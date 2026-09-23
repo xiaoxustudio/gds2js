@@ -18,7 +18,11 @@
 		"gen:ws": " npx tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
 		"build": "tsdown",
 		"dev": "tsx src/index.ts",
-		"watch": "tsdown --watch"
+		"watch": "tsdown --watch",
+		"test:golden": "node tools/golden.mjs",
+		"test:diff": "tsx tools/diff.mjs",
+		"test:ops": "tsx tools/ops-check.ts",
+		"test:ir": "tsx tools/ir-check.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.6",

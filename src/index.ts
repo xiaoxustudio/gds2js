@@ -1,12 +1,6 @@
 import { readFileSync } from "node:fs";
-import { Parser, Language } from "web-tree-sitter";
+import { parseSource } from "./parse/parser";
 
-Promise.all([Parser.init(), Language.load("./gdscript.wasm")]).then(
-	([_, lang]) => {
-		const parser = new Parser();
-		parser.setLanguage(lang);
-
-		const tree = parser.parse(readFileSync("examples/test1.gd").toString());
-		console.log(tree!.rootNode.toString());
-	},
-);
+const file = process.argv[2] ?? "examples/test1.gd";
+const tree = await parseSource(readFileSync(file, "utf8"));
+console.log(tree.rootNode.toString());

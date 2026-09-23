@@ -1,3 +1,6 @@
 build/
 node_modules/
 
+# AI files
+.workbuddy
+docs
