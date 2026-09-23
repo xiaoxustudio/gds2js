@@ -22,7 +22,8 @@
 		"test:golden": "node tools/golden.mjs",
 		"test:diff": "tsx tools/diff.mjs",
 		"test:ops": "tsx tools/ops-check.ts",
-		"test:ir": "tsx tools/ir-check.ts"
+		"test:ir": "tsx tools/ir-check.ts",
+		"test:sema": "tsx tools/sema-check.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.6",
