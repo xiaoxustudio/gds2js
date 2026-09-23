@@ -1,0 +1,33 @@
+{
+	"name": "gds2js",
+	"type": "module",
+	"version": "0.0.0",
+	"private": true,
+	"description": "将 .gds 转义为 js 运行",
+	"engines": {
+		"node": ">=24"
+	},
+	"exports": {
+		".": "./dist/index.mjs",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"gen:ws": " npx tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
+		"build": "tsdown",
+		"dev": "tsx src/index.ts",
+		"watch": "tsdown --watch"
+	},
+	"devDependencies": {
+		"@types/node": "^24.13.6",
+		"tree-sitter-cli": "^0.27.0",
+		"tsdown": "^0.22.5",
+		"tsx": "^4.23.15",
+		"typescript": "^7.0.2"
+	},
+	"dependencies": {
+		"web-tree-sitter": "^0.27.0"
+	}
+}
