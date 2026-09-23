@@ -5,3 +5,4 @@ export { ops, strOps } from "./ops";
 export { fast } from "./fast";
 export * from "./signal";
 export * from "./builtins";
+export * from "./methods";

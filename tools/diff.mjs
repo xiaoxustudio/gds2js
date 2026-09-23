@@ -62,7 +62,9 @@ const godotRunnable = rows.filter((r) => r.godotOk).length;
 const jsRan = rows.filter((r) => r.js !== null).length;
 const match = rows.filter((r) => r.js !== null && r.js === readGolden(r.id)).length;
 const silent = rows.filter((r) => r.js !== null && r.js !== readGolden(r.id));
-const todo = rows.filter((r) => r.godotOk && r.js === null);
+// 崩溃和「没做」必须分开算：前者是 bug，后者是排期。混在一起会把优先级带偏。
+const crashed = rows.filter((r) => r.godotOk && r.js === null && r.jsErr !== null);
+const todo = rows.filter((r) => r.godotOk && r.js === null && r.jsErr === null);
 const expectedErr = rows.filter((r) => !r.godotOk).length;
 const stale = rows.filter((r) => r.stale).length;
 
@@ -76,7 +78,16 @@ console.log("\n内容层");
 console.log(`  逐字节一致               ${match}/${godotRunnable}`);
 console.log("\n缺口（按处理优先级）");
 console.log(`  静默错误（能跑但输出错）  ${silent.length}   <- 最优先`);
+console.log(`  崩溃（抛 unsupported 等）${crashed.length}   <- 分清是设计取舍还是真 bug`);
 console.log(`  未实现                   ${todo.length}   <- 排期`);
+
+if (show) {
+  console.log("\n--- 细节 ---");
+  for (const r of rows) {
+    if (r.stale) console.log(`\n[漂移] ${r.id}  golden 与当前 Godot 输出不一致，先跑 tools/golden.mjs`);
+    if (r.jsErr) console.log(`\n[崩溃] ${r.id}  ${r.jsErr}`);
+  }
+}
 
 if (show && (silent.length > 0 || stale > 0)) {
   console.log("\n--- 细节 ---");

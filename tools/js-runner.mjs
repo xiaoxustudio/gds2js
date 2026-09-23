@@ -17,8 +17,19 @@ import { pathToFileURL } from "node:url";
 import { CORPUS } from "./lib.mjs";
 
 export default async function runCase(id) {
-  const driver = join(CORPUS, id, "main.mts");
-  if (!existsSync(driver)) return null;
+  // 优先跑 emitter 的产物，没有再退回到手写等价驱动
+  const gen = join(CORPUS, id, "main.gen.mts");
+  const hand = join(CORPUS, id, "main.mts");
+  const driver = existsSync(gen) ? gen : existsSync(hand) ? hand : null;
+  if (!driver) return null;
+
+  // 跑之前先清缓冲：上一个用例若中途抛错，它没 flush 的输出会串到这一个
+  try {
+    const harness = await import("../tools/harness/scene-tree");
+    harness.reset?.();
+  } catch {
+    /* 拿不到就跳过，靠 compile 清产物兜底 */
+  }
 
   const chunks = [];
   const original = process.stdout.write.bind(process.stdout);

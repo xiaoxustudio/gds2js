@@ -7,6 +7,15 @@
  * UnsupportedError（D4）。见 docs/RUNTIME_API.md §0。
  */
 import { Signal } from "../../src/runtime/signal";
+import type { Variant } from "../../src/runtime/tags";
+import { truthyOf } from "../../src/runtime/values";
+
+/** _process 的返回值可能是裸 boolean，也可能是 Variant 装箱 */
+function isTruthyResult(r: unknown): boolean {
+  if (r === true) return true;
+  if (typeof r === "object" && r !== null && "t" in r) return truthyOf(r as Variant);
+  return false;
+}
 
 let out: string[] = [];
 
@@ -22,6 +31,11 @@ export function flush(): void {
 
 export function captured(): string {
   return out.join("\n");
+}
+
+/** 用例之间必须清干净：上一个用例若中途抛错，没 flush 的输出会串到下一个 */
+export function reset(): void {
+  out = [];
 }
 
 class Timer {
@@ -48,7 +62,11 @@ export class SceneTree {
   #timers: Timer[] = [];
 
   async _initialize(): Promise<void> {}
-  async _process(_delta: number): Promise<boolean> {
+  /**
+   * 返回值用 unknown：编译产物可能返回裸 boolean，也可能返回 Variant 装箱。
+   * 两种都在 run() 里解释（编译产物由 emitter 生成，不做强制约定）。
+   */
+  async _process(_delta: number): Promise<unknown> {
     return false;
   }
 
@@ -68,7 +86,7 @@ export class SceneTree {
     while (!this.#quitted && frames < maxFrames) {
       await new Promise((r) => setTimeout(r, 2));
       this.#timers = this.#timers.filter((t) => !t.advance(0.002));
-      if (await this._process(0.002)) this.quit();
+      if (isTruthyResult(await this._process(0.002))) this.quit();
       frames++;
     }
     flush();
