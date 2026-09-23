@@ -9,16 +9,28 @@
 	},
 	"exports": {
 		".": "./dist/index.mjs",
+		"./runtime": "./dist/runtime.mjs",
+		"./host": "./dist/host.mjs",
 		"./package.json": "./package.json"
+	},
+	"bin": {
+		"gds2js": "./dist/cli.mjs"
 	},
 	"files": [
 		"dist"
 	],
 	"scripts": {
 		"gen:ws": " npx tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
-		"build": "tsdown",
+		"build": "tsdown && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
 		"dev": "tsx src/index.ts",
-		"watch": "tsdown --watch"
+		"watch": "tsdown --watch",
+		"test:golden": "node tools/golden.mjs",
+		"test:diff": "tsx tools/diff.mjs",
+		"test:ops": "tsx tools/ops-check.ts",
+		"test:ir": "tsx tools/ir-check.ts",
+		"test:sema": "tsx tools/sema-check.ts",
+		"test:compile": "tsx tools/compile.ts",
+		"test:multi": "tsx tools/multi-demo.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.6",
@@ -28,6 +40,7 @@
 		"typescript": "^7.0.2"
 	},
 	"dependencies": {
+		"commander": "^15.0.0",
 		"web-tree-sitter": "^0.27.0"
 	}
 }

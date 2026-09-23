@@ -1,3 +1,7 @@
+# 单包仓库：空列表显式声明「仅根包」（pnpm 自动把根纳入，故不写 "."）。
+# 缺这个字段时 pnpm 12 会直接报 "packages field missing or empty" 并拒绝所有安装。
+packages: []
+
 allowBuilds:
   esbuild: true
   tree-sitter-cli: true
