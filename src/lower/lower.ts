@@ -375,8 +375,13 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "bind", name: id ? id.text : n.text };
     }
     case "identifier":
+      // `_` 是通配；其余裸标识符是**常量模式**（按值匹配 const / 脚本常量）。
+      // 绑定要用 `var name`（grammar 出 pattern_binding），裸名不是绑定。
       if (n.text === "_") return { kind: "wildcard" };
-      throw new UnsupportedError("pattern-const", `常量模式 ${n.text} 未支持`);
+      return { kind: "const", expr: lowerExpr(n) };
+    case "attribute":
+      // `Suit.HEARTS` / `Class.CONST` 这类限定常量 → 常量模式
+      return { kind: "const", expr: lowerExpr(n) };
     case "integer":
       return { kind: "lit", lit: "int", value: Number(n.text) };
     case "float":

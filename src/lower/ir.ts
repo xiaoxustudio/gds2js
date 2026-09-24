@@ -54,7 +54,9 @@ export type Pattern =
   | { kind: "lit"; lit: LitKind; value: string | number | boolean | null }
   | { kind: "bind"; name: string }
   | { kind: "array"; items: Pattern[] }
-  | { kind: "dict"; entries: Array<{ key: Expr; pattern: Pattern }> };
+  | { kind: "dict"; entries: Array<{ key: Expr; pattern: Pattern }> }
+  /** 常量模式：裸标识符（const）或 attribute（enum 成员 / 类常量），按值匹配。 */
+  | { kind: "const"; expr: Expr };
 
 export interface Param {
   name: string;

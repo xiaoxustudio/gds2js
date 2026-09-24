@@ -17,12 +17,14 @@ export type Pat =
   | { k: "lit"; v: Variant }
   | { k: "bind" }
   | { k: "arr"; items: Pat[] }
-  | { k: "dict"; entries: Array<{ key: Variant; pat: Pat }> };
+  | { k: "dict"; entries: Array<{ key: Variant; pat: Pat }> }
+  | { k: "const"; v: Variant };
 
 export const patWild = (): Pat => ({ k: "wild" });
 export const patLit = (v: Variant): Pat => ({ k: "lit", v });
 export const patBind = (): Pat => ({ k: "bind" });
 export const patArray = (items: Pat[]): Pat => ({ k: "arr", items });
+export const patConst = (v: Variant): Pat => ({ k: "const", v });
 export const patDict = (entries: Array<[Variant, Pat]>): Pat => ({
   k: "dict",
   entries: entries.map(([key, pat]) => ({ key, pat })),
@@ -45,6 +47,9 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
       out.push(s);
       return true;
     case "lit":
+      return valueEq(s, p.v);
+    case "const":
+      // 常量模式：按值相等匹配（与字面量同一套 valueEq 语义）
       return valueEq(s, p.v);
     case "arr": {
       if (s.t !== Tag.ARRAY) return false;

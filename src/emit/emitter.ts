@@ -548,6 +548,8 @@ function emitPattern(p: Pattern): string {
       return "rt.patBind()";
     case "lit":
       return `rt.patLit(${emitLit(p.lit, p.value)})`;
+    case "const":
+      return `rt.patConst(${emitExpr(p.expr)})`;
     case "array":
       return `rt.patArray([${p.items.map(emitPattern).join(", ")}])`;
     case "dict":
