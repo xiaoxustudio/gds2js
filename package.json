@@ -30,7 +30,8 @@
 		"test:ir": "tsx tools/ir-check.ts",
 		"test:sema": "tsx tools/sema-check.ts",
 		"test:compile": "tsx tools/compile.ts",
-		"test:multi": "tsx tools/multi-demo.ts"
+		"test:multi": "tsx tools/multi-demo.ts",
+		"bench": "tsx tools/bench.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.6",

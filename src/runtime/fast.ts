@@ -2,8 +2,31 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import type { Variant } from "./tags";
 import { GArray, GDict, strFloat, valueEq } from "./values";
 
+/** 与 tags.ts 的 checkInt 抛完全相同的错（D1：超 2^53 响亮失败，绝不静默降级）。 */
+function int64(v: number): UnsupportedError {
+  return new UnsupportedError("int64-out-of-range", `整数 ${v} 超出 2^53，需要 BigInt 路径（未实现）`);
+}
+
 /** 单态快路径（D2 的第二轨）。输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
+  // ---- 解箱 int 运算：结果仍要过 D1 的 2^53 检查，溢出抛与 V.int/checkInt 完全相同的错 ----
+  // 语义必须与 ops.add/sub/mul 的 bothInt 分支逐位对齐，否则解箱会变成静默错误。
+  iAddC(a: number, b: number): number {
+    const r = a + b;
+    if (!Number.isSafeInteger(r)) throw int64(r);
+    return r;
+  },
+  iSubC(a: number, b: number): number {
+    const r = a - b;
+    if (!Number.isSafeInteger(r)) throw int64(r);
+    return r;
+  },
+  iMulC(a: number, b: number): number {
+    const r = a * b;
+    if (!Number.isSafeInteger(r)) throw int64(r);
+    return r;
+  },
+
   iDiv(a: number, b: number): number {
     if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
     return Math.trunc(a / b);

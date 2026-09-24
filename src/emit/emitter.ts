@@ -298,9 +298,15 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
 
   const lines = [`${async}${f.name}(${params}): ${ret} {`];
   mark(base, f.loc);
-  for (const s of f.body) {
-    mark(base + lines.length, s.loc);
-    for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`  ${line}`);
+  const savedUnboxed = UNBOXED_INT;
+  UNBOXED_INT = computeUnboxedInt(f);
+  try {
+    for (const s of f.body) {
+      mark(base + lines.length, s.loc);
+      for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`  ${line}`);
+    }
+  } finally {
+    UNBOXED_INT = savedUnboxed;
   }
   lines.push("}");
   lines.push("");
@@ -329,6 +335,8 @@ function emitConstructor(f: FuncDecl, base: number, hasSuper: boolean): string[]
   if (!explicitSuper && hasSuper) lines.push("  super();");
 
   IN_CONSTRUCTOR = true;
+  const savedUnboxed = UNBOXED_INT;
+  UNBOXED_INT = computeUnboxedInt(f);
   try {
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
@@ -336,6 +344,7 @@ function emitConstructor(f: FuncDecl, base: number, hasSuper: boolean): string[]
     }
   } finally {
     IN_CONSTRUCTOR = false;
+    UNBOXED_INT = savedUnboxed;
   }
   lines.push("}");
   lines.push("");
@@ -357,9 +366,21 @@ function hasValueReturn(stmts: Stmt[]): boolean {
 
 // ---------------------------------------------------------------- 语句
 
+/** 条件表达式：裸 bool 直接用，裸 int 用 `!==0`（GDScript int 真值），否则走 rt.ops.truthy。 */
+function condExpr(e: Expr): string {
+  const r = emitExprR(e);
+  if (r.rep === "bool") return r.code;
+  if (r.rep === "int") return `${r.code} !== 0`;
+  return `rt.ops.truthy(${r.code})`;
+}
+
 function emitStmt(s: Stmt, voidReturn: boolean): string[] {
   switch (s.kind) {
     case "var": {
+      // 解箱局部：init 必为 int 表达式（推断保证），直接发裸 number
+      if (s.init && UNBOXED_INT.has(s.name)) {
+        return [`let ${s.name} = ${emitExprR(s.init).code};`];
+      }
       // 直接发射 let —— 块作用域由 JS 自己保证，正好对应 S16
       const init = s.init ? emitExpr(s.init) : "rt.V.nil()";
       // 带类型标注的声明要做截断：`var i: int = 3.9` 在 Godot 里是 3，不是 3.9（S6）
@@ -370,8 +391,15 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
     case "expr":
       return [`${emitExpr(s.expr)};`];
 
-    case "assign":
+    case "assign": {
+      // 赋值给解箱局部：值必为 int（推断保证）；万一不是，用 rt.toInt 安全拆箱兜底
+      if (s.target.kind === "ident" && UNBOXED_INT.has(s.target.name)) {
+        const vr = emitExprR(s.value);
+        const raw = vr.rep === "int" ? vr.code : `rt.toInt(${boxR(vr)})`;
+        return [`${s.target.name} = ${raw};`];
+      }
       return [emitAssign(s.target, emitExpr(s.value))];
+    }
 
     case "return":
       if (!s.value) return ["return;"];
@@ -383,7 +411,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       s.branches.forEach((br, i) => {
         const prefix = i === 0 ? "" : "} ";
         const kw = i === 0 ? "if" : br.cond ? "else if" : "else";
-        const cond = br.cond ? ` (rt.ops.truthy(${emitExpr(br.cond)}))` : "";
+        const cond = br.cond ? ` (${condExpr(br.cond)})` : "";
         lines.push(`${prefix}${kw}${cond} {`);
         for (const st of br.body) {
           for (const line of emitStmt(st, voidReturn)) lines.push(`  ${line}`);
@@ -402,7 +430,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
 
     case "while":
       return [
-        `while (rt.ops.truthy(${emitExpr(s.cond)})) {`,
+        `while (${condExpr(s.cond)}) {`,
         ...s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`)),
         "}",
       ];
@@ -448,8 +476,205 @@ function emitAssign(target: Expr, value: string): string {
 }
 
 // ---------------------------------------------------------------- 表达式
+//
+// D2 单态化解箱（保守）：表达式带「表示」标签——
+//   rep "int"  = 裸 JS number（仅安全 int 字面量 / 已解箱局部 / 二者的 + - *）
+//   rep "bool" = 裸 JS boolean（仅两个 int 的比较）
+//   rep "var"  = 装箱 Variant（其余一切）
+// `emitExpr` = 永远返回装箱后的字符串（旧调用点全部不变，raw 子表达式自动装箱）；
+// 只有 `+ - *`、比较、while/if 条件、解箱局部的声明/赋值这几处直接用 `emitExprR` 走 raw。
+// 漏装箱不会静默：裸 number 进了 ops.* 会因不是 Variant 而响亮报错，golden 必抓到。
+
+type Rep = "var" | "int" | "bool";
+interface R {
+  code: string;
+  rep: Rep;
+}
+
+/** 当前函数里被解箱成裸 int 的局部变量名。 */
+let UNBOXED_INT = new Set<string>();
+
+const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
+const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC" };
+
+/** 把带表示的表达式装箱成 Variant 字符串。 */
+function boxR(r: R): string {
+  if (r.rep === "int") return `rt.V.int(${r.code})`;
+  if (r.rep === "bool") return `rt.V.bool(${r.code})`;
+  return r.code;
+}
 
 function emitExpr(e: Expr): string {
+  return boxR(emitExprR(e));
+}
+
+function emitExprR(e: Expr): R {
+  if (e.kind === "lit" && e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) {
+    return { code: String(e.value), rep: "int" };
+  }
+  if (e.kind === "ident" && UNBOXED_INT.has(e.name)) {
+    return { code: e.name, rep: "int" };
+  }
+  if (e.kind === "binary") {
+    const raw = tryRawBinary(e);
+    if (raw) return raw;
+  }
+  return { code: emitExprVar(e), rep: "var" };
+}
+
+/** e 子树里是否提及已解箱局部——用来把 raw 优化限制在「真有解箱变量参与」处，纯字面量表达式保持原产物不变。 */
+function mentionsUnboxed(e: Expr): boolean {
+  switch (e.kind) {
+    case "ident":
+      return UNBOXED_INT.has(e.name);
+    case "binary":
+      return mentionsUnboxed(e.left) || mentionsUnboxed(e.right);
+    case "unary":
+    case "await":
+      return mentionsUnboxed(e.operand);
+    default:
+      return false;
+  }
+}
+
+function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
+  const arith = ARITH_RAW[e.op];
+  const cmp = CMP_RAW[e.op];
+  if (!arith && !cmp) return null;
+  const L = emitExprR(e.left);
+  const Rr = emitExprR(e.right);
+  if (L.rep !== "int" || Rr.rep !== "int") return null;
+  if (!mentionsUnboxed(e.left) && !mentionsUnboxed(e.right)) return null;
+  if (arith) return { code: `rt.fast.${arith}(${L.code}, ${Rr.code})`, rep: "int" };
+  return { code: `(${L.code} ${cmp} ${Rr.code})`, rep: "bool" };
+}
+
+/**
+ * 保守推断函数内可解箱成裸 int 的局部：
+ * `var x = <int 表达式>` 且 x 的每次赋值都是 int 表达式（int 字面量 / 已解箱局部 / 二者的 + - *）。
+ * 排除：参数、for 变量、match 绑定、lambda 内声明或被赋值的名字。
+ * 用「自身暂定为 int」打破 `x += 1` 的循环依赖，迭代到不动点。
+ */
+function computeUnboxedInt(f: FuncDecl): Set<string> {
+  const excluded = new Set<string>(f.params.map((p) => p.name));
+  const decls: Array<{ name: string; init: Expr | null }> = [];
+  const assigns: Array<{ name: string; value: Expr }> = [];
+
+  const walkExpr = (e: Expr, inLambda: boolean): void => {
+    switch (e.kind) {
+      case "lambda":
+        e.body.forEach((s) => walkStmt(s, true));
+        break;
+      case "binary":
+        walkExpr(e.left, inLambda);
+        walkExpr(e.right, inLambda);
+        break;
+      case "unary":
+      case "await":
+        walkExpr(e.operand, inLambda);
+        break;
+      case "call":
+        walkExpr(e.callee, inLambda);
+        e.args.forEach((a) => walkExpr(a, inLambda));
+        break;
+      case "attribute":
+        walkExpr(e.obj, inLambda);
+        break;
+      case "index":
+        walkExpr(e.obj, inLambda);
+        walkExpr(e.index, inLambda);
+        break;
+      case "array":
+        e.items.forEach((a) => walkExpr(a, inLambda));
+        break;
+      case "dict":
+        e.entries.forEach((en) => {
+          walkExpr(en.key, inLambda);
+          walkExpr(en.value, inLambda);
+        });
+        break;
+      case "is":
+      case "as":
+        walkExpr(e.operand, inLambda);
+        break;
+    }
+  };
+  const walkStmt = (s: Stmt, inLambda: boolean): void => {
+    switch (s.kind) {
+      case "var":
+        if (inLambda) excluded.add(s.name);
+        else decls.push({ name: s.name, init: s.init });
+        if (s.init) walkExpr(s.init, inLambda);
+        break;
+      case "assign":
+        if (s.target.kind === "ident") {
+          if (inLambda) excluded.add(s.target.name);
+          else assigns.push({ name: s.target.name, value: s.value });
+        }
+        walkExpr(s.target, inLambda);
+        walkExpr(s.value, inLambda);
+        break;
+      case "expr":
+        walkExpr(s.expr, inLambda);
+        break;
+      case "return":
+        if (s.value) walkExpr(s.value, inLambda);
+        break;
+      case "if":
+        for (const b of s.branches) {
+          if (b.cond) walkExpr(b.cond, inLambda);
+          b.body.forEach((x) => walkStmt(x, inLambda));
+        }
+        break;
+      case "for":
+        excluded.add(s.var);
+        walkExpr(s.iter, inLambda);
+        s.body.forEach((x) => walkStmt(x, inLambda));
+        break;
+      case "while":
+        walkExpr(s.cond, inLambda);
+        s.body.forEach((x) => walkStmt(x, inLambda));
+        break;
+      case "match":
+        walkExpr(s.subject, inLambda);
+        for (const a of s.arms) {
+          if (a.guard) walkExpr(a.guard, inLambda);
+          patternNames(a.pattern).forEach((n) => excluded.add(n));
+          a.body.forEach((x) => walkStmt(x, inLambda));
+        }
+        break;
+    }
+  };
+  f.body.forEach((s) => walkStmt(s, false));
+
+  const U = new Set<string>();
+  const isInt = (e: Expr, self: string): boolean => {
+    switch (e.kind) {
+      case "lit":
+        return e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value);
+      case "ident":
+        return e.name === self || U.has(e.name);
+      case "binary":
+        return (e.op === "+" || e.op === "-" || e.op === "*") && isInt(e.left, self) && isInt(e.right, self);
+      default:
+        return false;
+    }
+  };
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const d of decls) {
+      if (U.has(d.name) || excluded.has(d.name)) continue;
+      if (!d.init || !isInt(d.init, d.name)) continue;
+      if (!assigns.every((a) => a.name !== d.name || isInt(a.value, d.name))) continue;
+      U.add(d.name);
+      changed = true;
+    }
+  }
+  return U;
+}
+
+function emitExprVar(e: Expr): string {
   switch (e.kind) {
     case "lit":
       return emitLit(e.lit, e.value);
