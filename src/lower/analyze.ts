@@ -61,8 +61,16 @@ function declNames(d: Decl): string[] {
 export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[] {
   const diags: Diagnostic[] = [];
 
+  // enum 名进作用域：named enum 用枚举名（`Color.RED` 里被查的是 Color），
+  // 匿名 enum 的成员是脚本级裸常量（`A`）。
+  const enumNames: string[] = [];
+  for (const en of m.enums) {
+    if (en.name) enumNames.push(en.name);
+    else for (const mm of en.members) enumNames.push(mm.name);
+  }
+
   const globalScope = new Scope(
-    new Set([...(m.className ? [m.className] : []), ...declNames(m), ...globals]),
+    new Set([...(m.className ? [m.className] : []), ...declNames(m), ...enumNames, ...globals]),
     null,
   );
   const moduleScope = globalScope.child(declNames(m));

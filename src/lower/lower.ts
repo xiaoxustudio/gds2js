@@ -2,6 +2,8 @@ import { UnsupportedError } from "../runtime/errors";
 import type { SyntaxNode, Tree } from "../parse/parser";
 import type {
   ClassDecl,
+  EnumDecl,
+  EnumMember,
   Expr,
   FuncDecl,
   Loc,
@@ -61,6 +63,7 @@ function lowerModule(root: SyntaxNode): Module {
     topStmts: [],
     vars: [],
     signals: [],
+    enums: [],
     funcs: [],
     innerClasses: [],
   };
@@ -82,6 +85,9 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "signal_statement":
         m.signals.push(lowerSignal(c));
+        break;
+      case "enum_definition":
+        m.enums.push(lowerEnum(c));
         break;
       case "function_definition":
         m.funcs.push(lowerFunc(c));
@@ -121,6 +127,25 @@ function lowerSignal(n: SyntaxNode): SignalDecl {
     params: paramsNode ? named(paramsNode).map((p) => p.text) : [],
     loc: loc(n),
   };
+}
+
+/**
+ * `enum Name { A, B = 5, C }` —— 成员值自增，显式 `= N` 重置游标。
+ * name 为 null 即匿名 enum（成员成为脚本级裸常量）。
+ */
+function lowerEnum(n: SyntaxNode): EnumDecl {
+  const nameNode = field(n, "name");
+  const list = field(n, "body"); // enumerator_list
+  const members: EnumMember[] = [];
+  let next = 0;
+  for (const en of list ? named(list) : []) {
+    const idNode = field(en, "left");
+    const valNode = field(en, "right");
+    const value = valNode ? Number(valNode.text) : next;
+    members.push({ name: need(idNode, "枚举成员名").text, value });
+    next = value + 1;
+  }
+  return { name: nameNode ? nameNode.text : null, members, loc: loc(n) };
 }
 
 function lowerClass(n: SyntaxNode): ClassDecl {

@@ -95,6 +95,18 @@ export interface SignalDecl {
   loc: Loc;
 }
 
+export interface EnumMember {
+  name: string;
+  value: number;
+}
+
+/** `enum Name { A, B = 5 }`；name 为 null 表示匿名 enum（成员是脚本级裸常量）。 */
+export interface EnumDecl {
+  name: string | null;
+  members: EnumMember[];
+  loc: Loc;
+}
+
 export interface ClassDecl {
   name: string;
   extends: string | null;
@@ -113,6 +125,7 @@ export interface Module {
   topStmts: Stmt[];
   vars: VarDecl[];
   signals: SignalDecl[];
+  enums: EnumDecl[];
   funcs: FuncDecl[];
   innerClasses: ClassDecl[];
 }

@@ -189,6 +189,19 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
 
+  // enum → 模块作用域常量。named enum 发成冻结对象（`Color.RED` 经 rt.attribute 取字段），
+  // 匿名 enum 的成员发成逐个裸常量。值是 Variant int，故 `Color.RED + 1` / print 都走正常路径。
+  for (const en of m.enums) {
+    mark(out.length, en.loc);
+    if (en.name) {
+      const fields = en.members.map((mm) => `${mm.name}: rt.V.int(${mm.value})`).join(", ");
+      out.push(`const ${en.name} = Object.freeze({ ${fields} });`);
+    } else {
+      for (const mm of en.members) out.push(`const ${mm.name} = rt.V.int(${mm.value});`);
+    }
+  }
+  if (m.enums.length > 0) out.push("");
+
   const heritage =
     baseClass.kind === "host" ? " extends SceneTree"
     : baseClass.kind === "import" ? ` extends ${baseClass.name}`
