@@ -58,11 +58,11 @@ function declNames(d: Decl): string[] {
   ];
 }
 
-export function analyze(m: Module): Diagnostic[] {
+export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[] {
   const diags: Diagnostic[] = [];
 
   const globalScope = new Scope(
-    new Set([...(m.className ? [m.className] : []), ...declNames(m)]),
+    new Set([...(m.className ? [m.className] : []), ...declNames(m), ...globals]),
     null,
   );
   const moduleScope = globalScope.child(declNames(m));

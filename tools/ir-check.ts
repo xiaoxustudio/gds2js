@@ -7,9 +7,9 @@ import { readFileSync } from "node:fs";
 import { parseSource } from "../src/parse/parser";
 import { lower } from "../src/lower/lower";
 import { UnsupportedError } from "../src/runtime/errors";
-import { caseScript, listCases } from "./lib.mjs";
+import { caseScript, listSingleCases } from "./lib.mjs";
 
-const cases = listCases();
+const cases = listSingleCases();
 let ok = 0;
 const failures: Array<{ id: string; code: string; msg: string }> = [];
 const byCode = new Map<string, number>();

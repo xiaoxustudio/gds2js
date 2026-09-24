@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { analyze } from "../src/lower/analyze";
 import { lower } from "../src/lower/lower";
 import { parseSource } from "../src/parse/parser";
-import { caseScript, godotOk, listCases, readGolden } from "./lib.mjs";
+import { caseScript, godotOk, listSingleCases, readGolden } from "./lib.mjs";
 
 interface Row {
   id: string;
@@ -19,7 +19,7 @@ interface Row {
   msg: string;
 }
 
-const cases = listCases();
+const cases = listSingleCases();
 let hit = 0;
 const falsePositives: Row[] = [];
 const misses: Row[] = [];

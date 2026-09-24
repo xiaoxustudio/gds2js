@@ -9,7 +9,7 @@
  * 度量必须分层 —— 一个笼统的通过率会把「未实现」和「跑错了」混成一件事，
  * 而这两件事的优先级完全不同：前者是排期问题，后者是 bug。
  */
-import { caseScript, godotOk, listCases, normalize, readGolden, runGodot } from "./lib.mjs";
+import { caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden, runGodot } from "./lib.mjs";
 
 const argv = process.argv.slice(2);
 const show = argv.includes("--show");
@@ -39,7 +39,7 @@ for (const id of cases) {
   let godotNow = golden;
   let stale = golden === null;
   if (refresh && golden !== null) {
-    const { text } = runGodot(gd);
+    const { text } = runGodot(gd, { projectPath: caseIsProject(id) ? caseDir(id) : null });
     godotNow = normalize(text, gd);
     stale = godotNow !== golden;
   }

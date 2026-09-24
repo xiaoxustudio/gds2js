@@ -33,14 +33,36 @@ export function caseGolden(id) {
   return join(caseDir(id), "godot.txt");
 }
 
+/** 多文件工程用例：目录里有 project.godot 就是（class_name 是工程级特性）。 */
+export function caseIsProject(id) {
+  return existsSync(join(caseDir(id), "project.godot"));
+}
+
+/**
+ * 单文件工具（compile / ir-check / sema-check）的用例集：排除工程用例。
+ * 工程用例的跨文件语义在单文件视角下会把别的文件的 class_name 误判成未声明，
+ * 只能整工程编译才有意义 —— 那归 diff 管。
+ */
+export function listSingleCases(filter = "") {
+  return listCases(filter).filter((id) => !caseIsProject(id));
+}
+
 /**
  * 跑一次 Godot。注意：不要用 shell 的 timeout，Git Bash 下会解析到 Windows 的
  * timeout.exe（是个延时命令，直接吃掉参数）。超时交给 spawnSync 自己管。
+ *
+ * 传 projectPath 时以工程模式跑（--path + res:// 脚本），class_name / 跨文件才生效；
+ * 否则单文件模式（--script <abs.gd>），沿用种子用例的老写法。
  */
-export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null } = {}) {
+  const scriptArg = projectPath ? "res://" + (gdPath.split(/[\\/]/).pop() || "main.gd") : gdPath;
+  const args = ["--headless"];
+  if (projectPath) args.push("--path", projectPath);
+  args.push("--script", scriptArg);
+
   let r;
   try {
-    r = spawnSync(GODOT_BIN, ["--headless", "--script", gdPath], {
+    r = spawnSync(GODOT_BIN, args, {
       encoding: "utf8",
       timeout: timeoutMs,
       windowsHide: true,
@@ -75,13 +97,19 @@ export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
 export function normalize(text, gdPath = "") {
   let out = text;
   if (gdPath) {
+    // 整目录先抹平（多文件用例里 helper 脚本也会以绝对路径出现在报错里），
+    // 再单独把 main.gd 归一到 <case>/main.gd，保持种子用例逐字节不变。
+    const caseDir = dirname(gdPath);
+    for (const v of [caseDir.replace(/\\/g, "/"), caseDir.replace(/\//g, "\\")]) {
+      if (v) out = out.split(v).join("<case>");
+    }
     const variants = [gdPath.replace(/\\/g, "/"), gdPath.replace(/\//g, "\\")];
     for (const v of variants) out = out.split(v).join("<case>/main.gd");
   }
   // Godot 报错里的脚本路径有两种形态：绝对路径，或 res:// 相对工程根。
   // 走哪种取决于它有没有在往上找到 project.godot，本机两种都出现过，必须都抹掉，
-  // 否则 golden 会随工程位置漂移。
-  out = out.replace(/res:\/\/[^\s)"]*main\.gd/g, "<case>/main.gd");
+  // 否则 golden 会随工程位置漂移。多文件时 helper 脚本也要归一。
+  out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, name) => `<case>/${name}`);
   const lines = out.split(/\r?\n/);
   const kept = [];
   for (const line of lines) {

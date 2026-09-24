@@ -401,20 +401,25 @@ function lowerExpr(n: SyntaxNode): Expr {
     }
     case "attribute": {
       const kids = named(n);
-      const obj = lowerExpr(need(kids[0] ?? null, "属性对象"));
-      const second = kids[1];
-      if (!second) return { kind: "attribute", obj, name: "", loc: c };
-      // fns.append(...) 的 second 是 attribute_call，带参数 → 变成方法调用
-      if (second.type === "attribute_call") {
-        const argsNode = field(second, "arguments");
-        return {
-          kind: "call",
-          callee: { kind: "attribute", obj, name: need(named(second)[0], "方法名").text, loc: loc(second) },
-          args: argsNode ? named(argsNode).map(lowerExpr) : [],
-          loc: c,
-        };
+      if (kids.length === 0) throw new UnsupportedError("attribute", "空的属性访问");
+      // grammar：attribute = 基础表达式 + 任意多段（identifier=属性 / attribute_call=方法）。
+      // 必须逐段左折叠，否则 `a.b().c()` 只剩第一层，丢掉后面的段。
+      let acc = lowerExpr(need(kids[0] ?? null, "属性对象"));
+      for (const seg of kids.slice(1)) {
+        if (seg.type === "attribute_call") {
+          const name = need(named(seg)[0] ?? null, "方法名");
+          const argsNode = field(seg, "arguments");
+          acc = {
+            kind: "call",
+            callee: { kind: "attribute", obj: acc, name: name.text, loc: loc(seg) },
+            args: argsNode ? named(argsNode).map(lowerExpr) : [],
+            loc: c,
+          };
+        } else {
+          acc = { kind: "attribute", obj: acc, name: seg.text, loc: c };
+        }
       }
-      return { kind: "attribute", obj, name: second.text, loc: c };
+      return acc;
     }
     case "call": {
       const kids = named(n);

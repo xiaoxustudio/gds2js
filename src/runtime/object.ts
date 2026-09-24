@@ -1,3 +1,4 @@
+import { UnsupportedError } from "./errors";
 import { V, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
 
@@ -59,4 +60,35 @@ export function registerClass(name: string, ctor: GdClassCtor): void {
 
 export function lookupClass(name: string): GdClassCtor | undefined {
   return CLASS_REGISTRY.get(name);
+}
+
+// ---------------------------------------------------------------- 脚本注册表
+
+/** res:// 路径 → 该脚本的类构造器。preload/load 按路径取"脚本"这个值。 */
+const SCRIPT_REGISTRY = new Map<string, GdClassCtor>();
+
+/**
+ * 每个编译产物在模块体里注册自己：`rt.registerScript("res://foo.gd", Foo)`。
+ * load(动态) 靠它按 res 路径解析；preload(静态) 走 ESM import，但也注册一份保持一致。
+ */
+export function registerScript(resPath: string, ctor: GdClassCtor): void {
+  SCRIPT_REGISTRY.set(resPath, ctor);
+}
+
+/**
+ * 一个"脚本"值 = 用 OBJECT 承载构造器（Godot 里 GDScript 本身就是个 Object/Resource）。
+ * 支持 `S = preload(...)` 之后 `S.new()`（见 method() 里的 new 分支）。
+ */
+export function scriptValue(ctor: GdClassCtor): Variant {
+  return V.object(ctor);
+}
+
+/** `load("res://x.gd")` 运行时解析；未知路径响亮报错，绝不静默返回 null。 */
+export function loadScript(path: Variant | string): Variant {
+  const key = typeof path === "string" ? path : String((path as Variant).v);
+  const ctor = SCRIPT_REGISTRY.get(key);
+  if (!ctor) {
+    throw new UnsupportedError("load-unknown-script", `load() 解析不到脚本：${key}`);
+  }
+  return V.object(ctor);
 }

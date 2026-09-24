@@ -8,6 +8,17 @@ import { UnsupportedError } from "../runtime/errors";
  * 契约里 `fast.*` 已经定死，等这一版跑绿了再按 D2 加内联优化 —— 先要正确。
  */
 
+/**
+ * 顶层 extends 解析出的基类，由调用方（CLI / 项目层）决定：
+ * - `host`  继承宿主的 `SceneTree`（语料入口脚本的默认）
+ * - `none`  不继承任何基类（库类、或 `--no-host`）
+ * - `import` 继承跨文件的用户基类，`from` 是它的 ESM 说明符
+ */
+export type BaseSpec =
+  | { kind: "host" }
+  | { kind: "none" }
+  | { kind: "import"; name: string; from: string };
+
 export interface EmitOptions {
   /** 运行时的 import 说明符。语料用相对路径；发布产物用 "gds2js/runtime" */
   runtimeImport?: string;
@@ -19,6 +30,26 @@ export interface EmitOptions {
   hostImport?: string | null;
   /** 模块末尾是否自动 `await new Main().run()`。语料要，产物不要 */
   autoRun?: boolean;
+  /** 顶层类名。默认 "Main"（语料沿用）；多文件由项目层传真实 class_name / 文件名派生 */
+  className?: string;
+  /**
+   * 顶层 extends 的解析结果。省略时按向后兼容回落：有宿主 → host，无宿主 → none。
+   */
+  baseClass?: BaseSpec;
+  /**
+   * 跨文件引用的类：GDScript `class_name` → 提供该类的 ESM 说明符。
+   * 项目层解出依赖边后传入，emitter 发射成 `import { name } from "from"`，
+   * 并把这些名字纳入 `MODULE_CLASSES`，让 `Foo.new()` / `is Foo` 认得它们。
+   */
+  classRefs?: Array<{ name: string; from: string }>;
+  /** 该产物自己的 res:// 路径；给了才发射 `rt.registerScript(resPath, 类)`，供 load() 解析。 */
+  resPath?: string;
+  /** `preload("字面量")` → 解析到的绑定名 + 提供它的 ESM 说明符。 */
+  preloads?: Array<{ literal: string; name: string; from: string }>;
+  /** `load("字面量")` → 规范化 res 路径（脚本注册表的键），保证运行时查得到。 */
+  loadMap?: Array<{ literal: string; resPath: string }>;
+  /** 只需触发注册、不绑定名字的副作用 import（动态 load 的目标脚本）。 */
+  sideEffectImports?: string[];
 }
 
 const DEFAULT_RUNTIME_IMPORT = "../../../src/runtime/index";
@@ -73,6 +104,10 @@ const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "String", "load", 
 let MODULE_VARS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
 let MODULE_CLASSES = new Set<string>();
+/** preload("字面量") → 解析到的类绑定名 */
+let PRELOADS = new Map<string, string>();
+/** load("字面量") → 规范化 res 路径（脚本注册表的键） */
+let LOADS = new Map<string, string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
 
@@ -80,19 +115,47 @@ export function emitModule(m: Module, opts: EmitOptions = {}): string {
   const runtimeImport = opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
   const hostImport = opts.hostImport === undefined ? DEFAULT_HOST_IMPORT : opts.hostImport;
   const autoRun = opts.autoRun ?? true;
-  const className = "Main";
+  const className = opts.className ?? "Main";
+  const classRefs = opts.classRefs ?? [];
+  const resPath = opts.resPath;
+  const preloads = opts.preloads ?? [];
+  const sideEffectImports = opts.sideEffectImports ?? [];
+  // 向后兼容：省略 baseClass 时，有宿主就继承 SceneTree，无宿主则不继承。
+  const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
 
   MODULE_VARS = new Set([...m.vars.map((v) => v.name), ...m.signals.map((s) => s.name)]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
-  MODULE_CLASSES = new Set([...m.innerClasses.map((c) => c.name), ...(m.className ? [m.className] : [])]);
+  MODULE_CLASSES = new Set([
+    ...m.innerClasses.map((c) => c.name),
+    ...(m.className ? [m.className] : []),
+    ...classRefs.map((r) => r.name),
+  ]);
+  PRELOADS = new Map(preloads.map((p) => [p.literal, p.name]));
+  LOADS = new Map((opts.loadMap ?? []).map((l) => [l.literal, l.resPath]));
 
   const out: string[] = [];
   out.push("// 由 gds2js 从 main.gd 编译生成 —— 不要手改。");
   out.push("");
   out.push(`import * as rt from "${runtimeImport}";`);
-  if (hostImport) out.push(`import { print, SceneTree } from "${hostImport}";`);
+  // 宿主提供 print（全局函数）；只有基类解析到 host 时才顺带 import SceneTree。
+  if (hostImport) {
+    const hostNames = baseClass.kind === "host" ? ["print", "SceneTree"] : ["print"];
+    out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
+  }
+  // 跨文件类引用 + preload 目标都要 import 才能触发定义方的 registerClass/registerScript。
+  const imports = new Map<string, string>(); // 绑定名 → 说明符
+  for (const ref of classRefs) imports.set(ref.name, ref.from);
+  for (const p of preloads) imports.set(p.name, p.from);
+  for (const [name, from] of imports) out.push(`import { ${name} } from "${from}";`);
+  for (const spec of sideEffectImports ?? []) out.push(`import "${spec}";`);
+  if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
-  out.push(`export class ${className}${hostImport ? " extends SceneTree" : ""} {`);
+
+  const heritage =
+    baseClass.kind === "host" ? " extends SceneTree"
+    : baseClass.kind === "import" ? ` extends ${baseClass.name}`
+    : "";
+  out.push(`export class ${className}${heritage} {`);
   for (const s of m.signals) out.push(`  ${s.name} = new rt.Signal();`);
   for (const v of m.vars) {
     out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
@@ -103,6 +166,11 @@ export function emitModule(m: Module, opts: EmitOptions = {}): string {
   }
   out.push("}");
   out.push("");
+
+  // 有 class_name 的脚本注册进运行时全局表：跨文件的 `is Foo` / `as Foo` 靠它。
+  if (m.className) out.push(`rt.registerClass(${JSON.stringify(m.className)}, ${className});`);
+  // 按 res:// 路径注册：`load("res://…")` 与 `preload` 一致性都靠它。
+  if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
   // 内部类是模块级声明，发射成兄弟类（GDScript 里它们对整个脚本可见）
   for (const c of m.innerClasses) out.push(...emitClassDecl(c));
@@ -396,6 +464,26 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     const name = e.callee.name;
     // print 是 GDScript 全局函数，参数要先 show 成字符串
     if (name === "print") return `print(${args.map((a) => `rt.show(${a})`).join(", ")})`;
+
+    // preload(工程内脚本) → 编译期就解析成静态 import 进来的类绑定
+    if (name === "preload") {
+      const a = e.args[0];
+      const lit = a && a.kind === "lit" && a.lit === "string" ? String(a.value) : null;
+      const bound = lit !== null ? PRELOADS.get(lit) : undefined;
+      if (bound) return `rt.scriptValue(${bound})`;
+      throw new UnsupportedError(
+        "emit-preload",
+        `preload(${lit ?? "非字面量"}) 未解析到工程内的 .gd（跨文件编译需能定位该脚本）`,
+      );
+    }
+    // load(路径) → 运行时按 res:// 查脚本注册表（目标已由项目层副作用 import 注册）
+    if (name === "load") {
+      const a = e.args[0];
+      const lit = a && a.kind === "lit" && a.lit === "string" ? String(a.value) : null;
+      const canonical = lit !== null ? LOADS.get(lit) : undefined;
+      if (canonical) return `rt.loadScript(${JSON.stringify(canonical)})`;
+      return `rt.loadScript(${args[0]})`;
+    }
 
     const builtin = BUILTIN[name];
     if (builtin) return builtin(args);

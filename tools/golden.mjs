@@ -7,6 +7,8 @@
  *   node tools/golden.mjs --check        # 不写盘，只报漂移
  */
 import {
+  caseDir,
+  caseIsProject,
   caseScript,
   godotOk,
   listCases,
@@ -37,7 +39,8 @@ let drift = 0;
 
 for (const id of cases) {
   const gd = caseScript(id);
-  const { text, timedOut } = runGodot(gd);
+  const projectPath = caseIsProject(id) ? caseDir(id) : null;
+  const { text, timedOut } = runGodot(gd, { projectPath });
   const norm = normalize(text, gd);
   const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
   if (timedOut) timeout++;

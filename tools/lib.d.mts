@@ -5,12 +5,14 @@ export declare const GODOT_BIN: string;
 export declare const DEFAULT_TIMEOUT_MS: number;
 
 export declare function listCases(filter?: string): string[];
+export declare function listSingleCases(filter?: string): string[];
 export declare function caseDir(id: string): string;
 export declare function caseScript(id: string): string;
 export declare function caseGolden(id: string): string;
+export declare function caseIsProject(id: string): boolean;
 export declare function runGodot(
   gdPath: string,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; projectPath?: string | null },
 ): { text: string; timedOut: boolean; exitCode: number | null };
 export declare function normalize(text: string, gdPath?: string): string;
 export declare function readGolden(id: string): string | null;

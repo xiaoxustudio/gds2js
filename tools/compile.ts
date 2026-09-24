@@ -11,10 +11,10 @@ import { analyze } from "../src/lower/analyze";
 import { lower } from "../src/lower/lower";
 import { parseSource } from "../src/parse/parser";
 import { UnsupportedError } from "../src/runtime/errors";
-import { caseDir, caseScript, listCases } from "./lib.mjs";
+import { caseDir, caseScript, listSingleCases } from "./lib.mjs";
 
 const filter = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
-const cases = listCases(filter);
+const cases = listSingleCases(filter);
 
 let compiled = 0;
 const rejected: string[] = [];

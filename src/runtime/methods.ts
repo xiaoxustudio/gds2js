@@ -67,6 +67,15 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
     }
 
+    // 脚本值（preload / load 的结果）：`.v` 就是类构造器，`.new()` 实例化它
+    if (typeof inner === "function") {
+      if (name === "new") {
+        const Ctor = inner as new (...a: Variant[]) => object;
+        return V.object(new Ctor(...args));
+      }
+      throw new UnsupportedError("script-method", `脚本上的 ${name}() 未实现`);
+    }
+
     // 用户类实例：方法就是原型上的函数
     const member = (inner as unknown as Record<string, unknown>)[name];
     if (typeof member === "function") {
