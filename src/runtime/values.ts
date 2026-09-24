@@ -113,6 +113,11 @@ export class GDict {
     return [...this.ks];
   }
 
+  /** 值按插入顺序，与 keys() 对应 */
+  values(): Variant[] {
+    return [...this.vs];
+  }
+
   has(k: Variant): boolean {
     return this.index.has(keyOf(k));
   }

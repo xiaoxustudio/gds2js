@@ -122,6 +122,8 @@ let PRELOADS = new Map<string, string>();
 let LOADS = new Map<string, string>();
 /** 正在发射 _init（constructor）体——只有此上下文允许 super(...) 构造调用。 */
 let IN_CONSTRUCTOR = false;
+/** 正在发射的模块里 named enum 的名字（`Suit.HEARTS` 点访问要特判成 rt.index） */
+let ENUM_NAMES = new Set<string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
 
@@ -189,13 +191,16 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
 
-  // enum → 模块作用域常量。named enum 发成冻结对象（`Color.RED` 经 rt.attribute 取字段），
-  // 匿名 enum 的成员发成逐个裸常量。值是 Variant int，故 `Color.RED + 1` / print 都走正常路径。
+  // enum → 模块作用域常量。named enum 发成 GDict（`Suit["X"]`/keys()/values()/size()/for-in 全走 Dictionary 路径），
+  // `Suit.HEARTS` 点访问由 emitExpr 特判成 rt.index（GDScript 只允许 enum 点访问，不允许普通 dict 点访问）。
+  // 匿名 enum 的成员是脚本级裸 int 常量。值是 Variant int，故 `Suit.X + 1` / print 都走正常路径。
+  ENUM_NAMES = new Set<string>();
   for (const en of m.enums) {
     mark(out.length, en.loc);
     if (en.name) {
-      const fields = en.members.map((mm) => `${mm.name}: rt.V.int(${mm.value})`).join(", ");
-      out.push(`const ${en.name} = Object.freeze({ ${fields} });`);
+      ENUM_NAMES.add(en.name);
+      const pairs = en.members.map((mm) => `[rt.V.str(${JSON.stringify(mm.name)}), rt.V.int(${mm.value})]`).join(", ");
+      out.push(`const ${en.name} = rt.dictOf([${pairs}]);`);
     } else {
       for (const mm of en.members) out.push(`const ${mm.name} = rt.V.int(${mm.value});`);
     }
@@ -485,6 +490,10 @@ function emitExpr(e: Expr): string {
       // super.属性 在 JS 里走原型链、拿不到父类实例字段，语义不对——只支持 super.method()
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
+      }
+      // enum 点访问 `Suit.HEARTS` → 字典取值（GDScript 只允许 enum 这样点访问）
+      if (e.obj.kind === "ident" && ENUM_NAMES.has(e.obj.name)) {
+        return `rt.index(${e.obj.name}, rt.V.str(${JSON.stringify(e.name)}))`;
       }
       return `rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)})`;
 

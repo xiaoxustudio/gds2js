@@ -117,6 +117,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.bool(d.has(one(args, "has")));
         case "keys":
           return V.array(GArray.of(d.keys()));
+        case "values":
+          return V.array(GArray.of(d.values()));
         case "get":
           return d.get(one(args, "get"));
         case "set":
