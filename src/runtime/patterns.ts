@@ -1,0 +1,109 @@
+import { UnsupportedError } from "./errors";
+import { Tag, V, type TagValue, type Variant } from "./tags";
+import { GArray, valueEq } from "./values";
+
+/**
+ * `match` 的模式匹配与 `is` / `as` 的类型判定。
+ *
+ * 语义依据 docs/SEMANTICS.md：
+ * - 数组模式要求长度相等、逐项匹配，绑定按出现顺序收集（用例 020）
+ * - `is` 在 Godot 4.6.3 是编译期就能确定的类型判定（用例 021）
+ */
+
+export type Pat =
+  | { k: "wild" }
+  | { k: "lit"; v: Variant }
+  | { k: "bind" }
+  | { k: "arr"; items: Pat[] };
+
+export const patWild = (): Pat => ({ k: "wild" });
+export const patLit = (v: Variant): Pat => ({ k: "lit", v });
+export const patBind = (): Pat => ({ k: "bind" });
+export const patArray = (items: Pat[]): Pat => ({ k: "arr", items });
+
+/**
+ * 匹配成功返回**按绑定出现顺序**收集的值数组，失败返回 null。
+ * emitter 拿到数组后按 IR 里 pattern 的绑定名依次解构。
+ */
+export function matchPattern(subject: Variant, p: Pat): Variant[] | null {
+  const out: Variant[] = [];
+  return matches(subject, p, out) ? out : null;
+}
+
+function matches(s: Variant, p: Pat, out: Variant[]): boolean {
+  switch (p.k) {
+    case "wild":
+      return true;
+    case "bind":
+      out.push(s);
+      return true;
+    case "lit":
+      return valueEq(s, p.v);
+    case "arr": {
+      if (s.t !== Tag.ARRAY) return false;
+      const items = (s.v as GArray).raw();
+      if (items.length !== p.items.length) return false;
+      return p.items.every((sub, i) => {
+        const item = items[i];
+        return item !== undefined && matches(item, sub, out);
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------- is / as
+
+const TYPE_TAGS: Record<string, TagValue> = {
+  int: Tag.INT,
+  float: Tag.FLOAT,
+  bool: Tag.BOOL,
+  String: Tag.STRING,
+  Array: Tag.ARRAY,
+  Dictionary: Tag.DICT,
+  Object: Tag.OBJECT,
+  Nil: Tag.NIL,
+  null: Tag.NIL,
+};
+
+function builtinTag(name: string): TagValue | undefined {
+  // Array[int] 这类带元素类型的写法，判定只看容器类型
+  return TYPE_TAGS[name.replace(/\[.*\]$/, "")];
+}
+
+export function isType(v: Variant, name: string): Variant {
+  if (name === "Variant") return V.bool(true);
+  const t = builtinTag(name);
+  if (t === undefined) {
+    throw new UnsupportedError("is-type", `is ${name} 未实现（自定义类型需要类注册表）`);
+  }
+  return V.bool(v.t === t);
+}
+
+export function asType(v: Variant, name: string): Variant {
+  if (name === "Variant") return v;
+  const t = builtinTag(name);
+  if (t === undefined) {
+    throw new UnsupportedError("as-type", `as ${name} 未实现（自定义类型需要类注册表）`);
+  }
+  return v.t === t ? v : V.nil();
+}
+
+/**
+ * `typeof` 返回的是 Godot 的 Variant.Type 枚举值（int=2、float=3，见用例 002）。
+ * **不能**直接用我们的 Tag —— NIL/BOOL/INT/FLOAT/STRING 恰好同值（0–4），
+ * 但 ARRAY 在 Godot 里是 28 不是 5，DICT 是 27 不是 6。
+ */
+const GODOT_TYPE: Record<TagValue, number> = {
+  [Tag.NIL]: 0,
+  [Tag.BOOL]: 1,
+  [Tag.INT]: 2,
+  [Tag.FLOAT]: 3,
+  [Tag.STRING]: 4,
+  [Tag.ARRAY]: 28,
+  [Tag.DICT]: 27,
+  [Tag.OBJECT]: 24,
+};
+
+export function typeOf(v: Variant): Variant {
+  return V.int(GODOT_TYPE[v.t]);
+}

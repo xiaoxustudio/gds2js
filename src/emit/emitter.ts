@@ -1,4 +1,4 @@
-import type { Expr, FuncDecl, Module, Stmt } from "../lower/ir";
+import type { Expr, FuncDecl, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 
 /**
@@ -43,11 +43,11 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
+  typeof: (a) => `rt.typeOf(${a.join(", ")})`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = new Set([
-  "typeof",
   "Vector2",
   "Vector2i",
   "Vector3",
@@ -130,9 +130,13 @@ function hasValueReturn(stmts: Stmt[]): boolean {
 
 function emitStmt(s: Stmt, voidReturn: boolean): string[] {
   switch (s.kind) {
-    case "var":
+    case "var": {
       // 直接发射 let —— 块作用域由 JS 自己保证，正好对应 S16
-      return [`let ${s.name} = ${s.init ? emitExpr(s.init) : "rt.V.nil()"};`];
+      const init = s.init ? emitExpr(s.init) : "rt.V.nil()";
+      // 带类型标注的声明要做截断：`var i: int = 3.9` 在 Godot 里是 3，不是 3.9（S6）
+      const cast = declaredCast(s.type);
+      return [`let ${s.name} = ${cast ? `${cast}(${init})` : init};`];
+    }
 
     case "expr":
       return [`${emitExpr(s.expr)};`];
@@ -181,8 +185,28 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
     case "pass":
       return ["/* pass */"];
 
-    case "match":
-      throw new UnsupportedError("emit-match", "match 还没实现");
+    case "match": {
+      // do-while(false) + break：让第一个命中的 arm 接管，其余跳过。
+      // 已知限制：arm 体内若要对**外层循环** break/continue，会被这里截住。
+      const subject = emitExpr(s.subject);
+      const lines: string[] = ["do {"];
+      s.arms.forEach((arm, i) => {
+        const m = `__m${i}`;
+        const guard = arm.guard ? ` && rt.ops.truthy(${emitExpr(arm.guard)})` : "";
+        lines.push(`  const ${m} = rt.matchPattern(${subject}, ${emitPattern(arm.pattern)});`);
+        lines.push(`  if (${m} !== null${guard}) {`);
+        patternNames(arm.pattern).forEach((name, idx) => {
+          lines.push(`    const ${name} = ${m}[${idx}];`);
+        });
+        for (const st of arm.body) {
+          for (const line of emitStmt(st, voidReturn)) lines.push(`    ${line}`);
+        }
+        lines.push("    break;");
+        lines.push("  }");
+      });
+      lines.push("} while (false);");
+      return lines;
+    }
   }
 }
 
@@ -249,8 +273,61 @@ function emitExpr(e: Expr): string {
       return emitCall(e);
 
     case "is":
+      return `rt.isType(${emitExpr(e.operand)}, ${JSON.stringify(typeName(e.type))})`;
+
     case "as":
-      throw new UnsupportedError("emit-is-as", "is / as 还没实现");
+      return `rt.asType(${emitExpr(e.operand)}, ${JSON.stringify(typeName(e.type))})`;
+  }
+}
+
+/** 带类型标注的声明需要显式转换（S6：float 赋给 int 向零截断） */
+function declaredCast(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  const base = t.name.replace(/\[.*\]$/, "");
+  if (base === "int") return "rt.toInt";
+  if (base === "float") return "rt.toFloat";
+  if (base === "bool") return "rt.toBool";
+  if (base === "String") return "rt.strOf";
+  return null;
+}
+
+function typeName(t: TypeRef): string {
+  if (t.kind === "named") return t.name;
+  if (t.kind === "array") return "Array";
+  return "Variant";
+}
+
+function emitPattern(p: Pattern): string {
+  switch (p.kind) {
+    case "wildcard":
+      return "rt.patWild()";
+    case "bind":
+      return "rt.patBind()";
+    case "lit":
+      return `rt.patLit(${emitLit(p.lit, p.value)})`;
+    case "array":
+      return `rt.patArray([${p.items.map(emitPattern).join(", ")}])`;
+    case "dict":
+      throw new UnsupportedError("emit-pattern-dict", "字典模式还没实现");
+  }
+}
+
+function emitLit(lit: string, value: string | number | boolean | null): string {
+  if (lit === "int") return `rt.V.int(${String(value)})`;
+  if (lit === "float") return `rt.V.float(${String(value)})`;
+  if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
+  if (lit === "bool") return `rt.V.bool(${String(value)})`;
+  return "rt.V.nil()";
+}
+
+function patternNames(p: Pattern): string[] {
+  switch (p.kind) {
+    case "bind":
+      return [p.name];
+    case "array":
+      return p.items.flatMap(patternNames);
+    default:
+      return [];
   }
 }
 

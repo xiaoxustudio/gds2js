@@ -20,24 +20,44 @@ let compiled = 0;
 const rejected: string[] = [];
 const unsupported: Array<{ id: string; msg: string }> = [];
 
+/**
+ * 不用 rmSync 删旧产物 —— 沙箱里 rmSync 会走回收站且可能超时。
+ * 改成直接**覆写**：失败用例留一个抛错的占位文件，
+ * js-runner 跑到它时会把明确原因记进「崩溃」桶，而不是跑到上一轮的陈旧代码。
+ */
+const writeStub = (id: string, reason: string): void => {
+  writeFileSync(
+    join(caseDir(id), "main.gen.mts"),
+    `// gds2js：本轮没有生成有效产物。保留文件是为了让 js-runner 报出明确原因。\nthrow new Error(${JSON.stringify(`gds2js 编译失败：${reason}`)});\n`,
+    "utf8",
+  );
+};
+
 for (const id of cases) {
-  // 先清掉上一轮的产物。编译失败 / 被语义分析拦下的用例会留下**陈旧的** main.gen.mts，
-  // 它半路抛错后没 flush 的输出会串到下一个用例，把度量整个带偏（实测踩过）。
-  rmSync(join(caseDir(id), "main.gen.mts"), { force: true });
-
   const src = readFileSync(caseScript(id), "utf8");
-  const ir = lower(await parseSource(src));
 
-  const diags = analyze(ir);
-  if (diags.length > 0) {
-    rejected.push(id);
+  let diags: Array<{ code: string; message: string }> = [];
+  try {
+    diags = analyze(lower(await parseSource(src)));
+  } catch (e) {
+    writeStub(id, `lowering 崩溃：${e instanceof Error ? e.message : String(e)}`);
+    unsupported.push({ id, msg: String(e) });
     continue;
   }
+  if (diags.length > 0) {
+    rejected.push(id);
+    writeStub(id, `语义分析拦下：${diags[0]?.message ?? ""}`);
+    continue;
+  }
+
   try {
+    const ir = lower(await parseSource(src));
     writeFileSync(join(caseDir(id), "main.gen.mts"), emitModule(ir), "utf8");
     compiled++;
   } catch (e) {
-    unsupported.push({ id, msg: e instanceof UnsupportedError ? e.message : String(e) });
+    const msg = e instanceof UnsupportedError ? e.message : String(e);
+    writeStub(id, msg);
+    unsupported.push({ id, msg });
   }
 }
 

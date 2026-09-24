@@ -19,9 +19,13 @@ function isTruthyResult(r: unknown): boolean {
 
 let out: string[] = [];
 
-/** GDScript 的 print 是全局函数，多个参数用空格连接 */
+/**
+ * GDScript 的 print 是全局函数。**多参数是无分隔符拼接**，不是空格连接 ——
+ * 这是用例 002 第 6 行（`print(typeof(1), " ", typeof(1.0))` → "2 3"）实测出来的，
+ * 直觉上以为是空格连接，结果多出两个空格。要带分隔符得用 `prints()`。
+ */
 export function print(...args: unknown[]): void {
-  out.push(args.map((a) => String(a)).join(" "));
+  out.push(args.map((a) => String(a)).join(""));
 }
 
 export function flush(): void {
