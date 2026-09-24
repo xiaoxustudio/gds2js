@@ -4,44 +4,47 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  zero = new rt.Signal();
+  one = new rt.Signal();
+  two = new rt.Signal();
   frames = rt.V.int(0);
 
   async _initialize(): Promise<void> {
-    print(rt.show((await this.wait_zero())));
-    print(rt.show((await this.wait_one())));
-    print(rt.show((await this.wait_two())));
+    print(rt.show((await rt.awaitValue(this.wait_zero()))));
+    print(rt.show((await rt.awaitValue(this.wait_one()))));
+    print(rt.show((await rt.awaitValue(this.wait_two()))));
   }
   
   async wait_zero(): Promise<unknown> {
-    rt.method(fire_zero, "call_deferred", []);
-    return (await zero);
+    rt.method(rt.callableOf(this.fire_zero.bind(this)), "call_deferred", []);
+    return (await rt.awaitValue(this.zero));
   }
   
   async wait_one(): Promise<unknown> {
-    rt.method(fire_one, "call_deferred", []);
-    return (await one);
+    rt.method(rt.callableOf(this.fire_one.bind(this)), "call_deferred", []);
+    return (await rt.awaitValue(this.one));
   }
   
   async wait_two(): Promise<unknown> {
-    rt.method(fire_two, "call_deferred", []);
-    return (await two);
+    rt.method(rt.callableOf(this.fire_two.bind(this)), "call_deferred", []);
+    return (await rt.awaitValue(this.two));
   }
   
   fire_zero(): void {
-    rt.method(zero, "emit", []);
+    rt.method(this.zero, "emit", []);
   }
   
   fire_one(): void {
-    rt.method(one, "emit", [rt.V.int(7)]);
+    rt.method(this.one, "emit", [rt.V.int(7)]);
   }
   
   fire_two(): void {
-    rt.method(two, "emit", [rt.V.int(1), rt.V.int(2)]);
+    rt.method(this.two, "emit", [rt.V.int(1), rt.V.int(2)]);
   }
   
   async _process(_d): Promise<unknown> {
-    frames = rt.ops.add(frames, rt.V.int(1));
-    if (rt.ops.truthy(rt.ops.eq(frames, rt.V.int(40)))) {
+    this.frames = rt.ops.add(this.frames, rt.V.int(1));
+    if (rt.ops.truthy(rt.ops.eq(this.frames, rt.V.int(40)))) {
       this.quit();
     }
     return rt.V.bool(false);

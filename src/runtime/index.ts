@@ -6,3 +6,4 @@ export { fast } from "./fast";
 export * from "./signal";
 export * from "./builtins";
 export * from "./methods";
+export * from "./object";

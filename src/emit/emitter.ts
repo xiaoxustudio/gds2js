@@ -46,9 +46,31 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set(["typeof", "Vector2", "Vector2i", "Vector3", "Color", "String", "load", "preload"]);
+const BUILTIN_TODO = new Set([
+  "typeof",
+  "Vector2",
+  "Vector2i",
+  "Vector3",
+  "Color",
+  "String",
+  "load",
+  "preload",
+]);
+
+/**
+ * 模块级名字。局部变量不在里面，所以发射成裸标识符；
+ * 模块级的变量 / 信号 / 函数被发射成类字段或方法，引用时必须带 `this.`。
+ *
+ * 已知缺口：局部变量与模块级变量同名时会被误判成 `this.x`。
+ * emitter 目前没有作用域信息，等 IR 带上符号解析结果再修。
+ */
+let MODULE_VARS = new Set<string>();
+let MODULE_FUNCS = new Set<string>();
 
 export function emitModule(m: Module): string {
+  MODULE_VARS = new Set([...m.vars.map((v) => v.name), ...m.signals.map((s) => s.name)]);
+  MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+
   const out: string[] = [];
   out.push("// 由 gds2js 从 main.gd 编译生成 —— 不要手改。");
   out.push("");
@@ -56,10 +78,11 @@ export function emitModule(m: Module): string {
   out.push(`import { print, SceneTree } from "${HARNESS_IMPORT}";`);
   out.push("");
   out.push("export class Main extends SceneTree {");
+  for (const s of m.signals) out.push(`  ${s.name} = new rt.Signal();`);
   for (const v of m.vars) {
     out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
   }
-  if (m.vars.length > 0) out.push("");
+  if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
     for (const line of emitFunc(f)) out.push(`  ${line}`);
   }
@@ -164,7 +187,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
 }
 
 function emitAssign(target: Expr, value: string): string {
-  if (target.kind === "ident") return `${target.name} = ${value};`;
+  if (target.kind === "ident") return `${emitExpr(target)} = ${value};`;
   if (target.kind === "index") {
     return `rt.setIndex(${emitExpr(target.obj)}, ${emitExpr(target.index)}, ${value});`;
   }
@@ -183,6 +206,9 @@ function emitExpr(e: Expr): string {
       return "rt.V.nil()";
 
     case "ident":
+      // 必须 bind(this)：光传 this.f 出去会在调用时丢掉接收者
+      if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this))`;
+      if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
       return e.name;
 
     case "unary":
@@ -192,7 +218,8 @@ function emitExpr(e: Expr): string {
       throw new UnsupportedError("emit-unary", `一元运算符 ${e.op} 还没实现`);
 
     case "await":
-      return `(await ${emitExpr(e.operand)})`;
+      // 统一走 rt.awaitValue：Signal 会真的挂起，非信号值原样返回（S22）
+      return `(await rt.awaitValue(${emitExpr(e.operand)}))`;
 
     case "binary":
       return emitBinary(e);
@@ -211,11 +238,15 @@ function emitExpr(e: Expr): string {
     case "attribute":
       return `rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)})`;
 
+    case "lambda": {
+      const params = e.params.map((p) => p.name).join(", ");
+      const body = e.body.flatMap((st) => emitStmt(st, false).map((l) => `      ${l}`));
+      // 直接用 JS 箭头函数：闭包捕获天然是「每次迭代独立」的，正好对应 S17
+      return `rt.callable((${params}) => {\n${body.join("\n")}\n    })`;
+    }
+
     case "call":
       return emitCall(e);
-
-    case "lambda":
-      throw new UnsupportedError("emit-lambda", "lambda 还没实现");
 
     case "is":
     case "as":

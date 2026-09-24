@@ -1,9 +1,11 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
+import { Signal } from "./signal";
 import { Tag, V, type Variant } from "./tags";
-import { GArray, GDict, keyOf, strAt, strLength, strSubstr, strFormat } from "./values";
+import { GArray, GDict, strAt, strFormat, strLength, strSubstr } from "./values";
 
 /**
- * 容器 / 字符串上的方法与下标操作。
+ * 容器 / 字符串 / 对象上的方法与下标操作。
  * 放在这里而不是各自的类里，是为了让 emitter 只需要一个统一入口
  * （`rt.method(obj, "name", args)`），不必在生成代码里判断值的具体类型。
  */
@@ -23,7 +25,51 @@ function asString(v: Variant, who: string): string {
   return v.v as string;
 }
 
-export function method(obj: Variant, name: string, args: Variant[]): Variant {
+/** 入口可能是裸 JS 值（lambda、引擎对象），先归一成 Variant */
+function norm(v: unknown): Variant {
+  return isVariant(v) ? v : wrapValue(v);
+}
+
+export function method(raw: unknown, name: string, args: Variant[]): Variant {
+  const obj = norm(raw);
+
+  if (obj.t === Tag.OBJECT) {
+    const inner = obj.v;
+
+    if (inner instanceof Signal) {
+      if (name === "emit") {
+        inner.emit(...args.map((a) => a.v));
+        return V.nil();
+      }
+      if (name === "connect") {
+        const fn = args[0];
+        if (fn === undefined) throw new GodotRuntimeError("arity", "connect 缺少参数");
+        inner.connect((...a: unknown[]) => {
+          const f = (fn.v as Record<string, unknown>)[CALLABLE] as Fn | undefined;
+          if (f) f(...a.map(wrapValue));
+        });
+        return V.nil();
+      }
+      throw new UnsupportedError("signal-method", `Signal.${name}() 未实现`);
+    }
+
+    const fn = (inner as Record<string, unknown>)[CALLABLE];
+    if (typeof fn === "function") {
+      const f = fn as Fn;
+      if (name === "call") return wrapValue(f(...args));
+      // call_deferred：推到下一个宏任务，等价于 Godot 的帧末调用
+      if (name === "call_deferred") {
+        setTimeout(() => {
+          f(...args);
+        }, 0);
+        return V.nil();
+      }
+      throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
+    }
+
+    throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
+  }
+
   switch (obj.t) {
     case Tag.ARRAY: {
       const a = obj.v as GArray;
@@ -86,14 +132,16 @@ export function method(obj: Variant, name: string, args: Variant[]): Variant {
   }
 }
 
-export function index(obj: Variant, idx: Variant): Variant {
+export function index(raw: unknown, idx: Variant): Variant {
+  const obj = norm(raw);
   if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArg([idx], 0, "下标"));
   if (obj.t === Tag.DICT) return asDict(obj, "下标").get(idx);
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
-export function setIndex(obj: Variant, idx: Variant, val: Variant): void {
+export function setIndex(raw: unknown, idx: Variant, val: Variant): void {
+  const obj = norm(raw);
   if (obj.t === Tag.ARRAY) {
     asArray(obj, "下标赋值").set(intArg([idx], 0, "下标赋值"), val);
     return;
@@ -126,9 +174,20 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
   return V.str(strFormat(asString(fmt, "格式化"), list));
 }
 
-export function attribute(obj: Variant, name: string): Variant {
-  if (obj.t === Tag.NIL) throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);
-  throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做）`);
+/**
+ * 取属性。返回值**不**归一成 Variant —— 因为 `create_timer(...).timeout`
+ * 拿到的是个 Signal，await 它才有意义；包成 Variant 反而会让它立刻 resolve。
+ */
+export function attribute(raw: unknown, name: string): unknown {
+  const obj = norm(raw);
+  if (obj.t === Tag.OBJECT) {
+    const inner = obj.v as Record<string, unknown>;
+    if (name in inner) return inner[name];
+  }
+  if (obj.t === Tag.NIL) {
+    throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);
+  }
+  throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做完）`);
 }
 
 function one(args: Variant[], who: string): Variant {
@@ -144,5 +203,3 @@ function intArg(args: Variant[], i: number, who: string): number {
   }
   return a.v as number;
 }
-
-export { keyOf };

@@ -7,17 +7,17 @@ export class Main extends SceneTree {
   frames = rt.V.int(0);
 
   async _initialize(): Promise<void> {
-    print(rt.show((await this.f())));
+    print(rt.show((await rt.awaitValue(this.f()))));
   }
   
   async f(): Promise<unknown> {
-    (await rt.attribute(this.create_timer(rt.V.float(0.02)), "timeout"));
+    (await rt.awaitValue(rt.attribute(this.create_timer(rt.V.float(0.02)), "timeout")));
     return rt.V.int(42);
   }
   
   async _process(_d): Promise<unknown> {
-    frames = rt.ops.add(frames, rt.V.int(1));
-    if (rt.ops.truthy(rt.ops.eq(frames, rt.V.int(30)))) {
+    this.frames = rt.ops.add(this.frames, rt.V.int(1));
+    if (rt.ops.truthy(rt.ops.eq(this.frames, rt.V.int(30)))) {
       this.quit();
     }
     return rt.V.bool(false);

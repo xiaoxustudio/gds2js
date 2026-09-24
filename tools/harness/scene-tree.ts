@@ -70,8 +70,14 @@ export class SceneTree {
     return false;
   }
 
-  create_timer(sec: number): Timer {
-    const t = new Timer(sec);
+  /**
+   * 注意：编译产物传进来的是 Variant（`rt.V.float(0.02)`），不是裸 number。
+   * 不拆箱的话 `#left -= dt` 会变成 NaN，定时器永不触发，
+   * `_initialize` 就永远 await 下去 —— 表现为用例静默挂死。
+   */
+  create_timer(sec: number | Variant): Timer {
+    const s = typeof sec === "number" ? sec : Number((sec as Variant).v);
+    const t = new Timer(s);
     this.#timers.push(t);
     return t;
   }
@@ -81,7 +87,18 @@ export class SceneTree {
   }
 
   async run(maxFrames = 3000): Promise<void> {
-    await this._initialize();
+    /**
+     * Godot 里 `_initialize` 可以是协程，主循环与它**并发**推进。
+     * 如果先 await _initialize 再跑循环就会死锁：
+     * _initialize 在等定时器，而定时器只能靠主循环推进。
+     * 所以这里先把它挂起来，循环跑完再收尾。
+     */
+    let initError: unknown = null;
+    const initDone = this._initialize().catch((e: unknown) => {
+      initError = e;
+      this.quit();
+    });
+
     let frames = 0;
     while (!this.#quitted && frames < maxFrames) {
       await new Promise((r) => setTimeout(r, 2));
@@ -89,6 +106,9 @@ export class SceneTree {
       if (isTruthyResult(await this._process(0.002))) this.quit();
       frames++;
     }
+
+    await initDone;
     flush();
+    if (initError !== null) throw initError;
   }
 }
