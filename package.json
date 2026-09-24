@@ -8,9 +8,10 @@
 		"node": ">=24"
 	},
 	"exports": {
-		".": "./dist/index.mjs",
+		".": "./dist/runtime.mjs",
 		"./runtime": "./dist/runtime.mjs",
 		"./host": "./dist/host.mjs",
+		"./standalone": "./dist/standalone.cjs",
 		"./package.json": "./package.json"
 	},
 	"bin": {
@@ -20,9 +21,9 @@
 		"dist"
 	],
 	"scripts": {
-		"gen:ws": " npx tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
-		"build": "tsdown && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
-		"dev": "tsx src/index.ts",
+		"gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
+		"build": "tsdown && tsdown --config tsdown.standalone.config.ts && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
+		"dev": "tsx src/cli.ts",
 		"watch": "tsdown --watch",
 		"test:golden": "node tools/golden.mjs",
 		"test:diff": "tsx tools/diff.mjs",
@@ -30,7 +31,9 @@
 		"test:ir": "tsx tools/ir-check.ts",
 		"test:sema": "tsx tools/sema-check.ts",
 		"test:compile": "tsx tools/compile.ts",
-		"test:multi": "tsx tools/multi-demo.ts"
+		"test:multi": "tsx tools/multi-demo.ts",
+		"test:pkgmodes": "tsx tools/pkg-modes-check.ts",
+		"bench": "tsx tools/bench.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.6",

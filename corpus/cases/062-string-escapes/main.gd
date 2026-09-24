@@ -1,0 +1,22 @@
+extends SceneTree
+
+func _initialize():
+	print("\n".length())
+	print("\t".length())
+	print("\r".length())
+	print("\a".length())
+	print("\b".length())
+	print("\f".length())
+	print("\v".length())
+	print("\\".length())
+	print("\"".length())
+	print("\'".length())
+	print("ab\ncd".length())
+	print("\u0041" == "A")
+	print("it\'s" == "it's")
+	print("it\'s".length())
+	print("a\rb".length())
+	print("\\" + "\\" == "\\\\")
+	print("\u00e9".length())
+	print("\u00e9" == "é")
+	quit()

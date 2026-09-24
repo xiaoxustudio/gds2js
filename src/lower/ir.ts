@@ -15,7 +15,7 @@ export interface Loc {
 export type LitKind = "int" | "float" | "string" | "bool" | "null";
 
 export type Expr =
-  | { kind: "lit"; lit: LitKind; value: string | number | boolean | null; loc: Loc }
+  | { kind: "lit"; lit: LitKind; value: string | number | bigint | boolean | null; loc: Loc }
   | { kind: "ident"; name: string; loc: Loc }
   | { kind: "binary"; op: string; left: Expr; right: Expr; loc: Loc }
   | { kind: "unary"; op: string; operand: Expr; loc: Loc }
@@ -51,10 +51,12 @@ export interface MatchArm {
 
 export type Pattern =
   | { kind: "wildcard" }
-  | { kind: "lit"; lit: LitKind; value: string | number | boolean | null }
+  | { kind: "lit"; lit: LitKind; value: string | number | bigint | boolean | null }
   | { kind: "bind"; name: string }
   | { kind: "array"; items: Pattern[] }
-  | { kind: "dict"; entries: Array<{ key: Expr; pattern: Pattern }> };
+  | { kind: "dict"; entries: Array<{ key: Expr; pattern: Pattern }> }
+  /** 常量模式：裸标识符（const）或 attribute（enum 成员 / 类常量），按值匹配。 */
+  | { kind: "const"; expr: Expr };
 
 export interface Param {
   name: string;
@@ -95,6 +97,18 @@ export interface SignalDecl {
   loc: Loc;
 }
 
+export interface EnumMember {
+  name: string;
+  value: number;
+}
+
+/** `enum Name { A, B = 5 }`；name 为 null 表示匿名 enum（成员是脚本级裸常量）。 */
+export interface EnumDecl {
+  name: string | null;
+  members: EnumMember[];
+  loc: Loc;
+}
+
 export interface ClassDecl {
   name: string;
   extends: string | null;
@@ -113,6 +127,7 @@ export interface Module {
   topStmts: Stmt[];
   vars: VarDecl[];
   signals: SignalDecl[];
+  enums: EnumDecl[];
   funcs: FuncDecl[];
   innerClasses: ClassDecl[];
 }

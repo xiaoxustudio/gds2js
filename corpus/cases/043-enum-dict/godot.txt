@@ -1,0 +1,10 @@
+3
+["HEARTS", "DIAMONDS", "CLUBS"]
+[0, 5, 6]
+5
+true
+false
+HEARTS
+DIAMONDS
+CLUBS
+{ "HEARTS": 0, "DIAMONDS": 5, "CLUBS": 6 }

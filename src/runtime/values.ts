@@ -1,6 +1,11 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, tagName, V, type Variant } from "./tags";
+import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { GVector2 } from "./vector2";
+
+/** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
+function numVal(v: Variant): number {
+  return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
+}
 
 /**
  * Dictionary 键编码。
@@ -26,6 +31,19 @@ export function keyOf(v: Variant): string {
 
 // ---------------------------------------------------------------- Array
 
+/**
+ * Godot 数组下标的唯一口径（056 实测）：**支持负数**（`a[-1]` 是最后一格，读写同规则），
+ * 越界一律响亮报 `array-index` —— 尤其写越界，Godot 是 SCRIPT ERROR，**不会**像 JS 那样
+ * 把数组撑长或挂一个 `-1` 属性上去（后者先前在 GArray.set 里是静默错）。
+ */
+export function arrIdx(i: number, len: number): number {
+  const k = i < 0 ? i + len : i;
+  if (k < 0 || k >= len) {
+    throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
+  }
+  return k;
+}
+
 export class GArray {
   private items: Variant[];
 
@@ -46,15 +64,11 @@ export class GArray {
   }
 
   get(i: number): Variant {
-    const v = this.items[i];
-    if (v === undefined) {
-      throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
-    }
-    return v;
+    return this.items[arrIdx(i, this.items.length)]!;
   }
 
   set(i: number, v: Variant): void {
-    this.items[i] = v;
+    this.items[arrIdx(i, this.items.length)] = v;
   }
 
   append(v: Variant): void {
@@ -90,9 +104,19 @@ export class GArray {
     if (!allNum && !allStr) {
       throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
     }
+    // 数值排序：int 载荷可能是 bigint，混着 `-` 会 TypeError；两边都可能是 bigint，
+    // 用 number 减又会因 >2^53 相等而错排。所以先按「窄化到 number」的跨类型序，
+    // 两个 int 之间再退回 bigint 精确比较。
     const cmp = allNum
-      ? (a: Variant, b: Variant) => (a.v as number) - (b.v as number)
-      : (a: Variant, b: Variant) => (a.v as string) < (b.v as string) ? -1 : 1;
+      ? (a: Variant, b: Variant) =>
+          a.t === Tag.INT && b.t === Tag.INT
+            ? intToBig(a.v as IntPayload) < intToBig(b.v as IntPayload)
+              ? -1
+              : intToBig(a.v as IntPayload) > intToBig(b.v as IntPayload)
+                ? 1
+                : 0
+            : numVal(a) - numVal(b)
+      : (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string);
     this.items = [...this.items].sort(cmp);
   }
 }
@@ -113,6 +137,11 @@ export class GDict {
     return [...this.ks];
   }
 
+  /** 值按插入顺序，与 keys() 对应 */
+  values(): Variant[] {
+    return [...this.vs];
+  }
+
   has(k: Variant): boolean {
     return this.index.has(keyOf(k));
   }
@@ -121,6 +150,18 @@ export class GDict {
     const i = this.index.get(keyOf(k));
     if (i === undefined) return V.nil();
     return this.vs[i] ?? V.nil();
+  }
+
+  /**
+   * 方括号读 `d[k]`（S 语义：Godot 对缺键**报错**，见 `Invalid access to property or key`），
+   * 与 `.get(k)`（缺键返回 nil）区分开。装箱读与容器单态化的裸读都以此为准，二者必须一致。
+   */
+  getRequired(k: Variant): Variant {
+    const i = this.index.get(keyOf(k));
+    if (i === undefined) {
+      throw new GodotRuntimeError("dict-key", `字典键不存在: ${show(k)}`);
+    }
+    return this.vs[i] as Variant;
   }
 
   set(k: Variant, v: Variant): void {
@@ -177,22 +218,241 @@ export function strSubstr(s: string, from: number, len: number): string {
   return [...s].slice(from, from + len).join("");
 }
 
+/**
+ * Godot 的 to_upper / to_lower 走 **Unicode 简单映射**：一个码点映一个码点、长度不变
+ * （探针实测 ß→ß、ﬁ→ﬁ、İ→i、ǳ→Ǳ、ǅ→Ǆ）。JS 的 toUpperCase/toLowerCase 走**兼容全映射**
+ * （ß→SS、ﬁ→FI、İ→i̇、ǳ→DŽ），于是 `"ß".to_upper()` 会**静默**产出与 Godot 不同长度的字符串
+ * （060 差分抓到过）。
+ *
+ * 这里逐码点映射：JS 的结果仍是单码点的（覆盖日常文字）直接采用，天然与简单映射一致；
+ * 一旦 JS 把它撑开，简单映射的值要么等于原字符、要么是另一个我们无从由 JS 推得的单码点，
+ * 于是只认下表里**已对 Godot 实测确认**的条目，其余一律响亮拒绝 —— 宁可报缺，不发错字。
+ */
+const SIMPLE_CASE: Record<"upper" | "lower", Record<string, string>> = {
+  upper: { ß: "ß", ﬁ: "ﬁ", ǳ: "Ǳ", ǅ: "Ǆ" },
+  lower: { İ: "i" },
+};
+
+/**
+ * Godot 的 String 是 UTF-32，`<` / `>` / `<=` / `>=` 以及 `Array.sort()` 都按**码点**逐位比较。
+ * JS 的字符串比较按 UTF-16 **码元**，代理区（U+D800–U+DFFF）会排到 U+FFFF 之下：
+ * 探针实测 `String.chr(0x1F600) < String.chr(0xFFFF)` 在 Godot 里是 **false**，JS 却给 **true** ——
+ * 一条能静默改判定向的错（emoji 与 BMP 高位字符比较、含 emoji 的字符串数组排序都会中）。
+ *
+ * 快路：两边都不含代理对时，码元序与码点序必然一致，直接用原生比较（日常文本全走这条）。
+ * 只有真出现代理对才逐码点比。
+ */
+export function strCmp(x: string, y: string): number {
+  if (!/[\uD800-\uDFFF]/.test(x) && !/[\uD800-\uDFFF]/.test(y)) {
+    return x === y ? 0 : x < y ? -1 : 1;
+  }
+  const xa = [...x];
+  const ya = [...y];
+  const n = Math.min(xa.length, ya.length);
+  for (let i = 0; i < n; i++) {
+    const cx = xa[i]!.codePointAt(0)!;
+    const cy = ya[i]!.codePointAt(0)!;
+    if (cx !== cy) return cx < cy ? -1 : 1;
+  }
+  if (xa.length === ya.length) return 0;
+  return xa.length < ya.length ? -1 : 1;
+}
+
+export function strCase(s: string, dir: "upper" | "lower"): string {
+  const table = SIMPLE_CASE[dir];
+  const out: string[] = [];
+  for (const ch of s) {
+    const mapped = dir === "upper" ? ch.toUpperCase() : ch.toLowerCase();
+    if ([...mapped].length === 1) {
+      out.push(mapped);
+      continue;
+    }
+    const fixed = table[ch];
+    if (fixed !== undefined) {
+      out.push(fixed);
+      continue;
+    }
+    throw new UnsupportedError(
+      "case-mapping",
+      `to_${dir === "upper" ? "upper" : "lower"}：字符 ${ch}（U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase()
+        }）的 Unicode 简单映射无法由 JS 推得（JS 给 "${mapped}"，Godot 给单码点），` +
+        `已实测的字符可补进 SIMPLE_CASE.${dir} 表`,
+    );
+  }
+  return out.join("");
+}
+
+/** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */
+const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);
+
+interface FmtSpec {
+  flags: string;
+  width: number;
+  prec: number | null;
+  type: string;
+  text: string;
+}
+
+type FmtTok = { lit: string } | { spec: FmtSpec };
+
+/** 符号在前、再补零（实测 %05d/-42 → "-0042"、%08.2f/-3.14159 → "-0003.14"）。 */
+function padFmt(body: string, sign: string, sp: FmtSpec): string {
+  const left = sp.flags.includes("-");
+  const zero = !left && sp.flags.includes("0");
+  if (zero && sp.width > 0) return sign + body.padStart(sp.width - sign.length, "0");
+  const raw = sign + body;
+  if (raw.length >= sp.width) return raw;
+  return left ? raw.padEnd(sp.width) : raw.padStart(sp.width);
+}
+
+function fmtNum(a: Variant, sp: FmtSpec): number {
+  if (a.t === Tag.INT) return intToNum(a.v as IntPayload);
+  if (a.t === Tag.FLOAT) return a.v as number;
+  throw new UnsupportedError(
+    "format-number",
+    `${sp.text} 需要数值，收到 ${tagName(a.t)}（Godot 此处是 Parse Error: a number is required in operator %）`,
+  );
+}
+
+/** x/X/o/c 只验证过 int；float 是否像 %d 那样截断**未实测**，宁缺毋猜。 */
+function fmtIntOnly(a: Variant, sp: FmtSpec): bigint {
+  if (a.t === Tag.INT) return intToBig(a.v as IntPayload);
+  throw new UnsupportedError(
+    "format-int",
+    `${sp.text} 只对 int 实测过（收到 ${tagName(a.t)}）；Godot 对 float 的行为未探针确认，拒绝猜测`,
+  );
+}
+
+/**
+ * GDScript 的 `%` 格式化。逐条对 Godot 4.6.3 探针实测（4 批共 51 个单表达式探针文件）：
+ *   转换符只有 `d o x X c s f` —— `%i %u %e %g` 与 `#` 标志在 Godot 是
+ *   `Parse Error: unsupported format character`；标志支持 `-`（左对齐）`0`（补零）`+`（正号）；`%%` 出字面 `%`。
+ *   `%d` 收 float **向零截断**（3.7→"3"、-3.7→"-3"）；精度对 `%d` 无效（`%.3d` 42 → "42"）。
+ *   `%f` 默认 6 位小数（3.5→"3.500000"、int 3→"3.000000"），`%.Nf` 取 N 位且**四舍五入远离零**
+ *   （2.5→"3"、3.5→"4"、2.25→"2.3"），与 JS `toFixed` 的取整规则一致。
+ *   `%x/%X/%o` 收负数给「符号 + 绝对值的进制串」（-1 → "-1"）；`%c` 是码点转字符（128512 → U+1F600，0 → NUL）。
+ *   参数**多于**转换符（只可能是数组右值）时 Godot 原样返回格式串（`"%d" % [1,2]` → `"%d"`）；
+ *   **少于**则 Godot 解析期报 not enough arguments，我们在运行期响亮抛。
+ * 早先的实现只 `replace(/%[dfs]/g, …)`：其余一律原样留在输出里（`%5d`、`%%`、`%x` 全部静默错），
+ * 且 `%f` 走 `strFloat` 得 "3.5" 而非 "3.500000" —— 都是能跑但输出错。
+ */
 export function strFormat(fmt: string, args: Variant[]): string {
-  let i = 0;
-  return fmt.replace(/%[dfs]/g, (spec) => {
-    const a = args[i++];
-    if (a === undefined) {
-      throw new GodotRuntimeError("format-arity", `格式化参数不足: ${fmt}`);
+  const toks: FmtTok[] = [];
+  let lit = "";
+  let specs = 0;
+  for (let i = 0; i < fmt.length; i++) {
+    if (fmt[i] !== "%") {
+      lit += fmt[i];
+      continue;
     }
-    if (spec === "%d") {
-      if (a.t !== Tag.INT) {
-        throw new UnsupportedError("format-d", `%d 需要 int，收到 ${tagName(a.t)}`);
+    if (fmt[i + 1] === "%") {
+      lit += "%";
+      i++;
+      continue;
+    }
+    let k = i + 1;
+    let flags = "";
+    while (k < fmt.length && (fmt[k] === "-" || fmt[k] === "+" || fmt[k] === "0")) {
+      flags += fmt[k];
+      k++;
+    }
+    let width = 0;
+    while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
+      width = width * 10 + (fmt[k]!.charCodeAt(0) - 48);
+      k++;
+    }
+    let prec: number | null = null;
+    if (fmt[k] === ".") {
+      k++;
+      prec = 0;
+      while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
+        prec = prec * 10 + (fmt[k]!.charCodeAt(0) - 48);
+        k++;
       }
-      return String(a.v);
     }
-    if (spec === "%s") return show(a);
-    return strFloat(a.v as number);
-  });
+    const t = fmt[k];
+    if (t === undefined || !FMT_TYPES.has(t)) {
+      throw new UnsupportedError(
+        "format-spec",
+        `不支持的格式符 "${fmt.slice(i, k + 1)}"：Godot 只认 d o x X c s f` +
+          `（%i/%u/%e/%g 与 # 标志实测是 Parse Error: unsupported format character）`,
+      );
+    }
+    toks.push({ lit });
+    lit = "";
+    toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1) } });
+    specs++;
+    i = k;
+  }
+  toks.push({ lit });
+
+  if (args.length > specs) return fmt; // Godot 的怪规则：实参多出来就原样返回格式串
+  if (args.length < specs) {
+    throw new GodotRuntimeError(
+      "format-arity",
+      `格式化参数不足: ${fmt}（需 ${specs} 个，给了 ${args.length} 个；Godot 是 Parse Error: not enough arguments）`,
+    );
+  }
+
+  let ai = 0;
+  let out = "";
+  for (const tk of toks) {
+    if ("lit" in tk) {
+      out += tk.lit;
+      continue;
+    }
+    const sp = tk.spec;
+    const a = args[ai++]!;
+    switch (sp.type) {
+      case "s":
+        out += padFmt(show(a), "", sp);
+        break;
+      case "d": {
+        let neg: boolean;
+        let body: string;
+        if (a.t === Tag.INT) {
+          const p = a.v as IntPayload;
+          if (typeof p === "bigint") {
+            neg = p < 0n;
+            body = (neg ? -p : p).toString();
+          } else {
+            neg = p < 0;
+            body = Math.abs(p).toString();
+          }
+        } else {
+          const v = Math.trunc(fmtNum(a, sp)); // 向零截断（实测 3.7→3、-3.7→-3）
+          neg = v < 0;
+          body = Math.abs(v).toString();
+        }
+        const sign = neg ? "-" : sp.flags.includes("+") ? "+" : "";
+        out += padFmt(body, sign, sp);
+        break;
+      }
+      case "f": {
+        const v = fmtNum(a, sp);
+        const body = Math.abs(v).toFixed(sp.prec ?? 6);
+        out += padFmt(body, v < 0 ? "-" : sp.flags.includes("+") ? "+" : "", sp);
+        break;
+      }
+      case "x":
+      case "X":
+      case "o": {
+        const p = fmtIntOnly(a, sp);
+        const neg = p < 0n;
+        const mag = neg ? -p : p;
+        const base = sp.type === "o" ? 8 : 16;
+        const body = sp.type === "X" ? mag.toString(base).toUpperCase() : mag.toString(base);
+        out += padFmt(body, neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
+        break;
+      }
+      case "c": {
+        const p = fmtIntOnly(a, sp);
+        out += padFmt(String.fromCodePoint(Number(p)), "", sp);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- 格式化
@@ -264,8 +524,10 @@ export function valueEq(a: Variant, b: Variant): boolean {
   const ta = a.t;
   const tb = b.t;
   if (ta === Tag.INT || ta === Tag.FLOAT) {
-    // 跨 int/float 数值相等（S11）
-    if (tb === Tag.INT || tb === Tag.FLOAT) return (a.v as number) === (b.v as number);
+    // 跨 int/float 数值相等（S11）。两个 int 的载荷已归一化（同值同表示），直接 ===；
+    // 一旦掺了 float，就得把 bigint 收成 number 再比 —— 否则 2^62n === 2^62 会假。
+    if (tb === Tag.INT && ta === Tag.INT) return (a.v as IntPayload) === (b.v as IntPayload);
+    if (tb === Tag.INT || tb === Tag.FLOAT) return numVal(a) === numVal(b);
     return false;
   }
   if (ta !== tb) return false;

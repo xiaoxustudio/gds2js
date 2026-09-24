@@ -1,8 +1,8 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
-import { Tag, V, type Variant } from "./tags";
-import { GArray, GDict, strAt, strFormat, strLength, strSubstr } from "./values";
+import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
+import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr } from "./values";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -117,6 +117,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.bool(d.has(one(args, "has")));
         case "keys":
           return V.array(GArray.of(d.keys()));
+        case "values":
+          return V.array(GArray.of(d.values()));
         case "get":
           return d.get(one(args, "get"));
         case "set":
@@ -136,9 +138,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "substr":
           return V.str(strSubstr(s, intArg(args, 0, "substr"), intArg(args, 1, "substr")));
         case "to_upper":
-          return V.str(s.toUpperCase());
+          return V.str(strCase(s, "upper"));
         case "to_lower":
-          return V.str(s.toLowerCase());
+          return V.str(strCase(s, "lower"));
         default:
           throw new UnsupportedError("string-method", `String.${name}() 未实现`);
       }
@@ -151,7 +153,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 export function index(raw: unknown, idx: Variant): Variant {
   const obj = norm(raw);
   if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArg([idx], 0, "下标"));
-  if (obj.t === Tag.DICT) return asDict(obj, "下标").get(idx);
+  if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
@@ -217,5 +219,6 @@ function intArg(args: Variant[], i: number, who: string): number {
   if (a === undefined || a.t !== Tag.INT) {
     throw new UnsupportedError("need-int-arg", `${who} 的第 ${i} 个参数需要 int`);
   }
-  return a.v as number;
+  // 载荷可能是 bigint（超出 2^53）：这些位置都是长度/索引，只能是裸 number。
+  return intToNum(a.v as IntPayload);
 }

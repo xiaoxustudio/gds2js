@@ -38,7 +38,35 @@ export function tagName(t: TagValue): string {
   return TAG_NAME[t];
 }
 
-/** int 用 JS number 承载（D1）。超出 2^53 一律抛错，不做静默降级。 */
+/**
+ * int 载荷（D1 修订版）：2^53 内仍用 JS number，只有真超出才用 bigint。
+ * 归一化保证「同一数值只有一种表示」，于是字典键、=== 相等、显示都不会因 1 与 1n 而分裂。
+ */
+export type IntPayload = number | bigint;
+
+const TWO_63 = 1n << 63n;
+const TWO_64 = 1n << 64n;
+const MAX_SAFE_B = BigInt(Number.MAX_SAFE_INTEGER);
+const MIN_SAFE_B = -MAX_SAFE_B;
+
+/** Godot 的 int 是 64 位有符号、溢出**回绕**（006 实测 int64max+1 → int64min），这里实现同一件事。 */
+export function wrap64(x: bigint): bigint {
+  let v = x % TWO_64;
+  if (v < 0n) v += TWO_64;
+  return v >= TWO_63 ? v - TWO_64 : v;
+}
+
+/** 先回绕到 [-2^63, 2^63)，再把能安全用 number 表达的值收回 number。 */
+export function normInt(x: bigint): number | bigint {
+  const v = wrap64(x);
+  return v >= MIN_SAFE_B && v <= MAX_SAFE_B ? Number(v) : v;
+}
+
+export const intToBig = (v: IntPayload): bigint => (typeof v === "bigint" ? v : BigInt(v));
+/** 交给只能吃 number 的场合（浮点混合、数组下标、strAt 等）。精度损失与 Godot 的 float 一致。 */
+export const intToNum = (v: IntPayload): number => (typeof v === "bigint" ? Number(v) : v);
+
+/** 裸 number 越界仍响亮抛错（解箱快路径的边界，D1 有意保留）；bigint 则按 int64 回绕归一化。 */
 function checkInt(v: number): number {
   if (!Number.isSafeInteger(v)) {
     throw new UnsupportedError(
@@ -56,8 +84,8 @@ export const V = {
   bool(v: boolean): Variant {
     return { t: Tag.BOOL, v };
   },
-  int(v: number): Variant {
-    return { t: Tag.INT, v: checkInt(v) };
+  int(v: number | bigint): Variant {
+    return { t: Tag.INT, v: typeof v === "bigint" ? normInt(v) : checkInt(v) };
   },
   float(v: number): Variant {
     return { t: Tag.FLOAT, v };

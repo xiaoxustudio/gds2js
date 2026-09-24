@@ -61,8 +61,16 @@ function declNames(d: Decl): string[] {
 export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[] {
   const diags: Diagnostic[] = [];
 
+  // enum 名进作用域：named enum 用枚举名（`Color.RED` 里被查的是 Color），
+  // 匿名 enum 的成员是脚本级裸常量（`A`）。
+  const enumNames: string[] = [];
+  for (const en of m.enums) {
+    if (en.name) enumNames.push(en.name);
+    else for (const mm of en.members) enumNames.push(mm.name);
+  }
+
   const globalScope = new Scope(
-    new Set([...(m.className ? [m.className] : []), ...declNames(m), ...globals]),
+    new Set([...(m.className ? [m.className] : []), ...declNames(m), ...enumNames, ...globals]),
     null,
   );
   const moduleScope = globalScope.child(declNames(m));
@@ -181,6 +189,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
     case "ident":
       // 只查"值位置"的标识符。被调用者位置不查 —— 那可能是继承来的方法或内置函数，
       // 查了会大量误报（例如 SceneTree.create_timer）。
+      // `super` 是关键字（super.method()），不是需要声明的值标识符，放行。
+      if (e.name === "super") return;
       if (!scope.has(e.name)) {
         diags.push({
           code: "undeclared-identifier",
@@ -306,8 +316,12 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
   const l = staticType(e.left);
   const r = staticType(e.right);
 
-  // S3：% 只对 int 合法，Godot 编译期就拒 float 参与
-  if (e.op === "%" && (l === "float" || r === "float")) {
+  // S3：% 只对 int 合法，Godot 编译期就拒 float 参与。
+  // 但 `%` 同时是**字符串格式化**运算符：`"%.1f" % 2.25` 完全合法（实测 Godot 接受并输出 "2.3"）。
+  // 所以这条只能在"两边都不是 String"（即真的是取模）时才成立 —— 早先漏了这个前提，
+  // 把带精度/标志的浮点格式化一律误判成非法运算（%f % 3.5 侥幸没中是因为它走的是另一条推断）。
+  const isModulo = l !== "String" && r !== "String";
+  if (e.op === "%" && isModulo && (l === "float" || r === "float")) {
     diags.push({
       code: "op-mod-float",
       message: `Invalid operands to operator %, ${l} and ${r}.`,

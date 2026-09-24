@@ -9,7 +9,7 @@ import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { fast } from "../src/runtime/fast";
 import { ops, strOps } from "../src/runtime/ops";
 import { V } from "../src/runtime/tags";
-import { GArray, GDict, show, strFloat } from "../src/runtime/values";
+import { GArray, GDict, show, strFloat, strFormat } from "../src/runtime/values";
 
 let pass = 0;
 const fails: string[] = [];
@@ -62,10 +62,113 @@ eq("004", "2**3**2", show(ops.pow(ops.pow(I(2), I(3)), I(2))), "64");
 eq("004", "2**3", show(ops.pow(I(2), I(3))), "8");
 eq("004", "2.0**0.5", show(ops.pow(F(2), F(0.5))), "1.4142135623731");
 
-// ---- 005 / 006 / 016 int64：D1 决定抛 unsupported，不静默降级
-shouldThrow("005", "9223372036854775807 超出 2^53", () => I(9223372036854775807));
-shouldThrow("006", "int64 回绕语义", () => ops.add(I(9223372036854775807), I(1)));
-shouldThrow("016", "1<<62 需要 int64", () => ops.shl(I(1), I(62)));
+// ---- 005 / 006 / 016 int64：装箱轨走 BigInt，期望值取自这三个 case 的 godot.txt（Godot 实测）
+eq("005", "int64max 原样表示", show(I(9223372036854775807n)), "9223372036854775807");
+eq("005", "int64min 原样表示", show(I(-9223372036854775808n)), "-9223372036854775808");
+eq("005", "int64max-1 加 1", show(ops.add(I(9223372036854775806n), I(1))), "9223372036854775807");
+eq("006", "int64max 加 1 回绕成 int64min", show(ops.add(I(9223372036854775807n), I(1))), "-9223372036854775808");
+eq(
+  "006",
+  "int64min 取负仍回绕成 int64min",
+  show(ops.neg(ops.sub(ops.neg(I(9223372036854775807n)), I(1)))),
+  "-9223372036854775808",
+);
+eq("016", "1<<62 精确不丢位", show(ops.shl(I(1), I(62))), "4611686018427387904");
+
+// 归一化不变式：能安全用 number 表达的值绝不留 bigint —— 否则 1 与 1n 会裂成两个字典键、=== 也会分裂
+eq("005", "2^53 内存 number", typeof I(1).v, "number");
+eq("005", "超出才留 bigint", typeof I(9223372036854775807n).v, "bigint");
+eq("005", "运算后落回 2^53 内自动降回 number", typeof ops.sub(I(9223372036854775807n), I(9223372036854775806n)).v, "number");
+
+// 比较必须走 bigint：收成 number 会把 2^62 与 2^62+1 折成同一个 double（055 差分实测抓到过静默错）
+eq("055", "2^62 < 2^62+1 精确成立", show(ops.lt(I(4611686018427387904n), I(4611686018427387905n))), "true");
+eq("055", "2^62 与 2^62+1 不相等", show(ops.eq(I(4611686018427387904n), I(4611686018427387905n))), "false");
+eq("055", "小 int 与 int64max 比较", show(ops.lt(I(1), I(9223372036854775807n))), "true");
+
+// 解箱快路径的 2^53 边界是**有意保留**的响亮抛错（D1 修订版）：越界必须炸，不能静默回绕
+shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(9007199254740991, 1));
+
+// ---- 数组下标：Godot 支持**负索引**（从尾部数），读写同规则；越界一律响亮报错、绝不扩数组。
+// 期望值全部来自 056/057 的 godot.txt（含 a[-1]=9 → [1,2,9]、a[5]=9 → SCRIPT ERROR 两次探针）。
+{
+  const g = GArray.of([I(1), I(2), I(3)]);
+  eq("056", "装箱 a[-1] 读末格", show(g.get(-1)), "3");
+  eq("056", "装箱 a[-3] 读首格", show(g.get(-3)), "1");
+  g.set(-1, I(9));
+  eq("056", "装箱 a[-1]=9 写末格", show(V.array(g)), "[1, 2, 9]");
+  g.set(-2, I(8));
+  eq("056", "装箱 a[-2]=8 写倒数第二格", show(V.array(g)), "[1, 8, 9]");
+  shouldThrow("056", "装箱读越界抛错", () => g.get(3));
+  shouldThrow("056", "装箱负索引超出抛错", () => g.get(-4));
+  shouldThrow("056", "装箱写越界抛错", () => g.set(5, I(0)));
+  try {
+    g.set(5, I(0));
+  } catch {
+    /* 预期抛错 */
+  }
+  // JS 原生 items[5]=v 会把数组撑到 6 格（Godot 是 SCRIPT ERROR）—— 这条钉住"没被撑长"。
+  eq("056", "写越界被拒后数组长度不变", g.size(), 3);
+}
+{
+  eq("057", "裸 a[-1] 读末格", fast.rawArrGet([1, 2, 3], -1), 3);
+  shouldThrow("057", "裸 a[3] 读越界", () => fast.rawArrGet([1, 2, 3], 3));
+  const r = [1, 2, 3];
+  fast.rawArrSet(r, -1, 9);
+  eq("057", "裸 a[-1]=9", JSON.stringify(r), "[1,2,9]");
+  const r2 = [1, 2, 3];
+  shouldThrow("057", "裸 a[5]=9 写越界", () => fast.rawArrSet(r2, 5, 9));
+  eq("057", "裸写越界后没被撑长", r2.length, 3);
+  eq("057", "裸 g[-1][-1] 两层负索引", fast.rawArrGet2([[1, 2], [3, 4]], -1, -1), 4);
+  const gg: number[][] = [[1, 2], [3, 4]];
+  fast.rawArrSet2(gg, -1, 0, 7);
+  eq("057", "裸 g[-1][0]=7", JSON.stringify(gg), "[[1,2],[7,4]]");
+  shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
+}
+
+// ---- 061 字符串比较：Godot 按码点（UTF-32），JS 原生按 UTF-16 码元 → 代理对会判反方向。
+// 期望值取自 061-string-order 的 godot.txt（String.chr(0x1F600) vs String.chr(0xFFFF) 探针实测）。
+{
+  const EMO = String.fromCodePoint(0x1f600);
+  const S = (s: string) => V.str(s);
+  eq("061", "😀 < U+FFFF 为 false", show(ops.lt(S(EMO), S("\uFFFF"))), "false");
+  eq("061", "U+FFFF < 😀 为 true", show(ops.lt(S("\uFFFF"), S(EMO))), "true");
+  eq("061", "😀 > U+FFFF 为 true", show(ops.gt(S(EMO), S("\uFFFF"))), "true");
+  eq("061", "z < 😀 为 true", show(ops.lt(S("z"), S(EMO))), "true");
+  // 无代理对的日常文本走原生快路，方向必须照旧
+  eq("061", "快路 apple < z", show(ops.lt(S("apple"), S("z"))), "true");
+  eq("061", "快路 前缀短者小", show(ops.lt(S("ab"), S("abc"))), "true");
+  eq("061", "快路相等", show(ops.eq(S("abc"), S("abc"))), "true");
+  const g = GArray.of([S(EMO), S("\uFFFF"), S("z"), S("apple")]);
+  g.sort();
+  eq(
+    "061",
+    "含 emoji 的字符串数组按码点排序",
+    g.raw().map((v) => show(v)).join("|"),
+    "apple|z|\uFFFF|" + EMO,
+  );
+}
+
+// ---- 063 `%` 格式化：063 语料锁住"能格式化的"，这里锁住"必须响亮拒绝的"
+{
+  const F = (fmt: string, args: unknown[]) => strFormat(fmt, args as never);
+  eq("063", "%f 默认 6 位小数", F("%f", [V.float(3.5)]), "3.500000");
+  eq("063", "%d 收 float 向零截断", F("%d", [V.float(-3.7)]), "-3");
+  eq("063", "%.0f 四舍五入远离零", F("%.0f", [V.float(2.5)]), "3");
+  eq("063", "%% 出字面百分号", F("50%% of %d", [V.int(7)]), "50% of 7");
+  eq("063", "%05d 负数符号在前", F("%05d", [V.int(-42)]), "-0042");
+  eq("063", "%x 负数给符号加绝对值", F("%x", [V.int(-1)]), "-1");
+  // Godot 对这些是 Parse Error: unsupported format character —— 我们运行期响亮抛，绝不原样留在输出里
+  shouldThrow("063", "%i 不支持要抛", () => F("%i", [V.int(1)]));
+  shouldThrow("063", "%e 不支持要抛", () => F("%e", [V.float(1)]));
+  shouldThrow("063", "%g 不支持要抛", () => F("%g", [V.float(1)]));
+  shouldThrow("063", "# 标志不支持要抛", () => F("%#x", [V.int(1)]));
+  shouldThrow("063", "%d 收字符串要抛", () => F("%d", [V.str("abc")]));
+  shouldThrow("063", "%f 收字符串要抛", () => F("%f", [V.str("abc")]));
+  shouldThrow("063", "%x 收 float 未实测要抛", () => F("%x", [V.float(3.5)]));
+  shouldThrow("063", "参数不足要抛", () => F("%d %d", [V.int(1)]));
+  // Godot 的怪规则：实参多于转换符（数组右值）→ 原样返回格式串
+  eq("063", "实参多余则原样返回格式串", F("%d", [V.int(1), V.int(2)]), "%d");
+}
 
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）
 {

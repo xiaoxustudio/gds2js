@@ -2,6 +2,8 @@ import { UnsupportedError } from "../runtime/errors";
 import type { SyntaxNode, Tree } from "../parse/parser";
 import type {
   ClassDecl,
+  EnumDecl,
+  EnumMember,
   Expr,
   FuncDecl,
   Loc,
@@ -61,6 +63,7 @@ function lowerModule(root: SyntaxNode): Module {
     topStmts: [],
     vars: [],
     signals: [],
+    enums: [],
     funcs: [],
     innerClasses: [],
   };
@@ -83,8 +86,14 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "signal_statement":
         m.signals.push(lowerSignal(c));
         break;
+      case "enum_definition":
+        m.enums.push(lowerEnum(c));
+        break;
       case "function_definition":
         m.funcs.push(lowerFunc(c));
+        break;
+      case "constructor_definition":
+        m.funcs.push(lowerConstructor(c));
         break;
       case "class_definition":
         m.innerClasses.push(lowerClass(c));
@@ -120,6 +129,25 @@ function lowerSignal(n: SyntaxNode): SignalDecl {
   };
 }
 
+/**
+ * `enum Name { A, B = 5, C }` —— 成员值自增，显式 `= N` 重置游标。
+ * name 为 null 即匿名 enum（成员成为脚本级裸常量）。
+ */
+function lowerEnum(n: SyntaxNode): EnumDecl {
+  const nameNode = field(n, "name");
+  const list = field(n, "body"); // enumerator_list
+  const members: EnumMember[] = [];
+  let next = 0;
+  for (const en of list ? named(list) : []) {
+    const idNode = field(en, "left");
+    const valNode = field(en, "right");
+    const value = valNode ? Number(valNode.text) : next;
+    members.push({ name: need(idNode, "枚举成员名").text, value });
+    next = value + 1;
+  }
+  return { name: nameNode ? nameNode.text : null, members, loc: loc(n) };
+}
+
 function lowerClass(n: SyntaxNode): ClassDecl {
   const body = need(field(n, "body"), "类体");
   const decl: ClassDecl = {
@@ -148,6 +176,9 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "function_definition":
         decl.funcs.push(lowerFunc(c));
+        break;
+      case "constructor_definition":
+        decl.funcs.push(lowerConstructor(c));
         break;
       case "class_definition":
         decl.innerClasses.push(lowerClass(c));
@@ -179,6 +210,25 @@ function lowerFunc(n: SyntaxNode): FuncDecl {
   };
 }
 
+/**
+ * `_init(...)` —— grammar 里是 constructor_definition，没有 name 字段（隐含 _init）。
+ * 降级成名为 "_init" 的 FuncDecl，emitter 再把它发成 JS constructor。
+ * _init 不能是协程（Godot 不允许 await），coroutine 恒 false。
+ */
+function lowerConstructor(n: SyntaxNode): FuncDecl {
+  const paramsNode = field(n, "parameters");
+  const bodyNode = field(n, "body");
+  return {
+    name: "_init",
+    params: paramsNode ? named(paramsNode).map(lowerParam) : [],
+    returnType: null,
+    body: bodyNode ? lowerBody(bodyNode) : [],
+    coroutine: false,
+    isStatic: false,
+    loc: loc(n),
+  };
+}
+
 function hasAwait(n: SyntaxNode): boolean {
   if (n.type === "await_expression") return true;
   return n.namedChildren.some(hasAwait);
@@ -197,8 +247,23 @@ function lowerParam(n: SyntaxNode): Param {
 
 // ---------------------------------------------------------------- 语句
 
+/**
+ * 整数字面量必须**原样**保住精度：`Number("9223372036854775807")` 会先四舍五入成
+ * ...808 才交给运行时，那样的 BigInt 路径永远拿不到正确值。2^53 内仍用 number
+ * （让发射期保持裸数字），超出改用 bigint 字面量。顺带吃掉 GDScript 的 `1_000_000` 下划线。
+ */
+function lowerIntLit(text: string): number | bigint {
+  const t = text.replace(/_/g, "");
+  const n = Number(t);
+  return Number.isSafeInteger(n) ? n : BigInt(t);
+}
+
 function lowerBody(n: SyntaxNode): Stmt[] {
-  return named(n).map(lowerStmt);
+  // 注释不参与语义，和顶层一样直接丢弃。tree-sitter 把 `#…` 挂成 block 的**具名**子节点，
+  // 不先滤掉就会在 lowerStmt 的 default 分支炸成「语句 comment 未支持」。
+  return named(n)
+    .filter((c) => c.type !== "comment")
+    .map(lowerStmt);
 }
 
 function lowerStmt(n: SyntaxNode): Stmt {
@@ -325,10 +390,15 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "bind", name: id ? id.text : n.text };
     }
     case "identifier":
+      // `_` 是通配；其余裸标识符是**常量模式**（按值匹配 const / 脚本常量）。
+      // 绑定要用 `var name`（grammar 出 pattern_binding），裸名不是绑定。
       if (n.text === "_") return { kind: "wildcard" };
-      throw new UnsupportedError("pattern-const", `常量模式 ${n.text} 未支持`);
+      return { kind: "const", expr: lowerExpr(n) };
+    case "attribute":
+      // `Suit.HEARTS` / `Class.CONST` 这类限定常量 → 常量模式
+      return { kind: "const", expr: lowerExpr(n) };
     case "integer":
-      return { kind: "lit", lit: "int", value: Number(n.text) };
+      return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
     case "float":
       return { kind: "lit", lit: "float", value: Number(n.text) };
     case "string":
@@ -341,6 +411,15 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "lit", lit: "null", value: null };
     case "array":
       return { kind: "array", items: named(n).map(lowerPattern) };
+    case "dictionary":
+      // 字典模式：pair 的 left 是键表达式，value 是「值模式」（可嵌套数组/字典/字面/通配）
+      return {
+        kind: "dict",
+        entries: named(n).map((pair) => ({
+          key: lowerExpr(need(field(pair, "left") ?? named(pair)[0] ?? null, "字典键")),
+          pattern: lowerPattern(need(field(pair, "value") ?? named(pair)[1] ?? null, "字典值模式")),
+        })),
+      };
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
@@ -352,7 +431,7 @@ function lowerExpr(n: SyntaxNode): Expr {
   const c = loc(n);
   switch (n.type) {
     case "integer":
-      return { kind: "lit", lit: "int", value: Number(n.text), loc: c };
+      return { kind: "lit", lit: "int", value: lowerIntLit(n.text), loc: c };
     case "float":
       return { kind: "lit", lit: "float", value: Number(n.text), loc: c };
     case "string":
@@ -440,14 +519,63 @@ function lowerExpr(n: SyntaxNode): Expr {
   }
 }
 
+/**
+ * GDScript 字符串转义。**不能借用 JSON.parse**：JSON 的转义集比 GDScript 窄（没有 \a \v \'），
+ * 而旧实现在 JSON.parse 抛错时 catch 后**原样返回带反斜杠的源码** —— 于是 "it\'s" 会静默变成
+ * 字面 it\'s（Godot 实测 \' 就是 1 个撇号）。这正是"宁可响、不可静默错"要堵的口子。
+ *
+ * 下表逐条对 Godot 4.6.3 探针实测（9 个单转义探针文件，各只放一条 print，避免一个解析错拖垮整批）：
+ *   \n \t \r \a \b \f \v \ \" \' 各 1 字符；"ab\ncd" 长 5；\u0041 → 65、\u00e9 → 233（取 4 位十六进制）。
+ *   \x41 → Parse Error: Invalid escape in string（GDScript 没有 \x）。
+ *   \U0001F600 → 长度 3、码点 502/48/48：贪婪吃掉最多 6 位十六进制（0x1F6=502）后把 00 当字面量。
+ * 认不出的转义一律响亮抛错，绝不退回原文。
+ */
 function unquote(raw: string): string {
-  if (raw.length >= 2 && (raw.startsWith('"') || raw.startsWith("'"))) {
-    const inner = raw.slice(1, -1);
-    try {
-      return JSON.parse(`"${inner}"`) as string;
-    } catch {
-      return inner;
+  if (raw.length < 2 || !(raw.startsWith('"') || raw.startsWith("'"))) return raw;
+  const inner = raw.slice(1, -1);
+  let out = "";
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!;
+    if (ch !== "\\") {
+      out += ch;
+      continue;
+    }
+    const e = inner[++i];
+    if (e === undefined) {
+      throw new UnsupportedError("string-escape", "字符串以孤立反斜杠结尾");
+    }
+    switch (e) {
+      case "n": out += "\n"; break;
+      case "t": out += "\t"; break;
+      case "r": out += "\r"; break;
+      case "a": out += "\u0007"; break;
+      case "b": out += "\u0008"; break;
+      case "f": out += "\u000C"; break;
+      case "v": out += "\u000B"; break;
+      case "\\": out += "\\"; break;
+      case '"': out += '"'; break;
+      case "'": out += "'"; break;
+      case "u": {
+        const hex = inner.slice(i + 1, i + 5);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+          throw new UnsupportedError("string-escape", `\\u 需要 4 位十六进制，收到 "${hex}"`);
+        }
+        out += String.fromCodePoint(parseInt(hex, 16));
+        i += 4;
+        break;
+      }
+      // Godot 对 \U 是"贪婪吃最多 6 位十六进制"，只有一例实证、语义又怪，不猜。
+      case "U":
+        throw new UnsupportedError(
+          "string-escape",
+          "\\U 转义未实现：Godot 贪婪吃最多 6 位十六进制（实测 \\U0001F600 → 码点 502 + 字面 \"00\"），仅一例实证，宁缺毋猜",
+        );
+      default:
+        throw new UnsupportedError(
+          "string-escape",
+          `不支持的字符串转义 \\${e}（GDScript 无 \\x；实测 Godot 对 \\x41 报 Parse Error: Invalid escape in string）`,
+        );
     }
   }
-  return raw;
+  return out;
 }
