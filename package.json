@@ -8,7 +8,7 @@
 		"node": ">=24"
 	},
 	"exports": {
-		".": "./dist/index.mjs",
+		".": "./dist/runtime.mjs",
 		"./runtime": "./dist/runtime.mjs",
 		"./host": "./dist/host.mjs",
 		"./package.json": "./package.json"
@@ -20,7 +20,7 @@
 		"dist"
 	],
 	"scripts": {
-		"gen:ws": " npx tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
+		"gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
 		"build": "tsdown && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
 		"dev": "tsx src/index.ts",
 		"watch": "tsdown --watch",
