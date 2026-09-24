@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
-import { emitModule, type BaseSpec } from "../emit/emitter";
+import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
+import type { RawSourceMap } from "../emit/sourcemap";
 import type { Diagnostic } from "../lower/analyze";
 import { analyze } from "../lower/analyze";
 import type { ClassDecl, Expr, Module, Stmt, TypeRef } from "../lower/ir";
@@ -44,6 +45,8 @@ export interface ProjectOptions {
   hostImport: string | null;
   /** 产物末尾是否自动驱动生命周期（跑 _initialize/_process）。库工程一般 false。 */
   autoRun?: boolean;
+  /** 为每个产物生成行粒度 sourcemap（默认关）。 */
+  sourcemap?: boolean;
 }
 
 export interface CompiledModule {
@@ -51,6 +54,8 @@ export interface CompiledModule {
   jsPath: string;
   className: string;
   code: string;
+  /** opts.sourcemap 开启时的 Source Map v3 对象。 */
+  map?: RawSourceMap;
 }
 
 export interface ProjectResult {
@@ -385,7 +390,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       }
     });
 
-    const code = emitModule(l.module, {
+    const emitOpts = {
       runtimeImport: opts.runtimeImport,
       hostImport: opts.hostImport,
       autoRun: opts.autoRun ?? isEntry,
@@ -396,13 +401,19 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       preloads,
       loadMap: [...loadMap].map(([literal, resPath]) => ({ literal, resPath })),
       sideEffectImports: [...sideEffect.values()],
-    });
+      sourcemap: opts.sourcemap,
+      jsFile: basename(jsPathFor(l, opts)),
+      // source 相对产物所在目录，指向它的 .gd 源（map 与 .mts 同目录）
+      sourceFile: relative(dirname(jsPathFor(l, opts)), join(resRoot, l.resPath.slice(RES_PREFIX.length))).split(sep).join("/"),
+    };
+    const { code, map } = opts.sourcemap ? emitModuleWithMap(l.module, emitOpts) : { code: emitModule(l.module, emitOpts), map: null };
 
     modules.push({
       resPath: l.resPath,
       jsPath: jsPathFor(l, opts),
       className: l.jsName,
       code,
+      map: map ?? undefined,
     });
   }
 

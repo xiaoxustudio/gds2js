@@ -1,5 +1,6 @@
-import type { ClassDecl, Expr, FuncDecl, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
+import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 /**
  * IR → JS。
@@ -50,6 +51,12 @@ export interface EmitOptions {
   loadMap?: Array<{ literal: string; resPath: string }>;
   /** 只需触发注册、不绑定名字的副作用 import（动态 load 的目标脚本）。 */
   sideEffectImports?: string[];
+  /** 生成行粒度 sourcemap（默认关，关掉时产出的字节与不生成时完全一致）。 */
+  sourcemap?: boolean;
+  /** sourcemap 的 sources 字段（通常是 .gd 源文件路径，相对 sourceRoot 或直接路径）。 */
+  sourceFile?: string;
+  /** 产物文件名（sourcemap 的 file 字段与 //# sourceMappingURL 用它，需与实际写盘名一致）。 */
+  jsFile?: string;
 }
 
 const DEFAULT_RUNTIME_IMPORT = "../../../src/runtime/index";
@@ -111,7 +118,27 @@ let LOADS = new Map<string, string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
 
+// ---- sourcemap 采集（只在 emitModuleWithMap 且 opts.sourcemap 时启用）----
+let MAP_ACTIVE = false;
+let LINE_MAPPINGS: LineMapping[] = [];
+/** 记录「生成第 genLine 行（0-based）」来自源 loc。只读不写，不影响输出字节。 */
+function mark(genLine: number, loc: Loc | undefined): void {
+  if (!MAP_ACTIVE || !loc) return;
+  LINE_MAPPINGS.push({ genLine, srcLine: loc.line - 1, srcCol: loc.col - 1 });
+}
+
+export interface EmitResult {
+  code: string;
+  map: RawSourceMap | null;
+}
+
 export function emitModule(m: Module, opts: EmitOptions = {}): string {
+  return emitModuleWithMap(m, opts).code;
+}
+
+export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult {
+  MAP_ACTIVE = opts.sourcemap === true;
+  LINE_MAPPINGS = [];
   const runtimeImport = opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
   const hostImport = opts.hostImport === undefined ? DEFAULT_HOST_IMPORT : opts.hostImport;
   const autoRun = opts.autoRun ?? true;
@@ -156,13 +183,19 @@ export function emitModule(m: Module, opts: EmitOptions = {}): string {
     : baseClass.kind === "import" ? ` extends ${baseClass.name}`
     : "";
   out.push(`export class ${className}${heritage} {`);
-  for (const s of m.signals) out.push(`  ${s.name} = new rt.Signal();`);
+  for (const s of m.signals) {
+    mark(out.length, s.loc);
+    out.push(`  ${s.name} = new rt.Signal();`);
+  }
   for (const v of m.vars) {
+    mark(out.length, v.loc);
     out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
   }
   if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
-    for (const line of emitFunc(f)) out.push(`  ${line}`);
+    const base = out.length;
+    const lines = emitFunc(f, base);
+    for (const line of lines) out.push(`  ${line}`);
   }
   out.push("}");
   out.push("");
@@ -173,13 +206,26 @@ export function emitModule(m: Module, opts: EmitOptions = {}): string {
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
   // 内部类是模块级声明，发射成兄弟类（GDScript 里它们对整个脚本可见）
-  for (const c of m.innerClasses) out.push(...emitClassDecl(c));
+  for (const c of m.innerClasses) {
+    const base = out.length;
+    for (const line of emitClassDecl(c, base)) out.push(line);
+  }
 
   if (autoRun) out.push(`await new ${className}().run();`);
-  return `${out.join("\n")}\n`;
+
+  let code = `${out.join("\n")}\n`;
+  let map: RawSourceMap | null = null;
+  if (MAP_ACTIVE) {
+    const sourceFile = opts.sourceFile ?? `${className}.gd`;
+    const jsFile = opts.jsFile ?? `${className}.mjs`;
+    map = buildSourceMap({ file: jsFile, source: sourceFile, mappings: LINE_MAPPINGS });
+    code += `//# sourceMappingURL=${jsFile}.map\n`;
+  }
+  MAP_ACTIVE = false;
+  return { code, map };
 }
 
-function emitClassDecl(decl: ClassDecl): string[] {
+function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (decl.extends) {
     throw new UnsupportedError("class-extends", `类 ${decl.name} 的 extends 还没实现`);
   }
@@ -187,12 +233,15 @@ function emitClassDecl(decl: ClassDecl): string[] {
   CURRENT_MEMBERS = new Set(decl.vars.map((v) => v.name));
 
   const lines = [`class ${decl.name} {`];
+  mark(base, decl.loc);
   for (const v of decl.vars) {
+    mark(base + lines.length, v.loc);
     lines.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
   }
   if (decl.vars.length > 0) lines.push("");
   for (const f of decl.funcs) {
-    for (const line of emitFunc(f)) lines.push(`  ${line}`);
+    const funcBase = base + lines.length;
+    for (const line of emitFunc(f, funcBase)) lines.push(`  ${line}`);
   }
   lines.push("}");
   // 注册进运行时的类注册表，`is` 判定和 Base.new() 都靠它
@@ -203,7 +252,7 @@ function emitClassDecl(decl: ClassDecl): string[] {
   return lines;
 }
 
-function emitFunc(f: FuncDecl): string[] {
+function emitFunc(f: FuncDecl, base = 0): string[] {
   // 入口方法是 harness 约定的异步方法，必须保持 Promise 签名
   const isEntry = f.name === "_initialize" || f.name === "_process";
   const async = f.coroutine || isEntry ? "async " : "";
@@ -216,7 +265,9 @@ function emitFunc(f: FuncDecl): string[] {
   else ret = hasValue ? "unknown" : "void";
 
   const lines = [`${async}${f.name}(${params}): ${ret} {`];
+  mark(base, f.loc);
   for (const s of f.body) {
+    mark(base + lines.length, s.loc);
     for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`  ${line}`);
   }
   lines.push("}");

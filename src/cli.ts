@@ -11,9 +11,10 @@
  * "gds2js/host"（宿主桩）。怎么驱动生命周期（跑不跑 _initialize / _process）由使用方决定。
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { compileProject, findGdFiles } from "./compile/project";
-import { emitModule } from "./emit/emitter";
+import { emitModule, emitModuleWithMap } from "./emit/emitter";
+import type { RawSourceMap } from "./emit/sourcemap";
 import { analyze } from "./lower/analyze";
 import { lower } from "./lower/lower";
 import { parseSource } from "./parse/parser";
@@ -41,7 +42,8 @@ function usage(code: number): never {
       --res-root <dir>   res:// 映射到的工程根（默认向上找 project.godot，否则入口所在目录）
   --runtime <spec>       运行时的 import 说明符（默认 "gds2js/runtime"）
   --host <spec>          宿主的 import 说明符（默认 "gds2js/host"）
-      --no-host          不引入宿主，发射成不继承任何基类的纯类`);
+      --no-host          不引入宿主，发射成不继承任何基类的纯类
+      --sourcemap        额外生成行粒度 .map（默认关，关掉时产物字节完全不变）`);
   process.exit(code);
 }
 
@@ -55,6 +57,7 @@ for (let i = 0; i < argv.length; i++) {
   const a = argv[i]!;
   if (a === "--help" || a === "-h") usage(0);
   else if (a === "--no-host") flags.add("no-host");
+  else if (a === "--sourcemap") flags.add("sourcemap");
   else if (a.startsWith("-")) {
     if (FLAGS_WITH_VALUE.has(a)) {
       const v = argv[i + 1];
@@ -140,8 +143,14 @@ if (cmd === "build") {
   console.error(`${input}: 静态检查通过`);
   const outPath = resolve(readFlagValue("--out", "-o") ?? input.replace(/\.gd$/i, ".mjs"));
   let code: string;
+  let map: RawSourceMap | null = null;
   try {
-    code = emitModule(ir, { runtimeImport, hostImport, autoRun: false });
+    const sm = flags.has("sourcemap");
+    const result = sm
+      ? emitModuleWithMap(ir, { runtimeImport, hostImport, autoRun: false, sourcemap: true, sourceFile: input, jsFile: basename(outPath) })
+      : { code: emitModule(ir, { runtimeImport, hostImport, autoRun: false }), map: null };
+    code = result.code;
+    map = result.map;
   } catch (e) {
     const msg = e instanceof UnsupportedError ? `[${e.code}] ${e.message}` : String(e);
     console.error(`${input}:  error  ${msg}`);
@@ -149,7 +158,8 @@ if (cmd === "build") {
   }
   mkdirSync(dirname(outPath), { recursive: true });
   writeFileSync(outPath, code, "utf8");
-  console.error(`${outPath}: 已生成 (${code.split("\n").length} 行)`);
+  if (map) writeFileSync(`${outPath}.map`, JSON.stringify(map), "utf8");
+  console.error(`${outPath}: 已生成 (${code.split("\n").length} 行)${map ? " + .map" : ""}`);
   process.exit(0);
 }
 
@@ -165,6 +175,7 @@ if (cmd === "check-project" || cmd === "build-project") {
       runtimeImport,
       hostImport,
       autoRun: false,
+      sourcemap: flags.has("sourcemap"),
     });
   } catch (e) {
     const msg = e instanceof UnsupportedError ? `[${e.code}] ${e.message}` : String(e);
@@ -190,6 +201,7 @@ if (cmd === "check-project" || cmd === "build-project") {
   for (const m of result.modules) {
     mkdirSync(dirname(m.jsPath), { recursive: true });
     writeFileSync(m.jsPath, m.code, "utf8");
+    if (m.map) writeFileSync(`${m.jsPath}.map`, JSON.stringify(m.map), "utf8");
   }
   console.error(
     `已编译 ${result.modules.length} 个模块 → ${outDir}（入口发现 ${findGdFiles(resRoot).length} 个 .gd）`,
