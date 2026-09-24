@@ -120,6 +120,8 @@ let MODULE_CLASSES = new Set<string>();
 let PRELOADS = new Map<string, string>();
 /** load("字面量") → 规范化 res 路径（脚本注册表的键） */
 let LOADS = new Map<string, string>();
+/** 正在发射 _init（constructor）体——只有此上下文允许 super(...) 构造调用。 */
+let IN_CONSTRUCTOR = false;
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
 
@@ -203,7 +205,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
     const base = out.length;
-    const lines = emitFunc(f, base);
+    const lines = emitFunc(f, base, baseClass.kind !== "none");
     for (const line of lines) out.push(`  ${line}`);
   }
   out.push("}");
@@ -261,7 +263,10 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   return lines;
 }
 
-function emitFunc(f: FuncDecl, base = 0): string[] {
+function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
+  // _init → JS constructor（构造参数即 .new(args) 的实参）
+  if (f.name === "_init") return emitConstructor(f, base, hasSuper);
+
   // 入口方法是 harness 约定的异步方法，必须保持 Promise 签名
   const isEntry = f.name === "_initialize" || f.name === "_process";
   const async = f.coroutine || isEntry ? "async " : "";
@@ -278,6 +283,41 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   for (const s of f.body) {
     mark(base + lines.length, s.loc);
     for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`  ${line}`);
+  }
+  lines.push("}");
+  lines.push("");
+  return lines;
+}
+
+/**
+ * `_init` → `constructor`。派生类必须在使用 this 前调 super()：
+ * - 体首句是显式 `super(args)` → 原样发（emitCall 在 IN_CONSTRUCTOR 下放行）；
+ * - 否则若类有基类 → 隐式补 `super()`（GDScript 隐式父构造也是无参）。
+ * 无基类（内部类 / 无 extends）不发 super。
+ * 字段初始化器是 JS class fields，由引擎在 super() 之后、构造体之前跑——正好对上 GDScript「先字段后 _init 体」。
+ */
+function emitConstructor(f: FuncDecl, base: number, hasSuper: boolean): string[] {
+  const params = f.params.map((p) => p.name).join(", ");
+  const lines = [`constructor(${params}) {`];
+  mark(base, f.loc);
+
+  const first = f.body[0];
+  const explicitSuper =
+    !!first &&
+    first.kind === "expr" &&
+    first.expr.kind === "call" &&
+    first.expr.callee.kind === "ident" &&
+    first.expr.callee.name === "super";
+  if (!explicitSuper && hasSuper) lines.push("  super();");
+
+  IN_CONSTRUCTOR = true;
+  try {
+    for (const s of f.body) {
+      mark(base + lines.length, s.loc);
+      for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
+    }
+  } finally {
+    IN_CONSTRUCTOR = false;
   }
   lines.push("}");
   lines.push("");
@@ -551,9 +591,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
     const builtin = BUILTIN[name];
     if (builtin) return builtin(args);
-    // super(...) 构造调用只出现在 _init 里，而 _init→constructor 尚未实现，先响亮报错
+    // super(...) 构造调用：只在 _init(constructor) 上下文合法，发成 JS 原生 super(args)
     if (name === "super") {
-      throw new UnsupportedError("emit-super-ctor", "super(...) 构造调用还没实现（需先支持 _init→constructor）");
+      if (IN_CONSTRUCTOR) return `super(${args.join(", ")})`;
+      throw new UnsupportedError("emit-super-ctor", "super(...) 只能出现在 _init 里");
     }
     if (BUILTIN_TODO.has(name)) {
       throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);

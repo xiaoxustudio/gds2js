@@ -86,6 +86,9 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "function_definition":
         m.funcs.push(lowerFunc(c));
         break;
+      case "constructor_definition":
+        m.funcs.push(lowerConstructor(c));
+        break;
       case "class_definition":
         m.innerClasses.push(lowerClass(c));
         break;
@@ -149,6 +152,9 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "function_definition":
         decl.funcs.push(lowerFunc(c));
         break;
+      case "constructor_definition":
+        decl.funcs.push(lowerConstructor(c));
+        break;
       case "class_definition":
         decl.innerClasses.push(lowerClass(c));
         break;
@@ -175,6 +181,25 @@ function lowerFunc(n: SyntaxNode): FuncDecl {
     // 协程性是静态可判定的：函数体里出现 await 就是协程（SEMANTICS S18）
     coroutine: hasAwait(n),
     isStatic,
+    loc: loc(n),
+  };
+}
+
+/**
+ * `_init(...)` —— grammar 里是 constructor_definition，没有 name 字段（隐含 _init）。
+ * 降级成名为 "_init" 的 FuncDecl，emitter 再把它发成 JS constructor。
+ * _init 不能是协程（Godot 不允许 await），coroutine 恒 false。
+ */
+function lowerConstructor(n: SyntaxNode): FuncDecl {
+  const paramsNode = field(n, "parameters");
+  const bodyNode = field(n, "body");
+  return {
+    name: "_init",
+    params: paramsNode ? named(paramsNode).map(lowerParam) : [],
+    returnType: null,
+    body: bodyNode ? lowerBody(bodyNode) : [],
+    coroutine: false,
+    isStatic: false,
     loc: loc(n),
   };
 }
