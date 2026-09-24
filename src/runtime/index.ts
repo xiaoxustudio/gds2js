@@ -8,3 +8,4 @@ export * from "./builtins";
 export * from "./methods";
 export * from "./object";
 export * from "./patterns";
+export * from "./vector2";

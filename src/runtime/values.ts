@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, type Variant } from "./tags";
+import { GVector2 } from "./vector2";
 
 /**
  * Dictionary 键编码。
@@ -238,6 +239,14 @@ export function show(v: Variant): string {
       const parts = d.keys().map((k) => `${repr(k)}: ${repr(d.get(k))}`);
       return `{ ${parts.join(", ")} }`;
     }
+    case Tag.OBJECT: {
+      const inner = v.v;
+      // Godot 打印 Vector2 用括号且分量是浮点格式：(4.0, 6.0)
+      if (inner instanceof GVector2) {
+        return `(${strFloat(inner.x)}, ${strFloat(inner.y)})`;
+      }
+      throw new UnsupportedError("show-type", "print 不支持该对象类型");
+    }
     default:
       throw new UnsupportedError("show-type", `print 不支持 ${tagName(v.t)}`);
   }
@@ -271,6 +280,10 @@ export function valueEq(a: Variant, b: Variant): boolean {
     case Tag.DICT:
       return (a.v as GDict).eq(b.v as GDict);
     case Tag.OBJECT:
+      // Vector2 的相等是分量比较，不是引用比较
+      if (a.v instanceof GVector2 && b.v instanceof GVector2) {
+        return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
       return a.v === b.v;
   }
   return false;

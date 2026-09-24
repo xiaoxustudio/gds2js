@@ -44,10 +44,11 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
+  Vector2: (a) => `rt.vector2(rt.num(${a[0]}), rt.num(${a[1]}))`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set(["Vector2", "Vector2i", "Vector3", "Color", "String", "load", "preload"]);
+const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "String", "load", "preload"]);
 
 /**
  * 模块级名字。局部变量不在里面，所以发射成裸标识符；

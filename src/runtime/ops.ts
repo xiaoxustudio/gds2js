@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, type Variant } from "./tags";
+import { GVector2 } from "./vector2";
 import {
   GArray,
   GDict,
@@ -49,6 +50,10 @@ export const ops = {
     if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
       return V.array((a.v as GArray).concat(b.v as GArray));
     }
+    // Vector2 分量加（S13）
+    const va = a.t === Tag.OBJECT && a.v instanceof GVector2 ? a.v : null;
+    const vb = b.t === Tag.OBJECT && b.v instanceof GVector2 ? b.v : null;
+    if (va && vb) return V.object(new GVector2(va.x + vb.x, va.y + vb.y));
     throw new UnsupportedError("add-operands", `+ 不支持 ${tagName(a.t)} + ${tagName(b.t)}`);
   },
 
