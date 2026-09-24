@@ -366,6 +366,15 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "lit", lit: "null", value: null };
     case "array":
       return { kind: "array", items: named(n).map(lowerPattern) };
+    case "dictionary":
+      // 字典模式：pair 的 left 是键表达式，value 是「值模式」（可嵌套数组/字典/字面/通配）
+      return {
+        kind: "dict",
+        entries: named(n).map((pair) => ({
+          key: lowerExpr(need(field(pair, "left") ?? named(pair)[0] ?? null, "字典键")),
+          pattern: lowerPattern(need(field(pair, "value") ?? named(pair)[1] ?? null, "字典值模式")),
+        })),
+      };
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }

@@ -1,13 +1,14 @@
 import { UnsupportedError } from "./errors";
 import { lookupClass } from "./object";
 import { Tag, V, type TagValue, type Variant } from "./tags";
-import { GArray, valueEq } from "./values";
+import { GArray, GDict, valueEq } from "./values";
 
 /**
  * `match` 的模式匹配与 `is` / `as` 的类型判定。
  *
  * 语义依据 docs/SEMANTICS.md：
  * - 数组模式要求长度相等、逐项匹配，绑定按出现顺序收集（用例 020）
+ * - 字典模式是**精确键集匹配**：键数相等且每个模式键都在、值匹配；多余键 → 不匹配（实测 4.6.3，用例 041）
  * - `is` 在 Godot 4.6.3 是编译期就能确定的类型判定（用例 021）
  */
 
@@ -15,12 +16,17 @@ export type Pat =
   | { k: "wild" }
   | { k: "lit"; v: Variant }
   | { k: "bind" }
-  | { k: "arr"; items: Pat[] };
+  | { k: "arr"; items: Pat[] }
+  | { k: "dict"; entries: Array<{ key: Variant; pat: Pat }> };
 
 export const patWild = (): Pat => ({ k: "wild" });
 export const patLit = (v: Variant): Pat => ({ k: "lit", v });
 export const patBind = (): Pat => ({ k: "bind" });
 export const patArray = (items: Pat[]): Pat => ({ k: "arr", items });
+export const patDict = (entries: Array<[Variant, Pat]>): Pat => ({
+  k: "dict",
+  entries: entries.map(([key, pat]) => ({ key, pat })),
+});
 
 /**
  * 匹配成功返回**按绑定出现顺序**收集的值数组，失败返回 null。
@@ -48,6 +54,18 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
         const item = items[i];
         return item !== undefined && matches(item, sub, out);
       });
+    }
+    case "dict": {
+      // Godot 字典模式是**精确键集匹配**，不是子集：subject 的键必须与模式完全一致
+      // （键数相等 + 每个模式键都在且值匹配）。多余键 → 不匹配（实测 4.6.3，用例 041）。
+      if (s.t !== Tag.DICT) return false;
+      const d = s.v as GDict;
+      if (d.size() !== p.entries.length) return false;
+      for (const en of p.entries) {
+        if (!d.has(en.key)) return false;
+        if (!matches(d.get(en.key), en.pat, out)) return false;
+      }
+      return true;
     }
   }
 }

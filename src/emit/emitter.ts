@@ -529,7 +529,7 @@ function emitPattern(p: Pattern): string {
     case "array":
       return `rt.patArray([${p.items.map(emitPattern).join(", ")}])`;
     case "dict":
-      throw new UnsupportedError("emit-pattern-dict", "字典模式还没实现");
+      return `rt.patDict([${p.entries.map((en) => `[${emitExpr(en.key)}, ${emitPattern(en.pattern)}]`).join(", ")}])`;
   }
 }
 
@@ -539,6 +539,8 @@ function patternNames(p: Pattern): string[] {
       return [p.name];
     case "array":
       return p.items.flatMap(patternNames);
+    case "dict":
+      return p.entries.flatMap((en) => patternNames(en.pattern));
     default:
       return [];
   }
