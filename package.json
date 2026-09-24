@@ -9,14 +9,19 @@
 	},
 	"exports": {
 		".": "./dist/index.mjs",
+		"./runtime": "./dist/runtime.mjs",
+		"./host": "./dist/host.mjs",
 		"./package.json": "./package.json"
+	},
+	"bin": {
+		"gds2js": "./dist/cli.mjs"
 	},
 	"files": [
 		"dist"
 	],
 	"scripts": {
 		"gen:ws": " npx tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
-		"build": "tsdown",
+		"build": "tsdown && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
 		"dev": "tsx src/index.ts",
 		"watch": "tsdown --watch",
 		"test:golden": "node tools/golden.mjs",

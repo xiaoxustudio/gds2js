@@ -8,8 +8,21 @@ import { UnsupportedError } from "../runtime/errors";
  * 契约里 `fast.*` 已经定死，等这一版跑绿了再按 D2 加内联优化 —— 先要正确。
  */
 
-const RUNTIME_IMPORT = "../../../src/runtime/index";
-const HARNESS_IMPORT = "../../../tools/harness/scene-tree";
+export interface EmitOptions {
+  /** 运行时的 import 说明符。语料用相对路径；发布产物用 "gds2js/runtime" */
+  runtimeImport?: string;
+  /**
+   * 宿主（SceneTree 基类 + print）的 import 说明符。
+   * 语料用相对路径；发布产物用 "gds2js/host"。
+   * 传 null 表示不引入宿主、发射成不继承任何基类的纯类。
+   */
+  hostImport?: string | null;
+  /** 模块末尾是否自动 `await new Main().run()`。语料要，产物不要 */
+  autoRun?: boolean;
+}
+
+const DEFAULT_RUNTIME_IMPORT = "../../../src/runtime/index";
+const DEFAULT_HOST_IMPORT = "../../../tools/harness/scene-tree";
 
 const BINOP: Record<string, string> = {
   "+": "add",
@@ -63,7 +76,12 @@ let MODULE_CLASSES = new Set<string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
 
-export function emitModule(m: Module): string {
+export function emitModule(m: Module, opts: EmitOptions = {}): string {
+  const runtimeImport = opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
+  const hostImport = opts.hostImport === undefined ? DEFAULT_HOST_IMPORT : opts.hostImport;
+  const autoRun = opts.autoRun ?? true;
+  const className = "Main";
+
   MODULE_VARS = new Set([...m.vars.map((v) => v.name), ...m.signals.map((s) => s.name)]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
   MODULE_CLASSES = new Set([...m.innerClasses.map((c) => c.name), ...(m.className ? [m.className] : [])]);
@@ -71,10 +89,10 @@ export function emitModule(m: Module): string {
   const out: string[] = [];
   out.push("// 由 gds2js 从 main.gd 编译生成 —— 不要手改。");
   out.push("");
-  out.push(`import * as rt from "${RUNTIME_IMPORT}";`);
-  out.push(`import { print, SceneTree } from "${HARNESS_IMPORT}";`);
+  out.push(`import * as rt from "${runtimeImport}";`);
+  if (hostImport) out.push(`import { print, SceneTree } from "${hostImport}";`);
   out.push("");
-  out.push("export class Main extends SceneTree {");
+  out.push(`export class ${className}${hostImport ? " extends SceneTree" : ""} {`);
   for (const s of m.signals) out.push(`  ${s.name} = new rt.Signal();`);
   for (const v of m.vars) {
     out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
@@ -89,7 +107,7 @@ export function emitModule(m: Module): string {
   // 内部类是模块级声明，发射成兄弟类（GDScript 里它们对整个脚本可见）
   for (const c of m.innerClasses) out.push(...emitClassDecl(c));
 
-  out.push("await new Main().run();");
+  if (autoRun) out.push(`await new ${className}().run();`);
   return `${out.join("\n")}\n`;
 }
 

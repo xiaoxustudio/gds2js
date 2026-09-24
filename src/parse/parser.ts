@@ -1,20 +1,33 @@
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Language, Parser } from "web-tree-sitter";
 
 /**
- * 相对 import.meta.url 解析，而不是相对 cwd。
- * 原来写的是 Language.load("./gdscript.wasm")，一换工作目录或打包就必挂。
+ * wasm 相对 import.meta.url 定位，而不是相对 cwd —— 原来写 "./gdscript.wasm"，
+ * 一换工作目录就挂。
  *
- * TODO(打包)：dist/ 里没有 gdscript.wasm，发布时需要把 wasm 一起复制过去，
- * 或改成内联 base64 + Language.load(Buffer)。现在只保证从源码树跑是对的。
+ * 位置随产物形态变化，所以逐个候选试：
+ *   源码树  src/parse/parser.ts  → 仓库根 ../../gdscript.wasm
+ *   打包    dist/parser-xxx.mjs  → ../gdscript.wasm（build 脚本会复制进去）
+ *   装包    node_modules/gds2js/dist/… → 包根 ../gdscript.wasm
  */
-const WASM_URL = new URL("../../gdscript.wasm", import.meta.url);
+const WASM_CANDIDATES = ["../../gdscript.wasm", "../gdscript.wasm", "./gdscript.wasm"];
+
+function resolveWasm(): string {
+  for (const spec of WASM_CANDIDATES) {
+    const p = fileURLToPath(new URL(spec, import.meta.url));
+    if (existsSync(p)) return p;
+  }
+  throw new Error(
+    `找不到 gdscript.wasm（试过 ${WASM_CANDIDATES.join(" , ")}，基于 ${import.meta.url}）`,
+  );
+}
 
 let cached: Promise<Parser> | null = null;
 
 async function create(): Promise<Parser> {
   await Parser.init();
-  const lang = await Language.load(fileURLToPath(WASM_URL));
+  const lang = await Language.load(resolveWasm());
   const parser = new Parser();
   parser.setLanguage(lang);
   return parser;
