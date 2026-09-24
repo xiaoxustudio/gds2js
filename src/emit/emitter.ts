@@ -429,6 +429,10 @@ function emitExpr(e: Expr): string {
       return `rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)})`;
 
     case "attribute":
+      // super.属性 在 JS 里走原型链、拿不到父类实例字段，语义不对——只支持 super.method()
+      if (e.obj.kind === "ident" && e.obj.name === "super") {
+        throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
+      }
       return `rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)})`;
 
     case "lambda": {
@@ -547,6 +551,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
     const builtin = BUILTIN[name];
     if (builtin) return builtin(args);
+    // super(...) 构造调用只出现在 _init 里，而 _init→constructor 尚未实现，先响亮报错
+    if (name === "super") {
+      throw new UnsupportedError("emit-super-ctor", "super(...) 构造调用还没实现（需先支持 _init→constructor）");
+    }
     if (BUILTIN_TODO.has(name)) {
       throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
     }
@@ -556,6 +564,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
   }
 
   if (e.callee.kind === "attribute") {
+    // super.method(...) → JS 原生 super 调用（我们的类用真 extends，语义正好对上）
+    if (e.callee.obj.kind === "ident" && e.callee.obj.name === "super") {
+      return `super.${e.callee.name}(${args.join(", ")})`;
+    }
     // Base.new() → 构造一个用户类实例
     if (
       e.callee.name === "new" &&

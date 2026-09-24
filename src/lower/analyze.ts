@@ -181,6 +181,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
     case "ident":
       // 只查"值位置"的标识符。被调用者位置不查 —— 那可能是继承来的方法或内置函数，
       // 查了会大量误报（例如 SceneTree.create_timer）。
+      // `super` 是关键字（super.method()），不是需要声明的值标识符，放行。
+      if (e.name === "super") return;
       if (!scope.has(e.name)) {
         diags.push({
           code: "undeclared-identifier",
