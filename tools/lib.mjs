@@ -60,6 +60,22 @@ export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath =
   if (projectPath) args.push("--path", projectPath);
   args.push("--script", scriptArg);
 
+  // 工程模式必须先跑一次 --import：Godot 的 class_name 全局注册表在导入期才建出来
+  // （.godot/global_script_class_cache.cfg）。缺它，headless 直接跑脚本会报
+  // "Identifier X not declared"—— 不是我们的代码错，是全局类没注册。best-effort，丢弃输出。
+  if (projectPath) {
+    try {
+      spawnSync(GODOT_BIN, ["--headless", "--path", projectPath, "--import"], {
+        encoding: "utf8",
+        timeout: timeoutMs,
+        windowsHide: true,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+    } catch {
+      /* import 失败不阻断；脚本步会把真正的错报出来 */
+    }
+  }
+
   let r;
   try {
     r = spawnSync(GODOT_BIN, args, {
@@ -97,19 +113,15 @@ export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath =
 export function normalize(text, gdPath = "") {
   let out = text;
   if (gdPath) {
-    // 整目录先抹平（多文件用例里 helper 脚本也会以绝对路径出现在报错里），
-    // 再单独把 main.gd 归一到 <case>/main.gd，保持种子用例逐字节不变。
-    const caseDir = dirname(gdPath);
-    for (const v of [caseDir.replace(/\\/g, "/"), caseDir.replace(/\//g, "\\")]) {
-      if (v) out = out.split(v).join("<case>");
-    }
     const variants = [gdPath.replace(/\\/g, "/"), gdPath.replace(/\//g, "\\")];
     for (const v of variants) out = out.split(v).join("<case>/main.gd");
   }
   // Godot 报错里的脚本路径有两种形态：绝对路径，或 res:// 相对工程根。
-  // 走哪种取决于它有没有在往上找到 project.godot，本机两种都出现过，必须都抹掉，
-  // 否则 golden 会随工程位置漂移。多文件时 helper 脚本也要归一。
-  out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, name) => `<case>/${name}`);
+  // 单文件 `--script <abs>` 模式下 Godot 以 CWD 为 res:// 根，会打印
+  // `res://corpus/cases/NNN/main.gd`；工程模式（--path）则打印 `res://main.gd`。
+  // 一律塌缩成 `<case>/<basename>`，既还原种子用例的 `<case>/main.gd`，也让多文件
+  // helper 脚本（point.gd 等）归一到 `<case>/point.gd`，不随工程位置漂移。
+  out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, p) => `<case>/${p.split("/").pop()}`);
   const lines = out.split(/\r?\n/);
   const kept = [];
   for (const line of lines) {
