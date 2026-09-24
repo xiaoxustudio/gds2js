@@ -347,7 +347,11 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   // ---- Pass 4：逐文件发射
   const modules: CompiledModule[] = [];
   for (const l of loaded.values()) {
-    const fileDiags = analyze(l.module, classIndex.keys()).map((d) => ({ resPath: l.resPath, diagnostic: d }));
+    // 静态分析的作用域要带上 extends 链上用户基类的成员名，否则继承来的字段/值
+    // 在「值位置」会被误判未声明（被调用者位置本就宽容，所以继承方法一直没事）。
+    const inherited = inheritedMembers(l, loaded, classIndex);
+    const globals = new Set<string>([...classIndex.keys(), ...inherited]);
+    const fileDiags = analyze(l.module, globals).map((d) => ({ resPath: l.resPath, diagnostic: d }));
     if (fileDiags.length > 0) {
       diags.push(...fileDiags);
       continue; // 有语义错误不发射（与 CLI 一致）
@@ -399,6 +403,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       classRefs,
       resPath: l.resPath,
       preloads,
+      inheritedMembers: inherited,
       loadMap: [...loadMap].map(([literal, resPath]) => ({ literal, resPath })),
       sideEffectImports: [...sideEffect.values()],
       sourcemap: opts.sourcemap,
@@ -450,6 +455,42 @@ function collectLocalNames(m: Module): string[] {
 function classFile(name: string, loaded: Map<string, Loaded>, classIndex: Map<string, string>): Loaded | null {
   const resPath = classIndex.get(name);
   return resPath ? loaded.get(resPath) ?? null : null;
+}
+
+/** 解析一个文件的 extends 目标模块（用户基类）；host/引擎/无 → null。 */
+function baseModule(
+  l: Loaded,
+  loaded: Map<string, Loaded>,
+  classIndex: Map<string, string>,
+): Loaded | null {
+  const ext = extendsRefText(l.module.extends);
+  if (!ext) return null;
+  if (ext.endsWith(".gd")) return loaded.get(resolveGdPath(l.resPath, ext)) ?? null;
+  const bare = ext.replace(/\[.*\]$/, "");
+  if (classIndex.has(bare)) return classFile(bare, loaded, classIndex);
+  return null; // SceneTree / 引擎类型 / 未知 —— 没有可读的成员模块
+}
+
+/**
+ * 收集 extends 链上所有用户基类的成员名（vars / funcs / signals）。
+ * 供静态分析当作「已声明」，让继承来的字段在值位置不被误判未声明。
+ */
+function inheritedMembers(
+  l: Loaded,
+  loaded: Map<string, Loaded>,
+  classIndex: Map<string, string>,
+): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>([l.resPath]);
+  let cur = baseModule(l, loaded, classIndex);
+  while (cur && !seen.has(cur.resPath)) {
+    seen.add(cur.resPath);
+    for (const v of cur.module.vars) names.push(v.name);
+    for (const f of cur.module.funcs) names.push(f.name);
+    for (const s of cur.module.signals) names.push(s.name);
+    cur = baseModule(cur, loaded, classIndex);
+  }
+  return names;
 }
 
 interface ResolvedBase {

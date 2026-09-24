@@ -51,6 +51,11 @@ export interface EmitOptions {
   loadMap?: Array<{ literal: string; resPath: string }>;
   /** 只需触发注册、不绑定名字的副作用 import（动态 load 的目标脚本）。 */
   sideEffectImports?: string[];
+  /**
+   * extends 链上继承来的成员名（字段/方法/信号）。
+   * 值位置引用继承字段要发成 `this.x`，否则裸标识符运行期 ReferenceError。
+   */
+  inheritedMembers?: string[];
   /** 生成行粒度 sourcemap（默认关，关掉时产出的字节与不生成时完全一致）。 */
   sourcemap?: boolean;
   /** sourcemap 的 sources 字段（通常是 .gd 源文件路径，相对 sourceRoot 或直接路径）。 */
@@ -150,7 +155,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   // 向后兼容：省略 baseClass 时，有宿主就继承 SceneTree，无宿主则不继承。
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
 
-  MODULE_VARS = new Set([...m.vars.map((v) => v.name), ...m.signals.map((s) => s.name)]);
+  MODULE_VARS = new Set([
+    ...m.vars.map((v) => v.name),
+    ...m.signals.map((s) => s.name),
+    ...(opts.inheritedMembers ?? []),
+  ]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
