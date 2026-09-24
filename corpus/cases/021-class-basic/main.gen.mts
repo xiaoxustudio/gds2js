@@ -5,7 +5,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    let b = rt.method(Base, "new", []);
+    let b = rt.V.object(new Base());
     print(rt.show(rt.method(b, "tag", [])));
     print(rt.show(rt.isType(b, "Base")));
     print(rt.show(rt.attribute(b, "hp")));
@@ -13,5 +13,15 @@ export class Main extends SceneTree {
   }
   
 }
+
+class Base {
+  hp = rt.V.int(10);
+
+  tag(): unknown {
+    return rt.formatOf(rt.V.str("base-%d"), this.hp);
+  }
+  
+}
+rt.registerClass("Base", Base);
 
 await new Main().run();

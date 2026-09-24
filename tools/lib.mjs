@@ -50,6 +50,16 @@ export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
     return { text: `<<GDS2JS_SPAWN_ERROR>> ${e.message}`, timedOut: false, exitCode: null };
   }
   const timedOut = !!(r.error && (r.error.code === "ETIMEDOUT" || r.signal === "SIGTERM"));
+  // spawn 起不来（比如沙箱拦进程、二进制缺失）必须响亮地失败。
+  // 不拦的话输出是空串，godotOk() 会把它判成 OK，golden --check 全线假漂移 —— 实测踩过。
+  if (r.error && !timedOut) {
+    const code = r.error.code ?? "UNKNOWN";
+    return {
+      text: `<<GDS2JS_SPAWN_ERROR>> ${code}: ${r.error.message}`,
+      timedOut: false,
+      exitCode: null,
+    };
+  }
   let text = (r.stdout || "") + (r.stderr || "");
   if (timedOut) text += "\n<<GDS2JS_TIMEOUT>>";
   return { text, timedOut, exitCode: r.status };

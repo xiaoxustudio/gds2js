@@ -43,3 +43,20 @@ export function wrapValue(v: unknown): Variant {
 export function unwrap(v: unknown): unknown {
   return isVariant(v) ? v.v : v;
 }
+
+// ---------------------------------------------------------------- 类注册表
+
+export interface GdClassCtor {
+  new (...args: unknown[]): object;
+}
+
+const CLASS_REGISTRY = new Map<string, GdClassCtor>();
+
+/** class_name / 内部类都注册进来，`is` 判定和 `X.new()` 靠它 */
+export function registerClass(name: string, ctor: GdClassCtor): void {
+  CLASS_REGISTRY.set(name, ctor);
+}
+
+export function lookupClass(name: string): GdClassCtor | undefined {
+  return CLASS_REGISTRY.get(name);
+}

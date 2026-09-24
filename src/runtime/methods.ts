@@ -67,6 +67,13 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
     }
 
+    // 用户类实例：方法就是原型上的函数
+    const member = (inner as unknown as Record<string, unknown>)[name];
+    if (typeof member === "function") {
+      const f = member as (...a: Variant[]) => unknown;
+      return wrapValue(f.apply(inner, args));
+    }
+
     throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
   }
 

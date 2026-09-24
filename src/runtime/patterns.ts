@@ -1,4 +1,5 @@
 import { UnsupportedError } from "./errors";
+import { lookupClass } from "./object";
 import { Tag, V, type TagValue, type Variant } from "./tags";
 import { GArray, valueEq } from "./values";
 
@@ -73,19 +74,23 @@ function builtinTag(name: string): TagValue | undefined {
 export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
   const t = builtinTag(name);
-  if (t === undefined) {
-    throw new UnsupportedError("is-type", `is ${name} 未实现（自定义类型需要类注册表）`);
+  if (t !== undefined) return V.bool(v.t === t);
+  const ctor = lookupClass(name);
+  if (ctor) {
+    return V.bool(v.t === Tag.OBJECT && v.v instanceof ctor);
   }
-  return V.bool(v.t === t);
+  throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
 
 export function asType(v: Variant, name: string): Variant {
   if (name === "Variant") return v;
   const t = builtinTag(name);
-  if (t === undefined) {
-    throw new UnsupportedError("as-type", `as ${name} 未实现（自定义类型需要类注册表）`);
+  if (t !== undefined) return v.t === t ? v : V.nil();
+  const ctor = lookupClass(name);
+  if (ctor) {
+    return v.t === Tag.OBJECT && v.v instanceof ctor ? v : V.nil();
   }
-  return v.t === t ? v : V.nil();
+  throw new UnsupportedError("as-type", `as ${name} 未实现（未知类型）`);
 }
 
 /**

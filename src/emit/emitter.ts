@@ -1,4 +1,4 @@
-import type { Expr, FuncDecl, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
+import type { ClassDecl, Expr, FuncDecl, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 
 /**
@@ -47,15 +47,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set([
-  "Vector2",
-  "Vector2i",
-  "Vector3",
-  "Color",
-  "String",
-  "load",
-  "preload",
-]);
+const BUILTIN_TODO = new Set(["Vector2", "Vector2i", "Vector3", "Color", "String", "load", "preload"]);
 
 /**
  * 模块级名字。局部变量不在里面，所以发射成裸标识符；
@@ -66,10 +58,14 @@ const BUILTIN_TODO = new Set([
  */
 let MODULE_VARS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
+let MODULE_CLASSES = new Set<string>();
+/** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
+let CURRENT_MEMBERS = new Set<string>();
 
 export function emitModule(m: Module): string {
   MODULE_VARS = new Set([...m.vars.map((v) => v.name), ...m.signals.map((s) => s.name)]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+  MODULE_CLASSES = new Set([...m.innerClasses.map((c) => c.name), ...(m.className ? [m.className] : [])]);
 
   const out: string[] = [];
   out.push("// 由 gds2js 从 main.gd 编译生成 —— 不要手改。");
@@ -88,8 +84,36 @@ export function emitModule(m: Module): string {
   }
   out.push("}");
   out.push("");
+
+  // 内部类是模块级声明，发射成兄弟类（GDScript 里它们对整个脚本可见）
+  for (const c of m.innerClasses) out.push(...emitClassDecl(c));
+
   out.push("await new Main().run();");
   return `${out.join("\n")}\n`;
+}
+
+function emitClassDecl(decl: ClassDecl): string[] {
+  if (decl.extends) {
+    throw new UnsupportedError("class-extends", `类 ${decl.name} 的 extends 还没实现`);
+  }
+  const saved = CURRENT_MEMBERS;
+  CURRENT_MEMBERS = new Set(decl.vars.map((v) => v.name));
+
+  const lines = [`class ${decl.name} {`];
+  for (const v of decl.vars) {
+    lines.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
+  }
+  if (decl.vars.length > 0) lines.push("");
+  for (const f of decl.funcs) {
+    for (const line of emitFunc(f)) lines.push(`  ${line}`);
+  }
+  lines.push("}");
+  // 注册进运行时的类注册表，`is` 判定和 Base.new() 都靠它
+  lines.push(`rt.registerClass(${JSON.stringify(decl.name)}, ${decl.name});`);
+  lines.push("");
+
+  CURRENT_MEMBERS = saved;
+  return lines;
 }
 
 function emitFunc(f: FuncDecl): string[] {
@@ -223,15 +247,13 @@ function emitAssign(target: Expr, value: string): string {
 function emitExpr(e: Expr): string {
   switch (e.kind) {
     case "lit":
-      if (e.lit === "int") return `rt.V.int(${String(e.value)})`;
-      if (e.lit === "float") return `rt.V.float(${String(e.value)})`;
-      if (e.lit === "string") return `rt.V.str(${JSON.stringify(e.value)})`;
-      if (e.lit === "bool") return `rt.V.bool(${String(e.value)})`;
-      return "rt.V.nil()";
+      return emitLit(e.lit, e.value);
 
     case "ident":
       // 必须 bind(this)：光传 this.f 出去会在调用时丢掉接收者
       if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this))`;
+      // 类方法里引用自己的成员变量
+      if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
       return e.name;
 
@@ -280,6 +302,14 @@ function emitExpr(e: Expr): string {
   }
 }
 
+function emitLit(lit: string, value: string | number | boolean | null): string {
+  if (lit === "int") return `rt.V.int(${String(value)})`;
+  if (lit === "float") return `rt.V.float(${String(value)})`;
+  if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
+  if (lit === "bool") return `rt.V.bool(${String(value)})`;
+  return "rt.V.nil()";
+}
+
 /** 带类型标注的声明需要显式转换（S6：float 赋给 int 向零截断） */
 function declaredCast(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
@@ -310,14 +340,6 @@ function emitPattern(p: Pattern): string {
     case "dict":
       throw new UnsupportedError("emit-pattern-dict", "字典模式还没实现");
   }
-}
-
-function emitLit(lit: string, value: string | number | boolean | null): string {
-  if (lit === "int") return `rt.V.int(${String(value)})`;
-  if (lit === "float") return `rt.V.float(${String(value)})`;
-  if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
-  if (lit === "bool") return `rt.V.bool(${String(value)})`;
-  return "rt.V.nil()";
 }
 
 function patternNames(p: Pattern): string[] {
@@ -367,6 +389,14 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
   }
 
   if (e.callee.kind === "attribute") {
+    // Base.new() → 构造一个用户类实例
+    if (
+      e.callee.name === "new" &&
+      e.callee.obj.kind === "ident" &&
+      MODULE_CLASSES.has(e.callee.obj.name)
+    ) {
+      return `rt.V.object(new ${e.callee.obj.name}(${args.join(", ")}))`;
+    }
     const obj = emitExpr(e.callee.obj);
     return `rt.method(${obj}, ${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;
   }
