@@ -68,6 +68,17 @@ export interface EmitOptions {
    * 单文件编译时无需传——本模块扫描即为全集。
    */
   rawAbiExternal?: string[];
+  /**
+   * 产物运行时打包模式（默认 "import"，行为与历史逐字节一致）：
+   * - import：`import "gds2js/runtime"` + `import "gds2js/host"`，靠已安装的 gds2js 解析。
+   * - local：产物用 createRequire 载入旁挂的 `standalone.cjs`（相对路径由 standaloneRequirePath 给）。
+   * - single：把 standalone.cjs 文本内联进本文件 → 真正自包含单文件，无需 node_modules。
+   */
+  runtimeMode?: "import" | "local" | "single";
+  /** local 模式：从产物文件到旁挂 standalone.cjs 的相对说明符（如 "./gds2js-standalone.cjs"）。 */
+  standaloneRequirePath?: string;
+  /** single 模式：dist/standalone.cjs 的完整文本，内联进产物顶部。 */
+  standaloneInline?: string;
 }
 
 const DEFAULT_RUNTIME_IMPORT = "../../../src/runtime/index";
@@ -147,6 +158,27 @@ export interface EmitResult {
   map: RawSourceMap | null;
 }
 
+/**
+ * single 模式的自包含头部：把 dist/standalone.cjs 的整段 CJS 文本塞进一个 IIFE，
+ * 提供 `exports`/`module` 两个壳，取回 { rt, print, SceneTree }。standalone.cjs 是纯 CJS、
+ * 无 require（只碰 node 全局 process），故无需 require shim；包进函数作用域也不与产物主体的
+ * `Main` / enum 常量 / 内部类发生名字冲突。
+ */
+function standaloneInlineHeader(body: string): string {
+  const indented = body
+    .split("\n")
+    .map((l) => (l.length ? `  ${l}` : l))
+    .join("\n");
+  return [
+    "const { rt, print, SceneTree } = (() => {",
+    "  const module = { exports: {} };",
+    "  const exports = module.exports;",
+    indented,
+    "  return exports;",
+    "})();",
+  ].join("\n");
+}
+
 export function emitModule(m: Module, opts: EmitOptions = {}): string {
   return emitModuleWithMap(m, opts).code;
 }
@@ -182,11 +214,22 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   const out: string[] = [];
   out.push("// 由 gds2js 从 main.gd 编译生成 —— 不要手改。");
   out.push("");
-  out.push(`import * as rt from "${runtimeImport}";`);
-  // 宿主提供 print（全局函数）；只有基类解析到 host 时才顺带 import SceneTree。
-  if (hostImport) {
-    const hostNames = baseClass.kind === "host" ? ["print", "SceneTree"] : ["print"];
-    out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
+  // 运行时/宿主头部：import 模式逐字节同旧行为；local/single 从自包含 standalone 包绑定 rt/print/SceneTree。
+  const runtimeMode = opts.runtimeMode ?? "import";
+  if (runtimeMode === "single") {
+    if (!opts.standaloneInline) throw new UnsupportedError("emit-standalone", "single 模式需要 standaloneInline");
+    out.push(standaloneInlineHeader(opts.standaloneInline));
+  } else if (runtimeMode === "local") {
+    const p = opts.standaloneRequirePath ?? "./gds2js-standalone.cjs";
+    out.push(`import { createRequire } from "node:module";`);
+    out.push(`const { rt, print, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
+  } else {
+    out.push(`import * as rt from "${runtimeImport}";`);
+    // 宿主提供 print（全局函数）；只有基类解析到 host 时才顺带 import SceneTree。
+    if (hostImport) {
+      const hostNames = baseClass.kind === "host" ? ["print", "SceneTree"] : ["print"];
+      out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
+    }
   }
   // 跨文件类引用 + preload 目标都要 import 才能触发定义方的 registerClass/registerScript。
   const imports = new Map<string, string>(); // 绑定名 → 说明符

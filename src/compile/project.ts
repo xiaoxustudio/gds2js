@@ -47,6 +47,12 @@ export interface ProjectOptions {
   autoRun?: boolean;
   /** 为每个产物生成行粒度 sourcemap（默认关）。 */
   sourcemap?: boolean;
+  /** 运行时打包模式（见 emit 端）：import 默认；local 旁挂；single 内联。 */
+  runtimeMode?: "import" | "local" | "single";
+  /** single 模式：standalone.cjs 全文，内联进每个模块。 */
+  standaloneInline?: string;
+  /** local 模式：已旁挂到输出区的 standalone.cjs 绝对路径；每个模块按相对路径 require。 */
+  standaloneFile?: string;
 }
 
 export interface CompiledModule {
@@ -432,6 +438,13 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       rawAbiExternal: rawAbiBlockedModules.has(l.resPath)
         ? l.module.funcs.map((f) => f.name)
         : [...attrNames],
+      // 运行时打包模式：single 内联整包；local 每个模块按自身位置算到旁挂包的相对说明符。
+      runtimeMode: opts.runtimeMode ?? "import",
+      standaloneInline: opts.standaloneInline,
+      standaloneRequirePath:
+        opts.runtimeMode === "local" && opts.standaloneFile
+          ? "./" + relative(dirname(jsPathFor(l, opts)), opts.standaloneFile).split(sep).join("/")
+          : undefined,
       sourcemap: opts.sourcemap,
       jsFile: basename(jsPathFor(l, opts)),
       // source 相对产物所在目录，指向它的 .gd 源（map 与 .mts 同目录）
