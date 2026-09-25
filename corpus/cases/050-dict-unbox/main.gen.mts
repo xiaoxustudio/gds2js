@@ -1,0 +1,45 @@
+// 由 gds2js 从 main.gd 编译生成 —— 不要手改。
+
+import * as rt from "../../../src/runtime/index";
+import { print, SceneTree } from "../../../tools/harness/scene-tree";
+
+export class Main extends SceneTree {
+  async _initialize(): Promise<void> {
+    let d = new Map([]);
+    let i = 0;
+    let s = 0;
+    while ((i < 3)) {
+      d.set(i, rt.fast.iMulC(i, 10));
+      i = rt.fast.iAddC(i, 1);
+    }
+    let j = 0;
+    while ((j < d.size)) {
+      s = rt.fast.iAddC(s, rt.fast.rawDictGet(d, j));
+      j = rt.fast.iAddC(j, 1);
+    }
+    print(rt.show(rt.V.int(s)));
+    print(rt.show(rt.V.int(d.size)));
+    print(rt.show(rt.V.int(rt.fast.rawDictGet(d, 2))));
+    let e = new Map([]);
+    e.set("a", 1);
+    e.set("b", 2);
+    print(rt.show(rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))));
+    print(rt.show(rt.V.int(e.size)));
+    let g = rt.dictOf([]);
+    rt.setIndex(g, rt.V.float(1), rt.V.int(5));
+    print(rt.show(rt.index(g, rt.V.float(1))));
+    let m = rt.dictOf([]);
+    rt.setIndex(m, rt.V.int(0), rt.V.int(1));
+    rt.setIndex(m, rt.V.int(1), rt.V.float(2.5));
+    print(rt.show(rt.ops.add(rt.index(m, rt.V.int(0)), rt.index(m, rt.V.int(1)))));
+    let h = rt.dictOf([]);
+    rt.setIndex(h, rt.V.int(0), rt.V.int(1));
+    let k = h;
+    rt.setIndex(k, rt.V.int(1), rt.V.int(2));
+    print(rt.show(rt.method(h, "size", [])));
+    this.quit();
+  }
+  
+}
+
+await new Main().run();

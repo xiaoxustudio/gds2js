@@ -266,6 +266,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   MAP_ACTIVE = false;
   RAW_ABIS = new Map();
   RAW_ARRAYS = new Map();
+  RAW_DICTS = new Map();
   CURRENT_RET = null;
   return { code, map };
 }
@@ -319,10 +320,12 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
   const savedUnboxed = UNBOXED;
   const savedRet = CURRENT_RET;
   const savedArrays = RAW_ARRAYS;
+  const savedDicts = RAW_DICTS;
   CURRENT_RET = abi ? abi.ret : null;
   const layout = analyzeFuncLayout(f);
   UNBOXED = layout.unboxed;
   RAW_ARRAYS = layout.arrays;
+  RAW_DICTS = layout.dicts;
   try {
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
@@ -332,6 +335,7 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
     UNBOXED = savedUnboxed;
     CURRENT_RET = savedRet;
     RAW_ARRAYS = savedArrays;
+    RAW_DICTS = savedDicts;
   }
   lines.push("}");
   lines.push("");
@@ -415,6 +419,22 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         });
         return [`let ${s.name} = [${parts.join(", ")}];`];
       }
+      // 特化裸字典局部：init 必为 int/str 键 + 统一数字值 → 发裸 Map（保插入顺序，与 Godot 一致）
+      const dk = RAW_DICTS.get(s.name);
+      if (dk && s.init && s.init.kind === "dict") {
+        const pairs = s.init.entries.map((en) => {
+          const kr = emitExprR(en.key);
+          const vr = emitExprR(en.value);
+          if (kr.rep !== "int" && kr.rep !== "str") {
+            throw new UnsupportedError("raw-dict-key", `内部不变量破坏：裸字典键期望 int/str，实得 ${kr.rep}`);
+          }
+          if (vr.rep !== dk) {
+            throw new UnsupportedError("raw-dict-init", `内部不变量破坏：裸字典值期望 ${dk}，实得 ${vr.rep}`);
+          }
+          return `[${kr.code}, ${vr.code}]`;
+        });
+        return [`let ${s.name} = new Map([${pairs.join(", ")}]);`];
+      }
       // 解箱局部：init 必为同型数值表达式（推断保证），直接发裸 number
       if (s.init && UNBOXED.has(s.name)) {
         return [`let ${s.name} = ${emitExprR(s.init).code};`];
@@ -430,6 +450,21 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       return [`${emitExpr(s.expr)};`];
 
     case "assign": {
+      // 裸字典下标写：存裸值（Map<primitive, number>），键/值 rep 与推断一致，不符即响亮报错。
+      if (s.target.kind === "index" && s.target.obj.kind === "ident") {
+        const dk = RAW_DICTS.get(s.target.obj.name);
+        if (dk) {
+          const kr = emitExprR(s.target.index);
+          const vr = emitExprR(s.value);
+          if (kr.rep !== "int" && kr.rep !== "str") {
+            throw new UnsupportedError("raw-dict-key", `内部不变量破坏：裸字典键期望 int/str，实得 ${kr.rep}`);
+          }
+          if (vr.rep !== dk) {
+            throw new UnsupportedError("raw-dict-set", `内部不变量破坏：裸字典值期望 ${dk}，实得 ${vr.rep}`);
+          }
+          return [`${s.target.obj.name}.set(${kr.code}, ${vr.code});`];
+        }
+      }
       // 赋值给解箱局部：值必为同型裸值（推断保证）；万一不是，按类型拆箱取裸值（.v）兜底
       if (s.target.kind === "ident") {
         const kind = UNBOXED.get(s.target.name);
@@ -566,7 +601,10 @@ let CURRENT_RET: Kind | null = null;
 type ElemKind = "int" | "float";
 /** 当前函数里被特化成裸 number[] 的数组局部：名字 → 元素类型。由 analyzeFuncLayout 逐函数算出。 */
 let RAW_ARRAYS = new Map<string, ElemKind>();
+/** 当前函数里被特化成裸 Map<primitive,number> 的字典局部：名字 → 值类型（键仅 int/str）。 */
+let RAW_DICTS = new Map<string, ElemKind>();
 const NO_ARRAYS: Map<string, ElemKind> = new Map();
+const NO_DICTS: Map<string, ElemKind> = new Map();
 
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
 const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
@@ -600,7 +638,7 @@ function emitExprR(e: Expr): R {
     const k = UNBOXED.get(e.name);
     if (k) return { code: e.name, rep: k };
   }
-  // 容器元素单态化：裸数组的下标读 / .append / .size/.length（分析期已判定这些是唯一合法用法）。
+  // 容器元素单态化：裸数组/裸字典的下标读 / append / .size/.length（分析期已判定这些是唯一合法用法）。
   if (e.kind === "index" && e.obj.kind === "ident") {
     const ek = RAW_ARRAYS.get(e.obj.name);
     if (ek) {
@@ -608,12 +646,22 @@ function emitExprR(e: Expr): R {
       if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
       return { code: `rt.fast.rawArrGet(${e.obj.name}, ${ir.code})`, rep: ek };
     }
+    const dk = RAW_DICTS.get(e.obj.name);
+    if (dk) {
+      const kr = emitExprR(e.index);
+      if (kr.rep !== "int" && kr.rep !== "str") {
+        throw new UnsupportedError("raw-dict-key", `内部不变量破坏：裸字典键期望 int/str，实得 ${kr.rep}`);
+      }
+      return { code: `rt.fast.rawDictGet(${e.obj.name}, ${kr.code})`, rep: dk };
+    }
   }
   if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
-    const ek = RAW_ARRAYS.get(e.callee.obj.name);
     const nm = e.callee.obj.name;
-    if (ek && (e.callee.name === "size" || e.callee.name === "length") && e.args.length === 0) {
-      return { code: `${nm}.length`, rep: "int" };
+    const ek = RAW_ARRAYS.get(nm);
+    const dk = RAW_DICTS.get(nm);
+    if ((ek || dk) && (e.callee.name === "size" || e.callee.name === "length") && e.args.length === 0) {
+      // 裸数组长度是 .length，裸 Map 是 .size。
+      return { code: `${nm}.${ek ? "length" : "size"}`, rep: "int" };
     }
     if (ek && e.callee.name === "append" && e.args.length === 1) {
       const er = emitExprR(e.args[0]!);
@@ -679,7 +727,11 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
  * 排除：参数、for 变量、match 绑定、lambda 内声明或被赋值的名字。
  * 用「自身暂定」打破 `x += 1` 的循环依赖，每种类型各自迭代到不动点；init 字面量类型天然互斥，不会同属两类。
  */
-function computeUnboxed(f: FuncDecl, arrays: Map<string, ElemKind> = NO_ARRAYS): Map<string, "int" | "float" | "str"> {
+function computeUnboxed(
+  f: FuncDecl,
+  arrays: Map<string, ElemKind> = NO_ARRAYS,
+  dict: Map<string, ElemKind> = NO_DICTS,
+): Map<string, "int" | "float" | "str"> {
   const abi = RAW_ABIS.get(f.name);
   const paramKind = new Map<string, Kind>();
   if (abi) f.params.forEach((p, i) => paramKind.set(p.name, abi.params[i]!));
@@ -794,9 +846,9 @@ function computeUnboxed(f: FuncDecl, arrays: Map<string, ElemKind> = NO_ARRAYS):
     const identKind = (self: string) => (n: string): Kind | null =>
       paramKind.get(n) ?? result.get(n) ?? (n === self || U.has(n) ? kind : null);
     const isNum = (e: Expr, self: string): boolean => {
-      if (e.kind === "call") return kindOfExpr(e, identKind(self), arrays) === kind;
-      if (e.kind === "binary") return kindOfExpr(e, identKind(self), arrays) === kind;
-      if (e.kind === "index") return kindOfExpr(e, identKind(self), arrays) === kind;
+      if (e.kind === "call") return kindOfExpr(e, identKind(self), arrays, dict) === kind;
+      if (e.kind === "binary") return kindOfExpr(e, identKind(self), arrays, dict) === kind;
+      if (e.kind === "index") return kindOfExpr(e, identKind(self), arrays, dict) === kind;
       if (e.kind === "lit") return isLit(e);
       if (e.kind === "ident") return e.name === self || U.has(e.name) || paramKind.get(e.name) === kind;
       return false;
@@ -834,6 +886,7 @@ function kindOfExpr(
   e: Expr,
   identKind: (n: string) => Kind | null,
   arrays: Map<string, ElemKind> = NO_ARRAYS,
+  dict: Map<string, ElemKind> = NO_DICTS,
 ): Kind | "bool" | null {
   switch (e.kind) {
     case "lit":
@@ -844,8 +897,8 @@ function kindOfExpr(
     case "ident":
       return identKind(e.name);
     case "binary": {
-      const lk = kindOfExpr(e.left, identKind, arrays);
-      const rk = kindOfExpr(e.right, identKind, arrays);
+      const lk = kindOfExpr(e.left, identKind, arrays, dict);
+      const rk = kindOfExpr(e.right, identKind, arrays, dict);
       if (lk === null || rk === null || lk === "bool" || rk === "bool" || lk !== rk) return null;
       if (lk === "int" && INT_ARITH.has(e.op)) return "int";
       if (lk === "float" && FLOAT_ARITH.has(e.op)) return "float";
@@ -854,25 +907,35 @@ function kindOfExpr(
       return null;
     }
     case "index": {
-      // 裸数组的 int 下标读 → 元素类型；下标非 int 保守回退装箱（越界语义与运行时一致）。
+      // 裸数组 / 裸字典的合法下标读 → 元素类型；下标类型不符保守回退装箱。
       if (e.obj.kind === "ident") {
         const ek = arrays.get(e.obj.name);
-        if (ek && kindOfExpr(e.index, identKind, arrays) === "int") return ek;
+        if (ek && kindOfExpr(e.index, identKind, arrays, dict) === "int") return ek;
+        const dk = dict.get(e.obj.name);
+        if (dk) {
+          const kk = kindOfExpr(e.index, identKind, arrays, dict);
+          if (kk === "int" || kk === "str") return dk; // float 键会与 int 键碰撞（S14）→ 不接受
+        }
       }
       return null;
     }
     case "call": {
       if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
-        // 裸数组 .size() / .length() → 裸 int 长度。
-        const ek = arrays.get(e.callee.obj.name);
-        if (ek && (e.callee.name === "size" || e.callee.name === "length") && e.args.length === 0) return "int";
+        // 裸数组 / 裸字典 .size() / .length() → 裸 int 长度。
+        const recv = e.callee.obj.name;
+        if (
+          (arrays.has(recv) || dict.has(recv)) &&
+          (e.callee.name === "size" || e.callee.name === "length") &&
+          e.args.length === 0
+        )
+          return "int";
         return null;
       }
       if (e.callee.kind !== "ident") return null;
       const abi = RAW_ABIS.get(e.callee.name);
       if (!abi || e.args.length !== abi.params.length) return null;
       for (let i = 0; i < e.args.length; i++) {
-        if (kindOfExpr(e.args[i]!, identKind, arrays) !== abi.params[i]!) return null;
+        if (kindOfExpr(e.args[i]!, identKind, arrays, dict) !== abi.params[i]!) return null;
       }
       return abi.ret;
     }
@@ -1340,31 +1403,49 @@ function mapsEqual<T>(a: Map<string, T>, b: Map<string, T>): boolean {
  * 逐一剔除「写入/初值/下标与所设 Kind 不符」或「逃逸」的候选，直到数组集与解箱集同时稳定。
  * 最终 arrays 与 unboxed 互为不动点，发射期据此发裸数组并对 rep 断言兜底。
  */
-function analyzeFuncLayout(f: FuncDecl): { unboxed: Map<string, "int" | "float" | "str">; arrays: Map<string, ElemKind> } {
-  const cands = scanArrayCandidates(f);
+function analyzeFuncLayout(f: FuncDecl): {
+  unboxed: Map<string, "int" | "float" | "str">;
+  arrays: Map<string, ElemKind>;
+  dicts: Map<string, ElemKind>;
+} {
+  const aC = scanArrayCandidates(f);
+  const dC = scanDictCandidates(f);
   const arrays = new Map<string, ElemKind>();
-  for (const [name, c] of cands) {
+  for (const [name, c] of aC) {
     if (c.escaped) continue;
     const k = elemKindFromInit(c.init);
     if (k) arrays.set(name, k);
   }
-  let unboxed = computeUnboxed(f, arrays);
-  const cap = cands.size + 8;
+  const dicts = new Map<string, ElemKind>();
+  for (const [name, c] of dC) {
+    if (c.escaped) continue;
+    const k = elemKindFromInit({ kind: "array", items: c.init.entries.map((en) => en.value), loc: c.init.loc });
+    if (k) dicts.set(name, k);
+  }
+  let unboxed = computeUnboxed(f, arrays, dicts);
+  const cap = aC.size + dC.size + 8;
   for (let it = 0; it < cap; it++) {
     let changed = false;
     for (const [name, K] of [...arrays]) {
-      const c = cands.get(name);
-      if (!c || c.escaped || !verifyArray(c, K, unboxed, arrays)) {
+      const c = aC.get(name);
+      if (!c || c.escaped || !verifyArray(c, K, unboxed, arrays, dicts)) {
         arrays.delete(name);
         changed = true;
       }
     }
-    const un2 = computeUnboxed(f, arrays);
+    for (const [name, K] of [...dicts]) {
+      const c = dC.get(name);
+      if (!c || c.escaped || !verifyDict(c, K, unboxed, arrays, dicts)) {
+        dicts.delete(name);
+        changed = true;
+      }
+    }
+    const un2 = computeUnboxed(f, arrays, dicts);
     const unChanged = !mapsEqual(un2, unboxed);
     unboxed = un2;
     if (!changed && !unChanged) break;
   }
-  return { unboxed, arrays };
+  return { unboxed, arrays, dicts };
 }
 
 /** 校验候选数组在其所设 Kind 下：初值元素、写入元素皆为该 Kind，读下标皆为 int。 */
@@ -1373,16 +1454,203 @@ function verifyArray(
   K: ElemKind,
   unboxed: Map<string, "int" | "float" | "str">,
   arrays: Map<string, ElemKind>,
+  dicts: Map<string, ElemKind>,
 ): boolean {
   const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
   if (elemKindFromInit(c.init) !== K) return false;
   // 初值里的非字面量元素（如 var a=[x, y]）也要能裸化为 K
   for (const it of c.init.items) {
     if (it.kind === "lit") continue; // 字面量已由 elemKindFromInit 定 K
-    if (kindOfExpr(it, identKind, arrays) !== K) return false;
+    if (kindOfExpr(it, identKind, arrays, dicts) !== K) return false;
   }
-  for (const w of c.writeElems) if (kindOfExpr(w, identKind, arrays) !== K) return false;
-  for (const r of c.readIdxs) if (kindOfExpr(r, identKind, arrays) !== "int") return false;
+  for (const w of c.writeElems) if (kindOfExpr(w, identKind, arrays, dicts) !== K) return false;
+  for (const r of c.readIdxs) if (kindOfExpr(r, identKind, arrays, dicts) !== "int") return false;
+  return true;
+}
+
+// ------------------------------------------------------- 字典候选（int/str 键 + 统一 int/float 值）
+
+interface DictCand {
+  init: Extract<Expr, { kind: "dict" }>;
+  writeKeys: Expr[]; // d[k]=v 的 k
+  writeVals: Expr[]; // d[k]=v 的 v
+  readKeys: Expr[]; // d[k] 读的 k
+  escaped: boolean;
+}
+
+/**
+ * 扫一遍函数体找候选字典局部（`var d = {}` / `var d = {int/str 键: 数字值}`，无类型标注），判逃逸。
+ * 合法用法仅限：d[k]=v 写、d[k] 读、d.size()/d.length()。其它（.get/.has/keys/values/erase、别名、
+ * 重赋值、作实参/元素/返回/print/in/迭代/lambda 捕获…）→ escaped。键须 int/str（float 键会与 int 键
+ * 在 JS Map 里碰撞，违反 S14 → 一律落回装箱）。
+ */
+function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
+  const cands = new Map<string, DictCand>();
+  const pre = (s: Stmt): void => {
+    if (s.kind === "var") {
+      if (!s.type && s.init && s.init.kind === "dict") {
+        cands.set(s.name, { init: s.init, writeKeys: [], writeVals: [], readKeys: [], escaped: false });
+      }
+    } else if (s.kind === "if") for (const b of s.branches) b.body.forEach(pre);
+    else if (s.kind === "for") s.body.forEach(pre);
+    else if (s.kind === "while") s.body.forEach(pre);
+    else if (s.kind === "match") for (const a of s.arms) a.body.forEach(pre);
+  };
+  f.body.forEach(pre);
+
+  const markEscape = (n: string): void => {
+    const c = cands.get(n);
+    if (c) c.escaped = true;
+  };
+  const candObj = (e: Expr): string | null => (e.kind === "ident" && cands.has(e.name) ? e.name : null);
+
+  const visitExpr = (e: Expr, inL: boolean): void => {
+    switch (e.kind) {
+      case "ident":
+        if (cands.has(e.name)) markEscape(e.name);
+        return;
+      case "call": {
+        if (e.callee.kind === "attribute") {
+          const obj = candObj(e.callee.obj);
+          if (obj) {
+            const c = cands.get(obj)!;
+            const N = e.callee.name;
+            if (inL || !((N === "size" || N === "length") && e.args.length === 0)) c.escaped = true; // 其它字典方法全逃逸
+            e.args.forEach((a) => visitExpr(a, inL));
+            return;
+          }
+          visitExpr(e.callee, inL);
+          e.args.forEach((a) => visitExpr(a, inL));
+          return;
+        }
+        visitExpr(e.callee, inL);
+        e.args.forEach((a) => visitExpr(a, inL));
+        return;
+      }
+      case "index": {
+        const obj = candObj(e.obj);
+        if (obj) {
+          const c = cands.get(obj)!;
+          if (inL) c.escaped = true;
+          else c.readKeys.push(e.index);
+          visitExpr(e.index, inL);
+          return;
+        }
+        visitExpr(e.obj, inL);
+        visitExpr(e.index, inL);
+        return;
+      }
+      case "attribute":
+        visitExpr(e.obj, inL);
+        return;
+      case "binary":
+        visitExpr(e.left, inL);
+        visitExpr(e.right, inL);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        visitExpr(e.operand, inL);
+        return;
+      case "array":
+        e.items.forEach((it) => visitExpr(it, inL));
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          visitExpr(en.key, inL);
+          visitExpr(en.value, inL);
+        }
+        return;
+      case "lambda":
+        e.body.forEach((s) => visitStmt(s, true));
+        return;
+    }
+  };
+  const visitStmt = (s: Stmt, inL: boolean): void => {
+    switch (s.kind) {
+      case "var":
+        if (s.init) visitExpr(s.init, inL);
+        return;
+      case "assign": {
+        // 下标写 d[k]=v 是字典的合法主操作；重赋值 d=… 才逃逸。
+        if (s.target.kind === "index") {
+          const obj = candObj(s.target.obj);
+          if (obj) {
+            const c = cands.get(obj)!;
+            if (inL) c.escaped = true;
+            else {
+              c.writeKeys.push(s.target.index);
+              c.writeVals.push(s.value);
+            }
+            visitExpr(s.target, inL);
+            visitExpr(s.value, inL);
+            return;
+          }
+        }
+        if (s.target.kind === "ident" && cands.has(s.target.name)) markEscape(s.target.name);
+        visitExpr(s.target, inL);
+        visitExpr(s.value, inL);
+        return;
+      }
+      case "expr":
+        visitExpr(s.expr, inL);
+        return;
+      case "return":
+        if (s.value) visitExpr(s.value, inL);
+        return;
+      case "if":
+        for (const b of s.branches) {
+          if (b.cond) visitExpr(b.cond, inL);
+          b.body.forEach((x) => visitStmt(x, inL));
+        }
+        return;
+      case "for":
+        visitExpr(s.iter, inL);
+        s.body.forEach((x) => visitStmt(x, inL));
+        return;
+      case "while":
+        visitExpr(s.cond, inL);
+        s.body.forEach((x) => visitStmt(x, inL));
+        return;
+      case "match":
+        visitExpr(s.subject, inL);
+        for (const a of s.arms) {
+          if (a.guard) visitExpr(a.guard, inL);
+          a.body.forEach((x) => visitStmt(x, inL));
+        }
+        return;
+      case "break":
+      case "continue":
+      case "pass":
+        return;
+    }
+  };
+  f.body.forEach((s) => visitStmt(s, false));
+  return cands;
+}
+
+/** 键必须裸化为 int 或 str（float/bool/其它一律拒收，避免 S14 的 1 与 1.0 碰撞）。 */
+function keyKindOk(k: Kind | "bool" | null): boolean {
+  return k === "int" || k === "str";
+}
+
+/** 校验候选字典在所设值 Kind 下：初值/写入值皆为该 Kind，初值/写入/读键皆 int|str。 */
+function verifyDict(
+  c: DictCand,
+  K: ElemKind,
+  unboxed: Map<string, "int" | "float" | "str">,
+  arrays: Map<string, ElemKind>,
+  dicts: Map<string, ElemKind>,
+): boolean {
+  const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
+  for (const en of c.init.entries) {
+    if (!keyKindOk(kindOfExpr(en.key, identKind, arrays, dicts))) return false;
+    if (kindOfExpr(en.value, identKind, arrays, dicts) !== K) return false;
+  }
+  for (const k of c.writeKeys) if (!keyKindOk(kindOfExpr(k, identKind, arrays, dicts))) return false;
+  for (const v of c.writeVals) if (kindOfExpr(v, identKind, arrays, dicts) !== K) return false;
+  for (const k of c.readKeys) if (!keyKindOk(kindOfExpr(k, identKind, arrays, dicts))) return false;
   return true;
 }
 

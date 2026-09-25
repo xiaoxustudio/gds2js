@@ -18,6 +18,19 @@ export const fast = {
     }
     return v;
   },
+
+  /**
+   * 裸字典下标读（值为 number，故 get 返回 undefined 只可能是缺键）。缺键抛与 GDict.getRequired
+   * 同族的 GodotRuntimeError —— Godot 对 `d[missing]` 方括号读本就是 SCRIPT ERROR（已探针确证），
+   * 绝不把缺键静默成 undefined（→ NaN）。键为 int / string 原始值（float 键会与之碰撞，编译期已禁）。
+   */
+  rawDictGet(d: Map<unknown, number>, k: number | string): number {
+    const v = d.get(k);
+    if (v === undefined) {
+      throw new GodotRuntimeError("dict-key", `字典键不存在: ${String(k)}`);
+    }
+    return v;
+  },
   // ---- 解箱 int 运算：结果仍要过 D1 的 2^53 检查，溢出抛与 V.int/checkInt 完全相同的错 ----
   // 语义必须与 ops.add/sub/mul 的 bothInt 分支逐位对齐，否则解箱会变成静默错误。
   iAddC(a: number, b: number): number {

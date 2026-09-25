@@ -153,7 +153,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 export function index(raw: unknown, idx: Variant): Variant {
   const obj = norm(raw);
   if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArg([idx], 0, "下标"));
-  if (obj.t === Tag.DICT) return asDict(obj, "下标").get(idx);
+  if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }

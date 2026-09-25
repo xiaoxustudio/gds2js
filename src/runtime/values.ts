@@ -128,6 +128,18 @@ export class GDict {
     return this.vs[i] ?? V.nil();
   }
 
+  /**
+   * 方括号读 `d[k]`（S 语义：Godot 对缺键**报错**，见 `Invalid access to property or key`），
+   * 与 `.get(k)`（缺键返回 nil）区分开。装箱读与容器单态化的裸读都以此为准，二者必须一致。
+   */
+  getRequired(k: Variant): Variant {
+    const i = this.index.get(keyOf(k));
+    if (i === undefined) {
+      throw new GodotRuntimeError("dict-key", `字典键不存在: ${show(k)}`);
+    }
+    return this.vs[i] as Variant;
+  }
+
   set(k: Variant, v: Variant): void {
     const key = keyOf(k);
     const i = this.index.get(key);
