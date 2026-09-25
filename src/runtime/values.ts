@@ -458,25 +458,54 @@ export function strFormat(fmt: string, args: Variant[]): string {
 // ---------------------------------------------------------------- 格式化
 
 /**
- * 浮点转字符串（Godot 规则：14 位有效数字，去尾随零，至少保留一位小数）。
- * str(1.0) == "1.0"，str(2.5) == "2.5"（S7）
+ * 浮点转字符串。16 个单表达式探针对 Godot 4.6.3 实测，规则可完整复现：
+ *   `nan` / `inf` / `-inf` 原样；**0 与 -0.0 都印 `0.0`**；
+ *   **整数值**浮点 → 精确十进制位 + `.0`（`1e14`→`100000000000000.0`、`1e20`→21 位+`.0`）；
+ *   **非整数** → 小数位数 = `max(0, 14 - 整数位数)`，再去尾随零（`0.0000001`→`0.0000001`、
+ *   `0.1+0.2`→`0.3`、`1e-20`→`0.0`）；整数位已超 14 位时小数位为 0，四舍五入**远离零**且
+ *   **不补 `.0`**（`123456789012345.6`→`123456789012346`）。
+ * 旧实现用 `toPrecision(14)`，一旦落到科学计数法就抛 `float-format-exp` —— 于是任何大浮点
+ * （`1e15` 起）都跑不了；改用 BigInt 展开十进制后不再有这个上限（`toFixed` 在 ≥1e21 会自己转科学计数法，故不走它）。
  */
+/**
+ * 把 `toPrecision(17)` 可能给出的科学计数法展开成普通十进制。
+ * Godot 印大浮点时是**先取约 17 位有效数字再展开**，不是取 double 的精确值：
+ * 实测 `print(1e300)` 得 `10000000000000001` 后跟零，而 1e300 的精确二进制值是一串
+ * 301 位的乱数（我们用 BigInt 展开就会得到它，与 Godot 不一致）。
+ */
+function expandPlain(s: string): string {
+  const m = /^(-?)(\d*)(?:\.(\d*))?[eE]([+-]?\d+)$/.exec(s);
+  if (!m) return s;
+  const ip = m[2]!;
+  const fp = m[3] ?? "";
+  const digits = ip + fp;
+  const pointPos = ip.length + parseInt(m[4]!, 10);
+  if (pointPos >= digits.length) return m[1]! + digits + "0".repeat(pointPos - digits.length);
+  if (pointPos <= 0) return `${m[1]!}0.${"0".repeat(-pointPos)}${digits}`;
+  return m[1]! + digits.slice(0, pointPos) + "." + digits.slice(pointPos);
+}
+
 export function strFloat(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
   if (n === -Infinity) return "-inf";
-  const s = n.toPrecision(14);
-  if (/[eE]/.test(s)) {
-    throw new UnsupportedError(
-      "float-format-exp",
-      `浮点科学计数法格式化未补测: ${n}（见 SEMANTICS §6-8）`,
-    );
+  if (n === 0) return "0.0";
+  if (Number.isInteger(n)) {
+    let s = expandPlain(n.toPrecision(17));
+    if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
+    return `${s}.0`;
   }
-  if (s.includes(".")) {
-    const trimmed = s.replace(/0+$/, "");
-    return trimmed.endsWith(".") ? `${trimmed}0` : trimmed;
+  const intDigits = Math.max(0, Math.floor(Math.log10(Math.abs(n))) + 1);
+  // 实测是 **15 位有效数字**（不是旧实现的 14 位）：1.2345678901234567→"1.23456789012346"、
+  // 12345.678901234567→"12345.6789012346"、1234567890123.45→"1234567890123.45" 全部只对 15 位成立。
+  // 小数位再夹在 [0, 14]：上界让 1e-20 塌成 "0.0"，下界让 15 位整数位以上直接取整（123456789012345.6→"123456789012346"）。
+  const decimals = Math.max(0, Math.min(14, 15 - intDigits));
+  if (decimals === 0) {
+    const r = Math.sign(n) * Math.round(Math.abs(n));
+    return BigInt(r).toString();
   }
-  return `${s}.0`;
+  const trimmed = n.toFixed(decimals).replace(/0+$/, "");
+  return trimmed.endsWith(".") ? `${trimmed}0` : trimmed;
 }
 
 /** 顶层 print：字符串不加引号 */
