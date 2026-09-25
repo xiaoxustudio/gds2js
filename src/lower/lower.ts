@@ -519,14 +519,63 @@ function lowerExpr(n: SyntaxNode): Expr {
   }
 }
 
+/**
+ * GDScript 字符串转义。**不能借用 JSON.parse**：JSON 的转义集比 GDScript 窄（没有 \a \v \'），
+ * 而旧实现在 JSON.parse 抛错时 catch 后**原样返回带反斜杠的源码** —— 于是 "it\'s" 会静默变成
+ * 字面 it\'s（Godot 实测 \' 就是 1 个撇号）。这正是"宁可响、不可静默错"要堵的口子。
+ *
+ * 下表逐条对 Godot 4.6.3 探针实测（9 个单转义探针文件，各只放一条 print，避免一个解析错拖垮整批）：
+ *   \n \t \r \a \b \f \v \ \" \' 各 1 字符；"ab\ncd" 长 5；\u0041 → 65、\u00e9 → 233（取 4 位十六进制）。
+ *   \x41 → Parse Error: Invalid escape in string（GDScript 没有 \x）。
+ *   \U0001F600 → 长度 3、码点 502/48/48：贪婪吃掉最多 6 位十六进制（0x1F6=502）后把 00 当字面量。
+ * 认不出的转义一律响亮抛错，绝不退回原文。
+ */
 function unquote(raw: string): string {
-  if (raw.length >= 2 && (raw.startsWith('"') || raw.startsWith("'"))) {
-    const inner = raw.slice(1, -1);
-    try {
-      return JSON.parse(`"${inner}"`) as string;
-    } catch {
-      return inner;
+  if (raw.length < 2 || !(raw.startsWith('"') || raw.startsWith("'"))) return raw;
+  const inner = raw.slice(1, -1);
+  let out = "";
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!;
+    if (ch !== "\\") {
+      out += ch;
+      continue;
+    }
+    const e = inner[++i];
+    if (e === undefined) {
+      throw new UnsupportedError("string-escape", "字符串以孤立反斜杠结尾");
+    }
+    switch (e) {
+      case "n": out += "\n"; break;
+      case "t": out += "\t"; break;
+      case "r": out += "\r"; break;
+      case "a": out += "\u0007"; break;
+      case "b": out += "\u0008"; break;
+      case "f": out += "\u000C"; break;
+      case "v": out += "\u000B"; break;
+      case "\\": out += "\\"; break;
+      case '"': out += '"'; break;
+      case "'": out += "'"; break;
+      case "u": {
+        const hex = inner.slice(i + 1, i + 5);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+          throw new UnsupportedError("string-escape", `\\u 需要 4 位十六进制，收到 "${hex}"`);
+        }
+        out += String.fromCodePoint(parseInt(hex, 16));
+        i += 4;
+        break;
+      }
+      // Godot 对 \U 是"贪婪吃最多 6 位十六进制"，只有一例实证、语义又怪，不猜。
+      case "U":
+        throw new UnsupportedError(
+          "string-escape",
+          "\\U 转义未实现：Godot 贪婪吃最多 6 位十六进制（实测 \\U0001F600 → 码点 502 + 字面 \"00\"），仅一例实证，宁缺毋猜",
+        );
+      default:
+        throw new UnsupportedError(
+          "string-escape",
+          `不支持的字符串转义 \\${e}（GDScript 无 \\x；实测 Godot 对 \\x41 报 Parse Error: Invalid escape in string）`,
+        );
     }
   }
-  return raw;
+  return out;
 }
