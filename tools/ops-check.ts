@@ -88,6 +88,43 @@ eq("055", "小 int 与 int64max 比较", show(ops.lt(I(1), I(9223372036854775807
 // 解箱快路径的 2^53 边界是**有意保留**的响亮抛错（D1 修订版）：越界必须炸，不能静默回绕
 shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(9007199254740991, 1));
 
+// ---- 数组下标：Godot 支持**负索引**（从尾部数），读写同规则；越界一律响亮报错、绝不扩数组。
+// 期望值全部来自 056/057 的 godot.txt（含 a[-1]=9 → [1,2,9]、a[5]=9 → SCRIPT ERROR 两次探针）。
+{
+  const g = GArray.of([I(1), I(2), I(3)]);
+  eq("056", "装箱 a[-1] 读末格", show(g.get(-1)), "3");
+  eq("056", "装箱 a[-3] 读首格", show(g.get(-3)), "1");
+  g.set(-1, I(9));
+  eq("056", "装箱 a[-1]=9 写末格", show(V.array(g)), "[1, 2, 9]");
+  g.set(-2, I(8));
+  eq("056", "装箱 a[-2]=8 写倒数第二格", show(V.array(g)), "[1, 8, 9]");
+  shouldThrow("056", "装箱读越界抛错", () => g.get(3));
+  shouldThrow("056", "装箱负索引超出抛错", () => g.get(-4));
+  shouldThrow("056", "装箱写越界抛错", () => g.set(5, I(0)));
+  try {
+    g.set(5, I(0));
+  } catch {
+    /* 预期抛错 */
+  }
+  // JS 原生 items[5]=v 会把数组撑到 6 格（Godot 是 SCRIPT ERROR）—— 这条钉住"没被撑长"。
+  eq("056", "写越界被拒后数组长度不变", g.size(), 3);
+}
+{
+  eq("057", "裸 a[-1] 读末格", fast.rawArrGet([1, 2, 3], -1), 3);
+  shouldThrow("057", "裸 a[3] 读越界", () => fast.rawArrGet([1, 2, 3], 3));
+  const r = [1, 2, 3];
+  fast.rawArrSet(r, -1, 9);
+  eq("057", "裸 a[-1]=9", JSON.stringify(r), "[1,2,9]");
+  const r2 = [1, 2, 3];
+  shouldThrow("057", "裸 a[5]=9 写越界", () => fast.rawArrSet(r2, 5, 9));
+  eq("057", "裸写越界后没被撑长", r2.length, 3);
+  eq("057", "裸 g[-1][-1] 两层负索引", fast.rawArrGet2([[1, 2], [3, 4]], -1, -1), 4);
+  const gg: number[][] = [[1, 2], [3, 4]];
+  fast.rawArrSet2(gg, -1, 0, 7);
+  eq("057", "裸 g[-1][0]=7", JSON.stringify(gg), "[[1,2],[7,4]]");
+  shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
+}
+
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）
 {
   const a = GArray.of([I(1), I(2)]);

@@ -32,9 +32,9 @@ export class Main extends SceneTree {
     rt.method(f, "append", [rt.V.int(8)]);
     print(rt.show(e));
     print(rt.show(rt.method(e, "size", [])));
-    let w = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
-    rt.setIndex(w, rt.V.int(0), rt.V.int(5));
-    print(rt.show(rt.index(w, rt.V.int(0))));
+    let w = [1, 2];
+    rt.fast.rawArrSet(w, 0, 5);
+    print(rt.show(rt.V.int(rt.fast.rawArrGet(w, 0))));
     this.quit();
   }
   

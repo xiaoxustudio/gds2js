@@ -86,6 +86,28 @@ const KERNELS: Kernel[] = [
 `,
   },
   {
+    name: "array-write",
+    reps: 5,
+    body: `
+	var a = []
+	var i = 0
+	while i < 50000:
+		a.append(i)
+		i += 1
+	var j = 0
+	while j < 50000:
+		a[j] = a[j] * 2
+		j += 1
+	var k = 0
+	while k < 25000:
+		var t = a[k]
+		a[k] = a[49999 - k]
+		a[49999 - k] = t
+		k += 1
+	return a[0] + a[49999]
+`,
+  },
+  {
     name: "dict-set-get",
     reps: 5,
     body: `

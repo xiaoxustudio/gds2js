@@ -31,6 +31,19 @@ export function keyOf(v: Variant): string {
 
 // ---------------------------------------------------------------- Array
 
+/**
+ * Godot 数组下标的唯一口径（056 实测）：**支持负数**（`a[-1]` 是最后一格，读写同规则），
+ * 越界一律响亮报 `array-index` —— 尤其写越界，Godot 是 SCRIPT ERROR，**不会**像 JS 那样
+ * 把数组撑长或挂一个 `-1` 属性上去（后者先前在 GArray.set 里是静默错）。
+ */
+export function arrIdx(i: number, len: number): number {
+  const k = i < 0 ? i + len : i;
+  if (k < 0 || k >= len) {
+    throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
+  }
+  return k;
+}
+
 export class GArray {
   private items: Variant[];
 
@@ -51,15 +64,11 @@ export class GArray {
   }
 
   get(i: number): Variant {
-    const v = this.items[i];
-    if (v === undefined) {
-      throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
-    }
-    return v;
+    return this.items[arrIdx(i, this.items.length)]!;
   }
 
   set(i: number, v: Variant): void {
-    this.items[i] = v;
+    this.items[arrIdx(i, this.items.length)] = v;
   }
 
   append(v: Variant): void {

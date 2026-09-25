@@ -538,6 +538,8 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
           return [`${s.target.name} = ${raw};`];
         }
       }
+      const rawWrite = emitRawIndexWrite(s.target, s.value);
+      if (rawWrite) return [rawWrite];
       return [emitAssign(s.target, emitExpr(s.value))];
     }
 
@@ -616,6 +618,38 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       return lines;
     }
   }
+}
+
+/**
+ * 裸数组 / 裸网格的下标写（step 15）。verifyArray 已保证写值同型、下标为 int，这里再核一次 rep：
+ * 核不上说明「推断为 X ⟺ 发射为 X rep」这条不变式被破坏，宁可编译期响亮报错，也绝不静默发出
+ * 一个往 number[] 里塞 Variant 的裸写。返回 null 表示这不是裸容器，交回装箱的 setIndex。
+ */
+function emitRawIndexWrite(target: Expr, value: Expr): string | null {
+  if (target.kind !== "index") return null;
+  const raw = (e: Expr, want: "int" | "float"): string => {
+    const r = emitExprR(e);
+    if (r.rep !== want) {
+      throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组写入值 rep=${r.rep}，应为 ${want}`);
+    }
+    return r.code;
+  };
+  if (target.obj.kind === "ident") {
+    const K = RAW_ARRAYS.get(target.obj.name);
+    if (!K || isGridElem(K)) return null; // 网格的整行写不合法（前面已判逃逸），这里不接
+    const i = raw(target.index, "int");
+    const v = raw(value, K);
+    return `rt.fast.rawArrSet(${target.obj.name}, ${i}, ${v});`;
+  }
+  if (target.obj.kind === "index" && target.obj.obj.kind === "ident") {
+    const K = RAW_ARRAYS.get(target.obj.obj.name);
+    if (!K || !isGridElem(K)) return null;
+    const i = raw(target.obj.index, "int");
+    const j = raw(target.index, "int");
+    const v = raw(value, leafOf(K));
+    return `rt.fast.rawArrSet2(${target.obj.obj.name}, ${i}, ${j}, ${v});`;
+  }
+  return null;
 }
 
 function emitAssign(target: Expr, value: string): string {
@@ -1395,15 +1429,18 @@ interface ArrayCand {
   init: Extract<Expr, { kind: "array" }>;
   writeElems: Expr[]; // a.append(e) 的 e
   readIdxs: Expr[]; // a[i] 读的 i
+  writeIdxs: Expr[]; // a[i]=v / g[i][j]=v 的全部下标（网格写记两层）
+  writeVals: Expr[]; // a[i]=v / g[i][j]=v 写入的叶子值
   escaped: boolean; // 出现任何非白名单用法 → 取消特化
 }
 
 /**
  * 静态扫一遍函数体，找出候选数组局部（`var a = []` / `var a = <数字字面量数组>`，无类型标注）
  * 并按「出现位置」判定是否逃逸。只有以下用法算合法：
- *   decl 自身、a.append(<单实参>) 的接收者、a.size()/a.length() 的接收者、a[<i>] 的读接收者。
- * 其它一切（别名 b=a、重赋值 a=…、下标写 a[i]=…、其它方法、作为实参/元素/返回/print/in/迭代/
- * lambda 捕获/match 主体等）→ escaped。
+ *   decl 自身、a.append(<单实参>) 的接收者、a.size()/a.length() 的接收者、
+ *   a[<i>] 的读接收者、a[<i>]=v / g[<i>][<j>]=v 的下标写。
+ * 其它一切（别名 b=a、重赋值 a=…、把网格的行当值用、其它方法、作为实参/元素/返回/print/in/
+ * 迭代/lambda 捕获/match 主体等）→ escaped。
  */
 function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   const cands = new Map<string, ArrayCand>();
@@ -1412,7 +1449,14 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   const pre = (s: Stmt): void => {
     if (s.kind === "var") {
       if (!s.type && s.init && s.init.kind === "array") {
-        cands.set(s.name, { init: s.init, writeElems: [], readIdxs: [], escaped: false });
+        cands.set(s.name, {
+          init: s.init,
+          writeElems: [],
+          readIdxs: [],
+          writeIdxs: [],
+          writeVals: [],
+          escaped: false,
+        });
       }
     } else if (s.kind === "if") for (const b of s.branches) b.body.forEach(pre);
     else if (s.kind === "for") {
@@ -1431,6 +1475,22 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   const isGridCand = (c: ArrayCand): boolean => {
     const k = elemKindFromInit(c.init, true);
     return !!k && isGridElem(k);
+  };
+  /**
+   * 认 `a[i]=…`（标量数组）与 `g[i][j]=…`（网格）两种下标写，返回候选名 + 它的全部下标。
+   * 形态不合（网格的整行写 `g[i]=…`、标量数组的双层写）返回 null，交给原有逃逸判定。
+   */
+  const matchIndexWrite = (t: Expr): { name: string; idxs: Expr[] } | null => {
+    if (t.kind !== "index") return null;
+    if (t.obj.kind === "ident") {
+      const c = cands.get(t.obj.name);
+      return c && !isGridCand(c) ? { name: t.obj.name, idxs: [t.index] } : null;
+    }
+    if (t.obj.kind === "index" && t.obj.obj.kind === "ident") {
+      const c = cands.get(t.obj.obj.name);
+      return c && isGridCand(c) ? { name: t.obj.obj.name, idxs: [t.obj.index, t.index] } : null;
+    }
+    return null;
   };
 
   const visitExpr = (e: Expr, inL: boolean): void => {
@@ -1525,7 +1585,18 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         if (s.init) visitExpr(s.init, inL);
         return;
       case "assign": {
-        // 下标写 a[i]=.. 与 重赋值 a=.. 都让候选数组逃逸。
+        // 下标写 a[i]=v / g[i][j]=v 是数组的主操作（step 15）：先记下写入值与下标，
+        // 交给 verifyArray 判「写值与元素同型、下标是 int」，通过后发裸写；不再一律逃逸。
+        // 但重赋值 a=… 仍要逃逸 —— 那会把整个裸容器换掉。
+        const w = matchIndexWrite(s.target);
+        if (w && !inL) {
+          const c = cands.get(w.name)!;
+          c.writeIdxs.push(...w.idxs);
+          c.writeVals.push(s.value);
+          w.idxs.forEach((ix) => visitExpr(ix, inL));
+          visitExpr(s.value, inL);
+          return;
+        }
         const wt =
           s.target.kind === "index"
             ? isCandObj(s.target.obj)
@@ -1533,6 +1604,7 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
               ? s.target.name
               : null;
         if (wt) markEscape(wt);
+        if (w) markEscape(w.name); // lambda 里出现的下标写：容器不能跨出 lambda
         visitExpr(s.target, inL);
         visitExpr(s.value, inL);
         return;
@@ -1693,6 +1765,11 @@ function verifyArray(
   }
   for (const w of c.writeElems) if (kindOfExpr(w, identKind, arrays, dicts) !== K) return false;
   for (const r of c.readIdxs) if (kindOfExpr(r, identKind, arrays, dicts) !== "int") return false;
+  // 下标写：写进去的必须和元素同型（网格比的是**叶子**型），下标必须是 int。
+  // 违反就整个数组退回装箱 —— 装箱轨元素是 Variant，装什么都合法，不会有类型陷阱。
+  const leaf: Kind = isGridElem(K) ? leafOf(K) : K;
+  for (const v of c.writeVals) if (kindOfExpr(v, identKind, arrays, dicts) !== leaf) return false;
+  for (const ix of c.writeIdxs) if (kindOfExpr(ix, identKind, arrays, dicts) !== "int") return false;
   return true;
 }
 

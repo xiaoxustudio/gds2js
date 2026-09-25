@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import type { Variant } from "./tags";
-import { GArray, GDict, strFloat, valueEq } from "./values";
+import { GArray, GDict, arrIdx, strFloat, valueEq } from "./values";
 
 /** 与 tags.ts 的 checkInt 抛完全相同的错（D1：超 2^53 响亮失败，绝不静默降级）。 */
 function int64(v: number): UnsupportedError {
@@ -9,30 +9,32 @@ function int64(v: number): UnsupportedError {
 
 /** 单态快路径（D2 的第二轨）。输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
-  // ---- 容器元素单态化（D2 第四轨）：裸数组下标读 ----
-  /** 越界/负索引抛与 GArray.get 完全相同的错，绝不把越界静默成 undefined（→ NaN）。 */
+  // ---- 容器元素单态化（D2 第四轨）：裸数组下标读写 ----
+  /** 与装箱轨同一个 `arrIdx` 口径：支持负索引（从尾部数），越界抛 array-index。 */
   rawArrGet(a: number[], i: number): number {
-    const v = a[i];
-    if (v === undefined) {
-      throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
-    }
-    return v;
+    return a[arrIdx(i, a.length)]!;
   },
 
   /**
-   * 二维网格 `g[i][j]`（number[][]）的双下标读：任一层越界/负索引都抛与 GArray.get 同码的
-   * `array-index`，绝不静默 undefined→NaN。两层越界都按外层→内层的顺序检查（同 Godot 逐层报错）。
+   * 二维网格 `g[i][j]`（number[][]）的双下标读：两层各自都用 arrIdx 规范化（负索引在任一层都合法），
+   * 任一层越界抛 array-index，绝不静默 undefined→NaN。外层先、内层后，同 Godot 逐层报错的顺序。
    */
   rawArrGet2(g: number[][], i: number, j: number): number {
-    const row = g[i];
-    if (row === undefined) {
-      throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
-    }
-    const v = row[j];
-    if (v === undefined) {
-      throw new GodotRuntimeError("array-index", `数组索引越界: ${j}`);
-    }
-    return v;
+    const row = g[arrIdx(i, g.length)]!;
+    return row[arrIdx(j, row.length)]!;
+  },
+
+  /**
+   * 裸数组下标写。必须走 arrIdx 检查：JS 原生 `a[i] = v` 对越界会把数组撑长、对负数会挂成
+   * 非索引属性，两者都是 Godot 会用 SCRIPT ERROR 拦下的静默错（055/056 探针确证）。
+   */
+  rawArrSet(a: number[], i: number, v: number): void {
+    a[arrIdx(i, a.length)] = v;
+  },
+
+  rawArrSet2(g: number[][], i: number, j: number, v: number): void {
+    const row = g[arrIdx(i, g.length)]!;
+    row[arrIdx(j, row.length)] = v;
   },
 
   /**
