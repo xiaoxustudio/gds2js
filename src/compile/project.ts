@@ -344,6 +344,28 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   // ---- 环检测（extends 循环 / preload 循环），Godot 也是错误，这里响亮报出
   detectCycles(loaded, resRoot);
 
+  // ---- 参数/返回单态化的跨模块安全集（D2 第三轨）：
+  // 裸 ABI 会让方法只接受裸值；一旦它以装箱形式被外部触达就静默算错。跨模块触达只有两条路：
+  //   (1) obj.m() / super.m() —— 属性访问，全工程任意一处出现 `.m` 就禁掉 m 的裸 ABI；
+  //   (2) 继承（基类方法被子类以 this.m() 虚调用）—— 参与任何用户类继承关系的模块整体禁用。
+  // 单模块直接 f() 且从不被属性/继承触达的纯 helper 才保留单态化。
+  const attrNames = new Set<string>();
+  for (const l of loaded.values()) {
+    walkModuleExprs(l.module, (e) => {
+      if (e.kind === "attribute") attrNames.add(e.name);
+      // 字符串字面量可能是 obj.call("m") / connect("m") 的目标方法名（按名反射派发）→ 一并保守排除。
+      if (e.kind === "lit" && e.lit === "string") attrNames.add(String(e.value));
+    });
+  }
+  const rawAbiBlockedModules = new Set<string>();
+  for (const l of loaded.values()) {
+    const bm = baseModule(l, loaded, classIndex);
+    if (bm) {
+      rawAbiBlockedModules.add(l.resPath); // 有用户基类：this.m() 可能是虚调用
+      rawAbiBlockedModules.add(bm.resPath); // 被继承：其方法可能被派生类虚调用
+    }
+  }
+
   // ---- Pass 4：逐文件发射
   const modules: CompiledModule[] = [];
   for (const l of loaded.values()) {
@@ -406,6 +428,10 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       inheritedMembers: inherited,
       loadMap: [...loadMap].map(([literal, resPath]) => ({ literal, resPath })),
       sideEffectImports: [...sideEffect.values()],
+      // 参与继承的模块整体禁裸 ABI（传本模块全部方法名）；否则传全工程属性名集合。
+      rawAbiExternal: rawAbiBlockedModules.has(l.resPath)
+        ? l.module.funcs.map((f) => f.name)
+        : [...attrNames],
       sourcemap: opts.sourcemap,
       jsFile: basename(jsPathFor(l, opts)),
       // source 相对产物所在目录，指向它的 .gd 源（map 与 .mts 同目录）

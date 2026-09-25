@@ -62,6 +62,12 @@ export interface EmitOptions {
   sourceFile?: string;
   /** 产物文件名（sourcemap 的 file 字段与 //# sourceMappingURL 用它，需与实际写盘名一致）。 */
   jsFile?: string;
+  /**
+   * 跨文件编译时由项目层传入：工程内**任何模块**里作为属性访问名 / 裸标识符出现过、
+   * 或被继承过的函数名。这些名字一律禁止裸 ABI（它们可能被 obj.f()/Callable 以装箱实参触达）。
+   * 单文件编译时无需传——本模块扫描即为全集。
+   */
+  rawAbiExternal?: string[];
 }
 
 const DEFAULT_RUNTIME_IMPORT = "../../../src/runtime/index";
@@ -207,6 +213,13 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   if (m.enums.length > 0) out.push("");
 
+  // 参数/返回单态化（D2 第三轨）：逐模块算出裸 ABI 函数集，供 emitFunc/emitExprR/computeUnboxed 共享。
+  RAW_ABIS = computeRawAbis(m, {
+    hasBase: baseClass.kind === "import",
+    inherited: new Set(opts.inheritedMembers ?? []),
+    external: new Set(opts.rawAbiExternal ?? []),
+  });
+
   const heritage =
     baseClass.kind === "host" ? " extends SceneTree"
     : baseClass.kind === "import" ? ` extends ${baseClass.name}`
@@ -251,6 +264,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     code += `//# sourceMappingURL=${jsFile}.map\n`;
   }
   MAP_ACTIVE = false;
+  RAW_ABIS = new Map();
+  CURRENT_RET = null;
   return { code, map };
 }
 
@@ -287,18 +302,22 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
 
   // 入口方法是 harness 约定的异步方法，必须保持 Promise 签名
   const isEntry = f.name === "_initialize" || f.name === "_process";
+  const abi = RAW_ABIS.get(f.name);
   const async = f.coroutine || isEntry ? "async " : "";
   const params = f.params.map((p) => p.name).join(", ");
   const hasValue = hasValueReturn(f.body);
 
   let ret: string;
-  if (f.name === "_initialize") ret = "Promise<void>";
+  if (abi) ret = abi.ret === "str" ? "string" : "number";
+  else if (f.name === "_initialize") ret = "Promise<void>";
   else if (isEntry || f.coroutine) ret = "Promise<unknown>";
   else ret = hasValue ? "unknown" : "void";
 
   const lines = [`${async}${f.name}(${params}): ${ret} {`];
   mark(base, f.loc);
   const savedUnboxed = UNBOXED;
+  const savedRet = CURRENT_RET;
+  CURRENT_RET = abi ? abi.ret : null;
   UNBOXED = computeUnboxed(f);
   try {
     for (const s of f.body) {
@@ -307,6 +326,7 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
     }
   } finally {
     UNBOXED = savedUnboxed;
+    CURRENT_RET = savedRet;
   }
   lines.push("}");
   lines.push("");
@@ -408,6 +428,17 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
 
     case "return":
       if (!s.value) return ["return;"];
+      // 裸 ABI 函数：返回值必须是声明的那一种裸类型（推断保证）；对不上就响，绝不静默发装箱值。
+      if (CURRENT_RET) {
+        const rr = emitExprR(s.value);
+        if (rr.rep !== CURRENT_RET) {
+          throw new UnsupportedError(
+            "raw-abi-return",
+            `内部不变量破坏：裸函数返回期望 ${CURRENT_RET}，实得 ${rr.rep}`,
+          );
+        }
+        return [`return ${rr.code};`];
+      }
       // _initialize 的返回类型被钉成 Promise<void>，有返回值时用 void 吃掉
       return voidReturn ? [`return void (${emitExpr(s.value)});`] : [`return ${emitExpr(s.value)};`];
 
@@ -499,6 +530,18 @@ interface R {
 /** 当前函数里被解箱成裸 JS 值的局部：int/float → number，str → string。 */
 let UNBOXED = new Map<string, "int" | "float" | "str">();
 
+/** 单态化的三种裸表示。 */
+type Kind = "int" | "float" | "str";
+/** 纯返回值函数的裸 ABI：参数与返回统一为同一种 Kind（v1 只支持同型）。 */
+interface RawAbi {
+  params: Kind[];
+  ret: Kind;
+}
+/** 当前模块内可走裸 ABI 的函数：名字 → 签名。由 computeRawAbis 逐模块算出。 */
+let RAW_ABIS = new Map<string, RawAbi>();
+/** 当前正在发射的函数若走裸 ABI，其返回裸类型；否则 null（返回值需装箱）。 */
+let CURRENT_RET: Kind | null = null;
+
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
 const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
 // float 无 D1 范围陷阱（溢出→Infinity、除零→Infinity，与装箱 V.float(a op b) 逐位一致），故内联裸运算即可。
@@ -530,6 +573,28 @@ function emitExprR(e: Expr): R {
   if (e.kind === "ident") {
     const k = UNBOXED.get(e.name);
     if (k) return { code: e.name, rep: k };
+  }
+  if (e.kind === "call" && e.callee.kind === "ident") {
+    // 裸 ABI：直接调用点传裸实参、结果按裸类型流（不再回 rvalue）。分析期已保证同型；
+    // 万一表示与推断不符（漏改的对齐 bug），宁可响亮报错，绝不静默发错。
+    const abi = RAW_ABIS.get(e.callee.name);
+    if (abi) {
+      if (e.args.length !== abi.params.length) {
+        throw new UnsupportedError("raw-abi-arity", `内部不变量破坏：${e.callee.name} 期望 ${abi.params.length} 个实参`);
+      }
+      const raws = e.args.map(emitExprR);
+      for (let i = 0; i < raws.length; i++) {
+        const want = abi.params[i]!;
+        const got = raws[i]!;
+        if (got.rep !== want) {
+          throw new UnsupportedError(
+            "raw-abi-arg",
+            `内部不变量破坏：${e.callee.name} 第 ${i + 1} 参数期望 ${want}，实得 ${got.rep}`,
+          );
+        }
+      }
+      return { code: `this.${e.callee.name}(${raws.map((r) => r.code).join(", ")})`, rep: abi.ret };
+    }
   }
   if (e.kind === "binary") {
     const raw = tryRawBinary(e);
@@ -568,6 +633,9 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
  * 用「自身暂定」打破 `x += 1` 的循环依赖，每种类型各自迭代到不动点；init 字面量类型天然互斥，不会同属两类。
  */
 function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
+  const abi = RAW_ABIS.get(f.name);
+  const paramKind = new Map<string, Kind>();
+  if (abi) f.params.forEach((p, i) => paramKind.set(p.name, abi.params[i]!));
   const excluded = new Set<string>(f.params.map((p) => p.name));
   const decls: Array<{ name: string; init: Expr | null }> = [];
   const assigns: Array<{ name: string; value: Expr }> = [];
@@ -663,8 +731,9 @@ function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
   f.body.forEach((s) => walkStmt(s, false));
 
   const result = new Map<string, "int" | "float" | "str">();
+  // 裸 ABI 函数的参数直接是裸值：种进 result，使发射期 emitExprR(ident 参数) 解析出正确 rep。
+  if (abi) f.params.forEach((p, i) => result.set(p.name, abi.params[i]!));
   for (const kind of ["int", "float", "str"] as const) {
-    const ops = kind === "int" ? ["+", "-", "*", "/", "%"] : kind === "float" ? ["+", "-", "*", "/"] : ["+"];
     const isLit = (e: Expr): boolean =>
       e.kind === "lit" &&
       (kind === "int"
@@ -673,17 +742,16 @@ function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
           ? e.lit === "float"
           : e.lit === "string");
     const U = new Set<string>();
+    // 与发射期 tryRawBinary / 裸调用完全同一张算子表：用 kindOfExpr 判定表达式裸类型，
+    // 保证「推断为 int ⟺ 发射为 int rep」，杜绝漏箱（静默错）。ident 经本函数已推断的裸映射解析。
+    const identKind = (self: string) => (n: string): Kind | null =>
+      paramKind.get(n) ?? result.get(n) ?? (n === self || U.has(n) ? kind : null);
     const isNum = (e: Expr, self: string): boolean => {
-      switch (e.kind) {
-        case "lit":
-          return isLit(e);
-        case "ident":
-          return e.name === self || U.has(e.name);
-        case "binary":
-          return ops.includes(e.op) && isNum(e.left, self) && isNum(e.right, self);
-        default:
-          return false;
-      }
+      if (e.kind === "call") return kindOfExpr(e, identKind(self)) === kind;
+      if (e.kind === "binary") return kindOfExpr(e, identKind(self)) === kind;
+      if (e.kind === "lit") return isLit(e);
+      if (e.kind === "ident") return e.name === self || U.has(e.name) || paramKind.get(e.name) === kind;
+      return false;
     };
     let changed = true;
     while (changed) {
@@ -699,6 +767,320 @@ function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
     }
   }
   return result;
+}
+
+// ------------------------------------------------ 参数/返回单态化（D2 第三轨）
+
+const INT_ARITH = new Set(["+", "-", "*", "/", "%"]);
+const FLOAT_ARITH = new Set(["+", "-", "*", "/"]);
+const CMP_OPS = new Set(["<", "<=", ">", ">=", "==", "!="]);
+
+/**
+ * 结构化的表达式裸类型判定，算子表与 tryRawBinary 逐字一致：
+ * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / call(裸 ABI 目标) 能产出裸类型，
+ * 其余（attribute/index/array/dict/lambda/await/is/as/unary）一律返回 null（必须装箱）。
+ * 返回 "bool" 表示裸比较结果（调用方要求 int/float/str 时自然落选）。
+ */
+function kindOfExpr(e: Expr, identKind: (n: string) => Kind | null): Kind | "bool" | null {
+  switch (e.kind) {
+    case "lit":
+      if (e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) return "int";
+      if (e.lit === "float" && typeof e.value === "number") return "float";
+      if (e.lit === "string") return "str";
+      return null;
+    case "ident":
+      return identKind(e.name);
+    case "binary": {
+      const lk = kindOfExpr(e.left, identKind);
+      const rk = kindOfExpr(e.right, identKind);
+      if (lk === null || rk === null || lk === "bool" || rk === "bool" || lk !== rk) return null;
+      if (lk === "int" && INT_ARITH.has(e.op)) return "int";
+      if (lk === "float" && FLOAT_ARITH.has(e.op)) return "float";
+      if (lk === "str" && e.op === "+") return "str";
+      if ((lk === "int" || lk === "float") && CMP_OPS.has(e.op)) return "bool";
+      return null;
+    }
+    case "call": {
+      if (e.callee.kind !== "ident") return null;
+      const abi = RAW_ABIS.get(e.callee.name);
+      if (!abi || e.args.length !== abi.params.length) return null;
+      for (let i = 0; i < e.args.length; i++) {
+        if (kindOfExpr(e.args[i]!, identKind) !== abi.params[i]!) return null;
+      }
+      return abi.ret;
+    }
+    default:
+      return null;
+  }
+}
+
+interface RawSite {
+  args: Expr[];
+  owner: FuncDecl;
+}
+
+/** 纯返回值形态：单条 `return <expr>`，无返回类型标注，参数无类型/默认值，非协程/静态/入口。 */
+function isPureReturnForm(f: FuncDecl): boolean {
+  if (f.coroutine || f.isStatic) return false;
+  if (f.returnType) return false;
+  if (f.body.length !== 1) return false;
+  const st = f.body[0]!;
+  if (st.kind !== "return" || !st.value) return false;
+  for (const p of f.params) if (p.type || p.default) return false;
+  return true;
+}
+
+/**
+ * 全模块扫描：
+ * - 顶层方法体内 `f(...)`（裸 ident 被调）→ 记为 f 的直接调用点（sites）。
+ * - 其它任何对名字的引用（裸 ident 取值 / obj.name 成员访问 / super.name / 嵌套在 lambda、
+ *   内部类、字段初始化、默认值、match 绑定作用域里的调用）→ 保守计入 escapes，取消该函数单态化资格。
+ */
+function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>; sitesByF: Map<string, RawSite[]> } {
+  const escapes = new Set<string>();
+  const sitesByF = new Map<string, RawSite[]>();
+  const escape = (n: string): void => {
+    if (n !== "super") escapes.add(n);
+  };
+
+  const expr = (e: Expr, owner: FuncDecl | null, allowSite: boolean): void => {
+    switch (e.kind) {
+      case "lit":
+        // 字符串字面量可能正是 obj.call("m") / signal.connect("m") / has_method("m") 的目标方法名，
+        // 单态化会让这些按名反射派发拿到装箱实参 → 静默算错。保守：任何字符串都按潜在方法名逃逸。
+        if (e.lit === "string") escape(String(e.value));
+        return;
+      case "ident":
+        escape(e.name);
+        return;
+      case "call": {
+        if (e.callee.kind === "ident") {
+          const nm = e.callee.name;
+          if (allowSite && owner && candNames.has(nm)) {
+            if (!sitesByF.has(nm)) sitesByF.set(nm, []);
+            sitesByF.get(nm)!.push({ args: e.args, owner });
+          } else {
+            escape(nm);
+          }
+        } else {
+          expr(e.callee, owner, false);
+        }
+        for (const a of e.args) expr(a, owner, allowSite);
+        return;
+      }
+      case "attribute":
+        escape(e.name);
+        expr(e.obj, owner, allowSite);
+        return;
+      case "index":
+        expr(e.obj, owner, allowSite);
+        expr(e.index, owner, allowSite);
+        return;
+      case "binary":
+        expr(e.left, owner, allowSite);
+        expr(e.right, owner, allowSite);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        expr(e.operand, owner, allowSite);
+        return;
+      case "array":
+        for (const it of e.items) expr(it, owner, allowSite);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          expr(en.key, owner, allowSite);
+          expr(en.value, owner, allowSite);
+        }
+        return;
+      case "lambda":
+        for (const s of e.body) stmt(s, owner, false);
+        return;
+    }
+  };
+  const stmt = (s: Stmt, owner: FuncDecl | null, allowSite: boolean): void => {
+    switch (s.kind) {
+      case "var":
+        if (s.init) expr(s.init, owner, allowSite);
+        return;
+      case "assign":
+        expr(s.target, owner, allowSite);
+        expr(s.value, owner, allowSite);
+        return;
+      case "expr":
+        expr(s.expr, owner, allowSite);
+        return;
+      case "return":
+        if (s.value) expr(s.value, owner, allowSite);
+        return;
+      case "if":
+        for (const b of s.branches) {
+          if (b.cond) expr(b.cond, owner, allowSite);
+          for (const x of b.body) stmt(x, owner, allowSite);
+        }
+        return;
+      case "for":
+        expr(s.iter, owner, allowSite);
+        for (const x of s.body) stmt(x, owner, allowSite);
+        return;
+      case "while":
+        expr(s.cond, owner, allowSite);
+        for (const x of s.body) stmt(x, owner, allowSite);
+        return;
+      case "match":
+        expr(s.subject, owner, allowSite);
+        for (const a of s.arms) {
+          if (a.guard) expr(a.guard, owner, allowSite);
+          for (const x of a.body) stmt(x, owner, false);
+        }
+        return;
+      case "break":
+      case "continue":
+      case "pass":
+        return;
+    }
+  };
+
+  for (const f of m.funcs) {
+    for (const p of f.params) if (p.default) expr(p.default, f, false);
+    for (const s of f.body) stmt(s, f, true);
+  }
+  for (const v of m.vars) if (v.init) expr(v.init, null, false);
+  const walkClass = (c: ClassDecl): void => {
+    for (const v of c.vars) if (v.init) expr(v.init, null, false);
+    for (const f of c.funcs) {
+      for (const s of f.body) stmt(s, f, false);
+    }
+    c.innerClasses.forEach(walkClass);
+  };
+  m.innerClasses.forEach(walkClass);
+
+  return { escapes, sitesByF };
+}
+
+/** 签名候选：给定统一 Kind，体（参数视为该 Kind）与所有调用点实参都能裸化为该 Kind 才成立。 */
+function sigValid(
+  f: FuncDecl,
+  K: Kind,
+  sites: RawSite[],
+  uOf: (fn: FuncDecl) => Map<string, "int" | "float" | "str">,
+): boolean {
+  const st = f.body[0]!;
+  if (st.kind !== "return" || !st.value) return false;
+  const pk = new Map<string, Kind>();
+  for (const p of f.params) pk.set(p.name, K);
+  if (kindOfExpr(st.value, (n) => pk.get(n) ?? null) !== K) return false;
+  for (const s of sites) {
+    if (s.args.length !== f.params.length) return false;
+    const u = uOf(s.owner);
+    for (const a of s.args) {
+      if (kindOfExpr(a, (n) => u.get(n) ?? null) !== K) return false;
+    }
+  }
+  return true;
+}
+
+function sameAbis(a: Map<string, RawAbi>, b: Map<string, RawAbi>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) {
+    const w = b.get(k);
+    if (!w || w.ret !== v.ret) return false;
+  }
+  return true;
+}
+
+/**
+ * 求本模块可单态化的函数集合（D2 第三轨 v1）。
+ * 安全边界（v1，全部满足才发裸 ABI）：
+ * - 无内部类（内部类方法是兄弟类，`this.f` 会指错对象）；
+ * - 无基类 / 不在继承成员里（基类或派生类可能以 virtual 方式调用，收到裸值会静默算错）；
+ * - 名字不在工程其它模块声明（跨模块只能 obj.f() 属性调用，走装箱派发）；
+ * - 函数是「纯单 return 表达式」且参数/返回类型无标注、非协程/静态/入口；
+ * - 名字从不作为裸标识符（Callable）、成员访问 .f、super.f、lambda/内部类/字段初始化里的调用出现；
+ * - 每个直接调用点参数个数与形参一致，且所有调用点参数与函数体在本模块不动点下都是同一种 int/float/str。
+ * 不动点不收敛（跨候选 Kind 互相牵动的罕见情形）→ 直接放弃全部单态化，退回逐字节旧行为。
+ */
+function computeRawAbis(
+  m: Module,
+  ctx: { hasBase: boolean; inherited: Set<string>; external: Set<string> },
+): Map<string, RawAbi> {
+  const empty = new Map<string, RawAbi>();
+  if (m.innerClasses.length > 0 || ctx.hasBase) return empty;
+
+  const byName = new Map<string, FuncDecl>();
+  for (const f of m.funcs) byName.set(f.name, f);
+
+  const candNames = new Set<string>();
+  for (const f of m.funcs) {
+    if (!isPureReturnForm(f)) continue;
+    if (f.name.startsWith("_")) continue; // 引擎虚函数 / 入口 / 构造
+    if (ENUM_NAMES.has(f.name) || MODULE_VARS.has(f.name) || MODULE_CLASSES.has(f.name)) continue;
+    // external：工程其它模块里作为属性/裸标识符出现过的名字，或被继承出现过的名字。
+    // 跨模块只能 obj.f() / Callable 触达，那会喂裸方法装箱实参 → 静默算错，必须整名排除。
+    if (ctx.inherited.has(f.name) || ctx.external.has(f.name)) continue;
+    candNames.add(f.name);
+  }
+  if (candNames.size === 0) return empty;
+
+  const { escapes, sitesByF } = scanRawUsage(m, candNames);
+  for (const n of escapes) candNames.delete(n);
+
+  // 需有 ≥1 合法方法体调用点（否则可能只在字段/lambda 里被调，或根本是引擎虚函数）。
+  for (const n of [...candNames]) {
+    if ((sitesByF.get(n) ?? []).length === 0) candNames.delete(n);
+  }
+  if (candNames.size === 0) return empty;
+
+  const saved = RAW_ABIS;
+  const dummyU: (fn: FuncDecl) => Map<string, "int" | "float" | "str"> = () => new Map();
+  // 乐观播种：先只看函数体（参数视为该 K、暂不看调用点）给每个候选一个签名，
+  // 打破 `s = add2(s, i)` 这类正反馈依赖（s 的裸推断依赖 add2 的返回类型）。随后不动点按调用点证据收敛/反驳。
+  const seed = new Map<string, RawAbi>();
+  for (const name of candNames) {
+    const f = byName.get(name)!;
+    for (const K of ["int", "float", "str"] as const) {
+      if (sigValid(f, K, [], dummyU)) {
+        seed.set(name, { params: f.params.map(() => K), ret: K });
+        break;
+      }
+    }
+  }
+  let cur = seed;
+  let stable = false;
+  const cap = (candNames.size + 2) * 4;
+  for (let it = 0; it < cap; it++) {
+    RAW_ABIS = cur;
+    const uCache = new Map<string, Map<string, "int" | "float" | "str">>();
+    const uOf = (fn: FuncDecl): Map<string, "int" | "float" | "str"> => {
+      let v = uCache.get(fn.name);
+      if (!v) {
+        v = computeUnboxed(fn);
+        uCache.set(fn.name, v);
+      }
+      return v;
+    };
+    const next = new Map<string, RawAbi>();
+    for (const name of candNames) {
+      const f = byName.get(name)!;
+      const sites = sitesByF.get(name) ?? [];
+      for (const K of ["int", "float", "str"] as const) {
+        if (sigValid(f, K, sites, uOf)) {
+          next.set(name, { params: f.params.map(() => K), ret: K });
+          break;
+        }
+      }
+    }
+    if (sameAbis(cur, next)) {
+      cur = next;
+      stable = true;
+      break;
+    }
+    cur = next;
+  }
+  RAW_ABIS = saved;
+  return stable ? cur : empty;
 }
 
 function emitExprVar(e: Expr): string {

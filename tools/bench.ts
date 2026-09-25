@@ -22,6 +22,8 @@ interface Kernel {
   name: string;
   /** 每个 kernel 是一个无参 `bench()` 方法，返回一个校验值（防 DCE）。 */
   body: string;
+  /** 可选：bench() 之外的辅助方法源码（放在 bench 前），用于测函数调用边界的装箱开销。 */
+  helpers?: string;
   /** 计时重复次数（loop 量已写进 body，这里只是多跑几遍取稳定值）。 */
   reps: number;
 }
@@ -112,10 +114,26 @@ const KERNELS: Kernel[] = [
 	return s.length()
 `,
   },
+  {
+    name: "helper-int",
+    reps: 5,
+    helpers: `func add2(a, b):
+	return a + b
+
+`,
+    body: `
+	var s = 0
+	var i = 0
+	while i < 300000:
+		s = add2(s, i)
+		i += 1
+	return s
+`,
+  },
 ];
 
 async function compileKernel(k: Kernel): Promise<string> {
-  const src = `class_name K\n\nfunc bench():${k.body}`;
+  const src = `class_name K\n\n${k.helpers ?? ""}func bench():${k.body}`;
   const ir = lower(await parseSource(src));
   const code = emitModule(ir, {
     runtimeImport: "gds2js/runtime",
