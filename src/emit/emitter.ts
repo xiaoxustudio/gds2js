@@ -218,7 +218,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   const runtimeMode = opts.runtimeMode ?? "import";
   if (runtimeMode === "single") {
     if (!opts.standaloneInline) throw new UnsupportedError("emit-standalone", "single 模式需要 standaloneInline");
-    out.push(standaloneInlineHeader(opts.standaloneInline));
+    // 按行 push（而非一整串）：mark() 用 out.length 当生成行号，多行内联头必须逐行计入，
+    // 否则 sourcemap 的 genLine 会把整段头当成 1 行而错位。join 后字节完全一致。
+    out.push(...standaloneInlineHeader(opts.standaloneInline).split("\n"));
   } else if (runtimeMode === "local") {
     const p = opts.standaloneRequirePath ?? "./gds2js-standalone.cjs";
     out.push(`import { createRequire } from "node:module";`);

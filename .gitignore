@@ -2,6 +2,7 @@ build/
 sea/
 pkg-build/
 pkg/
+pkg-check/
 node_modules/
 dist/
 
