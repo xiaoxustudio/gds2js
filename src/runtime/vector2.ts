@@ -248,6 +248,17 @@ function normalized(x: number, y: number): Variant {
   return vector2(div(x, l), div(y, l));
 }
 
+/**
+ * 比较的唯一口径：**字典序**（先 x 再 y），不是「每个分量都更大」。
+ * 判别点实测：`Vector2(3,4) > Vector2(2,5)` → true（x 已决出，y 更小不影响）、
+ * `Vector2(3,4) < Vector2(4,3)` → true、`Vector2(1,2) < Vector2(1,3)` → true。
+ * ops 的比较与 Array.sort() 都走这里，别在别处再写一份。
+ */
+export function vecCmp(a: GVector2, b: GVector2): number {
+  if (a.x !== b.x) return a.x < b.x ? -1 : 1;
+  return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
+}
+
 /** 下标读：`v[0]` / `v[1]`（实测存在；越界 Godot 是解析期就拦，我们按运行时报错处理）。 */
 export function vec2Index(v: GVector2, idx: Variant): Variant {
   const i = idx.t === Tag.INT ? intToNum(idx.v as number | bigint) : null;

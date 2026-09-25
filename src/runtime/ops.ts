@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
-import { asVec2, GVector2 } from "./vector2";
+import { asVec2, GVector2, vecCmp } from "./vector2";
 import {
   GArray,
   GDict,
@@ -245,11 +245,16 @@ function compare(a: Variant, b: Variant): number {
   // (3,4) > (2,5) → true（x 已胜出，y 更小也不影响）、(3,4) < (4,3) → true。
   const va = asVec2(a);
   const vb = asVec2(b);
-  if (va && vb) {
-    if (va.x !== vb.x) return va.x < vb.x ? -1 : 1;
-    return va.y === vb.y ? 0 : va.y < vb.y ? -1 : 1;
-  }
+  if (va && vb) return vecCmp(va, vb);
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
+}
+
+/**
+ * `a` 严格小于 `b`？与 `<`、`Array.sort()`、`bsearch`、`min`/`max` 同一个口径，
+ * 免得两套实现分叉（比较不支持的类型照样响亮抛）。
+ */
+export function isLess(a: Variant, b: Variant): boolean {
+  return compare(a, b) < 0;
 }
 
 /** 二进制快速幂，每步都回绕到 int64（等价于 Godot 的 64 位溢出行为）。 */

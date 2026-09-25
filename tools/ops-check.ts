@@ -7,10 +7,10 @@
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { fast } from "../src/runtime/fast";
-import { ops, strOps } from "../src/runtime/ops";
+import { isLess, ops, strOps } from "../src/runtime/ops";
 import { V, type Variant } from "../src/runtime/tags";
-import { GArray, GDict, show, strFloat, strFormat, strVec2 } from "../src/runtime/values";
-import { GVector2, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
+import { GArray, GDict, keyOf, show, strFloat, strFormat, strVec2 } from "../src/runtime/values";
+import { GVector2, vecCmp, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 
 let pass = 0;
 const fails: string[] = [];
@@ -325,6 +325,54 @@ eq("fast", "strInt vs strFloat", `${fast.strInt(1)}/${fast.strFloat(1)}`, "1/1.0
 eq("fast", "eqDeep 与 ops.eq 一致", fast.eqDeep(I(1), F(1)), true);
 eq("fast", "truthyArr 与 ops.truthy 一致", fast.truthyArr(GArray.of([])), false);
 shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
+
+// ---- 070 Array 排序 / 检索族（期望值取自 070-array-ordering 的 godot.txt）
+{
+  const nums = GArray.of([I(3), F(1.5), I(1)]);
+  nums.sort();
+  eq("070", "int/float 混排按数值、各自保留原类型", show(V.array(nums)), "[1, 1.5, 3]");
+  const bools = GArray.of([V.bool(true), V.bool(false), V.bool(true)]);
+  bools.sort();
+  eq("070", "纯 bool 可排且 false 在前", show(V.array(bools)), "[false, true, true]");
+  const vecs = GArray.of([vector2(1, 2), vector2(0, 3)]);
+  vecs.sort();
+  eq("070", "Vector2 数组按字典序排", show(V.array(vecs)), "[(0.0, 3.0), (1.0, 2.0)]");
+  const big = GArray.of([I(9007199254740993n), I(9007199254740992n), I(1)]);
+  big.sort();
+  eq("070", ">2^53 的 int 排序不被折成同值", show(V.array(big)), "[1, 9007199254740992, 9007199254740993]");
+  const pair = (k: number, tag: string) => V.array(GArray.of([I(k), S(tag)]));
+  const first = (v: Variant) => ((v.v as GArray).raw()[0] as Variant).v as number;
+  const ties = GArray.of([pair(1, "a"), pair(2, "b"), pair(1, "c"), pair(2, "d"), pair(1, "e")]);
+  ties.sortCustom((x, y) => first(x) < first(y));
+  eq("070", "sort_custom 同键保持插入序", show(V.array(ties)), '[[1, "a"], [1, "c"], [1, "e"], [2, "b"], [2, "d"]]');
+  const sorted = GArray.of([I(1), I(3), I(5)]);
+  eq("070", "bsearch 命中给下标", sorted.bsearch(I(3), isLess), 1);
+  eq("070", "bsearch 未命中给插入位置", sorted.bsearch(I(4), isLess), 2);
+  const unsorted = GArray.of([I(3), I(1), I(2)]);
+  eq("070", "bsearch 不检查有序、照二分走法给值", unsorted.bsearch(I(2), isLess), 2);
+  eq("070", "bsearch 超出上界给 size", unsorted.bsearch(I(99), isLess), 3);
+  eq("070", "find 用深度相等", GArray.of([pair(1, "a"), pair(3, "b")]).find(pair(3, "b")), 1);
+  eq("070", "find 未命中给 -1", unsorted.find(I(9)), -1);
+  eq("070", "count 数深度相等的个数", unsorted.count(I(3)), 1);
+  eq("070", "min 走同一个比较口径", show(unsorted.extreme(true, isLess) as Variant), "1");
+  eq("070", "空数组 extreme 给 null", GArray.of([]).extreme(true, isLess), null);
+  shouldThrow("070", "混合类型排序仍然响亮报缺", () => GArray.of([I(1), S("a")]).sort());
+  eq("070", "字典序比较不是逐分量", vecCmp(new GVector2(3, 4), new GVector2(2, 5)), 1);
+}
+
+// ---- 071 字典键的类型面（期望值取自 071-dict-key-types 的 godot.txt）
+{
+  eq("071", "int 1 与 float 1.0 是两个键", keyOf(I(1)) !== keyOf(F(1)), true);
+  eq("071", "bool true 又是第三个键", keyOf(V.bool(true)) !== keyOf(I(1)), true);
+  eq("071", "Vector2 按键值而非引用", keyOf(vector2(1, 2)) === keyOf(vector2(1.0, 2.0)), true);
+  eq("071", "不同 Vector2 是不同键", keyOf(vector2(1, 2)) === keyOf(vector2(2, 1)), false);
+  eq("071", "0.0 与 -0.0 是同一个键", keyOf(F(0)) === keyOf(F(-0)), true);
+  const d = new GDict();
+  d.set(I(1), S("a"));
+  d.set(F(1), S("b"));
+  eq("071", "1 与 1.0 各自存得住", `${show(d.get(I(1)))}/${show(d.get(F(1)))}/${d.size()}`, "a/b/2");
+  shouldThrow("071", "数组不能当键", () => keyOf(V.array(GArray.of([]))));
+}
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
 if (fails.length > 0) {

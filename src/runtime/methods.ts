@@ -2,7 +2,8 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr } from "./values";
+import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr, truthyOf } from "./values";
+import { isLess } from "./ops";
 import { GVector2, vec2Index, vector2Method } from "./vector2";
 
 /**
@@ -108,6 +109,24 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "concat":
           return V.array(a.concat(asArray(one(args, "concat"), "concat")));
+        case "sort_custom": {
+          const before = comparatorOf(args[0], "sort_custom");
+          a.sortCustom(before);
+          return V.nil();
+        }
+        case "bsearch":
+          return V.int(a.bsearch(one(args, "bsearch"), isLess));
+        case "bsearch_custom":
+          return V.int(a.bsearch(one(args, "bsearch_custom"), comparatorOf(args[1], "bsearch_custom")));
+        case "find":
+          return V.int(a.find(one(args, "find")));
+        case "count":
+          return V.int(a.count(one(args, "count")));
+        // 实测空数组的 min()/max() 都是 null（不是报错）
+        case "min":
+          return a.extreme(true, isLess) ?? V.nil();
+        case "max":
+          return a.extreme(false, isLess) ?? V.nil();
         default:
           throw new UnsupportedError("array-method", `Array.${name}() 未实现`);
       }
@@ -216,6 +235,18 @@ export function attribute(raw: unknown, name: string): unknown {
     throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);
   }
   throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做完）`);
+}
+
+/**
+ * `sort_custom` / `bsearch_custom` 的比较实参：Godot 传进来的是 Callable，
+ * f(a,b) 为真表示 a 该在 b 前（`func(a, b): return a < b` 是升序）。
+ */
+function comparatorOf(v: Variant | undefined, who: string): (a: Variant, b: Variant) => boolean {
+  const fn = v === undefined ? undefined : ((v.v as Record<string, unknown>)[CALLABLE] as Fn | undefined);
+  if (typeof fn !== "function") {
+    throw new UnsupportedError("array-comparator", `Array.${who}() 需要一个 Callable 比较器`);
+  }
+  return (x, y) => truthyOf(wrapValue(fn(x, y)));
 }
 
 function one(args: Variant[], who: string): Variant {

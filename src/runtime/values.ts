@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
-import { GVector2 } from "./vector2";
+import { GVector2, asVec2, vecCmp } from "./vector2";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -24,9 +24,17 @@ export function keyOf(v: Variant): string {
       return `f:${String(v.v)}`;
     case Tag.STRING:
       return `s:${v.v as string}`;
+    case Tag.OBJECT: {
+      // Vector2 能当键，且按**值**分（实测 k[Vector2(1,2)] 与 k[Vector2(1.0,2.0)] 是同一格、
+      // 而 k[Vector2(1,2)] 与 k[Vector2(2,1)] 是两格）。分量已 fround，所以字符串化就够稳定。
+      const vec = asVec2(v);
+      if (vec) return `v:${String(vec.x)},${String(vec.y)}`;
+      break;
+    }
     default:
-      throw new UnsupportedError("dict-key-type", `${tagName(v.t)} 不能作为字典键（未实现）`);
+      break;
   }
+  throw new UnsupportedError("dict-key-type", `${tagName(v.t)} 不能作为字典键（未实现）`);
 }
 
 // ---------------------------------------------------------------- Array
@@ -97,11 +105,20 @@ export class GArray {
     });
   }
 
+  /**
+   * `sort()`。实测（4.6.3）：int/float 混排按数值排、各自保留原类型（`[2.5,1,3.0,2]` → `[1, 2, 2.5, 3.0]`）；
+   * 字符串按码点（`["b","a","C"]` → `["C","a","b"]`）；纯 bool 能排（false 在前）；
+   * Vector2 按字典序（`[Vector2(1,2),Vector2(0,3)]` → `[(0.0, 3.0), (1.0, 2.0)]`）。
+   * **掺进不可比的类型时 Godot 不报错**，只是比较永远不成立、顺序原样保留（`[1,"a"]` 照旧、`[true,1]` 照旧）。
+   * 我们不复现这种"猜出来的顺序"，响亮报缺 —— 这里最不该有的就是静默给一个错顺序。
+   */
   sort(): void {
     if (this.items.length === 0) return;
     const allNum = this.items.every((x) => x.t === Tag.INT || x.t === Tag.FLOAT);
     const allStr = this.items.every((x) => x.t === Tag.STRING);
-    if (!allNum && !allStr) {
+    const allBool = this.items.every((x) => x.t === Tag.BOOL);
+    const allVec = this.items.every((x) => asVec2(x) !== null);
+    if (!allNum && !allStr && !allBool && !allVec) {
       throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
     }
     // 数值排序：int 载荷可能是 bigint，混着 `-` 会 TypeError；两边都可能是 bigint，
@@ -116,8 +133,65 @@ export class GArray {
                 ? 1
                 : 0
             : numVal(a) - numVal(b)
-      : (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string);
+      : allStr
+        ? (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string)
+        : allBool
+          ? (a: Variant, b: Variant) => Number(a.v) - Number(b.v)
+          : (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2);
     this.items = [...this.items].sort(cmp);
+  }
+
+  /**
+   * `sort_custom(f)`：f(a,b) 为真表示 a 该排在 b 前。实测与 JS 的稳定排序一致
+   * （ties 保留插入顺序：`[[1,a],[2,b],[1,c],[2,d],[1,e]]` 按首元素排完是 a、c、e 的先后）。
+   * JS 的 sort 只吃三值比较器，所以一次比较要问两侧 f(a,b) 与 f(b,a)。
+   */
+  sortCustom(before: (a: Variant, b: Variant) => boolean): void {
+    this.items = [...this.items].sort((x, y) => (before(x, y) ? -1 : before(y, x) ? 1 : 0));
+  }
+
+  /**
+   * `bsearch(v)` / `bsearch_custom(v, f)` 的走法（实测对上 Godot 的 Algorithm::bsearch）：
+   * 命中返回该下标，未命中返回**该插入的位置**（不是 `~idx`）。四条实测全部复现：
+   * `[1,3,5].bsearch(3)`=1、`.bsearch(4)`=2、`[3,1,2].bsearch(99)`=3、`[3,1,2].bsearch(2)`=2
+   * （最后一条也说明：数组无序时 Godot 不检查，照这套二分走法给值，所以必须逐比对齐而不是"找不到就 -1"）。
+   */
+  bsearch(value: Variant, less: (a: Variant, b: Variant) => boolean): number {
+    let lo = 0;
+    let hi = this.items.length;
+    while (lo < hi) {
+      const m = (hi + lo) >> 1;
+      const e = this.items[m] as Variant;
+      if (less(e, value)) lo = m + 1;
+      else if (!less(value, e)) return m;
+      else hi = m;
+    }
+    return lo;
+  }
+
+  /** `find(v)` 用深度相等（实测 `[[1,2],[3,4]].find([3,4])` → 1），未命中给 -1。 */
+  find(v: Variant): number {
+    return this.items.findIndex((x) => valueEq(x, v));
+  }
+
+  count(v: Variant): number {
+    return this.items.reduce((n, x) => (valueEq(x, v) ? n + 1 : n), 0);
+  }
+
+  /** min/max 的比较口径由调用方给（值类型在 ops 那边，运行时这里不能反向依赖）。 */
+  extreme(
+    wantMin: boolean,
+    less: (a: Variant, b: Variant) => boolean,
+  ): Variant | null {
+    let best: Variant | null = null;
+    for (const x of this.items) {
+      if (best === null) {
+        best = x;
+        continue;
+      }
+      if (wantMin ? less(x, best) : less(best, x)) best = x;
+    }
+    return best;
   }
 }
 
