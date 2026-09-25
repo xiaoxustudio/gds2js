@@ -803,11 +803,12 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
 }
 
 /**
- * 保守推断函数内可解箱成裸 number 的局部（int 或 float）：
- * `var x = <同型数值表达式>` 且 x 的每次赋值都是同型数值表达式
- * （int/float 字面量 / 已解箱同型局部 / 二者的 + - *，float 额外含 /）。
- * 排除：参数、for 变量、match 绑定、lambda 内声明或被赋值的名字。
- * 用「自身暂定」打破 `x += 1` 的循环依赖，每种类型各自迭代到不动点；init 字面量类型天然互斥，不会同属两类。
+ * 保守推断函数内可解箱成裸 number 的局部（int / float / str）：
+ * `var x = <同型表达式>` 且 x 的每次赋值都是同型表达式
+ * （字面量 / 已解箱同型局部 / 裸运算 / 裸 ABI 调用 / 裸容器元素读，算子表与发射期同一张）。
+ * 排除：参数、for 变量、match 绑定、带显式类型标注的 var、lambda 内声明或被赋值的名字。
+ * 判据取**后置不动点**（先假定全部候选再剔除证不出者），因此除 `x += 1` 的自身环外，
+ * fib 型「多个局部互为读写环」也能收下。理由见下方 U 的注释（对执行时刻归纳）。
  */
 function computeUnboxed(
   f: FuncDecl,
@@ -935,18 +936,26 @@ function computeUnboxed(
       if (e.kind === "ident") return e.name === self || U.has(e.name) || paramKind.get(e.name) === kind;
       return false;
     };
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const d of decls) {
-        if (U.has(d.name) || excluded.has(d.name) || result.has(d.name)) continue;
-        if (!d.init || !isNum(d.init, d.name)) continue;
-        if (!assigns.every((a) => a.name !== d.name || isNum(a.value, d.name))) continue;
-        U.add(d.name);
-        result.set(d.name, kind);
-        changed = true;
+    // 候选先全装进 U，再迭代剔除「初值或任一赋值证不出 kind」者 → 收敛到**后置**不动点
+    // （自洽的最大集）。换掉原先「从空集生长」的前置不动点，因为 fib 型滚动变量
+    // （a←b←t←a）彼此依赖、无独立入口，空集起步永远进不来（实测 a/b/t 全程装箱）。
+    // 可靠性不靠静态依赖图无环，而是对**执行时刻**归纳：任一裸读的值必来自更早的
+    // 一次 init/assign，其右端每个裸操作数又各自来自更早的赋值……时刻严格递减，
+    // 只可能落在字面量 / 裸 ABI 参数 / 裸容器元素上。故「每条进入路径都证得出 kind」
+    // ⟹ 运行时值必为 kind。剔除一轮即单调收缩，候选有限必收敛。
+    for (const d of decls) if (!excluded.has(d.name) && !result.has(d.name)) U.add(d.name);
+    let pruned = true;
+    while (pruned) {
+      pruned = false;
+      for (const name of [...U]) {
+        // 同名重复声明（如分支里各写一次 var）必须**每条**都证得出，才算这个类型。
+        const okInit = decls.every((d) => d.name !== name || (!!d.init && isNum(d.init, name)));
+        if (okInit && assigns.every((a) => a.name !== name || isNum(a.value, name))) continue;
+        U.delete(name);
+        pruned = true;
       }
     }
+    for (const name of U) result.set(name, kind);
   }
   return result;
 }
