@@ -606,7 +606,7 @@ function emitExprR(e: Expr): R {
     if (ek) {
       const ir = emitExprR(e.index);
       if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
-      return { code: `${e.obj.name}[${ir.code}]`, rep: ek };
+      return { code: `rt.fast.rawArrGet(${e.obj.name}, ${ir.code})`, rep: ek };
     }
   }
   if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {

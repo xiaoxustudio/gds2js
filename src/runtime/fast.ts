@@ -9,6 +9,15 @@ function int64(v: number): UnsupportedError {
 
 /** 单态快路径（D2 的第二轨）。输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
+  // ---- 容器元素单态化（D2 第四轨）：裸数组下标读 ----
+  /** 越界/负索引抛与 GArray.get 完全相同的错，绝不把越界静默成 undefined（→ NaN）。 */
+  rawArrGet(a: number[], i: number): number {
+    const v = a[i];
+    if (v === undefined) {
+      throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
+    }
+    return v;
+  },
   // ---- 解箱 int 运算：结果仍要过 D1 的 2^53 检查，溢出抛与 V.int/checkInt 完全相同的错 ----
   // 语义必须与 ops.add/sub/mul 的 bothInt 分支逐位对齐，否则解箱会变成静默错误。
   iAddC(a: number, b: number): number {

@@ -10,11 +10,11 @@ export class Main extends SceneTree {
     let s = 0;
     while ((i < 3)) {
       a.push(i);
-      s = rt.fast.iAddC(s, a[i]);
+      s = rt.fast.iAddC(s, rt.fast.rawArrGet(a, i));
       i = rt.fast.iAddC(i, 1);
     }
     print(rt.show(rt.V.int(s)));
-    print(rt.show(rt.V.int(a[1])));
+    print(rt.show(rt.V.int(rt.fast.rawArrGet(a, 1))));
     print(rt.show(rt.V.int(a.length)));
     let b = [1.5];
     let j = 0;
@@ -22,7 +22,7 @@ export class Main extends SceneTree {
     b.push(2);
     b.push(2.5);
     while ((j < b.length)) {
-      s2 = (s2 + b[j]);
+      s2 = (s2 + rt.fast.rawArrGet(b, j));
       j = rt.fast.iAddC(j, 1);
     }
     print(rt.show(rt.V.float(s2)));
