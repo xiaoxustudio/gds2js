@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";
-import { Tag, V, type Variant } from "./tags";
+import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
 import { GArray, show, strLength, truthyOf } from "./values";
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用） */
@@ -7,7 +7,8 @@ export function num(v: Variant): number {
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new UnsupportedError("not-number", `需要数值，收到类型 ${v.t}`);
   }
-  return v.v as number;
+  // int 载荷可能是 bigint：这里收成 number，float(大整数) 的精度损失与 Godot 一致。
+  return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */

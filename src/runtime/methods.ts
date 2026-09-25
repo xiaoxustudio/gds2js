@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
-import { Tag, V, type Variant } from "./tags";
+import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strFormat, strLength, strSubstr } from "./values";
 
 /**
@@ -219,5 +219,6 @@ function intArg(args: Variant[], i: number, who: string): number {
   if (a === undefined || a.t !== Tag.INT) {
     throw new UnsupportedError("need-int-arg", `${who} 的第 ${i} 个参数需要 int`);
   }
-  return a.v as number;
+  // 载荷可能是 bigint（超出 2^53）：这些位置都是长度/索引，只能是裸 number。
+  return intToNum(a.v as IntPayload);
 }

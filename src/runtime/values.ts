@@ -1,6 +1,11 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, tagName, V, type Variant } from "./tags";
+import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { GVector2 } from "./vector2";
+
+/** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
+function numVal(v: Variant): number {
+  return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
+}
 
 /**
  * Dictionary 键编码。
@@ -90,8 +95,18 @@ export class GArray {
     if (!allNum && !allStr) {
       throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
     }
+    // 数值排序：int 载荷可能是 bigint，混着 `-` 会 TypeError；两边都可能是 bigint，
+    // 用 number 减又会因 >2^53 相等而错排。所以先按「窄化到 number」的跨类型序，
+    // 两个 int 之间再退回 bigint 精确比较。
     const cmp = allNum
-      ? (a: Variant, b: Variant) => (a.v as number) - (b.v as number)
+      ? (a: Variant, b: Variant) =>
+          a.t === Tag.INT && b.t === Tag.INT
+            ? intToBig(a.v as IntPayload) < intToBig(b.v as IntPayload)
+              ? -1
+              : intToBig(a.v as IntPayload) > intToBig(b.v as IntPayload)
+                ? 1
+                : 0
+            : numVal(a) - numVal(b)
       : (a: Variant, b: Variant) => (a.v as string) < (b.v as string) ? -1 : 1;
     this.items = [...this.items].sort(cmp);
   }
@@ -281,8 +296,10 @@ export function valueEq(a: Variant, b: Variant): boolean {
   const ta = a.t;
   const tb = b.t;
   if (ta === Tag.INT || ta === Tag.FLOAT) {
-    // 跨 int/float 数值相等（S11）
-    if (tb === Tag.INT || tb === Tag.FLOAT) return (a.v as number) === (b.v as number);
+    // 跨 int/float 数值相等（S11）。两个 int 的载荷已归一化（同值同表示），直接 ===；
+    // 一旦掺了 float，就得把 bigint 收成 number 再比 —— 否则 2^62n === 2^62 会假。
+    if (tb === Tag.INT && ta === Tag.INT) return (a.v as IntPayload) === (b.v as IntPayload);
+    if (tb === Tag.INT || tb === Tag.FLOAT) return numVal(a) === numVal(b);
     return false;
   }
   if (ta !== tb) return false;

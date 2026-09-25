@@ -1908,8 +1908,9 @@ function emitExprVar(e: Expr): string {
   }
 }
 
-function emitLit(lit: string, value: string | number | boolean | null): string {
-  if (lit === "int") return `rt.V.int(${String(value)})`;
+function emitLit(lit: string, value: string | number | bigint | boolean | null): string {
+  // bigint 字面量必须带 n 后缀，否则 JS 又把它变回失精的 number。
+  if (lit === "int") return `rt.V.int(${typeof value === "bigint" ? `${value.toString()}n` : String(value)})`;
   if (lit === "float") return `rt.V.float(${String(value)})`;
   if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
   if (lit === "bool") return `rt.V.bool(${String(value)})`;

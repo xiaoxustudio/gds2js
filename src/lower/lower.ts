@@ -247,6 +247,17 @@ function lowerParam(n: SyntaxNode): Param {
 
 // ---------------------------------------------------------------- 语句
 
+/**
+ * 整数字面量必须**原样**保住精度：`Number("9223372036854775807")` 会先四舍五入成
+ * ...808 才交给运行时，那样的 BigInt 路径永远拿不到正确值。2^53 内仍用 number
+ * （让发射期保持裸数字），超出改用 bigint 字面量。顺带吃掉 GDScript 的 `1_000_000` 下划线。
+ */
+function lowerIntLit(text: string): number | bigint {
+  const t = text.replace(/_/g, "");
+  const n = Number(t);
+  return Number.isSafeInteger(n) ? n : BigInt(t);
+}
+
 function lowerBody(n: SyntaxNode): Stmt[] {
   // 注释不参与语义，和顶层一样直接丢弃。tree-sitter 把 `#…` 挂成 block 的**具名**子节点，
   // 不先滤掉就会在 lowerStmt 的 default 分支炸成「语句 comment 未支持」。
@@ -387,7 +398,7 @@ function lowerPattern(n: SyntaxNode): Pattern {
       // `Suit.HEARTS` / `Class.CONST` 这类限定常量 → 常量模式
       return { kind: "const", expr: lowerExpr(n) };
     case "integer":
-      return { kind: "lit", lit: "int", value: Number(n.text) };
+      return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
     case "float":
       return { kind: "lit", lit: "float", value: Number(n.text) };
     case "string":
@@ -420,7 +431,7 @@ function lowerExpr(n: SyntaxNode): Expr {
   const c = loc(n);
   switch (n.type) {
     case "integer":
-      return { kind: "lit", lit: "int", value: Number(n.text), loc: c };
+      return { kind: "lit", lit: "int", value: lowerIntLit(n.text), loc: c };
     case "float":
       return { kind: "lit", lit: "float", value: Number(n.text), loc: c };
     case "string":

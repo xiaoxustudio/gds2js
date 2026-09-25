@@ -15,7 +15,7 @@ export interface Loc {
 export type LitKind = "int" | "float" | "string" | "bool" | "null";
 
 export type Expr =
-  | { kind: "lit"; lit: LitKind; value: string | number | boolean | null; loc: Loc }
+  | { kind: "lit"; lit: LitKind; value: string | number | bigint | boolean | null; loc: Loc }
   | { kind: "ident"; name: string; loc: Loc }
   | { kind: "binary"; op: string; left: Expr; right: Expr; loc: Loc }
   | { kind: "unary"; op: string; operand: Expr; loc: Loc }
@@ -51,7 +51,7 @@ export interface MatchArm {
 
 export type Pattern =
   | { kind: "wildcard" }
-  | { kind: "lit"; lit: LitKind; value: string | number | boolean | null }
+  | { kind: "lit"; lit: LitKind; value: string | number | bigint | boolean | null }
   | { kind: "bind"; name: string }
   | { kind: "array"; items: Pattern[] }
   | { kind: "dict"; entries: Array<{ key: Expr; pattern: Pattern }> }
