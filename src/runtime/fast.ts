@@ -20,6 +20,22 @@ export const fast = {
   },
 
   /**
+   * 二维网格 `g[i][j]`（number[][]）的双下标读：任一层越界/负索引都抛与 GArray.get 同码的
+   * `array-index`，绝不静默 undefined→NaN。两层越界都按外层→内层的顺序检查（同 Godot 逐层报错）。
+   */
+  rawArrGet2(g: number[][], i: number, j: number): number {
+    const row = g[i];
+    if (row === undefined) {
+      throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
+    }
+    const v = row[j];
+    if (v === undefined) {
+      throw new GodotRuntimeError("array-index", `数组索引越界: ${j}`);
+    }
+    return v;
+  },
+
+  /**
    * 裸字典下标读（值为 number，故 get 返回 undefined 只可能是缺键）。缺键抛与 GDict.getRequired
    * 同族的 GodotRuntimeError —— Godot 对 `d[missing]` 方括号读本就是 SCRIPT ERROR（已探针确证），
    * 绝不把缺键静默成 undefined（→ NaN）。键为 int / string 原始值（float 键会与之碰撞，编译期已禁）。

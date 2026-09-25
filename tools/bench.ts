@@ -115,6 +115,25 @@ const KERNELS: Kernel[] = [
 `,
   },
   {
+    name: "array-2d",
+    reps: 5,
+    body: `
+	var g = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+	var s = 0
+	var r = 0
+	while r < 300:
+		var c = 0
+		while c < 3:
+			var i = 0
+			while i < 3:
+				s += g[r % 3][i] + g[i][c]
+				i += 1
+			c += 1
+		r += 1
+	return s
+`,
+  },
+  {
     name: "helper-int",
     reps: 5,
     helpers: `func add2(a, b):

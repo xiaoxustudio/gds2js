@@ -455,6 +455,24 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       // 特化裸数组局部：init 必为数字字面量数组（且逐元素与元素 Kind 相符，推断已校验）→ 发裸 number[]
       const ek = RAW_ARRAYS.get(s.name);
       if (ek && s.init && s.init.kind === "array") {
+        if (isGridElem(ek)) {
+          // 二维网格：每个 top 项都是数字字面量数组 → 发 number[][]，叶子必须与基型 Kind 相符。
+          const leaf = leafOf(ek);
+          const rows = s.init.items.map((row) => {
+            if (row.kind !== "array") {
+              throw new UnsupportedError("raw-array-init", `内部不变量破坏：裸网格行期望数组字面量，实得 ${row.kind}`);
+            }
+            const cells = row.items.map((it) => {
+              const r = emitExprR(it);
+              if (r.rep !== leaf) {
+                throw new UnsupportedError("raw-array-init", `内部不变量破坏：裸网格叶子期望 ${leaf}，实得 ${r.rep}`);
+              }
+              return r.code;
+            });
+            return `[${cells.join(", ")}]`;
+          });
+          return [`let ${s.name} = [${rows.join(", ")}];`];
+        }
         const parts = s.init.items.map((it) => {
           const r = emitExprR(it);
           if (r.rep !== ek) {
@@ -642,14 +660,21 @@ let RAW_ABIS = new Map<string, RawAbi>();
 /** 当前正在发射的函数若走裸 ABI，其返回裸类型；否则 null（返回值需装箱）。 */
 let CURRENT_RET: Kind | null = null;
 
-/** 容器元素单态化（D2 第四轨 v1）：函数局部 Array 的裸元素类型（仅 int/float，绝不存 Variant）。 */
-type ElemKind = "int" | "float";
-/** 当前函数里被特化成裸 number[] 的数组局部：名字 → 元素类型。由 analyzeFuncLayout 逐函数算出。 */
+/**
+ * 容器元素单态化（D2 第四轨）：函数局部 Array 的裸元素类型。
+ * `"int"`/`"float"` = 裸 number[]；`"int[]"`/`"float[]"` = 二维网格 number[][]（叶子是标量）。
+ * 再深的嵌套、行/值被当对象用等一律不特化（回退装箱）。
+ */
+type ElemKind = "int" | "float" | "int[]" | "float[]";
+const isGridElem = (k: ElemKind): k is "int[]" | "float[]" => k === "int[]" || k === "float[]";
+/** 网格的叶子标量类型。 */
+const leafOf = (k: ElemKind): "int" | "float" => (k === "int[]" ? "int" : k === "float[]" ? "float" : k);
+/** 当前函数里被特化成裸 number[] / number[][] 的数组局部：名字 → 元素类型。由 analyzeFuncLayout 逐函数算出。 */
 let RAW_ARRAYS = new Map<string, ElemKind>();
-/** 当前函数里被特化成裸 Map<primitive,number> 的字典局部：名字 → 值类型（键仅 int/str）。 */
-let RAW_DICTS = new Map<string, ElemKind>();
+/** 当前函数里被特化成裸 Map<primitive,number> 的字典局部：名字 → 值类型（键仅 int/str，值仅标量 int/float）。 */
+let RAW_DICTS = new Map<string, "int" | "float">();
 const NO_ARRAYS: Map<string, ElemKind> = new Map();
-const NO_DICTS: Map<string, ElemKind> = new Map();
+const NO_DICTS: Map<string, "int" | "float"> = new Map();
 
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
 const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
@@ -684,9 +709,21 @@ function emitExprR(e: Expr): R {
     if (k) return { code: e.name, rep: k };
   }
   // 容器元素单态化：裸数组/裸字典的下标读 / append / .size/.length（分析期已判定这些是唯一合法用法）。
+  if (e.kind === "index" && e.obj.kind === "index" && e.obj.obj.kind === "ident") {
+    // 二维网格 g[i][j]：两层下标都 int，发一次 rawArrGet2（任一层越界响亮抛 array-index）。
+    const ek = RAW_ARRAYS.get(e.obj.obj.name);
+    if (ek && isGridElem(ek)) {
+      const ri = emitExprR(e.obj.index);
+      const rj = emitExprR(e.index);
+      if (ri.rep !== "int" || rj.rep !== "int") {
+        throw new UnsupportedError("raw-array", `内部不变量破坏：裸网格下标期望 int，实得 ${ri.rep}/${rj.rep}`);
+      }
+      return { code: `rt.fast.rawArrGet2(${e.obj.obj.name}, ${ri.code}, ${rj.code})`, rep: leafOf(ek) };
+    }
+  }
   if (e.kind === "index" && e.obj.kind === "ident") {
     const ek = RAW_ARRAYS.get(e.obj.name);
-    if (ek) {
+    if (ek && !isGridElem(ek)) {
       const ir = emitExprR(e.index);
       if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
       return { code: `rt.fast.rawArrGet(${e.obj.name}, ${ir.code})`, rep: ek };
@@ -775,7 +812,7 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
 function computeUnboxed(
   f: FuncDecl,
   arrays: Map<string, ElemKind> = NO_ARRAYS,
-  dict: Map<string, ElemKind> = NO_DICTS,
+  dict: Map<string, "int" | "float"> = NO_DICTS,
 ): Map<string, "int" | "float" | "str"> {
   const abi = RAW_ABIS.get(f.name);
   const paramKind = new Map<string, Kind>();
@@ -931,7 +968,7 @@ function kindOfExpr(
   e: Expr,
   identKind: (n: string) => Kind | null,
   arrays: Map<string, ElemKind> = NO_ARRAYS,
-  dict: Map<string, ElemKind> = NO_DICTS,
+  dict: Map<string, "int" | "float"> = NO_DICTS,
 ): Kind | "bool" | null {
   switch (e.kind) {
     case "lit":
@@ -952,10 +989,23 @@ function kindOfExpr(
       return null;
     }
     case "index": {
-      // 裸数组 / 裸字典的合法下标读 → 元素类型；下标类型不符保守回退装箱。
+      // 二维网格 g[i][j] → 叶子标量类型（两层下标都 int）。
+      const mid = e.obj;
+      if (mid.kind === "index" && mid.obj.kind === "ident") {
+        const ek = arrays.get(mid.obj.name);
+        if (
+          ek &&
+          isGridElem(ek) &&
+          kindOfExpr(mid.index, identKind, arrays, dict) === "int" &&
+          kindOfExpr(e.index, identKind, arrays, dict) === "int"
+        )
+          return leafOf(ek);
+      }
+      // 裸标量数组 / 裸字典的下标读 → 元素类型；下标类型不符保守回退装箱。
       if (e.obj.kind === "ident") {
         const ek = arrays.get(e.obj.name);
-        if (ek && kindOfExpr(e.index, identKind, arrays, dict) === "int") return ek;
+        // 网格的 g[i]（行）不是标量 Kind，落到这里返回 null（且分析期已让整数组回退）。
+        if (ek && !isGridElem(ek) && kindOfExpr(e.index, identKind, arrays, dict) === "int") return ek;
         const dk = dict.get(e.obj.name);
         if (dk) {
           const kk = kindOfExpr(e.index, identKind, arrays, dict);
@@ -1328,6 +1378,11 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
     if (c) c.escaped = true;
   };
   const isCandObj = (e: Expr): string | null => e.kind === "ident" && cands.has(e.name) ? e.name : null;
+  // 该候选的初值是否为"数组的数组"（二维网格）——仅看字面量初值（网格 v1 不支持 append 建立）。
+  const isGridCand = (c: ArrayCand): boolean => {
+    const k = elemKindFromInit(c.init, true);
+    return !!k && isGridElem(k);
+  };
 
   const visitExpr = (e: Expr, inL: boolean): void => {
     switch (e.kind) {
@@ -1362,10 +1417,24 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         return;
       }
       case "index": {
+        // 二维网格叶子读 g[i][j]：内层 index(g,i) 不单独作值，这里整体消费、记录两个下标。
+        const mid = e.obj;
+        if (mid.kind === "index" && mid.obj.kind === "ident" && cands.has(mid.obj.name)) {
+          const c = cands.get(mid.obj.name)!;
+          if (inL || !isGridCand(c)) c.escaped = true; // 标量数组出现 g[i][j]（类型不该）→ 保守回退
+          else {
+            c.readIdxs.push(mid.index);
+            c.readIdxs.push(e.index);
+          }
+          visitExpr(mid.index, inL);
+          visitExpr(e.index, inL);
+          return;
+        }
         const objName = isCandObj(e.obj);
         if (objName) {
           const c = cands.get(objName)!;
-          if (inL) c.escaped = true;
+          // 网格的 g[i] 把"行"当值用（裸 number[] 无法在别处安全表示）→ 整个数组回退装箱。
+          if (inL || isGridCand(c)) c.escaped = true;
           else c.readIdxs.push(e.index);
           visitExpr(e.index, inL);
           return;
@@ -1456,16 +1525,46 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   return cands;
 }
 
-function elemKindFromInit(init: Extract<Expr, { kind: "array" }>): ElemKind | null {
-  let seen: ElemKind | null = null;
+/** 标量数字字面量的类型；非安全 int / 非数字 → null。 */
+function scalarLitKind(e: Expr): "int" | "float" | null {
+  if (e.kind !== "lit") return null;
+  if (e.lit === "float" && typeof e.value === "number") return "float";
+  if (e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) return "int";
+  return null;
+}
+
+/**
+ * 数组/字典初值的元素类型。nested=false（字典值）只认标量数字字面量数组；
+ * nested=true（数组）额外认"数组的数组"（元素皆数字字面量、基型统一）→ 返回 `"int[]"`/`"float[]"`。
+ * 空数组返回 "int"（暂定，由后续读/写定夺）。
+ */
+function elemKindFromInit(init: Extract<Expr, { kind: "array" }>, nested = false): ElemKind | null {
+  if (init.items.length === 0) return "int";
+  // 标量情形
+  let scalar: "int" | "float" | null = null;
+  let scalarOk = true;
   for (const it of init.items) {
-    if (it.kind !== "lit" || (it.lit !== "int" && it.lit !== "float")) return null; // 非数字字面量初值 → 不做候选
-    const k: ElemKind = it.lit === "float" ? "float" : "int";
-    if (it.lit === "int" && !(typeof it.value === "number" && Number.isSafeInteger(it.value))) return null;
-    if (seen && seen !== k) return null; // 初值里 int/float 混用 → 保守装箱
-    seen = k;
+    const k = scalarLitKind(it);
+    if (!k) { scalarOk = false; break; }
+    if (scalar && scalar !== k) { scalarOk = false; break; }
+    scalar = k;
   }
-  return seen ?? "int"; // 空数组暂定 int，由后续写入定夺
+  if (scalarOk && scalar) return scalar;
+  // 二维网格情形（仅 nested）：每项都是数组字面量，且所有叶子同基型标量
+  if (nested) {
+    let leaf: "int" | "float" | null = null;
+    for (const row of init.items) {
+      if (row.kind !== "array") return null;
+      for (const it of row.items) {
+        const k = scalarLitKind(it);
+        if (!k) return null;
+        if (leaf && leaf !== k) return null;
+        leaf = k;
+      }
+    }
+    if (leaf) return leaf === "float" ? "float[]" : "int[]";
+  }
+  return null;
 }
 
 function mapsEqual<T>(a: Map<string, T>, b: Map<string, T>): boolean {
@@ -1483,21 +1582,21 @@ function mapsEqual<T>(a: Map<string, T>, b: Map<string, T>): boolean {
 function analyzeFuncLayout(f: FuncDecl): {
   unboxed: Map<string, "int" | "float" | "str">;
   arrays: Map<string, ElemKind>;
-  dicts: Map<string, ElemKind>;
+  dicts: Map<string, "int" | "float">;
 } {
   const aC = scanArrayCandidates(f);
   const dC = scanDictCandidates(f);
   const arrays = new Map<string, ElemKind>();
   for (const [name, c] of aC) {
     if (c.escaped) continue;
-    const k = elemKindFromInit(c.init);
+    const k = elemKindFromInit(c.init, true); // 数组允许二维网格元素类型
     if (k) arrays.set(name, k);
   }
-  const dicts = new Map<string, ElemKind>();
+  const dicts = new Map<string, "int" | "float">();
   for (const [name, c] of dC) {
     if (c.escaped) continue;
     const k = elemKindFromInit({ kind: "array", items: c.init.entries.map((en) => en.value), loc: c.init.loc });
-    if (k) dicts.set(name, k);
+    if (k === "int" || k === "float") dicts.set(name, k); // 字典值只认标量（dict-of-array 不特化）
   }
   let unboxed = computeUnboxed(f, arrays, dicts);
   const cap = aC.size + dC.size + 8;
@@ -1531,14 +1630,17 @@ function verifyArray(
   K: ElemKind,
   unboxed: Map<string, "int" | "float" | "str">,
   arrays: Map<string, ElemKind>,
-  dicts: Map<string, ElemKind>,
+  dicts: Map<string, "int" | "float">,
 ): boolean {
   const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
-  if (elemKindFromInit(c.init) !== K) return false;
-  // 初值里的非字面量元素（如 var a=[x, y]）也要能裸化为 K
-  for (const it of c.init.items) {
-    if (it.kind === "lit") continue; // 字面量已由 elemKindFromInit 定 K
-    if (kindOfExpr(it, identKind, arrays, dicts) !== K) return false;
+  if (elemKindFromInit(c.init, true) !== K) return false;
+  // 标量数组：初值里的非字面量元素（如 var a=[x, y]）也要能裸化为 K。
+  // 网格（int[]/float[]）：初值已由 elemKindFromInit 校验为"数组的数组、叶子同基型"，无需再查。
+  if (!isGridElem(K)) {
+    for (const it of c.init.items) {
+      if (it.kind === "lit") continue; // 字面量已由 elemKindFromInit 定 K
+      if (kindOfExpr(it, identKind, arrays, dicts) !== K) return false;
+    }
   }
   for (const w of c.writeElems) if (kindOfExpr(w, identKind, arrays, dicts) !== K) return false;
   for (const r of c.readIdxs) if (kindOfExpr(r, identKind, arrays, dicts) !== "int") return false;
@@ -1718,7 +1820,7 @@ function verifyDict(
   K: ElemKind,
   unboxed: Map<string, "int" | "float" | "str">,
   arrays: Map<string, ElemKind>,
-  dicts: Map<string, ElemKind>,
+  dicts: Map<string, "int" | "float">,
 ): boolean {
   const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
   for (const en of c.init.entries) {
