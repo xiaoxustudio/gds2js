@@ -8,8 +8,8 @@ export class Main extends SceneTree {
     print(rt.show(rt.strOf(rt.V.int(1))));
     print(rt.show(rt.strOf(rt.V.float(1))));
     print(rt.show(rt.strOf(rt.V.float(2.5))));
-    let f = rt.V.float(3.9);
-    let i = rt.toInt(f);
+    let f = 3.9;
+    let i = rt.toInt(rt.V.float(f));
     print(rt.show(i));
     print(rt.show(rt.ops.div(rt.toFloat(rt.V.int(7)), rt.V.int(2))));
     print(rt.show(rt.typeOf(rt.V.int(1))), rt.show(rt.V.str(" ")), rt.show(rt.typeOf(rt.V.float(1))));
