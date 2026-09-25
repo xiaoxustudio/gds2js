@@ -12,7 +12,7 @@ export interface Loc {
   col: number;
 }
 
-export type LitKind = "int" | "float" | "string" | "bool" | "null";
+export type LitKind = "int" | "float" | "string" | "string_name" | "bool" | "null";
 
 export type Expr =
   | { kind: "lit"; lit: LitKind; value: string | number | bigint | boolean | null; loc: Loc }
@@ -68,6 +68,22 @@ export type TypeRef =
   | { kind: "named"; name: string }
   | { kind: "array"; item: TypeRef }
   | { kind: "variant" };
+
+/**
+ * 能用「类型名.静态成员」取值的内建类型 → 运行时里产出该成员的函数名。
+ * 实测 `Vector2.UP` 合法（常量值），`String.chr(65)` 合法（静态方法调用），
+ * 而裸 `Vector2` / `String` 当值是 `Identifier "..." not declared`。
+ * 语义分析据此放行属性基与被调属性，emitter 据此发运行时调用。
+ */
+const STATIC_MEMBER_FNS: Record<string, string> = {
+  Vector2: "vector2Const",
+  String: "stringStatic",
+};
+
+/** 属性基是「带静态成员的内建类型名」时给出运行时函数名，否则 null。 */
+export function staticMemberFn(e: Expr): string | null {
+  return e.kind === "ident" ? (STATIC_MEMBER_FNS[e.name] ?? null) : null;
+}
 
 export interface FuncDecl {
   name: string;

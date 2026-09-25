@@ -1,5 +1,7 @@
+import { staticMemberFn } from "../lower/ir";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
+import { isElemKind } from "../runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 /**
@@ -110,14 +112,13 @@ const BINOP: Record<string, string> = {
  * 第三个实参是 step —— 早先只发前两参，于是 `for i in range(0, 10, 2)` **静默**按 1 递增
  * （058 差分实测：Godot 0,2,4,6,8 而我们 0,1,2,…）。参数对不上就响，别再悄悄丢。
  */
-function rangeNumArgs(a: Array<string | undefined>): string {
+function rangeArgList(a: Array<string | undefined>): string {
   if (a.length > 3) {
     throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
   }
-  const start = a[0] === undefined ? "0" : `rt.num(${a[0]})`;
-  const stop = a[1] === undefined ? "" : `, rt.num(${a[1]})`;
-  const step = a[2] === undefined ? "" : `, rt.num(${a[2]})`;
-  return `${start}${stop}${step}`;
+  // 参数一律以 Variant 交给运行时，由 rt.rangeInt 按 Godot 的「转 int」口径截断
+  // （float 向零截断、bool 当 0/1、其它类型运行错）—— 在编译期偷偷 num() 会丢掉这套语义。
+  return `[${a.filter((x): x is string => x !== undefined).join(", ")}]`;
 }
 
 /** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */
@@ -134,7 +135,7 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接
-  range: (a) => `rt.V.array(rt.range(${rangeNumArgs(a)}))`,
+  range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
   str: (a) => `rt.strOf(${a.join(", ")})`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,
@@ -143,11 +144,15 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
-  Vector2: (a) => `rt.vector2(rt.num(${a[0]}), rt.num(${a[1]}))`,
+  // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
+  Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
+  // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
+  String: (a) => `rt.stringCtor([${a.join(", ")}])`,
+  StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "String", "load", "preload"]);
+const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "load", "preload"]);
 
 /**
  * 模块级名字。局部变量不在里面，所以发射成裸标识符；
@@ -302,7 +307,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   for (const v of m.vars) {
     mark(out.length, v.loc);
-    out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
+    out.push(`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
   }
   if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
@@ -353,7 +358,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   mark(base, decl.loc);
   for (const v of decl.vars) {
     mark(base + lines.length, v.loc);
-    lines.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
+    lines.push(`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
   }
   if (decl.vars.length > 0) lines.push("");
   for (const f of decl.funcs) {
@@ -529,7 +534,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         return [`let ${s.name} = ${emitExprR(s.init).code};`];
       }
       // 直接发射 let —— 块作用域由 JS 自己保证，正好对应 S16
-      const init = s.init ? emitExpr(s.init) : "rt.V.nil()";
+      const init = stampDecl(s.type, s.init, emitExpr);
       // 带类型标注的声明要做截断：`var i: int = 3.9` 在 Godot 里是 3，不是 3.9（S6）
       const cast = declaredCast(s.type);
       return [`let ${s.name} = ${cast ? `${cast}(${init})` : init};`];
@@ -566,6 +571,11 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       }
       const rawWrite = emitRawIndexWrite(s.target, s.value);
       if (rawWrite) return [rawWrite];
+      // 值类型写（Vector2）：目标可能是 `v.x` / `v[0]` / `a[0].x` / `d["k"].y`
+      if (s.target.kind === "attribute" || s.target.kind === "index") {
+        const vw = emitValueWrite(s.target, s.value);
+        if (vw) return vw;
+      }
       return [emitAssign(s.target, emitExpr(s.value))];
     }
 
@@ -612,7 +622,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       const body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
       if (isRangeCall(s.iter) && UNBOXED.get(s.var) === "int") {
         return [
-          `for (let ${s.var} of rt.rangeSeq(${rangeNumArgs(s.iter.args.map(emitExpr))})) {`,
+          `for (let ${s.var} of rt.rangeSeq(${rangeArgList(s.iter.args.map(emitExpr))})) {`,
           ...body,
           "}",
         ];
@@ -687,6 +697,87 @@ function emitRawIndexWrite(target: Expr, value: Expr): string | null {
     const j = raw(target.index, "int");
     const v = raw(value, leafOf(K));
     return `rt.fast.rawArrSet2(${target.obj.obj.name}, ${i}, ${j}, ${v});`;
+  }
+  return null;
+}
+
+/** 一条能读也能写回的存储路径，连同它需要的先提语句。 */
+interface WPath {
+  read: string;
+  write: (nv: string) => string;
+  pre: string[];
+}
+
+/**
+ * 一次写回：容器是原地改（运行时返回 null，不用再补一笔）；只有值类型（Vector2）才要把新值
+ * 放回它来的那个存储位 —— 那个位置是变量还是容器的一格，只有发射器知道。
+ */
+function writeBack(p: WPath, call: string): string[] {
+  const store = p.write("_nv");
+  if (store === "") return [call + ";"];
+  return ["{", ...p.pre, "  const _nv = " + call + ";", "  if (_nv !== null) " + store, "}"];
+}
+
+/**
+ * 值类型写：`v.x = 1`、`v[0] = 9`、`a[0].x = 5`、`d["k"].y = 8`、`m.x = 3`（模块字段）—— 全部实测合法。
+ *
+ * Vector2 是**值类型**，写它必须产出新值再放回它来的那一格：实测 `var w = v; w.x = 100` 不动 `v`、
+ * `for x in a: x.x = 100` 一整格都不改，而 `a[0].x = 5` 确实改到数组里那一格、`m.x = 5` 真的改到成员。
+ * 所以这里生成一对「读这条路」+「把新值写回这条路」的代码，路径由 {@link writePathFor} 给。
+ */
+function emitValueWrite(target: Expr, value: Expr): string[] | null {
+  const seq = { n: 0 };
+  if (target.kind === "attribute") {
+    const p = writePathFor(target.obj, seq);
+    return writeBack(p, `rt.writeProp(${p.read}, ${JSON.stringify(target.name)}, ${emitExpr(value)})`);
+  }
+  if (target.kind === "index") {
+    const p = writePathFor(target.obj, seq);
+    return writeBack(p, `rt.writeIdx(${p.read}, ${emitExpr(target.index)}, ${emitExpr(value)})`);
+  }
+  return null;
+}
+
+/** 一路往下取基，看这条路径的起点是变量还是临时值。 */
+function pathRoot(t: Expr): Expr {
+  if (t.kind === "index" || t.kind === "attribute") return pathRoot(t.obj);
+  return t;
+}
+
+/**
+ * 一条读写路径；写不回去时分两种命运（都实测过）：
+ * - 根是**临时值**（`f().x = 1`）：Godot 同样只求值、看不见效果、而且不报错 → 只发求值，不写回。
+ * - 根是**变量**但中间隔着字段（`p.m.x = 5`）：Godot 会把新值写进那个字段（实测成员写成立，
+ *   m1/m2 → `(5.0, 2.0)`），而属性赋值我们整体还没实现（见 {@link emitAssign} 的 attribute 分支），
+ *   写回无处落地 —— 当场报未实现，绝不编一条「看着成功、其实什么都没改」的产物。
+ */
+function writePathFor(t: Expr, seq: { n: number }): WPath {
+  const p = lvalueOf(t, seq);
+  if (p !== null) return p;
+  if (pathRoot(t).kind === "ident") {
+    throw new UnsupportedError("vector2-write-path", `赋值目标要穿过对象的字段（如 p.m.x = 1），属性赋值还没实现`);
+  }
+  return { read: emitExpr(t), write: () => "", pre: [] };
+}
+
+/**
+ * 能读也能写回的存储路径：变量（局部、或发成类字段的模块变量）/ 容器下标。
+ * 下标的实参先提到临时变量里 —— 读和写回都要用它，不能求两次值。
+ */
+function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
+  if (t.kind === "ident") {
+    const read = emitExpr(t);
+    return { read, write: (nv) => `${read} = ${nv};`, pre: [] };
+  }
+  if (t.kind === "index") {
+    const base = lvalueOf(t.obj, seq);
+    if (base === null) return null;
+    const key = `_w${seq.n++}`;
+    return {
+      read: `rt.index(${base.read}, ${key})`,
+      write: (nv) => `rt.setIndex(${base.read}, ${key}, ${nv});`,
+      pre: [...base.pre, `const ${key} = ${emitExpr(t.index)};`],
+    };
   }
   return null;
 }
@@ -967,8 +1058,8 @@ function computeUnboxed(
         }
         break;
       case "for":
-        // `for x in range(...)` 的 x 依次取到 rangeSeq 的裸 int 元素（rangeSeq 只收整数界/步长，
-        // 越界与否由运行时响亮拒绝，不改变元素类型）。给它一条**合成的 int 字面量初值**当候选，
+        // `for x in range(...)` 的 x 依次取到 rangeSeq 的裸 int 元素（界与步长都在运行时被
+        // rt.rangeInt 截断成 int，所以元素一定是 int；转不了的类型由运行时报错，不改变元素类型）。给它一条**合成的 int 字面量初值**当候选，
         // 于是 x 和其它裸 int 局部走完全同一套判定：循环体里若把 x 赋成非 int，
         // `assigns` 那条检查会照常把它剔掉，发射端见 UNBOXED 里没有它就直接退回装箱的 rt.iter。
         if (inLambda || !isRangeCall(s.iter)) excluded.add(s.var);
@@ -2045,6 +2136,12 @@ function emitExprVar(e: Expr): string {
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
       }
+      // Vector2 的静态成员：`Vector2.UP`。裸 `Vector2` 不是变量，得在这一步接住，
+      // 否则会发成一个不存在的标识符、到运行时才 ReferenceError。
+      const staticFn = staticMemberFn(e.obj);
+      if (staticFn) {
+        return `rt.${staticFn}(${JSON.stringify(e.name)})`;
+      }
       // enum 点访问 `Suit.HEARTS` → 字典取值（GDScript 只允许 enum 这样点访问）
       if (e.obj.kind === "ident" && ENUM_NAMES.has(e.obj.name)) {
         return `rt.index(${e.obj.name}, rt.V.str(${JSON.stringify(e.name)}))`;
@@ -2074,11 +2171,41 @@ function emitLit(lit: string, value: string | number | bigint | boolean | null):
   if (lit === "int") return `rt.V.int(${typeof value === "bigint" ? `${value.toString()}n` : String(value)})`;
   if (lit === "float") return `rt.V.float(${String(value)})`;
   if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
+  if (lit === "string_name") return `rt.V.stringName(${JSON.stringify(value)})`;
   if (lit === "bool") return `rt.V.bool(${String(value)})`;
   return "rt.V.nil()";
 }
 
 /** 带类型标注的声明需要显式转换（S6：float 赋给 int 向零截断） */
+/**
+ * 声明类型是定型容器（`Array[int]` / `Dictionary[String, int]`）时在容器**创建处**盖章。
+ * Godot 把元素类型记在值上，所以章跟着字面量/默认值一起发出去，之后 `var u = a` 自然共享
+ * （实测：别名照样受限、`u[0] = 2.5` 照样截成 2）。没有初值时 Godot 给的也是**定型空容器**
+ * （实测 `var a: Array[int]` 之后 append 1.5 → `[1]`），所以 typeDefault 那条也要盖。
+ * 元素是引擎类（`Array[Node]`）时不盖章 —— 运行时还没有类层次可校验，宁可不限制也别误拒（见待做）。
+ */
+function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: Expr) => string): string {
+  const raw = init ? emit(init) : typeDefault(t);
+  if (t === null || t.kind !== "named") return raw;
+  const m = /^(Array|Dictionary)\[(.+)\]$/.exec(t.name);
+  if (m === null) return raw;
+  const inner = m[2] ?? "";
+  if (inner.includes("[")) return raw; // 嵌套定型在语义分析就报错了
+  // 字面量初值 Godot 允许并逐格转换（实测 Array[int] = [1, 2.5] → [1, 2]）；
+  // 把**未定型的现成数组**赋给定型变量它是会报错的，运行时那条负责。
+  const fromLiteral = init === null || init === undefined || init.kind === "array" || init.kind === "dict";
+  if (m[1] === "Array") {
+    const kind = inner.trim();
+    if (!isElemKind(kind)) return raw;
+    return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
+  }
+  const parts = inner.split(",").map((p) => p.trim());
+  const keyKind = parts[0] ?? "";
+  const valKind = parts[1] ?? "";
+  if (parts.length !== 2 || !isElemKind(keyKind) || !isElemKind(valKind)) return raw;
+  return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
+}
+
 function declaredCast(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
@@ -2087,6 +2214,29 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
   return null;
+}
+
+/**
+ * 没有初值的声明给的是**该类型的默认值**，不是 null。实测（Godot 4.6.3）：
+ *   `var i: int` → `0`、`: float` → `0.0`、`: bool` → `false`、`: String` → `""`（len 为 0）、
+ *   `var arr: Array` → `[]`（且 `arr == []` 为 true）、`: Dictionary` → `{  }`、`: Vector2` → `(0.0, 0.0)`，
+ *   而 `var nod: Node` → `<null>`。
+ * 所以只有值类型要特判；类与引擎对象保持 null 本就是对的。
+ * Color / Vector3 这些还没实现的内建值类型仍会给 null —— 但它们任何用法本来就先在构造/方法处响亮报缺。
+ */
+function typeDefault(t: TypeRef | null): string {
+  if (t === null) return "rt.V.nil()";
+  if (t.kind === "array") return "rt.V.array(rt.GArray.of([]))";
+  if (t.kind !== "named") return "rt.V.nil()";
+  const base = t.name.replace(/\[.*\]$/, "");
+  if (base === "int") return "rt.V.int(0)";
+  if (base === "float") return "rt.V.float(0)";
+  if (base === "bool") return "rt.V.bool(false)";
+  if (base === "String") return `rt.V.str("")`;
+  if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
+  if (base === "Dictionary") return "rt.dictOf([])";
+  if (base === "Vector2") return "rt.vector2(0, 0)";
+  return "rt.V.nil()";
 }
 
 function typeName(t: TypeRef): string {
@@ -2197,6 +2347,12 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       MODULE_CLASSES.has(e.callee.obj.name)
     ) {
       return `rt.V.object(new ${e.callee.obj.name}(${args.join(", ")}))`;
+    }
+    // 类型名上的静态方法：`String.chr(65)` 这类。BUILTIN 里只有函数式内置，
+    // 走 rt.method 会先把 `String` 发成一个不存在的标识符。
+    const staticFn = staticMemberFn(e.callee.obj);
+    if (staticFn) {
+      return `rt.${staticFn}(${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;
     }
     const obj = emitExpr(e.callee.obj);
     return `rt.method(${obj}, ${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;

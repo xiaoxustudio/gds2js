@@ -1,0 +1,6 @@
+before
+SCRIPT ERROR: Invalid assignment of property or key 'y' with value of type 'String' on a base object of type 'Vector2'.
+   at: _initialize (<case>/main.gd:8)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:8)
+<<GDS2JS_TIMEOUT>>

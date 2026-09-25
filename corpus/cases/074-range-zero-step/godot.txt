@@ -1,0 +1,5 @@
+SCRIPT ERROR: Error calling GDScript utility function "range()": 步长参数为零！
+   at: _initialize (<case>/main.gd:4)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:4)
+<<GDS2JS_TIMEOUT>>

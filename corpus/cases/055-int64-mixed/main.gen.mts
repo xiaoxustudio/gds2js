@@ -17,9 +17,18 @@ export class Main extends SceneTree {
     print(rt.show(rt.ops.add(z, rt.V.int(1))));
     print(rt.show(rt.ops.mul(z, rt.V.int(2))));
     let d = rt.dictOf([]);
-    rt.setIndex(d, rt.V.int(9223372036854775807n), rt.V.str("big"));
-    rt.setIndex(d, rt.V.int(1), rt.V.str("one"));
-    rt.setIndex(d, rt.ops.neg(rt.V.int(9223372036854775808n)), rt.V.str("min"));
+    {
+      const _nv = rt.writeIdx(d, rt.V.int(9223372036854775807n), rt.V.str("big"));
+      if (_nv !== null) d = _nv;
+    }
+    {
+      const _nv = rt.writeIdx(d, rt.V.int(1), rt.V.str("one"));
+      if (_nv !== null) d = _nv;
+    }
+    {
+      const _nv = rt.writeIdx(d, rt.ops.neg(rt.V.int(9223372036854775808n)), rt.V.str("min"));
+      if (_nv !== null) d = _nv;
+    }
     print(rt.show(rt.method(d, "size", [])));
     print(rt.show(rt.index(d, rt.V.int(9223372036854775807n))));
     print(rt.show(rt.index(d, rt.V.int(1))));

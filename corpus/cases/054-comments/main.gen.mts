@@ -23,7 +23,7 @@ export class Main extends SceneTree {
     } else {
       print(rt.show(rt.V.int(222)));
     }
-    for (let k of rt.rangeSeq(rt.num(rt.V.int(2)))) {
+    for (let k of rt.rangeSeq([rt.V.int(2)])) {
       print(rt.show(rt.V.int(k)));
     }
     do {

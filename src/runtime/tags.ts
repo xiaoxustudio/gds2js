@@ -10,6 +10,7 @@ export const Tag = {
   INT: 2,
   FLOAT: 3,
   STRING: 4,
+  STRING_NAME: 8,
   ARRAY: 5,
   DICT: 6,
   OBJECT: 7,
@@ -29,6 +30,7 @@ const TAG_NAME: Record<TagValue, string> = {
   [Tag.INT]: "int",
   [Tag.FLOAT]: "float",
   [Tag.STRING]: "String",
+  [Tag.STRING_NAME]: "StringName",
   [Tag.ARRAY]: "Array",
   [Tag.DICT]: "Dictionary",
   [Tag.OBJECT]: "Object",
@@ -92,6 +94,10 @@ export const V = {
   },
   str(v: string): Variant {
     return { t: Tag.STRING, v };
+  },
+  /** `&"x"`：Godot 的 StringName，实测与 String 同值相等、同字典键，但 typeof 是 21。 */
+  stringName(v: string): Variant {
+    return { t: Tag.STRING_NAME, v };
   },
   array(v: unknown): Variant {
     return { t: Tag.ARRAY, v };

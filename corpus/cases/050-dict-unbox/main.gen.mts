@@ -26,16 +26,31 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))));
     print(rt.show(rt.V.int(e.size)));
     let g = rt.dictOf([]);
-    rt.setIndex(g, rt.V.float(1), rt.V.int(5));
+    {
+      const _nv = rt.writeIdx(g, rt.V.float(1), rt.V.int(5));
+      if (_nv !== null) g = _nv;
+    }
     print(rt.show(rt.index(g, rt.V.float(1))));
     let m = rt.dictOf([]);
-    rt.setIndex(m, rt.V.int(0), rt.V.int(1));
-    rt.setIndex(m, rt.V.int(1), rt.V.float(2.5));
+    {
+      const _nv = rt.writeIdx(m, rt.V.int(0), rt.V.int(1));
+      if (_nv !== null) m = _nv;
+    }
+    {
+      const _nv = rt.writeIdx(m, rt.V.int(1), rt.V.float(2.5));
+      if (_nv !== null) m = _nv;
+    }
     print(rt.show(rt.ops.add(rt.index(m, rt.V.int(0)), rt.index(m, rt.V.int(1)))));
     let h = rt.dictOf([]);
-    rt.setIndex(h, rt.V.int(0), rt.V.int(1));
+    {
+      const _nv = rt.writeIdx(h, rt.V.int(0), rt.V.int(1));
+      if (_nv !== null) h = _nv;
+    }
     let k = h;
-    rt.setIndex(k, rt.V.int(1), rt.V.int(2));
+    {
+      const _nv = rt.writeIdx(k, rt.V.int(1), rt.V.int(2));
+      if (_nv !== null) k = _nv;
+    }
     print(rt.show(rt.method(h, "size", [])));
     this.quit();
   }

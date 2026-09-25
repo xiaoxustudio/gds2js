@@ -124,7 +124,26 @@ export function normalize(text, gdPath = "") {
   out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, p) => `<case>/${p.split("/").pop()}`);
   const lines = out.split(/\r?\n/);
   const kept = [];
-  for (const line of lines) {
+  // Godot 的容器实现在越界 / 切片方向不合 / Callable 实参个数对不上 / 定型容器装不下这个值时，
+  // 走的是引擎侧 ERR_FAIL_*：stderr 打一条 ERROR + 回溯，然后**什么都不做继续跑**（实测：
+  // 未定型操作静默无操作、被拒的元素就是没进去、调用失败的格子就是不收）。
+  // 判据用**结构**而不是枚举文案：这类诊断的回溯帧一定指向 `core/variant/*.cpp`，
+  // 那是 Godot 的内部源文件行号，产物不可能复现 —— 与 step 29「不复现 Godot 的 stderr 警告」、
+  // 上面剥 ConfigFile 噪音是同一条纪律。
+  // 反过来两条必须保住：`SCRIPT ERROR`（脚本语义）整类不碰；
+  // `ERROR: Failed to load script …` 的帧在 `modules/gdscript/`，是预期报错用例 golden 的一部分。
+  const ENGINE_FRAME = /^\s+at: \S+ \(core\/variant\//;
+  const BLOCK_TAIL = /^(\s+(at: |GDScript backtrace|\[\d+\] )|ERROR: Condition )/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^ERROR: /.test(line)) {
+      let j = i + 1;
+      while (j < lines.length && BLOCK_TAIL.test(lines[j])) j++;
+      if (lines.slice(i, j).some((l) => ENGINE_FRAME.test(l))) {
+        i = j - 1; // 整块丢掉：消息 + Condition 行 + at:/回溯帧
+        continue;
+      }
+    }
     if (/^Godot Engine v/.test(line)) continue;
     if (/^ERROR: ConfigFile parse error/.test(line)) continue;
     if (/^\s*at: _parse \(core\/io\/config_file/.test(line)) continue;
