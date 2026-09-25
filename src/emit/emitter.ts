@@ -501,7 +501,7 @@ interface R {
 let UNBOXED = new Map<string, "int" | "float">();
 
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
-const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC" };
+const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
 // float 无 D1 范围陷阱（溢出→Infinity、除零→Infinity，与装箱 V.float(a op b) 逐位一致），故内联裸运算即可。
 const FLOAT_ARITH_RAW: Record<string, string> = { "+": "+", "-": "-", "*": "*", "/": "/" };
 
@@ -657,7 +657,7 @@ function computeUnboxed(f: FuncDecl): Map<string, "int" | "float"> {
 
   const result = new Map<string, "int" | "float">();
   for (const kind of ["int", "float"] as const) {
-    const ops = kind === "int" ? ["+", "-", "*"] : ["+", "-", "*", "/"];
+    const ops = kind === "int" ? ["+", "-", "*", "/", "%"] : ["+", "-", "*", "/"];
     const U = new Set<string>();
     const isNum = (e: Expr, self: string): boolean => {
       switch (e.kind) {

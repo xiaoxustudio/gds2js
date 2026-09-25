@@ -26,6 +26,20 @@ export const fast = {
     if (!Number.isSafeInteger(r)) throw int64(r);
     return r;
   },
+  // 语义与 ops.div 的 bothInt 分支逐位对齐：除零抛 int-div-zero，结果向零截断再过 D1 检查。
+  iDivC(a: number, b: number): number {
+    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
+    const r = Math.trunc(a / b);
+    if (!Number.isSafeInteger(r)) throw int64(r);
+    return r;
+  },
+  // 与 ops.mod 对齐：除零抛 int-mod-zero；JS % 已「跟被除数符号」(S3)；结果过 D1 检查。
+  iModC(a: number, b: number): number {
+    if (b === 0) throw new GodotRuntimeError("int-mod-zero", "整数取模零");
+    const r = a % b;
+    if (!Number.isSafeInteger(r)) throw int64(r);
+    return r;
+  },
 
   iDiv(a: number, b: number): number {
     if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
