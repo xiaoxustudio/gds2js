@@ -125,6 +125,29 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
 }
 
+// ---- 061 字符串比较：Godot 按码点（UTF-32），JS 原生按 UTF-16 码元 → 代理对会判反方向。
+// 期望值取自 061-string-order 的 godot.txt（String.chr(0x1F600) vs String.chr(0xFFFF) 探针实测）。
+{
+  const EMO = String.fromCodePoint(0x1f600);
+  const S = (s: string) => V.str(s);
+  eq("061", "😀 < U+FFFF 为 false", show(ops.lt(S(EMO), S("\uFFFF"))), "false");
+  eq("061", "U+FFFF < 😀 为 true", show(ops.lt(S("\uFFFF"), S(EMO))), "true");
+  eq("061", "😀 > U+FFFF 为 true", show(ops.gt(S(EMO), S("\uFFFF"))), "true");
+  eq("061", "z < 😀 为 true", show(ops.lt(S("z"), S(EMO))), "true");
+  // 无代理对的日常文本走原生快路，方向必须照旧
+  eq("061", "快路 apple < z", show(ops.lt(S("apple"), S("z"))), "true");
+  eq("061", "快路 前缀短者小", show(ops.lt(S("ab"), S("abc"))), "true");
+  eq("061", "快路相等", show(ops.eq(S("abc"), S("abc"))), "true");
+  const g = GArray.of([S(EMO), S("\uFFFF"), S("z"), S("apple")]);
+  g.sort();
+  eq(
+    "061",
+    "含 emoji 的字符串数组按码点排序",
+    g.raw().map((v) => show(v)).join("|"),
+    "apple|z|\uFFFF|" + EMO,
+  );
+}
+
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）
 {
   const a = GArray.of([I(1), I(2)]);

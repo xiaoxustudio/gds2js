@@ -7,6 +7,7 @@ import {
   keyOf,
   show,
   strAt,
+  strCmp,
   strFloat,
   strFormat,
   strLength,
@@ -217,9 +218,8 @@ function compare(a: Variant, b: Variant): number {
     return x === y ? 0 : x < y ? -1 : 1;
   }
   if (a.t === Tag.STRING && b.t === Tag.STRING) {
-    const x = a.v as string;
-    const y = b.v as string;
-    return x === y ? 0 : x < y ? -1 : 1;
+    // 按码点比（JS 原生的 < 按 UTF-16 码元，含 emoji 时会与 Godot 判出相反方向）
+    return strCmp(a.v as string, b.v as string);
   }
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
 }

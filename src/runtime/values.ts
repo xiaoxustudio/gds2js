@@ -116,7 +116,7 @@ export class GArray {
                 ? 1
                 : 0
             : numVal(a) - numVal(b)
-      : (a: Variant, b: Variant) => (a.v as string) < (b.v as string) ? -1 : 1;
+      : (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string);
     this.items = [...this.items].sort(cmp);
   }
 }
@@ -232,6 +232,31 @@ const SIMPLE_CASE: Record<"upper" | "lower", Record<string, string>> = {
   upper: { ß: "ß", ﬁ: "ﬁ", ǳ: "Ǳ", ǅ: "Ǆ" },
   lower: { İ: "i" },
 };
+
+/**
+ * Godot 的 String 是 UTF-32，`<` / `>` / `<=` / `>=` 以及 `Array.sort()` 都按**码点**逐位比较。
+ * JS 的字符串比较按 UTF-16 **码元**，代理区（U+D800–U+DFFF）会排到 U+FFFF 之下：
+ * 探针实测 `String.chr(0x1F600) < String.chr(0xFFFF)` 在 Godot 里是 **false**，JS 却给 **true** ——
+ * 一条能静默改判定向的错（emoji 与 BMP 高位字符比较、含 emoji 的字符串数组排序都会中）。
+ *
+ * 快路：两边都不含代理对时，码元序与码点序必然一致，直接用原生比较（日常文本全走这条）。
+ * 只有真出现代理对才逐码点比。
+ */
+export function strCmp(x: string, y: string): number {
+  if (!/[\uD800-\uDFFF]/.test(x) && !/[\uD800-\uDFFF]/.test(y)) {
+    return x === y ? 0 : x < y ? -1 : 1;
+  }
+  const xa = [...x];
+  const ya = [...y];
+  const n = Math.min(xa.length, ya.length);
+  for (let i = 0; i < n; i++) {
+    const cx = xa[i]!.codePointAt(0)!;
+    const cy = ya[i]!.codePointAt(0)!;
+    if (cx !== cy) return cx < cy ? -1 : 1;
+  }
+  if (xa.length === ya.length) return 0;
+  return xa.length < ya.length ? -1 : 1;
+}
 
 export function strCase(s: string, dir: "upper" | "lower"): string {
   const table = SIMPLE_CASE[dir];
