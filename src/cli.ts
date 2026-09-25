@@ -12,9 +12,11 @@
  *
  * 参数解析用 commander；下面的构建/检查动作被写成可重跑的纯函数，watch 模式复用同一套。
  */
-import { copyFileSync, mkdirSync, readFileSync, watch, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 import { compileProject } from "./compile/project";
 import { emitModule, emitModuleWithMap } from "./emit/emitter";
@@ -188,19 +190,76 @@ function emitOptsFor(ctx: Ctx, outPath: string): Record<string, unknown> {
   return base;
 }
 
-async function buildProject(ctx: Ctx): Promise<boolean> {
-  // single 会把运行时内联进"每个"模块 → 每个文件各持一份 registerClass 注册表，
-  // 跨文件的 `is Foo` / `Foo.new()` 因此认不到彼此的类型。多文件只能共享一份运行时（import/local）。
-  if (ctx.runtimeMode === "single") {
-    console.error(
-      `build-project 不支持 --runtime-mode single（每个模块会各内联一份运行时、类型注册表不共享）。\n` +
-        `  多文件工程请用 --runtime-mode local（旁挂一份共享 standalone）或 import（默认）。`,
+/** 已构建的 dist/runtime.mjs + dist/host.mjs 的 file URL，供打包步骤把运行时按绝对路径内联（不依赖包自引用解析）。 */
+function runtimeFileUrls(): { rt: string; host: string } {
+  try {
+    const req = createRequire(import.meta.url);
+    return {
+      rt: pathToFileURL(req.resolve("gds2js/runtime")).href,
+      host: pathToFileURL(req.resolve("gds2js/host")).href,
+    };
+  } catch (e) {
+    throw new Error(
+      `打包 single 需要先构建 dist（gds2js/runtime / gds2js/host）。跑 pnpm build。原因：${
+        e instanceof Error ? e.message : String(e)
+      }`,
     );
-    return false;
   }
+}
+
+/**
+ * build-project 的 single 模式：先按 import 模式把各模块编到系统临时目录（运行时/宿主用 dist 的
+ * file URL，确保 bundler 能在任意路径把它们内联），再交给 rolldown(tsdown build) bundle 成**一个**
+ * 自包含 .mjs。作用域提升、跨文件类/import、名字冲突都交给真 bundler——不自造拼接（那会静默出错）。
+ */
+async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
+  const emit = mkdtempSync(join(tmpdir(), "gds2js-emit-"));
+  try {
+    const { rt, host } = runtimeFileUrls();
+    const result = await compileProject({
+      entries: [ctx.input],
+      resRoot: ctx.resRoot,
+      outDir: emit,
+      runtimeImport: rt,
+      hostImport: ctx.hostImport === null ? null : host,
+      autoRun: ctx.run ? undefined : false,
+    });
+    if (!printDiags(projectDiags(result, ctx.resRoot))) return false;
+    for (const m of result.modules) {
+      mkdirSync(dirname(m.jsPath), { recursive: true });
+      writeFileSync(m.jsPath, m.code, "utf8");
+    }
+    const wantRes = "res://" + relative(ctx.resRoot, ctx.input).split("\\").join("/");
+    const entry = result.modules.find((m) => m.resPath === wantRes) ?? result.modules[0];
+    if (!entry) {
+      console.error(`${ctx.input}: 无可打包模块`);
+      return false;
+    }
+    const { build } = await import("tsdown"); // 仅整app single 才拉 bundler，别把 rolldown 压进每次 CLI 启动
+    await build({
+      entry: entry.jsPath,
+      outDir: ctx.outDir,
+      format: "esm",
+      target: "node22",
+      dts: false,
+      clean: true,
+      config: false,
+      silent: true,
+    } as Parameters<typeof build>[0]);
+    console.error(`已编译并 bundle 成单文件 → ${join(ctx.outDir, basename(entry.jsPath).replace(/\.mts$/, ".mjs"))}`);
+    return true;
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    return false;
+  } finally {
+    rmSync(emit, { recursive: true, force: true });
+  }
+}
+
+async function buildProject(ctx: Ctx): Promise<boolean> {
+  if (ctx.runtimeMode === "single") return bundleProjectSingle(ctx);
   let result;
   try {
-    // single 已在上方拒绝，这里只剩 local / import。
     const modeOpts =
       ctx.runtimeMode === "local"
         ? (() => {

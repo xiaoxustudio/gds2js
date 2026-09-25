@@ -23,7 +23,7 @@
 	"scripts": {
 		"gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
 		"build": "tsdown && tsdown --config tsdown.standalone.config.ts && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
-		"dev": "tsx src/index.ts",
+		"dev": "tsx src/cli.ts",
 		"watch": "tsdown --watch",
 		"test:golden": "node tools/golden.mjs",
 		"test:diff": "tsx tools/diff.mjs",

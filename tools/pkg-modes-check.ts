@@ -9,9 +9,12 @@
  * 跑：node_modules/.bin/tsx tools/pkg-modes-check.ts   （全绿退出 0，任一失败退出 1）
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { build } from "tsdown";
 import { compileProject } from "../src/compile/project";
 import { emitModuleWithMap } from "../src/emit/emitter";
 import { analyze } from "../src/lower/analyze";
@@ -187,6 +190,56 @@ async function checkSourcemapSingle(): Promise<void> {
   else bad(`带 map single 输出不符：${JSON.stringify(out.slice(0, 120))}`);
 }
 
+// ④ build-project single：整app bundle 成零 import 的单文件，且在仓库外能跑（证明真自包含）
+async function checkWholeAppSingle(): Promise<void> {
+  console.log("④ build-project single：tsdown bundle → 零 import 单文件 + 仓库外可跑");
+  const req = createRequire(import.meta.url);
+  const rt = pathToFileURL(req.resolve("gds2js/runtime")).href;
+  const host = pathToFileURL(req.resolve("gds2js/host")).href;
+  const emit = join(TMP, "wa_emit");
+  const out = join(TMP, "wa_out");
+  mkdirSync(emit, { recursive: true });
+  const res = await compileProject({
+    entries: [join(ROOT, "examples/multi/main.gd")],
+    resRoot: join(ROOT, "examples/multi"),
+    outDir: emit,
+    runtimeImport: rt,
+    hostImport: host,
+  });
+  if (res.diags.length > 0) return bad(`whole-app 编译诊断：${res.diags[0]!.diagnostic.message}`);
+  for (const m of res.modules) {
+    mkdirSync(dirname(m.jsPath), { recursive: true });
+    writeFileSync(m.jsPath, m.code, "utf8");
+  }
+  const entry = res.modules.find((m) => m.resPath === "res://main.gd");
+  if (!entry) return bad("whole-app 无入口模块");
+  await build({
+    entry: entry.jsPath,
+    outDir: out,
+    format: "esm",
+    target: "node22",
+    dts: false,
+    clean: true,
+    config: false,
+    silent: true,
+  } as unknown as Parameters<typeof build>[0]);
+  const bundleFile = join(out, "main.mjs");
+  const b = readFileSync(bundleFile, "utf8");
+  const imports = b.split("\n").filter((l) => /^\s*import[\s{*.]/.test(l));
+  if (imports.length === 0) ok("bundle 零 top-level import（运行时/宿主/跨文件全内联）");
+  else bad(`bundle 仍有 top-level import：${JSON.stringify(imports.slice(0, 3))}`);
+  // 拷到仓库外跑，确保不靠 node_modules
+  const iso = mkdtempSync(join(tmpdir(), "gds-iso-"));
+  try {
+    copyFileSync(bundleFile, join(iso, "app.mjs"));
+    const { out: o, code } = runNode(iso, "app.mjs");
+    if (code === 0 && o === "7\ntrue\nshape-7\nhi bob\ntrue\nhi zed\n") ok("仓库外 node 跑单文件 bundle，输出正确");
+    else bad(`仓库外运行异常 code=${code} out=${JSON.stringify(o.slice(0, 160))}`);
+  } finally {
+    rmSync(iso, { recursive: true, force: true });
+  }
+}
+
 async function main(): Promise<void> {
   rmSync(TMP, { recursive: true, force: true });
   mkdirSync(TMP, { recursive: true });
@@ -194,6 +247,7 @@ async function main(): Promise<void> {
     await checkPerCaseModes();
     await checkNestedProjectLocal();
     await checkSourcemapSingle();
+    await checkWholeAppSingle();
   } finally {
     console.log(`\n失败 ${failures} 项`);
     rmSync(TMP, { recursive: true, force: true });
