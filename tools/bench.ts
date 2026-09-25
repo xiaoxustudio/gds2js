@@ -108,6 +108,21 @@ const KERNELS: Kernel[] = [
 `,
   },
   {
+    name: "array-for-range",
+    reps: 5,
+    body: `
+	var a = []
+	for k in range(30000):
+		a.append(k)
+	for m in range(30000):
+		a[m] = a[m] * 2
+	var s = 0
+	for n in range(30000):
+		s += a[n]
+	return s
+`,
+  },
+  {
     name: "dict-set-get",
     reps: 5,
     body: `

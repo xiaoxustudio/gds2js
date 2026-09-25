@@ -51,8 +51,12 @@ export function or(l: Variant, right: () => Variant): Variant {
   return truthyOf(l) ? l : right();
 }
 
-/** range(end) / range(start, end) / range(start, end, step) */
-export function range(a: number, b?: number, step = 1): GArray {
+/**
+ * range 序列的唯一算式，返回**裸 number 数组**：`range()` 用它再逐个装箱，
+ * `for x in range(...)` 的裸循环节直接迭代它（省掉整批 Variant 分配）。
+ * 两边共用一份，免得循环展开悄悄跑出与 range() 不同的序列。
+ */
+export function rangeSeq(a: number, b?: number, step = 1): number[] {
   let start = 0;
   let end = a;
   if (b !== undefined) {
@@ -75,11 +79,16 @@ export function range(a: number, b?: number, step = 1): GArray {
       );
     }
   }
-  const items = [];
+  const items: number[] = [];
   if (step > 0) {
-    for (let i = start; i < end; i += step) items.push(V.int(i));
+    for (let i = start; i < end; i += step) items.push(i);
   } else {
-    for (let i = start; i > end; i += step) items.push(V.int(i));
+    for (let i = start; i > end; i += step) items.push(i);
   }
-  return GArray.of(items);
+  return items;
+}
+
+/** range(end) / range(start, end) / range(start, end, step) */
+export function range(a: number, b?: number, step = 1): GArray {
+  return GArray.of(rangeSeq(a, b, step).map((i) => V.int(i)));
 }

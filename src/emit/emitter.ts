@@ -104,20 +104,37 @@ const BINOP: Record<string, string> = {
   "^": "bxor",
 };
 
+/**
+ * range(...) 的实参 → 交给运行时的裸 number 参数串。BUILTIN.range（表达式用法）与
+ * `for x in range(...)` 的裸循环展开共用这一份，免得两条路径把参数渲染歪。
+ * 第三个实参是 step —— 早先只发前两参，于是 `for i in range(0, 10, 2)` **静默**按 1 递增
+ * （058 差分实测：Godot 0,2,4,6,8 而我们 0,1,2,…）。参数对不上就响，别再悄悄丢。
+ */
+function rangeNumArgs(a: Array<string | undefined>): string {
+  if (a.length > 3) {
+    throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
+  }
+  const start = a[0] === undefined ? "0" : `rt.num(${a[0]})`;
+  const stop = a[1] === undefined ? "" : `, rt.num(${a[1]})`;
+  const step = a[2] === undefined ? "" : `, rt.num(${a[2]})`;
+  return `${start}${stop}${step}`;
+}
+
+/** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */
+function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
+  return (
+    e.kind === "call" &&
+    e.callee.kind === "ident" &&
+    e.callee.name === "range" &&
+    e.args.length >= 1 &&
+    e.args.length <= 3
+  );
+}
+
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
-  // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接。
-  // 第三个实参是 step —— 早先只发前两参，于是 `for i in range(0, 10, 2)` **静默**按 1 递增
-  // （058 差分实测：Godot 0,2,4,6,8 而我们 0,1,2,…）。参数对不上就响，别再悄悄丢。
-  range: (a) => {
-    if (a.length > 3) {
-      throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
-    }
-    const start = a[0] === undefined ? "0" : `rt.num(${a[0]})`;
-    const stop = a[1] === undefined ? "" : `, rt.num(${a[1]})`;
-    const step = a[2] === undefined ? "" : `, rt.num(${a[2]})`;
-    return `rt.V.array(rt.range(${start}${stop}${step}))`;
-  },
+  // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接
+  range: (a) => `rt.V.array(rt.range(${rangeNumArgs(a)}))`,
   str: (a) => `rt.strOf(${a.join(", ")})`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,
@@ -583,12 +600,25 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       return lines;
     }
 
-    case "for":
-      return [
-        `for (const ${s.var} of rt.iter(${emitExpr(s.iter)})) {`,
-        ...s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`)),
-        "}",
-      ];
+    case "for": {
+      // 绑定必须用 `let` 而不是 `const`：JS 的 for-of 每轮**新建一次绑定**（let 与 const 同），
+      // 所以循环体里 `i = i + 1` 只影响当轮、不渗到下一轮 —— 正是 Godot 的语义
+      // （实测 `for i in range(3): i = i+1` 打印 1/2/3）。用 const 会当场 TypeError。
+      //
+      // `for x in range(...)` 且 x 已被推断成裸 int：直接迭代 rangeSeq 的 number[]，
+      // 既省掉整批 Variant 分配，也不再因"x 是 Variant"而连累被它索引的数组整体逃逸。
+      // 唯一的开关就是 UNBOXED，与 computeUnboxed 那条合成候选同源 —— 推断一旦退让，
+      // 这里必然跟着退回装箱路，不会出现"迭代裸 number、体内当 Variant 用"的错位。
+      const body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
+      if (isRangeCall(s.iter) && UNBOXED.get(s.var) === "int") {
+        return [
+          `for (let ${s.var} of rt.rangeSeq(${rangeNumArgs(s.iter.args.map(emitExpr))})) {`,
+          ...body,
+          "}",
+        ];
+      }
+      return [`for (let ${s.var} of rt.iter(${emitExpr(s.iter)})) {`, ...body, "}"];
+    }
 
     case "while":
       return [
@@ -937,7 +967,12 @@ function computeUnboxed(
         }
         break;
       case "for":
-        excluded.add(s.var);
+        // `for x in range(...)` 的 x 依次取到 rangeSeq 的裸 int 元素（rangeSeq 只收整数界/步长，
+        // 越界与否由运行时响亮拒绝，不改变元素类型）。给它一条**合成的 int 字面量初值**当候选，
+        // 于是 x 和其它裸 int 局部走完全同一套判定：循环体里若把 x 赋成非 int，
+        // `assigns` 那条检查会照常把它剔掉，发射端见 UNBOXED 里没有它就直接退回装箱的 rt.iter。
+        if (inLambda || !isRangeCall(s.iter)) excluded.add(s.var);
+        else decls.push({ name: s.var, init: { kind: "lit", lit: "int", value: 0, loc: s.iter.loc } });
         walkExpr(s.iter, inLambda);
         s.body.forEach((x) => walkStmt(x, inLambda));
         break;

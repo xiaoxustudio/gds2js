@@ -23,8 +23,8 @@ export class Main extends SceneTree {
     } else {
       print(rt.show(rt.V.int(222)));
     }
-    for (const k of rt.iter(rt.V.array(rt.range(rt.num(rt.V.int(2)))))) {
-      print(rt.show(k));
+    for (let k of rt.rangeSeq(rt.num(rt.V.int(2)))) {
+      print(rt.show(rt.V.int(k)));
     }
     do {
       const __m0 = rt.matchPattern(this.counter, rt.patLit(rt.V.int(4)));

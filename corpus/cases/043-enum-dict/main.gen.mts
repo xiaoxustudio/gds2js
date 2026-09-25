@@ -13,7 +13,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.index(Suit, rt.V.str("DIAMONDS"))));
     print(rt.show(rt.method(Suit, "has", [rt.V.str("CLUBS")])));
     print(rt.show(rt.method(Suit, "has", [rt.V.str("NOPE")])));
-    for (const k of rt.iter(Suit)) {
+    for (let k of rt.iter(Suit)) {
       print(rt.show(k));
     }
     print(rt.show(Suit));
