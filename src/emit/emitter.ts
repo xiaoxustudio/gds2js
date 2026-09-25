@@ -106,9 +106,18 @@ const BINOP: Record<string, string> = {
 
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
-  // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接
-  range: (a) =>
-    `rt.V.array(rt.range(${a[0] ? `rt.num(${a[0]})` : "0"}${a[1] ? `, rt.num(${a[1]})` : ""}))`,
+  // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接。
+  // 第三个实参是 step —— 早先只发前两参，于是 `for i in range(0, 10, 2)` **静默**按 1 递增
+  // （058 差分实测：Godot 0,2,4,6,8 而我们 0,1,2,…）。参数对不上就响，别再悄悄丢。
+  range: (a) => {
+    if (a.length > 3) {
+      throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
+    }
+    const start = a[0] === undefined ? "0" : `rt.num(${a[0]})`;
+    const stop = a[1] === undefined ? "" : `, rt.num(${a[1]})`;
+    const step = a[2] === undefined ? "" : `, rt.num(${a[2]})`;
+    return `rt.V.array(rt.range(${start}${stop}${step}))`;
+  },
   str: (a) => `rt.strOf(${a.join(", ")})`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,

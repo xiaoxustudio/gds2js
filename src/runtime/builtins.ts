@@ -60,6 +60,21 @@ export function range(a: number, b?: number, step = 1): GArray {
     end = b;
   }
   if (step === 0) throw new Error("range 的步长不能为 0");
+  // 非整数的界/步长：Godot 走 int 重载会退化（实测 `range(0, 3, 0.5)` 什么都不输出），我们不去
+  // 复刻这种未文档化的退化，改为响亮拒绝 —— 否则会一路走到 `V.int(0.5)`，报出「0.5 超出 2^53」
+  // 这种指错地方的误导错误。整数值的 float（如 range(0.0, 3.0)）不受影响，实测与 Godot 同为 0/1/2。
+  for (const [what, v] of [
+    ["起点", start],
+    ["终点", end],
+    ["步长", step],
+  ] as const) {
+    if (!Number.isInteger(v)) {
+      throw new UnsupportedError(
+        "range-non-integer",
+        `range 的${what}不是整数（${v}）：Godot 此处退化为空数组，语义未定，拒绝生成可能静默错位的代码`,
+      );
+    }
+  }
   const items = [];
   if (step > 0) {
     for (let i = start; i < end; i += step) items.push(V.int(i));
