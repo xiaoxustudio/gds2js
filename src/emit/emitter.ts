@@ -265,6 +265,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   MAP_ACTIVE = false;
   RAW_ABIS = new Map();
+  RAW_ARRAYS = new Map();
   CURRENT_RET = null;
   return { code, map };
 }
@@ -317,8 +318,11 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
   mark(base, f.loc);
   const savedUnboxed = UNBOXED;
   const savedRet = CURRENT_RET;
+  const savedArrays = RAW_ARRAYS;
   CURRENT_RET = abi ? abi.ret : null;
-  UNBOXED = computeUnboxed(f);
+  const layout = analyzeFuncLayout(f);
+  UNBOXED = layout.unboxed;
+  RAW_ARRAYS = layout.arrays;
   try {
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
@@ -327,6 +331,7 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
   } finally {
     UNBOXED = savedUnboxed;
     CURRENT_RET = savedRet;
+    RAW_ARRAYS = savedArrays;
   }
   lines.push("}");
   lines.push("");
@@ -398,6 +403,18 @@ function condExpr(e: Expr): string {
 function emitStmt(s: Stmt, voidReturn: boolean): string[] {
   switch (s.kind) {
     case "var": {
+      // 特化裸数组局部：init 必为数字字面量数组（且逐元素与元素 Kind 相符，推断已校验）→ 发裸 number[]
+      const ek = RAW_ARRAYS.get(s.name);
+      if (ek && s.init && s.init.kind === "array") {
+        const parts = s.init.items.map((it) => {
+          const r = emitExprR(it);
+          if (r.rep !== ek) {
+            throw new UnsupportedError("raw-array-init", `内部不变量破坏：裸数组元素期望 ${ek}，实得 ${r.rep}`);
+          }
+          return r.code;
+        });
+        return [`let ${s.name} = [${parts.join(", ")}];`];
+      }
       // 解箱局部：init 必为同型数值表达式（推断保证），直接发裸 number
       if (s.init && UNBOXED.has(s.name)) {
         return [`let ${s.name} = ${emitExprR(s.init).code};`];
@@ -506,6 +523,9 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
 function emitAssign(target: Expr, value: string): string {
   if (target.kind === "ident") return `${emitExpr(target)} = ${value};`;
   if (target.kind === "index") {
+    if (target.obj.kind === "ident" && RAW_ARRAYS.has(target.obj.name)) {
+      throw new UnsupportedError("raw-array", "内部不变量破坏：裸数组不应出现下标赋值");
+    }
     return `rt.setIndex(${emitExpr(target.obj)}, ${emitExpr(target.index)}, ${value});`;
   }
   throw new UnsupportedError("emit-assign", `赋值目标 ${target.kind} 还没实现`);
@@ -542,6 +562,12 @@ let RAW_ABIS = new Map<string, RawAbi>();
 /** 当前正在发射的函数若走裸 ABI，其返回裸类型；否则 null（返回值需装箱）。 */
 let CURRENT_RET: Kind | null = null;
 
+/** 容器元素单态化（D2 第四轨 v1）：函数局部 Array 的裸元素类型（仅 int/float，绝不存 Variant）。 */
+type ElemKind = "int" | "float";
+/** 当前函数里被特化成裸 number[] 的数组局部：名字 → 元素类型。由 analyzeFuncLayout 逐函数算出。 */
+let RAW_ARRAYS = new Map<string, ElemKind>();
+const NO_ARRAYS: Map<string, ElemKind> = new Map();
+
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
 const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
 // float 无 D1 范围陷阱（溢出→Infinity、除零→Infinity，与装箱 V.float(a op b) 逐位一致），故内联裸运算即可。
@@ -573,6 +599,27 @@ function emitExprR(e: Expr): R {
   if (e.kind === "ident") {
     const k = UNBOXED.get(e.name);
     if (k) return { code: e.name, rep: k };
+  }
+  // 容器元素单态化：裸数组的下标读 / .append / .size/.length（分析期已判定这些是唯一合法用法）。
+  if (e.kind === "index" && e.obj.kind === "ident") {
+    const ek = RAW_ARRAYS.get(e.obj.name);
+    if (ek) {
+      const ir = emitExprR(e.index);
+      if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
+      return { code: `${e.obj.name}[${ir.code}]`, rep: ek };
+    }
+  }
+  if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
+    const ek = RAW_ARRAYS.get(e.callee.obj.name);
+    const nm = e.callee.obj.name;
+    if (ek && (e.callee.name === "size" || e.callee.name === "length") && e.args.length === 0) {
+      return { code: `${nm}.length`, rep: "int" };
+    }
+    if (ek && e.callee.name === "append" && e.args.length === 1) {
+      const er = emitExprR(e.args[0]!);
+      if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 append 元素期望 ${ek}，实得 ${er.rep}`);
+      return { code: `${nm}.push(${er.code})`, rep: "var" };
+    }
   }
   if (e.kind === "call" && e.callee.kind === "ident") {
     // 裸 ABI：直接调用点传裸实参、结果按裸类型流（不再回 rvalue）。分析期已保证同型；
@@ -632,7 +679,7 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
  * 排除：参数、for 变量、match 绑定、lambda 内声明或被赋值的名字。
  * 用「自身暂定」打破 `x += 1` 的循环依赖，每种类型各自迭代到不动点；init 字面量类型天然互斥，不会同属两类。
  */
-function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
+function computeUnboxed(f: FuncDecl, arrays: Map<string, ElemKind> = NO_ARRAYS): Map<string, "int" | "float" | "str"> {
   const abi = RAW_ABIS.get(f.name);
   const paramKind = new Map<string, Kind>();
   if (abi) f.params.forEach((p, i) => paramKind.set(p.name, abi.params[i]!));
@@ -747,8 +794,9 @@ function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
     const identKind = (self: string) => (n: string): Kind | null =>
       paramKind.get(n) ?? result.get(n) ?? (n === self || U.has(n) ? kind : null);
     const isNum = (e: Expr, self: string): boolean => {
-      if (e.kind === "call") return kindOfExpr(e, identKind(self)) === kind;
-      if (e.kind === "binary") return kindOfExpr(e, identKind(self)) === kind;
+      if (e.kind === "call") return kindOfExpr(e, identKind(self), arrays) === kind;
+      if (e.kind === "binary") return kindOfExpr(e, identKind(self), arrays) === kind;
+      if (e.kind === "index") return kindOfExpr(e, identKind(self), arrays) === kind;
       if (e.kind === "lit") return isLit(e);
       if (e.kind === "ident") return e.name === self || U.has(e.name) || paramKind.get(e.name) === kind;
       return false;
@@ -777,11 +825,16 @@ const CMP_OPS = new Set(["<", "<=", ">", ">=", "==", "!="]);
 
 /**
  * 结构化的表达式裸类型判定，算子表与 tryRawBinary 逐字一致：
- * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / call(裸 ABI 目标) 能产出裸类型，
- * 其余（attribute/index/array/dict/lambda/await/is/as/unary）一律返回 null（必须装箱）。
+ * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / call(裸 ABI 目标) /
+ * index(裸数组下标读) / call(裸数组 .size()/.length()) 能产出裸类型，
+ * 其余（attribute/array/dict/lambda/await/is/as/unary、非 int 下标）一律返回 null（必须装箱）。
  * 返回 "bool" 表示裸比较结果（调用方要求 int/float/str 时自然落选）。
  */
-function kindOfExpr(e: Expr, identKind: (n: string) => Kind | null): Kind | "bool" | null {
+function kindOfExpr(
+  e: Expr,
+  identKind: (n: string) => Kind | null,
+  arrays: Map<string, ElemKind> = NO_ARRAYS,
+): Kind | "bool" | null {
   switch (e.kind) {
     case "lit":
       if (e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) return "int";
@@ -791,8 +844,8 @@ function kindOfExpr(e: Expr, identKind: (n: string) => Kind | null): Kind | "boo
     case "ident":
       return identKind(e.name);
     case "binary": {
-      const lk = kindOfExpr(e.left, identKind);
-      const rk = kindOfExpr(e.right, identKind);
+      const lk = kindOfExpr(e.left, identKind, arrays);
+      const rk = kindOfExpr(e.right, identKind, arrays);
       if (lk === null || rk === null || lk === "bool" || rk === "bool" || lk !== rk) return null;
       if (lk === "int" && INT_ARITH.has(e.op)) return "int";
       if (lk === "float" && FLOAT_ARITH.has(e.op)) return "float";
@@ -800,12 +853,26 @@ function kindOfExpr(e: Expr, identKind: (n: string) => Kind | null): Kind | "boo
       if ((lk === "int" || lk === "float") && CMP_OPS.has(e.op)) return "bool";
       return null;
     }
+    case "index": {
+      // 裸数组的 int 下标读 → 元素类型；下标非 int 保守回退装箱（越界语义与运行时一致）。
+      if (e.obj.kind === "ident") {
+        const ek = arrays.get(e.obj.name);
+        if (ek && kindOfExpr(e.index, identKind, arrays) === "int") return ek;
+      }
+      return null;
+    }
     case "call": {
+      if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
+        // 裸数组 .size() / .length() → 裸 int 长度。
+        const ek = arrays.get(e.callee.obj.name);
+        if (ek && (e.callee.name === "size" || e.callee.name === "length") && e.args.length === 0) return "int";
+        return null;
+      }
       if (e.callee.kind !== "ident") return null;
       const abi = RAW_ABIS.get(e.callee.name);
       if (!abi || e.args.length !== abi.params.length) return null;
       for (let i = 0; i < e.args.length; i++) {
-        if (kindOfExpr(e.args[i]!, identKind) !== abi.params[i]!) return null;
+        if (kindOfExpr(e.args[i]!, identKind, arrays) !== abi.params[i]!) return null;
       }
       return abi.ret;
     }
@@ -1081,6 +1148,242 @@ function computeRawAbis(
   }
   RAW_ABIS = saved;
   return stable ? cur : empty;
+}
+
+// ------------------------------------------- 容器元素单态化（D2 第四轨 v1：仅 Array、仅 int/float）
+
+interface ArrayCand {
+  init: Extract<Expr, { kind: "array" }>;
+  writeElems: Expr[]; // a.append(e) 的 e
+  readIdxs: Expr[]; // a[i] 读的 i
+  escaped: boolean; // 出现任何非白名单用法 → 取消特化
+}
+
+/**
+ * 静态扫一遍函数体，找出候选数组局部（`var a = []` / `var a = <数字字面量数组>`，无类型标注）
+ * 并按「出现位置」判定是否逃逸。只有以下用法算合法：
+ *   decl 自身、a.append(<单实参>) 的接收者、a.size()/a.length() 的接收者、a[<i>] 的读接收者。
+ * 其它一切（别名 b=a、重赋值 a=…、下标写 a[i]=…、其它方法、作为实参/元素/返回/print/in/迭代/
+ * lambda 捕获/match 主体等）→ escaped。
+ */
+function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
+  const cands = new Map<string, ArrayCand>();
+
+  // 预扫：收集 `var <name> = [..]`（array 字面量、无类型标注）作为候选。
+  const pre = (s: Stmt): void => {
+    if (s.kind === "var") {
+      if (!s.type && s.init && s.init.kind === "array") {
+        cands.set(s.name, { init: s.init, writeElems: [], readIdxs: [], escaped: false });
+      }
+    } else if (s.kind === "if") for (const b of s.branches) b.body.forEach(pre);
+    else if (s.kind === "for") {
+      s.body.forEach(pre);
+    } else if (s.kind === "while") s.body.forEach(pre);
+    else if (s.kind === "match") for (const a of s.arms) a.body.forEach(pre);
+  };
+  f.body.forEach(pre);
+
+  const markEscape = (n: string): void => {
+    const c = cands.get(n);
+    if (c) c.escaped = true;
+  };
+  const isCandObj = (e: Expr): string | null => e.kind === "ident" && cands.has(e.name) ? e.name : null;
+
+  const visitExpr = (e: Expr, inL: boolean): void => {
+    switch (e.kind) {
+      case "ident":
+        // 能走到这里说明该 ident 处「裸取值」角色（合法角色在 call/index 分支被就地消化、不再下钻）。
+        if (cands.has(e.name)) markEscape(e.name);
+        return;
+      case "call": {
+        if (e.callee.kind === "attribute") {
+          const objName = isCandObj(e.callee.obj);
+          const N = e.callee.name;
+          if (objName) {
+            const c = cands.get(objName)!;
+            if (inL) {
+              c.escaped = true;
+            } else if (N === "append" && e.args.length === 1) {
+              c.writeElems.push(e.args[0]!);
+            } else if ((N === "size" || N === "length") && e.args.length === 0) {
+              /* 合法：仅把数组当长度来源，不下钻 obj */
+            } else {
+              c.escaped = true; // 其它数组方法（pop/insert/clear…）→ 逃逸
+            }
+            e.args.forEach((a) => visitExpr(a, inL));
+            return;
+          }
+          visitExpr(e.callee, inL);
+          e.args.forEach((a) => visitExpr(a, inL));
+          return;
+        }
+        visitExpr(e.callee, inL);
+        e.args.forEach((a) => visitExpr(a, inL));
+        return;
+      }
+      case "index": {
+        const objName = isCandObj(e.obj);
+        if (objName) {
+          const c = cands.get(objName)!;
+          if (inL) c.escaped = true;
+          else c.readIdxs.push(e.index);
+          visitExpr(e.index, inL);
+          return;
+        }
+        visitExpr(e.obj, inL);
+        visitExpr(e.index, inL);
+        return;
+      }
+      case "attribute":
+        visitExpr(e.obj, inL); // obj 若是裸候选 ident → 走到 ident 分支逃逸（如 a.foo / 不带括号的 a.size）
+        return;
+      case "binary":
+        visitExpr(e.left, inL);
+        visitExpr(e.right, inL);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        visitExpr(e.operand, inL);
+        return;
+      case "array":
+        e.items.forEach((it) => visitExpr(it, inL));
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          visitExpr(en.key, inL);
+          visitExpr(en.value, inL);
+        }
+        return;
+      case "lambda":
+        e.body.forEach((s) => visitStmt(s, true));
+        return;
+    }
+  };
+  const visitStmt = (s: Stmt, inL: boolean): void => {
+    switch (s.kind) {
+      case "var":
+        if (s.init) visitExpr(s.init, inL);
+        return;
+      case "assign": {
+        // 下标写 a[i]=.. 与 重赋值 a=.. 都让候选数组逃逸。
+        const wt =
+          s.target.kind === "index"
+            ? isCandObj(s.target.obj)
+            : s.target.kind === "ident" && cands.has(s.target.name)
+              ? s.target.name
+              : null;
+        if (wt) markEscape(wt);
+        visitExpr(s.target, inL);
+        visitExpr(s.value, inL);
+        return;
+      }
+      case "expr":
+        visitExpr(s.expr, inL);
+        return;
+      case "return":
+        if (s.value) visitExpr(s.value, inL);
+        return;
+      case "if":
+        for (const b of s.branches) {
+          if (b.cond) visitExpr(b.cond, inL);
+          b.body.forEach((x) => visitStmt(x, inL));
+        }
+        return;
+      case "for":
+        visitExpr(s.iter, inL); // for x in a → a 裸取值 → 逃逸
+        s.body.forEach((x) => visitStmt(x, inL));
+        return;
+      case "while":
+        visitExpr(s.cond, inL);
+        s.body.forEach((x) => visitStmt(x, inL));
+        return;
+      case "match":
+        visitExpr(s.subject, inL);
+        for (const a of s.arms) {
+          if (a.guard) visitExpr(a.guard, inL);
+          a.body.forEach((x) => visitStmt(x, inL));
+        }
+        return;
+      case "break":
+      case "continue":
+      case "pass":
+        return;
+    }
+  };
+  f.body.forEach((s) => visitStmt(s, false));
+  return cands;
+}
+
+function elemKindFromInit(init: Extract<Expr, { kind: "array" }>): ElemKind | null {
+  let seen: ElemKind | null = null;
+  for (const it of init.items) {
+    if (it.kind !== "lit" || (it.lit !== "int" && it.lit !== "float")) return null; // 非数字字面量初值 → 不做候选
+    const k: ElemKind = it.lit === "float" ? "float" : "int";
+    if (it.lit === "int" && !(typeof it.value === "number" && Number.isSafeInteger(it.value))) return null;
+    if (seen && seen !== k) return null; // 初值里 int/float 混用 → 保守装箱
+    seen = k;
+  }
+  return seen ?? "int"; // 空数组暂定 int，由后续写入定夺
+}
+
+function mapsEqual<T>(a: Map<string, T>, b: Map<string, T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
+}
+
+/**
+ * 联合不动点：数组元素 Kind 与标量解箱彼此依赖（`s += a[j]` 要靠 a 的元素类型才能解箱 s，
+ * 而 a 的元素类型又要靠写入实参（可能是别的解箱局部/别的数组读）来定）。单调移除：从乐观种子出发，
+ * 逐一剔除「写入/初值/下标与所设 Kind 不符」或「逃逸」的候选，直到数组集与解箱集同时稳定。
+ * 最终 arrays 与 unboxed 互为不动点，发射期据此发裸数组并对 rep 断言兜底。
+ */
+function analyzeFuncLayout(f: FuncDecl): { unboxed: Map<string, "int" | "float" | "str">; arrays: Map<string, ElemKind> } {
+  const cands = scanArrayCandidates(f);
+  const arrays = new Map<string, ElemKind>();
+  for (const [name, c] of cands) {
+    if (c.escaped) continue;
+    const k = elemKindFromInit(c.init);
+    if (k) arrays.set(name, k);
+  }
+  let unboxed = computeUnboxed(f, arrays);
+  const cap = cands.size + 8;
+  for (let it = 0; it < cap; it++) {
+    let changed = false;
+    for (const [name, K] of [...arrays]) {
+      const c = cands.get(name);
+      if (!c || c.escaped || !verifyArray(c, K, unboxed, arrays)) {
+        arrays.delete(name);
+        changed = true;
+      }
+    }
+    const un2 = computeUnboxed(f, arrays);
+    const unChanged = !mapsEqual(un2, unboxed);
+    unboxed = un2;
+    if (!changed && !unChanged) break;
+  }
+  return { unboxed, arrays };
+}
+
+/** 校验候选数组在其所设 Kind 下：初值元素、写入元素皆为该 Kind，读下标皆为 int。 */
+function verifyArray(
+  c: ArrayCand,
+  K: ElemKind,
+  unboxed: Map<string, "int" | "float" | "str">,
+  arrays: Map<string, ElemKind>,
+): boolean {
+  const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
+  if (elemKindFromInit(c.init) !== K) return false;
+  // 初值里的非字面量元素（如 var a=[x, y]）也要能裸化为 K
+  for (const it of c.init.items) {
+    if (it.kind === "lit") continue; // 字面量已由 elemKindFromInit 定 K
+    if (kindOfExpr(it, identKind, arrays) !== K) return false;
+  }
+  for (const w of c.writeElems) if (kindOfExpr(w, identKind, arrays) !== K) return false;
+  for (const r of c.readIdxs) if (kindOfExpr(r, identKind, arrays) !== "int") return false;
+  return true;
 }
 
 function emitExprVar(e: Expr): string {
