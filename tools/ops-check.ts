@@ -8,9 +8,9 @@
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { fast } from "../src/runtime/fast";
 import { ops, strOps } from "../src/runtime/ops";
-import { V } from "../src/runtime/tags";
+import { V, type Variant } from "../src/runtime/tags";
 import { GArray, GDict, show, strFloat, strFormat, strVec2 } from "../src/runtime/values";
-import { GVector2 } from "../src/runtime/vector2";
+import { GVector2, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 
 let pass = 0;
 const fails: string[] = [];
@@ -199,6 +199,35 @@ eq(
   eq("066", "整数分量补一位小数", strVec2(4), "4.0");
   eq("066", "大值不转科学计数法", strVec2(999999986991104), "999999986991104.0");
   eq("066", "Vector2 相等按 float32 分量", show(ops.eq(V.object(v), V.object(new GVector2(1e15, 0.1)))), "true");
+}
+
+// ---- 068 Vector2 成员面：每步都舍回 float32（不是"算完再舍"），逐条探针实测
+{
+  const m = (x: number, y: number) => (name: string, args: Variant[] = []) =>
+    show(vector2Method(new GVector2(x, y), name, args));
+  const a = m(3, 4);
+  eq("068", "angle 是 float32 的 atan2", a("angle"), "0.92729520797729");
+  eq("068", "dot 逐步 float32", m(0.1, 0.2)("dot", [vector2(0.1, 0.2)]), "0.05000000447035");
+  eq("068", "normalized 零向量不给 nan", m(0, 0)("normalized"), "(0.0, 0.0)");
+  eq("068", "normalized 大分量塌成 1.0", m(1e15, 1)("normalized"), "(1.0, 0.0)");
+  eq("068", "round 半数远离零", m(2.5, -0.5)("round"), "(3.0, -1.0)");
+  eq("068", "snapped = step*floor(v/step+0.5)", m(2.5, -0.5)("snapped", [vector2(1, 1)]), "(3.0, 0.0)");
+  eq("068", "snapped 步长为 0 时原样返回", a("snapped", [vector2(0, 1)]), "(3.0, 4.0)");
+  eq("068", "limit_length(0) 给零向量", a("limit_length", [F(0)]), "(0.0, 0.0)");
+  eq("068", "orthogonal 是 (y, -x)", a("orthogonal"), "(4.0, -3.0)");
+  eq("068", "aspect 0/0 是 nan", m(0, 0)("aspect"), "nan");
+  eq("068", "逐分量乘", show(ops.mul(vector2(3, 4), vector2(-1, 2))), "(-3.0, 8.0)");
+  eq("068", "逐分量除且不拦除零", show(ops.div(vector2(1, 1), vector2(0, 0))), "(inf, inf)");
+  eq("068", "比较是字典序不是逐分量", show(ops.gt(vector2(3, 4), vector2(2, 5))), "true");
+  eq("068", "下标读分量", show(vec2Index(new GVector2(3, 4), I(1))), "4.0");
+  eq("068", "Vector2() 是零向量", show(vector2New([])), "(0.0, 0.0)");
+  eq("068", "整数分量打印走 17 位展开", strVec2(Math.fround(1e20)), "100000002004087730000.0");
+  eq("068", "舍到 0 的非零值保留负号", strVec2(-4e-7), "-0.0");
+  shouldThrow("068", "下标越界", () => vec2Index(new GVector2(3, 4), I(2)));
+  shouldThrow("068", "一个参数的 Vector2()", () => vector2New([I(1)]));
+  shouldThrow("068", "Vector2.NAN 不存在", () => vector2Const("NAN"));
+  shouldThrow("068", "slerp 未实现（语义没测准，宁缺毋猜）", () => a("slerp", [vector2(1, 2), F(0.5)]));
+  shouldThrow("068", "is_normalized 未实现（容差没钉死）", () => a("is_normalized"));
 }
 
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）

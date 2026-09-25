@@ -69,6 +69,20 @@ export type TypeRef =
   | { kind: "array"; item: TypeRef }
   | { kind: "variant" };
 
+/**
+ * 能用「类型名.静态成员」取值的内建类型 → 运行时里产出该常量的函数名（实测 `Vector2.UP` 合法，
+ * 而裸 `Vector2` 当值是 `Identifier "Vector2" not declared`）。
+ * 语义分析据此放行属性基，emitter 据此发常量。Vector2i / Vector3 / Color 实现时往里加。
+ */
+const STATIC_MEMBER_FNS: Record<string, string> = {
+  Vector2: "vector2Const",
+};
+
+/** 属性基是「带静态成员的内建类型名」时给出运行时函数名，否则 null。 */
+export function staticMemberFn(e: Expr): string | null {
+  return e.kind === "ident" ? (STATIC_MEMBER_FNS[e.name] ?? null) : null;
+}
+
 export interface FuncDecl {
   name: string;
   params: Param[];

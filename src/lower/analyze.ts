@@ -1,3 +1,4 @@
+import { staticMemberFn } from "./ir";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt } from "./ir";
 
 /**
@@ -226,7 +227,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       return;
 
     case "attribute":
-      walkExpr(e.obj, scope, coroutines, diags);
+      // `Vector2.UP` 这类静态成员：基是类型名而不是变量，不该报未声明
+      if (staticMemberFn(e.obj) === null) walkExpr(e.obj, scope, coroutines, diags);
       return;
 
     case "array":

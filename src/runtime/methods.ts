@@ -3,7 +3,7 @@ import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr } from "./values";
-import { GVector2 } from "./vector2";
+import { GVector2, vec2Index, vector2Method } from "./vector2";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -37,14 +37,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
 
-    // Vector2 的方法。分量已在构造处归一到 float32（见 vector2.ts），
-    // 所以 length() 也是对 float32 值开方：实测 Vector2(1e15,0).length() → 999999986991104.0
-    if (inner instanceof GVector2) {
-      if (name === "length" && args.length === 0) {
-        return V.float(Math.hypot(inner.x, inner.y));
-      }
-      throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现`);
-    }
+    // Vector2 的方法面（语义逐条探针实测，测不准的直接报缺，见 vector2.ts 的注释）
+    if (inner instanceof GVector2) return vector2Method(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -165,6 +159,8 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArg([idx], 0, "下标"));
   if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
+  // Vector2 可以按下标取分量（实测 v[0] → 3.0、v[1] → 4.0；越界 Godot 在解析期就拦）
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vec2Index(obj.v as GVector2, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 

@@ -1,3 +1,4 @@
+import { staticMemberFn } from "../lower/ir";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
@@ -143,7 +144,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
-  Vector2: (a) => `rt.vector2(rt.num(${a[0]}), rt.num(${a[1]}))`,
+  // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
+  Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
@@ -302,7 +304,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   for (const v of m.vars) {
     mark(out.length, v.loc);
-    out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
+    out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : typeDefault(v.type)};`);
   }
   if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
@@ -353,7 +355,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   mark(base, decl.loc);
   for (const v of decl.vars) {
     mark(base + lines.length, v.loc);
-    lines.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : "rt.V.nil()"};`);
+    lines.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : typeDefault(v.type)};`);
   }
   if (decl.vars.length > 0) lines.push("");
   for (const f of decl.funcs) {
@@ -529,7 +531,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         return [`let ${s.name} = ${emitExprR(s.init).code};`];
       }
       // 直接发射 let —— 块作用域由 JS 自己保证，正好对应 S16
-      const init = s.init ? emitExpr(s.init) : "rt.V.nil()";
+      const init = s.init ? emitExpr(s.init) : typeDefault(s.type);
       // 带类型标注的声明要做截断：`var i: int = 3.9` 在 Godot 里是 3，不是 3.9（S6）
       const cast = declaredCast(s.type);
       return [`let ${s.name} = ${cast ? `${cast}(${init})` : init};`];
@@ -2045,6 +2047,12 @@ function emitExprVar(e: Expr): string {
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
       }
+      // Vector2 的静态成员：`Vector2.UP`。裸 `Vector2` 不是变量，得在这一步接住，
+      // 否则会发成一个不存在的标识符、到运行时才 ReferenceError。
+      const staticFn = staticMemberFn(e.obj);
+      if (staticFn) {
+        return `rt.${staticFn}(${JSON.stringify(e.name)})`;
+      }
       // enum 点访问 `Suit.HEARTS` → 字典取值（GDScript 只允许 enum 这样点访问）
       if (e.obj.kind === "ident" && ENUM_NAMES.has(e.obj.name)) {
         return `rt.index(${e.obj.name}, rt.V.str(${JSON.stringify(e.name)}))`;
@@ -2087,6 +2095,29 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
   return null;
+}
+
+/**
+ * 没有初值的声明给的是**该类型的默认值**，不是 null。实测（Godot 4.6.3）：
+ *   `var i: int` → `0`、`: float` → `0.0`、`: bool` → `false`、`: String` → `""`（len 为 0）、
+ *   `var arr: Array` → `[]`（且 `arr == []` 为 true）、`: Dictionary` → `{  }`、`: Vector2` → `(0.0, 0.0)`，
+ *   而 `var nod: Node` → `<null>`。
+ * 所以只有值类型要特判；类与引擎对象保持 null 本就是对的。
+ * Color / Vector3 这些还没实现的内建值类型仍会给 null —— 但它们任何用法本来就先在构造/方法处响亮报缺。
+ */
+function typeDefault(t: TypeRef | null): string {
+  if (t === null) return "rt.V.nil()";
+  if (t.kind === "array") return "rt.V.array(rt.GArray.of([]))";
+  if (t.kind !== "named") return "rt.V.nil()";
+  const base = t.name.replace(/\[.*\]$/, "");
+  if (base === "int") return "rt.V.int(0)";
+  if (base === "float") return "rt.V.float(0)";
+  if (base === "bool") return "rt.V.bool(false)";
+  if (base === "String") return `rt.V.str("")`;
+  if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
+  if (base === "Dictionary") return "rt.dictOf([])";
+  if (base === "Vector2") return "rt.vector2(0, 0)";
+  return "rt.V.nil()";
 }
 
 function typeName(t: TypeRef): string {

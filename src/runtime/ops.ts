@@ -79,6 +79,8 @@ export const ops = {
     // Vector2 * 标量 / 标量 * Vector2（实测 Vector2(1e15,1)*2 → (1999999973982208.0, 2.0)）
     const va = asVec2(a);
     const vb = asVec2(b);
+    // Vector2 * Vector2 是**逐分量**（实测 (3,4)*(-1,2) → (-3.0, 8.0)，不是点积）
+    if (va && vb) return V.object(new GVector2(va.x * vb.x, va.y * vb.y));
     if (va && isNum(b)) return V.object(new GVector2(va.x * num(b), va.y * num(b)));
     if (vb && isNum(a)) return V.object(new GVector2(vb.x * num(a), vb.y * num(a)));
     if (!isNum(a) || !isNum(b)) {
@@ -91,6 +93,9 @@ export const ops = {
   div(a: Variant, b: Variant): Variant {
     // Vector2 / 标量（实测 Vector2(1e15,4)/2 → (499999993495552.0, 2.0)）
     const va = asVec2(a);
+    const vb = asVec2(b);
+    // Vector2 / Vector2 也是逐分量，且**不拦除零**（实测 Vector2(1,1)/Vector2(0,0) → (inf, inf)）
+    if (va && vb) return V.object(new GVector2(va.x / vb.x, va.y / vb.y));
     if (va && isNum(b)) return V.object(new GVector2(va.x / num(b), va.y / num(b)));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
@@ -235,6 +240,14 @@ function compare(a: Variant, b: Variant): number {
   if (a.t === Tag.STRING && b.t === Tag.STRING) {
     // 按码点比（JS 原生的 < 按 UTF-16 码元，含 emoji 时会与 Godot 判出相反方向）
     return strCmp(a.v as string, b.v as string);
+  }
+  // Vector2 比较是**字典序**（先 x 再 y），不是"每个分量都更大"。判别点实测：
+  // (3,4) > (2,5) → true（x 已胜出，y 更小也不影响）、(3,4) < (4,3) → true。
+  const va = asVec2(a);
+  const vb = asVec2(b);
+  if (va && vb) {
+    if (va.x !== vb.x) return va.x < vb.x ? -1 : 1;
+    return va.y === vb.y ? 0 : va.y < vb.y ? -1 : 1;
   }
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
 }
