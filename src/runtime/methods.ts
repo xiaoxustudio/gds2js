@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strFormat, strLength, strSubstr } from "./values";
+import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr } from "./values";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -138,9 +138,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "substr":
           return V.str(strSubstr(s, intArg(args, 0, "substr"), intArg(args, 1, "substr")));
         case "to_upper":
-          return V.str(s.toUpperCase());
+          return V.str(strCase(s, "upper"));
         case "to_lower":
-          return V.str(s.toLowerCase());
+          return V.str(strCase(s, "lower"));
         default:
           throw new UnsupportedError("string-method", `String.${name}() 未实现`);
       }

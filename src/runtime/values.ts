@@ -218,6 +218,45 @@ export function strSubstr(s: string, from: number, len: number): string {
   return [...s].slice(from, from + len).join("");
 }
 
+/**
+ * Godot 的 to_upper / to_lower 走 **Unicode 简单映射**：一个码点映一个码点、长度不变
+ * （探针实测 ß→ß、ﬁ→ﬁ、İ→i、ǳ→Ǳ、ǅ→Ǆ）。JS 的 toUpperCase/toLowerCase 走**兼容全映射**
+ * （ß→SS、ﬁ→FI、İ→i̇、ǳ→DŽ），于是 `"ß".to_upper()` 会**静默**产出与 Godot 不同长度的字符串
+ * （060 差分抓到过）。
+ *
+ * 这里逐码点映射：JS 的结果仍是单码点的（覆盖日常文字）直接采用，天然与简单映射一致；
+ * 一旦 JS 把它撑开，简单映射的值要么等于原字符、要么是另一个我们无从由 JS 推得的单码点，
+ * 于是只认下表里**已对 Godot 实测确认**的条目，其余一律响亮拒绝 —— 宁可报缺，不发错字。
+ */
+const SIMPLE_CASE: Record<"upper" | "lower", Record<string, string>> = {
+  upper: { ß: "ß", ﬁ: "ﬁ", ǳ: "Ǳ", ǅ: "Ǆ" },
+  lower: { İ: "i" },
+};
+
+export function strCase(s: string, dir: "upper" | "lower"): string {
+  const table = SIMPLE_CASE[dir];
+  const out: string[] = [];
+  for (const ch of s) {
+    const mapped = dir === "upper" ? ch.toUpperCase() : ch.toLowerCase();
+    if ([...mapped].length === 1) {
+      out.push(mapped);
+      continue;
+    }
+    const fixed = table[ch];
+    if (fixed !== undefined) {
+      out.push(fixed);
+      continue;
+    }
+    throw new UnsupportedError(
+      "case-mapping",
+      `to_${dir === "upper" ? "upper" : "lower"}：字符 ${ch}（U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase()
+        }）的 Unicode 简单映射无法由 JS 推得（JS 给 "${mapped}"，Godot 给单码点），` +
+        `已实测的字符可补进 SIMPLE_CASE.${dir} 表`,
+    );
+  }
+  return out.join("");
+}
+
 export function strFormat(fmt: string, args: Variant[]): string {
   let i = 0;
   return fmt.replace(/%[dfs]/g, (spec) => {
