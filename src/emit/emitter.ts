@@ -787,9 +787,11 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
   if (CMP_RAW[e.op] && L.rep === Rr.rep && (L.rep === "int" || L.rep === "float")) {
     return { code: `(${L.code} ${CMP_RAW[e.op]!} ${Rr.code})`, rep: "bool" };
   }
-  // int 算术 + - *：带 D1 检查的 checked 快路径
+  // int 算术 + - * / %：带 D1 检查的 checked 快路径
   if (L.rep === "int" && Rr.rep === "int" && ARITH_RAW[e.op]) {
-    return { code: `rt.fast.${ARITH_RAW[e.op]}(${L.code}, ${Rr.code})`, rep: "int" };
+    // 与 kindOfExpr 同一道判定：结果已知越界就不发裸式，否则两侧会静默错位（漏箱）。
+    if (!litBinaryFitsRaw(e)) return null;
+    return { code: `rt.fast.${ARITH_RAW[e.op]!}(${L.code}, ${Rr.code})`, rep: "int" };
   }
   // float 算术 + - * /：内联裸运算（无范围陷阱）
   if (L.rep === "float" && Rr.rep === "float" && FLOAT_ARITH_RAW[e.op]) {
@@ -966,6 +968,44 @@ const INT_ARITH = new Set(["+", "-", "*", "/", "%"]);
 const FLOAT_ARITH = new Set(["+", "-", "*", "/"]);
 const CMP_OPS = new Set(["<", "<=", ">", ">=", "==", "!="]);
 
+const RAW_INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
+const RAW_INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
+
+/** 只在「本身就是个范围内 int 字面量」时给出其精确值，否则 null（不参与判定）。 */
+function rawIntLit(e: Expr): bigint | null {
+  if (e.kind !== "lit" || e.lit !== "int") return null;
+  return typeof e.value === "number" ? BigInt(e.value) : null;
+}
+
+/**
+ * 双 int 字面量的裸算术，结果还塞得进 2^53 吗？塞不进就整式退回装箱轨。
+ * 裸 number 谈不了 int64：硬发 `iMulC(4000000000, 4000000000)` 只会在运行期抛
+ * int64-out-of-range —— 编译期就能算出来的必然崩溃，不该留给运行时。装箱轨那边按
+ * Godot 的 int64 回绕，才是这种式子的正确归宿。
+ * 只有「操作数皆为字面量」才可静态判定，其余一律维持原有保守行为。
+ */
+function litBinaryFitsRaw(e: Extract<Expr, { kind: "binary" }>): boolean {
+  const a = rawIntLit(e.left);
+  const b = rawIntLit(e.right);
+  if (a === null || b === null) return true;
+  let r: bigint;
+  switch (e.op) {
+    case "+":
+      r = a + b;
+      break;
+    case "-":
+      r = a - b;
+      break;
+    case "*":
+      r = a * b;
+      break;
+    // 整除 / 取模的结果量级不超过操作数，操作数既已在界内就不必再算。
+    default:
+      return true;
+  }
+  return r >= RAW_INT_MIN && r <= RAW_INT_MAX;
+}
+
 /**
  * 结构化的表达式裸类型判定，算子表与 tryRawBinary 逐字一致：
  * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / call(裸 ABI 目标) /
@@ -991,7 +1031,7 @@ function kindOfExpr(
       const lk = kindOfExpr(e.left, identKind, arrays, dict);
       const rk = kindOfExpr(e.right, identKind, arrays, dict);
       if (lk === null || rk === null || lk === "bool" || rk === "bool" || lk !== rk) return null;
-      if (lk === "int" && INT_ARITH.has(e.op)) return "int";
+      if (lk === "int" && INT_ARITH.has(e.op)) return litBinaryFitsRaw(e) ? "int" : null;
       if (lk === "float" && FLOAT_ARITH.has(e.op)) return "float";
       if (lk === "str" && e.op === "+") return "str";
       if ((lk === "int" || lk === "float") && CMP_OPS.has(e.op)) return "bool";

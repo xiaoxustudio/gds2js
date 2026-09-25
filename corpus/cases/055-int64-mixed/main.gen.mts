@@ -8,6 +8,14 @@ export class Main extends SceneTree {
     print(rt.show(rt.ops.div(rt.V.int(9223372036854775807n), rt.V.int(2))));
     print(rt.show(rt.ops.mod(rt.V.int(9223372036854775807n), rt.V.int(1000))));
     print(rt.show(rt.ops.mod(rt.ops.neg(rt.V.int(9223372036854775807n)), rt.V.int(1000))));
+    print(rt.show(rt.ops.mul(rt.V.int(4000000000), rt.V.int(4000000000))));
+    print(rt.show(rt.ops.mul(rt.V.int(3000000000), rt.V.int(3000000000))));
+    print(rt.show(rt.ops.mul(rt.ops.mul(rt.V.int(100000000), rt.V.int(100000000)), rt.V.int(100000000))));
+    print(rt.show(rt.V.int(rt.fast.iAddC(5000000000, 5000000000))));
+    let z = rt.ops.mul(rt.V.int(4000000000), rt.V.int(4000000000));
+    print(rt.show(z));
+    print(rt.show(rt.ops.add(z, rt.V.int(1))));
+    print(rt.show(rt.ops.mul(z, rt.V.int(2))));
     let d = rt.dictOf([]);
     rt.setIndex(d, rt.V.int(9223372036854775807n), rt.V.str("big"));
     rt.setIndex(d, rt.V.int(1), rt.V.str("one"));
