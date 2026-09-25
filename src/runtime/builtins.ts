@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";
-import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, show, strLength, truthyOf } from "./values";
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用） */
@@ -16,12 +16,86 @@ export function strOf(v: Variant): Variant {
   return V.str(show(v));
 }
 
+/**
+ * int() / float() 的类型转换。旧实现是 `V.int(Math.trunc(num(v)))` / `V.float(num(v))`，
+ * 而 `num()` 只收数值 —— 于是 `int("42")`、`int(true)`、`float("1.5")` 全部**拒编**（Godot 都合法），
+ * `int(1e20)` 更是抛「超出 2^53」（Godot 饱和到 int64 min）。26 条单表达式探针实测出的规则：
+ *
+ *   int(float) 向零截断（3.7→3、-3.7→-3、-0.5→0）；**2^53 以上仍精确**（`9007199254740993.0`→`9007199254740994`，
+ *   该 double 本身就是 ...994）；`nan` / `±inf` / `|x| ≥ 2^63` 一律**饱和成 -9223372036854775808**（5 种输入同值）。
+ *   int(bool)→1/0；float(bool)→1.0/0.0；float(int)→`.0` 形式。
+ *   int(String) 走 Godot 的 `to_int()` 规则：跳前导空白与符号，之后**数字累加、非数字忽略、遇 `.` 停止**
+ *     —— 所以 `0x10`→10（x 被忽略）、`1e3`→13（e 被忽略）、`3.9`→3（. 停止）、`12x`→12、`abc`/`""`→0、` 42 `→42。
+ *   float(String) 是普通浮点前缀解析（`.5`→0.5、`-2.5e2`→-250.0、`1e3`→1000.0、`0x10`→0.0、`abc`→0.0）。
+ *   Vector2 / Array 等传给 int()/float() 在 Godot 是 Parse Error，我们保持响亮拒绝。
+ */
+const INT64_MIN = BigInt("-9223372036854775808");
+const TWO_63 = 2 ** 63;
+
+/** 见上方 int(String) 规则注释。 */
+function strToInt(s: string): bigint {
+  let i = 0;
+  while (i < s.length && (s[i] === " " || s[i] === "\t" || s[i] === "\n" || s[i] === "\r")) i++;
+  let neg = false;
+  if (s[i] === "-") {
+    neg = true;
+    i++;
+  } else if (s[i] === "+") {
+    i++;
+  }
+  let acc = 0n;
+  for (; i < s.length; i++) {
+    const ch = s[i]!;
+    if (ch === ".") break;
+    if (ch >= "0" && ch <= "9") acc = acc * 10n + BigInt(ch.charCodeAt(0) - 48);
+  }
+  return neg ? -acc : acc;
+}
+
+/** float(String)：取前导浮点数，取不到就是 0（实测 `0x10`→0.0、`abc`→0.0）。 */
+function strToFloat(s: string): number {
+  const m = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(s);
+  return m ? Number(m[0]) : 0;
+}
+
 export function toFloat(v: Variant): Variant {
-  return V.float(num(v));
+  switch (v.t) {
+    case Tag.FLOAT:
+      return v;
+    case Tag.INT:
+      return V.float(intToNum(v.v as IntPayload));
+    case Tag.BOOL:
+      return V.float(v.v ? 1 : 0);
+    case Tag.STRING:
+      return V.float(strToFloat(v.v as string));
+    default:
+      throw new UnsupportedError(
+        "to-float",
+        `float() 不接受 ${tagName(v.t)}（Godot 是 Parse Error: No constructor of "float" matches the signature）`,
+      );
+  }
 }
 
 export function toInt(v: Variant): Variant {
-  return V.int(Math.trunc(num(v)));
+  switch (v.t) {
+    case Tag.INT:
+      return v;
+    case Tag.BOOL:
+      return V.int(v.v ? 1 : 0);
+    case Tag.STRING:
+      return V.int(strToInt(v.v as string));
+    case Tag.FLOAT: {
+      const x = v.v as number;
+      if (!Number.isFinite(x) || Math.abs(x) >= TWO_63) return V.int(INT64_MIN);
+      // BigInt 精确展开，2^53 以上不丢位（旧实现走 Number 会在边界上错一位）
+      return V.int(BigInt(Math.trunc(x)));
+    }
+    default:
+      throw new UnsupportedError(
+        "to-int",
+        `int() 不接受 ${tagName(v.t)}（Godot 是 Parse Error: No constructor of "int" matches the signature）`,
+      );
+  }
 }
 
 export function toBool(v: Variant): Variant {
