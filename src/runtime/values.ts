@@ -282,22 +282,177 @@ export function strCase(s: string, dir: "upper" | "lower"): string {
   return out.join("");
 }
 
+/** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */
+const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);
+
+interface FmtSpec {
+  flags: string;
+  width: number;
+  prec: number | null;
+  type: string;
+  text: string;
+}
+
+type FmtTok = { lit: string } | { spec: FmtSpec };
+
+/** 符号在前、再补零（实测 %05d/-42 → "-0042"、%08.2f/-3.14159 → "-0003.14"）。 */
+function padFmt(body: string, sign: string, sp: FmtSpec): string {
+  const left = sp.flags.includes("-");
+  const zero = !left && sp.flags.includes("0");
+  if (zero && sp.width > 0) return sign + body.padStart(sp.width - sign.length, "0");
+  const raw = sign + body;
+  if (raw.length >= sp.width) return raw;
+  return left ? raw.padEnd(sp.width) : raw.padStart(sp.width);
+}
+
+function fmtNum(a: Variant, sp: FmtSpec): number {
+  if (a.t === Tag.INT) return intToNum(a.v as IntPayload);
+  if (a.t === Tag.FLOAT) return a.v as number;
+  throw new UnsupportedError(
+    "format-number",
+    `${sp.text} 需要数值，收到 ${tagName(a.t)}（Godot 此处是 Parse Error: a number is required in operator %）`,
+  );
+}
+
+/** x/X/o/c 只验证过 int；float 是否像 %d 那样截断**未实测**，宁缺毋猜。 */
+function fmtIntOnly(a: Variant, sp: FmtSpec): bigint {
+  if (a.t === Tag.INT) return intToBig(a.v as IntPayload);
+  throw new UnsupportedError(
+    "format-int",
+    `${sp.text} 只对 int 实测过（收到 ${tagName(a.t)}）；Godot 对 float 的行为未探针确认，拒绝猜测`,
+  );
+}
+
+/**
+ * GDScript 的 `%` 格式化。逐条对 Godot 4.6.3 探针实测（4 批共 51 个单表达式探针文件）：
+ *   转换符只有 `d o x X c s f` —— `%i %u %e %g` 与 `#` 标志在 Godot 是
+ *   `Parse Error: unsupported format character`；标志支持 `-`（左对齐）`0`（补零）`+`（正号）；`%%` 出字面 `%`。
+ *   `%d` 收 float **向零截断**（3.7→"3"、-3.7→"-3"）；精度对 `%d` 无效（`%.3d` 42 → "42"）。
+ *   `%f` 默认 6 位小数（3.5→"3.500000"、int 3→"3.000000"），`%.Nf` 取 N 位且**四舍五入远离零**
+ *   （2.5→"3"、3.5→"4"、2.25→"2.3"），与 JS `toFixed` 的取整规则一致。
+ *   `%x/%X/%o` 收负数给「符号 + 绝对值的进制串」（-1 → "-1"）；`%c` 是码点转字符（128512 → U+1F600，0 → NUL）。
+ *   参数**多于**转换符（只可能是数组右值）时 Godot 原样返回格式串（`"%d" % [1,2]` → `"%d"`）；
+ *   **少于**则 Godot 解析期报 not enough arguments，我们在运行期响亮抛。
+ * 早先的实现只 `replace(/%[dfs]/g, …)`：其余一律原样留在输出里（`%5d`、`%%`、`%x` 全部静默错），
+ * 且 `%f` 走 `strFloat` 得 "3.5" 而非 "3.500000" —— 都是能跑但输出错。
+ */
 export function strFormat(fmt: string, args: Variant[]): string {
-  let i = 0;
-  return fmt.replace(/%[dfs]/g, (spec) => {
-    const a = args[i++];
-    if (a === undefined) {
-      throw new GodotRuntimeError("format-arity", `格式化参数不足: ${fmt}`);
+  const toks: FmtTok[] = [];
+  let lit = "";
+  let specs = 0;
+  for (let i = 0; i < fmt.length; i++) {
+    if (fmt[i] !== "%") {
+      lit += fmt[i];
+      continue;
     }
-    if (spec === "%d") {
-      if (a.t !== Tag.INT) {
-        throw new UnsupportedError("format-d", `%d 需要 int，收到 ${tagName(a.t)}`);
+    if (fmt[i + 1] === "%") {
+      lit += "%";
+      i++;
+      continue;
+    }
+    let k = i + 1;
+    let flags = "";
+    while (k < fmt.length && (fmt[k] === "-" || fmt[k] === "+" || fmt[k] === "0")) {
+      flags += fmt[k];
+      k++;
+    }
+    let width = 0;
+    while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
+      width = width * 10 + (fmt[k]!.charCodeAt(0) - 48);
+      k++;
+    }
+    let prec: number | null = null;
+    if (fmt[k] === ".") {
+      k++;
+      prec = 0;
+      while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
+        prec = prec * 10 + (fmt[k]!.charCodeAt(0) - 48);
+        k++;
       }
-      return String(a.v);
     }
-    if (spec === "%s") return show(a);
-    return strFloat(a.v as number);
-  });
+    const t = fmt[k];
+    if (t === undefined || !FMT_TYPES.has(t)) {
+      throw new UnsupportedError(
+        "format-spec",
+        `不支持的格式符 "${fmt.slice(i, k + 1)}"：Godot 只认 d o x X c s f` +
+          `（%i/%u/%e/%g 与 # 标志实测是 Parse Error: unsupported format character）`,
+      );
+    }
+    toks.push({ lit });
+    lit = "";
+    toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1) } });
+    specs++;
+    i = k;
+  }
+  toks.push({ lit });
+
+  if (args.length > specs) return fmt; // Godot 的怪规则：实参多出来就原样返回格式串
+  if (args.length < specs) {
+    throw new GodotRuntimeError(
+      "format-arity",
+      `格式化参数不足: ${fmt}（需 ${specs} 个，给了 ${args.length} 个；Godot 是 Parse Error: not enough arguments）`,
+    );
+  }
+
+  let ai = 0;
+  let out = "";
+  for (const tk of toks) {
+    if ("lit" in tk) {
+      out += tk.lit;
+      continue;
+    }
+    const sp = tk.spec;
+    const a = args[ai++]!;
+    switch (sp.type) {
+      case "s":
+        out += padFmt(show(a), "", sp);
+        break;
+      case "d": {
+        let neg: boolean;
+        let body: string;
+        if (a.t === Tag.INT) {
+          const p = a.v as IntPayload;
+          if (typeof p === "bigint") {
+            neg = p < 0n;
+            body = (neg ? -p : p).toString();
+          } else {
+            neg = p < 0;
+            body = Math.abs(p).toString();
+          }
+        } else {
+          const v = Math.trunc(fmtNum(a, sp)); // 向零截断（实测 3.7→3、-3.7→-3）
+          neg = v < 0;
+          body = Math.abs(v).toString();
+        }
+        const sign = neg ? "-" : sp.flags.includes("+") ? "+" : "";
+        out += padFmt(body, sign, sp);
+        break;
+      }
+      case "f": {
+        const v = fmtNum(a, sp);
+        const body = Math.abs(v).toFixed(sp.prec ?? 6);
+        out += padFmt(body, v < 0 ? "-" : sp.flags.includes("+") ? "+" : "", sp);
+        break;
+      }
+      case "x":
+      case "X":
+      case "o": {
+        const p = fmtIntOnly(a, sp);
+        const neg = p < 0n;
+        const mag = neg ? -p : p;
+        const base = sp.type === "o" ? 8 : 16;
+        const body = sp.type === "X" ? mag.toString(base).toUpperCase() : mag.toString(base);
+        out += padFmt(body, neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
+        break;
+      }
+      case "c": {
+        const p = fmtIntOnly(a, sp);
+        out += padFmt(String.fromCodePoint(Number(p)), "", sp);
+        break;
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- 格式化

@@ -316,8 +316,12 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
   const l = staticType(e.left);
   const r = staticType(e.right);
 
-  // S3：% 只对 int 合法，Godot 编译期就拒 float 参与
-  if (e.op === "%" && (l === "float" || r === "float")) {
+  // S3：% 只对 int 合法，Godot 编译期就拒 float 参与。
+  // 但 `%` 同时是**字符串格式化**运算符：`"%.1f" % 2.25` 完全合法（实测 Godot 接受并输出 "2.3"）。
+  // 所以这条只能在"两边都不是 String"（即真的是取模）时才成立 —— 早先漏了这个前提，
+  // 把带精度/标志的浮点格式化一律误判成非法运算（%f % 3.5 侥幸没中是因为它走的是另一条推断）。
+  const isModulo = l !== "String" && r !== "String";
+  if (e.op === "%" && isModulo && (l === "float" || r === "float")) {
     diags.push({
       code: "op-mod-float",
       message: `Invalid operands to operator %, ${l} and ${r}.`,

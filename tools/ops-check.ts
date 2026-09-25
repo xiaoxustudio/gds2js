@@ -9,7 +9,7 @@ import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { fast } from "../src/runtime/fast";
 import { ops, strOps } from "../src/runtime/ops";
 import { V } from "../src/runtime/tags";
-import { GArray, GDict, show, strFloat } from "../src/runtime/values";
+import { GArray, GDict, show, strFloat, strFormat } from "../src/runtime/values";
 
 let pass = 0;
 const fails: string[] = [];
@@ -146,6 +146,28 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
     g.raw().map((v) => show(v)).join("|"),
     "apple|z|\uFFFF|" + EMO,
   );
+}
+
+// ---- 063 `%` 格式化：063 语料锁住"能格式化的"，这里锁住"必须响亮拒绝的"
+{
+  const F = (fmt: string, args: unknown[]) => strFormat(fmt, args as never);
+  eq("063", "%f 默认 6 位小数", F("%f", [V.float(3.5)]), "3.500000");
+  eq("063", "%d 收 float 向零截断", F("%d", [V.float(-3.7)]), "-3");
+  eq("063", "%.0f 四舍五入远离零", F("%.0f", [V.float(2.5)]), "3");
+  eq("063", "%% 出字面百分号", F("50%% of %d", [V.int(7)]), "50% of 7");
+  eq("063", "%05d 负数符号在前", F("%05d", [V.int(-42)]), "-0042");
+  eq("063", "%x 负数给符号加绝对值", F("%x", [V.int(-1)]), "-1");
+  // Godot 对这些是 Parse Error: unsupported format character —— 我们运行期响亮抛，绝不原样留在输出里
+  shouldThrow("063", "%i 不支持要抛", () => F("%i", [V.int(1)]));
+  shouldThrow("063", "%e 不支持要抛", () => F("%e", [V.float(1)]));
+  shouldThrow("063", "%g 不支持要抛", () => F("%g", [V.float(1)]));
+  shouldThrow("063", "# 标志不支持要抛", () => F("%#x", [V.int(1)]));
+  shouldThrow("063", "%d 收字符串要抛", () => F("%d", [V.str("abc")]));
+  shouldThrow("063", "%f 收字符串要抛", () => F("%f", [V.str("abc")]));
+  shouldThrow("063", "%x 收 float 未实测要抛", () => F("%x", [V.float(3.5)]));
+  shouldThrow("063", "参数不足要抛", () => F("%d %d", [V.int(1)]));
+  // Godot 的怪规则：实参多于转换符（数组右值）→ 原样返回格式串
+  eq("063", "实参多余则原样返回格式串", F("%d", [V.int(1), V.int(2)]), "%d");
 }
 
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）
