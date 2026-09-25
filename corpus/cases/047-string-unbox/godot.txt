@@ -1,0 +1,6 @@
+abbb
+true
+truthy
+empty-false
+abbb!
+1x

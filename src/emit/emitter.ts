@@ -366,11 +366,12 @@ function hasValueReturn(stmts: Stmt[]): boolean {
 
 // ---------------------------------------------------------------- 语句
 
-/** 条件表达式：裸 bool 直接用，裸 int/float 用 `!== 0`（GDScript 数值真值），否则走 rt.ops.truthy。 */
+/** 条件表达式：裸 bool 直接用；裸 int/float 用 `!== 0`，裸 str 用 `!== ""`（S12 空串假值）；否则 rt.ops.truthy。 */
 function condExpr(e: Expr): string {
   const r = emitExprR(e);
   if (r.rep === "bool") return r.code;
   if (r.rep === "int" || r.rep === "float") return `${r.code} !== 0`;
+  if (r.rep === "str") return `${r.code} !== ""`;
   return `rt.ops.truthy(${r.code})`;
 }
 
@@ -392,15 +393,13 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       return [`${emitExpr(s.expr)};`];
 
     case "assign": {
-      // 赋值给解箱局部：值必为同型裸值（推断保证）；万一不是，按类型拆箱取裸 number（.v）兜底
+      // 赋值给解箱局部：值必为同型裸值（推断保证）；万一不是，按类型拆箱取裸值（.v）兜底
       if (s.target.kind === "ident") {
         const kind = UNBOXED.get(s.target.name);
         if (kind) {
           const vr = emitExprR(s.value);
-          const raw =
-            vr.rep === kind
-              ? vr.code
-              : `rt.${kind === "int" ? "toInt" : "toFloat"}(${boxR(vr)}).v`;
+          const fn = kind === "int" ? "toInt" : kind === "float" ? "toFloat" : "strOf";
+          const raw = vr.rep === kind ? vr.code : `rt.${fn}(${boxR(vr)}).v`;
           return [`${s.target.name} = ${raw};`];
         }
       }
@@ -491,14 +490,14 @@ function emitAssign(target: Expr, value: string): string {
 // 只有 `+ - *`、比较、while/if 条件、解箱局部的声明/赋值这几处直接用 `emitExprR` 走 raw。
 // 漏装箱不会静默：裸 number 进了 ops.* 会因不是 Variant 而响亮报错，golden 必抓到。
 
-type Rep = "var" | "int" | "float" | "bool";
+type Rep = "var" | "int" | "float" | "str" | "bool";
 interface R {
   code: string;
   rep: Rep;
 }
 
-/** 当前函数里被解箱成裸 number 的局部：int 或 float。 */
-let UNBOXED = new Map<string, "int" | "float">();
+/** 当前函数里被解箱成裸 JS 值的局部：int/float → number，str → string。 */
+let UNBOXED = new Map<string, "int" | "float" | "str">();
 
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
 const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
@@ -509,6 +508,7 @@ const FLOAT_ARITH_RAW: Record<string, string> = { "+": "+", "-": "-", "*": "*", 
 function boxR(r: R): string {
   if (r.rep === "int") return `rt.V.int(${r.code})`;
   if (r.rep === "float") return `rt.V.float(${r.code})`;
+  if (r.rep === "str") return `rt.V.str(${r.code})`;
   if (r.rep === "bool") return `rt.V.bool(${r.code})`;
   return r.code;
 }
@@ -523,6 +523,9 @@ function emitExprR(e: Expr): R {
   }
   if (e.kind === "lit" && e.lit === "float" && typeof e.value === "number") {
     return { code: String(e.value), rep: "float" };
+  }
+  if (e.kind === "lit" && e.lit === "string") {
+    return { code: JSON.stringify(e.value), rep: "str" };
   }
   if (e.kind === "ident") {
     const k = UNBOXED.get(e.name);
@@ -550,6 +553,10 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
   if (L.rep === "float" && Rr.rep === "float" && FLOAT_ARITH_RAW[e.op]) {
     return { code: `(${L.code} ${FLOAT_ARITH_RAW[e.op]!} ${Rr.code})`, rep: "float" };
   }
+  // string 拼接：仅 + ，两操作数皆裸 str（JS a+b 与装箱 V.str(a+b) 逐位一致）
+  if (L.rep === "str" && Rr.rep === "str" && e.op === "+") {
+    return { code: `(${L.code} + ${Rr.code})`, rep: "str" };
+  }
   return null;
 }
 
@@ -560,7 +567,7 @@ function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
  * 排除：参数、for 变量、match 绑定、lambda 内声明或被赋值的名字。
  * 用「自身暂定」打破 `x += 1` 的循环依赖，每种类型各自迭代到不动点；init 字面量类型天然互斥，不会同属两类。
  */
-function computeUnboxed(f: FuncDecl): Map<string, "int" | "float"> {
+function computeUnboxed(f: FuncDecl): Map<string, "int" | "float" | "str"> {
   const excluded = new Set<string>(f.params.map((p) => p.name));
   const decls: Array<{ name: string; init: Expr | null }> = [];
   const assigns: Array<{ name: string; value: Expr }> = [];
@@ -655,16 +662,21 @@ function computeUnboxed(f: FuncDecl): Map<string, "int" | "float"> {
   };
   f.body.forEach((s) => walkStmt(s, false));
 
-  const result = new Map<string, "int" | "float">();
-  for (const kind of ["int", "float"] as const) {
-    const ops = kind === "int" ? ["+", "-", "*", "/", "%"] : ["+", "-", "*", "/"];
+  const result = new Map<string, "int" | "float" | "str">();
+  for (const kind of ["int", "float", "str"] as const) {
+    const ops = kind === "int" ? ["+", "-", "*", "/", "%"] : kind === "float" ? ["+", "-", "*", "/"] : ["+"];
+    const isLit = (e: Expr): boolean =>
+      e.kind === "lit" &&
+      (kind === "int"
+        ? e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)
+        : kind === "float"
+          ? e.lit === "float"
+          : e.lit === "string");
     const U = new Set<string>();
     const isNum = (e: Expr, self: string): boolean => {
       switch (e.kind) {
         case "lit":
-          return kind === "int"
-            ? e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)
-            : e.lit === "float";
+          return isLit(e);
         case "ident":
           return e.name === self || U.has(e.name);
         case "binary":
