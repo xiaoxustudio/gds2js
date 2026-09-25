@@ -248,7 +248,11 @@ function lowerParam(n: SyntaxNode): Param {
 // ---------------------------------------------------------------- 语句
 
 function lowerBody(n: SyntaxNode): Stmt[] {
-  return named(n).map(lowerStmt);
+  // 注释不参与语义，和顶层一样直接丢弃。tree-sitter 把 `#…` 挂成 block 的**具名**子节点，
+  // 不先滤掉就会在 lowerStmt 的 default 分支炸成「语句 comment 未支持」。
+  return named(n)
+    .filter((c) => c.type !== "comment")
+    .map(lowerStmt);
 }
 
 function lowerStmt(n: SyntaxNode): Stmt {
