@@ -508,6 +508,21 @@ export function strFloat(n: number): string {
   return trimmed.endsWith(".") ? `${trimmed}0` : trimmed;
 }
 
+/**
+ * Vector2 分量的打印格式：固定 **6 位小数**再去尾随零，至少留一位小数。
+ * 与 strFloat（15 位有效数字）是两条路，探针实测：
+ *   `Vector2(1.2345678901234567, 0.1+0.2)` → `(1.234568, 0.3)`
+ *   `Vector2(1e15, 0).x` 单独打印           → `999999986991104.0`（走 strFloat）
+ *   `Vector2(1.0000000000000002, 1e-8)`     → `(1.0, 0.0)`（1e-8 被 6 位小数吃掉）
+ *   `Vector2(-0.0, 0.0)`                    → `(0.0, 0.0)`
+ */
+export function strVec2(n: number): string {
+  if (Number.isNaN(n)) return "nan";
+  if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
+  const t = n.toFixed(6).replace(/0+$/, "");
+  return t.endsWith(".") ? `${t}0` : t;
+}
+
 /** 顶层 print：字符串不加引号 */
 export function show(v: Variant): string {
   switch (v.t) {
@@ -530,9 +545,10 @@ export function show(v: Variant): string {
     }
     case Tag.OBJECT: {
       const inner = v.v;
-      // Godot 打印 Vector2 用括号且分量是浮点格式：(4.0, 6.0)
+      // Godot 打印 Vector2 用括号，且分量走**专用**的 6 位小数格式（见 strVec2），
+      // 不是 strFloat 的 15 位有效数字：实测 Vector2(1.2345678901234567, 0.1+0.2) → "(1.234568, 0.3)"
       if (inner instanceof GVector2) {
-        return `(${strFloat(inner.x)}, ${strFloat(inner.y)})`;
+        return `(${strVec2(inner.x)}, ${strVec2(inner.y)})`;
       }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }

@@ -3,6 +3,7 @@ import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr } from "./values";
+import { GVector2 } from "./vector2";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -35,6 +36,15 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
+
+    // Vector2 的方法。分量已在构造处归一到 float32（见 vector2.ts），
+    // 所以 length() 也是对 float32 值开方：实测 Vector2(1e15,0).length() → 999999986991104.0
+    if (inner instanceof GVector2) {
+      if (name === "length" && args.length === 0) {
+        return V.float(Math.hypot(inner.x, inner.y));
+      }
+      throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现`);
+    }
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -199,6 +209,10 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);
   if (obj.t === Tag.OBJECT) {
+    // Vector2 的分量读取要给 Variant：下面 `name in inner` 那条是给 Signal / Callable 用的
+    // （它们要的正是裸对象），走那条会把 number 直接递给 rt.show / ops，于是 "print 不支持 undefined"。
+    const vec = obj.v instanceof GVector2 ? (obj.v as GVector2) : null;
+    if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
     const inner = obj.v as Record<string, unknown>;
     if (name in inner) return inner[name];
   }

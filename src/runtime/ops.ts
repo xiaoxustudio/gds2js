@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
-import { GVector2 } from "./vector2";
+import { asVec2, GVector2 } from "./vector2";
 import {
   GArray,
   GDict,
@@ -65,6 +65,10 @@ export const ops = {
   },
 
   sub(a: Variant, b: Variant): Variant {
+    // Vector2 相减（实测 Vector2(1,2)-Vector2(3,4) → (-2.0, -2.0)）
+    const va = asVec2(a);
+    const vb = asVec2(b);
+    if (va && vb) return V.object(new GVector2(va.x - vb.x, va.y - vb.y));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("sub-operands", `- 不支持 ${tagName(a.t)} - ${tagName(b.t)}`);
     }
@@ -72,6 +76,11 @@ export const ops = {
   },
 
   mul(a: Variant, b: Variant): Variant {
+    // Vector2 * 标量 / 标量 * Vector2（实测 Vector2(1e15,1)*2 → (1999999973982208.0, 2.0)）
+    const va = asVec2(a);
+    const vb = asVec2(b);
+    if (va && isNum(b)) return V.object(new GVector2(va.x * num(b), va.y * num(b)));
+    if (vb && isNum(a)) return V.object(new GVector2(vb.x * num(a), vb.y * num(a)));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
     }
@@ -80,6 +89,9 @@ export const ops = {
 
   /** 两个 int 才走整数除法（向零截断），否则浮点（S1 / S2） */
   div(a: Variant, b: Variant): Variant {
+    // Vector2 / 标量（实测 Vector2(1e15,4)/2 → (499999993495552.0, 2.0)）
+    const va = asVec2(a);
+    if (va && isNum(b)) return V.object(new GVector2(va.x / num(b), va.y / num(b)));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
     }
@@ -123,6 +135,9 @@ export const ops = {
   },
 
   neg(a: Variant): Variant {
+    // 实测 -Vector2(1.5, 2) → (-1.5, -2.0)
+    const va = asVec2(a);
+    if (va) return V.object(new GVector2(-va.x, -va.y));
     if (!isNum(a)) {
       throw new UnsupportedError("neg-operands", `- 不支持 ${tagName(a.t)}`);
     }

@@ -9,7 +9,8 @@ import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { fast } from "../src/runtime/fast";
 import { ops, strOps } from "../src/runtime/ops";
 import { V } from "../src/runtime/tags";
-import { GArray, GDict, show, strFloat, strFormat } from "../src/runtime/values";
+import { GArray, GDict, show, strFloat, strFormat, strVec2 } from "../src/runtime/values";
+import { GVector2 } from "../src/runtime/vector2";
 
 let pass = 0;
 const fails: string[] = [];
@@ -185,6 +186,20 @@ eq(
   strFloat(1e300),
   "10000000000000001" + "0".repeat(284) + ".0",
 );
+
+// ---- 066 Vector2 是 float32 存储 + 专用的 6 位小数打印（Godot real_t=float，探针实测）
+{
+  const v = new GVector2(1e15, 0.1);
+  eq("066", "构造即落 float32（1e15）", v.x, 999999986991104);
+  eq("066", "构造即落 float32（0.1）", v.y, Math.fround(0.1));
+  eq("066", "float32 值单独打印走 15 位规则", strFloat(0.10000000149011612), "0.10000000149012");
+  eq("066", "Vector2 分量打印是 6 位小数", strVec2(1.2345678806304932), "1.234568");
+  eq("066", "1e-8 被 6 位小数吃成 0.0", strVec2(1e-8), "0.0");
+  eq("066", "-0.0 打成 0.0", strVec2(-0), "0.0");
+  eq("066", "整数分量补一位小数", strVec2(4), "4.0");
+  eq("066", "大值不转科学计数法", strVec2(999999986991104), "999999986991104.0");
+  eq("066", "Vector2 相等按 float32 分量", show(ops.eq(V.object(v), V.object(new GVector2(1e15, 0.1)))), "true");
+}
 
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）
 {
