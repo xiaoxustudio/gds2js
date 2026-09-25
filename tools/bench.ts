@@ -130,6 +130,24 @@ const KERNELS: Kernel[] = [
 	return s
 `,
   },
+  {
+    name: "helper-assign",
+    reps: 5,
+    helpers: `func tri(x):
+	var y = x * 3
+	var z = y + x
+	return z
+
+`,
+    body: `
+	var s = 0
+	var i = 0
+	while i < 300000:
+		s = tri(i)
+		i += 1
+	return s
+`,
+  },
 ];
 
 async function compileKernel(k: Kernel): Promise<string> {

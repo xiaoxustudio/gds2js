@@ -1,4 +1,7 @@
 build/
+sea/
+pkg-build/
+pkg/
 node_modules/
 dist/
 

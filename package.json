@@ -22,6 +22,7 @@
 	"scripts": {
 		"gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
 		"build": "tsdown && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
+		"build:sea": "tsdown --config tsdown.sea.config.ts && node tools/build-sea.mjs",
 		"dev": "tsx src/index.ts",
 		"watch": "tsdown --watch",
 		"test:golden": "node tools/golden.mjs",
@@ -35,6 +36,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "^24.13.6",
+		"postject": "1.0.0-alpha.6",
 		"tree-sitter-cli": "^0.27.0",
 		"tsdown": "^0.22.5",
 		"tsx": "^4.23.15",

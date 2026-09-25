@@ -949,15 +949,31 @@ interface RawSite {
   owner: FuncDecl;
 }
 
-/** 纯返回值形态：单条 `return <expr>`，无返回类型标注，参数无类型/默认值，非协程/静态/入口。 */
-function isPureReturnForm(f: FuncDecl): boolean {
+/**
+ * 裸 ABI 形态判定（D2 第三轨 v2）：无返回类型标注、参数无类型/默认值、非协程/静态/入口，
+ * 且函数体是**直线**——每条语句只能是 `var x = …`（无类型标注）、`x = …`（目标是裸 ident）、或 `return <有值>`；
+ * 且至少一条带值 return。禁止 if/while/for/match/裸表达式语句/容器字面量等——那些会引入 Variant 落点，
+ * 一旦混进裸 ABI 就可能静默算错。真正的同型性判定交给 sigValid 的前向 env 推断。
+ */
+function abiFormOk(f: FuncDecl): boolean {
   if (f.coroutine || f.isStatic) return false;
   if (f.returnType) return false;
-  if (f.body.length !== 1) return false;
-  const st = f.body[0]!;
-  if (st.kind !== "return" || !st.value) return false;
+  if (f.body.length === 0) return false;
   for (const p of f.params) if (p.type || p.default) return false;
-  return true;
+  let sawReturn = false;
+  for (const st of f.body) {
+    if (st.kind === "return") {
+      if (!st.value) return false; // 裸 return（无值）→ 返回 Variant，不可裸化
+      sawReturn = true;
+    } else if (st.kind === "var") {
+      if (st.type) return false; // 带类型标注的 var 可能触发截断（S6），排除
+    } else if (st.kind === "assign") {
+      if (st.target.kind !== "ident") return false; // 只允许给局部/参数赋值，容器/属性写一律排除
+    } else {
+      return false; // if/while/for/match/expr/break/continue/pass 等控制流或裸副作用 → 不做裸 ABI
+    }
+  }
+  return sawReturn;
 }
 
 /**
@@ -1097,16 +1113,32 @@ function sigValid(
   sites: RawSite[],
   uOf: (fn: FuncDecl) => Map<string, "int" | "float" | "str">,
 ): boolean {
-  const st = f.body[0]!;
-  if (st.kind !== "return" || !st.value) return false;
-  const pk = new Map<string, Kind>();
-  for (const p of f.params) pk.set(p.name, K);
-  if (kindOfExpr(st.value, (n) => pk.get(n) ?? null) !== K) return false;
+  // 前向 env 推断：参数起步为 K，逐语句要求 var 初值 / assign 值 / return 值都裸化为 K。
+  // 遇到未声明的名字（模块变量/字段）或不可裸化的表达式（属性/下标/容器/非裸调用）→ kindOfExpr 返回非 K → 落选。
+  const env = new Map<string, Kind>();
+  for (const p of f.params) env.set(p.name, K);
+  const ik = (n: string): Kind | null => env.get(n) ?? null;
+  let sawReturn = false;
+  for (const st of f.body) {
+    if (st.kind === "var") {
+      if (!st.init || kindOfExpr(st.init, ik) !== K) return false;
+      env.set(st.name, K);
+    } else if (st.kind === "assign") {
+      if (st.target.kind !== "ident" || !env.has(st.target.name)) return false;
+      if (kindOfExpr(st.value, ik) !== K) return false;
+    } else if (st.kind === "return") {
+      if (!st.value || kindOfExpr(st.value, ik) !== K) return false;
+      sawReturn = true;
+    } else {
+      return false;
+    }
+  }
+  if (!sawReturn) return false;
   for (const s of sites) {
     if (s.args.length !== f.params.length) return false;
     const u = uOf(s.owner);
     for (const a of s.args) {
-      if (kindOfExpr(a, (n) => u.get(n) ?? null) !== K) return false;
+      if (kindOfExpr(a, (n) => u.get(n) ?? null, NO_ARRAYS, NO_DICTS) !== K) return false;
     }
   }
   return true;
@@ -1144,7 +1176,7 @@ function computeRawAbis(
 
   const candNames = new Set<string>();
   for (const f of m.funcs) {
-    if (!isPureReturnForm(f)) continue;
+    if (!abiFormOk(f)) continue;
     if (f.name.startsWith("_")) continue; // 引擎虚函数 / 入口 / 构造
     if (ENUM_NAMES.has(f.name) || MODULE_VARS.has(f.name) || MODULE_CLASSES.has(f.name)) continue;
     // external：工程其它模块里作为属性/裸标识符出现过的名字，或被继承出现过的名字。
