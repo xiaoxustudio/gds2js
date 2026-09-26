@@ -260,8 +260,26 @@ eq(
   shouldThrow("068", "下标越界", () => vecReadIndex(new GVector2(3, 4), I(2)));
   shouldThrow("068", "一个参数的 Vector2()", () => vector2New([I(1)]));
   shouldThrow("068", "Vector2.NAN 不存在", () => vector2Const("NAN"));
-  shouldThrow("068", "slerp 未实现（语义没测准，宁缺毋猜）", () => a("slerp", [vector2(1, 2), F(0.5)]));
-  shouldThrow("068", "is_normalized 未实现（容差没钉死）", () => a("is_normalized"));
+  // step 41 把这三条从「报缺」变成了实测值（期望全部取自 093 的 golden）
+  eq("093", "slerp 是极坐标插值", a("slerp", [vector2(1, 2), F(0.5)]), "(1.902113, 3.077683)");
+  eq("093", "slerp 端点是零向量走 lerp", m(0, 0)("slerp", [vector2(1, 0), F(0.5)]), "(0.5, 0.0)");
+  eq("093", "slerp 直角给对称结果", m(1, 0)("slerp", [vector2(0, 1), F(0.5)]), "(0.707107, 0.707107)");
+  eq("093", "slerp 半圈绕 +90°（负号来自 fround(π/2)）", m(1, 0)("slerp", [vector2(-1, 0), F(0.5)]), "(-0.0, 1.0)");
+  eq("093", "slerp 反向的 wrap 必须在 double 里做", m(1, 2)("slerp", [vector2(-1, -2), F(0.5)]), "(-2.0, 1.0)");
+  eq("093", "slerp 长度也线性插值", m(2, 0)("slerp", [vector2(0, 3), F(0.25)]), "(2.078729, 0.861038)");
+  eq(
+    "093",
+    "is_normalized 的阈值是 length_squared 上的 1e-3",
+    `${m(0.9995, 0)("is_normalized")} ${m(0.9992, 0)("is_normalized")} ${m(0.7071, 0.7071)("is_normalized")} ${m(0, 0)("is_normalized")} ${a("is_normalized")}`,
+    "true false true false false",
+  );
+  eq("093", "is_zero_approx 是逐分量 |v| < 1e-5", `${m(0, 0)("is_zero_approx")} ${m(0.000009, 0)("is_zero_approx")} ${m(0.00001, 0)("is_zero_approx")} ${m(0, -0.000009)("is_zero_approx")}`, "true true false true");
+  eq(
+    "093",
+    "is_equal_approx 是 max(1e-5, 1e-5*|a|)",
+    `${m(1, 2)("is_equal_approx", [vector2(1.0000095, 2)])} ${m(1, 2)("is_equal_approx", [vector2(1.00001, 2)])} ${m(3, 4)("is_equal_approx", [vector2(3.000029, 4)])} ${m(3, 4)("is_equal_approx", [vector2(3.000031, 4)])} ${m(0.001, 0)("is_equal_approx", [vector2(0.0010002, 0)])}`,
+    "true false true false true",
+  );
 }
 
 // ---- 007 数组是共享引用，duplicate 才拷贝（S9）
@@ -1209,9 +1227,19 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 
   // 探针**没能**钉死语义的（reflect 六个点互相矛盾、bounce/slide 要求单位法向且会往 stderr 打一行、
   // slerp 末位不足信、is_zero_approx / clampf 没测）与实测不存在的成员，全都必须响
-  for (const n of ["reflect", "bounce", "slide", "slerp", "is_zero_approx", "clampf"]) {
+  for (const n of ["reflect", "bounce", "slide"]) {
     shouldThrow("091", `Vector3.${n}() 未实现要响`, () => m3(V3(1, 2, 3), n, V3(0, 1, 0)));
   }
+  // step 41 解锁的三条（期望取自 093 的 golden）
+  eq("093", "Vector3.clampf 与 clamp 同值", `${vv(m3(V3(1, 2, 3), "clampf", F(1.5), F(2.5)))}/${vv(m3(V3(3, 2, 1), "clampf", F(1.5), F(2.5)))}/${vv(m3(V3(-1, 2, 5), "clampf", F(0), F(1)))}`, "(1.5, 2.0, 2.5)/(2.5, 2.0, 1.5)/(0.0, 1.0, 1.0)");
+  eq("093", "Vector3.is_zero_approx", `${m3(V3(0, 0, 0), "is_zero_approx").v}/${m3(V3(0.000009, 0, 0), "is_zero_approx").v}/${m3(V3(0.00001, 0, 0), "is_zero_approx").v}/${m3(V3(0, 0, -0.00002), "is_zero_approx").v}`, "true/true/false/false");
+  eq("093", "Vector3.is_normalized 用 1e-3（用 1e-5 会把 0.9995 判错）", `${m3(V3(0.9995, 0, 0), "is_normalized").v}/${m3(V3(0.9992, 0, 0), "is_normalized").v}/${m3(V3(0.5774, 0.5774, 0.5774), "is_normalized").v}/${m3(V3(1, 1, 0.045), "is_normalized").v}`, "true/false/true/false");
+  eq(
+    "093",
+    "Vector3.slerp：权重留 double、求和后落一次 float32",
+    `${vv(m3(V3(3, 4, 0), "slerp", V3(0, 5, 0), F(0.5)))}/${vv(m3(V3(1, 2, 3), "slerp", V3(4, 5, 6), F(0.3)))}/${vv(m3(V3(1, 2, 3), "slerp", V3(-1, -2, -3), F(0.5)))}/${vv(m3(V3(0, 0, 0), "slerp", V3(1, 0, 0), F(0.5)))}`,
+    "(1.581139, 4.743417, 0.0)/(1.710528, 2.878237, 4.045945)/(0.0, 0.0, 0.0)/(0.5, 0.0, 0.0)",
+  );
   for (const n of ["nlerp", "from_size", "lerpf", "angle_to_signed", "orthogonal", "to_float32", "to_double", "to_int8_array"]) {
     shouldThrow("091", `实测不存在的 Vector3.${n} 要响`, () => m3(V3(1, 2, 3), n));
   }

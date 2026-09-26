@@ -1,6 +1,6 @@
 import { UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { vecFailKey } from "./vector2";
+import { CMP_EPS, NORMALIZED_EPS, approxEq, lerpLen, vecFailKey } from "./vector2";
 
 /**
  * 三维向量 —— 与 Vector2 同一套「值类型 + float32 分量」口径（逐条探针实测，Godot 4.6.3）：
@@ -99,17 +99,6 @@ function arity(args: Variant[], n: number, who: string): void {
 
 const lengthSq = (v: GVector3) => add(add(mul(v.x, v.x), mul(v.y, v.y)), mul(v.z, v.z));
 const flen = (x: number, y: number, z: number) => r(Math.sqrt(add(add(mul(x, x), mul(y, y)), mul(z, z))));
-
-/** float32 版的 `Math::is_equal_approx`：阈值 `max(CMP_EPSILON, CMP_EPSILON*|a|)`，严格小于。
- *  实测八个点全对上：|1-1.0000095| 真、|1-1.00001| 假（fround 后差 1.0013e-5）、
- *  |3-3.000029| 真、|3-3.000031| 假（相对阈值 3e-5）、|0.001-0.0010002| 真（绝对地板 1e-5）。 */
-const CMP_EPS = r(1e-5);
-function approxEq(a: number, b: number): boolean {
-  if (a === b) return true;
-  const eps = mul(CMP_EPS, Math.abs(a));
-  const minEps = eps < CMP_EPS ? CMP_EPS : eps;
-  return r(Math.abs(sub(a, b))) < minEps;
-}
 
 /**
  * Vector3 的方法面。**只实现探针钉住的语义**，其余响亮报缺：
@@ -285,9 +274,63 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return V.bool(approxEq(v.x, o.x) && approxEq(v.y, o.y) && approxEq(v.z, o.z));
     }
     case "is_normalized": {
-      // 实测 (1,1,1) → false、(1,0,0) → true、(0.7071…,0.7071…,0) → true（length_squared 差 6e-8）
+      // 阈值是 length_squared 上的 1e-3（与 Vector2 同一条，20 个点夹出来的）：
+      // 实测 (0.9995,0,0) → true、(0.9992,0,0) → false，用 CMP_EPS(1e-5) 会把前者判错
       arity(args, 0, "is_normalized");
-      return V.bool(r(Math.abs(sub(lengthSq(v), 1))) < CMP_EPS);
+      return V.bool(r(Math.abs(sub(lengthSq(v), 1))) < NORMALIZED_EPS);
+    }
+    case "is_zero_approx":
+      arity(args, 0, "is_zero_approx");
+      return V.bool(Math.abs(v.x) < CMP_EPS && Math.abs(v.y) < CMP_EPS && Math.abs(v.z) < CMP_EPS);
+    case "clampf": {
+      // 实测 Vector3.clampf(1.5, 2.5) 与 clamp(同值向量) 给同一个 (1.5, 2.0, 2.5)
+      arity(args, 2, "clampf");
+      const lo = scalar(args[0], "clampf");
+      const hi = scalar(args[1], "clampf");
+      return vector3(
+        Math.max(lo, Math.min(hi, v.x)),
+        Math.max(lo, Math.min(hi, v.y)),
+        Math.max(lo, Math.min(hi, v.z)),
+      );
+    }
+    case "slerp": {
+      // 13 个实测点全对上：对称的 sin 权重球面插值（三角函数走 double，向量与长度按 float32 步进），
+      // 退化情形（任一端是零向量，或 |sinθ| < 1e-5 —— 含同向与反向）退回普通 lerp。
+      // 判别点：`(1,2,3).slerp((-1,-2,-3), 0.5)` → (0.0, 0.0, 0.0)（反向走 lerp，不是 Vector2 那样转 90°）；
+      // `(1,2,3).slerp((4,5,6), 0.3)` → (1.710528, 2.878237, 4.045945) —— 只有三角用 double 才对上最后一位。
+      arity(args, 2, "slerp");
+      const o = vecArg(args, 0, "slerp");
+      const w = scalar(args[1], "slerp");
+      const la = flen(v.x, v.y, v.z);
+      const lb = flen(o.x, o.y, o.z);
+      const plain = () =>
+        vector3(
+          add(v.x, mul(sub(o.x, v.x), w)),
+          add(v.y, mul(sub(o.y, v.y), w)),
+          add(v.z, mul(sub(o.z, v.z), w)),
+        );
+      if (la === 0 || lb === 0) return plain();
+      const sax = div(v.x, la);
+      const say = div(v.y, la);
+      const saz = div(v.z, la);
+      const sbx = div(o.x, lb);
+      const sby = div(o.y, lb);
+      const sbz = div(o.z, lb);
+      const d = add(add(mul(sax, sbx), mul(say, sby)), mul(saz, sbz));
+      const dt = d < -1 ? -1 : d > 1 ? 1 : d;
+      const theta = Math.acos(dt);
+      const s = Math.sin(theta);
+      if (Math.abs(s) < 1e-5) return plain();
+      // 两个权重**保持 double**，与分量相乘后才一次性落回 float32 —— 这一步是 14 个实测点
+      // 唯一认的配方：把 t1/t2 先 fround、或逐项各自 fround 再相加，都会在 6 位小数打印上差最后一位
+      // （判别点 (3,4,0).slerp((0,5,0), 0.5) → (1.581139, 4.743417, 0.0)）。
+      const t1 = Math.sin((1 - w) * theta) / s;
+      const t2 = Math.sin(w * theta) / s;
+      const len = lerpLen(la, lb, w);
+      const ux = r(sax * t1 + sbx * t2);
+      const uy = r(say * t1 + sby * t2);
+      const uz = r(saz * t1 + sbz * t2);
+      return vector3(mul(ux, len), mul(uy, len), mul(uz, len));
     }
     case "is_finite":
       // 实测 (1e300,0,0) → false（收成 float32 已是 inf）、掺 nan → false
@@ -295,11 +338,9 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return V.bool(Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z));
     case "bounce":
     case "slide":
+      throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（法向不是单位向量时 Godot 给零向量还往 stderr 打一行，产物复现不了）`);
     case "reflect":
-    case "slerp":
-    case "is_zero_approx":
-    case "clampf":
-      throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（探针未能钉死语义，见 docs/ROADMAP.md 待做）`);
+      throw new UnsupportedError("vector3-method", "Vector3.reflect() 未实现（六个实测点互相矛盾，逆不出唯一公式）");
     default:
       throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（实测不存在或没探针）`);
   }
