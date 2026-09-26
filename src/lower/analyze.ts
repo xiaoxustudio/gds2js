@@ -1,5 +1,5 @@
 import { staticMemberFn } from "./ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt } from "./ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "./ir";
 
 /**
  * 语义分析层。
@@ -79,8 +79,115 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
 
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
   for (const c of m.innerClasses) checkClass(c, moduleScope, diags);
+  checkTypedCollections(m, diags);
 
   return diags;
+}
+
+/**
+ * 定型容器（`Array[int]` / `Dictionary[String, int]`）的两条解析期检查，都是实测的 Godot
+ * Parse Error —— 不拦的话它们会编成"能跑但语义不同"的产物：
+ * - 嵌套定型：`Array[Array[int]]` 是 `Nested typed collections are not supported.`（实测）；
+ * - 字面量初值里有装不进去的元素：`Array[int] = [1, "s"]` 是
+ *   `Cannot include a value of type "String" as "int".`（实测；同格的 float→int 是**允许**的，
+ *   运行时应截断成 2，所以只对静态就不同族的类型报错）。
+ */
+function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
+  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc }> = [
+    ...m.vars.map((v) => ({ type: v.type, init: v.init, loc: v.loc })),
+    ...m.funcs.flatMap((f) => [
+      ...f.params.map((p) => ({ type: p.type, init: p.default, loc: f.loc })),
+      { type: f.returnType, init: null, loc: f.loc },
+    ]),
+  ];
+  const collect = (cls: ClassDecl): void => {
+    for (const v of cls.vars) targets.push({ type: v.type, init: v.init, loc: v.loc });
+    for (const f of cls.funcs) {
+      for (const p of f.params) targets.push({ type: p.type, init: p.default, loc: f.loc });
+      targets.push({ type: f.returnType, init: null, loc: f.loc });
+    }
+    for (const inner of cls.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+  // 函数体里的局部声明也要走：用一条极简的语句遍历（只求拿到 var 的 type/init/loc）
+  const walkStmts = (stmts: Stmt[]): void => {
+    for (const s of stmts) {
+      if (s.kind === "var") targets.push({ type: s.type, init: s.init, loc: s.loc });
+      else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body);
+      else if (s.kind === "for" || s.kind === "while") walkStmts(s.body);
+    }
+  };
+  for (const f of m.funcs) walkStmts(f.body);
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) walkStmts(f.body);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const c of m.innerClasses) walkClass(c);
+
+  for (const t of targets) {
+    if (t.type === null || t.type.kind !== "named") continue;
+    const m2 = /^(Array|Dictionary)\[(.+)\]$/.exec(t.type.name);
+    if (m2 === null) continue;
+    const inner = m2[2] ?? "";
+    if (inner.includes("[")) {
+      diags.push({
+        code: "typed-collection-nested",
+        message: `Nested typed collections are not supported.（${t.type.name}）`,
+        loc: t.loc,
+      });
+      continue;
+    }
+    if (t.init === null) continue;
+    // Array[T] 只有元素要验；Dictionary[K, V] 是键与值各验各的（混着验会假报：
+    // Dictionary[String, int] 的值 1 对 "String" 当然不成立，但那不是 Godot 的错误）
+    const slots: Array<{ exprs: Expr[]; kind: string }> = [];
+    if (m2[1] === "Array") {
+      if (t.init.kind === "array") slots.push({ exprs: t.init.items, kind: inner.trim() });
+    } else {
+      const parts = inner.split(",").map((p) => p.trim());
+      const keyKind = parts[0] ?? "";
+      const valKind = parts[1] ?? "";
+      if (t.init.kind === "dict" && parts.length === 2) {
+        slots.push({ exprs: t.init.entries.map((e) => e.key), kind: keyKind });
+        slots.push({ exprs: t.init.entries.map((e) => e.value), kind: valKind });
+      }
+    }
+    for (const slot of slots) {
+      for (const it of slot.exprs) {
+        const st = staticType(it);
+        if (st === null) continue; // 推不出静态类型就交给运行时的转换表
+        if (!canHold(slot.kind, st)) {
+          diags.push({
+            code: "typed-collection-literal",
+            message: `Cannot include a value of type "${st}" as "${slot.kind}".`,
+            loc: it.loc,
+          });
+        }
+      }
+    }
+  }
+}
+
+/** 静态类型能不能装进某个元素/键/值的槽（与运行时 elemConvert 同一张表；float→int 允许，运行时会截断） */
+function canHold(kind: string, st: NonNullable<StaticType>): boolean {
+  switch (kind) {
+    case "int":
+    case "float":
+      return st === "int" || st === "float" || st === "bool";
+    case "bool":
+      return st === "bool" || st === "int" || st === "float";
+    case "String":
+    case "StringName":
+      return st === "String";
+    case "Vector2":
+      return false; // Vector2 字面量的静态类型还推不出（staticType 给 null），运行时兜底
+    case "Array":
+      return st === "Array";
+    case "Dictionary":
+      return st === "Dictionary";
+    default:
+      return true; // 引擎类：运行时阶段的事
+  }
 }
 
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {

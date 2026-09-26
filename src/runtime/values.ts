@@ -44,6 +44,96 @@ export function keyOf(v: Variant): string {
 // ---------------------------------------------------------------- Array
 
 /**
+ * 定型容器（`Array[int]` / `Dictionary[String, int]` 一类）的元素类型名。
+ * 只收实测能验算的内建值类型；引擎类（`Array[Node]`）与嵌套定型（`Array[Array[int]]`）
+ * Godot 在解析期就拒绝（"Nested typed collections are not supported"），走不到这里。
+ */
+export type ElemKind = "int" | "float" | "bool" | "String" | "StringName" | "Vector2" | "Array" | "Dictionary";
+
+/** Godot 认识、且我们能在运行时校验的容器标注类型名 */
+export function isElemKind(name: string): name is ElemKind {
+  return (
+    name === "int" || name === "float" || name === "bool" || name === "String" ||
+    name === "StringName" || name === "Vector2" || name === "Array" || name === "Dictionary"
+  );
+}
+
+/**
+ * `resize` 扩张时填进新格子的默认值。实测（083）：`Array[int]` → 0、`Array[float]` → 0.0、
+ * `Array[bool]` → false、`Array[String]` → ""、`Array[StringName]` → &""、
+ * `Array[Vector2]` → (0.0, 0.0)、`Array[Array]` → []、`Array[Dictionary]` → {  }。
+ * 未定型数组给 null（实测 `Array` resize 出 `[1, null]`）。
+ */
+export function elemDefault(kind: ElemKind): Variant {
+  switch (kind) {
+    case "int":
+      return V.int(0);
+    case "float":
+      return V.float(0);
+    case "bool":
+      return V.bool(false);
+    case "String":
+      return V.str("");
+    case "StringName":
+      return V.stringName("");
+    case "Vector2":
+      return V.object(new GVector2(0, 0));
+    case "Array":
+      return V.array(new GArray());
+    case "Dictionary":
+      return V.dict(new GDict());
+  }
+}
+
+/**
+ * 元素转换矩阵（083 全格实测）。规则是**能转就转、不能转就整次操作作废**，而不是报错：
+ * Godot 在 `typed.validate(...)` 失败时只往 stderr 打一条 ERROR、容器原样不动。
+ *   int   ← int / float（向零截断：2.9→2、-1.9→-1；|x| ≥ 2^63 或非有限 → INT64_MIN，与 `int()` 同口径）/ bool
+ *   float ← float / int / bool（true → 1.0）
+ *   bool  ← bool / int / float（0 与 0.0 为假）
+ *   String ← String / StringName      StringName ← StringName / String
+ *   Vector2 / Array / Dictionary 只收同型本身
+ * **明确不收**（收下就是静默错）：String → int（实测 `Array[int].append("3")` 数组不变）、
+ * String → bool、int → String、Vector2 → int、null → int、容器 → 标量 等。
+ */
+export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
+  switch (kind) {
+    case "int":
+      if (v.t === Tag.INT) return v;
+      if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
+      if (v.t === Tag.FLOAT) {
+        const x = v.v as number;
+        if (!Number.isFinite(x) || Math.abs(x) >= 2n ** 63n) return V.int(-(2n ** 63n));
+        return V.int(BigInt(Math.trunc(x)));
+      }
+      return null;
+    case "float":
+      if (v.t === Tag.FLOAT) return v;
+      if (v.t === Tag.INT) return V.float(intToNum(v.v as IntPayload));
+      if (v.t === Tag.BOOL) return V.float(v.v ? 1 : 0);
+      return null;
+    case "bool":
+      if (v.t === Tag.BOOL) return v;
+      if (v.t === Tag.INT || v.t === Tag.FLOAT) return V.bool((v.v as number) !== 0);
+      return null;
+    case "String":
+      if (v.t === Tag.STRING) return v;
+      if (v.t === Tag.STRING_NAME) return V.str(v.v as string);
+      return null;
+    case "StringName":
+      if (v.t === Tag.STRING_NAME) return v;
+      if (v.t === Tag.STRING) return V.stringName(v.v as string);
+      return null;
+    case "Vector2":
+      return v.t === Tag.OBJECT && v.v instanceof GVector2 ? v : null;
+    case "Array":
+      return v.t === Tag.ARRAY ? v : null;
+    case "Dictionary":
+      return v.t === Tag.DICT ? v : null;
+  }
+}
+
+/**
  * Godot 数组下标的唯一口径（056 实测）：**支持负数**（`a[-1]` 是最后一格，读写同规则），
  * 越界一律响亮报 `array-index` —— 尤其写越界，Godot 是 SCRIPT ERROR，**不会**像 JS 那样
  * 把数组撑长或挂一个 `-1` 属性上去（后者先前在 GArray.set 里是静默错）。
@@ -68,6 +158,11 @@ function fromEnd(i: number, len: number): number | null {
 
 export class GArray {
   private items: Variant[];
+  /**
+   * 定型容器（`Array[T]`）的元素类型，null 是未定型。类型跟着**值**走而不是跟着变量走：
+   * 实测 `var a: Array[int]` 之后 `var u = a; u.append("s")` 照样被拒、`u.append(2.5)` 照样截成 2。
+   */
+  elem: ElemKind | null = null;
 
   constructor(items: Variant[] = []) {
     this.items = items;
@@ -75,6 +170,37 @@ export class GArray {
 
   static of(items: Variant[]): GArray {
     return new GArray(items);
+  }
+
+  /**
+   * 盖上元素类型，并把**已有的**格子逐格转换（实测 `Array[int] = [1, 2.5]` 得到 [1, 2]）。
+   * 转换不过的格子原样留着 —— 那种写法 Godot 在解析期就拒（`Cannot include a value of type
+   * "String" as "int"`），归语义分析报；运行时先撞见它也不该静默改数据。
+   */
+  stampElem(kind: ElemKind): void {
+    this.elem = kind;
+    this.items = this.items.map((x) => elemConvert(kind, x) ?? x);
+  }
+
+  elemKind(): ElemKind | null {
+    return this.elem;
+  }
+
+  /** 装进槽位：定型数组先按实测矩阵转换，转换不过就整次操作作废（Godot 只打 stderr 诊断） */
+  private asElement(v: Variant): Variant | null {
+    return this.elem === null ? v : elemConvert(this.elem, v);
+  }
+
+  /** 整批校验（append_array / assign 实测是**全有或全无**：有一格不合格就整个不动） */
+  private asElements(vs: Variant[]): Variant[] | null {
+    if (this.elem === null) return vs;
+    const out: Variant[] = [];
+    for (const v of vs) {
+      const c = elemConvert(this.elem, v);
+      if (c === null) return null;
+      out.push(c);
+    }
+    return out;
   }
 
   size(): number {
@@ -90,22 +216,39 @@ export class GArray {
   }
 
   set(i: number, v: Variant): void {
-    this.items[arrIdx(i, this.items.length)] = v;
+    // 定型数组的下标写同样要转换/拒绝（实测 `a[0] = 2.5` → 2、`a[0] = "s"` 数组不变）
+    const c = this.asElement(v);
+    if (c === null) return;
+    this.items[arrIdx(i, this.items.length)] = c;
   }
 
   append(v: Variant): void {
-    this.items.push(v);
+    const c = this.asElement(v);
+    if (c !== null) this.items.push(c);
   }
 
   /** 深拷贝：元素里的容器也要复制（S9 —— 赋值是共享，duplicate 才是拷贝） */
   duplicate(deep = false): GArray {
     // 实测 `duplicate()` 是**浅**的：外层新数组、内层容器仍是同一个引用
-    // （`var s = a.duplicate(); s[0][0] = 9` 会把 `a` 也改掉），要 `duplicate(true)` 才断开
-    return deep ? new GArray(this.items.map(deepCopy)) : new GArray([...this.items]);
+    // （`var s = a.duplicate(); s[0][0] = 9` 会把 `a` 也改掉），要 `duplicate(true)` 才断开。
+    // 元素类型跟着复制过来（实测副本仍拒绝不合格的元素）。
+    const copy = deep ? new GArray(this.items.map(deepCopy)) : new GArray([...this.items]);
+    copy.elem = this.elem;
+    return copy;
+  }
+
+  /**
+   * 检索用的实参也要按元素类型转换（实测 y1/y2：定型的 `Array[int].find(1.0)` → 0、
+   * `Array[String].find(&"x")` → 0，而未定型数组同一条是 -1 —— 因为定型容器先把查询值
+   * 收成本类型再比）。转换不过就等于「这类型根本装不下它」，直接当作没找到。
+   */
+  private asQuery(v: Variant): Variant | null {
+    return this.elem === null ? v : elemConvert(this.elem, v);
   }
 
   has(v: Variant): boolean {
-    return this.items.some((x) => valueSame(x, v));
+    const q = this.asQuery(v);
+    return q !== null && this.items.some((x) => valueSame(x, q));
   }
 
   /**
@@ -116,7 +259,10 @@ export class GArray {
     const n = this.items.length;
     const k = at < 0 ? n + at : at;
     if (k < 0 || k > n) return;
-    this.items.splice(k, 0, v);
+    const c = this.asElement(v);
+    // 实测：定型数组里 insert 一个不合格的元素，数组整个不动（Godot 只在 stderr 记一条）
+    if (c === null) return;
+    this.items.splice(k, 0, c);
   }
 
   /** `erase(v)`：删掉第一个身份相等的元素，没有就什么都不做（实测不报错）。 */
@@ -144,7 +290,8 @@ export class GArray {
   }
 
   pushFront(v: Variant): void {
-    this.items.unshift(v);
+    const c = this.asElement(v);
+    if (c !== null) this.items.unshift(c);
   }
 
   /** `remove_at(i)`：与 pop_at 同一套折算，越界静默无操作。 */
@@ -158,7 +305,25 @@ export class GArray {
    * 不是每格一份拷贝。
    */
   fillWith(v: Variant): void {
-    for (let i = 0; i < this.items.length; i++) this.items[i] = v;
+    const c = this.asElement(v);
+    if (c === null) return;
+    for (let i = 0; i < this.items.length; i++) this.items[i] = c;
+  }
+
+  /**
+   * `resize(n)`。实测（083）收缩就是截断；扩张填**元素类型的默认值** ——
+   * Array[int] → 0、Array[String] → ""、Array[StringName] → &""、Array[Vector2] → (0.0, 0.0)、
+   * Array[Array] → []、Array[Dictionary] → {  }，未定型数组才给 null（`[1, null]`）。
+   * 负数与超过长度的值实测都是无操作，且不报错。
+   */
+  resize(n: number): void {
+    if (n < 0 || n === this.items.length) return;
+    if (n < this.items.length) {
+      this.items.length = n;
+      return;
+    }
+    const filler = this.elem === null ? null : elemDefault(this.elem);
+    while (this.items.length < n) this.items.push(filler === null ? V.nil() : deepCopy(filler));
   }
 
   /**
@@ -184,17 +349,22 @@ export class GArray {
         for (let i = b; i > e; i += step) out.push(this.items[i] as Variant);
       }
     }
-    return deep ? new GArray(out.map(deepCopy)) : new GArray(out);
+    const cut = deep ? new GArray(out.map(deepCopy)) : new GArray(out);
+    cut.elem = this.elem; // 实测 slice 的副本仍定型（再 append "s" 被拒）
+    return cut;
   }
 
   /** `append_array(other)`：元素按引用接上（实测改 src 的嵌套容器会串进来）。 */
   appendAll(other: GArray): void {
-    this.items.push(...other.raw());
+    // 实测是**全有或全无**：源数组里有一格不合格（`[2, "s"]` 装进 Array[int]）就整个不动
+    const converted = this.asElements(other.raw());
+    if (converted !== null) this.items.push(...converted);
   }
 
   /** `assign(other)`：整层换掉，但元素仍共享引用（实测 b 改了内层会串进 a，改外层不会）。 */
   assignFrom(other: GArray): void {
-    this.items = [...other.raw()];
+    const converted = this.asElements(other.raw());
+    if (converted !== null) this.items = [...converted];
   }
 
   reverseItems(): void {
@@ -210,6 +380,9 @@ export class GArray {
    * （见 valueSame），且 `from` 不做「从尾部数」：实测负数一律 -1、越过尾也 -1。
    */
   findSame(v: Variant, from = 0): number {
+    const q = this.asQuery(v);
+    if (q === null) return -1;
+    v = q;
     if (from < 0 || from >= this.items.length) return -1;
     for (let i = from; i < this.items.length; i++) if (valueSame(this.items[i] as Variant, v)) return i;
     return -1;
@@ -220,6 +393,9 @@ export class GArray {
    * 实测 `[1,2,1,2]` 上 `from=0` → 0、`-2` → 2、`-4` → 0 而 `-9` → 2，只有这两步能同时满足。
    */
   rfindSame(v: Variant, from = -1): number {
+    const q = this.asQuery(v);
+    if (q === null) return -1;
+    v = q;
     const n = this.items.length;
     if (n === 0) return -1;
     let k = from < 0 ? n + from : from;
@@ -229,7 +405,9 @@ export class GArray {
   }
 
   count(v: Variant): number {
-    return this.items.reduce((m, x) => (valueSame(x, v) ? m + 1 : m), 0);
+    const q = this.asQuery(v);
+    if (q === null) return 0;
+    return this.items.reduce((m, x) => (valueSame(x, q) ? m + 1 : m), 0);
   }
 
   /** `+` 产生新数组，不修改原数组 */
@@ -328,9 +506,12 @@ export class GArray {
       const r = p(x);
       if (r !== null && truthyOf(r)) out.push(x);
     }
-    return new GArray(out);
+    const kept = new GArray(out);
+    kept.elem = this.elem; // 实测 filter 的副本仍是定型数组（再 append 不合格元素照样被拒）
+    return kept;
   }
 
+  // map 的结果**不是**定型数组（实测 Array[int].map(...) 之后能塞进 String）
   mapBy(p: (v: Variant) => Variant | null): GArray {
     const out: Variant[] = [];
     for (const x of this.items) {
@@ -401,6 +582,30 @@ export class GDict {
   private ks: Variant[] = [];
   private vs: Variant[] = [];
   private index = new Map<string, number>();
+  /** `Dictionary[K, V]` 的键/值类型，null 是未定型。与数组同理，类型跟着**值**走 */
+  keyKind: ElemKind | null = null;
+  valKind: ElemKind | null = null;
+
+  /** 盖上键/值类型，已有的格子逐格转换（同 GArray.stampElem） */
+  stampElem(k: ElemKind, val: ElemKind): void {
+    this.keyKind = k;
+    this.valKind = val;
+    const ks = this.ks;
+    const vs = this.vs;
+    this.ks = [];
+    this.vs = [];
+    this.index = new Map();
+    for (let i = 0; i < ks.length; i++) this.set(ks[i] as Variant, vs[i] as Variant);
+  }
+
+  /** 键或值转换失败就整次 set 作废（Godot 的 typed.validate 只打 stderr、字典不变） */
+  private conv(k: Variant, v: Variant): [Variant, Variant] | null {
+    const kk = this.keyKind === null ? k : elemConvert(this.keyKind, k);
+    if (kk === null) return null;
+    const vv = this.valKind === null ? v : elemConvert(this.valKind, v);
+    if (vv === null) return null;
+    return [kk, vv];
+  }
 
   size(): number {
     return this.ks.length;
@@ -416,12 +621,23 @@ export class GDict {
     return [...this.vs];
   }
 
+  /**
+   * 查询用的键也要按键类型收成本类型（实测 y4：`Dictionary[String,int].has(&"a")` 为真、
+   * `.get(1)` 给 null —— 键类型装不下的查询就当不存在，与数组的检索口径同源）。
+   */
+  private asQuery(k: Variant): Variant | null {
+    return this.keyKind === null ? k : elemConvert(this.keyKind, k);
+  }
+
   has(k: Variant): boolean {
-    return this.index.has(keyOf(k));
+    const q = this.asQuery(k);
+    return q !== null && this.index.has(keyOf(q));
   }
 
   get(k: Variant): Variant {
-    const i = this.index.get(keyOf(k));
+    const q = this.asQuery(k);
+    if (q === null) return V.nil();
+    const i = this.index.get(keyOf(q));
     if (i === undefined) return V.nil();
     return this.vs[i] ?? V.nil();
   }
@@ -431,7 +647,8 @@ export class GDict {
    * 与 `.get(k)`（缺键返回 nil）区分开。装箱读与容器单态化的裸读都以此为准，二者必须一致。
    */
   getRequired(k: Variant): Variant {
-    const i = this.index.get(keyOf(k));
+    const q = this.asQuery(k);
+    const i = q === null ? undefined : this.index.get(keyOf(q));
     if (i === undefined) {
       throw new GodotRuntimeError("dict-key", `字典键不存在: ${show(k)}`);
     }
@@ -439,6 +656,10 @@ export class GDict {
   }
 
   set(k: Variant, v: Variant): void {
+    const cv = this.conv(k, v);
+    if (cv === null) return;
+    k = cv[0];
+    v = cv[1];
     const key = keyOf(k);
     const i = this.index.get(key);
     if (i === undefined) {
@@ -453,6 +674,9 @@ export class GDict {
   /** 实测 `duplicate()` 是浅拷贝（改副本里的嵌套容器会串回原字典），`duplicate(true)` 才断开。 */
   duplicate(deep = false): GDict {
     const d = new GDict();
+    // 副本同样是定型的（实测 Dictionary[String,int].duplicate() 之后 1.5 会被截成 1）
+    d.keyKind = this.keyKind;
+    d.valKind = this.valKind;
     for (let i = 0; i < this.ks.length; i++) {
       const k = this.ks[i];
       const v = this.vs[i];
@@ -463,7 +687,9 @@ export class GDict {
 
   /** `erase(k)`：实测返回** bool**（键在不在），不是 void。 */
   erase(k: Variant): boolean {
-    const key = keyOf(k);
+    const q = this.asQuery(k);
+    if (q === null) return false;
+    const key = keyOf(q);
     const i = this.index.get(key);
     if (i === undefined) return false;
     this.ks.splice(i, 1);
@@ -498,13 +724,17 @@ export class GDict {
 
   /** `has_all(keys)`：键用 `==` 口径（与 `has` 同一个 index 查法）；空数组实测为 true。 */
   hasAll(keys: GArray): boolean {
+    // 空数组实测为 true
     return keys.raw().every((k) => this.has(k));
   }
 
   /** `find_key(v)`：按身份找值，命中给键、未命中实测给 null。 */
   findKey(v: Variant): Variant {
+    // 值同样先按 valKind 收成本类型再比（与数组检索同一个口径）
+    const q = this.valKind === null ? v : elemConvert(this.valKind, v);
+    if (q === null) return V.nil();
     for (let i = 0; i < this.vs.length; i++) {
-      if (valueSame(this.vs[i] as Variant, v)) return this.ks[i] as Variant;
+      if (valueSame(this.vs[i] as Variant, q)) return this.ks[i] as Variant;
     }
     return V.nil();
   }
@@ -547,6 +777,39 @@ function deepCopy(v: Variant): Variant {
   if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true));
   if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate(true));
   return { t: v.t, v: v.v };
+}
+
+/**
+ * 声明处给容器值盖上元素类型。Godot 把类型记在**值**上，所以章只盖一次、跟着值走
+ * （实测 `var u = a` 之后 u 照样受限）。
+ * fromLiteral 为假且容器本来未定型、又非空时，Godot 是**运行时报错**
+ * （`Trying to assign an array of type "Array" to a variable of type "Array[int]"`），不是静默转类型。
+ */
+export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean): Variant {
+  const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
+  if (g === null) throw new UnsupportedError("typed-assign", `Array[${kind}] 的初值不是数组`);
+  // 实测 x7：未定型的数组即使**是空的**也照样报错 —— 判据是「值本身定没定型」，不是有没有元素
+  if (!fromLiteral && g.elemKind() === null) {
+    throw new GodotRuntimeError(
+      "typed-assign",
+      `Trying to assign an array of type "Array" to a variable of type "Array[${kind}]"`,
+    );
+  }
+  g.stampElem(kind);
+  return v;
+}
+
+export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: boolean): Variant {
+  const d = v.t === Tag.DICT ? (v.v as GDict) : null;
+  if (d === null) throw new UnsupportedError("typed-assign", `Dictionary[${k}, ${val}] 的初值不是字典`);
+  if (!fromLiteral && d.keyKind === null) {
+    throw new GodotRuntimeError(
+      "typed-assign",
+      `Trying to assign a dictionary of type "Dictionary" to a variable of type "Dictionary[${k}, ${val}]"`,
+    );
+  }
+  d.stampElem(k, val);
+  return v;
 }
 
 // ---------------------------------------------------------------- String

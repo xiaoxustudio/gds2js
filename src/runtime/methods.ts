@@ -157,13 +157,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             ),
           );
         case "resize":
-          // 实测定长扩张要按**元素类型的默认值**填（Array[int] 给 0、Array[String] 给 ""），
-          // 而未定型数组给 null。我们的数组不携带元素类型（见 ROADMAP 待做），
-          // 一律填 null 会在定型数组上静默错，所以整条先报缺。
-          throw new UnsupportedError(
-            "array-resize",
-            "Array.resize() 未实现：定型数组要按元素类型填默认值，运行时还不携带元素类型",
-          );
+          // 实测：收缩是截断、扩张按**元素类型的默认值**填（Array[int] → 0、Array[String] → ""、
+          // Array[StringName] → &""、Array[Vector2] → (0.0, 0.0)、未定型 → null），
+          // 负数与超出都不报错。
+          a.resize(intArg(args, 0, "resize"));
+          return V.nil();
         case "sort":
           a.sort();
           return V.nil();

@@ -1,6 +1,7 @@
 import { staticMemberFn } from "../lower/ir";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
+import { isElemKind } from "../runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 /**
@@ -306,7 +307,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   for (const v of m.vars) {
     mark(out.length, v.loc);
-    out.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : typeDefault(v.type)};`);
+    out.push(`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
   }
   if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
@@ -357,7 +358,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   mark(base, decl.loc);
   for (const v of decl.vars) {
     mark(base + lines.length, v.loc);
-    lines.push(`  ${v.name} = ${v.init ? emitExpr(v.init) : typeDefault(v.type)};`);
+    lines.push(`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
   }
   if (decl.vars.length > 0) lines.push("");
   for (const f of decl.funcs) {
@@ -533,7 +534,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         return [`let ${s.name} = ${emitExprR(s.init).code};`];
       }
       // 直接发射 let —— 块作用域由 JS 自己保证，正好对应 S16
-      const init = s.init ? emitExpr(s.init) : typeDefault(s.type);
+      const init = stampDecl(s.type, s.init, emitExpr);
       // 带类型标注的声明要做截断：`var i: int = 3.9` 在 Godot 里是 3，不是 3.9（S6）
       const cast = declaredCast(s.type);
       return [`let ${s.name} = ${cast ? `${cast}(${init})` : init};`];
@@ -2090,6 +2091,35 @@ function emitLit(lit: string, value: string | number | bigint | boolean | null):
 }
 
 /** 带类型标注的声明需要显式转换（S6：float 赋给 int 向零截断） */
+/**
+ * 声明类型是定型容器（`Array[int]` / `Dictionary[String, int]`）时在容器**创建处**盖章。
+ * Godot 把元素类型记在值上，所以章跟着字面量/默认值一起发出去，之后 `var u = a` 自然共享
+ * （实测：别名照样受限、`u[0] = 2.5` 照样截成 2）。没有初值时 Godot 给的也是**定型空容器**
+ * （实测 `var a: Array[int]` 之后 append 1.5 → `[1]`），所以 typeDefault 那条也要盖。
+ * 元素是引擎类（`Array[Node]`）时不盖章 —— 运行时还没有类层次可校验，宁可不限制也别误拒（见待做）。
+ */
+function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: Expr) => string): string {
+  const raw = init ? emit(init) : typeDefault(t);
+  if (t === null || t.kind !== "named") return raw;
+  const m = /^(Array|Dictionary)\[(.+)\]$/.exec(t.name);
+  if (m === null) return raw;
+  const inner = m[2] ?? "";
+  if (inner.includes("[")) return raw; // 嵌套定型在语义分析就报错了
+  // 字面量初值 Godot 允许并逐格转换（实测 Array[int] = [1, 2.5] → [1, 2]）；
+  // 把**未定型的现成数组**赋给定型变量它是会报错的，运行时那条负责。
+  const fromLiteral = init === null || init === undefined || init.kind === "array" || init.kind === "dict";
+  if (m[1] === "Array") {
+    const kind = inner.trim();
+    if (!isElemKind(kind)) return raw;
+    return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
+  }
+  const parts = inner.split(",").map((p) => p.trim());
+  const keyKind = parts[0] ?? "";
+  const valKind = parts[1] ?? "";
+  if (parts.length !== 2 || !isElemKind(keyKind) || !isElemKind(valKind)) return raw;
+  return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
+}
+
 function declaredCast(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");

@@ -25,6 +25,10 @@ import {
   stringNameCtor,
   stringStatic,
   strVec2,
+  elemConvert,
+  elemDefault,
+  stampArray,
+  stampDict,
   truthyOf,
   valueEq,
 } from "../src/runtime/values";
@@ -749,7 +753,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("080", "rfind(1,-4) 折算到 0", show(call(fr, "rfind", [I(1), I(-4)])), "0");
   eq("080", "rfind(1,-9) 折算仍越界 → 退回整段", show(call(fr, "rfind", [I(1), I(-9)])), "2");
   eq("080", "rfind 未命中给 -1", show(call(fr, "rfind", [I(9)])), "-1");
-  shouldThrow("080", "resize 未实现（定型数组要按元素类型填默认值）", () => call(arrOf([I(1)]), "resize", [I(3)]));
+  const ru = arrOf([I(1)]);
+  call(ru, "resize", [I(3)]);
+  eq("080", "未定型数组 resize 填 null", show(ru), "[1, <null>, <null>]");
 
   // Dictionary：erase 返回 bool、merge 默认不覆盖、has_all/find_key/get 缺省
   const dm = new GDict();
@@ -866,6 +872,115 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   call(unsorted, "sort_custom", [one(() => true)]);
   eq("082", "实参个数不对的比较器保持原序", show(unsorted), "[2, 1]");
   shouldThrow("082", "filter 的非 Callable 实参要响", () => call(A, "filter", [I(1)]));
+}
+
+// ---- 083 定型容器：元素类型跟着值走、转换矩阵、resize 默认值、检索先收本类型
+{
+  const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
+  const typed = (kind: string, xs: Variant[]) => stampArray(V.array(GArray.of(xs)), kind as never, true);
+  const SHOW = (v: Variant | null) => (v === null ? "<reject>" : show(v));
+
+  // 转换矩阵（null 表示 Godot 的 typed.validate 失败 → 整次操作作废）
+  eq("083", "int ← float 向零截断", SHOW(elemConvert("int", F(2.9))), "2");
+  eq("083", "int ← 负 float 也向零", SHOW(elemConvert("int", F(-1.9))), "-1");
+  eq("083", "int ← 越界 float 饱和到 INT64_MIN", SHOW(elemConvert("int", F(1e20))), "-9223372036854775808");
+  eq("083", "int ← bool", SHOW(elemConvert("int", V.bool(true))), "1");
+  eq("083", "int ← String 拒绝", SHOW(elemConvert("int", S("3"))), "<reject>");
+  eq("083", "int ← null 拒绝", SHOW(elemConvert("int", V.nil())), "<reject>");
+  eq("083", "float ← int", SHOW(elemConvert("float", I(3))), "3.0");
+  eq("083", "float ← bool", SHOW(elemConvert("float", V.bool(true))), "1.0");
+  eq("083", "bool ← 0 / 2 / 2.5", [0, 2, 2.5].map((n) => SHOW(elemConvert("bool", n % 1 === 0 ? I(n) : F(n)))).join(","), "false,true,true");
+  eq("083", "bool ← String 拒绝", SHOW(elemConvert("bool", S("x"))), "<reject>");
+  eq("083", "String ← StringName", SHOW(elemConvert("String", V.stringName("x"))), "x");
+  eq("083", "String ← int 拒绝", SHOW(elemConvert("String", I(3))), "<reject>");
+  eq("083", "StringName ← String", (elemConvert("StringName", S("x")) as Variant).t, Tag.STRING_NAME);
+  eq("083", "Vector2 ← int 拒绝", SHOW(elemConvert("Vector2", I(1))), "<reject>");
+  eq("083", "Array ← Dictionary 拒绝", SHOW(elemConvert("Array", V.dict(new GDict()))), "<reject>");
+
+  // resize 的填充值（实测 8 种）
+  const defOf = (kind: string) => show(elemDefault(kind as never));
+  eq("083", "int 默认 0", defOf("int"), "0");
+  eq("083", "float 默认 0.0", defOf("float"), "0.0");
+  eq("083", "bool 默认 false", defOf("bool"), "false");
+  eq("083", "String 默认空串", "[" + defOf("String") + "]", "[]");
+  eq("083", "StringName 默认 &\"\"", defOf("StringName"), "");
+  eq("083", "Vector2 默认 (0.0, 0.0)", defOf("Vector2"), "(0.0, 0.0)");
+  eq("083", "Array 默认 []", defOf("Array"), "[]");
+  eq("083", "Dictionary 默认 {  }", defOf("Dictionary"), "{  }");
+
+  // 装元素：能转就转、不能转就不进去
+  const ai = typed("int", [I(1), F(2.5), V.bool(true)]);
+  eq("083", "字面量初值逐格转换", show(ai), "[1, 2, 1]");
+  call(ai, "append", [F(4.9)]);
+  call(ai, "append", [S("s")]);
+  call(ai, "append", [V.nil()]);
+  eq("083", "append 被拒的元素不进去", show(ai), "[1, 2, 1, 4]");
+  call(ai, "insert", [I(0), F(9.8)]);
+  eq("083", "insert 也转换", show(ai), "[9, 1, 2, 1, 4]");
+  call(ai, "insert", [I(0), S("x")]);
+  eq("083", "insert 被拒时数组不动", show(ai), "[9, 1, 2, 1, 4]");
+  call(ai, "fill", [F(5.7)]);
+  eq("083", "fill 转换后填满", show(ai), "[5, 5, 5, 5, 5]");
+  // 检索值先收成本类型（与未定型数组的 -1 形成对照，见 080）
+  const q = typed("int", [I(1), I(2)]);
+  eq("083", "定型数组 find(1.0) 命中", show(call(q, "find", [F(1)])), "0");
+  eq("083", "定型数组 count(1.0) 计数", show(call(q, "count", [F(1)])), "1");
+  eq("083", "定型数组 has(1.0) 为真", show(call(q, "has", [F(1)])), "true");
+  eq("083", "未定型数组 find(1.0) 仍是 -1", show(call(V.array(GArray.of([I(1)])), "find", [F(1)])), "-1");
+  eq("083", "定型数组 find(\"s\") 收不下 → -1", show(call(q, "find", [S("s")])), "-1");
+  call(q, "erase", [F(2.5)]);
+  eq("083", "erase 也先收成本类型", show(q), "[1]");
+  // resize
+  const rz = typed("int", [I(1)]);
+  call(rz, "resize", [I(3)]);
+  eq("083", "resize 扩张填类型默认值", show(rz), "[1, 0, 0]");
+  call(rz, "resize", [I(1)]);
+  eq("083", "resize 收缩是截断", show(rz), "[1]");
+  const rzu = V.array(GArray.of([I(1)]));
+  call(rzu, "resize", [I(3)]);
+  eq("083", "未定型数组填 null", show(rzu), "[1, <null>, <null>]");
+  // 传播：duplicate/slice/filter 保留定型，map 与 + 不保留
+  const keepTyped = (v: Variant) => {
+    call(v, "append", [S("s")]);
+    return show(v);
+  };
+  eq("083", "duplicate 保留定型", keepTyped(call(typed("int", [I(1)]), "duplicate")), "[1]");
+  eq("083", "slice 保留定型", keepTyped(call(typed("int", [I(1)]), "slice", [I(0), I(1)])), "[1]");
+  eq("083", "filter 保留定型", keepTyped(call(typed("int", [I(1)]), "filter", [callable((x: Variant) => V.bool(true))])), "[1]");
+  eq("083", "map 不保留定型", keepTyped(call(typed("int", [I(1)]), "map", [callable((x: Variant) => x)])), '[1, "s"]');
+  eq("083", "+ 不保留定型", keepTyped(ops.add(typed("int", [I(1)]), V.array(GArray.of([I(2)])))), '[1, 2, "s"]');
+  // append_array / assign 全有或全无
+  const aa = typed("int", [I(0)]);
+  call(aa, "append_array", [V.array(GArray.of([I(1), S("s")]))]);
+  eq("083", "append_array 有一格不合格就整个不动", show(aa), "[0]");
+  call(aa, "append_array", [V.array(GArray.of([F(1.5), F(2.5)]))]);
+  eq("083", "append_array 全合格就逐格转换", show(aa), "[0, 1, 2]");
+  const asrc = V.array(GArray.of([I(3)]));
+  const ag = typed("int", [I(9)]);
+  call(ag, "assign", [asrc]);
+  call(asrc, "push_back", [I(7)]);
+  eq("083", "assign 换整层但不共享外层", show(ag), "[3]");
+  call(ag, "assign", [V.array(GArray.of([I(4), S("s")]))]);
+  eq("083", "assign 也全有或全无", show(ag), "[3]");
+  // 未定型数组赋给定型变量：Godot 是运行时报错（即使数组是空的）
+  shouldThrow("083", "未定型数组不能当定型变量的初值", () => stampArray(V.array(GArray.of([])), "int", false));
+  shouldThrow("083", "未定型字典同理", () => stampDict(V.dict(new GDict()), "String", "int", false));
+  // 定型字典：键与值各自转换
+  const dt = stampDict(V.dict(new GDict()), "String", "int", true);
+  const dv = dt.v as GDict;
+  dv.set(S("a"), F(1.9));
+  eq("083", "字典值按 valKind 转换", show(dt), '{ "a": 1 }');
+  dv.set(V.stringName("b"), I(2));
+  eq("083", "字典键按 keyKind 收成 String", show(dt), '{ "a": 1, "b": 2 }');
+  dv.set(I(3), I(3));
+  eq("083", "键收不下就整次 set 作废", show(dt), '{ "a": 1, "b": 2 }');
+  eq("083", "字典 has 先收键类型", show(dt.t === Tag.DICT ? method(dt, "has", [V.stringName("a")]) : V.nil()), "true");
+  eq("083", "字典 get 收不下的键当不存在", show(method(dt, "get", [I(1)])), "<null>");
+  eq("083", "find_key 先收值类型", show(method(dt, "find_key", [F(2.0)])), "b");
+  // 空数组 insert(0) 等边界不受定型影响
+  const freshT = typed("int", []);
+  call(freshT, "insert", [I(0), I(1)]);
+  eq("083", "空的定型数组 insert(0) 给一格", show(freshT), "[1]");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
