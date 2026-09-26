@@ -56,6 +56,16 @@ export function arrIdx(i: number, len: number): number {
   return k;
 }
 
+/**
+ * 方法参数里的下标（`pop_at` / `remove_at` / `insert` …）：与 arrIdx 同样「负数从尾部数」，
+ * 但**越界不给异常** —— 实测这些方法越界是静默无操作（`pop_at` 连返回都是 null）。
+ * 方括号下标走 arrIdx（那条必须炸），两套口径别混。
+ */
+function fromEnd(i: number, len: number): number | null {
+  const k = i < 0 ? i + len : i;
+  return k < 0 || k >= len ? null : k;
+}
+
 export class GArray {
   private items: Variant[];
 
@@ -88,12 +98,138 @@ export class GArray {
   }
 
   /** 深拷贝：元素里的容器也要复制（S9 —— 赋值是共享，duplicate 才是拷贝） */
-  duplicate(): GArray {
-    return new GArray(this.items.map(deepCopy));
+  duplicate(deep = false): GArray {
+    // 实测 `duplicate()` 是**浅**的：外层新数组、内层容器仍是同一个引用
+    // （`var s = a.duplicate(); s[0][0] = 9` 会把 `a` 也改掉），要 `duplicate(true)` 才断开
+    return deep ? new GArray(this.items.map(deepCopy)) : new GArray([...this.items]);
   }
 
   has(v: Variant): boolean {
-    return this.items.some((x) => valueEq(x, v));
+    return this.items.some((x) => valueSame(x, v));
+  }
+
+  /**
+   * `insert(at, v)`。实测越界是**静默不插入**（既不报错也不追加）：`insert(10)` 无变化，
+   * 但 `insert(size)` 恰好等于尾接；负数按下标从尾部折算（`insert(-1)` 插在倒数第一格之前）。
+   */
+  insertAt(at: number, v: Variant): void {
+    const n = this.items.length;
+    const k = at < 0 ? n + at : at;
+    if (k < 0 || k > n) return;
+    this.items.splice(k, 0, v);
+  }
+
+  /** `erase(v)`：删掉第一个身份相等的元素，没有就什么都不做（实测不报错）。 */
+  erase(v: Variant): void {
+    const i = this.findSame(v);
+    if (i >= 0) this.items.splice(i, 1);
+  }
+
+  popFront(): Variant {
+    return this.shiftAt(this.items.length ? 0 : null);
+  }
+
+  popBack(): Variant {
+    return this.shiftAt(this.items.length ? this.items.length - 1 : null);
+  }
+
+  /** `pop_at(i)`：越界（含折算后越界的负数）实测给 null 且**不改数组**。 */
+  popAt(i: number): Variant {
+    return this.shiftAt(fromEnd(i, this.items.length));
+  }
+
+  private shiftAt(k: number | null): Variant {
+    if (k === null) return V.nil();
+    return this.items.splice(k, 1)[0] as Variant;
+  }
+
+  pushFront(v: Variant): void {
+    this.items.unshift(v);
+  }
+
+  /** `remove_at(i)`：与 pop_at 同一套折算，越界静默无操作。 */
+  removeAt(i: number): void {
+    const k = fromEnd(i, this.items.length);
+    if (k !== null) this.shiftAt(k);
+  }
+
+  /**
+   * `fill(v)`：整格填成**同一个引用**（实测 `a.fill(b)` 后改 `b`，a 的每一格都跟着变），
+   * 不是每格一份拷贝。
+   */
+  fillWith(v: Variant): void {
+    for (let i = 0; i < this.items.length; i++) this.items[i] = v;
+  }
+
+  /**
+   * `slice(begin, end, step, deep)`。end 传 null 表示实参省略（实测省略时截到串尾，
+   * 而**显式 -1** 是「末尾前一格」—— `slice(2, -1)` 在 3 格数组上给 []，两者不能混为一谈）。
+   * 步长为 0 实测给空数组；负步长只往回走，方向不对直接空（`slice(0, 5, -1)` → []）。
+   */
+  sliceItems(begin: number, end: number | null, step: number, deep: boolean): GArray {
+    const n = this.items.length;
+    const out: Variant[] = [];
+    if (step !== 0) {
+      let b = begin < 0 ? n + begin : begin;
+      let e = end === null ? n : end < 0 ? n + end : end;
+      if (step > 0) {
+        b = Math.min(Math.max(b, 0), n);
+        e = Math.min(Math.max(e, 0), n);
+        for (let i = b; i < e; i += step) out.push(this.items[i] as Variant);
+      } else {
+        // 负步长：起点越过末位就从末位开始（实测 slice(9,1,-1) → [5,4,3]），
+        // 终点最低压到 -1，好让 slice(-1,-9,-1) 还能取下标 0。
+        b = Math.min(Math.max(b, 0), n - 1);
+        e = Math.max(e, -1);
+        for (let i = b; i > e; i += step) out.push(this.items[i] as Variant);
+      }
+    }
+    return deep ? new GArray(out.map(deepCopy)) : new GArray(out);
+  }
+
+  /** `append_array(other)`：元素按引用接上（实测改 src 的嵌套容器会串进来）。 */
+  appendAll(other: GArray): void {
+    this.items.push(...other.raw());
+  }
+
+  /** `assign(other)`：整层换掉，但元素仍共享引用（实测 b 改了内层会串进 a，改外层不会）。 */
+  assignFrom(other: GArray): void {
+    this.items = [...other.raw()];
+  }
+
+  reverseItems(): void {
+    this.items.reverse();
+  }
+
+  clearAll(): void {
+    this.items = [];
+  }
+
+  /**
+   * `find(v, from = 0)` / `count(v)` / `erase(v)` / `has(v)` 都用**身份**相等而不是 `==`
+   * （见 valueSame），且 `from` 不做「从尾部数」：实测负数一律 -1、越过尾也 -1。
+   */
+  findSame(v: Variant, from = 0): number {
+    if (from < 0 || from >= this.items.length) return -1;
+    for (let i = from; i < this.items.length; i++) if (valueSame(this.items[i] as Variant, v)) return i;
+    return -1;
+  }
+
+  /**
+   * `rfind(v, from = -1)`：负 from **先**按从尾部折算，折算后仍越界才退回「整段都找」。
+   * 实测 `[1,2,1,2]` 上 `from=0` → 0、`-2` → 2、`-4` → 0 而 `-9` → 2，只有这两步能同时满足。
+   */
+  rfindSame(v: Variant, from = -1): number {
+    const n = this.items.length;
+    if (n === 0) return -1;
+    let k = from < 0 ? n + from : from;
+    if (k < 0 || k >= n) k = n - 1;
+    for (let i = k; i >= 0; i--) if (valueSame(this.items[i] as Variant, v)) return i;
+    return -1;
+  }
+
+  count(v: Variant): number {
+    return this.items.reduce((m, x) => (valueSame(x, v) ? m + 1 : m), 0);
   }
 
   /** `+` 产生新数组，不修改原数组 */
@@ -109,6 +245,12 @@ export class GArray {
     });
   }
 
+  /** 身份版比较：`has`/`find`/`count` 走它（见 valueSame）。 */
+  same(other: GArray): boolean {
+    if (this.items.length !== other.items.length) return false;
+    return this.items.every((x, i) => valueSame(x, other.items[i] as Variant));
+  }
+
   /**
    * `sort()`。实测（4.6.3）：int/float 混排按数值排、各自保留原类型（`[2.5,1,3.0,2]` → `[1, 2, 2.5, 3.0]`）；
    * 字符串按码点（`["b","a","C"]` → `["C","a","b"]`）；纯 bool 能排（false 在前）；
@@ -119,7 +261,7 @@ export class GArray {
   sort(): void {
     if (this.items.length === 0) return;
     const allNum = this.items.every((x) => x.t === Tag.INT || x.t === Tag.FLOAT);
-    const allStr = this.items.every((x) => x.t === Tag.STRING);
+    const allStr = this.items.every((x) => x.t === Tag.STRING || x.t === Tag.STRING_NAME);
     const allBool = this.items.every((x) => x.t === Tag.BOOL);
     const allVec = this.items.every((x) => asVec2(x) !== null);
     if (!allNum && !allStr && !allBool && !allVec) {
@@ -171,15 +313,6 @@ export class GArray {
       else hi = m;
     }
     return lo;
-  }
-
-  /** `find(v)` 用深度相等（实测 `[[1,2],[3,4]].find([3,4])` → 1），未命中给 -1。 */
-  find(v: Variant): number {
-    return this.items.findIndex((x) => valueEq(x, v));
-  }
-
-  count(v: Variant): number {
-    return this.items.reduce((n, x) => (valueEq(x, v) ? n + 1 : n), 0);
   }
 
   /** min/max 的比较口径由调用方给（值类型在 ops 那边，运行时这里不能反向依赖）。 */
@@ -254,14 +387,90 @@ export class GDict {
     }
   }
 
-  duplicate(): GDict {
+  /** 实测 `duplicate()` 是浅拷贝（改副本里的嵌套容器会串回原字典），`duplicate(true)` 才断开。 */
+  duplicate(deep = false): GDict {
     const d = new GDict();
     for (let i = 0; i < this.ks.length; i++) {
       const k = this.ks[i];
       const v = this.vs[i];
-      if (k !== undefined && v !== undefined) d.set(deepCopy(k), deepCopy(v));
+      if (k !== undefined && v !== undefined) d.set(deep ? deepCopy(k) : k, deep ? deepCopy(v) : v);
     }
     return d;
+  }
+
+  /** `erase(k)`：实测返回** bool**（键在不在），不是 void。 */
+  erase(k: Variant): boolean {
+    const key = keyOf(k);
+    const i = this.index.get(key);
+    if (i === undefined) return false;
+    this.ks.splice(i, 1);
+    this.vs.splice(i, 1);
+    this.index.delete(key);
+    for (const [kk, ii] of [...this.index.entries()]) {
+      if (ii > i) this.index.set(kk, ii - 1);
+    }
+    return true;
+  }
+
+  clearAll(): void {
+    this.ks = [];
+    this.vs = [];
+    this.index = new Map();
+  }
+
+  /**
+   * `merge(other, overwrite)`。实测**默认不覆盖**（`{"a":1}` merge `{"a":9,"b":2}` 仍是 `{"a":1,"b":2}`），
+   * 第二个实参给 true 才顶掉已有的键；新键两种情况都会补上。
+   */
+  mergeWith(other: GDict, overwrite: boolean): void {
+    const ks = other.keys();
+    for (const k of ks) {
+      if (this.has(k)) {
+        if (overwrite) this.set(k, other.get(k));
+      } else {
+        this.set(k, other.get(k));
+      }
+    }
+  }
+
+  /** `has_all(keys)`：键用 `==` 口径（与 `has` 同一个 index 查法）；空数组实测为 true。 */
+  hasAll(keys: GArray): boolean {
+    return keys.raw().every((k) => this.has(k));
+  }
+
+  /** `find_key(v)`：按身份找值，命中给键、未命中实测给 null。 */
+  findKey(v: Variant): Variant {
+    for (let i = 0; i < this.vs.length; i++) {
+      if (valueSame(this.vs[i] as Variant, v)) return this.ks[i] as Variant;
+    }
+    return V.nil();
+  }
+
+  /** `assign(other)`：整层换成实参的一份拷贝（实测改实参不影响本字典）。 */
+  assignFrom(other: GDict): void {
+    const ks = other.keys();
+    const vs = other.values();
+    this.ks = [];
+    this.vs = [];
+    this.index = new Map();
+    for (let i = 0; i < ks.length; i++) this.set(ks[i] as Variant, vs[i] as Variant);
+  }
+
+  isEmpty(): boolean {
+    return this.ks.length === 0;
+  }
+
+  /** 身份版比较（`count`/`find` 的实参是容器时用，见 valueSame）：不看键序。 */
+  same(other: GDict): boolean {
+    if (this.size() !== other.size()) return false;
+    return this.ks.every((k, i) => {
+      for (let j = 0; j < other.ks.length; j++) {
+        if (valueSame(k, other.ks[j] as Variant)) {
+          return valueSame(this.vs[i] as Variant, other.vs[j] as Variant);
+        }
+      }
+      return false;
+    });
   }
 
   eq(other: GDict): boolean {
@@ -271,8 +480,9 @@ export class GDict {
 }
 
 function deepCopy(v: Variant): Variant {
-  if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate());
-  if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate());
+  // 这里必须显式要深拷贝：duplicate() 默认是浅的（Godot 的口径，见上）
+  if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true));
+  if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate(true));
   return { t: v.t, v: v.v };
 }
 
@@ -918,6 +1128,39 @@ export function valueEq(a: Variant, b: Variant): boolean {
       return a.v === b.v;
   }
   return false;
+}
+
+/**
+ * Godot 的**身份**相等（`Variant::identity`）：`has` / `find` / `rfind` / `count` / `erase` 用它，
+ * 而 `==` 运算符用上面那个跨 int/float 的 valueEq。两者在数字上分家（实测 `[1].has(1.0)` → false、
+ * `[1].find(1.0)` → -1，而 `1 == 1.0` 为真；`[0].has(false)`、`[null].has(0)` 也都是 false），
+ * String 与 StringName 却合一（实测 `["a"].count(&"a")` → 1），容器递归比身份、字典不看键序
+ * （实测 `[{"x":1,"y":2}].count({"y":2,"x":1})` → 1）。
+ */
+export function valueSame(a: Variant, b: Variant): boolean {
+  if (
+    (a.t === Tag.STRING || a.t === Tag.STRING_NAME) &&
+    (b.t === Tag.STRING || b.t === Tag.STRING_NAME)
+  ) {
+    return (a.v as string) === (b.v as string);
+  }
+  if (a.t !== b.t) return false;
+  switch (a.t) {
+    case Tag.NIL:
+      return true;
+    case Tag.ARRAY:
+      return (a.v as GArray).same(b.v as GArray);
+    case Tag.DICT:
+      return (a.v as GDict).same(b.v as GDict);
+    case Tag.OBJECT:
+      // Vector2 按分量而不是引用（实测 [Vector2(1,2)].count(Vector2(1.0,2.0)) → 1）
+      if (a.v instanceof GVector2 && b.v instanceof GVector2) {
+        return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
+      return a.v === b.v;
+    default:
+      return a.v === b.v;
+  }
 }
 
 /** 空数组 / 空字典 / 0 / 0.0 / "" 全为 false —— 与 JS 相反（S12） */

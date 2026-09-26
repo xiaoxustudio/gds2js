@@ -124,7 +124,21 @@ export function normalize(text, gdPath = "") {
   out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, p) => `<case>/${p.split("/").pop()}`);
   const lines = out.split(/\r?\n/);
   const kept = [];
-  for (const line of lines) {
+  // Godot 的容器方法在越界 / 切片方向不合时走的是引擎侧 ERR_FAIL_*：stderr 打一条 ERROR + 回溯，
+  // 然后**什么都不做继续跑**。行为与我们的"静默无操作"完全一致，差的就是那几行日志 —— 而里面的
+  // `at: insert (core/variant/array.cpp:335)` 是 Godot 的内部源文件行号，产物不可能复现。
+  // 所以整条（含 at: / backtrace / [N] 帧）归一化掉，与上面剥 ConfigFile 噪音、step 29 定下的
+  // 「不复现 Godot 的 stderr 警告」是同一条纪律。注意**不碰 `SCRIPT ERROR`**：那是脚本语义，
+  // 预期报错用例（013/014/074…）的 golden 就靠它。
+  const ENGINE_DIAG = /^ERROR: (The calculated index .* is out of bounds|Slice step )/;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (ENGINE_DIAG.test(line)) {
+      i++;
+      while (i < lines.length && /^\s+(at: |GDScript backtrace|\[\d+\] )/.test(lines[i])) i++;
+      i--;
+      continue;
+    }
     if (/^Godot Engine v/.test(line)) continue;
     if (/^ERROR: ConfigFile parse error/.test(line)) continue;
     if (/^\s*at: _parse \(core\/io\/config_file/.test(line)) continue;

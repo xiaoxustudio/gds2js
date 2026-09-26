@@ -1,0 +1,40 @@
+true
+{ "b": 2 }
+false
+{ "b": 2 }
+true
+{  }
+0
+true
+false
+{ "a": 1, "b": 2 }
+{ "a": 1, "b": 2 }
+{ "a": 9, "b": 2 }
+{ "a": 9, "b": 2 }
+true
+false
+true
+true
+b
+a
+<null>
+1
+<null>
+7
+1
+true
+{ "k": [9] }
+{ "k": [9] }
+{ "k": [5] }
+{  }
+{ "k": 1 }
+["b", "a"]
+[3, 2]
+["a", "b"]
+{ "y": 2 }
+true
+false
+false
+{ "l": [1, { "n": 2 }] }
+true
+true

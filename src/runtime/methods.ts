@@ -103,11 +103,67 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           a.append(one(args, "append"));
           return V.nil();
         case "duplicate":
-          return V.array(a.duplicate());
+          return V.array(a.duplicate(boolArgOr(args, 0, false)));
         case "size":
           return V.int(a.size());
+        case "is_empty":
+          return V.bool(a.size() === 0);
         case "has":
           return V.bool(a.has(one(args, "has")));
+        case "insert":
+          a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert"));
+          return V.nil();
+        case "erase":
+          a.erase(one(args, "erase"));
+          return V.nil();
+        case "push_front":
+          a.pushFront(one(args, "push_front"));
+          return V.nil();
+        case "push_back":
+          a.append(one(args, "push_back"));
+          return V.nil();
+        case "pop_front":
+          return a.popFront();
+        case "pop_back":
+          return a.popBack();
+        case "pop_at":
+          return a.popAt(intArg(args, 0, "pop_at"));
+        case "remove_at":
+          a.removeAt(intArg(args, 0, "remove_at"));
+          return V.nil();
+        case "clear":
+          a.clearAll();
+          return V.nil();
+        case "reverse":
+          a.reverseItems();
+          return V.nil();
+        case "fill":
+          a.fillWith(one(args, "fill"));
+          return V.nil();
+        case "append_array":
+          a.appendAll(asArray(one(args, "append_array"), "append_array"));
+          return V.nil();
+        case "assign":
+          a.assignFrom(asArray(one(args, "assign"), "assign"));
+          return V.nil();
+        case "slice":
+          // 第 2 个实参**省略**与显式给 -1 是两回事（前者截到尾），所以按 undefined 分岔
+          return V.array(
+            a.sliceItems(
+              intArgOr(args, 0, 0),
+              args[1] === undefined ? null : intArg(args, 1, "slice"),
+              intArgOr(args, 2, 1),
+              boolArgOr(args, 3, false),
+            ),
+          );
+        case "resize":
+          // 实测定长扩张要按**元素类型的默认值**填（Array[int] 给 0、Array[String] 给 ""），
+          // 而未定型数组给 null。我们的数组不携带元素类型（见 ROADMAP 待做），
+          // 一律填 null 会在定型数组上静默错，所以整条先报缺。
+          throw new UnsupportedError(
+            "array-resize",
+            "Array.resize() 未实现：定型数组要按元素类型填默认值，运行时还不携带元素类型",
+          );
         case "sort":
           a.sort();
           return V.nil();
@@ -123,7 +179,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "bsearch_custom":
           return V.int(a.bsearch(one(args, "bsearch_custom"), comparatorOf(args[1], "bsearch_custom")));
         case "find":
-          return V.int(a.find(one(args, "find")));
+          return V.int(a.findSame(one(args, "find"), intArgOr(args, 1, 0)));
+        case "rfind":
+          return V.int(a.rfindSame(one(args, "rfind"), intArgOr(args, 1, -1)));
         case "count":
           return V.int(a.count(one(args, "count")));
         // 实测空数组的 min()/max() 都是 null（不是报错）
@@ -147,12 +205,31 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "values":
           return V.array(GArray.of(d.values()));
         case "get":
-          return d.get(one(args, "get"));
+          // 实测缺键：get(k) 给 null，get(k, def) 给 def（与方括号 d[k] 的「缺键报错」是两回事）
+          return d.has(one(args, "get")) ? d.get(args[0] as Variant) : (args[1] ?? V.nil());
         case "set":
           d.set(args[0] as Variant, args[1] as Variant);
           return V.nil();
+        case "is_empty":
+          return V.bool(d.isEmpty());
+        case "erase":
+          return V.bool(d.erase(one(args, "erase")));
+        case "clear":
+          d.clearAll();
+          return V.nil();
+        case "merge":
+          // 默认**不覆盖**已有的键（实测），第二个实参给 true 才顶
+          d.mergeWith(asDict(one(args, "merge"), "merge"), boolArgOr(args, 1, false));
+          return V.nil();
+        case "has_all":
+          return V.bool(d.hasAll(asArray(one(args, "has_all"), "has_all")));
+        case "find_key":
+          return d.findKey(one(args, "find_key"));
+        case "assign":
+          d.assignFrom(asDict(one(args, "assign"), "assign"));
+          return V.nil();
         case "duplicate":
-          return V.dict(d.duplicate());
+          return V.dict(d.duplicate(boolArgOr(args, 0, false)));
         default:
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
       }
@@ -284,6 +361,12 @@ function one(args: Variant[], who: string): Variant {
   return a;
 }
 
+function argAt(args: Variant[], i: number, who: string): Variant {
+  const a = args[i];
+  if (a === undefined) throw new GodotRuntimeError("arity", `${who} 缺少第 ${i} 个参数`);
+  return a;
+}
+
 function intArg(args: Variant[], i: number, who: string): number {
   const a = args[i];
   if (a === undefined || a.t !== Tag.INT) {
@@ -306,5 +389,13 @@ function boolArg(args: Variant[], i: number, who: string): boolean {
   if (a === undefined || a.t !== Tag.BOOL) {
     throw new UnsupportedError("need-bool-arg", `${who} 的第 ${i} 个参数需要 bool`);
   }
+  return a.v as boolean;
+}
+
+/** 可选 bool 参：省略时取 Godot 的默认值（实测 duplicate()/slice() 的 deep、merge 的 overwrite 都默认 false） */
+function boolArgOr(args: Variant[], i: number, dflt: boolean): boolean {
+  const a = args[i];
+  if (a === undefined) return dflt;
+  if (a.t !== Tag.BOOL) throw new UnsupportedError("need-bool-arg", `第 ${i} 个参数需要 bool`);
   return a.v as boolean;
 }

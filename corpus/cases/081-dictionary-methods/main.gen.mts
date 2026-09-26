@@ -1,0 +1,84 @@
+// 由 gds2js 从 main.gd 编译生成 —— 不要手改。
+
+import * as rt from "../../../src/runtime/index";
+import { print, SceneTree } from "../../../tools/harness/scene-tree";
+
+export class Main extends SceneTree {
+  async _initialize(): Promise<void> {
+    let d = rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]);
+    print(rt.show(rt.method(d, "erase", [rt.V.str("a")])));
+    print(rt.show(d));
+    print(rt.show(rt.method(d, "erase", [rt.V.str("zz")])));
+    print(rt.show(d));
+    print(rt.show(rt.method(d, "has", [rt.V.str("b")])));
+    let c = rt.dictOf([[rt.V.int(1), rt.V.int(2)]]);
+    rt.method(c, "clear", []);
+    print(rt.show(c));
+    print(rt.show(rt.method(c, "size", [])));
+    print(rt.show(rt.method(c, "is_empty", [])));
+    print(rt.show(rt.method(rt.dictOf([[rt.V.int(1), rt.V.int(2)]]), "is_empty", [])));
+    let m = rt.dictOf([[rt.V.str("a"), rt.V.int(1)]]);
+    rt.method(m, "merge", [rt.dictOf([[rt.V.str("a"), rt.V.int(9)], [rt.V.str("b"), rt.V.int(2)]])]);
+    print(rt.show(m));
+    rt.method(m, "merge", [rt.dictOf([[rt.V.str("a"), rt.V.int(9)]]), rt.V.bool(false)]);
+    print(rt.show(m));
+    rt.method(m, "merge", [rt.dictOf([[rt.V.str("a"), rt.V.int(9)]]), rt.V.bool(true)]);
+    print(rt.show(m));
+    rt.method(m, "merge", [rt.dictOf([])]);
+    print(rt.show(m));
+    let ha = rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]);
+    print(rt.show(rt.method(ha, "has_all", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])));
+    print(rt.show(rt.method(ha, "has_all", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("z")]))])));
+    print(rt.show(rt.method(ha, "has_all", [rt.V.array(rt.GArray.of([]))])));
+    print(rt.show(rt.method(rt.dictOf([]), "has_all", [rt.V.array(rt.GArray.of([]))])));
+    let fk = rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]);
+    print(rt.show(rt.method(fk, "find_key", [rt.V.int(2)])));
+    print(rt.show(rt.method(fk, "find_key", [rt.V.int(1)])));
+    print(rt.show(rt.method(fk, "find_key", [rt.V.int(99)])));
+    print(rt.show(rt.method(fk, "get", [rt.V.str("a")])));
+    print(rt.show(rt.method(fk, "get", [rt.V.str("zz")])));
+    print(rt.show(rt.method(fk, "get", [rt.V.str("zz"), rt.V.int(7)])));
+    print(rt.show(rt.index(fk, rt.V.stringName("a"))));
+    print(rt.show(rt.method(fk, "has", [rt.V.stringName("a")])));
+    let dd = rt.dictOf([[rt.V.str("k"), rt.V.array(rt.GArray.of([rt.V.int(1)]))]]);
+    let ds = rt.method(dd, "duplicate", []);
+    rt.setIndex(rt.index(ds, rt.V.str("k")), rt.V.int(0), rt.V.int(9));
+    print(rt.show(dd));
+    let deep = rt.method(dd, "duplicate", [rt.V.bool(true)]);
+    rt.setIndex(rt.index(deep, rt.V.str("k")), rt.V.int(0), rt.V.int(5));
+    print(rt.show(dd));
+    print(rt.show(deep));
+    let eo = rt.dictOf([]);
+    let es = rt.method(eo, "duplicate", []);
+    rt.setIndex(es, rt.V.str("k"), rt.V.int(1));
+    print(rt.show(eo));
+    print(rt.show(es));
+    let order = rt.dictOf([]);
+    rt.setIndex(order, rt.V.str("b"), rt.V.int(1));
+    rt.setIndex(order, rt.V.str("a"), rt.V.int(2));
+    rt.setIndex(order, rt.V.str("b"), rt.V.int(3));
+    print(rt.show(rt.method(order, "keys", [])));
+    print(rt.show(rt.method(order, "values", [])));
+    rt.method(order, "erase", [rt.V.str("b")]);
+    rt.setIndex(order, rt.V.str("b"), rt.V.int(4));
+    print(rt.show(rt.method(order, "keys", [])));
+    let asg = rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]);
+    let src = rt.dictOf([[rt.V.str("y"), rt.V.int(2)]]);
+    rt.method(asg, "assign", [src]);
+    rt.setIndex(src, rt.V.str("y"), rt.V.int(9));
+    print(rt.show(asg));
+    let eq1 = rt.dictOf([[rt.V.str("x"), rt.V.int(1)], [rt.V.str("y"), rt.V.int(2)]]);
+    let eq2 = rt.dictOf([[rt.V.str("y"), rt.V.int(2)], [rt.V.str("x"), rt.V.int(1)]]);
+    print(rt.show(rt.ops.eq(eq1, eq2)));
+    print(rt.show(rt.ops.neq(eq1, eq2)));
+    print(rt.show(rt.ops.eq(eq1, rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]))));
+    let nest = rt.dictOf([[rt.V.str("l"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.dictOf([[rt.V.str("n"), rt.V.int(2)]])]))]]);
+    print(rt.show(nest));
+    print(rt.show(rt.ops.eq(rt.method(nest, "duplicate", [rt.V.bool(true)]), nest)));
+    print(rt.show(rt.ops.eq(rt.index(rt.method(nest, "duplicate", [rt.V.bool(true)]), rt.V.str("l")), rt.index(nest, rt.V.str("l")))));
+    this.quit();
+  }
+  
+}
+
+await new Main().run();

@@ -368,8 +368,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const unsorted = GArray.of([I(3), I(1), I(2)]);
   eq("070", "bsearch 不检查有序、照二分走法给值", unsorted.bsearch(I(2), isLess), 2);
   eq("070", "bsearch 超出上界给 size", unsorted.bsearch(I(99), isLess), 3);
-  eq("070", "find 用深度相等", GArray.of([pair(1, "a"), pair(3, "b")]).find(pair(3, "b")), 1);
-  eq("070", "find 未命中给 -1", unsorted.find(I(9)), -1);
+  eq("070", "find 用深度相等", GArray.of([pair(1, "a"), pair(3, "b")]).findSame(pair(3, "b")), 1);
+  eq("070", "find 未命中给 -1", unsorted.findSame(I(9)), -1);
   eq("070", "count 数深度相等的个数", unsorted.count(I(3)), 1);
   eq("070", "min 走同一个比较口径", show(unsorted.extreme(true, isLess) as Variant), "1");
   eq("070", "空数组 extreme 给 null", GArray.of([]).extreme(true, isLess), null);
@@ -561,6 +561,252 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("079", "split 的第 3 个参数 max_splits 口径没测清，报缺", () =>
     sm("a-b-c", "split", [S("-"), V.bool(false), I(2)]),
   );
+}
+
+// ---- 080/081 容器结构方法与「身份 vs ==」两套口径（期望值取自 080/081 的 godot.txt）
+{
+  const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
+  const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
+  const N = V.nil();
+  const B = (b: boolean) => V.bool(b);
+  const vec = (x: number, y: number) => vector2(x, y);
+  const dict = (pairs: [Variant, Variant][]) => {
+    const g = new GDict();
+    for (const [k, v] of pairs) g.set(k, v);
+    return V.dict(g);
+  };
+
+  // insert：越界是静默不插入，但 at == size 恰好尾接；负数从尾部折算
+  const ins = arrOf([I(1), I(2), I(3)]);
+  call(ins, "insert", [I(0), I(9)]);
+  eq("080", "insert(0) 插到最前", show(ins), "[9, 1, 2, 3]");
+  call(ins, "insert", [I(2), I(8)]);
+  eq("080", "insert(2) 插到中间", show(ins), "[9, 1, 8, 2, 3]");
+  call(ins, "insert", [I(10), I(7)]);
+  eq("080", "insert 越界静默不插入", show(ins), "[9, 1, 8, 2, 3]");
+  call(ins, "insert", [I(6), I(7)]);
+  eq("080", "insert 的 at 越过尾也不插入", show(ins), "[9, 1, 8, 2, 3]");
+  call(ins, "insert", [I(5), I(7)]);
+  eq("080", "insert(at == size) 尾接", show(ins), "[9, 1, 8, 2, 3, 7]");
+  const neg = arrOf([I(1), I(2), I(3)]);
+  call(neg, "insert", [I(-1), I(5)]);
+  eq("080", "insert(-1) 从尾部折算", show(neg), "[1, 2, 5, 3]");
+  call(neg, "insert", [I(-9), I(4)]);
+  eq("080", "insert 负向越界也不插入", show(neg), "[1, 2, 5, 3]");
+  const fresh = arrOf([]);
+  call(fresh, "insert", [I(0), I(1)]);
+  eq("080", "空数组 insert(0) 给一格", show(fresh), "[1]");
+
+  // pop 族：越界给 null 而且不改数组
+  const pp = arrOf([I(1), I(2), I(3)]);
+  eq("080", "pop_front 给值并移除", show(call(pp, "pop_front")), "1");
+  eq("080", "pop_back 给值并移除", show(call(pp, "pop_back")), "3");
+  eq("080", "pop 之后剩中间那格", show(pp), "[2]");
+  eq("080", "pop_at(5) 越界给 null", show(call(pp, "pop_at", [I(5)])), "<null>");
+  eq("080", "pop_at 越界不改数组", show(pp), "[2]");
+  eq("080", "pop_at(-9) 折算后仍越界给 null", show(call(pp, "pop_at", [I(-9)])), "<null>");
+  const last = arrOf([I(1), I(2), I(3)]);
+  eq("080", "pop_at(-1) 是最后一格", show(call(last, "pop_at", [I(-1)])), "3");
+  eq("080", "pop_at(-1) 之后数组缩短", show(last), "[1, 2]");
+  const empt = arrOf([]);
+  eq("080", "空数组 pop_front 给 null", show(call(empt, "pop_front")), "<null>");
+  eq("080", "空数组 pop_back 给 null", show(call(empt, "pop_back")), "<null>");
+  eq("080", "空数组 pop_at 给 null", show(call(empt, "pop_at", [I(0)])), "<null>");
+
+  // remove_at / erase / clear / reverse
+  const rm = arrOf([I(1), I(2), I(3)]);
+  call(rm, "remove_at", [I(0)]);
+  eq("080", "remove_at(0)", show(rm), "[2, 3]");
+  call(rm, "remove_at", [I(5)]);
+  eq("080", "remove_at 越界静默无操作", show(rm), "[2, 3]");
+  call(rm, "remove_at", [I(-1)]);
+  eq("080", "remove_at(-1) 删最后一格", show(rm), "[2]");
+  const er = arrOf([I(1), I(2), I(3), I(1)]);
+  call(er, "erase", [I(2)]);
+  eq("080", "erase 删掉第一个匹配", show(er), "[1, 3, 1]");
+  call(er, "erase", [I(9)]);
+  eq("080", "erase 没匹配就什么都不做", show(er), "[1, 3, 1]");
+  call(er, "erase", [I(1)]);
+  eq("080", "erase 只删第一个、不删全部", show(er), "[3, 1]");
+  const erNest = arrOf([V.array(GArray.of([I(1), I(2)])), I(3)]);
+  call(erNest, "erase", [V.array(GArray.of([I(1), I(2)]))]);
+  eq("080", "erase 嵌套数组按值匹配", show(erNest), "[3]");
+  const erMix = arrOf([F(1), I(1)]);
+  call(erMix, "erase", [I(1)]);
+  eq("080", "erase 用身份口径：1 不碰 1.0", show(erMix), "[1.0]");
+  const rv = arrOf([I(1), I(2), I(3)]);
+  call(rv, "reverse");
+  eq("080", "reverse 原地反转", show(rv), "[3, 2, 1]");
+  call(rv, "clear");
+  eq("080", "clear 清空", `${show(rv)}/${show(call(rv, "is_empty"))}`, "[]/true");
+  eq("080", "is_empty 对非空是 false", show(call(arrOf([I(1)]), "is_empty")), "false");
+
+  // fill：所有格是同一个引用（实测改 src 会串进每一格）
+  const fl = arrOf([I(1), I(2)]);
+  const srcArr = arrOf([I(9)]);
+  call(fl, "fill", [srcArr]);
+  eq("080", "fill 填进去的是引用", show(fl), "[[9], [9]]");
+  call(srcArr, "assign", [arrOf([I(5)])]);
+  eq("080", "改源数组会串进每一格", show(fl), "[[5], [5]]");
+
+  // slice：17 条实测边界
+  const SL = (begin: number, end?: number, step?: number, deep?: boolean) =>
+    show(
+      call(
+        arrOf([I(1), I(2), I(3), I(4), I(5)]),
+        "slice",
+        [
+          I(begin),
+          ...(end === undefined ? [] : [I(end)]),
+          ...(step === undefined ? [] : [I(step)]),
+          ...(deep === undefined ? [] : [B(deep)]),
+        ],
+      ),
+    );
+  eq("080", "slice(1,3)", SL(1, 3), "[2, 3]");
+  eq("080", "slice(-2) 从尾部", SL(-2), "[4, 5]");
+  eq("080", "slice(1) 缺 end 截到尾", SL(1), "[2, 3, 4, 5]");
+  eq("080", "slice(0,10) 越界夹紧", SL(0, 10), "[1, 2, 3, 4, 5]");
+  eq("080", "slice(3,1) 反向不给倒序", SL(3, 1), "[]");
+  eq("080", "slice(0,0) 空", SL(0, 0), "[]");
+  eq("080", "slice(-9) 起点夹到 0", SL(-9), "[1, 2, 3, 4, 5]");
+  eq("080", "slice(-9,-6) 两头都夹", SL(-9, -6), "[]");
+  eq("080", "显式 slice(2,-1) 是「末位前一格」为终点", SL(2, -1), "[3, 4]");
+  eq("080", "slice(0,5,2) 步长", SL(0, 5, 2), "[1, 3, 5]");
+  eq("080", "slice(1,4,3)", SL(1, 4, 3), "[2]");
+  eq("080", "负步长方向不对给空", SL(0, 5, -1), "[]");
+  eq("080", "slice(4,1,-1) 往回走", SL(4, 1, -1), "[5, 4, 3]");
+  eq("080", "slice(-1,-6,-1) 走到下标 0 为止", SL(-1, -6, -1), "[5, 4, 3, 2, 1]");
+  eq("080", "起点越界从末位开始", SL(9, 1, -1), "[5, 4, 3]");
+  eq("080", "步长 0 实测给空数组", SL(0, 5, 0), "[]");
+  const sh2 = arrOf([V.array(GArray.of([I(1)])), V.array(GArray.of([I(2)]))]);
+  const cut = call(sh2, "slice", [I(0), I(2)]) as Variant;
+  call(call(cut, "pop_front") as Variant, "erase", [I(1)]);
+  eq("080", "slice 默认浅切：内层共享", show(sh2), "[[], [2]]");
+  const sh3 = arrOf([V.array(GArray.of([I(1)])), V.array(GArray.of([I(2)]))]);
+  const deepCut = call(sh3, "slice", [I(0), I(2), I(1), B(true)]) as Variant;
+  call(deepCut, "assign", [arrOf([V.array(GArray.of([I(9)]))])]);
+  eq("080", "slice(..., true) 深切：改不到原表", show(sh3), "[[1], [2]]");
+
+  // duplicate / append_array / assign 的引用口径
+  const dupSrc = arrOf([arrOf([I(1)])]);
+  const shallowInner = call(call(dupSrc, "duplicate"), "pop_front") as Variant;
+  call(shallowInner, "erase", [I(1)]);
+  eq("080", "duplicate() 是浅拷贝：改副本的内层会串回原表", show(dupSrc), "[[]]");
+  const dupSrc2 = arrOf([arrOf([I(1)])]);
+  const deepInner = call(call(dupSrc2, "duplicate", [B(true)]), "pop_front") as Variant;
+  call(deepInner, "erase", [I(1)]);
+  eq("080", "duplicate(true) 断开内层", show(dupSrc2), "[[1]]");
+  const ap = arrOf([I(1)]);
+  const asrc = arrOf([arrOf([I(9)])]);
+  call(ap, "append_array", [asrc]);
+  call(asrc, "pop_back");
+  eq("080", "append_array 之后动源数组的外层不影响 ap", show(ap), "[1, [9]]");
+  const ap2 = arrOf([]);
+  const asrc2 = arrOf([arrOf([I(9)])]);
+  call(ap2, "append_array", [asrc2]);
+  call(call(asrc2, "pop_back"), "erase", [I(9)]);
+  eq("080", "append_array 接的是同一个内层引用", show(ap2), "[[]]");
+  const asg = arrOf([I(1), I(2)]);
+  const bsrc = arrOf([I(3)]);
+  call(asg, "assign", [bsrc]);
+  call(bsrc, "push_back", [I(9)]);
+  eq("080", "assign 换整层但不共享外层结构", show(asg), "[3]");
+  const asg2 = arrOf([]);
+  const nsrc = arrOf([V.array(GArray.of([I(1)]))]);
+  call(asg2, "assign", [nsrc]);
+  call(call(nsrc, "pop_front"), "erase", [I(1)]);
+  eq("080", "assign 的元素仍共享", show(asg2), "[[]]");
+
+  // 身份 vs ==：has / find / rfind / count 用身份，运算符 == 用 valueEq
+  const idn = arrOf([I(1), F(1), B(true), N, V.stringName("a")]);
+  eq("080", "has 命中 int 1", show(call(idn, "has", [I(1)])), "true");
+  eq("080", "has 命中 float 1.0", show(call(idn, "has", [F(1)])), "true");
+  eq("080", "has 命中 true", show(call(idn, "has", [B(true)])), "true");
+  eq("080", "has 命中 null", show(call(idn, "has", [N])), "true");
+  eq("080", "StringName 与 String 身份合一", show(call(idn, "has", [S("a")])), "true");
+  eq("080", "[1] 里没有 1.0（has 不看 ==）", show(call(arrOf([I(1)]), "has", [F(1)])), "false");
+  eq("080", "[1] 里 find(1.0) 给 -1", show(call(arrOf([I(1)]), "find", [F(1)])), "-1");
+  eq("080", "[1] 里 count(1.0) 给 0", show(call(arrOf([I(1)]), "count", [F(1)])), "0");
+  eq("080", "[0] 里没有 false", show(call(arrOf([I(0)]), "has", [B(false)])), "false");
+  eq("080", "[null] 里没有 0", show(call(arrOf([N]), "has", [I(0)])), "false");
+  eq("080", "嵌套容器也按身份递归", show(call(arrOf([V.array(GArray.of([I(1)]))]), "has", [V.array(GArray.of([F(1)]))])), "false");
+  eq("080", "字典身份不看键序", show(call(arrOf([dict([[S("x"), I(1)], [S("y"), I(2)]])]), "count", [dict([[S("y"), I(2)], [S("x"), I(1)]])])), "1");
+  eq("080", "Vector2 按分量身份", show(call(arrOf([vec(1, 2)]), "count", [vec(1.0, 2.0)])), "1");
+  eq("080", "1 == 1.0 运算符仍是真（口径不同）", show(ops.eq(I(1), F(1))), "true");
+
+  // find 的 from 不折负数；rfind 先折算、折完仍越界才退回整段
+  const fr = arrOf([I(1), I(2), I(1), I(2)]);
+  eq("080", "find 默认从头", show(call(fr, "find", [I(1)])), "0");
+  eq("080", "find(1,1) 从下标 1 往后", show(call(fr, "find", [I(1), I(1)])), "2");
+  eq("080", "find 起点越过尾给 -1", show(call(fr, "find", [I(1), I(9)])), "-1");
+  eq("080", "find 的负 from 不做尾部折算", show(call(fr, "find", [I(1), I(-1)])), "-1");
+  eq("080", "rfind 默认从尾往回", show(call(fr, "rfind", [I(1)])), "2");
+  eq("080", "rfind(1,0) 只看下标 0", show(call(fr, "rfind", [I(1), I(0)])), "0");
+  eq("080", "rfind(1,1) 回看 1、0", show(call(fr, "rfind", [I(1), I(1)])), "0");
+  eq("080", "rfind(1,-2) 折算到下标 2", show(call(fr, "rfind", [I(1), I(-2)])), "2");
+  eq("080", "rfind(1,-4) 折算到 0", show(call(fr, "rfind", [I(1), I(-4)])), "0");
+  eq("080", "rfind(1,-9) 折算仍越界 → 退回整段", show(call(fr, "rfind", [I(1), I(-9)])), "2");
+  eq("080", "rfind 未命中给 -1", show(call(fr, "rfind", [I(9)])), "-1");
+  shouldThrow("080", "resize 未实现（定型数组要按元素类型填默认值）", () => call(arrOf([I(1)]), "resize", [I(3)]));
+
+  // Dictionary：erase 返回 bool、merge 默认不覆盖、has_all/find_key/get 缺省
+  const dm = new GDict();
+  dm.set(S("a"), I(1));
+  dm.set(S("b"), I(2));
+  const dmv = V.dict(dm);
+  eq("081", "erase 命中给 true", show(call(dmv, "erase", [S("a")])), "true");
+  eq("081", "erase 之后只剩 b", show(dmv), '{ "b": 2 }');
+  eq("081", "erase 没命中给 false", show(call(dmv, "erase", [S("zz")])), "false");
+  eq("081", "erase 没命中不改内容", show(dmv), '{ "b": 2 }');
+  const dc = dict([[I(1), I(2)]]);
+  call(dc, "clear");
+  eq("081", "clear 之后是空表", `${show(dc)}/${show(call(dc, "is_empty"))}/${show(call(dc, "size"))}`, "{  }/true/0");
+  const mg = new GDict();
+  mg.set(S("a"), I(1));
+  const mgv = V.dict(mg);
+  call(mgv, "merge", [dict([[S("a"), I(9)], [S("b"), I(2)]])]);
+  eq("081", "merge 默认不覆盖已有键", show(mgv), '{ "a": 1, "b": 2 }');
+  call(mgv, "merge", [dict([[S("a"), I(9)]]), B(true)]);
+  eq("081", "merge(..., true) 才顶掉", show(mgv), '{ "a": 9, "b": 2 }');
+  call(mgv, "merge", [V.dict(new GDict())]);
+  eq("081", "merge 空表什么都不改", show(mgv), '{ "a": 9, "b": 2 }');
+  const ha = dict([[S("a"), I(1)], [S("b"), I(2)]]);
+  eq("081", "has_all 全中", show(call(ha, "has_all", [arrOf([S("a"), S("b")])])), "true");
+  eq("081", "has_all 缺一个就 false", show(call(ha, "has_all", [arrOf([S("a"), S("z")])])), "false");
+  eq("081", "has_all 空数组为真", show(call(ha, "has_all", [arrOf([])])), "true");
+  const fk = dict([[S("a"), I(1)], [S("b"), I(2)]]);
+  eq("081", "find_key 给键", show(call(fk, "find_key", [I(2)])), "b");
+  eq("081", "find_key 未命中给 null", show(call(fk, "find_key", [I(99)])), "<null>");
+  eq("081", "get 缺键给 null", show(call(fk, "get", [S("zz")])), "<null>");
+  eq("081", "get 缺键带默认值给默认", show(call(fk, "get", [S("zz"), I(7)])), "7");
+  eq("081", "get 命中给值", show(call(fk, "get", [S("a")])), "1");
+  const dsrc = dict([[S("k"), arrOf([I(1)])]]);
+  const dsh = call(dsrc, "duplicate") as Variant;
+  call(dsh, "set", [S("k"), arrOf([I(9)])]);
+  eq("081", "字典 duplicate() 浅：换整格不影响原表", show(dsrc), '{ "k": [1] }');
+  const dsrc2 = dict([[S("k"), arrOf([I(1)])]]);
+  const ddp = call(dsrc2, "duplicate", [B(true)]) as Variant;
+  call(call(ddp, "get", [S("k")]), "push_back", [I(9)]);
+  eq("081", "字典 duplicate(true) 深：内层断开", show(dsrc2), '{ "k": [1] }');
+  const dasg = dict([[S("x"), I(1)]]);
+  const dsrc3 = dict([[S("y"), I(2)]]);
+  call(dasg, "assign", [dsrc3]);
+  call(dsrc3, "set", [S("y"), I(9)]);
+  eq("081", "字典 assign 换成实参的拷贝", show(dasg), '{ "y": 2 }');
+  eq("081", "字典相等不看键序", show(ops.eq(dict([[S("x"), I(1)], [S("y"), I(2)]]), dict([[S("y"), I(2)], [S("x"), I(1)]]))), "true");
+  const ko = new GDict();
+  ko.set(S("b"), I(1));
+  ko.set(S("a"), I(2));
+  ko.set(S("b"), I(3));
+  eq("081", "改已有键不挪位置", show(V.dict(ko)), '{ "b": 3, "a": 2 }');
+  ko.erase(S("b"));
+  ko.set(S("b"), I(4));
+  eq("081", "erase 再插会排到末尾", show(V.dict(ko)), '{ "a": 2, "b": 4 }');
+  eq("081", "erase 之后索引紧凑、旧键仍可查", `${show(ko.get(S("a")))}/${show(ko.get(S("b")))}`, "2/4");
+  shouldThrow("081", "Dictionary.count() 不存在（实测 Nonexistent function）", () => call(ha, "count", [I(1)]));
+  shouldThrow("081", "Dictionary.merge_recursive 不存在", () => call(mgv, "merge_recursive", [dsrc3]));
+  shouldThrow("080", "Array.has_all 不存在（实测 Nonexistent function）", () => call(fr, "has_all", [arrOf([I(1)])]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
