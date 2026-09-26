@@ -393,7 +393,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   d.set(I(1), S("a"));
   d.set(F(1), S("b"));
   eq("071", "1 与 1.0 各自存得住", `${show(d.get(I(1)))}/${show(d.get(F(1)))}/${d.size()}`, "a/b/2");
-  shouldThrow("071", "数组不能当键", () => keyOf(V.array(GArray.of([]))));
+  // step 39 推翻了这条旧断言：容器实测**能**当键（090 实测），桶就是内容的结构编码
+  eq("090", "数组键走 c: 内容桶", keyOf(V.array(GArray.of([I(1)]))), "c:[i:1]");
+  eq("090", "空数组与空字典不是同一个桶", keyOf(V.array(GArray.of([]))) === keyOf(V.dict(new GDict())), false);
 }
 
 // ---- 072 to_upper/to_lower 走简单映射：长度不变，且单码点答案以 Godot 实测表为准
@@ -1037,6 +1039,110 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     eq("087", "字典那一格改了", show(dv), '{ "k": 2 }');
     eq("087", "Vector2 的下标写回报新值", SHOW2(writeIdx(V2(1, 2), I(1), I(8))), "(1.0, 8.0)");
   }
+}
+
+{
+  // ---- step 39：容器当字典键（090 实测）。桶按内容算，并且**冻在插入那一刻**。
+  const arr = (xs: Variant[]) => V.array(GArray.of(xs));
+  const newDict = () => new GDict();
+  const dict = (pairs: [Variant, Variant][]) => {
+    const g = newDict();
+    for (const [k, v] of pairs) g.set(k, v);
+    return V.dict(g);
+  };
+
+  eq("090", "等值数组落进同一个桶", keyOf(arr([I(1), I(2)])) === keyOf(arr([I(1), I(2)])), "true");
+  eq("090", "[1] 与 [1.0] 是两个桶（身份口径）", keyOf(arr([I(1)])) === keyOf(arr([F(1)])), "false");
+
+  const g1 = newDict();
+  const a1 = arr([I(1), I(2)]);
+  g1.set(a1, I(5));
+  eq("090", "等值新数组命中同一格", show(g1.get(arr([I(1), I(2)]))), "5");
+  eq("090", "has 走同一格", `${String(g1.has(a1))}/${String(g1.has(arr([I(1), I(2)])))}`, "true/true");
+  eq("090", "掺 float 的查询落空", show(g1.get(arr([F(1), F(2)]))), "<null>");
+  g1.set(arr([I(1), I(2)]), I(6));
+  eq("090", "等值键再写是顶掉同一格", `${String(g1.size())} ${show(V.dict(g1))}`, "1 { [1, 2]: 6 }");
+
+  // 实测 q3：`{"a":1,"b":2}` 与 `{"b":2,"a":1}` 是两个格，尽管它们 `==` 成立 —— 键序进桶
+  const od = newDict();
+  od.set(dict([[S("a"), I(1)], [S("b"), I(2)]]), I(9));
+  eq("090", "换了键序就查不着", show(od.get(dict([[S("b"), I(2)], [S("a"), I(1)]]))), "<null>");
+  eq("090", "原序才命中", show(od.get(dict([[S("a"), I(1)], [S("b"), I(2)]]))), "9");
+
+  // ghost：键改过之后这一格从所有查询里消失，但打印仍是存着的那个值（实测 q4/r4/s5）
+  const gd = newDict();
+  const m1 = arr([I(1)]);
+  gd.set(m1, I(8));
+  (m1.v as GArray).append(I(2));
+  eq("090", "改过的键现值旧值都查不着", `${String(gd.has(arr([I(1)])))}/${String(gd.has(arr([I(1), I(2)])))}`, "false/false");
+  eq("090", "改过的键也擦不掉", `${String(gd.erase(arr([I(1)])))}/${String(gd.size())}`, "false/1");
+  eq("090", "打印取存着的值而不是重新查", show(V.dict(gd)), "{ [1, 2]: 8 }");
+
+  // 同一个桶底下能并存两格（实测 r5）
+  const c1 = arr([I(7), I(8)]);
+  const s2 = newDict();
+  s2.set(c1, I(1));
+  (c1.v as GArray).append(I(9));
+  s2.set(arr([I(7), I(8)]), I(2));
+  eq("090", "同桶两格并存", `${String(s2.size())} ${show(V.dict(s2))}`, "2 { [7, 8, 9]: 1, [7, 8]: 2 }");
+  eq("090", "新格查得着、ghost 格查不着", `${show(s2.get(arr([I(7), I(8)])))}/${show(s2.get(c1))}`, "2/<null>");
+  eq("090", "erase 只擦得掉查得着的那格", `${String(s2.erase(arr([I(7), I(8)])))}/${String(s2.erase(c1))}/${String(s2.size())}`, "true/false/1");
+
+  // 浅拷贝照抄冻结的桶（s1），深拷贝按新内容重算（t3）
+  const sh = newDict();
+  const kk = arr([I(1), I(2)]);
+  sh.set(kk, I(1));
+  const cp = sh.duplicate();
+  (kk.v as GArray).append(I(3));
+  eq(
+    "090",
+    "浅拷贝不重算桶",
+    `${show(cp.get(arr([I(1), I(2)])))}/${show(cp.get(arr([I(1), I(2), I(3)])))}/${show(V.dict(cp))}`,
+    "<null>/<null>/{ [1, 2, 3]: 1 }",
+  );
+  const dp = sh.duplicate(true);
+  eq("090", "深拷贝按现内容重算", `${show(dp.get(arr([I(1), I(2), I(3)])))}/${show(dp.get(arr([I(1), I(2)])))}`, "1/<null>");
+
+  // merge 搬的是存着的值（实测 u1/u2），不是按现值重查
+  const src = newDict();
+  const sk = arr([I(1), I(2)]);
+  src.set(sk, I(1));
+  (sk.v as GArray).append(I(3));
+  const mg = newDict();
+  mg.mergeWith(src, false);
+  eq("090", "ghost 格也 merge 得过去", `${show(V.dict(mg))}/${show(mg.get(arr([I(1), I(2), I(3)])))}`, "{ [1, 2, 3]: 1 }/1");
+
+  // Vector2 键：值类型，写不坏（实测 k5/q7）
+  const vd = newDict();
+  vd.set(vector2(1, 2), I(1));
+  vd.set(vector2(1, 2), I(2));
+  eq("090", "等值 Vector2 顶掉同一格", `${String(vd.size())} ${show(V.dict(vd))}`, "1 { (1.0, 2.0): 2 }");
+  eq("090", "换成分量就不是那个键了", `${String(vd.has(vector2(9, 2)))}/${show(vd.get(vector2(1.0, 2.0)))}`, "false/2");
+
+  // 空容器键（实测 k8）
+  const ed = newDict();
+  ed.set(arr([]), I(1));
+  ed.set(dict([]), I(2));
+  eq("090", "空数组与空字典是两格", `${show(ed.get(arr([])))}/${show(ed.get(dict([])))}/${show(V.dict(ed))}`, "1/2/{ []: 1, {  }: 2 }");
+
+  // 定型字典的容器键（实测 q5：Dictionary[Array,int] 里 [1,2] 命中、[1.0,2.0] 不命中）
+  const tg = (stampDict(dict([]), "Array", "int", true).v as GDict);
+  tg.set(arr([I(1), I(2)]), I(5));
+  eq("090", "定型 Array 键按身份查", `${show(tg.get(arr([I(1), I(2)])))}/${show(tg.get(arr([F(1), F(2)])))}`, "5/<null>");
+
+  // 嵌套容器键：改内层同样把它变成 ghost（实测 r8）
+  const inner = arr([I(1)]);
+  const nd = newDict();
+  nd.set(arr([inner]), I(8));
+  (inner.v as GArray).append(I(2));
+  eq("090", "改内层让整格查不着", `${show(nd.get(arr([arr([I(1)])])))}/${show(V.dict(nd))}`, "<null>/{ [[1, 2]]: 8 }");
+
+  // 自引用容器当键：Godot 靠深度截断活下来，我们没有对应口径 —— 响亮报缺
+  const cyc = GArray.of([]);
+  cyc.append(V.array(cyc));
+  shouldThrow("090", "自引用的数组不能当键", () => keyOf(V.array(cyc)));
+  shouldThrow("090", "拿去 set 也一样响", () => newDict().set(V.array(cyc), I(1)));
+  eq("090", "自引用数组跟自己比是 true", valueEq(V.array(cyc), V.array(cyc)), "true");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

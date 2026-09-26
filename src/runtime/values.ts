@@ -14,6 +14,25 @@ function numVal(v: Variant): number {
  * 而 JS 的 Map 会把 1 和 1.0 合并 —— 所以键必须带类型前缀。
  */
 export function keyOf(v: Variant): string {
+  return keyOfIn(v, []);
+}
+
+/** 自引用容器当键：Godot 靠「hash 到 128 层截断」活下来（实测 s4：环回的键照样能查得着），
+ *  我们没有同一个口径 —— 与其给一个凭空的近似，不如当场报缺。 */
+function refuseCyclicKey(): never {
+  throw new UnsupportedError(
+    "dict-key-cycle",
+    "自引用的容器不能当字典键（Godot 的容器 hash 按深度截断，实测能存能查，我们没有对应口径）",
+  );
+}
+
+/**
+ * 桶的编码。容器键（实测 k1/q1/r1）按**内容**分格：等值的新数组命中同一格（`d[a]=1` 之后
+ * `d[[1,2]]` 改到同一格），但 `[1]` / `[1.0]` / `[true]` / `[0]` 是四个不同的格（元素走
+ * {@link valueSame} 的身份口径），字典的编码**跟着键序走**（实测 q3：`{"a":1,"b":2}` 与
+ * `{"b":2,"a":1}` 是两个格，尽管它们 `==` 成立）。`c:` 前缀保证容器桶不会跟标量桶撞车。
+ */
+function keyOfIn(v: Variant, path: unknown[]): string {
   switch (v.t) {
     case Tag.NIL:
       return "n:";
@@ -28,6 +47,29 @@ export function keyOf(v: Variant): string {
     case Tag.STRING_NAME:
       // 实测 StringName 与等价 String 是**同一个键**（{&"k": 1, "k": 2} 在 Godot 是重复键报错）
       return `s:${v.v as string}`;
+    case Tag.ARRAY: {
+      const g = v.v as GArray;
+      if (path.includes(g)) refuseCyclicKey();
+      path.push(g);
+      const items = g.raw();
+      let out = "c:[";
+      for (let i = 0; i < items.length; i++) out += (i === 0 ? "" : ",") + keyOfIn(items[i] as Variant, path);
+      path.pop();
+      return out + "]";
+    }
+    case Tag.DICT: {
+      const g = v.v as GDict;
+      if (path.includes(g)) refuseCyclicKey();
+      path.push(g);
+      const ks = g.keys();
+      const vs = g.values();
+      let out = "c:{";
+      for (let i = 0; i < ks.length; i++) {
+        out += (i === 0 ? "" : ",") + keyOfIn(ks[i] as Variant, path) + "=>" + keyOfIn(vs[i] as Variant, path);
+      }
+      path.pop();
+      return out + "}";
+    }
     case Tag.OBJECT: {
       // Vector2 能当键，且按**值**分（实测 k[Vector2(1,2)] 与 k[Vector2(1.0,2.0)] 是同一格、
       // 而 k[Vector2(1,2)] 与 k[Vector2(2,1)] 是两格）。分量已 fround，所以字符串化就够稳定。
@@ -416,6 +458,9 @@ export class GArray {
   }
 
   eq(other: GArray): boolean {
+    // 同一个对象先短路：实测自引用数组 `a == a` 是 true（s3），不短路就会无限递归；
+    // Godot 的深比较同样有这一条。
+    if (this.items === other.items) return true;
     if (this.items.length !== other.items.length) return false;
     return this.items.every((x, i) => {
       const y = other.items[i];
@@ -425,6 +470,7 @@ export class GArray {
 
   /** 身份版比较：`has`/`find`/`count` 走它（见 valueSame）。 */
   same(other: GArray): boolean {
+    if (this.items === other.items) return true;
     if (this.items.length !== other.items.length) return false;
     return this.items.every((x, i) => valueSame(x, other.items[i] as Variant));
   }
@@ -581,8 +627,14 @@ export class GArray {
 export class GDict {
   private ks: Variant[] = [];
   private vs: Variant[] = [];
+  /** 桶 → 该桶**最新**那一格的下标 */
   private index = new Map<string, number>();
-  /** `Dictionary[K, V]` 的键/值类型，null 是未定型。与数组同理，类型跟着**值**走 */
+  /** 每格插入那一刻算好的桶。Godot 的键 hash 冻在插入时（实测 q4/r4/s5：键之后被改，
+   *  这一格就从所有查询里消失，而 `keys()` 里打出来的还是改过的现值）。 */
+  private bkt: string[] = [];
+  /** 同桶的前一格（-1 表示没有）。只有容器键会挂出链（实测 r5：改过的旧键 + 等值的新键 = 两格）。 */
+  private prev: number[] = [];
+  /** 定型容器的键/值类型，null 是未定型。与数组同理，类型跟着**值**走 */
   keyKind: ElemKind | null = null;
   valKind: ElemKind | null = null;
 
@@ -595,6 +647,8 @@ export class GDict {
     this.ks = [];
     this.vs = [];
     this.index = new Map();
+    this.bkt = [];
+    this.prev = [];
     for (let i = 0; i < ks.length; i++) this.set(ks[i] as Variant, vs[i] as Variant);
   }
 
@@ -629,16 +683,34 @@ export class GDict {
     return this.keyKind === null ? k : elemConvert(this.keyKind, k);
   }
 
+  /**
+   * 查询落在哪一格，-1 表示没有。桶是**插入时**冻住的那份编码：
+   * 标量与 Vector2 的桶跟键一一对应、又不可变，命中就是那一格（热路径不多花一次身份比较）；
+   * 容器桶还要拿键的**现值**再验一次身份 —— 实测改过的键 has/get/erase 全都找不着（k2/r4/s5），
+   * 而同一个桶底下还能再挂一格（r5：旧键改过、新键等值 → 两格并存）。
+   */
+  private slot(b: string, q: Variant): number {
+    let i = this.index.get(b);
+    if (i === undefined) return -1;
+    if (b[0] !== "c") return i;
+    while (i >= 0) {
+      const k = this.ks[i];
+      if (k !== undefined && valueSame(k, q)) return i;
+      i = this.prev[i] as number;
+    }
+    return -1;
+  }
+
   has(k: Variant): boolean {
     const q = this.asQuery(k);
-    return q !== null && this.index.has(keyOf(q));
+    return q !== null && this.slot(keyOf(q), q) >= 0;
   }
 
   get(k: Variant): Variant {
     const q = this.asQuery(k);
     if (q === null) return V.nil();
-    const i = this.index.get(keyOf(q));
-    if (i === undefined) return V.nil();
+    const i = this.slot(keyOf(q), q);
+    if (i < 0) return V.nil();
     return this.vs[i] ?? V.nil();
   }
 
@@ -648,8 +720,8 @@ export class GDict {
    */
   getRequired(k: Variant): Variant {
     const q = this.asQuery(k);
-    const i = q === null ? undefined : this.index.get(keyOf(q));
-    if (i === undefined) {
+    const i = q === null ? -1 : this.slot(keyOf(q), q);
+    if (i < 0) {
       throw new GodotRuntimeError("dict-key", `字典键不存在: ${show(k)}`);
     }
     return this.vs[i] as Variant;
@@ -660,15 +732,18 @@ export class GDict {
     if (cv === null) return;
     k = cv[0];
     v = cv[1];
-    const key = keyOf(k);
-    const i = this.index.get(key);
-    if (i === undefined) {
-      this.index.set(key, this.ks.length);
-      this.ks.push(k);
-      this.vs.push(v);
-    } else {
+    const b = keyOf(k);
+    const i = this.slot(b, k);
+    if (i >= 0) {
       this.vs[i] = v;
+      return;
     }
+    const older = this.index.get(b);
+    this.index.set(b, this.ks.length);
+    this.bkt.push(b);
+    this.prev.push(older === undefined ? -1 : older);
+    this.ks.push(k);
+    this.vs.push(v);
   }
 
   /** 实测 `duplicate()` 是浅拷贝（改副本里的嵌套容器会串回原字典），`duplicate(true)` 才断开。 */
@@ -677,24 +752,53 @@ export class GDict {
     // 副本同样是定型的（实测 Dictionary[String,int].duplicate() 之后 1.5 会被截成 1）
     d.keyKind = this.keyKind;
     d.valKind = this.valKind;
+    if (deep) {
+      // 深拷贝给每个键造了一份新内容，Godot 是拿新内容重新入表 → 桶照现值重算
+      // （实测 t3：键先改过再 duplicate(true)，之后按现值查得着）
+      for (let i = 0; i < this.ks.length; i++) {
+        const k = this.ks[i];
+        const v = this.vs[i];
+        if (k !== undefined && v !== undefined) d.set(deepCopy(k), deepCopy(v));
+      }
+      return d;
+    }
+    // 浅拷贝：键还是同一个对象，桶必须**照抄**而不是按现值重算 —— 实测 s1，拷完再把键改了，
+    // 副本对旧内容和现内容全都查不着（重算会让那格变成可查的，等于凭空多出一格）。
     for (let i = 0; i < this.ks.length; i++) {
       const k = this.ks[i];
       const v = this.vs[i];
-      if (k !== undefined && v !== undefined) d.set(deep ? deepCopy(k) : k, deep ? deepCopy(v) : v);
+      if (k === undefined || v === undefined) continue;
+      const b = this.bkt[i] as string;
+      const older = d.index.get(b);
+      d.index.set(b, d.ks.length);
+      d.bkt.push(b);
+      d.prev.push(older === undefined ? -1 : older);
+      d.ks.push(k);
+      d.vs.push(v);
     }
     return d;
   }
 
-  /** `erase(k)`：实测返回** bool**（键在不在），不是 void。 */
+  /** `erase(k)`：实测返回** bool**（键在不在），不是 void。改过的容器键实测擦不掉（r4）。 */
   erase(k: Variant): boolean {
     const q = this.asQuery(k);
     if (q === null) return false;
-    const key = keyOf(q);
-    const i = this.index.get(key);
-    if (i === undefined) return false;
+    const b = keyOf(q);
+    const i = this.slot(b, q);
+    if (i < 0) return false;
+    const older = this.prev[i] as number;
+    if (this.index.get(b) === i) {
+      if (older < 0) this.index.delete(b);
+      else this.index.set(b, older);
+    }
     this.ks.splice(i, 1);
     this.vs.splice(i, 1);
-    this.index.delete(key);
+    this.bkt.splice(i, 1);
+    this.prev.splice(i, 1);
+    for (let j = 0; j < this.prev.length; j++) {
+      if (this.prev[j] === i) this.prev[j] = older;
+      else if ((this.prev[j] as number) > i) this.prev[j] = (this.prev[j] as number) - 1;
+    }
     for (const [kk, ii] of [...this.index.entries()]) {
       if (ii > i) this.index.set(kk, ii - 1);
     }
@@ -705,20 +809,23 @@ export class GDict {
     this.ks = [];
     this.vs = [];
     this.index = new Map();
+    this.bkt = [];
+    this.prev = [];
   }
 
   /**
    * `merge(other, overwrite)`。实测**默认不覆盖**（`{"a":1}` merge `{"a":9,"b":2}` 仍是 `{"a":1,"b":2}`），
    * 第二个实参给 true 才顶掉已有的键；新键两种情况都会补上。
+   * 取实参的格子要**成对**拿（keys()+get() 不行）：实测 u1/u2 —— 源字典里改过的容器键照样搬得过去，
+   * 因为那种 ghost 格按现值已经查不回来，但存着的值还在。
    */
   mergeWith(other: GDict, overwrite: boolean): void {
     const ks = other.keys();
-    for (const k of ks) {
-      if (this.has(k)) {
-        if (overwrite) this.set(k, other.get(k));
-      } else {
-        this.set(k, other.get(k));
-      }
+    const vs = other.values();
+    for (let i = 0; i < ks.length; i++) {
+      const k = ks[i] as Variant;
+      if (!overwrite && this.has(k)) continue;
+      this.set(k, vs[i] as Variant);
     }
   }
 
@@ -746,6 +853,8 @@ export class GDict {
     this.ks = [];
     this.vs = [];
     this.index = new Map();
+    this.bkt = [];
+    this.prev = [];
     for (let i = 0; i < ks.length; i++) this.set(ks[i] as Variant, vs[i] as Variant);
   }
 
@@ -755,6 +864,8 @@ export class GDict {
 
   /** 身份版比较（`count`/`find` 的实参是容器时用，见 valueSame）：不看键序。 */
   same(other: GDict): boolean {
+    // 同上：自引用的字典跟自己比是 true（Godot 有这一条短路），不然无限递归
+    if (this === other) return true;
     if (this.size() !== other.size()) return false;
     return this.ks.every((k, i) => {
       for (let j = 0; j < other.ks.length; j++) {
@@ -767,8 +878,22 @@ export class GDict {
   }
 
   eq(other: GDict): boolean {
+    if (this === other) return true;
     if (this.size() !== other.size()) return false;
-    return this.ks.every((k) => valueEq(this.get(k), other.get(k)));
+    // 成对比较，不能靠 keys()+get()：ghost 格（改过的容器键）按现值查不回来，
+    // 存着的值会被看成 null。键按桶比 —— 桶已经统一了 String 与 StringName，容器键是内容编码。
+    for (let i = 0; i < this.ks.length; i++) {
+      const b = this.bkt[i];
+      let found = false;
+      for (let j = 0; j < other.ks.length; j++) {
+        if (other.bkt[j] === b) {
+          found = valueEq(this.vs[i] as Variant, other.vs[j] as Variant);
+          break;
+        }
+      }
+      if (!found) return false;
+    }
+    return true;
   }
 }
 
@@ -1390,7 +1515,10 @@ export function show(v: Variant): string {
       return `[${(v.v as GArray).raw().map(repr).join(", ")}]`;
     case Tag.DICT: {
       const d = v.v as GDict;
-      const parts = d.keys().map((k) => `${repr(k)}: ${repr(d.get(k))}`);
+      // 必须按插入顺序把键和**存着的值**成对拿出来，不能用 keys()+get() 重建：
+      // 实测改过的容器键（ghost 格）按现值已经查不回来，Godot 打印的却还是存着的那个值（090 第 7 行）。
+      const vs = d.values();
+      const parts = d.keys().map((k, i) => `${repr(k)}: ${repr(vs[i] as Variant)}`);
       return `{ ${parts.join(", ")} }`;
     }
     case Tag.OBJECT: {

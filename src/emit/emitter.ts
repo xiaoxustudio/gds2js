@@ -755,7 +755,7 @@ function writePathFor(t: Expr, seq: { n: number }): WPath {
   const p = lvalueOf(t, seq);
   if (p !== null) return p;
   if (pathRoot(t).kind === "ident") {
-    throw new UnsupportedError("vector2-write-path", `写值类型要穿过对象的字段（如 p.m.x = 1），属性赋值还没实现`);
+    throw new UnsupportedError("vector2-write-path", `赋值目标要穿过对象的字段（如 p.m.x = 1），属性赋值还没实现`);
   }
   return { read: emitExpr(t), write: () => "", pre: [] };
 }
