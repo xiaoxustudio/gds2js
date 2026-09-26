@@ -403,6 +403,9 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "lit", lit: "float", value: Number(n.text) };
     case "string":
       return { kind: "lit", lit: "string", value: unquote(n.text) };
+    case "string_name":
+      // &"abc" 的 CST 文本带前导 &，剥掉后与 string 走同一套转义解码
+      return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)) };
     case "true":
       return { kind: "lit", lit: "bool", value: true };
     case "false":
@@ -436,6 +439,8 @@ function lowerExpr(n: SyntaxNode): Expr {
       return { kind: "lit", lit: "float", value: Number(n.text), loc: c };
     case "string":
       return { kind: "lit", lit: "string", value: unquote(n.text), loc: c };
+    case "string_name":
+      return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)), loc: c };
     case "true":
       return { kind: "lit", lit: "bool", value: true, loc: c };
     case "false":
@@ -517,6 +522,11 @@ function lowerExpr(n: SyntaxNode): Expr {
     default:
       throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
   }
+}
+
+/** `&"abc"` 的 CST 文本连前导 `&` 一起给，剥掉后才能和 String 共用同一套转义解码。 */
+function stripAmp(text: string): string {
+  return text.startsWith("&") ? text.slice(1) : text;
 }
 
 /**

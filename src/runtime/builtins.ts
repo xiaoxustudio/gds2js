@@ -111,7 +111,8 @@ export function abs(v: Variant): Variant {
 }
 
 export function lengthOf(v: Variant): Variant {
-  if (v.t === Tag.STRING) return V.int(strLength(v.v as string));
+  // StringName 与 String 同一个口径（实测 len(&"abc") → 3）
+  if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());
   throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
 }

@@ -277,7 +277,7 @@ function staticType(e: Expr): StaticType {
     case "lit":
       if (e.lit === "int") return "int";
       if (e.lit === "float") return "float";
-      if (e.lit === "string") return "String";
+      if (e.lit === "string" || e.lit === "string_name") return "String";
       if (e.lit === "bool") return "bool";
       return "null";
     case "array":

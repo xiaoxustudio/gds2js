@@ -3,7 +3,7 @@ import { md5Hex } from "./md5";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCase, strFormat, strLength, strSubstr, truthyOf } from "./values";
+import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, vec2Index, vector2Method } from "./vector2";
 
@@ -35,6 +35,9 @@ function norm(v: unknown): Variant {
 
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
+  // StringName 上实测能直接调用 String 的方法族（length/substr/split/contains/to_upper…），
+  // 且**返回的是 String 而不是 StringName**（typeof(&"abc".to_upper()) → 4），所以先降成 String 再走原分派。
+  if (obj.t === Tag.STRING_NAME) return method(V.str(obj.v as string), name, args);
 
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
@@ -160,7 +163,26 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "length":
           return V.int(strLength(s));
         case "substr":
-          return V.str(strSubstr(s, intArg(args, 0, "substr"), intArg(args, 1, "substr")));
+          return V.str(strSubstr(s, intArg(args, 0, "substr"), intArgOr(args, 1, -1)));
+        case "left":
+          return V.str(strEdge(s, intArg(args, 0, "left"), "left"));
+        case "right":
+          return V.str(strEdge(s, intArg(args, 0, "right"), "right"));
+        case "is_empty":
+          return V.bool(strLength(s) === 0);
+        case "contains":
+          return V.bool(strContains(s, asString(one(args, "contains"), "contains")));
+        case "split": {
+          // max_splits 与 allow_empty=false 的相互作用实测凑不出简洁算式
+          // （"a,,b".split(",", false, 1) 给 ["a","b"] 而不是 ["a",",b"]，
+          //  "a-b-c".split("-", false, 0) 又完全不限刀），先响亮报缺，不发猜的语义。
+          if (args.length > 2) {
+            throw new UnsupportedError("split-max-splits", "split() 的第 3 个参数 max_splits 未实现");
+          }
+          const allow = args[1] === undefined ? true : boolArg(args, 1, "split");
+          const parts = strSplit(s, asString(one(args, "split"), "split"), allow).map((p) => V.str(p));
+          return V.array(GArray.of(parts));
+        }
         case "to_upper":
           return V.str(strCase(s, "upper"));
         case "to_lower":
@@ -269,4 +291,20 @@ function intArg(args: Variant[], i: number, who: string): number {
   }
   // 载荷可能是 bigint（超出 2^53）：这些位置都是长度/索引，只能是裸 number。
   return intToNum(a.v as IntPayload);
+}
+
+/** 可选 int 参：省略时取 Godot 的默认值（实测 `"abc".substr(2)` → "c"，长度默认到串尾） */
+function intArgOr(args: Variant[], i: number, dflt: number): number {
+  const a = args[i];
+  if (a === undefined) return dflt;
+  if (a.t !== Tag.INT) throw new UnsupportedError("need-int-arg", `第 ${i} 个参数需要 int`);
+  return intToNum(a.v as IntPayload);
+}
+
+function boolArg(args: Variant[], i: number, who: string): boolean {
+  const a = args[i];
+  if (a === undefined || a.t !== Tag.BOOL) {
+    throw new UnsupportedError("need-bool-arg", `${who} 的第 ${i} 个参数需要 bool`);
+  }
+  return a.v as boolean;
 }

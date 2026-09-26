@@ -1,0 +1,74 @@
+abc
+true
+true
+true
+false
+21
+true
+false
+abc
+3
+3
+ab
+bc
+4
+2
+true
+ABC
+4
+true
+ab
+4
+xy
+ky
+xyz
+21
+true
+true
+4
+[&"abc"]
+{ "a": &"abc" }
+{ &"k": 1 }
+1
+1
+true
+1
+{ &"k": 1, &"abc": 7 }
+q
+true
+4
+true
+false
+true
+d41d8cd98f00b204e9800998ecf8427e
+[ab]
+[]
+[abc]
+[ab]
+[]
+[bc]
+[bc]
+[abc]
+[ab]
+[bc]
+false
+true
+false
+false
+true
+[c]
+[]
+[abc]
+[]
+[c]
+["a", "b", "c"]
+["a", "", "b"]
+["a", "b", ""]
+["a", "b"]
+2
+[""]
+1
+["a", "b", "c"]
+1
+["💝", "💝"]
+💝

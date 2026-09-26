@@ -17,6 +17,7 @@ import {
 } from "./values";
 
 const isNum = (v: Variant): boolean => v.t === Tag.INT || v.t === Tag.FLOAT;
+const isStringish = (v: Variant): boolean => v.t === Tag.STRING || v.t === Tag.STRING_NAME;
 
 function num(v: Variant): number {
   if (!isNum(v)) {
@@ -51,7 +52,8 @@ export const ops = {
     if (isNum(a) && isNum(b)) {
       return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x + y) : V.float(num(a) + num(b));
     }
-    if (a.t === Tag.STRING && b.t === Tag.STRING) {
+    // String 与 StringName 混着加都走连接、结果一律是 String（实测 "x" + &"y" → xy、&"a" + &"b" → ab 且 typeof 为 4）
+    if (isStringish(a) && isStringish(b)) {
       return V.str((a.v as string) + (b.v as string));
     }
     if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
@@ -240,6 +242,16 @@ function compare(a: Variant, b: Variant): number {
   if (a.t === Tag.STRING && b.t === Tag.STRING) {
     // 按码点比（JS 原生的 < 按 UTF-16 码元，含 emoji 时会与 Godot 判出相反方向）
     return strCmp(a.v as string, b.v as string);
+  }
+  // 掺进 StringName 就没有可复刻的排序口径（实测，见 SEMANTICS「StringName」）：
+  // 混族比较 Godot 当场炸（Invalid operands 'StringName' and 'String' in operator '<'），
+  // 同族比较又不按内容排（&"zzz" < &"abc" 为真）、不按 .hash()、不按字面量出现顺序 ——
+  // 是引擎内部的指针/桶位序，随版本和内部表大小变。宁缺不猜。
+  if (isStringish(a) && isStringish(b)) {
+    throw new UnsupportedError(
+      "compare-string-name",
+      `StringName 的 < / > 按 Godot 内部指针序，无可靠口径（实测 &"zzz" < &"abc" 为真），拒绝${tagName(a.t)} 与 ${tagName(b.t)} 比大小`,
+    );
   }
   // Vector2 比较是**字典序**（先 x 再 y），不是"每个分量都更大"。判别点实测：
   // (3,4) > (2,5) → true（x 已胜出，y 更小也不影响）、(3,4) < (4,3) → true。

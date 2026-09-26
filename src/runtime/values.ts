@@ -25,6 +25,9 @@ export function keyOf(v: Variant): string {
       return `f:${String(v.v)}`;
     case Tag.STRING:
       return `s:${v.v as string}`;
+    case Tag.STRING_NAME:
+      // 实测 StringName 与等价 String 是**同一个键**（{&"k": 1, "k": 2} 在 Godot 是重复键报错）
+      return `s:${v.v as string}`;
     case Tag.OBJECT: {
       // Vector2 能当键，且按**值**分（实测 k[Vector2(1,2)] 与 k[Vector2(1.0,2.0)] 是同一格、
       // 而 k[Vector2(1,2)] 与 k[Vector2(2,1)] 是两格）。分量已 fround，所以字符串化就够稳定。
@@ -289,8 +292,76 @@ export function strAt(s: string, i: number): string {
   return c;
 }
 
-export function strSubstr(s: string, from: number, len: number): string {
-  return [...s].slice(from, from + len).join("");
+/**
+ * `substr(from, len = -1)`。实测的三条边界，JS 原生 slice 一条都不对：
+ * `from` 为负或越过串尾都给**空串**（JS 的负 index 是从尾部数，`"abc".substr(-2)` 会给出 "bc"），
+ * `len` 省略或为负表示截到串尾（`"abc".substr(2)` → "c"、`substr(0, -1)` → "abc"）。
+ */
+export function strSubstr(s: string, from: number, len = -1): string {
+  const chars = [...s];
+  if (from < 0 || from >= chars.length) return "";
+  return (len < 0 ? chars.slice(from) : chars.slice(from, from + len)).join("");
+}
+
+/**
+ * `left(n)` / `right(n)`：n 是**码点**个数。负数先折成 `length + n`（实测 `"abc".left(-1)` → "ab"、
+ * `"abc".right(-1)` → "bc"，即从另一端各丢 |n| 个），再夹进 [0, length]（实测 left(-5)/right(-5) → ""、
+ * left(99) → 整串）。
+ */
+export function strEdge(s: string, n: number, side: "left" | "right"): string {
+  const len = strLength(s);
+  const k = n < 0 ? len + n : n;
+  if (k <= 0) return "";
+  if (k >= len) return s;
+  const chars = [...s];
+  return (side === "left" ? chars.slice(0, k) : chars.slice(len - k)).join("");
+}
+
+/**
+ * `contains(needle)`：**空 needle 不算包含**（实测 `"abc".contains("")` 与 `"".contains("")` 都是 false）。
+ * JS 的 `includes` 恰好给 true —— 不特判就是一条静默错。
+ */
+export function strContains(hay: string, needle: string): boolean {
+  return needle !== "" && hay.includes(needle);
+}
+
+/**
+ * `split(delim)` / `split(delim, allow_empty)`，语义全部实测：
+ * - 分隔符为空串 → 逐**码点**切（`"ab".split("")` → ["a","b"]），空串本身 → [""]；
+ * - 默认保留空片段（`"a,,b"` → ["a","","b"]、`"a,b,"` → ["a","b",""]、`"".split(",")` → [""]）；
+ * - `allow_empty` 为 false → 丢掉所有空片段（`"".split(",", false)` → **[]**、`",a,b"` → ["a","b"]）。
+ *
+ * 快路用原生 split（无代理元时与 UTF-32 口径等价）；一旦出现代理元就逐码点切 —— 否则
+ * 半个代理对（只能由 `String.chr(0xD83D)` 这类运行时构造出来）会当分隔符命中、把 emoji 拦腰截断，
+ * 而 Godot 的 UTF-32 里根本没有这个码点，是不出声的错。
+ */
+export function strSplit(s: string, delim: string, allowEmpty: boolean): string[] {
+  let parts: string[];
+  if (delim === "") {
+    // JS 的 `"ab".split("")` 按码元切、`"".split("")` 还给 []，两处都与 Godot 不同 → 自己按码点走
+    const chars = [...s];
+    parts = chars.length === 0 ? [""] : chars;
+  } else if (/[\uD800-\uDFFF]/.test(s) || /[\uD800-\uDFFF]/.test(delim)) {
+    const chars = [...s];
+    const dchars = [...delim];
+    parts = [];
+    let cur = "";
+    let i = 0;
+    while (i < chars.length) {
+      if (i + dchars.length <= chars.length && dchars.every((c, j) => chars[i + j] === c)) {
+        parts.push(cur);
+        cur = "";
+        i += dchars.length;
+      } else {
+        cur += chars[i];
+        i++;
+      }
+    }
+    parts.push(cur);
+  } else {
+    parts = s.split(delim);
+  }
+  return allowEmpty ? parts : parts.filter((p) => p !== "");
 }
 
 /**
@@ -741,10 +812,26 @@ export function stringCtor(args: Variant[]): Variant {
     throw new GodotRuntimeError("string-ctor-arity", `String() 只接受 1 个参数（收到 ${args.length} 个）`);
   }
   const v = args[0] as Variant;
-  if (v.t !== Tag.STRING) {
+  // 实测 String(&"k") == "k" 为真且 typeof 是 4；其余实参类型 Godot 是 Parse Error
+  if (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME) {
     throw new GodotRuntimeError("string-ctor", `没有 String(${tagName(v.t)}) 这个构造器（Godot 是 Parse Error）`);
   }
-  return v;
+  return V.str(v.v as string);
+}
+
+/** `StringName("x")`：实测只接受字符串族（int 是 Parse Error），结果与 `&"x"` 同类。 */
+export function stringNameCtor(args: Variant[]): Variant {
+  if (args.length !== 1) {
+    throw new GodotRuntimeError("string-name-ctor-arity", `StringName() 只接受 1 个参数（收到 ${args.length} 个）`);
+  }
+  const v = args[0] as Variant;
+  if (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME) {
+    throw new GodotRuntimeError(
+      "string-name-ctor",
+      `没有 StringName(${tagName(v.t)}) 这个构造器（Godot 是 Parse Error: No constructor of "StringName" matches the signature）`,
+    );
+  }
+  return V.stringName(v.v as string);
 }
 
 /** 顶层 print：字符串不加引号 */
@@ -759,6 +846,9 @@ export function show(v: Variant): string {
     case Tag.FLOAT:
       return strFloat(v.v as number);
     case Tag.STRING:
+      return v.v as string;
+    case Tag.STRING_NAME:
+      // print(&"abc") 直接给 abc（实测），但装进容器里是 &"abc"（见 repr）
       return v.v as string;
     case Tag.ARRAY:
       return `[${(v.v as GArray).raw().map(repr).join(", ")}]`;
@@ -784,6 +874,7 @@ export function show(v: Variant): string {
 /** 容器内嵌：字符串要加引号 */
 export function repr(v: Variant): string {
   if (v.t === Tag.STRING) return `"${v.v as string}"`;
+  if (v.t === Tag.STRING_NAME) return `&"${v.v as string}"`;
   return show(v);
 }
 
@@ -799,6 +890,13 @@ export function valueEq(a: Variant, b: Variant): boolean {
     if (tb === Tag.INT || tb === Tag.FLOAT) return numVal(a) === numVal(b);
     return false;
   }
+  // StringName 与等值 String 相等（实测 &"abc" == "abc" 与反向都为真），要在下面的同标签早退之前判
+  if (
+    (ta === Tag.STRING || ta === Tag.STRING_NAME) &&
+    (tb === Tag.STRING || tb === Tag.STRING_NAME)
+  ) {
+    return (a.v as string) === (b.v as string);
+  }
   if (ta !== tb) return false;
   switch (ta) {
     case Tag.NIL:
@@ -806,6 +904,8 @@ export function valueEq(a: Variant, b: Variant): boolean {
     case Tag.BOOL:
     case Tag.STRING:
       return a.v === b.v;
+    case Tag.STRING_NAME:
+      return b.t === Tag.STRING_NAME && a.v === b.v;
     case Tag.ARRAY:
       return (a.v as GArray).eq(b.v as GArray);
     case Tag.DICT:
@@ -831,6 +931,7 @@ export function truthyOf(v: Variant): boolean {
     case Tag.FLOAT:
       return (v.v as number) !== 0;
     case Tag.STRING:
+    case Tag.STRING_NAME:
       return (v.v as string) !== "";
     case Tag.ARRAY:
       return (v.v as GArray).size() !== 0;

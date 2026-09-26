@@ -6,12 +6,27 @@
  * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
-import { range, rangeSeq } from "../src/runtime/builtins";
+import { lengthOf, range, rangeSeq } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { md5Hex } from "../src/runtime/md5";
+import { index, method } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
-import { V, type Variant } from "../src/runtime/tags";
-import { GArray, GDict, keyOf, show, strCase, strFloat, strFormat, strVec2, stringCtor, stringStatic } from "../src/runtime/values";
+import { Tag, V, type Variant } from "../src/runtime/tags";
+import {
+  GArray,
+  GDict,
+  keyOf,
+  show,
+  strCase,
+  strFloat,
+  strFormat,
+  stringCtor,
+  stringNameCtor,
+  stringStatic,
+  strVec2,
+  truthyOf,
+  valueEq,
+} from "../src/runtime/values";
 import { GVector2, vecCmp, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 
 let pass = 0;
@@ -478,6 +493,74 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("078", "int64 上界给 8.00 EiB", HZ(I(9223372036854775807n)), "8.00 EiB");
   eq("078", "负数按 uint64 解释", HZ(I(-1024)), "16.00 EiB");
   shouldThrow("078", "humanize_size 缺参数要响", () => stringStatic("humanize_size", []));
+}
+
+// ---- 079 StringName：同值即同键、print 裸串、容器里带 &"…"，但它不是 String，且排序口径不可复刻
+{
+  const sn = (x: string) => V.stringName(x);
+  eq("079", "print 是裸串", show(sn("abc")), "abc");
+  eq("079", "装进数组要带 &\"…\"", show(V.array(GArray.of([sn("abc")]))), '[&"abc"]');
+  {
+    const d = new GDict();
+    d.set(sn("k"), I(1));
+    eq("079", "字典里的键带前缀", show(V.dict(d)), '{ &"k": 1 }');
+    eq("079", "String 键能查到 StringName 键", show(d.get(S("k"))), "1");
+  }
+  eq("079", "键与等值 String 合一", keyOf(sn("k")) === keyOf(S("k")), true);
+  eq("079", "与等值 String 相等", valueEq(sn("abc"), S("abc")), true);
+  eq("079", "相等仍是大小写敏感", valueEq(sn("A"), sn("a")), false);
+  eq("079", "空 StringName 为假", truthyOf(sn("")), false);
+  eq("079", "len 同 String", show(lengthOf(sn("abc"))), "3");
+  eq("079", "方法转发后拿到的是 String 而非 StringName", method(sn("abc"), "to_upper", []).t, Tag.STRING);
+  eq("079", "混着加结果是 String", ops.add(sn("a"), S("b")).t, Tag.STRING);
+  eq("079", "String(&\"k\") 降成 String", stringCtor([sn("k")]).t, Tag.STRING);
+  shouldThrow("079", "StringName 不能下标（Godot: Invalid access to property or key）", () => index(sn("abc"), I(0)));
+  shouldThrow("079", "StringName 与 String 混比大小（Godot 当场炸）", () => isLess(sn("a"), S("b")));
+  shouldThrow("079", "两个 StringName 比大小也无口径（Godot 按内部指针序：&\"zzz\" < &\"abc\" 为真）", () =>
+    isLess(sn("zzz"), sn("abc")),
+  );
+  shouldThrow("079", "StringName(42) 没有这个构造器", () => stringNameCtor([I(1)]));
+}
+
+// ---- 079 顺带钉住的 String 方法面：left/right/contains/is_empty/split/substr 的边界，期望值全取自 079 的 godot.txt
+{
+  const EMO = String.fromCodePoint(0x1f45d); // 💝 = String.chr(128157)
+  const sm = (base: string, name: string, args: Variant[]) => method(S(base), name, args);
+  const L = (n: number, base = "abc") => show(sm(base, "left", [I(n)]));
+  const R = (n: number, base = "abc") => show(sm(base, "right", [I(n)]));
+  const SP = (base: string, delim: string, allow?: Variant) =>
+    show(sm(base, "split", allow === undefined ? [S(delim)] : [S(delim), allow]));
+  eq("079", "left(2)", L(2), "ab");
+  eq("079", "left(0) 空串", L(0), "");
+  eq("079", "left 超界给整串", L(5), "abc");
+  eq("079", "left(-1) 是各丢一个而非从尾部数", L(-1), "ab");
+  eq("079", "left(-5) 夹成空", L(-5), "");
+  eq("079", "right(2)", R(2), "bc");
+  eq("079", "right(-1)", R(-1), "bc");
+  eq("079", "right(-2)", R(-2), "c");
+  eq("079", "left 按码点：emoji 不拦腰", L(1, `${EMO}xy`), EMO);
+  eq("079", "contains 空针不算命中（JS 的 includes 会给 true）", show(sm("abc", "contains", [S("")])), "false");
+  eq("079", "contains 命中", show(sm("abc", "contains", [S("bc")])), "true");
+  eq("079", "contains 大小写敏感", show(sm("abc", "contains", [S("A")])), "false");
+  eq("079", "is_empty 只对空串", `${show(sm("", "is_empty", []))}/${show(sm("a", "is_empty", []))}`, "true/false");
+  eq("079", "substr 缺长度截到串尾", show(sm("abc", "substr", [I(2)])), "c");
+  eq("079", "substr 负起点给空串（JS slice 会从尾部数）", show(sm("abc", "substr", [I(-2)])), "");
+  eq("079", "substr 负长度截到串尾", show(sm("abc", "substr", [I(0), I(-1)])), "abc");
+  eq("079", "substr 越界给空串", show(sm("abc", "substr", [I(5)])), "");
+  eq("079", "split 保留空片段", SP("a,b,c", ","), '["a", "b", "c"]');
+  eq("079", "split 中间的空串留着", SP("a,,b", ","), '["a", "", "b"]');
+  eq("079", "split 末尾的空串也留着", SP("a,b,", ","), '["a", "b", ""]');
+  eq("079", "split allow_empty=false 丢掉全部空片段", SP("a,,b", ",", V.bool(false)), '["a", "b"]');
+  eq("079", "空串 split 出一个空片段", SP("", ","), '[""]');
+  eq("079", "空串 split 空分隔符也是空片段", SP("", ""), '[""]');
+  eq("079", "空分隔符逐码点切", SP("abc", ""), '["a", "b", "c"]');
+  eq("079", "分隔符不命中给整串", SP("abc", "x"), '["abc"]');
+  eq("079", "含 emoji 的串按码点切", SP(`${EMO}x${EMO}`, "x"), `["${EMO}", "${EMO}"]`);
+  // 半个代理对当分隔符：Godot 的 UTF-32 里没有这个码点，整串原样返回；JS 原生 split 会把 emoji 截断
+  eq("079", "孤立代理元分隔符不截断 emoji", SP(`${EMO}ab`, String.fromCharCode(0xd83d)), `["${EMO}ab"]`);
+  shouldThrow("079", "split 的第 3 个参数 max_splits 口径没测清，报缺", () =>
+    sm("a-b-c", "split", [S("-"), V.bool(false), I(2)]),
+  );
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

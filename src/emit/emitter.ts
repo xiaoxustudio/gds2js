@@ -145,8 +145,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
   // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
-  // 实测 String() 只接受 String（其余签名 Godot 是 Parse Error），把门交给运行时
+  // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
+  StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
@@ -2083,6 +2084,7 @@ function emitLit(lit: string, value: string | number | bigint | boolean | null):
   if (lit === "int") return `rt.V.int(${typeof value === "bigint" ? `${value.toString()}n` : String(value)})`;
   if (lit === "float") return `rt.V.float(${String(value)})`;
   if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
+  if (lit === "string_name") return `rt.V.stringName(${JSON.stringify(value)})`;
   if (lit === "bool") return `rt.V.bool(${String(value)})`;
   return "rt.V.nil()";
 }
