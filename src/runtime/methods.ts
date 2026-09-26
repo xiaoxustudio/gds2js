@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { md5Hex } from "./md5";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
@@ -164,6 +165,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        // 实测与标准 MD5（RFC 1321）逐向量一致，走自带的 UTF-8 版本，不引 node:crypto
+        case "md5_text":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `md5_text() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(md5Hex(s));
         default:
           throw new UnsupportedError("string-method", `String.${name}() 未实现`);
       }

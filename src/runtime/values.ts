@@ -633,6 +633,25 @@ export function strNum(n: number): string {
 }
 
 /**
+ * `String.num_scientific(v)`。实测口径（Godot 4.6.3）：
+ *   - 只有指数够极端才走科学计数法：`1e15` → `1e+15`、`1e20` → `1e+20`、`1e-5` → `1e-05`，
+ *     而 `1e-4` → `0.0001`、`1e3` → `1000` —— 临界是 `|x| >= 1e15` 或 `|x| < 1e-4`；
+ *   - 数字部分是**最短可回读**表示（`9.9999999e-07`、`123456789012345.6` 都和 JS 一样）；
+ *   - 指数**带符号并补到两位**（JS 原生给 `1e-7`，Godot 要 `1e-07`）；
+ *   - 与 str()/print() 是两套印法：`num_scientific(42)` → `42`、`(0)` → `0`，都没有 `.0`。
+ */
+export function strSci(n: number): string {
+  if (Number.isNaN(n)) return "nan";
+  if (n === Infinity) return "inf";
+  if (n === -Infinity) return "-inf";
+  if (n === 0) return "0";
+  const a = Math.abs(n);
+  if (a < 1e15 && a >= 1e-4) return String(n);
+  const m = /^(-?[\d.]+)e([+-])(\d+)$/.exec(n.toExponential());
+  return m ? `${m[1]}e${m[2]}${m[3]!.padStart(2, "0")}` : n.toExponential();
+}
+
+/**
  * `String.` 上的静态成员。目前实现探针钉住的三个：
  *   `chr(n)` —— 参数转 int（float 截断、bool 当 0/1）；**0、负数、代理区、> U+10FFFF
  *   一律换成 U+FFFD**（实测 `String.chr(0) == String.chr(0xFFFD)` 为真：Godot 的串里不留 NUL）；
@@ -662,10 +681,18 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
       if (v === undefined) throw new GodotRuntimeError("arity", "String.num_int64() 缺少参数");
       return V.str(intArgBig(v, "String.num_int64() 的参数").toString());
     }
+    case "num_scientific": {
+      const v = args[0];
+      if (v === undefined) throw new GodotRuntimeError("arity", "String.num_scientific() 缺少参数");
+      if (v.t === Tag.FLOAT) return V.str(strSci(v.v as number));
+      if (v.t === Tag.INT) return V.str(strSci(intToNum(v.v as IntPayload)));
+      if (v.t === Tag.BOOL) return V.str(strSci(v.v ? 1 : 0));
+      throw new GodotRuntimeError("string-arg", `String.num_scientific() 不接受 ${tagName(v.t)}`);
+    }
     default:
       throw new UnsupportedError(
         "string-static",
-        `String.${name} 未实现（实测存在的静态成员是 chr/num/num_int64；num_float 这类 Godot 根本没有，md5_text/humanize_size 还没探针实现）`,
+        `String.${name} 未实现（实测存在的静态成员是 chr/num/num_int64/num_scientific；num_float 这类 Godot 根本没有，humanize_size 还没建模）`,
       );
   }
 }

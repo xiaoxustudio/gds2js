@@ -8,6 +8,7 @@
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { range, rangeSeq } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
+import { md5Hex } from "../src/runtime/md5";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { V, type Variant } from "../src/runtime/tags";
 import { GArray, GDict, keyOf, show, strCase, strFloat, strFormat, strVec2, stringCtor, stringStatic } from "../src/runtime/values";
@@ -443,6 +444,26 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("076", "没实现的静态成员要响", () => stringStatic("md5_text", [str("abc")]));
   shouldThrow("076", "没有 String(int) 构造器", () => stringCtor([I(1)]));
   shouldThrow("076", "String() 只接受一个参数", () => stringCtor([]));
+}
+
+// ---- 077 num_scientific 的临界与两位指数；md5 与 Godot/Node 三方对齐
+{
+  const SC = (n: number) => ((stringStatic("num_scientific", [F(n)]) as Variant).v as string);
+  eq("077", "num_scientific(1e-7) 指数补两位", SC(1e-7), "1e-07");
+  eq("077", "num_scientific(1e-5)", SC(1e-5), "1e-05");
+  eq("077", "1e-4 还在普通区", SC(1e-4), "0.0001");
+  eq("077", "1e14 用普通展开", SC(1e14), "100000000000000");
+  eq("077", "1e15 起走科学计数法", SC(1e15), "1e+15");
+  eq("077", "1e-20 两位以上指数原样", SC(1e-20), "1e-20");
+  eq("077", "尾数是最短可回读", SC(9.9999999e-7), "9.9999999e-07");
+  eq("077", "0 不给 .0", SC(0), "0");
+  eq("077", "inf / nan 与 str 同名", `${SC(Infinity)}/${SC(NaN)}`, "inf/nan");
+  eq("077", "int 实参先收数", (stringStatic("num_scientific", [I(42)]) as Variant).v, "42");
+  eq("077", "md5 空串", md5Hex(""), "d41d8cd98f00b204e9800998ecf8427e");
+  eq("077", "md5 abc", md5Hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
+  eq("077", "md5 走 UTF-8 字节", md5Hex("中文"), "a7bac2239fcdcb3a067903d8077c4a07");
+  eq("077", "md5 64 字节分块边界", md5Hex("a".repeat(64)), "014842d480b571495a4a0363793f7367");
+  shouldThrow("077", "humanize_size 还没建模，问到要响", () => stringStatic("humanize_size", [I(1024)]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
