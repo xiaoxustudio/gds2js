@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, show, strLength, truthyOf } from "./values";
+import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用） */
 export function num(v: Variant): number {
@@ -138,16 +138,7 @@ export function rangeInt(v: Variant | undefined, n: number): number {
   if (v === undefined) {
     throw new GodotRuntimeError("range-arity", `range 缺少第 ${n} 个参数`);
   }
-  switch (v.t) {
-    case Tag.INT:
-      return Math.trunc(intToNum(v.v as IntPayload));
-    case Tag.FLOAT:
-      return Math.trunc(v.v as number);
-    case Tag.BOOL:
-      return v.v ? 1 : 0;
-    default:
-      throw new GodotRuntimeError("range-arg", `range 的第 ${n} 个参数不能转成 int（收到 ${tagName(v.t)}）`);
-  }
+  return Number(intArgBig(v, `range 的第 ${n} 个参数`));
 }
 
 /**

@@ -145,10 +145,12 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
   // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
+  // 实测 String() 只接受 String（其余签名 Godot 是 Parse Error），把门交给运行时
+  String: (a) => `rt.stringCtor([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "String", "load", "preload"]);
+const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "load", "preload"]);
 
 /**
  * 模块级名字。局部变量不在里面，所以发射成裸标识符；
@@ -2227,6 +2229,12 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       MODULE_CLASSES.has(e.callee.obj.name)
     ) {
       return `rt.V.object(new ${e.callee.obj.name}(${args.join(", ")}))`;
+    }
+    // 类型名上的静态方法：`String.chr(65)` 这类。BUILTIN 里只有函数式内置，
+    // 走 rt.method 会先把 `String` 发成一个不存在的标识符。
+    const staticFn = staticMemberFn(e.callee.obj);
+    if (staticFn) {
+      return `rt.${staticFn}(${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;
     }
     const obj = emitExpr(e.callee.obj);
     return `rt.method(${obj}, ${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;

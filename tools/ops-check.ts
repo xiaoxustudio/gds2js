@@ -10,7 +10,7 @@ import { range, rangeSeq } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { V, type Variant } from "../src/runtime/tags";
-import { GArray, GDict, keyOf, show, strCase, strFloat, strFormat, strVec2 } from "../src/runtime/values";
+import { GArray, GDict, keyOf, show, strCase, strFloat, strFormat, strVec2, stringCtor, stringStatic } from "../src/runtime/values";
 import { GVector2, vecCmp, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 
 let pass = 0;
@@ -415,6 +415,34 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("074", "显式零步长", () => range([I(0), I(1), F(0.0)]));
   shouldThrow("074", "String 不能转 int", () => range([I(0), S("3")]));
   shouldThrow("074", "Vector2 不能当步长", () => range([I(0), I(3), vector2(1, 1)]));
+}
+
+// ---- 076 String 的静态成员（实测：参数向零截断；0/负数/代理区/越界一律换成 U+FFFD）
+{
+  const S = (v: Variant) => v.v as string;
+  const str = (x: string) => V.str(x);
+  const FF = String.fromCharCode(0xfffd);
+  eq("076", "chr(65) 是 A", S(stringStatic("chr", [I(65)])), "A");
+  eq("076", "chr(0x1F600) 是 emoji", S(stringStatic("chr", [I(0x1f600)])), "\u{1F600}");
+  eq("076", "chr(0) 被换成 U+FFFD", S(stringStatic("chr", [I(0)])), FF);
+  eq("076", "chr(-1) 被换成 U+FFFD", S(stringStatic("chr", [I(-1)])), FF);
+  eq("076", "chr(0xD800) 代理区换 U+FFFD", S(stringStatic("chr", [I(0xd800)])), FF);
+  eq("076", "chr(0x10FFFF) 还在上界内", S(stringStatic("chr", [I(0x10ffff)])), String.fromCodePoint(0x10ffff));
+  eq("076", "chr 的 bigint 载荷越界换 U+FFFD", S(stringStatic("chr", [I(9007199254740993n)])), FF);
+  eq("076", "chr(2.7) 向零截断", S(stringStatic("chr", [F(2.7)])), S(stringStatic("chr", [I(2)])));
+  eq("076", "chr(true) 当 1", S(stringStatic("chr", [V.bool(true)])), S(stringStatic("chr", [I(1)])));
+  eq("076", "num(42) 走浮点格式", S(stringStatic("num", [I(42)])), "42.0");
+  eq("076", "num(-0.0) 保住符号（print 不给）", S(stringStatic("num", [F(-0)])), "-0.0");
+  eq("076", "num(0.0) 仍是 0.0", S(stringStatic("num", [F(0)])), "0.0");
+  eq("076", "num(1e20) 与 str 同路", S(stringStatic("num", [F(1e20)])), strFloat(1e20));
+  eq("076", "num_int64 逐位精确", S(stringStatic("num_int64", [I(9007199254740993n)])), "9007199254740993");
+  eq("076", "num_int64 也向零截断", S(stringStatic("num_int64", [F(1.7)])), "1");
+  eq("076", "String 构造器原样返回", S(stringCtor([str("x")])), "x");
+  shouldThrow("076", "chr 不接受 String 参数", () => stringStatic("chr", [str("65")]));
+  shouldThrow("076", "num 不接受 String 参数", () => stringStatic("num", [str("1.5")]));
+  shouldThrow("076", "没实现的静态成员要响", () => stringStatic("md5_text", [str("abc")]));
+  shouldThrow("076", "没有 String(int) 构造器", () => stringCtor([I(1)]));
+  shouldThrow("076", "String() 只接受一个参数", () => stringCtor([]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

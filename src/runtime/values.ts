@@ -600,6 +600,91 @@ export function strVec2(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
+/**
+ * 工具函数「int 形参」的统一归一（实测口径）：**float 向零截断**、**bool 当 0/1**、
+ * int 原样；其余类型 Godot 是编译期类型错，我们运行时报错（能到这一步说明静态侧判不出）。
+ * 用 bigint 作中介，`num_int64(9007199254740993)` 这种要逐位精确的才不会被折成 double。
+ */
+export function intArgBig(v: Variant, who: string): bigint {
+  switch (v.t) {
+    case Tag.INT:
+      return intToBig(v.v as IntPayload);
+    case Tag.FLOAT: {
+      const n = v.v as number;
+      if (!Number.isFinite(n)) {
+        throw new GodotRuntimeError("arg-int", `${who} 需要 int，收到非有限浮点 ${strFloat(n)}`);
+      }
+      return BigInt(Math.trunc(n));
+    }
+    case Tag.BOOL:
+      return v.v ? 1n : 0n;
+    default:
+      throw new GodotRuntimeError("arg-int", `${who} 需要 int，收到 ${tagName(v.t)}`);
+  }
+}
+
+/**
+ * `String.num(v)` 的口径。与 str()/print() 同一条浮点格式（实测 1e-20→0.0、
+ * 123456789012345.6→123456789012346、1e20→21 位展开 + .0、inf/nan 同名），
+ * **唯一实测差别是 -0.0**：print 给 `0.0`，String.num 给 `-0.0`。
+ */
+export function strNum(n: number): string {
+  return Object.is(n, -0) ? "-0.0" : strFloat(n);
+}
+
+/**
+ * `String.` 上的静态成员。目前实现探针钉住的三个：
+ *   `chr(n)` —— 参数转 int（float 截断、bool 当 0/1）；**0、负数、代理区、> U+10FFFF
+ *   一律换成 U+FFFD**（实测 `String.chr(0) == String.chr(0xFFFD)` 为真：Godot 的串里不留 NUL）；
+ *   `num(v)` —— 见 strNum；`num_int64(v)` —— 转 int 后按十进制精确印。
+ * 其余（`num_float` 之类 Godot 根本没有的、以及 md5_text/humanize_size 这些还没实现的）响亮报缺。
+ */
+export function stringStatic(name: string, args: Variant[] = []): Variant {
+  switch (name) {
+    case "chr": {
+      const v = args[0];
+      if (v === undefined) throw new GodotRuntimeError("arity", "String.chr() 缺少参数");
+      const cp = intArgBig(v, "String.chr() 的参数");
+      const bad = cp <= 0n || cp > 0x10ffffn || (cp >= 0xd800n && cp <= 0xdfff);
+      return V.str(String.fromCodePoint(bad ? 0xfffd : Number(cp)));
+    }
+    case "num": {
+      const v = args[0];
+      if (v === undefined) throw new GodotRuntimeError("arity", "String.num() 缺少参数");
+      // 形参是 float：int/bool 先收成数字再走浮点格式（实测 String.num(42) → "42.0"）
+      if (v.t === Tag.FLOAT) return V.str(strNum(v.v as number));
+      if (v.t === Tag.INT) return V.str(strNum(intToNum(v.v as IntPayload)));
+      if (v.t === Tag.BOOL) return V.str(strNum(v.v ? 1 : 0));
+      throw new GodotRuntimeError("string-arg", `String.num() 不接受 ${tagName(v.t)}`);
+    }
+    case "num_int64": {
+      const v = args[0];
+      if (v === undefined) throw new GodotRuntimeError("arity", "String.num_int64() 缺少参数");
+      return V.str(intArgBig(v, "String.num_int64() 的参数").toString());
+    }
+    default:
+      throw new UnsupportedError(
+        "string-static",
+        `String.${name} 未实现（实测存在的静态成员是 chr/num/num_int64；num_float 这类 Godot 根本没有，md5_text/humanize_size 还没探针实现）`,
+      );
+  }
+}
+
+/**
+ * `String(x)` 构造器：实测**只接受 String**（`String("x")` → x），
+ * int/float/bool/null/Vector2/Array 全是 Godot 的 Parse Error，所以到得了运行时还不是字符串就报错。
+ */
+export function stringCtor(args: Variant[]): Variant {
+  if (args.length !== 1) {
+    throw new GodotRuntimeError("string-ctor-arity", `String() 只接受 1 个参数（收到 ${args.length} 个）`);
+  }
+  const v = args[0] as Variant;
+  if (v.t !== Tag.STRING) {
+    throw new GodotRuntimeError("string-ctor", `没有 String(${tagName(v.t)}) 这个构造器（Godot 是 Parse Error）`);
+  }
+  return v;
+}
+
 /** 顶层 print：字符串不加引号 */
 export function show(v: Variant): string {
   switch (v.t) {
