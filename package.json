@@ -30,6 +30,7 @@
 		"test:ops": "tsx tools/ops-check.ts",
 		"test:ir": "tsx tools/ir-check.ts",
 		"test:sema": "tsx tools/sema-check.ts",
+		"test:escape": "tsx tools/escape-check.ts",
 		"test:compile": "tsx tools/compile.ts",
 		"test:multi": "tsx tools/multi-demo.ts",
 		"test:pkgmodes": "tsx tools/pkg-modes-check.ts",

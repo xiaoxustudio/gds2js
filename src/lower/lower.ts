@@ -527,20 +527,34 @@ function lowerExpr(n: SyntaxNode): Expr {
  * 下表逐条对 Godot 4.6.3 探针实测（9 个单转义探针文件，各只放一条 print，避免一个解析错拖垮整批）：
  *   \n \t \r \a \b \f \v \ \" \' 各 1 字符；"ab\ncd" 长 5；\u0041 → 65、\u00e9 → 233（取 4 位十六进制）。
  *   \x41 → Parse Error: Invalid escape in string（GDScript 没有 \x）。
- *   \U0001F600 → 长度 3、码点 502/48/48：\U 吃**恰好 6 位**十六进制（0x1F6=502），剩下的 00 当字面量。
- *     step 28 探针补齐：\U0041 / \U00041 / \U12 / \U / \UZZ 一律 Parse Error:
- *     Invalid hexadecimal digit in unicode escape sequence —— 少一位都不行，不是贪婪；
- *     \U110000 越界不报错，运行时换成 U+FFFD 并警告 Invalid unicode codepoint。
+ *   \u 吃**恰好 4 位**、\U 吃**恰好 6 位**十六进制，少一位都是 Parse Error:
+ *     Invalid hexadecimal digit in unicode escape sequence（\U0041 / \U00041 / \U12 / \U00D800 之外的
+ *     \U0001F600 这类"多出来的位"不是错，是按宽度吃掉后当普通字符：长度 3、码点 502/48/48）。
+ *   \U110000 这种越界值不报错，串里那位变成 U+FFFD（Godot 另外往 stderr 打警告，我们不复现警告）。
+ *   \U000000 → 真的 NUL 字符（长度 1，等于 String.chr(0)），同样只伴随一条警告。
+ *   **代理区**：`\uD800` / `\uDC00` 单独出现是 Parse Error「Invalid UTF-16 sequence in string,
+ *     unpaired lead/trail surrogate」；但**相邻的 lead+trail 两个转义会配成一个码点** ——
+ *     实测 `"\uD800\uDC00"`、`"\U00D800\U00DC00"`、`"\uD800\U00DC00x"` 长度分别是 1/1/2，
+ *     且都等于 String.chr(0x10000)（跨 \u 与 \U 两种写法也能配）。所以配对要等整串切完才能判。
  * 认不出的转义一律响亮抛错，绝不退回原文。
  */
 function unquote(raw: string): string {
   if (raw.length < 2 || !(raw.startsWith('"') || raw.startsWith("'"))) return raw;
   const inner = raw.slice(1, -1);
-  let out = "";
+  // 先切成「字面片段 / 转义码点」的有序序列，配对与越界替换留到第二趟：
+  // 代理对只可能出现在**相邻的两个转义**之间，中间隔了字面字符就不算。
+  const parts: Array<string | number> = [];
+  const pushLit = (ch: string) => {
+    const last = parts[parts.length - 1];
+    if (typeof last === "string") parts[parts.length - 1] = last + ch;
+    else parts.push(ch);
+  };
+  const pushEsc = (cp: number) => parts.push(cp);
+
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i]!;
     if (ch !== "\\") {
-      out += ch;
+      pushLit(ch);
       continue;
     }
     const e = inner[++i];
@@ -548,38 +562,67 @@ function unquote(raw: string): string {
       throw new UnsupportedError("string-escape", "字符串以孤立反斜杠结尾");
     }
     switch (e) {
-      case "n": out += "\n"; break;
-      case "t": out += "\t"; break;
-      case "r": out += "\r"; break;
-      case "a": out += "\u0007"; break;
-      case "b": out += "\u0008"; break;
-      case "f": out += "\u000C"; break;
-      case "v": out += "\u000B"; break;
-      case "\\": out += "\\"; break;
-      case '"': out += '"'; break;
-      case "'": out += "'"; break;
-      case "u": {
-        const hex = inner.slice(i + 1, i + 5);
-        if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
-          throw new UnsupportedError("string-escape", `\\u 需要 4 位十六进制，收到 "${hex}"`);
+      case "n": pushLit("\n"); break;
+      case "t": pushLit("\t"); break;
+      case "r": pushLit("\r"); break;
+      case "a": pushEsc(0x07); break;
+      case "b": pushEsc(0x08); break;
+      case "f": pushEsc(0x0c); break;
+      case "v": pushEsc(0x0b); break;
+      case "\\": pushLit("\\"); break;
+      case '"': pushLit('"'); break;
+      case "'": pushLit("'"); break;
+      case "u":
+      case "U": {
+        // \u = 4 位、\U = 6 位，且必须**恰好**这么多：少一位 Godot 就是 Parse Error，
+        // 多出来的位不是错误，是留给后面的普通字符（实测 \U0001F600 → 0x1F6 + "00"）。
+        const width = e === "u" ? 4 : 6;
+        const hex = inner.slice(i + 1, i + 1 + width);
+        if (!new RegExp(`^[0-9a-fA-F]{${width}}$`).test(hex)) {
+          throw new UnsupportedError(
+            "string-escape",
+            `\\${e} 需要恰好 ${width} 位十六进制，收到 "${hex}"（Godot: Invalid hexadecimal digit in unicode escape sequence）`,
+          );
         }
-        out += String.fromCodePoint(parseInt(hex, 16));
-        i += 4;
+        pushEsc(parseInt(hex, 16));
+        i += width;
         break;
       }
-      // \U 的宽度与越界行为 step 28 已测清（见上方 unquote 注释），但**代理区值**怎么处理、
-      // 一个串里多处越界怎么替换这两条还没探针 —— 响亮报缺，不发半对的实现。
-      case "U":
-        throw new UnsupportedError(
-          "string-escape",
-          "\\U 转义未实现：规则已实测为「恰好 6 位十六进制、越界值替换成 U+FFFD」，还差代理区值与多处越界两条探针（见 docs/ROADMAP.md 待做）",
-        );
       default:
         throw new UnsupportedError(
           "string-escape",
           `不支持的字符串转义 \\${e}（GDScript 无 \\x；实测 Godot 对 \\x41 报 Parse Error: Invalid escape in string）`,
         );
     }
+  }
+
+  let out = "";
+  for (let k = 0; k < parts.length; k++) {
+    const p = parts[k]!;
+    if (typeof p === "string") {
+      out += p;
+      continue;
+    }
+    if (p >= 0xd800 && p <= 0xdbff) {
+      const q = parts[k + 1];
+      if (typeof q === "number" && q >= 0xdc00 && q <= 0xdfff) {
+        out += String.fromCodePoint(0x10000 + ((p - 0xd800) << 10) + (q - 0xdc00));
+        k++;
+        continue;
+      }
+      throw new UnsupportedError(
+        "string-escape",
+        `\\u${p.toString(16)} 是孤立的前置代理（Godot: Invalid UTF-16 sequence in string, unpaired lead surrogate）`,
+      );
+    }
+    if (p >= 0xdc00 && p <= 0xdfff) {
+      throw new UnsupportedError(
+        "string-escape",
+        `\\u${p.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
+      );
+    }
+    // 越界（> U+10FFFF）不是编译错：Godot 把那位换成 U+FFFD，只在 stderr 警告一句
+    out += p > 0x10ffff ? "\uFFFD" : String.fromCodePoint(p);
   }
   return out;
 }
