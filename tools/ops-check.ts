@@ -6,6 +6,7 @@
  * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
+import { range, rangeSeq } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { V, type Variant } from "../src/runtime/tags";
@@ -397,6 +398,23 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("072", "Straße 上档只改日常字母", strCase("Stra\u00DFe", "upper"), "STRA\u00DFE");
   eq("072", "日常 ASCII 仍走 JS 单码点结果", strCase("hello", "upper"), "HELLO");
   eq("072", "无映射字符两边都保持", strCase("\u4E2D\u{1F600}", "upper"), "\u4E2D\u{1F600}");
+}
+
+// ---- 073/074 range 的参数归一（实测：float 向零截断、bool 当 0/1、截断后步长为 0 是运行错）
+{
+  const R = (...vs: Variant[]) => show(V.array(range(vs)));
+  eq("073", "range(0.5, 2.5) 两端各截断", R(F(0.5), F(2.5)), "[0, 1]");
+  eq("073", "range(2.5) 一个参数也截断", R(F(2.5)), "[0, 1]");
+  eq("073", "range(0, 3.9) 截断 end", R(I(0), F(3.9)), "[0, 1, 2]");
+  eq("073", "range(0, 3, 2.5) 截断 step", R(I(0), I(3), F(2.5)), "[0, 2]");
+  eq("073", "range(0, 3, true) 把 bool 当 1", R(I(0), I(3), V.bool(true)), "[0, 1, 2]");
+  eq("073", "range(-1.5, 1.5) 向零截断不是向下取整", R(F(-1.5), F(1.5)), "[-1, 0]");
+  eq("073", "range(-2) 空数组", R(I(-2)), "[]");
+  eq("073", "rangeSeq 与 range 同一条算式", rangeSeq([F(0.9), I(6), F(1.7)]).join(","), "0,1,2,3,4,5");
+  shouldThrow("074", "步长截断成 0（0.999）", () => range([I(0), I(3), F(0.999)]));
+  shouldThrow("074", "显式零步长", () => range([I(0), I(1), F(0.0)]));
+  shouldThrow("074", "String 不能转 int", () => range([I(0), S("3")]));
+  shouldThrow("074", "Vector2 不能当步长", () => range([I(0), I(3), vector2(1, 1)]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

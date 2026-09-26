@@ -6,7 +6,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let fns = rt.V.array(rt.GArray.of([]));
-    for (let i of rt.rangeSeq(rt.num(rt.V.int(3)))) {
+    for (let i of rt.rangeSeq([rt.V.int(3)])) {
       rt.method(fns, "append", [rt.callable(() => {
       return rt.V.int(i);
     })]);

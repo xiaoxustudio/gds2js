@@ -527,7 +527,10 @@ function lowerExpr(n: SyntaxNode): Expr {
  * 下表逐条对 Godot 4.6.3 探针实测（9 个单转义探针文件，各只放一条 print，避免一个解析错拖垮整批）：
  *   \n \t \r \a \b \f \v \ \" \' 各 1 字符；"ab\ncd" 长 5；\u0041 → 65、\u00e9 → 233（取 4 位十六进制）。
  *   \x41 → Parse Error: Invalid escape in string（GDScript 没有 \x）。
- *   \U0001F600 → 长度 3、码点 502/48/48：贪婪吃掉最多 6 位十六进制（0x1F6=502）后把 00 当字面量。
+ *   \U0001F600 → 长度 3、码点 502/48/48：\U 吃**恰好 6 位**十六进制（0x1F6=502），剩下的 00 当字面量。
+ *     step 28 探针补齐：\U0041 / \U00041 / \U12 / \U / \UZZ 一律 Parse Error:
+ *     Invalid hexadecimal digit in unicode escape sequence —— 少一位都不行，不是贪婪；
+ *     \U110000 越界不报错，运行时换成 U+FFFD 并警告 Invalid unicode codepoint。
  * 认不出的转义一律响亮抛错，绝不退回原文。
  */
 function unquote(raw: string): string {
@@ -564,11 +567,12 @@ function unquote(raw: string): string {
         i += 4;
         break;
       }
-      // Godot 对 \U 是"贪婪吃最多 6 位十六进制"，只有一例实证、语义又怪，不猜。
+      // \U 的宽度与越界行为 step 28 已测清（见上方 unquote 注释），但**代理区值**怎么处理、
+      // 一个串里多处越界怎么替换这两条还没探针 —— 响亮报缺，不发半对的实现。
       case "U":
         throw new UnsupportedError(
           "string-escape",
-          "\\U 转义未实现：Godot 贪婪吃最多 6 位十六进制（实测 \\U0001F600 → 码点 502 + 字面 \"00\"），仅一例实证，宁缺毋猜",
+          "\\U 转义未实现：规则已实测为「恰好 6 位十六进制、越界值替换成 U+FFFD」，还差代理区值与多处越界两条探针（见 docs/ROADMAP.md 待做）",
         );
       default:
         throw new UnsupportedError(

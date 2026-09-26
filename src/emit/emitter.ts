@@ -111,14 +111,13 @@ const BINOP: Record<string, string> = {
  * 第三个实参是 step —— 早先只发前两参，于是 `for i in range(0, 10, 2)` **静默**按 1 递增
  * （058 差分实测：Godot 0,2,4,6,8 而我们 0,1,2,…）。参数对不上就响，别再悄悄丢。
  */
-function rangeNumArgs(a: Array<string | undefined>): string {
+function rangeArgList(a: Array<string | undefined>): string {
   if (a.length > 3) {
     throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
   }
-  const start = a[0] === undefined ? "0" : `rt.num(${a[0]})`;
-  const stop = a[1] === undefined ? "" : `, rt.num(${a[1]})`;
-  const step = a[2] === undefined ? "" : `, rt.num(${a[2]})`;
-  return `${start}${stop}${step}`;
+  // 参数一律以 Variant 交给运行时，由 rt.rangeInt 按 Godot 的「转 int」口径截断
+  // （float 向零截断、bool 当 0/1、其它类型运行错）—— 在编译期偷偷 num() 会丢掉这套语义。
+  return `[${a.filter((x): x is string => x !== undefined).join(", ")}]`;
 }
 
 /** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */
@@ -135,7 +134,7 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接
-  range: (a) => `rt.V.array(rt.range(${rangeNumArgs(a)}))`,
+  range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
   str: (a) => `rt.strOf(${a.join(", ")})`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,
@@ -614,7 +613,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       const body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
       if (isRangeCall(s.iter) && UNBOXED.get(s.var) === "int") {
         return [
-          `for (let ${s.var} of rt.rangeSeq(${rangeNumArgs(s.iter.args.map(emitExpr))})) {`,
+          `for (let ${s.var} of rt.rangeSeq(${rangeArgList(s.iter.args.map(emitExpr))})) {`,
           ...body,
           "}",
         ];
@@ -969,8 +968,8 @@ function computeUnboxed(
         }
         break;
       case "for":
-        // `for x in range(...)` 的 x 依次取到 rangeSeq 的裸 int 元素（rangeSeq 只收整数界/步长，
-        // 越界与否由运行时响亮拒绝，不改变元素类型）。给它一条**合成的 int 字面量初值**当候选，
+        // `for x in range(...)` 的 x 依次取到 rangeSeq 的裸 int 元素（界与步长都在运行时被
+        // rt.rangeInt 截断成 int，所以元素一定是 int；转不了的类型由运行时报错，不改变元素类型）。给它一条**合成的 int 字面量初值**当候选，
         // 于是 x 和其它裸 int 局部走完全同一套判定：循环体里若把 x 赋成非 int，
         // `assigns` 那条检查会照常把它剔掉，发射端见 UNBOXED 里没有它就直接退回装箱的 rt.iter。
         if (inLambda || !isRangeCall(s.iter)) excluded.add(s.var);
