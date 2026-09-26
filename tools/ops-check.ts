@@ -9,7 +9,7 @@ import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { fast } from "../src/runtime/fast";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { V, type Variant } from "../src/runtime/tags";
-import { GArray, GDict, keyOf, show, strFloat, strFormat, strVec2 } from "../src/runtime/values";
+import { GArray, GDict, keyOf, show, strCase, strFloat, strFormat, strVec2 } from "../src/runtime/values";
 import { GVector2, vecCmp, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 
 let pass = 0;
@@ -304,7 +304,7 @@ eq("017", "1e30 整数值精确展开", strFloat(1e30), "10000000000000000000000
 eq("018", "\"hello\"[0]", strOps.at("hello", 0), "h");
 eq("018", "length()", strOps.length("hello"), 5);
 eq("018", "substr(1,3)", strOps.substr("hello", 1, 3), "ell");
-eq("018", "to_upper()", "hello".toUpperCase(), "HELLO");
+eq("018", "to_upper()", strCase("hello", "upper"), "HELLO");
 eq("018", "\"%d/%s\"%[5,\"x\"]", strOps.format("%d/%s", [I(5), S("x")]), "5/x");
 eq("018", "UTF-32 length（emoji 算 1 个码点）", strOps.length("a\u{1F600}"), 2);
 
@@ -372,6 +372,31 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   d.set(F(1), S("b"));
   eq("071", "1 与 1.0 各自存得住", `${show(d.get(I(1)))}/${show(d.get(F(1)))}/${d.size()}`, "a/b/2");
   shouldThrow("071", "数组不能当键", () => keyOf(V.array(GArray.of([]))));
+}
+
+// ---- 072 to_upper/to_lower 走简单映射：长度不变，且单码点答案以 Godot 实测表为准
+// （表由 tools/case-probe.mjs + tools/golden.mjs 000-probe-cs + tools/case-table.mjs 生成）
+{
+  eq("072", "\u00DF 上档保持", strCase("\u00DF", "upper"), "\u00DF");
+  eq("072", "\u00DF 下档保持", strCase("\u00DF", "lower"), "\u00DF");
+  eq("072", "\uFB00 上档保持（旧实现响亮报缺）", strCase("\uFB00", "upper"), "\uFB00");
+  eq("072", "\uFB01 上档保持（旧实现响亮报缺）", strCase("\uFB01", "upper"), "\uFB01");
+  eq("072", "\uFB13 上档保持（亚美尼亚连字）", strCase("\uFB13", "upper"), "\uFB13");
+  eq("072", "\u0130 下档给单个 i", strCase("\u0130", "lower"), "i");
+  eq("072", "\u0130 上档保持", strCase("\u0130", "upper"), "\u0130");
+  eq("072", "\u0131 上档给 I", strCase("\u0131", "upper"), "I");
+  eq("072", "\u01F3 上档给单码点 \u01F1", strCase("\u01F3", "upper"), "\u01F1");
+  eq("072", "\u01C5 上档给 \u01C4", strCase("\u01C5", "upper"), "\u01C4");
+  eq("072", "\u0149 上档不被拆成 \u02BCN", strCase("\u0149", "upper"), "\u0149");
+  eq("072", "\u0390 上档不被拆成 \u0399..", strCase("\u0390", "upper"), "\u0390");
+  eq("072", "\u1FBC 下档给 \u1FB3", strCase("\u1FBC", "lower"), "\u1FB3");
+  eq("072", "\uA7CE 下档不被 JS 改成 \uA7CF", strCase("\uA7CE", "lower"), "\uA7CE");
+  eq("072", "\uA7CF 上档不被 JS 改成 \uA7CE", strCase("\uA7CF", "upper"), "\uA7CF");
+  eq("072", "Bassa Vah 下档保持（JS 会互映射）", strCase("\u{16EA0}", "lower"), "\u{16EA0}");
+  eq("072", "Bassa Vah 上档保持", strCase("\u{16EBB}", "upper"), "\u{16EBB}");
+  eq("072", "Straße 上档只改日常字母", strCase("Stra\u00DFe", "upper"), "STRA\u00DFE");
+  eq("072", "日常 ASCII 仍走 JS 单码点结果", strCase("hello", "upper"), "HELLO");
+  eq("072", "无映射字符两边都保持", strCase("\u4E2D\u{1F600}", "upper"), "\u4E2D\u{1F600}");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
