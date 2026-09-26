@@ -9,6 +9,7 @@ import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { lengthOf, range, rangeSeq } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { md5Hex } from "../src/runtime/md5";
+import { callable } from "../src/runtime/object";
 import { index, method } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
@@ -807,6 +808,64 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("081", "Dictionary.count() 不存在（实测 Nonexistent function）", () => call(ha, "count", [I(1)]));
   shouldThrow("081", "Dictionary.merge_recursive 不存在", () => call(mgv, "merge_recursive", [dsrc3]));
   shouldThrow("080", "Array.has_all 不存在（实测 Nonexistent function）", () => call(fr, "has_all", [arrOf([I(1)])]));
+}
+
+// ---- 082 Callable 参数族：短路、调用失败（实参个数对不上）的各家口径、reduce 的 acc 规则
+{
+  const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
+  const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
+  const A = arrOf([I(1), I(2), I(3), I(4)]);
+  // 声明 1 个形参的谓词 / 声明 2 个的比较器；JS 箭头函数的 length 就是 Godot 那份声明的实参个数
+  const one = (f: (x: Variant) => boolean) => callable((x: Variant) => V.bool(f(x)));
+  const two = (f: (a: Variant, b: Variant) => Variant) => callable((a: Variant, b: Variant) => f(a, b));
+  const isGt2 = (x: Variant) => (x.v as number) > 2;
+
+  eq("082", "filter 给新数组", show(call(A, "filter", [one(isGt2)])), "[3, 4]");
+  eq("082", "filter 不改原数组", show(A), "[1, 2, 3, 4]");
+  eq("082", "map 收的是返回值", show(call(A, "map", [one((x) => (x.v as number) % 2 === 0)])), "[false, true, false, true]");
+  eq("082", "空数组 filter 给空", show(call(arrOf([]), "filter", [one(() => true)])), "[]");
+  eq("082", "空数组 map 给空", show(call(arrOf([]), "map", [one(() => true)])), "[]");
+  eq("082", "any 命中", show(call(A, "any", [one(isGt2)])), "true");
+  eq("082", "all 全过", show(call(A, "all", [one((x) => (x.v as number) > 0)])), "true");
+  eq("082", "all 有一个不过就 false", show(call(A, "all", [one(isGt2)])), "false");
+  eq("082", "空数组 any 假", show(call(arrOf([]), "any", [one(() => true)])), "false");
+  eq("082", "空数组 all 真", show(call(arrOf([]), "all", [one(() => false)])), "true");
+  // 短路：数一下实际被调用过几次
+  let hits = 0;
+  call(A, "any", [one((x) => { hits++; return (x.v as number) > 2; })]);
+  eq("082", "any 命中就停（1、2、3 三次）", hits, 3);
+  hits = 0;
+  call(A, "all", [one((x) => { hits++; return (x.v as number) > 2; })]);
+  eq("082", "all 遇假就停（只调 1）", hits, 1);
+  hits = 0;
+  call(A, "filter", [one((x) => { hits++; return (x.v as number) > 2; })]);
+  eq("082", "filter 不短路（四格全问）", hits, 4);
+  eq("082", "find_custom 给下标", show(call(A, "find_custom", [one(isGt2)])), "2");
+  eq("082", "find_custom 未命中 -1", show(call(A, "find_custom", [one((x) => (x.v as number) > 99)])), "-1");
+  eq("082", "find_custom 的 from 不折负数", show(call(A, "find_custom", [one(isGt2), I(-1)])), "-1");
+  eq("082", "find_custom 从 from 往后", show(call(A, "find_custom", [one((x) => (x.v as number) > 0), I(3)])), "3");
+  eq("082", "rfind_custom 给下标", show(call(A, "rfind_custom", [one(isGt2)])), "3");
+  eq("082", "rfind_custom(…, 0) 只看下标 0", show(call(A, "rfind_custom", [one(isGt2), I(0)])), "-1");
+  eq("082", "rfind_custom 折算后越界退回整段", show(call(A, "rfind_custom", [one((x) => (x.v as number) === 1), I(-99)])), "0");
+  eq("082", "reduce 带 acc 从下标 0 折", show(call(A, "reduce", [two((a, x) => V.int((a.v as number) + (x.v as number))), I(100)])), "110");
+  eq("082", "reduce 省略 acc 拿首元素起折", show(call(arrOf([I(1), I(2), I(3)]), "reduce", [two((a, x) => V.int((a.v as number) * 10 + (x.v as number)))])), "123");
+  eq("082", "reduce 单元素省略 acc", show(call(arrOf([I(5)]), "reduce", [two((a, x) => V.int((a.v as number) + (x.v as number)))])), "5");
+  eq("082", "reduce 空数组带 acc 给 acc", show(call(arrOf([]), "reduce", [two((a) => a), I(5)])), "5");
+  eq("082", "reduce 空数组省略 acc 给 null", show(call(arrOf([]), "reduce", [two((a) => a)])), "<null>");
+  // 调用失败（实参个数对不上）：Godot 只打 stderr 诊断，各方法把「没有结果」解释成自己的口径
+  // 声明 0 个形参：Godot 会判「实参个数对不上」，整次调用失败
+  const wrongArity = callable(() => V.bool(true));
+  eq("082", "map 遇到调用失败就不收这一格", show(call(A, "map", [wrongArity])), "[]");
+  eq("082", "filter 遇到调用失败全丢", show(call(A, "filter", [wrongArity])), "[]");
+  eq("082", "any 遇到调用失败给 false", show(call(A, "any", [wrongArity])), "false");
+  eq("082", "all 遇到调用失败也给 false", show(call(A, "all", [wrongArity])), "false");
+  eq("082", "find_custom 遇到调用失败给 -1", show(call(A, "find_custom", [wrongArity])), "-1");
+  eq("082", "reduce 遇到调用失败整表给 null", show(call(A, "reduce", [wrongArity, I(0)])), "<null>");
+  // 比较器同理：1 形参的 Callable 对 sort_custom 永远不成立 → 实测原序不动
+  const unsorted = arrOf([I(2), I(1)]);
+  call(unsorted, "sort_custom", [one(() => true)]);
+  eq("082", "实参个数不对的比较器保持原序", show(unsorted), "[2, 1]");
+  shouldThrow("082", "filter 的非 Callable 实参要响", () => call(A, "filter", [I(1)]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

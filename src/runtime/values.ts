@@ -315,9 +315,72 @@ export class GArray {
     return lo;
   }
 
+  /**
+   * `filter(f)` / `map(f)` / `find_custom(f, from)` / `rfind_custom(f, from)` 一族。
+   * 谓词返回 `null` 表示**这次调用失败**（实参个数与 Callable 声明对不上，Godot 只往 stderr 打
+   * 一条引擎诊断、不报错）。实测（082）失败时的口径：filter 不收这一格、map 也不收
+   * （`[1,2].map(func(x, i): return 1)` → `[]`）、find_custom/rfind_custom 当不匹配。
+   * 结果是新数组，但**元素仍是引用**（实测改结果里的嵌套容器会串回原表）。
+   */
+  filterBy(p: (v: Variant) => Variant | null): GArray {
+    const out: Variant[] = [];
+    for (const x of this.items) {
+      const r = p(x);
+      if (r !== null && truthyOf(r)) out.push(x);
+    }
+    return new GArray(out);
+  }
+
+  mapBy(p: (v: Variant) => Variant | null): GArray {
+    const out: Variant[] = [];
+    for (const x of this.items) {
+      const r = p(x);
+      if (r !== null) out.push(r);
+    }
+    return new GArray(out);
+  }
+
+  /** `any(f)` / `all(f)`：实测**短路**（`[1,2,3,4].any(x>2)` 只调用到 3）。空数组 any 假、all 真。 */
+  anyBy(p: (v: Variant) => Variant | null): boolean {
+    for (const x of this.items) {
+      const r = p(x);
+      if (r !== null && truthyOf(r)) return true;
+    }
+    return false;
+  }
+
+  allBy(p: (v: Variant) => Variant | null): boolean {
+    for (const x of this.items) {
+      const r = p(x);
+      if (r === null || !truthyOf(r)) return false;
+    }
+    return true;
+  }
+
+  /** `find_custom` / `rfind_custom` 实测给的是**下标**（不是元素），未命中 -1；from 的折算与 find/rfind 同一套。 */
+  findCustom(p: (v: Variant) => Variant | null, from = 0): number {
+    if (from < 0 || from >= this.items.length) return -1;
+    for (let i = from; i < this.items.length; i++) {
+      const r = p(this.items[i] as Variant);
+      if (r !== null && truthyOf(r)) return i;
+    }
+    return -1;
+  }
+
+  rfindCustom(p: (v: Variant) => Variant | null, from = -1): number {
+    const n = this.items.length;
+    if (n === 0) return -1;
+    let k = from < 0 ? n + from : from;
+    if (k < 0 || k >= n) k = n - 1;
+    for (let i = k; i >= 0; i--) {
+      const r = p(this.items[i] as Variant);
+      if (r !== null && truthyOf(r)) return i;
+    }
+    return -1;
+  }
+
   /** min/max 的比较口径由调用方给（值类型在 ops 那边，运行时这里不能反向依赖）。 */
-  extreme(
-    wantMin: boolean,
+  extreme(    wantMin: boolean,
     less: (a: Variant, b: Variant) => boolean,
   ): Variant | null {
     let best: Variant | null = null;

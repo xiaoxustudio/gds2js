@@ -184,6 +184,40 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.int(a.rfindSame(one(args, "rfind"), intArgOr(args, 1, -1)));
         case "count":
           return V.int(a.count(one(args, "count")));
+        case "filter":
+          return V.array(a.filterBy(predOf(args[0], "filter")));
+        case "map":
+          return V.array(a.mapBy(predOf(args[0], "map")));
+        case "any":
+          return V.bool(a.anyBy(predOf(args[0], "any")));
+        case "all":
+          return V.bool(a.allBy(predOf(args[0], "all")));
+        case "find_custom":
+          return V.int(a.findCustom(predOf(args[0], "find_custom"), intArgOr(args, 1, 0)));
+        case "rfind_custom":
+          return V.int(a.rfindCustom(predOf(args[0], "rfind_custom"), intArgOr(args, 1, -1)));
+        case "reduce": {
+          // 实参个数按 Godot 是 2（acc, 元素）；省略第二个实参时拿**第一个元素**当 acc、从下标 1
+          // 开始折（实测 [1,2,3].reduce(acc*10+x) → 123），给了 acc 就从 0 开始折。
+          const call = callerOf(args[0], 2, "reduce");
+          const items = a.raw();
+          let acc: Variant;
+          let start = 0;
+          if (args.length > 1) {
+            acc = args[1] as Variant;
+          } else {
+            if (items.length === 0) return V.nil(); // 实测空数组又没 acc 给 null
+            acc = items[0] as Variant;
+            start = 1;
+          }
+          for (let i = start; i < items.length; i++) {
+            const r = call([acc, items[i] as Variant]);
+            // 实测：任何一次调用失败，整个 reduce 就给 null（不是保留已折出的部分）
+            if (r === null) return V.nil();
+            acc = r;
+          }
+          return acc;
+        }
         // 实测空数组的 min()/max() 都是 null（不是报错）
         case "min":
           return a.extreme(true, isLess) ?? V.nil();
@@ -344,15 +378,39 @@ export function attribute(raw: unknown, name: string): unknown {
 }
 
 /**
+ * Callable 实参：Godot **严格按声明的实参个数**调用，对不上整次调用就失败 —— 而失败在 Godot
+ * 不是脚本错误，只有一条 stderr 诊断，实测各家把「没有结果」解释成自己的口径
+ * （见 GArray 的 filterBy/mapBy/… 与下面的 reduce）。返回的调用器用 `null` 表示「这次调用失败」。
+ * 我们的 lambda 发成同形参数的箭头函数、方法 Callable 是 `bind(this)` 过的原方法（bind 第一个
+ * thisArg 不减 length），所以 `fn.length` 正好就是 Godot 那份声明的实参个数。
+ */
+function callerOf(v: Variant | undefined, argc: number, who: string): (args: Variant[]) => Variant | null {
+  const inner = v === undefined ? undefined : (v.v as Record<string, unknown>);
+  const fn = inner === undefined ? undefined : (inner[CALLABLE] as Fn | undefined);
+  if (typeof fn !== "function") {
+    throw new UnsupportedError("array-callable", `Array.${who}() 需要一个 Callable`);
+  }
+  if (fn.length !== argc) return () => null;
+  return (args) => wrapValue(fn(...args));
+}
+
+/** 单实参谓词：`filter`/`map`/`any`/`all`/`find_custom`/`rfind_custom` 收到的都是 `f(元素)`。 */
+function predOf(v: Variant | undefined, who: string): (x: Variant) => Variant | null {
+  const call = callerOf(v, 1, who);
+  return (x) => call([x]);
+}
+
+/**
  * `sort_custom` / `bsearch_custom` 的比较实参：Godot 传进来的是 Callable，
  * f(a,b) 为真表示 a 该在 b 前（`func(a, b): return a < b` 是升序）。
+ * 实参个数对不上时实测比较器恒不成立（`[2,1].sort_custom(func(x): return true)` 保持 [2, 1]）。
  */
 function comparatorOf(v: Variant | undefined, who: string): (a: Variant, b: Variant) => boolean {
-  const fn = v === undefined ? undefined : ((v.v as Record<string, unknown>)[CALLABLE] as Fn | undefined);
-  if (typeof fn !== "function") {
-    throw new UnsupportedError("array-comparator", `Array.${who}() 需要一个 Callable 比较器`);
-  }
-  return (x, y) => truthyOf(wrapValue(fn(x, y)));
+  const call = callerOf(v, 2, who);
+  return (x, y) => {
+    const r = call([x, y]);
+    return r !== null && truthyOf(r);
+  };
 }
 
 function one(args: Variant[], who: string): Variant {
