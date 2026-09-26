@@ -180,7 +180,8 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
     case "StringName":
       return st === "String";
     case "Vector2":
-      return false; // Vector2 字面量的静态类型还推不出（staticType 给 null），运行时兜底
+    case "Vector3":
+      return false; // 向量字面量的静态类型还推不出（staticType 给 null），运行时兜底
     case "Array":
       return st === "Array";
     case "Dictionary":

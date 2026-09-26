@@ -1,0 +1,7 @@
+1.0
+3.0
+SCRIPT ERROR: Invalid access of index '3' on a base object of type: 'Vector3'.
+   at: _initialize (<case>/main.gd:7)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:7)
+<<GDS2JS_TIMEOUT>>

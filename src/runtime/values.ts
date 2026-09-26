@@ -2,6 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { GVector2, asVec2, vecCmp } from "./vector2";
+import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -75,6 +76,9 @@ function keyOfIn(v: Variant, path: unknown[]): string {
       // 而 k[Vector2(1,2)] 与 k[Vector2(2,1)] 是两格）。分量已 fround，所以字符串化就够稳定。
       const vec = asVec2(v);
       if (vec) return `v:${String(vec.x)},${String(vec.y)}`;
+      // Vector3 也按值分格（实测 a12/d10：`d[Vector3(1,2,3)]` 存得下、等值新向量命中同一格）
+      const vec3 = asVec3(v);
+      if (vec3) return `w:${String(vec3.x)},${String(vec3.y)},${String(vec3.z)}`;
       break;
     }
     default:
@@ -90,13 +94,22 @@ function keyOfIn(v: Variant, path: unknown[]): string {
  * 只收实测能验算的内建值类型；引擎类（`Array[Node]`）与嵌套定型（`Array[Array[int]]`）
  * Godot 在解析期就拒绝（"Nested typed collections are not supported"），走不到这里。
  */
-export type ElemKind = "int" | "float" | "bool" | "String" | "StringName" | "Vector2" | "Array" | "Dictionary";
+export type ElemKind =
+  | "int"
+  | "float"
+  | "bool"
+  | "String"
+  | "StringName"
+  | "Vector2"
+  | "Vector3"
+  | "Array"
+  | "Dictionary";
 
 /** Godot 认识、且我们能在运行时校验的容器标注类型名 */
 export function isElemKind(name: string): name is ElemKind {
   return (
     name === "int" || name === "float" || name === "bool" || name === "String" ||
-    name === "StringName" || name === "Vector2" || name === "Array" || name === "Dictionary"
+    name === "StringName" || name === "Vector2" || name === "Vector3" || name === "Array" || name === "Dictionary"
   );
 }
 
@@ -120,6 +133,9 @@ export function elemDefault(kind: ElemKind): Variant {
       return V.stringName("");
     case "Vector2":
       return V.object(new GVector2(0, 0));
+    case "Vector3":
+      // 实测 `Array[Vector3]` resize 给 `[(0.0, 0.0, 0.0), ...]`、`Array[Vector2i]` 给 `(0, 0)`
+      return vector3(0, 0, 0);
     case "Array":
       return V.array(new GArray());
     case "Dictionary":
@@ -168,6 +184,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       return null;
     case "Vector2":
       return v.t === Tag.OBJECT && v.v instanceof GVector2 ? v : null;
+    case "Vector3":
+      return v.t === Tag.OBJECT && v.v instanceof GVector3 ? v : null;
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
     case "Dictionary":
@@ -488,7 +506,8 @@ export class GArray {
     const allStr = this.items.every((x) => x.t === Tag.STRING || x.t === Tag.STRING_NAME);
     const allBool = this.items.every((x) => x.t === Tag.BOOL);
     const allVec = this.items.every((x) => asVec2(x) !== null);
-    if (!allNum && !allStr && !allBool && !allVec) {
+    const allVec3 = this.items.every((x) => asVec3(x) !== null);
+    if (!allNum && !allStr && !allBool && !allVec && !allVec3) {
       throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
     }
     // 数值排序：int 载荷可能是 bigint，混着 `-` 会 TypeError；两边都可能是 bigint，
@@ -507,7 +526,9 @@ export class GArray {
         ? (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string)
         : allBool
           ? (a: Variant, b: Variant) => Number(a.v) - Number(b.v)
-          : (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2);
+          : allVec
+            ? (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2)
+            : (a: Variant, b: Variant) => vec3Cmp(asVec3(a) as GVector3, asVec3(b) as GVector3);
     this.items = [...this.items].sort(cmp);
   }
 
@@ -1528,6 +1549,10 @@ export function show(v: Variant): string {
       if (inner instanceof GVector2) {
         return `(${strVec2(inner.x)}, ${strVec2(inner.y)})`;
       }
+      // Vector3 同一套短格式：实测 (1, 2, 3) → "(1.0, 2.0, 3.0)"、(0.1,0,0).x 打印仍给 0.1
+      if (inner instanceof GVector3) {
+        return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)})`;
+      }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }
     default:
@@ -1551,14 +1576,19 @@ export function valueEq(a: Variant, b: Variant): boolean {
   // `v == [1]`、`v == &"x"` 全部当场炸，只有跟 null 比给 false）。放在函数最前面是必须的：
   // 下面 int/float 那条跨类型分支和 `ta !== tb → false` 的早退都会把它悄悄吃掉，
   // 而「该响的没响」正是最不该有的静默错。
-  const asVec = (x: Variant): GVector2 | null => (x.t === Tag.OBJECT && x.v instanceof GVector2 ? (x.v as GVector2) : null);
-  const av = asVec(a);
-  const bv = asVec(b);
-  if (av !== null || bv !== null) {
-    if (av !== null && bv !== null) return av.x === bv.x && av.y === bv.y;
-    const other = av === null ? a : b;
+  const nameOf = (x: Variant): string =>
+    asVec2(x) !== null ? "Vector2" : asVec3(x) !== null ? "Vector3" : tagName(x.t);
+  const a2 = asVec2(a);
+  const b2 = asVec2(b);
+  const a3 = asVec3(a);
+  const b3 = asVec3(b);
+  if (a2 !== null || b2 !== null || a3 !== null || b3 !== null) {
+    if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
+    if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
+    const other = a2 !== null || a3 !== null ? b : a;
+    // 只有跟 null 比保留 false（实测 `Vector3 != null` 是 true）
     if (other.t === Tag.NIL) return false;
-    const nameOf = (x: Variant): string => (asVec(x) !== null ? "Vector2" : tagName(x.t));
+    // Vector2 与 Vector3 混比也炸（实测 `Invalid operands 'Vector3' and 'Vector2' in operator '=='.`）
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${nameOf(a)}' and '${nameOf(b)}' in operator '=='.`);
   }
   if (ta === Tag.INT || ta === Tag.FLOAT) {
@@ -1619,9 +1649,12 @@ export function valueSame(a: Variant, b: Variant): boolean {
     case Tag.DICT:
       return (a.v as GDict).same(b.v as GDict);
     case Tag.OBJECT:
-      // Vector2 按分量而不是引用（实测 [Vector2(1,2)].count(Vector2(1.0,2.0)) → 1）
+      // Vector2 / Vector3 按分量而不是引用（实测 [Vector2(1,2)].count(Vector2(1.0,2.0)) → 1）
       if (a.v instanceof GVector2 && b.v instanceof GVector2) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
+      if (a.v instanceof GVector3 && b.v instanceof GVector3) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
       }
       return a.v === b.v;
     default:

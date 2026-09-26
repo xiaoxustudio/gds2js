@@ -6,6 +6,7 @@ import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
+import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -44,6 +45,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
     // Vector2 的方法面（语义逐条探针实测，测不准的直接报缺，见 vector2.ts 的注释）
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
+    if (inner instanceof GVector3) return vector3Method(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -318,6 +320,7 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
   // Vector2 可以按下标取分量（实测 v[0] → 3.0、v[1] → 4.0；越界 Godot 在解析期就拦）
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
@@ -329,6 +332,8 @@ export function index(raw: unknown, idx: Variant): Variant {
  */
 export function writeProp(base: Variant, key: string, value: Variant): Variant | null {
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
+  const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
+  if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",
@@ -342,6 +347,9 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
 export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant | null {
   if (base.t === Tag.OBJECT && base.v instanceof GVector2) {
     return vecWrite(base.v as GVector2, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector3) {
+    return vec3Write(base.v as GVector3, idx, value, "index");
   }
   setIndex(base, idx, value);
   return null;
@@ -392,6 +400,8 @@ export function attribute(raw: unknown, name: string): unknown {
     // （它们要的正是裸对象），走那条会把 number 直接递给 rt.show / ops，于是 "print 不支持 undefined"。
     const vec = obj.v instanceof GVector2 ? (obj.v as GVector2) : null;
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
+    const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
+    if (vec3 && (name === "x" || name === "y" || name === "z")) return V.float(vec3[name]);
     const inner = obj.v as Record<string, unknown>;
     if (name in inner) return inner[name];
   }

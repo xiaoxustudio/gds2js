@@ -1,6 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asVec2, GVector2, vecCmp } from "./vector2";
+import { asVec3, GVector3, vec3Cmp } from "./vector3";
 import {
   GArray,
   GDict,
@@ -63,6 +64,10 @@ export const ops = {
     const va = a.t === Tag.OBJECT && a.v instanceof GVector2 ? a.v : null;
     const vb = b.t === Tag.OBJECT && b.v instanceof GVector2 ? b.v : null;
     if (va && vb) return V.object(new GVector2(va.x + vb.x, va.y + vb.y));
+    const wa3 = asVec3(a);
+    const wb3 = asVec3(b);
+    // Vector3 分量加（实测 (1,2,3)+(0.5,0,0) → (1.5, 2.0, 3.0)）；跟标量混加 Godot 是解析期报错，这里同样不接
+    if (wa3 && wb3) return V.object(new GVector3(wa3.x + wb3.x, wa3.y + wb3.y, wa3.z + wb3.z));
     throw new UnsupportedError("add-operands", `+ 不支持 ${tagName(a.t)} + ${tagName(b.t)}`);
   },
 
@@ -71,6 +76,9 @@ export const ops = {
     const va = asVec2(a);
     const vb = asVec2(b);
     if (va && vb) return V.object(new GVector2(va.x - vb.x, va.y - vb.y));
+    const wa3 = asVec3(a);
+    const wb3 = asVec3(b);
+    if (wa3 && wb3) return V.object(new GVector3(wa3.x - wb3.x, wa3.y - wb3.y, wa3.z - wb3.z));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("sub-operands", `- 不支持 ${tagName(a.t)} - ${tagName(b.t)}`);
     }
@@ -85,6 +93,12 @@ export const ops = {
     if (va && vb) return V.object(new GVector2(va.x * vb.x, va.y * vb.y));
     if (va && isNum(b)) return V.object(new GVector2(va.x * num(b), va.y * num(b)));
     if (vb && isNum(a)) return V.object(new GVector2(vb.x * num(a), vb.y * num(a)));
+    const wa3 = asVec3(a);
+    const wb3 = asVec3(b);
+    // 实测逐分量：(2,3,4)*(0.5,1,2) → (1.0, 3.0, 8.0)；标量：(1,2,3)*2.5 → (2.5, 5.0, 7.5)
+    if (wa3 && wb3) return V.object(new GVector3(wa3.x * wb3.x, wa3.y * wb3.y, wa3.z * wb3.z));
+    if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x * num(b), wa3.y * num(b), wa3.z * num(b)));
+    if (wb3 && isNum(a)) return V.object(new GVector3(wb3.x * num(a), wb3.y * num(a), wb3.z * num(a)));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
     }
@@ -99,6 +113,10 @@ export const ops = {
     // Vector2 / Vector2 也是逐分量，且**不拦除零**（实测 Vector2(1,1)/Vector2(0,0) → (inf, inf)）
     if (va && vb) return V.object(new GVector2(va.x / vb.x, va.y / vb.y));
     if (va && isNum(b)) return V.object(new GVector2(va.x / num(b), va.y / num(b)));
+    const wa3 = asVec3(a);
+    const wb3 = asVec3(b);
+    if (wa3 && wb3) return V.object(new GVector3(wa3.x / wb3.x, wa3.y / wb3.y, wa3.z / wb3.z));
+    if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x / num(b), wa3.y / num(b), wa3.z / num(b)));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
     }
@@ -145,6 +163,8 @@ export const ops = {
     // 实测 -Vector2(1.5, 2) → (-1.5, -2.0)
     const va = asVec2(a);
     if (va) return V.object(new GVector2(-va.x, -va.y));
+    const wa3 = asVec3(a);
+    if (wa3) return V.object(new GVector3(-wa3.x, -wa3.y, -wa3.z));
     if (!isNum(a)) {
       throw new UnsupportedError("neg-operands", `- 不支持 ${tagName(a.t)}`);
     }
@@ -258,6 +278,10 @@ function compare(a: Variant, b: Variant): number {
   const va = asVec2(a);
   const vb = asVec2(b);
   if (va && vb) return vecCmp(va, vb);
+  // Vector3 也是字典序，只是多一个 z（实测 (1,3,0)<(2,0,0) 真、(0,1,9)<(0,2,0) 真）
+  const wa3 = asVec3(a);
+  const wb3 = asVec3(b);
+  if (wa3 && wb3) return vec3Cmp(wa3, wb3);
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
 }
 

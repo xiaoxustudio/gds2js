@@ -9,3 +9,4 @@ export * from "./methods";
 export * from "./object";
 export * from "./patterns";
 export * from "./vector2";
+export * from "./vector3";

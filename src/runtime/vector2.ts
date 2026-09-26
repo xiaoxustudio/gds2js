@@ -272,7 +272,7 @@ function vecSlot(key: Variant): 0 | 1 | null {
   return null;
 }
 
-function failKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
+export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
   const shown = key.t === Tag.STRING || key.t === Tag.STRING_NAME ? `"${key.v as string}"` : String(key.v);
   const vt = value ? tagName(value.t) : "?";
   if (via === "read") {
@@ -301,8 +301,8 @@ function failKey(key: Variant, via: "prop" | "index" | "read", base: string, val
  */
 export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vecSlot(key);
-  if (slot === null) failKey(key, via, "Vector2", value);
-  if (value.t !== Tag.INT && value.t !== Tag.FLOAT) failKey(key, via, "Vector2", value);
+  if (slot === null) vecFailKey(key, via, "Vector2", value);
+  if (value.t !== Tag.INT && value.t !== Tag.FLOAT) vecFailKey(key, via, "Vector2", value);
   const num = value.t === Tag.INT ? intToNum(value.v as IntPayload) : (value.v as number);
   return V.object(slot === 0 ? new GVector2(num, vec.y) : new GVector2(vec.x, num));
 }
@@ -310,6 +310,6 @@ export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop
 /** 下标读：越界或键型不对都按实测口径报错（`v[2]` → Invalid access of index …）。 */
 export function vecReadIndex(vec: GVector2, key: Variant): Variant {
   const slot = vecSlot(key);
-  if (slot === null) failKey(key, "read", "Vector2");
+  if (slot === null) vecFailKey(key, "read", "Vector2");
   return V.float(slot === 0 ? vec.x : vec.y);
 }
