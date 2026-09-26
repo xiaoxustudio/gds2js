@@ -1,0 +1,10 @@
+g1 9007199254740994 | 9007199254740994
+g2 1234567890100000256 | 1000000000000000000
+g3 1.0 | false
+g4 1.5 | false | false | 100000.0
+g5 true | true | true | true | true
+g6 false | false | false | false | false
+g7 false | 1.2 | true | false
+g8 -2.5 | -0.5 | 5.5 | 0.0 | 0.0
+g9 false | false | true | 1
+g10 0.0 | 0.0 | 1.0 | 1234567890100000256

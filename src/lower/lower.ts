@@ -1,3 +1,4 @@
+import { parseGdDouble } from "./double";
 import { UnsupportedError } from "../runtime/errors";
 import type { SyntaxNode, Tree } from "../parse/parser";
 import type {
@@ -400,7 +401,7 @@ function lowerPattern(n: SyntaxNode): Pattern {
     case "integer":
       return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
     case "float":
-      return { kind: "lit", lit: "float", value: Number(n.text) };
+      return { kind: "lit", lit: "float", value: parseGdDouble(n.text) };
     case "string":
       return { kind: "lit", lit: "string", value: unquote(n.text) };
     case "string_name":
@@ -436,7 +437,7 @@ function lowerExpr(n: SyntaxNode): Expr {
     case "integer":
       return { kind: "lit", lit: "int", value: lowerIntLit(n.text), loc: c };
     case "float":
-      return { kind: "lit", lit: "float", value: Number(n.text), loc: c };
+      return { kind: "lit", lit: "float", value: parseGdDouble(n.text), loc: c };
     case "string":
       return { kind: "lit", lit: "string", value: unquote(n.text), loc: c };
     case "string_name":

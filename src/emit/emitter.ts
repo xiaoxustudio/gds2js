@@ -141,18 +141,23 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   int: (a) => `rt.toInt(${a.join(", ")})`,
   bool: (a) => `rt.toBool(${a.join(", ")})`,
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
+  // 实参个数交给运行时把门（`hash()` 少/多参在 Godot 是解析期错）
+  hash: (a) => `rt.variantHash([${a.join(", ")}])`,
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
   // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
+  Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
+  Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
+  Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "Color", "load", "preload"]);
+const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "load", "preload"]);
 
 /**
  * 模块级名字。局部变量不在里面，所以发射成裸标识符；
@@ -2236,6 +2241,10 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
   if (base === "Dictionary") return "rt.dictOf([])";
   if (base === "Vector2") return "rt.vector2(0, 0)";
+  if (base === "Vector3") return "rt.vector3(0, 0, 0)";
+  if (base === "Vector2i") return "rt.vector2i(0, 0)";
+  // 实测 `var c: Color` 的默认值是 (0.0, 0.0, 0.0, 1.0)（alpha 是 1，不是 0）
+  if (base === "Color") return "rt.color(0, 0, 0, 1)";
   return "rt.V.nil()";
 }
 

@@ -1,0 +1,39 @@
+// 由 gds2js 从 main.gd 编译生成 —— 不要手改。
+
+import * as rt from "../../../src/runtime/index";
+import { print, SceneTree } from "../../../tools/harness/scene-tree";
+
+export class Main extends SceneTree {
+  async _initialize(): Promise<void> {
+    let arr = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.str("p"), rt.V.str("q")])), "String", true);
+    let sn = rt.V.stringName("sep");
+    let zn = rt.V.stringName("z");
+    let inner = rt.V.array(rt.GArray.of([rt.V.int(1)]));
+    let d = rt.dictOf([[rt.V.str("a"), rt.V.int(1)]]);
+    let v2 = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
+    let c = rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]);
+    let v3 = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
+    let v2i = rt.vector2iNew([rt.V.int(3), rt.V.int(4)]);
+    let fs = rt.V.array(rt.GArray.of([rt.V.float((1 / 3)), rt.V.float(100000000000000000000), rt.V.float((0.1 + 0.2)), rt.V.float((1 / 0)), rt.ops.div(rt.ops.neg(rt.V.float(1)), rt.V.float(0))]));
+    print(rt.show(rt.V.str("n1 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b"), rt.V.str("c")]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n2 [")), rt.show(rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([rt.V.str("x")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(""), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n3 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str(""), rt.V.str("b")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str(""), rt.V.str("")]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n4 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.bool(true), rt.V.bool(false)]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n5 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.nil()]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.nil()]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n6 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([v2, v2i]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n7 [")), rt.show(rt.method(rt.V.str("| "), "join", [rt.V.array(rt.GArray.of([d, v2, c, v3]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n8 [")), rt.show(rt.method(rt.V.str("|"), "join", [arr])), rt.show(rt.V.str("] [")), rt.show(rt.method(sn, "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([zn, rt.V.str("y")]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n9 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([inner, rt.V.str("a")]))])), rt.show(rt.V.str("]")));
+    print(rt.show(rt.V.str("n10 [")), rt.show(rt.method(rt.V.str(", "), "join", [fs])), rt.show(rt.V.str("]")));
+    let big = rt.V.array(rt.GArray.of([]));
+    for (let i of rt.rangeSeq([rt.V.int(200)])) {
+      rt.method(big, "append", [rt.V.int(i)]);
+    }
+    print(rt.show(rt.V.str("n11 ")), rt.show(rt.method(rt.method(rt.V.str(","), "join", [big]), "length", [])));
+    print(rt.show(rt.V.str("n12 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("only")]))])), rt.show(rt.V.str("]")));
+    this.quit();
+  }
+  
+}
+
+await new Main().run();

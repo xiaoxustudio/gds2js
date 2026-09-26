@@ -1,11 +1,16 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
+import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat } from "./builtins";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit, strSubstr, truthyOf } from "./values";
+import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
+  strSplitCapped, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
+import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
+import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
+import { colorMethod, colorRead, colorWrite, GColor } from "./color";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -44,6 +49,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
     // Vector2 的方法面（语义逐条探针实测，测不准的直接报缺，见 vector2.ts 的注释）
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
+    if (inner instanceof GVector3) return vector3Method(inner, name, args);
+    if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
+    if (inner instanceof GColor) return colorMethod(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -111,8 +119,10 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "has":
           return V.bool(a.has(one(args, "has")));
         case "insert":
-          a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert"));
-          return V.nil();
+          // 实测返回**状态码**而不是 null：插进去了给 0，下标越界（`insert(99)`、`insert(-99)`）
+          // 或定型数组装不下这个元素（`Array[int].insert(0, "s")`）都给 **31**。
+          // 旧实现一律回 nil，于是 `print(a.insert(0, 9))` 我们印 `<null>`、Godot 印 `0` —— 静默错。
+          return V.int(a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert")) ? 0 : 31);
         case "erase":
           a.erase(one(args, "erase"));
           return V.nil();
@@ -156,12 +166,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
               boolArgOr(args, 3, false),
             ),
           );
-        case "resize":
+        case "resize": {
           // 实测：收缩是截断、扩张按**元素类型的默认值**填（Array[int] → 0、Array[String] → ""、
-          // Array[StringName] → &""、Array[Vector2] → (0.0, 0.0)、未定型 → null），
-          // 负数与超出都不报错。
-          a.resize(intArg(args, 0, "resize"));
-          return V.nil();
+          // Array[StringName] → &""、Array[Vector2] → (0.0, 0.0)、未定型 → null），负数与超出都不改数组。
+          // **返回值同样是状态码**：负数给 31、其余（含 `n === size` 的空操作）给 0。
+          // 负数那条 Godot 还往 stderr 打一行 `Condition "p_size < 0" …（./core/templates/cowdata.h）`，
+          // 产物复现不了 —— 所以这个输入只钉在 ops-check，不进语料。
+          const n = intArg(args, 0, "resize");
+          a.resize(n);
+          return V.int(n < 0 ? 31 : 0);
+        }
         case "sort":
           a.sort();
           return V.nil();
@@ -281,21 +295,103 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.bool(strLength(s) === 0);
         case "contains":
           return V.bool(strContains(s, asString(one(args, "contains"), "contains")));
+        // 实测最多三个参数（第四个是解析期 "Too many arguments for split() call"），第三参 max_splits
+        // 的算式由 46 个实测点定下来，口径见 values.ts 的 strSplitCapped 注释
         case "split": {
-          // max_splits 与 allow_empty=false 的相互作用实测凑不出简洁算式
-          // （"a,,b".split(",", false, 1) 给 ["a","b"] 而不是 ["a",",b"]，
-          //  "a-b-c".split("-", false, 0) 又完全不限刀），先响亮报缺，不发猜的语义。
-          if (args.length > 2) {
-            throw new UnsupportedError("split-max-splits", "split() 的第 3 个参数 max_splits 未实现");
+          if (args.length > 3) {
+            throw new GodotRuntimeError("arity", `split() 最多 3 个参数（收到 ${args.length} 个）`);
           }
           const allow = args[1] === undefined ? true : boolArg(args, 1, "split");
-          const parts = strSplit(s, asString(one(args, "split"), "split"), allow).map((p) => V.str(p));
-          return V.array(GArray.of(parts));
+          const dm = asString(one(args, "split"), "split");
+          let parts: string[];
+          if (args.length === 3) {
+            const mx = args[2] as Variant;
+            if (mx.t !== Tag.INT) {
+              throw new GodotRuntimeError("split-arg", `split() 的第 3 个参数需要 int，收到 ${tagName(mx.t)}`);
+            }
+            const cap = intToNum(mx.v as IntPayload);
+            // 0 与负数都是「不限刀」（实测 "a-b-c".split("-", false, 0) → 全切），那条路交给两参版
+            parts = cap <= 0 ? strSplit(s, dm, allow) : strSplitCapped(s, dm, allow, cap);
+          } else {
+            parts = strSplit(s, dm, allow);
+          }
+          return V.array(GArray.of(parts.map((p) => V.str(p))));
         }
         case "to_upper":
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        // 实测两条：前缀截断 + 严格整串判_valid；下划线不算数字（("1_000_000.25").to_float() → 1.0、
+        // is_valid_float 为假），带前后空格也一律假（" 1.5 " / "1e5 "），"1e" 与 "1e+" 反倒算真数
+        case "to_float":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `to_float() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.float(strToFloat(s));
+        case "is_valid_float": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_float() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]*)?$/.test(s));
+        }
+        // 实测：形参声明是 PackedStringArray，但**未定型 Array 照样能传**（字符串/整数/浮点/布尔/
+        // null/向量/颜色/嵌套数组都测过，元素走 print 那套 stringify）。传别的是**解析期**报错：
+        // Dictionary → `Invalid argument … should be "PackedStringArray" but is "Dictionary"`、
+        // String / int → `Cannot pass a value of type "String" as "PackedStringArray"`；
+        // 实参 0 个或 2 个也都在解析期。我们只能在这一层拦，文本照抄 Godot 那条。
+        case "join": {
+          if (args.length !== 1) {
+            throw new GodotRuntimeError(
+              "join-arity",
+              args.length === 0
+                ? `Too few arguments for "join()" call. Expected at least 1 but received 0.`
+                : `Too many arguments for "join()" call. Expected at most 1 but received ${args.length}.`,
+            );
+          }
+          const a = args[0] as Variant;
+          if (a.t !== Tag.ARRAY) {
+            // 两条文本实测不同：字典给 `Invalid argument …`，标量给 `Cannot pass a value of type …`
+            // （静态可判的那批由分析层同文本拦下，见 analyze.ts 的 JOIN_BAD_ARG；走到这里说明实参是运行期才知道的）
+            throw new GodotRuntimeError(
+              "join-arg",
+              a.t === Tag.DICT
+                ? `Invalid argument for "join()" function: argument 1 should be "PackedStringArray" but is "Dictionary".`
+                : `Cannot pass a value of type "${tagName(a.t)}" as "PackedStringArray".`,
+            );
+          }
+          return V.str(strJoin(s, a.v as GArray));
+        }
+        // 实测与全局 int(字符串) 一字不差（31 个点全等），所以直接复用同一条 strToInt
+        case "to_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `to_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(strToInt(s));
+        case "is_valid_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(INT_RE.test(s));
+        case "hex_to_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `hex_to_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(strHexToInt(s));
+        // is_valid_hex_number 的那个参数实测是「换成必须带 0x 前缀」，而不是「允许带符号」
+        case "is_valid_hex_number": {
+          if (args.length > 1) {
+            throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);
+          }
+          const withPrefix = args.length === 1 ? boolArg(args, 0, "is_valid_hex_number") : false;
+          return V.bool(withPrefix ? HEX_PREFIX_RE.test(s) : HEX_RE.test(s));
+        }
+        // 实测 `&"abc".hash()` 与 `"abc".hash()` 同为 193485963：StringName 的 hash 就是内容的 hash，
+        // 所以两条路共用 hashDjb2（算式见 builtins.ts 里那条 15 点的实测注释）
+        case "hash":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `hash() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(hashDjb2(s));
         // 实测与标准 MD5（RFC 1321）逐向量一致，走自带的 UTF-8 版本，不引 node:crypto
         case "md5_text":
           if (args.length !== 0) {
@@ -318,6 +414,10 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
   // Vector2 可以按下标取分量（实测 v[0] → 3.0、v[1] → 4.0；越界 Godot 在解析期就拦）
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
+  // Color 的下标与属性读同一张嘴（实测 c[0]、c["r"]、c["h"]、c["r8"] 都能读）
+  if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
@@ -329,6 +429,12 @@ export function index(raw: unknown, idx: Variant): Variant {
  */
 export function writeProp(base: Variant, key: string, value: Variant): Variant | null {
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
+  const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
+  if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
+  const vec2i = base.t === Tag.OBJECT && base.v instanceof GVector2i ? (base.v as GVector2i) : null;
+  if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
+  const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
+  if (col !== null) return colorWrite(col, V.str(key), value, "prop");
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",
@@ -342,6 +448,15 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
 export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant | null {
   if (base.t === Tag.OBJECT && base.v instanceof GVector2) {
     return vecWrite(base.v as GVector2, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector3) {
+    return vec3Write(base.v as GVector3, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector2i) {
+    return vec2iWrite(base.v as GVector2i, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GColor) {
+    return colorWrite(base.v as GColor, idx, value, "index");
   }
   setIndex(base, idx, value);
   return null;
@@ -392,6 +507,14 @@ export function attribute(raw: unknown, name: string): unknown {
     // （它们要的正是裸对象），走那条会把 number 直接递给 rt.show / ops，于是 "print 不支持 undefined"。
     const vec = obj.v instanceof GVector2 ? (obj.v as GVector2) : null;
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
+    const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
+    if (vec3 && (name === "x" || name === "y" || name === "z")) return V.float(vec3[name]);
+    const vec2i = obj.v instanceof GVector2i ? (obj.v as GVector2i) : null;
+    // 实测 Vector2i 的分量读出来是 int（`w["y"]` → 2、`w.x` → 2，不是 2.0）
+    if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
+    // Color 的 r/g/b/a 与派生的 h/s/v、字节族 r8/... 都在同一张槽位表里（实测都可读）
+    const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
+    if (col !== null) return colorRead(col, V.str(name), "prop");
     const inner = obj.v as Record<string, unknown>;
     if (name in inner) return inner[name];
   }

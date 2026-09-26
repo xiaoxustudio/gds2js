@@ -2,6 +2,9 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { GVector2, asVec2, vecCmp } from "./vector2";
+import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
+import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
+import { asColor, color, colorCmp, GColor } from "./color";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -14,17 +17,14 @@ function numVal(v: Variant): number {
  * 而 JS 的 Map 会把 1 和 1.0 合并 —— 所以键必须带类型前缀。
  */
 export function keyOf(v: Variant): string {
-  return keyOfIn(v, []);
+  return keyOfIn(v, 0);
 }
 
-/** 自引用容器当键：Godot 靠「hash 到 128 层截断」活下来（实测 s4：环回的键照样能查得着），
- *  我们没有同一个口径 —— 与其给一个凭空的近似，不如当场报缺。 */
-function refuseCyclicKey(): never {
-  throw new UnsupportedError(
-    "dict-key-cycle",
-    "自引用的容器不能当字典键（Godot 的容器 hash 按深度截断，实测能存能查，我们没有对应口径）",
-  );
-}
+/**
+ * 自引用容器当键：实测 Godot 认（环回的键存得下、查得着、`erase` 也擦得掉），靠的是与打印/比较
+ * 同一条**深度闸门**（见 {@link PRINT_DEPTH}）——闸门之外全塌成一格。旧版本在这里响亮报缺
+ * （`dict-key-cycle`），是因为那时还没有闸门口径；step 46 量出闸门是 101 层之后，桶也照它走。
+ */
 
 /**
  * 桶的编码。容器键（实测 k1/q1/r1）按**内容**分格：等值的新数组命中同一格（`d[a]=1` 之后
@@ -32,7 +32,7 @@ function refuseCyclicKey(): never {
  * {@link valueSame} 的身份口径），字典的编码**跟着键序走**（实测 q3：`{"a":1,"b":2}` 与
  * `{"b":2,"a":1}` 是两个格，尽管它们 `==` 成立）。`c:` 前缀保证容器桶不会跟标量桶撞车。
  */
-function keyOfIn(v: Variant, path: unknown[]): string {
+function keyOfIn(v: Variant, depth: number): string {
   switch (v.t) {
     case Tag.NIL:
       return "n:";
@@ -48,26 +48,28 @@ function keyOfIn(v: Variant, path: unknown[]): string {
       // 实测 StringName 与等价 String 是**同一个键**（{&"k": 1, "k": 2} 在 Godot 是重复键报错）
       return `s:${v.v as string}`;
     case Tag.ARRAY: {
+      // 闸门之外一律塌成同一个记号：实测 `d[a]=1`（a=[a]）之后再 `d[b]=2`（b=[b]）打的还是**同一格**、
+      // size 仍是 1；`[p]`、`[[p]]` 与 `p` 同一格；`nest(101)` 与 `nest(102)` 也同一格（step 47 探针 k1/k2/k3）
+      if (depth >= PRINT_DEPTH) return "…";
       const g = v.v as GArray;
-      if (path.includes(g)) refuseCyclicKey();
-      path.push(g);
       const items = g.raw();
       let out = "c:[";
-      for (let i = 0; i < items.length; i++) out += (i === 0 ? "" : ",") + keyOfIn(items[i] as Variant, path);
-      path.pop();
+      for (let i = 0; i < items.length; i++) out += (i === 0 ? "" : ",") + keyOfIn(items[i] as Variant, depth + 1);
       return out + "]";
     }
     case Tag.DICT: {
+      if (depth >= PRINT_DEPTH) return "…";
       const g = v.v as GDict;
-      if (path.includes(g)) refuseCyclicKey();
-      path.push(g);
       const ks = g.keys();
       const vs = g.values();
       let out = "c:{";
       for (let i = 0; i < ks.length; i++) {
-        out += (i === 0 ? "" : ",") + keyOfIn(ks[i] as Variant, path) + "=>" + keyOfIn(vs[i] as Variant, path);
+        out +=
+          (i === 0 ? "" : ",") +
+          keyOfIn(ks[i] as Variant, depth + 1) +
+          "=>" +
+          keyOfIn(vs[i] as Variant, depth + 1);
       }
-      path.pop();
       return out + "}";
     }
     case Tag.OBJECT: {
@@ -75,6 +77,16 @@ function keyOfIn(v: Variant, path: unknown[]): string {
       // 而 k[Vector2(1,2)] 与 k[Vector2(2,1)] 是两格）。分量已 fround，所以字符串化就够稳定。
       const vec = asVec2(v);
       if (vec) return `v:${String(vec.x)},${String(vec.y)}`;
+      // Vector3 也按值分格（实测 a12/d10：`d[Vector3(1,2,3)]` 存得下、等值新向量命中同一格）
+      const vec3 = asVec3(v);
+      if (vec3) return `w:${String(vec3.x)},${String(vec3.y)},${String(vec3.z)}`;
+      // Vector2i 同（实测 p7/p17：`d[Vector2i(1,2)]` 与 `d[Vector2i(1.7,2.2)]` 是同一格）
+      const vec2i = asVec2i(v);
+      if (vec2i) return `x:${String(vec2i.x)},${String(vec2i.y)}`;
+      // Color 同样按值分格（实测 096：d[Color(1,0,0,1)] 与新建的等值 Color 命中同一格）
+      const col = asColor(v);
+      if (col)
+        return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
       break;
     }
     default:
@@ -90,13 +102,30 @@ function keyOfIn(v: Variant, path: unknown[]): string {
  * 只收实测能验算的内建值类型；引擎类（`Array[Node]`）与嵌套定型（`Array[Array[int]]`）
  * Godot 在解析期就拒绝（"Nested typed collections are not supported"），走不到这里。
  */
-export type ElemKind = "int" | "float" | "bool" | "String" | "StringName" | "Vector2" | "Array" | "Dictionary";
+export type ElemKind =
+  | "int"
+  | "float"
+  | "bool"
+  | "String"
+  | "StringName"
+  | "Vector2"
+  | "Vector3"
+  | "Vector2i"
+  | "Color"
+  | "Array"
+  | "Dictionary";
 
 /** Godot 认识、且我们能在运行时校验的容器标注类型名 */
 export function isElemKind(name: string): name is ElemKind {
   return (
     name === "int" || name === "float" || name === "bool" || name === "String" ||
-    name === "StringName" || name === "Vector2" || name === "Array" || name === "Dictionary"
+    name === "StringName" ||
+    name === "Vector2" ||
+    name === "Vector3" ||
+    name === "Vector2i" ||
+    name === "Color" ||
+    name === "Array" ||
+    name === "Dictionary"
   );
 }
 
@@ -120,6 +149,14 @@ export function elemDefault(kind: ElemKind): Variant {
       return V.stringName("");
     case "Vector2":
       return V.object(new GVector2(0, 0));
+    case "Vector3":
+      // 实测 `Array[Vector3]` resize 给 `[(0.0, 0.0, 0.0), ...]`、`Array[Vector2i]` 给 `(0, 0)`
+      return vector3(0, 0, 0);
+    case "Vector2i":
+      return vector2i(0, 0);
+    // 实测 Array[Color] resize 填的是 (0.0, 0.0, 0.0, 1.0)（alpha 是 1）
+    case "Color":
+      return color(0, 0, 0, 1);
     case "Array":
       return V.array(new GArray());
     case "Dictionary":
@@ -168,6 +205,12 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       return null;
     case "Vector2":
       return v.t === Tag.OBJECT && v.v instanceof GVector2 ? v : null;
+    case "Vector3":
+      return v.t === Tag.OBJECT && v.v instanceof GVector3 ? v : null;
+    case "Vector2i":
+      return v.t === Tag.OBJECT && v.v instanceof GVector2i ? v : null;
+    case "Color":
+      return v.t === Tag.OBJECT && v.v instanceof GColor ? v : null;
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
     case "Dictionary":
@@ -270,11 +313,22 @@ export class GArray {
   }
 
   /** 深拷贝：元素里的容器也要复制（S9 —— 赋值是共享，duplicate 才是拷贝） */
-  duplicate(deep = false): GArray {
+  duplicate(deep = false, memo?: Map<unknown, Variant>): GArray {
     // 实测 `duplicate()` 是**浅**的：外层新数组、内层容器仍是同一个引用
     // （`var s = a.duplicate(); s[0][0] = 9` 会把 `a` 也改掉），要 `duplicate(true)` 才断开。
     // 元素类型跟着复制过来（实测副本仍拒绝不合格的元素）。
-    const copy = deep ? new GArray(this.items.map(deepCopy)) : new GArray([...this.items]);
+    if (!deep) {
+      const shared = new GArray([...this.items]);
+      shared.elem = this.elem;
+      return shared;
+    }
+    // 环要保住：先把自己登记进 memo，再逐个深拷（实测 `c[0] == c` 仍为真）
+    const m = memo ?? new Map<unknown, Variant>();
+    const copy = new GArray([]);
+    const seen = m.get(this);
+    if (seen !== undefined) return (seen.v as GArray);
+    m.set(this, V.array(copy));
+    for (const it of this.items) copy.items.push(deepCopy(it, m));
     copy.elem = this.elem;
     return copy;
   }
@@ -294,17 +348,19 @@ export class GArray {
   }
 
   /**
-   * `insert(at, v)`。实测越界是**静默不插入**（既不报错也不追加）：`insert(10)` 无变化，
+   * `insert(at, v)`，返回**是否真的插进去了**（调用方据此给 Godot 的状态码，见 methods.ts）。
+   * 实测越界是**静默不插入**（既不报错也不追加）：`insert(10)` 无变化、`insert(-99)` 同样，
    * 但 `insert(size)` 恰好等于尾接；负数按下标从尾部折算（`insert(-1)` 插在倒数第一格之前）。
    */
-  insertAt(at: number, v: Variant): void {
+  insertAt(at: number, v: Variant): boolean {
     const n = this.items.length;
     const k = at < 0 ? n + at : at;
-    if (k < 0 || k > n) return;
+    if (k < 0 || k > n) return false;
     const c = this.asElement(v);
-    // 实测：定型数组里 insert 一个不合格的元素，数组整个不动（Godot 只在 stderr 记一条）
-    if (c === null) return;
+    // 实测：定型数组里 insert 一个不合格的元素，数组整个不动（Godot 只在 stderr 记一条），状态码给 31
+    if (c === null) return false;
     this.items.splice(k, 0, c);
+    return true;
   }
 
   /** `erase(v)`：删掉第一个身份相等的元素，没有就什么都不做（实测不报错）。 */
@@ -391,7 +447,13 @@ export class GArray {
         for (let i = b; i > e; i += step) out.push(this.items[i] as Variant);
       }
     }
-    const cut = deep ? new GArray(out.map(deepCopy)) : new GArray(out);
+    // 一次调用共用一份 memo；`out.map(deepCopy)` 会把数组下标当第二个参数喂给 deepCopy，
+    // 那个参数现在是 memo —— 不包一层就是运行期崩。
+    let cut: GArray;
+    {
+      const m = new Map<unknown, Variant>();
+      cut = deep ? new GArray(out.map((x) => deepCopy(x, m))) : new GArray(out);
+    }
     cut.elem = this.elem; // 实测 slice 的副本仍定型（再 append "s" 被拒）
     return cut;
   }
@@ -457,22 +519,33 @@ export class GArray {
     return new GArray([...this.items, ...other.raw()]);
   }
 
-  eq(other: GArray): boolean {
+  eq(other: GArray, depth = 0): boolean {
+    return this.eqAt(other, depth);
+  }
+
+  private eqAt(other: GArray, depth: number): boolean {
     // 同一个对象先短路：实测自引用数组 `a == a` 是 true（s3），不短路就会无限递归；
     // Godot 的深比较同样有这一条。
     if (this.items === other.items) return true;
+    // 到比较闸门就当相等（实测两个不同的自引用数组 `a == b` 为真；闸门深度见 COMPARE_DEPTH）
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.items.length !== other.items.length) return false;
     return this.items.every((x, i) => {
       const y = other.items[i];
-      return y !== undefined && valueEq(x, y);
+      return y !== undefined && valueEq(x, y, depth + 1);
     });
   }
 
   /** 身份版比较：`has`/`find`/`count` 走它（见 valueSame）。 */
-  same(other: GArray): boolean {
+  same(other: GArray, depth = 0): boolean {
+    return this.sameAt(other, depth);
+  }
+
+  private sameAt(other: GArray, depth: number): boolean {
     if (this.items === other.items) return true;
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.items.length !== other.items.length) return false;
-    return this.items.every((x, i) => valueSame(x, other.items[i] as Variant));
+    return this.items.every((x, i) => valueSame(x, other.items[i] as Variant, depth + 1));
   }
 
   /**
@@ -488,7 +561,9 @@ export class GArray {
     const allStr = this.items.every((x) => x.t === Tag.STRING || x.t === Tag.STRING_NAME);
     const allBool = this.items.every((x) => x.t === Tag.BOOL);
     const allVec = this.items.every((x) => asVec2(x) !== null);
-    if (!allNum && !allStr && !allBool && !allVec) {
+    const allVec3 = this.items.every((x) => asVec3(x) !== null);
+    const allVec2i = this.items.every((x) => asVec2i(x) !== null);
+    if (!allNum && !allStr && !allBool && !allVec && !allVec3 && !allVec2i) {
       throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
     }
     // 数值排序：int 载荷可能是 bigint，混着 `-` 会 TypeError；两边都可能是 bigint，
@@ -507,7 +582,15 @@ export class GArray {
         ? (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string)
         : allBool
           ? (a: Variant, b: Variant) => Number(a.v) - Number(b.v)
-          : (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2);
+          : allVec
+            ? (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2)
+            : allVec3
+              ? (a: Variant, b: Variant) => vec3Cmp(asVec3(a) as GVector3, asVec3(b) as GVector3)
+              : (a: Variant, b: Variant) => {
+                  // Color 之间没有顺序（实测 `c1 < c2` 是 Parse Error），sort() 只能响亮报缺
+                  if (asColor(a) !== null && asColor(b) !== null) colorCmp();
+                  return vec2iCmp(asVec2i(a) as GVector2i, asVec2i(b) as GVector2i);
+                };
     this.items = [...this.items].sort(cmp);
   }
 
@@ -747,7 +830,7 @@ export class GDict {
   }
 
   /** 实测 `duplicate()` 是浅拷贝（改副本里的嵌套容器会串回原字典），`duplicate(true)` 才断开。 */
-  duplicate(deep = false): GDict {
+  duplicate(deep = false, memo?: Map<unknown, Variant>): GDict {
     const d = new GDict();
     // 副本同样是定型的（实测 Dictionary[String,int].duplicate() 之后 1.5 会被截成 1）
     d.keyKind = this.keyKind;
@@ -755,10 +838,15 @@ export class GDict {
     if (deep) {
       // 深拷贝给每个键造了一份新内容，Godot 是拿新内容重新入表 → 桶照现值重算
       // （实测 t3：键先改过再 duplicate(true)，之后按现值查得着）
+      const m = memo ?? new Map<unknown, Variant>();
+      const seen = m.get(this);
+      if (seen !== undefined) return (seen.v as GDict);
+      // 环要保住（实测 `d["x"]=d` 深拷之后 `cd["x"] == cd` 仍为真）：登记在填之前
+      m.set(this, V.dict(d));
       for (let i = 0; i < this.ks.length; i++) {
         const k = this.ks[i];
         const v = this.vs[i];
-        if (k !== undefined && v !== undefined) d.set(deepCopy(k), deepCopy(v));
+        if (k !== undefined && v !== undefined) d.set(deepCopy(k, m), deepCopy(v, m));
       }
       return d;
     }
@@ -863,22 +951,32 @@ export class GDict {
   }
 
   /** 身份版比较（`count`/`find` 的实参是容器时用，见 valueSame）：不看键序。 */
-  same(other: GDict): boolean {
+  same(other: GDict, depth = 0): boolean {
+    return this.sameAt(other, depth);
+  }
+
+  private sameAt(other: GDict, depth: number): boolean {
     // 同上：自引用的字典跟自己比是 true（Godot 有这一条短路），不然无限递归
     if (this === other) return true;
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.size() !== other.size()) return false;
     return this.ks.every((k, i) => {
       for (let j = 0; j < other.ks.length; j++) {
-        if (valueSame(k, other.ks[j] as Variant)) {
-          return valueSame(this.vs[i] as Variant, other.vs[j] as Variant);
+        if (valueSame(k, other.ks[j] as Variant, depth + 1)) {
+          return valueSame(this.vs[i] as Variant, other.vs[j] as Variant, depth + 1);
         }
       }
       return false;
     });
   }
 
-  eq(other: GDict): boolean {
+  eq(other: GDict, depth = 0): boolean {
+    return this.eqAt(other, depth);
+  }
+
+  private eqAt(other: GDict, depth: number): boolean {
     if (this === other) return true;
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.size() !== other.size()) return false;
     // 成对比较，不能靠 keys()+get()：ghost 格（改过的容器键）按现值查不回来，
     // 存着的值会被看成 null。键按桶比 —— 桶已经统一了 String 与 StringName，容器键是内容编码。
@@ -887,7 +985,7 @@ export class GDict {
       let found = false;
       for (let j = 0; j < other.ks.length; j++) {
         if (other.bkt[j] === b) {
-          found = valueEq(this.vs[i] as Variant, other.vs[j] as Variant);
+          found = valueEq(this.vs[i] as Variant, other.vs[j] as Variant, depth + 1);
           break;
         }
       }
@@ -897,10 +995,12 @@ export class GDict {
   }
 }
 
-function deepCopy(v: Variant): Variant {
+function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
   // 这里必须显式要深拷贝：duplicate() 默认是浅的（Godot 的口径，见上）
-  if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true));
-  if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate(true));
+  // memo 是「源容器 → 正在构造的副本」，实测深拷贝要**保住环**：
+  // `a=[a]` 的 `a.duplicate(true)` 之后 `c[0] == c` 仍为真（字典、间接环同）。
+  if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true, memo));
+  if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate(true, memo));
   return { t: v.t, v: v.v };
 }
 
@@ -996,6 +1096,69 @@ export function strContains(hay: string, needle: string): boolean {
  * 半个代理对（只能由 `String.chr(0xD83D)` 这类运行时构造出来）会当分隔符命中、把 emoji 拦腰截断，
  * 而 Godot 的 UTF-32 里根本没有这个码点，是不出声的错。
  */
+/**
+ * `split(delim, allow_empty, max_splits)` 的第三条参数。实测口径（46 个点全对上，用例 099）：
+ *  - `max_splits <= 0` 就是**不限刀**，与两参版同结果（所以那条路直接交给 `strSplit`，不动既有语义）；
+ *  - 切满 `max_splits` 刀之后**余段原样给回**，既不再切、也不再剔内部空段
+ *    （`"a,,,b".split(",", true, 1)` → `["a", ",,b"]`、`"a,b,".split(",", false, 1)` → `["a", "b,"]`）；
+ *  - 但 `allow_empty=false` 时**余段开头**的分隔符仍被跳过（空片段不算数）：
+ *    `",a,,b,".split(",", false, 1)` → `["a", "b,"]`、`"  a  ".split(" ", false, 2)` → `["a"]`；
+ *  - 空片段**不消耗** `max_splits` 的额度（`"a,b,,c,d".split(",", false, 2)` → `["a", "b", "c,d"]`）；
+ *  - 分隔符为空串时按**码点边界**下刀，且真的只切 `max_splits` 刀：
+ *    `"abc".split("", true, 1)` → `["a", "bc"]`（不是逐字符全切）。
+ */
+export function strSplitCapped(s: string, delim: string, allowEmpty: boolean, maxSplit: number): string[] {
+  const sepLen = delim.length;
+  // 刀口位置表：非空分隔符按**最左、不重叠**扫（实测 `"aaa".split("aa", true, 1)` → ["", "a"]）；
+  // 空分隔符按码点边界（与 step 19 的 UTF-32 口径同一条，代理元不会被拦腰切）
+  const cuts: number[] = [];
+  if (sepLen === 0) {
+    const chars = [...s];
+    let at = 0;
+    for (let i = 0; i < chars.length - 1; i++) {
+      at += (chars[i] as string).length;
+      cuts.push(at);
+    }
+  } else {
+    for (let i = 0; i + sepLen <= s.length; ) {
+      if (s.startsWith(delim, i)) {
+        cuts.push(i);
+        i += sepLen;
+      } else i += 1;
+    }
+  }
+  const out: string[] = [];
+  let readFrom = 0;
+  let count = 0;
+  let pi = 0;
+  while (pi < cuts.length && count < maxSplit) {
+    let p = cuts[pi] as number;
+    if (!allowEmpty) {
+      // 连续分隔符：这一格是空片段就跳过，不占额度（实测 d16：`"aa".split("a", false, 1)` → []）
+      while (p === readFrom) {
+        readFrom = p + sepLen;
+        pi++;
+        if (pi >= cuts.length) {
+          p = -1;
+          break;
+        }
+        p = cuts[pi] as number;
+      }
+      if (p === -1) break;
+    }
+    count++;
+    out.push(s.slice(readFrom, p));
+    readFrom = p + sepLen;
+    pi++;
+  }
+  if (!allowEmpty) {
+    while (sepLen > 0 && readFrom < s.length && s.startsWith(delim, readFrom)) readFrom += sepLen;
+  }
+  const tail = s.slice(readFrom);
+  if (allowEmpty || tail !== "") out.push(tail);
+  return out;
+}
+
 export function strSplit(s: string, delim: string, allowEmpty: boolean): string[] {
   let parts: string[];
   if (delim === "") {
@@ -1324,6 +1487,23 @@ export function strFloat(n: number): string {
  *   `Vector2(-0.0000004, …)`               → `(-0.0, …)`（非零但舍到 0 时**保留**负号）
  * 分量是 float32，所以 ≥2^23 的值一律是整数、走第二条路，两者不会在同一分量上打架。
  */
+/**
+ * Color 分量的打印格式：与 strVec2 同一套规则但只有 **4 位小数**（实测
+ * `print(Color(1.0/3.0, 0.1, 0.123456789, 1.0))` → `(0.3333, 0.1, 0.1235, 1.0)`），
+ * 两条实测差别：
+ *  - **恰好 -0.0 也保留负号**（`Color(1/3, 1e-5, -1e-5, -0.0)` → `(0.3333, 0.0, -0.0, -0.0)`，
+ *    Vector2 同位置给 `0.0`）；
+ *  - 舍到零的非零值同样留负号（-1e-5 → `-0.0`），1e20 这类整数分量仍走 strFloat 的展开。
+ */
+export function strColor(n: number): string {
+  if (Number.isNaN(n)) return "nan";
+  if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
+  if (n === 0) return Object.is(n, -0) ? "-0.0" : "0.0";
+  if (Number.isInteger(n)) return strFloat(n);
+  const t = n.toFixed(4).replace(/0+$/, "");
+  return t.endsWith(".") ? `${t}0` : t;
+}
+
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -1496,7 +1676,29 @@ export function stringNameCtor(args: Variant[]): Variant {
 }
 
 /** 顶层 print：字符串不加引号 */
-export function show(v: Variant): string {
+/**
+ * 容器打印 / 比较的深度上限。**实测是一条固定的层数闸门，不是「看见重复就断」**：
+ *  - 没有环、纯粹 101 层嵌套（`nest(100)`）全展开；102 层（`nest(101)`）起最里一层换成 `[...]`；
+ *  - 自引用数组 `a=[a]` → `[`×101 + `[...]` + `]`×101（`str(a).length()` 实测 **207**）；
+ *  - 自引用字典 `d["x"]=d` → (`{ "x": ` + ` }`)×101 + `{ ... }`（长度实测 **916**，收尾标记是带空格的 `{ ... }`）；
+ *  - 间接环（`p=[q]`、`q=[p]`）与直接环同一个层数，所以不是重复检测。
+ * 比较（`==`）也按同一层数截断：实测两个**不同**的自引用数组相等（`a == b` 真）、两条不同的间接环相等、
+ * 两个不同的自引用字典也相等 —— 不截断的话我们这边是 RangeError 栈溢出。
+ */
+export const PRINT_DEPTH = 101;
+
+/**
+ * 比较（`==` / `has` / `count` 走的身份比较）另有一道**更浅**的闸门 = **52 层**（实测，与打印那道不是一条）。
+ * 判据是三条边界：
+ *  - `a == nest(n)`（a=[a]，nest(n) 有 n+1 层）在 n=51 假、n=52 真；
+ *  - `nest(n) == nest(n+1)` 与 `nest(n) == nest(n+2)` 同样在 n=51 假、n=52 真；
+ *  - 而**桶**要深得多：`d[nest(100)]` 查 `nest(101)` 仍然落空，`d[nest(101)]` 查 `nest(102)` 才命中（=101 那道）。
+ * 也就是说 Godot 的 `==` 在 52 层之外会把**明显不同**的两个容器判成相等（`nest(52) == nest(53)` 实测为真），
+ * 字典格还要另看桶。两条闸门各按各的实测值，别合成一条。
+ */
+export const COMPARE_DEPTH = 52;
+
+export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:
       return "<null>";
@@ -1511,14 +1713,19 @@ export function show(v: Variant): string {
     case Tag.STRING_NAME:
       // print(&"abc") 直接给 abc（实测），但装进容器里是 &"abc"（见 repr）
       return v.v as string;
-    case Tag.ARRAY:
-      return `[${(v.v as GArray).raw().map(repr).join(", ")}]`;
+    case Tag.ARRAY: {
+      // 实测：到第 102 层就换成 `[...]`（见 PRINT_DEPTH 的注释），有限深结构与环走同一条
+      if (depth >= PRINT_DEPTH) return "[...]";
+      const g = v.v as GArray;
+      return `[${g.raw().map((x) => repr(x, depth + 1)).join(", ")}]`;
+    }
     case Tag.DICT: {
+      if (depth >= PRINT_DEPTH) return "{ ... }";
       const d = v.v as GDict;
       // 必须按插入顺序把键和**存着的值**成对拿出来，不能用 keys()+get() 重建：
       // 实测改过的容器键（ghost 格）按现值已经查不回来，Godot 打印的却还是存着的那个值（090 第 7 行）。
       const vs = d.values();
-      const parts = d.keys().map((k, i) => `${repr(k)}: ${repr(vs[i] as Variant)}`);
+      const parts = d.keys().map((k, i) => `${repr(k, depth + 1)}: ${repr(vs[i] as Variant, depth + 1)}`);
       return `{ ${parts.join(", ")} }`;
     }
     case Tag.OBJECT: {
@@ -1528,6 +1735,18 @@ export function show(v: Variant): string {
       if (inner instanceof GVector2) {
         return `(${strVec2(inner.x)}, ${strVec2(inner.y)})`;
       }
+      // Vector3 同一套短格式：实测 (1, 2, 3) → "(1.0, 2.0, 3.0)"、(0.1,0,0).x 打印仍给 0.1
+      if (inner instanceof GVector3) {
+        return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)})`;
+      }
+      // Vector2i 打印是整数：实测 (1, 2)、(-2147483648, 0)，不带小数点
+      if (inner instanceof GVector2i) {
+        return `(${String(inner.x)}, ${String(inner.y)})`;
+      }
+      // Color 另有一套 4 位小数格式（实测 (0.3333, 0.1, 0.1235, 1.0)），且 -0.0 保留负号
+      if (inner instanceof GColor) {
+        return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
+      }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }
     default:
@@ -1536,29 +1755,75 @@ export function show(v: Variant): string {
 }
 
 /** 容器内嵌：字符串要加引号 */
-export function repr(v: Variant): string {
+export function repr(v: Variant, depth = 0): string {
   if (v.t === Tag.STRING) return `"${v.v as string}"`;
   if (v.t === Tag.STRING_NAME) return `&"${v.v as string}"`;
-  return show(v);
+  return show(v, depth);
+}
+
+/**
+ * `分隔符.join(数组)`：每个元素走 **print 那一条 stringify**，不是容器里那套带引号的 repr。
+ * 实测：`str(null)` → `<null>`、`str(&"z")` → `z`（无引号）、`str(Vector2(1,2))` → `(1.0, 2.0)`、
+ * 而数组元素本身仍按容器形式给 `[1]`；空数组给空串、空分隔符就是把它们粘起来。
+ */
+export function strJoin(sep: string, g: GArray): string {
+  const items = g.raw();
+  let out = "";
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0) out += sep;
+    out += show(items[i] as Variant);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- 相等与真值
 
-export function valueEq(a: Variant, b: Variant): boolean {
+export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   const ta = a.t;
   const tb = b.t;
-  // Vector2 与别的类型比 ==，Godot 是**运行时报错**（实测 `v == 3`、`3 == v`、`v == "x"`、
-  // `v == [1]`、`v == &"x"` 全部当场炸，只有跟 null 比给 false）。放在函数最前面是必须的：
+  // 三种向量与别的类型比 ==，Godot 是**运行时报错**（实测 `v == 3`、`3 == v`、`v == "x"`、
+  // `v == [1]`、`v == &"x"`、`Vector2i == Vector2` 全部当场炸，只有跟 null 比给 false）。
+  // 放在函数最前面是必须的：
   // 下面 int/float 那条跨类型分支和 `ta !== tb → false` 的早退都会把它悄悄吃掉，
   // 而「该响的没响」正是最不该有的静默错。
-  const asVec = (x: Variant): GVector2 | null => (x.t === Tag.OBJECT && x.v instanceof GVector2 ? (x.v as GVector2) : null);
-  const av = asVec(a);
-  const bv = asVec(b);
-  if (av !== null || bv !== null) {
-    if (av !== null && bv !== null) return av.x === bv.x && av.y === bv.y;
-    const other = av === null ? a : b;
-    if (other.t === Tag.NIL) return false;
-    const nameOf = (x: Variant): string => (asVec(x) !== null ? "Vector2" : tagName(x.t));
+  const nameOf = (x: Variant): string =>
+    asVec2(x) !== null
+      ? "Vector2"
+      : asVec3(x) !== null
+        ? "Vector3"
+        : asVec2i(x) !== null
+          ? "Vector2i"
+          : asColor(x) !== null
+            ? "Color"
+            : tagName(x.t);
+  const a2 = asVec2(a);
+  const b2 = asVec2(b);
+  const a3 = asVec3(a);
+  const b3 = asVec3(b);
+  const ai = asVec2i(a);
+  const bi = asVec2i(b);
+  const ac = asColor(a);
+  const bc = asColor(b);
+  if (
+    a2 !== null ||
+    b2 !== null ||
+    a3 !== null ||
+    b3 !== null ||
+    ai !== null ||
+    bi !== null ||
+    ac !== null ||
+    bc !== null
+  ) {
+    if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
+    if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
+    if (ai !== null && bi !== null) return ai.x === bi.x && ai.y === bi.y;
+    // Color 与别的类型比 == 也是当场炸（实测 `c == 1`、`c == Vector2(...)`），只有 null 给 false
+    if (ac !== null && bc !== null)
+      return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
+    // 只有跟 null 比保留 false（实测三种向量都一样：`w == null` 假、`w != null` 真）
+    if (((a2 !== null || a3 !== null || ai !== null || ac !== null ? b : a) as Variant).t === Tag.NIL)
+      return false;
+    // Vector2 与 Vector3 混比也炸（实测 `Invalid operands 'Vector3' and 'Vector2' in operator '=='.`）
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${nameOf(a)}' and '${nameOf(b)}' in operator '=='.`);
   }
   if (ta === Tag.INT || ta === Tag.FLOAT) {
@@ -1585,9 +1850,9 @@ export function valueEq(a: Variant, b: Variant): boolean {
     case Tag.STRING_NAME:
       return b.t === Tag.STRING_NAME && a.v === b.v;
     case Tag.ARRAY:
-      return (a.v as GArray).eq(b.v as GArray);
+      return (a.v as GArray).eq(b.v as GArray, depth);
     case Tag.DICT:
-      return (a.v as GDict).eq(b.v as GDict);
+      return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       // 走到这里两边都不是 Vector2（函数最前面那条守卫已经把掺向量的组合全接走了），
       // 对象之间只剩引用相等。
@@ -1603,7 +1868,9 @@ export function valueEq(a: Variant, b: Variant): boolean {
  * String 与 StringName 却合一（实测 `["a"].count(&"a")` → 1），容器递归比身份、字典不看键序
  * （实测 `[{"x":1,"y":2}].count({"y":2,"x":1})` → 1）。
  */
-export function valueSame(a: Variant, b: Variant): boolean {
+export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
+  // 与 valueEq 同一条深度闸门（实测不同的自引用容器 `has`/`count` 侧也走得通，且不能栈溢出）
+  if (depth >= COMPARE_DEPTH && (a.t === Tag.ARRAY || a.t === Tag.DICT) && a.t === b.t) return true;
   if (
     (a.t === Tag.STRING || a.t === Tag.STRING_NAME) &&
     (b.t === Tag.STRING || b.t === Tag.STRING_NAME)
@@ -1615,13 +1882,22 @@ export function valueSame(a: Variant, b: Variant): boolean {
     case Tag.NIL:
       return true;
     case Tag.ARRAY:
-      return (a.v as GArray).same(b.v as GArray);
+      return (a.v as GArray).same(b.v as GArray, depth);
     case Tag.DICT:
-      return (a.v as GDict).same(b.v as GDict);
+      return (a.v as GDict).same(b.v as GDict, depth);
     case Tag.OBJECT:
-      // Vector2 按分量而不是引用（实测 [Vector2(1,2)].count(Vector2(1.0,2.0)) → 1）
+      // Vector2 / Vector3 按分量而不是引用（实测 [Vector2(1,2)].count(Vector2(1.0,2.0)) → 1）
       if (a.v instanceof GVector2 && b.v instanceof GVector2) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
+      if (a.v instanceof GVector3 && b.v instanceof GVector3) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
+      }
+      if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
+        return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
+      if (a.v instanceof GColor && b.v instanceof GColor) {
+        return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
       return a.v === b.v;
     default:

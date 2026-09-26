@@ -28,6 +28,9 @@ export class GVector2 {
 
 const r = Math.fround;
 
+/** Vector2i 的分类标记：靠它认「单参构造」，不必 import vector2i（那会形成模块环）。 */
+export const VEC2I_MARK = Symbol("gds2js.Vector2i");
+
 export function vector2(x: number, y: number): Variant {
   return V.object(new GVector2(x, y));
 }
@@ -40,8 +43,17 @@ export function asVec2(v: Variant): GVector2 | null {
 /** `Vector2(...)` 构造：0 参给零向量（实测 `Vector2()` → `(0.0, 0.0)`），其余必须两参。 */
 export function vector2New(args: Variant[]): Variant {
   if (args.length === 0) return vector2(0, 0);
+  // 一个实参：拷贝自己（实测 `Vector2(Vector2(1,2))` → (1.0, 2.0)）或从 Vector2i 升级
+  // （实测 `Vector2(Vector2i(1,2))` → (1.0, 2.0)）
+  if (args.length === 1) {
+    const a = args[0] as Variant;
+    if (a.t === Tag.OBJECT && a.v instanceof GVector2) return vector2(a.v.x, a.v.y);
+    const o = a.v as { x?: number; y?: number } | null;
+    if (a.t === Tag.OBJECT && o !== null && VEC2I_MARK in o) return vector2(o.x as number, o.y as number);
+    throw new UnsupportedError("vector2-arg", `Vector2() 单参只收 Vector2 / Vector2i，收到 ${tagName(a.t)}`);
+  }
   if (args.length !== 2) {
-    throw new UnsupportedError("vector2-arity", `Vector2() 需要 0 或 2 个参数（收到 ${args.length} 个）`);
+    throw new UnsupportedError("vector2-arity", `Vector2() 需要 0、1（向量）或 2 个参数（收到 ${args.length} 个）`);
   }
   return vector2(scalar(args[0], "Vector2"), scalar(args[1], "Vector2"));
 }
@@ -230,12 +242,44 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
     case "is_finite":
       arity(args, 0, "is_finite");
       return V.bool(Number.isFinite(v.x) && Number.isFinite(v.y));
-    case "slerp":
+    case "slerp": {
+      // 实测 12 个点全对上的口径：**极坐标插值** —— 长度线性插值，角度按 wrap 到 (-π, π] 的差插值。
+      // wrap 必须在 double 里做（Godot 的 fmod 也是 double）：`Vector2(1,2).slerp((-1,-2), 0.5)`
+      // 给 (-2.0, 1.0)，而 float32 里 `ab - aa` 落在 -π 之内一点点，wrap 不触发就会给反方向的 (2.0, -1.0)。
+      // 角度落回 float32 才取三角函数，所以 `(1,0).slerp((-1,0),0.5)` 给的是 **(-0.0, 1.0)** —— 负号来自
+      // fround(π/2) 略大于 π/2，cos 出来是 -4.37e-8，打印成 -0.0。
+      arity(args, 2, "slerp");
+      const o = vecArg(args, 0, "slerp");
+      const w = scalar(args[1], "slerp");
+      const aa = Math.atan2(v.y, v.x);
+      const ab = Math.atan2(o.y, o.x);
+      let d = ab - aa;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d <= -Math.PI) d += 2 * Math.PI;
+      const ang = r(aa + d * w);
+      const len = lerpLen(flen(v.x, v.y), flen(o.x, o.y), w);
+      return vector2(mul(len, r(Math.cos(ang))), mul(len, r(Math.sin(ang))));
+    }
+    case "is_equal_approx":
+      // 口径与 Vector3 同一条（见 CMP_EPS）；实测 (1,2) vs (1.0000095,2) 真、vs (1.00001,2) 假、
+      // (3,4) vs (3.000029,4) 真、vs (3.000031,4) 假、(1e300,1) 相同真、(0,0) vs (9e-6,0) 真
+      arity(args, 1, "is_equal_approx");
+      {
+        const o = vecArg(args, 0, "is_equal_approx");
+        return V.bool(approxEq(v.x, o.x) && approxEq(v.y, o.y));
+      }
+    case "is_zero_approx":
+      arity(args, 0, "is_zero_approx");
+      return V.bool(Math.abs(v.x) < CMP_EPS && Math.abs(v.y) < CMP_EPS);
+    case "is_normalized": {
+      // 阈值实测是 length_squared 上的 1e-3，不是 CMP_EPSILON —— 用 1e-5 会把 (0.9995,0) 判错
+      arity(args, 0, "is_normalized");
+      const ls = add(mul(v.x, v.x), mul(v.y, v.y));
+      return V.bool(r(Math.abs(sub(ls, 1))) < NORMALIZED_EPS);
+    }
     case "slide":
     case "bounce":
-    case "is_equal_approx":
-    case "is_normalized":
-      throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现（探针未能钉死语义，见 docs/ROADMAP.md 待做）`);
+      throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现（法向不是单位向量时 Godot 除了给零向量还往 stderr 打一行，产物复现不了）`);
     default:
       throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现`);
   }
@@ -259,6 +303,31 @@ export function vecCmp(a: GVector2, b: GVector2): number {
   return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
 }
 
+/**
+ * Godot 单精度构建里的 `CMP_EPSILON`。两个谓词都用到，且都是**严格小于**：
+ *  - `is_zero_approx`：逐分量 `|v| < 1e-5`（实测 9e-6 真、1e-5 假、2e-5 假，Vector2/Vector3 一样）
+ *  - `is_equal_approx`：逐分量 `|a-b| < max(1e-5, 1e-5*|a|)`（Vector2 与 Vector3 共用，实测 13 个点）
+ */
+export const CMP_EPS = r(1e-5);
+
+/** 实测阈值：`|length_squared() - 1| < 1e-3`。20 个点夹出来的（0.9995 真 / 0.9992 假、
+ *  (1, 0.045) 假、(0.5774,0.5774,0.5774) 真……），Vector2 与 Vector3 完全同一条。 */
+export const NORMALIZED_EPS = r(1e-3);
+
+/** 逐分量容差比较，口径见上面的 `CMP_EPS`。分量已经先过 float32，所以边界点会跟着 fround 挪位，
+ *  这正是当初 Vector2 探针把阈值「夹在 6.7e-6–9.9e-6」的原因。 */
+export function approxEq(a: number, b: number): boolean {
+  if (a === b) return true;
+  const eps = mul(CMP_EPS, Math.abs(a));
+  const minEps = eps < CMP_EPS ? CMP_EPS : eps;
+  return r(Math.abs(sub(a, b))) < minEps;
+}
+
+/** 长度线性插值（float32 步进），slerp 与 lerp 都用它。 */
+export function lerpLen(la: number, lb: number, w: number): number {
+  return add(la, mul(sub(lb, la), w));
+}
+
 /** 下标/属性键 → 分量槽位：0/1 与 "x"/"y" 都认（实测 `v["x"]` 读到 1.0、`v["x"] = 7` 写进 x）。 */
 function vecSlot(key: Variant): 0 | 1 | null {
   if (key.t === Tag.INT) {
@@ -272,7 +341,7 @@ function vecSlot(key: Variant): 0 | 1 | null {
   return null;
 }
 
-function failKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
+export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
   const shown = key.t === Tag.STRING || key.t === Tag.STRING_NAME ? `"${key.v as string}"` : String(key.v);
   const vt = value ? tagName(value.t) : "?";
   if (via === "read") {
@@ -301,8 +370,8 @@ function failKey(key: Variant, via: "prop" | "index" | "read", base: string, val
  */
 export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vecSlot(key);
-  if (slot === null) failKey(key, via, "Vector2", value);
-  if (value.t !== Tag.INT && value.t !== Tag.FLOAT) failKey(key, via, "Vector2", value);
+  if (slot === null) vecFailKey(key, via, "Vector2", value);
+  if (value.t !== Tag.INT && value.t !== Tag.FLOAT) vecFailKey(key, via, "Vector2", value);
   const num = value.t === Tag.INT ? intToNum(value.v as IntPayload) : (value.v as number);
   return V.object(slot === 0 ? new GVector2(num, vec.y) : new GVector2(vec.x, num));
 }
@@ -310,6 +379,6 @@ export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop
 /** 下标读：越界或键型不对都按实测口径报错（`v[2]` → Invalid access of index …）。 */
 export function vecReadIndex(vec: GVector2, key: Variant): Variant {
   const slot = vecSlot(key);
-  if (slot === null) failKey(key, "read", "Vector2");
+  if (slot === null) vecFailKey(key, "read", "Vector2");
   return V.float(slot === 0 ? vec.x : vec.y);
 }

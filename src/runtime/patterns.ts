@@ -3,6 +3,9 @@ import { lookupClass } from "./object";
 import { Tag, V, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
+import { GVector3 } from "./vector3";
+import { GVector2i } from "./vector2i";
+import { GColor } from "./color";
 
 /**
  * `match` 的模式匹配与 `is` / `as` 的类型判定。
@@ -98,10 +101,13 @@ function builtinTag(name: string): TagValue | undefined {
 
 /**
  * 数学内建类型（都挤在 Tag.OBJECT 里，只能按实例判）。实测 `Vector2(3,4) is Vector2` → true。
- * Vector2i / Vector3 / Color 还没实现，问到就落到下面的报缺分支。
+ * Color 还没实现时问到就落到下面的报缺分支；实测 typeof(Color(1,0,0,1)) → 20。
  */
 const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Vector2: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2,
+  Vector3: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3,
+  Vector2i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2i,
+  Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
 };
 
 export function isType(v: Variant, name: string): Variant {
@@ -150,5 +156,10 @@ const GODOT_TYPE: Record<TagValue, number> = {
 export function typeOf(v: Variant): Variant {
   // 数学内建类型都塞在 Tag.OBJECT 里，得按实例再分一次（实测 typeof(Vector2(1,2)) → 5）
   if (v.t === Tag.OBJECT && v.v instanceof GVector2) return V.int(5);
+  if (v.t === Tag.OBJECT && v.v instanceof GVector3) return V.int(9);
+  // 实测 typeof(Vector2i(1,2)) → 6
+  if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
+  // 实测 typeof(Color(1,0,0,1)) → 20
+  if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   return V.int(GODOT_TYPE[v.t]);
 }

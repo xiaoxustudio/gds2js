@@ -1,0 +1,6 @@
+7
+SCRIPT ERROR: Division by zero error in operator '/'.
+   at: _initialize (<case>/main.gd:6)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:6)
+<<GDS2JS_TIMEOUT>>
