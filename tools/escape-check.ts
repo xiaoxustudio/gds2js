@@ -57,7 +57,8 @@ const FFFD = String.fromCharCode(0xfffd);
 // —— 越界与 NUL：Godot 都当合法字符串，只是额外警告一句（警告不进语料，见文件头）
 await eq("\\U 越界一位换成 U+FFFD", `"${B}U110000"`, FFFD);
 await eq("\\U 越界只换它自己那一位", `"a${B}U110001b"`, `a${FFFD}b`);
-await eq("\\U000000 是真 NUL 不是 U+FFFD", `"${B}U000000"`, String.fromCharCode(0));
+await eq("\\U000000 被换成 U+FFFD（Godot 不允许串里留真 NUL）", `"${B}U000000"`, FFFD);
+await eq("\\u0000 同样换成 U+FFFD", `"${B}u0000"`, FFFD);
 await eq("多处越界各自换一位", `"${B}U110000x${B}U110001"`, `${FFFD}x${FFFD}`);
 // —— 相邻代理转义配成一个码点（实测 \uD800\uDC00、\U00D800\U00DC00、跨写法都等于 String.chr(0x10000)）
 await eq("\\u 前置 + \\u 后续配对", `"${B}uD800${B}uDC00"`, A1);

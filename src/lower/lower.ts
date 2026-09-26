@@ -531,7 +531,8 @@ function lowerExpr(n: SyntaxNode): Expr {
  *     Invalid hexadecimal digit in unicode escape sequence（\U0041 / \U00041 / \U12 / \U00D800 之外的
  *     \U0001F600 这类"多出来的位"不是错，是按宽度吃掉后当普通字符：长度 3、码点 502/48/48）。
  *   \U110000 这种越界值不报错，串里那位变成 U+FFFD（Godot 另外往 stderr 打警告，我们不复现警告）。
- *   \U000000 → 真的 NUL 字符（长度 1，等于 String.chr(0)），同样只伴随一条警告。
+ *   \U000000 → **不是** NUL：Godot 把串里的 NUL 也换成 U+FFFD（实测等于 String.chr(0xFFFD)），
+ *     同样只伴随一条警告。
  *   **代理区**：`\uD800` / `\uDC00` 单独出现是 Parse Error「Invalid UTF-16 sequence in string,
  *     unpaired lead/trail surrogate」；但**相邻的 lead+trail 两个转义会配成一个码点** ——
  *     实测 `"\uD800\uDC00"`、`"\U00D800\U00DC00"`、`"\uD800\U00DC00x"` 长度分别是 1/1/2，
@@ -621,8 +622,10 @@ function unquote(raw: string): string {
         `\\u${p.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
       );
     }
-    // 越界（> U+10FFFF）不是编译错：Godot 把那位换成 U+FFFD，只在 stderr 警告一句
-    out += p > 0x10ffff ? "\uFFFD" : String.fromCodePoint(p);
+    // 越界（> U+10FFFF）与 **NUL** 都不是编译错：Godot 把那一位换成 U+FFFD，只在 stderr 警告一句
+    // （实测 String.chr(0) == String.chr(0xFFFD) 为真、"a<U000000b" == "a"+chr(0xFFFD)+"b" 为真，
+    // u0000 走同一条解码路、长度也是 3）。所以这里不能留真 NUL。
+    out += p === 0 || p > 0x10ffff ? "\uFFFD" : String.fromCodePoint(p);
   }
   return out;
 }
