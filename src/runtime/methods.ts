@@ -2,10 +2,10 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
-import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
-import { GVector2, vec2Index, vector2Method } from "./vector2";
+import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -317,8 +317,34 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
   if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
   // Vector2 可以按下标取分量（实测 v[0] → 3.0、v[1] → 4.0；越界 Godot 在解析期就拦）
-  if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vec2Index(obj.v as GVector2, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
+}
+
+/**
+ * `v.x = E`：Vector2 是值类型，写它要产出新值再放回原来的存储位，所以这里**只回报新值**，
+ * 由生成的代码决定写回哪里（写回目标是变量还是容器的一格，发射器才知道）。
+ * 返回 null 表示已经在原地处理完、不需要写回 —— 属性写在 Godot 里只对值类型成立，
+ * 别的基（实测 `a[0].x = 5` 里 a[0] 是 int）一律运行时报错。
+ */
+export function writeProp(base: Variant, key: string, value: Variant): Variant | null {
+  const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
+  if (vec === null) {
+    throw new GodotRuntimeError(
+      "vector2-write",
+      `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type '${tagName(base.t)}'.`,
+    );
+  }
+  return vecWrite(vec, V.str(key), value, "prop");
+}
+
+/** `v[0] = E`：基是 Vector2 就回报新值，否则是容器/字典的下标赋值（原地，返回 null）。 */
+export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant | null {
+  if (base.t === Tag.OBJECT && base.v instanceof GVector2) {
+    return vecWrite(base.v as GVector2, idx, value, "index");
+  }
+  setIndex(base, idx, value);
+  return null;
 }
 
 export function setIndex(raw: unknown, idx: Variant, val: Variant): void {

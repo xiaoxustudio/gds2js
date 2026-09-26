@@ -10,7 +10,7 @@ import { lengthOf, range, rangeSeq } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { md5Hex } from "../src/runtime/md5";
 import { callable } from "../src/runtime/object";
-import { index, method } from "../src/runtime/methods";
+import { index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
 import {
@@ -32,7 +32,7 @@ import {
   truthyOf,
   valueEq,
 } from "../src/runtime/values";
-import { GVector2, vecCmp, vec2Index, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
+import { GVector2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 
 let pass = 0;
 const fails: string[] = [];
@@ -241,11 +241,11 @@ eq(
   eq("068", "逐分量乘", show(ops.mul(vector2(3, 4), vector2(-1, 2))), "(-3.0, 8.0)");
   eq("068", "逐分量除且不拦除零", show(ops.div(vector2(1, 1), vector2(0, 0))), "(inf, inf)");
   eq("068", "比较是字典序不是逐分量", show(ops.gt(vector2(3, 4), vector2(2, 5))), "true");
-  eq("068", "下标读分量", show(vec2Index(new GVector2(3, 4), I(1))), "4.0");
+  eq("068", "下标读分量", show(vecReadIndex(new GVector2(3, 4), I(1))), "4.0");
   eq("068", "Vector2() 是零向量", show(vector2New([])), "(0.0, 0.0)");
   eq("068", "整数分量打印走 17 位展开", strVec2(Math.fround(1e20)), "100000002004087730000.0");
   eq("068", "舍到 0 的非零值保留负号", strVec2(-4e-7), "-0.0");
-  shouldThrow("068", "下标越界", () => vec2Index(new GVector2(3, 4), I(2)));
+  shouldThrow("068", "下标越界", () => vecReadIndex(new GVector2(3, 4), I(2)));
   shouldThrow("068", "一个参数的 Vector2()", () => vector2New([I(1)]));
   shouldThrow("068", "Vector2.NAN 不存在", () => vector2Const("NAN"));
   shouldThrow("068", "slerp 未实现（语义没测准，宁缺毋猜）", () => a("slerp", [vector2(1, 2), F(0.5)]));
@@ -981,6 +981,62 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const freshT = typed("int", []);
   call(freshT, "insert", [I(0), I(1)]);
   eq("083", "空的定型数组 insert(0) 给一格", show(freshT), "[1]");
+}
+
+// ---- 087/088/089 Vector2 写语义：值类型写回、键型与值型口径、== 的操作数报错
+{
+  const V2 = (x: number, y: number) => vector2(x, y);
+  const w = (v: Variant, key: Variant, value: Variant) => vecWrite(v.v as GVector2, key, value, "index");
+  const p = (v: Variant, name: string, value: Variant) => writeProp(v, name, value) as Variant;
+  const SHOW2 = (r: Variant | null) => (r === null ? "<原地>" : show(r));
+
+  eq("087", "写 x 产出新值", SHOW2(p(V2(1, 2), "x", I(9))), "(9.0, 2.0)");
+  eq("087", "写 y", SHOW2(p(V2(1, 2), "y", I(9))), "(1.0, 9.0)");
+  eq("087", "下标写 0/1 都认", [SHOW2(w(V2(1, 2), I(0), I(7))), SHOW2(w(V2(1, 2), I(1), I(7)))].join(" "), "(7.0, 2.0) (1.0, 7.0)");
+  eq("087", "字符串键 x/y 也认（实测 v[\"y\"] = 5 改的是 y）", SHOW2(w(V2(1, 2), S("y"), I(5))), "(1.0, 5.0)");
+  eq("087", "StringName 键同样认", SHOW2(w(V2(1, 2), V.stringName("x"), I(5))), "(5.0, 2.0)");
+  eq("087", "int 实参收成 float32", SHOW2(p(V2(1, 2), "x", I(3))), "(3.0, 2.0)");
+  eq("087", "写入照旧过 float32", (w(V2(1, 2), I(0), F(0.1)).v as GVector2).x, Math.fround(0.1));
+  eq("087", "1e20 落到 float32 的可表示值", show(w(V2(1, 2), I(0), F(1e20))), "(100000002004087730000.0, 2.0)");
+  eq("087", "负值向零不是向下取整", show(w(V2(1, 2), I(0), F(-2.5))), "(-2.5, 2.0)");
+  // 值类型：写不动别人
+  {
+    const v = V2(1, 2);
+    const copy = p(v, "x", I(100)) as Variant;
+    eq("087", "写回的新值不影响原值", `${show(v)} ${show(copy)}`, "(1.0, 2.0) (100.0, 2.0)");
+  }
+  // 报错口径（实测 088/089）：属性名不存在、下标越界、实参类型不对、跟非向量比 ==
+  shouldThrow("088", "未知属性名要响", () => p(V2(1, 2), "zz", I(1)));
+  shouldThrow("088", "bool 不能写进分量", () => p(V2(1, 2), "x", V.bool(true)));
+  shouldThrow("088", "String 不能写进分量", () => p(V2(1, 2), "y", S("s")));
+  shouldThrow("088", "Vector2 不能写进分量", () => p(V2(1, 2), "x", V2(1, 2)));
+  shouldThrow("088", "null 不能写进分量", () => p(V2(1, 2), "x", V.nil()));
+  shouldThrow("088", "下标 2 越界要响", () => w(V2(1, 2), I(2), I(9)));
+  shouldThrow("088", "下标 -1 不做尾部折算", () => w(V2(1, 2), I(-1), I(9)));
+  shouldThrow("088", "非向量基的属性写要响", () => writeProp(I(1), "x", I(2)));
+  shouldThrow("089", "Vector2 == int 报错（不是给 false）", () => valueEq(V2(1, 2), I(3)));
+  shouldThrow("089", "反过来也一样", () => valueEq(I(3), V2(1, 2)));
+  shouldThrow("089", "Vector2 == String 报错", () => valueEq(V2(1, 2), S("x")));
+  shouldThrow("089", "Vector2 == Array 报错", () => valueEq(V2(1, 2), V.array(GArray.of([]))));
+  shouldThrow("089", "ops.eq 同样要响", () => ops.eq(V2(1, 2), F(1)));
+  eq("089", "跟 null 比仍然是 false", `${valueEq(V2(1, 2), V.nil())}/${valueEq(V.nil(), V2(1, 2))}`, "false/false");
+  eq("087", "Vector2 之间按分量比", `${valueEq(V2(1, 2), V2(1.0, 2.0))}/${valueEq(V2(1, 2), V2(1, 3))}`, "true/false");
+  // 读侧：0/1/"x"/"y" 都能读，越界报实测那句
+  eq("087", "读 v[0]", show(vecReadIndex(vector2(1, 2).v as GVector2, I(1))), "2.0");
+  eq("087", "读 v[\"x\"]", show(vecReadIndex(vector2(1, 2).v as GVector2, S("x"))), "1.0");
+  shouldThrow("087", "读越界下标要响", () => vecReadIndex(vector2(1, 2).v as GVector2, I(2)));
+  // writeIdx：容器走原地（返回 null），Vector2 走写回
+  {
+    const arr = V.array(GArray.of([I(1), I(2)]));
+    eq("087", "数组下标写是原地改", SHOW2(writeIdx(arr, I(0), I(9))), "<原地>");
+    eq("087", "数组那一格真的变了", show(arr), "[9, 2]");
+    const dict = new GDict();
+    dict.set(S("k"), I(1));
+    const dv = V.dict(dict);
+    eq("087", "字典同理", SHOW2(writeIdx(dv, S("k"), I(2))), "<原地>");
+    eq("087", "字典那一格改了", show(dv), '{ "k": 2 }');
+    eq("087", "Vector2 的下标写回报新值", SHOW2(writeIdx(V2(1, 2), I(1), I(8))), "(1.0, 8.0)");
+  }
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

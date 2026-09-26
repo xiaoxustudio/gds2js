@@ -128,12 +128,20 @@ export class Main extends SceneTree {
     let kept = rt.method(nest, "filter", [rt.callable((x) => {
       return rt.V.bool(true);
     })]);
-    rt.setIndex(rt.index(kept, rt.V.int(0)), rt.V.int(0), rt.V.int(9));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(kept, _w0), rt.V.int(0), rt.V.int(9));
+      if (_nv !== null) rt.setIndex(kept, _w0, _nv);
+    }
     print(rt.show(nest));
     let mapped = rt.method(nest, "map", [rt.callable((x) => {
       return x;
     })]);
-    rt.setIndex(rt.index(mapped, rt.V.int(0)), rt.V.int(0), rt.V.int(8));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(mapped, _w0), rt.V.int(0), rt.V.int(8));
+      if (_nv !== null) rt.setIndex(mapped, _w0, _nv);
+    }
     print(rt.show(nest));
     print(rt.show(rt.method(rt.V.array(rt.GArray.of([rt.V.nil(), rt.V.int(1)])), "filter", [rt.callable((x) => {
       return rt.ops.eq(x, rt.V.nil());

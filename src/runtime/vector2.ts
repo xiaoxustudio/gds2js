@@ -1,5 +1,5 @@
-import { UnsupportedError } from "./errors";
-import { Tag, V, intToNum, type Variant } from "./tags";
+import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 
 /**
  * 二维向量 —— GDScript 内建的数学类型。
@@ -259,13 +259,57 @@ export function vecCmp(a: GVector2, b: GVector2): number {
   return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
 }
 
-/** 下标读：`v[0]` / `v[1]`（实测存在；越界 Godot 是解析期就拦，我们按运行时报错处理）。 */
-export function vec2Index(v: GVector2, idx: Variant): Variant {
-  const i = idx.t === Tag.INT ? intToNum(idx.v as number | bigint) : null;
-  if (i === null) throw new UnsupportedError("vector2-index", `Vector2 下标需要 int，收到 ${idx.t}`);
-  const comp = i === 0 ? v.x : i === 1 ? v.y : null;
-  if (comp === null) {
-    throw new UnsupportedError("vector2-index", `Vector2 下标只能是 0 或 1（收到 ${i}）`);
+/** 下标/属性键 → 分量槽位：0/1 与 "x"/"y" 都认（实测 `v["x"]` 读到 1.0、`v["x"] = 7` 写进 x）。 */
+function vecSlot(key: Variant): 0 | 1 | null {
+  if (key.t === Tag.INT) {
+    const i = intToNum(key.v as IntPayload);
+    return i === 0 ? 0 : i === 1 ? 1 : null;
   }
-  return V.float(comp);
+  if (key.t === Tag.STRING || key.t === Tag.STRING_NAME) {
+    const s = key.v as string;
+    return s === "x" ? 0 : s === "y" ? 1 : null;
+  }
+  return null;
+}
+
+function failKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
+  const shown = key.t === Tag.STRING || key.t === Tag.STRING_NAME ? `"${key.v as string}"` : String(key.v);
+  const vt = value ? tagName(value.t) : "?";
+  if (via === "read") {
+    throw new GodotRuntimeError("vector2-index", `Invalid access of index '${shown}' on a base object of type: '${base}'.`);
+  }
+  if (via === "prop") {
+    throw new GodotRuntimeError(
+      "vector2-write",
+      `Invalid assignment of property or key '${shown}' with value of type '${vt}' on a base object of type '${base}'.`,
+    );
+  }
+  throw new GodotRuntimeError(
+    "vector2-write",
+    `Invalid assignment of index '${shown}' (on base: '${base}') with value of type '${vt}'.`,
+  );
+}
+
+/**
+ * 向量写（实测 `v.x = 9`、`v[0] = 9`、`v["x"] = 7` 都合法）。
+ *
+ * Vector2 是**值类型**，所以绝不原地改：产出新值，由调用方写回它来的那个存储位 ——
+ * 实测 `var w = v; w.x = 100` 不动 v，而 `a[0].x = 5`、`d["k"].y = 8` 确实改到容器里那一格
+ * （写回哪一格由发射器生成的路径决定，见 emitter 的 emitMemberAssign）。
+ * 实参只收 int/float（`v.x = true` / `"s"` / `Vector2(...)` 实测都是运行时报错，不是截断），
+ * 存下照旧过 float32（构造即 fround）。
+ */
+export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop" | "index"): Variant {
+  const slot = vecSlot(key);
+  if (slot === null) failKey(key, via, "Vector2", value);
+  if (value.t !== Tag.INT && value.t !== Tag.FLOAT) failKey(key, via, "Vector2", value);
+  const num = value.t === Tag.INT ? intToNum(value.v as IntPayload) : (value.v as number);
+  return V.object(slot === 0 ? new GVector2(num, vec.y) : new GVector2(vec.x, num));
+}
+
+/** 下标读：越界或键型不对都按实测口径报错（`v[2]` → Invalid access of index …）。 */
+export function vecReadIndex(vec: GVector2, key: Variant): Variant {
+  const slot = vecSlot(key);
+  if (slot === null) failKey(key, "read", "Vector2");
+  return V.float(slot === 0 ? vec.x : vec.y);
 }

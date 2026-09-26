@@ -42,7 +42,10 @@ export class Main extends SceneTree {
     print(rt.show(rt.index(d, rt.V.stringName("k"))));
     print(rt.show(rt.method(d, "has", [rt.V.str("k")])));
     print(rt.show(rt.method(d, "size", [])));
-    rt.setIndex(d, s, rt.V.int(7));
+    {
+      const _nv = rt.writeIdx(d, s, rt.V.int(7));
+      if (_nv !== null) d = _nv;
+    }
     print(rt.show(d));
     let e = rt.V.stringName("q");
     print(rt.show(e));

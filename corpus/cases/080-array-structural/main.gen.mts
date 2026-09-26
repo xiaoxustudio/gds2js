@@ -78,7 +78,10 @@ export class Main extends SceneTree {
     let src = rt.V.array(rt.GArray.of([rt.V.int(9)]));
     rt.method(fl, "fill", [src]);
     print(rt.show(fl));
-    rt.setIndex(src, rt.V.int(0), rt.V.int(5));
+    {
+      const _nv = rt.writeIdx(src, rt.V.int(0), rt.V.int(5));
+      if (_nv !== null) src = _nv;
+    }
     print(rt.show(fl));
     let sl = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4), rt.V.int(5)]));
     print(rt.show(rt.method(sl, "slice", [rt.V.int(1), rt.V.int(3)])));
@@ -100,18 +103,34 @@ export class Main extends SceneTree {
     print(rt.show(sl));
     let sh = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.array(rt.GArray.of([rt.V.int(2)]))]));
     let shallow = rt.method(sh, "slice", [rt.V.int(0), rt.V.int(2)]);
-    rt.setIndex(rt.index(shallow, rt.V.int(0)), rt.V.int(0), rt.V.int(9));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(shallow, _w0), rt.V.int(0), rt.V.int(9));
+      if (_nv !== null) rt.setIndex(shallow, _w0, _nv);
+    }
     print(rt.show(sh));
     let deep = rt.method(sh, "slice", [rt.V.int(0), rt.V.int(2), rt.V.int(1), rt.V.bool(true)]);
-    rt.setIndex(rt.index(deep, rt.V.int(1)), rt.V.int(0), rt.V.int(8));
+    {
+    const _w0 = rt.V.int(1);
+      const _nv = rt.writeIdx(rt.index(deep, _w0), rt.V.int(0), rt.V.int(8));
+      if (_nv !== null) rt.setIndex(deep, _w0, _nv);
+    }
     print(rt.show(sh));
     print(rt.show(deep));
     let dup = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)]))]));
     let ds = rt.method(dup, "duplicate", []);
-    rt.setIndex(rt.index(ds, rt.V.int(0)), rt.V.int(0), rt.V.int(9));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(ds, _w0), rt.V.int(0), rt.V.int(9));
+      if (_nv !== null) rt.setIndex(ds, _w0, _nv);
+    }
     print(rt.show(dup));
     let dd = rt.method(dup, "duplicate", [rt.V.bool(true)]);
-    rt.setIndex(rt.index(dd, rt.V.int(0)), rt.V.int(0), rt.V.int(5));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(dd, _w0), rt.V.int(0), rt.V.int(5));
+      if (_nv !== null) rt.setIndex(dd, _w0, _nv);
+    }
     print(rt.show(dup));
     print(rt.show(dd));
     print(rt.show(rt.method(rt.method(dup, "duplicate", []), "size", [])));
@@ -121,17 +140,28 @@ export class Main extends SceneTree {
     let asrc = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(9)]))]));
     let shared = rt.V.array(rt.GArray.of([]));
     rt.method(shared, "append_array", [asrc]);
-    rt.setIndex(rt.index(asrc, rt.V.int(0)), rt.V.int(0), rt.V.int(7));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(asrc, _w0), rt.V.int(0), rt.V.int(7));
+      if (_nv !== null) rt.setIndex(asrc, _w0, _nv);
+    }
     print(rt.show(shared));
     let bs = rt.V.array(rt.GArray.of([rt.V.int(3)]));
     let asg = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
     rt.method(asg, "assign", [bs]);
-    rt.setIndex(bs, rt.V.int(0), rt.V.int(9));
+    {
+      const _nv = rt.writeIdx(bs, rt.V.int(0), rt.V.int(9));
+      if (_nv !== null) bs = _nv;
+    }
     print(rt.show(asg));
     let nest_src = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)]))]));
     let assigned = rt.V.array(rt.GArray.of([]));
     rt.method(assigned, "assign", [nest_src]);
-    rt.setIndex(rt.index(nest_src, rt.V.int(0)), rt.V.int(0), rt.V.int(9));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(nest_src, _w0), rt.V.int(0), rt.V.int(9));
+      if (_nv !== null) rt.setIndex(nest_src, _w0, _nv);
+    }
     print(rt.show(assigned));
     let idn = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(1), rt.V.bool(true), rt.V.nil(), rt.V.stringName("a")]));
     print(rt.show(rt.method(idn, "has", [rt.V.int(1)])));

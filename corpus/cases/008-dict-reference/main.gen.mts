@@ -7,7 +7,10 @@ export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let d1 = rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]);
     let d2 = d1;
-    rt.setIndex(d2, rt.V.str("y"), rt.V.int(2));
+    {
+      const _nv = rt.writeIdx(d2, rt.V.str("y"), rt.V.int(2));
+      if (_nv !== null) d2 = _nv;
+    }
     print(rt.show(d1));
     print(rt.show(rt.method(d2, "size", [])));
     this.quit();

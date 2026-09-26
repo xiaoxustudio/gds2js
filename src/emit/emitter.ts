@@ -571,6 +571,11 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       }
       const rawWrite = emitRawIndexWrite(s.target, s.value);
       if (rawWrite) return [rawWrite];
+      // 值类型写（Vector2）：目标可能是 `v.x` / `v[0]` / `a[0].x` / `d["k"].y`
+      if (s.target.kind === "attribute" || s.target.kind === "index") {
+        const vw = emitValueWrite(s.target, s.value);
+        if (vw) return vw;
+      }
       return [emitAssign(s.target, emitExpr(s.value))];
     }
 
@@ -692,6 +697,87 @@ function emitRawIndexWrite(target: Expr, value: Expr): string | null {
     const j = raw(target.index, "int");
     const v = raw(value, leafOf(K));
     return `rt.fast.rawArrSet2(${target.obj.obj.name}, ${i}, ${j}, ${v});`;
+  }
+  return null;
+}
+
+/** 一条能读也能写回的存储路径，连同它需要的先提语句。 */
+interface WPath {
+  read: string;
+  write: (nv: string) => string;
+  pre: string[];
+}
+
+/**
+ * 一次写回：容器是原地改（运行时返回 null，不用再补一笔）；只有值类型（Vector2）才要把新值
+ * 放回它来的那个存储位 —— 那个位置是变量还是容器的一格，只有发射器知道。
+ */
+function writeBack(p: WPath, call: string): string[] {
+  const store = p.write("_nv");
+  if (store === "") return [call + ";"];
+  return ["{", ...p.pre, "  const _nv = " + call + ";", "  if (_nv !== null) " + store, "}"];
+}
+
+/**
+ * 值类型写：`v.x = 1`、`v[0] = 9`、`a[0].x = 5`、`d["k"].y = 8`、`m.x = 3`（模块字段）—— 全部实测合法。
+ *
+ * Vector2 是**值类型**，写它必须产出新值再放回它来的那一格：实测 `var w = v; w.x = 100` 不动 `v`、
+ * `for x in a: x.x = 100` 一整格都不改，而 `a[0].x = 5` 确实改到数组里那一格、`m.x = 5` 真的改到成员。
+ * 所以这里生成一对「读这条路」+「把新值写回这条路」的代码，路径由 {@link writePathFor} 给。
+ */
+function emitValueWrite(target: Expr, value: Expr): string[] | null {
+  const seq = { n: 0 };
+  if (target.kind === "attribute") {
+    const p = writePathFor(target.obj, seq);
+    return writeBack(p, `rt.writeProp(${p.read}, ${JSON.stringify(target.name)}, ${emitExpr(value)})`);
+  }
+  if (target.kind === "index") {
+    const p = writePathFor(target.obj, seq);
+    return writeBack(p, `rt.writeIdx(${p.read}, ${emitExpr(target.index)}, ${emitExpr(value)})`);
+  }
+  return null;
+}
+
+/** 一路往下取基，看这条路径的起点是变量还是临时值。 */
+function pathRoot(t: Expr): Expr {
+  if (t.kind === "index" || t.kind === "attribute") return pathRoot(t.obj);
+  return t;
+}
+
+/**
+ * 一条读写路径；写不回去时分两种命运（都实测过）：
+ * - 根是**临时值**（`f().x = 1`）：Godot 同样只求值、看不见效果、而且不报错 → 只发求值，不写回。
+ * - 根是**变量**但中间隔着字段（`p.m.x = 5`）：Godot 会把新值写进那个字段（实测成员写成立，
+ *   m1/m2 → `(5.0, 2.0)`），而属性赋值我们整体还没实现（见 {@link emitAssign} 的 attribute 分支），
+ *   写回无处落地 —— 当场报未实现，绝不编一条「看着成功、其实什么都没改」的产物。
+ */
+function writePathFor(t: Expr, seq: { n: number }): WPath {
+  const p = lvalueOf(t, seq);
+  if (p !== null) return p;
+  if (pathRoot(t).kind === "ident") {
+    throw new UnsupportedError("vector2-write-path", `写值类型要穿过对象的字段（如 p.m.x = 1），属性赋值还没实现`);
+  }
+  return { read: emitExpr(t), write: () => "", pre: [] };
+}
+
+/**
+ * 能读也能写回的存储路径：变量（局部、或发成类字段的模块变量）/ 容器下标。
+ * 下标的实参先提到临时变量里 —— 读和写回都要用它，不能求两次值。
+ */
+function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
+  if (t.kind === "ident") {
+    const read = emitExpr(t);
+    return { read, write: (nv) => `${read} = ${nv};`, pre: [] };
+  }
+  if (t.kind === "index") {
+    const base = lvalueOf(t.obj, seq);
+    if (base === null) return null;
+    const key = `_w${seq.n++}`;
+    return {
+      read: `rt.index(${base.read}, ${key})`,
+      write: (nv) => `rt.setIndex(${base.read}, ${key}, ${nv});`,
+      pre: [...base.pre, `const ${key} = ${emitExpr(t.index)};`],
+    };
   }
   return null;
 }

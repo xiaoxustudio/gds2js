@@ -26,9 +26,15 @@ export class Main extends SceneTree {
     rt.method(a, "insert", [rt.V.int(0), rt.V.str("x")]);
     print(rt.show(a));
     let alias = a;
-    rt.setIndex(alias, rt.V.int(0), rt.V.float(9.8));
+    {
+      const _nv = rt.writeIdx(alias, rt.V.int(0), rt.V.float(9.8));
+      if (_nv !== null) alias = _nv;
+    }
     print(rt.show(a));
-    rt.setIndex(alias, rt.V.int(0), rt.V.str("no"));
+    {
+      const _nv = rt.writeIdx(alias, rt.V.int(0), rt.V.str("no"));
+      if (_nv !== null) alias = _nv;
+    }
     print(rt.show(a));
     rt.method(a, "resize", [rt.V.int(6)]);
     print(rt.show(a));
@@ -98,22 +104,37 @@ export class Main extends SceneTree {
     print(rt.show(u));
     let d = rt.stampDict(rt.dictOf([[rt.V.str("a"), rt.V.float(1.9)]]), "String", "int", true);
     print(rt.show(d));
-    rt.setIndex(d, rt.V.str("b"), rt.V.float(2.7));
+    {
+      const _nv = rt.writeIdx(d, rt.V.str("b"), rt.V.float(2.7));
+      if (_nv !== null) d = _nv;
+    }
     print(rt.show(d));
     let dalias = d;
-    rt.setIndex(dalias, rt.V.str("c"), rt.V.float(3.5));
+    {
+      const _nv = rt.writeIdx(dalias, rt.V.str("c"), rt.V.float(3.5));
+      if (_nv !== null) dalias = _nv;
+    }
     print(rt.show(d));
     print(rt.show(rt.method(d, "keys", [])));
     print(rt.show(rt.method(d, "values", [])));
     let dc = rt.method(d, "duplicate", []);
-    rt.setIndex(dc, rt.V.str("z"), rt.V.float(4.5));
+    {
+      const _nv = rt.writeIdx(dc, rt.V.str("z"), rt.V.float(4.5));
+      if (_nv !== null) dc = _nv;
+    }
     print(rt.show(dc));
     print(rt.show(d));
     let ds = rt.stampDict(rt.dictOf([]), "String", "String", true);
-    rt.setIndex(ds, rt.V.str("k"), rt.V.stringName("v"));
+    {
+      const _nv = rt.writeIdx(ds, rt.V.str("k"), rt.V.stringName("v"));
+      if (_nv !== null) ds = _nv;
+    }
     print(rt.show(ds));
     let dv = rt.stampDict(rt.dictOf([]), "int", "Array", true);
-    rt.setIndex(dv, rt.V.int(1), rt.V.array(rt.GArray.of([rt.V.int(2)])));
+    {
+      const _nv = rt.writeIdx(dv, rt.V.int(1), rt.V.array(rt.GArray.of([rt.V.int(2)])));
+      if (_nv !== null) dv = _nv;
+    }
     print(rt.show(dv));
     let q = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), "int", true);
     print(rt.show(rt.method(q, "has", [rt.V.float(1)])));

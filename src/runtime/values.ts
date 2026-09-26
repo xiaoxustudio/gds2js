@@ -1419,6 +1419,20 @@ export function repr(v: Variant): string {
 export function valueEq(a: Variant, b: Variant): boolean {
   const ta = a.t;
   const tb = b.t;
+  // Vector2 与别的类型比 ==，Godot 是**运行时报错**（实测 `v == 3`、`3 == v`、`v == "x"`、
+  // `v == [1]`、`v == &"x"` 全部当场炸，只有跟 null 比给 false）。放在函数最前面是必须的：
+  // 下面 int/float 那条跨类型分支和 `ta !== tb → false` 的早退都会把它悄悄吃掉，
+  // 而「该响的没响」正是最不该有的静默错。
+  const asVec = (x: Variant): GVector2 | null => (x.t === Tag.OBJECT && x.v instanceof GVector2 ? (x.v as GVector2) : null);
+  const av = asVec(a);
+  const bv = asVec(b);
+  if (av !== null || bv !== null) {
+    if (av !== null && bv !== null) return av.x === bv.x && av.y === bv.y;
+    const other = av === null ? a : b;
+    if (other.t === Tag.NIL) return false;
+    const nameOf = (x: Variant): string => (asVec(x) !== null ? "Vector2" : tagName(x.t));
+    throw new GodotRuntimeError("eq-operands", `Invalid operands '${nameOf(a)}' and '${nameOf(b)}' in operator '=='.`);
+  }
   if (ta === Tag.INT || ta === Tag.FLOAT) {
     // 跨 int/float 数值相等（S11）。两个 int 的载荷已归一化（同值同表示），直接 ===；
     // 一旦掺了 float，就得把 bigint 收成 number 再比 —— 否则 2^62n === 2^62 会假。
@@ -1447,10 +1461,8 @@ export function valueEq(a: Variant, b: Variant): boolean {
     case Tag.DICT:
       return (a.v as GDict).eq(b.v as GDict);
     case Tag.OBJECT:
-      // Vector2 的相等是分量比较，不是引用比较
-      if (a.v instanceof GVector2 && b.v instanceof GVector2) {
-        return a.v.x === b.v.x && a.v.y === b.v.y;
-      }
+      // 走到这里两边都不是 Vector2（函数最前面那条守卫已经把掺向量的组合全接走了），
+      // 对象之间只剩引用相等。
       return a.v === b.v;
   }
   return false;

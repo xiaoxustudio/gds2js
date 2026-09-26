@@ -8,17 +8,34 @@ export class Main extends SceneTree {
     let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]));
     print(rt.show(rt.index(a, rt.ops.neg(rt.V.int(1)))));
     print(rt.show(rt.index(a, rt.ops.neg(rt.V.int(3)))));
-    rt.setIndex(a, rt.ops.neg(rt.V.int(1)), rt.V.int(9));
+    {
+      const _nv = rt.writeIdx(a, rt.ops.neg(rt.V.int(1)), rt.V.int(9));
+      if (_nv !== null) a = _nv;
+    }
     print(rt.show(a));
-    rt.setIndex(a, rt.ops.neg(rt.V.int(2)), rt.V.int(8));
+    {
+      const _nv = rt.writeIdx(a, rt.ops.neg(rt.V.int(2)), rt.V.int(8));
+      if (_nv !== null) a = _nv;
+    }
     print(rt.show(a));
-    rt.setIndex(a, rt.V.int(0), rt.V.int(5));
+    {
+      const _nv = rt.writeIdx(a, rt.V.int(0), rt.V.int(5));
+      if (_nv !== null) a = _nv;
+    }
     print(rt.show(a));
     let b = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(4)]))]));
     print(rt.show(rt.index(rt.index(b, rt.ops.neg(rt.V.int(1))), rt.ops.neg(rt.V.int(1)))));
-    rt.setIndex(rt.index(b, rt.ops.neg(rt.V.int(1))), rt.V.int(0), rt.V.int(7));
+    {
+    const _w0 = rt.ops.neg(rt.V.int(1));
+      const _nv = rt.writeIdx(rt.index(b, _w0), rt.V.int(0), rt.V.int(7));
+      if (_nv !== null) rt.setIndex(b, _w0, _nv);
+    }
     print(rt.show(b));
-    rt.setIndex(rt.index(b, rt.V.int(0)), rt.V.int(1), rt.V.int(6));
+    {
+    const _w0 = rt.V.int(0);
+      const _nv = rt.writeIdx(rt.index(b, _w0), rt.V.int(1), rt.V.int(6));
+      if (_nv !== null) rt.setIndex(b, _w0, _nv);
+    }
     print(rt.show(b));
     print(rt.show(rt.method(a, "size", [])));
     print(rt.show(rt.method(b, "size", [])));

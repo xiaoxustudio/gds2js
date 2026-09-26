@@ -42,30 +42,56 @@ export class Main extends SceneTree {
     print(rt.show(rt.method(fk, "has", [rt.V.stringName("a")])));
     let dd = rt.dictOf([[rt.V.str("k"), rt.V.array(rt.GArray.of([rt.V.int(1)]))]]);
     let ds = rt.method(dd, "duplicate", []);
-    rt.setIndex(rt.index(ds, rt.V.str("k")), rt.V.int(0), rt.V.int(9));
+    {
+    const _w0 = rt.V.str("k");
+      const _nv = rt.writeIdx(rt.index(ds, _w0), rt.V.int(0), rt.V.int(9));
+      if (_nv !== null) rt.setIndex(ds, _w0, _nv);
+    }
     print(rt.show(dd));
     let deep = rt.method(dd, "duplicate", [rt.V.bool(true)]);
-    rt.setIndex(rt.index(deep, rt.V.str("k")), rt.V.int(0), rt.V.int(5));
+    {
+    const _w0 = rt.V.str("k");
+      const _nv = rt.writeIdx(rt.index(deep, _w0), rt.V.int(0), rt.V.int(5));
+      if (_nv !== null) rt.setIndex(deep, _w0, _nv);
+    }
     print(rt.show(dd));
     print(rt.show(deep));
     let eo = rt.dictOf([]);
     let es = rt.method(eo, "duplicate", []);
-    rt.setIndex(es, rt.V.str("k"), rt.V.int(1));
+    {
+      const _nv = rt.writeIdx(es, rt.V.str("k"), rt.V.int(1));
+      if (_nv !== null) es = _nv;
+    }
     print(rt.show(eo));
     print(rt.show(es));
     let order = rt.dictOf([]);
-    rt.setIndex(order, rt.V.str("b"), rt.V.int(1));
-    rt.setIndex(order, rt.V.str("a"), rt.V.int(2));
-    rt.setIndex(order, rt.V.str("b"), rt.V.int(3));
+    {
+      const _nv = rt.writeIdx(order, rt.V.str("b"), rt.V.int(1));
+      if (_nv !== null) order = _nv;
+    }
+    {
+      const _nv = rt.writeIdx(order, rt.V.str("a"), rt.V.int(2));
+      if (_nv !== null) order = _nv;
+    }
+    {
+      const _nv = rt.writeIdx(order, rt.V.str("b"), rt.V.int(3));
+      if (_nv !== null) order = _nv;
+    }
     print(rt.show(rt.method(order, "keys", [])));
     print(rt.show(rt.method(order, "values", [])));
     rt.method(order, "erase", [rt.V.str("b")]);
-    rt.setIndex(order, rt.V.str("b"), rt.V.int(4));
+    {
+      const _nv = rt.writeIdx(order, rt.V.str("b"), rt.V.int(4));
+      if (_nv !== null) order = _nv;
+    }
     print(rt.show(rt.method(order, "keys", [])));
     let asg = rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]);
     let src = rt.dictOf([[rt.V.str("y"), rt.V.int(2)]]);
     rt.method(asg, "assign", [src]);
-    rt.setIndex(src, rt.V.str("y"), rt.V.int(9));
+    {
+      const _nv = rt.writeIdx(src, rt.V.str("y"), rt.V.int(9));
+      if (_nv !== null) src = _nv;
+    }
     print(rt.show(asg));
     let eq1 = rt.dictOf([[rt.V.str("x"), rt.V.int(1)], [rt.V.str("y"), rt.V.int(2)]]);
     let eq2 = rt.dictOf([[rt.V.str("y"), rt.V.int(2)], [rt.V.str("x"), rt.V.int(1)]]);

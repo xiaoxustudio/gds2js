@@ -1,0 +1,6 @@
+before
+SCRIPT ERROR: Invalid operands 'Vector2' and 'int' in operator '=='.
+   at: _initialize (<case>/main.gd:7)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:7)
+<<GDS2JS_TIMEOUT>>
