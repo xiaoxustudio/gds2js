@@ -652,6 +652,36 @@ export function strSci(n: number): string {
 }
 
 /**
+ * `String.humanize_size(n)` —— 40 个实测点拟合出的规则（`1025`→`1.00 KiB`、
+ * `1075`→`1.04 KiB`（**截断不是四舍五入**）、`1048575`→`1023.9 KiB`、`1048576`→`1024 KiB`、
+ * `1048577`→`1.00 MiB`、`-1024`→`16.00 EiB`）：
+ *  - 参数按 **uint64** 解释（所以负数变成一个巨大值），再转成 **double** 参与比较 ——
+ *    `2^64-1024` 在 double 里就是 `2^64`，这正是 `-1024` 给 `16.00 EiB` 而非 `15.99` 的原因；
+ *  - 档位：`while (value > 1024) value /= 1024`（**严格大于**，故 1048576 停在 KiB 档给 `1024 KiB`）；
+ *  - 小数位：`< 100` 两位、`< 1024` 一位、再大**不留小数**（`100.0`、`1023.9`、`1024` 全对上）；
+ *  - 原始档位（B）直接印整数本身，不走上面的缩放。
+ */
+const SIZE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+
+export function strHumanizeSize(v: Variant): Variant {
+  const signed = intArgBig(v, "String.humanize_size() 的参数");
+  const u = signed & ((1n << 64n) - 1n); // uint64 解释
+  if (u === 0n) return V.str("0 B");
+  let value = Number(u); // 与 Godot 一致：比较与缩放都在 double 上做
+  let cat = 0;
+  while (value > 1024) {
+    value /= 1024;
+    cat++;
+  }
+  const unit = SIZE_UNITS[cat] ?? SIZE_UNITS[SIZE_UNITS.length - 1]!;
+  if (cat === 0) return V.str(`${u.toString()} B`);
+  const digits = value < 100 ? 2 : value < 1024 ? 1 : 0;
+  const scale = 10 ** digits;
+  const trunc = Math.trunc(value * scale) / scale;
+  return V.str(digits === 0 ? `${Math.trunc(value)} ${unit}` : `${trunc.toFixed(digits)} ${unit}`);
+}
+
+/**
  * `String.` 上的静态成员。目前实现探针钉住的三个：
  *   `chr(n)` —— 参数转 int（float 截断、bool 当 0/1）；**0、负数、代理区、> U+10FFFF
  *   一律换成 U+FFFD**（实测 `String.chr(0) == String.chr(0xFFFD)` 为真：Godot 的串里不留 NUL）；
@@ -689,10 +719,15 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
       if (v.t === Tag.BOOL) return V.str(strSci(v.v ? 1 : 0));
       throw new GodotRuntimeError("string-arg", `String.num_scientific() 不接受 ${tagName(v.t)}`);
     }
+    case "humanize_size": {
+      const v = args[0];
+      if (v === undefined) throw new GodotRuntimeError("arity", "String.humanize_size() 缺少参数");
+      return strHumanizeSize(v);
+    }
     default:
       throw new UnsupportedError(
         "string-static",
-        `String.${name} 未实现（实测存在的静态成员是 chr/num/num_int64/num_scientific；num_float 这类 Godot 根本没有，humanize_size 还没建模）`,
+        `String.${name} 未实现（实测存在的静态成员是 chr/num/num_int64/num_scientific/humanize_size；num_float 这类 Godot 根本没有）`,
       );
   }
 }

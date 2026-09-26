@@ -463,7 +463,21 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("077", "md5 abc", md5Hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
   eq("077", "md5 走 UTF-8 字节", md5Hex("中文"), "a7bac2239fcdcb3a067903d8077c4a07");
   eq("077", "md5 64 字节分块边界", md5Hex("a".repeat(64)), "014842d480b571495a4a0363793f7367");
-  shouldThrow("077", "humanize_size 还没建模，问到要响", () => stringStatic("humanize_size", [I(1024)]));
+}
+
+// ---- 078 humanize_size：档位停在「严格 > 1024」、小数位 2/1/0、按 uint64 解释参数
+{
+  const HZ = (v: Variant) => ((stringStatic("humanize_size", [v]) as Variant).v as string);
+  eq("078", "0 给 0 B", HZ(I(0)), "0 B");
+  eq("078", "1024 仍是整数档", HZ(I(1024)), "1024 B");
+  eq("078", "1025 进 KiB 且截断", HZ(I(1025)), "1.00 KiB");
+  eq("078", "1075 截成 1.04 不是 1.05", HZ(I(1075)), "1.04 KiB");
+  eq("078", "102400 只留一位", HZ(I(102400)), "100.0 KiB");
+  eq("078", "1048576 停在 KiB 档不留小数", HZ(I(1048576)), "1024 KiB");
+  eq("078", "1048577 才升到 MiB", HZ(I(1048577)), "1.00 MiB");
+  eq("078", "int64 上界给 8.00 EiB", HZ(I(9223372036854775807n)), "8.00 EiB");
+  eq("078", "负数按 uint64 解释", HZ(I(-1024)), "16.00 EiB");
+  shouldThrow("078", "humanize_size 缺参数要响", () => stringStatic("humanize_size", []));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
