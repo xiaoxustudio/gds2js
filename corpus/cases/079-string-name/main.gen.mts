@@ -62,10 +62,10 @@ export class Main extends SceneTree {
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.V.int(2)])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.V.int(0)])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.V.int(5)])), rt.V.str("]"))));
-    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.ops.neg(rt.V.int(1))])), rt.V.str("]"))));
-    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.ops.neg(rt.V.int(5))])), rt.V.str("]"))));
+    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.V.int((-1))])), rt.V.str("]"))));
+    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "left", [rt.V.int((-5))])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "right", [rt.V.int(2)])), rt.V.str("]"))));
-    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "right", [rt.ops.neg(rt.V.int(1))])), rt.V.str("]"))));
+    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "right", [rt.V.int((-1))])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "right", [rt.V.int(5)])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(s, "left", [rt.V.int(2)])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(s, "right", [rt.V.int(2)])), rt.V.str("]"))));
@@ -75,8 +75,8 @@ export class Main extends SceneTree {
     print(rt.show(rt.method(rt.V.str(t), "is_empty", [])));
     print(rt.show(rt.method(rt.V.str(""), "is_empty", [])));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "substr", [rt.V.int(2)])), rt.V.str("]"))));
-    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "substr", [rt.ops.neg(rt.V.int(2))])), rt.V.str("]"))));
-    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "substr", [rt.V.int(0), rt.ops.neg(rt.V.int(1))])), rt.V.str("]"))));
+    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "substr", [rt.V.int((-2))])), rt.V.str("]"))));
+    print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "substr", [rt.V.int(0), rt.V.int((-1))])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(rt.V.str(t), "substr", [rt.V.int(5)])), rt.V.str("]"))));
     print(rt.show(rt.ops.add(rt.ops.add(rt.V.str("["), rt.method(s, "substr", [rt.V.int(2)])), rt.V.str("]"))));
     print(rt.show(rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(",")])));

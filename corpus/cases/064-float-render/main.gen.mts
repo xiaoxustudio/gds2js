@@ -18,8 +18,8 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.float(123456789012345.6)));
     print(rt.show(rt.V.float(1)));
     print(rt.show(rt.V.float(2.5)));
-    print(rt.show(rt.ops.neg(rt.V.float(0))));
-    print(rt.show(rt.ops.neg(rt.V.float(3.14159))));
+    print(rt.show(rt.V.float((-0))));
+    print(rt.show(rt.V.float((-3.14159))));
     print(rt.show(rt.V.float((1e+308 * 10))));
     print(rt.show(rt.strOf(rt.V.float(100000000000000000000))));
     print(rt.show(rt.V.array(rt.GArray.of([rt.V.float(100000000000000000000), rt.V.float(0.5)]))));

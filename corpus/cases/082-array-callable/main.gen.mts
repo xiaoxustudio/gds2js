@@ -65,13 +65,13 @@ export class Main extends SceneTree {
     }), rt.V.int(2)])));
     print(rt.show(rt.method(a, "find_custom", [rt.callable((x) => {
       return rt.ops.gt(x, rt.V.int(1));
-    }), rt.ops.neg(rt.V.int(1))])));
+    }), rt.V.int((-1))])));
     print(rt.show(rt.method(a, "rfind_custom", [rt.callable((x) => {
       return rt.ops.gt(x, rt.V.int(1));
     }), rt.V.int(0)])));
     print(rt.show(rt.method(a, "rfind_custom", [rt.callable((x) => {
       return rt.ops.gt(x, rt.V.int(1));
-    }), rt.ops.neg(rt.V.int(9))])));
+    }), rt.V.int((-9))])));
     print(rt.show(rt.method(a, "reduce", [rt.callable((acc, x) => {
       return rt.ops.add(acc, x);
     }), rt.V.int(0)])));

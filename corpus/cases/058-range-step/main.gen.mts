@@ -8,7 +8,7 @@ export class Main extends SceneTree {
     for (let i of rt.rangeSeq([rt.V.int(0), rt.V.int(10), rt.V.int(2)])) {
       print(rt.show(rt.V.int(i)));
     }
-    for (let j of rt.rangeSeq([rt.V.int(10), rt.V.int(0), rt.ops.neg(rt.V.int(2))])) {
+    for (let j of rt.rangeSeq([rt.V.int(10), rt.V.int(0), rt.V.int((-2))])) {
       print(rt.show(rt.V.int(j)));
     }
     print(rt.show(rt.method(rt.V.array(rt.range([rt.V.int(0), rt.V.int(20), rt.V.int(5)])), "size", [])));

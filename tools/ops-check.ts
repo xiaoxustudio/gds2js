@@ -183,6 +183,124 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
 }
 
+// ---- step 56：容器变更方法的**裸轨**与**装箱轨**逐步对齐。
+// 装箱轨的每条口径都是 Godot 实测过的（114-array-mutation-status / 115-raw-mutation-paths 的 golden），
+// 所以这里不需要新的"我认为对"：只要两条轨跑同一串操作得到同一串状态码与同一个末态，裸轨就是安全的。
+{
+  type MutOp = { op: string; i?: number; v?: number };
+  const runMut = (title: string, prog: MutOp[]): void => {
+    const g = V.array(GArray.of([1, 2, 3].map((n) => V.int(n))));
+    const a = [1, 2, 3];
+    const box: string[] = [];
+    const raw: string[] = [];
+    for (const s of prog) {
+      switch (s.op) {
+        case "insert":
+          box.push(show(method(g, "insert", [V.int(s.i!), V.int(s.v!)])));
+          raw.push(String(fast.rawArrInsert(a, s.i!, s.v!)));
+          break;
+        // void 与"结果被丢弃的 pop"两边都只记一个占位符：裸轨拿不到返回值，正是它只在丢弃时才合法的理由。
+        case "remove_at":
+          method(g, "remove_at", [V.int(s.i!)]);
+          fast.rawArrRemoveAt(a, s.i!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "pop_at":
+          method(g, "pop_at", [V.int(s.i!)]);
+          fast.rawArrRemoveAt(a, s.i!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "pop_back":
+          method(g, "pop_back", []);
+          a.pop();
+          box.push("·");
+          raw.push("·");
+          break;
+        case "pop_front":
+          method(g, "pop_front", []);
+          a.shift();
+          box.push("·");
+          raw.push("·");
+          break;
+        case "push_front":
+          method(g, "push_front", [V.int(s.v!)]);
+          fast.rawArrPushFront(a, s.v!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "push_back":
+          method(g, "push_back", [V.int(s.v!)]);
+          a.push(s.v!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "reverse":
+          method(g, "reverse", []);
+          a.reverse();
+          box.push("·");
+          raw.push("·");
+          break;
+        case "fill":
+          method(g, "fill", [V.int(s.v!)]);
+          a.fill(s.v!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "clear":
+          method(g, "clear", []);
+          fast.rawArrClear(a);
+          box.push("·");
+          raw.push("·");
+          break;
+        default:
+          throw new Error(`未知的操作 ${s.op}`);
+      }
+    }
+    // 装箱轨 print 数组是 `[1, 2, 3]`，裸轨拼成同样的形状再比。装箱轨是参照（Godot 实测过），
+    // 所以它当"期望"，裸轨当"实得"。
+    eq("step56", title, `[${a.join(", ")}] ${raw.join(" ")}`, `${show(g)} ${box.join(" ")}`);
+  };
+
+  runMut("insert/remove_at/push_front/fill 混合", [
+    { op: "insert", i: 1, v: 9 },
+    { op: "push_front", v: 7 },
+    { op: "remove_at", i: 0 },
+    { op: "insert", i: -1, v: 4 },
+    { op: "fill", v: 5 },
+  ]);
+  runMut("下标折算与越界状态码", [
+    { op: "insert", i: 3, v: 4 },
+    { op: "insert", i: 99, v: 5 },
+    { op: "insert", i: -99, v: 6 },
+    { op: "remove_at", i: -1 },
+    { op: "remove_at", i: 9 },
+    { op: "pop_at", i: -5 },
+  ]);
+  runMut("清空后再 pop 不炸", [
+    { op: "pop_back" },
+    { op: "pop_front" },
+    { op: "clear" },
+    { op: "pop_back" },
+    { op: "push_front", v: 1 },
+    { op: "clear" },
+  ]);
+  runMut("负下标折叠、push_back 与 reverse", [
+    { op: "insert", i: -1, v: 4 },
+    { op: "push_back", v: 5 },
+    { op: "reverse" },
+    { op: "insert", i: -5, v: 6 },
+    { op: "remove_at", i: -1 },
+  ]);
+  const dm = new Map<string, number>([["k", 5]]);
+  const gd = new GDict();
+  gd.set(V.str("k"), V.int(5));
+  const dg = V.dict(gd);
+  eq("step56", "裸 get(k,def) 与装箱同值（命中）", String(fast.rawDictGetOr(dm, "k", 0)), show(method(dg, "get", [V.str("k"), V.int(0)])));
+  eq("step56", "裸 get(k,def) 与装箱同值（缺键给默认）", String(fast.rawDictGetOr(dm, "j", 7)), show(method(dg, "get", [V.str("j"), V.int(7)])));
+}
+
 // ---- 061 字符串比较：Godot 按码点（UTF-32），JS 原生按 UTF-16 码元 → 代理对会判反方向。
 // 期望值取自 061-string-order 的 godot.txt（String.chr(0x1F600) vs String.chr(0xFFFF) 探针实测）。
 {

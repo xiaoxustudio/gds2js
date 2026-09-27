@@ -19,7 +19,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.stringStatic("num_scientific", [rt.V.float((1 / 0))])));
     print(rt.show(rt.stringStatic("num_scientific", [rt.V.float((0 / 0))])));
     print(rt.show(rt.stringStatic("num_scientific", [rt.V.int(42)])));
-    print(rt.show(rt.stringStatic("num_scientific", [rt.ops.neg(rt.V.float(1.5))])));
+    print(rt.show(rt.stringStatic("num_scientific", [rt.V.float((-1.5))])));
     print(rt.show(rt.stringStatic("num_scientific", [rt.V.float(9.9999999e-7)])));
     print(rt.show(rt.stringStatic("num_scientific", [rt.V.float(1e-20)])));
     print(rt.show(rt.stringStatic("num_scientific", [rt.V.float(100000000000000)])));

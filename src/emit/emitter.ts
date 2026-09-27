@@ -546,7 +546,8 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
     }
 
     case "expr":
-      return [`${emitExpr(s.expr)};`];
+      // 结果丢弃，就不必装箱：boxR 只是纯分配地套一层 V.*，而裸 insert 的状态码正是白扔的那份。
+      return [`${emitExprR(s.expr).code};`];
 
     case "assign": {
       // 裸字典下标写：存裸值（Map<primitive, number>），键/值 rep 与推断一致，不符即响亮报错。
@@ -914,10 +915,63 @@ function emitExprR(e: Expr): R {
       // 裸数组长度是 .length，裸 Map 是 .size。
       return { code: `${nm}.${ek ? "length" : "size"}`, rep: "int" };
     }
-    if (ek && e.callee.name === "append" && e.args.length === 1) {
+    if (ek && (e.callee.name === "append" || e.callee.name === "push_back") && e.args.length === 1) {
       const er = emitExprR(e.args[0]!);
-      if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 append 元素期望 ${ek}，实得 ${er.rep}`);
+      if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 ${e.callee.name} 元素期望 ${ek}，实得 ${er.rep}`);
       return { code: `${nm}.push(${er.code})`, rep: "var" };
+    }
+    // 原地倒序：只换位置、不比较，元素是谁都跟着走，所以裸数组直接发 JS 的 reverse()。
+    if (ek && e.callee.name === "reverse" && e.args.length === 0) {
+      return { code: `${nm}.reverse()`, rep: "var" };
+    }
+    // ---- step 56：变更类方法的裸路径。void 的那批 rep 记 "var"（Godot 根本不让取它们的返回值，
+    // 分析层已按 S142 拦下），insert 例外 —— 它给状态码 int，要能被当值用。
+    if (ek && e.callee.name === "push_front" && e.args.length === 1) {
+      const er = emitExprR(e.args[0]!);
+      if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 push_front 元素期望 ${ek}，实得 ${er.rep}`);
+      return { code: `rt.fast.rawArrPushFront(${nm}, ${er.code})`, rep: "var" };
+    }
+    if (ek && e.callee.name === "fill" && e.args.length === 1) {
+      const er = emitExprR(e.args[0]!);
+      if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 fill 元素期望 ${ek}，实得 ${er.rep}`);
+      return { code: `${nm}.fill(${er.code})`, rep: "var" };
+    }
+    if (ek && e.callee.name === "insert" && e.args.length === 2) {
+      const ir = emitExprR(e.args[0]!);
+      const vr = emitExprR(e.args[1]!);
+      if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 insert 下标期望 int，实得 ${ir.rep}`);
+      if (vr.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 insert 元素期望 ${ek}，实得 ${vr.rep}`);
+      return { code: `rt.fast.rawArrInsert(${nm}, ${ir.code}, ${vr.code})`, rep: "int" };
+    }
+    if (ek && e.callee.name === "remove_at" && e.args.length === 1) {
+      const ir = emitExprR(e.args[0]!);
+      if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 remove_at 下标期望 int，实得 ${ir.rep}`);
+      return { code: `rt.fast.rawArrRemoveAt(${nm}, ${ir.code})`, rep: "var" };
+    }
+    if (ek && e.callee.name === "clear" && e.args.length === 0) {
+      return { code: `rt.fast.rawArrClear(${nm})`, rep: "var" };
+    }
+    // pop 三兄弟只在**结果被丢弃**时才可能走到这里（分析期把用了返回值的整个数组退回装箱了）：
+    // 空数组时 Godot 给 null，裸轨没有 null 的位置，所以绝不能让它们的返回值参与运算。
+    if (ek && e.callee.name === "pop_back" && e.args.length === 0) {
+      return { code: `${nm}.pop()`, rep: "var" };
+    }
+    if (ek && e.callee.name === "pop_front" && e.args.length === 0) {
+      return { code: `${nm}.shift()`, rep: "var" };
+    }
+    if (ek && e.callee.name === "pop_at" && e.args.length === 1) {
+      const ir = emitExprR(e.args[0]!);
+      if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 pop_at 下标期望 int，实得 ${ir.rep}`);
+      return { code: `rt.fast.rawArrRemoveAt(${nm}, ${ir.code})`, rep: "var" };
+    }
+    if (dk && e.callee.name === "get" && e.args.length === 2) {
+      const kr = emitExprR(e.args[0]!);
+      const dr = emitExprR(e.args[1]!);
+      if (kr.rep !== "int" && kr.rep !== "str") {
+        throw new UnsupportedError("raw-dict-key", `内部不变量破坏：裸字典 get 键期望 int/str，实得 ${kr.rep}`);
+      }
+      if (dr.rep !== dk) throw new UnsupportedError("raw-dict-get", `内部不变量破坏：裸字典 get 默认值期望 ${dk}，实得 ${dr.rep}`);
+      return { code: `rt.fast.rawDictGetOr(${nm}, ${kr.code}, ${dr.code})`, rep: dk };
     }
   }
   if (e.kind === "call" && e.callee.kind === "ident") {
@@ -941,6 +995,12 @@ function emitExprR(e: Expr): R {
       }
       return { code: `this.${e.callee.name}(${raws.map((r) => r.code).join(", ")})`, rep: abi.ret };
     }
+  }
+  if (e.kind === "unary" && e.op === "-") {
+    // 与 kindOfExpr 的 unary 分支同一条规则：只有操作数本身是裸 int/float 才发裸负号。
+    // 裸 int 都在安全整数范围内（字面量与 checked 算子都保证），取负不会越界。
+    const or = emitExprR(e.operand);
+    if (or.rep === "int" || or.rep === "float") return { code: `(-${or.code})`, rep: or.rep };
   }
   if (e.kind === "binary") {
     const raw = tryRawBinary(e);
@@ -1182,9 +1242,9 @@ function litBinaryFitsRaw(e: Extract<Expr, { kind: "binary" }>): boolean {
 
 /**
  * 结构化的表达式裸类型判定，算子表与 tryRawBinary 逐字一致：
- * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / call(裸 ABI 目标) /
+ * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / unary(负号) / call(裸 ABI 目标) /
  * index(裸数组下标读) / call(裸数组 .size()/.length()) 能产出裸类型，
- * 其余（attribute/array/dict/lambda/await/is/as/unary、非 int 下标）一律返回 null（必须装箱）。
+ * 其余（attribute/array/dict/lambda/await/is/as、`!`/`~`、非 int 下标）一律返回 null（必须装箱）。
  * 返回 "bool" 表示裸比较结果（调用方要求 int/float/str 时自然落选）。
  */
 function kindOfExpr(
@@ -1210,6 +1270,13 @@ function kindOfExpr(
       if (lk === "str" && e.op === "+") return "str";
       if ((lk === "int" || lk === "float") && CMP_OPS.has(e.op)) return "bool";
       return null;
+    }
+    case "unary": {
+      // 一元负号保持操作数的裸类型（`a[-1]`、`a.remove_at(-1)` 是最常见的字面下标写法）；
+      // 取反 `!` 与按位取反 `~` 的结果是 bool / 需要 int64 截断，都不进裸路。
+      if (e.op !== "-") return null;
+      const ok = kindOfExpr(e.operand, identKind, arrays, dict);
+      return ok === "int" || ok === "float" ? ok : null;
     }
     case "index": {
       // 二维网格 g[i][j] → 叶子标量类型（两层下标都 int）。
@@ -1247,6 +1314,17 @@ function kindOfExpr(
           e.args.length === 0
         )
           return "int";
+        // 裸数组 insert 给**状态码**（S141），所以它在裸 int 语境里是合法的。
+        if (arrays.has(recv) && e.callee.name === "insert" && e.args.length === 2) {
+          return kindOfExpr(e.args[0]!, identKind, arrays, dict) === "int" ? "int" : null;
+        }
+        // 裸字典 get(k, def)：只有默认值与值槽同型才是裸的（一参形态缺键给 null → 不是裸值）。
+        const gk = dict.get(recv);
+        if (gk && e.callee.name === "get" && e.args.length === 2) {
+          const kk = kindOfExpr(e.args[0]!, identKind, arrays, dict);
+          const dk2 = kindOfExpr(e.args[1]!, identKind, arrays, dict);
+          if ((kk === "int" || kk === "str") && dk2 === gk) return gk;
+        }
         return null;
       }
       if (e.callee.kind !== "ident") return null;
@@ -1633,7 +1711,7 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
     return null;
   };
 
-  const visitExpr = (e: Expr, inL: boolean): void => {
+  const visitExpr = (e: Expr, inL: boolean, discarded = false): void => {
     switch (e.kind) {
       case "ident":
         // 能走到这里说明该 ident 处「裸取值」角色（合法角色在 call/index 分支被就地消化、不再下钻）。
@@ -1647,12 +1725,33 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
             const c = cands.get(objName)!;
             if (inL) {
               c.escaped = true;
-            } else if (N === "append" && e.args.length === 1) {
+            } else if ((N === "append" || N === "push_back") && e.args.length === 1) {
               c.writeElems.push(e.args[0]!);
             } else if ((N === "size" || N === "length") && e.args.length === 0) {
               /* 合法：仅把数组当长度来源，不下钻 obj */
+            } else if (N === "insert" && e.args.length === 2) {
+              // 下标进 writeIdxs（必须是 int）、值进 writeElems（必须与元素同型），
+              // 于是「插一个不合型的值」会让整个数组退回装箱 —— 那正是定型数组该拒的情形。
+              c.writeIdxs.push(e.args[0]!);
+              c.writeElems.push(e.args[1]!);
+            } else if (N === "remove_at" && e.args.length === 1) {
+              c.writeIdxs.push(e.args[0]!);
+            } else if (N === "push_front" && e.args.length === 1) {
+              c.writeElems.push(e.args[0]!);
+            } else if (N === "fill" && e.args.length === 1) {
+              c.writeElems.push(e.args[0]!);
+            } else if (N === "clear" && e.args.length === 0) {
+              /* 合法：清空不引入别的类型 */
+            } else if (N === "reverse" && e.args.length === 0) {
+              /* 合法：原地倒序只挪格子，比较都不做（sort 那族不走裸路，见 S133 的同键顺序） */
+            } else if (discarded && N === "pop_back" && e.args.length === 0) {
+              /* 合法：**仅在结果被丢弃时**。要用返回值就得表示 null（空数组），裸轨表示不了 → 逃逸 */
+            } else if (discarded && N === "pop_front" && e.args.length === 0) {
+              /* 同上 */
+            } else if (discarded && N === "pop_at" && e.args.length === 1) {
+              c.readIdxs.push(e.args[0]!); // 下标仍须是 int
             } else {
-              c.escaped = true; // 其它数组方法（pop/insert/clear…）→ 逃逸
+              c.escaped = true; // 其它数组方法（resize/sort/duplicate…）与「用了 pop 的返回值」→ 逃逸
             }
             e.args.forEach((a) => visitExpr(a, inL));
             return;
@@ -1750,7 +1849,7 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         return;
       }
       case "expr":
-        visitExpr(s.expr, inL);
+        visitExpr(s.expr, inL, true); // 表达式语句：结果被丢弃，丢弃版 pop_* 才能走裸路
         return;
       case "return":
         if (s.value) visitExpr(s.value, inL);
@@ -1960,7 +2059,15 @@ function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
           if (obj) {
             const c = cands.get(obj)!;
             const N = e.callee.name;
-            if (inL || !((N === "size" || N === "length") && e.args.length === 0)) c.escaped = true; // 其它字典方法全逃逸
+            if (inL) c.escaped = true;
+            else if ((N === "size" || N === "length") && e.args.length === 0) {
+              /* 合法：只把字典当长度来源 */
+            } else if (N === "get" && e.args.length === 2) {
+              // 只裸化「两参」那一形：缺键给默认值，而默认值的静态类型由 verifyDict 按值槽校验。
+              // 一参 `get(k)` 缺键给 **null**，裸轨里没有 null 的位置 → 整个字典退回装箱（照旧逃逸）。
+              c.readKeys.push(e.args[0]!);
+              c.writeVals.push(e.args[1]!);
+            } else c.escaped = true; // 其它字典方法全逃逸
             e.args.forEach((a) => visitExpr(a, inL));
             return;
           }

@@ -14,7 +14,7 @@ export class Main extends SceneTree {
     let c = rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]);
     let v3 = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
     let v2i = rt.vector2iNew([rt.V.int(3), rt.V.int(4)]);
-    let fs = rt.V.array(rt.GArray.of([rt.V.float((1 / 3)), rt.V.float(100000000000000000000), rt.V.float((0.1 + 0.2)), rt.V.float((1 / 0)), rt.ops.div(rt.ops.neg(rt.V.float(1)), rt.V.float(0))]));
+    let fs = rt.V.array(rt.GArray.of([rt.V.float((1 / 3)), rt.V.float(100000000000000000000), rt.V.float((0.1 + 0.2)), rt.V.float((1 / 0)), rt.V.float(((-1) / 0))]));
     print(rt.show(rt.V.str("n1 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b"), rt.V.str("c")]))])), rt.show(rt.V.str("]")));
     print(rt.show(rt.V.str("n2 [")), rt.show(rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([rt.V.str("x")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(""), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])), rt.show(rt.V.str("]")));
     print(rt.show(rt.V.str("n3 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str(""), rt.V.str("b")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str(""), rt.V.str("")]))])), rt.show(rt.V.str("]")));

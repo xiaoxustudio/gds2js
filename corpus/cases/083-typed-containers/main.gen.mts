@@ -7,7 +7,7 @@ export class Main extends SceneTree {
   member = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(7)])), "int", true);
 
   async _initialize(): Promise<void> {
-    let a = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(2.5), rt.ops.neg(rt.V.float(1.9)), rt.V.bool(true)])), "int", true);
+    let a = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(2.5), rt.V.float((-1.9)), rt.V.bool(true)])), "int", true);
     print(rt.show(a));
     rt.method(a, "append", [rt.V.int(3)]);
     rt.method(a, "append", [rt.V.float(4.9)]);

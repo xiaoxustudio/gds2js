@@ -19,15 +19,15 @@ export class Main extends SceneTree {
     print(rt.show(rt.stringStatic("num", [rt.V.float(123456789012345.6)])));
     print(rt.show(rt.stringStatic("num", [rt.V.float((1 / 0))])));
     print(rt.show(rt.stringStatic("num", [rt.V.float((0 / 0))])));
-    print(rt.show(rt.stringStatic("num", [rt.ops.neg(rt.V.float(1.5))])));
+    print(rt.show(rt.stringStatic("num", [rt.V.float((-1.5))])));
     print(rt.show(rt.stringStatic("num_int64", [rt.V.int(9007199254740993n)])));
     print(rt.show(rt.stringStatic("num_int64", [rt.V.float(1.7)])));
-    print(rt.show(rt.stringStatic("num_int64", [rt.ops.neg(rt.V.int(5))])));
+    print(rt.show(rt.stringStatic("num_int64", [rt.V.int((-5))])));
     print(rt.show(rt.stringCtor([rt.V.str("x")])));
     print(rt.show(rt.method(rt.stringCtor([rt.V.str(("x" + "y"))]), "length", [])));
     print(rt.show(rt.ops.add(rt.ops.add(rt.strOf(rt.V.int(42)), rt.V.str("|")), rt.stringStatic("num", [rt.V.int(42)]))));
-    print(rt.show(rt.ops.neg(rt.V.float(0))));
-    print(rt.show(rt.stringStatic("num", [rt.ops.neg(rt.V.float(0))])));
+    print(rt.show(rt.V.float((-0))));
+    print(rt.show(rt.stringStatic("num", [rt.V.float((-0))])));
     this.quit();
   }
   

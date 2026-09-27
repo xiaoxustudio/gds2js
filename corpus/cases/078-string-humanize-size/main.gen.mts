@@ -48,7 +48,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.stringStatic("humanize_size", [rt.V.int(1125899906842624)])));
     print(rt.show(rt.stringStatic("humanize_size", [rt.V.int(1152921504606846976n)])));
     print(rt.show(rt.stringStatic("humanize_size", [rt.V.int(9223372036854775807n)])));
-    print(rt.show(rt.stringStatic("humanize_size", [rt.ops.neg(rt.V.int(1024))])));
+    print(rt.show(rt.stringStatic("humanize_size", [rt.V.int((-1024))])));
     print(rt.show(rt.stringStatic("humanize_size", [rt.V.float(1.9)])));
     this.quit();
   }

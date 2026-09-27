@@ -25,7 +25,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.str("f10 ")), rt.show(rt.V.bool((a === 9007199254740994))), rt.show(rt.V.str(" | ")), rt.show(rt.V.bool((a > 9007199254740992))), rt.show(rt.V.str(" | ")), rt.show(rt.V.bool((d < 1.2345678901e-7))));
     let i = 1000000.25;
     print(rt.show(rt.V.str("f11 ")), rt.show(rt.toInt(rt.V.float(i))), rt.show(rt.V.str(" | ")), rt.show(rt.V.float(i)));
-    let j = rt.ops.neg(rt.V.float(9007199254740994));
+    let j = rt.V.float((-9007199254740994));
     print(rt.show(rt.V.str("f12 ")), rt.show(rt.toInt(j)));
     this.quit();
   }

@@ -6,8 +6,8 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     print(rt.show(rt.toInt(rt.V.float(3.7))));
-    print(rt.show(rt.toInt(rt.ops.neg(rt.V.float(3.7)))));
-    print(rt.show(rt.toInt(rt.ops.neg(rt.V.float(0.5)))));
+    print(rt.show(rt.toInt(rt.V.float((-3.7)))));
+    print(rt.show(rt.toInt(rt.V.float((-0.5)))));
     print(rt.show(rt.toInt(rt.V.bool(true))));
     print(rt.show(rt.toInt(rt.V.bool(false))));
     print(rt.show(rt.toInt(rt.V.float(9007199254740992))));
@@ -16,7 +16,7 @@ export class Main extends SceneTree {
     let z = 0;
     print(rt.show(rt.toInt(rt.V.float((z / z)))));
     print(rt.show(rt.toInt(rt.V.float((1 / z)))));
-    print(rt.show(rt.toInt(rt.ops.div(rt.ops.neg(rt.V.float(1)), rt.V.float(z)))));
+    print(rt.show(rt.toInt(rt.V.float(((-1) / z)))));
     print(rt.show(rt.toInt(rt.V.str("42"))));
     print(rt.show(rt.toInt(rt.V.str("-42"))));
     print(rt.show(rt.toInt(rt.V.str("12x"))));

@@ -53,7 +53,7 @@ export class Main extends SceneTree {
       if (_nv !== null) z = _nv;
     }
     {
-      const _nv = rt.writeIdx(z, rt.ops.neg(rt.V.float(0)), rt.V.str("negzero"));
+      const _nv = rt.writeIdx(z, rt.V.float((-0)), rt.V.str("negzero"));
       if (_nv !== null) z = _nv;
     }
     print(rt.show(z));

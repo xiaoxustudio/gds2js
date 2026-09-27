@@ -10,14 +10,14 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.float(3.9)]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.int(3), rt.V.float(2.5)]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.int(3), rt.V.bool(true)]))));
-    print(rt.show(rt.V.array(rt.range([rt.ops.neg(rt.V.int(2))]))));
+    print(rt.show(rt.V.array(rt.range([rt.V.int((-2))]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.int(0)]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(3)]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(1), rt.V.int(4)]))));
-    print(rt.show(rt.V.array(rt.range([rt.V.int(4), rt.V.int(0), rt.ops.neg(rt.V.int(2))]))));
+    print(rt.show(rt.V.array(rt.range([rt.V.int(4), rt.V.int(0), rt.V.int((-2))]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.int(5), rt.V.int(2)]))));
     print(rt.show(rt.V.array(rt.range([rt.V.float(0.9), rt.V.float(0.1)]))));
-    print(rt.show(rt.V.array(rt.range([rt.ops.neg(rt.V.float(1.5)), rt.V.float(1.5)]))));
+    print(rt.show(rt.V.array(rt.range([rt.V.float((-1.5)), rt.V.float(1.5)]))));
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.int(3), rt.V.float(1.001)]))));
     let st = 1.7;
     print(rt.show(rt.V.array(rt.range([rt.V.int(0), rt.V.int(6), rt.V.float(st)]))));

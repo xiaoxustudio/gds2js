@@ -13,7 +13,7 @@ export class Main extends SceneTree {
     n = rt.fast.iSubC(n, 7);
     print(rt.show(rt.V.int(rt.fast.iDivC(n, 2))));
     print(rt.show(rt.V.int(rt.fast.iModC(n, 2))));
-    print(rt.show(rt.ops.mod(rt.V.int(7), rt.ops.neg(rt.V.int(2)))));
+    print(rt.show(rt.V.int(rt.fast.iModC(7, (-2)))));
     print(rt.show(rt.ops.div(rt.V.int(7), rt.V.float(0.5))));
     this.quit();
   }

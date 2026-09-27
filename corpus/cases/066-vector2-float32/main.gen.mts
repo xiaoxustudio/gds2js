@@ -8,7 +8,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.vector2New([rt.V.int(4), rt.V.int(6)])));
     print(rt.show(rt.vector2New([rt.V.float(1.5), rt.V.float(2.25)])));
     print(rt.show(rt.vector2New([rt.V.float(1.2345678901234567), rt.V.float((0.1 + 0.2))])));
-    print(rt.show(rt.vector2New([rt.ops.neg(rt.V.float(0)), rt.ops.neg(rt.V.float(3.7))])));
+    print(rt.show(rt.vector2New([rt.V.float((-0)), rt.V.float((-3.7))])));
     print(rt.show(rt.vector2New([rt.V.float(1.0000000000000002), rt.V.float(1e-8)])));
     print(rt.show(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.float(3.5), rt.V.int(4)])]))));
     print(rt.show(rt.V.array(rt.GArray.of([rt.V.float(100000000000000000000), rt.vector2New([rt.V.float(1000000000000000), rt.V.int(2)])]))));

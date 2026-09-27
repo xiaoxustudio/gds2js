@@ -14,7 +14,7 @@ export class Main extends SceneTree {
     let s = rt.V.array(rt.GArray.of([rt.V.str("b"), rt.V.str("a"), rt.V.str("C")]));
     rt.method(s, "sort", []);
     print(rt.show(s));
-    let n = rt.V.array(rt.GArray.of([rt.V.int(2), rt.ops.neg(rt.V.int(2)), rt.V.int(0), rt.ops.neg(rt.V.int(1)), rt.V.int(1)]));
+    let n = rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.int((-2)), rt.V.int(0), rt.V.int((-1)), rt.V.int(1)]));
     rt.method(n, "sort", []);
     print(rt.show(n));
     let e = rt.V.array(rt.GArray.of([]));
@@ -49,7 +49,7 @@ export class Main extends SceneTree {
       return rt.ops.gt(x, y);
     })]);
     print(rt.show(words));
-    let vs = rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(0), rt.V.int(3)]), rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.vector2New([rt.ops.neg(rt.V.int(2)), rt.V.int(5)])]));
+    let vs = rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(0), rt.V.int(3)]), rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.vector2New([rt.V.int((-2)), rt.V.int(5)])]));
     rt.method(vs, "sort_custom", [rt.callable((x, y) => {
       return rt.ops.lt(rt.attribute(x, "y"), rt.attribute(y, "y"));
     })]);

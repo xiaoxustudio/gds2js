@@ -8,7 +8,7 @@ export class Main extends SceneTree {
     let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
     print(rt.show(rt.V.str("n1 ")), rt.show(rt.method(a, "insert", [rt.V.int(0), rt.V.int(9)])), rt.show(rt.V.str(" ")), rt.show(a));
     print(rt.show(rt.V.str("n2 ")), rt.show(rt.method(a, "insert", [rt.V.int(99), rt.V.int(8)])), rt.show(rt.V.str(" ")), rt.show(a));
-    print(rt.show(rt.V.str("n3 ")), rt.show(rt.method(a, "insert", [rt.ops.neg(rt.V.int(99)), rt.V.int(8)])), rt.show(rt.V.str(" ")), rt.show(a));
+    print(rt.show(rt.V.str("n3 ")), rt.show(rt.method(a, "insert", [rt.V.int((-99)), rt.V.int(8)])), rt.show(rt.V.str(" ")), rt.show(a));
     print(rt.show(rt.V.str("n4 ")), rt.show(rt.method(a, "insert", [rt.V.int(3), rt.V.int(7)])), rt.show(rt.V.str(" ")), rt.show(a));
     print(rt.show(rt.V.str("n5 ")), rt.show(rt.method(a, "resize", [rt.V.int(6)])), rt.show(rt.V.str(" ")), rt.show(a));
     print(rt.show(rt.V.str("n6 ")), rt.show(rt.method(a, "resize", [rt.V.int(6)])), rt.show(rt.V.str(" ")), rt.show(rt.method(a, "size", [])));

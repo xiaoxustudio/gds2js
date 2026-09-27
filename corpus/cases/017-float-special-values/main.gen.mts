@@ -7,8 +7,8 @@ export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     print(rt.show(rt.strOf(rt.V.float((0 / 0)))));
     print(rt.show(rt.V.float((1 / 0))));
-    print(rt.show(rt.ops.div(rt.ops.neg(rt.V.float(1)), rt.V.float(0))));
-    print(rt.show(rt.strOf(rt.sqrt(rt.ops.neg(rt.V.float(1))))));
+    print(rt.show(rt.V.float(((-1) / 0))));
+    print(rt.show(rt.strOf(rt.sqrt(rt.V.float((-1))))));
     this.quit();
   }
   

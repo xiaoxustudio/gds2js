@@ -6,7 +6,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let a = rt.vector2New([rt.V.int(3), rt.V.int(4)]);
-    let b = rt.vector2New([rt.ops.neg(rt.V.int(1)), rt.V.int(2)]);
+    let b = rt.vector2New([rt.V.int((-1)), rt.V.int(2)]);
     print(rt.show(rt.vector2Const("ZERO")));
     print(rt.show(rt.vector2Const("ONE")));
     print(rt.show(rt.vector2Const("INF")));
@@ -50,28 +50,28 @@ export class Main extends SceneTree {
     print(rt.show(rt.method(a, "direction_to", [b])));
     print(rt.show(rt.method(a, "angle", [])));
     print(rt.show(rt.method(rt.vector2New([rt.V.int(0), rt.V.int(0)]), "angle", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.ops.neg(rt.V.int(3)), rt.ops.neg(rt.V.int(4))]), "angle", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.int((-3)), rt.V.int((-4))]), "angle", [])));
     print(rt.show(rt.method(a, "angle_to", [b])));
     print(rt.show(rt.method(a, "angle_to", [rt.vector2New([rt.V.int(0), rt.V.int(0)])])));
     print(rt.show(rt.method(a, "angle_to_point", [b])));
     print(rt.show(rt.method(a, "abs", [])));
     print(rt.show(rt.method(a, "sign", [])));
     print(rt.show(rt.method(rt.vector2New([rt.V.int(0), rt.V.int(0)]), "sign", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.ops.neg(rt.V.int(3)), rt.ops.neg(rt.V.int(4))]), "sign", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.ops.neg(rt.V.float(2.5))]), "floor", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.ops.neg(rt.V.float(2.5))]), "ceil", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.ops.neg(rt.V.float(2.5))]), "round", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(2.5), rt.ops.neg(rt.V.float(0.5))]), "round", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(3.5), rt.ops.neg(rt.V.float(3.5))]), "round", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(2.5), rt.ops.neg(rt.V.float(0.5))]), "snapped", [rt.vector2New([rt.V.int(1), rt.V.int(1)])])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.int((-3)), rt.V.int((-4))]), "sign", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.V.float((-2.5))]), "floor", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.V.float((-2.5))]), "ceil", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.V.float((-2.5))]), "round", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(2.5), rt.V.float((-0.5))]), "round", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(3.5), rt.V.float((-3.5))]), "round", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(2.5), rt.V.float((-0.5))]), "snapped", [rt.vector2New([rt.V.int(1), rt.V.int(1)])])));
     print(rt.show(rt.method(rt.vector2New([rt.V.int(1), rt.V.int(1)]), "snapped", [rt.vector2New([rt.V.int(3), rt.V.int(3)])])));
     print(rt.show(rt.method(a, "snapped", [rt.vector2New([rt.V.int(0), rt.V.int(1)])])));
     print(rt.show(rt.method(a, "orthogonal", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.ops.neg(rt.V.int(3)), rt.V.int(4)]), "orthogonal", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.int((-3)), rt.V.int(4)]), "orthogonal", [])));
     print(rt.show(rt.method(a, "rotated", [rt.V.float(1)])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.int(1), rt.V.int(0)]), "rotated", [rt.ops.neg(rt.V.float(1.5707963267949))])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.int(1), rt.V.int(0)]), "rotated", [rt.V.float((-1.5707963267949))])));
     print(rt.show(rt.method(a, "aspect", [])));
-    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.ops.neg(rt.V.float(2.5))]), "aspect", [])));
+    print(rt.show(rt.method(rt.vector2New([rt.V.float(1.5), rt.V.float((-2.5))]), "aspect", [])));
     print(rt.show(rt.method(rt.vector2New([rt.V.int(0), rt.V.int(0)]), "aspect", [])));
     print(rt.show(rt.method(a, "lerp", [b, rt.V.float(0.5)])));
     print(rt.show(rt.method(a, "lerp", [b, rt.V.float(2)])));
@@ -84,7 +84,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.method(rt.vector2Const("INF"), "is_finite", [])));
     print(rt.show(rt.method(rt.vector2Const("INF"), "length", [])));
     print(rt.show(rt.method(rt.vector2Const("INF"), "normalized", [])));
-    print(rt.show(rt.vector2New([rt.V.float(100000000000000000000), rt.ops.neg(rt.V.float(100000000000000000000))])));
+    print(rt.show(rt.vector2New([rt.V.float(100000000000000000000), rt.V.float((-100000000000000000000))])));
     print(rt.show(rt.vector2New([rt.V.float(0.9999999), rt.V.float(0.000001)])));
     print(rt.show(rt.vector2New([rt.V.float(1234567), rt.V.float(0.00001)])));
     print(rt.show(rt.vector2New([rt.V.float(1000000000000000), rt.V.float(1e-7)])));
@@ -97,8 +97,8 @@ export class Main extends SceneTree {
     print(rt.show(rt.asType(a, "Vector2")));
     print(rt.show(rt.ops.div(rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.vector2New([rt.V.int(0), rt.V.int(0)]))));
     print(rt.show(rt.ops.eq(rt.vector2New([rt.V.float(0.1), rt.V.int(0)]), rt.vector2New([rt.V.float(0.100000001), rt.V.int(0)]))));
-    print(rt.show(rt.vector2New([rt.ops.neg(rt.V.float(0)), rt.V.int(5)])));
-    print(rt.show(rt.vector2New([rt.ops.neg(rt.V.float(4e-7)), rt.V.float(6e-7)])));
+    print(rt.show(rt.vector2New([rt.V.float((-0)), rt.V.int(5)])));
+    print(rt.show(rt.vector2New([rt.V.float((-4e-7)), rt.V.float(6e-7)])));
     this.quit();
   }
   
