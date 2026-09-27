@@ -2,6 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
+import { asColor, color, colorCmp, GColor } from "./color";
 import {
   add32,
   asVec2i,
@@ -84,6 +85,11 @@ export const ops = {
     const ziAdd = asVec2i(a);
     const zjAdd = asVec2i(b);
     if (ziAdd && zjAdd) return vector2i(add32(ziAdd.x, zjAdd.x), add32(ziAdd.y, zjAdd.y));
+    // Color 只跟 Color 加（实测混 int 是 Parse Error）：(1,2,3,4)+(0.5,0.5,0.5,0.5) → (1.5, 2.5, 3.5, 4.5)
+    const caAdd = asColor(a);
+    const cbAdd = asColor(b);
+    if (caAdd && cbAdd)
+      return color(caAdd.r + cbAdd.r, caAdd.g + cbAdd.g, caAdd.b + cbAdd.b, caAdd.a + cbAdd.a);
     throw new UnsupportedError("add-operands", `+ 不支持 ${tagName(a.t)} + ${tagName(b.t)}`);
   },
 
@@ -98,6 +104,10 @@ export const ops = {
     const ziSub = asVec2i(a);
     const zjSub = asVec2i(b);
     if (ziSub && zjSub) return vector2i(sub32(ziSub.x, zjSub.x), sub32(ziSub.y, zjSub.y));
+    const caSub = asColor(a);
+    const cbSub = asColor(b);
+    if (caSub && cbSub)
+      return color(caSub.r - cbSub.r, caSub.g - cbSub.g, caSub.b - cbSub.b, caSub.a - cbSub.a);
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("sub-operands", `- 不支持 ${tagName(a.t)} - ${tagName(b.t)}`);
     }
@@ -126,6 +136,15 @@ export const ops = {
     if (zjMul && a.t === Tag.FLOAT) return vec2iToFloat(zjMul, num(a), "mul");
     if (ziMul && isNum(b)) return vector2i(mul32(ziMul.x, intToNum(b.v as IntPayload)), mul32(ziMul.y, intToNum(b.v as IntPayload)));
     if (zjMul && isNum(a)) return vector2i(mul32(zjMul.x, intToNum(a.v as IntPayload)), mul32(zjMul.y, intToNum(a.v as IntPayload)));
+    // Color 的乘法实测三种都行：Color*Color 逐分量、Color*标量、标量*Color（(1,2,3,4)*2 → (2,4,6,8)）
+    const caMul = asColor(a);
+    const cbMul = asColor(b);
+    if (caMul && cbMul)
+      return color(caMul.r * cbMul.r, caMul.g * cbMul.g, caMul.b * cbMul.b, caMul.a * cbMul.a);
+    if (caMul && isNum(b))
+      return color(caMul.r * num(b), caMul.g * num(b), caMul.b * num(b), caMul.a * num(b));
+    if (cbMul && isNum(a))
+      return color(cbMul.r * num(a), cbMul.g * num(a), cbMul.b * num(a), cbMul.a * num(a));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
     }
@@ -152,6 +171,13 @@ export const ops = {
       const k = intToNum(b.v as IntPayload);
       return vector2i(div32(ziDiv.x, k), div32(ziDiv.y, k));
     }
+    // Color 的除法实测同乘法三种口径，且 `/0.0` 给 inf 而不是除零错（实测 (1,2,3,4)/0.0 → (inf, inf, inf, inf)）
+    const caDiv = asColor(a);
+    const cbDiv = asColor(b);
+    if (caDiv && cbDiv)
+      return color(caDiv.r / cbDiv.r, caDiv.g / cbDiv.g, caDiv.b / cbDiv.b, caDiv.a / cbDiv.a);
+    if (caDiv && isNum(b)) return color(caDiv.r / num(b), caDiv.g / num(b), caDiv.b / num(b), caDiv.a / num(b));
+    if (cbDiv && isNum(a)) return color(cbDiv.r / num(a), cbDiv.g / num(a), cbDiv.b / num(a), cbDiv.a / num(a));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
     }
@@ -211,6 +237,9 @@ export const ops = {
     const ziNeg = asVec2i(a);
     // 实测 -Vector2i.MIN 还是 -2147483648（回绕），不是正数
     if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
+    // 实测 -Color(1,-2,0,0.5) → (0.0, 3.0, 1.0, 0.5)：一元负号是「反色」，且 alpha 原样留着
+    const caNeg = asColor(a);
+    if (caNeg) return color(1 - caNeg.r, 1 - caNeg.g, 1 - caNeg.b, caNeg.a);
     if (!isNum(a)) {
       throw new UnsupportedError("neg-operands", `- 不支持 ${tagName(a.t)}`);
     }
@@ -328,6 +357,8 @@ function compare(a: Variant, b: Variant): number {
   const wa3 = asVec3(a);
   const wb3 = asVec3(b);
   if (wa3 && wb3) return vec3Cmp(wa3, wb3);
+  // Color 压根没有大小（实测 `c1 < c2` / `>` 都是 Parse Error），问到即响
+  if (asColor(a) !== null || asColor(b) !== null) colorCmp();
   const ziCmp = asVec2i(a);
   const zjCmp = asVec2i(b);
   if (ziCmp && zjCmp) return vec2iCmp(ziCmp, zjCmp);

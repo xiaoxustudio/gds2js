@@ -8,6 +8,7 @@ import { isLess } from "./ops";
 import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
+import { colorMethod, colorRead, colorWrite, GColor } from "./color";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -48,6 +49,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
+    if (inner instanceof GColor) return colorMethod(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -324,6 +326,8 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
+  // Color 的下标与属性读同一张嘴（实测 c[0]、c["r"]、c["h"]、c["r8"] 都能读）
+  if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
@@ -339,6 +343,8 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
   const vec2i = base.t === Tag.OBJECT && base.v instanceof GVector2i ? (base.v as GVector2i) : null;
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
+  const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
+  if (col !== null) return colorWrite(col, V.str(key), value, "prop");
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",
@@ -358,6 +364,9 @@ export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant |
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector2i) {
     return vec2iWrite(base.v as GVector2i, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GColor) {
+    return colorWrite(base.v as GColor, idx, value, "index");
   }
   setIndex(base, idx, value);
   return null;
@@ -413,6 +422,9 @@ export function attribute(raw: unknown, name: string): unknown {
     const vec2i = obj.v instanceof GVector2i ? (obj.v as GVector2i) : null;
     // 实测 Vector2i 的分量读出来是 int（`w["y"]` → 2、`w.x` → 2，不是 2.0）
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
+    // Color 的 r/g/b/a 与派生的 h/s/v、字节族 r8/... 都在同一张槽位表里（实测都可读）
+    const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
+    if (col !== null) return colorRead(col, V.str(name), "prop");
     const inner = obj.v as Record<string, unknown>;
     if (name in inner) return inner[name];
   }

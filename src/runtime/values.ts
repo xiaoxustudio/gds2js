@@ -4,6 +4,7 @@ import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
+import { asColor, color, colorCmp, GColor } from "./color";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -83,6 +84,10 @@ function keyOfIn(v: Variant, path: unknown[]): string {
       // Vector2i 同（实测 p7/p17：`d[Vector2i(1,2)]` 与 `d[Vector2i(1.7,2.2)]` 是同一格）
       const vec2i = asVec2i(v);
       if (vec2i) return `x:${String(vec2i.x)},${String(vec2i.y)}`;
+      // Color 同样按值分格（实测 096：d[Color(1,0,0,1)] 与新建的等值 Color 命中同一格）
+      const col = asColor(v);
+      if (col)
+        return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
       break;
     }
     default:
@@ -107,6 +112,7 @@ export type ElemKind =
   | "Vector2"
   | "Vector3"
   | "Vector2i"
+  | "Color"
   | "Array"
   | "Dictionary";
 
@@ -118,6 +124,7 @@ export function isElemKind(name: string): name is ElemKind {
     name === "Vector2" ||
     name === "Vector3" ||
     name === "Vector2i" ||
+    name === "Color" ||
     name === "Array" ||
     name === "Dictionary"
   );
@@ -148,6 +155,9 @@ export function elemDefault(kind: ElemKind): Variant {
       return vector3(0, 0, 0);
     case "Vector2i":
       return vector2i(0, 0);
+    // 实测 Array[Color] resize 填的是 (0.0, 0.0, 0.0, 1.0)（alpha 是 1）
+    case "Color":
+      return color(0, 0, 0, 1);
     case "Array":
       return V.array(new GArray());
     case "Dictionary":
@@ -200,6 +210,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       return v.t === Tag.OBJECT && v.v instanceof GVector3 ? v : null;
     case "Vector2i":
       return v.t === Tag.OBJECT && v.v instanceof GVector2i ? v : null;
+    case "Color":
+      return v.t === Tag.OBJECT && v.v instanceof GColor ? v : null;
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
     case "Dictionary":
@@ -545,7 +557,11 @@ export class GArray {
             ? (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2)
             : allVec3
               ? (a: Variant, b: Variant) => vec3Cmp(asVec3(a) as GVector3, asVec3(b) as GVector3)
-              : (a: Variant, b: Variant) => vec2iCmp(asVec2i(a) as GVector2i, asVec2i(b) as GVector2i);
+              : (a: Variant, b: Variant) => {
+                  // Color 之间没有顺序（实测 `c1 < c2` 是 Parse Error），sort() 只能响亮报缺
+                  if (asColor(a) !== null && asColor(b) !== null) colorCmp();
+                  return vec2iCmp(asVec2i(a) as GVector2i, asVec2i(b) as GVector2i);
+                };
     this.items = [...this.items].sort(cmp);
   }
 
@@ -1362,6 +1378,23 @@ export function strFloat(n: number): string {
  *   `Vector2(-0.0000004, …)`               → `(-0.0, …)`（非零但舍到 0 时**保留**负号）
  * 分量是 float32，所以 ≥2^23 的值一律是整数、走第二条路，两者不会在同一分量上打架。
  */
+/**
+ * Color 分量的打印格式：与 strVec2 同一套规则但只有 **4 位小数**（实测
+ * `print(Color(1.0/3.0, 0.1, 0.123456789, 1.0))` → `(0.3333, 0.1, 0.1235, 1.0)`），
+ * 两条实测差别：
+ *  - **恰好 -0.0 也保留负号**（`Color(1/3, 1e-5, -1e-5, -0.0)` → `(0.3333, 0.0, -0.0, -0.0)`，
+ *    Vector2 同位置给 `0.0`）；
+ *  - 舍到零的非零值同样留负号（-1e-5 → `-0.0`），1e20 这类整数分量仍走 strFloat 的展开。
+ */
+export function strColor(n: number): string {
+  if (Number.isNaN(n)) return "nan";
+  if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
+  if (n === 0) return Object.is(n, -0) ? "-0.0" : "0.0";
+  if (Number.isInteger(n)) return strFloat(n);
+  const t = n.toFixed(4).replace(/0+$/, "");
+  return t.endsWith(".") ? `${t}0` : t;
+}
+
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -1574,6 +1607,10 @@ export function show(v: Variant): string {
       if (inner instanceof GVector2i) {
         return `(${String(inner.x)}, ${String(inner.y)})`;
       }
+      // Color 另有一套 4 位小数格式（实测 (0.3333, 0.1, 0.1235, 1.0)），且 -0.0 保留负号
+      if (inner instanceof GColor) {
+        return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
+      }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }
     default:
@@ -1605,19 +1642,36 @@ export function valueEq(a: Variant, b: Variant): boolean {
         ? "Vector3"
         : asVec2i(x) !== null
           ? "Vector2i"
-          : tagName(x.t);
+          : asColor(x) !== null
+            ? "Color"
+            : tagName(x.t);
   const a2 = asVec2(a);
   const b2 = asVec2(b);
   const a3 = asVec3(a);
   const b3 = asVec3(b);
   const ai = asVec2i(a);
   const bi = asVec2i(b);
-  if (a2 !== null || b2 !== null || a3 !== null || b3 !== null || ai !== null || bi !== null) {
+  const ac = asColor(a);
+  const bc = asColor(b);
+  if (
+    a2 !== null ||
+    b2 !== null ||
+    a3 !== null ||
+    b3 !== null ||
+    ai !== null ||
+    bi !== null ||
+    ac !== null ||
+    bc !== null
+  ) {
     if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
     if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
     if (ai !== null && bi !== null) return ai.x === bi.x && ai.y === bi.y;
+    // Color 与别的类型比 == 也是当场炸（实测 `c == 1`、`c == Vector2(...)`），只有 null 给 false
+    if (ac !== null && bc !== null)
+      return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
     // 只有跟 null 比保留 false（实测三种向量都一样：`w == null` 假、`w != null` 真）
-    if (((a2 !== null || a3 !== null || ai !== null ? b : a) as Variant).t === Tag.NIL) return false;
+    if (((a2 !== null || a3 !== null || ai !== null || ac !== null ? b : a) as Variant).t === Tag.NIL)
+      return false;
     // Vector2 与 Vector3 混比也炸（实测 `Invalid operands 'Vector3' and 'Vector2' in operator '=='.`）
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${nameOf(a)}' and '${nameOf(b)}' in operator '=='.`);
   }
@@ -1688,6 +1742,9 @@ export function valueSame(a: Variant, b: Variant): boolean {
       }
       if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
+      if (a.v instanceof GColor && b.v instanceof GColor) {
+        return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
       return a.v === b.v;
     default:
