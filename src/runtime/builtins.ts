@@ -1,5 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToNum, tagName, wrap64, type IntPayload, type Variant } from "./tags";
 import { decimalToDouble } from "../lower/double";
 import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
 
@@ -25,33 +25,89 @@ export function strOf(v: Variant): Variant {
  *   int(float) 向零截断（3.7→3、-3.7→-3、-0.5→0）；**2^53 以上仍精确**（`9007199254740993.0`→`9007199254740994`，
  *   该 double 本身就是 ...994）；`nan` / `±inf` / `|x| ≥ 2^63` 一律**饱和成 -9223372036854775808**（5 种输入同值）。
  *   int(bool)→1/0；float(bool)→1.0/0.0；float(int)→`.0` 形式。
- *   int(String) 走 Godot 的 `to_int()` 规则：跳前导空白与符号，之后**数字累加、非数字忽略、遇 `.` 停止**
- *     —— 所以 `0x10`→10（x 被忽略）、`1e3`→13（e 被忽略）、`3.9`→3（. 停止）、`12x`→12、`abc`/`""`→0、` 42 `→42。
+ *   int(String) 就是 {@link strToInt} 那条单趟扫描（**数字累加、非数字跳过、`-` 只在见过数字之前翻符号、遇 `.` 停止**）：
+ *     所以 `0x10`→10（x 被忽略）、`1e3`→13（e 被忽略）、`3.9`→3（. 停止）、`12x`→12、`abc`/`""`→0、` 42 `→42。
  *   float(String) 是普通浮点前缀解析（`.5`→0.5、`-2.5e2`→-250.0、`1e3`→1000.0、`0x10`→0.0、`abc`→0.0）。
  *   Vector2 / Array 等传给 int()/float() 在 Godot 是 Parse Error，我们保持响亮拒绝。
  */
 const INT64_MIN = BigInt("-9223372036854775808");
+const INT64_MAX = BigInt("9223372036854775807");
 const TWO_63 = 2 ** 63;
 
-/** 见上方 int(String) 规则注释。 */
-function strToInt(s: string): bigint {
-  let i = 0;
-  while (i < s.length && (s[i] === " " || s[i] === "\t" || s[i] === "\n" || s[i] === "\r")) i++;
-  let neg = false;
-  if (s[i] === "-") {
-    neg = true;
-    i++;
-  } else if (s[i] === "+") {
-    i++;
-  }
+/** 十进制累加的饱和闸门，见 {@link strToInt} 的实测说明 */
+const DEC_SATURATE_AT = 10n ** 18n;
+
+/**
+ * `to_int()` / `int(字符串)` 的算式（用例 104 的 118 个值 + 6 组同形探针，口径见 SEMANTICS S127–S129）。
+ * **单趟扫描**，每个字符只有四种待遇：
+ *  - 数字：`acc = acc*10 + d`，**int64 回绕**（Godot 那边就是有符号溢出）；
+ *  - `-`：**只在还没见过任何数字时**翻一次符号，可反复翻 —— `"a-5"`→-5、`"a--5"`→5、
+ *    `"-a-2"`→2、`"+ -3"`→-3，而 `"5-3"`→53、`"1--2"`→12（见过数字就再也不翻了）；
+ *  - `.`：**立刻停止**（`"1.5"`→1、`"x.5"`→0、`"-1.5x2"`→-1），不是把后面的数字也攒上；
+ *  - 其余（空白、字母、下划线、`+`）：一律跳过且不断扫描 —— 所以 `"\r\n-5"`→-5、
+ *    非断空格也算普通跳过项，前导空白**不需要**单独一轮循环处理。
+ *
+ * 溢出是**两段式**的，这条最容易凭直觉写错：
+ *  - 19 位以内老老实实回绕：`"9223372036854775808"`(2^63) → INT64_MIN、
+ *    `"9500000000000000009"` → -8946744073709551607、`"9999999999999999991"` → -8446744073709551625；
+ *  - 但**乘 10 之前** `|acc|` 已达 `10^18` 就饱和：`"10000000000000000000"`(10^19) → INT64_MAX
+ *    （不是绕成 -8446744073709551616），负的那侧给 INT64_MIN。闸门量到个位：
+ *    `|acc| = 10^18-1` 仍回绕，`10^18` 才饱和 —— 跟 `INT64_MAX/10` 那个「防溢出」常数**不是一个数**，
+ *    别拿它当判据（`"9223372036854775811"` 实测绕成 -9223372036854775805，按 INT64_MAX/10 就该饱和）。
+ *  - 饱和看的是**回绕之后**的绝对值：`"99999999999999999999"` 第 19 位先绕成 -8.4e18，第 20 位才撞上闸门。
+ *
+ * 符号是「先攒无符号累加值、最后再取负」，取负同样回绕：`"-9223372036854775809"` → INT64_MAX。
+ */
+export function strToInt(s: string): bigint {
   let acc = 0n;
-  for (; i < s.length; i++) {
+  let neg = false;
+  let seenDigit = false;
+  let sat = false;
+  for (let i = 0; i < s.length; i++) {
     const ch = s[i]!;
     if (ch === ".") break;
-    if (ch >= "0" && ch <= "9") acc = acc * 10n + BigInt(ch.charCodeAt(0) - 48);
+    if (ch >= "0" && ch <= "9") {
+      seenDigit = true;
+      if (sat) continue;
+      if (acc >= DEC_SATURATE_AT || acc <= -DEC_SATURATE_AT) {
+        sat = true;
+        continue;
+      }
+      acc = wrap64(acc * 10n + BigInt(ch.charCodeAt(0) - 48));
+    } else if (ch === "-" && !seenDigit) {
+      neg = !neg;
+    }
   }
-  return neg ? -acc : acc;
+  if (sat) return neg ? INT64_MIN : INT64_MAX;
+  return neg ? wrap64(-acc) : acc;
 }
+
+/**
+ * `hex_to_int()`（实测 40 点）：**整串必须合式**才给值，否则 0 —— 与 `to_int()` 是两条完全不相像的式子。
+ * 式子是「可选一个 `-`、可选 `0x`/`0X` 前缀、其后全是十六进制位」，别的形状（`"+ff"`、`" 0x10"`、
+ * `"0x10 "`、`"--ff"`、`"-0x-10"`、`"0x"`、`""`）一律 0。
+ * **溢出与十进制那侧相反：这里是饱和而不是回绕**（实测 `0xFFFFFFFFFFFFFFFF` → INT64_MAX、
+ * `0x8000000000000000` → INT64_MAX，而十进制的 2^63 是给 INT64_MIN 的）；负的那侧饱和到 INT64_MIN。
+ * `"0b101"` → 45313 是个陷阱：`0,b,1,0,1` 本身就全是十六进制位，压根没有前缀要剥。
+ */
+export function strHexToInt(s: string): bigint {
+  const m = /^(-?)(0[xX])?([0-9a-fA-F]+)$/.exec(s);
+  if (m === null) return 0n;
+  const v = BigInt("0x" + (m[3] as string));
+  if (v > INT64_MAX) return m[1] === "-" ? INT64_MIN : INT64_MAX;
+  return m[1] === "-" ? -v : v;
+}
+
+/** `is_valid_int()`：整串 `[+-]?数字+`。实测 `"+42"`、`"007"` 真，`" 42 "`、`"0x1"`、`"1_000"`、`"+-5"`、`"--5"`、`"+ 5"` 假；**不看范围**（`"9223372036854775808"` 也算真） */
+export const INT_RE = /^[+-]?[0-9]+$/;
+/** `is_valid_hex_number()` 默认式子：可带**一个**正负号（`"+ff"` 实测为真），**不**带前缀 */
+export const HEX_RE = /^[+-]?[0-9a-fA-F]+$/;
+/**
+ * 参数为真时的式子（Godot 那侧叫 `with_alpha_prefix`，实测与「允许带符号」无关）：
+ * 必须带**小写** `0x`，可再带一个正负号 —— 实测真 `{0x10, -0x10, +0x10}`、假 `{0X1f, -0X10, +-0x10, ff, -ff, 0xg, " 0x10"}`。
+ * 注意它与 `hex_to_int()` 不同调：`"+ff"` 在这儿是**真**，走 `hex_to_int()` 却是 0。
+ */
+export const HEX_PREFIX_RE = /^[+-]?0x[0-9a-fA-F]+$/;
 
 /** float(String)：取前导浮点数，取不到就是 0（实测 `0x10`→0.0、`abc`→0.0）。 */
 export function strToFloat(s: string): number {

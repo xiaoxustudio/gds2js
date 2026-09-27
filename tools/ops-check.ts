@@ -6,7 +6,7 @@
  * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
-import { hashDjb2, lengthOf, range, rangeSeq, variantHash } from "../src/runtime/builtins";
+import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
@@ -1779,6 +1779,63 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("103", "StringName 走同一条降格路", String((method(V.stringName("1.5"), "to_float", []) as Variant).v), "1.5");
   shouldThrow("103", "to_float 不收实参", () => method(V.str("1.5"), "to_float", [V.int(1)]));
   shouldThrow("103", "is_valid_float 不收实参", () => method(V.str("1"), "is_valid_float", [V.int(1)]));
+}
+
+// ---- 104 字符串转整数一族：to_int / is_valid_int / hex_to_int / is_valid_hex_number
+// 期望值来自用例 104 的 godot.txt（118 个值）与 6 组同形探针；饱和那几条 Godot 另打 stderr，
+// 产物复现不了，所以只在下面这里钉、不进语料。
+{
+  const TI = (s: string) => String((method(V.str(s), "to_int", []) as Variant).v);
+  const VI = (s: string) => String(method(V.str(s), "is_valid_int", []).v);
+  const HI = (s: string) => String((method(V.str(s), "hex_to_int", []) as Variant).v);
+  const VH = (s: string, sign = false) => String(method(V.str(s), "is_valid_hex_number", sign ? [V.bool(true)] : []).v);
+  const toI = (s: string) => String(toInt(V.str(s)).v);
+
+  eq("104", "to_int 与 int(字符串) 同值（跳过非数字继续攒）", `${TI("42")}|${TI("-42")}|${TI("+42")}|${TI(" 42 ")}|${TI("42abc")}`, "42|-42|42|42|42");
+  eq("104", "1e5 → 15、0x10 → 10、0b101 → 101", `${TI("1e5")}|${TI("0x10")}|${TI("0b101")}`, "15|10|101");
+  eq("104", "遇 `.` 就停（不是把后面的数字也攒上）", TI("1.5"), "1");
+  eq("104", "取不到数字给 0", `${TI("abc")}|${TI("")}|${TI("f f")}`, "0|0|0");
+  eq("104", "溢出按 int64 回绕", `${TI("9223372036854775808")}|${TI("-9223372036854775809")}`, "-9223372036854775808|9223372036854775807");
+  eq("104", "is_valid_int 严格整串、不看范围", `${VI("42")}|${VI("+42")}|${VI("007")}|${VI("9223372036854775808")}`, "true|true|true|true");
+  eq("104", "is_valid_int 一律拒空格/前缀/下划线/小数/空", `${VI(" 42 ")}|${VI("0x10")}|${VI("1_000")}|${VI("1.5")}|${VI("")}|${VI("-")}`, "false|false|false|false|false|false");
+  eq("104", "hex_to_int 认 0x / 0X 前缀与负号", `${HI("ff")}|${HI("0x10")}|${HI("0X1f")}|${HI("-ff")}|${HI("-0x10")}|${HI("abc")}`, "255|16|31|-255|-16|2748");
+  eq("104", "0b101 整串读作 0xb101", HI("0b101"), "45313");
+  // 不合式的那批在 Godot 侧还会往 stderr 打一条 core/string 的 ERROR（产物不复现，所以只能钉在这里）
+  eq("104", "不合式的十六进制串一律 0（不是取前缀）", `${HI("1.5")}|${HI("f f")}|${HI("+ff")}|${HI("zz")}|${HI("0x")}|${HI("")}`, "0|0|0|0|0|0");
+  eq("104", "is_valid_hex_number 默认可带负号、不带前缀", `${VH("ff")}|${VH("-ff")}|${VH("1e5")}|${VH("0x10")}|${VH("zz")}|${VH("")}`, "true|true|true|false|false|false");
+  eq("104", "参数为真时反过来：必须带 0x、不认负号与前缀大写", `${VH("0x10", true)}|${VH("-ff", true)}|${VH("ff", true)}|${VH("0X1f", true)}`, "true|false|false|false");
+  eq("104", "StringName 也走同一条降格路", String((method(V.stringName("ff"), "hex_to_int", []) as Variant).v), "255");
+  // ---- 符号那条：`-` 只在「还没见过数字」时翻一次，可反复翻（实测 n13/n14 的 13 个点）
+  eq("104", "见过数字之前 `-` 才翻符号（垃圾字符不断它）", `${TI("a-5")}|${TI("a--5")}|${TI("-a-2")}|${TI("+ -3")}`, "-5|5|2|-3");
+  eq("104", "见过数字之后 `-` 彻底惰性", `${TI("5-3")}|${TI("1--2")}`, "53|12");
+  eq("104", "符号连写按奇偶翻", `${TI("--5")}|${TI("---5")}|${TI("+-5")}|${TI("-+5")}|${TI("- 5")}|${TI("-- 5")}|${TI("--1.9")}`, "5|-5|-5|-5|-5|5|1");
+  eq("104", "空白/控制符/前缀里的点都只是被跳过", `${TI(" -5")}|${TI("x-5")}|${TI("e-5")}`, "-5|-5|-5");
+  // ---- `.` 立刻停扫（实测 6 个点）
+  eq("104", "遇 `.` 立刻停：点后面的数字与符号都不算", `${TI("1.5")}|${TI(".-5")}|${TI("x.5")}|${TI("-1.5x2")}|${TI("1.5.6")}|${TI("1 .5")}`, "1|0|0|-1|1|1");
+  // ---- 溢出两段式：19 位以内回绕、|acc| 撞上 10^18 才饱和（实测 21 个点，含边界 10^18-1 / 10^18）
+  eq("104", "19 位再大也是回绕，不是饱和", `${TI("9500000000000000009")}|${TI("9999999999999999991")}|${TI("9223372036854775811")}|${TI("9223372036854775801")}`, "-8946744073709551607|-8446744073709551625|-9223372036854775805|9223372036854775801");
+  eq("104", "2^63 与 -2^63 两侧都还是回绕", `${TI("9223372036854775808")}|${TI("-9223372036854775808")}|${TI("-9223372036854775809")}|${TI("-9223372036854775810")}`, "-9223372036854775808|-9223372036854775808|9223372036854775807|9223372036854775806");
+  // 这几条 Godot 会另往 stderr 打 `Cannot represent … as a 64-bit signed integer`（core/string/ustring.cpp），
+  // 那行产物复现不了，所以钉在这里而不是语料里（同 step 43 的处置）。
+  eq("104", "撞上 10^18 闸门就饱和（且 Godot 侧另打一行 ERROR，故不进语料）", `${TI("10000000000000000000")}|${TI("-10000000000000000000")}|${TI("18446744073709551615")}|${TI("18446744073709551617")}|${TI("99999999999999999999")}`, "9223372036854775807|-9223372036854775808|9223372036854775807|9223372036854775807|9223372036854775807");
+  eq("104", "前导零不吃闸门（21 个字符攒出来还是 42）", TI("0000000000000000000042"), "42");
+  eq("104", "全局 int(字符串) 与 to_int() 同路", `${toI("a-5")}|${toI("9223372036854775808")}|${toI("9500000000000000009")}|${toI("--1.9")}|${toI("ffffffffffffffff")}`, "-5|-9223372036854775808|-8946744073709551607|1|0");
+  // ---- hex_to_int：形状严格 + **饱和**（与十进制那侧的回绕正好相反，实测 18 个点）
+  eq("104", "hex_to_int 也是整串读作十六进制", `${HI("0x1f")}|${HI("-0x1f")}|${HI("0")}|${HI("-0")}|${HI("0x0")}`, "31|-31|0|0|0");
+  eq("104", "hex_to_int 越界是**饱和**（十进制那侧是回绕）", `${HI("7fffffffffffffff")}|${HI("-0x7fffffffffffffff")}`, "9223372036854775807|-9223372036854775807");
+  eq("104", "hex_to_int 越过 INT64_MAX 饱和到两端", `${HI("ffffffffffffffff")}|${HI("8000000000000000")}|${HI("0x10000000000000000")}|${HI("-0x8000000000000000")}`, "9223372036854775807|9223372036854775807|9223372036854775807|-9223372036854775808");
+  eq("104", "不合式的形状整个给 0（不取前缀）", `${HI("+ff")}|${HI("--ff")}|${HI(" 0x10")}|${HI("0x10 ")}|${HI("-0x-10")}|${HI("0x")}`, "0|0|0|0|0|0");
+  // ---- is_valid_* 的符号口径（实测 24 个点）
+  eq("104", "is_valid_hex_number 默认接受一个正负号", `${VH("+ff")}|${VH("+1")}|${VH("--ff")}|${VH("++ff")}|${VH(" ff")}|${VH("-1.5")}`, "true|true|false|false|false|false");
+  eq("104", "带参数那条也要前缀、符号仍可带一个", `${VH("-0x10", true)}|${VH("+0x10", true)}|${VH("-0X10", true)}|${VH("+-0x10", true)}|${VH(" 0x10", true)}|${VH("0x0", true)}`, "true|true|false|false|false|true");
+  eq("104", "is_valid_int 不吃连写符号与空格", `${VI("+-5")}|${VI("--5")}|${VI("+ 5")}|${VI("00")}|${VI("1 .5")}|${VI("x-5")}`, "false|false|false|true|false|false");
+  eq("104", "StringName 那侧实测 5 点全走同一条路", `${String((method(V.stringName("42"), "to_int", []) as Variant).v)}|${String(method(V.stringName("42"), "is_valid_int", []).v)}|${String(method(V.stringName("0x10"), "is_valid_hex_number", [V.bool(true)]).v)}|${String(method(V.stringName("42"), "is_valid_hex_number", []).v)}`, "42|true|true|true");
+  shouldThrow("104", "to_int 不收实参", () => method(V.str("1"), "to_int", [V.int(1)]));
+  shouldThrow("104", "is_valid_int 不收实参", () => method(V.str("1"), "is_valid_int", [V.bool(true)]));
+  shouldThrow("104", "hex_to_int 不收实参", () => method(V.str("ff"), "hex_to_int", [V.bool(true)]));
+  shouldThrow("104", "is_valid_hex_number 最多一个参数", () =>
+    method(V.str("0x1"), "is_valid_hex_number", [V.bool(true), V.bool(true)]),
+  );
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

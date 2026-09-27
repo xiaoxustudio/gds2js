@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
-import { hashDjb2, strToFloat } from "./builtins";
+import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat } from "./builtins";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
@@ -327,6 +327,30 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `is_valid_float() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.bool(/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]*)?$/.test(s));
+        }
+        // 实测与全局 int(字符串) 一字不差（31 个点全等），所以直接复用同一条 strToInt
+        case "to_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `to_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(strToInt(s));
+        case "is_valid_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(INT_RE.test(s));
+        case "hex_to_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `hex_to_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(strHexToInt(s));
+        // is_valid_hex_number 的那个参数实测是「换成必须带 0x 前缀」，而不是「允许带符号」
+        case "is_valid_hex_number": {
+          if (args.length > 1) {
+            throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);
+          }
+          const withPrefix = args.length === 1 ? boolArg(args, 0, "is_valid_hex_number") : false;
+          return V.bool(withPrefix ? HEX_PREFIX_RE.test(s) : HEX_RE.test(s));
         }
         // 实测 `&"abc".hash()` 与 `"abc".hash()` 同为 193485963：StringName 的 hash 就是内容的 hash，
         // 所以两条路共用 hashDjb2（算式见 builtins.ts 里那条 15 点的实测注释）
