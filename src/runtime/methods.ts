@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
+import { hashDjb2 } from "./builtins";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
@@ -302,6 +303,13 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        // 实测 `&"abc".hash()` 与 `"abc".hash()` 同为 193485963：StringName 的 hash 就是内容的 hash，
+        // 所以两条路共用 hashDjb2（算式见 builtins.ts 里那条 15 点的实测注释）
+        case "hash":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `hash() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(hashDjb2(s));
         // 实测与标准 MD5（RFC 1321）逐向量一致，走自带的 UTF-8 版本，不引 node:crypto
         case "md5_text":
           if (args.length !== 0) {

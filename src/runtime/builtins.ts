@@ -102,6 +102,38 @@ export function toBool(v: Variant): Variant {
   return V.bool(truthyOf(v));
 }
 
+/**
+ * Godot 的字符串哈希（实测逆出的算式）：**djb2、按 UTF-32 码点走、每步回绕 32 位、结果按无符号印**。
+ * `h = 5381; h = (h * 33 + codepoint) mod 2³²`。15 个实测点 0 处不一致，其中三条是关键判别：
+ *  - `"你好"` → `6553378`、`"\u{1F600}"` → `306085`、`"\u{10000}"` → `243109`：
+ *    吃的是**码点**而不是 UTF-16 码元（代理对会被合成一个 0x1F600）；
+ *  - 26 个字母 → `3927029252`（> 2³¹ 仍印正数）→ 无符号 32 位；
+ *  - `""` → `5381`（种子原样），`&"abc".hash()` 与 `"abc".hash()` 同为 `193485963`（StringName 就是内容的 hash）。
+ * 乘法最大到 `(2³²−1)*33 + 0x10FFFF ≈ 1.4e11`，远小于 2⁵³，所以 double 里逐步取模是精确的。
+ */
+export function hashDjb2(s: string): number {
+  let h = 5381;
+  for (const ch of s) h = (h * 33 + (ch.codePointAt(0) as number)) % 4294967296;
+  return h;
+}
+
+/**
+ * 全局 `hash()`。实测：字符串族走上面那条 djb2、`hash(true)` → 1、`hash(false)` → 0、`hash(null)` → 0。
+ * 其余类型（int / float / 数组 / 字典 / 向量 / Color / 对象）走的是 Godot 的 murmur3 那条链 ——
+ * 实测 `hash(5)` → 1788267159、`hash(0)` → 720020139、`hash(2.5)` → 2779676868，算式还没逆出来，
+ * 所以这里响亮报缺，不拿 JS 自己的一套顶替。
+ */
+export function variantHash(args: Variant[]): Variant {
+  if (args.length !== 1) {
+    throw new GodotRuntimeError("arity", `hash() 只接受 1 个参数（收到 ${args.length} 个）`);
+  }
+  const v = args[0] as Variant;
+  if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(hashDjb2(v.v as string));
+  if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
+  if (v.t === Tag.NIL) return V.int(0);
+  throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：Godot 那侧是非字符串的 murmur3 链，算式未逆出`);
+}
+
 export function sqrt(v: Variant): Variant {
   return V.float(Math.sqrt(num(v)));
 }

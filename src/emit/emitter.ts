@@ -141,6 +141,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   int: (a) => `rt.toInt(${a.join(", ")})`,
   bool: (a) => `rt.toBool(${a.join(", ")})`,
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
+  // 实参个数交给运行时把门（`hash()` 少/多参在 Godot 是解析期错）
+  hash: (a) => `rt.variantHash([${a.join(", ")}])`,
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,

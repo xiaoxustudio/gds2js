@@ -6,7 +6,7 @@
  * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
-import { lengthOf, range, rangeSeq } from "../src/runtime/builtins";
+import { hashDjb2, lengthOf, range, rangeSeq, variantHash } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { md5Hex } from "../src/runtime/md5";
 import { callable } from "../src/runtime/object";
@@ -1481,6 +1481,41 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("096", "Color 数组不能 sort（没有顺序）", () => {
     GArray.of([color(1, 0, 0, 1), color(0, 1, 0, 1)]).sort();
   });
+}
+
+// ---- 098 String.hash() / 全局 hash()：Godot 那条是 djb2、按 UTF-32 码点走、每步回绕 32 位（15+ 实测点）
+{
+  const H = (s: string) => String(hashDjb2(s));
+  const vh = (v: Variant) => String(variantHash([v]).v);
+  eq("098", "空串就是种子", H(""), "5381");
+  eq("098", "单字符", H("a"), "177670");
+  eq("098", "abc 与计划文档里那条实测同值", H("abc"), "193485963");
+  eq("098", "吃码点不吃码元：BMP 中文", H("你好"), "6553378");
+  eq("098", "吃码点不吃码元：一个 emoji", H("\u{1F600}"), "306085");
+  eq("098", "吃码点不吃码元：两个 emoji", H("\u{1F600}\u{1F601}"), "10229318");
+  eq("098", "吃码点不吃码元：组合用字母", H("a\u0301"), "5863879");
+  eq("098", "边界码点 U+FFFF / U+10000", `${H("\uFFFF")}/${H("\u{10000}")}`, "243108/243109");
+  eq("098", "26 个字母溢出 32 位之后仍印无符号", H("abcdefghijklmnopqrstuvwxyz"), "3927029252");
+  eq("098", "43 个字符（多轮回绕）", H("the quick brown fox jumps over the lazy dog"), "2012963070");
+  eq("098", "经典转义那一条", H("\t\n\\\""), "2086810998");
+  eq(
+    "098",
+    "数字串 / 大写 / 空格 / 重复串",
+    [H("0123456789"), H("A"), H(" "), H("abcabc")].join(" "),
+    "995771986 177638 177605 4048076369",
+  );
+  eq("098", "全局 hash(String)", vh(V.str("abc")), "193485963");
+  eq("098", "全局 hash(StringName) 同值", vh(V.stringName("abc")), "193485963");
+  eq("098", "实例方法 hash() 与全局同值", String(method(V.str("abc"), "hash", []).v), "193485963");
+  eq("098", "StringName 的方法也走同一条", String(method(V.stringName("abc"), "hash", []).v), "193485963");
+  eq("098", "hash(true) / hash(false) / hash(null)", `${vh(V.bool(true))}/${vh(V.bool(false))}/${vh(V.nil())}`, "1/0/0");
+  shouldThrow("098", "hash(int) 的 murmur3 链还没逆出来", () => vh(V.int(5)));
+  shouldThrow("098", "hash(float) 同样报缺", () => vh(V.float(2.5)));
+  shouldThrow("098", "hash(数组) 报缺，不拿 JS 自己的一套顶", () => vh(V.array(GArray.of([V.int(1)]))));
+  shouldThrow("098", "hash(Vector2) 报缺", () => vh(vector2(1, 2)));
+  shouldThrow("098", "hash(Color) 报缺", () => vh(color(1, 0, 0, 1)));
+  shouldThrow("098", "hash() 的实参个数必须是 1", () => variantHash([]));
+  shouldThrow("098", "String.hash() 不收实参", () => method(V.str("abc"), "hash", [V.int(1)]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
