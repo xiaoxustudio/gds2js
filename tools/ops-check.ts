@@ -8,6 +8,7 @@
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { hashDjb2, lengthOf, range, rangeSeq, variantHash } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
+import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
 import { callable } from "../src/runtime/object";
 import { index, method, writeIdx, writeProp } from "../src/runtime/methods";
@@ -1736,6 +1737,26 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       "1/false/false",
     );
   }
+}
+
+// ---- 102 浮点字面量的解析：Godot 先把小数位截到 17 位再拼整数除 10^k，两次舍入不是正确舍入
+{
+  // 比较用**数值**而不是十进制串：> 2⁵³ 的 double 会被 JS 印成最短可回读形式（…300 而不是 …256）
+  const D = (t: string, want: number) => String(Math.trunc(parseGdDouble(t)) === want);
+  const DK = (t: string, k: number, want: number) => String(Math.trunc(parseGdDouble(t) * k) === want);
+  eq("102", "9007199254740993.0 → …994（JS 给 …992）", D("9007199254740993.0", 9007199254740994), "true");
+  eq("102", "负号同口径", D("-9007199254740993.0", -9007199254740994), "true");
+  eq("102", "9007199254740993.5 两条路一致（回归位）", D("9007199254740993.5", 9007199254740994), "true");
+  eq("102", "小数截 17 位", DK("0.1234567890123456789", 1e17, 12345678901234568), "true");
+  eq("102", "前导零占小数预算：只剩 11 位有效数字", DK("0.0000001234567890123456789", 1e25, 1234567890100000256), "true");
+  eq("102", "1 后面 54 位小数被截 → 落回 1.0", DK("1.000000000000000083266726846886739642044414197265625", 1e18, 1000000000000000000), "true");
+  eq("102", "100000000000000001.0 两条路一致", D("100000000000000001.0", 100000000000000000), "true");
+  eq("102", "1234567890123456789.0 两条路一致", D("1234567890123456789.0", 1234567890123456768), "true");
+  eq("102", "0.999999999999999999999 截位后就是 1", D("0.999999999999999999999", 1), "true");
+  eq("102", "指数量不参与截位", DK("1e-23", 1e30, 10000000), "true");
+  eq("102", "下划线分隔符照收", D("1_000_000.25", 1000000), "true");
+  eq("102", "无小数点也按同一式子（>2⁵³ 的奇数落回偶数）", D("9007199254740993", 9007199254740992), "true");
+  eq("102", "非数字串仍走 JS 的老路（字面量里遇不到，留着当护栏）", `${parseGdDouble("xyz")}/${parseGdDouble("1e")}`, "NaN/1");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
