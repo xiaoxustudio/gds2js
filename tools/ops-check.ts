@@ -1866,6 +1866,41 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   });
 }
 
+// ---- 113/114 容器变更方法的返回值：void 的那批与给状态码的那批（实测，见 S141–S142）
+{
+  const arr = (...xs: Variant[]) => V.array(GArray.of(xs));
+  const typedArr = (kind: string, ...xs: Variant[]) => stampArray(arr(...xs), kind as never, true);
+  const call = (recv: Variant, name: string, args: Variant[]) => show(method(recv, name, args));
+  const I = (n: number) => V.int(n);
+
+  // insert / resize 给**状态码 int**（0 成功、31 失败），旧实现一律回 nil —— 那是静默错
+  const a1 = arr(I(1), I(2));
+  eq("114", "insert 成功给 0", call(a1, "insert", [I(0), I(9)]), "0");
+  eq("114", "insert 之后数组真的变了", show(a1), "[9, 1, 2]");
+  eq("114", "insert 下标越界给 31 且不动数组", `${call(a1, "insert", [I(99), I(8)])}|${call(a1, "insert", [I(-99), I(8)])}`, "31|31");
+  eq("114", "insert(size) 是尾接、给 0", call(a1, "insert", [I(3), I(7)]), "0");
+  eq("114", "定型数组装不下这个元素也给 31、数组不动", `${call(typedArr("int", I(1), I(2)), "insert", [I(0), V.str("s")])}|${show(typedArr("int", I(1), I(2)))}`, "31|[1, 2]");
+  const a2 = arr(I(1), I(2));
+  eq("114", "resize 扩张给 0、按元素默认值填（未定型是 null）", `${call(a2, "resize", [I(4)])}|${show(a2)}`, "0|[1, 2, <null>, <null>]");
+  eq("114", "resize 同长度是空操作、仍给 0", call(a2, "resize", [I(4)]), "0");
+  eq("114", "resize 收缩给 0", `${call(a2, "resize", [I(1)])}|${show(a2)}`, "0|[1]");
+  // 负数 resize 在 Godot 侧还往 stderr 打一条 cowdata.h 的 Condition（产物复现不了）→ 只钉在这儿
+  eq("114", "resize 负数给 31 且不动数组", `${call(a2, "resize", [I(-1)])}|${show(a2)}`, "31|[1]");
+  // pop 系列给**元素**（空数组给 null），Dictionary.erase 给 bool、Array.erase 是 void
+  const a3 = arr(I(1), I(2), I(3));
+  eq("114", "pop_back / pop_front 给被弹出的元素", `${call(a3, "pop_back", [])}|${call(a3, "pop_front", [])}|${show(a3)}`, "3|1|[2]");
+  eq("114", "空数组 pop 给 null", call(arr(), "pop_back", []), "<null>");
+  eq("114", "pop_at 越界给 null 且不动数组", `${call(a3, "pop_at", [I(9)])}|${show(a3)}`, "<null>|[2]");
+  const onePairDict = () => {
+    const g = new GDict();
+    g.set(I(1), I(2));
+    return V.dict(g);
+  };
+  eq("114", "Dictionary.erase 给 bool（删掉了 true、没有 false）", `${call(onePairDict(), "erase", [I(1)])}|${call(onePairDict(), "erase", [I(9)])}`, "true|false");
+  // void 的那批：Godot 根本不让取它们的返回值（解析期错，见 113），装箱轨统一给 nil
+  eq("113", "void 方法在运行时的返回值统一是 nil", `${call(arr(I(1)), "append", [I(2)])}|${call(arr(I(1)), "clear", [])}|${call(arr(I(1)), "fill", [I(0)])}|${call(arr(I(1), I(2)), "remove_at", [I(0)])}|${call(arr(I(1)), "push_front", [I(0)])}|${call(arr(I(1)), "push_back", [I(2)])}|${call(arr(I(1), I(1)), "erase", [I(1)])}`, "<null>|<null>|<null>|<null>|<null>|<null>|<null>");
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
 if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);

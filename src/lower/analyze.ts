@@ -81,6 +81,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   for (const c of m.innerClasses) checkClass(c, moduleScope, diags);
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
+  checkVoidMethodValues(m, diags);
 
   return diags;
 }
@@ -384,6 +385,148 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   };
 
   for (const body of bodies) walkStmts(body, new Map(), new Map());
+}
+
+/**
+ * Godot 对「取 void 方法的返回值」是**解析期**报错，文本是
+ * `Cannot get return value of call to "append()" because it returns "void".`（实测）。
+ * 我们原先照直编，产物会给出一个值（装箱轨是 `<null>`、裸轨甚至是数组长度）—— 静默错。
+ *
+ * 只在**能证明接收者是容器**时才报：变量的初值是数组/字典字面量，或标注是 `Array`/`Dictionary`
+ * （含定型标注）。一旦该变量被赋成别的形状就把它从表里删掉 —— 宁可漏报，不可误拦合法工程
+ * （自定义类上同名的 `append`/`clear` 不该被这条撞上）。
+ *
+ * 实测的 void 集合：Array 的 `append`/`push_front`/`push_back`/`remove_at`/`clear`/`fill`/`erase`，
+ * Dictionary 的 `clear`。**不是** void 的（别顺手加进来）：`insert` 与 `resize` 给状态码 int（0/31）、
+ * `pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值。
+ */
+const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
+const VOID_DICT_METHODS = new Set(["clear"]);
+
+function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
+  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) bodies.push(f.body);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+
+  /** 变量名 → 容器形状；只在推得出来时进表。 */
+  const shapeOf = (e: Expr): "Array" | "Dictionary" | null => {
+    if (e.kind === "array") return "Array";
+    if (e.kind === "dict") return "Dictionary";
+    return null;
+  };
+
+  for (const body of bodies) {
+    const shapes = new Map<string, "Array" | "Dictionary">();
+    const expr = (e: Expr, discarded: boolean): void => {
+      switch (e.kind) {
+        case "call": {
+          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && !discarded) {
+            const shape = shapes.get(e.callee.obj.name);
+            const set = shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null;
+            if (set !== null && set.has(e.callee.name)) {
+              diags.push({
+                code: "void-method-value",
+                message: `Cannot get return value of call to "${e.callee.name}()" because it returns "void".`,
+                loc: e.loc,
+              });
+            }
+          }
+          expr(e.callee, false);
+          for (const a of e.args) expr(a, false);
+          return;
+        }
+        case "index":
+          expr(e.obj, false);
+          expr(e.index, false);
+          return;
+        case "attribute":
+          expr(e.obj, false);
+          return;
+        case "binary":
+          expr(e.left, false);
+          expr(e.right, false);
+          return;
+        case "unary":
+        case "await":
+        case "is":
+        case "as":
+          expr(e.operand, false);
+          return;
+        case "array":
+          for (const it of e.items) expr(it, false);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key, false);
+            expr(en.value, false);
+          }
+          return;
+        default:
+          return;
+      }
+    };
+    const stmts = (ss: Stmt[]): void => {
+      for (const s of ss) {
+        switch (s.kind) {
+          case "var": {
+            if (s.type !== null && s.type.kind === "named") {
+              if (/^Array(\[|$)/.test(s.type.name)) shapes.set(s.name, "Array");
+              else if (/^Dictionary(\[|$)/.test(s.type.name)) shapes.set(s.name, "Dictionary");
+            } else if (s.init !== null) {
+              const sh = shapeOf(s.init);
+              if (sh !== null) shapes.set(s.name, sh);
+            }
+            if (s.init !== null) expr(s.init, false);
+            continue;
+          }
+          case "assign": {
+            // 重新赋值就可能换掉形状：认不出来的一律把该变量移出表（保守）
+            if (s.target.kind === "ident") {
+              const sh = shapeOf(s.value);
+              if (sh === null) shapes.delete(s.target.name);
+              else shapes.set(s.target.name, sh);
+            }
+            expr(s.target, false);
+            expr(s.value, false);
+            continue;
+          }
+          case "expr":
+            expr(s.expr, true); // 表达式语句：结果被丢掉，void 方法在这儿是合法的
+            continue;
+          case "return":
+            if (s.value !== null) expr(s.value, false);
+            continue;
+          case "if":
+            for (const b of s.branches) {
+              if (b.cond !== null) expr(b.cond, false);
+              stmts(b.body);
+            }
+            continue;
+          case "for":
+            expr(s.iter, false);
+            stmts(s.body);
+            continue;
+          case "while":
+            expr(s.cond, false);
+            stmts(s.body);
+            continue;
+          case "match":
+            expr(s.subject, false);
+            for (const arm of s.arms) {
+              if (arm.guard !== null) expr(arm.guard, false);
+              stmts(arm.body);
+            }
+            continue;
+          default:
+            continue;
+        }
+      }
+    };
+    stmts(body);
+  }
 }
 
 /** 标量标注 → `staticType` 那一套名字；认不出来的（引擎类、Variant）一律不管，交运行时。 */

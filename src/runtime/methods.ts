@@ -119,8 +119,10 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "has":
           return V.bool(a.has(one(args, "has")));
         case "insert":
-          a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert"));
-          return V.nil();
+          // 实测返回**状态码**而不是 null：插进去了给 0，下标越界（`insert(99)`、`insert(-99)`）
+          // 或定型数组装不下这个元素（`Array[int].insert(0, "s")`）都给 **31**。
+          // 旧实现一律回 nil，于是 `print(a.insert(0, 9))` 我们印 `<null>`、Godot 印 `0` —— 静默错。
+          return V.int(a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert")) ? 0 : 31);
         case "erase":
           a.erase(one(args, "erase"));
           return V.nil();
@@ -164,12 +166,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
               boolArgOr(args, 3, false),
             ),
           );
-        case "resize":
+        case "resize": {
           // 实测：收缩是截断、扩张按**元素类型的默认值**填（Array[int] → 0、Array[String] → ""、
-          // Array[StringName] → &""、Array[Vector2] → (0.0, 0.0)、未定型 → null），
-          // 负数与超出都不报错。
-          a.resize(intArg(args, 0, "resize"));
-          return V.nil();
+          // Array[StringName] → &""、Array[Vector2] → (0.0, 0.0)、未定型 → null），负数与超出都不改数组。
+          // **返回值同样是状态码**：负数给 31、其余（含 `n === size` 的空操作）给 0。
+          // 负数那条 Godot 还往 stderr 打一行 `Condition "p_size < 0" …（./core/templates/cowdata.h）`，
+          // 产物复现不了 —— 所以这个输入只钉在 ops-check，不进语料。
+          const n = intArg(args, 0, "resize");
+          a.resize(n);
+          return V.int(n < 0 ? 31 : 0);
+        }
         case "sort":
           a.sort();
           return V.nil();

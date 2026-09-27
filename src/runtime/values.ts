@@ -348,17 +348,19 @@ export class GArray {
   }
 
   /**
-   * `insert(at, v)`。实测越界是**静默不插入**（既不报错也不追加）：`insert(10)` 无变化，
+   * `insert(at, v)`，返回**是否真的插进去了**（调用方据此给 Godot 的状态码，见 methods.ts）。
+   * 实测越界是**静默不插入**（既不报错也不追加）：`insert(10)` 无变化、`insert(-99)` 同样，
    * 但 `insert(size)` 恰好等于尾接；负数按下标从尾部折算（`insert(-1)` 插在倒数第一格之前）。
    */
-  insertAt(at: number, v: Variant): void {
+  insertAt(at: number, v: Variant): boolean {
     const n = this.items.length;
     const k = at < 0 ? n + at : at;
-    if (k < 0 || k > n) return;
+    if (k < 0 || k > n) return false;
     const c = this.asElement(v);
-    // 实测：定型数组里 insert 一个不合格的元素，数组整个不动（Godot 只在 stderr 记一条）
-    if (c === null) return;
+    // 实测：定型数组里 insert 一个不合格的元素，数组整个不动（Godot 只在 stderr 记一条），状态码给 31
+    if (c === null) return false;
     this.items.splice(k, 0, c);
+    return true;
   }
 
   /** `erase(v)`：删掉第一个身份相等的元素，没有就什么都不做（实测不报错）。 */
