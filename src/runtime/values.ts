@@ -314,11 +314,22 @@ export class GArray {
   }
 
   /** 深拷贝：元素里的容器也要复制（S9 —— 赋值是共享，duplicate 才是拷贝） */
-  duplicate(deep = false): GArray {
+  duplicate(deep = false, memo?: Map<unknown, Variant>): GArray {
     // 实测 `duplicate()` 是**浅**的：外层新数组、内层容器仍是同一个引用
     // （`var s = a.duplicate(); s[0][0] = 9` 会把 `a` 也改掉），要 `duplicate(true)` 才断开。
     // 元素类型跟着复制过来（实测副本仍拒绝不合格的元素）。
-    const copy = deep ? new GArray(this.items.map(deepCopy)) : new GArray([...this.items]);
+    if (!deep) {
+      const shared = new GArray([...this.items]);
+      shared.elem = this.elem;
+      return shared;
+    }
+    // 环要保住：先把自己登记进 memo，再逐个深拷（实测 `c[0] == c` 仍为真）
+    const m = memo ?? new Map<unknown, Variant>();
+    const copy = new GArray([]);
+    const seen = m.get(this);
+    if (seen !== undefined) return (seen.v as GArray);
+    m.set(this, V.array(copy));
+    for (const it of this.items) copy.items.push(deepCopy(it, m));
     copy.elem = this.elem;
     return copy;
   }
@@ -435,7 +446,13 @@ export class GArray {
         for (let i = b; i > e; i += step) out.push(this.items[i] as Variant);
       }
     }
-    const cut = deep ? new GArray(out.map(deepCopy)) : new GArray(out);
+    // 一次调用共用一份 memo；`out.map(deepCopy)` 会把数组下标当第二个参数喂给 deepCopy，
+    // 那个参数现在是 memo —— 不包一层就是运行期崩。
+    let cut: GArray;
+    {
+      const m = new Map<unknown, Variant>();
+      cut = deep ? new GArray(out.map((x) => deepCopy(x, m))) : new GArray(out);
+    }
     cut.elem = this.elem; // 实测 slice 的副本仍定型（再 append "s" 被拒）
     return cut;
   }
@@ -501,22 +518,33 @@ export class GArray {
     return new GArray([...this.items, ...other.raw()]);
   }
 
-  eq(other: GArray): boolean {
+  eq(other: GArray, depth = 0): boolean {
+    return this.eqAt(other, depth);
+  }
+
+  private eqAt(other: GArray, depth: number): boolean {
     // 同一个对象先短路：实测自引用数组 `a == a` 是 true（s3），不短路就会无限递归；
     // Godot 的深比较同样有这一条。
     if (this.items === other.items) return true;
+    // 到层数闸门就当相等（实测两个不同的自引用数组 `a == b` 为真，Godot 的比较是深度截断的）
+    if (depth >= PRINT_DEPTH) return true;
     if (this.items.length !== other.items.length) return false;
     return this.items.every((x, i) => {
       const y = other.items[i];
-      return y !== undefined && valueEq(x, y);
+      return y !== undefined && valueEq(x, y, depth + 1);
     });
   }
 
   /** 身份版比较：`has`/`find`/`count` 走它（见 valueSame）。 */
-  same(other: GArray): boolean {
+  same(other: GArray, depth = 0): boolean {
+    return this.sameAt(other, depth);
+  }
+
+  private sameAt(other: GArray, depth: number): boolean {
     if (this.items === other.items) return true;
+    if (depth >= PRINT_DEPTH) return true;
     if (this.items.length !== other.items.length) return false;
-    return this.items.every((x, i) => valueSame(x, other.items[i] as Variant));
+    return this.items.every((x, i) => valueSame(x, other.items[i] as Variant, depth + 1));
   }
 
   /**
@@ -801,7 +829,7 @@ export class GDict {
   }
 
   /** 实测 `duplicate()` 是浅拷贝（改副本里的嵌套容器会串回原字典），`duplicate(true)` 才断开。 */
-  duplicate(deep = false): GDict {
+  duplicate(deep = false, memo?: Map<unknown, Variant>): GDict {
     const d = new GDict();
     // 副本同样是定型的（实测 Dictionary[String,int].duplicate() 之后 1.5 会被截成 1）
     d.keyKind = this.keyKind;
@@ -809,10 +837,15 @@ export class GDict {
     if (deep) {
       // 深拷贝给每个键造了一份新内容，Godot 是拿新内容重新入表 → 桶照现值重算
       // （实测 t3：键先改过再 duplicate(true)，之后按现值查得着）
+      const m = memo ?? new Map<unknown, Variant>();
+      const seen = m.get(this);
+      if (seen !== undefined) return (seen.v as GDict);
+      // 环要保住（实测 `d["x"]=d` 深拷之后 `cd["x"] == cd` 仍为真）：登记在填之前
+      m.set(this, V.dict(d));
       for (let i = 0; i < this.ks.length; i++) {
         const k = this.ks[i];
         const v = this.vs[i];
-        if (k !== undefined && v !== undefined) d.set(deepCopy(k), deepCopy(v));
+        if (k !== undefined && v !== undefined) d.set(deepCopy(k, m), deepCopy(v, m));
       }
       return d;
     }
@@ -917,22 +950,32 @@ export class GDict {
   }
 
   /** 身份版比较（`count`/`find` 的实参是容器时用，见 valueSame）：不看键序。 */
-  same(other: GDict): boolean {
+  same(other: GDict, depth = 0): boolean {
+    return this.sameAt(other, depth);
+  }
+
+  private sameAt(other: GDict, depth: number): boolean {
     // 同上：自引用的字典跟自己比是 true（Godot 有这一条短路），不然无限递归
     if (this === other) return true;
+    if (depth >= PRINT_DEPTH) return true;
     if (this.size() !== other.size()) return false;
     return this.ks.every((k, i) => {
       for (let j = 0; j < other.ks.length; j++) {
-        if (valueSame(k, other.ks[j] as Variant)) {
-          return valueSame(this.vs[i] as Variant, other.vs[j] as Variant);
+        if (valueSame(k, other.ks[j] as Variant, depth + 1)) {
+          return valueSame(this.vs[i] as Variant, other.vs[j] as Variant, depth + 1);
         }
       }
       return false;
     });
   }
 
-  eq(other: GDict): boolean {
+  eq(other: GDict, depth = 0): boolean {
+    return this.eqAt(other, depth);
+  }
+
+  private eqAt(other: GDict, depth: number): boolean {
     if (this === other) return true;
+    if (depth >= PRINT_DEPTH) return true;
     if (this.size() !== other.size()) return false;
     // 成对比较，不能靠 keys()+get()：ghost 格（改过的容器键）按现值查不回来，
     // 存着的值会被看成 null。键按桶比 —— 桶已经统一了 String 与 StringName，容器键是内容编码。
@@ -941,7 +984,7 @@ export class GDict {
       let found = false;
       for (let j = 0; j < other.ks.length; j++) {
         if (other.bkt[j] === b) {
-          found = valueEq(this.vs[i] as Variant, other.vs[j] as Variant);
+          found = valueEq(this.vs[i] as Variant, other.vs[j] as Variant, depth + 1);
           break;
         }
       }
@@ -951,10 +994,12 @@ export class GDict {
   }
 }
 
-function deepCopy(v: Variant): Variant {
+function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
   // 这里必须显式要深拷贝：duplicate() 默认是浅的（Godot 的口径，见上）
-  if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true));
-  if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate(true));
+  // memo 是「源容器 → 正在构造的副本」，实测深拷贝要**保住环**：
+  // `a=[a]` 的 `a.duplicate(true)` 之后 `c[0] == c` 仍为真（字典、间接环同）。
+  if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true, memo));
+  if (v.t === Tag.DICT) return V.dict((v.v as GDict).duplicate(true, memo));
   return { t: v.t, v: v.v };
 }
 
@@ -1630,7 +1675,18 @@ export function stringNameCtor(args: Variant[]): Variant {
 }
 
 /** 顶层 print：字符串不加引号 */
-export function show(v: Variant): string {
+/**
+ * 容器打印 / 比较的深度上限。**实测是一条固定的层数闸门，不是「看见重复就断」**：
+ *  - 没有环、纯粹 101 层嵌套（`nest(100)`）全展开；102 层（`nest(101)`）起最里一层换成 `[...]`；
+ *  - 自引用数组 `a=[a]` → `[`×101 + `[...]` + `]`×101（`str(a).length()` 实测 **207**）；
+ *  - 自引用字典 `d["x"]=d` → (`{ "x": ` + ` }`)×101 + `{ ... }`（长度实测 **916**，收尾标记是带空格的 `{ ... }`）；
+ *  - 间接环（`p=[q]`、`q=[p]`）与直接环同一个层数，所以不是重复检测。
+ * 比较（`==`）也按同一层数截断：实测两个**不同**的自引用数组相等（`a == b` 真）、两条不同的间接环相等、
+ * 两个不同的自引用字典也相等 —— 不截断的话我们这边是 RangeError 栈溢出。
+ */
+export const PRINT_DEPTH = 101;
+
+export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:
       return "<null>";
@@ -1645,14 +1701,19 @@ export function show(v: Variant): string {
     case Tag.STRING_NAME:
       // print(&"abc") 直接给 abc（实测），但装进容器里是 &"abc"（见 repr）
       return v.v as string;
-    case Tag.ARRAY:
-      return `[${(v.v as GArray).raw().map(repr).join(", ")}]`;
+    case Tag.ARRAY: {
+      // 实测：到第 102 层就换成 `[...]`（见 PRINT_DEPTH 的注释），有限深结构与环走同一条
+      if (depth >= PRINT_DEPTH) return "[...]";
+      const g = v.v as GArray;
+      return `[${g.raw().map((x) => repr(x, depth + 1)).join(", ")}]`;
+    }
     case Tag.DICT: {
+      if (depth >= PRINT_DEPTH) return "{ ... }";
       const d = v.v as GDict;
       // 必须按插入顺序把键和**存着的值**成对拿出来，不能用 keys()+get() 重建：
       // 实测改过的容器键（ghost 格）按现值已经查不回来，Godot 打印的却还是存着的那个值（090 第 7 行）。
       const vs = d.values();
-      const parts = d.keys().map((k, i) => `${repr(k)}: ${repr(vs[i] as Variant)}`);
+      const parts = d.keys().map((k, i) => `${repr(k, depth + 1)}: ${repr(vs[i] as Variant, depth + 1)}`);
       return `{ ${parts.join(", ")} }`;
     }
     case Tag.OBJECT: {
@@ -1682,15 +1743,15 @@ export function show(v: Variant): string {
 }
 
 /** 容器内嵌：字符串要加引号 */
-export function repr(v: Variant): string {
+export function repr(v: Variant, depth = 0): string {
   if (v.t === Tag.STRING) return `"${v.v as string}"`;
   if (v.t === Tag.STRING_NAME) return `&"${v.v as string}"`;
-  return show(v);
+  return show(v, depth);
 }
 
 // ---------------------------------------------------------------- 相等与真值
 
-export function valueEq(a: Variant, b: Variant): boolean {
+export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   const ta = a.t;
   const tb = b.t;
   // 三种向量与别的类型比 ==，Godot 是**运行时报错**（实测 `v == 3`、`3 == v`、`v == "x"`、
@@ -1762,9 +1823,9 @@ export function valueEq(a: Variant, b: Variant): boolean {
     case Tag.STRING_NAME:
       return b.t === Tag.STRING_NAME && a.v === b.v;
     case Tag.ARRAY:
-      return (a.v as GArray).eq(b.v as GArray);
+      return (a.v as GArray).eq(b.v as GArray, depth);
     case Tag.DICT:
-      return (a.v as GDict).eq(b.v as GDict);
+      return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       // 走到这里两边都不是 Vector2（函数最前面那条守卫已经把掺向量的组合全接走了），
       // 对象之间只剩引用相等。
@@ -1780,7 +1841,9 @@ export function valueEq(a: Variant, b: Variant): boolean {
  * String 与 StringName 却合一（实测 `["a"].count(&"a")` → 1），容器递归比身份、字典不看键序
  * （实测 `[{"x":1,"y":2}].count({"y":2,"x":1})` → 1）。
  */
-export function valueSame(a: Variant, b: Variant): boolean {
+export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
+  // 与 valueEq 同一条深度闸门（实测不同的自引用容器 `has`/`count` 侧也走得通，且不能栈溢出）
+  if (depth >= PRINT_DEPTH && (a.t === Tag.ARRAY || a.t === Tag.DICT) && a.t === b.t) return true;
   if (
     (a.t === Tag.STRING || a.t === Tag.STRING_NAME) &&
     (b.t === Tag.STRING || b.t === Tag.STRING_NAME)
@@ -1792,9 +1855,9 @@ export function valueSame(a: Variant, b: Variant): boolean {
     case Tag.NIL:
       return true;
     case Tag.ARRAY:
-      return (a.v as GArray).same(b.v as GArray);
+      return (a.v as GArray).same(b.v as GArray, depth);
     case Tag.DICT:
-      return (a.v as GDict).same(b.v as GDict);
+      return (a.v as GDict).same(b.v as GDict, depth);
     case Tag.OBJECT:
       // Vector2 / Vector3 按分量而不是引用（实测 [Vector2(1,2)].count(Vector2(1.0,2.0)) → 1）
       if (a.v instanceof GVector2 && b.v instanceof GVector2) {

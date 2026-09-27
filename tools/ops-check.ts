@@ -32,6 +32,7 @@ import {
   stampDict,
   truthyOf,
   valueEq,
+  valueSame,
 } from "../src/runtime/values";
 import {
   asColor,
@@ -1566,6 +1567,67 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("099", "max_splits 要 int（float 实测是类型错）", () =>
     method(V.str("a,b"), "split", [V.str(","), V.bool(true), V.float(1.5)]),
   );
+}
+
+// ---- 100 自引用容器：打印与比较是一条固定层数闸门（101 层），深拷贝要保住环
+{
+  const items = (g: unknown): Variant[] => (g as { items: Variant[] }).items;
+  const mkA = (): [GArray, Variant] => {
+    const g = GArray.of([]);
+    const gv = V.array(g);
+    items(g).push(gv);
+    return [g, gv];
+  };
+  const mkD = (): [GDict, Variant] => {
+    const d = new GDict();
+    const dv = V.dict(d);
+    d.set(V.str("x"), dv);
+    return [d, dv];
+  };
+  const nest = (n: number): Variant => {
+    let c = V.array(GArray.of([]));
+    for (let i = 0; i < n; i++) {
+      const g = GArray.of([]);
+      items(g).push(c);
+      c = V.array(g);
+    }
+    return c;
+  };
+  const [ga, gv] = mkA();
+  const [gd, dv] = mkD();
+  const sa = show(gv);
+  const sd = show(dv);
+  eq("100", "自引用数组打印长 207：101 个左括号 + 标记 + 101 个右括号", String(sa.length), "207");
+  eq("100", "数组的收尾标记是 [...]（不带空格）", sa.slice(0, 3) + "|" + sa.slice(101, 106) + "|" + sa.slice(-3), "[[[|[...]|]]]");
+  eq("100", "自引用字典打印长 916", String(sd.length), "916");
+  eq("100", "字典的收尾标记是带空格的 { ... }（第 707 格起）", sd.slice(0, 7) + "|" + sd.slice(707, 714), `{ \"x\": |{ ... }`);
+  eq("100", "101 层的有限深结构全展开（没有标记）", String(show(nest(100)).length), "202");
+  eq("100", "102 层起最里一层换成标记：环与有限深走同一道闸门", String(show(nest(101)).length), "207");
+  {
+    const p = GArray.of([]);
+    const pv = V.array(p);
+    const q = GArray.of([]);
+    const qv = V.array(q);
+    items(p).push(qv);
+    items(q).push(pv);
+    eq("100", "间接环与直接环同层数（不是重复检测）", String(show(pv).length), "207");
+  }
+  const [gb, bv] = mkA();
+  eq("100", "两个不同的自引用数组 == 为真（实测 a == b）", String(valueEq(gv, bv)), "true");
+  eq("100", "同引用仍是真", String(valueEq(gv, gv)), "true");
+  const [hd, hv] = mkD();
+  eq("100", "两个不同的自引用字典 == 为真", String(valueEq(dv, hv)), "true");
+  eq("100", "身份版比较同样截断，不栈溢出", String(valueSame(dv, hv)), "true");
+  const ca = ga.duplicate(true);
+  eq("100", "深拷贝保住环：副本的第 0 格就是副本自己", String((items(ca)[0] as Variant).v === ca), "true");
+  eq("100", "深拷贝的打印与原物同形", show(V.array(ca)), sa);
+  eq("100", "浅拷贝照旧共享内层", String(items(ga.duplicate())[0] === gv), "true");
+  const cd = gd.duplicate(true);
+  eq("100", "字典深拷贝保住环", String((cd.getRequired(V.str("x")) as Variant).v === cd), "true");
+  eq("100", "字典深拷贝的打印同形", show(V.dict(cd)), sd);
+  // 兄弟两格各自也按绝对层数截断（实测 `str([a, a]).length()` == 414）
+  eq("100", "数组里两个环：外层占掉一层，两个子环各短一格", String(show(V.array(GArray.of([gv, gv]))).length), "414");
+  eq("100", "深拷出来的环按层数与原物相等", String(valueEq(V.array(ca), gv)), "true");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
