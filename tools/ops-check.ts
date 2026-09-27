@@ -1188,11 +1188,19 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   (inner.v as GArray).append(I(2));
   eq("090", "改内层让整格查不着", `${show(nd.get(arr([arr([I(1)])])))}/${show(V.dict(nd))}`, "<null>/{ [[1, 2]]: 8 }");
 
-  // 自引用容器当键：Godot 靠深度截断活下来，我们没有对应口径 —— 响亮报缺
+  // 自引用容器当键：step 47 起按实测的**两道闸门**走 —— 桶塌在 101 层（旧断言要求"响亮报缺"，
+  // 是那时还没有闸门口径；现在真值说了算，改断言不改实现）
   const cyc = GArray.of([]);
   cyc.append(V.array(cyc));
-  shouldThrow("090", "自引用的数组不能当键", () => keyOf(V.array(cyc)));
-  shouldThrow("090", "拿去 set 也一样响", () => newDict().set(V.array(cyc), I(1)));
+  eq("090", "自引用数组的桶塌在 101 层（3×101 + 记号 + 101）", String(keyOf(V.array(cyc)).length), "405");
+  {
+    const other = GArray.of([]);
+    other.append(V.array(other));
+    eq("090", "两个不同的环算出同一个桶", String(keyOf(V.array(other)) === keyOf(V.array(cyc))), "true");
+    const dd = newDict();
+    dd.set(V.array(cyc), I(1));
+    eq("090", "环键存得下也查得着", `${dd.size()}/${dd.has(V.array(other))}`, "1/true");
+  }
   eq("090", "自引用数组跟自己比是 true", valueEq(V.array(cyc), V.array(cyc)), "true");
 }
 
@@ -1628,6 +1636,106 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   // 兄弟两格各自也按绝对层数截断（实测 `str([a, a]).length()` == 414）
   eq("100", "数组里两个环：外层占掉一层，两个子环各短一格", String(show(V.array(GArray.of([gv, gv]))).length), "414");
   eq("100", "深拷出来的环按层数与原物相等", String(valueEq(V.array(ca), gv)), "true");
+}
+
+// ---- 101 自引用容器当字典键：**桶走 101 层闸门、比较走 52 层**，两道不是一条（step 47 实测）
+{
+  const its = (g: unknown): Variant[] => (g as { items: Variant[] }).items;
+  const cyc = (): Variant => {
+    const g = GArray.of([]);
+    const v = V.array(g);
+    its(g).push(v);
+    return v;
+  };
+  const nest = (n: number): Variant => {
+    let c = V.array(GArray.of([]));
+    for (let i = 0; i < n; i++) {
+      const g = GArray.of([]);
+      its(g).push(c);
+      c = V.array(g);
+    }
+    return c;
+  };
+  const eqs = (a: Variant, b: Variant) => String(valueEq(a, b));
+
+  eq("101", "比较闸门 = 52：a == nest(51) 假", eqs(cyc(), nest(51)), "false");
+  eq("101", "a == nest(52) 真", eqs(cyc(), nest(52)), "true");
+  eq("101", "nest(51) == nest(52) 假", eqs(nest(51), nest(52)), "false");
+  eq("101", "nest(52) == nest(53) 真（52 层之外明显不同的容器会相等）", eqs(nest(52), nest(53)), "true");
+  {
+    const d = new GDict();
+    d.set(nest(100), V.int(1));
+    eq("101", "桶闸门更深：d[nest(100)] 查 nest(101) 落空", `${d.has(nest(101))}/${d.size()}`, "false/1");
+  }
+  {
+    const d = new GDict();
+    d.set(nest(101), V.int(1));
+    eq("101", "d[nest(101)] 查 nest(102) 命中", String(d.has(nest(102))), "true");
+    d.set(nest(102), V.int(2));
+    eq("101", "顶掉同一格、size 仍是 1", `${d.size()}/${String(d.getRequired(nest(101)).v)}`, "1/2");
+  }
+  {
+    const a = cyc();
+    const b = cyc();
+    const d = new GDict();
+    d.set(a, V.int(1));
+    eq("101", "两个不同的环是同一格", String(d.has(b)), "true");
+    d.set(b, V.int(2));
+    eq("101", "顶掉之后两个键读到同一个值", `${String(d.getRequired(a).v)}/${String(d.getRequired(b).v)}`, "2/2");
+    d.erase(a);
+    eq("101", "erase 擦得掉环键", `${d.size()}/${String(d.has(b))}`, "0/false");
+  }
+  {
+    const p = GArray.of([]);
+    const q = GArray.of([]);
+    const pv = V.array(p);
+    const qv = V.array(q);
+    its(p).push(qv);
+    its(q).push(pv);
+    const r = GArray.of([]);
+    const s = GArray.of([]);
+    const rv = V.array(r);
+    its(r).push(V.array(s));
+    its(s).push(rv);
+    const d = new GDict();
+    d.set(pv, V.int(1));
+    eq("101", "间接环互等为真", eqs(pv, rv), "true");
+    eq("101", "多包一层还是同一格（p / [p] / [[p]]）", `${d.has(rv)}/${d.has(V.array(GArray.of([pv])))}`, "true/true");
+  }
+  {
+    const ca = new GDict();
+    const cav = V.dict(ca);
+    ca.set(V.str("k"), cav);
+    const cb = new GDict();
+    const cbv = V.dict(cb);
+    cb.set(V.str("k"), cbv);
+    const d = new GDict();
+    d.set(cav, V.int(1));
+    d.set(cbv, V.int(2));
+    eq("101", "字典环键并格、size 1", `${d.size()}/${String(d.getRequired(cav).v)}`, "1/2");
+    const arr = GArray.of([cav]);
+    eq("101", "数组的 has/count 也按截断身份", `${arr.has(cbv)}/${arr.count(cbv)}`, "true/1");
+  }
+  {
+    const e = V.array(GArray.of([]));
+    const f = GArray.of([e]);
+    const d = new GDict();
+    d.set(e, V.int(1));
+    d.set(V.array(f), V.int(2));
+    eq("101", "[] 与 [[]] 仍是两格（闸门没把浅结构糊掉）", String(d.size()), "2");
+  }
+  {
+    const k = V.array(GArray.of([V.int(1), V.int(2)]));
+    const d = new GDict();
+    d.set(k, V.int(5));
+    its(k.v).push(V.int(3));
+    eq(
+      "101",
+      "改过的有限键仍是 ghost（S81 旧口径没被闸门破坏）",
+      `${d.size()}/${d.has(k)}/${d.has(V.array(GArray.of([V.int(1), V.int(2)])))}`,
+      "1/false/false",
+    );
+  }
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

@@ -17,17 +17,14 @@ function numVal(v: Variant): number {
  * 而 JS 的 Map 会把 1 和 1.0 合并 —— 所以键必须带类型前缀。
  */
 export function keyOf(v: Variant): string {
-  return keyOfIn(v, []);
+  return keyOfIn(v, 0);
 }
 
-/** 自引用容器当键：Godot 靠「hash 到 128 层截断」活下来（实测 s4：环回的键照样能查得着），
- *  我们没有同一个口径 —— 与其给一个凭空的近似，不如当场报缺。 */
-function refuseCyclicKey(): never {
-  throw new UnsupportedError(
-    "dict-key-cycle",
-    "自引用的容器不能当字典键（Godot 的容器 hash 按深度截断，实测能存能查，我们没有对应口径）",
-  );
-}
+/**
+ * 自引用容器当键：实测 Godot 认（环回的键存得下、查得着、`erase` 也擦得掉），靠的是与打印/比较
+ * 同一条**深度闸门**（见 {@link PRINT_DEPTH}）——闸门之外全塌成一格。旧版本在这里响亮报缺
+ * （`dict-key-cycle`），是因为那时还没有闸门口径；step 46 量出闸门是 101 层之后，桶也照它走。
+ */
 
 /**
  * 桶的编码。容器键（实测 k1/q1/r1）按**内容**分格：等值的新数组命中同一格（`d[a]=1` 之后
@@ -35,7 +32,7 @@ function refuseCyclicKey(): never {
  * {@link valueSame} 的身份口径），字典的编码**跟着键序走**（实测 q3：`{"a":1,"b":2}` 与
  * `{"b":2,"a":1}` 是两个格，尽管它们 `==` 成立）。`c:` 前缀保证容器桶不会跟标量桶撞车。
  */
-function keyOfIn(v: Variant, path: unknown[]): string {
+function keyOfIn(v: Variant, depth: number): string {
   switch (v.t) {
     case Tag.NIL:
       return "n:";
@@ -51,26 +48,28 @@ function keyOfIn(v: Variant, path: unknown[]): string {
       // 实测 StringName 与等价 String 是**同一个键**（{&"k": 1, "k": 2} 在 Godot 是重复键报错）
       return `s:${v.v as string}`;
     case Tag.ARRAY: {
+      // 闸门之外一律塌成同一个记号：实测 `d[a]=1`（a=[a]）之后再 `d[b]=2`（b=[b]）打的还是**同一格**、
+      // size 仍是 1；`[p]`、`[[p]]` 与 `p` 同一格；`nest(101)` 与 `nest(102)` 也同一格（step 47 探针 k1/k2/k3）
+      if (depth >= PRINT_DEPTH) return "…";
       const g = v.v as GArray;
-      if (path.includes(g)) refuseCyclicKey();
-      path.push(g);
       const items = g.raw();
       let out = "c:[";
-      for (let i = 0; i < items.length; i++) out += (i === 0 ? "" : ",") + keyOfIn(items[i] as Variant, path);
-      path.pop();
+      for (let i = 0; i < items.length; i++) out += (i === 0 ? "" : ",") + keyOfIn(items[i] as Variant, depth + 1);
       return out + "]";
     }
     case Tag.DICT: {
+      if (depth >= PRINT_DEPTH) return "…";
       const g = v.v as GDict;
-      if (path.includes(g)) refuseCyclicKey();
-      path.push(g);
       const ks = g.keys();
       const vs = g.values();
       let out = "c:{";
       for (let i = 0; i < ks.length; i++) {
-        out += (i === 0 ? "" : ",") + keyOfIn(ks[i] as Variant, path) + "=>" + keyOfIn(vs[i] as Variant, path);
+        out +=
+          (i === 0 ? "" : ",") +
+          keyOfIn(ks[i] as Variant, depth + 1) +
+          "=>" +
+          keyOfIn(vs[i] as Variant, depth + 1);
       }
-      path.pop();
       return out + "}";
     }
     case Tag.OBJECT: {
@@ -526,8 +525,8 @@ export class GArray {
     // 同一个对象先短路：实测自引用数组 `a == a` 是 true（s3），不短路就会无限递归；
     // Godot 的深比较同样有这一条。
     if (this.items === other.items) return true;
-    // 到层数闸门就当相等（实测两个不同的自引用数组 `a == b` 为真，Godot 的比较是深度截断的）
-    if (depth >= PRINT_DEPTH) return true;
+    // 到比较闸门就当相等（实测两个不同的自引用数组 `a == b` 为真；闸门深度见 COMPARE_DEPTH）
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.items.length !== other.items.length) return false;
     return this.items.every((x, i) => {
       const y = other.items[i];
@@ -542,7 +541,7 @@ export class GArray {
 
   private sameAt(other: GArray, depth: number): boolean {
     if (this.items === other.items) return true;
-    if (depth >= PRINT_DEPTH) return true;
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.items.length !== other.items.length) return false;
     return this.items.every((x, i) => valueSame(x, other.items[i] as Variant, depth + 1));
   }
@@ -957,7 +956,7 @@ export class GDict {
   private sameAt(other: GDict, depth: number): boolean {
     // 同上：自引用的字典跟自己比是 true（Godot 有这一条短路），不然无限递归
     if (this === other) return true;
-    if (depth >= PRINT_DEPTH) return true;
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.size() !== other.size()) return false;
     return this.ks.every((k, i) => {
       for (let j = 0; j < other.ks.length; j++) {
@@ -975,7 +974,7 @@ export class GDict {
 
   private eqAt(other: GDict, depth: number): boolean {
     if (this === other) return true;
-    if (depth >= PRINT_DEPTH) return true;
+    if (depth >= COMPARE_DEPTH) return true;
     if (this.size() !== other.size()) return false;
     // 成对比较，不能靠 keys()+get()：ghost 格（改过的容器键）按现值查不回来，
     // 存着的值会被看成 null。键按桶比 —— 桶已经统一了 String 与 StringName，容器键是内容编码。
@@ -1686,6 +1685,17 @@ export function stringNameCtor(args: Variant[]): Variant {
  */
 export const PRINT_DEPTH = 101;
 
+/**
+ * 比较（`==` / `has` / `count` 走的身份比较）另有一道**更浅**的闸门 = **52 层**（实测，与打印那道不是一条）。
+ * 判据是三条边界：
+ *  - `a == nest(n)`（a=[a]，nest(n) 有 n+1 层）在 n=51 假、n=52 真；
+ *  - `nest(n) == nest(n+1)` 与 `nest(n) == nest(n+2)` 同样在 n=51 假、n=52 真；
+ *  - 而**桶**要深得多：`d[nest(100)]` 查 `nest(101)` 仍然落空，`d[nest(101)]` 查 `nest(102)` 才命中（=101 那道）。
+ * 也就是说 Godot 的 `==` 在 52 层之外会把**明显不同**的两个容器判成相等（`nest(52) == nest(53)` 实测为真），
+ * 字典格还要另看桶。两条闸门各按各的实测值，别合成一条。
+ */
+export const COMPARE_DEPTH = 52;
+
 export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:
@@ -1843,7 +1853,7 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
  */
 export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
   // 与 valueEq 同一条深度闸门（实测不同的自引用容器 `has`/`count` 侧也走得通，且不能栈溢出）
-  if (depth >= PRINT_DEPTH && (a.t === Tag.ARRAY || a.t === Tag.DICT) && a.t === b.t) return true;
+  if (depth >= COMPARE_DEPTH && (a.t === Tag.ARRAY || a.t === Tag.DICT) && a.t === b.t) return true;
   if (
     (a.t === Tag.STRING || a.t === Tag.STRING_NAME) &&
     (b.t === Tag.STRING || b.t === Tag.STRING_NAME)

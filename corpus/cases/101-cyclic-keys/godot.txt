@@ -1,0 +1,25 @@
+k1a 1 true 1 1
+k1b true 1 true
+k1c 1 2 2
+k1d 207
+k1e 212
+k1f 0 false
+k2a true true 1 1
+k2b true true
+k2c false
+k2d 2 1 2 { []: 1, [[]]: 2 }
+k3a true 1 true
+k3b 1 2
+k3c false false
+k3d true true
+k3e 1 8 8
+k4a true
+k4b 1 2 2 914
+k4c true 1 1
+k4d true 1 false
+k4e 1 false false { [1, 2, 3]: 5 }
+k5a false true false true true
+k5b 104 207 207
+k5c false 1 false true
+k5d true 1 1
+k5e true true 1
