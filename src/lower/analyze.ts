@@ -181,6 +181,7 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
       return st === "String";
     case "Vector2":
     case "Vector3":
+    case "Vector2i":
       return false; // 向量字面量的静态类型还推不出（staticType 给 null），运行时兜底
     case "Array":
       return st === "Array";
@@ -462,8 +463,17 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
     }
   }
 
-  // 字面量整数除零也是编译错误
-  if (e.op === "/" && e.right.kind === "lit" && e.right.lit === "int" && Number(e.right.value) === 0) {
+  // 字面量整数除零才是编译错误（实测 `1 / 0` → Parse Error）。**左边也得是字面量**：
+  // `var w = Vector2i(7, 7); w / 0` 实测是**运行期** SCRIPT ERROR（`Division by zero error in operator '/'.`
+  // 带 at: 栈帧），说明 Godot 只对常量折叠得出的式子提前拦，所以两边都常量才报。
+  if (
+    e.op === "/" &&
+    e.left.kind === "lit" &&
+    (e.left.lit === "int" || e.left.lit === "float") &&
+    e.right.kind === "lit" &&
+    e.right.lit === "int" &&
+    Number(e.right.value) === 0
+  ) {
     diags.push({ code: "div-by-zero", message: "Division by zero error in operator /.", loc: e.loc });
   }
 }

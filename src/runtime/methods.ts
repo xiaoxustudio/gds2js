@@ -7,6 +7,7 @@ import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLeng
 import { isLess } from "./ops";
 import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
+import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -46,6 +47,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     // Vector2 的方法面（语义逐条探针实测，测不准的直接报缺，见 vector2.ts 的注释）
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
+    if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -321,6 +323,7 @@ export function index(raw: unknown, idx: Variant): Variant {
   // Vector2 可以按下标取分量（实测 v[0] → 3.0、v[1] → 4.0；越界 Godot 在解析期就拦）
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
@@ -334,6 +337,8 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
+  const vec2i = base.t === Tag.OBJECT && base.v instanceof GVector2i ? (base.v as GVector2i) : null;
+  if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",
@@ -350,6 +355,9 @@ export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant |
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector3) {
     return vec3Write(base.v as GVector3, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector2i) {
+    return vec2iWrite(base.v as GVector2i, idx, value, "index");
   }
   setIndex(base, idx, value);
   return null;
@@ -402,6 +410,9 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
     const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
     if (vec3 && (name === "x" || name === "y" || name === "z")) return V.float(vec3[name]);
+    const vec2i = obj.v instanceof GVector2i ? (obj.v as GVector2i) : null;
+    // 实测 Vector2i 的分量读出来是 int（`w["y"]` → 2、`w.x` → 2，不是 2.0）
+    if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const inner = obj.v as Record<string, unknown>;
     if (name in inner) return inner[name];
   }

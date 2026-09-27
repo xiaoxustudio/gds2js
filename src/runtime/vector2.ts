@@ -28,6 +28,9 @@ export class GVector2 {
 
 const r = Math.fround;
 
+/** Vector2i 的分类标记：靠它认「单参构造」，不必 import vector2i（那会形成模块环）。 */
+export const VEC2I_MARK = Symbol("gds2js.Vector2i");
+
 export function vector2(x: number, y: number): Variant {
   return V.object(new GVector2(x, y));
 }
@@ -40,8 +43,17 @@ export function asVec2(v: Variant): GVector2 | null {
 /** `Vector2(...)` 构造：0 参给零向量（实测 `Vector2()` → `(0.0, 0.0)`），其余必须两参。 */
 export function vector2New(args: Variant[]): Variant {
   if (args.length === 0) return vector2(0, 0);
+  // 一个实参：拷贝自己（实测 `Vector2(Vector2(1,2))` → (1.0, 2.0)）或从 Vector2i 升级
+  // （实测 `Vector2(Vector2i(1,2))` → (1.0, 2.0)）
+  if (args.length === 1) {
+    const a = args[0] as Variant;
+    if (a.t === Tag.OBJECT && a.v instanceof GVector2) return vector2(a.v.x, a.v.y);
+    const o = a.v as { x?: number; y?: number } | null;
+    if (a.t === Tag.OBJECT && o !== null && VEC2I_MARK in o) return vector2(o.x as number, o.y as number);
+    throw new UnsupportedError("vector2-arg", `Vector2() 单参只收 Vector2 / Vector2i，收到 ${tagName(a.t)}`);
+  }
   if (args.length !== 2) {
-    throw new UnsupportedError("vector2-arity", `Vector2() 需要 0 或 2 个参数（收到 ${args.length} 个）`);
+    throw new UnsupportedError("vector2-arity", `Vector2() 需要 0、1（向量）或 2 个参数（收到 ${args.length} 个）`);
   }
   return vector2(scalar(args[0], "Vector2"), scalar(args[1], "Vector2"));
 }

@@ -4,6 +4,7 @@ import { Tag, V, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
+import { GVector2i } from "./vector2i";
 
 /**
  * `match` 的模式匹配与 `is` / `as` 的类型判定。
@@ -104,6 +105,7 @@ function builtinTag(name: string): TagValue | undefined {
 const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Vector2: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2,
   Vector3: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3,
+  Vector2i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2i,
 };
 
 export function isType(v: Variant, name: string): Variant {
@@ -152,7 +154,8 @@ const GODOT_TYPE: Record<TagValue, number> = {
 export function typeOf(v: Variant): Variant {
   // 数学内建类型都塞在 Tag.OBJECT 里，得按实例再分一次（实测 typeof(Vector2(1,2)) → 5）
   if (v.t === Tag.OBJECT && v.v instanceof GVector2) return V.int(5);
-  // 实测 typeof(Vector3(1,2,3)) → 9（Vector2i 是 6，还没实现）
   if (v.t === Tag.OBJECT && v.v instanceof GVector3) return V.int(9);
+  // 实测 typeof(Vector2i(1,2)) → 6
+  if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
   return V.int(GODOT_TYPE[v.t]);
 }

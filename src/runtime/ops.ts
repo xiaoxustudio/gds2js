@@ -3,6 +3,18 @@ import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Vari
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
 import {
+  add32,
+  asVec2i,
+  div32,
+  GVector2i,
+  mod32,
+  mul32,
+  sub32,
+  vec2iCmp,
+  vec2iToFloat,
+  vector2i,
+} from "./vector2i";
+import {
   GArray,
   GDict,
   keyOf,
@@ -68,6 +80,10 @@ export const ops = {
     const wb3 = asVec3(b);
     // Vector3 分量加（实测 (1,2,3)+(0.5,0,0) → (1.5, 2.0, 3.0)）；跟标量混加 Godot 是解析期报错，这里同样不接
     if (wa3 && wb3) return V.object(new GVector3(wa3.x + wb3.x, wa3.y + wb3.y, wa3.z + wb3.z));
+    // Vector2i 只跟 Vector2i 加（实测 `Vector2i + Vector2`、`Vector2i + 1` 都是解析期报错），结果回绕 int32
+    const ziAdd = asVec2i(a);
+    const zjAdd = asVec2i(b);
+    if (ziAdd && zjAdd) return vector2i(add32(ziAdd.x, zjAdd.x), add32(ziAdd.y, zjAdd.y));
     throw new UnsupportedError("add-operands", `+ 不支持 ${tagName(a.t)} + ${tagName(b.t)}`);
   },
 
@@ -79,6 +95,9 @@ export const ops = {
     const wa3 = asVec3(a);
     const wb3 = asVec3(b);
     if (wa3 && wb3) return V.object(new GVector3(wa3.x - wb3.x, wa3.y - wb3.y, wa3.z - wb3.z));
+    const ziSub = asVec2i(a);
+    const zjSub = asVec2i(b);
+    if (ziSub && zjSub) return vector2i(sub32(ziSub.x, zjSub.x), sub32(ziSub.y, zjSub.y));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("sub-operands", `- 不支持 ${tagName(a.t)} - ${tagName(b.t)}`);
     }
@@ -99,6 +118,14 @@ export const ops = {
     if (wa3 && wb3) return V.object(new GVector3(wa3.x * wb3.x, wa3.y * wb3.y, wa3.z * wb3.z));
     if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x * num(b), wa3.y * num(b), wa3.z * num(b)));
     if (wb3 && isNum(a)) return V.object(new GVector3(wb3.x * num(a), wb3.y * num(a), wb3.z * num(a)));
+    // 逐分量；标量是 float 时实测**升级成 Vector2**（(6,6)*0.5 → (3.0, 3.0)、(6,6)/4.0 → (1.5, 1.5)）
+    const ziMul = asVec2i(a);
+    const zjMul = asVec2i(b);
+    if (ziMul && zjMul) return vector2i(mul32(ziMul.x, zjMul.x), mul32(ziMul.y, zjMul.y));
+    if (ziMul && b.t === Tag.FLOAT) return vec2iToFloat(ziMul, num(b), "mul");
+    if (zjMul && a.t === Tag.FLOAT) return vec2iToFloat(zjMul, num(a), "mul");
+    if (ziMul && isNum(b)) return vector2i(mul32(ziMul.x, intToNum(b.v as IntPayload)), mul32(ziMul.y, intToNum(b.v as IntPayload)));
+    if (zjMul && isNum(a)) return vector2i(mul32(zjMul.x, intToNum(a.v as IntPayload)), mul32(zjMul.y, intToNum(a.v as IntPayload)));
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
     }
@@ -117,6 +144,14 @@ export const ops = {
     const wb3 = asVec3(b);
     if (wa3 && wb3) return V.object(new GVector3(wa3.x / wb3.x, wa3.y / wb3.y, wa3.z / wb3.z));
     if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x / num(b), wa3.y / num(b), wa3.z / num(b)));
+    const ziDiv = asVec2i(a);
+    const zjDiv = asVec2i(b);
+    if (ziDiv && zjDiv) return vector2i(div32(ziDiv.x, zjDiv.x), div32(ziDiv.y, zjDiv.y));
+    if (ziDiv && b.t === Tag.FLOAT) return vec2iToFloat(ziDiv, num(b), "div");
+    if (ziDiv && isNum(b)) {
+      const k = intToNum(b.v as IntPayload);
+      return vector2i(div32(ziDiv.x, k), div32(ziDiv.y, k));
+    }
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
     }
@@ -134,6 +169,14 @@ export const ops = {
 
   /** 取模只对 int 合法，符号跟被除数（S3） */
   mod(a: Variant, b: Variant): Variant {
+    // Vector2i 的 % 逐分量、符号跟被除数（实测 (-7,7) % (2,-2) → (-1, 1)、(7,7) % 2 → (1, 1)），除零文本另有一套
+    const ziMod = asVec2i(a);
+    const zjMod = asVec2i(b);
+    if (ziMod && zjMod) return vector2i(mod32(ziMod.x, zjMod.x), mod32(ziMod.y, zjMod.y));
+    if (ziMod && isNum(b)) {
+      const k = intToNum(b.v as IntPayload);
+      return vector2i(mod32(ziMod.x, k), mod32(ziMod.y, k));
+    }
     const [x, y] = intPair(a, b);
     if (intToBig(y) === 0n) {
       throw new GodotRuntimeError("int-mod-zero", "整数取模零");
@@ -165,6 +208,9 @@ export const ops = {
     if (va) return V.object(new GVector2(-va.x, -va.y));
     const wa3 = asVec3(a);
     if (wa3) return V.object(new GVector3(-wa3.x, -wa3.y, -wa3.z));
+    const ziNeg = asVec2i(a);
+    // 实测 -Vector2i.MIN 还是 -2147483648（回绕），不是正数
+    if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
     if (!isNum(a)) {
       throw new UnsupportedError("neg-operands", `- 不支持 ${tagName(a.t)}`);
     }
@@ -282,6 +328,9 @@ function compare(a: Variant, b: Variant): number {
   const wa3 = asVec3(a);
   const wb3 = asVec3(b);
   if (wa3 && wb3) return vec3Cmp(wa3, wb3);
+  const ziCmp = asVec2i(a);
+  const zjCmp = asVec2i(b);
+  if (ziCmp && zjCmp) return vec2iCmp(ziCmp, zjCmp);
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
 }
 

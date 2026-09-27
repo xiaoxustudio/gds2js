@@ -3,6 +3,7 @@ import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } fr
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
+import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -79,6 +80,9 @@ function keyOfIn(v: Variant, path: unknown[]): string {
       // Vector3 也按值分格（实测 a12/d10：`d[Vector3(1,2,3)]` 存得下、等值新向量命中同一格）
       const vec3 = asVec3(v);
       if (vec3) return `w:${String(vec3.x)},${String(vec3.y)},${String(vec3.z)}`;
+      // Vector2i 同（实测 p7/p17：`d[Vector2i(1,2)]` 与 `d[Vector2i(1.7,2.2)]` 是同一格）
+      const vec2i = asVec2i(v);
+      if (vec2i) return `x:${String(vec2i.x)},${String(vec2i.y)}`;
       break;
     }
     default:
@@ -102,6 +106,7 @@ export type ElemKind =
   | "StringName"
   | "Vector2"
   | "Vector3"
+  | "Vector2i"
   | "Array"
   | "Dictionary";
 
@@ -109,7 +114,12 @@ export type ElemKind =
 export function isElemKind(name: string): name is ElemKind {
   return (
     name === "int" || name === "float" || name === "bool" || name === "String" ||
-    name === "StringName" || name === "Vector2" || name === "Vector3" || name === "Array" || name === "Dictionary"
+    name === "StringName" ||
+    name === "Vector2" ||
+    name === "Vector3" ||
+    name === "Vector2i" ||
+    name === "Array" ||
+    name === "Dictionary"
   );
 }
 
@@ -136,6 +146,8 @@ export function elemDefault(kind: ElemKind): Variant {
     case "Vector3":
       // 实测 `Array[Vector3]` resize 给 `[(0.0, 0.0, 0.0), ...]`、`Array[Vector2i]` 给 `(0, 0)`
       return vector3(0, 0, 0);
+    case "Vector2i":
+      return vector2i(0, 0);
     case "Array":
       return V.array(new GArray());
     case "Dictionary":
@@ -186,6 +198,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       return v.t === Tag.OBJECT && v.v instanceof GVector2 ? v : null;
     case "Vector3":
       return v.t === Tag.OBJECT && v.v instanceof GVector3 ? v : null;
+    case "Vector2i":
+      return v.t === Tag.OBJECT && v.v instanceof GVector2i ? v : null;
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
     case "Dictionary":
@@ -507,7 +521,8 @@ export class GArray {
     const allBool = this.items.every((x) => x.t === Tag.BOOL);
     const allVec = this.items.every((x) => asVec2(x) !== null);
     const allVec3 = this.items.every((x) => asVec3(x) !== null);
-    if (!allNum && !allStr && !allBool && !allVec && !allVec3) {
+    const allVec2i = this.items.every((x) => asVec2i(x) !== null);
+    if (!allNum && !allStr && !allBool && !allVec && !allVec3 && !allVec2i) {
       throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
     }
     // 数值排序：int 载荷可能是 bigint，混着 `-` 会 TypeError；两边都可能是 bigint，
@@ -528,7 +543,9 @@ export class GArray {
           ? (a: Variant, b: Variant) => Number(a.v) - Number(b.v)
           : allVec
             ? (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2)
-            : (a: Variant, b: Variant) => vec3Cmp(asVec3(a) as GVector3, asVec3(b) as GVector3);
+            : allVec3
+              ? (a: Variant, b: Variant) => vec3Cmp(asVec3(a) as GVector3, asVec3(b) as GVector3)
+              : (a: Variant, b: Variant) => vec2iCmp(asVec2i(a) as GVector2i, asVec2i(b) as GVector2i);
     this.items = [...this.items].sort(cmp);
   }
 
@@ -1553,6 +1570,10 @@ export function show(v: Variant): string {
       if (inner instanceof GVector3) {
         return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)})`;
       }
+      // Vector2i 打印是整数：实测 (1, 2)、(-2147483648, 0)，不带小数点
+      if (inner instanceof GVector2i) {
+        return `(${String(inner.x)}, ${String(inner.y)})`;
+      }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }
     default:
@@ -1572,22 +1593,31 @@ export function repr(v: Variant): string {
 export function valueEq(a: Variant, b: Variant): boolean {
   const ta = a.t;
   const tb = b.t;
-  // Vector2 与别的类型比 ==，Godot 是**运行时报错**（实测 `v == 3`、`3 == v`、`v == "x"`、
-  // `v == [1]`、`v == &"x"` 全部当场炸，只有跟 null 比给 false）。放在函数最前面是必须的：
+  // 三种向量与别的类型比 ==，Godot 是**运行时报错**（实测 `v == 3`、`3 == v`、`v == "x"`、
+  // `v == [1]`、`v == &"x"`、`Vector2i == Vector2` 全部当场炸，只有跟 null 比给 false）。
+  // 放在函数最前面是必须的：
   // 下面 int/float 那条跨类型分支和 `ta !== tb → false` 的早退都会把它悄悄吃掉，
   // 而「该响的没响」正是最不该有的静默错。
   const nameOf = (x: Variant): string =>
-    asVec2(x) !== null ? "Vector2" : asVec3(x) !== null ? "Vector3" : tagName(x.t);
+    asVec2(x) !== null
+      ? "Vector2"
+      : asVec3(x) !== null
+        ? "Vector3"
+        : asVec2i(x) !== null
+          ? "Vector2i"
+          : tagName(x.t);
   const a2 = asVec2(a);
   const b2 = asVec2(b);
   const a3 = asVec3(a);
   const b3 = asVec3(b);
-  if (a2 !== null || b2 !== null || a3 !== null || b3 !== null) {
+  const ai = asVec2i(a);
+  const bi = asVec2i(b);
+  if (a2 !== null || b2 !== null || a3 !== null || b3 !== null || ai !== null || bi !== null) {
     if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
     if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
-    const other = a2 !== null || a3 !== null ? b : a;
-    // 只有跟 null 比保留 false（实测 `Vector3 != null` 是 true）
-    if (other.t === Tag.NIL) return false;
+    if (ai !== null && bi !== null) return ai.x === bi.x && ai.y === bi.y;
+    // 只有跟 null 比保留 false（实测三种向量都一样：`w == null` 假、`w != null` 真）
+    if (((a2 !== null || a3 !== null || ai !== null ? b : a) as Variant).t === Tag.NIL) return false;
     // Vector2 与 Vector3 混比也炸（实测 `Invalid operands 'Vector3' and 'Vector2' in operator '=='.`）
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${nameOf(a)}' and '${nameOf(b)}' in operator '=='.`);
   }
@@ -1655,6 +1685,9 @@ export function valueSame(a: Variant, b: Variant): boolean {
       }
       if (a.v instanceof GVector3 && b.v instanceof GVector3) {
         return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
+      }
+      if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
+        return a.v.x === b.v.x && a.v.y === b.v.y;
       }
       return a.v === b.v;
     default:

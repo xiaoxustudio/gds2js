@@ -147,6 +147,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
   Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
+  Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
   // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
@@ -2238,6 +2239,7 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Dictionary") return "rt.dictOf([])";
   if (base === "Vector2") return "rt.vector2(0, 0)";
   if (base === "Vector3") return "rt.vector3(0, 0, 0)";
+  if (base === "Vector2i") return "rt.vector2i(0, 0)";
   return "rt.V.nil()";
 }
 
