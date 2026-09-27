@@ -1050,6 +1050,69 @@ export function strContains(hay: string, needle: string): boolean {
  * 半个代理对（只能由 `String.chr(0xD83D)` 这类运行时构造出来）会当分隔符命中、把 emoji 拦腰截断，
  * 而 Godot 的 UTF-32 里根本没有这个码点，是不出声的错。
  */
+/**
+ * `split(delim, allow_empty, max_splits)` 的第三条参数。实测口径（46 个点全对上，用例 099）：
+ *  - `max_splits <= 0` 就是**不限刀**，与两参版同结果（所以那条路直接交给 `strSplit`，不动既有语义）；
+ *  - 切满 `max_splits` 刀之后**余段原样给回**，既不再切、也不再剔内部空段
+ *    （`"a,,,b".split(",", true, 1)` → `["a", ",,b"]`、`"a,b,".split(",", false, 1)` → `["a", "b,"]`）；
+ *  - 但 `allow_empty=false` 时**余段开头**的分隔符仍被跳过（空片段不算数）：
+ *    `",a,,b,".split(",", false, 1)` → `["a", "b,"]`、`"  a  ".split(" ", false, 2)` → `["a"]`；
+ *  - 空片段**不消耗** `max_splits` 的额度（`"a,b,,c,d".split(",", false, 2)` → `["a", "b", "c,d"]`）；
+ *  - 分隔符为空串时按**码点边界**下刀，且真的只切 `max_splits` 刀：
+ *    `"abc".split("", true, 1)` → `["a", "bc"]`（不是逐字符全切）。
+ */
+export function strSplitCapped(s: string, delim: string, allowEmpty: boolean, maxSplit: number): string[] {
+  const sepLen = delim.length;
+  // 刀口位置表：非空分隔符按**最左、不重叠**扫（实测 `"aaa".split("aa", true, 1)` → ["", "a"]）；
+  // 空分隔符按码点边界（与 step 19 的 UTF-32 口径同一条，代理元不会被拦腰切）
+  const cuts: number[] = [];
+  if (sepLen === 0) {
+    const chars = [...s];
+    let at = 0;
+    for (let i = 0; i < chars.length - 1; i++) {
+      at += (chars[i] as string).length;
+      cuts.push(at);
+    }
+  } else {
+    for (let i = 0; i + sepLen <= s.length; ) {
+      if (s.startsWith(delim, i)) {
+        cuts.push(i);
+        i += sepLen;
+      } else i += 1;
+    }
+  }
+  const out: string[] = [];
+  let readFrom = 0;
+  let count = 0;
+  let pi = 0;
+  while (pi < cuts.length && count < maxSplit) {
+    let p = cuts[pi] as number;
+    if (!allowEmpty) {
+      // 连续分隔符：这一格是空片段就跳过，不占额度（实测 d16：`"aa".split("a", false, 1)` → []）
+      while (p === readFrom) {
+        readFrom = p + sepLen;
+        pi++;
+        if (pi >= cuts.length) {
+          p = -1;
+          break;
+        }
+        p = cuts[pi] as number;
+      }
+      if (p === -1) break;
+    }
+    count++;
+    out.push(s.slice(readFrom, p));
+    readFrom = p + sepLen;
+    pi++;
+  }
+  if (!allowEmpty) {
+    while (sepLen > 0 && readFrom < s.length && s.startsWith(delim, readFrom)) readFrom += sepLen;
+  }
+  const tail = s.slice(readFrom);
+  if (allowEmpty || tail !== "") out.push(tail);
+  return out;
+}
+
 export function strSplit(s: string, delim: string, allowEmpty: boolean): string[] {
   let parts: string[];
   if (delim === "") {

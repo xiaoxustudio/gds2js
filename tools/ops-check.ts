@@ -616,9 +616,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("079", "含 emoji 的串按码点切", SP(`${EMO}x${EMO}`, "x"), `["${EMO}", "${EMO}"]`);
   // 半个代理对当分隔符：Godot 的 UTF-32 里没有这个码点，整串原样返回；JS 原生 split 会把 emoji 截断
   eq("079", "孤立代理元分隔符不截断 emoji", SP(`${EMO}ab`, String.fromCharCode(0xd83d)), `["${EMO}ab"]`);
-  shouldThrow("079", "split 的第 3 个参数 max_splits 口径没测清，报缺", () =>
-    sm("a-b-c", "split", [S("-"), V.bool(false), I(2)]),
-  );
+  // 第 3 参在 step 45 按 46 个实测点亮起来（口径见 099 那块），旧断言跟着换成值断言
+  eq("079", "max_splits 现在给值、不再报缺", show(method(V.str("a,b,c"), "split", [V.str(","), V.bool(true), V.int(1)])), "[\"a\", \"b,c\"]");
 }
 
 // ---- 080/081 容器结构方法与「身份 vs ==」两套口径（期望值取自 080/081 的 godot.txt）
@@ -1516,6 +1515,57 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("098", "hash(Color) 报缺", () => vh(color(1, 0, 0, 1)));
   shouldThrow("098", "hash() 的实参个数必须是 1", () => variantHash([]));
   shouldThrow("098", "String.hash() 不收实参", () => method(V.str("abc"), "hash", [V.int(1)]));
+}
+
+// ---- 099 split 的第三参 max_splits：46 个实测点定下来的算式（余段原样、空片段不占额度、码点下刀）
+{
+  const SP = (s: string, d: string, allow: boolean, cap: number) =>
+    show(method(V.str(s), "split", [V.str(d), V.bool(allow), V.int(cap)]));
+  const T: Array<[string, string, boolean, number, string]> = [
+    ["a,b,c", ",", true, 1, '["a", "b,c"]'],
+    ["a,,b", ",", true, 1, '["a", ",b"]'],
+    ["a,,b", ",", false, 1, '["a", "b"]'],
+    ["a,,b", ",", false, 2, '["a", "b"]'],
+    ["a,,,b", ",", true, 1, '["a", ",,b"]'],
+    ["a,b,,c,d", ",", false, 2, '["a", "b", "c,d"]'],
+    ["a,b,,c,d", ",", true, 3, '["a", "b", "", "c,d"]'],
+    [",a,", ",", true, 1, '["", "a,"]'],
+    [",a,", ",", false, 1, '["a"]'],
+    [",a,,b,", ",", false, 1, '["a", "b,"]'],
+    [",a,,b,", ",", false, 2, '["a", "b"]'],
+    ["  a  ", " ", false, 2, '["a"]'],
+    [",,,", ",", false, 1, "[]"],
+    [",,,", ",", false, 2, "[]"],
+    [",,,", ",", true, 1, '["", ",,"]'],
+    ["aa", "a", true, 1, '["", "a"]'],
+    ["aa", "a", false, 1, "[]"],
+    ["aaa", "aa", true, 1, '["", "a"]'],
+    ["a,b,", ",", false, 1, '["a", "b,"]'],
+    ["a, ,b", ",", false, 1, '["a", " ,b"]'],
+    ["abc", "", true, 1, '["a", "bc"]'],
+    ["abc", "", false, 1, '["a", "bc"]'],
+    ["abc", "", true, 2, '["a", "b", "c"]'],
+    ["ab,,cd", "", false, 2, '["a", "b", ",,cd"]'],
+    ["a::b::c", "::", true, 1, '["a", "b::c"]'],
+    ["aXXbXXc", "XX", false, 1, '["a", "bXXc"]'],
+    ["a,b,c", ",", true, 5, '["a", "b", "c"]'],
+    ["", ",", true, 1, '[""]'],
+    ["", ",", false, 1, "[]"],
+    ["x", ",", true, 1, '["x"]'],
+  ];
+  for (const [s, d, allow, cap, want] of T) {
+    eq("099", `split(${JSON.stringify(s)}, ${JSON.stringify(d)}, ${allow}, ${cap})`, SP(s, d, allow, cap), want);
+  }
+  eq("099", "max_splits=0 就是不限刀", SP("a,b,c", ",", true, 0), '["a", "b", "c"]');
+  eq("099", "max_splits 负数同样不限刀", SP("a,b,c", ",", false, -1), '["a", "b", "c"]');
+  eq("099", "两参版口径没被带跑（回归位）", show(method(V.str("a,,b"), "split", [V.str(","), V.bool(false)])), '["a", "b"]');
+  eq("099", "空分隔符的两参版仍逐码点", show(method(V.str("ab"), "split", [V.str("")])), '["a", "b"]');
+  shouldThrow("099", "split() 不收第四个参数", () =>
+    method(V.str("a,b"), "split", [V.str(","), V.bool(true), V.int(1), V.bool(true)]),
+  );
+  shouldThrow("099", "max_splits 要 int（float 实测是类型错）", () =>
+    method(V.str("a,b"), "split", [V.str(","), V.bool(true), V.float(1.5)]),
+  );
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);

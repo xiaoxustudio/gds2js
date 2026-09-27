@@ -4,7 +4,8 @@ import { hashDjb2 } from "./builtins";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit, strSubstr, truthyOf } from "./values";
+import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit,
+  strSplitCapped, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -288,16 +289,27 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.bool(strLength(s) === 0);
         case "contains":
           return V.bool(strContains(s, asString(one(args, "contains"), "contains")));
+        // 实测最多三个参数（第四个是解析期 "Too many arguments for split() call"），第三参 max_splits
+        // 的算式由 46 个实测点定下来，口径见 values.ts 的 strSplitCapped 注释
         case "split": {
-          // max_splits 与 allow_empty=false 的相互作用实测凑不出简洁算式
-          // （"a,,b".split(",", false, 1) 给 ["a","b"] 而不是 ["a",",b"]，
-          //  "a-b-c".split("-", false, 0) 又完全不限刀），先响亮报缺，不发猜的语义。
-          if (args.length > 2) {
-            throw new UnsupportedError("split-max-splits", "split() 的第 3 个参数 max_splits 未实现");
+          if (args.length > 3) {
+            throw new GodotRuntimeError("arity", `split() 最多 3 个参数（收到 ${args.length} 个）`);
           }
           const allow = args[1] === undefined ? true : boolArg(args, 1, "split");
-          const parts = strSplit(s, asString(one(args, "split"), "split"), allow).map((p) => V.str(p));
-          return V.array(GArray.of(parts));
+          const dm = asString(one(args, "split"), "split");
+          let parts: string[];
+          if (args.length === 3) {
+            const mx = args[2] as Variant;
+            if (mx.t !== Tag.INT) {
+              throw new GodotRuntimeError("split-arg", `split() 的第 3 个参数需要 int，收到 ${tagName(mx.t)}`);
+            }
+            const cap = intToNum(mx.v as IntPayload);
+            // 0 与负数都是「不限刀」（实测 "a-b-c".split("-", false, 0) → 全切），那条路交给两参版
+            parts = cap <= 0 ? strSplit(s, dm, allow) : strSplitCapped(s, dm, allow, cap);
+          } else {
+            parts = strSplit(s, dm, allow);
+          }
+          return V.array(GArray.of(parts.map((p) => V.str(p))));
         }
         case "to_upper":
           return V.str(strCase(s, "upper"));
