@@ -6,6 +6,8 @@
  *   gds2js build <file.gd> [-o out]            编译单个文件成 ESM 模块
  *   gds2js check-project <entry.gd>            跨文件静态检查（编译作用域内全部 .gd）
  *   gds2js build-project <entry.gd> [-o dir]   跨文件编译整个工程（class_name / extends / is）
+ *   gds2js run <file.gd>                       编译并**直接执行**，脚本的 print 就是命令输出
+ *   gds2js run-project <entry.gd>              同上，整个工程编译到临时目录后跑入口
  *
  * 产出的模块 export 一个脚本类，import "gds2js/runtime"（语言运行时）和
  * "gds2js/host"（宿主桩）。怎么驱动生命周期由使用方决定。
@@ -15,7 +17,7 @@
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 import { compileProject } from "./compile/project";
@@ -26,7 +28,7 @@ import { lower } from "./lower/lower";
 import { parseSource } from "./parse/parser";
 import { UnsupportedError } from "./runtime/errors";
 
-type CmdName = "check" | "build" | "check-project" | "build-project";
+type CmdName = "check" | "build" | "check-project" | "build-project" | "run" | "run-project";
 type RuntimeMode = "import" | "local" | "single";
 
 /** 旁挂/内联用的自包含运行时文件名（local 模式复制到输出目录时用它）。 */
@@ -61,6 +63,8 @@ interface Ctx {
   run: boolean;
   sourcemap: boolean;
   watch: boolean;
+  /** run/run-project：跑完留着临时产物（看生成的代码用），默认删干净。 */
+  keep: boolean;
 }
 
 interface Diag {
@@ -334,6 +338,111 @@ function projectDiags(result: Awaited<ReturnType<typeof compileProject>>, resRoo
   }));
 }
 
+// ---------------------------------------------------------------- 直接执行（run）
+
+/** 临时产物的名字前缀（跑完即删；留着是给 --keep 看生成代码用的）。 */
+const RUN_TMP = ".gds2js-run-";
+
+/**
+ * run：编译 + **在同一个进程里执行**，脚本自己的 `print` 就是命令的输出。
+ *
+ * 为什么不 spawn 子进程：这台机器上 `node` 子进程会 EBUSY（tools/js-runner.mjs 里记着同一条），
+ * 而且宿主桩的 `quit()` 只是置个标志位、由 `SceneTree.run()` 收尾时 `flush()`，
+ * 所以进程内 import 一个带 autoRun 的产物就是完整的一次运行，不需要子进程隔离。
+ *
+ * 临时产物写在**源文件旁边**而不是 os.tmpdir：产物的头部是 `import "gds2js/runtime"` 这样的
+ * 裸说明符，node 要从导入方的目录向上找 node_modules，写到临时盘就解析不到了。
+ */
+async function runSingle(ctx: Ctx): Promise<boolean> {
+  // local 模式要把 standalone.cjs 旁挂到产物同目录，而 run 的产物就在用户源文件旁边 ——
+  // 为了不留（更不能删）用户目录里的派生文件，run 只走 import / single。
+  if (ctx.runtimeMode === "local") {
+    console.error(`${ctx.input}:  error  run 不支持 --runtime-mode local（会往源目录旁挂 standalone；要旁挂请先 build）`);
+    return false;
+  }
+  const loaded = await tryLoadSingle(ctx.input);
+  if ("error" in loaded) {
+    console.error(loaded.error);
+    return false;
+  }
+  if (!printDiags(loaded.diags)) return false;
+
+  const tmpPath = join(dirname(ctx.input), `${RUN_TMP}${process.pid}.mts`);
+  try {
+    writeFileSync(tmpPath, emitModule(loaded.ir, emitOptsFor({ ...ctx, run: true }, tmpPath)), "utf8");
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    rmSync(tmpPath, { force: true });
+    return false;
+  }
+  try {
+    await import(pathToFileURL(tmpPath).href);
+    return true;
+  } catch (e) {
+    console.error(`${ctx.input}:  runtime error  ${errOf(e)}`);
+    return false;
+  } finally {
+    if (!ctx.keep) {
+      rmSync(tmpPath, { force: true });
+    } else {
+      console.error(`${tmpPath}: 已生成并保留（--keep）`);
+    }
+  }
+}
+
+/** run-project：整个工程编到 `<res-root>/.gds2js-run-<pid>/`，跑入口产物，然后连目录一起删。 */
+async function runProject(ctx: Ctx): Promise<boolean> {
+  // local/single 目前只有单文件那条路实现过；这里宁可拒绝，也不要"看起来支持、其实按 import 跑"。
+  if (ctx.runtimeMode !== "import") {
+    console.error(`${ctx.input}:  error  run-project 只支持 --runtime-mode import（local/single 请先 build-project 再 node 产物）`);
+    return false;
+  }
+  const outDir = join(ctx.resRoot, `${RUN_TMP}${process.pid}`);
+  let result;
+  try {
+    result = await compileProject({
+      entries: [ctx.input],
+      resRoot: ctx.resRoot,
+      outDir,
+      runtimeImport: ctx.runtimeImport,
+      hostImport: ctx.hostImport,
+      // 交回项目层决定谁能被驱动：只有入口产物该带生命周期尾巴，
+      // 每个模块都加一遍的话，纯类模块（不继承 SceneTree）就 `.run is not a function`。
+      autoRun: undefined,
+    });
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  if (!printDiags(projectDiags(result, ctx.resRoot))) {
+    rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  for (const m of result.modules) {
+    mkdirSync(dirname(m.jsPath), { recursive: true });
+    writeFileSync(m.jsPath, m.code, "utf8");
+  }
+  // 入口产物：resPath 与入口文件对上的那个模块；找不到就退回拓扑序最后一个。
+  const entryRes = "res://" + relative(ctx.resRoot, ctx.input).split(sep).join("/");
+  const entry = result.modules.find((m) => m.resPath === entryRes) ?? result.modules[result.modules.length - 1];
+  if (!entry) {
+    console.error(`${ctx.input}: 工程里没有可执行的模块`);
+    rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  try {
+    await import(pathToFileURL(entry.jsPath).href);
+    return true;
+  } catch (e) {
+    console.error(`${ctx.input}:  runtime error  ${errOf(e)}`);
+    return false;
+  } finally {
+    if (!ctx.keep) rmSync(outDir, { recursive: true, force: true });
+    else console.error(`${outDir}: 产物已保留（--keep）`);
+  }
+}
+
 // ---------------------------------------------------------------- 运行 + watch 循环
 
 const RUNNERS: Record<CmdName, (ctx: Ctx) => Promise<boolean>> = {
@@ -341,6 +450,8 @@ const RUNNERS: Record<CmdName, (ctx: Ctx) => Promise<boolean>> = {
   build: buildSingle,
   "check-project": checkProject,
   "build-project": buildProject,
+  run: runSingle,
+  "run-project": runProject,
 };
 
 async function dispatch(ctx: Ctx): Promise<void> {
@@ -399,7 +510,7 @@ const resolveCtx = (
   opts: Record<string, unknown>,
 ): Ctx => {
   const input = resolve(file);
-  const isProject = cmd === "check-project" || cmd === "build-project";
+  const isProject = cmd === "check-project" || cmd === "build-project" || cmd === "run-project";
   const resRoot = isProject ? resolve((opts.resRoot as string) ?? findResRoot(input)) : "";
   return {
     cmd,
@@ -414,6 +525,7 @@ const resolveCtx = (
     run: opts.run !== false,
     sourcemap: opts.sourcemap === true,
     watch: opts.watch === true,
+    keep: opts.keep === true,
   };
 };
 
@@ -448,6 +560,22 @@ withCommon(
     .option("--no-run", "入口产物不自动驱动生命周期（默认会 run）")
     .option("--sourcemap", "为每个产物生成行粒度 .map"),
 ).action((entry: string, opts) => dispatch(resolveCtx("build-project", entry, opts)));
+
+withCommon(
+  program
+    .command("run <file>")
+    .description("编译并直接执行单个脚本：脚本的 print 就是本命令的输出（临时产物跑完即删）")
+    .option("--runtime-mode <mode>", "运行时打包模式：import(默认) | single(内联自包含)；local 会往源目录旁挂文件，run 不支持")
+    .option("--keep", "留下临时产物（看生成的代码用），默认执行完删掉"),
+).action((file: string, opts) => dispatch(resolveCtx("run", file, opts)));
+
+withCommon(
+  program
+    .command("run-project <entry>")
+    .description("编译并直接执行整个工程（跑入口产物，临时目录用完即删；只支持 import 模式）")
+    .option("--res-root <dir>", "res:// 工程根（默认向上找 project.godot）")
+    .option("--keep", "留下临时产物目录（看生成的代码用），默认执行完删掉"),
+).action((entry: string, opts) => dispatch(resolveCtx("run-project", entry, opts)));
 
 // 无参数时打印帮助（与旧版 usage(0) 一致）；未知子命令由 commander 报错并 exit 1。
 if (process.argv.slice(2).length === 0) {
