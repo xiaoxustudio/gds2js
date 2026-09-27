@@ -1838,6 +1838,34 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   );
 }
 
+// ---- 106 String.join：分隔符在前、数组在后，元素走 print 那套 stringify（实测 30 余点）
+{
+  const arr = (...xs: Variant[]) => V.array(GArray.of(xs));
+  const J = (sep: string, a: Variant) => String((method(V.str(sep), "join", [a]) as Variant).v);
+  const S = (x: string) => V.str(x);
+
+  eq("106", "字符串元素原样、无引号", J(", ", arr(S("a"), S("b"), S("c"))), "a, b, c");
+  eq("106", "空数组给空串；单元素不加尾分隔符", `${J("-", arr())}|${J("-", arr(S("x")))}`, "|x");
+  eq("106", "空分隔符就是粘连", J("", arr(S("a"), S("b"))), "ab");
+  eq("106", "空串元素占一格（分隔符照加）", `${J(", ", arr(S("a"), S(""), S("b")))}|${J(", ", arr(S(""), S("")))}`, "a, , b|, ");
+  eq("106", "非字符串元素走 print 口径", `${J(", ", arr(V.int(1), V.int(2), V.int(3)))}|${J(", ", arr(V.bool(true), V.bool(false)))}`, "1, 2, 3|true, false");
+  eq("106", "null 给 <null>", `${J(", ", arr(V.nil()))}|${J(", ", arr(S("a"), V.nil()))}`, "<null>|a, <null>");
+  eq("106", "嵌套数组元素仍按容器形式", J(", ", arr(arr(V.int(1)), S("a"))), "[1], a");
+  eq("106", "StringName 元素给内容（不带 &\"\"）", J(", ", arr(V.stringName("z"), S("y"))), "z, y");
+  eq("106", "StringName 当接收者也一样", String((method(V.stringName("sep"), "join", [arr(S("a"), S("b"))]) as Variant).v), "asepb");
+  eq("106", "浮点元素按 15 位口径", J(", ", arr(V.float(1 / 3), V.float(1e20), V.float(0.1 + 0.2), V.float(Infinity), V.float(-Infinity))),
+    "0.33333333333333, 100000000000000000000.0, 0.3, inf, -inf");
+  eq("106", "200 个整数拼出来 689 个字符", J(",", arr(...Array.from({ length: 200 }, (_, i) => V.int(i)))),
+    Array.from({ length: 200 }, (_, i) => String(i)).join(","));
+  shouldThrow("106", "join 少一个实参要响（Godot 是解析期 Too few arguments）", () => method(V.str("|"), "join", []));
+  shouldThrow("106", "join 多一个实参要响（Too many arguments，Expected at most 1）", () => method(V.str("|"), "join", [arr(S("a")), V.int(2)]));
+  shouldThrow("106", "join 收非数组实参要响（形参是 PackedStringArray）", () => {
+    const d = new GDict();
+    d.set(V.str("a"), V.int(1));
+    return method(V.str(", "), "join", [V.dict(d)]);
+  });
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
 if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);

@@ -1759,6 +1759,21 @@ export function repr(v: Variant, depth = 0): string {
   return show(v, depth);
 }
 
+/**
+ * `分隔符.join(数组)`：每个元素走 **print 那一条 stringify**，不是容器里那套带引号的 repr。
+ * 实测：`str(null)` → `<null>`、`str(&"z")` → `z`（无引号）、`str(Vector2(1,2))` → `(1.0, 2.0)`、
+ * 而数组元素本身仍按容器形式给 `[1]`；空数组给空串、空分隔符就是把它们粘起来。
+ */
+export function strJoin(sep: string, g: GArray): string {
+  const items = g.raw();
+  let out = "";
+  for (let i = 0; i < items.length; i++) {
+    if (i > 0) out += sep;
+    out += show(items[i] as Variant);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- 相等与真值
 
 export function valueEq(a: Variant, b: Variant, depth = 0): boolean {

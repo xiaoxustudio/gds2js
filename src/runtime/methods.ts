@@ -4,7 +4,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFl
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strLength, strSplit,
+import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
   strSplitCapped, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -327,6 +327,33 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `is_valid_float() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.bool(/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]*)?$/.test(s));
+        }
+        // 实测：形参声明是 PackedStringArray，但**未定型 Array 照样能传**（字符串/整数/浮点/布尔/
+        // null/向量/颜色/嵌套数组都测过，元素走 print 那套 stringify）。传别的是**解析期**报错：
+        // Dictionary → `Invalid argument … should be "PackedStringArray" but is "Dictionary"`、
+        // String / int → `Cannot pass a value of type "String" as "PackedStringArray"`；
+        // 实参 0 个或 2 个也都在解析期。我们只能在这一层拦，文本照抄 Godot 那条。
+        case "join": {
+          if (args.length !== 1) {
+            throw new GodotRuntimeError(
+              "join-arity",
+              args.length === 0
+                ? `Too few arguments for "join()" call. Expected at least 1 but received 0.`
+                : `Too many arguments for "join()" call. Expected at most 1 but received ${args.length}.`,
+            );
+          }
+          const a = args[0] as Variant;
+          if (a.t !== Tag.ARRAY) {
+            // 两条文本实测不同：字典给 `Invalid argument …`，标量给 `Cannot pass a value of type …`
+            // （静态可判的那批由分析层同文本拦下，见 analyze.ts 的 JOIN_BAD_ARG；走到这里说明实参是运行期才知道的）
+            throw new GodotRuntimeError(
+              "join-arg",
+              a.t === Tag.DICT
+                ? `Invalid argument for "join()" function: argument 1 should be "PackedStringArray" but is "Dictionary".`
+                : `Cannot pass a value of type "${tagName(a.t)}" as "PackedStringArray".`,
+            );
+          }
+          return V.str(strJoin(s, a.v as GArray));
         }
         // 实测与全局 int(字符串) 一字不差（31 个点全等），所以直接复用同一条 strToInt
         case "to_int":

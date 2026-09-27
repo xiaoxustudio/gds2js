@@ -373,6 +373,9 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         // 被调用者位置不做 undeclared 检查（见 ident 分支的注释）
       } else {
         walkExpr(e.callee, scope, coroutines, diags);
+        // 方法实参的签名检查 Godot 也放在**解析期**（实测 join 那族），所以静态判得出的一律在这儿拦；
+        // 推不出类型的实参（变量、函数调用结果）仍由运行时那两条同文本的抛错兜住。
+        if (e.callee.kind === "attribute") checkMethodCall(e.callee.name, e, diags);
       }
       for (const a of e.args) walkExpr(a, scope, coroutines, diags);
       return;
@@ -477,6 +480,44 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
   ) {
     diags.push({ code: "div-by-zero", message: "Division by zero error in operator /.", loc: e.loc });
   }
+}
+
+/**
+ * `join()` 的实参形状（全部实测自 Godot 4.6.3 的解析期诊断）。
+ * 字典走 `Invalid argument …` 那条，标量走 `Cannot pass a value of type … as "PackedStringArray"` 那条 ——
+ * 两条文本不同，别合成一条。Array（含未定型字面量、Array[String]）是**合法**实参，不在此表。
+ */
+const JOIN_BAD_ARG: Record<string, string> = {
+  Dictionary: `Invalid argument for "join()" function: argument 1 should be "PackedStringArray" but is "Dictionary".`,
+  String: `Cannot pass a value of type "String" as "PackedStringArray".`,
+  int: `Cannot pass a value of type "int" as "PackedStringArray".`,
+  float: `Cannot pass a value of type "float" as "PackedStringArray".`,
+  bool: `Cannot pass a value of type "bool" as "PackedStringArray".`,
+  null: `Cannot pass a value of type "null" as "PackedStringArray".`,
+};
+
+/** 方法调用的解析期检查（Godot 把签名不合的实参放在 parse 阶段，实测见 S135）。 */
+function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
+  if (name !== "join") return;
+  if (e.args.length === 0) {
+    diags.push({
+      code: "join-arity",
+      message: `Too few arguments for "join()" call. Expected at least 1 but received 0.`,
+      loc: e.loc,
+    });
+    return;
+  }
+  if (e.args.length > 1) {
+    diags.push({
+      code: "join-arity",
+      message: `Too many arguments for "join()" call. Expected at most 1 but received ${e.args.length}.`,
+      loc: e.loc,
+    });
+    return;
+  }
+  const t = staticType(e.args[0] as Expr);
+  const msg = t === null ? undefined : JOIN_BAD_ARG[t];
+  if (msg !== undefined) diags.push({ code: "join-arg", message: msg, loc: e.loc });
 }
 
 function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
