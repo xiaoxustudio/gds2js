@@ -1,0 +1,12 @@
+s1 1 1
+s2 2 2
+s3 10 10
+s4 10
+s5 true true
+s6 24 24
+s7 24 false
+s8 7
+s9 42 42
+s10 50
+s11 true
+s12 hello via self call

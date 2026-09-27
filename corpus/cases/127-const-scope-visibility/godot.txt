@@ -1,0 +1,8 @@
+t1 42
+t2 outer-name
+t3 7
+t4 outer-name
+t5 7
+t6 7
+t7 7
+t8 7

@@ -1,5 +1,5 @@
 import { staticMemberFn } from "./ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "./ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 /**
  * 语义分析层。
@@ -28,14 +28,25 @@ class Scope {
   constructor(
     private vars: Set<string>,
     private parent: Scope | null,
+    /** 只有函数作用域会标它（见 allowsSelf）；块作用域留空，往上找函数作用域的答案。 */
+    private selfOk?: boolean,
   ) {}
 
   has(name: string): boolean {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name));
   }
 
-  child(names: string[]): Scope {
-    return new Scope(new Set(names), this);
+  /**
+   * 当前函数是否允许 `self`（S143）：沿作用域链上推到函数作用域为止。
+   * 类作用域（checkClass 造的）没标这个位，所以模块级 `var x = self` 走的仍是通用「未声明」那条，
+   * 不在这个口子内 —— Godot 对那个写法报什么我们没测，不放行就是不静默。
+   */
+  allowsSelf(): boolean {
+    return this.selfOk ?? (this.parent !== null && this.parent.allowsSelf());
+  }
+
+  child(names: string[], selfOk?: boolean): Scope {
+    return new Scope(new Set(names), this, selfOk);
   }
 
   /**
@@ -76,12 +87,28 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   );
   const moduleScope = globalScope.child(declNames(m));
   const coroutines = new Set(m.funcs.filter((f) => f.coroutine).map((f) => f.name));
+  // 内部类能看见的外层名字**只有**：常量、enum、类名（含兄弟内部类与跨文件的 class_name）——
+  // 模块级的 var / signal / func 都看不见（f31 / f32 报未声明、f33 / f24 报「not found in base self」）。
+  // 作用域链必须另起一条：globalScope 里就装着 declNames(m)，挂在它下面等于什么都没挡。
+  const classScopeBase = new Scope(
+    new Set([
+      ...(m.className ? [m.className] : []),
+      ...m.vars.filter((v) => v.isConst).map((v) => v.name),
+      ...m.innerClasses.map((c) => c.name),
+      ...enumNames,
+      ...globals,
+    ]),
+    null,
+  );
 
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
-  for (const c of m.innerClasses) checkClass(c, moduleScope, diags);
+  for (const c of m.innerClasses) checkClass(c, classScopeBase, diags);
+  checkStaticAccess(m.funcs, m.vars, diags);
+  checkClassFuncVisibility(m, diags);
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
+  checkTypedVarAssign(m, diags);
 
   return diags;
 }
@@ -402,6 +429,195 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
  */
 const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
 const VOID_DICT_METHODS = new Set(["clear"]);
+/**
+ * `PackedByteArray` 那一侧的 void 集合（`tmp/void-probe` 三个批次量完的，与 Array 那套**不是**同一张表）：
+ * - `append` 返回的是 **bool**（实测印出 `false`，元素照样追加）—— 别照 Array 那条当 void 拦；
+ * - `insert` / `resize` 返回 **Error 状态码**（成功 0，负数与越界 31 且原样不动），与 Array 同形；
+ * - `append_array` / `remove_at` / `fill` 取值是解析期错（void 那句）；
+ * - 零参的 `sort` / `reverse` 也在 void 那一族（`var s = b.sort()` 实测就是 void 那句，用例 137）。
+ *   同一件事**塞进 `print(...)` 的实参位**时 Godot 换了一句（`Function "sort()" not found in base self.`，
+ *   见 S168 的探针 `tmp/void-probe/sort.gd`）—— 两句都是拒，我们统一发 void 那句，位置别猜。
+ */
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
+const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
+
+/** 这条检查认得的接收者形状。 */
+type ContainerShape = "Array" | "Dictionary" | "PackedByteArray";
+
+/**
+ * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
+ * 形体与定型容器那族一模一样 —— 实参是字面量报两条（先槽位后赋值），实参是变量只报赋值那条。
+ * 只列实测过的组合：`null` 对 int/float/bool/String 四个槽都报（f8 四条），
+ * String 槽只收 String（int/float/bool 都报，f4/f9），int 槽收 int/float/bool（截断与 1，f5/f6 实测值）。
+ * 没测过的组合一律返回 null 不报 —— 误拦合法工程比漏报更糟（sema 那 0 误报是硬指标）。
+ */
+function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null {
+  switch (slot) {
+    case "int":
+      if (st === "int" || st === "float" || st === "bool") return true;
+      if (st === "String" || st === "null") return false;
+      return null;
+    case "float":
+      if (st === "int" || st === "float") return true;
+      if (st === "null" || st === "String") return false;
+      return null;
+    case "bool":
+      if (st === "bool" || st === "int") return true;
+      if (st === "null" || st === "String") return false;
+      return null;
+    case "String":
+      if (st === "String") return true;
+      if (st === "int" || st === "float" || st === "bool" || st === "null") return false;
+      return null;
+    default:
+      // Array / Dictionary / 引擎类槽：赋值这一面还没实测（定型容器的**索引**槽另有一套检查）
+      return null;
+  }
+}
+
+/**
+ * 收集「声明了标量类型的名字」（模块变量 + 本函数的带标注局部，含嵌套块），
+ * 再逐个 `x = v` 赋值点判组合是否合式。
+ */
+function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
+  const scalarType = (t: TypeRef | null): string | null => {
+    if (t === null || t.kind !== "named") return null;
+    const base = t.name.replace(/\[.*\]$/, "");
+    return base === "int" || base === "float" || base === "bool" || base === "String" ? base : null;
+  };
+
+  const checkBody = (body: Stmt[], outer: Map<string, string>): void => {
+    const decls = new Map(outer);
+    const stmt = (s: Stmt): void => {
+      switch (s.kind) {
+        case "var": {
+          const d = scalarType(s.type);
+          if (d !== null) decls.set(s.name, d);
+          if (s.init) expr(s.init);
+          return;
+        }
+        case "assign": {
+          if (s.target.kind === "ident") {
+            const slot = decls.get(s.target.name);
+            const st = staticOf(s.value, decls);
+            if (slot !== undefined && st !== null) {
+              const holds = varSlotHolds(slot, st);
+              if (holds === false) {
+                if (s.value.kind === "lit") {
+                  diags.push({
+                    code: "typed-var-value",
+                    message: `Cannot assign a value of type "${st}" as "${slot}".`,
+                    loc: s.value.loc,
+                  });
+                }
+                diags.push({
+                  code: "typed-var-assign",
+                  message: `Value of type "${st}" cannot be assigned to a variable of type "${slot}".`,
+                  loc: s.value.loc,
+                });
+              }
+            }
+          }
+          expr(s.value);
+          return;
+        }
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond) expr(br.cond);
+            br.body.forEach(stmt);
+          }
+          return;
+        case "for":
+          expr(s.iter);
+          s.body.forEach(stmt);
+          return;
+        case "while":
+          expr(s.cond);
+          s.body.forEach(stmt);
+          return;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) {
+            if (arm.guard) expr(arm.guard);
+            arm.body.forEach(stmt);
+          }
+          return;
+        case "expr":
+          expr(s.expr);
+          return;
+        case "return":
+          if (s.value) expr(s.value);
+          return;
+        default:
+          return;
+      }
+    };
+    const staticOf = (e: Expr, d: Map<string, string>): NonNullable<StaticType> | null => {
+      if (e.kind === "ident") {
+        const t = d.get(e.name);
+        return t === undefined ? null : (t as NonNullable<StaticType>);
+      }
+      return staticType(e);
+    };
+    const expr = (e: Expr): void => {
+      switch (e.kind) {
+        case "lambda":
+          // lambda 体里可能再声明带类型的局部：独立作用域，不影响外层 decls
+          checkBody(e.body, decls);
+          return;
+        case "call":
+          expr(e.callee);
+          e.args.forEach(expr);
+          return;
+        case "binary":
+          expr(e.left);
+          expr(e.right);
+          return;
+        case "unary":
+        case "await":
+        case "is":
+        case "as":
+          expr(e.operand);
+          return;
+        case "attribute":
+          expr(e.obj);
+          return;
+        case "index":
+          expr(e.obj);
+          expr(e.index);
+          return;
+        case "array":
+          e.items.forEach(expr);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key);
+            expr(en.value);
+          }
+          return;
+        default:
+          return;
+      }
+    };
+    body.forEach(stmt);
+  };
+
+  const run = (vars: VarDecl[], funcs: FuncDecl[]): void => {
+    const outer = new Map<string, string>();
+    for (const v of vars) {
+      const d = scalarType(v.type);
+      if (d !== null) outer.set(v.name, d);
+    }
+    for (const f of funcs) checkBody(f.body, outer);
+  };
+
+  run(m.vars, m.funcs);
+  const classes = (c: ClassDecl): void => {
+    run(c.vars, c.funcs);
+    for (const inner of c.innerClasses) classes(inner);
+  };
+  for (const c of m.innerClasses) classes(c);
+}
 
 function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
@@ -412,24 +628,33 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) collect(c);
 
   /** 变量名 → 容器形状；只在推得出来时进表。 */
-  const shapeOf = (e: Expr): "Array" | "Dictionary" | null => {
+  const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
+    // `var b = PackedByteArray([1,2])`：构造器调用是这一族唯一推得出的初值形状
+    // （`"x".to_utf8_buffer()` 那条推不出，宁可漏报）
+    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "PackedByteArray") {
+      return "PackedByteArray";
+    }
     return null;
   };
 
   for (const body of bodies) {
-    const shapes = new Map<string, "Array" | "Dictionary">();
+    const shapes = new Map<string, ContainerShape>();
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
           if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && !discarded) {
             const shape = shapes.get(e.callee.obj.name);
-            const set = shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null;
-            if (set !== null && set.has(e.callee.name)) {
+            const name = e.callee.name;
+            const isVoid =
+              shape === "PackedByteArray"
+                ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
+                : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
+            if (isVoid) {
               diags.push({
                 code: "void-method-value",
-                message: `Cannot get return value of call to "${e.callee.name}()" because it returns "void".`,
+                message: `Cannot get return value of call to "${name}()" because it returns "void".`,
                 loc: e.loc,
               });
             }
@@ -475,6 +700,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (s.type !== null && s.type.kind === "named") {
               if (/^Array(\[|$)/.test(s.type.name)) shapes.set(s.name, "Array");
               else if (/^Dictionary(\[|$)/.test(s.type.name)) shapes.set(s.name, "Dictionary");
+              else if (s.type.name === "PackedByteArray") shapes.set(s.name, "PackedByteArray");
             } else if (s.init !== null) {
               const sh = shapeOf(s.init);
               if (sh !== null) shapes.set(s.name, sh);
@@ -549,15 +775,287 @@ function scalarStaticName(name: string): string | null {
   }
 }
 
+/**
+ * 静态方法里碰实例成员 —— Godot 在**解析期**就拒（S160 实测的 f21 / f22 两条原文）：
+ * - 裸读实例变量：`Cannot access non-static variable "mv" from the static function "reads()".`
+ * - 裸调实例方法：`Cannot call non-static function "imeth()" from the static function "calls()".`
+ * 不拦的话这条会编成产物，而 JS 静态方法里的 `this` 是**类本身**，`this.mv` 静默给 undefined ——
+ * 正是最难查的那一形。`const`（isConst）与 `static var`（isStatic）都不算实例变量：
+ * 静态里读常量实测成立（f15 t4/t5），静态里读写本类静态变量也实测成立（f17 t6、f23 t3/t4 —— S161）。
+ */
+function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic[]): void {
+  const instanceVars = new Set(vars.filter((v) => !v.isConst && !v.isStatic).map((v) => v.name));
+  const instanceFuncs = new Set(funcs.filter((f) => !f.isStatic).map((f) => f.name));
+  if (instanceVars.size === 0 && instanceFuncs.size === 0) return;
+
+  for (const f of funcs) {
+    if (!f.isStatic) continue;
+    // 局部名与形参不算「实例成员」：Godot 的解析按最近的声明走
+    const local = new Set<string>();
+    collectLocalNames(f.body, f.params.map((p) => p.name), local);
+
+    const expr = (e: Expr): void => {
+      switch (e.kind) {
+        case "ident":
+          if (!local.has(e.name) && instanceVars.has(e.name)) {
+            diags.push({
+              code: "static-access-var",
+              message: `Cannot access non-static variable "${e.name}" from the static function "${f.name}()".`,
+              loc: e.loc,
+            });
+          }
+          return;
+        case "call": {
+          // 只判**裸调**（callee 是 ident）：`p.imeth()` 这种带着接收者的写法实测完全合法（f25）
+          if (e.callee.kind === "ident" && !local.has(e.callee.name) && instanceFuncs.has(e.callee.name)) {
+            diags.push({
+              code: "static-call-func",
+              message: `Cannot call non-static function "${e.callee.name}()" from the static function "${f.name}()".`,
+              loc: e.loc,
+            });
+          }
+          expr(e.callee);
+          for (const a of e.args) expr(a);
+          return;
+        }
+        case "index":
+          expr(e.obj);
+          expr(e.index);
+          return;
+        case "attribute":
+          expr(e.obj);
+          return;
+        case "binary":
+          expr(e.left);
+          expr(e.right);
+          return;
+        case "unary":
+        case "await":
+        case "is":
+        case "as":
+          expr(e.operand);
+          return;
+        case "array":
+          for (const it of e.items) expr(it);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key);
+            expr(en.value);
+          }
+          return;
+        case "lambda":
+          // lambda 里的裸名字沿用外层判定，但形参不进外层 local（保守：只按外层已知的实例名判）
+          for (const st of e.body) stmt(st);
+          return;
+        case "lit":
+          return;
+      }
+    };
+    const stmt = (s: Stmt): void => {
+      switch (s.kind) {
+        case "expr":
+          expr(s.expr);
+          return;
+        case "var":
+          if (s.init !== null) expr(s.init);
+          return;
+        case "assign":
+          expr(s.target);
+          expr(s.value);
+          return;
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond !== null) expr(br.cond);
+            br.body.forEach(stmt);
+          }
+          return;
+        case "for":
+          expr(s.iter);
+          s.body.forEach(stmt);
+          return;
+        case "while":
+          expr(s.cond);
+          s.body.forEach(stmt);
+          return;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) {
+            if (arm.guard !== null) expr(arm.guard);
+            arm.body.forEach(stmt);
+          }
+          return;
+        case "return":
+          if (s.value !== null) expr(s.value);
+          return;
+        default:
+          return;
+      }
+    };
+    f.body.forEach(stmt);
+  }
+}
+
+/**
+ * 函数体里所有**局部声明**的名字：形参、`var`、`for` 的循环变量、`match` 的绑定、lambda 的形参。
+ * 用来避免「局部遮蔽了外层名字却被当成外层名字报错」这一类误报 —— 误报在这套判据里是硬伤。
+ */
+function collectLocalNames(body: Stmt[], params: string[], out: Set<string>): void {
+  for (const p of params) out.add(p);
+  const stmt = (s: Stmt): void => {
+    switch (s.kind) {
+      case "var":
+        out.add(s.name);
+        return;
+      case "for":
+        out.add(s.var);
+        s.body.forEach(stmt);
+        return;
+      case "if":
+        for (const br of s.branches) br.body.forEach(stmt);
+        return;
+      case "while":
+        s.body.forEach(stmt);
+        return;
+      case "match":
+        for (const arm of s.arms) {
+          if (arm.pattern.kind === "bind") out.add(arm.pattern.name);
+          arm.body.forEach(stmt);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  body.forEach(stmt);
+}
+
+/**
+ * 内部类里**裸调外层脚本的函数**是解析期错：`Function "helper()" not found in base self.`
+ * （f33 实测实例方法那一版；f24 是静态方法那一版，同一条文本）。
+ * 通用「未声明」那条只管值位置，被调用者位置历来不检查（`quit()` / `create_timer()` 这些宿主方法
+ * 是故意放行的），所以这里只认**外层脚本里真存在的那个函数名**才报 —— 认不得的一律放行，
+ * 这样误报恒为零，也不会顺手把引擎方法拦掉。
+ */
+function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
+  const outerFuncs = new Set(m.funcs.map((f) => f.name));
+  if (outerFuncs.size === 0) return;
+
+  const scanExpr = (e: Expr, cb: (name: string, loc: Loc) => void): void => {
+    switch (e.kind) {
+      case "call":
+        if (e.callee.kind === "ident") cb(e.callee.name, e.loc);
+        scanExpr(e.callee, cb);
+        for (const a of e.args) scanExpr(a, cb);
+        return;
+      case "index":
+        scanExpr(e.obj, cb);
+        scanExpr(e.index, cb);
+        return;
+      case "attribute":
+        scanExpr(e.obj, cb);
+        return;
+      case "binary":
+        scanExpr(e.left, cb);
+        scanExpr(e.right, cb);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        scanExpr(e.operand, cb);
+        return;
+      case "array":
+        for (const it of e.items) scanExpr(it, cb);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          scanExpr(en.key, cb);
+          scanExpr(en.value, cb);
+        }
+        return;
+      case "lambda":
+        scanStmts(e.body, cb);
+        return;
+      default:
+        return;
+    }
+  };
+  const scanStmts = (body: Stmt[], cb: (name: string, loc: Loc) => void): void => {
+    for (const s of body) {
+      switch (s.kind) {
+        case "expr":
+          scanExpr(s.expr, cb);
+          continue;
+        case "var":
+          if (s.init !== null) scanExpr(s.init, cb);
+          continue;
+        case "assign":
+          scanExpr(s.target, cb);
+          scanExpr(s.value, cb);
+          continue;
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond !== null) scanExpr(br.cond, cb);
+            scanStmts(br.body, cb);
+          }
+          continue;
+        case "for":
+          scanExpr(s.iter, cb);
+          scanStmts(s.body, cb);
+          continue;
+        case "while":
+          scanExpr(s.cond, cb);
+          scanStmts(s.body, cb);
+          continue;
+        case "match":
+          scanExpr(s.subject, cb);
+          for (const arm of s.arms) {
+            if (arm.guard !== null) scanExpr(arm.guard, cb);
+            scanStmts(arm.body, cb);
+          }
+          continue;
+        case "return":
+          if (s.value !== null) scanExpr(s.value, cb);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  const walkClass = (c: ClassDecl): void => {
+    const own = new Set(c.funcs.map((f) => f.name));
+    for (const f of c.funcs) {
+      const local = new Set<string>();
+      collectLocalNames(f.body, f.params.map((p) => p.name), local);
+      scanStmts(f.body, (name, loc) => {
+        if (outerFuncs.has(name) && !own.has(name) && !local.has(name)) {
+          diags.push({
+            code: "class-outer-func",
+            message: `Function "${name}()" not found in base self.`,
+            loc,
+          });
+        }
+      });
+    }
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const c of m.innerClasses) walkClass(c);
+}
+
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {
   const scope = base.child([c.name, ...declNames(c)]);
   const coroutines = new Set(c.funcs.filter((f) => f.coroutine).map((f) => f.name));
+  checkStaticAccess(c.funcs, c.vars, diags);
   for (const f of c.funcs) checkFunc(f, scope, coroutines, diags);
   for (const inner of c.innerClasses) checkClass(inner, scope, diags);
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[]): void {
-  const scope = outer.child(f.params.map((p) => p.name));
+  // `self` 一律进作用域（S143 实测它在实例方法里就是个对象），静态方法那一条按 Godot 的原文单独报，
+  // 不能让通用「未声明」抢话 —— 抢了就成了「我们报错、Godot 不报」的另一种口径。
+  const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
   walkStmts(f.body, scope, coroutines, diags, false);
 }
 
@@ -658,6 +1156,17 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       // 查了会大量误报（例如 SceneTree.create_timer）。
       // `super` 是关键字（super.method()），不是需要声明的值标识符，放行。
       if (e.name === "super") return;
+      if (e.name === "self") {
+        // 实测（S143 + `static func` 那条探针）：静态方法里用 self 是**解析期**错。
+        if (!scope.allowsSelf()) {
+          diags.push({
+            code: "self-in-static",
+            message: 'Cannot use "self" inside a static function.',
+            loc: e.loc,
+          });
+        }
+        return;
+      }
       if (!scope.has(e.name)) {
         diags.push({
           code: "undeclared-identifier",

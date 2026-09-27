@@ -123,7 +123,7 @@ export class Main extends SceneTree {
     print(rt.show(big));
     let neg = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     {
-      const _nv = rt.writeProp(neg, "x", rt.ops.neg(rt.V.float(2.5)));
+      const _nv = rt.writeProp(neg, "x", rt.V.float((-2.5)));
       if (_nv !== null) neg = _nv;
     }
     print(rt.show(neg));
@@ -146,4 +146,6 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerFieldTypes(Main, {"m": "Vector2"});
+rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

@@ -6,12 +6,13 @@
  * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
-import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/runtime/builtins";
+import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable } from "../src/runtime/object";
-import { index, method, writeIdx, writeProp } from "../src/runtime/methods";
+import { callable, callableOf, registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta } from "../src/runtime/object";
+import { Signal } from "../src/runtime/signal";
+import { attribute, index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
 import {
@@ -45,7 +46,7 @@ import {
   colorWrite,
   GColor,
 } from "../src/runtime/color";
-import { GVector2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
+import { GVector2, asVec2, toVec2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 import {
   GVector3,
   asVec3,
@@ -57,6 +58,7 @@ import {
   vector3Method,
   vector3New,
 } from "../src/runtime/vector3";
+import { bytesCtor, GBytes, toByte } from "../src/runtime/packed";
 import { isType, typeOf } from "../src/runtime/patterns";
 import {
   GVector2i,
@@ -181,6 +183,124 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   fast.rawArrSet2(gg, -1, 0, 7);
   eq("057", "裸 g[-1][0]=7", JSON.stringify(gg), "[[1,2],[7,4]]");
   shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
+}
+
+// ---- step 56：容器变更方法的**裸轨**与**装箱轨**逐步对齐。
+// 装箱轨的每条口径都是 Godot 实测过的（114-array-mutation-status / 115-raw-mutation-paths 的 golden），
+// 所以这里不需要新的"我认为对"：只要两条轨跑同一串操作得到同一串状态码与同一个末态，裸轨就是安全的。
+{
+  type MutOp = { op: string; i?: number; v?: number };
+  const runMut = (title: string, prog: MutOp[]): void => {
+    const g = V.array(GArray.of([1, 2, 3].map((n) => V.int(n))));
+    const a = [1, 2, 3];
+    const box: string[] = [];
+    const raw: string[] = [];
+    for (const s of prog) {
+      switch (s.op) {
+        case "insert":
+          box.push(show(method(g, "insert", [V.int(s.i!), V.int(s.v!)])));
+          raw.push(String(fast.rawArrInsert(a, s.i!, s.v!)));
+          break;
+        // void 与"结果被丢弃的 pop"两边都只记一个占位符：裸轨拿不到返回值，正是它只在丢弃时才合法的理由。
+        case "remove_at":
+          method(g, "remove_at", [V.int(s.i!)]);
+          fast.rawArrRemoveAt(a, s.i!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "pop_at":
+          method(g, "pop_at", [V.int(s.i!)]);
+          fast.rawArrRemoveAt(a, s.i!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "pop_back":
+          method(g, "pop_back", []);
+          a.pop();
+          box.push("·");
+          raw.push("·");
+          break;
+        case "pop_front":
+          method(g, "pop_front", []);
+          a.shift();
+          box.push("·");
+          raw.push("·");
+          break;
+        case "push_front":
+          method(g, "push_front", [V.int(s.v!)]);
+          fast.rawArrPushFront(a, s.v!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "push_back":
+          method(g, "push_back", [V.int(s.v!)]);
+          a.push(s.v!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "reverse":
+          method(g, "reverse", []);
+          a.reverse();
+          box.push("·");
+          raw.push("·");
+          break;
+        case "fill":
+          method(g, "fill", [V.int(s.v!)]);
+          a.fill(s.v!);
+          box.push("·");
+          raw.push("·");
+          break;
+        case "clear":
+          method(g, "clear", []);
+          fast.rawArrClear(a);
+          box.push("·");
+          raw.push("·");
+          break;
+        default:
+          throw new Error(`未知的操作 ${s.op}`);
+      }
+    }
+    // 装箱轨 print 数组是 `[1, 2, 3]`，裸轨拼成同样的形状再比。装箱轨是参照（Godot 实测过），
+    // 所以它当"期望"，裸轨当"实得"。
+    eq("step56", title, `[${a.join(", ")}] ${raw.join(" ")}`, `${show(g)} ${box.join(" ")}`);
+  };
+
+  runMut("insert/remove_at/push_front/fill 混合", [
+    { op: "insert", i: 1, v: 9 },
+    { op: "push_front", v: 7 },
+    { op: "remove_at", i: 0 },
+    { op: "insert", i: -1, v: 4 },
+    { op: "fill", v: 5 },
+  ]);
+  runMut("下标折算与越界状态码", [
+    { op: "insert", i: 3, v: 4 },
+    { op: "insert", i: 99, v: 5 },
+    { op: "insert", i: -99, v: 6 },
+    { op: "remove_at", i: -1 },
+    { op: "remove_at", i: 9 },
+    { op: "pop_at", i: -5 },
+  ]);
+  runMut("清空后再 pop 不炸", [
+    { op: "pop_back" },
+    { op: "pop_front" },
+    { op: "clear" },
+    { op: "pop_back" },
+    { op: "push_front", v: 1 },
+    { op: "clear" },
+  ]);
+  runMut("负下标折叠、push_back 与 reverse", [
+    { op: "insert", i: -1, v: 4 },
+    { op: "push_back", v: 5 },
+    { op: "reverse" },
+    { op: "insert", i: -5, v: 6 },
+    { op: "remove_at", i: -1 },
+  ]);
+  const dm = new Map<string, number>([["k", 5]]);
+  const gd = new GDict();
+  gd.set(V.str("k"), V.int(5));
+  const dg = V.dict(gd);
+  eq("step56", "裸 get(k,def) 与装箱同值（命中）", String(fast.rawDictGetOr(dm, "k", 0)), show(method(dg, "get", [V.str("k"), V.int(0)])));
+  eq("step56", "裸 get(k,def) 与装箱同值（缺键给默认）", String(fast.rawDictGetOr(dm, "j", 7)), show(method(dg, "get", [V.str("j"), V.int(7)])));
 }
 
 // ---- 061 字符串比较：Godot 按码点（UTF-32），JS 原生按 UTF-16 码元 → 代理对会判反方向。
@@ -1901,8 +2021,272 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("113", "void 方法在运行时的返回值统一是 nil", `${call(arr(I(1)), "append", [I(2)])}|${call(arr(I(1)), "clear", [])}|${call(arr(I(1)), "fill", [I(0)])}|${call(arr(I(1), I(2)), "remove_at", [I(0)])}|${call(arr(I(1)), "push_front", [I(0)])}|${call(arr(I(1)), "push_back", [I(2)])}|${call(arr(I(1), I(1)), "erase", [I(1)])}`, "<null>|<null>|<null>|<null>|<null>|<null>|<null>");
 }
 
-console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
-if (fails.length > 0) {
+// ---- step 58：声明为 Vector2 的槽在**赋值点**的转换（实测 f5/f6：`mv = Vector2i(1,2)` 给 (1.0, 2.0)、
+// 内建类的 `p.v = Vector2i(3,4)` 同值；Vector2 之间是拷贝，不是共享同一个实例）
+{
+  eq("step58", "Vector2i 升成 Vector2", show(toVec2(vector2i(1, 2))), "(1.0, 2.0)");
+  const srcV = vector2(1.5, 2.5);
+  const dstV = toVec2(srcV);
+  eq("step58", "Vector2 进 Vector2 槽同值", show(dstV), "(1.5, 2.5)");
+  eq("step58", "而且是拷贝（不共享实例）", asVec2(dstV) === asVec2(srcV), false);
+  // int 进 Vector2 槽 Godot 在解析期就拒（f9 实测），所以走到这里是第二道防线：响亮，绝不静默存下别的形状
+  shouldThrow("step58", "int 进 Vector2 槽响亮报缺", () => toVec2(I(5)));
+}
+
+// ---- step 58b：属性写 `p.m = v` 走的是 Godot 的 named-property 动态路径。
+// 语料钉住了「收得下」的那半边（120 逐字节），这里钉「拒」的那半边 —— Godot 一旦被这几条打断
+// 就不再跑 quit()，进程挂着（S145 实测 timedOut），所以它们进不了语料，只能在这里对账。
+{
+  class Inner {
+    m: Variant = I(1);
+    t: Variant = I(2);
+    s: Variant = S("a");
+    v: Variant = vector2(0, 0);
+    getm(): Variant {
+      return this.m;
+    }
+  }
+  registerClass("Inner", Inner as unknown as new (...a: unknown[]) => object);
+  registerFieldTypes(Inner as unknown as never, { t: "int", s: "String", v: "Vector2" });
+  const obj = V.object(new Inner());
+  const field = (k: string): string => show((obj.v as Record<string, Variant>)[k] as Variant);
+
+  writeProp(obj, "t", F(5.5));
+  eq("step58b", "int 字段收 float 截断", field("t"), "5");
+  writeProp(obj, "t", S("12abc"));
+  eq("step58b", "int 字段收数字串走 int(字符串)", field("t"), "12");
+  writeProp(obj, "s", V.stringName("nm"));
+  eq("step58b", "String 字段收 StringName", field("s"), "nm");
+  writeProp(obj, "v", vector2i(3, 4));
+  eq("step58b", "Vector2 字段收 Vector2i 升级", field("v"), "(3.0, 4.0)");
+  writeProp(obj, "m", S("x"));
+  eq("step58b", "未定型字段原样存", field("m"), "x");
+  // f10 实测：往 String 字段塞 int 与 e1「未知键」用的是同一句话，所以这里绝不能套 str() 糊过去
+  shouldThrow("step58b", "String 字段拒 int（不是转成 \"5\"）", () => writeProp(obj, "s", I(5)));
+  shouldThrow("step58b", "未知键拒（e1 的形体）", () => writeProp(obj, "zz", I(1)));
+  shouldThrow("step58b", "写方法名也拒（f11 与未知键同文本）", () => writeProp(obj, "getm", I(5)));
+}
+
+{
+  // f27 / f28 实测：Callable 给 25、Signal 给 26。产物里信号与 lambda 都是**裸 JS 对象**
+  // （`fired = new rt.Signal()` 这样的字段，读出来不装箱），所以 typeOf 必须能吃裸值 ——
+  // 以前它拿 `undefined` 的 tag 去查表，冒出来的是一条与信号毫无关系的 BigInt 错。
+  const sig = new Signal();
+  eq("step61", "typeof(Callable) → 25（装箱的方法引用）", `${typeOf(callableOf(() => V.int(1))).v}`, "25");
+  eq("step61", "typeof(Callable) → 25（callable 工厂）", `${typeOf(callable(() => V.int(1))).v}`, "25");
+  eq("step61", "typeof(信号) → 26（**裸对象**，产物里的实际形状）", `${typeOf(sig).v}`, "26");
+  eq("step61", "typeof(信号) → 26（装箱的）", `${typeOf(V.object(sig)).v}`, "26");
+  eq("step61", "普通对象仍是 24（没被新分支误伤）", `${typeOf(V.object({})).v}`, "24");
+}
+
+{
+  // S160 实测：静态方法三条路都通 —— `A.f()`、`p.f()`、`var cb = A.f`（再 cb.call()）。
+  // JS 那边静态方法挂在**构造器**上、实例摸不到，所以运行时必须有一张显式表可查。
+  class Holder {
+    mv = V.int(1);
+    static make(): Variant {
+      return V.str("made");
+    }
+    static twice(x: Variant): Variant {
+      return V.int(42);
+    }
+  }
+  registerClass("Holder", Holder);
+  registerStaticMethods(Holder, ["make", "twice"]);
+  const h = new Holder();
+  eq("step62", "A.f() 从类对象调得到", `${method(Holder, "make", []).v}`, "made");
+  eq("step62", "p.f() 从实例也调得到，同一个结果", `${method(V.object(h), "make", []).v}`, "made");
+  eq("step62", "A.f 取值是 Callable（typeof → 25）", `${typeOf(attribute(Holder, "make")).v}`, "25");
+  eq("step62", "p.f 取值同样是 Callable", `${typeOf(attribute(V.object(h), "make")).v}`, "25");
+  eq("step62", "取到的 Callable 照样能 call，实参照传", `${method(attribute(Holder, "twice"), "call", [V.int(21)]).v}`, "42");
+  // 这条是「为什么必须用显式表」的证人：JS 函数自带 name / length 两个键，
+  // 拿 constructor[name] 鸭子类型去认静态方法会把它们当成方法召出来。
+  shouldThrow("step62", "没登记的 name/length 不当成方法（显式表的意义）", () => method(V.object(h), "name", []));
+}
+
+{
+  // S161 实测：`static var` 是**共享的一格** —— 类名、实例两条读写路落在同一格上，
+  // 而且带类型的槽照 S150 那五种转换（f17 t7：`A.setx(2.7)` → 2、`A.x` 也跟着是 2）。
+  class Box {
+    static x = V.int(1);
+    static plain = V.int(2);
+  }
+  registerClass("Box", Box);
+  registerStaticVars(Box, { x: "int", plain: "" });
+  const b = new Box();
+  eq("step63", "类对象读得到那一格", `${(attribute(Box, "x") as Variant).v}`, "1");
+  eq("step63", "实例读的是**同一格**", `${(attribute(V.object(b), "x") as Variant).v}`, "1");
+  writeProp(Box, "x", F(5.5));
+  eq("step63", "类名写：int 槽收 float 截断", `${(Box.x as Variant).v}`, "5");
+  writeProp(V.object(b), "x", S("12abc"));
+  eq("step63", "实例写、类名读到（真是共享的）", `${(attribute(Box, "x") as Variant).v}`, "12");
+  writeProp(Box, "plain", S("s"));
+  eq("step63", "没实测类型的槽原样存（不编造规则）", `${(attribute(Box, "plain") as Variant).t}`, `${Tag.STRING}`);
+  shouldThrow("step63", "静态表里没有的键照旧响拒", () => writeProp(V.object(new Box()), "zz", I(1)));
+}
+
+{
+  // f35 对拍出来的静默错：**实例方法读出来是裸 JS 函数**，于是 `typeof(cb)` 给 24（Godot 给 25）、
+  // `cb.call(21)` 直接报「脚本上的 call() 未实现」。修好之后这几条谓词才谈得上。
+  class Holder2 {
+    im(v: Variant): Variant {
+      return v;
+    }
+    static sm(v: Variant): Variant {
+      return v;
+    }
+  }
+  registerClass("Holder2", Holder2);
+  registerStaticMethods(Holder2, ["sm"]);
+  const h2 = new Holder2();
+  const bound = attribute(V.object(h2), "im");
+  eq("step65", "实例方法读出来是 Callable（typeof → 25，不再是 24）", `${typeOf(bound).v}`, "25");
+  eq("step65", "Callable.get_method()", `${method(bound, "get_method", []).v}`, "im");
+  eq("step65", "is_null() false / is_valid() true（f34 t2/t3）", `${method(bound, "is_null", []).v}/${method(bound, "is_valid", []).v}`, "false/true");
+  eq("step65", "Callable.callv 收一个 Array（f34 t7）", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
+  const stat = attribute(Holder2, "sm");
+  eq("step65", "静态方法取值的 get_method 也报得出名字（f34 t4）", `${method(stat, "get_method", []).v}`, "sm");
+  // 静态那一格的 is_null / is_valid 实测只覆盖了 top 与 a.im，静态那版没测 —— 响着比猜着好
+  shouldThrow("step65", "静态方法的 is_valid 没实测过 → 照旧响拒", () => method(stat, "is_valid", []));
+  class Sig {
+    fired = new Signal("fired");
+  }
+  const sg = attribute(V.object(new Sig()), "fired");
+  eq("step65", "Signal.get_name()（f34 t9）", `${method(sg, "get_name", []).v}`, "fired");
+  eq("step65", "Signal.is_null() → false（f34 t2）", `${method(sg, "is_null", []).v}`, "false");
+}
+
+{
+  // f36 / f39 实测的 Object 方法面：这些都**不依赖身份 id**，所以能逐条对上。
+  class Obj {
+    im(): Variant {
+      return V.int(1);
+    }
+    static sm(): Variant {
+      return V.nil();
+    }
+  }
+  registerClass("Obj", Obj);
+  registerStaticMethods(Obj, ["sm"]);
+  registerNativeBase(Obj, "RefCounted");
+  const o = new Obj();
+  eq("step66", "get_class 给的是**原生基类**而不是脚本名（f39 t3）", `${method(V.object(o), "get_class", []).v}`, "RefCounted");
+  eq("step66", "has_method：自己的 / 静态的 / Object 自带的都真，全局函数与空串假", [
+    method(V.object(o), "has_method", [V.str("im")]).v,
+    method(V.object(o), "has_method", [V.str("sm")]).v,
+    method(V.object(o), "has_method", [V.str("get_class")]).v,
+    method(V.object(o), "has_method", [V.str("print")]).v,
+    method(V.object(o), "has_method", [V.str("")]).v,
+  ].join(","), "true,true,true,false,false");
+  setMeta(o, V.stringName("sn"), I(6));
+  eq("step66", "StringName 写进去、String 键读得到（f39 t1）", [
+    method(V.object(o), "has_meta", [V.str("sn")]).v,
+    method(V.object(o), "get_meta", [V.str("sn")]).v,
+  ].join(" "), "true 6");
+  eq("step66", "get_meta 两参形给默认值（f36 t5）", `${method(V.object(o), "get_meta", [V.str("nope"), I(99)]).v}`, "99");
+  eq("step66", "get_meta 一参形缺键给 null 且**继续跑**（f37）", `${method(V.object(o), "get_meta", [V.str("nope")]).t}`, `${Tag.NIL}`);
+  method(V.object(o), "remove_meta", [V.str("sn")]);
+  eq("step66", "remove_meta 之后 has_meta 假（f39 t2）", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
+  shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
+}
+
+{
+  // S168 实测的 PackedByteArray。三条最容易写错的：元素一律折成 0..255、
+  // **赋值是共享引用**（与 Array 同一条，`PackedByteArray(src)` / `duplicate()` / `slice()` 才拷贝）、
+  // `==` 比的是内容。最后这条我在 135 的差分上真错过一次：分支放进了 `valueSame`（比身份），
+  // `b == PackedByteArray([3,1,2])` 就印成 false 而不是 Godot 的 true。
+  const err = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  const pack = (ns: number[]): Variant => V.object(GBytes.of(ns));
+  const b = bytesCtor([V.array(GArray.of([I(3), I(1), I(2)]))]);
+  eq("step67", "构造 + 打印 + typeof → 29（f40 t1）", `${show(b)} ${typeOf(b).v}`, "[3, 1, 2] 29");
+  eq("step67", "元素折成字节：300→44、-1→255、2.7→2、true→1（f43 / f49）",
+    `${toByte(I(300))} ${toByte(I(-1))} ${toByte(F(2.7))} ${toByte(V.bool(true))}`, "44 255 2 1");
+  eq("step67", "`+` 拼接给新 pack（f51 t1）", `${show(ops.add(b, pack([7])))}`, "[3, 1, 2, 7]");
+  eq("step67", "== 比内容：同内容真、不同内容假（f51 t2）",
+    `${valueEq(b, bytesCtor([V.array(GArray.of([I(3), I(1), I(2)]))]))} ${valueEq(b, pack([7]))}`, "true false");
+  const neg = pack([1, 2]);
+  eq("step67", "负下标从尾部数（f52）", `${show(index(neg, I(-1)))}`, "2");
+  eq("step67", "越界读的文本逐字对上（f50）", err(() => index(neg, I(5))),
+    "Invalid access of index '5' on a base object of type: 'PackedByteArray'.");
+  eq("step67", "越界写的文本逐字对上（f50）", err(() => writeIdx(neg, I(5), I(1))),
+    "Invalid assignment of index '5' (on base: 'PackedByteArray') with value of type 'int'.");
+  const wr = pack([0, 0]);
+  writeIdx(wr, I(0), I(700));
+  eq("step67", "下标写 700 回绕成 188（f43）", `${show(wr)}`, "[188, 0]");
+  const dup = method(b, "duplicate", []);
+  writeIdx(dup, I(0), I(8));
+  const cp = bytesCtor([b]);
+  writeIdx(cp, I(1), I(5));
+  eq("step67", "duplicate() 与 PackedByteArray(src) 都是独立拷贝（f49 t3 / f51 t11）",
+    `${show(b)} ${show(dup)} ${show(cp)}`, "[3, 1, 2] [8, 1, 2] [3, 5, 2]");
+  const rs = pack([1]);
+  method(rs, "resize", [I(3)]);
+  eq("step67", "resize 长出来的格子填 0（f51 t10）", `${show(rs)}`, "[1, 0, 0]");
+  eq("step67", "hex_encode（f40 t9）", `${method(pack([1, 2, 3, 255]), "hex_encode", []).v}`, "010203ff");
+  eq("step67", "UTF-8 往返：六字节 → héllo（f40 t4）",
+    `${method(pack([104, 195, 169, 108, 108, 111]), "get_string_from_utf8", []).v}`, "héllo");
+  eq("step67", "文本 → 字节（S168 的 to_utf8_buffer）", `${show(method(S("héllo"), "to_utf8_buffer", []))}`,
+    "[104, 195, 169, 108, 108, 111]");
+  eq("step67", "get_string_from_ascii 只实测过纯 ASCII，带高位字节响着拒",
+    err(() => method(pack([104, 200]), "get_string_from_ascii", [])),
+    "get_string_from_ascii() 只实测过纯 ASCII 的字节");
+  eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（f41 / 用例 135）",
+    `${err(() => method(b, "min", []))}|${err(() => method(b, "to_byte_array", []))}`,
+    "Invalid call. Nonexistent function 'min' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.");
+  shouldThrow("step67", "bsearch 存在但没测过 → 响亮拒，不拿 Array 的结论凑", () => method(b, "bsearch", [I(1)]));
+  const viaArray = arrayFromVariant(b);
+  eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
+    `${show(viaArray)} ${typeOf(index(viaArray, I(0))).v}`, "[3, 1, 2] 2");
+  shouldThrow("step67", "Array(x) 只实测过 PackedByteArray 实参", () => arrayFromVariant(S("abc")));
+  // GBytes 的 JS 载荷自带 items / raw / length 三个键，Godot 那侧这些**一个都不是成员**（属性面为空）。
+  // 不挡的话 `print(b.raw)` 会把内部实现当成员递出去 —— 「Godot 拒、我们给值」那一族。
+  shouldThrow("step67", "读 pack 的「属性」一律响（属性面没实测过，成员全是方法）", () => attribute(b, "length"));
+  shouldThrow("step67", "写 pack 的内部键不许落进存储", () => writeProp(b, "items", I(1)));
+  // 第二批探针（`tmp/void-probe` e/g 系列）改的是**返回值与负下标**这一面：`append` 不是 void 而是
+  // 返回 bool、`insert`/`resize` 给 Error 状态码、负下标与越界的 insert/remove_at 是**原样不动**
+  // （JS 的 splice 会把它们当成尾部操作，那是静默错）、`get` 越界给 0 而不是报错、写的负下标从尾部数。
+  const mut = (ns: number[]): Variant => V.object(GBytes.of(ns));
+  const ap = mut([1, 2, 3]);
+  eq("step67", "append() 返回 **bool false** 且照样追加（e1 / g1）",
+    `${show(method(ap, "append", [I(9)]))} ${show(ap)}`, "false [1, 2, 3, 9]");
+  const ins = mut([1, 2, 3]);
+  eq("step67", "insert 合法给 0 并插进去（batch1 t）", `${show(method(ins, "insert", [I(0), I(5)]))} ${show(ins)}`, "0 [5, 1, 2, 3]");
+  const insNeg = mut([1, 2, 3]);
+  eq("step67", "insert(-1) 是**原样不动** + 31（d7 / g7，不是尾部插入）",
+    `${show(method(insNeg, "insert", [I(-1), I(9)]))} ${show(insNeg)}`, "31 [1, 2, 3]");
+  const insOob = mut([1, 2, 3]);
+  eq("step67", "insert 越界同样 31 且不动（e5）", `${show(method(insOob, "insert", [I(10), I(5)]))} ${show(insOob)}`, "31 [1, 2, 3]");
+  const rz = mut([1, 2, 3]);
+  eq("step67", "resize 缩回去是截断，返回 0（g2）", `${show(method(rz, "resize", [I(2)]))} ${show(rz)}`, "0 [1, 2]");
+  const rzNeg = mut([1, 2, 3]);
+  eq("step67", "resize(-1) 给 31 且长度不变（e4）", `${show(method(rzNeg, "resize", [I(-1)]))} ${show(rzNeg)}`, "31 [1, 2, 3]");
+  const rmNeg = mut([1, 2, 3]);
+  method(rmNeg, "remove_at", [I(-1)]);
+  eq("step67", "remove_at 的负下标**不删末尾**（e8，JS 的 splice(-1,1) 会删）", `${show(rmNeg)}`, "[1, 2, 3]");
+  const rmOob = mut([1, 2, 3]);
+  method(rmOob, "remove_at", [I(9)]);
+  eq("step67", "remove_at 越界原样不动（e7）", `${show(rmOob)}`, "[1, 2, 3]");
+  const gt = mut([1, 2, 3]);
+  eq("step67", "get 越界给 **0** 而不是报错（g4，与 `b[5]` 两套口径）", `${show(method(gt, "get", [I(5)]))}`, "0");
+  shouldThrow("step67", "get 的负下标没量过 → 响（下标读实测是从尾部数）", () => method(gt, "get", [I(-1)]));
+  const nw = mut([1, 2, 3]);
+  writeIdx(nw, I(-1), I(9));
+  eq("step67", "写的负下标与读一样从尾部数（d6）", `${show(nw)}`, "[1, 2, 9]");
+  eq("step67", "copy_on_write 在 4.6.3 对这个类型不存在（e3）",
+    err(() => method(b, "copy_on_write", [])), "Invalid call. Nonexistent function 'copy_on_write' in base 'PackedByteArray'.");
+  eq("step67", "slice 的单参与负 end 都按 JS 口径（e6 实测同值）",
+    `${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1)]))} ${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1), I(-1)]))}`,
+    "[2, 3, 4] [2, 3]");
+}
+
+console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);
 }

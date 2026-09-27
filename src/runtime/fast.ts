@@ -37,6 +37,45 @@ export const fast = {
     row[arrIdx(j, row.length)] = v;
   },
 
+  // ---- 变更类方法的裸路径（step 56）。口径逐条照抄装箱轨的 GArray，别在这儿另立一套 ----
+  /**
+   * `insert(at, v)` 的裸版，返回 Godot 的**状态码**：插进去了 0，下标折算后越界 31（数组不动）。
+   * 折算与越界判定和 `GArray.insertAt` 一模一样：负数从尾部数、`at === size` 恰好是尾接、
+   * `at > size` 与折算后 `< 0` 都是静默不插（实测 S141）。
+   */
+  rawArrInsert<T>(a: T[], at: number, v: T): number {
+    const n = a.length;
+    const k = at < 0 ? n + at : at;
+    if (k < 0 || k > n) return 31;
+    a.splice(k, 0, v);
+    return 0;
+  },
+
+  /**
+   * `remove_at(i)`，也是**结果被丢弃**的 `pop_at(i)`（装箱轨里两者折算与越界行为完全一样，
+   * 只差一个返回 null）。越界静默无操作，不抛 array-index —— 这点和下标读写不同。
+   */
+  rawArrRemoveAt(a: unknown[], i: number): void {
+    const k = i < 0 ? i + a.length : i;
+    if (k >= 0 && k < a.length) a.splice(k, 1);
+  },
+
+  rawArrClear(a: unknown[]): void {
+    a.length = 0;
+  },
+
+  rawArrPushFront<T>(a: T[], v: T): void {
+    a.unshift(v);
+  },
+
+  /**
+   * `d.get(k, def)` 的裸版：**只**用于两参形态（默认值的静态类型与值槽同型）。
+   * 一参形态缺键给 null，裸轨表示不了 → 那种用法整个字典退回装箱，不走这里。
+   */
+  rawDictGetOr<K, V>(m: Map<K, V>, k: K, def: V): V {
+    return m.has(k) ? (m.get(k) as V) : def;
+  },
+
   /**
    * 裸字典下标读（值为 number，故 get 返回 undefined 只可能是缺键）。缺键抛与 GDict.getRequired
    * 同族的 GodotRuntimeError —— Godot 对 `d[missing]` 方括号读本就是 SCRIPT ERROR（已探针确证），

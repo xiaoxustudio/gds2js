@@ -123,6 +123,24 @@ const KERNELS: Kernel[] = [
 `,
   },
   {
+    name: "array-mutation",
+    reps: 5,
+    body: `
+	var a = [1, 2, 3, 4, 5]
+	var i = 0
+	while i < 20000:
+		a.push_front(i % 2)
+		a.pop_back()
+		a.insert(2, 7)
+		a.remove_at(5)
+		i += 1
+	var s = 0
+	for k in range(a.size()):
+		s += a[k]
+	return s
+`,
+  },
+  {
     name: "dict-set-get",
     reps: 5,
     body: `
@@ -135,6 +153,23 @@ const KERNELS: Kernel[] = [
 	var j = 0
 	while j < 30000:
 		s += d[j]
+		j += 1
+	return s
+`,
+  },
+  {
+    name: "dict-get-default",
+    reps: 5,
+    body: `
+	var d = {}
+	var i = 0
+	while i < 20000:
+		d[i] = i * 2
+		i += 1
+	var s = 0
+	var j = 0
+	while j < 21000:
+		s += d.get(j, 0)
 		j += 1
 	return s
 `,

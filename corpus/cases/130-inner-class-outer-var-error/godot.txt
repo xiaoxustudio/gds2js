@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Identifier "g_var" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:8)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

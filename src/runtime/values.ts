@@ -5,6 +5,7 @@ import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asColor, color, colorCmp, GColor } from "./color";
+import { bytesEq, GBytes } from "./packed";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -1747,6 +1748,10 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GColor) {
         return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
       }
+      // PackedByteArray 打印是字节方括号式子（实测 f40 t1：[104, 195, 169, 108, 108, 111]）
+      if (inner instanceof GBytes) {
+        return `[${(inner as GBytes).raw().join(", ")}]`;
+      }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }
     default:
@@ -1854,7 +1859,9 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     case Tag.DICT:
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
-      // 走到这里两边都不是 Vector2（函数最前面那条守卫已经把掺向量的组合全接走了），
+      // PackedByteArray 的 `==` 比内容（实测 f51 t2：同内容真、不同内容假）；
+      // 走到这里两边都不是三种向量与 Color（函数最前面那条守卫已经把掺它们的组合全接走了）
+      if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
       // 对象之间只剩引用相等。
       return a.v === b.v;
   }

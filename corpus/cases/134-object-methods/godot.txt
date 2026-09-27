@@ -1,0 +1,8 @@
+t1 true 6
+t2 false 99
+t3 SceneTree | RefCounted
+t4 true true
+t5 true false
+t6 false
+t7 8 dflt
+t8 28

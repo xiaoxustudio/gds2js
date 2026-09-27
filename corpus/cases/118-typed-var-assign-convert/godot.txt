@@ -1,0 +1,10 @@
+q1 2
+q2 3
+q3 1
+q4 (1.0, 2.0)
+q5 5.0
+q6 false
+q7 true
+q8 strname 4
+q9 7
+q10 7

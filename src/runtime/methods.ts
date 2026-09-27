@@ -1,16 +1,17 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
-import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat } from "./builtins";
-import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
+import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat, toBool, toFloat, toInt } from "./builtins";
+import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
   strSplitCapped, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
-import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
+import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { colorMethod, colorRead, colorWrite, GColor } from "./color";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes } from "./packed";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -38,6 +39,49 @@ function norm(v: unknown): Variant {
   return isVariant(v) ? v : wrapValue(v);
 }
 
+/**
+ * 声明类型槽的写入值（S150 实测的那五种 + 「没实测过的槽原样存」）。
+ * 字段写与静态变量写**共用这一张表** —— 两套规则各写一遍正是 S154 警告过的分叉温床。
+ */
+function intoSlot(kind: string | undefined, value: Variant, key: string, owner: unknown): Variant {
+  if (kind === undefined) return value;
+  if (kind === "int") return toInt(value);
+  if (kind === "float") return toFloat(value);
+  if (kind === "bool") return toBool(value);
+  if (kind === "String") {
+    // String 槽绝不隐式 str()：`p.s = 5` 实测是运行期错（f10），套一层就是静默分叉
+    if (value.t === Tag.STRING) return value;
+    if (value.t === Tag.STRING_NAME) return V.str(value.v as string);
+    throw propAssignError(key, value, owner);
+  }
+  if (kind === "Vector2") return toVec2(value);
+  return value;
+}
+
+/** 静态方法调用：`A.f()` 与 `p.f()` 两条路都汇到这里（实测 S160 两者结果一样）。
+ * 接收者给构造器本身，与 GDScript「静态方法没有 self」一致 —— 发出去的产物里静态方法
+ * 也只用 `A.x` 这种具名形式碰自己的类，不依赖 `this`。
+ */
+function callStatic(ctor: unknown, name: string, args: Variant[]): Variant {
+  return wrapValue(staticFnOf(ctor, name).apply(ctor, args));
+}
+
+/**
+ * 表里登记过的静态名，构造器上就该有对应的函数。拿不到说明产物与表不一致 —— 响亮报，不静默给 undefined。
+ */
+function staticFnOf(ctor: unknown, name: string): (...a: Variant[]) => unknown {
+  const f = (ctor as Record<string, unknown> | null)?.[name];
+  if (typeof f !== "function") {
+    throw new UnsupportedError("static-fn-missing", `静态方法 ${name}() 在类上找不到（注册表与产物不一致）`);
+  }
+  return f as (...a: Variant[]) => unknown;
+}
+
+/** 静态成员挂在构造器上，从实例摸要经 constructor。 */
+function staticCtorOf(inner: unknown): unknown {
+  return typeof inner === "function" ? inner : (inner as { constructor?: unknown })?.constructor;
+}
+
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
   // StringName 上实测能直接调用 String 的方法族（length/substr/split/contains/to_upper…），
@@ -52,6 +96,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
+    // PackedByteArray 的方法面（S168 全条实测；不存在的那批给 Godot 的原话）
+    if (inner instanceof GBytes) return bytesMethod(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -67,6 +113,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         });
         return V.nil();
       }
+      // 实测 f34 t9 / t2：信号能报出自己的名字，`is_null()` 一律是 false
+      if (name === "get_name") return V.str(inner.sigName);
+      if (name === "is_null") return V.bool(false);
+      // `fired.is_valid()` 实测是**解析期错**（两句：Cannot find member "is_valid" in base "Signal." +
+      // Function "is_valid()" not found in base Signal.），所以这里不顺手给它 true
       throw new UnsupportedError("signal-method", `Signal.${name}() 未实现`);
     }
 
@@ -81,16 +132,86 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         }, 0);
         return V.nil();
       }
+      // 实测 f34 t7：callv 收一个 Array，元素就是实参
+      if (name === "callv") {
+        const arr = args[0];
+        if (arr === undefined || !(arr.v instanceof GArray)) {
+          throw new GodotRuntimeError("callable-callv", "callv() 需要一个 Array 实参");
+        }
+        return wrapValue(f(...(arr.v as GArray).raw()));
+      }
+      // 实测 f34 t4：三种方法 Callable（脚本级函数、绑定方法、静态方法）都报得出自己的名字
+      if (name === "get_method") {
+        const m = (inner as Record<string, unknown>)[CALLABLE_NAME];
+        if (typeof m !== "string") {
+          throw new UnsupportedError("callable-method", `Callable.${name}() 未实现（这个 Callable 不是方法引用）`);
+        }
+        return V.str(m);
+      }
+      // 实测 f34 t2/t3：带着接收者的方法 Callable 是 is_null() false、is_valid() true。
+      // 静态方法与 lambda 的那一格没测过（f34 只测了 top / a.im），所以不带接收者的一律报缺。
+      if (name === "is_null" || name === "is_valid") {
+        const meta = inner as Record<string, unknown>;
+        if (typeof meta[CALLABLE_NAME] !== "string" || meta[CALLABLE_OBJECT] === undefined) {
+          throw new UnsupportedError("callable-method", `Callable.${name}() 未实现（没实测过这种 Callable）`);
+        }
+        return V.bool(name === "is_valid");
+      }
       throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
     }
 
     // 脚本值（preload / load 的结果）：`.v` 就是类构造器，`.new()` 实例化它
     if (typeof inner === "function") {
+      // `new` 排在静态查表**之前**是实测要求：自己写 `static func new()` 也盖不掉真构造器（f20）
       if (name === "new") {
         const Ctor = inner as new (...a: Variant[]) => object;
         return V.object(new Ctor(...args));
       }
+      if (staticMethodsOf(inner)?.has(name)) return callStatic(inner, name, args);
       throw new UnsupportedError("script-method", `脚本上的 ${name}() 未实现`);
+    }
+
+    // Object 那一层的方法面（实测 f36 / f39，全部不依赖身份 id）
+    if (name === "has_method") {
+      // `has_method` 认三类：自己/继承来的实例方法、静态方法、还有 Object 自带的那几个
+      //（实测 `a.has_method("get_class")` 真、`has_method("print")` 假、`has_method("")` 假）
+      const m = args[0];
+      if (m === undefined || (m.t !== Tag.STRING && m.t !== Tag.STRING_NAME)) {
+        throw new GodotRuntimeError("has-method", "has_method() 需要一个 String 实参");
+      }
+      const key = m.v as string;
+      return V.bool(
+        key === "has_method" || key === "get_class" || key === "set_meta" || key === "get_meta" ||
+        key === "has_meta" || key === "remove_meta" ||
+        typeof (inner as Record<string, unknown>)[key] === "function" ||
+        staticMethodsOf(inner)?.has(key) === true,
+      );
+    }
+    if (name === "get_class") {
+      // 返回的是**原生基类**：外层 `extends SceneTree` → SceneTree，内部类 → RefCounted（f39 t3）
+      const base = nativeBaseOf(inner);
+      if (base === null) throw new UnsupportedError("get-class", `get_class() 还不知道这个类的原生基类`);
+      return V.str(base);
+    }
+    if (name === "set_meta" || name === "get_meta" || name === "has_meta" || name === "remove_meta") {
+      const obj = inner as object;
+      if (name === "set_meta") {
+        if (args.length !== 2) throw new GodotRuntimeError("arity", `set_meta() 需要 2 个参数（收到 ${args.length} 个）`);
+        setMeta(obj, args[0] as Variant, args[1] as Variant);
+        return V.nil();
+      }
+      if (name === "has_meta") {
+        if (args.length !== 1) throw new GodotRuntimeError("arity", `has_meta() 需要 1 个参数（收到 ${args.length} 个）`);
+        return V.bool(hasMeta(obj, args[0] as Variant));
+      }
+      if (name === "remove_meta") {
+        if (args.length !== 1) throw new GodotRuntimeError("arity", `remove_meta() 需要 1 个参数（收到 ${args.length} 个）`);
+        removeMeta(obj, args[0] as Variant);
+        return V.nil();
+      }
+      // 一参形遇到没有的键给 null 并**继续跑**（f37 实测 exit 0，Godot 只多打一条 core/object 的引擎 ERROR）
+      if (args.length > 2 || args.length < 1) throw new GodotRuntimeError("arity", `get_meta() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+      return getMeta(obj, args[0] as Variant, args[1]);
     }
 
     // 用户类实例：方法就是原型上的函数
@@ -99,6 +220,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       const f = member as (...a: Variant[]) => unknown;
       return wrapValue(f.apply(inner, args));
     }
+
+    // 实例也能调静态方法（实测 p.make() 与 A.make() 同一个结果，S160）
+    if (staticMethodsOf(inner)?.has(name)) return callStatic(staticCtorOf(inner), name, args);
 
     throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
   }
@@ -321,6 +445,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        // 实测 f40 / f49：`"héllo".to_utf8_buffer()` 给 6 个字节（é 是 195,169）、`"abc".to_ascii_buffer()` → [97,98,99]
+        case "to_utf8_buffer": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf8_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(Array.from(new TextEncoder().encode(s))));
+        }
+        case "to_ascii_buffer": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_ascii_buffer() 不接受参数（收到 ${args.length} 个）`);
+          // 非 ASCII 的那一格没量过（Godot 怎么折字节我们不猜），只放行实测过的纯 ASCII 路径
+          if (Array.from(s).some((ch) => (ch.codePointAt(0) as number) > 127)) {
+            throw new UnsupportedError("string-ascii-buffer", "to_ascii_buffer() 只实测过纯 ASCII 字符串");
+          }
+          return V.object(new GBytes(Array.from(s, (ch) => ch.codePointAt(0) as number)));
+        }
         // 实测两条：前缀截断 + 严格整串判_valid；下划线不算数字（("1_000_000.25").to_float() → 1.0、
         // is_valid_float 为假），带前后空格也一律假（" 1.5 " / "1e5 "），"1e" 与 "1e+" 反倒算真数
         case "to_float":
@@ -418,6 +555,8 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
   // Color 的下标与属性读同一张嘴（实测 c[0]、c["r"]、c["h"]、c["r8"] 都能读）
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
+  // PackedByteArray：正负下标都从两端数（实测 f50 / f52），越界那句话也是实测的
+  if (obj.t === Tag.OBJECT && obj.v instanceof GBytes) return bytesReadIndex(obj.v as GBytes, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
@@ -427,7 +566,23 @@ export function index(raw: unknown, idx: Variant): Variant {
  * 返回 null 表示已经在原地处理完、不需要写回 —— 属性写在 Godot 里只对值类型成立，
  * 别的基（实测 `a[0].x = 5` 里 a[0] 是 int）一律运行时报错。
  */
-export function writeProp(base: Variant, key: string, value: Variant): Variant | null {
+/**
+ * Godot 属性写的那条错：未知键（e1）、往 String 槽塞 int（f10）、写方法名（f11）**三条文本一模一样**，
+ * 所以合成一个助手。基类那一段实测是 `RefCounted (Inner)`（内建类）；拿不到注册名就退成 Object。
+ */
+function propAssignError(key: string, value: Variant, inner: unknown): never {
+  throw new GodotRuntimeError(
+    "prop-assign",
+    `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type 'RefCounted (${classNameOf(inner) ?? "Object"})'.`,
+  );
+}
+
+/**
+ * 属性写 `base.key = value`。入口和 `method` / `attribute` 一样要**归一裸值**：
+ * `A.x = 100` 里的 `A` 是发射出去的裸类构造器（类名不是变量），不归一就什么分支都进不去。
+ */
+export function writeProp(raw: unknown, key: string, value: Variant): Variant | null {
+  const base = norm(raw);
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
@@ -435,6 +590,42 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
   const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
   if (col !== null) return colorWrite(col, V.str(key), value, "prop");
+  // 用户类实例的 named-property 写（`p.m = v`）。Godot 在这条路上**不做解析期静态检查**（与 S151
+  // 的给定型变量赋值是两套口径），而是运行时按字段的声明类型转或拒，规则是实测出来的：
+  //   · 数值槽收得下 数字 / bool / **数字串**（`p.t = 5.5`→5、`p.t = "12abc"`→12，走 `int(字符串)` 那条，S127）
+  //   · String 槽只收 String / StringName（`p.s = &"nm"`→"nm"），**收 int 是运行期错**（f10 实测），
+  //     所以这里绝不能套 `str()` 把它糊过去 —— 那是「我们存下 5、Godot 拒绝」的静默分叉
+  //   · Vector2 槽收 Vector2 / Vector2i（升级 + 拷贝，f5 实测）
+  //   · 没实测过的槽（Color / Vector3 / 引用类型）原样存，不编造规则
+  // 未知键与「写方法名」是同一条错（e1 与 f11 实测文本一模一样），所以判据是「有声明类型表项
+  // 或者是实例的自有属性」，二者皆无就拒 —— 方法在原型上，正好落到拒绝那一支。
+  // 用户类实例的 named-property 写（`p.m = v`）。**值类型不算**：Vector2 / Vector3 / Vector2i / Color
+  // 的写是「产出新值 + 写回」（step 38），实例本身也是 object，混进下面这支就变成原地改写了。
+  // `static var`：实测类名（`A.x = 100`）、实例（`p.x = 200`）与静态方法里裸写都落在**同一格**（S161），
+  // 而且带类型的槽照 S150 转换。基是**类对象**时 `typeof base.v === "function"`，够不到下面那支，
+  // 所以这一条单独走在前面。
+  if (base.t === Tag.OBJECT && (typeof base.v === "function" || (base.v !== null && typeof base.v === "object"))) {
+    const svars = staticVarsOf(base.v);
+    if (svars !== null && key in svars) {
+      (staticCtorOf(base.v) as Record<string, unknown>)[key] = intoSlot(svars[key], value, key, base.v);
+      return null;
+    }
+  }
+  const objInner = base.t === Tag.OBJECT
+    && base.v !== null
+    && typeof base.v === "object"
+    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
+    ? (base.v as Record<string, unknown>)
+    : null;
+  if (objInner !== null) {
+    const kind = fieldTypesOf(objInner)?.[key];
+    if (kind === undefined && !Object.hasOwn(objInner, key)) {
+      throw propAssignError(key, value, objInner);
+    }
+    objInner[key] = intoSlot(kind, value, key, objInner);
+    // 原地改字段，不产出新值 —— 返回 null 让发射侧的写回分支安静跳过
+    return null;
+  }
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",
@@ -457,6 +648,10 @@ export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant |
   }
   if (base.t === Tag.OBJECT && base.v instanceof GColor) {
     return colorWrite(base.v as GColor, idx, value, "index");
+  }
+  // PackedByteArray 的下标写：元素折成 0..255（实测 700 → 188），越界给实测那句 `Invalid assignment of index …`
+  if (base.t === Tag.OBJECT && base.v instanceof GBytes) {
+    return bytesWriteIndex(base.v as GBytes, idx, value, "index");
   }
   setIndex(base, idx, value);
   return null;
@@ -515,8 +710,35 @@ export function attribute(raw: unknown, name: string): unknown {
     // Color 的 r/g/b/a 与派生的 h/s/v、字节族 r8/... 都在同一张槽位表里（实测都可读）
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
+    // PackedByteArray 在 GDScript 侧**一个属性都没有**（成员全是方法，实测 `b.length` 这类是解析期拒），
+    // 而 GBytes 的 JS 载荷自带 `items` / `raw` / `length` 三个键 —— 放到下面 `name in inner` 那条
+    // 就会把内部实现当成员递出去，那是「Godot 拒、我们给值」的静默错那一族。
+    if (obj.v instanceof GBytes) {
+      throw new UnsupportedError("packed-attribute", `PackedByteArray 没有 ${name} 这个成员（这一族的成员全是方法，属性面没实测过）`);
+    }
     const inner = obj.v as Record<string, unknown>;
-    if (name in inner) return inner[name];
+    // 静态方法从实例与脚本值上都读得到（S160：`p.make` / `A.make` 都是 Callable，typeof → 25）。
+    // 这条必须走在 `name in inner` 之前：JS 的静态方法**就是**构造器上的自有属性，
+    // 那一条会把裸 JS 函数直接递出去，于是 typeof 成了 24、call() 也不认识它。
+    if (staticMethodsOf(inner)?.has(name)) {
+      const ctor = staticCtorOf(inner);
+      // 带上方法名：实测 `A.sm.get_method()` → "sm"（f34 t4）。接收者不给 —— 静态那格的
+      // is_null / is_valid 没测过，留着让它们响亮报缺，而不是猜一个 false / true。
+      return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown, name);
+    }
+    // 静态变量同样三条路都读得到（S161：`Inner.sv`、`p.sv`），存的本来就是 Variant
+    const svars = staticVarsOf(inner);
+    if (svars !== null && name in svars) {
+      return (staticCtorOf(inner) as Record<string, unknown>)[name];
+    }
+    if (typeof inner !== "function" && name in inner) {
+      const v = inner[name];
+      // 实例方法读出来必须是**绑好的 Callable**（实测 f35：`typeof(a.im)` → 25、`cb.call(21)` → 42、
+      // `get_method()` → "im"、`is_null()` false / `is_valid()` true）。JS 那边它是原型上的裸函数，
+      // 原样递出去就变成「typeof 24 + call() 找不到」—— 与静态方法那一支同一个坑（f34 t1 的 24 也是它）。
+      if (typeof v === "function") return callableOf(v.bind(inner) as (...a: unknown[]) => unknown, name, obj);
+      return v;
+    }
   }
   if (obj.t === Tag.NIL) {
     throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);
