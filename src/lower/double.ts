@@ -19,31 +19,36 @@
  */
 const FRAC_DIGITS = 17;
 
-export function parseGdDouble(text: string): number {
-  let s = text.replaceAll("_", "");
+/**
+ * 不做下划线处理的版本：字面量里 `1_000.5` 合法，但**运行时的字符串**不认下划线
+ * （实测 `("1_000_000.25").to_float()` → **1.0**、`is_valid_float()` → false），
+ * 所以下划线的剥离只属于字面量那条路。
+ */
+export function decimalToDouble(s: string): number {
+  let text = s;
   let neg = false;
-  if (s[0] === "-" || s[0] === "+") {
-    neg = s[0] === "-";
-    s = s.slice(1);
+  if (text[0] === "-" || text[0] === "+") {
+    neg = text[0] === "-";
+    text = text.slice(1);
   }
-  let mant = s;
+  let mant = text;
   let exp = 0;
-  const ei = s.toLowerCase().indexOf("e");
+  const ei = text.toLowerCase().indexOf("e");
   if (ei >= 0) {
-    mant = s.slice(0, ei);
-    exp = Number(s.slice(ei + 1)) || 0;
+    mant = text.slice(0, ei);
+    exp = Number(text.slice(ei + 1)) || 0;
   }
   const dot = mant.indexOf(".");
   const ip = dot < 0 ? mant : mant.slice(0, dot);
   let fp = dot < 0 ? "" : mant.slice(dot + 1);
   if (fp.length > FRAC_DIGITS) fp = fp.slice(0, FRAC_DIGITS);
   const all = `${ip}${fp}`;
-  let v: number;
-  try {
-    v = Number(BigInt(all === "" ? "0" : all)) / Math.pow(10, fp.length);
-  } catch {
-    return Number(text); // 非纯数字（inf/nan 之类）交给 JS，行为与旧实现一致
-  }
+  if (!/^[0-9]*$/.test(all)) return Number(s); // 混进非数字（含 e 后面不是整数）时退回 JS
+  let v = Number(BigInt(all === "" ? "0" : all)) / Math.pow(10, fp.length);
   if (exp !== 0) v *= Math.pow(10, exp);
   return neg ? -v : v;
+}
+
+export function parseGdDouble(text: string): number {
+  return decimalToDouble(text.replaceAll("_", ""));
 }

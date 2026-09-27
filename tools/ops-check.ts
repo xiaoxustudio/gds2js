@@ -1759,6 +1759,28 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("102", "非数字串仍走 JS 的老路（字面量里遇不到，留着当护栏）", `${parseGdDouble("xyz")}/${parseGdDouble("1e")}`, "NaN/1");
 }
 
+// ---- 103 运行时字符串转浮点：与字面量同一条两次舍入；to_float 吃前缀、is_valid_float 严格整串
+{
+  const tf = (s: string) => (method(V.str(s), "to_float", []) as Variant).v as number;
+  const VF = (s: string) => String(method(V.str(s), "is_valid_float", []).v);
+  eq("103", "to_float 与字面量共用两次舍入（…993.0 → …994）", String(Math.trunc(tf("9007199254740993.0")) === 9007199254740994), "true");
+  eq("103", "前导零吃小数预算：只剩 11 位", String(Math.trunc(tf("0.0000001234567890123456789") * 1e25) === 1234567890100000256), "true");
+  eq("103", "1+2⁻⁵³ 的 54 位展开落回 1.0", String(Math.trunc(tf("1.000000000000000083266726846886739642044414197265625") * 1e18) === 1000000000000000000), "true");
+  eq("103", "下划线在字符串这条路**不算**数字（与字面量相反）", `${tf("1_000_000.25")}/${VF("1_000_000.25")}`, "1/false");
+  eq("103", "空格：to_float 吃前缀、is_valid 一律假", `${tf(" 1.5 ")}|${VF(" 1.5 ")}|${tf("1e5 ")}|${VF("1e5 ")}`, "1.5|false|100000|false");
+  eq("103", "取不到数字就是 0", `${tf("abc")}/${tf("")}/${tf("inf")}/${tf("nan")}/${tf("0x10")}`, "0/0/0/0/0");
+  eq("103", "前缀截断（Godot 一路如此）", `${tf("1.2.3.4")}/${tf("1 2")}/${tf("  -2.5x")}/${tf("-.5")}/${tf("+5.5")}`, "1.2/1/-2.5/-0.5/5.5");
+  for (const s of [".5", "5.", "1e", "1e+", "1e-2", "01.50", "-.5", "+5.5", "0.999999999999999999999", "1e-23", "9007199254740993.0"]) {
+    eq("103", `is_valid_float(${JSON.stringify(s)}) 为真`, VF(s), "true");
+  }
+  for (const s of ["+-1", "0x10", "1.5abc", ".e5", "inf", "INF", "nan", "1.2.3.4", "1 E5", "1e5 ", " 1.5 ", "  -2.5x", "", ".", "1_000_000.25"]) {
+    eq("103", `is_valid_float(${JSON.stringify(s)}) 为假`, VF(s), "false");
+  }
+  eq("103", "StringName 走同一条降格路", String((method(V.stringName("1.5"), "to_float", []) as Variant).v), "1.5");
+  shouldThrow("103", "to_float 不收实参", () => method(V.str("1.5"), "to_float", [V.int(1)]));
+  shouldThrow("103", "is_valid_float 不收实参", () => method(V.str("1"), "is_valid_float", [V.int(1)]));
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
 if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);

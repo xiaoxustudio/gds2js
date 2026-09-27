@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { decimalToDouble } from "../lower/double";
 import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用） */
@@ -53,9 +54,12 @@ function strToInt(s: string): bigint {
 }
 
 /** float(String)：取前导浮点数，取不到就是 0（实测 `0x10`→0.0、`abc`→0.0）。 */
-function strToFloat(s: string): number {
-  const m = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(s);
-  return m ? Number(m[0]) : 0;
+export function strToFloat(s: string): number {
+  const m = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d*)?/.exec(s);
+  // 前缀截断之后交给 decimalToDouble：实测 `("9007199254740993.0").to_float()` 与字面量
+  // 同值（都是 …994），说明运行时这条路走的是同一个 String::to_double；下划线**不算**数字
+  // （`("1_000_000.25").to_float()` → 1.0），所以这条正则不吃下划线、也不做剥离
+  return m ? decimalToDouble(m[0]) : 0;
 }
 
 export function toFloat(v: Variant): Variant {

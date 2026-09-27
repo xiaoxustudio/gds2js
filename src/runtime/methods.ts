@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
-import { hashDjb2 } from "./builtins";
+import { hashDjb2, strToFloat } from "./builtins";
 import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
@@ -315,6 +315,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        // 实测两条：前缀截断 + 严格整串判_valid；下划线不算数字（("1_000_000.25").to_float() → 1.0、
+        // is_valid_float 为假），带前后空格也一律假（" 1.5 " / "1e5 "），"1e" 与 "1e+" 反倒算真数
+        case "to_float":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `to_float() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.float(strToFloat(s));
+        case "is_valid_float": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_float() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(/^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]*)?$/.test(s));
+        }
         // 实测 `&"abc".hash()` 与 `"abc".hash()` 同为 193485963：StringName 的 hash 就是内容的 hash，
         // 所以两条路共用 hashDjb2（算式见 builtins.ts 里那条 15 点的实测注释）
         case "hash":
