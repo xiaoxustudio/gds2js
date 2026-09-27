@@ -19,3 +19,6 @@ bench/.out/
 # AI files
 .workbuddy
 docs
+
+# 探针临时件（pw.mjs 的输入/输出、拟合脚本等）：每轮现搭现弃，别混进提交
+tmp/
