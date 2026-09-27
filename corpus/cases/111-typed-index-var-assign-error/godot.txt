@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Value of type "int" cannot be assigned to a variable of type "String".
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

@@ -80,6 +80,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
   for (const c of m.innerClasses) checkClass(c, moduleScope, diags);
   checkTypedCollections(m, diags);
+  checkTypedIndexSlots(m, diags);
 
   return diags;
 }
@@ -190,6 +191,218 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
       return st === "Dictionary";
     default:
       return true; // 引擎类：运行时阶段的事
+  }
+}
+
+/** 定型容器的槽位：`Array[int]` 只有元素，`Dictionary[int, String]` 是键与值两槽。 */
+type TypedSlot = { decl: string; kind: "Array" | "Dictionary"; elem?: string; key?: string; val?: string };
+
+/** 从标注里读出槽位。读不出来（不是容器、嵌套定型）就不管 —— 嵌套那条由 `typed-collection-nested` 报。 */
+function parseTyped(name: string): TypedSlot | null {
+  const m = /^(Array|Dictionary)\[(.+)\]$/.exec(name);
+  if (m === null) return null;
+  const inner = m[2] as string;
+  if (inner.includes("[")) return null;
+  if (m[1] === "Array") return { decl: name, kind: "Array", elem: inner.trim() };
+  const parts = inner.split(",").map((p) => p.trim());
+  if (parts.length !== 2) return null;
+  return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
+}
+
+/**
+ * 索引读写撞给定型容器的槽位时，Godot 在**解析期**就拒（实测 5 条形体，见 S138），
+ * 放过去就是"能编能跑但语义不同"的产物：
+ *  - `a[0] = "s"`（`Array[int]`）→ `Cannot assign a value of type "String" as "int".`
+ *  - `d[1] = 5`（`Dictionary[int, String]`）→ `Cannot assign a value of type "int" as "String".`
+ *  - **下标是变量**时换成另一条形体：`a[i] = i`（`Array[String]`）→ `Value of type "int" cannot be assigned to a variable of type "String".`
+ *  - 键的类型不合（`d["s"] = "x"`）**以及读**（`print(d["k"])`）→ `Invalid index type "String" for a base of type "Dictionary[int, String]".`
+ *  - 反过来**不报**的也实测过：`a.append("s")` 与 `Dictionary[Vector2, int]` 的声明都是合法的（append 走运行时转换，别在这儿拦）。
+ * 判据沿用 `canHold` 那张运行时转换表（float→int 允许，运行时截断），并且只在静态类型推得出来时才报 ——
+ * 推不出就交给运行时的元素转换。null 实参两侧都未实测，一律不报（宁可漏报，不编造严格性）。
+ */
+function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
+  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) bodies.push(f.body);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+
+  /**
+   * 这一段自己带一张「局部变量声明类型」表：`staticType` 全局不管标识符（只认字面量与算式），
+   * 而 t8 那条实测要求 `var i: int` 之后 `a[i] = i` 也能静态判 —— 只在这个 pass 里补，
+   * 不去动全局推断（那会把既有 0 误报的检查项一起拖进未实测的行为里）。
+   */
+  const stOf = (e: Expr, decls: Map<string, string>): NonNullable<StaticType> | null => {
+    if (e.kind === "ident") {
+      const d = decls.get(e.name);
+      return d === undefined ? null : (d as NonNullable<StaticType>);
+    }
+    return staticType(e);
+  };
+
+  const badKey = (slot: TypedSlot, index: Expr, decls: Map<string, string>): void => {
+    if (slot.kind !== "Dictionary" || slot.key === undefined) return;
+    const st = stOf(index, decls);
+    if (st === null || st === "null") return;
+    if (canHold(slot.key, st)) return;
+    diags.push({
+      code: "typed-index-key",
+      message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
+      loc: index.loc,
+    });
+  };
+
+  const walkExpr = (e: Expr, typed: Map<string, TypedSlot>, decls: Map<string, string>): void => {
+    switch (e.kind) {
+      case "index": {
+        if (e.obj.kind === "ident") {
+          const slot = typed.get(e.obj.name);
+          if (slot !== undefined) badKey(slot, e.index, decls);
+        }
+        walkExpr(e.obj, typed, decls);
+        walkExpr(e.index, typed, decls);
+        return;
+      }
+      case "binary":
+        walkExpr(e.left, typed, decls);
+        walkExpr(e.right, typed, decls);
+        return;
+      case "unary":
+        walkExpr(e.operand, typed, decls);
+        return;
+      case "call":
+        walkExpr(e.callee, typed, decls);
+        for (const a of e.args) walkExpr(a, typed, decls);
+        return;
+      case "attribute":
+        walkExpr(e.obj, typed, decls);
+        return;
+      case "array":
+        for (const it of e.items) walkExpr(it, typed, decls);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          walkExpr(en.key, typed, decls);
+          walkExpr(en.value, typed, decls);
+        }
+        return;
+      case "await":
+        walkExpr(e.operand, typed, decls);
+        return;
+      default:
+        return;
+    }
+  };
+
+  const valueMsg = (slotKind: string, value: Expr, index: Expr, decls: Map<string, string>): void => {
+    const st = stOf(value, decls);
+    if (st === null || st === "null") return;
+    if (canHold(slotKind, st)) return;
+    const literalIndex = index.kind === "lit";
+    // 实测（108 / 112 两份 golden）：**下标是字面量时 Godot 两条都报** —— 先「元素槽」那条
+    // `Cannot assign a value of type "String" as "int".`，再「赋值类型」那条
+    // `Value of type "String" cannot be assigned to a variable of type "int".`；
+    // 下标是变量时（111）只剩后面那条。顺序也是 golden 里的顺序，别合成一条。
+    if (literalIndex) {
+      diags.push({
+        code: "typed-index-value",
+        message: `Cannot assign a value of type "${st}" as "${slotKind}".`,
+        loc: value.loc,
+      });
+    }
+    diags.push({
+      code: "typed-index-assign",
+      message: `Value of type "${st}" cannot be assigned to a variable of type "${slotKind}".`,
+      loc: value.loc,
+    });
+  };
+
+  const walkStmts = (stmts: Stmt[], typed: Map<string, TypedSlot>, decls: Map<string, string>): void => {
+    for (const s of stmts) {
+      switch (s.kind) {
+        case "var": {
+          if (s.type !== null && s.type.kind === "named") {
+            const slot = parseTyped(s.type.name);
+            if (slot !== null) typed.set(s.name, slot);
+            else {
+              const scalar = scalarStaticName(s.type.name);
+              if (scalar !== null) decls.set(s.name, scalar);
+            }
+          }
+          if (s.init !== null) walkExpr(s.init, typed, decls);
+          continue;
+        }
+        case "assign": {
+          let handledTarget = false;
+          if (s.target.kind === "index" && s.target.obj.kind === "ident") {
+            const slot = typed.get(s.target.obj.name);
+            if (slot !== undefined) {
+              // 写侧：键先判（109 那条实测的是键不合式），再看值。target 整个子树就此不再下探，
+              // 否则同一个 index 节点会被读侧再报一遍。
+              handledTarget = true;
+              badKey(slot, s.target.index, decls);
+              const kind = slot.kind === "Array" ? slot.elem : slot.val;
+              if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls);
+            }
+          }
+          if (!handledTarget) walkExpr(s.target, typed, decls);
+          walkExpr(s.value, typed, decls);
+          continue;
+        }
+        case "expr":
+          walkExpr(s.expr, typed, decls);
+          continue;
+        case "return":
+          if (s.value !== null) walkExpr(s.value, typed, decls);
+          continue;
+        case "if":
+          for (const b of s.branches) {
+            if (b.cond !== null) walkExpr(b.cond, typed, decls);
+            walkStmts(b.body, typed, decls);
+          }
+          continue;
+        case "for":
+          walkExpr(s.iter, typed, decls);
+          walkStmts(s.body, typed, decls);
+          continue;
+        case "while":
+          walkExpr(s.cond, typed, decls);
+          walkStmts(s.body, typed, decls);
+          continue;
+        case "match":
+          walkExpr(s.subject, typed, decls);
+          for (const arm of s.arms) {
+            if (arm.guard !== null) walkExpr(arm.guard, typed, decls);
+            walkStmts(arm.body, typed, decls);
+          }
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  for (const body of bodies) walkStmts(body, new Map(), new Map());
+}
+
+/** 标量标注 → `staticType` 那一套名字；认不出来的（引擎类、Variant）一律不管，交运行时。 */
+function scalarStaticName(name: string): string | null {
+  if (/^Array\[/.test(name)) return "Array";
+  if (/^Dictionary\[/.test(name)) return "Dictionary";
+  switch (name) {
+    case "int":
+    case "float":
+    case "bool":
+    case "String":
+    case "StringName":
+    case "Vector2":
+    case "Vector3":
+    case "Vector2i":
+    case "Color":
+      return name;
+    default:
+      return null;
   }
 }
 
