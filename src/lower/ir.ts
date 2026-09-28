@@ -107,7 +107,26 @@ export interface VarDecl {
   type: TypeRef | null;
   init: Expr | null;
   isConst: boolean;
+  /**
+   * 属性访问器（`var prop: int:` 带 `get:` / `set(v):`，或引用式 `get = _getp, set = _setp`）。
+   * null = 普通成员变量。两种写法实测行为一致（S152：f2 块式、f12 引用式各 10 个观测点同形）：
+   * 写只调 set、读只调 get、`p.prop += 1` 是 get 一次 + set 一次、**只有 getter 时写是静默无操作**。
+   */
+  accessor: PropAccessor | null;
   loc: Loc;
+}
+
+/**
+ * 属性访问器。inline = 块式（`get:` / `set(v):` 带方法体），
+ * method = 引用式（`get = _getp` / `set = _setp`，值是方法名）。
+ */
+export type PropGetter = { kind: "inline"; body: Stmt[] } | { kind: "method"; method: string };
+export type PropSetter = { kind: "inline"; param: string; body: Stmt[] } | { kind: "method"; method: string };
+
+export interface PropAccessor {
+  getter: PropGetter;
+  /** null = 只读属性（写它按 Godot 的实测是**静默无操作**，不是报错：e8 / f12 的 k4）。 */
+  setter: PropSetter | null;
 }
 
 export interface SignalDecl {

@@ -12,6 +12,9 @@ import type {
   Module,
   Param,
   Pattern,
+  PropAccessor,
+  PropGetter,
+  PropSetter,
   SignalDecl,
   Stmt,
   TypeRef,
@@ -117,8 +120,45 @@ function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
     type: typeNode ? lowerType(typeNode) : null,
     init: valueNode ? lowerExpr(valueNode) : null,
     isConst,
+    accessor: lowerAccessor(n.children.find((c) => c.type === "setget") ?? null),
     loc: loc(n),
   };
+}
+
+/**
+ * 属性访问器（文法里是 `setget` 子节点，实测见 S152）。两种写法行为一致，都收：
+ *   · 块式 `get:` / `set(value):` —— 子节点 get_body / set_body，各带一个 body 块
+ *   · 引用式 `get = _getp, set = _setp` —— 子节点 getter / setter，值是方法名
+ * **过去这里是整段丢掉的**（lowerVar 根本不看 setget），于是 `var prop: int:` 编成一个没有初值的
+ * 普通成员，读它给 null、写它静默改不到东西 —— 一条能编译通过的静默错。
+ * 只带 set 不带 get 的形态没探针测过，宁可拒绝也不把猜的行为编进产物。
+ */
+function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
+  if (!n || n.type !== "setget") return null;
+  let getter: PropGetter | null = null;
+  let setter: PropSetter | null = null;
+  const blockBody = (c: SyntaxNode): Stmt[] => {
+    const body = c.children.find((k) => k.type === "body");
+    return body ? lowerBody(body) : [];
+  };
+  for (const c of n.children) {
+    if (c.type === "get_body") getter = { kind: "inline", body: blockBody(c) };
+    else if (c.type === "set_body") {
+      const params = c.children.find((k) => k.type === "parameters");
+      const pname = params ? (named(params)[0]?.text ?? "") : "";
+      if (pname === "") throw new UnsupportedError("property-setget", "set 访问器至少要一个参数名（实测形态是 set(value):）");
+      setter = { kind: "inline", param: pname, body: blockBody(c) };
+    } else if (c.type === "getter") getter = { kind: "method", method: c.text };
+    else if (c.type === "setter") setter = { kind: "method", method: c.text };
+    else if (c.isNamed) {
+      throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
+    }
+    // 其余是 get / set / = / , / : 这些连接符，逐对读上面四个具名子节点就够了
+  }
+  if (getter === null) {
+    throw new UnsupportedError("property-setget", "只带 set 不带 get 的属性访问器还没实测过，先拒绝");
+  }
+  return { getter, setter };
 }
 
 function lowerSignal(n: SyntaxNode): SignalDecl {

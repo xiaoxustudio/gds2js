@@ -1,5 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "../lower/ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, PropAccessor, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 import { isElemKind } from "../runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
@@ -321,7 +321,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   for (const v of m.vars) {
     mark(out.length, v.loc);
-    out.push(`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+    for (const l of emitMemberVar(v)) out.push(l);
   }
   if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
@@ -372,16 +372,52 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
  * 运行时必须知道字段声明成什么，否则就是把 float 存进 int 槽的静默错。
  * 只收实测过的那五种；别的类型不发 —— 宁可不转，也不拿猜的表去改数据。
  */
-function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null }[]): string | null {
+function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; accessor?: PropAccessor | null }[]): string | null {
   const rows: string[] = [];
   for (const v of vars) {
+    const base = v.type !== null && v.type.kind === "named" ? v.type.name.replace(/\[.*\]$/, "") : "";
+    if (v.accessor !== null && v.accessor !== undefined) {
+      // 属性访问器：实测 Godot **在调用 setter 之前**就按声明类型转换（f13：`p.prop = 2.7` 与
+      // 方法里的 `self.prop = 3.9` 都是 setter 收到 2 / 3，typeof 是 int）—— 两条路径同一条规则，
+      // 所以带类型的属性照常登记类型（writeProp 转换后再落给 JS 的 set）。
+      // 没写类型的属性（`var p:` + get/set）没有可转的目标，登记成 "accessor"：
+      // 这一档的意义是**放行键名**（访问器在原型上，writeProp 的「自有属性」判定看不见它），不做转换。
+      const known = base === "int" || base === "float" || base === "bool" || base === "String" || base === "Vector2";
+      rows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(known ? base : "accessor")}`);
+      continue;
+    }
     if (v.type === null || v.type.kind !== "named") continue;
-    const base = v.type.name.replace(/\[.*\]$/, "");
     if (base === "int" || base === "float" || base === "bool" || base === "String" || base === "Vector2") {
       rows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base)}`);
     }
   }
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
+}
+
+/**
+ * 类成员变量的发射。普通字段一行；带访问器的发成 JS 的 get/set，**不再发那个字段** ——
+ * JS 的同名类字段会把访问器盖掉，读出来就成了初值而不是 getter 的结果。
+ * 只读属性（没有 set）实测「写它」是**静默无操作**（S152 的 e8 / f12 k4：值不变、也不报错），
+ * 所以补一个空 set：不补的话 JS 会抛 TypeError，变成「Godot 能跑、我们崩」。
+ */
+function emitMemberVar(v: VarDecl): string[] {
+  const a = v.accessor;
+  if (a === null || a === undefined) return [`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`];
+  const out: string[] = [];
+  const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
+  out.push(`  get ${v.name}() {`);
+  if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
+  else out.push(`    return this.${a.getter.method}();`);
+  out.push("  }");
+  // 形参直接用 GDScript 写的那个名字：体里的标识符本来就发射成同名 JS 变量，不需要任何改写
+  // （同名成员被形参遮住，与 Godot 一致）。引用式与「没有 set」两支都用 value 这个占位名。
+  const pname = a.setter !== null && a.setter.kind === "inline" ? a.setter.param : "value";
+  out.push(`  set ${v.name}(${pname}) {`);
+  if (a.setter === null) out.push(`    // 只读属性：Godot 实测写它是静默无操作（S152），不是报错`);
+  else if (a.setter.kind === "inline") out.push(...lines(a.setter.body));
+  else out.push(`    this.${a.setter.method}(value);`);
+  out.push("  }");
+  return out;
 }
 
 function emitClassDecl(decl: ClassDecl, base = 0): string[] {
@@ -397,7 +433,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   mark(base, decl.loc);
   for (const v of decl.vars) {
     mark(base + lines.length, v.loc);
-    lines.push(`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+    for (const l of emitMemberVar(v)) lines.push(l);
   }
   if (decl.vars.length > 0) lines.push("");
   for (const f of decl.funcs) {
