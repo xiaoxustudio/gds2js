@@ -542,6 +542,20 @@ function lowerExpr(n: SyntaxNode): Expr {
             args: argsNode ? named(argsNode).map(lowerExpr) : [],
             loc: c,
           };
+        } else if (seg.type === "attribute_subscript") {
+          // `p.m[1]`：文法把「属性 + 下标」折成一个 attribute_subscript 段（identifier + subscript_arguments）。
+          // 过去这里把**整段文本**当成属性名，于是发成 rt.attribute(p, "m[1]") —— 读它报「取属性未实现」，
+          // 写它更糟（writeProp 拿 'm[1]' 当键）。正确形状是「先取属性 m，再对它下标」。
+          const parts = named(seg);
+          const nm = need(parts[0] ?? null, "attribute_subscript 的属性名");
+          const argsNode = field(seg, "arguments") ?? parts[1] ?? null;
+          const idx = argsNode ? named(argsNode)[0] : undefined;
+          acc = {
+            kind: "index",
+            obj: { kind: "attribute", obj: acc, name: nm.text, loc: c },
+            index: lowerExpr(need(idx ?? null, "attribute_subscript 的下标")),
+            loc: c,
+          };
         } else {
           acc = { kind: "attribute", obj: acc, name: seg.text, loc: c };
         }

@@ -921,25 +921,15 @@ function emitValueWrite(target: Expr, value: Expr): string[] | null {
   return null;
 }
 
-/** 一路往下取基，看这条路径的起点是变量还是临时值。 */
-function pathRoot(t: Expr): Expr {
-  if (t.kind === "index" || t.kind === "attribute") return pathRoot(t.obj);
-  return t;
-}
-
 /**
- * 一条读写路径；写不回去时分两种命运（都实测过）：
- * - 根是**临时值**（`f().x = 1`）：Godot 同样只求值、看不见效果、而且不报错 → 只发求值，不写回。
- * - 根是**变量**但中间隔着字段（`p.m.x = 5`）：Godot 会把新值写进那个字段（实测成员写成立，
- *   m1/m2 → `(5.0, 2.0)`），而属性赋值我们整体还没实现（见 {@link emitAssign} 的 attribute 分支），
- *   写回无处落地 —— 当场报未实现，绝不编一条「看着成功、其实什么都没改」的产物。
+ * 一条读写路径。写不回去时只有一种命运（实测过）：根是**临时值**（`f().x = 1`）——
+ * Godot 同样只求值、看不见效果、而且不报错，所以只发求值、不写回。
+ * 根是变量时一律能落地（ident / index / attribute 三段各自给出 read+write），
+ * 穿过字段的值类型写（`p.m.x = 5`）自 step 58b 的属性写落地后已经不是特例。
  */
 function writePathFor(t: Expr, seq: { n: number }): WPath {
   const p = lvalueOf(t, seq);
   if (p !== null) return p;
-  if (pathRoot(t).kind === "ident") {
-    throw new UnsupportedError("vector2-write-path", `赋值目标要穿过对象的字段（如 p.m.x = 1），属性赋值还没实现`);
-  }
   return { read: emitExpr(t), write: () => "", pre: [] };
 }
 
@@ -960,6 +950,19 @@ function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
       read: `rt.index(${base.read}, ${key})`,
       write: (nv) => `rt.setIndex(${base.read}, ${key}, ${nv});`,
       pre: [...base.pre, `const ${key} = ${emitExpr(t.index)};`],
+    };
+  }
+  if (t.kind === "attribute") {
+    // `p.m` 这一段：读用 rt.attribute，写回用 rt.writeProp —— 后者是 step 58b 落地的属性写，
+    // 所以「穿过别人的字段写值类型分量」（`p.m.x = 5`，实测 Godot 真写进那个字段，S77/S147）
+    // 现在能整体成立：内层 writeProp 产出新向量，外层 writeProp 把它放回字段。
+    const base = lvalueOf(t.obj, seq);
+    if (base === null) return null;
+    const nm = JSON.stringify(t.name);
+    return {
+      read: `rt.attribute(${base.read}, ${nm})`,
+      write: (nv) => `rt.writeProp(${base.read}, ${nm}, ${nv});`,
+      pre: base.pre,
     };
   }
   return null;
