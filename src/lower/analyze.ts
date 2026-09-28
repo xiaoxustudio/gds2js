@@ -429,6 +429,20 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
  */
 const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
 const VOID_DICT_METHODS = new Set(["clear"]);
+/**
+ * `PackedByteArray` 那一侧的 void 集合（`tmp/void-probe` 三个批次量完的，与 Array 那套**不是**同一张表）：
+ * - `append` 返回的是 **bool**（实测印出 `false`，元素照样追加）—— 别照 Array 那条当 void 拦；
+ * - `insert` / `resize` 返回 **Error 状态码**（成功 0，负数与越界 31 且原样不动），与 Array 同形；
+ * - `append_array` / `remove_at` / `fill` 取值是解析期错（void 那句）；
+ * - 零参的 `sort` / `reverse` 也在 void 那一族（`var s = b.sort()` 实测就是 void 那句，用例 137）。
+ *   同一件事**塞进 `print(...)` 的实参位**时 Godot 换了一句（`Function "sort()" not found in base self.`，
+ *   见 S168 的探针 `tmp/void-probe/sort.gd`）—— 两句都是拒，我们统一发 void 那句，位置别猜。
+ */
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
+const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
+
+/** 这条检查认得的接收者形状。 */
+type ContainerShape = "Array" | "Dictionary" | "PackedByteArray";
 
 /**
  * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
@@ -614,24 +628,33 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) collect(c);
 
   /** 变量名 → 容器形状；只在推得出来时进表。 */
-  const shapeOf = (e: Expr): "Array" | "Dictionary" | null => {
+  const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
+    // `var b = PackedByteArray([1,2])`：构造器调用是这一族唯一推得出的初值形状
+    // （`"x".to_utf8_buffer()` 那条推不出，宁可漏报）
+    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "PackedByteArray") {
+      return "PackedByteArray";
+    }
     return null;
   };
 
   for (const body of bodies) {
-    const shapes = new Map<string, "Array" | "Dictionary">();
+    const shapes = new Map<string, ContainerShape>();
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
           if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && !discarded) {
             const shape = shapes.get(e.callee.obj.name);
-            const set = shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null;
-            if (set !== null && set.has(e.callee.name)) {
+            const name = e.callee.name;
+            const isVoid =
+              shape === "PackedByteArray"
+                ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
+                : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
+            if (isVoid) {
               diags.push({
                 code: "void-method-value",
-                message: `Cannot get return value of call to "${e.callee.name}()" because it returns "void".`,
+                message: `Cannot get return value of call to "${name}()" because it returns "void".`,
                 loc: e.loc,
               });
             }
@@ -677,6 +700,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (s.type !== null && s.type.kind === "named") {
               if (/^Array(\[|$)/.test(s.type.name)) shapes.set(s.name, "Array");
               else if (/^Dictionary(\[|$)/.test(s.type.name)) shapes.set(s.name, "Dictionary");
+              else if (s.type.name === "PackedByteArray") shapes.set(s.name, "PackedByteArray");
             } else if (s.init !== null) {
               const sh = shapeOf(s.init);
               if (sh !== null) shapes.set(s.name, sh);

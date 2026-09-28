@@ -6,7 +6,7 @@
  * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
  */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
-import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/runtime/builtins";
+import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
@@ -58,6 +58,7 @@ import {
   vector3Method,
   vector3New,
 } from "../src/runtime/vector3";
+import { bytesCtor, GBytes, toByte } from "../src/runtime/packed";
 import { isType, typeOf } from "../src/runtime/patterns";
 import {
   GVector2i,
@@ -2187,6 +2188,102 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   method(V.object(o), "remove_meta", [V.str("sn")]);
   eq("step66", "remove_meta 之后 has_meta 假（f39 t2）", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
   shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
+}
+
+{
+  // S168 实测的 PackedByteArray。三条最容易写错的：元素一律折成 0..255、
+  // **赋值是共享引用**（与 Array 同一条，`PackedByteArray(src)` / `duplicate()` / `slice()` 才拷贝）、
+  // `==` 比的是内容。最后这条我在 135 的差分上真错过一次：分支放进了 `valueSame`（比身份），
+  // `b == PackedByteArray([3,1,2])` 就印成 false 而不是 Godot 的 true。
+  const err = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  const pack = (ns: number[]): Variant => V.object(GBytes.of(ns));
+  const b = bytesCtor([V.array(GArray.of([I(3), I(1), I(2)]))]);
+  eq("step67", "构造 + 打印 + typeof → 29（f40 t1）", `${show(b)} ${typeOf(b).v}`, "[3, 1, 2] 29");
+  eq("step67", "元素折成字节：300→44、-1→255、2.7→2、true→1（f43 / f49）",
+    `${toByte(I(300))} ${toByte(I(-1))} ${toByte(F(2.7))} ${toByte(V.bool(true))}`, "44 255 2 1");
+  eq("step67", "`+` 拼接给新 pack（f51 t1）", `${show(ops.add(b, pack([7])))}`, "[3, 1, 2, 7]");
+  eq("step67", "== 比内容：同内容真、不同内容假（f51 t2）",
+    `${valueEq(b, bytesCtor([V.array(GArray.of([I(3), I(1), I(2)]))]))} ${valueEq(b, pack([7]))}`, "true false");
+  const neg = pack([1, 2]);
+  eq("step67", "负下标从尾部数（f52）", `${show(index(neg, I(-1)))}`, "2");
+  eq("step67", "越界读的文本逐字对上（f50）", err(() => index(neg, I(5))),
+    "Invalid access of index '5' on a base object of type: 'PackedByteArray'.");
+  eq("step67", "越界写的文本逐字对上（f50）", err(() => writeIdx(neg, I(5), I(1))),
+    "Invalid assignment of index '5' (on base: 'PackedByteArray') with value of type 'int'.");
+  const wr = pack([0, 0]);
+  writeIdx(wr, I(0), I(700));
+  eq("step67", "下标写 700 回绕成 188（f43）", `${show(wr)}`, "[188, 0]");
+  const dup = method(b, "duplicate", []);
+  writeIdx(dup, I(0), I(8));
+  const cp = bytesCtor([b]);
+  writeIdx(cp, I(1), I(5));
+  eq("step67", "duplicate() 与 PackedByteArray(src) 都是独立拷贝（f49 t3 / f51 t11）",
+    `${show(b)} ${show(dup)} ${show(cp)}`, "[3, 1, 2] [8, 1, 2] [3, 5, 2]");
+  const rs = pack([1]);
+  method(rs, "resize", [I(3)]);
+  eq("step67", "resize 长出来的格子填 0（f51 t10）", `${show(rs)}`, "[1, 0, 0]");
+  eq("step67", "hex_encode（f40 t9）", `${method(pack([1, 2, 3, 255]), "hex_encode", []).v}`, "010203ff");
+  eq("step67", "UTF-8 往返：六字节 → héllo（f40 t4）",
+    `${method(pack([104, 195, 169, 108, 108, 111]), "get_string_from_utf8", []).v}`, "héllo");
+  eq("step67", "文本 → 字节（S168 的 to_utf8_buffer）", `${show(method(S("héllo"), "to_utf8_buffer", []))}`,
+    "[104, 195, 169, 108, 108, 111]");
+  eq("step67", "get_string_from_ascii 只实测过纯 ASCII，带高位字节响着拒",
+    err(() => method(pack([104, 200]), "get_string_from_ascii", [])),
+    "get_string_from_ascii() 只实测过纯 ASCII 的字节");
+  eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（f41 / 用例 135）",
+    `${err(() => method(b, "min", []))}|${err(() => method(b, "to_byte_array", []))}`,
+    "Invalid call. Nonexistent function 'min' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.");
+  shouldThrow("step67", "bsearch 存在但没测过 → 响亮拒，不拿 Array 的结论凑", () => method(b, "bsearch", [I(1)]));
+  const viaArray = arrayFromVariant(b);
+  eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
+    `${show(viaArray)} ${typeOf(index(viaArray, I(0))).v}`, "[3, 1, 2] 2");
+  shouldThrow("step67", "Array(x) 只实测过 PackedByteArray 实参", () => arrayFromVariant(S("abc")));
+  // GBytes 的 JS 载荷自带 items / raw / length 三个键，Godot 那侧这些**一个都不是成员**（属性面为空）。
+  // 不挡的话 `print(b.raw)` 会把内部实现当成员递出去 —— 「Godot 拒、我们给值」那一族。
+  shouldThrow("step67", "读 pack 的「属性」一律响（属性面没实测过，成员全是方法）", () => attribute(b, "length"));
+  shouldThrow("step67", "写 pack 的内部键不许落进存储", () => writeProp(b, "items", I(1)));
+  // 第二批探针（`tmp/void-probe` e/g 系列）改的是**返回值与负下标**这一面：`append` 不是 void 而是
+  // 返回 bool、`insert`/`resize` 给 Error 状态码、负下标与越界的 insert/remove_at 是**原样不动**
+  // （JS 的 splice 会把它们当成尾部操作，那是静默错）、`get` 越界给 0 而不是报错、写的负下标从尾部数。
+  const mut = (ns: number[]): Variant => V.object(GBytes.of(ns));
+  const ap = mut([1, 2, 3]);
+  eq("step67", "append() 返回 **bool false** 且照样追加（e1 / g1）",
+    `${show(method(ap, "append", [I(9)]))} ${show(ap)}`, "false [1, 2, 3, 9]");
+  const ins = mut([1, 2, 3]);
+  eq("step67", "insert 合法给 0 并插进去（batch1 t）", `${show(method(ins, "insert", [I(0), I(5)]))} ${show(ins)}`, "0 [5, 1, 2, 3]");
+  const insNeg = mut([1, 2, 3]);
+  eq("step67", "insert(-1) 是**原样不动** + 31（d7 / g7，不是尾部插入）",
+    `${show(method(insNeg, "insert", [I(-1), I(9)]))} ${show(insNeg)}`, "31 [1, 2, 3]");
+  const insOob = mut([1, 2, 3]);
+  eq("step67", "insert 越界同样 31 且不动（e5）", `${show(method(insOob, "insert", [I(10), I(5)]))} ${show(insOob)}`, "31 [1, 2, 3]");
+  const rz = mut([1, 2, 3]);
+  eq("step67", "resize 缩回去是截断，返回 0（g2）", `${show(method(rz, "resize", [I(2)]))} ${show(rz)}`, "0 [1, 2]");
+  const rzNeg = mut([1, 2, 3]);
+  eq("step67", "resize(-1) 给 31 且长度不变（e4）", `${show(method(rzNeg, "resize", [I(-1)]))} ${show(rzNeg)}`, "31 [1, 2, 3]");
+  const rmNeg = mut([1, 2, 3]);
+  method(rmNeg, "remove_at", [I(-1)]);
+  eq("step67", "remove_at 的负下标**不删末尾**（e8，JS 的 splice(-1,1) 会删）", `${show(rmNeg)}`, "[1, 2, 3]");
+  const rmOob = mut([1, 2, 3]);
+  method(rmOob, "remove_at", [I(9)]);
+  eq("step67", "remove_at 越界原样不动（e7）", `${show(rmOob)}`, "[1, 2, 3]");
+  const gt = mut([1, 2, 3]);
+  eq("step67", "get 越界给 **0** 而不是报错（g4，与 `b[5]` 两套口径）", `${show(method(gt, "get", [I(5)]))}`, "0");
+  shouldThrow("step67", "get 的负下标没量过 → 响（下标读实测是从尾部数）", () => method(gt, "get", [I(-1)]));
+  const nw = mut([1, 2, 3]);
+  writeIdx(nw, I(-1), I(9));
+  eq("step67", "写的负下标与读一样从尾部数（d6）", `${show(nw)}`, "[1, 2, 9]");
+  eq("step67", "copy_on_write 在 4.6.3 对这个类型不存在（e3）",
+    err(() => method(b, "copy_on_write", [])), "Invalid call. Nonexistent function 'copy_on_write' in base 'PackedByteArray'.");
+  eq("step67", "slice 的单参与负 end 都按 JS 口径（e6 实测同值）",
+    `${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1)]))} ${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1), I(-1)]))}`,
+    "[2, 3, 4] [2, 3]");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

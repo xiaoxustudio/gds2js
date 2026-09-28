@@ -11,6 +11,7 @@ import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vecto
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { colorMethod, colorRead, colorWrite, GColor } from "./color";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes } from "./packed";
 
 /**
  * 容器 / 字符串 / 对象上的方法与下标操作。
@@ -95,6 +96,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
+    // PackedByteArray 的方法面（S168 全条实测；不存在的那批给 Godot 的原话）
+    if (inner instanceof GBytes) return bytesMethod(inner, name, args);
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -442,6 +445,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        // 实测 f40 / f49：`"héllo".to_utf8_buffer()` 给 6 个字节（é 是 195,169）、`"abc".to_ascii_buffer()` → [97,98,99]
+        case "to_utf8_buffer": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf8_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(Array.from(new TextEncoder().encode(s))));
+        }
+        case "to_ascii_buffer": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_ascii_buffer() 不接受参数（收到 ${args.length} 个）`);
+          // 非 ASCII 的那一格没量过（Godot 怎么折字节我们不猜），只放行实测过的纯 ASCII 路径
+          if (Array.from(s).some((ch) => (ch.codePointAt(0) as number) > 127)) {
+            throw new UnsupportedError("string-ascii-buffer", "to_ascii_buffer() 只实测过纯 ASCII 字符串");
+          }
+          return V.object(new GBytes(Array.from(s, (ch) => ch.codePointAt(0) as number)));
+        }
         // 实测两条：前缀截断 + 严格整串判_valid；下划线不算数字（("1_000_000.25").to_float() → 1.0、
         // is_valid_float 为假），带前后空格也一律假（" 1.5 " / "1e5 "），"1e" 与 "1e+" 反倒算真数
         case "to_float":
@@ -539,6 +555,8 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
   // Color 的下标与属性读同一张嘴（实测 c[0]、c["r"]、c["h"]、c["r8"] 都能读）
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
+  // PackedByteArray：正负下标都从两端数（实测 f50 / f52），越界那句话也是实测的
+  if (obj.t === Tag.OBJECT && obj.v instanceof GBytes) return bytesReadIndex(obj.v as GBytes, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
 }
 
@@ -596,7 +614,7 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const objInner = base.t === Tag.OBJECT
     && base.v !== null
     && typeof base.v === "object"
-    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GColor || base.v instanceof Signal)
+    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
     ? (base.v as Record<string, unknown>)
     : null;
   if (objInner !== null) {
@@ -630,6 +648,10 @@ export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant |
   }
   if (base.t === Tag.OBJECT && base.v instanceof GColor) {
     return colorWrite(base.v as GColor, idx, value, "index");
+  }
+  // PackedByteArray 的下标写：元素折成 0..255（实测 700 → 188），越界给实测那句 `Invalid assignment of index …`
+  if (base.t === Tag.OBJECT && base.v instanceof GBytes) {
+    return bytesWriteIndex(base.v as GBytes, idx, value, "index");
   }
   setIndex(base, idx, value);
   return null;
@@ -688,6 +710,12 @@ export function attribute(raw: unknown, name: string): unknown {
     // Color 的 r/g/b/a 与派生的 h/s/v、字节族 r8/... 都在同一张槽位表里（实测都可读）
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
+    // PackedByteArray 在 GDScript 侧**一个属性都没有**（成员全是方法，实测 `b.length` 这类是解析期拒），
+    // 而 GBytes 的 JS 载荷自带 `items` / `raw` / `length` 三个键 —— 放到下面 `name in inner` 那条
+    // 就会把内部实现当成员递出去，那是「Godot 拒、我们给值」的静默错那一族。
+    if (obj.v instanceof GBytes) {
+      throw new UnsupportedError("packed-attribute", `PackedByteArray 没有 ${name} 这个成员（这一族的成员全是方法，属性面没实测过）`);
+    }
     const inner = obj.v as Record<string, unknown>;
     // 静态方法从实例与脚本值上都读得到（S160：`p.make` / `A.make` 都是 Callable，typeof → 25）。
     // 这条必须走在 `name in inner` 之前：JS 的静态方法**就是**构造器上的自有属性，

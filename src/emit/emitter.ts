@@ -154,10 +154,30 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
+  // PackedByteArray 这一族先只做**字节**那一种（其余八种的元素转换规则还没逐条对拍，见 S168）
+  PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
+  // Array(pack) 实测只量过从 PackedByteArray 转（f49 t4），其余形状由运行时响亮拒
+  Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set(["Vector2i", "Vector3", "load", "preload"]);
+const BUILTIN_TODO = new Set([
+  "Vector2i",
+  "Vector3",
+  "load",
+  "preload",
+  // Packed*Array 这一族只做了字节那一种（S168）：其余八种的元素转换规则还没逐条对拍。
+  // 不列进来的话 `PackedInt32Array(...)` 会发成 `this.PackedInt32Array(...)` —— 那是 JS 的
+  // TypeError，而 Godot 跑得好好，错形就变成了「我们崩、Godot 过」的误报级差异。
+  "PackedInt32Array",
+  "PackedInt64Array",
+  "PackedFloat32Array",
+  "PackedFloat64Array",
+  "PackedStringArray",
+  "PackedVector2Array",
+  "PackedVector3Array",
+  "PackedColorArray",
+]);
 
 /**
  * 模块级名字。局部变量不在里面，所以发射成裸标识符；
@@ -2700,6 +2720,9 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Vector2i") return "rt.vector2i(0, 0)";
   // 实测 `var c: Color` 的默认值是 (0.0, 0.0, 0.0, 1.0)（alpha 是 1，不是 0）
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
+  // 实测 `var b: PackedByteArray` 不给初值就是**空 pack**（印 `[]`、`b == PackedByteArray()` 真、
+  // `b.duplicate()` 也是 `[]`，tmp/void-probe d1/e9）—— 发 null 会印成 `<null>`，是静默错
+  if (base === "PackedByteArray") return "rt.bytesCtor([])";
   return "rt.V.nil()";
 }
 

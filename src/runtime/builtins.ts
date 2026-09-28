@@ -2,6 +2,20 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, wrap64, type IntPayload, type Variant } from "./tags";
 import { decimalToDouble } from "../lower/double";
 import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
+import { asBytes } from "./packed";
+
+/**
+ * `Array(x)` —— 实测过的那一格只有「从 PackedByteArray 转」（f49 t4：`Array(src)` → `[1, 2, 3]`、
+ * 元素 typeof 是 2）。其余形状（0 参、从 Array / Dictionary 转）没量过，一律响亮拒：
+ * 过去这些写法是 `this.Array is not a function` 的 JS TypeError，换成正面的报缺至少说得清原因。
+ */
+export function arrayFromVariant(v: Variant): Variant {
+  const b = asBytes(v);
+  if (b === null) {
+    throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
+  }
+  return V.array(GArray.of(b.raw().map((x) => V.int(x))));
+}
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用） */
 export function num(v: Variant): number {

@@ -3,6 +3,7 @@ import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Vari
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
 import { asColor, color, colorCmp, GColor } from "./color";
+import { bytesConcat, GBytes } from "./packed";
 import {
   add32,
   asVec2i,
@@ -73,6 +74,10 @@ export const ops = {
     if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
       return V.array((a.v as GArray).concat(b.v as GArray));
     }
+    // PackedByteArray + PackedByteArray：拼出一个**新**的 pack（实测 f51 t1：[3,1,2] + [7] → [3,1,2,7]）
+    const ba = a.t === Tag.OBJECT && a.v instanceof GBytes ? a.v : null;
+    const bb = b.t === Tag.OBJECT && b.v instanceof GBytes ? b.v : null;
+    if (ba && bb) return bytesConcat(ba, bb);
     // Vector2 分量加（S13）
     const va = a.t === Tag.OBJECT && a.v instanceof GVector2 ? a.v : null;
     const vb = b.t === Tag.OBJECT && b.v instanceof GVector2 ? b.v : null;
