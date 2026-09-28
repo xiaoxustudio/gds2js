@@ -58,7 +58,7 @@ import {
   vector3Method,
   vector3New,
 } from "../src/runtime/vector3";
-import { bytesCtor, GBytes, toByte } from "../src/runtime/packed";
+import { bytesCtor, GBytes, packCtor, toByte } from "../src/runtime/packed";
 import { isType, typeOf } from "../src/runtime/patterns";
 import {
   GVector2i,
@@ -2284,6 +2284,68 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step67", "slice 的单参与负 end 都按 JS 口径（e6 实测同值）",
     `${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1)]))} ${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1), I(-1)]))}`,
     "[2, 3, 4] [2, 3]");
+}
+
+{
+  // S169：数值 pack 的三种形状（byte / int32 / int64）行为口径实测一致，只有**元素折算**分岔。
+  // 期望值取自 `tmp/pack-probe` 与语料 138 的 godot.txt。
+  const perr = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  const i32 = packCtor("int32", [V.array(GArray.of([I(2147483648), I(-2147483649), I(4294967296), I(9007199254740993n), F(2.7), F(-2.7), V.bool(true)]))]);
+  eq("step68", "int32 是**回绕**不是饱和（2^31→-2^31、-2^31-1→2^31-1、2^32→0、2^53+1→1）",
+    `${show(i32)} ${typeOf(i32).v}`, "[-2147483648, 2147483647, 0, 1, 2, -2, 1] 30");
+  const i32f = packCtor("int32", [V.array(GArray.of([F(0.1), F(1.0), F(1e308)]))]);
+  eq("step68", "float→int32：范围内截断，**越上界饱和到 INT32_MIN**（不是 MAX、也不是截低位）",
+    `${show(i32f)} ${show(index(i32f, I(0)))} ${show(ops.eq(index(i32f, I(0)), F(0.1)))}`, "[0, 1, -2147483648] 0 false");
+  const i64 = packCtor("int64", [V.array(GArray.of([I(2147483648), I(-2147483649), I(9007199254740993n), F(2.7), V.bool(true)]))]);
+  eq("step68", "int64 保精确（2^53+1 原样存 → 元素必须是 BigInt，typeof 31）",
+    `${show(i64)} ${typeOf(i64).v} ${show(index(i64, I(2)))} ${typeOf(index(i64, I(0))).v}`,
+    "[2147483648, -2147483649, 9007199254740993, 2, 1] 31 9007199254740993 2");
+  const i32b = V.object(GBytes.of([1, 2, 3], "int32"));
+  eq("step68", "int32 的 append 折 0..255？**不折**：300 原样存，返回值仍是 bool false（byte 那族才折）",
+    `${show(method(i32b, "append", [I(300)]))} ${show(i32b)}`, "false [1, 2, 3, 300]");
+  const i32r = V.object(GBytes.of([1, 2, 3], "int32"));
+  eq("step68", "resize 长出来填 0、返回 0（h-*ret / k-*resgrow）",
+    `${show(method(i32r, "resize", [I(5)]))} ${show(i32r)}`, "0 [1, 2, 3, 0, 0]");
+  const i32n = V.object(GBytes.of([1, 2, 3], "int32"));
+  eq("step68", "resize(-1) 给 31 且长度不变", `${show(method(i32n, "resize", [I(-1)]))} ${show(i32n)}`, "31 [1, 2, 3]");
+  const i32i = V.object(GBytes.of([1, 2, 3], "int32"));
+  eq("step68", "insert 的三种位置：合法 0、负数与越界都 31 且原样不动",
+    [method(i32i, "insert", [I(0), I(5)]).v, method(i32i, "insert", [I(-1), I(9)]).v, method(i32i, "insert", [I(99), I(9)]).v].join(","),
+    "0,31,31");
+  eq("step68", "上面那两次失败插入确实没动存储", `${show(i32i)}`, "[5, 1, 2, 3]");
+  const i32d = V.object(GBytes.of([1, 2, 3], "int32"));
+  method(i32d, "remove_at", [I(-1)]);
+  eq("step68", "remove_at(-1) 不删末尾（JS 的 splice(-1,1) 会删）", `${show(i32d)}`, "[1, 2, 3]");
+  const i32g = V.object(GBytes.of([1, 2, 3], "int32"));
+  eq("step68", "get 越界给 0（int pack 与 byte 同形）", `${show(method(i32g, "get", [I(5)]))} ${show(method(i32g, "get", [I(1)]))}`, "0 2");
+  const i32w = V.object(GBytes.of([1, 2, 3], "int32"));
+  writeIdx(i32w, I(-1), I(77));
+  eq("step68", "写的负下标从尾部数（k-*negwrite）", `${show(i32w)}`, "[1, 2, 77]");
+  eq("step68", "hex_encode 在 PackedInt32Array 上不存在（k-*hex）",
+    perr(() => method(i32g, "hex_encode", [])), "Invalid call. Nonexistent function 'hex_encode' in base 'PackedInt32Array'.");
+  eq("step68", "越界的**下标读**用各自的类型名（不是照抄 PackedByteArray 那句）",
+    perr(() => index(i32g, I(5))), "Invalid access of index '5' on a base object of type: 'PackedInt32Array'.");
+  eq("step68", "越界写的那句也照类型名变", perr(() => writeIdx(i32g, I(5), I(1))),
+    "Invalid assignment of index '5' (on base: 'PackedInt32Array') with value of type 'int'.");
+  // 没量过的形状一律响：跨 pack 的 `+`、`Array(int pack)`、String 元素（Godot 给 [0]，我们只量了
+  // 一条 `"x"` → 0 不足以推整族），以及 int64 的 float 溢出。
+  shouldThrow("step68", "跨 pack 拼接没量过 → 响", () => ops.add(i32g, V.object(GBytes.of([1], "byte"))));
+  shouldThrow("step68", "Array(int pack) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(i32g));
+  shouldThrow("step68", "String 元素只量到 \"x\" → 0 这一格，整族不套", () => packCtor("int32", [V.array(GArray.of([S("12abc")]))]));
+  shouldThrow("step68", "int64 收 float 溢出的形状没量过 → 响", () => packCtor("int64", [V.array(GArray.of([F(1e308)]))]));
+  shouldThrow("step68", "跨 pack 的拷贝构造没量过 → 响", () => packCtor("int32", [V.object(GBytes.of([1], "byte"))]));
+  const i64s = V.object(GBytes.of([3n, 1n, 2n], "int64"));
+  method(i64s, "sort", []);
+  eq("step68", "int64 的比较走 BigInt（不是把 bigint 折成 number）", `${show(i64s)}`, "[1, 2, 3]");
+  eq("step68", "== 比内容、同形状才比（138 u7 / u12）",
+    `${show(ops.eq(V.object(GBytes.of([1, 2], "int32")), V.object(GBytes.of([1, 2], "int32"))))}`, "true");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

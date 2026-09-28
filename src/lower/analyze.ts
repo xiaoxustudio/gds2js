@@ -440,9 +440,15 @@ const VOID_DICT_METHODS = new Set(["clear"]);
  */
 const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
+/**
+ * 这三张 void 表**逐个量过、三边同形**（byte：`tmp/void-probe`，int32 / int64：`tmp/pack-probe` 的
+ * k-\* 与 h-\*-ret 系列），所以用一个形状标签收它们。float 两种与 String / Vector / Color 三种
+ * 没量过，仍在发射表的 `BUILTIN_TODO` 里响着。
+ */
+const PACK_SHAPE_NAMES = new Set(["PackedByteArray", "PackedInt32Array", "PackedInt64Array"]);
 
 /** 这条检查认得的接收者形状。 */
-type ContainerShape = "Array" | "Dictionary" | "PackedByteArray";
+type ContainerShape = "Array" | "Dictionary" | "Pack";
 
 /**
  * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
@@ -633,8 +639,8 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     if (e.kind === "dict") return "Dictionary";
     // `var b = PackedByteArray([1,2])`：构造器调用是这一族唯一推得出的初值形状
     // （`"x".to_utf8_buffer()` 那条推不出，宁可漏报）
-    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "PackedByteArray") {
-      return "PackedByteArray";
+    if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
+      return "Pack";
     }
     return null;
   };
@@ -648,7 +654,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             const shape = shapes.get(e.callee.obj.name);
             const name = e.callee.name;
             const isVoid =
-              shape === "PackedByteArray"
+              shape === "Pack"
                 ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
                 : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
             if (isVoid) {
@@ -700,7 +706,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (s.type !== null && s.type.kind === "named") {
               if (/^Array(\[|$)/.test(s.type.name)) shapes.set(s.name, "Array");
               else if (/^Dictionary(\[|$)/.test(s.type.name)) shapes.set(s.name, "Dictionary");
-              else if (s.type.name === "PackedByteArray") shapes.set(s.name, "PackedByteArray");
+              else if (PACK_SHAPE_NAMES.has(s.type.name)) shapes.set(s.name, "Pack");
             } else if (s.init !== null) {
               const sh = shapeOf(s.init);
               if (sh !== null) shapes.set(s.name, sh);

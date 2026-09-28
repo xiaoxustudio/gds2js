@@ -7,7 +7,7 @@ import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
 import { GVector2i } from "./vector2i";
 import { GColor } from "./color";
-import { GBytes } from "./packed";
+import { GBytes, packTypeOfCode } from "./packed";
 
 /**
  * `match` 的模式匹配与 `is` / `as` 的类型判定。
@@ -168,7 +168,7 @@ export function typeOf(raw: unknown): Variant {
   // 实测 typeof(Color(1,0,0,1)) → 20
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   // 实测 typeof(PackedByteArray(...)) → 29（S168；其余八种 pack 也各有号，但那一族还没实现）
-  if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(29);
+  if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   // 实测 typeof(信号) → 26（模块的、内部类的、赋给变量之后都一样）
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
   // 实测 typeof(Callable) → 25：绑好的方法、`A.static_fn`、lambda 都算

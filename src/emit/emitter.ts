@@ -154,8 +154,10 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
-  // PackedByteArray 这一族先只做**字节**那一种（其余八种的元素转换规则还没逐条对拍，见 S168）
+  // Packed*Array：数值那一族的**行为口径实测一致**（S168 / S169），只有元素折算按 kind 分岔
   PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
+  PackedInt32Array: (a) => `rt.packCtor("int32", [${a.join(", ")}])`,
+  PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
   // Array(pack) 实测只量过从 PackedByteArray 转（f49 t4），其余形状由运行时响亮拒
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
 };
@@ -166,11 +168,11 @@ const BUILTIN_TODO = new Set([
   "Vector3",
   "load",
   "preload",
-  // Packed*Array 这一族只做了字节那一种（S168）：其余八种的元素转换规则还没逐条对拍。
-  // 不列进来的话 `PackedInt32Array(...)` 会发成 `this.PackedInt32Array(...)` —— 那是 JS 的
+  // Packed*Array 这一族做了 byte / int32 / int64 三种（S168 / S169）：剩下五种（两个 float、String、
+  // Vector2/3、Color）的元素折算与**打印文本**还没逐条对拍（float32 的 `0.1` 印成
+  // `0.10000000149012`、`1e308` 印成 `inf` 那一套要单独逆）。
+  // 不列进来的话 `PackedFloat32Array(...)` 会发成 `this.PackedFloat32Array(...)` —— 那是 JS 的
   // TypeError，而 Godot 跑得好好，错形就变成了「我们崩、Godot 过」的误报级差异。
-  "PackedInt32Array",
-  "PackedInt64Array",
   "PackedFloat32Array",
   "PackedFloat64Array",
   "PackedStringArray",
@@ -2723,6 +2725,9 @@ function typeDefault(t: TypeRef | null): string {
   // 实测 `var b: PackedByteArray` 不给初值就是**空 pack**（印 `[]`、`b == PackedByteArray()` 真、
   // `b.duplicate()` 也是 `[]`，tmp/void-probe d1/e9）—— 发 null 会印成 `<null>`，是静默错
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
+  // 四种数值 pack 的默认值实测全是空 pack（`var a: PackedInt32Array` 印 `[]`、`== PackedInt32Array()` 真）
+  if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';
+  if (base === "PackedInt64Array") return 'rt.packCtor("int64", [])';
   return "rt.V.nil()";
 }
 
