@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat, toBool, toFloat, toInt } from "./builtins";
-import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, isVariant, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -166,6 +166,49 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       }
       if (staticMethodsOf(inner)?.has(name)) return callStatic(inner, name, args);
       throw new UnsupportedError("script-method", `脚本上的 ${name}() 未实现`);
+    }
+
+    // Object 那一层的方法面（实测 f36 / f39，全部不依赖身份 id）
+    if (name === "has_method") {
+      // `has_method` 认三类：自己/继承来的实例方法、静态方法、还有 Object 自带的那几个
+      //（实测 `a.has_method("get_class")` 真、`has_method("print")` 假、`has_method("")` 假）
+      const m = args[0];
+      if (m === undefined || (m.t !== Tag.STRING && m.t !== Tag.STRING_NAME)) {
+        throw new GodotRuntimeError("has-method", "has_method() 需要一个 String 实参");
+      }
+      const key = m.v as string;
+      return V.bool(
+        key === "has_method" || key === "get_class" || key === "set_meta" || key === "get_meta" ||
+        key === "has_meta" || key === "remove_meta" ||
+        typeof (inner as Record<string, unknown>)[key] === "function" ||
+        staticMethodsOf(inner)?.has(key) === true,
+      );
+    }
+    if (name === "get_class") {
+      // 返回的是**原生基类**：外层 `extends SceneTree` → SceneTree，内部类 → RefCounted（f39 t3）
+      const base = nativeBaseOf(inner);
+      if (base === null) throw new UnsupportedError("get-class", `get_class() 还不知道这个类的原生基类`);
+      return V.str(base);
+    }
+    if (name === "set_meta" || name === "get_meta" || name === "has_meta" || name === "remove_meta") {
+      const obj = inner as object;
+      if (name === "set_meta") {
+        if (args.length !== 2) throw new GodotRuntimeError("arity", `set_meta() 需要 2 个参数（收到 ${args.length} 个）`);
+        setMeta(obj, args[0] as Variant, args[1] as Variant);
+        return V.nil();
+      }
+      if (name === "has_meta") {
+        if (args.length !== 1) throw new GodotRuntimeError("arity", `has_meta() 需要 1 个参数（收到 ${args.length} 个）`);
+        return V.bool(hasMeta(obj, args[0] as Variant));
+      }
+      if (name === "remove_meta") {
+        if (args.length !== 1) throw new GodotRuntimeError("arity", `remove_meta() 需要 1 个参数（收到 ${args.length} 个）`);
+        removeMeta(obj, args[0] as Variant);
+        return V.nil();
+      }
+      // 一参形遇到没有的键给 null 并**继续跑**（f37 实测 exit 0，Godot 只多打一条 core/object 的引擎 ERROR）
+      if (args.length > 2 || args.length < 1) throw new GodotRuntimeError("arity", `get_meta() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+      return getMeta(obj, args[0] as Variant, args[1]);
     }
 
     // 用户类实例：方法就是原型上的函数

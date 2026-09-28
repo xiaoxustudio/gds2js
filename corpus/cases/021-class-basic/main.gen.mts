@@ -14,6 +14,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerNativeBase(Main, "SceneTree");
 class Base {
   hp = rt.V.int(10);
 
@@ -23,5 +24,6 @@ class Base {
   
 }
 rt.registerClass("Base", Base);
+rt.registerNativeBase(Base, "RefCounted");
 
 await new Main().run();

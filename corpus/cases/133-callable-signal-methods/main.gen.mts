@@ -27,6 +27,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerNativeBase(Main, "SceneTree");
 class A {
   im(v): unknown {
     return rt.ops.mul(v, rt.V.int(2));
@@ -39,5 +40,6 @@ class A {
 }
 rt.registerClass("A", A);
 rt.registerStaticMethods(A, ["sm"]);
+rt.registerNativeBase(A, "RefCounted");
 
 await new Main().run();

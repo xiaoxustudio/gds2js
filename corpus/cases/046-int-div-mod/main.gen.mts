@@ -20,4 +20,5 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

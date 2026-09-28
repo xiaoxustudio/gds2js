@@ -36,6 +36,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerNativeBase(Main, "SceneTree");
 class Box {
   n = rt.V.int(1);
 
@@ -71,5 +72,6 @@ class Box {
   
 }
 rt.registerClass("Box", Box);
+rt.registerNativeBase(Box, "RefCounted");
 
 await new Main().run();

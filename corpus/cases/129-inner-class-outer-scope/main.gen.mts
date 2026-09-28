@@ -22,6 +22,7 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"TOP": "int"});
+rt.registerNativeBase(Main, "SceneTree");
 class Other {
   OC = rt.V.int(5);
   static OC = rt.V.int(5);
@@ -33,6 +34,7 @@ class Other {
 }
 rt.registerClass("Other", Other);
 rt.registerFieldTypes(Other, {"OC": "int"});
+rt.registerNativeBase(Other, "RefCounted");
 
 class Inner {
   IC = rt.V.int(9);
@@ -57,5 +59,6 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"IC": "int"});
+rt.registerNativeBase(Inner, "RefCounted");
 
 await new Main().run();

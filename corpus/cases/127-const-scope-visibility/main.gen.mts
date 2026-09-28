@@ -25,6 +25,7 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"TOP": "int", "NAME": "String"});
+rt.registerNativeBase(Main, "SceneTree");
 class Inner {
   TOP = rt.V.int(7);
   static TOP = rt.V.int(7);
@@ -53,5 +54,6 @@ class Inner {
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"TOP": "int"});
 rt.registerStaticMethods(Inner, ["read_static_outer","read_static_shadow"]);
+rt.registerNativeBase(Inner, "RefCounted");
 
 await new Main().run();

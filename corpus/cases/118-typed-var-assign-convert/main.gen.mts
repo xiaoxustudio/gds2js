@@ -39,4 +39,5 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"mt": "int", "mfl": "float", "mb": "bool", "ms": "String", "mv": "Vector2"});
+rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

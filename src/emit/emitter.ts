@@ -384,6 +384,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (moduleStaticVars !== null) out.push(`rt.registerStaticVars(${className}, ${moduleStaticVars});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(${className}, ${JSON.stringify(moduleStatics)});`);
+  // `get_class()` 要的是**原生基类**（f39 t3：外层 extends SceneTree → SceneTree、没 extends → RefCounted）。
+  // `extends 别的脚本` 那支**不发这行** —— 让运行时沿原型链去父类那份登记里找，比在这儿猜基类名诚实。
+  if (baseClass.kind !== "import") {
+    out.push(`rt.registerNativeBase(${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
+  }
   // 按 res:// 路径注册：`load("res://…")` 与 `preload` 一致性都靠它。
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
@@ -549,6 +554,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null) lines.push(`rt.registerStaticVars(${decl.name}, ${declStaticVars});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
+  // 内部类没有 extends（那条仍在 emitClassDecl 头上响亮拒），原生基类就是 RefCounted（f36 t7 实测）
+  lines.push(`rt.registerNativeBase(${decl.name}, "RefCounted");`);
   lines.push("");
 
   CURRENT_MEMBERS = saved;

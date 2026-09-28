@@ -10,7 +10,7 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable, callableOf, registerClass, registerFieldTypes, registerStaticMethods, registerStaticVars } from "../src/runtime/object";
+import { callable, callableOf, registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta } from "../src/runtime/object";
 import { Signal } from "../src/runtime/signal";
 import { attribute, index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
@@ -2153,6 +2153,40 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const sg = attribute(V.object(new Sig()), "fired");
   eq("step65", "Signal.get_name()（f34 t9）", `${method(sg, "get_name", []).v}`, "fired");
   eq("step65", "Signal.is_null() → false（f34 t2）", `${method(sg, "is_null", []).v}`, "false");
+}
+
+{
+  // f36 / f39 实测的 Object 方法面：这些都**不依赖身份 id**，所以能逐条对上。
+  class Obj {
+    im(): Variant {
+      return V.int(1);
+    }
+    static sm(): Variant {
+      return V.nil();
+    }
+  }
+  registerClass("Obj", Obj);
+  registerStaticMethods(Obj, ["sm"]);
+  registerNativeBase(Obj, "RefCounted");
+  const o = new Obj();
+  eq("step66", "get_class 给的是**原生基类**而不是脚本名（f39 t3）", `${method(V.object(o), "get_class", []).v}`, "RefCounted");
+  eq("step66", "has_method：自己的 / 静态的 / Object 自带的都真，全局函数与空串假", [
+    method(V.object(o), "has_method", [V.str("im")]).v,
+    method(V.object(o), "has_method", [V.str("sm")]).v,
+    method(V.object(o), "has_method", [V.str("get_class")]).v,
+    method(V.object(o), "has_method", [V.str("print")]).v,
+    method(V.object(o), "has_method", [V.str("")]).v,
+  ].join(","), "true,true,true,false,false");
+  setMeta(o, V.stringName("sn"), I(6));
+  eq("step66", "StringName 写进去、String 键读得到（f39 t1）", [
+    method(V.object(o), "has_meta", [V.str("sn")]).v,
+    method(V.object(o), "get_meta", [V.str("sn")]).v,
+  ].join(" "), "true 6");
+  eq("step66", "get_meta 两参形给默认值（f36 t5）", `${method(V.object(o), "get_meta", [V.str("nope"), I(99)]).v}`, "99");
+  eq("step66", "get_meta 一参形缺键给 null 且**继续跑**（f37）", `${method(V.object(o), "get_meta", [V.str("nope")]).t}`, `${Tag.NIL}`);
+  method(V.object(o), "remove_meta", [V.str("sn")]);
+  eq("step66", "remove_meta 之后 has_meta 假（f39 t2）", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
+  shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

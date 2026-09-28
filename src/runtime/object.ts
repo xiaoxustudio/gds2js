@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";
-import { V, type Variant } from "./tags";
+import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
 
 /**
@@ -131,6 +131,70 @@ export function staticMethodsOf(target: unknown): Set<string> | null {
 export function classNameOf(target: unknown): string | null {
   const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
   return (ctor && CLASS_NAMES.get(ctor)) ?? null;
+}
+
+/**
+ * 构造器 → **原生基类名**（`get_class()` 要返回它）。
+ * 实测 f39 t3：外层脚本 `extends SceneTree` 给 `SceneTree`，内部类（没 extends）给 `RefCounted` ——
+ * 返回的是**原生基类**而不是脚本类名，所以这张表必须由发射器按基类登记，不能拿注册名顶。
+ * 用 WeakMap 按构造器存：匿名脚本的类名（Main）在多文件工程里会撞，登记名那条路不能走。
+ */
+const NATIVE_BASE = new WeakMap<GdClassCtor, string>();
+
+export function registerNativeBase(ctor: GdClassCtor, name: string): void {
+  NATIVE_BASE.set(ctor, name);
+}
+
+/** 沿 JS 原型链往上找第一个登记过的原生基类（`extends 别的脚本` 时靠这条）。 */
+export function nativeBaseOf(target: unknown): string | null {
+  let ctor: unknown = typeof target === "function" ? target : (target as { constructor?: unknown })?.constructor;
+  while (typeof ctor === "function") {
+    const hit = NATIVE_BASE.get(ctor as GdClassCtor);
+    if (hit !== undefined) return hit;
+    ctor = Object.getPrototypeOf(ctor);
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- meta 存储
+//
+// `set_meta` / `get_meta` / `has_meta` / `remove_meta`（实测 f36 / f39）：
+// 键是 String 或 StringName（**同一个键**：`a.set_meta(&"sn", 6)` 之后 `a.has_meta("sn")` 是真），
+// 值随便装；`get_meta` 两参形给默认值，一参形遇到没有的键**给 null 并继续跑**（Godot 那边只多一条
+// core/object 的引擎 ERROR，脚本不中断 —— f37 实测 exit 0）。
+const METAS = new WeakMap<object, Map<string, Variant>>();
+
+function metaKey(v: Variant): string {
+  if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return v.v as string;
+  throw new UnsupportedError("meta-key", `meta 的键需要 String 或 StringName，收到 ${tagName(v.t)}`);
+}
+
+function metaStore(obj: object): Map<string, Variant> {
+  let m = METAS.get(obj);
+  if (m === undefined) {
+    m = new Map<string, Variant>();
+    METAS.set(obj, m);
+  }
+  return m;
+}
+
+export function setMeta(obj: object, key: Variant, value: Variant): void {
+  metaStore(obj).set(metaKey(key), value);
+}
+
+export function hasMeta(obj: object, key: Variant): boolean {
+  return metaStore(obj).has(metaKey(key));
+}
+
+export function removeMeta(obj: object, key: Variant): void {
+  metaStore(obj).delete(metaKey(key));
+}
+
+/** 一参形缺键时给 null（实测 f37 / f39 t9 的 `<null>`），两参形给那个默认值。 */
+export function getMeta(obj: object, key: Variant, dflt?: Variant): Variant {
+  const hit = metaStore(obj).get(metaKey(key));
+  if (hit !== undefined) return hit;
+  return dflt === undefined ? V.nil() : dflt;
 }
 
 export function lookupClass(name: string): GdClassCtor | undefined {

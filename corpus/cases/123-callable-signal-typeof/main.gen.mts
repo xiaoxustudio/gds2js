@@ -27,6 +27,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerNativeBase(Main, "SceneTree");
 class Box {
   boxed = new rt.Signal("boxed");
   n = rt.V.int(1);
@@ -34,5 +35,6 @@ class Box {
 }
 rt.registerClass("Box", Box);
 rt.registerFieldTypes(Box, {"n": "int"});
+rt.registerNativeBase(Box, "RefCounted");
 
 await new Main().run();

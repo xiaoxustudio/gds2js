@@ -147,4 +147,5 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"m": "Vector2"});
+rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

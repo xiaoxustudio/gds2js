@@ -66,6 +66,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerNativeBase(Main, "SceneTree");
 class Inner {
   m = rt.V.int(1);
   t = rt.V.int(2);
@@ -75,5 +76,6 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"t": "int", "s": "String", "v": "Vector2"});
+rt.registerNativeBase(Inner, "RefCounted");
 
 await new Main().run();
