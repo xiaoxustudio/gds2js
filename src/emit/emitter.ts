@@ -334,6 +334,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
 
   // 有 class_name 的脚本注册进运行时全局表：跨文件的 `is Foo` / `as Foo` 靠它。
   if (m.className) out.push(`rt.registerClass(${JSON.stringify(m.className)}, ${className});`);
+  const moduleFields = fieldTypesLiteral(m.vars);
+  if (moduleFields !== null) out.push(`rt.registerFieldTypes(${className}, ${moduleFields});`);
   // 按 res:// 路径注册：`load("res://…")` 与 `preload` 一致性都靠它。
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
@@ -363,6 +365,25 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   return { code, map };
 }
 
+/**
+ * 带声明类型的成员表，发成 `rt.registerFieldTypes(Cls, {...})`。
+ * 属性写 `p.t = v` 在 Godot 是**运行时**按字段声明类型收敛（S150 实测：`p.t = 5.5`→5、
+ * `p.t = "12abc"`→12、`p.s = &"nm"`→"nm"，而 `p.s = 5` 直接是运行期错），
+ * 运行时必须知道字段声明成什么，否则就是把 float 存进 int 槽的静默错。
+ * 只收实测过的那五种；别的类型不发 —— 宁可不转，也不拿猜的表去改数据。
+ */
+function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null }[]): string | null {
+  const rows: string[] = [];
+  for (const v of vars) {
+    if (v.type === null || v.type.kind !== "named") continue;
+    const base = v.type.name.replace(/\[.*\]$/, "");
+    if (base === "int" || base === "float" || base === "bool" || base === "String" || base === "Vector2") {
+      rows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base)}`);
+    }
+  }
+  return rows.length === 0 ? null : `{${rows.join(", ")}}`;
+}
+
 function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (decl.extends) {
     throw new UnsupportedError("class-extends", `类 ${decl.name} 的 extends 还没实现`);
@@ -386,6 +407,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push("}");
   // 注册进运行时的类注册表，`is` 判定和 Base.new() 都靠它
   lines.push(`rt.registerClass(${JSON.stringify(decl.name)}, ${decl.name});`);
+  const declFields = fieldTypesLiteral(decl.vars);
+  if (declFields !== null) lines.push(`rt.registerFieldTypes(${decl.name}, ${declFields});`);
   lines.push("");
 
   CURRENT_MEMBERS = saved;
@@ -929,6 +952,12 @@ function emitAssign(target: Expr, value: string): string {
       throw new UnsupportedError("raw-array", "内部不变量破坏：裸数组不应出现下标赋值");
     }
     return `rt.setIndex(${emitExpr(target.obj)}, ${emitExpr(target.index)}, ${value});`;
+  }
+  // 属性写 `p.m = v`：Godot 走 named-property 的**动态**路径 —— 运行时按字段的声明类型收敛或拒
+  // （S150：`p.t = 5.5`→5、`p.t = "12abc"`→12、`p.s = 5` 是运行期错），与「给定型变量赋值」的
+  // 解析期检查（S151）是两套口径。值类型写（`v.x = 1`）由上面的 emitValueWrite 接管，到这儿来的是普通字段。
+  if (target.kind === "attribute") {
+    return `rt.writeProp(${emitExpr(target.obj)}, ${JSON.stringify(target.name)}, ${value});`;
   }
   throw new UnsupportedError("emit-assign", `赋值目标 ${target.kind} 还没实现`);
 }

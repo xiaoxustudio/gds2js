@@ -1,13 +1,13 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
-import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat } from "./builtins";
-import { CALLABLE, isVariant, wrapValue, type Fn } from "./object";
+import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat, toBool, toFloat, toInt } from "./builtins";
+import { CALLABLE, classNameOf, fieldTypesOf, isVariant, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
   strSplitCapped, strSubstr, truthyOf } from "./values";
 import { isLess } from "./ops";
-import { GVector2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
+import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { colorMethod, colorRead, colorWrite, GColor } from "./color";
@@ -427,6 +427,17 @@ export function index(raw: unknown, idx: Variant): Variant {
  * 返回 null 表示已经在原地处理完、不需要写回 —— 属性写在 Godot 里只对值类型成立，
  * 别的基（实测 `a[0].x = 5` 里 a[0] 是 int）一律运行时报错。
  */
+/**
+ * Godot 属性写的那条错：未知键（e1）、往 String 槽塞 int（f10）、写方法名（f11）**三条文本一模一样**，
+ * 所以合成一个助手。基类那一段实测是 `RefCounted (Inner)`（内建类）；拿不到注册名就退成 Object。
+ */
+function propAssignError(key: string, value: Variant, inner: object): never {
+  throw new GodotRuntimeError(
+    "prop-assign",
+    `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type 'RefCounted (${classNameOf(inner) ?? "Object"})'.`,
+  );
+}
+
 export function writeProp(base: Variant, key: string, value: Variant): Variant | null {
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
@@ -435,6 +446,41 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
   const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
   if (col !== null) return colorWrite(col, V.str(key), value, "prop");
+  // 用户类实例的 named-property 写（`p.m = v`）。Godot 在这条路上**不做解析期静态检查**（与 S151
+  // 的给定型变量赋值是两套口径），而是运行时按字段的声明类型转或拒，规则是实测出来的：
+  //   · 数值槽收得下 数字 / bool / **数字串**（`p.t = 5.5`→5、`p.t = "12abc"`→12，走 `int(字符串)` 那条，S127）
+  //   · String 槽只收 String / StringName（`p.s = &"nm"`→"nm"），**收 int 是运行期错**（f10 实测），
+  //     所以这里绝不能套 `str()` 把它糊过去 —— 那是「我们存下 5、Godot 拒绝」的静默分叉
+  //   · Vector2 槽收 Vector2 / Vector2i（升级 + 拷贝，f5 实测）
+  //   · 没实测过的槽（Color / Vector3 / 引用类型）原样存，不编造规则
+  // 未知键与「写方法名」是同一条错（e1 与 f11 实测文本一模一样），所以判据是「有声明类型表项
+  // 或者是实例的自有属性」，二者皆无就拒 —— 方法在原型上，正好落到拒绝那一支。
+  // 用户类实例的 named-property 写（`p.m = v`）。**值类型不算**：Vector2 / Vector3 / Vector2i / Color
+  // 的写是「产出新值 + 写回」（step 38），实例本身也是 object，混进下面这支就变成原地改写了。
+  const objInner = base.t === Tag.OBJECT
+    && base.v !== null
+    && typeof base.v === "object"
+    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GColor || base.v instanceof Signal)
+    ? (base.v as Record<string, unknown>)
+    : null;
+  if (objInner !== null) {
+    const kind = fieldTypesOf(objInner)?.[key];
+    if (kind === undefined && !Object.hasOwn(objInner, key)) {
+      throw propAssignError(key, value, objInner);
+    }
+    if (kind === undefined) objInner[key] = value;
+    else if (kind === "int") objInner[key] = toInt(value);
+    else if (kind === "float") objInner[key] = toFloat(value);
+    else if (kind === "bool") objInner[key] = toBool(value);
+    else if (kind === "String") {
+      if (value.t === Tag.STRING) objInner[key] = value;
+      else if (value.t === Tag.STRING_NAME) objInner[key] = V.str(value.v as string);
+      else throw propAssignError(key, value, objInner);
+    } else if (kind === "Vector2") objInner[key] = toVec2(value);
+    else objInner[key] = value;
+    // 原地改字段，不产出新值 —— 返回 null 让发射侧的写回分支安静跳过
+    return null;
+  }
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",

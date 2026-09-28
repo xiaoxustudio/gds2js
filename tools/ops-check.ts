@@ -10,7 +10,7 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable } from "../src/runtime/object";
+import { callable, registerClass, registerFieldTypes } from "../src/runtime/object";
 import { index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
@@ -2029,6 +2029,40 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step58", "而且是拷贝（不共享实例）", asVec2(dstV) === asVec2(srcV), false);
   // int 进 Vector2 槽 Godot 在解析期就拒（f9 实测），所以走到这里是第二道防线：响亮，绝不静默存下别的形状
   shouldThrow("step58", "int 进 Vector2 槽响亮报缺", () => toVec2(I(5)));
+}
+
+// ---- step 58b：属性写 `p.m = v` 走的是 Godot 的 named-property 动态路径。
+// 语料钉住了「收得下」的那半边（120 逐字节），这里钉「拒」的那半边 —— Godot 一旦被这几条打断
+// 就不再跑 quit()，进程挂着（S145 实测 timedOut），所以它们进不了语料，只能在这里对账。
+{
+  class Inner {
+    m: Variant = I(1);
+    t: Variant = I(2);
+    s: Variant = S("a");
+    v: Variant = vector2(0, 0);
+    getm(): Variant {
+      return this.m;
+    }
+  }
+  registerClass("Inner", Inner as unknown as new (...a: unknown[]) => object);
+  registerFieldTypes(Inner as unknown as never, { t: "int", s: "String", v: "Vector2" });
+  const obj = V.object(new Inner());
+  const field = (k: string): string => show((obj.v as Record<string, Variant>)[k] as Variant);
+
+  writeProp(obj, "t", F(5.5));
+  eq("step58b", "int 字段收 float 截断", field("t"), "5");
+  writeProp(obj, "t", S("12abc"));
+  eq("step58b", "int 字段收数字串走 int(字符串)", field("t"), "12");
+  writeProp(obj, "s", V.stringName("nm"));
+  eq("step58b", "String 字段收 StringName", field("s"), "nm");
+  writeProp(obj, "v", vector2i(3, 4));
+  eq("step58b", "Vector2 字段收 Vector2i 升级", field("v"), "(3.0, 4.0)");
+  writeProp(obj, "m", S("x"));
+  eq("step58b", "未定型字段原样存", field("m"), "x");
+  // f10 实测：往 String 字段塞 int 与 e1「未知键」用的是同一句话，所以这里绝不能套 str() 糊过去
+  shouldThrow("step58b", "String 字段拒 int（不是转成 \"5\"）", () => writeProp(obj, "s", I(5)));
+  shouldThrow("step58b", "未知键拒（e1 的形体）", () => writeProp(obj, "zz", I(1)));
+  shouldThrow("step58b", "写方法名也拒（f11 与未知键同文本）", () => writeProp(obj, "getm", I(5)));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

@@ -52,10 +52,37 @@ export interface GdClassCtor {
 }
 
 const CLASS_REGISTRY = new Map<string, GdClassCtor>();
+/** 构造器 → 注册名：属性写报错的 `RefCounted (Inner)` 那一段要用（e1 实测的形体）。 */
+const CLASS_NAMES = new WeakMap<GdClassCtor, string>();
+/**
+ * 构造器 → 「成员名 → 声明类型名」（`var t: int` 这类**带标注的成员**）。
+ * 属性写 `p.t = v` 走的是 named-property 那条动态路径，Godot 在那儿**不报解析期错、而是转换**
+ * （实测 f5：`p.t = 5.5` → 5、`p.t = "12abc"` → 12、`p.v = Vector2i(3,4)` → (3.0, 4.0)），
+ * 所以运行时必须知道字段声明成什么，否则就是把 float 存进 int 槽的静默错。
+ */
+const FIELD_TYPES = new WeakMap<GdClassCtor, Record<string, string>>();
 
 /** class_name / 内部类都注册进来，`is` 判定和 `X.new()` 靠它 */
 export function registerClass(name: string, ctor: GdClassCtor): void {
   CLASS_REGISTRY.set(name, ctor);
+  CLASS_NAMES.set(ctor, name);
+}
+
+/** 发射器为每个类补发一行：`rt.registerFieldTypes(Inner, { t: "int", v: "Vector2" })`。 */
+export function registerFieldTypes(ctor: GdClassCtor, table: Record<string, string>): void {
+  FIELD_TYPES.set(ctor, table);
+}
+
+/** 实例（或构造器）的声明类型表，没有则 null。 */
+export function fieldTypesOf(target: unknown): Record<string, string> | null {
+  const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
+  return (ctor && FIELD_TYPES.get(ctor)) || null;
+}
+
+/** 实例（或构造器）的注册名，用于报错文本；拿不到就 null。 */
+export function classNameOf(target: unknown): string | null {
+  const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
+  return (ctor && CLASS_NAMES.get(ctor)) ?? null;
 }
 
 export function lookupClass(name: string): GdClassCtor | undefined {
