@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Cannot use "self" inside a static function.
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

@@ -28,14 +28,25 @@ class Scope {
   constructor(
     private vars: Set<string>,
     private parent: Scope | null,
+    /** 只有函数作用域会标它（见 allowsSelf）；块作用域留空，往上找函数作用域的答案。 */
+    private selfOk?: boolean,
   ) {}
 
   has(name: string): boolean {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name));
   }
 
-  child(names: string[]): Scope {
-    return new Scope(new Set(names), this);
+  /**
+   * 当前函数是否允许 `self`（S143）：沿作用域链上推到函数作用域为止。
+   * 类作用域（checkClass 造的）没标这个位，所以模块级 `var x = self` 走的仍是通用「未声明」那条，
+   * 不在这个口子内 —— Godot 对那个写法报什么我们没测，不放行就是不静默。
+   */
+  allowsSelf(): boolean {
+    return this.selfOk ?? (this.parent !== null && this.parent.allowsSelf());
+  }
+
+  child(names: string[], selfOk?: boolean): Scope {
+    return new Scope(new Set(names), this, selfOk);
   }
 
   /**
@@ -557,7 +568,9 @@ function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[]): void {
-  const scope = outer.child(f.params.map((p) => p.name));
+  // `self` 一律进作用域（S143 实测它在实例方法里就是个对象），静态方法那一条按 Godot 的原文单独报，
+  // 不能让通用「未声明」抢话 —— 抢了就成了「我们报错、Godot 不报」的另一种口径。
+  const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
   walkStmts(f.body, scope, coroutines, diags, false);
 }
 
@@ -658,6 +671,17 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       // 查了会大量误报（例如 SceneTree.create_timer）。
       // `super` 是关键字（super.method()），不是需要声明的值标识符，放行。
       if (e.name === "super") return;
+      if (e.name === "self") {
+        // 实测（S143 + `static func` 那条探针）：静态方法里用 self 是**解析期**错。
+        if (!scope.allowsSelf()) {
+          diags.push({
+            code: "self-in-static",
+            message: 'Cannot use "self" inside a static function.',
+            loc: e.loc,
+          });
+        }
+        return;
+      }
       if (!scope.has(e.name)) {
         diags.push({
           code: "undeclared-identifier",

@@ -550,6 +550,10 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       return [`${emitExprR(s.expr).code};`];
 
     case "assign": {
+      // `self.m = v` 与裸 `m = v` 是同一格（S143 实测）：先把目标降成裸成员，
+      // 成员写、解箱局部、值类型写回这些既有口径就原样接管，不另发一套 writeProp 写回。
+      const bare = unwrapSelfMember(s.target);
+      if (bare) return emitStmt({ ...s, target: bare }, voidReturn);
       // 裸字典下标写：存裸值（Map<primitive, number>），键/值 rep 与推断一致，不符即响亮报错。
       if (s.target.kind === "index" && s.target.obj.kind === "ident") {
         const dk = RAW_DICTS.get(s.target.obj.name);
@@ -786,6 +790,17 @@ function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
     };
   }
   return null;
+}
+
+/**
+ * `self.<成员>` → 裸成员 ident（S143：实测 `self.m` 与 `m` 是同一格，写哪边都互相看得见）。
+ * 名字不是当前类的成员就返回 null —— 那是 `self.get_script()` 这类 Object 方法，
+ * 我们还没有对象模型去接，宁可让它走各自的响亮分支，不能悄悄发成一个不存在的 `this.x`。
+ */
+function unwrapSelfMember(t: Expr): Expr | null {
+  if (t.kind !== "attribute" || t.obj.kind !== "ident" || t.obj.name !== "self") return null;
+  if (!CURRENT_MEMBERS.has(t.name) && !MODULE_VARS.has(t.name)) return null;
+  return { kind: "ident", name: t.name, loc: t.loc };
 }
 
 function emitAssign(target: Expr, value: string): string {
@@ -2212,6 +2227,9 @@ function emitExprVar(e: Expr): string {
       return emitLit(e.lit, e.value);
 
     case "ident":
+      // `self` 站在值位置就是「当前实例」这个对象（S143：typeof(self)=24、传参与返回都行）。
+      // 包一层 V.object(this) 而不是造新值 —— 实测 p.showself() == p 为 true，身份不能变。
+      if (e.name === "self") return `rt.V.object(this)`;
       // 必须 bind(this)：光传 this.f 出去会在调用时丢掉接收者
       if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this))`;
       // 类方法里引用自己的成员变量
@@ -2247,6 +2265,15 @@ function emitExprVar(e: Expr): string {
       // super.属性 在 JS 里走原型链、拿不到父类实例字段，语义不对——只支持 super.method()
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
+      }
+      // `self.m` 与裸 `m` 是同一格（S143 实测），所以成员名降成裸 ident、走同一条发射规则
+      // （成员 → this.m；方法 → bind 好的 Callable，与 `var c = self.f` 同口径）。
+      // 不是成员的名字（`self.get_script()` 这类 Object 方法）交给 rt.attribute 响亮报缺，不自造。
+      if (e.obj.kind === "ident" && e.obj.name === "self") {
+        if (CURRENT_MEMBERS.has(e.name) || MODULE_VARS.has(e.name) || MODULE_FUNCS.has(e.name)) {
+          return emitExprVar({ kind: "ident", name: e.name, loc: e.loc });
+        }
+        return `rt.attribute(rt.V.object(this), ${JSON.stringify(e.name)})`;
       }
       // Vector2 的静态成员：`Vector2.UP`。裸 `Vector2` 不是变量，得在这一步接住，
       // 否则会发成一个不存在的标识符、到运行时才 ReferenceError。
@@ -2455,6 +2482,15 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     // super.method(...) → JS 原生 super 调用（我们的类用真 extends，语义正好对上）
     if (e.callee.obj.kind === "ident" && e.callee.obj.name === "super") {
       return `super.${e.callee.name}(${args.join(", ")})`;
+    }
+    // self.method(...) 与裸 method(...) 同一条路（S143 实测 self.f() 成立）；
+    // 不是成员的方法名（get_script/has_method 这套 Object 方法我们还没有）交给 rt.method 响亮报缺。
+    if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && e.callee.obj.name === "self") {
+      const own = e.callee.name;
+      if (MODULE_FUNCS.has(own) || CURRENT_MEMBERS.has(own) || MODULE_VARS.has(own)) {
+        return `this.${own}(${args.join(", ")})`;
+      }
+      return `rt.method(rt.V.object(this), ${JSON.stringify(own)}, [${args.join(", ")}])`;
     }
     // Base.new() → 构造一个用户类实例
     if (

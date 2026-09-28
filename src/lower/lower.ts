@@ -197,7 +197,9 @@ function lowerFunc(n: SyntaxNode): FuncDecl {
   const paramsNode = field(n, "parameters");
   const returnNode = field(n, "return_type");
   const bodyNode = field(n, "body");
-  const isStatic = n.children.some((c) => !c.isNamed && c.text === "static");
+  // 文法里 static 是**具名节点** static_keyword，不是匿名 token —— 老写法「匿名子节点文本是 static」
+  // 从来没命中过，isStatic 一直静默给 false（self 在静态方法里的检查因此形同虚设）。
+  const isStatic = n.children.some((c) => c.type === "static_keyword");
 
   return {
     name: need(field(n, "name"), "函数名").text,
