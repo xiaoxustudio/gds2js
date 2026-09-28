@@ -24,3 +24,5 @@ docs
 tmp/
 # `gds2js run --keep` 留在源文件旁边的临时产物（默认跑完即删，只有 --keep 会留）
 .gds2js-run*
+# `gds2js export` 的中间工作目录（cjs bundle / sea-config / blob；默认打完即删，只有 --keep-blob 会留）
+.gds2js-export/

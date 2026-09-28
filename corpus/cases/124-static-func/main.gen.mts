@@ -21,23 +21,23 @@ export class Main extends SceneTree {
   
   async _initialize(): Promise<void> {
     let p = rt.V.object(new Inner());
-    print(rt.show(rt.V.str("u1 ")), rt.show(rt.method(Inner, "make", [])));
-    print(rt.show(rt.V.str("u2 ")), rt.show(rt.method(Inner, "twice", [rt.V.int(21)])));
-    print(rt.show(rt.V.str("u3 ")), rt.show(rt.method(Inner, "selfcall", [])));
-    print(rt.show(rt.V.str("u4 ")), rt.show(rt.method(Inner, "readconst", [])));
-    print(rt.show(rt.V.str("u5 ")), rt.show(rt.method(Inner, "rec", [rt.V.int(10)])));
-    print(rt.show(rt.V.str("u6 ")), rt.show(rt.method(p, "usestatic", [])));
-    print(rt.show(rt.V.str("u7 ")), rt.show(rt.method(p, "make", [])));
-    print(rt.show(rt.V.str("u8 ")), rt.show(rt.method(p, "twice", [rt.V.int(3)])));
-    print(rt.show(rt.V.str("u9 ")), rt.show(rt.typeOf(rt.attribute(Inner, "make"))));
-    print(rt.show(rt.V.str("u10 ")), rt.show(rt.method(rt.attribute(Inner, "make"), "call", [])));
-    print(rt.show(rt.V.str("u11 ")), rt.show(Main.helper()));
-    print(rt.show(rt.V.str("u12 ")), rt.show(Main.usehelper()));
-    print(rt.show(rt.V.str("u13 ")), rt.show(this.outerbare()));
-    print(rt.show(rt.V.str("u14 ")), rt.show(Main.helper()));
+    print(rt.showArgs([rt.V.str("u1 "), rt.method(Inner, "make", [])]));
+    print(rt.showArgs([rt.V.str("u2 "), rt.method(Inner, "twice", [rt.V.int(21)])]));
+    print(rt.showArgs([rt.V.str("u3 "), rt.method(Inner, "selfcall", [])]));
+    print(rt.showArgs([rt.V.str("u4 "), rt.method(Inner, "readconst", [])]));
+    print(rt.showArgs([rt.V.str("u5 "), rt.method(Inner, "rec", [rt.V.int(10)])]));
+    print(rt.showArgs([rt.V.str("u6 "), rt.method(p, "usestatic", [])]));
+    print(rt.showArgs([rt.V.str("u7 "), rt.method(p, "make", [])]));
+    print(rt.showArgs([rt.V.str("u8 "), rt.method(p, "twice", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("u9 "), rt.typeOf(rt.attribute(Inner, "make"))]));
+    print(rt.showArgs([rt.V.str("u10 "), rt.method(rt.attribute(Inner, "make"), "call", [])]));
+    print(rt.showArgs([rt.V.str("u11 "), Main.helper()]));
+    print(rt.showArgs([rt.V.str("u12 "), Main.usehelper()]));
+    print(rt.showArgs([rt.V.str("u13 "), this.outerbare()]));
+    print(rt.showArgs([rt.V.str("u14 "), Main.helper()]));
     let cb = rt.attribute(Inner, "make");
-    print(rt.show(rt.V.str("u15 ")), rt.show(rt.typeOf(cb)), rt.show(rt.V.str(" ")), rt.show(rt.method(cb, "call", [])));
-    print(rt.show(rt.V.str("u16 ")), rt.show(rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper"))));
+    print(rt.showArgs([rt.V.str("u15 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "call", [])]));
+    print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper"))]));
     this.quit();
   }
   

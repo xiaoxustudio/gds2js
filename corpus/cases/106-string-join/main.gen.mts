@@ -15,22 +15,22 @@ export class Main extends SceneTree {
     let v3 = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
     let v2i = rt.vector2iNew([rt.V.int(3), rt.V.int(4)]);
     let fs = rt.V.array(rt.GArray.of([rt.V.float((1 / 3)), rt.V.float(100000000000000000000), rt.V.float((0.1 + 0.2)), rt.V.float((1 / 0)), rt.V.float(((-1) / 0))]));
-    print(rt.show(rt.V.str("n1 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b"), rt.V.str("c")]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n2 [")), rt.show(rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([rt.V.str("x")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(""), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n3 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str(""), rt.V.str("b")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str(""), rt.V.str("")]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n4 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.bool(true), rt.V.bool(false)]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n5 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.nil()]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.nil()]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n6 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([v2, v2i]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n7 [")), rt.show(rt.method(rt.V.str("| "), "join", [rt.V.array(rt.GArray.of([d, v2, c, v3]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n8 [")), rt.show(rt.method(rt.V.str("|"), "join", [arr])), rt.show(rt.V.str("] [")), rt.show(rt.method(sn, "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([zn, rt.V.str("y")]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n9 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([inner, rt.V.str("a")]))])), rt.show(rt.V.str("]")));
-    print(rt.show(rt.V.str("n10 [")), rt.show(rt.method(rt.V.str(", "), "join", [fs])), rt.show(rt.V.str("]")));
+    print(rt.showArgs([rt.V.str("n1 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b"), rt.V.str("c")]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n2 ["), rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([]))]), rt.V.str("] ["), rt.method(rt.V.str("-"), "join", [rt.V.array(rt.GArray.of([rt.V.str("x")]))]), rt.V.str("] ["), rt.method(rt.V.str(""), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n3 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str(""), rt.V.str("b")]))]), rt.V.str("] ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str(""), rt.V.str("")]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n4 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]), rt.V.str("] ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.bool(true), rt.V.bool(false)]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n5 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.nil()]))]), rt.V.str("] ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.nil()]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n6 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([v2, v2i]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n7 ["), rt.method(rt.V.str("| "), "join", [rt.V.array(rt.GArray.of([d, v2, c, v3]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n8 ["), rt.method(rt.V.str("|"), "join", [arr]), rt.V.str("] ["), rt.method(sn, "join", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))]), rt.V.str("] ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([zn, rt.V.str("y")]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n9 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([inner, rt.V.str("a")]))]), rt.V.str("]")]));
+    print(rt.showArgs([rt.V.str("n10 ["), rt.method(rt.V.str(", "), "join", [fs]), rt.V.str("]")]));
     let big = rt.V.array(rt.GArray.of([]));
     for (let i of rt.rangeSeq([rt.V.int(200)])) {
       rt.method(big, "append", [rt.V.int(i)]);
     }
-    print(rt.show(rt.V.str("n11 ")), rt.show(rt.method(rt.method(rt.V.str(","), "join", [big]), "length", [])));
-    print(rt.show(rt.V.str("n12 [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([]))])), rt.show(rt.V.str("] [")), rt.show(rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("only")]))])), rt.show(rt.V.str("]")));
+    print(rt.showArgs([rt.V.str("n11 "), rt.method(rt.method(rt.V.str(","), "join", [big]), "length", [])]));
+    print(rt.showArgs([rt.V.str("n12 ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([]))]), rt.V.str("] ["), rt.method(rt.V.str(", "), "join", [rt.V.array(rt.GArray.of([rt.V.str("only")]))]), rt.V.str("]")]));
     this.quit();
   }
   

@@ -5,7 +5,7 @@ import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asColor, color, colorCmp, GColor } from "./color";
-import { bytesEq, GBytes } from "./packed";
+import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -1699,6 +1699,22 @@ export const PRINT_DEPTH = 101;
  */
 export const COMPARE_DEPTH = 52;
 
+// PackedStringArray 的元素折算要用 show，而 packed.ts 不能反过来 import values.ts（环），
+// 所以在这里把函数登记过去 —— 显式注入，不靠鸭子类型猜。
+registerPackStringifier((v) => show(v));
+
+/**
+ * `print(a, b, c)` 的口径：**Godot 先把所有实参求值完，才开始把每个转成字符串**
+ * （S170 ⑦ 实测：`print(r, r.append(2.5), r)` 两个 `r` 都是追加之后的）。
+ * 所以发射器不能把 `rt.show(...)` 铺在实参位置上（那会让转字符串夹在副作用之间），
+ * 而是把整串实参交到这里，按顺序 show、用空串拼（Godot 的 print 不加分隔符）。
+ */
+export function showArgs(args: Variant[]): string {
+  let out = "";
+  for (const a of args) out += show(a);
+  return out;
+}
+
 export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:
@@ -1748,9 +1764,10 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GColor) {
         return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
       }
-      // PackedByteArray 打印是字节方括号式子（实测 f40 t1：[104, 195, 169, 108, 108, 111]）
+      // Packed*Array 的打印是方括号式子，**元素走容器里的口径**（实测 141：`["a", "b"]` 带引号，
+      // 而 `print(s[0])` 是裸 a；浮点那几个格是 `[0.1, 2.7]`）
       if (inner instanceof GBytes) {
-        return `[${(inner as GBytes).raw().join(", ")}]`;
+        return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }

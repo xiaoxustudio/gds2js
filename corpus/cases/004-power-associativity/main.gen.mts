@@ -5,9 +5,9 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.V.int(2))));
-    print(rt.show(rt.ops.pow(rt.V.int(2), rt.V.int(3))));
-    print(rt.show(rt.ops.pow(rt.V.float(2), rt.V.float(0.5))));
+    print(rt.showArgs([rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.V.int(2))]));
+    print(rt.showArgs([rt.ops.pow(rt.V.int(2), rt.V.int(3))]));
+    print(rt.showArgs([rt.ops.pow(rt.V.float(2), rt.V.float(0.5))]));
     this.quit();
   }
   

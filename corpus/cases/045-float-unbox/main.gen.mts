@@ -11,13 +11,13 @@ export class Main extends SceneTree {
       acc = (acc + (i * 2));
       i = (i + 1);
     }
-    print(rt.show(rt.V.float(acc)));
+    print(rt.showArgs([rt.V.float(acc)]));
     let n = 3;
     let f = rt.toFloat(rt.V.int(n));
-    print(rt.show(f));
-    print(rt.show(rt.V.int(rt.fast.iAddC(n, 1))));
-    print(rt.show(rt.V.int(rt.fast.iAddC(2, rt.fast.iMulC(3, 4)))));
-    print(rt.show(rt.V.bool((n < 4))));
+    print(rt.showArgs([f]));
+    print(rt.showArgs([rt.V.int(rt.fast.iAddC(n, 1))]));
+    print(rt.showArgs([rt.V.int(rt.fast.iAddC(2, rt.fast.iMulC(3, 4)))]));
+    print(rt.showArgs([rt.V.bool((n < 4))]));
     this.quit();
   }
   

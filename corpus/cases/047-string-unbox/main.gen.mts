@@ -11,19 +11,19 @@ export class Main extends SceneTree {
       s = (s + "b");
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(rt.V.str(s)));
+    print(rt.showArgs([rt.V.str(s)]));
     let empty = "";
-    print(rt.show(rt.ops.eq(rt.V.str(empty), rt.V.str(""))));
+    print(rt.showArgs([rt.ops.eq(rt.V.str(empty), rt.V.str(""))]));
     if (s !== "") {
-      print(rt.show(rt.V.str("truthy")));
+      print(rt.showArgs([rt.V.str("truthy")]));
     }
     if (empty !== "") {
-      print(rt.show(rt.V.str("nope")));
+      print(rt.showArgs([rt.V.str("nope")]));
     } else {
-      print(rt.show(rt.V.str("empty-false")));
+      print(rt.showArgs([rt.V.str("empty-false")]));
     }
-    print(rt.show(rt.V.str((s + "!"))));
-    print(rt.show(rt.ops.add(rt.strOf(rt.V.int(1)), rt.V.str("x"))));
+    print(rt.showArgs([rt.V.str((s + "!"))]));
+    print(rt.showArgs([rt.ops.add(rt.strOf(rt.V.int(1)), rt.V.str("x"))]));
     this.quit();
   }
   

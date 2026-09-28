@@ -11,8 +11,8 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d2, rt.V.str("y"), rt.V.int(2));
       if (_nv !== null) d2 = _nv;
     }
-    print(rt.show(d1));
-    print(rt.show(rt.method(d2, "size", [])));
+    print(rt.showArgs([d1]));
+    print(rt.showArgs([rt.method(d2, "size", [])]));
     this.quit();
   }
   

@@ -154,8 +154,16 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
-  // PackedByteArray 这一族先只做**字节**那一种（其余八种的元素转换规则还没逐条对拍，见 S168）
+  // Packed*Array：数值那一族的**行为口径实测一致**（S168 / S169），只有元素折算按 kind 分岔
   PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
+  PackedInt32Array: (a) => `rt.packCtor("int32", [${a.join(", ")}])`,
+  PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
+  PackedFloat32Array: (a) => `rt.packCtor("float32", [${a.join(", ")}])`,
+  PackedFloat64Array: (a) => `rt.packCtor("float64", [${a.join(", ")}])`,
+  PackedStringArray: (a) => `rt.packCtor("string", [${a.join(", ")}])`,
+  PackedVector2Array: (a) => `rt.packCtor("vector2", [${a.join(", ")}])`,
+  PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
+  PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   // Array(pack) 实测只量过从 PackedByteArray 转（f49 t4），其余形状由运行时响亮拒
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
 };
@@ -164,19 +172,17 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 const BUILTIN_TODO = new Set([
   "Vector2i",
   "Vector3",
+  // Vector3i 的运行时那一族还没做（145 的探针量过 Godot：`PackedVector3Array([Vector3i(1,2,3)])`
+  // → [(1.0, 2.0, 3.0)] 是成立的）。不列进来会发成 `this.Vector3i(...)` —— JS 的 TypeError，
+  // 差分记成「崩溃」而不是「未实现」，正是这张表要挡的。
+  "Vector3i",
   "load",
   "preload",
-  // Packed*Array 这一族只做了字节那一种（S168）：其余八种的元素转换规则还没逐条对拍。
-  // 不列进来的话 `PackedInt32Array(...)` 会发成 `this.PackedInt32Array(...)` —— 那是 JS 的
-  // TypeError，而 Godot 跑得好好，错形就变成了「我们崩、Godot 过」的误报级差异。
-  "PackedInt32Array",
-  "PackedInt64Array",
-  "PackedFloat32Array",
-  "PackedFloat64Array",
-  "PackedStringArray",
-  "PackedVector2Array",
-  "PackedVector3Array",
-  "PackedColorArray",
+  // Packed*Array 这一族九种全落地了（S168 / S169 / S170 / S171 / S173）。
+  // 「认得但没实现」的那张表留着是防 `this.PackedXxx(...)` 这种 JS TypeError —— 那是
+  // 「我们崩、Godot 过」的误报级差异，现在九种都有真表项，只剩下面这几个非 pack 的名字。
+  // （刻意响着的两格在 runtime/packed.ts 里，不在这张表上：`PackedColorArray.sort()` 的
+  // 比较依据没量、向量与颜色 pack 的 has / count / find 元素比较口径没量。）
 ]);
 
 /**
@@ -2723,6 +2729,17 @@ function typeDefault(t: TypeRef | null): string {
   // 实测 `var b: PackedByteArray` 不给初值就是**空 pack**（印 `[]`、`b == PackedByteArray()` 真、
   // `b.duplicate()` 也是 `[]`，tmp/void-probe d1/e9）—— 发 null 会印成 `<null>`，是静默错
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
+  // 四种数值 pack 的默认值实测全是空 pack（`var a: PackedInt32Array` 印 `[]`、`== PackedInt32Array()` 真）
+  if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';
+  if (base === "PackedInt64Array") return 'rt.packCtor("int64", [])';
+  if (base === "PackedFloat32Array") return 'rt.packCtor("float32", [])';
+  if (base === "PackedFloat64Array") return 'rt.packCtor("float64", [])';
+  // 实测 `var s: PackedStringArray` 的默认值是空 pack，`resize` 长出来的格子填**空串**（S171）
+  if (base === "PackedStringArray") return 'rt.packCtor("string", [])';
+  // 向量与颜色 pack 的默认值同样实测为空 pack（S173 default / is 那批）
+  if (base === "PackedVector2Array") return 'rt.packCtor("vector2", [])';
+  if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
+  if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
   return "rt.V.nil()";
 }
 
@@ -2784,8 +2801,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
   if (e.callee.kind === "ident") {
     const name = e.callee.name;
-    // print 是 GDScript 全局函数，参数要先 show 成字符串
-    if (name === "print") return `print(${args.map((a) => `rt.show(${a})`).join(", ")})`;
+    // print 是 GDScript 全局函数。实参**不能**就地 show：Godot 是把全部实参求值完才转字符串
+    // （S170 ⑦），就地 show 会让 `print(a, a.pop_back(), a)` 的第一个 a 印成弹出之前 —— 静默错。
+    // 交一份 Variant 数组给 rt.showArgs，求值顺序与转换顺序就对了上。
+    if (name === "print") return `print(rt.showArgs([${args.join(", ")}]))`;
 
     // preload(工程内脚本) → 编译期就解析成静态 import 进来的类绑定
     if (name === "preload") {

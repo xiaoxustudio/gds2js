@@ -11,11 +11,11 @@ export class Main extends SceneTree {
 
   async _initialize(): Promise<void> {
     let i = rt.V.object(new Inner());
-    print(rt.show(rt.V.str("t1 ")), rt.show(rt.method(i, "useconst", [])));
-    print(rt.show(rt.V.str("t2 ")), rt.show(rt.method(i, "useenum", [])));
-    print(rt.show(rt.V.str("t3 ")), rt.show(rt.method(i, "useother", [])));
-    print(rt.show(rt.V.str("t4 ")), rt.show(rt.method(i, "ownconst", [])));
-    print(rt.show(rt.V.str("t5 ")), rt.show(Inner.IC));
+    print(rt.showArgs([rt.V.str("t1 "), rt.method(i, "useconst", [])]));
+    print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "useenum", [])]));
+    print(rt.showArgs([rt.V.str("t3 "), rt.method(i, "useother", [])]));
+    print(rt.showArgs([rt.V.str("t4 "), rt.method(i, "ownconst", [])]));
+    print(rt.showArgs([rt.V.str("t5 "), Inner.IC]));
     this.quit();
   }
   

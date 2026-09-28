@@ -16,9 +16,9 @@ export class Main extends SceneTree {
       }
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(rt.V.int(s)));
-    print(rt.show(rt.V.int(g.length)));
-    print(rt.show(rt.V.int(rt.fast.rawArrGet2(g, 2, 1))));
+    print(rt.showArgs([rt.V.int(s)]));
+    print(rt.showArgs([rt.V.int(g.length)]));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet2(g, 2, 1))]));
     let f = [[10, 20], [30, 40]];
     let n = 0;
     let r = 0;
@@ -26,7 +26,7 @@ export class Main extends SceneTree {
       n = rt.fast.iAddC(n, rt.fast.iAddC(rt.fast.rawArrGet2(f, r, 0), rt.fast.rawArrGet2(f, r, 1)));
       r = rt.fast.iAddC(r, 1);
     }
-    print(rt.show(rt.V.int(n)));
+    print(rt.showArgs([rt.V.int(n)]));
     this.quit();
   }
   

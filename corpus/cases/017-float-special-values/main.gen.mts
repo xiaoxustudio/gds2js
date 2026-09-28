@@ -5,10 +5,10 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.strOf(rt.V.float((0 / 0)))));
-    print(rt.show(rt.V.float((1 / 0))));
-    print(rt.show(rt.V.float(((-1) / 0))));
-    print(rt.show(rt.strOf(rt.sqrt(rt.V.float((-1))))));
+    print(rt.showArgs([rt.strOf(rt.V.float((0 / 0)))]));
+    print(rt.showArgs([rt.V.float((1 / 0))]));
+    print(rt.showArgs([rt.V.float(((-1) / 0))]));
+    print(rt.showArgs([rt.strOf(rt.sqrt(rt.V.float((-1))))]));
     this.quit();
   }
   

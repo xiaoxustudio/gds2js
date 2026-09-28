@@ -11,14 +11,14 @@ export class Main extends SceneTree {
 
   async _initialize(): Promise<void> {
     let i = rt.V.object(new Inner());
-    print(rt.show(rt.V.str("t1 ")), rt.show(Main.TOP));
-    print(rt.show(rt.V.str("t2 ")), rt.show(rt.method(i, "read_outer", [])));
-    print(rt.show(rt.V.str("t3 ")), rt.show(rt.method(i, "read_shadow", [])));
-    print(rt.show(rt.V.str("t4 ")), rt.show(rt.method(Inner, "read_static_outer", [])));
-    print(rt.show(rt.V.str("t5 ")), rt.show(rt.method(Inner, "read_static_shadow", [])));
-    print(rt.show(rt.V.str("t6 ")), rt.show(rt.method(i, "via_self_dot", [])));
-    print(rt.show(rt.V.str("t7 ")), rt.show(Inner.TOP));
-    print(rt.show(rt.V.str("t8 ")), rt.show(rt.attribute(i, "TOP")));
+    print(rt.showArgs([rt.V.str("t1 "), Main.TOP]));
+    print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "read_outer", [])]));
+    print(rt.showArgs([rt.V.str("t3 "), rt.method(i, "read_shadow", [])]));
+    print(rt.showArgs([rt.V.str("t4 "), rt.method(Inner, "read_static_outer", [])]));
+    print(rt.showArgs([rt.V.str("t5 "), rt.method(Inner, "read_static_shadow", [])]));
+    print(rt.showArgs([rt.V.str("t6 "), rt.method(i, "via_self_dot", [])]));
+    print(rt.showArgs([rt.V.str("t7 "), Inner.TOP]));
+    print(rt.showArgs([rt.V.str("t8 "), rt.attribute(i, "TOP")]));
     this.quit();
   }
   

@@ -108,6 +108,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
+  checkPackIsAs(m, diags);
   checkTypedVarAssign(m, diags);
 
   return diags;
@@ -440,9 +441,27 @@ const VOID_DICT_METHODS = new Set(["clear"]);
  */
 const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
+/**
+ * 这九种形状的 void 表**逐个量过、口径一致**（byte：`tmp/void-probe`，int32 / int64：
+ * `tmp/pack-probe` 的 k-* 与 h-*ret 系列，float32 / float64：`tmp/fp/probe2`，String：
+ * `tmp/fp/probe5`，向量与颜色三种：`tmp/fp/probe8` 的 sortval / fillval / rmval / revval）。
+ * 只有 `append_array` 在向量与颜色那三种上没单独量（探针那句写错了括号），照六边一致的表推过去 ——
+ * 推错的方向是「Godot 跑、我们拒」，可接受。
+ */
+const PACK_SHAPE_NAMES = new Set([
+  "PackedByteArray",
+  "PackedInt32Array",
+  "PackedInt64Array",
+  "PackedFloat32Array",
+  "PackedFloat64Array",
+  "PackedStringArray",
+  "PackedVector2Array",
+  "PackedVector3Array",
+  "PackedColorArray",
+]);
 
 /** 这条检查认得的接收者形状。 */
-type ContainerShape = "Array" | "Dictionary" | "PackedByteArray";
+type ContainerShape = "Array" | "Dictionary" | "Pack";
 
 /**
  * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
@@ -633,8 +652,8 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     if (e.kind === "dict") return "Dictionary";
     // `var b = PackedByteArray([1,2])`：构造器调用是这一族唯一推得出的初值形状
     // （`"x".to_utf8_buffer()` 那条推不出，宁可漏报）
-    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "PackedByteArray") {
-      return "PackedByteArray";
+    if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
+      return "Pack";
     }
     return null;
   };
@@ -648,7 +667,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             const shape = shapes.get(e.callee.obj.name);
             const name = e.callee.name;
             const isVoid =
-              shape === "PackedByteArray"
+              shape === "Pack"
                 ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
                 : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
             if (isVoid) {
@@ -700,7 +719,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (s.type !== null && s.type.kind === "named") {
               if (/^Array(\[|$)/.test(s.type.name)) shapes.set(s.name, "Array");
               else if (/^Dictionary(\[|$)/.test(s.type.name)) shapes.set(s.name, "Dictionary");
-              else if (s.type.name === "PackedByteArray") shapes.set(s.name, "PackedByteArray");
+              else if (PACK_SHAPE_NAMES.has(s.type.name)) shapes.set(s.name, "Pack");
             } else if (s.init !== null) {
               const sh = shapeOf(s.init);
               if (sh !== null) shapes.set(s.name, sh);
@@ -783,6 +802,98 @@ function scalarStaticName(name: string): string | null {
  * 正是最难查的那一形。`const`（isConst）与 `static var`（isStatic）都不算实例变量：
  * 静态里读常量实测成立（f15 t4/t5），静态里读写本类静态变量也实测成立（f17 t6、f23 t3/t4 —— S161）。
  */
+/**
+ * `is` / `as` 指向 Packed\*Array 的**解析期**拒（S172 实测，step 72）。操作数的静态类型判得出来时
+ * Godot 根本不让编：`is` 一句 `Expression is of type "T" so it can't be of type "PackedX".`，
+ * `as` **两句**（`Cannot cast a value of type "int" as "PackedByteArray".` +
+ * `Invalid cast. Cannot convert from "int" to "PackedByteArray".`）。
+ * 判不出来（变量、函数返回）就留到运行期 —— 那时各认各的形状，而且 pack `is Array` / `is Object`
+ * 都是**假**、只有 `is Variant` 真（rt.isType 那侧实现）。
+ * 只认实测过的类型名拼写，认不出的一律不报（宁可漏报，不可误拦合法工程）。
+ */
+const PACK_IS_AS_NAMES = new Set([
+  "PackedByteArray",
+  "PackedInt32Array",
+  "PackedInt64Array",
+  "PackedFloat32Array",
+  "PackedFloat64Array",
+  "PackedStringArray",
+  // 这三种还没实现，但**解析期拒**照样成立（144 量的就是 PackedVector2Array）：
+  // 判得不出静态类型的操作数（变量等）不会走到这里，所以不会误拦「运行期真的能判」的那一侧。
+  "PackedVector2Array",
+  "PackedVector3Array",
+  "PackedColorArray",
+]);
+/** 能静态判出来的操作数类型（S172 一条条量过的拼写；`null` 那格的文本没量，故意不列）。 */
+const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Color"]);
+
+function staticTypeName(e: Expr): string | null {
+  if (e.kind === "lit") {
+    return (
+      { int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName" } as Record<
+        string,
+        string
+      >
+    )[e.lit] ?? null;
+  }
+  if (e.kind === "array") return "Array";
+  if (e.kind === "dict") return "Dictionary";
+  // `Vector2(1, 2) is PackedVector2Array` 实测也是解析期拒（构造调用判得出类型）
+  if (e.kind === "call" && e.callee.kind === "ident" && STATIC_VALUE_TYPES.has(e.callee.name)) {
+    return e.callee.name;
+  }
+  return null;
+}
+
+/** 粗粒度的 IR 遍历：只看 kind，不枚举每种节点（新增形状时这里不会漏）。 */
+function walkExprKinds(node: unknown, out: Extract<Expr, { kind: "is" | "as" }>[]): void {
+  if (Array.isArray(node)) {
+    for (const x of node) walkExprKinds(x, out);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  if (obj.kind === "is" || obj.kind === "as") out.push(obj as unknown as Extract<Expr, { kind: "is" | "as" }>);
+  for (const key of Object.keys(obj)) {
+    if (key === "loc") continue;
+    walkExprKinds(obj[key], out);
+  }
+}
+
+function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
+  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) bodies.push(f.body);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+  for (const body of bodies) {
+    const found: Extract<Expr, { kind: "is" | "as" }>[] = [];
+    walkExprKinds(body, found);
+    for (const node of found) {
+      if (node.type.kind !== "named") continue;
+      const target = node.type.name.replace(/\[.*\]$/, "");
+      const packTarget = PACK_IS_AS_NAMES.has(target);
+      // S172 还量到一条同形的：`&"nm" is String` 也是解析期拒（StringName 与 String 在**槽位转换**
+      // 上是同一族、在 `is` 谓词上不是）。只这一格量过，所以既不限别的目标类型、也不碰 `as`。
+      const snAgainstString = target === "String" && node.kind === "is" && staticTypeName(node.operand) === "StringName";
+      if (!packTarget && !snAgainstString) continue;
+      const from = staticTypeName(node.operand);
+      if (from === null) continue;
+      if (node.kind === "is") {
+        diags.push({
+          code: "pack-is-type",
+          message: `Expression is of type "${from}" so it can't be of type "${target}".`,
+          loc: node.loc,
+        });
+      } else {
+        diags.push({ code: "pack-as-type", message: `Cannot cast a value of type "${from}" as "${target}".`, loc: node.loc });
+        diags.push({ code: "pack-as-type", message: `Invalid cast. Cannot convert from "${from}" to "${target}".`, loc: node.loc });
+      }
+    }
+  }
+}
+
 function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic[]): void {
   const instanceVars = new Set(vars.filter((v) => !v.isConst && !v.isStatic).map((v) => v.name));
   const instanceFuncs = new Set(funcs.filter((f) => !f.isStatic).map((f) => f.name));

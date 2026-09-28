@@ -10,57 +10,57 @@ export class Main extends SceneTree {
       const _nv = rt.writeProp(p, "m", rt.V.int(5));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a1 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("a1 "), rt.attribute(p, "m")]));
     {
       const _nv = rt.writeProp(p, "m", rt.ops.add(rt.attribute(p, "m"), rt.V.int(3)));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a2 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("a2 "), rt.attribute(p, "m")]));
     {
       const _nv = rt.writeProp(p, "t", rt.V.float(5.5));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a3 ")), rt.show(rt.attribute(p, "t")));
+    print(rt.showArgs([rt.V.str("a3 "), rt.attribute(p, "t")]));
     {
       const _nv = rt.writeProp(p, "t", rt.V.str("12abc"));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a4 ")), rt.show(rt.attribute(p, "t")));
+    print(rt.showArgs([rt.V.str("a4 "), rt.attribute(p, "t")]));
     {
       const _nv = rt.writeProp(p, "s", rt.V.stringName("nm"));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a5 ")), rt.show(rt.attribute(p, "s")), rt.show(rt.V.str(" ")), rt.show(rt.typeOf(rt.attribute(p, "s"))));
+    print(rt.showArgs([rt.V.str("a5 "), rt.attribute(p, "s"), rt.V.str(" "), rt.typeOf(rt.attribute(p, "s"))]));
     {
       const _nv = rt.writeProp(p, "v", rt.vector2iNew([rt.V.int(3), rt.V.int(4)]));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a6 ")), rt.show(rt.attribute(p, "v")));
+    print(rt.showArgs([rt.V.str("a6 "), rt.attribute(p, "v")]));
     let arr = rt.V.array(rt.GArray.of([p, p]));
     {
     const _w0 = rt.V.int(0);
       const _nv = rt.writeProp(rt.index(arr, _w0), "m", rt.V.int(11));
       if (_nv !== null) rt.setIndex(arr, _w0, _nv);
     }
-    print(rt.show(rt.V.str("a7 ")), rt.show(rt.attribute(rt.index(arr, rt.V.int(1)), "m")), rt.show(rt.V.str(" ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("a7 "), rt.attribute(rt.index(arr, rt.V.int(1)), "m"), rt.V.str(" "), rt.attribute(p, "m")]));
     let d = rt.dictOf([[rt.V.str("k"), p]]);
     {
     const _w0 = rt.V.str("k");
       const _nv = rt.writeProp(rt.index(d, _w0), "m", rt.V.int(12));
       if (_nv !== null) rt.setIndex(d, _w0, _nv);
     }
-    print(rt.show(rt.V.str("a8 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("a8 "), rt.attribute(p, "m")]));
     let q = p;
     {
       const _nv = rt.writeProp(q, "m", rt.V.int(13));
       if (_nv !== null) q = _nv;
     }
-    print(rt.show(rt.V.str("a9 ")), rt.show(rt.attribute(p, "m")), rt.show(rt.V.str(" ")), rt.show(rt.attribute(q, "m")));
+    print(rt.showArgs([rt.V.str("a9 "), rt.attribute(p, "m"), rt.V.str(" "), rt.attribute(q, "m")]));
     {
       const _nv = rt.writeProp(p, "m", rt.ops.mul(rt.attribute(p, "m"), rt.V.int(2)));
       if (_nv !== null) p = _nv;
     }
-    print(rt.show(rt.V.str("a10 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("a10 "), rt.attribute(p, "m")]));
     this.quit();
   }
   

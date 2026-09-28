@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Language, Parser } from "web-tree-sitter";
+import { seaFile } from "../home";
 
 /**
  * wasm 相对 import.meta.url 定位，而不是相对 cwd —— 原来写 "./gdscript.wasm"，
@@ -14,6 +15,9 @@ import { Language, Parser } from "web-tree-sitter";
 const WASM_CANDIDATES = ["../../gdscript.wasm", "../gdscript.wasm", "./gdscript.wasm"];
 
 function resolveWasm(): string {
+  // 自包含 exe（SEA）里 import.meta.url 指向二进制自己，候选路径全都无意义 —— 用解出来的那份
+  const fromHome = seaFile("gdscript.wasm");
+  if (fromHome) return fromHome;
   for (const spec of WASM_CANDIDATES) {
     const p = fileURLToPath(new URL(spec, import.meta.url));
     if (existsSync(p)) return p;

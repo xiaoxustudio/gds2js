@@ -13,9 +13,9 @@ export class Main extends SceneTree {
       s = rt.fast.iAddC(s, rt.fast.rawArrGet(a, i));
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(rt.V.int(s)));
-    print(rt.show(rt.V.int(rt.fast.rawArrGet(a, 1))));
-    print(rt.show(rt.V.int(a.length)));
+    print(rt.showArgs([rt.V.int(s)]));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet(a, 1))]));
+    print(rt.showArgs([rt.V.int(a.length)]));
     let b = [1.5];
     let j = 0;
     let s2 = 0;
@@ -25,16 +25,16 @@ export class Main extends SceneTree {
       s2 = (s2 + rt.fast.rawArrGet(b, j));
       j = rt.fast.iAddC(j, 1);
     }
-    print(rt.show(rt.V.float(s2)));
+    print(rt.showArgs([rt.V.float(s2)]));
     let e = rt.V.array(rt.GArray.of([]));
     rt.method(e, "append", [rt.V.int(7)]);
     let f = e;
     rt.method(f, "append", [rt.V.int(8)]);
-    print(rt.show(e));
-    print(rt.show(rt.method(e, "size", [])));
+    print(rt.showArgs([e]));
+    print(rt.showArgs([rt.method(e, "size", [])]));
     let w = [1, 2];
     rt.fast.rawArrSet(w, 0, 5);
-    print(rt.show(rt.V.int(rt.fast.rawArrGet(w, 0))));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet(w, 0))]));
     this.quit();
   }
   

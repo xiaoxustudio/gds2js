@@ -14,9 +14,9 @@ export class Main extends SceneTree {
       rt.fast.rawArrSet(a, rt.fast.iSubC(rt.fast.iSubC(n, 1), i), t);
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(rt.V.int(rt.fast.rawArrGet(a, 0))));
-    print(rt.show(rt.V.int(rt.fast.rawArrGet(a, 4))));
-    print(rt.show(rt.V.int(rt.fast.rawArrGet(a, 2))));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet(a, 0))]));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet(a, 4))]));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet(a, 2))]));
     let g = [[1, 2], [3, 4]];
     let r = 0;
     while ((r < 2)) {
@@ -27,15 +27,15 @@ export class Main extends SceneTree {
       }
       r = rt.fast.iAddC(r, 1);
     }
-    print(rt.show(rt.V.int(rt.fast.rawArrGet2(g, 0, 0))));
-    print(rt.show(rt.V.int(rt.fast.rawArrGet2(g, 1, 1))));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet2(g, 0, 0))]));
+    print(rt.showArgs([rt.V.int(rt.fast.rawArrGet2(g, 1, 1))]));
     let s = 0;
     let k = 0;
     while ((k < 2)) {
       s = rt.fast.iAddC(s, rt.fast.iAddC(rt.fast.rawArrGet2(g, k, 0), rt.fast.rawArrGet2(g, k, 1)));
       k = rt.fast.iAddC(k, 1);
     }
-    print(rt.show(rt.V.int(s)));
+    print(rt.showArgs([rt.V.int(s)]));
     this.quit();
   }
   

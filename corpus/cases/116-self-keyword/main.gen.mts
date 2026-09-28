@@ -12,24 +12,24 @@ export class Main extends SceneTree {
   }
   
   hello(): void {
-    print(rt.show(rt.V.str("s12 hello via self call")));
+    print(rt.showArgs([rt.V.str("s12 hello via self call")]));
   }
   
   async _initialize(): Promise<void> {
     let b = rt.V.object(new Box());
-    print(rt.show(rt.V.str("s1 ")), rt.show(rt.method(b, "readself", [])), rt.show(rt.V.str(" ")), rt.show(rt.attribute(b, "n")));
-    print(rt.show(rt.V.str("s2 ")), rt.show(rt.method(b, "bump", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(b, "readself", [])));
-    print(rt.show(rt.V.str("s3 ")), rt.show(rt.method(b, "setn", [rt.V.int(10)])), rt.show(rt.V.str(" ")), rt.show(rt.attribute(b, "n")));
-    print(rt.show(rt.V.str("s4 ")), rt.show(this.useobj(b)));
-    print(rt.show(rt.V.str("s5 ")), rt.show(rt.ops.eq(rt.method(b, "me", []), b)), rt.show(rt.V.str(" ")), rt.show(rt.method(b, "sameother", [b])));
-    print(rt.show(rt.V.str("s6 ")), rt.show(rt.method(b, "ty", [])), rt.show(rt.V.str(" ")), rt.show(rt.typeOf(b)));
-    print(rt.show(rt.V.str("s7 ")), rt.show(rt.typeOf(rt.V.object(this))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(rt.V.object(this), rt.V.nil())));
-    print(rt.show(rt.V.str("s8 ")), rt.show(this.outervar));
+    print(rt.showArgs([rt.V.str("s1 "), rt.method(b, "readself", []), rt.V.str(" "), rt.attribute(b, "n")]));
+    print(rt.showArgs([rt.V.str("s2 "), rt.method(b, "bump", []), rt.V.str(" "), rt.method(b, "readself", [])]));
+    print(rt.showArgs([rt.V.str("s3 "), rt.method(b, "setn", [rt.V.int(10)]), rt.V.str(" "), rt.attribute(b, "n")]));
+    print(rt.showArgs([rt.V.str("s4 "), this.useobj(b)]));
+    print(rt.showArgs([rt.V.str("s5 "), rt.ops.eq(rt.method(b, "me", []), b), rt.V.str(" "), rt.method(b, "sameother", [b])]));
+    print(rt.showArgs([rt.V.str("s6 "), rt.method(b, "ty", []), rt.V.str(" "), rt.typeOf(b)]));
+    print(rt.showArgs([rt.V.str("s7 "), rt.typeOf(rt.V.object(this)), rt.V.str(" "), rt.ops.eq(rt.V.object(this), rt.V.nil())]));
+    print(rt.showArgs([rt.V.str("s8 "), this.outervar]));
     this.outervar = rt.V.int(42);
-    print(rt.show(rt.V.str("s9 ")), rt.show(this.outervar), rt.show(rt.V.str(" ")), rt.show(this.outervar));
+    print(rt.showArgs([rt.V.str("s9 "), this.outervar, rt.V.str(" "), this.outervar]));
     this.outervar = rt.ops.add(this.outervar, rt.V.int(8));
-    print(rt.show(rt.V.str("s10 ")), rt.show(this.outervar));
-    print(rt.show(rt.V.str("s11 ")), rt.show(rt.ops.eq(this.outer_self, rt.V.object(this))));
+    print(rt.showArgs([rt.V.str("s10 "), this.outervar]));
+    print(rt.showArgs([rt.V.str("s11 "), rt.ops.eq(this.outer_self, rt.V.object(this))]));
     this.hello();
     this.quit();
   }

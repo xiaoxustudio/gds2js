@@ -14,14 +14,14 @@ export class Main extends SceneTree {
     let b = rt.V.object(new Box());
     let cb = rt.callableOf(this.ifn.bind(this), "ifn", rt.V.object(this));
     let sig = this.fired;
-    print(rt.show(rt.V.str("u1 ")), rt.show(rt.typeOf(cb)));
-    print(rt.show(rt.V.str("u2 ")), rt.show(rt.typeOf(rt.callableOf(this.ifn.bind(this), "ifn", rt.V.object(this)))));
-    print(rt.show(rt.V.str("u3 ")), rt.show(rt.typeOf(sig)));
-    print(rt.show(rt.V.str("u4 ")), rt.show(rt.typeOf(this.fired)));
-    print(rt.show(rt.V.str("u5 ")), rt.show(rt.typeOf(rt.attribute(b, "boxed"))));
-    print(rt.show(rt.V.str("u6 ")), rt.show(rt.method(cb, "call", [])));
-    print(rt.show(rt.V.str("u7 ")), rt.show(rt.typeOf(rt.attribute(b, "n"))));
-    print(rt.show(rt.V.str("u8 ")), rt.show(rt.typeOf(rt.attribute(rt.V.object(new Box()), "boxed"))));
+    print(rt.showArgs([rt.V.str("u1 "), rt.typeOf(cb)]));
+    print(rt.showArgs([rt.V.str("u2 "), rt.typeOf(rt.callableOf(this.ifn.bind(this), "ifn", rt.V.object(this)))]));
+    print(rt.showArgs([rt.V.str("u3 "), rt.typeOf(sig)]));
+    print(rt.showArgs([rt.V.str("u4 "), rt.typeOf(this.fired)]));
+    print(rt.showArgs([rt.V.str("u5 "), rt.typeOf(rt.attribute(b, "boxed"))]));
+    print(rt.showArgs([rt.V.str("u6 "), rt.method(cb, "call", [])]));
+    print(rt.showArgs([rt.V.str("u7 "), rt.typeOf(rt.attribute(b, "n"))]));
+    print(rt.showArgs([rt.V.str("u8 "), rt.typeOf(rt.attribute(rt.V.object(new Box()), "boxed"))]));
     this.quit();
   }
   

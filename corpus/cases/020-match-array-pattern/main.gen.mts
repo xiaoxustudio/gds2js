@@ -9,29 +9,29 @@ export class Main extends SceneTree {
       const __m0 = rt.matchPattern(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.patArray([rt.patLit(rt.V.int(1)), rt.patBind()]));
       if (__m0 !== null) {
         const v = __m0[0];
-        print(rt.show(v));
+        print(rt.showArgs([v]));
         break;
       }
       const __m1 = rt.matchPattern(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.patWild());
       if (__m1 !== null) {
-        print(rt.show(rt.V.str("none")));
+        print(rt.showArgs([rt.V.str("none")]));
         break;
       }
     } while (false);
     do {
       const __m0 = rt.matchPattern(rt.V.int(3), rt.patLit(rt.V.int(1)));
       if (__m0 !== null) {
-        print(rt.show(rt.V.str("one-or-two")));
+        print(rt.showArgs([rt.V.str("one-or-two")]));
         break;
       }
       const __m1 = rt.matchPattern(rt.V.int(3), rt.patLit(rt.V.int(2)));
       if (__m1 !== null) {
-        print(rt.show(rt.V.str("one-or-two")));
+        print(rt.showArgs([rt.V.str("one-or-two")]));
         break;
       }
       const __m2 = rt.matchPattern(rt.V.int(3), rt.patLit(rt.V.int(3)));
       if (__m2 !== null) {
-        print(rt.show(rt.V.str("three")));
+        print(rt.showArgs([rt.V.str("three")]));
         break;
       }
     } while (false);

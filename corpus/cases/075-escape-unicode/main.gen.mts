@@ -5,30 +5,30 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.V.str("A")));
-    print(rt.show(rt.method(rt.V.str("A"), "length", [])));
-    print(rt.show(rt.V.str("A")));
-    print(rt.show(rt.method(rt.V.str("A"), "length", [])));
-    print(rt.show(rt.V.str("Ƕ00")));
-    print(rt.show(rt.method(rt.V.str("Ƕ00"), "length", [])));
-    print(rt.show(rt.ops.eq(rt.V.str("Ƕ00"), rt.V.str("Ƕ00"))));
-    print(rt.show(rt.V.str("𐀀")));
-    print(rt.show(rt.method(rt.V.str("𐀀"), "length", [])));
-    print(rt.show(rt.ops.eq(rt.V.str("𐀀"), rt.V.str("𐀀"))));
-    print(rt.show(rt.ops.eq(rt.V.str("𐀀"), rt.V.str("𐀀"))));
-    print(rt.show(rt.method(rt.V.str("𐀀"), "length", [])));
-    print(rt.show(rt.ops.eq(rt.V.str("𐀀x"), rt.V.str("𐀀x"))));
-    print(rt.show(rt.method(rt.V.str("𐀀x"), "length", [])));
-    print(rt.show(rt.ops.eq(rt.V.str("𐀀"), rt.V.str("𐀀"))));
-    print(rt.show(rt.ops.eq(rt.V.str("􏿿"), rt.V.str("􏿿"))));
-    print(rt.show(rt.method(rt.V.str("􏿿"), "length", [])));
-    print(rt.show(rt.ops.eq(rt.V.str("é"), rt.V.str("é"))));
-    print(rt.show(rt.ops.eq(rt.V.str("ÿ"), rt.V.str("ÿ"))));
-    print(rt.show(rt.V.str("AB")));
-    print(rt.show(rt.method(rt.V.str("a\tb"), "length", [])));
-    print(rt.show(rt.method(rt.V.str("a\bc"), "length", [])));
-    print(rt.show(rt.method(rt.V.str("\u000b"), "length", [])));
-    print(rt.show(rt.method(rt.V.str("a'b\"c"), "length", [])));
+    print(rt.showArgs([rt.V.str("A")]));
+    print(rt.showArgs([rt.method(rt.V.str("A"), "length", [])]));
+    print(rt.showArgs([rt.V.str("A")]));
+    print(rt.showArgs([rt.method(rt.V.str("A"), "length", [])]));
+    print(rt.showArgs([rt.V.str("Ƕ00")]));
+    print(rt.showArgs([rt.method(rt.V.str("Ƕ00"), "length", [])]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("Ƕ00"), rt.V.str("Ƕ00"))]));
+    print(rt.showArgs([rt.V.str("𐀀")]));
+    print(rt.showArgs([rt.method(rt.V.str("𐀀"), "length", [])]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("𐀀"), rt.V.str("𐀀"))]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("𐀀"), rt.V.str("𐀀"))]));
+    print(rt.showArgs([rt.method(rt.V.str("𐀀"), "length", [])]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("𐀀x"), rt.V.str("𐀀x"))]));
+    print(rt.showArgs([rt.method(rt.V.str("𐀀x"), "length", [])]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("𐀀"), rt.V.str("𐀀"))]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("􏿿"), rt.V.str("􏿿"))]));
+    print(rt.showArgs([rt.method(rt.V.str("􏿿"), "length", [])]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("é"), rt.V.str("é"))]));
+    print(rt.showArgs([rt.ops.eq(rt.V.str("ÿ"), rt.V.str("ÿ"))]));
+    print(rt.showArgs([rt.V.str("AB")]));
+    print(rt.showArgs([rt.method(rt.V.str("a\tb"), "length", [])]));
+    print(rt.showArgs([rt.method(rt.V.str("a\bc"), "length", [])]));
+    print(rt.showArgs([rt.method(rt.V.str("\u000b"), "length", [])]));
+    print(rt.showArgs([rt.method(rt.V.str("a'b\"c"), "length", [])]));
     this.quit();
   }
   

@@ -17,7 +17,7 @@ export class Main extends SceneTree {
   
   mix(a, b): unknown {
     let t = rt.ops.add(a, b);
-    print(rt.show(t));
+    print(rt.showArgs([t]));
     return t;
   }
   
@@ -35,11 +35,11 @@ export class Main extends SceneTree {
       s = this.tri(i);
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(rt.V.int(s)));
-    print(rt.show(rt.V.int(this.tri(10))));
-    print(rt.show(rt.V.str(this.shout("hi"))));
-    print(rt.show(this.mix(rt.V.int(2), rt.V.int(3))));
-    print(rt.show(this.choose(rt.V.int(5))));
+    print(rt.showArgs([rt.V.int(s)]));
+    print(rt.showArgs([rt.V.int(this.tri(10))]));
+    print(rt.showArgs([rt.V.str(this.shout("hi"))]));
+    print(rt.showArgs([this.mix(rt.V.int(2), rt.V.int(3))]));
+    print(rt.showArgs([this.choose(rt.V.int(5))]));
     this.quit();
   }
   

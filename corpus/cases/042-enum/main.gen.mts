@@ -9,13 +9,13 @@ const ANON_B = rt.V.int(1);
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.index(Suit, rt.V.str("HEARTS"))));
-    print(rt.show(rt.index(Suit, rt.V.str("DIAMONDS"))));
-    print(rt.show(rt.index(Suit, rt.V.str("CLUBS"))));
-    print(rt.show(rt.ops.add(rt.index(Suit, rt.V.str("CLUBS")), rt.V.int(1))));
-    print(rt.show(ANON_A), rt.show(ANON_B));
+    print(rt.showArgs([rt.index(Suit, rt.V.str("HEARTS"))]));
+    print(rt.showArgs([rt.index(Suit, rt.V.str("DIAMONDS"))]));
+    print(rt.showArgs([rt.index(Suit, rt.V.str("CLUBS"))]));
+    print(rt.showArgs([rt.ops.add(rt.index(Suit, rt.V.str("CLUBS")), rt.V.int(1))]));
+    print(rt.showArgs([ANON_A, ANON_B]));
     let c = rt.index(Suit, rt.V.str("DIAMONDS"));
-    print(rt.show(c));
+    print(rt.showArgs([c]));
     this.quit();
   }
   

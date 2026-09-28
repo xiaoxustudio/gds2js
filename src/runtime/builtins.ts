@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, wrap64, type IntPayload, type Variant } from "./tags";
 import { decimalToDouble } from "../lower/double";
 import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
-import { asBytes } from "./packed";
+import { asBytes, packTypeName } from "./packed";
 
 /**
  * `Array(x)` —— 实测过的那一格只有「从 PackedByteArray 转」（f49 t4：`Array(src)` → `[1, 2, 3]`、
@@ -14,7 +14,11 @@ export function arrayFromVariant(v: Variant): Variant {
   if (b === null) {
     throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
   }
-  return V.array(GArray.of(b.raw().map((x) => V.int(x))));
+  // `Array(PackedInt32Array(...))` 这类没量过（用例 135 只钉了 byte 那一支）→ 响
+  if (b.kind !== "byte") {
+    throw new UnsupportedError("array-ctor-from-kind", `Array(...) 只实测过 PackedByteArray 实参（收到 ${packTypeName(b.kind)}）`);
+  }
+  return V.array(GArray.of(b.raw().map((x) => V.int(typeof x === "bigint" ? x : x as number))));
 }
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用） */
