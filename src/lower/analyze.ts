@@ -87,10 +87,24 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   );
   const moduleScope = globalScope.child(declNames(m));
   const coroutines = new Set(m.funcs.filter((f) => f.coroutine).map((f) => f.name));
+  // 内部类能看见的外层名字**只有**：常量、enum、类名（含兄弟内部类与跨文件的 class_name）——
+  // 模块级的 var / signal / func 都看不见（f31 / f32 报未声明、f33 / f24 报「not found in base self」）。
+  // 作用域链必须另起一条：globalScope 里就装着 declNames(m)，挂在它下面等于什么都没挡。
+  const classScopeBase = new Scope(
+    new Set([
+      ...(m.className ? [m.className] : []),
+      ...m.vars.filter((v) => v.isConst).map((v) => v.name),
+      ...m.innerClasses.map((c) => c.name),
+      ...enumNames,
+      ...globals,
+    ]),
+    null,
+  );
 
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
-  for (const c of m.innerClasses) checkClass(c, moduleScope, diags);
+  for (const c of m.innerClasses) checkClass(c, classScopeBase, diags);
   checkStaticAccess(m.funcs, m.vars, diags);
+  checkClassFuncVisibility(m, diags);
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
@@ -753,21 +767,8 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
   for (const f of funcs) {
     if (!f.isStatic) continue;
     // 局部名与形参不算「实例成员」：Godot 的解析按最近的声明走
-    const local = new Set(f.params.map((p) => p.name));
-    const collectLocal = (body: Stmt[]): void => {
-      for (const s of body) {
-        if (s.kind === "var") local.add(s.name);
-        else if (s.kind === "for") local.add(s.var);
-        else if (s.kind === "if") for (const br of s.branches) collectLocal(br.body);
-        else if (s.kind === "while") collectLocal(s.body);
-        else if (s.kind === "match")
-          for (const arm of s.arms) {
-            if (arm.pattern.kind === "bind") local.add(arm.pattern.name);
-            collectLocal(arm.body);
-          }
-      }
-    };
-    collectLocal(f.body);
+    const local = new Set<string>();
+    collectLocalNames(f.body, f.params.map((p) => p.name), local);
 
     const expr = (e: Expr): void => {
       switch (e.kind) {
@@ -869,6 +870,154 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
     };
     f.body.forEach(stmt);
   }
+}
+
+/**
+ * 函数体里所有**局部声明**的名字：形参、`var`、`for` 的循环变量、`match` 的绑定、lambda 的形参。
+ * 用来避免「局部遮蔽了外层名字却被当成外层名字报错」这一类误报 —— 误报在这套判据里是硬伤。
+ */
+function collectLocalNames(body: Stmt[], params: string[], out: Set<string>): void {
+  for (const p of params) out.add(p);
+  const stmt = (s: Stmt): void => {
+    switch (s.kind) {
+      case "var":
+        out.add(s.name);
+        return;
+      case "for":
+        out.add(s.var);
+        s.body.forEach(stmt);
+        return;
+      case "if":
+        for (const br of s.branches) br.body.forEach(stmt);
+        return;
+      case "while":
+        s.body.forEach(stmt);
+        return;
+      case "match":
+        for (const arm of s.arms) {
+          if (arm.pattern.kind === "bind") out.add(arm.pattern.name);
+          arm.body.forEach(stmt);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  body.forEach(stmt);
+}
+
+/**
+ * 内部类里**裸调外层脚本的函数**是解析期错：`Function "helper()" not found in base self.`
+ * （f33 实测实例方法那一版；f24 是静态方法那一版，同一条文本）。
+ * 通用「未声明」那条只管值位置，被调用者位置历来不检查（`quit()` / `create_timer()` 这些宿主方法
+ * 是故意放行的），所以这里只认**外层脚本里真存在的那个函数名**才报 —— 认不得的一律放行，
+ * 这样误报恒为零，也不会顺手把引擎方法拦掉。
+ */
+function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
+  const outerFuncs = new Set(m.funcs.map((f) => f.name));
+  if (outerFuncs.size === 0) return;
+
+  const scanExpr = (e: Expr, cb: (name: string, loc: Loc) => void): void => {
+    switch (e.kind) {
+      case "call":
+        if (e.callee.kind === "ident") cb(e.callee.name, e.loc);
+        scanExpr(e.callee, cb);
+        for (const a of e.args) scanExpr(a, cb);
+        return;
+      case "index":
+        scanExpr(e.obj, cb);
+        scanExpr(e.index, cb);
+        return;
+      case "attribute":
+        scanExpr(e.obj, cb);
+        return;
+      case "binary":
+        scanExpr(e.left, cb);
+        scanExpr(e.right, cb);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        scanExpr(e.operand, cb);
+        return;
+      case "array":
+        for (const it of e.items) scanExpr(it, cb);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          scanExpr(en.key, cb);
+          scanExpr(en.value, cb);
+        }
+        return;
+      case "lambda":
+        scanStmts(e.body, cb);
+        return;
+      default:
+        return;
+    }
+  };
+  const scanStmts = (body: Stmt[], cb: (name: string, loc: Loc) => void): void => {
+    for (const s of body) {
+      switch (s.kind) {
+        case "expr":
+          scanExpr(s.expr, cb);
+          continue;
+        case "var":
+          if (s.init !== null) scanExpr(s.init, cb);
+          continue;
+        case "assign":
+          scanExpr(s.target, cb);
+          scanExpr(s.value, cb);
+          continue;
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond !== null) scanExpr(br.cond, cb);
+            scanStmts(br.body, cb);
+          }
+          continue;
+        case "for":
+          scanExpr(s.iter, cb);
+          scanStmts(s.body, cb);
+          continue;
+        case "while":
+          scanExpr(s.cond, cb);
+          scanStmts(s.body, cb);
+          continue;
+        case "match":
+          scanExpr(s.subject, cb);
+          for (const arm of s.arms) {
+            if (arm.guard !== null) scanExpr(arm.guard, cb);
+            scanStmts(arm.body, cb);
+          }
+          continue;
+        case "return":
+          if (s.value !== null) scanExpr(s.value, cb);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  const walkClass = (c: ClassDecl): void => {
+    const own = new Set(c.funcs.map((f) => f.name));
+    for (const f of c.funcs) {
+      const local = new Set<string>();
+      collectLocalNames(f.body, f.params.map((p) => p.name), local);
+      scanStmts(f.body, (name, loc) => {
+        if (outerFuncs.has(name) && !own.has(name) && !local.has(name)) {
+          diags.push({
+            code: "class-outer-func",
+            message: `Function "${name}()" not found in base self.`,
+            loc,
+          });
+        }
+      });
+    }
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const c of m.innerClasses) walkClass(c);
 }
 
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {
