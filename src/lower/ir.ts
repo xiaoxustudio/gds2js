@@ -107,6 +107,8 @@ export interface VarDecl {
   type: TypeRef | null;
   init: Expr | null;
   isConst: boolean;
+  /** `static var` —— 实测 4.6.3 支持，而且是**真共享**的一格（S161）：类名、实例、静态方法三条路读写的是同一格。 */
+  isStatic: boolean;
   /**
    * 属性访问器（`var prop: int:` 带 `get:` / `set(v):`，或引用式 `get = _getp, set = _setp`）。
    * null = 普通成员变量。两种写法实测行为一致（S152：f2 块式、f12 引用式各 10 个观测点同形）：

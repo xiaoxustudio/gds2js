@@ -120,6 +120,8 @@ function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
     type: typeNode ? lowerType(typeNode) : null,
     init: valueNode ? lowerExpr(valueNode) : null,
     isConst,
+    // 与 lowerFunc 同一个判据：文法把 `static` 发成**具名**子节点 static_keyword
+    isStatic: n.children.some((c) => c.type === "static_keyword"),
     accessor: lowerAccessor(n.children.find((c) => c.type === "setget") ?? null),
     loc: loc(n),
   };

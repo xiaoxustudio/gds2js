@@ -197,7 +197,7 @@ let CURRENT_CLASS = "";
  * 现在给每个常量在**它自己的类**上再发一份 static 副本，裸读一律按归属发成 `<类>.NAME`，
  * 静态方法里读常量（f15 t4/t5）与内部类读外层常量（f29 t2/t4）就同一条路了。
  */
-let CONST_OWNERS = new Map<string, string>();
+let CLASS_VALUE_OWNERS = new Map<string, string>();
 /**
  * 当前作用域里**声明了类型**的名字 → 那个 TypeRef（模块级 + 当前类的成员变量，emitClassDecl 进出时切换）。
  * 赋值点要按声明类型转换：实测 Godot 对 `var mt: int` 之后 `mt = 2.7` 给 2（截断），
@@ -261,7 +261,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
 
   MODULE_VARS = new Set([
-    ...m.vars.map((v) => v.name),
+    ...m.vars.filter((v) => !v.isStatic).map((v) => v.name),
     ...m.signals.map((s) => s.name),
     ...(opts.inheritedMembers ?? []),
   ]);
@@ -269,7 +269,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   // 模块类的静态方法面：名字挂在这个类作用域上，调用与取值都发成 `<类名>.f`
   CURRENT_CLASS = className;
   STATIC_FUNCS = new Set(m.funcs.filter((f) => f.isStatic).map((f) => f.name));
-  CONST_OWNERS = new Map(m.vars.filter((v) => v.isConst).map((v) => [v.name, className]));
+  CLASS_VALUE_OWNERS = new Map(
+    m.vars.filter((v) => v.isConst || v.isStatic).map((v) => [v.name, className]),
+  );
   VAR_TYPES = new Map(m.vars.map((v) => [v.name, v.type]));
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
@@ -357,8 +359,10 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
 
   // 有 class_name 的脚本注册进运行时全局表：跨文件的 `is Foo` / `as Foo` 靠它。
   if (m.className) out.push(`rt.registerClass(${JSON.stringify(m.className)}, ${className});`);
-  const moduleFields = fieldTypesLiteral(m.vars);
+  const moduleFields = fieldTypesLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(${className}, ${moduleFields});`);
+  const moduleStaticVars = staticVarTableLiteral(m.vars);
+  if (moduleStaticVars !== null) out.push(`rt.registerStaticVars(${className}, ${moduleStaticVars});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(${className}, ${JSON.stringify(moduleStatics)});`);
   // 按 res:// 路径注册：`load("res://…")` 与 `preload` 一致性都靠它。
@@ -430,6 +434,22 @@ function staticNamesLiteral(funcs: readonly { name: string; isStatic: boolean }[
 }
 
 /**
+ * 静态变量表，发成 `rt.registerStaticVars(Cls, { sv: "int", plain: "" })`。
+ * 有了这张表，运行时才知道 `A.x` / `p.x` / `A.x = v` / `p.x = v` 摸的是**类上那一格**（S161），
+ * 以及带类型的槽该怎么转换（照 S150 那五种，其余原样存）。
+ * 没实测过声明类型的槽登记成 ""，只登记键名、不做转换 —— 与「不认识的类型不发」是同一条纪律。
+ */
+function staticVarTableLiteral(vars: readonly VarDecl[]): string | null {
+  const rows: string[] = [];
+  for (const v of vars) {
+    if (!v.isStatic) continue;
+    const base = v.type !== null && v.type.kind === "named" ? v.type.name.replace(/\[.*\]$/, "") : "";
+    rows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base === "int" || base === "float" || base === "bool" || base === "String" || base === "Vector2" ? base : "")}`);
+  }
+  return rows.length === 0 ? null : `{${rows.join(", ")}}`;
+}
+
+/**
  * 类成员变量的发射。普通字段一行；带访问器的发成 JS 的 get/set，**不再发那个字段** ——
  * JS 的同名类字段会把访问器盖掉，读出来就成了初值而不是 getter 的结果。
  * 只读属性（没有 set）实测「写它」是**静默无操作**（S152 的 e8 / f12 k4：值不变、也不报错），
@@ -438,11 +458,15 @@ function staticNamesLiteral(funcs: readonly { name: string; isStatic: boolean }[
 function emitMemberVar(v: VarDecl): string[] {
   const a = v.accessor;
   if (a === null || a === undefined) {
-    const field = `  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`;
+    const init = stampDecl(v.type, v.init, emitExpr);
+    // `static var` 是**共享的一格**（S161）：发成类的 static 字段、实例上不留副本，
+    // `A.x` / `p.x` / 静态方法里裸写这三条路都靠运行时那张静态表落到同一格。
+    if (v.isStatic) return [`  static ${v.name} = ${init};`];
+    const field = `  ${v.name} = ${init};`;
     // 常量在**类上**也要有一份：Godot 的常量是类级的，静态方法里读常量（f15 t4/t5）与
     // 内部类里读外层常量（f29 t2/t4）实测都成立，而裸读现在按归属发成 `<类>.NAME`。
     // 实例字段照旧留着 —— `p.CV` 那条路（f29 t8 实测给 7）靠的就是它。
-    if (v.isConst) return [field, `  static ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`];
+    if (v.isConst) return [field, `  static ${v.name} = ${init};`];
     return [field];
   }
   const out: string[] = [];
@@ -470,14 +494,15 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   const savedTypes = VAR_TYPES;
   const savedStatics = STATIC_FUNCS;
   const savedClass = CURRENT_CLASS;
-  const savedConsts = CONST_OWNERS;
-  CURRENT_MEMBERS = new Set(decl.vars.map((v) => v.name));
+  const savedConsts = CLASS_VALUE_OWNERS;
+  CURRENT_MEMBERS = new Set(decl.vars.filter((v) => !v.isStatic).map((v) => v.name));
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
-  // 内部类**继承外层的常量可见性**（f29 实测），同名按 GDScript 的就近遮蔽覆盖
-  CONST_OWNERS = new Map(savedConsts);
-  for (const v of decl.vars) if (v.isConst) CONST_OWNERS.set(v.name, decl.name);
+  // 内部类**继承外层的常量可见性**（f29 实测），同名按 GDScript 的就近遮蔽覆盖；
+  // 静态变量也算类级的那一格（S161）
+  CLASS_VALUE_OWNERS = new Map(savedConsts);
+  for (const v of decl.vars) if (v.isConst || v.isStatic) CLASS_VALUE_OWNERS.set(v.name, decl.name);
 
   const lines = [`class ${decl.name} {`];
   mark(base, decl.loc);
@@ -499,8 +524,10 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push("}");
   // 注册进运行时的类注册表，`is` 判定和 Base.new() 都靠它
   lines.push(`rt.registerClass(${JSON.stringify(decl.name)}, ${decl.name});`);
-  const declFields = fieldTypesLiteral(decl.vars);
+  const declFields = fieldTypesLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declFields !== null) lines.push(`rt.registerFieldTypes(${decl.name}, ${declFields});`);
+  const declStaticVars = staticVarTableLiteral(decl.vars);
+  if (declStaticVars !== null) lines.push(`rt.registerStaticVars(${decl.name}, ${declStaticVars});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
   lines.push("");
@@ -509,7 +536,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   VAR_TYPES = savedTypes;
   STATIC_FUNCS = savedStatics;
   CURRENT_CLASS = savedClass;
-  CONST_OWNERS = savedConsts;
+  CLASS_VALUE_OWNERS = savedConsts;
   return lines;
 }
 
@@ -2485,7 +2512,7 @@ function emitExprVar(e: Expr): string {
       if (e.name === "self") return `rt.V.object(this)`;
       // 常量是**类级**的：按归属发成 `<类>.NAME`，静态方法里读常量（f15 t4/t5）与
       // 内部类读外层常量（f29 t2/t4）都走这一条；发成 `this.NAME` 在类上的 static 副本存在之后是错的形
-      const owner = CONST_OWNERS.get(e.name);
+      const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
       // 静态方法是**本类作用域**的名字（`typeof(helper)` → 25），它发在构造器上、不在实例上，
       // 所以绑的是类而不是 this（f23 t8 实测）

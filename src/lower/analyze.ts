@@ -742,10 +742,11 @@ function scalarStaticName(name: string): string | null {
  * - 裸读实例变量：`Cannot access non-static variable "mv" from the static function "reads()".`
  * - 裸调实例方法：`Cannot call non-static function "imeth()" from the static function "calls()".`
  * 不拦的话这条会编成产物，而 JS 静态方法里的 `this` 是**类本身**，`this.mv` 静默给 undefined ——
- * 正是最难查的那一形。`const`（isConst）不算实例变量：静态里读常量是实测成立的（f15 t4/t5）。
+ * 正是最难查的那一形。`const`（isConst）与 `static var`（isStatic）都不算实例变量：
+ * 静态里读常量实测成立（f15 t4/t5），静态里读写本类静态变量也实测成立（f17 t6、f23 t3/t4 —— S161）。
  */
 function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic[]): void {
-  const instanceVars = new Set(vars.filter((v) => !v.isConst).map((v) => v.name));
+  const instanceVars = new Set(vars.filter((v) => !v.isConst && !v.isStatic).map((v) => v.name));
   const instanceFuncs = new Set(funcs.filter((f) => !f.isStatic).map((f) => f.name));
   if (instanceVars.size === 0 && instanceFuncs.size === 0) return;
 

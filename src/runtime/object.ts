@@ -91,6 +91,24 @@ export function registerStaticMethods(ctor: GdClassCtor, names: string[]): void 
 }
 
 /**
+ * 构造器 → 「静态变量名 → 声明类型名」（`static var x: int`）。实测 S161：静态变量是**共享的一格**，
+ * 类名（`A.x = 100`）、实例（`p.x = 200`）与静态方法里裸写都落在同一格上，
+ * 带类型的槽照 S150 那五种规则转换（f17 t7：`A.setx(2.7)` → 2）。
+ */
+const STATIC_VARS = new WeakMap<GdClassCtor, Record<string, string>>();
+
+/** 发射器为每个有静态变量的类补发一行：`rt.registerStaticVars(Inner, { sv: "int" })`。 */
+export function registerStaticVars(ctor: GdClassCtor, table: Record<string, string>): void {
+  STATIC_VARS.set(ctor, table);
+}
+
+/** 实例（或构造器）的静态变量表，没有则 null。 */
+export function staticVarsOf(target: unknown): Record<string, string> | null {
+  const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
+  return (ctor && STATIC_VARS.get(ctor)) || null;
+}
+
+/**
  * 类（或实例）的静态方法名表。**必须是显式表**：静态方法就是构造器上的自有属性，
  * 拿 `constructor[name]` 鸭子类型去认会把 JS 函数自带的 `name` / `length` 当成方法。
  */

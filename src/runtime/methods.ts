@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat, toBool, toFloat, toInt } from "./builtins";
-import { CALLABLE, callableOf, classNameOf, fieldTypesOf, isVariant, staticMethodsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, callableOf, classNameOf, fieldTypesOf, isVariant, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -39,7 +39,25 @@ function norm(v: unknown): Variant {
 }
 
 /**
- * 静态方法调用：`A.f()` 与 `p.f()` 两条路都汇到这里（实测 S160 两者结果一样）。
+ * 声明类型槽的写入值（S150 实测的那五种 + 「没实测过的槽原样存」）。
+ * 字段写与静态变量写**共用这一张表** —— 两套规则各写一遍正是 S154 警告过的分叉温床。
+ */
+function intoSlot(kind: string | undefined, value: Variant, key: string, owner: unknown): Variant {
+  if (kind === undefined) return value;
+  if (kind === "int") return toInt(value);
+  if (kind === "float") return toFloat(value);
+  if (kind === "bool") return toBool(value);
+  if (kind === "String") {
+    // String 槽绝不隐式 str()：`p.s = 5` 实测是运行期错（f10），套一层就是静默分叉
+    if (value.t === Tag.STRING) return value;
+    if (value.t === Tag.STRING_NAME) return V.str(value.v as string);
+    throw propAssignError(key, value, owner);
+  }
+  if (kind === "Vector2") return toVec2(value);
+  return value;
+}
+
+/** 静态方法调用：`A.f()` 与 `p.f()` 两条路都汇到这里（实测 S160 两者结果一样）。
  * 接收者给构造器本身，与 GDScript「静态方法没有 self」一致 —— 发出去的产物里静态方法
  * 也只用 `A.x` 这种具名形式碰自己的类，不依赖 `this`。
  */
@@ -461,14 +479,19 @@ export function index(raw: unknown, idx: Variant): Variant {
  * Godot 属性写的那条错：未知键（e1）、往 String 槽塞 int（f10）、写方法名（f11）**三条文本一模一样**，
  * 所以合成一个助手。基类那一段实测是 `RefCounted (Inner)`（内建类）；拿不到注册名就退成 Object。
  */
-function propAssignError(key: string, value: Variant, inner: object): never {
+function propAssignError(key: string, value: Variant, inner: unknown): never {
   throw new GodotRuntimeError(
     "prop-assign",
     `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type 'RefCounted (${classNameOf(inner) ?? "Object"})'.`,
   );
 }
 
-export function writeProp(base: Variant, key: string, value: Variant): Variant | null {
+/**
+ * 属性写 `base.key = value`。入口和 `method` / `attribute` 一样要**归一裸值**：
+ * `A.x = 100` 里的 `A` 是发射出去的裸类构造器（类名不是变量），不归一就什么分支都进不去。
+ */
+export function writeProp(raw: unknown, key: string, value: Variant): Variant | null {
+  const base = norm(raw);
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
@@ -487,6 +510,16 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
   // 或者是实例的自有属性」，二者皆无就拒 —— 方法在原型上，正好落到拒绝那一支。
   // 用户类实例的 named-property 写（`p.m = v`）。**值类型不算**：Vector2 / Vector3 / Vector2i / Color
   // 的写是「产出新值 + 写回」（step 38），实例本身也是 object，混进下面这支就变成原地改写了。
+  // `static var`：实测类名（`A.x = 100`）、实例（`p.x = 200`）与静态方法里裸写都落在**同一格**（S161），
+  // 而且带类型的槽照 S150 转换。基是**类对象**时 `typeof base.v === "function"`，够不到下面那支，
+  // 所以这一条单独走在前面。
+  if (base.t === Tag.OBJECT && (typeof base.v === "function" || (base.v !== null && typeof base.v === "object"))) {
+    const svars = staticVarsOf(base.v);
+    if (svars !== null && key in svars) {
+      (staticCtorOf(base.v) as Record<string, unknown>)[key] = intoSlot(svars[key], value, key, base.v);
+      return null;
+    }
+  }
   const objInner = base.t === Tag.OBJECT
     && base.v !== null
     && typeof base.v === "object"
@@ -498,16 +531,7 @@ export function writeProp(base: Variant, key: string, value: Variant): Variant |
     if (kind === undefined && !Object.hasOwn(objInner, key)) {
       throw propAssignError(key, value, objInner);
     }
-    if (kind === undefined) objInner[key] = value;
-    else if (kind === "int") objInner[key] = toInt(value);
-    else if (kind === "float") objInner[key] = toFloat(value);
-    else if (kind === "bool") objInner[key] = toBool(value);
-    else if (kind === "String") {
-      if (value.t === Tag.STRING) objInner[key] = value;
-      else if (value.t === Tag.STRING_NAME) objInner[key] = V.str(value.v as string);
-      else throw propAssignError(key, value, objInner);
-    } else if (kind === "Vector2") objInner[key] = toVec2(value);
-    else objInner[key] = value;
+    objInner[key] = intoSlot(kind, value, key, objInner);
     // 原地改字段，不产出新值 —— 返回 null 让发射侧的写回分支安静跳过
     return null;
   }
@@ -598,6 +622,11 @@ export function attribute(raw: unknown, name: string): unknown {
     if (staticMethodsOf(inner)?.has(name)) {
       const ctor = staticCtorOf(inner);
       return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown);
+    }
+    // 静态变量同样三条路都读得到（S161：`Inner.sv`、`p.sv`），存的本来就是 Variant
+    const svars = staticVarsOf(inner);
+    if (svars !== null && name in svars) {
+      return (staticCtorOf(inner) as Record<string, unknown>)[name];
     }
     if (name in inner) return inner[name];
   }

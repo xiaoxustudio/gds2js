@@ -10,7 +10,7 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable, callableOf, registerClass, registerFieldTypes, registerStaticMethods } from "../src/runtime/object";
+import { callable, callableOf, registerClass, registerFieldTypes, registerStaticMethods, registerStaticVars } from "../src/runtime/object";
 import { Signal } from "../src/runtime/signal";
 import { attribute, index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
@@ -2101,6 +2101,27 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   // 这条是「为什么必须用显式表」的证人：JS 函数自带 name / length 两个键，
   // 拿 constructor[name] 鸭子类型去认静态方法会把它们当成方法召出来。
   shouldThrow("step62", "没登记的 name/length 不当成方法（显式表的意义）", () => method(V.object(h), "name", []));
+}
+
+{
+  // S161 实测：`static var` 是**共享的一格** —— 类名、实例两条读写路落在同一格上，
+  // 而且带类型的槽照 S150 那五种转换（f17 t7：`A.setx(2.7)` → 2、`A.x` 也跟着是 2）。
+  class Box {
+    static x = V.int(1);
+    static plain = V.int(2);
+  }
+  registerClass("Box", Box);
+  registerStaticVars(Box, { x: "int", plain: "" });
+  const b = new Box();
+  eq("step63", "类对象读得到那一格", `${(attribute(Box, "x") as Variant).v}`, "1");
+  eq("step63", "实例读的是**同一格**", `${(attribute(V.object(b), "x") as Variant).v}`, "1");
+  writeProp(Box, "x", F(5.5));
+  eq("step63", "类名写：int 槽收 float 截断", `${(Box.x as Variant).v}`, "5");
+  writeProp(V.object(b), "x", S("12abc"));
+  eq("step63", "实例写、类名读到（真是共享的）", `${(attribute(Box, "x") as Variant).v}`, "12");
+  writeProp(Box, "plain", S("s"));
+  eq("step63", "没实测类型的槽原样存（不编造规则）", `${(attribute(Box, "plain") as Variant).t}`, `${Tag.STRING}`);
+  shouldThrow("step63", "静态表里没有的键照旧响拒", () => writeProp(V.object(new Box()), "zz", I(1)));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
