@@ -1,5 +1,5 @@
 import { staticMemberFn } from "./ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef } from "./ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 /**
  * 语义分析层。
@@ -93,6 +93,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
+  checkTypedVarAssign(m, diags);
 
   return diags;
 }
@@ -413,6 +414,181 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
  */
 const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
 const VOID_DICT_METHODS = new Set(["clear"]);
+
+/**
+ * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
+ * 形体与定型容器那族一模一样 —— 实参是字面量报两条（先槽位后赋值），实参是变量只报赋值那条。
+ * 只列实测过的组合：`null` 对 int/float/bool/String 四个槽都报（f8 四条），
+ * String 槽只收 String（int/float/bool 都报，f4/f9），int 槽收 int/float/bool（截断与 1，f5/f6 实测值）。
+ * 没测过的组合一律返回 null 不报 —— 误拦合法工程比漏报更糟（sema 那 0 误报是硬指标）。
+ */
+function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null {
+  switch (slot) {
+    case "int":
+      if (st === "int" || st === "float" || st === "bool") return true;
+      if (st === "String" || st === "null") return false;
+      return null;
+    case "float":
+      if (st === "int" || st === "float") return true;
+      if (st === "null" || st === "String") return false;
+      return null;
+    case "bool":
+      if (st === "bool" || st === "int") return true;
+      if (st === "null" || st === "String") return false;
+      return null;
+    case "String":
+      if (st === "String") return true;
+      if (st === "int" || st === "float" || st === "bool" || st === "null") return false;
+      return null;
+    default:
+      // Array / Dictionary / 引擎类槽：赋值这一面还没实测（定型容器的**索引**槽另有一套检查）
+      return null;
+  }
+}
+
+/**
+ * 收集「声明了标量类型的名字」（模块变量 + 本函数的带标注局部，含嵌套块），
+ * 再逐个 `x = v` 赋值点判组合是否合式。
+ */
+function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
+  const scalarType = (t: TypeRef | null): string | null => {
+    if (t === null || t.kind !== "named") return null;
+    const base = t.name.replace(/\[.*\]$/, "");
+    return base === "int" || base === "float" || base === "bool" || base === "String" ? base : null;
+  };
+
+  const checkBody = (body: Stmt[], outer: Map<string, string>): void => {
+    const decls = new Map(outer);
+    const stmt = (s: Stmt): void => {
+      switch (s.kind) {
+        case "var": {
+          const d = scalarType(s.type);
+          if (d !== null) decls.set(s.name, d);
+          if (s.init) expr(s.init);
+          return;
+        }
+        case "assign": {
+          if (s.target.kind === "ident") {
+            const slot = decls.get(s.target.name);
+            const st = staticOf(s.value, decls);
+            if (slot !== undefined && st !== null) {
+              const holds = varSlotHolds(slot, st);
+              if (holds === false) {
+                if (s.value.kind === "lit") {
+                  diags.push({
+                    code: "typed-var-value",
+                    message: `Cannot assign a value of type "${st}" as "${slot}".`,
+                    loc: s.value.loc,
+                  });
+                }
+                diags.push({
+                  code: "typed-var-assign",
+                  message: `Value of type "${st}" cannot be assigned to a variable of type "${slot}".`,
+                  loc: s.value.loc,
+                });
+              }
+            }
+          }
+          expr(s.value);
+          return;
+        }
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond) expr(br.cond);
+            br.body.forEach(stmt);
+          }
+          return;
+        case "for":
+          expr(s.iter);
+          s.body.forEach(stmt);
+          return;
+        case "while":
+          expr(s.cond);
+          s.body.forEach(stmt);
+          return;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) {
+            if (arm.guard) expr(arm.guard);
+            arm.body.forEach(stmt);
+          }
+          return;
+        case "expr":
+          expr(s.expr);
+          return;
+        case "return":
+          if (s.value) expr(s.value);
+          return;
+        default:
+          return;
+      }
+    };
+    const staticOf = (e: Expr, d: Map<string, string>): NonNullable<StaticType> | null => {
+      if (e.kind === "ident") {
+        const t = d.get(e.name);
+        return t === undefined ? null : (t as NonNullable<StaticType>);
+      }
+      return staticType(e);
+    };
+    const expr = (e: Expr): void => {
+      switch (e.kind) {
+        case "lambda":
+          // lambda 体里可能再声明带类型的局部：独立作用域，不影响外层 decls
+          checkBody(e.body, decls);
+          return;
+        case "call":
+          expr(e.callee);
+          e.args.forEach(expr);
+          return;
+        case "binary":
+          expr(e.left);
+          expr(e.right);
+          return;
+        case "unary":
+        case "await":
+        case "is":
+        case "as":
+          expr(e.operand);
+          return;
+        case "attribute":
+          expr(e.obj);
+          return;
+        case "index":
+          expr(e.obj);
+          expr(e.index);
+          return;
+        case "array":
+          e.items.forEach(expr);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key);
+            expr(en.value);
+          }
+          return;
+        default:
+          return;
+      }
+    };
+    body.forEach(stmt);
+  };
+
+  const run = (vars: VarDecl[], funcs: FuncDecl[]): void => {
+    const outer = new Map<string, string>();
+    for (const v of vars) {
+      const d = scalarType(v.type);
+      if (d !== null) outer.set(v.name, d);
+    }
+    for (const f of funcs) checkBody(f.body, outer);
+  };
+
+  run(m.vars, m.funcs);
+  const classes = (c: ClassDecl): void => {
+    run(c.vars, c.funcs);
+    for (const inner of c.innerClasses) classes(inner);
+  };
+  for (const c of m.innerClasses) classes(c);
+}
 
 function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];

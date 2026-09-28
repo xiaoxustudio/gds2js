@@ -45,7 +45,7 @@ import {
   colorWrite,
   GColor,
 } from "../src/runtime/color";
-import { GVector2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
+import { GVector2, asVec2, toVec2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 import {
   GVector3,
   asVec3,
@@ -2019,8 +2019,19 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("113", "void 方法在运行时的返回值统一是 nil", `${call(arr(I(1)), "append", [I(2)])}|${call(arr(I(1)), "clear", [])}|${call(arr(I(1)), "fill", [I(0)])}|${call(arr(I(1), I(2)), "remove_at", [I(0)])}|${call(arr(I(1)), "push_front", [I(0)])}|${call(arr(I(1)), "push_back", [I(2)])}|${call(arr(I(1), I(1)), "erase", [I(1)])}`, "<null>|<null>|<null>|<null>|<null>|<null>|<null>");
 }
 
-console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);
-if (fails.length > 0) {
+// ---- step 58：声明为 Vector2 的槽在**赋值点**的转换（实测 f5/f6：`mv = Vector2i(1,2)` 给 (1.0, 2.0)、
+// 内建类的 `p.v = Vector2i(3,4)` 同值；Vector2 之间是拷贝，不是共享同一个实例）
+{
+  eq("step58", "Vector2i 升成 Vector2", show(toVec2(vector2i(1, 2))), "(1.0, 2.0)");
+  const srcV = vector2(1.5, 2.5);
+  const dstV = toVec2(srcV);
+  eq("step58", "Vector2 进 Vector2 槽同值", show(dstV), "(1.5, 2.5)");
+  eq("step58", "而且是拷贝（不共享实例）", asVec2(dstV) === asVec2(srcV), false);
+  // int 进 Vector2 槽 Godot 在解析期就拒（f9 实测），所以走到这里是第二道防线：响亮，绝不静默存下别的形状
+  shouldThrow("step58", "int 进 Vector2 槽响亮报缺", () => toVec2(I(5)));
+}
+
+console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);
 }

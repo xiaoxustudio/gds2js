@@ -1,0 +1,41 @@
+// 由 gds2js 从 main.gd 编译生成 —— 不要手改。
+
+import * as rt from "../../../src/runtime/index";
+import { print, SceneTree } from "../../../tools/harness/scene-tree";
+
+export class Main extends SceneTree {
+  mt = rt.V.int(2);
+  mfl = rt.V.int(1);
+  mb = rt.V.bool(false);
+  ms = rt.V.str("a");
+  mv = rt.vector2New([rt.V.int(0), rt.V.int(0)]);
+
+  async _initialize(): Promise<void> {
+    this.mt = rt.toInt(rt.V.float(2.7));
+    print(rt.show(rt.V.str("q1 ")), rt.show(this.mt));
+    let u = 3.9;
+    this.mt = rt.toInt(rt.V.float(u));
+    print(rt.show(rt.V.str("q2 ")), rt.show(this.mt));
+    this.mt = rt.toInt(rt.V.bool(true));
+    print(rt.show(rt.V.str("q3 ")), rt.show(this.mt));
+    this.mv = rt.toVec2(rt.vector2iNew([rt.V.int(1), rt.V.int(2)]));
+    print(rt.show(rt.V.str("q4 ")), rt.show(this.mv));
+    this.mfl = rt.toFloat(rt.V.int(5));
+    print(rt.show(rt.V.str("q5 ")), rt.show(this.mfl));
+    this.mb = rt.toBool(rt.V.int(0));
+    print(rt.show(rt.V.str("q6 ")), rt.show(this.mb));
+    this.mb = rt.toBool(rt.V.int(3));
+    print(rt.show(rt.V.str("q7 ")), rt.show(this.mb));
+    this.ms = rt.strOf(rt.V.stringName("strname"));
+    print(rt.show(rt.V.str("q8 ")), rt.show(this.ms), rt.show(rt.V.str(" ")), rt.show(rt.typeOf(this.ms)));
+    let li = rt.toInt(rt.V.int(0));
+    li = rt.toInt(rt.V.float(7.5));
+    print(rt.show(rt.V.str("q9 ")), rt.show(li));
+    li = rt.toInt(rt.ops.add(li, rt.V.float(0.5)));
+    print(rt.show(rt.V.str("q10 ")), rt.show(li));
+    this.quit();
+  }
+  
+}
+
+await new Main().run();

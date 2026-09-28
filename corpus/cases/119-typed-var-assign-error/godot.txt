@@ -1,0 +1,34 @@
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Value of type "String" cannot be assigned to a variable of type "int".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "null" as "int".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Value of type "null" cannot be assigned to a variable of type "int".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Value of type "int" cannot be assigned to a variable of type "String".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "float" as "String".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Value of type "float" cannot be assigned to a variable of type "String".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "bool" as "String".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Value of type "bool" cannot be assigned to a variable of type "String".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "null" as "String".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Value of type "null" cannot be assigned to a variable of type "String".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "null" as "float".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Value of type "null" cannot be assigned to a variable of type "float".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "null" as "bool".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Value of type "null" cannot be assigned to a variable of type "bool".
+   at: GDScript::reload (<case>/main.gd:16)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

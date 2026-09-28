@@ -179,6 +179,14 @@ let IN_CONSTRUCTOR = false;
 let ENUM_NAMES = new Set<string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
+/**
+ * 当前作用域里**声明了类型**的名字 → 那个 TypeRef（模块级 + 当前类的成员变量，emitClassDecl 进出时切换）。
+ * 赋值点要按声明类型转换：实测 Godot 对 `var mt: int` 之后 `mt = 2.7` 给 2（截断），
+ * 我们过去直接把 float 存进去 —— 一处静默错（用例 118 的 q1）。
+ */
+let VAR_TYPES = new Map<string, TypeRef | null>();
+/** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
+let LOCAL_TYPES = new Map<string, TypeRef | null>();
 
 // ---- sourcemap 采集（只在 emitModuleWithMap 且 opts.sourcemap 时启用）----
 let MAP_ACTIVE = false;
@@ -239,6 +247,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     ...(opts.inheritedMembers ?? []),
   ]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+  VAR_TYPES = new Map(m.vars.map((v) => [v.name, v.type]));
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
     ...(m.className ? [m.className] : []),
@@ -349,6 +358,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   RAW_ARRAYS = new Map();
   RAW_DICTS = new Map();
   CURRENT_RET = null;
+  VAR_TYPES = new Map();
+  LOCAL_TYPES = new Map();
   return { code, map };
 }
 
@@ -357,7 +368,9 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
     throw new UnsupportedError("class-extends", `类 ${decl.name} 的 extends 还没实现`);
   }
   const saved = CURRENT_MEMBERS;
+  const savedTypes = VAR_TYPES;
   CURRENT_MEMBERS = new Set(decl.vars.map((v) => v.name));
+  VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
 
   const lines = [`class ${decl.name} {`];
   mark(base, decl.loc);
@@ -376,10 +389,111 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push("");
 
   CURRENT_MEMBERS = saved;
+  VAR_TYPES = savedTypes;
   return lines;
 }
 
+/**
+ * 收函数体里所有**带类型标注**的 var（嵌套块与 match 分支都要看，GDScript 的声明虽然按块作用域，
+ * 但赋值点可能在同一函数的任何位置）。用来在赋值时补声明类型的转换。
+ */
+function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<string, TypeRef | null> {
+  const stmt = (s: Stmt): void => {
+    switch (s.kind) {
+      case "var":
+        if (s.type !== null) out.set(s.name, s.type);
+        return;
+      case "if":
+        for (const br of s.branches) {
+          br.cond && exprTypes(br.cond);
+          br.body.forEach(stmt);
+        }
+        return;
+      case "for":
+        exprTypes(s.iter);
+        s.body.forEach(stmt);
+        return;
+      case "while":
+        exprTypes(s.cond);
+        s.body.forEach(stmt);
+        return;
+      case "match":
+        exprTypes(s.subject);
+        for (const arm of s.arms) {
+          arm.guard && exprTypes(arm.guard);
+          arm.body.forEach(stmt);
+        }
+        return;
+      case "assign":
+        exprTypes(s.target);
+        exprTypes(s.value);
+        return;
+      case "expr":
+        exprTypes(s.expr);
+        return;
+      case "return":
+        if (s.value) exprTypes(s.value);
+        return;
+      default:
+        return;
+    }
+  };
+  const exprTypes = (e: Expr): void => {
+    switch (e.kind) {
+      case "lambda":
+        e.body.forEach(stmt);
+        return;
+      case "call":
+        exprTypes(e.callee);
+        e.args.forEach(exprTypes);
+        return;
+      case "binary":
+        exprTypes(e.left);
+        exprTypes(e.right);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        exprTypes(e.operand);
+        return;
+      case "attribute":
+        exprTypes(e.obj);
+        return;
+      case "index":
+        exprTypes(e.obj);
+        exprTypes(e.index);
+        return;
+      case "array":
+        e.items.forEach(exprTypes);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          exprTypes(en.key);
+          exprTypes(en.value);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  body.forEach(stmt);
+  return out;
+}
+
 function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
+  // 赋值点要认得「这个名字声明成什么类型」：类成员 + 本函数里带标注的局部。
+  // 用 try/finally 是因为 emitFuncInner 有多处提前返回，状态漏在外面会污染下一个函数。
+  const saved = LOCAL_TYPES;
+  LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
+  try {
+    return emitFuncInner(f, base, hasSuper);
+  } finally {
+    LOCAL_TYPES = saved;
+  }
+}
+
+function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
   // _init → JS constructor（构造参数即 .new(args) 的实参）
   if (f.name === "_init") return emitConstructor(f, base, hasSuper);
 
@@ -804,7 +918,12 @@ function unwrapSelfMember(t: Expr): Expr | null {
 }
 
 function emitAssign(target: Expr, value: string): string {
-  if (target.kind === "ident") return `${emitExpr(target)} = ${value};`;
+  if (target.kind === "ident") {
+    // 目标是声明过类型的变量就按那个类型转换（实测 `var mt: int` 之后 `mt = 2.7` 给 2、
+    // `var li: int` 之后 `li = lv.x` 给 1、内建类的 `t = 8.9` 给 8 —— 截断而不是存下 float）。
+    const cast = declaredCast(LOCAL_TYPES.get(target.name) ?? null);
+    return `${emitExpr(target)} = ${cast ? `${cast}(${value})` : value};`;
+  }
   if (target.kind === "index") {
     if (target.obj.kind === "ident" && RAW_ARRAYS.has(target.obj.name)) {
       throw new UnsupportedError("raw-array", "内部不变量破坏：裸数组不应出现下标赋值");
@@ -2352,6 +2471,8 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "float") return "rt.toFloat";
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
+  // Vector2 槽：实测 `mv = Vector2i(1, 2)` 给 (1.0, 2.0)（升级 + 拷贝），见 runtime 的 toVec2。
+  if (base === "Vector2") return "rt.toVec2";
   return null;
 }
 

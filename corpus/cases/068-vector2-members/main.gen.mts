@@ -14,7 +14,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.vector2Const("RIGHT")));
     print(rt.show(rt.vector2Const("UP")));
     print(rt.show(rt.vector2Const("DOWN")));
-    let d = rt.vector2(0, 0);
+    let d = rt.toVec2(rt.vector2(0, 0));
     print(rt.show(d));
     print(rt.show(rt.vector2New([])));
     print(rt.show(rt.ops.add(a, b)));

@@ -10,7 +10,7 @@ export class Main extends SceneTree {
     let zn = rt.V.stringName("z");
     let inner = rt.V.array(rt.GArray.of([rt.V.int(1)]));
     let d = rt.dictOf([[rt.V.str("a"), rt.V.int(1)]]);
-    let v2 = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
+    let v2 = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
     let c = rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]);
     let v3 = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
     let v2i = rt.vector2iNew([rt.V.int(3), rt.V.int(4)]);

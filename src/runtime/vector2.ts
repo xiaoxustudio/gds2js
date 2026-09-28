@@ -40,6 +40,17 @@ export function asVec2(v: Variant): GVector2 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector2 ? (v.v as GVector2) : null;
 }
 
+/**
+ * 声明为 `Vector2` 的变量/字段在**赋值点**的转换（实测 f5：`var mv: Vector2` 之后
+ * `mv = Vector2i(1, 2)` 给 `(1.0, 2.0)`，`p.v = Vector2i(3, 4)` 同值）。
+ * 直接复用 `vector2New` 的单参形态：Vector2 拷一份（值类型写点必须拷贝，见 step 38）、
+ * Vector2i 升成 float，别的实参响亮报缺 —— 那种组合 Godot 在解析期就拒（`mv = 5` 实测），
+ * 走到这里说明是推不出静态类型的动态路径，宁可抛也不要静默存错形状。
+ */
+export function toVec2(v: Variant): Variant {
+  return vector2New([v]);
+}
+
 /** `Vector2(...)` 构造：0 参给零向量（实测 `Vector2()` → `(0.0, 0.0)`），其余必须两参。 */
 export function vector2New(args: Variant[]): Variant {
   if (args.length === 0) return vector2(0, 0);

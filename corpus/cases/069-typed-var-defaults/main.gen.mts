@@ -11,7 +11,7 @@ export class Main extends SceneTree {
     let b = rt.toBool(rt.V.bool(false));
     let arr = rt.V.array(rt.GArray.of([]));
     let dic = rt.dictOf([]);
-    let v2 = rt.vector2(0, 0);
+    let v2 = rt.toVec2(rt.vector2(0, 0));
     let nod = rt.V.nil();
     print(rt.show(i));
     print(rt.show(f));
