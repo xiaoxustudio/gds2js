@@ -158,6 +158,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
   PackedInt32Array: (a) => `rt.packCtor("int32", [${a.join(", ")}])`,
   PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
+  PackedFloat32Array: (a) => `rt.packCtor("float32", [${a.join(", ")}])`,
+  PackedFloat64Array: (a) => `rt.packCtor("float64", [${a.join(", ")}])`,
   // Array(pack) 实测只量过从 PackedByteArray 转（f49 t4），其余形状由运行时响亮拒
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
 };
@@ -173,8 +175,6 @@ const BUILTIN_TODO = new Set([
   // `0.10000000149012`、`1e308` 印成 `inf` 那一套要单独逆）。
   // 不列进来的话 `PackedFloat32Array(...)` 会发成 `this.PackedFloat32Array(...)` —— 那是 JS 的
   // TypeError，而 Godot 跑得好好，错形就变成了「我们崩、Godot 过」的误报级差异。
-  "PackedFloat32Array",
-  "PackedFloat64Array",
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
@@ -2728,6 +2728,8 @@ function typeDefault(t: TypeRef | null): string {
   // 四种数值 pack 的默认值实测全是空 pack（`var a: PackedInt32Array` 印 `[]`、`== PackedInt32Array()` 真）
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';
   if (base === "PackedInt64Array") return 'rt.packCtor("int64", [])';
+  if (base === "PackedFloat32Array") return 'rt.packCtor("float32", [])';
+  if (base === "PackedFloat64Array") return 'rt.packCtor("float64", [])';
   return "rt.V.nil()";
 }
 

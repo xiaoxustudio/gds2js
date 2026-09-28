@@ -20,14 +20,16 @@ import type { GArray } from "./values";
  * `0.10000000149012`、`1e308` 印成 `inf`，那套文本要单独逆，见 S169 的 ④），以及 String / Vector2 /
  * Vector3 / Color 四种 pack。发射表里它们仍在 `BUILTIN_TODO`，问到就响。
  */
-export type PackKind = "byte" | "int32" | "int64";
+export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64";
 
 const PACK_TYPE_NAME: Record<PackKind, string> = {
   byte: "PackedByteArray",
   int32: "PackedInt32Array",
   int64: "PackedInt64Array",
+  float32: "PackedFloat32Array",
+  float64: "PackedFloat64Array",
 };
-const PACK_TYPEOF: Record<PackKind, number> = { byte: 29, int32: 30, int64: 31 };
+const PACK_TYPEOF: Record<PackKind, number> = { byte: 29, int32: 30, int64: 31, float32: 32, float64: 33 };
 
 /** 元素存储：byte 与 int32 用 number（都已折进范围），int64 一律 BigInt（超过 2^53 也得保精确）。 */
 export class GBytes {
@@ -84,6 +86,19 @@ export function toElem(kind: PackKind, v: Variant): number | bigint {
       `往 ${PACK_TYPE_NAME[kind]} 塞 String 只量到 "x" → 0 这一格（其余形状的换算没实测过）`,
     );
   }
+  if (kind === "float32" || kind === "float64") {
+    // 实测（S170）：int / bool 进 float 槽是升格（`[1, true, 3]` → `[1.0, 1.0, 3.0]`），
+    // float32 存 `Math.fround`（`9007199254740993` → `9007199254740992.0`），
+    // 而 `1e308` 进 float32 变成 **inf**（fround 溢出）—— 打印走的是普通浮点那条，
+    // 实测 14 个点（含 0.1 / 2.7 / 1/3 / 1e-5 / 1e20 的 float32 值）与我们的浮点文本逐字一致
+    if (v.t === Tag.BOOL) return v.v ? 1 : 0;
+    if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
+      throw new UnsupportedError("packed-element-kind", `${PACK_TYPE_NAME[kind]} 收 ${tagName(v.t)} 没实测过`);
+    }
+    const raw = v.v as number | bigint;
+    const d = typeof raw === "bigint" ? Number(raw) : raw;
+    return kind === "float32" ? Math.fround(d) : d;
+  }
   if (v.t === Tag.BOOL) return kind === "int64" ? (v.v as boolean ? 1n : 0n) : v.v ? 1 : 0;
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new UnsupportedError(
@@ -133,7 +148,13 @@ export function toByte(v: Variant): number {
 }
 
 function elemVariant(kind: PackKind, e: number | bigint): Variant {
+  if (kind === "float32" || kind === "float64") return V.float(e as number);
   return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e)) : V.int(e);
+}
+
+/** 元素按形状取成 Variant —— values.ts 的打印用它，逐个走各自类型的 print 口径（浮点那套不是字符串插值）。 */
+export function packItems(p: GBytes): Variant[] {
+  return p.raw().map((e) => elemVariant(p.kind, e));
 }
 
 /** 越界读的文本是实测的；**负下标从尾部数**（读与写都是，d6 / f52）。 */
@@ -318,7 +339,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (n < 0) {
         throw new UnsupportedError("packed-get-neg", "get() 的负下标没实测过（下标读实测是从尾部数）");
       }
-      return n < items.length ? elemVariant(kind, items[n] as number | bigint) : V.int(0);
+      return n < items.length ? elemVariant(kind, items[n] as number | bigint) : elemVariant(kind, 0);
     }
     case "hex_encode":
       return V.str((items as number[]).map((x) => x.toString(16).padStart(2, "0")).join(""));
@@ -391,7 +412,11 @@ export function packEq(a: GBytes, b: GBytes): boolean {
     throw new UnsupportedError("packed-eq-kind", `${packTypeName(a.kind)} == ${packTypeName(b.kind)} 没实测过`);
   }
   if (x.length !== y.length) return false;
-  return x.every((v, i) => BigInt(v) === BigInt(y[i] as number | bigint));
+  // int64 的载荷是 bigint（BigInt 比），其余是 number（=== 比）。float 槽那侧 NaN 相等的口径没量过，
+  // 但 NaN 进 pack 得先有一句浮点字面量，实测点里没有出现，先照 JS 的 === 走
+  const same = (a: number | bigint, b: number | bigint): boolean =>
+    typeof a === "bigint" || typeof b === "bigint" ? BigInt(a) === BigInt(b) : a === b;
+  return x.every((v, i) => same(v, y[i] as number | bigint));
 }
 
 export function bytesEq(a: GBytes, b: GBytes): boolean {

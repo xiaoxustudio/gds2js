@@ -445,7 +445,7 @@ const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
  * k-\* 与 h-\*-ret 系列），所以用一个形状标签收它们。float 两种与 String / Vector / Color 三种
  * 没量过，仍在发射表的 `BUILTIN_TODO` 里响着。
  */
-const PACK_SHAPE_NAMES = new Set(["PackedByteArray", "PackedInt32Array", "PackedInt64Array"]);
+const PACK_SHAPE_NAMES = new Set(["PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array"]);
 
 /** 这条检查认得的接收者形状。 */
 type ContainerShape = "Array" | "Dictionary" | "Pack";

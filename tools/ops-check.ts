@@ -2348,6 +2348,45 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     `${show(ops.eq(V.object(GBytes.of([1, 2], "int32")), V.object(GBytes.of([1, 2], "int32"))))}`, "true");
 }
 
+{
+  // S170：两个 float pack。要点是**不需要新的浮点打印规则** —— float32 存 `Math.fround` 之后，
+  // 元素走的就是既有那套浮点文本（17 位有效数字、最多 14 位小数、去掉尾零、至少留一位），
+  // 与 Godot 逐字相同（14 个实测点全部对上）。
+  const fl = (kind: "float32" | "float64", ns: number[]): Variant =>
+    packCtor(kind, [V.array(GArray.of(ns.map((x) => V.float(x))))]);
+  eq("step69", "float32 的 0.1 / 2.7 / 1/3 / 1e-5 / 1e20 打印与 Godot 同字，typeof 32",
+    `${show(fl("float32", [0.1, 2.7, 1 / 3, 1e-5, 123456.789, -0.0, 1e20]))} ${typeOf(fl("float32", [1])).v}`,
+    "[0.10000000149012, 2.70000004768372, 0.33333334326744, 0.00000999999975, 123456.7890625, 0.0, 100000002004087730000.0] 32");
+  eq("step69", "float64 原样保精度（0.1 == 0.1 真、1/3 给 14 位小数），typeof 33",
+    `${show(fl("float64", [0.1, 1 / 3]))} ${typeOf(fl("float64", [1])).v} ${show(ops.eq(index(fl("float64", [0.1]), I(0)), F(0.1)))}`,
+    "[0.1, 0.33333333333333] 33 true");
+  eq("step69", "float32 的 1e308 → **inf**，float64 的 1e308 → 309 位全展",
+    `${show(index(fl("float32", [1e308]), I(0)))} ${show(index(fl("float64", [1e308]), I(0))).slice(0, 12)}…${show(index(fl("float64", [1e308]), I(0))).slice(-3)}`,
+    "inf 100000000000…0.0");
+  eq("step69", "int / bool 升格：[1, true, 3] → [1.0, 1.0, 3.0]（不是回绕、不是折字节）",
+    `${show(packCtor("float64", [V.array(GArray.of([I(1), V.bool(true), I(3)]))]))}`, "[1.0, 1.0, 3.0]");
+  const fz = V.object(GBytes.of([1.5], "float32"));
+  method(fz, "resize", [I(3)]);
+  eq("step69", "resize 长出来填 **0.0**（按元素类型），append 仍返回 bool false",
+    `${show(fz)} ${show(method(fz, "append", [F(2.5)]))} ${show(fz)}`, "[1.5, 0.0, 0.0] false [1.5, 0.0, 0.0, 2.5]");
+  const fg = V.object(GBytes.of([1.5, 2.5], "float32"));
+  eq("step69", "get 越界给 **0.0**（不是 int 的 0）、负下标从尾部数",
+    `${show(method(fg, "get", [I(5)]))} ${show(index(fg, I(-1)))}`, "0.0 2.5");
+  const fi = V.object(GBytes.of([1.5, 2.5], "float64"));
+  eq("step69", "insert 的 0 / 31 同形（负数原样不动）",
+    `${show(method(fi, "insert", [I(0), F(9.5)]))} ${show(method(fi, "insert", [I(-1), F(9)]))} ${show(fi)}`,
+    "0 31 [9.5, 1.5, 2.5]");
+  const fw = V.object(GBytes.of([1.5, 2.5], "float32"));
+  writeIdx(fw, I(-1), F(8.25));
+  eq("step69", "写的负下标也从尾部数", `${show(fw)}`, "[1.5, 8.25]");
+  shouldThrow("step69", "跨形状拼接（float32 + byte）没量过 → 响", () =>
+    ops.add(V.object(GBytes.of([1.5], "float32")), V.object(GBytes.of([1], "byte"))));
+  shouldThrow("step69", "String 元素在 float pack 上只量到 \"x\" → [0.0] 这一格 → 整族响", () =>
+    packCtor("float32", [V.array(GArray.of([S("x")]))]));
+  shouldThrow("step69", "hex_encode 不在 float pack 上（只有 byte 那支量过）", () =>
+    method(V.object(GBytes.of([1.5], "float32")), "hex_encode", []));
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);

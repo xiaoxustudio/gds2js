@@ -5,7 +5,7 @@ import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asColor, color, colorCmp, GColor } from "./color";
-import { bytesEq, GBytes } from "./packed";
+import { bytesEq, GBytes, packItems } from "./packed";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -1750,7 +1750,8 @@ export function show(v: Variant, depth = 0): string {
       }
       // PackedByteArray 打印是字节方括号式子（实测 f40 t1：[104, 195, 169, 108, 108, 111]）
       if (inner instanceof GBytes) {
-        return `[${(inner as GBytes).raw().join(", ")}]`;
+        // 逐个元素走各自的 print 口径：浮点那几个格是 `[0.1, 2.7]` 而不是 JS 的插值
+        return `[${packItems(inner as GBytes).map((e) => show(e)).join(", ")}]`;
       }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }
