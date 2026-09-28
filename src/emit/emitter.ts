@@ -431,11 +431,17 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
 
   const lines = [`class ${decl.name} {`];
   mark(base, decl.loc);
+  // 内部类的 signal 以前整族被丢掉（这里只发 vars 与 funcs），于是 `a.inner_sig` 读出来
+  // 是「取属性未实现」而不是一个信号 —— 与模块级同一条式子：发成实例上的 rt.Signal 字段。
+  for (const s of decl.signals) {
+    mark(base + lines.length, s.loc);
+    lines.push(`  ${s.name} = new rt.Signal();`);
+  }
   for (const v of decl.vars) {
     mark(base + lines.length, v.loc);
     for (const l of emitMemberVar(v)) lines.push(l);
   }
-  if (decl.vars.length > 0) lines.push("");
+  if (decl.vars.length > 0 || decl.signals.length > 0) lines.push("");
   for (const f of decl.funcs) {
     const funcBase = base + lines.length;
     for (const line of emitFunc(f, funcBase)) lines.push(`  ${line}`);

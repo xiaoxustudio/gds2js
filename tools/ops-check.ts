@@ -10,7 +10,8 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable, registerClass, registerFieldTypes } from "../src/runtime/object";
+import { callable, callableOf, registerClass, registerFieldTypes } from "../src/runtime/object";
+import { Signal } from "../src/runtime/signal";
 import { index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
@@ -2063,6 +2064,18 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("step58b", "String 字段拒 int（不是转成 \"5\"）", () => writeProp(obj, "s", I(5)));
   shouldThrow("step58b", "未知键拒（e1 的形体）", () => writeProp(obj, "zz", I(1)));
   shouldThrow("step58b", "写方法名也拒（f11 与未知键同文本）", () => writeProp(obj, "getm", I(5)));
+}
+
+{
+  // f27 / f28 实测：Callable 给 25、Signal 给 26。产物里信号与 lambda 都是**裸 JS 对象**
+  // （`fired = new rt.Signal()` 这样的字段，读出来不装箱），所以 typeOf 必须能吃裸值 ——
+  // 以前它拿 `undefined` 的 tag 去查表，冒出来的是一条与信号毫无关系的 BigInt 错。
+  const sig = new Signal();
+  eq("step61", "typeof(Callable) → 25（装箱的方法引用）", `${typeOf(callableOf(() => V.int(1))).v}`, "25");
+  eq("step61", "typeof(Callable) → 25（callable 工厂）", `${typeOf(callable(() => V.int(1))).v}`, "25");
+  eq("step61", "typeof(信号) → 26（**裸对象**，产物里的实际形状）", `${typeOf(sig).v}`, "26");
+  eq("step61", "typeof(信号) → 26（装箱的）", `${typeOf(V.object(sig)).v}`, "26");
+  eq("step61", "普通对象仍是 24（没被新分支误伤）", `${typeOf(V.object({})).v}`, "24");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

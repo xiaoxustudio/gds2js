@@ -1,5 +1,6 @@
 import { UnsupportedError } from "./errors";
-import { lookupClass } from "./object";
+import { CALLABLE, isVariant, lookupClass, wrapValue } from "./object";
+import { Signal } from "./signal";
 import { Tag, V, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
@@ -153,7 +154,11 @@ const GODOT_TYPE: Record<TagValue, number> = {
   [Tag.OBJECT]: 24,
 };
 
-export function typeOf(v: Variant): Variant {
+export function typeOf(raw: unknown): Variant {
+  // 入口可能是**裸 JS 值**：信号在产物里就是 `new rt.Signal()` 这样的裸对象，字段读出来不装箱，
+  // 方法 Callable / lambda 也一样。不先归一就会拿 `undefined` 的 tag 去查表，
+  // 于是一条和信号毫无关系的 BigInt 错冒出来（f28 实测撞到的正是这个）。
+  const v = isVariant(raw) ? raw : wrapValue(raw);
   // 数学内建类型都塞在 Tag.OBJECT 里，得按实例再分一次（实测 typeof(Vector2(1,2)) → 5）
   if (v.t === Tag.OBJECT && v.v instanceof GVector2) return V.int(5);
   if (v.t === Tag.OBJECT && v.v instanceof GVector3) return V.int(9);
@@ -161,5 +166,9 @@ export function typeOf(v: Variant): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
   // 实测 typeof(Color(1,0,0,1)) → 20
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
+  // 实测 typeof(信号) → 26（模块的、内部类的、赋给变量之后都一样）
+  if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
+  // 实测 typeof(Callable) → 25：绑好的方法、`A.static_fn`、lambda 都算
+  if (v.t === Tag.OBJECT && CALLABLE in (v.v as Record<string, unknown>)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }
