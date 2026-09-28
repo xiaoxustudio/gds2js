@@ -7,16 +7,16 @@ const Suit = rt.dictOf([[rt.V.str("HEARTS"), rt.V.int(0)], [rt.V.str("DIAMONDS")
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.method(Suit, "size", [])));
-    print(rt.show(rt.method(Suit, "keys", [])));
-    print(rt.show(rt.method(Suit, "values", [])));
-    print(rt.show(rt.index(Suit, rt.V.str("DIAMONDS"))));
-    print(rt.show(rt.method(Suit, "has", [rt.V.str("CLUBS")])));
-    print(rt.show(rt.method(Suit, "has", [rt.V.str("NOPE")])));
+    print(rt.showArgs([rt.method(Suit, "size", [])]));
+    print(rt.showArgs([rt.method(Suit, "keys", [])]));
+    print(rt.showArgs([rt.method(Suit, "values", [])]));
+    print(rt.showArgs([rt.index(Suit, rt.V.str("DIAMONDS"))]));
+    print(rt.showArgs([rt.method(Suit, "has", [rt.V.str("CLUBS")])]));
+    print(rt.showArgs([rt.method(Suit, "has", [rt.V.str("NOPE")])]));
     for (let k of rt.iter(Suit)) {
-      print(rt.show(k));
+      print(rt.showArgs([k]));
     }
-    print(rt.show(Suit));
+    print(rt.showArgs([Suit]));
     this.quit();
   }
   

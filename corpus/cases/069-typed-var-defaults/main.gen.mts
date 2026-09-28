@@ -13,17 +13,17 @@ export class Main extends SceneTree {
     let dic = rt.dictOf([]);
     let v2 = rt.toVec2(rt.vector2(0, 0));
     let nod = rt.V.nil();
-    print(rt.show(i));
-    print(rt.show(f));
-    print(rt.show(b));
-    print(rt.show(s));
-    print(rt.show(arr));
-    print(rt.show(dic));
-    print(rt.show(v2));
-    print(rt.show(nod));
-    print(rt.show(rt.lengthOf(s)));
-    print(rt.show(rt.ops.eq(arr, rt.V.array(rt.GArray.of([])))));
-    print(rt.show(rt.typeOf(f)));
+    print(rt.showArgs([i]));
+    print(rt.showArgs([f]));
+    print(rt.showArgs([b]));
+    print(rt.showArgs([s]));
+    print(rt.showArgs([arr]));
+    print(rt.showArgs([dic]));
+    print(rt.showArgs([v2]));
+    print(rt.showArgs([nod]));
+    print(rt.showArgs([rt.lengthOf(s)]));
+    print(rt.showArgs([rt.ops.eq(arr, rt.V.array(rt.GArray.of([])))]));
+    print(rt.showArgs([rt.typeOf(f)]));
     this.quit();
   }
   

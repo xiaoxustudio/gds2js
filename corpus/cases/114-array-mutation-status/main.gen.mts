@@ -6,25 +6,25 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
-    print(rt.show(rt.V.str("n1 ")), rt.show(rt.method(a, "insert", [rt.V.int(0), rt.V.int(9)])), rt.show(rt.V.str(" ")), rt.show(a));
-    print(rt.show(rt.V.str("n2 ")), rt.show(rt.method(a, "insert", [rt.V.int(99), rt.V.int(8)])), rt.show(rt.V.str(" ")), rt.show(a));
-    print(rt.show(rt.V.str("n3 ")), rt.show(rt.method(a, "insert", [rt.V.int((-99)), rt.V.int(8)])), rt.show(rt.V.str(" ")), rt.show(a));
-    print(rt.show(rt.V.str("n4 ")), rt.show(rt.method(a, "insert", [rt.V.int(3), rt.V.int(7)])), rt.show(rt.V.str(" ")), rt.show(a));
-    print(rt.show(rt.V.str("n5 ")), rt.show(rt.method(a, "resize", [rt.V.int(6)])), rt.show(rt.V.str(" ")), rt.show(a));
-    print(rt.show(rt.V.str("n6 ")), rt.show(rt.method(a, "resize", [rt.V.int(6)])), rt.show(rt.V.str(" ")), rt.show(rt.method(a, "size", [])));
-    print(rt.show(rt.V.str("n7 ")), rt.show(rt.method(a, "resize", [rt.V.int(2)])), rt.show(rt.V.str(" ")), rt.show(a));
+    print(rt.showArgs([rt.V.str("n1 "), rt.method(a, "insert", [rt.V.int(0), rt.V.int(9)]), rt.V.str(" "), a]));
+    print(rt.showArgs([rt.V.str("n2 "), rt.method(a, "insert", [rt.V.int(99), rt.V.int(8)]), rt.V.str(" "), a]));
+    print(rt.showArgs([rt.V.str("n3 "), rt.method(a, "insert", [rt.V.int((-99)), rt.V.int(8)]), rt.V.str(" "), a]));
+    print(rt.showArgs([rt.V.str("n4 "), rt.method(a, "insert", [rt.V.int(3), rt.V.int(7)]), rt.V.str(" "), a]));
+    print(rt.showArgs([rt.V.str("n5 "), rt.method(a, "resize", [rt.V.int(6)]), rt.V.str(" "), a]));
+    print(rt.showArgs([rt.V.str("n6 "), rt.method(a, "resize", [rt.V.int(6)]), rt.V.str(" "), rt.method(a, "size", [])]));
+    print(rt.showArgs([rt.V.str("n7 "), rt.method(a, "resize", [rt.V.int(2)]), rt.V.str(" "), a]));
     let t = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), "int", true);
-    print(rt.show(rt.V.str("n8 ")), rt.show(rt.method(t, "insert", [rt.V.int(0), rt.V.str("s")])), rt.show(rt.V.str(" ")), rt.show(t));
-    print(rt.show(rt.V.str("n9 ")), rt.show(rt.method(t, "insert", [rt.V.int(1), rt.V.int(5)])), rt.show(rt.V.str(" ")), rt.show(t));
+    print(rt.showArgs([rt.V.str("n8 "), rt.method(t, "insert", [rt.V.int(0), rt.V.str("s")]), rt.V.str(" "), t]));
+    print(rt.showArgs([rt.V.str("n9 "), rt.method(t, "insert", [rt.V.int(1), rt.V.int(5)]), rt.V.str(" "), t]));
     let b = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]));
-    print(rt.show(rt.V.str("n10 ")), rt.show(rt.method(b, "pop_back", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(b, "pop_front", [])), rt.show(rt.V.str(" ")), rt.show(b));
+    print(rt.showArgs([rt.V.str("n10 "), rt.method(b, "pop_back", []), rt.V.str(" "), rt.method(b, "pop_front", []), rt.V.str(" "), b]));
     let c = rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8), rt.V.int(9)]));
-    print(rt.show(rt.V.str("n11 ")), rt.show(rt.method(c, "pop_at", [rt.V.int(1)])), rt.show(rt.V.str(" ")), rt.show(c));
+    print(rt.showArgs([rt.V.str("n11 "), rt.method(c, "pop_at", [rt.V.int(1)]), rt.V.str(" "), c]));
     let e = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(1)]));
     rt.method(e, "erase", [rt.V.int(1)]);
-    print(rt.show(rt.V.str("n12 ")), rt.show(e));
+    print(rt.showArgs([rt.V.str("n12 "), e]));
     let d = rt.dictOf([[rt.V.int(1), rt.V.int(2)]]);
-    print(rt.show(rt.V.str("n13 ")), rt.show(rt.method(d, "erase", [rt.V.int(1)])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "erase", [rt.V.int(9)])), rt.show(rt.V.str(" ")), rt.show(d));
+    print(rt.showArgs([rt.V.str("n13 "), rt.method(d, "erase", [rt.V.int(1)]), rt.V.str(" "), rt.method(d, "erase", [rt.V.int(9)]), rt.V.str(" "), d]));
     this.quit();
   }
   

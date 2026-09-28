@@ -1699,6 +1699,18 @@ export const PRINT_DEPTH = 101;
  */
 export const COMPARE_DEPTH = 52;
 
+/**
+ * `print(a, b, c)` 的口径：**Godot 先把所有实参求值完，才开始把每个转成字符串**
+ * （S170 ⑦ 实测：`print(r, r.append(2.5), r)` 两个 `r` 都是追加之后的）。
+ * 所以发射器不能把 `rt.show(...)` 铺在实参位置上（那会让转字符串夹在副作用之间），
+ * 而是把整串实参交到这里，按顺序 show、用空串拼（Godot 的 print 不加分隔符）。
+ */
+export function showArgs(args: Variant[]): string {
+  let out = "";
+  for (const a of args) out += show(a);
+  return out;
+}
+
 export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:

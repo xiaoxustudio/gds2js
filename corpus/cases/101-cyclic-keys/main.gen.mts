@@ -22,19 +22,19 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d, a, rt.V.int(1));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(rt.V.str("k1a ")), rt.show(rt.method(d, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "has", [a])), rt.show(rt.V.str(" ")), rt.show(rt.index(d, a)), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "get", [a])));
+    print(rt.showArgs([rt.V.str("k1a "), rt.method(d, "size", []), rt.V.str(" "), rt.method(d, "has", [a]), rt.V.str(" "), rt.index(d, a), rt.V.str(" "), rt.method(d, "get", [a])]));
     let b = rt.V.array(rt.GArray.of([]));
     rt.method(b, "append", [b]);
-    print(rt.show(rt.V.str("k1b ")), rt.show(rt.method(d, "has", [b])), rt.show(rt.V.str(" ")), rt.show(rt.index(d, b)), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(b, a)));
+    print(rt.showArgs([rt.V.str("k1b "), rt.method(d, "has", [b]), rt.V.str(" "), rt.index(d, b), rt.V.str(" "), rt.ops.eq(b, a)]));
     {
       const _nv = rt.writeIdx(d, b, rt.V.int(2));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(rt.V.str("k1c ")), rt.show(rt.method(d, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.index(d, a)), rt.show(rt.V.str(" ")), rt.show(rt.index(d, b)));
-    print(rt.show(rt.V.str("k1d ")), rt.show(rt.method(rt.strOf(rt.method(d, "keys", [])), "length", [])));
-    print(rt.show(rt.V.str("k1e ")), rt.show(rt.method(rt.strOf(d), "length", [])));
+    print(rt.showArgs([rt.V.str("k1c "), rt.method(d, "size", []), rt.V.str(" "), rt.index(d, a), rt.V.str(" "), rt.index(d, b)]));
+    print(rt.showArgs([rt.V.str("k1d "), rt.method(rt.strOf(rt.method(d, "keys", [])), "length", [])]));
+    print(rt.showArgs([rt.V.str("k1e "), rt.method(rt.strOf(d), "length", [])]));
     rt.method(d, "erase", [a]);
-    print(rt.show(rt.V.str("k1f ")), rt.show(rt.method(d, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "has", [b])));
+    print(rt.showArgs([rt.V.str("k1f "), rt.method(d, "size", []), rt.V.str(" "), rt.method(d, "has", [b])]));
     let p = rt.V.array(rt.GArray.of([]));
     let q = rt.V.array(rt.GArray.of([p]));
     rt.method(p, "append", [q]);
@@ -46,12 +46,12 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d2, p, rt.V.int(1));
       if (_nv !== null) d2 = _nv;
     }
-    print(rt.show(rt.V.str("k2a ")), rt.show(rt.ops.eq(p, r)), rt.show(rt.V.str(" ")), rt.show(rt.method(d2, "has", [r])), rt.show(rt.V.str(" ")), rt.show(rt.index(d2, r)), rt.show(rt.V.str(" ")), rt.show(rt.method(d2, "size", [])));
-    print(rt.show(rt.V.str("k2b ")), rt.show(rt.method(d2, "has", [rt.V.array(rt.GArray.of([p]))])), rt.show(rt.V.str(" ")), rt.show(rt.method(d2, "has", [rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([p]))]))])));
+    print(rt.showArgs([rt.V.str("k2a "), rt.ops.eq(p, r), rt.V.str(" "), rt.method(d2, "has", [r]), rt.V.str(" "), rt.index(d2, r), rt.V.str(" "), rt.method(d2, "size", [])]));
+    print(rt.showArgs([rt.V.str("k2b "), rt.method(d2, "has", [rt.V.array(rt.GArray.of([p]))]), rt.V.str(" "), rt.method(d2, "has", [rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([p]))]))])]));
     let e = rt.V.array(rt.GArray.of([]));
     let f = rt.V.array(rt.GArray.of([]));
     rt.method(f, "append", [e]);
-    print(rt.show(rt.V.str("k2c ")), rt.show(rt.ops.eq(e, f)));
+    print(rt.showArgs([rt.V.str("k2c "), rt.ops.eq(e, f)]));
     let d3 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d3, e, rt.V.int(1));
@@ -61,20 +61,20 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d3, f, rt.V.int(2));
       if (_nv !== null) d3 = _nv;
     }
-    print(rt.show(rt.V.str("k2d ")), rt.show(rt.method(d3, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.index(d3, e)), rt.show(rt.V.str(" ")), rt.show(rt.index(d3, f)), rt.show(rt.V.str(" ")), rt.show(d3));
+    print(rt.showArgs([rt.V.str("k2d "), rt.method(d3, "size", []), rt.V.str(" "), rt.index(d3, e), rt.V.str(" "), rt.index(d3, f), rt.V.str(" "), d3]));
     let d4 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d4, this.nest(rt.V.int(101)), rt.V.int(1));
       if (_nv !== null) d4 = _nv;
     }
-    print(rt.show(rt.V.str("k3a ")), rt.show(rt.method(d4, "has", [this.nest(rt.V.int(102))])), rt.show(rt.V.str(" ")), rt.show(rt.index(d4, this.nest(rt.V.int(102)))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(this.nest(rt.V.int(101)), this.nest(rt.V.int(102)))));
+    print(rt.showArgs([rt.V.str("k3a "), rt.method(d4, "has", [this.nest(rt.V.int(102))]), rt.V.str(" "), rt.index(d4, this.nest(rt.V.int(102))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(101)), this.nest(rt.V.int(102)))]));
     {
       const _nv = rt.writeIdx(d4, this.nest(rt.V.int(102)), rt.V.int(2));
       if (_nv !== null) d4 = _nv;
     }
-    print(rt.show(rt.V.str("k3b ")), rt.show(rt.method(d4, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.index(d4, this.nest(rt.V.int(101)))));
-    print(rt.show(rt.V.str("k3c ")), rt.show(rt.method(d4, "has", [this.nest(rt.V.int(3))])), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(this.nest(rt.V.int(3)), this.nest(rt.V.int(4)))));
-    print(rt.show(rt.V.str("k3d ")), rt.show(rt.ops.eq(a, this.nest(rt.V.int(101)))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(a, this.nest(rt.V.int(100)))));
+    print(rt.showArgs([rt.V.str("k3b "), rt.method(d4, "size", []), rt.V.str(" "), rt.index(d4, this.nest(rt.V.int(101)))]));
+    print(rt.showArgs([rt.V.str("k3c "), rt.method(d4, "has", [this.nest(rt.V.int(3))]), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(3)), this.nest(rt.V.int(4)))]));
+    print(rt.showArgs([rt.V.str("k3d "), rt.ops.eq(a, this.nest(rt.V.int(101))), rt.V.str(" "), rt.ops.eq(a, this.nest(rt.V.int(100)))]));
     let d5 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d5, a, rt.V.int(7));
@@ -84,7 +84,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d5, this.nest(rt.V.int(101)), rt.V.int(8));
       if (_nv !== null) d5 = _nv;
     }
-    print(rt.show(rt.V.str("k3e ")), rt.show(rt.method(d5, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.index(d5, a)), rt.show(rt.V.str(" ")), rt.show(rt.index(d5, this.nest(rt.V.int(101)))));
+    print(rt.showArgs([rt.V.str("k3e "), rt.method(d5, "size", []), rt.V.str(" "), rt.index(d5, a), rt.V.str(" "), rt.index(d5, this.nest(rt.V.int(101)))]));
     let ca = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(ca, rt.V.str("k"), ca);
@@ -95,7 +95,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(cb, rt.V.str("k"), cb);
       if (_nv !== null) cb = _nv;
     }
-    print(rt.show(rt.V.str("k4a ")), rt.show(rt.ops.eq(ca, cb)));
+    print(rt.showArgs([rt.V.str("k4a "), rt.ops.eq(ca, cb)]));
     let d6 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d6, ca, rt.V.int(1));
@@ -105,7 +105,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d6, cb, rt.V.int(2));
       if (_nv !== null) d6 = _nv;
     }
-    print(rt.show(rt.V.str("k4b ")), rt.show(rt.method(d6, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.index(d6, ca)), rt.show(rt.V.str(" ")), rt.show(rt.index(d6, cb)), rt.show(rt.V.str(" ")), rt.show(rt.method(rt.strOf(d6), "length", [])));
+    print(rt.showArgs([rt.V.str("k4b "), rt.method(d6, "size", []), rt.V.str(" "), rt.index(d6, ca), rt.V.str(" "), rt.index(d6, cb), rt.V.str(" "), rt.method(rt.strOf(d6), "length", [])]));
     let md = rt.dictOf([]);
     let mx = rt.V.array(rt.GArray.of([]));
     rt.method(mx, "append", [md]);
@@ -118,9 +118,9 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d7, mx, rt.V.int(1));
       if (_nv !== null) d7 = _nv;
     }
-    print(rt.show(rt.V.str("k4c ")), rt.show(rt.method(d7, "has", [mx])), rt.show(rt.V.str(" ")), rt.show(rt.index(d7, mx)), rt.show(rt.V.str(" ")), rt.show(rt.method(d7, "size", [])));
+    print(rt.showArgs([rt.V.str("k4c "), rt.method(d7, "has", [mx]), rt.V.str(" "), rt.index(d7, mx), rt.V.str(" "), rt.method(d7, "size", [])]));
     let arr = rt.V.array(rt.GArray.of([ca, mx]));
-    print(rt.show(rt.V.str("k4d ")), rt.show(rt.method(arr, "has", [ca])), rt.show(rt.V.str(" ")), rt.show(rt.method(arr, "count", [cb])), rt.show(rt.V.str(" ")), rt.show(rt.method(arr, "has", [md])));
+    print(rt.showArgs([rt.V.str("k4d "), rt.method(arr, "has", [ca]), rt.V.str(" "), rt.method(arr, "count", [cb]), rt.V.str(" "), rt.method(arr, "has", [md])]));
     let ghost = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
     let d8 = rt.dictOf([]);
     {
@@ -128,21 +128,21 @@ export class Main extends SceneTree {
       if (_nv !== null) d8 = _nv;
     }
     rt.method(ghost, "append", [rt.V.int(3)]);
-    print(rt.show(rt.V.str("k4e ")), rt.show(rt.method(d8, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d8, "has", [ghost])), rt.show(rt.V.str(" ")), rt.show(rt.method(d8, "has", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])), rt.show(rt.V.str(" ")), rt.show(d8));
-    print(rt.show(rt.V.str("k5a ")), rt.show(rt.ops.eq(a, this.nest(rt.V.int(51)))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(a, this.nest(rt.V.int(52)))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(this.nest(rt.V.int(51)), this.nest(rt.V.int(52)))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(this.nest(rt.V.int(52)), this.nest(rt.V.int(53)))), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(this.nest(rt.V.int(52)), this.nest(rt.V.int(54)))));
-    print(rt.show(rt.V.str("k5b ")), rt.show(rt.method(rt.strOf(this.nest(rt.V.int(51))), "length", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(rt.strOf(this.nest(rt.V.int(101))), "length", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(rt.strOf(this.nest(rt.V.int(102))), "length", [])));
+    print(rt.showArgs([rt.V.str("k4e "), rt.method(d8, "size", []), rt.V.str(" "), rt.method(d8, "has", [ghost]), rt.V.str(" "), rt.method(d8, "has", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str(" "), d8]));
+    print(rt.showArgs([rt.V.str("k5a "), rt.ops.eq(a, this.nest(rt.V.int(51))), rt.V.str(" "), rt.ops.eq(a, this.nest(rt.V.int(52))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(51)), this.nest(rt.V.int(52))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(52)), this.nest(rt.V.int(53))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(52)), this.nest(rt.V.int(54)))]));
+    print(rt.showArgs([rt.V.str("k5b "), rt.method(rt.strOf(this.nest(rt.V.int(51))), "length", []), rt.V.str(" "), rt.method(rt.strOf(this.nest(rt.V.int(101))), "length", []), rt.V.str(" "), rt.method(rt.strOf(this.nest(rt.V.int(102))), "length", [])]));
     let d9 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d9, this.nest(rt.V.int(100)), rt.V.int(1));
       if (_nv !== null) d9 = _nv;
     }
-    print(rt.show(rt.V.str("k5c ")), rt.show(rt.method(d9, "has", [this.nest(rt.V.int(101))])), rt.show(rt.V.str(" ")), rt.show(rt.method(d9, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d9, "has", [this.nest(rt.V.int(40))])), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(this.nest(rt.V.int(100)), this.nest(rt.V.int(101)))));
+    print(rt.showArgs([rt.V.str("k5c "), rt.method(d9, "has", [this.nest(rt.V.int(101))]), rt.V.str(" "), rt.method(d9, "size", []), rt.V.str(" "), rt.method(d9, "has", [this.nest(rt.V.int(40))]), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(100)), this.nest(rt.V.int(101)))]));
     let da = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(da, this.nest(rt.V.int(101)), rt.V.int(1));
       if (_nv !== null) da = _nv;
     }
-    print(rt.show(rt.V.str("k5d ")), rt.show(rt.method(da, "has", [this.nest(rt.V.int(102))])), rt.show(rt.V.str(" ")), rt.show(rt.method(da, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.index(da, this.nest(rt.V.int(102)))));
+    print(rt.showArgs([rt.V.str("k5d "), rt.method(da, "has", [this.nest(rt.V.int(102))]), rt.V.str(" "), rt.method(da, "size", []), rt.V.str(" "), rt.index(da, this.nest(rt.V.int(102)))]));
     let db = rt.dictOf([]);
     let g1 = rt.V.array(rt.GArray.of([]));
     rt.method(g1, "append", [g1]);
@@ -152,7 +152,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(db, g1, rt.V.int(1));
       if (_nv !== null) db = _nv;
     }
-    print(rt.show(rt.V.str("k5e ")), rt.show(rt.method(db, "has", [g2])), rt.show(rt.V.str(" ")), rt.show(rt.ops.eq(g1, g2)), rt.show(rt.V.str(" ")), rt.show(rt.method(db, "size", [])));
+    print(rt.showArgs([rt.V.str("k5e "), rt.method(db, "has", [g2]), rt.V.str(" "), rt.ops.eq(g1, g2), rt.V.str(" "), rt.method(db, "size", [])]));
     this.quit();
   }
   

@@ -7,7 +7,7 @@ export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     for (let i of rt.rangeSeq([rt.V.int(3)])) {
       i = rt.fast.iAddC(i, 1);
-      print(rt.show(rt.V.int(i)));
+      print(rt.showArgs([rt.V.int(i)]));
     }
     this.quit();
   }

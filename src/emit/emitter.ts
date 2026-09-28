@@ -2791,8 +2791,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
   if (e.callee.kind === "ident") {
     const name = e.callee.name;
-    // print 是 GDScript 全局函数，参数要先 show 成字符串
-    if (name === "print") return `print(${args.map((a) => `rt.show(${a})`).join(", ")})`;
+    // print 是 GDScript 全局函数。实参**不能**就地 show：Godot 是把全部实参求值完才转字符串
+    // （S170 ⑦），就地 show 会让 `print(a, a.pop_back(), a)` 的第一个 a 印成弹出之前 —— 静默错。
+    // 交一份 Variant 数组给 rt.showArgs，求值顺序与转换顺序就对了上。
+    if (name === "print") return `print(rt.showArgs([${args.join(", ")}]))`;
 
     // preload(工程内脚本) → 编译期就解析成静态 import 进来的类绑定
     if (name === "preload") {

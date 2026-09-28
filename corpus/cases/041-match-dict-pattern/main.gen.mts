@@ -9,12 +9,12 @@ export class Main extends SceneTree {
     do {
       const __m0 = rt.matchPattern(d, rt.patDict([[rt.V.str("a"), rt.patLit(rt.V.int(1))], [rt.V.str("b"), rt.patLit(rt.V.str("two"))]]));
       if (__m0 !== null) {
-        print(rt.show(rt.V.str("exact")));
+        print(rt.showArgs([rt.V.str("exact")]));
         break;
       }
       const __m1 = rt.matchPattern(d, rt.patWild());
       if (__m1 !== null) {
-        print(rt.show(rt.V.str("other")));
+        print(rt.showArgs([rt.V.str("other")]));
         break;
       }
     } while (false);
@@ -22,17 +22,17 @@ export class Main extends SceneTree {
     do {
       const __m0 = rt.matchPattern(e, rt.patDict([[rt.V.str("x"), rt.patLit(rt.V.int(10))], [rt.V.str("y"), rt.patLit(rt.V.int(99))]]));
       if (__m0 !== null) {
-        print(rt.show(rt.V.str("wrong-val")));
+        print(rt.showArgs([rt.V.str("wrong-val")]));
         break;
       }
       const __m1 = rt.matchPattern(e, rt.patDict([[rt.V.str("x"), rt.patWild()], [rt.V.str("y"), rt.patLit(rt.V.int(20))]]));
       if (__m1 !== null) {
-        print(rt.show(rt.V.str("wild-x")));
+        print(rt.showArgs([rt.V.str("wild-x")]));
         break;
       }
       const __m2 = rt.matchPattern(e, rt.patWild());
       if (__m2 !== null) {
-        print(rt.show(rt.V.str("e-fallback")));
+        print(rt.showArgs([rt.V.str("e-fallback")]));
         break;
       }
     } while (false);
@@ -40,7 +40,7 @@ export class Main extends SceneTree {
     do {
       const __m0 = rt.matchPattern(n, rt.patDict([[rt.V.str("p"), rt.patArray([rt.patLit(rt.V.int(1)), rt.patLit(rt.V.int(2))])]]));
       if (__m0 !== null) {
-        print(rt.show(rt.V.str("nested-arr")));
+        print(rt.showArgs([rt.V.str("nested-arr")]));
         break;
       }
     } while (false);
@@ -48,12 +48,12 @@ export class Main extends SceneTree {
     do {
       const __m0 = rt.matchPattern(big, rt.patDict([[rt.V.str("a"), rt.patLit(rt.V.int(1))], [rt.V.str("b"), rt.patLit(rt.V.int(2))]]));
       if (__m0 !== null) {
-        print(rt.show(rt.V.str("subset-should-not-run")));
+        print(rt.showArgs([rt.V.str("subset-should-not-run")]));
         break;
       }
       const __m1 = rt.matchPattern(big, rt.patWild());
       if (__m1 !== null) {
-        print(rt.show(rt.V.str("exact-only")));
+        print(rt.showArgs([rt.V.str("exact-only")]));
         break;
       }
     } while (false);

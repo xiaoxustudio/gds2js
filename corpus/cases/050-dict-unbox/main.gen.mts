@@ -17,20 +17,20 @@ export class Main extends SceneTree {
       s = rt.fast.iAddC(s, rt.fast.rawDictGet(d, j));
       j = rt.fast.iAddC(j, 1);
     }
-    print(rt.show(rt.V.int(s)));
-    print(rt.show(rt.V.int(d.size)));
-    print(rt.show(rt.V.int(rt.fast.rawDictGet(d, 2))));
+    print(rt.showArgs([rt.V.int(s)]));
+    print(rt.showArgs([rt.V.int(d.size)]));
+    print(rt.showArgs([rt.V.int(rt.fast.rawDictGet(d, 2))]));
     let e = new Map([]);
     e.set("a", 1);
     e.set("b", 2);
-    print(rt.show(rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))));
-    print(rt.show(rt.V.int(e.size)));
+    print(rt.showArgs([rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))]));
+    print(rt.showArgs([rt.V.int(e.size)]));
     let g = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(g, rt.V.float(1), rt.V.int(5));
       if (_nv !== null) g = _nv;
     }
-    print(rt.show(rt.index(g, rt.V.float(1))));
+    print(rt.showArgs([rt.index(g, rt.V.float(1))]));
     let m = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(m, rt.V.int(0), rt.V.int(1));
@@ -40,7 +40,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(m, rt.V.int(1), rt.V.float(2.5));
       if (_nv !== null) m = _nv;
     }
-    print(rt.show(rt.ops.add(rt.index(m, rt.V.int(0)), rt.index(m, rt.V.int(1)))));
+    print(rt.showArgs([rt.ops.add(rt.index(m, rt.V.int(0)), rt.index(m, rt.V.int(1)))]));
     let h = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(h, rt.V.int(0), rt.V.int(1));
@@ -51,7 +51,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(k, rt.V.int(1), rt.V.int(2));
       if (_nv !== null) k = _nv;
     }
-    print(rt.show(rt.method(h, "size", [])));
+    print(rt.showArgs([rt.method(h, "size", [])]));
     this.quit();
   }
   

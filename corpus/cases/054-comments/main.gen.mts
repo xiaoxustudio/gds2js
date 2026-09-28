@@ -16,29 +16,29 @@ export class Main extends SceneTree {
     while ((i < 3)) {
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(this.bump(rt.V.int(2))));
-    print(rt.show(this.counter));
+    print(rt.showArgs([this.bump(rt.V.int(2))]));
+    print(rt.showArgs([this.counter]));
     if ((i > 2)) {
-      print(rt.show(rt.V.int(111)));
+      print(rt.showArgs([rt.V.int(111)]));
     } else {
-      print(rt.show(rt.V.int(222)));
+      print(rt.showArgs([rt.V.int(222)]));
     }
     for (let k of rt.rangeSeq([rt.V.int(2)])) {
-      print(rt.show(rt.V.int(k)));
+      print(rt.showArgs([rt.V.int(k)]));
     }
     do {
       const __m0 = rt.matchPattern(this.counter, rt.patLit(rt.V.int(4)));
       if (__m0 !== null) {
-        print(rt.show(rt.V.int(444)));
+        print(rt.showArgs([rt.V.int(444)]));
         break;
       }
       const __m1 = rt.matchPattern(this.counter, rt.patWild());
       if (__m1 !== null) {
-        print(rt.show(rt.V.int(999)));
+        print(rt.showArgs([rt.V.int(999)]));
         break;
       }
     } while (false);
-    print(rt.show(rt.V.str("保留 # 井号")));
+    print(rt.showArgs([rt.V.str("保留 # 井号")]));
     this.quit();
   }
   

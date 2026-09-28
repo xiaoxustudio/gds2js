@@ -8,12 +8,12 @@ export class Main extends SceneTree {
     let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
     let b = a;
     rt.method(b, "append", [rt.V.int(3)]);
-    print(rt.show(a));
-    print(rt.show(b));
-    print(rt.show(rt.ops.eq(a, b)));
+    print(rt.showArgs([a]));
+    print(rt.showArgs([b]));
+    print(rt.showArgs([rt.ops.eq(a, b)]));
     let c = rt.method(a, "duplicate", []);
     rt.method(c, "append", [rt.V.int(9)]);
-    print(rt.show(a));
+    print(rt.showArgs([a]));
     this.quit();
   }
   

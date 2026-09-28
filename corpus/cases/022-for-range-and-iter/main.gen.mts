@@ -9,17 +9,17 @@ export class Main extends SceneTree {
     for (let i of rt.rangeSeq([rt.V.int(3)])) {
       rt.method(acc, "append", [rt.V.int(i)]);
     }
-    print(rt.show(acc));
+    print(rt.showArgs([acc]));
     let ks = rt.V.array(rt.GArray.of([]));
     for (let k of rt.iter(rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]))) {
       rt.method(ks, "append", [k]);
     }
-    print(rt.show(ks));
+    print(rt.showArgs([ks]));
     let vs = rt.V.array(rt.GArray.of([]));
     for (let x of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(10), rt.V.int(20)])))) {
       rt.method(vs, "append", [x]);
     }
-    print(rt.show(vs));
+    print(rt.showArgs([vs]));
     this.quit();
   }
   

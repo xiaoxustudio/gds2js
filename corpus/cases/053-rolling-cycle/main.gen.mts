@@ -21,8 +21,8 @@ export class Main extends SceneTree {
       b = t;
       i = rt.fast.iAddC(i, 1);
     }
-    print(rt.show(rt.V.int(a)));
-    print(rt.show(rt.V.int(b)));
+    print(rt.showArgs([rt.V.int(a)]));
+    print(rt.showArgs([rt.V.int(b)]));
     let p = rt.V.int(0);
     let q = rt.V.int(0);
     let j = 0;
@@ -31,8 +31,8 @@ export class Main extends SceneTree {
       q = this.pick(q, rt.V.int(j));
       j = rt.fast.iAddC(j, 1);
     }
-    print(rt.show(p));
-    print(rt.show(q));
+    print(rt.showArgs([p]));
+    print(rt.showArgs([q]));
     let x = 1.5;
     let y = 2.5;
     let r = 0;
@@ -42,8 +42,8 @@ export class Main extends SceneTree {
       y = z;
       r = rt.fast.iAddC(r, 1);
     }
-    print(rt.show(rt.V.float(x)));
-    print(rt.show(rt.V.float(y)));
+    print(rt.showArgs([rt.V.float(x)]));
+    print(rt.showArgs([rt.V.float(y)]));
     let g = 0;
     let h = rt.V.float(1);
     let w = 0;
@@ -52,8 +52,8 @@ export class Main extends SceneTree {
       h = rt.ops.mul(rt.V.int(g), rt.V.float(1.5));
       w = rt.fast.iAddC(w, 1);
     }
-    print(rt.show(rt.V.int(g)));
-    print(rt.show(h));
+    print(rt.showArgs([rt.V.int(g)]));
+    print(rt.showArgs([h]));
     let c = 0;
     if ((g > 1)) {
       let u = c;
@@ -62,7 +62,7 @@ export class Main extends SceneTree {
       let u2 = "no";
       c = rt.fast.iAddC(c, 1);
     }
-    print(rt.show(rt.V.int(c)));
+    print(rt.showArgs([rt.V.int(c)]));
     this.quit();
   }
   

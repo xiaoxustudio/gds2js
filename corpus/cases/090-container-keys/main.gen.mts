@@ -13,33 +13,33 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d, a, rt.V.int(5));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(d));
-    print(rt.show(rt.method(d, "has", [a])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "has", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])), rt.show(rt.V.str(" ")), rt.show(rt.index(d, rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])))), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "get", [rt.V.array(rt.GArray.of([rt.V.float(1), rt.V.float(2)])), rt.V.str("M")])));
+    print(rt.showArgs([d]));
+    print(rt.showArgs([rt.method(d, "has", [a]), rt.V.str(" "), rt.method(d, "has", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str(" "), rt.index(d, rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))), rt.V.str(" "), rt.method(d, "get", [rt.V.array(rt.GArray.of([rt.V.float(1), rt.V.float(2)])), rt.V.str("M")])]));
     {
       const _nv = rt.writeIdx(d, rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.int(6));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(d), rt.show(rt.V.str(" size=")), rt.show(rt.method(d, "size", [])));
+    print(rt.showArgs([d, rt.V.str(" size="), rt.method(d, "size", [])]));
     let e = rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]);
     {
       const _nv = rt.writeIdx(d, e, rt.V.int(7));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(d), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "get", [rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "get", [rt.dictOf([[rt.V.str("x"), rt.V.float(1)]]), rt.V.str("M")])));
-    print(rt.show(rt.method(d, "keys", [])), rt.show(rt.V.str(" size=")), rt.show(rt.method(d, "size", [])));
+    print(rt.showArgs([d, rt.V.str(" "), rt.method(d, "get", [rt.dictOf([[rt.V.str("x"), rt.V.int(1)]]), rt.V.str("M")]), rt.V.str(" "), rt.method(d, "get", [rt.dictOf([[rt.V.str("x"), rt.V.float(1)]]), rt.V.str("M")])]));
+    print(rt.showArgs([rt.method(d, "keys", []), rt.V.str(" size="), rt.method(d, "size", [])]));
     let od = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(od, rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]), rt.V.int(9));
       if (_nv !== null) od = _nv;
     }
-    print(rt.show(rt.method(od, "get", [rt.dictOf([[rt.V.str("b"), rt.V.int(2)], [rt.V.str("a"), rt.V.int(1)]]), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(od, "get", [rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]), rt.V.str("M")])));
+    print(rt.showArgs([rt.method(od, "get", [rt.dictOf([[rt.V.str("b"), rt.V.int(2)], [rt.V.str("a"), rt.V.int(1)]]), rt.V.str("M")]), rt.V.str(" "), rt.method(od, "get", [rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]), rt.V.str("M")])]));
     let m = rt.V.array(rt.GArray.of([rt.V.int(1)]));
     {
       const _nv = rt.writeIdx(d, m, rt.V.int(8));
       if (_nv !== null) d = _nv;
     }
     rt.method(m, "append", [rt.V.int(2)]);
-    print(rt.show(rt.method(d, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "has", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])), rt.show(rt.V.str(" ")), rt.show(rt.method(d, "has", [m])), rt.show(rt.V.str(" ")), rt.show(d));
+    print(rt.showArgs([rt.method(d, "size", []), rt.V.str(" "), rt.method(d, "has", [rt.V.array(rt.GArray.of([rt.V.int(1)]))]), rt.V.str(" "), rt.method(d, "has", [m]), rt.V.str(" "), d]));
     let c1 = rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8)]));
     let d2 = rt.dictOf([]);
     {
@@ -51,15 +51,15 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d2, rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8)])), rt.V.int(2));
       if (_nv !== null) d2 = _nv;
     }
-    print(rt.show(d2), rt.show(rt.V.str(" size=")), rt.show(rt.method(d2, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d2, "get", [rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(d2, "get", [c1, rt.V.str("M")])));
-    print(rt.show(rt.method(d2, "erase", [rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8)]))])), rt.show(rt.V.str(" ")), rt.show(rt.method(d2, "erase", [c1])), rt.show(rt.V.str(" size=")), rt.show(rt.method(d2, "size", [])));
+    print(rt.showArgs([d2, rt.V.str(" size="), rt.method(d2, "size", []), rt.V.str(" "), rt.method(d2, "get", [rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8)])), rt.V.str("M")]), rt.V.str(" "), rt.method(d2, "get", [c1, rt.V.str("M")])]));
+    print(rt.showArgs([rt.method(d2, "erase", [rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8)]))]), rt.V.str(" "), rt.method(d2, "erase", [c1]), rt.V.str(" size="), rt.method(d2, "size", [])]));
     let k3 = rt.V.array(rt.GArray.of([rt.V.int(1)]));
     let d3 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d3, k3, rt.V.int(1));
       if (_nv !== null) d3 = _nv;
     }
-    print(rt.show(rt.method(d3, "erase", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])), rt.show(rt.V.str(" ")), rt.show(rt.method(d3, "erase", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])), rt.show(rt.V.str(" size=")), rt.show(rt.method(d3, "size", [])));
+    print(rt.showArgs([rt.method(d3, "erase", [rt.V.array(rt.GArray.of([rt.V.int(1)]))]), rt.V.str(" "), rt.method(d3, "erase", [rt.V.array(rt.GArray.of([rt.V.int(1)]))]), rt.V.str(" size="), rt.method(d3, "size", [])]));
     let sh = rt.dictOf([]);
     let kk = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
     {
@@ -68,33 +68,33 @@ export class Main extends SceneTree {
     }
     let cp = rt.method(sh, "duplicate", []);
     rt.method(kk, "append", [rt.V.int(3)]);
-    print(rt.show(rt.method(cp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(cp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(cp));
+    print(rt.showArgs([rt.method(cp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("M")]), rt.V.str(" "), rt.method(cp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), rt.V.str("M")]), rt.V.str(" "), cp]));
     let dp = rt.method(sh, "duplicate", [rt.V.bool(true)]);
-    print(rt.show(rt.method(dp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(dp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(dp));
+    print(rt.showArgs([rt.method(dp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), rt.V.str("M")]), rt.V.str(" "), rt.method(dp, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("M")]), rt.V.str(" "), dp]));
     let v = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     let d4 = rt.dictOf([[rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.V.int(1)]]);
     {
       const _nv = rt.writeIdx(d4, v, rt.V.int(2));
       if (_nv !== null) d4 = _nv;
     }
-    print(rt.show(d4), rt.show(rt.V.str(" size=")), rt.show(rt.method(d4, "size", [])), rt.show(rt.V.str(" ")), rt.show(rt.method(d4, "has", [rt.vector2New([rt.V.float(1), rt.V.float(2)])])));
+    print(rt.showArgs([d4, rt.V.str(" size="), rt.method(d4, "size", []), rt.V.str(" "), rt.method(d4, "has", [rt.vector2New([rt.V.float(1), rt.V.float(2)])])]));
     {
       const _nv = rt.writeProp(v, "x", rt.V.int(9));
       if (_nv !== null) v = _nv;
     }
-    print(rt.show(rt.method(d4, "has", [v])), rt.show(rt.V.str(" ")), rt.show(rt.method(d4, "get", [rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.V.str("M")])));
+    print(rt.showArgs([rt.method(d4, "has", [v]), rt.V.str(" "), rt.method(d4, "get", [rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.V.str("M")])]));
     let ta = rt.stampArray(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)])])), "Vector2", true);
     let d5 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d5, ta, rt.V.int(3));
       if (_nv !== null) d5 = _nv;
     }
-    print(rt.show(d5), rt.show(rt.V.str(" ")), rt.show(rt.method(d5, "get", [rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)])])), rt.V.str("M")])));
+    print(rt.showArgs([d5, rt.V.str(" "), rt.method(d5, "get", [rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)])])), rt.V.str("M")])]));
     {
       const _nv = rt.writeIdx(this.td, rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.int(5));
       if (_nv !== null) this.td = _nv;
     }
-    print(rt.show(this.td), rt.show(rt.V.str(" ")), rt.show(rt.method(this.td, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(this.td, "get", [rt.V.array(rt.GArray.of([rt.V.float(1), rt.V.float(2)])), rt.V.str("M")])));
+    print(rt.showArgs([this.td, rt.V.str(" "), rt.method(this.td, "get", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("M")]), rt.V.str(" "), rt.method(this.td, "get", [rt.V.array(rt.GArray.of([rt.V.float(1), rt.V.float(2)])), rt.V.str("M")])]));
     let d6 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d6, rt.V.array(rt.GArray.of([])), rt.V.int(1));
@@ -104,13 +104,13 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d6, rt.dictOf([]), rt.V.int(2));
       if (_nv !== null) d6 = _nv;
     }
-    print(rt.show(d6), rt.show(rt.V.str(" ")), rt.show(rt.method(d6, "get", [rt.V.array(rt.GArray.of([])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(d6, "get", [rt.dictOf([]), rt.V.str("M")])));
+    print(rt.showArgs([d6, rt.V.str(" "), rt.method(d6, "get", [rt.V.array(rt.GArray.of([])), rt.V.str("M")]), rt.V.str(" "), rt.method(d6, "get", [rt.dictOf([]), rt.V.str("M")])]));
     let d7 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d7, rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.int(1));
       if (_nv !== null) d7 = _nv;
     }
-    print(rt.show(rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.float(1)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.bool(true)])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.int(0)])), rt.V.str("M")])));
+    print(rt.showArgs([rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.str("M")]), rt.V.str(" "), rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.float(1)])), rt.V.str("M")]), rt.V.str(" "), rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.bool(true)])), rt.V.str("M")]), rt.V.str(" "), rt.method(d7, "get", [rt.V.array(rt.GArray.of([rt.V.int(0)])), rt.V.str("M")])]));
     let inner = rt.V.array(rt.GArray.of([rt.V.int(1)]));
     let d8 = rt.dictOf([]);
     {
@@ -118,7 +118,7 @@ export class Main extends SceneTree {
       if (_nv !== null) d8 = _nv;
     }
     rt.method(inner, "append", [rt.V.int(2)]);
-    print(rt.show(rt.method(d8, "get", [rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)]))])), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(d8), rt.show(rt.V.str(" ")), rt.show(rt.method(d8, "values", [])));
+    print(rt.showArgs([rt.method(d8, "get", [rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)]))])), rt.V.str("M")]), rt.V.str(" "), d8, rt.V.str(" "), rt.method(d8, "values", [])]));
     let d9 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d9, rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.str("one"));
@@ -129,7 +129,7 @@ export class Main extends SceneTree {
       if (_nv !== null) d9 = _nv;
     }
     for (let key of rt.iter(d9)) {
-      print(rt.show(key), rt.show(rt.V.str(" -> ")), rt.show(rt.index(d9, key)));
+      print(rt.showArgs([key, rt.V.str(" -> "), rt.index(d9, key)]));
     }
     let da = rt.dictOf([[rt.V.str("z"), rt.dictOf([])]]);
     let db = rt.dictOf([]);
@@ -142,7 +142,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(rt.index(da, _w0), rt.V.str("y"), rt.V.int(1));
       if (_nv !== null) rt.setIndex(da, _w0, _nv);
     }
-    print(rt.show(rt.method(db, "get", [rt.dictOf([[rt.V.str("z"), rt.dictOf([])]]), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(rt.method(db, "get", [rt.dictOf([[rt.V.str("z"), rt.dictOf([[rt.V.str("y"), rt.V.int(1)]])]]), rt.V.str("M")])), rt.show(rt.V.str(" ")), rt.show(db));
+    print(rt.showArgs([rt.method(db, "get", [rt.dictOf([[rt.V.str("z"), rt.dictOf([])]]), rt.V.str("M")]), rt.V.str(" "), rt.method(db, "get", [rt.dictOf([[rt.V.str("z"), rt.dictOf([[rt.V.str("y"), rt.V.int(1)]])]]), rt.V.str("M")]), rt.V.str(" "), db]));
     this.quit();
   }
   

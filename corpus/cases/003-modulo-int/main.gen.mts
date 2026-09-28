@@ -5,9 +5,9 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.V.int(rt.fast.iModC((-7), 3))));
-    print(rt.show(rt.V.int(rt.fast.iModC(7, (-3)))));
-    print(rt.show(rt.V.int(rt.fast.iModC(7, 3))));
+    print(rt.showArgs([rt.V.int(rt.fast.iModC((-7), 3))]));
+    print(rt.showArgs([rt.V.int(rt.fast.iModC(7, (-3)))]));
+    print(rt.showArgs([rt.V.int(rt.fast.iModC(7, 3))]));
     this.quit();
   }
   

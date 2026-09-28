@@ -10,34 +10,34 @@ export class Main extends SceneTree {
       const _nv = rt.writeProp(rt.attribute(p, "m"), "x", rt.V.int(5));
       if (_nv !== null) rt.writeProp(p, "m", _nv);
     }
-    print(rt.show(rt.V.str("u1 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("u1 "), rt.attribute(p, "m")]));
     {
       const _nv = rt.writeIdx(rt.attribute(p, "m"), rt.V.int(1), rt.V.int(7));
       if (_nv !== null) rt.writeProp(p, "m", _nv);
     }
-    print(rt.show(rt.V.str("u2 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("u2 "), rt.attribute(p, "m")]));
     let arr = rt.V.array(rt.GArray.of([p]));
     {
     const _w0 = rt.V.int(0);
       const _nv = rt.writeProp(rt.attribute(rt.index(arr, _w0), "m"), "x", rt.V.int(9));
       if (_nv !== null) rt.writeProp(rt.index(arr, _w0), "m", _nv);
     }
-    print(rt.show(rt.V.str("u3 ")), rt.show(rt.attribute(p, "m")), rt.show(rt.V.str(" ")), rt.show(rt.attribute(rt.index(arr, rt.V.int(0)), "m")));
+    print(rt.showArgs([rt.V.str("u3 "), rt.attribute(p, "m"), rt.V.str(" "), rt.attribute(rt.index(arr, rt.V.int(0)), "m")]));
     let d = rt.dictOf([[rt.V.str("k"), p]]);
     {
     const _w0 = rt.V.str("k");
       const _nv = rt.writeProp(rt.attribute(rt.index(d, _w0), "m"), "y", rt.V.int(3));
       if (_nv !== null) rt.writeProp(rt.index(d, _w0), "m", _nv);
     }
-    print(rt.show(rt.V.str("u4 ")), rt.show(rt.attribute(p, "m")));
+    print(rt.showArgs([rt.V.str("u4 "), rt.attribute(p, "m")]));
     let q = rt.attribute(p, "m");
     {
       const _nv = rt.writeProp(q, "x", rt.V.int(50));
       if (_nv !== null) q = _nv;
     }
-    print(rt.show(rt.V.str("u5 ")), rt.show(rt.attribute(p, "m")), rt.show(rt.V.str(" ")), rt.show(q));
-    print(rt.show(rt.V.str("u6 ")), rt.show(rt.method(p, "getm", [])));
-    print(rt.show(rt.V.str("u7 ")), rt.show(rt.index(rt.attribute(p, "m"), rt.V.int(0))), rt.show(rt.V.str(" ")), rt.show(rt.index(rt.attribute(p, "m"), rt.V.int(1))), rt.show(rt.V.str(" ")), rt.show(rt.attribute(rt.attribute(p, "m"), "y")));
+    print(rt.showArgs([rt.V.str("u5 "), rt.attribute(p, "m"), rt.V.str(" "), q]));
+    print(rt.showArgs([rt.V.str("u6 "), rt.method(p, "getm", [])]));
+    print(rt.showArgs([rt.V.str("u7 "), rt.index(rt.attribute(p, "m"), rt.V.int(0)), rt.V.str(" "), rt.index(rt.attribute(p, "m"), rt.V.int(1)), rt.V.str(" "), rt.attribute(rt.attribute(p, "m"), "y")]));
     this.quit();
   }
   

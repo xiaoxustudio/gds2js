@@ -14,15 +14,15 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d, rt.V.float(1), rt.V.str("float"));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(rt.method(d, "size", [])));
-    print(rt.show(d));
-    print(rt.show(rt.index(d, rt.V.int(1))));
-    print(rt.show(rt.index(d, rt.V.float(1))));
+    print(rt.showArgs([rt.method(d, "size", [])]));
+    print(rt.showArgs([d]));
+    print(rt.showArgs([rt.index(d, rt.V.int(1))]));
+    print(rt.showArgs([rt.index(d, rt.V.float(1))]));
     {
       const _nv = rt.writeIdx(d, rt.V.str("1"), rt.V.str("str"));
       if (_nv !== null) d = _nv;
     }
-    print(rt.show(rt.method(d, "size", [])));
+    print(rt.showArgs([rt.method(d, "size", [])]));
     this.quit();
   }
   

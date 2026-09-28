@@ -7,7 +7,7 @@ export class Main extends SceneTree {
   frames = rt.V.int(0);
 
   async _initialize(): Promise<void> {
-    print(rt.show((await rt.awaitValue(this.f()))));
+    print(rt.showArgs([(await rt.awaitValue(this.f()))]));
   }
   
   async f(): Promise<unknown> {

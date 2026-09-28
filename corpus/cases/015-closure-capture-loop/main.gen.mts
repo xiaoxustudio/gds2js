@@ -15,7 +15,7 @@ export class Main extends SceneTree {
     for (let f of rt.iter(fns)) {
       rt.method(out, "append", [rt.method(f, "call", [])]);
     }
-    print(rt.show(out));
+    print(rt.showArgs([out]));
     this.quit();
   }
   

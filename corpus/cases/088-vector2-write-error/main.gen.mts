@@ -5,13 +5,13 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.show(rt.V.str("before")));
+    print(rt.showArgs([rt.V.str("before")]));
     let v = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     {
       const _nv = rt.writeProp(v, "y", rt.V.str("s"));
       if (_nv !== null) v = _nv;
     }
-    print(rt.show(v));
+    print(rt.showArgs([v]));
     this.quit();
   }
   

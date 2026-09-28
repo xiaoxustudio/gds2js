@@ -6,9 +6,9 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let b = rt.V.object(new Base());
-    print(rt.show(rt.method(b, "tag", [])));
-    print(rt.show(rt.isType(b, "Base")));
-    print(rt.show(rt.attribute(b, "hp")));
+    print(rt.showArgs([rt.method(b, "tag", [])]));
+    print(rt.showArgs([rt.isType(b, "Base")]));
+    print(rt.showArgs([rt.attribute(b, "hp")]));
     this.quit();
   }
   

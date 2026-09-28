@@ -6,11 +6,11 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let s = "hello";
-    print(rt.show(rt.index(rt.V.str(s), rt.V.int(0))));
-    print(rt.show(rt.method(rt.V.str(s), "length", [])));
-    print(rt.show(rt.method(rt.V.str(s), "substr", [rt.V.int(1), rt.V.int(3)])));
-    print(rt.show(rt.method(rt.V.str(s), "to_upper", [])));
-    print(rt.show(rt.formatOf(rt.V.str("%d/%s"), rt.V.array(rt.GArray.of([rt.V.int(5), rt.V.str("x")])))));
+    print(rt.showArgs([rt.index(rt.V.str(s), rt.V.int(0))]));
+    print(rt.showArgs([rt.method(rt.V.str(s), "length", [])]));
+    print(rt.showArgs([rt.method(rt.V.str(s), "substr", [rt.V.int(1), rt.V.int(3)])]));
+    print(rt.showArgs([rt.method(rt.V.str(s), "to_upper", [])]));
+    print(rt.showArgs([rt.formatOf(rt.V.str("%d/%s"), rt.V.array(rt.GArray.of([rt.V.int(5), rt.V.str("x")])))]));
     this.quit();
   }
   
