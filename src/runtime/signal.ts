@@ -7,6 +7,12 @@ export class Signal {
   #listeners = new Set<(...args: unknown[]) => void>();
   #waiting: Array<(v: unknown) => void> = [];
 
+  /**
+   * 信号名，`get_name()` 要返回它（实测 f34 t9：`fired.get_name()` → `fired`）。
+   * 发射器在构造点把 GDScript 里的那个名字传进来，不需要另建一张登记表。
+   */
+  constructor(readonly sigName: string = "") {}
+
   connect(fn: (...args: unknown[]) => void): void {
     this.#listeners.add(fn);
   }

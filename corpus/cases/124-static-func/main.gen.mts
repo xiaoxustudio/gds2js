@@ -37,7 +37,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.str("u14 ")), rt.show(Main.helper()));
     let cb = rt.attribute(Inner, "make");
     print(rt.show(rt.V.str("u15 ")), rt.show(rt.typeOf(cb)), rt.show(rt.V.str(" ")), rt.show(rt.method(cb, "call", [])));
-    print(rt.show(rt.V.str("u16 ")), rt.show(rt.typeOf(rt.callableOf(Main.usehelper.bind(Main)))));
+    print(rt.show(rt.V.str("u16 ")), rt.show(rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper"))));
     this.quit();
   }
   

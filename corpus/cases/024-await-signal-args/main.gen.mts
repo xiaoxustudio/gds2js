@@ -4,9 +4,9 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  zero = new rt.Signal();
-  one = new rt.Signal();
-  two = new rt.Signal();
+  zero = new rt.Signal("zero");
+  one = new rt.Signal("one");
+  two = new rt.Signal("two");
   frames = rt.V.int(0);
 
   async _initialize(): Promise<void> {
@@ -16,17 +16,17 @@ export class Main extends SceneTree {
   }
   
   async wait_zero(): Promise<unknown> {
-    rt.method(rt.callableOf(this.fire_zero.bind(this)), "call_deferred", []);
+    rt.method(rt.callableOf(this.fire_zero.bind(this), "fire_zero", rt.V.object(this)), "call_deferred", []);
     return (await rt.awaitValue(this.zero));
   }
   
   async wait_one(): Promise<unknown> {
-    rt.method(rt.callableOf(this.fire_one.bind(this)), "call_deferred", []);
+    rt.method(rt.callableOf(this.fire_one.bind(this), "fire_one", rt.V.object(this)), "call_deferred", []);
     return (await rt.awaitValue(this.one));
   }
   
   async wait_two(): Promise<unknown> {
-    rt.method(rt.callableOf(this.fire_two.bind(this)), "call_deferred", []);
+    rt.method(rt.callableOf(this.fire_two.bind(this), "fire_two", rt.V.object(this)), "call_deferred", []);
     return (await rt.awaitValue(this.two));
   }
   

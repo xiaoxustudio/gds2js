@@ -17,7 +17,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.str("t4 ")), rt.show(rt.method(Inner, "read_static_outer", [])));
     print(rt.show(rt.V.str("t5 ")), rt.show(rt.method(Inner, "read_static_shadow", [])));
     print(rt.show(rt.V.str("t6 ")), rt.show(rt.method(i, "via_self_dot", [])));
-    print(rt.show(rt.V.str("t7 ")), rt.show(rt.attribute(Inner, "TOP")));
+    print(rt.show(rt.V.str("t7 ")), rt.show(Inner.TOP));
     print(rt.show(rt.V.str("t8 ")), rt.show(rt.attribute(i, "TOP")));
     this.quit();
   }

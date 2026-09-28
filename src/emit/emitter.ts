@@ -199,6 +199,13 @@ let CURRENT_CLASS = "";
  */
 let CLASS_VALUE_OWNERS = new Map<string, string>();
 /**
+ * 「这个类有哪些类级值（常量 / 静态变量）」—— 认 `Inner.IC`、`A.sv` 这种**类名点类级值**的写法
+ * （实测 f29 t7、f16 t1 都读得到）。要单独一张按类分的表：外层脚本里同名常量会遮住内部类那个
+ * （f29 的 `TOP` 就是），按「当前作用域谁可见」判会把 `Inner.TOP` 认成外层的。
+ * 必须在发射任何函数体**之前**建好 —— 模块方法在产物里排在内部类之前。
+ */
+let CLASS_VALUES = new Map<string, Set<string>>();
+/**
  * 当前作用域里**声明了类型**的名字 → 那个 TypeRef（模块级 + 当前类的成员变量，emitClassDecl 进出时切换）。
  * 赋值点要按声明类型转换：实测 Godot 对 `var mt: int` 之后 `mt = 2.7` 给 2（截断），
  * 我们过去直接把 float 存进去 —— 一处静默错（用例 118 的 q1）。
@@ -272,6 +279,18 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   CLASS_VALUE_OWNERS = new Map(
     m.vars.filter((v) => v.isConst || v.isStatic).map((v) => [v.name, className]),
   );
+  // 类级的值（常量 / 静态变量）按类先收齐：模块方法在产物里排在内部类**之前**发射，
+  // 现在不收，后面认 `Inner.IC` 就没有依据
+  CLASS_VALUES = new Map();
+  const collectClassValues = (name: string, vars: { name: string; isConst: boolean; isStatic: boolean }[]): void => {
+    CLASS_VALUES.set(name, new Set(vars.filter((v) => v.isConst || v.isStatic).map((v) => v.name)));
+  };
+  collectClassValues(className, m.vars);
+  const collectInner = (c: ClassDecl): void => {
+    collectClassValues(c.name, c.vars);
+    for (const inner of c.innerClasses) collectInner(inner);
+  };
+  for (const c of m.innerClasses) collectInner(c);
   VAR_TYPES = new Map(m.vars.map((v) => [v.name, v.type]));
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
@@ -342,7 +361,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   out.push(`export class ${className}${heritage} {`);
   for (const s of m.signals) {
     mark(out.length, s.loc);
-    out.push(`  ${s.name} = new rt.Signal();`);
+    out.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
   }
   for (const v of m.vars) {
     mark(out.length, v.loc);
@@ -510,7 +529,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   // 是「取属性未实现」而不是一个信号 —— 与模块级同一条式子：发成实例上的 rt.Signal 字段。
   for (const s of decl.signals) {
     mark(base + lines.length, s.loc);
-    lines.push(`  ${s.name} = new rt.Signal();`);
+    lines.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
   }
   for (const v of decl.vars) {
     mark(base + lines.length, v.loc);
@@ -2516,9 +2535,9 @@ function emitExprVar(e: Expr): string {
       if (owner !== undefined) return `${owner}.${e.name}`;
       // 静态方法是**本类作用域**的名字（`typeof(helper)` → 25），它发在构造器上、不在实例上，
       // 所以绑的是类而不是 this（f23 t8 实测）
-      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}))`;
+      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
       // 必须 bind(this)：光传 this.f 出去会在调用时丢掉接收者
-      if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this))`;
+      if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this), ${JSON.stringify(e.name)}, rt.V.object(this))`;
       // 类方法里引用自己的成员变量
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
@@ -2571,6 +2590,12 @@ function emitExprVar(e: Expr): string {
       // enum 点访问 `Suit.HEARTS` → 字典取值（GDScript 只允许 enum 这样点访问）
       if (e.obj.kind === "ident" && ENUM_NAMES.has(e.obj.name)) {
         return `rt.index(${e.obj.name}, rt.V.str(${JSON.stringify(e.name)}))`;
+      }
+      // 「类名点类级值」（`Inner.IC`、`A.sv` 这一类，实测 f29 t7 / f16 t1 都读得到）：
+      // 直接发成 JS 的 `<类>.<名>`。运行时那条 `name in inner` 在类对象上是不能走的 ——
+      // JS 函数自带 `name` / `length` 这些键，鸭子类型会假冒成功（与静态方法表同一个理由）。
+      if (e.obj.kind === "ident" && CLASS_VALUES.get(e.obj.name)?.has(e.name) === true) {
+        return `${e.obj.name}.${e.name}`;
       }
       return `rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)})`;
 

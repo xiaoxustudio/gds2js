@@ -11,6 +11,9 @@ import { GArray, GDict } from "./values";
  */
 
 export const CALLABLE = "__gds2js_callable";
+/** 方法 Callable 的方法名与接收者（`get_method()` / `is_null()` / `is_valid()` 要用，实测 f34）。 */
+export const CALLABLE_NAME = "__gds2js_callable_name";
+export const CALLABLE_OBJECT = "__gds2js_callable_object";
 
 export type Fn = (...args: Variant[]) => Variant;
 
@@ -18,9 +21,16 @@ export function callable(fn: Fn): Variant {
   return V.object({ [CALLABLE]: fn });
 }
 
-/** 把已经绑定好 this 的方法包成 Callable（GDScript 里 `fire_zero` 本身就是个 Callable） */
-export function callableOf(fn: (...args: unknown[]) => unknown): Variant {
-  return V.object({ [CALLABLE]: fn });
+/**
+ * 把已经绑定好 this 的方法包成 Callable（GDScript 里 `fire_zero` 本身就是个 Callable）。
+ * 带上 name / obj 是为了 `get_method()`、`is_null()`、`is_valid()` 这几条实测过的谓词；
+ * lambda 与「拿不到接收者」的形状一律不带 —— 那些组合没测过，宁可响亮报缺也不猜。
+ */
+export function callableOf(fn: (...args: unknown[]) => unknown, name?: string, obj?: Variant): Variant {
+  const box: Record<string, unknown> = { [CALLABLE]: fn };
+  if (name !== undefined) box[CALLABLE_NAME] = name;
+  if (obj !== undefined) box[CALLABLE_OBJECT] = obj;
+  return V.object(box);
 }
 
 export function isVariant(v: unknown): v is Variant {

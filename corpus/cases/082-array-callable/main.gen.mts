@@ -111,18 +111,18 @@ export class Main extends SceneTree {
     print(rt.show(rt.method(a, "reduce", [rt.callable((acc, x) => {
       return rt.ops.add(acc, x);
     }), rt.V.int(100)])));
-    print(rt.show(rt.method(a, "filter", [rt.callableOf(this._pick.bind(this))])));
+    print(rt.show(rt.method(a, "filter", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])));
     print(rt.show(this.seen));
     rt.method(this.seen, "clear", []);
-    print(rt.show(rt.method(a, "any", [rt.callableOf(this._pick.bind(this))])));
+    print(rt.show(rt.method(a, "any", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])));
     print(rt.show(this.seen));
     rt.method(this.seen, "clear", []);
-    print(rt.show(rt.method(a, "all", [rt.callableOf(this._pick.bind(this))])));
+    print(rt.show(rt.method(a, "all", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])));
     print(rt.show(this.seen));
     rt.method(this.seen, "clear", []);
-    print(rt.show(rt.method(a, "reduce", [rt.callableOf(this._add.bind(this)), rt.V.int(0)])));
-    print(rt.show(rt.method(a, "map", [rt.callableOf(this._add.bind(this))])));
-    print(rt.show(rt.method(a, "map", [rt.callableOf(this._pick.bind(this))])));
+    print(rt.show(rt.method(a, "reduce", [rt.callableOf(this._add.bind(this), "_add", rt.V.object(this)), rt.V.int(0)])));
+    print(rt.show(rt.method(a, "map", [rt.callableOf(this._add.bind(this), "_add", rt.V.object(this))])));
+    print(rt.show(rt.method(a, "map", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])));
     print(rt.show(this.seen));
     let nest = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)]))]));
     let kept = rt.method(nest, "filter", [rt.callable((x) => {

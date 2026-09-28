@@ -4,7 +4,7 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  fired = new rt.Signal();
+  fired = new rt.Signal("fired");
 
   ifn(): unknown {
     return rt.V.int(7);
@@ -12,10 +12,10 @@ export class Main extends SceneTree {
   
   async _initialize(): Promise<void> {
     let b = rt.V.object(new Box());
-    let cb = rt.callableOf(this.ifn.bind(this));
+    let cb = rt.callableOf(this.ifn.bind(this), "ifn", rt.V.object(this));
     let sig = this.fired;
     print(rt.show(rt.V.str("u1 ")), rt.show(rt.typeOf(cb)));
-    print(rt.show(rt.V.str("u2 ")), rt.show(rt.typeOf(rt.callableOf(this.ifn.bind(this)))));
+    print(rt.show(rt.V.str("u2 ")), rt.show(rt.typeOf(rt.callableOf(this.ifn.bind(this), "ifn", rt.V.object(this)))));
     print(rt.show(rt.V.str("u3 ")), rt.show(rt.typeOf(sig)));
     print(rt.show(rt.V.str("u4 ")), rt.show(rt.typeOf(this.fired)));
     print(rt.show(rt.V.str("u5 ")), rt.show(rt.typeOf(rt.attribute(b, "boxed"))));
@@ -28,7 +28,7 @@ export class Main extends SceneTree {
 }
 
 class Box {
-  boxed = new rt.Signal();
+  boxed = new rt.Signal("boxed");
   n = rt.V.int(1);
 
 }

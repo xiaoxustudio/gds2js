@@ -2124,6 +2124,37 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("step63", "静态表里没有的键照旧响拒", () => writeProp(V.object(new Box()), "zz", I(1)));
 }
 
+{
+  // f35 对拍出来的静默错：**实例方法读出来是裸 JS 函数**，于是 `typeof(cb)` 给 24（Godot 给 25）、
+  // `cb.call(21)` 直接报「脚本上的 call() 未实现」。修好之后这几条谓词才谈得上。
+  class Holder2 {
+    im(v: Variant): Variant {
+      return v;
+    }
+    static sm(v: Variant): Variant {
+      return v;
+    }
+  }
+  registerClass("Holder2", Holder2);
+  registerStaticMethods(Holder2, ["sm"]);
+  const h2 = new Holder2();
+  const bound = attribute(V.object(h2), "im");
+  eq("step65", "实例方法读出来是 Callable（typeof → 25，不再是 24）", `${typeOf(bound).v}`, "25");
+  eq("step65", "Callable.get_method()", `${method(bound, "get_method", []).v}`, "im");
+  eq("step65", "is_null() false / is_valid() true（f34 t2/t3）", `${method(bound, "is_null", []).v}/${method(bound, "is_valid", []).v}`, "false/true");
+  eq("step65", "Callable.callv 收一个 Array（f34 t7）", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
+  const stat = attribute(Holder2, "sm");
+  eq("step65", "静态方法取值的 get_method 也报得出名字（f34 t4）", `${method(stat, "get_method", []).v}`, "sm");
+  // 静态那一格的 is_null / is_valid 实测只覆盖了 top 与 a.im，静态那版没测 —— 响着比猜着好
+  shouldThrow("step65", "静态方法的 is_valid 没实测过 → 照旧响拒", () => method(stat, "is_valid", []));
+  class Sig {
+    fired = new Signal("fired");
+  }
+  const sg = attribute(V.object(new Sig()), "fired");
+  eq("step65", "Signal.get_name()（f34 t9）", `${method(sg, "get_name", []).v}`, "fired");
+  eq("step65", "Signal.is_null() → false（f34 t2）", `${method(sg, "is_null", []).v}`, "false");
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);

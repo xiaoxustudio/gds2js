@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat, toBool, toFloat, toInt } from "./builtins";
-import { CALLABLE, callableOf, classNameOf, fieldTypesOf, isVariant, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, isVariant, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -110,6 +110,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         });
         return V.nil();
       }
+      // 实测 f34 t9 / t2：信号能报出自己的名字，`is_null()` 一律是 false
+      if (name === "get_name") return V.str(inner.sigName);
+      if (name === "is_null") return V.bool(false);
+      // `fired.is_valid()` 实测是**解析期错**（两句：Cannot find member "is_valid" in base "Signal." +
+      // Function "is_valid()" not found in base Signal.），所以这里不顺手给它 true
       throw new UnsupportedError("signal-method", `Signal.${name}() 未实现`);
     }
 
@@ -123,6 +128,31 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           f(...args);
         }, 0);
         return V.nil();
+      }
+      // 实测 f34 t7：callv 收一个 Array，元素就是实参
+      if (name === "callv") {
+        const arr = args[0];
+        if (arr === undefined || !(arr.v instanceof GArray)) {
+          throw new GodotRuntimeError("callable-callv", "callv() 需要一个 Array 实参");
+        }
+        return wrapValue(f(...(arr.v as GArray).raw()));
+      }
+      // 实测 f34 t4：三种方法 Callable（脚本级函数、绑定方法、静态方法）都报得出自己的名字
+      if (name === "get_method") {
+        const m = (inner as Record<string, unknown>)[CALLABLE_NAME];
+        if (typeof m !== "string") {
+          throw new UnsupportedError("callable-method", `Callable.${name}() 未实现（这个 Callable 不是方法引用）`);
+        }
+        return V.str(m);
+      }
+      // 实测 f34 t2/t3：带着接收者的方法 Callable 是 is_null() false、is_valid() true。
+      // 静态方法与 lambda 的那一格没测过（f34 只测了 top / a.im），所以不带接收者的一律报缺。
+      if (name === "is_null" || name === "is_valid") {
+        const meta = inner as Record<string, unknown>;
+        if (typeof meta[CALLABLE_NAME] !== "string" || meta[CALLABLE_OBJECT] === undefined) {
+          throw new UnsupportedError("callable-method", `Callable.${name}() 未实现（没实测过这种 Callable）`);
+        }
+        return V.bool(name === "is_valid");
       }
       throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
     }
@@ -621,14 +651,23 @@ export function attribute(raw: unknown, name: string): unknown {
     // 那一条会把裸 JS 函数直接递出去，于是 typeof 成了 24、call() 也不认识它。
     if (staticMethodsOf(inner)?.has(name)) {
       const ctor = staticCtorOf(inner);
-      return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown);
+      // 带上方法名：实测 `A.sm.get_method()` → "sm"（f34 t4）。接收者不给 —— 静态那格的
+      // is_null / is_valid 没测过，留着让它们响亮报缺，而不是猜一个 false / true。
+      return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown, name);
     }
     // 静态变量同样三条路都读得到（S161：`Inner.sv`、`p.sv`），存的本来就是 Variant
     const svars = staticVarsOf(inner);
     if (svars !== null && name in svars) {
       return (staticCtorOf(inner) as Record<string, unknown>)[name];
     }
-    if (name in inner) return inner[name];
+    if (typeof inner !== "function" && name in inner) {
+      const v = inner[name];
+      // 实例方法读出来必须是**绑好的 Callable**（实测 f35：`typeof(a.im)` → 25、`cb.call(21)` → 42、
+      // `get_method()` → "im"、`is_null()` false / `is_valid()` true）。JS 那边它是原型上的裸函数，
+      // 原样递出去就变成「typeof 24 + call() 找不到」—— 与静态方法那一支同一个坑（f34 t1 的 24 也是它）。
+      if (typeof v === "function") return callableOf(v.bind(inner) as (...a: unknown[]) => unknown, name, obj);
+      return v;
+    }
   }
   if (obj.t === Tag.NIL) {
     throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);

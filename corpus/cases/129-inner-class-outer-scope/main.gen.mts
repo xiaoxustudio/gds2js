@@ -15,7 +15,7 @@ export class Main extends SceneTree {
     print(rt.show(rt.V.str("t2 ")), rt.show(rt.method(i, "useenum", [])));
     print(rt.show(rt.V.str("t3 ")), rt.show(rt.method(i, "useother", [])));
     print(rt.show(rt.V.str("t4 ")), rt.show(rt.method(i, "ownconst", [])));
-    print(rt.show(rt.V.str("t5 ")), rt.show(rt.attribute(Inner, "IC")));
+    print(rt.show(rt.V.str("t5 ")), rt.show(Inner.IC));
     this.quit();
   }
   
