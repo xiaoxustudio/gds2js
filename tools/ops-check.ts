@@ -2387,6 +2387,49 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     method(V.object(GBytes.of([1.5], "float32")), "hex_encode", []));
 }
 
+{
+  // S171：PackedStringArray。这一支最要紧的一条是**元素折算取 show**（不是 `String(v)`、也不是拒），
+  // 五种来源都实测过：int / float / bool / null / StringName。
+  const strs = (vs: Variant[]): Variant => packCtor("string", [V.array(GArray.of(vs))]);
+  eq("step71", "元素取 show：[1, 2.5, true, null, &\"nm\"] → [\"1\", \"2.5\", \"true\", \"<null>\", \"nm\"]",
+    show(strs([I(1), F(2.5), V.bool(true), V.nil(), V.stringName("nm")])),
+    '["1", "2.5", "true", "<null>", "nm"]');
+  const sb = strs([S("a"), S("b")]);
+  eq("step71", "打印与 typeof 34、元素 typeof 4（不是 11）", `${show(sb)} ${typeOf(sb).v} ${typeOf(index(sb, I(0))).v}`,
+    '["a", "b"] 34 4');
+  const sdef = V.object(GBytes.of([], "string"));
+  method(sdef, "resize", [I(2)]);
+  eq("step71", "resize 长出来填**空串**（int/float 那两侧填 0 / 0.0，byte 填 0）", `${show(sdef)} ${sdef.t}`, `["", ""] ${Tag.OBJECT}`);
+  eq("step71", "get 越界给空串（与 b[i] 越界报错是两套口径）",
+    `${show(method(sdef, "get", [I(9)]))}| ${show(sdef)}`, '| ["", ""]');
+  const sap = V.object(GBytes.of(["a"], "string"));
+  eq("step71", "append 返回 bool false 且追加", `${show(method(sap, "append", [S("x")]))} ${show(sap)}`, 'false ["a", "x"]');
+  const sneg = V.object(GBytes.of(["a", "b"], "string"));
+  writeIdx(sneg, I(-1), S("z"));
+  eq("step71", "写的负下标从尾部数（t-negwrite）", `${show(sneg)}`, '["a", "z"]');
+  const ssort = V.object(GBytes.of(["b", "a", "ab"], "string"));
+  method(ssort, "sort", []);
+  eq("step71", "sort 按码点（step 19 那条），不是把字符串当数字相减", `${show(ssort)}`, '["a", "ab", "b"]');
+  eq("step71", "== 比内容、+ 同形状拼接",
+    `${show(ops.eq(strs([S("a")]), strs([S("a")])))} ${show(ops.add(strs([S("a")]), strs([S("b")])))}`,
+    'true ["a", "b"]');
+  shouldThrow("step71", "跨形状拼接（string + byte）没量过 → 响", () =>
+    ops.add(strs([S("a")]), V.object(GBytes.of([1], "byte"))));
+  shouldThrow("step71", "Array(PackedStringArray) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(sb));
+  const serr = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  eq("step71", "min 在 PackedStringArray 上不存在，句子里的型名跟着换（t-nonexistent）",
+    serr(() => method(sb, "min", [])), "Invalid call. Nonexistent function 'min' in base 'PackedStringArray'.");
+  eq("step71", "join 在 PackedStringArray 上不存在（旧文档有、4.6.3 没有）",
+    serr(() => method(sb, "join", [S("-")])), "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);

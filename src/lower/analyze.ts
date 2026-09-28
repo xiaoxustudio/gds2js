@@ -441,11 +441,11 @@ const VOID_DICT_METHODS = new Set(["clear"]);
 const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
 /**
- * 这三张 void 表**逐个量过、三边同形**（byte：`tmp/void-probe`，int32 / int64：`tmp/pack-probe` 的
- * k-\* 与 h-\*-ret 系列），所以用一个形状标签收它们。float 两种与 String / Vector / Color 三种
- * 没量过，仍在发射表的 `BUILTIN_TODO` 里响着。
+ * 这六张 void 表**逐个量过、六边同形**（byte：`tmp/void-probe`，int32 / int64：`tmp/pack-probe` 的
+ * k-* 与 h-*ret 系列，float32 / float64：`tmp/fp/probe2`，String：`tmp/fp/probe5`），所以用一个形状
+ * 标签收它们。Vector2 / Vector3 / Color 三种没量过，仍在发射表的 `BUILTIN_TODO` 里响着。
  */
-const PACK_SHAPE_NAMES = new Set(["PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array"]);
+const PACK_SHAPE_NAMES = new Set(["PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray"]);
 
 /** 这条检查认得的接收者形状。 */
 type ContainerShape = "Array" | "Dictionary" | "Pack";

@@ -20,7 +20,7 @@ import type { GArray } from "./values";
  * `0.10000000149012`、`1e308` 印成 `inf`，那套文本要单独逆，见 S169 的 ④），以及 String / Vector2 /
  * Vector3 / Color 四种 pack。发射表里它们仍在 `BUILTIN_TODO`，问到就响。
  */
-export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64";
+export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string";
 
 const PACK_TYPE_NAME: Record<PackKind, string> = {
   byte: "PackedByteArray",
@@ -28,18 +28,29 @@ const PACK_TYPE_NAME: Record<PackKind, string> = {
   int64: "PackedInt64Array",
   float32: "PackedFloat32Array",
   float64: "PackedFloat64Array",
+  string: "PackedStringArray",
 };
-const PACK_TYPEOF: Record<PackKind, number> = { byte: 29, int32: 30, int64: 31, float32: 32, float64: 33 };
+const PACK_TYPEOF: Record<PackKind, number> = { byte: 29, int32: 30, int64: 31, float32: 32, float64: 33, string: 34 };
 
-/** 元素存储：byte 与 int32 用 number（都已折进范围），int64 一律 BigInt（超过 2^53 也得保精确）。 */
+/**
+ * String pack 的元素折算是**取 show**（S171 实测：`[1, 2.5, true, null, &"nm"]` →
+ * `["1", "2.5", "true", "<null>", "nm"]`）。show 住在 values.ts，而 values.ts 已经 import
+ * 这个模块，所以不互相 import：由 values.ts 在模块初始化时把函数注进来。
+ */
+let stringifier: ((v: Variant) => string) | null = null;
+export function registerPackStringifier(fn: (v: Variant) => string): void {
+  stringifier = fn;
+}
+
+/** 元素存储：byte / int32 / float* 用 number，int64 用 BigInt，string 用 JS 字符串。 */
 export class GBytes {
-  private items: (number | bigint)[];
+  private items: (number | bigint | string)[];
 
-  constructor(items: (number | bigint)[] = [], readonly kind: PackKind = "byte") {
+  constructor(items: (number | bigint | string)[] = [], readonly kind: PackKind = "byte") {
     this.items = items;
   }
 
-  raw(): (number | bigint)[] {
+  raw(): (number | bigint | string)[] {
     return this.items;
   }
 
@@ -47,7 +58,7 @@ export class GBytes {
     return this.items.length;
   }
 
-  static of(values: (number | bigint)[], kind: PackKind = "byte"): GBytes {
+  static of(values: (number | bigint | string)[], kind: PackKind = "byte"): GBytes {
     return new GBytes(values, kind);
   }
 }
@@ -78,7 +89,15 @@ function foldInt32(n: number | bigint): number {
  * 元素折算。只收实测过的来源：int / float（截断）/ bool / String（走 `to_int` 那一族，实测 `"x"` → 0）。
  * float→int32 的**饱和方向**只量了正的一侧（1e308 → INT32_MIN），负的一侧没量 → 响亮拒。
  */
-export function toElem(kind: PackKind, v: Variant): number | bigint {
+export function toElem(kind: PackKind, v: Variant): number | bigint | string {
+  if (kind === "string") {
+    // 实测（S171 s-int-elem / s-null-elem / s-sn-elem）：任何 Variant 都**取 show**
+    // —— `[1, 2.5, true, null, &"nm"]` → `["1", "2.5", "true", "<null>", "nm"]`
+    if (stringifier === null) {
+      throw new UnsupportedError("packed-string-not-registered", "PackedStringArray 的 show 还没登记（values.ts 的初始化顺序有问题）");
+    }
+    return stringifier(v);
+  }
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) {
     // 实测 `PackedInt32Array(["x"])` → `[0]`、`PackedFloat32Array(["x"])` → `[0.0]`：**不是**解析期拒
     throw new UnsupportedError(
@@ -147,9 +166,23 @@ export function toByte(v: Variant): number {
   return toElem("byte", v) as number;
 }
 
-function elemVariant(kind: PackKind, e: number | bigint): Variant {
+function elemVariant(kind: PackKind, e: number | bigint | string): Variant {
+  if (kind === "string") return V.str(e as string);
   if (kind === "float32" || kind === "float64") return V.float(e as number);
-  return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e)) : V.int(e);
+  return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e as number)) : V.int(e as number | bigint);
+}
+
+/** 码点比较（step 19 的量在字符串比较上通用的那条），不是 JS 默认的 UTF-16 码元比较。 */
+function cmpStrings(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const n = Math.min(x.length, y.length);
+  for (let i = 0; i < n; i++) {
+    const ca = x[i] as string;
+    const cb = y[i] as string;
+    if (ca !== cb) return (ca.codePointAt(0) as number) < (cb.codePointAt(0) as number) ? -1 : 1;
+  }
+  return x.length === y.length ? 0 : x.length < y.length ? -1 : 1;
 }
 
 /** 元素按形状取成 Variant —— values.ts 的打印用它，逐个走各自类型的 print 口径（浮点那套不是字符串插值）。 */
@@ -216,6 +249,9 @@ const NO_SUCH_METHOD = new Set([
   "push_front",
   // 旧文档里的写时复制入口对这个类型不存在（e3 实测：运行期错且打断脚本，进不了语料）
   "copy_on_write",
+  // `join` 在 PackedStringArray 上**也不存在**（S171 t-s-join / probe5 实测：
+  // `Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.`）
+  "join",
 ]);
 /** 存在但这一轮没做 / 没实测的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
 const NOT_YET = new Set(["bsearch", "to_hex_string", "to_raw_string", "compress", "decompress", "search_sorted", "set", "get_bytes", "remove_at_copy"]);
@@ -292,7 +328,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       // 实测：负数给 **31** 且长度不变；缩回去是截断；长出来的格子按**元素类型**填
       // 0 / 0 / 0n（k-*resgrow），成功一律 0（g2 / g3 / e4）
       if (want < 0) return V.int(31);
-      const filler: number | bigint = kind === "int64" ? 0n : 0;
+      const filler: number | bigint | string = kind === "string" ? "" : kind === "int64" ? 0n : 0;
       while (items.length < want) items.push(filler);
       if (want < items.length) items.length = want;
       return V.int(0);
@@ -313,7 +349,8 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       arity("find", args, 1);
       return V.int(items.indexOf(toElem(kind, args[0] as Variant)));
     case "sort":
-      items.sort(kind === "int64" ? (x, y) => (BigInt(x) < BigInt(y) ? -1 : BigInt(x) > BigInt(y) ? 1 : 0) : (x, y) => (x as number) - (y as number));
+      if (kind === "string") items.sort((x, y) => cmpStrings(x as string, y as string));
+      else items.sort(kind === "int64" ? (x, y) => (BigInt(x) < BigInt(y) ? -1 : BigInt(x) > BigInt(y) ? 1 : 0) : (x, y) => (x as number) - (y as number));
       return V.nil();
     case "reverse":
       items.reverse();
@@ -339,7 +376,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (n < 0) {
         throw new UnsupportedError("packed-get-neg", "get() 的负下标没实测过（下标读实测是从尾部数）");
       }
-      return n < items.length ? elemVariant(kind, items[n] as number | bigint) : elemVariant(kind, 0);
+      return n < items.length ? elemVariant(kind, items[n] as number | bigint | string) : elemVariant(kind, kind === "string" ? "" : 0);
     }
     case "hex_encode":
       return V.str((items as number[]).map((x) => x.toString(16).padStart(2, "0")).join(""));
@@ -414,8 +451,12 @@ export function packEq(a: GBytes, b: GBytes): boolean {
   if (x.length !== y.length) return false;
   // int64 的载荷是 bigint（BigInt 比），其余是 number（=== 比）。float 槽那侧 NaN 相等的口径没量过，
   // 但 NaN 进 pack 得先有一句浮点字面量，实测点里没有出现，先照 JS 的 === 走
-  const same = (a: number | bigint, b: number | bigint): boolean =>
-    typeof a === "bigint" || typeof b === "bigint" ? BigInt(a) === BigInt(b) : a === b;
+  const same = (a: number | bigint | string, b: number | bigint | string): boolean =>
+    typeof a === "string" || typeof b === "string"
+      ? a === b
+      : typeof a === "bigint" || typeof b === "bigint"
+        ? BigInt(a as number | bigint) === BigInt(b as number | bigint)
+        : a === b;
   return x.every((v, i) => same(v, y[i] as number | bigint));
 }
 

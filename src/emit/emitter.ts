@@ -160,6 +160,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
   PackedFloat32Array: (a) => `rt.packCtor("float32", [${a.join(", ")}])`,
   PackedFloat64Array: (a) => `rt.packCtor("float64", [${a.join(", ")}])`,
+  PackedStringArray: (a) => `rt.packCtor("string", [${a.join(", ")}])`,
   // Array(pack) 实测只量过从 PackedByteArray 转（f49 t4），其余形状由运行时响亮拒
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
 };
@@ -170,12 +171,12 @@ const BUILTIN_TODO = new Set([
   "Vector3",
   "load",
   "preload",
-  // Packed*Array 这一族做了 byte / int32 / int64 三种（S168 / S169）：剩下五种（两个 float、String、
-  // Vector2/3、Color）的元素折算与**打印文本**还没逐条对拍（float32 的 `0.1` 印成
-  // `0.10000000149012`、`1e308` 印成 `inf` 那一套要单独逆）。
-  // 不列进来的话 `PackedFloat32Array(...)` 会发成 `this.PackedFloat32Array(...)` —— 那是 JS 的
+  // Packed*Array 这一族做了 byte / int32 / int64 / float32 / float64 / String 六种
+  // （S168 / S169 / S170 / S171）。剩下三种（Vector2 / Vector3 / Color）的元素折算只量到
+  // 「塞错类型给默认值」（`PackedVector2Array([1])` → [(0.0, 0.0)]、`PackedColorArray(["x"])`
+  // → 全透明黑加一句 stderr），正常元素的口径还没逐条对拍。
+  // 不列进来的话 `PackedVector2Array(...)` 会发成 `this.PackedVector2Array(...)` —— 那是 JS 的
   // TypeError，而 Godot 跑得好好，错形就变成了「我们崩、Godot 过」的误报级差异。
-  "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
   "PackedColorArray",
@@ -2730,6 +2731,8 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "PackedInt64Array") return 'rt.packCtor("int64", [])';
   if (base === "PackedFloat32Array") return 'rt.packCtor("float32", [])';
   if (base === "PackedFloat64Array") return 'rt.packCtor("float64", [])';
+  // 实测 `var s: PackedStringArray` 的默认值是空 pack，`resize` 长出来的格子填**空串**（S171）
+  if (base === "PackedStringArray") return 'rt.packCtor("string", [])';
   return "rt.V.nil()";
 }
 
