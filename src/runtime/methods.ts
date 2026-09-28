@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, strToInt, strToFloat, toBool, toFloat, toInt } from "./builtins";
-import { CALLABLE, classNameOf, fieldTypesOf, isVariant, wrapValue, type Fn } from "./object";
+import { CALLABLE, callableOf, classNameOf, fieldTypesOf, isVariant, staticMethodsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -36,6 +36,31 @@ function asString(v: Variant, who: string): string {
 /** 入口可能是裸 JS 值（lambda、引擎对象），先归一成 Variant */
 function norm(v: unknown): Variant {
   return isVariant(v) ? v : wrapValue(v);
+}
+
+/**
+ * 静态方法调用：`A.f()` 与 `p.f()` 两条路都汇到这里（实测 S160 两者结果一样）。
+ * 接收者给构造器本身，与 GDScript「静态方法没有 self」一致 —— 发出去的产物里静态方法
+ * 也只用 `A.x` 这种具名形式碰自己的类，不依赖 `this`。
+ */
+function callStatic(ctor: unknown, name: string, args: Variant[]): Variant {
+  return wrapValue(staticFnOf(ctor, name).apply(ctor, args));
+}
+
+/**
+ * 表里登记过的静态名，构造器上就该有对应的函数。拿不到说明产物与表不一致 —— 响亮报，不静默给 undefined。
+ */
+function staticFnOf(ctor: unknown, name: string): (...a: Variant[]) => unknown {
+  const f = (ctor as Record<string, unknown> | null)?.[name];
+  if (typeof f !== "function") {
+    throw new UnsupportedError("static-fn-missing", `静态方法 ${name}() 在类上找不到（注册表与产物不一致）`);
+  }
+  return f as (...a: Variant[]) => unknown;
+}
+
+/** 静态成员挂在构造器上，从实例摸要经 constructor。 */
+function staticCtorOf(inner: unknown): unknown {
+  return typeof inner === "function" ? inner : (inner as { constructor?: unknown })?.constructor;
 }
 
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
@@ -86,10 +111,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
     // 脚本值（preload / load 的结果）：`.v` 就是类构造器，`.new()` 实例化它
     if (typeof inner === "function") {
+      // `new` 排在静态查表**之前**是实测要求：自己写 `static func new()` 也盖不掉真构造器（f20）
       if (name === "new") {
         const Ctor = inner as new (...a: Variant[]) => object;
         return V.object(new Ctor(...args));
       }
+      if (staticMethodsOf(inner)?.has(name)) return callStatic(inner, name, args);
       throw new UnsupportedError("script-method", `脚本上的 ${name}() 未实现`);
     }
 
@@ -99,6 +126,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       const f = member as (...a: Variant[]) => unknown;
       return wrapValue(f.apply(inner, args));
     }
+
+    // 实例也能调静态方法（实测 p.make() 与 A.make() 同一个结果，S160）
+    if (staticMethodsOf(inner)?.has(name)) return callStatic(staticCtorOf(inner), name, args);
 
     throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
   }
@@ -562,6 +592,13 @@ export function attribute(raw: unknown, name: string): unknown {
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     const inner = obj.v as Record<string, unknown>;
+    // 静态方法从实例与脚本值上都读得到（S160：`p.make` / `A.make` 都是 Callable，typeof → 25）。
+    // 这条必须走在 `name in inner` 之前：JS 的静态方法**就是**构造器上的自有属性，
+    // 那一条会把裸 JS 函数直接递出去，于是 typeof 成了 24、call() 也不认识它。
+    if (staticMethodsOf(inner)?.has(name)) {
+      const ctor = staticCtorOf(inner);
+      return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown);
+    }
     if (name in inner) return inner[name];
   }
   if (obj.t === Tag.NIL) {

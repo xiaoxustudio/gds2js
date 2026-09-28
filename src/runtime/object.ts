@@ -61,6 +61,12 @@ const CLASS_NAMES = new WeakMap<GdClassCtor, string>();
  * 所以运行时必须知道字段声明成什么，否则就是把 float 存进 int 槽的静默错。
  */
 const FIELD_TYPES = new WeakMap<GdClassCtor, Record<string, string>>();
+/**
+ * 构造器 → 静态方法名集合（`static func`）。实测 S160：静态方法**三条路都能调**
+ * （`A.f()`、`p.f()`、`var cb = A.f`），而 JS 那边它是构造器上的自有属性 —— 实例既看不见
+ * 也摸不着，所以这三条都要靠这张表在运行时回退。
+ */
+const STATIC_METHODS = new WeakMap<GdClassCtor, Set<string>>();
 
 /** class_name / 内部类都注册进来，`is` 判定和 `X.new()` 靠它 */
 export function registerClass(name: string, ctor: GdClassCtor): void {
@@ -77,6 +83,20 @@ export function registerFieldTypes(ctor: GdClassCtor, table: Record<string, stri
 export function fieldTypesOf(target: unknown): Record<string, string> | null {
   const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
   return (ctor && FIELD_TYPES.get(ctor)) || null;
+}
+
+/** 发射器为每个类补发一行：`rt.registerStaticMethods(Inner, ["make", "twice"])`。 */
+export function registerStaticMethods(ctor: GdClassCtor, names: string[]): void {
+  STATIC_METHODS.set(ctor, new Set(names));
+}
+
+/**
+ * 类（或实例）的静态方法名表。**必须是显式表**：静态方法就是构造器上的自有属性，
+ * 拿 `constructor[name]` 鸭子类型去认会把 JS 函数自带的 `name` / `length` 当成方法。
+ */
+export function staticMethodsOf(target: unknown): Set<string> | null {
+  const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
+  return (ctor && STATIC_METHODS.get(ctor)) || null;
 }
 
 /** 实例（或构造器）的注册名，用于报错文本；拿不到就 null。 */

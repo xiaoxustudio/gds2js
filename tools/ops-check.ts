@@ -10,9 +10,9 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash } from "../src/
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable, callableOf, registerClass, registerFieldTypes } from "../src/runtime/object";
+import { callable, callableOf, registerClass, registerFieldTypes, registerStaticMethods } from "../src/runtime/object";
 import { Signal } from "../src/runtime/signal";
-import { index, method, writeIdx, writeProp } from "../src/runtime/methods";
+import { attribute, index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
 import {
@@ -2076,6 +2076,31 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step61", "typeof(信号) → 26（**裸对象**，产物里的实际形状）", `${typeOf(sig).v}`, "26");
   eq("step61", "typeof(信号) → 26（装箱的）", `${typeOf(V.object(sig)).v}`, "26");
   eq("step61", "普通对象仍是 24（没被新分支误伤）", `${typeOf(V.object({})).v}`, "24");
+}
+
+{
+  // S160 实测：静态方法三条路都通 —— `A.f()`、`p.f()`、`var cb = A.f`（再 cb.call()）。
+  // JS 那边静态方法挂在**构造器**上、实例摸不到，所以运行时必须有一张显式表可查。
+  class Holder {
+    mv = V.int(1);
+    static make(): Variant {
+      return V.str("made");
+    }
+    static twice(x: Variant): Variant {
+      return V.int(42);
+    }
+  }
+  registerClass("Holder", Holder);
+  registerStaticMethods(Holder, ["make", "twice"]);
+  const h = new Holder();
+  eq("step62", "A.f() 从类对象调得到", `${method(Holder, "make", []).v}`, "made");
+  eq("step62", "p.f() 从实例也调得到，同一个结果", `${method(V.object(h), "make", []).v}`, "made");
+  eq("step62", "A.f 取值是 Callable（typeof → 25）", `${typeOf(attribute(Holder, "make")).v}`, "25");
+  eq("step62", "p.f 取值同样是 Callable", `${typeOf(attribute(V.object(h), "make")).v}`, "25");
+  eq("step62", "取到的 Callable 照样能 call，实参照传", `${method(attribute(Holder, "twice"), "call", [V.int(21)]).v}`, "42");
+  // 这条是「为什么必须用显式表」的证人：JS 函数自带 name / length 两个键，
+  // 拿 constructor[name] 鸭子类型去认静态方法会把它们当成方法召出来。
+  shouldThrow("step62", "没登记的 name/length 不当成方法（显式表的意义）", () => method(V.object(h), "name", []));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

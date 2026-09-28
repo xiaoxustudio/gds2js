@@ -180,6 +180,25 @@ let ENUM_NAMES = new Set<string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
 /**
+ * 当前类作用域里的 `static func` 名字（模块类与内部类各一套）。
+ * 三条实测口径决定它必须存在（S160）：静态方法**发在构造器上**，所以
+ * ① 实例方法里裸调静态（`func usestatic(): return make()`）不能发成 `this.make()` —— 实例摸不到静态；
+ * ② 静态方法里裸调静态同理要发成 `Inner.twice(...)`；
+ * ③ 静态方法名站在值位置（`typeof(Inner.make)` → 25）要发成绑过类名的 Callable。
+ */
+let STATIC_FUNCS = new Set<string>();
+/** 当前类作用域的 JS 类名：静态调用与静态取值都挂在这个名字上。 */
+let CURRENT_CLASS = "";
+/**
+ * 当前作用域可见的 `const` → **它所属的 JS 类名**。
+ * Godot 的常量是类级的，而且**内部类看得见外层脚本的常量**（f29 实测 t2/t4 都给值）；
+ * 我们平时把常量发成实例字段，于是内部类里读外层常量会拿到 `this.NAME` = undefined → 印 `<null>`
+ * —— 一处静默错（f29 对拍：Godot `outer-name`、我们 `<null>`）。
+ * 现在给每个常量在**它自己的类**上再发一份 static 副本，裸读一律按归属发成 `<类>.NAME`，
+ * 静态方法里读常量（f15 t4/t5）与内部类读外层常量（f29 t2/t4）就同一条路了。
+ */
+let CONST_OWNERS = new Map<string, string>();
+/**
  * 当前作用域里**声明了类型**的名字 → 那个 TypeRef（模块级 + 当前类的成员变量，emitClassDecl 进出时切换）。
  * 赋值点要按声明类型转换：实测 Godot 对 `var mt: int` 之后 `mt = 2.7` 给 2（截断），
  * 我们过去直接把 float 存进去 —— 一处静默错（用例 118 的 q1）。
@@ -247,6 +266,10 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     ...(opts.inheritedMembers ?? []),
   ]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+  // 模块类的静态方法面：名字挂在这个类作用域上，调用与取值都发成 `<类名>.f`
+  CURRENT_CLASS = className;
+  STATIC_FUNCS = new Set(m.funcs.filter((f) => f.isStatic).map((f) => f.name));
+  CONST_OWNERS = new Map(m.vars.filter((v) => v.isConst).map((v) => [v.name, className]));
   VAR_TYPES = new Map(m.vars.map((v) => [v.name, v.type]));
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
@@ -336,6 +359,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (m.className) out.push(`rt.registerClass(${JSON.stringify(m.className)}, ${className});`);
   const moduleFields = fieldTypesLiteral(m.vars);
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(${className}, ${moduleFields});`);
+  const moduleStatics = staticNamesLiteral(m.funcs);
+  if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(${className}, ${JSON.stringify(moduleStatics)});`);
   // 按 res:// 路径注册：`load("res://…")` 与 `preload` 一致性都靠它。
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
@@ -395,6 +420,16 @@ function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; 
 }
 
 /**
+ * 静态方法名表，发成 `rt.registerStaticMethods(Cls, ["make", "twice"])`。
+ * 运行时靠它把 `A.f()`、`p.f()`、`A.f`（取值）三条路落到构造器上 —— 实测三条都成立（S160）。
+ * **必须是显式表**：静态方法就是 JS 构造器上的自有属性，用 `constructor[name]` 鸭子类型去认
+ * 会把函数自带的 `name` / `length` 两个键当成方法，把不该存在的"方法"召出来。
+ */
+function staticNamesLiteral(funcs: readonly { name: string; isStatic: boolean }[]): string[] {
+  return funcs.filter((f) => f.isStatic).map((f) => f.name);
+}
+
+/**
  * 类成员变量的发射。普通字段一行；带访问器的发成 JS 的 get/set，**不再发那个字段** ——
  * JS 的同名类字段会把访问器盖掉，读出来就成了初值而不是 getter 的结果。
  * 只读属性（没有 set）实测「写它」是**静默无操作**（S152 的 e8 / f12 k4：值不变、也不报错），
@@ -402,7 +437,14 @@ function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; 
  */
 function emitMemberVar(v: VarDecl): string[] {
   const a = v.accessor;
-  if (a === null || a === undefined) return [`  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`];
+  if (a === null || a === undefined) {
+    const field = `  ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`;
+    // 常量在**类上**也要有一份：Godot 的常量是类级的，静态方法里读常量（f15 t4/t5）与
+    // 内部类里读外层常量（f29 t2/t4）实测都成立，而裸读现在按归属发成 `<类>.NAME`。
+    // 实例字段照旧留着 —— `p.CV` 那条路（f29 t8 实测给 7）靠的就是它。
+    if (v.isConst) return [field, `  static ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`];
+    return [field];
+  }
   const out: string[] = [];
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
   out.push(`  get ${v.name}() {`);
@@ -426,8 +468,16 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   }
   const saved = CURRENT_MEMBERS;
   const savedTypes = VAR_TYPES;
+  const savedStatics = STATIC_FUNCS;
+  const savedClass = CURRENT_CLASS;
+  const savedConsts = CONST_OWNERS;
   CURRENT_MEMBERS = new Set(decl.vars.map((v) => v.name));
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
+  CURRENT_CLASS = decl.name;
+  STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
+  // 内部类**继承外层的常量可见性**（f29 实测），同名按 GDScript 的就近遮蔽覆盖
+  CONST_OWNERS = new Map(savedConsts);
+  for (const v of decl.vars) if (v.isConst) CONST_OWNERS.set(v.name, decl.name);
 
   const lines = [`class ${decl.name} {`];
   mark(base, decl.loc);
@@ -451,10 +501,15 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push(`rt.registerClass(${JSON.stringify(decl.name)}, ${decl.name});`);
   const declFields = fieldTypesLiteral(decl.vars);
   if (declFields !== null) lines.push(`rt.registerFieldTypes(${decl.name}, ${declFields});`);
+  const declStatics = staticNamesLiteral(decl.funcs);
+  if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
   lines.push("");
 
   CURRENT_MEMBERS = saved;
   VAR_TYPES = savedTypes;
+  STATIC_FUNCS = savedStatics;
+  CURRENT_CLASS = savedClass;
+  CONST_OWNERS = savedConsts;
   return lines;
 }
 
@@ -559,6 +614,11 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
 }
 
 function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
+  // `static func _init` / 静态的入口方法**没探针测过**，而且发出去是最坏的错形：
+  // harness 只调实例上的 `_initialize`，静态版本会编得出来却**永远不跑**。响亮拒，不猜。
+  if (f.isStatic && (f.name === "_init" || f.name === "_initialize" || f.name === "_process")) {
+    throw new UnsupportedError("static-entry", `静态的 ${f.name}() 还没实测过行为，不猜着发`);
+  }
   // _init → JS constructor（构造参数即 .new(args) 的实参）
   if (f.name === "_init") return emitConstructor(f, base, hasSuper);
 
@@ -575,7 +635,7 @@ function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
   else if (isEntry || f.coroutine) ret = "Promise<unknown>";
   else ret = hasValue ? "unknown" : "void";
 
-  const lines = [`${async}${f.name}(${params}): ${ret} {`];
+  const lines = [`${f.isStatic ? "static " : ""}${async}${f.name}(${params}): ${ret} {`];
   mark(base, f.loc);
   const savedUnboxed = UNBOXED;
   const savedRet = CURRENT_RET;
@@ -2423,6 +2483,13 @@ function emitExprVar(e: Expr): string {
       // `self` 站在值位置就是「当前实例」这个对象（S143：typeof(self)=24、传参与返回都行）。
       // 包一层 V.object(this) 而不是造新值 —— 实测 p.showself() == p 为 true，身份不能变。
       if (e.name === "self") return `rt.V.object(this)`;
+      // 常量是**类级**的：按归属发成 `<类>.NAME`，静态方法里读常量（f15 t4/t5）与
+      // 内部类读外层常量（f29 t2/t4）都走这一条；发成 `this.NAME` 在类上的 static 副本存在之后是错的形
+      const owner = CONST_OWNERS.get(e.name);
+      if (owner !== undefined) return `${owner}.${e.name}`;
+      // 静态方法是**本类作用域**的名字（`typeof(helper)` → 25），它发在构造器上、不在实例上，
+      // 所以绑的是类而不是 this（f23 t8 实测）
+      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}))`;
       // 必须 bind(this)：光传 this.f 出去会在调用时丢掉接收者
       if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this))`;
       // 类方法里引用自己的成员变量
@@ -2668,6 +2735,9 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     if (BUILTIN_TODO.has(name)) {
       throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
     }
+    // 本类作用域的静态方法：静态方法发在**构造器**上，实例（`this`）摸不到，所以裸调一律具名到类
+    // （实测 f15 t3 静态裸调静态、f15 t7 实例方法裸调静态、f23 t3 外层裸调都成立）
+    if (STATIC_FUNCS.has(name)) return `${CURRENT_CLASS}.${name}(${args.join(", ")})`;
     // 其余一律当作继承来的方法 —— 与语义分析层的宽容策略一致
     // （create_timer / quit 这些是 SceneTree 上的，不是本脚本定义的）
     return `this.${name}(${args.join(", ")})`;
@@ -2682,6 +2752,9 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     // 不是成员的方法名（get_script/has_method 这套 Object 方法我们还没有）交给 rt.method 响亮报缺。
     if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && e.callee.obj.name === "self") {
       const own = e.callee.name;
+      // `self.f()` 里 f 是静态方法时**不能**发成 `this.f()`：静态方法挂在构造器上，实例摸不到
+      // （f23 t6 实测 `self.helper()` 与裸 `helper()` 同值，都走类那格）
+      if (STATIC_FUNCS.has(own)) return `${CURRENT_CLASS}.${own}(${args.join(", ")})`;
       if (MODULE_FUNCS.has(own) || CURRENT_MEMBERS.has(own) || MODULE_VARS.has(own)) {
         return `this.${own}(${args.join(", ")})`;
       }

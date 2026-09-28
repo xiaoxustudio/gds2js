@@ -90,6 +90,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
 
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
   for (const c of m.innerClasses) checkClass(c, moduleScope, diags);
+  checkStaticAccess(m.funcs, m.vars, diags);
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
@@ -736,9 +737,143 @@ function scalarStaticName(name: string): string | null {
   }
 }
 
+/**
+ * 静态方法里碰实例成员 —— Godot 在**解析期**就拒（S160 实测的 f21 / f22 两条原文）：
+ * - 裸读实例变量：`Cannot access non-static variable "mv" from the static function "reads()".`
+ * - 裸调实例方法：`Cannot call non-static function "imeth()" from the static function "calls()".`
+ * 不拦的话这条会编成产物，而 JS 静态方法里的 `this` 是**类本身**，`this.mv` 静默给 undefined ——
+ * 正是最难查的那一形。`const`（isConst）不算实例变量：静态里读常量是实测成立的（f15 t4/t5）。
+ */
+function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic[]): void {
+  const instanceVars = new Set(vars.filter((v) => !v.isConst).map((v) => v.name));
+  const instanceFuncs = new Set(funcs.filter((f) => !f.isStatic).map((f) => f.name));
+  if (instanceVars.size === 0 && instanceFuncs.size === 0) return;
+
+  for (const f of funcs) {
+    if (!f.isStatic) continue;
+    // 局部名与形参不算「实例成员」：Godot 的解析按最近的声明走
+    const local = new Set(f.params.map((p) => p.name));
+    const collectLocal = (body: Stmt[]): void => {
+      for (const s of body) {
+        if (s.kind === "var") local.add(s.name);
+        else if (s.kind === "for") local.add(s.var);
+        else if (s.kind === "if") for (const br of s.branches) collectLocal(br.body);
+        else if (s.kind === "while") collectLocal(s.body);
+        else if (s.kind === "match")
+          for (const arm of s.arms) {
+            if (arm.pattern.kind === "bind") local.add(arm.pattern.name);
+            collectLocal(arm.body);
+          }
+      }
+    };
+    collectLocal(f.body);
+
+    const expr = (e: Expr): void => {
+      switch (e.kind) {
+        case "ident":
+          if (!local.has(e.name) && instanceVars.has(e.name)) {
+            diags.push({
+              code: "static-access-var",
+              message: `Cannot access non-static variable "${e.name}" from the static function "${f.name}()".`,
+              loc: e.loc,
+            });
+          }
+          return;
+        case "call": {
+          // 只判**裸调**（callee 是 ident）：`p.imeth()` 这种带着接收者的写法实测完全合法（f25）
+          if (e.callee.kind === "ident" && !local.has(e.callee.name) && instanceFuncs.has(e.callee.name)) {
+            diags.push({
+              code: "static-call-func",
+              message: `Cannot call non-static function "${e.callee.name}()" from the static function "${f.name}()".`,
+              loc: e.loc,
+            });
+          }
+          expr(e.callee);
+          for (const a of e.args) expr(a);
+          return;
+        }
+        case "index":
+          expr(e.obj);
+          expr(e.index);
+          return;
+        case "attribute":
+          expr(e.obj);
+          return;
+        case "binary":
+          expr(e.left);
+          expr(e.right);
+          return;
+        case "unary":
+        case "await":
+        case "is":
+        case "as":
+          expr(e.operand);
+          return;
+        case "array":
+          for (const it of e.items) expr(it);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key);
+            expr(en.value);
+          }
+          return;
+        case "lambda":
+          // lambda 里的裸名字沿用外层判定，但形参不进外层 local（保守：只按外层已知的实例名判）
+          for (const st of e.body) stmt(st);
+          return;
+        case "lit":
+          return;
+      }
+    };
+    const stmt = (s: Stmt): void => {
+      switch (s.kind) {
+        case "expr":
+          expr(s.expr);
+          return;
+        case "var":
+          if (s.init !== null) expr(s.init);
+          return;
+        case "assign":
+          expr(s.target);
+          expr(s.value);
+          return;
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond !== null) expr(br.cond);
+            br.body.forEach(stmt);
+          }
+          return;
+        case "for":
+          expr(s.iter);
+          s.body.forEach(stmt);
+          return;
+        case "while":
+          expr(s.cond);
+          s.body.forEach(stmt);
+          return;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) {
+            if (arm.guard !== null) expr(arm.guard);
+            arm.body.forEach(stmt);
+          }
+          return;
+        case "return":
+          if (s.value !== null) expr(s.value);
+          return;
+        default:
+          return;
+      }
+    };
+    f.body.forEach(stmt);
+  }
+}
+
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {
   const scope = base.child([c.name, ...declNames(c)]);
   const coroutines = new Set(c.funcs.filter((f) => f.coroutine).map((f) => f.name));
+  checkStaticAccess(c.funcs, c.vars, diags);
   for (const f of c.funcs) checkFunc(f, scope, coroutines, diags);
   for (const inner of c.innerClasses) checkClass(inner, scope, diags);
 }

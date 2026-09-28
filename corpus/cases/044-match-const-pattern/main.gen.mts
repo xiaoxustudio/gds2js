@@ -7,10 +7,11 @@ const State = rt.dictOf([[rt.V.str("IDLE"), rt.V.int(0)], [rt.V.str("RUN"), rt.V
 
 export class Main extends SceneTree {
   LIMIT = rt.V.int(3);
+  static LIMIT = rt.V.int(3);
 
   async _initialize(): Promise<void> {
     do {
-      const __m0 = rt.matchPattern(rt.V.int(3), rt.patConst(this.LIMIT));
+      const __m0 = rt.matchPattern(rt.V.int(3), rt.patConst(Main.LIMIT));
       if (__m0 !== null) {
         print(rt.show(rt.V.str("limit")));
         break;

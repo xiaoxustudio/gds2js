@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Cannot access non-static variable "mv" from the static function "reads()".
+   at: GDScript::reload (<case>/main.gd:8)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
