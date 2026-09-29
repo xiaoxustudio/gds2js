@@ -59,7 +59,7 @@ import {
   vector3New,
 } from "../src/runtime/vector3";
 import { bytesCtor, GBytes, packCtor, toByte } from "../src/runtime/packed";
-import { isType, typeOf } from "../src/runtime/patterns";
+import { asType, isType, typeOf } from "../src/runtime/patterns";
 import {
   GVector2i,
   asVec2i,
@@ -2428,6 +2428,20 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     serr(() => method(sb, "min", [])), "Invalid call. Nonexistent function 'min' in base 'PackedStringArray'.");
   eq("step71", "join 在 PackedStringArray 上不存在（旧文档有、4.6.3 没有）",
     serr(() => method(sb, "join", [S("-")])), "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
+}
+
+{
+  // S172：pack 的 is / as。**各认各的形状**，而且 pack 既不是 Array 也不是 Object，只有 is Variant 真。
+  const byte = V.object(GBytes.of([1, 2], "byte"));
+  const i32 = V.object(GBytes.of([7], "int32"));
+  eq("step72", "b is PackedByteArray 真、is PackedInt32Array / Array / Object 全假、is Variant 真",
+    [isType(byte, "PackedByteArray").v, isType(byte, "PackedInt32Array").v, isType(byte, "Array").v, isType(byte, "Object").v, isType(byte, "Variant").v].join(","),
+    "true,false,false,false,true");
+  eq("step72", "同一支 int32 只认自己那个名字", `${isType(i32, "PackedInt32Array").v} ${isType(i32, "PackedByteArray").v}`, "true false");
+  eq("step72", "as 同形状是**同一个值**（c == b 真）", `${show(asType(byte, "PackedByteArray"))} ${valueEq(asType(byte, "PackedByteArray"), byte)}`, "[1, 2] true");
+  shouldThrow("step72", "as 到别的形状没量过 → 响（静态能判的那类由语义分析层在解析期拒）", () => asType(byte, "PackedStringArray"));
+  shouldThrow("step72", "String / Vector 三种没实现的形状仍走报缺分支", () => isType(byte, "PackedVector2Array"));
+  eq("step72", "普通值不受影响：1 is Object 假、[] is Array 真", `${isType(I(1), "Object").v} ${isType(V.array(GArray.of([])), "Array").v}`, "false true");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

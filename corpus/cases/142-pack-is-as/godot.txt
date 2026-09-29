@@ -1,0 +1,5 @@
+r1 true false false false true
+r2 true false false
+r3 [1, 2] true 2
+r4 false true
+r5 29 7 1

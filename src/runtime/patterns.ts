@@ -7,7 +7,7 @@ import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
 import { GVector2i } from "./vector2i";
 import { GColor } from "./color";
-import { GBytes, packTypeOfCode } from "./packed";
+import { asBytes, GBytes, packTypeOfCode, type PackKind } from "./packed";
 
 /**
  * `match` 的模式匹配与 `is` / `as` 的类型判定。
@@ -112,8 +112,31 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
 };
 
+/**
+ * Packed\*Array 的 `is` / `as`（S172 实测）。两条要点：
+ * - **各认各的形状**：`b is PackedByteArray` 真，而同一支 `b is PackedInt32Array` **假**；
+ * - pack **不算 Array、也不算 Object**（`b is Array` 假、`b is Object` 假），只有 `is Variant` 真。
+ *   后一条与 TYPE_TAGS 把 `Object` 映到 Tag.OBJECT 相冲，所以下面 `is Object` 那支要先把 pack 摘出去。
+ */
+const PACK_TYPES: Record<string, PackKind> = {
+  PackedByteArray: "byte",
+  PackedInt32Array: "int32",
+  PackedInt64Array: "int64",
+  PackedFloat32Array: "float32",
+  PackedFloat64Array: "float64",
+  PackedStringArray: "string",
+};
+
+function packKindMatches(v: Variant, kind: PackKind): boolean {
+  const b = asBytes(v);
+  return b !== null && b.kind === kind;
+}
+
 export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
+  const pk = PACK_TYPES[name];
+  if (pk !== undefined) return V.bool(packKindMatches(v, pk));
+  if (name === "Object" && asBytes(v) !== null) return V.bool(false);
   const t = builtinTag(name);
   if (t !== undefined) return V.bool(v.t === t);
   const math = MATH_TYPES[name];
@@ -127,6 +150,13 @@ export function isType(v: Variant, name: string): Variant {
 
 export function asType(v: Variant, name: string): Variant {
   if (name === "Variant") return v;
+  const pk = PACK_TYPES[name];
+  if (pk !== undefined) {
+    // 实测只覆盖「cast 同一形状还是同一个值」（`var c = b as PackedByteArray` → `c == b` 真）。
+    // 形状不合的那格没量过（静态能判的那类 Godot 在解析期就拒，见 analyze.ts），所以响着拒
+    if (packKindMatches(v, pk)) return v;
+    throw new UnsupportedError("as-type-pack", `as ${name} 只量过形状相符的 pack（收到的是别的东西）`);
+  }
   const t = builtinTag(name);
   if (t !== undefined) return v.t === t ? v : V.nil();
   const math = MATH_TYPES[name];
