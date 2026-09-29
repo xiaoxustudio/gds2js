@@ -1,18 +1,3 @@
-/**
- * 大小写映射探针的第一段：把「JS 认为存在大小写映射」的全部码点写成临时用例，
- * 交给 tools/golden.mjs 用 Godot 跑出真值。
- *
- * 只扫这批码点的理由：Godot 的 to_upper/to_lower 走 Unicode **简单映射**（一个码点只映一个
- * 码点，实测全宇宙 0 个例外）。若某码点在 JS 里上下都等于自己，说明 Unicode 数据里它没有
- * case mapping，Godot 也只可能给回原字符 —— 两边同形，不必测。反过来，JS 有映射的码点才是
- * 「可能与 Godot 不同」的全集（含 JS 会撑开成多码点的那 103 个）。
- *
- * 用法（三步，别漏第二步）：
- *   node tools/case-probe.mjs
- *   node tools/golden.mjs 000-probe-cs        # 真值由 Godot 4.6.3 给，不是凭印象
- *   node tools/case-table.mjs                 # 对账 + 重写 src/runtime/case-table.ts
- * 探针目录 corpus/cases/000-probe-cs-* 是临时产物，生成表后可以直接删掉。
- */
 import { mkdirSync, writeFileSync } from "node:fs";
 
 const CHUNK = 700;

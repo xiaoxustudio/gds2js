@@ -9,15 +9,6 @@ import { GVector2i } from "./vector2i";
 import { GColor } from "./color";
 import { asBytes, GBytes, packTypeOfCode, type PackKind } from "./packed";
 
-/**
- * `match` 的模式匹配与 `is` / `as` 的类型判定。
- *
- * 语义依据 docs/SEMANTICS.md：
- * - 数组模式要求长度相等、逐项匹配，绑定按出现顺序收集（用例 020）
- * - 字典模式是**精确键集匹配**：键数相等且每个模式键都在、值匹配；多余键 → 不匹配（实测 4.6.3，用例 041）
- * - `is` 在 Godot 4.6.3 是编译期就能确定的类型判定（用例 021）
- */
-
 export type Pat =
   | { k: "wild" }
   | { k: "lit"; v: Variant }
@@ -55,7 +46,6 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
     case "lit":
       return valueEq(s, p.v);
     case "const":
-      // 常量模式：按值相等匹配（与字面量同一套 valueEq 语义）
       return valueEq(s, p.v);
     case "arr": {
       if (s.t !== Tag.ARRAY) return false;
@@ -67,8 +57,6 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
       });
     }
     case "dict": {
-      // Godot 字典模式是**精确键集匹配**，不是子集：subject 的键必须与模式完全一致
-      // （键数相等 + 每个模式键都在且值匹配）。多余键 → 不匹配（实测 4.6.3，用例 041）。
       if (s.t !== Tag.DICT) return false;
       const d = s.v as GDict;
       if (d.size() !== p.entries.length) return false;
@@ -80,8 +68,6 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
     }
   }
 }
-
-// ---------------------------------------------------------------- is / as
 
 const TYPE_TAGS: Record<string, TagValue> = {
   int: Tag.INT,
@@ -97,7 +83,6 @@ const TYPE_TAGS: Record<string, TagValue> = {
 };
 
 function builtinTag(name: string): TagValue | undefined {
-  // Array[int] 这类带元素类型的写法，判定只看容器类型
   return TYPE_TAGS[name.replace(/\[.*\]$/, "")];
 }
 
@@ -155,8 +140,6 @@ export function asType(v: Variant, name: string): Variant {
   if (name === "Variant") return v;
   const pk = PACK_TYPES[name];
   if (pk !== undefined) {
-    // 实测只覆盖「cast 同一形状还是同一个值」（`var c = b as PackedByteArray` → `c == b` 真）。
-    // 形状不合的那格没量过（静态能判的那类 Godot 在解析期就拒，见 analyze.ts），所以响着拒
     if (packKindMatches(v, pk)) return v;
     throw new UnsupportedError("as-type-pack", `as ${name} 只量过形状相符的 pack（收到的是别的东西）`);
   }
@@ -189,22 +172,13 @@ const GODOT_TYPE: Record<TagValue, number> = {
 };
 
 export function typeOf(raw: unknown): Variant {
-  // 入口可能是**裸 JS 值**：信号在产物里就是 `new rt.Signal()` 这样的裸对象，字段读出来不装箱，
-  // 方法 Callable / lambda 也一样。不先归一就会拿 `undefined` 的 tag 去查表，
-  // 于是一条和信号毫无关系的 BigInt 错冒出来（f28 实测撞到的正是这个）。
   const v = isVariant(raw) ? raw : wrapValue(raw);
-  // 数学内建类型都塞在 Tag.OBJECT 里，得按实例再分一次（实测 typeof(Vector2(1,2)) → 5）
   if (v.t === Tag.OBJECT && v.v instanceof GVector2) return V.int(5);
   if (v.t === Tag.OBJECT && v.v instanceof GVector3) return V.int(9);
-  // 实测 typeof(Vector2i(1,2)) → 6
   if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
-  // 实测 typeof(Color(1,0,0,1)) → 20
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
-  // 实测 typeof(PackedByteArray(...)) → 29（S168；其余八种 pack 也各有号，但那一族还没实现）
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
-  // 实测 typeof(信号) → 26（模块的、内部类的、赋给变量之后都一样）
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
-  // 实测 typeof(Callable) → 25：绑好的方法、`A.static_fn`、lambda 都算
   if (v.t === Tag.OBJECT && CALLABLE in (v.v as Record<string, unknown>)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }

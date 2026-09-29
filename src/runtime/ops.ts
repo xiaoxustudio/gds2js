@@ -38,7 +38,6 @@ function num(v: Variant): number {
   if (!isNum(v)) {
     throw new UnsupportedError("not-number", `需要数值，收到 ${tagName(v.t)}`);
   }
-  // int 载荷可能是 bigint（超出 2^53）：这里按 Godot 的 float 精度收成 number。
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
@@ -67,30 +66,24 @@ export const ops = {
     if (isNum(a) && isNum(b)) {
       return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x + y) : V.float(num(a) + num(b));
     }
-    // String 与 StringName 混着加都走连接、结果一律是 String（实测 "x" + &"y" → xy、&"a" + &"b" → ab 且 typeof 为 4）
     if (isStringish(a) && isStringish(b)) {
       return V.str((a.v as string) + (b.v as string));
     }
     if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
       return V.array((a.v as GArray).concat(b.v as GArray));
     }
-    // PackedByteArray + PackedByteArray：拼出一个**新**的 pack（实测 f51 t1：[3,1,2] + [7] → [3,1,2,7]）
     const ba = a.t === Tag.OBJECT && a.v instanceof GBytes ? a.v : null;
     const bb = b.t === Tag.OBJECT && b.v instanceof GBytes ? b.v : null;
     if (ba && bb) return bytesConcat(ba, bb);
-    // Vector2 分量加（S13）
     const va = a.t === Tag.OBJECT && a.v instanceof GVector2 ? a.v : null;
     const vb = b.t === Tag.OBJECT && b.v instanceof GVector2 ? b.v : null;
     if (va && vb) return V.object(new GVector2(va.x + vb.x, va.y + vb.y));
     const wa3 = asVec3(a);
     const wb3 = asVec3(b);
-    // Vector3 分量加（实测 (1,2,3)+(0.5,0,0) → (1.5, 2.0, 3.0)）；跟标量混加 Godot 是解析期报错，这里同样不接
     if (wa3 && wb3) return V.object(new GVector3(wa3.x + wb3.x, wa3.y + wb3.y, wa3.z + wb3.z));
-    // Vector2i 只跟 Vector2i 加（实测 `Vector2i + Vector2`、`Vector2i + 1` 都是解析期报错），结果回绕 int32
     const ziAdd = asVec2i(a);
     const zjAdd = asVec2i(b);
     if (ziAdd && zjAdd) return vector2i(add32(ziAdd.x, zjAdd.x), add32(ziAdd.y, zjAdd.y));
-    // Color 只跟 Color 加（实测混 int 是 Parse Error）：(1,2,3,4)+(0.5,0.5,0.5,0.5) → (1.5, 2.5, 3.5, 4.5)
     const caAdd = asColor(a);
     const cbAdd = asColor(b);
     if (caAdd && cbAdd)
@@ -99,7 +92,6 @@ export const ops = {
   },
 
   sub(a: Variant, b: Variant): Variant {
-    // Vector2 相减（实测 Vector2(1,2)-Vector2(3,4) → (-2.0, -2.0)）
     const va = asVec2(a);
     const vb = asVec2(b);
     if (va && vb) return V.object(new GVector2(va.x - vb.x, va.y - vb.y));
@@ -120,20 +112,16 @@ export const ops = {
   },
 
   mul(a: Variant, b: Variant): Variant {
-    // Vector2 * 标量 / 标量 * Vector2（实测 Vector2(1e15,1)*2 → (1999999973982208.0, 2.0)）
     const va = asVec2(a);
     const vb = asVec2(b);
-    // Vector2 * Vector2 是**逐分量**（实测 (3,4)*(-1,2) → (-3.0, 8.0)，不是点积）
     if (va && vb) return V.object(new GVector2(va.x * vb.x, va.y * vb.y));
     if (va && isNum(b)) return V.object(new GVector2(va.x * num(b), va.y * num(b)));
     if (vb && isNum(a)) return V.object(new GVector2(vb.x * num(a), vb.y * num(a)));
     const wa3 = asVec3(a);
     const wb3 = asVec3(b);
-    // 实测逐分量：(2,3,4)*(0.5,1,2) → (1.0, 3.0, 8.0)；标量：(1,2,3)*2.5 → (2.5, 5.0, 7.5)
     if (wa3 && wb3) return V.object(new GVector3(wa3.x * wb3.x, wa3.y * wb3.y, wa3.z * wb3.z));
     if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x * num(b), wa3.y * num(b), wa3.z * num(b)));
     if (wb3 && isNum(a)) return V.object(new GVector3(wb3.x * num(a), wb3.y * num(a), wb3.z * num(a)));
-    // 逐分量；标量是 float 时实测**升级成 Vector2**（(6,6)*0.5 → (3.0, 3.0)、(6,6)/4.0 → (1.5, 1.5)）
     const ziMul = asVec2i(a);
     const zjMul = asVec2i(b);
     if (ziMul && zjMul) return vector2i(mul32(ziMul.x, zjMul.x), mul32(ziMul.y, zjMul.y));
@@ -141,7 +129,6 @@ export const ops = {
     if (zjMul && a.t === Tag.FLOAT) return vec2iToFloat(zjMul, num(a), "mul");
     if (ziMul && isNum(b)) return vector2i(mul32(ziMul.x, intToNum(b.v as IntPayload)), mul32(ziMul.y, intToNum(b.v as IntPayload)));
     if (zjMul && isNum(a)) return vector2i(mul32(zjMul.x, intToNum(a.v as IntPayload)), mul32(zjMul.y, intToNum(a.v as IntPayload)));
-    // Color 的乘法实测三种都行：Color*Color 逐分量、Color*标量、标量*Color（(1,2,3,4)*2 → (2,4,6,8)）
     const caMul = asColor(a);
     const cbMul = asColor(b);
     if (caMul && cbMul)
@@ -156,12 +143,9 @@ export const ops = {
     return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x * y) : V.float(num(a) * num(b));
   },
 
-  /** 两个 int 才走整数除法（向零截断），否则浮点（S1 / S2） */
   div(a: Variant, b: Variant): Variant {
-    // Vector2 / 标量（实测 Vector2(1e15,4)/2 → (499999993495552.0, 2.0)）
     const va = asVec2(a);
     const vb = asVec2(b);
-    // Vector2 / Vector2 也是逐分量，且**不拦除零**（实测 Vector2(1,1)/Vector2(0,0) → (inf, inf)）
     if (va && vb) return V.object(new GVector2(va.x / vb.x, va.y / vb.y));
     if (va && isNum(b)) return V.object(new GVector2(va.x / num(b), va.y / num(b)));
     const wa3 = asVec3(a);
@@ -176,7 +160,6 @@ export const ops = {
       const k = intToNum(b.v as IntPayload);
       return vector2i(div32(ziDiv.x, k), div32(ziDiv.y, k));
     }
-    // Color 的除法实测同乘法三种口径，且 `/0.0` 给 inf 而不是除零错（实测 (1,2,3,4)/0.0 → (inf, inf, inf, inf)）
     const caDiv = asColor(a);
     const cbDiv = asColor(b);
     if (caDiv && cbDiv)
@@ -188,19 +171,15 @@ export const ops = {
     }
     if (bothInt(a, b)) {
       const [x, y] = intPair(a, b);
-      // 注意：零判定必须转 bigint 再比 —— `0n === 0` 是 false，漏转会把除零放过去。
       if (intToBig(y) === 0n) {
         throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
       }
-      // BigInt 的 / 本就向零截断（S1/S2）。
       return i64(x, y, (p, q) => p / q);
     }
     return V.float(num(a) / num(b));
   },
 
-  /** 取模只对 int 合法，符号跟被除数（S3） */
   mod(a: Variant, b: Variant): Variant {
-    // Vector2i 的 % 逐分量、符号跟被除数（实测 (-7,7) % (2,-2) → (-1, 1)、(7,7) % 2 → (1, 1)），除零文本另有一套
     const ziMod = asVec2i(a);
     const zjMod = asVec2i(b);
     if (ziMod && zjMod) return vector2i(mod32(ziMod.x, zjMod.x), mod32(ziMod.y, zjMod.y));
@@ -212,11 +191,9 @@ export const ops = {
     if (intToBig(y) === 0n) {
       throw new GodotRuntimeError("int-mod-zero", "整数取模零");
     }
-    // BigInt 的 % 符号跟被除数，与 S3 一致。
     return i64(x, y, (p, q) => p % q);
   },
 
-  /** 结合性由 emitter 加括号保证（S4） */
   pow(a: Variant, b: Variant): Variant {
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("pow-operands", `** 不支持 ${tagName(a.t)} ** ${tagName(b.t)}`);
@@ -234,15 +211,12 @@ export const ops = {
   },
 
   neg(a: Variant): Variant {
-    // 实测 -Vector2(1.5, 2) → (-1.5, -2.0)
     const va = asVec2(a);
     if (va) return V.object(new GVector2(-va.x, -va.y));
     const wa3 = asVec3(a);
     if (wa3) return V.object(new GVector3(-wa3.x, -wa3.y, -wa3.z));
     const ziNeg = asVec2i(a);
-    // 实测 -Vector2i.MIN 还是 -2147483648（回绕），不是正数
     if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
-    // 实测 -Color(1,-2,0,0.5) → (0.0, 3.0, 1.0, 0.5)：一元负号是「反色」，且 alpha 原样留着
     const caNeg = asColor(a);
     if (caNeg) return color(1 - caNeg.r, 1 - caNeg.g, 1 - caNeg.b, caNeg.a);
     if (!isNum(a)) {
@@ -250,8 +224,6 @@ export const ops = {
     }
     return a.t === Tag.INT ? V.int(-intToBig(a.v as IntPayload)) : V.float(-(a.v as number));
   },
-
-  // ---- 比较 ----
 
   eq(a: Variant, b: Variant): Variant {
     return V.bool(valueEq(a, b));
@@ -272,12 +244,9 @@ export const ops = {
     return V.bool(compare(a, b) >= 0);
   },
 
-  /** 空容器 / 0 / "" 全为 false（S12） */
   truthy(a: Variant): boolean {
     return truthyOf(a);
   },
-
-  // ---- 位运算：全程 bigint，int64 语义由 wrap64 保证（不再 Number() 来回，那正是 1<<62 失精的地方）----
 
   band(a: Variant, b: Variant): Variant {
     const [x, y] = intPair(a, b);
@@ -306,8 +275,6 @@ export const ops = {
     return V.int(intToBig(x) >> intToBig(y));
   },
 
-  // ---- 其他 ----
-
   inOp(a: Variant, b: Variant): Variant {
     if (b.t === Tag.ARRAY) return V.bool((b.v as GArray).has(a));
     if (b.t === Tag.DICT) return V.bool((b.v as GDict).has(a));
@@ -328,8 +295,6 @@ export const ops = {
 
 function compare(a: Variant, b: Variant): number {
   if (isNum(a) && isNum(b)) {
-    // 两个 int 必须按 bigint 比：收成 number 会把 2^62 与 2^62+1 折成同一个 double，
-    // 于是 `<` 静默判成 false（055 实测抓到）。掺 float 时才按 Godot 的 double 语义收成 number。
     if (a.t === Tag.INT && b.t === Tag.INT) {
       const x = intToBig(a.v as IntPayload);
       const y = intToBig(b.v as IntPayload);
@@ -340,29 +305,20 @@ function compare(a: Variant, b: Variant): number {
     return x === y ? 0 : x < y ? -1 : 1;
   }
   if (a.t === Tag.STRING && b.t === Tag.STRING) {
-    // 按码点比（JS 原生的 < 按 UTF-16 码元，含 emoji 时会与 Godot 判出相反方向）
     return strCmp(a.v as string, b.v as string);
   }
-  // 掺进 StringName 就没有可复刻的排序口径（实测，见 SEMANTICS「StringName」）：
-  // 混族比较 Godot 当场炸（Invalid operands 'StringName' and 'String' in operator '<'），
-  // 同族比较又不按内容排（&"zzz" < &"abc" 为真）、不按 .hash()、不按字面量出现顺序 ——
-  // 是引擎内部的指针/桶位序，随版本和内部表大小变。宁缺不猜。
   if (isStringish(a) && isStringish(b)) {
     throw new UnsupportedError(
       "compare-string-name",
       `StringName 的 < / > 按 Godot 内部指针序，无可靠口径（实测 &"zzz" < &"abc" 为真），拒绝${tagName(a.t)} 与 ${tagName(b.t)} 比大小`,
     );
   }
-  // Vector2 比较是**字典序**（先 x 再 y），不是"每个分量都更大"。判别点实测：
-  // (3,4) > (2,5) → true（x 已胜出，y 更小也不影响）、(3,4) < (4,3) → true。
   const va = asVec2(a);
   const vb = asVec2(b);
   if (va && vb) return vecCmp(va, vb);
-  // Vector3 也是字典序，只是多一个 z（实测 (1,3,0)<(2,0,0) 真、(0,1,9)<(0,2,0) 真）
   const wa3 = asVec3(a);
   const wb3 = asVec3(b);
   if (wa3 && wb3) return vec3Cmp(wa3, wb3);
-  // Color 压根没有大小（实测 `c1 < c2` / `>` 都是 Parse Error），问到即响
   if (asColor(a) !== null || asColor(b) !== null) colorCmp();
   const ziCmp = asVec2i(a);
   const zjCmp = asVec2i(b);

@@ -1,10 +1,3 @@
-/**
- * ops / fast 的自校验。期望值全部来自 corpus/cases 的 godot.txt（Godot 4.6.3 实测），
- * 不是我凭印象写的。跑：node_modules/.bin/tsx tools/ops-check.ts
- *
- * 注意：这不是差分测试台的替代 —— 它只校验运行时算子，
- * 真正的端到端对比要等 emitter 落地后由 tools/js-runner.mjs 驱动。
- */
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
@@ -97,32 +90,27 @@ const F = V.float;
 const S = V.str;
 const showOp = (v: { t: number; v: unknown }) => show(v as never);
 
-// ---- 001 整数除法（向零截断）
 eq("001", "5/2", show(ops.div(I(5), I(2))), "2");
 eq("001", "-5/2", show(ops.div(I(-5), I(2))), "-2");
 eq("001", "5/2.0", show(ops.div(I(5), F(2))), "2.5");
 eq("001", "7.0/2", show(ops.div(F(7), I(2))), "3.5");
 eq("001", "-7/2", show(ops.div(I(-7), I(2))), "-3");
 
-// ---- 002 int/float 的 str 必须不同（S7）
 eq("002", "str(1)", show(I(1)), "1");
 eq("002", "str(1.0)", show(F(1)), "1.0");
 eq("002", "str(2.5)", show(F(2.5)), "2.5");
 eq("002", "float赋给int变量(3.9)", fast.intCast(3.9), 3);
 eq("002", "float(7)/2", show(ops.div(F(7), I(2))), "3.5");
 
-// ---- 003 取模符号跟被除数
 eq("003", "-7%3", show(ops.mod(I(-7), I(3))), "-1");
 eq("003", "7%-3", show(ops.mod(I(7), I(-3))), "1");
 eq("003", "7%3", show(ops.mod(I(7), I(3))), "1");
 shouldThrow("003", "7.5%3（float 取模，Godot 编译期就拒）", () => ops.mod(F(7.5), I(3)));
 
-// ---- 004 ** 左结合（S4）
 eq("004", "2**3**2", show(ops.pow(ops.pow(I(2), I(3)), I(2))), "64");
 eq("004", "2**3", show(ops.pow(I(2), I(3))), "8");
 eq("004", "2.0**0.5", show(ops.pow(F(2), F(0.5))), "1.4142135623731");
 
-// ---- 005 / 006 / 016 int64：装箱轨走 BigInt，期望值取自这三个 case 的 godot.txt（Godot 实测）
 eq("005", "int64max 原样表示", show(I(9223372036854775807n)), "9223372036854775807");
 eq("005", "int64min 原样表示", show(I(-9223372036854775808n)), "-9223372036854775808");
 eq("005", "int64max-1 加 1", show(ops.add(I(9223372036854775806n), I(1))), "9223372036854775807");
@@ -135,21 +123,16 @@ eq(
 );
 eq("016", "1<<62 精确不丢位", show(ops.shl(I(1), I(62))), "4611686018427387904");
 
-// 归一化不变式：能安全用 number 表达的值绝不留 bigint —— 否则 1 与 1n 会裂成两个字典键、=== 也会分裂
 eq("005", "2^53 内存 number", typeof I(1).v, "number");
 eq("005", "超出才留 bigint", typeof I(9223372036854775807n).v, "bigint");
 eq("005", "运算后落回 2^53 内自动降回 number", typeof ops.sub(I(9223372036854775807n), I(9223372036854775806n)).v, "number");
 
-// 比较必须走 bigint：收成 number 会把 2^62 与 2^62+1 折成同一个 double（055 差分实测抓到过静默错）
 eq("055", "2^62 < 2^62+1 精确成立", show(ops.lt(I(4611686018427387904n), I(4611686018427387905n))), "true");
 eq("055", "2^62 与 2^62+1 不相等", show(ops.eq(I(4611686018427387904n), I(4611686018427387905n))), "false");
 eq("055", "小 int 与 int64max 比较", show(ops.lt(I(1), I(9223372036854775807n))), "true");
 
-// 解箱快路径的 2^53 边界是**有意保留**的响亮抛错（D1 修订版）：越界必须炸，不能静默回绕
 shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(9007199254740991, 1));
 
-// ---- 数组下标：Godot 支持**负索引**（从尾部数），读写同规则；越界一律响亮报错、绝不扩数组。
-// 期望值全部来自 056/057 的 godot.txt（含 a[-1]=9 → [1,2,9]、a[5]=9 → SCRIPT ERROR 两次探针）。
 {
   const g = GArray.of([I(1), I(2), I(3)]);
   eq("056", "装箱 a[-1] 读末格", show(g.get(-1)), "3");
@@ -164,9 +147,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   try {
     g.set(5, I(0));
   } catch {
-    /* 预期抛错 */
   }
-  // JS 原生 items[5]=v 会把数组撑到 6 格（Godot 是 SCRIPT ERROR）—— 这条钉住"没被撑长"。
   eq("056", "写越界被拒后数组长度不变", g.size(), 3);
 }
 {
@@ -185,9 +166,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
 }
 
-// ---- step 56：容器变更方法的**裸轨**与**装箱轨**逐步对齐。
-// 装箱轨的每条口径都是 Godot 实测过的（114-array-mutation-status / 115-raw-mutation-paths 的 golden），
-// 所以这里不需要新的"我认为对"：只要两条轨跑同一串操作得到同一串状态码与同一个末态，裸轨就是安全的。
 {
   type MutOp = { op: string; i?: number; v?: number };
   const runMut = (title: string, prog: MutOp[]): void => {
@@ -201,7 +179,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
           box.push(show(method(g, "insert", [V.int(s.i!), V.int(s.v!)])));
           raw.push(String(fast.rawArrInsert(a, s.i!, s.v!)));
           break;
-        // void 与"结果被丢弃的 pop"两边都只记一个占位符：裸轨拿不到返回值，正是它只在丢弃时才合法的理由。
         case "remove_at":
           method(g, "remove_at", [V.int(s.i!)]);
           fast.rawArrRemoveAt(a, s.i!);
@@ -260,8 +237,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
           throw new Error(`未知的操作 ${s.op}`);
       }
     }
-    // 装箱轨 print 数组是 `[1, 2, 3]`，裸轨拼成同样的形状再比。装箱轨是参照（Godot 实测过），
-    // 所以它当"期望"，裸轨当"实得"。
     eq("step56", title, `[${a.join(", ")}] ${raw.join(" ")}`, `${show(g)} ${box.join(" ")}`);
   };
 
@@ -303,8 +278,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("step56", "裸 get(k,def) 与装箱同值（缺键给默认）", String(fast.rawDictGetOr(dm, "j", 7)), show(method(dg, "get", [V.str("j"), V.int(7)])));
 }
 
-// ---- 061 字符串比较：Godot 按码点（UTF-32），JS 原生按 UTF-16 码元 → 代理对会判反方向。
-// 期望值取自 061-string-order 的 godot.txt（String.chr(0x1F600) vs String.chr(0xFFFF) 探针实测）。
 {
   const EMO = String.fromCodePoint(0x1f600);
   const S = (s: string) => V.str(s);
@@ -312,7 +285,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("061", "U+FFFF < 😀 为 true", show(ops.lt(S("\uFFFF"), S(EMO))), "true");
   eq("061", "😀 > U+FFFF 为 true", show(ops.gt(S(EMO), S("\uFFFF"))), "true");
   eq("061", "z < 😀 为 true", show(ops.lt(S("z"), S(EMO))), "true");
-  // 无代理对的日常文本走原生快路，方向必须照旧
   eq("061", "快路 apple < z", show(ops.lt(S("apple"), S("z"))), "true");
   eq("061", "快路 前缀短者小", show(ops.lt(S("ab"), S("abc"))), "true");
   eq("061", "快路相等", show(ops.eq(S("abc"), S("abc"))), "true");
@@ -326,7 +298,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   );
 }
 
-// ---- 063 `%` 格式化：063 语料锁住"能格式化的"，这里锁住"必须响亮拒绝的"
 {
   const F = (fmt: string, args: unknown[]) => strFormat(fmt, args as never);
   eq("063", "%f 默认 6 位小数", F("%f", [V.float(3.5)]), "3.500000");
@@ -335,7 +306,6 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("063", "%% 出字面百分号", F("50%% of %d", [V.int(7)]), "50% of 7");
   eq("063", "%05d 负数符号在前", F("%05d", [V.int(-42)]), "-0042");
   eq("063", "%x 负数给符号加绝对值", F("%x", [V.int(-1)]), "-1");
-  // Godot 对这些是 Parse Error: unsupported format character —— 我们运行期响亮抛，绝不原样留在输出里
   shouldThrow("063", "%i 不支持要抛", () => F("%i", [V.int(1)]));
   shouldThrow("063", "%e 不支持要抛", () => F("%e", [V.float(1)]));
   shouldThrow("063", "%g 不支持要抛", () => F("%g", [V.float(1)]));
@@ -344,14 +314,9 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   shouldThrow("063", "%f 收字符串要抛", () => F("%f", [V.str("abc")]));
   shouldThrow("063", "%x 收 float 未实测要抛", () => F("%x", [V.float(3.5)]));
   shouldThrow("063", "参数不足要抛", () => F("%d %d", [V.int(1)]));
-  // Godot 的怪规则：实参多于转换符（数组右值）→ 原样返回格式串
   eq("063", "实参多余则原样返回格式串", F("%d", [V.int(1), V.int(2)]), "%d");
 }
 
-// ---- 064 浮点渲染的特殊值。inf/-inf/nan 钉在这里而不是语料里：
-// 语料曾把 `var z=0.0; print(1.0/z); print(-1.0/z)` 两行跑出**符号互换**的 golden（两次都一致），
-// 但同样的两行单独成文件时 Godot 给的是正确的 inf/-inf（我们的产物也逐字节一致），隔离复现不出那个
-// 转置 —— 所以不拿它去改运行时，只把渲染本身按实测钉死。
 eq("064", "inf 渲染", strFloat(Infinity), "inf");
 eq("064", "-inf 渲染", strFloat(-Infinity), "-inf");
 eq("064", "nan 渲染", strFloat(NaN), "nan");
@@ -364,7 +329,6 @@ eq(
   "10000000000000001" + "0".repeat(284) + ".0",
 );
 
-// ---- 066 Vector2 是 float32 存储 + 专用的 6 位小数打印（Godot real_t=float，探针实测）
 {
   const v = new GVector2(1e15, 0.1);
   eq("066", "构造即落 float32（1e15）", v.x, 999999986991104);
@@ -378,7 +342,6 @@ eq(
   eq("066", "Vector2 相等按 float32 分量", show(ops.eq(V.object(v), V.object(new GVector2(1e15, 0.1)))), "true");
 }
 
-// ---- 068 Vector2 成员面：每步都舍回 float32（不是"算完再舍"），逐条探针实测
 {
   const m = (x: number, y: number) => (name: string, args: Variant[] = []) =>
     show(vector2Method(new GVector2(x, y), name, args));
@@ -403,7 +366,6 @@ eq(
   shouldThrow("068", "下标越界", () => vecReadIndex(new GVector2(3, 4), I(2)));
   shouldThrow("068", "一个参数的 Vector2()", () => vector2New([I(1)]));
   shouldThrow("068", "Vector2.NAN 不存在", () => vector2Const("NAN"));
-  // step 41 把这三条从「报缺」变成了实测值（期望全部取自 093 的 golden）
   eq("093", "slerp 是极坐标插值", a("slerp", [vector2(1, 2), F(0.5)]), "(1.902113, 3.077683)");
   eq("093", "slerp 端点是零向量走 lerp", m(0, 0)("slerp", [vector2(1, 0), F(0.5)]), "(0.5, 0.0)");
   eq("093", "slerp 直角给对称结果", m(1, 0)("slerp", [vector2(0, 1), F(0.5)]), "(0.707107, 0.707107)");
@@ -425,7 +387,6 @@ eq(
   );
 }
 
-// ---- 007 数组是共享引用，duplicate 才拷贝（S9）
 {
   const a = GArray.of([I(1), I(2)]);
   const b = a;
@@ -436,7 +397,6 @@ eq(
   eq("007", "duplicate 后 a 不受影响", show(V.array(a)), "[1, 2, 3]");
 }
 
-// ---- 009 深度比较（S10 / S11）
 eq("009", "[1,2]==[1,2]", show(ops.eq(V.array(GArray.of([I(1), I(2)])), V.array(GArray.of([I(1), I(2)])))), "true");
 {
   const d1 = new GDict();
@@ -448,7 +408,6 @@ eq("009", "[1,2]==[1,2]", show(ops.eq(V.array(GArray.of([I(1), I(2)])), V.array(
 eq("009", "1.0==1", show(ops.eq(F(1), I(1))), "true");
 eq("009", "1==1.0", show(ops.eq(I(1), F(1))), "true");
 
-// ---- 010 truthiness：空容器 / 0 / "" 全为 false（S12）
 eq("010", "not not []", ops.truthy(V.array(GArray.of([]))), false);
 eq("010", "not not {}", ops.truthy(V.dict(new GDict())), false);
 eq("010", "not not 0", ops.truthy(I(0)), false);
@@ -457,13 +416,11 @@ eq("010", "not not \"\"", ops.truthy(S("")), false);
 eq("010", "not not [0]", ops.truthy(V.array(GArray.of([I(0)]))), true);
 eq("010", "not not \"0\"", ops.truthy(S("0")), true);
 
-// ---- 011 + 按类型分派（S13）
 eq("011", "[1]+[2]", show(ops.add(V.array(GArray.of([I(1)])), V.array(GArray.of([I(2)])))), "[1, 2]");
 eq("011", "\"a\"+\"b\"", show(ops.add(S("a"), S("b"))), "ab");
 eq("011", "1+2.5", show(ops.add(I(1), F(2.5))), "3.5");
 shouldThrow("011", "Vector2 相加（未实现，Tier 1 不做）", () => ops.add(F(1), S("x")));
 
-// ---- 012 字典键必须区分 int / float / string（S14）
 {
   const d = new GDict();
   d.set(I(1), S("int"));
@@ -476,7 +433,6 @@ shouldThrow("011", "Vector2 相加（未实现，Tier 1 不做）", () => ops.ad
   eq("012", "字典打印", show(V.dict(d)), '{ 1: "int", 1.0: "float", "1": "str" }');
 }
 
-// ---- 016 位运算（int32 范围内）
 eq("016", "255&15", show(ops.band(I(255), I(15))), "15");
 eq("016", "~5", show(ops.bnot(I(5))), "-6");
 eq("016", "8>>1", show(ops.shr(I(8), I(1))), "4");
@@ -484,18 +440,14 @@ eq("016", "6|9", show(ops.bor(I(6), I(9))), "15");
 eq("016", "6^9", show(ops.bxor(I(6), I(9))), "15");
 shouldThrow("016", "负操作数移位（Godot 编译期就拒）", () => ops.shr(I(-1), I(1)));
 
-// ---- 017 浮点特殊值
 eq("017", "str(0.0/0.0)", strOps.float(NaN), "nan");
 eq("017", "1.0/0.0", strOps.float(Infinity), "inf");
 eq("017", "-1.0/0.0", strOps.float(-Infinity), "-inf");
-// 旧实现按 **14 位**有效数字，实测 Godot 是 **15 位** —— 下面三条都是先前会静默少一位的（064/探针实测）。
 eq("064", "15 位有效数字", strFloat(1.2345678901234567), "1.23456789012346");
 eq("064", "12345.678901234567", strFloat(12345.678901234567), "12345.6789012346");
 eq("064", "小数位夹到 2 位", strFloat(1234567890123.45), "1234567890123.45");
-// 整数值浮点走精确展开（实测 1e13/1e17/1e21/1e30 都是"数字全展开 + .0"）
 eq("017", "1e30 整数值精确展开", strFloat(1e30), "1000000000000000000000000000000.0");
 
-// ---- 018 String（UTF-32 语义 S26）
 eq("018", "\"hello\"[0]", strOps.at("hello", 0), "h");
 eq("018", "length()", strOps.length("hello"), 5);
 eq("018", "substr(1,3)", strOps.substr("hello", 1, 3), "ell");
@@ -503,7 +455,6 @@ eq("018", "to_upper()", strCase("hello", "upper"), "HELLO");
 eq("018", "\"%d/%s\"%[5,\"x\"]", strOps.format("%d/%s", [I(5), S("x")]), "5/x");
 eq("018", "UTF-32 length（emoji 算 1 个码点）", strOps.length("a\u{1F600}"), 2);
 
-// ---- 019 in
 eq("019", "2 in [1,2]", show(ops.inOp(I(2), V.array(GArray.of([I(1), I(2)])))), "true");
 eq("019", "\"e\" in \"hello\"", show(ops.inOp(S("e"), S("hello"))), "true");
 eq("019", "9 in [1,2]", show(ops.inOp(I(9), V.array(GArray.of([I(1), I(2)])))), "false");
@@ -513,7 +464,6 @@ eq("019", "9 in [1,2]", show(ops.inOp(I(9), V.array(GArray.of([I(1), I(2)])))), 
   eq("019", "\"k\" in {\"k\":1}", show(ops.inOp(S("k"), V.dict(d))), "true");
 }
 
-// ---- fast.* 与 ops.* 必须一致（双轨不能分叉）
 eq("fast", "iDiv 与 ops.div 一致", fast.iDiv(-7, 2), -3);
 eq("fast", "iMod 与 ops.mod 一致", fast.iMod(-7, 3), -1);
 eq("fast", "strInt vs strFloat", `${fast.strInt(1)}/${fast.strFloat(1)}`, "1/1.0");
@@ -521,7 +471,6 @@ eq("fast", "eqDeep 与 ops.eq 一致", fast.eqDeep(I(1), F(1)), true);
 eq("fast", "truthyArr 与 ops.truthy 一致", fast.truthyArr(GArray.of([])), false);
 shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 
-// ---- 070 Array 排序 / 检索族（期望值取自 070-array-ordering 的 godot.txt）
 {
   const nums = GArray.of([I(3), F(1.5), I(1)]);
   nums.sort();
@@ -555,7 +504,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("070", "字典序比较不是逐分量", vecCmp(new GVector2(3, 4), new GVector2(2, 5)), 1);
 }
 
-// ---- 071 字典键的类型面（期望值取自 071-dict-key-types 的 godot.txt）
 {
   eq("071", "int 1 与 float 1.0 是两个键", keyOf(I(1)) !== keyOf(F(1)), true);
   eq("071", "bool true 又是第三个键", keyOf(V.bool(true)) !== keyOf(I(1)), true);
@@ -566,13 +514,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   d.set(I(1), S("a"));
   d.set(F(1), S("b"));
   eq("071", "1 与 1.0 各自存得住", `${show(d.get(I(1)))}/${show(d.get(F(1)))}/${d.size()}`, "a/b/2");
-  // step 39 推翻了这条旧断言：容器实测**能**当键（090 实测），桶就是内容的结构编码
   eq("090", "数组键走 c: 内容桶", keyOf(V.array(GArray.of([I(1)]))), "c:[i:1]");
   eq("090", "空数组与空字典不是同一个桶", keyOf(V.array(GArray.of([]))) === keyOf(V.dict(new GDict())), false);
 }
 
-// ---- 072 to_upper/to_lower 走简单映射：长度不变，且单码点答案以 Godot 实测表为准
-// （表由 tools/case-probe.mjs + tools/golden.mjs 000-probe-cs + tools/case-table.mjs 生成）
 {
   eq("072", "\u00DF 上档保持", strCase("\u00DF", "upper"), "\u00DF");
   eq("072", "\u00DF 下档保持", strCase("\u00DF", "lower"), "\u00DF");
@@ -596,7 +541,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("072", "无映射字符两边都保持", strCase("\u4E2D\u{1F600}", "upper"), "\u4E2D\u{1F600}");
 }
 
-// ---- 073/074 range 的参数归一（实测：float 向零截断、bool 当 0/1、截断后步长为 0 是运行错）
 {
   const R = (...vs: Variant[]) => show(V.array(range(vs)));
   eq("073", "range(0.5, 2.5) 两端各截断", R(F(0.5), F(2.5)), "[0, 1]");
@@ -613,7 +557,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("074", "Vector2 不能当步长", () => range([I(0), I(3), vector2(1, 1)]));
 }
 
-// ---- 076 String 的静态成员（实测：参数向零截断；0/负数/代理区/越界一律换成 U+FFFD）
 {
   const S = (v: Variant) => v.v as string;
   const str = (x: string) => V.str(x);
@@ -641,7 +584,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("076", "String() 只接受一个参数", () => stringCtor([]));
 }
 
-// ---- 077 num_scientific 的临界与两位指数；md5 与 Godot/Node 三方对齐
 {
   const SC = (n: number) => ((stringStatic("num_scientific", [F(n)]) as Variant).v as string);
   eq("077", "num_scientific(1e-7) 指数补两位", SC(1e-7), "1e-07");
@@ -660,7 +602,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("077", "md5 64 字节分块边界", md5Hex("a".repeat(64)), "014842d480b571495a4a0363793f7367");
 }
 
-// ---- 078 humanize_size：档位停在「严格 > 1024」、小数位 2/1/0、按 uint64 解释参数
 {
   const HZ = (v: Variant) => ((stringStatic("humanize_size", [v]) as Variant).v as string);
   eq("078", "0 给 0 B", HZ(I(0)), "0 B");
@@ -675,7 +616,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("078", "humanize_size 缺参数要响", () => stringStatic("humanize_size", []));
 }
 
-// ---- 079 StringName：同值即同键、print 裸串、容器里带 &"…"，但它不是 String，且排序口径不可复刻
 {
   const sn = (x: string) => V.stringName(x);
   eq("079", "print 是裸串", show(sn("abc")), "abc");
@@ -702,9 +642,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("079", "StringName(42) 没有这个构造器", () => stringNameCtor([I(1)]));
 }
 
-// ---- 079 顺带钉住的 String 方法面：left/right/contains/is_empty/split/substr 的边界，期望值全取自 079 的 godot.txt
 {
-  const EMO = String.fromCodePoint(0x1f45d); // 💝 = String.chr(128157)
+  const EMO = String.fromCodePoint(0x1f45d);
   const sm = (base: string, name: string, args: Variant[]) => method(S(base), name, args);
   const L = (n: number, base = "abc") => show(sm(base, "left", [I(n)]));
   const R = (n: number, base = "abc") => show(sm(base, "right", [I(n)]));
@@ -736,13 +675,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("079", "空分隔符逐码点切", SP("abc", ""), '["a", "b", "c"]');
   eq("079", "分隔符不命中给整串", SP("abc", "x"), '["abc"]');
   eq("079", "含 emoji 的串按码点切", SP(`${EMO}x${EMO}`, "x"), `["${EMO}", "${EMO}"]`);
-  // 半个代理对当分隔符：Godot 的 UTF-32 里没有这个码点，整串原样返回；JS 原生 split 会把 emoji 截断
   eq("079", "孤立代理元分隔符不截断 emoji", SP(`${EMO}ab`, String.fromCharCode(0xd83d)), `["${EMO}ab"]`);
-  // 第 3 参在 step 45 按 46 个实测点亮起来（口径见 099 那块），旧断言跟着换成值断言
   eq("079", "max_splits 现在给值、不再报缺", show(method(V.str("a,b,c"), "split", [V.str(","), V.bool(true), V.int(1)])), "[\"a\", \"b,c\"]");
 }
 
-// ---- 080/081 容器结构方法与「身份 vs ==」两套口径（期望值取自 080/081 的 godot.txt）
 {
   const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
   const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
@@ -755,7 +691,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     return V.dict(g);
   };
 
-  // insert：越界是静默不插入，但 at == size 恰好尾接；负数从尾部折算
   const ins = arrOf([I(1), I(2), I(3)]);
   call(ins, "insert", [I(0), I(9)]);
   eq("080", "insert(0) 插到最前", show(ins), "[9, 1, 2, 3]");
@@ -776,7 +711,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   call(fresh, "insert", [I(0), I(1)]);
   eq("080", "空数组 insert(0) 给一格", show(fresh), "[1]");
 
-  // pop 族：越界给 null 而且不改数组
   const pp = arrOf([I(1), I(2), I(3)]);
   eq("080", "pop_front 给值并移除", show(call(pp, "pop_front")), "1");
   eq("080", "pop_back 给值并移除", show(call(pp, "pop_back")), "3");
@@ -792,7 +726,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("080", "空数组 pop_back 给 null", show(call(empt, "pop_back")), "<null>");
   eq("080", "空数组 pop_at 给 null", show(call(empt, "pop_at", [I(0)])), "<null>");
 
-  // remove_at / erase / clear / reverse
   const rm = arrOf([I(1), I(2), I(3)]);
   call(rm, "remove_at", [I(0)]);
   eq("080", "remove_at(0)", show(rm), "[2, 3]");
@@ -820,7 +753,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("080", "clear 清空", `${show(rv)}/${show(call(rv, "is_empty"))}`, "[]/true");
   eq("080", "is_empty 对非空是 false", show(call(arrOf([I(1)]), "is_empty")), "false");
 
-  // fill：所有格是同一个引用（实测改 src 会串进每一格）
   const fl = arrOf([I(1), I(2)]);
   const srcArr = arrOf([I(9)]);
   call(fl, "fill", [srcArr]);
@@ -828,7 +760,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   call(srcArr, "assign", [arrOf([I(5)])]);
   eq("080", "改源数组会串进每一格", show(fl), "[[5], [5]]");
 
-  // slice：17 条实测边界
   const SL = (begin: number, end?: number, step?: number, deep?: boolean) =>
     show(
       call(
@@ -867,7 +798,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   call(deepCut, "assign", [arrOf([V.array(GArray.of([I(9)]))])]);
   eq("080", "slice(..., true) 深切：改不到原表", show(sh3), "[[1], [2]]");
 
-  // duplicate / append_array / assign 的引用口径
   const dupSrc = arrOf([arrOf([I(1)])]);
   const shallowInner = call(call(dupSrc, "duplicate"), "pop_front") as Variant;
   call(shallowInner, "erase", [I(1)]);
@@ -897,7 +827,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   call(call(nsrc, "pop_front"), "erase", [I(1)]);
   eq("080", "assign 的元素仍共享", show(asg2), "[[]]");
 
-  // 身份 vs ==：has / find / rfind / count 用身份，运算符 == 用 valueEq
   const idn = arrOf([I(1), F(1), B(true), N, V.stringName("a")]);
   eq("080", "has 命中 int 1", show(call(idn, "has", [I(1)])), "true");
   eq("080", "has 命中 float 1.0", show(call(idn, "has", [F(1)])), "true");
@@ -914,7 +843,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("080", "Vector2 按分量身份", show(call(arrOf([vec(1, 2)]), "count", [vec(1.0, 2.0)])), "1");
   eq("080", "1 == 1.0 运算符仍是真（口径不同）", show(ops.eq(I(1), F(1))), "true");
 
-  // find 的 from 不折负数；rfind 先折算、折完仍越界才退回整段
   const fr = arrOf([I(1), I(2), I(1), I(2)]);
   eq("080", "find 默认从头", show(call(fr, "find", [I(1)])), "0");
   eq("080", "find(1,1) 从下标 1 往后", show(call(fr, "find", [I(1), I(1)])), "2");
@@ -931,7 +859,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   call(ru, "resize", [I(3)]);
   eq("080", "未定型数组 resize 填 null", show(ru), "[1, <null>, <null>]");
 
-  // Dictionary：erase 返回 bool、merge 默认不覆盖、has_all/find_key/get 缺省
   const dm = new GDict();
   dm.set(S("a"), I(1));
   dm.set(S("b"), I(2));
@@ -990,12 +917,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("080", "Array.has_all 不存在（实测 Nonexistent function）", () => call(fr, "has_all", [arrOf([I(1)])]));
 }
 
-// ---- 082 Callable 参数族：短路、调用失败（实参个数对不上）的各家口径、reduce 的 acc 规则
 {
   const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
   const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
   const A = arrOf([I(1), I(2), I(3), I(4)]);
-  // 声明 1 个形参的谓词 / 声明 2 个的比较器；JS 箭头函数的 length 就是 Godot 那份声明的实参个数
   const one = (f: (x: Variant) => boolean) => callable((x: Variant) => V.bool(f(x)));
   const two = (f: (a: Variant, b: Variant) => Variant) => callable((a: Variant, b: Variant) => f(a, b));
   const isGt2 = (x: Variant) => (x.v as number) > 2;
@@ -1010,7 +935,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("082", "all 有一个不过就 false", show(call(A, "all", [one(isGt2)])), "false");
   eq("082", "空数组 any 假", show(call(arrOf([]), "any", [one(() => true)])), "false");
   eq("082", "空数组 all 真", show(call(arrOf([]), "all", [one(() => false)])), "true");
-  // 短路：数一下实际被调用过几次
   let hits = 0;
   call(A, "any", [one((x) => { hits++; return (x.v as number) > 2; })]);
   eq("082", "any 命中就停（1、2、3 三次）", hits, 3);
@@ -1032,8 +956,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("082", "reduce 单元素省略 acc", show(call(arrOf([I(5)]), "reduce", [two((a, x) => V.int((a.v as number) + (x.v as number)))])), "5");
   eq("082", "reduce 空数组带 acc 给 acc", show(call(arrOf([]), "reduce", [two((a) => a), I(5)])), "5");
   eq("082", "reduce 空数组省略 acc 给 null", show(call(arrOf([]), "reduce", [two((a) => a)])), "<null>");
-  // 调用失败（实参个数对不上）：Godot 只打 stderr 诊断，各方法把「没有结果」解释成自己的口径
-  // 声明 0 个形参：Godot 会判「实参个数对不上」，整次调用失败
   const wrongArity = callable(() => V.bool(true));
   eq("082", "map 遇到调用失败就不收这一格", show(call(A, "map", [wrongArity])), "[]");
   eq("082", "filter 遇到调用失败全丢", show(call(A, "filter", [wrongArity])), "[]");
@@ -1041,20 +963,17 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("082", "all 遇到调用失败也给 false", show(call(A, "all", [wrongArity])), "false");
   eq("082", "find_custom 遇到调用失败给 -1", show(call(A, "find_custom", [wrongArity])), "-1");
   eq("082", "reduce 遇到调用失败整表给 null", show(call(A, "reduce", [wrongArity, I(0)])), "<null>");
-  // 比较器同理：1 形参的 Callable 对 sort_custom 永远不成立 → 实测原序不动
   const unsorted = arrOf([I(2), I(1)]);
   call(unsorted, "sort_custom", [one(() => true)]);
   eq("082", "实参个数不对的比较器保持原序", show(unsorted), "[2, 1]");
   shouldThrow("082", "filter 的非 Callable 实参要响", () => call(A, "filter", [I(1)]));
 }
 
-// ---- 083 定型容器：元素类型跟着值走、转换矩阵、resize 默认值、检索先收本类型
 {
   const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
   const typed = (kind: string, xs: Variant[]) => stampArray(V.array(GArray.of(xs)), kind as never, true);
   const SHOW = (v: Variant | null) => (v === null ? "<reject>" : show(v));
 
-  // 转换矩阵（null 表示 Godot 的 typed.validate 失败 → 整次操作作废）
   eq("083", "int ← float 向零截断", SHOW(elemConvert("int", F(2.9))), "2");
   eq("083", "int ← 负 float 也向零", SHOW(elemConvert("int", F(-1.9))), "-1");
   eq("083", "int ← 越界 float 饱和到 INT64_MIN", SHOW(elemConvert("int", F(1e20))), "-9223372036854775808");
@@ -1071,7 +990,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "Vector2 ← int 拒绝", SHOW(elemConvert("Vector2", I(1))), "<reject>");
   eq("083", "Array ← Dictionary 拒绝", SHOW(elemConvert("Array", V.dict(new GDict()))), "<reject>");
 
-  // resize 的填充值（实测 8 种）
   const defOf = (kind: string) => show(elemDefault(kind as never));
   eq("083", "int 默认 0", defOf("int"), "0");
   eq("083", "float 默认 0.0", defOf("float"), "0.0");
@@ -1082,7 +1000,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "Array 默认 []", defOf("Array"), "[]");
   eq("083", "Dictionary 默认 {  }", defOf("Dictionary"), "{  }");
 
-  // 装元素：能转就转、不能转就不进去
   const ai = typed("int", [I(1), F(2.5), V.bool(true)]);
   eq("083", "字面量初值逐格转换", show(ai), "[1, 2, 1]");
   call(ai, "append", [F(4.9)]);
@@ -1095,7 +1012,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "insert 被拒时数组不动", show(ai), "[9, 1, 2, 1, 4]");
   call(ai, "fill", [F(5.7)]);
   eq("083", "fill 转换后填满", show(ai), "[5, 5, 5, 5, 5]");
-  // 检索值先收成本类型（与未定型数组的 -1 形成对照，见 080）
   const q = typed("int", [I(1), I(2)]);
   eq("083", "定型数组 find(1.0) 命中", show(call(q, "find", [F(1)])), "0");
   eq("083", "定型数组 count(1.0) 计数", show(call(q, "count", [F(1)])), "1");
@@ -1104,7 +1020,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "定型数组 find(\"s\") 收不下 → -1", show(call(q, "find", [S("s")])), "-1");
   call(q, "erase", [F(2.5)]);
   eq("083", "erase 也先收成本类型", show(q), "[1]");
-  // resize
   const rz = typed("int", [I(1)]);
   call(rz, "resize", [I(3)]);
   eq("083", "resize 扩张填类型默认值", show(rz), "[1, 0, 0]");
@@ -1113,7 +1028,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const rzu = V.array(GArray.of([I(1)]));
   call(rzu, "resize", [I(3)]);
   eq("083", "未定型数组填 null", show(rzu), "[1, <null>, <null>]");
-  // 传播：duplicate/slice/filter 保留定型，map 与 + 不保留
   const keepTyped = (v: Variant) => {
     call(v, "append", [S("s")]);
     return show(v);
@@ -1123,7 +1037,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "filter 保留定型", keepTyped(call(typed("int", [I(1)]), "filter", [callable((x: Variant) => V.bool(true))])), "[1]");
   eq("083", "map 不保留定型", keepTyped(call(typed("int", [I(1)]), "map", [callable((x: Variant) => x)])), '[1, "s"]');
   eq("083", "+ 不保留定型", keepTyped(ops.add(typed("int", [I(1)]), V.array(GArray.of([I(2)])))), '[1, 2, "s"]');
-  // append_array / assign 全有或全无
   const aa = typed("int", [I(0)]);
   call(aa, "append_array", [V.array(GArray.of([I(1), S("s")]))]);
   eq("083", "append_array 有一格不合格就整个不动", show(aa), "[0]");
@@ -1136,10 +1049,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "assign 换整层但不共享外层", show(ag), "[3]");
   call(ag, "assign", [V.array(GArray.of([I(4), S("s")]))]);
   eq("083", "assign 也全有或全无", show(ag), "[3]");
-  // 未定型数组赋给定型变量：Godot 是运行时报错（即使数组是空的）
   shouldThrow("083", "未定型数组不能当定型变量的初值", () => stampArray(V.array(GArray.of([])), "int", false));
   shouldThrow("083", "未定型字典同理", () => stampDict(V.dict(new GDict()), "String", "int", false));
-  // 定型字典：键与值各自转换
   const dt = stampDict(V.dict(new GDict()), "String", "int", true);
   const dv = dt.v as GDict;
   dv.set(S("a"), F(1.9));
@@ -1151,13 +1062,11 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("083", "字典 has 先收键类型", show(dt.t === Tag.DICT ? method(dt, "has", [V.stringName("a")]) : V.nil()), "true");
   eq("083", "字典 get 收不下的键当不存在", show(method(dt, "get", [I(1)])), "<null>");
   eq("083", "find_key 先收值类型", show(method(dt, "find_key", [F(2.0)])), "b");
-  // 空数组 insert(0) 等边界不受定型影响
   const freshT = typed("int", []);
   call(freshT, "insert", [I(0), I(1)]);
   eq("083", "空的定型数组 insert(0) 给一格", show(freshT), "[1]");
 }
 
-// ---- 087/088/089 Vector2 写语义：值类型写回、键型与值型口径、== 的操作数报错
 {
   const V2 = (x: number, y: number) => vector2(x, y);
   const w = (v: Variant, key: Variant, value: Variant) => vecWrite(v.v as GVector2, key, value, "index");
@@ -1173,13 +1082,11 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("087", "写入照旧过 float32", (w(V2(1, 2), I(0), F(0.1)).v as GVector2).x, Math.fround(0.1));
   eq("087", "1e20 落到 float32 的可表示值", show(w(V2(1, 2), I(0), F(1e20))), "(100000002004087730000.0, 2.0)");
   eq("087", "负值向零不是向下取整", show(w(V2(1, 2), I(0), F(-2.5))), "(-2.5, 2.0)");
-  // 值类型：写不动别人
   {
     const v = V2(1, 2);
     const copy = p(v, "x", I(100)) as Variant;
     eq("087", "写回的新值不影响原值", `${show(v)} ${show(copy)}`, "(1.0, 2.0) (100.0, 2.0)");
   }
-  // 报错口径（实测 088/089）：属性名不存在、下标越界、实参类型不对、跟非向量比 ==
   shouldThrow("088", "未知属性名要响", () => p(V2(1, 2), "zz", I(1)));
   shouldThrow("088", "bool 不能写进分量", () => p(V2(1, 2), "x", V.bool(true)));
   shouldThrow("088", "String 不能写进分量", () => p(V2(1, 2), "y", S("s")));
@@ -1195,11 +1102,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("089", "ops.eq 同样要响", () => ops.eq(V2(1, 2), F(1)));
   eq("089", "跟 null 比仍然是 false", `${valueEq(V2(1, 2), V.nil())}/${valueEq(V.nil(), V2(1, 2))}`, "false/false");
   eq("087", "Vector2 之间按分量比", `${valueEq(V2(1, 2), V2(1.0, 2.0))}/${valueEq(V2(1, 2), V2(1, 3))}`, "true/false");
-  // 读侧：0/1/"x"/"y" 都能读，越界报实测那句
   eq("087", "读 v[0]", show(vecReadIndex(vector2(1, 2).v as GVector2, I(1))), "2.0");
   eq("087", "读 v[\"x\"]", show(vecReadIndex(vector2(1, 2).v as GVector2, S("x"))), "1.0");
   shouldThrow("087", "读越界下标要响", () => vecReadIndex(vector2(1, 2).v as GVector2, I(2)));
-  // writeIdx：容器走原地（返回 null），Vector2 走写回
   {
     const arr = V.array(GArray.of([I(1), I(2)]));
     eq("087", "数组下标写是原地改", SHOW2(writeIdx(arr, I(0), I(9))), "<原地>");
@@ -1214,7 +1119,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // ---- step 39：容器当字典键（090 实测）。桶按内容算，并且**冻在插入那一刻**。
   const arr = (xs: Variant[]) => V.array(GArray.of(xs));
   const newDict = () => new GDict();
   const dict = (pairs: [Variant, Variant][]) => {
@@ -1235,13 +1139,11 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   g1.set(arr([I(1), I(2)]), I(6));
   eq("090", "等值键再写是顶掉同一格", `${String(g1.size())} ${show(V.dict(g1))}`, "1 { [1, 2]: 6 }");
 
-  // 实测 q3：`{"a":1,"b":2}` 与 `{"b":2,"a":1}` 是两个格，尽管它们 `==` 成立 —— 键序进桶
   const od = newDict();
   od.set(dict([[S("a"), I(1)], [S("b"), I(2)]]), I(9));
   eq("090", "换了键序就查不着", show(od.get(dict([[S("b"), I(2)], [S("a"), I(1)]]))), "<null>");
   eq("090", "原序才命中", show(od.get(dict([[S("a"), I(1)], [S("b"), I(2)]]))), "9");
 
-  // ghost：键改过之后这一格从所有查询里消失，但打印仍是存着的那个值（实测 q4/r4/s5）
   const gd = newDict();
   const m1 = arr([I(1)]);
   gd.set(m1, I(8));
@@ -1250,7 +1152,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("090", "改过的键也擦不掉", `${String(gd.erase(arr([I(1)])))}/${String(gd.size())}`, "false/1");
   eq("090", "打印取存着的值而不是重新查", show(V.dict(gd)), "{ [1, 2]: 8 }");
 
-  // 同一个桶底下能并存两格（实测 r5）
   const c1 = arr([I(7), I(8)]);
   const s2 = newDict();
   s2.set(c1, I(1));
@@ -1260,7 +1161,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("090", "新格查得着、ghost 格查不着", `${show(s2.get(arr([I(7), I(8)])))}/${show(s2.get(c1))}`, "2/<null>");
   eq("090", "erase 只擦得掉查得着的那格", `${String(s2.erase(arr([I(7), I(8)])))}/${String(s2.erase(c1))}/${String(s2.size())}`, "true/false/1");
 
-  // 浅拷贝照抄冻结的桶（s1），深拷贝按新内容重算（t3）
   const sh = newDict();
   const kk = arr([I(1), I(2)]);
   sh.set(kk, I(1));
@@ -1275,7 +1175,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const dp = sh.duplicate(true);
   eq("090", "深拷贝按现内容重算", `${show(dp.get(arr([I(1), I(2), I(3)])))}/${show(dp.get(arr([I(1), I(2)])))}`, "1/<null>");
 
-  // merge 搬的是存着的值（实测 u1/u2），不是按现值重查
   const src = newDict();
   const sk = arr([I(1), I(2)]);
   src.set(sk, I(1));
@@ -1284,33 +1183,27 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   mg.mergeWith(src, false);
   eq("090", "ghost 格也 merge 得过去", `${show(V.dict(mg))}/${show(mg.get(arr([I(1), I(2), I(3)])))}`, "{ [1, 2, 3]: 1 }/1");
 
-  // Vector2 键：值类型，写不坏（实测 k5/q7）
   const vd = newDict();
   vd.set(vector2(1, 2), I(1));
   vd.set(vector2(1, 2), I(2));
   eq("090", "等值 Vector2 顶掉同一格", `${String(vd.size())} ${show(V.dict(vd))}`, "1 { (1.0, 2.0): 2 }");
   eq("090", "换成分量就不是那个键了", `${String(vd.has(vector2(9, 2)))}/${show(vd.get(vector2(1.0, 2.0)))}`, "false/2");
 
-  // 空容器键（实测 k8）
   const ed = newDict();
   ed.set(arr([]), I(1));
   ed.set(dict([]), I(2));
   eq("090", "空数组与空字典是两格", `${show(ed.get(arr([])))}/${show(ed.get(dict([])))}/${show(V.dict(ed))}`, "1/2/{ []: 1, {  }: 2 }");
 
-  // 定型字典的容器键（实测 q5：Dictionary[Array,int] 里 [1,2] 命中、[1.0,2.0] 不命中）
   const tg = (stampDict(dict([]), "Array", "int", true).v as GDict);
   tg.set(arr([I(1), I(2)]), I(5));
   eq("090", "定型 Array 键按身份查", `${show(tg.get(arr([I(1), I(2)])))}/${show(tg.get(arr([F(1), F(2)])))}`, "5/<null>");
 
-  // 嵌套容器键：改内层同样把它变成 ghost（实测 r8）
   const inner = arr([I(1)]);
   const nd = newDict();
   nd.set(arr([inner]), I(8));
   (inner.v as GArray).append(I(2));
   eq("090", "改内层让整格查不着", `${show(nd.get(arr([arr([I(1)])])))}/${show(V.dict(nd))}`, "<null>/{ [[1, 2]]: 8 }");
 
-  // 自引用容器当键：step 47 起按实测的**两道闸门**走 —— 桶塌在 101 层（旧断言要求"响亮报缺"，
-  // 是那时还没有闸门口径；现在真值说了算，改断言不改实现）
   const cyc = GArray.of([]);
   cyc.append(V.array(cyc));
   eq("090", "自引用数组的桶塌在 101 层（3×101 + 记号 + 101）", String(keyOf(V.array(cyc)).length), "405");
@@ -1325,9 +1218,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("090", "自引用数组跟自己比是 true", valueEq(V.array(cyc), V.array(cyc)), "true");
 }
 
-
 {
-  // ---- step 40：Vector3（091 / 092 实测）。分量 float32、写它产出新值、打印走短格式。
   const V3 = (x: number, y: number, z: number) => vector3(x, y, z);
   const m3 = (v: Variant, name: string, ...args: Variant[]) => vector3Method(asVec3(v) as GVector3, name, args);
   const vv = (n: Variant) => show(n);
@@ -1375,12 +1266,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   );
   eq("091", "is_normalized / is_finite", `${m3(V3(1, 1, 1), "is_normalized").v}/${m3(V3(1, 0, 0), "is_normalized").v}/${m3(V3(0.7071067811865475, 0.7071067811865475, 0), "is_normalized").v}/${m3(V3(1e300, 0, 0), "is_finite").v}/${m3(V3(1, 2, 3), "is_finite").v}`, "false/true/true/false/true");
 
-  // 探针**没能**钉死语义的（reflect 六个点互相矛盾、bounce/slide 要求单位法向且会往 stderr 打一行、
-  // slerp 末位不足信、is_zero_approx / clampf 没测）与实测不存在的成员，全都必须响
   for (const n of ["reflect", "bounce", "slide"]) {
     shouldThrow("091", `Vector3.${n}() 未实现要响`, () => m3(V3(1, 2, 3), n, V3(0, 1, 0)));
   }
-  // step 41 解锁的三条（期望取自 093 的 golden）
   eq("093", "Vector3.clampf 与 clamp 同值", `${vv(m3(V3(1, 2, 3), "clampf", F(1.5), F(2.5)))}/${vv(m3(V3(3, 2, 1), "clampf", F(1.5), F(2.5)))}/${vv(m3(V3(-1, 2, 5), "clampf", F(0), F(1)))}`, "(1.5, 2.0, 2.5)/(2.5, 2.0, 1.5)/(0.0, 1.0, 1.0)");
   eq("093", "Vector3.is_zero_approx", `${m3(V3(0, 0, 0), "is_zero_approx").v}/${m3(V3(0.000009, 0, 0), "is_zero_approx").v}/${m3(V3(0.00001, 0, 0), "is_zero_approx").v}/${m3(V3(0, 0, -0.00002), "is_zero_approx").v}`, "true/true/false/false");
   eq("093", "Vector3.is_normalized 用 1e-3（用 1e-5 会把 0.9995 判错）", `${m3(V3(0.9995, 0, 0), "is_normalized").v}/${m3(V3(0.9992, 0, 0), "is_normalized").v}/${m3(V3(0.5774, 0.5774, 0.5774), "is_normalized").v}/${m3(V3(1, 1, 0.045), "is_normalized").v}`, "true/false/true/false");
@@ -1405,10 +1293,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   }
 }
 
-
-
 {
-  // ---- step 42：Vector2i（094 / 095 实测）。int32 值类型：构造与写入截断、算完回绕、length_squared 走 int64。
   const Z = (x: number | bigint, y: number | bigint) => vector2i(x, y);
   const zm = (v: Variant, name: string, ...args: Variant[]) => vector2iMethod(asVec2i(v) as GVector2i, name, args);
   const zs = (n: Variant) => show(n);
@@ -1446,7 +1331,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("094", "常量表含 MAX/MIN、没有 INF", `${zs(vector2iConst("ONE"))}/${zs(vector2iConst("UP"))}/${zs(vector2iConst("DOWN"))}/${zs(vector2iConst("MAX"))}/${zs(vector2iConst("MIN"))}`, "(1, 1)/(0, -1)/(0, 1)/(2147483647, 2147483647)/(-2147483648, -2147483648)");
   shouldThrow("094", "Vector2i.INF 实测不存在", () => vector2iConst("INF"));
 
-  // 实测**不存在**的成员（别按 Vector2/Vector3 的表照抄）
   for (const n of ["is_normalized", "is_equal_approx", "normalized", "direction_to", "move_toward", "floor", "ceil", "round", "clampf", "snappedf", "ceildiv", "floordiv", "posmod", "signwrapping"]) {
     shouldThrow("094", `Vector2i.${n}() 实测不存在要响`, () => zm(Z(1, 2), n));
   }
@@ -1468,7 +1352,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   }
 }
 
-// ---- 096 Color：值类型这一族的最后一个（分量 float32 + 4 位小数打印），逐条探针实测（Godot 4.6.3）
 {
   const C = (...a: Variant[]) => colorNew(a);
   const g = (name: string, args: Variant[] = []) => colorStatic(name, args);
@@ -1585,8 +1468,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("096", "写 r8 落的是字节", show(colorWrite(instOf(), V.str("r8"), V.int(128), "prop")), "(0.502, 0.2, 0.3, 0.4)");
   eq("096", "写 a8 之后 a 是 64/255", show(colorWrite(instOf(), V.str("a8"), V.int(64), "prop")), "(0.1, 0.2, 0.3, 0.251)");
   shouldThrow("096", "字节写越界没探针，响亮报缺", () => colorWrite(instOf(), V.str("r8"), V.int(300), "prop"));
-  // 属性写拒绝 String 实测会炸；那行文案里键要不要带引号没探针（vecFailKey 现给 '"r"'），
-  // 所以这里只钉「必须响亮报错」，不钉文案。
   shouldThrow("096", "String 写分量要炸", () => colorWrite(instOf(), V.str("r"), V.str("x"), "prop"));
   {
     const wd = writeProp(inst, "b", V.float(1)) as Variant;
@@ -1612,7 +1493,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   });
 }
 
-// ---- 098 String.hash() / 全局 hash()：Godot 那条是 djb2、按 UTF-32 码点走、每步回绕 32 位（15+ 实测点）
 {
   const H = (s: string) => String(hashDjb2(s));
   const vh = (v: Variant) => String(variantHash([v]).v);
@@ -1647,7 +1527,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("098", "String.hash() 不收实参", () => method(V.str("abc"), "hash", [V.int(1)]));
 }
 
-// ---- 099 split 的第三参 max_splits：46 个实测点定下来的算式（余段原样、空片段不占额度、码点下刀）
 {
   const SP = (s: string, d: string, allow: boolean, cap: number) =>
     show(method(V.str(s), "split", [V.str(d), V.bool(allow), V.int(cap)]));
@@ -1698,7 +1577,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   );
 }
 
-// ---- 100 自引用容器：打印与比较是一条固定层数闸门（101 层），深拷贝要保住环
 {
   const items = (g: unknown): Variant[] => (g as { items: Variant[] }).items;
   const mkA = (): [GArray, Variant] => {
@@ -1754,12 +1632,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const cd = gd.duplicate(true);
   eq("100", "字典深拷贝保住环", String((cd.getRequired(V.str("x")) as Variant).v === cd), "true");
   eq("100", "字典深拷贝的打印同形", show(V.dict(cd)), sd);
-  // 兄弟两格各自也按绝对层数截断（实测 `str([a, a]).length()` == 414）
   eq("100", "数组里两个环：外层占掉一层，两个子环各短一格", String(show(V.array(GArray.of([gv, gv]))).length), "414");
   eq("100", "深拷出来的环按层数与原物相等", String(valueEq(V.array(ca), gv)), "true");
 }
 
-// ---- 101 自引用容器当字典键：**桶走 101 层闸门、比较走 52 层**，两道不是一条（step 47 实测）
 {
   const its = (g: unknown): Variant[] => (g as { items: Variant[] }).items;
   const cyc = (): Variant => {
@@ -1859,9 +1735,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   }
 }
 
-// ---- 102 浮点字面量的解析：Godot 先把小数位截到 17 位再拼整数除 10^k，两次舍入不是正确舍入
 {
-  // 比较用**数值**而不是十进制串：> 2⁵³ 的 double 会被 JS 印成最短可回读形式（…300 而不是 …256）
   const D = (t: string, want: number) => String(Math.trunc(parseGdDouble(t)) === want);
   const DK = (t: string, k: number, want: number) => String(Math.trunc(parseGdDouble(t) * k) === want);
   eq("102", "9007199254740993.0 → …994（JS 给 …992）", D("9007199254740993.0", 9007199254740994), "true");
@@ -1879,7 +1753,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("102", "非数字串仍走 JS 的老路（字面量里遇不到，留着当护栏）", `${parseGdDouble("xyz")}/${parseGdDouble("1e")}`, "NaN/1");
 }
 
-// ---- 103 运行时字符串转浮点：与字面量同一条两次舍入；to_float 吃前缀、is_valid_float 严格整串
 {
   const tf = (s: string) => (method(V.str(s), "to_float", []) as Variant).v as number;
   const VF = (s: string) => String(method(V.str(s), "is_valid_float", []).v);
@@ -1901,9 +1774,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("103", "is_valid_float 不收实参", () => method(V.str("1"), "is_valid_float", [V.int(1)]));
 }
 
-// ---- 104 字符串转整数一族：to_int / is_valid_int / hex_to_int / is_valid_hex_number
-// 期望值来自用例 104 的 godot.txt（118 个值）与 6 组同形探针；饱和那几条 Godot 另打 stderr，
-// 产物复现不了，所以只在下面这里钉、不进语料。
 {
   const TI = (s: string) => String((method(V.str(s), "to_int", []) as Variant).v);
   const VI = (s: string) => String(method(V.str(s), "is_valid_int", []).v);
@@ -1920,32 +1790,24 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("104", "is_valid_int 一律拒空格/前缀/下划线/小数/空", `${VI(" 42 ")}|${VI("0x10")}|${VI("1_000")}|${VI("1.5")}|${VI("")}|${VI("-")}`, "false|false|false|false|false|false");
   eq("104", "hex_to_int 认 0x / 0X 前缀与负号", `${HI("ff")}|${HI("0x10")}|${HI("0X1f")}|${HI("-ff")}|${HI("-0x10")}|${HI("abc")}`, "255|16|31|-255|-16|2748");
   eq("104", "0b101 整串读作 0xb101", HI("0b101"), "45313");
-  // 不合式的那批在 Godot 侧还会往 stderr 打一条 core/string 的 ERROR（产物不复现，所以只能钉在这里）
   eq("104", "不合式的十六进制串一律 0（不是取前缀）", `${HI("1.5")}|${HI("f f")}|${HI("+ff")}|${HI("zz")}|${HI("0x")}|${HI("")}`, "0|0|0|0|0|0");
   eq("104", "is_valid_hex_number 默认可带负号、不带前缀", `${VH("ff")}|${VH("-ff")}|${VH("1e5")}|${VH("0x10")}|${VH("zz")}|${VH("")}`, "true|true|true|false|false|false");
   eq("104", "参数为真时反过来：必须带 0x、不认负号与前缀大写", `${VH("0x10", true)}|${VH("-ff", true)}|${VH("ff", true)}|${VH("0X1f", true)}`, "true|false|false|false");
   eq("104", "StringName 也走同一条降格路", String((method(V.stringName("ff"), "hex_to_int", []) as Variant).v), "255");
-  // ---- 符号那条：`-` 只在「还没见过数字」时翻一次，可反复翻（实测 n13/n14 的 13 个点）
   eq("104", "见过数字之前 `-` 才翻符号（垃圾字符不断它）", `${TI("a-5")}|${TI("a--5")}|${TI("-a-2")}|${TI("+ -3")}`, "-5|5|2|-3");
   eq("104", "见过数字之后 `-` 彻底惰性", `${TI("5-3")}|${TI("1--2")}`, "53|12");
   eq("104", "符号连写按奇偶翻", `${TI("--5")}|${TI("---5")}|${TI("+-5")}|${TI("-+5")}|${TI("- 5")}|${TI("-- 5")}|${TI("--1.9")}`, "5|-5|-5|-5|-5|5|1");
   eq("104", "空白/控制符/前缀里的点都只是被跳过", `${TI(" -5")}|${TI("x-5")}|${TI("e-5")}`, "-5|-5|-5");
-  // ---- `.` 立刻停扫（实测 6 个点）
   eq("104", "遇 `.` 立刻停：点后面的数字与符号都不算", `${TI("1.5")}|${TI(".-5")}|${TI("x.5")}|${TI("-1.5x2")}|${TI("1.5.6")}|${TI("1 .5")}`, "1|0|0|-1|1|1");
-  // ---- 溢出两段式：19 位以内回绕、|acc| 撞上 10^18 才饱和（实测 21 个点，含边界 10^18-1 / 10^18）
   eq("104", "19 位再大也是回绕，不是饱和", `${TI("9500000000000000009")}|${TI("9999999999999999991")}|${TI("9223372036854775811")}|${TI("9223372036854775801")}`, "-8946744073709551607|-8446744073709551625|-9223372036854775805|9223372036854775801");
   eq("104", "2^63 与 -2^63 两侧都还是回绕", `${TI("9223372036854775808")}|${TI("-9223372036854775808")}|${TI("-9223372036854775809")}|${TI("-9223372036854775810")}`, "-9223372036854775808|-9223372036854775808|9223372036854775807|9223372036854775806");
-  // 这几条 Godot 会另往 stderr 打 `Cannot represent … as a 64-bit signed integer`（core/string/ustring.cpp），
-  // 那行产物复现不了，所以钉在这里而不是语料里（同 step 43 的处置）。
   eq("104", "撞上 10^18 闸门就饱和（且 Godot 侧另打一行 ERROR，故不进语料）", `${TI("10000000000000000000")}|${TI("-10000000000000000000")}|${TI("18446744073709551615")}|${TI("18446744073709551617")}|${TI("99999999999999999999")}`, "9223372036854775807|-9223372036854775808|9223372036854775807|9223372036854775807|9223372036854775807");
   eq("104", "前导零不吃闸门（21 个字符攒出来还是 42）", TI("0000000000000000000042"), "42");
   eq("104", "全局 int(字符串) 与 to_int() 同路", `${toI("a-5")}|${toI("9223372036854775808")}|${toI("9500000000000000009")}|${toI("--1.9")}|${toI("ffffffffffffffff")}`, "-5|-9223372036854775808|-8946744073709551607|1|0");
-  // ---- hex_to_int：形状严格 + **饱和**（与十进制那侧的回绕正好相反，实测 18 个点）
   eq("104", "hex_to_int 也是整串读作十六进制", `${HI("0x1f")}|${HI("-0x1f")}|${HI("0")}|${HI("-0")}|${HI("0x0")}`, "31|-31|0|0|0");
   eq("104", "hex_to_int 越界是**饱和**（十进制那侧是回绕）", `${HI("7fffffffffffffff")}|${HI("-0x7fffffffffffffff")}`, "9223372036854775807|-9223372036854775807");
   eq("104", "hex_to_int 越过 INT64_MAX 饱和到两端", `${HI("ffffffffffffffff")}|${HI("8000000000000000")}|${HI("0x10000000000000000")}|${HI("-0x8000000000000000")}`, "9223372036854775807|9223372036854775807|9223372036854775807|-9223372036854775808");
   eq("104", "不合式的形状整个给 0（不取前缀）", `${HI("+ff")}|${HI("--ff")}|${HI(" 0x10")}|${HI("0x10 ")}|${HI("-0x-10")}|${HI("0x")}`, "0|0|0|0|0|0");
-  // ---- is_valid_* 的符号口径（实测 24 个点）
   eq("104", "is_valid_hex_number 默认接受一个正负号", `${VH("+ff")}|${VH("+1")}|${VH("--ff")}|${VH("++ff")}|${VH(" ff")}|${VH("-1.5")}`, "true|true|false|false|false|false");
   eq("104", "带参数那条也要前缀、符号仍可带一个", `${VH("-0x10", true)}|${VH("+0x10", true)}|${VH("-0X10", true)}|${VH("+-0x10", true)}|${VH(" 0x10", true)}|${VH("0x0", true)}`, "true|true|false|false|false|true");
   eq("104", "is_valid_int 不吃连写符号与空格", `${VI("+-5")}|${VI("--5")}|${VI("+ 5")}|${VI("00")}|${VI("1 .5")}|${VI("x-5")}`, "false|false|false|true|false|false");
@@ -1958,7 +1820,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   );
 }
 
-// ---- 106 String.join：分隔符在前、数组在后，元素走 print 那套 stringify（实测 30 余点）
 {
   const arr = (...xs: Variant[]) => V.array(GArray.of(xs));
   const J = (sep: string, a: Variant) => String((method(V.str(sep), "join", [a]) as Variant).v);
@@ -1986,14 +1847,12 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   });
 }
 
-// ---- 113/114 容器变更方法的返回值：void 的那批与给状态码的那批（实测，见 S141–S142）
 {
   const arr = (...xs: Variant[]) => V.array(GArray.of(xs));
   const typedArr = (kind: string, ...xs: Variant[]) => stampArray(arr(...xs), kind as never, true);
   const call = (recv: Variant, name: string, args: Variant[]) => show(method(recv, name, args));
   const I = (n: number) => V.int(n);
 
-  // insert / resize 给**状态码 int**（0 成功、31 失败），旧实现一律回 nil —— 那是静默错
   const a1 = arr(I(1), I(2));
   eq("114", "insert 成功给 0", call(a1, "insert", [I(0), I(9)]), "0");
   eq("114", "insert 之后数组真的变了", show(a1), "[9, 1, 2]");
@@ -2004,9 +1863,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("114", "resize 扩张给 0、按元素默认值填（未定型是 null）", `${call(a2, "resize", [I(4)])}|${show(a2)}`, "0|[1, 2, <null>, <null>]");
   eq("114", "resize 同长度是空操作、仍给 0", call(a2, "resize", [I(4)]), "0");
   eq("114", "resize 收缩给 0", `${call(a2, "resize", [I(1)])}|${show(a2)}`, "0|[1]");
-  // 负数 resize 在 Godot 侧还往 stderr 打一条 cowdata.h 的 Condition（产物复现不了）→ 只钉在这儿
   eq("114", "resize 负数给 31 且不动数组", `${call(a2, "resize", [I(-1)])}|${show(a2)}`, "31|[1]");
-  // pop 系列给**元素**（空数组给 null），Dictionary.erase 给 bool、Array.erase 是 void
   const a3 = arr(I(1), I(2), I(3));
   eq("114", "pop_back / pop_front 给被弹出的元素", `${call(a3, "pop_back", [])}|${call(a3, "pop_front", [])}|${show(a3)}`, "3|1|[2]");
   eq("114", "空数组 pop 给 null", call(arr(), "pop_back", []), "<null>");
@@ -2017,25 +1874,18 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     return V.dict(g);
   };
   eq("114", "Dictionary.erase 给 bool（删掉了 true、没有 false）", `${call(onePairDict(), "erase", [I(1)])}|${call(onePairDict(), "erase", [I(9)])}`, "true|false");
-  // void 的那批：Godot 根本不让取它们的返回值（解析期错，见 113），装箱轨统一给 nil
   eq("113", "void 方法在运行时的返回值统一是 nil", `${call(arr(I(1)), "append", [I(2)])}|${call(arr(I(1)), "clear", [])}|${call(arr(I(1)), "fill", [I(0)])}|${call(arr(I(1), I(2)), "remove_at", [I(0)])}|${call(arr(I(1)), "push_front", [I(0)])}|${call(arr(I(1)), "push_back", [I(2)])}|${call(arr(I(1), I(1)), "erase", [I(1)])}`, "<null>|<null>|<null>|<null>|<null>|<null>|<null>");
 }
 
-// ---- step 58：声明为 Vector2 的槽在**赋值点**的转换（实测 f5/f6：`mv = Vector2i(1,2)` 给 (1.0, 2.0)、
-// 内建类的 `p.v = Vector2i(3,4)` 同值；Vector2 之间是拷贝，不是共享同一个实例）
 {
   eq("step58", "Vector2i 升成 Vector2", show(toVec2(vector2i(1, 2))), "(1.0, 2.0)");
   const srcV = vector2(1.5, 2.5);
   const dstV = toVec2(srcV);
   eq("step58", "Vector2 进 Vector2 槽同值", show(dstV), "(1.5, 2.5)");
   eq("step58", "而且是拷贝（不共享实例）", asVec2(dstV) === asVec2(srcV), false);
-  // int 进 Vector2 槽 Godot 在解析期就拒（f9 实测），所以走到这里是第二道防线：响亮，绝不静默存下别的形状
   shouldThrow("step58", "int 进 Vector2 槽响亮报缺", () => toVec2(I(5)));
 }
 
-// ---- step 58b：属性写 `p.m = v` 走的是 Godot 的 named-property 动态路径。
-// 语料钉住了「收得下」的那半边（120 逐字节），这里钉「拒」的那半边 —— Godot 一旦被这几条打断
-// 就不再跑 quit()，进程挂着（S145 实测 timedOut），所以它们进不了语料，只能在这里对账。
 {
   class Inner {
     m: Variant = I(1);
@@ -2061,16 +1911,12 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step58b", "Vector2 字段收 Vector2i 升级", field("v"), "(3.0, 4.0)");
   writeProp(obj, "m", S("x"));
   eq("step58b", "未定型字段原样存", field("m"), "x");
-  // f10 实测：往 String 字段塞 int 与 e1「未知键」用的是同一句话，所以这里绝不能套 str() 糊过去
   shouldThrow("step58b", "String 字段拒 int（不是转成 \"5\"）", () => writeProp(obj, "s", I(5)));
   shouldThrow("step58b", "未知键拒（e1 的形体）", () => writeProp(obj, "zz", I(1)));
   shouldThrow("step58b", "写方法名也拒（f11 与未知键同文本）", () => writeProp(obj, "getm", I(5)));
 }
 
 {
-  // f27 / f28 实测：Callable 给 25、Signal 给 26。产物里信号与 lambda 都是**裸 JS 对象**
-  // （`fired = new rt.Signal()` 这样的字段，读出来不装箱），所以 typeOf 必须能吃裸值 ——
-  // 以前它拿 `undefined` 的 tag 去查表，冒出来的是一条与信号毫无关系的 BigInt 错。
   const sig = new Signal();
   eq("step61", "typeof(Callable) → 25（装箱的方法引用）", `${typeOf(callableOf(() => V.int(1))).v}`, "25");
   eq("step61", "typeof(Callable) → 25（callable 工厂）", `${typeOf(callable(() => V.int(1))).v}`, "25");
@@ -2080,8 +1926,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S160 实测：静态方法三条路都通 —— `A.f()`、`p.f()`、`var cb = A.f`（再 cb.call()）。
-  // JS 那边静态方法挂在**构造器**上、实例摸不到，所以运行时必须有一张显式表可查。
   class Holder {
     mv = V.int(1);
     static make(): Variant {
@@ -2099,14 +1943,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step62", "A.f 取值是 Callable（typeof → 25）", `${typeOf(attribute(Holder, "make")).v}`, "25");
   eq("step62", "p.f 取值同样是 Callable", `${typeOf(attribute(V.object(h), "make")).v}`, "25");
   eq("step62", "取到的 Callable 照样能 call，实参照传", `${method(attribute(Holder, "twice"), "call", [V.int(21)]).v}`, "42");
-  // 这条是「为什么必须用显式表」的证人：JS 函数自带 name / length 两个键，
-  // 拿 constructor[name] 鸭子类型去认静态方法会把它们当成方法召出来。
   shouldThrow("step62", "没登记的 name/length 不当成方法（显式表的意义）", () => method(V.object(h), "name", []));
 }
 
 {
-  // S161 实测：`static var` 是**共享的一格** —— 类名、实例两条读写路落在同一格上，
-  // 而且带类型的槽照 S150 那五种转换（f17 t7：`A.setx(2.7)` → 2、`A.x` 也跟着是 2）。
   class Box {
     static x = V.int(1);
     static plain = V.int(2);
@@ -2126,8 +1966,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // f35 对拍出来的静默错：**实例方法读出来是裸 JS 函数**，于是 `typeof(cb)` 给 24（Godot 给 25）、
-  // `cb.call(21)` 直接报「脚本上的 call() 未实现」。修好之后这几条谓词才谈得上。
   class Holder2 {
     im(v: Variant): Variant {
       return v;
@@ -2146,7 +1984,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step65", "Callable.callv 收一个 Array（f34 t7）", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
   const stat = attribute(Holder2, "sm");
   eq("step65", "静态方法取值的 get_method 也报得出名字（f34 t4）", `${method(stat, "get_method", []).v}`, "sm");
-  // 静态那一格的 is_null / is_valid 实测只覆盖了 top 与 a.im，静态那版没测 —— 响着比猜着好
   shouldThrow("step65", "静态方法的 is_valid 没实测过 → 照旧响拒", () => method(stat, "is_valid", []));
   class Sig {
     fired = new Signal("fired");
@@ -2157,7 +1994,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // f36 / f39 实测的 Object 方法面：这些都**不依赖身份 id**，所以能逐条对上。
   class Obj {
     im(): Variant {
       return V.int(1);
@@ -2191,10 +2027,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S168 实测的 PackedByteArray。三条最容易写错的：元素一律折成 0..255、
-  // **赋值是共享引用**（与 Array 同一条，`PackedByteArray(src)` / `duplicate()` / `slice()` 才拷贝）、
-  // `==` 比的是内容。最后这条我在 135 的差分上真错过一次：分支放进了 `valueSame`（比身份），
-  // `b == PackedByteArray([3,1,2])` 就印成 false 而不是 Godot 的 true。
   const err = (fn: () => unknown): string => {
     try {
       fn();
@@ -2245,13 +2077,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
     `${show(viaArray)} ${typeOf(index(viaArray, I(0))).v}`, "[3, 1, 2] 2");
   shouldThrow("step67", "Array(x) 只实测过 PackedByteArray 实参", () => arrayFromVariant(S("abc")));
-  // GBytes 的 JS 载荷自带 items / raw / length 三个键，Godot 那侧这些**一个都不是成员**（属性面为空）。
-  // 不挡的话 `print(b.raw)` 会把内部实现当成员递出去 —— 「Godot 拒、我们给值」那一族。
   shouldThrow("step67", "读 pack 的「属性」一律响（属性面没实测过，成员全是方法）", () => attribute(b, "length"));
   shouldThrow("step67", "写 pack 的内部键不许落进存储", () => writeProp(b, "items", I(1)));
-  // 第二批探针（`tmp/void-probe` e/g 系列）改的是**返回值与负下标**这一面：`append` 不是 void 而是
-  // 返回 bool、`insert`/`resize` 给 Error 状态码、负下标与越界的 insert/remove_at 是**原样不动**
-  // （JS 的 splice 会把它们当成尾部操作，那是静默错）、`get` 越界给 0 而不是报错、写的负下标从尾部数。
   const mut = (ns: number[]): Variant => V.object(GBytes.of(ns));
   const ap = mut([1, 2, 3]);
   eq("step67", "append() 返回 **bool false** 且照样追加（e1 / g1）",
@@ -2287,8 +2114,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S169：数值 pack 的三种形状（byte / int32 / int64）行为口径实测一致，只有**元素折算**分岔。
-  // 期望值取自 `tmp/pack-probe` 与语料 138 的 godot.txt。
   const perr = (fn: () => unknown): string => {
     try {
       fn();
@@ -2334,8 +2159,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     perr(() => index(i32g, I(5))), "Invalid access of index '5' on a base object of type: 'PackedInt32Array'.");
   eq("step68", "越界写的那句也照类型名变", perr(() => writeIdx(i32g, I(5), I(1))),
     "Invalid assignment of index '5' (on base: 'PackedInt32Array') with value of type 'int'.");
-  // 没量过的形状一律响：跨 pack 的 `+`、`Array(int pack)`、String 元素（Godot 给 [0]，我们只量了
-  // 一条 `"x"` → 0 不足以推整族），以及 int64 的 float 溢出。
   shouldThrow("step68", "跨 pack 拼接没量过 → 响", () => ops.add(i32g, V.object(GBytes.of([1], "byte"))));
   shouldThrow("step68", "Array(int pack) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(i32g));
   shouldThrow("step68", "String 元素只量到 \"x\" → 0 这一格，整族不套", () => packCtor("int32", [V.array(GArray.of([S("12abc")]))]));
@@ -2349,9 +2172,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S170：两个 float pack。要点是**不需要新的浮点打印规则** —— float32 存 `Math.fround` 之后，
-  // 元素走的就是既有那套浮点文本（17 位有效数字、最多 14 位小数、去掉尾零、至少留一位），
-  // 与 Godot 逐字相同（14 个实测点全部对上）。
   const fl = (kind: "float32" | "float64", ns: number[]): Variant =>
     packCtor(kind, [V.array(GArray.of(ns.map((x) => V.float(x))))]);
   eq("step69", "float32 的 0.1 / 2.7 / 1/3 / 1e-5 / 1e20 打印与 Godot 同字，typeof 32",
@@ -2388,8 +2208,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S171：PackedStringArray。这一支最要紧的一条是**元素折算取 show**（不是 `String(v)`、也不是拒），
-  // 五种来源都实测过：int / float / bool / null / StringName。
   const strs = (vs: Variant[]): Variant => packCtor("string", [V.array(GArray.of(vs))]);
   eq("step71", "元素取 show：[1, 2.5, true, null, &\"nm\"] → [\"1\", \"2.5\", \"true\", \"<null>\", \"nm\"]",
     show(strs([I(1), F(2.5), V.bool(true), V.nil(), V.stringName("nm")])),
@@ -2431,7 +2249,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S172：pack 的 is / as。**各认各的形状**，而且 pack 既不是 Array 也不是 Object，只有 is Variant 真。
   const byte = V.object(GBytes.of([1, 2], "byte"));
   const i32 = V.object(GBytes.of([7], "int32"));
   eq("step72", "b is PackedByteArray 真、is PackedInt32Array / Array / Object 全假、is Variant 真",
@@ -2446,8 +2263,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // S173：最后三种 pack（Vector2 / Vector3 / Color）。要点是**格子存载荷对象**、
-  // 折算是「对得上就拷一份、对不上就给默认值」（实测六条都是这个方向，不报错）。
   const v2 = (x: number, y: number): Variant => V.object(new GVector2(x, y));
   const p2 = packCtor("vector2", [V.array(GArray.of([v2(3, 3), v2(1, 1), v2(2, 2)]))]);
   eq("step73", "PackedVector2Array 的打印与 typeof 35、元素 typeof 5",

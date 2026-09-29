@@ -21,8 +21,6 @@ import type {
   VarDecl,
 } from "./ir";
 
-/** CST → IR。只做「去糖 + 显式化」，不做优化（见 docs/ROADMAP.md §2）。 */
-
 function loc(n: SyntaxNode): Loc {
   return { line: n.startPosition.row + 1, col: n.startPosition.column + 1 };
 }
@@ -47,14 +45,10 @@ function named(n: SyntaxNode): SyntaxNode[] {
   return n.namedChildren;
 }
 
-// ---------------------------------------------------------------- 类型
-
 function lowerType(n: SyntaxNode): TypeRef {
   if (n.type === "inferred_type") return { kind: "variant" };
   return { kind: "named", name: n.text };
 }
-
-// ---------------------------------------------------------------- 模块 / 类
 
 export function lower(tree: Tree): Module {
   return lowerModule(tree.rootNode);
@@ -78,7 +72,7 @@ function lowerModule(root: SyntaxNode): Module {
         m.className = need(field(c, "name"), "class_name").text;
         break;
       case "extends_statement":
-        m.extends = // extends_statement 里的 type 是位置子节点，不是具名字段（grammar 没给它 field 名）
+        m.extends =
 need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "variable_statement":
@@ -120,7 +114,6 @@ function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
     type: typeNode ? lowerType(typeNode) : null,
     init: valueNode ? lowerExpr(valueNode) : null,
     isConst,
-    // 与 lowerFunc 同一个判据：文法把 `static` 发成**具名**子节点 static_keyword
     isStatic: n.children.some((c) => c.type === "static_keyword"),
     accessor: lowerAccessor(n.children.find((c) => c.type === "setget") ?? null),
     loc: loc(n),
@@ -155,7 +148,6 @@ function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
     else if (c.isNamed) {
       throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
     }
-    // 其余是 get / set / = / , / : 这些连接符，逐对读上面四个具名子节点就够了
   }
   if (getter === null) {
     throw new UnsupportedError("property-setget", "只带 set 不带 get 的属性访问器还没实测过，先拒绝");
@@ -172,13 +164,9 @@ function lowerSignal(n: SyntaxNode): SignalDecl {
   };
 }
 
-/**
- * `enum Name { A, B = 5, C }` —— 成员值自增，显式 `= N` 重置游标。
- * name 为 null 即匿名 enum（成员成为脚本级裸常量）。
- */
 function lowerEnum(n: SyntaxNode): EnumDecl {
   const nameNode = field(n, "name");
-  const list = field(n, "body"); // enumerator_list
+  const list = field(n, "body");
   const members: EnumMember[] = [];
   let next = 0;
   for (const en of list ? named(list) : []) {
@@ -205,7 +193,7 @@ function lowerClass(n: SyntaxNode): ClassDecl {
   for (const c of named(body)) {
     switch (c.type) {
       case "extends_statement":
-        decl.extends = // extends_statement 里的 type 是位置子节点，不是具名字段（grammar 没给它 field 名）
+        decl.extends =
 need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "variable_statement":
@@ -239,8 +227,6 @@ function lowerFunc(n: SyntaxNode): FuncDecl {
   const paramsNode = field(n, "parameters");
   const returnNode = field(n, "return_type");
   const bodyNode = field(n, "body");
-  // 文法里 static 是**具名节点** static_keyword，不是匿名 token —— 老写法「匿名子节点文本是 static」
-  // 从来没命中过，isStatic 一直静默给 false（self 在静态方法里的检查因此形同虚设）。
   const isStatic = n.children.some((c) => c.type === "static_keyword");
 
   return {
@@ -248,18 +234,12 @@ function lowerFunc(n: SyntaxNode): FuncDecl {
     params: paramsNode ? named(paramsNode).map(lowerParam) : [],
     returnType: returnNode ? lowerType(returnNode) : null,
     body: bodyNode ? lowerBody(bodyNode) : [],
-    // 协程性是静态可判定的：函数体里出现 await 就是协程（SEMANTICS S18）
     coroutine: hasAwait(n),
     isStatic,
     loc: loc(n),
   };
 }
 
-/**
- * `_init(...)` —— grammar 里是 constructor_definition，没有 name 字段（隐含 _init）。
- * 降级成名为 "_init" 的 FuncDecl，emitter 再把它发成 JS constructor。
- * _init 不能是协程（Godot 不允许 await），coroutine 恒 false。
- */
 function lowerConstructor(n: SyntaxNode): FuncDecl {
   const paramsNode = field(n, "parameters");
   const bodyNode = field(n, "body");
@@ -290,8 +270,6 @@ function lowerParam(n: SyntaxNode): Param {
   };
 }
 
-// ---------------------------------------------------------------- 语句
-
 /**
  * 整数字面量必须**原样**保住精度：`Number("9223372036854775807")` 会先四舍五入成
  * ...808 才交给运行时，那样的 BigInt 路径永远拿不到正确值。2^53 内仍用 number
@@ -304,8 +282,6 @@ function lowerIntLit(text: string): number | bigint {
 }
 
 function lowerBody(n: SyntaxNode): Stmt[] {
-  // 注释不参与语义，和顶层一样直接丢弃。tree-sitter 把 `#…` 挂成 block 的**具名**子节点，
-  // 不先滤掉就会在 lowerStmt 的 default 分支炸成「语句 comment 未支持」。
   return named(n)
     .filter((c) => c.type !== "comment")
     .map(lowerStmt);
@@ -321,8 +297,6 @@ function lowerStmt(n: SyntaxNode): Stmt {
     case "expression_statement": {
       const e = named(n)[0];
       if (!e) throw new UnsupportedError("empty-expr-stmt", "空表达式语句");
-      // GDScript 的赋值语句是 (expression_statement (assignment ...))，
-      // 不是独立的 assignment 语句节点 —— 不转发的话赋值永远走不到下面那个分支。
       if (e.type === "assignment" || e.type === "augmented_assignment") return lowerStmt(e);
       return { kind: "expr", expr: lowerExpr(e), loc: c };
     }
@@ -334,7 +308,6 @@ function lowerStmt(n: SyntaxNode): Stmt {
         loc: c,
       };
     case "augmented_assignment": {
-      // x += 1  →  x = x + 1（去糖）
       const op = operatorOf(n).replace(/=$/, "");
       const left = lowerExpr(need(field(n, "left"), "赋值左值"));
       return {
@@ -420,7 +393,6 @@ function lowerMatch(n: SyntaxNode): Stmt {
     const guardNode = named(section).find((x) => x.type === "pattern_guard");
     const guard = guardNode ? lowerExpr(need(field(guardNode, "condition") ?? named(guardNode)[0], "when 条件")) : null;
     const patternNodes = named(section).filter((x) => x !== guardNode && x.type !== "body");
-    // `1, 2:` 这种多模式分支展开成多个共享同一体的 arm
     for (const p of patternNodes) {
       arms.push({ pattern: lowerPattern(p), guard, body: sectionBody });
     }
@@ -435,12 +407,9 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "bind", name: id ? id.text : n.text };
     }
     case "identifier":
-      // `_` 是通配；其余裸标识符是**常量模式**（按值匹配 const / 脚本常量）。
-      // 绑定要用 `var name`（grammar 出 pattern_binding），裸名不是绑定。
       if (n.text === "_") return { kind: "wildcard" };
       return { kind: "const", expr: lowerExpr(n) };
     case "attribute":
-      // `Suit.HEARTS` / `Class.CONST` 这类限定常量 → 常量模式
       return { kind: "const", expr: lowerExpr(n) };
     case "integer":
       return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
@@ -449,7 +418,6 @@ function lowerPattern(n: SyntaxNode): Pattern {
     case "string":
       return { kind: "lit", lit: "string", value: unquote(n.text) };
     case "string_name":
-      // &"abc" 的 CST 文本带前导 &，剥掉后与 string 走同一套转义解码
       return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)) };
     case "true":
       return { kind: "lit", lit: "bool", value: true };
@@ -460,7 +428,6 @@ function lowerPattern(n: SyntaxNode): Pattern {
     case "array":
       return { kind: "array", items: named(n).map(lowerPattern) };
     case "dictionary":
-      // 字典模式：pair 的 left 是键表达式，value 是「值模式」（可嵌套数组/字典/字面/通配）
       return {
         kind: "dict",
         entries: named(n).map((pair) => ({
@@ -472,8 +439,6 @@ function lowerPattern(n: SyntaxNode): Pattern {
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
 }
-
-// ---------------------------------------------------------------- 表达式
 
 function lowerExpr(n: SyntaxNode): Expr {
   const c = loc(n);
@@ -531,8 +496,6 @@ function lowerExpr(n: SyntaxNode): Expr {
     case "attribute": {
       const kids = named(n);
       if (kids.length === 0) throw new UnsupportedError("attribute", "空的属性访问");
-      // grammar：attribute = 基础表达式 + 任意多段（identifier=属性 / attribute_call=方法）。
-      // 必须逐段左折叠，否则 `a.b().c()` 只剩第一层，丢掉后面的段。
       let acc = lowerExpr(need(kids[0] ?? null, "属性对象"));
       for (const seg of kids.slice(1)) {
         if (seg.type === "attribute_call") {
@@ -545,9 +508,6 @@ function lowerExpr(n: SyntaxNode): Expr {
             loc: c,
           };
         } else if (seg.type === "attribute_subscript") {
-          // `p.m[1]`：文法把「属性 + 下标」折成一个 attribute_subscript 段（identifier + subscript_arguments）。
-          // 过去这里把**整段文本**当成属性名，于是发成 rt.attribute(p, "m[1]") —— 读它报「取属性未实现」，
-          // 写它更糟（writeProp 拿 'm[1]' 当键）。正确形状是「先取属性 m，再对它下标」。
           const parts = named(seg);
           const nm = need(parts[0] ?? null, "attribute_subscript 的属性名");
           const argsNode = field(seg, "arguments") ?? parts[1] ?? null;
@@ -588,31 +548,9 @@ function stripAmp(text: string): string {
   return text.startsWith("&") ? text.slice(1) : text;
 }
 
-/**
- * GDScript 字符串转义。**不能借用 JSON.parse**：JSON 的转义集比 GDScript 窄（没有 \a \v \'），
- * 而旧实现在 JSON.parse 抛错时 catch 后**原样返回带反斜杠的源码** —— 于是 "it\'s" 会静默变成
- * 字面 it\'s（Godot 实测 \' 就是 1 个撇号）。这正是"宁可响、不可静默错"要堵的口子。
- *
- * 下表逐条对 Godot 4.6.3 探针实测（9 个单转义探针文件，各只放一条 print，避免一个解析错拖垮整批）：
- *   \n \t \r \a \b \f \v \ \" \' 各 1 字符；"ab\ncd" 长 5；\u0041 → 65、\u00e9 → 233（取 4 位十六进制）。
- *   \x41 → Parse Error: Invalid escape in string（GDScript 没有 \x）。
- *   \u 吃**恰好 4 位**、\U 吃**恰好 6 位**十六进制，少一位都是 Parse Error:
- *     Invalid hexadecimal digit in unicode escape sequence（\U0041 / \U00041 / \U12 / \U00D800 之外的
- *     \U0001F600 这类"多出来的位"不是错，是按宽度吃掉后当普通字符：长度 3、码点 502/48/48）。
- *   \U110000 这种越界值不报错，串里那位变成 U+FFFD（Godot 另外往 stderr 打警告，我们不复现警告）。
- *   \U000000 → **不是** NUL：Godot 把串里的 NUL 也换成 U+FFFD（实测等于 String.chr(0xFFFD)），
- *     同样只伴随一条警告。
- *   **代理区**：`\uD800` / `\uDC00` 单独出现是 Parse Error「Invalid UTF-16 sequence in string,
- *     unpaired lead/trail surrogate」；但**相邻的 lead+trail 两个转义会配成一个码点** ——
- *     实测 `"\uD800\uDC00"`、`"\U00D800\U00DC00"`、`"\uD800\U00DC00x"` 长度分别是 1/1/2，
- *     且都等于 String.chr(0x10000)（跨 \u 与 \U 两种写法也能配）。所以配对要等整串切完才能判。
- * 认不出的转义一律响亮抛错，绝不退回原文。
- */
 function unquote(raw: string): string {
   if (raw.length < 2 || !(raw.startsWith('"') || raw.startsWith("'"))) return raw;
   const inner = raw.slice(1, -1);
-  // 先切成「字面片段 / 转义码点」的有序序列，配对与越界替换留到第二趟：
-  // 代理对只可能出现在**相邻的两个转义**之间，中间隔了字面字符就不算。
   const parts: Array<string | number> = [];
   const pushLit = (ch: string) => {
     const last = parts[parts.length - 1];
@@ -644,8 +582,6 @@ function unquote(raw: string): string {
       case "'": pushLit("'"); break;
       case "u":
       case "U": {
-        // \u = 4 位、\U = 6 位，且必须**恰好**这么多：少一位 Godot 就是 Parse Error，
-        // 多出来的位不是错误，是留给后面的普通字符（实测 \U0001F600 → 0x1F6 + "00"）。
         const width = e === "u" ? 4 : 6;
         const hex = inner.slice(i + 1, i + 1 + width);
         if (!new RegExp(`^[0-9a-fA-F]{${width}}$`).test(hex)) {
@@ -691,9 +627,6 @@ function unquote(raw: string): string {
         `\\u${p.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
       );
     }
-    // 越界（> U+10FFFF）与 **NUL** 都不是编译错：Godot 把那一位换成 U+FFFD，只在 stderr 警告一句
-    // （实测 String.chr(0) == String.chr(0xFFFD) 为真、"a<U000000b" == "a"+chr(0xFFFD)+"b" 为真，
-    // u0000 走同一条解码路、长度也是 3）。所以这里不能留真 NUL。
     out += p === 0 || p > 0x10ffff ? "\uFFFD" : String.fromCodePoint(p);
   }
   return out;

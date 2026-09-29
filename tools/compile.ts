@@ -1,9 +1,3 @@
-/**
- * 把语料编译成 JS。产出 `corpus/cases/<id>/main.gen.mts`（emitter 的产物，
- * 与手写的 main.mts 区分开）。
- *
- * 跑：node_modules/.bin/tsx tools/compile.ts [filter]
- */
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitModule } from "../src/emit/emitter";

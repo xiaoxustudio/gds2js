@@ -1,22 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 
-/**
- * 二维向量 —— GDScript 内建的数学类型。
- *
- * **分量是 32 位 float**（探针实测，不是打印造成的）：
- *   `Vector2(1e15, 0).x == 1e15` → **false**，`.x` 单独打印给 `999999986991104.0`；
- *   `Vector2(0.1, 0).x` → `0.10000000149012`；`Vector2(0.1,0) == Vector2(0.100000001,0)` → **true**。
- * 所以在构造处统一 `Math.fround`：算术结果也都是"新建一个 GVector2"，于是同样落到 float32，
- * 与 Godot 的 real_t=float 一致（`Vector2(1e15,1)*2` → `(1999999973982208.0, 2.0)` 实测）。
- *
- * **算术也必须每步都 fround**，不能"先用 double 算完再舍入"。判别点：
- * `Vector2(0.1,0.2).dot(Vector2(0.1,0.2))` → Godot 给 `0.05000000447035`，
- * 逐步 float32 正好是这个值，而 double 中间量最后一步舍入会给 `0.05000000074506`。
- * 下面凡是产数值的都写作 `r(...)` 嵌套；标量结果（length/dot/angle/aspect…）同样返回 float32。
- *
- * 注意：打印**不**走通用浮点规则，另有 6 位小数的专用格式（见 values.ts 的 strVec2）。
- */
 export class GVector2 {
   x: number;
   y: number;
@@ -54,8 +38,6 @@ export function toVec2(v: Variant): Variant {
 /** `Vector2(...)` 构造：0 参给零向量（实测 `Vector2()` → `(0.0, 0.0)`），其余必须两参。 */
 export function vector2New(args: Variant[]): Variant {
   if (args.length === 0) return vector2(0, 0);
-  // 一个实参：拷贝自己（实测 `Vector2(Vector2(1,2))` → (1.0, 2.0)）或从 Vector2i 升级
-  // （实测 `Vector2(Vector2i(1,2))` → (1.0, 2.0)）
   if (args.length === 1) {
     const a = args[0] as Variant;
     if (a.t === Tag.OBJECT && a.v instanceof GVector2) return vector2(a.v.x, a.v.y);
@@ -180,14 +162,11 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       arity(args, 0, "ceil");
       return vector2(Math.ceil(v.x), Math.ceil(v.y));
     case "round": {
-      // Godot 用 C 的 roundf：半数**远离零**。JS 的 Math.round 是半数向正无穷（-2.5 → -2），照抄会静默错。
       arity(args, 0, "round");
       const h = (n: number) => (n < 0 ? -Math.round(-n) : Math.round(n));
       return vector2(h(v.x), h(v.y));
     }
     case "snapped": {
-      // 实测 = `step * floor(value / step + 0.5)`，且 step 分量为 0 时**原样返回**该分量
-      // （(3,4).snapped(Vector2(0,1)) → (3.0, 4.0)，不是 nan）。
       arity(args, 1, "snapped");
       const o = vecArg(args, 0, "snapped");
       const snap = (n: number, s: number) => (s === 0 ? n : mul(s, Math.floor(add(div(n, s), 0.5))));
@@ -200,7 +179,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(add(v.x, mul(sub(o.x, v.x), w)), add(v.y, mul(sub(o.y, v.y), w)));
     }
     case "move_toward": {
-      // 实测：`len <= delta` 或 len 为 0 就直接给目标点；否则沿方向走 delta（delta 为负会**倒退**）。
       arity(args, 2, "move_toward");
       const o = vecArg(args, 0, "move_toward");
       const d = scalar(args[1], "move_toward");
@@ -218,7 +196,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(mul(div(v.x, len), max), mul(div(v.y, len), max));
     }
     case "orthogonal":
-      // 实测 (3,4) → (4.0, -3.0)、(-3,4) → (4.0, 3.0)、(0,-5) → (-5.0, 0.0)，即 (y, -x)
       arity(args, 0, "orthogonal");
       return vector2(v.y, -v.x);
     case "rotated": {
@@ -229,12 +206,9 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(sub(mul(v.x, c), mul(v.y, s)), add(mul(v.x, s), mul(v.y, c)));
     }
     case "angle":
-      // (0,0).angle() → 0.0（atan2(0,0) 本来就是 +0），实测无需特判
       arity(args, 0, "angle");
       return V.float(r(Math.atan2(v.y, v.x)));
     case "angle_to": {
-      // 实测 (3,4).angle_to(Vector2(0,0)) → 0.0、angle_to(自身) → 0.0：atan2(cross, dot) 自然给出，
-      // 不需要零向量特判（Godot 就是 `atan2(cross, dot)`）。
       arity(args, 1, "angle_to");
       const o = vecArg(args, 0, "angle_to");
       const cross = sub(mul(v.x, o.y), mul(v.y, o.x));
@@ -247,18 +221,12 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return V.float(r(Math.atan2(sub(o.y, v.y), sub(o.x, v.x))));
     }
     case "aspect":
-      // 实测 (1.5,-2.5).aspect() → -0.60000002384186（float32 的 -0.6），(0,0) → nan
       arity(args, 0, "aspect");
       return V.float(div(v.x, v.y));
     case "is_finite":
       arity(args, 0, "is_finite");
       return V.bool(Number.isFinite(v.x) && Number.isFinite(v.y));
     case "slerp": {
-      // 实测 12 个点全对上的口径：**极坐标插值** —— 长度线性插值，角度按 wrap 到 (-π, π] 的差插值。
-      // wrap 必须在 double 里做（Godot 的 fmod 也是 double）：`Vector2(1,2).slerp((-1,-2), 0.5)`
-      // 给 (-2.0, 1.0)，而 float32 里 `ab - aa` 落在 -π 之内一点点，wrap 不触发就会给反方向的 (2.0, -1.0)。
-      // 角度落回 float32 才取三角函数，所以 `(1,0).slerp((-1,0),0.5)` 给的是 **(-0.0, 1.0)** —— 负号来自
-      // fround(π/2) 略大于 π/2，cos 出来是 -4.37e-8，打印成 -0.0。
       arity(args, 2, "slerp");
       const o = vecArg(args, 0, "slerp");
       const w = scalar(args[1], "slerp");
@@ -272,8 +240,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(mul(len, r(Math.cos(ang))), mul(len, r(Math.sin(ang))));
     }
     case "is_equal_approx":
-      // 口径与 Vector3 同一条（见 CMP_EPS）；实测 (1,2) vs (1.0000095,2) 真、vs (1.00001,2) 假、
-      // (3,4) vs (3.000029,4) 真、vs (3.000031,4) 假、(1e300,1) 相同真、(0,0) vs (9e-6,0) 真
       arity(args, 1, "is_equal_approx");
       {
         const o = vecArg(args, 0, "is_equal_approx");
@@ -283,7 +249,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       arity(args, 0, "is_zero_approx");
       return V.bool(Math.abs(v.x) < CMP_EPS && Math.abs(v.y) < CMP_EPS);
     case "is_normalized": {
-      // 阈值实测是 length_squared 上的 1e-3，不是 CMP_EPSILON —— 用 1e-5 会把 (0.9995,0) 判错
       arity(args, 0, "is_normalized");
       const ls = add(mul(v.x, v.x), mul(v.y, v.y));
       return V.bool(r(Math.abs(sub(ls, 1))) < NORMALIZED_EPS);

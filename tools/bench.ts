@@ -1,14 +1,3 @@
-/**
- * 性能 benchmark —— D2 性能阶段的度量 + 每步优化的回归护栏。
- * 跑：node_modules/.bin/tsx tools/bench.ts（需先 pnpm build，kernel 走 gds2js/runtime 自引用）
- *
- * 把若干计算密集的 GDScript kernel 用真正的编译管线（parse→lower→emitModule）编成 .mts，
- * 在 node 下计时。校验值用于确认优化前后语义不变（必须逐一相同）。
- *
- * 基线（纯 ops.* 动态路径 + Variant 装箱）合计 ~160ms；
- * 保守 int 单态化解箱后 ~91ms（int-sum 3.8x，循环计数器解箱是主要来源）。
- * 不引入任何新编译器代码——只复用 emitModule，所以 bench 本身不会带来语义风险。
- */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,11 +9,8 @@ const OUT = resolve("bench/.out");
 
 interface Kernel {
   name: string;
-  /** 每个 kernel 是一个无参 `bench()` 方法，返回一个校验值（防 DCE）。 */
   body: string;
-  /** 可选：bench() 之外的辅助方法源码（放在 bench 前），用于测函数调用边界的装箱开销。 */
   helpers?: string;
-  /** 计时重复次数（loop 量已写进 body，这里只是多跑几遍取稳定值）。 */
   reps: number;
 }
 
@@ -266,7 +252,7 @@ async function main(): Promise<void> {
     const file = await compileKernel(k);
     const mod = (await import(pathToFileURL(file).href)) as { K: new () => { bench: () => { v: unknown } } };
     const inst = new mod.K();
-    inst.bench(); // 预热，触发 JIT
+    inst.bench();
     let checksum: unknown = null;
     const t0 = performance.now();
     for (let r = 0; r < k.reps; r++) checksum = inst.bench().v;

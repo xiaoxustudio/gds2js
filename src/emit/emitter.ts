@@ -4,82 +4,30 @@ import { UnsupportedError } from "../runtime/errors";
 import { isElemKind } from "../runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
-/**
- * IR → JS。
- *
- * v1 策略：**一律走动态路径 `ops.*`，不做单态快路径**。
- * 契约里 `fast.*` 已经定死，等这一版跑绿了再按 D2 加内联优化 —— 先要正确。
- */
 
-/**
- * 顶层 extends 解析出的基类，由调用方（CLI / 项目层）决定：
- * - `host`  继承宿主的 `SceneTree`（语料入口脚本的默认）
- * - `none`  不继承任何基类（库类、或 `--no-host`）
- * - `import` 继承跨文件的用户基类，`from` 是它的 ESM 说明符
- */
 export type BaseSpec =
   | { kind: "host" }
   | { kind: "none" }
   | { kind: "import"; name: string; from: string };
 
 export interface EmitOptions {
-  /** 运行时的 import 说明符。语料用相对路径；发布产物用 "gds2js/runtime" */
   runtimeImport?: string;
-  /**
-   * 宿主（SceneTree 基类 + print）的 import 说明符。
-   * 语料用相对路径；发布产物用 "gds2js/host"。
-   * 传 null 表示不引入宿主、发射成不继承任何基类的纯类。
-   */
   hostImport?: string | null;
-  /** 模块末尾是否自动 `await new Main().run()`。语料要，产物不要 */
   autoRun?: boolean;
-  /** 顶层类名。默认 "Main"（语料沿用）；多文件由项目层传真实 class_name / 文件名派生 */
   className?: string;
-  /**
-   * 顶层 extends 的解析结果。省略时按向后兼容回落：有宿主 → host，无宿主 → none。
-   */
   baseClass?: BaseSpec;
-  /**
-   * 跨文件引用的类：GDScript `class_name` → 提供该类的 ESM 说明符。
-   * 项目层解出依赖边后传入，emitter 发射成 `import { name } from "from"`，
-   * 并把这些名字纳入 `MODULE_CLASSES`，让 `Foo.new()` / `is Foo` 认得它们。
-   */
   classRefs?: Array<{ name: string; from: string }>;
-  /** 该产物自己的 res:// 路径；给了才发射 `rt.registerScript(resPath, 类)`，供 load() 解析。 */
   resPath?: string;
-  /** `preload("字面量")` → 解析到的绑定名 + 提供它的 ESM 说明符。 */
   preloads?: Array<{ literal: string; name: string; from: string }>;
-  /** `load("字面量")` → 规范化 res 路径（脚本注册表的键），保证运行时查得到。 */
   loadMap?: Array<{ literal: string; resPath: string }>;
-  /** 只需触发注册、不绑定名字的副作用 import（动态 load 的目标脚本）。 */
   sideEffectImports?: string[];
-  /**
-   * extends 链上继承来的成员名（字段/方法/信号）。
-   * 值位置引用继承字段要发成 `this.x`，否则裸标识符运行期 ReferenceError。
-   */
   inheritedMembers?: string[];
-  /** 生成行粒度 sourcemap（默认关，关掉时产出的字节与不生成时完全一致）。 */
   sourcemap?: boolean;
-  /** sourcemap 的 sources 字段（通常是 .gd 源文件路径，相对 sourceRoot 或直接路径）。 */
   sourceFile?: string;
-  /** 产物文件名（sourcemap 的 file 字段与 //# sourceMappingURL 用它，需与实际写盘名一致）。 */
   jsFile?: string;
-  /**
-   * 跨文件编译时由项目层传入：工程内**任何模块**里作为属性访问名 / 裸标识符出现过、
-   * 或被继承过的函数名。这些名字一律禁止裸 ABI（它们可能被 obj.f()/Callable 以装箱实参触达）。
-   * 单文件编译时无需传——本模块扫描即为全集。
-   */
   rawAbiExternal?: string[];
-  /**
-   * 产物运行时打包模式（默认 "import"，行为与历史逐字节一致）：
-   * - import：`import "gds2js/runtime"` + `import "gds2js/host"`，靠已安装的 gds2js 解析。
-   * - local：产物用 createRequire 载入旁挂的 `standalone.cjs`（相对路径由 standaloneRequirePath 给）。
-   * - single：把 standalone.cjs 文本内联进本文件 → 真正自包含单文件，无需 node_modules。
-   */
   runtimeMode?: "import" | "local" | "single";
-  /** local 模式：从产物文件到旁挂 standalone.cjs 的相对说明符（如 "./gds2js-standalone.cjs"）。 */
   standaloneRequirePath?: string;
-  /** single 模式：dist/standalone.cjs 的完整文本，内联进产物顶部。 */
   standaloneInline?: string;
 }
 
@@ -116,8 +64,6 @@ function rangeArgList(a: Array<string | undefined>): string {
   if (a.length > 3) {
     throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
   }
-  // 参数一律以 Variant 交给运行时，由 rt.rangeInt 按 Godot 的「转 int」口径截断
-  // （float 向零截断、bool 当 0/1、其它类型运行错）—— 在编译期偷偷 num() 会丢掉这套语义。
   return `[${a.filter((x): x is string => x !== undefined).join(", ")}]`;
 }
 
@@ -134,27 +80,22 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
 
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
-  // range() 返回裸 GArray，包一层变体才能跟 rt.iter / 下标这些统一入口对接
   range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
   str: (a) => `rt.strOf(${a.join(", ")})`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,
   bool: (a) => `rt.toBool(${a.join(", ")})`,
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
-  // 实参个数交给运行时把门（`hash()` 少/多参在 Godot 是解析期错）
   hash: (a) => `rt.variantHash([${a.join(", ")}])`,
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
-  // 参数个数交给运行时把门：`Vector2()` 是零向量，`Vector2(1)` 这类要响亮报缺
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
   Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
   Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
-  // 实测 String()/StringName() 都只接受字符串族（其余签名 Godot 是 Parse Error），把门交给运行时
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
-  // Packed*Array：数值那一族的**行为口径实测一致**（S168 / S169），只有元素折算按 kind 分岔
   PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
   PackedInt32Array: (a) => `rt.packCtor("int32", [${a.join(", ")}])`,
   PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
@@ -164,7 +105,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedVector2Array: (a) => `rt.packCtor("vector2", [${a.join(", ")}])`,
   PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
-  // Array(pack) 实测只量过从 PackedByteArray 转（f49 t4），其余形状由运行时响亮拒
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
 };
 
@@ -172,17 +112,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 const BUILTIN_TODO = new Set([
   "Vector2i",
   "Vector3",
-  // Vector3i 的运行时那一族还没做（145 的探针量过 Godot：`PackedVector3Array([Vector3i(1,2,3)])`
-  // → [(1.0, 2.0, 3.0)] 是成立的）。不列进来会发成 `this.Vector3i(...)` —— JS 的 TypeError，
-  // 差分记成「崩溃」而不是「未实现」，正是这张表要挡的。
   "Vector3i",
   "load",
   "preload",
-  // Packed*Array 这一族九种全落地了（S168 / S169 / S170 / S171 / S173）。
-  // 「认得但没实现」的那张表留着是防 `this.PackedXxx(...)` 这种 JS TypeError —— 那是
-  // 「我们崩、Godot 过」的误报级差异，现在九种都有真表项，只剩下面这几个非 pack 的名字。
-  // （刻意响着的两格在 runtime/packed.ts 里，不在这张表上：`PackedColorArray.sort()` 的
-  // 比较依据没量、向量与颜色 pack 的 has / count / find 元素比较口径没量。）
 ]);
 
 /**
@@ -243,7 +175,6 @@ let LOCAL_TYPES = new Map<string, TypeRef | null>();
 // ---- sourcemap 采集（只在 emitModuleWithMap 且 opts.sourcemap 时启用）----
 let MAP_ACTIVE = false;
 let LINE_MAPPINGS: LineMapping[] = [];
-/** 记录「生成第 genLine 行（0-based）」来自源 loc。只读不写，不影响输出字节。 */
 function mark(genLine: number, loc: Loc | undefined): void {
   if (!MAP_ACTIVE || !loc) return;
   LINE_MAPPINGS.push({ genLine, srcLine: loc.line - 1, srcCol: loc.col - 1 });
@@ -254,12 +185,6 @@ export interface EmitResult {
   map: RawSourceMap | null;
 }
 
-/**
- * single 模式的自包含头部：把 dist/standalone.cjs 的整段 CJS 文本塞进一个 IIFE，
- * 提供 `exports`/`module` 两个壳，取回 { rt, print, SceneTree }。standalone.cjs 是纯 CJS、
- * 无 require（只碰 node 全局 process），故无需 require shim；包进函数作用域也不与产物主体的
- * `Main` / enum 常量 / 内部类发生名字冲突。
- */
 function standaloneInlineHeader(body: string): string {
   const indented = body
     .split("\n")
@@ -290,7 +215,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   const resPath = opts.resPath;
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
-  // 向后兼容：省略 baseClass 时，有宿主就继承 SceneTree，无宿主则不继承。
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
 
   MODULE_VARS = new Set([
@@ -299,14 +223,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     ...(opts.inheritedMembers ?? []),
   ]);
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
-  // 模块类的静态方法面：名字挂在这个类作用域上，调用与取值都发成 `<类名>.f`
   CURRENT_CLASS = className;
   STATIC_FUNCS = new Set(m.funcs.filter((f) => f.isStatic).map((f) => f.name));
   CLASS_VALUE_OWNERS = new Map(
     m.vars.filter((v) => v.isConst || v.isStatic).map((v) => [v.name, className]),
   );
-  // 类级的值（常量 / 静态变量）按类先收齐：模块方法在产物里排在内部类**之前**发射，
-  // 现在不收，后面认 `Inner.IC` 就没有依据
   CLASS_VALUES = new Map();
   const collectClassValues = (name: string, vars: { name: string; isConst: boolean; isStatic: boolean }[]): void => {
     CLASS_VALUES.set(name, new Set(vars.filter((v) => v.isConst || v.isStatic).map((v) => v.name)));
@@ -329,12 +250,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   const out: string[] = [];
   out.push("// 由 gds2js 从 main.gd 编译生成 —— 不要手改。");
   out.push("");
-  // 运行时/宿主头部：import 模式逐字节同旧行为；local/single 从自包含 standalone 包绑定 rt/print/SceneTree。
   const runtimeMode = opts.runtimeMode ?? "import";
   if (runtimeMode === "single") {
     if (!opts.standaloneInline) throw new UnsupportedError("emit-standalone", "single 模式需要 standaloneInline");
-    // 按行 push（而非一整串）：mark() 用 out.length 当生成行号，多行内联头必须逐行计入，
-    // 否则 sourcemap 的 genLine 会把整段头当成 1 行而错位。join 后字节完全一致。
     out.push(...standaloneInlineHeader(opts.standaloneInline).split("\n"));
   } else if (runtimeMode === "local") {
     const p = opts.standaloneRequirePath ?? "./gds2js-standalone.cjs";
@@ -342,14 +260,12 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     out.push(`const { rt, print, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
   } else {
     out.push(`import * as rt from "${runtimeImport}";`);
-    // 宿主提供 print（全局函数）；只有基类解析到 host 时才顺带 import SceneTree。
     if (hostImport) {
       const hostNames = baseClass.kind === "host" ? ["print", "SceneTree"] : ["print"];
       out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
     }
   }
-  // 跨文件类引用 + preload 目标都要 import 才能触发定义方的 registerClass/registerScript。
-  const imports = new Map<string, string>(); // 绑定名 → 说明符
+  const imports = new Map<string, string>();
   for (const ref of classRefs) imports.set(ref.name, ref.from);
   for (const p of preloads) imports.set(p.name, p.from);
   for (const [name, from] of imports) out.push(`import { ${name} } from "${from}";`);
@@ -357,9 +273,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
 
-  // enum → 模块作用域常量。named enum 发成 GDict（`Suit["X"]`/keys()/values()/size()/for-in 全走 Dictionary 路径），
-  // `Suit.HEARTS` 点访问由 emitExpr 特判成 rt.index（GDScript 只允许 enum 点访问，不允许普通 dict 点访问）。
-  // 匿名 enum 的成员是脚本级裸 int 常量。值是 Variant int，故 `Suit.X + 1` / print 都走正常路径。
   ENUM_NAMES = new Set<string>();
   for (const en of m.enums) {
     mark(out.length, en.loc);
@@ -373,7 +286,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   if (m.enums.length > 0) out.push("");
 
-  // 参数/返回单态化（D2 第三轨）：逐模块算出裸 ABI 函数集，供 emitFunc/emitExprR/computeUnboxed 共享。
   RAW_ABIS = computeRawAbis(m, {
     hasBase: baseClass.kind === "import",
     inherited: new Set(opts.inheritedMembers ?? []),
@@ -402,7 +314,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   out.push("}");
   out.push("");
 
-  // 有 class_name 的脚本注册进运行时全局表：跨文件的 `is Foo` / `as Foo` 靠它。
   if (m.className) out.push(`rt.registerClass(${JSON.stringify(m.className)}, ${className});`);
   const moduleFields = fieldTypesLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(${className}, ${moduleFields});`);
@@ -410,15 +321,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (moduleStaticVars !== null) out.push(`rt.registerStaticVars(${className}, ${moduleStaticVars});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(${className}, ${JSON.stringify(moduleStatics)});`);
-  // `get_class()` 要的是**原生基类**（f39 t3：外层 extends SceneTree → SceneTree、没 extends → RefCounted）。
-  // `extends 别的脚本` 那支**不发这行** —— 让运行时沿原型链去父类那份登记里找，比在这儿猜基类名诚实。
   if (baseClass.kind !== "import") {
     out.push(`rt.registerNativeBase(${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
-  // 按 res:// 路径注册：`load("res://…")` 与 `preload` 一致性都靠它。
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
-  // 内部类是模块级声明，发射成兄弟类（GDScript 里它们对整个脚本可见）
   for (const c of m.innerClasses) {
     const base = out.length;
     for (const line of emitClassDecl(c, base)) out.push(line);
@@ -444,23 +351,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   return { code, map };
 }
 
-/**
- * 带声明类型的成员表，发成 `rt.registerFieldTypes(Cls, {...})`。
- * 属性写 `p.t = v` 在 Godot 是**运行时**按字段声明类型收敛（S150 实测：`p.t = 5.5`→5、
- * `p.t = "12abc"`→12、`p.s = &"nm"`→"nm"，而 `p.s = 5` 直接是运行期错），
- * 运行时必须知道字段声明成什么，否则就是把 float 存进 int 槽的静默错。
- * 只收实测过的那五种；别的类型不发 —— 宁可不转，也不拿猜的表去改数据。
- */
 function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; accessor?: PropAccessor | null }[]): string | null {
   const rows: string[] = [];
   for (const v of vars) {
     const base = v.type !== null && v.type.kind === "named" ? v.type.name.replace(/\[.*\]$/, "") : "";
     if (v.accessor !== null && v.accessor !== undefined) {
-      // 属性访问器：实测 Godot **在调用 setter 之前**就按声明类型转换（f13：`p.prop = 2.7` 与
-      // 方法里的 `self.prop = 3.9` 都是 setter 收到 2 / 3，typeof 是 int）—— 两条路径同一条规则，
-      // 所以带类型的属性照常登记类型（writeProp 转换后再落给 JS 的 set）。
-      // 没写类型的属性（`var p:` + get/set）没有可转的目标，登记成 "accessor"：
-      // 这一档的意义是**放行键名**（访问器在原型上，writeProp 的「自有属性」判定看不见它），不做转换。
       const known = base === "int" || base === "float" || base === "bool" || base === "String" || base === "Vector2";
       rows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(known ? base : "accessor")}`);
       continue;
@@ -483,12 +378,6 @@ function staticNamesLiteral(funcs: readonly { name: string; isStatic: boolean }[
   return funcs.filter((f) => f.isStatic).map((f) => f.name);
 }
 
-/**
- * 静态变量表，发成 `rt.registerStaticVars(Cls, { sv: "int", plain: "" })`。
- * 有了这张表，运行时才知道 `A.x` / `p.x` / `A.x = v` / `p.x = v` 摸的是**类上那一格**（S161），
- * 以及带类型的槽该怎么转换（照 S150 那五种，其余原样存）。
- * 没实测过声明类型的槽登记成 ""，只登记键名、不做转换 —— 与「不认识的类型不发」是同一条纪律。
- */
 function staticVarTableLiteral(vars: readonly VarDecl[]): string | null {
   const rows: string[] = [];
   for (const v of vars) {
@@ -499,23 +388,12 @@ function staticVarTableLiteral(vars: readonly VarDecl[]): string | null {
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
 }
 
-/**
- * 类成员变量的发射。普通字段一行；带访问器的发成 JS 的 get/set，**不再发那个字段** ——
- * JS 的同名类字段会把访问器盖掉，读出来就成了初值而不是 getter 的结果。
- * 只读属性（没有 set）实测「写它」是**静默无操作**（S152 的 e8 / f12 k4：值不变、也不报错），
- * 所以补一个空 set：不补的话 JS 会抛 TypeError，变成「Godot 能跑、我们崩」。
- */
 function emitMemberVar(v: VarDecl): string[] {
   const a = v.accessor;
   if (a === null || a === undefined) {
     const init = stampDecl(v.type, v.init, emitExpr);
-    // `static var` 是**共享的一格**（S161）：发成类的 static 字段、实例上不留副本，
-    // `A.x` / `p.x` / 静态方法里裸写这三条路都靠运行时那张静态表落到同一格。
     if (v.isStatic) return [`  static ${v.name} = ${init};`];
     const field = `  ${v.name} = ${init};`;
-    // 常量在**类上**也要有一份：Godot 的常量是类级的，静态方法里读常量（f15 t4/t5）与
-    // 内部类里读外层常量（f29 t2/t4）实测都成立，而裸读现在按归属发成 `<类>.NAME`。
-    // 实例字段照旧留着 —— `p.CV` 那条路（f29 t8 实测给 7）靠的就是它。
     if (v.isConst) return [field, `  static ${v.name} = ${init};`];
     return [field];
   }
@@ -525,8 +403,6 @@ function emitMemberVar(v: VarDecl): string[] {
   if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
   else out.push(`    return this.${a.getter.method}();`);
   out.push("  }");
-  // 形参直接用 GDScript 写的那个名字：体里的标识符本来就发射成同名 JS 变量，不需要任何改写
-  // （同名成员被形参遮住，与 Godot 一致）。引用式与「没有 set」两支都用 value 这个占位名。
   const pname = a.setter !== null && a.setter.kind === "inline" ? a.setter.param : "value";
   out.push(`  set ${v.name}(${pname}) {`);
   if (a.setter === null) out.push(`    // 只读属性：Godot 实测写它是静默无操作（S152），不是报错`);
@@ -549,15 +425,11 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
-  // 内部类**继承外层的常量可见性**（f29 实测），同名按 GDScript 的就近遮蔽覆盖；
-  // 静态变量也算类级的那一格（S161）
   CLASS_VALUE_OWNERS = new Map(savedConsts);
   for (const v of decl.vars) if (v.isConst || v.isStatic) CLASS_VALUE_OWNERS.set(v.name, decl.name);
 
   const lines = [`class ${decl.name} {`];
   mark(base, decl.loc);
-  // 内部类的 signal 以前整族被丢掉（这里只发 vars 与 funcs），于是 `a.inner_sig` 读出来
-  // 是「取属性未实现」而不是一个信号 —— 与模块级同一条式子：发成实例上的 rt.Signal 字段。
   for (const s of decl.signals) {
     mark(base + lines.length, s.loc);
     lines.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
@@ -572,7 +444,6 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
     for (const line of emitFunc(f, funcBase)) lines.push(`  ${line}`);
   }
   lines.push("}");
-  // 注册进运行时的类注册表，`is` 判定和 Base.new() 都靠它
   lines.push(`rt.registerClass(${JSON.stringify(decl.name)}, ${decl.name});`);
   const declFields = fieldTypesLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declFields !== null) lines.push(`rt.registerFieldTypes(${decl.name}, ${declFields});`);
@@ -580,7 +451,6 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null) lines.push(`rt.registerStaticVars(${decl.name}, ${declStaticVars});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
-  // 内部类没有 extends（那条仍在 emitClassDecl 头上响亮拒），原生基类就是 RefCounted（f36 t7 实测）
   lines.push(`rt.registerNativeBase(${decl.name}, "RefCounted");`);
   lines.push("");
 
@@ -592,10 +462,6 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   return lines;
 }
 
-/**
- * 收函数体里所有**带类型标注**的 var（嵌套块与 match 分支都要看，GDScript 的声明虽然按块作用域，
- * 但赋值点可能在同一函数的任何位置）。用来在赋值时补声明类型的转换。
- */
 function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<string, TypeRef | null> {
   const stmt = (s: Stmt): void => {
     switch (s.kind) {
@@ -681,8 +547,6 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
 }
 
 function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
-  // 赋值点要认得「这个名字声明成什么类型」：类成员 + 本函数里带标注的局部。
-  // 用 try/finally 是因为 emitFuncInner 有多处提前返回，状态漏在外面会污染下一个函数。
   const saved = LOCAL_TYPES;
   LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
   try {
@@ -693,15 +557,11 @@ function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
 }
 
 function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
-  // `static func _init` / 静态的入口方法**没探针测过**，而且发出去是最坏的错形：
-  // harness 只调实例上的 `_initialize`，静态版本会编得出来却**永远不跑**。响亮拒，不猜。
   if (f.isStatic && (f.name === "_init" || f.name === "_initialize" || f.name === "_process")) {
     throw new UnsupportedError("static-entry", `静态的 ${f.name}() 还没实测过行为，不猜着发`);
   }
-  // _init → JS constructor（构造参数即 .new(args) 的实参）
   if (f.name === "_init") return emitConstructor(f, base, hasSuper);
 
-  // 入口方法是 harness 约定的异步方法，必须保持 Promise 签名
   const isEntry = f.name === "_initialize" || f.name === "_process";
   const abi = RAW_ABIS.get(f.name);
   const async = f.coroutine || isEntry ? "async " : "";
@@ -741,13 +601,6 @@ function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
   return lines;
 }
 
-/**
- * `_init` → `constructor`。派生类必须在使用 this 前调 super()：
- * - 体首句是显式 `super(args)` → 原样发（emitCall 在 IN_CONSTRUCTOR 下放行）；
- * - 否则若类有基类 → 隐式补 `super()`（GDScript 隐式父构造也是无参）。
- * 无基类（内部类 / 无 extends）不发 super。
- * 字段初始化器是 JS class fields，由引擎在 super() 之后、构造体之前跑——正好对上 GDScript「先字段后 _init 体」。
- */
 function emitConstructor(f: FuncDecl, base: number, hasSuper: boolean): string[] {
   const params = f.params.map((p) => p.name).join(", ");
   const lines = [`constructor(${params}) {`];
@@ -792,7 +645,6 @@ function hasValueReturn(stmts: Stmt[]): boolean {
   return false;
 }
 
-// ---------------------------------------------------------------- 语句
 
 /** 条件表达式：裸 bool 直接用；裸 int/float 用 `!== 0`，裸 str 用 `!== ""`（S12 空串假值）；否则 rt.ops.truthy。 */
 function condExpr(e: Expr): string {
@@ -806,11 +658,9 @@ function condExpr(e: Expr): string {
 function emitStmt(s: Stmt, voidReturn: boolean): string[] {
   switch (s.kind) {
     case "var": {
-      // 特化裸数组局部：init 必为数字字面量数组（且逐元素与元素 Kind 相符，推断已校验）→ 发裸 number[]
       const ek = RAW_ARRAYS.get(s.name);
       if (ek && s.init && s.init.kind === "array") {
         if (isGridElem(ek)) {
-          // 二维网格：每个 top 项都是数字字面量数组 → 发 number[][]，叶子必须与基型 Kind 相符。
           const leaf = leafOf(ek);
           const rows = s.init.items.map((row) => {
             if (row.kind !== "array") {
@@ -836,7 +686,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         });
         return [`let ${s.name} = [${parts.join(", ")}];`];
       }
-      // 特化裸字典局部：init 必为 int/str 键 + 统一数字值 → 发裸 Map（保插入顺序，与 Godot 一致）
       const dk = RAW_DICTS.get(s.name);
       if (dk && s.init && s.init.kind === "dict") {
         const pairs = s.init.entries.map((en) => {
@@ -852,27 +701,20 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         });
         return [`let ${s.name} = new Map([${pairs.join(", ")}]);`];
       }
-      // 解箱局部：init 必为同型数值表达式（推断保证），直接发裸 number
       if (s.init && UNBOXED.has(s.name)) {
         return [`let ${s.name} = ${emitExprR(s.init).code};`];
       }
-      // 直接发射 let —— 块作用域由 JS 自己保证，正好对应 S16
       const init = stampDecl(s.type, s.init, emitExpr);
-      // 带类型标注的声明要做截断：`var i: int = 3.9` 在 Godot 里是 3，不是 3.9（S6）
       const cast = declaredCast(s.type);
       return [`let ${s.name} = ${cast ? `${cast}(${init})` : init};`];
     }
 
     case "expr":
-      // 结果丢弃，就不必装箱：boxR 只是纯分配地套一层 V.*，而裸 insert 的状态码正是白扔的那份。
       return [`${emitExprR(s.expr).code};`];
 
     case "assign": {
-      // `self.m = v` 与裸 `m = v` 是同一格（S143 实测）：先把目标降成裸成员，
-      // 成员写、解箱局部、值类型写回这些既有口径就原样接管，不另发一套 writeProp 写回。
       const bare = unwrapSelfMember(s.target);
       if (bare) return emitStmt({ ...s, target: bare }, voidReturn);
-      // 裸字典下标写：存裸值（Map<primitive, number>），键/值 rep 与推断一致，不符即响亮报错。
       if (s.target.kind === "index" && s.target.obj.kind === "ident") {
         const dk = RAW_DICTS.get(s.target.obj.name);
         if (dk) {
@@ -887,7 +729,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
           return [`${s.target.obj.name}.set(${kr.code}, ${vr.code});`];
         }
       }
-      // 赋值给解箱局部：值必为同型裸值（推断保证）；万一不是，按类型拆箱取裸值（.v）兜底
       if (s.target.kind === "ident") {
         const kind = UNBOXED.get(s.target.name);
         if (kind) {
@@ -899,7 +740,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       }
       const rawWrite = emitRawIndexWrite(s.target, s.value);
       if (rawWrite) return [rawWrite];
-      // 值类型写（Vector2）：目标可能是 `v.x` / `v[0]` / `a[0].x` / `d["k"].y`
       if (s.target.kind === "attribute" || s.target.kind === "index") {
         const vw = emitValueWrite(s.target, s.value);
         if (vw) return vw;
@@ -909,7 +749,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
 
     case "return":
       if (!s.value) return ["return;"];
-      // 裸 ABI 函数：返回值必须是声明的那一种裸类型（推断保证）；对不上就响，绝不静默发装箱值。
       if (CURRENT_RET) {
         const rr = emitExprR(s.value);
         if (rr.rep !== CURRENT_RET) {
@@ -920,7 +759,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
         }
         return [`return ${rr.code};`];
       }
-      // _initialize 的返回类型被钉成 Promise<void>，有返回值时用 void 吃掉
       return voidReturn ? [`return void (${emitExpr(s.value)});`] : [`return ${emitExpr(s.value)};`];
 
     case "if": {
@@ -939,14 +777,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
     }
 
     case "for": {
-      // 绑定必须用 `let` 而不是 `const`：JS 的 for-of 每轮**新建一次绑定**（let 与 const 同），
-      // 所以循环体里 `i = i + 1` 只影响当轮、不渗到下一轮 —— 正是 Godot 的语义
-      // （实测 `for i in range(3): i = i+1` 打印 1/2/3）。用 const 会当场 TypeError。
-      //
-      // `for x in range(...)` 且 x 已被推断成裸 int：直接迭代 rangeSeq 的 number[]，
-      // 既省掉整批 Variant 分配，也不再因"x 是 Variant"而连累被它索引的数组整体逃逸。
-      // 唯一的开关就是 UNBOXED，与 computeUnboxed 那条合成候选同源 —— 推断一旦退让，
-      // 这里必然跟着退回装箱路，不会出现"迭代裸 number、体内当 Variant 用"的错位。
       const body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
       if (isRangeCall(s.iter) && UNBOXED.get(s.var) === "int") {
         return [
@@ -973,8 +803,6 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
       return ["/* pass */"];
 
     case "match": {
-      // do-while(false) + break：让第一个命中的 arm 接管，其余跳过。
-      // 已知限制：arm 体内若要对**外层循环** break/continue，会被这里截住。
       const subject = emitExpr(s.subject);
       const lines: string[] = ["do {"];
       s.arms.forEach((arm, i) => {
@@ -1013,7 +841,7 @@ function emitRawIndexWrite(target: Expr, value: Expr): string | null {
   };
   if (target.obj.kind === "ident") {
     const K = RAW_ARRAYS.get(target.obj.name);
-    if (!K || isGridElem(K)) return null; // 网格的整行写不合法（前面已判逃逸），这里不接
+    if (!K || isGridElem(K)) return null;
     const i = raw(target.index, "int");
     const v = raw(value, K);
     return `rt.fast.rawArrSet(${target.obj.name}, ${i}, ${v});`;
@@ -1029,7 +857,6 @@ function emitRawIndexWrite(target: Expr, value: Expr): string | null {
   return null;
 }
 
-/** 一条能读也能写回的存储路径，连同它需要的先提语句。 */
 interface WPath {
   read: string;
   write: (nv: string) => string;
@@ -1098,9 +925,6 @@ function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
     };
   }
   if (t.kind === "attribute") {
-    // `p.m` 这一段：读用 rt.attribute，写回用 rt.writeProp —— 后者是 step 58b 落地的属性写，
-    // 所以「穿过别人的字段写值类型分量」（`p.m.x = 5`，实测 Godot 真写进那个字段，S77/S147）
-    // 现在能整体成立：内层 writeProp 产出新向量，外层 writeProp 把它放回字段。
     const base = lvalueOf(t.obj, seq);
     if (base === null) return null;
     const nm = JSON.stringify(t.name);
@@ -1126,8 +950,6 @@ function unwrapSelfMember(t: Expr): Expr | null {
 
 function emitAssign(target: Expr, value: string): string {
   if (target.kind === "ident") {
-    // 目标是声明过类型的变量就按那个类型转换（实测 `var mt: int` 之后 `mt = 2.7` 给 2、
-    // `var li: int` 之后 `li = lv.x` 给 1、内建类的 `t = 8.9` 给 8 —— 截断而不是存下 float）。
     const cast = declaredCast(LOCAL_TYPES.get(target.name) ?? null);
     return `${emitExpr(target)} = ${cast ? `${cast}(${value})` : value};`;
   }
@@ -1137,24 +959,12 @@ function emitAssign(target: Expr, value: string): string {
     }
     return `rt.setIndex(${emitExpr(target.obj)}, ${emitExpr(target.index)}, ${value});`;
   }
-  // 属性写 `p.m = v`：Godot 走 named-property 的**动态**路径 —— 运行时按字段的声明类型收敛或拒
-  // （S150：`p.t = 5.5`→5、`p.t = "12abc"`→12、`p.s = 5` 是运行期错），与「给定型变量赋值」的
-  // 解析期检查（S151）是两套口径。值类型写（`v.x = 1`）由上面的 emitValueWrite 接管，到这儿来的是普通字段。
   if (target.kind === "attribute") {
     return `rt.writeProp(${emitExpr(target.obj)}, ${JSON.stringify(target.name)}, ${value});`;
   }
   throw new UnsupportedError("emit-assign", `赋值目标 ${target.kind} 还没实现`);
 }
 
-// ---------------------------------------------------------------- 表达式
-//
-// D2 单态化解箱（保守）：表达式带「表示」标签——
-//   rep "int"  = 裸 JS number（仅安全 int 字面量 / 已解箱局部 / 二者的 + - *）
-//   rep "bool" = 裸 JS boolean（仅两个 int 的比较）
-//   rep "var"  = 装箱 Variant（其余一切）
-// `emitExpr` = 永远返回装箱后的字符串（旧调用点全部不变，raw 子表达式自动装箱）；
-// 只有 `+ - *`、比较、while/if 条件、解箱局部的声明/赋值这几处直接用 `emitExprR` 走 raw。
-// 漏装箱不会静默：裸 number 进了 ops.* 会因不是 Variant 而响亮报错，golden 必抓到。
 
 type Rep = "var" | "int" | "float" | "str" | "bool";
 interface R {
@@ -1165,9 +975,7 @@ interface R {
 /** 当前函数里被解箱成裸 JS 值的局部：int/float → number，str → string。 */
 let UNBOXED = new Map<string, "int" | "float" | "str">();
 
-/** 单态化的三种裸表示。 */
 type Kind = "int" | "float" | "str";
-/** 纯返回值函数的裸 ABI：参数与返回统一为同一种 Kind（v1 只支持同型）。 */
 interface RawAbi {
   params: Kind[];
   ret: Kind;
@@ -1177,11 +985,6 @@ let RAW_ABIS = new Map<string, RawAbi>();
 /** 当前正在发射的函数若走裸 ABI，其返回裸类型；否则 null（返回值需装箱）。 */
 let CURRENT_RET: Kind | null = null;
 
-/**
- * 容器元素单态化（D2 第四轨）：函数局部 Array 的裸元素类型。
- * `"int"`/`"float"` = 裸 number[]；`"int[]"`/`"float[]"` = 二维网格 number[][]（叶子是标量）。
- * 再深的嵌套、行/值被当对象用等一律不特化（回退装箱）。
- */
 type ElemKind = "int" | "float" | "int[]" | "float[]";
 const isGridElem = (k: ElemKind): k is "int[]" | "float[]" => k === "int[]" || k === "float[]";
 /** 网格的叶子标量类型。 */
@@ -1225,9 +1028,7 @@ function emitExprR(e: Expr): R {
     const k = UNBOXED.get(e.name);
     if (k) return { code: e.name, rep: k };
   }
-  // 容器元素单态化：裸数组/裸字典的下标读 / append / .size/.length（分析期已判定这些是唯一合法用法）。
   if (e.kind === "index" && e.obj.kind === "index" && e.obj.obj.kind === "ident") {
-    // 二维网格 g[i][j]：两层下标都 int，发一次 rawArrGet2（任一层越界响亮抛 array-index）。
     const ek = RAW_ARRAYS.get(e.obj.obj.name);
     if (ek && isGridElem(ek)) {
       const ri = emitExprR(e.obj.index);
@@ -1259,7 +1060,6 @@ function emitExprR(e: Expr): R {
     const ek = RAW_ARRAYS.get(nm);
     const dk = RAW_DICTS.get(nm);
     if ((ek || dk) && (e.callee.name === "size" || e.callee.name === "length") && e.args.length === 0) {
-      // 裸数组长度是 .length，裸 Map 是 .size。
       return { code: `${nm}.${ek ? "length" : "size"}`, rep: "int" };
     }
     if (ek && (e.callee.name === "append" || e.callee.name === "push_back") && e.args.length === 1) {
@@ -1267,12 +1067,9 @@ function emitExprR(e: Expr): R {
       if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 ${e.callee.name} 元素期望 ${ek}，实得 ${er.rep}`);
       return { code: `${nm}.push(${er.code})`, rep: "var" };
     }
-    // 原地倒序：只换位置、不比较，元素是谁都跟着走，所以裸数组直接发 JS 的 reverse()。
     if (ek && e.callee.name === "reverse" && e.args.length === 0) {
       return { code: `${nm}.reverse()`, rep: "var" };
     }
-    // ---- step 56：变更类方法的裸路径。void 的那批 rep 记 "var"（Godot 根本不让取它们的返回值，
-    // 分析层已按 S142 拦下），insert 例外 —— 它给状态码 int，要能被当值用。
     if (ek && e.callee.name === "push_front" && e.args.length === 1) {
       const er = emitExprR(e.args[0]!);
       if (er.rep !== ek) throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组 push_front 元素期望 ${ek}，实得 ${er.rep}`);
@@ -1298,8 +1095,6 @@ function emitExprR(e: Expr): R {
     if (ek && e.callee.name === "clear" && e.args.length === 0) {
       return { code: `rt.fast.rawArrClear(${nm})`, rep: "var" };
     }
-    // pop 三兄弟只在**结果被丢弃**时才可能走到这里（分析期把用了返回值的整个数组退回装箱了）：
-    // 空数组时 Godot 给 null，裸轨没有 null 的位置，所以绝不能让它们的返回值参与运算。
     if (ek && e.callee.name === "pop_back" && e.args.length === 0) {
       return { code: `${nm}.pop()`, rep: "var" };
     }
@@ -1322,8 +1117,6 @@ function emitExprR(e: Expr): R {
     }
   }
   if (e.kind === "call" && e.callee.kind === "ident") {
-    // 裸 ABI：直接调用点传裸实参、结果按裸类型流（不再回 rvalue）。分析期已保证同型；
-    // 万一表示与推断不符（漏改的对齐 bug），宁可响亮报错，绝不静默发错。
     const abi = RAW_ABIS.get(e.callee.name);
     if (abi) {
       if (e.args.length !== abi.params.length) {
@@ -1344,8 +1137,6 @@ function emitExprR(e: Expr): R {
     }
   }
   if (e.kind === "unary" && e.op === "-") {
-    // 与 kindOfExpr 的 unary 分支同一条规则：只有操作数本身是裸 int/float 才发裸负号。
-    // 裸 int 都在安全整数范围内（字面量与 checked 算子都保证），取负不会越界。
     const or = emitExprR(e.operand);
     if (or.rep === "int" || or.rep === "float") return { code: `(-${or.code})`, rep: or.rep };
   }
@@ -1359,35 +1150,22 @@ function emitExprR(e: Expr): R {
 function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
   const L = emitExprR(e.left);
   const Rr = emitExprR(e.right);
-  // 比较：两操作数同为裸 int 或同为裸 float → 裸 JS 比较，结果裸 bool
   if (CMP_RAW[e.op] && L.rep === Rr.rep && (L.rep === "int" || L.rep === "float")) {
     return { code: `(${L.code} ${CMP_RAW[e.op]!} ${Rr.code})`, rep: "bool" };
   }
-  // int 算术 + - * / %：带 D1 检查的 checked 快路径
   if (L.rep === "int" && Rr.rep === "int" && ARITH_RAW[e.op]) {
-    // 与 kindOfExpr 同一道判定：结果已知越界就不发裸式，否则两侧会静默错位（漏箱）。
     if (!litBinaryFitsRaw(e)) return null;
     return { code: `rt.fast.${ARITH_RAW[e.op]!}(${L.code}, ${Rr.code})`, rep: "int" };
   }
-  // float 算术 + - * /：内联裸运算（无范围陷阱）
   if (L.rep === "float" && Rr.rep === "float" && FLOAT_ARITH_RAW[e.op]) {
     return { code: `(${L.code} ${FLOAT_ARITH_RAW[e.op]!} ${Rr.code})`, rep: "float" };
   }
-  // string 拼接：仅 + ，两操作数皆裸 str（JS a+b 与装箱 V.str(a+b) 逐位一致）
   if (L.rep === "str" && Rr.rep === "str" && e.op === "+") {
     return { code: `(${L.code} + ${Rr.code})`, rep: "str" };
   }
   return null;
 }
 
-/**
- * 保守推断函数内可解箱成裸 number 的局部（int / float / str）：
- * `var x = <同型表达式>` 且 x 的每次赋值都是同型表达式
- * （字面量 / 已解箱同型局部 / 裸运算 / 裸 ABI 调用 / 裸容器元素读，算子表与发射期同一张）。
- * 排除：参数、for 变量、match 绑定、带显式类型标注的 var、lambda 内声明或被赋值的名字。
- * 判据取**后置不动点**（先假定全部候选再剔除证不出者），因此除 `x += 1` 的自身环外，
- * fib 型「多个局部互为读写环」也能收下。理由见下方 U 的注释（对执行时刻归纳）。
- */
 function computeUnboxed(
   f: FuncDecl,
   arrays: Map<string, ElemKind> = NO_ARRAYS,
@@ -1443,8 +1221,6 @@ function computeUnboxed(
     switch (s.kind) {
       case "var":
         if (inLambda) excluded.add(s.name);
-        // 带显式类型标注的 var 不解箱：`: int` / `: float` 可能触发截断转换（S6），
-        // 解箱会跳过 declaredCast 而静默算错（如 `var i: int = 3.9` 应为 3）。
         else if (!s.type) decls.push({ name: s.name, init: s.init });
         else excluded.add(s.name);
         if (s.init) walkExpr(s.init, inLambda);
@@ -1470,10 +1246,6 @@ function computeUnboxed(
         }
         break;
       case "for":
-        // `for x in range(...)` 的 x 依次取到 rangeSeq 的裸 int 元素（界与步长都在运行时被
-        // rt.rangeInt 截断成 int，所以元素一定是 int；转不了的类型由运行时报错，不改变元素类型）。给它一条**合成的 int 字面量初值**当候选，
-        // 于是 x 和其它裸 int 局部走完全同一套判定：循环体里若把 x 赋成非 int，
-        // `assigns` 那条检查会照常把它剔掉，发射端见 UNBOXED 里没有它就直接退回装箱的 rt.iter。
         if (inLambda || !isRangeCall(s.iter)) excluded.add(s.var);
         else decls.push({ name: s.var, init: { kind: "lit", lit: "int", value: 0, loc: s.iter.loc } });
         walkExpr(s.iter, inLambda);
@@ -1496,7 +1268,6 @@ function computeUnboxed(
   f.body.forEach((s) => walkStmt(s, false));
 
   const result = new Map<string, "int" | "float" | "str">();
-  // 裸 ABI 函数的参数直接是裸值：种进 result，使发射期 emitExprR(ident 参数) 解析出正确 rep。
   if (abi) f.params.forEach((p, i) => result.set(p.name, abi.params[i]!));
   for (const kind of ["int", "float", "str"] as const) {
     const isLit = (e: Expr): boolean =>
@@ -1507,8 +1278,6 @@ function computeUnboxed(
           ? e.lit === "float"
           : e.lit === "string");
     const U = new Set<string>();
-    // 与发射期 tryRawBinary / 裸调用完全同一张算子表：用 kindOfExpr 判定表达式裸类型，
-    // 保证「推断为 int ⟺ 发射为 int rep」，杜绝漏箱（静默错）。ident 经本函数已推断的裸映射解析。
     const identKind = (self: string) => (n: string): Kind | null =>
       paramKind.get(n) ?? result.get(n) ?? (n === self || U.has(n) ? kind : null);
     const isNum = (e: Expr, self: string): boolean => {
@@ -1519,19 +1288,11 @@ function computeUnboxed(
       if (e.kind === "ident") return e.name === self || U.has(e.name) || paramKind.get(e.name) === kind;
       return false;
     };
-    // 候选先全装进 U，再迭代剔除「初值或任一赋值证不出 kind」者 → 收敛到**后置**不动点
-    // （自洽的最大集）。换掉原先「从空集生长」的前置不动点，因为 fib 型滚动变量
-    // （a←b←t←a）彼此依赖、无独立入口，空集起步永远进不来（实测 a/b/t 全程装箱）。
-    // 可靠性不靠静态依赖图无环，而是对**执行时刻**归纳：任一裸读的值必来自更早的
-    // 一次 init/assign，其右端每个裸操作数又各自来自更早的赋值……时刻严格递减，
-    // 只可能落在字面量 / 裸 ABI 参数 / 裸容器元素上。故「每条进入路径都证得出 kind」
-    // ⟹ 运行时值必为 kind。剔除一轮即单调收缩，候选有限必收敛。
     for (const d of decls) if (!excluded.has(d.name) && !result.has(d.name)) U.add(d.name);
     let pruned = true;
     while (pruned) {
       pruned = false;
       for (const name of [...U]) {
-        // 同名重复声明（如分支里各写一次 var）必须**每条**都证得出，才算这个类型。
         const okInit = decls.every((d) => d.name !== name || (!!d.init && isNum(d.init, name)));
         if (okInit && assigns.every((a) => a.name !== name || isNum(a.value, name))) continue;
         U.delete(name);
@@ -1543,7 +1304,6 @@ function computeUnboxed(
   return result;
 }
 
-// ------------------------------------------------ 参数/返回单态化（D2 第三轨）
 
 const INT_ARITH = new Set(["+", "-", "*", "/", "%"]);
 const FLOAT_ARITH = new Set(["+", "-", "*", "/"]);
@@ -1580,20 +1340,12 @@ function litBinaryFitsRaw(e: Extract<Expr, { kind: "binary" }>): boolean {
     case "*":
       r = a * b;
       break;
-    // 整除 / 取模的结果量级不超过操作数，操作数既已在界内就不必再算。
     default:
       return true;
   }
   return r >= RAW_INT_MIN && r <= RAW_INT_MAX;
 }
 
-/**
- * 结构化的表达式裸类型判定，算子表与 tryRawBinary 逐字一致：
- * 只有 lit / ident(经 identKind 解析) / binary(同型裸运算) / unary(负号) / call(裸 ABI 目标) /
- * index(裸数组下标读) / call(裸数组 .size()/.length()) 能产出裸类型，
- * 其余（attribute/array/dict/lambda/await/is/as、`!`/`~`、非 int 下标）一律返回 null（必须装箱）。
- * 返回 "bool" 表示裸比较结果（调用方要求 int/float/str 时自然落选）。
- */
 function kindOfExpr(
   e: Expr,
   identKind: (n: string) => Kind | null,
@@ -1619,14 +1371,11 @@ function kindOfExpr(
       return null;
     }
     case "unary": {
-      // 一元负号保持操作数的裸类型（`a[-1]`、`a.remove_at(-1)` 是最常见的字面下标写法）；
-      // 取反 `!` 与按位取反 `~` 的结果是 bool / 需要 int64 截断，都不进裸路。
       if (e.op !== "-") return null;
       const ok = kindOfExpr(e.operand, identKind, arrays, dict);
       return ok === "int" || ok === "float" ? ok : null;
     }
     case "index": {
-      // 二维网格 g[i][j] → 叶子标量类型（两层下标都 int）。
       const mid = e.obj;
       if (mid.kind === "index" && mid.obj.kind === "ident") {
         const ek = arrays.get(mid.obj.name);
@@ -1638,22 +1387,19 @@ function kindOfExpr(
         )
           return leafOf(ek);
       }
-      // 裸标量数组 / 裸字典的下标读 → 元素类型；下标类型不符保守回退装箱。
       if (e.obj.kind === "ident") {
         const ek = arrays.get(e.obj.name);
-        // 网格的 g[i]（行）不是标量 Kind，落到这里返回 null（且分析期已让整数组回退）。
         if (ek && !isGridElem(ek) && kindOfExpr(e.index, identKind, arrays, dict) === "int") return ek;
         const dk = dict.get(e.obj.name);
         if (dk) {
           const kk = kindOfExpr(e.index, identKind, arrays, dict);
-          if (kk === "int" || kk === "str") return dk; // float 键会与 int 键碰撞（S14）→ 不接受
+          if (kk === "int" || kk === "str") return dk;
         }
       }
       return null;
     }
     case "call": {
       if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
-        // 裸数组 / 裸字典 .size() / .length() → 裸 int 长度。
         const recv = e.callee.obj.name;
         if (
           (arrays.has(recv) || dict.has(recv)) &&
@@ -1661,11 +1407,9 @@ function kindOfExpr(
           e.args.length === 0
         )
           return "int";
-        // 裸数组 insert 给**状态码**（S141），所以它在裸 int 语境里是合法的。
         if (arrays.has(recv) && e.callee.name === "insert" && e.args.length === 2) {
           return kindOfExpr(e.args[0]!, identKind, arrays, dict) === "int" ? "int" : null;
         }
-        // 裸字典 get(k, def)：只有默认值与值槽同型才是裸的（一参形态缺键给 null → 不是裸值）。
         const gk = dict.get(recv);
         if (gk && e.callee.name === "get" && e.args.length === 2) {
           const kk = kindOfExpr(e.args[0]!, identKind, arrays, dict);
@@ -1706,25 +1450,19 @@ function abiFormOk(f: FuncDecl): boolean {
   let sawReturn = false;
   for (const st of f.body) {
     if (st.kind === "return") {
-      if (!st.value) return false; // 裸 return（无值）→ 返回 Variant，不可裸化
+      if (!st.value) return false;
       sawReturn = true;
     } else if (st.kind === "var") {
-      if (st.type) return false; // 带类型标注的 var 可能触发截断（S6），排除
+      if (st.type) return false;
     } else if (st.kind === "assign") {
-      if (st.target.kind !== "ident") return false; // 只允许给局部/参数赋值，容器/属性写一律排除
+      if (st.target.kind !== "ident") return false;
     } else {
-      return false; // if/while/for/match/expr/break/continue/pass 等控制流或裸副作用 → 不做裸 ABI
+      return false;
     }
   }
   return sawReturn;
 }
 
-/**
- * 全模块扫描：
- * - 顶层方法体内 `f(...)`（裸 ident 被调）→ 记为 f 的直接调用点（sites）。
- * - 其它任何对名字的引用（裸 ident 取值 / obj.name 成员访问 / super.name / 嵌套在 lambda、
- *   内部类、字段初始化、默认值、match 绑定作用域里的调用）→ 保守计入 escapes，取消该函数单态化资格。
- */
 function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>; sitesByF: Map<string, RawSite[]> } {
   const escapes = new Set<string>();
   const sitesByF = new Map<string, RawSite[]>();
@@ -1735,8 +1473,6 @@ function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>
   const expr = (e: Expr, owner: FuncDecl | null, allowSite: boolean): void => {
     switch (e.kind) {
       case "lit":
-        // 字符串字面量可能正是 obj.call("m") / signal.connect("m") / has_method("m") 的目标方法名，
-        // 单态化会让这些按名反射派发拿到装箱实参 → 静默算错。保守：任何字符串都按潜在方法名逃逸。
         if (e.lit === "string") escape(String(e.value));
         return;
       case "ident":
@@ -1849,15 +1585,12 @@ function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>
   return { escapes, sitesByF };
 }
 
-/** 签名候选：给定统一 Kind，体（参数视为该 Kind）与所有调用点实参都能裸化为该 Kind 才成立。 */
 function sigValid(
   f: FuncDecl,
   K: Kind,
   sites: RawSite[],
   uOf: (fn: FuncDecl) => Map<string, "int" | "float" | "str">,
 ): boolean {
-  // 前向 env 推断：参数起步为 K，逐语句要求 var 初值 / assign 值 / return 值都裸化为 K。
-  // 遇到未声明的名字（模块变量/字段）或不可裸化的表达式（属性/下标/容器/非裸调用）→ kindOfExpr 返回非 K → 落选。
   const env = new Map<string, Kind>();
   for (const p of f.params) env.set(p.name, K);
   const ik = (n: string): Kind | null => env.get(n) ?? null;
@@ -1896,17 +1629,6 @@ function sameAbis(a: Map<string, RawAbi>, b: Map<string, RawAbi>): boolean {
   return true;
 }
 
-/**
- * 求本模块可单态化的函数集合（D2 第三轨 v1）。
- * 安全边界（v1，全部满足才发裸 ABI）：
- * - 无内部类（内部类方法是兄弟类，`this.f` 会指错对象）；
- * - 无基类 / 不在继承成员里（基类或派生类可能以 virtual 方式调用，收到裸值会静默算错）；
- * - 名字不在工程其它模块声明（跨模块只能 obj.f() 属性调用，走装箱派发）；
- * - 函数是「纯单 return 表达式」且参数/返回类型无标注、非协程/静态/入口；
- * - 名字从不作为裸标识符（Callable）、成员访问 .f、super.f、lambda/内部类/字段初始化里的调用出现；
- * - 每个直接调用点参数个数与形参一致，且所有调用点参数与函数体在本模块不动点下都是同一种 int/float/str。
- * 不动点不收敛（跨候选 Kind 互相牵动的罕见情形）→ 直接放弃全部单态化，退回逐字节旧行为。
- */
 function computeRawAbis(
   m: Module,
   ctx: { hasBase: boolean; inherited: Set<string>; external: Set<string> },
@@ -1920,10 +1642,8 @@ function computeRawAbis(
   const candNames = new Set<string>();
   for (const f of m.funcs) {
     if (!abiFormOk(f)) continue;
-    if (f.name.startsWith("_")) continue; // 引擎虚函数 / 入口 / 构造
+    if (f.name.startsWith("_")) continue;
     if (ENUM_NAMES.has(f.name) || MODULE_VARS.has(f.name) || MODULE_CLASSES.has(f.name)) continue;
-    // external：工程其它模块里作为属性/裸标识符出现过的名字，或被继承出现过的名字。
-    // 跨模块只能 obj.f() / Callable 触达，那会喂裸方法装箱实参 → 静默算错，必须整名排除。
     if (ctx.inherited.has(f.name) || ctx.external.has(f.name)) continue;
     candNames.add(f.name);
   }
@@ -1932,7 +1652,6 @@ function computeRawAbis(
   const { escapes, sitesByF } = scanRawUsage(m, candNames);
   for (const n of escapes) candNames.delete(n);
 
-  // 需有 ≥1 合法方法体调用点（否则可能只在字段/lambda 里被调，或根本是引擎虚函数）。
   for (const n of [...candNames]) {
     if ((sitesByF.get(n) ?? []).length === 0) candNames.delete(n);
   }
@@ -1940,8 +1659,6 @@ function computeRawAbis(
 
   const saved = RAW_ABIS;
   const dummyU: (fn: FuncDecl) => Map<string, "int" | "float" | "str"> = () => new Map();
-  // 乐观播种：先只看函数体（参数视为该 K、暂不看调用点）给每个候选一个签名，
-  // 打破 `s = add2(s, i)` 这类正反馈依赖（s 的裸推断依赖 add2 的返回类型）。随后不动点按调用点证据收敛/反驳。
   const seed = new Map<string, RawAbi>();
   for (const name of candNames) {
     const f = byName.get(name)!;
@@ -1988,29 +1705,19 @@ function computeRawAbis(
   return stable ? cur : empty;
 }
 
-// ------------------------------------------- 容器元素单态化（D2 第四轨 v1：仅 Array、仅 int/float）
 
 interface ArrayCand {
   init: Extract<Expr, { kind: "array" }>;
-  writeElems: Expr[]; // a.append(e) 的 e
-  readIdxs: Expr[]; // a[i] 读的 i
-  writeIdxs: Expr[]; // a[i]=v / g[i][j]=v 的全部下标（网格写记两层）
-  writeVals: Expr[]; // a[i]=v / g[i][j]=v 写入的叶子值
-  escaped: boolean; // 出现任何非白名单用法 → 取消特化
+  writeElems: Expr[];
+  readIdxs: Expr[];
+  writeIdxs: Expr[];
+  writeVals: Expr[];
+  escaped: boolean;
 }
 
-/**
- * 静态扫一遍函数体，找出候选数组局部（`var a = []` / `var a = <数字字面量数组>`，无类型标注）
- * 并按「出现位置」判定是否逃逸。只有以下用法算合法：
- *   decl 自身、a.append(<单实参>) 的接收者、a.size()/a.length() 的接收者、
- *   a[<i>] 的读接收者、a[<i>]=v / g[<i>][<j>]=v 的下标写。
- * 其它一切（别名 b=a、重赋值 a=…、把网格的行当值用、其它方法、作为实参/元素/返回/print/in/
- * 迭代/lambda 捕获/match 主体等）→ escaped。
- */
 function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   const cands = new Map<string, ArrayCand>();
 
-  // 预扫：收集 `var <name> = [..]`（array 字面量、无类型标注）作为候选。
   const pre = (s: Stmt): void => {
     if (s.kind === "var") {
       if (!s.type && s.init && s.init.kind === "array") {
@@ -2036,15 +1743,10 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
     if (c) c.escaped = true;
   };
   const isCandObj = (e: Expr): string | null => e.kind === "ident" && cands.has(e.name) ? e.name : null;
-  // 该候选的初值是否为"数组的数组"（二维网格）——仅看字面量初值（网格 v1 不支持 append 建立）。
   const isGridCand = (c: ArrayCand): boolean => {
     const k = elemKindFromInit(c.init, true);
     return !!k && isGridElem(k);
   };
-  /**
-   * 认 `a[i]=…`（标量数组）与 `g[i][j]=…`（网格）两种下标写，返回候选名 + 它的全部下标。
-   * 形态不合（网格的整行写 `g[i]=…`、标量数组的双层写）返回 null，交给原有逃逸判定。
-   */
   const matchIndexWrite = (t: Expr): { name: string; idxs: Expr[] } | null => {
     if (t.kind !== "index") return null;
     if (t.obj.kind === "ident") {
@@ -2061,7 +1763,6 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   const visitExpr = (e: Expr, inL: boolean, discarded = false): void => {
     switch (e.kind) {
       case "ident":
-        // 能走到这里说明该 ident 处「裸取值」角色（合法角色在 call/index 分支被就地消化、不再下钻）。
         if (cands.has(e.name)) markEscape(e.name);
         return;
       case "call": {
@@ -2075,10 +1776,7 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
             } else if ((N === "append" || N === "push_back") && e.args.length === 1) {
               c.writeElems.push(e.args[0]!);
             } else if ((N === "size" || N === "length") && e.args.length === 0) {
-              /* 合法：仅把数组当长度来源，不下钻 obj */
             } else if (N === "insert" && e.args.length === 2) {
-              // 下标进 writeIdxs（必须是 int）、值进 writeElems（必须与元素同型），
-              // 于是「插一个不合型的值」会让整个数组退回装箱 —— 那正是定型数组该拒的情形。
               c.writeIdxs.push(e.args[0]!);
               c.writeElems.push(e.args[1]!);
             } else if (N === "remove_at" && e.args.length === 1) {
@@ -2088,17 +1786,13 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
             } else if (N === "fill" && e.args.length === 1) {
               c.writeElems.push(e.args[0]!);
             } else if (N === "clear" && e.args.length === 0) {
-              /* 合法：清空不引入别的类型 */
             } else if (N === "reverse" && e.args.length === 0) {
-              /* 合法：原地倒序只挪格子，比较都不做（sort 那族不走裸路，见 S133 的同键顺序） */
             } else if (discarded && N === "pop_back" && e.args.length === 0) {
-              /* 合法：**仅在结果被丢弃时**。要用返回值就得表示 null（空数组），裸轨表示不了 → 逃逸 */
             } else if (discarded && N === "pop_front" && e.args.length === 0) {
-              /* 同上 */
             } else if (discarded && N === "pop_at" && e.args.length === 1) {
-              c.readIdxs.push(e.args[0]!); // 下标仍须是 int
+              c.readIdxs.push(e.args[0]!);
             } else {
-              c.escaped = true; // 其它数组方法（resize/sort/duplicate…）与「用了 pop 的返回值」→ 逃逸
+              c.escaped = true;
             }
             e.args.forEach((a) => visitExpr(a, inL));
             return;
@@ -2112,11 +1806,10 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         return;
       }
       case "index": {
-        // 二维网格叶子读 g[i][j]：内层 index(g,i) 不单独作值，这里整体消费、记录两个下标。
         const mid = e.obj;
         if (mid.kind === "index" && mid.obj.kind === "ident" && cands.has(mid.obj.name)) {
           const c = cands.get(mid.obj.name)!;
-          if (inL || !isGridCand(c)) c.escaped = true; // 标量数组出现 g[i][j]（类型不该）→ 保守回退
+          if (inL || !isGridCand(c)) c.escaped = true;
           else {
             c.readIdxs.push(mid.index);
             c.readIdxs.push(e.index);
@@ -2128,7 +1821,6 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         const objName = isCandObj(e.obj);
         if (objName) {
           const c = cands.get(objName)!;
-          // 网格的 g[i] 把"行"当值用（裸 number[] 无法在别处安全表示）→ 整个数组回退装箱。
           if (inL || isGridCand(c)) c.escaped = true;
           else c.readIdxs.push(e.index);
           visitExpr(e.index, inL);
@@ -2139,7 +1831,7 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         return;
       }
       case "attribute":
-        visitExpr(e.obj, inL); // obj 若是裸候选 ident → 走到 ident 分支逃逸（如 a.foo / 不带括号的 a.size）
+        visitExpr(e.obj, inL);
         return;
       case "binary":
         visitExpr(e.left, inL);
@@ -2171,9 +1863,6 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         if (s.init) visitExpr(s.init, inL);
         return;
       case "assign": {
-        // 下标写 a[i]=v / g[i][j]=v 是数组的主操作（step 15）：先记下写入值与下标，
-        // 交给 verifyArray 判「写值与元素同型、下标是 int」，通过后发裸写；不再一律逃逸。
-        // 但重赋值 a=… 仍要逃逸 —— 那会把整个裸容器换掉。
         const w = matchIndexWrite(s.target);
         if (w && !inL) {
           const c = cands.get(w.name)!;
@@ -2190,13 +1879,13 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
               ? s.target.name
               : null;
         if (wt) markEscape(wt);
-        if (w) markEscape(w.name); // lambda 里出现的下标写：容器不能跨出 lambda
+        if (w) markEscape(w.name);
         visitExpr(s.target, inL);
         visitExpr(s.value, inL);
         return;
       }
       case "expr":
-        visitExpr(s.expr, inL, true); // 表达式语句：结果被丢弃，丢弃版 pop_* 才能走裸路
+        visitExpr(s.expr, inL, true);
         return;
       case "return":
         if (s.value) visitExpr(s.value, inL);
@@ -2208,7 +1897,7 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
         }
         return;
       case "for":
-        visitExpr(s.iter, inL); // for x in a → a 裸取值 → 逃逸
+        visitExpr(s.iter, inL);
         s.body.forEach((x) => visitStmt(x, inL));
         return;
       case "while":
@@ -2247,7 +1936,6 @@ function scalarLitKind(e: Expr): "int" | "float" | null {
  */
 function elemKindFromInit(init: Extract<Expr, { kind: "array" }>, nested = false): ElemKind | null {
   if (init.items.length === 0) return "int";
-  // 标量情形
   let scalar: "int" | "float" | null = null;
   let scalarOk = true;
   for (const it of init.items) {
@@ -2257,7 +1945,6 @@ function elemKindFromInit(init: Extract<Expr, { kind: "array" }>, nested = false
     scalar = k;
   }
   if (scalarOk && scalar) return scalar;
-  // 二维网格情形（仅 nested）：每项都是数组字面量，且所有叶子同基型标量
   if (nested) {
     let leaf: "int" | "float" | null = null;
     for (const row of init.items) {
@@ -2296,14 +1983,14 @@ function analyzeFuncLayout(f: FuncDecl): {
   const arrays = new Map<string, ElemKind>();
   for (const [name, c] of aC) {
     if (c.escaped) continue;
-    const k = elemKindFromInit(c.init, true); // 数组允许二维网格元素类型
+    const k = elemKindFromInit(c.init, true);
     if (k) arrays.set(name, k);
   }
   const dicts = new Map<string, "int" | "float">();
   for (const [name, c] of dC) {
     if (c.escaped) continue;
     const k = elemKindFromInit({ kind: "array", items: c.init.entries.map((en) => en.value), loc: c.init.loc });
-    if (k === "int" || k === "float") dicts.set(name, k); // 字典值只认标量（dict-of-array 不特化）
+    if (k === "int" || k === "float") dicts.set(name, k);
   }
   let unboxed = computeUnboxed(f, arrays, dicts);
   const cap = aC.size + dC.size + 8;
@@ -2341,40 +2028,29 @@ function verifyArray(
 ): boolean {
   const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
   if (elemKindFromInit(c.init, true) !== K) return false;
-  // 标量数组：初值里的非字面量元素（如 var a=[x, y]）也要能裸化为 K。
-  // 网格（int[]/float[]）：初值已由 elemKindFromInit 校验为"数组的数组、叶子同基型"，无需再查。
   if (!isGridElem(K)) {
     for (const it of c.init.items) {
-      if (it.kind === "lit") continue; // 字面量已由 elemKindFromInit 定 K
+      if (it.kind === "lit") continue;
       if (kindOfExpr(it, identKind, arrays, dicts) !== K) return false;
     }
   }
   for (const w of c.writeElems) if (kindOfExpr(w, identKind, arrays, dicts) !== K) return false;
   for (const r of c.readIdxs) if (kindOfExpr(r, identKind, arrays, dicts) !== "int") return false;
-  // 下标写：写进去的必须和元素同型（网格比的是**叶子**型），下标必须是 int。
-  // 违反就整个数组退回装箱 —— 装箱轨元素是 Variant，装什么都合法，不会有类型陷阱。
   const leaf: Kind = isGridElem(K) ? leafOf(K) : K;
   for (const v of c.writeVals) if (kindOfExpr(v, identKind, arrays, dicts) !== leaf) return false;
   for (const ix of c.writeIdxs) if (kindOfExpr(ix, identKind, arrays, dicts) !== "int") return false;
   return true;
 }
 
-// ------------------------------------------------------- 字典候选（int/str 键 + 统一 int/float 值）
 
 interface DictCand {
   init: Extract<Expr, { kind: "dict" }>;
-  writeKeys: Expr[]; // d[k]=v 的 k
-  writeVals: Expr[]; // d[k]=v 的 v
-  readKeys: Expr[]; // d[k] 读的 k
+  writeKeys: Expr[];
+  writeVals: Expr[];
+  readKeys: Expr[];
   escaped: boolean;
 }
 
-/**
- * 扫一遍函数体找候选字典局部（`var d = {}` / `var d = {int/str 键: 数字值}`，无类型标注），判逃逸。
- * 合法用法仅限：d[k]=v 写、d[k] 读、d.size()/d.length()。其它（.get/.has/keys/values/erase、别名、
- * 重赋值、作实参/元素/返回/print/in/迭代/lambda 捕获…）→ escaped。键须 int/str（float 键会与 int 键
- * 在 JS Map 里碰撞，违反 S14 → 一律落回装箱）。
- */
 function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
   const cands = new Map<string, DictCand>();
   const pre = (s: Stmt): void => {
@@ -2408,13 +2084,10 @@ function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
             const N = e.callee.name;
             if (inL) c.escaped = true;
             else if ((N === "size" || N === "length") && e.args.length === 0) {
-              /* 合法：只把字典当长度来源 */
             } else if (N === "get" && e.args.length === 2) {
-              // 只裸化「两参」那一形：缺键给默认值，而默认值的静态类型由 verifyDict 按值槽校验。
-              // 一参 `get(k)` 缺键给 **null**，裸轨里没有 null 的位置 → 整个字典退回装箱（照旧逃逸）。
               c.readKeys.push(e.args[0]!);
               c.writeVals.push(e.args[1]!);
-            } else c.escaped = true; // 其它字典方法全逃逸
+            } else c.escaped = true;
             e.args.forEach((a) => visitExpr(a, inL));
             return;
           }
@@ -2472,7 +2145,6 @@ function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
         if (s.init) visitExpr(s.init, inL);
         return;
       case "assign": {
-        // 下标写 d[k]=v 是字典的合法主操作；重赋值 d=… 才逃逸。
         if (s.target.kind === "index") {
           const obj = candObj(s.target.obj);
           if (obj) {
@@ -2559,19 +2231,11 @@ function emitExprVar(e: Expr): string {
       return emitLit(e.lit, e.value);
 
     case "ident":
-      // `self` 站在值位置就是「当前实例」这个对象（S143：typeof(self)=24、传参与返回都行）。
-      // 包一层 V.object(this) 而不是造新值 —— 实测 p.showself() == p 为 true，身份不能变。
       if (e.name === "self") return `rt.V.object(this)`;
-      // 常量是**类级**的：按归属发成 `<类>.NAME`，静态方法里读常量（f15 t4/t5）与
-      // 内部类读外层常量（f29 t2/t4）都走这一条；发成 `this.NAME` 在类上的 static 副本存在之后是错的形
       const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
-      // 静态方法是**本类作用域**的名字（`typeof(helper)` → 25），它发在构造器上、不在实例上，
-      // 所以绑的是类而不是 this（f23 t8 实测）
       if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
-      // 必须 bind(this)：光传 this.f 出去会在调用时丢掉接收者
       if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this), ${JSON.stringify(e.name)}, rt.V.object(this))`;
-      // 类方法里引用自己的成员变量
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
       return e.name;
@@ -2583,7 +2247,6 @@ function emitExprVar(e: Expr): string {
       throw new UnsupportedError("emit-unary", `一元运算符 ${e.op} 还没实现`);
 
     case "await":
-      // 统一走 rt.awaitValue：Signal 会真的挂起，非信号值原样返回（S22）
       return `(await rt.awaitValue(${emitExpr(e.operand)}))`;
 
     case "binary":
@@ -2601,32 +2264,22 @@ function emitExprVar(e: Expr): string {
       return `rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)})`;
 
     case "attribute":
-      // super.属性 在 JS 里走原型链、拿不到父类实例字段，语义不对——只支持 super.method()
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
       }
-      // `self.m` 与裸 `m` 是同一格（S143 实测），所以成员名降成裸 ident、走同一条发射规则
-      // （成员 → this.m；方法 → bind 好的 Callable，与 `var c = self.f` 同口径）。
-      // 不是成员的名字（`self.get_script()` 这类 Object 方法）交给 rt.attribute 响亮报缺，不自造。
       if (e.obj.kind === "ident" && e.obj.name === "self") {
         if (CURRENT_MEMBERS.has(e.name) || MODULE_VARS.has(e.name) || MODULE_FUNCS.has(e.name)) {
           return emitExprVar({ kind: "ident", name: e.name, loc: e.loc });
         }
         return `rt.attribute(rt.V.object(this), ${JSON.stringify(e.name)})`;
       }
-      // Vector2 的静态成员：`Vector2.UP`。裸 `Vector2` 不是变量，得在这一步接住，
-      // 否则会发成一个不存在的标识符、到运行时才 ReferenceError。
       const staticFn = staticMemberFn(e.obj);
       if (staticFn) {
         return `rt.${staticFn}(${JSON.stringify(e.name)})`;
       }
-      // enum 点访问 `Suit.HEARTS` → 字典取值（GDScript 只允许 enum 这样点访问）
       if (e.obj.kind === "ident" && ENUM_NAMES.has(e.obj.name)) {
         return `rt.index(${e.obj.name}, rt.V.str(${JSON.stringify(e.name)}))`;
       }
-      // 「类名点类级值」（`Inner.IC`、`A.sv` 这一类，实测 f29 t7 / f16 t1 都读得到）：
-      // 直接发成 JS 的 `<类>.<名>`。运行时那条 `name in inner` 在类对象上是不能走的 ——
-      // JS 函数自带 `name` / `length` 这些键，鸭子类型会假冒成功（与静态方法表同一个理由）。
       if (e.obj.kind === "ident" && CLASS_VALUES.get(e.obj.name)?.has(e.name) === true) {
         return `${e.obj.name}.${e.name}`;
       }
@@ -2635,7 +2288,6 @@ function emitExprVar(e: Expr): string {
     case "lambda": {
       const params = e.params.map((p) => p.name).join(", ");
       const body = e.body.flatMap((st) => emitStmt(st, false).map((l) => `      ${l}`));
-      // 直接用 JS 箭头函数：闭包捕获天然是「每次迭代独立」的，正好对应 S17
       return `rt.callable((${params}) => {\n${body.join("\n")}\n    })`;
     }
 
@@ -2651,7 +2303,6 @@ function emitExprVar(e: Expr): string {
 }
 
 function emitLit(lit: string, value: string | number | bigint | boolean | null): string {
-  // bigint 字面量必须带 n 后缀，否则 JS 又把它变回失精的 number。
   if (lit === "int") return `rt.V.int(${typeof value === "bigint" ? `${value.toString()}n` : String(value)})`;
   if (lit === "float") return `rt.V.float(${String(value)})`;
   if (lit === "string") return `rt.V.str(${JSON.stringify(value)})`;
@@ -2674,9 +2325,7 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   const m = /^(Array|Dictionary)\[(.+)\]$/.exec(t.name);
   if (m === null) return raw;
   const inner = m[2] ?? "";
-  if (inner.includes("[")) return raw; // 嵌套定型在语义分析就报错了
-  // 字面量初值 Godot 允许并逐格转换（实测 Array[int] = [1, 2.5] → [1, 2]）；
-  // 把**未定型的现成数组**赋给定型变量它是会报错的，运行时那条负责。
+  if (inner.includes("[")) return raw;
   const fromLiteral = init === null || init === undefined || init.kind === "array" || init.kind === "dict";
   if (m[1] === "Array") {
     const kind = inner.trim();
@@ -2697,7 +2346,6 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "float") return "rt.toFloat";
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
-  // Vector2 槽：实测 `mv = Vector2i(1, 2)` 给 (1.0, 2.0)（升级 + 拷贝），见 runtime 的 toVec2。
   if (base === "Vector2") return "rt.toVec2";
   return null;
 }
@@ -2724,19 +2372,13 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Vector2") return "rt.vector2(0, 0)";
   if (base === "Vector3") return "rt.vector3(0, 0, 0)";
   if (base === "Vector2i") return "rt.vector2i(0, 0)";
-  // 实测 `var c: Color` 的默认值是 (0.0, 0.0, 0.0, 1.0)（alpha 是 1，不是 0）
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
-  // 实测 `var b: PackedByteArray` 不给初值就是**空 pack**（印 `[]`、`b == PackedByteArray()` 真、
-  // `b.duplicate()` 也是 `[]`，tmp/void-probe d1/e9）—— 发 null 会印成 `<null>`，是静默错
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
-  // 四种数值 pack 的默认值实测全是空 pack（`var a: PackedInt32Array` 印 `[]`、`== PackedInt32Array()` 真）
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';
   if (base === "PackedInt64Array") return 'rt.packCtor("int64", [])';
   if (base === "PackedFloat32Array") return 'rt.packCtor("float32", [])';
   if (base === "PackedFloat64Array") return 'rt.packCtor("float64", [])';
-  // 实测 `var s: PackedStringArray` 的默认值是空 pack，`resize` 长出来的格子填**空串**（S171）
   if (base === "PackedStringArray") return 'rt.packCtor("string", [])';
-  // 向量与颜色 pack 的默认值同样实测为空 pack（S173 default / is 那批）
   if (base === "PackedVector2Array") return 'rt.packCtor("vector2", [])';
   if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
   if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
@@ -2783,7 +2425,6 @@ function emitBinary(e: Extract<Expr, { kind: "binary" }>): string {
   const l = emitExpr(e.left);
   const r = emitExpr(e.right);
 
-  // `"%d" % [...]` 是格式化，不是取模
   if (e.op === "%" && e.left.kind === "lit" && e.left.lit === "string") {
     return `rt.formatOf(${l}, ${r})`;
   }
@@ -2801,12 +2442,8 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
   if (e.callee.kind === "ident") {
     const name = e.callee.name;
-    // print 是 GDScript 全局函数。实参**不能**就地 show：Godot 是把全部实参求值完才转字符串
-    // （S170 ⑦），就地 show 会让 `print(a, a.pop_back(), a)` 的第一个 a 印成弹出之前 —— 静默错。
-    // 交一份 Variant 数组给 rt.showArgs，求值顺序与转换顺序就对了上。
     if (name === "print") return `print(rt.showArgs([${args.join(", ")}]))`;
 
-    // preload(工程内脚本) → 编译期就解析成静态 import 进来的类绑定
     if (name === "preload") {
       const a = e.args[0];
       const lit = a && a.kind === "lit" && a.lit === "string" ? String(a.value) : null;
@@ -2817,7 +2454,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
         `preload(${lit ?? "非字面量"}) 未解析到工程内的 .gd（跨文件编译需能定位该脚本）`,
       );
     }
-    // load(路径) → 运行时按 res:// 查脚本注册表（目标已由项目层副作用 import 注册）
     if (name === "load") {
       const a = e.args[0];
       const lit = a && a.kind === "lit" && a.lit === "string" ? String(a.value) : null;
@@ -2828,7 +2464,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
     const builtin = BUILTIN[name];
     if (builtin) return builtin(args);
-    // super(...) 构造调用：只在 _init(constructor) 上下文合法，发成 JS 原生 super(args)
     if (name === "super") {
       if (IN_CONSTRUCTOR) return `super(${args.join(", ")})`;
       throw new UnsupportedError("emit-super-ctor", "super(...) 只能出现在 _init 里");
@@ -2836,32 +2471,22 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     if (BUILTIN_TODO.has(name)) {
       throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
     }
-    // 本类作用域的静态方法：静态方法发在**构造器**上，实例（`this`）摸不到，所以裸调一律具名到类
-    // （实测 f15 t3 静态裸调静态、f15 t7 实例方法裸调静态、f23 t3 外层裸调都成立）
     if (STATIC_FUNCS.has(name)) return `${CURRENT_CLASS}.${name}(${args.join(", ")})`;
-    // 其余一律当作继承来的方法 —— 与语义分析层的宽容策略一致
-    // （create_timer / quit 这些是 SceneTree 上的，不是本脚本定义的）
     return `this.${name}(${args.join(", ")})`;
   }
 
   if (e.callee.kind === "attribute") {
-    // super.method(...) → JS 原生 super 调用（我们的类用真 extends，语义正好对上）
     if (e.callee.obj.kind === "ident" && e.callee.obj.name === "super") {
       return `super.${e.callee.name}(${args.join(", ")})`;
     }
-    // self.method(...) 与裸 method(...) 同一条路（S143 实测 self.f() 成立）；
-    // 不是成员的方法名（get_script/has_method 这套 Object 方法我们还没有）交给 rt.method 响亮报缺。
     if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && e.callee.obj.name === "self") {
       const own = e.callee.name;
-      // `self.f()` 里 f 是静态方法时**不能**发成 `this.f()`：静态方法挂在构造器上，实例摸不到
-      // （f23 t6 实测 `self.helper()` 与裸 `helper()` 同值，都走类那格）
       if (STATIC_FUNCS.has(own)) return `${CURRENT_CLASS}.${own}(${args.join(", ")})`;
       if (MODULE_FUNCS.has(own) || CURRENT_MEMBERS.has(own) || MODULE_VARS.has(own)) {
         return `this.${own}(${args.join(", ")})`;
       }
       return `rt.method(rt.V.object(this), ${JSON.stringify(own)}, [${args.join(", ")}])`;
     }
-    // Base.new() → 构造一个用户类实例
     if (
       e.callee.name === "new" &&
       e.callee.obj.kind === "ident" &&
@@ -2869,8 +2494,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     ) {
       return `rt.V.object(new ${e.callee.obj.name}(${args.join(", ")}))`;
     }
-    // 类型名上的静态方法：`String.chr(65)` 这类。BUILTIN 里只有函数式内置，
-    // 走 rt.method 会先把 `String` 发成一个不存在的标识符。
     const staticFn = staticMemberFn(e.callee.obj);
     if (staticFn) {
       return `rt.${staticFn}(${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;

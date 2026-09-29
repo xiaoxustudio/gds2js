@@ -1,12 +1,3 @@
-/**
- * IR 定义。
- *
- * 设计约束（见 docs/ROADMAP.md §2）：
- * - 保持高层结构，不做 SSA / 优化 —— 目标是 JS，V8 自己会优化。
- * - 只做「去糖 + 显式化」：把 GDScript 的语法糖拆成显式节点，把隐式语义标出来。
- * - JSON 可序列化 —— 这样 IR 快照测试可以直接 diff，不用比字符串。
- */
-
 export interface Loc {
   line: number;
   col: number;
@@ -25,7 +16,6 @@ export type Expr =
   | { kind: "array"; items: Expr[]; loc: Loc }
   | { kind: "dict"; entries: Array<{ key: Expr; value: Expr }>; loc: Loc }
   | { kind: "lambda"; params: Param[]; body: Stmt[]; loc: Loc }
-  /** Godot 的 await 只对 Signal 有挂起语义，非信号值直接返回 —— 见 SEMANTICS S22 */
   | { kind: "await"; operand: Expr; loc: Loc }
   | { kind: "is"; operand: Expr; type: TypeRef; loc: Loc }
   | { kind: "as"; operand: Expr; type: TypeRef; loc: Loc };
@@ -55,7 +45,6 @@ export type Pattern =
   | { kind: "bind"; name: string }
   | { kind: "array"; items: Pattern[] }
   | { kind: "dict"; entries: Array<{ key: Expr; pattern: Pattern }> }
-  /** 常量模式：裸标识符（const）或 attribute（enum 成员 / 类常量），按值匹配。 */
   | { kind: "const"; expr: Expr };
 
 export interface Param {
@@ -93,10 +82,6 @@ export interface FuncDecl {
   params: Param[];
   returnType: TypeRef | null;
   body: Stmt[];
-  /**
-   * 函数体含 await 即为协程（SEMANTICS S18）。
-   * Godot 强制协程调用必须加 await，不做这条检查就会放过 Godot 不让跑的代码。
-   */
   coroutine: boolean;
   isStatic: boolean;
   loc: Loc;
@@ -107,27 +92,16 @@ export interface VarDecl {
   type: TypeRef | null;
   init: Expr | null;
   isConst: boolean;
-  /** `static var` —— 实测 4.6.3 支持，而且是**真共享**的一格（S161）：类名、实例、静态方法三条路读写的是同一格。 */
   isStatic: boolean;
-  /**
-   * 属性访问器（`var prop: int:` 带 `get:` / `set(v):`，或引用式 `get = _getp, set = _setp`）。
-   * null = 普通成员变量。两种写法实测行为一致（S152：f2 块式、f12 引用式各 10 个观测点同形）：
-   * 写只调 set、读只调 get、`p.prop += 1` 是 get 一次 + set 一次、**只有 getter 时写是静默无操作**。
-   */
   accessor: PropAccessor | null;
   loc: Loc;
 }
 
-/**
- * 属性访问器。inline = 块式（`get:` / `set(v):` 带方法体），
- * method = 引用式（`get = _getp` / `set = _setp`，值是方法名）。
- */
 export type PropGetter = { kind: "inline"; body: Stmt[] } | { kind: "method"; method: string };
 export type PropSetter = { kind: "inline"; param: string; body: Stmt[] } | { kind: "method"; method: string };
 
 export interface PropAccessor {
   getter: PropGetter;
-  /** null = 只读属性（写它按 Godot 的实测是**静默无操作**，不是报错：e8 / f12 的 k4）。 */
   setter: PropSetter | null;
 }
 
@@ -142,7 +116,6 @@ export interface EnumMember {
   value: number;
 }
 
-/** `enum Name { A, B = 5 }`；name 为 null 表示匿名 enum（成员是脚本级裸常量）。 */
 export interface EnumDecl {
   name: string | null;
   members: EnumMember[];
@@ -159,9 +132,7 @@ export interface ClassDecl {
   loc: Loc;
 }
 
-/** 一个 .gd 文件 = 一个模块。 */
 export interface Module {
-  /** 模块内可能没有 class_name（匿名脚本），也可能有 extends。 */
   className: string | null;
   extends: string | null;
   topStmts: Stmt[];

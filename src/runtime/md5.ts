@@ -1,13 +1,3 @@
-/**
- * MD5（RFC 1321），只为 `String.md5_text()` 服务。
- *
- * 为什么自带而不是 `node:crypto`：产物要能被 tsdown 打成**单文件 bundle**并在仓库外、
- * 非 Node 环境下跑（见 §5.7），引内置模块会在浏览器/打包侧直接失效。
- *
- * 正确性由 Godot 实测向量钉住（语料 077 + ops-check）：空串、"abc"、"The quick brown fox"、
- * 中文（UTF-8 字节序）都与 `System_security::compute_md5` 一致，也与 Node crypto 一致。
- */
-
 const S = [
   7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9,
   14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15,
@@ -18,11 +8,9 @@ const K = new Int32Array(
   Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) | 0),
 );
 
-/** 按 UTF-8 字节算 md5，返回小写十六进制（与 Godot 一致）。 */
 export function md5Hex(text: string): string {
   const bytes = new TextEncoder().encode(text);
   const bitLen = bytes.length * 8;
-  // 尾部：0x80 + 若干 0 + 64 位小端长度，凑到 64 字节的整数倍
   const padded = new Uint8Array((((bytes.length + 8) >> 6) + 1) << 6);
   padded.set(bytes);
   padded[bytes.length] = 0x80;

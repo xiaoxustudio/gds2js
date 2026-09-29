@@ -14,7 +14,6 @@ export function arrayFromVariant(v: Variant): Variant {
   if (b === null) {
     throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
   }
-  // `Array(PackedInt32Array(...))` 这类没量过（用例 135 只钉了 byte 那一支）→ 响
   if (b.kind !== "byte") {
     throw new UnsupportedError("array-ctor-from-kind", `Array(...) 只实测过 PackedByteArray 实参（收到 ${packTypeName(b.kind)}）`);
   }
@@ -26,7 +25,6 @@ export function num(v: Variant): number {
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new UnsupportedError("not-number", `需要数值，收到类型 ${v.t}`);
   }
-  // int 载荷可能是 bigint：这里收成 number，float(大整数) 的精度损失与 Godot 一致。
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
@@ -130,9 +128,6 @@ export const HEX_PREFIX_RE = /^[+-]?0x[0-9a-fA-F]+$/;
 /** float(String)：取前导浮点数，取不到就是 0（实测 `0x10`→0.0、`abc`→0.0）。 */
 export function strToFloat(s: string): number {
   const m = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d*)?/.exec(s);
-  // 前缀截断之后交给 decimalToDouble：实测 `("9007199254740993.0").to_float()` 与字面量
-  // 同值（都是 …994），说明运行时这条路走的是同一个 String::to_double；下划线**不算**数字
-  // （`("1_000_000.25").to_float()` → 1.0），所以这条正则不吃下划线、也不做剥离
   return m ? decimalToDouble(m[0]) : 0;
 }
 
@@ -165,7 +160,6 @@ export function toInt(v: Variant): Variant {
     case Tag.FLOAT: {
       const x = v.v as number;
       if (!Number.isFinite(x) || Math.abs(x) >= TWO_63) return V.int(INT64_MIN);
-      // BigInt 精确展开，2^53 以上不丢位（旧实现走 Number 会在边界上错一位）
       return V.int(BigInt(Math.trunc(x)));
     }
     default:
@@ -221,7 +215,6 @@ export function abs(v: Variant): Variant {
 }
 
 export function lengthOf(v: Variant): Variant {
-  // StringName 与 String 同一个口径（实测 len(&"abc") → 3）
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());
   throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
@@ -252,13 +245,7 @@ export function rangeInt(v: Variant | undefined, n: number): number {
   return Number(intArgBig(v, `range 的第 ${n} 个参数`));
 }
 
-/**
- * range 序列的唯一算式，返回**裸 number 数组**：`range()` 用它再逐个装箱，
- * `for x in range(...)` 的裸循环节直接迭代它（省掉整批 Variant 分配）。
- * 两边共用一份，免得循环展开悄悄跑出与 range() 不同的序列。
- */
 export function rangeSeq(args: Variant[]): number[] {
-  // 一个参数是 end，两个是 start/end，三个带 step；range() 无参在 Godot 也是运行错
   const end = rangeInt(args.length >= 2 ? args[1] : args[0], args.length >= 2 ? 2 : 1);
   const start = args.length >= 2 ? rangeInt(args[0], 1) : 0;
   const step = args.length >= 3 ? rangeInt(args[2], 3) : 1;

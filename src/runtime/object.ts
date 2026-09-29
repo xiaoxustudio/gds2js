@@ -2,14 +2,6 @@ import { UnsupportedError } from "./errors";
 import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
 
-/**
- * 可调用对象（Callable）与「任意 JS 值 → 变体」的归一。
- *
- * 之所以需要这层：emitter 生成的代码里，lambda、绑定方法、引擎对象（如 Timer）
- * 都是普通 JS 值，而容器的 `method` / `index` 入口只认 Variant。
- * 与其让生成代码到处判断类型，不如统一在这里收口。
- */
-
 export const CALLABLE = "__gds2js_callable";
 /** 方法 Callable 的方法名与接收者（`get_method()` / `is_null()` / `is_valid()` 要用，实测 f34）。 */
 export const CALLABLE_NAME = "__gds2js_callable_name";
@@ -55,8 +47,6 @@ export function unwrap(v: unknown): unknown {
   return isVariant(v) ? v.v : v;
 }
 
-// ---------------------------------------------------------------- 类注册表
-
 export interface GdClassCtor {
   new (...args: unknown[]): object;
 }
@@ -78,13 +68,11 @@ const FIELD_TYPES = new WeakMap<GdClassCtor, Record<string, string>>();
  */
 const STATIC_METHODS = new WeakMap<GdClassCtor, Set<string>>();
 
-/** class_name / 内部类都注册进来，`is` 判定和 `X.new()` 靠它 */
 export function registerClass(name: string, ctor: GdClassCtor): void {
   CLASS_REGISTRY.set(name, ctor);
   CLASS_NAMES.set(ctor, name);
 }
 
-/** 发射器为每个类补发一行：`rt.registerFieldTypes(Inner, { t: "int", v: "Vector2" })`。 */
 export function registerFieldTypes(ctor: GdClassCtor, table: Record<string, string>): void {
   FIELD_TYPES.set(ctor, table);
 }
@@ -95,7 +83,6 @@ export function fieldTypesOf(target: unknown): Record<string, string> | null {
   return (ctor && FIELD_TYPES.get(ctor)) || null;
 }
 
-/** 发射器为每个类补发一行：`rt.registerStaticMethods(Inner, ["make", "twice"])`。 */
 export function registerStaticMethods(ctor: GdClassCtor, names: string[]): void {
   STATIC_METHODS.set(ctor, new Set(names));
 }
@@ -107,7 +94,6 @@ export function registerStaticMethods(ctor: GdClassCtor, names: string[]): void 
  */
 const STATIC_VARS = new WeakMap<GdClassCtor, Record<string, string>>();
 
-/** 发射器为每个有静态变量的类补发一行：`rt.registerStaticVars(Inner, { sv: "int" })`。 */
 export function registerStaticVars(ctor: GdClassCtor, table: Record<string, string>): void {
   STATIC_VARS.set(ctor, table);
 }
@@ -201,15 +187,9 @@ export function lookupClass(name: string): GdClassCtor | undefined {
   return CLASS_REGISTRY.get(name);
 }
 
-// ---------------------------------------------------------------- 脚本注册表
-
 /** res:// 路径 → 该脚本的类构造器。preload/load 按路径取"脚本"这个值。 */
 const SCRIPT_REGISTRY = new Map<string, GdClassCtor>();
 
-/**
- * 每个编译产物在模块体里注册自己：`rt.registerScript("res://foo.gd", Foo)`。
- * load(动态) 靠它按 res 路径解析；preload(静态) 走 ESM import，但也注册一份保持一致。
- */
 export function registerScript(resPath: string, ctor: GdClassCtor): void {
   SCRIPT_REGISTRY.set(resPath, ctor);
 }

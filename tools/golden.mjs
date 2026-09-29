@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * 生成 / 刷新 golden：用裁判引擎跑每个 case，把归一化后的输出写进 godot.txt。
- *
- *   node tools/golden.mjs                # 全量
- *   node tools/golden.mjs 01             # 只跑名字含 01 的
- *   node tools/golden.mjs --check        # 不写盘，只报漂移
- */
 import {
   caseDir,
   caseIsProject,

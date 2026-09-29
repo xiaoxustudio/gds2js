@@ -1,20 +1,4 @@
 #!/usr/bin/env node
-/**
- * perry 产物的**语义可信度**门：把语料真打成独立 exe，跑起来，逐字节对 Godot golden。
- *
- *   node tools/perry-check.ts 001 063 077          # 指定若干例（前缀匹配）
- *   node tools/perry-check.ts                      # 默认：风险面代表集（验 CLI 的默认 GC）
- *   node tools/perry-check.ts --all                # 全量（发版前跑）
- *   PERRY_RS4GC=1 node tools/perry-check.ts 001    # 换 GC 模式验（显式设过就照你的值）
- *
- * 为什么要有这一条而不是只看「export 出货了」：perry 那一支走的是 `PERRY_RS4GC=0`
- * （CLI 的默认 —— 默认那支 RS4GC 在 Windows 上编译含 try/catch 的模块会访问违例，上游 #7354）。
- * 换 GC 策略换来的是**能跑但可能算错**的风险 —— 只有拿真 Godot 的输出做裁判才量得出来。
- * 所以这个门对失败严格：任何一例不一致就红灯，不像 export-check 那样容忍上游状态。
- *
- * 成本实测：打平运行时进 perry 的模块缓存后，单例 ~3–10 s；冷启动第一例（要原生编那份运行时）
- * 到 2 min 量级。所以默认跑代表集，`--all` 留给发版前。
- */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -74,7 +58,6 @@ if (!existsSync(join(ROOT, "dist", "cli.mjs"))) {
 const work = join(tmpdir(), "gds2js-perry-check");
 mkdirSync(work, { recursive: true });
 
-/** 一例：CLI 真打一个 exe，再把它当黑盒跑起来。 */
 function check(id: string): { id: string; ok: boolean; note: string } {
   const entry = caseScript(id);
   const golden = readGolden(id);
@@ -88,8 +71,6 @@ function check(id: string): { id: string; ok: boolean; note: string } {
   );
   const wantedOk = godotOk(golden);
   if (build.status !== 0 || !existsSync(exe)) {
-    // Godot 侧就报错的用例里有一类是**静态**错（定型容器嵌套、把 void 返回值当值用…），
-    // 我们的语义分析在编译期就拦下 —— export 正确地不出货。这种「非 0 + 有诊断」就是通过。
     if (!wantedOk) {
       const diag = (build.stderr || "").trim();
       if (diag === "") return { id, ok: false, note: "预期报错用例拒了但没给任何诊断" };
@@ -102,8 +83,6 @@ function check(id: string): { id: string; ok: boolean; note: string } {
   const out = run.stdout ?? "";
   if (run.error) return { id, ok: false, note: `exe 起不来：${run.error.message}` };
   if (!wantedOk) {
-    // 另一类预期报错是**运行期**的（除零、越界下标…）：exe 该有，但跑起来必须非 0 且报错可见 ——
-    // 静默退 0 就是语义错了，最坏的假绿
     if (run.status === 0) return { id, ok: false, note: "预期报错用例却退出 0" };
     if ((run.stderr || "").trim() === "") return { id, ok: false, note: `退了 ${run.status} 但 stderr 没任何报错` };
     return { id, ok: true, note: "运行期正确报错（非 0 退出）" };
@@ -111,7 +90,6 @@ function check(id: string): { id: string; ok: boolean; note: string } {
   if (run.status !== 0) {
     return { id, ok: false, note: `退出码 ${run.status}：${(run.stderr || "").trim().split("\n").slice(-2).join(" / ")}` };
   }
-  // 与 run-check 同一条对比契约：golden 是 normalize 过的，产物走同一个 normalize
   const got = normalize(out, entry);
   if (got === golden) return { id, ok: true, note: "逐字节一致" };
   const a = golden.split("\n");

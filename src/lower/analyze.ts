@@ -1,16 +1,6 @@
 import { staticMemberFn } from "./ir";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
-/**
- * 语义分析层。
- *
- * 存在的理由：lowering 只保证"能降成 IR"，它会放过 Godot 根本不让跑的代码。
- * 这一层负责把这些代码拦下来 —— 不拦的话，它们会以"编译成功但语义错"的形式漏过去，
- * 正是最不该有的静默错误。
- *
- * 每条检查都对应 docs/SEMANTICS.md 里的一条实测结论。
- */
-
 export interface Diagnostic {
   code: string;
   message: string;
@@ -28,7 +18,6 @@ class Scope {
   constructor(
     private vars: Set<string>,
     private parent: Scope | null,
-    /** 只有函数作用域会标它（见 allowsSelf）；块作用域留空，往上找函数作用域的答案。 */
     private selfOk?: boolean,
   ) {}
 
@@ -36,11 +25,6 @@ class Scope {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name));
   }
 
-  /**
-   * 当前函数是否允许 `self`（S143）：沿作用域链上推到函数作用域为止。
-   * 类作用域（checkClass 造的）没标这个位，所以模块级 `var x = self` 走的仍是通用「未声明」那条，
-   * 不在这个口子内 —— Godot 对那个写法报什么我们没测，不放行就是不静默。
-   */
   allowsSelf(): boolean {
     return this.selfOk ?? (this.parent !== null && this.parent.allowsSelf());
   }
@@ -49,11 +33,6 @@ class Scope {
     return new Scope(new Set(names), this, selfOk);
   }
 
-  /**
-   * 在当前作用域里声明变量。
-   * 块作用域（S16）靠 child() 天然实现 —— if/for/while 的体是 child scope，
-   * 在里面声明的变量不会泄漏到外层。
-   */
   declare(name: string): void {
     this.vars.add(name);
   }
@@ -73,8 +52,6 @@ function declNames(d: Decl): string[] {
 export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[] {
   const diags: Diagnostic[] = [];
 
-  // enum 名进作用域：named enum 用枚举名（`Color.RED` 里被查的是 Color），
-  // 匿名 enum 的成员是脚本级裸常量（`A`）。
   const enumNames: string[] = [];
   for (const en of m.enums) {
     if (en.name) enumNames.push(en.name);
@@ -87,9 +64,6 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   );
   const moduleScope = globalScope.child(declNames(m));
   const coroutines = new Set(m.funcs.filter((f) => f.coroutine).map((f) => f.name));
-  // 内部类能看见的外层名字**只有**：常量、enum、类名（含兄弟内部类与跨文件的 class_name）——
-  // 模块级的 var / signal / func 都看不见（f31 / f32 报未声明、f33 / f24 报「not found in base self」）。
-  // 作用域链必须另起一条：globalScope 里就装着 declNames(m)，挂在它下面等于什么都没挡。
   const classScopeBase = new Scope(
     new Set([
       ...(m.className ? [m.className] : []),
@@ -114,14 +88,6 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   return diags;
 }
 
-/**
- * 定型容器（`Array[int]` / `Dictionary[String, int]`）的两条解析期检查，都是实测的 Godot
- * Parse Error —— 不拦的话它们会编成"能跑但语义不同"的产物：
- * - 嵌套定型：`Array[Array[int]]` 是 `Nested typed collections are not supported.`（实测）；
- * - 字面量初值里有装不进去的元素：`Array[int] = [1, "s"]` 是
- *   `Cannot include a value of type "String" as "int".`（实测；同格的 float→int 是**允许**的，
- *   运行时应截断成 2，所以只对静态就不同族的类型报错）。
- */
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc }> = [
     ...m.vars.map((v) => ({ type: v.type, init: v.init, loc: v.loc })),
@@ -139,7 +105,6 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     for (const inner of cls.innerClasses) collect(inner);
   };
   for (const c of m.innerClasses) collect(c);
-  // 函数体里的局部声明也要走：用一条极简的语句遍历（只求拿到 var 的 type/init/loc）
   const walkStmts = (stmts: Stmt[]): void => {
     for (const s of stmts) {
       if (s.kind === "var") targets.push({ type: s.type, init: s.init, loc: s.loc });
@@ -168,8 +133,6 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       continue;
     }
     if (t.init === null) continue;
-    // Array[T] 只有元素要验；Dictionary[K, V] 是键与值各验各的（混着验会假报：
-    // Dictionary[String, int] 的值 1 对 "String" 当然不成立，但那不是 Godot 的错误）
     const slots: Array<{ exprs: Expr[]; kind: string }> = [];
     if (m2[1] === "Array") {
       if (t.init.kind === "array") slots.push({ exprs: t.init.items, kind: inner.trim() });
@@ -185,7 +148,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     for (const slot of slots) {
       for (const it of slot.exprs) {
         const st = staticType(it);
-        if (st === null) continue; // 推不出静态类型就交给运行时的转换表
+        if (st === null) continue;
         if (!canHold(slot.kind, st)) {
           diags.push({
             code: "typed-collection-literal",
@@ -213,17 +176,16 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
     case "Vector3":
     case "Vector2i":
     case "Color":
-      return false; // 向量字面量的静态类型还推不出（staticType 给 null），运行时兜底
+      return false;
     case "Array":
       return st === "Array";
     case "Dictionary":
       return st === "Dictionary";
     default:
-      return true; // 引擎类：运行时阶段的事
+      return true;
   }
 }
 
-/** 定型容器的槽位：`Array[int]` 只有元素，`Dictionary[int, String]` 是键与值两槽。 */
 type TypedSlot = { decl: string; kind: "Array" | "Dictionary"; elem?: string; key?: string; val?: string };
 
 /** 从标注里读出槽位。读不出来（不是容器、嵌套定型）就不管 —— 嵌套那条由 `typed-collection-nested` 报。 */
@@ -238,17 +200,6 @@ function parseTyped(name: string): TypedSlot | null {
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
 
-/**
- * 索引读写撞给定型容器的槽位时，Godot 在**解析期**就拒（实测 5 条形体，见 S138），
- * 放过去就是"能编能跑但语义不同"的产物：
- *  - `a[0] = "s"`（`Array[int]`）→ `Cannot assign a value of type "String" as "int".`
- *  - `d[1] = 5`（`Dictionary[int, String]`）→ `Cannot assign a value of type "int" as "String".`
- *  - **下标是变量**时换成另一条形体：`a[i] = i`（`Array[String]`）→ `Value of type "int" cannot be assigned to a variable of type "String".`
- *  - 键的类型不合（`d["s"] = "x"`）**以及读**（`print(d["k"])`）→ `Invalid index type "String" for a base of type "Dictionary[int, String]".`
- *  - 反过来**不报**的也实测过：`a.append("s")` 与 `Dictionary[Vector2, int]` 的声明都是合法的（append 走运行时转换，别在这儿拦）。
- * 判据沿用 `canHold` 那张运行时转换表（float→int 允许，运行时截断），并且只在静态类型推得出来时才报 ——
- * 推不出就交给运行时的元素转换。null 实参两侧都未实测，一律不报（宁可漏报，不编造严格性）。
- */
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
   const collect = (c: ClassDecl): void => {
@@ -257,11 +208,6 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
 
-  /**
-   * 这一段自己带一张「局部变量声明类型」表：`staticType` 全局不管标识符（只认字面量与算式），
-   * 而 t8 那条实测要求 `var i: int` 之后 `a[i] = i` 也能静态判 —— 只在这个 pass 里补，
-   * 不去动全局推断（那会把既有 0 误报的检查项一起拖进未实测的行为里）。
-   */
   const stOf = (e: Expr, decls: Map<string, string>): NonNullable<StaticType> | null => {
     if (e.kind === "ident") {
       const d = decls.get(e.name);
@@ -329,10 +275,6 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     if (st === null || st === "null") return;
     if (canHold(slotKind, st)) return;
     const literalIndex = index.kind === "lit";
-    // 实测（108 / 112 两份 golden）：**下标是字面量时 Godot 两条都报** —— 先「元素槽」那条
-    // `Cannot assign a value of type "String" as "int".`，再「赋值类型」那条
-    // `Value of type "String" cannot be assigned to a variable of type "int".`；
-    // 下标是变量时（111）只剩后面那条。顺序也是 golden 里的顺序，别合成一条。
     if (literalIndex) {
       diags.push({
         code: "typed-index-value",
@@ -367,8 +309,6 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
           if (s.target.kind === "index" && s.target.obj.kind === "ident") {
             const slot = typed.get(s.target.obj.name);
             if (slot !== undefined) {
-              // 写侧：键先判（109 那条实测的是键不合式），再看值。target 整个子树就此不再下探，
-              // 否则同一个 index 节点会被读侧再报一遍。
               handledTarget = true;
               badKey(slot, s.target.index, decls);
               const kind = slot.kind === "Array" ? slot.elem : slot.val;
@@ -460,7 +400,6 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-/** 这条检查认得的接收者形状。 */
 type ContainerShape = "Array" | "Dictionary" | "Pack";
 
 /**
@@ -489,15 +428,10 @@ function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null
       if (st === "int" || st === "float" || st === "bool" || st === "null") return false;
       return null;
     default:
-      // Array / Dictionary / 引擎类槽：赋值这一面还没实测（定型容器的**索引**槽另有一套检查）
       return null;
   }
 }
 
-/**
- * 收集「声明了标量类型的名字」（模块变量 + 本函数的带标注局部，含嵌套块），
- * 再逐个 `x = v` 赋值点判组合是否合式。
- */
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
   const scalarType = (t: TypeRef | null): string | null => {
     if (t === null || t.kind !== "named") return null;
@@ -581,7 +515,6 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
     const expr = (e: Expr): void => {
       switch (e.kind) {
         case "lambda":
-          // lambda 体里可能再声明带类型的局部：独立作用域，不影响外层 decls
           checkBody(e.body, decls);
           return;
         case "call":
@@ -646,12 +579,9 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
 
-  /** 变量名 → 容器形状；只在推得出来时进表。 */
   const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
-    // `var b = PackedByteArray([1,2])`：构造器调用是这一族唯一推得出的初值形状
-    // （`"x".to_utf8_buffer()` 那条推不出，宁可漏报）
     if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
       return "Pack";
     }
@@ -728,7 +658,6 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             continue;
           }
           case "assign": {
-            // 重新赋值就可能换掉形状：认不出来的一律把该变量移出表（保守）
             if (s.target.kind === "ident") {
               const sh = shapeOf(s.value);
               if (sh === null) shapes.delete(s.target.name);
@@ -739,7 +668,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             continue;
           }
           case "expr":
-            expr(s.expr, true); // 表达式语句：结果被丢掉，void 方法在这儿是合法的
+            expr(s.expr, true);
             continue;
           case "return":
             if (s.value !== null) expr(s.value, false);
@@ -818,8 +747,6 @@ const PACK_IS_AS_NAMES = new Set([
   "PackedFloat32Array",
   "PackedFloat64Array",
   "PackedStringArray",
-  // 这三种还没实现，但**解析期拒**照样成立（144 量的就是 PackedVector2Array）：
-  // 判得不出静态类型的操作数（变量等）不会走到这里，所以不会误拦「运行期真的能判」的那一侧。
   "PackedVector2Array",
   "PackedVector3Array",
   "PackedColorArray",
@@ -838,14 +765,12 @@ function staticTypeName(e: Expr): string | null {
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
-  // `Vector2(1, 2) is PackedVector2Array` 实测也是解析期拒（构造调用判得出类型）
   if (e.kind === "call" && e.callee.kind === "ident" && STATIC_VALUE_TYPES.has(e.callee.name)) {
     return e.callee.name;
   }
   return null;
 }
 
-/** 粗粒度的 IR 遍历：只看 kind，不枚举每种节点（新增形状时这里不会漏）。 */
 function walkExprKinds(node: unknown, out: Extract<Expr, { kind: "is" | "as" }>[]): void {
   if (Array.isArray(node)) {
     for (const x of node) walkExprKinds(x, out);
@@ -874,8 +799,6 @@ function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
       if (node.type.kind !== "named") continue;
       const target = node.type.name.replace(/\[.*\]$/, "");
       const packTarget = PACK_IS_AS_NAMES.has(target);
-      // S172 还量到一条同形的：`&"nm" is String` 也是解析期拒（StringName 与 String 在**槽位转换**
-      // 上是同一族、在 `is` 谓词上不是）。只这一格量过，所以既不限别的目标类型、也不碰 `as`。
       const snAgainstString = target === "String" && node.kind === "is" && staticTypeName(node.operand) === "StringName";
       if (!packTarget && !snAgainstString) continue;
       const from = staticTypeName(node.operand);
@@ -901,7 +824,6 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
 
   for (const f of funcs) {
     if (!f.isStatic) continue;
-    // 局部名与形参不算「实例成员」：Godot 的解析按最近的声明走
     const local = new Set<string>();
     collectLocalNames(f.body, f.params.map((p) => p.name), local);
 
@@ -917,7 +839,6 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           }
           return;
         case "call": {
-          // 只判**裸调**（callee 是 ident）：`p.imeth()` 这种带着接收者的写法实测完全合法（f25）
           if (e.callee.kind === "ident" && !local.has(e.callee.name) && instanceFuncs.has(e.callee.name)) {
             diags.push({
               code: "static-call-func",
@@ -956,7 +877,6 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           }
           return;
         case "lambda":
-          // lambda 里的裸名字沿用外层判定，但形参不进外层 local（保守：只按外层已知的实例名判）
           for (const st of e.body) stmt(st);
           return;
         case "lit":
@@ -1041,13 +961,6 @@ function collectLocalNames(body: Stmt[], params: string[], out: Set<string>): vo
   body.forEach(stmt);
 }
 
-/**
- * 内部类里**裸调外层脚本的函数**是解析期错：`Function "helper()" not found in base self.`
- * （f33 实测实例方法那一版；f24 是静态方法那一版，同一条文本）。
- * 通用「未声明」那条只管值位置，被调用者位置历来不检查（`quit()` / `create_timer()` 这些宿主方法
- * 是故意放行的），所以这里只认**外层脚本里真存在的那个函数名**才报 —— 认不得的一律放行，
- * 这样误报恒为零，也不会顺手把引擎方法拦掉。
- */
 function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
   const outerFuncs = new Set(m.funcs.map((f) => f.name));
   if (outerFuncs.size === 0) return;
@@ -1164,13 +1077,9 @@ function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[]): void {
-  // `self` 一律进作用域（S143 实测它在实例方法里就是个对象），静态方法那一条按 Godot 的原文单独报，
-  // 不能让通用「未声明」抢话 —— 抢了就成了「我们报错、Godot 不报」的另一种口径。
   const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
   walkStmts(f.body, scope, coroutines, diags, false);
 }
-
-// ---------------------------------------------------------------- 语句
 
 function walkStmts(
   stmts: Stmt[],
@@ -1192,7 +1101,6 @@ function walkStmt(
   switch (s.kind) {
     case "var":
       if (s.init) walkExpr(s.init, scope, coroutines, diags);
-      // 先走 init 再声明：`var x = x` 的右值不该看到自己
       scope.declare(s.name);
       break;
     case "expr":
@@ -1208,7 +1116,6 @@ function walkStmt(
     case "if":
       for (const br of s.branches) {
         if (br.cond) walkExpr(br.cond, scope, coroutines, diags);
-        // 块作用域（S16）：if/for/while 的体是独立作用域，变量不泄漏到外层
         walkStmts(br.body, scope.child([]), coroutines, diags, inLoop);
       }
       break;
@@ -1255,20 +1162,14 @@ function patternBindings(p: Pattern): string[] {
   }
 }
 
-// ---------------------------------------------------------------- 表达式
-
 function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnostic[], awaited = false): void {
   switch (e.kind) {
     case "lit":
       return;
 
     case "ident":
-      // 只查"值位置"的标识符。被调用者位置不查 —— 那可能是继承来的方法或内置函数，
-      // 查了会大量误报（例如 SceneTree.create_timer）。
-      // `super` 是关键字（super.method()），不是需要声明的值标识符，放行。
       if (e.name === "super") return;
       if (e.name === "self") {
-        // 实测（S143 + `static func` 那条探针）：静态方法里用 self 是**解析期**错。
         if (!scope.allowsSelf()) {
           diags.push({
             code: "self-in-static",
@@ -1313,7 +1214,6 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       return;
 
     case "attribute":
-      // `Vector2.UP` 这类静态成员：基是类型名而不是变量，不该报未声明
       if (staticMemberFn(e.obj) === null) walkExpr(e.obj, scope, coroutines, diags);
       return;
 
@@ -1337,7 +1237,6 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
     case "call": {
       if (e.callee.kind === "ident") {
         const name = e.callee.name;
-        // S18：协程必须被 await。协程性是静态可判定的（函数体含 await）。
         if (coroutines.has(name) && !awaited) {
           diags.push({
             code: "coroutine-not-awaited",
@@ -1346,11 +1245,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
           });
         }
         checkCall(name, e, diags);
-        // 被调用者位置不做 undeclared 检查（见 ident 分支的注释）
       } else {
         walkExpr(e.callee, scope, coroutines, diags);
-        // 方法实参的签名检查 Godot 也放在**解析期**（实测 join 那族），所以静态判得出的一律在这儿拦；
-        // 推不出类型的实参（变量、函数调用结果）仍由运行时那两条同文本的抛错兜住。
         if (e.callee.kind === "attribute") checkMethodCall(e.callee.name, e, diags);
       }
       for (const a of e.args) walkExpr(a, scope, coroutines, diags);
@@ -1358,8 +1254,6 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
     }
   }
 }
-
-// ---------------------------------------------------------------- 静态类型检查
 
 function staticType(e: Expr): StaticType {
   switch (e.kind) {
@@ -1407,10 +1301,6 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
   const l = staticType(e.left);
   const r = staticType(e.right);
 
-  // S3：% 只对 int 合法，Godot 编译期就拒 float 参与。
-  // 但 `%` 同时是**字符串格式化**运算符：`"%.1f" % 2.25` 完全合法（实测 Godot 接受并输出 "2.3"）。
-  // 所以这条只能在"两边都不是 String"（即真的是取模）时才成立 —— 早先漏了这个前提，
-  // 把带精度/标志的浮点格式化一律误判成非法运算（%f % 3.5 侥幸没中是因为它走的是另一条推断）。
   const isModulo = l !== "String" && r !== "String";
   if (e.op === "%" && isModulo && (l === "float" || r === "float")) {
     diags.push({
@@ -1420,7 +1310,6 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
     });
   }
 
-  // SEMANTICS §0：String 与 int/float 用 == 比较是编译错误
   if (e.op === "==" || e.op === "!=") {
     const sVsN = (l === "String" && (r === "int" || r === "float")) || (r === "String" && (l === "int" || l === "float"));
     if (sVsN) {
@@ -1432,7 +1321,6 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
     }
   }
 
-  // S24：移位操作数为负，Godot 编译期就拒
   if (e.op === ">>" || e.op === "<<") {
     if (isNegativeLiteral(e.left) || isNegativeLiteral(e.right)) {
       diags.push({
@@ -1443,9 +1331,6 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
     }
   }
 
-  // 字面量整数除零才是编译错误（实测 `1 / 0` → Parse Error）。**左边也得是字面量**：
-  // `var w = Vector2i(7, 7); w / 0` 实测是**运行期** SCRIPT ERROR（`Division by zero error in operator '/'.`
-  // 带 at: 栈帧），说明 Godot 只对常量折叠得出的式子提前拦，所以两边都常量才报。
   if (
     e.op === "/" &&
     e.left.kind === "lit" &&
@@ -1472,7 +1357,6 @@ const JOIN_BAD_ARG: Record<string, string> = {
   null: `Cannot pass a value of type "null" as "PackedStringArray".`,
 };
 
-/** 方法调用的解析期检查（Godot 把签名不合的实参放在 parse 阶段，实测见 S135）。 */
 function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "join") return;
   if (e.args.length === 0) {
@@ -1497,7 +1381,6 @@ function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags
 }
 
 function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
-  // SEMANTICS §0：bool(Array) / bool(String) / bool(Dictionary) 没有对应构造函数
   if (name !== "bool" || e.args.length === 0) return;
   const t = staticType(e.args[0] as Expr);
   if (t === "Array" || t === "String" || t === "Dictionary") {

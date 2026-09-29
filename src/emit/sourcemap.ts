@@ -1,12 +1,3 @@
-/**
- * Source Map v3 的行粒度编码。
- *
- * gds2js 的产物是给人 import/调试的 JS 模块，运行时报错默认指向生成代码 —— sourcemap
- * 把它映射回 .gd 源行。v1 只做**行粒度**（生成列恒 0）：够用（栈帧定位到行），
- * 且能纯增量实现，不动 emitter 产出的一个字节。
- */
-
-/** 一条映射：生成第 genLine 行（0-based）→ 源第 srcLine/srcCol 行（0-based）。 */
 export interface LineMapping {
   genLine: number;
   srcLine: number;
@@ -31,7 +22,7 @@ function vlq(value: number): string {
   do {
     let digit = v & 0b11111;
     v >>>= 5;
-    if (v > 0) digit |= 0b100000; // 还有后续分组，置 continuation bit
+    if (v > 0) digit |= 0b100000;
     out += B64[digit]!;
   } while (v > 0);
   return out;
@@ -48,13 +39,12 @@ export function encodeMappings(sorted: LineMapping[]): string {
   const maxLine = byGen.reduce((n, m) => Math.max(n, m.genLine), -1);
   const lines: string[] = new Array<string>(maxLine + 1).fill("");
 
-  // 源字段是跨整张图累计的增量；生成列每行从 0 起，行粒度下恒为 0。
   let prevSrcIdx = 0;
   let prevSrcLine = 0;
   let prevSrcCol = 0;
   for (const m of byGen) {
     const seg = [
-      vlq(0), // 生成列
+      vlq(0),
       vlq(0 - prevSrcIdx),
       vlq(m.srcLine - prevSrcLine),
       vlq(m.srcCol - prevSrcCol),

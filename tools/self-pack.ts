@@ -1,27 +1,4 @@
 #!/usr/bin/env node
-/**
- * 把 **gds2js CLI 自己**打成一个 Windows 独立可执行文件（Node SEA）。
- *
- *   pnpm build                                   # 必须先有 dist（打进包的就是那几份产物）
- *   pnpm build:self [-o gds2js.exe] [--node <path>] [--keep-bundle]
- *
- * 这是**仓库的构建工具**，不是分发的 CLI 的子命令：exe 不该背着「再打一个 exe」的能力，
- * 它只需要背着「打用户的 exe」要用的真文件（见下面 home 清单）。
- *
- * 难点不在打包，而在「exe 里的 export 还要能用」。几件实测的事决定了这里的形状：
- *  1. SEA exe **不吃 node 旗标**（`x.exe -p …` 会把旗标当 argv 交给内嵌 main）。想靠内嵌一份 node
- *     让 exe 里再跑 `--build-sea`，代价是 34 MB 压缩资产，用户决定不干 —— `--pack node` 只认
- *     **外部** node（`--node` / `GDS2JS_NODE_BIN` / PATH）。
- *  2. 换进去的是 **perry**：`perry.exe` 旁边必须有 `LLVM-C.dll`（实测缺它连 `--version` 都是
- *     0xC0000135，而 LTO/libclang/libomp 都不必），运行时 `perry_runtime.lib` 在包里是 zst 且
- *     perry 不会自己解。好消息是 perry 把 LLVM 吃进进程、也自己找 MSVC 的 link.exe —— 实测把
- *     PATH 削到只剩 System32 照样出货，所以目标机器**不需要装 LLVM**。
- *  3. `--build-sea` 的 assets 是**原样 1:1 入包**（塞 20 MB 资产 exe 就 +20 MB），而实测 deflate-9
- *     能把 perry.exe 压到 41%、LLVM-C.dll 压到 37%、wasm 压到 15% —— 所以每个资产先压一份，
- *     由 `src/home.ts` 在首次运行时解回真实文件。
- *  4. 原生 `.node` 只能从**真实文件系统** dlopen（Node 文档写明，VFS 救不了）。不过 home 里现在
- *     已经没有 bundler 了：exe 里跑 rolldown 实测站不住，export 两支都不需要它。
- */
 import { deflateSync } from "node:zlib";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -39,21 +16,10 @@ const HOME_DIST = ["dist/product.mjs", "dist/standalone.cjs"] as const;
 const SEA_MIN_NODE = "25.7.0";
 
 interface Source {
-  /** 在 home 里的相对路径（`/` 分隔），也是资产 key 的尾段。 */
   rel: string;
-  /** 从哪读。 */
   src: string;
 }
 
-/**
- * perry 工具链：从本地 `@perryts/perry-win32-x64` 取，**照 npm 包的 `bin/` `lib/` 形状铺进 home**。
- * 这样「exe 同目录找 DLL」和 `src/perry.ts` 里「bin 往上两级找 lib」在解出来的家目录里原样成立，
- * 不需要第二套定位逻辑。
- *
- * `perry_stdlib.lib.zst` / `perry_ui_windows.lib.zst` 不进包：实测我们的产物只走
- * `Linking (runtime-only)`，只给 runtime 就出货（20 MB 级的 exe，输出逐字节对过 node 与 golden）。
- * perry 哪天要另一颗 lib，它自己的原话会被 CLI 报出来，那时再往这里加。
- */
 function perryHome(): Source[] {
   const pkgJson = createRequire(join(ROOT, "noop.js")).resolve("@perryts/perry-win32-x64/package.json");
   const pkg = dirname(pkgJson);
@@ -64,18 +30,10 @@ function perryHome(): Source[] {
   ];
 }
 
-/** web-tree-sitter 的运行时 wasm：走它自己的 exports 子路径，不猜目录形状。 */
 function wasmGlue(): string {
   return createRequire(join(ROOT, "noop.js")).resolve("web-tree-sitter/web-tree-sitter.wasm");
 }
 
-/**
- * home 清单。缺件直接报错 —— 打出一个残废 exe 比不打更糟。
- *
- * `web-tree-sitter.wasm` 很容易被漏：self bundle 把它内联了，而它按
- * `new URL("web-tree-sitter.wasm", import.meta.url)` 找自己那颗运行时 wasm，在 exe 里那就是
- * 「exe 同目录」，实测直接 ENOENT + abort。由 `src/parse/parser.ts` 的 locateFile 指过去。
- */
 function homeSources(): Source[] {
   const out: Source[] = [
     { rel: "gdscript.wasm", src: join(ROOT, "gdscript.wasm") },
@@ -106,7 +64,6 @@ function versionAtLeast(v: string, min: string): boolean {
   return true;
 }
 
-/** 问一份 node 的版本；起不来、或回话不像版本号就返回 null（SEA exe 会把旗标当 argv，绝不回版本号）。 */
 function nodeVersionOf(bin: string): string | null {
   const r = spawnSync(bin, ["-p", "process.versions.node"], { encoding: "utf8", windowsHide: true, timeout: 60_000 });
   if (r.error || r.status !== 0) return null;
@@ -114,12 +71,6 @@ function nodeVersionOf(bin: string): string | null {
   return /^\d+\.\d+\.\d+/.test(out) ? out : null;
 }
 
-/**
- * 打成 CLI 的单文件 bundle。
- * **`inlineDynamicImports` 是必需的**：默认会把 `await import("tsdown")`（`--runtime-mode single` 那条路）
- * 拆成兄弟 chunk（实测碎成 8 个文件），而注入 SEA 的 main 里 `import.meta.url` 指向 exe 自己，
- * 相对 chunk 路径解析不到。
- */
 async function bundleCli(stage: string): Promise<string> {
   const { build } = await import("tsdown");
   const outDir = join(stage, "app");
@@ -148,7 +99,6 @@ interface Opts {
   keep: boolean;
 }
 
-/** 解析 argv：只认 `-o/--out`、`--node`、`--keep-bundle`，别的一律响亮拒绝（拼错的旗标不该被静默吃掉）。 */
 function parseArgv(argv: string[]): Opts {
   const opts: { out?: string; node?: string; keep?: boolean } = {};
   for (let i = 0; i < argv.length; i++) {
@@ -167,7 +117,6 @@ function parseArgv(argv: string[]): Opts {
     } else throw new Error(`不认识的参数：${a}（可用：-o/--out、--node、--keep-bundle、-h）`);
   }
   const out = resolve(opts.out ?? join(ROOT, "gds2js.exe"));
-  // 打这个包必须借一份真 node 跑 --build-sea（≥25.7）；它只是构建机上的工具，不进产物
   const seaBin = opts.node ?? process.env.GDS2JS_NODE_BIN ?? process.execPath;
   return { out, seaBin, stage: join(ROOT, ".gds2js-self"), keep: opts.keep === true };
 }

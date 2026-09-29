@@ -1,12 +1,3 @@
-/**
- * 语义分析的检出率度量。
- *
- * 判据不是"我觉得该报错"，而是 **Godot 到底报没报错**：golden 里有 SCRIPT ERROR 就是预期报错。
- * - 误报：我们报错但 Godot 放过了 —— 会把能跑的代码拦死，最伤
- * - 漏报：Godot 报错但我们放过了 —— 会以"编译成功但语义错"的形式漏出去
- *
- * 跑：node_modules/.bin/tsx tools/sema-check.ts
- */
 import { readFileSync } from "node:fs";
 import { analyze } from "../src/lower/analyze";
 import { lower } from "../src/lower/lower";

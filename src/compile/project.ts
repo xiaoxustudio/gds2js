@@ -9,17 +9,6 @@ import { lower } from "../lower/lower";
 import { parseSource } from "../parse/parser";
 import { UnsupportedError } from "../runtime/errors";
 
-/**
- * 跨文件编译的项目层（docs/ROADMAP.md P5）。
- *
- * 单文件 emitModule 不认识"别的文件"。这一层负责：
- * 1. 从入口出发发现依赖 —— 解析 `res://` / 相对路径、`class_name`、`extends`、`preload`。
- * 2. 建 `class_name → 文件` 全局表（Godot 的 class_name 是工程级注册，跨文件可见）。
- * 3. 把跨文件引用解析成 ESM import 说明符，逐文件 emitModule。
- *
- * 范围（本步）：class_name 全局注册 + 跨文件 extends + 跨文件 `Foo.new()` / `is Foo`
- * + `preload(已知 res:// 路径)` → 静态 import。`load`（动态）留到下一步。
- */
 
 const RES_PREFIX = "res://";
 
@@ -33,25 +22,15 @@ const ENGINE_BASES = new Set([
 ]);
 
 export interface ProjectOptions {
-  /** 入口 .gd 的文件系统绝对路径。 */
   entries: string[];
-  /** `res://` 映射到的目录（通常是含 project.godot 的工程根）。 */
   resRoot: string;
-  /** 产物输出根目录；镜像 res:// 下的相对结构。 */
   outDir: string;
-  /** 运行时的 import 说明符（裸包名或相对路径，对所有产物一致）。 */
   runtimeImport: string;
-  /** 宿主的 import 说明符；null 表示不引入宿主。 */
   hostImport: string | null;
-  /** 产物末尾是否自动驱动生命周期（跑 _initialize/_process）。库工程一般 false。 */
   autoRun?: boolean;
-  /** 为每个产物生成行粒度 sourcemap（默认关）。 */
   sourcemap?: boolean;
-  /** 运行时打包模式（见 emit 端）：import 默认；local 旁挂；single 内联。 */
   runtimeMode?: "import" | "local" | "single";
-  /** single 模式：standalone.cjs 全文，内联进每个模块。 */
   standaloneInline?: string;
-  /** local 模式：已旁挂到输出区的 standalone.cjs 绝对路径；每个模块按相对路径 require。 */
   standaloneFile?: string;
 }
 
@@ -60,17 +39,14 @@ export interface CompiledModule {
   jsPath: string;
   className: string;
   code: string;
-  /** opts.sourcemap 开启时的 Source Map v3 对象。 */
   map?: RawSourceMap;
 }
 
 export interface ProjectResult {
   modules: CompiledModule[];
-  /** 按文件聚合的静态检查诊断；非空表示该文件不该被发射。 */
   diags: Array<{ resPath: string; diagnostic: Diagnostic }>;
 }
 
-// ---------------------------------------------------------------- 路径工具
 
 function toResPath(absPath: string, resRoot: string): string {
   const rel = relative(resRoot, absPath).split(sep).join("/");
@@ -80,8 +56,7 @@ function toResPath(absPath: string, resRoot: string): string {
 /** 把 GDScript 里的路径字符串解析成规范化的 res:// 路径（全程在 res 空间内）。 */
 function resolveGdPath(fromRes: string, target: string): string {
   if (target.startsWith(RES_PREFIX)) return normalizeRes(target);
-  // 相对当前文件的 res 目录
-  const fromDir = dirname(fromRes); // "res://a" → "res://"; "res://a/b" → "res://a"
+  const fromDir = dirname(fromRes);
   const base = fromDir === "" || fromDir === RES_PREFIX || fromDir === "res:" ? RES_PREFIX : fromDir + "/";
   return normalizeRes(base + target);
 }
@@ -91,7 +66,6 @@ function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
 }
 
-/** 折叠 res:// 路径里的 ./ 与 ../。 */
 function normalizeRes(resPath: string): string {
   const rest = resPath.slice(RES_PREFIX.length);
   const out: string[] = [];
@@ -109,7 +83,6 @@ function derivedClassName(resPath: string): string {
   return /^[0-9]/.test(raw) ? `_${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
-// ---------------------------------------------------------------- IR 遍历
 
 function walkStmt(s: Stmt, visit: (e: Expr) => void): void {
   switch (s.kind) {
@@ -211,34 +184,25 @@ function typeRefName(t: TypeRef | null): string | null {
 function extendsRefText(raw: string | null): string | null {
   if (raw === null) return null;
   const trimmed = raw.trim();
-  // `extends "res://base.gd"` —— 带引号的是脚本路径
   if (/^["'].*["']$/.test(trimmed)) return trimmed.slice(1, -1);
   return trimmed;
 }
 
-// ---------------------------------------------------------------- 主流程
 
 interface Loaded {
   resPath: string;
   absPath: string;
   module: Module;
-  /** 依赖：其它 .gd 的 res 路径（extends 脚本 / preload / load 之外，class_name 依赖后补）。 */
   depPaths: Set<string>;
-  /** 引用的其它 class_name（含 extends 与表达式里的裸名字）。 */
   classRefs: Set<string>;
-  /** 该模块自带的类名（class_name 或派生），用于 JS 导出名。 */
   jsName: string;
 }
 
-/**
- * 编译一个跨文件工程：发现 → 建 class_name 表 → 解析边 → 逐文件发射。
- * 不写盘，只返回产物字符串；写盘交给调用方。
- */
 export async function compileProject(opts: ProjectOptions): Promise<ProjectResult> {
   const resRoot = resolve(opts.resRoot);
   const entries = opts.entries.map((e) => resolve(e));
 
-  const loaded = new Map<string, Loaded>(); // key: resPath
+  const loaded = new Map<string, Loaded>();
   const diags: ProjectResult["diags"] = [];
 
   const need = async (absPath: string): Promise<Loaded | null> => {
@@ -262,10 +226,6 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     return l;
   };
 
-  // ---- Pass 1：确定编译作用域。
-  // class_name 是**工程级**注册：`GpShape.new()` 不带任何路径，必须扫描全部 .gd 才知道它是谁。
-  // 所以作用域 = 入口 ∪ resRoot 下的所有 .gd（等价于 Godot 的全局类注册表），
-  // 再沿路径依赖（extends "res://…" / preload）向外补。
   const queue: string[] = [];
   const seedPaths = new Set<string>();
   const seed = (absFile: string): void => {
@@ -284,7 +244,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     if (!l) continue;
     const collect = (candidate: string | null, from: string): string | null => {
       if (!candidate) return null;
-      if (!candidate.endsWith(".gd")) return null; // 只认脚本
+      if (!candidate.endsWith(".gd")) return null;
       const depRes = resolveGdPath(from, candidate);
       if (!l.depPaths.has(depRes)) {
         l.depPaths.add(depRes);
@@ -293,9 +253,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       return depRes;
     };
 
-    // extends "res://x.gd"
     collect(extendsRefText(l.module.extends), resPath);
-    // preload("res://x.gd") / load("res://x.gd")
     walkModuleExprs(l.module, (e) => {
       if (e.kind === "call" && e.callee.kind === "ident" && (e.callee.name === "preload" || e.callee.name === "load")) {
         const a = e.args[0];
@@ -304,8 +262,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     });
   }
 
-  // ---- Pass 2：建 class_name → resPath 全局表
-  const classIndex = new Map<string, string>(); // className -> resPath
+  const classIndex = new Map<string, string>();
   for (const l of loaded.values()) {
     if (l.module.className) {
       const prev = classIndex.get(l.module.className);
@@ -319,11 +276,9 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     }
   }
 
-  // ---- Pass 3：解析每个文件的跨文件边（class_name 引用 + extends 基类）
   const entryResSet = new Set(entries.map((e) => normalizeRes(toResPath(e, resRoot))));
   for (const l of loaded.values()) {
     const own = l.module.className;
-    // 本文件内的局部/成员/函数名，避免把局部变量误判成跨文件类名
     const locals = new Set<string>([
       ...l.module.vars.map((v) => v.name),
       ...l.module.funcs.map((f) => f.name),
@@ -336,7 +291,6 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       if (classIndex.has(name)) l.classRefs.add(name);
     };
 
-    // extends 的类名形式
     const extText = extendsRefText(l.module.extends);
     if (extText && !extText.endsWith(".gd")) record(extText.replace(/\[.*\]$/, ""));
 
@@ -347,19 +301,12 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     });
   }
 
-  // ---- 环检测（extends 循环 / preload 循环），Godot 也是错误，这里响亮报出
   detectCycles(loaded, resRoot);
 
-  // ---- 参数/返回单态化的跨模块安全集（D2 第三轨）：
-  // 裸 ABI 会让方法只接受裸值；一旦它以装箱形式被外部触达就静默算错。跨模块触达只有两条路：
-  //   (1) obj.m() / super.m() —— 属性访问，全工程任意一处出现 `.m` 就禁掉 m 的裸 ABI；
-  //   (2) 继承（基类方法被子类以 this.m() 虚调用）—— 参与任何用户类继承关系的模块整体禁用。
-  // 单模块直接 f() 且从不被属性/继承触达的纯 helper 才保留单态化。
   const attrNames = new Set<string>();
   for (const l of loaded.values()) {
     walkModuleExprs(l.module, (e) => {
       if (e.kind === "attribute") attrNames.add(e.name);
-      // 字符串字面量可能是 obj.call("m") / connect("m") 的目标方法名（按名反射派发）→ 一并保守排除。
       if (e.kind === "lit" && e.lit === "string") attrNames.add(String(e.value));
     });
   }
@@ -367,22 +314,19 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   for (const l of loaded.values()) {
     const bm = baseModule(l, loaded, classIndex);
     if (bm) {
-      rawAbiBlockedModules.add(l.resPath); // 有用户基类：this.m() 可能是虚调用
-      rawAbiBlockedModules.add(bm.resPath); // 被继承：其方法可能被派生类虚调用
+      rawAbiBlockedModules.add(l.resPath);
+      rawAbiBlockedModules.add(bm.resPath);
     }
   }
 
-  // ---- Pass 4：逐文件发射
   const modules: CompiledModule[] = [];
   for (const l of loaded.values()) {
-    // 静态分析的作用域要带上 extends 链上用户基类的成员名，否则继承来的字段/值
-    // 在「值位置」会被误判未声明（被调用者位置本就宽容，所以继承方法一直没事）。
     const inherited = inheritedMembers(l, loaded, classIndex);
     const globals = new Set<string>([...classIndex.keys(), ...inherited]);
     const fileDiags = analyze(l.module, globals).map((d) => ({ resPath: l.resPath, diagnostic: d }));
     if (fileDiags.length > 0) {
       diags.push(...fileDiags);
-      continue; // 有语义错误不发射（与 CLI 一致）
+      continue;
     }
 
     const isEntry = entryResSet.has(l.resPath);
@@ -391,17 +335,16 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     const classRefs = [...l.classRefs]
       .filter((name) => {
         const dep = classFile(name, loaded, classIndex);
-        return !dep || dep.jsName !== baseName; // 基类单独 import，避免重复绑定
+        return !dep || dep.jsName !== baseName;
       })
       .map((name) => {
         const dep = classFile(name, loaded, classIndex)!;
         return { name: dep.jsName, from: jsImportSpecifier(l, dep, opts) };
       });
 
-    // preload/load 的字面量目标 → 解析成工程内的脚本模块（literal 原样保留给 emitter 查表）
     const preloads: Array<{ literal: string; name: string; from: string }> = [];
-    const loadMap = new Map<string, string>(); // 原始字面量 → 规范化 resPath（loadScript 的键）
-    const sideEffect = new Map<string, string>(); // resPath → 副作用 import 说明符
+    const loadMap = new Map<string, string>();
+    const sideEffect = new Map<string, string>();
     walkModuleExprs(l.module, (e) => {
       if (e.kind !== "call" || e.callee.kind !== "ident") return;
       const fn = e.callee.name;
@@ -411,7 +354,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       const literal = String(a.value);
       const depRes = resolveGdPath(l.resPath, literal);
       const dep = loaded.get(depRes);
-      if (!dep) return; // 交给 emitter 响亮报未解析
+      if (!dep) return;
       if (fn === "preload") {
         if (!preloads.some((p) => p.literal === literal)) {
           preloads.push({ literal, name: dep.jsName, from: jsImportSpecifier(l, dep, opts) });
@@ -434,11 +377,9 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       inheritedMembers: inherited,
       loadMap: [...loadMap].map(([literal, resPath]) => ({ literal, resPath })),
       sideEffectImports: [...sideEffect.values()],
-      // 参与继承的模块整体禁裸 ABI（传本模块全部方法名）；否则传全工程属性名集合。
       rawAbiExternal: rawAbiBlockedModules.has(l.resPath)
         ? l.module.funcs.map((f) => f.name)
         : [...attrNames],
-      // 运行时打包模式：single 内联整包；local 每个模块按自身位置算到旁挂包的相对说明符。
       runtimeMode: opts.runtimeMode ?? "import",
       standaloneInline: opts.standaloneInline,
       standaloneRequirePath:
@@ -447,7 +388,6 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
           : undefined,
       sourcemap: opts.sourcemap,
       jsFile: basename(jsPathFor(l, opts)),
-      // source 相对产物所在目录，指向它的 .gd 源（map 与 .mts 同目录）
       sourceFile: relative(dirname(jsPathFor(l, opts)), join(resRoot, l.resPath.slice(RES_PREFIX.length))).split(sep).join("/"),
     };
     const { code, map } = opts.sourcemap ? emitModuleWithMap(l.module, emitOpts) : { code: emitModule(l.module, emitOpts), map: null };
@@ -462,7 +402,6 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   }
 
   if (diags.length > 0) {
-    // 仍然返回，让调用方决定；但被拦下的文件不会出现在 modules 里
   }
   return { modules, diags };
 }
@@ -507,13 +446,9 @@ function baseModule(
   if (ext.endsWith(".gd")) return loaded.get(resolveGdPath(l.resPath, ext)) ?? null;
   const bare = ext.replace(/\[.*\]$/, "");
   if (classIndex.has(bare)) return classFile(bare, loaded, classIndex);
-  return null; // SceneTree / 引擎类型 / 未知 —— 没有可读的成员模块
+  return null;
 }
 
-/**
- * 收集 extends 链上所有用户基类的成员名（vars / funcs / signals）。
- * 供静态分析当作「已声明」，让继承来的字段在值位置不被误判未声明。
- */
 function inheritedMembers(
   l: Loaded,
   loaded: Map<string, Loaded>,
@@ -533,7 +468,6 @@ function inheritedMembers(
 }
 
 interface ResolvedBase {
-  /** 基类对应的 JS 导出名；host 基类为 null。 */
   jsName: string | null;
   spec: BaseSpec;
 }
@@ -568,7 +502,6 @@ function resolveBase(
 }
 
 function jsPathFor(l: Loaded, opts: ProjectOptions): string {
-  // 产物带类型标注（: Promise<void> 等），是 TypeScript —— 与语料一致走 .mts + tsx。
   const rel = l.resPath.slice(RES_PREFIX.length).replace(/\.gd$/, ".mts");
   return join(resolve(opts.outDir), rel);
 }
@@ -616,7 +549,6 @@ function detectCycles(loaded: Map<string, Loaded>, resRoot: string): void {
   for (const l of loaded.values()) if (color.get(l.resPath) === WHITE) dfs(l, []);
 }
 
-/** 列出目录下的全部 .gd（递归），供 CLI 以工程根为入口时使用。 */
 export function findGdFiles(dir: string): string[] {
   const out: string[] = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {

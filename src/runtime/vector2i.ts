@@ -2,23 +2,6 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GVector2, VEC2I_MARK, vecFailKey, vector2 } from "./vector2";
 
-/**
- * 二维**整数**向量 —— 与 Vector2/Vector3 一样是值类型，但分量是 **int32 且算完回绕**（全部实测）：
- *   `Vector2i(2147483647,0) + Vector2i(1,0)` → `(-2147483648, 0)`、`Vector2i(2147483647,0)*2` → `(-2, 0)`、
- *   `Vector2i.MIN.abs()` 与 `-Vector2i.MIN` 都还是 `(-2147483648, ...)`（2^31 绕回负极）。
- * 构造、赋值都**向零截断**再回绕：`Vector2i(-1.7,-2.2)` → `(-1, -2)`、`w.x = 2.7` → 2、
- * `w.x = 2147483648` → -2147483648、`w.x = 9007199254740993` → 1（先按 int64 精确取模再回绕）。
- *
- * 两条容易猜错的口径：
- *  - **掺 float 标量会升级成 Vector2**：`Vector2i(6,6)/4.0` → `(1.5, 1.5)`、`*0.5` → `(3.0, 3.0)`，
- *    不是整数截断；而 `+ Vector2(1,1)` 是 Parse Error（不给混着加）。
- *  - **length_squared / distance_squared_to 走 int64 不回绕**：
- *    `Vector2i(2147483647,0).length_squared()` → `4611686014132420609`（精确值），
- *    但 `length / aspect / distance_to` 给的是 double（`(3,-4).length()` → 5.0、`(3,4).aspect()` → 0.75、
- *    `(3,0).aspect()` → inf、`(0,0).aspect()` → nan）。
- *
- * `typeof` 是 **6**，打印是 `(1, 2)`（整数，不带小数点），能当字典键、能进定型容器。
- */
 export class GVector2i {
   readonly [VEC2I_MARK] = true;
   x: number;
@@ -133,7 +116,6 @@ function arity(args: Variant[], n: number, who: string): void {
 export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Variant {
   switch (name) {
     case "abs":
-      // 实测 MIN.abs() 还是 MIN（2^31 回绕），不是正数
       arity(args, 0, "abs");
       return vector2i(wrap32(Math.abs(v.x)), wrap32(Math.abs(v.y)));
     case "sign": {
@@ -152,15 +134,12 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       return vector2i(Math.max(v.x, o.x), Math.max(v.y, o.y));
     }
     case "clamp": {
-      // 实测 (7,3).clamp((1,1),(4,4)) → (4, 3)
       arity(args, 2, "clamp");
       const lo = vecArg(args, 0, "clamp");
       const hi = vecArg(args, 1, "clamp");
       return vector2i(Math.max(lo.x, Math.min(hi.x, v.x)), Math.max(lo.y, Math.min(hi.y, v.y)));
     }
     case "snapped": {
-      // 与 Vector2 同式 `step * floor(v/step + 0.5)`，实测 (-7,3).snapped((2,2)) → (-6, 4)、
-      // step 分量为 0 时那一格原样返回（实测 (−7,3).snapped((0,1)) → (-7, 3)）
       arity(args, 1, "snapped");
       const o = vecArg(args, 0, "snapped");
       const snap = (n: number, s: number) => (s === 0 ? n : wrap32(s * Math.floor(n / s + 0.5)));
@@ -170,11 +149,9 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       arity(args, 0, "length");
       return V.float(Math.sqrt(Number(sq64(v.x, v.y))));
     case "length_squared":
-      // 实测不回绕：Vector2i(2147483647,0).length_squared() → 4611686014132420609
       arity(args, 0, "length_squared");
       return V.int(sq64(v.x, v.y));
     case "aspect":
-      // 实测 (3,4) → 0.75、(0,4) → 0.0、(3,0) → inf，是 double 除法
       arity(args, 0, "aspect");
       return V.float(v.x / v.y);
     case "distance_to": {
@@ -192,7 +169,6 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       return V.int(BigInt(dx) * BigInt(dx) + BigInt(dy) * BigInt(dy));
     }
     case "min_axis_index":
-      // 实测 (7,3) → 1、(5,3) → 1、(1,2,3) 那套 X=0/Y=1 的编号
       arity(args, 0, "min_axis_index");
       return V.int(v.x <= v.y ? 0 : 1);
     case "max_axis_index":
