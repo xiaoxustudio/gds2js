@@ -830,7 +830,7 @@ const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Color"]);
 function staticTypeName(e: Expr): string | null {
   if (e.kind === "lit") {
     return (
-      { int: "int", float: "float", bool: "bool", string: "String", stringName: "StringName" } as Record<
+      { int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName" } as Record<
         string,
         string
       >
@@ -871,10 +871,15 @@ function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
     const found: Extract<Expr, { kind: "is" | "as" }>[] = [];
     walkExprKinds(body, found);
     for (const node of found) {
-      if (node.type.kind !== "named" || !PACK_IS_AS_NAMES.has(node.type.name.replace(/\[.*\]$/, ""))) continue;
+      if (node.type.kind !== "named") continue;
+      const target = node.type.name.replace(/\[.*\]$/, "");
+      const packTarget = PACK_IS_AS_NAMES.has(target);
+      // S172 还量到一条同形的：`&"nm" is String` 也是解析期拒（StringName 与 String 在**槽位转换**
+      // 上是同一族、在 `is` 谓词上不是）。只这一格量过，所以既不限别的目标类型、也不碰 `as`。
+      const snAgainstString = target === "String" && node.kind === "is" && staticTypeName(node.operand) === "StringName";
+      if (!packTarget && !snAgainstString) continue;
       const from = staticTypeName(node.operand);
       if (from === null) continue;
-      const target = node.type.name;
       if (node.kind === "is") {
         diags.push({
           code: "pack-is-type",
