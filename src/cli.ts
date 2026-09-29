@@ -23,6 +23,7 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Command } from "commander";
 import { compileProject } from "./compile/project";
+import { seaFile, seaNodeExe } from "./home";
 import { emitModule, emitModuleWithMap } from "./emit/emitter";
 import type { RawSourceMap } from "./emit/sourcemap";
 import { analyze } from "./lower/analyze";
@@ -38,6 +39,9 @@ const STANDALONE_FILE = "gds2js-standalone.cjs";
 
 /** 解析 gds2js/standalone（包自引用，源码态与安装态都能定位到 dist/standalone.cjs）。 */
 function standalonePath(): string {
+  // 自包含 exe：用解出来的 dist/standalone.cjs；非 SEA 返回 null，走原来的包解析
+  const fromHome = seaFile("dist/standalone.cjs");
+  if (fromHome) return fromHome;
   try {
     return createRequire(import.meta.url).resolve("gds2js/standalone");
   } catch (e) {
@@ -254,6 +258,10 @@ function emitOptsFor(ctx: Ctx, outPath: string): Record<string, unknown> {
 
 /** 已构建的 dist/runtime.mjs + dist/host.mjs 的 file URL，供打包步骤把运行时按绝对路径内联（不依赖包自引用解析）。 */
 function runtimeFileUrls(): { rt: string; host: string } {
+  // 自包含 exe 里没有「包」可解析，直接用解出来的 dist 两份
+  const rt = seaFile("dist/runtime.mjs");
+  const host = seaFile("dist/host.mjs");
+  if (rt && host) return { rt: pathToFileURL(rt).href, host: pathToFileURL(host).href };
   try {
     const req = createRequire(import.meta.url);
     return {
@@ -825,7 +833,13 @@ const resolveCtx = (
     watch: opts.watch === true,
     keep: opts.keep === true,
     pack: cmd === "export" ? packOf(opts.pack) : "node",
-    seaNode: cmd === "export" ? ((opts.node as string) ?? process.env.GDS2JS_NODE_BIN) || process.execPath : process.execPath,
+    // 显式 --node > GDS2JS_NODE_BIN > exe 内嵌的那份 node > 当前进程。
+    // 最后那一档在 exe 里必须是内嵌那份：SEA 内 process.execPath 指向 exe 自己（实测），
+    // 拿它去 --build-sea 等于叫 gds2js.exe 去当 node 用。
+    seaNode:
+      cmd === "export"
+        ? (opts.node as string) ?? process.env.GDS2JS_NODE_BIN ?? seaNodeExe() ?? process.execPath
+        : process.execPath,
     keepBundle: opts.keepBundle === true,
   };
 };
