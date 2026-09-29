@@ -442,11 +442,23 @@ const VOID_DICT_METHODS = new Set(["clear"]);
 const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
 /**
- * 这六张 void 表**逐个量过、六边同形**（byte：`tmp/void-probe`，int32 / int64：`tmp/pack-probe` 的
- * k-* 与 h-*ret 系列，float32 / float64：`tmp/fp/probe2`，String：`tmp/fp/probe5`），所以用一个形状
- * 标签收它们。Vector2 / Vector3 / Color 三种没量过，仍在发射表的 `BUILTIN_TODO` 里响着。
+ * 这九种形状的 void 表**逐个量过、口径一致**（byte：`tmp/void-probe`，int32 / int64：
+ * `tmp/pack-probe` 的 k-* 与 h-*ret 系列，float32 / float64：`tmp/fp/probe2`，String：
+ * `tmp/fp/probe5`，向量与颜色三种：`tmp/fp/probe8` 的 sortval / fillval / rmval / revval）。
+ * 只有 `append_array` 在向量与颜色那三种上没单独量（探针那句写错了括号），照六边一致的表推过去 ——
+ * 推错的方向是「Godot 跑、我们拒」，可接受。
  */
-const PACK_SHAPE_NAMES = new Set(["PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray"]);
+const PACK_SHAPE_NAMES = new Set([
+  "PackedByteArray",
+  "PackedInt32Array",
+  "PackedInt64Array",
+  "PackedFloat32Array",
+  "PackedFloat64Array",
+  "PackedStringArray",
+  "PackedVector2Array",
+  "PackedVector3Array",
+  "PackedColorArray",
+]);
 
 /** 这条检查认得的接收者形状。 */
 type ContainerShape = "Array" | "Dictionary" | "Pack";

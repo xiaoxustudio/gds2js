@@ -2440,8 +2440,52 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step72", "同一支 int32 只认自己那个名字", `${isType(i32, "PackedInt32Array").v} ${isType(i32, "PackedByteArray").v}`, "true false");
   eq("step72", "as 同形状是**同一个值**（c == b 真）", `${show(asType(byte, "PackedByteArray"))} ${valueEq(asType(byte, "PackedByteArray"), byte)}`, "[1, 2] true");
   shouldThrow("step72", "as 到别的形状没量过 → 响（静态能判的那类由语义分析层在解析期拒）", () => asType(byte, "PackedStringArray"));
-  shouldThrow("step72", "String / Vector 三种没实现的形状仍走报缺分支", () => isType(byte, "PackedVector2Array"));
+  eq("step72", "跨形状的 is 现在判得出来（step 73 之后九种全实现）：byte 不是 PackedVector2Array",
+    `${isType(byte, "PackedVector2Array").v}`, "false");
   eq("step72", "普通值不受影响：1 is Object 假、[] is Array 真", `${isType(I(1), "Object").v} ${isType(V.array(GArray.of([])), "Array").v}`, "false true");
+}
+
+{
+  // S173：最后三种 pack（Vector2 / Vector3 / Color）。要点是**格子存载荷对象**、
+  // 折算是「对得上就拷一份、对不上就给默认值」（实测六条都是这个方向，不报错）。
+  const v2 = (x: number, y: number): Variant => V.object(new GVector2(x, y));
+  const p2 = packCtor("vector2", [V.array(GArray.of([v2(3, 3), v2(1, 1), v2(2, 2)]))]);
+  eq("step73", "PackedVector2Array 的打印与 typeof 35、元素 typeof 5",
+    `${show(p2)} ${typeOf(p2).v} ${typeOf(index(p2, I(0))).v}`, "[(3.0, 3.0), (1.0, 1.0), (2.0, 2.0)] 35 5");
+  const p2s = V.object(GBytes.of([new GVector2(3, 3), new GVector2(1, 1), new GVector2(2, 2)], "vector2"));
+  method(p2s, "sort", []);
+  eq("step73", "sort 按 x 再按 y（实测同一条序列）", `${show(p2s)} ${show(index(p2s, I(-1)))}`,
+    "[(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)] (3.0, 3.0)");
+  const pf = V.object(GBytes.of([], "vector2"));
+  method(pf, "resize", [I(3)]);
+  eq("step73", "resize 长出来填**默认向量** (0.0, 0.0)，get 越界同值",
+    `${show(pf)} ${show(method(pf, "get", [I(9)]))}`, "[(0.0, 0.0), (0.0, 0.0), (0.0, 0.0)] (0.0, 0.0)");
+  eq("step73", "append 返回 bool false、insert 合法给 0（与其余六种同形）",
+    `${show(method(pf, "append", [v2(1, 2)]))} ${show(method(pf, "insert", [I(0), v2(0, 5)]))} ${show(method(pf, "size", []))}`,
+    "false 0 5");
+  const pu = packCtor("vector2", [V.array(GArray.of([V.object(new GVector2i(1, 2))]))]);
+  eq("step73", "Vector2i 升格成 Vector2（实测）", `${show(pu)}`, "[(1.0, 2.0)]");
+  const pbad = packCtor("vector2", [V.array(GArray.of([I(1), S("x"), V.bool(true)]))]);
+  eq("step73", "对不上的类型一律折成默认值、**不报错**", `${show(pbad)}`, "[(0.0, 0.0), (0.0, 0.0), (0.0, 0.0)]");
+  const pbtc = packCtor("color", [V.array(GArray.of([v2(1, 2)]))]);
+  eq("step73", "颜色 pack 收 Vector2 → 默认色 (0.0, 0.0, 0.0, 1.0)（实测给一句 stderr，stdout 不受影响）",
+    `${show(pbtc)} ${typeOf(pbtc).v}`, "[(0.0, 0.0, 0.0, 1.0)] 37");
+  eq("step73", "== 比的是分量内容（两个新建的同值 pack 相等）",
+    `${show(ops.eq(V.object(GBytes.of([new GVector2(1, 2)], "vector2")), V.object(GBytes.of([new GVector2(1, 2)], "vector2"))))}`,
+    "true");
+  const pdup = method(V.object(GBytes.of([new GVector2(1, 1)], "vector2")), "duplicate", []);
+  writeIdx(pdup, I(0), v2(7, 7));
+  eq("step73", "duplicate 是独立拷贝（写回去不动原 pack）", `${show(pdup)} ${show(V.object(GBytes.of([new GVector2(1, 1)], "vector2")))}`,
+    "[(7.0, 7.0)] [(1.0, 1.0)]");
+  const v3 = packCtor("vector3", [V.array(GArray.of([V.object(new GVector3(1, 2, 3))]))]);
+  eq("step73", "PackedVector3Array 的打印与 typeof 36", `${show(v3)} ${typeOf(v3).v}`, "[(1.0, 2.0, 3.0)] 36");
+  eq("step73", "is / as 三种也各认各形状（c is PackedColorArray 真、is PackedVector3Array 假）",
+    `${isType(V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color")), "PackedColorArray").v} ${isType(V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color")), "PackedVector3Array").v}`,
+    "true false");
+  shouldThrow("step73", "颜色 pack 的 sort 比较依据没量到 → 响（2 个元素的样本分不出来）", () =>
+    method(V.object(GBytes.of([new GColor(0, 1, 0, 1), new GColor(1, 0, 0, 1)], "color")), "sort", []));
+  shouldThrow("step73", "向量 pack 的 has / count / find 元素比较口径没量过 → 响（按引用比一定错）", () =>
+    method(p2s, "has", [v2(1, 1)]));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

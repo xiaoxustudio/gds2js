@@ -125,6 +125,9 @@ const PACK_TYPES: Record<string, PackKind> = {
   PackedFloat32Array: "float32",
   PackedFloat64Array: "float64",
   PackedStringArray: "string",
+  PackedVector2Array: "vector2",
+  PackedVector3Array: "vector3",
+  PackedColorArray: "color",
 };
 
 function packKindMatches(v: Variant, kind: PackKind): boolean {

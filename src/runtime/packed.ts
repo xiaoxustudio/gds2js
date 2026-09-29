@@ -1,5 +1,9 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type Variant } from "./tags";
+import { GColor } from "./color";
+import { GVector2 } from "./vector2";
+import { GVector2i } from "./vector2i";
+import { GVector3 } from "./vector3";
 // 只要类型：values.ts 反过来 import 这个模块（打印与相等都要认它），运行时互相引用就成了环
 import type { GArray } from "./values";
 
@@ -20,7 +24,10 @@ import type { GArray } from "./values";
  * `0.10000000149012`、`1e308` 印成 `inf`，那套文本要单独逆，见 S169 的 ④），以及 String / Vector2 /
  * Vector3 / Color 四种 pack。发射表里它们仍在 `BUILTIN_TODO`，问到就响。
  */
-export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string";
+export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "color";
+
+/** 一个格子里能放的东西：数值 pack 是 number / bigint，String pack 是裸字符串，向量与颜色 pack 是载荷对象。 */
+export type PackElem = number | bigint | string | GVector2 | GVector3 | GColor;
 
 const PACK_TYPE_NAME: Record<PackKind, string> = {
   byte: "PackedByteArray",
@@ -29,8 +36,21 @@ const PACK_TYPE_NAME: Record<PackKind, string> = {
   float32: "PackedFloat32Array",
   float64: "PackedFloat64Array",
   string: "PackedStringArray",
+  vector2: "PackedVector2Array",
+  vector3: "PackedVector3Array",
+  color: "PackedColorArray",
 };
-const PACK_TYPEOF: Record<PackKind, number> = { byte: 29, int32: 30, int64: 31, float32: 32, float64: 33, string: 34 };
+const PACK_TYPEOF: Record<PackKind, number> = {
+  byte: 29,
+  int32: 30,
+  int64: 31,
+  float32: 32,
+  float64: 33,
+  string: 34,
+  vector2: 35,
+  vector3: 36,
+  color: 37,
+};
 
 /**
  * String pack 的元素折算是**取 show**（S171 实测：`[1, 2.5, true, null, &"nm"]` →
@@ -42,15 +62,15 @@ export function registerPackStringifier(fn: (v: Variant) => string): void {
   stringifier = fn;
 }
 
-/** 元素存储：byte / int32 / float* 用 number，int64 用 BigInt，string 用 JS 字符串。 */
+/** 元素存储按形状走（PackElem）。 */
 export class GBytes {
-  private items: (number | bigint | string)[];
+  private items: PackElem[];
 
-  constructor(items: (number | bigint | string)[] = [], readonly kind: PackKind = "byte") {
+  constructor(items: PackElem[] = [], readonly kind: PackKind = "byte") {
     this.items = items;
   }
 
-  raw(): (number | bigint | string)[] {
+  raw(): PackElem[] {
     return this.items;
   }
 
@@ -58,8 +78,30 @@ export class GBytes {
     return this.items.length;
   }
 
-  static of(values: (number | bigint | string)[], kind: PackKind = "byte"): GBytes {
+  static of(values: PackElem[], kind: PackKind = "byte"): GBytes {
     return new GBytes(values, kind);
+  }
+}
+
+/**
+ * 每种形状的**默认格子**：`resize` 长出来填它、`get` 越界给它、塞错类型也折成它。
+ * 三条都是实测的（S173：向量与颜色 pack 的 `resize(3)` 补 `(0.0, 0.0)` / `(0.0, 0.0, 0.0)` /
+ * `(0.0, 0.0, 0.0, 1.0)`，`get(9)` 同值；S171 ④：`PackedVector2Array([1])` → `[(0.0, 0.0)]`）。
+ */
+export function defaultElem(kind: PackKind): PackElem {
+  switch (kind) {
+    case "int64":
+      return 0n;
+    case "string":
+      return "";
+    case "vector2":
+      return new GVector2(0, 0);
+    case "vector3":
+      return new GVector3(0, 0, 0);
+    case "color":
+      return new GColor(0, 0, 0, 1);
+    default:
+      return 0;
   }
 }
 
@@ -89,7 +131,24 @@ function foldInt32(n: number | bigint): number {
  * 元素折算。只收实测过的来源：int / float（截断）/ bool / String（走 `to_int` 那一族，实测 `"x"` → 0）。
  * float→int32 的**饱和方向**只量了正的一侧（1e308 → INT32_MIN），负的一侧没量 → 响亮拒。
  */
-export function toElem(kind: PackKind, v: Variant): number | bigint | string {
+export function toElem(kind: PackKind, v: Variant): PackElem {
+  if (kind === "vector2" || kind === "vector3" || kind === "color") {
+    // S171 ④ + S173：形状对得上就收下（**拷贝一份**，与槽位赋值那条一致），
+    // Vector2i / Vector3i 是实测的升格（`PackedVector2Array([Vector2i(1, 2)])` → [(1.0, 2.0)]），
+    // 其余（int / String / bool / 别的值类型）一律折成**默认值**而不是报错 —— 实测六条都这样
+    const inner = v.t === Tag.OBJECT ? (v.v as object) : null;
+    if (kind === "vector2") {
+      if (inner instanceof GVector2) return new GVector2(inner.x, inner.y);
+      if (inner instanceof GVector2i) return new GVector2(inner.x, inner.y);
+      return defaultElem(kind);
+    }
+    if (kind === "vector3") {
+      if (inner instanceof GVector3) return new GVector3(inner.x, inner.y, inner.z);
+      return defaultElem(kind);
+    }
+    if (inner instanceof GColor) return new GColor(inner.r, inner.g, inner.b, inner.a);
+    return defaultElem(kind);
+  }
   if (kind === "string") {
     // 实测（S171 s-int-elem / s-null-elem / s-sn-elem）：任何 Variant 都**取 show**
     // —— `[1, 2.5, true, null, &"nm"]` → `["1", "2.5", "true", "<null>", "nm"]`
@@ -166,8 +225,9 @@ export function toByte(v: Variant): number {
   return toElem("byte", v) as number;
 }
 
-function elemVariant(kind: PackKind, e: number | bigint | string): Variant {
+function elemVariant(kind: PackKind, e: PackElem): Variant {
   if (kind === "string") return V.str(e as string);
+  if (kind === "vector2" || kind === "vector3" || kind === "color") return V.object(e as object);
   if (kind === "float32" || kind === "float64") return V.float(e as number);
   return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e as number)) : V.int(e as number | bigint);
 }
@@ -185,13 +245,48 @@ function cmpStrings(a: string, b: string): number {
   return x.length === y.length ? 0 : x.length < y.length ? -1 : 1;
 }
 
+/**
+ * 向量 pack 的 sort 比较：实测 `[(3,3), (1,1), (2,2)]` → `[(1,1), (2,2), (3,3)]`，
+ * Vector3 同样按 x 再按 y（再按 z）—— 与值类型那条字典序一致（S173）。
+ */
+function cmpVec(a: GVector2 | GVector3, b: GVector2 | GVector3, keys: readonly string[]): number {
+  for (const k of keys) {
+    const av = (a as unknown as Record<string, number>)[k] as number;
+    const bv = (b as unknown as Record<string, number>)[k] as number;
+    if (av !== bv) return av < bv ? -1 : 1;
+  }
+  return 0;
+}
+
+/** 数值的相等（int64 走 bigint，其余 ===）。 */
+function scalarSame(a: PackElem, b: PackElem): boolean {
+  if (typeof a === "string" || typeof b === "string") return a === b;
+  if (typeof a === "bigint" || typeof b === "bigint") return BigInt(a as number | bigint) === BigInt(b as number | bigint);
+  return a === b;
+}
+
+/** 一格的相等：向量与颜色按**分量内容**比（S173 实测 `a == PackedVector2Array([Vector2(1, 2)])` 真）。 */
+function elemSame(kind: PackKind, a: PackElem, b: PackElem): boolean {
+  if (kind === "vector2") return (a as GVector2).x === (b as GVector2).x && (a as GVector2).y === (b as GVector2).y;
+  if (kind === "vector3")
+    return (a as GVector3).x === (b as GVector3).x && (a as GVector3).y === (b as GVector3).y && (a as GVector3).z === (b as GVector3).z;
+  if (kind === "color")
+    return (
+      (a as GColor).r === (b as GColor).r &&
+      (a as GColor).g === (b as GColor).g &&
+      (a as GColor).b === (b as GColor).b &&
+      (a as GColor).a === (b as GColor).a
+    );
+  return scalarSame(a, b);
+}
+
 /** 元素按形状取成 Variant —— values.ts 的打印用它，逐个走各自类型的 print 口径（浮点那套不是字符串插值）。 */
 export function packItems(p: GBytes): Variant[] {
   return p.raw().map((e) => elemVariant(p.kind, e));
 }
 
 /** 越界读的文本是实测的；**负下标从尾部数**（读与写都是，d6 / f52）。 */
-function elemAt(p: GBytes, idx: Variant): number | bigint {
+function elemAt(p: GBytes, idx: Variant): PackElem {
   const n = intToNum(idx.v as number | bigint);
   const at = typeof n === "bigint" ? Number(n) : Math.trunc(n);
   const real = at < 0 ? p.length + at : at;
@@ -328,7 +423,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       // 实测：负数给 **31** 且长度不变；缩回去是截断；长出来的格子按**元素类型**填
       // 0 / 0 / 0n（k-*resgrow），成功一律 0（g2 / g3 / e4）
       if (want < 0) return V.int(31);
-      const filler: number | bigint | string = kind === "string" ? "" : kind === "int64" ? 0n : 0;
+      const filler = defaultElem(kind);
       while (items.length < want) items.push(filler);
       if (want < items.length) items.length = want;
       return V.int(0);
@@ -340,18 +435,31 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       return V.nil();
     }
     case "has":
-      arity("has", args, 1);
-      return V.bool(items.includes(toElem(kind, args[0] as Variant)));
     case "count":
-      arity("count", args, 1);
-      return V.int(items.filter((x) => x === toElem(kind, args[0] as Variant)).length);
-    case "find":
-      arity("find", args, 1);
-      return V.int(items.indexOf(toElem(kind, args[0] as Variant)));
-    case "sort":
-      if (kind === "string") items.sort((x, y) => cmpStrings(x as string, y as string));
-      else items.sort(kind === "int64" ? (x, y) => (BigInt(x) < BigInt(y) ? -1 : BigInt(x) > BigInt(y) ? 1 : 0) : (x, y) => (x as number) - (y as number));
+    case "find": {
+      arity(name, args, 1);
+      const want = toElem(kind, args[0] as Variant);
+      // 向量 / 颜色 pack 的检索按**引用**比会错（JS 的 includes / indexOf 都是引用等），
+      // 而按值比这一族没量过（S173 只量了 codes / 越界 / 负下标 / 默认值 / 升格），所以响着拒
+      if (kind === "vector2" || kind === "vector3" || kind === "color") {
+        throw new UnsupportedError("packed-search", `${PACK_TYPE_NAME[kind]}.${name}() 的元素比较口径没实测过（值类型按引用比会错）`);
+      }
+      if (name === "has") return V.bool(items.includes(want));
+      if (name === "count") return V.int(items.filter((x) => x === want).length);
+      return V.int(items.indexOf(want));
+    }
+    case "sort": {
+      if (kind === "color") {
+        // 实测两条元素的 PackedColorArray.sort() **原样不动**，但 n=2 分不出「没有序」与
+        // 「某种算法刚好不动」，而拿一个算法特有的顺序当语义正是 step 51 拒过的事 → 响
+        throw new UnsupportedError("packed-sort-color", "PackedColorArray.sort() 的比较依据没实测过（2 个元素的样本分不出来）");
+      }
+      if (kind === "vector2") items.sort((x, y) => cmpVec(x as GVector2, y as GVector2, ["x", "y"]));
+      else if (kind === "vector3") items.sort((x, y) => cmpVec(x as GVector3, y as GVector3, ["x", "y", "z"]));
+      else if (kind === "string") items.sort((x, y) => cmpStrings(x as string, y as string));
+      else items.sort(kind === "int64" ? (x, y) => (BigInt(x as number | bigint) < BigInt(y as number | bigint) ? -1 : BigInt(x as number | bigint) > BigInt(y as number | bigint) ? 1 : 0) : (x, y) => (x as number) - (y as number));
       return V.nil();
+    }
     case "reverse":
       items.reverse();
       return V.nil();
@@ -376,7 +484,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (n < 0) {
         throw new UnsupportedError("packed-get-neg", "get() 的负下标没实测过（下标读实测是从尾部数）");
       }
-      return n < items.length ? elemVariant(kind, items[n] as number | bigint | string) : elemVariant(kind, kind === "string" ? "" : 0);
+      return n < items.length ? elemVariant(kind, items[n] as PackElem) : elemVariant(kind, defaultElem(kind));
     }
     case "hex_encode":
       return V.str((items as number[]).map((x) => x.toString(16).padStart(2, "0")).join(""));
@@ -449,15 +557,9 @@ export function packEq(a: GBytes, b: GBytes): boolean {
     throw new UnsupportedError("packed-eq-kind", `${packTypeName(a.kind)} == ${packTypeName(b.kind)} 没实测过`);
   }
   if (x.length !== y.length) return false;
-  // int64 的载荷是 bigint（BigInt 比），其余是 number（=== 比）。float 槽那侧 NaN 相等的口径没量过，
-  // 但 NaN 进 pack 得先有一句浮点字面量，实测点里没有出现，先照 JS 的 === 走
-  const same = (a: number | bigint | string, b: number | bigint | string): boolean =>
-    typeof a === "string" || typeof b === "string"
-      ? a === b
-      : typeof a === "bigint" || typeof b === "bigint"
-        ? BigInt(a as number | bigint) === BigInt(b as number | bigint)
-        : a === b;
-  return x.every((v, i) => same(v, y[i] as number | bigint));
+  // int64 的载荷是 bigint，向量与颜色按**分量内容**比（elemSame）；浮点槽的 NaN 口径没量过，
+  // 但实测点里没出现 NaN，先照 === 走
+  return x.every((v, i) => elemSame(a.kind, v, y[i] as PackElem));
 }
 
 export function bytesEq(a: GBytes, b: GBytes): boolean {
