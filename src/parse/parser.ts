@@ -15,7 +15,6 @@ import { seaFile } from "../home";
 const WASM_CANDIDATES = ["../../gdscript.wasm", "../gdscript.wasm", "./gdscript.wasm"];
 
 function resolveWasm(): string {
-  // 自包含 exe（SEA）里 import.meta.url 指向二进制自己，候选路径全都无意义 —— 用解出来的那份
   const fromHome = seaFile("gdscript.wasm");
   if (fromHome) return fromHome;
   for (const spec of WASM_CANDIDATES) {
@@ -30,7 +29,8 @@ function resolveWasm(): string {
 let cached: Promise<Parser> | null = null;
 
 async function create(): Promise<Parser> {
-  await Parser.init();
+  const glue = seaFile("node_modules/web-tree-sitter/web-tree-sitter.wasm");
+  await Parser.init(glue ? { locateFile: () => glue } : undefined);
   const lang = await Language.load(resolveWasm());
   const parser = new Parser();
   parser.setLanguage(lang);

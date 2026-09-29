@@ -1,13 +1,3 @@
-/**
- * 打包模式回归自检（tools）——补 diff/golden 主链路覆盖不到的 local/single 两档：
- *   ① 代表性用例在 single / local 下用真 node 跑产物，stdout 必须等于 Godot golden。
- *   ② 带子目录的多文件工程在 local 下：子模块 requirePath 走 `../gds2js-standalone.cjs`
- *      且入口能跑通（验证共享 standalone 的相对解析 + 跨文件 registerClass 共享）。
- *   ③ single 模式的 sourcemap：解码 mappings，断言内联 runtime 头（~1300 行）把 genLine 顶大后，
- *      源行仍落回 .gd 的合法小行号（证明映射没被内联头带偏）。
- *
- * 跑：node_modules/.bin/tsx tools/pkg-modes-check.ts   （全绿退出 0，任一失败退出 1）
- */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -35,13 +25,11 @@ function bad(msg: string): void {
   console.log(`  ✗ ${msg}`);
 }
 
-/** 跑一段 node（cwd 内旁挂的 standalone.cjs 才能被相对 require 命中）。返回 stdout。 */
 function runNode(cwd: string, file: string): { out: string; code: number | null } {
   const r = spawnSync(process.execPath, [file], { cwd, encoding: "utf8", timeout: 15000 });
   return { out: (r.stdout || "") + (r.stderr || ""), code: r.status };
 }
 
-// ① 代表性用例：single / local 逐字节对齐 Godot golden
 async function checkPerCaseModes(): Promise<void> {
   console.log("① single/local × 代表性用例 vs golden");
   const cases = [
@@ -81,7 +69,6 @@ async function checkPerCaseModes(): Promise<void> {
   }
 }
 
-// ② 带子目录的多文件工程 local：子模块相对 require 到上级旁挂包 + 跨文件类跑通
 async function checkNestedProjectLocal(): Promise<void> {
   console.log("② 子目录工程 local：../ 相对旁挂 + 跨文件 registerClass 共享");
   const proj = join(TMP, "nested_src");
@@ -110,7 +97,6 @@ async function checkNestedProjectLocal(): Promise<void> {
   if (!sub) return bad("nested 未产出 res://sub/thing.gd 模块");
   mkdirSync(dirname(sub.jsPath), { recursive: true });
   for (const m of result.modules) writeFileSync(m.jsPath, m.code, "utf8");
-  // 子模块在 outDir/sub，旁挂包在 outDir 根 → 相对路径必须含 ../
   if (sub.code.includes("../gds2js-standalone.cjs")) ok("子模块 requirePath 用 ../ 命中上级旁挂包");
   else bad(`子模块 requirePath 未走 ../：\n    ${sub.code.split("\n").find((l) => l.includes("standalone")) ?? "(无 standalone 行)"}`);
 
@@ -121,7 +107,6 @@ async function checkNestedProjectLocal(): Promise<void> {
   else bad(`nested local 运行异常 code=${code} out=${JSON.stringify(out.slice(0, 200))}`);
 }
 
-// ③ single 模式 sourcemap：解码 VLQ mappings，断言内联头没把源映射带偏
 function decodeMappingsField(str: string): Array<{ genLine: number; srcLine: number; srcCol: number }> {
   const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
   const val = (c: string): number => {
@@ -145,7 +130,7 @@ function decodeMappingsField(str: string): Array<{ genLine: number; srcLine: num
         } while (cont);
         return result & 1 ? -(result >> 1) : result >> 1;
       };
-      field(); // 生成列（行粒度恒 0 增量）
+      field();
       sIdx += field();
       sLine += field();
       sCol += field();
@@ -181,7 +166,6 @@ async function checkSourcemapSingle(): Promise<void> {
   else bad(`genLine 未体现内联头偏移（max=${maxGen}）`);
   if (badSrc.length === 0) ok(`全部 ${m.length} 条 srcLine 都在 .gd 行数范围内（<${gdLineCount}）`);
   else bad(`${badSrc.length} 条 srcLine 越界，例：${JSON.stringify(badSrc.slice(0, 3))}`);
-  // 端到端：产物仍能跑出正确结果
   writeFileSync(join(dir, "m.mts"), code, "utf8");
   writeFileSync(join(dir, "m.mts.map"), JSON.stringify(map), "utf8");
   const { out } = runNode(dir, "m.mts");
@@ -190,7 +174,6 @@ async function checkSourcemapSingle(): Promise<void> {
   else bad(`带 map single 输出不符：${JSON.stringify(out.slice(0, 120))}`);
 }
 
-// ④ build-project single：整app bundle 成零 import 的单文件，且在仓库外能跑（证明真自包含）
 async function checkWholeAppSingle(): Promise<void> {
   console.log("④ build-project single：tsdown bundle → 零 import 单文件 + 仓库外可跑");
   const req = createRequire(import.meta.url);
@@ -228,7 +211,6 @@ async function checkWholeAppSingle(): Promise<void> {
   const imports = b.split("\n").filter((l) => /^\s*import[\s{*.]/.test(l));
   if (imports.length === 0) ok("bundle 零 top-level import（运行时/宿主/跨文件全内联）");
   else bad(`bundle 仍有 top-level import：${JSON.stringify(imports.slice(0, 3))}`);
-  // 拷到仓库外跑，确保不靠 node_modules
   const iso = mkdtempSync(join(tmpdir(), "gds-iso-"));
   try {
     copyFileSync(bundleFile, join(iso, "app.mjs"));

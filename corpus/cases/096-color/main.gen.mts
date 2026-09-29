@@ -8,6 +8,7 @@ export class Main extends SceneTree {
   q = rt.color(0, 0, 0, 1);
 
   poke(p): void {
+    p = rt.paramSlot(p, "Color", 1, "poke", this);
     {
       const _nv = rt.writeProp(p, "r", rt.V.float(9));
       if (_nv !== null) p = _nv;

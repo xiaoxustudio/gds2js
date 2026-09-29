@@ -43,7 +43,7 @@ export function decimalToDouble(s: string): number {
   let fp = dot < 0 ? "" : mant.slice(dot + 1);
   if (fp.length > FRAC_DIGITS) fp = fp.slice(0, FRAC_DIGITS);
   const all = `${ip}${fp}`;
-  if (!/^[0-9]*$/.test(all)) return Number(s); // 混进非数字（含 e 后面不是整数）时退回 JS
+  if (!/^[0-9]*$/.test(all)) return Number(s);
   let v = Number(BigInt(all === "" ? "0" : all)) / Math.pow(10, fp.length);
   if (exp !== 0) v *= Math.pow(10, exp);
   return neg ? -v : v;

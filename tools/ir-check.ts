@@ -1,8 +1,3 @@
-/**
- * Lowering 覆盖率：拿全部语料喂给 CST→IR，看有多少能降下来、卡在什么节点上。
- * 这是**状态层**的度量，不代表语义正确 —— 正确性由 Godot 的 golden 判。
- * 跑：node_modules/.bin/tsx tools/ir-check.ts
- */
 import { readFileSync } from "node:fs";
 import { parseSource } from "../src/parse/parser";
 import { lower } from "../src/lower/lower";

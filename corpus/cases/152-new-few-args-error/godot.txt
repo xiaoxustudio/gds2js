@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Too few arguments for "new()" call. Expected at least 1 but received 0.
+   at: GDScript::reload (<case>/main.gd:14)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

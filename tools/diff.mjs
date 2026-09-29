@@ -1,14 +1,4 @@
 #!/usr/bin/env node
-/**
- * 分层对比：Godot（裁判） vs gds2js 编译产物（被测）。
- *
- *   node tools/diff.mjs            # 全量
- *   node tools/diff.mjs 01         # 只跑名字含 01 的
- *   node tools/diff.mjs --show     # 打印不一致用例的首个差异行
- *
- * 度量必须分层 —— 一个笼统的通过率会把「未实现」和「跑错了」混成一件事，
- * 而这两件事的优先级完全不同：前者是排期问题，后者是 bug。
- */
 import { caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden, runGodot } from "./lib.mjs";
 
 const argv = process.argv.slice(2);
@@ -47,8 +37,6 @@ for (const id of cases) {
   const row = { id, godotOk: godotOk(godotNow), stale, js: null, jsErr: null };
   if (row.godotOk) {
     try {
-      // 注意：不能直接 String(await jsRunner(id)) —— String(null) 是 "null"，
-      // 会把「未实现」算成「跑出结果」，把度量整个带偏。
       const raw = jsRunner ? await jsRunner(id) : null;
       row.js = raw === null || raw === undefined ? null : normalize(String(raw), gd);
     } catch (e) {

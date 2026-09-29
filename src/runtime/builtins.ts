@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToNum, tagName, wrap64, type IntPayload, type Variant } from "./tags";
-import { decimalToDouble } from "../lower/double";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
 import { asBytes, packTypeName } from "./packed";
 
@@ -14,7 +14,6 @@ export function arrayFromVariant(v: Variant): Variant {
   if (b === null) {
     throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
   }
-  // `Array(PackedInt32Array(...))` 这类没量过（用例 135 只钉了 byte 那一支）→ 响
   if (b.kind !== "byte") {
     throw new UnsupportedError("array-ctor-from-kind", `Array(...) 只实测过 PackedByteArray 实参（收到 ${packTypeName(b.kind)}）`);
   }
@@ -26,78 +25,12 @@ export function num(v: Variant): number {
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new UnsupportedError("not-number", `需要数值，收到类型 ${v.t}`);
   }
-  // int 载荷可能是 bigint：这里收成 number，float(大整数) 的精度损失与 Godot 一致。
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */
 export function strOf(v: Variant): Variant {
   return V.str(show(v));
-}
-
-/**
- * int() / float() 的类型转换。旧实现是 `V.int(Math.trunc(num(v)))` / `V.float(num(v))`，
- * 而 `num()` 只收数值 —— 于是 `int("42")`、`int(true)`、`float("1.5")` 全部**拒编**（Godot 都合法），
- * `int(1e20)` 更是抛「超出 2^53」（Godot 饱和到 int64 min）。26 条单表达式探针实测出的规则：
- *
- *   int(float) 向零截断（3.7→3、-3.7→-3、-0.5→0）；**2^53 以上仍精确**（`9007199254740993.0`→`9007199254740994`，
- *   该 double 本身就是 ...994）；`nan` / `±inf` / `|x| ≥ 2^63` 一律**饱和成 -9223372036854775808**（5 种输入同值）。
- *   int(bool)→1/0；float(bool)→1.0/0.0；float(int)→`.0` 形式。
- *   int(String) 就是 {@link strToInt} 那条单趟扫描（**数字累加、非数字跳过、`-` 只在见过数字之前翻符号、遇 `.` 停止**）：
- *     所以 `0x10`→10（x 被忽略）、`1e3`→13（e 被忽略）、`3.9`→3（. 停止）、`12x`→12、`abc`/`""`→0、` 42 `→42。
- *   float(String) 是普通浮点前缀解析（`.5`→0.5、`-2.5e2`→-250.0、`1e3`→1000.0、`0x10`→0.0、`abc`→0.0）。
- *   Vector2 / Array 等传给 int()/float() 在 Godot 是 Parse Error，我们保持响亮拒绝。
- */
-const INT64_MIN = BigInt("-9223372036854775808");
-const INT64_MAX = BigInt("9223372036854775807");
-const TWO_63 = 2 ** 63;
-
-/** 十进制累加的饱和闸门，见 {@link strToInt} 的实测说明 */
-const DEC_SATURATE_AT = 10n ** 18n;
-
-/**
- * `to_int()` / `int(字符串)` 的算式（用例 104 的 118 个值 + 6 组同形探针，口径见 SEMANTICS S127–S129）。
- * **单趟扫描**，每个字符只有四种待遇：
- *  - 数字：`acc = acc*10 + d`，**int64 回绕**（Godot 那边就是有符号溢出）；
- *  - `-`：**只在还没见过任何数字时**翻一次符号，可反复翻 —— `"a-5"`→-5、`"a--5"`→5、
- *    `"-a-2"`→2、`"+ -3"`→-3，而 `"5-3"`→53、`"1--2"`→12（见过数字就再也不翻了）；
- *  - `.`：**立刻停止**（`"1.5"`→1、`"x.5"`→0、`"-1.5x2"`→-1），不是把后面的数字也攒上；
- *  - 其余（空白、字母、下划线、`+`）：一律跳过且不断扫描 —— 所以 `"\r\n-5"`→-5、
- *    非断空格也算普通跳过项，前导空白**不需要**单独一轮循环处理。
- *
- * 溢出是**两段式**的，这条最容易凭直觉写错：
- *  - 19 位以内老老实实回绕：`"9223372036854775808"`(2^63) → INT64_MIN、
- *    `"9500000000000000009"` → -8946744073709551607、`"9999999999999999991"` → -8446744073709551625；
- *  - 但**乘 10 之前** `|acc|` 已达 `10^18` 就饱和：`"10000000000000000000"`(10^19) → INT64_MAX
- *    （不是绕成 -8446744073709551616），负的那侧给 INT64_MIN。闸门量到个位：
- *    `|acc| = 10^18-1` 仍回绕，`10^18` 才饱和 —— 跟 `INT64_MAX/10` 那个「防溢出」常数**不是一个数**，
- *    别拿它当判据（`"9223372036854775811"` 实测绕成 -9223372036854775805，按 INT64_MAX/10 就该饱和）。
- *  - 饱和看的是**回绕之后**的绝对值：`"99999999999999999999"` 第 19 位先绕成 -8.4e18，第 20 位才撞上闸门。
- *
- * 符号是「先攒无符号累加值、最后再取负」，取负同样回绕：`"-9223372036854775809"` → INT64_MAX。
- */
-export function strToInt(s: string): bigint {
-  let acc = 0n;
-  let neg = false;
-  let seenDigit = false;
-  let sat = false;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i]!;
-    if (ch === ".") break;
-    if (ch >= "0" && ch <= "9") {
-      seenDigit = true;
-      if (sat) continue;
-      if (acc >= DEC_SATURATE_AT || acc <= -DEC_SATURATE_AT) {
-        sat = true;
-        continue;
-      }
-      acc = wrap64(acc * 10n + BigInt(ch.charCodeAt(0) - 48));
-    } else if (ch === "-" && !seenDigit) {
-      neg = !neg;
-    }
-  }
-  if (sat) return neg ? INT64_MIN : INT64_MAX;
-  return neg ? wrap64(-acc) : acc;
 }
 
 /**
@@ -127,15 +60,19 @@ export const HEX_RE = /^[+-]?[0-9a-fA-F]+$/;
  */
 export const HEX_PREFIX_RE = /^[+-]?0x[0-9a-fA-F]+$/;
 
-/** float(String)：取前导浮点数，取不到就是 0（实测 `0x10`→0.0、`abc`→0.0）。 */
-export function strToFloat(s: string): number {
-  const m = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d*)?/.exec(s);
-  // 前缀截断之后交给 decimalToDouble：实测 `("9007199254740993.0").to_float()` 与字面量
-  // 同值（都是 …994），说明运行时这条路走的是同一个 String::to_double；下划线**不算**数字
-  // （`("1_000_000.25").to_float()` → 1.0），所以这条正则不吃下划线、也不做剥离
-  return m ? decimalToDouble(m[0]) : 0;
-}
-
+/**
+ * int() / float() 的类型转换。旧实现是 `V.int(Math.trunc(num(v)))` / `V.float(num(v))`，
+ * 而 `num()` 只收数值 —— 于是 `int("42")`、`int(true)`、`float("1.5")` 全部**拒编**（Godot 都合法），
+ * `int(1e20)` 更是抛「超出 2^53」（Godot 饱和到 int64 min）。26 条单表达式探针实测出的规则：
+ *
+ *   int(float) 向零截断（3.7→3、-3.7→-3、-0.5→0）；**2^53 以上仍精确**（`9007199254740993.0`→`9007199254740994`，
+ *   该 double 本身就是 ...994）；`nan` / `±inf` / `|x| ≥ 2^63` 一律**饱和成 -9223372036854775808**（5 种输入同值）。
+ *   int(bool)→1/0；float(bool)→1.0/0.0；float(int)→`.0` 形式。
+ *   int(String) 就是 {@link strToInt} 那条单趟扫描（**数字累加、非数字跳过、`-` 只在见过数字之前翻符号、遇 `.` 停止**）：
+ *     所以 `0x10`→10（x 被忽略）、`1e3`→13（e 被忽略）、`3.9`→3（. 停止）、`12x`→12、`abc`/`""`→0、` 42 `→42。
+ *   float(String) 是普通浮点前缀解析（`.5`→0.5、`-2.5e2`→-250.0、`1e3`→1000.0、`0x10`→0.0、`abc`→0.0）。
+ *   Vector2 / Array 等传给 int()/float() 在 Godot 是 Parse Error，我们保持响亮拒绝。
+ */
 export function toFloat(v: Variant): Variant {
   switch (v.t) {
     case Tag.FLOAT:
@@ -165,7 +102,6 @@ export function toInt(v: Variant): Variant {
     case Tag.FLOAT: {
       const x = v.v as number;
       if (!Number.isFinite(x) || Math.abs(x) >= TWO_63) return V.int(INT64_MIN);
-      // BigInt 精确展开，2^53 以上不丢位（旧实现走 Number 会在边界上错一位）
       return V.int(BigInt(Math.trunc(x)));
     }
     default:
@@ -221,7 +157,6 @@ export function abs(v: Variant): Variant {
 }
 
 export function lengthOf(v: Variant): Variant {
-  // StringName 与 String 同一个口径（实测 len(&"abc") → 3）
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());
   throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
@@ -252,13 +187,7 @@ export function rangeInt(v: Variant | undefined, n: number): number {
   return Number(intArgBig(v, `range 的第 ${n} 个参数`));
 }
 
-/**
- * range 序列的唯一算式，返回**裸 number 数组**：`range()` 用它再逐个装箱，
- * `for x in range(...)` 的裸循环节直接迭代它（省掉整批 Variant 分配）。
- * 两边共用一份，免得循环展开悄悄跑出与 range() 不同的序列。
- */
 export function rangeSeq(args: Variant[]): number[] {
-  // 一个参数是 end，两个是 start/end，三个带 step；range() 无参在 Godot 也是运行错
   const end = rangeInt(args.length >= 2 ? args[1] : args[0], args.length >= 2 ? 2 : 1);
   const start = args.length >= 2 ? rangeInt(args[0], 1) : 0;
   const step = args.length >= 3 ? rangeInt(args[2], 3) : 1;

@@ -18,7 +18,6 @@ export const Tag = {
 
 export type TagValue = (typeof Tag)[keyof typeof Tag];
 
-/** 动态路径的值（R3）。静态类型已知时用裸 JS 值，不装箱。 */
 export interface Variant {
   t: TagValue;
   v: unknown;
@@ -40,10 +39,6 @@ export function tagName(t: TagValue): string {
   return TAG_NAME[t];
 }
 
-/**
- * int 载荷（D1 修订版）：2^53 内仍用 JS number，只有真超出才用 bigint。
- * 归一化保证「同一数值只有一种表示」，于是字典键、=== 相等、显示都不会因 1 与 1n 而分裂。
- */
 export type IntPayload = number | bigint;
 
 const TWO_63 = 1n << 63n;
@@ -95,7 +90,6 @@ export const V = {
   str(v: string): Variant {
     return { t: Tag.STRING, v };
   },
-  /** `&"x"`：Godot 的 StringName，实测与 String 同值相等、同字典键，但 typeof 是 21。 */
   stringName(v: string): Variant {
     return { t: Tag.STRING_NAME, v };
   },

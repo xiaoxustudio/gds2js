@@ -1,0 +1,5 @@
+SCRIPT ERROR: Invalid type in function 'p' in base 'RefCounted (A)'. Cannot convert argument 1 from String to int.
+   at: _initialize (<case>/main.gd:9)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:9)
+<<GDS2JS_TIMEOUT>>

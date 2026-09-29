@@ -1,53 +1,55 @@
 {
-	"name": "gds2js",
-	"type": "module",
-	"version": "0.0.0",
-	"private": true,
-	"description": "将 .gds 转义为 js 运行",
-	"engines": {
-		"node": ">=25.7"
-	},
-	"exports": {
-		".": "./dist/runtime.mjs",
-		"./runtime": "./dist/runtime.mjs",
-		"./host": "./dist/host.mjs",
-		"./standalone": "./dist/standalone.cjs",
-		"./package.json": "./package.json"
-	},
-	"bin": {
-		"gds2js": "./dist/cli.mjs"
-	},
-	"files": [
-		"dist"
-	],
-	"scripts": {
-		"gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
-		"build": "tsdown && tsdown --config tsdown.standalone.config.ts && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
-		"dev": "tsx src/cli.ts",
-		"watch": "tsdown --watch",
-		"test:golden": "node tools/golden.mjs",
-		"test:diff": "tsx tools/diff.mjs",
-		"test:ops": "tsx tools/ops-check.ts",
-		"test:ir": "tsx tools/ir-check.ts",
-		"test:sema": "tsx tools/sema-check.ts",
-		"test:escape": "tsx tools/escape-check.ts",
-		"test:compile": "tsx tools/compile.ts",
-		"test:run": "tsx tools/run-check.mjs",
-		"test:multi": "tsx tools/multi-demo.ts",
-		"test:pkgmodes": "tsx tools/pkg-modes-check.ts",
-		"test:export": "tsx tools/export-check.ts",
-		"bench": "tsx tools/bench.ts"
-	},
-	"devDependencies": {
-		"@types/node": "^24.19.0",
-		"tree-sitter-cli": "^0.27.0",
-		"tsdown": "^0.22.14",
-		"tsx": "^4.23.15",
-		"typescript": "^7.0.2"
-	},
-	"dependencies": {
-		"@perryts/perry-win32-x64": "^0.5.1520",
-		"commander": "^15.0.0",
-		"web-tree-sitter": "^0.27.0"
-	}
+  "name": "gds2js",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "将 .gds 转义为 js 运行",
+  "engines": {
+    "node": ">=25.7"
+  },
+  "exports": {
+    ".": "./dist/runtime.mjs",
+    "./runtime": "./dist/runtime.mjs",
+    "./host": "./dist/host.mjs",
+    "./standalone": "./dist/standalone.cjs",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "gds2js": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
+    "build": "tsdown && tsdown --config tsdown.standalone.config.ts && tsdown --config tsdown.product.config.ts && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
+    "dev": "tsx src/cli.ts",
+    "watch": "tsdown --watch",
+    "test:golden": "node tools/golden.mjs",
+    "test:diff": "tsx tools/diff.mjs",
+    "test:ops": "tsx tools/ops-check.ts",
+    "test:ir": "tsx tools/ir-check.ts",
+    "test:sema": "tsx tools/sema-check.ts",
+    "test:escape": "tsx tools/escape-check.ts",
+    "test:compile": "tsx tools/compile.ts",
+    "test:run": "tsx tools/run-check.mjs",
+    "test:multi": "tsx tools/multi-demo.ts",
+    "test:pkgmodes": "tsx tools/pkg-modes-check.ts",
+    "test:export": "tsx tools/export-check.ts",
+    "bench": "tsx tools/bench.ts",
+    "test:perry": "tsx tools/perry-check.ts",
+    "build:self": "tsx tools/self-pack.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "tree-sitter-cli": "^0.27.0",
+    "tsdown": "^0.22.14",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "@perryts/perry-win32-x64": "^0.5.1520",
+    "commander": "^15.0.0",
+    "web-tree-sitter": "^0.27.0"
+  }
 }

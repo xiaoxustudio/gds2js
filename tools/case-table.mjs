@@ -1,20 +1,7 @@
-/**
- * 大小写映射探针的第二段：把 000-probe-cs-* 的 Godot 真值与 JS 的映射逐码点对账，
- * 重新生成 src/runtime/case-table.ts（运行时唯一的那张例外表）。
- *
- * 为什么必须有这张表：JS 的 toUpperCase/toLowerCase 走**兼容全映射**（ß→SS、İ→i̇、ǳ→DŽ、
- * ﬁ→FI），Godot 走**简单映射**（长度永远不变）。凡是「JS 把单码点撑开」的位置，照抄 JS 就会
- * 静默产出与 Godot 不同长度的字符串；另外还有反向情况 —— JS 与 Godot 都给单码点，但给的
- * 不是同一个字符（实测 Bassa Vah 整段、U+A7CE…U+A7D5：Godot 当作无大小写、JS 却互映射），
- * 那类更阴：长度对、内容错，只有逐码点实测才发现。
- *
- * 用法见 tools/case-probe.mjs 文件头。换 Godot 版本时重跑三步，报告里的 NEW 就是新版本
- * 改了的映射，会被一并写进表里。
- */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
 const OUT = "src/runtime/case-table.ts";
-const BS = String.fromCharCode(92); // 反斜杠，免得在几层字符串转义里打架
+const BS = String.fromCharCode(92);
 
 const rows = [];
 for (const dir of readdirSync("corpus/cases").filter((d) => d.startsWith("000-probe-cs-"))) {

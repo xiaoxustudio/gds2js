@@ -7,6 +7,7 @@ export * from "./signal";
 export * from "./builtins";
 export * from "./methods";
 export * from "./object";
+export * from "./slots";
 export * from "./patterns";
 export * from "./vector2";
 export * from "./vector3";

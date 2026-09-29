@@ -3,20 +3,6 @@ import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags
 import { CMP_EPS, approxEq, vecFailKey } from "./vector2";
 import { COLOR_NAMED } from "./color-named";
 
-/**
- * 颜色 —— 值类型这一族的最后一个（逐条探针实测，Godot 4.6.3）：
- *   `typeof(Color(1,0,0))` → **20**、`Color(0.1,0.2,0.3).r` → `0.10000000149012`（分量是 float32）、
- *   `var d = c; d.b = 1` 不动 `c`（值语义）、能当字典键、`Array[Color]` 的默认元素是 `(0.0, 0.0, 0.0, 1.0)`。
- *
- * 三个只属于 Color 的口径（都和 Vector2/3 不同，别照抄）：
- *  - **打印用 4 位小数**且**保留 -0.0 的负号**：`Color(1.0/3.0, 1e-5, -1e-5, -0.0)` →
- *    `(0.3333, 0.0, -0.0, -0.0)`（Vector2 的 -0.0 会印成 `0.0`）；大整数分量仍走 15/17 位那条路。
- *  - **`<`/`>` 根本没有**（实测是 Parse Error），所以比较这里响亮报缺而不是给个字典序。
- *  - **一元负号是「反色」**：`-Color(1,-2,0,0.5)` → `(0.0, 3.0, 1.0, 0.5)`，即 `1-x` 且 **alpha 原样保留**，
- *    与 `inverted()` 同式，不是分量取负。
- *
- * `h/s/v` 是可读写派生属性（实测 `c.h = 0.5` 会按 HSV 重算 rgb），`r8/g8/b8/a8` 是 0..255 的字节属性。
- */
 export class GColor {
   r: number;
   g: number;
@@ -83,7 +69,6 @@ function packedColor(packed: number): Variant {
  * （实测 `Color.html("red")` → `(0.0, 0.0, 0.0, 1.0)`，而 `Color("red")` → `(1.0, 0.0, 0.0, 1.0)`）。
  */
 function parseColor(s: string, names: boolean): Variant | null {
-  // 名字表只在认名字的口子生效：实测 Color("red") 给红色，而 Color.html("red") 给兜底色
   if (names) {
     const packed = namedOf(s);
     if (packed !== undefined) return packedColor(packed);
@@ -135,14 +120,12 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
   if (args.length > 0 || name === "html" || name === "from_string" || name === "from_hsv") {
     switch (name) {
       case "html": {
-        // 实测 `Color.html("f00")` → (1,0,0,1)、`Color.html("80ff0000")` → (0.502,1,0,0)（RGBA）
         if (args.length !== 1) {
           throw new UnsupportedError("color-arity", `Color.html() 只收 1 个字符串（收到 ${args.length} 个）`);
         }
         return parseColor(strArg(args[0], "html"), false) ?? ZERO_COLOR();
       }
       case "from_string": {
-        // 实测必须两个参数（少一个就是解析期报错），第二个是兜底色
         if (args.length !== 2) {
           throw new UnsupportedError(
             "color-arity",
@@ -154,7 +137,6 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
         return parseColor(strArg(args[0], "from_string"), true) ?? color(fb.r, fb.g, fb.b, fb.a);
       }
       case "from_hsv": {
-        // 实测 3 参 alpha 补 1、4 参照收：from_hsv(0.5,0.25,0.5) → (0.375, 0.5, 0.5, 1.0)
         if (args.length !== 3 && args.length !== 4) {
           throw new UnsupportedError(
             "color-arity",
@@ -231,9 +213,6 @@ function fromHsv(h: number, s: number, v: number, a: number): Variant {
  */
 function byteOf(n: number): number {
   if (Number.isNaN(n)) return -2147483648;
-  // 乘法本身也留在 float32 里：实测 0.7 的字节是 **179** 而不是 178 —— double 算 0.7f*255 得
-  // 178.49999696 会舍到 178，而 float32 把它表成精确的 178.5，半数远离零进位就是 179。
-  // to_html / to_rgba32 / r8 三个口子共用这一条。
   const scaled = r32(n * 255);
   const v = scaled < 0 ? -Math.round(-scaled) : Math.round(scaled);
   if (v < 0) return 0;
@@ -271,14 +250,11 @@ const pack32 = (bytes: number[]): Variant => {
 export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   switch (name) {
     case "to_html": {
-      // 实测：无参时 alpha 为 1 就省掉两位，否则总是 8 位；参数是布尔（true 强制带 alpha）
       if (args.length > 1) {
         throw new UnsupportedError("color-arity", `Color.to_html() 最多 1 个实参（收到 ${args.length} 个）`);
       }
       const hex = (n: number) => byteOf(n).toString(16).padStart(2, "0");
       const body = hex(c.r) + hex(c.g) + hex(c.b);
-      // 实测 to_html() **默认就带** alpha（Color(0.6,0.4,0.2,1).to_html() → "996633ff"），
-      // 只有显式 to_html(false) 才给 6 位
       const withAlpha = args.length === 0 ? true : Boolean((args[0] as Variant).v);
       return V.str(withAlpha ? body + hex(c.a) : body);
     }
@@ -286,20 +262,15 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       arity(args, 0, "to_rgba32");
       return pack32([byteOf(c.r), byteOf(c.g), byteOf(c.b), byteOf(c.a)]);
     case "to_argb32":
-      // 实测 Color(0.6,0.4,0.2,1).to_argb32() → 4288243251 = 0xFF996633
       arity(args, 0, "to_argb32");
       return pack32([byteOf(c.a), byteOf(c.r), byteOf(c.g), byteOf(c.b)]);
     case "to_abgr32":
-      // 实测同色 to_abgr32() → 4281558681 = 0xFF336699
       arity(args, 0, "to_abgr32");
       return pack32([byteOf(c.a), byteOf(c.b), byteOf(c.g), byteOf(c.r)]);
     case "get_luminance":
-      // 实测是 Rec.709 权重：(0.25,0.5,0.75) → 0.4649、(0.6,0.4,0.2) → 0.42808、灰 0.5 → 0.5
       arity(args, 0, "get_luminance");
       return V.float(add(add(mul(0.2126, c.r), mul(0.7152, c.g)), mul(0.0722, c.b)));
     case "lightened": {
-      // 实测 `Color(0.6,0.4,0.2,1).lightened(0.5)` → `(0.8, 0.7, 0.6, 1.0)`：
-      // 不是「分量加」也不是「夹到 1」，而是**向白插值**（amount 为负会往回走，(0.4, 0.1, -0.2)）
       arity(args, 1, "lightened");
       const w = numArg(args[0], "lightened");
       return color(
@@ -310,7 +281,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       );
     }
     case "darkened": {
-      // 实测同色 darkened(0.5) → `(0.3, 0.2, 0.1, 1.0)`：向黑插值，alpha 同样不动
       arity(args, 1, "darkened");
       const w = numArg(args[0], "darkened");
       return color(
@@ -321,11 +291,9 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       );
     }
     case "inverted":
-      // 实测 (0.6,0.4,0.2,0.3).inverted() → (0.4, 0.6, 0.8, 0.3)：1-分量、alpha 保留
       arity(args, 0, "inverted");
       return color(sub(1, c.r), sub(1, c.g), sub(1, c.b), c.a);
     case "lerp": {
-      // 实测 (0.1,0.2,0.3,0.4).lerp((0.7,0.8,0.9,1), 0.333) → (0.2998, 0.3998, 0.4998, 0.5998)
       arity(args, 2, "lerp");
       const o = colArg(args, 0, "lerp");
       const w = numArg(args[1], "lerp");
@@ -337,7 +305,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       );
     }
     case "is_equal_approx": {
-      // 实测与向量共用 CMP_EPSILON 那条相对容差：1 vs 1.000009 真、vs 1.00001 假、0.5 vs 0.500004 真
       arity(args, 1, "is_equal_approx");
       const o = colArg(args, 0, "is_equal_approx");
       return V.bool(
@@ -367,7 +334,6 @@ export function colorCmp(): never {
   throw new UnsupportedError("color-cmp", "Color 没有大小比较（实测 `<`/`>` 在 Godot 是 Parse Error）");
 }
 
-/** 分量槽位：0..3 与 r/g/b/a；派生的 h/s/v 与字节族 r8/g8/b8/a8 各占一段。 */
 type ColorSlot = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 const SLOTS: Record<string, ColorSlot> = {
@@ -444,7 +410,6 @@ export function colorWrite(c: GColor, key: Variant, value: Variant, via: "prop" 
     const [h, sv, v] = toHsv(c);
     return fromHsv(s === 4 ? n : h, s === 5 ? n : sv, s === 6 ? n : v, c.a);
   }
-  // 字节写入实测只在 0..255 内验过（`c.a8 = 64` → 0.251）；越界实参 Godot 侧怎么处理没探，响亮报缺
   if (n < 0 || n > 255 || !Number.isInteger(n)) {
     throw new UnsupportedError(
       "color-byte",

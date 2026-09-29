@@ -1,25 +1,3 @@
-/**
- * export 回归自检（tools）—— `pnpm test:export`
- * 两支打包器各跑真流程，并把「当前卡在哪」如实分类；分类只认 CLI 自己吐的
- * `gds2js-export[<verdict>]` 标记，不 scrape 上游自由文本（上一轮被 scriptc 的
- * `@override` 措辞骗出过假红灯，教训记在 ROADMAP 5.8）。
- *
- *   ok        打出 exe 且跑起来 stdout 逐字节等于期望
- *   refused   版本/二进制门禁（含 --pack node 在旧 node 上该响的那一声）
- *   no-lib    perry 缺 perry_runtime.lib（npm 包没带，不是我们的问题）
- *   crash     perry 访问违例（RS4GC + Windows try/catch，上游 #7354）
- *   FAIL      以上都不是 —— 真回归，红灯
- *
- * 格子：
- *   A node/出货            需要 SEA-capable 的 node（GDS2JS_NODE_BIN 或当前 node ≥25.7）；
- *                          成了就再跑一遍「运行期抛错必须非 0」那套
- *   B node/版本门禁        当前 node < 25.7 时必须响亮拒绝并给出重跑命令
- *   C perry/默认           预期 crash 或 no-lib
- *   D perry/PERRY_RS4GC=0  预期 no-lib（实测 codegen 是能走完的）
- *   E --pack scriptc       必须被拒（这一支已按实测撤掉，别再悄悄回来）
- *
- * 除 FAIL 外一律记账不红灯。跑：node_modules/.bin/tsx tools/export-check.ts
- */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -79,8 +57,7 @@ function runExport(args: string[], env: NodeJS.ProcessEnv): { code: number | nul
   return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
 }
 
-/** 跑产物并对期望输出；抛错形状（want=null）则要求非 0 退出 + stderr 有内容。 */
-function checkExe(cell: string, exe: string, want: string | null): void {
+function checkExe(cell: string, exe: string, want: string | null, work = WORK): void {
   if (!existsSync(exe)) return record(cell, "FAIL", `退出码 0 但没有 ${exe}`);
   const run = spawnSync(exe, [], { encoding: "utf8", windowsHide: true, timeout: 120_000 });
   if (want === null) {
@@ -93,7 +70,7 @@ function checkExe(cell: string, exe: string, want: string | null): void {
   }
   if ((run.stderr || "").length > 0) return record(cell, "FAIL", `输出对但 stderr 不干净：${JSON.stringify(run.stderr.slice(0, 120))}`);
   record(cell, "ok", "stdout 逐字节一致、退出码 0、stderr 干净");
-  if (existsSync(WORK)) record(`${cell}/清理`, "FAIL", `中间工作目录没清：${WORK}`);
+  if (existsSync(work)) record(`${cell}/清理`, "FAIL", `中间工作目录没清：${work}`);
   else record(`${cell}/清理`, "ok", "");
 }
 
@@ -101,9 +78,23 @@ function boomProject(): string {
   const proj = join(TMP, "boom");
   mkdirSync(proj, { recursive: true });
   writeFileSync(join(proj, "project.godot"), '[application]\nconfig/name="boom"\n', "utf8");
-  // 整数除零：Godot 与我们的运行时都在运行期抛（S27）
   writeFileSync(join(proj, "main.gd"), "extends SceneTree\n\nfunc _initialize():\n\tvar z = 0\n\tprint(100 / z)\n\tquit()\n", "utf8");
   return proj;
+}
+
+function looseScript(): { file: string; want: string } {
+  const file = join(TMP, "loose.gd");
+  writeFileSync(file, 'extends SceneTree\n\nfunc _initialize():\n\tprint("散装脚本")\n\tprint(2 ** 10)\n\tquit()\n', "utf8");
+  return { file, want: "散装脚本\n1024\n" };
+}
+
+function nestedProject(): { root: string; entry: string; want: string } {
+  const root = join(TMP, "nested");
+  mkdirSync(join(root, "game", "ui"), { recursive: true });
+  writeFileSync(join(root, "project.godot"), '[application]\nconfig/name="nested"\n', "utf8");
+  writeFileSync(join(root, "game", "ui", "label.gd"), "class_name Fancy\n\nvar text: String = \"\"\n\nfunc render() -> String:\n\treturn \"[\" + text + \"]\"\n", "utf8");
+  writeFileSync(join(root, "game", "main.gd"), "extends SceneTree\n\nfunc _initialize():\n\tvar f := Fancy.new()\n\tf.text = \"hi\"\n\tprint(f.render())\n\tprint(5 / 2)\n\tquit()\n", "utf8");
+  return { root, entry: join(root, "game", "main.gd"), want: "[hi]\n2\n" };
 }
 
 function main(): void {
@@ -142,8 +133,6 @@ function main(): void {
   console.log("B node/版本门禁（SEA 节点不够新时该响，并给出重跑命令）");
   if (atLeast(selfV, SEA_MIN_NODE)) record("node/版本门禁", "refused", `当前 node v${selfV} 已够新，没有更旧的当对照物`);
   else {
-    // 显式把 SEA 节点指回当前这个旧 node：整条命令可能被注了 GDS2JS_NODE_BIN=<新 node>，
-    // 不覆盖掉的话这一格拿到的就是够新的二进制，门禁根本没被测到（上一版就栽在这）
     const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", join(TMP, "old.exe"), "--pack", "node"], { GDS2JS_NODE_BIN: process.execPath });
     const v = verdictOf(r.out);
     if (r.code === 0) record("node/版本门禁", "FAIL", `旧 node（v${selfV}）本该拒绝，却退了 0`);
@@ -152,26 +141,93 @@ function main(): void {
     else record("node/版本门禁", "ok", `v${selfV} 上响亮拒绝 + 给出重跑命令`);
   }
 
-  console.log("C/D perry（默认 GC 与 PERRY_RS4GC=0 两格，按实测各归各的上游状态）");
-  for (const [cell, env] of [
-    ["perry/默认RS4GC", {}],
-    ["perry/PERRY_RS4GC=0", { PERRY_RS4GC: "0" }],
-  ] as Array<[string, NodeJS.ProcessEnv]>) {
-    const exe = join(TMP, `${cell.replace(/[=/]/g, "_")}.exe`);
-    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], env);
+  console.log("C/D perry（未设 GC 环境变量 = 走 CLI 的默认 PERRY_RS4GC=0；显式设过 = 原样传，两格都该出货并逐字节对）");
+  let perryShipped = false;
+  {
+    const exe = join(TMP, "perry_default.exe");
+    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], { PERRY_RS4GC: "" });
     const v = verdictOf(r.out);
-    if (r.code === 0 && existsSync(exe)) checkExe(cell, exe, MULTI_WANT);
-    else record(cell, v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code} 且无分类标记`);
+    if (r.code === 0 && existsSync(exe)) {
+      if (!/PERRY_RS4GC=0/.test(r.out) || !/默认/.test(r.out)) record("perry/默认GC", "FAIL", "给了默认 GC 却没把「这是本 CLI 的默认」讲出来");
+      else checkExe("perry/默认GC", exe, MULTI_WANT);
+    } else record("perry/默认GC", v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code} 且无分类标记`);
+    perryShipped = existsSync(exe);
+  }
+  {
+    const exe = join(TMP, "perry_explicit0.exe");
+    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], { PERRY_RS4GC: "0" });
+    const v = verdictOf(r.out);
+    if (r.code === 0 && existsSync(exe)) {
+      if (!/你显式设的/.test(r.out)) record("perry/显式RS4GC=0", "FAIL", "显式值被改口成默认了 —— 用户设的 PERRY_RS4GC 必须原样传");
+      else checkExe("perry/显式RS4GC=0", exe, MULTI_WANT);
+    } else record("perry/显式RS4GC=0", v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code} 且无分类标记`);
+    perryShipped = perryShipped || existsSync(exe);
   }
 
-  console.log("E --pack scriptc 必须被拒（这一支已按实测撤掉）");
+  console.log("E 嵌套目录工程（入口在子目录，两支都真打真跑）");
+  {
+    const nested = nestedProject();
+    const cells: Array<{ name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean; needPerry: boolean }> = [
+      { name: "node/nested", args: seaCapable ? ["--pack", "node", "--node", seaCapable] : ["--pack", "node"], env: {}, needSea: true, needPerry: false },
+      { name: "perry/nested", args: ["--pack", "perry"], env: { PERRY_RS4GC: "0" }, needSea: false, needPerry: true },
+    ];
+    for (const c of cells) {
+      if ((c.needSea && !seaCapable) || (c.needPerry && !perryShipped)) {
+        record(c.name, "refused", c.needSea ? `本机没有 Node >= ${SEA_MIN_NODE}` : "perry 那一支上面没出货，这一格跟着跑没意义");
+        continue;
+      }
+      const exe = join(TMP, `${c.name.replace("/", "-")}.exe`);
+      const r = runExport([nested.entry, "--res-root", nested.root, "-o", exe, ...c.args], c.env);
+      const v = verdictOf(r.out);
+      if (r.code !== 0) record(c.name, v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code}\n${r.out.split(/\r?\n/).slice(-6).join("\n")}`);
+      else {
+        checkExe(c.name, exe, nested.want, join(nested.root, ".gds2js-export"));
+        const work = join(nested.root, ".gds2js-export");
+        if (existsSync(work)) record(`${c.name}/子目录清理`, "FAIL", `没清干净：${work}`);
+        else record(`${c.name}/子目录清理`, "ok", "空目录自底向上收掉了");
+      }
+    }
+  }
+
+  console.log("F perry 的 -o 路径含非 ASCII（实测链接失败却退 0，必须报得出来）");
+  if (!perryShipped) record("perry/非ASCII输出路径", "refused", "perry 上面没出货，这一格跳过");
+  else {
+    const exe = join(TMP, "我的程序.exe");
+    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], { PERRY_RS4GC: "0" });
+    if (r.code === 0 && existsSync(exe)) record("perry/非ASCII输出路径", "ok", "这一版 perry 能吃非 ASCII 路径了（记下，别再当限制写死）");
+    else if (!/非 ASCII/.test(r.out)) record("perry/非ASCII输出路径", verdictOf(r.out)?.v ?? "FAIL", "失败了却没把「-o 含非 ASCII」说清楚（perry 自己退 0，用户无从下手）");
+    else record("perry/非ASCII输出路径", "refused", "响亮拒绝并给出 ASCII 的出路");
+  }
+
+  console.log("G 散装单文件（入口不在任何工程里）：两支都该照 build/run 的边界打得出 exe");
+  {
+    const loose = looseScript();
+    const cells: Array<{ label: string; name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean; needPerry: boolean }> = [
+      { label: "node/散装单文件", name: "node-loose", args: seaCapable ? ["--pack", "node", "--node", seaCapable] : ["--pack", "node"], env: {}, needSea: true, needPerry: false },
+      { label: "perry/散装单文件", name: "perry-loose", args: ["--pack", "perry"], env: { PERRY_RS4GC: "0" }, needSea: false, needPerry: true },
+    ];
+    for (const c of cells) {
+      if ((c.needSea && !seaCapable) || (c.needPerry && !perryShipped)) {
+        record(c.label, "refused", c.needSea ? `本机没有 Node >= ${SEA_MIN_NODE}` : "perry 那一支上面没出货，这一格跟着跑没意义");
+        continue;
+      }
+      const exe = join(TMP, `${c.name}.exe`);
+      const r = runExport([loose.file, "-o", exe, ...c.args], c.env);
+      const v = verdictOf(r.out);
+      if (/本身不是 Godot 工程/.test(r.out)) record(c.label, "FAIL", "散装单文件又被嵌套工程守卫拦住了");
+      else if (r.code !== 0) record(c.label, v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code}\n${r.out.split(/\r?\n/).slice(-6).join("\n")}`);
+      else checkExe(c.label, exe, loose.want, join(TMP, ".gds2js-export"));
+    }
+  }
+
+  console.log("H --pack scriptc 必须被拒（这一支已按实测撤掉）");
   const rs = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", join(TMP, "s.exe"), "--pack", "scriptc"], {});
   if (rs.code === 0 || !/--pack 只能是 node \| perry/.test(rs.out)) {
     record("--pack scriptc", "FAIL", `没有拒掉这个已移除的取值：${rs.out.slice(0, 120)}`);
   } else record("--pack scriptc", "ok", "被取值闸门拒了");
 
   rmSync(TMP, { recursive: true, force: true });
-  rmSync(WORK, { recursive: true, force: true }); // 失败格会故意留 bundle 供人工重试，这里替用户收掉
+  rmSync(WORK, { recursive: true, force: true });
   const failed = results.filter((x) => x.v === "FAIL");
   const okc = results.filter((x) => x.v === "ok").length;
   console.log(`\n汇总：ok ${okc} / 上游或环境记账 ${results.length - okc - failed.length} / FAIL ${failed.length}`);

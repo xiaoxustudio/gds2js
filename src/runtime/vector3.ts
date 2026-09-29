@@ -2,14 +2,6 @@ import { UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { CMP_EPS, NORMALIZED_EPS, approxEq, lerpLen, vecFailKey } from "./vector2";
 
-/**
- * 三维向量 —— 与 Vector2 同一套「值类型 + float32 分量」口径（逐条探针实测，Godot 4.6.3）：
- *   `Vector3(0.1,0,0).x` → `0.10000000149012`、`Vector3(1,2,3) == Vector3(1,2,3.0000001)` → true
- *   （两者 fround 后是同一个 float32）、`var w = v; w.z = 9` 不动 `v`、`typeof` 给 **9**、
- *   打印 `(1.0, 2.0, 3.0)` 走 Vector2 那套短格式。
- *
- * 每步算术都舍回 float32（理由见 vector2.ts 顶部），三个分量一起算。
- */
 export class GVector3 {
   x: number;
   y: number;
@@ -149,7 +141,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return V.float(add(add(mul(v.x, o.x), mul(v.y, o.y)), mul(v.z, o.z)));
     }
     case "cross": {
-      // 实测 (1,2,3)×(0,1,0) → (-3.0, 0.0, 1.0)、(1,0,0)×(0,1,0) → (0.0, 0.0, 1.0)
       arity(args, 1, "cross");
       const o = vecArg(args, 0, "cross");
       return vector3(
@@ -173,15 +164,11 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       arity(args, 0, "ceil");
       return vector3(Math.ceil(v.x), Math.ceil(v.y), Math.ceil(v.z));
     case "round": {
-      // Godot 用 roundf：半数**远离零**（实测 (-1.5,-2.5,3.5).round() → (-2.0, -3.0, 4.0)）。
-      // JS 的 Math.round 是半数向正无穷，照抄会静默错。
       arity(args, 0, "round");
       const h = (n: number) => (n < 0 ? -Math.round(-n) : Math.round(n));
       return vector3(h(v.x), h(v.y), h(v.z));
     }
     case "snapped": {
-      // 与 Vector2 同式：`step * floor(value / step + 0.5)`，step 分量为 0 时原样返回；
-      // step 为 inf 时 floor(0.5)=0、inf*0 → nan（实测 `snapped(Vector3.INF)` 给 (nan, nan, nan)）。
       arity(args, 1, "snapped");
       const o = vecArg(args, 0, "snapped");
       const snap = (n: number, s: number) => (s === 0 ? n : mul(s, Math.floor(add(div(n, s), 0.5))));
@@ -194,15 +181,12 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(snap(v.x), snap(v.y), snap(v.z));
     }
     case "lerp": {
-      // 实测 (1,2,3).lerp((2,3,4), 0.5) → (1.5, 2.5, 3.5)：`v + (to - v) * w`，每步 float32
       arity(args, 2, "lerp");
       const o = vecArg(args, 0, "lerp");
       const w = scalar(args[1], "lerp");
       return vector3(add(v.x, mul(sub(o.x, v.x), w)), add(v.y, mul(sub(o.y, v.y), w)), add(v.z, mul(sub(o.z, v.z), w)));
     }
     case "cubic_interpolate": {
-      // 实测 (1,2,3).cubic_interpolate((2,2,2), (3,3,3), (4,4,4), 0.5) → (1.25, 1.8125, 2.375)，
-      // 正是 Godot 的 Catmull-Rom 展开（实参顺序是 b、pre_a、post_b、weight），每步回 float32。
       arity(args, 4, "cubic_interpolate");
       const b = vecArg(args, 0, "cubic_interpolate");
       const pre = vecArg(args, 1, "cubic_interpolate");
@@ -230,7 +214,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(Math.max(v.x, o.x), Math.max(v.y, o.y), Math.max(v.z, o.z));
     }
     case "clamp": {
-      // 实测 (1,2,3).clamp((1.5,1.5,1.5), (2.5,2.5,2.5)) → (1.5, 2.0, 2.5)
       arity(args, 2, "clamp");
       const lo = vecArg(args, 0, "clamp");
       const hi = vecArg(args, 1, "clamp");
@@ -241,8 +224,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       );
     }
     case "limit_length": {
-      // 实测 (1,2,3).limit_length(1.0) → (0.267261, 0.534522, 0.801784)、
-      // (0.1,0.2,0.3).limit_length(10.0) 原样 —— 只在超出时缩到 max。
       arity(args, 1, "limit_length");
       const max = scalar(args[0], "limit_length");
       const len = flen(v.x, v.y, v.z);
@@ -250,7 +231,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(mul(div(v.x, len), max), mul(div(v.y, len), max), mul(div(v.z, len), max));
     }
     case "angle_to": {
-      // 实测 (0,1,0).angle_to((1,0,0)) → 1.57079637050629 = `atan2(|cross|, dot)` 的 float32
       arity(args, 1, "angle_to");
       const o = vecArg(args, 0, "angle_to");
       const cx = sub(mul(v.y, o.z), mul(v.z, o.y));
@@ -260,7 +240,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return V.float(r(Math.atan2(flen(cx, cy, cz), dot)));
     }
     case "min_axis_index": {
-      // 实测 (1,2,3) → 0、(3,4,5) 打头给 0、Vector2i(5,3) → 1；X=0 / Y=1 / Z=2
       arity(args, 0, "min_axis_index");
       return V.int(v.x <= v.y ? (v.x <= v.z ? 0 : 2) : v.y <= v.z ? 1 : 2);
     }
@@ -274,8 +253,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return V.bool(approxEq(v.x, o.x) && approxEq(v.y, o.y) && approxEq(v.z, o.z));
     }
     case "is_normalized": {
-      // 阈值是 length_squared 上的 1e-3（与 Vector2 同一条，20 个点夹出来的）：
-      // 实测 (0.9995,0,0) → true、(0.9992,0,0) → false，用 CMP_EPS(1e-5) 会把前者判错
       arity(args, 0, "is_normalized");
       return V.bool(r(Math.abs(sub(lengthSq(v), 1))) < NORMALIZED_EPS);
     }
@@ -283,7 +260,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       arity(args, 0, "is_zero_approx");
       return V.bool(Math.abs(v.x) < CMP_EPS && Math.abs(v.y) < CMP_EPS && Math.abs(v.z) < CMP_EPS);
     case "clampf": {
-      // 实测 Vector3.clampf(1.5, 2.5) 与 clamp(同值向量) 给同一个 (1.5, 2.0, 2.5)
       arity(args, 2, "clampf");
       const lo = scalar(args[0], "clampf");
       const hi = scalar(args[1], "clampf");
@@ -294,10 +270,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       );
     }
     case "slerp": {
-      // 13 个实测点全对上：对称的 sin 权重球面插值（三角函数走 double，向量与长度按 float32 步进），
-      // 退化情形（任一端是零向量，或 |sinθ| < 1e-5 —— 含同向与反向）退回普通 lerp。
-      // 判别点：`(1,2,3).slerp((-1,-2,-3), 0.5)` → (0.0, 0.0, 0.0)（反向走 lerp，不是 Vector2 那样转 90°）；
-      // `(1,2,3).slerp((4,5,6), 0.3)` → (1.710528, 2.878237, 4.045945) —— 只有三角用 double 才对上最后一位。
       arity(args, 2, "slerp");
       const o = vecArg(args, 0, "slerp");
       const w = scalar(args[1], "slerp");
@@ -321,9 +293,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const theta = Math.acos(dt);
       const s = Math.sin(theta);
       if (Math.abs(s) < 1e-5) return plain();
-      // 两个权重**保持 double**，与分量相乘后才一次性落回 float32 —— 这一步是 14 个实测点
-      // 唯一认的配方：把 t1/t2 先 fround、或逐项各自 fround 再相加，都会在 6 位小数打印上差最后一位
-      // （判别点 (3,4,0).slerp((0,5,0), 0.5) → (1.581139, 4.743417, 0.0)）。
       const t1 = Math.sin((1 - w) * theta) / s;
       const t2 = Math.sin(w * theta) / s;
       const len = lerpLen(la, lb, w);
@@ -333,7 +302,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(mul(ux, len), mul(uy, len), mul(uz, len));
     }
     case "is_finite":
-      // 实测 (1e300,0,0) → false（收成 float32 已是 inf）、掺 nan → false
       arity(args, 0, "is_finite");
       return V.bool(Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z));
     case "bounce":

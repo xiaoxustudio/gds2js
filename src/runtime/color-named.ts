@@ -5,142 +5,142 @@
 // （"MINTCREAM" / "rebeccapurple" 同样命中），大小写不敏感。
 // 值存成 0xAARRGGBB 整数：分量 = byte/255，构造时统一落 float32。
 export const COLOR_NAMED: Record<string, number> = {
-  alice_blue: 0xfff0f8ff, // #f0f8ff a=ff
-  antique_white: 0xfffaebd7, // #faebd7 a=ff
-  aqua: 0xff00ffff, // #00ffff a=ff
-  aquamarine: 0xff7fffd4, // #7fffd4 a=ff
-  azure: 0xfff0ffff, // #f0ffff a=ff
-  beige: 0xfff5f5dc, // #f5f5dc a=ff
-  bisque: 0xffffe4c4, // #ffe4c4 a=ff
-  black: 0xff000000, // #000000 a=ff
-  blanched_almond: 0xffffebcd, // #ffebcd a=ff
-  blue: 0xff0000ff, // #0000ff a=ff
-  blue_violet: 0xff8a2be2, // #8a2be2 a=ff
-  brown: 0xffa52a2a, // #a52a2a a=ff
-  burlywood: 0xffdeb887, // #deb887 a=ff
-  cadet_blue: 0xff5f9ea0, // #5f9ea0 a=ff
-  chartreuse: 0xff7fff00, // #7fff00 a=ff
-  chocolate: 0xffd2691e, // #d2691e a=ff
-  coral: 0xffff7f50, // #ff7f50 a=ff
-  cornflower_blue: 0xff6495ed, // #6495ed a=ff
-  cornsilk: 0xfffff8dc, // #fff8dc a=ff
-  crimson: 0xffdc143c, // #dc143c a=ff
-  cyan: 0xff00ffff, // #00ffff a=ff
-  dark_blue: 0xff00008b, // #00008b a=ff
-  dark_cyan: 0xff008b8b, // #008b8b a=ff
-  dark_goldenrod: 0xffb8860b, // #b8860b a=ff
-  dark_gray: 0xffa9a9a9, // #a9a9a9 a=ff
-  dark_green: 0xff006400, // #006400 a=ff
-  dark_magenta: 0xff8b008b, // #8b008b a=ff
-  dark_olive_green: 0xff556b2f, // #556b2f a=ff
-  dark_orange: 0xffff8c00, // #ff8c00 a=ff
-  dark_orchid: 0xff9932cc, // #9932cc a=ff
-  dark_red: 0xff8b0000, // #8b0000 a=ff
-  dark_salmon: 0xffe9967a, // #e9967a a=ff
-  dark_sea_green: 0xff8fbc8f, // #8fbc8f a=ff
-  dark_slate_blue: 0xff483d8b, // #483d8b a=ff
-  dark_slate_gray: 0xff2f4f4f, // #2f4f4f a=ff
-  dark_turquoise: 0xff00ced1, // #00ced1 a=ff
-  dark_violet: 0xff9400d3, // #9400d3 a=ff
-  deep_pink: 0xffff1493, // #ff1493 a=ff
-  deep_sky_blue: 0xff00bfff, // #00bfff a=ff
-  dim_gray: 0xff696969, // #696969 a=ff
-  dodger_blue: 0xff1e90ff, // #1e90ff a=ff
-  firebrick: 0xffb22222, // #b22222 a=ff
-  floral_white: 0xfffffaf0, // #fffaf0 a=ff
-  forest_green: 0xff228b22, // #228b22 a=ff
-  fuchsia: 0xffff00ff, // #ff00ff a=ff
-  gainsboro: 0xffdcdcdc, // #dcdcdc a=ff
-  ghost_white: 0xfff8f8ff, // #f8f8ff a=ff
-  gold: 0xffffd700, // #ffd700 a=ff
-  goldenrod: 0xffdaa520, // #daa520 a=ff
-  gray: 0xffbebebe, // #bebebe a=ff
-  green: 0xff00ff00, // #00ff00 a=ff
-  green_yellow: 0xffadff2f, // #adff2f a=ff
-  honeydew: 0xfff0fff0, // #f0fff0 a=ff
-  hot_pink: 0xffff69b4, // #ff69b4 a=ff
-  indian_red: 0xffcd5c5c, // #cd5c5c a=ff
-  indigo: 0xff4b0082, // #4b0082 a=ff
-  ivory: 0xfffffff0, // #fffff0 a=ff
-  khaki: 0xfff0e68c, // #f0e68c a=ff
-  lavender: 0xffe6e6fa, // #e6e6fa a=ff
-  lavender_blush: 0xfffff0f5, // #fff0f5 a=ff
-  lawn_green: 0xff7cfc00, // #7cfc00 a=ff
-  lemon_chiffon: 0xfffffacd, // #fffacd a=ff
-  light_blue: 0xffadd8e6, // #add8e6 a=ff
-  light_coral: 0xfff08080, // #f08080 a=ff
-  light_cyan: 0xffe0ffff, // #e0ffff a=ff
-  light_gray: 0xffd3d3d3, // #d3d3d3 a=ff
-  light_green: 0xff90ee90, // #90ee90 a=ff
-  light_pink: 0xffffb6c1, // #ffb6c1 a=ff
-  light_salmon: 0xffffa07a, // #ffa07a a=ff
-  light_sea_green: 0xff20b2aa, // #20b2aa a=ff
-  light_sky_blue: 0xff87cefa, // #87cefa a=ff
-  light_slate_gray: 0xff778899, // #778899 a=ff
-  light_steel_blue: 0xffb0c4de, // #b0c4de a=ff
-  light_yellow: 0xffffffe0, // #ffffe0 a=ff
-  lime: 0xff00ff00, // #00ff00 a=ff
-  lime_green: 0xff32cd32, // #32cd32 a=ff
-  linen: 0xfffaf0e6, // #faf0e6 a=ff
-  magenta: 0xffff00ff, // #ff00ff a=ff
-  maroon: 0xffb03060, // #b03060 a=ff
-  medium_aquamarine: 0xff66cdaa, // #66cdaa a=ff
-  medium_blue: 0xff0000cd, // #0000cd a=ff
-  medium_purple: 0xff9370db, // #9370db a=ff
-  medium_sea_green: 0xff3cb371, // #3cb371 a=ff
-  medium_slate_blue: 0xff7b68ee, // #7b68ee a=ff
-  medium_spring_green: 0xff00fa9a, // #00fa9a a=ff
-  medium_turquoise: 0xff48d1cc, // #48d1cc a=ff
-  medium_violet_red: 0xffc71585, // #c71585 a=ff
-  midnight_blue: 0xff191970, // #191970 a=ff
-  mint_cream: 0xfff5fffa, // #f5fffa a=ff
-  misty_rose: 0xffffe4e1, // #ffe4e1 a=ff
-  moccasin: 0xffffe4b5, // #ffe4b5 a=ff
-  navajo_white: 0xffffdead, // #ffdead a=ff
-  navy_blue: 0xff000080, // #000080 a=ff
-  old_lace: 0xfffdf5e6, // #fdf5e6 a=ff
-  olive: 0xff808000, // #808000 a=ff
-  olive_drab: 0xff6b8e23, // #6b8e23 a=ff
-  orange: 0xffffa500, // #ffa500 a=ff
-  orange_red: 0xffff4500, // #ff4500 a=ff
-  orchid: 0xffda70d6, // #da70d6 a=ff
-  pale_goldenrod: 0xffeee8aa, // #eee8aa a=ff
-  pale_green: 0xff98fb98, // #98fb98 a=ff
-  pale_turquoise: 0xffafeeee, // #afeeee a=ff
-  pale_violet_red: 0xffdb7093, // #db7093 a=ff
-  papaya_whip: 0xffffefd5, // #ffefd5 a=ff
-  peach_puff: 0xffffdab9, // #ffdab9 a=ff
-  peru: 0xffcd853f, // #cd853f a=ff
-  pink: 0xffffc0cb, // #ffc0cb a=ff
-  plum: 0xffdda0dd, // #dda0dd a=ff
-  powder_blue: 0xffb0e0e6, // #b0e0e6 a=ff
-  purple: 0xffa020f0, // #a020f0 a=ff
-  rebecca_purple: 0xff663399, // #663399 a=ff
-  red: 0xffff0000, // #ff0000 a=ff
-  rosy_brown: 0xffbc8f8f, // #bc8f8f a=ff
-  royal_blue: 0xff4169e1, // #4169e1 a=ff
-  saddle_brown: 0xff8b4513, // #8b4513 a=ff
-  salmon: 0xfffa8072, // #fa8072 a=ff
-  sandy_brown: 0xfff4a460, // #f4a460 a=ff
-  seashell: 0xfffff5ee, // #fff5ee a=ff
-  sea_green: 0xff2e8b57, // #2e8b57 a=ff
-  sienna: 0xffa0522d, // #a0522d a=ff
-  silver: 0xffc0c0c0, // #c0c0c0 a=ff
-  sky_blue: 0xff87ceeb, // #87ceeb a=ff
-  slate_blue: 0xff6a5acd, // #6a5acd a=ff
-  slate_gray: 0xff708090, // #708090 a=ff
-  snow: 0xfffffafa, // #fffafa a=ff
-  spring_green: 0xff00ff7f, // #00ff7f a=ff
-  steel_blue: 0xff4682b4, // #4682b4 a=ff
-  tan: 0xffd2b48c, // #d2b48c a=ff
-  teal: 0xff008080, // #008080 a=ff
-  thistle: 0xffd8bfd8, // #d8bfd8 a=ff
-  tomato: 0xffff6347, // #ff6347 a=ff
-  turquoise: 0xff40e0d0, // #40e0d0 a=ff
-  violet: 0xffee82ee, // #ee82ee a=ff
-  wheat: 0xfff5deb3, // #f5deb3 a=ff
-  white: 0xffffffff, // #ffffff a=ff
-  white_smoke: 0xfff5f5f5, // #f5f5f5 a=ff
-  yellow: 0xffffff00, // #ffff00 a=ff
-  yellow_green: 0xff9acd32, // #9acd32 a=ff
+  alice_blue: 0xfff0f8ff,
+  antique_white: 0xfffaebd7,
+  aqua: 0xff00ffff,
+  aquamarine: 0xff7fffd4,
+  azure: 0xfff0ffff,
+  beige: 0xfff5f5dc,
+  bisque: 0xffffe4c4,
+  black: 0xff000000,
+  blanched_almond: 0xffffebcd,
+  blue: 0xff0000ff,
+  blue_violet: 0xff8a2be2,
+  brown: 0xffa52a2a,
+  burlywood: 0xffdeb887,
+  cadet_blue: 0xff5f9ea0,
+  chartreuse: 0xff7fff00,
+  chocolate: 0xffd2691e,
+  coral: 0xffff7f50,
+  cornflower_blue: 0xff6495ed,
+  cornsilk: 0xfffff8dc,
+  crimson: 0xffdc143c,
+  cyan: 0xff00ffff,
+  dark_blue: 0xff00008b,
+  dark_cyan: 0xff008b8b,
+  dark_goldenrod: 0xffb8860b,
+  dark_gray: 0xffa9a9a9,
+  dark_green: 0xff006400,
+  dark_magenta: 0xff8b008b,
+  dark_olive_green: 0xff556b2f,
+  dark_orange: 0xffff8c00,
+  dark_orchid: 0xff9932cc,
+  dark_red: 0xff8b0000,
+  dark_salmon: 0xffe9967a,
+  dark_sea_green: 0xff8fbc8f,
+  dark_slate_blue: 0xff483d8b,
+  dark_slate_gray: 0xff2f4f4f,
+  dark_turquoise: 0xff00ced1,
+  dark_violet: 0xff9400d3,
+  deep_pink: 0xffff1493,
+  deep_sky_blue: 0xff00bfff,
+  dim_gray: 0xff696969,
+  dodger_blue: 0xff1e90ff,
+  firebrick: 0xffb22222,
+  floral_white: 0xfffffaf0,
+  forest_green: 0xff228b22,
+  fuchsia: 0xffff00ff,
+  gainsboro: 0xffdcdcdc,
+  ghost_white: 0xfff8f8ff,
+  gold: 0xffffd700,
+  goldenrod: 0xffdaa520,
+  gray: 0xffbebebe,
+  green: 0xff00ff00,
+  green_yellow: 0xffadff2f,
+  honeydew: 0xfff0fff0,
+  hot_pink: 0xffff69b4,
+  indian_red: 0xffcd5c5c,
+  indigo: 0xff4b0082,
+  ivory: 0xfffffff0,
+  khaki: 0xfff0e68c,
+  lavender: 0xffe6e6fa,
+  lavender_blush: 0xfffff0f5,
+  lawn_green: 0xff7cfc00,
+  lemon_chiffon: 0xfffffacd,
+  light_blue: 0xffadd8e6,
+  light_coral: 0xfff08080,
+  light_cyan: 0xffe0ffff,
+  light_gray: 0xffd3d3d3,
+  light_green: 0xff90ee90,
+  light_pink: 0xffffb6c1,
+  light_salmon: 0xffffa07a,
+  light_sea_green: 0xff20b2aa,
+  light_sky_blue: 0xff87cefa,
+  light_slate_gray: 0xff778899,
+  light_steel_blue: 0xffb0c4de,
+  light_yellow: 0xffffffe0,
+  lime: 0xff00ff00,
+  lime_green: 0xff32cd32,
+  linen: 0xfffaf0e6,
+  magenta: 0xffff00ff,
+  maroon: 0xffb03060,
+  medium_aquamarine: 0xff66cdaa,
+  medium_blue: 0xff0000cd,
+  medium_purple: 0xff9370db,
+  medium_sea_green: 0xff3cb371,
+  medium_slate_blue: 0xff7b68ee,
+  medium_spring_green: 0xff00fa9a,
+  medium_turquoise: 0xff48d1cc,
+  medium_violet_red: 0xffc71585,
+  midnight_blue: 0xff191970,
+  mint_cream: 0xfff5fffa,
+  misty_rose: 0xffffe4e1,
+  moccasin: 0xffffe4b5,
+  navajo_white: 0xffffdead,
+  navy_blue: 0xff000080,
+  old_lace: 0xfffdf5e6,
+  olive: 0xff808000,
+  olive_drab: 0xff6b8e23,
+  orange: 0xffffa500,
+  orange_red: 0xffff4500,
+  orchid: 0xffda70d6,
+  pale_goldenrod: 0xffeee8aa,
+  pale_green: 0xff98fb98,
+  pale_turquoise: 0xffafeeee,
+  pale_violet_red: 0xffdb7093,
+  papaya_whip: 0xffffefd5,
+  peach_puff: 0xffffdab9,
+  peru: 0xffcd853f,
+  pink: 0xffffc0cb,
+  plum: 0xffdda0dd,
+  powder_blue: 0xffb0e0e6,
+  purple: 0xffa020f0,
+  rebecca_purple: 0xff663399,
+  red: 0xffff0000,
+  rosy_brown: 0xffbc8f8f,
+  royal_blue: 0xff4169e1,
+  saddle_brown: 0xff8b4513,
+  salmon: 0xfffa8072,
+  sandy_brown: 0xfff4a460,
+  seashell: 0xfffff5ee,
+  sea_green: 0xff2e8b57,
+  sienna: 0xffa0522d,
+  silver: 0xffc0c0c0,
+  sky_blue: 0xff87ceeb,
+  slate_blue: 0xff6a5acd,
+  slate_gray: 0xff708090,
+  snow: 0xfffffafa,
+  spring_green: 0xff00ff7f,
+  steel_blue: 0xff4682b4,
+  tan: 0xffd2b48c,
+  teal: 0xff008080,
+  thistle: 0xffd8bfd8,
+  tomato: 0xffff6347,
+  turquoise: 0xff40e0d0,
+  violet: 0xffee82ee,
+  wheat: 0xfff5deb3,
+  white: 0xffffffff,
+  white_smoke: 0xfff5f5f5,
+  yellow: 0xffffff00,
+  yellow_green: 0xff9acd32,
 };
