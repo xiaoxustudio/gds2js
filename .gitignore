@@ -26,3 +26,6 @@ tmp/
 .gds2js-run*
 # `gds2js export` 的中间工作目录（cjs bundle / sea-config / blob；默认打完即删，只有 --keep-blob 会留）
 .gds2js-export/
+# `gds2js self` 的舞台目录（CLI 单文件 bundle + 压缩后的 home 资产 + sea-config）与产物
+.gds2js-self/
+gds2js.exe

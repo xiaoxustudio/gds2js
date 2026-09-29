@@ -1,10 +1,17 @@
 /**
  * 自包含 exe（Node SEA）里的「家」。
  *
- * 为什么要它：CLI 打进 exe 之后，还有四样东西按**真实文件**找 —— `gdscript.wasm`、
- * `dist/runtime.mjs`/`host.mjs`/`standalone.cjs`、rolldown 那颗 20MB 的原生绑定（Node 文档
- * 写明 `process.dlopen` 只认真实文件，VFS 也救不了它）、以及拿来做 SEA 的 node.exe。
+ * 为什么要它：CLI 打进 exe 之后，还有几样东西按**真实文件**找 —— `gdscript.wasm` 与
+ * web-tree-sitter 自己那颗运行时 wasm（内联后它按 `import.meta.url` 找，在 exe 里就是 exe 同目录）、
+ * `dist/product.mjs` / `standalone.cjs`、以及内嵌的 perry 工具链（perry.exe 要旁边的 LLVM-C.dll，
+ * 实测缺它连 `--version` 都是 `0xC0000135`；运行时是 zst 且 perry 不会自己解）。
  * 与其在 exe 里重建一套模块解析，不如**首次运行把这几样解到临时目录**，让所有老代码路径原样工作。
+ *
+ * home 里**没有 node**：实测 SEA exe 不吃 node 旗标（`x.exe -p …` 把旗标当 argv 交给内嵌 main），
+ * 所以塞一份 node 进去只为让 exe 里能再跑 `--build-sea`，代价是 34 MB 压缩资产。用户决定改成
+ * node 走外部（`--node` / `GDS2JS_NODE_BIN` / PATH），exe 里内嵌的是 perry。
+ * 也**没有 bundler**：exe 里跑 rolldown 站不住（内联代码的懒 require 找不到包），所以 export
+ * 两支都改成不需要它 —— 见 `src/cli.ts` 的 `exportTree`。
  *
  * 关键前提：**非 SEA 一律返回 null**，调用方保持现有逻辑 —— 所以源码态 / npm 安装态 / 全部
  * 测试链路行为零变化（这条是硬要求：语料产物字节不许动）。
@@ -13,6 +20,7 @@ import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { inflateSync } from "node:zlib";
 
 /** SEA 里 `process.execPath` 是 exe 自己，所以家目录只能从「解出来的那一份」拿。 */
 type SeaModule = { isSea(): boolean; getAssetKeys(): string[]; getRawAsset(key: string): Uint8Array | undefined };
@@ -56,9 +64,13 @@ export function seaFile(rel: string): string | null {
   return existsSync(p) ? p : null;
 }
 
-/** exe 内嵌的那份 node（用户批准「把 node 塞进去」：`--build-sea` 需要真实的 node 二进制）。 */
-export function seaNodeExe(): string | null {
-  return seaFile("node/node.exe") ?? seaFile("node/node");
+/**
+ * exe 内嵌的那份 perry。目录形状**照 npm 包铺**（`perry/bin/perry.exe` + `perry/bin/LLVM-C.dll`
+ * + `perry/lib/*.zst`），这样 Windows 的 DLL 搜索（先看 exe 同目录）和 `src/perry.ts` 里
+ * 「从 bin 往上两级找 lib」那套逻辑在解出来的家目录里原样成立，不用写第二套。
+ */
+export function seaPerryExe(): string | null {
+  return seaFile("perry/bin/perry.exe");
 }
 
 function ensureHome(api: SeaModule): string {
@@ -67,24 +79,27 @@ function ensureHome(api: SeaModule): string {
   // 版本标签进目录名：换 exe 就换目录，旧版残留不会串台（也不去删别人的）
   const tag = `${process.versions.node}-${hash(keys.join("|"))}`;
   const dir = process.env.GDS2JS_HOME || join(tmpdir(), `gds2js-home-${tag}`);
-  if (existsSync(join(dir, ".ready"))) return dir;
-  const tmp = `${dir}.tmp-${process.pid}`;
-  mkdirSync(tmp, { recursive: true });
-  for (const key of keys) {
-    const rel = key.slice("gds2js-home/".length);
-    if (!rel || rel.includes("..")) throw new Error(`资产名不合法：${key}`);
-    const bytes = api.getRawAsset(key);
-    if (!bytes) throw new Error(`资产读不出来：${key}`);
-    const dest = join(tmp, rel);
-    mkdirSync(dirname(dest), { recursive: true });
-    writeFileSync(dest, bytes);
-  }
-  writeFileSync(join(tmp, ".ready"), tag, "utf8");
-  if (!existsSync(dir)) {
-    try {
-      renameSync(tmp, dir);
-    } catch {
-      if (!existsSync(join(dir, ".ready"))) throw new Error(`解包落位失败：${dir}`);
+  if (!existsSync(join(dir, ".ready"))) {
+    const tmp = `${dir}.tmp-${process.pid}`;
+    mkdirSync(tmp, { recursive: true });
+    for (const key of keys) {
+      const rel = key.slice("gds2js-home/".length);
+      if (!rel || rel.includes("..")) throw new Error(`资产名不合法：${key}`);
+      const bytes = api.getRawAsset(key);
+      if (!bytes) throw new Error(`资产读不出来：${key}`);
+      const dest = join(tmp, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      // `--build-sea` 的 assets 是原样入包的（实测 20 MB 资产就让 exe +20 MB），
+      // 所以打包那边（tools/self-pack.ts）统一先 deflate 再塞；这里逐个解回来。
+      writeFileSync(dest, inflateSync(bytes));
+    }
+    writeFileSync(join(tmp, ".ready"), tag, "utf8");
+    if (!existsSync(dir)) {
+      try {
+        renameSync(tmp, dir);
+      } catch {
+        if (!existsSync(join(dir, ".ready"))) throw new Error(`解包落位失败：${dir}`);
+      }
     }
   }
   return dir;
