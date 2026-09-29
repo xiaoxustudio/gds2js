@@ -8,13 +8,15 @@
  *   gds2js build-project <entry.gd> [-o dir]   跨文件编译整个工程（class_name / extends / is）
  *   gds2js run <file.gd>                       编译并**直接执行**，脚本的 print 就是命令输出
  *   gds2js run-project <entry.gd>              同上，整个工程编译到临时目录后跑入口
+ *   gds2js export <entry.gd>                   打成 **Windows 独立可执行文件**（--pack node|perry）
  *
  * 产出的模块 export 一个脚本类，import "gds2js/runtime"（语言运行时）和
  * "gds2js/host"（宿主桩）。怎么驱动生命周期由使用方决定。
  *
  * 参数解析用 commander；下面的构建/检查动作被写成可重跑的纯函数，watch 模式复用同一套。
  */
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -28,7 +30,7 @@ import { lower } from "./lower/lower";
 import { parseSource } from "./parse/parser";
 import { UnsupportedError } from "./runtime/errors";
 
-type CmdName = "check" | "build" | "check-project" | "build-project" | "run" | "run-project";
+type CmdName = "check" | "build" | "check-project" | "build-project" | "run" | "run-project" | "export";
 type RuntimeMode = "import" | "local" | "single";
 
 /** 旁挂/内联用的自包含运行时文件名（local 模式复制到输出目录时用它）。 */
@@ -65,6 +67,12 @@ interface Ctx {
   watch: boolean;
   /** run/run-project：跑完留着临时产物（看生成的代码用），默认删干净。 */
   keep: boolean;
+  /** export：用哪个打包器（node 默认 = 官方 SEA；perry = 外部原生编译器）。 */
+  pack: Pack;
+  /** export --pack node：拿哪个 node 做 --build-sea（它同时就是产物内嵌的运行时）。 */
+  seaNode: string;
+  /** export：留下中间工作目录（bundle / sea-config），默认删。 */
+  keepBundle: boolean;
 }
 
 interface Diag {
@@ -83,20 +91,70 @@ function hostOf(hostOpt: string | boolean | undefined): string | null {
   return typeof hostOpt === "string" ? hostOpt : "gds2js/host";
 }
 
-/** 从入口向上找含 project.godot 的目录作为 res:// 根，找不到就用入口所在目录。 */
-function findResRoot(entryAbs: string): string {
+/** --pack 的取值闸门：写错就响，别默默按默认那条路走（两支的失败形状完全不同）。 */
+function packOf(v: unknown): Pack {
+  if (v === undefined || v === "node") return "node";
+  if (v === "perry") return "perry";
+  console.error(`export --pack 只能是 node | perry（收到 ${JSON.stringify(v)}）`);
+  process.exit(1);
+}
+
+/** 从入口向上找含 project.godot 的目录作为 res:// 根，找不到就用入口所在目录（inferred=true）。 */
+function findResRoot(entryAbs: string): { root: string; inferred: boolean } {
   let dir = dirname(entryAbs);
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       readFileSync(join(dir, "project.godot"), "utf8");
-      return dir;
+      return { root: dir, inferred: false };
     } catch {
       const parent = dirname(dir);
-      if (parent === dir) return dirname(entryAbs);
+      if (parent === dir) return { root: dirname(entryAbs), inferred: true };
       dir = parent;
     }
   }
+}
+
+/**
+ * 回退根往下找**嵌套的 Godot 工程**（子目录自己带 project.godot）。
+ * 为什么要管：工程级命令会把根目录下的 .gd 递归全收进同一次编译（project.ts 的 findGdFiles），
+ * 而那些子工程的 `res://` 是按外层根解析的 —— 于是报出来的 missing-file 跟用户给的入口看着毫无关系。
+ */
+function findNestedProjects(root: string): string[] {
+  const out: string[] = [];
+  const SKIP = new Set(["node_modules", ".godot", ".git", "dist", "build"]);
+  const walk = (dir: string, depth: number): void => {
+    if (depth > 6 || out.length >= 5) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory() || e.name.startsWith(".") || SKIP.has(e.name)) continue;
+      const p = join(dir, e.name);
+      if (existsSync(join(p, "project.godot"))) out.push(p);
+      else walk(p, depth + 1);
+    }
+  };
+  walk(root, 0);
+  return out;
+}
+
+/** 只在「隐式回退出来的根」上响：显式 --res-root 是用户的决定，不覆盖、也不二次猜测。 */
+function refuseNestedProjects(input: string, root: string, nested: string[]): never {
+  console.error(
+    `${input}:  error  ${root} 本身不是 Godot 工程（向上没找到 project.godot），但它下面嵌着 ${nested.length} 个工程：\n    ` +
+      nested.join("\n    "),
+  );
+  console.error(
+    "  工程级命令（check-project / build-project / run-project / export）会把根目录下的 .gd **递归全收**进同一次编译，\n" +
+      "  而那些子工程脚本里的 res:// 路径是按外层根解析的 —— 所以报出来的缺文件跟给的入口看着毫无关系。\n" +
+      `  改指那个工程里的脚本（例如 ${join(nested[0] ?? root, "main.gd")}），或用 --res-root 明确根目录；\n` +
+      "  只编译单个脚本请用 gds2js build / gds2js run（单文件路径不解析 res://）。",
+  );
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------- 单文件前端
@@ -212,11 +270,13 @@ function runtimeFileUrls(): { rt: string; host: string } {
 }
 
 /**
- * build-project 的 single 模式：先按 import 模式把各模块编到系统临时目录（运行时/宿主用 dist 的
- * file URL，确保 bundler 能在任意路径把它们内联），再交给 rolldown(tsdown build) bundle 成**一个**
- * 自包含 .mjs。作用域提升、跨文件类/import、名字冲突都交给真 bundler——不自造拼接（那会静默出错）。
+ * build-project 的 single 模式（也是 export 的前半段）：先按 import 模式把各模块编到系统临时目录
+ * （运行时/宿主用 dist 的 file URL，确保 bundler 能在任意路径把它们内联），再交给 rolldown(tsdown build)
+ * bundle 成**一个**自包含 .mjs。作用域提升、跨文件类/import、名字冲突都交给真 bundler——不自造拼接（那会静默出错）。
+ *
+ * 成功返回 bundle 的绝对路径（export 要拿它喂外部编译器），失败返回 null（诊断已打印）。
  */
-async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
+async function selfContainedBundle(ctx: Ctx): Promise<string | null> {
   const emit = mkdtempSync(join(tmpdir(), "gds2js-emit-"));
   try {
     const { rt, host } = runtimeFileUrls();
@@ -228,7 +288,7 @@ async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
       hostImport: ctx.hostImport === null ? null : host,
       autoRun: ctx.run ? undefined : false,
     });
-    if (!printDiags(projectDiags(result, ctx.resRoot))) return false;
+    if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
     for (const m of result.modules) {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
@@ -237,7 +297,7 @@ async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
     const entry = result.modules.find((m) => m.resPath === wantRes) ?? result.modules[0];
     if (!entry) {
       console.error(`${ctx.input}: 无可打包模块`);
-      return false;
+      return null;
     }
     const { build } = await import("tsdown"); // 仅整app single 才拉 bundler，别把 rolldown 压进每次 CLI 启动
     await build({
@@ -250,13 +310,229 @@ async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
       config: false,
       silent: true,
     } as Parameters<typeof build>[0]);
-    console.error(`已编译并 bundle 成单文件 → ${join(ctx.outDir, basename(entry.jsPath).replace(/\.mts$/, ".mjs"))}`);
-    return true;
+    const bundlePath = join(ctx.outDir, basename(entry.jsPath).replace(/\.mts$/i, ".mjs"));
+    console.error(`已编译并 bundle 成单文件 → ${bundlePath}`);
+    return bundlePath;
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    return null;
+  } finally {
+    rmSync(emit, { recursive: true, force: true });
+  }
+}
+
+async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
+  return (await selfContainedBundle(ctx)) !== null;
+}
+
+// ---------------------------------------------------------------- 独立可执行文件（export）
+
+function diagText(r: { stdout?: string; stderr?: string; status?: number | null }): string {
+  return ((r.stdout ?? "") + (r.stderr ?? "")).trim() || `退出码 ${r.status}`;
+}
+
+/** 只截前 n 行：外部编译器/LLVM 的报告动辄上百行，别把终端糊死。 */
+function head(text: string, n: number): string {
+  return text.split(/\r?\n/).slice(0, n).join("\n");
+}
+
+/**
+ * 两种打包器：
+ * - `node`（默认）：Node 官方的一步式 SEA —— 拿 `<node> --build-sea=<sea-config.json>` 一次生成，要 **Node >= 25.7**。
+ *   `--node` / `GDS2JS_NODE_BIN` 可以指另一个够新的二进制，所以 CLI 自己跑在 24 上也能出货。
+ * - `perry`：PerryTS 的 `perry compile`（SWC + LLVM，产物里不带 Node）。
+ *
+ * scriptc 那一支按实测撤了：它硬缺 `Math.fround`（float32 语义）、`bigint`（int64 家族）、
+ * 覆写 async 基类方法（`class Main extends SceneTree { async _initialize() }` 就是我们宿主契约本身），
+ * 真产物 coverage 也还剩上百处「执行到就抛围栏」—— 细节记在 ROADMAP 5.8。
+ * tsdown 的 `exe` 选项本质也是调同一套 SEA，所以不再并存第二份实现。
+ */
+type Pack = "node" | "perry";
+
+/**
+ * `--build-sea` 的起点版本。实测 24.21 没这个 flag（且那边的 SEA 静默忽略 `mainFormat`），
+ * 26.7.0 有、并且认 `mainFormat: "module"` —— 所以产物那句顶层 await 原样能跑，发射形状不用改。
+ */
+const SEA_MIN_NODE = "25.7.0";
+
+function versionAtLeast(v: string, min: string): boolean {
+  const a = v.replace(/^v/, "").split(".").map(Number);
+  const b = min.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] ?? 0) > (b[i] ?? 0)) return true;
+    if ((a[i] ?? 0) < (b[i] ?? 0)) return false;
+  }
+  return true;
+}
+
+/** 问一个 node 二进制的版本；起不来返回 null（PATH 上没有 / 它不是 node）。 */
+function nodeVersionOf(bin: string): string | null {
+  const r = spawnSync(bin, ["-p", "process.versions.node"], { encoding: "utf8", windowsHide: true, timeout: 60_000 });
+  if (r.error || r.status !== 0) return null;
+  return (r.stdout || "").trim() || null;
+}
+
+/** 版本不够时把「该重跑的那条命令」打出来。刚失败的那个 node 不配当建议 —— 那是废话。 */
+function refuseOldSea(ctx: Ctx, got: string | null, bin: string): void {
+  const v = nodeVersionOf(bin);
+  const hint = v !== null && versionAtLeast(v, SEA_MIN_NODE) ? bin : '"<Node >= 25.7>"';
+  exportVerdict("refused", `node SEA 版本不够（要 >= ${SEA_MIN_NODE}，实测 ${got ?? "不可用"}）`);
+  console.error(
+    `${ctx.input}:  error  --pack node 需要 Node >= ${SEA_MIN_NODE}（SEA 的一步式 --build-sea），${bin} 是 ${got ?? "不可用"}。`,
+  );
+  console.error(`  换够新的 node 重跑即可：\n    ${hint} ${process.argv[1] ?? "gds2js"} export ${ctx.input} -o ${ctx.outPath} --pack=node`);
+}
+
+/**
+ * perry 的定位：`PERRY_BIN` 优先，否则先在**本地 node_modules** 解析
+ * （它的 npm 包是分平台的，装在 PATH 别处没用 —— 官方 shim 只在自己的 node_modules 树里翻，实测过），
+ * 最后才吃 PATH 上的 `perry`。
+ */
+function perryBin(): string {
+  if (process.env.PERRY_BIN) return process.env.PERRY_BIN;
+  if (process.platform === "win32" && process.arch === "x64") {
+    try {
+      return createRequire(import.meta.url).resolve("@perryts/perry-win32-x64/bin/perry.exe");
+    } catch {
+      /* 没装成本地依赖就回 PATH */
+    }
+  }
+  return "perry";
+}
+
+function preflightPerry(): { bin: string; version: string } | null {
+  const bin = perryBin();
+  const r = spawnSync(bin, ["--version"], { encoding: "utf8", windowsHide: true, timeout: 120_000 });
+  if (r.error || r.status !== 0) {
+    console.error(`${bin} --version 失败：${r.error?.message ?? diagText(r)}`);
+    console.error("  装 @perryts/perry（连带平台包 @perryts/perry-win32-x64），或用 PERRY_BIN 指到具体可执行文件。");
+    exportVerdict("refused", "perry 二进制不可用");
+    return null;
+  }
+  return { bin, version: (r.stdout || "").trim() };
+}
+
+/**
+ * export 的失败分类只从这里出：**我们**给结论，不让下游去 scrape 上游的自由文本 ——
+ * 上一轮就是教训：scriptc 先用 `@override` 那类类型检查错挡下来，措辞完全不在预料里，
+ * 抓文本的 classify 把「本该拒绝」误报成了红灯。tools/export-check.ts 认的就是这一行。
+ */
+type ExportVerdict = "refused" | "no-lib" | "crash" | "failed";
+function exportVerdict(v: ExportVerdict, note: string): void {
+  console.error(`gds2js-export[${v}] ${note}`);
+}
+
+/**
+ * perry 在本机实测撞的两道墙，各自把它自己吐的原因翻成可行动的补救。
+ * 匹配的是 perry 的原文，它改了句子这里就不响 —— 宁可多印一句原文也别猜。
+ */
+function perryWall(why: string, status: number | null | undefined): { v: ExportVerdict; advice: string } | null {
+  if (/Could not find perry_runtime\.lib/.test(why)) {
+    return {
+      v: "no-lib",
+      advice:
+        "perry 的 win32 npm 包没带预编译运行时（perry_runtime.lib），链接这一步谁都过不去。\n" +
+        "  两条出路：① 等上游把 lib 打进 @perryts/perry-win32-x64；② 自己 checkout perry 源码，\n" +
+        "  `cargo build --release -p perry-runtime-static` 后用 PERRY_WORKSPACE_ROOT 指过去。",
+    };
+  }
+  if (/PERRY_RS4GC|WinEH funclet|catchpad/.test(why)) {
+    return {
+      v: "refused",
+      advice:
+        "perry 默认的 GC 模式（RS4GC）在 Windows 上不肯编译含 try/catch 的模块 —— 它明说\n" +
+        "  LLVM 的 rewrite-statepoints-for-gc 不支持 MSVC funclet EH，硬上会访问违例（上游 #7354）。\n" +
+        "  我们的运行时浑身是 try/catch，所以这条必然撞上。可以 `PERRY_RS4GC=0` 绕过（本 CLI 会把环境变量转给 perry），\n" +
+        "  但那等于换 GC 策略：产物必须跑一遍全量语料逐字节对 golden 才谈得上可信。",
+    };
+  }
+  if (status === 3221225477 || status === -1073741819) {
+    // perry 自己说过这一类会「访问违例而不是报错」，所以崩了就没有文字可匹配，只能认退出码
+    return {
+      v: "crash",
+      advice:
+        "perry 在 LLVM 里访问违例（0xC0000005）—— 这就是它预告过的 RS4GC + Windows try/catch 那一类（上游 #7354）。\n" +
+        "  实测加 `PERRY_RS4GC=0` 后，我们的整份 bundle 能走完 codegen（约 3.4 分钟）只剩链接那一步：\n" +
+        "    PERRY_RS4GC=0 gds2js export <entry.gd> -o app.exe --pack perry\n" +
+        "  但那等于换 GC 策略，产物必须跑一遍全量语料逐字节对 golden 才算可信 —— 别默认打开。",
+    };
+  }
+  return null;
+}
+
+/**
+ * export：整个工程 → **Windows** 独立可执行文件。Linux 产物不做。
+ * 输入固定是 `single` 那条路打出的自包含 bundle（零 import、bundler 已擦类型）。
+ */
+async function exportExecutable(ctx: Ctx): Promise<boolean> {
+  if (process.platform !== "win32") {
+    console.error(`${ctx.input}:  error  export 只出 Windows 产物（当前平台 ${process.platform}）。Linux 未纳入。`);
+    return false;
+  }
+  const pack = ctx.pack;
+  // node 那一支的门禁在「哪个 node 做 SEA」上，与跑 CLI 的进程可以不是同一个
+  if (pack === "node") {
+    const v = nodeVersionOf(ctx.seaNode);
+    if (v === null || !versionAtLeast(v, SEA_MIN_NODE)) {
+      refuseOldSea(ctx, v, ctx.seaNode);
+      return false;
+    }
+  }
+  const perry = pack === "perry" ? preflightPerry() : null;
+  if (pack === "perry" && !perry) return false;
+
+  const bundle = await selfContainedBundle(ctx);
+  if (!bundle) return false;
+  const exe = ctx.outPath;
+  const cfg = join(ctx.outDir, "sea-config.json");
+  let made = false;
+  try {
+    if (pack === "node") {
+      // 实测 Node >= 25.7 认 mainFormat:"module"，所以带顶层 await 的 ESM bundle 原样就是合法的 SEA main
+      writeFileSync(cfg, JSON.stringify({ main: bundle, mainFormat: "module", output: exe, disableExperimentalSEAWarning: true }, null, 2), "utf8");
+      console.error(`node SEA（v${nodeVersionOf(ctx.seaNode)}）打包中：${ctx.seaNode} --build-sea=${cfg}`);
+      const r = spawnSync(ctx.seaNode, [`--build-sea=${cfg}`], { encoding: "utf8", windowsHide: true, timeout: 600_000 });
+      made = !r.error && r.status === 0 && existsSync(exe);
+      if (!made) {
+        const why = r.error?.message ?? diagText(r);
+        console.error(`${ctx.input}:  error  --build-sea 失败（退出码 ${r.status}）：\n${head(why, 20)}`);
+        exportVerdict("failed", "node SEA 没能出货（原因未归类，原文见上）");
+      }
+    } else {
+      const bin = perry?.bin ?? "perry";
+      const args = ["compile", bundle, "-o", exe];
+      console.error(`perry（${perry?.version || bin}）打包中：${bin} ${args.join(" ")}`);
+      const r = spawnSync(bin, args, { encoding: "utf8", windowsHide: true, timeout: 1_500_000 });
+      made = !r.error && r.status === 0 && existsSync(exe);
+      if (!made) {
+        const why = r.error?.message ?? diagText(r);
+        console.error(`${ctx.input}:  error  perry 失败（退出码 ${r.status}）：\n${head(why, 20)}`);
+        const wall = perryWall(why, r.status);
+        if (wall) {
+          exportVerdict(wall.v, "perry 没能出货");
+          console.error(wall.advice);
+        } else exportVerdict("failed", "perry 没能出货（原因未归类，原文见上）");
+      }
+    }
+    if (!made) console.error(`  bundle 留在 ${bundle}（--keep-bundle 就不会清了），可直接拿它重试编译器。`);
+    else console.error(`已导出 Windows 可执行文件（${pack}）→ ${exe} (${(statSync(exe).size / 1048576).toFixed(1)} MB)`);
+    return made;
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
     return false;
   } finally {
-    rmSync(emit, { recursive: true, force: true });
+    if (ctx.keepBundle) console.error(`中间件已保留（--keep-bundle）：${ctx.outDir}`);
+    else {
+      rmSync(cfg, { force: true });
+      if (made) {
+        rmSync(bundle, { force: true });
+        try {
+          rmdirSync(ctx.outDir);
+        } catch {
+          /* 非空就别递归删用户目录 */
+        }
+      }
+    }
   }
 }
 
@@ -452,6 +728,7 @@ const RUNNERS: Record<CmdName, (ctx: Ctx) => Promise<boolean>> = {
   "build-project": buildProject,
   run: runSingle,
   "run-project": runProject,
+  export: exportExecutable,
 };
 
 async function dispatch(ctx: Ctx): Promise<void> {
@@ -510,15 +787,36 @@ const resolveCtx = (
   opts: Record<string, unknown>,
 ): Ctx => {
   const input = resolve(file);
-  const isProject = cmd === "check-project" || cmd === "build-project" || cmd === "run-project";
-  const resRoot = isProject ? resolve((opts.resRoot as string) ?? findResRoot(input)) : "";
+  const isProject = cmd === "check-project" || cmd === "build-project" || cmd === "run-project" || cmd === "export";
+  const givenRoot = typeof opts.resRoot === "string" ? resolve(opts.resRoot) : null;
+  let resRoot = "";
+  if (isProject) {
+    if (givenRoot) {
+      resRoot = givenRoot;
+    } else {
+      const found = findResRoot(input);
+      if (found.inferred) {
+        const nested = findNestedProjects(found.root);
+        if (nested.length > 0) refuseNestedProjects(input, found.root, nested);
+      }
+      resRoot = found.root;
+    }
+  }
   return {
     cmd,
     input,
-    // 产物带可擦除的 TS 标注（: Promise<void> 等），默认 .mts 才能被 node 原生类型擦除直接跑。
-    outPath: resolve((opts.out as string) ?? input.replace(/\.gd$/i, ".mts")),
+    // build：产物带可擦除的 TS 标注（: Promise<void> 等），默认 .mts 才能被 node 原生类型擦除直接跑。
+    // export：-o 的语义换成"可执行文件路径"，所以中间工作目录另算（见下面 outDir）。
+    outPath: resolve(
+      (opts.out as string) ??
+        (cmd === "export"
+          ? join(dirname(input), basename(input).replace(/\.gd$/i, "")) + (process.platform === "win32" ? ".exe" : "")
+          : input.replace(/\.gd$/i, ".mts")),
+    ),
     resRoot,
-    outDir: isProject ? resolve((opts.out as string) ?? join(resRoot, ".gds2js")) : "",
+    outDir: isProject
+      ? resolve(cmd === "export" ? join(resRoot, ".gds2js-export") : ((opts.out as string) ?? join(resRoot, ".gds2js")))
+      : "",
     runtimeImport: (opts.runtime as string) ?? "gds2js/runtime",
     hostImport: hostOf(opts.host as string | boolean | undefined),
     runtimeMode: ((opts.runtimeMode as string) ?? "import") as RuntimeMode,
@@ -526,6 +824,9 @@ const resolveCtx = (
     sourcemap: opts.sourcemap === true,
     watch: opts.watch === true,
     keep: opts.keep === true,
+    pack: cmd === "export" ? packOf(opts.pack) : "node",
+    seaNode: cmd === "export" ? ((opts.node as string) ?? process.env.GDS2JS_NODE_BIN) || process.execPath : process.execPath,
+    keepBundle: opts.keepBundle === true,
   };
 };
 
@@ -576,6 +877,17 @@ withCommon(
     .option("--res-root <dir>", "res:// 工程根（默认向上找 project.godot）")
     .option("--keep", "留下临时产物目录（看生成的代码用），默认执行完删掉"),
 ).action((entry: string, opts) => dispatch(resolveCtx("run-project", entry, opts)));
+
+// export 固定走 single bundle（自包含才打得成 exe），不吃 --runtime-mode；也不套 withCommon。
+program
+  .command("export <entry>")
+  .description("把整个工程编译成自包含 bundle，再用 perry / scriptc 打成 **Windows** 原生可执行文件（产物不带 Node）")
+  .option("--pack <name>", "打包器：node(默认，官方 SEA，要 Node>=25.7) | perry（外部原生编译器，PERRY_BIN 可指路）", "node")
+  .option("--node <path>", "--pack node 时用哪个 node 做 --build-sea（同时也是产物内嵌的运行时）；默认取 GDS2JS_NODE_BIN 否则当前 node")
+  .option("--res-root <dir>", "res:// 工程根（默认向上找 project.godot）")
+  .option("-o, --out <file>", "可执行文件输出路径（默认与入口同名，带 .exe）")
+  .option("--keep-bundle", "留下中间 bundle（排查用），默认删")
+  .action((entry: string, opts) => dispatch(resolveCtx("export", entry, opts)));
 
 // 无参数时打印帮助（与旧版 usage(0) 一致）；未知子命令由 commander 报错并 exit 1。
 if (process.argv.slice(2).length === 0) {

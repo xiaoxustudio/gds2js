@@ -5,7 +5,7 @@
 	"private": true,
 	"description": "将 .gds 转义为 js 运行",
 	"engines": {
-		"node": ">=24"
+		"node": ">=25.7"
 	},
 	"exports": {
 		".": "./dist/runtime.mjs",
@@ -35,16 +35,18 @@
 		"test:run": "tsx tools/run-check.mjs",
 		"test:multi": "tsx tools/multi-demo.ts",
 		"test:pkgmodes": "tsx tools/pkg-modes-check.ts",
+		"test:export": "tsx tools/export-check.ts",
 		"bench": "tsx tools/bench.ts"
 	},
 	"devDependencies": {
-		"@types/node": "^24.13.6",
+		"@types/node": "^24.19.0",
 		"tree-sitter-cli": "^0.27.0",
-		"tsdown": "^0.22.5",
+		"tsdown": "^0.22.14",
 		"tsx": "^4.23.15",
 		"typescript": "^7.0.2"
 	},
 	"dependencies": {
+		"@perryts/perry-win32-x64": "^0.5.1520",
 		"commander": "^15.0.0",
 		"web-tree-sitter": "^0.27.0"
 	}
