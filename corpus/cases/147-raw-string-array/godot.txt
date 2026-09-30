@@ -1,0 +1,6 @@
+t1 ann,bob,cy, 3
+t2 zoe 最大 2 BOB
+t3 b c 2
+t4 z b
+t5 zoe! cy! 3
+t6 x 1 2

@@ -173,6 +173,20 @@ const KERNELS: Kernel[] = [
 `,
   },
   {
+    name: "string-array",
+    reps: 5,
+    body: `
+	var names = ["a", "b"]
+	var s = 0
+	var i = 0
+	while i < 20000:
+		names.append("x" + names[i % 2])
+		s += names[i].length()
+		i += 1
+	return s
+`,
+  },
+  {
     name: "array-2d",
     reps: 5,
     body: `

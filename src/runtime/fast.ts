@@ -9,20 +9,21 @@ function int64(v: number): UnsupportedError {
 
 /** 单态快路径（D2 的第二轨）。输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
-  rawArrGet(a: number[], i: number): number {
+  /** 裸数组下标读：元素类型由发射期定（int / float / str），这里只保证越界口径一致。 */
+  rawArrGet<T>(a: T[], i: number): T {
     return a[arrIdx(i, a.length)]!;
   },
 
-  rawArrGet2(g: number[][], i: number, j: number): number {
+  rawArrGet2<T>(g: T[][], i: number, j: number): T {
     const row = g[arrIdx(i, g.length)]!;
     return row[arrIdx(j, row.length)]!;
   },
 
-  rawArrSet(a: number[], i: number, v: number): void {
+  rawArrSet<T>(a: T[], i: number, v: T): void {
     a[arrIdx(i, a.length)] = v;
   },
 
-  rawArrSet2(g: number[][], i: number, j: number, v: number): void {
+  rawArrSet2<T>(g: T[][], i: number, j: number, v: T): void {
     const row = g[arrIdx(i, g.length)]!;
     row[arrIdx(j, row.length)] = v;
   },

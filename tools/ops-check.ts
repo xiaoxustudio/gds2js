@@ -165,6 +165,18 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("057", "裸 g[-1][0]=7", JSON.stringify(gg), "[[1,2],[7,4]]");
   shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
 }
+{
+  // step 75：读/写 helper 泛型化之后，字符串元素必须与数值那族共用同一套越界口径
+  eq("147", "裸字符串数组 a[-1] 读末格", fast.rawArrGet(["a", "b"], -1), "b");
+  shouldThrow("147", "裸字符串数组 a[2] 读越界", () => fast.rawArrGet(["a", "b"], 2));
+  const st = ["a", "b"];
+  fast.rawArrSet(st, -1, "z");
+  eq("147", "裸字符串数组 a[-1]=z", JSON.stringify(st), '["a","z"]');
+  const st2 = ["a", "b"];
+  shouldThrow("147", "裸字符串数组 a[5]=x 写越界", () => fast.rawArrSet(st2, 5, "x"));
+  eq("147", "裸字符串数组写越界后没被撑长", st2.length, 2);
+  eq("147", "裸字符串网格 g[-1][-1] 两层负索引", fast.rawArrGet2([["a", "b"], ["c", "d"]], -1, -1), "d");
+}
 
 {
   type MutOp = { op: string; i?: number; v?: number };

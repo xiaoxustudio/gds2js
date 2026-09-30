@@ -832,7 +832,7 @@ function emitStmt(s: Stmt, voidReturn: boolean): string[] {
  */
 function emitRawIndexWrite(target: Expr, value: Expr): string | null {
   if (target.kind !== "index") return null;
-  const raw = (e: Expr, want: "int" | "float"): string => {
+  const raw = (e: Expr, want: Kind): string => {
     const r = emitExprR(e);
     if (r.rep !== want) {
       throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组写入值 rep=${r.rep}，应为 ${want}`);
@@ -985,10 +985,10 @@ let RAW_ABIS = new Map<string, RawAbi>();
 /** 当前正在发射的函数若走裸 ABI，其返回裸类型；否则 null（返回值需装箱）。 */
 let CURRENT_RET: Kind | null = null;
 
-type ElemKind = "int" | "float" | "int[]" | "float[]";
-const isGridElem = (k: ElemKind): k is "int[]" | "float[]" => k === "int[]" || k === "float[]";
+type ElemKind = "int" | "float" | "str" | "int[]" | "float[]" | "str[]";
+const isGridElem = (k: ElemKind): k is "int[]" | "float[]" | "str[]" => k === "int[]" || k === "float[]" || k === "str[]";
 /** 网格的叶子标量类型。 */
-const leafOf = (k: ElemKind): "int" | "float" => (k === "int[]" ? "int" : k === "float[]" ? "float" : k);
+const leafOf = (k: ElemKind): Kind => (k === "int[]" ? "int" : k === "float[]" ? "float" : k === "str[]" ? "str" : k);
 /** 当前函数里被特化成裸 number[] / number[][] 的数组局部：名字 → 元素类型。由 analyzeFuncLayout 逐函数算出。 */
 let RAW_ARRAYS = new Map<string, ElemKind>();
 /** 当前函数里被特化成裸 Map<primitive,number> 的字典局部：名字 → 值类型（键仅 int/str，值仅标量 int/float）。 */
@@ -1715,6 +1715,17 @@ interface ArrayCand {
   escaped: boolean;
 }
 
+/**
+ * 数组候选的元素类型。step 75 起 **空初值不再一律当 int**：这里一律不给类型，改由 `analyzeFuncLayout`
+ * 的不动点按「写入证据」定（那里才拿得到 unboxed 表，所以 `s.append("x")`、`a[i] = n` 这类非字面量写入
+ * 也能定下来 —— 只看字面量会把 049 那类特化白丢掉）。
+ * 只在 candidates 扫完之后调用（isGridCand 那处在扫描中途，仍按初值判，网格必须有字面量行）。
+ */
+function arrayElemKind(c: ArrayCand): ElemKind | null {
+  if (c.init.items.length === 0) return null;
+  return elemKindFromInit(c.init, true);
+}
+
 function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   const cands = new Map<string, ArrayCand>();
 
@@ -1922,21 +1933,25 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
 }
 
 /** 标量数字字面量的类型；非安全 int / 非数字 → null。 */
-function scalarLitKind(e: Expr): "int" | "float" | null {
+function scalarLitKind(e: Expr): Kind | null {
   if (e.kind !== "lit") return null;
   if (e.lit === "float" && typeof e.value === "number") return "float";
   if (e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) return "int";
+  // 字符串元素进裸轨：rep 走 step 5 那条 `str`，越界读仍由 arrIdx 响亮抛错
+  if (e.lit === "string") return "str";
   return null;
 }
 
 /**
- * 数组/字典初值的元素类型。nested=false（字典值）只认标量数字字面量数组；
- * nested=true（数组）额外认"数组的数组"（元素皆数字字面量、基型统一）→ 返回 `"int[]"`/`"float[]"`。
- * 空数组返回 "int"（暂定，由后续读/写定夺）。
+ * 数组/字典初值的元素类型。nested=false（字典值）只认标量字面量数组；
+ * nested=true（数组）额外认"数组的数组"（叶子同为 int / float / str 字面量、基型统一）
+ * → 返回 `"int[]"` / `"float[]"` / `"str[]"`。
+ * 空数组这里给 "int"，但**数组候选不看这一格**（step 75 起空初值改由不动点按写入证据定类型）：
+ * 留着这个返回值的消费方是字典值那条与扫描中途的 isGridCand，两者都拿不到写入证据。
  */
 function elemKindFromInit(init: Extract<Expr, { kind: "array" }>, nested = false): ElemKind | null {
   if (init.items.length === 0) return "int";
-  let scalar: "int" | "float" | null = null;
+  let scalar: Kind | null = null;
   let scalarOk = true;
   for (const it of init.items) {
     const k = scalarLitKind(it);
@@ -1946,7 +1961,7 @@ function elemKindFromInit(init: Extract<Expr, { kind: "array" }>, nested = false
   }
   if (scalarOk && scalar) return scalar;
   if (nested) {
-    let leaf: "int" | "float" | null = null;
+    let leaf: Kind | null = null;
     for (const row of init.items) {
       if (row.kind !== "array") return null;
       for (const it of row.items) {
@@ -1956,7 +1971,7 @@ function elemKindFromInit(init: Extract<Expr, { kind: "array" }>, nested = false
         leaf = k;
       }
     }
-    if (leaf) return leaf === "float" ? "float[]" : "int[]";
+    if (leaf) return leaf === "float" ? "float[]" : leaf === "str" ? "str[]" : "int[]";
   }
   return null;
 }
@@ -1983,7 +1998,7 @@ function analyzeFuncLayout(f: FuncDecl): {
   const arrays = new Map<string, ElemKind>();
   for (const [name, c] of aC) {
     if (c.escaped) continue;
-    const k = elemKindFromInit(c.init, true);
+    const k = arrayElemKind(c);
     if (k) arrays.set(name, k);
   }
   const dicts = new Map<string, "int" | "float">();
@@ -1993,9 +2008,26 @@ function analyzeFuncLayout(f: FuncDecl): {
     if (k === "int" || k === "float") dicts.set(name, k);
   }
   let unboxed = computeUnboxed(f, arrays, dicts);
-  const cap = aC.size + dC.size + 8;
+  const seeded = new Set<string>();
+  // 每轮至少消费掉一次「播种 / 删数组 / 删字典」事件，所以这个上限够用；到上限也只是提前停止特化（保守方向）。
+  const cap = aC.size * 2 + dC.size + 8;
   for (let it = 0; it < cap; it++) {
     let changed = false;
+    // 空初值的候选在这里定类型（step 75）。为什么放在不动点里：`var a = []` + `a.append(i)` 的 `i`
+    // 往往是解箱局部，只看字面量证据会白丢这类特化（049 就掉过）。
+    // `seeded` 是单调度所在：每个候选**最多播种一次**，被 verifyArray 删掉之后不再重播（否则
+    // 「写入都是 str、下标证不出 int」这类候选会每轮加一次删一次，不动点永远跑到上限才停）。
+    for (const [name, c] of aC) {
+      if (c.escaped || arrays.has(name) || seeded.has(name) || c.init.items.length !== 0) continue;
+      const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
+      const kinds = [...c.writeElems, ...c.writeVals].map((e) => kindOfExpr(e, identKind, arrays, dicts));
+      const first = kinds[0];
+      if (first === undefined || first === null || first === "bool") continue;
+      if (!kinds.every((k) => k === first)) continue;
+      arrays.set(name, first);
+      seeded.add(name);
+      changed = true;
+    }
     for (const [name, K] of [...arrays]) {
       const c = aC.get(name);
       if (!c || c.escaped || !verifyArray(c, K, unboxed, arrays, dicts)) {
@@ -2027,7 +2059,8 @@ function verifyArray(
   dicts: Map<string, "int" | "float">,
 ): boolean {
   const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
-  if (elemKindFromInit(c.init, true) !== K) return false;
+  // 空初值没有"初值类型"可对：它的 K 是不动点里按写入证据定的，下面 writeElems / writeVals 那两条就是它的校验
+  if (c.init.items.length !== 0 && elemKindFromInit(c.init, true) !== K) return false;
   if (!isGridElem(K)) {
     for (const it of c.init.items) {
       if (it.kind === "lit") continue;
