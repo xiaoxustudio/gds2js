@@ -148,7 +148,14 @@ pnpm test:multi      # 跨文件冒烟（examples/multi）
 pnpm test:pkgmodes   # local/single 两模式的回归：逐用例 node 跑对齐 golden + 子目录 local + single sourcemap 解码
 pnpm test:export     # export 的回归：node(SEA+VFS) / perry 两支各真打一个 exe（stdout 逐字节 + 抛错须非 0 退出 + 门禁该响的响 + 中间件清干净）；要先前 pnpm build
 pnpm test:perry      # perry 产物的语义门：真打 exe 真跑，逐字节对 Godot golden（默认验 CLI 的 GC 默认；显式 PERRY_RS4GC=… 就照你的值验）
-pnpm bench           # D2 性能内核基准
+pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上）
+pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
 ```
+
+> 两份 bench 吃同一张 kernel 表（`tools/bench-kernels.ts`），列宽一致、校验值并排列出，所以能直接对撞。`bench:godot` 只在**一个 Godot 进程**里跑完全部 kernel（冷启动 12~17 s，逐 kernel 起进程会把测量全淹在启动里），内部用 `Time.get_ticks_usec()` 计时，预热 1 次 + `reps` 次计时，与 `bench` 同形。倍率 = Godot / gds2js。
+>
+> 读数字时的一个不对称要知道：JS 那侧是 V8，边跑边 JIT；GDScript 那侧是解释执行。所以这份对照量的是「我们编译出来的产物 vs Godot 自己执行同一段 GDScript」，不是两份编译器代码生成质量的同条件比较。校验值只列不判等（浮点的印法两边本就不同），要核语义走 `test:diff` / `test:golden`。
+>
+> 机器别同时干别的：实测空闲连跑两次合计差 <1%（397.2 / 395.8 ms），但同时跑编译负载会整体虚高约 1.7 倍（415 → 674 ms）。单条 kernel 有 ±30% 抖动，看趋势用「合计」，要比较单条就多跑几遍。
 
 > `test:diff` 只覆盖 import 模式产物；`local` / `single` 由 `test:pkgmodes` 补齐（它逐用例用真 node 跑产物比对 golden）。
