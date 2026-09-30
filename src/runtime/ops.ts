@@ -17,6 +17,20 @@ import {
   vector2i,
 } from "./vector2i";
 import {
+  asVec3i,
+  v3iAdd,
+  v3iDiv,
+  v3iDivK,
+  v3iMod,
+  v3iModK,
+  v3iMul,
+  v3iMulK,
+  v3iNeg,
+  v3iSub,
+  vec3iCmp,
+  vec3iToFloat,
+} from "./vector3i";
+import {
   GArray,
   GDict,
   keyOf,
@@ -84,6 +98,9 @@ export const ops = {
     const ziAdd = asVec2i(a);
     const zjAdd = asVec2i(b);
     if (ziAdd && zjAdd) return vector2i(add32(ziAdd.x, zjAdd.x), add32(ziAdd.y, zjAdd.y));
+    const zi3Add = asVec3i(a);
+    const zj3Add = asVec3i(b);
+    if (zi3Add && zj3Add) return v3iAdd(zi3Add, zj3Add);
     const caAdd = asColor(a);
     const cbAdd = asColor(b);
     if (caAdd && cbAdd)
@@ -101,6 +118,9 @@ export const ops = {
     const ziSub = asVec2i(a);
     const zjSub = asVec2i(b);
     if (ziSub && zjSub) return vector2i(sub32(ziSub.x, zjSub.x), sub32(ziSub.y, zjSub.y));
+    const zi3Sub = asVec3i(a);
+    const zj3Sub = asVec3i(b);
+    if (zi3Sub && zj3Sub) return v3iSub(zi3Sub, zj3Sub);
     const caSub = asColor(a);
     const cbSub = asColor(b);
     if (caSub && cbSub)
@@ -129,6 +149,16 @@ export const ops = {
     if (zjMul && a.t === Tag.FLOAT) return vec2iToFloat(zjMul, num(a), "mul");
     if (ziMul && isNum(b)) return vector2i(mul32(ziMul.x, intToNum(b.v as IntPayload)), mul32(ziMul.y, intToNum(b.v as IntPayload)));
     if (zjMul && isNum(a)) return vector2i(mul32(zjMul.x, intToNum(a.v as IntPayload)), mul32(zjMul.y, intToNum(a.v as IntPayload)));
+    // Vector3i 与标量：`tmp/f67 t03` 量了 int 的两侧与向量的逐分量除/模，`tmp/f70 p21`/`p22` 量了
+    // **右边放 float** —— 那时升级成 Vector3（与 Vector2i 同形）。左边的 `2.0 * Vector3i` 与
+    // `4 / Vector3i` 都没量到（`p23` 只量到后者是解析期拒），所以左侧只接 int。
+    const zi3Mul = asVec3i(a);
+    const zj3Mul = asVec3i(b);
+    if (zi3Mul && zj3Mul) return v3iMul(zi3Mul, zj3Mul);
+    if (zi3Mul && b.t === Tag.FLOAT) return vec3iToFloat(zi3Mul, num(b), "mul");
+    if (zi3Mul && b.t === Tag.INT) return v3iMulK(zi3Mul, intToNum(b.v as IntPayload));
+    if (zj3Mul && a.t === Tag.INT) return v3iMulK(zj3Mul, intToNum(a.v as IntPayload));
+    if (zj3Mul && a.t === Tag.INT) return v3iMulK(zj3Mul, intToNum(a.v as IntPayload));
     const caMul = asColor(a);
     const cbMul = asColor(b);
     if (caMul && cbMul)
@@ -160,6 +190,17 @@ export const ops = {
       const k = intToNum(b.v as IntPayload);
       return vector2i(div32(ziDiv.x, k), div32(ziDiv.y, k));
     }
+    // Vector3i 的除/取模：向量对向量与**右边 int 标量**（`tmp/f67 t03` 的 a/b、a%b、a/2、a%-2），
+    // 除零走 div32/mod32 那两句实测文本（`tmp/f67 t14`/`t15`）。
+    // 掺 float 的 `/ 4.0` 没量到（`tmp/f69 t82` 只量到 `% 4.0` 是解析期拒），所以不升也不截，落到下面的报缺。
+    const zi3Div = asVec3i(a);
+    const zj3Div = asVec3i(b);
+    if (zi3Div && zj3Div) return v3iDiv(zi3Div, zj3Div);
+    if (zi3Div && b.t === Tag.FLOAT) return vec3iToFloat(zi3Div, num(b), "div");
+    if (zi3Div && b.t === Tag.INT) return v3iDivK(zi3Div, intToNum(b.v as IntPayload));
+    if (zj3Div) {
+      throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / Vector3i（左边放标量实测是解析期拒，p23）`);
+    }
     const caDiv = asColor(a);
     const cbDiv = asColor(b);
     if (caDiv && cbDiv)
@@ -187,6 +228,10 @@ export const ops = {
       const k = intToNum(b.v as IntPayload);
       return vector2i(mod32(ziMod.x, k), mod32(ziMod.y, k));
     }
+    const zi3Mod = asVec3i(a);
+    const zj3Mod = asVec3i(b);
+    if (zi3Mod && zj3Mod) return v3iMod(zi3Mod, zj3Mod);
+    if (zi3Mod && b.t === Tag.INT) return v3iModK(zi3Mod, intToNum(b.v as IntPayload));
     const [x, y] = intPair(a, b);
     if (intToBig(y) === 0n) {
       throw new GodotRuntimeError("int-mod-zero", "整数取模零");
@@ -217,6 +262,8 @@ export const ops = {
     if (wa3) return V.object(new GVector3(-wa3.x, -wa3.y, -wa3.z));
     const ziNeg = asVec2i(a);
     if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
+    const zi3Neg = asVec3i(a);
+    if (zi3Neg) return v3iNeg(zi3Neg);
     const caNeg = asColor(a);
     if (caNeg) return color(1 - caNeg.r, 1 - caNeg.g, 1 - caNeg.b, caNeg.a);
     if (!isNum(a)) {
@@ -323,6 +370,9 @@ function compare(a: Variant, b: Variant): number {
   const ziCmp = asVec2i(a);
   const zjCmp = asVec2i(b);
   if (ziCmp && zjCmp) return vec2iCmp(ziCmp, zjCmp);
+  const zi3Cmp = asVec3i(a);
+  const zj3Cmp = asVec3i(b);
+  if (zi3Cmp && zj3Cmp) return vec3iCmp(zi3Cmp, zj3Cmp);
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
 }
 

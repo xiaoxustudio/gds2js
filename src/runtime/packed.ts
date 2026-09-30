@@ -4,6 +4,7 @@ import { INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
 import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
+import { GVector3i } from "./vector3i";
 import { GVector3 } from "./vector3";
 import type { GArray } from "./values";
 
@@ -119,10 +120,21 @@ export function toElem(kind: PackKind, v: Variant): PackElem {
     if (kind === "vector2") {
       if (inner instanceof GVector2) return new GVector2(inner.x, inner.y);
       if (inner instanceof GVector2i) return new GVector2(inner.x, inner.y);
+      // `PackedVector2Array([Vector3(1, 2, 3)])` → `[(1.0, 2.0)]`（`tmp/f69 v01`）：**丢掉 z**，
+      // 不是给默认元素。这一格之前落到 `defaultElem`，于是静默成 `[(0.0, 0.0)]`。
+      if (inner instanceof GVector3) return new GVector2(inner.x, inner.y);
+      if (inner instanceof GVector3i) return new GVector2(inner.x, inner.y);
       return defaultElem(kind);
     }
     if (kind === "vector3") {
       if (inner instanceof GVector3) return new GVector3(inner.x, inner.y, inner.z);
+      // `PackedVector3Array([Vector3i(1, 2, 3)])` → `[(1.0, 2.0, 3.0)]`（`tmp/f67 t12` 的 `r` 行）：
+      // append / 构造这一侧**升格**，写那一侧不升（见 packWriteIndex）。
+      if (inner instanceof GVector3i) return new GVector3(inner.x, inner.y, inner.z);
+      // `PackedVector3Array([Vector2(1, 2)])` → `[(1.0, 2.0, 0.0)]`、Vector2i 同形（`tmp/f69 v01`）：
+      // 缺的那一格补 0，同样不是整格默认。
+      if (inner instanceof GVector2) return new GVector3(inner.x, inner.y, 0);
+      if (inner instanceof GVector2i) return new GVector3(inner.x, inner.y, 0);
       return defaultElem(kind);
     }
     if (inner instanceof GColor) return new GColor(inner.r, inner.g, inner.b, inner.a);
@@ -721,8 +733,48 @@ export function packWriteIndex(p: GBytes, idx: Variant, value: Variant): Variant
       `Invalid assignment of index '${String(at)}' (on base: '${PACK_TYPE_NAME[p.kind]}') with value of type '${tagName(value.t)}'.`,
     );
   }
+  /**
+   * **写这一侧只收同形状**。`tmp/f69 t12` 与 `tmp/f70 p17–p20` 实测：同一个值走 `append` / `insert` /
+   * `set` / 构造会升格（`Vector3i` → `(1.0, 2.0, 3.0)`、`Vector2i` → Vector2、`Vector2` → Vector3 补 0），
+   * 而 `p[0] = <别的东西>` 全部是运行时报错，文本统一是
+   * `Invalid assignment of property or key '0' with value of type 'Vector3i' on a base object of type 'PackedVector3Array'.`
+   * 三对向量/颜色 pack 各认自己的形状；`Color` 槽那一格没量（`tmp/f70` 只量了向量），照旧走折算。
+   */
+  const exact = PACK_WRITE_EXACT[p.kind];
+  if (exact !== null) {
+    const inner = value.t === Tag.OBJECT ? (value.v as object) : null;
+    if (inner === null || !exact(inner)) {
+      throw new GodotRuntimeError(
+        "packed-index-write-type",
+        `Invalid assignment of property or key '${String(at)}' with value of type '${writeValueName(value, inner)}' on a base object of type '${PACK_TYPE_NAME[p.kind]}'.`,
+      );
+    }
+  }
   p.raw()[real] = toElem(p.kind, value);
   return null;
+}
+
+/** 写路径要求同形状的那几支（`color` 与六支数值/字符串 pack 没量这一格 → null，照旧折算）。 */
+const PACK_WRITE_EXACT: Record<PackKind, ((v: object) => boolean) | null> = {
+  byte: null,
+  int32: null,
+  int64: null,
+  float32: null,
+  float64: null,
+  string: null,
+  color: null,
+  vector2: (v) => v instanceof GVector2,
+  vector3: (v) => v instanceof GVector3,
+};
+
+/** 报错文本里的类型名：值类型要说得出 `Vector3i`，`tagName` 只会给 `Object`。 */
+function writeValueName(value: Variant, inner: object | null): string {
+  if (inner instanceof GVector2) return "Vector2";
+  if (inner instanceof GVector2i) return "Vector2i";
+  if (inner instanceof GVector3) return "Vector3";
+  if (inner instanceof GVector3i) return "Vector3i";
+  if (inner instanceof GColor) return "Color";
+  return tagName(value.t);
 }
 
 export function bytesReadIndex(b: GBytes, idx: Variant): Variant {

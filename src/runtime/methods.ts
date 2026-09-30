@@ -10,7 +10,8 @@ import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
-import { GVector2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
+import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
+import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor } from "./color";
 import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes } from "./packed";
 
@@ -49,6 +50,10 @@ function intoSlot(kind: string | undefined, value: Variant, key: string, owner: 
     throw propAssignError(key, value, owner);
   }
   if (kind === "Vector2") return toVec2(value);
+  // 值类型槽（`tmp/f69 w03-fd-*` 量的是字段那一形）：`var fd: Vector2i = Vector2(1.7, -2.9)` → `(1, -2)`。
+  if (kind === "Vector2i") return toVec2i(value);
+  if (kind === "Vector3") return toVec3(value);
+  if (kind === "Vector3i") return toVec3i(value);
   return value;
 }
 
@@ -86,6 +91,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
+    if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
     if (inner instanceof GBytes) return bytesMethod(inner, name, args);
 
@@ -491,6 +497,7 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector3i) return vec3iReadIndex(obj.v as GVector3i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
   if (obj.t === Tag.OBJECT && obj.v instanceof GBytes) return bytesReadIndex(obj.v as GBytes, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
@@ -524,6 +531,8 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
   const vec2i = base.t === Tag.OBJECT && base.v instanceof GVector2i ? (base.v as GVector2i) : null;
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
+  const vec3i = asVec3i(base);
+  if (vec3i !== null) return vec3iWrite(vec3i, V.str(key), value, "prop");
   const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
   if (col !== null) return colorWrite(col, V.str(key), value, "prop");
   if (base.t === Tag.OBJECT && (typeof base.v === "function" || (base.v !== null && typeof base.v === "object"))) {
@@ -536,7 +545,7 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const objInner = base.t === Tag.OBJECT
     && base.v !== null
     && typeof base.v === "object"
-    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
+    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GVector3i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
     ? (base.v as Record<string, unknown>)
     : null;
   if (objInner !== null) {
@@ -566,6 +575,9 @@ export function writeIdx(base: Variant, idx: Variant, value: Variant): Variant |
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector2i) {
     return vec2iWrite(base.v as GVector2i, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector3i) {
+    return vec3iWrite(base.v as GVector3i, idx, value, "index");
   }
   if (base.t === Tag.OBJECT && base.v instanceof GColor) {
     return colorWrite(base.v as GColor, idx, value, "index");
@@ -619,6 +631,8 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec3 && (name === "x" || name === "y" || name === "z")) return V.float(vec3[name]);
     const vec2i = obj.v instanceof GVector2i ? (obj.v as GVector2i) : null;
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
+    const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
+    if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     if (obj.v instanceof GBytes) {

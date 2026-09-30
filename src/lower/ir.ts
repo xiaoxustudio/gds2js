@@ -68,6 +68,7 @@ const STATIC_MEMBER_FNS: Record<string, string> = {
   Vector2: "vector2Const",
   Vector3: "vector3Const",
   Vector2i: "vector2iConst",
+  Vector3i: "vector3iConst",
   Color: "colorStatic",
   String: "stringStatic",
 };

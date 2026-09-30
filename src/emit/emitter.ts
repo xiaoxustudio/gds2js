@@ -95,6 +95,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
   Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
   Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
+  Vector3i: (a) => `rt.vector3iNew([${a.join(", ")}])`,
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
@@ -2627,6 +2628,12 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
   if (base === "Vector2") return "rt.toVec2";
+  // 值类型槽的转换（`tmp/f67 t08`：`var w: Vector3i = Vector3(1.7, 2.2, 3.9)` → `(1, 2, 3)`、
+  // `var x: Vector3 = Vector3i(4, 5, 6)` → `(4.0, 5.0, 6.0)`）。**没有**这两条转换时槽里存的就是原形状，
+  // 于是打印与 `typeof` 都跟着错（实测我们曾给 `(1.7, 2.9)` / typeof 5），这一族见 S181。
+  if (base === "Vector3") return "rt.toVec3";
+  if (base === "Vector3i") return "rt.toVec3i";
+  if (base === "Vector2i") return "rt.toVec2i";
   return null;
 }
 
@@ -2652,6 +2659,7 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Vector2") return "rt.vector2(0, 0)";
   if (base === "Vector3") return "rt.vector3(0, 0, 0)";
   if (base === "Vector2i") return "rt.vector2i(0, 0)";
+  if (base === "Vector3i") return "rt.vector3i(0, 0, 0)";
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';

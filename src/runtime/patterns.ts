@@ -6,6 +6,8 @@ import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
 import { GVector2i } from "./vector2i";
+import { GVector3i } from "./vector3i";
+import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { asBytes, GBytes, packTypeOfCode, type PackKind } from "./packed";
 
@@ -94,6 +96,7 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Vector2: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2,
   Vector3: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3,
   Vector2i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2i,
+  Vector3i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3i,
   Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
 };
 
@@ -146,7 +149,13 @@ export function asType(v: Variant, name: string): Variant {
   const t = builtinTag(name);
   if (t !== undefined) return v.t === t ? v : V.nil();
   const math = MATH_TYPES[name];
-  if (math) return math(v) ? v : V.nil();
+  if (math) {
+    // `as` 在整型向量与浮点向量之间是**转换**而不是判空：`tmp/f69 t65` 实测
+    // `Vector3i(1, 2, 3) as Vector3` → `(1.0, 2.0, 3.0)`、`typeof` 给 9；
+    // 走下面的判空就会静默成 `<null>`，那是这一族里最容易被漏的一格。
+    if (name === "Vector3" && asVec3i(v) !== null) return toVec3(v);
+    return math(v) ? v : V.nil();
+  }
   const ctor = lookupClass(name);
   if (ctor) {
     return v.t === Tag.OBJECT && v.v instanceof ctor ? v : V.nil();
@@ -176,6 +185,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GVector2) return V.int(5);
   if (v.t === Tag.OBJECT && v.v instanceof GVector3) return V.int(9);
   if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
+  if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return V.int(10);
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);

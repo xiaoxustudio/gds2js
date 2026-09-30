@@ -23,20 +23,30 @@ export function vector3(x: number, y: number, z: number): Variant {
   return V.object(new GVector3(x, y, z));
 }
 
+/**
+ * Vector3i 的分类标记（与 `vector2.ts` 的 `VEC2I_MARK` 同一手法）：
+ * 这一侧要认「单参构造收 Vector3i」，但不能 import `vector3i`（那成环）。
+ * 两个符号**必须不同**，否则 `Vector2()` 的单参分支会把 Vector3i 误认成 Vector2i、悄悄少一个分量。
+ */
+export const VEC3I_MARK = Symbol("gds2js.Vector3i");
+
 /** 取向量实例，不是 Vector3 对象则 null（ops / values 分派用）。 */
 export function asVec3(v: Variant): GVector3 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector3 ? (v.v as GVector3) : null;
 }
 
-/** `Vector3(...)`：0 参给零向量，1 参只收 Vector3（拷贝），其余必须三个数值。
- *  实测 1 个数值是 Parse Error（`No constructor of "Vector3" matches the signature "Vector3(float)"`），
- *  `Vector3(Vector2, float)` 同样没有。 */
+/** `Vector3(...)`：0 参给零向量，1 参收 Vector3（拷贝）与 Vector3i（逐分量升 float，实测 `tmp/f67 t07`），
+ *  其余必须三个数值。实测 1 个数值是 Parse Error
+ *  （`No constructor of "Vector3" matches the signature "Vector3(float)"`），`Vector3(Vector2, float)` 同样没有。 */
 export function vector3New(args: Variant[]): Variant {
   if (args.length === 0) return vector3(0, 0, 0);
   if (args.length === 1) {
     const o = asVec3(args[0] as Variant);
-    if (o === null) throw new UnsupportedError("vector3-arg", `Vector3() 单参只收 Vector3，收到 ${tagName((args[0] as Variant).t)}`);
-    return vector3(o.x, o.y, o.z);
+    if (o !== null) return vector3(o.x, o.y, o.z);
+    const a = args[0] as Variant;
+    const duck = a.t === Tag.OBJECT ? (a.v as { x?: number; y?: number; z?: number } | null) : null;
+    if (duck !== null && VEC3I_MARK in duck) return vector3(duck.x as number, duck.y as number, duck.z as number);
+    throw new UnsupportedError("vector3-arg", `Vector3() 单参只收 Vector3 / Vector3i，收到 ${tagName(a.t)}`);
   }
   if (args.length !== 3) {
     throw new UnsupportedError("vector3-arity", `Vector3() 需要 0、1（Vector3）或 3 个参数（收到 ${args.length} 个）`);

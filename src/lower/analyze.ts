@@ -177,6 +177,7 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
     case "Vector2":
     case "Vector3":
     case "Vector2i":
+    case "Vector3i":
     case "Color":
       return false;
     case "Array":
@@ -719,6 +720,7 @@ function scalarStaticName(name: string): string | null {
     case "Vector2":
     case "Vector3":
     case "Vector2i":
+    case "Vector3i":
     case "Color":
       return name;
     default:
@@ -755,7 +757,7 @@ const PACK_IS_AS_NAMES = new Set([
   "PackedColorArray",
 ]);
 /** 能静态判出来的操作数类型（S172 一条条量过的拼写；`null` 那格的文本没量，故意不列）。 */
-const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Color"]);
+const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Vector3i", "Color"]);
 
 /**
  * 一个函数体里**标注为 `StringName`** 的局部变量名（f57 `sn-var-is-string` 要的那份）。
@@ -866,9 +868,12 @@ function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
  * Godot 对不合槽的来源是**解析期**拒，而我们原先照直编、在运行期按字面量那套折算（S177 末记的已知缺口）。
  *
  * 能进槽的来源与 S176 的形参槽表**同一套**（数值 pack 收 int / float / bool、String pack 收 String 与
- * StringName、Color pack 收 Color / int / String、向量 pack 只收自己那个向量），但**不共用代码也不互推**：
- * `PackedVector2Array` 这一族只量了收 Vector2（Vector2i 没量 → 不报也不转，S176 那条「形参槽吃 Vector2i」
- * 不能搬过来）；元素位在不同方法里也不是同一个下标（`append` / `find` 是第 1 参、`insert` / `set` 是第 2 参）。
+ * StringName、Color pack 收 Color / int / String），但**不共用代码也不互推**：
+ * 向量 pack 这一族到 `tmp/f69` 才量齐 —— `PackedVector2Array` 收 **Vector2 与 Vector2i**（u07 实测
+ * `append(Vector2i(1, 2))` → `[(1.0, 2.0)]`），而 `Vector3` / `Vector3i` 进 Vector2 槽是解析期拒
+ * （v02 两句），`PackedVector3Array` 反过来拒 Vector2 / Vector2i（v02 的 Vector2 那格已实测）；
+ * `append(Vector3i)` 进 Vector3 槽那一格按 u05 / t12 的构造侧结论暂放通过，等 `tmp/f70` 补测再定。
+ * 元素位在不同方法里也不是同一个下标（`append` / `find` 是第 1 参、`insert` / `set` 是第 2 参）。
  *
  * 文本有两种形状，都按实测发：容器来源（Array / Dictionary）**只有一句** `Invalid argument …`，
  * 标量与值类型来源是**两句**（`Cannot pass a value of type "X" as "Y".` 在前）。
@@ -880,8 +885,8 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedFloat32Array: { slot: "float", ok: ["int", "float", "bool"] },
   PackedFloat64Array: { slot: "float", ok: ["int", "float", "bool"] },
   PackedStringArray: { slot: "String", ok: ["String", "StringName"] },
-  PackedVector2Array: { slot: "Vector2", ok: ["Vector2"] },
-  PackedVector3Array: { slot: "Vector3", ok: ["Vector3"] },
+  PackedVector2Array: { slot: "Vector2", ok: ["Vector2", "Vector2i"] },
+  PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
 /** 元素槽是第几个实参（1 起），只列量过的方法。 */
@@ -894,7 +899,15 @@ function packArgSource(e: Expr): string | null {
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
-  if (e.kind === "call" && e.callee.kind === "ident" && (e.callee.name === "Vector2" || e.callee.name === "Vector3" || e.callee.name === "Color")) {
+  if (
+    e.kind === "call" &&
+    e.callee.kind === "ident" &&
+    (e.callee.name === "Vector2" ||
+      e.callee.name === "Vector3" ||
+      e.callee.name === "Vector2i" ||
+      e.callee.name === "Vector3i" ||
+      e.callee.name === "Color")
+  ) {
     return e.callee.name;
   }
   return null;

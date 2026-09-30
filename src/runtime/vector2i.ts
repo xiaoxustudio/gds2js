@@ -71,6 +71,16 @@ export function vector2iNew(args: Variant[]): Variant {
   return vector2i(intArg(args[0], "Vector2i"), intArg(args[1], "Vector2i"));
 }
 
+/**
+ * 声明成 `Vector2i` 的槽（变量初值、后续赋值、字段）：`var v: Vector2i = Vector2(1.7, -2.9)`
+ * 实测给 `(1, -2)` 且 `typeof` 仍是 6（`tmp/f69 w01` / `w03`，局部与字段同式）—— 逐分量向零截断。
+ * 这条转换缺席时槽里存的就是 Vector2，于是打印与 `typeof` 一起错（我们旧行为是 `(1.7, -2.9)` / 5），
+ * 那一格与 Vector3/Vector3i 同族，记在 S181。`Vector3 → Vector2i` 实测是解析期拒，走 `vector2iNew` 的报缺。
+ */
+export function toVec2i(v: Variant): Variant {
+  return vector2iNew([v]);
+}
+
 /** 常量表：实测有 ONE/ZERO/LEFT/RIGHT/UP/DOWN/MAX/MIN，**没有 INF**（`Vector2i.INF` 是 Parse Error）。
  *  `UP` 是 (0, -1)，与 Vector2 同向（2D 的 y 轴朝下）。 */
 const VEC2I_CONST: Record<string, [number, number]> = {
