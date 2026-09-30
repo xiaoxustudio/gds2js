@@ -38,7 +38,21 @@ class Scope {
   }
 }
 
-type StaticType = "int" | "float" | "String" | "bool" | "null" | "Array" | "Dictionary" | null;
+type StaticType =
+  | "int"
+  | "float"
+  | "String"
+  | "bool"
+  | "null"
+  | "Array"
+  | "Dictionary"
+  /** 值类型（S181 的槽矩阵按这些名字说话；`staticType` 只折构造调用那一形） */
+  | "Vector2"
+  | "Vector2i"
+  | "Vector3"
+  | "Vector3i"
+  | "Color"
+  | null;
 
 function declNames(d: Decl): string[] {
   return [
@@ -176,11 +190,11 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
     case "StringName":
       return st === "String";
     case "Vector2":
-    case "Vector3":
     case "Vector2i":
+    case "Vector3":
     case "Vector3i":
     case "Color":
-      return false;
+      return valueSlotHolds(kind, st);
     case "Array":
       return st === "Array";
     case "Dictionary":
@@ -432,16 +446,77 @@ function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null
       if (st === "String") return true;
       if (st === "int" || st === "float" || st === "bool" || st === "null") return false;
       return null;
+    case "Vector2":
+    case "Vector2i":
+    case "Vector3":
+    case "Vector3i":
+    case "Color":
+      return valueSlotHolds(slot, st);
     default:
       return null;
   }
 }
 
+/**
+ * 值类型槽的矩阵（`tmp/f69` 的 w01/w02/w03 三形 × 13 对，加 `tmp/f67 t08` 与 `tmp/f69 u01–u05`）。
+ * 只有这四格会**转换**，同型当然也进，其余组合 Godot 在解析期就拒（两句文本见 S181 ⑦）：
+ *   Vector2i ← Vector2（逐分量向零截断）、Vector3i ← Vector3（同）
+ *   Vector2  ← Vector2i、Vector3  ← Vector3i（升成 float）
+ * 跨维度一律不通（`Vector3 → Vector2i`、`Vector2 → Vector3` 都实测拒），标量与 Color 也不通。
+ * 容器元素槽（`Array[Vector2i]` 那一族，u01–u05）与变量 / 字段槽（w01–w03）量下来是**同一张表**，
+ * 所以两侧共用这一个判据 —— 各写一份正是 S154 警告的分叉温床。
+ * `Color` 槽吃 String / int 那两格只在**形参**那一族量过（S176），变量槽这一形没量 → 不在表里，
+ * 落到「拒」的那侧（「Godot 能跑、我们拒」是可接受的形状，反过来才是事故）。
+ */
+function valueSlotHolds(slot: string, st: NonNullable<StaticType>): boolean {
+  const WIDEN: Record<string, string[]> = {
+    Vector2: ["Vector2", "Vector2i"],
+    Vector2i: ["Vector2i", "Vector2"],
+    Vector3: ["Vector3", "Vector3i"],
+    Vector3i: ["Vector3i", "Vector3"],
+    Color: ["Color"],
+  };
+  const ok = WIDEN[slot];
+  return ok !== undefined && ok.includes(st);
+}
+
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
+  /** 现在也管**值类型**槽（S181 ⑦：`var c: Color = Vector3(1, 2, 3)` 这类 Godot 在解析期就两句拒） */
   const scalarType = (t: TypeRef | null): string | null => {
     if (t === null || t.kind !== "named") return null;
     const base = t.name.replace(/\[.*\]$/, "");
-    return base === "int" || base === "float" || base === "bool" || base === "String" ? base : null;
+    if (base === "int" || base === "float" || base === "bool" || base === "String") return base;
+    return STATIC_VALUE_TYPES.has(base) ? base : null;
+  };
+
+  /** 表达式静态判得出什么类型：ident 查槽表，其余走 `staticType`（值类型构造调用那一形在里面） */
+  const staticOf = (e: Expr, d: Map<string, string>): NonNullable<StaticType> | null => {
+    if (e.kind === "ident") {
+      const t = d.get(e.name);
+      return t === undefined ? null : (t as NonNullable<StaticType>);
+    }
+    return staticType(e);
+  };
+
+  /**
+   * 「声明带初值」那一格是**两句**，第二句把变量名带进去（实测 `tmp/f69` 的 w01 局部 / w03 字段
+   * 与 `tmp/f73/slot1`）：`Cannot assign a value of type "Vector3" as "Color".` +
+   * `Cannot assign a value of type Vector3 to variable "fd" with specified type Color.`
+   * 局部变量与模块 / 成员字段同一形、两句同序；判不出来（变量来源不在槽表里、函数返回）就一句都不发。
+   */
+  const declRefuse = (name: string, slot: string, init: Expr, slots: Map<string, string>): void => {
+    const st = staticOf(init, slots);
+    if (st === null || varSlotHolds(slot, st) !== false) return;
+    diags.push({
+      code: "typed-var-value",
+      message: `Cannot assign a value of type "${st}" as "${slot}".`,
+      loc: init.loc,
+    });
+    diags.push({
+      code: "typed-var-assign",
+      message: `Cannot assign a value of type ${st} to variable "${name}" with specified type ${slot}.`,
+      loc: init.loc,
+    });
   };
 
   const checkBody = (body: Stmt[], outer: Map<string, string>): void => {
@@ -451,6 +526,7 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
         case "var": {
           const d = scalarType(s.type);
           if (d !== null) decls.set(s.name, d);
+          if (d !== null && s.init) declRefuse(s.name, d, s.init, decls);
           if (s.init) expr(s.init);
           return;
         }
@@ -461,7 +537,7 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
             if (slot !== undefined && st !== null) {
               const holds = varSlotHolds(slot, st);
               if (holds === false) {
-                if (s.value.kind === "lit") {
+                if (s.value.kind === "lit" || (staticType(s.value) !== null && STATIC_VALUE_TYPES.has(st))) {
                   diags.push({
                     code: "typed-var-value",
                     message: `Cannot assign a value of type "${st}" as "${slot}".`,
@@ -510,13 +586,6 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
           return;
       }
     };
-    const staticOf = (e: Expr, d: Map<string, string>): NonNullable<StaticType> | null => {
-      if (e.kind === "ident") {
-        const t = d.get(e.name);
-        return t === undefined ? null : (t as NonNullable<StaticType>);
-      }
-      return staticType(e);
-    };
     const expr = (e: Expr): void => {
       switch (e.kind) {
         case "lambda":
@@ -564,6 +633,11 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
     for (const v of vars) {
       const d = scalarType(v.type);
       if (d !== null) outer.set(v.name, d);
+    }
+    // 槽表先建完再判初值 —— 字段的初值可以引用**后面**才声明的另一个字段（f69 w03 那一族）
+    for (const v of vars) {
+      const d = scalarType(v.type);
+      if (d !== null && v.init) declRefuse(v.name, d, v.init, outer);
     }
     for (const f of funcs) checkBody(f.body, outer);
   };
@@ -1607,6 +1681,13 @@ function staticType(e: Expr): StaticType {
       if (e.op === "+" && (l === "Array" || r === "Array")) return "Array";
       if (l === "int" && r === "int") return "int";
       if (isNum(l) && isNum(r)) return "float";
+      return null;
+    }
+    case "call": {
+      // 值类型的构造调用折成类型名 —— S181 的槽矩阵与 `Array[Vector2]` 那种元素槽都要认得出
+      // `Vector3(1, 2, 3)` 这一形。只认 STATIC_VALUE_TYPES 里量过的五个名字，别的调用（普通函数、
+      // `Color.named(...)`、`PackedX(...)`）一律 null：判不出来就不报，误拦合法工程比漏报贵。
+      if (e.callee.kind === "ident" && STATIC_VALUE_TYPES.has(e.callee.name)) return e.callee.name as StaticType;
       return null;
     }
     default:

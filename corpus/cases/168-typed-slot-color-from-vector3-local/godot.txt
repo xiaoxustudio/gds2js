@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "Vector3" as "Color".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type Vector3 to variable "c" with specified type Color.
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
