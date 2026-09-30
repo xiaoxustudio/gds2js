@@ -83,6 +83,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
   checkPackIsAs(m, diags);
+  checkPackArgSlots(m, diags);
   checkTypedVarAssign(m, diags);
   checkInitContracts(m, new Set(globals), diags);
 
@@ -860,6 +861,123 @@ function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
  * 一律不报（sema 的 0 误报是硬的）；`X.new(...)` 只在链上解得出一个脚本 `_init` 时判 arity。
  * lambda 里不判 —— 那里的 `return` / `super()` 语义没测过，闯进去就是猜。
  */
+/**
+ * pack 的**方法实参槽位**（f66 的 249 格：九种 pack × `append` / `insert` / `set` / `find` × 12 种来源）。
+ * Godot 对不合槽的来源是**解析期**拒，而我们原先照直编、在运行期按字面量那套折算（S177 末记的已知缺口）。
+ *
+ * 能进槽的来源与 S176 的形参槽表**同一套**（数值 pack 收 int / float / bool、String pack 收 String 与
+ * StringName、Color pack 收 Color / int / String、向量 pack 只收自己那个向量），但**不共用代码也不互推**：
+ * `PackedVector2Array` 这一族只量了收 Vector2（Vector2i 没量 → 不报也不转，S176 那条「形参槽吃 Vector2i」
+ * 不能搬过来）；元素位在不同方法里也不是同一个下标（`append` / `find` 是第 1 参、`insert` / `set` 是第 2 参）。
+ *
+ * 文本有两种形状，都按实测发：容器来源（Array / Dictionary）**只有一句** `Invalid argument …`，
+ * 标量与值类型来源是**两句**（`Cannot pass a value of type "X" as "Y".` 在前）。
+ */
+const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = {
+  PackedByteArray: { slot: "int", ok: ["int", "float", "bool"] },
+  PackedInt32Array: { slot: "int", ok: ["int", "float", "bool"] },
+  PackedInt64Array: { slot: "int", ok: ["int", "float", "bool"] },
+  PackedFloat32Array: { slot: "float", ok: ["int", "float", "bool"] },
+  PackedFloat64Array: { slot: "float", ok: ["int", "float", "bool"] },
+  PackedStringArray: { slot: "String", ok: ["String", "StringName"] },
+  PackedVector2Array: { slot: "Vector2", ok: ["Vector2"] },
+  PackedVector3Array: { slot: "Vector3", ok: ["Vector3"] },
+  PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
+};
+/** 元素槽是第几个实参（1 起），只列量过的方法。 */
+const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, find: 1, insert: 2, set: 2 };
+
+/** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
+function packArgSource(e: Expr): string | null {
+  if (e.kind === "lit") {
+    return ({ int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName", null: "null" } as Record<string, string>)[e.lit] ?? null;
+  }
+  if (e.kind === "array") return "Array";
+  if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "call" && e.callee.kind === "ident" && (e.callee.name === "Vector2" || e.callee.name === "Vector3" || e.callee.name === "Color")) {
+    return e.callee.name;
+  }
+  return null;
+}
+
+function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) bodies.push(f.body);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+
+  for (const body of bodies) {
+    const nodes: Record<string, unknown>[] = [];
+    const scan = (n: unknown): void => {
+      if (Array.isArray(n)) {
+        for (const x of n) scan(x);
+        return;
+      }
+      if (n === null || typeof n !== "object") return;
+      const obj = n as Record<string, unknown>;
+      if (obj.kind === "lambda") return;
+      nodes.push(obj);
+      for (const key of Object.keys(obj)) {
+        if (key !== "loc") scan(obj[key]);
+      }
+    };
+    scan(body);
+
+    // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
+    const packs = new Map<string, string>();
+    const reassigned = new Set<string>();
+    for (const n of nodes) {
+      if (n.kind === "assign") {
+        const target = n.target as Record<string, unknown> | undefined;
+        if (target !== undefined && target.kind === "ident" && typeof target.name === "string") reassigned.add(target.name);
+      }
+    }
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named" && type.name in PACK_ARG_SLOTS) {
+        packs.set(n.name, type.name);
+        continue;
+      }
+      const init = n.init as Expr | null;
+      if (init !== null && init.kind === "call" && init.callee.kind === "ident" && init.callee.name in PACK_ARG_SLOTS) {
+        packs.set(n.name, init.callee.name);
+      }
+    }
+
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "attribute") continue;
+      const obj = callee.obj as Record<string, unknown> | undefined;
+      if (obj === undefined || obj.kind !== "ident" || typeof obj.name !== "string") continue;
+      const pack = packs.get(obj.name);
+      if (pack === undefined) continue;
+      const method = callee.name;
+      if (typeof method !== "string") continue;
+      const argAt = PACK_ELEMENT_ARG[method];
+      if (argAt === undefined) continue;
+      const args = (n.args as Expr[]) ?? [];
+      if (args.length !== argAt) continue;
+      const src = packArgSource(args[argAt - 1] as Expr);
+      if (src === null) continue;
+      const { slot, ok } = PACK_ARG_SLOTS[pack] as { slot: string; ok: readonly string[] };
+      if (ok.includes(src)) continue;
+      const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      if (src !== "Array" && src !== "Dictionary") {
+        diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${src}" as "${slot}".`, loc });
+      }
+      diags.push({
+        code: "pack-arg-slot",
+        message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${src}".`,
+        loc,
+      });
+    }
+  }
+}
+
 function checkInitContracts(m: Module, globals: Set<string>, diags: Diagnostic[]): void {
   const inner = new Map<string, ClassDecl>();
   const index = (c: ClassDecl): void => {
