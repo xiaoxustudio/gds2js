@@ -1,0 +1,8 @@
+n1 Bare._init
+n1 Bare._init
+n4 empty=24 bare=true
+n2 NeedsArg._init 9
+n5 9 3
+n2 NeedsArg._init 4
+n3 Right.after-super 4
+n6 4

@@ -221,6 +221,9 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "class_definition":
         decl.innerClasses.push(lowerClass(c));
         break;
+      // `class X extends Y: pass` 实测合法（tmp/f53 t11），就是「没有自有成员」
+      case "pass_statement":
+        break;
       case "annotation":
         break;
       default:

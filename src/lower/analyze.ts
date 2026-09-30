@@ -1,5 +1,5 @@
 import { staticMemberFn } from "./ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
   code: string;
@@ -84,6 +84,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkVoidMethodValues(m, diags);
   checkPackIsAs(m, diags);
   checkTypedVarAssign(m, diags);
+  checkInitContracts(m, new Set(globals), diags);
 
   return diags;
 }
@@ -813,6 +814,137 @@ function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
         diags.push({ code: "pack-as-type", message: `Cannot cast a value of type "${from}" as "${target}".`, loc: node.loc });
         diags.push({ code: "pack-as-type", message: `Invalid cast. Cannot convert from "${from}" to "${target}".`, loc: node.loc });
       }
+    }
+  }
+}
+
+/**
+ * `_init` 与 `new()` 的解析期拒（S174 ④，探针 `tmp/f53/t05` / `t07` / `t09` / `t12` / `t13` / `t16`–`t19`）。
+ * 四句文本逐字照 Godot：
+ * - `Constructor cannot return a value.` —— **不带值的 `return` 是合法的**（t15 实测照跑）
+ * - `Cannot call the parent class' virtual function "_init()" because it hasn't been defined.`
+ *   （父类是脚本类却没定义 `_init`（t09）、是引擎类型（t20 的 `extends RefCounted`）、**或压根没写基类**
+ *   （t21，隐式 RefCounted）三格都是这一句）
+ * - `Too many / few arguments for "_init()" call. …`（`super(...)` 那一侧）
+ * - `Too many / few arguments for "new()" call. …`（`X.new(...)` 那一侧，**函数名写的是 `new()`**，两句不同）
+ * 「at most」数全部形参、「at least」数没有默认值的那些（t16 的 `func _init(p_a: int = 7)` 收 2 个实参时报
+ * `Expected at most 1`，而 0 个实参合法）。
+ * **只判同模块解得出基类链的那几形**：基类名在 `globals`（工程里的 class_name）里时分析层看不到它的签名，
+ * 一律不报（sema 的 0 误报是硬的）；`X.new(...)` 只在链上解得出一个脚本 `_init` 时判 arity。
+ * lambda 里不判 —— 那里的 `return` / `super()` 语义没测过，闯进去就是猜。
+ */
+function checkInitContracts(m: Module, globals: Set<string>, diags: Diagnostic[]): void {
+  const inner = new Map<string, ClassDecl>();
+  const index = (c: ClassDecl): void => {
+    inner.set(c.name, c);
+    for (const x of c.innerClasses) index(x);
+  };
+  for (const c of m.innerClasses) index(c);
+
+  type Chain = { state: "unknown" } | { state: "none" } | { state: "init"; params: Param[] };
+  /** 从某个基类名往上找 `_init`；名字解不出（跨文件的类）就给 unknown。 */
+  const chainInit = (startName: string | null): Chain => {
+    const seen = new Set<string>();
+    let name = startName;
+    while (name !== null) {
+      if (seen.has(name)) return { state: "unknown" };
+      seen.add(name);
+      const c = inner.get(name);
+      // 不是本模块的内部类：在工程的类名表里 → 签名看不见；否则是引擎类型（含隐式 RefCounted）→ 链到头
+      if (!c) return globals.has(name) ? { state: "unknown" } : { state: "none" };
+      const f = c.funcs.find((x) => x.name === "_init" && !x.isStatic);
+      if (f) return { state: "init", params: f.params };
+      name = c.extends;
+    }
+    return { state: "none" };
+  };
+
+  const arityText = (who: "_init" | "new", params: Param[], got: number): string | null => {
+    const max = params.length;
+    const min = params.filter((p) => p.default === null).length;
+    if (got > max) return `Too many arguments for "${who}()" call. Expected at most ${max} but received ${got}.`;
+    if (got < min) return `Too few arguments for "${who}()" call. Expected at least ${min} but received ${got}.`;
+    return null;
+  };
+
+  const scan = (node: unknown, visit: (e: Record<string, unknown>) => void): void => {
+    if (Array.isArray(node)) {
+      for (const x of node) scan(x, visit);
+      return;
+    }
+    if (node === null || typeof node !== "object") return;
+    const obj = node as Record<string, unknown>;
+    if (obj.kind === "lambda") return;
+    visit(obj);
+    for (const key of Object.keys(obj)) {
+      if (key === "loc") continue;
+      scan(obj[key], visit);
+    }
+  };
+
+  const asCalls = (body: Stmt[]): Record<string, unknown>[] => {
+    const out: Record<string, unknown>[] = [];
+    scan(body, (e) => {
+      if (e.kind === "call") out.push(e);
+    });
+    return out;
+  };
+
+  /** 调用形式 `X.new(...)` / `super(...)` 的实参数与被调的名字。 */
+  const callShape = (e: Record<string, unknown>): { kind: "super" | "new"; target: string; args: number } | null => {
+    const callee = e.callee as Record<string, unknown> | undefined;
+    if (!callee) return null;
+    if (callee.kind === "ident" && callee.name === "super") return { kind: "super", target: "super", args: ((e.args as Expr[]) ?? []).length };
+    if (callee.kind === "attribute" && callee.name === "new" && (callee.obj as Record<string, unknown>)?.kind === "ident") {
+      return { kind: "new", target: String((callee.obj as Record<string, unknown>).name), args: ((e.args as Expr[]) ?? []).length };
+    }
+    return null;
+  };
+
+  const funcs: Array<{ f: FuncDecl; owner: ClassDecl | null }> = m.funcs.map((f) => ({ f, owner: null }));
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) funcs.push({ f, owner: c });
+    for (const x of c.innerClasses) collect(x);
+  };
+  for (const c of m.innerClasses) collect(c);
+
+  for (const { f, owner } of funcs) {
+    const isInit = f.name === "_init" && !f.isStatic;
+    if (isInit) {
+      const returns: Record<string, unknown>[] = [];
+      scan(f.body, (e) => {
+        if (e.kind === "return" && e.value !== null && e.value !== undefined) returns.push(e);
+      });
+      for (const r of returns) {
+        diags.push({ code: "init-returns-value", message: "Constructor cannot return a value.", loc: r.loc as Loc });
+      }
+    }
+    for (const e of asCalls(f.body)) {
+      const shape = callShape(e);
+      if (!shape) continue;
+      if (shape.kind === "super") {
+        // 只有 `_init` 里的 `super(...)` 才是构造链；别的方法里的 `super()` 实测调父类同名方法（S174 ⑥）
+        if (!isInit || owner === null) continue;
+        const up = chainInit(owner.extends);
+        if (up.state === "unknown") continue;
+        if (up.state === "none") {
+          diags.push({
+            code: "super-init-missing",
+            message: `Cannot call the parent class' virtual function "_init()" because it hasn't been defined.`,
+            loc: e.loc as Loc,
+          });
+          continue;
+        }
+        const text = arityText("_init", up.params, shape.args);
+        if (text) diags.push({ code: "super-init-arity", message: text, loc: e.loc as Loc });
+        continue;
+      }
+      // `X.new(...)`：X 得是本模块解得开的类，且链上有一个脚本 `_init` 才对得上 arity
+      if (!inner.has(shape.target)) continue;
+      const up = chainInit(shape.target);
+      if (up.state !== "init") continue;
+      const text = arityText("new", up.params, shape.args);
+      if (text) diags.push({ code: "new-arity", message: text, loc: e.loc as Loc });
     }
   }
 }

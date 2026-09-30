@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Constructor cannot return a value.
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
