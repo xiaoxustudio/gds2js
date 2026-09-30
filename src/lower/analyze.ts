@@ -376,11 +376,12 @@ const VOID_DICT_METHODS = new Set(["clear"]);
  * - `append` 返回的是 **bool**（实测印出 `false`，元素照样追加）—— 别照 Array 那条当 void 拦；
  * - `insert` / `resize` 返回 **Error 状态码**（成功 0，负数与越界 31 且原样不动），与 Array 同形；
  * - `append_array` / `remove_at` / `fill` 取值是解析期错（void 那句）；
+ * - `set(i, v)` 同族（f57 `bytes-set`：`Cannot get return value of call to "set()" because it returns "void".`）；
  * - 零参的 `sort` / `reverse` 也在 void 那一族（`var s = b.sort()` 实测就是 void 那句，用例 137）。
  *   同一件事**塞进 `print(...)` 的实参位**时 Godot 换了一句（`Function "sort()" not found in base self.`，
  *   见 S168 的探针 `tmp/void-probe/sort.gd`）—— 两句都是拒，我们统一发 void 那句，位置别猜。
  */
-const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill"]);
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set"]);
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
 /**
  * 这九种形状的 void 表**逐个量过、口径一致**（byte：`tmp/void-probe`，int32 / int64：
@@ -755,6 +756,28 @@ const PACK_IS_AS_NAMES = new Set([
 /** 能静态判出来的操作数类型（S172 一条条量过的拼写；`null` 那格的文本没量，故意不列）。 */
 const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Color"]);
 
+/**
+ * 一个函数体里**标注为 `StringName`** 的局部变量名（f57 `sn-var-is-string` 要的那份）。
+ * 只认 `var` 的标注，形参没量过；Godot 的标注是不松口的（同一变量后来不可能装别的类型），
+ * 所以「这个名字是 StringName」在整个函数体里都成立，不必管作用域嵌套。
+ */
+function stringNameVars(node: unknown, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const x of node) stringNameVars(x, out);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+  const obj = node as Record<string, unknown>;
+  if (obj.kind === "var") {
+    const type = obj.type as TypeRef | null;
+    if (type !== null && type.kind === "named" && type.name === "StringName" && typeof obj.name === "string") out.add(obj.name);
+  }
+  for (const key of Object.keys(obj)) {
+    if (key === "loc") continue;
+    stringNameVars(obj[key], out);
+  }
+}
+
 function staticTypeName(e: Expr): string | null {
   if (e.kind === "lit") {
     return (
@@ -794,15 +817,19 @@ function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
   for (const body of bodies) {
+    const snVars = new Set<string>();
+    stringNameVars(body, snVars);
     const found: Extract<Expr, { kind: "is" | "as" }>[] = [];
     walkExprKinds(body, found);
     for (const node of found) {
       if (node.type.kind !== "named") continue;
       const target = node.type.name.replace(/\[.*\]$/, "");
       const packTarget = PACK_IS_AS_NAMES.has(target);
-      const snAgainstString = target === "String" && node.kind === "is" && staticTypeName(node.operand) === "StringName";
+      // `var s: StringName` 之后 `s is String` 与字面量那一格同句（f57 sn-var-is-string，实测成立）
+      const snVarOperand = node.operand.kind === "ident" && snVars.has(node.operand.name);
+      const snAgainstString = target === "String" && node.kind === "is" && (snVarOperand || staticTypeName(node.operand) === "StringName");
       if (!packTarget && !snAgainstString) continue;
-      const from = staticTypeName(node.operand);
+      const from = snVarOperand && !packTarget ? "StringName" : staticTypeName(node.operand);
       if (from === null) continue;
       if (node.kind === "is") {
         diags.push({

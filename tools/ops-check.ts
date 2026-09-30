@@ -2149,7 +2149,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step67", "remove_at 越界原样不动（e7）", `${show(rmOob)}`, "[1, 2, 3]");
   const gt = mut([1, 2, 3]);
   eq("step67", "get 越界给 **0** 而不是报错（g4，与 `b[5]` 两套口径）", `${show(method(gt, "get", [I(5)]))}`, "0");
-  shouldThrow("step67", "get 的负下标没量过 → 响（下标读实测是从尾部数）", () => method(gt, "get", [I(-1)]));
+  eq("step80", "get 的负下标算**越界**、给默认元素值（f57：Godot 另打一句引擎 stderr，stdout 那半是 0；与 `b[-1]` 从尾部数是两套口径）",
+    `${show(method(gt, "get", [I(-1)]))}`, "0");
   const nw = mut([1, 2, 3]);
   writeIdx(nw, I(-1), I(9));
   eq("step67", "写的负下标与读一样从尾部数（d6）", `${show(nw)}`, "[1, 2, 9]");
@@ -2208,8 +2209,14 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "Invalid assignment of index '5' (on base: 'PackedInt32Array') with value of type 'int'.");
   shouldThrow("step68", "跨 pack 拼接没量过 → 响", () => ops.add(i32g, V.object(GBytes.of([1], "byte"))));
   shouldThrow("step68", "Array(int pack) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(i32g));
-  shouldThrow("step68", "String 元素只量到 \"x\" → 0 这一格，整族不套", () => packCtor("int32", [V.array(GArray.of([S("12abc")]))]));
-  shouldThrow("step68", "int64 收 float 溢出的形状没量过 → 响", () => packCtor("int64", [V.array(GArray.of([F(1e308)]))]));
+  eq("step80", "String 元素走**前导数解析**（与 to_int() 同一条式子，f57 / f58：\"12abc\" → 12、\"-7xyz\" → -7、\"x\" → 0）",
+    `${show(packCtor("int32", [V.array(GArray.of([S("12abc")]))]))} ${show(packCtor("int32", [V.array(GArray.of([S("-7xyz")]))]))} ${show(packCtor("byte", [V.array(GArray.of([S("x")]))]))}`,
+    "[12] [-7] [0]");
+  eq("step80", "int64 收 float 的正向溢出**饱和到 INT64_MIN**（f57：1e30 → -9223372036854775808；nan/inf 仍响）",
+    `${show(packCtor("int64", [V.array(GArray.of([F(1e308), F(1e30), F(2.7), F(-2.7)]))]))}`,
+    "[-9223372036854775808, -9223372036854775808, 2, -2]");
+  shouldThrow("step80", "int64 收 nan / inf 这一格没量过 → 仍响（饱和只量了有限大数）", () =>
+    packCtor("int64", [V.array(GArray.of([F(Number.NaN)]))]));
   shouldThrow("step68", "跨 pack 的拷贝构造没量过 → 响", () => packCtor("int32", [V.object(GBytes.of([1], "byte"))]));
   const i64s = V.object(GBytes.of([3n, 1n, 2n], "int64"));
   method(i64s, "sort", []);
@@ -2248,8 +2255,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step69", "写的负下标也从尾部数", `${show(fw)}`, "[1.5, 8.25]");
   shouldThrow("step69", "跨形状拼接（float32 + byte）没量过 → 响", () =>
     ops.add(V.object(GBytes.of([1.5], "float32")), V.object(GBytes.of([1], "byte"))));
-  shouldThrow("step69", "String 元素在 float pack 上只量到 \"x\" → [0.0] 这一格 → 整族响", () =>
-    packCtor("float32", [V.array(GArray.of([S("x")]))]));
+  eq("step80", "float pack 的 String 元素同一条前导数解析（\"x\" → 0.0、\"1.5abc\" → 1.5，float32 再过储存）",
+    `${show(packCtor("float32", [V.array(GArray.of([S("x"), S("1.5")]))]))} ${show(packCtor("float64", [V.array(GArray.of([S("1.5abc")]))]))}`,
+    "[0.0, 1.5] [1.5]");
   shouldThrow("step69", "hex_encode 不在 float pack 上（只有 byte 那支量过）", () =>
     method(V.object(GBytes.of([1.5], "float32")), "hex_encode", []));
 }
@@ -2344,10 +2352,84 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step73", "is / as 三种也各认各形状（c is PackedColorArray 真、is PackedVector3Array 假）",
     `${isType(V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color")), "PackedColorArray").v} ${isType(V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color")), "PackedVector3Array").v}`,
     "true false");
-  shouldThrow("step73", "颜色 pack 的 sort 比较依据没量到 → 响（2 个元素的样本分不出来）", () =>
-    method(V.object(GBytes.of([new GColor(0, 1, 0, 1), new GColor(1, 0, 0, 1)], "color")), "sort", []));
-  shouldThrow("step73", "向量 pack 的 has / count / find 元素比较口径没量过 → 响（按引用比一定错）", () =>
-    method(p2s, "has", [v2(1, 1)]));
+  const cs = V.object(GBytes.of([new GColor(0.9, 0.1, 0.1, 1), new GColor(0.1, 0.9, 0.1, 0.5), new GColor(0.5, 0.5, 0.5, 1), new GColor(0.1, 0.1, 0.9, 1), new GColor(0.5, 0.1, 0.9, 0.25)], "color"));
+  method(cs, "sort", []);
+  eq("step80", "Color pack 的 sort 是 r→g→b→a 字典序（f56 p01：反着排再排一次得同一序列）", `${show(cs)}`,
+    "[(0.1, 0.1, 0.9, 1.0), (0.1, 0.9, 0.1, 0.5), (0.5, 0.1, 0.9, 0.25), (0.5, 0.5, 0.5, 1.0), (0.9, 0.1, 0.1, 1.0)]");
+  eq("step80", "向量 pack 的 has / count / find 按**分量内容**比（f57；JS 的 includes/indexOf 对这些载荷是比引用，不改就是静默错）",
+    `${show(method(p2s, "has", [v2(1, 1)]))} ${show(method(p2s, "find", [v2(3, 3)]))} ${show(method(p2s, "count", [v2(2, 2)]))} ${show(method(p2s, "find", [v2(9, 9)]))}`,
+    "true 2 1 -1");
+}
+
+{
+  // step 80 的明账：探针 tmp/f57（方法面）、tmp/f58（set 与 String 元素）、tmp/f59（set 的九边）。
+  // 越界与负下标那几格 Godot 会往 stderr 打一句引擎 ERROR，那是「不进语料」的形状，所以钉在这里。
+  const perr = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  const bset = V.object(GBytes.of([1, 2, 3], "byte"));
+  method(bset, "set", [I(0), I(300)]);
+  eq("step80", "set() 的元素走与字面量同一套折算：set(0, 300) → [44, 2, 3]（f58）", `${show(bset)}`, "[44, 2, 3]");
+  method(bset, "set", [I(-1), I(9)]);
+  method(bset, "set", [I(5), I(9)]);
+  eq("step80", "set() 的负下标与越界**静默不动**（f58：既不改内容也不改长度，与 `p[i] = v` 那两句报错两套口径）",
+    `${show(bset)} ${show(method(bset, "size", []))}`, "[44, 2, 3] 3");
+  const i32set = V.object(GBytes.of([1, 2], "int32"));
+  method(i32set, "set", [I(1), I(70000)]);
+  method(i32set, "set", [I(-1), I(9)]);
+  eq("step80", "int32 的 set 不回绕（70000 原样），负下标同样不动（f58 / f59）", `${show(i32set)}`, "[1, 70000]");
+  const i64set = V.object(GBytes.of([1n, 2n], "int64"));
+  method(i64set, "set", [I(1), I(-3)]);
+  eq("step80", "int64 的 set（f59：[1, -3]）", `${show(i64set)}`, "[1, -3]");
+  const f32set = V.object(GBytes.of([1.5, 2.5], "float32"));
+  method(f32set, "set", [I(0), I(3)]);
+  method(f32set, "set", [I(1), F(0.1)]);
+  eq("step80", "float32 的 set：int 实参升格、0.1 落进 float32 储存（f59）", `${show(f32set)}`,
+    "[3.0, 0.10000000149012]");
+  const f64set = V.object(GBytes.of([1.5, 2.5], "float64"));
+  method(f64set, "set", [I(0), I(7)]);
+  eq("step80", "float64 的 set 收 int 给 7.0（f59）", `${show(f64set)}`, "[7.0, 2.5]");
+  const sset = packCtor("string", [V.array(GArray.of([S("a"), S("b")]))]);
+  method(sset, "set", [I(1), S("z")]);
+  method(sset, "set", [I(5), S("y")]);
+  eq("step80", "String pack 的 set：改一格、越界那句只多一句引擎 stderr（f59 t04）",
+    `${show(sset)} ${show(method(sset, "size", []))}`, `["a", "z"] 2`);
+  const v2set = V.object(GBytes.of([new GVector2(1, 2)], "vector2"));
+  method(v2set, "set", [I(0), V.object(new GVector2(9, 9))]);
+  method(v2set, "set", [I(3), V.object(new GVector2(1, 1))]);
+  eq("step80", "Vector2 pack 的 set 写进去的是**拷贝**、越界不动（f59 t05）", `${show(v2set)}`, "[(9.0, 9.0)]");
+  const v3set = V.object(GBytes.of([new GVector3(1, 2, 3)], "vector3"));
+  method(v3set, "set", [I(0), V.object(new GVector3(9, 9, 9))]);
+  eq("step80", "Vector3 pack 的 set（f59 t06）", `${show(v3set)}`, "[(9.0, 9.0, 9.0)]");
+  const cv = V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color"));
+  method(cv, "set", [I(0), V.object(new GColor(0, 1, 0, 0.5))]);
+  eq("step80", "Color pack 的 set（f59 t07）", `${show(cv)}`, "[(0.0, 1.0, 0.0, 0.5)]");
+  const gb = V.object(GBytes.of([1, 2, 3], "byte"));
+  const sget = packCtor("string", [V.array(GArray.of([S("a")]))]);
+  eq("step80", "get 的负下标算越界、给默认元素值：byte → 0、String → 空串（f56 p03，Godot 另打引擎 stderr，那条不进语料）",
+    `${show(method(gb, "get", [I(-1)]))}|${show(method(sget, "get", [I(-1)]))}|${show(method(sget, "get", [I(0)]))}`,
+    "0||a");
+  const colhc = V.object(GBytes.of([new GColor(0.1, 0.2, 0.3, 1), new GColor(0.1, 0.2, 0.3, 0.5)], "color"));
+  eq("step80", "Color 的 has / find 按四个分量比，0.1 与 0.10000001 **不是**同一格（f57：float32 储存也不把它们并掉）",
+    `${show(method(colhc, "has", [V.object(new GColor(0.1, 0.2, 0.3, 1))]))} ${show(method(colhc, "find", [V.object(new GColor(0.10000001, 0.2, 0.3, 1))]))}`,
+    "true -1");
+  const v2hc = packCtor("vector2", [V.array(GArray.of([V.object(new GVector2(1.0000001, 2)), V.object(new GVector2(1, 2))]))]);
+  eq("step80", "Vector2 pack 的 has 按分量比（引用比会是 false —— 那一格就是静默错）",
+    `${show(method(v2hc, "has", [V.object(new GVector2(1, 2))]))} ${show(method(v2hc, "count", [V.object(new GVector2(1, 2))]))}`,
+    "true 1");
+  eq("step80", "byte 那支四个名字在 4.6.3 不存在（f57），型名照实测文本",
+    [perr(() => method(gb, "to_hex_string", [])), perr(() => method(gb, "search_sorted", [])), perr(() => method(gb, "to_base64", [])), perr(() => method(gb, "decode_string", []))].join("|"),
+    "Invalid call. Nonexistent function 'to_hex_string' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'search_sorted' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_base64' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'decode_string' in base 'PackedByteArray'.");
+  eq("step80", "index_of 在 PackedStringArray 上不存在（f57 s-index-of）",
+    perr(() => method(packCtor("string", [V.array(GArray.of([S("a")]))]), "index_of", [S("a")])),
+    "Invalid call. Nonexistent function 'index_of' in base 'PackedStringArray'.");
+  shouldThrow("step80", "这四个名字只在 byte / String 那两支量到「不存在」，别的形状仍走响亮拒（不拿邻居的结论凑）", () =>
+    method(V.object(GBytes.of([1], "int32")), "to_hex_string", []));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

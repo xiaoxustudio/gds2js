@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type Variant } from "./tags";
+import { INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
 import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
@@ -107,8 +108,10 @@ function foldInt32(n: number | bigint): number {
 }
 
 /**
- * 元素折算。只收实测过的来源：int / float（截断）/ bool / String（走 `to_int` 那一族，实测 `"x"` → 0）。
- * float→int32 的**饱和方向**只量了正的一侧（1e308 → INT32_MIN），负的一侧没量 → 响亮拒。
+ * 元素折算。实测过的来源：int / float（截断或饱和）/ bool / String（**前导数解析**，与 `to_int()` /
+ * `to_float()` 同一条式子）/ 与形状对应的值类型。没量过的组合一律响亮拒，不拿相邻形状的结论凑。
+ * float→int32 的**饱和方向**只量了正的一侧（1e30 与 2147483648.0 → INT32_MIN），负的一侧没量 → 响亮拒；
+ * float→int64 正的一侧量到了 INT64_MIN（1e30），nan / ±inf 那一格仍响。
  */
 export function toElem(kind: PackKind, v: Variant): PackElem {
   if (kind === "vector2" || kind === "vector3" || kind === "color") {
@@ -132,10 +135,13 @@ export function toElem(kind: PackKind, v: Variant): PackElem {
     return stringifier(v);
   }
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) {
-    throw new UnsupportedError(
-      "packed-element-string",
-      `往 ${PACK_TYPE_NAME[kind]} 塞 String 只量到 "x" → 0 这一格（其余形状的换算没实测过）`,
-    );
+    // S177 ④：数值 pack 收 String 是**前导数解析**，与 `to_int()` / `to_float()` 同一条式子（f57 / f58 实测：
+    // `PackedByteArray(["x"])` → `[0]`、`(["12abc"])` → `[12]`、`PackedInt32Array(["-7xyz"])` → `[-7]`、
+    // `PackedFloat64Array(["1.5abc"])` → `[1.5]`、`PackedFloat32Array(["abc"])` → `[0.0]`）。
+    // 先按数值解析成 Variant，再走下面那条已经量过的数值折算 —— 所以 `"70000"` 塞 byte 就是 70000 的 byte 回绕。
+    const s = v.v as string;
+    if (kind === "float32" || kind === "float64") return toElem(kind, V.float(strToFloat(s)));
+    return toElem(kind, V.int(strToInt(s)));
   }
   if (kind === "float32" || kind === "float64") {
     if (v.t === Tag.BOOL) return v.v ? 1 : 0;
@@ -156,9 +162,13 @@ export function toElem(kind: PackKind, v: Variant): PackElem {
   if (kind === "int64") {
     if (v.t === Tag.FLOAT) {
       const f = v.v as number;
-      if (!Number.isFinite(f) || Math.abs(f) >= 9223372036854775808) {
-        throw new UnsupportedError("packed-element-overflow", `PackedInt64Array 收 ${String(f)} 这个形状没实测过`);
+      // 实测 `PackedInt64Array([1e30, 2.7, -2.7])` → `[-9223372036854775808, 2, -2]`：正向溢出饱和到 INT64_MIN，
+      // 与 `builtins.ts` 里 `int()` 那条（26 点探针：nan / ±inf / |x| ≥ 2^63 同给 INT64_MIN）同一式子。
+      // nan / ±inf 在 pack 这一格没量过 → 继续响。
+      if (!Number.isFinite(f)) {
+        throw new UnsupportedError("packed-element-overflow", `PackedInt64Array 收 ${String(f)}：饱和只量了有限大数（1e30 → INT64_MIN），nan/inf 那一格没实测过`);
       }
+      if (Math.abs(f) >= TWO_63) return INT64_MIN;
       return BigInt(Math.trunc(f));
     }
     const n = v.v as number | bigint;
@@ -310,7 +320,15 @@ const NO_SUCH_METHOD = new Set([
   "join",
 ]);
 /** 存在但这一轮没做 / 没实测的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
-const NOT_YET = new Set(["bsearch", "to_hex_string", "to_raw_string", "compress", "decompress", "search_sorted", "set", "get_bytes", "remove_at_copy"]);
+const NOT_YET = new Set(["bsearch", "to_hex_string", "to_raw_string", "compress", "decompress", "search_sorted", "get_bytes", "remove_at_copy"]);
+/**
+ * 只在**某一种 pack** 上量到「4.6.3 里根本没有这个方法」（f57：`Nonexistent function 'X' in base 'Y'`）。
+ * 同名的格子在别的形状上没量过，所以只在量过的那一支给实测文本，其余仍走 NOT_YET / 未实现那条响亮拒。
+ */
+const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
+  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string"]),
+  string: new Set(["index_of"]),
+};
 /** 只有 byte 那一支量过的方法（int pack 上 `hex_encode` 实测是 Nonexistent，另两个没量）。 */
 const BYTE_ONLY = new Set(["get_string_from_utf8", "get_string_from_ascii"]);
 const NON_BYTE_MISSING = new Set(["hex_encode"]);
@@ -326,6 +344,9 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
   }
   if (NO_SUCH_METHOD.has(name)) {
+    throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
+  }
+  if (MISSING_ON[kind]?.has(name) === true) {
     throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
   }
   if (NOT_YET.has(name)) {
@@ -394,18 +415,18 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     case "find": {
       arity(name, args, 1);
       const want = toElem(kind, args[0] as Variant);
-      if (kind === "vector2" || kind === "vector3" || kind === "color") {
-        throw new UnsupportedError("packed-search", `${PACK_TYPE_NAME[kind]}.${name}() 的元素比较口径没实测过（值类型按引用比会错）`);
-      }
-      if (name === "has") return V.bool(items.includes(want));
-      if (name === "count") return V.int(items.filter((x) => x === want).length);
-      return V.int(items.indexOf(want));
+      // S177 ①：值类型 pack 的检索按**分量内容**比（实测 `PackedVector2Array([(1,2),(3,4)]).has((1,2))` 真，
+      // 而两格 `(1.0000001, 2)` 与 `(1, 2)` 在 float32 储存下**仍不是**同一格（`count` 给 1）；
+      // Color 的 0.1 与 0.10000001 同理不是同一格）。JS 的 includes / indexOf 对这些载荷是引用等，所以三种形状都走 elemSame。
+      const same = (x: PackElem): boolean => elemSame(kind, x, want);
+      if (name === "has") return V.bool(items.some(same));
+      if (name === "count") return V.int(items.filter(same).length);
+      return V.int(items.findIndex(same));
     }
     case "sort": {
-      if (kind === "color") {
-        throw new UnsupportedError("packed-sort-color", "PackedColorArray.sort() 的比较依据没实测过（2 个元素的样本分不出来）");
-      }
-      if (kind === "vector2") items.sort((x, y) => cmpVec(x as GVector2, y as GVector2, ["x", "y"]));
+      // S177 ②：Color 的 sort 是 r→g→b→a 的字典序（五个可分辨的颜色实测；反向再排得到同一序列）
+      if (kind === "color") items.sort((x, y) => cmpVec(x as unknown as GVector2, y as unknown as GVector2, ["r", "g", "b", "a"]));
+      else if (kind === "vector2") items.sort((x, y) => cmpVec(x as GVector2, y as GVector2, ["x", "y"]));
       else if (kind === "vector3") items.sort((x, y) => cmpVec(x as GVector3, y as GVector3, ["x", "y", "z"]));
       else if (kind === "string") items.sort((x, y) => cmpStrings(x as string, y as string));
       else items.sort(kind === "int64" ? (x, y) => (BigInt(x as number | bigint) < BigInt(y as number | bigint) ? -1 : BigInt(x as number | bigint) > BigInt(y as number | bigint) ? 1 : 0) : (x, y) => (x as number) - (y as number));
@@ -430,10 +451,22 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       arity("get", args, 1);
       const gv = intToNum((args[0] as Variant).v as number | bigint);
       const n = typeof gv === "bigint" ? Number(gv) : Math.trunc(gv);
-      if (n < 0) {
-        throw new UnsupportedError("packed-get-neg", "get() 的负下标没实测过（下标读实测是从尾部数）");
-      }
-      return n < items.length ? elemVariant(kind, items[n] as PackElem) : elemVariant(kind, defaultElem(kind));
+      // S177 ③：`get()` 的负下标**不从尾部数**（与 `p[-1]` 相反，那个实测从尾部数）——
+      // 它算越界，给默认元素值。Godot 同时往 stderr 打一条引擎 ERROR（`Index p_index = -1 is out of bounds`），
+      // 那是 stderr 的形状、不进语料，所以这里只把 stdout 那半对齐。
+      return n >= 0 && n < items.length ? elemVariant(kind, items[n] as PackElem) : elemVariant(kind, defaultElem(kind));
+    }
+    case "set": {
+      arity("set", args, 2);
+      const sv = intToNum((args[0] as Variant).v as number | bigint);
+      const at = typeof sv === "bigint" ? Number(sv) : Math.trunc(sv);
+      // S177 ⑤：`set()` 九边同形（byte / int32 / int64 / float32 / float64 / String / Vector2 / Vector3 / Color
+      // 都量了，f58 + f59）：元素走与字面量同一套折算（`set(0, 300)` → `[44, 2, 3]`、f32 的 `set(1, 0.1)` →
+      // `0.10000000149012`），**负下标与越界一律静默不动**（`set(-1, 9)`、`set(5, 9)` 都不改内容也不改长度，
+      // 只多一句引擎 stderr，那条形状不进语料）—— 与 `p[i] = v` 的下标写相反，那句是 `Invalid assignment …`。
+      // 返回值是 void，取它的值在解析期就拒（analyze 的 VOID_BYTES_METHODS）。
+      if (at >= 0 && at < items.length) items[at] = toElem(kind, args[1] as Variant);
+      return V.nil();
     }
     case "hex_encode":
       return V.str((items as number[]).map((x) => x.toString(16).padStart(2, "0")).join(""));

@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Expression is of type "StringName" so it can't be of type "String".
+   at: GDScript::reload (<case>/main.gd:5)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
