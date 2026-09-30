@@ -28,7 +28,9 @@ gds2js run-project    <entry.gd>    # 同上，整个工程编到临时目录后
 gds2js export         <entry.gd>    # 打成 Node 独立可执行文件（SEA）
 ```
 
-常用选项：`-o/--out`、`-w/--watch`、`--sourcemap`、`--runtime <spec>`、`--host <spec>` / `--no-host`、`--runtime-mode`；`export` 另有 `--pack` / `--node` / `--keep-bundle`。
+常用选项：`-o/--out`、`-w/--watch`、`--sourcemap`、`--runtime <spec>`、`--host <spec>` / `--no-host`、`--runtime-mode`；`export` 另有 `--pack` / `--node` / `--keep-bundle` / `-v,--verbose`。
+
+> `export` 默认只给一行结论（`已导出 <exe>（大小，编译器，GC 模式）`）；外部编译器的完整命令行、工作目录、运行时解压位置这些细节收在 `-v` 后面。入口脚本既没有 `_initialize` 也没有 `_process` 时会另起一行 `warning` —— 那种 exe 能跑但什么都不执行（宿主只驱动 SceneTree 的这两个虚函数，`_ready` 不在其中）。
 
 > `check-project` / `build-project` / `run-project` 是**工程级**命令：它们把 resRoot 下的 `.gd` **递归全收**进同一次编译，`res://` 按那个根解析。所以入口所在目录得是真正的工程根（有 `project.godot`）。若向上找不到、而该目录下又嵌着别的工程，命令会在编译**前**点名那个嵌套工程并给出出路（改指它的脚本 / `--res-root` / 单文件请用 `build`·`run`）；显式给了 `--res-root` 就按你说的办，不插手。
 >
@@ -89,7 +91,8 @@ gds2js export main.gd -o app.exe --pack perry                    # 换 perry（�
 - **scriptc 已按实测移除**（`--pack scriptc` 会被取值闸门直接拒掉）：它硬缺三样 —— `Math.fround` 无 lowering（float32 语义）、`bigint` 完全不能编（int64 家族）、**覆写 async 基类方法不支持**（那正是 `class Main extends SceneTree { async _initialize() }` 这个宿主契约本身）；真产物 `scriptc coverage` 实测静态 69%、`--dynamic` 下仍剩 129 处「执行到就抛围栏」，且它明说装箱 class 实例不许跨越静态↔动态边界。细节记在 ROADMAP 5.8，将来上游补齐再谈接回。
 - 中间件默认清干净（`<res-root>/.gds2js-export/`；单文件入口则摆在脚本旁边 `<dir>/.gds2js-export/`，都已进 `.gitignore`），`--keep-bundle` 才留；失败时会把中间件目录印出来方便你直接拿它重试外部编译器。
 - **`--pack perry` 的 `-o` 路径必须是 ASCII**（实测）：路径里有中文时 perry 要么报 `Linking failed`，要么把一个**乱码文件名**的 exe 写到同目录（`我的程序.exe` → `鎴戠殑绋嬪簭.exe`），而且**退出码可能是 0**。CLI 认这个形状并直接说清原因与出路；`.gd` 与工程目录里带中文不受影响。
-- 回归：`pnpm test:export` 把每格分类成 `ok / refused / no-lib / crash / FAIL`，**只有 FAIL 红灯**（上游状态不该把本地套件打挂）。`pnpm test:perry` 是**语义门**：真打 exe、真跑、逐字节对 Godot golden；没设 `PERRY_RS4GC` 时验的就是 CLI 的默认那条路，显式设过就照你的值验（这一条门量的是「哪一种 GC 下产物与 golden 逐字节一致」）。默认跑风险面代表集 26 例，`--all` 是全量，位置参数按名字筛（`node tools/perry-check.ts 077`）。计时看冷热：运行时那份进了 perry 的模块缓存后单例 ~3–10 s，冷启动第一例会到 2 min 量级。
+- **`--pack perry` 慢在哪（12 核 / 32 GB 本机实测）**：CLI 自己编译只要 **0.2 s**，其余全是 perry 的**整程序原生 codegen** —— 它把那份 ~200 KB 的自带运行时连同你的脚本一起编成机器码，并按**整个模块图**缓存。所以：内容一字不变地再打一次 **17~38 s**；改了脚本内容（哪怕一个字符）就冷编译 **5~10 min**（并发跑别的负载时更久）；把 `PERRY_MODULE_JOBS/PERRY_CODEGEN_UNIT_JOBS` 提到 4×3 反而更慢（**873 s**，32 GB 内存吃紧）。日常迭代用 `--pack node`（SEA，几十秒级、产物 100 MB），发版再上 perry。
+- 回归：`pnpm test:export` 把每格分类成 `ok / refused / no-lib / crash / FAIL`，**只有 FAIL 红灯**（上游状态不该把本地套件打挂）。`pnpm test:perry` 是**语义门**：真打 exe、真跑、逐字节对 Godot golden；没设 `PERRY_RS4GC` 时验的就是 CLI 的默认那条路，显式设过就照你的值验（这一条门量的是「哪一种 GC 下产物与 golden 逐字节一致」）。默认跑风险面代表集 26 例，`--all` 是全量，位置参数按名字筛（`node tools/perry-check.ts 077`）。同一批用例重复跑命中 perry 的图缓存，单例几秒；换了内容就冷编译（见上条）。
 
 ## 把 CLI 自己打成 exe（`pnpm build:self`）
 

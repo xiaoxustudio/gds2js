@@ -53,6 +53,7 @@ interface Ctx {
   pack: Pack;
   seaNode: string | null;
   keepBundle: boolean;
+  verbose: boolean;
 }
 
 interface Diag {
@@ -321,7 +322,7 @@ async function exportTree(ctx: Ctx): Promise<{ entry: string; files: string[]; d
     const dirs = [...new Set(result.modules.map((m) => dirname(m.jsPath)))];
     for (const d of dirs) copyFileSync(product, join(d, PRODUCT_RUNTIME_FILE));
     const files = walkMjs(dir);
-    console.error(`已编译成 ${result.modules.length} 个模块 + 1 份打平运行时 → ${dir}`);
+    if (ctx.verbose) console.error(`已编译成 ${result.modules.length} 个模块 + 1 份打平运行时 → ${dir}`);
     return { entry: entry.jsPath, files, dirs: dirs.filter((d) => d !== dir) };
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
@@ -349,7 +350,7 @@ async function exportSingleTree(ctx: Ctx): Promise<{ entry: string; files: strin
     writeFileSync(entry, code, "utf8");
     copyFileSync(product, join(dir, PRODUCT_RUNTIME_FILE));
     const files = walkMjs(dir);
-    console.error(`已编译成单文件 + 1 份打平运行时 → ${dir}`);
+    if (ctx.verbose) console.error(`已编译成单文件 + 1 份打平运行时 → ${dir}`);
     return { entry, files, dirs: [] };
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
@@ -390,6 +391,11 @@ function walkMjs(dir: string): string[] {
 
 function diagText(r: { stdout?: string; stderr?: string; status?: number | null }): string {
   return ((r.stdout ?? "") + (r.stderr ?? "")).trim() || `退出码 ${r.status}`;
+}
+
+/** 宿主只驱动 SceneTree 的 `_initialize` / `_process`；产物里两个都没有，跑起来就是什么都不做。 */
+function hasHostEntry(code: string): boolean {
+  return /_(initialize|process)\s*\(/.test(code);
 }
 
 /** 只截前 n 行：外部编译器/LLVM 的报告动辄上百行，别把终端糊死。 */
@@ -577,6 +583,7 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
   const cfg = join(ctx.outDir, "sea-config.json");
   const shim = join(ctx.outDir, SEA_MAIN_FILE);
   let made = false;
+  let note = "";
   try {
     if (pack === "node") {
       const entryRel = relative(ctx.outDir, tree.entry).split("\\").join("/");
@@ -588,7 +595,7 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
         JSON.stringify({ main: shim, mainFormat: "module", output: exe, useVfs: true, assets, disableExperimentalSEAWarning: true }, null, 2),
         "utf8",
       );
-      console.error(`node SEA（v${nodeVersionOf(seaBin)}，外部 ${seaBin}，${tree.files.length} 个模块走 VFS）打包中：${seaBin} --build-sea=${cfg}`);
+      note = `node ${nodeVersionOf(seaBin)}`;      if (ctx.verbose) console.error(`  ${seaBin} --build-sea=${cfg}（${tree.files.length} 个模块走 VFS）`);
       const r = spawnSync(seaBin, [`--build-sea=${cfg}`], { encoding: "utf8", windowsHide: true, timeout: 600_000 });
       made = !r.error && r.status === 0 && existsSync(exe);
       if (!made) {
@@ -600,13 +607,12 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
       const bin = perry?.bin ?? "perry";
       const args = ["compile", tree.entry, "-o", exe];
       const rtDir = process.env.PERRY_RUNTIME_DIR ? null : perryRuntimeDir(bin);
-      if (rtDir) console.error(`perry 运行时：${rtDir}（包里的 perry_runtime.lib 是 zst 压的，perry 不会自己解）`);
       const gc = perryGc();
-      if (gc.defaulted) {
-        console.error("perry GC：PERRY_RS4GC=0（本 CLI 的默认 —— 默认那支 RS4GC 编我们的运行时必崩，实测白烧 6~7 分钟后访问违例）");
-        console.error("  要按 perry 自己的默认语义试：PERRY_RS4GC=1 gds2js export …（产物语义请拿 pnpm test:perry 对 golden）");
-      } else console.error(`perry GC：PERRY_RS4GC=${gc.value}（你显式设的，原样传）`);
-      console.error(`perry（${perry?.version || bin}）打包中：${bin} ${args.join(" ")}`);
+      note = `${perry?.version || "perry"}，GC PERRY_RS4GC=${gc.value}${gc.defaulted ? "（默认）" : "（你显式设的）"}`;
+      if (ctx.verbose) {
+        if (rtDir) console.error(`  perry 运行时（包里的 zst 解压来）：${rtDir}`);
+        console.error(`  ${bin} ${args.join(" ")}`);
+      }
       const r = spawnSync(bin, args, {
         encoding: "utf8",
         windowsHide: true,
@@ -625,7 +631,13 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
       }
     }
     if (!made) console.error(`  中间件留在 ${ctx.outDir}（--keep-bundle 就不会清了），可直接拿它重试编译器。`);
-    else console.error(`已导出 Windows 可执行文件（${pack}）→ ${exe} (${(statSync(exe).size / 1048576).toFixed(1)} MB)`);
+    else {
+      console.error(`已导出 ${exe}（${(statSync(exe).size / 1048576).toFixed(1)} MB，${note}）`);
+      if (!hasHostEntry(readFileSync(tree.entry, "utf8"))) {
+        console.error(`${ctx.input}:  warning  入口没有 _initialize / _process —— 这个 exe 跑起来什么都不执行`);
+        console.error("  宿主只驱动 SceneTree 的这两个虚函数：加 `extends SceneTree` + `func _initialize():`（`_ready` 不在其中）");
+      }
+    }
     return made;
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
@@ -921,6 +933,7 @@ const resolveCtx = (
     pack: cmd === "export" ? packOf(opts.pack) : "node",
     seaNode: cmd === "export" ? externalSeaNode(opts.node as string | undefined) : process.execPath,
     keepBundle: opts.keepBundle === true,
+    verbose: opts.verbose === true,
   };
 };
 
@@ -974,12 +987,13 @@ withCommon(
 
 program
   .command("export <entry>")
-  .description("把整个工程编译成自包含 bundle，再用 perry / scriptc 打成 **Windows** 原生可执行文件（产物不带 Node）")
+  .description("把入口（整工程或单个脚本）编译成模块树，再用 node SEA / perry 打成 **Windows** 原生可执行文件")
   .option("--pack <name>", "打包器：node(默认，官方 SEA，要 Node>=25.7) | perry（外部原生编译器，PERRY_BIN 可指路）", "node")
   .option("--node <path>", "--pack node 时用哪份**外部** node 做 --build-sea（需 ≥25.7）；默认取 GDS2JS_NODE_BIN 否则当前 node，exe 里则从 PATH 找")
   .option("--res-root <dir>", "res:// 工程根（默认向上找 project.godot）")
   .option("-o, --out <file>", "可执行文件输出路径（默认与入口同名，带 .exe）")
-  .option("--keep-bundle", "留下中间 bundle（排查用），默认删")
+  .option("--keep-bundle", "留下中间产物（排查用），默认删")
+  .option("-v, --verbose", "打出过程细节：外部编译器完整命令行、工作目录、GC 模式的理由；默认只给结论一行")
   .action((entry: string, opts) => dispatch(resolveCtx("export", entry, opts)));
 
 if (process.argv.slice(2).length === 0) {
