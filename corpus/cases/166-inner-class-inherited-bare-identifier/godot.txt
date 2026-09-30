@@ -1,0 +1,7 @@
+plain 7 7 99
+p true
+plain 7 7 99
+mid 7 7 99 3
+shadow 1 7 100
+bump 8 8
+after 8 100 24

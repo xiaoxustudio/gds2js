@@ -4,7 +4,7 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  static osv = rt.V.int(1);
+  static osv = rt.toInt(rt.V.int(1));
 
   static bumpOuter(): unknown {
     Main.osv = rt.toInt(rt.ops.add(Main.osv, rt.V.int(1)));
@@ -42,14 +42,15 @@ export class Main extends SceneTree {
 }
 
 rt.registerStaticVars(Main, {"osv": "int"});
+rt.registerMethodArities(Main, { "bumpOuter": [0, 0], "_initialize": [0, 0] });
 rt.registerStaticMethods(Main, ["bumpOuter"]);
 rt.registerNativeBase(Main, "SceneTree");
 class A {
-  static x = rt.V.int(1);
+  static x = rt.toInt(rt.V.int(1));
   static plain = rt.V.int(2);
   static lit = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
-  static computed = rt.V.int(rt.fast.iMulC(3, 7));
-  mv = rt.V.int(9);
+  static computed = rt.toInt(rt.V.int(rt.fast.iMulC(3, 7)));
+  mv = rt.toInt(rt.V.int(9));
 
   static setx(v): unknown {
     A.x = rt.toInt(v);
@@ -64,6 +65,7 @@ class A {
 rt.registerClass("A", A);
 rt.registerFieldTypes(A, {"mv": "int"});
 rt.registerStaticVars(A, {"x": "int", "plain": "", "lit": "", "computed": "int"});
+rt.registerMethodArities(A, { "setx": [1, 1], "fromInstance": [0, 0] });
 rt.registerStaticMethods(A, ["setx"]);
 rt.registerNativeBase(A, "RefCounted");
 

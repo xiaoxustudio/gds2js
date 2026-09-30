@@ -318,9 +318,20 @@ function vecSlot(key: Variant): 0 | 1 | null {
 }
 
 export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
-  const shown = key.t === Tag.STRING || key.t === Tag.STRING_NAME ? `"${key.v as string}"` : String(key.v);
+  /**
+   * 实测下来字符串键**不加引号**，而且读的那一句会换形状：
+   *  - `v["w"]` 读 → `Invalid access to property or key 'w' on a base object of type 'Vector3i'.`（f69 t53，`type` 后**没有**冒号）
+   *  - `v[3]` 读 → `Invalid access of index '3' on a base object of type: 'Vector3i'.`（t51/t52 与用例 092/097，**有**冒号）
+   *  - `v.y = …` 写 → `Invalid assignment of property or key 'y' with value of type '…' on a base object of type 'Vector2'.`（用例 088 与 f69 t56）
+   *  - `v[5] = …` 写 → `Invalid assignment of index '5' (on base: 'Vector3i') with value of type 'int'.`（t55）
+   */
+  const isName = key.t === Tag.STRING || key.t === Tag.STRING_NAME;
+  const shown = isName ? (key.v as string) : String(key.v);
   const vt = value ? tagName(value.t) : "?";
   if (via === "read") {
+    if (isName) {
+      throw new GodotRuntimeError("vector2-index", `Invalid access to property or key '${shown}' on a base object of type '${base}'.`);
+    }
     throw new GodotRuntimeError("vector2-index", `Invalid access of index '${shown}' on a base object of type: '${base}'.`);
   }
   if (via === "prop") {

@@ -1,0 +1,6 @@
+r y-z-x
+r2 z-x-y
+r3 p-n-m
+r4 x-y-z ["x", "y", "z"] 0 add3
+r5 y-z-x
+r6 true 1

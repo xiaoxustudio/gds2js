@@ -38,7 +38,8 @@
     "test:export": "tsx tools/export-check.ts",
     "bench": "tsx tools/bench.ts",
     "test:perry": "tsx tools/perry-check.ts",
-    "build:self": "tsx tools/self-pack.ts"
+    "build:self": "tsx tools/self-pack.ts",
+    "bench:godot": "tsx tools/bench-godot.ts"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",

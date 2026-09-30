@@ -1,5 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { CMP_EPS, approxEq, vecFailKey } from "./vector2";
 import { COLOR_NAMED } from "./color-named";
 
@@ -82,6 +82,13 @@ function parseColor(s: string, names: boolean): Variant | null {
   return color(byte(0) / 255, byte(2) / 255, byte(4) / 255, a / 255);
 }
 
+/** int → Color 的 **packed RGBA** 那一形（构造器与槽共用，见 `colorNew` 与 `tryColorSlot`）。 */
+function packedRgba(raw: bigint): Variant {
+  const u = ((raw % 4294967296n) + 4294967296n) % 4294967296n;
+  const ch = (k: bigint) => Number((u >> k) & 255n) / 255;
+  return color(ch(24n), ch(16n), ch(8n), ch(0n));
+}
+
 /** `Color(...)`：0 参给 `(0,0,0,1)`；1 参收 Color 或字符串；3 参 alpha 补 1；4 参照收。 */
 export function colorNew(args: Variant[]): Variant {
   if (args.length === 0) return ZERO_COLOR();
@@ -92,7 +99,15 @@ export function colorNew(args: Variant[]): Variant {
     if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
       return parseColor(a.v as string, true) ?? ZERO_COLOR();
     }
-    throw new UnsupportedError("color-arg", `Color() 单参只收 Color 或字符串，收到 ${tagName(a.t)}`);
+    /**
+     * 单参收 int = **packed RGBA**（`tmp/f76` 十二个打点 + `tmp/f75 d-slot-*` 的 Color 槽同一套）：
+     * r 取 24..31、g 16..23、b 8..15、a 0..7，各除 255，先按 2³² 取模 ——
+     * `Color(123456789)`（0x075BCD15）→ `(0.0275, 0.3569, 0.8039, 0.0824)`、
+     * `Color(-1)` → 全 1、`Color(4294967296)` → 全 0、`Color(256)` → `(0.0, 0.0, 0.0039, 0.0)`。
+     * float 那一格实测是拒（`Color` 槽吃 float 也是解析期错），不顺手接。
+     */
+    if (a.t === Tag.INT) return packedRgba(intToBig(a.v as IntPayload));
+    throw new UnsupportedError("color-arg", `Color() 单参只收 Color / 字符串 / int，收到 ${tagName(a.t)}`);
   }
   if (args.length === 3) {
     return color(numArg(args[0], "Color"), numArg(args[1], "Color"), numArg(args[2], "Color"), 1);
@@ -109,6 +124,27 @@ export function colorNew(args: Variant[]): Variant {
     numArg(args[2], "Color"),
     numArg(args[3], "Color"),
   );
+}
+
+/**
+ * **Color 槽**（变量初值 / 后续赋值 / 字段 / 定型容器元素与字典键值 / 形参默认值）收什么：
+ * `tmp/f77` 与 `tmp/f79` 逐形量到 —— 同型拷一份、int 走 packed RGBA、String 走色名与 hex；
+ * `bool` / `float` / `StringName` / 向量全都进不来（`v-color-bool` / `v-color-float` / `v-color-strname`
+ * 各两句解析期拒）。量不到的形状给 null，让调用方按自己的口径处理（容器丢、槽位响亮报）。
+ */
+export function tryColorSlot(v: Variant): Variant | null {
+  const c = asColor(v);
+  if (c !== null) return color(c.r, c.g, c.b, c.a);
+  if (v.t === Tag.INT) return packedRgba(intToBig(v.v as IntPayload));
+  if (v.t === Tag.STRING) return parseColor(v.v as string, true) ?? ZERO_COLOR();
+  return null;
+}
+
+/** 变量 / 字段那一族的 Color 转换：槽只能装 Color，装不下不是「原样塞进去」而是响亮报。 */
+export function toColor(v: Variant): Variant {
+  const r = tryColorSlot(v);
+  if (r !== null) return r;
+  throw new UnsupportedError("color-slot", `Color 槽只收 Color / int / String，收到 ${tagName(v.t)}`);
 }
 
 /**

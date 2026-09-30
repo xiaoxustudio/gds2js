@@ -1,0 +1,31 @@
+// 由 gds2js 从 main.gd 编译生成 —— 不要手改。
+
+import * as rt from "../../../src/runtime/index";
+import { print, SceneTree } from "../../../tools/harness/scene-tree";
+
+const INF = rt.V.float(Number.POSITIVE_INFINITY);
+const NAN = rt.V.float(Number.NaN);
+const PI = rt.V.float(3.141592653589793);
+const TAU = rt.V.float(6.283185307179586);
+
+export class Main extends SceneTree {
+  async _initialize(): Promise<void> {
+    print(rt.showArgs([rt.V.str("r1 "), rt.typeOf(PI), rt.V.str(" "), PI, rt.V.str(" "), TAU]));
+    print(rt.showArgs([rt.V.str("r2 "), rt.typeOf(INF), rt.V.str(" "), INF, rt.V.str(" "), NAN]));
+    print(rt.showArgs([rt.V.str("r3 "), rt.ops.eq(PI, rt.V.float(3.141592653589793)), rt.V.str(" "), rt.ops.eq(PI, rt.V.float(3.14159265358979))]));
+    print(rt.showArgs([rt.V.str("r4 "), rt.ops.eq(TAU, rt.ops.mul(PI, rt.V.float(2))), rt.V.str(" "), rt.ops.gt(INF, rt.V.float(1e+308)), rt.V.str(" "), rt.ops.eq(NAN, NAN)]));
+    print(rt.showArgs([rt.V.str("r5 "), rt.V.array(rt.GArray.of([PI, TAU, INF, NAN]))]));
+    print(rt.showArgs([rt.V.str("r6 "), rt.ops.neg(PI), rt.V.str(" "), rt.ops.neg(INF), rt.V.str(" "), rt.ops.sub(INF, INF), rt.V.str(" "), rt.ops.div(rt.V.float(1), INF)]));
+    let a = rt.toInt(PI);
+    let b = rt.toInt(TAU);
+    print(rt.showArgs([rt.V.str("r7 "), a, rt.V.str(" "), b]));
+    let p = PI;
+    print(rt.showArgs([rt.V.str("r8 "), rt.typeOf(p), rt.V.str(" "), rt.ops.div(p, rt.V.float(2))]));
+    this.quit();
+  }
+  
+}
+
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(Main, "SceneTree");
+await new Main().run();

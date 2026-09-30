@@ -5,14 +5,15 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    print(rt.showArgs([rt.strOf(rt.V.float((0 / 0)))]));
+    print(rt.showArgs([rt.strBuiltin([rt.V.float((0 / 0))])]));
     print(rt.showArgs([rt.V.float((1 / 0))]));
     print(rt.showArgs([rt.V.float(((-1) / 0))]));
-    print(rt.showArgs([rt.strOf(rt.sqrt(rt.V.float((-1))))]));
+    print(rt.showArgs([rt.strBuiltin([rt.sqrt(rt.V.float((-1)))])]));
     this.quit();
   }
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

@@ -45,5 +45,6 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "tri": [1, 1], "shout": [1, 1], "mix": [2, 2], "choose": [1, 1], "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

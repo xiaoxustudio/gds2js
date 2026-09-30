@@ -66,12 +66,13 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
   m = rt.V.int(1);
-  t = rt.V.int(2);
-  s = rt.V.str("a");
-  v = rt.vector2New([rt.V.int(0), rt.V.int(0)]);
+  t = rt.toInt(rt.V.int(2));
+  s = rt.strOf(rt.V.str("a"));
+  v = rt.toVec2(rt.vector2New([rt.V.int(0), rt.V.int(0)]));
 
 }
 rt.registerClass("Inner", Inner);

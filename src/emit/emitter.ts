@@ -1,4 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
+import { GLOBAL_CONSTANTS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 import { isElemKind } from "../runtime/values";
@@ -83,7 +84,7 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
-  str: (a) => `rt.strOf(${a.join(", ")})`,
+  str: (a) => `rt.strBuiltin([${a.join(", ")}])`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,
   bool: (a) => `rt.toBool(${a.join(", ")})`,
@@ -95,6 +96,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
   Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
   Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
+  Vector3i: (a) => `rt.vector3iNew([${a.join(", ")}])`,
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
@@ -108,6 +110,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
+  // `Callable()` / `Callable(o, "m")`（`tmp/f97` c1 / c7）：以前落到 `this.Callable(...)` ——
+  // JS 的 TypeError，差分当场记成「崩溃」而不是「未实现」，正是 `BUILTIN_TODO` 那张表要挡的事。
+  Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
@@ -304,6 +309,20 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
 
+  // 全局常量（`PI` / `TAU` / `INF` / `NAN` / `CONNECT_*`，实测见 S194）：**只在模块真的引用了才发**，
+  // 发成模块顶层的 `const`、引用点保持裸名字 —— 于是 JS 的作用域就是 GDScript 的作用域：
+  // 函数里的 `var PI = 5`（f99 p12）与模块级的 `const PI = 1`（p10）都自然遮蔽全局，
+  // 而不是把用户的名字折成字面量后静默改掉他的那一格。
+  const globalConsts = globalConstLines(m, new Set<string>([
+    ...m.vars.map((v) => v.name),
+    ...classRefs.map((r) => r.name),
+    ...preloads.map((p) => p.name),
+  ]));
+  if (globalConsts.length > 0) {
+    out.push(...globalConsts);
+    out.push("");
+  }
+
   ENUM_NAMES = new Set<string>();
   for (const en of m.enums) {
     mark(out.length, en.loc);
@@ -355,6 +374,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(${className}, ${moduleFields});`);
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   if (moduleStaticVars !== null) out.push(`rt.registerStaticVars(${className}, ${moduleStaticVars});`);
+  const moduleArities = methodAritiesLiteral(m.funcs);
+  if (moduleArities !== null) out.push(`rt.registerMethodArities(${className}, ${moduleArities});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(${className}, ${JSON.stringify(moduleStatics)});`);
   if (baseClass.kind !== "import") {
@@ -459,6 +480,30 @@ function innerClassBase(text: string): string | null {
  * 内部类要按「基类在前」发：JS 的 class 声明有 TDZ，源码里 `class Child extends Later` 而 `Later` 写在后面时
  * 照源序发会当场 ReferenceError —— Godot 实测允许这种前向引用（tmp/f53 t14）。成环的拒。
  */
+/**
+ * 内部类沿 `extends` 链继承来的实例成员名（字段、常量、信号）。
+ * 实测（`tmp/f72/ic1.gd`，Godot 4.6.3）：`class Plain extends NoInit` 的方法里**裸引** `a` 与 `CA`
+ * 是合法的，隔一层的 `class Mid extends Plain` 也照样能裸引 —— 链要一路走上去。
+ * 不并进来时发出去的是裸 `a`，跑起来一句 `a is not defined`。
+ * 继承来的**方法**不用并：`emitCall` 对裸 ident 调用无条件发 `this.f()`，本来就对。
+ */
+function innerInheritedNames(decl: ClassDecl): string[] {
+  const seen = new Set<string>([decl.name]);
+  const out: string[] = [];
+  let next: string | null = decl.extends;
+  while (next !== null) {
+    const parent = INNER_CLASSES.get(next);
+    if (!parent || seen.has(parent.name)) break;
+    seen.add(parent.name);
+    out.push(
+      ...parent.vars.filter((v) => !v.isStatic).map((v) => v.name),
+      ...parent.signals.map((s) => s.name),
+    );
+    next = parent.extends;
+  }
+  return out;
+}
+
 function orderInnerClasses(classes: ClassDecl[]): ClassDecl[] {
   const out: ClassDecl[] = [];
   const done = new Set<string>();
@@ -489,7 +534,10 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   const savedHasBase = INIT_HAS_BASE;
   const savedAsMethod = INIT_AS_METHOD;
   const savedHostSuper = NEEDS_HOST_SUPER;
-  CURRENT_MEMBERS = new Set(decl.vars.filter((v) => !v.isStatic).map((v) => v.name));
+  CURRENT_MEMBERS = new Set([
+    ...decl.vars.filter((v) => !v.isStatic).map((v) => v.name),
+    ...innerInheritedNames(decl),
+  ]);
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
@@ -520,6 +568,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declFields !== null) lines.push(`rt.registerFieldTypes(${decl.name}, ${declFields});`);
   const declStaticVars = staticVarTableLiteral(decl.vars);
   if (declStaticVars !== null) lines.push(`rt.registerStaticVars(${decl.name}, ${declStaticVars});`);
+  const declArities = methodAritiesLiteral(decl.funcs);
+  if (declArities !== null) lines.push(`rt.registerMethodArities(${decl.name}, ${declArities});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
   // 与模块类同一口径（S167）：原生基类只在**没有脚本基类**时登记，有的话运行时沿原型链往上找。
@@ -631,8 +681,19 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   }
 }
 
-/** 与 declaredCast 同一批类型，这里要的是**槽位类型名**（运行时报错文本里要用它）。只含量过的七个槽。 */
-const MEASURED_SLOTS = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Color"]);
+/** 与 declaredCast 同一批类型，这里要的是**槽位类型名**（运行时报错文本里要用它）。只含量过的十个槽（S176 + S185）。 */
+const MEASURED_SLOTS = new Set([
+  "int",
+  "float",
+  "bool",
+  "String",
+  "StringName",
+  "Vector2",
+  "Vector2i",
+  "Vector3",
+  "Vector3i",
+  "Color",
+]);
 function slotTypeName(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
@@ -795,6 +856,134 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
 }
 
 /** 旧形状的类级成员：信号与实例字段发成 JS 类字段，静态与 const 的静态镜像照发，带读写器的发 get/set。 */
+/**
+ * 收集这个模块里**裸引用**到的全局常量，生成模块顶层的声明行（实测口径见 S194）。
+ * 保留名不声明：枚举名与匿名枚举成员本来就是顶层 `const`、类名与 preload/import 名是顶层绑定、
+ * 模块与类的 `var` / `const` 走 `this.X` —— 撞名时以用户自己的声明为准
+ * （f99 p10 量到 `const PI = 1` 合法并遮蔽全局，p12 量到函数里的 `var PI = 5` 同样合法）。
+ */
+function globalConstLines(m: Module, reservedExtra: Set<string>): string[] {
+  const reserved = new Set<string>(reservedExtra);
+  const addEnum = (en: Module["enums"][number]): void => {
+    if (en.name !== null && en.name !== undefined) reserved.add(en.name);
+    for (const mm of en.members) reserved.add(mm.name);
+  };
+  for (const en of m.enums) addEnum(en);
+  if (m.className !== undefined && m.className !== null) reserved.add(m.className);
+  const addClass = (c: ClassDecl): void => {
+    reserved.add(c.name);
+    for (const v of c.vars) reserved.add(v.name);
+    for (const inner of c.innerClasses) addClass(inner);
+  };
+  for (const c of m.innerClasses) addClass(c);
+
+  const used = new Set<string>();
+  const expr = (e: Expr | null): void => {
+    if (e === null || e === undefined) return;
+    switch (e.kind) {
+      case "ident":
+        if (isGlobalConst(e.name)) used.add(e.name);
+        return;
+      case "binary":
+        expr(e.left);
+        expr(e.right);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        expr(e.operand);
+        return;
+      case "index":
+        expr(e.obj);
+        expr(e.index);
+        return;
+      case "attribute":
+        expr(e.obj);
+        return;
+      case "call":
+        expr(e.callee);
+        for (const a of e.args) expr(a);
+        return;
+      case "lambda":
+        for (const s of e.body) stmt(s);
+        return;
+      case "array":
+        for (const it of e.items) expr(it);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          expr(en.key);
+          expr(en.value);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  const stmt = (s: Stmt): void => {
+    switch (s.kind) {
+      case "expr":
+        expr(s.expr);
+        return;
+      case "var":
+        expr(s.init);
+        return;
+      case "assign":
+        expr(s.target);
+        expr(s.value);
+        return;
+      case "if":
+        for (const b of s.branches) {
+          if (b.cond !== null) expr(b.cond);
+          for (const x of b.body) stmt(x);
+        }
+        return;
+      case "for":
+        expr(s.iter);
+        for (const x of s.body) stmt(x);
+        return;
+      case "while":
+        expr(s.cond);
+        for (const x of s.body) stmt(x);
+        return;
+      case "match":
+        expr(s.subject);
+        for (const arm of s.arms) {
+          if (arm.guard !== null) expr(arm.guard);
+          for (const x of arm.body) stmt(x);
+        }
+        return;
+      case "return":
+        if (s.value !== null) expr(s.value);
+        return;
+      default:
+        return;
+    }
+  };
+  const func = (f: FuncDecl): void => {
+    for (const p of f.params) expr(p.default ?? null);
+    for (const s of f.body) stmt(s);
+  };
+  for (const f of m.funcs) func(f);
+  for (const v of m.vars) expr(v.init);
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) func(f);
+    for (const v of c.vars) expr(v.init);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const c of m.innerClasses) walkClass(c);
+
+  return [...used]
+    .filter((n) => !reserved.has(n))
+    .sort()
+    .map((n) => {
+      // `used` 里只放过 `isGlobalConst` 认过的名字，所以这张表一定查得到
+      const c = GLOBAL_CONSTANTS[n]!;
+      return `const ${n} = ${c.kind === "int" ? "rt.V.int" : "rt.V.float"}(${c.value});`;
+    });
+}
+
 function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: number): string[] {
   const out: string[] = [];
   for (const s of signals) {
@@ -807,7 +996,7 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
       out.push(...emitAccessors(v));
       continue;
     }
-    const init = stampDecl(v.type, v.init, emitExpr);
+    const init = slotInit(v.type, v.init);
     if (v.isStatic) {
       out.push(`  static ${v.name} = ${init};`);
       continue;
@@ -828,6 +1017,18 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
  * （实测 `class WithInit extends Plain` 用子类覆写的 `_note` 去初始化基类的字段）。
  * 带读写器的属性照旧只发 get/set（今天就不发初值），静态与 const 的静态镜像发在类上（见 emitClassLevelVars）。
  */
+/**
+ * 字段 / 静态变量那一族的初始化：定型容器走 `stampDecl`，**其余定目标量还要过 declaredCast**。
+ * 少了后半截就是静默错（`tmp/f81 fd-init` 一次量到五格）：Godot 给 `2 / (0.0, 0.0, 0.0, 1.0) / (1, 2) / typeof 21 / 3.0`，
+ * 我们当时给 `2.7 / 255 / (1.7, 2.9) / typeof 4 / 3` —— 槽里存的是原形状，打印与 `typeof` 一起错。
+ * 局部变量（`emitStmt` 的 var 分支）与形参默认值本来就走这条，只有字段这一族漏了。
+ */
+function slotInit(t: TypeRef | null, init: Expr | null | undefined): string {
+  const raw = stampDecl(t, init, emitExpr);
+  const cast = declaredCast(t);
+  return cast === null ? raw : `${cast}(${raw})`;
+}
+
 function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: boolean, lineBase: number): string[] {
   const out: string[] = ["  __gd_fields__() {"];
   if (chainToBase) out.push("    super.__gd_fields__();");
@@ -838,7 +1039,7 @@ function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: b
   for (const v of vars) {
     if (v.isStatic || v.accessor) continue;
     mark(lineBase + out.length, v.loc);
-    out.push(`    this.${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+    out.push(`    this.${v.name} = ${slotInit(v.type, v.init)};`);
   }
   out.push("  }");
   out.push("");
@@ -854,7 +1055,7 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }
-    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init)};`);
   }
   if (out.length > 0) out.push("");
   return out;
@@ -2510,7 +2711,7 @@ function emitExprVar(e: Expr): string {
       if (e.name === "self") return `rt.V.object(this)`;
       const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
-      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
+      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}), ${JSON.stringify(e.name)}, rt.V.object(${CURRENT_CLASS}))`;
       if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this), ${JSON.stringify(e.name)}, rt.V.object(this))`;
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
@@ -2619,6 +2820,30 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
 }
 
+/**
+ * `Object.call` / `callv` 的 arity 表（S189）：`[必填数, 全部形参数]`。
+ * 必填数 = 第一个带默认值的形参之前的个数（与 JS `fn.length` 同口径），最多数只有 IR 知道 ——
+ * 实测 Godot 两边都管：`hi(x, y)` 少一个实参是 `Expected 2 argument(s).`，而 `twice(s = "z")` 给 0 个或 1 个都合法。
+ */
+function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
+  const rows: string[] = [];
+  for (const f of funcs) {
+    // `_init` 不在表里（它的实参数另有解析期那一族，S174）；**静态方法现在进表**：
+    // `Callable.get_argument_count()` 在静态方法那一格给的是声明形参数（`tmp/f97` a3），
+    // 而 `p.f()` 调静态方法本来就合法（S160），所以这张表按名字查多一格只会更接近 Godot。
+    if (f.name === "_init") continue;
+    let required = f.params.length;
+    for (let i = 0; i < f.params.length; i++) {
+      if (f.params[i]?.default !== null && f.params[i]?.default !== undefined) {
+        required = i;
+        break;
+      }
+    }
+    rows.push(`${JSON.stringify(f.name)}: [${required}, ${f.params.length}]`);
+  }
+  return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
+}
+
 function declaredCast(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
@@ -2627,6 +2852,16 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
   if (base === "Vector2") return "rt.toVec2";
+  // 值类型槽的转换（`tmp/f67 t08`：`var w: Vector3i = Vector3(1.7, 2.2, 3.9)` → `(1, 2, 3)`、
+  // `var x: Vector3 = Vector3i(4, 5, 6)` → `(4.0, 5.0, 6.0)`）。**没有**这两条转换时槽里存的就是原形状，
+  // 于是打印与 `typeof` 都跟着错（实测我们曾给 `(1.7, 2.9)` / typeof 5），这一族见 S181。
+  if (base === "Vector3") return "rt.toVec3";
+  if (base === "Vector3i") return "rt.toVec3i";
+  if (base === "Vector2i") return "rt.toVec2i";
+  // `tmp/f77` / `tmp/f79`：Color 槽吃 int（packed RGBA）与 String（色名 / hex），StringName 槽吃 String。
+  // 变量初值、后续赋值、字段、形参默认值四路实测同形（`var c: Color = 123456789` 与 `fd = "abc"` 都会转）。
+  if (base === "Color") return "rt.toColor";
+  if (base === "StringName") return "rt.toStringNameSlot";
   return null;
 }
 
@@ -2647,11 +2882,15 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "float") return "rt.V.float(0)";
   if (base === "bool") return "rt.V.bool(false)";
   if (base === "String") return `rt.V.str("")`;
+  // `tmp/f79 v-sn-uninit`：`var sn: StringName` 的默认值是**空 StringName**（typeof 21、打印空串、length 0），
+  // 不是 null —— 原先这里没有分支，落到 `rt.V.nil()`，于是 `sn.length()` 直接撞出「类型 0 上调用 length()」。
+  if (base === "StringName") return `rt.V.stringName("")`;
   if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
   if (base === "Dictionary") return "rt.dictOf([])";
   if (base === "Vector2") return "rt.vector2(0, 0)";
   if (base === "Vector3") return "rt.vector3(0, 0, 0)";
   if (base === "Vector2i") return "rt.vector2i(0, 0)";
+  if (base === "Vector3i") return "rt.vector3i(0, 0, 0)";
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';

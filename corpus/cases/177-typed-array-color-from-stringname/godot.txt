@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot include a value of type "StringName" as "Color".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot have an element of type "StringName" in an array of type "Array[Color]".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

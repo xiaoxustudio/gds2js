@@ -4,7 +4,7 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  m = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
+  m = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
 
   bump(p): void {
     p = rt.paramSlot(p, "Vector2", 1, "bump", this);
@@ -148,5 +148,6 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"m": "Vector2"});
+rt.registerMethodArities(Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

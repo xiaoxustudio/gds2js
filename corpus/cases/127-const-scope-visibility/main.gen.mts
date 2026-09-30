@@ -4,10 +4,10 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  TOP = rt.V.int(42);
-  static TOP = rt.V.int(42);
-  NAME = rt.V.str("outer-name");
-  static NAME = rt.V.str("outer-name");
+  TOP = rt.toInt(rt.V.int(42));
+  static TOP = rt.toInt(rt.V.int(42));
+  NAME = rt.strOf(rt.V.str("outer-name"));
+  static NAME = rt.strOf(rt.V.str("outer-name"));
 
   async _initialize(): Promise<void> {
     let i = rt.V.object(new Inner());
@@ -25,10 +25,11 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"TOP": "int", "NAME": "String"});
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
-  TOP = rt.V.int(7);
-  static TOP = rt.V.int(7);
+  TOP = rt.toInt(rt.V.int(7));
+  static TOP = rt.toInt(rt.V.int(7));
 
   read_outer(): unknown {
     return Main.NAME;
@@ -53,6 +54,7 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"TOP": "int"});
+rt.registerMethodArities(Inner, { "read_outer": [0, 0], "read_shadow": [0, 0], "read_static_outer": [0, 0], "read_static_shadow": [0, 0], "via_self_dot": [0, 0] });
 rt.registerStaticMethods(Inner, ["read_static_outer","read_static_shadow"]);
 rt.registerNativeBase(Inner, "RefCounted");
 

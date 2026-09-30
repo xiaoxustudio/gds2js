@@ -4,8 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  c = rt.colorNew([rt.V.float(0.1), rt.V.float(0.2), rt.V.float(0.3), rt.V.float(0.4)]);
-  q = rt.color(0, 0, 0, 1);
+  c = rt.toColor(rt.colorNew([rt.V.float(0.1), rt.V.float(0.2), rt.V.float(0.3), rt.V.float(0.4)]));
+  q = rt.toColor(rt.color(0, 0, 0, 1));
 
   poke(p): void {
     p = rt.paramSlot(p, "Color", 1, "poke", this);
@@ -102,5 +102,6 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "poke": [1, 1], "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

@@ -36,6 +36,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "useobj": [1, 1], "hello": [0, 0], "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Box {
   n = rt.V.int(1);
@@ -72,6 +73,7 @@ class Box {
   
 }
 rt.registerClass("Box", Box);
+rt.registerMethodArities(Box, { "getn": [0, 0], "readself": [0, 0], "bump": [0, 0], "setn": [1, 1], "me": [0, 0], "sameother": [1, 1], "ty": [0, 0] });
 rt.registerNativeBase(Box, "RefCounted");
 
 await new Main().run();

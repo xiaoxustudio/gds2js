@@ -4,8 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  TOP = rt.V.int(42);
-  static TOP = rt.V.int(42);
+  TOP = rt.toInt(rt.V.int(42));
+  static TOP = rt.toInt(rt.V.int(42));
 
   static helper(): unknown {
     return rt.ops.add(Main.TOP, rt.V.int(1));
@@ -37,19 +37,20 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("u14 "), Main.helper()]));
     let cb = rt.attribute(Inner, "make");
     print(rt.showArgs([rt.V.str("u15 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "call", [])]));
-    print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper"))]));
+    print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper", rt.V.object(Main)))]));
     this.quit();
   }
   
 }
 
 rt.registerFieldTypes(Main, {"TOP": "int"});
+rt.registerMethodArities(Main, { "helper": [0, 0], "usehelper": [0, 0], "outerbare": [0, 0], "_initialize": [0, 0] });
 rt.registerStaticMethods(Main, ["helper","usehelper"]);
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
-  CV = rt.V.int(99);
-  static CV = rt.V.int(99);
-  mv = rt.V.int(7);
+  CV = rt.toInt(rt.V.int(99));
+  static CV = rt.toInt(rt.V.int(99));
+  mv = rt.toInt(rt.V.int(7));
 
   static make(): unknown {
     return rt.V.str("made");
@@ -81,6 +82,7 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"CV": "int", "mv": "int"});
+rt.registerMethodArities(Inner, { "make": [0, 0], "twice": [1, 1], "selfcall": [0, 0], "readconst": [0, 0], "rec": [1, 1], "usestatic": [0, 0] });
 rt.registerStaticMethods(Inner, ["make","twice","selfcall","readconst","rec"]);
 rt.registerNativeBase(Inner, "RefCounted");
 

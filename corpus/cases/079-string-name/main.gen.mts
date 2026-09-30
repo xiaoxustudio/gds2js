@@ -14,7 +14,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.typeOf(s)]));
     print(rt.showArgs([rt.isType(s, "StringName")]));
     print(rt.showArgs([rt.isType(s, "String")]));
-    print(rt.showArgs([rt.strOf(s)]));
+    print(rt.showArgs([rt.strBuiltin([s])]));
     print(rt.showArgs([rt.lengthOf(s)]));
     print(rt.showArgs([rt.method(s, "length", [])]));
     print(rt.showArgs([rt.method(s, "left", [rt.V.int(2)])]));
@@ -47,11 +47,11 @@ export class Main extends SceneTree {
       if (_nv !== null) d = _nv;
     }
     print(rt.showArgs([d]));
-    let e = rt.V.stringName("q");
+    let e = rt.toStringNameSlot(rt.V.stringName("q"));
     print(rt.showArgs([e]));
     print(rt.showArgs([rt.ops.neq(rt.V.stringName("abc"), rt.V.stringName("abd"))]));
-    print(rt.showArgs([rt.typeOf(rt.strOf(s))]));
-    print(rt.showArgs([rt.ops.eq(rt.strOf(s), rt.V.str("abc"))]));
+    print(rt.showArgs([rt.typeOf(rt.strBuiltin([s]))]));
+    print(rt.showArgs([rt.ops.eq(rt.strBuiltin([s]), rt.V.str("abc"))]));
     print(rt.showArgs([rt.ops.neq(s, rt.V.str("abc"))]));
     let sn = rt.V.stringName("");
     let st = "";
@@ -95,5 +95,6 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

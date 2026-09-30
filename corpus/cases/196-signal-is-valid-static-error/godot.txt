@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot find member "is_valid" in base "Signal".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Function "is_valid()" not found in base Signal.
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

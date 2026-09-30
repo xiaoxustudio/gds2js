@@ -31,6 +31,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class A {
   static sf(a, b = rt.toInt(rt.V.int(9))): unknown {
@@ -44,20 +45,20 @@ class A {
   }
   
   expr_default(a = rt.V.int(rt.fast.iAddC(1, 2))): unknown {
-    return rt.formatOf(rt.V.str("e=%s"), rt.V.array(rt.GArray.of([rt.strOf(a)])));
+    return rt.formatOf(rt.V.str("e=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
   }
   
   arr_default(a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))): unknown {
     rt.method(a, "append", [rt.V.int(99)]);
-    return rt.formatOf(rt.V.str("arr=%s"), rt.V.array(rt.GArray.of([rt.strOf(a)])));
+    return rt.formatOf(rt.V.str("arr=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
   }
   
   vec_default(v = rt.vector2New([rt.V.int(1), rt.V.int(2)])): unknown {
-    return rt.formatOf(rt.V.str("v=%s"), rt.V.array(rt.GArray.of([rt.strOf(v)])));
+    return rt.formatOf(rt.V.str("v=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([v])])));
   }
   
   null_default(a = rt.V.nil()): unknown {
-    return rt.formatOf(rt.V.str("n=%s"), rt.V.array(rt.GArray.of([rt.strOf(a)])));
+    return rt.formatOf(rt.V.str("n=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
   }
   
   refs_earlier(a, b = a): unknown {
@@ -89,7 +90,7 @@ class A {
   
   float_into_int_math(a = rt.toInt(rt.V.float(2.7))): unknown {
     a = rt.paramSlot(a, "int", 1, "float_into_int_math", this);
-    return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.strOf(rt.ops.add(a, rt.V.float(0.5)))])));
+    return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.add(a, rt.V.float(0.5))])])));
   }
   
   call_it(): unknown {
@@ -98,11 +99,12 @@ class A {
   
 }
 rt.registerClass("A", A);
+rt.registerMethodArities(A, { "sf": [1, 2], "one": [1, 2], "expr_default": [0, 1], "arr_default": [0, 1], "vec_default": [0, 1], "null_default": [0, 1], "refs_earlier": [1, 2], "const_default": [0, 1], "method_default": [0, 1], "helper": [0, 0], "str_slot": [0, 1], "float_into_int_slot": [0, 1], "float_into_int_math": [0, 1], "call_it": [0, 0] });
 rt.registerStaticMethods(A, ["sf"]);
 rt.registerNativeBase(A, "RefCounted");
 
 class Needs {
-  a = rt.V.int(0);
+  a = rt.toInt(rt.V.int(0));
 
   constructor(p_a = rt.toInt(rt.V.int(7))) {
     p_a = rt.paramSlot(p_a, "int", 1, "_init", this);

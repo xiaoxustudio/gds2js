@@ -4,8 +4,11 @@ import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
-import { asColor, color, colorCmp, GColor } from "./color";
+import { asVec3i, GVector3i, vector3i } from "./vector3i";
+import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
+import { sortGodot } from "./sort";
+import { callableSame, isCallable } from "./callable";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -71,6 +74,8 @@ function keyOfIn(v: Variant, depth: number): string {
       if (vec3) return `w:${String(vec3.x)},${String(vec3.y)},${String(vec3.z)}`;
       const vec2i = asVec2i(v);
       if (vec2i) return `x:${String(vec2i.x)},${String(vec2i.y)}`;
+      const vec3i = asVec3i(v);
+      if (vec3i) return `u:${String(vec3i.x)},${String(vec3i.y)},${String(vec3i.z)}`;
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
@@ -91,6 +96,7 @@ export type ElemKind =
   | "Vector2"
   | "Vector3"
   | "Vector2i"
+  | "Vector3i"
   | "Color"
   | "Array"
   | "Dictionary";
@@ -103,6 +109,7 @@ export function isElemKind(name: string): name is ElemKind {
     name === "Vector2" ||
     name === "Vector3" ||
     name === "Vector2i" ||
+    name === "Vector3i" ||
     name === "Color" ||
     name === "Array" ||
     name === "Dictionary"
@@ -133,6 +140,8 @@ export function elemDefault(kind: ElemKind): Variant {
       return vector3(0, 0, 0);
     case "Vector2i":
       return vector2i(0, 0);
+    case "Vector3i":
+      return vector3i(0, 0, 0);
     case "Color":
       return color(0, 0, 0, 1);
     case "Array":
@@ -181,14 +190,35 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       if (v.t === Tag.STRING_NAME) return v;
       if (v.t === Tag.STRING) return V.stringName(v.v as string);
       return null;
-    case "Vector2":
+    case "Vector2": {
+      // `Array[Vector2].append(Vector2i(1, 2))` → `[(1.0, 2.0)]`（`tmp/f69 u02`）：整型向量升成 float。
+      if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.object(new GVector2((v.v as GVector2i).x, (v.v as GVector2i).y));
       return v.t === Tag.OBJECT && v.v instanceof GVector2 ? v : null;
-    case "Vector3":
+    }
+    case "Vector3": {
+      // 同一格的 Vector3i → Vector3（`tmp/f69 u03`）。
+      const g3i = v.t === Tag.OBJECT ? (v.v as object) : null;
+      if (g3i instanceof GVector3i) return vector3(g3i.x, g3i.y, g3i.z);
       return v.t === Tag.OBJECT && v.v instanceof GVector3 ? v : null;
-    case "Vector2i":
+    }
+    case "Vector2i": {
+      // `Array[Vector2i].append(Vector2(1.7, 2.9))` → `[(1, 2)]`（`tmp/f69 u01`）：逐分量向零截断。
+      // 这一格之前只收同型，于是整次 append 被 validate 挡掉、数组**静默不动**，而 Godot 收下了。
+      const g2 = v.t === Tag.OBJECT ? (v.v as object) : null;
+      if (g2 instanceof GVector2) return vector2i(g2.x, g2.y);
       return v.t === Tag.OBJECT && v.v instanceof GVector2i ? v : null;
+    }
+    case "Vector3i": {
+      // `Array[Vector3i].append(Vector3(4.7, 5.2, 6.9))` → `(4, 5, 6)`：收 Vector3 并**逐分量向零截断**
+      // （实测 `tmp/f67 t13`）。Vector2i 那一侧的同一格还没量，所以那边照旧只收同型。
+      if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return v;
+      if (v.t === Tag.OBJECT && v.v instanceof GVector3) return vector3i(v.v.x, v.v.y, v.v.z);
+      return null;
+    }
     case "Color":
-      return v.t === Tag.OBJECT && v.v instanceof GColor ? v : null;
+      // `Array[Color]` 的元素与 `Dictionary[StringName, Color]` 的值都收 int / String（`tmp/f77` / `tmp/f79`：
+      // `append(1)` → `(0.0, 0.0, 0.0, 0.0039)`、`append("f00")` → `(1.0, 0.0, 0.0, 1.0)`、`{"k": 5}` 同理）。
+      return tryColorSlot(v);
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
     case "Dictionary":
@@ -495,8 +525,21 @@ export class GArray {
     this.items = [...this.items].sort(cmp);
   }
 
+  /**
+   * 同键顺序走引擎那份置换（`src/runtime/sort.ts` 逐行转写 `core/templates/sort_array.h`），不再是 JS 的稳定 sort。
+   * 这一格挂了五轮（S184 / S133–S134）：n≤16 时两者本来就一致，**n≥17 有同键才分叉**。指纹是
+   * `Vector2i(键, 下标)` 只按键比、印出下标序列，两套共 **71 格全中**：
+   *  - `tmp/f74.txt` 45 格（拟合用的那批：全等键 n=16…100、mod3/mod5、有序 / 逆序 / 锯齿 / 分块、反向比较器、恒假谓词）；
+   *  - `tmp/f94.txt` 26 格（**没参与拟合的独立批**：新 n（19/21/25/36/48/50/65/96/128/200）、新重复度（mod7 / mod2-64 / i*i%5 / mod9）、
+   *    反向比较器 n=25/60，以及非自洽的比较器 `<=` 与恒真）。对拍脚本 `npx tsx tmp/sort-shipped.mts`。
+   * `tmp/f94` 还顺定量出一件此前只能猜的事：**这份 4.6.3 构建的 `Validate` 是开的** —— 恒真比较器会往 stderr 打
+   * `ERROR: bad comparison function; sorting will be broken`、出处 `unguarded_linear_insert (./core/templates/sort_array.h:252)`，
+   * 而那条宏是 `break`（只中断当前那个扫描 while，分治循环照走），所以引擎给的是「带着 break 的置换」而不是中断。
+   * **置换复现了、那行 stderr 复现不了**，所以不自洽比较器的形状只钉进 ops-check 与探针，不进语料。
+   * `sort()`（无比较器）不动：它的同键元素是**值相等**的元素，置换再怎么变印出来都一样，量不到也就没必要换。
+   */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
-    this.items = [...this.items].sort((x, y) => (before(x, y) ? -1 : before(y, x) ? 1 : 0));
+    this.items = sortGodot(this.items, before);
   }
 
   bsearch(value: Variant, less: (a: Variant, b: Variant) => boolean): number {
@@ -1413,6 +1456,15 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
 }
 
 /**
+ * `str(a, b, c…)`：Godot 是**每个实参按 print 那套渲染，然后无分隔拼起来** ——
+ * `tmp/f93`：`str("a","-","b")` → `a-b`、`str(1,2,3)` → `123`、`str("x", null, 2.5)` → `x<null>2.5`。
+ * 之前发射的是 `rt.strOf(第一个实参)`，多余实参被**静默丢掉**（`str("a","-", "b")` 只给 `a`）。
+ */
+export function strBuiltin(args: Variant[]): Variant {
+  return V.str(args.map((v) => show(v)).join(""));
+}
+
+/**
  * `String(x)` 构造器：实测**只接受 String**（`String("x")` → x），
  * int/float/bool/null/Vector2/Array 全是 Godot 的 Parse Error，所以到得了运行时还不是字符串就报错。
  */
@@ -1440,6 +1492,17 @@ export function stringNameCtor(args: Variant[]): Variant {
     );
   }
   return V.stringName(v.v as string);
+}
+
+/**
+ * **StringName 槽**（变量 / 字段 / 容器元素与键 / 形参默认值）：`tmp/f77` 与 `tmp/f79` 量到
+ * `var sn: StringName = "nm"`、`sn = "zz"`、`Dictionary[StringName, int] = { "a": 1 }` 全部成立，
+ * 而 `= 5`（`v-sn-str`）与 `= Color(...)`（`v-sn-color`）是解析期两句。装不下就响亮报，不原样塞进去。
+ */
+export function toStringNameSlot(v: Variant): Variant {
+  if (v.t === Tag.STRING_NAME) return v;
+  if (v.t === Tag.STRING) return V.stringName(v.v as string);
+  throw new UnsupportedError("string-name-slot", `StringName 槽只收 StringName / String，收到 ${tagName(v.t)}`);
 }
 
 /** 顶层 print：字符串不加引号 */
@@ -1516,6 +1579,9 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GVector2i) {
         return `(${String(inner.x)}, ${String(inner.y)})`;
       }
+      if (inner instanceof GVector3i) {
+        return `(${String(inner.x)}, ${String(inner.y)}, ${String(inner.z)})`;
+      }
       if (inner instanceof GColor) {
         return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
       }
@@ -1559,7 +1625,10 @@ export function valueTypeName(x: Variant): string {
   if (asVec2(x) !== null) return "Vector2";
   if (asVec3(x) !== null) return "Vector3";
   if (asVec2i(x) !== null) return "Vector2i";
+  if (asVec3i(x) !== null) return "Vector3i";
   if (asColor(x) !== null) return "Color";
+  // `tmp/f97` d5 的报错文本里 Callable 就叫 `Callable`（`Invalid operands 'Callable' and 'int' …`）
+  if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }
 
@@ -1572,6 +1641,8 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   const b3 = asVec3(b);
   const ai = asVec2i(a);
   const bi = asVec2i(b);
+  const ai3 = asVec3i(a);
+  const bi3 = asVec3i(b);
   const ac = asColor(a);
   const bc = asColor(b);
   if (
@@ -1581,15 +1652,21 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     b3 !== null ||
     ai !== null ||
     bi !== null ||
+    ai3 !== null ||
+    bi3 !== null ||
     ac !== null ||
     bc !== null
   ) {
     if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
     if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
     if (ai !== null && bi !== null) return ai.x === bi.x && ai.y === bi.y;
+    if (ai3 !== null && bi3 !== null) return ai3.x === bi3.x && ai3.y === bi3.y && ai3.z === bi3.z;
     if (ac !== null && bc !== null)
       return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
-    if (((a2 !== null || a3 !== null || ai !== null || ac !== null ? b : a) as Variant).t === Tag.NIL)
+    if (
+      ((a2 !== null || a3 !== null || ai !== null || ai3 !== null || ac !== null ? b : a) as Variant).t ===
+      Tag.NIL
+    )
       return false;
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
   }
@@ -1603,6 +1680,15 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     (tb === Tag.STRING || tb === Tag.STRING_NAME)
   ) {
     return (a.v as string) === (b.v as string);
+  }
+  if (isCallable(a) !== isCallable(b)) {
+    // `tmp/f97` d5：Callable 跟 int 比在 Godot **不是** false，而是运行期那一句
+    // `Invalid operands 'Callable' and 'int' in operator '=='.`（`== null` / `== "add3"` 两格与
+    // float / bool 来源都没量到 —— 那一支 print 在第一个式子上就断了，所以只发实测这一形）
+    const other = isCallable(a) ? b : a;
+    if (other.t === Tag.INT) {
+      throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
+    }
   }
   if (ta !== tb) return false;
   switch (ta) {
@@ -1619,6 +1705,9 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
+      // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算），不是 JS 盒子引用 ——
+      // 读一次属性就新建一个盒子，按引用比会把 Godot 的真相判成假（实测见 `callable.ts` 的 `callableSame`）
+      if (isCallable(a) && isCallable(b)) return callableSame(a.v as Record<string, unknown>, b.v as Record<string, unknown>);
       return a.v === b.v;
   }
   return false;
@@ -1657,9 +1746,15 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
       }
+      if (a.v instanceof GVector3i && b.v instanceof GVector3i) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
+      }
       if (a.v instanceof GColor && b.v instanceof GColor) {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
+      // Callable 走与 `==` 同一条等式：d6 实测 `[o.add3, o.add3].has(o.add3)` 是**真**，
+      // 而盒子每次读都是新建的，按 JS 引用比会判成假
+      if (isCallable(a) && isCallable(b)) return callableSame(a.v as Record<string, unknown>, b.v as Record<string, unknown>);
       return a.v === b.v;
     default:
       return a.v === b.v;

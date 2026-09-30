@@ -30,6 +30,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Base {
   constructor(...__gd_new_args) {
@@ -38,7 +39,7 @@ class Base {
   }
 
   __gd_fields__() {
-    this.bx = this._mk(rt.V.str("Base.bx"));
+    this.bx = rt.toInt(this._mk(rt.V.str("Base.bx")));
   }
 
   _init(): void {
@@ -58,12 +59,13 @@ class Base {
 }
 rt.registerClass("Base", Base);
 rt.registerFieldTypes(Base, {"bx": "int"});
+rt.registerMethodArities(Base, { "_mk": [1, 1], "tag": [0, 0] });
 rt.registerNativeBase(Base, "RefCounted");
 
 class NoInit extends Base {
   __gd_fields__() {
     super.__gd_fields__();
-    this.cx = this._mk(rt.V.str("NoInit.cx"));
+    this.cx = rt.toInt(this._mk(rt.V.str("NoInit.cx")));
   }
 
 }
@@ -73,7 +75,7 @@ rt.registerFieldTypes(NoInit, {"cx": "int"});
 class Own extends Base {
   __gd_fields__() {
     super.__gd_fields__();
-    this.cx2 = this._mk(rt.V.str("Own.cx2"));
+    this.cx2 = rt.toInt(this._mk(rt.V.str("Own.cx2")));
   }
 
   _init(): void {
@@ -89,7 +91,7 @@ rt.registerFieldTypes(Own, {"cx2": "int"});
 class Grand extends Own {
   __gd_fields__() {
     super.__gd_fields__();
-    this.gx = this._mk(rt.V.str("Grand.gx"));
+    this.gx = rt.toInt(this._mk(rt.V.str("Grand.gx")));
   }
 
   _init(): void {
@@ -109,7 +111,7 @@ class Needs {
   }
 
   __gd_fields__() {
-    this.n = rt.V.int(0);
+    this.n = rt.toInt(rt.V.int(0));
   }
 
   _init(p_n): void {
@@ -138,7 +140,7 @@ rt.registerClass("SkipParent", SkipParent);
 class Forwarded extends Needs {
   __gd_fields__() {
     super.__gd_fields__();
-    this.k = rt.V.int(3);
+    this.k = rt.toInt(rt.V.int(3));
   }
 
 }
@@ -156,5 +158,6 @@ class SuperOther extends Base {
   
 }
 rt.registerClass("SuperOther", SuperOther);
+rt.registerMethodArities(SuperOther, { "tag": [0, 0] });
 
 await new Main().run();

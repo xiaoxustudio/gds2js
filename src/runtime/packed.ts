@@ -4,6 +4,7 @@ import { INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
 import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
+import { GVector3i } from "./vector3i";
 import { GVector3 } from "./vector3";
 import type { GArray } from "./values";
 
@@ -119,10 +120,21 @@ export function toElem(kind: PackKind, v: Variant): PackElem {
     if (kind === "vector2") {
       if (inner instanceof GVector2) return new GVector2(inner.x, inner.y);
       if (inner instanceof GVector2i) return new GVector2(inner.x, inner.y);
+      // `PackedVector2Array([Vector3(1, 2, 3)])` → `[(1.0, 2.0)]`（`tmp/f69 v01`）：**丢掉 z**，
+      // 不是给默认元素。这一格之前落到 `defaultElem`，于是静默成 `[(0.0, 0.0)]`。
+      if (inner instanceof GVector3) return new GVector2(inner.x, inner.y);
+      if (inner instanceof GVector3i) return new GVector2(inner.x, inner.y);
       return defaultElem(kind);
     }
     if (kind === "vector3") {
       if (inner instanceof GVector3) return new GVector3(inner.x, inner.y, inner.z);
+      // `PackedVector3Array([Vector3i(1, 2, 3)])` → `[(1.0, 2.0, 3.0)]`（`tmp/f67 t12` 的 `r` 行）：
+      // append / 构造这一侧**升格**，写那一侧不升（见 packWriteIndex）。
+      if (inner instanceof GVector3i) return new GVector3(inner.x, inner.y, inner.z);
+      // `PackedVector3Array([Vector2(1, 2)])` → `[(1.0, 2.0, 0.0)]`、Vector2i 同形（`tmp/f69 v01`）：
+      // 缺的那一格补 0，同样不是整格默认。
+      if (inner instanceof GVector2) return new GVector3(inner.x, inner.y, 0);
+      if (inner instanceof GVector2i) return new GVector3(inner.x, inner.y, 0);
       return defaultElem(kind);
     }
     if (inner instanceof GColor) return new GColor(inner.r, inner.g, inner.b, inner.a);
@@ -335,15 +347,18 @@ const NO_SUCH_METHOD = new Set([
   "join",
 ]);
 /** 存在但这一轮没做 / 没实测的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
-const NOT_YET = new Set(["to_hex_string", "search_sorted", "remove_at_copy"]);
+const NOT_YET = new Set(["to_hex_string", "search_sorted"]);
 /**
  * 只在**某一种 pack** 上量到「4.6.3 里根本没有这个方法」（f57 / f61 / f62：`Nonexistent function 'X' in base 'Y'`）。
  * 同名的格子在别的形状上没量过，所以只在量过的那一支给实测文本，其余仍走 NOT_YET / 未实现那条响亮拒。
  */
 const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
-  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes"]),
+  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes", "remove_at_copy", "bsearch_custom"]),
   string: new Set(["index_of"]),
-  int32: new Set(["to_float32_array", "to_int32_array"]),
+  int32: new Set(["to_float32_array", "to_int32_array", "remove_at_copy"]),
+  int64: new Set(["remove_at_copy"]),
+  float32: new Set(["remove_at_copy", "bsearch_custom"]),
+  vector2: new Set(["bsearch_custom"]),
 };
 /** byte 那一支独有的方法（`to_*_array` 与压缩这一族只在它身上量过；int32 上至少两个 `to_*_array` 实测是 Nonexistent）。 */
 const BYTE_ONLY = new Set([
@@ -353,10 +368,14 @@ const BYTE_ONLY = new Set([
   "to_int64_array",
   "to_float32_array",
   "to_float64_array",
-  "compress",
-  "decompress",
 ]);
-const NON_BYTE_MISSING = new Set(["hex_encode"]);
+/**
+ * 非 byte 形状实测「根本没有这个名字」的那一批：`hex_encode` 之外，`tmp/f102` 把压缩这一族也量齐了 ——
+ * `compress()` / `decompress()` 在 i32 / i64 / f32 / f64 / str / v2 / v3 / color **八支全部**给
+ * `Invalid call. Nonexistent function 'compress' in base 'PackedXArray'.`（e1 系列，一格一支），
+ * 所以 step 82 那句「只在 byte 上量过、别的形状仍按没实测响」升级成实测文本。
+ */
+const NON_BYTE_MISSING = new Set(["hex_encode", "compress", "decompress"]);
 
 function arity(name: string, args: Variant[], n: number): void {
   if (args.length !== n) throw new GodotRuntimeError("arity", `${name}() 需要 ${n} 个参数（收到 ${args.length} 个）`);
@@ -559,7 +578,8 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     }
     case "has":
     case "count":
-    case "find": {
+    case "find":
+    case "rfind": {
       arity(name, args, 1);
       const want = toElem(kind, args[0] as Variant);
       // S177 ①：值类型 pack 的检索按**分量内容**比（实测 `PackedVector2Array([(1,2),(3,4)]).has((1,2))` 真，
@@ -568,7 +588,12 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       const same = (x: PackElem): boolean => elemSame(kind, x, want);
       if (name === "has") return V.bool(items.some(same));
       if (name === "count") return V.int(items.filter(same).length);
-      return V.int(items.findIndex(same));
+      if (name === "find") return V.int(items.findIndex(same));
+      // rfind 只在 byte 那一支量过（`tmp/f102` c6：同一格 find / rfind 都给 1，找不到给 -1）；
+      // 其余八支没量 → 响亮拒，不照 find 推
+      if (kind !== "byte") throw new UnsupportedError("packed-rfind", `${kind} 的 rfind() 没实测过，只在 PackedByteArray 上量过`);
+      for (let i = items.length - 1; i >= 0; i--) if (same(items[i] as PackElem)) return V.int(i);
+      return V.int(-1);
     }
     case "sort":
       items.sort((x, y) => cmpElem(kind, x, y));
@@ -721,8 +746,48 @@ export function packWriteIndex(p: GBytes, idx: Variant, value: Variant): Variant
       `Invalid assignment of index '${String(at)}' (on base: '${PACK_TYPE_NAME[p.kind]}') with value of type '${tagName(value.t)}'.`,
     );
   }
+  /**
+   * **写这一侧只收同形状**。`tmp/f69 t12` 与 `tmp/f70 p17–p20` 实测：同一个值走 `append` / `insert` /
+   * `set` / 构造会升格（`Vector3i` → `(1.0, 2.0, 3.0)`、`Vector2i` → Vector2、`Vector2` → Vector3 补 0），
+   * 而 `p[0] = <别的东西>` 全部是运行时报错，文本统一是
+   * `Invalid assignment of property or key '0' with value of type 'Vector3i' on a base object of type 'PackedVector3Array'.`
+   * 三对向量/颜色 pack 各认自己的形状；`Color` 槽那一格没量（`tmp/f70` 只量了向量），照旧走折算。
+   */
+  const exact = PACK_WRITE_EXACT[p.kind];
+  if (exact !== null) {
+    const inner = value.t === Tag.OBJECT ? (value.v as object) : null;
+    if (inner === null || !exact(inner)) {
+      throw new GodotRuntimeError(
+        "packed-index-write-type",
+        `Invalid assignment of property or key '${String(at)}' with value of type '${writeValueName(value, inner)}' on a base object of type '${PACK_TYPE_NAME[p.kind]}'.`,
+      );
+    }
+  }
   p.raw()[real] = toElem(p.kind, value);
   return null;
+}
+
+/** 写路径要求同形状的那几支（`color` 与六支数值/字符串 pack 没量这一格 → null，照旧折算）。 */
+const PACK_WRITE_EXACT: Record<PackKind, ((v: object) => boolean) | null> = {
+  byte: null,
+  int32: null,
+  int64: null,
+  float32: null,
+  float64: null,
+  string: null,
+  color: null,
+  vector2: (v) => v instanceof GVector2,
+  vector3: (v) => v instanceof GVector3,
+};
+
+/** 报错文本里的类型名：值类型要说得出 `Vector3i`，`tagName` 只会给 `Object`。 */
+function writeValueName(value: Variant, inner: object | null): string {
+  if (inner instanceof GVector2) return "Vector2";
+  if (inner instanceof GVector2i) return "Vector2i";
+  if (inner instanceof GVector3) return "Vector3";
+  if (inner instanceof GVector3i) return "Vector3i";
+  if (inner instanceof GColor) return "Color";
+  return tagName(value.t);
 }
 
 export function bytesReadIndex(b: GBytes, idx: Variant): Variant {

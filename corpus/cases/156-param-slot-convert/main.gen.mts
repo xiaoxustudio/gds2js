@@ -25,21 +25,22 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class A {
   p_int(a): unknown {
     a = rt.paramSlot(a, "int", 1, "p_int", this);
-    return rt.formatOf(rt.V.str("int<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.typeOf(a)])));
+    return rt.formatOf(rt.V.str("int<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
   p_float(a): unknown {
     a = rt.paramSlot(a, "float", 1, "p_float", this);
-    return rt.formatOf(rt.V.str("float<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.typeOf(a)])));
+    return rt.formatOf(rt.V.str("float<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
   p_bool(a): unknown {
     a = rt.paramSlot(a, "bool", 1, "p_bool", this);
-    return rt.formatOf(rt.V.str("bool<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.typeOf(a)])));
+    return rt.formatOf(rt.V.str("bool<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
   p_str(a): unknown {
@@ -49,26 +50,27 @@ class A {
   
   p_vec2(a): unknown {
     a = rt.paramSlot(a, "Vector2", 1, "p_vec2", this);
-    return rt.formatOf(rt.V.str("vec2<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.typeOf(a)])));
+    return rt.formatOf(rt.V.str("vec2<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
   p_vec2i(a): unknown {
     a = rt.paramSlot(a, "Vector2i", 1, "p_vec2i", this);
-    return rt.formatOf(rt.V.str("vec2i<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.typeOf(a)])));
+    return rt.formatOf(rt.V.str("vec2i<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
   p_color(a): unknown {
     a = rt.paramSlot(a, "Color", 1, "p_color", this);
-    return rt.formatOf(rt.V.str("color<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.typeOf(a)])));
+    return rt.formatOf(rt.V.str("color<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
   math(a): unknown {
     a = rt.paramSlot(a, "int", 1, "math", this);
-    return rt.formatOf(rt.V.str("math<-%s|%s"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.strOf(rt.ops.mul(a, rt.V.int(2)))])));
+    return rt.formatOf(rt.V.str("math<-%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.mul(a, rt.V.int(2))])])));
   }
   
 }
 rt.registerClass("A", A);
+rt.registerMethodArities(A, { "p_int": [1, 1], "p_float": [1, 1], "p_bool": [1, 1], "p_str": [1, 1], "p_vec2": [1, 1], "p_vec2i": [1, 1], "p_color": [1, 1], "math": [1, 1] });
 rt.registerNativeBase(A, "RefCounted");
 
 await new Main().run();

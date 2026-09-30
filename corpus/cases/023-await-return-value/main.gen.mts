@@ -25,5 +25,6 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0], "f": [0, 0], "_process": [1, 1] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();
