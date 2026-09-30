@@ -2491,6 +2491,65 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     method(V.object(GBytes.of([1n], "int64")), "to_int64_array", []));
 }
 
+{
+  // step 82：compress / decompress（探针 tmp/f63 / f64 / f65）。九个「Godot 字节 vs 我们的字节」是这一族的正面证据。
+  const perr = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  const bb = (ns: number[]): Variant => V.object(GBytes.of(ns, "byte"));
+  const hex = (v: Variant): string => String(method(v, "hex_encode", []).v);
+  const hello: number[] = [...new TextEncoder().encode("hello hello hello")];
+  const vectors: Array<[string, number[]]> = [["6 字节", [1, 2, 3, 1, 2, 3]], ["64 个 A", new Array(64).fill(65)], ["17 字节文本", hello]];
+  const godotHex: Record<string, string[]> = {
+    "1": ["789c6364626664620600002c000d", "789c7374a40c0000107e1041", "789ccb48cdc9c957c84090003a2e067d"],
+    "2": ["28b52ffd2006310000010203010203", "28b52ffd20404500001041410100930016", "28b52ffd20116500003068656c6c6f200100314a11"],
+    "3": ["1f8b080000000000000a636462666462060087d716b806000000", "1f8b080000000000000a7374a40c00003c624c4140000000", "1f8b080000000000000acb48cdc9c957c84090008088f9e511000000"],
+  };
+  for (const mode of ["1", "2", "3"]) {
+    vectors.forEach(([name, ns], i) => {
+      const c = method(bb(ns), "compress", [I(Number(mode))]);
+      eq(`step82`, `compress(${mode}) 在「${name}」上的字节与 Godot 逐字节相同、decompress 再还原（f64 / f65）`,
+        `${hex(c)} ${show(method(c, "decompress", [I(ns.length), I(Number(mode))]))}`,
+        `${godotHex[mode]![i]} ${show(bb(ns))}`);
+    });
+  }
+  eq("step82", "空 pack 压哪种模式都给空 pack（f64 t12 —— node 的 deflateSync 反倒给 8 字节，这一格必须照 Godot）",
+    `${show(method(bb([]), "compress", [I(1)]))} ${show(method(bb([]), "compress", [I(2)]))} ${show(method(bb([]), "compress", [I(3)]))}`,
+    "[] [] []");
+  eq("step82", "越界的模式给空 pack（实测的 4 / 9 / -1 三格，compress 与 decompress 都是）",
+    `${show(method(bb([1, 2, 3]), "compress", [I(4)]))} ${show(method(bb([1, 2, 3]), "compress", [I(9)]))} ${show(method(bb([1, 2, 3]), "compress", [I(-1)]))} ${show(method(bb([1, 2, 3]), "decompress", [I(6), I(4)]))}`,
+    "[] [] [] []");
+  const c1 = method(bb(hello), "compress", [I(1)]);
+  const back20 = method(c1, "decompress", [I(20), I(1)]);
+  eq("step82", "expected_size 的三条口径：0 与负数给空 pack、**比真身小也给空 pack**（不是截断！那是 mode 0 的行为）、比真身大不补零",
+    `${show(method(c1, "decompress", [I(0), I(1)]))} ${show(method(c1, "decompress", [I(-1), I(1)]))} ${show(method(c1, "decompress", [I(5), I(1)]))} ${(back20.v as GBytes).length} ${show(back20)}`,
+    `[] [] [] 17 [104, 101, 108, 108, 111, 32, 104, 101, 108, 108, 111, 32, 104, 101, 108, 108, 111]`);
+  eq("step82", "垃圾数据解不出来给空 pack（f65 三种模式一致，Godot 另打一句引擎 stderr）",
+    `${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(1)]))} ${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(3)]))}`,
+    "[] []");
+  shouldThrow("step82", "compress(0)（不写模式时的默认值）没对上任何 node 编解码器 → 响亮拒，不发近似字节", () =>
+    method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]));
+  shouldThrow("step82", "compress() 零参同样是 mode 0 → 同一句响（f63 t16 量到它给 17 字节的「头部 + 原字节 + 补零」）", () =>
+    method(bb([1]), "compress", []));
+  shouldThrow("step82", "decompress 不写模式 = mode 0 → 也响", () => method(bb([1, 2, 3]), "decompress", [I(6)]));
+  eq("step82", "模式实参只量过 int：给 float 响亮拒（不拿「int 槽会截断」那条推）",
+    perr(() => method(bb([1, 2, 3]), "compress", [F(1.5)])), "compress() / decompress() 的模式只实测过 int（收到 float）");
+  shouldThrow("step82", "compress / decompress 只在 PackedByteArray 上量过，别的形状仍响亮拒", () =>
+    method(V.object(GBytes.of([1], "int32")), "compress", [I(1)]));
+  eq("step82", "compress 不动 self，返回的还是 PackedByteArray（typeof 29）",
+    (() => {
+      const p = bb([1, 2, 3, 1, 2, 3]);
+      const c = method(p, "compress", [I(1)]);
+      return `${show(p)} ${typeOf(c).v}`;
+    })(),
+    "[1, 2, 3, 1, 2, 3] 29");
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);

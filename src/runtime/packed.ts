@@ -335,7 +335,7 @@ const NO_SUCH_METHOD = new Set([
   "join",
 ]);
 /** 存在但这一轮没做 / 没实测的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
-const NOT_YET = new Set(["to_hex_string", "compress", "decompress", "search_sorted", "remove_at_copy"]);
+const NOT_YET = new Set(["to_hex_string", "search_sorted", "remove_at_copy"]);
 /**
  * 只在**某一种 pack** 上量到「4.6.3 里根本没有这个方法」（f57 / f61 / f62：`Nonexistent function 'X' in base 'Y'`）。
  * 同名的格子在别的形状上没量过，所以只在量过的那一支给实测文本，其余仍走 NOT_YET / 未实现那条响亮拒。
@@ -345,12 +345,93 @@ const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
   string: new Set(["index_of"]),
   int32: new Set(["to_float32_array", "to_int32_array"]),
 };
-/** byte 那一支独有的四个 `to_*_array`（f61 / f62 量到 int32 上至少两个是 Nonexistent，其余形状没量）。 */
-const BYTE_ONLY = new Set(["get_string_from_utf8", "get_string_from_ascii", "to_int32_array", "to_int64_array", "to_float32_array", "to_float64_array"]);
+/** byte 那一支独有的方法（`to_*_array` 与压缩这一族只在它身上量过；int32 上至少两个 `to_*_array` 实测是 Nonexistent）。 */
+const BYTE_ONLY = new Set([
+  "get_string_from_utf8",
+  "get_string_from_ascii",
+  "to_int32_array",
+  "to_int64_array",
+  "to_float32_array",
+  "to_float64_array",
+  "compress",
+  "decompress",
+]);
 const NON_BYTE_MISSING = new Set(["hex_encode"]);
 
 function arity(name: string, args: Variant[], n: number): void {
   if (args.length !== n) throw new GodotRuntimeError("arity", `${name}() 需要 ${n} 个参数（收到 ${args.length} 个）`);
+}
+
+/**
+ * `compress()` / `decompress()` 的模式表（f63 / f64 / f65 量齐）。**1 = zlib deflate、2 = zstd、
+ * 3 = gzip** 这三格是拿 `node:zlib` 逐字节对上 Godot 输出的（六个向量：6 字节、64 个 `A`、17 字节的文本，
+ * 每向量三模式全部 hex 相同；原始读数留在 `tmp/f64.txt`）。
+ * **0 是 `compress()` 不写模式时的默认值**，它在 4.6.3 给的是「一个头部字节 + 原字节 + 补零」那种形状
+ * （`[1, 2, 3, 1, 2, 3]` → `0f 01 02 03 01 02 03` 再补 11 个 0，共 17 字节），node 侧没有对得上的编解码器 →
+ * 响亮拒（猜错的代价是**产物字节**错，正是这一路最贵的那类）。越界模式（实测的 4 / 9 / -1）给**空 pack**。
+ */
+/**
+ * 压缩这一族要 node 的 zlib。**不能静态 `import "node:zlib"`** —— `single` 那支产物是把 runtime
+ * 整个内联进一个 ESM 的自包含文件，静态 import 要么留下顶层 import（打包门的「零顶层 import」当场红），
+ * 要么被改写成 ESM 里的 `require("node:zlib")` 而 `ReferenceError`（两条都在 pkg-modes-check 里抓到过）。
+ * 所以走 `process.getBuiltinModule`：`process` 是全局、不产生任何 import，SEA 与内联产物 alike 都能用；
+ * 取不到（老 node / 非 node 宿主）就把这三格退回响亮拒 —— 宁拒不用近似。
+ */
+let zlibMod: Record<string, ((b: Uint8Array) => Uint8Array) | undefined> | null | undefined;
+
+function nodeZlib(): Record<string, ((b: Uint8Array) => Uint8Array) | undefined> | null {
+  if (zlibMod === undefined) {
+    const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
+    const get = proc?.getBuiltinModule;
+    zlibMod = typeof get === "function" ? (get.call(proc, "node:zlib") as Record<string, ((b: Uint8Array) => Uint8Array) | undefined>) : null;
+  }
+  return zlibMod;
+}
+
+type Codec = { pack: (b: Uint8Array) => Uint8Array; unpack: (b: Uint8Array) => Uint8Array };
+
+function codecFor(mode: number): Codec | "empty" | null {
+  const z = nodeZlib();
+  if (z === null) return null; // 连 zlib 都拿不到：三种模式一起响
+  if (mode === 1) {
+    const pack = z["deflateSync"];
+    const unpack = z["inflateSync"];
+    if (pack === undefined || unpack === undefined) return null;
+    return { pack, unpack };
+  }
+  if (mode === 3) {
+    const pack = z["gzipSync"];
+    const unpack = z["gunzipSync"];
+    if (pack === undefined || unpack === undefined) return null;
+    return { pack, unpack };
+  }
+  if (mode === 2) {
+    const pack = z["zstdCompressSync"];
+    const unpack = z["zstdDecompressSync"];
+    if (pack === undefined || unpack === undefined) return null; // 这版 node 没带 zstd：响，不悄悄降级
+    return { pack, unpack };
+  }
+  if (mode === 0) return null;
+  return "empty";
+}
+
+/** 模式实参：只量过 int（0..3 与越界的 4 / 9 / -1）。别的来源没量 → 响。 */
+function modeOf(v: Variant): number {
+  if (v.t !== Tag.INT) {
+    throw new UnsupportedError("compress-mode-kind", `compress() / decompress() 的模式只实测过 int（收到 ${tagName(v.t)}）`);
+  }
+  const n = intToNum(v.v as number | bigint);
+  return typeof n === "bigint" ? Number(n) : n;
+}
+
+/** pack 的格子 → 字节缓冲（byte pack 的元素在 `toElem` 那侧已经折到 0..255）。 */
+function byteBuf(items: PackElem[]): Uint8Array {
+  const buf = new Uint8Array(items.length);
+  for (let i = 0; i < items.length; i++) {
+    const e = items[i] as number | bigint;
+    buf[i] = (typeof e === "bigint" ? Number(e) : e) & 255;
+  }
+  return buf;
 }
 
 /**
@@ -360,11 +441,7 @@ function arity(name: string, args: Variant[], n: number): void {
  * f62 t09 的六字节给的是 `[]`），Godot 那句 `size must be a multiple of …` 是引擎 stderr、不进语料。
  */
 function bytesToPack(items: PackElem[], kind: PackKind, width: number, read: (dv: DataView, off: number) => PackElem): Variant {
-  const buf = new Uint8Array(items.length);
-  for (let i = 0; i < items.length; i++) {
-    const e = items[i] as number | bigint;
-    buf[i] = (typeof e === "bigint" ? Number(e) : e) & 255;
-  }
+  const buf = byteBuf(items);
   if (buf.length % width !== 0) return V.object(new GBytes([], kind));
   const dv = new DataView(buf.buffer);
   const out: PackElem[] = [];
@@ -573,6 +650,44 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       return bytesToPack(items, "float64", 8, (dv, off) => dv.getFloat64(off, true));
     case "to_byte_array":
       return V.object(new GBytes(packToBytes(kind, items), "byte"));
+    case "compress": {
+      if (args.length > 1) {
+        throw new GodotRuntimeError("arity", `compress() 最多 1 个参数（收到 ${args.length} 个）`);
+      }
+      const mode = args.length === 0 ? 0 : modeOf(args[0] as Variant);
+      const codec = codecFor(mode);
+      // 越界模式实测给空 pack（4 / 9 / -1 三格）；空 pack 压任何模式也还是空 pack
+      // （实测 `PackedByteArray().compress(1)` → `[]`，而 node 的 deflateSync 反倒给 8 字节 —— 这一格必须照 Godot）
+      if (codec === "empty" || items.length === 0) return V.object(new GBytes([], "byte"));
+      if (codec === null) {
+        throw new UnsupportedError("packed-compress-mode", `compress() 的 mode ${mode} 发不出去：0 是不写模式时的默认值，4.6.3 那侧给的是「头部字节 + 原字节 + 补零」那种形状，node 侧没有对得上的编解码器；1 / 2 / 3 要靠 process.getBuiltinModule("node:zlib")（这一版取不到，或 2 需要而它没有 zstd）。都不发近似值`);
+      }
+      return V.object(new GBytes([...codec.pack(byteBuf(items))], "byte"));
+    }
+    case "decompress": {
+      if (args.length < 1 || args.length > 2) {
+        throw new GodotRuntimeError("arity", `decompress() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+      }
+      const mode = args.length === 2 ? modeOf(args[1] as Variant) : 0;
+      const codec = codecFor(mode);
+      if (codec === "empty") return V.object(new GBytes([], "byte"));
+      if (codec === null) {
+        throw new UnsupportedError("packed-compress-mode", `decompress() 的 mode ${mode} 没法逐字节对上（同 compress()：0 是默认模式、node 侧没对应编解码器），不发近似值`);
+      }
+      const sv = intToNum((args[0] as Variant).v as number | bigint);
+      const want = typeof sv === "bigint" ? Number(sv) : sv;
+      // f65 三种模式一致的三条：expected ≤ 0 给空 pack；**expected 比真身小也给空 pack**
+      // （不是截断 —— 截断是 mode 0 那一支的行为）；比真身大也不补零，给的就是真身。
+      if (!(want > 0) || items.length === 0) return V.object(new GBytes([], "byte"));
+      let plain: Uint8Array;
+      try {
+        plain = codec.unpack(byteBuf(items));
+      } catch {
+        return V.object(new GBytes([], "byte")); // 垃圾数据实测给空 pack（另打一句引擎 stderr）
+      }
+      if (plain.length > want) return V.object(new GBytes([], "byte"));
+      return V.object(new GBytes([...plain], "byte"));
+    }
     case "get_string_from_utf8": {
       return V.str(new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(items as number[])));
     }
