@@ -460,6 +460,30 @@ function innerClassBase(text: string): string | null {
  * 内部类要按「基类在前」发：JS 的 class 声明有 TDZ，源码里 `class Child extends Later` 而 `Later` 写在后面时
  * 照源序发会当场 ReferenceError —— Godot 实测允许这种前向引用（tmp/f53 t14）。成环的拒。
  */
+/**
+ * 内部类沿 `extends` 链继承来的实例成员名（字段、常量、信号）。
+ * 实测（`tmp/f72/ic1.gd`，Godot 4.6.3）：`class Plain extends NoInit` 的方法里**裸引** `a` 与 `CA`
+ * 是合法的，隔一层的 `class Mid extends Plain` 也照样能裸引 —— 链要一路走上去。
+ * 不并进来时发出去的是裸 `a`，跑起来一句 `a is not defined`。
+ * 继承来的**方法**不用并：`emitCall` 对裸 ident 调用无条件发 `this.f()`，本来就对。
+ */
+function innerInheritedNames(decl: ClassDecl): string[] {
+  const seen = new Set<string>([decl.name]);
+  const out: string[] = [];
+  let next: string | null = decl.extends;
+  while (next !== null) {
+    const parent = INNER_CLASSES.get(next);
+    if (!parent || seen.has(parent.name)) break;
+    seen.add(parent.name);
+    out.push(
+      ...parent.vars.filter((v) => !v.isStatic).map((v) => v.name),
+      ...parent.signals.map((s) => s.name),
+    );
+    next = parent.extends;
+  }
+  return out;
+}
+
 function orderInnerClasses(classes: ClassDecl[]): ClassDecl[] {
   const out: ClassDecl[] = [];
   const done = new Set<string>();
@@ -490,7 +514,10 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   const savedHasBase = INIT_HAS_BASE;
   const savedAsMethod = INIT_AS_METHOD;
   const savedHostSuper = NEEDS_HOST_SUPER;
-  CURRENT_MEMBERS = new Set(decl.vars.filter((v) => !v.isStatic).map((v) => v.name));
+  CURRENT_MEMBERS = new Set([
+    ...decl.vars.filter((v) => !v.isStatic).map((v) => v.name),
+    ...innerInheritedNames(decl),
+  ]);
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));

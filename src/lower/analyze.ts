@@ -64,6 +64,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   );
   const moduleScope = globalScope.child(declNames(m));
   const coroutines = new Set(m.funcs.filter((f) => f.coroutine).map((f) => f.name));
+  const classes = classTable(m);
   const classScopeBase = new Scope(
     new Set([
       ...(m.className ? [m.className] : []),
@@ -76,7 +77,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   );
 
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
-  for (const c of m.innerClasses) checkClass(c, classScopeBase, diags);
+  for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
   checkStaticAccess(m.funcs, m.vars, diags);
   checkClassFuncVisibility(m, diags);
   checkTypedCollections(m, diags);
@@ -1358,12 +1359,48 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 }
 
-function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[]): void {
-  const scope = base.child([c.name, ...declNames(c)]);
+function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[], classes: Map<string, ClassDecl>): void {
+  const scope = base.child([c.name, ...declNames(c), ...inheritedNames(c, classes)]);
   const coroutines = new Set(c.funcs.filter((f) => f.coroutine).map((f) => f.name));
   checkStaticAccess(c.funcs, c.vars, diags);
   for (const f of c.funcs) checkFunc(f, scope, coroutines, diags);
-  for (const inner of c.innerClasses) checkClass(inner, scope, diags);
+  for (const inner of c.innerClasses) checkClass(inner, scope, diags, classes);
+}
+
+/**
+ * 脚本里所有内部类的名字表（含嵌套的）。基类若是跨文件那种（在 `globals` 里），
+ * 这张表查不到 → 一个名字也不并，与跨文件那条 `inheritedMembers` 通路的保守口径一致。
+ */
+function classTable(m: Module): Map<string, ClassDecl> {
+  const out = new Map<string, ClassDecl>();
+  const collect = (list: ClassDecl[]): void => {
+    for (const c of list) {
+      if (!out.has(c.name)) out.set(c.name, c);
+      collect(c.innerClasses);
+    }
+  };
+  collect(m.innerClasses);
+  return out;
+}
+
+/**
+ * 沿 `extends` 链把祖先的声明名并进来。实测（`tmp/f72/ic1.gd`，Godot 4.6.3 跑得通、我们此前拦四条）：
+ * 内部类 `class Plain extends NoInit` 里**裸引**继承来的 `var a` 与 `const CA` 是合法的，
+ * 隔一层的 `class Mid extends Plain` 同样能裸引（链要一路走上去，不能只看直接父类）。
+ * `seen` 是给畸形继承（A extends B extends A）挡死循环的 —— 那种写法 Godot 侧没量过。
+ */
+function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[] {
+  const seen = new Set<string>([c.name]);
+  const out: string[] = [];
+  let next: string | null = c.extends;
+  while (next !== null) {
+    const parent = classes.get(next);
+    if (!parent || seen.has(parent.name)) break;
+    seen.add(parent.name);
+    out.push(...declNames(parent));
+    next = parent.extends;
+  }
+  return out;
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[]): void {
