@@ -311,11 +311,14 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     });
   }
   const rawAbiBlockedModules = new Set<string>();
+  // 被别的脚本类 extends 的那些模块：构造要走协议形状（S174 —— 子类的字段初始化子必须排在父类 `_init` 体之前）
+  const extendedModules = new Set<string>();
   for (const l of loaded.values()) {
     const bm = baseModule(l, loaded, classIndex);
     if (bm) {
       rawAbiBlockedModules.add(l.resPath);
       rawAbiBlockedModules.add(bm.resPath);
+      extendedModules.add(bm.resPath);
     }
   }
 
@@ -380,6 +383,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       rawAbiExternal: rawAbiBlockedModules.has(l.resPath)
         ? l.module.funcs.map((f) => f.name)
         : [...attrNames],
+      extendedByScript: extendedModules.has(l.resPath),
       runtimeMode: opts.runtimeMode ?? "import",
       standaloneInline: opts.standaloneInline,
       standaloneRequirePath:

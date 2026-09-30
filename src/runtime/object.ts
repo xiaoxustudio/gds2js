@@ -77,10 +77,25 @@ export function registerFieldTypes(ctor: GdClassCtor, table: Record<string, stri
   FIELD_TYPES.set(ctor, table);
 }
 
-/** 实例（或构造器）的声明类型表，没有则 null。 */
+/**
+ * 实例（或构造器）的声明类型表，没有则 null。
+ * **沿原型链并表**：派生类自己的表只登记自有成员，而继承来的带标注成员同样要拿到声明类型
+ * （内部类现在能 `extends` 内部类，S174 ④；子类里写 `p.t = 5.5` 仍要按基类声明的 `int` 转成 5）。
+ * 每张构造器只算一次，注册行都在产物加载期跑完，用户代码才开始查，所以缓存不会读到半张表。
+ */
+const FIELD_TYPES_CHAIN = new WeakMap<Function, Record<string, string> | null>();
 export function fieldTypesOf(target: unknown): Record<string, string> | null {
-  const ctor = typeof target === "function" ? (target as GdClassCtor) : (target as { constructor?: GdClassCtor })?.constructor;
-  return (ctor && FIELD_TYPES.get(ctor)) || null;
+  const start = typeof target === "function" ? (target as Function) : (target as { constructor?: Function })?.constructor ?? null;
+  if (!start) return null;
+  if (FIELD_TYPES_CHAIN.has(start)) return FIELD_TYPES_CHAIN.get(start) ?? null;
+  let merged: Record<string, string> | null = null;
+  // 从自己的表往上并（子类的声明盖住父类的同名声明）；走到 null 或 JS 原型链的头就停。
+  for (let c: Function | null = start; c !== null; c = Object.getPrototypeOf(c) as Function | null) {
+    const table = FIELD_TYPES.get(c as GdClassCtor);
+    if (table) merged = { ...table, ...(merged ?? {}) };
+  }
+  FIELD_TYPES_CHAIN.set(start, merged);
+  return merged;
 }
 
 export function registerStaticMethods(ctor: GdClassCtor, names: string[]): void {

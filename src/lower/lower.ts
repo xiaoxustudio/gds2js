@@ -190,6 +190,13 @@ function lowerClass(n: SyntaxNode): ClassDecl {
     innerClasses: [],
     loc: loc(n),
   };
+  // 内部类的 `class X extends Y:` 里 extends_statement 是 class_definition 的**直接孩子**（与 class_body 同级），
+  // 不在类体里 —— 只在类体里找会把基类静默丢掉（S174，探针 tmp/f53 t01）。
+  for (const c of named(n)) {
+    if (c.type === "extends_statement") {
+      decl.extends = need(named(c)[0] ?? field(c, "type"), "extends").text;
+    }
+  }
   for (const c of named(body)) {
     switch (c.type) {
       case "extends_statement":

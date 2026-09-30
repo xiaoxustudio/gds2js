@@ -1,5 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, PropAccessor, Stmt, TypeRef, VarDecl } from "../lower/ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 import { isElemKind } from "../runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
@@ -26,6 +26,8 @@ export interface EmitOptions {
   sourceFile?: string;
   jsFile?: string;
   rawAbiExternal?: string[];
+  /** 本模块的类被工程里**别的脚本类** extends：构造要走协议形状（S174），由 project.ts 按 extends 边给出。 */
+  extendedByScript?: boolean;
   runtimeMode?: "import" | "local" | "single";
   standaloneRequirePath?: string;
   standaloneInline?: string;
@@ -127,12 +129,30 @@ const BUILTIN_TODO = new Set([
 let MODULE_VARS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
 let MODULE_CLASSES = new Set<string>();
+/** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它（S174 ④）。 */
+let INNER_CLASSES = new Map<string, ClassDecl>();
+/** 被同模块内部类当基类的那些类名：它们的构造要走协议形状（S174）。 */
+let EXTENDED_INNER = new Set<string>();
 /** preload("字面量") → 解析到的类绑定名 */
 let PRELOADS = new Map<string, string>();
 /** load("字面量") → 规范化 res 路径（脚本注册表的键） */
 let LOADS = new Map<string, string>();
-/** 正在发射 _init（constructor）体——只有此上下文允许 super(...) 构造调用。 */
-let IN_CONSTRUCTOR = false;
+/**
+ * 正在发射 `_init` 的体 —— 只有这里的 `super(...)` 才发成 `super._init(...)`（S174 ②）。
+ * 配套的两个变量：`INIT_HAS_BASE` 是「这个类有没有脚本基类」（没有的话 `super()` 在 Godot 是解析期拒，
+ * 我们也不发那种运行期才炸的 JS）；`CURRENT_FUNC` 是「非 `_init` 方法里的 `super()`」那条实测口径要用到的方法名。
+ */
+let IN_INIT = false;
+let INIT_HAS_BASE = false;
+let CURRENT_FUNC = "";
+/**
+ * `_init` 发成协议形状的方法（true）还是旧的 JS constructor（false）。
+ * 只有链上**有脚本继承边**的类才需要协议形状：孤立的根类里「字段先跑、体后跑」两种形状等价，
+ * 用不到就不重写全部产物（S174 的 churn 纪律）。
+ */
+let INIT_AS_METHOD = false;
+/** 旧形状下 JS 的直接基类是宿主 SceneTree：派生构造器必须自己调 super()，否则运行期当场炸。 */
+let NEEDS_HOST_SUPER = false;
 /** 正在发射的模块里 named enum 的名字（`Suit.HEARTS` 点访问要特判成 rt.index） */
 let ENUM_NAMES = new Set<string>();
 /** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
@@ -244,6 +264,17 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     ...(m.className ? [m.className] : []),
     ...classRefs.map((r) => r.name),
   ]);
+  INNER_CLASSES = new Map();
+  const indexInner = (c: ClassDecl): void => {
+    INNER_CLASSES.set(c.name, c);
+    for (const inner of c.innerClasses) indexInner(inner);
+  };
+  for (const c of m.innerClasses) indexInner(c);
+  // 被同模块别的内部类当基类的，要走协议形状（它的子类字段必须排在它的 `_init` 体之前，S174 ①）
+  EXTENDED_INNER = new Set<string>();
+  for (const c of INNER_CLASSES.values()) {
+    if (c.extends !== null && INNER_CLASSES.has(c.extends)) EXTENDED_INNER.add(c.extends);
+  }
   PRELOADS = new Map(preloads.map((p) => [p.literal, p.name]));
   LOADS = new Map((opts.loadMap ?? []).map((l) => [l.literal, l.resPath]));
 
@@ -296,19 +327,24 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
     baseClass.kind === "host" ? " extends SceneTree"
     : baseClass.kind === "import" ? ` extends ${baseClass.name}`
     : "";
+  // 构造协议（S174）：只有脚本基类才往 `super.__gd_fields__()` 串；宿主 SceneTree 不是脚本类，
+  // 所以由本类自己当根（先 super() 再跑字段与 _init）。
+  // 构造形状由「链上有没有脚本继承边」决定（S174）：有边才用协议形状，孤立根类保持旧字节。
+  const proto = baseClass.kind === "import" || opts.extendedByScript === true;
+  INIT_HAS_BASE = baseClass.kind === "import";
+  INIT_AS_METHOD = proto;
+  NEEDS_HOST_SUPER = !proto && baseClass.kind === "host";
   out.push(`export class ${className}${heritage} {`);
-  for (const s of m.signals) {
-    mark(out.length, s.loc);
-    out.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
+  if (proto) {
+    if (baseClass.kind !== "import") out.push(...emitRootConstructor(baseClass.kind === "host"));
+    out.push(...emitFieldsMethod(m.vars, m.signals, baseClass.kind === "import", out.length));
+    out.push(...emitClassLevelVars(m.vars, out.length));
+  } else {
+    out.push(...emitLegacyMembers(m.vars, m.signals, out.length));
   }
-  for (const v of m.vars) {
-    mark(out.length, v.loc);
-    for (const l of emitMemberVar(v)) out.push(l);
-  }
-  if (m.signals.length > 0 || m.vars.length > 0) out.push("");
   for (const f of m.funcs) {
     const base = out.length;
-    const lines = emitFunc(f, base, baseClass.kind !== "none");
+    const lines = emitFunc(f, base);
     for (const line of lines) out.push(`  ${line}`);
   }
   out.push("}");
@@ -326,7 +362,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   }
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, ${className});`);
 
-  for (const c of m.innerClasses) {
+  for (const c of orderInnerClasses(m.innerClasses)) {
     const base = out.length;
     for (const line of emitClassDecl(c, base)) out.push(line);
   }
@@ -388,15 +424,10 @@ function staticVarTableLiteral(vars: readonly VarDecl[]): string | null {
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
 }
 
-function emitMemberVar(v: VarDecl): string[] {
+/** 带读写器的属性：发成 JS 的 get/set（初值不发 —— 实测口径见 S152，这里维持既有形状，只从类字段挪到类级）。 */
+function emitAccessors(v: VarDecl): string[] {
   const a = v.accessor;
-  if (a === null || a === undefined) {
-    const init = stampDecl(v.type, v.init, emitExpr);
-    if (v.isStatic) return [`  static ${v.name} = ${init};`];
-    const field = `  ${v.name} = ${init};`;
-    if (v.isConst) return [field, `  static ${v.name} = ${init};`];
-    return [field];
-  }
+  if (a === null || a === undefined) return [];
   const out: string[] = [];
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
   out.push(`  get ${v.name}() {`);
@@ -412,15 +443,52 @@ function emitMemberVar(v: VarDecl): string[] {
   return out;
 }
 
+/**
+ * 内部类 `extends` 的目标怎么发（S174 ④）。
+ * - `RefCounted` / `Object` 这种**没有脚本构造器**的原生基类 → 发成不带 heritage 的根类（与今天的形状一致）
+ * - 同模块的内部类名 → JS 的 `extends 那个绑定`
+ * - 其余（引擎类型、跨文件的类名）→ 响亮拒：那一格的形状还没实测过
+ */
+function innerClassBase(text: string): string | null {
+  if (text === "RefCounted" || text === "Object") return null;
+  if (INNER_CLASSES.has(text)) return text;
+  throw new UnsupportedError("class-extends", `内部类 extends ${text} 还没实测过（引擎类型属 Tier 2，跨文件的内部类基类那一格没量）`);
+}
+
+/**
+ * 内部类要按「基类在前」发：JS 的 class 声明有 TDZ，源码里 `class Child extends Later` 而 `Later` 写在后面时
+ * 照源序发会当场 ReferenceError —— Godot 实测允许这种前向引用（tmp/f53 t14）。成环的拒。
+ */
+function orderInnerClasses(classes: ClassDecl[]): ClassDecl[] {
+  const out: ClassDecl[] = [];
+  const done = new Set<string>();
+  const visiting = new Set<string>();
+  const put = (c: ClassDecl): void => {
+    if (done.has(c.name)) return;
+    if (visiting.has(c.name)) throw new UnsupportedError("class-extends", `内部类 ${c.name} 的 extends 成环`);
+    visiting.add(c.name);
+    const b = c.extends !== null ? INNER_CLASSES.get(c.extends) : undefined;
+    if (b) put(b);
+    visiting.delete(c.name);
+    done.add(c.name);
+    out.push(c);
+  };
+  for (const c of classes) put(c);
+  return out;
+}
+
 function emitClassDecl(decl: ClassDecl, base = 0): string[] {
-  if (decl.extends) {
-    throw new UnsupportedError("class-extends", `类 ${decl.name} 的 extends 还没实现`);
+  if (decl.innerClasses.length > 0) {
+    throw new UnsupportedError("inner-class", `内部类 ${decl.name} 里再套内部类还没实测过，不发`);
   }
   const saved = CURRENT_MEMBERS;
   const savedTypes = VAR_TYPES;
   const savedStatics = STATIC_FUNCS;
   const savedClass = CURRENT_CLASS;
   const savedConsts = CLASS_VALUE_OWNERS;
+  const savedHasBase = INIT_HAS_BASE;
+  const savedAsMethod = INIT_AS_METHOD;
+  const savedHostSuper = NEEDS_HOST_SUPER;
   CURRENT_MEMBERS = new Set(decl.vars.filter((v) => !v.isStatic).map((v) => v.name));
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
@@ -428,17 +496,20 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   CLASS_VALUE_OWNERS = new Map(savedConsts);
   for (const v of decl.vars) if (v.isConst || v.isStatic) CLASS_VALUE_OWNERS.set(v.name, decl.name);
 
-  const lines = [`class ${decl.name} {`];
+  const baseName = decl.extends === null ? null : innerClassBase(decl.extends);
+  const proto = baseName !== null || EXTENDED_INNER.has(decl.name);
+  INIT_HAS_BASE = baseName !== null;
+  INIT_AS_METHOD = proto;
+  NEEDS_HOST_SUPER = false;
+  const lines = [`class ${decl.name}${baseName !== null ? ` extends ${baseName}` : ""} {`];
   mark(base, decl.loc);
-  for (const s of decl.signals) {
-    mark(base + lines.length, s.loc);
-    lines.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
+  if (proto) {
+    if (baseName === null) lines.push(...emitRootConstructor(false));
+    lines.push(...emitFieldsMethod(decl.vars, decl.signals, baseName !== null, base + lines.length));
+    lines.push(...emitClassLevelVars(decl.vars, base + lines.length));
+  } else {
+    lines.push(...emitLegacyMembers(decl.vars, decl.signals, base + lines.length));
   }
-  for (const v of decl.vars) {
-    mark(base + lines.length, v.loc);
-    for (const l of emitMemberVar(v)) lines.push(l);
-  }
-  if (decl.vars.length > 0 || decl.signals.length > 0) lines.push("");
   for (const f of decl.funcs) {
     const funcBase = base + lines.length;
     for (const line of emitFunc(f, funcBase)) lines.push(`  ${line}`);
@@ -451,7 +522,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null) lines.push(`rt.registerStaticVars(${decl.name}, ${declStaticVars});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
-  lines.push(`rt.registerNativeBase(${decl.name}, "RefCounted");`);
+  // 与模块类同一口径（S167）：原生基类只在**没有脚本基类**时登记，有的话运行时沿原型链往上找。
+  if (baseName === null) lines.push(`rt.registerNativeBase(${decl.name}, "RefCounted");`);
   lines.push("");
 
   CURRENT_MEMBERS = saved;
@@ -459,6 +531,9 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   STATIC_FUNCS = savedStatics;
   CURRENT_CLASS = savedClass;
   CLASS_VALUE_OWNERS = savedConsts;
+  INIT_HAS_BASE = savedHasBase;
+  INIT_AS_METHOD = savedAsMethod;
+  NEEDS_HOST_SUPER = savedHostSuper;
   return lines;
 }
 
@@ -546,21 +621,26 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
   return out;
 }
 
-function emitFunc(f: FuncDecl, base = 0, hasSuper = false): string[] {
+function emitFunc(f: FuncDecl, base = 0): string[] {
   const saved = LOCAL_TYPES;
   LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
   try {
-    return emitFuncInner(f, base, hasSuper);
+    return emitFuncInner(f, base);
   } finally {
     LOCAL_TYPES = saved;
   }
 }
 
-function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
+function emitFuncInner(f: FuncDecl, base = 0): string[] {
+  // 参数默认值那一格还没对拍过：Godot 少传就用默认值，而我们的产物少传会在 `rt.toInt(undefined)`
+  // 这类地方抛 —— 那是「Godot 能跑、我们崩」，所以先响亮拒，等有 golden 钉住默认值再把它们发出去。
+  if (f.params.some((p) => p.default !== null)) {
+    throw new UnsupportedError("param-default", `${f.name}() 的参数默认值还没实测过，不发（探针 tmp/f53 t06 撞出来的那条）`);
+  }
   if (f.isStatic && (f.name === "_init" || f.name === "_initialize" || f.name === "_process")) {
     throw new UnsupportedError("static-entry", `静态的 ${f.name}() 还没实测过行为，不猜着发`);
   }
-  if (f.name === "_init") return emitConstructor(f, base, hasSuper);
+  if (f.name === "_init") return INIT_AS_METHOD ? emitInitMethod(f, base) : emitInitAsConstructor(f, base, NEEDS_HOST_SUPER);
 
   const isEntry = f.name === "_initialize" || f.name === "_process";
   const abi = RAW_ABIS.get(f.name);
@@ -580,6 +660,8 @@ function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
   const savedRet = CURRENT_RET;
   const savedArrays = RAW_ARRAYS;
   const savedDicts = RAW_DICTS;
+  const savedFunc = CURRENT_FUNC;
+  CURRENT_FUNC = f.name;
   CURRENT_RET = abi ? abi.ret : null;
   const layout = analyzeFuncLayout(f);
   UNBOXED = layout.unboxed;
@@ -595,28 +677,28 @@ function emitFuncInner(f: FuncDecl, base = 0, hasSuper = false): string[] {
     CURRENT_RET = savedRet;
     RAW_ARRAYS = savedArrays;
     RAW_DICTS = savedDicts;
+    CURRENT_FUNC = savedFunc;
   }
   lines.push("}");
   lines.push("");
   return lines;
 }
 
-function emitConstructor(f: FuncDecl, base: number, hasSuper: boolean): string[] {
+/**
+ * `_init` 发成**普通方法**（协议形状，S174 ②③）：只要这条继承链上有脚本边就用它。
+ * 两条实测把 constructor 模型否掉了：整条链的字段初始化子先全部跑完，才轮到 `_init` 的体；
+ * 子类自己定义了 `_init` 却不写 `super()` 时，父类的体一次也不跑。JS 的派生构造器要求先 `super()`、
+ * 而且只能调一次，两头都对不上（`super()` 调两遍父体在 Godot 是合法的，实测跑两遍）。
+ */
+function emitInitMethod(f: FuncDecl, base: number): string[] {
   const params = f.params.map((p) => p.name).join(", ");
-  const lines = [`constructor(${params}) {`];
+  const lines = [`_init(${params}): void {`];
   mark(base, f.loc);
-
-  const first = f.body[0];
-  const explicitSuper =
-    !!first &&
-    first.kind === "expr" &&
-    first.expr.kind === "call" &&
-    first.expr.callee.kind === "ident" &&
-    first.expr.callee.name === "super";
-  if (!explicitSuper && hasSuper) lines.push("  super();");
-
-  IN_CONSTRUCTOR = true;
+  const savedIn = IN_INIT;
   const savedUnboxed = UNBOXED;
+  const savedFunc = CURRENT_FUNC;
+  IN_INIT = true;
+  CURRENT_FUNC = "_init";
   UNBOXED = computeUnboxed(f);
   try {
     for (const s of f.body) {
@@ -624,12 +706,129 @@ function emitConstructor(f: FuncDecl, base: number, hasSuper: boolean): string[]
       for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
     }
   } finally {
-    IN_CONSTRUCTOR = false;
+    IN_INIT = savedIn;
     UNBOXED = savedUnboxed;
+    CURRENT_FUNC = savedFunc;
   }
   lines.push("}");
   lines.push("");
   return lines;
+}
+
+/**
+ * 旧形状：`_init` 就是 JS constructor。只在**链上没有脚本继承边**时用 —— 孤立根类的字段初始化子
+ * 本来就先于体跑（JS 类字段在构造器体之前），与实测同值，所以没必要为它重写全部产物。
+ * `hostSuper` 是「JS 的直接基类是宿主的 SceneTree」：那种构造器必须自己调 super()。
+ */
+function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): string[] {
+  const params = f.params.map((p) => p.name).join(", ");
+  const lines = [`constructor(${params}) {`];
+  mark(base, f.loc);
+  const first = f.body[0];
+  const explicitSuper =
+    !!first &&
+    first.kind === "expr" &&
+    first.expr.kind === "call" &&
+    first.expr.callee.kind === "ident" &&
+    first.expr.callee.name === "super";
+  if (!explicitSuper && hostSuper) lines.push("  super();");
+  const savedUnboxed = UNBOXED;
+  const savedFunc = CURRENT_FUNC;
+  UNBOXED = computeUnboxed(f);
+  CURRENT_FUNC = "_init";
+  try {
+    for (const s of f.body) {
+      mark(base + lines.length, s.loc);
+      for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
+    }
+  } finally {
+    UNBOXED = savedUnboxed;
+    CURRENT_FUNC = savedFunc;
+  }
+  lines.push("}");
+  lines.push("");
+  return lines;
+}
+
+/** 旧形状的类级成员：信号与实例字段发成 JS 类字段，静态与 const 的静态镜像照发，带读写器的发 get/set。 */
+function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: number): string[] {
+  const out: string[] = [];
+  for (const s of signals) {
+    mark(lineBase + out.length, s.loc);
+    out.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
+  }
+  for (const v of vars) {
+    mark(lineBase + out.length, v.loc);
+    if (v.accessor) {
+      out.push(...emitAccessors(v));
+      continue;
+    }
+    const init = stampDecl(v.type, v.init, emitExpr);
+    if (v.isStatic) {
+      out.push(`  static ${v.name} = ${init};`);
+      continue;
+    }
+    out.push(`  ${v.name} = ${init};`);
+    if (v.isConst) {
+      mark(lineBase + out.length, v.loc);
+      out.push(`  static ${v.name} = ${init};`);
+    }
+  }
+  if (vars.length > 0 || signals.length > 0) out.push("");
+  return out;
+}
+
+/**
+ * 字段与信号的初始化子集中到 `__gd_fields__`（S174 ①）：由**根类**的构造器调一次，派生类各自
+ * `super.__gd_fields__()` 串起来，于是初始化子按「基类 → 子类」跑完，而且里面调的是**最派生的覆写方法**
+ * （实测 `class WithInit extends Plain` 用子类覆写的 `_note` 去初始化基类的字段）。
+ * 带读写器的属性照旧只发 get/set（今天就不发初值），静态与 const 的静态镜像发在类上（见 emitClassLevelVars）。
+ */
+function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: boolean, lineBase: number): string[] {
+  const out: string[] = ["  __gd_fields__() {"];
+  if (chainToBase) out.push("    super.__gd_fields__();");
+  for (const s of signals) {
+    mark(lineBase + out.length, s.loc);
+    out.push(`    this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
+  }
+  for (const v of vars) {
+    if (v.isStatic || v.accessor) continue;
+    mark(lineBase + out.length, v.loc);
+    out.push(`    this.${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+  }
+  out.push("  }");
+  out.push("");
+  return out;
+}
+
+/** 类级的那几行：静态变量、const 的静态镜像、带读写器属性的 get/set。 */
+function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
+  const out: string[] = [];
+  for (const v of vars) {
+    mark(lineBase + out.length, v.loc);
+    if (v.accessor) {
+      for (const l of emitAccessors(v)) out.push(l);
+      continue;
+    }
+    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+  }
+  if (out.length > 0) out.push("");
+  return out;
+}
+
+/**
+ * 只有**根用户类**需要构造器：派生类继承它，`this.__gd_fields__()` 与 `this._init?.(...)` 都按最派生的一支走。
+ * `hostSuper` 表示 JS 的直接基类是宿主的 SceneTree —— 那种情况得先 `super()` 才碰得了 this，
+ * 而 SceneTree 不是脚本类，所以 `__gd_fields__` 不往它身上串。
+ */
+function emitRootConstructor(hostSuper: boolean): string[] {
+  const out = ["  constructor(...__gd_new_args) {"];
+  if (hostSuper) out.push("    super();");
+  out.push("    this.__gd_fields__();");
+  out.push("    this._init?.(...__gd_new_args);");
+  out.push("  }");
+  out.push("");
+  return out;
 }
 
 function hasValueReturn(stmts: Stmt[]): boolean {
@@ -2498,8 +2697,18 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     const builtin = BUILTIN[name];
     if (builtin) return builtin(args);
     if (name === "super") {
-      if (IN_CONSTRUCTOR) return `super(${args.join(", ")})`;
-      throw new UnsupportedError("emit-super-ctor", "super(...) 只能出现在 _init 里");
+      // 实测两条（tmp/f53）：`_init` 里的 `super(...)` 调父类 `_init` 的**体**，调两次就跑两遍（t01 / t08）；
+      // **别的方法**里的 `super()` 调的是父类的**同名**方法（t04）。没有脚本基类时 Godot 是解析期拒
+      // （t09：`Cannot call the parent class' virtual function "_init()" because it hasn't been defined.`），
+      // 所以这里不发「能跑但形状不对」的 JS，直接响亮拒。
+      if (!INIT_HAS_BASE) {
+        throw new UnsupportedError("emit-super-ctor", `${CURRENT_CLASS} 没有脚本基类，super() 这一格还没实测过，不发`);
+      }
+      if (IN_INIT) return `super._init(${args.join(", ")})`;
+      if (CURRENT_FUNC === "" || STATIC_FUNCS.has(CURRENT_FUNC)) {
+        throw new UnsupportedError("emit-super-ctor", "静态方法里的 super() 没实测过，不发");
+      }
+      return `super.${CURRENT_FUNC}(${args.join(", ")})`;
     }
     if (BUILTIN_TODO.has(name)) {
       throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
