@@ -1551,19 +1551,21 @@ export function strJoin(sep: string, g: GArray): string {
   return out;
 }
 
+/**
+ * Variant 的 **Godot 类型名**：`tagName` 只到 Tag 粒度，值类型都在 OBJECT 里，
+ * 而报错文本要说得出 `Vector2` / `Color` 这种名字（`valueEq` 的分支标签与形参槽位都用它）。
+ */
+export function valueTypeName(x: Variant): string {
+  if (asVec2(x) !== null) return "Vector2";
+  if (asVec3(x) !== null) return "Vector3";
+  if (asVec2i(x) !== null) return "Vector2i";
+  if (asColor(x) !== null) return "Color";
+  return tagName(x.t);
+}
+
 export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   const ta = a.t;
   const tb = b.t;
-  const nameOf = (x: Variant): string =>
-    asVec2(x) !== null
-      ? "Vector2"
-      : asVec3(x) !== null
-        ? "Vector3"
-        : asVec2i(x) !== null
-          ? "Vector2i"
-          : asColor(x) !== null
-            ? "Color"
-            : tagName(x.t);
   const a2 = asVec2(a);
   const b2 = asVec2(b);
   const a3 = asVec3(a);
@@ -1589,7 +1591,7 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
     if (((a2 !== null || a3 !== null || ai !== null || ac !== null ? b : a) as Variant).t === Tag.NIL)
       return false;
-    throw new GodotRuntimeError("eq-operands", `Invalid operands '${nameOf(a)}' and '${nameOf(b)}' in operator '=='.`);
+    throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
   }
   if (ta === Tag.INT || ta === Tag.FLOAT) {
     if (tb === Tag.INT && ta === Tag.INT) return (a.v as IntPayload) === (b.v as IntPayload);

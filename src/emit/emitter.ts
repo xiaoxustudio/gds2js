@@ -631,6 +631,32 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   }
 }
 
+/** 与 declaredCast 同一批类型，这里要的是**槽位类型名**（运行时报错文本里要用它）。只含量过的七个槽。 */
+const MEASURED_SLOTS = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Color"]);
+function slotTypeName(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  const base = t.name.replace(/\[.*\]$/, "");
+  return MEASURED_SLOTS.has(base) ? base : null;
+}
+
+/**
+ * 形参的入口槽位（S176）：Godot 在**函数入口**把实参塞进定型标量的槽，塞不进去不是转换而是抛
+ * `Invalid type in function 'f' in base 'RefCounted (A)'. Cannot convert argument 1 from String to int.`
+ * —— 这一格比变量 / 字段赋值**严**（S150 那张转换表在这里不能照搬，能转的组合见 S176 的矩阵）。
+ * 只对实例方法发（`this` 提供 base 标签）；静态方法与宿主基类那两格的标签还没量。
+ */
+function emitParamSlots(f: FuncDecl): string[] {
+  const out: string[] = [];
+  let n = 0;
+  for (const p of f.params) {
+    n++;
+    const slot = slotTypeName(p.type);
+    if (slot === null) continue;
+    out.push(`${p.name} = rt.paramSlot(${p.name}, ${JSON.stringify(slot)}, ${n}, ${JSON.stringify(f.name)}, this);`);
+  }
+  return out;
+}
+
 /**
  * 形参表（S175）：带默认值的发成 JS 的默认参数。实测三条口径 ——
  * ① 默认表达式**每次调用都重新求值**（`a = [1, 2]` 里 append 过之后，下次进来还是 `[1, 2]`，不是 Python 那种共享默认对象）；
@@ -682,6 +708,8 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   RAW_ARRAYS = layout.arrays;
   RAW_DICTS = layout.dicts;
   try {
+    // 实例方法才发入口槽位（静态方法的 base 标签那一格没量过；裸 ABI 不收带类型的函数）
+    if (!f.isStatic) for (const line of emitParamSlots(f)) lines.push(`  ${line}`);
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
       for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`  ${line}`);
@@ -715,6 +743,7 @@ function emitInitMethod(f: FuncDecl, base: number): string[] {
   CURRENT_FUNC = "_init";
   UNBOXED = computeUnboxed(f);
   try {
+    for (const line of emitParamSlots(f)) lines.push(`  ${line}`);
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
       for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
@@ -751,6 +780,7 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
   UNBOXED = computeUnboxed(f);
   CURRENT_FUNC = "_init";
   try {
+    for (const line of emitParamSlots(f)) lines.push(`  ${line}`);
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
       for (const line of emitStmt(s, false)) lines.push(`  ${line}`);

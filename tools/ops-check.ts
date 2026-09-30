@@ -5,6 +5,7 @@ import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
 import { callable, callableOf, registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta } from "../src/runtime/object";
 import { Signal } from "../src/runtime/signal";
+import { paramSlot } from "../src/runtime/slots";
 import { attribute, index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
@@ -176,6 +177,40 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   shouldThrow("147", "裸字符串数组 a[5]=x 写越界", () => fast.rawArrSet(st2, 5, "x"));
   eq("147", "裸字符串数组写越界后没被撑长", st2.length, 2);
   eq("147", "裸字符串网格 g[-1][-1] 两层负索引", fast.rawArrGet2([["a", "b"], ["c", "d"]], -1, -1), "d");
+}
+{
+  // step 79：定目标量形参的入口槽位（S176 的 7×13 对拍表里挑一格「能转的」与「该抛的」各钉一遍）
+  class SlotA {}
+  registerClass("SlotA", SlotA);
+  registerNativeBase(SlotA, "RefCounted");
+  const self = new SlotA();
+  const errOf = (v: Variant, to: string, i: number, fn: string): string => {
+    try {
+      paramSlot(v, to, i, fn, self);
+      return "<没抛>";
+    } catch (e) {
+      return String((e as Error).message);
+    }
+  };
+  eq("156", "int 槽吃 2.7 向零截断", show(paramSlot(V.float(2.7), "int", 1, "p", self)), "2");
+  eq("156", "int 槽吃 true → 1", show(paramSlot(V.bool(true), "int", 1, "p", self)), "1");
+  eq("156", "int 槽吃 1e30 → int64 最小值", show(paramSlot(V.float(1e30), "int", 1, "p", self)), "-9223372036854775808");
+  eq("156", "float 槽吃 1 → 1.0", show(paramSlot(V.int(1), "float", 1, "p", self)), "1.0");
+  eq("156", "bool 槽吃 2.7 → true", show(paramSlot(V.float(2.7), "bool", 1, "p", self)), "true");
+  eq("156", "String 槽吃 StringName", show(paramSlot(V.stringName("nm"), "String", 1, "p", self)), "nm");
+  eq("156", "Vector2 槽吃 Vector2i", show(paramSlot(vector2iNew([V.int(3), V.int(4)]), "Vector2", 1, "p", self)), "(3.0, 4.0)");
+  eq("156", "Vector2i 槽吃 Vector2", show(paramSlot(vector2New([V.float(1.7), V.float(2.2)]), "Vector2i", 1, "p", self)), "(1, 2)");
+  eq("156", "Color 槽吃字符串色名", show(paramSlot(V.str("abc"), "Color", 1, "p", self)), "(0.6667, 0.7333, 0.8, 1.0)");
+  eq("156", "同类实参原样过", show(paramSlot(V.int(7), "int", 1, "p", self)), "7");
+  eq(
+    "157",
+    "String 塞 int 槽抛的是实测那句",
+    errOf(V.str("12abc"), "int", 1, "p"),
+    "Invalid type in function 'p' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from String to int.",
+  );
+  eq("157", "null 的来源在文本里叫 Nil", errOf(V.nil(), "int", 2, "q"), "Invalid type in function 'q' in base 'RefCounted (SlotA)'. Cannot convert argument 2 from Nil to int.");
+  eq("157", "Array 塞 Color 槽", errOf(V.array(GArray.of([])), "Color", 1, "r"), "Invalid type in function 'r' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Array to Color.");
+  shouldThrow("157", "Color 槽吃 int 还没实现 → 响亮拒", () => paramSlot(V.int(1), "Color", 1, "p", self));
 }
 
 {

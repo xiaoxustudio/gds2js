@@ -1,0 +1,9 @@
+t1 int<-7(2) int<-2(2) int<-1(2) int<-0(2)
+t2 int<--9223372036854775808(2)
+t3 float<-1.0(3) float<-2.5(3) float<-1.0(3)
+t4 bool<-true(1) bool<-false(1) bool<-true(1)
+t5 str<-abc(4) str<-nm(4)
+t6 vec2<-(3.0, 4.0)(5) vec2<-(1.0, 2.0)(5)
+t7 vec2i<-(1, 2)(6) vec2i<-(5, 6)(6)
+t8 color<-(0.6667, 0.7333, 0.8, 1.0)(20) color<-(0.25, 0.5, 0.75, 1.0)(20)
+t9 math<-2|4 math<-1|2

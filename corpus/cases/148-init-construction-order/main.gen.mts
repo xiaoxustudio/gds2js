@@ -46,6 +46,7 @@ class Base {
   }
   
   _mk(who): unknown {
+    who = rt.paramSlot(who, "String", 1, "_mk", this);
     print(rt.showArgs([rt.V.str("n2 init "), who]));
     return rt.V.int(1);
   }
@@ -112,6 +113,7 @@ class Needs {
   }
 
   _init(p_n): void {
+    p_n = rt.paramSlot(p_n, "int", 1, "_init", this);
     this.n = rt.toInt(p_n);
     print(rt.showArgs([rt.V.str("n6 Needs._init "), p_n]));
   }

@@ -5,6 +5,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   nest(n): unknown {
+    n = rt.paramSlot(n, "int", 1, "nest", this);
     let c = rt.V.array(rt.GArray.of([]));
     for (let i of rt.rangeSeq([n])) {
       let x = rt.V.array(rt.GArray.of([]));

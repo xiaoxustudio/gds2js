@@ -38,6 +38,8 @@ class A {
   }
   
   one(a, b = rt.toInt(rt.V.int(5))): unknown {
+    a = rt.paramSlot(a, "int", 1, "one", this);
+    b = rt.paramSlot(b, "int", 2, "one", this);
     return rt.formatOf(rt.V.str("one=%d/%d"), rt.V.array(rt.GArray.of([a, b])));
   }
   
@@ -59,6 +61,7 @@ class A {
   }
   
   refs_earlier(a, b = a): unknown {
+    a = rt.paramSlot(a, "int", 1, "refs_earlier", this);
     return rt.formatOf(rt.V.str("r=%d/%d"), rt.V.array(rt.GArray.of([a, b])));
   }
   
@@ -75,14 +78,17 @@ class A {
   }
   
   str_slot(a = rt.strOf(rt.V.str("hi"))): unknown {
+    a = rt.paramSlot(a, "String", 1, "str_slot", this);
     return rt.ops.add(rt.ops.add(rt.V.str("s=["), a), rt.V.str("]"));
   }
   
   float_into_int_slot(a = rt.toInt(rt.V.float(2.7))): unknown {
+    a = rt.paramSlot(a, "int", 1, "float_into_int_slot", this);
     return rt.formatOf(rt.V.str("m=%d"), a);
   }
   
   float_into_int_math(a = rt.toInt(rt.V.float(2.7))): unknown {
+    a = rt.paramSlot(a, "int", 1, "float_into_int_math", this);
     return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.strOf(rt.ops.add(a, rt.V.float(0.5)))])));
   }
   
@@ -99,6 +105,7 @@ class Needs {
   a = rt.V.int(0);
 
   constructor(p_a = rt.toInt(rt.V.int(7))) {
+    p_a = rt.paramSlot(p_a, "int", 1, "_init", this);
     this.a = rt.toInt(p_a);
     print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a)]));
   }

@@ -54,6 +54,7 @@ class NeedsArg {
   }
 
   _init(p_n): void {
+    p_n = rt.paramSlot(p_n, "int", 1, "_init", this);
     this.n = rt.toInt(p_n);
     print(rt.showArgs([rt.V.str("n2 NeedsArg._init "), p_n]));
   }
@@ -79,6 +80,7 @@ class Right extends NeedsArg {
   }
 
   _init(p_x): void {
+    p_x = rt.paramSlot(p_x, "int", 1, "_init", this);
     super._init(p_x);
     print(rt.showArgs([rt.V.str("n3 Right.after-super "), p_x]));
   }

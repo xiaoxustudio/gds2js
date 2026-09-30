@@ -7,6 +7,7 @@ export class Main extends SceneTree {
   m = rt.vector2iNew([rt.V.int(1), rt.V.int(2)]);
 
   bump(p): void {
+    p = rt.paramSlot(p, "Vector2i", 1, "bump", this);
     {
       const _nv = rt.writeProp(p, "x", rt.V.int(7));
       if (_nv !== null) p = _nv;
