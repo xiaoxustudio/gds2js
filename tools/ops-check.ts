@@ -2119,7 +2119,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（f41 / 用例 135）",
     `${err(() => method(b, "min", []))}|${err(() => method(b, "to_byte_array", []))}`,
     "Invalid call. Nonexistent function 'min' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.");
-  shouldThrow("step67", "bsearch 存在但没测过 → 响亮拒，不拿 Array 的结论凑", () => method(b, "bsearch", [I(1)]));
+  eq("step81", "bsearch 这一轮量齐了（f60）：给的是下标，找不到给插入位而不是 -1 —— [3,1,2] 上 bsearch(1) 是 0、bsearch(2) 是 2",
+    `${show(method(b, "bsearch", [I(1)]))} ${show(method(b, "bsearch", [I(2)]))}`, "0 2");
   const viaArray = arrayFromVariant(b);
   eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
     `${show(viaArray)} ${typeOf(index(viaArray, I(0))).v}`, "[3, 1, 2] 2");
@@ -2430,6 +2431,64 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "Invalid call. Nonexistent function 'index_of' in base 'PackedStringArray'.");
   shouldThrow("step80", "这四个名字只在 byte / String 那两支量到「不存在」，别的形状仍走响亮拒（不拿邻居的结论凑）", () =>
     method(V.object(GBytes.of([1], "int32")), "to_hex_string", []));
+}
+
+{
+  // step 81：pack 工具箱第一半（探针 tmp/f60 / tmp/f61 / tmp/f62；bsearch 的整张表另由 tmp/bs-verify.mts 对拍 355 格）
+  const perr = (fn: () => unknown): string => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as Error).message;
+    }
+    return "<没抛>";
+  };
+  const bb = (ns: number[]): Variant => V.object(GBytes.of(ns, "byte"));
+  eq("step81", "bsearch 找得到给下标、找不到给**插入位**（越界两头是 0 与 size，**从来不给 -1**，f60 / f62）",
+    `${show(method(bb([1, 3, 5, 7]), "bsearch", [I(5)]))} ${show(method(bb([1, 3, 5, 7]), "bsearch", [I(6)]))} ${show(method(bb([1, 3, 5, 7]), "bsearch", [I(0)]))} ${show(method(bb([1, 3, 5, 7]), "bsearch", [I(9)]))}`,
+    "2 3 0 4");
+  eq("step81", "before 默认是真；写 false 走 upper_bound（第一格 **>** 目标），重复元素一路数到尾（f60 [2,2,2] / [1,1,2,2,3]）",
+    `${show(method(bb([1, 3, 5, 7]), "bsearch", [I(5), V.bool(false)]))} ${show(method(bb([2, 2, 2]), "bsearch", [I(2), V.bool(false)]))} ${show(method(bb([1, 1, 2, 2, 3]), "bsearch", [I(2), V.bool(true)]))} ${show(method(bb([1, 1, 2, 2, 3]), "bsearch", [I(2), V.bool(false)]))}`,
+    "3 3 2 4");
+  eq("step81", "未排序的 pack 也照 Godot 那条「折半 + `len -= half + 1`」的走（f60 t02 的五个数组全部逐格对上）",
+    `${show(method(bb([3, 1, 2]), "bsearch", [I(2)]))} ${show(method(bb([3, 1, 2]), "bsearch", [I(9)]))} ${show(method(bb([3, 1, 2]), "bsearch", [I(0)]))} ${show(method(bb([5, 5, 1]), "bsearch", [I(6)]))} ${show(method(bb([9, 2, 7, 4]), "bsearch", [I(7)]))} ${show(method(bb([4, 3, 2, 1]), "bsearch", [I(2), V.bool(false)]))}`,
+    "2 3 0 3 2 4");
+  eq("step81", "空 pack 给 0（两种 before 都是），越出两端的给 0 / size（f62 t12）",
+    `${show(method(bb([]), "bsearch", [I(1)]))} ${show(method(bb([]), "bsearch", [I(1), V.bool(false)]))}`,
+    "0 0");
+  eq("step81", "String / float64 / Vector2 / Color 的 bsearch 用各自 sort 的那条比较（f61 / f62）",
+    `${show(method(packCtor("string", [V.array(GArray.of([S("a"), S("c"), S("e")]))]), "bsearch", [S("d")]))} ${show(method(V.object(GBytes.of([1.5, 2.5, 3.5], "float64")), "bsearch", [F(2.0)]))} ${show(method(V.object(GBytes.of([new GVector2(1, 1)], "vector2")), "bsearch", [V.object(new GVector2(5, 5))]))} ${show(method(V.object(GBytes.of([new GColor(0, 1, 0, 1), new GColor(1, 0, 0, 1)], "color")), "bsearch", [V.object(new GColor(1, 0, 0, 1))]))}`,
+    "2 1 1 1");
+  shouldThrow("step81", "bsearch 的第二个参数只量过 bool —— 别的来源响亮拒", () =>
+    method(bb([1, 2]), "bsearch", [I(1), F(0.5)]));
+  eq("step81", "byte 的四个 to_*_array 都是**小端**（f61 / f62：0x3F800000 写作 [0,0,128,63]、1 写作末字节 1）",
+    `${show(method(bb([0, 0, 128, 63]), "to_float32_array", []))} ${show(method(bb([205, 204, 204, 61]), "to_float32_array", []))} ${show(method(bb([1, 0, 0, 0]), "to_int32_array", []))} ${show(method(bb([0, 0, 0, 0, 0, 0, 248, 63]), "to_float64_array", []))} ${show(method(bb([0, 0, 0, 0, 0, 0, 0, 1]), "to_int64_array", []))} ${show(method(bb([0, 0, 0, 0, 0, 0, 0, 128]), "to_int64_array", []))}`,
+    "[1.0] [0.10000000149012] [1] [1.5] [72057594037927936] [-9223372036854775808]");
+  eq("step81", "长度**不是整数倍就给空 pack**（f62 t09：六字节的 to_float32_array 是 `[]`，不是「读一个整组」；那句 multiple of 是引擎 stderr，不进语料）；空 pack 也给空的",
+    `${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8]), "to_float32_array", []))} ${show(method(bb([1, 2, 3]), "to_int64_array", []))} ${show(method(bb([1, 2, 3, 4, 5, 6]), "to_float32_array", []))} ${typeOf(method(bb([0, 0, 128, 63]), "to_float32_array", [])).v} ${typeOf(method(bb([1, 0, 0, 0, 0, 0, 0, 0]), "to_int64_array", [])).v} ${show(method(bb([]), "to_float32_array", []))}`,
+    "[0.0, 0.0] [] [] 32 31 []");
+  eq("step81", "to_int64_array 的元素是 int（typeof 2），负一还原成八格 255（f61 t07 / t11）",
+    `${show(method(bb([255, 255, 255, 255, 255, 255, 255, 255]), "to_int64_array", []))} ${show(method(bb([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]), "to_int64_array", []))} ${typeOf(index(method(bb([1, 0, 0, 0, 0, 0, 0, 0]), "to_int64_array", []), I(0))).v}`,
+    "[-1] [1, 2] 2");
+  eq("step81", "to_byte_array 八种形状都有（f61：int32 / int64 / float32 / float64 / String / Vector2 / Vector3 / Color），一律小端铺平",
+    `${show(method(V.object(GBytes.of([1, -2], "int32")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([1n, -2n], "int64")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([1.5, -1.0, 0.1], "float32")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([1.5], "float64")), "to_byte_array", []))}`,
+    "[1, 0, 0, 0, 254, 255, 255, 255] [1, 0, 0, 0, 0, 0, 0, 0, 254, 255, 255, 255, 255, 255, 255, 255] [0, 0, 192, 63, 0, 0, 128, 191, 205, 204, 204, 61] [0, 0, 0, 0, 0, 0, 248, 63]");
+  eq("step81", "值类型与颜色的 to_byte_array：float32 逐分量（Vector2 八字节、Vector3 十二字节、Color 十六字节 r→g→b→a）",
+    `${show(method(V.object(GBytes.of([new GVector2(1, 2)], "vector2")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([new GVector3(1, 2, 3)], "vector3")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color")), "to_byte_array", []))}`,
+    "[0, 0, 128, 63, 0, 0, 0, 64] [0, 0, 128, 63, 0, 0, 0, 64, 0, 0, 64, 64] [0, 0, 128, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 63]");
+  eq("step81", "String pack 的 to_byte_array 是**每元素一份 UTF-8 再接一个 0**（f61 / f62：[\"ab\",\"c\"]、[\"\"] → [0]、[] → []、[\"éA\"]）",
+    `${show(method(packCtor("string", [V.array(GArray.of([S("ab"), S("c")]))]), "to_byte_array", []))} ${show(method(packCtor("string", [V.array(GArray.of([S("")]))]), "to_byte_array", []))} ${show(method(packCtor("string", [V.array(GArray.of([]))]), "to_byte_array", []))} ${show(method(packCtor("string", [V.array(GArray.of([S("éA")]))]), "to_byte_array", []))}`,
+    "[97, 98, 0, 99, 0] [0] [] [195, 169, 65, 0]");
+  eq("step81", "to_byte_array 的返回形状是 PackedByteArray（typeof 29，f62 t11）",
+    `${typeOf(method(packCtor("string", [V.array(GArray.of([S("ab")]))]), "to_byte_array", [])).v}`, "29");
+  eq("step81", "byte 自己没有 to_byte_array，也没有 get_bytes / to_raw_string（f61 / S168 ⑥）",
+    [perr(() => method(bb([1]), "to_byte_array", [])), perr(() => method(bb([1]), "get_bytes", [I(0), I(1)])), perr(() => method(bb([1]), "to_raw_string", []))].join("|"),
+    "Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'get_bytes' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_raw_string' in base 'PackedByteArray'.");
+  eq("step81", "int32 上没有 to_float32_array / to_int32_array（f61 t09 / f62 t08 的解析期两句，运行期那一格是这句）",
+    [perr(() => method(V.object(GBytes.of([1], "int32")), "to_float32_array", [])), perr(() => method(V.object(GBytes.of([1], "int32")), "to_int32_array", []))].join("|"),
+    "Invalid call. Nonexistent function 'to_float32_array' in base 'PackedInt32Array'.|Invalid call. Nonexistent function 'to_int32_array' in base 'PackedInt32Array'.");
+  shouldThrow("step81", "四个 to_*_array 只在 byte 上量到「有」，别的形状（int64 / float / 向量）仍响亮拒", () =>
+    method(V.object(GBytes.of([1n], "int64")), "to_int64_array", []));
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

@@ -241,6 +241,22 @@ function scalarSame(a: PackElem, b: PackElem): boolean {
   return a === b;
 }
 
+/** 一格的比较：与 `sort` / `bsearch` 共用这一条口径（数值、String 码点、向量与颜色按分量字典序）。 */
+function cmpElem(kind: PackKind, a: PackElem, b: PackElem): number {
+  if (kind === "color") return cmpVec(a as unknown as GVector2, b as unknown as GVector2, ["r", "g", "b", "a"]);
+  if (kind === "vector2") return cmpVec(a as GVector2, b as GVector2, ["x", "y"]);
+  if (kind === "vector3") return cmpVec(a as GVector3, b as GVector3, ["x", "y", "z"]);
+  if (kind === "string") return cmpStrings(a as string, b as string);
+  if (kind === "int64") {
+    const x = BigInt(a as number | bigint);
+    const y = BigInt(b as number | bigint);
+    return x < y ? -1 : x > y ? 1 : 0;
+  }
+  const x = a as number;
+  const y = b as number;
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+
 /** 一格的相等：向量与颜色按**分量内容**比（S173 实测 `a == PackedVector2Array([Vector2(1, 2)])` 真）。 */
 function elemSame(kind: PackKind, a: PackElem, b: PackElem): boolean {
   if (kind === "vector2") return (a as GVector2).x === (b as GVector2).x && (a as GVector2).y === (b as GVector2).y;
@@ -310,7 +326,6 @@ const NO_SUCH_METHOD = new Set([
   "pop_front",
   "subarray",
   "to_string",
-  "to_byte_array",
   "decode_utf8",
   "decode_ascii",
   "hash",
@@ -320,21 +335,76 @@ const NO_SUCH_METHOD = new Set([
   "join",
 ]);
 /** 存在但这一轮没做 / 没实测的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
-const NOT_YET = new Set(["bsearch", "to_hex_string", "to_raw_string", "compress", "decompress", "search_sorted", "get_bytes", "remove_at_copy"]);
+const NOT_YET = new Set(["to_hex_string", "compress", "decompress", "search_sorted", "remove_at_copy"]);
 /**
- * 只在**某一种 pack** 上量到「4.6.3 里根本没有这个方法」（f57：`Nonexistent function 'X' in base 'Y'`）。
+ * 只在**某一种 pack** 上量到「4.6.3 里根本没有这个方法」（f57 / f61 / f62：`Nonexistent function 'X' in base 'Y'`）。
  * 同名的格子在别的形状上没量过，所以只在量过的那一支给实测文本，其余仍走 NOT_YET / 未实现那条响亮拒。
  */
 const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
-  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string"]),
+  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes"]),
   string: new Set(["index_of"]),
+  int32: new Set(["to_float32_array", "to_int32_array"]),
 };
-/** 只有 byte 那一支量过的方法（int pack 上 `hex_encode` 实测是 Nonexistent，另两个没量）。 */
-const BYTE_ONLY = new Set(["get_string_from_utf8", "get_string_from_ascii"]);
+/** byte 那一支独有的四个 `to_*_array`（f61 / f62 量到 int32 上至少两个是 Nonexistent，其余形状没量）。 */
+const BYTE_ONLY = new Set(["get_string_from_utf8", "get_string_from_ascii", "to_int32_array", "to_int64_array", "to_float32_array", "to_float64_array"]);
 const NON_BYTE_MISSING = new Set(["hex_encode"]);
 
 function arity(name: string, args: Variant[], n: number): void {
   if (args.length !== n) throw new GodotRuntimeError("arity", `${name}() 需要 ${n} 个参数（收到 ${args.length} 个）`);
+}
+
+/**
+ * byte → 别的形状：**小端**逐组读（f61 / f62 量的方向：`[0, 0, 128, 63]` → `[1.0]`、
+ * `[205, 204, 204, 61]` → `[0.10000000149012]`、`[0,0,0,0,0,0,0,1]` → `[72057594037927936]`、
+ * `[0,0,0,0,0,0,0,128]` → `[-9223372036854775808]`）。长度**不是整数倍时给空 pack**（不是「有几个整组读几个」：
+ * f62 t09 的六字节给的是 `[]`），Godot 那句 `size must be a multiple of …` 是引擎 stderr、不进语料。
+ */
+function bytesToPack(items: PackElem[], kind: PackKind, width: number, read: (dv: DataView, off: number) => PackElem): Variant {
+  const buf = new Uint8Array(items.length);
+  for (let i = 0; i < items.length; i++) {
+    const e = items[i] as number | bigint;
+    buf[i] = (typeof e === "bigint" ? Number(e) : e) & 255;
+  }
+  if (buf.length % width !== 0) return V.object(new GBytes([], kind));
+  const dv = new DataView(buf.buffer);
+  const out: PackElem[] = [];
+  for (let off = 0; off + width <= buf.length; off += width) out.push(read(dv, off));
+  return V.object(new GBytes(out, kind));
+}
+
+/**
+ * 别的形状 → byte：**小端**逐格铺平（f61 八种形状全量过：int32 `[1, -2]` → `[1,0,0,0,254,255,255,255]`、
+ * float32 `[1.5, -1.0, 0.1]` → `[0,0,192,63, 0,0,128,191, 205,204,204,61]`、Vector2 八字节、Vector3 十二字节、
+ * Color 十六字节 r→g→b→a）。String 那一支是**每个元素一份 UTF-8 再接一个 0**（f61 / f62：`["ab","c"]` →
+ * `[97,98,0,99,0]`、`[""]` → `[0]`、`[]` → `[]`、`["éA"]` → `[195,169,65,0]`）。
+ */
+function packToBytes(kind: PackKind, items: PackElem[]): number[] {
+  const out: number[] = [];
+  const one = (width: number, fill: (dv: DataView) => void): void => {
+    const buf = new ArrayBuffer(width);
+    fill(new DataView(buf));
+    out.push(...new Uint8Array(buf));
+  };
+  for (const e of items) {
+    if (kind === "string") {
+      out.push(...new TextEncoder().encode(e as string), 0);
+    } else if (kind === "int32") {
+      one(4, (dv) => dv.setInt32(0, e as number, true));
+    } else if (kind === "int64") {
+      one(8, (dv) => dv.setBigInt64(0, BigInt(e as number | bigint), true));
+    } else if (kind === "float32") {
+      one(4, (dv) => dv.setFloat32(0, e as number, true));
+    } else if (kind === "float64") {
+      one(8, (dv) => dv.setFloat64(0, e as number, true));
+    } else {
+      const vs =
+        kind === "vector2" ? [(e as GVector2).x, (e as GVector2).y]
+        : kind === "vector3" ? [(e as GVector3).x, (e as GVector3).y, (e as GVector3).z]
+        : [(e as GColor).r, (e as GColor).g, (e as GColor).b, (e as GColor).a];
+      one(vs.length * 4, (dv) => vs.forEach((v, i) => dv.setFloat32(i * 4, v, true)));
+    }
+  }
+  return out;
 }
 
 export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
@@ -423,14 +493,37 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (name === "count") return V.int(items.filter(same).length);
       return V.int(items.findIndex(same));
     }
-    case "sort": {
-      // S177 ②：Color 的 sort 是 r→g→b→a 的字典序（五个可分辨的颜色实测；反向再排得到同一序列）
-      if (kind === "color") items.sort((x, y) => cmpVec(x as unknown as GVector2, y as unknown as GVector2, ["r", "g", "b", "a"]));
-      else if (kind === "vector2") items.sort((x, y) => cmpVec(x as GVector2, y as GVector2, ["x", "y"]));
-      else if (kind === "vector3") items.sort((x, y) => cmpVec(x as GVector3, y as GVector3, ["x", "y", "z"]));
-      else if (kind === "string") items.sort((x, y) => cmpStrings(x as string, y as string));
-      else items.sort(kind === "int64" ? (x, y) => (BigInt(x as number | bigint) < BigInt(y as number | bigint) ? -1 : BigInt(x as number | bigint) > BigInt(y as number | bigint) ? 1 : 0) : (x, y) => (x as number) - (y as number));
+    case "sort":
+      items.sort((x, y) => cmpElem(kind, x, y));
       return V.nil();
+    case "bsearch": {
+      if (args.length < 1 || args.length > 2) {
+        throw new GodotRuntimeError("arity", `bsearch() 最多 2 个参数（收到 ${args.length} 个）`);
+      }
+      // S178 ①：九种形状都有 `bsearch`，返回的**永远是下标**（找不到不给 -1，与旧文档那句相反）：
+      // `before` 默认真 = lower_bound（第一格 `>=` 目标），假 = upper_bound（第一格 `>` 目标）。
+      // 走的是「折半 + `len -= half + 1`」那套二进制查找，所以在**未排序**的 pack 上也是确定结果 ——
+      // f60 的 12 个数组 × 17 个目标、f61 / f62 的补格全部按这条对上，照抄而不是「JS 手写个二分」。
+      const flag = args[1] as Variant;
+      if (args.length === 2 && flag.t !== Tag.BOOL) {
+        throw new UnsupportedError("bsearch-before", `bsearch() 的第二个参数只实测过 bool（收到 ${tagName(flag.t)}）`);
+      }
+      const before = args.length === 2 ? (flag.v as boolean) : true;
+      const want = toElem(kind, args[0] as Variant);
+      let first = 0;
+      let len = items.length;
+      while (len > 0) {
+        const half = len >> 1;
+        const mid = first + half;
+        const c = cmpElem(kind, items[mid] as PackElem, want);
+        if (before ? c < 0 : c <= 0) {
+          first = mid + 1;
+          len -= half + 1;
+        } else {
+          len = half;
+        }
+      }
+      return V.int(first);
     }
     case "reverse":
       items.reverse();
@@ -470,6 +563,16 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     }
     case "hex_encode":
       return V.str((items as number[]).map((x) => x.toString(16).padStart(2, "0")).join(""));
+    case "to_int32_array":
+      return bytesToPack(items, "int32", 4, (dv, off) => dv.getInt32(off, true));
+    case "to_float32_array":
+      return bytesToPack(items, "float32", 4, (dv, off) => dv.getFloat32(off, true));
+    case "to_int64_array":
+      return bytesToPack(items, "int64", 8, (dv, off) => dv.getBigInt64(off, true));
+    case "to_float64_array":
+      return bytesToPack(items, "float64", 8, (dv, off) => dv.getFloat64(off, true));
+    case "to_byte_array":
+      return V.object(new GBytes(packToBytes(kind, items), "byte"));
     case "get_string_from_utf8": {
       return V.str(new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(items as number[])));
     }
