@@ -1,5 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 import { isElemKind } from "../runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
@@ -631,12 +631,26 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   }
 }
 
+/**
+ * 形参表（S175）：带默认值的发成 JS 的默认参数。实测三条口径 ——
+ * ① 默认表达式**每次调用都重新求值**（`a = [1, 2]` 里 append 过之后，下次进来还是 `[1, 2]`，不是 Python 那种共享默认对象）；
+ * ② 可以引用**前面的形参**（`func f(a, b = a)`）、模块 `const`、值类型构造、`null`，也能调自身方法
+ *   （`a = helper()` 实测合法，走 this 派发，同样每次求值）；
+ * ③ 定型标量的槽位对默认值做**同样的转换**（`func f(a: int = 2.7)` 里 a 是 2，`func h(s: String = &"nm")` 里是 "nm"）
+ *   —— 走 declaredCast，与字段 / 变量赋值那一族同一条路；定型容器走 stampDecl。
+ */
+function emitParamList(params: Param[]): string {
+  return params
+    .map((p) => {
+      if (p.default === null) return p.name;
+      const raw = stampDecl(p.type, p.default, emitExpr);
+      const cast = declaredCast(p.type);
+      return `${p.name} = ${cast === null ? raw : `${cast}(${raw})`}`;
+    })
+    .join(", ");
+}
+
 function emitFuncInner(f: FuncDecl, base = 0): string[] {
-  // 参数默认值那一格还没对拍过：Godot 少传就用默认值，而我们的产物少传会在 `rt.toInt(undefined)`
-  // 这类地方抛 —— 那是「Godot 能跑、我们崩」，所以先响亮拒，等有 golden 钉住默认值再把它们发出去。
-  if (f.params.some((p) => p.default !== null)) {
-    throw new UnsupportedError("param-default", `${f.name}() 的参数默认值还没实测过，不发（探针 tmp/f53 t06 撞出来的那条）`);
-  }
   if (f.isStatic && (f.name === "_init" || f.name === "_initialize" || f.name === "_process")) {
     throw new UnsupportedError("static-entry", `静态的 ${f.name}() 还没实测过行为，不猜着发`);
   }
@@ -645,7 +659,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   const isEntry = f.name === "_initialize" || f.name === "_process";
   const abi = RAW_ABIS.get(f.name);
   const async = f.coroutine || isEntry ? "async " : "";
-  const params = f.params.map((p) => p.name).join(", ");
+  const params = emitParamList(f.params);
   const hasValue = hasValueReturn(f.body);
 
   let ret: string;
@@ -691,7 +705,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
  * 而且只能调一次，两头都对不上（`super()` 调两遍父体在 Godot 是合法的，实测跑两遍）。
  */
 function emitInitMethod(f: FuncDecl, base: number): string[] {
-  const params = f.params.map((p) => p.name).join(", ");
+  const params = emitParamList(f.params);
   const lines = [`_init(${params}): void {`];
   mark(base, f.loc);
   const savedIn = IN_INIT;
@@ -721,7 +735,7 @@ function emitInitMethod(f: FuncDecl, base: number): string[] {
  * `hostSuper` 是「JS 的直接基类是宿主的 SceneTree」：那种构造器必须自己调 super()。
  */
 function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): string[] {
-  const params = f.params.map((p) => p.name).join(", ");
+  const params = emitParamList(f.params);
   const lines = [`constructor(${params}) {`];
   mark(base, f.loc);
   const first = f.body[0];
@@ -2518,6 +2532,10 @@ function emitExprVar(e: Expr): string {
       return `rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)})`;
 
     case "lambda": {
+      // lambda 里的默认值没量过（求值时机与闭包捕获的关系说不清），只拒那一格，普通形照常发
+      if (e.params.some((p) => p.default !== null)) {
+        throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
+      }
       const params = e.params.map((p) => p.name).join(", ");
       const body = e.body.flatMap((st) => emitStmt(st, false).map((l) => `      ${l}`));
       return `rt.callable((${params}) => {\n${body.join("\n")}\n    })`;
