@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "Vector2" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "v3()" function: argument 1 should be "Vector3" but is "Vector2".
+   at: GDScript::reload (<case>/main.gd:7)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

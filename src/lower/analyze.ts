@@ -102,6 +102,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkVoidMethodValues(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
+  checkFuncArgSlots(m, diags);
   checkTypedVarAssign(m, diags);
   checkInitContracts(m, new Set(globals), diags);
 
@@ -1078,6 +1079,119 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${src}".`,
         loc,
       });
+    }
+  }
+}
+
+/**
+ * 定目标量**形参**能收哪些来源（S176 的 7 槽 × 13 来源表 + `tmp/f75` 的 98 格新槽矩阵，摘要留在
+ * `tmp/f75.sum`）。与运行时的 `PARAM_SLOTS` 是同一套结论但**不共用代码**（照 S180 的旧例：两侧读者不同，
+ * 一份表被两处读正是分叉温床）。`Rect2` 那一行是**空的** —— 十四格全拒，一支都没量到能进来的来源。
+ */
+const FUNC_ARG_SLOTS: Record<string, readonly string[]> = {
+  int: ["int", "float", "bool"],
+  float: ["int", "float", "bool"],
+  bool: ["int", "float", "bool"],
+  String: ["String", "StringName"],
+  StringName: ["StringName", "String"],
+  Vector2: ["Vector2", "Vector2i"],
+  Vector2i: ["Vector2i", "Vector2"],
+  Vector3: ["Vector3", "Vector3i"],
+  Vector3i: ["Vector3i", "Vector3"],
+  Color: ["Color", "String", "int"],
+  Rect2: [],
+};
+
+/** 类名槽（`func f(n: Node)`）只量到「字面量 int / String 一句拒」，而 `f(null)` 合法 —— 这轮不碰。 */
+function funcSlotName(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  const base = t.name.replace(/\[.*\]$/, "");
+  return base in FUNC_ARG_SLOTS ? base : null;
+}
+
+/**
+ * 字面量来源进**用户函数**的定型形参：Godot 在解析期就拦（`tmp/f75` 的 a-* 那 98 格）。
+ * 文本与 pack 那一族同形（S180 ②）：来源是 Array / Dictionary 只有 `Invalid argument …` 一句，
+ * 标量与值类型来源是两句，`Cannot pass a value of type "X" as "Y".` 在前。
+ * 判不出来源（变量、表达式、函数返回）就一句不发 —— 宁可漏报，误拦合法工程贵得多。
+ */
+function checkFuncArgSlots(m: Module, diags: Diagnostic[]): void {
+  const moduleSigs = new Map<string, Param[]>();
+  for (const f of m.funcs) moduleSigs.set(f.name, f.params);
+  const classes = classTable(m);
+
+  /** 某个内部类里能看见的裸名方法：模块函数打底，再按继承链从叶子往上被自己的方法盖。 */
+  const sigsFor = (c: ClassDecl): Map<string, Param[]> => {
+    const out = new Map(moduleSigs);
+    const chain: ClassDecl[] = [];
+    const seen = new Set<string>();
+    let cur: ClassDecl | null = c;
+    while (cur !== null && !seen.has(cur.name)) {
+      seen.add(cur.name);
+      chain.unshift(cur);
+      cur = cur.extends !== null ? classes.get(cur.extends) ?? null : null;
+    }
+    for (const cc of chain) for (const f of cc.funcs) out.set(f.name, f.params);
+    return out;
+  };
+
+  const targets: Array<{ body: Stmt[]; sigs: Map<string, Param[]> }> = [];
+  for (const f of m.funcs) targets.push({ body: f.body, sigs: moduleSigs });
+  const collectClass = (c: ClassDecl): void => {
+    const sigs = sigsFor(c);
+    for (const f of c.funcs) targets.push({ body: f.body, sigs });
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
+
+  for (const { body, sigs } of targets) {
+    const nodes: Record<string, unknown>[] = [];
+    const scan = (n: unknown): void => {
+      if (Array.isArray(n)) {
+        for (const x of n) scan(x);
+        return;
+      }
+      if (n === null || typeof n !== "object") return;
+      const obj = n as Record<string, unknown>;
+      if (obj.kind === "lambda") return;
+      nodes.push(obj);
+      for (const key of Object.keys(obj)) {
+        if (key !== "loc") scan(obj[key]);
+      }
+    };
+    scan(body);
+
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined) continue;
+      let fname: string | null = null;
+      if (callee.kind === "ident" && typeof callee.name === "string") fname = callee.name;
+      else if (callee.kind === "attribute" && typeof callee.name === "string") {
+        const base = callee.obj as Record<string, unknown> | undefined;
+        if (base !== undefined && base.kind === "ident" && base.name === "self") fname = callee.name;
+      }
+      if (fname === null) continue;
+      const params = sigs.get(fname);
+      if (params === undefined) continue;
+      const args = (n.args as Expr[]) ?? [];
+      if (args.length !== params.length) continue;
+      for (let i = 0; i < args.length; i++) {
+        const slot = funcSlotName((params[i] as Param).type);
+        if (slot === null) continue;
+        const accept = FUNC_ARG_SLOTS[slot] as readonly string[];
+        const src = slotSource(args[i] as Expr);
+        if (src === null || accept.includes(src)) continue;
+        const loc = (n.loc as Diagnostic["loc"]) ?? null;
+        if (src !== "Array" && src !== "Dictionary") {
+          diags.push({ code: "func-arg-slot", message: `Cannot pass a value of type "${src}" as "${slot}".`, loc });
+        }
+        diags.push({
+          code: "func-arg-slot",
+          message: `Invalid argument for "${fname}()" function: argument ${i + 1} should be "${slot}" but is "${src}".`,
+          loc,
+        });
+      }
     }
   }
 }

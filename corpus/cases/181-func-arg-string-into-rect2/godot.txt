@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "Rect2".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "rr()" function: argument 1 should be "Rect2" but is "String".
+   at: GDScript::reload (<case>/main.gd:7)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
