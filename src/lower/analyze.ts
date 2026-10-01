@@ -102,7 +102,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkVoidMethodValues(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
-  checkFuncArgSlots(m, diags);
+  checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkInitContracts(m, new Set(globals), diags);
 
@@ -1115,7 +1115,29 @@ function funcSlotName(t: TypeRef | null): string | null {
  * 标量与值类型来源是两句，`Cannot pass a value of type "X" as "Y".` 在前。
  * 判不出来源（变量、表达式、函数返回）就一句不发 —— 宁可漏报，误拦合法工程贵得多。
  */
-function checkFuncArgSlots(m: Module, diags: Diagnostic[]): void {
+/**
+ * 类名槽（S187 末说的「刻意没做」那一半，`tmp/f75 a2-class-slot-*` 三格量到）：形参类型是**本工程里认得的类名**
+ * （本模块的内部类，或工程层喂进来的 `class_name`）时，标量来源进不来，而且**只发第二句**
+ * （`Invalid argument for "f()" function: argument 1 should be "Thing" but is "int".`，
+ * 没有 `Cannot pass a value of type …` 那一句 —— 与容器来源同形）。
+ * `null` 在对象槽是合法的、Array / Dictionary 与值类型那几格**没量**，所以一律不判；
+ * 引擎类名（`Node` / `RefCounted` …）编译期手上没有名单，认不出来就当不知道，宁可不报。
+ */
+function classSlotNames(m: Module, globals: Set<string>): Set<string> {
+  const out = new Set<string>();
+  const collect = (list: ClassDecl[]): void => {
+    for (const c of list) {
+      out.add(c.name);
+      collect(c.innerClasses);
+    }
+  };
+  collect(m.innerClasses);
+  for (const g of globals) out.add(g);
+  return out;
+}
+
+function checkFuncArgSlots(m: Module, globals: Set<string>, diags: Diagnostic[]): void {
+  const classSlots = classSlotNames(m, globals);
   const moduleSigs = new Map<string, Param[]>();
   for (const f of m.funcs) moduleSigs.set(f.name, f.params);
   const classes = classTable(m);
@@ -1177,19 +1199,34 @@ function checkFuncArgSlots(m: Module, diags: Diagnostic[]): void {
       const args = (n.args as Expr[]) ?? [];
       if (args.length !== params.length) continue;
       for (let i = 0; i < args.length; i++) {
-        const slot = funcSlotName((params[i] as Param).type);
-        if (slot === null) continue;
-        const accept = FUNC_ARG_SLOTS[slot] as readonly string[];
+        const ptype = (params[i] as Param).type;
+        const slot = funcSlotName(ptype);
         const src = slotSource(args[i] as Expr);
-        if (src === null || accept.includes(src)) continue;
-        const loc = (n.loc as Diagnostic["loc"]) ?? null;
-        if (src !== "Array" && src !== "Dictionary") {
-          diags.push({ code: "func-arg-slot", message: `Cannot pass a value of type "${src}" as "${slot}".`, loc });
+        if (src === null) continue;
+        if (slot !== null) {
+          const accept = FUNC_ARG_SLOTS[slot] as readonly string[];
+          if (accept.includes(src)) continue;
+          const loc = (n.loc as Diagnostic["loc"]) ?? null;
+          if (src !== "Array" && src !== "Dictionary") {
+            diags.push({ code: "func-arg-slot", message: `Cannot pass a value of type "${src}" as "${slot}".`, loc });
+          }
+          diags.push({
+            code: "func-arg-slot",
+            message: `Invalid argument for "${fname}()" function: argument ${i + 1} should be "${slot}" but is "${src}".`,
+            loc,
+          });
+          continue;
         }
+        // 类名槽：只认本工程叫得出名字的类（内部类 + 工程层给的 class_name），只拒标量来源，**只发第二句**
+        if (ptype === null || ptype.kind !== "named" || src === "null") continue;
+        const cname = ptype.name.replace(/\[.*\]$/, "");
+        if (!classSlots.has(cname)) continue;
+        if (["Array", "Dictionary"].includes(src) || cname === src) continue;
+        if (!["int", "float", "bool", "String", "StringName"].includes(src)) continue;
         diags.push({
-          code: "func-arg-slot",
-          message: `Invalid argument for "${fname}()" function: argument ${i + 1} should be "${slot}" but is "${src}".`,
-          loc,
+          code: "func-arg-class-slot",
+          message: `Invalid argument for "${fname}()" function: argument ${i + 1} should be "${cname}" but is "${src}".`,
+          loc: (n.loc as Diagnostic["loc"]) ?? null,
         });
       }
     }
