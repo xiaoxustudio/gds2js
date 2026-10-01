@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Invalid argument for "append()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

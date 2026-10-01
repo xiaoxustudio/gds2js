@@ -3038,6 +3038,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("219", "compress / decompress 在其余八支上全部 Nonexistent（e1 系列八格，step 82 那句「只在 byte 量过」升级成实测文本）",
     `${errText102(() => method(i323(), "compress", [I(1)]))} || ${errText102(() => method(v21(), "decompress", [I(9), I(1)]))}`,
     "Invalid call. Nonexistent function 'compress' in base 'PackedInt32Array'. || Invalid call. Nonexistent function 'decompress' in base 'PackedVector2Array'.");
+  eq("223", "Array 与 Dictionary 上也根本没有 join（j2 / j6 / j7：它是 String 的方法）",
+    `${errText102(() => method(V.array(GArray.of([I(1), I(2)])), "join", [S("-")]))} || ${errText102(() => method(V.dict(new GDict()), "join", [S("-")]))}`,
+    "Invalid call. Nonexistent function 'join' in base 'Array'. || Invalid call. Nonexistent function 'join' in base 'Dictionary'.");
   eq("219", "join 九支全都没有（a1 这一轮补了 byte / i64 / f32 / v3 / color 五支，与旧账四支合成整族）",
     errText102(() => method(str2(), "join", [S("-")])),
     "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
