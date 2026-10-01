@@ -7,6 +7,7 @@ import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
+import { sortGodot } from "./sort";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -524,28 +525,20 @@ export class GArray {
   }
 
   /**
-   * `sort` / `sortCustom` 的**同键顺序在 n≥17 这一侧与 Godot 不同**，这是有意留下的明账（S184），不是没查：
-   * 我们走 JS 的稳定 sort，Godot 走它自己的非稳定实现。实测指纹（`tmp/f74`，45 格，元素是
-   * `Vector2i(键, 下标)`、只按键比，所以输出就是它做的置换）：
-   *  - n≤16 全等键 → **原序不动**（看着稳定）；
-   *  - n=17..32 全等键 → **整段反序**（`16 15 … 1 0`）；
-   *  - n=33 → 两块：`32..18 | 0..16`；n=40、n=64 → 两块**升序**；n=100 → **四块、每块 25 个、各自降序**，
-   *    块序是 Q2 Q3 Q0 Q1 —— 块大小与 n 成比例，说明分区递归过两层以上。
-   * 三家候选已按这 45 格判过：libstdc++ 的 introsort 结构族（含阈值 4..20、两侧递归顺序、最终插入趟的
-   * 有保护/无保护）最高 **9/45**；Hoare 双端扫描族（pivot 取 lo/中点/hi/med3、扫描是否含等号、切分点
-   * 取 j 还是 j-1、阈值同上）**32/45**；Bentley–McIlroy 的等值收集版按重建实现只有 2/45（且全等键会无限递归，
-   * 说明我重建的收尾不对）。**都不足以照抄** —— 半对的置换比稳定的错序更坏，因为它会在“看着像对了”的格子上静默走偏。
-   * 要闭合这一格得拿到引擎那侧的确切实现 —— step 92 把这个前置条件解开了：4.6.3 走的是
-   * `core/variant/array.cpp` → `core/templates/vector.h` 的 `Vector::sort_custom` → **`core/templates/sort_array.h`
-   * 的 `SortArray`**，骨架是 introsort：`INTROSORT_THRESHOLD = 16`、`while (last - first > 16)`、
-   * **先递归右半、左半用 `last = cut` 继续循环**、深度上限 `bitlog(len) * 2`、用尽时 `partial_sort(first, last, last)`、
-   * pivot 走 median-of-three 且**按位置读不是快照**。照这四条又扫了 72 个变体（`tmp/sort-gd.mts`，格子名与键函数
-   * 按 `tmp/write-f74.mts` 逐条对上）：**最高 29/45** —— 高于 libstdc++ 那一形的 9/45、仍不及 Hoare 族的 32/45，
-   * 差的是 partition 内部的循环体（问答能问到比较式，问不出边界）。所以行为照旧不动，
-   * 语料里的排序用例都避开“大 N + 同键”，这条差异挂在 S184 与 ROADMAP 的待做上。
+   * 同键顺序走引擎那份置换（`src/runtime/sort.ts` 逐行转写 `core/templates/sort_array.h`），不再是 JS 的稳定 sort。
+   * 这一格挂了五轮（S184 / S133–S134）：n≤16 时两者本来就一致，**n≥17 有同键才分叉**。指纹是
+   * `Vector2i(键, 下标)` 只按键比、印出下标序列，两套共 **71 格全中**：
+   *  - `tmp/f74.txt` 45 格（拟合用的那批：全等键 n=16…100、mod3/mod5、有序 / 逆序 / 锯齿 / 分块、反向比较器、恒假谓词）；
+   *  - `tmp/f94.txt` 26 格（**没参与拟合的独立批**：新 n（19/21/25/36/48/50/65/96/128/200）、新重复度（mod7 / mod2-64 / i*i%5 / mod9）、
+   *    反向比较器 n=25/60，以及非自洽的比较器 `<=` 与恒真）。对拍脚本 `npx tsx tmp/sort-shipped.mts`。
+   * `tmp/f94` 还顺定量出一件此前只能猜的事：**这份 4.6.3 构建的 `Validate` 是开的** —— 恒真比较器会往 stderr 打
+   * `ERROR: bad comparison function; sorting will be broken`、出处 `unguarded_linear_insert (./core/templates/sort_array.h:252)`，
+   * 而那条宏是 `break`（只中断当前那个扫描 while，分治循环照走），所以引擎给的是「带着 break 的置换」而不是中断。
+   * **置换复现了、那行 stderr 复现不了**，所以不自洽比较器的形状只钉进 ops-check 与探针，不进语料。
+   * `sort()`（无比较器）不动：它的同键元素是**值相等**的元素，置换再怎么变印出来都一样，量不到也就没必要换。
    */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
-    this.items = [...this.items].sort((x, y) => (before(x, y) ? -1 : before(y, x) ? 1 : 0));
+    this.items = sortGodot(this.items, before);
   }
 
   bsearch(value: Variant, less: (a: Variant, b: Variant) => boolean): number {

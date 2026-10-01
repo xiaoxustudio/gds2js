@@ -2755,7 +2755,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 
 {
   // step 95：`str(...)` 多实参与 `Callable.bind(...)`（S190，探针 `tmp/f91` / `tmp/f93`）
-  const cat = (a: Variant, b: Variant, c: Variant): Variant => V.str(`${show(a)}|${show(b)}|${show(c)}`);
+  const cat = (...args: unknown[]): Variant => V.str(args.map((x) => show(x as Variant)).join("|"));
   const base = callableOf(cat, "cat", V.object({}));
   const one = method(base, "bind", [V.str("x")]);
   const two = method(base, "bind", [V.str("x"), V.str("y")]);
@@ -2782,6 +2782,36 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "a-b 123 x<null>2.5",
   );
   eq("188", "str 单实参与 String() 同形、容器与值类型走同一套渲染", `${strBuiltin([V.int(1)]).v} ${strBuiltin([vector2(1.5, 2)]).v} ${strBuiltin([V.array(GArray.of([V.int(1), V.int(2)]))]).v}`, "1 (1.5, 2.0) [1, 2]");
+}
+
+{
+  // step 96：`sort_custom` 改走引擎那份置换（`src/runtime/sort.ts` 逐行转写 `core/templates/sort_array.h`，S184 结掉）。
+  // 下面每一条的期望值都是 Godot 自己打出来的下标序列（`tmp/f74.txt` / `tmp/f94.txt`）；
+  // 整套 71 格的对拍在 `npx tsx tmp/sort-shipped.mts`，用的就是要发出去的这个模块。
+  const perm = (n: number, key: (i: number) => number, cmp: (x: number, y: number) => boolean): string => {
+    const g = GArray.of(Array.from({ length: n }, (_x, i) => vector2i(key(i), i)));
+    g.sortCustom((x, y) => cmp((asVec2i(x) as GVector2i).x, (asVec2i(y) as GVector2i).x));
+    return g.items.map((v) => String((asVec2i(v) as GVector2i).y)).join(" ");
+  };
+  const lt = (x: number, y: number): boolean => x < y;
+  eq("189", "n≤16 全等键不动 —— 插入趟本来就是稳定的，这是用例 105 一直对得上的原因", perm(16, () => 0, lt), "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15");
+  eq("189", "n=17 全等键整段反序（n≥17 起 introsort 接管）", perm(17, () => 0, lt), "16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
+  eq("189", "n=19 也整段反序（f94 里没参与拟合的那格）", perm(19, () => 0, lt), "18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
+  eq(
+    "189",
+    "n=100 全等键是四块 × 25、块内降序、块序 Q2 Q3 Q0 Q1",
+    perm(100, () => 0, lt),
+    "74 73 72 71 70 69 68 67 66 65 64 63 62 61 60 59 58 57 56 55 54 53 52 51 50 99 98 97 96 95 94 93 92 91 90 89 88 87 86 85 84 83 82 81 80 79 78 77 76 75 24 23 22 21 20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0 49 48 47 46 45 44 43 42 41 40 39 38 37 36 35 34 33 32 31 30 29 28 27 26 25",
+  );
+  eq(
+    "189",
+    "mod7 的 n=30：分块不再是 25 一份，键散开后排成 Godot 那一条",
+    perm(30, (i) => i % 7, lt),
+    "0 28 21 14 7 29 22 15 1 8 2 23 16 9 10 24 17 3 25 11 4 18 19 12 5 26 20 27 6 13",
+  );
+  // 非自洽比较器：置换能复现，Godot 那行 `ERROR: bad comparison function; sorting will be broken` 复现不了 → 只进这里，不进语料
+  eq("189", "`<=` 比较器走 ERR_BAD_COMPARE 的 break 分支（只中断当前那个扫描 while）", perm(10, (i) => i % 3, (x, y) => x <= y), "9 6 3 0 7 4 1 8 5 2");
+  eq("189", "恒真比较器 n=17：收尾插入趟被 `next == 0` 那道 break 截住，头两格换了个位", perm(17, (i) => i, () => true), "15 16 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
