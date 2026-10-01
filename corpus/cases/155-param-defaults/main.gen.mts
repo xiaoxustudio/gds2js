@@ -45,20 +45,20 @@ class A {
   }
   
   expr_default(a = rt.V.int(rt.fast.iAddC(1, 2))): unknown {
-    return rt.formatOf(rt.V.str("e=%s"), rt.V.array(rt.GArray.of([rt.strOf(a)])));
+    return rt.formatOf(rt.V.str("e=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
   }
   
   arr_default(a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))): unknown {
     rt.method(a, "append", [rt.V.int(99)]);
-    return rt.formatOf(rt.V.str("arr=%s"), rt.V.array(rt.GArray.of([rt.strOf(a)])));
+    return rt.formatOf(rt.V.str("arr=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
   }
   
   vec_default(v = rt.vector2New([rt.V.int(1), rt.V.int(2)])): unknown {
-    return rt.formatOf(rt.V.str("v=%s"), rt.V.array(rt.GArray.of([rt.strOf(v)])));
+    return rt.formatOf(rt.V.str("v=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([v])])));
   }
   
   null_default(a = rt.V.nil()): unknown {
-    return rt.formatOf(rt.V.str("n=%s"), rt.V.array(rt.GArray.of([rt.strOf(a)])));
+    return rt.formatOf(rt.V.str("n=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
   }
   
   refs_earlier(a, b = a): unknown {
@@ -90,7 +90,7 @@ class A {
   
   float_into_int_math(a = rt.toInt(rt.V.float(2.7))): unknown {
     a = rt.paramSlot(a, "int", 1, "float_into_int_math", this);
-    return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strOf(a), rt.strOf(rt.ops.add(a, rt.V.float(0.5)))])));
+    return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.add(a, rt.V.float(0.5))])])));
   }
   
   call_it(): unknown {

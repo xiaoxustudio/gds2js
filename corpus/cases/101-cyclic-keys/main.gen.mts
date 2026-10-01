@@ -32,8 +32,8 @@ export class Main extends SceneTree {
       if (_nv !== null) d = _nv;
     }
     print(rt.showArgs([rt.V.str("k1c "), rt.method(d, "size", []), rt.V.str(" "), rt.index(d, a), rt.V.str(" "), rt.index(d, b)]));
-    print(rt.showArgs([rt.V.str("k1d "), rt.method(rt.strOf(rt.method(d, "keys", [])), "length", [])]));
-    print(rt.showArgs([rt.V.str("k1e "), rt.method(rt.strOf(d), "length", [])]));
+    print(rt.showArgs([rt.V.str("k1d "), rt.method(rt.strBuiltin([rt.method(d, "keys", [])]), "length", [])]));
+    print(rt.showArgs([rt.V.str("k1e "), rt.method(rt.strBuiltin([d]), "length", [])]));
     rt.method(d, "erase", [a]);
     print(rt.showArgs([rt.V.str("k1f "), rt.method(d, "size", []), rt.V.str(" "), rt.method(d, "has", [b])]));
     let p = rt.V.array(rt.GArray.of([]));
@@ -106,7 +106,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(d6, cb, rt.V.int(2));
       if (_nv !== null) d6 = _nv;
     }
-    print(rt.showArgs([rt.V.str("k4b "), rt.method(d6, "size", []), rt.V.str(" "), rt.index(d6, ca), rt.V.str(" "), rt.index(d6, cb), rt.V.str(" "), rt.method(rt.strOf(d6), "length", [])]));
+    print(rt.showArgs([rt.V.str("k4b "), rt.method(d6, "size", []), rt.V.str(" "), rt.index(d6, ca), rt.V.str(" "), rt.index(d6, cb), rt.V.str(" "), rt.method(rt.strBuiltin([d6]), "length", [])]));
     let md = rt.dictOf([]);
     let mx = rt.V.array(rt.GArray.of([]));
     rt.method(mx, "append", [md]);
@@ -131,7 +131,7 @@ export class Main extends SceneTree {
     rt.method(ghost, "append", [rt.V.int(3)]);
     print(rt.showArgs([rt.V.str("k4e "), rt.method(d8, "size", []), rt.V.str(" "), rt.method(d8, "has", [ghost]), rt.V.str(" "), rt.method(d8, "has", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str(" "), d8]));
     print(rt.showArgs([rt.V.str("k5a "), rt.ops.eq(a, this.nest(rt.V.int(51))), rt.V.str(" "), rt.ops.eq(a, this.nest(rt.V.int(52))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(51)), this.nest(rt.V.int(52))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(52)), this.nest(rt.V.int(53))), rt.V.str(" "), rt.ops.eq(this.nest(rt.V.int(52)), this.nest(rt.V.int(54)))]));
-    print(rt.showArgs([rt.V.str("k5b "), rt.method(rt.strOf(this.nest(rt.V.int(51))), "length", []), rt.V.str(" "), rt.method(rt.strOf(this.nest(rt.V.int(101))), "length", []), rt.V.str(" "), rt.method(rt.strOf(this.nest(rt.V.int(102))), "length", [])]));
+    print(rt.showArgs([rt.V.str("k5b "), rt.method(rt.strBuiltin([this.nest(rt.V.int(51))]), "length", []), rt.V.str(" "), rt.method(rt.strBuiltin([this.nest(rt.V.int(101))]), "length", []), rt.V.str(" "), rt.method(rt.strBuiltin([this.nest(rt.V.int(102))]), "length", [])]));
     let d9 = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d9, this.nest(rt.V.int(100)), rt.V.int(1));

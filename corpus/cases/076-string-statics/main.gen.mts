@@ -25,7 +25,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.stringStatic("num_int64", [rt.V.int((-5))])]));
     print(rt.showArgs([rt.stringCtor([rt.V.str("x")])]));
     print(rt.showArgs([rt.method(rt.stringCtor([rt.V.str(("x" + "y"))]), "length", [])]));
-    print(rt.showArgs([rt.ops.add(rt.ops.add(rt.strOf(rt.V.int(42)), rt.V.str("|")), rt.stringStatic("num", [rt.V.int(42)]))]));
+    print(rt.showArgs([rt.ops.add(rt.ops.add(rt.strBuiltin([rt.V.int(42)]), rt.V.str("|")), rt.stringStatic("num", [rt.V.int(42)]))]));
     print(rt.showArgs([rt.V.float((-0))]));
     print(rt.showArgs([rt.stringStatic("num", [rt.V.float((-0))])]));
     this.quit();

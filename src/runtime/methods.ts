@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
-import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -139,10 +139,31 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     const fn = (inner as Record<string, unknown>)[CALLABLE];
     if (typeof fn === "function") {
       const f = fn as Fn;
-      if (name === "call") return wrapValue(f(...args));
+      // `tmp/f91 b01 / b02`：绑定的实参排在**调用实参之后**（`add3.bind("x").call("y","z")` → `y-z-x`），
+      // 链式 bind 把新实参挤到已绑定那串**前面**（`.bind("m").bind("n").call("p")` → `p-n-m`）。
+      const bound = ((inner as Record<string, unknown>)[CALLABLE_BOUND] as Variant[] | undefined) ?? [];
+      if (name === "bind") {
+        const meta = inner as Record<string, unknown>;
+        const box: Record<string, unknown> = { [CALLABLE]: f };
+        if (typeof meta[CALLABLE_NAME] === "string") box[CALLABLE_NAME] = meta[CALLABLE_NAME];
+        if (meta[CALLABLE_OBJECT] !== undefined) box[CALLABLE_OBJECT] = meta[CALLABLE_OBJECT];
+        box[CALLABLE_BOUND] = [...(args as Variant[]), ...bound];
+        return V.object(box);
+      }
+      if (name === "get_bound_arguments") {
+        return V.array(GArray.of(bound.slice()));
+      }
+      if (name === "get_argument_count") {
+        // 实测只覆盖绑定过的那一格（`tmp/f91 b02` 给 **0**）；未绑定 Callable 的口径没量 → 响亮拒
+        if (((inner as Record<string, unknown>)[CALLABLE_BOUND] as Variant[] | undefined) === undefined) {
+          throw new UnsupportedError("callable-arity-count", "get_argument_count() 只量过绑定后的 Callable（给 0）");
+        }
+        return V.int(0);
+      }
+      if (name === "call") return wrapValue(f(...args, ...bound));
       if (name === "call_deferred") {
         setTimeout(() => {
-          f(...args);
+          f(...args, ...bound);
         }, 0);
         return V.nil();
       }
@@ -151,7 +172,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         if (arr === undefined || !(arr.v instanceof GArray)) {
           throw new GodotRuntimeError("callable-callv", "callv() 需要一个 Array 实参");
         }
-        return wrapValue(f(...(arr.v as GArray).raw()));
+        return wrapValue(f(...(arr.v as GArray).raw(), ...bound));
       }
       if (name === "get_method") {
         const m = (inner as Record<string, unknown>)[CALLABLE_NAME];

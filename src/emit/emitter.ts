@@ -83,7 +83,7 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
-  str: (a) => `rt.strOf(${a.join(", ")})`,
+  str: (a) => `rt.strBuiltin([${a.join(", ")}])`,
   float: (a) => `rt.toFloat(${a.join(", ")})`,
   int: (a) => `rt.toInt(${a.join(", ")})`,
   bool: (a) => `rt.toBool(${a.join(", ")})`,

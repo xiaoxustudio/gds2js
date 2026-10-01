@@ -26,7 +26,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.method(rt.vector2New([rt.V.float(1000000000000000), rt.V.int(0)]), "length", [])]));
     print(rt.showArgs([rt.ops.eq(rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.float(1), rt.V.int(2)]))]));
     print(rt.showArgs([rt.ops.neq(rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int(1), rt.V.int(3)]))]));
-    print(rt.showArgs([rt.strOf(rt.vector2New([rt.V.int(2), rt.V.int(3)]))]));
+    print(rt.showArgs([rt.strBuiltin([rt.vector2New([rt.V.int(2), rt.V.int(3)])])]));
     this.quit();
   }
   

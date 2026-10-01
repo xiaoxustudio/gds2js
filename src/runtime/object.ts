@@ -6,6 +6,8 @@ export const CALLABLE = "__gds2js_callable";
 /** 方法 Callable 的方法名与接收者（`get_method()` / `is_null()` / `is_valid()` 要用，实测 f34）。 */
 export const CALLABLE_NAME = "__gds2js_callable_name";
 export const CALLABLE_OBJECT = "__gds2js_callable_object";
+/** `Callable.bind(...)` 绑上去的实参（实测排在调用实参**之后**，S190）。 */
+export const CALLABLE_BOUND = "__gds2js_callable_bound";
 
 export type Fn = (...args: Variant[]) => Variant;
 

@@ -23,7 +23,7 @@ export class Main extends SceneTree {
       print(rt.showArgs([rt.V.str("empty-false")]));
     }
     print(rt.showArgs([rt.V.str((s + "!"))]));
-    print(rt.showArgs([rt.ops.add(rt.strOf(rt.V.int(1)), rt.V.str("x"))]));
+    print(rt.showArgs([rt.ops.add(rt.strBuiltin([rt.V.int(1)]), rt.V.str("x"))]));
     this.quit();
   }
   

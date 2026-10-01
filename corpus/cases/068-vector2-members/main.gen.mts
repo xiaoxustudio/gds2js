@@ -89,7 +89,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.vector2New([rt.V.float(1234567), rt.V.float(0.00001)])]));
     print(rt.showArgs([rt.vector2New([rt.V.float(1000000000000000), rt.V.float(1e-7)])]));
     print(rt.showArgs([rt.vector2New([rt.V.float(123456789.123), rt.V.float(1e-7)])]));
-    print(rt.showArgs([rt.strOf(a)]));
+    print(rt.showArgs([rt.strBuiltin([a])]));
     print(rt.showArgs([rt.V.array(rt.GArray.of([a]))]));
     print(rt.showArgs([rt.dictOf([[rt.V.str("v"), a]])]));
     print(rt.showArgs([rt.isType(a, "Vector2")]));

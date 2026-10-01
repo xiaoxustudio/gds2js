@@ -16,6 +16,7 @@ import {
   show,
   strCase,
   strFloat,
+  strBuiltin,
   strFormat,
   stringCtor,
   stringNameCtor,
@@ -2750,6 +2751,37 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "(4.0, 5.0, 6.0) 9 (1, 2, 3) 10 (1, -2) 6");
   shouldThrow("step85", "Vector3 槽吃 Vector2 实测是解析期拒（f69 w01），不猜转换", () => toVec3(vector2(1, 2)));
   shouldThrow("step85", "Vector3i 槽吃 int 实测是解析期拒（f69 t89 两句）", () => toVec3i(V.int(5)));
+}
+
+{
+  // step 95：`str(...)` 多实参与 `Callable.bind(...)`（S190，探针 `tmp/f91` / `tmp/f93`）
+  const cat = (a: Variant, b: Variant, c: Variant): Variant => V.str(`${show(a)}|${show(b)}|${show(c)}`);
+  const base = callableOf(cat, "cat", V.object({}));
+  const one = method(base, "bind", [V.str("x")]);
+  const two = method(base, "bind", [V.str("x"), V.str("y")]);
+  const chain = method(one, "bind", [V.str("n")]);
+  const full = method(base, "bind", [V.str("x"), V.str("y"), V.str("z")]);
+  eq(
+    "187",
+    "bind 的实参排在调用实参**之后**、链式 bind 挤到已绑定那串前面",
+    `${show(method(one, "call", [V.str("y"), V.str("z")]))} ${show(method(two, "call", [V.str("z")]))} ${show(method(chain, "call", [V.str("p")]))} ${show(method(full, "call", []))}`,
+    "y|z|x z|x|y p|n|x x|y|z",
+  );
+  eq(
+    "187",
+    "get_bound_arguments / get_argument_count（绑定过给 0）/ get_method / is_valid",
+    `${show(method(one, "get_bound_arguments", []))} ${method(full, "get_argument_count", []).v} ${method(base, "get_method", []).v} ${method(one, "is_valid", []).v}`,
+    `["x"] 0 cat true`,
+  );
+  eq("187", "callv 同样把绑定实参接在后面", show(method(one, "callv", [V.array(GArray.of([V.str("y"), V.str("z")]))])), "y|z|x");
+  shouldThrow("187", "没绑定过的 Callable 问 get_argument_count 还没量 → 响亮拒", () => method(base, "get_argument_count", []));
+  eq(
+    "188",
+    "str(a, b, …) 是每个实参按 print 的渲染**无分隔拼接**（f93）",
+    `${strBuiltin([V.str("a"), V.str("-"), V.str("b")]).v} ${strBuiltin([V.int(1), V.int(2), V.int(3)]).v} ${strBuiltin([V.str("x"), V.nil(), V.float(2.5)]).v}`,
+    "a-b 123 x<null>2.5",
+  );
+  eq("188", "str 单实参与 String() 同形、容器与值类型走同一套渲染", `${strBuiltin([V.int(1)]).v} ${strBuiltin([vector2(1.5, 2)]).v} ${strBuiltin([V.array(GArray.of([V.int(1), V.int(2)]))]).v}`, "1 (1.5, 2.0) [1, 2]");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

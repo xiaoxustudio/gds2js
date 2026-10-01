@@ -80,7 +80,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.method(rt.vector3New([rt.V.float(0.001), rt.V.int(0), rt.V.int(0)]), "is_equal_approx", [rt.vector3New([rt.V.float(0.0010002), rt.V.int(0), rt.V.int(0)])]), rt.V.str(" "), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "is_equal_approx", [rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])])]));
     print(rt.showArgs([rt.method(rt.vector3New([rt.V.int(1), rt.V.int(1), rt.V.int(1)]), "is_normalized", []), rt.V.str(" "), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(0), rt.V.int(0)]), "is_normalized", []), rt.V.str(" "), rt.method(rt.vector3New([rt.V.float(0.7071067811865475), rt.V.float(0.7071067811865475), rt.V.int(0)]), "is_normalized", [])]));
     print(rt.showArgs([rt.method(rt.vector3New([rt.V.float(1e+300), rt.V.int(0), rt.V.int(0)]), "is_finite", []), rt.V.str(" "), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "is_finite", [])]));
-    print(rt.showArgs([rt.typeOf(v), rt.V.str(" "), rt.isType(v, "Vector3"), rt.V.str(" "), rt.isType(v, "Vector2"), rt.V.str(" "), rt.strOf(v)]));
+    print(rt.showArgs([rt.typeOf(v), rt.V.str(" "), rt.isType(v, "Vector3"), rt.V.str(" "), rt.isType(v, "Vector2"), rt.V.str(" "), rt.strBuiltin([v])]));
     let dd = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(dd, rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.int(5));

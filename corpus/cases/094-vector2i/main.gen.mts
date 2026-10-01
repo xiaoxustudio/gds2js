@@ -83,7 +83,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.method(rt.vector2iNew([rt.V.int((-7)), rt.V.int(3)]), "snapped", [rt.vector2iNew([rt.V.int(2), rt.V.int(2)])]), rt.V.str(" | "), rt.method(rt.vector2iNew([rt.V.int((-7)), rt.V.int(3)]), "snapped", [rt.vector2iNew([rt.V.int(0), rt.V.int(1)])]), rt.V.str(" | "), rt.method(rt.vector2iNew([rt.V.int(0), rt.V.int(0)]), "length", []), rt.V.str(" | "), rt.method(rt.vector2iNew([rt.V.int(0), rt.V.int(0)]), "aspect", []), rt.V.str(" | "), rt.method(rt.vector2iNew([rt.V.int(3), rt.V.int(0)]), "aspect", [])]));
     print(rt.showArgs([rt.method(rt.vector2iConst("MIN"), "abs", []), rt.V.str(" | "), rt.ops.neg(rt.vector2iConst("MIN")), rt.V.str(" | "), rt.method(rt.vector2iConst("MIN"), "sign", [])]));
     print(rt.showArgs([rt.vector2iConst("ONE"), rt.V.str(" "), rt.vector2iConst("ZERO"), rt.V.str(" "), rt.vector2iConst("UP"), rt.V.str(" "), rt.vector2iConst("DOWN"), rt.V.str(" "), rt.vector2iConst("LEFT"), rt.V.str(" "), rt.vector2iConst("RIGHT"), rt.V.str(" "), rt.vector2iConst("MAX"), rt.V.str(" "), rt.vector2iConst("MIN")]));
-    print(rt.showArgs([rt.typeOf(w), rt.V.str(" "), rt.isType(w, "Vector2i"), rt.V.str(" "), rt.isType(w, "Vector2"), rt.V.str(" "), rt.strOf(w)]));
+    print(rt.showArgs([rt.typeOf(w), rt.V.str(" "), rt.isType(w, "Vector2i"), rt.V.str(" "), rt.isType(w, "Vector2"), rt.V.str(" "), rt.strBuiltin([w])]));
     let d = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(d, rt.vector2iNew([rt.V.int(1), rt.V.int(2)]), rt.V.int(5));

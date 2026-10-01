@@ -1462,6 +1462,15 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
 }
 
 /**
+ * `str(a, b, c…)`：Godot 是**每个实参按 print 那套渲染，然后无分隔拼起来** ——
+ * `tmp/f93`：`str("a","-","b")` → `a-b`、`str(1,2,3)` → `123`、`str("x", null, 2.5)` → `x<null>2.5`。
+ * 之前发射的是 `rt.strOf(第一个实参)`，多余实参被**静默丢掉**（`str("a","-", "b")` 只给 `a`）。
+ */
+export function strBuiltin(args: Variant[]): Variant {
+  return V.str(args.map((v) => show(v)).join(""));
+}
+
+/**
  * `String(x)` 构造器：实测**只接受 String**（`String("x")` → x），
  * int/float/bool/null/Vector2/Array 全是 Godot 的 Parse Error，所以到得了运行时还不是字符串就报错。
  */

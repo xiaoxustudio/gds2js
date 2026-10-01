@@ -18,7 +18,7 @@ rt.registerNativeBase(Main, "SceneTree");
 class A {
   p(a): unknown {
     a = rt.paramSlot(a, "int", 1, "p", this);
-    return rt.ops.add(rt.V.str("ok<-"), rt.strOf(a));
+    return rt.ops.add(rt.V.str("ok<-"), rt.strBuiltin([a]));
   }
   
 }

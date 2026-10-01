@@ -28,7 +28,7 @@ export class Main extends SceneTree {
       if (_nv !== null) idx = _nv;
     }
     print(rt.showArgs([rt.V.str("write "), idx, rt.V.str(" "), rt.attribute(idx, "y"), rt.V.str(" "), rt.typeOf(rt.attribute(idx, "z"))]));
-    print(rt.showArgs([rt.V.str("str "), rt.strOf(a), rt.V.str(" "), rt.ops.add(rt.V.stringName("x"), rt.strOf(a))]));
+    print(rt.showArgs([rt.V.str("str "), rt.strBuiltin([a]), rt.V.str(" "), rt.ops.add(rt.V.stringName("x"), rt.strBuiltin([a]))]));
     let d = rt.dictOf([[rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.str("a")]]);
     {
       const _nv = rt.writeIdx(d, rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(4)]), rt.V.str("b"));
