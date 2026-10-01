@@ -286,6 +286,24 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       }
       return wrapValue((fn as (...a: Variant[]) => unknown).apply(inner, rest));
     }
+    if (name === "call_deferred") {
+      const fname = args[0] as Variant | undefined;
+      if (fname === undefined || (fname.t !== Tag.STRING && fname.t !== Tag.STRING_NAME)) {
+        throw new GodotRuntimeError("object-call", `call_deferred() 的第一个实参需要是方法名（String）`);
+      }
+      const who = fname.v as string;
+      const fn = (inner as Record<string, unknown>)[who];
+      if (typeof fn !== "function") {
+        // 「方法不存在」与「实参不合式」那两格的确切文本没量过（S185 ⑤ 只量到失败落进 message_queue 的引擎帧）→ 响亮拒
+        throw new UnsupportedError("object-call-deferred", `call_deferred("${who}") 的方法不存在，失败形状也没量过`);
+      }
+      // `tmp/f95` g06：`o.call_deferred("hi", 1, 2)` 的**返回值就是 null**，真正的调用排在后面
+      const rest = args.slice(1) as Variant[];
+      setTimeout(() => {
+        (fn as (...a: Variant[]) => unknown).apply(inner, rest);
+      }, 0);
+      return V.nil();
+    }
     if (name === "set_meta" || name === "get_meta" || name === "has_meta" || name === "remove_meta") {
       const obj = inner as object;
       if (name === "set_meta") {

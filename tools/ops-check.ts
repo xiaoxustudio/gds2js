@@ -2791,7 +2791,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const perm = (n: number, key: (i: number) => number, cmp: (x: number, y: number) => boolean): string => {
     const g = GArray.of(Array.from({ length: n }, (_x, i) => vector2i(key(i), i)));
     g.sortCustom((x, y) => cmp((asVec2i(x) as GVector2i).x, (asVec2i(y) as GVector2i).x));
-    return g.items.map((v) => String((asVec2i(v) as GVector2i).y)).join(" ");
+    return g.raw().map((v) => String((asVec2i(v) as GVector2i).y)).join(" ");
   };
   const lt = (x: number, y: number): boolean => x < y;
   eq("189", "n≤16 全等键不动 —— 插入趟本来就是稳定的，这是用例 105 一直对得上的原因", perm(16, () => 0, lt), "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15");

@@ -407,6 +407,14 @@ const VOID_DICT_METHODS = new Set(["clear"]);
 const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set"]);
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
 /**
+ * **脚本对象**接收者那一侧（`tmp/f95` g01，S192）：`var u = o.set("s", "y")` 是解析期拒，
+ * 文本与 pack 的 `set` **同一句** —— `Cannot get return value of call to "set()" because it returns "void".`
+ * 只量了 `set`：`get` 返回 Variant、`call` / `callv` 返回值都量过不是 void，`free()` 量到的是**运行期**
+ * 那两帧（且会把 `_initialize` 打断到超时），都不在这张表里。`self.set(...)` 没量 → 不顺手扩，
+ * 免得把 Godot 收得下的形状误拒。
+ */
+const VOID_OBJECT_METHODS = new Set(["set"]);
+/**
  * 这九种形状的 void 表**逐个量过、口径一致**（byte：`tmp/void-probe`，int32 / int64：
  * `tmp/pack-probe` 的 k-* 与 h-*ret 系列，float32 / float64：`tmp/fp/probe2`，String：
  * `tmp/fp/probe5`，向量与颜色三种：`tmp/fp/probe8` 的 sortval / fillval / rmval / revval）。
@@ -425,7 +433,7 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-type ContainerShape = "Array" | "Dictionary" | "Pack";
+type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object";
 
 /**
  * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
@@ -675,11 +683,31 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
 
+  /** 能被 `X.new()` 造出来的类名：脚本自己的类 + 内部类（递归，S192 的接收者形状就靠它认） */
+  const classNames = new Set<string>(m.className ? [m.className] : []);
+  const addClassNames = (cs: ClassDecl[]): void => {
+    for (const c of cs) {
+      classNames.add(c.name);
+      addClassNames(c.innerClasses);
+    }
+  };
+  addClassNames(m.innerClasses);
+
   const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
     if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
       return "Pack";
+    }
+    // `var o = Thing.new()`：接收者是脚本自己的类造出来的对象，`set` 在那里同样是 void
+    if (
+      e.kind === "call" &&
+      e.callee.kind === "attribute" &&
+      e.callee.name === "new" &&
+      e.callee.obj.kind === "ident" &&
+      classNames.has(e.callee.obj.name)
+    ) {
+      return "Object";
     }
     return null;
   };
@@ -695,7 +723,9 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             const isVoid =
               shape === "Pack"
                 ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
-                : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
+                : shape === "Object"
+                  ? VOID_OBJECT_METHODS.has(name)
+                  : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
             if (isVoid) {
               diags.push({
                 code: "void-method-value",
