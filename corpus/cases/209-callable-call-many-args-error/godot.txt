@@ -1,0 +1,5 @@
+SCRIPT ERROR: Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s).
+   at: _initialize (<case>/main.gd:19)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:19)
+<<GDS2JS_TIMEOUT>>

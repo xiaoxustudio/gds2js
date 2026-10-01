@@ -53,6 +53,25 @@ export function declaredArgCount(box: Record<string, unknown>): number | null {
   return (box[CALLABLE] as Function).length;
 }
 
+/**
+ * Callable 的 `[必填, 全部]` 形参数 —— `tmp/f101` 那两句 arity 拒要用**两个**数：
+ * 少给报「必填数」、多给报「全部数」（`twice(x, y = "z")`：给 0 个是 `Expected 1 argument(s).`、
+ * 给 3 个是 `Expected 2 argument(s).`）。方法与静态方法查发射器那张表（静态方法 step 98 起进表），
+ * lambda 两个数都取 `fn.length`（默认值形参那一形在发射期就被拒）。
+ * 空 Callable 返回 null：它走的是另一句（`Attempt to call function 'null::null (Callable)' …`）。
+ */
+export function callableArityBounds(box: Record<string, unknown>): [number, number] | null {
+  if (typeof box[CALLABLE] !== "function") return null;
+  const name = box[CALLABLE_NAME];
+  if (typeof name === "string") {
+    const recv = box[CALLABLE_OBJECT];
+    if (recv === undefined) return null;
+    return methodAritiesOf((recv as Variant).v)?.[name] ?? null;
+  }
+  const len = (box[CALLABLE] as Function).length;
+  return [len, len];
+}
+
 export function isVariant(v: unknown): v is Variant {
   return typeof v === "object" && v !== null && typeof (v as Variant).t === "number";
 }

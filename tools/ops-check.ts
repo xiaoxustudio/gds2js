@@ -2945,6 +2945,74 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("196", "信号自身的 get_name / is_null / typeof 不变（s01 / S165）", `${method(V.object(new Signal("fired")), "get_name", []).v} ${method(V.object(new Signal("fired")), "is_null", []).v}`, "fired false");
 }
 
+
+{
+  // step 101：`Callable.call()` 的实参数量（探针 `tmp/f101` 18 支，S196）。
+  // 语料 207–214 钉的是「跑得出什么 / 抛哪一句」，这里钉**文本逐字**与那一格发不出去的形状。
+  const errText = (fn: () => unknown): string => {
+    try {
+      const r = fn();
+      return `没抛：${String(r)}`;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  class Base {
+    three(a: Variant, b: Variant, c: Variant): Variant {
+      return V.str(`${String(a.v)}${String(b.v)}${String(c.v)}`);
+    }
+    twice(x: Variant, y: Variant = V.str("z")): Variant {
+      return V.str(`${String(x.v)}${String(y.v)}`);
+    }
+    static stwo(a: Variant, b: Variant): Variant {
+      return V.str(`${String(a.v)}${String(b.v)}`);
+    }
+  }
+  registerMethodArities(Base as never, { three: [3, 3], twice: [1, 2], stwo: [2, 2] });
+  registerStaticMethods(Base as never, ["stwo"]);
+  registerNativeBase(Base as never, "RefCounted");
+  const inst = new Base();
+  const three = attribute(inst, "three") as Variant;
+  eq(
+    "208",
+    "少给与多给同一句、N 都是 3（a1 / a2：无默认值时必填数与全部数相同）",
+    `${errText(() => method(three, "call", [V.int(1), V.int(2)]))} || ${errText(() => method(three, "call", [V.int(1), V.int(2), V.int(3), V.int(4)]))}`,
+    "Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s). || Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s).",
+  );
+  eq(
+    "211",
+    "带默认值形参：少给报**必填数**、多给报**全部数**（d1 / d2 同一个 twice）",
+    `${errText(() => method(attribute(inst, "twice") as Variant, "call", []))} || ${errText(() => method(attribute(inst, "twice") as Variant, "call", [V.int(1), V.int(2), V.int(3)]))}`,
+    "Invalid call to function 'RefCounted::twice (Callable)'. Expected 1 argument(s). || Invalid call to function 'RefCounted::twice (Callable)'. Expected 2 argument(s).",
+  );
+  eq(
+    "214",
+    "静态方法的标签是 **GDScript::**，不是接收者的原生基类（a4）",
+    errText(() => method(attribute(Base, "stwo") as Variant, "call", [V.int(1)])),
+    "Invalid call to function 'GDScript::stwo (Callable)'. Expected 2 argument(s).",
+  );
+  eq(
+    "213",
+    "lambda 的标签是字面量 `<anonymous lambda>(lambda)`（e1–e3）",
+    errText(() => method(callableOf(((x: unknown, y: unknown) => V.nil()) as never), "call", [V.int(1)])),
+    "Invalid call to function '<anonymous lambda>(lambda) (Callable)'. Expected 2 argument(s).",
+  );
+  eq("207", "绑定的实参**抵扣**数量：bind(1,2) 之后 call(3) 合法，且结果仍是「调用实参在前」（b3）", show(method(method(three, "bind", [V.int(1), V.int(2)]), "call", [V.int(3)])), "312");  eq("207", "callv 数量不合式：不报错、不调用，给 null（c1 / c2）", `${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))} ${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2), V.int(3), V.int(4)]))]))}`, "<null> <null>");
+  {
+    class Outer {
+      topfn(a: Variant, b: Variant): Variant {
+        return V.str(`${String(a.v)}${String(b.v)}`);
+      }
+    }
+    registerMethodArities(Outer as never, { topfn: [2, 2] });
+    registerNativeBase(Outer as never, "SceneTree");
+    const c = attribute(new Outer(), "topfn") as Variant;
+    shouldThrow("215", "外层脚本自己的方法那一形标签要**文件名**（a5 / f1）→ 响亮拒，不发半对文本", () =>
+      method(c, "call", [V.int(1)]),
+    );
+  }
+}
+
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
   for (const f of fails) console.log(`  FAIL  ${f}`);
   process.exit(1);

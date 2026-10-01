@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
-import { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT, boundArgsOf, callableOf, declaredArgCount, classNameOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT, boundArgsOf, callableArityBounds, callableOf, declaredArgCount, classNameOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -139,6 +139,51 @@ function callCallableBox(box: Record<string, unknown>, args: Variant[]): Variant
 }
 
 /**
+ * `Callable.call()` 的实参数量（`tmp/f101` 18 支）：**给的 + 绑的** 对不上声明数就是运行期那句
+ * `Invalid call to function '<标签> (Callable)'. Expected <N> argument(s).`，
+ * 少给报**必填数**、多给报**全部数**（d1 给 0 个 → `Expected 1`、d2 给 3 个 → `Expected 2`，
+ * 同一个 `twice(x, y = "z")`），无默认值时两个数相同（a1 / a2 都是 `Expected 3`）。
+ * 我们此前完全不查：少给就是 `undefined` 进槽、多给被静默丢掉 —— 两边都是静默错。
+ */
+function callableCall(box: Record<string, unknown>, args: Variant[]): Variant {
+  const fn = box[CALLABLE] as Fn | null;
+  if (typeof fn !== "function") {
+    throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
+  }
+  const bounds = callableArityBounds(box);
+  if (bounds !== null) {
+    const given = args.length + boundArgsOf(box).length;
+    if (given < bounds[0] || given > bounds[1]) {
+      const n = given < bounds[0] ? bounds[0] : bounds[1];
+      throw new GodotRuntimeError(
+        "callable-arity",
+        `Invalid call to function '${callableCallLabel(box)} (Callable)'. Expected ${n} argument(s).`,
+      );
+    }
+  }
+  return wrapValue(fn(...args, ...boundArgsOf(box)));
+}
+
+/**
+ * 那句里的**函数标签**，四种接收者四种形状，全是实测：
+ * lambda → `<anonymous lambda>(lambda)`（e1–e3）；静态方法 → `GDScript::<名字>`（a4，**不是** `RefCounted`）；
+ * 内部类实例（含继承来的方法）→ 只印原生基类 `RefCounted::<名字>`（a1 / a3 / a6，类名进不去）；
+ * 外层脚本自己的方法 → `SceneTree(<文件名>.gd)::topfn`（a5 / f1）—— 这一形要产物知道 `.gd` 的名字，
+ * 是 step 95 给 `Object.call` 记过的同一笔挂账，所以**响亮拒**，不发半对的文本。
+ */
+function callableCallLabel(box: Record<string, unknown>): string {
+  const name = box[CALLABLE_NAME];
+  if (typeof name !== "string") return "<anonymous lambda>(lambda)";
+  const recv = box[CALLABLE_OBJECT] as Variant | undefined;
+  const inner = recv?.v;
+  if (inner !== undefined && staticMethodsOf(inner)?.has(name)) return `GDScript::${name}`;
+  const native = inner === undefined ? null : nativeBaseOf(inner);
+  if (native === null) throw new UnsupportedError("callable-arity-label", "还不知道这个 Callable 的函数标签");
+  if (native === "RefCounted") return `RefCounted::${name}`;
+  throw new UnsupportedError("callable-arity-label", `${native} 的函数标签要脚本文件名（§6 那笔挂账），这一格没发出去过`);
+}
+
+/**
  * Callable 的方法面（`tmp/f96` c 系列 + `tmp/f97` a / c / d 系列）。四种形状共用这一张表：
  * 方法 Callable（带 `CALLABLE_NAME` + 接收者）、静态方法 Callable、lambda、以及 `Callable()` 空 Callable。
  */
@@ -170,7 +215,7 @@ function callableMethod(box: Record<string, unknown>, name: string, args: Varian
       return V.int(declared - bound.length);
     }
     case "call":
-      return callCallableBox(box, args);
+      return callableCall(box, args);
     case "call_deferred": {
       if (!hasFn) throw new UnsupportedError("callable-deferred-null", "空 Callable 上 call_deferred() 没量过");
       setTimeout(() => {
@@ -185,7 +230,16 @@ function callableMethod(box: Record<string, unknown>, name: string, args: Varian
       }
       // c8：空 Callable 的 `callv` **不报错也不调**，给 null —— 与 S185 ⑤ 那条 callv 的老口径同一形状
       if (!hasFn) return V.nil();
-      return wrapValue(fn(...(arr.v as GArray).raw(), ...bound));
+      const given = (arr.v as GArray).raw();
+      // c1 / c2（`tmp/f101`）：`callv` 的数量不合式**既不报错也不调用**，安静给 null（少给、多给、
+      // 绑过之后再少给都不响）。这与 `call()` 那两句正相反 —— 同一个数量检查在两条路上是两种结果，
+      // 照 `call` 那样抛就把「Godot 安静给 null」变成了「我们抛错」。
+      const bounds = callableArityBounds(box);
+      if (bounds !== null) {
+        const total = given.length + bound.length;
+        if (total < bounds[0] || total > bounds[1]) return V.nil();
+      }
+      return wrapValue(fn(...given, ...bound));
     }
     case "get_method": {
       const m = box[CALLABLE_NAME];
