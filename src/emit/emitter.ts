@@ -109,6 +109,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
+  // `Callable()` / `Callable(o, "m")`（`tmp/f97` c1 / c7）：以前落到 `this.Callable(...)` ——
+  // JS 的 TypeError，差分当场记成「崩溃」而不是「未实现」，正是 `BUILTIN_TODO` 那张表要挡的事。
+  Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
@@ -2565,7 +2568,7 @@ function emitExprVar(e: Expr): string {
       if (e.name === "self") return `rt.V.object(this)`;
       const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
-      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
+      if (STATIC_FUNCS.has(e.name)) return `rt.callableOf(${CURRENT_CLASS}.${e.name}.bind(${CURRENT_CLASS}), ${JSON.stringify(e.name)}, rt.V.object(${CURRENT_CLASS}))`;
       if (MODULE_FUNCS.has(e.name)) return `rt.callableOf(this.${e.name}.bind(this), ${JSON.stringify(e.name)}, rt.V.object(this))`;
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
@@ -2682,7 +2685,10 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
 function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
   for (const f of funcs) {
-    if (f.isStatic || f.name === "_init") continue;
+    // `_init` 不在表里（它的实参数另有解析期那一族，S174）；**静态方法现在进表**：
+    // `Callable.get_argument_count()` 在静态方法那一格给的是声明形参数（`tmp/f97` a3），
+    // 而 `p.f()` 调静态方法本来就合法（S160），所以这张表按名字查多一格只会更接近 Godot。
+    if (f.name === "_init") continue;
     let required = f.params.length;
     for (let i = 0; i < f.params.length; i++) {
       if (f.params[i]?.default !== null && f.params[i]?.default !== undefined) {

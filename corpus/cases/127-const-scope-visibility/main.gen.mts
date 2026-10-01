@@ -54,7 +54,7 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"TOP": "int"});
-rt.registerMethodArities(Inner, { "read_outer": [0, 0], "read_shadow": [0, 0], "via_self_dot": [0, 0] });
+rt.registerMethodArities(Inner, { "read_outer": [0, 0], "read_shadow": [0, 0], "read_static_outer": [0, 0], "read_static_shadow": [0, 0], "via_self_dot": [0, 0] });
 rt.registerStaticMethods(Inner, ["read_static_outer","read_static_shadow"]);
 rt.registerNativeBase(Inner, "RefCounted");
 

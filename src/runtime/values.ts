@@ -8,6 +8,7 @@ import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
 import { sortGodot } from "./sort";
+import { callableSame, isCallable } from "./callable";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -1626,6 +1627,8 @@ export function valueTypeName(x: Variant): string {
   if (asVec2i(x) !== null) return "Vector2i";
   if (asVec3i(x) !== null) return "Vector3i";
   if (asColor(x) !== null) return "Color";
+  // `tmp/f97` d5 的报错文本里 Callable 就叫 `Callable`（`Invalid operands 'Callable' and 'int' …`）
+  if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }
 
@@ -1678,6 +1681,15 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   ) {
     return (a.v as string) === (b.v as string);
   }
+  if (isCallable(a) !== isCallable(b)) {
+    // `tmp/f97` d5：Callable 跟 int 比在 Godot **不是** false，而是运行期那一句
+    // `Invalid operands 'Callable' and 'int' in operator '=='.`（`== null` / `== "add3"` 两格与
+    // float / bool 来源都没量到 —— 那一支 print 在第一个式子上就断了，所以只发实测这一形）
+    const other = isCallable(a) ? b : a;
+    if (other.t === Tag.INT) {
+      throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
+    }
+  }
   if (ta !== tb) return false;
   switch (ta) {
     case Tag.NIL:
@@ -1693,6 +1705,9 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
+      // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算），不是 JS 盒子引用 ——
+      // 读一次属性就新建一个盒子，按引用比会把 Godot 的真相判成假（实测见 `callable.ts` 的 `callableSame`）
+      if (isCallable(a) && isCallable(b)) return callableSame(a.v as Record<string, unknown>, b.v as Record<string, unknown>);
       return a.v === b.v;
   }
   return false;
@@ -1737,6 +1752,9 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GColor && b.v instanceof GColor) {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
+      // Callable 走与 `==` 同一条等式：d6 实测 `[o.add3, o.add3].has(o.add3)` 是**真**，
+      // 而盒子每次读都是新建的，按 JS 引用比会判成假
+      if (isCallable(a) && isCallable(b)) return callableSame(a.v as Record<string, unknown>, b.v as Record<string, unknown>);
       return a.v === b.v;
     default:
       return a.v === b.v;

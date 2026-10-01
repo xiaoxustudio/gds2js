@@ -1,0 +1,7 @@
+r1 25 true false
+r2 true 0 0
+r3 0 true
+r4 25 false
+r5 false true <anonymous lambda>
+r6 false true hi 7
+r7 25 hi 8

@@ -415,6 +415,21 @@ const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
  */
 const VOID_OBJECT_METHODS = new Set(["set"]);
 /**
+ * **Signal** 接收者那一侧（`tmp/f96` s06 / e3 / e8、`tmp/f97` b3 / e5）：`emit()` 与 `disconnect()`
+ * 都是 void，取值是解析期那一句（与 Array / pack / 对象同形）；`connect()` **不是** void ——
+ * 它返回 Error 状态码 int（0 成功、31 重复连接，见 `tmp/f97` b1 / e4）。
+ */
+const VOID_SIGNAL_METHODS = new Set(["emit", "disconnect"]);
+/** 站在 Callable 值位置上的 void 方法（`tmp/f97` c9 / e6 之外的那格：`var v = c.call_deferred(1)`）。 */
+const VOID_CALLABLE_METHODS = new Set(["call_deferred"]);
+/**
+ * Signal 上**没有**这个名字，而且是**解析期**两句（`tmp/f96` s02 / `tmp/f97` e6，两句同一行号、
+ * 顺序固定）：`Cannot find member "is_valid" in base "Signal".` + `Function "is_valid()" not found in base Signal.`
+ * 注意第二句的 `Signal` **不带引号** —— 与 `has_method` / `get_method_list` / `is_connected_to`
+ * 那三格不同形（那三格解析期放过、运行期才给 `Invalid call. Nonexistent function …`，见 methods.ts）。
+ */
+const SIGNAL_PARSE_MISSING = new Set(["is_valid"]);
+/**
  * 这九种形状的 void 表**逐个量过、口径一致**（byte：`tmp/void-probe`，int32 / int64：
  * `tmp/pack-probe` 的 k-* 与 h-*ret 系列，float32 / float64：`tmp/fp/probe2`，String：
  * `tmp/fp/probe5`，向量与颜色三种：`tmp/fp/probe8` 的 sortval / fillval / rmval / revval）。
@@ -433,7 +448,7 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object";
+type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object" | "Signal" | "Callable";
 
 /**
  * 给定型变量赋值的静态判定（f4/f8/f9 实测）：不合式的组合在 Godot 是**解析期**错，
@@ -693,9 +708,22 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   addClassNames(m.innerClasses);
 
+  /** 本模块声明过的信号名（含内部类里的）：裸写 `fired` 就是一个 Signal 值（`tmp/f96` s01 的读法）。 */
+  const signalNames = new Set<string>(m.signals.map((s) => s.name));
+  const addSignalNames = (cs: ClassDecl[]): void => {
+    for (const c of cs) {
+      for (const s of c.signals) signalNames.add(s.name);
+      addSignalNames(c.innerClasses);
+    }
+  };
+  addSignalNames(m.innerClasses);
+
   const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
+    // `var c = Callable()`：Godot 从构造式推出静态类型是 Callable（e7 那一格实测编得过、c9 是解析期拒），
+    // 而从 `o.hi` 读出来的那格**推不出**（e1 / e2 是运行期那句）—— 所以这里只认构造式与显式标注。
+    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "Callable") return "Callable";
     if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
       return "Pack";
     }
@@ -717,21 +745,44 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
-          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && !discarded) {
-            const shape = shapes.get(e.callee.obj.name);
+          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
             const name = e.callee.name;
-            const isVoid =
-              shape === "Pack"
-                ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
-                : shape === "Object"
-                  ? VOID_OBJECT_METHODS.has(name)
-                  : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
-            if (isVoid) {
+            // 裸信号名（`fired.emit(1)`）是唯一量过的「不先过 var」的证明；**`var s = fired` 之后再
+            // `s.emit(1)` 不在其中** —— s01b 量到 Godot 对那种 var 是**运行期**才判（`has_method` 给的是
+            // 运行期那句），所以这条链不发解析期拒。局部变量遮住同名信号时也以 `shapes` 为准。
+            const shape =
+              shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null);
+            // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
+            if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
               diags.push({
-                code: "void-method-value",
-                message: `Cannot get return value of call to "${name}()" because it returns "void".`,
+                code: "signal-member-missing",
+                message: `Cannot find member "${name}" in base "Signal".`,
                 loc: e.loc,
               });
+              diags.push({
+                code: "signal-member-not-found",
+                message: `Function "${name}()" not found in base Signal.`,
+                loc: e.loc,
+              });
+            }
+            if (!discarded) {
+              const isVoid =
+                shape === "Pack"
+                  ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
+                  : shape === "Object"
+                    ? VOID_OBJECT_METHODS.has(name)
+                    : shape === "Signal"
+                      ? VOID_SIGNAL_METHODS.has(name)
+                      : shape === "Callable"
+                        ? VOID_CALLABLE_METHODS.has(name)
+                        : (shape === "Array" ? VOID_ARRAY_METHODS : shape === "Dictionary" ? VOID_DICT_METHODS : null)?.has(name) === true;
+              if (isVoid) {
+                diags.push({
+                  code: "void-method-value",
+                  message: `Cannot get return value of call to "${name}()" because it returns "void".`,
+                  loc: e.loc,
+                });
+              }
             }
           }
           expr(e.callee, false);
@@ -776,6 +827,8 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
               if (/^Array(\[|$)/.test(s.type.name)) shapes.set(s.name, "Array");
               else if (/^Dictionary(\[|$)/.test(s.type.name)) shapes.set(s.name, "Dictionary");
               else if (PACK_SHAPE_NAMES.has(s.type.name)) shapes.set(s.name, "Pack");
+              else if (s.type.name === "Signal") shapes.set(s.name, "Signal");
+              else if (s.type.name === "Callable") shapes.set(s.name, "Callable");
             } else if (s.init !== null) {
               const sh = shapeOf(s.init);
               if (sh !== null) shapes.set(s.name, sh);

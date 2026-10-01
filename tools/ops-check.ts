@@ -3,10 +3,10 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVaria
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable, callableOf, registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta } from "../src/runtime/object";
+import { callable, callableOf, nullCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta } from "../src/runtime/object";
 import { Signal } from "../src/runtime/signal";
 import { paramSlot } from "../src/runtime/slots";
-import { attribute, index, method, writeIdx, writeProp } from "../src/runtime/methods";
+import { attribute, callableCtor, index, method, writeIdx, writeProp } from "../src/runtime/methods";
 import { isLess, ops, strOps } from "../src/runtime/ops";
 import { Tag, V, type Variant } from "../src/runtime/tags";
 import {
@@ -2080,7 +2080,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step65", "Callable.callv 收一个 Array（f34 t7）", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
   const stat = attribute(Holder2, "sm");
   eq("step65", "静态方法取值的 get_method 也报得出名字（f34 t4）", `${method(stat, "get_method", []).v}`, "sm");
-  shouldThrow("step65", "静态方法的 is_valid 没实测过 → 照旧响拒", () => method(stat, "is_valid", []));
+  // step 98 把这一格量掉了（`tmp/f96` c02b / c02c）：静态方法 Callable 与带接收者的方法 Callable 同形，
+  // `is_null()` 假、`is_valid()` 真 —— 旧的断言是「没实测过 → 照旧响拒」。
+  eq("step65", "静态方法 Callable 的 is_null / is_valid（f96 c02b / c02c）", `${method(stat, "is_null", []).v} ${method(stat, "is_valid", []).v}`, "false true");
   class Sig {
     fired = new Signal("fired");
   }
@@ -2769,12 +2771,14 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   );
   eq(
     "187",
-    "get_bound_arguments / get_argument_count（绑定过给 0）/ get_method / is_valid",
-    `${show(method(one, "get_bound_arguments", []))} ${method(full, "get_argument_count", []).v} ${method(base, "get_method", []).v} ${method(one, "is_valid", []).v}`,
-    `["x"] 0 cat true`,
+    "get_bound_arguments / get_method / is_valid",
+    `${show(method(one, "get_bound_arguments", []))} ${method(base, "get_method", []).v} ${method(one, "is_valid", []).v}`,
+    `["x"] cat true`,
   );
   eq("187", "callv 同样把绑定实参接在后面", show(method(one, "callv", [V.array(GArray.of([V.str("y"), V.str("z")]))])), "y|z|x");
-  shouldThrow("187", "没绑定过的 Callable 问 get_argument_count 还没量 → 响亮拒", () => method(base, "get_argument_count", []));
+  // step 98 更正：这一族当年只量到「**绑满**那一格给 0」（a1 的阶梯量出来是「还要几个实参」），
+  // 所以这里既不能报 0、也不能凭 `cat` 这个名字编出声明形参数 —— 合成的 Callable 没有形参表，响亮拒。
+  shouldThrow("187", "拿不到声明形参数的 Callable 问 get_argument_count → 响亮拒（规则见用例 193）", () => method(base, "get_argument_count", []));
   eq(
     "188",
     "str(a, b, …) 是每个实参按 print 的渲染**无分隔拼接**（f93）",
@@ -2812,6 +2816,109 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   // 非自洽比较器：置换能复现，Godot 那行 `ERROR: bad comparison function; sorting will be broken` 复现不了 → 只进这里，不进语料
   eq("189", "`<=` 比较器走 ERR_BAD_COMPARE 的 break 分支（只中断当前那个扫描 while）", perm(10, (i) => i % 3, (x, y) => x <= y), "9 6 3 0 7 4 1 8 5 2");
   eq("189", "恒真比较器 n=17：收尾插入趟被 `next == 0` 那道 break 截住，头两格换了个位", perm(17, (i) => i, () => true), "15 16 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
+}
+
+{
+  // step 98：Callable 与 Signal 的方法面（探针 `tmp/f96` 24 支 + `tmp/f97` 43 支，S193）。
+  // 期望值全部是 Godot 自己打出来的读数；带引擎 stderr 的格子（重复连接那一句 ERROR:、
+  // 运行期错的 backtrace）只进这里，不进语料。
+  const errText = (fn: () => unknown): string => {
+    try {
+      const r = fn();
+      return `没抛：${String(r)}`;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  class Holder {
+    add3(a: unknown, b: unknown, c: unknown): Variant {
+      return V.str(`${String(a)}-${String(b)}-${String(c)}`);
+    }
+    hi(x: unknown): Variant {
+      return V.str(String(x));
+    }
+    twice(x: unknown, y = "z"): Variant {
+      return V.str(`${String(x)}|${String(y)}`);
+    }
+    static sm(x: unknown): Variant {
+      return V.str(String(x));
+    }
+  }
+  // 静态方法也进这张表 —— step 98 起发射器把静态方法一起登记（`get_argument_count()` 那一格要用，
+  // 而 `p.f()` 调静态方法本来就合法，S160）
+  registerMethodArities(Holder as never, { add3: [3, 3], hi: [1, 1], twice: [1, 2], sm: [1, 1] });
+  registerStaticMethods(Holder as never, ["sm"]);
+  const inst = new Holder();
+  const other = new Holder();
+  const c0 = attribute(inst, "add3") as Variant;
+  const boundWith = (n: number): Variant => method(c0, "bind", Array.from({ length: n }, (_x, i) => V.int(i + 1)));
+
+  eq("193", "get_argument_count 是「**还要几个实参**」：3 形参绑 0/1/2/3 个给 3/2/1/0（a1 阶梯）", [0, 1, 2, 3].map((n) => method(boundWith(n), "get_argument_count", []).v).join(" "), "3 2 1 0");
+  eq("193", "bind() 的空列表等于没绑（f96 c09 那格给的是声明形参数）", method(boundWith(0), "get_argument_count", []).v, 3);
+  eq("193", "静态方法 Callable 同一式：1 形参给 1（a3 那一形）", `${method(attribute(Holder, "sm") as Variant, "get_argument_count", []).v}`, "1");
+  eq("193", "lambda（没有名字的 Callable）按声明形参数（a2 / c08）", method(callableOf(((x: unknown, y: unknown, z: unknown) => V.nil()) as never), "get_argument_count", []).v, 3);
+  shouldThrow("193", "带默认值形参的方法问 get_argument_count → 响亮拒（那一格没量，不拿 fn.length 猜）", () => method(attribute(inst, "twice") as Variant, "get_argument_count", []));
+
+  eq("194", "空 Callable：is_null 真 / is_valid 假 / get_method 空串 / get_argument_count 0（c1 c2 c4）", `${method(nullCallable(), "is_null", []).v} ${method(nullCallable(), "is_valid", []).v} "${method(nullCallable(), "get_method", []).v}" ${method(nullCallable(), "get_argument_count", []).v}`, 'true false "" 0');
+  eq("194", "空 Callable 的 get_bound_arguments 是空 Array、callv 给 null 且不报错（c11 / c8）", `${show(method(nullCallable(), "get_bound_arguments", []))} ${show(method(nullCallable(), "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))}`, "[] <null>");
+  eq("194", "空 Callable 上 call() 是运行期那一句（c3）", errText(() => method(nullCallable(), "call", [V.int(1)])), "Attempt to call function 'null::null (Callable)' on a null instance.");
+  eq("194", "绑过实参的空 Callable 不再算 null（c6）", `${method(boundWith(0), "is_null", []).v} ${method(method(nullCallable(), "bind", [V.int(1)]), "is_null", []).v}`, "false false");
+  shouldThrow("194", "空 Callable 上 call_deferred 没量过 → 响亮拒（c9 只量到解析期那一格）", () => method(nullCallable(), "call_deferred", [V.int(1)]));
+  shouldThrow("194", "is_valid 在「空 + 绑过实参」那一格没量 → 响亮拒，不拿 is_null 的反面推", () => method(method(nullCallable(), "bind", [V.int(1)]), "is_valid", []));
+  shouldThrow("194", "Callable(字符串) 一参形：Godot 是解析期 No constructor，运行期先响亮拒（c10）", () => callableCtor([V.str("on_fired")]));
+  shouldThrow("194", "unbind() 量到存在但语义没读懂 → 继续响亮拒（f96 c07）", () => method(c0, "unbind", [V.int(1)]));
+
+  eq("192", "方法 Callable 的等式比 (接收者, 方法名)：两次读同一个小盒不同（d1 / d7 / f96 c06）", `${valueEq(c0, attribute(inst, "add3") as Variant)} ${valueEq(c0, attribute(other, "add3") as Variant)}`, "true false");
+  eq("192", "绑定的实参**不进**等式：bind(1) 与 bind(2) 相等（d3）", valueEq(boundWith(1), boundWith(2)), true);
+  eq("192", "静态方法与空 Callable 各自成格（d4 / c5）", `${valueEq(attribute(Holder, "sm") as Variant, attribute(Holder, "sm") as Variant)} ${valueEq(nullCallable(), nullCallable())}`, "true true");
+  eq("192", "lambda 按引用比：两个同体 lambda 不等（d2）", valueEq(callableOf(((x: unknown) => V.nil()) as never), callableOf(((x: unknown) => V.nil()) as never)), false);
+  eq("192", "Array.has 走同一条等式（d6 实测真）", (V.array(GArray.of([c0, attribute(inst, "hi") as Variant])).v as GArray).has(attribute(inst, "add3") as Variant), true);
+  eq("192", "Callable 与 int 比不是 false，而是运行期那一句（d5）", errText(() => valueEq(c0, V.int(1))), "Invalid operands 'Callable' and 'int' in operator '=='.");
+
+  // 一个「把每次投递记下来」的回调 Callable：名字与接收者固定，所以两条连接按实测等式算同一条
+  const mkSink = (seen: string[]): Variant =>
+    callableOf(((v: unknown) => {
+      seen.push(String((v as Variant).v));
+      return V.nil();
+    }) as never, "on_fired", V.object({}));
+  {
+    const seen: string[] = [];
+    const sig = V.object(new Signal("fired"));
+    const cb = mkSink(seen);
+    const code1 = method(sig, "connect", [cb]);
+    const code2 = method(sig, "connect", [cb]);
+    method(sig, "emit", [V.int(5)]);
+    method(sig, "disconnect", [cb]);
+    const code3 = method(sig, "connect", [cb]);
+    eq(
+      "195",
+      "connect 给 Error 码 int：第一次 0、重复 31、断开后再连又是 0（b1 / e4）",
+      `${code1.t === Tag.INT ? "int" : "非 int"} ${code1.v} ${code2.v} ${code3.v}`,
+      "int 0 31 0",
+    );
+    eq("195", "重复连接不多一份投递、disconnect 是 void 且真的断开（b1 / b2）", `${seen.join(",")} ${show(method(sig, "disconnect", [cb]))}`, "5 <null>");
+  }
+  {
+    const seen: string[] = [];
+    const sig = V.object(new Signal("fired"));
+    eq("195", "CONNECT_ONE_SHOT 实测是 4（b4），连上就投一次（b5 / b7）", `${method(sig, "connect", [mkSink(seen), V.int(4)]).v}`, "0");
+    method(sig, "emit", [V.int(1)]);
+    method(sig, "emit", [V.int(2)]);
+    eq("195", "one-shot 投完自动断开：第二次 emit 不再投递", seen.join(","), "1");
+    const seen2: string[] = [];
+    const sig2 = V.object(new Signal("fired"));
+    method(sig2, "connect", [mkSink(seen2), V.int(1)]);
+    method(sig2, "emit", [V.int(3)]);
+    method(sig2, "emit", [V.int(4)]);
+    eq("195", "flag=1 是常规连接：两次都投（b6）", seen2.join(","), "3,4");
+    shouldThrow("195", "flags=2 这类没量过的值 → 响亮拒，不静默按 0 处理", () => method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(2)]));
+  }
+  eq("196", "Signal 上 has_method / get_method_list / is_connected_to 是运行期那三句（s01b / s01c / s04）", [
+    errText(() => method(V.object(new Signal("fired")), "has_method", [V.str("connect")])),
+    errText(() => method(V.object(new Signal("fired")), "get_method_list", [])),
+    errText(() => method(V.object(new Signal("fired")), "is_connected_to", [V.nil()])),
+  ].join(" || "), "Invalid call. Nonexistent function 'has_method' in base 'Signal'. || Invalid call. Nonexistent function 'get_method_list' in base 'Signal'. || Invalid call. Nonexistent function 'is_connected_to' in base 'Signal'.");
+  eq("196", "信号自身的 get_name / is_null / typeof 不变（s01 / S165）", `${method(V.object(new Signal("fired")), "get_name", []).v} ${method(V.object(new Signal("fired")), "is_null", []).v}`, "fired false");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

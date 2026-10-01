@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
-import { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT, boundArgsOf, callableOf, declaredArgCount, classNameOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -103,6 +103,112 @@ function staticCtorOf(inner: unknown): unknown {
   return typeof inner === "function" ? inner : (inner as { constructor?: unknown })?.constructor;
 }
 
+/**
+ * `Callable()` 与 `Callable(对象, "方法名")` 两个构造式（`tmp/f97` c1 / c7）：
+ * 前者是**空 Callable**（typeof 仍是 25），后者与 `o.名字` 读出来的盒子同形，所以直接走 `attribute()`。
+ * 一参形 `Callable("on_fired")` 在 Godot 是解析期那句
+ * `No constructor of "Callable" matches the signature "Callable(String)".`（c10）——
+ * 解析期那一族还没接（分析层不判内建构造器的形参），运行期先响亮拒。
+ */
+export function callableCtor(args: Variant[]): Variant {
+  if (args.length === 0) return nullCallable();
+  if (args.length === 2) {
+    const [obj, name] = args as [Variant, Variant | undefined];
+    if (name === undefined || (name.t !== Tag.STRING && name.t !== Tag.STRING_NAME)) {
+      throw new UnsupportedError("callable-ctor", "Callable(对象, 名字) 的第二个实参量过的是方法名字符串");
+    }
+    return attribute(obj, String(name.v)) as Variant;
+  }
+  throw new UnsupportedError(
+    "callable-ctor",
+    `Callable() 只量过 0 参与 2 参（收到 ${args.length} 个；1 参那一格在 Godot 是解析期拒）`,
+  );
+}
+
+/**
+ * 调一个 Callable 盒子：绑定的实参排在**调用实参之后**（`tmp/f91 b01 / b02`）。
+ * 空 Callable（`Callable()`）的 `call()` 是运行期那句
+ * `Attempt to call function 'null::null (Callable)' on a null instance.`（`tmp/f97` c3）。
+ */
+function callCallableBox(box: Record<string, unknown>, args: Variant[]): Variant {
+  const fn = box[CALLABLE] as Fn | null;
+  if (typeof fn !== "function") {
+    throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
+  }
+  return wrapValue(fn(...args, ...boundArgsOf(box)));
+}
+
+/**
+ * Callable 的方法面（`tmp/f96` c 系列 + `tmp/f97` a / c / d 系列）。四种形状共用这一张表：
+ * 方法 Callable（带 `CALLABLE_NAME` + 接收者）、静态方法 Callable、lambda、以及 `Callable()` 空 Callable。
+ */
+function callableMethod(box: Record<string, unknown>, name: string, args: Variant[]): Variant {
+  const fn = box[CALLABLE] as Fn | null;
+  const bound = boundArgsOf(box);
+  const hasFn = typeof fn === "function";
+  switch (name) {
+    case "bind": {
+      const next: Record<string, unknown> = { [CALLABLE]: fn ?? null };
+      if (typeof box[CALLABLE_NAME] === "string") next[CALLABLE_NAME] = box[CALLABLE_NAME];
+      if (box[CALLABLE_OBJECT] !== undefined) next[CALLABLE_OBJECT] = box[CALLABLE_OBJECT];
+      next[CALLABLE_BOUND] = [...(args as Variant[]), ...bound];
+      return V.object(next);
+    }
+    case "get_bound_arguments":
+      return V.array(GArray.of(bound.slice()));
+    case "get_argument_count": {
+      // 实测是「**还要几个实参**」= 声明形参数 − 绑定数（a1 的 3/2/1/0/3 阶梯、a2 lambda、a3 静态、
+      // a4 调用之后不变、c4/c11 空 Callable 给 0）。S190 当年只量到「绑满」那一格（0），
+      // 照它发成「只要有 bind 过就给 0」是静默错 —— `o.add3.bind(1)` Godot 给 2、我们给 0。
+      const declared = declaredArgCount(box);
+      if (declared === null) {
+        throw new UnsupportedError(
+          "callable-arity-count",
+          "get_argument_count() 拿不到这个 Callable 的声明形参数（方法表里没有它，或它带默认值形参 —— 那一格没量）",
+        );
+      }
+      return V.int(declared - bound.length);
+    }
+    case "call":
+      return callCallableBox(box, args);
+    case "call_deferred": {
+      if (!hasFn) throw new UnsupportedError("callable-deferred-null", "空 Callable 上 call_deferred() 没量过");
+      setTimeout(() => {
+        (fn as Fn)(...args, ...bound);
+      }, 0);
+      return V.nil();
+    }
+    case "callv": {
+      const arr = args[0];
+      if (arr === undefined || !(arr.v instanceof GArray)) {
+        throw new GodotRuntimeError("callable-callv", "callv() 需要一个 Array 实参");
+      }
+      // c8：空 Callable 的 `callv` **不报错也不调**，给 null —— 与 S185 ⑤ 那条 callv 的老口径同一形状
+      if (!hasFn) return V.nil();
+      return wrapValue(fn(...(arr.v as GArray).raw(), ...bound));
+    }
+    case "get_method": {
+      const m = box[CALLABLE_NAME];
+      if (typeof m === "string") return V.str(m);
+      // c2：空 Callable 给**空串**（印出来就是 `r ` 后面什么都没有）；
+      // f96 c04c：lambda 给字面量 `<anonymous lambda>`（过去我们把这两种都当成「不是方法引用」而拒）
+      if (!hasFn) return V.str("");
+      return V.str("<anonymous lambda>");
+    }
+    case "is_null":
+      // c1 空 Callable 真；c6 `Callable().bind(1)` **假**（绑过实参就不再是空的）；
+      // c04b lambda 假、c02b 静态方法假、S165 方法 Callable 假 —— 四种形状里只有空 Callable 为真。
+      return V.bool(!hasFn && bound.length === 0);
+    case "is_valid":
+      if (!hasFn && bound.length > 0) {
+        throw new UnsupportedError("callable-is-valid-bound-null", "绑过实参的空 Callable 上 is_valid() 没量过");
+      }
+      // c1 空 Callable 假；c04b lambda 真；c02c 静态方法真；S165 方法 Callable 真
+      return V.bool(hasFn);
+  }
+  throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
+}
+
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
   if (obj.t === Tag.STRING_NAME) return method(V.str(obj.v as string), name, args);
@@ -123,72 +229,43 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         return V.nil();
       }
       if (name === "connect") {
-        const fn = args[0];
-        if (fn === undefined) throw new GodotRuntimeError("arity", "connect 缺少参数");
-        inner.connect((...a: unknown[]) => {
-          const f = (fn.v as Record<string, unknown>)[CALLABLE] as Fn | undefined;
-          if (f) f(...a.map(wrapValue));
-        });
+        const cb = args[0];
+        if (cb === undefined || !isCallableBox(cb.v)) {
+          throw new UnsupportedError("signal-connect", "connect() 的 Callable 实参这一格没量过（非 Callable 来源）");
+        }
+        // flags 只量过 0 / 1 / 4（4 = `CONNECT_ONE_SHOT`）；其余值没量 → 响亮拒，不静默按 0 处理
+        const flags = args.length > 1 ? (args[1] as Variant) : V.int(0);
+        if (flags.t !== Tag.INT) {
+          throw new UnsupportedError("signal-flag", "connect() 的 flags 只量过 int 来源");
+        }
+        const n = Number(flags.v);
+        if (n !== 0 && n !== 1 && n !== 4) {
+          throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 4）`);
+        }
+        const box = cb.v as Record<string, unknown>;
+        return V.int(inner.connectTo(box, (...a: unknown[]) => callCallableBox(box, a.map(wrapValue)), n === 4));
+      }
+      if (name === "disconnect") {
+        const cb = args[0];
+        if (cb === undefined || !isCallableBox(cb.v)) {
+          throw new UnsupportedError("signal-disconnect", "disconnect() 的 Callable 实参这一格没量过（非 Callable 来源）");
+        }
+        inner.disconnectFrom(cb.v as Record<string, unknown>);
         return V.nil();
       }
       if (name === "get_name") return V.str(inner.sigName);
       if (name === "is_null") return V.bool(false);
+      // `tmp/f96` s01b / s01c / s04：这三个名字在 Signal 上**不存在**，而且是**运行期**那句
+      // `Invalid call. Nonexistent function 'X' in base 'Signal'.`（解析期没拦住它），与 `is_valid`
+      // 那一格不同 —— `is_valid` 是**解析期**两句（s02 / e6，见 analyze 的 SIGNAL_NO_MEMBER）。
+      if (name === "has_method" || name === "get_method_list" || name === "is_connected_to") {
+        throw new GodotRuntimeError("signal-method", `Invalid call. Nonexistent function '${name}' in base 'Signal'.`);
+      }
       throw new UnsupportedError("signal-method", `Signal.${name}() 未实现`);
     }
 
-    const fn = (inner as Record<string, unknown>)[CALLABLE];
-    if (typeof fn === "function") {
-      const f = fn as Fn;
-      // `tmp/f91 b01 / b02`：绑定的实参排在**调用实参之后**（`add3.bind("x").call("y","z")` → `y-z-x`），
-      // 链式 bind 把新实参挤到已绑定那串**前面**（`.bind("m").bind("n").call("p")` → `p-n-m`）。
-      const bound = ((inner as Record<string, unknown>)[CALLABLE_BOUND] as Variant[] | undefined) ?? [];
-      if (name === "bind") {
-        const meta = inner as Record<string, unknown>;
-        const box: Record<string, unknown> = { [CALLABLE]: f };
-        if (typeof meta[CALLABLE_NAME] === "string") box[CALLABLE_NAME] = meta[CALLABLE_NAME];
-        if (meta[CALLABLE_OBJECT] !== undefined) box[CALLABLE_OBJECT] = meta[CALLABLE_OBJECT];
-        box[CALLABLE_BOUND] = [...(args as Variant[]), ...bound];
-        return V.object(box);
-      }
-      if (name === "get_bound_arguments") {
-        return V.array(GArray.of(bound.slice()));
-      }
-      if (name === "get_argument_count") {
-        // 实测只覆盖绑定过的那一格（`tmp/f91 b02` 给 **0**）；未绑定 Callable 的口径没量 → 响亮拒
-        if (((inner as Record<string, unknown>)[CALLABLE_BOUND] as Variant[] | undefined) === undefined) {
-          throw new UnsupportedError("callable-arity-count", "get_argument_count() 只量过绑定后的 Callable（给 0）");
-        }
-        return V.int(0);
-      }
-      if (name === "call") return wrapValue(f(...args, ...bound));
-      if (name === "call_deferred") {
-        setTimeout(() => {
-          f(...args, ...bound);
-        }, 0);
-        return V.nil();
-      }
-      if (name === "callv") {
-        const arr = args[0];
-        if (arr === undefined || !(arr.v instanceof GArray)) {
-          throw new GodotRuntimeError("callable-callv", "callv() 需要一个 Array 实参");
-        }
-        return wrapValue(f(...(arr.v as GArray).raw(), ...bound));
-      }
-      if (name === "get_method") {
-        const m = (inner as Record<string, unknown>)[CALLABLE_NAME];
-        if (typeof m !== "string") {
-          throw new UnsupportedError("callable-method", `Callable.${name}() 未实现（这个 Callable 不是方法引用）`);
-        }
-        return V.str(m);
-      }
-      if (name === "is_null" || name === "is_valid") {
-        const meta = inner as Record<string, unknown>;
-        if (typeof meta[CALLABLE_NAME] !== "string" || meta[CALLABLE_OBJECT] === undefined) {
-          throw new UnsupportedError("callable-method", `Callable.${name}() 未实现（没实测过这种 Callable）`);
-        }
-        return V.bool(name === "is_valid");
-      }
-      throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
+    if (isCallableBox(inner)) {
+      return callableMethod(inner as Record<string, unknown>, name, args);
     }
 
     if (typeof inner === "function") {
@@ -770,7 +847,9 @@ export function attribute(raw: unknown, name: string): unknown {
     const inner = obj.v as Record<string, unknown>;
     if (staticMethodsOf(inner)?.has(name)) {
       const ctor = staticCtorOf(inner);
-      return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown, name);
+      // 接收者带**类本身**：静态方法 Callable 的 `get_argument_count()` 与等式都要按 (类, 方法名) 判
+      // （`tmp/f97` a3 给声明形参数、d4 两个读法相等）
+      return callableOf(staticFnOf(ctor, name).bind(ctor) as (...a: unknown[]) => unknown, name, V.object(ctor));
     }
     const svars = staticVarsOf(inner);
     if (svars !== null && name in svars) {

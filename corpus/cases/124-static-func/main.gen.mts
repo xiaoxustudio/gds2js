@@ -37,14 +37,14 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("u14 "), Main.helper()]));
     let cb = rt.attribute(Inner, "make");
     print(rt.showArgs([rt.V.str("u15 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "call", [])]));
-    print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper"))]));
+    print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.callableOf(Main.usehelper.bind(Main), "usehelper", rt.V.object(Main)))]));
     this.quit();
   }
   
 }
 
 rt.registerFieldTypes(Main, {"TOP": "int"});
-rt.registerMethodArities(Main, { "outerbare": [0, 0], "_initialize": [0, 0] });
+rt.registerMethodArities(Main, { "helper": [0, 0], "usehelper": [0, 0], "outerbare": [0, 0], "_initialize": [0, 0] });
 rt.registerStaticMethods(Main, ["helper","usehelper"]);
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
@@ -82,7 +82,7 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"CV": "int", "mv": "int"});
-rt.registerMethodArities(Inner, { "usestatic": [0, 0] });
+rt.registerMethodArities(Inner, { "make": [0, 0], "twice": [1, 1], "selfcall": [0, 0], "readconst": [0, 0], "rec": [1, 1], "usestatic": [0, 0] });
 rt.registerStaticMethods(Inner, ["make","twice","selfcall","readconst","rec"]);
 rt.registerNativeBase(Inner, "RefCounted");
 

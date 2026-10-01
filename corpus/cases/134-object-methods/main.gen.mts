@@ -36,7 +36,7 @@ class A {
   
 }
 rt.registerClass("A", A);
-rt.registerMethodArities(A, { "im": [0, 0] });
+rt.registerMethodArities(A, { "im": [0, 0], "sm": [0, 0] });
 rt.registerStaticMethods(A, ["sm"]);
 rt.registerNativeBase(A, "RefCounted");
 

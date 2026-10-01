@@ -1,0 +1,6 @@
+r1 true false
+r2 true
+r3 true
+r4 true false
+r5 true 2
+r6 true false

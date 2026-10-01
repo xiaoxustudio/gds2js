@@ -1,13 +1,11 @@
 import { UnsupportedError } from "./errors";
 import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
+import { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT } from "./callable";
 
-export const CALLABLE = "__gds2js_callable";
-/** 方法 Callable 的方法名与接收者（`get_method()` / `is_null()` / `is_valid()` 要用，实测 f34）。 */
-export const CALLABLE_NAME = "__gds2js_callable_name";
-export const CALLABLE_OBJECT = "__gds2js_callable_object";
-/** `Callable.bind(...)` 绑上去的实参（实测排在调用实参**之后**，S190）。 */
-export const CALLABLE_BOUND = "__gds2js_callable_bound";
+// Callable 盒子的键名与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，而不能反向 import 本模块）；
+// 这里原样转出去，产物与 ops 的 `rt.CALLABLE` 那类读法不受影响。
+export { CALLABLE, CALLABLE_BOUND, CALLABLE_NAME, CALLABLE_OBJECT, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable } from "./callable";
 
 export type Fn = (...args: Variant[]) => Variant;
 
@@ -18,13 +16,41 @@ export function callable(fn: Fn): Variant {
 /**
  * 把已经绑定好 this 的方法包成 Callable（GDScript 里 `fire_zero` 本身就是个 Callable）。
  * 带上 name / obj 是为了 `get_method()`、`is_null()`、`is_valid()` 这几条实测过的谓词；
- * lambda 与「拿不到接收者」的形状一律不带 —— 那些组合没测过，宁可响亮报缺也不猜。
+ * lambda 不带名字 —— 它的 `get_method()` 实测给 `<anonymous lambda>`（`tmp/f96` c04c）。
  */
 export function callableOf(fn: (...args: unknown[]) => unknown, name?: string, obj?: Variant): Variant {
   const box: Record<string, unknown> = { [CALLABLE]: fn };
   if (name !== undefined) box[CALLABLE_NAME] = name;
   if (obj !== undefined) box[CALLABLE_OBJECT] = obj;
   return V.object(box);
+}
+
+/** Callable 盒子「还缺几个实参」：绑定的实参**抵扣**声明形参数（实测见 `declaredArgCount` 的注释）。 */
+export function boundArgsOf(box: Record<string, unknown>): Variant[] {
+  return (box[CALLABLE_BOUND] as Variant[] | undefined) ?? [];
+}
+
+/**
+ * 声明形参数。`tmp/f97` 的 a1 阶梯把 `get_argument_count()` 的口径钉死了：它给的是**还要几个实参**，
+ * 不是声明形参数、也不是绑定数 —— `add3` 未绑给 3、`bind(1)` 给 2、`bind(1, 2)` 给 1、
+ * `bind(1, 2, 3)` 给 0、`bind()` 给 3，lambda 与静态方法同一式（a2 / a3），调用一次之后不变（a4）。
+ * S190 当年记的「绑过的 Callable 给 0」正是**绑满**那一格，被当成通用规则发出去就成了静默错。
+ * 拿不到声明数（表里没有、或那方法带默认值 —— 那一格没量）→ null，由调用方响亮拒。
+ */
+export function declaredArgCount(box: Record<string, unknown>): number | null {
+  if (typeof box[CALLABLE] !== "function") return 0;
+  const name = box[CALLABLE_NAME];
+  if (typeof name === "string") {
+    const recv = box[CALLABLE_OBJECT];
+    const table = recv === undefined ? null : methodAritiesOf((recv as Variant).v);
+    const row = table?.[name];
+    // `[必填, 全部]` 两值不等说明有默认值形参 —— Godot 在那一形上给什么没量过，不猜。
+    if (row === undefined || row[0] !== row[1]) return null;
+    return row[1];
+  }
+  // lambda：发成同形参的箭头函数，且形参默认值在发射期就被拒（`lambda-param-default`），
+  // 所以 `fn.length` 就是声明形参数（a2 实测三个形参的 lambda 给 3）。
+  return (box[CALLABLE] as Function).length;
 }
 
 export function isVariant(v: unknown): v is Variant {
