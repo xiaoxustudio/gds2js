@@ -5,9 +5,9 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    let sn = rt.V.stringName("ff");
-    let sn2 = rt.V.stringName("42");
-    let sn3 = rt.V.stringName("0x10");
+    let sn = rt.toStringNameSlot(rt.V.stringName("ff"));
+    let sn2 = rt.toStringNameSlot(rt.V.stringName("42"));
+    let sn3 = rt.toStringNameSlot(rt.V.stringName("0x10"));
     print(rt.showArgs([rt.V.str("n1 "), rt.method(rt.V.str("42"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("-42"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("+42"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str(" 42 "), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("42abc"), "to_int", [])]));
     print(rt.showArgs([rt.V.str("n2 "), rt.method(rt.V.str("0x10"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("1_000"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("1.5"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("1e5"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("abc"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str(""), "to_int", [])]));
     print(rt.showArgs([rt.V.str("n3 "), rt.method(rt.V.str("9223372036854775807"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("9223372036854775808"), "to_int", []), rt.V.str(" | "), rt.method(rt.V.str("-9223372036854775809"), "to_int", [])]));

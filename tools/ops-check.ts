@@ -26,6 +26,7 @@ import {
   elemDefault,
   stampArray,
   stampDict,
+  toStringNameSlot,
   truthyOf,
   valueEq,
   valueSame,
@@ -39,6 +40,7 @@ import {
   colorStatic,
   colorWrite,
   GColor,
+  toColor,
 } from "../src/runtime/color";
 import { GVector2, asVec2, toVec2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
 import {
@@ -1565,10 +1567,22 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("096", "Array[Color] 的默认元素 alpha 是 1", show(elemDefault("Color")), "(0.0, 0.0, 0.0, 1.0)");
   eq(
     "096",
-    "elemConvert 只收 Color 本身",
-    `${elemConvert("Color", color(1, 1, 1, 1)) === null ? "拒" : "收"}/${elemConvert("Color", V.int(1)) === null ? "拒" : "收"}`,
-    "收/拒",
+    // step 90（S186）把 Color 槽的入口扩到 int / String：`tmp/f77` / `tmp/f79` 量到变量、字段、
+    // 容器元素与键、形参默认值四路都收（`Array[Color] = [1, "f00"]` → 两个 Color），StringName 仍拒。
+    "elemConvert 的 Color 槽收 Color / int / String，不收 StringName",
+    `${show(elemConvert("Color", V.int(1)) as Variant)}/${show(elemConvert("Color", V.str("f00")) as Variant)}/${elemConvert("Color", V.stringName("x")) === null ? "拒" : "收"}`,
+    "(0.0, 0.0, 0.0, 0.0039)/(1.0, 0.0, 0.0, 1.0)/拒",
   );
+  eq(
+    "096",
+    "Color 槽的 int 与 2³² 边界",
+    `${show(toColor(V.int(123456789)))}/${show(toColor(V.int(4294967296)))}/${show(toColor(V.int(-1)))}`,
+    "(0.0275, 0.3569, 0.8039, 0.0824)/(0.0, 0.0, 0.0, 0.0)/(1.0, 1.0, 1.0, 1.0)",
+  );
+  eq("096", "Color 槽拷一份是拷贝不是共享", `${show(toColor(color(0.5, 0.5, 0.5, 0.5)))}`, "(0.5, 0.5, 0.5, 0.5)");
+  eq("096", "StringName 槽吃 String、不吃 int 与 Color", `${show(toStringNameSlot(V.str("zz")))}/${String(typeOf(toStringNameSlot(V.str("zz"))).v)}`, "zz/21");
+  shouldThrow("096", "StringName 槽吃 int 响亮拒", () => toStringNameSlot(V.int(5)));
+  shouldThrow("096", "Color 槽吃 StringName 响亮拒", () => toColor(V.stringName("abc")));
   shouldThrow("096", "Color 数组不能 sort（没有顺序）", () => {
     GArray.of([color(1, 0, 0, 1), color(0, 1, 0, 1)]).sort();
   });

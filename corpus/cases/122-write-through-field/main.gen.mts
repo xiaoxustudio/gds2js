@@ -45,7 +45,7 @@ export class Main extends SceneTree {
 
 rt.registerNativeBase(Main, "SceneTree");
 class Box {
-  m = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
+  m = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
 
   getm(): unknown {
     return this.m;

@@ -47,7 +47,7 @@ export class Main extends SceneTree {
       if (_nv !== null) d = _nv;
     }
     print(rt.showArgs([d]));
-    let e = rt.V.stringName("q");
+    let e = rt.toStringNameSlot(rt.V.stringName("q"));
     print(rt.showArgs([e]));
     print(rt.showArgs([rt.ops.neq(rt.V.stringName("abc"), rt.V.stringName("abd"))]));
     print(rt.showArgs([rt.typeOf(rt.strOf(s))]));

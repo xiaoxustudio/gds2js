@@ -30,7 +30,7 @@ export class Main extends SceneTree {
 rt.registerNativeBase(Main, "SceneTree");
 class Box {
   boxed = new rt.Signal("boxed");
-  n = rt.V.int(1);
+  n = rt.toInt(rt.V.int(1));
 
 }
 rt.registerClass("Box", Box);

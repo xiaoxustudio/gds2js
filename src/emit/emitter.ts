@@ -846,7 +846,7 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
       out.push(...emitAccessors(v));
       continue;
     }
-    const init = stampDecl(v.type, v.init, emitExpr);
+    const init = slotInit(v.type, v.init);
     if (v.isStatic) {
       out.push(`  static ${v.name} = ${init};`);
       continue;
@@ -867,6 +867,18 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
  * （实测 `class WithInit extends Plain` 用子类覆写的 `_note` 去初始化基类的字段）。
  * 带读写器的属性照旧只发 get/set（今天就不发初值），静态与 const 的静态镜像发在类上（见 emitClassLevelVars）。
  */
+/**
+ * 字段 / 静态变量那一族的初始化：定型容器走 `stampDecl`，**其余定目标量还要过 declaredCast**。
+ * 少了后半截就是静默错（`tmp/f81 fd-init` 一次量到五格）：Godot 给 `2 / (0.0, 0.0, 0.0, 1.0) / (1, 2) / typeof 21 / 3.0`，
+ * 我们当时给 `2.7 / 255 / (1.7, 2.9) / typeof 4 / 3` —— 槽里存的是原形状，打印与 `typeof` 一起错。
+ * 局部变量（`emitStmt` 的 var 分支）与形参默认值本来就走这条，只有字段这一族漏了。
+ */
+function slotInit(t: TypeRef | null, init: Expr | null | undefined): string {
+  const raw = stampDecl(t, init, emitExpr);
+  const cast = declaredCast(t);
+  return cast === null ? raw : `${cast}(${raw})`;
+}
+
 function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: boolean, lineBase: number): string[] {
   const out: string[] = ["  __gd_fields__() {"];
   if (chainToBase) out.push("    super.__gd_fields__();");
@@ -877,7 +889,7 @@ function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: b
   for (const v of vars) {
     if (v.isStatic || v.accessor) continue;
     mark(lineBase + out.length, v.loc);
-    out.push(`    this.${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+    out.push(`    this.${v.name} = ${slotInit(v.type, v.init)};`);
   }
   out.push("  }");
   out.push("");
@@ -893,7 +905,7 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }
-    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${stampDecl(v.type, v.init, emitExpr)};`);
+    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init)};`);
   }
   if (out.length > 0) out.push("");
   return out;
@@ -2672,6 +2684,10 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "Vector3") return "rt.toVec3";
   if (base === "Vector3i") return "rt.toVec3i";
   if (base === "Vector2i") return "rt.toVec2i";
+  // `tmp/f77` / `tmp/f79`：Color 槽吃 int（packed RGBA）与 String（色名 / hex），StringName 槽吃 String。
+  // 变量初值、后续赋值、字段、形参默认值四路实测同形（`var c: Color = 123456789` 与 `fd = "abc"` 都会转）。
+  if (base === "Color") return "rt.toColor";
+  if (base === "StringName") return "rt.toStringNameSlot";
   return null;
 }
 
@@ -2692,6 +2708,9 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "float") return "rt.V.float(0)";
   if (base === "bool") return "rt.V.bool(false)";
   if (base === "String") return `rt.V.str("")`;
+  // `tmp/f79 v-sn-uninit`：`var sn: StringName` 的默认值是**空 StringName**（typeof 21、打印空串、length 0），
+  // 不是 null —— 原先这里没有分支，落到 `rt.V.nil()`，于是 `sn.length()` 直接撞出「类型 0 上调用 length()」。
+  if (base === "StringName") return `rt.V.stringName("")`;
   if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
   if (base === "Dictionary") return "rt.dictOf([])";
   if (base === "Vector2") return "rt.vector2(0, 0)";

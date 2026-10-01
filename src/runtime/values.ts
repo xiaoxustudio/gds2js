@@ -5,7 +5,7 @@ import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
-import { asColor, color, colorCmp, GColor } from "./color";
+import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
@@ -214,7 +214,9 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       return null;
     }
     case "Color":
-      return v.t === Tag.OBJECT && v.v instanceof GColor ? v : null;
+      // `Array[Color]` 的元素与 `Dictionary[StringName, Color]` 的值都收 int / String（`tmp/f77` / `tmp/f79`：
+      // `append(1)` → `(0.0, 0.0, 0.0, 0.0039)`、`append("f00")` → `(1.0, 0.0, 0.0, 1.0)`、`{"k": 5}` 同理）。
+      return tryColorSlot(v);
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
     case "Dictionary":
@@ -1481,6 +1483,17 @@ export function stringNameCtor(args: Variant[]): Variant {
     );
   }
   return V.stringName(v.v as string);
+}
+
+/**
+ * **StringName 槽**（变量 / 字段 / 容器元素与键 / 形参默认值）：`tmp/f77` 与 `tmp/f79` 量到
+ * `var sn: StringName = "nm"`、`sn = "zz"`、`Dictionary[StringName, int] = { "a": 1 }` 全部成立，
+ * 而 `= 5`（`v-sn-str`）与 `= Color(...)`（`v-sn-color`）是解析期两句。装不下就响亮报，不原样塞进去。
+ */
+export function toStringNameSlot(v: Variant): Variant {
+  if (v.t === Tag.STRING_NAME) return v;
+  if (v.t === Tag.STRING) return V.stringName(v.v as string);
+  throw new UnsupportedError("string-name-slot", `StringName 槽只收 StringName / String，收到 ${tagName(v.t)}`);
 }
 
 /** 顶层 print：字符串不加引号 */

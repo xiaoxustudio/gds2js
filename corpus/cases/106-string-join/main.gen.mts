@@ -6,12 +6,12 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
     let arr = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.str("p"), rt.V.str("q")])), "String", true);
-    let sn = rt.V.stringName("sep");
-    let zn = rt.V.stringName("z");
+    let sn = rt.toStringNameSlot(rt.V.stringName("sep"));
+    let zn = rt.toStringNameSlot(rt.V.stringName("z"));
     let inner = rt.V.array(rt.GArray.of([rt.V.int(1)]));
     let d = rt.dictOf([[rt.V.str("a"), rt.V.int(1)]]);
     let v2 = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
-    let c = rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]);
+    let c = rt.toColor(rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]));
     let v3 = rt.toVec3(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]));
     let v2i = rt.toVec2i(rt.vector2iNew([rt.V.int(3), rt.V.int(4)]));
     let fs = rt.V.array(rt.GArray.of([rt.V.float((1 / 3)), rt.V.float(100000000000000000000), rt.V.float((0.1 + 0.2)), rt.V.float((1 / 0)), rt.V.float(((-1) / 0))]));

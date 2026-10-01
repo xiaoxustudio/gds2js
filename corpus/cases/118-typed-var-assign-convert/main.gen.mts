@@ -4,11 +4,11 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  mt = rt.V.int(2);
-  mfl = rt.V.int(1);
-  mb = rt.V.bool(false);
-  ms = rt.V.str("a");
-  mv = rt.vector2New([rt.V.int(0), rt.V.int(0)]);
+  mt = rt.toInt(rt.V.int(2));
+  mfl = rt.toFloat(rt.V.int(1));
+  mb = rt.toBool(rt.V.bool(false));
+  ms = rt.strOf(rt.V.str("a"));
+  mv = rt.toVec2(rt.vector2New([rt.V.int(0), rt.V.int(0)]));
 
   async _initialize(): Promise<void> {
     this.mt = rt.toInt(rt.V.float(2.7));

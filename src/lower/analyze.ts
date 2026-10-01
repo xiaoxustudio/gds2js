@@ -52,6 +52,9 @@ type StaticType =
   | "Vector3"
   | "Vector3i"
   | "Color"
+  /** `&"…"` 字面量在槽位文本里就叫这个名字（`staticType` 把它并进 `String`，那是别的判据的口径，
+   *  只有槽位这一族用 `slotSource` 看得见它 —— S186：`Array[Color] = [&"abc"]` 两句拒的就是 StringName） */
+  | "StringName"
   | null;
 
 function declNames(d: Decl): string[] {
@@ -164,7 +167,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     }
     for (const slot of slots) {
       for (const it of slot.exprs) {
-        const st = staticType(it);
+        const st = slotSource(it);
         if (st === null) continue;
         if (!canHold(slot.kind, st)) {
           diags.push({
@@ -187,8 +190,10 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
     case "bool":
       return st === "bool" || st === "int" || st === "float";
     case "String":
+      // `Array[String] = [&"abc"]` 实测收（元素被折成 String，`tmp/f80 arr-str-strname` → typeof 4）。
+      return st === "String" || st === "StringName";
     case "StringName":
-      return st === "String";
+      return valueSlotHolds(kind, st);
     case "Vector2":
     case "Vector2i":
     case "Vector3":
@@ -231,7 +236,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
       const d = decls.get(e.name);
       return d === undefined ? null : (d as NonNullable<StaticType>);
     }
-    return staticType(e);
+    return slotSource(e);
   };
 
   const badKey = (slot: TypedSlot, index: Expr, decls: Map<string, string>): void => {
@@ -429,21 +434,23 @@ type ContainerShape = "Array" | "Dictionary" | "Pack";
  * 没测过的组合一律返回 null 不报 —— 误拦合法工程比漏报更糟（sema 那 0 误报是硬指标）。
  */
 function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null {
+  // `tmp/f82`：StringName 字面量在**标量槽**上与 String 同侧 —— int / float / bool 三个槽两句拒
+  // （`Cannot assign a value of type "StringName" as "int".` 那一形），String 槽倒是收并折成 String（`tmp/f80`）。
   switch (slot) {
     case "int":
       if (st === "int" || st === "float" || st === "bool") return true;
-      if (st === "String" || st === "null") return false;
+      if (st === "String" || st === "StringName" || st === "null") return false;
       return null;
     case "float":
       if (st === "int" || st === "float") return true;
-      if (st === "null" || st === "String") return false;
+      if (st === "null" || st === "String" || st === "StringName") return false;
       return null;
     case "bool":
       if (st === "bool" || st === "int") return true;
-      if (st === "null" || st === "String") return false;
+      if (st === "null" || st === "String" || st === "StringName") return false;
       return null;
     case "String":
-      if (st === "String") return true;
+      if (st === "String" || st === "StringName") return true;
       if (st === "int" || st === "float" || st === "bool" || st === "null") return false;
       return null;
     case "Vector2":
@@ -451,6 +458,7 @@ function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null
     case "Vector3":
     case "Vector3i":
     case "Color":
+    case "StringName":
       return valueSlotHolds(slot, st);
     default:
       return null;
@@ -458,15 +466,19 @@ function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null
 }
 
 /**
- * 值类型槽的矩阵（`tmp/f69` 的 w01/w02/w03 三形 × 13 对，加 `tmp/f67 t08` 与 `tmp/f69 u01–u05`）。
- * 只有这四格会**转换**，同型当然也进，其余组合 Godot 在解析期就拒（两句文本见 S181 ⑦）：
+ * 值类型槽的矩阵（`tmp/f69` 的 w01/w02/w03 三形 × 13 对，加 `tmp/f67 t08`、`tmp/f69 u01–u05`、
+ * `tmp/f77` / `tmp/f78` / `tmp/f79` 的 Color 与 StringName 那一族）。
+ * 同型当然进，下面这些**会转换**，其余组合 Godot 在解析期就拒（两句文本见 S181 ⑦ / S186）：
  *   Vector2i ← Vector2（逐分量向零截断）、Vector3i ← Vector3（同）
  *   Vector2  ← Vector2i、Vector3  ← Vector3i（升成 float）
- * 跨维度一律不通（`Vector3 → Vector2i`、`Vector2 → Vector3` 都实测拒），标量与 Color 也不通。
+ *   Color    ← int（packed RGBA）、← String（色名与 hex）
+ *   StringName ← String
+ * 跨维度一律不通（`Vector3 → Vector2i`、`Vector2 → Vector3` 都实测拒），标量与 Color 也不通，
+ * Color ← bool / float / StringName 与 StringName ← int / Color 同样实测两句拒（`tmp/f78` / `tmp/f79`）。
  * 容器元素槽（`Array[Vector2i]` 那一族，u01–u05）与变量 / 字段槽（w01–w03）量下来是**同一张表**，
  * 所以两侧共用这一个判据 —— 各写一份正是 S154 警告的分叉温床。
- * `Color` 槽吃 String / int 那两格只在**形参**那一族量过（S176），变量槽这一形没量 → 不在表里，
- * 落到「拒」的那侧（「Godot 能跑、我们拒」是可接受的形状，反过来才是事故）。
+ * Color 槽吃 String / int 先在**形参**那一族量到（S176 / S185），现在变量、字段、容器元素、
+ * 形参默认值四路都量到了（`tmp/f77` / `tmp/f79`）—— 原先按「拒」处理是**「Godot 能跑、我们拒」**，这一版放开。
  */
 function valueSlotHolds(slot: string, st: NonNullable<StaticType>): boolean {
   const WIDEN: Record<string, string[]> = {
@@ -474,7 +486,8 @@ function valueSlotHolds(slot: string, st: NonNullable<StaticType>): boolean {
     Vector2i: ["Vector2i", "Vector2"],
     Vector3: ["Vector3", "Vector3i"],
     Vector3i: ["Vector3i", "Vector3"],
-    Color: ["Color"],
+    Color: ["Color", "int", "String"],
+    StringName: ["StringName", "String"],
   };
   const ok = WIDEN[slot];
   return ok !== undefined && ok.includes(st);
@@ -486,16 +499,19 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
     if (t === null || t.kind !== "named") return null;
     const base = t.name.replace(/\[.*\]$/, "");
     if (base === "int" || base === "float" || base === "bool" || base === "String") return base;
+    // StringName 不进 STATIC_VALUE_TYPES（那张表还喂 `staticType` 的构造调用折算，别顺带改那边的口径），
+    // 但它的变量 / 字段槽两句拒实测成立（`tmp/f77 v-sn-str`：`var bad: StringName = 5`）。
+    if (base === "StringName") return base;
     return STATIC_VALUE_TYPES.has(base) ? base : null;
   };
 
-  /** 表达式静态判得出什么类型：ident 查槽表，其余走 `staticType`（值类型构造调用那一形在里面） */
+  /** 表达式静态判得出什么类型：ident 查槽表，其余走 `slotSource`（值类型构造调用与 StringName 字面量都在里面） */
   const staticOf = (e: Expr, d: Map<string, string>): NonNullable<StaticType> | null => {
     if (e.kind === "ident") {
       const t = d.get(e.name);
       return t === undefined ? null : (t as NonNullable<StaticType>);
     }
-    return staticType(e);
+    return slotSource(e);
   };
 
   /**
@@ -1654,6 +1670,18 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       return;
     }
   }
+}
+
+/**
+ * 槽位判据专用的来源名：`&"…"` 字面量给 `StringName`，其余照 `staticType`。
+ * 为什么不并进 `staticType`：那张表还喂着打印、运算与 pack 实参等判据，它们的口径已经按
+ * 「StringName 视作 String」定过（S134 / S180），一处改动会把别的族一起翻掉。
+ * 实测需要区分的地方是槽：`Array[Color] = [&"abc"]` 与 `var c: Color = &"abc"` 都两句拒，
+ * 而 `Array[String] = [&"abc"]` 与 `var s: String = &"abc"` 都收（`tmp/f80`）。
+ */
+function slotSource(e: Expr): NonNullable<StaticType> | null {
+  if (e.kind === "lit" && e.lit === "string_name") return "StringName";
+  return staticType(e);
 }
 
 function staticType(e: Expr): StaticType {

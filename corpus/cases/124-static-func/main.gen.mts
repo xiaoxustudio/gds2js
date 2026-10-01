@@ -4,8 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  TOP = rt.V.int(42);
-  static TOP = rt.V.int(42);
+  TOP = rt.toInt(rt.V.int(42));
+  static TOP = rt.toInt(rt.V.int(42));
 
   static helper(): unknown {
     return rt.ops.add(Main.TOP, rt.V.int(1));
@@ -47,9 +47,9 @@ rt.registerFieldTypes(Main, {"TOP": "int"});
 rt.registerStaticMethods(Main, ["helper","usehelper"]);
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
-  CV = rt.V.int(99);
-  static CV = rt.V.int(99);
-  mv = rt.V.int(7);
+  CV = rt.toInt(rt.V.int(99));
+  static CV = rt.toInt(rt.V.int(99));
+  mv = rt.toInt(rt.V.int(7));
 
   static make(): unknown {
     return rt.V.str("made");

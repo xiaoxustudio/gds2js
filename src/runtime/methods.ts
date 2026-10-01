@@ -6,13 +6,13 @@ import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fiel
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
-  strSplitCapped, strSubstr, truthyOf } from "./values";
+  strSplitCapped, strSubstr, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
-import { colorMethod, colorRead, colorWrite, GColor } from "./color";
+import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
 import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes } from "./packed";
 
 function asArray(v: Variant, who: string): GArray {
@@ -54,6 +54,10 @@ function intoSlot(kind: string | undefined, value: Variant, key: string, owner: 
   if (kind === "Vector2i") return toVec2i(value);
   if (kind === "Vector3") return toVec3(value);
   if (kind === "Vector3i") return toVec3i(value);
+  // Color / StringName 字段（`tmp/f79 fd-assign`：`fd = 255` → `(0.0, 0.0, 0.0, 1.0)`、`fd = "abc"` → 色名解析、
+  // `sn = "zz"` → typeof 21），变量与 static var 走同一条。
+  if (kind === "Color") return toColor(value);
+  if (kind === "StringName") return toStringNameSlot(value);
   return value;
 }
 

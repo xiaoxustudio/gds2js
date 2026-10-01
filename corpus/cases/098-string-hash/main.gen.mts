@@ -5,7 +5,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   async _initialize(): Promise<void> {
-    let sn = rt.V.stringName("abc");
+    let sn = rt.toStringNameSlot(rt.V.stringName("abc"));
     print(rt.showArgs([rt.method(rt.V.str("abc"), "hash", []), rt.V.str(" "), rt.method(rt.V.str(""), "hash", []), rt.V.str(" "), rt.method(rt.V.str("a"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("Hello, World!"), "hash", [])]));
     print(rt.showArgs([rt.method(rt.V.str("你好"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("😀"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("😀😁"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("￿"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("𐀀"), "hash", [])]));
     print(rt.showArgs([rt.method(rt.V.str("abcdefghijklmnopqrstuvwxyz"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("the quick brown fox jumps over the lazy dog"), "hash", [])]));

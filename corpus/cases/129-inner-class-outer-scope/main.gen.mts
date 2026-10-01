@@ -6,8 +6,8 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 const Suit = rt.dictOf([[rt.V.str("HEARTS"), rt.V.int(0)], [rt.V.str("SPADES"), rt.V.int(1)]]);
 
 export class Main extends SceneTree {
-  TOP = rt.V.int(42);
-  static TOP = rt.V.int(42);
+  TOP = rt.toInt(rt.V.int(42));
+  static TOP = rt.toInt(rt.V.int(42));
 
   async _initialize(): Promise<void> {
     let i = rt.V.object(new Inner());
@@ -24,8 +24,8 @@ export class Main extends SceneTree {
 rt.registerFieldTypes(Main, {"TOP": "int"});
 rt.registerNativeBase(Main, "SceneTree");
 class Other {
-  OC = rt.V.int(5);
-  static OC = rt.V.int(5);
+  OC = rt.toInt(rt.V.int(5));
+  static OC = rt.toInt(rt.V.int(5));
 
   getoc(): unknown {
     return Other.OC;
@@ -37,8 +37,8 @@ rt.registerFieldTypes(Other, {"OC": "int"});
 rt.registerNativeBase(Other, "RefCounted");
 
 class Inner {
-  IC = rt.V.int(9);
-  static IC = rt.V.int(9);
+  IC = rt.toInt(rt.V.int(9));
+  static IC = rt.toInt(rt.V.int(9));
 
   useconst(): unknown {
     return Main.TOP;

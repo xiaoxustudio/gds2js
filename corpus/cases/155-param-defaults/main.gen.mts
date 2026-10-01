@@ -102,7 +102,7 @@ rt.registerStaticMethods(A, ["sf"]);
 rt.registerNativeBase(A, "RefCounted");
 
 class Needs {
-  a = rt.V.int(0);
+  a = rt.toInt(rt.V.int(0));
 
   constructor(p_a = rt.toInt(rt.V.int(7))) {
     p_a = rt.paramSlot(p_a, "int", 1, "_init", this);

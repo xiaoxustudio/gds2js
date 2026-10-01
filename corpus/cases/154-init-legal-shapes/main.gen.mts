@@ -50,7 +50,7 @@ class NeedsArg {
   }
 
   __gd_fields__() {
-    this.n = rt.V.int(0);
+    this.n = rt.toInt(rt.V.int(0));
   }
 
   _init(p_n): void {
@@ -67,7 +67,7 @@ rt.registerNativeBase(NeedsArg, "RefCounted");
 class Forward extends NeedsArg {
   __gd_fields__() {
     super.__gd_fields__();
-    this.k = rt.V.int(3);
+    this.k = rt.toInt(rt.V.int(3));
   }
 
 }
