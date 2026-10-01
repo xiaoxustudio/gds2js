@@ -535,7 +535,13 @@ export class GArray {
    * 有保护/无保护）最高 **9/45**；Hoare 双端扫描族（pivot 取 lo/中点/hi/med3、扫描是否含等号、切分点
    * 取 j 还是 j-1、阈值同上）**32/45**；Bentley–McIlroy 的等值收集版按重建实现只有 2/45（且全等键会无限递归，
    * 说明我重建的收尾不对）。**都不足以照抄** —— 半对的置换比稳定的错序更坏，因为它会在“看着像对了”的格子上静默走偏。
-   * 要闭合这一格得拿到引擎那侧的确切实现（`local::quick_sort` / `SortArray`）逐行对照；在此之前
+   * 要闭合这一格得拿到引擎那侧的确切实现 —— step 92 把这个前置条件解开了：4.6.3 走的是
+   * `core/variant/array.cpp` → `core/templates/vector.h` 的 `Vector::sort_custom` → **`core/templates/sort_array.h`
+   * 的 `SortArray`**，骨架是 introsort：`INTROSORT_THRESHOLD = 16`、`while (last - first > 16)`、
+   * **先递归右半、左半用 `last = cut` 继续循环**、深度上限 `bitlog(len) * 2`、用尽时 `partial_sort(first, last, last)`、
+   * pivot 走 median-of-three 且**按位置读不是快照**。照这四条又扫了 72 个变体（`tmp/sort-gd.mts`，格子名与键函数
+   * 按 `tmp/write-f74.mts` 逐条对上）：**最高 29/45** —— 高于 libstdc++ 那一形的 9/45、仍不及 Hoare 族的 32/45，
+   * 差的是 partition 内部的循环体（问答能问到比较式，问不出边界）。所以行为照旧不动，
    * 语料里的排序用例都避开“大 N + 同键”，这条差异挂在 S184 与 ROADMAP 的待做上。
    */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
