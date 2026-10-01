@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot find member "join" in base "PackedStringArray".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Function "join()" not found in base PackedStringArray.
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

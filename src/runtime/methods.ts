@@ -597,6 +597,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "max":
           return a.extreme(false, isLess) ?? V.nil();
         default:
+          // `tmp/f103` j2 / j6 / j8 / j9：`join` 在 Array 上**根本没有**（它是 String 的方法），
+          // 接收者是推断出来的 var 时解析期放过，运行期给这句
+          if (name === "join") throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function 'join' in base 'Array'.`);
           throw new UnsupportedError("array-method", `Array.${name}() 未实现`);
       }
     }
@@ -636,6 +639,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "duplicate":
           return V.dict(d.duplicate(boolArgOr(args, 0, false)));
         default:
+          // j7：字典上同样没有 `join`（`[1,2]` 那两支量的是 Array，这支单独量过一次）
+          if (name === "join") throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function 'join' in base 'Dictionary'.`);
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
       }
     }

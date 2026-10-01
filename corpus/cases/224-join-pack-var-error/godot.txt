@@ -1,0 +1,5 @@
+SCRIPT ERROR: Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.
+   at: _initialize (<case>/main.gd:5)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)
+<<GDS2JS_TIMEOUT>>

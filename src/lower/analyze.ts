@@ -1237,6 +1237,11 @@ const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, find: 1, insert: 2
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
+  // n7（`tmp/f103`）：`p.has("a" + "b")` 与字面量同形 —— 常量折叠出来的 String 在解析期就是已知的，
+  // 两句都发。只折「字符串 + 字符串」，别的组合没量过（宁可漏报）
+  if (e.kind === "binary" && e.op === "+") {
+    return packArgSource(e.left) === "String" && packArgSource(e.right) === "String" ? "String" : null;
+  }
   if (e.kind === "lit") {
     return ({ int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName", null: "null" } as Record<string, string>)[e.lit] ?? null;
   }
@@ -1255,6 +1260,9 @@ function packArgSource(e: Expr): string | null {
   }
   return null;
 }
+
+/** 来源名就是标注名本身的那些（Godot 文本里就叫这个，S176 / S180 的写法） */
+const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Dictionary"]);
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
@@ -1283,6 +1291,8 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
 
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
+    /** 同函数体内 `var v: String` 这一类**带标注的局部 var**：第二种证明，只发一句（n2 / S198） */
+    const annot = new Map<string, string>();
     const reassigned = new Set<string>();
     for (const n of nodes) {
       if (n.kind === "assign") {
@@ -1297,6 +1307,7 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, type.name);
         continue;
       }
+      if (type !== null && type.kind === "named" && ANNOT_SOURCES.has(type.name)) annot.set(n.name, type.name);
       const init = n.init as Expr | null;
       if (init !== null && init.kind === "call" && init.callee.kind === "ident" && init.callee.name in PACK_ARG_SLOTS) {
         packs.set(n.name, init.callee.name);
@@ -1317,17 +1328,25 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       if (argAt === undefined) continue;
       const args = (n.args as Expr[]) ?? [];
       if (args.length !== argAt) continue;
-      const src = packArgSource(args[argAt - 1] as Expr);
-      if (src === null) continue;
+      const arg0 = args[argAt - 1] as Expr;
+      const src = packArgSource(arg0);
+      // 第二种证明（n2 / `tmp/f103`）：同函数体里 `var v: String = ...` 这种**带标注的局部 var**，
+      // Godot 静态知道来源类型，但**只发第二句** —— 少了前面那句 `Cannot pass a value of type …`。
+      // 而推断出来的（`var v = "x"`）与跨函数的来源（形参、别的函数的返回值）解析期放过、
+      // 成运行期那句 `Invalid type in function 'has' in base 'PackedByteArray'. Cannot convert …`
+      // —— 那一族本轮只记录（S198），不猜着发。
+      const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
+      const proven = src ?? annotated;
+      if (proven === null) continue;
       const { slot, ok } = PACK_ARG_SLOTS[pack] as { slot: string; ok: readonly string[] };
-      if (ok.includes(src)) continue;
+      if (ok.includes(proven)) continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      if (src !== "Array" && src !== "Dictionary") {
-        diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${src}" as "${slot}".`, loc });
+      if (src !== null && proven !== "Array" && proven !== "Dictionary") {
+        diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
       }
       diags.push({
         code: "pack-arg-slot",
-        message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${src}".`,
+        message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${proven}".`,
         loc,
       });
     }
@@ -2195,8 +2214,40 @@ const JOIN_BAD_ARG: Record<string, string> = {
   null: `Cannot pass a value of type "null" as "PackedStringArray".`,
 };
 
+
+/**
+ * 接收者能不能**静态证成** Array / Dictionary / 某种 pack？
+ * 三条证明都是量过的形状：字面量、`PackedXArray(...)` 构造式、以及 `var a: Array` / `: Dictionary` /
+ * `: PackedXArray` 这一类**标注**（j3 量到标注 `Array` 的 var 是解析期两句，j2 量到推断出来的是运行期那句）。
+ * 变量名不在这里解析 —— 推断来源不证（宁可漏报，也不把运行期那句提前）。
+ */
+function joinReceiverBase(e: Expr): string | null {
+  // `tmp/f103` j1 / j5 量到的是解析期两句，第二句的类型名**不带引号**
+  if (e.kind === "array") return "Array";
+  if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
+    return e.callee.name;
+  }
+  return null;
+}
+
 function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "join") return;
+  // `join` 是 **String** 的方法。`tmp/f103` 把接收者这一族量齐后，规则分成三段：
+  // ① 接收者是**字符串字面量** —— 只有这一形走下面那套「实参形状」判据（用例 106 / 107 的实测来源）；
+  // ② 接收者是**能静态证出来的 Array / Dictionary / pack**（字面量、`PackedXArray(...)` 构造式）——
+  //    解析期两句 `Cannot find member "join" in base "X".` + `Function "join()" not found in base X.`（j1 / j5）；
+  // ③ 其余（`var a = [1,2]` 这类推断出来的接收者，j2 / j4 / j6 / j7）—— 解析期放过、**运行期**给
+  //    `Invalid call. Nonexistent function 'join' in base 'Array'.`，所以这里什么都不报，交给运行时那句。
+  const recv = e.callee.kind === "attribute" ? e.callee.obj : null;
+  if (recv !== null && !(recv.kind === "lit" && recv.lit === "string")) {
+    const base = joinReceiverBase(recv);
+    if (base !== null) {
+      diags.push({ code: "join-not-member", message: `Cannot find member "join" in base "${base}".`, loc: e.loc });
+      diags.push({ code: "join-not-found", message: `Function "join()" not found in base ${base}.`, loc: e.loc });
+    }
+    return;
+  }
   if (e.args.length === 0) {
     diags.push({
       code: "join-arity",
