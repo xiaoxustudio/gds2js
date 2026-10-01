@@ -2351,8 +2351,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   };
   eq("step71", "min 在 PackedStringArray 上不存在，句子里的型名跟着换（t-nonexistent）",
     serr(() => method(sb, "min", [])), "Invalid call. Nonexistent function 'min' in base 'PackedStringArray'.");
-  eq("step71", "join 在 PackedStringArray 上不存在（旧文档有、4.6.3 没有）",
-    serr(() => method(sb, "join", [S("-")])), "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
+  eq("step71", "join 在 PackedStringArray 上不存在（旧文档有、4.6.3 没有；step 102 的 a1 系列把九支一次量齐）",
+    serr(() => method(sb, "join", [S("-")])),
+    "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
 }
 
 {
@@ -3011,6 +3012,56 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       method(c, "call", [V.int(1)]),
     );
   }
+}
+
+
+{
+  // step 102：pack 一族的明账（探针 `tmp/f102` 44 支，S197）。这些格子都带引擎 stderr 或是
+  // 「跑期才响」的形状，按老规矩钉在这里；三格静默错（has / count / fill 的元素位）另进语料 215–217。
+  const errText102 = (fn: () => unknown): string => {
+    try {
+      const r = fn();
+      return `没抛：${String(r)}`;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const mk = (kind: Parameters<typeof packCtor>[0], items: Variant[]): Variant => packCtor(kind, [V.array(GArray.of(items))]);
+  const byte3 = () => mk("byte", [I(1), I(2), I(3)]);
+  const i323 = () => mk("int32", [I(1), I(2), I(3)]);
+  const str2 = () => mk("string", [S("a"), S("b")]);
+  const v21 = () => mk("vector2", [vector2(1, 2)]);
+
+  eq("219", "remove_at_copy 在量过的四支上都是 Nonexistent（d1 系列；它此前挂在「没实测」那张表）",
+    errText102(() => method(byte3(), "remove_at_copy", [I(0)])),
+    "Invalid call. Nonexistent function 'remove_at_copy' in base 'PackedByteArray'.");
+  eq("219", "compress / decompress 在其余八支上全部 Nonexistent（e1 系列八格，step 82 那句「只在 byte 量过」升级成实测文本）",
+    `${errText102(() => method(i323(), "compress", [I(1)]))} || ${errText102(() => method(v21(), "decompress", [I(9), I(1)]))}`,
+    "Invalid call. Nonexistent function 'compress' in base 'PackedInt32Array'. || Invalid call. Nonexistent function 'decompress' in base 'PackedVector2Array'.");
+  eq("219", "join 九支全都没有（a1 这一轮补了 byte / i64 / f32 / v3 / color 五支，与旧账四支合成整族）",
+    errText102(() => method(str2(), "join", [S("-")])),
+    "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
+  eq("219", "bsearch_custom 在 byte 与 v2 上量到不存在（g1 / g3；其余七支仍未量 → 走「没实测」那条响）",
+    `${errText102(() => method(byte3(), "bsearch_custom", [S(""), I(1)]))} || ${errText102(() => method(v21(), "bsearch_custom", [S(""), I(1)]))}`,
+    "Invalid call. Nonexistent function 'bsearch_custom' in base 'PackedByteArray'. || Invalid call. Nonexistent function 'bsearch_custom' in base 'PackedVector2Array'.");
+  eq("218", "下标位给 float 是**向零截断**、不报错（c1–c5：读 / 写 / set / insert / remove_at 五格）",
+    (() => {
+      const p = byte3();
+      const read = show(index(p, F(1.5)));
+      writeIdx(p, F(1.5), I(5));
+      method(p, "set", [F(1.5), I(6)]);
+      method(p, "insert", [F(0.9), I(4)]);
+      method(p, "remove_at", [F(2.7)]);
+      return `${read} ${show(p)}`;
+    })(),
+    "2 [4, 1, 3]");
+  const sizeOf = (v: Variant): unknown => method(v, "size", []).v;
+  eq(
+    "218",
+    "模式 5 与 -2 都给空 pack（f1 / f2 把 S179 的越界范围从 4 / 9 / -1 扩到这两格），decompress 的模式 5 也是空 pack（f3）",
+    `${sizeOf(method(byte3(), "compress", [I(5)]))} ${sizeOf(method(byte3(), "compress", [I(-2)]))} ${sizeOf(method(method(byte3(), "compress", [I(1)]), "decompress", [I(9), I(5)]))}`,
+    "0 0 0",
+  );
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

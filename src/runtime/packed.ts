@@ -347,15 +347,18 @@ const NO_SUCH_METHOD = new Set([
   "join",
 ]);
 /** 存在但这一轮没做 / 没实测的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
-const NOT_YET = new Set(["to_hex_string", "search_sorted", "remove_at_copy"]);
+const NOT_YET = new Set(["to_hex_string", "search_sorted"]);
 /**
  * 只在**某一种 pack** 上量到「4.6.3 里根本没有这个方法」（f57 / f61 / f62：`Nonexistent function 'X' in base 'Y'`）。
  * 同名的格子在别的形状上没量过，所以只在量过的那一支给实测文本，其余仍走 NOT_YET / 未实现那条响亮拒。
  */
 const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
-  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes"]),
+  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes", "remove_at_copy", "bsearch_custom"]),
   string: new Set(["index_of"]),
-  int32: new Set(["to_float32_array", "to_int32_array"]),
+  int32: new Set(["to_float32_array", "to_int32_array", "remove_at_copy"]),
+  int64: new Set(["remove_at_copy"]),
+  float32: new Set(["remove_at_copy", "bsearch_custom"]),
+  vector2: new Set(["bsearch_custom"]),
 };
 /** byte 那一支独有的方法（`to_*_array` 与压缩这一族只在它身上量过；int32 上至少两个 `to_*_array` 实测是 Nonexistent）。 */
 const BYTE_ONLY = new Set([
@@ -365,10 +368,14 @@ const BYTE_ONLY = new Set([
   "to_int64_array",
   "to_float32_array",
   "to_float64_array",
-  "compress",
-  "decompress",
 ]);
-const NON_BYTE_MISSING = new Set(["hex_encode"]);
+/**
+ * 非 byte 形状实测「根本没有这个名字」的那一批：`hex_encode` 之外，`tmp/f102` 把压缩这一族也量齐了 ——
+ * `compress()` / `decompress()` 在 i32 / i64 / f32 / f64 / str / v2 / v3 / color **八支全部**给
+ * `Invalid call. Nonexistent function 'compress' in base 'PackedXArray'.`（e1 系列，一格一支），
+ * 所以 step 82 那句「只在 byte 上量过、别的形状仍按没实测响」升级成实测文本。
+ */
+const NON_BYTE_MISSING = new Set(["hex_encode", "compress", "decompress"]);
 
 function arity(name: string, args: Variant[], n: number): void {
   if (args.length !== n) throw new GodotRuntimeError("arity", `${name}() 需要 ${n} 个参数（收到 ${args.length} 个）`);
@@ -571,7 +578,8 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     }
     case "has":
     case "count":
-    case "find": {
+    case "find":
+    case "rfind": {
       arity(name, args, 1);
       const want = toElem(kind, args[0] as Variant);
       // S177 ①：值类型 pack 的检索按**分量内容**比（实测 `PackedVector2Array([(1,2),(3,4)]).has((1,2))` 真，
@@ -580,7 +588,12 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       const same = (x: PackElem): boolean => elemSame(kind, x, want);
       if (name === "has") return V.bool(items.some(same));
       if (name === "count") return V.int(items.filter(same).length);
-      return V.int(items.findIndex(same));
+      if (name === "find") return V.int(items.findIndex(same));
+      // rfind 只在 byte 那一支量过（`tmp/f102` c6：同一格 find / rfind 都给 1，找不到给 -1）；
+      // 其余八支没量 → 响亮拒，不照 find 推
+      if (kind !== "byte") throw new UnsupportedError("packed-rfind", `${kind} 的 rfind() 没实测过，只在 PackedByteArray 上量过`);
+      for (let i = items.length - 1; i >= 0; i--) if (same(items[i] as PackElem)) return V.int(i);
+      return V.int(-1);
     }
     case "sort":
       items.sort((x, y) => cmpElem(kind, x, y));

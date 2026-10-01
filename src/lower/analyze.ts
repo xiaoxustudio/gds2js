@@ -1225,8 +1225,15 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
-/** 元素槽是第几个实参（1 起），只列量过的方法。 */
-const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, find: 1, insert: 2, set: 2 };
+/**
+ * 元素槽是第几个实参（1 起），只列量过的方法。`tmp/f102` 把 `has` / `count` / `fill` 也量齐了：
+ * 三个名字的元素位都是第 1 参，文本与 `append` / `find` **同一套两句**
+ * （`Cannot pass a value of type "String" as "int".` + `Invalid argument for "has()" function: …`）。
+ * 这三格此前是**静默错**：`PackedByteArray([1,2]).has("x")` 我们给 `false`、
+ * `PackedVector2Array([Vector2(1,2)]).count(7)` 给 `0`、而 `PackedStringArray(["a","b"]).fill(7)`
+ * 直接把 7 折成 `"7"` 铺满整支 —— 最后一形是「凭空造内容」，最贵的那一类。
+ */
+const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
