@@ -221,7 +221,30 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   );
   eq("157", "null 的来源在文本里叫 Nil", errOf(V.nil(), "int", 2, "q"), "Invalid type in function 'q' in base 'RefCounted (SlotA)'. Cannot convert argument 2 from Nil to int.");
   eq("157", "Array 塞 Color 槽", errOf(V.array(GArray.of([])), "Color", 1, "r"), "Invalid type in function 'r' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Array to Color.");
-  shouldThrow("157", "Color 槽吃 int 还没实现 → 响亮拒", () => paramSlot(V.int(1), "Color", 1, "p", self));
+
+  // step 89 / S185：`tmp/f75 d-slot-*` 的 12 格 + `tmp/f76` 构造器同 12 格 —— Color 槽吃 int 走
+  // **packed RGBA**（r=24..31、g=16..23、b=8..15、a=0..7，各除 255，先按 2³² 取模）。
+  const colorSlot = (n: number | bigint): string => show(paramSlot(V.int(n), "Color", 1, "p", self));
+  eq("172", "Color 槽吃 int：逐通道", `${colorSlot(1)}/${colorSlot(255)}/${colorSlot(256)}/${colorSlot(16711680)}/${colorSlot(65280)}`, "(0.0, 0.0, 0.0, 0.0039)/(0.0, 0.0, 0.0, 1.0)/(0.0, 0.0, 0.0039, 0.0)/(0.0, 1.0, 0.0, 0.0)/(0.0, 0.0, 1.0, 0.0)");
+  eq("172", "Color 槽吃 int：混合色（d-slot-big）", colorSlot(123456789), "(0.0275, 0.3569, 0.8039, 0.0824)");
+  eq("172", "Color 槽吃 int：负数与 2³² 边界", `${colorSlot(-1)}/${colorSlot(4294967295)}/${colorSlot(4294967296)}/${colorSlot(0)}`, "(1.0, 1.0, 1.0, 1.0)/(1.0, 1.0, 1.0, 1.0)/(0.0, 0.0, 0.0, 0.0)/(0.0, 0.0, 0.0, 0.0)");
+  eq("172", "构造器 Color(int) 与槽同一套解析", `${show(colorNew([V.int(123456789)]))}/${show(colorNew([V.int(0)]))}`, "(0.0275, 0.3569, 0.8039, 0.0824)/(0.0, 0.0, 0.0, 0.0)");
+  eq("172", "Color 槽吃 Color 原样过", show(paramSlot(colorNew([V.int(-1)]), "Color", 1, "p", self)), "(1.0, 1.0, 1.0, 1.0)");
+
+  // 三个新槽（`tmp/f75 a-Vector3-from-*` / `a-Vector3i-from-*` / `a-StringName-from-*`）：
+  // 各自只量到「同型 + 一条加宽/截断」，其余来源是解析期拒 —— 走到运行时这一侧就抛入口那句
+  // （a2-var-* 三格量到运行时同样是这句，只有 base 标签换成脚本文件名）。
+  eq("173", "Vector3 槽吃 Vector3i → 升 float", show(paramSlot(vector3iNew([V.int(1), V.int(2), V.int(3)]), "Vector3", 1, "p", self)), "(1.0, 2.0, 3.0)");
+  eq("173", "Vector3i 槽吃 Vector3 → 逐分量向零截断", show(paramSlot(vector3New([V.float(1.7), V.float(-2.9), V.float(3.1)]), "Vector3i", 1, "p", self)), "(1, -2, 3)");
+  eq("173", "StringName 槽吃 String", show(paramSlot(V.str("nm"), "StringName", 1, "p", self)), "nm");
+  eq(
+    "173",
+    "Vector2 塞 Vector3i 槽（a2-var-v2-to-v3i）",
+    errOf(vector2New([V.float(1.7), V.float(2.9)]), "Vector3i", 1, "f"),
+    "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Vector2 to Vector3i.",
+  );
+  eq("173", "Nil 塞 Vector3 槽（a2-var-null-to-v3）", errOf(V.nil(), "Vector3", 1, "f"), "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Nil to Vector3.");
+  eq("173", "int 塞 StringName 槽", errOf(V.int(5), "StringName", 1, "f"), "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from int to StringName.");
 }
 
 {

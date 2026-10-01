@@ -1,5 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { CMP_EPS, approxEq, vecFailKey } from "./vector2";
 import { COLOR_NAMED } from "./color-named";
 
@@ -92,7 +92,19 @@ export function colorNew(args: Variant[]): Variant {
     if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
       return parseColor(a.v as string, true) ?? ZERO_COLOR();
     }
-    throw new UnsupportedError("color-arg", `Color() 单参只收 Color 或字符串，收到 ${tagName(a.t)}`);
+    /**
+     * 单参收 int = **packed RGBA**（`tmp/f76` 十二个打点 + `tmp/f75 d-slot-*` 的 Color 槽同一套）：
+     * r 取 24..31、g 16..23、b 8..15、a 0..7，各除 255，先按 2³² 取模 ——
+     * `Color(123456789)`（0x075BCD15）→ `(0.0275, 0.3569, 0.8039, 0.0824)`、
+     * `Color(-1)` → 全 1、`Color(4294967296)` → 全 0、`Color(256)` → `(0.0, 0.0, 0.0039, 0.0)`。
+     * float 那一格实测是拒（`Color` 槽吃 float 也是解析期错），不顺手接。
+     */
+    if (a.t === Tag.INT) {
+      const u = ((intToBig(a.v as IntPayload) % 4294967296n) + 4294967296n) % 4294967296n;
+      const ch = (k: bigint) => Number((u >> k) & 255n) / 255;
+      return color(ch(24n), ch(16n), ch(8n), ch(0n));
+    }
+    throw new UnsupportedError("color-arg", `Color() 单参只收 Color / 字符串 / int，收到 ${tagName(a.t)}`);
   }
   if (args.length === 3) {
     return color(numArg(args[0], "Color"), numArg(args[1], "Color"), numArg(args[2], "Color"), 1);

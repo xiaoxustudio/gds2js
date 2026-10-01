@@ -659,8 +659,19 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   }
 }
 
-/** 与 declaredCast 同一批类型，这里要的是**槽位类型名**（运行时报错文本里要用它）。只含量过的七个槽。 */
-const MEASURED_SLOTS = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Color"]);
+/** 与 declaredCast 同一批类型，这里要的是**槽位类型名**（运行时报错文本里要用它）。只含量过的十个槽（S176 + S185）。 */
+const MEASURED_SLOTS = new Set([
+  "int",
+  "float",
+  "bool",
+  "String",
+  "StringName",
+  "Vector2",
+  "Vector2i",
+  "Vector3",
+  "Vector3i",
+  "Color",
+]);
 function slotTypeName(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
