@@ -239,12 +239,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           throw new UnsupportedError("signal-flag", "connect() 的 flags 只量过 int 来源");
         }
         // flags 量过 0 / 1 / 2 / 4 / 8 五个值（`tmp/f97` b1 / b5 / b7 与 `tmp/f99b` q05–q09）。
-        // **1（DEFERRED）故意不发**：实测它的投递排在当前这一轮之后（q05：三条 print 全先出），
-        // 而宿主在 `quit()` 之后就 flush + `process.exit`，宏任务一个都不排干 —— 发出去会**静默丢行**。
-        // 要做得先让宿主把 deferred 队列跑完（§6 那条「驱动本身还是桩」），这一轮不混进来。
+        // **1（DEFERRED）故意不发** —— 理由在 step 100 改正过一次：`tmp/f100b` 量到 deferred 队列在
+        // `_initialize` 之后**是会排的**（e1 模块函数照印 later ran、e7 链式两级都跑、e6 与信号那份的先后
+        // 固定），所以「宿主不排宏任务」不是原因。真正的原因是 e3 / e4 那一对：同一个实例存进模块变量之后
+        // deferred 照投，而**局部** `var o = Thing.new()` 那一格 Godot 一声不响地丢弃（`_initialize` 返回时
+        // RefCounted 回收掉了）。我们的盒子对接收者是强引用、JS 也不随作用域结束回收，于是排干队列会从
+        // 「两边都不印（巧合对上）」变成「Godot 不印、我们多印一行」= 静默错。要发这一格得先有宿主的对象
+        // 生命周期模型（S195 ③，与 §6「驱动还是桩」那条同一个前置），不是加一次 flush。
         const n = Number(flags.v);
         if (n === 1) {
-          throw new UnsupportedError("signal-flag-deferred", "connect() 的 CONNECT_DEFERRED 要宿主先排干宏任务，否则投递静默丢失");
+          throw new UnsupportedError("signal-flag-deferred", "connect() 的 CONNECT_DEFERRED 要宿主先有对象生命周期模型，否则局部实例那一形会从静默丢行变成静默多印（S195 ③）");
         }
         if (n !== 0 && n !== 2 && n !== 4 && n !== 8) {
           throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 8）`);

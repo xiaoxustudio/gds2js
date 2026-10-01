@@ -2926,9 +2926,11 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       method(sig3, "emit", [V.int(9)]);
       eq("195", "重复连的那一份不补投", seen3.join(","), "9");
     }
-    // step 99：flags=1 量到了「排在当前这一轮之后」（f99b q05 / q06），但宿主 quit() 后就 flush + exit、
-    // 宏任务一个都不排干 —— 发出去会**静默丢行**，所以这一格故意响亮拒，而不是照 b6 那样当常规连接。
-    shouldThrow("195", "CONNECT_DEFERRED 要宿主先排干宏任务 → 响亮拒（宁丢一格不静默丢行）", () =>
+    // step 100 改正了这条的理由：`tmp/f100b` 量到 deferred 队列在 `_initialize` 之后**是会排的**
+    // （e1 模块函数照印 later ran、e7 链式两级都跑），所以「宿主不排宏任务」不是原因；真正拦着它的是
+    // e3 / e4 那一对 —— 局部实例的 deferred 被 Godot 随 RefCounted 回收丢掉，我们持强引用、排干就会
+    // 从「两边都不印」变成「Godot 不印、我们多印一行」（S195 ③）。所以这一格继续响亮拒。
+    shouldThrow("195", "CONNECT_DEFERRED 要宿主先有对象生命周期模型 → 响亮拒（S195 ③：排干会让局部实例那一形静默多印）", () =>
       method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(1)]),
     );
     shouldThrow("195", "flags=-1 这种压着多个位的组合没量过 → 响亮拒（q10 只量到它给 0）", () =>
