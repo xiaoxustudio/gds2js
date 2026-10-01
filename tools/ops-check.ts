@@ -2907,11 +2907,33 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     eq("195", "one-shot 投完自动断开：第二次 emit 不再投递", seen.join(","), "1");
     const seen2: string[] = [];
     const sig2 = V.object(new Signal("fired"));
-    method(sig2, "connect", [mkSink(seen2), V.int(1)]);
+    const sink2 = mkSink(seen2);
+    method(sig2, "connect", [sink2, V.int(2)]);
     method(sig2, "emit", [V.int(3)]);
     method(sig2, "emit", [V.int(4)]);
-    eq("195", "flag=1 是常规连接：两次都投（b6）", seen2.join(","), "3,4");
-    shouldThrow("195", "flags=2 这类没量过的值 → 响亮拒，不静默按 0 处理", () => method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(2)]));
+    eq("195", "flag=2（CONNECT_PERSIST）走常规连接：两次都投（f99b q08 前半）", seen2.join(","), "3,4");
+    eq("195", "flag=2 的重复判定与 0 同形：第二次 31（f99b q08）", method(sig2, "connect", [sink2, V.int(2)]).v, 31);
+    {
+      const seen3: string[] = [];
+      const sig3 = V.object(new Signal("fired"));
+      const sink = mkSink(seen3);
+      eq(
+        "195",
+        "flag=8（CONNECT_REFERENCE_COUNTED）允许重复连（两次都 0）但只投一份（f99b q07）",
+        `${method(sig3, "connect", [sink, V.int(8)]).v} ${method(sig3, "connect", [sink, V.int(8)]).v}`,
+        "0 0",
+      );
+      method(sig3, "emit", [V.int(9)]);
+      eq("195", "重复连的那一份不补投", seen3.join(","), "9");
+    }
+    // step 99：flags=1 量到了「排在当前这一轮之后」（f99b q05 / q06），但宿主 quit() 后就 flush + exit、
+    // 宏任务一个都不排干 —— 发出去会**静默丢行**，所以这一格故意响亮拒，而不是照 b6 那样当常规连接。
+    shouldThrow("195", "CONNECT_DEFERRED 要宿主先排干宏任务 → 响亮拒（宁丢一格不静默丢行）", () =>
+      method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(1)]),
+    );
+    shouldThrow("195", "flags=-1 这种压着多个位的组合没量过 → 响亮拒（q10 只量到它给 0）", () =>
+      method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(-1)]),
+    );
   }
   eq("196", "Signal 上 has_method / get_method_list / is_connected_to 是运行期那三句（s01b / s01c / s04）", [
     errText(() => method(V.object(new Signal("fired")), "has_method", [V.str("connect")])),

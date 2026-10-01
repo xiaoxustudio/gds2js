@@ -1,4 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
+import { GLOBAL_CONSTANTS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "../runtime/errors";
 import { isElemKind } from "../runtime/values";
@@ -307,6 +308,20 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   for (const spec of sideEffectImports ?? []) out.push(`import "${spec}";`);
   if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
+
+  // 全局常量（`PI` / `TAU` / `INF` / `NAN` / `CONNECT_*`，实测见 S194）：**只在模块真的引用了才发**，
+  // 发成模块顶层的 `const`、引用点保持裸名字 —— 于是 JS 的作用域就是 GDScript 的作用域：
+  // 函数里的 `var PI = 5`（f99 p12）与模块级的 `const PI = 1`（p10）都自然遮蔽全局，
+  // 而不是把用户的名字折成字面量后静默改掉他的那一格。
+  const globalConsts = globalConstLines(m, new Set<string>([
+    ...m.vars.map((v) => v.name),
+    ...classRefs.map((r) => r.name),
+    ...preloads.map((p) => p.name),
+  ]));
+  if (globalConsts.length > 0) {
+    out.push(...globalConsts);
+    out.push("");
+  }
 
   ENUM_NAMES = new Set<string>();
   for (const en of m.enums) {
@@ -841,6 +856,134 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
 }
 
 /** 旧形状的类级成员：信号与实例字段发成 JS 类字段，静态与 const 的静态镜像照发，带读写器的发 get/set。 */
+/**
+ * 收集这个模块里**裸引用**到的全局常量，生成模块顶层的声明行（实测口径见 S194）。
+ * 保留名不声明：枚举名与匿名枚举成员本来就是顶层 `const`、类名与 preload/import 名是顶层绑定、
+ * 模块与类的 `var` / `const` 走 `this.X` —— 撞名时以用户自己的声明为准
+ * （f99 p10 量到 `const PI = 1` 合法并遮蔽全局，p12 量到函数里的 `var PI = 5` 同样合法）。
+ */
+function globalConstLines(m: Module, reservedExtra: Set<string>): string[] {
+  const reserved = new Set<string>(reservedExtra);
+  const addEnum = (en: Module["enums"][number]): void => {
+    if (en.name !== null && en.name !== undefined) reserved.add(en.name);
+    for (const mm of en.members) reserved.add(mm.name);
+  };
+  for (const en of m.enums) addEnum(en);
+  if (m.className !== undefined && m.className !== null) reserved.add(m.className);
+  const addClass = (c: ClassDecl): void => {
+    reserved.add(c.name);
+    for (const v of c.vars) reserved.add(v.name);
+    for (const inner of c.innerClasses) addClass(inner);
+  };
+  for (const c of m.innerClasses) addClass(c);
+
+  const used = new Set<string>();
+  const expr = (e: Expr | null): void => {
+    if (e === null || e === undefined) return;
+    switch (e.kind) {
+      case "ident":
+        if (isGlobalConst(e.name)) used.add(e.name);
+        return;
+      case "binary":
+        expr(e.left);
+        expr(e.right);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        expr(e.operand);
+        return;
+      case "index":
+        expr(e.obj);
+        expr(e.index);
+        return;
+      case "attribute":
+        expr(e.obj);
+        return;
+      case "call":
+        expr(e.callee);
+        for (const a of e.args) expr(a);
+        return;
+      case "lambda":
+        for (const s of e.body) stmt(s);
+        return;
+      case "array":
+        for (const it of e.items) expr(it);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          expr(en.key);
+          expr(en.value);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+  const stmt = (s: Stmt): void => {
+    switch (s.kind) {
+      case "expr":
+        expr(s.expr);
+        return;
+      case "var":
+        expr(s.init);
+        return;
+      case "assign":
+        expr(s.target);
+        expr(s.value);
+        return;
+      case "if":
+        for (const b of s.branches) {
+          if (b.cond !== null) expr(b.cond);
+          for (const x of b.body) stmt(x);
+        }
+        return;
+      case "for":
+        expr(s.iter);
+        for (const x of s.body) stmt(x);
+        return;
+      case "while":
+        expr(s.cond);
+        for (const x of s.body) stmt(x);
+        return;
+      case "match":
+        expr(s.subject);
+        for (const arm of s.arms) {
+          if (arm.guard !== null) expr(arm.guard);
+          for (const x of arm.body) stmt(x);
+        }
+        return;
+      case "return":
+        if (s.value !== null) expr(s.value);
+        return;
+      default:
+        return;
+    }
+  };
+  const func = (f: FuncDecl): void => {
+    for (const p of f.params) expr(p.default ?? null);
+    for (const s of f.body) stmt(s);
+  };
+  for (const f of m.funcs) func(f);
+  for (const v of m.vars) expr(v.init);
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) func(f);
+    for (const v of c.vars) expr(v.init);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const c of m.innerClasses) walkClass(c);
+
+  return [...used]
+    .filter((n) => !reserved.has(n))
+    .sort()
+    .map((n) => {
+      // `used` 里只放过 `isGlobalConst` 认过的名字，所以这张表一定查得到
+      const c = GLOBAL_CONSTANTS[n]!;
+      return `const ${n} = ${c.kind === "int" ? "rt.V.int" : "rt.V.float"}(${c.value});`;
+    });
+}
+
 function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: number): string[] {
   const out: string[] = [];
   for (const s of signals) {

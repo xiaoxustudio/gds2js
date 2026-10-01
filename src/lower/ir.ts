@@ -22,7 +22,7 @@ export type Expr =
 
 export type Stmt =
   | { kind: "expr"; expr: Expr; loc: Loc }
-  | { kind: "var"; name: string; type: TypeRef | null; init: Expr | null; loc: Loc }
+  | { kind: "var"; name: string; type: TypeRef | null; init: Expr | null; isConst: boolean; loc: Loc }
   | { kind: "assign"; target: Expr; value: Expr; loc: Loc }
   | { kind: "if"; branches: Array<{ cond: Expr | null; body: Stmt[] }>; loc: Loc }
   | { kind: "for"; var: string; iter: Expr; body: Stmt[]; loc: Loc }

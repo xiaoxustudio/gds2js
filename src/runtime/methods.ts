@@ -238,12 +238,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         if (flags.t !== Tag.INT) {
           throw new UnsupportedError("signal-flag", "connect() 的 flags 只量过 int 来源");
         }
+        // flags 量过 0 / 1 / 2 / 4 / 8 五个值（`tmp/f97` b1 / b5 / b7 与 `tmp/f99b` q05–q09）。
+        // **1（DEFERRED）故意不发**：实测它的投递排在当前这一轮之后（q05：三条 print 全先出），
+        // 而宿主在 `quit()` 之后就 flush + `process.exit`，宏任务一个都不排干 —— 发出去会**静默丢行**。
+        // 要做得先让宿主把 deferred 队列跑完（§6 那条「驱动本身还是桩」），这一轮不混进来。
         const n = Number(flags.v);
-        if (n !== 0 && n !== 1 && n !== 4) {
-          throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 4）`);
+        if (n === 1) {
+          throw new UnsupportedError("signal-flag-deferred", "connect() 的 CONNECT_DEFERRED 要宿主先排干宏任务，否则投递静默丢失");
+        }
+        if (n !== 0 && n !== 2 && n !== 4 && n !== 8) {
+          throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 8）`);
         }
         const box = cb.v as Record<string, unknown>;
-        return V.int(inner.connectTo(box, (...a: unknown[]) => callCallableBox(box, a.map(wrapValue)), n === 4));
+        return V.int(inner.connectTo(box, (...a: unknown[]) => callCallableBox(box, a.map(wrapValue)), n));
       }
       if (name === "disconnect") {
         const cb = args[0];

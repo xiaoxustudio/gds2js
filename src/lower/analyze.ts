@@ -1,4 +1,5 @@
 import { staticMemberFn } from "./ir";
+import { isGlobalConst } from "./globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
@@ -100,6 +101,7 @@ export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[]
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
+  checkConstAssign(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
@@ -688,6 +690,165 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
     for (const inner of c.innerClasses) classes(inner);
   };
   for (const c of m.innerClasses) classes(c);
+}
+
+/**
+ * 给常量赋值是**解析期**拒 —— 五种形状实测**同一句** `Cannot assign a new value to a constant.`：
+ * 函数里的 `const`（`tmp/f99b` q01）、模块级 `const`（q02）、复合赋值 `C += 1`（`tmp/f99c` r01）、
+ * 内部类的 `const`（r03）、以及全局常量 `PI = 2`（`tmp/f99` p11）。我们此前照直编，`const C = 1`
+ * 之后 `C = 2` 跑得出 2，而 Godot 根本进不到运行 —— 是「Godot 拒、我们跑」那一类。
+ * 复合赋值不用另写一条：IR 里 `C += 1` 就是 `assign(C, binary(+, C, 1))`，r01 量到同一句。
+ *
+ * 两条保守边界（都是「误拦一合法工程比漏报一句解析期错贵」的应用）：
+ * ① 只判**简单标识符**目标（`d[C] = 1`、`C.x = 1` 那些形没量）；
+ * ② 同一个函数体里那个名字**被另绑过一次**（形参、非 const 的 `var`、`for` 变量、pattern 绑定、
+ *    lambda 形参）就整格放行 —— p12 量到 `var PI = 5` 合法且遮蔽全局常量。
+ */
+function checkConstAssign(m: Module, diags: Diagnostic[]): void {
+  const moduleConsts = new Set<string>(m.vars.filter((v) => v.isConst).map((v) => v.name));
+
+  const bindings = (ss: Stmt[], rebound: Set<string>, localConsts: Set<string>): void => {
+    for (const s of ss) {
+      switch (s.kind) {
+        case "var":
+          if (s.isConst) localConsts.add(s.name);
+          else rebound.add(s.name);
+          exprBindings(s.init, rebound, localConsts);
+          continue;
+        case "assign":
+          exprBindings(s.target, rebound, localConsts);
+          exprBindings(s.value, rebound, localConsts);
+          continue;
+        case "for":
+          rebound.add(s.var);
+          exprBindings(s.iter, rebound, localConsts);
+          bindings(s.body, rebound, localConsts);
+          continue;
+        case "if":
+          for (const b of s.branches) {
+            if (b.cond !== null) exprBindings(b.cond, rebound, localConsts);
+            bindings(b.body, rebound, localConsts);
+          }
+          continue;
+        case "while":
+          exprBindings(s.cond, rebound, localConsts);
+          bindings(s.body, rebound, localConsts);
+          continue;
+        case "match":
+          exprBindings(s.subject, rebound, localConsts);
+          for (const arm of s.arms) {
+            for (const n of patternBindings(arm.pattern)) rebound.add(n);
+            if (arm.guard !== null) exprBindings(arm.guard, rebound, localConsts);
+            bindings(arm.body, rebound, localConsts);
+          }
+          continue;
+        case "expr":
+          exprBindings(s.expr, rebound, localConsts);
+          continue;
+        case "return":
+          if (s.value !== null) exprBindings(s.value, rebound, localConsts);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  const exprBindings = (e: Expr | null, rebound: Set<string>, localConsts: Set<string>): void => {
+    if (e === null) return;
+    switch (e.kind) {
+      case "lambda":
+        for (const p of e.params) rebound.add(p.name);
+        bindings(e.body, rebound, localConsts);
+        return;
+      case "binary":
+        exprBindings(e.left, rebound, localConsts);
+        exprBindings(e.right, rebound, localConsts);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        exprBindings(e.operand, rebound, localConsts);
+        return;
+      case "index":
+        exprBindings(e.obj, rebound, localConsts);
+        exprBindings(e.index, rebound, localConsts);
+        return;
+      case "attribute":
+        exprBindings(e.obj, rebound, localConsts);
+        return;
+      case "array":
+        for (const it of e.items) exprBindings(it, rebound, localConsts);
+        return;
+      case "dict":
+        for (const en of e.entries) {
+          exprBindings(en.key, rebound, localConsts);
+          exprBindings(en.value, rebound, localConsts);
+        }
+        return;
+      default:
+        return;
+    }
+  };
+
+  const check = (ss: Stmt[], consts: Set<string>, rebound: Set<string>): void => {
+    for (const s of ss) {
+      switch (s.kind) {
+        case "assign": {
+          if (s.target.kind === "ident") {
+            const nm = s.target.name;
+            if (!rebound.has(nm) && (consts.has(nm) || isGlobalConst(nm))) {
+              diags.push({
+                code: "const-assign",
+                message: "Cannot assign a new value to a constant.",
+                loc: s.loc,
+              });
+            }
+          }
+          check(s.value.kind === "lambda" ? s.value.body : [], consts, rebound);
+          continue;
+        }
+        case "var":
+          if (s.init !== null && s.init.kind === "lambda") check(s.init.body, consts, rebound);
+          continue;
+        case "if":
+          for (const b of s.branches) check(b.body, consts, rebound);
+          continue;
+        case "while":
+          check(s.body, consts, rebound);
+          continue;
+        case "for":
+          check(s.body, consts, rebound);
+          continue;
+        case "match":
+          for (const arm of s.arms) check(arm.body, consts, rebound);
+          continue;
+        case "expr":
+          if (s.expr.kind === "lambda") check(s.expr.body, consts, rebound);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  const one = (params: Param[], body: Stmt[], consts: Set<string>): void => {
+    const rebound = new Set<string>(params.map((p) => p.name));
+    const localConsts = new Set<string>();
+    bindings(body, rebound, localConsts);
+    const all = new Set<string>([...consts, ...localConsts]);
+    check(body, all, rebound);
+  };
+
+  const walkClass = (c: ClassDecl, inherited: Set<string>): void => {
+    const consts = new Set<string>([...inherited, ...c.vars.filter((v) => v.isConst).map((v) => v.name)]);
+    for (const f of c.funcs) one(f.params, f.body, consts);
+    for (const inner of c.innerClasses) walkClass(inner, consts);
+  };
+
+  for (const f of m.funcs) one(f.params, f.body, moduleConsts);
+  for (const c of m.innerClasses) walkClass(c, moduleConsts);
 }
 
 function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
@@ -1830,7 +1991,7 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         }
         return;
       }
-      if (!scope.has(e.name)) {
+      if (!scope.has(e.name) && !isGlobalConst(e.name)) {
         diags.push({
           code: "undeclared-identifier",
           message: `Identifier "${e.name}" not declared in the current scope.`,

@@ -2,7 +2,7 @@
 export const CONNECT_OK = 0;
 export const CONNECT_ALREADY_CONNECTED = 31;
 
-/** 一条连接：盒子用于**身份比较**，fn 是真正要跑的式子，oneShot 来自 `CONNECT_ONE_SHOT`（实测值 4）。 */
+/** 一条连接：盒子用于**身份比较**，fn 是真正要跑的式子（flags 的实测口径见 `connectTo`）。 */
 type Listener = { box: object; fn: (...args: unknown[]) => void; oneShot: boolean };
 
 export class Signal {
@@ -12,21 +12,27 @@ export class Signal {
   constructor(readonly sigName: string = "") {}
 
   /**
-   * Godot 的 `connect(callable, flags)` 口径（`tmp/f97` b1 / b5 / b6 / b7）：
-   * - 返回 **int**：第一次 0，重复连**同一个** Callable 给 31 且**不会**多一份投递
-   *   （b1 里 `emit(5)` 只印一次 `got 5`）—— 所以「重复连接」既是返回码的格子也是行为的格子；
-   * - `disconnect` 之后可以再连，又给 0；
-   * - flags 只量过 **0 / 1 / 4** 三格：4（`CONNECT_ONE_SHOT`）是「投一次就自动断开」（b5：`emit` 两次只印一次），
-   *   0 与 1 都是常规连接（b6 两次都印）。**其余的 flags 值没量过** → 由调用方响亮拒，不静默当 0 处理。
-   * 身份比的是 Callable 的**等式**（`callableSame`：接收者 + 方法名，绑定串不算），
-   * 所以 `s.connect(o.hi)` 两次是 31，而 `s.connect(o.hi.bind(1))` 与 `s.connect(o.hi.bind(2))` 也撞同一格 ——
-   * 这一推论来自实测的等式，没有单独量过 connect，记在 S193 的没量清单里。
+   * Godot 的 `connect(callable, flags)` 口径（`tmp/f97` b1 / b5 / b7、`tmp/f99b` q05–q09）：
+   * - 返回 **Error 码 int**：成功 0，重复连**同一个** Callable 给 31 且**不**多一份投递
+   *   （b1：`emit(5)` 只印一次）；`disconnect` 之后再连又给 0；
+   * - flags 量过的四个可发值：**0 与 2**（`CONNECT_PERSIST`）走常规连接，q08 量到 2 的重复判定与 0
+   *   **完全同形**（第二次仍 31）；**4**（`CONNECT_ONE_SHOT`）投一次就摘掉（b5：两次 emit 只印一次，
+   *   q09：摘掉之前重复连仍给 31）；**8**（`CONNECT_REFERENCE_COUNTED`）**允许**重复连（q07 两次都 0）
+   *   但只投一份；
+   * - **1（`CONNECT_DEFERRED`）量到了、故意不发**：q05 / q06 量到它的投递排在当前这一轮之后，
+   *   而宿主 `quit()` 之后直接 flush + `process.exit`，宏任务一个都不排干 → 发出去会静默丢行，
+   *   所以由调用方响亮拒（`methods.ts` 的 `signal-flag-deferred`）；
+   * - 其余值（含压着好几个位的 `-1`，q10 只量到它给 0）也没量 → 响亮拒，不静默按常规连接发。
+   * 身份比的是 Callable 的**等式**（`callableSame`：接收者 + 方法名，绑定串不算），所以
+   * `s.connect(o.hi)` 两次是 31；`s.connect(o.hi.bind(1))` 与 `s.connect(o.hi.bind(2))` 撞同一格
+   * 是从实测等式**推**出来的，没单独量 → 记在 S194 的没量清单里。
    */
-  connectTo(box: object, fn: (...args: unknown[]) => void, oneShot: boolean): number {
+  connectTo(box: object, fn: (...args: unknown[]) => void, flags: number): number {
     for (const l of this.#listeners) {
-      if (sameBox(l.box, box)) return CONNECT_ALREADY_CONNECTED;
+      if (!sameBox(l.box, box)) continue;
+      return flags === 8 ? CONNECT_OK : CONNECT_ALREADY_CONNECTED;
     }
-    this.#listeners.push({ box, fn, oneShot });
+    this.#listeners.push({ box, fn, oneShot: flags === 4 });
     return CONNECT_OK;
   }
 
