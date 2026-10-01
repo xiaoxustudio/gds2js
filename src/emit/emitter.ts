@@ -356,6 +356,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(${className}, ${moduleFields});`);
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   if (moduleStaticVars !== null) out.push(`rt.registerStaticVars(${className}, ${moduleStaticVars});`);
+  const moduleArities = methodAritiesLiteral(m.funcs);
+  if (moduleArities !== null) out.push(`rt.registerMethodArities(${className}, ${moduleArities});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(${className}, ${JSON.stringify(moduleStatics)});`);
   if (baseClass.kind !== "import") {
@@ -548,6 +550,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declFields !== null) lines.push(`rt.registerFieldTypes(${decl.name}, ${declFields});`);
   const declStaticVars = staticVarTableLiteral(decl.vars);
   if (declStaticVars !== null) lines.push(`rt.registerStaticVars(${decl.name}, ${declStaticVars});`);
+  const declArities = methodAritiesLiteral(decl.funcs);
+  if (declArities !== null) lines.push(`rt.registerMethodArities(${decl.name}, ${declArities});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(${decl.name}, ${JSON.stringify(declStatics)});`);
   // 与模块类同一口径（S167）：原生基类只在**没有脚本基类**时登记，有的话运行时沿原型链往上找。
@@ -2668,6 +2672,27 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   const valKind = parts[1] ?? "";
   if (parts.length !== 2 || !isElemKind(keyKind) || !isElemKind(valKind)) return raw;
   return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
+}
+
+/**
+ * `Object.call` / `callv` 的 arity 表（S189）：`[必填数, 全部形参数]`。
+ * 必填数 = 第一个带默认值的形参之前的个数（与 JS `fn.length` 同口径），最多数只有 IR 知道 ——
+ * 实测 Godot 两边都管：`hi(x, y)` 少一个实参是 `Expected 2 argument(s).`，而 `twice(s = "z")` 给 0 个或 1 个都合法。
+ */
+function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
+  const rows: string[] = [];
+  for (const f of funcs) {
+    if (f.isStatic || f.name === "_init") continue;
+    let required = f.params.length;
+    for (let i = 0; i < f.params.length; i++) {
+      if (f.params[i]?.default !== null && f.params[i]?.default !== undefined) {
+        required = i;
+        break;
+      }
+    }
+    rows.push(`${JSON.stringify(f.name)}: [${required}, ${f.params.length}]`);
+  }
+  return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
 }
 
 function declaredCast(t: TypeRef | null): string | null {

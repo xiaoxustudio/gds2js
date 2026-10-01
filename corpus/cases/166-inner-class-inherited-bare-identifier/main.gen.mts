@@ -17,6 +17,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class NoInit {
   constructor(...__gd_new_args) {
@@ -38,6 +39,7 @@ class NoInit {
   
 }
 rt.registerClass("NoInit", NoInit);
+rt.registerMethodArities(NoInit, { "get_a": [0, 0] });
 rt.registerNativeBase(NoInit, "RefCounted");
 
 class Plain extends NoInit {
@@ -56,6 +58,7 @@ class Plain extends NoInit {
   
 }
 rt.registerClass("Plain", Plain);
+rt.registerMethodArities(Plain, { "show": [0, 0] });
 
 class Mid extends Plain {
   __gd_fields__() {
@@ -74,5 +77,6 @@ class Mid extends Plain {
   
 }
 rt.registerClass("Mid", Mid);
+rt.registerMethodArities(Mid, { "bare": [0, 0], "bump": [0, 0] });
 
 await new Main().run();

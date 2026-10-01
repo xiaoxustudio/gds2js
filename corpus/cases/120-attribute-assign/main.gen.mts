@@ -66,6 +66,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
   m = rt.V.int(1);

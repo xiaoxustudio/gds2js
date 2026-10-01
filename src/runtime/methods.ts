@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
-import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
+import { CALLABLE, CALLABLE_NAME, CALLABLE_OBJECT, callableOf, classNameOf, fieldTypesOf, getMeta, hasMeta, isVariant, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, staticMethodsOf, staticVarsOf, wrapValue, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
@@ -39,6 +39,24 @@ function norm(v: unknown): Variant {
  * 声明类型槽的写入值（S150 实测的那五种 + 「没实测过的槽原样存」）。
  * 字段写与静态变量写**共用这一张表** —— 两套规则各写一遍正是 S154 警告过的分叉温床。
  */
+/** `Object.call` / `callv` 报错文本里的 `RefCounted (Thing)`：与形参槽、`get_class()` 同一批登记（S167 / S189）。 */
+function objectBaseLabel(inner: unknown): string {
+  const cls = classNameOf(inner);
+  const native = nativeBaseOf(inner);
+  if (native !== null && cls !== null) return `${native} (${cls})`;
+  if (native !== null) return native;
+  if (cls !== null) return cls;
+  throw new UnsupportedError("object-call-base", "call/callv 的报错还不知道这个对象的基类标签");
+}
+
+/** `callv(name, args)` 的第二个实参：必须是 Array，元素原样当实参用（`tmp/f88 p06`）。 */
+function callvArgs(v: Variant | undefined): Variant[] {
+  if (v === undefined || v.t !== Tag.ARRAY) {
+    throw new GodotRuntimeError("object-callv", "callv() 的第二个实参需要是 Array");
+  }
+  return (v.v as GArray).raw().slice();
+}
+
 function intoSlot(kind: string | undefined, value: Variant, key: string, owner: unknown): Variant {
   if (kind === undefined) return value;
   if (kind === "int") return toInt(value);
@@ -178,6 +196,74 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       const base = nativeBaseOf(inner);
       if (base === null) throw new UnsupportedError("get-class", `get_class() 还不知道这个类的原生基类`);
       return V.str(base);
+    }
+    if (name === "is_class") {
+      const a0 = args[0] as Variant | undefined;
+      if (a0 === undefined || (a0.t !== Tag.STRING && a0.t !== Tag.STRING_NAME)) {
+        throw new GodotRuntimeError("is-class", "is_class() 需要一个 String 实参");
+      }
+      const base = nativeBaseOf(inner);
+      if (base === null) throw new UnsupportedError("is-class", "is_class() 还不知道这个类的原生基类");
+      // `tmp/f89 q01 / q06`：认的是**引擎那条链**，脚本类名不在里面 ——
+      // `class Thing extends RefCounted` 的 `is_class("Thing")` 是 **false**，`is_class("RefCounted")` 与
+      // `is_class("Object")` 是 true，`is_class("Node")` / 拼错的名字是 false。
+      const want = a0.v as string;
+      return V.bool(want === base || want === "Object");
+    }
+    if (name === "set" || name === "get") {
+      const key = args[0] as Variant | undefined;
+      if (key === undefined || (key.t !== Tag.STRING && key.t !== Tag.STRING_NAME)) {
+        throw new GodotRuntimeError("object-setget", `${name}() 的第一个实参需要是属性名（String）`);
+      }
+      const prop = key.v as string;
+      if (name === "get") {
+        // `tmp/f90 q07`：未知键静默 null（`o.get("zz")`）；**方法名给的是 Callable**（typeof 25），
+        // 字段就是字段值。语料 185 钉 null 那一格，Callable 那格只能钉 typeof（打印带实例 id）。
+        if (args.length !== 1) throw new GodotRuntimeError("arity", `get() 需要 1 个参数（收到 ${args.length} 个）`);
+        if (!(prop in (inner as Record<string, unknown>))) return V.nil();
+        return wrapValue(attribute(obj, prop));
+      }
+      if (args.length !== 2) throw new GodotRuntimeError("arity", `set() 需要 2 个参数（收到 ${args.length} 个）`);
+      // 实测两条都是**静默无操作**：`tmp/f90 q07` 的 `o.set("zz", 5)`（键不存在）与语料 185 的
+      // `o.set("s", 12)`（`var s: String` 装不下 int）之后读回来都还是原样，Godot 一句不报。
+      // 未定型字段照旧自由赋值（同一支探针里 `o.set("a", "s")` 就把 int 字段换成了 String）。
+      if (!Object.hasOwn(inner as object, prop)) return V.nil();
+      try {
+        writeProp(obj, prop, args[1] as Variant);
+      } catch (e) {
+        if (e instanceof GodotRuntimeError) return V.nil();
+        throw e;
+      }
+      return V.nil();
+    }
+    if (name === "call" || name === "callv") {
+      const fname = args[0] as Variant | undefined;
+      if (fname === undefined || (fname.t !== Tag.STRING && fname.t !== Tag.STRING_NAME)) {
+        throw new GodotRuntimeError("object-call", `${name}() 的第一个实参需要是方法名（String）`);
+      }
+      const who = fname.v as string;
+      const label = objectBaseLabel(inner);
+      const fn = (inner as Record<string, unknown>)[who];
+      if (typeof fn !== "function") {
+        // `tmp/f89 q03`：`Invalid call. Nonexistent function 'nope (via call)' in base 'RefCounted (Thing)'.`
+        throw new GodotRuntimeError("object-call", `Invalid call. Nonexistent function '${who} (via call)' in base '${label}'.`);
+      }
+      const rest = name === "call" ? (args.slice(1) as Variant[]) : callvArgs(args[1] as Variant | undefined);
+      // 必填数 = 第一个带默认值之前的形参数（JS 的 `fn.length` 正好是这个口径），最多数只能由产物登记（S189）
+      const declared = methodAritiesOf(inner)?.[who];
+      const min = declared !== undefined ? declared[0] : (fn as (...a: unknown[]) => unknown).length;
+      const max = declared !== undefined ? declared[1] : min;
+      if (rest.length < min || rest.length > max) {
+        if (name === "callv") {
+          // `tmp/f89 q05`：callv 不合式**不抛**，返回 null（Godot 那边多打一行 `Error calling method from 'callv'` 的引擎诊断）
+          return V.nil();
+        }
+        throw new GodotRuntimeError(
+          "object-call",
+          `Invalid call to function '${who} (via call)' in base '${label}'. Expected ${max} argument(s).`,
+        );
+      }
+      return wrapValue((fn as (...a: Variant[]) => unknown).apply(inner, rest));
     }
     if (name === "set_meta" || name === "get_meta" || name === "has_meta" || name === "remove_meta") {
       const obj = inner as object;

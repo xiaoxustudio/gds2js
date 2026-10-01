@@ -37,5 +37,6 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"fd_int": "int", "fd_float": "float"});
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 await new Main().run();

@@ -44,6 +44,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
   raw = rt.V.int(0);
@@ -87,6 +88,7 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"prop": "int", "ro": "int", "ref": "int"});
+rt.registerMethodArities(Inner, { "_getr": [0, 0], "_setr": [1, 1], "setvia": [1, 1] });
 rt.registerNativeBase(Inner, "RefCounted");
 
 await new Main().run();

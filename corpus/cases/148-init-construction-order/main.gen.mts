@@ -30,6 +30,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Base {
   constructor(...__gd_new_args) {
@@ -58,6 +59,7 @@ class Base {
 }
 rt.registerClass("Base", Base);
 rt.registerFieldTypes(Base, {"bx": "int"});
+rt.registerMethodArities(Base, { "_mk": [1, 1], "tag": [0, 0] });
 rt.registerNativeBase(Base, "RefCounted");
 
 class NoInit extends Base {
@@ -156,5 +158,6 @@ class SuperOther extends Base {
   
 }
 rt.registerClass("SuperOther", SuperOther);
+rt.registerMethodArities(SuperOther, { "tag": [0, 0] });
 
 await new Main().run();

@@ -78,6 +78,37 @@ export function registerFieldTypes(ctor: GdClassCtor, table: Record<string, stri
 }
 
 /**
+ * 方法名的 `[必填实参数, 全部形参数]` 表（S189）。`Object.call` / `callv` 的 arity 检查要用它：
+ * JS 的 `fn.length` 只数**到第一个带默认值的形参之前**，正好是「必填数」，但「最多数」拿不到 ——
+ * 而 Godot 两边都管（`tmp/f89 q04`：`hi(x, y)` 只给一个实参是 `Expected 2 argument(s).`；
+ * `tmp/f88 p06` / 语料 186：`twice(s = "z")` 给 0 个与 1 个都合法）。
+ */
+const METHOD_ARITIES = new WeakMap<GdClassCtor, Record<string, [number, number]>>();
+
+export function registerMethodArities(ctor: GdClassCtor, table: Record<string, [number, number]>): void {
+  METHOD_ARITIES.set(ctor, table);
+}
+
+/** 沿原型链并表，派生类盖过基类（与 `fieldTypesOf` 同一口径）。 */
+export function methodAritiesOf(target: unknown): Record<string, [number, number]> | null {
+  const start =
+    typeof target === "function" ? (target as Function) : (target as { constructor?: Function })?.constructor ?? null;
+  let ctor = start;
+  let out: Record<string, [number, number]> | null = null;
+  const chain: Function[] = [];
+  while (ctor) {
+    chain.push(ctor);
+    ctor = Object.getPrototypeOf(ctor) as Function | null;
+  }
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const t = METHOD_ARITIES.get(chain[i] as GdClassCtor);
+    if (t === undefined) continue;
+    out = { ...(out ?? {}), ...t };
+  }
+  return out;
+}
+
+/**
  * 实例（或构造器）的声明类型表，没有则 null。
  * **沿原型链并表**：派生类自己的表只登记自有成员，而继承来的带标注成员同样要拿到声明类型
  * （内部类现在能 `extends` 内部类，S174 ④；子类里写 `p.t = 5.5` 仍要按基类声明的 `int` 转成 5）。

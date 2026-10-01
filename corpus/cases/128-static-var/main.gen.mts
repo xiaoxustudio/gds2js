@@ -42,6 +42,7 @@ export class Main extends SceneTree {
 }
 
 rt.registerStaticVars(Main, {"osv": "int"});
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerStaticMethods(Main, ["bumpOuter"]);
 rt.registerNativeBase(Main, "SceneTree");
 class A {
@@ -64,6 +65,7 @@ class A {
 rt.registerClass("A", A);
 rt.registerFieldTypes(A, {"mv": "int"});
 rt.registerStaticVars(A, {"x": "int", "plain": "", "lit": "", "computed": "int"});
+rt.registerMethodArities(A, { "fromInstance": [0, 0] });
 rt.registerStaticMethods(A, ["setx"]);
 rt.registerNativeBase(A, "RefCounted");
 

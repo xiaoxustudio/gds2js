@@ -23,6 +23,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class A {
   im(): unknown {
@@ -35,6 +36,7 @@ class A {
   
 }
 rt.registerClass("A", A);
+rt.registerMethodArities(A, { "im": [0, 0] });
 rt.registerStaticMethods(A, ["sm"]);
 rt.registerNativeBase(A, "RefCounted");
 

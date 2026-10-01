@@ -25,6 +25,7 @@ export class Main extends SceneTree {
 }
 
 rt.registerFieldTypes(Main, {"TOP": "int", "NAME": "String"});
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Inner {
   TOP = rt.toInt(rt.V.int(7));
@@ -53,6 +54,7 @@ class Inner {
 }
 rt.registerClass("Inner", Inner);
 rt.registerFieldTypes(Inner, {"TOP": "int"});
+rt.registerMethodArities(Inner, { "read_outer": [0, 0], "read_shadow": [0, 0], "via_self_dot": [0, 0] });
 rt.registerStaticMethods(Inner, ["read_static_outer","read_static_shadow"]);
 rt.registerNativeBase(Inner, "RefCounted");
 

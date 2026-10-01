@@ -31,6 +31,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class A {
   static sf(a, b = rt.toInt(rt.V.int(9))): unknown {
@@ -98,6 +99,7 @@ class A {
   
 }
 rt.registerClass("A", A);
+rt.registerMethodArities(A, { "one": [1, 2], "expr_default": [0, 1], "arr_default": [0, 1], "vec_default": [0, 1], "null_default": [0, 1], "refs_earlier": [1, 2], "const_default": [0, 1], "method_default": [0, 1], "helper": [0, 0], "str_slot": [0, 1], "float_into_int_slot": [0, 1], "float_into_int_math": [0, 1], "call_it": [0, 0] });
 rt.registerStaticMethods(A, ["sf"]);
 rt.registerNativeBase(A, "RefCounted");
 

@@ -43,6 +43,7 @@ export class Main extends SceneTree {
   
 }
 
+rt.registerMethodArities(Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(Main, "SceneTree");
 class Box {
   m = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
@@ -54,6 +55,7 @@ class Box {
 }
 rt.registerClass("Box", Box);
 rt.registerFieldTypes(Box, {"m": "Vector2"});
+rt.registerMethodArities(Box, { "getm": [0, 0] });
 rt.registerNativeBase(Box, "RefCounted");
 
 await new Main().run();
