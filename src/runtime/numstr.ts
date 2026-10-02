@@ -10,6 +10,36 @@ export const INT64_MIN = BigInt("-9223372036854775808");
 export const INT64_MAX = BigInt("9223372036854775807");
 export const TWO_63 = 2 ** 63;
 
+const HEX_LOWER = "0123456789abcdef";
+const HEX_UPPER = "0123456789ABCDEF";
+
+/** 整数的十六进制幅值：整数的 `toString(radix)` 在静态编译目标上没有 lowering（实测 scriptc）。 */
+function hexAbs(v: number, digits: string): string {
+  if (v === 0) return "0";
+  let out = "";
+  let n = v;
+  while (n > 0) {
+    out = digits.charAt(n % 16) + out;
+    n = Math.floor(n / 16);
+  }
+  return out;
+}
+
+/** `v.toString(16)` 的等价：`0` → `"0"`、负数带符号（`-1` → `"-1"`），不补零。 */
+export function hexLower(v: number): string {
+  return v < 0 ? `-${hexAbs(-v, HEX_LOWER)}` : hexAbs(v, HEX_LOWER);
+}
+
+/** `v.toString(16).toUpperCase()` 的等价。 */
+export function hexUpper(v: number): string {
+  return v < 0 ? `-${hexAbs(-v, HEX_UPPER)}` : hexAbs(v, HEX_UPPER);
+}
+
+/** `.padStart(2, "0")` 的等价（三个用点都在 0–255 这一档，长的原样返回）。 */
+export function padZero2(s: string): string {
+  return s.length >= 2 ? s : `0${s}`;
+}
+
 /** 十进制累加的饱和闸门，见 {@link strToInt} 的实测说明 */
 const DEC_SATURATE_AT = 10n ** 18n;
 

@@ -77,6 +77,12 @@ function i64(x: IntPayload, y: IntPayload, f: (a: bigint, b: bigint) => bigint):
  */
 export const ops = {
   add(a: Variant, b: Variant): Variant {
+    // pack 的 `+`（拼接）：不落地 `GBytes | null` 的局部（那一体格子要把类实例表示成 checked-dynamic 属性，
+    // 而 `GBytes.items` 是含 bigint 与类实例的联合数组、没有静态表示，静态 exe 一跑就拒），
+    // 所以 `instanceof` 直接写在条件里、进格后把收窄的 `a.v` / `b.v` 交出去。
+    if (a.t === Tag.OBJECT && b.t === Tag.OBJECT && a.v instanceof GBytes && b.v instanceof GBytes) {
+      return bytesConcat(a.v, b.v);
+    }
     if (isNum(a) && isNum(b)) {
       return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x + y) : V.float(num(a) + num(b));
     }
@@ -86,9 +92,6 @@ export const ops = {
     if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
       return V.array((a.v as GArray).concat(b.v as GArray));
     }
-    const ba = a.t === Tag.OBJECT && a.v instanceof GBytes ? a.v : null;
-    const bb = b.t === Tag.OBJECT && b.v instanceof GBytes ? b.v : null;
-    if (ba && bb) return bytesConcat(ba, bb);
     const va = a.t === Tag.OBJECT && a.v instanceof GVector2 ? a.v : null;
     const vb = b.t === Tag.OBJECT && b.v instanceof GVector2 ? b.v : null;
     if (va && vb) return V.object(new GVector2(va.x + vb.x, va.y + vb.y));
@@ -385,14 +388,38 @@ export function isLess(a: Variant, b: Variant): boolean {
 }
 
 /** 二进制快速幂，每步都回绕到 int64（等价于 Godot 的 64 位溢出行为）。 */
+// bigint 的一切比较与复合赋值在静态编译目标上都没有 lowering（实测 scriptc SC1043：
+// 「comparing non-number, non-string values」，`e > 0n`、`if (e & 1n)`、`e >>= 1n` 三形一起拒），
+// 而 `DataView` 的 bigint 读写都有 —— 拆成「带符号高 32 位 + 无符号低 32 位」按 number 判。
+// 赋值式的 `e = e >> 1n` 是可编的，被拒的只有复合形式 `>>=`。
+const BIG_SCRATCH = new DataView(new ArrayBuffer(8));
+
+function bigWords(v: bigint): [number, number] {
+  BIG_SCRATCH.setBigInt64(0, v);
+  return [BIG_SCRATCH.getInt32(0), BIG_SCRATCH.getUint32(4)];
+}
+
+/** 严格大于 0：高字不带符号，且不是全零。 */
+function bigPositive(v: bigint): boolean {
+  const w = bigWords(v);
+  const hi = w[0] as number;
+  if (hi < 0) return false;
+  return hi > 0 || (w[1] as number) > 0;
+}
+
+/** 最低位是不是 1（`v & 1n` 的等价判）。 */
+function bigOdd(v: bigint): boolean {
+  return ((bigWords(v)[1] as number) & 1) === 1;
+}
+
 function bigPow(base0: bigint, exp0: bigint): bigint {
   let r = 1n;
   let base = wrap64(base0);
   let e = exp0;
-  while (e > 0n) {
-    if (e & 1n) r = wrap64(r * base);
+  while (bigPositive(e)) {
+    if (bigOdd(e)) r = wrap64(r * base);
     base = wrap64(base * base);
-    e >>= 1n;
+    e = e >> 1n;
   }
   return wrap64(r);
 }

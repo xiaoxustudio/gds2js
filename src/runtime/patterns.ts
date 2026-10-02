@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";
-import { CALLABLE, isVariant, lookupClass, wrapValue } from "./object";
+import { isCallableBox, isVariant, lookupClass, objIs, wrapValue } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
@@ -9,7 +9,7 @@ import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
-import { asBytes, GBytes, packTypeOfCode, type PackKind } from "./packed";
+import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
 
 export type Pat =
   | { k: "wild" }
@@ -119,22 +119,21 @@ const PACK_TYPES: Record<string, PackKind> = {
 };
 
 function packKindMatches(v: Variant, kind: PackKind): boolean {
-  const b = asBytes(v);
-  return b !== null && b.kind === kind;
+  return isBytes(v) && packBytes(v).kind === kind;
 }
 
 export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
   const pk = PACK_TYPES[name];
   if (pk !== undefined) return V.bool(packKindMatches(v, pk));
-  if (name === "Object" && asBytes(v) !== null) return V.bool(false);
+  if (name === "Object" && isBytes(v)) return V.bool(false);
   const t = builtinTag(name);
   if (t !== undefined) return V.bool(v.t === t);
   const math = MATH_TYPES[name];
   if (math) return V.bool(math(v));
-  const ctor = lookupClass(name);
-  if (ctor) {
-    return V.bool(v.t === Tag.OBJECT && v.v instanceof ctor);
+  const desc = lookupClass(name);
+  if (desc !== undefined) {
+    return V.bool(objIs(v, desc));
   }
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
@@ -156,9 +155,9 @@ export function asType(v: Variant, name: string): Variant {
     if (name === "Vector3" && asVec3i(v) !== null) return toVec3(v);
     return math(v) ? v : V.nil();
   }
-  const ctor = lookupClass(name);
-  if (ctor) {
-    return v.t === Tag.OBJECT && v.v instanceof ctor ? v : V.nil();
+  const desc = lookupClass(name);
+  if (desc !== undefined) {
+    return objIs(v, desc) ? v : V.nil();
   }
   throw new UnsupportedError("as-type", `as ${name} 未实现（未知类型）`);
 }
@@ -189,6 +188,6 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
-  if (v.t === Tag.OBJECT && CALLABLE in (v.v as Record<string, unknown>)) return V.int(25);
+  if (v.t === Tag.OBJECT && isCallableBox(v.v)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }

@@ -4,11 +4,12 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     do {
       const __m0 = rt.matchPattern(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.patArray([rt.patLit(rt.V.int(1)), rt.patBind()]));
       if (__m0 !== null) {
-        const v = __m0[0];
+        const v = __m0[0] as rt.Variant;
         print(rt.showArgs([v]));
         break;
       }
@@ -38,8 +39,17 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

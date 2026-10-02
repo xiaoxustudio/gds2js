@@ -9,7 +9,8 @@ export class Main extends SceneTree {
   TOP = rt.toInt(rt.V.int(42));
   static TOP = rt.toInt(rt.V.int(42));
 
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let i = rt.V.object(new Inner());
     print(rt.showArgs([rt.V.str("t1 "), rt.method(i, "useconst", [])]));
     print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "useenum", [])]));
@@ -19,49 +20,77 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerFieldTypes(Main, {"TOP": "int"});
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-class Other {
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerFieldTypes(__gd_d_Main, {"TOP": "int"});
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+class Other extends rt.GdScriptObject {
   OC = rt.toInt(rt.V.int(5));
   static OC = rt.toInt(rt.V.int(5));
 
-  getoc(): unknown {
+  getoc(): rt.Variant {
     return Other.OC;
   }
   
-}
-rt.registerClass("Other", Other);
-rt.registerFieldTypes(Other, {"OC": "int"});
-rt.registerMethodArities(Other, { "getoc": [0, 0] });
-rt.registerNativeBase(Other, "RefCounted");
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "getoc": return rt.wrapValue(this.getoc());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
 
-class Inner {
+}
+const __gd_d_Other = rt.defineClass(Other, () => new Other(), (o) => o instanceof Other);
+rt.nameClass(__gd_d_Other, "Other");
+rt.registerFieldTypes(__gd_d_Other, {"OC": "int"});
+rt.registerMethodArities(__gd_d_Other, { "getoc": [0, 0] });
+rt.registerNativeBase(__gd_d_Other, "RefCounted");
+
+class Inner extends rt.GdScriptObject {
   IC = rt.toInt(rt.V.int(9));
   static IC = rt.toInt(rt.V.int(9));
 
-  useconst(): unknown {
+  useconst(): rt.Variant {
     return Main.TOP;
   }
   
-  useenum(): unknown {
-    return rt.index(Suit, rt.V.str("HEARTS"));
+  useenum(): rt.Variant {
+    return rt.wrapValue(rt.index(Suit, rt.V.str("HEARTS")));
   }
   
-  useother(): unknown {
+  useother(): rt.Variant {
     return rt.method(rt.V.object(new Other()), "getoc", []);
   }
   
-  ownconst(): unknown {
+  ownconst(): rt.Variant {
     return Inner.IC;
   }
   
-}
-rt.registerClass("Inner", Inner);
-rt.registerFieldTypes(Inner, {"IC": "int"});
-rt.registerMethodArities(Inner, { "useconst": [0, 0], "useenum": [0, 0], "useother": [0, 0], "ownconst": [0, 0] });
-rt.registerNativeBase(Inner, "RefCounted");
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "useconst": return rt.wrapValue(this.useconst());
+      case "useenum": return rt.wrapValue(this.useenum());
+      case "useother": return rt.wrapValue(this.useother());
+      case "ownconst": return rt.wrapValue(this.ownconst());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
 
-await new Main().run();
+}
+const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
+rt.nameClass(__gd_d_Inner, "Inner");
+rt.registerFieldTypes(__gd_d_Inner, {"IC": "int"});
+rt.registerMethodArities(__gd_d_Inner, { "useconst": [0, 0], "useenum": [0, 0], "useother": [0, 0], "ownconst": [0, 0] });
+rt.registerNativeBase(__gd_d_Inner, "RefCounted");
+
+const __gd_entry = new Main();
+await __gd_entry.run();

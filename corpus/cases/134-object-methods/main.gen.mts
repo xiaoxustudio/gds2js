@@ -4,7 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let a = rt.V.object(new A());
     rt.method(a, "set_meta", [rt.V.str("k"), rt.V.int(5)]);
     rt.method(a, "set_meta", [rt.V.stringName("sn"), rt.V.int(6)]);
@@ -21,23 +22,40 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-class A {
-  im(): unknown {
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+class A extends rt.GdScriptObject {
+  im(): rt.Variant {
     return rt.V.int(1);
   }
   
-  static sm(): unknown {
+  static sm(): rt.Variant {
     return rt.V.int(2);
   }
   
-}
-rt.registerClass("A", A);
-rt.registerMethodArities(A, { "im": [0, 0], "sm": [0, 0] });
-rt.registerStaticMethods(A, ["sm"]);
-rt.registerNativeBase(A, "RefCounted");
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "im": return rt.wrapValue(this.im());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
 
-await new Main().run();
+}
+const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
+rt.nameClass(__gd_d_A, "A");
+rt.registerMethodArities(__gd_d_A, { "im": [0, 0], "sm": [0, 0] });
+rt.registerStaticMethods(__gd_d_A, ["sm"], {"sm": (a: rt.Variant[]): rt.Variant => rt.wrapValue(A.sm())});
+rt.registerNativeBase(__gd_d_A, "RefCounted");
+
+const __gd_entry = new Main();
+await __gd_entry.run();

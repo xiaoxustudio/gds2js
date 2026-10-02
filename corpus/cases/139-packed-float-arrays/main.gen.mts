@@ -4,12 +4,13 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let f = rt.packCtor("float32", [rt.V.array(rt.GArray.of([rt.V.float(0.1), rt.V.float(2.7), rt.ops.div(rt.V.float(1), rt.V.int(3)), rt.V.float(0.00001), rt.V.float(123456.789), rt.V.float((-0)), rt.V.float(100000000000000000000)]))]);
     print(rt.showArgs([rt.V.str("u1 "), f, rt.V.str(" "), rt.typeOf(f)]));
-    print(rt.showArgs([rt.V.str("u2 "), rt.index(f, rt.V.int(0)), rt.V.str(" "), rt.ops.eq(rt.index(f, rt.V.int(0)), rt.V.float(0.1)), rt.V.str(" "), rt.typeOf(rt.index(f, rt.V.int(0)))]));
+    print(rt.showArgs([rt.V.str("u2 "), rt.wrapValue(rt.index(f, rt.V.int(0))), rt.V.str(" "), rt.ops.eq(rt.wrapValue(rt.index(f, rt.V.int(0))), rt.V.float(0.1)), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(f, rt.V.int(0))))]));
     let d = rt.packCtor("float64", [rt.V.array(rt.GArray.of([rt.V.float(0.1), rt.V.float(2.7), rt.ops.div(rt.V.float(1), rt.V.int(3)), rt.V.float(100000000000000000000), rt.V.float(1e+308)]))]);
-    print(rt.showArgs([rt.V.str("u3 "), d, rt.V.str(" "), rt.typeOf(d), rt.V.str(" "), rt.ops.eq(rt.index(d, rt.V.int(0)), rt.V.float(0.1))]));
+    print(rt.showArgs([rt.V.str("u3 "), d, rt.V.str(" "), rt.typeOf(d), rt.V.str(" "), rt.ops.eq(rt.wrapValue(rt.index(d, rt.V.int(0))), rt.V.float(0.1))]));
     let m = rt.packCtor("float64", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.bool(true), rt.V.int(3)]))]);
     print(rt.showArgs([rt.V.str("u4 "), m]));
     let r = rt.packCtor("float32", []);
@@ -31,7 +32,7 @@ export class Main extends SceneTree {
     }
     print(rt.showArgs([rt.V.str("u7 "), g, rt.V.str(" "), k]));
     print(rt.showArgs([rt.V.str("u8 "), rt.ops.eq(g, rt.packCtor("float32", [rt.V.array(rt.GArray.of([rt.V.float(9.25), rt.V.float(2.5)]))])), rt.V.str(" "), rt.ops.add(g, rt.packCtor("float32", [rt.V.array(rt.GArray.of([rt.V.float(3.5)]))]))]));
-    print(rt.showArgs([rt.V.str("u9 "), rt.method(g, "get", [rt.V.int(5)]), rt.V.str(" "), rt.index(g, rt.V.int((-1))), rt.V.str(" "), rt.method(g, "has", [rt.V.float(9.25)]), rt.V.str(" "), rt.method(g, "find", [rt.V.float(2.5)])]));
+    print(rt.showArgs([rt.V.str("u9 "), rt.method(g, "get", [rt.V.int(5)]), rt.V.str(" "), rt.wrapValue(rt.index(g, rt.V.int((-1)))), rt.V.str(" "), rt.method(g, "has", [rt.V.float(9.25)]), rt.V.str(" "), rt.method(g, "find", [rt.V.float(2.5)])]));
     {
       const _nv = rt.writeIdx(g, rt.V.int((-1)), rt.V.float(8.25));
       if (_nv !== null) g = _nv;
@@ -47,8 +48,17 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

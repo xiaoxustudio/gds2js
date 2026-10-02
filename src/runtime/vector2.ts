@@ -12,8 +12,22 @@ export class GVector2 {
 
 const r = Math.fround;
 
-/** Vector2i 的分类标记：靠它认「单参构造」，不必 import vector2i（那会形成模块环）。 */
-export const VEC2I_MARK = Symbol("gds2js.Vector2i");
+/**
+ * 「这个对象是不是 Vector2i、是的话把两个分量交出来」那一格，由 `vector2i` 在自己模块里登记。
+ * 用登记函数而不是 `MARK in o`：反向 import 会成环，而计算键的 `in` 在静态编译目标上是一堵墙
+ * （scriptc：'in' with computed (non-literal) keys）。函数值两边都是普通值。
+ * 交的是**分量**而不是布尔：判完再回头 `a.v as { x?: number; y?: number }` 取分量，那一步是
+ * 「把 unknown 收成结构视图」—— 静态目标上那张视图与原实例不是同一个身份，视图上的 `instanceof`
+ * 当场落空（实测 scriptc 的 exe：`Vector2() 单参只收 Vector2 / Vector2i，收到 Object`，
+ * 而 node 跑同一份产物是对的）。
+ */
+type Vec2iParts = (o: object) => [number, number] | null;
+
+let vec2iParts: Vec2iParts | null = null;
+
+export function registerVec2iParts(f: Vec2iParts): void {
+  vec2iParts = f;
+}
 
 export function vector2(x: number, y: number): Variant {
   return V.object(new GVector2(x, y));
@@ -41,8 +55,9 @@ export function vector2New(args: Variant[]): Variant {
   if (args.length === 1) {
     const a = args[0] as Variant;
     if (a.t === Tag.OBJECT && a.v instanceof GVector2) return vector2(a.v.x, a.v.y);
-    const o = a.v as { x?: number; y?: number } | null;
-    if (a.t === Tag.OBJECT && o !== null && VEC2I_MARK in o) return vector2(o.x as number, o.y as number);
+    const inner = a.t === Tag.OBJECT ? a.v : null;
+    const parts = inner !== null && typeof inner === "object" && vec2iParts !== null ? vec2iParts(inner) : null;
+    if (parts !== null) return vector2(parts[0] as number, parts[1] as number);
     throw new UnsupportedError("vector2-arg", `Vector2() 单参只收 Vector2 / Vector2i，收到 ${tagName(a.t)}`);
   }
   if (args.length !== 2) {

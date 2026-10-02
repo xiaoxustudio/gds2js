@@ -4,22 +4,23 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  take_v3(v): void {
+  take_v3(v: rt.Variant): void {
     v = rt.paramSlot(v, "Vector3", 1, "take_v3", this);
     print(rt.showArgs([rt.V.str("v3 "), rt.typeOf(v), rt.V.str(" "), v]));
   }
   
-  take_v3i(v): void {
+  take_v3i(v: rt.Variant): void {
     v = rt.paramSlot(v, "Vector3i", 1, "take_v3i", this);
     print(rt.showArgs([rt.V.str("v3i "), rt.typeOf(v), rt.V.str(" "), v]));
   }
   
-  take_name(n): void {
+  take_name(n: rt.Variant): void {
     n = rt.paramSlot(n, "StringName", 1, "take_name", this);
     print(rt.showArgs([rt.V.str("name "), rt.typeOf(n), rt.V.str(" "), n]));
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let a = rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
     let b = rt.vector3New([rt.V.float(1.7), rt.V.float((-2.9)), rt.V.float(3.1)]);
     let s = "nm";
@@ -33,8 +34,20 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "take_v3": return rt.wrapValue(this.take_v3(args[0] as rt.Variant));
+      case "take_v3i": return rt.wrapValue(this.take_v3i(args[0] as rt.Variant));
+      case "take_name": return rt.wrapValue(this.take_name(args[0] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "take_v3": [1, 1], "take_v3i": [1, 1], "take_name": [1, 1], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "take_v3": [1, 1], "take_v3i": [1, 1], "take_name": [1, 1], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

@@ -243,6 +243,31 @@ function fromHsv(h: number, s: number, v: number, a: number): Variant {
   }
 }
 
+const HEX_DIGITS = "0123456789abcdef";
+
+/** 整数的十六进制（幅值），按位取模拼。 */
+function hexMag(v: number): string {
+  if (v <= 0) return "0";
+  let out = "";
+  let n = v;
+  while (n > 0) {
+    out = HEX_DIGITS.charAt(n % 16) + out;
+    n = Math.floor(n / 16);
+  }
+  return out;
+}
+
+/**
+ * `x.toString(16)` 的等价实现 —— 整数的 `toString(radix)` 在静态编译目标上没有 lowering（实测 scriptc）。
+ * 口径照 JS 原样：0–255 给两位（`0` → `"00"`、`255` → `"ff"`，正是 `padStart(2, "0")` 的效果），
+ * 负数给符号 + 幅值（`byteOf(NaN)` 那格的 -2147483648 → `"-80000000"`，原来 padStart 对它就是不动）。
+ */
+function hexByte(v: number): string {
+  if (v < 0) return `-${hexMag(-v)}`;
+  if (v > 255) return hexMag(v);
+  return HEX_DIGITS.charAt((v >> 4) & 0xf) + HEX_DIGITS.charAt(v & 0xf);
+}
+
 /**
  * 字节属性读（`c.r8`）。实测口径：`round(分量*255)` 后夹到 0..255，
  * 而 **nan 给 -2147483648**（Godot 那边过了一次 int32 转换）、`inf` → 255、`-inf` → 0。
@@ -289,7 +314,7 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       if (args.length > 1) {
         throw new UnsupportedError("color-arity", `Color.to_html() 最多 1 个实参（收到 ${args.length} 个）`);
       }
-      const hex = (n: number) => byteOf(n).toString(16).padStart(2, "0");
+      const hex = (n: number) => hexByte(byteOf(n));
       const body = hex(c.r) + hex(c.g) + hex(c.b);
       const withAlpha = args.length === 0 ? true : Boolean((args[0] as Variant).v);
       return V.str(withAlpha ? body + hex(c.a) : body);

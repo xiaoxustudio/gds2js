@@ -6,7 +6,8 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   member = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(7)])), "int", true);
 
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let a = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(2.5), rt.V.float((-1.9)), rt.V.bool(true)])), "int", true);
     print(rt.showArgs([a]));
     rt.method(a, "append", [rt.V.int(3)]);
@@ -75,14 +76,16 @@ export class Main extends SceneTree {
     let nd = rt.stampArray(rt.V.array(rt.GArray.of([])), "Dictionary", true);
     rt.method(nd, "resize", [rt.V.int(1)]);
     print(rt.showArgs([nd]));
-    let filtered = rt.method(a, "filter", [rt.callable((x) => {
+    let filtered = rt.method(a, "filter", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.bool(true);
-    })]);
+    }, 1)]);
     rt.method(filtered, "append", [rt.V.str("s")]);
     print(rt.showArgs([filtered]));
-    let mapped = rt.method(a, "map", [rt.callable((x) => {
+    let mapped = rt.method(a, "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return x;
-    })]);
+    }, 1)]);
     rt.method(mapped, "append", [rt.V.str("s")]);
     print(rt.showArgs([mapped]));
     let joined = rt.ops.add(a, rt.V.array(rt.GArray.of([rt.V.int(1)])));
@@ -158,8 +161,17 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

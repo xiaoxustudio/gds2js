@@ -9,32 +9,44 @@ const CONNECT_REFERENCE_COUNTED = rt.V.int(8);
 export class Main extends SceneTree {
   fired = new rt.Signal("fired");
 
-  on_fired(v): void {
+  on_fired(v: rt.Variant): void {
     print(rt.showArgs([rt.V.str("got "), v]));
   }
   
-  on_other(v): void {
+  on_other(v: rt.Variant): void {
     print(rt.showArgs([rt.V.str("other "), v]));
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let s = this.fired;
-    print(rt.showArgs([rt.V.str("r1 "), rt.method(s, "connect", [rt.callableOf(this.on_fired.bind(this), "on_fired", rt.V.object(this))])]));
+    print(rt.showArgs([rt.V.str("r1 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
     rt.method(s, "emit", [rt.V.int(1)]);
-    rt.method(s, "disconnect", [rt.callableOf(this.on_fired.bind(this), "on_fired", rt.V.object(this))]);
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(s, "connect", [rt.callableOf(this.on_fired.bind(this), "on_fired", rt.V.object(this))])]));
-    rt.method(s, "disconnect", [rt.callableOf(this.on_fired.bind(this), "on_fired", rt.V.object(this))]);
-    print(rt.showArgs([rt.V.str("r3 "), rt.typeOf(rt.method(s, "connect", [rt.callableOf(this.on_fired.bind(this), "on_fired", rt.V.object(this)), CONNECT_ONE_SHOT]))]));
+    rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);
+    print(rt.showArgs([rt.V.str("r2 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
+    rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);
+    print(rt.showArgs([rt.V.str("r3 "), rt.typeOf(rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired"), CONNECT_ONE_SHOT]))]));
     rt.method(s, "emit", [rt.V.int(2)]);
     rt.method(s, "emit", [rt.V.int(3)]);
-    print(rt.showArgs([rt.V.str("r4 "), rt.method(s, "connect", [rt.callableOf(this.on_other.bind(this), "on_other", rt.V.object(this)), CONNECT_REFERENCE_COUNTED])]));
-    print(rt.showArgs([rt.V.str("r5 "), rt.method(s, "connect", [rt.callableOf(this.on_other.bind(this), "on_other", rt.V.object(this)), CONNECT_REFERENCE_COUNTED])]));
+    print(rt.showArgs([rt.V.str("r4 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_other"), CONNECT_REFERENCE_COUNTED])]));
+    print(rt.showArgs([rt.V.str("r5 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_other"), CONNECT_REFERENCE_COUNTED])]));
     rt.method(s, "emit", [rt.V.int(4)]);
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "on_fired": return rt.wrapValue(this.on_fired(args[0] as rt.Variant));
+      case "on_other": return rt.wrapValue(this.on_other(args[0] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "on_fired": [1, 1], "on_other": [1, 1], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "on_fired": [1, 1], "on_other": [1, 1], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

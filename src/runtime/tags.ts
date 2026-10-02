@@ -49,7 +49,7 @@ const MIN_SAFE_B = -MAX_SAFE_B;
 /** Godot 的 int 是 64 位有符号、溢出**回绕**（006 实测 int64max+1 → int64min），这里实现同一件事。 */
 export function wrap64(x: bigint): bigint {
   let v = x % TWO_64;
-  if (v < 0n) v += TWO_64;
+  if (v < 0n) v = v + TWO_64;
   return v >= TWO_63 ? v - TWO_64 : v;
 }
 

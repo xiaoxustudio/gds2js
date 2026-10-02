@@ -4,7 +4,7 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  build(n, mod): unknown {
+  build(n: rt.Variant, mod: rt.Variant): rt.Variant {
     let a = rt.V.array(rt.GArray.of([]));
     for (let i of rt.rangeSeq([n])) {
       rt.method(a, "append", [rt.vector2iNew([rt.ops.mod(rt.V.int(i), mod), rt.V.int(i)])]);
@@ -12,24 +12,29 @@ export class Main extends SceneTree {
     return a;
   }
   
-  idx(a, rev): unknown {
+  idx(a: rt.Variant, rev: rt.Variant): rt.Variant {
     if (rt.ops.truthy(rev)) {
-      rt.method(a, "sort_custom", [rt.callable((x, y) => {
-      return rt.ops.gt(rt.attribute(x, "x"), rt.attribute(y, "x"));
-    })]);
+      rt.method(a, "sort_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const y = __a[1] as rt.Variant;
+      return rt.ops.gt(rt.wrapValue(rt.attribute(x, "x")), rt.wrapValue(rt.attribute(y, "x")));
+    }, 2)]);
     } else {
-      rt.method(a, "sort_custom", [rt.callable((x, y) => {
-      return rt.ops.lt(rt.attribute(x, "x"), rt.attribute(y, "x"));
-    })]);
+      rt.method(a, "sort_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const y = __a[1] as rt.Variant;
+      return rt.ops.lt(rt.wrapValue(rt.attribute(x, "x")), rt.wrapValue(rt.attribute(y, "x")));
+    }, 2)]);
     }
     let out = rt.V.str("");
     for (let v of rt.iter(a)) {
-      out = rt.ops.add(out, rt.ops.add(rt.strBuiltin([rt.attribute(v, "y")]), rt.V.str(" ")));
+      out = rt.ops.add(out, rt.ops.add(rt.strBuiltin([rt.wrapValue(rt.attribute(v, "y"))]), rt.V.str(" ")));
     }
     return out;
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     print(rt.showArgs([rt.V.str("r "), this.idx(this.build(rt.V.int(16), rt.V.int(1)), rt.V.bool(false))]));
     print(rt.showArgs([rt.V.str("r2 "), this.idx(this.build(rt.V.int(17), rt.V.int(1)), rt.V.bool(false))]));
     print(rt.showArgs([rt.V.str("r3 "), this.idx(this.build(rt.V.int(19), rt.V.int(1)), rt.V.bool(false))]));
@@ -41,8 +46,19 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "build": return rt.wrapValue(this.build(args[0] as rt.Variant, args[1] as rt.Variant));
+      case "idx": return rt.wrapValue(this.idx(args[0] as rt.Variant, args[1] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "build": [2, 2], "idx": [2, 2], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "build": [2, 2], "idx": [2, 2], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

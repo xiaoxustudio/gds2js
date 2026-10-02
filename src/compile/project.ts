@@ -27,6 +27,18 @@ export interface ProjectOptions {
   outDir: string;
   runtimeImport: string;
   hostImport: string | null;
+  /**
+   * 静态打包（`export --pack scriptc`）用：`runtime/` 与 `host.ts` 的**源码**只铺一份，
+   * 放在这个绝对目录下，每个模块的 import 按自己那一层的相对深度算出来。
+   * 不给它就照 `runtimeImport` / `hostImport` 原样发（node 那两支的做法：每层各拷一份打平运行时）。
+   * 为什么静态不能每层一份：scriptc 会把每一层的 runtime 编成**独立的一张图**，
+   * 同一个脚本类就有两份 `ClassDesc` 身份 —— 那是静默错里最贵的一类。
+   */
+  runtimeRoot?: string;
+  /** `runtimeRoot` 里 runtime 那一份的目标文件名（不带扩展名，scriptc 那支是 `runtime/index`）。 */
+  runtimeFile?: string;
+  /** 同一棵树根上的宿主文件名；不给就跟 `runtimeImport` 一样走静态那条 import。 */
+  hostFile?: string;
   autoRun?: boolean;
   sourcemap?: boolean;
   runtimeMode?: "import" | "local" | "single";
@@ -368,9 +380,17 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       }
     });
 
+    const jsPath = jsPathFor(l, opts);
     const emitOpts = {
-      runtimeImport: opts.runtimeImport,
-      hostImport: opts.hostImport,
+      runtimeImport: opts.runtimeRoot
+        ? relFromJs(jsPath, join(opts.runtimeRoot, opts.runtimeFile ?? "runtime/index"))
+        : opts.runtimeImport,
+      hostImport:
+        opts.hostImport === null
+          ? null
+          : opts.runtimeRoot
+            ? relFromJs(jsPath, join(opts.runtimeRoot, opts.hostFile ?? "host"))
+            : opts.hostImport,
       autoRun: opts.autoRun ?? isEntry,
       className: l.jsName,
       baseClass: base?.spec ?? (isEntry && opts.hostImport ? { kind: "host" } : { kind: "none" }),
@@ -388,17 +408,17 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       standaloneInline: opts.standaloneInline,
       standaloneRequirePath:
         opts.runtimeMode === "local" && opts.standaloneFile
-          ? "./" + relative(dirname(jsPathFor(l, opts)), opts.standaloneFile).split(sep).join("/")
+          ? "./" + relative(dirname(jsPath), opts.standaloneFile).split(sep).join("/")
           : undefined,
       sourcemap: opts.sourcemap,
-      jsFile: basename(jsPathFor(l, opts)),
-      sourceFile: relative(dirname(jsPathFor(l, opts)), join(resRoot, l.resPath.slice(RES_PREFIX.length))).split(sep).join("/"),
+      jsFile: basename(jsPath),
+      sourceFile: relative(dirname(jsPath), join(resRoot, l.resPath.slice(RES_PREFIX.length))).split(sep).join("/"),
     };
     const { code, map } = opts.sourcemap ? emitModuleWithMap(l.module, emitOpts) : { code: emitModule(l.module, emitOpts), map: null };
 
     modules.push({
       resPath: l.resPath,
-      jsPath: jsPathFor(l, opts),
+      jsPath,
       className: l.jsName,
       code,
       map: map ?? undefined,
@@ -512,11 +532,13 @@ function jsPathFor(l: Loaded, opts: ProjectOptions): string {
 
 /** 从某个产物的 js 目录到目标产物 js 的相对 ESM 说明符（带 .mts）。 */
 function jsImportSpecifier(from: Loaded, target: Loaded, opts: ProjectOptions): string {
-  const fromJs = jsPathFor(from, opts);
-  const targetJs = jsPathFor(target, opts);
-  let rel = relative(dirname(fromJs), targetJs).split(sep).join("/");
-  if (!rel.startsWith(".")) rel = "./" + rel;
-  return rel;
+  return relFromJs(jsPathFor(from, opts), jsPathFor(target, opts));
+}
+
+/** 从某个产物的目录到**绝对**目标的相对 ESM 说明符（`./` / `../` 起头，斜杠分隔）。 */
+function relFromJs(fromJsPath: string, absTarget: string): string {
+  const rel = relative(dirname(fromJsPath), absTarget).split(sep).join("/");
+  return rel.startsWith(".") ? rel : "./" + rel;
 }
 
 function detectCycles(loaded: Map<string, Loaded>, resRoot: string): void {

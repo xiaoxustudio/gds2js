@@ -6,7 +6,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   m = rt.toVec3(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]));
 
-  bump(p): void {
+  bump(p: rt.Variant): void {
     p = rt.paramSlot(p, "Vector3", 1, "bump", this);
     {
       const _nv = rt.writeProp(p, "x", rt.V.int(7));
@@ -15,16 +15,17 @@ export class Main extends SceneTree {
     print(rt.showArgs([p]));
   }
   
-  make(): unknown {
+  make(): rt.Variant {
     let t = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
     return t;
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let v = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
     print(rt.showArgs([v, rt.V.str(" "), rt.vector3New([]), rt.V.str(" "), rt.vector3New([v])]));
-    print(rt.showArgs([rt.attribute(v, "x"), rt.V.str(" "), rt.attribute(v, "y"), rt.V.str(" "), rt.attribute(v, "z"), rt.V.str(" "), rt.index(v, rt.V.int(0)), rt.V.str(" "), rt.index(v, rt.V.int(2)), rt.V.str(" "), rt.index(v, rt.V.str("y"))]));
-    print(rt.showArgs([rt.attribute(rt.vector3New([rt.V.float(0.1), rt.V.int(0), rt.V.int(0)]), "x")]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(v, "x")), rt.V.str(" "), rt.wrapValue(rt.attribute(v, "y")), rt.V.str(" "), rt.wrapValue(rt.attribute(v, "z")), rt.V.str(" "), rt.wrapValue(rt.index(v, rt.V.int(0))), rt.V.str(" "), rt.wrapValue(rt.index(v, rt.V.int(2))), rt.V.str(" "), rt.wrapValue(rt.index(v, rt.V.str("y")))]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(rt.vector3New([rt.V.float(0.1), rt.V.int(0), rt.V.int(0)]), "x"))]));
     print(rt.showArgs([rt.ops.add(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.float(0.5), rt.V.int(0), rt.V.int(0)])), rt.V.str(" | "), rt.ops.sub(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(1), rt.V.int(1), rt.V.int(1)]))]));
     print(rt.showArgs([rt.ops.mul(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.float(2.5)), rt.V.str(" | "), rt.ops.mul(rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.float(0.5), rt.V.int(1), rt.V.int(2)])), rt.V.str(" | "), rt.ops.div(rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.V.int(2)), rt.V.str(" | "), rt.ops.div(rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]))]));
     print(rt.showArgs([rt.ops.neg(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]));
@@ -61,7 +62,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(v, rt.V.str("z"), rt.V.int(1));
       if (_nv !== null) v = _nv;
     }
-    print(rt.showArgs([v, rt.V.str(" "), rt.attribute(v, "y")]));
+    print(rt.showArgs([v, rt.V.str(" "), rt.wrapValue(rt.attribute(v, "y"))]));
     print(rt.showArgs([rt.ops.lt(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(4)])), rt.V.str(" "), rt.ops.lt(rt.vector3New([rt.V.int(1), rt.V.int(3), rt.V.int(0)]), rt.vector3New([rt.V.int(2), rt.V.int(0), rt.V.int(0)])), rt.V.str(" "), rt.ops.lt(rt.vector3New([rt.V.int(0), rt.V.int(1), rt.V.int(9)]), rt.vector3New([rt.V.int(0), rt.V.int(2), rt.V.int(0)])), rt.V.str(" "), rt.ops.lte(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), rt.V.str(" "), rt.ops.gte(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(4)]))]));
     print(rt.showArgs([rt.ops.eq(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.float(3.0000001)])), rt.V.str(" "), rt.ops.eq(rt.vector3New([rt.V.float((0.1 + 0.2)), rt.V.int(0), rt.V.int(0)]), rt.vector3New([rt.V.float(0.3), rt.V.int(0), rt.V.int(0)])), rt.V.str(" "), rt.ops.neq(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.nil()), rt.V.str(" "), rt.ops.eq(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.nil())]));
     print(rt.showArgs([rt.vector3Const("UP"), rt.V.str(" "), rt.vector3Const("DOWN"), rt.V.str(" "), rt.vector3Const("LEFT"), rt.V.str(" "), rt.vector3Const("RIGHT"), rt.V.str(" "), rt.vector3Const("FORWARD"), rt.V.str(" "), rt.vector3Const("BACK"), rt.V.str(" "), rt.vector3Const("ONE"), rt.V.str(" "), rt.vector3Const("ZERO"), rt.V.str(" "), rt.vector3Const("INF")]));
@@ -94,7 +95,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(ta, rt.V.int(0), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]));
       if (_nv !== null) ta = _nv;
     }
-    print(rt.showArgs([ta, rt.V.str(" "), rt.attribute(rt.index(ta, rt.V.int(0)), "z")]));
+    print(rt.showArgs([ta, rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(ta, rt.V.int(0))), "z"))]));
     let sv = rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(3), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(2), rt.V.int(0), rt.V.int(0)])]));
     rt.method(sv, "sort", []);
     print(rt.showArgs([sv]));
@@ -118,8 +119,19 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "bump": return rt.wrapValue(this.bump(args[0] as rt.Variant));
+      case "make": return rt.wrapValue(this.make());
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

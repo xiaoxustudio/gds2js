@@ -4,7 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let a = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]);
     let h = rt.method(rt.V.str("hello hello hello"), "to_utf8_buffer", []);
     for (let mode of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])))) {
@@ -23,13 +24,22 @@ export class Main extends SceneTree {
     }
     let bc = rt.method(big, "compress", [rt.V.int(2)]);
     let bd = rt.method(bc, "decompress", [rt.V.int(1000), rt.V.int(2)]);
-    print(rt.showArgs([rt.V.str("t5 "), rt.method(bc, "size", []), rt.V.str(" "), rt.method(bd, "size", []), rt.V.str(" "), rt.index(bd, rt.V.int(0)), rt.V.str(" "), rt.index(bd, rt.V.int(500)), rt.V.str(" "), rt.index(bd, rt.V.int(999))]));
+    print(rt.showArgs([rt.V.str("t5 "), rt.method(bc, "size", []), rt.V.str(" "), rt.method(bd, "size", []), rt.V.str(" "), rt.wrapValue(rt.index(bd, rt.V.int(0))), rt.V.str(" "), rt.wrapValue(rt.index(bd, rt.V.int(500))), rt.V.str(" "), rt.wrapValue(rt.index(bd, rt.V.int(999)))]));
     print(rt.showArgs([rt.V.str("t6 "), rt.ops.eq(rt.method(rt.method(a, "compress", [rt.V.int(1)]), "hex_encode", []), rt.method(rt.method(a, "compress", [rt.V.int(1)]), "hex_encode", [])), rt.V.str(" "), rt.ops.eq(rt.method(a, "compress", [rt.V.int(1)]), rt.method(a, "compress", [rt.V.int(1)]))]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

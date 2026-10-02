@@ -10,7 +10,8 @@ export class Main extends SceneTree {
   fd_vec2i = rt.toVec2i(rt.vector2New([rt.V.float(1.7), rt.V.float(2.9)]));
   fd_name = rt.toStringNameSlot(rt.V.str("nm"));
 
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     print(rt.showArgs([rt.V.str("r "), this.fd_int, rt.V.str(" "), this.fd_float, rt.V.str(" "), this.fd_color, rt.V.str(" "), this.fd_vec2i, rt.V.str(" "), rt.typeOf(this.fd_name), rt.V.str(" "), this.fd_name]));
     let c = rt.toColor(rt.V.int(123456789));
     print(rt.showArgs([rt.V.str("c "), c, rt.V.str(" "), rt.typeOf(c)]));
@@ -24,19 +25,28 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(a, rt.V.int(0), rt.V.int(4294967295));
       if (_nv !== null) a = _nv;
     }
-    print(rt.showArgs([rt.V.str("a "), a, rt.V.str(" "), rt.typeOf(rt.index(a, rt.V.int(1)))]));
+    print(rt.showArgs([rt.V.str("a "), a, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(a, rt.V.int(1))))]));
     let d = rt.stampDict(rt.dictOf([[rt.V.str("k"), rt.V.int(5)]]), "StringName", "Color", true);
-    print(rt.showArgs([rt.V.str("d "), d, rt.V.str(" "), rt.typeOf(rt.index(rt.method(d, "keys", []), rt.V.int(0))), rt.V.str(" "), rt.typeOf(rt.index(d, rt.V.str("k")))]));
+    print(rt.showArgs([rt.V.str("d "), d, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(rt.method(d, "keys", []), rt.V.int(0)))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(d, rt.V.str("k"))))]));
     let s = rt.strOf(rt.V.stringName("abc"));
     print(rt.showArgs([rt.V.str("s "), s, rt.V.str(" "), rt.typeOf(s)]));
     let arr = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.stringName("abc")])), "String", true);
-    print(rt.showArgs([rt.V.str("arr "), arr, rt.V.str(" "), rt.typeOf(rt.index(arr, rt.V.int(0)))]));
+    print(rt.showArgs([rt.V.str("arr "), arr, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(arr, rt.V.int(0))))]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerFieldTypes(Main, {"fd_int": "int", "fd_float": "float"});
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerFieldTypes(__gd_d_Main, {"fd_int": "int", "fd_float": "float"});
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

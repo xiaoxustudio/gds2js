@@ -4,13 +4,14 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let c = rt.packCtor("color", [rt.V.array(rt.GArray.of([rt.colorNew([rt.V.float(0.9), rt.V.float(0.1), rt.V.float(0.1), rt.V.int(1)]), rt.colorNew([rt.V.float(0.1), rt.V.float(0.9), rt.V.float(0.1), rt.V.float(0.5)]), rt.colorNew([rt.V.float(0.5), rt.V.float(0.5), rt.V.float(0.5), rt.V.int(1)]), rt.colorNew([rt.V.float(0.1), rt.V.float(0.1), rt.V.float(0.9), rt.V.int(1)]), rt.colorNew([rt.V.float(0.5), rt.V.float(0.1), rt.V.float(0.9), rt.V.float(0.25)])]))]);
     rt.method(c, "sort", []);
     print(rt.showArgs([rt.V.str("t1 "), c]));
     rt.method(c, "reverse", []);
     rt.method(c, "sort", []);
-    print(rt.showArgs([rt.V.str("t2 "), rt.method(c, "size", []), rt.V.str(" "), rt.index(c, rt.V.int(0)), rt.V.str(" "), rt.index(c, rt.V.int(4))]));
+    print(rt.showArgs([rt.V.str("t2 "), rt.method(c, "size", []), rt.V.str(" "), rt.wrapValue(rt.index(c, rt.V.int(0))), rt.V.str(" "), rt.wrapValue(rt.index(c, rt.V.int(4)))]));
     let v = rt.packCtor("vector2", [rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int(3), rt.V.int(4)])]))]);
     print(rt.showArgs([rt.V.str("t3 "), rt.method(v, "has", [rt.vector2New([rt.V.int(1), rt.V.int(2)])]), rt.V.str(" "), rt.method(v, "has", [rt.vector2New([rt.V.int(1), rt.V.int(3)])]), rt.V.str(" "), rt.method(v, "count", [rt.vector2New([rt.V.int(3), rt.V.int(4)])]), rt.V.str(" "), rt.method(v, "find", [rt.vector2New([rt.V.int(3), rt.V.int(4)])]), rt.V.str(" "), rt.method(v, "find", [rt.vector2New([rt.V.int(9), rt.V.int(9)])])]));
     let f = rt.packCtor("vector2", [rt.V.array(rt.GArray.of([rt.vector2New([rt.V.float(1.0000001), rt.V.int(2)]), rt.vector2New([rt.V.int(1), rt.V.int(2)])]))]);
@@ -21,9 +22,9 @@ export class Main extends SceneTree {
     let w = rt.packCtor("vector3", [rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])]))]);
     print(rt.showArgs([rt.V.str("t7 "), rt.method(w, "has", [rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])]), rt.V.str(" "), rt.method(w, "find", [rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])]), rt.V.str(" "), rt.method(w, "count", [rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])])]));
     let b = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(8), rt.V.int(9)]))]);
-    print(rt.showArgs([rt.V.str("t8 "), rt.method(b, "get", [rt.V.int(1)]), rt.V.str(" "), rt.index(b, rt.V.int((-1))), rt.V.str(" "), rt.method(b, "size", [])]));
+    print(rt.showArgs([rt.V.str("t8 "), rt.method(b, "get", [rt.V.int(1)]), rt.V.str(" "), rt.wrapValue(rt.index(b, rt.V.int((-1)))), rt.V.str(" "), rt.method(b, "size", [])]));
     let s = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b"), rt.V.str("c")]))]);
-    print(rt.showArgs([rt.V.str("t9 "), rt.method(s, "get", [rt.V.int(2)]), rt.V.str("|"), rt.index(s, rt.V.int((-1))), rt.V.str("|"), rt.index(s, rt.V.int(0))]));
+    print(rt.showArgs([rt.V.str("t9 "), rt.method(s, "get", [rt.V.int(2)]), rt.V.str("|"), rt.wrapValue(rt.index(s, rt.V.int((-1)))), rt.V.str("|"), rt.wrapValue(rt.index(s, rt.V.int(0)))]));
     let q = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]);
     rt.method(q, "set", [rt.V.int(0), rt.V.int(300)]);
     print(rt.showArgs([rt.V.str("t10 "), q]));
@@ -39,8 +40,17 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

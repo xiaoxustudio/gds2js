@@ -7,7 +7,7 @@ export class Main extends SceneTree {
   c = rt.toColor(rt.colorNew([rt.V.float(0.1), rt.V.float(0.2), rt.V.float(0.3), rt.V.float(0.4)]));
   q = rt.toColor(rt.color(0, 0, 0, 1));
 
-  poke(p): void {
+  poke(p: rt.Variant): void {
     p = rt.paramSlot(p, "Color", 1, "poke", this);
     {
       const _nv = rt.writeProp(p, "r", rt.V.float(9));
@@ -16,7 +16,8 @@ export class Main extends SceneTree {
     print(rt.showArgs([p]));
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     print(rt.showArgs([rt.typeOf(this.c), rt.V.str(" "), rt.colorNew([]), rt.V.str(" "), rt.colorNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.str(" "), rt.colorNew([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.V.str(" "), rt.colorNew([this.c]), rt.V.str(" "), this.q]));
     print(rt.showArgs([rt.colorNew([rt.V.str("red")]), rt.V.str(" "), rt.colorNew([rt.V.str("#00ff00")]), rt.V.str(" "), rt.colorNew([rt.V.str("FF8000")]), rt.V.str(" "), rt.colorNew([rt.V.str("f00")]), rt.V.str(" "), rt.colorNew([rt.V.str("REBECCA_PURPLE")]), rt.V.str(" "), rt.colorNew([rt.V.str("medium_purple")])]));
     print(rt.showArgs([rt.colorStatic("html", [rt.V.str("80ff0000")]), rt.V.str(" "), rt.colorStatic("html", [rt.V.str("f00")]), rt.V.str(" "), rt.colorStatic("from_string", [rt.V.str("#00ff00"), rt.colorNew([rt.V.int(9), rt.V.int(9), rt.V.int(9), rt.V.int(9)])]), rt.V.str(" "), rt.colorStatic("from_string", [rt.V.str("alice_blue"), rt.colorNew([rt.V.int(9), rt.V.int(9), rt.V.int(9), rt.V.int(9)])])]));
@@ -24,10 +25,10 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.colorStatic("RED"), rt.V.str(" "), rt.colorStatic("ALICE_BLUE"), rt.V.str(" "), rt.colorStatic("TRANSPARENT"), rt.V.str(" "), rt.colorStatic("MEDIUM_PURPLE"), rt.V.str(" "), rt.colorStatic("REBECCA_PURPLE")]));
     print(rt.showArgs([rt.colorNew([rt.V.float((1 / 3)), rt.V.float(0.1), rt.V.float(0.123456789), rt.V.float(1)]), rt.V.str(" "), rt.colorNew([rt.V.float((1 / 3)), rt.V.float(0.00001), rt.V.float((-0.00001)), rt.V.float((-0))])]));
     print(rt.showArgs([rt.colorNew([rt.V.float(100000000000000000000), rt.V.float(1e-8), rt.V.float((-1e-8)), rt.V.int(1)]), rt.V.str(" "), rt.colorNew([rt.V.float((0 / 0)), rt.V.float((1 / 0)), rt.V.float(((-1) / 0)), rt.V.int(1)]), rt.V.str(" "), rt.colorNew([rt.V.float(0.9999999), rt.V.float(0.00004), rt.V.float(0.00006), rt.V.float(0.5)])]));
-    print(rt.showArgs([rt.attribute(this.c, "r"), rt.V.str(" "), rt.attribute(this.c, "g"), rt.V.str(" "), rt.index(this.c, rt.V.int(0)), rt.V.str(" "), rt.index(this.c, rt.V.str("g")), rt.V.str(" "), rt.attribute(this.c, "a"), rt.V.str(" "), rt.index(this.c, rt.V.int(3))]));
-    print(rt.showArgs([rt.attribute(this.c, "h"), rt.V.str(" "), rt.attribute(this.c, "s"), rt.V.str(" "), rt.attribute(this.c, "v"), rt.V.str(" "), rt.index(this.c, rt.V.str("h")), rt.V.str(" "), rt.attribute(this.c, "r8"), rt.V.str(" "), rt.attribute(this.c, "a8")]));
-    print(rt.showArgs([rt.attribute(rt.colorNew([rt.V.float(0.5), rt.V.float(0.5), rt.V.float(0.5)]), "h"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.float(0.5), rt.V.float(0.5), rt.V.float(0.5)]), "s"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.int(0), rt.V.int(0), rt.V.int(0)]), "h"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.float((-0.5)), rt.V.float(0.2), rt.V.float(0.9)]), "h"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.float(0.2), rt.V.float(0.1), rt.V.float(0.3)]), "h")]));
-    print(rt.showArgs([rt.attribute(rt.colorNew([rt.V.float(0.6), rt.V.float(0.4), rt.V.float(0.2), rt.V.int(1)]), "h"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.float(0.6), rt.V.float(0.4), rt.V.float(0.2), rt.V.int(1)]), "s"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.float(0.6), rt.V.float(0.4), rt.V.float(0.2), rt.V.int(1)]), "v"), rt.V.str(" "), rt.attribute(rt.colorNew([rt.V.float((0 / 0)), rt.V.float((1 / 0)), rt.V.float(((-1) / 0)), rt.V.float(0.4)]), "r8")]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(this.c, "r")), rt.V.str(" "), rt.wrapValue(rt.attribute(this.c, "g")), rt.V.str(" "), rt.wrapValue(rt.index(this.c, rt.V.int(0))), rt.V.str(" "), rt.wrapValue(rt.index(this.c, rt.V.str("g"))), rt.V.str(" "), rt.wrapValue(rt.attribute(this.c, "a")), rt.V.str(" "), rt.wrapValue(rt.index(this.c, rt.V.int(3)))]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(this.c, "h")), rt.V.str(" "), rt.wrapValue(rt.attribute(this.c, "s")), rt.V.str(" "), rt.wrapValue(rt.attribute(this.c, "v")), rt.V.str(" "), rt.wrapValue(rt.index(this.c, rt.V.str("h"))), rt.V.str(" "), rt.wrapValue(rt.attribute(this.c, "r8")), rt.V.str(" "), rt.wrapValue(rt.attribute(this.c, "a8"))]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float(0.5), rt.V.float(0.5), rt.V.float(0.5)]), "h")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float(0.5), rt.V.float(0.5), rt.V.float(0.5)]), "s")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.int(0), rt.V.int(0), rt.V.int(0)]), "h")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float((-0.5)), rt.V.float(0.2), rt.V.float(0.9)]), "h")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float(0.2), rt.V.float(0.1), rt.V.float(0.3)]), "h"))]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float(0.6), rt.V.float(0.4), rt.V.float(0.2), rt.V.int(1)]), "h")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float(0.6), rt.V.float(0.4), rt.V.float(0.2), rt.V.int(1)]), "s")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float(0.6), rt.V.float(0.4), rt.V.float(0.2), rt.V.int(1)]), "v")), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.colorNew([rt.V.float((0 / 0)), rt.V.float((1 / 0)), rt.V.float(((-1) / 0)), rt.V.float(0.4)]), "r8"))]));
     let d = rt.colorNew([this.c]);
     {
       const _nv = rt.writeProp(d, "b", rt.V.int(1));
@@ -70,7 +71,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeProp(k, "r8", rt.V.int(128));
       if (_nv !== null) k = _nv;
     }
-    print(rt.showArgs([k, rt.V.str(" "), rt.attribute(k, "r"), rt.V.str(" "), rt.attribute(k, "h"), rt.V.str(" "), rt.attribute(k, "a8")]));
+    print(rt.showArgs([k, rt.V.str(" "), rt.wrapValue(rt.attribute(k, "r")), rt.V.str(" "), rt.wrapValue(rt.attribute(k, "h")), rt.V.str(" "), rt.wrapValue(rt.attribute(k, "a8"))]));
     let m = rt.colorNew([rt.V.float(0.1), rt.V.float(0.2), rt.V.float(0.3), rt.V.float(0.4)]);
     {
       const _nv = rt.writeIdx(m, rt.V.str("a"), rt.V.float(0.5));
@@ -87,10 +88,10 @@ export class Main extends SceneTree {
       const _nv = rt.writeProp(key, "b", rt.V.int(1));
       if (_nv !== null) key = _nv;
     }
-    print(rt.showArgs([dd, rt.V.str(" "), rt.method(dd, "has", [key]), rt.V.str(" "), rt.method(dd, "has", [rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])]), rt.V.str(" "), rt.index(dd, rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]))]));
+    print(rt.showArgs([dd, rt.V.str(" "), rt.method(dd, "has", [key]), rt.V.str(" "), rt.method(dd, "has", [rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])]), rt.V.str(" "), rt.wrapValue(rt.index(dd, rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])))]));
     let ta = rt.stampArray(rt.V.array(rt.GArray.of([rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])])), "Color", true);
     rt.method(ta, "resize", [rt.V.int(3)]);
-    print(rt.showArgs([ta, rt.V.str(" "), rt.ops.eq(rt.index(ta, rt.V.int(0)), rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])), rt.V.str(" "), rt.method(ta, "has", [rt.colorNew([rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(1)])])]));
+    print(rt.showArgs([ta, rt.V.str(" "), rt.ops.eq(rt.wrapValue(rt.index(ta, rt.V.int(0))), rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])), rt.V.str(" "), rt.method(ta, "has", [rt.colorNew([rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(1)])])]));
     {
     const _w0 = rt.V.int(0);
       const _nv = rt.writeProp(rt.index(ta, _w0), "g", rt.V.float(0.5));
@@ -100,8 +101,18 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "poke": return rt.wrapValue(this.poke(args[0] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "poke": [1, 1], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "poke": [1, 1], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

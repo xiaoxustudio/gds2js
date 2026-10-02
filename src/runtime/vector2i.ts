@@ -1,9 +1,8 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GVector2, VEC2I_MARK, vecFailKey, vector2 } from "./vector2";
+import { GVector2, registerVec2iParts, vecFailKey, vector2 } from "./vector2";
 
 export class GVector2i {
-  readonly [VEC2I_MARK] = true;
   x: number;
   y: number;
   constructor(x: number | bigint, y: number | bigint) {
@@ -11,6 +10,8 @@ export class GVector2i {
     this.y = wrap32(y);
   }
 }
+
+registerVec2iParts((o: object): [number, number] | null => (o instanceof GVector2i ? [o.x, o.y] : null));
 
 const U32 = 4294967296n;
 const S32 = 2147483648n;

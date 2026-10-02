@@ -1,3 +1,10 @@
+/**
+ * 「exe 自带的家目录」这一格的 seam（#14）。名字里不带 SEA，因为有两条出货路都住在它后面：
+ * node 那支是 `--pack node` 的 SEA 资产（下面的实现），原生那支是 scriptc exe 里嵌的资源，
+ * 由 `tools/cli-native.mjs` 生成同名文件。两支对外的契约都是同一个：
+ * **解出一个只读的家目录，能给出目录本身和目录里某个文件的落盘路径**。
+ * 契约里刻意是「落盘路径」—— `--runtime-mode local` 的旁挂与 `--pack scriptc` 的铺源码都要的是文件，不是字符串。
+ */
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -18,10 +25,10 @@ function seaApi(): SeaModule | null {
   return sea;
 }
 
-/** 解出来的家目录（进程内只算一次）。null = 不在 SEA 里。 */
+/** 解出来的家目录（进程内只算一次）。null = 这个构建没有自带家目录（npm 安装态就是 null）。 */
 let home: string | null | undefined;
 
-export function seaHome(): string | null {
+export function selfHome(): string | null {
   if (home !== undefined) return home;
   const api = seaApi();
   if (!api || !api.isSea()) return (home = null);
@@ -35,20 +42,11 @@ export function seaHome(): string | null {
   return home;
 }
 
-export function seaFile(rel: string): string | null {
-  const h = seaHome();
+export function selfFile(rel: string): string | null {
+  const h = selfHome();
   if (!h) return null;
   const p = join(h, rel);
   return existsSync(p) ? p : null;
-}
-
-/**
- * exe 内嵌的那份 perry。目录形状**照 npm 包铺**（`perry/bin/perry.exe` + `perry/bin/LLVM-C.dll`
- * + `perry/lib/*.zst`），这样 Windows 的 DLL 搜索（先看 exe 同目录）和 `src/perry.ts` 里
- * 「从 bin 往上两级找 lib」那套逻辑在解出来的家目录里原样成立，不用写第二套。
- */
-export function seaPerryExe(): string | null {
-  return seaFile("perry/bin/perry.exe");
 }
 
 function ensureHome(api: SeaModule): string {

@@ -1,9 +1,10 @@
+import "../src/host-node"; // node 宿主的 zlib 注册（runtime 只留槽，见 `src/runtime/packed.ts`）
 import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
 import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "../src/runtime/builtins";
 import { fast } from "../src/runtime/fast";
 import { parseGdDouble } from "../src/lower/double";
 import { md5Hex } from "../src/runtime/md5";
-import { callable, callableOf, nullCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta } from "../src/runtime/object";
+import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "../src/runtime/object";
 import { Signal } from "../src/runtime/signal";
 import { paramSlot } from "../src/runtime/slots";
 import { attribute, callableCtor, index, method, writeIdx, writeProp } from "../src/runtime/methods";
@@ -78,6 +79,15 @@ import {
   vector3iNew,
 } from "../src/runtime/vector3i";
 import { toVec2i } from "../src/runtime/vector2i";
+
+/**
+ * 产物里每个脚本类都带一张发射器生成的按名派发表（S203），运行时只认那张表。
+ * harness 手写的类没有发射器，就自己给一张同形状的实现 —— 表在 node 里动态取成员没问题。
+ */
+function gdDispatchByName(self: object, name: string, args: Variant[]): Variant | null {
+  const f = (self as Record<string, unknown>)[name];
+  return typeof f === "function" ? wrapValue((f as (...a: Variant[]) => unknown).apply(self, args)) : null;
+}
 
 let pass = 0;
 const fails: string[] = [];
@@ -166,37 +176,37 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("056", "写越界被拒后数组长度不变", g.size(), 3);
 }
 {
-  eq("057", "裸 a[-1] 读末格", fast.rawArrGet([1, 2, 3], -1), 3);
-  shouldThrow("057", "裸 a[3] 读越界", () => fast.rawArrGet([1, 2, 3], 3));
+  eq("057", "裸 a[-1] 读末格", fast.rawArrGetNum([1, 2, 3], -1), 3);
+  shouldThrow("057", "裸 a[3] 读越界", () => fast.rawArrGetNum([1, 2, 3], 3));
   const r = [1, 2, 3];
-  fast.rawArrSet(r, -1, 9);
+  fast.rawArrSetNum(r, -1, 9);
   eq("057", "裸 a[-1]=9", JSON.stringify(r), "[1,2,9]");
   const r2 = [1, 2, 3];
-  shouldThrow("057", "裸 a[5]=9 写越界", () => fast.rawArrSet(r2, 5, 9));
+  shouldThrow("057", "裸 a[5]=9 写越界", () => fast.rawArrSetNum(r2, 5, 9));
   eq("057", "裸写越界后没被撑长", r2.length, 3);
-  eq("057", "裸 g[-1][-1] 两层负索引", fast.rawArrGet2([[1, 2], [3, 4]], -1, -1), 4);
+  eq("057", "裸 g[-1][-1] 两层负索引", fast.rawArrGetNum2([[1, 2], [3, 4]], -1, -1), 4);
   const gg: number[][] = [[1, 2], [3, 4]];
-  fast.rawArrSet2(gg, -1, 0, 7);
+  fast.rawArrSetNum2(gg, -1, 0, 7);
   eq("057", "裸 g[-1][0]=7", JSON.stringify(gg), "[[1,2],[7,4]]");
-  shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSet2([[1, 2]], 0, 5, 0));
+  shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSetNum2([[1, 2]], 0, 5, 0));
 }
 {
   // step 75：读/写 helper 泛型化之后，字符串元素必须与数值那族共用同一套越界口径
-  eq("147", "裸字符串数组 a[-1] 读末格", fast.rawArrGet(["a", "b"], -1), "b");
-  shouldThrow("147", "裸字符串数组 a[2] 读越界", () => fast.rawArrGet(["a", "b"], 2));
+  eq("147", "裸字符串数组 a[-1] 读末格", fast.rawArrGetStr(["a", "b"], -1), "b");
+  shouldThrow("147", "裸字符串数组 a[2] 读越界", () => fast.rawArrGetStr(["a", "b"], 2));
   const st = ["a", "b"];
-  fast.rawArrSet(st, -1, "z");
+  fast.rawArrSetStr(st, -1, "z");
   eq("147", "裸字符串数组 a[-1]=z", JSON.stringify(st), '["a","z"]');
   const st2 = ["a", "b"];
-  shouldThrow("147", "裸字符串数组 a[5]=x 写越界", () => fast.rawArrSet(st2, 5, "x"));
+  shouldThrow("147", "裸字符串数组 a[5]=x 写越界", () => fast.rawArrSetStr(st2, 5, "x"));
   eq("147", "裸字符串数组写越界后没被撑长", st2.length, 2);
-  eq("147", "裸字符串网格 g[-1][-1] 两层负索引", fast.rawArrGet2([["a", "b"], ["c", "d"]], -1, -1), "d");
+  eq("147", "裸字符串网格 g[-1][-1] 两层负索引", fast.rawArrGetStr2([["a", "b"], ["c", "d"]], -1, -1), "d");
 }
 {
   // step 79：定目标量形参的入口槽位（S176 的 7×13 对拍表里挑一格「能转的」与「该抛的」各钉一遍）
   class SlotA {}
-  registerClass("SlotA", SlotA);
-  registerNativeBase(SlotA, "RefCounted");
+  const dSlotA = registerClass("SlotA", SlotA, () => new SlotA(), (o) => o instanceof SlotA);
+  registerNativeBase(dSlotA, "RefCounted");
   const self = new SlotA();
   const errOf = (v: Variant, to: string, i: number, fn: string): string => {
     try {
@@ -261,17 +271,17 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
       switch (s.op) {
         case "insert":
           box.push(show(method(g, "insert", [V.int(s.i!), V.int(s.v!)])));
-          raw.push(String(fast.rawArrInsert(a, s.i!, s.v!)));
+          raw.push(String(fast.rawArrInsertNum(a, s.i!, s.v!)));
           break;
         case "remove_at":
           method(g, "remove_at", [V.int(s.i!)]);
-          fast.rawArrRemoveAt(a, s.i!);
+          fast.rawArrRemoveAtNum(a, s.i!);
           box.push("·");
           raw.push("·");
           break;
         case "pop_at":
           method(g, "pop_at", [V.int(s.i!)]);
-          fast.rawArrRemoveAt(a, s.i!);
+          fast.rawArrRemoveAtNum(a, s.i!);
           box.push("·");
           raw.push("·");
           break;
@@ -289,7 +299,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
           break;
         case "push_front":
           method(g, "push_front", [V.int(s.v!)]);
-          fast.rawArrPushFront(a, s.v!);
+          fast.rawArrPushFrontNum(a, s.v!);
           box.push("·");
           raw.push("·");
           break;
@@ -313,7 +323,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
           break;
         case "clear":
           method(g, "clear", []);
-          fast.rawArrClear(a);
+          fast.rawArrClearNum(a);
           box.push("·");
           raw.push("·");
           break;
@@ -358,8 +368,8 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   const gd = new GDict();
   gd.set(V.str("k"), V.int(5));
   const dg = V.dict(gd);
-  eq("step56", "裸 get(k,def) 与装箱同值（命中）", String(fast.rawDictGetOr(dm, "k", 0)), show(method(dg, "get", [V.str("k"), V.int(0)])));
-  eq("step56", "裸 get(k,def) 与装箱同值（缺键给默认）", String(fast.rawDictGetOr(dm, "j", 7)), show(method(dg, "get", [V.str("j"), V.int(7)])));
+  eq("step56", "裸 get(k,def) 与装箱同值（命中）", String(fast.rawDictGetOrNum(dm, "k", 0)), show(method(dg, "get", [V.str("k"), V.int(0)])));
+  eq("step56", "裸 get(k,def) 与装箱同值（缺键给默认）", String(fast.rawDictGetOrNum(dm, "j", 7)), show(method(dg, "get", [V.str("j"), V.int(7)])));
 }
 
 {
@@ -1005,8 +1015,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
   const call = (v: Variant, name: string, args: Variant[] = []) => method(v, name, args);
   const A = arrOf([I(1), I(2), I(3), I(4)]);
-  const one = (f: (x: Variant) => boolean) => callable((x: Variant) => V.bool(f(x)));
-  const two = (f: (a: Variant, b: Variant) => Variant) => callable((a: Variant, b: Variant) => f(a, b));
+  const one = (f: (x: Variant) => boolean) => callable((a: Variant[]) => V.bool(f(a[0] as Variant)), 1);
+  const two = (f: (a: Variant, b: Variant) => Variant) => callable((a: Variant[]) => f(a[0] as Variant, a[1] as Variant), 2);
   const isGt2 = (x: Variant) => (x.v as number) > 2;
 
   eq("082", "filter 给新数组", show(call(A, "filter", [one(isGt2)])), "[3, 4]");
@@ -1040,7 +1050,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("082", "reduce 单元素省略 acc", show(call(arrOf([I(5)]), "reduce", [two((a, x) => V.int((a.v as number) + (x.v as number)))])), "5");
   eq("082", "reduce 空数组带 acc 给 acc", show(call(arrOf([]), "reduce", [two((a) => a), I(5)])), "5");
   eq("082", "reduce 空数组省略 acc 给 null", show(call(arrOf([]), "reduce", [two((a) => a)])), "<null>");
-  const wrongArity = callable(() => V.bool(true));
+  const wrongArity = callable(() => V.bool(true), 0);
   eq("082", "map 遇到调用失败就不收这一格", show(call(A, "map", [wrongArity])), "[]");
   eq("082", "filter 遇到调用失败全丢", show(call(A, "filter", [wrongArity])), "[]");
   eq("082", "any 遇到调用失败给 false", show(call(A, "any", [wrongArity])), "false");
@@ -1118,8 +1128,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   };
   eq("083", "duplicate 保留定型", keepTyped(call(typed("int", [I(1)]), "duplicate")), "[1]");
   eq("083", "slice 保留定型", keepTyped(call(typed("int", [I(1)]), "slice", [I(0), I(1)])), "[1]");
-  eq("083", "filter 保留定型", keepTyped(call(typed("int", [I(1)]), "filter", [callable((x: Variant) => V.bool(true))])), "[1]");
-  eq("083", "map 不保留定型", keepTyped(call(typed("int", [I(1)]), "map", [callable((x: Variant) => x)])), '[1, "s"]');
+  eq("083", "filter 保留定型", keepTyped(call(typed("int", [I(1)]), "filter", [callable((a: Variant[]) => V.bool(true), 1)])), "[1]");
+  eq("083", "map 不保留定型", keepTyped(call(typed("int", [I(1)]), "map", [callable((a: Variant[]) => a[0] as Variant, 1)])), '[1, "s"]');
   eq("083", "+ 不保留定型", keepTyped(ops.add(typed("int", [I(1)]), V.array(GArray.of([I(2)])))), '[1, 2, "s"]');
   const aa = typed("int", [I(0)]);
   call(aa, "append_array", [V.array(GArray.of([I(1), S("s")]))]);
@@ -1983,7 +1993,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  class Inner {
+  class Inner extends GdScriptObject {
     m: Variant = I(1);
     t: Variant = I(2);
     s: Variant = S("a");
@@ -1991,9 +2001,12 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     getm(): Variant {
       return this.m;
     }
+    override __gdDispatch(name: string, args: Variant[]): Variant | null {
+      return gdDispatchByName(this, name, args);
+    }
   }
-  registerClass("Inner", Inner as unknown as new (...a: unknown[]) => object);
-  registerFieldTypes(Inner as unknown as never, { t: "int", s: "String", v: "Vector2" });
+  const dInner = registerClass("Inner", Inner, () => new Inner(), (o) => o instanceof Inner);
+  registerFieldTypes(dInner, { t: "int", s: "String", v: "Vector2" });
   const obj = V.object(new Inner());
   const field = (k: string): string => show((obj.v as Record<string, Variant>)[k] as Variant);
 
@@ -2014,8 +2027,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 
 {
   const sig = new Signal();
-  eq("step61", "typeof(Callable) → 25（装箱的方法引用）", `${typeOf(callableOf(() => V.int(1))).v}`, "25");
-  eq("step61", "typeof(Callable) → 25（callable 工厂）", `${typeOf(callable(() => V.int(1))).v}`, "25");
+  eq("step61", "typeof(Callable) → 25（装箱的方法引用）", `${typeOf(callableOf(() => V.int(1), 0)).v}`, "25");
+  eq("step61", "typeof(Callable) → 25（callable 工厂）", `${typeOf(callable(() => V.int(1), 0)).v}`, "25");
   eq("step61", "typeof(信号) → 26（**裸对象**，产物里的实际形状）", `${typeOf(sig).v}`, "26");
   eq("step61", "typeof(信号) → 26（装箱的）", `${typeOf(V.object(sig)).v}`, "26");
   eq("step61", "普通对象仍是 24（没被新分支误伤）", `${typeOf(V.object({})).v}`, "24");
@@ -2031,8 +2044,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return V.int(42);
     }
   }
-  registerClass("Holder", Holder);
-  registerStaticMethods(Holder, ["make", "twice"]);
+  const dHolder = registerClass("Holder", Holder, () => new Holder(), (o) => o instanceof Holder);
+  registerStaticMethods(dHolder, ["make", "twice"], { make: (): Variant => Holder.make(), twice: (a: Variant[]): Variant => Holder.twice(a[0] as Variant) });
   const h = new Holder();
   eq("step62", "A.f() 从类对象调得到", `${method(Holder, "make", []).v}`, "made");
   eq("step62", "p.f() 从实例也调得到，同一个结果", `${method(V.object(h), "make", []).v}`, "made");
@@ -2047,8 +2060,11 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     static x = V.int(1);
     static plain = V.int(2);
   }
-  registerClass("Box", Box);
-  registerStaticVars(Box, { x: "int", plain: "" });
+  const dBox = registerClass("Box", Box, () => new Box(), (o) => o instanceof Box);
+  registerStaticVars(dBox, { x: "int", plain: "" }, {
+    x: { get: (): Variant => Box.x, set: (v: Variant): void => { Box.x = v; } },
+    plain: { get: (): Variant => Box.plain, set: (v: Variant): void => { Box.plain = v; } },
+  });
   const b = new Box();
   eq("step63", "类对象读得到那一格", `${(attribute(Box, "x") as Variant).v}`, "1");
   eq("step63", "实例读的是**同一格**", `${(attribute(V.object(b), "x") as Variant).v}`, "1");
@@ -2062,16 +2078,19 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  class Holder2 {
+  class Holder2 extends GdScriptObject {
     im(v: Variant): Variant {
       return v;
     }
     static sm(v: Variant): Variant {
       return v;
     }
+    override __gdDispatch(name: string, args: Variant[]): Variant | null {
+      return gdDispatchByName(this, name, args);
+    }
   }
-  registerClass("Holder2", Holder2);
-  registerStaticMethods(Holder2, ["sm"]);
+  const dHolder2 = registerClass("Holder2", Holder2, () => new Holder2(), (o) => o instanceof Holder2);
+  registerStaticMethods(dHolder2, ["sm"], { sm: (a: Variant[]): Variant => Holder2.sm(a[0] as Variant) });
   const h2 = new Holder2();
   const bound = attribute(V.object(h2), "im");
   eq("step65", "实例方法读出来是 Callable（typeof → 25，不再是 24）", `${typeOf(bound).v}`, "25");
@@ -2092,7 +2111,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  class Obj {
+  class Obj extends GdScriptObject {
     im(): Variant {
       return V.int(1);
     }
@@ -2100,9 +2119,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return V.nil();
     }
   }
-  registerClass("Obj", Obj);
-  registerStaticMethods(Obj, ["sm"]);
-  registerNativeBase(Obj, "RefCounted");
+  const dObj = registerClass("Obj", Obj, () => new Obj(), (o) => o instanceof Obj);
+  registerStaticMethods(dObj, ["sm"], { sm: (): Variant => Obj.sm() });
+  registerNativeBase(dObj, "RefCounted");
   const o = new Obj();
   eq("step66", "get_class 给的是**原生基类**而不是脚本名（f39 t3）", `${method(V.object(o), "get_class", []).v}`, "RefCounted");
   eq("step66", "has_method：自己的 / 静态的 / Object 自带的都真，全局函数与空串假", [
@@ -2759,7 +2778,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 {
   // step 95：`str(...)` 多实参与 `Callable.bind(...)`（S190，探针 `tmp/f91` / `tmp/f93`）
   const cat = (...args: unknown[]): Variant => V.str(args.map((x) => show(x as Variant)).join("|"));
-  const base = callableOf(cat, "cat", V.object({}));
+  const base = V.object(new CallableBox((a: Variant[]) => cat(...a), "cat", V.object({}), [], cat.length));
   const one = method(base, "bind", [V.str("x")]);
   const two = method(base, "bind", [V.str("x"), V.str("y")]);
   const chain = method(one, "bind", [V.str("n")]);
@@ -2831,7 +2850,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return e instanceof Error ? e.message : String(e);
     }
   };
-  class Holder {
+  class Holder extends GdScriptObject {
     add3(a: unknown, b: unknown, c: unknown): Variant {
       return V.str(`${String(a)}-${String(b)}-${String(c)}`);
     }
@@ -2844,11 +2863,15 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     static sm(x: unknown): Variant {
       return V.str(String(x));
     }
+    override __gdDispatch(name: string, args: Variant[]): Variant | null {
+      return gdDispatchByName(this, name, args);
+    }
   }
   // 静态方法也进这张表 —— step 98 起发射器把静态方法一起登记（`get_argument_count()` 那一格要用，
   // 而 `p.f()` 调静态方法本来就合法，S160）
-  registerMethodArities(Holder as never, { add3: [3, 3], hi: [1, 1], twice: [1, 2], sm: [1, 1] });
-  registerStaticMethods(Holder as never, ["sm"]);
+  const dHolder98 = registerClass("Holder", Holder, () => new Holder(), (o) => o instanceof Holder);
+  registerMethodArities(dHolder98, { add3: [3, 3], hi: [1, 1], twice: [1, 2], sm: [1, 1] });
+  registerStaticMethods(dHolder98, ["sm"], { sm: (a: Variant[]): Variant => Holder.sm(a[0] as Variant) });
   const inst = new Holder();
   const other = new Holder();
   const c0 = attribute(inst, "add3") as Variant;
@@ -2857,7 +2880,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("193", "get_argument_count 是「**还要几个实参**」：3 形参绑 0/1/2/3 个给 3/2/1/0（a1 阶梯）", [0, 1, 2, 3].map((n) => method(boundWith(n), "get_argument_count", []).v).join(" "), "3 2 1 0");
   eq("193", "bind() 的空列表等于没绑（f96 c09 那格给的是声明形参数）", method(boundWith(0), "get_argument_count", []).v, 3);
   eq("193", "静态方法 Callable 同一式：1 形参给 1（a3 那一形）", `${method(attribute(Holder, "sm") as Variant, "get_argument_count", []).v}`, "1");
-  eq("193", "lambda（没有名字的 Callable）按声明形参数（a2 / c08）", method(callableOf(((x: unknown, y: unknown, z: unknown) => V.nil()) as never), "get_argument_count", []).v, 3);
+  eq("193", "lambda（没有名字的 Callable）按声明形参数（a2 / c08）", method(callableOf(() => V.nil(), 3), "get_argument_count", []).v, 3);
   shouldThrow("193", "带默认值形参的方法问 get_argument_count → 响亮拒（那一格没量，不拿 fn.length 猜）", () => method(attribute(inst, "twice") as Variant, "get_argument_count", []));
 
   eq("194", "空 Callable：is_null 真 / is_valid 假 / get_method 空串 / get_argument_count 0（c1 c2 c4）", `${method(nullCallable(), "is_null", []).v} ${method(nullCallable(), "is_valid", []).v} "${method(nullCallable(), "get_method", []).v}" ${method(nullCallable(), "get_argument_count", []).v}`, 'true false "" 0');
@@ -2872,16 +2895,26 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("192", "方法 Callable 的等式比 (接收者, 方法名)：两次读同一个小盒不同（d1 / d7 / f96 c06）", `${valueEq(c0, attribute(inst, "add3") as Variant)} ${valueEq(c0, attribute(other, "add3") as Variant)}`, "true false");
   eq("192", "绑定的实参**不进**等式：bind(1) 与 bind(2) 相等（d3）", valueEq(boundWith(1), boundWith(2)), true);
   eq("192", "静态方法与空 Callable 各自成格（d4 / c5）", `${valueEq(attribute(Holder, "sm") as Variant, attribute(Holder, "sm") as Variant)} ${valueEq(nullCallable(), nullCallable())}`, "true true");
-  eq("192", "lambda 按引用比：两个同体 lambda 不等（d2）", valueEq(callableOf(((x: unknown) => V.nil()) as never), callableOf(((x: unknown) => V.nil()) as never)), false);
+  eq("192", "lambda 按引用比：两个同体 lambda 不等（d2）", valueEq(callableOf(() => V.nil(), 1), callableOf(() => V.nil(), 1)), false);
   eq("192", "Array.has 走同一条等式（d6 实测真）", (V.array(GArray.of([c0, attribute(inst, "hi") as Variant])).v as GArray).has(attribute(inst, "add3") as Variant), true);
   eq("192", "Callable 与 int 比不是 false，而是运行期那一句（d5）", errText(() => valueEq(c0, V.int(1))), "Invalid operands 'Callable' and 'int' in operator '=='.");
 
   // 一个「把每次投递记下来」的回调 Callable：名字与接收者固定，所以两条连接按实测等式算同一条
-  const mkSink = (seen: string[]): Variant =>
-    callableOf(((v: unknown) => {
-      seen.push(String((v as Variant).v));
+  class Sink extends GdScriptObject {
+    seen: string[];
+    constructor(seen: string[]) {
+      super();
+      this.seen = seen;
+    }
+    on_fired(v: Variant): Variant {
+      this.seen.push(String(v.v));
       return V.nil();
-    }) as never, "on_fired", V.object({}));
+    }
+    override __gdDispatch(name: string, args: Variant[]): Variant | null {
+      return gdDispatchByName(this, name, args);
+    }
+  }
+  const mkSink = (seen: string[]): Variant => methodCallable(V.object(new Sink(seen)), "on_fired");
   {
     const seen: string[] = [];
     const sig = V.object(new Signal("fired"));
@@ -2958,7 +2991,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return e instanceof Error ? e.message : String(e);
     }
   };
-  class Base {
+  class Base extends GdScriptObject {
     three(a: Variant, b: Variant, c: Variant): Variant {
       return V.str(`${String(a.v)}${String(b.v)}${String(c.v)}`);
     }
@@ -2968,10 +3001,14 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     static stwo(a: Variant, b: Variant): Variant {
       return V.str(`${String(a.v)}${String(b.v)}`);
     }
+    override __gdDispatch(name: string, args: Variant[]): Variant | null {
+      return gdDispatchByName(this, name, args);
+    }
   }
-  registerMethodArities(Base as never, { three: [3, 3], twice: [1, 2], stwo: [2, 2] });
-  registerStaticMethods(Base as never, ["stwo"]);
-  registerNativeBase(Base as never, "RefCounted");
+  const dBase = registerClass("Base", Base, () => new Base(), (o) => o instanceof Base);
+  registerMethodArities(dBase, { three: [3, 3], twice: [1, 2], stwo: [2, 2] });
+  registerStaticMethods(dBase, ["stwo"], { stwo: (a: Variant[]): Variant => Base.stwo(a[0] as Variant, a[1] as Variant) });
+  registerNativeBase(dBase, "RefCounted");
   const inst = new Base();
   const three = attribute(inst, "three") as Variant;
   eq(
@@ -2995,7 +3032,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq(
     "213",
     "lambda 的标签是字面量 `<anonymous lambda>(lambda)`（e1–e3）",
-    errText(() => method(callableOf(((x: unknown, y: unknown) => V.nil()) as never), "call", [V.int(1)])),
+    errText(() => method(callableOf(() => V.nil(), 2), "call", [V.int(1)])),
     "Invalid call to function '<anonymous lambda>(lambda) (Callable)'. Expected 2 argument(s).",
   );
   eq("207", "绑定的实参**抵扣**数量：bind(1,2) 之后 call(3) 合法，且结果仍是「调用实参在前」（b3）", show(method(method(three, "bind", [V.int(1), V.int(2)]), "call", [V.int(3)])), "312");  eq("207", "callv 数量不合式：不报错、不调用，给 null（c1 / c2）", `${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))} ${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2), V.int(3), V.int(4)]))]))}`, "<null> <null>");
@@ -3005,8 +3042,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
         return V.str(`${String(a.v)}${String(b.v)}`);
       }
     }
-    registerMethodArities(Outer as never, { topfn: [2, 2] });
-    registerNativeBase(Outer as never, "SceneTree");
+    const dOuter = registerClass("Outer", Outer, () => new Outer(), (o) => o instanceof Outer);
+    registerMethodArities(dOuter, { topfn: [2, 2] });
+    registerNativeBase(dOuter, "SceneTree");
     const c = attribute(new Outer(), "topfn") as Variant;
     shouldThrow("215", "外层脚本自己的方法那一形标签要**文件名**（a5 / f1）→ 响亮拒，不发半对文本", () =>
       method(c, "call", [V.int(1)]),

@@ -4,7 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let p = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(3), rt.V.int(5), rt.V.int(7)]))]);
     print(rt.showArgs([rt.V.str("t1 "), rt.method(p, "bsearch", [rt.V.int(5)]), rt.V.str(" "), rt.method(p, "bsearch", [rt.V.int(6)]), rt.V.str(" "), rt.method(p, "bsearch", [rt.V.int(0)]), rt.V.str(" "), rt.method(p, "bsearch", [rt.V.int(9)])]));
     print(rt.showArgs([rt.V.str("t2 "), rt.method(p, "bsearch", [rt.V.int(5), rt.V.bool(false)]), rt.V.str(" "), rt.method(p, "bsearch", [rt.V.int(6), rt.V.bool(false)]), rt.V.str(" "), rt.method(p, "bsearch", [rt.V.int(5), rt.V.bool(true)]), rt.V.str(" "), rt.method(p, "bsearch", [rt.V.int(9), rt.V.bool(false)])]));
@@ -38,12 +39,21 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("t23 "), rt.method(rt.packCtor("vector3", [rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)])]))]), "to_byte_array", [])]));
     print(rt.showArgs([rt.V.str("t24 "), rt.method(rt.packCtor("color", [rt.V.array(rt.GArray.of([rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])]))]), "to_byte_array", [])]));
     print(rt.showArgs([rt.V.str("t25 "), rt.typeOf(rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(0), rt.V.int(0), rt.V.int(128), rt.V.int(63)]))]), "to_float32_array", [])), rt.V.str(" "), rt.typeOf(rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0)]))]), "to_int64_array", [])), rt.V.str(" "), rt.typeOf(rt.method(rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("ab")]))]), "to_byte_array", []))]));
-    print(rt.showArgs([rt.V.str("t26 "), rt.index(rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0)]))]), "to_int64_array", []), rt.V.int(0)), rt.V.str(" "), rt.typeOf(rt.index(rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0)]))]), "to_int64_array", []), rt.V.int(0)))]));
+    print(rt.showArgs([rt.V.str("t26 "), rt.wrapValue(rt.index(rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0)]))]), "to_int64_array", []), rt.V.int(0))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(0)]))]), "to_int64_array", []), rt.V.int(0))))]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

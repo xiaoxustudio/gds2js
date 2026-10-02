@@ -4,21 +4,38 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let o = rt.V.object(new Thing());
     print(rt.showArgs([rt.V.str("r "), rt.method(o, "get_class", []), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("RefCounted")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Object")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Thing")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Node")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Nope")])]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-class Thing {
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+class Thing extends rt.GdScriptObject {
   a = rt.V.int(7);
 
-}
-rt.registerClass("Thing", Thing);
-rt.registerNativeBase(Thing, "RefCounted");
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      default: return super.__gdDispatch(name, args);
+    }
+  }
 
-await new Main().run();
+}
+const __gd_d_Thing = rt.defineClass(Thing, () => new Thing(), (o) => o instanceof Thing);
+rt.nameClass(__gd_d_Thing, "Thing");
+rt.registerNativeBase(__gd_d_Thing, "RefCounted");
+
+const __gd_entry = new Main();
+await __gd_entry.run();

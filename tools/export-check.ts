@@ -141,39 +141,16 @@ function main(): void {
     else record("node/版本门禁", "ok", `v${selfV} 上响亮拒绝 + 给出重跑命令`);
   }
 
-  console.log("C/D perry（未设 GC 环境变量 = 走 CLI 的默认 PERRY_RS4GC=0；显式设过 = 原样传，两格都该出货并逐字节对）");
-  let perryShipped = false;
-  {
-    const exe = join(TMP, "perry_default.exe");
-    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], { PERRY_RS4GC: "" });
-    const v = verdictOf(r.out);
-    if (r.code === 0 && existsSync(exe)) {
-      if (!/PERRY_RS4GC=0/.test(r.out) || !/默认/.test(r.out)) record("perry/默认GC", "FAIL", "给了默认 GC 却没把「这是本 CLI 的默认」讲出来");
-      else checkExe("perry/默认GC", exe, MULTI_WANT);
-    } else record("perry/默认GC", v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code} 且无分类标记`);
-    perryShipped = existsSync(exe);
-  }
-  {
-    const exe = join(TMP, "perry_explicit0.exe");
-    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], { PERRY_RS4GC: "0" });
-    const v = verdictOf(r.out);
-    if (r.code === 0 && existsSync(exe)) {
-      if (!/你显式设的/.test(r.out)) record("perry/显式RS4GC=0", "FAIL", "显式值被改口成默认了 —— 用户设的 PERRY_RS4GC 必须原样传");
-      else checkExe("perry/显式RS4GC=0", exe, MULTI_WANT);
-    } else record("perry/显式RS4GC=0", v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code} 且无分类标记`);
-    perryShipped = perryShipped || existsSync(exe);
-  }
-
   console.log("E 嵌套目录工程（入口在子目录，两支都真打真跑）");
   {
     const nested = nestedProject();
-    const cells: Array<{ name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean; needPerry: boolean }> = [
-      { name: "node/nested", args: seaCapable ? ["--pack", "node", "--node", seaCapable] : ["--pack", "node"], env: {}, needSea: true, needPerry: false },
-      { name: "perry/nested", args: ["--pack", "perry"], env: { PERRY_RS4GC: "0" }, needSea: false, needPerry: true },
+    const cells: Array<{ name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean }> = [
+      { name: "node/nested", args: seaCapable ? ["--pack", "node", "--node", seaCapable] : ["--pack", "node"], env: {}, needSea: true },
+      { name: "scriptc/nested", args: ["--pack", "scriptc"], env: {}, needSea: false },
     ];
     for (const c of cells) {
-      if ((c.needSea && !seaCapable) || (c.needPerry && !perryShipped)) {
-        record(c.name, "refused", c.needSea ? `本机没有 Node >= ${SEA_MIN_NODE}` : "perry 那一支上面没出货，这一格跟着跑没意义");
+      if (c.needSea && !seaCapable) {
+        record(c.name, "refused", `本机没有 Node >= ${SEA_MIN_NODE}`);
         continue;
       }
       const exe = join(TMP, `${c.name.replace("/", "-")}.exe`);
@@ -189,26 +166,16 @@ function main(): void {
     }
   }
 
-  console.log("F perry 的 -o 路径含非 ASCII（实测链接失败却退 0，必须报得出来）");
-  if (!perryShipped) record("perry/非ASCII输出路径", "refused", "perry 上面没出货，这一格跳过");
-  else {
-    const exe = join(TMP, "我的程序.exe");
-    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "perry"], { PERRY_RS4GC: "0" });
-    if (r.code === 0 && existsSync(exe)) record("perry/非ASCII输出路径", "ok", "这一版 perry 能吃非 ASCII 路径了（记下，别再当限制写死）");
-    else if (!/非 ASCII/.test(r.out)) record("perry/非ASCII输出路径", verdictOf(r.out)?.v ?? "FAIL", "失败了却没把「-o 含非 ASCII」说清楚（perry 自己退 0，用户无从下手）");
-    else record("perry/非ASCII输出路径", "refused", "响亮拒绝并给出 ASCII 的出路");
-  }
-
   console.log("G 散装单文件（入口不在任何工程里）：两支都该照 build/run 的边界打得出 exe");
   {
     const loose = looseScript();
-    const cells: Array<{ label: string; name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean; needPerry: boolean }> = [
-      { label: "node/散装单文件", name: "node-loose", args: seaCapable ? ["--pack", "node", "--node", seaCapable] : ["--pack", "node"], env: {}, needSea: true, needPerry: false },
-      { label: "perry/散装单文件", name: "perry-loose", args: ["--pack", "perry"], env: { PERRY_RS4GC: "0" }, needSea: false, needPerry: true },
+    const cells: Array<{ label: string; name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean }> = [
+      { label: "node/散装单文件", name: "node-loose", args: seaCapable ? ["--pack", "node", "--node", seaCapable] : ["--pack", "node"], env: {}, needSea: true },
+      { label: "scriptc/散装单文件", name: "scriptc-loose", args: ["--pack", "scriptc"], env: {}, needSea: false },
     ];
     for (const c of cells) {
-      if ((c.needSea && !seaCapable) || (c.needPerry && !perryShipped)) {
-        record(c.label, "refused", c.needSea ? `本机没有 Node >= ${SEA_MIN_NODE}` : "perry 那一支上面没出货，这一格跟着跑没意义");
+      if (c.needSea && !seaCapable) {
+        record(c.label, "refused", `本机没有 Node >= ${SEA_MIN_NODE}`);
         continue;
       }
       const exe = join(TMP, `${c.name}.exe`);
@@ -220,11 +187,15 @@ function main(): void {
     }
   }
 
-  console.log("H --pack scriptc 必须被拒（这一支已按实测撤掉）");
-  const rs = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", join(TMP, "s.exe"), "--pack", "scriptc"], {});
-  if (rs.code === 0 || !/--pack 只能是 node \| perry/.test(rs.out)) {
-    record("--pack scriptc", "FAIL", `没有拒掉这个已移除的取值：${rs.out.slice(0, 120)}`);
-  } else record("--pack scriptc", "ok", "被取值闸门拒了");
+  console.log("H --pack scriptc：项目树也出货（examples/multi 多模块，整棵树只共享一份 runtime 源码）");
+  {
+    const exe = join(TMP, "s.exe");
+    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "scriptc"], {});
+    const v = verdictOf(r.out);
+    if (r.code !== 0) {
+      record("--pack scriptc", v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code}\n${r.out.split(/\r?\n/).slice(-6).join("\n")}`);
+    } else checkExe("--pack scriptc", exe, MULTI_WANT);
+  }
 
   rmSync(TMP, { recursive: true, force: true });
   rmSync(WORK, { recursive: true, force: true });

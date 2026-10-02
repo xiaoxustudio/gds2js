@@ -4,23 +4,24 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  add2(a, b): number {
+  add2(a: number, b: number): number {
     return rt.fast.iAddC(a, b);
   }
   
-  scale(x): number {
+  scale(x: number): number {
     return (x * 2);
   }
   
-  shout(s): string {
+  shout(s: string): string {
     return (s + "!");
   }
   
-  idn(x): unknown {
+  idn(x: rt.Variant): rt.Variant {
     return x;
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let total = 0;
     let i = 0;
     while ((i < 3)) {
@@ -40,8 +41,21 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "add2": return rt.wrapValue(this.add2(rt.fast.unboxNum(args[0] as rt.Variant), rt.fast.unboxNum(args[1] as rt.Variant)));
+      case "scale": return rt.wrapValue(this.scale(rt.fast.unboxNum(args[0] as rt.Variant)));
+      case "shout": return rt.wrapValue(this.shout(rt.fast.unboxStr(args[0] as rt.Variant)));
+      case "idn": return rt.wrapValue(this.idn(args[0] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "add2": [2, 2], "scale": [1, 1], "shout": [1, 1], "idn": [1, 1], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "add2": [2, 2], "scale": [1, 1], "shout": [1, 1], "idn": [1, 1], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

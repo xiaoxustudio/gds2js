@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type Variant } from "./tags";
-import { INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
+import { INT64_MIN, TWO_63, hexLower, padZero2, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
 import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
@@ -95,8 +95,17 @@ export function packTypeOfCode(kind: PackKind): number {
   return PACK_TYPEOF[kind];
 }
 
-export function asBytes(v: Variant): GBytes | null {
-  return v.t === Tag.OBJECT && v.v instanceof GBytes ? (v.v as GBytes) : null;
+// 「是不是 pack」只交布尔：`GBytes | null` 这种**局部格子**在静态编译目标上要把类实例表示成
+// checked-dynamic 属性，而 `GBytes.items` 是含 bigint 与类实例的联合数组、没有静态表示
+// （实测 scriptc：`class fields cannot be represented as checked-dynamic properties`，
+// 而把 `instanceof` 写在条件里、进去之后 `v.v as GBytes` 取窄化值是可编可跑的 —— S209）。
+export function isBytes(v: Variant): boolean {
+  return v.t === Tag.OBJECT && v.v instanceof GBytes;
+}
+
+/** 只在 `isBytes(v)` 为真之后调用：交收窄的实例。 */
+export function packBytes(v: Variant): GBytes {
+  return v.v as GBytes;
 }
 
 const INT32_MIN = -2147483648;
@@ -220,10 +229,26 @@ function elemVariant(kind: PackKind, e: PackElem): Variant {
   return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e as number)) : V.int(e as number | bigint);
 }
 
+/** 码点切分：`Array.from(string)` 在静态编译目标上没有 lowering（实测 scriptc），自己按代理对走。 */
+function toCodepoints(s: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const hi = s.charCodeAt(i);
+    const lo = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+    if (hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff) {
+      out.push(s.slice(i, i + 2));
+      i++;
+      continue;
+    }
+    out.push(s.charAt(i));
+  }
+  return out;
+}
+
 /** 码点比较（step 19 的量在字符串比较上通用的那条），不是 JS 默认的 UTF-16 码元比较。 */
 function cmpStrings(a: string, b: string): number {
-  const x = Array.from(a);
-  const y = Array.from(b);
+  const x = toCodepoints(a);
+  const y = toCodepoints(b);
   const n = Math.min(x.length, y.length);
   for (let i = 0; i < n; i++) {
     const ca = x[i] as string;
@@ -234,36 +259,142 @@ function cmpStrings(a: string, b: string): number {
 }
 
 /**
- * 向量 pack 的 sort 比较：实测 `[(3,3), (1,1), (2,2)]` → `[(1,1), (2,2), (3,3)]`，
+ * 分量字典序：实测 `[(3,3), (1,1), (2,2)]` → `[(1,1), (2,2), (3,3)]`，
  * Vector3 同样按 x 再按 y（再按 z）—— 与值类型那条字典序一致（S173）。
+ * 「按名字取分量」（`Record<string, number>` 的 checked cast + 计算键）在静态编译目标上不可编，
+ * 所以调用方把分量摆齐了给进来。
  */
-function cmpVec(a: GVector2 | GVector3, b: GVector2 | GVector3, keys: readonly string[]): number {
-  for (const k of keys) {
-    const av = (a as unknown as Record<string, number>)[k] as number;
-    const bv = (b as unknown as Record<string, number>)[k] as number;
+function cmpNums(xs: number[], ys: number[]): number {
+  const n = xs.length < ys.length ? xs.length : ys.length;
+  for (let i = 0; i < n; i++) {
+    const av = xs[i] as number;
+    const bv = ys[i] as number;
     if (av !== bv) return av < bv ? -1 : 1;
   }
   return 0;
 }
 
+/** int64 家族里 number 与 bigint 混着存，比较前先各自归到 bigint；归不了的（向量/颜色）交给上层。 */
+function asBig(x: PackElem): bigint | null {
+  if (typeof x === "bigint") return x;
+  if (typeof x !== "number") return null;
+  const n: number = x;
+  return BigInt(n);
+}
+
+/** int64 那一格归成 bigint（`BigInt(union)` 在静态目标上没有 lowering，先按 `asBig` 收窄）。 */
+function bigElem(x: PackElem): bigint {
+  const b = asBig(x);
+  if (b !== null) return b;
+  throw new UnsupportedError("packed-int64", `int64 pack 里出现了 ${typeof x} 元素`);
+}
+
+/** int64 的两个 int64 比大小。 */
+function bigCmp(x: bigint, y: bigint): number {
+  // 静态目标上 bigint 的一切比较与转换都没有 lowering（实测 scriptc SC1043：`<`、`>`、`Number(x - y)`
+  // 三形一起拒），而 `DataView` 的读写都有 —— 拆成「带符号的高 32 位 + 无符号的低 32 位」按 number 比。
+  const buf = new ArrayBuffer(8);
+  const dv = new DataView(buf);
+  dv.setBigInt64(0, x);
+  const xHi = dv.getInt32(0);
+  const xLo = dv.getUint32(4);
+  dv.setBigInt64(0, y);
+  const yHi = dv.getInt32(0);
+  if (yHi !== xHi) return xHi < yHi ? -1 : 1;
+  const yLo = dv.getUint32(4);
+  return xLo === yLo ? 0 : xLo < yLo ? -1 : 1;
+}
+
+/**
+ * UTF-8 解码（`get_string_from_utf8()`）：`new TextDecoder(标签, 选项)` 在静态编译目标上没有 lowering
+ * （实测 scriptc），所以照 WHATWG 的 utf-8 状态机自己走 —— 非法序列给**一个** U+FFFD 并从下一个字节
+ * 重扫、截断序列只补一个 U+FFFD 就收尾（node `fatal: false` 同口径，对拍见 `tmp/utf8-check.mjs`）。
+ */
+function utf8Decode(items: number[]): string {
+  const out: string[] = [];
+  const len = items.length;
+  let i = 0;
+  while (i < len) {
+    const b0 = items[i] as number;
+    if (b0 <= 0x7f) {
+      out.push(String.fromCharCode(b0));
+      i++;
+      continue;
+    }
+    const need = b0 >= 0xc2 && b0 <= 0xdf ? 2 : b0 >= 0xe0 && b0 <= 0xef ? 3 : b0 >= 0xf0 && b0 <= 0xf4 ? 4 : 0;
+    if (need === 0) {
+      out.push("\uFFFD");
+      i++;
+      continue;
+    }
+    // 第二个字节的有效区间就是「最短形式 + 不落在代理区 + 不超 U+10FFFF」那三条界（0xe0 / 0xed / 0xf0 / 0xf4），
+    // 再往后的后续字节回到 80..BF。违界的字节**不消费**，下一轮重新当引导字节看。
+    let lo = 0x80;
+    let hi = 0xbf;
+    if (b0 === 0xe0) lo = 0xa0;
+    else if (b0 === 0xed) hi = 0x9f;
+    else if (b0 === 0xf0) lo = 0x90;
+    else if (b0 === 0xf4) hi = 0x8f;
+    let code = need === 2 ? b0 & 0x1f : need === 3 ? b0 & 0x0f : b0 & 0x07;
+    let k = 1;
+    for (; k < need; k++) {
+      const at = i + k;
+      if (at >= len) {
+        out.push("\uFFFD");
+        return out.join("");
+      }
+      const bk = items[at] as number;
+      if (bk < lo || bk > hi) {
+        out.push("\uFFFD");
+        i += k;
+        break;
+      }
+      code = (code << 6) | (bk & 0x3f);
+      lo = 0x80;
+      hi = 0xbf;
+    }
+    if (k === need) {
+      if (code <= 0xffff) out.push(String.fromCharCode(code));
+      else {
+        const c = code - 0x10000;
+        out.push(String.fromCharCode(0xd800 + (c >> 10), 0xdc00 + (c & 0x3ff)));
+      }
+      i += need;
+    }
+  }
+  return out.join("");
+}
+
 /** 数值的相等（int64 走 bigint，其余 ===）。 */
 function scalarSame(a: PackElem, b: PackElem): boolean {
   if (typeof a === "string" || typeof b === "string") return a === b;
-  if (typeof a === "bigint" || typeof b === "bigint") return BigInt(a as number | bigint) === BigInt(b as number | bigint);
+  if (typeof a === "bigint" || typeof b === "bigint") {
+    const ba = asBig(a);
+    const bb = asBig(b);
+    if (ba !== null && bb !== null) return ba === bb;
+  }
   return a === b;
 }
 
 /** 一格的比较：与 `sort` / `bsearch` 共用这一条口径（数值、String 码点、向量与颜色按分量字典序）。 */
 function cmpElem(kind: PackKind, a: PackElem, b: PackElem): number {
-  if (kind === "color") return cmpVec(a as unknown as GVector2, b as unknown as GVector2, ["r", "g", "b", "a"]);
-  if (kind === "vector2") return cmpVec(a as GVector2, b as GVector2, ["x", "y"]);
-  if (kind === "vector3") return cmpVec(a as GVector3, b as GVector3, ["x", "y", "z"]);
-  if (kind === "string") return cmpStrings(a as string, b as string);
-  if (kind === "int64") {
-    const x = BigInt(a as number | bigint);
-    const y = BigInt(b as number | bigint);
-    return x < y ? -1 : x > y ? 1 : 0;
+  if (kind === "color") {
+    const x = a as GColor;
+    const y = b as GColor;
+    return cmpNums([x.r, x.g, x.b, x.a], [y.r, y.g, y.b, y.a]);
   }
+  if (kind === "vector2") {
+    const x = a as GVector2;
+    const y = b as GVector2;
+    return cmpNums([x.x, x.y], [y.x, y.y]);
+  }
+  if (kind === "vector3") {
+    const x = a as GVector3;
+    const y = b as GVector3;
+    return cmpNums([x.x, x.y, x.z], [y.x, y.y, y.z]);
+  }
+  if (kind === "string") return cmpStrings(a as string, b as string);
+  if (kind === "int64") return bigCmp(bigElem(a), bigElem(b));
   const x = a as number;
   const y = b as number;
   return x < y ? -1 : x > y ? 1 : 0;
@@ -312,11 +443,8 @@ export function packCtor(kind: PackKind, args: Variant[]): Variant {
   const out = new GBytes([], kind);
   if (src.t === Tag.ARRAY) {
     for (const item of (src.v as GArray).raw()) out.raw().push(toElem(kind, item));
-  } else {
-    const sb = asBytes(src);
-    if (sb === null) {
-      throw new UnsupportedError("packed-ctor", `${PACK_TYPE_NAME[kind]}(${tagName(src.t)}) 这个初值形状没实测过`);
-    }
+  } else if (isBytes(src)) {
+    const sb = packBytes(src);
     if (sb.kind !== kind) {
       throw new UnsupportedError("packed-ctor-kind", `${PACK_TYPE_NAME[kind]}(${packTypeName(sb.kind)}) 这种跨 pack 的拷贝没实测过`);
     }
@@ -390,46 +518,28 @@ function arity(name: string, args: Variant[], n: number): void {
  * 响亮拒（猜错的代价是**产物字节**错，正是这一路最贵的那类）。越界模式（实测的 4 / 9 / -1）给**空 pack**。
  */
 /**
- * 压缩这一族要 node 的 zlib。**不能静态 `import "node:zlib"`** —— `single` 那支产物是把 runtime
- * 整个内联进一个 ESM 的自包含文件，静态 import 要么留下顶层 import（打包门的「零顶层 import」当场红），
- * 要么被改写成 ESM 里的 `require("node:zlib")` 而 `ReferenceError`（两条都在 pkg-modes-check 里抓到过）。
- * 所以走 `process.getBuiltinModule`：`process` 是全局、不产生任何 import，SEA 与内联产物 alike 都能用；
- * 取不到（老 node / 非 node 宿主）就把这三格退回响亮拒 —— 宁拒不用近似。
+ * 压缩这一族要 node 的 zlib，但 runtime **自己不能去找它**：`globalThis.process` 那种取法
+ * 是一串「把 unknown checked cast 成函数表」的形状，静态编译目标上不可编（实测 scriptc）。
+ * 所以 runtime 只留三个槽，由**宿主**注册（node 侧在 `src/host.ts`，它不在静态产物的图里）。
+ * 没注册（静态产物、非 node 宿主、老 node）就是 `null` → 那三格照旧响亮拒，宁拒不用近似。
  */
-let zlibMod: Record<string, ((b: Uint8Array) => Uint8Array) | undefined> | null | undefined;
-
-function nodeZlib(): Record<string, ((b: Uint8Array) => Uint8Array) | undefined> | null {
-  if (zlibMod === undefined) {
-    const proc = (globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }).process;
-    const get = proc?.getBuiltinModule;
-    zlibMod = typeof get === "function" ? (get.call(proc, "node:zlib") as Record<string, ((b: Uint8Array) => Uint8Array) | undefined>) : null;
-  }
-  return zlibMod;
-}
-
 type Codec = { pack: (b: Uint8Array) => Uint8Array; unpack: (b: Uint8Array) => Uint8Array };
 
+let zip1: Codec | null = null;
+let zip2: Codec | null = null;
+let zip3: Codec | null = null;
+
+/** 宿主把某个模式的编解码器挂进来（`mode` 只认实测过的 1 / 2 / 3）。 */
+export function registerZipCodec(mode: number, codec: Codec): void {
+  if (mode === 1) zip1 = codec;
+  else if (mode === 2) zip2 = codec;
+  else if (mode === 3) zip3 = codec;
+}
+
 function codecFor(mode: number): Codec | "empty" | null {
-  const z = nodeZlib();
-  if (z === null) return null; // 连 zlib 都拿不到：三种模式一起响
-  if (mode === 1) {
-    const pack = z["deflateSync"];
-    const unpack = z["inflateSync"];
-    if (pack === undefined || unpack === undefined) return null;
-    return { pack, unpack };
-  }
-  if (mode === 3) {
-    const pack = z["gzipSync"];
-    const unpack = z["gunzipSync"];
-    if (pack === undefined || unpack === undefined) return null;
-    return { pack, unpack };
-  }
-  if (mode === 2) {
-    const pack = z["zstdCompressSync"];
-    const unpack = z["zstdDecompressSync"];
-    if (pack === undefined || unpack === undefined) return null; // 这版 node 没带 zstd：响，不悄悄降级
-    return { pack, unpack };
-  }
+  if (mode === 1) return zip1;
+  if (mode === 3) return zip3;
+  if (mode === 2) return zip2;
   if (mode === 0) return null;
   return "empty";
 }
@@ -478,16 +588,20 @@ function packToBytes(kind: PackKind, items: PackElem[]): number[] {
   const out: number[] = [];
   const one = (width: number, fill: (dv: DataView) => void): void => {
     const buf = new ArrayBuffer(width);
-    fill(new DataView(buf));
-    out.push(...new Uint8Array(buf));
+    const dv = new DataView(buf);
+    fill(dv);
+    // 把这份字节铺进 out：`out.push(...new Uint8Array(buf))` 那种展开在静态目标上没有 lowering
+    for (let i = 0; i < width; i++) out.push(dv.getUint8(i));
   };
   for (const e of items) {
     if (kind === "string") {
-      out.push(...new TextEncoder().encode(e as string), 0);
+      const enc = new TextEncoder().encode(e as string);
+      for (let i = 0; i < enc.length; i++) out.push(enc[i] as number);
+      out.push(0);
     } else if (kind === "int32") {
       one(4, (dv) => dv.setInt32(0, e as number, true));
     } else if (kind === "int64") {
-      one(8, (dv) => dv.setBigInt64(0, BigInt(e as number | bigint), true));
+      one(8, (dv) => dv.setBigInt64(0, bigElem(e), true));
     } else if (kind === "float32") {
       one(4, (dv) => dv.setFloat32(0, e as number, true));
     } else if (kind === "float64") {
@@ -533,10 +647,11 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     }
     case "append_array": {
       arity("append_array", args, 1);
-      const src = asBytes(args[0] as Variant);
-      if (src === null) {
-        throw new UnsupportedError("append-array-element", `append_array() 只实测过 pack 实参（收到 ${tagName((args[0] as Variant).t)}）`);
+      const arg = args[0] as Variant;
+      if (!isBytes(arg)) {
+        throw new UnsupportedError("append-array-element", `append_array() 只实测过 pack 实参（收到 ${tagName(arg.t)}）`);
       }
+      const src = packBytes(arg);
       if (src.kind !== kind) {
         throw new UnsupportedError("append-array-kind", `append_array() 跨 pack 形状（${packTypeName(src.kind)} → ${PACK_TYPE_NAME[kind]}）没实测过`);
       }
@@ -606,11 +721,14 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       // `before` 默认真 = lower_bound（第一格 `>=` 目标），假 = upper_bound（第一格 `>` 目标）。
       // 走的是「折半 + `len -= half + 1`」那套二进制查找，所以在**未排序**的 pack 上也是确定结果 ——
       // f60 的 12 个数组 × 17 个目标、f61 / f62 的补格全部按这条对上，照抄而不是「JS 手写个二分」。
-      const flag = args[1] as Variant;
-      if (args.length === 2 && flag.t !== Tag.BOOL) {
-        throw new UnsupportedError("bsearch-before", `bsearch() 的第二个参数只实测过 bool（收到 ${tagName(flag.t)}）`);
+      // 可选的第二参：**不**先 `args[1] as Variant` 再判长度 —— 那一格缺位时是 undefined，
+      // 断言进非空类型在静态目标上运行期就拒（实测 scriptc：`undefined is not representable in
+      // the target union`），node 侧只是没人去解引用所以看不出来。取之前先看清有没有。
+      const second = args.length === 2 ? (args[1] as Variant) : null;
+      if (second !== null && second.t !== Tag.BOOL) {
+        throw new UnsupportedError("bsearch-before", `bsearch() 的第二个参数只实测过 bool（收到 ${tagName(second.t)}）`);
       }
-      const before = args.length === 2 ? (flag.v as boolean) : true;
+      const before = second === null ? true : (second.v as boolean);
       const want = toElem(kind, args[0] as Variant);
       let first = 0;
       let len = items.length;
@@ -631,7 +749,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       items.reverse();
       return V.nil();
     case "duplicate":
-      return V.object(new GBytes([...items], kind));
+      return V.object(new GBytes(copyElems(items), kind));
     case "slice": {
       if (args.length < 1 || args.length > 2) {
         throw new GodotRuntimeError("arity", `slice() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
@@ -664,7 +782,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       return V.nil();
     }
     case "hex_encode":
-      return V.str((items as number[]).map((x) => x.toString(16).padStart(2, "0")).join(""));
+      return V.str((items as number[]).map((x) => padZero2(hexLower(x))).join(""));
     case "to_int32_array":
       return bytesToPack(items, "int32", 4, (dv, off) => dv.getInt32(off, true));
     case "to_float32_array":
@@ -687,7 +805,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (codec === null) {
         throw new UnsupportedError("packed-compress-mode", `compress() 的 mode ${mode} 发不出去：0 是不写模式时的默认值，4.6.3 那侧给的是「头部字节 + 原字节 + 补零」那种形状，node 侧没有对得上的编解码器；1 / 2 / 3 要靠 process.getBuiltinModule("node:zlib")（这一版取不到，或 2 需要而它没有 zstd）。都不发近似值`);
       }
-      return V.object(new GBytes([...codec.pack(byteBuf(items))], "byte"));
+      return V.object(new GBytes(bytesOf(codec.pack(byteBuf(items))), "byte"));
     }
     case "decompress": {
       if (args.length < 1 || args.length > 2) {
@@ -711,10 +829,10 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
         return V.object(new GBytes([], "byte")); // 垃圾数据实测给空 pack（另打一句引擎 stderr）
       }
       if (plain.length > want) return V.object(new GBytes([], "byte"));
-      return V.object(new GBytes([...plain], "byte"));
+      return V.object(new GBytes(bytesOf(plain), "byte"));
     }
     case "get_string_from_utf8": {
-      return V.str(new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(items as number[])));
+      return V.str(utf8Decode(items as number[]));
     }
     case "get_string_from_ascii": {
       if (items.some((x) => (x as number) > 127)) {
@@ -798,11 +916,35 @@ export function bytesWriteIndex(b: GBytes, idx: Variant, value: Variant, _who?: 
   return packWriteIndex(b, idx, value);
 }
 
-export function packConcat(a: GBytes, b: GBytes): Variant {
+export /**
+ * 拼两段 PackElem：`[...a, ...b]` 那种展开在**含类实例的联合**数组上编译期过、运行期撞
+ * `class fields cannot be represented as checked-dynamic properties`（实测 scriptc 的 exe，
+ * 而 node 侧同一份产物是对的），所以一格一格 push（S205 验证过环这一形两边都可编可跑）。
+ */
+function concatElems(xs: PackElem[], ys: PackElem[]): PackElem[] {
+  const out: PackElem[] = [];
+  for (let i = 0; i < xs.length; i++) out.push(xs[i] as PackElem);
+  for (let i = 0; i < ys.length; i++) out.push(ys[i] as PackElem);
+  return out;
+}
+
+function bytesOf(xs: Uint8Array): PackElem[] {
+  const out: PackElem[] = [];
+  for (let i = 0; i < xs.length; i++) out.push(xs[i] as number);
+  return out;
+}
+
+function copyElems(xs: PackElem[]): PackElem[] {
+  const out: PackElem[] = [];
+  for (let i = 0; i < xs.length; i++) out.push(xs[i] as PackElem);
+  return out;
+}
+
+function packConcat(a: GBytes, b: GBytes): Variant {
   if (a.kind !== b.kind) {
     throw new UnsupportedError("packed-concat-kind", `${packTypeName(a.kind)} + ${packTypeName(b.kind)} 没实测过`);
   }
-  return V.object(new GBytes([...a.raw(), ...b.raw()], a.kind));
+  return V.object(new GBytes(concatElems(a.raw(), b.raw()), a.kind));
 }
 
 export function bytesConcat(a: GBytes, b: GBytes): Variant {

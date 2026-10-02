@@ -6,7 +6,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   m = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
 
-  bump(p): void {
+  bump(p: rt.Variant): void {
     p = rt.paramSlot(p, "Vector2", 1, "bump", this);
     {
       const _nv = rt.writeProp(p, "x", rt.V.int(7));
@@ -15,12 +15,13 @@ export class Main extends SceneTree {
     print(rt.showArgs([p]));
   }
   
-  make(): unknown {
+  make(): rt.Variant {
     let t = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     return t;
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let v = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     {
       const _nv = rt.writeProp(v, "x", rt.V.int(9));
@@ -100,7 +101,7 @@ export class Main extends SceneTree {
     v = rt.ops.add(v, rt.vector2New([rt.V.int(1), rt.V.int(1)]));
     print(rt.showArgs([v]));
     {
-      const _nv = rt.writeProp(v, "y", rt.ops.add(rt.attribute(v, "y"), rt.V.float(2.5)));
+      const _nv = rt.writeProp(v, "y", rt.ops.add(rt.wrapValue(rt.attribute(v, "y")), rt.V.float(2.5)));
       if (_nv !== null) v = _nv;
     }
     print(rt.showArgs([v]));
@@ -114,7 +115,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeProp(f, "x", rt.V.float(0.1));
       if (_nv !== null) f = _nv;
     }
-    print(rt.showArgs([rt.attribute(f, "x")]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(f, "x"))]));
     print(rt.showArgs([f]));
     let big = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     {
@@ -133,7 +134,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.ops.eq(v, rt.vector2New([rt.V.int(2), rt.V.int(6)]))]));
     print(rt.showArgs([rt.ops.neq(v, rt.vector2New([rt.V.int(2), rt.V.int(6)]))]));
     let kv = rt.dictOf([[rt.V.str("x"), rt.vector2New([rt.V.int(1), rt.V.int(2)])]]);
-    print(rt.showArgs([rt.ops.eq(rt.index(kv, rt.V.str("x")), rt.vector2New([rt.V.int(1), rt.V.int(2)]))]));
+    print(rt.showArgs([rt.ops.eq(rt.wrapValue(rt.index(kv, rt.V.str("x"))), rt.vector2New([rt.V.int(1), rt.V.int(2)]))]));
     let store = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
     let arr = rt.V.array(rt.GArray.of([store]));
     {
@@ -141,13 +142,24 @@ export class Main extends SceneTree {
       if (_nv !== null) store = _nv;
     }
     print(rt.showArgs([arr, rt.V.str(" "), store]));
-    print(rt.showArgs([rt.attribute(rt.index(arr, rt.V.int(0)), "x"), rt.V.str(" "), rt.index(rt.index(arr, rt.V.int(0)), rt.V.int(0))]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(arr, rt.V.int(0))), "x")), rt.V.str(" "), rt.wrapValue(rt.index(rt.wrapValue(rt.index(arr, rt.V.int(0))), rt.V.int(0)))]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "bump": return rt.wrapValue(this.bump(args[0] as rt.Variant));
+      case "make": return rt.wrapValue(this.make());
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerFieldTypes(Main, {"m": "Vector2"});
-rt.registerMethodArities(Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerFieldTypes(__gd_d_Main, {"m": "Vector2"});
+rt.registerMethodArities(__gd_d_Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

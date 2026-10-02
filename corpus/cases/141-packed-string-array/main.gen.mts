@@ -4,13 +4,14 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let s = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))]);
-    print(rt.showArgs([rt.V.str("u1 "), s, rt.V.str(" "), rt.typeOf(s), rt.V.str(" "), rt.index(s, rt.V.int(0)), rt.V.str(" "), rt.typeOf(rt.index(s, rt.V.int(0)))]));
+    print(rt.showArgs([rt.V.str("u1 "), s, rt.V.str(" "), rt.typeOf(s), rt.V.str(" "), rt.wrapValue(rt.index(s, rt.V.int(0))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(s, rt.V.int(0))))]));
     let m = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(2.5), rt.V.bool(true), rt.V.nil(), rt.V.stringName("nm")]))]);
     print(rt.showArgs([rt.V.str("u2 "), m]));
     print(rt.showArgs([rt.V.str("u3 "), rt.ops.eq(s, rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])), rt.V.str(" "), rt.ops.add(s, rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("c")]))]))]));
-    print(rt.showArgs([rt.V.str("u4 "), rt.index(s, rt.V.int((-1))), rt.V.str("|"), rt.V.str(" "), rt.method(s, "get", [rt.V.int(9)]), rt.V.str("|"), rt.V.str(" "), rt.method(s, "has", [rt.V.str("a")]), rt.V.str(" "), rt.method(s, "find", [rt.V.str("b")]), rt.V.str(" "), rt.method(s, "count", [rt.V.str("a")])]));
+    print(rt.showArgs([rt.V.str("u4 "), rt.wrapValue(rt.index(s, rt.V.int((-1)))), rt.V.str("|"), rt.V.str(" "), rt.method(s, "get", [rt.V.int(9)]), rt.V.str("|"), rt.V.str(" "), rt.method(s, "has", [rt.V.str("a")]), rt.V.str(" "), rt.method(s, "find", [rt.V.str("b")]), rt.V.str(" "), rt.method(s, "count", [rt.V.str("a")])]));
     let t = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("b"), rt.V.str("a")]))]);
     rt.method(t, "sort", []);
     print(rt.showArgs([rt.V.str("u5 "), t, rt.V.str(" "), rt.method(t, "slice", [rt.V.int(1)]), rt.V.str(" "), rt.ops.eq(rt.method(t, "duplicate", []), t)]));
@@ -23,7 +24,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(u, rt.V.int(0), rt.V.str("z"));
       if (_nv !== null) u = _nv;
     }
-    print(rt.showArgs([rt.V.str("u8 "), u, rt.V.str(" "), rt.index(u, rt.V.int((-1)))]));
+    print(rt.showArgs([rt.V.str("u8 "), u, rt.V.str(" "), rt.wrapValue(rt.index(u, rt.V.int((-1))))]));
     let d = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("q")]))]);
     let e = d;
     {
@@ -36,8 +37,17 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

@@ -67,7 +67,7 @@ function declNames(d: Decl): string[] {
   ];
 }
 
-export function analyze(m: Module, globals: Iterable<string> = []): Diagnostic[] {
+export function analyze(m: Module, globals: Set<string> = new Set<string>()): Diagnostic[] {
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];

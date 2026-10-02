@@ -1,6 +1,6 @@
 import { parseGdDouble } from "./double";
 import { UnsupportedError } from "../runtime/errors";
-import type { SyntaxNode, Tree } from "../parse/parser";
+import type { CsNode as SyntaxNode, CsTree as Tree } from "../parse/cst";
 import type {
   ClassDecl,
   EnumDecl,
@@ -25,8 +25,15 @@ function loc(n: SyntaxNode): Loc {
   return { line: n.startPosition.row + 1, col: n.startPosition.column + 1 };
 }
 
+/**
+ * 字段名挂在**孩子自己**那一格上（`fieldName`），所以这里是在 `children` 里找它 ——
+ * 不再需要 wasm 那个 `childForFieldName` 方法：CST 是普通记录，方法在静态目标上不好过（S231）。
+ */
 function field(n: SyntaxNode, name: string): SyntaxNode | null {
-  return n.childForFieldName(name);
+  for (const c of n.children) {
+    if (c.fieldName === name) return c;
+  }
+  return null;
 }
 
 function need(n: SyntaxNode | null | undefined, what: string): SyntaxNode {
@@ -297,13 +304,24 @@ function lowerBody(n: SyntaxNode): Stmt[] {
     .map(lowerStmt);
 }
 
+/**
+ * `Stmt` 的 var 那一支是联合里的一条臂 —— 展开 `VarDecl` 再 `as Stmt` 在静态编译目标上是
+ * 「联合转换没有唯一的布局映射」（SC2003，实测 `scriptc coverage src/cli.ts` 里那 2 格），
+ * 所以这里按那条臂**声明的字段**逐格写出来。`isStatic` / `accessor` 是刻意不带的：
+ * 它们只活在 `m.vars` 那份 `VarDecl` 上（模块变量走 `lowerVar` 直接进 `vars`，不经过语句），
+ * 语句上的这一支发射器只读 `name/type/init`。
+ */
+function varStmt(v: VarDecl, c: Loc): Stmt {
+  return { kind: "var", name: v.name, type: v.type, init: v.init, isConst: v.isConst, loc: c };
+}
+
 function lowerStmt(n: SyntaxNode): Stmt {
   const c = loc(n);
   switch (n.type) {
     case "variable_statement":
-      return { kind: "var", ...lowerVar(n, false), loc: c } as Stmt;
+      return varStmt(lowerVar(n, false), c);
     case "const_statement":
-      return { kind: "var", ...lowerVar(n, true), loc: c } as Stmt;
+      return varStmt(lowerVar(n, true), c);
     case "expression_statement": {
       const e = named(n)[0];
       if (!e) throw new UnsupportedError("empty-expr-stmt", "空表达式语句");
@@ -572,6 +590,17 @@ function unquote(raw: string): string {
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i]!;
     if (ch !== "\\") {
+      // 代理对必须**整对**推进去：静态目标上任何拼接（`+`、模板串、`join`）碰到半个代理都会把它换成
+      // U+FFFD（实测七种写法全中，S235），而 `slice` 出来的整对是好的 —— 所以这里按码点切，不按码元切。
+      const lead = inner.charCodeAt(i);
+      if (lead >= 0xd800 && lead <= 0xdbff && i + 1 < inner.length) {
+        const trail = inner.charCodeAt(i + 1);
+        if (trail >= 0xdc00 && trail <= 0xdfff) {
+          pushLit(inner.slice(i, i + 2));
+          i++;
+          continue;
+        }
+      }
       pushLit(ch);
       continue;
     }

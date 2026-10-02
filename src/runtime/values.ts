@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { hexUpper } from "./numstr";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { GVector2, asVec2, vecCmp } from "./vector2";
@@ -8,7 +9,7 @@ import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
 import { sortGodot } from "./sort";
-import { callableSame, isCallable } from "./callable";
+import { callableSame, isCallable, type CallableBox } from "./callable";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -1072,8 +1073,7 @@ export function strCase(s: string, dir: "upper" | "lower"): string {
     }
     throw new UnsupportedError(
       "case-mapping",
-      `to_${dir === "upper" ? "upper" : "lower"}：字符 ${ch}（U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase()
-        }）的 Godot 简单映射没有实测数据（JS 给 "${mapped}"，Godot 只会给单码点）。` +
+      `to_${dir === "upper" ? "upper" : "lower"}：字符 ${ch}（U+${hexUpper(ch.codePointAt(0) ?? 0)}）的 Godot 简单映射没有实测数据（JS 给 "${mapped}"，Godot 只会给单码点）。` +
         `重跑 tools/case-probe.mjs + tools/golden.mjs 000-probe-cs + tools/case-table.mjs 生成表格`,
     );
   }
@@ -1241,43 +1241,42 @@ export function strFormat(fmt: string, args: Variant[]): string {
 }
 
 /**
+ * `n.toPrecision(17)` 的等价实现，用 bigint 手算（静态编译目标没有 `toPrecision` 的 lowering）。
+ * 口径必须是**约 17 位有效数字**而不是 double 的精确展开：`String(1e300)` 给最短往返表示 `1e+300`、
+ * `BigInt(1e300)` 给 301 位精确值，两者都与 Godot 不符；取整到 17 位再补零才符合
+ * （实测 `print(1e300)` 得 `10000000000000001` 后跟零）。
+ * 进位让位数 +1 的那一族照规范给更大的那个，展开自然多一位零。
+ */
+function digits17(n: number): string {
+  let b = BigInt(n);
+  const neg = b < 0n;
+  if (neg) b = -b;
+  const s = String(b);
+  if (s.length <= 17) return neg ? `-${s}` : s;
+  const tail = s.length - 17;
+  const pow = 10n ** BigInt(tail);
+  let q = b / pow;
+  const r = b - q * pow;
+  if (r * 2n >= pow) q = q + 1n;
+  return `${neg ? "-" : ""}${String(q)}${"0".repeat(tail)}`;
+}
+
+/**
  * 浮点转字符串。16 个单表达式探针对 Godot 4.6.3 实测，规则可完整复现：
  *   `nan` / `inf` / `-inf` 原样；**0 与 -0.0 都印 `0.0`**；
- *   **整数值**浮点 → 精确十进制位 + `.0`（`1e14`→`100000000000000.0`、`1e20`→21 位+`.0`）；
+ *   **整数值**浮点 → 约 17 位有效数字的十进制 + `.0`（`1e14`→`100000000000000.0`、`1e300`→`10000000000000001` 后跟零）；
  *   **非整数** → 小数位数 = `max(0, 14 - 整数位数)`，再去尾随零（`0.0000001`→`0.0000001`、
  *   `0.1+0.2`→`0.3`、`1e-20`→`0.0`）；整数位已超 14 位时小数位为 0，四舍五入**远离零**且
  *   **不补 `.0`**（`123456789012345.6`→`123456789012346`）。
  * 旧实现用 `toPrecision(14)`，一旦落到科学计数法就抛 `float-format-exp` —— 于是任何大浮点
  * （`1e15` 起）都跑不了；改用 BigInt 展开十进制后不再有这个上限（`toFixed` 在 ≥1e21 会自己转科学计数法，故不走它）。
  */
-/**
- * 把 `toPrecision(17)` 可能给出的科学计数法展开成普通十进制。
- * Godot 印大浮点时是**先取约 17 位有效数字再展开**，不是取 double 的精确值：
- * 实测 `print(1e300)` 得 `10000000000000001` 后跟零，而 1e300 的精确二进制值是一串
- * 301 位的乱数（我们用 BigInt 展开就会得到它，与 Godot 不一致）。
- */
-function expandPlain(s: string): string {
-  const m = /^(-?)(\d*)(?:\.(\d*))?[eE]([+-]?\d+)$/.exec(s);
-  if (!m) return s;
-  const ip = m[2]!;
-  const fp = m[3] ?? "";
-  const digits = ip + fp;
-  const pointPos = ip.length + parseInt(m[4]!, 10);
-  if (pointPos >= digits.length) return m[1]! + digits + "0".repeat(pointPos - digits.length);
-  if (pointPos <= 0) return `${m[1]!}0.${"0".repeat(-pointPos)}${digits}`;
-  return m[1]! + digits.slice(0, pointPos) + "." + digits.slice(pointPos);
-}
-
 export function strFloat(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
   if (n === -Infinity) return "-inf";
   if (n === 0) return "0.0";
-  if (Number.isInteger(n)) {
-    let s = expandPlain(n.toPrecision(17));
-    if (s.includes(".")) s = s.replace(/0+$/, "").replace(/\.$/, "");
-    return `${s}.0`;
-  }
+  if (Number.isInteger(n)) return `${digits17(n)}.0`;
   const intDigits = Math.max(0, Math.floor(Math.log10(Math.abs(n))) + 1);
   const decimals = Math.max(0, Math.min(14, 15 - intDigits));
   if (decimals === 0) {
@@ -1663,11 +1662,9 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     if (ai3 !== null && bi3 !== null) return ai3.x === bi3.x && ai3.y === bi3.y && ai3.z === bi3.z;
     if (ac !== null && bc !== null)
       return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
-    if (
-      ((a2 !== null || a3 !== null || ai !== null || ai3 !== null || ac !== null ? b : a) as Variant).t ===
-      Tag.NIL
-    )
-      return false;
+    const other: Variant =
+      a2 !== null || a3 !== null || ai !== null || ai3 !== null || ac !== null ? b : a;
+    if (other.t === Tag.NIL) return false;
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
   }
   if (ta === Tag.INT || ta === Tag.FLOAT) {
@@ -1707,7 +1704,7 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
       // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算），不是 JS 盒子引用 ——
       // 读一次属性就新建一个盒子，按引用比会把 Godot 的真相判成假（实测见 `callable.ts` 的 `callableSame`）
-      if (isCallable(a) && isCallable(b)) return callableSame(a.v as Record<string, unknown>, b.v as Record<string, unknown>);
+      if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
   }
   return false;
@@ -1754,7 +1751,7 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       }
       // Callable 走与 `==` 同一条等式：d6 实测 `[o.add3, o.add3].has(o.add3)` 是**真**，
       // 而盒子每次读都是新建的，按 JS 引用比会判成假
-      if (isCallable(a) && isCallable(b)) return callableSame(a.v as Record<string, unknown>, b.v as Record<string, unknown>);
+      if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
     default:
       return a.v === b.v;

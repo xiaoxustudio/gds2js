@@ -27,21 +27,6 @@ interface Source {
 	src: string;
 }
 
-function perryHome(): Source[] {
-	const pkgJson = createRequire(join(ROOT, "noop.js")).resolve(
-		"@perryts/perry-win32-x64/package.json",
-	);
-	const pkg = dirname(pkgJson);
-	return [
-		{ rel: "perry/bin/perry.exe", src: join(pkg, "bin", "perry.exe") },
-		{ rel: "perry/bin/LLVM-C.dll", src: join(pkg, "bin", "LLVM-C.dll") },
-		{
-			rel: "perry/lib/perry_runtime.lib.zst",
-			src: join(pkg, "lib", "perry_runtime.lib.zst"),
-		},
-	];
-}
-
 function wasmGlue(): string {
 	return createRequire(join(ROOT, "noop.js")).resolve(
 		"web-tree-sitter/web-tree-sitter.wasm",
@@ -56,7 +41,6 @@ function homeSources(): Source[] {
 			src: wasmGlue(),
 		},
 		...HOME_DIST.map(f => ({ rel: f, src: join(ROOT, f) })),
-		...perryHome(),
 	];
 	const missing = out.filter(s => !existsSync(s.src));
 	if (missing.length > 0) {
@@ -64,10 +48,7 @@ function homeSources(): Source[] {
 			`缺料：\n  ${missing.map(m => `${m.rel} ← ${m.src}`).join("\n  ")}` +
 				(existsSync(join(ROOT, "dist/product.mjs"))
 					? ""
-					: "\n  （dist 没构建？先跑 pnpm build）") +
-				(missing.some(m => m.rel.startsWith("perry/"))
-					? "\n  （perry 没装成本地依赖？先 `pnpm add -D @perryts/perry-win32-x64` —— 打进 exe 的就是这一份）"
-					: ""),
+					: "\n  （dist 没构建？先跑 pnpm build）") 
 		);
 	}
 	return out;

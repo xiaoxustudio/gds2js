@@ -4,7 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let d = rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]);
     print(rt.showArgs([rt.method(d, "erase", [rt.V.str("a")])]));
     print(rt.showArgs([d]));
@@ -38,7 +39,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.method(fk, "get", [rt.V.str("a")])]));
     print(rt.showArgs([rt.method(fk, "get", [rt.V.str("zz")])]));
     print(rt.showArgs([rt.method(fk, "get", [rt.V.str("zz"), rt.V.int(7)])]));
-    print(rt.showArgs([rt.index(fk, rt.V.stringName("a"))]));
+    print(rt.showArgs([rt.wrapValue(rt.index(fk, rt.V.stringName("a")))]));
     print(rt.showArgs([rt.method(fk, "has", [rt.V.stringName("a")])]));
     let dd = rt.dictOf([[rt.V.str("k"), rt.V.array(rt.GArray.of([rt.V.int(1)]))]]);
     let ds = rt.method(dd, "duplicate", []);
@@ -101,12 +102,21 @@ export class Main extends SceneTree {
     let nest = rt.dictOf([[rt.V.str("l"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.dictOf([[rt.V.str("n"), rt.V.int(2)]])]))]]);
     print(rt.showArgs([nest]));
     print(rt.showArgs([rt.ops.eq(rt.method(nest, "duplicate", [rt.V.bool(true)]), nest)]));
-    print(rt.showArgs([rt.ops.eq(rt.index(rt.method(nest, "duplicate", [rt.V.bool(true)]), rt.V.str("l")), rt.index(nest, rt.V.str("l")))]));
+    print(rt.showArgs([rt.ops.eq(rt.wrapValue(rt.index(rt.method(nest, "duplicate", [rt.V.bool(true)]), rt.V.str("l"))), rt.wrapValue(rt.index(nest, rt.V.str("l"))))]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

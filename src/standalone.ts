@@ -1,4 +1,4 @@
-import * as host from "./host";
+import * as host from "./host-node";
 import * as runtime from "./runtime/index";
 
 /** 运行生命周期的入口：new Main().run() 由产物末尾调用；SceneTree 基类来自宿主。 */

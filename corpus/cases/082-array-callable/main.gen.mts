@@ -6,159 +6,219 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   seen = rt.V.array(rt.GArray.of([]));
 
-  _pick(x): unknown {
+  _pick(x: rt.Variant): rt.Variant {
     rt.method(this.seen, "append", [x]);
     return rt.ops.gt(x, rt.V.int(2));
   }
   
-  _add(acc, x): unknown {
+  _add(acc: rt.Variant, x: rt.Variant): rt.Variant {
     return rt.ops.add(acc, x);
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]));
-    print(rt.showArgs([rt.method(a, "filter", [rt.callable((x) => {
+    print(rt.showArgs([rt.method(a, "filter", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(2));
-    })])]));
+    }, 1)])]));
     print(rt.showArgs([a]));
-    print(rt.showArgs([rt.method(a, "map", [rt.callable((x) => {
+    print(rt.showArgs([rt.method(a, "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.mul(x, rt.V.int(2));
-    })])]));
-    print(rt.showArgs([rt.method(a, "map", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(1));
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "filter", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "filter", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "map", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return x;
-    })])]));
-    print(rt.showArgs([rt.method(a, "any", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "any", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(3));
-    })])]));
-    print(rt.showArgs([rt.method(a, "all", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "all", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(0));
-    })])]));
-    print(rt.showArgs([rt.method(a, "all", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "all", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(1));
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "any", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "any", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "all", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "all", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.bool(false);
-    })])]));
-    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(2));
-    })])]));
-    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(100));
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "find_custom", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "find_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(a, "rfind_custom", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "rfind_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(2));
-    })])]));
-    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(1));
-    }), rt.V.int(2)])]));
-    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((x) => {
+    }, 1), rt.V.int(2)])]));
+    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(1));
-    }), rt.V.int((-1))])]));
-    print(rt.showArgs([rt.method(a, "rfind_custom", [rt.callable((x) => {
+    }, 1), rt.V.int((-1))])]));
+    print(rt.showArgs([rt.method(a, "rfind_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(1));
-    }), rt.V.int(0)])]));
-    print(rt.showArgs([rt.method(a, "rfind_custom", [rt.callable((x) => {
+    }, 1), rt.V.int(0)])]));
+    print(rt.showArgs([rt.method(a, "rfind_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(1));
-    }), rt.V.int((-9))])]));
-    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((acc, x) => {
+    }, 1), rt.V.int((-9))])]));
+    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(acc, x);
-    }), rt.V.int(0)])]));
-    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((acc, x) => {
+    }, 2), rt.V.int(0)])]));
+    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(acc, x);
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), "reduce", [rt.callable((acc, x) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(rt.ops.mul(acc, rt.V.int(10)), x);
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.int(5)])), "reduce", [rt.callable((acc, x) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.int(5)])), "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(acc, x);
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "reduce", [rt.callable((acc, x) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(acc, x);
-    }), rt.V.int(5)])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "reduce", [rt.callable((acc, x) => {
+    }, 2), rt.V.int(5)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([])), "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(acc, x);
-    })])]));
-    print(rt.showArgs([rt.method(a, "map", [rt.callable((x, i) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(a, "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const i = __a[1] as rt.Variant;
       return rt.V.int(1);
-    })])]));
-    print(rt.showArgs([rt.method(a, "filter", [rt.callable((x, i) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(a, "filter", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const i = __a[1] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(a, "any", [rt.callable((x, i) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(a, "any", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const i = __a[1] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(a, "all", [rt.callable((x, i) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(a, "all", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const i = __a[1] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((x, i) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(a, "find_custom", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
+      const i = __a[1] as rt.Variant;
       return rt.V.bool(true);
-    })])]));
-    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((acc) => {
+    }, 2)])]));
+    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
       return acc;
-    }), rt.V.int(0)])]));
-    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((acc, x) => {
+    }, 1), rt.V.int(0)])]));
+    print(rt.showArgs([rt.method(a, "reduce", [rt.callable((__a: rt.Variant[]) => {
+      const acc = __a[0] as rt.Variant;
+      const x = __a[1] as rt.Variant;
       return rt.ops.add(acc, x);
-    }), rt.V.int(100)])]));
-    print(rt.showArgs([rt.method(a, "filter", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])]));
+    }, 2), rt.V.int(100)])]));
+    print(rt.showArgs([rt.method(a, "filter", [rt.methodCallable(rt.V.object(this), "_pick")])]));
     print(rt.showArgs([this.seen]));
     rt.method(this.seen, "clear", []);
-    print(rt.showArgs([rt.method(a, "any", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])]));
+    print(rt.showArgs([rt.method(a, "any", [rt.methodCallable(rt.V.object(this), "_pick")])]));
     print(rt.showArgs([this.seen]));
     rt.method(this.seen, "clear", []);
-    print(rt.showArgs([rt.method(a, "all", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])]));
+    print(rt.showArgs([rt.method(a, "all", [rt.methodCallable(rt.V.object(this), "_pick")])]));
     print(rt.showArgs([this.seen]));
     rt.method(this.seen, "clear", []);
-    print(rt.showArgs([rt.method(a, "reduce", [rt.callableOf(this._add.bind(this), "_add", rt.V.object(this)), rt.V.int(0)])]));
-    print(rt.showArgs([rt.method(a, "map", [rt.callableOf(this._add.bind(this), "_add", rt.V.object(this))])]));
-    print(rt.showArgs([rt.method(a, "map", [rt.callableOf(this._pick.bind(this), "_pick", rt.V.object(this))])]));
+    print(rt.showArgs([rt.method(a, "reduce", [rt.methodCallable(rt.V.object(this), "_add"), rt.V.int(0)])]));
+    print(rt.showArgs([rt.method(a, "map", [rt.methodCallable(rt.V.object(this), "_add")])]));
+    print(rt.showArgs([rt.method(a, "map", [rt.methodCallable(rt.V.object(this), "_pick")])]));
     print(rt.showArgs([this.seen]));
     let nest = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)]))]));
-    let kept = rt.method(nest, "filter", [rt.callable((x) => {
+    let kept = rt.method(nest, "filter", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.bool(true);
-    })]);
+    }, 1)]);
     {
     const _w0 = rt.V.int(0);
       const _nv = rt.writeIdx(rt.index(kept, _w0), rt.V.int(0), rt.V.int(9));
       if (_nv !== null) rt.setIndex(kept, _w0, _nv);
     }
     print(rt.showArgs([nest]));
-    let mapped = rt.method(nest, "map", [rt.callable((x) => {
+    let mapped = rt.method(nest, "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return x;
-    })]);
+    }, 1)]);
     {
     const _w0 = rt.V.int(0);
       const _nv = rt.writeIdx(rt.index(mapped, _w0), rt.V.int(0), rt.V.int(8));
       if (_nv !== null) rt.setIndex(mapped, _w0, _nv);
     }
     print(rt.showArgs([nest]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.nil(), rt.V.int(1)])), "filter", [rt.callable((x) => {
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.nil(), rt.V.int(1)])), "filter", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.eq(x, rt.V.nil());
-    })])]));
-    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.nil()])), "map", [rt.callable((x) => {
+    }, 1)])]));
+    print(rt.showArgs([rt.method(rt.V.array(rt.GArray.of([rt.V.nil()])), "map", [rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.V.int(5);
-    })])]));
-    let f = rt.callable((x) => {
+    }, 1)])]));
+    let f = rt.callable((__a: rt.Variant[]) => {
+      const x = __a[0] as rt.Variant;
       return rt.ops.gt(x, rt.V.int(2));
-    });
+    }, 1);
     print(rt.showArgs([rt.method(a, "filter", [f])]));
     print(rt.showArgs([rt.method(a, "map", [f])]));
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_pick": return rt.wrapValue(this._pick(args[0] as rt.Variant));
+      case "_add": return rt.wrapValue(this._add(args[0] as rt.Variant, args[1] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_pick": [1, 1], "_add": [2, 2], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_pick": [1, 1], "_add": [2, 2], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

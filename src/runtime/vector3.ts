@@ -24,11 +24,18 @@ export function vector3(x: number, y: number, z: number): Variant {
 }
 
 /**
- * Vector3i 的分类标记（与 `vector2.ts` 的 `VEC2I_MARK` 同一手法）：
- * 这一侧要认「单参构造收 Vector3i」，但不能 import `vector3i`（那成环）。
- * 两个符号**必须不同**，否则 `Vector2()` 的单参分支会把 Vector3i 误认成 Vector2i、悄悄少一个分量。
+ * 「这个对象是不是 Vector3i、是的话把三个分量交出来」那一格，由 `vector3i` 在自己模块里登记
+ * （同 `vector2.ts` 的 `vec2iParts`：反向 import 成环，而计算键的 `in` 与「把 unknown 收成结构视图」
+ * 在静态编译目标上都是墙 —— 视图与原实例不是同一个身份，视图上的 `instanceof` 当场落空）。
+ * 两个入口各自认各自的类，所以 `Vector2()` 的单参分支不会把 Vector3i 误认成 Vector2i、悄悄少一个分量。
  */
-export const VEC3I_MARK = Symbol("gds2js.Vector3i");
+type Vec3iParts = (o: object) => [number, number, number] | null;
+
+let vec3iParts: Vec3iParts | null = null;
+
+export function registerVec3iParts(f: Vec3iParts): void {
+  vec3iParts = f;
+}
 
 /** 取向量实例，不是 Vector3 对象则 null（ops / values 分派用）。 */
 export function asVec3(v: Variant): GVector3 | null {
@@ -44,8 +51,9 @@ export function vector3New(args: Variant[]): Variant {
     const o = asVec3(args[0] as Variant);
     if (o !== null) return vector3(o.x, o.y, o.z);
     const a = args[0] as Variant;
-    const duck = a.t === Tag.OBJECT ? (a.v as { x?: number; y?: number; z?: number } | null) : null;
-    if (duck !== null && VEC3I_MARK in duck) return vector3(duck.x as number, duck.y as number, duck.z as number);
+    const inner = a.t === Tag.OBJECT ? a.v : null;
+    const parts = inner !== null && typeof inner === "object" && vec3iParts !== null ? vec3iParts(inner) : null;
+    if (parts !== null) return vector3(parts[0] as number, parts[1] as number, parts[2] as number);
     throw new UnsupportedError("vector3-arg", `Vector3() 单参只收 Vector3 / Vector3i，收到 ${tagName(a.t)}`);
   }
   if (args.length !== 3) {

@@ -6,7 +6,7 @@ import { print, SceneTree } from "../../../tools/harness/scene-tree";
 export class Main extends SceneTree {
   m = rt.toVec2i(rt.vector2iNew([rt.V.int(1), rt.V.int(2)]));
 
-  bump(p): void {
+  bump(p: rt.Variant): void {
     p = rt.paramSlot(p, "Vector2i", 1, "bump", this);
     {
       const _nv = rt.writeProp(p, "x", rt.V.int(7));
@@ -15,11 +15,12 @@ export class Main extends SceneTree {
     print(rt.showArgs([p]));
   }
   
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let w = rt.vector2iNew([rt.V.int(1), rt.V.int(2)]);
     print(rt.showArgs([w, rt.V.str(" "), rt.vector2iNew([]), rt.V.str(" "), rt.vector2iNew([rt.V.float((-1.7)), rt.V.float((-2.2))]), rt.V.str(" "), rt.vector2iNew([w]), rt.V.str(" "), rt.vector2iNew([rt.vector2New([rt.V.float(1.7), rt.V.float(2.2)])])]));
     print(rt.showArgs([rt.vector2New([w]), rt.V.str(" "), rt.vector2New([rt.vector2New([rt.V.int(3), rt.V.int(4)])])]));
-    print(rt.showArgs([rt.attribute(w, "x"), rt.V.str(" "), rt.attribute(w, "y"), rt.V.str(" "), rt.index(w, rt.V.int(0)), rt.V.str(" "), rt.index(w, rt.V.str("y"))]));
+    print(rt.showArgs([rt.wrapValue(rt.attribute(w, "x")), rt.V.str(" "), rt.wrapValue(rt.attribute(w, "y")), rt.V.str(" "), rt.wrapValue(rt.index(w, rt.V.int(0))), rt.V.str(" "), rt.wrapValue(rt.index(w, rt.V.str("y")))]));
     print(rt.showArgs([rt.ops.eq(w, rt.vector2iNew([rt.V.float(1), rt.V.float(2)])), rt.V.str(" "), rt.ops.neq(w, rt.vector2iNew([rt.V.int(1), rt.V.int(3)])), rt.V.str(" "), rt.ops.eq(w, rt.V.nil()), rt.V.str(" "), rt.ops.neq(w, rt.V.nil())]));
     print(rt.showArgs([rt.ops.lt(w, rt.vector2iNew([rt.V.int(1), rt.V.int(3)])), rt.V.str(" "), rt.ops.gt(w, rt.vector2iNew([rt.V.int(0), rt.V.int(9)])), rt.V.str(" "), rt.ops.lte(w, rt.vector2iNew([rt.V.int(1), rt.V.int(2)]))]));
     print(rt.showArgs([rt.ops.add(w, rt.vector2iNew([rt.V.int(3), rt.V.int((-4))])), rt.V.str(" | "), rt.ops.sub(w, rt.vector2iNew([rt.V.int(1), rt.V.int(1)])), rt.V.str(" | "), rt.ops.mul(w, rt.vector2iNew([rt.V.int(4), rt.V.int(5)])), rt.V.str(" | "), rt.ops.mul(w, rt.V.int(2)), rt.V.str(" | "), rt.ops.div(w, rt.vector2iNew([rt.V.int(2), rt.V.int(2)])), rt.V.str(" | "), rt.ops.neg(w)]));
@@ -32,7 +33,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeProp(v, "x", rt.V.float(2.7));
       if (_nv !== null) v = _nv;
     }
-    print(rt.showArgs([v, rt.V.str(" "), rt.attribute(v, "x")]));
+    print(rt.showArgs([v, rt.V.str(" "), rt.wrapValue(rt.attribute(v, "x"))]));
     {
       const _nv = rt.writeIdx(v, rt.V.int(1), rt.V.float((-0.9)));
       if (_nv !== null) v = _nv;
@@ -107,7 +108,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(ta, rt.V.int(0), rt.vector2iNew([rt.V.int(3), rt.V.int(4)]));
       if (_nv !== null) ta = _nv;
     }
-    print(rt.showArgs([ta, rt.V.str(" "), rt.attribute(rt.index(ta, rt.V.int(0)), "y")]));
+    print(rt.showArgs([ta, rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(ta, rt.V.int(0))), "y"))]));
     let tdi = rt.stampDict(rt.dictOf([]), "Vector2i", "int", true);
     {
       const _nv = rt.writeIdx(tdi, rt.vector2iNew([rt.V.int(1), rt.V.int(2)]), rt.V.int(5));
@@ -122,8 +123,18 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "bump": return rt.wrapValue(this.bump(args[0] as rt.Variant));
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "bump": [1, 1], "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "bump": [1, 1], "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();

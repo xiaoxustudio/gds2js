@@ -9,48 +9,121 @@ function int64(v: number): UnsupportedError {
 
 /** 单态快路径（D2 的第二轨）。输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
-  /** 裸数组下标读：元素类型由发射期定（int / float / str），这里只保证越界口径一致。 */
-  rawArrGet<T>(a: T[], i: number): T {
-    return a[arrIdx(i, a.length)]!;
+  /** 装箱值 → 裸值：按名派发表调裸 ABI 方法（`computeRawAbis` 那一轨）时用。
+   *  scriptc 不给 `Variant | undefined` → `number | undefined` 这种「联合到联合」的转换留 lowering
+   *  （实测 SC2003 union conversion has no unambiguous layout mapping），所以转换放在这里、
+   *  调用点上是普通的 `Variant` 实参。 */
+  unboxNum(v: Variant): number {
+    return v.v as number;
   },
 
-  rawArrGet2<T>(g: T[][], i: number, j: number): T {
-    const row = g[arrIdx(i, g.length)]!;
-    return row[arrIdx(j, row.length)]!;
+  unboxStr(v: Variant): string {
+    return v.v as string;
   },
 
-  rawArrSet<T>(a: T[], i: number, v: T): void {
+  // 裸数组 / 裸字典的快路径**按元素种类各发一个具体入口**：元素类型发射期就知道（int / float / str），
+  // 而「对象字面量上的泛型方法」在静态编译目标上是接收者解析的围栏
+  // （实测 scriptc SC1090：reaching the object-literal generic method … the receiver must be a
+  // never-reassigned binding）。同一条 `iAddC` 那种非泛型成员一直在出货，所以这里只是去泛型化。
+  rawArrGetNum(a: number[], i: number): number {
+    return a[arrIdx(i, a.length)] as number;
+  },
+
+  rawArrGetStr(a: string[], i: number): string {
+    return a[arrIdx(i, a.length)] as string;
+  },
+
+  rawArrGetNum2(g: number[][], i: number, j: number): number {
+    const row = g[arrIdx(i, g.length)] as number[];
+    return row[arrIdx(j, row.length)] as number;
+  },
+
+  rawArrGetStr2(g: string[][], i: number, j: number): string {
+    const row = g[arrIdx(i, g.length)] as string[];
+    return row[arrIdx(j, row.length)] as string;
+  },
+
+  rawArrSetNum(a: number[], i: number, v: number): void {
     a[arrIdx(i, a.length)] = v;
   },
 
-  rawArrSet2<T>(g: T[][], i: number, j: number, v: T): void {
-    const row = g[arrIdx(i, g.length)]!;
+  rawArrSetStr(a: string[], i: number, v: string): void {
+    a[arrIdx(i, a.length)] = v;
+  },
+
+  rawArrSetNum2(g: number[][], i: number, j: number, v: number): void {
+    const row = g[arrIdx(i, g.length)] as number[];
     row[arrIdx(j, row.length)] = v;
   },
 
-  rawArrInsert<T>(a: T[], at: number, v: T): number {
+  rawArrSetStr2(g: string[][], i: number, j: number, v: string): void {
+    const row = g[arrIdx(i, g.length)] as string[];
+    row[arrIdx(j, row.length)] = v;
+  },
+
+  // 插入按种类各发一份：**不能**先 `a.push(null)` 再移位 —— 数组在静态目标上是带元素类型的，
+  // 往 `number[]` 里塞外来值不会照 node 的方式把长度撑起来（实测 115：插完之后读末格越界）。
+  // 先 push 一个本族值，再把 k 之后的格子整体后移，最后写 k。
+  rawArrInsertNum(a: number[], at: number, v: number): number {
     const n = a.length;
     const k = at < 0 ? n + at : at;
     if (k < 0 || k > n) return 31;
-    a.splice(k, 0, v);
+    a.push(v);
+    for (let i = n - 1; i >= k; i--) a[i + 1] = a[i] as number;
+    a[k] = v;
     return 0;
   },
 
-  rawArrRemoveAt(a: unknown[], i: number): void {
-    const k = i < 0 ? i + a.length : i;
-    if (k >= 0 && k < a.length) a.splice(k, 1);
+  rawArrInsertStr(a: string[], at: number, v: string): number {
+    const n = a.length;
+    const k = at < 0 ? n + at : at;
+    if (k < 0 || k > n) return 31;
+    a.push(v);
+    for (let i = n - 1; i >= k; i--) a[i + 1] = a[i] as string;
+    a[k] = v;
+    return 0;
   },
 
-  rawArrClear(a: unknown[]): void {
+  // removeAt / clear 也按种类各发一份。留 `unknown[]` 形参会**静默丢改动**：
+  // 实测 scriptc 把 `number[]` 传给 `unknown[]` 形参时交出去的是份拷贝（`rawArrRemoveAt(a, 0)`
+  // 跑完调用方的 `a.length` 仍是原值），node 侧同一句是原地改 —— 这类「 widening 之后不别名」
+  // 的形状与 S209 那条是同一物种，只能靠具体类型避开。（`splice` 也没有 lowering，所以手写后移 + pop。）
+  rawArrRemoveAtNum(a: number[], i: number): void {
+    const k = i < 0 ? i + a.length : i;
+    if (k < 0 || k >= a.length) return;
+    for (let j = k; j + 1 < a.length; j++) a[j] = a[j + 1] as number;
+    a.pop();
+  },
+
+  rawArrRemoveAtStr(a: string[], i: number): void {
+    const k = i < 0 ? i + a.length : i;
+    if (k < 0 || k >= a.length) return;
+    for (let j = k; j + 1 < a.length; j++) a[j] = a[j + 1] as string;
+    a.pop();
+  },
+
+  rawArrClearNum(a: number[]): void {
     a.length = 0;
   },
 
-  rawArrPushFront<T>(a: T[], v: T): void {
+  rawArrClearStr(a: string[]): void {
+    a.length = 0;
+  },
+
+  rawArrPushFrontNum(a: number[], v: number): void {
     a.unshift(v);
   },
 
-  rawDictGetOr<K, V>(m: Map<K, V>, k: K, def: V): V {
-    return m.has(k) ? (m.get(k) as V) : def;
+  rawArrPushFrontStr(a: string[], v: string): void {
+    a.unshift(v);
+  },
+
+  rawDictGetOrNum(m: Map<unknown, number>, k: unknown, def: number): number {
+    return m.has(k) ? (m.get(k) as number) : def;
+  },
+
+  rawDictGetOrStr(m: Map<unknown, string>, k: unknown, def: string): string {
+    return m.has(k) ? (m.get(k) as string) : def;
   },
 
   rawDictGet(d: Map<unknown, number>, k: number | string): number {

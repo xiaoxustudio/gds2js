@@ -2,7 +2,7 @@ import { UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { vecFailKey } from "./vector2";
 import { add32, div32, mod32, mul32, sub32, wrap32 } from "./vector2i";
-import { GVector3, VEC3I_MARK, vector3 } from "./vector3";
+import { GVector3, registerVec3iParts, vector3 } from "./vector3";
 
 /**
  * Vector3i —— 第三个 int32 值类型（形状照 `vector2i.ts`，口径全部来自 4.6.3 实测：
@@ -20,7 +20,6 @@ import { GVector3, VEC3I_MARK, vector3 } from "./vector3";
  *    这三条都是「照隔壁那一族抄就正好错」的形状，别顺手补。
  */
 export class GVector3i {
-  readonly [VEC3I_MARK] = true;
   x: number;
   y: number;
   z: number;
@@ -34,6 +33,8 @@ export class GVector3i {
 export function vector3i(x: number | bigint, y: number | bigint, z: number | bigint): Variant {
   return V.object(new GVector3i(x, y, z));
 }
+
+registerVec3iParts((o: object): [number, number, number] | null => (o instanceof GVector3i ? [o.x, o.y, o.z] : null));
 
 export function asVec3i(v: Variant): GVector3i | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector3i ? (v.v as GVector3i) : null;

@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
-import { asBytes, packTypeName } from "./packed";
+import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
 
 /**
  * `Array(x)` —— 实测过的那一格只有「从 PackedByteArray 转」（f49 t4：`Array(src)` → `[1, 2, 3]`、
@@ -10,10 +10,10 @@ import { asBytes, packTypeName } from "./packed";
  * 过去这些写法是 `this.Array is not a function` 的 JS TypeError，换成正面的报缺至少说得清原因。
  */
 export function arrayFromVariant(v: Variant): Variant {
-  const b = asBytes(v);
-  if (b === null) {
+  if (!isBytes(v)) {
     throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
   }
+  const b = packBytes(v);
   if (b.kind !== "byte") {
     throw new UnsupportedError("array-ctor-from-kind", `Array(...) 只实测过 PackedByteArray 实参（收到 ${packTypeName(b.kind)}）`);
   }

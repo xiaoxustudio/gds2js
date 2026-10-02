@@ -4,7 +4,8 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
     let x = rt.V.object(new A());
     let f = rt.toFloat(rt.V.float(2.7));
     let big = rt.toFloat(rt.V.float(1e+30));
@@ -23,54 +24,78 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-class A {
-  p_int(a): unknown {
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+class A extends rt.GdScriptObject {
+  p_int(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "int", 1, "p_int", this);
     return rt.formatOf(rt.V.str("int<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
-  p_float(a): unknown {
+  p_float(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "float", 1, "p_float", this);
     return rt.formatOf(rt.V.str("float<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
-  p_bool(a): unknown {
+  p_bool(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "bool", 1, "p_bool", this);
     return rt.formatOf(rt.V.str("bool<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
-  p_str(a): unknown {
+  p_str(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "String", 1, "p_str", this);
     return rt.formatOf(rt.V.str("str<-%s(%s)"), rt.V.array(rt.GArray.of([a, rt.typeOf(a)])));
   }
   
-  p_vec2(a): unknown {
+  p_vec2(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "Vector2", 1, "p_vec2", this);
     return rt.formatOf(rt.V.str("vec2<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
-  p_vec2i(a): unknown {
+  p_vec2i(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "Vector2i", 1, "p_vec2i", this);
     return rt.formatOf(rt.V.str("vec2i<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
-  p_color(a): unknown {
+  p_color(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "Color", 1, "p_color", this);
     return rt.formatOf(rt.V.str("color<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
   }
   
-  math(a): unknown {
+  math(a: rt.Variant): rt.Variant {
     a = rt.paramSlot(a, "int", 1, "math", this);
     return rt.formatOf(rt.V.str("math<-%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.mul(a, rt.V.int(2))])])));
   }
   
-}
-rt.registerClass("A", A);
-rt.registerMethodArities(A, { "p_int": [1, 1], "p_float": [1, 1], "p_bool": [1, 1], "p_str": [1, 1], "p_vec2": [1, 1], "p_vec2i": [1, 1], "p_color": [1, 1], "math": [1, 1] });
-rt.registerNativeBase(A, "RefCounted");
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "p_int": return rt.wrapValue(this.p_int(args[0] as rt.Variant));
+      case "p_float": return rt.wrapValue(this.p_float(args[0] as rt.Variant));
+      case "p_bool": return rt.wrapValue(this.p_bool(args[0] as rt.Variant));
+      case "p_str": return rt.wrapValue(this.p_str(args[0] as rt.Variant));
+      case "p_vec2": return rt.wrapValue(this.p_vec2(args[0] as rt.Variant));
+      case "p_vec2i": return rt.wrapValue(this.p_vec2i(args[0] as rt.Variant));
+      case "p_color": return rt.wrapValue(this.p_color(args[0] as rt.Variant));
+      case "math": return rt.wrapValue(this.math(args[0] as rt.Variant));
+      default: return super.__gdDispatch(name, args);
+    }
+  }
 
-await new Main().run();
+}
+const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
+rt.nameClass(__gd_d_A, "A");
+rt.registerMethodArities(__gd_d_A, { "p_int": [1, 1], "p_float": [1, 1], "p_bool": [1, 1], "p_str": [1, 1], "p_vec2": [1, 1], "p_vec2i": [1, 1], "p_color": [1, 1], "math": [1, 1] });
+rt.registerNativeBase(__gd_d_A, "RefCounted");
+
+const __gd_entry = new Main();
+await __gd_entry.run();

@@ -4,8 +4,9 @@ import * as rt from "../../../src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  async _initialize(): Promise<void> {
-    let d = new Map([]);
+    override _initialize(): Promise<void> { return this.__gd__initialize(); }
+  async __gd__initialize(): Promise<void> {
+    let d = new Map<unknown, number>([]);
     let i = 0;
     let s = 0;
     while ((i < 3)) {
@@ -20,7 +21,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.int(s)]));
     print(rt.showArgs([rt.V.int(d.size)]));
     print(rt.showArgs([rt.V.int(rt.fast.rawDictGet(d, 2))]));
-    let e = new Map([]);
+    let e = new Map<unknown, number>([]);
     e.set("a", 1);
     e.set("b", 2);
     print(rt.showArgs([rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))]));
@@ -30,7 +31,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(g, rt.V.float(1), rt.V.int(5));
       if (_nv !== null) g = _nv;
     }
-    print(rt.showArgs([rt.index(g, rt.V.float(1))]));
+    print(rt.showArgs([rt.wrapValue(rt.index(g, rt.V.float(1)))]));
     let m = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(m, rt.V.int(0), rt.V.int(1));
@@ -40,7 +41,7 @@ export class Main extends SceneTree {
       const _nv = rt.writeIdx(m, rt.V.int(1), rt.V.float(2.5));
       if (_nv !== null) m = _nv;
     }
-    print(rt.showArgs([rt.ops.add(rt.index(m, rt.V.int(0)), rt.index(m, rt.V.int(1)))]));
+    print(rt.showArgs([rt.ops.add(rt.wrapValue(rt.index(m, rt.V.int(0))), rt.wrapValue(rt.index(m, rt.V.int(1))))]));
     let h = rt.dictOf([]);
     {
       const _nv = rt.writeIdx(h, rt.V.int(0), rt.V.int(1));
@@ -55,8 +56,17 @@ export class Main extends SceneTree {
     this.quit();
   }
   
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      case "_initialize": return rt.wrapValue(this.__gd__initialize());
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
 }
 
-rt.registerMethodArities(Main, { "_initialize": [0, 0] });
-rt.registerNativeBase(Main, "SceneTree");
-await new Main().run();
+const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
+rt.registerNativeBase(__gd_d_Main, "SceneTree");
+const __gd_entry = new Main();
+await __gd_entry.run();
