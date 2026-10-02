@@ -5,15 +5,15 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "tsdown";
-import { compileProject } from "../src/compile/project";
-import { emitModuleWithMap } from "../src/emit/emitter";
-import { analyze } from "../src/lower/analyze";
-import { lower } from "../src/lower/lower";
-import { parseSource } from "../src/parse/parser";
+import { compileProject } from "@gds2js/compiler/compile/project";
+import { emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
+import { analyze } from "@gds2js/compiler/lower/analyze";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TMP = join(ROOT, "pkg-check");
-const STANDALONE_CJS = join(ROOT, "dist/standalone.cjs");
+const STANDALONE_CJS = join(ROOT, "packages/gds2js/dist/standalone.cjs");
 const STANDALONE_SRC = readFileSync(STANDALONE_CJS, "utf8");
 
 let failures = 0;
@@ -31,7 +31,7 @@ function runNode(cwd: string, file: string): { out: string; code: number | null 
 }
 
 async function checkPerCaseModes(): Promise<void> {
-  console.log("① single/local × 代表性用例 vs golden");
+  console.log("① single/local × 代表性用例 vs golden（走 npm 安装态：原生 exe 不带打包器，single 在那边会响亮拒）");
   const cases = [
     "011-add-operator-types",
     "020-match-array-pattern",
@@ -56,6 +56,8 @@ async function checkPerCaseModes(): Promise<void> {
       copyFileSync(STANDALONE_CJS, join(dir, "gds2js-standalone.cjs"));
       const { code } = emitModuleWithMap(ir, {
         autoRun: true,
+        runtimeImport: "../../../packages/runtime/src/runtime/index",
+        hostImport: "../../../tools/harness/scene-tree",
         runtimeMode: mode,
         ...(mode === "single" ? { standaloneInline: STANDALONE_SRC } : { standaloneRequirePath: "./gds2js-standalone.cjs" }),
       });
@@ -151,6 +153,8 @@ async function checkSourcemapSingle(): Promise<void> {
   const { code, map } = emitModuleWithMap(ir, {
     autoRun: true,
     sourcemap: true,
+    runtimeImport: "../../../packages/runtime/src/runtime/index",
+    hostImport: "../../../tools/harness/scene-tree",
     runtimeMode: "single",
     standaloneInline: STANDALONE_SRC,
     sourceFile: "main.gd",

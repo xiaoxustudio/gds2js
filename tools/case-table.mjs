@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 
-const OUT = "src/runtime/case-table.ts";
+const OUT = "packages/runtime/src/runtime/case-table.ts";
 const BS = String.fromCharCode(92);
 
 const rows = [];

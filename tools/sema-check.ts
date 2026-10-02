@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { analyze } from "../src/lower/analyze";
-import { lower } from "../src/lower/lower";
-import { parseSource } from "../src/parse/parser";
+import { analyze } from "@gds2js/compiler/lower/analyze";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { parseSource } from "@gds2js/compiler/parse/parser";
 import { caseScript, godotOk, listSingleCases, readGolden } from "./lib.mjs";
 
 interface Row {

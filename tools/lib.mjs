@@ -10,20 +10,17 @@ export const CORPUS = join(ROOT, "corpus", "cases");
 export const GODOT_BIN =
   process.env.GODOT_BIN || "F:/godot/Godot_v4.6.3-stable_win64_console.exe";
 
-/**
- * 单次 Godot 运行的上限。这条预算是「卡住了没输出」的护栏，不是性能指标：
- * 实测同一份代码，冷机器上 Godot 从启动到退出要 12–17 s，15 s 的默认值就会把
- * 明明跑对（输出逐字节相同）的用例判成 `TIMEOUT 漂移`。所以留一个环境变量口子，
- * 复扫时按机器状况放大（`GDS2JS_GODOT_TIMEOUT_MS=60000 node tools/golden.mjs --check`），
- * 默认值不动 —— 静默放宽护栏会把真的死循环当成慢。
- */
+/** 单次 Godot 运行的上限，「卡住了没输出」的护栏；用 GDS2JS_GODOT_TIMEOUT_MS 按机器状况放大。 */
 export const DEFAULT_TIMEOUT_MS = Number(process.env.GDS2JS_GODOT_TIMEOUT_MS) || 15000;
 
+/** 探头用例（000-probe-cs-*）是 case-table 的原料，不是语料：除非 filter 点名 000-，否则不进任何门。 */
 export function listCases(filter = "") {
   if (!existsSync(CORPUS)) return [];
+  const wantProbes = filter.startsWith("000-");
   return readdirSync(CORPUS, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
+    .filter((n) => wantProbes || !n.startsWith("000-"))
     .filter((n) => n.includes(filter))
     .sort();
 }
@@ -44,11 +41,7 @@ export function caseIsProject(id) {
   return existsSync(join(caseDir(id), "project.godot"));
 }
 
-/**
- * 单文件工具（compile / ir-check / sema-check）的用例集：排除工程用例。
- * 工程用例的跨文件语义在单文件视角下会把别的文件的 class_name 误判成未声明，
- * 只能整工程编译才有意义 —— 那归 diff 管。
- */
+/** 单文件工具（compile / ir-check / sema-check）的用例集：排除工程用例。 */
 export function listSingleCases(filter = "") {
   return listCases(filter).filter((id) => !caseIsProject(id));
 }

@@ -1,56 +1,46 @@
 {
-  "name": "gds2js",
+  "name": "gds2js-monorepo",
   "type": "module",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
-  "description": "将 .gds 转义为 js 运行",
+  "packageManager": "pnpm@12.8.1",
+  "description": "将 .gds 转义为 js 运行（monorepo 根：只放工具链与门脚本，对外面在 packages/gds2js）",
   "engines": {
-    "node": ">=25.7"
+    "node": ">=22.18"
   },
-  "exports": {
-    ".": "./dist/runtime.mjs",
-    "./runtime": "./dist/runtime.mjs",
-    "./host": "./dist/host.mjs",
-    "./standalone": "./dist/standalone.cjs",
-    "./package.json": "./package.json"
-  },
-  "bin": {
-    "gds2js": "./dist/cli.mjs"
-  },
-  "files": [
-    "dist"
-  ],
   "scripts": {
-    "gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
-    "build": "tsdown && tsdown --config tsdown.standalone.config.ts && tsdown --config tsdown.product.config.ts && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
-    "dev": "tsx src/cli.ts",
-    "watch": "tsdown --watch",
     "test:golden": "node tools/golden.mjs",
     "test:diff": "tsx tools/diff.mjs",
     "test:ops": "tsx tools/ops-check.ts",
+    "test:scriptc": "node tools/scriptc-check.mjs",
     "test:ir": "tsx tools/ir-check.ts",
     "test:sema": "tsx tools/sema-check.ts",
-    "test:escape": "tsx tools/escape-check.ts",
+    "test:treeface": "tsx tools/tree-face-check.ts",
+    "regen:case-table": "node tools/case-probe.mjs && node tools/golden.mjs 000-probe-cs && node tools/case-table.mjs",
+    "regen:case-flags": "node tools/case-flags-probe.mjs && node tools/golden.mjs 000-probe-cf && node tools/case-flags.mjs",
+    "test:cli-native": "node tools/cli-native-check.mjs",
     "test:compile": "tsx tools/compile.ts",
-    "test:run": "tsx tools/run-check.mjs",
-    "test:multi": "tsx tools/multi-demo.ts",
     "test:pkgmodes": "tsx tools/pkg-modes-check.ts",
     "test:export": "tsx tools/export-check.ts",
+    "release": "node tools/release.mjs",
     "bench": "tsx tools/bench.ts",
-    "test:perry": "tsx tools/perry-check.ts",
-    "build:self": "tsx tools/self-pack.ts",
-    "bench:godot": "tsx tools/bench-godot.ts"
+    "bench:godot": "tsx tools/bench-godot.ts",
+    "gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "dev": "tsx packages/gds2js/src/cli.ts",
+    "watch": "pnpm --filter gds2js watch"
   },
   "devDependencies": {
+    "@gds2js/compiler": "workspace:*",
+    "@gds2js/runtime": "workspace:*",
     "@types/node": "^24.19.0",
+    "commander": "^15.0.0",
+    "gds2js": "workspace:*",
     "tree-sitter-cli": "^0.27.0",
     "tsdown": "^0.22.14",
     "tsx": "^4.23.15",
+    "turbo": "^2.11.7",
     "typescript": "^7.0.2"
-  },
-  "dependencies": {
-    "@perryts/perry-win32-x64": "^0.5.1520",
-    "commander": "^15.0.0",
-    "web-tree-sitter": "^0.27.0"
   }
 }

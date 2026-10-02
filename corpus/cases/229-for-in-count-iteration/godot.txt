@@ -1,0 +1,22 @@
+int-5	[0][1][2][3][4]	5
+int-0	[]	0
+int-1	[0]	1
+int-neg	[]	0
+float-2	[0.0][1.0]	2
+float-0.5	[0.0]	1
+float-neg	[]	0
+str-ab	[a][b]	2
+str-empty	[]	0
+str-utf	[é][😀][a]	3
+dict	[a][b]	2
+dict-empty	[]	0
+array	[7][8][9]	3
+array-empty	[]	0
+pack-byte	[9][8]	2
+pack-str	[x][y]	2
+nested-array	[[1, 2]][[3]]	2
+counted	10	0	0
+counted-f	0.0|1.0|2.0	
+nested	00,01,10,11
+typed	0,1,2
+range-parity	[0, 1, 2, 3]	[0, 1, 2, 3]	[]

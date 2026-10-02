@@ -1,14 +1,29 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { emitModule } from "../src/emit/emitter";
-import { analyze } from "../src/lower/analyze";
-import { lower } from "../src/lower/lower";
-import { parseSource } from "../src/parse/parser";
-import { UnsupportedError } from "../src/runtime/errors";
+import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { analyze } from "@gds2js/compiler/lower/analyze";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { parseSource } from "@gds2js/compiler/parse/parser";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { caseDir, caseScript, listSingleCases } from "./lib.mjs";
 
 const filter = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 const cases = listSingleCases(filter);
+
+/** 生成物落在 corpus/cases/<id>/：runtime 与测试宿主都按仓库原位（三级回溯）—— 这两个值以前是 emitter 的默认值，现在由调用方声明。 */
+const GEN_EMIT_OPTS = {
+  runtimeImport: "../../../packages/runtime/src/runtime/index",
+  hostImport: "../../../tools/harness/scene-tree",
+};
+
+/** scriptc-check 的文本口径：产物里有没有 compress()/decompress()（`rt.method(x, "compress", …)`）。 */
+const NEED_ZSTD_TEXT = /,\s*"(?:compress|decompress)"\s*,/;
+/** 带 autoRun 尾巴的产物必须自己兜底：直接跑产物时没有 CLI 那层 try/catch。 */
+const ENTRY_TAIL = /const __gd_entry = new \w+\(\);/;
+const FALLBACK_TAIL = /rt\.reportRunFailure\(/;
+const runFallbackMissing: string[] = [];
+/** 文本口径（NEED_ZSTD）与 IR 标志（usesPackCodec）必须逐用例一致 —— 两条判据互锁在这里。 */
+const packCodecMismatch: string[] = [];
 
 let compiled = 0;
 const rejected: string[] = [];
@@ -46,7 +61,13 @@ for (const id of cases) {
 
   try {
     const ir = lower(await parseSource(src));
-    writeFileSync(join(caseDir(id), "main.gen.mts"), emitModule(ir), "utf8");
+    const gen = emitModule(ir, GEN_EMIT_OPTS);
+    const saysZstd = NEED_ZSTD_TEXT.test(gen);
+    if (saysZstd !== (ir.usesPackCodec === true)) {
+      packCodecMismatch.push(`${id}: 文本=${String(saysZstd)} / IR=${String(ir.usesPackCodec === true)}`);
+    }
+    if (ENTRY_TAIL.test(gen) && !FALLBACK_TAIL.test(gen)) runFallbackMissing.push(id);
+    writeFileSync(join(caseDir(id), "main.gen.mts"), gen, "utf8");
     compiled++;
   } catch (e) {
     const msg = e instanceof UnsupportedError ? e.message : String(e);
@@ -58,7 +79,17 @@ for (const id of cases) {
 console.log(`编译成功 ${compiled}/${cases.length}`);
 console.log(`  语义分析拦下（预期报错用例） ${rejected.length}`);
 console.log(`  emitter 不支持 ${unsupported.length}`);
+console.log(`  pack codec 口径不一致 ${packCodecMismatch.length}（文本 regex vs IR 标志，应为 0）`);
+console.log(`  自兜底缺失 ${runFallbackMissing.length}（有 autoRun 尾巴却没 reportRunFailure，应为 0）`);
 if (unsupported.length > 0) {
   console.log("\nemitter 缺口：");
   for (const u of unsupported) console.log(`  ${u.id.padEnd(30)} ${u.msg}`);
+}
+if (packCodecMismatch.length > 0) {
+  for (const m of packCodecMismatch) console.log(`  ✗ ${m}`);
+  process.exitCode = 1;
+}
+if (runFallbackMissing.length > 0) {
+  for (const m of runFallbackMissing) console.log(`  ✗ ${m}`);
+  process.exitCode = 1;
 }

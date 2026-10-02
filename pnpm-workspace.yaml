@@ -1,7 +1,16 @@
-# 单包仓库：空列表显式声明「仅根包」（pnpm 自动把根纳入，故不写 "."）。
-# 缺这个字段时 pnpm 12 会直接报 "packages field missing or empty" 并拒绝所有安装。
-packages: []
+# monorepo 工作区：packages/ 下是 @gds2js/* 三个包，根包（gds2js-monorepo）只放工具链与门脚本。
+packages:
+  - "packages/*"
 
 allowBuilds:
   esbuild: true
   tree-sitter-cli: true
+
+minimumReleaseAgeExclude:
+  - "@turbo/darwin-64@2.11.7"
+  - "@turbo/darwin-arm64@2.11.7"
+  - "@turbo/linux-64@2.11.7"
+  - "@turbo/linux-arm64@2.11.7"
+  - "@turbo/windows-64@2.11.7"
+  - "@turbo/windows-arm64@2.11.7"
+  - turbo@2.11.7
