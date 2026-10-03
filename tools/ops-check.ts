@@ -1,6 +1,6 @@
 import "@gds2js/runtime/host-node"; // node 宿主的 zlib 注册（runtime 只留槽，见 `packages/runtime/src/runtime/packed.ts`）
 import { print, resetOut, SceneTree } from "@gds2js/runtime/host";
-import { GodotRuntimeError, UnsupportedError, claimRunReporting, releaseRunReporting, reportRunFailure } from "@gds2js/runtime/runtime/errors";
+import { GodotRuntimeError, UnsupportedError, claimRunReporting, errOf, releaseRunReporting, reportRunFailure } from "@gds2js/runtime/runtime/errors";
 import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "@gds2js/runtime/runtime/builtins";
 import { fast } from "@gds2js/runtime/runtime/fast";
 import { parseGdDouble } from "@gds2js/runtime/shared/double";
@@ -3200,8 +3200,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     return `${written.trim() === "" ? "quiet" : written} | ${rethrown} | exit=${String(exitCodeSeen)}`;
   };
 
+  eq("run-fallback", "errOf 认 name 不认实例（CLI 与产物吃两份 runtime 副本时也带 code）", errOf(Object.assign(new Error("String.count() 未实现"), { name: "UnsupportedError", code: "string-method" })), "[string-method] String.count() 未实现");
+  eq("run-fallback", "errOf 对别的 Error 只给正文，不硬凑方括号", errOf(new GodotRuntimeError("arity", "参数不够")), "参数不够");
   eq("run-fallback", "同进程宿主声明了「归我报」：原样再抛、一声不印", probeFailure("in-process"), "quiet | rethrown:string-method | exit=undefined");
-  eq("run-fallback", "隔进程宿主声明过：只把退出码带回非 0", probeFailure("child"), "quiet |  | exit=1");
+  eq("run-fallback", "隔进程宿主声明过：只写正文，皮由父进程披", probeFailure("child"), "[string-method] String.count() 未实现\n |  | exit=1");
   eq(
     "run-fallback",
     "谁都没声明（直接跑产物）：补一句 runtime error",

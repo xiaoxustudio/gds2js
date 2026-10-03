@@ -41,7 +41,7 @@ pnpm build      # turbo run build：产出 packages/gds2js/dist/cli.mjs + runtim
 发布（形态 A：只发 `gds2js.exe`，scriptc 由用户自备——同目录 `scriptc/`、项目里 `npm i -D scriptc`、或 `SCRIPTC_BIN`）：
 
 ```bash
-pnpm release    # 版本一致性校验 → pnpm build → 原生 CLI 19 项等价性门 → release/gds2js-<version>-win64.exe（+ .sha256）
+pnpm release    # 版本一致性校验 → pnpm build → 原生 CLI 等价性门 → release/gds2js-<version>-win64.exe（+ .sha256）
 ```
 
 版本戳：`gds2js --version`（版本字面量在 `packages/gds2js/src/version.ts`，与四处 `package.json` 必须一字一致，`pnpm release` 会校验；原生 exe 里版本是静态编入的）。

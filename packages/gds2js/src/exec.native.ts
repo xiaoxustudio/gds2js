@@ -6,12 +6,18 @@ import { claimRunReportingInChild, releaseRunReporting } from "@gds2js/runtime/r
 
 const BIN: string = process.env.GDS2JS_NODE_BIN === undefined || process.env.GDS2JS_NODE_BIN === "" ? "node" : process.env.GDS2JS_NODE_BIN;
 
+/** 纯函数：子进程按「父进程报」的口径只写正文；正文为空（不是产物兜底那条路炸的）就退回退出码。 */
+function childReason(stderr: string, status: number | null): string {
+  const text = stderr.trim();
+  return text === "" ? `产物退出码 ${String(status)}` : text;
+}
+
 export async function runProduct(path: string): Promise<void> {
-  // 报法是 CLI 的：spawnSync 在 scriptc 上没有 env 这一格（SC2020），改走「子进程继承父环境」——
-  // 声明过之后产物撞错只把退出码带回非 0，不再自己印一行。
+  // 报法还是 CLI 的，但理由得接回来：spawnSync 在 scriptc 上没有 env 这一格（SC2020），
+  // 所以走「父环境改写 + 子进程继承」让产物别重复报，stderr 单接管理由转成 CLI 那一行的正文。
   const prev = claimRunReportingInChild();
-  const r = spawnSync(BIN, [path], { stdio: "inherit", windowsHide: true });
+  const r = spawnSync(BIN, [path], { stdio: ["inherit", "inherit", "pipe"], encoding: "utf8", windowsHide: true });
   releaseRunReporting(prev);
   if (r.error) throw new Error(`起 ${BIN} 失败（产物要 node ≥ 22.18；可以用 GDS2JS_NODE_BIN 指到具体二进制）：${r.error.message}`);
-  if (r.status !== 0) throw new Error(`产物退出码 ${String(r.status)}`);
+  if (r.status !== 0) throw new Error(childReason(r.stderr, r.status));
 }

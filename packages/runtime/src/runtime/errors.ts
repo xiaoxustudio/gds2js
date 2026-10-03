@@ -20,9 +20,17 @@ export class GodotRuntimeError extends Error {
   }
 }
 
-/** 报错行的正文：`[code] message`（响亮拒）或 `message`（运行期错）。CLI 与产物共用这一句。 */
+/**
+ * 报错行的正文：`[code] message`（响亮拒）或 `message`（运行期错）。CLI 与产物共用这一句。
+ * 认 `name` 不认 `instanceof`：CLI 吃的常是打包好的那一份 runtime、产物吃的是源码那一份，
+ * 两个类不同调，`instanceof` 在跨这份分岔时会失效（`UnsupportedError` 自己把 name 钉死了）。
+ */
 export function errOf(e: unknown): string {
-  return e instanceof UnsupportedError ? `[${e.code}] ${e.message}` : e instanceof Error ? e.message : String(e);
+  if (e instanceof Error && e.name === "UnsupportedError") {
+    const code = (e as { code?: string }).code;
+    return code === undefined ? e.message : `[${code}] ${e.message}`;
+  }
+  return e instanceof Error ? e.message : String(e);
 }
 
 /**
@@ -56,13 +64,13 @@ export function claimRunReportingInChild(): string | undefined {
 
 /**
  * `run` 抛出来时由产物自己收口。同进程声明过 → 原样再抛，照宿主自己的 catch 口径走；
- * 隔进程声明过 → 只把退出码带回非 0。两条都没声明（`node dist/x.mts`、scriptc 出的原生 exe
+ * 隔进程声明过 → 正文照写，但不披 `runtime error` 那层皮，父进程接过去按它自己的格式报，
+ * 一条错就只出一行、理由也不丢。两条都没声明（`node dist/x.mts`、scriptc 出的原生 exe
  * 直接跑）才是这一格要补的兜底：一句 `runtime error` 加非 0 退出码，而不是一条 Uncaught 栈。
  */
 export function reportRunFailure(e: unknown): void {
   const owner = process.env[RUN_OWNER_ENV];
   if (owner === RUN_OWNER_IN_PROCESS) throw e;
   process.exitCode = 1;
-  if (owner === RUN_OWNER_CHILD) return;
-  process.stderr.write(`  runtime error  ${errOf(e)}\n`);
+  process.stderr.write(owner === RUN_OWNER_CHILD ? `${errOf(e)}\n` : `  runtime error  ${errOf(e)}\n`);
 }

@@ -247,6 +247,21 @@ console.log("⑤ 能力边界要响亮拒");
   const missing = cliExe(["check", join(dir, "nope.gd")], ROOT);
   if (!/读不到文件/.test(missing.out)) fail(`缺文件没走到「读不到文件」那一句：${missing.out.slice(0, 160)}`);
   else ok("缺文件给的是错误行，不是 Uncaught");
+
+  // 产物撞未实现：两支 CLI 必须报同一行，而且理由不能被「产物退出码 N」吃掉
+  // —— 原生那支是起子进程跑产物的，产物的正文得从子进程 stderr 接回来才算报全。
+  const gd = join(dir, "uns.gd");
+  writeFileSync(gd, 'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("hello".count("l"))\n\tquit()\n', "utf8");
+  const nRun = cliNode(["run", gd], ROOT);
+  const xRun = cliExe(["run", gd], ROOT);
+  const hits = (s) => s.split("\n").filter((l) => l.includes("runtime error")).length;
+  if (/Uncaught/.test(nRun.out) || /Uncaught/.test(xRun.out)) fail(`run 撞未实现又漏出 Uncaught 栈：node=${nRun.out.slice(0, 160)} exe=${xRun.out.slice(0, 160)}`);
+  else if (nRun.status !== 1 || xRun.status !== 1) fail(`run 撞未实现的退出码不是 1：node=${String(nRun.status)} exe=${String(xRun.status)}`);
+  else if (/产物退出码/.test(xRun.out)) fail(`exe 把理由退化成了退出码：${xRun.out.slice(0, 200)}`);
+  else if (!/\[string-method\]/.test(nRun.out) || !/\[string-method\]/.test(xRun.out)) fail(`两支都没给出 [code] 正文：node=${nRun.out.slice(0, 160)} exe=${xRun.out.slice(0, 160)}`);
+  else if (nRun.out !== xRun.out) fail(`run 撞未实现的两支输出不同：\n    node=${JSON.stringify(nRun.out.slice(0, 200))}\n    exe=${JSON.stringify(xRun.out.slice(0, 200))}`);
+  else if (hits(nRun.out) !== 1 || hits(xRun.out) !== 1) fail(`一条错报了两行（产物自己与宿主各报一遍）：node=${hits(nRun.out)} exe=${hits(xRun.out)}`);
+  else ok("run 撞未实现：两支同一行 runtime error，理由没被退出码吃掉、也没重复报");
 }
 
 /* 6) `--pack node`：exe 里没有 node，这一支要么找到外部 node（≥25.7）出货，要么把版本门槛说清楚 —— 都不许崩 */

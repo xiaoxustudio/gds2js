@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * 发布收口（形态 A：只发 `gds2js.exe`，scriptc 由用户自备）——一条链跑完：
- *   版本一致性校验（根/三包 package.json ↔ src/version.ts）→ pnpm build → 原生 CLI 等价性门（19 项；
+ *   版本一致性校验（根/三包 package.json ↔ src/version.ts）→ pnpm build → 原生 CLI 等价性门（项数会随门加长，不写死；
  *   exe 过期会自动重编）→ 落 `release/` + sha256 → 产物 `--version` 冒烟。
  *
  * 用法：pnpm release
@@ -53,10 +53,10 @@ if (!seamFloor) fail("packages/gds2js/src/exec.native.ts 里找不到「产物�
 if (`>=${seamFloor[1]}` !== rootEngines) fail(`engines.node（${rootEngines}）与 exec.native.ts 的产物底线（>=${seamFloor[1]}）不一致`);
 console.log(`release: engines.node ${rootEngines}（根/gds2js/exec.native.ts 一致）`);
 
-/* 2) 构建 + 门：门里 exe 过期会自动重编，编完跑 19 项（含 SEA / scriptc 两支真出货）。 */
+/* 2) 构建 + 门：门里 exe 过期会自动重编，编完跑等价性门（含 SEA / scriptc 两支真出货）。 */
 console.log("release: pnpm build …");
 runCmd("pnpm build");
-console.log("release: 原生 CLI 等价性门（19 项）…");
+console.log("release: 原生 CLI 等价性门…");
 run(process.execPath, [join(ROOT, "tools", "cli-native-check.mjs")]);
 
 /* 3) 落产物：release/gds2js-<version>-win64.exe + .sha256。 */
