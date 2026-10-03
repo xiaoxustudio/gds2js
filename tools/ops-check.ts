@@ -17,9 +17,12 @@ import {
   keyOf,
   show,
   strCase,
+  strCapitalize,
+  strFind,
   strFloat,
   strBuiltin,
   strFormat,
+  strReplace,
   stringCtor,
   stringNameCtor,
   stringStatic,
@@ -543,6 +546,46 @@ eq("018", "substr(1,3)", strOps.substr("hello", 1, 3), "ell");
 eq("018", "to_upper()", strCase("hello", "upper"), "HELLO");
 eq("018", "\"%d/%s\"%[5,\"x\"]", strOps.format("%d/%s", [I(5), S("x")]), "5/x");
 eq("018", "UTF-32 length（emoji 算 1 个码点）", strOps.length("a\u{1F600}"), 2);
+
+eq("226", "replace 全量替换", strReplace("hello", "l", "L"), "heLLo");
+eq("226", "replace 分大小写", strReplace("hello", "L", "l"), "hello");
+eq("226", "replacen 不分大小写", strReplace("HELLO hello", "l", "1", true), "HE11O he11o");
+eq("226", "replace 左起、不重叠", `${strReplace("aaa", "aa", "b")}|${strReplace("aaaa", "aa", "b")}`, "ba|bb");
+eq("226", "replace 空 what 原样返回", strReplace("hello", "", "X"), "hello");
+eq("226", "replace 空 by 是删除", strReplace("hello", "l", ""), "heo");
+eq("226", "find 命中位含起点", `${strFind("hello", "l", 1, false)}|${strFind("hello", "l", 2, false)}|${strFind("hello", "l", 3, false)}`, "2|2|3");
+eq("226", "find 空 needle 恒 -1", strFind("hello", "", 0, false), -1);
+eq("226", "find 负 from 按「可落点数」折回", strFind("hello", "ll", -2, false), 2);
+eq("226", "find 折完仍为负就没命中", strFind("hello", "ll", -6, false), -1);
+eq("226", "rfind 默认从尾（-1）", strFind("hello", "l", -1, true), 3);
+eq("226", "rfind 越过最后一个可落点直接 -1", strFind("0123456789", "456", 8, true), -1);
+eq("226", "rfind 同一个 -1 却能命中", strFind("0123456789", "456", -1, true), 4);
+eq("226", "find/rfind 的负 from 分界不对称", `${strFind("0123456789", "456", -4, false)}|${strFind("0123456789", "456", -4, true)}`, "4|4");
+eq("226", "码点下标：emoji 不当两个", strFind("\u{1F600}a\u{1F600}", "a", 0, false), 1);
+
+eq("226", "capitalize 单词首字母", strCapitalize("hello world"), "Hello World");
+eq("226", "capitalize 把连续大写拆成多词", strCapitalize("hELLo wORLd"), "H El Lo W Or Ld");
+eq("226", "capitalize 拆 AAa 这类前缀", `${strCapitalize("AAa")}|${strCapitalize("AAAa")}|${strCapitalize("aAA")}`, "A Aa|Aa Aa|A Aa");
+eq("226", "capitalize 下划线/连字符折成空格", `${strCapitalize("test_case")}|${strCapitalize("test-case")}`, "Test Case|Test Case");
+eq("226", "capitalize 点号不折", strCapitalize("test.case"), "Test.case");
+eq("226", "capitalize 数字两侧都拆词", `${strCapitalize("hello123world")}|${strCapitalize("I23")}|${strCapitalize("2aA")}`, "Hello 123 World|I 23|2a A");
+eq("226", "capitalize 首尾空白抹掉", `${strCapitalize("  hello  world  ")}|${strCapitalize("   ")}|${strCapitalize("")}`, "Hello World||");
+eq("226", "capitalize 不照顾罗马数字", strCapitalize("xi ii iii iv v vi vii viii ix x"), "Xi Ii Iii Iv V Vi Vii Viii Ix X");
+eq("226", "capitalize 非 ASCII 数字不拆词也不开大写", strCapitalize("\u0660ab"), "\u0660ab");
+eq("226", "capitalize ASCII 数字才拆词", strCapitalize("0ab"), "0 Ab");
+eq("226", "capitalize 词内一律降档", strCapitalize("McDonald"), "Mc Donald");
+eq("226", "capitalize 首码元取简单大写（标题大写字母也一样）", strCapitalize("\u01C5 digraph"), "\u01C4 Digraph");
+eq("226", "capitalize 希腊终 s 升档", strCapitalize("\u03C2 end"), "\u03A3 End");
+{
+  const s = V.str("hello");
+  eq("226", "String.replace 走 method 分发", show(method(s, "replace", [V.str("l"), V.str("L")])), "heLLo");
+  eq("226", "String.find 走 method 分发", show(method(s, "find", [V.str("l"), I(3)])), "3");
+  eq("226", "String.rfind 缺省 from=-1", show(method(s, "rfind", [V.str("l")])), "3");
+  eq("226", "String.capitalize 走 method 分发", show(method(V.str("ab cd"), "capitalize", [])), "Ab Cd");
+  shouldThrow("226", "replace 只收 2 个参数", () => method(s, "replace", [V.str("l"), V.str("L"), V.bool(false)]));
+  shouldThrow("226", "replace 少一个参数就抛", () => method(s, "replace", [V.str("l")]));
+  shouldThrow("226", "capitalize 不接受参数", () => method(V.str("ab"), "capitalize", [I(1)]));
+}
 
 eq("019", "2 in [1,2]", show(ops.inOp(I(2), V.array(GArray.of([I(1), I(2)])))), "true");
 eq("019", "\"e\" in \"hello\"", show(ops.inOp(S("e"), S("hello"))), "true");

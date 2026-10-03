@@ -17,6 +17,7 @@
     "test:sema": "tsx tools/sema-check.ts",
     "test:treeface": "tsx tools/tree-face-check.ts",
     "regen:case-table": "node tools/case-probe.mjs && node tools/golden.mjs 000-probe-cs && node tools/case-table.mjs",
+    "regen:case-flags": "node tools/case-flags-probe.mjs && node tools/golden.mjs 000-probe-cf && node tools/case-flags.mjs",
     "test:cli-native": "node tools/cli-native-check.mjs",
     "test:compile": "tsx tools/compile.ts",
     "test:pkgmodes": "tsx tools/pkg-modes-check.ts",

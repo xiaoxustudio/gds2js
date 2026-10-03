@@ -2,6 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { hexUpper } from "./numstr";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
+import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
 import { GVector2, asVec2, vecCmp } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
@@ -1004,8 +1005,124 @@ export function strCase(s: string, dir: "upper" | "lower"): string {
   return out.join("");
 }
 
-/** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */
-const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);
+/** 单码点的 Godot 简单降档，供不区分大小写的比较用（Godot 的大小写表永不撑开）。 */
+function lowerOne(ch: string): string {
+  return strCase(ch, "lower");
+}
+
+function matchAt(chars: string[], at: number, needle: string[], insensitive: boolean): boolean {
+  if (at + needle.length > chars.length) return false;
+  for (let j = 0; j < needle.length; j++) {
+    const a = chars[at + j] as string;
+    const b = needle[j] as string;
+    if (a === b) continue;
+    if (insensitive && lowerOne(a) === lowerOne(b)) continue;
+    return false;
+  }
+  return true;
+}
+
+/** `replace(what, by)` / `replacen`：左起、不重叠地换掉每一处命中；`what` 为空串时整串原样返回。 */
+export function strReplace(hay: string, what: string, by: string, insensitive = false): string {
+  if (what === "") return hay;
+  const chars = [...hay];
+  const needle = [...what];
+  const out: string[] = [];
+  let i = 0;
+  while (i < chars.length) {
+    if (matchAt(chars, i, needle, insensitive)) {
+      out.push(by);
+      i += needle.length;
+    } else {
+      out.push(chars[i] as string);
+      i += 1;
+    }
+  }
+  return out.join("");
+}
+
+/**
+ * `find`/`findn`/`rfind`/`rfindn` 的落点口径（码点下标，没命中 -1）。
+ * 空 needle 一律 -1；`from` 为负时按「可落点数」折回 —— `B = len - m + 1 + from`，
+ * 折完仍为负就没命中。正向取第一个 `>= B`，反向取最后一个 `<= B`，且反向还要求 `from <= len - m`。
+ */
+export function strFind(hay: string, needle: string, from: number, last: boolean, insensitive = false): number {
+  const chars = [...hay];
+  const nd = [...needle];
+  if (nd.length === 0) return -1;
+  const slots = chars.length - nd.length + 1;
+  let at = from;
+  if (at < 0) {
+    at = slots + at;
+    if (at < 0) return -1;
+  }
+  if (!last) {
+    for (let i = at; i < slots; i++) if (matchAt(chars, i, nd, insensitive)) return i;
+    return -1;
+  }
+  if (at > slots - 1) return -1;
+  for (let i = at; i >= 0; i--) if (matchAt(chars, i, nd, insensitive)) return i;
+  return -1;
+}
+
+/** Godot 的 `strip_edges()`：`capitalize` 用得上，此刻串里的空白已全被折成空格。 */
+function stripSpaces(s: string): string {
+  let lo = 0;
+  let hi = s.length;
+  while (lo < hi && s[lo] === " ") lo++;
+  while (hi > lo && s[hi - 1] === " ") hi--;
+  return s.slice(lo, hi);
+}
+
+/**
+ * Godot `_separate_compound_words` 的拆词：大小写边界、数字与字母边界都插一个空格。
+ * condA `aA` / condB `AAa`、`2Aa` / condC `2aa` / condD `A2`、`a2`（逐条件实测于 4.6.3）。
+ */
+function separateCompoundWords(s: string): string {
+  const chars = [...s];
+  if (chars.length === 0) return s;
+  const flags = chars.map((ch) => {
+    const cp = ch.codePointAt(0) as number;
+    return [gdIsUpper(cp), gdIsLower(cp), gdIsDigit(cp)] as const;
+  });
+  const pieces: string[] = [];
+  let start = 0;
+  for (let i = 1; i < chars.length; i++) {
+    const [currUpper, currLower, currDigit] = flags[i] as readonly [boolean, boolean, boolean];
+    const [prevUpper, prevLower, prevDigit] = flags[i - 1] as readonly [boolean, boolean, boolean];
+    const nextLower = i + 1 < chars.length ? (flags[i + 1] as readonly boolean[])[1] : false;
+    const condA = prevLower && currUpper;
+    const condB = (prevUpper || prevDigit) && currUpper && nextLower;
+    const condC = prevDigit && currLower && nextLower;
+    const condD = (prevUpper || prevLower) && currDigit;
+    if (condA || condB || condC || condD) {
+      pieces.push(chars.slice(start, i).join(""), " ");
+      start = i;
+    }
+  }
+  pieces.push(chars.slice(start).join(""));
+  const folded = [...pieces.join("")]
+    .map((ch) => (gdIsSep(ch.codePointAt(0) as number) ? " " : ch))
+    .join("");
+  return strCase(folded, "lower");
+}
+
+/**
+ * `capitalize()`：拆词 → 去首尾空白 → 整串降档 → 每个非空词只把首码元换成简单大写。
+ * 词与词之间恒定一个空格，所以 `hELLo` 会变成 `H El Lo` —— 这是 Godot 自己的行为，不是偏差。
+ */
+export function strCapitalize(s: string): string {
+  const words = stripSpaces(separateCompoundWords(s)).split(" ");
+  const out: string[] = [];
+  for (const w of words) {
+    if (w === "") continue;
+    const chars = [...w];
+    out.push(strCase(chars[0] as string, "upper") + chars.slice(1).join(""));
+  }
+  return out.join(" ");
+}
+
+/** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);
 
 interface FmtSpec {
   flags: string;

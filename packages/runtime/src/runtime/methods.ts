@@ -5,7 +5,7 @@ import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, ClassDesc, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCase, strContains, strEdge, strFormat, strJoin, strLength, strSplit,
+import { GArray, GDict, strAt, strCapitalize, strCase, strContains, strEdge, strFind, strFormat, strJoin, strLength, strReplace, strSplit,
   strSplitCapped, strSubstr, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -608,6 +608,35 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.bool(strLength(s) === 0);
         case "contains":
           return V.bool(strContains(s, asString(one(args, "contains"), "contains")));
+        case "replace":
+        case "replacen":
+        case "find":
+        case "findn":
+        case "rfind":
+        case "rfindn": {
+          const min = name.startsWith("find") || name.startsWith("rfind") ? 1 : 2;
+          if (args.length < min) {
+            throw new GodotRuntimeError(
+              "arity",
+              `Too few arguments for "${name}()" call. Expected at least ${min} but received ${args.length}.`,
+            );
+          }
+          if (args.length > 2) {
+            throw new GodotRuntimeError(
+              "arity",
+              `Too many arguments for "${name}()" call. Expected at most 2 but received ${args.length}.`,
+            );
+          }
+          const insensitive = name.endsWith("n");
+          if (min === 2) {
+            return V.str(
+              strReplace(s, asString(args[0] as Variant, name), asString(args[1] as Variant, name), insensitive),
+            );
+          }
+          const needle = asString(args[0] as Variant, name);
+          const from = args.length === 2 ? intArg(args, 1, name) : name.startsWith("r") ? -1 : 0;
+          return V.int(strFind(s, needle, from, name.startsWith("r"), insensitive));
+        }
         case "split": {
           if (args.length > 3) {
             throw new GodotRuntimeError("arity", `split() 最多 3 个参数（收到 ${args.length} 个）`);
@@ -631,6 +660,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCase(s, "upper"));
         case "to_lower":
           return V.str(strCase(s, "lower"));
+        case "capitalize":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `capitalize() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strCapitalize(s));
         case "to_utf8_buffer": {
           if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf8_buffer() 不接受参数（收到 ${args.length} 个）`);
           return V.object(new GBytes(Array.from(new TextEncoder().encode(s))));

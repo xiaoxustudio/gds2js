@@ -14,6 +14,8 @@ bench/.out/
 
 # case-table 的探头原料（000-probe-cs-*，regen:case-table 现搭现弃，不入库）
 corpus/cases/000-probe-cs-*/
+# case-flags 的探头原料（000-probe-cf-*，regen:case-flags 现搭现弃，不入库）
+corpus/cases/000-probe-cf-*/
 
 # Godot 工程导入缓存（跑 --import 生成，含 class_name 全局注册表）
 .godot/
