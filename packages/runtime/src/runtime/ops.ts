@@ -43,6 +43,7 @@ import {
   strSubstr,
   truthyOf,
   valueEq,
+  valueTypeName,
 } from "./values";
 
 const isNum = (v: Variant): boolean => v.t === Tag.INT || v.t === Tag.FLOAT;
@@ -59,9 +60,10 @@ function bothInt(a: Variant, b: Variant): boolean {
   return a.t === Tag.INT && b.t === Tag.INT;
 }
 
-function intPair(a: Variant, b: Variant): [IntPayload, IntPayload] {
+/** 只有 int 才吃的运算符；不合式时给的是 Godot 运行期那一句（与 `==` 那一格同一模板）。 */
+function intPair(a: Variant, b: Variant, op: string): [IntPayload, IntPayload] {
   if (!bothInt(a, b)) {
-    throw new UnsupportedError("need-int", `需要两个 int，收到 ${tagName(a.t)} 和 ${tagName(b.t)}`);
+    throw new GodotRuntimeError("int-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   return [a.v as IntPayload, b.v as IntPayload];
 }
@@ -205,7 +207,7 @@ export const ops = {
       throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
     }
     if (bothInt(a, b)) {
-      const [x, y] = intPair(a, b);
+      const [x, y] = intPair(a, b, "/");
       if (intToBig(y) === 0n) {
         throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
       }
@@ -226,7 +228,7 @@ export const ops = {
     const zj3Mod = asVec3i(b);
     if (zi3Mod && zj3Mod) return v3iMod(zi3Mod, zj3Mod);
     if (zi3Mod && b.t === Tag.INT) return v3iModK(zi3Mod, intToNum(b.v as IntPayload));
-    const [x, y] = intPair(a, b);
+    const [x, y] = intPair(a, b, "%");
     if (intToBig(y) === 0n) {
       throw new GodotRuntimeError("int-mod-zero", "整数取模零");
     }
@@ -238,7 +240,7 @@ export const ops = {
       throw new UnsupportedError("pow-operands", `** 不支持 ${tagName(a.t)} ** ${tagName(b.t)}`);
     }
     if (bothInt(a, b)) {
-      const [x, y] = intPair(a, b);
+      const [x, y] = intPair(a, b, "**");
       const e = intToBig(y);
       if (e < 0n) {
         throw new UnsupportedError("int-pow-negative", "负整数次幂（未补测）");
@@ -290,15 +292,15 @@ export const ops = {
   },
 
   band(a: Variant, b: Variant): Variant {
-    const [x, y] = intPair(a, b);
+    const [x, y] = intPair(a, b, "&");
     return i64(x, y, (p, q) => p & q);
   },
   bor(a: Variant, b: Variant): Variant {
-    const [x, y] = intPair(a, b);
+    const [x, y] = intPair(a, b, "|");
     return i64(x, y, (p, q) => p | q);
   },
   bxor(a: Variant, b: Variant): Variant {
-    const [x, y] = intPair(a, b);
+    const [x, y] = intPair(a, b, "^");
     return i64(x, y, (p, q) => p ^ q);
   },
   bnot(a: Variant): Variant {
@@ -308,11 +310,11 @@ export const ops = {
     return V.int(~intToBig(a.v as IntPayload));
   },
   shl(a: Variant, b: Variant): Variant {
-    const [x, y] = checkShift(a, b);
+    const [x, y] = checkShift(a, b, "<<");
     return V.int(intToBig(x) << intToBig(y));
   },
   shr(a: Variant, b: Variant): Variant {
-    const [x, y] = checkShift(a, b);
+    const [x, y] = checkShift(a, b, ">>");
     return V.int(intToBig(x) >> intToBig(y));
   },
 
@@ -410,8 +412,8 @@ function bigPow(base0: bigint, exp0: bigint): bigint {
 }
 
 /** Godot 编译期就拒绝移位负操作数，运行时这条也得拦住 */
-function checkShift(a: Variant, b: Variant): [IntPayload, IntPayload] {
-  const [x, y] = intPair(a, b);
+function checkShift(a: Variant, b: Variant, op: string): [IntPayload, IntPayload] {
+  const [x, y] = intPair(a, b, op);
   if (intToBig(x) < 0n || intToBig(y) < 0n) {
     throw new GodotRuntimeError("bit-shift-negative", "移位操作数不能为负");
   }
