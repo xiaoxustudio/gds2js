@@ -36,7 +36,7 @@
     "test:pkgmodes": "tsx tools/pkg-modes-check.ts",
     "test:export": "tsx tools/export-check.ts",
     "bench": "tsx tools/bench.ts",
-        "build:self": "tsx tools/self-pack.ts",
+    "build:self": "tsx tools/self-pack.ts",
     "bench:godot": "tsx tools/bench-godot.ts",
     "gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
     "build": "tsdown && tsdown --config tsdown.standalone.config.ts && tsdown --config tsdown.product.config.ts && node -e \"require('node:fs').copyFileSync('gdscript.wasm','dist/gdscript.wasm')\"",
@@ -51,6 +51,7 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "commander": "^15.0.0",
     "web-tree-sitter": "^0.27.0"
   }
 }

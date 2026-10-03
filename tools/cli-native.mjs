@@ -6,9 +6,8 @@
  *
  * 用法：
  *   node tools/cli-native.mjs                    # 出货形态：--dynamic（岛），编出来在 tmp/cli-native/gds2js.exe
- *   node tools/cli-native.mjs --static           # 不要岛的静态构建
  *   node tools/cli-native.mjs --ts-only --keep   # 只重编 TS：沿用已有的 .o
- *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）；加 --static 看不要岛的那一侧
+ *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）
  *   TS_SRC=../libtree-sitter node tools/cli-native.mjs
  */
 import { spawnSync } from "node:child_process";
@@ -260,16 +259,16 @@ const ffiPath = join(SCRATCH, "ffi.json");
 writeFileSync(ffiPath, JSON.stringify(manifest, null, 2), "utf8");
 
 const entry = join(SCRATCH, "src", "cli.ts");
-/* `--dynamic` 是默认出货形态（`--static` 才不要岛）：把 quickjs-ng 岛嵌进 exe，岛只跑那几格不能静态翻译的代码。 */
-const dynamic = !process.argv.includes("--static");
+/* 岛是**必需**的，不再是可选形态：CLI 的参数解析用 commander，而 commander 不带岛就是 6 格 SC2013
+ * （实测；岛里 0 错并真跑通）。原先 `--static` 那一支随 commander 一起没了。 */
 if (coverageOnly) {
-  const covArgs = ["coverage", entry, ...(dynamic ? ["--dynamic"] : [])];
+  const covArgs = ["coverage", entry, "--dynamic"];
   const r = spawnSync(SCRIPTC, covArgs, { encoding: "utf8", cwd: ROOT, timeout: 1_500_000 });
   process.stdout.write(`${r.stdout ?? ""}${r.stderr ?? ""}`);
   process.exit(r.status ?? 1);
 }
 const exe = join(SCRATCH, "gds2js.exe");
-const build = spawnSync(SCRIPTC, ["build", entry, "--ffi", ffiPath, ...(dynamic ? ["--dynamic"] : []), "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
+const build = spawnSync(SCRIPTC, ["build", entry, "--ffi", ffiPath, "--dynamic", "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
 process.stdout.write(`${build.stdout ?? ""}${build.stderr ?? ""}`);
 if (build.status !== 0 || !existsSync(exe)) {
   console.error("\n还没编过去：把上面每一格的 SC 编号对着 ROADMAP §5.12.2 / §5.12.3 查，新增的围栏要记进 S 账。");

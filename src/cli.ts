@@ -9,8 +9,7 @@ import type { Dirent } from "node:fs";
 import { compileProject } from "./compile/project";
 import { bundleModule, bundlingAvailable } from "./bundle";
 import { runProduct } from "./exec";
-import { runCli, type CliSpec } from "./argv";
-import { FLAGS, withCommon } from "./commands";
+import { buildProgram, FLAGS, withCommon, type CliSpec } from "./commands";
 import { selfFile, selfHome } from "./home";
 import { emitModule, emitModuleWithMap } from "./emit/emitter";
 import type { RawSourceMap } from "./emit/sourcemap";
@@ -1129,8 +1128,4 @@ const CLI: CliSpec = {
   ],
 };
 
-const stop = runCli(CLI, process.argv.slice(2));
-if (stop !== null) {
-  process.stdout.write(stop.text + "\n");
-  process.exit(0);
-}
+buildProgram(CLI).parse();

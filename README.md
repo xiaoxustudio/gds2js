@@ -88,7 +88,7 @@ CLI 自己也能编成原生 exe：**`scriptc build src/cli.ts --dynamic --ffi �
 
 ```bash
 node tools/cli-native.mjs                  # 出货形态（--dynamic）→ tmp/cli-native/gds2js.exe（约 5 MB）
-node tools/cli-native.mjs --static         # 不要岛的静态构建（约 4 MB，也编得过）
+node tools/cli-native.mjs --coverage      # 只要围栏清单（带 file:line）
 node tools/cli-native.mjs --ts-only --keep # 只改了 TS：沿用上一轮的 .o，省 2 分钟
 node tools/cli-native.mjs --coverage       # 只要围栏清单（带 file:line）
 pnpm test:cli-native                       # 门：原生 exe 与 node 侧 CLI 逐字节/逐字对齐（--quick 跳慢格）
