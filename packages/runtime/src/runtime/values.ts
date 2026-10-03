@@ -10,7 +10,8 @@ import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
 import { sortGodot } from "./sort";
-import { callableSame, isCallable, type CallableBox } from "./callable";
+import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
+import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -23,6 +24,20 @@ export function keyOf(v: Variant): string {
 }
 
 /** 容器桶的编码：按**内容**分格（元素走 {@link valueSame} 的身份口径），字典的编码跟着键序走；`c:` 前缀保证容器桶不与标量桶撞车。 */
+/** Callable 的键位：空 Callable 一律同键；方法按「接收者身份 + 方法名 + 绑过没绑过」；lambda 按盒子身份。 */
+function callableKey(box: CallableBox): string {
+  if (isNullCallable(box)) return "y:";
+  if (box.name !== null) {
+    const recv = box.object;
+    if (recv !== null && recv.t === Tag.OBJECT && !(recv.v instanceof GBytes)) {
+      const id = (recv.v as GdIdentified).gdObjectId;
+      if (id > 0) return `q:${String(id)}:${box.name}:${box.bound.length === 0 ? "0" : "1"}`;
+    }
+    throw new UnsupportedError("dict-key-type", "这种接收者的方法 Callable 当字典键还没量过");
+  }
+  return `m:${String(box.gdObjectId)}`;
+}
+
 function keyOfIn(v: Variant, depth: number): string {
   switch (v.t) {
     case Tag.NIL:
@@ -72,6 +87,11 @@ function keyOfIn(v: Variant, depth: number): string {
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
+      if (isCallable(v)) return callableKey(v.v as CallableBox);
+      if (!(v.v instanceof GBytes)) {
+        const id = (v.v as GdIdentified).gdObjectId;
+        if (id > 0) return `o:${String(id)}`;
+      }
       break;
     }
     default:
@@ -1819,8 +1839,8 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
-      // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算）：读一次属性就新建一个盒子，按 JS 引用比会把真判成假
-      if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
+      // Callable 之间是**内容**等式（接收者 + 方法名，绑定实参不算，但绑过没绑过算）：读一次属性就新建一个盒子，按 JS 引用比会把真判成假
+      if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
   }
   return false;
@@ -1860,7 +1880,7 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
       // Callable 走与 `==` 同一条等式：盒子每次读都是新建的，按 JS 引用比会把真判成假
-      if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
+      if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
     default:
       return a.v === b.v;

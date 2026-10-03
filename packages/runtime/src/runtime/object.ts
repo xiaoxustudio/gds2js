@@ -1,12 +1,15 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
 import { CallableBox, isNullCallable, type Fn } from "./callable";
+import { nextObjectId } from "./identity";
 
 // Callable 盒子的**形状**与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，不能反向 import 本模块），这里只把外需要的几样转出去。
-export { CallableBox, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
+export { CallableBox, callableEq, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
 
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
+  /** 实例身份号：`get_instance_id()`、对象当字典键、数组里的成员判定都吃它（Godot 那侧是指针派生的号，跨运行不定，所以只复现关系不复现数字）。 */
+  readonly gdObjectId: number = nextObjectId();
   /** 命中给装箱值（调用方再 `wrapValue` 也无妨 —— `wrapValue` 对 Variant 原样返回）；没这个方法给 null。 */
   __gdDispatch(_name: string, _args: Variant[]): Variant | null {
     return null;

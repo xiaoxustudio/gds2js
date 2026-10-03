@@ -3,6 +3,7 @@ import { md5Hex } from "./md5";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, ClassDesc, type Fn } from "./object";
+import type { GdIdentified } from "./identity";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strInsertAt, strIsValidFilename, strJoin, strLength, strRepeat, strReplace, strSplit,
@@ -302,6 +303,15 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       const base = nativeBaseOf(inner);
       if (base === null) throw new UnsupportedError("get-class", `get_class() 还不知道这个类的原生基类`);
       return V.str(base);
+    }
+    if (name === "get_instance_id") {
+      if (args.length !== 0) {
+        throw new GodotRuntimeError("arity", `get_instance_id() 不接受参数（收到 ${args.length} 个）`);
+      }
+      // 实测：同一个对象两次调用相等、不同对象不等、typeof 是 2。数字本身是指针派生的，跨运行不定，所以语料只钉关系。
+      const id = (obj.v as GdIdentified).gdObjectId;
+      if (!(id > 0)) throw new UnsupportedError("instance-id", "这一类对象还没发身份号");
+      return V.int(id);
     }
     if (name === "is_class") {
       const a0 = args[0] as Variant | undefined;

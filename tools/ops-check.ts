@@ -5,7 +5,7 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVaria
 import { fast } from "@gds2js/runtime/runtime/fast";
 import { parseGdDouble } from "@gds2js/runtime/shared/double";
 import { md5Hex } from "@gds2js/runtime/runtime/md5";
-import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { callable, callableEq, callableSame, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { Signal } from "@gds2js/runtime/runtime/signal";
 import { paramSlot } from "@gds2js/runtime/runtime/slots";
 import { attribute, callableCtor, index, iter, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/methods";
@@ -664,6 +664,35 @@ eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValid
   shouldThrow("234", "get_slicec 的 (int, int) 形状没解释清，仍拒", () => method(V.str("a/b/c"), "get_slicec", [I(1), I(0)]));
 }
 
+
+{
+  const o1 = new GdScriptObject();
+  const o2 = new GdScriptObject();
+  const v1 = wrapValue(o1);
+  const v1b = wrapValue(o1);
+  const v2 = wrapValue(o2);
+  eq("235", "同一个对象同一个键位", keyOf(v1) === keyOf(v1b), true);
+  eq("235", "不同对象不同键位", keyOf(v1) === keyOf(v2), false);
+  eq("235", "对象键号是 int", typeof ((o1 as unknown as { gdObjectId: number }).gdObjectId), "number");
+  const d = new GDict();
+  d.set(v1, I(1));
+  d.set(v1b, I(2));
+  d.set(v2, I(3));
+  eq("235", "对象当键：同实例顶掉、异实例另开一格", `${d.size()}|${d.get(v1).v}|${d.has(v2)}`, "2|2|true");
+  eq("235", "erase 用身份命中", `${d.erase(v1b)}|${d.size()}|${d.has(v1)}`, "true|1|false");
+  const recv = v1;
+  const mPlain = new CallableBox(null, "m", recv, [], null);
+  const mBound = new CallableBox(null, "m", recv, [I(1)], null);
+  const mBound2 = new CallableBox(null, "m", recv, [I(2)], null);
+  eq("235", "方法 Callable：读两次相等", callableEq(mPlain, new CallableBox(null, "m", recv, [], null)), true);
+  eq("235", "绑没绑过进等式", callableEq(mPlain, mBound), false);
+  eq("235", "绑定实参不进等式", callableEq(mBound, mBound2), true);
+  eq("235", "connect 的口径不动（绑定串不算）", callableSame(mPlain, mBound), true);
+  const cd = new GDict();
+  cd.set(V.object(mBound), I(1));
+  cd.set(V.object(mBound2), I(2));
+  eq("235", "bind(1) 与 bind(2) 是同一个键", `${cd.size()}|${show(cd.get(V.object(mPlain)))}`, "1|<null>");
+}
 
 eq("019", "2 in [1,2]", show(ops.inOp(I(2), V.array(GArray.of([I(1), I(2)])))), "true");
 eq("019", "\"e\" in \"hello\"", show(ops.inOp(S("e"), S("hello"))), "true");

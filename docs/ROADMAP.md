@@ -119,6 +119,16 @@
 
 ---
 
+### 1.6 对象身份轮（2026-10-04，§6 第 6 条那一格落地）
+
+- **readings**：compile **157/226**、ir **226/226**、sema **226/226**（误报 0 / 漏报 0 / 崩溃 0）、ops **1415 → 1425**、diff **149/149 逐字节**（静默 0 / 崩溃 0 / 未实现 0）、treeface 17/0、`pnpm release` 整链绿（含 2b 面探针 38s）。
+- **落的是什么**：脚本实例、方法 Callable、lambda、空 Callable 现在都能当字典键与数组成员，判据是身份；`get_instance_id()` 发出去了（同实例稳定、异实例不同、typeof 2）。Callable 的等式实测比 `connect()` 多一条「绑过没绑过」（`c == c.bind(1)` 假、`c.bind(1) == c.bind(2)` 真、`hash(c) == hash(c.bind(1))` 真），所以新的 `callableEq` 只用在 `==` / 成员判定上，信号连接口径不动。号码本身**不进语料**（Godot 那个数是指针派生的、跨运行不定），用例钉的是关系；打印对象那一格仍响亮拒。
+- **顺带纠正一条旧账**：S204 记的「`Array.hash()` 在 Godot 是按实例不是按内容」**是错的** —— 它按内容且可复现（`[1,2]` 两支变量与字面量都同一个数）。当初看到两个数是因为那两支数组里装着对象，而**对象的 hash 才按身份**。一批实测数字记在 S208 当逆式的靶子，式子没逆出来之前 `hash()` / `Array.hash()` / `Dictionary.hash()` 继续响亮拒。
+- **一条写作约束（踩过）**：语料里别留 RefCounted 环 —— `var f := {}; f[p] = f` 让对象活到退出，Godot 会在 golden 里多打一行 `WARNING: ObjectDB instances leaked at exit`。
+- **本轮摘掉的一格**：信号当值用还在漏裸对象（`this.<signal>` 落的是 `rt.Signal` 而不是装箱 Variant，没走 `wrapValue`），所以 `fired == fired` 我们给假、`d[fired] = 1` 报 `dict-key-type`。实测口径已写进 §6 第 16 条③，等发射侧补上装箱再进语料 —— 宁可摘出来，也不留半条链。
+
+---
+
 ## 2. 当前任务与待办
 
 **决策 / 发布类**

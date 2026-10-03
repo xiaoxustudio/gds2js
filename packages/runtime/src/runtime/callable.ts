@@ -1,4 +1,5 @@
 import { Tag, V, type Variant } from "./tags";
+import { nextObjectId } from "./identity";
 
 /** Callable 盒子里的调用体：只收一个数组，不 rest、不 spread、不用可选形参。 */
 export type Fn = (args: Variant[]) => unknown;
@@ -13,6 +14,8 @@ export class CallableBox {
   bound: Variant[];
   /** 声明形参数；只有 lambda 用得上（方法那条走 `methodAritiesOf` 的表）。 */
   arity: number | null;
+  /** lambda 的等式是盒子身份，所以盒子得有自己的号。 */
+  readonly gdObjectId: number = nextObjectId();
   constructor(
     fn: Fn | null = null,
     name: string | null = null,
@@ -54,7 +57,16 @@ export function callableSame(a: CallableBox, b: CallableBox): boolean {
   return a.fn === b.fn;
 }
 
-/** `Callable()` 造出来的空 Callable：typeof 仍是 25。 */
-export function nullCallable(): Variant {
+/**
+ * `==` 上的 Callable 等式：比 `callableSame` 多一条「绑过没绑过」。
+ * 实测 `p.m == p.m` 真、`p.m == p.bind(1)` **假**、`p.bind(1) == p.bind(2)` **真** ——
+ * 绑定实参不进等式，但绑定状态进。`connect()` 的身份判定仍走 `callableSame`（S190 实测口径）。
+ */
+export function callableEq(a: CallableBox, b: CallableBox): boolean {
+  if (!callableSame(a, b)) return false;
+  return (a.bound.length === 0) === (b.bound.length === 0);
+}
+
+/** `Callable()` 造出来的空 Callable：typeof 仍是 25。 */export function nullCallable(): Variant {
   return V.object(new CallableBox());
 }
