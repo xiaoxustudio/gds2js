@@ -31,7 +31,7 @@ function runNode(cwd: string, file: string): { out: string; code: number | null 
 }
 
 async function checkPerCaseModes(): Promise<void> {
-  console.log("① single/local × 代表性用例 vs golden");
+  console.log("① single/local × 代表性用例 vs golden（走 npm 安装态：原生 exe 不带打包器，single 在那边会响亮拒）");
   const cases = [
     "011-add-operator-types",
     "020-match-array-pattern",

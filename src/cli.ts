@@ -1136,7 +1136,8 @@ const CLI: CliSpec = {
           long: "--pack",
           metavar: "name",
           defaultTo: "node",
-          help: "打包器：node(默认，官方 SEA，要 Node>=25.7) | scriptc（外部原生编译器 SCRIPTC_BIN，静态编 runtime 源码图，产物里不带 node）",
+          help:
+            "打包器：scriptc（首选：外部原生编译器静态编 runtime 源码图，产物 1.6 MB、不带 node）| node（出路，也是当前默认值：官方 SEA，要 Node>=25.7；只有它给得出 compress/decompress 用的 zlib/zstd。scriptc 的查找顺序：SCRIPTC_BIN → 同目录 scriptc/ → npm 依赖 → PATH；-v 打出实际用的哪一份）",
         },
         {
           key: "node",

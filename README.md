@@ -53,21 +53,25 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 
 ## 打成 Windows 独立可执行文件（`gds2js export`）
 
-只有 **Windows** 产物（Linux 暂不纳入）。两支打包器：
+只有 **Windows** 产物（Linux 暂不纳入）。**首选 `--pack scriptc`**（静态编 runtime 的 TS 源码图，产物里不带 node）；
+`--pack node` 是**出路那一支** —— 要用 `compress()/decompress()`（zlib/zstd）、或必须让产物跑在 node 上时才走它。
 
 ```bash
 pnpm build                                                       # export 吃 dist/product.mjs（打平的自带运行时），要先有 dist
-gds2js export main.gd -o app.exe                                 # 默认 --pack node（官方 SEA，要 Node>=25.7）
-gds2js export main.gd -o app.exe --node E:/node/26.7.0/node.exe  # CLI 跑在旧 node 上：让 SEA 用够新的那个
+gds2js export main.gd -o app.exe --pack scriptc                  # 首选：静态编 runtime 源码图，产物 1.6 MB、不带 node
 gds2js export 单文件.gd -o app.exe --pack scriptc                 # 不在工程里的散装脚本也照样打（与 build/run 同一条边界）
-gds2js export main.gd -o app.exe --pack scriptc                  # 换 scriptc（静态编 runtime 的 TS 源码图，产物里不带 Node）
+gds2js export main.gd -o app.exe                                 # 出路：--pack node（官方 SEA，要 Node>=25.7）
+gds2js export main.gd -o app.exe --node E:/node/26.7.0/node.exe  # CLI 跑在旧 node 上：让 SEA 用够新的那个
 ./app.exe
 ```
 
 | `--pack` | 走法 | 本机实测 |
 | --- | --- | --- |
-| `node`（默认） | 编译成**模块树** → `sea-config.json`（`mainFormat: "module"` + `useVfs` + 全部模块作 assets）→ `<node> --build-sea=cfg` | **通**：产物 ~100 MB，跑 `examples/multi` 输出**逐字节一致**、stderr 干净；运行期抛错的工程**退 1 且报错可见**。不经过 bundler |
-| `scriptc` | 产物 + `src/runtime/**`、`src/host.ts` 的 **TS 源码**铺成一棵树（项目树只铺**一份**，每个模块的 import 按自己那一层的深度算，于是只编出一张 runtime 图、一份类身份）→ `scriptc build <入口.mts> -o <exe> --strip`（`SCRIPTC_BIN` 可指路） | **通**：产物 1.5~1.6 MB，`pnpm test:scriptc --all` 全量 **142 例里 141 逐字节对 Godot golden**（单文件 + 项目树用例走真命令 `export --pack scriptc`）；唯一红的是 `161-pack-compress` —— 静态宿主没有 zlib/zstd，`compress()/decompress()` 的 mode 1/2/3 照口径**响亮拒**（不发近似值），要那一格就用 `--pack node` |
+| `scriptc`（**首选**） | 产物 + `src/runtime/**`、`src/host.ts` 的 **TS 源码**铺成一棵树（项目树只铺**一份**，每个模块的 import 按自己那一层的深度算，于是只编出一张 runtime 图、一份类身份）→ `scriptc build <入口.mts> -o <exe> --strip`（scriptc 二进制怎么找到，见下面「不带 node 的 `gds2js.exe`」那一节） | **通**：产物 1.5~1.6 MB，`pnpm test:scriptc --all` 全量 **142 例里 141 逐字节对 Godot golden**（单文件 + 项目树用例走真命令 `export --pack scriptc`）；唯一红的是 `161-pack-compress` —— 静态宿主没有 zlib/zstd，`compress()/decompress()` 的 mode 1/2/3 照口径**响亮拒**（不发近似值），要那一格就走下面那支 |
+| `node`（**出路**，也仍是当前的默认值） | 编译成**模块树** → `sea-config.json`（`mainFormat: "module"` + `useVfs` + 全部模块作 assets）→ `<node> --build-sea=cfg` | **通**：产物 ~100 MB，跑 `examples/multi` 输出**逐字节一致**、stderr 干净；运行期抛错的工程**退 1 且报错可见**。不经过 bundler。**它是唯一能给出 zlib/zstd 的一支**（产物跑在 node 上，node ≥ 24 自带 zstd） |
+
+默认值暂时还是 `node`：**不改是为了不让现成的脚本静默换掉打包器**（翻过去意味着产物从 100 MB 变成 1.6 MB，还要求机器上有 scriptc）。
+真要翻只是一行默认值的事，留作单独决定。
 
 
 ## 不带 node 的 `gds2js.exe`（原生 CLI）
