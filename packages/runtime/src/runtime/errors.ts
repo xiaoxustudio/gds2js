@@ -41,7 +41,7 @@ export function claimRunReporting(): string | undefined {
   return prev;
 }
 
-/** 交还「归我报」这个声明。 */
+/** 交还上一位的声明。 */
 export function releaseRunReporting(prev: string | undefined): void {
   if (prev === undefined) delete process.env[RUN_OWNER_ENV];
   else process.env[RUN_OWNER_ENV] = prev;
