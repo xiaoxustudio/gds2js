@@ -124,4 +124,8 @@ rt.setClassBase(__gd_d_Mid, rt.lookupClass("Plain") ?? null);
 rt.registerMethodArities(__gd_d_Mid, { "bare": [0, 0], "bump": [0, 0] });
 
 const __gd_entry = new Main();
-await __gd_entry.run();
+try {
+  await __gd_entry.run();
+} catch (__gd_e) {
+  rt.reportRunFailure(__gd_e);
+}

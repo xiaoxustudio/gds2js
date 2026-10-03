@@ -8,7 +8,6 @@ import { selfFile } from "@gds2js/compiler/home";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
-import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { PRODUCT_RUNTIME_FILE } from "../paths";
 
 /** 两支 `--pack` 的名字。 */
@@ -192,9 +191,8 @@ export function printDiags(diags: Diag[]): boolean {
   return diags.length === 0;
 }
 
-export function errOf(e: unknown): string {
-  return e instanceof UnsupportedError ? `[${e.code}] ${e.message}` : e instanceof Error ? e.message : String(e);
-}
+/** 报错行的正文：真源在 runtime，产物顶层的兜底与 CLI 报的是同一句。 */
+export { errOf } from "@gds2js/runtime/runtime/errors";
 
 /** tree-face 清单里的 `.ts` 名 → 发射器说明符/文件名要的裸基名。 */
 export function baseName(file: string): string {

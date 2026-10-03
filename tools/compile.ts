@@ -18,6 +18,10 @@ const GEN_EMIT_OPTS = {
 
 /** scriptc-check 的文本口径：产物里有没有 compress()/decompress()（`rt.method(x, "compress", …)`）。 */
 const NEED_ZSTD_TEXT = /,\s*"(?:compress|decompress)"\s*,/;
+/** 带 autoRun 尾巴的产物必须自己兜底：直接跑产物时没有 CLI 那层 try/catch。 */
+const ENTRY_TAIL = /const __gd_entry = new \w+\(\);/;
+const FALLBACK_TAIL = /rt\.reportRunFailure\(/;
+const runFallbackMissing: string[] = [];
 /** 文本口径（NEED_ZSTD）与 IR 标志（usesPackCodec）必须逐用例一致 —— 两条判据互锁在这里。 */
 const packCodecMismatch: string[] = [];
 
@@ -62,6 +66,7 @@ for (const id of cases) {
     if (saysZstd !== (ir.usesPackCodec === true)) {
       packCodecMismatch.push(`${id}: 文本=${String(saysZstd)} / IR=${String(ir.usesPackCodec === true)}`);
     }
+    if (ENTRY_TAIL.test(gen) && !FALLBACK_TAIL.test(gen)) runFallbackMissing.push(id);
     writeFileSync(join(caseDir(id), "main.gen.mts"), gen, "utf8");
     compiled++;
   } catch (e) {
@@ -75,11 +80,16 @@ console.log(`编译成功 ${compiled}/${cases.length}`);
 console.log(`  语义分析拦下（预期报错用例） ${rejected.length}`);
 console.log(`  emitter 不支持 ${unsupported.length}`);
 console.log(`  pack codec 口径不一致 ${packCodecMismatch.length}（文本 regex vs IR 标志，应为 0）`);
+console.log(`  自兜底缺失 ${runFallbackMissing.length}（有 autoRun 尾巴却没 reportRunFailure，应为 0）`);
 if (unsupported.length > 0) {
   console.log("\nemitter 缺口：");
   for (const u of unsupported) console.log(`  ${u.id.padEnd(30)} ${u.msg}`);
 }
 if (packCodecMismatch.length > 0) {
   for (const m of packCodecMismatch) console.log(`  ✗ ${m}`);
+  process.exitCode = 1;
+}
+if (runFallbackMissing.length > 0) {
+  for (const m of runFallbackMissing) console.log(`  ✗ ${m}`);
   process.exitCode = 1;
 }

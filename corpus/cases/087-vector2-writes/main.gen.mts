@@ -162,4 +162,8 @@ rt.registerFieldTypes(__gd_d_Main, {"m": "Vector2"});
 rt.registerMethodArities(__gd_d_Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 const __gd_entry = new Main();
-await __gd_entry.run();
+try {
+  await __gd_entry.run();
+} catch (__gd_e) {
+  rt.reportRunFailure(__gd_e);
+}

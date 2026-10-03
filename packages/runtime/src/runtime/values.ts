@@ -1081,20 +1081,23 @@ function stripSpaces(s: string): string {
 function separateCompoundWords(s: string): string {
   const chars = [...s];
   if (chars.length === 0) return s;
-  const flags = chars.map((ch) => {
+  const upper: boolean[] = [];
+  const lower: boolean[] = [];
+  const digit: boolean[] = [];
+  for (const ch of chars) {
     const cp = ch.codePointAt(0) as number;
-    return [gdIsUpper(cp), gdIsLower(cp), gdIsDigit(cp)] as const;
-  });
+    upper.push(gdIsUpper(cp));
+    lower.push(gdIsLower(cp));
+    digit.push(gdIsDigit(cp));
+  }
   const pieces: string[] = [];
   let start = 0;
   for (let i = 1; i < chars.length; i++) {
-    const [currUpper, currLower, currDigit] = flags[i] as readonly [boolean, boolean, boolean];
-    const [prevUpper, prevLower, prevDigit] = flags[i - 1] as readonly [boolean, boolean, boolean];
-    const nextLower = i + 1 < chars.length ? (flags[i + 1] as readonly boolean[])[1] : false;
-    const condA = prevLower && currUpper;
-    const condB = (prevUpper || prevDigit) && currUpper && nextLower;
-    const condC = prevDigit && currLower && nextLower;
-    const condD = (prevUpper || prevLower) && currDigit;
+    const nextLower = i + 1 < chars.length && lower[i + 1] === true;
+    const condA = lower[i - 1] === true && upper[i] === true;
+    const condB = (upper[i - 1] === true || digit[i - 1] === true) && upper[i] === true && nextLower;
+    const condC = digit[i - 1] === true && lower[i] === true && nextLower;
+    const condD = (upper[i - 1] === true || lower[i - 1] === true) && digit[i] === true;
     if (condA || condB || condC || condD) {
       pieces.push(chars.slice(start, i).join(""), " ");
       start = i;
@@ -1116,8 +1119,7 @@ export function strCapitalize(s: string): string {
   const out: string[] = [];
   for (const w of words) {
     if (w === "") continue;
-    const chars = [...w];
-    out.push(strCase(chars[0] as string, "upper") + chars.slice(1).join(""));
+    out.push(strCase(strAt(w, 0), "upper") + strSubstr(w, 1));
   }
   return out.join(" ");
 }

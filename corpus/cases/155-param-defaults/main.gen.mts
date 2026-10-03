@@ -155,4 +155,8 @@ rt.registerFieldTypes(__gd_d_Needs, {"a": "int"});
 rt.registerNativeBase(__gd_d_Needs, "RefCounted");
 
 const __gd_entry = new Main();
-await __gd_entry.run();
+try {
+  await __gd_entry.run();
+} catch (__gd_e) {
+  rt.reportRunFailure(__gd_e);
+}

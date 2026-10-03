@@ -368,9 +368,15 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   }
 
   // 驱动尾拆成两句：链式的 `new Main().run()` 在静态编译目标上是围栏，落成局部变量再调就是普通虚调用。
+  // 外面再包一层兜底：没有 CLI 在场时（直接 node 产物、scriptc 出的 exe）报同一句 `runtime error`，
+  // 而不是漏成一条 Uncaught 栈；CLI 在 globalThis 上留了标记，那层照旧自己报。
   if (autoRun) {
     out.push(`const __gd_entry = new ${className}();`);
-    out.push(`await __gd_entry.run();`);
+    out.push(`try {`);
+    out.push(`  await __gd_entry.run();`);
+    out.push(`} catch (__gd_e) {`);
+    out.push(`  rt.reportRunFailure(__gd_e);`);
+    out.push(`}`);
   }
 
   let code = `${out.join("\n")}\n`;

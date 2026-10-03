@@ -84,4 +84,8 @@ rt.registerStaticMethods(__gd_d_A, ["setx"], {"setx": (a: rt.Variant[]): rt.Vari
 rt.registerNativeBase(__gd_d_A, "RefCounted");
 
 const __gd_entry = new Main();
-await __gd_entry.run();
+try {
+  await __gd_entry.run();
+} catch (__gd_e) {
+  rt.reportRunFailure(__gd_e);
+}

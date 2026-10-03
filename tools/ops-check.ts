@@ -1,6 +1,6 @@
 import "@gds2js/runtime/host-node"; // node 宿主的 zlib 注册（runtime 只留槽，见 `packages/runtime/src/runtime/packed.ts`）
 import { print, resetOut, SceneTree } from "@gds2js/runtime/host";
-import { GodotRuntimeError, UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { GodotRuntimeError, UnsupportedError, claimRunReporting, releaseRunReporting, reportRunFailure } from "@gds2js/runtime/runtime/errors";
 import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "@gds2js/runtime/runtime/builtins";
 import { fast } from "@gds2js/runtime/runtime/fast";
 import { parseGdDouble } from "@gds2js/runtime/shared/double";
@@ -3172,6 +3172,42 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("host-run", "帧循环抛错：write 先于 throw（flush 在错误传播之前）", frameErr.order, "write>throw");
   const initErr = await probe(new InitErrorTree());
   eq("host-run", "init 抛错：同样先 flush 再抛", `${initErr.order}|${initErr.msg}`, "write>throw|init-boom");
+}
+
+{
+  const probeFailure = (owner: string | undefined) => {
+    const prev = claimRunReporting();
+    const prevCode = process.exitCode;
+    const realErr = process.stderr.write.bind(process.stderr);
+    let written = "";
+    let exitCodeSeen: unknown = undefined;
+    let rethrown = "";
+    releaseRunReporting(owner);
+    process.stderr.write = ((chunk: unknown) => {
+      written += String(chunk);
+      return true;
+    }) as typeof process.stderr.write;
+    try {
+      reportRunFailure(new UnsupportedError("string-method", "String.count() 未实现"));
+    } catch (e) {
+      rethrown = e instanceof UnsupportedError ? `rethrown:${e.code}` : "rethrown:other";
+    } finally {
+      exitCodeSeen = process.exitCode;
+      process.stderr.write = realErr;
+      releaseRunReporting(prev);
+      process.exitCode = prevCode;
+    }
+    return `${written.trim() === "" ? "quiet" : written} | ${rethrown} | exit=${String(exitCodeSeen)}`;
+  };
+
+  eq("run-fallback", "同进程宿主声明了「归我报」：原样再抛、一声不印", probeFailure("in-process"), "quiet | rethrown:string-method | exit=undefined");
+  eq("run-fallback", "隔进程宿主声明过：只把退出码带回非 0", probeFailure("child"), "quiet |  | exit=1");
+  eq(
+    "run-fallback",
+    "谁都没声明（直接跑产物）：补一句 runtime error",
+    probeFailure(undefined),
+    "  runtime error  [string-method] String.count() 未实现\n |  | exit=1",
+  );
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {
