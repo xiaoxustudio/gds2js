@@ -1,4 +1,4 @@
-import { parseGdDouble } from "@gds2js/runtime/lower/double";
+import { parseGdDouble } from "@gds2js/runtime/shared/double";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import type { CsNode as SyntaxNode, CsTree as Tree } from "../parse/cst";
 import type {
@@ -54,8 +54,14 @@ function lowerType(n: SyntaxNode): TypeRef {
   return { kind: "named", name: n.text };
 }
 
+/** `lower()` 一次调用内累计：这一份模块有没有 compress()/decompress() 调用。 */
+let packCodecUse = false;
+
 export function lower(tree: Tree): Module {
-  return lowerModule(tree.rootNode);
+  packCodecUse = false;
+  const m = lowerModule(tree.rootNode);
+  if (packCodecUse) m.usesPackCodec = true;
+  return m;
 }
 
 function lowerModule(root: SyntaxNode): Module {
@@ -507,6 +513,7 @@ function lowerExpr(n: SyntaxNode): Expr {
       for (const seg of kids.slice(1)) {
         if (seg.type === "attribute_call") {
           const name = need(named(seg)[0] ?? null, "方法名");
+          if (name.text === "compress" || name.text === "decompress") packCodecUse = true;
           const argsNode = field(seg, "arguments");
           acc = {
             kind: "call",

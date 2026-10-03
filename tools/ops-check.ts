@@ -1,8 +1,9 @@
 import "@gds2js/runtime/host-node"; // node 宿主的 zlib 注册（runtime 只留槽，见 `packages/runtime/src/runtime/packed.ts`）
+import { print, resetOut, SceneTree } from "@gds2js/runtime/host";
 import { GodotRuntimeError, UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "@gds2js/runtime/runtime/builtins";
 import { fast } from "@gds2js/runtime/runtime/fast";
-import { parseGdDouble } from "@gds2js/runtime/lower/double";
+import { parseGdDouble } from "@gds2js/runtime/shared/double";
 import { md5Hex } from "@gds2js/runtime/runtime/md5";
 import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { Signal } from "@gds2js/runtime/runtime/signal";
@@ -3081,6 +3082,53 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     `${sizeOf(method(byte3(), "compress", [I(5)]))} ${sizeOf(method(byte3(), "compress", [I(-2)]))} ${sizeOf(method(method(byte3(), "compress", [I(1)]), "decompress", [I(9), I(5)]))}`,
     "0 0 0",
   );
+}
+
+/* ---- host：SceneTree.run 的输出/错误次序（帧循环抛错与 init 抛错都要先 flush 再抛） ---- */
+{
+  class FrameErrorTree extends SceneTree {
+    override _initialize(): Promise<void> {
+      print("before-frame-error");
+      return Promise.resolve();
+    }
+    override _process(_delta: number): Promise<unknown> {
+      throw new Error("frame-boom");
+    }
+  }
+  class InitErrorTree extends SceneTree {
+    override _initialize(): Promise<void> {
+      print("before-init-error");
+      return Promise.reject(new Error("init-boom"));
+    }
+  }
+  const probe = async (tree: SceneTree): Promise<{ out: string; order: string; msg: string }> => {
+    resetOut();
+    let text = "";
+    const events: string[] = [];
+    const real = process.stdout.write;
+    process.stdout.write = ((chunk: unknown): boolean => {
+      text += typeof chunk === "string" ? chunk : Buffer.from(chunk as Uint8Array).toString("utf8");
+      events.push("write");
+      return true;
+    }) as typeof process.stdout.write;
+    let msg = "";
+    try {
+      await tree.run(5);
+      events.push("return");
+    } catch (e) {
+      events.push("throw");
+      msg = e instanceof Error ? e.message : String(e);
+    } finally {
+      process.stdout.write = real;
+      resetOut();
+    }
+    return { out: text, order: events.join(">"), msg };
+  };
+  const frameErr = await probe(new FrameErrorTree());
+  eq("host-run", "帧循环抛错：抛错前已缓冲的输出仍落盘", frameErr.out, "before-frame-error\n");
+  eq("host-run", "帧循环抛错：write 先于 throw（flush 在错误传播之前）", frameErr.order, "write>throw");
+  const initErr = await probe(new InitErrorTree());
+  eq("host-run", "init 抛错：同样先 flush 再抛", `${initErr.order}|${initErr.msg}`, "write>throw|init-boom");
 }
 
 console.log(`ops 自校验：通过 ${pass}，失败 ${fails.length}`);if (fails.length > 0) {

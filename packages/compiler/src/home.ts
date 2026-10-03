@@ -1,9 +1,9 @@
 /** 构建期由 tools/cli-native.mjs 同名换实现：原生 exe 的自带家目录是构建期嵌进二进制的文件，不是 SEA 资产。 */
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { inflateSync } from "node:zlib";
+import { fnv1a, homeDirNamed, writeAsset } from "./home-lib";
 
 type SeaModule = { isSea(): boolean; getAssetKeys(): string[]; getRawAsset(key: string): Uint8Array | undefined };
 
@@ -46,8 +46,8 @@ export function selfFile(rel: string): string | null {
 function ensureHome(api: SeaModule): string {
   const keys = api.getAssetKeys().filter((k) => k.startsWith("gds2js-home/"));
   if (keys.length === 0) throw new Error("exe 里没有 gds2js-home/* 资产");
-  const tag = `${process.versions.node}-${hash(keys.join("|"))}`;
-  const dir = process.env.GDS2JS_HOME || join(tmpdir(), `gds2js-home-${tag}`);
+  const tag = `${process.versions.node}-${fnv1a(keys.join("|"))}`;
+  const dir = homeDirNamed("gds2js-home", tag);
   if (!existsSync(join(dir, ".ready"))) {
     const tmp = `${dir}.tmp-${process.pid}`;
     mkdirSync(tmp, { recursive: true });
@@ -56,9 +56,7 @@ function ensureHome(api: SeaModule): string {
       if (!rel || rel.includes("..")) throw new Error(`资产名不合法：${key}`);
       const bytes = api.getRawAsset(key);
       if (!bytes) throw new Error(`资产读不出来：${key}`);
-      const dest = join(tmp, rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      writeFileSync(dest, inflateSync(bytes));
+      writeAsset(join(tmp, rel), inflateSync(bytes));
     }
     writeFileSync(join(tmp, ".ready"), tag, "utf8");
     if (!existsSync(dir)) {
@@ -70,14 +68,4 @@ function ensureHome(api: SeaModule): string {
     }
   }
   return dir;
-}
-
-/** FNV-1a：只要稳定、不要密码学强度。 */
-function hash(s: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return (h >>> 0).toString(16);
 }

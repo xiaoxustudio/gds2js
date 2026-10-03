@@ -56,6 +56,8 @@ async function checkPerCaseModes(): Promise<void> {
       copyFileSync(STANDALONE_CJS, join(dir, "gds2js-standalone.cjs"));
       const { code } = emitModuleWithMap(ir, {
         autoRun: true,
+        runtimeImport: "../../../packages/runtime/src/runtime/index",
+        hostImport: "../../../tools/harness/scene-tree",
         runtimeMode: mode,
         ...(mode === "single" ? { standaloneInline: STANDALONE_SRC } : { standaloneRequirePath: "./gds2js-standalone.cjs" }),
       });
@@ -151,6 +153,8 @@ async function checkSourcemapSingle(): Promise<void> {
   const { code, map } = emitModuleWithMap(ir, {
     autoRun: true,
     sourcemap: true,
+    runtimeImport: "../../../packages/runtime/src/runtime/index",
+    hostImport: "../../../tools/harness/scene-tree",
     runtimeMode: "single",
     standaloneInline: STANDALONE_SRC,
     sourceFile: "main.gd",

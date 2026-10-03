@@ -137,4 +137,6 @@ export interface Module {
   enums: EnumDecl[];
   funcs: FuncDecl[];
   innerClasses: ClassDecl[];
+  /** 用了 PackedByteArray 的 compress()/decompress() —— `--pack scriptc` 据此铺 zstd 宿主并加 `--dynamic`。 */
+  usesPackCodec?: boolean;
 }

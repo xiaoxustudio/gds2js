@@ -1,6 +1,6 @@
 {
   "name": "@gds2js/runtime",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "gds2js 运行时（含 host 系与 zstd 出货面）；源码以 .ts 出货，供产物树与 workspace 内消费。",
@@ -13,7 +13,8 @@
     "./host": "./src/host.ts",
     "./host-node": "./src/host-node.ts",
     "./host-scriptc": "./src/host-scriptc.ts",
-    "./lower/double": "./src/lower/double.ts",
+    "./shared/double": "./src/shared/double.ts",
+    "./tree-face": "./src/tree-face.ts",
     "./runtime/*": "./src/runtime/*.ts",
     "./package.json": "./package.json"
   }

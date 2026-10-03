@@ -12,10 +12,16 @@ corpus/cases/*/.gen/
 examples/multi/dist/
 bench/.out/
 
+# case-table 的探头原料（000-probe-cs-*，regen:case-table 现搭现弃，不入库）
+corpus/cases/000-probe-cs-*/
+
 # Godot 工程导入缓存（跑 --import 生成，含 class_name 全局注册表）
 .godot/
 # Godot 为脚本生成的 UID 边车文件（导入产物，可再生）
 *.gd.uid
+
+# 发布产物（pnpm release 的落点）
+release/
 
 # AI files
 .workbuddy

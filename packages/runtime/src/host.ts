@@ -73,16 +73,19 @@ export class SceneTree extends GdScriptObject {
       this.quit();
     });
 
-    let frames = 0;
-    while (!this.#quitted && frames < maxFrames) {
-      await new Promise((r) => setTimeout(r, 2));
-      this.#timers = this.#timers.filter((t) => !t.advance(0.002));
-      if (isTruthyResult(await this._process(0.002))) this.quit();
-      frames++;
+    try {
+      let frames = 0;
+      while (!this.#quitted && frames < maxFrames) {
+        await new Promise((r) => setTimeout(r, 2));
+        this.#timers = this.#timers.filter((t) => !t.advance(0.002));
+        if (isTruthyResult(await this._process(0.002))) this.quit();
+        frames++;
+      }
+      await initDone;
+    } finally {
+      // 帧循环或 init 抛错也要先落盘再抛：缓冲输出属于「已经发生的事」。
+      flush();
     }
-
-    await initDone;
-    flush();
     if (initError !== null) throw initError;
   }
 }

@@ -1,6 +1,6 @@
 /** 字符串→数值的解析：`int()` / `float()` / `String.to_int()` / `to_float()` 与 pack 的元素折算共用这两条式子。 */
 import { wrap64 } from "./tags";
-import { decimalToDouble } from "../lower/double";
+import { decimalToDouble } from "../shared/double";
 
 export const INT64_MIN = BigInt("-9223372036854775808");
 export const INT64_MAX = BigInt("9223372036854775807");

@@ -46,6 +46,8 @@ export interface CompiledModule {
   className: string;
   code: string;
   map?: RawSourceMap;
+  /** 透传 IR 的 pack codec 标志：`--pack scriptc` 的 zstd 宿主注入按它定。 */
+  usesPackCodec: boolean;
 }
 
 export interface ProjectResult {
@@ -415,6 +417,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       jsPath,
       className: l.jsName,
       code,
+      usesPackCodec: l.module.usesPackCodec === true,
       map: map ?? undefined,
     });
   }

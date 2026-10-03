@@ -5,7 +5,7 @@
  * 用法：
  *   pnpm test:cli-native            # 全门（含两次 scriptc 出货，几分钟）
  *   pnpm test:cli-native --quick    # 跳过 scriptc 出货那两格（只比 build/run/拒绝语）
- *   pnpm test:cli-native --rebuild  # 先重编原生 exe（默认沿用 tmp/cli-native/gds2js.exe）
+ *   pnpm test:cli-native --rebuild  # 强制重编原生 exe（默认：缺失或过期才重编；GDS2JS_CLI_NATIVE_NO_REBUILD=1 时过期直接失败）
  *
  * 前置：`pnpm build`（原生 exe 把 dist 与 runtime 源码嵌进自己）、libtree-sitter（`TS_SRC`）、zig、scriptc。
  */
@@ -42,7 +42,11 @@ function cliExe(args, cwd) {
 function run(bin, args, cwd) {
   const r = spawnSync(bin, args, { encoding: "utf8", cwd: ROOT, timeout: 2_400_000, windowsHide: true });
   if (r.error) throw new Error(`${bin} 起不来：${r.error.message}（args=${JSON.stringify(args)}）`);
-  return { status: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+  return { status: r.status, out: cleanNoise(`${r.stdout ?? ""}${r.stderr ?? ""}`) };
+}
+/** npm/pnpm 包装层噪声（例：pnpm 把 store-dir 注入子进程 env 后 npx 的告警）不是两侧的行为差异，比前剔掉。 */
+function cleanNoise(s) {
+  return s.split("\n").filter((l) => !/^npm warn Unknown env config /.test(l)).join("\n");
 }
 function read(p) {
   return readFileSync(p, "utf8");
@@ -91,8 +95,35 @@ function diffTrees(a, b) {
   return null;
 }
 
-/* 0) 原生 exe 在不在（出货形态：`--dynamic`，岛只跑那几格不能静态翻译的代码） */
-if (!existsSync(EXE) || process.argv.includes("--rebuild")) {
+/* 0) 原生 exe 在不在、新不新（出货形态：`--dynamic`，岛只跑那几格不能静态翻译的代码）。
+ *    exe 的输入集 = 包源码 / C 源 / 构建脚本 —— 任何一样比 exe 新就算过期，自动重建（拒绝验旧货）。 */
+function newestInputMtime() {
+  let newest = 0;
+  const walk = (dir) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else {
+        const t = statSync(p).mtimeMs;
+        if (t > newest) newest = t;
+      }
+    }
+  };
+  walk(join(ROOT, "packages"));
+  walk(join(ROOT, "native"));
+  const script = statSync(join(ROOT, "tools", "cli-native.mjs")).mtimeMs;
+  if (script > newest) newest = script;
+  return newest;
+}
+const exeStale = existsSync(EXE) && newestInputMtime() > statSync(EXE).mtimeMs;
+if (exeStale) {
+  if (process.env.GDS2JS_CLI_NATIVE_NO_REBUILD === "1") {
+    console.error("原生 exe 过期（packages/ 或 native/ 比它新），且设了 GDS2JS_CLI_NATIVE_NO_REBUILD=1 —— 拒绝验旧货。");
+    process.exit(1);
+  }
+  console.log("原生 exe 过期（packages/ 或 native/ 比它新），自动重建…");
+}
+if (!existsSync(EXE) || process.argv.includes("--rebuild") || exeStale) {
   console.log("先编原生 CLI（tools/cli-native.mjs，出货形态默认带 --dynamic；含 zig 编 C + scriptc 出货，慢）…");
   const r = spawnSync("node", [join(ROOT, "tools", "cli-native.mjs"), "--keep"], { encoding: "utf8", cwd: ROOT, timeout: 3_000_000 });
   if (r.status !== 0) {

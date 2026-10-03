@@ -7,8 +7,9 @@
 //   pnpm test:scriptc --all        全量（单文件 + 项目树，142 个上下，一轮要几十分钟）
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { ROOT, caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden } from "./lib.mjs";
+import { TREE_FACE } from "../packages/runtime/src/tree-face.ts";
 
 const args = process.argv.slice(2);
 const all = args.includes("--all");
@@ -35,45 +36,19 @@ function genFile(id) {
   return join(caseDir(id), "main.gen.mts");
 }
 
-/** 产物里有没有 PackedByteArray 的 compress()/decompress() 调用（发射器的形状是 `rt.method(x, "compress", …)`）——有就换带 zstd 的宿主、scriptc 加 --dynamic（与 packages/gds2js/src/cli.ts 的 usesPackCompress 同一口径）。 */
+/** 产物里有没有 PackedByteArray 的 compress()/decompress() 调用（发射器的形状是 `rt.method(x, "compress", …)`）——有就换带 zstd 的宿主、scriptc 加 --dynamic。口径与 cli.ts 的 IR 标志（usesPackCodec）经 test:compile 的交叉断言互锁。 */
 const NEED_ZSTD = /,\s*"(?:compress|decompress)"\s*,/;
 
-/** 与 `packages/runtime/src/host-scriptc.ts` 同形（只有相对路径按 tmp/sc-gate/<id>/ 的深度算）—— 改那份要改这份。 */
-function zstdHostSource() {
-  return `/// <reference path="../../../packages/runtime/src/gds2js-zstd.d.ts" />
-export * from "../../../packages/runtime/src/host";
-import { registerZipCodec } from "../../../packages/runtime/src/runtime/packed";
-import { deflateSync, inflateSync, gzipSync, gunzipSync } from "node:zlib";
-import * as Zstd from "gds2js-zstd";
-
-registerZipCodec(1, {
-  pack: (b: Uint8Array): Uint8Array => deflateSync(b),
-  unpack: (b: Uint8Array): Uint8Array => inflateSync(b),
-});
-registerZipCodec(3, {
-  pack: (b: Uint8Array): Uint8Array => gzipSync(b),
-  unpack: (b: Uint8Array): Uint8Array => gunzipSync(b),
-});
-
-function delay(ms: number): Promise<void> {
-  return new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
+/** 替身树里的 zstd 宿主：直接读真实的 zstdHost 源码，按 tree-face 清单把它那些相对说明符改写成回指仓库源（深度按替身树位置算）—— 不再有同形副本。 */
+function zstdHostSource(dir) {
+  const rtSrc = join(ROOT, TREE_FACE.repo.runtimeSrcRoot);
+  const src = readFileSync(join(rtSrc, TREE_FACE.repo.zstdHost), "utf8");
+  return src.replace(/"\.\/[^"]+"/g, (spec) => {
+    const target = join(rtSrc, spec.slice(3, -1));
+    let rel = relative(dir, target).split("\\").join("/");
+    if (!rel.startsWith(".")) rel = "./" + rel;
+    return `"${rel}"`;
   });
-}
-
-let waited = 0;
-while (!Zstd.ready() && waited < 500) {
-  await delay(10);
-  waited++;
-}
-if (!Zstd.ready()) {
-  throw new Error(\`zstd 驱动没就绪（等了 \${waited} 拍）：\${Zstd.initError()}\`);
-}
-registerZipCodec(2, {
-  pack: (b: Uint8Array): Uint8Array => Zstd.compress(b),
-  unpack: (b: Uint8Array): Uint8Array => Zstd.decompress(b),
-});
-`;
 }
 
 function copyTreeAll(from, to) {
@@ -90,13 +65,13 @@ function copyTreeAll(from, to) {
   }
 }
 
-/** 把 `packages/runtime/vendor` 里两个包铺到 `tmp/sc-gate/node_modules`（替身宿主从 tmp/sc-gate/<id>/ 往上正好找得到）。 */
+/** 把 vendor 里两个包铺到 `tmp/sc-gate/node_modules`（替身宿主从 tmp/sc-gate/<id>/ 往上正好找得到）。 */
 function ensureZstdPackages() {
-  const from = join(ROOT, "packages", "runtime", "src", "vendor");
+  const from = join(ROOT, TREE_FACE.repo.runtimeSrcRoot, TREE_FACE.repo.vendorDir);
   const to = join(WORK, "node_modules");
-  for (const pkg of ["gds2js-zstd", "zstd-codec"]) {
+  for (const pkg of TREE_FACE.tree.zstdPackages) {
     if (!existsSync(join(from, pkg))) {
-      console.log(`缺 packages/runtime/src/vendor/${pkg} —— zstd 用例没法铺驱动包`);
+      console.log(`缺 ${TREE_FACE.repo.vendorDir}/${pkg}（${TREE_FACE.repo.runtimeSrcRoot} 下）—— zstd 用例没法铺驱动包`);
       process.exit(1);
     }
     copyTreeAll(join(from, pkg), join(to, pkg));
@@ -121,11 +96,14 @@ function prepare(id) {
   mkdirSync(dir, { recursive: true });
   const src = readFileSync(genFile(id), "utf8");
   const zstd = NEED_ZSTD.test(src);
-  const moved = src.split("../../../tools/harness/scene-tree").join(zstd ? "./host-scriptc" : "../../../packages/runtime/src/host");
+  // 产物树里的替身宿主（zstd）或仓库源码宿主（普通）——两个说明符都从 tree-face 清单算。
+  const zstdSpec = "./" + TREE_FACE.tree.zstdHost.replace(/\.ts$/, "");
+  const repoHostSpec = relative(dir, join(ROOT, TREE_FACE.repo.runtimeSrcRoot, TREE_FACE.repo.host)).split("\\").join("/").replace(/\.ts$/, "");
+  const moved = src.split("../../../tools/harness/scene-tree").join(zstd ? zstdSpec : repoHostSpec);
   const file = join(dir, "main.mts");
   writeFileSync(file, moved, "utf8");
   if (zstd) {
-    writeFileSync(join(dir, "host-scriptc.ts"), zstdHostSource(), "utf8");
+    writeFileSync(join(dir, TREE_FACE.tree.zstdHost), zstdHostSource(dir), "utf8");
     ensureZstdPackages();
   }
   return { dir, file, zstd };

@@ -29,6 +29,8 @@ export type CommandSpec = {
 export type CliSpec = {
   name: string;
   description: string;
+  /** 给了就接 commander 的 `-V, --version`（默认不挂）。 */
+  version?: string;
   commands: CommandSpec[];
 };
 
@@ -72,6 +74,7 @@ function optionText(f: FlagSpec): string {
 export function buildProgram(spec: CliSpec): Command {
   const program = new Command(spec.name);
   program.description(spec.description);
+  if (spec.version !== undefined) program.version(spec.version);
   for (const c of spec.commands) {
     const sub = program.command(`${c.name} <${c.args.join(" <>")}>`).description(c.description);
     for (const f of c.flags) {

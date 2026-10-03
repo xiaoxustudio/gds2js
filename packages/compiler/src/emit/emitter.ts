@@ -12,8 +12,10 @@ export type BaseSpec =
   | { kind: "import"; name: string; from: string };
 
 export interface EmitOptions {
-  runtimeImport?: string;
-  hostImport?: string | null;
+  /** 产物里 runtime 的 import 说明符 —— 由调用方按产物落点算，编译器不带仓库布局知识。 */
+  runtimeImport: string;
+  /** 产物里宿主的 import 说明符；null = 这个产物不带宿主。 */
+  hostImport: string | null;
   autoRun?: boolean;
   className?: string;
   baseClass?: BaseSpec;
@@ -33,9 +35,6 @@ export interface EmitOptions {
   standaloneRequirePath?: string;
   standaloneInline?: string;
 }
-
-const DEFAULT_RUNTIME_IMPORT = "../../../packages/runtime/src/runtime/index";
-const DEFAULT_HOST_IMPORT = "../../../tools/harness/scene-tree";
 
 const BINOP: Record<string, string> = {
   "+": "add",
@@ -192,15 +191,15 @@ function standaloneInlineHeader(body: string): string {
   ].join("\n");
 }
 
-export function emitModule(m: Module, opts: EmitOptions = {}): string {
+export function emitModule(m: Module, opts: EmitOptions): string {
   return emitModuleWithMap(m, opts).code;
 }
 
-export function emitModuleWithMap(m: Module, opts: EmitOptions = {}): EmitResult {
+export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   MAP_ACTIVE = opts.sourcemap === true;
   LINE_MAPPINGS = [];
-  const runtimeImport = opts.runtimeImport ?? DEFAULT_RUNTIME_IMPORT;
-  const hostImport = opts.hostImport === undefined ? DEFAULT_HOST_IMPORT : opts.hostImport;
+  const runtimeImport = opts.runtimeImport;
+  const hostImport = opts.hostImport;
   const autoRun = opts.autoRun ?? true;
   const className = opts.className ?? "Main";
   const classRefs = opts.classRefs ?? [];

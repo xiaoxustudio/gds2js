@@ -13,11 +13,14 @@ export const GODOT_BIN =
 /** 单次 Godot 运行的上限，「卡住了没输出」的护栏；用 GDS2JS_GODOT_TIMEOUT_MS 按机器状况放大。 */
 export const DEFAULT_TIMEOUT_MS = Number(process.env.GDS2JS_GODOT_TIMEOUT_MS) || 15000;
 
+/** 探头用例（000-probe-cs-*）是 case-table 的原料，不是语料：除非 filter 点名 000-，否则不进任何门。 */
 export function listCases(filter = "") {
   if (!existsSync(CORPUS)) return [];
+  const wantProbes = filter.startsWith("000-");
   return readdirSync(CORPUS, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name)
+    .filter((n) => wantProbes || !n.startsWith("000-"))
     .filter((n) => n.includes(filter))
     .sort();
 }
