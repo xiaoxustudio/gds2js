@@ -8,7 +8,7 @@ import { md5Hex } from "@gds2js/runtime/runtime/md5";
 import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { Signal } from "@gds2js/runtime/runtime/signal";
 import { paramSlot } from "@gds2js/runtime/runtime/slots";
-import { attribute, callableCtor, index, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/methods";
+import { attribute, callableCtor, index, iter, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/methods";
 import { isLess, ops, strOps } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import {
@@ -562,6 +562,27 @@ eq("226", "rfind 越过最后一个可落点直接 -1", strFind("0123456789", "4
 eq("226", "rfind 同一个 -1 却能命中", strFind("0123456789", "456", -1, true), 4);
 eq("226", "find/rfind 的负 from 分界不对称", `${strFind("0123456789", "456", -4, false)}|${strFind("0123456789", "456", -4, true)}`, "4|4");
 eq("226", "码点下标：emoji 不当两个", strFind("\u{1F600}a\u{1F600}", "a", 0, false), 1);
+
+{
+  const els = (v: Variant) =>
+    iter(v)
+      .map((x) => show(x))
+      .join("|");
+  eq("229", "for i in 5 数到 4", els(V.int(5)), "0|1|2|3|4");
+  eq("229", "for i in 0 空转", els(V.int(0)), "");
+  eq("229", "for i in -3 空转", els(V.int(-3)), "");
+  eq("229", "for i in 1 只走一圈", els(V.int(1)), "0");
+  eq("229", "与 range(4) 同形", els(V.int(4)), els(V.array(range([V.int(4)]))));
+  eq("229", "float 上界给 float 元素", els(V.float(2)), "0.0|1.0");
+  eq("229", "0.5 也走一圈", els(V.float(0.5)), "0.0");
+  eq("229", "负 float 空转", els(V.float(-1)), "");
+  eq("229", "PackedByteArray 可迭代", els(V.object(new GBytes([9, 8]))), "9|8");
+  eq("229", "String 迭代仍按码点", els(V.str("é😀a")), "é|😀|a");
+  shouldThrow("229", "nan 上界响亮拒", () => iter(V.float(NaN)));
+  shouldThrow("229", "inf 上界响亮拒", () => iter(V.float(Infinity)));
+  shouldThrow("229", "越界整数上界响亮拒", () => iter(V.int(2n ** 53n)));
+  shouldThrow("229", "bool 不可迭代", () => iter(V.bool(true)));
+}
 
 eq("226", "capitalize 单词首字母", strCapitalize("hello world"), "Hello World");
 eq("226", "capitalize 把连续大写拆成多词", strCapitalize("hELLo wORLd"), "H El Lo W Or Ld");

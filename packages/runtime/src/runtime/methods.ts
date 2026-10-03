@@ -13,7 +13,7 @@ import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems } from "./packed";
 
 function asArray(v: Variant, who: string): GArray {
   if (v.t !== Tag.ARRAY) throw new UnsupportedError("not-array", `${who} 需要 Array，收到 ${v.t}`);
@@ -857,10 +857,33 @@ export function setIndex(raw: unknown, idx: Variant, val: Variant): void {
 }
 
 /** for ... in 的迭代协议 */
+/**
+ * `for x in <数>` 是「从 0 数到那个数」：整数给 `0..n-1`、float 给 `0.0..`，n<=0 空转（4.6.3 实测，见 SEMANTICS S202）。
+ * 计数口径与 `rangeSeq` 同一条 —— 都是先展开成数组再走 for-of。
+ */
 export function iter(v: Variant): Variant[] {
   if (v.t === Tag.ARRAY) return (v.v as GArray).raw();
   if (v.t === Tag.DICT) return (v.v as GDict).keys();
   if (v.t === Tag.STRING) return [...(v.v as string)].map((c) => V.str(c));
+  if (v.t === Tag.INT) {
+    const n = intToNum(v.v as IntPayload);
+    if (!Number.isSafeInteger(n)) {
+      throw new UnsupportedError("iter-count", `for 的整数上界超出 2^53 安全整数范围（${String(v.v)}）`);
+    }
+    const out: Variant[] = [];
+    for (let i = 0; i < n; i++) out.push(V.int(i));
+    return out;
+  }
+  if (v.t === Tag.FLOAT) {
+    const end = v.v as number;
+    if (!Number.isFinite(end)) {
+      throw new UnsupportedError("iter-count", `for 的 float 上界是 ${String(end)}，展不开`);
+    }
+    const out: Variant[] = [];
+    for (let i = 0; i < end; i++) out.push(V.float(i));
+    return out;
+  }
+  if (v.t === Tag.OBJECT && v.v instanceof GBytes) return packItems(v.v as GBytes);
   throw new UnsupportedError("iter-type", `类型 ${v.t} 不可迭代`);
 }
 
