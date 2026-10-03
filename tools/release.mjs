@@ -42,6 +42,17 @@ for (const p of ["package.json", "packages/runtime/package.json", "packages/comp
 }
 console.log(`release: 版本 ${version}（根/三包/version.ts 一致）`);
 
+/* 1b) Node 底线一致性：engines（根与对外包）与 exec.native.ts 里那句「产物要 node ≥ X」必须同一个数。
+       22.18 是实测边界（20.19.4 的 run 与 build-project 都炸、22.19.0 全过），SEA 那支另要 25.7、由运行期判。 */
+const enginesOf = (p) => JSON.parse(readFileSync(join(ROOT, p), "utf8")).engines?.node ?? "";
+const rootEngines = enginesOf("package.json");
+const pkgEngines = enginesOf("packages/gds2js/package.json");
+if (rootEngines !== pkgEngines) fail(`engines.node 不一致：根是 ${rootEngines || "缺"}，gds2js 是 ${pkgEngines || "缺"}`);
+const seamFloor = /产物要 node ≥ ([\d.]+)/.exec(readFileSync(join(ROOT, "packages", "gds2js", "src", "exec.native.ts"), "utf8"));
+if (!seamFloor) fail("packages/gds2js/src/exec.native.ts 里找不到「产物要 node ≥ …」那句，底线口径断了");
+if (`>=${seamFloor[1]}` !== rootEngines) fail(`engines.node（${rootEngines}）与 exec.native.ts 的产物底线（>=${seamFloor[1]}）不一致`);
+console.log(`release: engines.node ${rootEngines}（根/gds2js/exec.native.ts 一致）`);
+
 /* 2) 构建 + 门：门里 exe 过期会自动重编，编完跑 19 项（含 SEA / scriptc 两支真出货）。 */
 console.log("release: pnpm build …");
 runCmd("pnpm build");

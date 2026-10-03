@@ -6,7 +6,7 @@
   "packageManager": "pnpm@12.8.1",
   "description": "将 .gds 转义为 js 运行（monorepo 根：只放工具链与门脚本，对外面在 packages/gds2js）",
   "engines": {
-    "node": ">=25.7"
+    "node": ">=22.18"
   },
   "scripts": {
     "test:golden": "node tools/golden.mjs",

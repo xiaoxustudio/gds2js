@@ -11,8 +11,10 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。管�
 
 ## 环境
 
-- Node **>= 25**（`package.json` engines；那一条只服务 `--pack node` 的 SEA 支）。
-- **tools/ 侧需要 Node ≥ 23.6**：部分门脚本（`.mjs`）直接 `import` 包内 `.ts`（如 `tree-face.ts` 清单），靠 Node 默认开启的类型剥离；本机实测 Node 24/26 可用。
+- Node **>= 22.18**（`package.json` engines；CLI 与 tools/ 同一条底线 —— 门脚本 `.mjs` 直接 `import` 包内 `.ts`、`run` 跑 `.mts` 产物，靠的都是 Node 默认开启的类型剥离，那一条从 22.18 起）。
+  实测边界：18.20.4 / 20.19.4 上 `check` `check-project` `build` 都过，但 `run` 报 `Unknown file extension ".mts"`、`build-project --runtime-mode single` 报 `Promise.withResolvers is not a function`；
+  22.19.0 / 24.8.0 / 26.10.0 全过且 `run` 的输出逐字节相同。
+- **只有 `export --pack node`（SEA）那一支另要 Node >= 25.7**，由代码在运行期判并给明确拒（`实测 22.19.0` 这样的原文），不写进 engines。
 - 包管理：**pnpm 12.8.1**（根 `packageManager` 已钉；PATH 上是旧 pnpm 时用 `npx pnpm@12.8.1 …`）。
 - 需要本机 Godot 4.x 作为裁判引擎生成/校验 golden，路径用 `GODOT_BIN` 覆盖（默认 `F:/godot/...`）。
 
@@ -112,7 +114,7 @@ pnpm test:cli-native                       # 门：原生 exe 与 node 侧 CLI �
 
 ```bash
 node packages/gds2js/dist/cli.mjs build x.gd --runtime-mode single -o build/x.mts
-node build/x.mts          # Node >= 22.6（默认开启 --experimental-strip-types）
+node build/x.mts          # Node >= 22.18（类型剥离默认开启，与 engines 同一条）
 ```
 
 - 默认会在产物末尾发 `await new Main().run()`（入口即跑生命周期）。
