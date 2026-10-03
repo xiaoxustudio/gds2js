@@ -1,0 +1,47 @@
+PICK v1 1
+guard:a
+  hit a
+  end v1
+PICK v2 2
+guard:b
+  hit b-plain
+  end v2
+PICK v3 3
+guard:c
+  hit c
+  end v3
+PICK v9 9
+  hit wildcard
+  end v9
+guard:comma
+  cm2 low
+guard:comma2
+  cm4 rest
+guard:comma3
+  cm6 third
+guard:comma3
+  cm7 third
+  cm99 rest
+guard:o1
+  og1 fallen through
+guard:o2
+  og2 fallen through
+  og3 fallen through
+guard:ga
+guard:gb
+guard:gc
+  ga third
+guard:ol1
+  ol2 matched-outer-var
+guard:ol2
+  ol3 matched-const
+  ol8 guard-sees-outer
+guard:cg1
+guard:cg2
+  cg-list pair-yes
+guard:cg3
+  cg-dict dict
+  cg-other other
+guard:osb
+  osb5 outer-bind
+  osb6 outer-guard-uses-bind

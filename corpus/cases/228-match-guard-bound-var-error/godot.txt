@@ -1,0 +1,10 @@
+SCRIPT ERROR: Parse Error: Identifier "a" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Identifier "b" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Identifier "a" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Identifier "b" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:5)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
