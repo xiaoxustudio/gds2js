@@ -25,10 +25,7 @@ function loc(n: SyntaxNode): Loc {
   return { line: n.startPosition.row + 1, col: n.startPosition.column + 1 };
 }
 
-/**
- * 字段名挂在**孩子自己**那一格上（`fieldName`），所以这里是在 `children` 里找它 ——
- * 不再需要 wasm 那个 `childForFieldName` 方法：CST 是普通记录，方法在静态目标上不好过（S231）。
- */
+/** 按 fieldName 在 children 里取字段节点（字段名挂在孩子自己那一格上）。 */
 function field(n: SyntaxNode, name: string): SyntaxNode | null {
   for (const c of n.children) {
     if (c.fieldName === name) return c;
@@ -127,14 +124,7 @@ function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
   };
 }
 
-/**
- * 属性访问器（文法里是 `setget` 子节点，实测见 S152）。两种写法行为一致，都收：
- *   · 块式 `get:` / `set(value):` —— 子节点 get_body / set_body，各带一个 body 块
- *   · 引用式 `get = _getp, set = _setp` —— 子节点 getter / setter，值是方法名
- * **过去这里是整段丢掉的**（lowerVar 根本不看 setget），于是 `var prop: int:` 编成一个没有初值的
- * 普通成员，读它给 null、写它静默改不到东西 —— 一条能编译通过的静默错。
- * 只带 set 不带 get 的形态没探针测过，宁可拒绝也不把猜的行为编进产物。
- */
+/** 属性访问器（文法里是 `setget` 子节点），两种写法行为一致都收：块式 `get:` / `set(value):` 走 inline，引用式 `get = _getp, set = _setp` 走 method。 */
 function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
   if (!n || n.type !== "setget") return null;
   let getter: PropGetter | null = null;
@@ -197,8 +187,7 @@ function lowerClass(n: SyntaxNode): ClassDecl {
     innerClasses: [],
     loc: loc(n),
   };
-  // 内部类的 `class X extends Y:` 里 extends_statement 是 class_definition 的**直接孩子**（与 class_body 同级），
-  // 不在类体里 —— 只在类体里找会把基类静默丢掉（S174，探针 tmp/f53 t01）。
+  // 内部类的 `class X extends Y:` 里 extends_statement 是 class_definition 的直接孩子（与 class_body 同级），只扫类体会把基类静默丢掉
   for (const c of named(n)) {
     if (c.type === "extends_statement") {
       decl.extends = need(named(c)[0] ?? field(c, "type"), "extends").text;
@@ -228,7 +217,7 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "class_definition":
         decl.innerClasses.push(lowerClass(c));
         break;
-      // `class X extends Y: pass` 实测合法（tmp/f53 t11），就是「没有自有成员」
+      // `class X extends Y: pass` 合法，就是「没有自有成员」
       case "pass_statement":
         break;
       case "annotation":
@@ -287,11 +276,7 @@ function lowerParam(n: SyntaxNode): Param {
   };
 }
 
-/**
- * 整数字面量必须**原样**保住精度：`Number("9223372036854775807")` 会先四舍五入成
- * ...808 才交给运行时，那样的 BigInt 路径永远拿不到正确值。2^53 内仍用 number
- * （让发射期保持裸数字），超出改用 bigint 字面量。顺带吃掉 GDScript 的 `1_000_000` 下划线。
- */
+/** 整数字面量必须原样保住精度：先 `Number()` 会四舍五入、BigInt 那条路就拿不到正确值，所以 2^53 内用 number、超出用 bigint 字面量。顺带剥掉 GDScript 的 `1_000_000` 下划线。 */
 function lowerIntLit(text: string): number | bigint {
   const t = text.replace(/_/g, "");
   const n = Number(t);
@@ -304,13 +289,7 @@ function lowerBody(n: SyntaxNode): Stmt[] {
     .map(lowerStmt);
 }
 
-/**
- * `Stmt` 的 var 那一支是联合里的一条臂 —— 展开 `VarDecl` 再 `as Stmt` 在静态编译目标上是
- * 「联合转换没有唯一的布局映射」（SC2003，实测 `scriptc coverage src/cli.ts` 里那 2 格），
- * 所以这里按那条臂**声明的字段**逐格写出来。`isStatic` / `accessor` 是刻意不带的：
- * 它们只活在 `m.vars` 那份 `VarDecl` 上（模块变量走 `lowerVar` 直接进 `vars`，不经过语句），
- * 语句上的这一支发射器只读 `name/type/init`。
- */
+/** 逐格写出 `Stmt` 的 var 臂：展开 `VarDecl` 再 `as Stmt` 在静态编译目标上没有唯一的布局映射，所以不能用对象展开。`isStatic` / `accessor` 刻意不带 —— 它们只活在 `m.vars` 那份 `VarDecl` 上，语句这一支发射器只读 `name/type/init`。 */
 function varStmt(v: VarDecl, c: Loc): Stmt {
   return { kind: "var", name: v.name, type: v.type, init: v.init, isConst: v.isConst, loc: c };
 }
@@ -590,8 +569,7 @@ function unquote(raw: string): string {
   for (let i = 0; i < inner.length; i++) {
     const ch = inner[i]!;
     if (ch !== "\\") {
-      // 代理对必须**整对**推进去：静态目标上任何拼接（`+`、模板串、`join`）碰到半个代理都会把它换成
-      // U+FFFD（实测七种写法全中，S235），而 `slice` 出来的整对是好的 —— 所以这里按码点切，不按码元切。
+      // 代理对必须**整对**推进去：拼半个代理会被换成 U+FFFD，而 `slice` 出来的整对是好的 —— 所以这里按码点切，不按码元切。
       const lead = inner.charCodeAt(i);
       if (lead >= 0xd800 && lead <= 0xdbff && i + 1 < inner.length) {
         const trail = inner.charCodeAt(i + 1);

@@ -61,7 +61,7 @@ export function md5Hex(text: string): string {
   let out = "";
   const hexDigits = "0123456789abcdef";
   for (const w of [a0, b0, c0, d0]) {
-    // 整数的 `toString(16)` 与 `padStart` 在静态编译目标上都没有 lowering（实测 scriptc）：逐位拼
+    // 整数的 `toString(16)` 与 `padStart` 在静态编译目标上没有 lowering：逐位拼
     for (let i = 0; i < 4; i++) {
       const byte = (w >>> (i * 8)) & 0xff;
       out += hexDigits.charAt((byte >> 4) & 0xf) + hexDigits.charAt(byte & 0xf);

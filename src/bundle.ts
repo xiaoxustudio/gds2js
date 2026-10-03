@@ -1,11 +1,4 @@
-/**
- * `--runtime-mode single` 的内联打包 seam（#14）。
- *
- * 为什么要 seam：tsdown 是 npm 包，`await import("tsdown")` 在静态目标上落在嵌入式动态引擎里
- * （SC2012/SC2013，S227 量的第一份围栏清单里就有它），不带 `--dynamic` 编不过。
- * 原生构建由 `tools/cli-native.mjs` 生成同名文件，那一支 `bundlingAvailable()` 报 false，
- * `single` 就照「这个构建没带打包器」响亮拒 —— 而不是让整条 CLI 卡在编译期。
- */
+/** 构建期由 tools/cli-native.mjs 同名换实现：原生 exe 不带打包器，--runtime-mode single 照实拒。 */
 
 /** 这个构建里有没有可用的打包器（node 侧看 tsdown 装没装，原生侧恒 false）。 */
 export async function bundlingAvailable(): Promise<boolean> {

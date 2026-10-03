@@ -1,18 +1,4 @@
-/**
- * Godot 数组排序的**逐行转写**：`core/templates/sort_array.h` 的 `SortArray`（introsort + 堆退化 + 收尾插入趟）。
- *
- * 为什么要有这个文件：`Array.sort_custom` 在 n ≥ 17 且存在同键时给的不是稳定顺序，而是这个算法特有的置换
- * （S184）。以前这里走 JS 的稳定 sort，同键顺序与引擎不同 —— 可复现的静默分叉。原文到手后按原文搬，
- * 两套指纹对拍都是满分：`tmp/f74` 的 45 格（`npx tsx tmp/sort-verbatim.mts`）与 `tmp/f94` 的 26 格独立格
- * （`npx tsx tmp/sort-f94.mts`，全是那 45 格里没出现过的 n、重复度与非自洽比较器）。
- *
- * 两个必须照原文的点：
- * ① **pivot 按位置读，不是快照** —— 原文拿的是 `const T *pivot_element_location = &p_array[p_pivot]`，
- *    扫描时每次现取，交换时指针跟着换；
- * ② `ERR_BAD_COMPARE` 是 **break 出当前那一个扫描 while**，不是中断整个排序，所以比较器不自洽时
- *    引擎继续跑并给出一个它特有的顺序（4.6.3 实测 `Validate` 是开的：Godot 会往 stderr 打
- *    `ERROR: bad comparison function; sorting will be broken` —— 那行文本产物复现不了，置换能复现）。
- */
+/** Godot 数组排序的逐行转写：`core/templates/sort_array.h` 的 introsort + 堆退化 + 收尾插入趟。 */
 
 type Less<T> = (a: T, b: T) => boolean;
 
@@ -254,11 +240,7 @@ class SortArray<T> {
   }
 }
 
-/**
- * 按引擎的置换排一遍（返回新数组，与 `GArray` 现有口径一致）。
- * 比较器不自洽时那两条 `return` 走的是引擎 `ERR_BAD_COMPARE` 的 break 分支，置换照给 —— 但它那一行
- * stderr 复现不了；比较器中途抛错的形状没量过（引擎是原地排、我们排完才换数组）。
- */
+/** 按引擎的置换排一遍，返回新数组（`GArray` 现有口径）；比较器不自洽时走引擎 `ERR_BAD_COMPARE` 的 break 分支，置换照给、只复现不了那行 stderr。 */
 export function sortGodot<T>(items: readonly T[], less: Less<T>): T[] {
   const a = [...items];
   new SortArray<T>(a, less).sortRange(0, a.length);

@@ -8,20 +8,7 @@ import { toVec2 } from "./vector2";
 import { vector2iNew } from "./vector2i";
 import { toVec3, toVec3i } from "./vector3i";
 
-/**
- * 定目标量**形参**的入口槽位（S176 的 7 槽 × 13 来源对拍表，加上 S185 的 `tmp/f75` 98 格新槽矩阵）。
- *
- * 这一格比变量 / 字段赋值**严**：`func g(a: int)` 收到 String 时 Godot 不转换，而是在函数入口抛
- * `Invalid type in function 'g' in base 'RefCounted (A)'. Cannot convert argument 1 from String to int.`
- * 而收到 float / bool 又确实转换（2.7 → 2、true → 1、1e30 → int64 最小值）。
- * 所以「谁能塞进哪个槽」只能是一张实测表，S150 那张转换表在这里不成立。
- *
- * 表里每一行的 `from` 就是 Godot **允许转换**的那几个来源（`tmp/f75 a-Vector3-from-*` 一类：
- * 14 个来源里只有同型 + S185 记的几条加宽/截断活下来，其余全是解析期拒）；
- * 表里没有的组合一律抛上面那句。
- * 槽类型本身不在表里的（`Rect2` / `Plane` / 类名……）**原样透传**：那些槽的每一格还没量，
- * 不猜转换、也不误拒合法的同类实参，量完再补。
- */
+/** 带类型形参的入口槽位表：`from` 是 Godot 允许转换的来源，`cast` 是怎么转；表里没有的来源在函数入口抛错，槽类型本身不在表里的原样透传。 */
 const PARAM_SLOTS: Record<string, { from: string[]; cast: (v: Variant) => Variant }> = {
   int: { from: ["int", "float", "bool"], cast: toInt },
   float: { from: ["int", "float", "bool"], cast: toFloat },
@@ -30,9 +17,7 @@ const PARAM_SLOTS: Record<string, { from: string[]; cast: (v: Variant) => Varian
   StringName: { from: ["StringName", "String"], cast: (v) => V.stringName(v.v as string) },
   Vector2: { from: ["Vector2", "Vector2i"], cast: toVec2 },
   Vector2i: { from: ["Vector2i", "Vector2"], cast: (v) => vector2iNew([v]) },
-  // `tmp/f75` 的 98 格：Vector3 槽收 Vector3 与 Vector3i（升 float），Vector3i 槽收 Vector3i 与 Vector3
-  // （逐分量向零截断），StringName 槽收 StringName 与 String，**别的来源（含 int / float / bool / null /
-  // 跨维度向量 / Color）都是解析期拒**，走到这里说明来源是运行期才看清的形状 → 抛入口那句。
+  // Vector3 槽收 Vector3 与 Vector3i（升 float），Vector3i 槽收 Vector3i 与 Vector3（逐分量向零截断）；其余来源都是解析期拒，走到这里说明是运行期才看清的形状 → 抛入口那句。
   Vector3: { from: ["Vector3", "Vector3i"], cast: toVec3 },
   Vector3i: { from: ["Vector3i", "Vector3"], cast: toVec3i },
   Color: { from: ["Color", "String", "int"], cast: (v) => colorNew([v]) },
@@ -43,7 +28,7 @@ function argLabel(v: Variant): string {
   return v.t === Tag.NIL ? "Nil" : valueTypeName(v);
 }
 
-/** 报错文本里的 `RefCounted (A)`：原生基类 + 脚本类名，与对象打印 / `get_class()` 同一批登记（S167）。 */
+/** 报错文本里的 `RefCounted (A)`：原生基类 + 脚本类名，与对象打印 / `get_class()` 同一批登记。 */
 function baseLabel(self: unknown): string {
   const cls = classNameOf(self);
   const native = nativeBaseOf(self);
@@ -61,7 +46,7 @@ export function paramSlot(v: Variant, slot: string, index: number, fn: string, s
   throw new GodotRuntimeError("param-slot", paramSlotErrorText(fn, self, index, from, slot));
 }
 
-/** 量到「Godot 直接抛」的组合时用的那句话；抽出来好让语义与 `paramSlot` 的分支共用一份口径。 */
+/** 槽位收不下某个实参时 Godot 抛的那句话；抽出来好让语义与 `paramSlot` 的分支共用一份口径。 */
 export function paramSlotErrorText(fn: string, self: unknown, index: number, from: string, slot: string): string {
   return `Invalid type in function '${fn}' in base '${baseLabel(self)}'. Cannot convert argument ${index} from ${from} to ${slot}.`;
 }

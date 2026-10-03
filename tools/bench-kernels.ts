@@ -1,8 +1,6 @@
 /**
- * gds2js 与 Godot 两份 benchmark **共用**这 14 个 kernel：同一份源定义，两边跑出来的
- * 「每次(ms)」和「校验值」才可直接对撞；各写一套就会漂。
- * 每条带 reps（计时重复次数，前面另有一次不计时预热）与可选 helpers（模块级函数，
- * 用来量调用/赋值开销，不是 kernel 内部局部逻辑）。
+ * gds2js 与 Godot 两份 benchmark 共用这 14 个 kernel：同一份源定义，两边读数才可直接对撞。
+ * 每条带 reps（计时重复次数，前面另有一次不计时预热）与可选 helpers（模块级函数，用来量调用/赋值开销）。
  */
 export interface Kernel {
   name: string;
@@ -258,11 +256,7 @@ export function tableRow(r: BenchRow): string {
   return `${r.name.padEnd(22)} ${r.ms.toFixed(2).padStart(8)}    ${r.checksum}`;
 }
 
-/**
- * 两边同一 kernel 的倍率（Godot / gds2js，>1 = Godot 更慢）。校验值只列出来不判等：
- * 浮点那几条 Godot 与 JS 的印法本来就不同（15 位有效 vs str() 的最短往返），
- * 判等会把人引到「语义有差」的假信号上；要核语义走 test:diff / test:golden。
- */
+/** 两边同一 kernel 的倍率（Godot / gds2js，>1 = Godot 更慢）；校验值只列出来，不判等。 */
 export function compareRows(js: BenchRow[], godot: BenchRow[]): string[] {
   const jmap = new Map(js.map((r) => [r.name, r]));
   const out = ["kernel                 gds2js(ms)   Godot(ms)   倍率    校验值是否同字面", "----------------------  ---------   ---------  ------   --------------"];  let jsSum = 0, gdSum = 0;

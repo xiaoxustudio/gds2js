@@ -1,18 +1,6 @@
-/* #14 的原生 shim：把 libtree-sitter 的解析结果**拍平成定长记录**交回 TS。
- *
- * 为什么形状是这样（整数句柄 + 两块字节）：scriptc 的 `--ffi` 边界上只有
- * f64/u8/u32/i32(number)、bool、string、bytes(Uint8Array) 这几类，
- * `pointer` 没有对应的 TS 声明形状（实测 SC5003），返回类也只有 f64/u8/u32/i32/bool/void。
- * 所以 parser、tree 与两块缓冲都留在 C 侧，TS 每次解析拿回「一张前序节点表 + 一个名字池」。
- *
- * 一记录七个 int32：depth、kind 名在名字池里的偏移、start_byte、end_byte、is_named、has_error、
- * 本节点在父亲那里的字段名偏移（0 = 池首那个空串，表示没有字段名）。
- * 走的是 `ts_node_child`（含匿名与 extra），与 web-tree-sitter 的 `children` 同一棵树。
- *
- * 编译必须与 scriptc 的链接同一套工具链（`zig cc -target x86_64-windows-gnu`）：
- * 用本机 clang 的默认 windows-msvc target 编出来的 .o 会带 `/DEFAULTLIB:uuid.lib`，
- * 到 scriptc 那一步就报 `lld-link: could not open 'libuuid.a'`（实测，ROADMAP S219）。
- */
+/* 原生 shim：把 libtree-sitter 的解析结果拍平成定长记录（前序 + depth + UTF-8 字节区间 + 名字池）交回 TS。
+ * 对外只给「整数 + 两块字节」：FFI 边界上没有 pointer 这一类，所以 parser、tree 与两块缓冲都留在 C 侧。
+ * 编译必须用 zig cc -target x86_64-windows-gnu：换工具链目标会在链接期找不到 libuuid.a。 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,9 +50,7 @@ int gds_init(void) {
   return ts_parser_set_language(g_parser, tree_sitter_gdscript()) ? 1 : 0;
 }
 
-/* 长度不照 TS 传的走：JS 的 `.length` 是 UTF-16 码元数，这里要的是 UTF-8 字节数，
- * 非 ASCII 的 .gd 会切短/切歪（S222 在同一批语料上量到 8,637 个节点两者不等）。
- * 源码里不会有内嵌 NUL，所以 strlen 是安全的。 */
+/* 长度不照 TS 传的走：JS 的 .length 是 UTF-16 码元数，这里要的是 UTF-8 字节数；源码没有内嵌 NUL，所以 strlen 是安全的。 */
 int gds_parse_nodes(const char *src, int len) {
   (void)len;
   if (g_parser == NULL) return -1;

@@ -69,7 +69,7 @@ class Inner extends rt.GdScriptObject {
     return rt.V.int(7);
   }
   set ro(value) {
-    // 只读属性：Godot 实测写它是静默无操作（S152），不是报错
+    // 只读属性：Godot 里写它是静默无操作，不是报错
   }
   get ref() {
     return this._getr();

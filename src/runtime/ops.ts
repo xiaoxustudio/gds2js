@@ -71,15 +71,10 @@ function i64(x: IntPayload, y: IntPayload, f: (a: bigint, b: bigint) => bigint):
   return V.int(f(intToBig(x), intToBig(y)));
 }
 
-/**
- * 动态路径的运算符分派（R4）。
- * 每条语义都能在 docs/SEMANTICS.md 里找到依据编号。
- */
+/** 动态路径的运算符分派。 */
 export const ops = {
   add(a: Variant, b: Variant): Variant {
-    // pack 的 `+`（拼接）：不落地 `GBytes | null` 的局部（那一体格子要把类实例表示成 checked-dynamic 属性，
-    // 而 `GBytes.items` 是含 bigint 与类实例的联合数组、没有静态表示，静态 exe 一跑就拒），
-    // 所以 `instanceof` 直接写在条件里、进格后把收窄的 `a.v` / `b.v` 交出去。
+    // pack 的 `+`（拼接）：`instanceof` 直接写在条件里，不落地 `GBytes | null` 的可空局部。
     if (a.t === Tag.OBJECT && b.t === Tag.OBJECT && a.v instanceof GBytes && b.v instanceof GBytes) {
       return bytesConcat(a.v, b.v);
     }
@@ -152,9 +147,7 @@ export const ops = {
     if (zjMul && a.t === Tag.FLOAT) return vec2iToFloat(zjMul, num(a), "mul");
     if (ziMul && isNum(b)) return vector2i(mul32(ziMul.x, intToNum(b.v as IntPayload)), mul32(ziMul.y, intToNum(b.v as IntPayload)));
     if (zjMul && isNum(a)) return vector2i(mul32(zjMul.x, intToNum(a.v as IntPayload)), mul32(zjMul.y, intToNum(a.v as IntPayload)));
-    // Vector3i 与标量：`tmp/f67 t03` 量了 int 的两侧与向量的逐分量除/模，`tmp/f70 p21`/`p22` 量了
-    // **右边放 float** —— 那时升级成 Vector3（与 Vector2i 同形）。左边的 `2.0 * Vector3i` 与
-    // `4 / Vector3i` 都没量到（`p23` 只量到后者是解析期拒），所以左侧只接 int。
+    // Vector3i 与标量：右边放 float 时升级成 Vector3（与 Vector2i 同形），左边只接 int 标量。
     const zi3Mul = asVec3i(a);
     const zj3Mul = asVec3i(b);
     if (zi3Mul && zj3Mul) return v3iMul(zi3Mul, zj3Mul);
@@ -193,9 +186,7 @@ export const ops = {
       const k = intToNum(b.v as IntPayload);
       return vector2i(div32(ziDiv.x, k), div32(ziDiv.y, k));
     }
-    // Vector3i 的除/取模：向量对向量与**右边 int 标量**（`tmp/f67 t03` 的 a/b、a%b、a/2、a%-2），
-    // 除零走 div32/mod32 那两句实测文本（`tmp/f67 t14`/`t15`）。
-    // 掺 float 的 `/ 4.0` 没量到（`tmp/f69 t82` 只量到 `% 4.0` 是解析期拒），所以不升也不截，落到下面的报缺。
+    // Vector3i 的除 / 取模：向量对向量与右边 int 标量，除零走 div32 / mod32 那两句报错文本。
     const zi3Div = asVec3i(a);
     const zj3Div = asVec3i(b);
     if (zi3Div && zj3Div) return v3iDiv(zi3Div, zj3Div);
@@ -379,19 +370,12 @@ function compare(a: Variant, b: Variant): number {
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
 }
 
-/**
- * `a` 严格小于 `b`？与 `<`、`Array.sort()`、`bsearch`、`min`/`max` 同一个口径，
- * 免得两套实现分叉（比较不支持的类型照样响亮抛）。
- */
+/** `a` 严格小于 `b`：与 `<`、`Array.sort()`、`bsearch`、`min` / `max` 共用 compare 这一个口径。 */
 export function isLess(a: Variant, b: Variant): boolean {
   return compare(a, b) < 0;
 }
 
-/** 二进制快速幂，每步都回绕到 int64（等价于 Godot 的 64 位溢出行为）。 */
-// bigint 的一切比较与复合赋值在静态编译目标上都没有 lowering（实测 scriptc SC1043：
-// 「comparing non-number, non-string values」，`e > 0n`、`if (e & 1n)`、`e >>= 1n` 三形一起拒），
-// 而 `DataView` 的 bigint 读写都有 —— 拆成「带符号高 32 位 + 无符号低 32 位」按 number 判。
-// 赋值式的 `e = e >> 1n` 是可编的，被拒的只有复合形式 `>>=`。
+/** bigint 的比较与复合赋值在静态编译目标上没有 lowering，而 `DataView` 的 bigint 读写都有：拆成带符号高 32 位 + 无符号低 32 位，按 number 判。 */
 const BIG_SCRATCH = new DataView(new ArrayBuffer(8));
 
 function bigWords(v: bigint): [number, number] {
@@ -412,6 +396,7 @@ function bigOdd(v: bigint): boolean {
   return ((bigWords(v)[1] as number) & 1) === 1;
 }
 
+/** 二进制快速幂，每步都回绕到 int64（等价于 Godot 的 64 位溢出行为）。 */
 function bigPow(base0: bigint, exp0: bigint): bigint {
   let r = 1n;
   let base = wrap64(base0);
@@ -433,7 +418,7 @@ function checkShift(a: Variant, b: Variant): [IntPayload, IntPayload] {
   return [x, y];
 }
 
-// String 相关（Tier 1 需要的部分）
+/** String 相关运算的转发。 */
 export const strOps = {
   length: strLength,
   at: strAt,

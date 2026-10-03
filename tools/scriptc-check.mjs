@@ -1,16 +1,10 @@
 #!/usr/bin/env node
-// scriptc 出货门（S205）：把语料的产物喂给 scriptc 编成原生 exe，再逐字节对拍 Godot 的 golden。
-// 这是「静态那一支算不算数」唯一算数的判据 —— node 那侧跑对不等于静态 exe 跑对，两边形状差在围栏上。
+// scriptc 出货门：把语料的产物喂给 scriptc 编成原生 exe，再逐字节对拍 Godot 的 golden。
+// 单文件用例走「产物 + 换宿主 import → scriptc build」这条短路，项目树用例走真命令 `export --pack scriptc`。
 //
 //   pnpm test:scriptc              默认的代表集（一族一格，秒级到分钟级）
 //   pnpm test:scriptc 064          只跑 id 含 064 的
 //   pnpm test:scriptc --all        全量（单文件 + 项目树，142 个上下，一轮要几十分钟）
-//
-// 单文件用例走「产物 + 换宿主 import → scriptc build」这一条短路；项目树用例（031–040）走**真命令**
-// `export --pack scriptc`，因为它要量的正是「整棵树只有一份 runtime 源码」这一格。
-//
-// 产物形状里 `tools/harness/scene-tree` 那一支在静态目标上带着 node 的 zlib 查找，
-// 所以这里把 import 改指 `src/host`（静态可用的宿主）—— 与 `--pack scriptc` 将来发的那一行一致。
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,13 +13,12 @@ import { ROOT, caseDir, caseIsProject, caseScript, godotOk, listCases, normalize
 const args = process.argv.slice(2);
 const all = args.includes("--all");
 const keep = args.includes("--keep");
-// `--project`：只跑项目树那 9 个用例（031–040）。它们走的是真命令 `export --pack scriptc`，
-// 单跑一轮几十分钟，全量 sweep 里跟着跑；改到 export/compileProject 这一带就先单独跑这一支。
+// `--project`：只跑项目树那几个用例，走真命令 `export --pack scriptc`；单跑一轮几十分钟。
 const projectOnly = args.includes("--project");
 const filter = args.find((a) => !a.startsWith("--")) || "";
 const WORK = join(ROOT, "tmp", "sc-gate");
 
-// 代表集：每格都是一族已经量过的形状，全绿才有脸说覆盖面
+// 代表集：一族一格各一个
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -43,8 +36,7 @@ function genFile(id) {
 }
 
 function pickCases() {
-  // 项目树用例（`caseIsProject`）走另一条路：让**真 CLI** 的 `export --pack scriptc` 出树再出货，
-  // 所以它不需要 `main.gen.mts`（那一支只发单文件产物）。
+  // 项目树用例走真 CLI 的 `export --pack scriptc`，不需要 `main.gen.mts`（那一支只发单文件产物）
   const allIds = listCases(filter)
     .filter((id) => (projectOnly ? caseIsProject(id) : true))
     .filter((id) => godotOk(readGolden(id)) && (caseIsProject(id) || existsSync(genFile(id))));
@@ -55,8 +47,7 @@ function pickCases() {
 }
 
 function prepare(id) {
-  // `tmp/sc-gate/<case>/` 与 `corpus/cases/<case>/` 同深（三级），所以 runtime 的 import 原样保留，
-  // 只把宿主那一行从 node 的 harness 换成静态可用的 `src/host`。
+  // 与 `corpus/cases/<case>/` 同深（三级），runtime 的 import 原样保留，只把宿主那一行换成静态可用的 `src/host`
   const dir = join(WORK, id);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
@@ -84,11 +75,7 @@ function scNote(out, fallback) {
   return `${fallback}：${out.trim().split("\n").pop()?.slice(0, 120) ?? ""}`;
 }
 
-/**
- * 项目树用例：走**用户那条命令**（`export --pack scriptc`），门才作数 ——
- * 它同时量到「树里只有一份 runtime 源码」这一格（多份就是多套类身份，静默错）。
- * 中间树默认落在用例目录的 `.gds2js-export/`（gitignore 过），跑完就清，除非 `--keep`。
- */
+/** 项目树用例：走用户那条命令 `export --pack scriptc`，门才同时量到「树里只有一份 runtime 源码」。 */
 function gateProject(id) {
   const dir = join(WORK, id);
   rmSync(dir, { recursive: true, force: true });

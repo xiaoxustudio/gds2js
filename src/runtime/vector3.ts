@@ -23,12 +23,7 @@ export function vector3(x: number, y: number, z: number): Variant {
   return V.object(new GVector3(x, y, z));
 }
 
-/**
- * 「这个对象是不是 Vector3i、是的话把三个分量交出来」那一格，由 `vector3i` 在自己模块里登记
- * （同 `vector2.ts` 的 `vec2iParts`：反向 import 成环，而计算键的 `in` 与「把 unknown 收成结构视图」
- * 在静态编译目标上都是墙 —— 视图与原实例不是同一个身份，视图上的 `instanceof` 当场落空）。
- * 两个入口各自认各自的类，所以 `Vector2()` 的单参分支不会把 Vector3i 误认成 Vector2i、悄悄少一个分量。
- */
+/** 「这个对象是不是 Vector3i、是的话把三个分量交出来」那一格，由 `vector3i` 在自己模块里登记：反向 import 会成环，而交分量而不是布尔是因为判完再收结构视图会丢掉实例身份。两个入口各自认各自的类，所以 `Vector2()` 的单参分支不会把 Vector3i 误认成 Vector2i。 */
 type Vec3iParts = (o: object) => [number, number, number] | null;
 
 let vec3iParts: Vec3iParts | null = null;
@@ -42,9 +37,7 @@ export function asVec3(v: Variant): GVector3 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector3 ? (v.v as GVector3) : null;
 }
 
-/** `Vector3(...)`：0 参给零向量，1 参收 Vector3（拷贝）与 Vector3i（逐分量升 float，实测 `tmp/f67 t07`），
- *  其余必须三个数值。实测 1 个数值是 Parse Error
- *  （`No constructor of "Vector3" matches the signature "Vector3(float)"`），`Vector3(Vector2, float)` 同样没有。 */
+/** `Vector3(...)`：0 参给零向量，1 参收 Vector3（拷贝）与 Vector3i（逐分量升 float），其余必须三个数值。 */
 export function vector3New(args: Variant[]): Variant {
   if (args.length === 0) return vector3(0, 0, 0);
   if (args.length === 1) {
@@ -62,7 +55,7 @@ export function vector3New(args: Variant[]): Variant {
   return vector3(scalar(args[0], "Vector3"), scalar(args[1], "Vector3"), scalar(args[2], "Vector3"));
 }
 
-/** `Vector3.UP` 这类静态常量。实测 4.6.3 这九个（`Vector3.MAX` / `MIN` 直接是解析错误）。 */
+/** `Vector3.UP` 这类静态常量（Godot 只有这九个）。 */
 const VEC3_CONST: Record<string, [number, number, number]> = {
   ZERO: [0, 0, 0],
   ONE: [1, 1, 1],
@@ -110,20 +103,7 @@ function arity(args: Variant[], n: number, who: string): void {
 const lengthSq = (v: GVector3) => add(add(mul(v.x, v.x), mul(v.y, v.y)), mul(v.z, v.z));
 const flen = (x: number, y: number, z: number) => r(Math.sqrt(add(add(mul(x, x), mul(y, y)), mul(z, z))));
 
-/**
- * Vector3 的方法面。**只实现探针钉住的语义**，其余响亮报缺：
- *  - `bounce` / `slide`：实参必须已是单位法向，否则 Godot 返回零向量并往 stderr 打
- *    `ERROR: The normal ... must be normalized.`（实测 f4 用 (0.1,0.2,0.3) 与 (1,1,1) 都给 (0,0,0)），
- *    那行文本产物复现不了 —— 与 Vector2 同一个拒绝理由；
- *  - `reflect`：六个实测点（(1,0,0)→(1,-2,-3)、(0,1,0)→(-1,2,-3)、(0,0,1)→(-1,-2,3)
- *    对上「2·proj−v」，可 (1,1,0)、(2,2,0)、(1,1,1)、(3,6,9) 全给 (0,0,0) 就对不上了），
- *    逆不出唯一公式，不猜；
- *  - `slerp`：标准球面插值 + 长度线性插值能复现到小数点后四位，但最后一位在 6 位小数打印下
- *    不足信（同 Vector2 的教训），报缺；
- *  - `is_zero_approx` / `clampf`：没探针，报缺；
- *  - 实测**不存在**的成员（`orthogonal`、`nlerp`、`from_size`、`lerpf`、`angle_to_signed`、
- *    `to_float32`、`to_double`、`to_int8_array`）走 default 那条报缺，别臆造。
- */
+/** Vector3 的方法面：复现不了的（`bounce` / `slide` / `reflect`）与未知成员都响亮报缺。 */
 export function vector3Method(v: GVector3, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length":
@@ -332,25 +312,21 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
   }
 }
 
-/** 归一化：零向量原样返回（实测 `Vector3.ZERO.normalized()` → (0.0, 0.0, 0.0)；INF 给 nan） */
+/** 归一化：零向量原样返回，INF 给 nan。 */
 function normalized(x: number, y: number, z: number): Variant {
   const l = flen(x, y, z);
   if (l === 0) return vector3(0, 0, 0);
   return vector3(div(x, l), div(y, l), div(z, l));
 }
 
-/**
- * 比较的唯一口径：**字典序**（先 x 再 y 再 z），不是「每个分量都更大」。
- * 实测：(1,2,3)<(1,2,4) 真、(1,3,0)<(2,0,0) 真、(0,1,9)<(0,2,0) 真、(1,2,3)<=(1,2,3) 真、
- * (1,2,3)>=(1,2,4) 假。ops 的比较与 Array.sort() 都走这里。
- */
+/** 比较的唯一口径：**字典序**（x → y → z），不是「每个分量都更大」；ops 的比较与 `Array.sort()` 都走这里。 */
 export function vec3Cmp(a: GVector3, b: GVector3): number {
   if (a.x !== b.x) return a.x < b.x ? -1 : 1;
   if (a.y !== b.y) return a.y < b.y ? -1 : 1;
   return a.z === b.z ? 0 : a.z < b.z ? -1 : 1;
 }
 
-/** 键 → 分量槽位：0/1/2 与 "x"/"y"/"z" 都认（实测 `v["z"]` → 3.0、`v[2] = 8` → (1.0, 2.0, 8.0)）。 */
+/** 键 → 分量槽位：0/1/2 与 `"x"`/`"y"`/`"z"` 都认。 */
 function vec3Slot(key: Variant): 0 | 1 | 2 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -374,7 +350,7 @@ export function vec3Write(vec: GVector3, key: Variant, value: Variant, via: "pro
   return vector3(vec.x, vec.y, num);
 }
 
-/** 下标读：`v[0]` / `v["z"]`，越界报错（实测 `v[3]`、`v[-1]` 都是 `Invalid access of index …`）。 */
+/** 下标读：`v[0]` / `v["z"]` 都认，越界报 `Invalid access of index …`。 */
 export function vec3ReadIndex(vec: GVector3, key: Variant): Variant {
   const slot = vec3Slot(key);
   if (slot === null) vecFailKey(key, "read", "Vector3");

@@ -1,3 +1,4 @@
+/** 构建期由 tools/cli-native.mjs 同名换实现：原生 exe 里解析器是 libtree-sitter over FFI，不是 web-tree-sitter 的 wasm。 */
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Language, Parser } from "web-tree-sitter";
@@ -5,15 +6,7 @@ import { selfFile } from "../home";
 import type { CsTree } from "./cst";
 import { toCsTree } from "./wasm-cst";
 
-/**
- * wasm 相对 import.meta.url 定位，而不是相对 cwd —— 原来写 "./gdscript.wasm"，
- * 一换工作目录就挂。
- *
- * 位置随产物形态变化，所以逐个候选试：
- *   源码树  src/parse/parser.ts  → 仓库根 ../../gdscript.wasm
- *   打包    dist/parser-xxx.mjs  → ../gdscript.wasm（build 脚本会复制进去）
- *   装包    node_modules/gds2js/dist/… → 包根 ../gdscript.wasm
- */
+/** wasm 要相对 `import.meta.url` 定位而不是相对 cwd；产物形态不同、放置位置也不同，逐个候选试。 */
 const WASM_CANDIDATES = ["../../gdscript.wasm", "../gdscript.wasm", "./gdscript.wasm"];
 
 function resolveWasm(): string {
@@ -49,8 +42,6 @@ export async function parseSource(src: string): Promise<CsTree> {
   const parser = await getParser();
   const tree = parser.parse(src);
   if (!tree) throw new Error("tree-sitter 解析返回空树");
-  // 交回的是**我们自己的 CST 记录**（`./cst`）：web-tree-sitter 的包名不能顺着签名流进 lower，
-  // 否则整条链都沾上「这个包要跑在 --dynamic 岛里」（S227 里 lower 那两处 SC2004 就是这么来的）。
-  // 而且形状必须是记录不是类 —— 类实例喂不进记录形参（S231 的 SC2002）。
+  // 交回自己的 CST 记录：web-tree-sitter 的包名不能顺着签名流进 lower。
   return toCsTree(tree.rootNode, src);
 }

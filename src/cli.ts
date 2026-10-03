@@ -19,7 +19,7 @@ import { lower } from "./lower/lower";
 import { parseSource } from "./parse/parser";
 import { UnsupportedError } from "./runtime/errors";
 
-/** 不用 `Date.prototype.toLocaleTimeString`：它在静态目标上没有 lowering（实测 SC2020），这里手搓同一个 `hh:mm:ss`。 */
+/** 手搓 `hh:mm:ss`：`Date.prototype.toLocaleTimeString` 在静态目标上没有 lowering。 */
 function hhmmss(d: Date): string {
   const two = (n: number): string => (n < 10 ? "0" + String(n) : String(n));
   return two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds());
@@ -73,12 +73,7 @@ interface Diag {
   file: string;
 }
 
-/**
- * 自带家目录的 exe（原生 / SEA）里，产物那句 `import ... from "gds2js/runtime"` **没人能解析** ——
- * 裸说明符要的是 node_modules。所以这时候 `--runtime/--host` 的默认值直接给家目录里那份打平运行时的
- * file URL（就是 `export` 铺树时用的同一份 `dist/product.mjs`，`--runtime-mode import` 从此自足）。
- * npm 安装态家目录为 null，说明符照旧是裸的。
- */
+/** 自带家目录的 exe 里裸说明符没人能解析，`--runtime/--host` 的默认值于是直接给家目录里那份打平运行时的 file URL；npm 安装态家目录为 null，说明符照旧是裸的。 */
 function selfRuntimeSpec(): string | null {
   const p = selfFile(`dist/${PRODUCT_RUNTIME_FILE}`);
   return p === null ? null : pathToFileURL(p).href;
@@ -88,11 +83,7 @@ function runtimeOf(v: unknown): string {
   return strOf(v) ?? selfRuntimeSpec() ?? "gds2js/runtime";
 }
 
-/**
- * `opts` 来自 argv 解析器，形状是 `Record<string, unknown>` —— 旗标没给就是**没有**。
- * 静态目标上 `unknown as string` 是带运行期检查的断言（实测：值为 undefined 时抛
- * `expected string at $, got undefined`，S235），所以这里一律 typeof 收窄，不 `as`。
- */
+/** 旗标值一律 typeof 收窄，不 `as string`：静态目标上那是带运行期检查的断言。 */
 function strOf(v: unknown): string | null {
   return typeof v === "string" ? v : null;
 }
@@ -239,10 +230,7 @@ async function buildSingle(ctx: Ctx): Promise<boolean> {
   return true;
 }
 
-/**
- * `emitModule` 那三个模式共用的选项。刻意是一张**声明过的记录**而不是 `Record<string, unknown>`：
- * 展开一张值类型为 `unknown` 的索引记录在静态目标上没有形状（SC1090，实测在原生 CLI 构建里定位到本行调用点）。
- */
+/** `emitModule` 那三个模式共用的选项：刻意是一张声明过的记录，而不是 `Record<string, unknown>` —— 值类型为 `unknown` 的索引记录展开在静态目标上没有形状。 */
 type EmitOpts = {
   runtimeImport: string;
   hostImport: string | null;
@@ -334,9 +322,7 @@ async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
 /** `export` 铺出来的中间模块树：两支 pack、单文件与工程都归到这一个形状上。 */
 type ExportTree = { entry: string; files: string[]; dirs: string[] };
 
-/** 空的目录清单。刻意用**声明过的** `string[]` 常量，而不是裸 `[]` 字面量 ——
- *  静态目标上裸空数组推断成 `number[]`，塞进 `dirs: string[]` 那一格时运行期被联合检查拒：
- *  `a '{ dirs: number[]; entry: string; files: string[] }' value is not representable in the target union`（S235 实测）。 */
+/** 空的目录清单：刻意用声明过的 `string[]` 常量，而不是裸 `[]` 字面量 —— 静态目标上裸空数组推断成 `number[]`，塞进 `dirs: string[]` 那一格时运行期被联合检查拒。 */
 const NO_DIRS: string[] = [];
 
 async function exportTree(ctx: Ctx): Promise<ExportTree | null> {
@@ -344,9 +330,7 @@ async function exportTree(ctx: Ctx): Promise<ExportTree | null> {
   const dir = ctx.outDir;
   const product = productRuntimePath();
   try {
-    // 打平运行时只在**树根**放一份，每个模块的 import 按自己那一层的深度算（`runtimeRoot`）。
-    // 以前是「每个模块目录各拷一份」，那些副本在 ESM/VFS 里是**不同的模块实例** ——
-    // 于是同一个脚本类就有两张 runtime 图，跨目录调方法报 `对象上的 render() 未实现`（实测嵌套工程，S223）。
+    // 打平运行时只在树根放一份，每个模块的 import 按自己那一层的深度算（`runtimeRoot`）：每层各一份就是多张 runtime 图。
     mkdirSync(dir, { recursive: true });
     const result = await compileProject({
       entries: [ctx.input],
@@ -409,14 +393,7 @@ async function exportSingleTree(ctx: Ctx): Promise<ExportTree | null> {
   }
 }
 
-/**
- * `--pack scriptc` 的中间树：产物 + `runtime/` 与 `host.ts` 的 **TS 源码**。
- * 静态编的一直是**源码图**（实测把打平的 `product.mjs` 喂给 scriptc 会多出十几格假 `instanceof` 围栏），
- * 所以这里不拷 product.mjs，而是把 `src/runtime/**.ts` 与 `src/host.ts` 原样铺进产物目录。
- * 项目树也铺**一份**：`compileProject` 的 `runtimeRoot` 会把每个模块的 import 算成
- * 它自己那一层的相对路径，整棵树指回同一份源码 —— scriptc 于是只编出一张 runtime 图、一份类身份。
- * （照 node 那支旧行为「每层一份」静态编就会得到 N 份 `ClassDesc`，是静默错里最贵的一类。）
- */
+/** `--pack scriptc` 的中间树：产物 + `runtime/` 与 `host.ts` 的 TS 源码，整棵树只铺一份源码（静态编的是源码图，不是打平的 `product.mjs`）。 */
 async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
   const rt = runtimeTsDir();
   if (rt === null) {
@@ -425,8 +402,7 @@ async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
     exportVerdict("refused", "没有 runtime 的 TS 源码");
     return null;
   }
-  // runtime 唯一在树外的依赖是 `../lower/double`（一个零 import 的叶子），宿主是 `../host.ts` ——
-  // 两样都按原样的相对位置铺进产物目录，产物的 import 就不用改。
+  // runtime 唯一在树外的依赖是 `../lower/double`（一个零 import 的叶子），宿主是 `../host.ts`：两样都按原样的相对位置铺进产物目录，产物的 import 就不用改。
   const srcRoot = dirname(rt);
   const hostTs = join(srcRoot, "host.ts");
   const doubleTs = join(srcRoot, "lower", "double.ts");
@@ -549,10 +525,7 @@ function head(text: string, n: number): string {
 
 type Pack = "node" | "scriptc";
 
-/**
- * `--build-sea` 的起点版本。实测 24.21 没这个 flag（且那边的 SEA 静默忽略 `mainFormat`），
- * 26.7.0 有、并且认 `mainFormat: "module"` —— 所以产物那句顶层 await 原样能跑，发射形状不用改。
- */
+/** `--build-sea` 可用的最低 node 版本：再低没有这个 flag，也不认 `mainFormat: "module"`。 */
 const SEA_MIN_NODE = "25.7.0";
 
 function versionAtLeast(v: string, min: string): boolean {
@@ -598,7 +571,7 @@ function externalSeaNode(explicit: string | null): string | null {
   return null;
 }
 
-/** scriptc 那一支：二进制名、失败分类，以及「静态产物要 TS 源码图」的铺法。 */
+/** scriptc 的二进制名（`SCRIPTC_BIN` 可覆盖）。 */
 function scriptcBin(): string {
   const env = process.env.SCRIPTC_BIN?.trim();
   return env === undefined || env === "" ? "scriptc" : env;
@@ -616,12 +589,7 @@ function preflightScriptc(): { bin: string; version: string } | null {
   return { bin, version: (r.stdout || "").trim() };
 }
 
-/**
- * scriptc 的围栏分三类报（原文只截一行，分类结论走 exportVerdict，tools/export-check.ts 认那一行）：
- * - SC2011 / SC2012 / SC2020：标准库或语法**没有 lowering** → no-lib（要的是补形状，不是补类型）
- * - SC9001：编译器自己 ICE → crash
- * - 其余（SC1090 / SC1091 / SC1013 / SC0001…）：这一形静态编译目标上就是不收 → refused
- */
+/** 把 scriptc 的失败原文归成一个结论类别，并给一行用户看得懂的话。 */
 function scriptcWall(why: string): { v: ExportVerdict; advice: string } {
   const codes = [...why.matchAll(/error (SC\d+)/g)].map((m) => m[1] as string);
   const n = codes.length;
@@ -738,8 +706,7 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
       for (const rel of tree.files) ours.add(join(ctx.outDir, rel));
       for (const p of ours) rmSync(p, { force: true });
       if (pack === "scriptc") {
-        // 这一支的中间树里除了 .mts 还有整份 runtime 源码，外部编译器又会在旁边留 `.scriptc*` 缓存 ——
-        // 逐格删删不干净，而这个目录名是工具自己的暂存（EXPORT_TREE_DIR），整棵收掉才不留渣。
+        // 这一支的中间树里除了 .mts 还有整份 runtime 源码和外部编译器的缓存，逐格删删不干净：目录名是工具自己的暂存（EXPORT_TREE_DIR），整棵收掉才不留渣。
         if (basename(ctx.outDir) === EXPORT_TREE_DIR) rmSync(ctx.outDir, { recursive: true, force: true });
       } else {
         for (const d of tree.dirs.sort((a, b) => b.length - a.length)) {
@@ -761,7 +728,7 @@ async function buildProject(ctx: Ctx): Promise<boolean> {
   if (ctx.runtimeMode === "single") return bundleProjectSingle(ctx);
   let result: CompileResult;
   try {
-    // 刻意用**一张带可选格的记录**，不是「两种形状二选一」：联合记录展开没有 lowering（SC1090）。
+    // 刻意用一张带可选格的记录，不是「两种形状二选一」：联合记录展开没有 lowering。
     const modeOpts: { runtimeMode?: "import" | "local"; standaloneFile?: string } = { runtimeMode: "import" };
     if (ctx.runtimeMode === "local") {
       mkdirSync(ctx.outDir, { recursive: true });
@@ -825,8 +792,7 @@ async function checkProject(ctx: Ctx): Promise<boolean> {
   return true;
 }
 
-/** `compileProject` 的返回。刻意声明出来：隐式 any 的局部变量在静态目标上是个**通配符槽**，
- *  值过槽要逐格校验（`dirs: []` 被当成 number[] 拒掉就是这么来的，S235）。 */
+/** `compileProject` 的返回。刻意声明出来：隐式 any 的局部变量在静态目标上是个通配符槽，值过槽要逐格校验。 */
 type CompileResult = Awaited<ReturnType<typeof compileProject>>;
 
 function projectDiags(result: CompileResult, resRoot: string): Diag[] {
@@ -943,19 +909,13 @@ async function dispatch(ctx: Ctx): Promise<void> {
   startWatch(ctx);
 }
 
-/**
- * `--watch`：改 .gd 就重跑。
- *
- * 用**轮询摘要**而不是 `fs.watch`：静态目标上那两格都没有 lowering —— `{ recursive: true }` 整格 SC2020，
- * 非递归的监听器也只收 `()` / `(eventType: string)`，拿不到 `filename`（实测 SC2020）。
- * 少了 filename 就分不清「用户改了 .gd」和「我们刚写出 .mts」，会自己触发自己。
- * 摘要 = 范围内每个 .gd 的「路径:修改时间:大小」，两边同一份实现，也不吃 watcher 句柄上限。
- */
+/** `--watch` 的轮询间隔：静态目标上没有 `fs.watch` 的 lowering，只能靠摘要轮询。 */
 const WATCH_POLL_MS = 250;
 
 /** 工程模式下不往下走的目录名：里面的 .gd 不是用户正在写的代码。 */
 const WATCH_SKIP = /^(\.git|\.godot|node_modules)$/;
 
+/** 范围内每个 .gd 的「路径:修改时间:大小」摘要，排序后拼成一个串（拿不到 watcher 的 filename，只能自己比对）。 */
 function gdSignature(dir: string, deep: boolean): string {
   const parts: string[] = [];
   const stack = [dir];
@@ -984,6 +944,7 @@ function gdSignature(dir: string, deep: boolean): string {
   return parts.sort().join("|");
 }
 
+/** `--watch`：轮询 `gdSignature`，摘要变了就重跑一次命令（错误不中断）。 */
 function startWatch(ctx: Ctx): void {
   const isProject = ctx.cmd === "check-project" || ctx.cmd === "build-project";
   const watchDir = isProject ? ctx.resRoot : dirname(ctx.input);
@@ -1168,7 +1129,6 @@ const CLI: CliSpec = {
   ],
 };
 
-// 一条 `if (argv 空) 印帮助` 的旧行为由 runCli 顶格承担（它返回 Stop 时这里退 0）。
 const stop = runCli(CLI, process.argv.slice(2));
 if (stop !== null) {
   process.stdout.write(stop.text + "\n");

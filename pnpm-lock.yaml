@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@perryts/perry-win32-x64':
-        specifier: ^0.5.1520
-        version: 0.5.1520
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
       web-tree-sitter:
         specifier: ^0.27.0
         version: 0.27.0
@@ -194,11 +188,6 @@ packages:
 
   '@oxc-project/types@0.151.0':
     resolution: {integrity: sha512-J1yXrIlNDZVzE3ada310xeAw7nH8yCAyLPuUIsjKatFPmfn5bS1oW+cM+QsGOtVWd5nhSpbwZWx/rue+r5Z+PA==}
-
-  '@perryts/perry-win32-x64@0.5.1520':
-    resolution: {integrity: sha512-5vYuD71KWywfj5wEoSRrKo3W6mZ3JZ4yxDSE50OwqCLoTbTJ2KMEYgKumqWYim1WTji9HKiwQBWTD9QkcBY6Bg==}
-    cpu: [x64]
-    os: [win32]
 
   '@quansync/fs@1.1.0':
     resolution: {integrity: sha512-qAPG/t3HqML1TlN7sY/pTbEjzFVAKsMjNNMGheyDosro+kT4iw2KCUoHcVdmliwWjorm4elZbgNQyU2eD97eDg==}
@@ -568,10 +557,6 @@ packages:
     resolution: {integrity: sha512-tixWYgm5ZoOD+3g6UTea91eow5z6AAHaho3g0V9CNSNb45gM8SmflpAc+GRd1InC4AqN/07Unrgp56Y94N9hJQ==}
     engines: {node: '>=20.19.0'}
 
-  commander@15.0.0:
-    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
-    engines: {node: '>=22.12.0'}
-
   defu@6.1.7:
     resolution: {integrity: sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==}
 
@@ -821,8 +806,6 @@ snapshots:
 
   '@oxc-project/types@0.151.0': {}
 
-  '@perryts/perry-win32-x64@0.5.1520': {}
-
   '@quansync/fs@1.1.0':
     dependencies:
       quansync: 1.0.0
@@ -1015,8 +998,6 @@ snapshots:
   ansis@4.4.0: {}
 
   cac@7.0.0: {}
-
-  commander@15.0.0: {}
 
   defu@6.1.7: {}
 

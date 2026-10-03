@@ -28,12 +28,7 @@ function vlq(value: number): string {
   return out;
 }
 
-/**
- * 把一组映射编成 v3 的 mappings 串。
- * mappings 内部全是「相对上一段的增量」。行粒度下每行至多一个段（生成列恒 0），
- * 所以直接按生成行建槽位、只替换有映射的行，避免增量游标把连续行错插成空段。
- * 输入按 genLine 升序；同 genLine 只保留第一条。
- */
+/** 把行粒度映射编成 v3 的 `mappings` 串：每行至多一段（生成列恒 0），按 genLine 建槽位；输入按 genLine 升序，同 genLine 只留第一条。 */
 export function encodeMappings(sorted: LineMapping[]): string {
   const byGen = dedupeByGenLine([...sorted].sort((a, b) => a.genLine - b.genLine));
   const maxLine = byGen.reduce((n, m) => Math.max(n, m.genLine), -1);

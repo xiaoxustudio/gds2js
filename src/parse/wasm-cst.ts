@@ -1,10 +1,4 @@
-/**
- * wasm 那侧的 CST 物化（只在 node / `--pack node` / perry 之外的 node 之路上跑）。
- *
- * 单独一个文件是有原因的：CLI 换成原生解析器时，被替换掉的就是这一支（`parser.ts` 交回 `CsTree`，
- * 但树从哪来是它下面这一层的事），而 web-tree-sitter 的包名必须**只**出现在这里，
- * 不能顺着签名流进 `lower`（S227 的 SC2004 就是这么冒出来的）。
- */
+/** wasm 那侧的 CST 物化：`web-tree-sitter` 的包名只出现在这一支，不流进 `lower`。 */
 import type { Node as WasmNode } from "web-tree-sitter";
 import type { CsNode, CsTree } from "./cst";
 

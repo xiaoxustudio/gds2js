@@ -29,10 +29,7 @@ export const patDict = (entries: Array<[Variant, Pat]>): Pat => ({
   entries: entries.map(([key, pat]) => ({ key, pat })),
 });
 
-/**
- * 匹配成功返回**按绑定出现顺序**收集的值数组，失败返回 null。
- * emitter 拿到数组后按 IR 里 pattern 的绑定名依次解构。
- */
+/** 匹配成功返回按绑定出现顺序收集的值数组，失败返回 null。 */
 export function matchPattern(subject: Variant, p: Pat): Variant[] | null {
   const out: Variant[] = [];
   return matches(subject, p, out) ? out : null;
@@ -88,10 +85,7 @@ function builtinTag(name: string): TagValue | undefined {
   return TYPE_TAGS[name.replace(/\[.*\]$/, "")];
 }
 
-/**
- * 数学内建类型（都挤在 Tag.OBJECT 里，只能按实例判）。实测 `Vector2(3,4) is Vector2` → true。
- * Color 还没实现时问到就落到下面的报缺分支；实测 typeof(Color(1,0,0,1)) → 20。
- */
+/** 数学内建类型：都挤在 Tag.OBJECT 里，只能按实例判。 */
 const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Vector2: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2,
   Vector3: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3,
@@ -100,12 +94,7 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
 };
 
-/**
- * Packed\*Array 的 `is` / `as`（S172 实测）。两条要点：
- * - **各认各的形状**：`b is PackedByteArray` 真，而同一支 `b is PackedInt32Array` **假**；
- * - pack **不算 Array、也不算 Object**（`b is Array` 假、`b is Object` 假），只有 `is Variant` 真。
- *   后一条与 TYPE_TAGS 把 `Object` 映到 Tag.OBJECT 相冲，所以下面 `is Object` 那支要先把 pack 摘出去。
- */
+/** Packed*Array 的 `is` / `as`：各认各的形状，且 pack 既不算 Array 也不算 Object —— `is Object` 那支要先把它摘出去。 */
 const PACK_TYPES: Record<string, PackKind> = {
   PackedByteArray: "byte",
   PackedInt32Array: "int32",
@@ -149,9 +138,7 @@ export function asType(v: Variant, name: string): Variant {
   if (t !== undefined) return v.t === t ? v : V.nil();
   const math = MATH_TYPES[name];
   if (math) {
-    // `as` 在整型向量与浮点向量之间是**转换**而不是判空：`tmp/f69 t65` 实测
-    // `Vector3i(1, 2, 3) as Vector3` → `(1.0, 2.0, 3.0)`、`typeof` 给 9；
-    // 走下面的判空就会静默成 `<null>`，那是这一族里最容易被漏的一格。
+    // `as` 在整型向量与浮点向量之间是转换而不是判空，走下面的判空会静默成 `<null>`。
     if (name === "Vector3" && asVec3i(v) !== null) return toVec3(v);
     return math(v) ? v : V.nil();
   }
@@ -162,11 +149,7 @@ export function asType(v: Variant, name: string): Variant {
   throw new UnsupportedError("as-type", `as ${name} 未实现（未知类型）`);
 }
 
-/**
- * `typeof` 返回的是 Godot 的 Variant.Type 枚举值（int=2、float=3，见用例 002）。
- * **不能**直接用我们的 Tag —— NIL/BOOL/INT/FLOAT/STRING 恰好同值（0–4），
- * 但 ARRAY 在 Godot 里是 28 不是 5，DICT 是 27 不是 6。
- */
+/** `typeof` 返回 Godot 的 Variant.Type 枚举值（int=2、float=3），与内部的 Tag 不同值，只能另建一张表。 */
 const GODOT_TYPE: Record<TagValue, number> = {
   [Tag.NIL]: 0,
   [Tag.BOOL]: 1,

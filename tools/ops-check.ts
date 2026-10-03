@@ -80,10 +80,7 @@ import {
 } from "../src/runtime/vector3i";
 import { toVec2i } from "../src/runtime/vector2i";
 
-/**
- * 产物里每个脚本类都带一张发射器生成的按名派发表（S203），运行时只认那张表。
- * harness 手写的类没有发射器，就自己给一张同形状的实现 —— 表在 node 里动态取成员没问题。
- */
+/** 手写的类没有发射器，自己给一张与产物同形状的按名派发表。 */
 function gdDispatchByName(self: object, name: string, args: Variant[]): Variant | null {
   const f = (self as Record<string, unknown>)[name];
   return typeof f === "function" ? wrapValue((f as (...a: Variant[]) => unknown).apply(self, args)) : null;
@@ -191,7 +188,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   shouldThrow("057", "裸网格内层写越界", () => fast.rawArrSetNum2([[1, 2]], 0, 5, 0));
 }
 {
-  // step 75：读/写 helper 泛型化之后，字符串元素必须与数值那族共用同一套越界口径
+  // 字符串元素的读/写 helper 必须与数值那族共用同一套越界口径
   eq("147", "裸字符串数组 a[-1] 读末格", fast.rawArrGetStr(["a", "b"], -1), "b");
   shouldThrow("147", "裸字符串数组 a[2] 读越界", () => fast.rawArrGetStr(["a", "b"], 2));
   const st = ["a", "b"];
@@ -203,7 +200,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("147", "裸字符串网格 g[-1][-1] 两层负索引", fast.rawArrGetStr2([["a", "b"], ["c", "d"]], -1, -1), "d");
 }
 {
-  // step 79：定目标量形参的入口槽位（S176 的 7×13 对拍表里挑一格「能转的」与「该抛的」各钉一遍）
+  // 形参的入口槽位：「能转的」与「该抛的」各钉一格
   class SlotA {}
   const dSlotA = registerClass("SlotA", SlotA, () => new SlotA(), (o) => o instanceof SlotA);
   registerNativeBase(dSlotA, "RefCounted");
@@ -235,8 +232,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("157", "null 的来源在文本里叫 Nil", errOf(V.nil(), "int", 2, "q"), "Invalid type in function 'q' in base 'RefCounted (SlotA)'. Cannot convert argument 2 from Nil to int.");
   eq("157", "Array 塞 Color 槽", errOf(V.array(GArray.of([])), "Color", 1, "r"), "Invalid type in function 'r' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Array to Color.");
 
-  // step 89 / S185：`tmp/f75 d-slot-*` 的 12 格 + `tmp/f76` 构造器同 12 格 —— Color 槽吃 int 走
-  // **packed RGBA**（r=24..31、g=16..23、b=8..15、a=0..7，各除 255，先按 2³² 取模）。
+  // Color 槽吃 int 走 packed RGBA（r=24..31、g=16..23、b=8..15、a=0..7，各除 255，先按 2³² 取模）
   const colorSlot = (n: number | bigint): string => show(paramSlot(V.int(n), "Color", 1, "p", self));
   eq("172", "Color 槽吃 int：逐通道", `${colorSlot(1)}/${colorSlot(255)}/${colorSlot(256)}/${colorSlot(16711680)}/${colorSlot(65280)}`, "(0.0, 0.0, 0.0, 0.0039)/(0.0, 0.0, 0.0, 1.0)/(0.0, 0.0, 0.0039, 0.0)/(0.0, 1.0, 0.0, 0.0)/(0.0, 0.0, 1.0, 0.0)");
   eq("172", "Color 槽吃 int：混合色（d-slot-big）", colorSlot(123456789), "(0.0275, 0.3569, 0.8039, 0.0824)");
@@ -244,9 +240,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("172", "构造器 Color(int) 与槽同一套解析", `${show(colorNew([V.int(123456789)]))}/${show(colorNew([V.int(0)]))}`, "(0.0275, 0.3569, 0.8039, 0.0824)/(0.0, 0.0, 0.0, 0.0)");
   eq("172", "Color 槽吃 Color 原样过", show(paramSlot(colorNew([V.int(-1)]), "Color", 1, "p", self)), "(1.0, 1.0, 1.0, 1.0)");
 
-  // 三个新槽（`tmp/f75 a-Vector3-from-*` / `a-Vector3i-from-*` / `a-StringName-from-*`）：
-  // 各自只量到「同型 + 一条加宽/截断」，其余来源是解析期拒 —— 走到运行时这一侧就抛入口那句
-  // （a2-var-* 三格量到运行时同样是这句，只有 base 标签换成脚本文件名）。
+  // Vector3 / Vector3i / StringName 三个槽：只有同型与一条加宽/截断能转，其余来源在运行时抛入口那句
   eq("173", "Vector3 槽吃 Vector3i → 升 float", show(paramSlot(vector3iNew([V.int(1), V.int(2), V.int(3)]), "Vector3", 1, "p", self)), "(1.0, 2.0, 3.0)");
   eq("173", "Vector3i 槽吃 Vector3 → 逐分量向零截断", show(paramSlot(vector3New([V.float(1.7), V.float(-2.9), V.float(3.1)]), "Vector3i", 1, "p", self)), "(1, -2, 3)");
   eq("173", "StringName 槽吃 String", show(paramSlot(V.str("nm"), "StringName", 1, "p", self)), "nm");
@@ -1578,8 +1572,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("096", "Array[Color] 的默认元素 alpha 是 1", show(elemDefault("Color")), "(0.0, 0.0, 0.0, 1.0)");
   eq(
     "096",
-    // step 90（S186）把 Color 槽的入口扩到 int / String：`tmp/f77` / `tmp/f79` 量到变量、字段、
-    // 容器元素与键、形参默认值四路都收（`Array[Color] = [1, "f00"]` → 两个 Color），StringName 仍拒。
     "elemConvert 的 Color 槽收 Color / int / String，不收 StringName",
     `${show(elemConvert("Color", V.int(1)) as Variant)}/${show(elemConvert("Color", V.str("f00")) as Variant)}/${elemConvert("Color", V.stringName("x")) === null ? "拒" : "收"}`,
     "(0.0, 0.0, 0.0, 0.0039)/(1.0, 0.0, 0.0, 1.0)/拒",
@@ -2099,8 +2091,6 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step65", "Callable.callv 收一个 Array（f34 t7）", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
   const stat = attribute(Holder2, "sm");
   eq("step65", "静态方法取值的 get_method 也报得出名字（f34 t4）", `${method(stat, "get_method", []).v}`, "sm");
-  // step 98 把这一格量掉了（`tmp/f96` c02b / c02c）：静态方法 Callable 与带接收者的方法 Callable 同形，
-  // `is_null()` 假、`is_valid()` 真 —— 旧的断言是「没实测过 → 照旧响拒」。
   eq("step65", "静态方法 Callable 的 is_null / is_valid（f96 c02b / c02c）", `${method(stat, "is_null", []).v} ${method(stat, "is_valid", []).v}`, "false true");
   class Sig {
     fired = new Signal("fired");
@@ -2434,8 +2424,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // step 80 的明账：探针 tmp/f57（方法面）、tmp/f58（set 与 String 元素）、tmp/f59（set 的九边）。
-  // 越界与负下标那几格 Godot 会往 stderr 打一句引擎 ERROR，那是「不进语料」的形状，所以钉在这里。
+  // 越界与负下标那几格 Godot 会往 stderr 打一句引擎 ERROR，只能钉在这里
   const perr = (fn: () => unknown): string => {
     try {
       fn();
@@ -2505,7 +2494,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // step 81：pack 工具箱第一半（探针 tmp/f60 / tmp/f61 / tmp/f62；bsearch 的整张表另由 tmp/bs-verify.mts 对拍 355 格）
+  // pack 工具箱第一半
   const perr = (fn: () => unknown): string => {
     try {
       fn();
@@ -2563,7 +2552,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // step 82：compress / decompress（探针 tmp/f63 / f64 / f65）。九个「Godot 字节 vs 我们的字节」是这一族的正面证据。
+  // compress / decompress
   const perr = (fn: () => unknown): string => {
     try {
       fn();
@@ -2622,13 +2611,13 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // ===== step 85：Vector3i（int32 值类型）与值类型槽的换算矩阵。全部口径来自 `tmp/f67` / `tmp/f69` / `tmp/f70` =====
+  // ===== Vector3i（int32 值类型）与值类型槽的换算矩阵 =====
   const Z3 = (x: number | bigint, y: number | bigint, z: number | bigint) => vector3i(x, y, z);
   const z3 = (v: Variant) => show(v);
   const z3m = (v: Variant, name: string, ...args: Variant[]) => vector3iMethod(asVec3i(v) as GVector3i, name, args);
   const A3 = Z3(3, -4, 12);
   const B3 = Z3(1, 2, 3);
-  /** 断言「抛的正是实测那句文本」（每个块各有一份小 helper，与本文件其余块同形） */
+  /** 断言抛出的正是期望那句错误文本。 */
   const perr = (caseId: string, what: string, fn: () => unknown, expected: string): void => {
     let got = "(没有抛错)";
     try {
@@ -2776,7 +2765,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // step 95：`str(...)` 多实参与 `Callable.bind(...)`（S190，探针 `tmp/f91` / `tmp/f93`）
+  // str(...) 多实参与 Callable.bind(...)
   const cat = (...args: unknown[]): Variant => V.str(args.map((x) => show(x as Variant)).join("|"));
   const base = V.object(new CallableBox((a: Variant[]) => cat(...a), "cat", V.object({}), [], cat.length));
   const one = method(base, "bind", [V.str("x")]);
@@ -2796,8 +2785,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     `["x"] cat true`,
   );
   eq("187", "callv 同样把绑定实参接在后面", show(method(one, "callv", [V.array(GArray.of([V.str("y"), V.str("z")]))])), "y|z|x");
-  // step 98 更正：这一族当年只量到「**绑满**那一格给 0」（a1 的阶梯量出来是「还要几个实参」），
-  // 所以这里既不能报 0、也不能凭 `cat` 这个名字编出声明形参数 —— 合成的 Callable 没有形参表，响亮拒。
+  // 合成的 Callable 没有形参表：get_argument_count 既不能报 0、也不能凭方法名猜，响亮拒
   shouldThrow("187", "拿不到声明形参数的 Callable 问 get_argument_count → 响亮拒（规则见用例 193）", () => method(base, "get_argument_count", []));
   eq(
     "188",
@@ -2809,9 +2797,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // step 96：`sort_custom` 改走引擎那份置换（`src/runtime/sort.ts` 逐行转写 `core/templates/sort_array.h`，S184 结掉）。
-  // 下面每一条的期望值都是 Godot 自己打出来的下标序列（`tmp/f74.txt` / `tmp/f94.txt`）；
-  // 整套 71 格的对拍在 `npx tsx tmp/sort-shipped.mts`，用的就是要发出去的这个模块。
+  // sort_custom 走引擎那份置换：src/runtime/sort.ts 逐行转写 core/templates/sort_array.h
   const perm = (n: number, key: (i: number) => number, cmp: (x: number, y: number) => boolean): string => {
     const g = GArray.of(Array.from({ length: n }, (_x, i) => vector2i(key(i), i)));
     g.sortCustom((x, y) => cmp((asVec2i(x) as GVector2i).x, (asVec2i(y) as GVector2i).x));
@@ -2839,9 +2825,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // step 98：Callable 与 Signal 的方法面（探针 `tmp/f96` 24 支 + `tmp/f97` 43 支，S193）。
-  // 期望值全部是 Godot 自己打出来的读数；带引擎 stderr 的格子（重复连接那一句 ERROR:、
-  // 运行期错的 backtrace）只进这里，不进语料。
+  // Callable 与 Signal 的方法面：带引擎 stderr 的格子只钉在这里，不进语料
   const errText = (fn: () => unknown): string => {
     try {
       const r = fn();
@@ -2867,8 +2851,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return gdDispatchByName(this, name, args);
     }
   }
-  // 静态方法也进这张表 —— step 98 起发射器把静态方法一起登记（`get_argument_count()` 那一格要用，
-  // 而 `p.f()` 调静态方法本来就合法，S160）
+  // 静态方法也进这张表：get_argument_count() 那一格要用，而调静态方法本来就合法
   const dHolder98 = registerClass("Holder", Holder, () => new Holder(), (o) => o instanceof Holder);
   registerMethodArities(dHolder98, { add3: [3, 3], hi: [1, 1], twice: [1, 2], sm: [1, 1] });
   registerStaticMethods(dHolder98, ["sm"], { sm: (a: Variant[]): Variant => Holder.sm(a[0] as Variant) });
@@ -2899,7 +2882,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("192", "Array.has 走同一条等式（d6 实测真）", (V.array(GArray.of([c0, attribute(inst, "hi") as Variant])).v as GArray).has(attribute(inst, "add3") as Variant), true);
   eq("192", "Callable 与 int 比不是 false，而是运行期那一句（d5）", errText(() => valueEq(c0, V.int(1))), "Invalid operands 'Callable' and 'int' in operator '=='.");
 
-  // 一个「把每次投递记下来」的回调 Callable：名字与接收者固定，所以两条连接按实测等式算同一条
+  // 一个「把每次投递记下来」的回调 Callable：名字与接收者固定，所以两条连接按等式算同一条
   class Sink extends GdScriptObject {
     seen: string[];
     constructor(seen: string[]) {
@@ -2960,10 +2943,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       method(sig3, "emit", [V.int(9)]);
       eq("195", "重复连的那一份不补投", seen3.join(","), "9");
     }
-    // step 100 改正了这条的理由：`tmp/f100b` 量到 deferred 队列在 `_initialize` 之后**是会排的**
-    // （e1 模块函数照印 later ran、e7 链式两级都跑），所以「宿主不排宏任务」不是原因；真正拦着它的是
-    // e3 / e4 那一对 —— 局部实例的 deferred 被 Godot 随 RefCounted 回收丢掉，我们持强引用、排干就会
-    // 从「两边都不印」变成「Godot 不印、我们多印一行」（S195 ③）。所以这一格继续响亮拒。
+    // 局部实例的 deferred 会被 Godot 随 RefCounted 回收丢掉；我们持强引用，排干就会多印一行 → 响亮拒
     shouldThrow("195", "CONNECT_DEFERRED 要宿主先有对象生命周期模型 → 响亮拒（S195 ③：排干会让局部实例那一形静默多印）", () =>
       method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(1)]),
     );
@@ -2981,8 +2961,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 
 
 {
-  // step 101：`Callable.call()` 的实参数量（探针 `tmp/f101` 18 支，S196）。
-  // 语料 207–214 钉的是「跑得出什么 / 抛哪一句」，这里钉**文本逐字**与那一格发不出去的形状。
+  // Callable.call() 的实参数量：这里钉错误文本逐字与那一格发不出去的形状
   const errText = (fn: () => unknown): string => {
     try {
       const r = fn();
@@ -3054,8 +3033,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 
 
 {
-  // step 102：pack 一族的明账（探针 `tmp/f102` 44 支，S197）。这些格子都带引擎 stderr 或是
-  // 「跑期才响」的形状，按老规矩钉在这里；三格静默错（has / count / fill 的元素位）另进语料 215–217。
+  // pack 一族的明账：带引擎 stderr 或跑期才响的形状钉在这里
   const errText102 = (fn: () => unknown): string => {
     try {
       const r = fn();

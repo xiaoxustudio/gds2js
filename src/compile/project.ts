@@ -15,7 +15,7 @@ const RES_PREFIX = "res://";
 /** GDScript 里宿主/引擎提供、不需要文件支持的基类。Tier 1 只给了 SceneTree。 */
 const HOST_BASES = new Set(["SceneTree"]);
 
-/** 认得但 Tier 1 不给实现的引擎基类 —— 遇到就响亮报错（D4）。 */
+/** 认得但不给实现的引擎基类 —— 遇到就响亮报错。 */
 const ENGINE_BASES = new Set([
   "Node", "Node2D", "Node3D", "Control", "Resource", "RefCounted", "Object",
   "CharacterBody2D", "CharacterBody3D", "Area2D", "StaticBody2D", "RigidBody2D",
@@ -27,13 +27,7 @@ export interface ProjectOptions {
   outDir: string;
   runtimeImport: string;
   hostImport: string | null;
-  /**
-   * 静态打包（`export --pack scriptc`）用：`runtime/` 与 `host.ts` 的**源码**只铺一份，
-   * 放在这个绝对目录下，每个模块的 import 按自己那一层的相对深度算出来。
-   * 不给它就照 `runtimeImport` / `hostImport` 原样发（node 那两支的做法：每层各拷一份打平运行时）。
-   * 为什么静态不能每层一份：scriptc 会把每一层的 runtime 编成**独立的一张图**，
-   * 同一个脚本类就有两份 `ClassDesc` 身份 —— 那是静默错里最贵的一类。
-   */
+  /** 静态打包（`--pack scriptc`）用：`runtime/` 与 `host.ts` 的源码只铺一份在这个目录下，每个模块的 import 按自己那一层的相对深度算（每层各放一份会编成多张 runtime 图、同一个类有多份身份）。 */
   runtimeRoot?: string;
   /** `runtimeRoot` 里 runtime 那一份的目标文件名（不带扩展名，scriptc 那支是 `runtime/index`）。 */
   runtimeFile?: string;
@@ -323,7 +317,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     });
   }
   const rawAbiBlockedModules = new Set<string>();
-  // 被别的脚本类 extends 的那些模块：构造要走协议形状（S174 —— 子类的字段初始化子必须排在父类 `_init` 体之前）
+  // 被别的脚本类 extends 的那些模块：构造要走协议形状（子类的字段初始化子必须排在父类 `_init` 体之前）
   const extendedModules = new Set<string>();
   for (const l of loaded.values()) {
     const bm = baseModule(l, loaded, classIndex);

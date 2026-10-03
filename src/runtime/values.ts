@@ -16,21 +16,12 @@ function numVal(v: Variant): number {
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
-/**
- * Dictionary 键编码。
- * Godot 里 1（int）、1.0（float）、"1"（String）是三个不同的键（S14），
- * 而 JS 的 Map 会把 1 和 1.0 合并 —— 所以键必须带类型前缀。
- */
+/** Dictionary 键编码：键必须带类型前缀，否则 1（int）与 1.0（float）会撞成同一个键。 */
 export function keyOf(v: Variant): string {
   return keyOfIn(v, 0);
 }
 
-/**
- * 桶的编码。容器键（实测 k1/q1/r1）按**内容**分格：等值的新数组命中同一格（`d[a]=1` 之后
- * `d[[1,2]]` 改到同一格），但 `[1]` / `[1.0]` / `[true]` / `[0]` 是四个不同的格（元素走
- * {@link valueSame} 的身份口径），字典的编码**跟着键序走**（实测 q3：`{"a":1,"b":2}` 与
- * `{"b":2,"a":1}` 是两个格，尽管它们 `==` 成立）。`c:` 前缀保证容器桶不会跟标量桶撞车。
- */
+/** 容器桶的编码：按**内容**分格（元素走 {@link valueSame} 的身份口径），字典的编码跟着键序走；`c:` 前缀保证容器桶不与标量桶撞车。 */
 function keyOfIn(v: Variant, depth: number): string {
   switch (v.t) {
     case Tag.NIL:
@@ -117,12 +108,7 @@ export function isElemKind(name: string): name is ElemKind {
   );
 }
 
-/**
- * `resize` 扩张时填进新格子的默认值。实测（083）：`Array[int]` → 0、`Array[float]` → 0.0、
- * `Array[bool]` → false、`Array[String]` → ""、`Array[StringName]` → &""、
- * `Array[Vector2]` → (0.0, 0.0)、`Array[Array]` → []、`Array[Dictionary]` → {  }。
- * 未定型数组给 null（实测 `Array` resize 出 `[1, null]`）。
- */
+/** `resize` 扩张时按元素类型填进新格子的默认值。 */
 export function elemDefault(kind: ElemKind): Variant {
   switch (kind) {
     case "int":
@@ -152,17 +138,7 @@ export function elemDefault(kind: ElemKind): Variant {
   }
 }
 
-/**
- * 元素转换矩阵（083 全格实测）。规则是**能转就转、不能转就整次操作作废**，而不是报错：
- * Godot 在 `typed.validate(...)` 失败时只往 stderr 打一条 ERROR、容器原样不动。
- *   int   ← int / float（向零截断：2.9→2、-1.9→-1；|x| ≥ 2^63 或非有限 → INT64_MIN，与 `int()` 同口径）/ bool
- *   float ← float / int / bool（true → 1.0）
- *   bool  ← bool / int / float（0 与 0.0 为假）
- *   String ← String / StringName      StringName ← StringName / String
- *   Vector2 / Array / Dictionary 只收同型本身
- * **明确不收**（收下就是静默错）：String → int（实测 `Array[int].append("3")` 数组不变）、
- * String → bool、int → String、Vector2 → int、null → int、容器 → 标量 等。
- */
+/** 元素折算矩阵：能转就转，转不了交 null —— 调用方把整次容器操作静默作废，不报错。 */
 export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
     case "int":
@@ -192,33 +168,25 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       if (v.t === Tag.STRING) return V.stringName(v.v as string);
       return null;
     case "Vector2": {
-      // `Array[Vector2].append(Vector2i(1, 2))` → `[(1.0, 2.0)]`（`tmp/f69 u02`）：整型向量升成 float。
       if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.object(new GVector2((v.v as GVector2i).x, (v.v as GVector2i).y));
       return v.t === Tag.OBJECT && v.v instanceof GVector2 ? v : null;
     }
     case "Vector3": {
-      // 同一格的 Vector3i → Vector3（`tmp/f69 u03`）。
       const g3i = v.t === Tag.OBJECT ? (v.v as object) : null;
       if (g3i instanceof GVector3i) return vector3(g3i.x, g3i.y, g3i.z);
       return v.t === Tag.OBJECT && v.v instanceof GVector3 ? v : null;
     }
     case "Vector2i": {
-      // `Array[Vector2i].append(Vector2(1.7, 2.9))` → `[(1, 2)]`（`tmp/f69 u01`）：逐分量向零截断。
-      // 这一格之前只收同型，于是整次 append 被 validate 挡掉、数组**静默不动**，而 Godot 收下了。
       const g2 = v.t === Tag.OBJECT ? (v.v as object) : null;
       if (g2 instanceof GVector2) return vector2i(g2.x, g2.y);
       return v.t === Tag.OBJECT && v.v instanceof GVector2i ? v : null;
     }
     case "Vector3i": {
-      // `Array[Vector3i].append(Vector3(4.7, 5.2, 6.9))` → `(4, 5, 6)`：收 Vector3 并**逐分量向零截断**
-      // （实测 `tmp/f67 t13`）。Vector2i 那一侧的同一格还没量，所以那边照旧只收同型。
       if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return v;
       if (v.t === Tag.OBJECT && v.v instanceof GVector3) return vector3i(v.v.x, v.v.y, v.v.z);
       return null;
     }
     case "Color":
-      // `Array[Color]` 的元素与 `Dictionary[StringName, Color]` 的值都收 int / String（`tmp/f77` / `tmp/f79`：
-      // `append(1)` → `(0.0, 0.0, 0.0, 0.0039)`、`append("f00")` → `(1.0, 0.0, 0.0, 1.0)`、`{"k": 5}` 同理）。
       return tryColorSlot(v);
     case "Array":
       return v.t === Tag.ARRAY ? v : null;
@@ -227,11 +195,7 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   }
 }
 
-/**
- * Godot 数组下标的唯一口径（056 实测）：**支持负数**（`a[-1]` 是最后一格，读写同规则），
- * 越界一律响亮报 `array-index` —— 尤其写越界，Godot 是 SCRIPT ERROR，**不会**像 JS 那样
- * 把数组撑长或挂一个 `-1` 属性上去（后者先前在 GArray.set 里是静默错）。
- */
+/** 数组下标的唯一口径：支持负数（从尾部数，读写同规则），越界响亮报 `array-index`。 */
 export function arrIdx(i: number, len: number): number {
   const k = i < 0 ? i + len : i;
   if (k < 0 || k >= len) {
@@ -240,11 +204,7 @@ export function arrIdx(i: number, len: number): number {
   return k;
 }
 
-/**
- * 方法参数里的下标（`pop_at` / `remove_at` / `insert` …）：与 arrIdx 同样「负数从尾部数」，
- * 但**越界不给异常** —— 实测这些方法越界是静默无操作（`pop_at` 连返回都是 null）。
- * 方括号下标走 arrIdx（那条必须炸），两套口径别混。
- */
+/** 方法参数里的下标（`pop_at` / `remove_at` / `insert` …）：与 arrIdx 同样负数从尾部数，但越界交 null 表示静默无操作。 */
 function fromEnd(i: number, len: number): number | null {
   const k = i < 0 ? i + len : i;
   return k < 0 || k >= len ? null : k;
@@ -526,19 +486,7 @@ export class GArray {
     this.items = [...this.items].sort(cmp);
   }
 
-  /**
-   * 同键顺序走引擎那份置换（`src/runtime/sort.ts` 逐行转写 `core/templates/sort_array.h`），不再是 JS 的稳定 sort。
-   * 这一格挂了五轮（S184 / S133–S134）：n≤16 时两者本来就一致，**n≥17 有同键才分叉**。指纹是
-   * `Vector2i(键, 下标)` 只按键比、印出下标序列，两套共 **71 格全中**：
-   *  - `tmp/f74.txt` 45 格（拟合用的那批：全等键 n=16…100、mod3/mod5、有序 / 逆序 / 锯齿 / 分块、反向比较器、恒假谓词）；
-   *  - `tmp/f94.txt` 26 格（**没参与拟合的独立批**：新 n（19/21/25/36/48/50/65/96/128/200）、新重复度（mod7 / mod2-64 / i*i%5 / mod9）、
-   *    反向比较器 n=25/60，以及非自洽的比较器 `<=` 与恒真）。对拍脚本 `npx tsx tmp/sort-shipped.mts`。
-   * `tmp/f94` 还顺定量出一件此前只能猜的事：**这份 4.6.3 构建的 `Validate` 是开的** —— 恒真比较器会往 stderr 打
-   * `ERROR: bad comparison function; sorting will be broken`、出处 `unguarded_linear_insert (./core/templates/sort_array.h:252)`，
-   * 而那条宏是 `break`（只中断当前那个扫描 while，分治循环照走），所以引擎给的是「带着 break 的置换」而不是中断。
-   * **置换复现了、那行 stderr 复现不了**，所以不自洽比较器的形状只钉进 ops-check 与探针，不进语料。
-   * `sort()`（无比较器）不动：它的同键元素是**值相等**的元素，置换再怎么变印出来都一样，量不到也就没必要换。
-   */
+  /** 带比较器的排序：同键顺序走引擎那份置换（`src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
     this.items = sortGodot(this.items, before);
   }
@@ -876,12 +824,7 @@ function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
   return { t: v.t, v: v.v };
 }
 
-/**
- * 声明处给容器值盖上元素类型。Godot 把类型记在**值**上，所以章只盖一次、跟着值走
- * （实测 `var u = a` 之后 u 照样受限）。
- * fromLiteral 为假且容器本来未定型、又非空时，Godot 是**运行时报错**
- * （`Trying to assign an array of type "Array" to a variable of type "Array[int]"`），不是静默转类型。
- */
+/** 声明处给容器值盖上元素类型：类型记在**值**上、章只盖一次；非字面量赋给本来未定型的容器是运行时报错。 */
 export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean): Variant {
   const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
   if (g === null) throw new UnsupportedError("typed-assign", `Array[${kind}] 的初值不是数组`);
@@ -908,7 +851,7 @@ export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: b
   return v;
 }
 
-/** GDScript String 是 UTF-32，length 数码点，JS 是 UTF-16（S26） */
+/** GDScript String 是 UTF-32、length 数码点，JS 是 UTF-16。 */
 export function strLength(s: string): number {
   return [...s].length;
 }
@@ -922,22 +865,14 @@ export function strAt(s: string, i: number): string {
   return c;
 }
 
-/**
- * `substr(from, len = -1)`。实测的三条边界，JS 原生 slice 一条都不对：
- * `from` 为负或越过串尾都给**空串**（JS 的负 index 是从尾部数，`"abc".substr(-2)` 会给出 "bc"），
- * `len` 省略或为负表示截到串尾（`"abc".substr(2)` → "c"、`substr(0, -1)` → "abc"）。
- */
+/** `substr(from, len = -1)`：`from` 为负或越过串尾都给空串，`len` 省略或为负表示截到串尾 —— JS 原生 slice 两条都不对。 */
 export function strSubstr(s: string, from: number, len = -1): string {
   const chars = [...s];
   if (from < 0 || from >= chars.length) return "";
   return (len < 0 ? chars.slice(from) : chars.slice(from, from + len)).join("");
 }
 
-/**
- * `left(n)` / `right(n)`：n 是**码点**个数。负数先折成 `length + n`（实测 `"abc".left(-1)` → "ab"、
- * `"abc".right(-1)` → "bc"，即从另一端各丢 |n| 个），再夹进 [0, length]（实测 left(-5)/right(-5) → ""、
- * left(99) → 整串）。
- */
+/** `left(n)` / `right(n)`：n 是**码点**个数；负数先折成 `length + n`，再夹进 [0, length]。 */
 export function strEdge(s: string, n: number, side: "left" | "right"): string {
   const len = strLength(s);
   const k = n < 0 ? len + n : n;
@@ -947,10 +882,7 @@ export function strEdge(s: string, n: number, side: "left" | "right"): string {
   return (side === "left" ? chars.slice(0, k) : chars.slice(len - k)).join("");
 }
 
-/**
- * `contains(needle)`：**空 needle 不算包含**（实测 `"abc".contains("")` 与 `"".contains("")` 都是 false）。
- * JS 的 `includes` 恰好给 true —— 不特判就是一条静默错。
- */
+/** `contains(needle)`：**空 needle 不算包含** —— JS 的 `includes` 恰好给 true，不特判就是静默错。 */
 export function strContains(hay: string, needle: string): boolean {
   return needle !== "" && hay.includes(needle);
 }
@@ -1032,15 +964,7 @@ export function strSplit(s: string, delim: string, allowEmpty: boolean): string[
   return allowEmpty ? parts : parts.filter((p) => p !== "");
 }
 
-/**
- * Godot 的 String 是 UTF-32，`<` / `>` / `<=` / `>=` 以及 `Array.sort()` 都按**码点**逐位比较。
- * JS 的字符串比较按 UTF-16 **码元**，代理区（U+D800–U+DFFF）会排到 U+FFFF 之下：
- * 探针实测 `String.chr(0x1F600) < String.chr(0xFFFF)` 在 Godot 里是 **false**，JS 却给 **true** ——
- * 一条能静默改判定向的错（emoji 与 BMP 高位字符比较、含 emoji 的字符串数组排序都会中）。
- *
- * 快路：两边都不含代理对时，码元序与码点序必然一致，直接用原生比较（日常文本全走这条）。
- * 只有真出现代理对才逐码点比。
- */
+/** 字符串比较按**码点**逐位（Godot 的 String 是 UTF-32）；JS 原生按 UTF-16 码元，代理区会排到 U+FFFF 之下。两边都无代理对时码元序即码点序，走原生快路。 */
 export function strCmp(x: string, y: string): number {
   if (!/[\uD800-\uDFFF]/.test(x) && !/[\uD800-\uDFFF]/.test(y)) {
     return x === y ? 0 : x < y ? -1 : 1;
@@ -1093,7 +1017,7 @@ interface FmtSpec {
 
 type FmtTok = { lit: string } | { spec: FmtSpec };
 
-/** 符号在前、再补零（实测 %05d/-42 → "-0042"、%08.2f/-3.14159 → "-0003.14"）。 */
+/** 格式化填充：符号在前，再补零或补空格到目标宽度。 */
 function padFmt(body: string, sign: string, sp: FmtSpec): string {
   const left = sp.flags.includes("-");
   const zero = !left && sp.flags.includes("0");
@@ -1112,7 +1036,7 @@ function fmtNum(a: Variant, sp: FmtSpec): number {
   );
 }
 
-/** x/X/o/c 只验证过 int；float 是否像 %d 那样截断**未实测**，宁缺毋猜。 */
+/** x / X / o / c 的实参只收 int，收到别的响亮拒。 */
 function fmtIntOnly(a: Variant, sp: FmtSpec): bigint {
   if (a.t === Tag.INT) return intToBig(a.v as IntPayload);
   throw new UnsupportedError(
@@ -1240,13 +1164,7 @@ export function strFormat(fmt: string, args: Variant[]): string {
   return out;
 }
 
-/**
- * `n.toPrecision(17)` 的等价实现，用 bigint 手算（静态编译目标没有 `toPrecision` 的 lowering）。
- * 口径必须是**约 17 位有效数字**而不是 double 的精确展开：`String(1e300)` 给最短往返表示 `1e+300`、
- * `BigInt(1e300)` 给 301 位精确值，两者都与 Godot 不符；取整到 17 位再补零才符合
- * （实测 `print(1e300)` 得 `10000000000000001` 后跟零）。
- * 进位让位数 +1 的那一族照规范给更大的那个，展开自然多一位零。
- */
+/** `n.toPrecision(17)` 的等价实现（bigint 手算）：口径是**约 17 位有效数字**，不是 double 的精确展开。 */
 function digits17(n: number): string {
   let b = BigInt(n);
   const neg = b < 0n;
@@ -1261,16 +1179,7 @@ function digits17(n: number): string {
   return `${neg ? "-" : ""}${String(q)}${"0".repeat(tail)}`;
 }
 
-/**
- * 浮点转字符串。16 个单表达式探针对 Godot 4.6.3 实测，规则可完整复现：
- *   `nan` / `inf` / `-inf` 原样；**0 与 -0.0 都印 `0.0`**；
- *   **整数值**浮点 → 约 17 位有效数字的十进制 + `.0`（`1e14`→`100000000000000.0`、`1e300`→`10000000000000001` 后跟零）；
- *   **非整数** → 小数位数 = `max(0, 14 - 整数位数)`，再去尾随零（`0.0000001`→`0.0000001`、
- *   `0.1+0.2`→`0.3`、`1e-20`→`0.0`）；整数位已超 14 位时小数位为 0，四舍五入**远离零**且
- *   **不补 `.0`**（`123456789012345.6`→`123456789012346`）。
- * 旧实现用 `toPrecision(14)`，一旦落到科学计数法就抛 `float-format-exp` —— 于是任何大浮点
- * （`1e15` 起）都跑不了；改用 BigInt 展开十进制后不再有这个上限（`toFixed` 在 ≥1e21 会自己转科学计数法，故不走它）。
- */
+/** 浮点转字符串（Godot 的 print 口径）：`nan` / `inf` / `-inf` 原样，0 与 -0.0 都印 `0.0`；整数值给约 17 位有效数字 + `.0`，非整数按整数位数定小数位再去尾随零。 */
 export function strFloat(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
@@ -1287,25 +1196,7 @@ export function strFloat(n: number): string {
   return trimmed.endsWith(".") ? `${trimmed}0` : trimmed;
 }
 
-/**
- * Vector2 分量的打印格式：**小数值**走固定 6 位小数再去尾随零（至少留一位小数），
- * **整数值**改走 strFloat 的 17 位有效数字展开。两条路都是探针实测：
- *   `Vector2(1.2345678901234567, 0.1+0.2)` → `(1.234568, 0.3)`（6 位小数）
- *   `Vector2(0.9999999, 0.000001)`         → `(1.0, 0.000001)`（1e-7 被 6 位小数吃掉）
- *   `Vector2(1e20, -1e20)`                 → `(100000002004087730000.0, -100000002004087730000.0)`
- *     —— 这是 17 位有效数字，若也按 6 位小数印会给 full 精度 `…7730176.0`。
- *   `Vector2(-0.5, -0.0)`                  → `(-0.5, 0.0)`（恰好是 0 时符号丢掉）
- *   `Vector2(-0.0000004, …)`               → `(-0.0, …)`（非零但舍到 0 时**保留**负号）
- * 分量是 float32，所以 ≥2^23 的值一律是整数、走第二条路，两者不会在同一分量上打架。
- */
-/**
- * Color 分量的打印格式：与 strVec2 同一套规则但只有 **4 位小数**（实测
- * `print(Color(1.0/3.0, 0.1, 0.123456789, 1.0))` → `(0.3333, 0.1, 0.1235, 1.0)`），
- * 两条实测差别：
- *  - **恰好 -0.0 也保留负号**（`Color(1/3, 1e-5, -1e-5, -0.0)` → `(0.3333, 0.0, -0.0, -0.0)`，
- *    Vector2 同位置给 `0.0`）；
- *  - 舍到零的非零值同样留负号（-1e-5 → `-0.0`），1e20 这类整数分量仍走 strFloat 的展开。
- */
+/** Color 分量的打印格式：与 strVec2 同一套规则但只有 **4 位小数**；差别是 -0.0 与舍到零的非零值都**保留负号**（Vector2 同位置给 `0.0`）。 */
 export function strColor(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -1315,6 +1206,7 @@ export function strColor(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
+/** Vector2 分量的打印格式：**小数值**走固定 6 位小数再去尾随零（至少留一位小数），**整数值**走 strFloat 的 17 位有效数字展开；分量是 float32，两条路不会在同一分量上打架。 */
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -1323,11 +1215,7 @@ export function strVec2(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
-/**
- * 工具函数「int 形参」的统一归一（实测口径）：**float 向零截断**、**bool 当 0/1**、
- * int 原样；其余类型 Godot 是编译期类型错，我们运行时报错（能到这一步说明静态侧判不出）。
- * 用 bigint 作中介，`num_int64(9007199254740993)` 这种要逐位精确的才不会被折成 double。
- */
+/** 工具函数「int 形参」的统一归一：**float 向零截断**、**bool 当 0/1**、int 原样，其余类型运行时报错。用 bigint 作中介，大整数才不会被折成 double。 */
 export function intArgBig(v: Variant, who: string): bigint {
   switch (v.t) {
     case Tag.INT:
@@ -1346,23 +1234,12 @@ export function intArgBig(v: Variant, who: string): bigint {
   }
 }
 
-/**
- * `String.num(v)` 的口径。与 str()/print() 同一条浮点格式（实测 1e-20→0.0、
- * 123456789012345.6→123456789012346、1e20→21 位展开 + .0、inf/nan 同名），
- * **唯一实测差别是 -0.0**：print 给 `0.0`，String.num 给 `-0.0`。
- */
+/** `String.num(v)`：与 str()/print() 同一条浮点印法，唯一差别是 -0.0 给 `-0.0`（print 给 `0.0`）。 */
 export function strNum(n: number): string {
   return Object.is(n, -0) ? "-0.0" : strFloat(n);
 }
 
-/**
- * `String.num_scientific(v)`。实测口径（Godot 4.6.3）：
- *   - 只有指数够极端才走科学计数法：`1e15` → `1e+15`、`1e20` → `1e+20`、`1e-5` → `1e-05`，
- *     而 `1e-4` → `0.0001`、`1e3` → `1000` —— 临界是 `|x| >= 1e15` 或 `|x| < 1e-4`；
- *   - 数字部分是**最短可回读**表示（`9.9999999e-07`、`123456789012345.6` 都和 JS 一样）；
- *   - 指数**带符号并补到两位**（JS 原生给 `1e-7`，Godot 要 `1e-07`）；
- *   - 与 str()/print() 是两套印法：`num_scientific(42)` → `42`、`(0)` → `0`，都没有 `.0`。
- */
+/** `String.num_scientific(v)`：`|x| >= 1e15` 或 `|x| < 1e-4` 才走科学计数法，数字部分取最短可回读表示，指数带符号补到两位；与 print 是两套印法（`42` / `0` 都不带 `.0`）。 */
 export function strSci(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
@@ -1374,18 +1251,10 @@ export function strSci(n: number): string {
   return m ? `${m[1]}e${m[2]}${m[3]!.padStart(2, "0")}` : n.toExponential();
 }
 
-/**
- * `String.humanize_size(n)` —— 40 个实测点拟合出的规则（`1025`→`1.00 KiB`、
- * `1075`→`1.04 KiB`（**截断不是四舍五入**）、`1048575`→`1023.9 KiB`、`1048576`→`1024 KiB`、
- * `1048577`→`1.00 MiB`、`-1024`→`16.00 EiB`）：
- *  - 参数按 **uint64** 解释（所以负数变成一个巨大值），再转成 **double** 参与比较 ——
- *    `2^64-1024` 在 double 里就是 `2^64`，这正是 `-1024` 给 `16.00 EiB` 而非 `15.99` 的原因；
- *  - 档位：`while (value > 1024) value /= 1024`（**严格大于**，故 1048576 停在 KiB 档给 `1024 KiB`）；
- *  - 小数位：`< 100` 两位、`< 1024` 一位、再大**不留小数**（`100.0`、`1023.9`、`1024` 全对上）；
- *  - 原始档位（B）直接印整数本身，不走上面的缩放。
- */
+/** `humanize_size` 的单位档位。 */
 const SIZE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
 
+/** `String.humanize_size(n)`：参数按 **uint64** 解释（所以负数变成一个巨大值）再转 double；`while (value > 1024)` 严格大于定档，小数位 <100 两位、<1024 一位、再大不留，尾数**截断不四舍五入**；B 档直接印整数本身。 */
 export function strHumanizeSize(v: Variant): Variant {
   const signed = intArgBig(v, "String.humanize_size() 的参数");
   const u = signed & ((1n << 64n) - 1n);
@@ -1404,13 +1273,7 @@ export function strHumanizeSize(v: Variant): Variant {
   return V.str(digits === 0 ? `${Math.trunc(value)} ${unit}` : `${trunc.toFixed(digits)} ${unit}`);
 }
 
-/**
- * `String.` 上的静态成员。目前实现探针钉住的三个：
- *   `chr(n)` —— 参数转 int（float 截断、bool 当 0/1）；**0、负数、代理区、> U+10FFFF
- *   一律换成 U+FFFD**（实测 `String.chr(0) == String.chr(0xFFFD)` 为真：Godot 的串里不留 NUL）；
- *   `num(v)` —— 见 strNum；`num_int64(v)` —— 转 int 后按十进制精确印。
- * 其余（`num_float` 之类 Godot 根本没有的、以及 md5_text/humanize_size 这些还没实现的）响亮报缺。
- */
+/** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
 export function stringStatic(name: string, args: Variant[] = []): Variant {
   switch (name) {
     case "chr": {
@@ -1454,19 +1317,12 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
   }
 }
 
-/**
- * `str(a, b, c…)`：Godot 是**每个实参按 print 那套渲染，然后无分隔拼起来** ——
- * `tmp/f93`：`str("a","-","b")` → `a-b`、`str(1,2,3)` → `123`、`str("x", null, 2.5)` → `x<null>2.5`。
- * 之前发射的是 `rt.strOf(第一个实参)`，多余实参被**静默丢掉**（`str("a","-", "b")` 只给 `a`）。
- */
+/** `str(a, b, c…)`：每个实参按 print 那套渲染，然后**无分隔拼起来**。 */
 export function strBuiltin(args: Variant[]): Variant {
   return V.str(args.map((v) => show(v)).join(""));
 }
 
-/**
- * `String(x)` 构造器：实测**只接受 String**（`String("x")` → x），
- * int/float/bool/null/Vector2/Array 全是 Godot 的 Parse Error，所以到得了运行时还不是字符串就报错。
- */
+/** `String(x)` 构造器：只接受 String，其余来源是 Godot 的 Parse Error。 */
 export function stringCtor(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("string-ctor-arity", `String() 只接受 1 个参数（收到 ${args.length} 个）`);
@@ -1478,7 +1334,7 @@ export function stringCtor(args: Variant[]): Variant {
   return V.str(v.v as string);
 }
 
-/** `StringName("x")`：实测只接受字符串族（int 是 Parse Error），结果与 `&"x"` 同类。 */
+/** `StringName("x")`：只接受字符串族（int 是 Parse Error），结果与 `&"x"` 同类。 */
 export function stringNameCtor(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("string-name-ctor-arity", `StringName() 只接受 1 个参数（收到 ${args.length} 个）`);
@@ -1493,54 +1349,29 @@ export function stringNameCtor(args: Variant[]): Variant {
   return V.stringName(v.v as string);
 }
 
-/**
- * **StringName 槽**（变量 / 字段 / 容器元素与键 / 形参默认值）：`tmp/f77` 与 `tmp/f79` 量到
- * `var sn: StringName = "nm"`、`sn = "zz"`、`Dictionary[StringName, int] = { "a": 1 }` 全部成立，
- * 而 `= 5`（`v-sn-str`）与 `= Color(...)`（`v-sn-color`）是解析期两句。装不下就响亮报，不原样塞进去。
- */
+/** **StringName 槽**（变量 / 字段 / 容器元素与键 / 形参默认值）：只收 StringName / String，装不下就响亮报，不原样塞进去。 */
 export function toStringNameSlot(v: Variant): Variant {
   if (v.t === Tag.STRING_NAME) return v;
   if (v.t === Tag.STRING) return V.stringName(v.v as string);
   throw new UnsupportedError("string-name-slot", `StringName 槽只收 StringName / String，收到 ${tagName(v.t)}`);
 }
 
-/** 顶层 print：字符串不加引号 */
-/**
- * 容器打印 / 比较的深度上限。**实测是一条固定的层数闸门，不是「看见重复就断」**：
- *  - 没有环、纯粹 101 层嵌套（`nest(100)`）全展开；102 层（`nest(101)`）起最里一层换成 `[...]`；
- *  - 自引用数组 `a=[a]` → `[`×101 + `[...]` + `]`×101（`str(a).length()` 实测 **207**）；
- *  - 自引用字典 `d["x"]=d` → (`{ "x": ` + ` }`)×101 + `{ ... }`（长度实测 **916**，收尾标记是带空格的 `{ ... }`）；
- *  - 间接环（`p=[q]`、`q=[p]`）与直接环同一个层数，所以不是重复检测。
- * 比较（`==`）也按同一层数截断：实测两个**不同**的自引用数组相等（`a == b` 真）、两条不同的间接环相等、
- * 两个不同的自引用字典也相等 —— 不截断的话我们这边是 RangeError 栈溢出。
- */
+/** 容器打印的深度上限：一条**固定的层数闸门**，不是「看见重复就断」，越界那一层给 `[...]` / `{ ... }`。 */
 export const PRINT_DEPTH = 101;
 
-/**
- * 比较（`==` / `has` / `count` 走的身份比较）另有一道**更浅**的闸门 = **52 层**（实测，与打印那道不是一条）。
- * 判据是三条边界：
- *  - `a == nest(n)`（a=[a]，nest(n) 有 n+1 层）在 n=51 假、n=52 真；
- *  - `nest(n) == nest(n+1)` 与 `nest(n) == nest(n+2)` 同样在 n=51 假、n=52 真；
- *  - 而**桶**要深得多：`d[nest(100)]` 查 `nest(101)` 仍然落空，`d[nest(101)]` 查 `nest(102)` 才命中（=101 那道）。
- * 也就是说 Godot 的 `==` 在 52 层之外会把**明显不同**的两个容器判成相等（`nest(52) == nest(53)` 实测为真），
- * 字典格还要另看桶。两条闸门各按各的实测值，别合成一条。
- */
+/** 比较（`==` / `has` / `count` 的身份比较）的深度上限：另一道**更浅**的固定闸门，超出后两个明显不同的容器会被判成相等；与打印那道不是一条。 */
 export const COMPARE_DEPTH = 52;
 
 registerPackStringifier((v) => show(v));
 
-/**
- * `print(a, b, c)` 的口径：**Godot 先把所有实参求值完，才开始把每个转成字符串**
- * （S170 ⑦ 实测：`print(r, r.append(2.5), r)` 两个 `r` 都是追加之后的）。
- * 所以发射器不能把 `rt.show(...)` 铺在实参位置上（那会让转字符串夹在副作用之间），
- * 而是把整串实参交到这里，按顺序 show、用空串拼（Godot 的 print 不加分隔符）。
- */
+/** `print(a, b, c)` 的口径：**先把所有实参求值完，才开始逐个转字符串**，所以整串实参交到这里按顺序 show、用空串拼。 */
 export function showArgs(args: Variant[]): string {
   let out = "";
   for (const a of args) out += show(a);
   return out;
 }
 
+/** 顶层 print：字符串不加引号 */
 export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:
@@ -1601,11 +1432,7 @@ export function repr(v: Variant, depth = 0): string {
   return show(v, depth);
 }
 
-/**
- * `分隔符.join(数组)`：每个元素走 **print 那一条 stringify**，不是容器里那套带引号的 repr。
- * 实测：`str(null)` → `<null>`、`str(&"z")` → `z`（无引号）、`str(Vector2(1,2))` → `(1.0, 2.0)`、
- * 而数组元素本身仍按容器形式给 `[1]`；空数组给空串、空分隔符就是把它们粘起来。
- */
+/** `分隔符.join(数组)`：每个元素走 **print 那一条 stringify**，不是容器里那套带引号的 repr；空数组给空串。 */
 export function strJoin(sep: string, g: GArray): string {
   const items = g.raw();
   let out = "";
@@ -1616,17 +1443,13 @@ export function strJoin(sep: string, g: GArray): string {
   return out;
 }
 
-/**
- * Variant 的 **Godot 类型名**：`tagName` 只到 Tag 粒度，值类型都在 OBJECT 里，
- * 而报错文本要说得出 `Vector2` / `Color` 这种名字（`valueEq` 的分支标签与形参槽位都用它）。
- */
+/** Variant 的 **Godot 类型名**：`tagName` 只到 Tag 粒度，值类型都在 OBJECT 里，而报错文本要说得出 `Vector2` / `Color` 这种名字。 */
 export function valueTypeName(x: Variant): string {
   if (asVec2(x) !== null) return "Vector2";
   if (asVec3(x) !== null) return "Vector3";
   if (asVec2i(x) !== null) return "Vector2i";
   if (asVec3i(x) !== null) return "Vector3i";
   if (asColor(x) !== null) return "Color";
-  // `tmp/f97` d5 的报错文本里 Callable 就叫 `Callable`（`Invalid operands 'Callable' and 'int' …`）
   if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }
@@ -1679,9 +1502,7 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     return (a.v as string) === (b.v as string);
   }
   if (isCallable(a) !== isCallable(b)) {
-    // `tmp/f97` d5：Callable 跟 int 比在 Godot **不是** false，而是运行期那一句
-    // `Invalid operands 'Callable' and 'int' in operator '=='.`（`== null` / `== "add3"` 两格与
-    // float / bool 来源都没量到 —— 那一支 print 在第一个式子上就断了，所以只发实测这一形）
+    // Callable 跟 int 比在 Godot **不是** false，而是运行期那一句 `Invalid operands 'Callable' and 'int' in operator '=='.`
     const other = isCallable(a) ? b : a;
     if (other.t === Tag.INT) {
       throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
@@ -1702,21 +1523,14 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
-      // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算），不是 JS 盒子引用 ——
-      // 读一次属性就新建一个盒子，按引用比会把 Godot 的真相判成假（实测见 `callable.ts` 的 `callableSame`）
+      // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算）：读一次属性就新建一个盒子，按 JS 引用比会把真判成假
       if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
   }
   return false;
 }
 
-/**
- * Godot 的**身份**相等（`Variant::identity`）：`has` / `find` / `rfind` / `count` / `erase` 用它，
- * 而 `==` 运算符用上面那个跨 int/float 的 valueEq。两者在数字上分家（实测 `[1].has(1.0)` → false、
- * `[1].find(1.0)` → -1，而 `1 == 1.0` 为真；`[0].has(false)`、`[null].has(0)` 也都是 false），
- * String 与 StringName 却合一（实测 `["a"].count(&"a")` → 1），容器递归比身份、字典不看键序
- * （实测 `[{"x":1,"y":2}].count({"y":2,"x":1})` → 1）。
- */
+/** Godot 的**身份**相等（`Variant::identity`）：`has` / `find` / `rfind` / `count` / `erase` 用它。数字不做 int/float 跨型合一（`[1].has(1.0)` 假），String 与 StringName 却合一，容器递归比身份、字典不看键序。 */
 export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
   if (depth >= COMPARE_DEPTH && (a.t === Tag.ARRAY || a.t === Tag.DICT) && a.t === b.t) return true;
   if (
@@ -1749,8 +1563,7 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GColor && b.v instanceof GColor) {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
-      // Callable 走与 `==` 同一条等式：d6 实测 `[o.add3, o.add3].has(o.add3)` 是**真**，
-      // 而盒子每次读都是新建的，按 JS 引用比会判成假
+      // Callable 走与 `==` 同一条等式：盒子每次读都是新建的，按 JS 引用比会把真判成假
       if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
     default:
@@ -1758,7 +1571,7 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
   }
 }
 
-/** 空数组 / 空字典 / 0 / 0.0 / "" 全为 false —— 与 JS 相反（S12） */
+/** 空数组 / 空字典 / 0 / 0.0 / "" 全为 false —— 与 JS 相反。 */
 export function truthyOf(v: Variant): boolean {
   switch (v.t) {
     case Tag.NIL:

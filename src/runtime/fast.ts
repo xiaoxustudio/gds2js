@@ -2,17 +2,14 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import type { Variant } from "./tags";
 import { GArray, GDict, arrIdx, strFloat, valueEq } from "./values";
 
-/** 与 tags.ts 的 checkInt 抛完全相同的错（D1：超 2^53 响亮失败，绝不静默降级）。 */
+/** 整数超出 2^53 时抛的错，与 tags.ts 的 checkInt 同一句。 */
 function int64(v: number): UnsupportedError {
   return new UnsupportedError("int64-out-of-range", `整数 ${v} 超出 2^53，需要 BigInt 路径（未实现）`);
 }
 
-/** 单态快路径（D2 的第二轨）。输入输出都是裸 JS 值，不装箱。 */
+/** 单态快路径：输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
-  /** 装箱值 → 裸值：按名派发表调裸 ABI 方法（`computeRawAbis` 那一轨）时用。
-   *  scriptc 不给 `Variant | undefined` → `number | undefined` 这种「联合到联合」的转换留 lowering
-   *  （实测 SC2003 union conversion has no unambiguous layout mapping），所以转换放在这里、
-   *  调用点上是普通的 `Variant` 实参。 */
+  /** 装箱值 → 裸值：按名派发表调裸 ABI 方法时用。 */
   unboxNum(v: Variant): number {
     return v.v as number;
   },
@@ -21,10 +18,7 @@ export const fast = {
     return v.v as string;
   },
 
-  // 裸数组 / 裸字典的快路径**按元素种类各发一个具体入口**：元素类型发射期就知道（int / float / str），
-  // 而「对象字面量上的泛型方法」在静态编译目标上是接收者解析的围栏
-  // （实测 scriptc SC1090：reaching the object-literal generic method … the receiver must be a
-  // never-reassigned binding）。同一条 `iAddC` 那种非泛型成员一直在出货，所以这里只是去泛型化。
+  // 裸数组 / 裸字典的快路径按元素种类各发一个具体入口，不发泛型方法：泛型方法在静态编译目标上按接收者解析不过去。
   rawArrGetNum(a: number[], i: number): number {
     return a[arrIdx(i, a.length)] as number;
   },
@@ -61,9 +55,7 @@ export const fast = {
     row[arrIdx(j, row.length)] = v;
   },
 
-  // 插入按种类各发一份：**不能**先 `a.push(null)` 再移位 —— 数组在静态目标上是带元素类型的，
-  // 往 `number[]` 里塞外来值不会照 node 的方式把长度撑起来（实测 115：插完之后读末格越界）。
-  // 先 push 一个本族值，再把 k 之后的格子整体后移，最后写 k。
+  // 插入按种类各发一份：不能先 push 一个外来值占位再移位，静态目标上数组带元素类型、长度撑不起来。先 push 本族值，再把 k 之后的格子整体后移，最后写 k。
   rawArrInsertNum(a: number[], at: number, v: number): number {
     const n = a.length;
     const k = at < 0 ? n + at : at;
@@ -84,10 +76,7 @@ export const fast = {
     return 0;
   },
 
-  // removeAt / clear 也按种类各发一份。留 `unknown[]` 形参会**静默丢改动**：
-  // 实测 scriptc 把 `number[]` 传给 `unknown[]` 形参时交出去的是份拷贝（`rawArrRemoveAt(a, 0)`
-  // 跑完调用方的 `a.length` 仍是原值），node 侧同一句是原地改 —— 这类「 widening 之后不别名」
-  // 的形状与 S209 那条是同一物种，只能靠具体类型避开。（`splice` 也没有 lowering，所以手写后移 + pop。）
+  // removeAt / clear 也按种类各发一份：`unknown[]` 形参在静态目标上收到的是拷贝，原地改动会静默丢掉；`splice` 没有 lowering，所以手写后移 + pop。
   rawArrRemoveAtNum(a: number[], i: number): void {
     const k = i < 0 ? i + a.length : i;
     if (k < 0 || k >= a.length) return;

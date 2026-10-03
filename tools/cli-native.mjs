@@ -1,28 +1,15 @@
 #!/usr/bin/env node
 /**
- * #14 第①步的机器：把 gds2js **自己**编成不带 node 的原生 exe。
- *
- * 它做四件事：
- *   1. 把 `src/` 整个复制到 `tmp/cli-native/`（node 那侧的源码一行不动）；
- *   2. 把 scratch 里的 `src/parse/parser.ts` 换成**原生实现**（FFI 节点表 → `buildCsTree`）——
- *      CLI 其余部分只认 `./cst` 的记录形状，所以这一换就断了 web-tree-sitter 的整条依赖；
- *   3. 用 `zig cc -target x86_64-windows-gnu` 编 C（libtree-sitter + tree-sitter-gdscript + `native/gds_ts.c`）
- *      —— **必须**与 scriptc 的 `--ffi` 链接同一套工具链，用本机 clang 的 msvc target 会在链接期
- *      报 `lld-link: could not open 'libuuid.a'`（S219 踩过）；
- *   4. 写 ffi manifest，跑 `scriptc build src/cli.ts --ffi …`（`--coverage` 就只跑 coverage 拿围栏清单）。
+ * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 到 scratch、把四份同名文件换成原生实现、
+ * 用 zig 编 C、写 ffi manifest、跑 scriptc build。
+ * C 必须用 zig cc -target x86_64-windows-gnu 编：换工具链目标会在链接期找不到 libuuid.a。
  *
  * 用法：
  *   node tools/cli-native.mjs                    # 出货形态：--dynamic（岛），编出来在 tmp/cli-native/gds2js.exe
- *   node tools/cli-native.mjs --static           # 不要岛的静态构建（也编得过，小 1 MB，S235 实测）
- *   node tools/cli-native.mjs --ts-only --keep   # 只重编 TS：沿用上一轮的 .o（改 TS 的那几轮省 2 分钟）
+ *   node tools/cli-native.mjs --static           # 不要岛的静态构建
+ *   node tools/cli-native.mjs --ts-only --keep   # 只重编 TS：沿用已有的 .o
  *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）；加 --static 看不要岛的那一侧
  *   TS_SRC=../libtree-sitter node tools/cli-native.mjs
- *
- * 出货形态定的是 `--dynamic`（用户拍板，ROADMAP §5.12.7 B）：岛只托管 32/7903 条语句，
- * 我们自己的代码 99% 仍静态翻译，所以不是「整个 CLI 跑解释器」；换来的是「以后再多一格不能静态翻译的
- * 代码不至于卡死整条 CLI」。四条 seam（parser / exec / bundle / home）在 --dynamic 下**一条都不能撤**，
- * 理由逐条写在 §5.12.2：computed import() 仍是 SC1090、node:sea 是 SC2030、rolldown 是 native-addon lazy trap、
- * web-tree-sitter 的 wasm 胶水是 3 格 SC1090/SC2009。
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
@@ -109,11 +96,9 @@ export async function parseSource(src: string): Promise<CsTree> {
 writeFileSync(join(SCRATCH, "src", "parse", "parser.ts"), NATIVE_PARSER, "utf8");
 console.log("scratch 的 parser.ts 换成原生实现");
 
-/* 2b) 另外三条 seam 换成原生实现。
- *     `src/parse/parser.ts`、`src/exec.ts`、`src/bundle.ts`、`src/home.ts` 这四份是**构建期分岔**的口子：
- *     node 那侧吃 web-tree-sitter / 进程内 import() / tsdown / SEA 资产，原生 exe 里这四样都不存在，
- *     所以同名换实现，其余源码一行不改（`src/parse/cst.ts` 那套记录形状就是为了让这个分岔只有一层厚）。
- *     清单：S227 量的 19 格里，除 tsdown / run 的 import() / node:sea 之外全是「改形状」，不用 seam。
+/* 2b) 另外三份同名文件换成原生实现。
+ *     parser / exec / bundle / home 这四份是构建期分岔的口子：node 那侧吃 web-tree-sitter、
+ *     进程内 import()、tsdown、SEA 资产，原生 exe 里这四样都不存在，所以同名换实现，其余源码一行不改。
  */
 const NATIVE_BUNDLE = `// 原生构建专用（由 tools/cli-native.mjs 生成）：exe 里没有打包器，single 照实响亮拒。
 export async function bundlingAvailable(): Promise<boolean> {
@@ -143,12 +128,10 @@ export async function runProduct(path: string): Promise<void> {
 writeFileSync(join(SCRATCH, "src", "exec.ts"), NATIVE_EXEC, "utf8");
 console.log("scratch 的 exec.ts 换成原生实现（run 起外部 node 子进程）");
 
-/* 原生那支的「自带家目录」= 构建期把 dist 与 runtime 源码**嵌进 exe**。
+/* 原生那支的「自带家目录」= 构建期把 dist 与 runtime 源码嵌进 exe。
  * 契约与 SEA 那支一字不差：解出一个只读目录，给目录本身和目录里某个文件的落盘路径。
- * 带的是 cli.ts 问到的那些键：dist/product.mjs（export 两支）、dist/runtime.mjs + dist/host.mjs
- * （single 的 import 口）、dist/standalone.cjs（local 旁挂）、src/runtime/**.ts + src/host.ts
- * + src/lower/double.ts（--pack scriptc 要铺的 TS 源码图，runtimeTsDir() 找的就是 <home>/src/runtime）。
- * 不带 wasm：解析器走 FFI（第 2 步那份 parser.ts），gdscript.wasm 在这条路上没有读者。 */
+ * 带的是 cli.ts 问到的那些键：dist 下的 .mjs/.cjs、src/runtime/**.ts、src/host.ts、src/lower/double.ts。
+ * 不带 wasm：解析器走 FFI，gdscript.wasm 在这条路上没有读者。 */
 const HOME = [];
 const HOME_KEYS = [];
 function assetTo(rel, abs) {
@@ -237,7 +220,7 @@ writeFileSync(join(SCRATCH, "src", "home.ts"), NATIVE_HOME, "utf8");
 console.log(`scratch 的 home.ts 换成原生实现（嵌 ${HOME.length} 份 / 约 ${EMBED_MB} MB）`);
 
 
-/* 3) 编 C（`--ts-only` 复用上一轮的 obj，改 TS 的那几轮不必重编 libtree-sitter） */
+/* 3) 编 C（`--ts-only` 复用已有的 obj，不重编 libtree-sitter） */
 const objDir = join(SCRATCH, "obj");
 const tsOnly = process.argv.includes("--ts-only");
 if (!tsOnly) rmSync(objDir, { recursive: true, force: true });
@@ -277,8 +260,7 @@ const ffiPath = join(SCRATCH, "ffi.json");
 writeFileSync(ffiPath, JSON.stringify(manifest, null, 2), "utf8");
 
 const entry = join(SCRATCH, "src", "cli.ts");
-/* `--dynamic` 是**默认**出货形态（`--static` 才不要岛）：把 quickjs-ng 岛嵌进 exe（实测 +1.05 MB），
- * 岛只跑那几格不能静态翻译的代码 —— 我们自己的代码 99% 仍然静态翻译（coverage：7864/7903）。 */
+/* `--dynamic` 是默认出货形态（`--static` 才不要岛）：把 quickjs-ng 岛嵌进 exe，岛只跑那几格不能静态翻译的代码。 */
 const dynamic = !process.argv.includes("--static");
 if (coverageOnly) {
   const covArgs = ["coverage", entry, ...(dynamic ? ["--dynamic"] : [])];

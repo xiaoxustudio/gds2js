@@ -12,15 +12,7 @@ export class GVector2 {
 
 const r = Math.fround;
 
-/**
- * 「这个对象是不是 Vector2i、是的话把两个分量交出来」那一格，由 `vector2i` 在自己模块里登记。
- * 用登记函数而不是 `MARK in o`：反向 import 会成环，而计算键的 `in` 在静态编译目标上是一堵墙
- * （scriptc：'in' with computed (non-literal) keys）。函数值两边都是普通值。
- * 交的是**分量**而不是布尔：判完再回头 `a.v as { x?: number; y?: number }` 取分量，那一步是
- * 「把 unknown 收成结构视图」—— 静态目标上那张视图与原实例不是同一个身份，视图上的 `instanceof`
- * 当场落空（实测 scriptc 的 exe：`Vector2() 单参只收 Vector2 / Vector2i，收到 Object`，
- * 而 node 跑同一份产物是对的）。
- */
+/** 「这个对象是不是 Vector2i、是的话把两个分量交出来」那一格，由 `vector2i` 在自己模块里登记：反向 import 会成环，而交分量而不是布尔是因为判完再收结构视图会丢掉实例身份。 */
 type Vec2iParts = (o: object) => [number, number] | null;
 
 let vec2iParts: Vec2iParts | null = null;
@@ -38,18 +30,12 @@ export function asVec2(v: Variant): GVector2 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector2 ? (v.v as GVector2) : null;
 }
 
-/**
- * 声明为 `Vector2` 的变量/字段在**赋值点**的转换（实测 f5：`var mv: Vector2` 之后
- * `mv = Vector2i(1, 2)` 给 `(1.0, 2.0)`，`p.v = Vector2i(3, 4)` 同值）。
- * 直接复用 `vector2New` 的单参形态：Vector2 拷一份（值类型写点必须拷贝，见 step 38）、
- * Vector2i 升成 float，别的实参响亮报缺 —— 那种组合 Godot 在解析期就拒（`mv = 5` 实测），
- * 走到这里说明是推不出静态类型的动态路径，宁可抛也不要静默存错形状。
- */
+/** 声明为 `Vector2` 的变量/字段在**赋值点**的转换：复用 `vector2New` 的单参形态，别的实参响亮报缺。 */
 export function toVec2(v: Variant): Variant {
   return vector2New([v]);
 }
 
-/** `Vector2(...)` 构造：0 参给零向量（实测 `Vector2()` → `(0.0, 0.0)`），其余必须两参。 */
+/** `Vector2(...)` 构造：0 参给零向量，1 参收 Vector2 / Vector2i，其余必须两参。 */
 export function vector2New(args: Variant[]): Variant {
   if (args.length === 0) return vector2(0, 0);
   if (args.length === 1) {
@@ -66,7 +52,7 @@ export function vector2New(args: Variant[]): Variant {
   return vector2(scalar(args[0], "Vector2"), scalar(args[1], "Vector2"));
 }
 
-/** `Vector2.UP` 这类静态常量。实测 4.6.3 只有这七个（`Vector2.NAN` 直接是解析错误）。 */
+/** `Vector2.UP` 这类静态常量（Godot 只有这七个）。 */
 const VEC2_CONST: Record<string, [number, number]> = {
   ZERO: [0, 0],
   ONE: [1, 1],
@@ -113,16 +99,7 @@ const add = (a: number, b: number) => r(a + b);
 const sub = (a: number, b: number) => r(a - b);
 const flen = (x: number, y: number) => r(Math.sqrt(add(mul(x, x), mul(y, y))));
 
-/**
- * Vector2 的方法面。**只实现探针钉住的语义**；测不准的（slerp / slide / bounce /
- * is_equal_approx / is_normalized）一律响亮报缺，宁可编不过也不要静默给错值：
- *  - `slerp`：三种候选实现（角度+长度 lerp、归一化后旋转）在 6 位小数打印的最后一位上
- *    各自与实测差 1 ulp，逆不出 Godot 的确切算法；
- *  - `slide`/`bounce`：要求法向量已归一，否则 Godot 除了返回零向量还往 stderr 打
- *    `ERROR: The normal ... must be normalized.`，那行文本我们复现不了；
- *  - `is_equal_approx`/`is_normalized`：容差阈值按实测落在两个候选之间（相对 8e-6 与 1e-5 之间、
- *    绝对 1.1e-4 与 2e-4 之间），现有数据不足以钉死。
- */
+/** Vector2 的方法面：按名字派发，复现不了的（`slide` / `bounce`）与未知成员都响亮报缺。 */
 export function vector2Method(v: GVector2, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length":
@@ -276,37 +253,26 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
   }
 }
 
-/** 归一化：零向量原样返回（实测 (0,0).normalized() → (0.0, 0.0)，不是 nan）。 */
+/** 归一化：零向量原样返回，不是 nan。 */
 function normalized(x: number, y: number): Variant {
   const l = flen(x, y);
   if (l === 0) return vector2(0, 0);
   return vector2(div(x, l), div(y, l));
 }
 
-/**
- * 比较的唯一口径：**字典序**（先 x 再 y），不是「每个分量都更大」。
- * 判别点实测：`Vector2(3,4) > Vector2(2,5)` → true（x 已决出，y 更小不影响）、
- * `Vector2(3,4) < Vector2(4,3)` → true、`Vector2(1,2) < Vector2(1,3)` → true。
- * ops 的比较与 Array.sort() 都走这里，别在别处再写一份。
- */
+/** 比较的唯一口径：**字典序**（先 x 再 y），不是「每个分量都更大」；ops 的比较与 `Array.sort()` 都走这里。 */
 export function vecCmp(a: GVector2, b: GVector2): number {
   if (a.x !== b.x) return a.x < b.x ? -1 : 1;
   return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
 }
 
-/**
- * Godot 单精度构建里的 `CMP_EPSILON`。两个谓词都用到，且都是**严格小于**：
- *  - `is_zero_approx`：逐分量 `|v| < 1e-5`（实测 9e-6 真、1e-5 假、2e-5 假，Vector2/Vector3 一样）
- *  - `is_equal_approx`：逐分量 `|a-b| < max(1e-5, 1e-5*|a|)`（Vector2 与 Vector3 共用，实测 13 个点）
- */
+/** Godot 单精度构建里的 `CMP_EPSILON`：`is_zero_approx` 是逐分量 `|v| < eps`，`is_equal_approx` 是 `|a-b| < max(eps, eps*|a|)`，两条都**严格小于**。 */
 export const CMP_EPS = r(1e-5);
 
-/** 实测阈值：`|length_squared() - 1| < 1e-3`。20 个点夹出来的（0.9995 真 / 0.9992 假、
- *  (1, 0.045) 假、(0.5774,0.5774,0.5774) 真……），Vector2 与 Vector3 完全同一条。 */
+/** `is_normalized` 的阈值：`|length_squared() - 1| < 1e-3`，Vector2 与 Vector3 同一条。 */
 export const NORMALIZED_EPS = r(1e-3);
 
-/** 逐分量容差比较，口径见上面的 `CMP_EPS`。分量已经先过 float32，所以边界点会跟着 fround 挪位，
- *  这正是当初 Vector2 探针把阈值「夹在 6.7e-6–9.9e-6」的原因。 */
+/** 逐分量容差比较，口径见 `CMP_EPS`；分量已经先过 float32，所以边界点会跟着 fround 挪位。 */
 export function approxEq(a: number, b: number): boolean {
   if (a === b) return true;
   const eps = mul(CMP_EPS, Math.abs(a));
@@ -319,7 +285,7 @@ export function lerpLen(la: number, lb: number, w: number): number {
   return add(la, mul(sub(lb, la), w));
 }
 
-/** 下标/属性键 → 分量槽位：0/1 与 "x"/"y" 都认（实测 `v["x"]` 读到 1.0、`v["x"] = 7` 写进 x）。 */
+/** 下标/属性键 → 分量槽位：0/1 与 `"x"`/`"y"` 都认。 */
 function vecSlot(key: Variant): 0 | 1 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -333,13 +299,7 @@ function vecSlot(key: Variant): 0 | 1 | null {
 }
 
 export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
-  /**
-   * 实测下来字符串键**不加引号**，而且读的那一句会换形状：
-   *  - `v["w"]` 读 → `Invalid access to property or key 'w' on a base object of type 'Vector3i'.`（f69 t53，`type` 后**没有**冒号）
-   *  - `v[3]` 读 → `Invalid access of index '3' on a base object of type: 'Vector3i'.`（t51/t52 与用例 092/097，**有**冒号）
-   *  - `v.y = …` 写 → `Invalid assignment of property or key 'y' with value of type '…' on a base object of type 'Vector2'.`（用例 088 与 f69 t56）
-   *  - `v[5] = …` 写 → `Invalid assignment of index '5' (on base: 'Vector3i') with value of type 'int'.`（t55）
-   */
+  /** 四句文案的差别：字符串键**不加引号**，按下标读那一句在 `type` 后多一个冒号。 */
   const isName = key.t === Tag.STRING || key.t === Tag.STRING_NAME;
   const shown = isName ? (key.v as string) : String(key.v);
   const vt = value ? tagName(value.t) : "?";
@@ -361,15 +321,7 @@ export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: s
   );
 }
 
-/**
- * 向量写（实测 `v.x = 9`、`v[0] = 9`、`v["x"] = 7` 都合法）。
- *
- * Vector2 是**值类型**，所以绝不原地改：产出新值，由调用方写回它来的那个存储位 ——
- * 实测 `var w = v; w.x = 100` 不动 v，而 `a[0].x = 5`、`d["k"].y = 8` 确实改到容器里那一格
- * （写回哪一格由发射器生成的路径决定，见 emitter 的 emitMemberAssign）。
- * 实参只收 int/float（`v.x = true` / `"s"` / `Vector2(...)` 实测都是运行时报错，不是截断），
- * 存下照旧过 float32（构造即 fround）。
- */
+/** 向量写（`v.x = 9`、`v[0] = 9`、`v["x"] = 7`）。Vector2 是**值类型**，所以绝不原地改：产出新值、由调用方写回它来的那个存储位；实参只收 int/float，存下照旧过 float32（构造即 fround）。 */
 export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vecSlot(key);
   if (slot === null) vecFailKey(key, via, "Vector2", value);
@@ -378,7 +330,7 @@ export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop
   return V.object(slot === 0 ? new GVector2(num, vec.y) : new GVector2(vec.x, num));
 }
 
-/** 下标读：越界或键型不对都按实测口径报错（`v[2]` → Invalid access of index …）。 */
+/** 下标读：越界或键型不对都报错（`v[2]` → Invalid access of index …）。 */
 export function vecReadIndex(vec: GVector2, key: Variant): Variant {
   const slot = vecSlot(key);
   if (slot === null) vecFailKey(key, "read", "Vector2");

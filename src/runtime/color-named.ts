@@ -1,9 +1,4 @@
-// 由 Godot 4.6.3 实测生成（step 43）：两张脸同一个表 —— `Color.ALICE_BLUE` 常量与
-// `Color.from_string("alice_blue", …)` / `Color("ALICE BLUE"?)` 的解析都走这张 CSS3 名单。
-// 实测口径：138 个名字全部两侧一致（0 处不一致）；名单里没有 `NAVY`（只有 `NAVY_BLUE`）、
-// 没有 `LIGHT_GOLDENROD_YELLOW`，也不接受英式 `GREY` 系列拼写；查名时下划线可有可无
-// （"MINTCREAM" / "rebeccapurple" 同样命中），大小写不敏感。
-// 值存成 0xAARRGGBB 整数：分量 = byte/255，构造时统一落 float32。
+/** CSS3 内建颜色名 → 0xAARRGGBB 整数（分量 = byte/255，构造时统一落 float32）：`Color.ALICE_BLUE` 常量与 `Color.from_string()` 共用这张表，键是小写下划线形式，查名时大小写不敏感、下划线可有可无。 */
 export const COLOR_NAMED: Record<string, number> = {
   alice_blue: 0xfff0f8ff,
   antique_white: 0xfffaebd7,

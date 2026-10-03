@@ -1,10 +1,4 @@
-/**
- * 「exe 自带的家目录」这一格的 seam（#14）。名字里不带 SEA，因为有两条出货路都住在它后面：
- * node 那支是 `--pack node` 的 SEA 资产（下面的实现），原生那支是 scriptc exe 里嵌的资源，
- * 由 `tools/cli-native.mjs` 生成同名文件。两支对外的契约都是同一个：
- * **解出一个只读的家目录，能给出目录本身和目录里某个文件的落盘路径**。
- * 契约里刻意是「落盘路径」—— `--runtime-mode local` 的旁挂与 `--pack scriptc` 的铺源码都要的是文件，不是字符串。
- */
+/** 构建期由 tools/cli-native.mjs 同名换实现：原生 exe 的自带家目录是构建期嵌进二进制的文件，不是 SEA 资产。 */
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";

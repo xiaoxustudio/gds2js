@@ -1,10 +1,6 @@
 #!/usr/bin/env node
 /**
- * #14 的门：**不带 node 的 gds2js.exe** 与 node 侧 CLI 出货一致。
- *
- * `test:facade` 证的是「两棵树一样」，`test:scriptc` 证的是「产物在静态目标上跑得对」，
- * 这一门证的是中间那段：**编译器自己**换成原生实现之后，逐字节产物、跑起来的输出、
- * 以及它自己编出来的 scriptc exe 都和 node 那支一致（外加两格「原生构建做不了的事要响亮拒」）。
+ * 不带 node 的 gds2js.exe 与 node 侧 CLI 出货一致。
  *
  * 用法：
  *   pnpm test:cli-native            # 全门（含两次 scriptc 出货，几分钟）
@@ -13,8 +9,8 @@
  *
  * 前置：`pnpm build`（原生 exe 把 dist 与 runtime 源码嵌进自己）、libtree-sitter（`TS_SRC`）、zig、scriptc。
  */
-import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -51,6 +47,16 @@ function run(bin, args, cwd) {
 function read(p) {
   return readFileSync(p, "utf8");
 }
+
+/** 轮询到条件成立为止（`--watch` 那格用它等子进程的输出）。 */
+async function until(pred, ms) {
+  const stopAt = Date.now() + ms;
+  while (Date.now() < stopAt) {
+    if (pred()) return true;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return pred();
+}
 function copyTree(from, to) {
   mkdirSync(to, { recursive: true });
   for (const e of readdirSync(from, { withFileTypes: true })) {
@@ -85,7 +91,7 @@ function diffTrees(a, b) {
   return null;
 }
 
-/* 0) 原生 exe 在不在（出货形态：`--dynamic` —— 岛只跑那几格不能静态翻译的代码，我们自己的 99% 仍是静态） */
+/* 0) 原生 exe 在不在（出货形态：`--dynamic`，岛只跑那几格不能静态翻译的代码） */
 if (!existsSync(EXE) || process.argv.includes("--rebuild")) {
   console.log("先编原生 CLI（tools/cli-native.mjs，出货形态默认带 --dynamic；含 zig 编 C + scriptc 出货，慢）…");
   const r = spawnSync("node", [join(ROOT, "tools", "cli-native.mjs"), "--keep"], { encoding: "utf8", cwd: ROOT, timeout: 3_000_000 });
@@ -139,6 +145,27 @@ console.log("③ 原生 exe 的默认运行时说明符 = 家目录里的 file U
   else if (!first.includes("file:///") || !first.includes("gds2js-home-native")) fail(`默认说明符没指进家目录：${first}`);
   else if (cliNode(["run", join(dir, "main.gd")], ROOT).out !== cliExe(["run", join(dir, "main.gd")], ROOT).out) fail("默认家目录运行时跑出来的输出与 node 侧不同");
   else ok(`import 自家目录那一份（${/from "([^"]+)"/.exec(first)?.[1].split("/").slice(-2).join("/")}）`);
+}
+
+/* 3b) `--runtime-mode local`：产物旁边那份旁挂包来自 exe 内嵌的 dist/standalone.cjs（第三种运行时模式） */
+console.log("③′ local 模式：旁挂内嵌的 standalone，产物在仓库外也能跑");
+{
+  const dir = join(WD, "local-mode");
+  mkdirSync(dir, { recursive: true });
+  copyFileSync(join(ROOT, "corpus", "cases", "001-int-division", "main.gd"), join(dir, "main.gd"));
+  const n = cliNode(["build", join(dir, "main.gd"), "-o", join(dir, "node.mts"), "--runtime-mode", "local"], ROOT);
+  const e = cliExe(["build", join(dir, "main.gd"), "-o", join(dir, "exe.mts"), "--runtime-mode", "local"], ROOT);
+  const sideFile = "gds2js-standalone.cjs";
+  if (n.status !== 0 || e.status !== 0) fail(`local 模式退出码 node=${n.status} exe=${e.status}：${(n.out + e.out).slice(0, 200)}`);
+  else if (!existsSync(join(dir, sideFile))) fail(`旁挂的 ${sideFile} 没落到产物旁边`);
+  else if (read(join(dir, "node.mts")) !== read(join(dir, "exe.mts"))) fail("local 模式的产物不是逐字节（两句 requirePath 应当一样）");
+  else {
+    const played = run("node", [join(dir, "exe.mts")], ROOT);
+    const ref = cliExe(["run", join(dir, "main.gd")], ROOT).out;
+    if (played.status !== 0) fail(`旁挂产物跑不起来：${played.out.slice(0, 160)}`);
+    else if (played.out !== ref) fail(`旁挂产物的输出与 run 不同：exe侧=${JSON.stringify(played.out.slice(0, 80))} 参照=${JSON.stringify(ref.slice(0, 80))}`);
+    else ok(`产物 + 旁挂包跑通，输出与 run 逐字一致（${sideFile} ${(statSync(join(dir, sideFile)).size / 1024).toFixed(0)} KB）`);
+  }
 }
 
 /* 4) 工程出货：原生 exe 自己编一个 scriptc exe，产物树与 node 侧逐字节、跑起来输出逐字 */
@@ -206,6 +233,70 @@ if (!quick) {
     else fail(`SEA 产物跑不出东西：退出码 ${played.status} ${played.out.slice(0, 160)}`);
   } else if (/Node >=/.test(r.out)) ok("外部 node 不够新 → 报的是版本门槛那三行，不是崩溃");
   else fail(`--pack node 既没出货也没报门槛：${r.out.slice(0, 200)}`);
+}
+
+/* 7) `check-project`：跨文件静态检查，exe 与 node 侧逐字 */
+console.log("⑦ check-project：跨文件静态检查，exe 与 node 侧逐字");
+{
+  const dir = join(WD, "checkproj");
+  copyTree(join(ROOT, "corpus", "cases", "032-preload-load"), dir);
+  const args = ["check-project", join(dir, "main.gd"), "--res-root", dir];
+  const n = cliNode(args, ROOT);
+  const e = cliExe(args, ROOT);
+  if (n.status !== 0 || e.status !== 0) fail(`check-project 退出码 node=${n.status} exe=${e.status}：${(n.out + e.out).slice(0, 200)}`);
+  else if (n.out !== e.out) fail(`check-project 输出不同：node=${JSON.stringify(n.out.slice(0, 100))} exe=${JSON.stringify(e.out.slice(0, 100))}`);
+  else ok(`与 node 侧逐字一致：${JSON.stringify(n.out.trim().split("\n").join(" | ").slice(0, 70))}`);
+}
+
+/* 8) `--sourcemap`：同一份输入、两个目录里的同名输出 → 产物与 map 都应当逐字节相同 */
+console.log("⑧ --sourcemap：map 落盘、指回 .gd，两侧 map 逐字节");
+{
+  const src = join(WD, "smap");
+  mkdirSync(src, { recursive: true });
+  const gd = join(src, "main.gd");
+  copyFileSync(join(ROOT, "corpus", "cases", "001-int-division", "main.gd"), gd);
+  const dirN = join(src, "node");
+  const dirE = join(src, "exe");
+  // 钉住运行时说明符：exe 的默认值指内嵌家目录（那是 ③ 那一格管的事），这里比的是 sourcemap 那条路
+  const spec = ["--runtime", "gds2js/runtime", "--host", "gds2js/host"];
+  const n = cliNode(["build", gd, "-o", join(dirN, "out.mts"), "--sourcemap", ...spec], ROOT);
+  const e = cliExe(["build", gd, "-o", join(dirE, "out.mts"), "--sourcemap", ...spec], ROOT);
+  const mapN = join(dirN, "out.mts.map");
+  const mapE = join(dirE, "out.mts.map");
+  if (n.status !== 0 || e.status !== 0) fail(`--sourcemap 退出码 node=${n.status} exe=${e.status}：${(n.out + e.out).slice(0, 200)}`);
+  else if (!existsSync(mapN) || !existsSync(mapE)) fail("map 没落盘（node 侧或 exe 侧）");
+  else if (read(join(dirN, "out.mts")) !== read(join(dirE, "out.mts"))) fail("带 map 的产物不是逐字节");
+  else if (read(mapN) !== read(mapE)) fail("两侧 map 不是逐字节（同一输入、同名输出应当全等）");
+  else {
+    const m = JSON.parse(read(mapE));
+    const code = read(join(dirE, "out.mts"));
+    const tail = code.trimEnd().split("\n").pop() ?? "";
+    if (m.sources.length !== 1 || m.sources[0] !== gd) fail(`map 的 sources 没指回 .gd：${JSON.stringify(m.sources)}`);
+    else if (typeof m.mappings !== "string" || m.mappings.length === 0) fail("map 的 mappings 是空的");
+    else if (!tail.includes("sourceMappingURL=out.mts.map")) fail(`产物尾巴没有 sourceMappingURL 那句：${JSON.stringify(tail)}`);
+    else ok(`map 与产物都逐字节（mappings ${String(m.mappings.split(";").length)} 行）`);
+  }
+}
+
+/* 9) `--watch`：验的是 exe 里那份轮询摘要实现（`fs.watch` 的 recursive 与 listener 形状都没有 lowering） */
+console.log("⑨ --watch：改 .gd 要真的重跑");
+{
+  const dir = join(WD, "watch");
+  mkdirSync(dir, { recursive: true });
+  const gd = join(dir, "main.gd");
+  copyFileSync(join(ROOT, "corpus", "cases", "001-int-division", "main.gd"), gd);
+  const child = spawn(EXE, ["check", gd, "--watch"], { cwd: ROOT, windowsHide: true });
+  let buf = "";
+  child.stdout.on("data", (c) => { buf += String(c); });
+  child.stderr.on("data", (c) => { buf += String(c); });
+  const sawStart = await until(() => buf.includes("监听"), 15000);
+  appendFileSync(gd, "\n# 改一次\n", "utf8");
+  const sawRerun = sawStart && (await until(() => buf.includes("重新运行"), 15000));
+  child.kill();
+  await until(() => child.exitCode !== null, 5000);
+  if (!sawStart) fail(`没打出「监听 …」那一句（15 秒内）：${buf.slice(0, 200)}`);
+  else if (!sawRerun) fail(`改了 .gd 没触发重跑（15 秒内）：${buf.slice(-200)}`);
+  else ok("监听起来了，改 .gd 触发了一次重新运行");
 }
 
 console.log("");

@@ -58,12 +58,7 @@ export type TypeRef =
   | { kind: "array"; item: TypeRef }
   | { kind: "variant" };
 
-/**
- * 能用「类型名.静态成员」取值的内建类型 → 运行时里产出该成员的函数名。
- * 实测 `Vector2.UP` 合法（常量值），`String.chr(65)` 合法（静态方法调用），
- * 而裸 `Vector2` / `String` 当值是 `Identifier "..." not declared`。
- * 语义分析据此放行属性基与被调属性，emitter 据此发运行时调用。
- */
+/** 能用「类型名.静态成员」取值的内建类型 → 运行时里产出该成员的函数名；语义分析据此放行属性基与被调属性，emitter 据此发运行时调用。 */
 const STATIC_MEMBER_FNS: Record<string, string> = {
   Vector2: "vector2Const",
   Vector3: "vector3Const",

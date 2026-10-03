@@ -1,23 +1,7 @@
-/**
- * #14 的原生 CST：把 FFI 交回来的**节点表**物化成 `./cst` 那套普通记录。
- *
- * 为什么要这一层：静态 exe 里的解析器是 libtree-sitter（过 `--ffi`），而 FFI 边界上只有
- * number / bool / string / Uint8Array —— `pointer` 没有对应的 TS 声明形状（S220 量到 SC5003），
- * 所以树留在 C 侧一次拍平成定长 int32 记录，这里按记录重建。
- *
- * 为什么交回的是**记录**而不是类实例：`SC2002 record shapes must match exactly or width-coerce …
- * 请建一个字面量`（S231 实测：类实例喂不进记录形参的接口边界）。
- *
- * 关键的一条换算：原生给的 `start/end` 是 **UTF-8 字节**偏移，而 `lower` 一路按 JS 下标切字符串
- * （S222：同一批语料里 8,637 个节点两者不相等），所以每文件先建一张 byte→JS 索引表。
- */
+/** 原生 CST：把 FFI 交回来的节点表物化成 `./cst` 那套普通记录。 */
 import type { CsNode, CsPoint, CsTree } from "./cst";
 
-/**
- * 一记录七个 int32：depth、kind 名在名字池里的偏移、startByte、endByte、isNamed、hasError、
- * **本节点在父亲那里的字段名**偏移（0 = 池首那个空串，意思是没有字段名）。
- * 字段名那一格给 `lower` 的 `field()` 用：孩子在父亲那里叫什么，挂在孩子自己身上。
- */
+/** 一条记录七个 int32：depth、kind 名在名字池里的偏移、startByte、endByte、isNamed、hasError、本节点在父亲那里的字段名偏移（0 = 池首那个空串，即没有字段名）。 */
 const REC = 7;
 
 export type NodeTable = {
@@ -42,10 +26,7 @@ function nameAt(table: NodeTable, at: number): string {
   return s;
 }
 
-/**
- * byte→JS 码元下标表：线性扫一遍源码，每个字符把自己占的那几个字节都指向它的 JS 起始下标
- * （落在多字节序列中间的字节退化到该字符开头，不让 `slice` 崩）。
- */
+/** byte→JS 码元下标表：每个字节指向它所属字符的 JS 起始下标，落在多字节序列中间的字节退化到该字符开头。 */
 function byteToJsIndex(src: string): Int32Array {
   let total = 0;
   for (let i = 0; i < src.length; i++) total += utf8LenOfCodeUnit(src.charCodeAt(i) as number);
@@ -88,10 +69,7 @@ function childRowsOf(rec: Int32Array): number[][] {
   return out;
 }
 
-/**
- * 交回 `CsTree`：普通记录、每节点一个对象，无方法也无父指针（`lower` 从来没用过 `.parent`，S231）。
- * `startPosition` 的列按 **JS 码元**算 —— 与 web-tree-sitter 同形，这一条是 `test:facade` 对拍出来的。
- */
+/** 交回 `CsTree`：每节点一个普通记录对象，无方法也无父指针；`startPosition` 的列按 JS 码元算。 */
 export function buildCsTree(table: NodeTable): CsTree {
   const rec = table.rec;
   const total = rec.length / REC;

@@ -1,10 +1,6 @@
 /**
- * #14 的门面等价性检查（`pnpm test:facade`）：把 wasm 那侧的树**拍平**成 FFI 会交回的那张节点表
- * （前序 + depth + UTF-8 字节区间 + `\0` 分隔的 kind 名池），再让 `src/parse/native.ts` 的门面把它重建回来，
- * 与 wasm 的原树逐节点比 `type / text / children / namedChildren / isNamed / hasError / startIndex / endIndex`。
- *
- * 为什么先在 node 侧比：门面的两处真风险跟 C 无关 —— ① 字节区间换算回 JS 下标（S222 量到 8637 个节点两者不等），
- * ② 由「前序 + depth」复原父子关系。这两处过了，接上 FFI 只是换一张表的来源；过不了就先别碰解析器。
+ * 门面等价性检查：把 wasm 那侧的树拍平成 FFI 会交回的那张节点表，再让 `src/parse/native.ts` 的门面重建回来，逐节点比字段。
+ * 用法：pnpm test:facade
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -68,7 +64,7 @@ function tableFromWasm(src: string, root: WasmNode): NodeTable {
 
 type Diff = { file: string; path: string; field: string; a: string; b: string };
 
-/** A/B 两条路都是 `CsNode` 记录，比的是 `lower` 真会读的每一格（S228 数出来的那份成员清单）。 */
+/** A/B 两条路都是 `CsNode` 记录，比的是 `lower` 真会读的每一格。 */
 function compare(file: string, a: CsNode, b: CsNode, path: string): Diff | null {
   const pairs: Array<[string, unknown, unknown]> = [
     ["type", a.type, b.type],

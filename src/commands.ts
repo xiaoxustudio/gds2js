@@ -1,16 +1,10 @@
-/**
- * CLI 的命令表（#14 第②步：这些 spec 取代了 commander）。
- * 与 `src/cli.ts` 分开放，是因为 cli.ts 已经够长，而这张表是纯数据。
- *
- * 键名与旧 commander 的 `opts` 保持同一套 camel 名（`runtimeMode` / `keepBundle` / `host` …），
- * `resolveCtx` 一行都不用改；`--no-x` 那几条把对应键置 `false`，也和原来一致。
- */
+/** CLI 的命令表：每条命令的位置参数与旗标形状（纯数据）。 */
 import type { FlagSpec } from "./argv";
 
 const RUNTIME_MODE = "运行时打包模式：import(默认) | local(旁挂 standalone) | single(内联自包含)";
 const RES_ROOT = { key: "resRoot", long: "--res-root", metavar: "dir", help: "res:// 工程根（默认向上找 project.godot）" };
 
-/** 每条命令都带的公共选项（原来挂在 `withCommon` 上）。 */
+/** 每条命令都带的公共选项。 */
 export function commonFlags(): FlagSpec[] {
   return [
     { key: "runtime", long: "--runtime", metavar: "spec", help: "运行时的 import 说明符（默认 gds2js/runtime；自带家目录的 exe 默认指家目录里那份 product.mjs）" },

@@ -30,7 +30,7 @@ export function asColor(v: Variant): GColor | null {
   return v.t === Tag.OBJECT && v.v instanceof GColor ? (v.v as GColor) : null;
 }
 
-/** 数值实参：int/float 收成 number，其余响亮报错（实测 `Color("1",2,3)` 是解析期类型错）。 */
+/** 数值实参：int/float 收成 number，其余响亮报错。 */
 function numArg(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return v.v as number;
@@ -44,10 +44,10 @@ function strArg(v: Variant | undefined, who: string): string {
   throw new UnsupportedError("color-arg", `Color.${who} 需要字符串实参，收到 ${tagName(v.t)}`);
 }
 
-/** 解析失败时的兜底色：`Color(String)` 与 `Color.html` 都用 (0,0,0,1)（实测 `Color("notacolor")`）。 */
+/** 解析失败时的兜底色：`Color(String)` 与 `Color.html` 都用 (0,0,0,1)。 */
 const ZERO_COLOR = (): Variant => color(0, 0, 0, 1);
 
-/** 名字查表用的键：下划线可有可无、大小写不敏感（实测 "rebeccapurple" / "REBECCA_PURPLE" 同中）。 */
+/** 名字查表用的键：下划线可有可无、大小写不敏感。 */
 function namedOf(s: string): number | undefined {
   const key = s.toLowerCase().replace(/_/g, "");
   for (const name in COLOR_NAMED) {
@@ -56,18 +56,13 @@ function namedOf(s: string): number | undefined {
   return undefined;
 }
 
-/** 名字表里的 0xAARRGGBB → Color（实测常量面与 Color.from_string 完全一致）。 */
+/** 名字表里的 0xAARRGGBB → Color。 */
 function packedColor(packed: number): Variant {
   const b = (i: number) => Number((BigInt(packed) >> BigInt(i * 8)) & 0xffn);
   return color(b(2) / 255, b(1) / 255, b(0) / 255, b(3) / 255);
 }
 
-/**
- * 十六进制解析：`#` 可省，长度 3（`f00`→`ff0000`）/ 6（RGB）/ 8（RGBA，**alpha 在后**）三种，
- * 其余长度或非法字符一律走兜底（实测 `Color("0x80ff0000")` → `(0.0, 0.0, 0.0, 1.0)`）。
- * `names` 为 false 时不查名字表 —— 这是 `Color.html` 与 `Color(String)` 的唯一区别
- * （实测 `Color.html("red")` → `(0.0, 0.0, 0.0, 1.0)`，而 `Color("red")` → `(1.0, 0.0, 0.0, 1.0)`）。
- */
+/** 十六进制解析：`#` 可省，长度 3（`f00`→`ff0000`）/ 6（RGB）/ 8（RGBA，**alpha 在后**），其余长度或非法字符给 null；`names` 为 false 时不查名字表 —— 这是 `Color.html` 与 `Color(String)` 的唯一区别。 */
 function parseColor(s: string, names: boolean): Variant | null {
   if (names) {
     const packed = namedOf(s);
@@ -99,13 +94,7 @@ export function colorNew(args: Variant[]): Variant {
     if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
       return parseColor(a.v as string, true) ?? ZERO_COLOR();
     }
-    /**
-     * 单参收 int = **packed RGBA**（`tmp/f76` 十二个打点 + `tmp/f75 d-slot-*` 的 Color 槽同一套）：
-     * r 取 24..31、g 16..23、b 8..15、a 0..7，各除 255，先按 2³² 取模 ——
-     * `Color(123456789)`（0x075BCD15）→ `(0.0275, 0.3569, 0.8039, 0.0824)`、
-     * `Color(-1)` → 全 1、`Color(4294967296)` → 全 0、`Color(256)` → `(0.0, 0.0, 0.0039, 0.0)`。
-     * float 那一格实测是拒（`Color` 槽吃 float 也是解析期错），不顺手接。
-     */
+    // 单参收 int = **packed RGBA**：r/g/b/a 各占一字节，先按 2³² 取模；float 那一形 Godot 解析期就拒，不顺手接。
     if (a.t === Tag.INT) return packedRgba(intToBig(a.v as IntPayload));
     throw new UnsupportedError("color-arg", `Color() 单参只收 Color / 字符串 / int，收到 ${tagName(a.t)}`);
   }
@@ -126,12 +115,7 @@ export function colorNew(args: Variant[]): Variant {
   );
 }
 
-/**
- * **Color 槽**（变量初值 / 后续赋值 / 字段 / 定型容器元素与字典键值 / 形参默认值）收什么：
- * `tmp/f77` 与 `tmp/f79` 逐形量到 —— 同型拷一份、int 走 packed RGBA、String 走色名与 hex；
- * `bool` / `float` / `StringName` / 向量全都进不来（`v-color-bool` / `v-color-float` / `v-color-strname`
- * 各两句解析期拒）。量不到的形状给 null，让调用方按自己的口径处理（容器丢、槽位响亮报）。
- */
+/** **Color 槽**（变量初值 / 后续赋值 / 字段 / 定型容器元素与字典键值 / 形参默认值）收什么：同型拷一份、int 走 packed RGBA、String 走色名与 hex；装不下的形状给 null，由调用方按自己的口径处理。 */
 export function tryColorSlot(v: Variant): Variant | null {
   const c = asColor(v);
   if (c !== null) return color(c.r, c.g, c.b, c.a);
@@ -147,11 +131,7 @@ export function toColor(v: Variant): Variant {
   throw new UnsupportedError("color-slot", `Color 槽只收 Color / int / String，收到 ${tagName(v.t)}`);
 }
 
-/**
- * `Color.` 上的静态成员：常量名（`Color.RED`、`Color.TRANSPARENT`）与三个静态函数
- * （`html` / `from_string` / `from_hsv`）。实测**没有** `CLAMPED`、`is_zero_approx` 这类，
- * 名单外的名字一律响亮报缺。
- */
+/** `Color.` 上的静态成员：常量名（`Color.RED`、`Color.TRANSPARENT`）与 `html` / `from_string` / `from_hsv` 三个静态函数，名单外响亮报缺。 */
 export function colorStatic(name: string, args: Variant[] = []): Variant {
   if (args.length > 0 || name === "html" || name === "from_string" || name === "from_hsv") {
     switch (name) {
@@ -219,7 +199,7 @@ function toHsv(c: GColor): [number, number, number] {
   return [h, s, max];
 }
 
-/** HSV → RGB（Godot `Color::from_hsv`）。实测 `from_hsv(1,1,1)` → `(1,0,0)`：扇区号要按 6 取模。 */
+/** HSV → RGB（Godot `Color::from_hsv`）：扇区号要按 6 取模。 */
 function fromHsv(h: number, s: number, v: number, a: number): Variant {
   const hh = mul(h, 6);
   const i = Math.floor(hh);
@@ -257,21 +237,14 @@ function hexMag(v: number): string {
   return out;
 }
 
-/**
- * `x.toString(16)` 的等价实现 —— 整数的 `toString(radix)` 在静态编译目标上没有 lowering（实测 scriptc）。
- * 口径照 JS 原样：0–255 给两位（`0` → `"00"`、`255` → `"ff"`，正是 `padStart(2, "0")` 的效果），
- * 负数给符号 + 幅值（`byteOf(NaN)` 那格的 -2147483648 → `"-80000000"`，原来 padStart 对它就是不动）。
- */
+/** `x.toString(16)` 的等价实现 —— 整数的 `toString(radix)` 在静态编译目标上没有 lowering。口径照 JS 原样：0–255 给两位，负数给符号 + 幅值。 */
 function hexByte(v: number): string {
   if (v < 0) return `-${hexMag(-v)}`;
   if (v > 255) return hexMag(v);
   return HEX_DIGITS.charAt((v >> 4) & 0xf) + HEX_DIGITS.charAt(v & 0xf);
 }
 
-/**
- * 字节属性读（`c.r8`）。实测口径：`round(分量*255)` 后夹到 0..255，
- * 而 **nan 给 -2147483648**（Godot 那边过了一次 int32 转换）、`inf` → 255、`-inf` → 0。
- */
+/** 字节属性读（`c.r8`）：`round(分量*255)` 后夹到 0..255，而 **nan 给 -2147483648**、`inf` → 255、`-inf` → 0。 */
 function byteOf(n: number): number {
   if (Number.isNaN(n)) return -2147483648;
   const scaled = r32(n * 255);
@@ -294,20 +267,14 @@ function colArg(args: Variant[], i: number, who: string): GColor {
   return v;
 }
 
-/** 打包成 int32 再按无符号读回（实测 `Color(1,1,1,1).to_rgba32()` → 4294967295，是 64 位 int）。 */
+/** 打包成 int32 再按无符号读回（交出去的是 64 位 int）。 */
 const pack32 = (bytes: number[]): Variant => {
   let out = 0n;
   for (const b of bytes) out = (out << 8n) | BigInt(b & 0xff);
   return V.int(out);
 };
 
-/**
- * Color 的方法面。**实测存在**：`to_html([with_alpha])`、`to_rgba32`、`to_argb32`、`to_abgr32`、
- * `get_luminance`、`lightened`、`darkened`、`inverted`、`lerp`、`is_equal_approx`。
- * **实测不存在**（问到即报缺，别按文档印象实现）：`clamped`、`is_finite`、`is_zero_approx`、`mix`、
- * `blend_rgb`、`to_rgba8`/`to_argb8`/`to_abgr8`/`to_bgra8`、`to_bgra32`、`get_hsv`、`snap`、
- * `Color.from_rgba32`。
- */
+/** Color 的方法面：Godot 里没有的成员（下面那一串 case）一律响亮报缺，别按文档印象实现。 */
 export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   switch (name) {
     case "to_html": {
@@ -390,7 +357,7 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   }
 }
 
-/** 实测 Color 没有大小顺序（`c1 < c2` 是 Parse Error），所以比较一律响亮报缺。 */
+/** Color 没有大小顺序（`c1 < c2` 在 Godot 是 Parse Error），所以比较一律响亮报缺。 */
 export function colorCmp(): never {
   throw new UnsupportedError("color-cmp", "Color 没有大小比较（实测 `<`/`>` 在 Godot 是 Parse Error）");
 }
@@ -436,7 +403,7 @@ function withChannel(c: GColor, slot: ColorSlot, value: number): Variant {
   );
 }
 
-/** 读分量：`c[0]`/`c["r"]` 给 float32、`c["h"]` 给派生值、`c["r8"]` 给 int（实测 `c["h"]` 可读）。 */
+/** 读分量：`c[0]`/`c["r"]` 给 float32、`c["h"]` 给派生值、`c["r8"]` 给 int。 */
 export function colorRead(c: GColor, key: Variant, via: "prop" | "index" | "read"): Variant {
   const slot = colorSlot(key);
   if (slot === null) vecFailKey(key, via, "Color");
@@ -450,16 +417,12 @@ export function colorRead(c: GColor, key: Variant, via: "prop" | "index" | "read
   return V.int(bytes[s - 7] as number);
 }
 
-/** 下标读（实测 `c[4]` → `Invalid access of index '4' on a base object of type: 'Color'.`）。 */
+/** 下标读：Color 只有 0..3 那一形合法，其余报 `Invalid access of index …`。 */
 export function colorReadIndex(c: GColor, key: Variant): Variant {
   return colorRead(c, key, "read");
 }
 
-/**
- * 写分量（实测 r/g/b/a **不做夹取**：`c.r = 2.7` 存的就是 2.7；int 实参可以，String 实参报错）。
- * h/s/v 的写法是「转 HSV → 换那一格 → 转回 RGB」（实测 `c.h = 0.5` 把 (0.1,0.2,0.3) 改成
- * (0.1, 0.3, 0.3)，`c.v = 0.5` 改成 (0.1667, 0.3333, 0.5)）；r8 写的是字节（实测 `c.r8 = 128` → 0.502）。
- */
+/** 写分量：r/g/b/a **不做夹取**（`c.r = 2.7` 存的就是 2.7），实参只收整数族；h/s/v 是「转 HSV → 换那一格 → 转回 RGB」，r8 一族写的是字节。 */
 export function colorWrite(c: GColor, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = colorSlot(key);
   if (slot === null) vecFailKey(key, via, "Color", value);

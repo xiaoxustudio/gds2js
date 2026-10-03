@@ -67,7 +67,7 @@ gds2js export main.gd -o app.exe --pack scriptc                  # 换 scriptc�
 | `--pack` | 走法 | 本机实测 |
 | --- | --- | --- |
 | `node`（默认） | 编译成**模块树** → `sea-config.json`（`mainFormat: "module"` + `useVfs` + 全部模块作 assets）→ `<node> --build-sea=cfg` | **通**：产物 ~100 MB，跑 `examples/multi` 输出**逐字节一致**、stderr 干净；运行期抛错的工程**退 1 且报错可见**。不经过 bundler |
-| `scriptc` | 产物 + `src/runtime/**`、`src/host.ts` 的 **TS 源码**铺成一棵树（项目树只铺**一份**，每个模块的 import 按自己那一层的深度算，于是只编出一张 runtime 图、一份类身份）→ `scriptc build <入口.mts> -o <exe> --strip`（`SCRIPTC_BIN` 可指路） | **通**：产物 1.5~1.6 MB，`pnpm test:scriptc` 全量 **133 例里 132 逐字节对 Godot golden**（单文件 + 9 个项目树用例走真命令 `export --pack scriptc`）；唯一红的是 `161-pack-compress` —— 静态宿主没有 zlib/zstd，`compress()/decompress()` 的 mode 1/2/3 照口径**响亮拒**（不发近似值），要那一格就用 `--pack node` |
+| `scriptc` | 产物 + `src/runtime/**`、`src/host.ts` 的 **TS 源码**铺成一棵树（项目树只铺**一份**，每个模块的 import 按自己那一层的深度算，于是只编出一张 runtime 图、一份类身份）→ `scriptc build <入口.mts> -o <exe> --strip`（`SCRIPTC_BIN` 可指路） | **通**：产物 1.5~1.6 MB，`pnpm test:scriptc --all` 全量 **142 例里 141 逐字节对 Godot golden**（单文件 + 项目树用例走真命令 `export --pack scriptc`）；唯一红的是 `161-pack-compress` —— 静态宿主没有 zlib/zstd，`compress()/decompress()` 的 mode 1/2/3 照口径**响亮拒**（不发近似值），要那一格就用 `--pack node` |
 
 
 ## 不带 node 的 `gds2js.exe`（原生 CLI）
@@ -108,6 +108,8 @@ exe 里能做什么、什么会响亮拒：
 - 解析器走 **libtree-sitter over FFI**，不是 web-tree-sitter 的 wasm：wasm 胶水那几格（`as any`、
   `Parser.init({locateFile})`）在 `--dynamic` 下依然是 blocker。两条路出的树逐节点等价由 `pnpm test:facade` 守着。
 
+
+## 运行产物
 
 产物带可擦除的 TypeScript 标注（`: Promise<void>` 等），文件名后缀是 **`.mts`**，用 Node 原生类型擦除直接跑：
 

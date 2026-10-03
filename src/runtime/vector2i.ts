@@ -16,7 +16,7 @@ registerVec2iParts((o: object): [number, number] | null => (o instanceof GVector
 const U32 = 4294967296n;
 const S32 = 2147483648n;
 
-/** 先向零截断（float 实参），再按 int64 精确取模回绕到 int32（实测 p9/p10/n2/n4/m12）。 */
+/** 先向零截断（float 实参），再按 int64 精确取模回绕到 int32。 */
 export function wrap32(v: number | bigint): number {
   const b = typeof v === "bigint" ? v : BigInt(Math.trunc(v));
   const m = ((b % U32) + U32) % U32;
@@ -29,7 +29,7 @@ const isub = (a: number, b: number) => wrap32(BigInt(a) - BigInt(b));
 const imul = (a: number, b: number) => wrap32(BigInt(a) * BigInt(b));
 const idiv = (a: number, b: number) => wrap32(BigInt(a) / BigInt(b));
 const imod = (a: number, b: number) => wrap32(BigInt(a) % BigInt(b));
-/** 不回绕的那两条（实测 m11：length_squared 给的是精确 int64） */
+/** 不回绕的那一条：`length_squared` 给的是精确 int64。 */
 const sq64 = (a: number, b: number) => BigInt(a) * BigInt(a) + BigInt(b) * BigInt(b);
 
 export function vector2i(x: number | bigint, y: number | bigint): Variant {
@@ -40,8 +40,7 @@ export function asVec2i(v: Variant): GVector2i | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector2i ? (v.v as GVector2i) : null;
 }
 
-/** 实参收成 int64：int 原样、float 向零截断、Vector2/Vector2i 取分量，其余响亮报错。
- *  实测 `w.x = true` 是运行时报错（bool 不收），所以这里也不能放过 bool。 */
+/** 实参收成 int64：int 原样、float 向零截断，其余（包括 bool）响亮报错。 */
 function intArg(v: Variant | undefined, who: string): number | bigint {
   if (v === undefined) throw new UnsupportedError("vector2i-arity", `Vector2i.${who} 缺少实参`);
   if (v.t === Tag.INT) return intToBig(v.v as IntPayload);
@@ -55,7 +54,7 @@ function intArg(v: Variant | undefined, who: string): number | bigint {
   throw new UnsupportedError("vector2i-arg", `Vector2i.${who} 需要整数族实参，收到 ${tagName(v.t)}`);
 }
 
-/** `Vector2i()` → (0, 0)；一个实参收 Vector2 / Vector2i（逐分量截断，实测 m1）；两个实参是数值。 */
+/** `Vector2i()` → (0, 0)；一个实参收 Vector2 / Vector2i（逐分量截断）；两个实参是数值。 */
 export function vector2iNew(args: Variant[]): Variant {
   if (args.length === 0) return vector2i(0, 0);
   if (args.length === 1) {
@@ -72,18 +71,12 @@ export function vector2iNew(args: Variant[]): Variant {
   return vector2i(intArg(args[0], "Vector2i"), intArg(args[1], "Vector2i"));
 }
 
-/**
- * 声明成 `Vector2i` 的槽（变量初值、后续赋值、字段）：`var v: Vector2i = Vector2(1.7, -2.9)`
- * 实测给 `(1, -2)` 且 `typeof` 仍是 6（`tmp/f69 w01` / `w03`，局部与字段同式）—— 逐分量向零截断。
- * 这条转换缺席时槽里存的就是 Vector2，于是打印与 `typeof` 一起错（我们旧行为是 `(1.7, -2.9)` / 5），
- * 那一格与 Vector3/Vector3i 同族，记在 S181。`Vector3 → Vector2i` 实测是解析期拒，走 `vector2iNew` 的报缺。
- */
+/** 声明成 `Vector2i` 的槽（变量初值、后续赋值、字段）：逐分量向零截断。 */
 export function toVec2i(v: Variant): Variant {
   return vector2iNew([v]);
 }
 
-/** 常量表：实测有 ONE/ZERO/LEFT/RIGHT/UP/DOWN/MAX/MIN，**没有 INF**（`Vector2i.INF` 是 Parse Error）。
- *  `UP` 是 (0, -1)，与 Vector2 同向（2D 的 y 轴朝下）。 */
+/** 常量表：有 ONE/ZERO/LEFT/RIGHT/UP/DOWN/MAX/MIN，**没有 INF**；`UP` 是 (0, -1)，与 Vector2 同向（2D 的 y 轴朝下）。 */
 const VEC2I_CONST: Record<string, [number, number]> = {
   ZERO: [0, 0],
   ONE: [1, 1],
@@ -119,11 +112,7 @@ function arity(args: Variant[], n: number, who: string): void {
   }
 }
 
-/**
- * Vector2i 的方法面。实测**不存在**的（问到即报缺，别按 Vector2 的表照抄）：
- * `is_normalized`、`is_equal_approx`、`normalized`、`direction_to`、`move_toward`、`floor`/`ceil`/`round`、
- * `clampf`/`snappedf`/`ceildiv`/`floordiv`/`posmod`/`signwrapping`。
- */
+/** Vector2i 的方法面：Godot 里没有的成员（下面那一串 case）一律响亮报缺，别按 Vector2 的表照抄。 */
 export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Variant {
   switch (name) {
     case "abs":
@@ -205,13 +194,13 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
   }
 }
 
-/** 字典序（先 x 再 y），与 Vector2/Vector3 同一口径（实测 n25）。 */
+/** 字典序（先 x 再 y），与 Vector2/Vector3 同一口径。 */
 export function vec2iCmp(a: GVector2i, b: GVector2i): number {
   if (a.x !== b.x) return a.x < b.x ? -1 : 1;
   return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
 }
 
-/** 键 → 槽位：0/1 与 "x"/"y"（实测 `w["y"]` 读到 2；`w["z"]` 报 `Invalid access to property or key`）。 */
+/** 键 → 槽位：0/1 与 `"x"`/`"y"` 都认。 */
 function vec2iSlot(key: Variant): 0 | 1 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -224,17 +213,14 @@ function vec2iSlot(key: Variant): 0 | 1 | null {
   return null;
 }
 
-/** 下标读：实测越界与负下标都是 `Invalid access of index '5' on a base object of type: 'Vector2i'.` */
+/** 下标读：越界与负下标都报 `Invalid access of index …`。 */
 export function vec2iReadIndex(vec: GVector2i, key: Variant): Variant {
   const slot = vec2iSlot(key);
   if (slot === null) vecFailKey(key, "read", "Vector2i");
   return V.int(slot === 0 ? vec.x : vec.y);
 }
 
-/**
- * 写分量：实参必须是整数族（实测 bool 报错），float **向零截断**，超出 int32 回绕
- * （`w.x = 2.7` → 2、`w.x = -0.9` → 0、`w.x = 2147483648` → -2147483648）。
- */
+/** 写分量：实参必须是整数族（bool 报错），float **向零截断**，超出 int32 回绕。 */
 export function vec2iWrite(vec: GVector2i, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vec2iSlot(key);
   if (slot === null) vecFailKey(key, via, "Vector2i", value);
@@ -244,8 +230,7 @@ export function vec2iWrite(vec: GVector2i, key: Variant, value: Variant, via: "p
   return vector2i(vec.x, n);
 }
 
-/** 逐分量的整数除/取模（向零截断、符号跟被除数、回绕 int32）。
- *  除零实测文本：`Division by zero error in operator '/'.` 与 `Modulo by zero error in operator '%'.` */
+/** 逐分量的整数除（向零截断、符号跟被除数、回绕 int32），除零报运行错。 */
 export function div32(x: number, y: number): number {
   if (y === 0) throw new GodotRuntimeError("vector2i-div-zero", "Division by zero error in operator '/'.");
   return idiv(x, y);
@@ -261,7 +246,7 @@ export const add32 = iadd;
 export const sub32 = isub;
 export const mul32 = imul;
 
-/** 掺 float 标量会升级成 Vector2（实测 p14：`/4.0` → (1.5, 1.5)、`*0.5` → (3.0, 3.0)）。 */
+/** 掺 float 标量会升级成 Vector2。 */
 export function vec2iToFloat(a: GVector2i, k: number, op: "mul" | "div"): Variant {
   return op === "mul" ? vector2(a.x * k, a.y * k) : vector2(a.x / k, a.y / k);
 }

@@ -1,16 +1,7 @@
-/**
- * 自带的 argv 解析（#14 第②步）。
- *
- * 为什么不用 commander：`--npm-static commander` 编得出 exe 但跑不动 ——
- * `commander/lib/command.js:1608` 那行 `` `command:${this.name()}` `` 撞 `SC1090`
- * （重载返回类型里压着对象分支，模板串的转换没有 lowering），而那行在 `parseOptions` 的**主路**上，
- * 每条命令都过、换 API 绕不开（ROADMAP S225 量死）。CLI 要编成不带 node 的原生 exe，这层就必须自己的。
- *
- * 形状上刻意只用「记录 + 数组」：类实例喂不进记录形参、联合记录不能展开（S231 / S233 各撞过一次）。
- */
+/** 自带的 argv 解析：把 `argv` 按命令表解析成位置参数 + 选项表。 */
 
 export type FlagSpec = {
-  /** `opts` 里的键（camel 名，与 commander 给的形状一致） */
+  /** `opts` 里的键（camel 名） */
   key: string;
   /** 长选项，含 `--`；以 `no-` 开头的形是取反：不取值，把 `key` 置 false */
   long: string;
@@ -18,7 +9,7 @@ export type FlagSpec = {
   short?: string;
   /** 给了就说明这个选项要值（`--x v` 或 `--x=v`） */
   metavar?: string;
-  /** 缺省值（commander 的第三参语义） */
+  /** 缺省值 */
   defaultTo?: string;
   /** 帮助里那一行的说明 */
   help: string;
@@ -45,8 +36,7 @@ export type Stop = { help: boolean; text: string };
 
 function camel(long: string): string {
   const bare = long.startsWith("--no-") ? long.slice(5) : long.slice(2);
-  // 手写切段而不走 regex 替换：替换回调的那个捕获参数在静态目标上是
-  // 「runtime-optional capture 的计算读取」（实测 SC1090）。
+  // 手写切段而不走 regex 替换：替换回调的捕获参数在静态目标上没有 lowering。
   const parts = bare.split("-");
   let out = parts[0] as string;
   for (let i = 1; i < parts.length; i++) {
@@ -76,7 +66,7 @@ export function helpText(spec: CliSpec, cmd: CommandSpec | null): string {
   return `${spec.name} ${cmd.name} ${cmd.args.map((a) => `<${a}>`).join(" ")} - ${cmd.description}\n\n用法: ${spec.name} ${cmd.name} ${cmd.args.map((a) => `<${a}>`).join(" ")} [选项]\n\n选项:\n${flagHelp(cmd.flags)}\n`;
 }
 
-/** 找 `--x=v` 里的 `=`；没有就返回 -1。`charAt` 而不是 `tok[i]`：下标读取的类型带 undefined，静态侧算「runtime-optional capture 的计算读取」（SC1090） */
+/** 找 `--x=v` 里的 `=`；没有就返回 -1。用 `charAt` 而不是 `tok[i]`：下标读取的类型带 undefined，静态目标上算运行期可选捕获 */
 function eqAt(tok: string): number {
   for (let i = 0; i < tok.length; i++) {
     if (tok.charAt(i) === "=") return i;
@@ -97,10 +87,7 @@ function pick(flags: FlagSpec[], tok: string): FlagSpec | null {
   return null;
 }
 
-/**
- * 解析一条命令行的参数部分。返回 `stop` 表示要先印帮助再退出（`--help` / 缺参数）。
- * 未知选项与缺位置参数的行为照 commander 的口径：**报错 + 退出码 1**。
- */
+/** 解析一条命令行的参数部分。返回 `stop` 表示要先印帮助再退出（`--help` / 缺参数）；未知选项与缺位置参数都是报错 + 退出码 1。 */
 export function runCli(spec: CliSpec, argv: string[]): Stop | null {
   if (argv.length === 0) return { help: true, text: helpText(spec, null) };
   const want = argv[0];
