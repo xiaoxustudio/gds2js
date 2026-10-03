@@ -424,7 +424,7 @@ function checkShift(a: Variant, b: Variant, op: string): [IntPayload, IntPayload
 export const strOps = {
   length: strLength,
   at: strAt,
-  substr: strSubstr,
+  substr: (s: string, from: number, len: number): string => strSubstr(s, from, len),
   format: strFormat,
   float: strFloat,
 };

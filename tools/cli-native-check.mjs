@@ -251,7 +251,7 @@ console.log("⑤ 能力边界要响亮拒");
   // 产物撞未实现：两支 CLI 必须报同一行，而且理由不能被「产物退出码 N」吃掉
   // —— 原生那支是起子进程跑产物的，产物的正文得从子进程 stderr 接回来才算报全。
   const gd = join(dir, "uns.gd");
-  writeFileSync(gd, 'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("hello".count("l"))\n\tquit()\n', "utf8");
+  writeFileSync(gd, 'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".pad_zeros(3))\n\tquit()\n', "utf8");
   const nRun = cliNode(["run", gd], ROOT);
   const xRun = cliExe(["run", gd], ROOT);
   const hits = (s) => s.split("\n").filter((l) => l.includes("runtime error")).length;

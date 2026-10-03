@@ -853,12 +853,19 @@ export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: b
 }
 
 /** GDScript String 是 UTF-32、length 数码点，JS 是 UTF-16。 */
+/** 码点数组：`for…of` 走的是码点序，而 `[...s]` 与 `Array.from(s)` 在 scriptc 都没有 lowering。 */
+function codepoints(s: string): string[] {
+  const out: string[] = [];
+  for (const ch of s) out.push(ch);
+  return out;
+}
+
 export function strLength(s: string): number {
-  return [...s].length;
+  return codepoints(s).length;
 }
 
 export function strAt(s: string, i: number): string {
-  const chars = [...s];
+  const chars = codepoints(s);
   const c = chars[i];
   if (c === undefined) {
     throw new GodotRuntimeError("string-index", `字符串索引越界: ${i}`);
@@ -868,7 +875,7 @@ export function strAt(s: string, i: number): string {
 
 /** `substr(from, len = -1)`：`from` 为负或越过串尾都给空串，`len` 省略或为负表示截到串尾 —— JS 原生 slice 两条都不对。 */
 export function strSubstr(s: string, from: number, len = -1): string {
-  const chars = [...s];
+  const chars = codepoints(s);
   if (from < 0 || from >= chars.length) return "";
   return (len < 0 ? chars.slice(from) : chars.slice(from, from + len)).join("");
 }
@@ -879,7 +886,7 @@ export function strEdge(s: string, n: number, side: "left" | "right"): string {
   const k = n < 0 ? len + n : n;
   if (k <= 0) return "";
   if (k >= len) return s;
-  const chars = [...s];
+  const chars = codepoints(s);
   return (side === "left" ? chars.slice(0, k) : chars.slice(len - k)).join("");
 }
 
@@ -1122,6 +1129,176 @@ export function strCapitalize(s: string): string {
     out.push(strCase(strAt(w, 0), "upper") + strSubstr(w, 1));
   }
   return out.join(" ");
+}
+
+/** 两端裁掉码点 ≤ 0x20 的空白（高位空白如 NBSP 不裁，实测 `" a "` 才裁）。 */
+export function strStripEdges(s: string): string {
+  const cs = codepoints(s);
+  let a = 0;
+  let b = cs.length;
+  while (a < b && (cs[a] as string).codePointAt(0)! <= 0x20) a++;
+  while (b > a && (cs[b - 1] as string).codePointAt(0)! <= 0x20) b--;
+  return cs.slice(a, b).join("");
+}
+
+/** `get_slice`：切段取第 n 段。找不到分隔符时整串就是那一段（实测任意 n ≥ 0 都回原串），负数与越界回空。 */
+export function strGetSlice(s: string, delim: string, n: number): string {
+  if (n < 0 || delim === "") return "";
+  const parts = strSplit(s, delim, true);
+  if (parts.length === 1) return s;
+  return parts[n] ?? "";
+}
+
+/** `insert`：负位置原样返回，超出末尾就接在尾巴上。 */
+export function strInsertAt(s: string, pos: number, what: string): string {
+  const cs = codepoints(s);
+  if (pos < 0) return s;
+  const at = pos > cs.length ? cs.length : pos;
+  return cs.slice(0, at).join("") + what + cs.slice(at).join("");
+}
+
+/** `erase`：负起点给空串（Godot 那边另有一句引擎 ERROR），长度 0 或起点越界都不动。 */
+export function strEraseAt(s: string, pos: number, len: number): string {
+  const cs = codepoints(s);
+  if (pos < 0) return "";
+  if (len <= 0 || pos >= cs.length) return s;
+  const end = pos + len > cs.length ? cs.length : pos + len;
+  return cs.slice(0, pos).join("") + cs.slice(end).join("");
+}
+
+export function strRepeat(s: string, n: number): string {
+  if (n <= 0) return "";
+  let out = "";
+  for (let i = 0; i < n; i++) out += s;
+  return out;
+}
+
+export function strStartsWith(s: string, pre: string): boolean {
+  const a = codepoints(s);
+  const b = codepoints(pre);
+  if (b.length > a.length) return false;
+  for (let i = 0; i < b.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+export function strEndsWith(s: string, suf: string): boolean {
+  const a = codepoints(s);
+  const b = codepoints(suf);
+  if (b.length > a.length) return false;
+  const off = a.length - b.length;
+  for (let i = 0; i < b.length; i++) if (a[off + i] !== b[i]) return false;
+  return true;
+}
+
+/** 码点下标取字符；越界与负数给 0（引擎那侧同时往 stderr 打一行 out of bounds）。 */
+export function strUnicodeAt(s: string, i: number): number {
+  const c = codepoints(s)[i];
+  if (c === undefined) return 0;
+  return c.codePointAt(0) as number;
+}
+
+/** `count` 是非重叠计数；空针子给 0，不是「长度 + 1」。 */
+export function strCount(hay: string, needle: string, insensitive = false): number {
+  if (needle === "") return 0;
+  const step = codepoints(needle).length;
+  let n = 0;
+  let at = 0;
+  for (;;) {
+    const i = strFind(hay, needle, at, false, insensitive);
+    if (i < 0) break;
+    n++;
+    at = i + step;
+  }
+  return n;
+}
+
+const BAD_FILENAME = new Set(["\"", "%", "*", "/", ":", "<", ">", "?", "\\", "|"]);
+
+/** 只按「有没有非法字符 + 是不是空串」判，Windows 保留名不管（实测 `con` 与 `..` 都是合法文件名）。 */
+export function strIsValidFilename(s: string): boolean {
+  if (s === "") return false;
+  for (const ch of codepoints(s)) if (BAD_FILENAME.has(ch)) return false;
+  return true;
+}
+
+const URI_UNRESERVED = /^(?:[A-Za-z0-9]|[-._~])$/;
+
+function hex2(b: number): string {
+  const d = "0123456789ABCDEF";
+  return d.charAt(Math.floor(b / 16)) + d.charAt(b % 16);
+}
+
+/** 保留集只有 `[A-Za-z0-9-._~]`（实测 `*` `'` `!` Tab 与 DEL 都要转），其余按 UTF-8 字节出 `%XX`（大写）。 */
+export function strUriEncode(s: string): string {
+  const enc = new TextEncoder();
+  let out = "";
+  for (const ch of codepoints(s)) {
+    if (URI_UNRESERVED.test(ch)) out += ch;
+    else for (const b of enc.encode(ch)) out += "%" + hex2(b);
+  }
+  return out;
+}
+
+const C_ESCAPES = new Map<number, string>([
+  [7, "\\a"],
+  [8, "\\b"],
+  [9, "\\t"],
+  [10, "\\n"],
+  [11, "\\v"],
+  [12, "\\f"],
+  [13, "\\r"],
+  [34, '\\"'],
+  [39, "\\'"],
+  [92, "\\\\"],
+]);
+
+/** 只转义实测到的这十个；其它控制字符与非 ASCII 一律原样出门。 */
+export function strCEscape(s: string): string {
+  let out = "";
+  for (const ch of codepoints(s)) {
+    const e = C_ESCAPES.get(ch.codePointAt(0) as number);
+    out += e === undefined ? ch : e;
+  }
+  return out;
+}
+
+const INT64_MAX_B = 9223372036854775807n;
+
+/** 只认前置的 `-`（`+101` 实测整串判 0）与可选的 `0b` 前缀；其余任何非 01 字符都把整串判成 0，超出 int64 饱和到 MAX（符号后加）。 */
+export function strBinToInt(s: string): bigint {
+  const cs = codepoints(s);
+  let i = 0;
+  let neg = false;
+  if (cs[0] === "-") {
+    neg = true;
+    i = 1;
+  }
+  if (cs[i] === "0" && (cs[i + 1] === "b" || cs[i + 1] === "B")) i += 2;
+  let acc = 0n;
+  if (i >= cs.length) return 0n;
+  for (; i < cs.length; i++) {
+    const c = cs[i];
+    if (c !== "0" && c !== "1") return 0n;
+    acc = acc * 2n + (c === "1" ? 1n : 0n);
+    if (acc > INT64_MAX_B) return INT64_MAX_B;
+  }
+  return neg ? -acc : acc;
+}
+
+/** 拆词后按目标风格拼：`to_snake_case` / `to_kebab_case` / `to_camel_case` 共用同一条拆词（与 `capitalize` 同源）。 */
+export function strCaseStyle(s: string, style: "snake" | "kebab" | "camel"): string {
+  const words = stripSpaces(separateCompoundWords(s)).split(" ").filter((w) => w !== "");
+  if (style === "camel") {
+    let out = "";
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i] as string;
+      out += i === 0 ? strCase(w, "lower") : strCase(strAt(w, 0), "upper") + strSubstr(w, 1);
+    }
+    return out;
+  }
+  const joined: string[] = [];
+  for (const w of words) joined.push(strCase(w, "lower"));
+  return joined.join(style === "snake" ? "_" : "-");
 }
 
 /** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);

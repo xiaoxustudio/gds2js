@@ -16,10 +16,24 @@ import {
   GDict,
   keyOf,
   show,
+  strBinToInt,
   strCase,
+  strCaseStyle,
   strCapitalize,
+  strCEscape,
+  strCount,
+  strEndsWith,
+  strEraseAt,
   strFind,
   strFloat,
+  strGetSlice,
+  strInsertAt,
+  strIsValidFilename,
+  strRepeat,
+  strStartsWith,
+  strStripEdges,
+  strUnicodeAt,
+  strUriEncode,
   strBuiltin,
   strFormat,
   strReplace,
@@ -607,6 +621,49 @@ eq("226", "capitalize 希腊终 s 升档", strCapitalize("\u03C2 end"), "\u03A3 
   shouldThrow("226", "replace 少一个参数就抛", () => method(s, "replace", [V.str("l")]));
   shouldThrow("226", "capitalize 不接受参数", () => method(V.str("ab"), "capitalize", [I(1)]));
 }
+
+eq("234", "get_slice 无分隔符时整串就是那一段", `${strGetSlice("abc", "/", 0)}|${strGetSlice("abc", "/", 9)}`, "abc|abc");
+eq("234", "get_slice 负数与越界给空", `[${strGetSlice("a/b/c", "/", -1)}][${strGetSlice("a/b/c", "/", 3)}]`, "[][]");
+eq("234", "get_slice 空分隔符给空", strGetSlice("a/b", "", 0), "");
+eq("234", "get_slice 多字符分隔符", strGetSlice("ab-cd-ef", "cd", 1), "-ef");
+eq("234", "insert 负位置原样、超末尾接尾", `${strInsertAt("ac", -1, "b")}|${strInsertAt("ac", 9, "b")}`, "ac|acb");
+eq("234", "erase 负起点给空串", strEraseAt("abc", -1, 1), "");
+eq("234", "erase 零长与起点越界都不动", `${strEraseAt("abc", 1, 0)}|${strEraseAt("abc", 5, 1)}`, "abc|abc");
+eq("234", "repeat 非正数给空串", `[${strRepeat("ab", 0)}][${strRepeat("ab", -2)}]`, "[][]");
+eq("234", "unicode_at 越界与负数给 0", `${strUnicodeAt("abc", 3)}|${strUnicodeAt("abc", -1)}|${strUnicodeAt("", 0)}`, "0|0|0");
+eq("234", "unicode_at 按码点走", `${strUnicodeAt("\u{1F600}a", 0)}|${strUnicodeAt("\u{1F600}a", 1)}`, "128512|97");
+eq("234", "bin_to_int 只认负号", `${strBinToInt("+101")}|${strBinToInt("-101")}`, "0|-5");
+eq("234", "bin_to_int 混进非 01 就整串判 0", `${strBinToInt("10a0")}|${strBinToInt("1_0")}|${strBinToInt(" 101")}`, "0|0|0");
+eq("234", "bin_to_int 认 0b 前缀", strBinToInt("0b101"), 5n);
+eq("234", "bin_to_int 溢出饱和到 INT64_MAX", `${strBinToInt("1".repeat(64))}|${strBinToInt("-" + "1".repeat(63))}`, "9223372036854775807|-9223372036854775807");
+
+eq("234", "count 非重叠", `${strCount("aaaa", "aa")}|${strCount("aaa", "aa")}`, "2|1");
+eq("234", "count 空针子给 0", `${strCount("hello", "")}|${strCount("", "")}`, "0|0");
+eq("234", "countn 不分大小写", strCount("HELLO hello", "l", true), 4);
+eq("234", "空针子恒真", `${strStartsWith("abc", "")}|${strEndsWith("abc", "")}`, "true|true");
+eq("234", "begins_with 针子更长即假", strStartsWith("abc", "abcd"), false);
+eq("234", "strip_edges 只裁两端不碰中间", strStripEdges("  a\tb\r\n "), "a\tb");
+eq("234", "strip_edges 不动高位空白", strStripEdges(" a "), " a ");
+eq("234", "uri_encode 保留集", `${strUriEncode("a-z0.~_!")}|${strUriEncode("*'")}`, "a-z0.~_%21|%2A%27");
+eq("234", "uri_encode 非 ASCII 走字节", strUriEncode("\t"), "%09");
+eq("234", "c_escape 只转实测那十个", strCEscape("a\n\""), "a\\n\\\"");
+
+eq("234", "case_style 三种拼法", `${strCaseStyle("fooBar_baz", "kebab")}|${strCaseStyle("ABCdef", "snake")}|${strCaseStyle("_foo bar", "camel")}`, "foo-bar-baz|ab_cdef|fooBar");
+eq("234", "case_style 数字与点号", `${strCaseStyle("a1_b2", "snake")}|${strCaseStyle("XMLHttpRequest", "snake")}|${strCaseStyle("a.b", "kebab")}`, "a_1_b_2|xml_http_request|a.b");
+eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValidFilename("a b")}|${strIsValidFilename("con")}|${strIsValidFilename("")}`, "false|true|true|false");
+{
+  const s = V.str("a/b/c");
+  eq("234", "get_slice 走 method 分发", show(method(s, "get_slice", [V.str("/"), I(1)])), "b");
+  eq("234", "count 走 method 分发", show(method(V.str("hello"), "count", [V.str("l")])), "2");
+  eq("234", "casecmp_to 走 method 分发", show(method(V.str("a"), "casecmp_to", [V.str("B")])), "1");
+  shouldThrow("234", "count 的 chars 真值响亮拒", () => method(V.str("hello"), "count", [V.str("l"), V.bool(true)]));
+  shouldThrow("234", "count 的第 3 个参数没量过", () => method(V.str("hello"), "count", [V.str("l"), V.bool(false), I(1)]));
+  shouldThrow("234", "pad_zeros 口径没拟合，仍拒", () => method(V.str("5"), "pad_zeros", [I(3)]));
+  shouldThrow("234", "similarity 公式没拟合，仍拒", () => method(V.str("ab"), "similarity", [V.str("ba")]));
+  shouldThrow("234", "uri_decode 的非法转义形状没量清，仍拒", () => method(V.str("a%2"), "uri_decode", []));
+  shouldThrow("234", "get_slicec 的 (int, int) 形状没解释清，仍拒", () => method(V.str("a/b/c"), "get_slicec", [I(1), I(0)]));
+}
+
 
 eq("019", "2 in [1,2]", show(ops.inOp(I(2), V.array(GArray.of([I(1), I(2)])))), "true");
 eq("019", "\"e\" in \"hello\"", show(ops.inOp(S("e"), S("hello"))), "true");

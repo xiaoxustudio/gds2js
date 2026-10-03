@@ -5,8 +5,8 @@ import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, ClassDesc, type Fn } from "./object";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCapitalize, strCase, strContains, strEdge, strFind, strFormat, strJoin, strLength, strReplace, strSplit,
-  strSplitCapped, strSubstr, toStringNameSlot, truthyOf } from "./values";
+import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strInsertAt, strIsValidFilename, strJoin, strLength, strRepeat, strReplace, strSplit,
+  strSplitCapped, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriEncode, strCmp, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -722,6 +722,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `hex_to_int() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(strHexToInt(s));
+        case "bin_to_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `bin_to_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(strBinToInt(s));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);
@@ -734,6 +739,90 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `hash() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(hashDjb2(s));
+        case "begins_with":
+        case "ends_with": {
+          const w = asString(one(args, name), name);
+          return V.bool(name === "begins_with" ? strStartsWith(s, w) : strEndsWith(s, w));
+        }
+        case "get_slice": {
+          if (args.length < 2) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "get_slice()" call. Expected at least 2 but received ${args.length}.`);
+          }
+          if (args.length > 2) {
+            throw new GodotRuntimeError("arity", `Too many arguments for "get_slice()" call. Expected at most 2 but received ${args.length}.`);
+          }
+          return V.str(strGetSlice(s, asString(args[0] as Variant, "get_slice"), intArg(args, 1, "get_slice")));
+        }
+        case "insert": {
+          if (args.length !== 2) {
+            throw new GodotRuntimeError("arity", `insert() 要 2 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strInsertAt(s, intArg(args, 0, "insert"), asString(args[1] as Variant, "insert")));
+        }
+        case "erase": {
+          if (args.length !== 2) {
+            throw new GodotRuntimeError("arity", `erase() 要 2 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strEraseAt(s, intArg(args, 0, "erase"), intArg(args, 1, "erase")));
+        }
+        case "repeat": {
+          if (args.length !== 1) {
+            throw new GodotRuntimeError("arity", `repeat() 要 1 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strRepeat(s, intArg(args, 0, "repeat")));
+        }
+        case "strip_edges": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `strip_edges() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strStripEdges(s));
+        }
+        case "unicode_at":
+          return V.int(strUnicodeAt(s, intArg(args, 0, "unicode_at")));
+        case "casecmp_to":
+          return V.int(strCmp(s, asString(one(args, "casecmp_to"), "casecmp_to")));
+        case "is_valid_filename": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_filename() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(strIsValidFilename(s));
+        }
+        case "uri_encode": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `uri_encode() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strUriEncode(s));
+        }
+        case "c_escape": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `c_escape() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strCEscape(s));
+        }
+        case "to_camel_case":
+        case "to_kebab_case":
+        case "to_snake_case": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `${name}() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strCaseStyle(s, name === "to_camel_case" ? "camel" : name === "to_kebab_case" ? "kebab" : "snake"));
+        }
+        case "count":
+        case "countn": {
+          if (args.length < 1) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "${name}()" call. Expected at least 1 but received ${args.length}.`);
+          }
+          if (args.length > 3) {
+            throw new GodotRuntimeError("arity", `Too many arguments for "${name}()" call. Expected at most 3 but received ${args.length}.`);
+          }
+          if (args.length >= 2 && boolArg(args, 1, name)) {
+            throw new UnsupportedError("string-count-chars", `${name}() 的 chars 参数只实测过 false（真值那格见 SEMANTICS §6）`);
+          }
+          if (args.length === 3) {
+            throw new UnsupportedError("string-count-third", `${name}() 的第 3 个参数（int）没量过它管什么`);
+          }
+          return V.int(strCount(s, asString(args[0] as Variant, name), name === "countn"));
+        }
         case "md5_text":
           if (args.length !== 0) {
             throw new GodotRuntimeError("arity", `md5_text() 不接受参数（收到 ${args.length} 个）`);
