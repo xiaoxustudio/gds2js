@@ -235,7 +235,7 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   // Color 槽吃 int 走 packed RGBA（r=24..31、g=16..23、b=8..15、a=0..7，各除 255，先按 2³² 取模）
   const colorSlot = (n: number | bigint): string => show(paramSlot(V.int(n), "Color", 1, "p", self));
   eq("172", "Color 槽吃 int：逐通道", `${colorSlot(1)}/${colorSlot(255)}/${colorSlot(256)}/${colorSlot(16711680)}/${colorSlot(65280)}`, "(0.0, 0.0, 0.0, 0.0039)/(0.0, 0.0, 0.0, 1.0)/(0.0, 0.0, 0.0039, 0.0)/(0.0, 1.0, 0.0, 0.0)/(0.0, 0.0, 1.0, 0.0)");
-  eq("172", "Color 槽吃 int：混合色（d-slot-big）", colorSlot(123456789), "(0.0275, 0.3569, 0.8039, 0.0824)");
+  eq("172", "Color 槽吃 int：混合色", colorSlot(123456789), "(0.0275, 0.3569, 0.8039, 0.0824)");
   eq("172", "Color 槽吃 int：负数与 2³² 边界", `${colorSlot(-1)}/${colorSlot(4294967295)}/${colorSlot(4294967296)}/${colorSlot(0)}`, "(1.0, 1.0, 1.0, 1.0)/(1.0, 1.0, 1.0, 1.0)/(0.0, 0.0, 0.0, 0.0)/(0.0, 0.0, 0.0, 0.0)");
   eq("172", "构造器 Color(int) 与槽同一套解析", `${show(colorNew([V.int(123456789)]))}/${show(colorNew([V.int(0)]))}`, "(0.0275, 0.3569, 0.8039, 0.0824)/(0.0, 0.0, 0.0, 0.0)");
   eq("172", "Color 槽吃 Color 原样过", show(paramSlot(colorNew([V.int(-1)]), "Color", 1, "p", self)), "(1.0, 1.0, 1.0, 1.0)");
@@ -246,11 +246,11 @@ shouldThrow("005", "裸 iAddC 越过 2^53 仍响亮抛错", () => fast.iAddC(900
   eq("173", "StringName 槽吃 String", show(paramSlot(V.str("nm"), "StringName", 1, "p", self)), "nm");
   eq(
     "173",
-    "Vector2 塞 Vector3i 槽（a2-var-v2-to-v3i）",
+    "Vector2 塞 Vector3i 槽",
     errOf(vector2New([V.float(1.7), V.float(2.9)]), "Vector3i", 1, "f"),
     "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Vector2 to Vector3i.",
   );
-  eq("173", "Nil 塞 Vector3 槽（a2-var-null-to-v3）", errOf(V.nil(), "Vector3", 1, "f"), "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Nil to Vector3.");
+  eq("173", "Nil 塞 Vector3 槽", errOf(V.nil(), "Vector3", 1, "f"), "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from Nil to Vector3.");
   eq("173", "int 塞 StringName 槽", errOf(V.int(5), "StringName", 1, "f"), "Invalid type in function 'f' in base 'RefCounted (SlotA)'. Cannot convert argument 1 from int to StringName.");
 }
 
@@ -1826,7 +1826,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     its(k.v).push(V.int(3));
     eq(
       "101",
-      "改过的有限键仍是 ghost（S81 旧口径没被闸门破坏）",
+      "改过的有限键仍是 ghost（旧口径没被闸门破坏）",
       `${d.size()}/${d.has(k)}/${d.has(V.array(GArray.of([V.int(1), V.int(2)])))}`,
       "1/false/false",
     );
@@ -2013,8 +2013,8 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   writeProp(obj, "m", S("x"));
   eq("step58b", "未定型字段原样存", field("m"), "x");
   shouldThrow("step58b", "String 字段拒 int（不是转成 \"5\"）", () => writeProp(obj, "s", I(5)));
-  shouldThrow("step58b", "未知键拒（e1 的形体）", () => writeProp(obj, "zz", I(1)));
-  shouldThrow("step58b", "写方法名也拒（f11 与未知键同文本）", () => writeProp(obj, "getm", I(5)));
+  shouldThrow("step58b", "未知键拒（形体）", () => writeProp(obj, "zz", I(1)));
+  shouldThrow("step58b", "写方法名也拒（与未知键同文本）", () => writeProp(obj, "getm", I(5)));
 }
 
 {
@@ -2087,17 +2087,17 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const bound = attribute(V.object(h2), "im");
   eq("step65", "实例方法读出来是 Callable（typeof → 25，不再是 24）", `${typeOf(bound).v}`, "25");
   eq("step65", "Callable.get_method()", `${method(bound, "get_method", []).v}`, "im");
-  eq("step65", "is_null() false / is_valid() true（f34 t2/t3）", `${method(bound, "is_null", []).v}/${method(bound, "is_valid", []).v}`, "false/true");
-  eq("step65", "Callable.callv 收一个 Array（f34 t7）", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
+  eq("step65", "is_null() false / is_valid() true", `${method(bound, "is_null", []).v}/${method(bound, "is_valid", []).v}`, "false/true");
+  eq("step65", "Callable.callv 收一个 Array", `${method(bound, "callv", [V.array(GArray.of([I(7)]))]).v}`, "7");
   const stat = attribute(Holder2, "sm");
-  eq("step65", "静态方法取值的 get_method 也报得出名字（f34 t4）", `${method(stat, "get_method", []).v}`, "sm");
-  eq("step65", "静态方法 Callable 的 is_null / is_valid（f96 c02b / c02c）", `${method(stat, "is_null", []).v} ${method(stat, "is_valid", []).v}`, "false true");
+  eq("step65", "静态方法取值的 get_method 也报得出名字", `${method(stat, "get_method", []).v}`, "sm");
+  eq("step65", "静态方法 Callable 的 is_null / is_valid", `${method(stat, "is_null", []).v} ${method(stat, "is_valid", []).v}`, "false true");
   class Sig {
     fired = new Signal("fired");
   }
   const sg = attribute(V.object(new Sig()), "fired");
-  eq("step65", "Signal.get_name()（f34 t9）", `${method(sg, "get_name", []).v}`, "fired");
-  eq("step65", "Signal.is_null() → false（f34 t2）", `${method(sg, "is_null", []).v}`, "false");
+  eq("step65", "Signal.get_name()", `${method(sg, "get_name", []).v}`, "fired");
+  eq("step65", "Signal.is_null() → false", `${method(sg, "is_null", []).v}`, "false");
 }
 
 {
@@ -2113,7 +2113,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   registerStaticMethods(dObj, ["sm"], { sm: (): Variant => Obj.sm() });
   registerNativeBase(dObj, "RefCounted");
   const o = new Obj();
-  eq("step66", "get_class 给的是**原生基类**而不是脚本名（f39 t3）", `${method(V.object(o), "get_class", []).v}`, "RefCounted");
+  eq("step66", "get_class 给的是**原生基类**而不是脚本名", `${method(V.object(o), "get_class", []).v}`, "RefCounted");
   eq("step66", "has_method：自己的 / 静态的 / Object 自带的都真，全局函数与空串假", [
     method(V.object(o), "has_method", [V.str("im")]).v,
     method(V.object(o), "has_method", [V.str("sm")]).v,
@@ -2122,14 +2122,14 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     method(V.object(o), "has_method", [V.str("")]).v,
   ].join(","), "true,true,true,false,false");
   setMeta(o, V.stringName("sn"), I(6));
-  eq("step66", "StringName 写进去、String 键读得到（f39 t1）", [
+  eq("step66", "StringName 写进去、String 键读得到", [
     method(V.object(o), "has_meta", [V.str("sn")]).v,
     method(V.object(o), "get_meta", [V.str("sn")]).v,
   ].join(" "), "true 6");
-  eq("step66", "get_meta 两参形给默认值（f36 t5）", `${method(V.object(o), "get_meta", [V.str("nope"), I(99)]).v}`, "99");
-  eq("step66", "get_meta 一参形缺键给 null 且**继续跑**（f37）", `${method(V.object(o), "get_meta", [V.str("nope")]).t}`, `${Tag.NIL}`);
+  eq("step66", "get_meta 两参形给默认值", `${method(V.object(o), "get_meta", [V.str("nope"), I(99)]).v}`, "99");
+  eq("step66", "get_meta 一参形缺键给 null 且**继续跑**", `${method(V.object(o), "get_meta", [V.str("nope")]).t}`, `${Tag.NIL}`);
   method(V.object(o), "remove_meta", [V.str("sn")]);
-  eq("step66", "remove_meta 之后 has_meta 假（f39 t2）", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
+  eq("step66", "remove_meta 之后 has_meta 假", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
   shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
 }
 
@@ -2144,42 +2144,42 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   };
   const pack = (ns: number[]): Variant => V.object(GBytes.of(ns));
   const b = bytesCtor([V.array(GArray.of([I(3), I(1), I(2)]))]);
-  eq("step67", "构造 + 打印 + typeof → 29（f40 t1）", `${show(b)} ${typeOf(b).v}`, "[3, 1, 2] 29");
-  eq("step67", "元素折成字节：300→44、-1→255、2.7→2、true→1（f43 / f49）",
+  eq("step67", "构造 + 打印 + typeof → 29", `${show(b)} ${typeOf(b).v}`, "[3, 1, 2] 29");
+  eq("step67", "元素折成字节：300→44、-1→255、2.7→2、true→1",
     `${toByte(I(300))} ${toByte(I(-1))} ${toByte(F(2.7))} ${toByte(V.bool(true))}`, "44 255 2 1");
-  eq("step67", "`+` 拼接给新 pack（f51 t1）", `${show(ops.add(b, pack([7])))}`, "[3, 1, 2, 7]");
-  eq("step67", "== 比内容：同内容真、不同内容假（f51 t2）",
+  eq("step67", "`+` 拼接给新 pack", `${show(ops.add(b, pack([7])))}`, "[3, 1, 2, 7]");
+  eq("step67", "== 比内容：同内容真、不同内容假",
     `${valueEq(b, bytesCtor([V.array(GArray.of([I(3), I(1), I(2)]))]))} ${valueEq(b, pack([7]))}`, "true false");
   const neg = pack([1, 2]);
-  eq("step67", "负下标从尾部数（f52）", `${show(index(neg, I(-1)))}`, "2");
-  eq("step67", "越界读的文本逐字对上（f50）", err(() => index(neg, I(5))),
+  eq("step67", "负下标从尾部数", `${show(index(neg, I(-1)))}`, "2");
+  eq("step67", "越界读的文本逐字对上", err(() => index(neg, I(5))),
     "Invalid access of index '5' on a base object of type: 'PackedByteArray'.");
-  eq("step67", "越界写的文本逐字对上（f50）", err(() => writeIdx(neg, I(5), I(1))),
+  eq("step67", "越界写的文本逐字对上", err(() => writeIdx(neg, I(5), I(1))),
     "Invalid assignment of index '5' (on base: 'PackedByteArray') with value of type 'int'.");
   const wr = pack([0, 0]);
   writeIdx(wr, I(0), I(700));
-  eq("step67", "下标写 700 回绕成 188（f43）", `${show(wr)}`, "[188, 0]");
+  eq("step67", "下标写 700 回绕成 188", `${show(wr)}`, "[188, 0]");
   const dup = method(b, "duplicate", []);
   writeIdx(dup, I(0), I(8));
   const cp = bytesCtor([b]);
   writeIdx(cp, I(1), I(5));
-  eq("step67", "duplicate() 与 PackedByteArray(src) 都是独立拷贝（f49 t3 / f51 t11）",
+  eq("step67", "duplicate() 与 PackedByteArray(src) 都是独立拷贝",
     `${show(b)} ${show(dup)} ${show(cp)}`, "[3, 1, 2] [8, 1, 2] [3, 5, 2]");
   const rs = pack([1]);
   method(rs, "resize", [I(3)]);
-  eq("step67", "resize 长出来的格子填 0（f51 t10）", `${show(rs)}`, "[1, 0, 0]");
-  eq("step67", "hex_encode（f40 t9）", `${method(pack([1, 2, 3, 255]), "hex_encode", []).v}`, "010203ff");
-  eq("step67", "UTF-8 往返：六字节 → héllo（f40 t4）",
+  eq("step67", "resize 长出来的格子填 0", `${show(rs)}`, "[1, 0, 0]");
+  eq("step67", "hex_encode", `${method(pack([1, 2, 3, 255]), "hex_encode", []).v}`, "010203ff");
+  eq("step67", "UTF-8 往返：六字节 → héllo",
     `${method(pack([104, 195, 169, 108, 108, 111]), "get_string_from_utf8", []).v}`, "héllo");
-  eq("step67", "文本 → 字节（S168 的 to_utf8_buffer）", `${show(method(S("héllo"), "to_utf8_buffer", []))}`,
+  eq("step67", "文本 → 字节（to_utf8_buffer）", `${show(method(S("héllo"), "to_utf8_buffer", []))}`,
     "[104, 195, 169, 108, 108, 111]");
   eq("step67", "get_string_from_ascii 只实测过纯 ASCII，带高位字节响着拒",
     err(() => method(pack([104, 200]), "get_string_from_ascii", [])),
     "get_string_from_ascii() 只实测过纯 ASCII 的字节");
-  eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（f41 / 用例 135）",
+  eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（用例 135）",
     `${err(() => method(b, "min", []))}|${err(() => method(b, "to_byte_array", []))}`,
     "Invalid call. Nonexistent function 'min' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.");
-  eq("step81", "bsearch 这一轮量齐了（f60）：给的是下标，找不到给插入位而不是 -1 —— [3,1,2] 上 bsearch(1) 是 0、bsearch(2) 是 2",
+  eq("step81", "bsearch 这一轮量齐了：给的是下标，找不到给插入位而不是 -1 —— [3,1,2] 上 bsearch(1) 是 0、bsearch(2) 是 2",
     `${show(method(b, "bsearch", [I(1)]))} ${show(method(b, "bsearch", [I(2)]))}`, "0 2");
   const viaArray = arrayFromVariant(b);
   eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
@@ -2189,35 +2189,35 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("step67", "写 pack 的内部键不许落进存储", () => writeProp(b, "items", I(1)));
   const mut = (ns: number[]): Variant => V.object(GBytes.of(ns));
   const ap = mut([1, 2, 3]);
-  eq("step67", "append() 返回 **bool false** 且照样追加（e1 / g1）",
+  eq("step67", "append() 返回 **bool false** 且照样追加",
     `${show(method(ap, "append", [I(9)]))} ${show(ap)}`, "false [1, 2, 3, 9]");
   const ins = mut([1, 2, 3]);
   eq("step67", "insert 合法给 0 并插进去（batch1 t）", `${show(method(ins, "insert", [I(0), I(5)]))} ${show(ins)}`, "0 [5, 1, 2, 3]");
   const insNeg = mut([1, 2, 3]);
-  eq("step67", "insert(-1) 是**原样不动** + 31（d7 / g7，不是尾部插入）",
+  eq("step67", "insert(-1) 是**原样不动** + 31（不是尾部插入）",
     `${show(method(insNeg, "insert", [I(-1), I(9)]))} ${show(insNeg)}`, "31 [1, 2, 3]");
   const insOob = mut([1, 2, 3]);
-  eq("step67", "insert 越界同样 31 且不动（e5）", `${show(method(insOob, "insert", [I(10), I(5)]))} ${show(insOob)}`, "31 [1, 2, 3]");
+  eq("step67", "insert 越界同样 31 且不动", `${show(method(insOob, "insert", [I(10), I(5)]))} ${show(insOob)}`, "31 [1, 2, 3]");
   const rz = mut([1, 2, 3]);
-  eq("step67", "resize 缩回去是截断，返回 0（g2）", `${show(method(rz, "resize", [I(2)]))} ${show(rz)}`, "0 [1, 2]");
+  eq("step67", "resize 缩回去是截断，返回 0", `${show(method(rz, "resize", [I(2)]))} ${show(rz)}`, "0 [1, 2]");
   const rzNeg = mut([1, 2, 3]);
-  eq("step67", "resize(-1) 给 31 且长度不变（e4）", `${show(method(rzNeg, "resize", [I(-1)]))} ${show(rzNeg)}`, "31 [1, 2, 3]");
+  eq("step67", "resize(-1) 给 31 且长度不变", `${show(method(rzNeg, "resize", [I(-1)]))} ${show(rzNeg)}`, "31 [1, 2, 3]");
   const rmNeg = mut([1, 2, 3]);
   method(rmNeg, "remove_at", [I(-1)]);
-  eq("step67", "remove_at 的负下标**不删末尾**（e8，JS 的 splice(-1,1) 会删）", `${show(rmNeg)}`, "[1, 2, 3]");
+  eq("step67", "remove_at 的负下标**不删末尾**（JS 的 splice(-1,1) 会删）", `${show(rmNeg)}`, "[1, 2, 3]");
   const rmOob = mut([1, 2, 3]);
   method(rmOob, "remove_at", [I(9)]);
-  eq("step67", "remove_at 越界原样不动（e7）", `${show(rmOob)}`, "[1, 2, 3]");
+  eq("step67", "remove_at 越界原样不动", `${show(rmOob)}`, "[1, 2, 3]");
   const gt = mut([1, 2, 3]);
-  eq("step67", "get 越界给 **0** 而不是报错（g4，与 `b[5]` 两套口径）", `${show(method(gt, "get", [I(5)]))}`, "0");
-  eq("step80", "get 的负下标算**越界**、给默认元素值（f57：Godot 另打一句引擎 stderr，stdout 那半是 0；与 `b[-1]` 从尾部数是两套口径）",
+  eq("step67", "get 越界给 **0** 而不是报错（与 `b[5]` 两套口径）", `${show(method(gt, "get", [I(5)]))}`, "0");
+  eq("step80", "get 的负下标算**越界**、给默认元素值（Godot 另打一句引擎 stderr，stdout 那半是 0；与 `b[-1]` 从尾部数是两套口径）",
     `${show(method(gt, "get", [I(-1)]))}`, "0");
   const nw = mut([1, 2, 3]);
   writeIdx(nw, I(-1), I(9));
-  eq("step67", "写的负下标与读一样从尾部数（d6）", `${show(nw)}`, "[1, 2, 9]");
-  eq("step67", "copy_on_write 在 4.6.3 对这个类型不存在（e3）",
+  eq("step67", "写的负下标与读一样从尾部数", `${show(nw)}`, "[1, 2, 9]");
+  eq("step67", "copy_on_write 在 4.6.3 对这个类型不存在",
     err(() => method(b, "copy_on_write", [])), "Invalid call. Nonexistent function 'copy_on_write' in base 'PackedByteArray'.");
-  eq("step67", "slice 的单参与负 end 都按 JS 口径（e6 实测同值）",
+  eq("step67", "slice 的单参与负 end 都按 JS 口径（实测同值）",
     `${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1)]))} ${show(method(V.object(GBytes.of([1, 2, 3, 4])), "slice", [I(1), I(-1)]))}`,
     "[2, 3, 4] [2, 3]");
 }
@@ -2270,10 +2270,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "Invalid assignment of index '5' (on base: 'PackedInt32Array') with value of type 'int'.");
   shouldThrow("step68", "跨 pack 拼接没量过 → 响", () => ops.add(i32g, V.object(GBytes.of([1], "byte"))));
   shouldThrow("step68", "Array(int pack) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(i32g));
-  eq("step80", "String 元素走**前导数解析**（与 to_int() 同一条式子，f57 / f58：\"12abc\" → 12、\"-7xyz\" → -7、\"x\" → 0）",
+  eq("step80", "String 元素走**前导数解析**（与 to_int() 同一条式子：\"12abc\" → 12、\"-7xyz\" → -7、\"x\" → 0）",
     `${show(packCtor("int32", [V.array(GArray.of([S("12abc")]))]))} ${show(packCtor("int32", [V.array(GArray.of([S("-7xyz")]))]))} ${show(packCtor("byte", [V.array(GArray.of([S("x")]))]))}`,
     "[12] [-7] [0]");
-  eq("step80", "int64 收 float 的正向溢出**饱和到 INT64_MIN**（f57：1e30 → -9223372036854775808；nan/inf 仍响）",
+  eq("step80", "int64 收 float 的正向溢出**饱和到 INT64_MIN**（1e30 → -9223372036854775808；nan/inf 仍响）",
     `${show(packCtor("int64", [V.array(GArray.of([F(1e308), F(1e30), F(2.7), F(-2.7)]))]))}`,
     "[-9223372036854775808, -9223372036854775808, 2, -2]");
   shouldThrow("step80", "int64 收 nan / inf 这一格没量过 → 仍响（饱和只量了有限大数）", () =>
@@ -2340,7 +2340,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step71", "append 返回 bool false 且追加", `${show(method(sap, "append", [S("x")]))} ${show(sap)}`, 'false ["a", "x"]');
   const sneg = V.object(GBytes.of(["a", "b"], "string"));
   writeIdx(sneg, I(-1), S("z"));
-  eq("step71", "写的负下标从尾部数（t-negwrite）", `${show(sneg)}`, '["a", "z"]');
+  eq("step71", "写的负下标从尾部数", `${show(sneg)}`, '["a", "z"]');
   const ssort = V.object(GBytes.of(["b", "a", "ab"], "string"));
   method(ssort, "sort", []);
   eq("step71", "sort 按码点（step 19 那条），不是把字符串当数字相减", `${show(ssort)}`, '["a", "ab", "b"]');
@@ -2358,9 +2358,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     }
     return "<没抛>";
   };
-  eq("step71", "min 在 PackedStringArray 上不存在，句子里的型名跟着换（t-nonexistent）",
+  eq("step71", "min 在 PackedStringArray 上不存在，句子里的型名跟着换",
     serr(() => method(sb, "min", [])), "Invalid call. Nonexistent function 'min' in base 'PackedStringArray'.");
-  eq("step71", "join 在 PackedStringArray 上不存在（旧文档有、4.6.3 没有；step 102 的 a1 系列把九支一次量齐）",
+  eq("step71", "join 在 PackedStringArray 上不存在（旧文档有、4.6.3 没有；九支在 step 102 一次量齐）",
     serr(() => method(sb, "join", [S("-")])),
     "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
 }
@@ -2416,9 +2416,9 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "true false");
   const cs = V.object(GBytes.of([new GColor(0.9, 0.1, 0.1, 1), new GColor(0.1, 0.9, 0.1, 0.5), new GColor(0.5, 0.5, 0.5, 1), new GColor(0.1, 0.1, 0.9, 1), new GColor(0.5, 0.1, 0.9, 0.25)], "color"));
   method(cs, "sort", []);
-  eq("step80", "Color pack 的 sort 是 r→g→b→a 字典序（f56 p01：反着排再排一次得同一序列）", `${show(cs)}`,
+  eq("step80", "Color pack 的 sort 是 r→g→b→a 字典序（反着排再排一次得同一序列）", `${show(cs)}`,
     "[(0.1, 0.1, 0.9, 1.0), (0.1, 0.9, 0.1, 0.5), (0.5, 0.1, 0.9, 0.25), (0.5, 0.5, 0.5, 1.0), (0.9, 0.1, 0.1, 1.0)]");
-  eq("step80", "向量 pack 的 has / count / find 按**分量内容**比（f57；JS 的 includes/indexOf 对这些载荷是比引用，不改就是静默错）",
+  eq("step80", "向量 pack 的 has / count / find 按**分量内容**比（JS 的 includes/indexOf 对这些载荷是比引用，不改就是静默错）",
     `${show(method(p2s, "has", [v2(1, 1)]))} ${show(method(p2s, "find", [v2(3, 3)]))} ${show(method(p2s, "count", [v2(2, 2)]))} ${show(method(p2s, "find", [v2(9, 9)]))}`,
     "true 2 1 -1");
 }
@@ -2435,58 +2435,58 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   };
   const bset = V.object(GBytes.of([1, 2, 3], "byte"));
   method(bset, "set", [I(0), I(300)]);
-  eq("step80", "set() 的元素走与字面量同一套折算：set(0, 300) → [44, 2, 3]（f58）", `${show(bset)}`, "[44, 2, 3]");
+  eq("step80", "set() 的元素走与字面量同一套折算：set(0, 300) → [44, 2, 3]", `${show(bset)}`, "[44, 2, 3]");
   method(bset, "set", [I(-1), I(9)]);
   method(bset, "set", [I(5), I(9)]);
-  eq("step80", "set() 的负下标与越界**静默不动**（f58：既不改内容也不改长度，与 `p[i] = v` 那两句报错两套口径）",
+  eq("step80", "set() 的负下标与越界**静默不动**（既不改内容也不改长度，与 `p[i] = v` 那两句报错两套口径）",
     `${show(bset)} ${show(method(bset, "size", []))}`, "[44, 2, 3] 3");
   const i32set = V.object(GBytes.of([1, 2], "int32"));
   method(i32set, "set", [I(1), I(70000)]);
   method(i32set, "set", [I(-1), I(9)]);
-  eq("step80", "int32 的 set 不回绕（70000 原样），负下标同样不动（f58 / f59）", `${show(i32set)}`, "[1, 70000]");
+  eq("step80", "int32 的 set 不回绕（70000 原样），负下标同样不动", `${show(i32set)}`, "[1, 70000]");
   const i64set = V.object(GBytes.of([1n, 2n], "int64"));
   method(i64set, "set", [I(1), I(-3)]);
-  eq("step80", "int64 的 set（f59：[1, -3]）", `${show(i64set)}`, "[1, -3]");
+  eq("step80", "int64 的 set（[1, -3]）", `${show(i64set)}`, "[1, -3]");
   const f32set = V.object(GBytes.of([1.5, 2.5], "float32"));
   method(f32set, "set", [I(0), I(3)]);
   method(f32set, "set", [I(1), F(0.1)]);
-  eq("step80", "float32 的 set：int 实参升格、0.1 落进 float32 储存（f59）", `${show(f32set)}`,
+  eq("step80", "float32 的 set：int 实参升格、0.1 落进 float32 储存", `${show(f32set)}`,
     "[3.0, 0.10000000149012]");
   const f64set = V.object(GBytes.of([1.5, 2.5], "float64"));
   method(f64set, "set", [I(0), I(7)]);
-  eq("step80", "float64 的 set 收 int 给 7.0（f59）", `${show(f64set)}`, "[7.0, 2.5]");
+  eq("step80", "float64 的 set 收 int 给 7.0", `${show(f64set)}`, "[7.0, 2.5]");
   const sset = packCtor("string", [V.array(GArray.of([S("a"), S("b")]))]);
   method(sset, "set", [I(1), S("z")]);
   method(sset, "set", [I(5), S("y")]);
-  eq("step80", "String pack 的 set：改一格、越界那句只多一句引擎 stderr（f59 t04）",
+  eq("step80", "String pack 的 set：改一格、越界那句只多一句引擎 stderr",
     `${show(sset)} ${show(method(sset, "size", []))}`, `["a", "z"] 2`);
   const v2set = V.object(GBytes.of([new GVector2(1, 2)], "vector2"));
   method(v2set, "set", [I(0), V.object(new GVector2(9, 9))]);
   method(v2set, "set", [I(3), V.object(new GVector2(1, 1))]);
-  eq("step80", "Vector2 pack 的 set 写进去的是**拷贝**、越界不动（f59 t05）", `${show(v2set)}`, "[(9.0, 9.0)]");
+  eq("step80", "Vector2 pack 的 set 写进去的是**拷贝**、越界不动", `${show(v2set)}`, "[(9.0, 9.0)]");
   const v3set = V.object(GBytes.of([new GVector3(1, 2, 3)], "vector3"));
   method(v3set, "set", [I(0), V.object(new GVector3(9, 9, 9))]);
-  eq("step80", "Vector3 pack 的 set（f59 t06）", `${show(v3set)}`, "[(9.0, 9.0, 9.0)]");
+  eq("step80", "Vector3 pack 的 set", `${show(v3set)}`, "[(9.0, 9.0, 9.0)]");
   const cv = V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color"));
   method(cv, "set", [I(0), V.object(new GColor(0, 1, 0, 0.5))]);
-  eq("step80", "Color pack 的 set（f59 t07）", `${show(cv)}`, "[(0.0, 1.0, 0.0, 0.5)]");
+  eq("step80", "Color pack 的 set", `${show(cv)}`, "[(0.0, 1.0, 0.0, 0.5)]");
   const gb = V.object(GBytes.of([1, 2, 3], "byte"));
   const sget = packCtor("string", [V.array(GArray.of([S("a")]))]);
-  eq("step80", "get 的负下标算越界、给默认元素值：byte → 0、String → 空串（f56 p03，Godot 另打引擎 stderr，那条不进语料）",
+  eq("step80", "get 的负下标算越界、给默认元素值：byte → 0、String → 空串（Godot 另打引擎 stderr，那条不进语料）",
     `${show(method(gb, "get", [I(-1)]))}|${show(method(sget, "get", [I(-1)]))}|${show(method(sget, "get", [I(0)]))}`,
     "0||a");
   const colhc = V.object(GBytes.of([new GColor(0.1, 0.2, 0.3, 1), new GColor(0.1, 0.2, 0.3, 0.5)], "color"));
-  eq("step80", "Color 的 has / find 按四个分量比，0.1 与 0.10000001 **不是**同一格（f57：float32 储存也不把它们并掉）",
+  eq("step80", "Color 的 has / find 按四个分量比，0.1 与 0.10000001 **不是**同一格（float32 储存也不把它们并掉）",
     `${show(method(colhc, "has", [V.object(new GColor(0.1, 0.2, 0.3, 1))]))} ${show(method(colhc, "find", [V.object(new GColor(0.10000001, 0.2, 0.3, 1))]))}`,
     "true -1");
   const v2hc = packCtor("vector2", [V.array(GArray.of([V.object(new GVector2(1.0000001, 2)), V.object(new GVector2(1, 2))]))]);
   eq("step80", "Vector2 pack 的 has 按分量比（引用比会是 false —— 那一格就是静默错）",
     `${show(method(v2hc, "has", [V.object(new GVector2(1, 2))]))} ${show(method(v2hc, "count", [V.object(new GVector2(1, 2))]))}`,
     "true 1");
-  eq("step80", "byte 那支四个名字在 4.6.3 不存在（f57），型名照实测文本",
+  eq("step80", "byte 那支四个名字在 4.6.3 不存在，型名照实测文本",
     [perr(() => method(gb, "to_hex_string", [])), perr(() => method(gb, "search_sorted", [])), perr(() => method(gb, "to_base64", [])), perr(() => method(gb, "decode_string", []))].join("|"),
     "Invalid call. Nonexistent function 'to_hex_string' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'search_sorted' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_base64' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'decode_string' in base 'PackedByteArray'.");
-  eq("step80", "index_of 在 PackedStringArray 上不存在（f57 s-index-of）",
+  eq("step80", "index_of 在 PackedStringArray 上不存在",
     perr(() => method(packCtor("string", [V.array(GArray.of([S("a")]))]), "index_of", [S("a")])),
     "Invalid call. Nonexistent function 'index_of' in base 'PackedStringArray'.");
   shouldThrow("step80", "这四个名字只在 byte / String 那两支量到「不存在」，别的形状仍走响亮拒（不拿邻居的结论凑）", () =>
@@ -2504,47 +2504,47 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     return "<没抛>";
   };
   const bb = (ns: number[]): Variant => V.object(GBytes.of(ns, "byte"));
-  eq("step81", "bsearch 找得到给下标、找不到给**插入位**（越界两头是 0 与 size，**从来不给 -1**，f60 / f62）",
+  eq("step81", "bsearch 找得到给下标、找不到给**插入位**（越界两头是 0 与 size，**从来不给 -1**）",
     `${show(method(bb([1, 3, 5, 7]), "bsearch", [I(5)]))} ${show(method(bb([1, 3, 5, 7]), "bsearch", [I(6)]))} ${show(method(bb([1, 3, 5, 7]), "bsearch", [I(0)]))} ${show(method(bb([1, 3, 5, 7]), "bsearch", [I(9)]))}`,
     "2 3 0 4");
-  eq("step81", "before 默认是真；写 false 走 upper_bound（第一格 **>** 目标），重复元素一路数到尾（f60 [2,2,2] / [1,1,2,2,3]）",
+  eq("step81", "before 默认是真；写 false 走 upper_bound（第一格 **>** 目标），重复元素一路数到尾（[2,2,2] / [1,1,2,2,3]）",
     `${show(method(bb([1, 3, 5, 7]), "bsearch", [I(5), V.bool(false)]))} ${show(method(bb([2, 2, 2]), "bsearch", [I(2), V.bool(false)]))} ${show(method(bb([1, 1, 2, 2, 3]), "bsearch", [I(2), V.bool(true)]))} ${show(method(bb([1, 1, 2, 2, 3]), "bsearch", [I(2), V.bool(false)]))}`,
     "3 3 2 4");
-  eq("step81", "未排序的 pack 也照 Godot 那条「折半 + `len -= half + 1`」的走（f60 t02 的五个数组全部逐格对上）",
+  eq("step81", "未排序的 pack 也照 Godot 那条「折半 + `len -= half + 1`」的走（五个数组全部逐格对上）",
     `${show(method(bb([3, 1, 2]), "bsearch", [I(2)]))} ${show(method(bb([3, 1, 2]), "bsearch", [I(9)]))} ${show(method(bb([3, 1, 2]), "bsearch", [I(0)]))} ${show(method(bb([5, 5, 1]), "bsearch", [I(6)]))} ${show(method(bb([9, 2, 7, 4]), "bsearch", [I(7)]))} ${show(method(bb([4, 3, 2, 1]), "bsearch", [I(2), V.bool(false)]))}`,
     "2 3 0 3 2 4");
-  eq("step81", "空 pack 给 0（两种 before 都是），越出两端的给 0 / size（f62 t12）",
+  eq("step81", "空 pack 给 0（两种 before 都是），越出两端的给 0 / size",
     `${show(method(bb([]), "bsearch", [I(1)]))} ${show(method(bb([]), "bsearch", [I(1), V.bool(false)]))}`,
     "0 0");
-  eq("step81", "String / float64 / Vector2 / Color 的 bsearch 用各自 sort 的那条比较（f61 / f62）",
+  eq("step81", "String / float64 / Vector2 / Color 的 bsearch 用各自 sort 的那条比较",
     `${show(method(packCtor("string", [V.array(GArray.of([S("a"), S("c"), S("e")]))]), "bsearch", [S("d")]))} ${show(method(V.object(GBytes.of([1.5, 2.5, 3.5], "float64")), "bsearch", [F(2.0)]))} ${show(method(V.object(GBytes.of([new GVector2(1, 1)], "vector2")), "bsearch", [V.object(new GVector2(5, 5))]))} ${show(method(V.object(GBytes.of([new GColor(0, 1, 0, 1), new GColor(1, 0, 0, 1)], "color")), "bsearch", [V.object(new GColor(1, 0, 0, 1))]))}`,
     "2 1 1 1");
   shouldThrow("step81", "bsearch 的第二个参数只量过 bool —— 别的来源响亮拒", () =>
     method(bb([1, 2]), "bsearch", [I(1), F(0.5)]));
-  eq("step81", "byte 的四个 to_*_array 都是**小端**（f61 / f62：0x3F800000 写作 [0,0,128,63]、1 写作末字节 1）",
+  eq("step81", "byte 的四个 to_*_array 都是**小端**（0x3F800000 写作 [0,0,128,63]、1 写作末字节 1）",
     `${show(method(bb([0, 0, 128, 63]), "to_float32_array", []))} ${show(method(bb([205, 204, 204, 61]), "to_float32_array", []))} ${show(method(bb([1, 0, 0, 0]), "to_int32_array", []))} ${show(method(bb([0, 0, 0, 0, 0, 0, 248, 63]), "to_float64_array", []))} ${show(method(bb([0, 0, 0, 0, 0, 0, 0, 1]), "to_int64_array", []))} ${show(method(bb([0, 0, 0, 0, 0, 0, 0, 128]), "to_int64_array", []))}`,
     "[1.0] [0.10000000149012] [1] [1.5] [72057594037927936] [-9223372036854775808]");
-  eq("step81", "长度**不是整数倍就给空 pack**（f62 t09：六字节的 to_float32_array 是 `[]`，不是「读一个整组」；那句 multiple of 是引擎 stderr，不进语料）；空 pack 也给空的",
+  eq("step81", "长度**不是整数倍就给空 pack**（六字节的 to_float32_array 是 `[]`，不是「读一个整组」；那句 multiple of 是引擎 stderr，不进语料）；空 pack 也给空的",
     `${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8]), "to_float32_array", []))} ${show(method(bb([1, 2, 3]), "to_int64_array", []))} ${show(method(bb([1, 2, 3, 4, 5, 6]), "to_float32_array", []))} ${typeOf(method(bb([0, 0, 128, 63]), "to_float32_array", [])).v} ${typeOf(method(bb([1, 0, 0, 0, 0, 0, 0, 0]), "to_int64_array", [])).v} ${show(method(bb([]), "to_float32_array", []))}`,
     "[0.0, 0.0] [] [] 32 31 []");
-  eq("step81", "to_int64_array 的元素是 int（typeof 2），负一还原成八格 255（f61 t07 / t11）",
+  eq("step81", "to_int64_array 的元素是 int（typeof 2），负一还原成八格 255",
     `${show(method(bb([255, 255, 255, 255, 255, 255, 255, 255]), "to_int64_array", []))} ${show(method(bb([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0]), "to_int64_array", []))} ${typeOf(index(method(bb([1, 0, 0, 0, 0, 0, 0, 0]), "to_int64_array", []), I(0))).v}`,
     "[-1] [1, 2] 2");
-  eq("step81", "to_byte_array 八种形状都有（f61：int32 / int64 / float32 / float64 / String / Vector2 / Vector3 / Color），一律小端铺平",
+  eq("step81", "to_byte_array 八种形状都有（int32 / int64 / float32 / float64 / String / Vector2 / Vector3 / Color），一律小端铺平",
     `${show(method(V.object(GBytes.of([1, -2], "int32")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([1n, -2n], "int64")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([1.5, -1.0, 0.1], "float32")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([1.5], "float64")), "to_byte_array", []))}`,
     "[1, 0, 0, 0, 254, 255, 255, 255] [1, 0, 0, 0, 0, 0, 0, 0, 254, 255, 255, 255, 255, 255, 255, 255] [0, 0, 192, 63, 0, 0, 128, 191, 205, 204, 204, 61] [0, 0, 0, 0, 0, 0, 248, 63]");
   eq("step81", "值类型与颜色的 to_byte_array：float32 逐分量（Vector2 八字节、Vector3 十二字节、Color 十六字节 r→g→b→a）",
     `${show(method(V.object(GBytes.of([new GVector2(1, 2)], "vector2")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([new GVector3(1, 2, 3)], "vector3")), "to_byte_array", []))} ${show(method(V.object(GBytes.of([new GColor(1, 0, 0, 1)], "color")), "to_byte_array", []))}`,
     "[0, 0, 128, 63, 0, 0, 0, 64] [0, 0, 128, 63, 0, 0, 0, 64, 0, 0, 64, 64] [0, 0, 128, 63, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 63]");
-  eq("step81", "String pack 的 to_byte_array 是**每元素一份 UTF-8 再接一个 0**（f61 / f62：[\"ab\",\"c\"]、[\"\"] → [0]、[] → []、[\"éA\"]）",
+  eq("step81", "String pack 的 to_byte_array 是**每元素一份 UTF-8 再接一个 0**（[\"ab\",\"c\"]、[\"\"] → [0]、[] → []、[\"éA\"]）",
     `${show(method(packCtor("string", [V.array(GArray.of([S("ab"), S("c")]))]), "to_byte_array", []))} ${show(method(packCtor("string", [V.array(GArray.of([S("")]))]), "to_byte_array", []))} ${show(method(packCtor("string", [V.array(GArray.of([]))]), "to_byte_array", []))} ${show(method(packCtor("string", [V.array(GArray.of([S("éA")]))]), "to_byte_array", []))}`,
     "[97, 98, 0, 99, 0] [0] [] [195, 169, 65, 0]");
-  eq("step81", "to_byte_array 的返回形状是 PackedByteArray（typeof 29，f62 t11）",
+  eq("step81", "to_byte_array 的返回形状是 PackedByteArray（typeof 29）",
     `${typeOf(method(packCtor("string", [V.array(GArray.of([S("ab")]))]), "to_byte_array", [])).v}`, "29");
-  eq("step81", "byte 自己没有 to_byte_array，也没有 get_bytes / to_raw_string（f61 / S168 ⑥）",
+  eq("step81", "byte 自己没有 to_byte_array，也没有 get_bytes / to_raw_string",
     [perr(() => method(bb([1]), "to_byte_array", [])), perr(() => method(bb([1]), "get_bytes", [I(0), I(1)])), perr(() => method(bb([1]), "to_raw_string", []))].join("|"),
     "Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'get_bytes' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_raw_string' in base 'PackedByteArray'.");
-  eq("step81", "int32 上没有 to_float32_array / to_int32_array（f61 t09 / f62 t08 的解析期两句，运行期那一格是这句）",
+  eq("step81", "int32 上没有 to_float32_array / to_int32_array（解析期两句，运行期那一格是这句）",
     [perr(() => method(V.object(GBytes.of([1], "int32")), "to_float32_array", [])), perr(() => method(V.object(GBytes.of([1], "int32")), "to_int32_array", []))].join("|"),
     "Invalid call. Nonexistent function 'to_float32_array' in base 'PackedInt32Array'.|Invalid call. Nonexistent function 'to_int32_array' in base 'PackedInt32Array'.");
   shouldThrow("step81", "四个 to_*_array 只在 byte 上量到「有」，别的形状（int64 / float / 向量）仍响亮拒", () =>
@@ -2573,12 +2573,12 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   for (const mode of ["1", "2", "3"]) {
     vectors.forEach(([name, ns], i) => {
       const c = method(bb(ns), "compress", [I(Number(mode))]);
-      eq(`step82`, `compress(${mode}) 在「${name}」上的字节与 Godot 逐字节相同、decompress 再还原（f64 / f65）`,
+      eq(`step82`, `compress(${mode}) 在「${name}」上的字节与 Godot 逐字节相同、decompress 再还原`,
         `${hex(c)} ${show(method(c, "decompress", [I(ns.length), I(Number(mode))]))}`,
         `${godotHex[mode]![i]} ${show(bb(ns))}`);
     });
   }
-  eq("step82", "空 pack 压哪种模式都给空 pack（f64 t12 —— node 的 deflateSync 反倒给 8 字节，这一格必须照 Godot）",
+  eq("step82", "空 pack 压哪种模式都给空 pack（—— node 的 deflateSync 反倒给 8 字节，这一格必须照 Godot）",
     `${show(method(bb([]), "compress", [I(1)]))} ${show(method(bb([]), "compress", [I(2)]))} ${show(method(bb([]), "compress", [I(3)]))}`,
     "[] [] []");
   eq("step82", "越界的模式给空 pack（实测的 4 / 9 / -1 三格，compress 与 decompress 都是）",
@@ -2589,12 +2589,12 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("step82", "expected_size 的三条口径：0 与负数给空 pack、**比真身小也给空 pack**（不是截断！那是 mode 0 的行为）、比真身大不补零",
     `${show(method(c1, "decompress", [I(0), I(1)]))} ${show(method(c1, "decompress", [I(-1), I(1)]))} ${show(method(c1, "decompress", [I(5), I(1)]))} ${(back20.v as GBytes).length} ${show(back20)}`,
     `[] [] [] 17 [104, 101, 108, 108, 111, 32, 104, 101, 108, 108, 111, 32, 104, 101, 108, 108, 111]`);
-  eq("step82", "垃圾数据解不出来给空 pack（f65 三种模式一致，Godot 另打一句引擎 stderr）",
+  eq("step82", "垃圾数据解不出来给空 pack（三种模式一致，Godot 另打一句引擎 stderr）",
     `${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(1)]))} ${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(3)]))}`,
     "[] []");
   shouldThrow("step82", "compress(0)（不写模式时的默认值）没对上任何 node 编解码器 → 响亮拒，不发近似字节", () =>
     method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]));
-  shouldThrow("step82", "compress() 零参同样是 mode 0 → 同一句响（f63 t16 量到它给 17 字节的「头部 + 原字节 + 补零」）", () =>
+  shouldThrow("step82", "compress() 零参同样是 mode 0 → 同一句响（量到它给 17 字节的「头部 + 原字节 + 补零」）", () =>
     method(bb([1]), "compress", []));
   shouldThrow("step82", "decompress 不写模式 = mode 0 → 也响", () => method(bb([1, 2, 3]), "decompress", [I(6)]));
   eq("step82", "模式实参只量过 int：给 float 响亮拒（不拿「int 槽会截断」那条推）",
@@ -2628,10 +2628,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     eq(caseId, what, got, expected);
   };
 
-  eq("step85", "构造：0 参零向量、float 实参逐分量向零截断、超 int32 回绕、单参收 Vector3 与 Vector3i（f69 t01/t16/t70）",
+  eq("step85", "构造：0 参零向量、float 实参逐分量向零截断、超 int32 回绕、单参收 Vector3 与 Vector3i",
     `${z3(vector3iNew([]))}/${z3(vector3iNew([V.float(1.9), V.float(-2.9), V.float(3.5)]))}/${z3(vector3iNew([V.int(2147483648), V.int(-2147483649), V.int(4294967296)]))}/${z3(vector3iNew([vector3(1.7, -2.2, 3.5)]))}/${z3(vector3iNew([B3]))}`,
     "(0, 0, 0)/(1, -2, 3)/(-2147483648, 2147483647, 0)/(1, -2, 3)/(1, 2, 3)");
-  eq("step85", "bool 实参收（`Vector3i(true, false, true)` → `(1, 0, 1)`，f69 t70-ctor-bools），nan / ±inf 折成 0（t70-ctor-nan / inf）",
+  eq("step85", "bool 实参收（`Vector3i(true, false, true)` → `(1, 0, 1)`），nan / ±inf 折成 0（t70-ctor-nan / inf）",
     `${z3(vector3iNew([V.bool(true), V.bool(false), V.bool(true)]))}/${z3(vector3iNew([V.float(Number.NaN), V.float(1), V.float(2)]))}/${z3(vector3iNew([V.float(Infinity), V.float(-Infinity), V.float(3)]))}`,
     "(1, 0, 1)/(0, 1, 2)/(0, 0, 3)");
   shouldThrow("step85", "一个数的构造式 Godot 是解析期拒（`No constructor ... Vector3i(int)`），我们编不出产物", () =>
@@ -2641,51 +2641,51 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("step85", "Vector2 / Color 进构造器实测都是解析期拒，不照 Vector3 那一格推", () =>
     vector3iNew([vector2(1, 2)]));
 
-  eq("step85", "逐分量整数算式（f67 t03 六行 + 语料 165 的 arith / scalar / wrap 三行）",
+  eq("step85", "逐分量整数算式（六行 + 语料 165 的 arith / scalar / wrap 三行）",
     `${z3(ops.add(A3, B3))} ${z3(ops.sub(A3, B3))} ${z3(ops.mul(A3, B3))} ${z3(ops.div(A3, B3))} ${z3(ops.mod(A3, B3))} ${z3(ops.neg(A3))}`,
     "(4, -2, 15) (2, -6, 9) (3, -8, 36) (3, -2, 4) (0, 0, 0) (-3, 4, -12)");
-  eq("step85", "标量在左在右同式，除法向零、模的符号跟被除数（f67 t03 的 u / n 两行）",
+  eq("step85", "标量在左在右同式，除法向零、模的符号跟被除数（ u / n 两行）",
     `${z3(ops.mul(A3, V.int(2)))} ${z3(ops.mul(V.int(2), A3))} ${z3(ops.div(A3, V.int(-2)))} ${z3(ops.mod(A3, V.int(-2)))}`,
     "(6, -8, 24) (6, -8, 24) (-1, 2, -6) (1, 0, 0)");
-  eq("step85", "加减越界回绕 int32（f69 t81）",
+  eq("step85", "加减越界回绕 int32",
     `${z3(ops.add(Z3(2147483647, 0, 0), Z3(1, 0, 0)))} ${z3(ops.sub(Z3(-2147483648, 0, 0), Z3(1, 0, 0)))}`,
     "(-2147483648, 0, 0) (2147483647, 0, 0)");
-  eq("step85", "右边掺 float 升级成 Vector3（f70 p21 / p22）",
+  eq("step85", "右边掺 float 升级成 Vector3",
     `${show(ops.div(A3, V.float(4)))} ${show(ops.mul(A3, V.float(0.5)))} ${typeOf(ops.div(A3, V.float(4))).v}`,
     "(0.75, -1.0, 3.0) (1.5, -2.0, 6.0) 9");
-  shouldThrow("step85", "标量在左放 int 的除法实测是解析期拒（f70 p23 `4 / Vector3i`），不猜结果", () =>
+  shouldThrow("step85", "标量在左放 int 的除法实测是解析期拒（`4 / Vector3i`），不猜结果", () =>
     ops.div(V.int(4), A3));
-  shouldThrow("step85", "向量与向量混算（Vector3i + Vector3）实测解析期拒（f70 p25）", () =>
+  shouldThrow("step85", "向量与向量混算（Vector3i + Vector3）实测解析期拒", () =>
     ops.add(A3, vector3(1, 1, 1)));
-  perr("step85", "逐分量除零的文本与 int 那一族同一句（f67 t14）", () => ops.div(A3, Z3(0, 2, 2)), "Division by zero error in operator '/'.");
-  perr("step85", "逐分量取模零（f67 t15）", () => ops.mod(A3, Z3(0, 2, 2)), "Modulo by zero error in operator '%'.");
+  perr("step85", "逐分量除零的文本与 int 那一族同一句", () => ops.div(A3, Z3(0, 2, 2)), "Division by zero error in operator '/'.");
+  perr("step85", "逐分量取模零", () => ops.mod(A3, Z3(0, 2, 2)), "Modulo by zero error in operator '%'.");
 
-  eq("step85", "比较按字典序 x→y→z（f67 t03 的 cmp 行：a<b 假、a<=a 真、a>b 真）",
+  eq("step85", "比较按字典序 x→y→z（ cmp 行：a<b 假、a<=a 真、a>b 真）",
     `${isLess(A3, B3)} ${!isLess(A3, Z3(3, -4, 12))} ${isLess(B3, A3)}`,
     "false true true");
-  eq("step85", "同型相等与不等；跨形状（Vector3i == Vector3）实测是解析期拒 → 我们运行期也响（f69 t60 / u10）",
+  eq("step85", "同型相等与不等；跨形状（Vector3i == Vector3）实测是解析期拒 → 我们运行期也响",
     `${valueEq(A3, Z3(3, -4, 12))} ${valueEq(A3, B3)} ${ops.eq(vector3(1, 2, 3), vector3(1, 2, 3)).v}`,
     "true false true");
   shouldThrow("step85", "Vector3i == Vector3 不静默给 false", () => valueEq(A3, vector3(3, -4, 12)));
 
-  eq("step85", "方法面（f69 t00 / t10 / t20 / t30 + f70 p10）",
+  eq("step85", "方法面",
     `${z3(z3m(A3, "abs"))} ${z3(z3m(A3, "sign"))} ${show(z3m(A3, "length"))} ${show(z3m(A3, "length_squared"))} ${z3(z3m(A3, "min", B3))} ${z3(z3m(A3, "max", B3))}`,
     "(3, 4, 12) (1, -1, 1) 13.0 169 (1, -4, 3) (3, 2, 12)");
-  eq("step85", "clamp / snapped / 轴下标（f69 t30-m2-clamp、f70 p10–p13、f69 t10）",
+  eq("step85", "clamp / snapped / 轴下标",
     `${z3(z3m(A3, "clamp", Z3(0, 0, 0), Z3(5, 5, 5)))} ${z3(z3m(A3, "snapped", Z3(5, 5, 5)))} ${z3(z3m(A3, "snapped", Z3(-5, 2, 5)))} ${z3(z3m(A3, "snapped", Z3(0, 0, 0)))} ${show(z3m(A3, "min_axis_index"))} ${show(z3m(A3, "max_axis_index"))}`,
     "(3, 0, 5) (5, -5, 10) (5, -4, 10) (3, -4, 12) 1 2");
-  eq("step85", "distance_to 给 float、distance_squared_to 给 int（f69 t20 重跑）",
+  eq("step85", "distance_to 给 float、distance_squared_to 给 int（重跑）",
     `${show(z3m(A3, "distance_to", Z3(0, 0, 0)))} ${show(z3m(A3, "distance_squared_to", Z3(1, 1, 1)))} ${typeOf(z3m(A3, "distance_to", Z3(0, 0, 0))).v}`,
     "13.0 150 3");
-  shouldThrow("step85", "零参的 max()/min() 实测是解析期错（f67 t04），不发近似值", () => z3m(A3, "max"));
-  shouldThrow("step85", "max 收两个实参也是解析期错（f69 t30-m2-max `Expected at most 1`）", () => z3m(A3, "max", B3, B3));
-  shouldThrow("step85", "min 的实参必须是 Vector3i（f70 p24 实测 `Cannot pass a value of type \"int\" as \"Vector3i\"`）", () =>
+  shouldThrow("step85", "零参的 max()/min() 实测是解析期错，不发近似值", () => z3m(A3, "max"));
+  shouldThrow("step85", "max 收两个实参也是解析期错（`Expected at most 1`）", () => z3m(A3, "max", B3, B3));
+  shouldThrow("step85", "min 的实参必须是 Vector3i（实测 `Cannot pass a value of type \"int\" as \"Vector3i\"`）", () =>
     z3m(A3, "min", V.int(2)));
   for (const n of ["dot", "cross", "axis_get", "axis_set", "hash", "normalized", "direction_to", "move_toward", "lerp", "aspect", "floor", "ceilf", "roundf", "is_zero_approx", "is_equal_approx", "snappedf", "snapn", "posmod", "floordiv", "ceildiv", "signwrapping", "pow", "same_sign", "octant", "count_zeros", "to_vector3"]) {
-    shouldThrow("step85", `Vector3i.${n}() 实测不存在（f69 ①–④ 组逐格量到 Nonexistent function）`, () => z3m(A3, n));
+    shouldThrow("step85", `Vector3i.${n}() 实测不存在（①–④ 组逐格量到 Nonexistent function）`, () => z3m(A3, n));
   }
 
-  eq("step85", "静态常量表（f69 t40 的 16 支：INF 没有，AXIS_* 是**整数**不是向量）",
+  eq("step85", "静态常量表（ 16 支：INF 没有，AXIS_* 是**整数**不是向量）",
     `${z3(vector3iConst("ZERO"))} ${z3(vector3iConst("ONE"))} ${z3(vector3iConst("UP"))} ${z3(vector3iConst("DOWN"))} ${z3(vector3iConst("LEFT"))} ${z3(vector3iConst("RIGHT"))} ${z3(vector3iConst("FORWARD"))} ${z3(vector3iConst("BACK"))} ${z3(vector3iConst("MAX"))} ${z3(vector3iConst("MIN"))}`,
     "(0, 0, 0) (1, 1, 1) (0, 1, 0) (0, -1, 0) (-1, 0, 0) (1, 0, 0) (0, 0, -1) (0, 0, 1) (2147483647, 2147483647, 2147483647) (-2147483648, -2147483648, -2147483648)");
   eq("step85", "AXIS_X / AXIS_Y / AXIS_Z 是 int 0 / 1 / 2（实测 `print(Vector3i.AXIS_X)` 给 0、typeof 给 2）",
@@ -2693,15 +2693,15 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     "0 1 2 2");
   shouldThrow("step85", "Vector3i.INF 实测不存在（而 Vector3 有 —— 照抄就错）", () => vector3iConst("INF"));
 
-  eq("step85", "下标与字符串键读分量（f69 t50：`v[0..2]` 与 `v[\"x\"]`/`v[\"z\"]` 同格）",
+  eq("step85", "下标与字符串键读分量（`v[0..2]` 与 `v[\"x\"]`/`v[\"z\"]` 同格）",
     `${show(index(A3, I(0)))} ${show(index(Z3(7, 8, 9), I(1)))} ${show(index(Z3(7, 8, 9), V.str("y")))}`,
     "3 8 8");
-  perr("step85", "下标越界读：实测 `Invalid access of index '3' on a base object of type: 'Vector3i'.`（f69 t51）", () =>
+  perr("step85", "下标越界读：实测 `Invalid access of index '3' on a base object of type: 'Vector3i'.`", () =>
     index(A3, I(3)), "Invalid access of index '3' on a base object of type: 'Vector3i'.");
-  perr("step85", "负下标读**不绕到尾部**（与数组两套口径，f69 t52）", () => index(A3, I(-1)), "Invalid access of index '-1' on a base object of type: 'Vector3i'.");
-  perr("step85", "写越界是另一句文本（f69 t55）", () => writeIdx(A3, I(5), V.int(1)), "Invalid assignment of index '5' (on base: 'Vector3i') with value of type 'int'.");
-  perr("step85", "分量写 bool 拒（f69 t56）", () => writeProp(A3, "z", V.bool(true)), "Invalid assignment of property or key 'z' with value of type 'bool' on a base object of type 'Vector3i'.");
-  eq("step85", "分量写：float 向零截断、超界回绕（f67 t02 与语料 165 的 write 行）",
+  perr("step85", "负下标读**不绕到尾部**（与数组两套口径）", () => index(A3, I(-1)), "Invalid access of index '-1' on a base object of type: 'Vector3i'.");
+  perr("step85", "写越界是另一句文本", () => writeIdx(A3, I(5), V.int(1)), "Invalid assignment of index '5' (on base: 'Vector3i') with value of type 'int'.");
+  perr("step85", "分量写 bool 拒", () => writeProp(A3, "z", V.bool(true)), "Invalid assignment of property or key 'z' with value of type 'bool' on a base object of type 'Vector3i'.");
+  eq("step85", "分量写：float 向零截断、超界回绕（语料 165 的 write 行）",
     (() => {
       let v = Z3(1, 2, 3);
       v = writeIdx(v, I(1), V.float(7.9)) as Variant;
@@ -2711,10 +2711,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     })(),
     "(-1589934592, 7, 0)");
 
-  eq("step85", "打印是三个整数、typeof 给 10（f67 t09）",
+  eq("step85", "打印是三个整数、typeof 给 10",
     `${show(A3)} ${typeOf(A3).v}`,
     "(3, -4, 12) 10");
-  eq("step85", "当字典键：内容分格，`Vector3` 与 `Vector3i` 是**两个**键（f69 t62 实测 has → false）",
+  eq("step85", "当字典键：内容分格，`Vector3` 与 `Vector3i` 是**两个**键（实测 has → false）",
     (() => {
       const d = new GDict();
       d.set(B3, V.str("a"));
@@ -2722,7 +2722,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     })(),
     "{ (1, 2, 3): \"a\" } false true");
 
-  eq("step85", "pack 的**读侧**升格：Vector3i → Vector3、Vector2i → Vector3 补 0（f70 p01–p04 与语料 165 的 pack 行）",
+  eq("step85", "pack 的**读侧**升格：Vector3i → Vector3、Vector2i → Vector3 补 0（语料 165 的 pack 行）",
     (() => {
       const p = V.object(GBytes.of([], "vector3"));
       method(p, "append", [Z3(1, 2, 3)]);
@@ -2731,17 +2731,17 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return `${show(p)} ${typeOf(index(p, I(0))).v} ${show(method(p, "count", [Z3(1, 2, 3)]))} ${show(method(p, "has", [Z3(7, 8, 9)]))} ${show(method(p, "find", [Z3(7, 8, 9)]))}`;
     })(),
     "[(1.0, 2.0, 3.0), (4.0, 5.0, 0.0), (7.0, 8.0, 9.0)] 9 1 true 2");
-  perr("step85", "pack 的**写这一侧只收同形状**：`p[0] = Vector3i(...)` 实测报 `Invalid assignment of property or key '0' …`（f70 p18）", () =>
+  perr("step85", "pack 的**写这一侧只收同形状**：`p[0] = Vector3i(...)` 实测报 `Invalid assignment of property or key '0' …`", () =>
     writeIdx(V.object(GBytes.of([new GVector3(1, 2, 3)], "vector3")), I(0), Z3(7, 8, 9)),
     "Invalid assignment of property or key '0' with value of type 'Vector3i' on a base object of type 'PackedVector3Array'.");
-  perr("step85", "同一格在 Vector2 pack 上给 Vector2i 也拒（f70 p20）", () =>
+  perr("step85", "同一格在 Vector2 pack 上给 Vector2i 也拒", () =>
     writeIdx(V.object(GBytes.of([new GVector2(1, 2)], "vector2")), I(0), vector2i(7, 8)),
     "Invalid assignment of property or key '0' with value of type 'Vector2i' on a base object of type 'PackedVector2Array'.");
-  perr("step85", "Vector2 进 Vector3 pack 的写也拒（f70 p17）", () =>
+  perr("step85", "Vector2 进 Vector3 pack 的写也拒", () =>
     writeIdx(V.object(GBytes.of([new GVector3(1, 2, 3)], "vector3")), I(0), vector2(7, 8)),
     "Invalid assignment of property or key '0' with value of type 'Vector2' on a base object of type 'PackedVector3Array'.");
 
-  eq("step85", "定型容器的元素换算（f69 u01–u05 / u09：Vector3i 槽吃 Vector3 截断、Vector2i 槽吃 Vector2 截断、Vector2/Vector3 槽吃整型向量升格、int 槽不收向量）",
+  eq("step85", "定型容器的元素换算（Vector3i 槽吃 Vector3 截断、Vector2i 槽吃 Vector2 截断、Vector2/Vector3 槽吃整型向量升格、int 槽不收向量）",
     (() => {
       const a = stampArray(V.array(new GArray()), "Vector3i", true);
       method(a, "append", [vector3(4.7, 5.2, 6.9)]);
@@ -2757,11 +2757,11 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       return `${show(a)} ${show(b)} ${show(d)} ${show(f)}`;
     })(),
     "[(4, 5, 6)] [(1, -2)] [(1.0, 2.0)] []");
-  eq("step85", "值类型变量槽：`var wv: Vector3 = Vector3i(4,5,6)` 升 float、`var wi: Vector3i = Vector3(...)` 截断、`var v2i: Vector2i = Vector2(...)` 截断（f67 t08 + f69 w01/w03，语料 165 的 slot 行）",
+  eq("step85", "值类型变量槽：`var wv: Vector3 = Vector3i(4,5,6)` 升 float、`var wi: Vector3i = Vector3(...)` 截断、`var v2i: Vector2i = Vector2(...)` 截断（语料 165 的 slot 行）",
     `${show(toVec3(Z3(4, 5, 6)))} ${typeOf(toVec3(Z3(4, 5, 6))).v} ${show(toVec3i(vector3(1.7, 2.2, 3.9)))} ${typeOf(toVec3i(vector3(1.7, 2.2, 3.9))).v} ${show(toVec2i(vector2(1.7, -2.9)))} ${typeOf(toVec2i(vector2(1.7, -2.9))).v}`,
     "(4.0, 5.0, 6.0) 9 (1, 2, 3) 10 (1, -2) 6");
-  shouldThrow("step85", "Vector3 槽吃 Vector2 实测是解析期拒（f69 w01），不猜转换", () => toVec3(vector2(1, 2)));
-  shouldThrow("step85", "Vector3i 槽吃 int 实测是解析期拒（f69 t89 两句）", () => toVec3i(V.int(5)));
+  shouldThrow("step85", "Vector3 槽吃 Vector2 实测是解析期拒，不猜转换", () => toVec3(vector2(1, 2)));
+  shouldThrow("step85", "Vector3i 槽吃 int 实测是解析期拒（两句）", () => toVec3i(V.int(5)));
 }
 
 {
@@ -2789,7 +2789,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("187", "拿不到声明形参数的 Callable 问 get_argument_count → 响亮拒（规则见用例 193）", () => method(base, "get_argument_count", []));
   eq(
     "188",
-    "str(a, b, …) 是每个实参按 print 的渲染**无分隔拼接**（f93）",
+    "str(a, b, …) 是每个实参按 print 的渲染**无分隔拼接**",
     `${strBuiltin([V.str("a"), V.str("-"), V.str("b")]).v} ${strBuiltin([V.int(1), V.int(2), V.int(3)]).v} ${strBuiltin([V.str("x"), V.nil(), V.float(2.5)]).v}`,
     "a-b 123 x<null>2.5",
   );
@@ -2806,7 +2806,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const lt = (x: number, y: number): boolean => x < y;
   eq("189", "n≤16 全等键不动 —— 插入趟本来就是稳定的，这是用例 105 一直对得上的原因", perm(16, () => 0, lt), "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15");
   eq("189", "n=17 全等键整段反序（n≥17 起 introsort 接管）", perm(17, () => 0, lt), "16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
-  eq("189", "n=19 也整段反序（f94 里没参与拟合的那格）", perm(19, () => 0, lt), "18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
+  eq("189", "n=19 也整段反序（没参与拟合的那格）", perm(19, () => 0, lt), "18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0");
   eq(
     "189",
     "n=100 全等键是四块 × 25、块内降序、块序 Q2 Q3 Q0 Q1",
@@ -2860,10 +2860,10 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const c0 = attribute(inst, "add3") as Variant;
   const boundWith = (n: number): Variant => method(c0, "bind", Array.from({ length: n }, (_x, i) => V.int(i + 1)));
 
-  eq("193", "get_argument_count 是「**还要几个实参**」：3 形参绑 0/1/2/3 个给 3/2/1/0（a1 阶梯）", [0, 1, 2, 3].map((n) => method(boundWith(n), "get_argument_count", []).v).join(" "), "3 2 1 0");
-  eq("193", "bind() 的空列表等于没绑（f96 c09 那格给的是声明形参数）", method(boundWith(0), "get_argument_count", []).v, 3);
-  eq("193", "静态方法 Callable 同一式：1 形参给 1（a3 那一形）", `${method(attribute(Holder, "sm") as Variant, "get_argument_count", []).v}`, "1");
-  eq("193", "lambda（没有名字的 Callable）按声明形参数（a2 / c08）", method(callableOf(() => V.nil(), 3), "get_argument_count", []).v, 3);
+  eq("193", "get_argument_count 是「**还要几个实参**」：3 形参绑 0/1/2/3 个给 3/2/1/0（阶梯）", [0, 1, 2, 3].map((n) => method(boundWith(n), "get_argument_count", []).v).join(" "), "3 2 1 0");
+  eq("193", "bind() 的空列表等于没绑（那格给的是声明形参数）", method(boundWith(0), "get_argument_count", []).v, 3);
+  eq("193", "静态方法 Callable 同一式：1 形参给 1（那一形）", `${method(attribute(Holder, "sm") as Variant, "get_argument_count", []).v}`, "1");
+  eq("193", "lambda（没有名字的 Callable）按声明形参数", method(callableOf(() => V.nil(), 3), "get_argument_count", []).v, 3);
   shouldThrow("193", "带默认值形参的方法问 get_argument_count → 响亮拒（那一格没量，不拿 fn.length 猜）", () => method(attribute(inst, "twice") as Variant, "get_argument_count", []));
 
   eq("194", "空 Callable：is_null 真 / is_valid 假 / get_method 空串 / get_argument_count 0（c1 c2 c4）", `${method(nullCallable(), "is_null", []).v} ${method(nullCallable(), "is_valid", []).v} "${method(nullCallable(), "get_method", []).v}" ${method(nullCallable(), "get_argument_count", []).v}`, 'true false "" 0');
@@ -2873,14 +2873,14 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   shouldThrow("194", "空 Callable 上 call_deferred 没量过 → 响亮拒（c9 只量到解析期那一格）", () => method(nullCallable(), "call_deferred", [V.int(1)]));
   shouldThrow("194", "is_valid 在「空 + 绑过实参」那一格没量 → 响亮拒，不拿 is_null 的反面推", () => method(method(nullCallable(), "bind", [V.int(1)]), "is_valid", []));
   shouldThrow("194", "Callable(字符串) 一参形：Godot 是解析期 No constructor，运行期先响亮拒（c10）", () => callableCtor([V.str("on_fired")]));
-  shouldThrow("194", "unbind() 量到存在但语义没读懂 → 继续响亮拒（f96 c07）", () => method(c0, "unbind", [V.int(1)]));
+  shouldThrow("194", "unbind() 量到存在但语义没读懂 → 继续响亮拒", () => method(c0, "unbind", [V.int(1)]));
 
-  eq("192", "方法 Callable 的等式比 (接收者, 方法名)：两次读同一个小盒不同（d1 / d7 / f96 c06）", `${valueEq(c0, attribute(inst, "add3") as Variant)} ${valueEq(c0, attribute(other, "add3") as Variant)}`, "true false");
-  eq("192", "绑定的实参**不进**等式：bind(1) 与 bind(2) 相等（d3）", valueEq(boundWith(1), boundWith(2)), true);
-  eq("192", "静态方法与空 Callable 各自成格（d4 / c5）", `${valueEq(attribute(Holder, "sm") as Variant, attribute(Holder, "sm") as Variant)} ${valueEq(nullCallable(), nullCallable())}`, "true true");
-  eq("192", "lambda 按引用比：两个同体 lambda 不等（d2）", valueEq(callableOf(() => V.nil(), 1), callableOf(() => V.nil(), 1)), false);
-  eq("192", "Array.has 走同一条等式（d6 实测真）", (V.array(GArray.of([c0, attribute(inst, "hi") as Variant])).v as GArray).has(attribute(inst, "add3") as Variant), true);
-  eq("192", "Callable 与 int 比不是 false，而是运行期那一句（d5）", errText(() => valueEq(c0, V.int(1))), "Invalid operands 'Callable' and 'int' in operator '=='.");
+  eq("192", "方法 Callable 的等式比 (接收者, 方法名)：两次读同一个小盒不同", `${valueEq(c0, attribute(inst, "add3") as Variant)} ${valueEq(c0, attribute(other, "add3") as Variant)}`, "true false");
+  eq("192", "绑定的实参**不进**等式：bind(1) 与 bind(2) 相等", valueEq(boundWith(1), boundWith(2)), true);
+  eq("192", "静态方法与空 Callable 各自成格", `${valueEq(attribute(Holder, "sm") as Variant, attribute(Holder, "sm") as Variant)} ${valueEq(nullCallable(), nullCallable())}`, "true true");
+  eq("192", "lambda 按引用比：两个同体 lambda 不等", valueEq(callableOf(() => V.nil(), 1), callableOf(() => V.nil(), 1)), false);
+  eq("192", "Array.has 走同一条等式（实测真）", (V.array(GArray.of([c0, attribute(inst, "hi") as Variant])).v as GArray).has(attribute(inst, "add3") as Variant), true);
+  eq("192", "Callable 与 int 比不是 false，而是运行期那一句", errText(() => valueEq(c0, V.int(1))), "Invalid operands 'Callable' and 'int' in operator '=='.");
 
   // 一个「把每次投递记下来」的回调 Callable：名字与接收者固定，所以两条连接按等式算同一条
   class Sink extends GdScriptObject {
@@ -2909,16 +2909,16 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     const code3 = method(sig, "connect", [cb]);
     eq(
       "195",
-      "connect 给 Error 码 int：第一次 0、重复 31、断开后再连又是 0（b1 / e4）",
+      "connect 给 Error 码 int：第一次 0、重复 31、断开后再连又是 0",
       `${code1.t === Tag.INT ? "int" : "非 int"} ${code1.v} ${code2.v} ${code3.v}`,
       "int 0 31 0",
     );
-    eq("195", "重复连接不多一份投递、disconnect 是 void 且真的断开（b1 / b2）", `${seen.join(",")} ${show(method(sig, "disconnect", [cb]))}`, "5 <null>");
+    eq("195", "重复连接不多一份投递、disconnect 是 void 且真的断开", `${seen.join(",")} ${show(method(sig, "disconnect", [cb]))}`, "5 <null>");
   }
   {
     const seen: string[] = [];
     const sig = V.object(new Signal("fired"));
-    eq("195", "CONNECT_ONE_SHOT 实测是 4（b4），连上就投一次（b5 / b7）", `${method(sig, "connect", [mkSink(seen), V.int(4)]).v}`, "0");
+    eq("195", "CONNECT_ONE_SHOT 实测是 4，连上就投一次", `${method(sig, "connect", [mkSink(seen), V.int(4)]).v}`, "0");
     method(sig, "emit", [V.int(1)]);
     method(sig, "emit", [V.int(2)]);
     eq("195", "one-shot 投完自动断开：第二次 emit 不再投递", seen.join(","), "1");
@@ -2944,19 +2944,19 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
       eq("195", "重复连的那一份不补投", seen3.join(","), "9");
     }
     // 局部实例的 deferred 会被 Godot 随 RefCounted 回收丢掉；我们持强引用，排干就会多印一行 → 响亮拒
-    shouldThrow("195", "CONNECT_DEFERRED 要宿主先有对象生命周期模型 → 响亮拒（S195 ③：排干会让局部实例那一形静默多印）", () =>
+    shouldThrow("195", "CONNECT_DEFERRED 要宿主先有对象生命周期模型 → 响亮拒（排干会让局部实例那一形静默多印）", () =>
       method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(1)]),
     );
     shouldThrow("195", "flags=-1 这种压着多个位的组合没量过 → 响亮拒（q10 只量到它给 0）", () =>
       method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(-1)]),
     );
   }
-  eq("196", "Signal 上 has_method / get_method_list / is_connected_to 是运行期那三句（s01b / s01c / s04）", [
+  eq("196", "Signal 上 has_method / get_method_list / is_connected_to 是运行期那三句", [
     errText(() => method(V.object(new Signal("fired")), "has_method", [V.str("connect")])),
     errText(() => method(V.object(new Signal("fired")), "get_method_list", [])),
     errText(() => method(V.object(new Signal("fired")), "is_connected_to", [V.nil()])),
   ].join(" || "), "Invalid call. Nonexistent function 'has_method' in base 'Signal'. || Invalid call. Nonexistent function 'get_method_list' in base 'Signal'. || Invalid call. Nonexistent function 'is_connected_to' in base 'Signal'.");
-  eq("196", "信号自身的 get_name / is_null / typeof 不变（s01 / S165）", `${method(V.object(new Signal("fired")), "get_name", []).v} ${method(V.object(new Signal("fired")), "is_null", []).v}`, "fired false");
+  eq("196", "信号自身的 get_name / is_null / typeof 不变", `${method(V.object(new Signal("fired")), "get_name", []).v} ${method(V.object(new Signal("fired")), "is_null", []).v}`, "fired false");
 }
 
 
@@ -2992,29 +2992,29 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const three = attribute(inst, "three") as Variant;
   eq(
     "208",
-    "少给与多给同一句、N 都是 3（a1 / a2：无默认值时必填数与全部数相同）",
+    "少给与多给同一句、N 都是 3（无默认值时必填数与全部数相同）",
     `${errText(() => method(three, "call", [V.int(1), V.int(2)]))} || ${errText(() => method(three, "call", [V.int(1), V.int(2), V.int(3), V.int(4)]))}`,
     "Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s). || Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s).",
   );
   eq(
     "211",
-    "带默认值形参：少给报**必填数**、多给报**全部数**（d1 / d2 同一个 twice）",
+    "带默认值形参：少给报**必填数**、多给报**全部数**（同一个 twice）",
     `${errText(() => method(attribute(inst, "twice") as Variant, "call", []))} || ${errText(() => method(attribute(inst, "twice") as Variant, "call", [V.int(1), V.int(2), V.int(3)]))}`,
     "Invalid call to function 'RefCounted::twice (Callable)'. Expected 1 argument(s). || Invalid call to function 'RefCounted::twice (Callable)'. Expected 2 argument(s).",
   );
   eq(
     "214",
-    "静态方法的标签是 **GDScript::**，不是接收者的原生基类（a4）",
+    "静态方法的标签是 **GDScript::**，不是接收者的原生基类",
     errText(() => method(attribute(Base, "stwo") as Variant, "call", [V.int(1)])),
     "Invalid call to function 'GDScript::stwo (Callable)'. Expected 2 argument(s).",
   );
   eq(
     "213",
-    "lambda 的标签是字面量 `<anonymous lambda>(lambda)`（e1–e3）",
+    "lambda 的标签是字面量 `<anonymous lambda>(lambda)`",
     errText(() => method(callableOf(() => V.nil(), 2), "call", [V.int(1)])),
     "Invalid call to function '<anonymous lambda>(lambda) (Callable)'. Expected 2 argument(s).",
   );
-  eq("207", "绑定的实参**抵扣**数量：bind(1,2) 之后 call(3) 合法，且结果仍是「调用实参在前」（b3）", show(method(method(three, "bind", [V.int(1), V.int(2)]), "call", [V.int(3)])), "312");  eq("207", "callv 数量不合式：不报错、不调用，给 null（c1 / c2）", `${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))} ${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2), V.int(3), V.int(4)]))]))}`, "<null> <null>");
+  eq("207", "绑定的实参**抵扣**数量：bind(1,2) 之后 call(3) 合法，且结果仍是「调用实参在前」", show(method(method(three, "bind", [V.int(1), V.int(2)]), "call", [V.int(3)])), "312");  eq("207", "callv 数量不合式：不报错、不调用，给 null（c1 / c2）", `${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))} ${show(method(three, "callv", [V.array(GArray.of([V.int(1), V.int(2), V.int(3), V.int(4)]))]))}`, "<null> <null>");
   {
     class Outer {
       topfn(a: Variant, b: Variant): Variant {
@@ -3025,7 +3025,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
     registerMethodArities(dOuter, { topfn: [2, 2] });
     registerNativeBase(dOuter, "SceneTree");
     const c = attribute(new Outer(), "topfn") as Variant;
-    shouldThrow("215", "外层脚本自己的方法那一形标签要**文件名**（a5 / f1）→ 响亮拒，不发半对文本", () =>
+    shouldThrow("215", "外层脚本自己的方法那一形标签要**文件名**→ 响亮拒，不发半对文本", () =>
       method(c, "call", [V.int(1)]),
     );
   }
@@ -3048,19 +3048,19 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const str2 = () => mk("string", [S("a"), S("b")]);
   const v21 = () => mk("vector2", [vector2(1, 2)]);
 
-  eq("219", "remove_at_copy 在量过的四支上都是 Nonexistent（d1 系列；它此前挂在「没实测」那张表）",
+  eq("219", "remove_at_copy 在量过的四支上都是 Nonexistent（系列；它此前挂在「没实测」那张表）",
     errText102(() => method(byte3(), "remove_at_copy", [I(0)])),
     "Invalid call. Nonexistent function 'remove_at_copy' in base 'PackedByteArray'.");
-  eq("219", "compress / decompress 在其余八支上全部 Nonexistent（e1 系列八格，step 82 那句「只在 byte 量过」升级成实测文本）",
+  eq("219", "compress / decompress 在其余八支上全部 Nonexistent（八格，step 82 那句「只在 byte 量过」升级成实测文本）",
     `${errText102(() => method(i323(), "compress", [I(1)]))} || ${errText102(() => method(v21(), "decompress", [I(9), I(1)]))}`,
     "Invalid call. Nonexistent function 'compress' in base 'PackedInt32Array'. || Invalid call. Nonexistent function 'decompress' in base 'PackedVector2Array'.");
   eq("223", "Array 与 Dictionary 上也根本没有 join（j2 / j6 / j7：它是 String 的方法）",
     `${errText102(() => method(V.array(GArray.of([I(1), I(2)])), "join", [S("-")]))} || ${errText102(() => method(V.dict(new GDict()), "join", [S("-")]))}`,
     "Invalid call. Nonexistent function 'join' in base 'Array'. || Invalid call. Nonexistent function 'join' in base 'Dictionary'.");
-  eq("219", "join 九支全都没有（a1 这一轮补了 byte / i64 / f32 / v3 / color 五支，与旧账四支合成整族）",
+  eq("219", "join 九支全都没有（这一轮补了 byte / i64 / f32 / v3 / color 五支，与此前四支合成整族）",
     errText102(() => method(str2(), "join", [S("-")])),
     "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");
-  eq("219", "bsearch_custom 在 byte 与 v2 上量到不存在（g1 / g3；其余七支仍未量 → 走「没实测」那条响）",
+  eq("219", "bsearch_custom 在 byte 与 v2 上量到不存在（其余七支仍未量 → 走「没实测」那条响）",
     `${errText102(() => method(byte3(), "bsearch_custom", [S(""), I(1)]))} || ${errText102(() => method(v21(), "bsearch_custom", [S(""), I(1)]))}`,
     "Invalid call. Nonexistent function 'bsearch_custom' in base 'PackedByteArray'. || Invalid call. Nonexistent function 'bsearch_custom' in base 'PackedVector2Array'.");
   eq("218", "下标位给 float 是**向零截断**、不报错（c1–c5：读 / 写 / set / insert / remove_at 五格）",
@@ -3077,7 +3077,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   const sizeOf = (v: Variant): unknown => method(v, "size", []).v;
   eq(
     "218",
-    "模式 5 与 -2 都给空 pack（f1 / f2 把 S179 的越界范围从 4 / 9 / -1 扩到这两格），decompress 的模式 5 也是空 pack（f3）",
+    "模式 5 与 -2 都给空 pack（越界范围从 4 / 9 / -1 扩到这两格），decompress 的模式 5 也是空 pack",
     `${sizeOf(method(byte3(), "compress", [I(5)]))} ${sizeOf(method(byte3(), "compress", [I(-2)]))} ${sizeOf(method(method(byte3(), "compress", [I(1)]), "decompress", [I(9), I(5)]))}`,
     "0 0 0",
   );

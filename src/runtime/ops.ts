@@ -207,7 +207,7 @@ export const ops = {
     if (bothInt(a, b)) {
       const [x, y] = intPair(a, b);
       if (intToBig(y) === 0n) {
-        throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
+        throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
       }
       return i64(x, y, (p, q) => p / q);
     }

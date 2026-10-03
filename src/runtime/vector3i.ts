@@ -257,7 +257,7 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
     case "ceildiv":
     case "signwrapping":
     case "pow":
-      throw new UnsupportedError("vector3i-method", `Vector3i.${name}() 实测不存在（4.6.3 探针 tmp/f69）`);
+      throw new UnsupportedError("vector3i-method", `Vector3i.${name}() 实测不存在（4.6.3 实测）`);
     default:
       throw new UnsupportedError("vector3i-method", `Vector3i.${name}() 未实现`);
   }

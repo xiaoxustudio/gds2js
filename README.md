@@ -104,9 +104,7 @@ pnpm test:diff       # Godot(裁判) vs 编译产物(被测)，逐字节 + 静�
 pnpm test:golden     # 生成/校验 Godot golden（--check 只报漂移不写盘）
 pnpm test:compile    # 语料 → main.gen.mts（import 模式产物，0 churn 即无回归）
 pnpm test:ir / test:sema / test:ops
-pnpm test:facade     # CST 门面等价性：wasm 与 FFI 两条物化路逐节点比（239 份 / 73,874 个节点）
 pnpm test:cli-native # 原生 CLI 等价性：不带 node 的 gds2js.exe 与 node 侧逐字节/逐字对齐（要 zig + libtree-sitter + scriptc）
-pnpm test:multi      # 跨文件冒烟（examples/multi）
 pnpm test:pkgmodes   # local/single 两模式的回归：逐用例 node 跑对齐 golden + 子目录 local + single sourcemap 解码
 pnpm test:export     # export 的回归：node(SEA+VFS) / scriptc 两支各真打一个 exe（stdout 逐字节 + 抛错须非 0 退出 + 门禁该响的响 + 中间件清干净）；要先前 pnpm build
 pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字节对 Godot golden（默认跑代表集；--all 全量、--project 只跑 9 个项目树用例）

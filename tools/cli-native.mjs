@@ -57,7 +57,7 @@ console.log(`复制了 ${srcFiles.length} 份源码 → ${join(SCRATCH, "src")}`
 /* 2) parser.ts 换成原生实现（工具链之外的依赖就断在这里） */
 const NATIVE_PARSER = `// 原生构建专用（由 tools/cli-native.mjs 生成，**不要**在仓库里改这份）：
 // 同一个 \`parseSource\`，树从 libtree-sitter（\`--ffi\`）来，不再碰 web-tree-sitter。
-// CST 形状是 \`./cst\` 的普通记录 —— 类实例喂不进记录形参（S231 的 SC2002），两側都交记录（S232）。
+// CST 形状是 \`./cst\` 的普通记录 —— 类实例喂不进记录形参（SC2002），两側都交记录。
 import { buildCsTree, type NodeTable } from "./native";
 import type { CsTree } from "./cst";
 
@@ -271,7 +271,7 @@ const exe = join(SCRATCH, "gds2js.exe");
 const build = spawnSync(SCRIPTC, ["build", entry, "--ffi", ffiPath, "--dynamic", "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
 process.stdout.write(`${build.stdout ?? ""}${build.stderr ?? ""}`);
 if (build.status !== 0 || !existsSync(exe)) {
-  console.error("\n还没编过去：把上面每一格的 SC 编号对着 ROADMAP §5.12.2 / §5.12.3 查，新增的围栏要记进 S 账。");
+  console.error("\n还没编过去：SC 编号就是线索（对着报错站点的形状看），新增的围栏记得记一笔。");
   if (!keep) rmSync(SCRATCH, { recursive: true, force: true });
   process.exit(1);
 }

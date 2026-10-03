@@ -143,7 +143,7 @@ function callableCallLabel(box: CallableBox): string {
   const native = inner === undefined ? null : nativeBaseOf(inner);
   if (native === null) throw new UnsupportedError("callable-arity-label", "还不知道这个 Callable 的函数标签");
   if (native === "RefCounted") return `RefCounted::${name}`;
-  throw new UnsupportedError("callable-arity-label", `${native} 的函数标签要脚本文件名（§6 那笔挂账），这一格没发出去过`);
+  throw new UnsupportedError("callable-arity-label", `${native} 的函数标签要脚本文件名（docs/SEMANTICS.md §6 的挂账），这一格没发出去过`);
 }
 
 /** Callable 的方法面：方法 Callable、静态方法 Callable、lambda、`Callable()` 空 Callable 四种形状共用这一张表。 */
@@ -248,7 +248,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         // flags 认 0 / 1 / 2 / 4 / 8。**1（CONNECT_DEFERRED）故意不发** —— 局部实例在 `_initialize` 返回时被回收、Godot 一声不响丢弃，而我们的盒子对接收者是强引用，排干队列就从「两边都不印」变成「Godot 不印、我们多印一行」= 静默错；要发这一格得先有宿主的对象生命周期模型。
         const n = Number(flags.v);
         if (n === 1) {
-          throw new UnsupportedError("signal-flag-deferred", "connect() 的 CONNECT_DEFERRED 要宿主先有对象生命周期模型，否则局部实例那一形会从静默丢行变成静默多印（S195 ③）");
+          throw new UnsupportedError("signal-flag-deferred", "connect() 的 CONNECT_DEFERRED 要宿主先有对象生命周期模型，否则局部实例那一形会从静默丢行变成静默多印");
         }
         if (n !== 0 && n !== 2 && n !== 4 && n !== 8) {
           throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 8）`);

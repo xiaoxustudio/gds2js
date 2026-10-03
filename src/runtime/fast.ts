@@ -138,7 +138,7 @@ export const fast = {
     return r;
   },
   iDivC(a: number, b: number): number {
-    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
+    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
     const r = Math.trunc(a / b);
     if (!Number.isSafeInteger(r)) throw int64(r);
     return r;
@@ -151,7 +151,7 @@ export const fast = {
   },
 
   iDiv(a: number, b: number): number {
-    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程，S27）");
+    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
     return Math.trunc(a / b);
   },
   fDiv(a: number, b: number): number {
