@@ -5,6 +5,7 @@ pkg/
 pkg-check/
 node_modules/
 dist/
+.turbo/
 
 # 生成产物（跨文件工程编译输出，派生文件，不入库）
 corpus/cases/*/.gen/

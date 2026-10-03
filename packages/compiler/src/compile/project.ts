@@ -7,7 +7,7 @@ import { analyze } from "../lower/analyze";
 import type { ClassDecl, Expr, Module, Stmt, TypeRef } from "../lower/ir";
 import { lower } from "../lower/lower";
 import { parseSource } from "../parse/parser";
-import { UnsupportedError } from "../runtime/errors";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 
 
 const RES_PREFIX = "res://";

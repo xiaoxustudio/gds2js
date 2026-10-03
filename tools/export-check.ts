@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TMP = join(ROOT, "tmp", "export-check");
-const CLI = join(ROOT, "dist", "cli.mjs");
+const CLI = join(ROOT, "packages", "gds2js", "dist", "cli.mjs");
 const WORK = join(ROOT, "examples", "multi", ".gds2js-export");
 const SEA_MIN_NODE = "25.7.0";
 const MULTI = join(ROOT, "examples", "multi", "main.gd");

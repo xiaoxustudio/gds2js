@@ -486,7 +486,7 @@ export class GArray {
     this.items = [...this.items].sort(cmp);
   }
 
-  /** 带比较器的排序：同键顺序走引擎那份置换（`src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
+  /** 带比较器的排序：同键顺序走引擎那份置换（`packages/runtime/src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
     this.items = sortGodot(this.items, before);
   }

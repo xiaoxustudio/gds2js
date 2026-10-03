@@ -10,7 +10,7 @@ import { defineConfig } from "tsdown";
  * `inlineDynamicImports` 是把多入口的 code-splitting 关掉的那把钥匙（不加就还是切成多个 chunk）。
  */
 export default defineConfig({
-	entry: { product: "src/product.ts" },
+	entry: { product: "../runtime/src/product.ts" },
 	format: "esm",
 	target: "node25",
 	platform: "node",

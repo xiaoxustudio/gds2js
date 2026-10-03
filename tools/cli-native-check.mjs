@@ -34,7 +34,7 @@ function fail(msg) {
 
 /** node 那支 CLI：走仓库里的 tsx（与 test:diff 同一口径）。 */
 function cliNode(args, cwd) {
-  return run("npx", ["tsx", "src/cli.ts", ...args], cwd);
+  return run("npx", ["tsx", "packages/gds2js/src/cli.ts", ...args], cwd);
 }
 function cliExe(args, cwd) {
   return run(EXE, args, cwd);

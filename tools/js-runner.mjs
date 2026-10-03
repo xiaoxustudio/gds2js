@@ -35,7 +35,7 @@ export default async function runCase(id) {
 async function runProjectCase(id) {
   const root = caseDir(id);
   const outDir = join(root, ".gen");
-  const { compileProject } = await import("../src/compile/project.ts");
+  const { compileProject } = await import("@gds2js/compiler/compile/project");
   const result = await compileProject({
     entries: [join(root, "main.gd")],
     resRoot: root,
@@ -55,7 +55,7 @@ async function runProjectCase(id) {
   }
 
   try {
-    const harness = await import("../src/host.ts");
+    const harness = await import("@gds2js/runtime/host");
     harness.resetOut?.();
   } catch {
   }

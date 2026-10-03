@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { emitModule } from "../src/emit/emitter";
-import { lower } from "../src/lower/lower";
-import { parseSource } from "../src/parse/parser";
+import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { parseSource } from "@gds2js/compiler/parse/parser";
 import { KERNELS, tableHeader, tableRow, type BenchRow, type Kernel } from "./bench-kernels";
 
 const OUT = resolve("bench/.out");

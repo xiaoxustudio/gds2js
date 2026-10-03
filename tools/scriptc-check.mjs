@@ -35,14 +35,14 @@ function genFile(id) {
   return join(caseDir(id), "main.gen.mts");
 }
 
-/** 产物里有没有 PackedByteArray 的 compress()/decompress() 调用（发射器的形状是 `rt.method(x, "compress", …)`）——有就换带 zstd 的宿主、scriptc 加 --dynamic（与 src/cli.ts 的 usesPackCompress 同一口径）。 */
+/** 产物里有没有 PackedByteArray 的 compress()/decompress() 调用（发射器的形状是 `rt.method(x, "compress", …)`）——有就换带 zstd 的宿主、scriptc 加 --dynamic（与 packages/gds2js/src/cli.ts 的 usesPackCompress 同一口径）。 */
 const NEED_ZSTD = /,\s*"(?:compress|decompress)"\s*,/;
 
-/** 与 `src/host-scriptc.ts` 同形（只有相对路径按 tmp/sc-gate/<id>/ 的深度算）—— 改那份要改这份。 */
+/** 与 `packages/runtime/src/host-scriptc.ts` 同形（只有相对路径按 tmp/sc-gate/<id>/ 的深度算）—— 改那份要改这份。 */
 function zstdHostSource() {
-  return `/// <reference path="../../../src/gds2js-zstd.d.ts" />
-export * from "../../../src/host";
-import { registerZipCodec } from "../../../src/runtime/packed";
+  return `/// <reference path="../../../packages/runtime/src/gds2js-zstd.d.ts" />
+export * from "../../../packages/runtime/src/host";
+import { registerZipCodec } from "../../../packages/runtime/src/runtime/packed";
 import { deflateSync, inflateSync, gzipSync, gunzipSync } from "node:zlib";
 import * as Zstd from "gds2js-zstd";
 
@@ -90,13 +90,13 @@ function copyTreeAll(from, to) {
   }
 }
 
-/** 把 `vendor/` 里两个包铺到 `tmp/sc-gate/node_modules`（替身宿主从 tmp/sc-gate/<id>/ 往上正好找得到）。 */
+/** 把 `packages/runtime/vendor` 里两个包铺到 `tmp/sc-gate/node_modules`（替身宿主从 tmp/sc-gate/<id>/ 往上正好找得到）。 */
 function ensureZstdPackages() {
-  const from = join(ROOT, "vendor");
+  const from = join(ROOT, "packages", "runtime", "src", "vendor");
   const to = join(WORK, "node_modules");
   for (const pkg of ["gds2js-zstd", "zstd-codec"]) {
     if (!existsSync(join(from, pkg))) {
-      console.log(`缺 vendor/${pkg} —— zstd 用例没法铺驱动包`);
+      console.log(`缺 packages/runtime/src/vendor/${pkg} —— zstd 用例没法铺驱动包`);
       process.exit(1);
     }
     copyTreeAll(join(from, pkg), join(to, pkg));
@@ -121,7 +121,7 @@ function prepare(id) {
   mkdirSync(dir, { recursive: true });
   const src = readFileSync(genFile(id), "utf8");
   const zstd = NEED_ZSTD.test(src);
-  const moved = src.split("../../../tools/harness/scene-tree").join(zstd ? "./host-scriptc" : "../../../src/host");
+  const moved = src.split("../../../tools/harness/scene-tree").join(zstd ? "./host-scriptc" : "../../../packages/runtime/src/host");
   const file = join(dir, "main.mts");
   writeFileSync(file, moved, "utf8");
   if (zstd) {
@@ -159,7 +159,7 @@ function gateProject(id) {
   const treeDir = join(caseDir(id), ".gds2js-export");
   const r = spawnSync(
     "npx",
-    ["tsx", "src/cli.ts", "export", caseScript(id), "--pack", "scriptc", "-o", exe, "--keep-bundle"],
+    ["tsx", "packages/gds2js/src/cli.ts", "export", caseScript(id), "--pack", "scriptc", "-o", exe, "--keep-bundle"],
     { encoding: "utf8", shell: true, cwd: ROOT, timeout: 1_500_000 },
   );
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;

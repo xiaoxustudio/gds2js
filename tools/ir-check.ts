@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import { parseSource } from "../src/parse/parser";
-import { lower } from "../src/lower/lower";
-import { UnsupportedError } from "../src/runtime/errors";
+import { parseSource } from "@gds2js/compiler/parse/parser";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { caseScript, listSingleCases } from "./lib.mjs";
 
 const cases = listSingleCases();

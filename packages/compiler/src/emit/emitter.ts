@@ -1,8 +1,8 @@
 import { staticMemberFn } from "../lower/ir";
 import { GLOBAL_CONSTANTS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
-import { UnsupportedError } from "../runtime/errors";
-import { isElemKind } from "../runtime/values";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { isElemKind } from "@gds2js/runtime/runtime/values";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -34,7 +34,7 @@ export interface EmitOptions {
   standaloneInline?: string;
 }
 
-const DEFAULT_RUNTIME_IMPORT = "../../../src/runtime/index";
+const DEFAULT_RUNTIME_IMPORT = "../../../packages/runtime/src/runtime/index";
 const DEFAULT_HOST_IMPORT = "../../../tools/harness/scene-tree";
 
 const BINOP: Record<string, string> = {

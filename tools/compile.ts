@@ -1,10 +1,10 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { emitModule } from "../src/emit/emitter";
-import { analyze } from "../src/lower/analyze";
-import { lower } from "../src/lower/lower";
-import { parseSource } from "../src/parse/parser";
-import { UnsupportedError } from "../src/runtime/errors";
+import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { analyze } from "@gds2js/compiler/lower/analyze";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { parseSource } from "@gds2js/compiler/parse/parser";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { caseDir, caseScript, listSingleCases } from "./lib.mjs";
 
 const filter = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";

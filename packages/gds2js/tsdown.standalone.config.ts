@@ -7,7 +7,7 @@ import { defineConfig } from "tsdown";
  * 都从上面拿 { rt, print, SceneTree }。
  */
 export default defineConfig({
-	entry: { standalone: "src/standalone.ts" },
+	entry: { standalone: "../runtime/src/standalone.ts" },
 	format: "cjs",
 	target: "node22",
 	platform: "node",

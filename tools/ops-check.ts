@@ -1,15 +1,15 @@
-import "../src/host-node"; // node 宿主的 zlib 注册（runtime 只留槽，见 `src/runtime/packed.ts`）
-import { GodotRuntimeError, UnsupportedError } from "../src/runtime/errors";
-import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "../src/runtime/builtins";
-import { fast } from "../src/runtime/fast";
-import { parseGdDouble } from "../src/lower/double";
-import { md5Hex } from "../src/runtime/md5";
-import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "../src/runtime/object";
-import { Signal } from "../src/runtime/signal";
-import { paramSlot } from "../src/runtime/slots";
-import { attribute, callableCtor, index, method, writeIdx, writeProp } from "../src/runtime/methods";
-import { isLess, ops, strOps } from "../src/runtime/ops";
-import { Tag, V, type Variant } from "../src/runtime/tags";
+import "@gds2js/runtime/host-node"; // node 宿主的 zlib 注册（runtime 只留槽，见 `packages/runtime/src/runtime/packed.ts`）
+import { GodotRuntimeError, UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVariant } from "@gds2js/runtime/runtime/builtins";
+import { fast } from "@gds2js/runtime/runtime/fast";
+import { parseGdDouble } from "@gds2js/runtime/lower/double";
+import { md5Hex } from "@gds2js/runtime/runtime/md5";
+import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { Signal } from "@gds2js/runtime/runtime/signal";
+import { paramSlot } from "@gds2js/runtime/runtime/slots";
+import { attribute, callableCtor, index, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/methods";
+import { isLess, ops, strOps } from "@gds2js/runtime/runtime/ops";
+import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import {
   GArray,
   GDict,
@@ -32,7 +32,7 @@ import {
   truthyOf,
   valueEq,
   valueSame,
-} from "../src/runtime/values";
+} from "@gds2js/runtime/runtime/values";
 import {
   asColor,
   color,
@@ -43,8 +43,8 @@ import {
   colorWrite,
   GColor,
   toColor,
-} from "../src/runtime/color";
-import { GVector2, asVec2, toVec2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "../src/runtime/vector2";
+} from "@gds2js/runtime/runtime/color";
+import { GVector2, asVec2, toVec2, vecCmp, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "@gds2js/runtime/runtime/vector2";
 import {
   GVector3,
   asVec3,
@@ -55,9 +55,9 @@ import {
   vector3Const,
   vector3Method,
   vector3New,
-} from "../src/runtime/vector3";
-import { bytesCtor, GBytes, packCtor, toByte } from "../src/runtime/packed";
-import { asType, isType, typeOf } from "../src/runtime/patterns";
+} from "@gds2js/runtime/runtime/vector3";
+import { bytesCtor, GBytes, packCtor, toByte } from "@gds2js/runtime/runtime/packed";
+import { asType, isType, typeOf } from "@gds2js/runtime/runtime/patterns";
 import {
   GVector2i,
   asVec2i,
@@ -67,7 +67,7 @@ import {
   vector2iConst,
   vector2iMethod,
   vector2iNew,
-} from "../src/runtime/vector2i";
+} from "@gds2js/runtime/runtime/vector2i";
 import {
   asVec3i,
   GVector3i,
@@ -77,8 +77,8 @@ import {
   vector3iConst,
   vector3iMethod,
   vector3iNew,
-} from "../src/runtime/vector3i";
-import { toVec2i } from "../src/runtime/vector2i";
+} from "@gds2js/runtime/runtime/vector3i";
+import { toVec2i } from "@gds2js/runtime/runtime/vector2i";
 
 /** 手写的类没有发射器，自己给一张与产物同形状的按名派发表。 */
 function gdDispatchByName(self: object, name: string, args: Variant[]): Variant | null {
@@ -2797,7 +2797,7 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
 }
 
 {
-  // sort_custom 走引擎那份置换：src/runtime/sort.ts 逐行转写 core/templates/sort_array.h
+  // sort_custom 走引擎那份置换：packages/runtime/src/runtime/sort.ts 逐行转写 core/templates/sort_array.h
   const perm = (n: number, key: (i: number) => number, cmp: (x: number, y: number) => boolean): string => {
     const g = GArray.of(Array.from({ length: n }, (_x, i) => vector2i(key(i), i)));
     g.sortCustom((x, y) => cmp((asVec2i(x) as GVector2i).x, (asVec2i(y) as GVector2i).x));

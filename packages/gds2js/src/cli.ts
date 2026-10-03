@@ -6,17 +6,17 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import type { Dirent } from "node:fs";
-import { compileProject } from "./compile/project";
+import { compileProject } from "@gds2js/compiler/compile/project";
 import { bundleModule, bundlingAvailable } from "./bundle";
 import { runProduct } from "./exec";
 import { buildProgram, FLAGS, withCommon, type CliSpec } from "./commands";
-import { selfFile, selfHome } from "./home";
-import { emitModule, emitModuleWithMap } from "./emit/emitter";
-import type { RawSourceMap } from "./emit/sourcemap";
-import { analyze } from "./lower/analyze";
-import { lower } from "./lower/lower";
-import { parseSource } from "./parse/parser";
-import { UnsupportedError } from "./runtime/errors";
+import { selfFile, selfHome } from "@gds2js/compiler/home";
+import { emitModule, emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
+import type { RawSourceMap } from "@gds2js/compiler/emit/sourcemap";
+import { analyze } from "@gds2js/compiler/lower/analyze";
+import { lower } from "@gds2js/compiler/lower/lower";
+import { parseSource } from "@gds2js/compiler/parse/parser";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 
 /** 手搓 `hh:mm:ss`：`Date.prototype.toLocaleTimeString` 在静态目标上没有 lowering。 */
 function hhmmss(d: Date): string {
@@ -656,7 +656,13 @@ function scriptcWall(why: string): { v: ExportVerdict; advice: string } {
 function runtimeTsDir(): string | null {
   const here = dirname(fileURLToPath(import.meta.url));
   const home = selfHome();
-  const cands = [process.env.GDS2JS_RUNTIME_SRC, join(here, "runtime"), join(here, "..", "src", "runtime"), home === null ? null : join(home, "src", "runtime")];
+  const cands = [
+    process.env.GDS2JS_RUNTIME_SRC,
+    join(here, "..", "..", "runtime", "src", "runtime"), // packages/gds2js/dist 与 packages/gds2js/src 两种出发点
+    join(here, "..", "packages", "runtime", "src", "runtime"), // 迁移期：CLI 还在根的 src|dist 下
+    join(here, "runtime"),
+    home === null ? null : join(home, "src", "runtime"),
+  ];
   for (const c of cands) if (c !== undefined && c !== null && c !== "" && existsSync(join(c, "index.ts"))) return c;
   return null;
 }
@@ -693,13 +699,13 @@ function copyTreeAll(from: string, to: string): void {
 
 /** 用了 compress()/decompress() 的 scriptc 产物：把带 zstd 的宿主变体与驱动包铺进产物树（树要自包含，node_modules 由这里现铺）。 */
 function copyZstdHost(dir: string, srcRoot: string): boolean {
-  const vendor = join(srcRoot, "..", "vendor");
+  const vendor = join(srcRoot, "vendor");
   const hostVariant = join(srcRoot, "host-scriptc.ts");
   const declare = join(srcRoot, "gds2js-zstd.d.ts");
   const driver = join(vendor, "gds2js-zstd");
   const codec = join(vendor, "zstd-codec");
   if (!existsSync(hostVariant) || !existsSync(declare) || !existsSync(driver) || !existsSync(codec)) {
-    console.error("找不到 zstd 宿主变体或驱动包（src/host-scriptc.ts / src/gds2js-zstd.d.ts / vendor/gds2js-zstd / vendor/zstd-codec）。");
+    console.error("找不到 zstd 宿主变体或驱动包（packages/runtime/ 下的 host-scriptc.ts / gds2js-zstd.d.ts / vendor/…）。");
     exportVerdict("refused", "缺 zstd 宿主/驱动");
     return false;
   }

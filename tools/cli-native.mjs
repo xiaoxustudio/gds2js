@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 到 scratch、把四份同名文件换成原生实现、
+ * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 与 packages/ 到 scratch、把四份同名文件换成原生实现、
  * 用 zig 编 C、写 ffi manifest、跑 scriptc build。
  * C 必须用 zig cc -target x86_64-windows-gnu 编：换工具链目标会在链接期找不到 libuuid.a。
  *
@@ -43,16 +43,21 @@ if (!existsSync(join(TS_SRC, "lib", "src", "lib.c"))) {
   fail(`找不到 libtree-sitter 源码：${TS_SRC}\n  用 TS_SRC=<目录> 指过去（那目录要有 lib/src/lib.c 与 lib/include/tree_sitter/api.h）。`);
 }
 
-/* 1) scratch 里的 src/ */
-rmSync(join(SCRATCH, "src"), { recursive: true, force: true });
-const srcFiles = listTs(join(ROOT, "src"));
-for (const abs of srcFiles) {
-  const rel = relative(ROOT, abs).split("\\").join("/");
-  const dest = join(SCRATCH, rel);
-  mkdirSync(dirname(dest), { recursive: true });
-  copyFileSync(abs, dest);
+/* 1) scratch 里的源码树：三个 workspace 包（packages/*）原样铺出来。
+ *    包源码放在 SCRATCH/packages/*，步骤 2c 会把全部 `@gds2js/*` 说明符改成相对路径 ——
+ *    盘面上一旦落进 node_modules，scriptc 会把它当「包代码」收进岛，这些源码必须保持静态编译。 */
+rmSync(join(SCRATCH, "packages"), { recursive: true, force: true });
+const pkgFiles = [];
+for (const pkg of ["runtime", "compiler", "gds2js"]) {
+  for (const abs of listTs(join(ROOT, "packages", pkg))) {
+    const rel = relative(ROOT, abs).split("\\").join("/");
+    const dest = join(SCRATCH, rel);
+    mkdirSync(dirname(dest), { recursive: true });
+    copyFileSync(abs, dest);
+    pkgFiles.push(dest);
+  }
 }
-console.log(`复制了 ${srcFiles.length} 份源码 → ${join(SCRATCH, "src")}`);
+console.log(`复制了 ${pkgFiles.length} 份包源码 → ${SCRATCH}`);
 
 /* 2) parser.ts 换成原生实现（工具链之外的依赖就断在这里） */
 const NATIVE_PARSER = `// 原生构建专用（由 tools/cli-native.mjs 生成，**不要**在仓库里改这份）：
@@ -92,7 +97,7 @@ export async function parseSource(src: string): Promise<CsTree> {
   return buildCsTree(tableFromFfi(src));
 }
 `;
-writeFileSync(join(SCRATCH, "src", "parse", "parser.ts"), NATIVE_PARSER, "utf8");
+writeFileSync(join(SCRATCH, "packages", "compiler", "src", "parse", "parser.ts"), NATIVE_PARSER, "utf8");
 console.log("scratch 的 parser.ts 换成原生实现");
 
 /* 2b) 另外三份同名文件换成原生实现。
@@ -108,11 +113,11 @@ export async function bundleModule(entry: string, outDir: string): Promise<void>
   throw new Error(\`这个构建里没带打包器（\${entry} → \${outDir}）\`);
 }
 `;
-writeFileSync(join(SCRATCH, "src", "bundle.ts"), NATIVE_BUNDLE, "utf8");
+writeFileSync(join(SCRATCH, "packages", "gds2js", "src", "bundle.ts"), NATIVE_BUNDLE, "utf8");
 console.log("scratch 的 bundle.ts 换成原生实现（single 响亮拒）");
 
 const NATIVE_EXEC = `// 原生构建专用（由 tools/cli-native.mjs 生成）：静态 exe 里没有能跑产物的引擎 ——
-// 产物吃的是 node 的 builtin（\`src/host-node.ts\`），所以 \`run\` 起一个**外部 node 子进程**。
+// 产物吃的是 node 的 builtin（\`packages/runtime/src/host-node.ts\`），所以 \`run\` 起一个**外部 node 子进程**。
 // 版本要求是产物那边来的：入口是 \`.mts\`，靠 node 的类型剥离跑（22.18+/23.6+ 默认开）。
 import { spawnSync } from "node:child_process";
 
@@ -124,12 +129,13 @@ export async function runProduct(path: string): Promise<void> {
   if (r.status !== 0) throw new Error(\`产物退出码 \${String(r.status)}\`);
 }
 `;
-writeFileSync(join(SCRATCH, "src", "exec.ts"), NATIVE_EXEC, "utf8");
+writeFileSync(join(SCRATCH, "packages", "gds2js", "src", "exec.ts"), NATIVE_EXEC, "utf8");
 console.log("scratch 的 exec.ts 换成原生实现（run 起外部 node 子进程）");
 
 /* 原生那支的「自带家目录」= 构建期把 dist 与 runtime 源码嵌进 exe。
  * 契约与 SEA 那支一字不差：解出一个只读目录，给目录本身和目录里某个文件的落盘路径。
- * 带的是 cli.ts 问到的那些键：dist 下的 .mjs/.cjs、src/runtime/**.ts、src/host.ts、src/lower/double.ts。
+ * 带的是 cli.ts 问到的那些键：dist 下的 .mjs/.cjs、src/runtime/**.ts、src/host.ts、src/lower/double.ts
+ * （后三样读自 packages/runtime/，键名不变）。
  * 不带 wasm：解析器走 FFI，gdscript.wasm 在这条路上没有读者。 */
 const HOME = [];
 const HOME_KEYS = [];
@@ -137,14 +143,14 @@ function assetTo(rel, abs) {
   HOME_KEYS.push(rel);
   HOME.push(`  ${JSON.stringify(rel)}: ${JSON.stringify(readFileSync(abs, "utf8"))}`);
 }
-for (const name of readdirSync(join(ROOT, "dist")).sort()) {
+for (const name of readdirSync(join(ROOT, "packages", "gds2js", "dist")).sort()) {
   if (!/\.(mjs|cjs)$/.test(name)) continue;
-  assetTo(`dist/${name}`, join(ROOT, "dist", name));
+  assetTo(`dist/${name}`, join(ROOT, "packages", "gds2js", "dist", name));
 }
-const RT_DIR = join(ROOT, "src", "runtime");
+const RT_DIR = join(ROOT, "packages", "runtime", "src", "runtime");
 for (const abs of listTs(RT_DIR)) assetTo(`src/runtime/${relative(RT_DIR, abs).split("\\").join("/")}`, abs);
-assetTo("src/host.ts", join(ROOT, "src", "host.ts"));
-assetTo("src/lower/double.ts", join(ROOT, "src", "lower", "double.ts"));
+assetTo("src/host.ts", join(ROOT, "packages", "runtime", "src", "host.ts"));
+assetTo("src/lower/double.ts", join(ROOT, "packages", "runtime", "src", "lower", "double.ts"));
 if (HOME.length === 0) fail("`dist` 里没有 .mjs/.cjs —— 先跑 pnpm build（原生 exe 要把自带运行时嵌进去）。");
 const EMBED_MB = (HOME.reduce((n, s) => n + s.length, 0) / 1048576).toFixed(2);
 const NATIVE_HOME = `// 原生构建专用（由 tools/cli-native.mjs 生成）：exe 自带的家目录 = 构建期嵌进来的 ${HOME.length} 份文件
@@ -215,8 +221,29 @@ export function selfFile(rel: string): string | null {
   return existsSync(p) ? p : null;
 }
 `;
-writeFileSync(join(SCRATCH, "src", "home.ts"), NATIVE_HOME, "utf8");
+writeFileSync(join(SCRATCH, "packages", "compiler", "src", "home.ts"), NATIVE_HOME, "utf8");
 console.log(`scratch 的 home.ts 换成原生实现（嵌 ${HOME.length} 份 / 约 ${EMBED_MB} MB）`);
+
+/* 2c) 相对化：scratch 里所有 `@gds2js/*` 说明符改成指向 SCRATCH/packages/* 的相对路径。
+ *     一律不落 node_modules —— 那里被 scriptc 当「包代码」（要岛），而这些源码必须在静态 tier。 */
+let relRewrites = 0;
+for (const f of pkgFiles) {
+  let s = readFileSync(f, "utf8");
+  const before = s;
+  s = s.replace(/"@gds2js\/(runtime|compiler)\/([^"]+)"/g, (m, pkg, rest) => {
+    const hit = [join(SCRATCH, "packages", pkg, "src", rest + ".ts"), join(SCRATCH, "packages", pkg, "src", rest, "index.ts")].find((p) => existsSync(p));
+    if (hit === undefined) fail(`scratch 里解析不了 ${m}（${f}）`);
+    let rel = relative(dirname(f), hit).split("\\").join("/");
+    if (!rel.startsWith(".")) rel = "./" + rel;
+    return `"${rel}"`;
+  });
+  if (s !== before) {
+    writeFileSync(f, s, "utf8");
+    relRewrites++;
+  }
+  if (/"(?:@gds2js)\//.test(s)) fail(`scratch 里还剩没相对化的 @gds2js 说明符（${f}）`);
+}
+console.log(`相对化了 ${relRewrites} 份 scratch 源码的 @gds2js/* 说明符`);
 
 
 /* 3) 编 C（`--ts-only` 复用已有的 obj，不重编 libtree-sitter） */
@@ -258,7 +285,7 @@ const manifest = {
 const ffiPath = join(SCRATCH, "ffi.json");
 writeFileSync(ffiPath, JSON.stringify(manifest, null, 2), "utf8");
 
-const entry = join(SCRATCH, "src", "cli.ts");
+const entry = join(SCRATCH, "packages", "gds2js", "src", "cli.ts");
 /* 岛是**必需**的，不再是可选形态：CLI 的参数解析用 commander，而 commander 不带岛就是 6 格 SC2013
  * （实测；岛里 0 错并真跑通）。原先 `--static` 那一支随 commander 一起没了。 */
 if (coverageOnly) {

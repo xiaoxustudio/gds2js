@@ -1,5 +1,5 @@
-import { parseGdDouble } from "./double";
-import { UnsupportedError } from "../runtime/errors";
+import { parseGdDouble } from "@gds2js/runtime/lower/double";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import type { CsNode as SyntaxNode, CsTree as Tree } from "../parse/cst";
 import type {
   ClassDecl,

@@ -12,13 +12,25 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。管�
 ## 环境
 
 - Node **>= 25**（`package.json` engines）。
+- 包管理：**pnpm 12.8.1**（根 `packageManager` 已钉；PATH 上是旧 pnpm 时用 `npx pnpm@12.8.1 …`）。
 - 需要本机 Godot 4.x 作为裁判引擎生成/校验 golden，路径用 `GODOT_BIN` 覆盖（默认 `F:/godot/...`）。
+
+## 仓库结构（pnpm workspace + Turborepo）
+
+```
+packages/runtime    @gds2js/runtime   运行时 + host 系（各包 TS 源码都在包内 src/；`--pack scriptc` 的产物树直接铺它）
+packages/compiler   @gds2js/compiler  parse / lower / emit / compile（+ home）
+packages/gds2js     gds2js            CLI 与发布面：bin、exports、dist/*.mjs|cjs（tsdown 配置在包根）
+根                  16 条门脚本（tools/）、corpus/、examples/、bench/、native/、docs/
+```
+
+`turbo` 只编排**包级** `build` / `typecheck`；门入口保持 `pnpm test:*` 不变（以仓库根为 cwd）。
 
 ## 构建
 
 ```bash
 pnpm gen:ws     # 用 tree-sitter-cli 生成 gdscript.wasm（语法）
-pnpm build      # 产出 dist/cli.mjs + dist/runtime.mjs + dist/host.mjs + dist/standalone.cjs（自包含运行时包）
+pnpm build      # turbo run build：产出 packages/gds2js/dist/cli.mjs + runtime.mjs + host.mjs + standalone.cjs + product.mjs（自包含运行时包）
 ```
 
 ## CLI
@@ -57,7 +69,7 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 `--pack node` 是**出路那一支** —— 机器上没有 scriptc、或想用 Node 自带的那份 zlib/zstd 时才走它（scriptc 那支的压缩接线见下表）。
 
 ```bash
-pnpm build                                                       # export 吃 dist/product.mjs（打平的自带运行时），要先有 dist
+pnpm build                                                       # export 吃 packages/gds2js/dist/product.mjs（打平的自带运行时），要先有 dist
 gds2js export main.gd -o app.exe                                 # 默认即 --pack scriptc：静态编 runtime 源码图，产物 1.6 MB、不带 node
 gds2js export 单文件.gd -o app.exe                               # 不在工程里的散装脚本也照样打（与 build/run 同一条边界）
 gds2js export main.gd -o app.exe --pack node                     # 出路：官方 SEA，要 Node>=25.7，产物里带 node
@@ -71,7 +83,7 @@ gds2js export main.gd -o app.exe --node E:/node/26.7.0/node.exe  # CLI 跑在旧
 
 | 前置                                                              | 干什么用                                                                              | 怎么给                                                    |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `pnpm build`                                                      | `dist/*.mjs                                                                           | cjs` 会被**嵌进 exe**（自带家目录），没 dist 就嵌不到东西 | 跑一次即可 |
+| `pnpm build`                                                      | `packages/gds2js/dist/*.{mjs,cjs}` 会被**嵌进 exe**（自带家目录），没 dist 就嵌不到东西 | 跑一次即可 |
 | [libtree-sitter](https://github.com/tree-sitter/tree-sitter) 源码 | 原生解析器（`lib/src/lib.c` + `lib/include`）                                         | 克隆到 `tmp/libtree-sitter`，或 `TS_SRC=<目录>` 指过去    |
 | `tree-sitter-gdscript/`                                           | GDScript 语法（`src/parser.c` + `src/scanner.c`）；带自己的 `.git`，**不入库**        | 仓库根下克隆一份                                          |
 | `zig` + `scriptc`                                                 | 编 C（必须 `zig cc -target x86_64-windows-gnu`，与 scriptc 的链接同一套工具链）+ 出货 | `ZIG_CC` / `SCRIPTC_BIN` 可指路                           |
@@ -90,7 +102,7 @@ pnpm test:cli-native                       # 门：原生 exe 与 node 侧 CLI �
 产物带可擦除的 TypeScript 标注（`: Promise<void>` 等），文件名后缀是 **`.mts`**，用 Node 原生类型擦除直接跑：
 
 ```bash
-node dist/cli.mjs build x.gd --runtime-mode single -o build/x.mts
+node packages/gds2js/dist/cli.mjs build x.gd --runtime-mode single -o build/x.mts
 node build/x.mts          # Node >= 22.6（默认开启 --experimental-strip-types）
 ```
 

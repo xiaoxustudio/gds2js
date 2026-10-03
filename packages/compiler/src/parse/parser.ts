@@ -7,7 +7,7 @@ import type { CsTree } from "./cst";
 import { toCsTree } from "./wasm-cst";
 
 /** wasm 要相对 `import.meta.url` 定位而不是相对 cwd；产物形态不同、放置位置也不同，逐个候选试。 */
-const WASM_CANDIDATES = ["../../gdscript.wasm", "../gdscript.wasm", "./gdscript.wasm"];
+const WASM_CANDIDATES = ["../../../../gdscript.wasm", "../../../gdscript.wasm", "../../gdscript.wasm", "../gdscript.wasm", "./gdscript.wasm"];
 
 function resolveWasm(): string {
   const fromHome = selfFile("gdscript.wasm");
