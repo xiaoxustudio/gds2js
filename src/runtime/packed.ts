@@ -723,7 +723,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       // 越界模式给空 pack；空 pack 压任何模式也还是空 pack（node 的 deflateSync 反倒给 8 字节，这一格必须照 Godot）
       if (codec === "empty" || items.length === 0) return V.object(new GBytes([], "byte"));
       if (codec === null) {
-        throw new UnsupportedError("packed-compress-mode", `compress() 的 mode ${mode} 发不出去：0 是不写模式时的默认值，4.6.3 那侧给的是「头部字节 + 原字节 + 补零」那种形状，node 侧没有对得上的编解码器；1 / 2 / 3 要靠 process.getBuiltinModule("node:zlib")（这一版取不到，或 2 需要而它没有 zstd）。都不发近似值`);
+        throw new UnsupportedError("packed-compress-mode", `compress() 的 mode ${mode} 发不出去：0 是不写模式时的默认值，4.6.3 那侧给的是「头部字节 + 原字节 + 补零」那种形状，node 侧没有对得上的编解码器；1 / 2 / 3 要靠 process.getBuiltinModule("node:zlib")（这一版取不到，或 2 需要而它没有 zstd）。都不发近似值；要这一格改走 gds2js export --pack node，或直接用 node 跑产物（node ≥ 24 有 zstd）`);
       }
       return V.object(new GBytes(bytesOf(codec.pack(byteBuf(items))), "byte"));
     }
@@ -735,7 +735,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       const codec = codecFor(mode);
       if (codec === "empty") return V.object(new GBytes([], "byte"));
       if (codec === null) {
-        throw new UnsupportedError("packed-compress-mode", `decompress() 的 mode ${mode} 没法逐字节对上（同 compress()：0 是默认模式、node 侧没对应编解码器），不发近似值`);
+        throw new UnsupportedError("packed-compress-mode", `decompress() 的 mode ${mode} 没法逐字节对上（同 compress()：0 是默认模式、node 侧没对应编解码器），不发近似值；要这一格改走 gds2js export --pack node，或直接用 node 跑产物（node ≥ 24 有 zstd）`);
       }
       const sv = intToNum((args[0] as Variant).v as number | bigint);
       const want = typeof sv === "bigint" ? Number(sv) : sv;
