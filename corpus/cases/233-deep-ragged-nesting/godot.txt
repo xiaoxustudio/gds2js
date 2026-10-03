@@ -1,0 +1,14 @@
+3d-print	[[[1, 2], [3]], [[4], [5, 6]]]
+3d-size	2 2 2
+ragged-print	[[1, 2, 3], [4], [5, 6]]
+ragged-eq	true false
+deep-eq	true
+nested-str	[1, [2, [3, [4, [5]]]]]
+nested-idx	[5]
+self-cyc-size	1
+dict-in	{ "a": { "b": { "c": [1, { "d": 2 }] } } }
+dict-in-eq	true
+dup-deep	[5] 99
+dup-shallow	77
+typed-nested	[[1], [2, 3]] 2 2
+typed-pack	[[1, 2], []] 0
