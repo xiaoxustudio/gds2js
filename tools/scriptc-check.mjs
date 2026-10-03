@@ -29,6 +29,7 @@ const DEFAULT_SET = [
   "133-callable-signal-methods",
   "155-param-defaults",
   "200-module-const-shadows-global",
+  "234-string-methods-batch",
   "032-preload-load",
 ];
 

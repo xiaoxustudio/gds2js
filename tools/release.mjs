@@ -56,6 +56,10 @@ console.log(`release: engines.node ${rootEngines}（根/gds2js/exec.native.ts �
 /* 2) 构建 + 门：门里 exe 过期会自动重编，编完跑等价性门（含 SEA / scriptc 两支真出货）。 */
 console.log("release: pnpm build …");
 runCmd("pnpm build");
+/* 2b) 面探针：一个把 runtime String 面拉满的用例走 scriptc 短路（本机 38s）。
+ * 围栏类回归（新形状没 lowering、或旧形状被新代码变可达）在这里先炸，不用等等价性门那几分钟。 */
+console.log("release: scriptc 面探针（234-string-methods-batch）…");
+run(process.execPath, [join(ROOT, "tools", "scriptc-check.mjs"), "234-string-methods-batch"]);
 console.log("release: 原生 CLI 等价性门…");
 run(process.execPath, [join(ROOT, "tools", "cli-native-check.mjs")]);
 
