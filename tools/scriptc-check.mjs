@@ -6,7 +6,7 @@
 //   pnpm test:scriptc 064          只跑 id 含 064 的
 //   pnpm test:scriptc --all        全量（单文件 + 项目树，142 个上下，一轮要几十分钟）
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden } from "./lib.mjs";
 
@@ -35,6 +35,74 @@ function genFile(id) {
   return join(caseDir(id), "main.gen.mts");
 }
 
+/** 产物里有没有 PackedByteArray 的 compress()/decompress() 调用（发射器的形状是 `rt.method(x, "compress", …)`）——有就换带 zstd 的宿主、scriptc 加 --dynamic（与 src/cli.ts 的 usesPackCompress 同一口径）。 */
+const NEED_ZSTD = /,\s*"(?:compress|decompress)"\s*,/;
+
+/** 与 `src/host-scriptc.ts` 同形（只有相对路径按 tmp/sc-gate/<id>/ 的深度算）—— 改那份要改这份。 */
+function zstdHostSource() {
+  return `/// <reference path="../../../src/gds2js-zstd.d.ts" />
+export * from "../../../src/host";
+import { registerZipCodec } from "../../../src/runtime/packed";
+import { deflateSync, inflateSync, gzipSync, gunzipSync } from "node:zlib";
+import * as Zstd from "gds2js-zstd";
+
+registerZipCodec(1, {
+  pack: (b: Uint8Array): Uint8Array => deflateSync(b),
+  unpack: (b: Uint8Array): Uint8Array => inflateSync(b),
+});
+registerZipCodec(3, {
+  pack: (b: Uint8Array): Uint8Array => gzipSync(b),
+  unpack: (b: Uint8Array): Uint8Array => gunzipSync(b),
+});
+
+function delay(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+let waited = 0;
+while (!Zstd.ready() && waited < 500) {
+  await delay(10);
+  waited++;
+}
+if (!Zstd.ready()) {
+  throw new Error(\`zstd 驱动没就绪（等了 \${waited} 拍）：\${Zstd.initError()}\`);
+}
+registerZipCodec(2, {
+  pack: (b: Uint8Array): Uint8Array => Zstd.compress(b),
+  unpack: (b: Uint8Array): Uint8Array => Zstd.decompress(b),
+});
+`;
+}
+
+function copyTreeAll(from, to) {
+  if (!statSync(from).isDirectory()) {
+    copyFileSync(from, to);
+    return;
+  }
+  mkdirSync(to, { recursive: true });
+  for (const e of readdirSync(from, { withFileTypes: true })) {
+    const a = join(from, e.name);
+    const b = join(to, e.name);
+    if (e.isDirectory()) copyTreeAll(a, b);
+    else copyFileSync(a, b);
+  }
+}
+
+/** 把 `vendor/` 里两个包铺到 `tmp/sc-gate/node_modules`（替身宿主从 tmp/sc-gate/<id>/ 往上正好找得到）。 */
+function ensureZstdPackages() {
+  const from = join(ROOT, "vendor");
+  const to = join(WORK, "node_modules");
+  for (const pkg of ["gds2js-zstd", "zstd-codec"]) {
+    if (!existsSync(join(from, pkg))) {
+      console.log(`缺 vendor/${pkg} —— zstd 用例没法铺驱动包`);
+      process.exit(1);
+    }
+    copyTreeAll(join(from, pkg), join(to, pkg));
+  }
+}
+
 function pickCases() {
   // 项目树用例走真 CLI 的 `export --pack scriptc`，不需要 `main.gen.mts`（那一支只发单文件产物）
   const allIds = listCases(filter)
@@ -47,19 +115,26 @@ function pickCases() {
 }
 
 function prepare(id) {
-  // 与 `corpus/cases/<case>/` 同深（三级），runtime 的 import 原样保留，只把宿主那一行换成静态可用的 `src/host`
+  // 与 `corpus/cases/<case>/` 同深（三级），runtime 的 import 原样保留，只把宿主那一行换成静态可用的宿主
   const dir = join(WORK, id);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   const src = readFileSync(genFile(id), "utf8");
-  const moved = src.split("../../../tools/harness/scene-tree").join("../../../src/host");
+  const zstd = NEED_ZSTD.test(src);
+  const moved = src.split("../../../tools/harness/scene-tree").join(zstd ? "./host-scriptc" : "../../../src/host");
   const file = join(dir, "main.mts");
   writeFileSync(file, moved, "utf8");
-  return { dir, file };
+  if (zstd) {
+    writeFileSync(join(dir, "host-scriptc.ts"), zstdHostSource(), "utf8");
+    ensureZstdPackages();
+  }
+  return { dir, file, zstd };
 }
 
-function scBuild(file) {
-  const r = spawnSync("scriptc", ["build", file, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 600000 });
+function scBuild(file, dynamic) {
+  const args = ["build", file, "--strip"];
+  if (dynamic === true) args.push("--dynamic");
+  const r = spawnSync("scriptc", args, { encoding: "utf8", cwd: ROOT, timeout: 600000 });
   return { code: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
 }
 
@@ -107,8 +182,8 @@ for (const id of cases) {
     exe = g.exe;
     if (!g.built) row.note = scNote(g.out, `export 退出 ${g.code}`);
   } else {
-    const { dir, file } = prepare(id);
-    const build = scBuild(file);
+    const { dir, file, zstd } = prepare(id);
+    const build = scBuild(file, zstd);
     exe = exePath(dir);
     row.built = build.code === 0 && exe !== null;
     if (!row.built) row.note = scNote(build.out, `build 退出 ${build.code}`);

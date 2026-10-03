@@ -197,6 +197,17 @@ function main(): void {
     } else checkExe("--pack scriptc", exe, MULTI_WANT);
   }
 
+  console.log("I 不带 --pack 的默认值必须落在 scriptc 那一支（翻默认值这件事得有人守着）");
+  {
+    const exe = join(TMP, "default.exe");
+    const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--verbose"], {});
+    const v = verdictOf(r.out);
+    if (r.code !== 0) record("默认 pack", v?.v ?? "FAIL", v?.note ?? `退出码 ${r.code}\n${r.out.split(/\r?\n/).slice(-6).join("\n")}`);
+    else if (!/scriptc ← /.test(r.out))
+      record("默认 pack", "FAIL", `-v 里没有 scriptc 的定位行，说明默认值不是 scriptc：\n${r.out.split(/\r?\n/).slice(-4).join("\n")}`);
+    else checkExe("默认 pack", exe, MULTI_WANT);
+  }
+
   rmSync(TMP, { recursive: true, force: true });
   rmSync(WORK, { recursive: true, force: true });
   const failed = results.filter((x) => x.v === "FAIL");

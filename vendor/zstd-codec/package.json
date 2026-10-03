@@ -1,0 +1,6 @@
+{
+  "name": "zstd-codec",
+  "version": "0.1.5",
+  "description": "Vendored subset of zstd-codec (MIT) — emscripten asm.js zstd; wasm binding replaced by a stub. See LICENSE.",
+  "main": "index.js"
+}

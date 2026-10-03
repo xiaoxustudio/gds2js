@@ -101,8 +101,8 @@ function hostOf(hostOpt: unknown): string | null {
 }
 
 function packOf(v: unknown): Pack {
-  if (v === undefined || v === "node") return "node";
-  if (v === "scriptc") return "scriptc";
+  if (v === undefined || v === "scriptc") return "scriptc";
+  if (v === "node") return "node";
   console.error(`export --pack 只能是 node | scriptc（收到 ${JSON.stringify(v)}）`);
   process.exit(1);
 }
@@ -319,7 +319,7 @@ async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
 }
 
 /** `export` 铺出来的中间模块树：两支 pack、单文件与工程都归到这一个形状上。 */
-type ExportTree = { entry: string; files: string[]; dirs: string[] };
+type ExportTree = { entry: string; files: string[]; dirs: string[]; /** scriptc 真出货：产物里铺了 zstd 驱动（岛），build 时要加 `--dynamic`。 */ dynamic?: boolean };
 
 /** 空的目录清单：刻意用声明过的 `string[]` 常量，而不是裸 `[]` 字面量 —— 静态目标上裸空数组推断成 `number[]`，塞进 `dirs: string[]` 那一格时运行期被联合检查拒。 */
 const NO_DIRS: string[] = [];
@@ -421,7 +421,7 @@ async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
     return null;
   }
   if (ctx.project) {
-    return exportTsProjectTree(ctx, dir);
+    return exportTsProjectTree(ctx, dir, srcRoot);
   }
   const loaded = await tryLoadSingle(ctx.input);
   if ("error" in loaded) {
@@ -431,10 +431,16 @@ async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
   if (!printDiags(loaded.diags)) return null;
   const entry = join(dir, basename(ctx.input).replace(/\.gd$/i, "") + ".mts");
   try {
-    const code = emitModule(loaded.ir, { runtimeImport: "./runtime/index", hostImport: "./host", autoRun: ctx.run });
+    let code = emitModule(loaded.ir, { runtimeImport: "./runtime/index", hostImport: "./host", autoRun: ctx.run });
+    // 先按普通宿主编一遍量 compress()/decompress()；用到就把宿主换成带 zstd 的那份再编一次。
+    const useZstd = usesPackCompress([code]);
+    if (useZstd) {
+      if (!copyZstdHost(dir, srcRoot)) return null;
+      code = emitModule(loaded.ir, { runtimeImport: "./runtime/index", hostImport: "./host-scriptc", autoRun: ctx.run });
+    }
     writeFileSync(entry, code, "utf8");
     if (ctx.verbose) console.error(`已编译成单文件 + runtime TS 源码（${rt}）→ ${dir}`);
-    return { entry, files: walkMjs(dir), dirs: NO_DIRS };
+    return { entry, files: walkMjs(dir), dirs: NO_DIRS, dynamic: useZstd };
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
     return null;
@@ -445,18 +451,30 @@ async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
 async function exportTsProjectTree(
   ctx: Ctx,
   dir: string,
+  srcRoot: string,
 ): Promise<ExportTree | null> {
   try {
-    const result = await compileProject({
-      entries: [ctx.input],
-      resRoot: ctx.resRoot,
-      outDir: dir,
-      runtimeRoot: dir,
-      runtimeImport: "./runtime/index",
-      hostImport: ctx.hostImport === null ? null : "./host",
-      autoRun: ctx.run ? undefined : false,
-    });
+    const compile = (hostImport: string | null, hostFile: string) =>
+      compileProject({
+        entries: [ctx.input],
+        resRoot: ctx.resRoot,
+        outDir: dir,
+        runtimeRoot: dir,
+        runtimeImport: "./runtime/index",
+        // 树里换宿主名的开关是 hostFile（runtimeRoot 那条分支不走 hostImport）；hostImport 只管 baseClass 那一格。
+        hostImport,
+        hostFile,
+        autoRun: ctx.run ? undefined : false,
+      });
+    let result = await compile(ctx.hostImport === null ? null : "./host", "host");
     if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+    // compress()/decompress() 有没有进产物只有编出来才知道量；用到就换带 zstd 的宿主重编一遍。
+    const useZstd = ctx.hostImport !== null && usesPackCompress(result.modules.map((m) => m.code));
+    if (useZstd) {
+      result = await compile("./host-scriptc", "host-scriptc");
+      if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+      if (!copyZstdHost(dir, srcRoot)) return null;
+    }
     for (const m of result.modules) {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
@@ -468,7 +486,7 @@ async function exportTsProjectTree(
       return null;
     }
     if (ctx.verbose) console.error(`已编译成 ${result.modules.length} 个模块 + 1 份 runtime 源码 → ${dir}`);
-    return { entry: entry.jsPath, files: walkMjs(dir), dirs: NO_DIRS };
+    return { entry: entry.jsPath, files: walkMjs(dir), dirs: NO_DIRS, dynamic: useZstd };
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
     return null;
@@ -614,6 +632,7 @@ function preflightScriptc(): { bin: string; version: string } | null {
   console.error(`找不到可用的 scriptc（试过的路径见下）：${cands.join(" | ")}`);
   if (last !== "") console.error(`  最后一次调用：${last}`);
   console.error("  三条路：随包放一份 <gds2js 同目录>/scriptc/scriptc.exe；项目里 npm i -D scriptc；或设 SCRIPTC_BIN 指到可执行文件。");
+  console.error(`  哪条都不想要就退回 --pack node（只要 Node >= ${SEA_MIN_NODE}，不需要外部编译器）。`);
   exportVerdict("refused", "scriptc 二进制不可用");
   return null;
 }
@@ -652,6 +671,50 @@ function copyTreeTs(from: string, to: string): void {
   }
 }
 
+/** 产物里有没有 PackedByteArray 的 compress()/decompress() 调用 —— 发射器的形状是 `rt.method(x, "compress", …)`（用户字符串走 `rt.V.str("compress")`，逗号那个形状不会撞上）。 */
+function usesPackCompress(sources: string[]): boolean {
+  return sources.some((s) => /,\s*"(?:compress|decompress)"\s*,/.test(s));
+}
+
+/** 目录/文件一视同仁地拷（zstd 宿主变体是文件，vendor 里那两个包是整目录）。 */
+function copyTreeAll(from: string, to: string): void {
+  if (!statSync(from).isDirectory()) {
+    copyFileSync(from, to);
+    return;
+  }
+  mkdirSync(to, { recursive: true });
+  for (const e of readdirSync(from, { withFileTypes: true })) {
+    const a = join(from, e.name);
+    const b = join(to, e.name);
+    if (e.isDirectory()) copyTreeAll(a, b);
+    else copyFileSync(a, b);
+  }
+}
+
+/** 用了 compress()/decompress() 的 scriptc 产物：把带 zstd 的宿主变体与驱动包铺进产物树（树要自包含，node_modules 由这里现铺）。 */
+function copyZstdHost(dir: string, srcRoot: string): boolean {
+  const vendor = join(srcRoot, "..", "vendor");
+  const hostVariant = join(srcRoot, "host-scriptc.ts");
+  const declare = join(srcRoot, "gds2js-zstd.d.ts");
+  const driver = join(vendor, "gds2js-zstd");
+  const codec = join(vendor, "zstd-codec");
+  if (!existsSync(hostVariant) || !existsSync(declare) || !existsSync(driver) || !existsSync(codec)) {
+    console.error("找不到 zstd 宿主变体或驱动包（src/host-scriptc.ts / src/gds2js-zstd.d.ts / vendor/gds2js-zstd / vendor/zstd-codec）。");
+    exportVerdict("refused", "缺 zstd 宿主/驱动");
+    return false;
+  }
+  try {
+    copyTreeAll(hostVariant, join(dir, "host-scriptc.ts"));
+    copyTreeAll(declare, join(dir, "gds2js-zstd.d.ts"));
+    copyTreeAll(driver, join(dir, "node_modules", "gds2js-zstd"));
+    copyTreeAll(codec, join(dir, "node_modules", "zstd-codec"));
+  } catch (e) {
+    console.error(`${dir}:  error  铺 zstd 宿主/驱动失败：${errOf(e)}`);
+    return false;
+  }
+  return true;
+}
+
 type ExportVerdict = "refused" | "no-lib" | "crash" | "failed";
 function exportVerdict(v: ExportVerdict, note: string): void {
   console.error(`gds2js-export[${v}] ${note}`);
@@ -687,6 +750,7 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
   try {
     if (pack === "scriptc") {
       const args = ["build", tree.entry, "-o", exe, "--strip"];
+      if (tree.dynamic === true) args.push("--dynamic");
       note = `scriptc ${sc?.version ?? ""}`;
       if (ctx.verbose) console.error(`  ${sc?.bin ?? "scriptc"} ${args.join(" ")}`);
       const r = spawnSync(sc?.bin ?? "scriptc", args, { encoding: "utf8", windowsHide: true, timeout: 1_500_000 });
@@ -736,8 +800,9 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
       for (const rel of tree.files) ours.add(join(ctx.outDir, rel));
       for (const p of ours) rmSync(p, { force: true });
       if (pack === "scriptc") {
-        // 这一支的中间树里除了 .mts 还有整份 runtime 源码和外部编译器的缓存，逐格删删不干净：目录名是工具自己的暂存（EXPORT_TREE_DIR），整棵收掉才不留渣。
+        // 这一支的中间树里除了 .mts 还有整份 runtime 源码、zstd 驱动的 node_modules 和外部编译器的缓存，逐格删删不干净：目录名是工具自己的暂存（EXPORT_TREE_DIR），整棵收掉才不留渣。
         if (basename(ctx.outDir) === EXPORT_TREE_DIR) rmSync(ctx.outDir, { recursive: true, force: true });
+        else if (tree.dynamic === true) rmSync(join(ctx.outDir, "node_modules"), { recursive: true, force: true });
       } else {
         for (const d of tree.dirs.sort((a, b) => b.length - a.length)) {
           try {
@@ -1059,7 +1124,7 @@ const resolveCtx = (
     sourcemap: opts.sourcemap === true,
     watch: opts.watch === true,
     keep: opts.keep === true,
-    pack: cmd === "export" ? packOf(opts.pack) : "node",
+    pack: cmd === "export" ? packOf(opts.pack) : "scriptc",
     seaNode: cmd === "export" ? externalSeaNode(strOf(opts.node)) : process.execPath,
     keepBundle: opts.keepBundle === true,
     verbose: opts.verbose === true,
@@ -1129,15 +1194,15 @@ const CLI: CliSpec = {
     {
       name: "export",
       args: ["entry"],
-      description: "把入口（整工程或单个脚本）编译成模块树，再用 node SEA / scriptc 打成 **Windows** 原生可执行文件",
+      description: "把入口（整工程或单个脚本）编译成模块树，再用 scriptc / node SEA 打成 **Windows** 原生可执行文件",
       flags: [
         {
           key: "pack",
           long: "--pack",
           metavar: "name",
-          defaultTo: "node",
+          defaultTo: "scriptc",
           help:
-            "打包器：scriptc（首选：外部原生编译器静态编 runtime 源码图，产物 1.6 MB、不带 node）| node（出路，也是当前默认值：官方 SEA，要 Node>=25.7；只有它给得出 compress/decompress 用的 zlib/zstd。scriptc 的查找顺序：SCRIPTC_BIN → 同目录 scriptc/ → npm 依赖 → PATH；-v 打出实际用的哪一份）",
+            "打包器：scriptc（默认，也是首选：外部原生编译器静态编 runtime 源码图，产物 1.6 MB、不带 node；产物里真的调了 compress/decompress 时自动铺 zstd 驱动并加 --dynamic，见 README）| node（出路：官方 SEA，要 Node>=25.7，自带 zlib/zstd。scriptc 的查找顺序：SCRIPTC_BIN → 同目录 scriptc/ → npm 依赖 → PATH；-v 打出实际用的哪一份）",
         },
         {
           key: "node",

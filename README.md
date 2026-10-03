@@ -39,11 +39,11 @@ gds2js export         <entry.gd>    # 打成 Node 独立可执行文件（SEA）
 
 编译产物默认 `import "gds2js/runtime"` / `"gds2js/host"`。三种模式决定产物运行时**如何拿到 gds2js 运行时**：
 
-| 模式 | 产物怎么拿运行时 | 需要 node_modules？ | `build` | `build-project` |
-| --- | --- | --- | --- | --- |
-| `import`（默认） | `import "gds2js/runtime"`，靠包解析 | 需要（已安装 gds2js） | ✓ | ✓ |
-| `local` | 旁挂一份自包含 `gds2js-standalone.cjs`，产物 `createRequire` 载入 | 不需要 | ✓ | ✓ |
-| `single` | 把运行时**内联进产物文件**，零 import | 不需要 | ✓ | ✓（整app bundle） |
+| 模式             | 产物怎么拿运行时                                                  | 需要 node_modules？   | `build` | `build-project`   |
+| ---------------- | ----------------------------------------------------------------- | --------------------- | ------- | ----------------- |
+| `import`（默认） | `import "gds2js/runtime"`，靠包解析                               | 需要（已安装 gds2js） | ✓       | ✓                 |
+| `local`          | 旁挂一份自包含 `gds2js-standalone.cjs`，产物 `createRequire` 载入 | 不需要                | ✓       | ✓                 |
+| `single`         | 把运行时**内联进产物文件**，零 import                             | 不需要                | ✓       | ✓（整app bundle） |
 
 ```bash
 gds2js build x.gd --runtime-mode single -o x.mts            # 单文件自包含
@@ -53,42 +53,28 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 
 ## 打成 Windows 独立可执行文件（`gds2js export`）
 
-只有 **Windows** 产物（Linux 暂不纳入）。**首选 `--pack scriptc`**（静态编 runtime 的 TS 源码图，产物里不带 node）；
-`--pack node` 是**出路那一支** —— 要用 `compress()/decompress()`（zlib/zstd）、或必须让产物跑在 node 上时才走它。
+只有 **Windows** 产物（Linux 暂不纳入）。**默认且首选 `--pack scriptc`**（静态编 runtime 的 TS 源码图，产物里不带 node）；
+`--pack node` 是**出路那一支** —— 机器上没有 scriptc、或想用 Node 自带的那份 zlib/zstd 时才走它（scriptc 那支的压缩接线见下表）。
 
 ```bash
 pnpm build                                                       # export 吃 dist/product.mjs（打平的自带运行时），要先有 dist
-gds2js export main.gd -o app.exe --pack scriptc                  # 首选：静态编 runtime 源码图，产物 1.6 MB、不带 node
-gds2js export 单文件.gd -o app.exe --pack scriptc                 # 不在工程里的散装脚本也照样打（与 build/run 同一条边界）
-gds2js export main.gd -o app.exe                                 # 出路：--pack node（官方 SEA，要 Node>=25.7）
+gds2js export main.gd -o app.exe                                 # 默认即 --pack scriptc：静态编 runtime 源码图，产物 1.6 MB、不带 node
+gds2js export 单文件.gd -o app.exe                               # 不在工程里的散装脚本也照样打（与 build/run 同一条边界）
+gds2js export main.gd -o app.exe --pack node                     # 出路：官方 SEA，要 Node>=25.7，产物里带 node
 gds2js export main.gd -o app.exe --node E:/node/26.7.0/node.exe  # CLI 跑在旧 node 上：让 SEA 用够新的那个
 ./app.exe
 ```
 
-| `--pack` | 走法 | 本机实测 |
-| --- | --- | --- |
-| `scriptc`（**首选**） | 产物 + `src/runtime/**`、`src/host.ts` 的 **TS 源码**铺成一棵树（项目树只铺**一份**，每个模块的 import 按自己那一层的深度算，于是只编出一张 runtime 图、一份类身份）→ `scriptc build <入口.mts> -o <exe> --strip`（scriptc 二进制怎么找到，见下面「不带 node 的 `gds2js.exe`」那一节） | **通**：产物 1.5~1.6 MB，`pnpm test:scriptc --all` 全量 **142 例里 141 逐字节对 Godot golden**（单文件 + 项目树用例走真命令 `export --pack scriptc`）；唯一红的是 `161-pack-compress` —— 静态宿主没有 zlib/zstd，`compress()/decompress()` 的 mode 1/2/3 照口径**响亮拒**（不发近似值），要那一格就走下面那支 |
-| `node`（**出路**，也仍是当前的默认值） | 编译成**模块树** → `sea-config.json`（`mainFormat: "module"` + `useVfs` + 全部模块作 assets）→ `<node> --build-sea=cfg` | **通**：产物 ~100 MB，跑 `examples/multi` 输出**逐字节一致**、stderr 干净；运行期抛错的工程**退 1 且报错可见**。不经过 bundler。**它是唯一能给出 zlib/zstd 的一支**（产物跑在 node 上，node ≥ 24 自带 zstd） |
 
-默认值暂时还是 `node`：**不改是为了不让现成的脚本静默换掉打包器**（翻过去意味着产物从 100 MB 变成 1.6 MB，还要求机器上有 scriptc）。
-真要翻只是一行默认值的事，留作单独决定。
-
-
-## 不带 node 的 `gds2js.exe`（原生 CLI）
-
-CLI 自己也能编成原生 exe：**`scriptc build src/cli.ts --dynamic --ffi …`**。
-`--dynamic` 不是「整个 CLI 跑解释器」—— coverage 读数 7903 条语句里 **7864 条（99%）仍是静态翻译**，
-只有 32 条落在嵌入式 quickjs-ng 岛上。**产物那侧不变**：`export --pack scriptc` 仍然 shell out 到外部
-`scriptc` 做**静态**编译，所以产物还是 1.5~1.6 MB、不带 node、`test:scriptc` 的口径一字不动。
 
 前置（四样都要）：
 
-| 前置 | 干什么用 | 怎么给 |
-| --- | --- | --- |
-| `pnpm build` | `dist/*.mjs|cjs` 会被**嵌进 exe**（自带家目录），没 dist 就嵌不到东西 | 跑一次即可 |
-| [libtree-sitter](https://github.com/tree-sitter/tree-sitter) 源码 | 原生解析器（`lib/src/lib.c` + `lib/include`） | 克隆到 `tmp/libtree-sitter`，或 `TS_SRC=<目录>` 指过去 |
-| `tree-sitter-gdscript/` | GDScript 语法（`src/parser.c` + `src/scanner.c`）；带自己的 `.git`，**不入库** | 仓库根下克隆一份 |
-| `zig` + `scriptc` | 编 C（必须 `zig cc -target x86_64-windows-gnu`，与 scriptc 的链接同一套工具链）+ 出货 | `ZIG_CC` / `SCRIPTC_BIN` 可指路 |
+| 前置                                                              | 干什么用                                                                              | 怎么给                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `pnpm build`                                                      | `dist/*.mjs                                                                           | cjs` 会被**嵌进 exe**（自带家目录），没 dist 就嵌不到东西 | 跑一次即可 |
+| [libtree-sitter](https://github.com/tree-sitter/tree-sitter) 源码 | 原生解析器（`lib/src/lib.c` + `lib/include`）                                         | 克隆到 `tmp/libtree-sitter`，或 `TS_SRC=<目录>` 指过去    |
+| `tree-sitter-gdscript/`                                           | GDScript 语法（`src/parser.c` + `src/scanner.c`）；带自己的 `.git`，**不入库**        | 仓库根下克隆一份                                          |
+| `zig` + `scriptc`                                                 | 编 C（必须 `zig cc -target x86_64-windows-gnu`，与 scriptc 的链接同一套工具链）+ 出货 | `ZIG_CC` / `SCRIPTC_BIN` 可指路                           |
 
 ```bash
 node tools/cli-native.mjs                  # 出货：岛（--dynamic）是必需的 → tmp/cli-native/gds2js.exe（约 5 MB）
@@ -97,26 +83,6 @@ node tools/cli-native.mjs --coverage       # 只要围栏清单（带 file:line�
 pnpm test:cli-native                       # 门：原生 exe 与 node 侧 CLI 逐字节/逐字对齐（--quick 跳慢格）
 ```
 
-为什么岛是必需的：CLI 的参数解析用 commander，而 commander 不带岛就是 6 格 `SC2013`（`importing 'commander' requires the embedded dynamic engine`）；带岛则 0 错、岛里实测跑通。带岛的 exe 比纯静态大约 1 MB，我们自己的代码仍有 99% 是静态翻译的（coverage：7864/7903 条语句）。
-
-exe 里能做什么、什么会响亮拒：
-
-- **能做**：`check` / `build` / `check-project` / `build-project` / `run` / `run-project` / `export`（两支 `--pack`）。
-  自带家目录里嵌了 33 份文件（`dist/product.mjs`、`dist/standalone.cjs`、`src/runtime/**.ts`、`src/host.ts`、
-  `src/lower/double.ts`），首次用时解到临时目录（`GDS2JS_HOME` 可指），所以 `export --pack scriptc`
-  在**没有仓库、没有 node_modules** 的机器上也能铺出 runtime 源码图。
-- **`export --pack scriptc` 要 scriptc 本身**，按这个顺序找（`-v` 会打出到底用了哪一个）：
-  ① `SCRIPTC_BIN` ② 与 CLI 同目录的 `scriptc/scriptc.exe`（**随包分发**的放法：一个文件夹里 `gds2js.exe` + `scriptc/`）
-  ③ npm 依赖里那份 `scriptc/bin/scriptc.exe` ④ PATH 上的 `scriptc`。
-  为什么不是把 scriptc 塞进 gds2js.exe：它是**一整套工具链**（Windows x64 那支 187 MB —— 驱动 29 MB + LLVM 出码 43 MB + tsc 28 MB + 链接期用的预编 `.o` 68 MB），
-  内置等于把产物撑到 ~190 MB、每次首跑解 PE 再 spawn 子进程，还会把 scriptc 的版本焊死在我们这次构建上。
-- **`run` 要外部 node**（≥ 22.18 / 23.6，靠 node 的类型剥离跑 `.mts` 产物；`GDS2JS_NODE_BIN` 可指）。
-  exe 里没有能跑产物的引擎，这一支是**起子进程**，不是进程内 `import()`。
-- **`--runtime-mode single` 响亮拒**：内联打包要 tsdown，而 tsdown 的 rolldown 是原生插件（native addon），
-  嵌不进 exe。要单文件产物请用 npm 安装态的 `gds2js`，或用 `export` 出货。
-- **产物里的 `compress()/decompress()` mode 1/2/3 响亮拒**（静态宿主没有 zlib/zstd），要那一格用 `--pack node`。
-- 解析器走 **libtree-sitter over FFI**，不是 web-tree-sitter 的 wasm：wasm 胶水那几格（`as any`、
-  `Parser.init({locateFile})`）在 `--dynamic` 下依然是 blocker。两条路出的树逐节点等价由 `pnpm test:facade` 守着。
 
 
 ## 运行产物
