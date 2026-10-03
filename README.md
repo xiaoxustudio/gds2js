@@ -15,6 +15,8 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。管�
   实测边界：18.20.4 / 20.19.4 上 `check` `check-project` `build` 都过，但 `run` 报 `Unknown file extension ".mts"`、`build-project --runtime-mode single` 报 `Promise.withResolvers is not a function`；
   22.19.0 / 24.8.0 / 26.10.0 全过且 `run` 的输出逐字节相同。
 - **只有 `export --pack node`（SEA）那一支另要 Node >= 25.7**，由代码在运行期判并给明确拒（`实测 22.19.0` 这样的原文），不写进 engines。
+  `pnpm test:export` / `pnpm test:cli-native` 里那几格跟着本机 node 版本记账：当前这支不够新就是「上游/环境账」（export 给 10 ok / 3 记账），
+  另指一份够新的进去就转绿（`GDS2JS_NODE_BIN=<node 26> pnpm test:export` → 18 ok / 0 记账）—— 不是代码坏了。
 - 包管理：**pnpm 12.8.1**（根 `packageManager` 已钉；PATH 上是旧 pnpm 时用 `npx pnpm@12.8.1 …`）。
 - 需要本机 Godot 4.x 作为裁判引擎生成/校验 golden，路径用 `GODOT_BIN` 覆盖（默认 `F:/godot/...`）。
 
