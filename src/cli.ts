@@ -571,21 +571,51 @@ function externalSeaNode(explicit: string | null): string | null {
 }
 
 /** scriptc 的二进制名（`SCRIPTC_BIN` 可覆盖）。 */
-function scriptcBin(): string {
-  const env = process.env.SCRIPTC_BIN?.trim();
-  return env === undefined || env === "" ? "scriptc" : env;
+const EXE_TAIL = process.platform === "win32" ? ".exe" : "";
+
+/** npm 依赖里那份 scriptc 的可执行文件：从解析到的包入口往上找几层，认 `bin/scriptc(.exe)` 那个形状。 */
+function scriptcFromNpm(): string | null {
+  try {
+    let dir = dirname(createRequire(import.meta.url).resolve("scriptc"));
+    for (let i = 0; i < 5; i++) {
+      const cand = join(dir, "bin", "scriptc" + EXE_TAIL);
+      if (existsSync(cand)) return cand;
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // 没装成依赖，正常
+  }
+  return null;
+}
+
+/** 查找顺序：`SCRIPTC_BIN` → 与 CLI 同目录的 `scriptc/`（随包分发）→ npm 依赖里那份 → PATH 上的 `scriptc`。 */
+function scriptcCandidates(): string[] {
+  const out: string[] = [];
+  const fromEnv = process.env.SCRIPTC_BIN;
+  if (fromEnv !== undefined && fromEnv.trim() !== "") out.push(fromEnv.trim());
+  out.push(join(dirname(fileURLToPath(import.meta.url)), "scriptc", "scriptc" + EXE_TAIL));
+  const pkg = scriptcFromNpm();
+  if (pkg !== null) out.push(pkg);
+  out.push("scriptc");
+  return out;
 }
 
 function preflightScriptc(): { bin: string; version: string } | null {
-  const bin = scriptcBin();
-  const r = spawnSync(bin, ["--version"], { encoding: "utf8", windowsHide: true, timeout: 120_000 });
-  if (r.error || r.status !== 0) {
-    console.error(`${bin} --version 失败：${r.error?.message ?? diagText({ status: r.status, stdout: r.stdout, stderr: r.stderr })}`);
-    console.error("  装 scriptc（npm i -g scriptc），或用 SCRIPTC_BIN 指到具体可执行文件。");
-    exportVerdict("refused", "scriptc 二进制不可用");
-    return null;
+  const cands = scriptcCandidates();
+  let last = "";
+  for (const bin of cands) {
+    if (bin !== "scriptc" && !existsSync(bin)) continue;
+    const r = spawnSync(bin, ["--version"], { encoding: "utf8", windowsHide: true, timeout: 120_000 });
+    if (!r.error && r.status === 0) return { bin, version: (r.stdout || "").trim() };
+    last = r.error?.message ?? diagText({ status: r.status, stdout: r.stdout, stderr: r.stderr });
   }
-  return { bin, version: (r.stdout || "").trim() };
+  console.error(`找不到可用的 scriptc（试过的路径见下）：${cands.join(" | ")}`);
+  if (last !== "") console.error(`  最后一次调用：${last}`);
+  console.error("  三条路：随包放一份 <gds2js 同目录>/scriptc/scriptc.exe；项目里 npm i -D scriptc；或设 SCRIPTC_BIN 指到可执行文件。");
+  exportVerdict("refused", "scriptc 二进制不可用");
+  return null;
 }
 
 /** 把 scriptc 的失败原文归成一个结论类别，并给一行用户看得懂的话。 */
@@ -645,6 +675,7 @@ async function exportExecutable(ctx: Ctx): Promise<boolean> {
   }
   const sc = pack === "scriptc" ? preflightScriptc() : null;
   if (pack === "scriptc" && !sc) return false;
+  if (sc !== null && ctx.verbose) console.error(`  scriptc ← ${sc.bin}（${sc.version}）`);
 
   const tree = pack === "scriptc" ? await exportTsTree(ctx) : await exportTree(ctx);
   if (!tree) return false;

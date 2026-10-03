@@ -87,12 +87,13 @@ CLI 自己也能编成原生 exe：**`scriptc build src/cli.ts --dynamic --ffi �
 | `zig` + `scriptc` | 编 C（必须 `zig cc -target x86_64-windows-gnu`，与 scriptc 的链接同一套工具链）+ 出货 | `ZIG_CC` / `SCRIPTC_BIN` 可指路 |
 
 ```bash
-node tools/cli-native.mjs                  # 出货形态（--dynamic）→ tmp/cli-native/gds2js.exe（约 5 MB）
-node tools/cli-native.mjs --coverage      # 只要围栏清单（带 file:line）
+node tools/cli-native.mjs                  # 出货：岛（--dynamic）是必需的 → tmp/cli-native/gds2js.exe（约 5 MB）
 node tools/cli-native.mjs --ts-only --keep # 只改了 TS：沿用上一轮的 .o，省 2 分钟
 node tools/cli-native.mjs --coverage       # 只要围栏清单（带 file:line）
 pnpm test:cli-native                       # 门：原生 exe 与 node 侧 CLI 逐字节/逐字对齐（--quick 跳慢格）
 ```
+
+为什么岛是必需的：CLI 的参数解析用 commander，而 commander 不带岛就是 6 格 `SC2013`（`importing 'commander' requires the embedded dynamic engine`）；带岛则 0 错、岛里实测跑通。带岛的 exe 比纯静态大约 1 MB，我们自己的代码仍有 99% 是静态翻译的（coverage：7864/7903 条语句）。
 
 exe 里能做什么、什么会响亮拒：
 
@@ -100,6 +101,11 @@ exe 里能做什么、什么会响亮拒：
   自带家目录里嵌了 33 份文件（`dist/product.mjs`、`dist/standalone.cjs`、`src/runtime/**.ts`、`src/host.ts`、
   `src/lower/double.ts`），首次用时解到临时目录（`GDS2JS_HOME` 可指），所以 `export --pack scriptc`
   在**没有仓库、没有 node_modules** 的机器上也能铺出 runtime 源码图。
+- **`export --pack scriptc` 要 scriptc 本身**，按这个顺序找（`-v` 会打出到底用了哪一个）：
+  ① `SCRIPTC_BIN` ② 与 CLI 同目录的 `scriptc/scriptc.exe`（**随包分发**的放法：一个文件夹里 `gds2js.exe` + `scriptc/`）
+  ③ npm 依赖里那份 `scriptc/bin/scriptc.exe` ④ PATH 上的 `scriptc`。
+  为什么不是把 scriptc 塞进 gds2js.exe：它是**一整套工具链**（Windows x64 那支 187 MB —— 驱动 29 MB + LLVM 出码 43 MB + tsc 28 MB + 链接期用的预编 `.o` 68 MB），
+  内置等于把产物撑到 ~190 MB、每次首跑解 PE 再 spawn 子进程，还会把 scriptc 的版本焊死在我们这次构建上。
 - **`run` 要外部 node**（≥ 22.18 / 23.6，靠 node 的类型剥离跑 `.mts` 产物；`GDS2JS_NODE_BIN` 可指）。
   exe 里没有能跑产物的引擎，这一支是**起子进程**，不是进程内 `import()`。
 - **`--runtime-mode single` 响亮拒**：内联打包要 tsdown，而 tsdown 的 rolldown 是原生插件（native addon），
