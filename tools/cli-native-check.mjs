@@ -159,11 +159,18 @@ if (!quick) {
     const d = diffTrees(join(side.node, ".gds2js-export"), join(side.exe, ".gds2js-export"));
     if (d === null) ok("两边铺出的模块树逐字节一致（含 runtime 源码图）");
     else fail(`模块树不一致：${d}`);
+    // 参照：node 侧 CLI 跑同一个工程（run-project 只支持 import 模式）
+    const nodeRun = cliNode(["run-project", join(side.node, "main.gd"), "--res-root", side.node], ROOT);
+    // exe 的 run-project 走 exec seam（起外部 node）+ 家目录默认说明符，工程模式另算一格
+    const exeRun = cliExe(["run-project", join(side.exe, "main.gd"), "--res-root", side.exe], ROOT);
+    if (exeRun.status !== 0) fail(`exe 的 run-project 退出码 ${exeRun.status}：${exeRun.out.slice(0, 200)}`);
+    else if (exeRun.out !== nodeRun.out) fail(`exe 的 run-project 输出与 node 侧不同：\n    exe=${JSON.stringify(exeRun.out.slice(0, 160))}\n    node=${JSON.stringify(nodeRun.out.slice(0, 160))}`);
+    else ok(`exe 的 run-project 输出逐字一致：${JSON.stringify(exeRun.out.trim().split("\n").join(" | ").slice(0, 60))}`);
     const p = join(side.exe, "game.exe");
     if (!existsSync(p)) fail("原生 exe 没能编出 scriptc 产物");
     else {
       const runOut = run(p, [], ROOT).out;
-      const nodeOut = cliNode(["run-project", join(side.node, "main.gd"), "--res-root", side.node], ROOT).out;
+      const nodeOut = nodeRun.out;
       if (runOut.trim() === nodeOut.trim()) ok(`scriptc 产物跑通：${JSON.stringify(runOut.trim().split("\n").join(" | ").slice(0, 90))}`);
       else fail(`scriptc 产物输出不同：\n    exe=${JSON.stringify(runOut.slice(0, 200))}\n    参照=${JSON.stringify(nodeOut.slice(0, 200))}`);
     }

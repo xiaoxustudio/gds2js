@@ -73,7 +73,6 @@ interface Diag {
   file: string;
 }
 
-/** commander 把 --no-host 解析成 false、--host X 解析成字符串、缺省给默认值。三态归一到 null|string。 */
 /**
  * 自带家目录的 exe（原生 / SEA）里，产物那句 `import ... from "gds2js/runtime"` **没人能解析** ——
  * 裸说明符要的是 node_modules。所以这时候 `--runtime/--host` 的默认值直接给家目录里那份打平运行时的
@@ -104,6 +103,7 @@ function modeOf(v: unknown): RuntimeMode {
   return "import";
 }
 
+/** `--no-host` 给 false、`--host X` 给字符串、缺省给默认值：三态归一到 `null | string`。 */
 function hostOf(hostOpt: unknown): string | null {
   if (hostOpt === false) return null;
   if (typeof hostOpt === "string") return hostOpt;

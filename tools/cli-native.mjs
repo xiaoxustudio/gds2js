@@ -15,7 +15,7 @@
  *   node tools/cli-native.mjs                    # 出货形态：--dynamic（岛），编出来在 tmp/cli-native/gds2js.exe
  *   node tools/cli-native.mjs --static           # 不要岛的静态构建（也编得过，小 1 MB，S235 实测）
  *   node tools/cli-native.mjs --ts-only --keep   # 只重编 TS：沿用上一轮的 .o（改 TS 的那几轮省 2 分钟）
- *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）；加 --dynamic 看岛那一侧
+ *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）；加 --static 看不要岛的那一侧
  *   TS_SRC=../libtree-sitter node tools/cli-native.mjs
  *
  * 出货形态定的是 `--dynamic`（用户拍板，ROADMAP §5.12.7 B）：岛只托管 32/7903 条语句，

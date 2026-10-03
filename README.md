@@ -70,7 +70,44 @@ gds2js export main.gd -o app.exe --pack scriptc                  # 换 scriptc�
 | `scriptc` | 产物 + `src/runtime/**`、`src/host.ts` 的 **TS 源码**铺成一棵树（项目树只铺**一份**，每个模块的 import 按自己那一层的深度算，于是只编出一张 runtime 图、一份类身份）→ `scriptc build <入口.mts> -o <exe> --strip`（`SCRIPTC_BIN` 可指路） | **通**：产物 1.5~1.6 MB，`pnpm test:scriptc` 全量 **133 例里 132 逐字节对 Godot golden**（单文件 + 9 个项目树用例走真命令 `export --pack scriptc`）；唯一红的是 `161-pack-compress` —— 静态宿主没有 zlib/zstd，`compress()/decompress()` 的 mode 1/2/3 照口径**响亮拒**（不发近似值），要那一格就用 `--pack node` |
 
 
-## 运行产物
+## 不带 node 的 `gds2js.exe`（原生 CLI）
+
+CLI 自己也能编成原生 exe：**`scriptc build src/cli.ts --dynamic --ffi …`**。
+`--dynamic` 不是「整个 CLI 跑解释器」—— coverage 读数 7903 条语句里 **7864 条（99%）仍是静态翻译**，
+只有 32 条落在嵌入式 quickjs-ng 岛上。**产物那侧不变**：`export --pack scriptc` 仍然 shell out 到外部
+`scriptc` 做**静态**编译，所以产物还是 1.5~1.6 MB、不带 node、`test:scriptc` 的口径一字不动。
+
+前置（四样都要）：
+
+| 前置 | 干什么用 | 怎么给 |
+| --- | --- | --- |
+| `pnpm build` | `dist/*.mjs|cjs` 会被**嵌进 exe**（自带家目录），没 dist 就嵌不到东西 | 跑一次即可 |
+| [libtree-sitter](https://github.com/tree-sitter/tree-sitter) 源码 | 原生解析器（`lib/src/lib.c` + `lib/include`） | 克隆到 `tmp/libtree-sitter`，或 `TS_SRC=<目录>` 指过去 |
+| `tree-sitter-gdscript/` | GDScript 语法（`src/parser.c` + `src/scanner.c`）；带自己的 `.git`，**不入库** | 仓库根下克隆一份 |
+| `zig` + `scriptc` | 编 C（必须 `zig cc -target x86_64-windows-gnu`，与 scriptc 的链接同一套工具链）+ 出货 | `ZIG_CC` / `SCRIPTC_BIN` 可指路 |
+
+```bash
+node tools/cli-native.mjs                  # 出货形态（--dynamic）→ tmp/cli-native/gds2js.exe（约 5 MB）
+node tools/cli-native.mjs --static         # 不要岛的静态构建（约 4 MB，也编得过）
+node tools/cli-native.mjs --ts-only --keep # 只改了 TS：沿用上一轮的 .o，省 2 分钟
+node tools/cli-native.mjs --coverage       # 只要围栏清单（带 file:line）
+pnpm test:cli-native                       # 门：原生 exe 与 node 侧 CLI 逐字节/逐字对齐（--quick 跳慢格）
+```
+
+exe 里能做什么、什么会响亮拒：
+
+- **能做**：`check` / `build` / `check-project` / `build-project` / `run` / `run-project` / `export`（两支 `--pack`）。
+  自带家目录里嵌了 33 份文件（`dist/product.mjs`、`dist/standalone.cjs`、`src/runtime/**.ts`、`src/host.ts`、
+  `src/lower/double.ts`），首次用时解到临时目录（`GDS2JS_HOME` 可指），所以 `export --pack scriptc`
+  在**没有仓库、没有 node_modules** 的机器上也能铺出 runtime 源码图。
+- **`run` 要外部 node**（≥ 22.18 / 23.6，靠 node 的类型剥离跑 `.mts` 产物；`GDS2JS_NODE_BIN` 可指）。
+  exe 里没有能跑产物的引擎，这一支是**起子进程**，不是进程内 `import()`。
+- **`--runtime-mode single` 响亮拒**：内联打包要 tsdown，而 tsdown 的 rolldown 是原生插件（native addon），
+  嵌不进 exe。要单文件产物请用 npm 安装态的 `gds2js`，或用 `export` 出货。
+- **产物里的 `compress()/decompress()` mode 1/2/3 响亮拒**（静态宿主没有 zlib/zstd），要那一格用 `--pack node`。
+- 解析器走 **libtree-sitter over FFI**，不是 web-tree-sitter 的 wasm：wasm 胶水那几格（`as any`、
+  `Parser.init({locateFile})`）在 `--dynamic` 下依然是 blocker。两条路出的树逐节点等价由 `pnpm test:facade` 守着。
+
 
 产物带可擦除的 TypeScript 标注（`: Promise<void>` 等），文件名后缀是 **`.mts`**，用 Node 原生类型擦除直接跑：
 
@@ -89,6 +126,8 @@ pnpm test:diff       # Godot(裁判) vs 编译产物(被测)，逐字节 + 静�
 pnpm test:golden     # 生成/校验 Godot golden（--check 只报漂移不写盘）
 pnpm test:compile    # 语料 → main.gen.mts（import 模式产物，0 churn 即无回归）
 pnpm test:ir / test:sema / test:ops
+pnpm test:facade     # CST 门面等价性：wasm 与 FFI 两条物化路逐节点比（239 份 / 73,874 个节点）
+pnpm test:cli-native # 原生 CLI 等价性：不带 node 的 gds2js.exe 与 node 侧逐字节/逐字对齐（要 zig + libtree-sitter + scriptc）
 pnpm test:multi      # 跨文件冒烟（examples/multi）
 pnpm test:pkgmodes   # local/single 两模式的回归：逐用例 node 跑对齐 golden + 子目录 local + single sourcemap 解码
 pnpm test:export     # export 的回归：node(SEA+VFS) / scriptc 两支各真打一个 exe（stdout 逐字节 + 抛错须非 0 退出 + 门禁该响的响 + 中间件清干净）；要先前 pnpm build
