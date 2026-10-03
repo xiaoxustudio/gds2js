@@ -1,3 +1,5 @@
+import { nextObjectId } from "./identity";
+
 /** `connect()` 的返回码：成功 0，**同一个 Callable 已经连着**给 31（Error.ALREADY_IN_USE）。 */
 export const CONNECT_OK = 0;
 export const CONNECT_ALREADY_CONNECTED = 31;
@@ -8,6 +10,8 @@ type Listener = { box: object; fn: (args: Variant[]) => void; oneShot: boolean }
 export class Signal {
   #listeners: Listener[] = [];
   #waiting: Array<(v: unknown) => void> = [];
+  /** 信号对象也能当字典键（实测 `d[fired] = 1` 成立、`fired == fired` 真），所以它也要有自己的身份号。 */
+  readonly gdObjectId: number = nextObjectId();
 
   constructor(readonly sigName: string = "") {}
 

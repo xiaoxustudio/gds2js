@@ -1,16 +1,19 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { hexUpper } from "./numstr";
+import { hexUpper, strToInt } from "./numstr";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
-import { GVector2, asVec2, vecCmp } from "./vector2";
+import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
-import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
+import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode, toElem } from "./packed";
+import type { PackElem, PackKind } from "./packed";
+import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
-import { callableSame, isCallable, type CallableBox } from "./callable";
+import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
+import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -23,6 +26,20 @@ export function keyOf(v: Variant): string {
 }
 
 /** 容器桶的编码：按**内容**分格（元素走 {@link valueSame} 的身份口径），字典的编码跟着键序走；`c:` 前缀保证容器桶不与标量桶撞车。 */
+/** Callable 的键位：空 Callable 一律同键；方法按「接收者身份 + 方法名 + 绑过没绑过」；lambda 按盒子身份。 */
+function callableKey(box: CallableBox): string {
+  if (isNullCallable(box)) return "y:";
+  if (box.name !== null) {
+    const recv = box.object;
+    if (recv !== null && recv.t === Tag.OBJECT && !(recv.v instanceof GBytes)) {
+      const id = (recv.v as GdIdentified).gdObjectId;
+      if (id > 0) return `q:${String(id)}:${box.name}:${box.bound.length === 0 ? "0" : "1"}`;
+    }
+    throw new UnsupportedError("dict-key-type", "这种接收者的方法 Callable 当字典键还没量过");
+  }
+  return `m:${String(box.gdObjectId)}`;
+}
+
 function keyOfIn(v: Variant, depth: number): string {
   switch (v.t) {
     case Tag.NIL:
@@ -72,6 +89,11 @@ function keyOfIn(v: Variant, depth: number): string {
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
+      if (isCallable(v)) return callableKey(v.v as CallableBox);
+      if (!(v.v instanceof GBytes)) {
+        const id = (v.v as GdIdentified).gdObjectId;
+        if (id > 0) return `o:${String(id)}`;
+      }
       break;
     }
     default:
@@ -853,12 +875,19 @@ export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: b
 }
 
 /** GDScript String 是 UTF-32、length 数码点，JS 是 UTF-16。 */
+/** 码点数组：`for…of` 走的是码点序，而 `[...s]` 与 `Array.from(s)` 在 scriptc 都没有 lowering。 */
+function codepoints(s: string): string[] {
+  const out: string[] = [];
+  for (const ch of s) out.push(ch);
+  return out;
+}
+
 export function strLength(s: string): number {
-  return [...s].length;
+  return codepoints(s).length;
 }
 
 export function strAt(s: string, i: number): string {
-  const chars = [...s];
+  const chars = codepoints(s);
   const c = chars[i];
   if (c === undefined) {
     throw new GodotRuntimeError("string-index", `字符串索引越界: ${i}`);
@@ -868,7 +897,7 @@ export function strAt(s: string, i: number): string {
 
 /** `substr(from, len = -1)`：`from` 为负或越过串尾都给空串，`len` 省略或为负表示截到串尾 —— JS 原生 slice 两条都不对。 */
 export function strSubstr(s: string, from: number, len = -1): string {
-  const chars = [...s];
+  const chars = codepoints(s);
   if (from < 0 || from >= chars.length) return "";
   return (len < 0 ? chars.slice(from) : chars.slice(from, from + len)).join("");
 }
@@ -879,7 +908,7 @@ export function strEdge(s: string, n: number, side: "left" | "right"): string {
   const k = n < 0 ? len + n : n;
   if (k <= 0) return "";
   if (k >= len) return s;
-  const chars = [...s];
+  const chars = codepoints(s);
   return (side === "left" ? chars.slice(0, k) : chars.slice(len - k)).join("");
 }
 
@@ -1122,6 +1151,679 @@ export function strCapitalize(s: string): string {
     out.push(strCase(strAt(w, 0), "upper") + strSubstr(w, 1));
   }
   return out.join(" ");
+}
+
+/** 两端裁掉码点 ≤ 0x20 的空白（高位空白如 NBSP 不裁，实测 `" a "` 才裁）。 */
+export function strStripEdges(s: string): string {
+  const cs = codepoints(s);
+  let a = 0;
+  let b = cs.length;
+  while (a < b && (cs[a] as string).codePointAt(0)! <= 0x20) a++;
+  while (b > a && (cs[b - 1] as string).codePointAt(0)! <= 0x20) b--;
+  return cs.slice(a, b).join("");
+}
+
+/** `get_slice`：切段取第 n 段。找不到分隔符时整串就是那一段（实测任意 n ≥ 0 都回原串），负数与越界回空。 */
+export function strGetSlice(s: string, delim: string, n: number): string {
+  if (n < 0 || delim === "") return "";
+  const parts = strSplit(s, delim, true);
+  if (parts.length === 1) return s;
+  return parts[n] ?? "";
+}
+
+/** `pad_zeros()`：引擎的式子是「以第一个小数点为界（没有就整串），界落在最前就不动；跳过界内的前导非数字，把 `0` 插到数字段开头补到 `digits` 位」。于是 `".5"` 原样、`"abc"` 是往尾巴上贴 `abc00000`、`"--5"` 给 `--05`。 */
+export function strPadZeros(s: string, digits: number): string {
+  const chars = codepoints(s);
+  const found = chars.indexOf(".");
+  const end = found === -1 ? chars.length : found;
+  if (end === 0) return s;
+  let begin = 0;
+  while (begin < end) {
+    const c = (chars[begin] as string).codePointAt(0)!;
+    if (c >= 48 && c <= 57) break;
+    begin++;
+  }
+  const zeros = digits - (end - begin);
+  if (zeros <= 0) return s;
+  return chars.slice(0, begin).join("") + strRepeat("0", zeros) + chars.slice(begin).join("");
+}
+
+/** `get_slicec()`：引擎签名是 `get_slicec(char32_t p_splitter, int p_slice)` —— 分隔符是**码点数字**，不是字符串（文档写的那个形状在 4.6.3 过不了解析）。空串、负段号、段号越界都给空串。 */
+export function strGetSlicec(s: string, splitter: number, slice: number): string {
+  if (s === "" || slice < 0) return "";
+  const chars = codepoints(s);
+  let prev = 0;
+  let count = 0;
+  for (let i = 0; i <= chars.length; i++) {
+    const atEnd = i === chars.length;
+    const c = atEnd ? 0 : (chars[i] as string).codePointAt(0)!;
+    if (atEnd || c === splitter) {
+      if (slice === count) return chars.slice(prev, i).join("");
+      if (atEnd) return "";
+      count++;
+      prev = i + 1;
+    }
+  }
+  return "";
+}
+
+/** `insert`：负位置原样返回，超出末尾就接在尾巴上。 */
+export function strInsertAt(s: string, pos: number, what: string): string {
+  const cs = codepoints(s);
+  if (pos < 0) return s;
+  const at = pos > cs.length ? cs.length : pos;
+  return cs.slice(0, at).join("") + what + cs.slice(at).join("");
+}
+
+/** `erase`：负起点给空串（Godot 那边另有一句引擎 ERROR），长度 0 或起点越界都不动。 */
+export function strEraseAt(s: string, pos: number, len: number): string {
+  const cs = codepoints(s);
+  if (pos < 0) return "";
+  if (len <= 0 || pos >= cs.length) return s;
+  const end = pos + len > cs.length ? cs.length : pos + len;
+  return cs.slice(0, pos).join("") + cs.slice(end).join("");
+}
+
+export function strRepeat(s: string, n: number): string {
+  if (n <= 0) return "";
+  let out = "";
+  for (let i = 0; i < n; i++) out += s;
+  return out;
+}
+
+/** `similarity()`：引擎是**交叠 bigram 的 Dice 系数** —— 先判全等给 1，任一边不足两个码点给 0，其余 `2 × 交集 / (两边 bigram 数之和)`；交集是「源的每个 bigram 只要在目标里出现就计一次」，目标不被消耗，所以 `aaaa` 对 `aa` 能给到 1.5（大于 1 不是 bug）。返回值在 C++ 那边是 `float`，所以要过一遍 float32。 */
+export function strSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  const ac = codepoints(a);
+  const bc = codepoints(b);
+  if (ac.length < 2 || bc.length < 2) return 0;
+  const src = strBigrams(ac);
+  const tgt = strBigrams(bc);
+  let inter = 0;
+  for (const x of src) {
+    if (tgt.includes(x)) inter++;
+  }
+  return Math.fround((2 * inter) / (src.length + tgt.length));
+}
+
+/** 重叠二字组，`length() - 1` 个：循环上界保证两个下标都在界内。 */
+function strBigrams(chars: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i + 1 < chars.length; i++) out.push((chars[i] as string) + (chars[i + 1] as string));
+  return out;
+}
+
+export function strStartsWith(s: string, pre: string): boolean {
+  const a = codepoints(s);
+  const b = codepoints(pre);
+  if (b.length > a.length) return false;
+  for (let i = 0; i < b.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+export function strEndsWith(s: string, suf: string): boolean {
+  const a = codepoints(s);
+  const b = codepoints(suf);
+  if (b.length > a.length) return false;
+  const off = a.length - b.length;
+  for (let i = 0; i < b.length; i++) if (a[off + i] !== b[i]) return false;
+  return true;
+}
+
+/** 码点下标取字符；越界与负数给 0（引擎那侧同时往 stderr 打一行 out of bounds）。 */
+export function strUnicodeAt(s: string, i: number): number {
+  const c = codepoints(s)[i];
+  if (c === undefined) return 0;
+  return c.codePointAt(0) as number;
+}
+
+/** `count` 是非重叠计数；空针子给 0，不是「长度 + 1」。 */
+export function strCount(hay: string, needle: string, insensitive = false): number {
+  if (needle === "") return 0;
+  const step = codepoints(needle).length;
+  let n = 0;
+  let at = 0;
+  for (;;) {
+    const i = strFind(hay, needle, at, false, insensitive);
+    if (i < 0) break;
+    n++;
+    at = i + step;
+  }
+  return n;
+}
+
+const BAD_FILENAME = new Set(["\"", "%", "*", "/", ":", "<", ">", "?", "\\", "|"]);
+
+/** 只按「有没有非法字符 + 是不是空串」判，Windows 保留名不管（实测 `con` 与 `..` 都是合法文件名）。 */
+export function strIsValidFilename(s: string): boolean {
+  if (s === "") return false;
+  for (const ch of codepoints(s)) if (BAD_FILENAME.has(ch)) return false;
+  return true;
+}
+
+const URI_UNRESERVED = /^(?:[A-Za-z0-9]|[-._~])$/;
+
+function hex2(b: number): string {
+  const d = "0123456789ABCDEF";
+  return d.charAt(Math.floor(b / 16)) + d.charAt(b % 16);
+}
+
+/** 保留集只有 `[A-Za-z0-9-._~]`（实测 `*` `'` `!` Tab 与 DEL 都要转），其余按 UTF-8 字节出 `%XX`（大写）。 */
+export function strUriEncode(s: string): string {
+  const enc = new TextEncoder();
+  let out = "";
+  for (const ch of codepoints(s)) {
+    if (URI_UNRESERVED.test(ch)) out += ch;
+    else for (const b of enc.encode(ch)) out += "%" + hex2(b);
+  }
+  return out;
+}
+
+/**
+ * `uri_decode()`：引擎的式子在 `core/string/ustring.cpp:4542`，走的是 **UTF-8 字节**。三处最容易踩的地方都量过：
+ * ① 合法 hex 位只认 `0-9` 与 `A-Z` —— **小写 a-f 不算**，所以 `"%2f"` 把 `%` 吃掉、后两位照常输出成 `2f`；
+ * ② 「后面还有两位」的判据是 `i + 2 < 字节数`（严格小于），于是 `"x%4"` 与 `"%%4"` 都留下了 `%`；
+ * ③ `strtol` 是**部分**解析：`"%G1"` 折成 `0x00`、`"%4Z"` 折成 `0x04`，而重组按 strlen 取长度 —— **撞到 0 就截断**，故 `"%G1"` 是空串。
+ * `+` 一律换空格；非法字节序列由 UTF-8 状态机给一个 U+FFFD（引擎那边还会往 stderr 打一句 ERROR，那行不属于产物）。
+ */
+export function strUriDecode(s: string): string {
+  const src = Array.from(new TextEncoder().encode(s));
+  const res: number[] = [];
+  for (let i = 0; i < src.length; i++) {
+    const b = src[i] as number;
+    if (b === 0x25 && i + 2 < src.length) {
+      const o1 = src[i + 1] as number;
+      if (!uriHexOk(o1)) {
+        res.push(0x25);
+      } else {
+        const o2 = src[i + 2] as number;
+        if (uriHexOk(o2)) {
+          const hi = uriHexDigit(o1);
+          const lo = uriHexDigit(o2);
+          res.push(hi < 0 ? 0 : lo < 0 ? hi : hi * 16 + lo);
+          i += 2;
+        }
+      }
+    } else if (b === 0x2b) {
+      res.push(0x20);
+    } else {
+      res.push(b);
+    }
+  }
+  const nul = res.indexOf(0);
+  return utf8Decode(nul === -1 ? res : res.slice(0, nul));
+}
+
+/** `strtol(…, 16)` 认的位（含小写 a-f，虽然外层那道 `A-Z` 判据先把小写挡在外面了）。 */
+function uriHexDigit(c: number): number {
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
+  if (c >= 0x61 && c <= 0x66) return c - 0x61 + 10;
+  return -1;
+}
+
+/** 引擎那道判据：`is_digit(ord) || is_ascii_upper_case(ord)` —— 大写字母全过，但 `G`..`Z` 到 `strtol` 那里就不是 hex 位了。 */
+function uriHexOk(c: number): boolean {
+  return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);
+}
+
+/** 字面量式的字符串：加引号，只转义 `"` 与 `\` —— 制表符与换行**按原字符写进去**（实测不是 `\t` / `\n`）。 */
+function vsQuote(s: string): string {
+  let out = '"';
+  for (const ch of s) {
+    if (ch === '"' || ch === "\\") out += "\\" + ch;
+    else out += ch;
+  }
+  return out + '"';
+}
+
+/** 字典键的排序：先按类型等级 `null < bool < int < float < String < StringName`，同级再按值（实测：`{1, 2.5, 0.5}` → `1、0.5、2.5`，`{"B","a","A"}` 按码点）。 */
+const VS_KEY_RANK: Partial<Record<number, number>> = {
+  [Tag.NIL]: 0,
+  [Tag.BOOL]: 1,
+  [Tag.INT]: 2,
+  [Tag.FLOAT]: 3,
+  [Tag.STRING]: 4,
+  [Tag.STRING_NAME]: 5,
+};
+
+function vsKeyCompare(a: Variant, b: Variant): number {
+  const ra = VS_KEY_RANK[a.t];
+  const rb = VS_KEY_RANK[b.t];
+  if (ra === undefined || rb === undefined) {
+    throw new UnsupportedError("var-to-str-key", `var_to_str() 的字典键只实测过 null / bool / int / float / String / StringName（收到 ${tagName(a.t)}）`);
+  }
+  if (ra !== rb) return ra - rb;
+  if (a.t === Tag.BOOL) return (a.v ? 1 : 0) - (b.v ? 1 : 0);
+  if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
+    const x = codepoints(a.v as string);
+    const y = codepoints(b.v as string);
+    const n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) {
+      const dx = (x[i] as string).codePointAt(0)!;
+      const dy = (y[i] as string).codePointAt(0)!;
+      if (dx !== dy) return dx - dy;
+    }
+    return x.length - y.length;
+  }
+  return numVal(a) - numVal(b);
+}
+
+/**
+ * `var_to_str()`：字面量通道，与 print 分岔的每一条都量过（S214 / S221 / S227 / S229）——
+ * nil 是 `null`（不是 `<null>`）、字符串带引号且只转义两个字符、数组自己不加换行（元素里有字典就跟着字典多行，S230）、
+ * **字典在任意深度多行且不缩进、键按 {@link vsKeyCompare} 排序**、空的 `{}` 与 `[]` 才是紧凑式、int 走 int64。
+ * **浮点与一切装浮点的形状都响亮拒**：4.6.3 的尾数是引擎自己的十进制生成器（S229 用算术造值排掉了「固定 `%.*g`」与「最短往返」两条路），
+ * 照 print 那套发就是静默错；值类型与 float/打包数组同理，只有元素全为整数或字符串的打包数组敢发。
+ */
+export function varToStr(v: Variant): string {
+  switch (v.t) {
+    case Tag.NIL:
+      return "null";
+    case Tag.BOOL:
+      return v.v ? "true" : "false";
+    case Tag.INT:
+      return String(v.v);
+    case Tag.FLOAT:
+      throw new UnsupportedError("var-to-str-float", `var_to_str() 的浮点尾数还没量出引擎的取数式子（S229），宁可不发也不照 print 抄`);
+    case Tag.STRING:
+      return vsQuote(v.v as string);
+    case Tag.STRING_NAME:
+      return `&${vsQuote(v.v as string)}`;
+    case Tag.ARRAY: {
+      const items = (v.v as GArray).raw();
+      const parts: string[] = [];
+      for (const item of items) parts.push(varToStr(item));
+      return `[${parts.join(", ")}]`;
+    }
+    case Tag.DICT: {
+      const d = v.v as GDict;
+      const keys = d.keys();
+      if (keys.length === 0) return "{}";
+      const vals = d.values();
+      const pairs = keys.map((k, i) => [k, vals[i] as Variant] as const);
+      pairs.sort((a, b) => vsKeyCompare(a[0], b[0]));
+      const lines: string[] = [];
+      for (const [k, val] of pairs) lines.push(`${varToStr(k)}: ${varToStr(val)}`);
+      return `{\n${lines.join(",\n")}\n}`;
+    }
+    case Tag.OBJECT: {
+      const inner = v.v;
+      if (inner instanceof GBytes) {
+        const items = packItems(inner as GBytes);
+        const flat: string[] = [];
+        for (const item of items) {
+          if (item.t === Tag.FLOAT || item.t === Tag.OBJECT) {
+            throw new UnsupportedError("var-to-str-float", `var_to_str() 的 ${packTypeName(inner.kind)} 里有浮点或对象元素，取数式子还没量出（S229）`);
+          }
+          flat.push(varToStr(item));
+        }
+        return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
+      }
+      throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
+    }
+    default:
+      throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的类型 ${tagName(v.t)}`);
+  }
+}
+
+const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+/** `PackedXArray(...)` 那七支：名字 → pack 形状，实测的 arity 与元素形状一支一张。 */
+const SV_PACK_CTORS: Record<string, PackKind> = {
+  PackedByteArray: "byte",
+  PackedInt32Array: "int32",
+  PackedInt64Array: "int64",
+  PackedFloat32Array: "float32",
+  PackedFloat64Array: "float64",
+  PackedStringArray: "string",
+  PackedVector2Array: "vector2",
+};
+/** 引擎给得出值、我们这边没有对应形状的（实测 `Rect2(1, 2, 3, 4)` 是 typeof 7、`Quaternion(1, 2, 3, 4)` 是 15）：宁可响亮拒，也不发一个 null 出去。 */
+const SV_UNSHIPPED_CTORS = new Set(["Rect2", "Quaternion", "PackedVector3Array", "PackedColorArray"]);
+
+function svIsDigit(c: string): boolean {
+  return c >= "0" && c <= "9";
+}
+
+function svIsIdentStart(c: string): boolean {
+  return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_";
+}
+
+function svHexVal(c: string): number | null {
+  const o = c.charCodeAt(0);
+  if (o >= 0x30 && o <= 0x39) return o - 0x30;
+  if (o >= 0x41 && o <= 0x46) return o - 0x41 + 10;
+  if (o >= 0x61 && o <= 0x66) return o - 0x61 + 10;
+  return null;
+}
+
+/** 构造参数只量过数字：`Vector2("1", 2)` 与 `Vector2(Vector2(1, 2), 3)` 实测都是 null。 */
+function svNumArg(v: Variant | null): Variant | null {
+  if (v === null || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) return null;
+  return v;
+}
+
+/**
+ * `str_to_var()`：读侧的语法一支一支量过（S231），与 {@link varToStr} 是两条通道，别互相抄。
+ * 顶部只认一个值，后面跟着什么都不看（`1 2` → 1、`Vector2(1, 2) 3` → Vector2）；认不出的写法给 null
+ * —— 裸词、大写 `INF`、`'单引号'`、`(1, 2)`、`{: 1}`、容器里缺逗号、`Vector2()` 的 arity 不对，实测全是 null。
+ * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支），或者量到六位数却没量越界的 `\U` —— 响亮拒，不猜。
+ */
+export function strToVar(v: Variant): Variant {
+  if (v.t !== Tag.STRING) {
+    throw new UnsupportedError("str-to-var-arg", `str_to_var() 收到 ${tagName(v.t)}：只量过 String 那一支，其余形状不猜`);
+  }
+  const cs = codepoints(v.v as string);
+  let i = 0;
+
+  const ws = (): void => {
+    while (i < cs.length) {
+      const c = cs[i] as string;
+      if (c === " " || c === "\t" || c === "\n" || c === "\r") i++;
+      else break;
+    }
+  };
+  const at = (c: string): boolean => cs[i] === c;
+  const eat = (c: string): boolean => {
+    if (cs[i] !== c) return false;
+    i++;
+    return true;
+  };
+
+  /** 数字一段：`.` 与 `e` 只在实测到的形状里出现，`1e` / `1e+` / `1.` 都算 float 1.0，`1.5.2` 停在第二个点。 */
+  const number = (): Variant | null => {
+    const start = i;
+    let neg = false;
+    if (at("-")) {
+      neg = true;
+      i++;
+      if (i >= cs.length || !svIsDigit(cs[i] as string)) {
+        // `-` 后面跟的不是数字也不是 `inf` 就整段作废：`-`、`- 7`、`-nan` 三格实测都是 null
+        if (matchWord("inf")) return V.float(-Infinity);
+        i = start;
+        return null;
+      }
+    }
+    let text = neg ? "-" : "";
+    while (i < cs.length && svIsDigit(cs[i] as string)) text += cs[i++];
+    if (text.length === (neg ? 1 : 0)) {
+      i = start;
+      return null;
+    }
+    let isFloat = false;
+    let frac = "";
+    if (at(".")) {
+      isFloat = true;
+      i++;
+      while (i < cs.length && svIsDigit(cs[i] as string)) frac += cs[i++];
+    }
+    let exp = "";
+    if (at("e") || at("E")) {
+      isFloat = true;
+      i++;
+      let expSign = "";
+      if (eat("-")) expSign = "-";
+      else eat("+");
+      let digits = "";
+      while (i < cs.length && svIsDigit(cs[i] as string)) digits += cs[i++];
+      if (digits.length > 0) exp = `e${expSign}${digits}`;
+    }
+    if (!isFloat) return V.int(strToInt(text));
+    return V.float(parseGdDouble(`${text}${frac.length > 0 ? `.${frac}` : ""}${exp}`));
+  };
+
+  /** 字符串体：`"` 与 `\` 之外只有量过的那十个转义；`\a` `\v` `\q` `\x` `\0` 都是「去掉反斜杠留原字符」。 */
+  const string = (asName: boolean): Variant | null => {
+    i++;
+    let out = "";
+    for (;;) {
+      if (i >= cs.length) return null;
+      const c = cs[i++] as string;
+      if (c === '"') break;
+      if (c !== "\\") {
+        out += c;
+        continue;
+      }
+      const e = cs[i++];
+      if (e === undefined) return null;
+      switch (e) {
+        case "n":
+          out += "\n";
+          break;
+        case "t":
+          out += "\t";
+          break;
+        case "r":
+          out += "\r";
+          break;
+        case "b":
+          out += "\b";
+          break;
+        case "f":
+          out += "\f";
+          break;
+        case '"':
+        case "'":
+        case "\\":
+        case "/":
+          out += e;
+          break;
+        case "u": {
+          let val = 0;
+          for (let k = 0; k < 4; k++) {
+            if (i >= cs.length) return null;
+            const h = svHexVal(cs[i] as string);
+            if (h === null) return null;
+            val = val * 16 + h;
+            i++;
+          }
+          if (val >= 0xd800 && val <= 0xdfff) return null;
+          out += String.fromCodePoint(val);
+          break;
+        }
+        case "U":
+          throw new UnsupportedError("str-to-var-shape", `str_to_var() 的 \\U 实测吃掉六个十六进制位（"\\U0001F600" 给 U+01F6 再留 "00"），越界与代理区的处理没量过，先不猜`);
+        default:
+          out += e;
+      }
+    }
+    return asName ? V.stringName(out) : V.str(out);
+  };
+
+  const matchWord = (word: string): boolean => {
+    for (let k = 0; k < word.length; k++) {
+      if (cs[i + k] !== word[k]) return false;
+    }
+    const after = cs[i + word.length];
+    if (after !== undefined && (svIsIdentStart(after) || svIsDigit(after))) return false;
+    i += word.length;
+    return true;
+  };
+
+  const array = (): Variant | null => {
+    i++;
+    const g = GArray.of([]);
+    ws();
+    if (eat("]")) return V.array(g);
+    for (;;) {
+      const item = value();
+      if (item === null) return null;
+      g.raw().push(item);
+      ws();
+      if (eat(",")) {
+        ws();
+        if (eat("]")) return V.array(g);
+        continue;
+      }
+      if (eat("]")) return V.array(g);
+      return null;
+    }
+  };
+
+  const dict = (): Variant | null => {
+    i++;
+    const d = new GDict();
+    ws();
+    if (eat("}")) return V.dict(d);
+    for (;;) {
+      const k = value();
+      if (k === null) return null;
+      ws();
+      if (!eat(":")) return null;
+      const val = value();
+      if (val === null) return null;
+      d.set(k, val);
+      ws();
+      if (eat(",")) {
+        ws();
+        if (eat("}")) return V.dict(d);
+        continue;
+      }
+      if (eat("}")) return V.dict(d);
+      return null;
+    }
+  };
+
+  /** `Name(args)`：arity、元素类型、逗号规则全按实测的那几支；`Vector2 (1, 2)` 的空格是量过能吃的。 */
+  const ctor = (word: string): Variant | null => {
+    if (SV_UNSHIPPED_CTORS.has(word)) {
+      throw new UnsupportedError("str-to-var-type", `str_to_var() 的 ${word}(...) 引擎给得出值（实测 Rect2 是 typeof 7、Quaternion 是 15），我们没这个形状`);
+    }
+    if (!SV_VALUE_CTORS.has(word) && SV_PACK_CTORS[word] === undefined) {
+      throw new UnsupportedError("str-to-var-shape", `str_to_var() 的构造式名字「${word}」没量过：实测只有 NoSuchType 那种引擎不认的给 null，分不清就不猜`);
+    }
+    const kind = SV_PACK_CTORS[word];
+    i++;
+    const args: Variant[] = [];
+    ws();
+    if (!eat(")")) {
+      for (;;) {
+        // 参数形状一支一张：`PackedStringArray("a")` 只吃过串，`PackedStringArray(1)`、`Vector2("1", 2)`、`Vector2(Vector2(1, 2), 3)` 实测全是 null
+        const a = kind === "string" ? (at('"') ? string(false) : null) : svNumArg(number());
+        if (a === null) return null;
+        args.push(a);
+        ws();
+        if (eat(",")) {
+          ws();
+          if (at(")")) return null;
+          continue;
+        }
+        if (eat(")")) break;
+        return null;
+      }
+    }
+    const n = (k: number): number => numVal(args[k] as Variant);
+    if (word === "Vector2") return args.length === 2 ? vector2(n(0), n(1)) : null;
+    if (word === "Vector3") return args.length === 3 ? vector3(n(0), n(1), n(2)) : null;
+    if (word === "Vector2i") return args.length === 2 ? vector2i(Math.trunc(n(0)), Math.trunc(n(1))) : null;
+    if (word === "Vector3i") return args.length === 3 ? vector3i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2))) : null;
+    if (word === "Color") return args.length === 4 ? color(n(0), n(1), n(2), n(3)) : null;
+    const pack = SV_PACK_CTORS[word] as PackKind;
+    if (pack === "vector2") {
+      if (args.length % 2 !== 0) {
+        throw new UnsupportedError("str-to-var-shape", `PackedVector2Array(...) 的奇数参数个数没量过（实测只量了 (1, 2) 这一格）`);
+      }
+      const items: PackElem[] = [];
+      for (let k = 0; k + 1 < args.length; k += 2) items.push(new GVector2(n(k), n(k + 1)));
+      return V.object(new GBytes(items, pack));
+    }
+    return V.object(new GBytes(args.map((a) => toElem(pack, a)), pack));
+  };
+
+  /** null 是「这条写法引擎也解析不出来」，与量过的那批 null 同一形。 */
+  function value(): Variant | null {
+    ws();
+    if (i >= cs.length) return null;
+    const c = cs[i] as string;
+    if (c === "[") return array();
+    if (c === "{") return dict();
+    if (c === '"') return string(false);
+    if (c === "&") {
+      if (cs[i + 1] !== '"') return null;
+      i++;
+      return string(true);
+    }
+    if (c === "-" || svIsDigit(c)) return number();
+    if (!svIsIdentStart(c)) return null;
+    const start = i;
+    let word = "";
+    while (i < cs.length && (svIsIdentStart(cs[i] as string) || svIsDigit(cs[i] as string))) word += cs[i++];
+    if (word === "null") return V.nil();
+    if (word === "true") return V.bool(true);
+    if (word === "false") return V.bool(false);
+    if (word === "inf") return V.float(Infinity);
+    if (word === "inf_neg") return V.float(-Infinity);
+    if (word === "nan") return V.float(NaN);
+    ws();
+    if (at("(")) return ctor(word);
+    i = start;
+    return null;
+  }
+
+  const got = value();
+  return got === null ? V.nil() : got;
+}
+
+const C_ESCAPES = new Map<number, string>([
+  [7, "\\a"],
+  [8, "\\b"],
+  [9, "\\t"],
+  [10, "\\n"],
+  [11, "\\v"],
+  [12, "\\f"],
+  [13, "\\r"],
+  [34, '\\"'],
+  [39, "\\'"],
+  [92, "\\\\"],
+]);
+
+/** 只转义实测到的这十个；其它控制字符与非 ASCII 一律原样出门。 */
+export function strCEscape(s: string): string {
+  let out = "";
+  for (const ch of codepoints(s)) {
+    const e = C_ESCAPES.get(ch.codePointAt(0) as number);
+    out += e === undefined ? ch : e;
+  }
+  return out;
+}
+
+const INT64_MAX_B = 9223372036854775807n;
+
+/** 只认前置的 `-`（`+101` 实测整串判 0）与可选的 `0b` 前缀；其余任何非 01 字符都把整串判成 0，超出 int64 饱和到 MAX（符号后加）。 */
+export function strBinToInt(s: string): bigint {
+  const cs = codepoints(s);
+  let i = 0;
+  let neg = false;
+  if (cs[0] === "-") {
+    neg = true;
+    i = 1;
+  }
+  if (cs[i] === "0" && (cs[i + 1] === "b" || cs[i + 1] === "B")) i += 2;
+  let acc = 0n;
+  if (i >= cs.length) return 0n;
+  for (; i < cs.length; i++) {
+    const c = cs[i];
+    if (c !== "0" && c !== "1") return 0n;
+    acc = acc * 2n + (c === "1" ? 1n : 0n);
+    if (acc > INT64_MAX_B) return INT64_MAX_B;
+  }
+  return neg ? -acc : acc;
+}
+
+/** 拆词后按目标风格拼：`to_snake_case` / `to_kebab_case` / `to_camel_case` 共用同一条拆词（与 `capitalize` 同源）。 */
+export function strCaseStyle(s: string, style: "snake" | "kebab" | "camel"): string {
+  const words = stripSpaces(separateCompoundWords(s)).split(" ").filter((w) => w !== "");
+  if (style === "camel") {
+    let out = "";
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i] as string;
+      out += i === 0 ? strCase(w, "lower") : strCase(strAt(w, 0), "upper") + strSubstr(w, 1);
+    }
+    return out;
+  }
+  const joined: string[] = [];
+  for (const w of words) joined.push(strCase(w, "lower"));
+  return joined.join(style === "snake" ? "_" : "-");
 }
 
 /** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);
@@ -1642,8 +2344,8 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
-      // Callable 之间是**内容**等式（接收者 + 方法名，绑定串不算）：读一次属性就新建一个盒子，按 JS 引用比会把真判成假
-      if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
+      // Callable 之间是**内容**等式（接收者 + 方法名，绑定实参不算，但绑过没绑过算）：读一次属性就新建一个盒子，按 JS 引用比会把真判成假
+      if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
   }
   return false;
@@ -1683,7 +2385,7 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
       // Callable 走与 `==` 同一条等式：盒子每次读都是新建的，按 JS 引用比会把真判成假
-      if (isCallable(a) && isCallable(b)) return callableSame(a.v as CallableBox, b.v as CallableBox);
+      if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
     default:
       return a.v === b.v;

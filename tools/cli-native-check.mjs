@@ -251,7 +251,7 @@ console.log("⑤ 能力边界要响亮拒");
   // 产物撞未实现：两支 CLI 必须报同一行，而且理由不能被「产物退出码 N」吃掉
   // —— 原生那支是起子进程跑产物的，产物的正文得从子进程 stderr 接回来才算报全。
   const gd = join(dir, "uns.gd");
-  writeFileSync(gd, 'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("hello".count("l"))\n\tquit()\n', "utf8");
+  writeFileSync(gd, 'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".pad_zeros(3))\n\tquit()\n', "utf8");
   const nRun = cliNode(["run", gd], ROOT);
   const xRun = cliExe(["run", gd], ROOT);
   const hits = (s) => s.split("\n").filter((l) => l.includes("runtime error")).length;
@@ -343,6 +343,58 @@ console.log("⑨ --watch：改 .gd 要真的重跑");
   if (!sawStart) fail(`没打出「监听 …」那一句（15 秒内）：${buf.slice(0, 200)}`);
   else if (!sawRerun) fail(`改了 .gd 没触发重跑（15 秒内）：${buf.slice(-200)}`);
   else ok("监听起来了，改 .gd 触发了一次重新运行");
+}
+
+/* 9b) `run --watch`：光看「重新运行」那行不够 —— 重跑若写同名临时产物，Node 按 URL 缓存 ES 模块，
+ * 命令重跑了但脚本不会再执行（这个洞真出现过）。这一格要的是**程序自己的第二次、不同输出的**。 */
+console.log("⑨b run --watch：改 .gd 要真的再执行一次脚本");
+{
+  const dir = join(WD, "watch-run");
+  mkdirSync(dir, { recursive: true });
+  const gd = join(dir, "main.gd");
+  const script = (tag) => `extends SceneTree\n\nfunc _initialize():\n\tprint("${tag}")\n\tquit()\n`;
+  writeFileSync(gd, script("watch-a"), "utf8");
+  const child = spawn(EXE, ["run", gd, "--watch"], { cwd: ROOT, windowsHide: true });
+  let buf = "";
+  child.stdout.on("data", (c) => { buf += String(c); });
+  child.stderr.on("data", (c) => { buf += String(c); });
+  const sawFirst = await until(() => buf.includes("watch-a"), 30000);
+  if (sawFirst) writeFileSync(gd, script("watch-b"), "utf8");
+  const sawSecond = sawFirst && (await until(() => buf.includes("watch-b"), 30000));
+  child.kill();
+  await until(() => child.exitCode !== null, 5000);
+  if (!sawFirst) fail(`run --watch 第一次没执行（30 秒内没见 watch-a）：${buf.slice(0, 200)}`);
+  else if (!sawSecond) fail(`改了 .gd 之后脚本没有再执行一次（命令重跑了、程序没重跑 —— 产物名撞了模块缓存？）：${buf.slice(-240)}`);
+  else ok("run --watch 改文件后程序真的又跑了一遍");
+}
+
+/* 9c) run-project 过交叉点（≥ BUNDLE_FROM_MODULES）改走「打成单文件再装载」：装载方式不该改变语义 ——
+ *     exe 那支岛里没打包器（恒逐文件），node 那支打包，两支与显式关打包的 node 必须三方输出逐字相等。 */
+console.log("⑨c run-project 大工程：打包装载与逐文件装载输出逐字相等");
+{
+  const dir = join(WD, "wide-project");
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(join(dir, "lib"), { recursive: true });
+  writeFileSync(join(dir, "project.godot"), '[application]\nconfig/name="wide"\n', "utf8");
+  const N = 120;
+  for (let i = 0; i < N; i++) {
+    writeFileSync(join(dir, "lib", "m" + i + ".gd"), `class_name W${i}\n\nvar x = ${i}\n\nfunc twice():\n\treturn x * 2\n`, "utf8");
+  }
+  let main = "extends SceneTree\n";
+  for (let i = 0; i < N; i++) main += `const B${i} = preload("res://lib/m${i}.gd")\n`;
+  main += `\nfunc _initialize():\n\tprint("ok|", B0.new().twice(), B${N - 1}.new().twice())\n\tquit()\n`;
+  writeFileSync(join(dir, "main.gd"), main, "utf8");
+  const args = ["run-project", join(dir, "main.gd"), "--res-root", dir];
+  const bundled = cliNode(args, ROOT);
+  process.env.GDS2JS_RUN_BUNDLE = "0";
+  const perFile = cliNode(args, ROOT);
+  delete process.env.GDS2JS_RUN_BUNDLE;
+  const exeRun = cliExe(args, ROOT);
+  if (bundled.status !== 0) fail(`node（打包）退出码 ${bundled.status}：${bundled.out.slice(0, 200)}`);
+  else if (perFile.out !== bundled.out) fail(`打包改变了输出：\n    逐文件=${JSON.stringify(perFile.out.slice(0, 120))}\n    打包=${JSON.stringify(bundled.out.slice(0, 120))}`);
+  else if (exeRun.status !== 0) fail(`exe（逐文件）退出码 ${exeRun.status}：${exeRun.out.slice(0, 200)}`);
+  else if (exeRun.out !== bundled.out) fail(`exe 与 node（打包）输出不同：\n    exe=${JSON.stringify(exeRun.out.slice(0, 120))}\n    node=${JSON.stringify(bundled.out.slice(0, 120))}`);
+  else ok(`${String(N)} 模块工程三方一致：${JSON.stringify(bundled.out.trim().slice(0, 40))}`);
 }
 
 console.log("");

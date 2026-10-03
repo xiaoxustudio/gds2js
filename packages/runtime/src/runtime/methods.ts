@@ -1,12 +1,13 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
-import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
+import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, ClassDesc, type Fn } from "./object";
+import type { GdIdentified } from "./identity";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strCapitalize, strCase, strContains, strEdge, strFind, strFormat, strJoin, strLength, strReplace, strSplit,
-  strSplitCapped, strSubstr, toStringNameSlot, truthyOf } from "./values";
+import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
+  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -303,6 +304,15 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (base === null) throw new UnsupportedError("get-class", `get_class() 还不知道这个类的原生基类`);
       return V.str(base);
     }
+    if (name === "get_instance_id") {
+      if (args.length !== 0) {
+        throw new GodotRuntimeError("arity", `get_instance_id() 不接受参数（收到 ${args.length} 个）`);
+      }
+      // 实测：同一个对象两次调用相等、不同对象不等、typeof 是 2。数字本身是指针派生的，跨运行不定，所以语料只钉关系。
+      const id = (obj.v as GdIdentified).gdObjectId;
+      if (!(id > 0)) throw new UnsupportedError("instance-id", "这一类对象还没发身份号");
+      return V.int(id);
+    }
     if (name === "is_class") {
       const a0 = args[0] as Variant | undefined;
       if (a0 === undefined || (a0.t !== Tag.STRING && a0.t !== Tag.STRING_NAME)) {
@@ -546,6 +556,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return a.extreme(true, isLess) ?? V.nil();
         case "max":
           return a.extreme(false, isLess) ?? V.nil();
+        case "hash":
+          return V.int(variantHashNumber(obj));
         default:
           // `join` 在 Array 上**根本没有**（它是 String 的方法）：接收者是推断出来的 var 时解析期放过，运行期给下面那句
           if (name === "join") throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function 'join' in base 'Array'.`);
@@ -587,6 +599,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "duplicate":
           return V.dict(d.duplicate(boolArgOr(args, 0, false)));
+        case "hash":
+          return V.int(variantHashNumber(obj));
         default:
           // 字典上同样没有 `join`
           if (name === "join") throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function 'join' in base 'Dictionary'.`);
@@ -722,6 +736,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `hex_to_int() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(strHexToInt(s));
+        case "bin_to_int":
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `bin_to_int() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.int(strBinToInt(s));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);
@@ -734,6 +753,110 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `hash() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(hashDjb2(s));
+        case "begins_with":
+        case "ends_with": {
+          const w = asString(one(args, name), name);
+          return V.bool(name === "begins_with" ? strStartsWith(s, w) : strEndsWith(s, w));
+        }
+        case "pad_zeros": {
+          if (args.length !== 1) {
+            throw new GodotRuntimeError("arity", `pad_zeros() 要 1 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strPadZeros(s, intArg(args, 0, "pad_zeros")));
+        }
+        case "get_slicec": {
+          if (args.length !== 2) {
+            throw new GodotRuntimeError("arity", `get_slicec() 要 2 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strGetSlicec(s, intArg(args, 0, "get_slicec"), intArg(args, 1, "get_slicec")));
+        }
+        case "get_slice": {
+          if (args.length < 2) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "get_slice()" call. Expected at least 2 but received ${args.length}.`);
+          }
+          if (args.length > 2) {
+            throw new GodotRuntimeError("arity", `Too many arguments for "get_slice()" call. Expected at most 2 but received ${args.length}.`);
+          }
+          return V.str(strGetSlice(s, asString(args[0] as Variant, "get_slice"), intArg(args, 1, "get_slice")));
+        }
+        case "insert": {
+          if (args.length !== 2) {
+            throw new GodotRuntimeError("arity", `insert() 要 2 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strInsertAt(s, intArg(args, 0, "insert"), asString(args[1] as Variant, "insert")));
+        }
+        case "erase": {
+          if (args.length !== 2) {
+            throw new GodotRuntimeError("arity", `erase() 要 2 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strEraseAt(s, intArg(args, 0, "erase"), intArg(args, 1, "erase")));
+        }
+        case "repeat": {
+          if (args.length !== 1) {
+            throw new GodotRuntimeError("arity", `repeat() 要 1 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strRepeat(s, intArg(args, 0, "repeat")));
+        }
+        case "similarity":
+          return V.float(strSimilarity(s, asString(one(args, "similarity"), "similarity")));
+        case "strip_edges": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `strip_edges() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strStripEdges(s));
+        }
+        case "unicode_at":
+          return V.int(strUnicodeAt(s, intArg(args, 0, "unicode_at")));
+        case "casecmp_to":
+          return V.int(strCmp(s, asString(one(args, "casecmp_to"), "casecmp_to")));
+        case "is_valid_filename": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_filename() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(strIsValidFilename(s));
+        }
+        case "uri_encode": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `uri_encode() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strUriEncode(s));
+        }
+        case "uri_decode": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `uri_decode() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strUriDecode(s));
+        }
+        case "c_escape": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `c_escape() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strCEscape(s));
+        }
+        case "to_camel_case":
+        case "to_kebab_case":
+        case "to_snake_case": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `${name}() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strCaseStyle(s, name === "to_camel_case" ? "camel" : name === "to_kebab_case" ? "kebab" : "snake"));
+        }
+        case "count":
+        case "countn": {
+          if (args.length < 1) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "${name}()" call. Expected at least 1 but received ${args.length}.`);
+          }
+          if (args.length > 3) {
+            throw new GodotRuntimeError("arity", `Too many arguments for "${name}()" call. Expected at most 3 but received ${args.length}.`);
+          }
+          if (args.length >= 2 && boolArg(args, 1, name)) {
+            throw new UnsupportedError("string-count-chars", `${name}() 的 chars 参数只实测过 false（真值那格见 SEMANTICS §6）`);
+          }
+          if (args.length === 3) {
+            throw new UnsupportedError("string-count-third", `${name}() 的第 3 个参数（int）没量过它管什么`);
+          }
+          return V.int(strCount(s, asString(args[0] as Variant, name), name === "countn"));
+        }
         case "md5_text":
           if (args.length !== 0) {
             throw new GodotRuntimeError("arity", `md5_text() 不接受参数（收到 ${args.length} 个）`);
@@ -750,9 +873,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
 export function index(raw: unknown, idx: Variant): Variant {
   const obj = norm(raw);
-  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArg([idx], 0, "下标"));
+  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArgIdx(idx, "下标"));
   if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
-  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
+  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArgIdx(idx, "下标")));
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
@@ -821,6 +944,11 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
 /** `v[0] = E`：基是值类型就回报新值，容器/字典的下标赋值原地处理（返回 null）；基收 `unknown` 是因为发射器递来的读式（`rt.attribute` / `rt.index`）就是这个类型。 */
 export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | null {
   const base = norm(raw);
+  // 数组/字典/字符串不可能是向量那批 —— 先落回 setIndex，省掉下面六个 instanceof（下标写是热路径）。
+  if (base.t !== Tag.OBJECT) {
+    setIndex(base, idx, value);
+    return null;
+  }
   if (base.t === Tag.OBJECT && base.v instanceof GVector2) {
     return vecWrite(base.v as GVector2, idx, value, "index");
   }
@@ -846,7 +974,7 @@ export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | 
 export function setIndex(raw: unknown, idx: Variant, val: Variant): void {
   const obj = norm(raw);
   if (obj.t === Tag.ARRAY) {
-    asArray(obj, "下标赋值").set(intArg([idx], 0, "下标赋值"), val);
+    asArray(obj, "下标赋值").set(intArgIdx(idx, "下标赋值"), val);
     return;
   }
   if (obj.t === Tag.DICT) {
@@ -979,6 +1107,14 @@ function intArg(args: Variant[], i: number, who: string): number {
   const a = args[i];
   if (a === undefined || a.t !== Tag.INT) {
     throw new UnsupportedError("need-int-arg", `${who} 的第 ${i} 个参数需要 int`);
+  }
+  return intToNum(a.v as IntPayload);
+}
+
+/** 下标那三处（读、字符串取字符、写）只有一个 int 参：直接收 Variant，别为它现造一个参数数组。报错文本与 intArg 一致。 */
+function intArgIdx(a: Variant, who: string): number {
+  if (a.t !== Tag.INT) {
+    throw new UnsupportedError("need-int-arg", `${who} 的第 0 个参数需要 int`);
   }
   return intToNum(a.v as IntPayload);
 }

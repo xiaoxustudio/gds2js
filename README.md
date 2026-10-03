@@ -60,6 +60,24 @@ gds2js export         <entry.gd>    # 打成 Node 独立可执行文件（SEA）
 
 常用选项：`-o/--out`、`-w/--watch`、`--sourcemap`、`--runtime <spec>`、`--host <spec>` / `--no-host`、`--runtime-mode`；`export` 另有 `--pack` / `--node` / `--keep-bundle` / `-v,--verbose`；顶层 `-V/--version` 打出出货版本。
 
+### `run` 的启动延迟：怎么调最划算
+
+同一台机器、同一个示例脚本，`run` 端到端**交替配对 8 轮**的实测（`pnpm latency`，奇数轮反序消位置偏置；括号里是对最快的原生 exe 的配对差与 |t|）：
+
+| 调用方式 | 中位 | 对原生 exe |
+| --- | --- | --- |
+| `tmp/cli-native/gds2js.exe run <f.gd>` | ~255 ms | 基线 |
+| `node packages/gds2js/dist/cli.mjs run <f.gd>` | ~305 ms | +52 ms（\|t\|=6.5） |
+| `node --import tsx packages/gds2js/src/cli.ts run <f.gd>` | ~710 ms | +453 ms（\|t\|=16.1） |
+| `pnpm exec gds2js run <f.gd>` | ~1005 ms | +770 ms（\|t\|=33.5） |
+| Godot 4.6.3 `--headless --script` | ~1660 ms | +1407 ms（\|t\|=27.5） |
+
+所以嫌慢先换调用姿势：**用原生 `gds2js.exe`，其次 `node packages/gds2js/dist/cli.mjs`**；别用 `pnpm exec` / `npx`（光包装器就 +770 ms），也别用 `tsx` 跑源码（那是仓库内跑门的路径）。整体上我们比 Godot 的冷启动快 **6.5 倍**。`NODE_COMPILE_CACHE` 实测量不出收益（|t|=0.13），不必设。
+
+改文件反复试的小循环用 `gds2js run <f.gd> --watch`：进程不退出，runtime 只装载一次，实测「改文件 → 看到程序的新输出」约 **290 ms**，其中 250 ms 轮询 + 80 ms 去抖是设计上限（`fs.watch` 在静态目标没有 lowering，所以走摘要轮询），编译与执行只占剩下的几十毫秒以内。
+
+大工程的 `check-project` / `build-project` 走 **IR 缓存**（按源码内容 + 编译器内容戳寻址，落在系统临时目录，不进工程目录；改编译器立刻整体失效）。600 模块实测 `check-project` 快 **17%**（|t|=10.7）。`run-project` 不吃这个收益——它的三秒里约三分之二花在 Node 逐份装载产物上（601 份 `.mts` 888 ms vs 打成单文件 95 ms）。**工程 ≥ 100 个模块时 `run-project` 改为先打成单文件产物再装载**（600 模块实测 3473 → 2464 ms（−27.8%），两轮配对 12/12 轮都更快，输出逐字一样；阈值是量出来的：50 模块上打包还亏 170 ms）。开关 `GDS2JS_RUN_BUNDLE=0`；原生 exe 里没带打包器，那支照旧逐文件——`test:cli-native` 的 ⑨c 格要求「打包 / 不打包 / exe」三方输出逐字相等。缓存这边的开关是 `GDS2JS_IR_CACHE=0`（绕过）与 `GDS2JS_IR_CACHE_DIR`（指目录）；静态出货 exe 里缓存默认透传，因为岛上没有 `node:crypto`。
+
 ## 产物的运行时打包模式（`--runtime-mode`）
 
 编译产物默认 `import "gds2js/runtime"` / `"gds2js/host"`。三种模式决定产物运行时**如何拿到 gds2js 运行时**：
@@ -133,8 +151,11 @@ pnpm test:ir / test:sema / test:ops
 pnpm test:cli-native # 原生 CLI 等价性：不带 node 的 gds2js.exe 与 node 侧逐字节/逐字对齐（要 zig + libtree-sitter + scriptc）
 pnpm test:pkgmodes   # local/single 两模式的回归：逐用例 node 跑对齐 golden + 子目录 local + single sourcemap 解码
 pnpm test:export     # export 的回归：node(SEA+VFS) / scriptc 两支各真打一个 exe（stdout 逐字节 + 抛错须非 0 退出 + 门禁该响的响 + 中间件清干净）；要先前 pnpm build
-pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字节对 Godot golden（默认跑代表集；--all 全量、--project 只跑 9 个项目树用例）
+pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字节对 Godot golden（默认跑代表集；--all 全量、--project 只跑 9 个项目树用例、--jobs=N 控并发）
 pnpm regen:case-table # 再生成 runtime 的 case-table.ts（探头 000-probe-cs-* 现搭现弃不入库；只改表请走它）
-pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上）
+pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上；每 kernel 连跑 3 轮取最小，GDS2JS_BENCH_ROUNDS 可调）
+pnpm bench:ab        # 交替配对 A/B：pnpm bench:ab --rounds=6 <仓内文件>=<候选文件>，报配对差 ±SE 与 |t|（|t|<2 就是量不出来）
+pnpm bench:scriptc   # 同一张 kernel 表编成 scriptc 原生 exe 量每次调用（要 zig + scriptc；小格子受基线噪声限制，见 ROADMAP §1.19）
+pnpm latency         # CLI 端到端延迟门：交替配对量各条调用路径的 run 延迟（同上，|t|<2 不算数）
 pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
 ```

@@ -1,5 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
-import { GLOBAL_CONSTANTS, isGlobalConst } from "../lower/globals";
+import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
@@ -25,6 +25,8 @@ export interface EmitOptions {
   loadMap?: Array<{ literal: string; resPath: string }>;
   sideEffectImports?: string[];
   inheritedMembers?: string[];
+  /** JS 原型链顶端挂的是宿主 SceneTree（自己 extends 它，或沿脚本继承链走到它）：`quit()` / `create_timer()` 这类宿主方法只在链上有时才认。 */
+  hostBaseInChain?: boolean;
   sourcemap?: boolean;
   sourceFile?: string;
   jsFile?: string;
@@ -90,6 +92,18 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   bool: (a) => `rt.toBool(${a.join(", ")})`,
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
   hash: (a) => `rt.variantHash([${a.join(", ")}])`,
+  var_to_str: (a) => {
+    if (a.length !== 1) {
+      throw new UnsupportedError("var-to-str-arity", `var_to_str() 只发单实参形状（收到 ${a.length} 个）：4.6.3 的第二个实参是缩进串，装字典的数组跟着换行、缩进还按深度累加，式子没量出前不猜`);
+    }
+    return `rt.V.str(rt.varToStr(${a[0]}))`;
+  },
+  str_to_var: (a) => {
+    if (a.length !== 1) {
+      throw new UnsupportedError("str-to-var-arity", `str_to_var() 只发单实参形状（收到 ${a.length} 个）`);
+    }
+    return `rt.strToVar(${a[0]})`;
+  },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
@@ -111,19 +125,66 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
+  sign: (a) => `rt.gSign(${a[0]})`,
+  signi: (a) => `rt.gSignI(${a[0]})`,
+  signf: (a) => `rt.gSignF(${a[0]})`,
+  floor: (a) => `rt.gFloor(${a[0]}, "auto")`,
+  floorf: (a) => `rt.gFloor(${a[0]}, "float")`,
+  floori: (a) => `rt.gFloor(${a[0]}, "int")`,
+  ceil: (a) => `rt.gCeil(${a[0]}, "auto")`,
+  ceilf: (a) => `rt.gCeil(${a[0]}, "float")`,
+  ceili: (a) => `rt.gCeil(${a[0]}, "int")`,
+  round: (a) => `rt.gRound(${a[0]}, "auto")`,
+  roundf: (a) => `rt.gRound(${a[0]}, "float")`,
+  roundi: (a) => `rt.gRound(${a[0]}, "int")`,
+  posmod: (a) => `rt.gPosmod(${a[0]}, ${a[1]})`,
+  fposmod: (a) => `rt.gFposmod(${a[0]}, ${a[1]})`,
+  fmod: (a) => `rt.gFmod(${a[0]}, ${a[1]})`,
+  wrapi: (a) => `rt.gWrap(${a[0]}, ${a[1]}, ${a[2]}, true)`,
+  wrapf: (a) => `rt.gWrap(${a[0]}, ${a[1]}, ${a[2]}, false)`,
+  lerp: (a) => `rt.gLerp(${a[0]}, ${a[1]}, ${a[2]})`,
+  lerpf: (a) => `rt.gLerp(${a[0]}, ${a[1]}, ${a[2]})`,
+  inverse_lerp: (a) => `rt.gInverseLerp(${a[0]}, ${a[1]}, ${a[2]})`,
+  move_toward: (a) => `rt.gMoveToward(${a[0]}, ${a[1]}, ${a[2]})`,
+  snapped: (a) => `rt.gSnapped(${a[0]}, ${a[1]})`,
+  snappedf: (a) => `rt.gSnappedF(${a[0]}, ${a[1]})`,
+  snappedi: (a) => `rt.gSnappedI(${a[0]}, ${a[1]})`,
+  deg_to_rad: (a) => `rt.gDegToRad(${a[0]})`,
+  rad_to_deg: (a) => `rt.gRadToDeg(${a[0]})`,
+  angle_difference: (a) => `rt.gAngleDifference(${a[0]}, ${a[1]})`,
+  is_equal_approx: (a) => `rt.gIsEqualApprox(${a[0]}, ${a[1]})`,
+  is_zero_approx: (a) => `rt.gIsZeroApprox(${a[0]})`,
+  is_nan: (a) => `rt.gIsNan(${a[0]})`,
+  is_inf: (a) => `rt.gIsInf(${a[0]})`,
+  is_finite: (a) => `rt.gIsFinite(${a[0]})`,
+  min: (a) => `rt.gMin(${a[0]}, ${a[1]})`,
+  max: (a) => `rt.gMax(${a[0]}, ${a[1]})`,
+  mini: (a) => `rt.gMinI(${a[0]}, ${a[1]})`,
+  maxi: (a) => `rt.gMaxI(${a[0]}, ${a[1]})`,
+  minf: (a) => `rt.gMinF(${a[0]}, ${a[1]})`,
+  maxf: (a) => `rt.gMaxF(${a[0]}, ${a[1]})`,
+  clamp: (a) => `rt.gClamp(${a[0]}, ${a[1]}, ${a[2]}, "auto")`,
+  clampf: (a) => `rt.gClamp(${a[0]}, ${a[1]}, ${a[2]}, "float")`,
+  clampi: (a) => `rt.gClamp(${a[0]}, ${a[1]}, ${a[2]}, "int")`,
+  smoothstep: (a) => `rt.gSmoothstep(${a[0]}, ${a[1]}, ${a[2]})`,
+  ease: (a) => `rt.gEase(${a[0]}, ${a[1]})`,
+  cubic_interpolate: (a) => `rt.gCubic(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  remap: (a) => `rt.gRemap(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  exp: (a) => `rt.gExp(${a[0]})`,
+  log: (a) => `rt.gLog(${a[0]})`,
+  pow: (a) => `rt.gPow(${a[0]}, ${a[1]})`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set([
-  "Vector2i",
-  "Vector3",
-  "Vector3i",
-  "load",
-  "preload",
-]);
+const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
+
+/** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加 `print` / `load` / `preload`。
+ *  与 `GLOBAL_TODO_FUNCTIONS`（Godot 有、我们拒）相对，两份都是量出来的，摸不得。 */
+export const GLOBAL_IMPLEMENTED: Set<string> = new Set([...Object.keys(BUILTIN), "print", "load", "preload"]);
 
 /** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
+let MODULE_SIGNALS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
 let MODULE_CLASSES = new Set<string>();
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
@@ -162,6 +223,8 @@ let CLASS_VALUES = new Map<string, Set<string>>();
 let VAR_TYPES = new Map<string, TypeRef | null>();
 /** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
+/** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
+let CLASS_FUNCS = new Set<string>();
 
 // ---- sourcemap 采集（只在 emitModuleWithMap 且 opts.sourcemap 时启用）----
 let MAP_ACTIVE = false;
@@ -213,7 +276,15 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     ...m.signals.map((s) => s.name),
     ...(opts.inheritedMembers ?? []),
   ]);
+  /** 信号字段落的是裸 `rt.Signal`，当值用（比较、当字典键、进数组、`typeof`）必须先装箱成 Variant —— 直接递出去会在运行期变成没有类型的裸对象。 */
+  MODULE_SIGNALS = new Set(m.signals.map((s) => s.name));
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+  // 字段初始化式发在 INHERITED_METHODS 建起来之前，而那里裸调本类方法、继承来的方法与宿主基类的方法都合法，守卫认这张表。
+  CLASS_FUNCS = new Set([
+    ...m.funcs.map((f) => f.name),
+    ...(opts.inheritedMembers ?? []),
+    ...(baseClass.kind === "host" || opts.hostBaseInChain === true ? HOST_MEMBERS : []),
+  ]);
   CURRENT_CLASS = className;
   STATIC_FUNCS = new Set(m.funcs.filter((f) => f.isStatic).map((f) => f.name));
   CLASS_VALUE_OWNERS = new Map(
@@ -394,6 +465,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   CURRENT_RET = null;
   VAR_TYPES = new Map();
   LOCAL_TYPES = new Map();
+  CLASS_FUNCS = new Set();
   return { code, map };
 }
 
@@ -551,6 +623,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   const savedHasBase = INIT_HAS_BASE;
   const savedAsMethod = INIT_AS_METHOD;
   const savedHostSuper = NEEDS_HOST_SUPER;
+  const savedClassFuncs = CLASS_FUNCS;
   CURRENT_MEMBERS = new Set([
     ...decl.vars.filter((v) => !v.isStatic).map((v) => v.name),
     ...innerInheritedNames(decl),
@@ -558,6 +631,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
+  CLASS_FUNCS = new Set([...decl.funcs.map((f) => f.name), ...innerInheritedMethodNames(decl)]);
   CLASS_VALUE_OWNERS = new Map(savedConsts);
   for (const v of decl.vars) if (v.isConst || v.isStatic) CLASS_VALUE_OWNERS.set(v.name, decl.name);
 
@@ -610,6 +684,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   INIT_HAS_BASE = savedHasBase;
   INIT_AS_METHOD = savedAsMethod;
   NEEDS_HOST_SUPER = savedHostSuper;
+  CLASS_FUNCS = savedClassFuncs;
   return lines;
 }
 
@@ -2741,7 +2816,7 @@ function emitExprVar(e: Expr): string {
       if (STATIC_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(__gd_d_${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
-      if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
+      if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       return e.name;
 
     case "unary":
@@ -2966,6 +3041,21 @@ function emitBinary(e: Extract<Expr, { kind: "binary" }>): string {
   return `rt.ops.${fn}(${l}, ${r})`;
 }
 
+/** 裸调用的 callee 名在成员表里认不认得（内置与 print/load/preload 在前面各自就返回了）：本模块与当前类的方法、字段与信号、类级的值，加上继承链上的 —— 含宿主基类的 `quit()`，但只在链上真挂着宿主时。
+ *  实测 callee 名既不按局部声明解（`var cb = getv` 之后 `cb()` → `Function "cb()" not found in base self.`），也不按类名解（`Inner()` → `Member "Inner" is not a function.`），所以这两类名字不在表里。
+ *  一张都不认的才拒 —— 之前兜底直接发 `this.x(...)`，运行期炸成裸 JS `TypeError`，既没有 `[code]` 也不是 `UnsupportedError`。 */
+function callableInScope(name: string): boolean {
+  return (
+    MODULE_FUNCS.has(name) ||
+    CLASS_FUNCS.has(name) ||
+    STATIC_FUNCS.has(name) ||
+    CURRENT_MEMBERS.has(name) ||
+    MODULE_VARS.has(name) ||
+    INHERITED_METHODS.has(name) ||
+    CLASS_VALUE_OWNERS.has(name)
+  );
+}
+
 function emitCall(e: Extract<Expr, { kind: "call" }>): string {
   const args = e.args.map(emitExpr);
 
@@ -3008,6 +3098,9 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
     }
     if (STATIC_FUNCS.has(name)) return `${CURRENT_CLASS}.${name}(${args.join(", ")})`;
+    if (!callableInScope(name)) {
+      throw new UnsupportedError("call-unknown", `Function "${name}()" not found in base self.`);
+    }
     return `this.${name}(${args.join(", ")})`;
   }
 

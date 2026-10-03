@@ -1,0 +1,16 @@
+SCRIPT ERROR: Parse Error: Invalid operands to operator %, int and float.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid operands to operator %, float and int.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid operands to operator %, float and float.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid operands to operator /, bool and int.
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid operands to operator +, bool and bool.
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid operands for bit shifting. Only positive operands are supported. in operator >>.
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Invalid operands for bit shifting. Only positive operands are supported. in operator <<.
+   at: GDScript::reload (<case>/main.gd:10)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

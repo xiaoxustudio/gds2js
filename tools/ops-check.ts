@@ -5,7 +5,7 @@ import { hashDjb2, lengthOf, range, rangeSeq, toInt, variantHash, arrayFromVaria
 import { fast } from "@gds2js/runtime/runtime/fast";
 import { parseGdDouble } from "@gds2js/runtime/shared/double";
 import { md5Hex } from "@gds2js/runtime/runtime/md5";
-import { callable, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { callable, callableEq, callableSame, callableOf, nullCallable, CallableBox, methodCallable, registerClass, registerFieldTypes, registerMethodArities, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { Signal } from "@gds2js/runtime/runtime/signal";
 import { paramSlot } from "@gds2js/runtime/runtime/slots";
 import { attribute, callableCtor, index, iter, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/methods";
@@ -16,10 +16,28 @@ import {
   GDict,
   keyOf,
   show,
+  strBinToInt,
   strCase,
+  strCaseStyle,
   strCapitalize,
+  strCEscape,
+  strCount,
+  strEndsWith,
+  strEraseAt,
   strFind,
   strFloat,
+  strGetSlice,
+  strInsertAt,
+  strIsValidFilename,
+  strGetSlicec,
+  strPadZeros,
+  strRepeat,
+  strStartsWith,
+  strStripEdges,
+  strToVar,
+  strUriDecode,
+  strUnicodeAt,
+  strUriEncode,
   strBuiltin,
   strFormat,
   strReplace,
@@ -36,6 +54,7 @@ import {
   truthyOf,
   valueEq,
   valueSame,
+  varToStr,
 } from "@gds2js/runtime/runtime/values";
 import {
   asColor,
@@ -606,6 +625,187 @@ eq("226", "capitalize 希腊终 s 升档", strCapitalize("\u03C2 end"), "\u03A3 
   shouldThrow("226", "replace 只收 2 个参数", () => method(s, "replace", [V.str("l"), V.str("L"), V.bool(false)]));
   shouldThrow("226", "replace 少一个参数就抛", () => method(s, "replace", [V.str("l")]));
   shouldThrow("226", "capitalize 不接受参数", () => method(V.str("ab"), "capitalize", [I(1)]));
+}
+
+eq("234", "get_slice 无分隔符时整串就是那一段", `${strGetSlice("abc", "/", 0)}|${strGetSlice("abc", "/", 9)}`, "abc|abc");
+eq("234", "get_slice 负数与越界给空", `[${strGetSlice("a/b/c", "/", -1)}][${strGetSlice("a/b/c", "/", 3)}]`, "[][]");
+eq("234", "get_slice 空分隔符给空", strGetSlice("a/b", "", 0), "");
+eq("234", "get_slice 多字符分隔符", strGetSlice("ab-cd-ef", "cd", 1), "-ef");
+eq("234", "insert 负位置原样、超末尾接尾", `${strInsertAt("ac", -1, "b")}|${strInsertAt("ac", 9, "b")}`, "ac|acb");
+eq("234", "erase 负起点给空串", strEraseAt("abc", -1, 1), "");
+eq("234", "erase 零长与起点越界都不动", `${strEraseAt("abc", 1, 0)}|${strEraseAt("abc", 5, 1)}`, "abc|abc");
+eq("234", "repeat 非正数给空串", `[${strRepeat("ab", 0)}][${strRepeat("ab", -2)}]`, "[][]");
+eq("234", "unicode_at 越界与负数给 0", `${strUnicodeAt("abc", 3)}|${strUnicodeAt("abc", -1)}|${strUnicodeAt("", 0)}`, "0|0|0");
+eq("234", "unicode_at 按码点走", `${strUnicodeAt("\u{1F600}a", 0)}|${strUnicodeAt("\u{1F600}a", 1)}`, "128512|97");
+eq("234", "bin_to_int 只认负号", `${strBinToInt("+101")}|${strBinToInt("-101")}`, "0|-5");
+eq("234", "bin_to_int 混进非 01 就整串判 0", `${strBinToInt("10a0")}|${strBinToInt("1_0")}|${strBinToInt(" 101")}`, "0|0|0");
+eq("234", "bin_to_int 认 0b 前缀", strBinToInt("0b101"), 5n);
+eq("234", "bin_to_int 溢出饱和到 INT64_MAX", `${strBinToInt("1".repeat(64))}|${strBinToInt("-" + "1".repeat(63))}`, "9223372036854775807|-9223372036854775807");
+
+eq("234", "count 非重叠", `${strCount("aaaa", "aa")}|${strCount("aaa", "aa")}`, "2|1");
+eq("234", "count 空针子给 0", `${strCount("hello", "")}|${strCount("", "")}`, "0|0");
+eq("234", "countn 不分大小写", strCount("HELLO hello", "l", true), 4);
+eq("234", "空针子恒真", `${strStartsWith("abc", "")}|${strEndsWith("abc", "")}`, "true|true");
+eq("234", "begins_with 针子更长即假", strStartsWith("abc", "abcd"), false);
+eq("234", "strip_edges 只裁两端不碰中间", strStripEdges("  a\tb\r\n "), "a\tb");
+eq("234", "strip_edges 不动高位空白", strStripEdges(" a "), " a ");
+eq("234", "uri_encode 保留集", `${strUriEncode("a-z0.~_!")}|${strUriEncode("*'")}`, "a-z0.~_%21|%2A%27");
+eq("234", "uri_encode 非 ASCII 走字节", strUriEncode("\t"), "%09");
+eq("234", "c_escape 只转实测那十个", strCEscape("a\n\""), "a\\n\\\"");
+
+eq("234", "case_style 三种拼法", `${strCaseStyle("fooBar_baz", "kebab")}|${strCaseStyle("ABCdef", "snake")}|${strCaseStyle("_foo bar", "camel")}`, "foo-bar-baz|ab_cdef|fooBar");
+eq("234", "case_style 数字与点号", `${strCaseStyle("a1_b2", "snake")}|${strCaseStyle("XMLHttpRequest", "snake")}|${strCaseStyle("a.b", "kebab")}`, "a_1_b_2|xml_http_request|a.b");
+eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValidFilename("a b")}|${strIsValidFilename("con")}|${strIsValidFilename("")}`, "false|true|true|false");
+{
+  const s = V.str("a/b/c");
+  eq("234", "get_slice 走 method 分发", show(method(s, "get_slice", [V.str("/"), I(1)])), "b");
+  eq("234", "count 走 method 分发", show(method(V.str("hello"), "count", [V.str("l")])), "2");
+  eq("234", "casecmp_to 走 method 分发", show(method(V.str("a"), "casecmp_to", [V.str("B")])), "1");
+  shouldThrow("234", "count 的 chars 真值响亮拒", () => method(V.str("hello"), "count", [V.str("l"), V.bool(true)]));
+  shouldThrow("234", "count 的第 3 个参数没量过", () => method(V.str("hello"), "count", [V.str("l"), V.bool(false), I(1)]));
+  eq("234", "pad_zeros 以小数点为界补零", `${strPadZeros("0.5", 3)}|${strPadZeros(".5", 3)}|${strPadZeros("5", 3)}`, "000.5|.5|005");
+  eq("234", "pad_zeros 跳过前导非数字再插到数字段开头", `${strPadZeros("--5", 2)}|${strPadZeros("+5", 3)}|${strPadZeros(" 5", 3)}|${strPadZeros("-.5", 3)}`, "--05|+005| 005|-000.5");
+  eq("234", "pad_zeros 界内没数字就是往后贴", `${strPadZeros("abc", 5)}|${strPadZeros("x", 3)}|${strPadZeros("a.b", 5)}`, "abc00000|x000|a00000.b");
+  eq("234", "pad_zeros 够宽、空串都不动", `${strPadZeros("12", 2)}|${strPadZeros("12345", 3)}|${strPadZeros("", 3)}`, "12|12345|");
+  eq("234", "pad_zeros 走 method 分发", show(method(V.str("0.5"), "pad_zeros", [I(3)])), "000.5");
+  eq("234", "similarity 是交叠 bigram 的 Dice 系数（引擎读数 1.5 那格）", show(method(V.str("aaaa"), "similarity", [V.str("aa")])), "1.5");
+  eq("234", "similarity 的返回是 float32（4/3 那格）", show(method(V.str("aaaaa"), "similarity", [V.str("aaa")])), "1.33333337306976");
+  eq("234", "similarity 无公共 bigram", show(method(V.str("abc"), "similarity", [V.str("axc")])), "0.0");
+  eq("234", "similarity hello/hallo", show(method(V.str("hello"), "similarity", [V.str("hallo")])), "0.5");
+  eq("234", "similarity 分大小写", show(method(V.str("Hello"), "similarity", [V.str("hello")])), "0.75");
+  eq("234", "similarity kitten/sitting", show(method(V.str("kitten"), "similarity", [V.str("sitting")])), "0.36363637447357");
+  eq("234", "similarity hello/hell", show(method(V.str("hello"), "similarity", [V.str("hell")])), "0.85714286565781");
+  eq("234", "similarity 一边是另一边的前缀", show(method(V.str("abcde"), "similarity", [V.str("abcdefgh")])), "0.72727274894714");
+  eq("234", "similarity 全等先给 1（空串也算全等）", `${show(method(V.str("abc"), "similarity", [V.str("abc")]))}|${show(method(V.str(""), "similarity", [V.str("")]))}`, "1.0|1.0");
+  eq("234", "similarity 任一边不足两个码点给 0", `${show(method(V.str("a"), "similarity", [V.str("ab")]))}|${show(method(V.str(""), "similarity", [V.str("ab")]))}`, "0.0|0.0");
+  eq("234", "uri_decode 只认 0-9 与 A-Z 当 hex 位", `${strUriDecode("%2F")}|${strUriDecode("%2f")}`, "/|2f");
+  eq("234", "uri_decode 第一位不合式就留下百分号", `${strUriDecode("%%41")}|${strUriDecode("%zz")}`, "%A|%zz");
+  eq("234", "uri_decode 的「还剩两位」是严格小于", `${strUriDecode("a%41")}|${strUriDecode("x%4")}|${strUriDecode("%%4")}`, "aA|x%4|%%4");
+  eq("234", "uri_decode 的 strtol 是部分解析，撞 NUL 就截断", `${strUriDecode("%G1")}|${strUriDecode("%4Z")}`, "|\u0004");
+  eq("234", "uri_decode 把加号换成空格", `${strUriDecode("a+b")}|${strUriDecode("+")}|${strUriDecode("%25")}`, "a b| |%");
+  eq("234", "uri_decode 多字节按 UTF-8 重组成一个码点", `${strUriDecode("%C3%A9")}|${strUriDecode("%F0%9F%98%80")}|${strUriDecode("%41%42%43")}`, "é|😀|ABC");
+  eq("234", "uri_decode 非法字节给一个 U+FFFD", strUriDecode("%FF"), "\uFFFD");
+  eq("234", "uri_decode 走 method 分发", show(method(V.str("a%2"), "uri_decode", [])), "a%2");
+  eq("234", "get_slicec 的分隔符是码点不是串", `${strGetSlicec("a/b/c", 47, 0)}|${strGetSlicec("a/b/c", 47, 1)}|${strGetSlicec("a/b/c", 47, 2)}|${strGetSlicec("a.b", 46, 1)}`, "a|b|c|b");
+  eq("234", "get_slicec 负段号与越界给空串", `${strGetSlicec("a/b/c", 47, -1)}|${strGetSlicec("a/b/c", 47, 5)}|${strGetSlicec("1,2", 44, 9)}`, "||");
+  eq("234", "get_slicec 空串与空段", `${strGetSlicec("", 47, 0)}|${strGetSlicec("a//b", 47, 1)}`, "|");
+  eq("234", "get_slicec 找不到分隔符：0 段是整串、其余空", `${strGetSlicec("abc", 1, 0)}|${strGetSlicec("abc", 1, 3)}`, "abc|");
+  eq("234", "get_slicec 走 method 分发", show(method(V.str("a/b/c"), "get_slicec", [I(47), I(1)])), "b");
+}
+
+{
+  const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
+  const gd = (pairs: [Variant, Variant][]) => {
+    const g = new GDict();
+    for (const [k, v] of pairs) g.set(k, v);
+    return V.dict(g);
+  };
+  /** 引擎实测的形状逐格对上；没实测过的类型走响亮拒，这里把 code 也当输出比一遍。 */
+  const vs = (v: Variant): string => {
+    try {
+      return varToStr(v);
+    } catch (e) {
+      return `[${(e as UnsupportedError).code}]`;
+    }
+  };
+
+  eq("236", "var_to_str 的整数按 int64 全宽打", `${vs(I(7))}|${vs(I(-17))}|${vs(I(2147483648))}|${vs(I(4611686018427387904n))}`, "7|-17|2147483648|4611686018427387904");
+  eq("236", "var_to_str 的 null 与布尔是小写", `${vs(V.nil())}|${vs(V.bool(true))}|${vs(V.bool(false))}`, "null|true|false");
+  eq("236", "var_to_str 的字符串加引号，只有引号与反斜杠转义", `${vs(S("x"))}|${vs(S(""))}|${vs(S('a"b'))}|${vs(S("a\\b"))}`, '"x"|""|"a\\"b"|"a\\\\b"');
+  eq("236", "var_to_str 的制表符回车响铃原样留着（引擎 hex 22 09 22）", vs(S("a\tb\rc\u0007d")), '"a\tb\rc\u0007d"');
+  eq("236", "var_to_str 不把非 ASCII 折成 \\u（引擎 hex 22 c3 a9 22）", `${vs(S("é"))}|${vs(S("😀"))}`, '"é"|"😀"');
+  eq("236", "var_to_str 的 StringName 前面挂 &", vs(V.stringName("name")), '&"name"');
+  eq("236", "var_to_str 的数组一行打完，空数组是 []", `${vs(arrOf([I(1), I(2)]))}|${vs(arrOf([]))}`, "[1, 2]|[]");
+  eq("236", "var_to_str 的数组按元素递归", vs(arrOf([S("a"), V.nil(), V.bool(true)])), '["a", null, true]');
+  eq("236", "var_to_str 的空容器套空容器", vs(arrOf([arrOf([]), gd([])])), "[[], {}]");
+  eq("236", "var_to_str 里装 pack 与 StringName", vs(arrOf([V.object(new GBytes([1, 2], "byte")), V.stringName("s")])), '[PackedByteArray(1, 2), &"s"]');
+  eq("236", "var_to_str 的字典上下各一行、键值冒号空格", vs(gd([[S("a"), I(1)]])), '{\n"a": 1\n}');
+  eq("236", "var_to_str 的空字典是单行 {}", vs(gd([])), "{}");
+  eq("236", "var_to_str 的字典按键排序：null<bool<int<float<String<StringName", vs(gd([[V.stringName("b"), I(1)], [S("a"), I(2)], [I(10), I(3)], [S("10"), I(4)], [V.bool(true), I(5)]])), '{\ntrue: 5,\n10: 3,\n"10": 4,\n"a": 2,\n&"b": 1\n}');
+  eq("236", "var_to_str 的同级字符串键按码点（引擎把 \"10\" 排在 \"a\" 前）", vs(gd([[S("B"), I(1)], [S("a"), I(2)], [S("A"), I(3)]])), '{\n"A": 3,\n"B": 1,\n"a": 2\n}');
+  eq("236", "var_to_str 的嵌套字典不缩进", vs(gd([[S("a"), gd([[S("b"), gd([[S("c"), I(1)]])]])]])), '{\n"a": {\n"b": {\n"c": 1\n}\n}\n}');
+  eq("236", "var_to_str 的字典里数组仍单行", vs(gd([[S("a"), arrOf([arrOf([I(1), I(2)]), arrOf([I(3)])])]])), '{\n"a": [[1, 2], [3]]\n}');
+  eq("236", "var_to_str 的 pack 打成构造器形状", `${vs(V.object(new GBytes([1, 2], "byte")))}|${vs(V.object(new GBytes([], "byte")))}`, "PackedByteArray(1, 2)|PackedByteArray()");
+  eq("236", "var_to_str 认 int32/int64/string 三支 pack", `${vs(V.object(new GBytes([1, 2], "int32")))}|${vs(V.object(new GBytes([1], "int64")))}|${vs(V.object(new GBytes(["a", "b"], "string")))}`, 'PackedInt32Array(1, 2)|PackedInt64Array(1)|PackedStringArray("a", "b")');
+  eq("236", "var_to_str 的浮点尾数没量出取数式子，响亮拒", vs(F(2.5)), "[var-to-str-float]");
+  eq("236", "var_to_str 撞见装浮点的数组也拒", vs(arrOf([F(1)])), "[var-to-str-float]");
+  eq("236", "var_to_str 撞见装浮点的 pack 也拒", vs(V.object(new GBytes([1.5], "float32"))), "[var-to-str-float]");
+  eq("236", "var_to_str 的对象形状没实测，响亮拒", vs(wrapValue(new GdScriptObject())), "[var-to-str-type]");
+  eq("236", "var_to_str 的数组键照元素递归打（引擎 onearrkey 那格）", vs(gd([[arrOf([I(1), I(2)]), I(9)]])), "{\n[1, 2]: 9\n}");
+  eq("236", "var_to_str 的字典键自己也是多行（引擎 onedictkey 那格）", vs(gd([[gd([[S("z"), I(1)]]), I(5)]])), '{\n{\n"z": 1\n}: 5\n}');
+  eq("236", "两个数组键的排序式子没量出，响亮拒", vs(gd([[arrOf([I(1), I(2)]), I(9)], [arrOf([I(3)]), I(8)]])), "[var-to-str-key]");
+  eq("236", "数组里装了字典就跟着字典换行（引擎 arrval 那格）", vs(arrOf([arrOf([I(1), I(2)]), gd([[I(3), I(4)]])])), "[[1, 2], {\n3: 4\n}]");
+  eq("236", "字典值是对象时照样响亮拒", vs(gd([[S("n"), wrapValue(new GdScriptObject())]])), "[var-to-str-type]");
+
+  /** `str_to_var()` 的读数按「typeof|打印」两栏比，与语料同一个口径。 */
+  const sv = (s: string): string => {
+    try {
+      const got = strToVar(S(s));
+      return `${String((typeOf(got) as { v: number }).v)}|${show(got)}`;
+    } catch (e) {
+      return `[${(e as UnsupportedError).code}]`;
+    }
+  };
+  eq("236", "str_to_var 的数字：整数走 int64、带点或带 e 就是 float", `${sv("7")}|${sv("1.5")}|${sv("007")}|${sv("-0")}|${sv("1e")}`, "2|7|3|1.5|2|7|2|0|3|1.0");
+  eq("236", "str_to_var 只读一个值，后面跟着的不看（`1 2` 取 1、`0x10` 取 0、`1.5.2` 停在第二个点）", `${sv("1 2")}|${sv("0x10")}|${sv("1.5.2")}|${sv("1_000")}`, "2|1|2|0|3|1.5|2|1");
+  eq("236", "str_to_var 的指数：`1e` 与 `1e+` 都算 1.0，正负号各一格，1e400 溢出成 inf", `${sv("1e")}|${sv("1e+")}|${sv("1.")}|${sv("1e+3")}|${sv("1e-3")}|${sv("1E3")}`, "3|1.0|3|1.0|3|1.0|3|1000.0|3|0.001|3|1000.0");
+  eq("236", "str_to_var 认 inf / -inf / inf_neg / nan，大写与 + 号全不认", `${sv("inf")}|${sv("-inf")}|${sv("inf_neg")}|${sv("nan")}|${sv("+inf")}|${sv("-nan")}|${sv("- 7")}|${sv("-")}|${sv(".5")}`, "3|inf|3|-inf|3|-inf|3|nan|0|<null>|0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的字面量只认小写 null / true / false", `${sv("null")}|${sv("true")}|${sv("false")}|${sv("TRUE")}|${sv("True")}|${sv("Null")}|${sv("NaN")}|${sv("abc")}`, "0|<null>|1|true|1|false|0|<null>|0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的空白：前后空格与换行都跳掉，空串给 null", `${sv(" 7 ")}|${sv("\n7")}|${sv("")}|${sv("   ")}`, "2|7|2|7|0|<null>|0|<null>");
+  eq("236", "str_to_var 的转义：n t r b f 是真控制符，反斜杠与斜杠照字面", `${sv('"a\\nb"')}|${sv('"a\\tb"')}|${sv('"a\\rb"')}|${sv('"a\\bb"')}|${sv('"a\\fb"')}|${sv('"a\\\\b"')}`, "4|a\nb|4|a\tb|4|a\rb|4|a\bb|4|a\fb|4|a\\b");
+  eq("236", "str_to_var 的字符串只认双引号，未闭合给 null", `${sv('"x"')}|${sv('"a\\"b"')}|${sv("'x'")}|${sv('"abc')}`, "4|x|4|a\"b|0|<null>|0|<null>");
+  eq("236", "str_to_var 认不出的转义字母是「删掉反斜杠留原字符」（实测 \\a \\v \\q \\x \\0）", `${sv('"a\\ab"')}|${sv('"a\\vb"')}|${sv('"a\\qb"')}|${sv('"a\\x41b"')}|${sv('"a\\0b"')}`, "4|aab|4|avb|4|aqb|4|ax41b|4|a0b");
+  eq("236", "str_to_var 的 \\u 吃四个十六进制位，大小写都收", `${sv('"\\u0041"')}|${sv('"\\u00e9"')}|${sv('"\\uAbCd"')}|${sv('"a\\uFFFFb"')}`, "4|A|4|é|4|\uabcd|4|a\uffffb");
+  eq("236", "str_to_var 的代理区、缺位与非法十六进制的 \\u 整串作废", `${sv('"a\\uD800b"')}|${sv('"a\\uDFFFb"')}|${sv('"a\\u41b"')}|${sv('"a\\uZZZZb"')}`, "0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的 \\U 实测吃六位数但越界与代理区没量，响亮拒", sv('"a\\U0001F600b"'), "[str-to-var-shape]");
+  eq("236", "str_to_var 的 StringName：&\"...\" 收，&'...' 与 &name 都不收", `${sv('&"name"')}|${sv('&"a\\tb"')}|${sv("&'name'")}|${sv("&name")}`, "21|name|21|a\tb|0|<null>|0|<null>");
+  eq("236", "str_to_var 的数组：分隔符齐就收，尾逗号也收", `${sv("[1,2]")}|${sv("[ 1 , 2 ]")}|${sv("[1, 2,]")}|${sv("[ ]")}|${sv("[1, [2, 3]]")}`, "28|[1, 2]|28|[1, 2]|28|[1, 2]|28|[]|28|[1, [2, 3]]");
+  eq("236", "str_to_var 的数组缺一角就整串作废（未闭合、缺逗号、空元素、裸词）", `${sv("[1")}|${sv("[1,,2]")}|${sv("[1 2]")}|${sv("[,]")}|${sv("[.]")}|${sv("[abc]")}`, "0|<null>|0|<null>|0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的字典打印是 `{ 元素 }`，键的类型实测那六种都收", `${sv("{1: 2}")}|${sv('{1: 2, "b": 3}')}|${sv("{1.5: 2}")}|${sv("{true: 1}")}|${sv("{null: 1}")}|${sv('{&"a": 1}')}`, "27|{ 1: 2 }|27|{ 1: 2, \"b\": 3 }|27|{ 1.5: 2 }|27|{ true: 1 }|27|{ <null>: 1 }|27|{ &\"a\": 1 }");
+  eq("236", "str_to_var 的字典认多行写法与尾逗号，重复键后者盖前者", `${sv('{\n"a": 1,\n"b": 2\n}')}|${sv('{"a": 1,}')}|${sv("{1: 2, 1: 3}")}|${sv("{ }")}|${sv("{}")}`, '27|{ "a": 1, "b": 2 }|27|{ "a": 1 }|27|{ 1: 3 }|27|{  }|27|{  }');
+  eq("236", "str_to_var 的字典缺冒号、缺值或键是裸词都整串作废", `${sv("{a: 1}")}|${sv('{"a"}')}|${sv("{: 1}")}|${sv('{"a": }')}|${sv('{"a" 1}')}`, "0|<null>|0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的嵌套：字典里套字典再套数组与 StringName 键", sv('{"a": {"b": [1, {&"c": 2}]}}'), '27|{ "a": { "b": [1, { &"c": 2 }] } }');
+  eq("236", "str_to_var 的向量与颜色按实测 arity：arity 不对给 null", `${sv("Vector2(1.5, 2)")}|${sv("Vector2 (1, 2)")}|${sv("Vector2(1,2)")}|${sv("Vector2(1)")}|${sv("Vector2()")}|${sv("Vector2(1, 2, 3)")}`, "5|(1.5, 2.0)|5|(1.0, 2.0)|5|(1.0, 2.0)|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的整型向量把浮点截断（实测 -1.7 → -1）", `${sv("Vector2i(-1.7, 2)")}|${sv("Vector3i(1.5, 2, 3)")}|${sv("Vector3(1, 2, 3)")}|${sv("Color(1, 0, 0, 1)")}|${sv("Color(1, 0, 0)")}`, "6|(-1, 2)|10|(1, 2, 3)|9|(1.0, 2.0, 3.0)|20|(1.0, 0.0, 0.0, 1.0)|0|<null>");
+  eq("236", "str_to_var 的构造参数只量过数字：串与嵌套构造式全给 null", `${sv('Vector2("1", 2)')}|${sv("Vector2(Vector2(1, 2), 3)")}|${sv('Vector2i("a", 2)')}|${sv("Vector2(1, 2,)")}|${sv("(1, 2)")}`, "0|<null>|0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的 pack 构造式按类型收敛：byte 回绕、int 截断、int64 饱和", `${sv("PackedByteArray(1, 2)")}|${sv("PackedByteArray(300)")}|${sv("PackedByteArray(-1)")}|${sv("PackedByteArray(1.7)")}|${sv("PackedByteArray()")}`, "29|[1, 2]|29|[44]|29|[255]|29|[1]|29|[]");
+  eq("236", "str_to_var 认其余六支 pack 的形状", `${sv("PackedInt32Array(1.7, 2)")}|${sv("PackedInt64Array(1)")}|${sv("PackedFloat32Array(1)")}|${sv("PackedFloat64Array(1.5)")}|${sv('PackedStringArray("a")')}|${sv("PackedVector2Array(1, 2)")}`, "30|[1, 2]|31|[1]|32|[1.0]|33|[1.5]|34|[\"a\"]|35|[(1.0, 2.0)]");
+  eq("236", "str_to_var 的 pack 元素类型不合式给 null（实测 int 串互斥）", `${sv('PackedByteArray("a")')}|${sv('PackedInt32Array("a")')}|${sv("PackedStringArray(1)")}|${sv("PackedByteArray(1, 2,)")}`, "0|<null>|0|<null>|0|<null>|0|<null>");
+  eq("236", "str_to_var 的 int64 饱和（引擎同时往 stderr 打一句 Too large，值这边一致）", `${sv("99999999999999999999")}|${sv("PackedInt64Array(99999999999999999999)")}`, "2|9223372036854775807|31|[9223372036854775807]");
+  eq("236", "str_to_var 撞见引擎给得出而我们没形状的类型，响亮拒", `${sv("Rect2(1, 2, 3, 4)")}|${sv("Quaternion(1, 2, 3, 4)")}|${sv("PackedColorArray()")}`, "[str-to-var-type]|[str-to-var-type]|[str-to-var-type]");
+  eq("236", "str_to_var 撞见没量过的构造式名字响亮拒（引擎的 null 只量过 NoSuchType 那一格）", sv("NoSuchType(1)"), "[str-to-var-shape]");
+  eq("236", "str_to_var 的实参只量过 String：给 int 就拒", String(((() => { try { return strToVar(I(7)); } catch (e) { return `[${(e as UnsupportedError).code}]`; } })())), "[str-to-var-arg]");
+  eq("236", "var_to_str 打出去的写法，str_to_var 能原样读回来", sv(vs(gd([[S("a"), arrOf([I(1), gd([[S("b"), I(2)]])])], [I(3), S("z")]]))), '27|{ 3: "z", "a": [1, { "b": 2 }] }');
+}
+
+
+{
+  const o1 = new GdScriptObject();
+  const o2 = new GdScriptObject();
+  const v1 = wrapValue(o1);
+  const v1b = wrapValue(o1);
+  const v2 = wrapValue(o2);
+  eq("235", "同一个对象同一个键位", keyOf(v1) === keyOf(v1b), true);
+  eq("235", "不同对象不同键位", keyOf(v1) === keyOf(v2), false);
+  eq("235", "对象键号是 int", typeof ((o1 as unknown as { gdObjectId: number }).gdObjectId), "number");
+  const d = new GDict();
+  d.set(v1, I(1));
+  d.set(v1b, I(2));
+  d.set(v2, I(3));
+  eq("235", "对象当键：同实例顶掉、异实例另开一格", `${d.size()}|${d.get(v1).v}|${d.has(v2)}`, "2|2|true");
+  eq("235", "erase 用身份命中", `${d.erase(v1b)}|${d.size()}|${d.has(v1)}`, "true|1|false");
+  const recv = v1;
+  const mPlain = new CallableBox(null, "m", recv, [], null);
+  const mBound = new CallableBox(null, "m", recv, [I(1)], null);
+  const mBound2 = new CallableBox(null, "m", recv, [I(2)], null);
+  eq("235", "方法 Callable：读两次相等", callableEq(mPlain, new CallableBox(null, "m", recv, [], null)), true);
+  eq("235", "绑没绑过进等式", callableEq(mPlain, mBound), false);
+  eq("235", "绑定实参不进等式", callableEq(mBound, mBound2), true);
+  eq("235", "connect 的口径不动（绑定串不算）", callableSame(mPlain, mBound), true);
+  const cd = new GDict();
+  cd.set(V.object(mBound), I(1));
+  cd.set(V.object(mBound2), I(2));
+  eq("235", "bind(1) 与 bind(2) 是同一个键", `${cd.size()}|${show(cd.get(V.object(mPlain)))}`, "1|<null>");
 }
 
 eq("019", "2 in [1,2]", show(ops.inOp(I(2), V.array(GArray.of([I(1), I(2)])))), "true");
@@ -1681,9 +1881,12 @@ shouldThrow("fast", "iDiv 除零", () => fast.iDiv(1, 0));
   eq("098", "实例方法 hash() 与全局同值", String(method(V.str("abc"), "hash", []).v), "193485963");
   eq("098", "StringName 的方法也走同一条", String(method(V.stringName("abc"), "hash", []).v), "193485963");
   eq("098", "hash(true) / hash(false) / hash(null)", `${vh(V.bool(true))}/${vh(V.bool(false))}/${vh(V.nil())}`, "1/0/0");
-  shouldThrow("098", "hash(int) 的 murmur3 链还没逆出来", () => vh(V.int(5)));
-  shouldThrow("098", "hash(float) 同样报缺", () => vh(V.float(2.5)));
-  shouldThrow("098", "hash(数组) 报缺，不拿 JS 自己的一套顶", () => vh(V.array(GArray.of([V.int(1)]))));
+  eq("098", "hash(int) 走引擎的 hash_one_uint64（实测定住）", vh(V.int(5)), "1788267159");
+  eq("098", "hash(float) 走 murmur3 one_double", vh(V.float(2.5)), "2779676868");
+  eq("098", "±0 先归一：hash(-0.0) 与 hash(0.0) 同值", `${vh(V.float(-0))}/${vh(V.float(0))}`, "546098158/546098158");
+  eq("098", "hash(INF)", vh(V.float(Infinity)), "3550758535");
+  shouldThrow("098", "hash(NaN) 仍报缺：C++ NAN 常量的位型没实测", () => vh(V.float(NaN)));
+  eq("098", "数组按内容（类型标签起手、逐个元素折叠、fmix32 收尾）", vh(V.array(GArray.of([V.int(1)]))), "1008395022");
   shouldThrow("098", "hash(Vector2) 报缺", () => vh(vector2(1, 2)));
   shouldThrow("098", "hash(Color) 报缺", () => vh(color(1, 0, 0, 1)));
   shouldThrow("098", "hash() 的实参个数必须是 1", () => variantHash([]));

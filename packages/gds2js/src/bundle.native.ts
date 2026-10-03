@@ -3,6 +3,6 @@ export async function bundlingAvailable(): Promise<boolean> {
   return false;
 }
 
-export async function bundleModule(entry: string, outDir: string): Promise<void> {
+export async function bundleModule(entry: string, outDir: string, _quiet = false): Promise<void> {
   throw new Error(`这个构建里没带打包器（${entry} → ${outDir}）`);
 }

@@ -276,7 +276,7 @@ function bigCmp(x: bigint, y: bigint): number {
 }
 
 /** UTF-8 解码（`get_string_from_utf8()`）：`new TextDecoder(标签, 选项)` 在静态编译目标上没有 lowering，照 WHATWG 的 utf-8 状态机自己走 —— 非法序列给**一个** U+FFFD 并从下一个字节重扫。 */
-function utf8Decode(items: number[]): string {
+export function utf8Decode(items: number[]): string {
   const out: string[] = [];
   const len = items.length;
   let i = 0;

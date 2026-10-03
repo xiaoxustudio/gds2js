@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { cachedLower } from "./ir-cache";
 import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
 import type { RawSourceMap } from "../emit/sourcemap";
 import type { Diagnostic } from "../lower/analyze";
@@ -221,7 +222,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       throw new UnsupportedError("missing-file", `找不到脚本文件：${resPath}（${absPath}）`);
     }
     const src = readFileSync(absPath, "utf8");
-    const module = lower(await parseSource(src));
+    const module = await cachedLower(src, async () => lower(await parseSource(src)));
     const l: Loaded = {
       resPath,
       absPath,
@@ -390,6 +391,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       autoRun: opts.autoRun ?? isEntry,
       className: l.jsName,
       baseClass: base?.spec ?? (isEntry && opts.hostImport ? { kind: "host" } : { kind: "none" }),
+      hostBaseInChain: opts.hostImport !== null && hostOnChain(l, loaded, classIndex, entryResSet),
       classRefs,
       resPath: l.resPath,
       preloads,
@@ -486,6 +488,23 @@ function inheritedMembers(
     cur = baseModule(cur, loaded, classIndex);
   }
   return names;
+}
+
+/** 这个脚本的 JS 原型链顶端挂的是不是宿主 SceneTree：只有挂在上面时，`quit()` / `create_timer()` 这类宿主基类方法才在作用域里。没写 extends 时按 `baseClass` 那条式子走（入口才挂宿主）。 */
+function hostOnChain(
+  l: Loaded,
+  loaded: Map<string, Loaded>,
+  classIndex: Map<string, string>,
+  entryResSet: Set<string>,
+  seen = new Set<string>(),
+): boolean {
+  if (seen.has(l.resPath)) return false;
+  seen.add(l.resPath);
+  const ext = extendsRefText(l.module.extends);
+  if (!ext) return entryResSet.has(l.resPath);
+  if (HOST_BASES.has(ext.replace(/\[.*\]$/, ""))) return true;
+  const parent = baseModule(l, loaded, classIndex);
+  return parent ? hostOnChain(parent, loaded, classIndex, entryResSet, seen) : false;
 }
 
 interface ResolvedBase {
