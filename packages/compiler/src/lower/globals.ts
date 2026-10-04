@@ -23,6 +23,14 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "randi_range",
   "randf_range",
   "randfn",
+  // 4.6.3 实测「有这个名字、能过解析」的打印一族（`prints` 参数间一个空格、`printt` 一个制表符、`print_rich` 直接拼、
+  // `print_verbose` 在 headless 下不出声、`push_warning` 的 `WARNING:` 那行实测走 stderr）：我们没实现，拒的措辞得是「我们拒」而不是「Godot 也没有」。
+  "prints",
+  "printt",
+  "print_rich",
+  "print_verbose",
+  "push_error",
+  "push_warning",
 ]);
 
 

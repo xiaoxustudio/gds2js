@@ -135,7 +135,7 @@
 - **落的一族**：`sign(i/f)` `floor(f/i)` `ceil(f/i)` `round(f/i)` `fmod` `posmod` `fposmod` `wrapi` `wrapf` `lerp(f)` `inverse_lerp` `move_toward` `snapped(f/i)` `deg_to_rad` `rad_to_deg` `angle_difference` `is_equal_approx` `is_zero_approx` `is_nan` `is_inf` `is_finite` `min/max(i/f)` `clamp(f/i)` `smoothstep` `ease` `cubic_interpolate` `remap` `exp` `log` `pow` + 修好的 `abs`。语料 `236-global-math-family` 251 行逐字节，类型规则全记在 S209。
 - **量出来的一条静默错**：`abs(-3)` 在 Godot 是 **int 3**，我们恒给 float —— 之前没有一条用例钉它，所以没人看见。（`sqrt(1e300)` 那 150 位数字也顺手证明了浮点打印口径。）
 - **拒答清单原来是抄的**：`BUILTIN_TODO` 里五条名字全是死的（`Vector2i/Vector3/Vector3i` 早走 `BUILTIN` 构造表、`load/preload` 各有分支，实测三个构造器都跑得出来）。现在这份清单换成**实测存在、我们未实现**的 15 个全局函数（转换族 + 随机族 + `weakref`/`instance_from_id`/`get_stack`/`print_stack`），并由 `test:compile` 新增的那格逐个现编现验：**清单上的名字必须真的抛 `emit-builtin`**，实现了忘了划走就会红。
-- **试过又撤回的一条**：想让「认不出归属的全局调用」在发射期响亮拒（今天它是 `this.wrapi(...)` → 裸 JS `TypeError`）。实测这条守卫打挂 156 个用例 —— `quit()` 属于宿主基类、`helper()` 属于内部类/局部，分析层的 `scope.has` 又不涵盖模块级函数。要做就得先有一张跨作用域成员表，记在 §6 第 17 条①，这轮不硬上。
+- **试过又撤回的一条（后来做成了，见 §1.23）**：想让「认不出归属的全局调用」在发射期响亮拒（今天它是 `this.wrapi(...)` → 裸 JS `TypeError`）。实测这条守卫打挂 156 个用例 —— `quit()` 属于宿主基类、`helper()` 属于内部类/局部，分析层的 `scope.has` 又不涵盖模块级函数。要做就得先有一张跨作用域成员表，记在 §6 第 17 条①，这轮不硬上。
 
 ---
 
@@ -162,6 +162,10 @@
 
 - **readings**：compile **159/228**、ir **228/228**、sema **228/228**（误报/漏报/崩溃 0）、ops **1428/0**（098 那三格「还没逆出来」的拒答断言换成实测数）、diff **151/151 逐字节**（新增语料 `237-hash-chain` 35 行）、`test:scriptc 237` 出货一致、`pnpm typecheck` 无 `error TS`。
 - **出货那一面复跑过**（改的是 runtime 源码，不只是门）：`test:pkgmodes` 失败 0、`test:cli-native` **20/0**、`test:treeface` **17/0**、代表集 **10/10 出货一致**；`test:export` **ok 10 / 环境记账 3 / FAIL 0** —— 记账那三格都是 `node/*`（SEA 要 Node ≥25.7，本机 nvm 里最高只有 24.8.0），与这轮改动无关。
+- **式子的出处**：拟合到此为止 —— 前面那 21 个公开 murmur/fmix 变体全灭之后，在本机 `E:/编程练习/godot` 找到一份 **4.3.0 引擎源码树**，直接读 `core/templates/hashfuncs.h` 与 `core/variant/{array,dictionary}.cpp`。`hash_one_uint64` 原来是 **SuperFastHash 的 patter**（`(~v)+(v<<18)`、`*21`、`+ (v<<6)`、异或移位收尾，全程 64 位回绕），不是 murmur；murmur 那一轮的默认种子是 `0x7F07C65`。4.6.3 的裁判二进制对 4.3 的式子逐条点头 —— 这条链跨版本没动。
+- **实现与对撞**：`variantHashNumber` 一处真源，全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 都走它；22 个定住的数在真实运行时代码路径上全中，容器那格的关键是**起手把类型标签折进种子**（Array=28 / Dictionary=27，用的是 Godot 的 `Variant.Type`，不是我们内部的 Tag 编号），字典再按插入序把键、值交替折。`hash(0.0)==hash(-0.0)` 实测确认了引擎那句 ±0 归一。
+- **仍然拒的两格**（没测就不写）：`hash(NaN)` —— 引擎先换成 C++ `NAN` 常量的位型，那 8 个字节我们没实测；对象 / Vector2 / Color 等 —— 引擎走指针号，天生不可复现。深层嵌套也照实递归：引擎的 `recursive_hash` 越过 `MAX_RECURSION` 会 ERR_PRINT 后直接给 0，这条没测过就先进 §6 的待补测（S212 记着）。
+- **scriptc 面又量到一条**：`BigUint64Array` **没有 lowering（SC2020）** —— 双精度取那两个 32 位字得用 `DataView`（和 `ops.ts` 里 bigint 那套同一套路）。这条是 `test:scriptc 237` 逼出来的：node 侧 22/22 全对、scriptc 那一支直接编不过。
 
 ### 1.12 5.5 的第一次优化尝试：仪器先于优化（2026-10-04）
 
@@ -226,10 +230,17 @@
 - **还剩多少**：每次写摊到约 7 µs（875 ms / ~125k 次元素操作）对裸 JS 的 50 ns，仍差 **~140 倍** —— 那截是 Variant 装箱与解释开销，属任务 #18 那条「要不要开单态/去装箱快路径」的设计决定（用户尚未拍板）。
 - **第四次尝试也量不出来，已弃**：把 node 侧三试 null 的那个 `i64` number 短路（安全整数就不升 bigint）搬到 AOT 尺上：`array-write` 得 1000 ms/次，对上一个提交复量到的 875/906 读不出差别，而同批小格子（`array-append-sum` 4.25→17.5、`array-2d` 0.38→6.7）整批飘了 4× —— 判为噪声，`git checkout` 回退。**结论：装箱这一截不是换写法能拿到的，#18 那个设计口不开就别再第四次试。**
 - **门**：ops **1428/0**、diff **152/152 逐字节**、compile 160/229、typecheck 无 `error TS`、`test:scriptc` 代表集 **10/10**、treeface **17/0**；node 侧 `array-write` 24.64 / 24.74 ms（基线 23.77 / 24.89）**没有退步**，14 格校验值一字一样；`cli-native` / `pkgmodes` / `export` 的读数见下条提交说明。
-- **式子的出处**：拟合到此为止 —— 上一小节那 21 个公开 murmur/fmix 变体全灭之后，在本机 `E:/编程练习/godot` 找到一份 **4.3.0 引擎源码树**，直接读 `core/templates/hashfuncs.h` 与 `core/variant/{array,dictionary}.cpp`。`hash_one_uint64` 原来是 **SuperFastHash 的 patter**（`(~v)+(v<<18)`、`*21`、`+ (v<<6)`、异或移位收尾，全程 64 位回绕），不是 murmur；murmur 那一轮的默认种子是 `0x7F07C65`。4.6.3 的裁判二进制对 4.3 的式子逐条点头 —— 这条链跨版本没动。
-- **实现与对撞**：`variantHashNumber` 一处真源，全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 都走它；22 个定住的数在真实运行时代码路径上全中，容器那格的关键是**起手把类型标签折进种子**（Array=28 / Dictionary=27，用的是 Godot 的 `Variant.Type`，不是我们内部的 Tag 编号），字典再按插入序把键、值交替折。`hash(0.0)==hash(-0.0)` 实测确认了引擎那句 ±0 归一。
-- **仍然拒的两格**（没测就不写）：`hash(NaN)` —— 引擎先换成 C++ `NAN` 常量的位型，那 8 个字节我们没实测；对象 / Vector2 / Color 等 —— 引擎走指针号，天生不可复现。深层嵌套也照实递归：引擎的 `recursive_hash` 越过 `MAX_RECURSION` 会 ERR_PRINT 后直接给 0，这条没测过就先进 §6 的待补测（S212 记着）。
-- **scriptc 面又量到一条**：`BigUint64Array` **没有 lowering（SC2020）** —— 双精度取那两个 32 位字得用 `DataView`（和 `ops.ts` 里 bigint 那套同一套路）。这条是 `test:scriptc 237` 逼出来的：node 侧 22/22 全对、scriptc 那一支直接编不过。
+
+### 1.23 未知调用终于响亮拒了：那张「跨作用域成员表」就是发射器手里已有的几张（2026-10-04，任务 #16）
+
+- **先扫后写**：把全部语料 IR 里 callee 是 ident 的裸 `call` 都过一遍，减掉模块 / 内部类 / 局部的名字，剩下 83 个「看着像哪儿都不在」的名字逐个归类 —— 全落在四张合法表里：宿主基类成员（`quit` 242 例、`create_timer` 023/026）、内置与构造器表（`print` `hash` `Vector2` `Packed*` …）、关键字 `super`（5 例）、跨文件继承来的脚本类成员（`getv`，034）。上一轮那句「得先有一张跨作用域的成员表」其实不用新装表，发射器手里已经有。
+- **落点**：`emitCall` 那条 `this.x(...)` 兜底之前过一遍 `callableInScope`，认不出的抛 `UnsupportedError("call-unknown", …)`，文本抄引擎解析期那一句（S213 ①）。从此不再有我自己在 S210 记的那格「运行期裸 JS `TypeError`、没有 `[code]`、不是 `UnsupportedError`」—— 实测 `gds2js run` 现在给 ` error  [call-unknown] Function "this_is_not_a_function()" not found in base self.` 且退出码 1（`check` 看不见它：那一层只跑到分析，不到发射，与 `[emit-builtin]` 同一格口径）。
+- **门当场逼出两处误拦，都不是设计问题而是发射顺序**：① `test:diff` 立刻红 148 —— 字段初始化式发在 `INHERITED_METHODS` 建起来之前，而 `CURRENT_MEMBERS` 只收字段不收方法，于是内部类里 `var bx: int = _mk()` 被当成未知全局。补一张在发射字段前就位的 `CLASS_FUNCS`（内部类＝own + 沿 `extends` 继承来的方法名；模块类＝own + `inheritedMembers` + 宿主成员）。② 034 的 `quit()` —— 发射期只看得到直接基类是 `import`，不知道链顶挂不挂宿主；`compileProject` 顺着 extends 算出 `hostBaseInChain`（走到 `SceneTree`，或链顶是「没写 extends 的入口脚本」，与 `baseClass` 那条式子同源）交进 emit 选项。
+- **三条 callee 解析规则是量出来的**（`tmp/probe-unknown-call`、`tmp/probe-classname-ctor`，判引擎 4.6.3）：局部名不参与 —— `var cb = getv` 之后 `cb()` 也是 `Function "cb()" not found in base self.`；类名不参与 —— 内部类 `Inner()` 给 `Member "Inner" is not a function.` 与 `Name "Inner" called as a function but is a "Inner".` 两句，工程里 `class_name Foo` 的 `Foo()` 给的却是 `Function "Foo()" not found in base self.`（与守卫一字一致，构造是 `.new()`）；内部类里 `quit()` / `create_timer(1.0)` 同样拒（内部类不挂宿主）。第一条直接回答了「放行表要不要收局部名」：收了是多余的，把那张表和配套的局部名收集器摘掉，语料仍 **152/152 逐字节** —— 没用的机器当场删，不留。
+- **口径**：`test:compile` 多一格「未知调用守卫 8/8 格口径一致」，5 格该拒（模块级 / 内部类里的未知名字、内部类里的 `quit()` 与 `create_timer()`、把类名当函数调）+ 3 格该放行（宿主基类的 `quit()`、内部类字段初始化裸调本类方法、裸调继承来的方法）—— 放行那三格正是上一轮打挂 156 个用例的形状，钉在这儿防守卫退化。
+- **顺手把守卫的措辞账量平了一格**：`[call-unknown]` 分不清「Godot 也没有」与「Godot 有、我们没做」，两边都说成 `not found in base self.`。于是把打印一族一支一支过判引擎：`print_json` / `print_raw` **4.6.3 没有**（照旧给那一句，已加进 S210 的「没有」串）；`prints`（参数间一个空格）、`printt`（一个制表符）、`print_rich`（直接拼）、`print_verbose`（headless 下不出声）、`push_error`、`push_warning` **有** —— 六支划进 `GLOBAL_TODO_FUNCTIONS`，走 `[emit-builtin]` 那句「我们拒」。**没量过的名字仍然只会说 `not found in base self.`**，量一支划一支（§6 第 17 条②）。
+- **门**：typecheck 无 `error TS`、compile **160/229**（emitter 缺口 0）+ 守卫 **8/8**、ir **229/229**、sema **229/229**（误报/漏报/崩溃 0）、ops **1428/0**、diff **152/152 逐字节**（golden 238/238 未漂移）、`pkgmodes` 失败 0、treeface **17/0**、`test:scriptc` 代表集 **10/10 出货一致**、`cli-native` **22/0**、`test:export` **ok 10 / 环境记账 3 / FAIL 0**（记账那三格仍是 SEA 要 Node ≥25.7）—— 改的是发射器与工程编译，出货那一面全复跑过。
+- **还剩的一格**（照实记在 S213 末尾）：值位置的未知名字（`var f = wrapi`）仍发成裸 JS 标识符、运行期 `ReferenceError` —— 那是同一张表的「取值」版，这轮没动，不顺手扩。
 
 ---
 
