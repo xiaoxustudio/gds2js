@@ -285,6 +285,7 @@
 - **对上的那一半**：给了第二参时，4.6.3 就是 4.3 那条式子 —— 占位符含 `_` 就按 `placeholder.replace("_", 下标或键)` 全串替换（`"_0 _1"` → `_a _b`、`"_0 _0"` → `_a _a`、`"A_1_B"` 用 `"_1"` 原样），不含 `_` 就 `replace_first`（`"[%s]"` → `1`，`"[0]"` 与 `"{0} {1}"` 原样）；内层数组必须是 2 元键值对；字典按 `"{键}"` 替（`"{a}-{b}"` → `1-2`）。
 - **对不上的那一半，而且更要紧**：**缺省占位符在 4.6.3 是 `"{0}"` 而不是 `"{}"`** —— `"{}".format([1])` 原样、`"{0}".format(["x"])` 却给 `x`；引擎的错误行也从 4.3 那句 `STRING.format Inner Array size != 2` 换成了 `Invalid format: the inner Array at index 0 needs to contain only 2 elements, as a key-value pair.`（`at: format (core/string/ustring.cpp:3569)`），非容器那句也从 `use Array or Dictionary.` 变成带 Object 的版本。**结论：4.3.0 树不是 4.6.3 的替身**，它在 String 这一族里能给式子但不能给默认值与文案；S215/S216/S218 那三格之所以能出货，是因为**判引擎逐格点过头**，不是因为读了源码。这条记法以后照抄：读源码只算提出式子，量过才算数。
 - **所以这格仍不进实现**：缺省那一半还要再量（键的顺序、非字符串键、值转文本走哪套 print、`{}` 与 `{0}` 混排），量齐之前 `format` 继续走 `string-method` 那格响亮拒；18 格数据与两版差异全记在 S219。
+- **同一批还顺手把 `convert` / `type_convert` 的标量表量全了（S220）**：14 格对上（`"abc"` 转 bool 是 **true**、`null` 转 String 是六字符的 `"<null>"`、`"7abc"` 转 int 是 7、空字典打印 `{  }`），中止整支脚本的那格是 `convert([], TYPE_INT)`，报的却是「utility function "convert()" 不存在」—— 同一份文件前面十格 `convert()` 都跑通，所以那句拒在哪一层没定，数组转标量这条线单独量过之前不写进实现。
 - **门**：本轮只动文档与 `tmp/` 探头，代码与语料未变，门的读数与上一提交（`uri_decode`）一字一样：compile 160/229 + 守卫 8/8、ir 229/229、sema 229/229、ops 1452/0、diff 152/152 逐字节、typecheck 无 `error TS`、pkgmodes 失败 0、treeface 17/0、scriptc 代表集 10/10、cli-native 22/0。
 
 ---
