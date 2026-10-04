@@ -60,6 +60,20 @@ gds2js export         <entry.gd>    # 打成 Node 独立可执行文件（SEA）
 
 常用选项：`-o/--out`、`-w/--watch`、`--sourcemap`、`--runtime <spec>`、`--host <spec>` / `--no-host`、`--runtime-mode`；`export` 另有 `--pack` / `--node` / `--keep-bundle` / `-v,--verbose`；顶层 `-V/--version` 打出出货版本。
 
+### `run` 的启动延迟：怎么调最划算
+
+同一台机器、同一个示例脚本，`run` 端到端**交替配对 8 轮**的实测（`pnpm latency`，奇数轮反序消位置偏置；括号里是对最快的原生 exe 的配对差与 |t|）：
+
+| 调用方式 | 中位 | 对原生 exe |
+| --- | --- | --- |
+| `tmp/cli-native/gds2js.exe run <f.gd>` | ~255 ms | 基线 |
+| `node packages/gds2js/dist/cli.mjs run <f.gd>` | ~305 ms | +52 ms（\|t\|=6.5） |
+| `node --import tsx packages/gds2js/src/cli.ts run <f.gd>` | ~710 ms | +453 ms（\|t\|=16.1） |
+| `pnpm exec gds2js run <f.gd>` | ~1005 ms | +770 ms（\|t\|=33.5） |
+| Godot 4.6.3 `--headless --script` | ~1660 ms | +1407 ms（\|t\|=27.5） |
+
+所以嫌慢先换调用姿势：**用原生 `gds2js.exe`，其次 `node packages/gds2js/dist/cli.mjs`**；别用 `pnpm exec` / `npx`（光包装器就 +770 ms），也别用 `tsx` 跑源码（那是仓库内跑门的路径）。整体上我们比 Godot 的冷启动快 **6.5 倍**。`NODE_COMPILE_CACHE` 实测量不出收益（|t|=0.13），不必设。
+
 ## 产物的运行时打包模式（`--runtime-mode`）
 
 编译产物默认 `import "gds2js/runtime"` / `"gds2js/host"`。三种模式决定产物运行时**如何拿到 gds2js 运行时**：
@@ -137,5 +151,6 @@ pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字�
 pnpm regen:case-table # 再生成 runtime 的 case-table.ts（探头 000-probe-cs-* 现搭现弃不入库；只改表请走它）
 pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上；每 kernel 连跑 3 轮取最小，GDS2JS_BENCH_ROUNDS 可调）
 pnpm bench:ab        # 交替配对 A/B：pnpm bench:ab --rounds=6 <仓内文件>=<候选文件>，报配对差 ±SE 与 |t|（|t|<2 就是量不出来）
+pnpm latency         # CLI 端到端延迟门：交替配对量各条调用路径的 run 延迟（同上，|t|<2 不算数）
 pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
 ```

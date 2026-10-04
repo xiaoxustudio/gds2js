@@ -25,6 +25,7 @@
     "release": "node tools/release.mjs",
     "bench": "tsx tools/bench.ts",
     "bench:godot": "tsx tools/bench-godot.ts",
+    "latency": "node tools/cli-latency.mjs",
     "gen:ws": "pnpm exec tree-sitter build --wasm ./tree-sitter-gdscript -o gdscript.wasm",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
