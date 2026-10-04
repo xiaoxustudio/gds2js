@@ -1169,6 +1169,42 @@ export function strGetSlice(s: string, delim: string, n: number): string {
   return parts[n] ?? "";
 }
 
+/** `pad_zeros()`：引擎的式子是「以第一个小数点为界（没有就整串），界落在最前就不动；跳过界内的前导非数字，把 `0` 插到数字段开头补到 `digits` 位」。于是 `".5"` 原样、`"abc"` 是往尾巴上贴 `abc00000`、`"--5"` 给 `--05`。 */
+export function strPadZeros(s: string, digits: number): string {
+  const chars = codepoints(s);
+  const found = chars.indexOf(".");
+  const end = found === -1 ? chars.length : found;
+  if (end === 0) return s;
+  let begin = 0;
+  while (begin < end) {
+    const c = (chars[begin] as string).codePointAt(0)!;
+    if (c >= 48 && c <= 57) break;
+    begin++;
+  }
+  const zeros = digits - (end - begin);
+  if (zeros <= 0) return s;
+  return chars.slice(0, begin).join("") + strRepeat("0", zeros) + chars.slice(begin).join("");
+}
+
+/** `get_slicec()`：引擎签名是 `get_slicec(char32_t p_splitter, int p_slice)` —— 分隔符是**码点数字**，不是字符串（文档写的那个形状在 4.6.3 过不了解析）。空串、负段号、段号越界都给空串。 */
+export function strGetSlicec(s: string, splitter: number, slice: number): string {
+  if (s === "" || slice < 0) return "";
+  const chars = codepoints(s);
+  let prev = 0;
+  let count = 0;
+  for (let i = 0; i <= chars.length; i++) {
+    const atEnd = i === chars.length;
+    const c = atEnd ? 0 : (chars[i] as string).codePointAt(0)!;
+    if (atEnd || c === splitter) {
+      if (slice === count) return chars.slice(prev, i).join("");
+      if (atEnd) return "";
+      count++;
+      prev = i + 1;
+    }
+  }
+  return "";
+}
+
 /** `insert`：负位置原样返回，超出末尾就接在尾巴上。 */
 export function strInsertAt(s: string, pos: number, what: string): string {
   const cs = codepoints(s);

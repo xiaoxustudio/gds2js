@@ -6,7 +6,7 @@ import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArg
 import type { GdIdentified } from "./identity";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strInsertAt, strIsValidFilename, strJoin, strLength, strRepeat, strReplace, strSplit,
+import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriEncode, strCmp, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -757,6 +757,18 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "ends_with": {
           const w = asString(one(args, name), name);
           return V.bool(name === "begins_with" ? strStartsWith(s, w) : strEndsWith(s, w));
+        }
+        case "pad_zeros": {
+          if (args.length !== 1) {
+            throw new GodotRuntimeError("arity", `pad_zeros() 要 1 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strPadZeros(s, intArg(args, 0, "pad_zeros")));
+        }
+        case "get_slicec": {
+          if (args.length !== 2) {
+            throw new GodotRuntimeError("arity", `get_slicec() 要 2 个参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strGetSlicec(s, intArg(args, 0, "get_slicec"), intArg(args, 1, "get_slicec")));
         }
         case "get_slice": {
           if (args.length < 2) {

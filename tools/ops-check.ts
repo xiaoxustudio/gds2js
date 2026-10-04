@@ -29,6 +29,8 @@ import {
   strGetSlice,
   strInsertAt,
   strIsValidFilename,
+  strGetSlicec,
+  strPadZeros,
   strRepeat,
   strStartsWith,
   strStripEdges,
@@ -658,7 +660,11 @@ eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValid
   eq("234", "casecmp_to 走 method 分发", show(method(V.str("a"), "casecmp_to", [V.str("B")])), "1");
   shouldThrow("234", "count 的 chars 真值响亮拒", () => method(V.str("hello"), "count", [V.str("l"), V.bool(true)]));
   shouldThrow("234", "count 的第 3 个参数没量过", () => method(V.str("hello"), "count", [V.str("l"), V.bool(false), I(1)]));
-  shouldThrow("234", "pad_zeros 口径没拟合，仍拒", () => method(V.str("5"), "pad_zeros", [I(3)]));
+  eq("234", "pad_zeros 以小数点为界补零", `${strPadZeros("0.5", 3)}|${strPadZeros(".5", 3)}|${strPadZeros("5", 3)}`, "000.5|.5|005");
+  eq("234", "pad_zeros 跳过前导非数字再插到数字段开头", `${strPadZeros("--5", 2)}|${strPadZeros("+5", 3)}|${strPadZeros(" 5", 3)}|${strPadZeros("-.5", 3)}`, "--05|+005| 005|-000.5");
+  eq("234", "pad_zeros 界内没数字就是往后贴", `${strPadZeros("abc", 5)}|${strPadZeros("x", 3)}|${strPadZeros("a.b", 5)}`, "abc00000|x000|a00000.b");
+  eq("234", "pad_zeros 够宽、空串都不动", `${strPadZeros("12", 2)}|${strPadZeros("12345", 3)}|${strPadZeros("", 3)}`, "12|12345|");
+  eq("234", "pad_zeros 走 method 分发", show(method(V.str("0.5"), "pad_zeros", [I(3)])), "000.5");
   eq("234", "similarity 是交叠 bigram 的 Dice 系数（引擎读数 1.5 那格）", show(method(V.str("aaaa"), "similarity", [V.str("aa")])), "1.5");
   eq("234", "similarity 的返回是 float32（4/3 那格）", show(method(V.str("aaaaa"), "similarity", [V.str("aaa")])), "1.33333337306976");
   eq("234", "similarity 无公共 bigram", show(method(V.str("abc"), "similarity", [V.str("axc")])), "0.0");
@@ -670,7 +676,11 @@ eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValid
   eq("234", "similarity 全等先给 1（空串也算全等）", `${show(method(V.str("abc"), "similarity", [V.str("abc")]))}|${show(method(V.str(""), "similarity", [V.str("")]))}`, "1.0|1.0");
   eq("234", "similarity 任一边不足两个码点给 0", `${show(method(V.str("a"), "similarity", [V.str("ab")]))}|${show(method(V.str(""), "similarity", [V.str("ab")]))}`, "0.0|0.0");
   shouldThrow("234", "uri_decode 的非法转义形状没量清，仍拒", () => method(V.str("a%2"), "uri_decode", []));
-  shouldThrow("234", "get_slicec 的 (int, int) 形状没解释清，仍拒", () => method(V.str("a/b/c"), "get_slicec", [I(1), I(0)]));
+  eq("234", "get_slicec 的分隔符是码点不是串", `${strGetSlicec("a/b/c", 47, 0)}|${strGetSlicec("a/b/c", 47, 1)}|${strGetSlicec("a/b/c", 47, 2)}|${strGetSlicec("a.b", 46, 1)}`, "a|b|c|b");
+  eq("234", "get_slicec 负段号与越界给空串", `${strGetSlicec("a/b/c", 47, -1)}|${strGetSlicec("a/b/c", 47, 5)}|${strGetSlicec("1,2", 44, 9)}`, "||");
+  eq("234", "get_slicec 空串与空段", `${strGetSlicec("", 47, 0)}|${strGetSlicec("a//b", 47, 1)}`, "|");
+  eq("234", "get_slicec 找不到分隔符：0 段是整串、其余空", `${strGetSlicec("abc", 1, 0)}|${strGetSlicec("abc", 1, 3)}`, "abc|");
+  eq("234", "get_slicec 走 method 分发", show(method(V.str("a/b/c"), "get_slicec", [I(47), I(1)])), "b");
 }
 
 

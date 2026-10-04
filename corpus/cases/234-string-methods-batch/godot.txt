@@ -179,3 +179,26 @@ xml_http_request
 1.0
 0.0
 0.0
+0.5|000.5
+.5|.5
+abc|abc00000
+--5|--05
+5|005
+12|12
+x|x000
+a.b|a00000.b
+-.5|-000.5
+empty|
+wide|12345
+plus|+005
+space| 005
+s0|a
+s1|b
+s2|c
+s5|
+sneg|
+sempty|
+sdot|b
+sdup|
+snodiv0|abc
+snodiv3|

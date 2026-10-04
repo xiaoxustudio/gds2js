@@ -260,6 +260,16 @@
 - **门**：typecheck 无 `error TS`、ops **1437/0**、diff **152/152 逐字节**（golden 238/238 未漂移）、compile **160/229**（emitter 缺口 0、守卫 8/8）、ir **229/229**、sema **229/229**（误报/漏报/崩溃 0）、`pkgmodes` 失败 0、treeface **17/0**、`test:scriptc` 代表集 **10/10 出货一致**（234 那一格现在也走 AOT exe）、`cli-native` **22/0**、`test:export` **ok 10 / 环境记账 3 / FAIL 0**。
 - **下一格已经有着落了**：同一份源码里 `pad_zeros`（4789 行）与 `get_slicec`（1288 行）都有明确式子 —— `pad_zeros` 是「以小数点为界，跳过前导非数字，把 `0` 插到数字段开头」，S206 那四条看着互相矛盾的读数（`".5"` 不动、`"abc"`→`abc00000`、`"--5"`→`--05`）在这条式子下应当各自消解 —— 但 S206 没记下当时传的 `p_digits`，所以这只是**待验的推论**，探头要按已知参数把四格重打一遍才算数；`get_slicec` 的第一参数是 **`char32_t` 码点**不是 String，所以 `(1, 0)` 给整串、`(1, 非 0)` 给空，与文档写的 `(delimiter, slice)` 根本不是一回事。两格的探头在 `tmp/probe-pad-slice/`，量过之后再出货；`uri_decode` 的非法转义与 `format` 的 `placeholder` 第二参仍照 S206 响亮拒。
 
+### 1.26 `pad_zeros` 与 `get_slicec`：S206 那批「互相矛盾」的读数其实是同一条式子（2026-10-04，§6 第 15 条再收两格）
+
+- **接着上一轮的路子**：拟合不动就不猜，读 `E:/编程练习/godot` 那份 4.3.0 树。这次读的是 `core/string/ustring.cpp:4789`（`pad_zeros`）与 `:1288`（`get_slicec`），先读式子、再拿判引擎逐格对。
+- **`pad_zeros`**：以**第一个小数点**为界（没有就整串）；界落在最前直接原样返回（`".5"`）；界内**跳过前导非数字**得到 `begin`；补的零数 `= p_digits - (界长 - begin)`，插在 `begin` 处。于是 S206 那四条「互相矛盾」的读数一条式子全解释：`"abc"` 是界=3、begin=3、零=5 → `abc00000`（往后贴，不是往前补）、`"--5"` → `--05`、`"0.5"` → `000.5`。新量的一批也全中：`"+5"`→`+005`、`" 5"`→` 005`、`"-.5"`→`-000.5`、`"x"`→`x000`、`"a.b"`→`a00000.b`、够宽与空串不动。
+- **`get_slicec`**：引擎签名是 `get_slicec(char32_t p_splitter, int p_slice)` —— 分隔符是**码点数字**。这直接解释了 S206 那格怪事：`(1, 0)` 给整串是因为 U+0001 不在串里、第 0 段就是整串，`(1, 非 0)` 给空是段号越界；文档写的 `(delimiter, slice)` 形状在 4.6.3 **过不了解析**（`argument 1 should be "int" but is "String"`）。空串给空、负段号给空、空段（`"a//b"` 第 1 段）给空，都照源码逐格量过。
+- **出货**：`values.ts` 加 `strPadZeros` / `strGetSlicec`，`methods.ts` 加两条分发；ops 的 234 那组把两条 `shouldThrow` 换成 **10 格实测值**（总 **1445/0**），语料 234 尾部加 **23 行**并重生成 golden —— 顺手也验了 `similarity` 那 12 行没漂。`test:compile` 仍是 160/229、emitter 缺口 0、未知调用守卫 8/8。
+- **顺手把 `uri_decode` 也读了（S217，未出货）**：`ustring.cpp:4542` 的式子解释了 S206 全部四格怪事 —— 合法位只认 **0-9 与 A-Z**（小写 hex 位不算，于是 `"%2f"` 把 `%` 吃掉留 `2f`）、`CharString::length()` 含尾 NUL（所以 `"a%41"` 仍折得出 `aA`）、非法 hex 经 `strtol` 得到 0x00/0x04 而重组按 strlen 走（`"%G1"` 成空串）、`+` 换空格。20 格探头（`tmp/probe-uri-decode/`）逐格与式子一致，实现留到下一轮。
+- **门**：typecheck 无 `error TS`、ops **1445/0**、diff **152/152 逐字节**（golden 238/238 未漂移）、compile **160/229**（emitter 缺口 0、未知调用守卫 8/8）、ir **229/229**、sema **229/229**、`pkgmodes` 失败 0、treeface **17/0**、`test:scriptc` 代表集 **10/10 出货一致**（234 那 23 行新格子也走了一遍原生 exe）、`cli-native` **22/0**。
+- **仍未出货**：`format` 的 `placeholder` 第二参与 `count` 的 `chars` 真值 + 第 3 个 int 参数 —— 继续 `UnsupportedError`，等下一轮从同一份源码里读。
+
 ---
 
 ## 2. 当前任务与待办

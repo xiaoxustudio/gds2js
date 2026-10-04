@@ -171,6 +171,29 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.method(rt.V.str(""), "similarity", [rt.V.str("")])]));
     print(rt.showArgs([rt.method(rt.V.str("a"), "similarity", [rt.V.str("ab")])]));
     print(rt.showArgs([rt.method(rt.V.str(""), "similarity", [rt.V.str("ab")])]));
+    print(rt.showArgs([rt.V.str("0.5|"), rt.method(rt.V.str("0.5"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str(".5|"), rt.method(rt.V.str(".5"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("abc|"), rt.method(rt.V.str("abc"), "pad_zeros", [rt.V.int(5)])]));
+    print(rt.showArgs([rt.V.str("--5|"), rt.method(rt.V.str("--5"), "pad_zeros", [rt.V.int(2)])]));
+    print(rt.showArgs([rt.V.str("5|"), rt.method(rt.V.str("5"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("12|"), rt.method(rt.V.str("12"), "pad_zeros", [rt.V.int(2)])]));
+    print(rt.showArgs([rt.V.str("x|"), rt.method(rt.V.str("x"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("a.b|"), rt.method(rt.V.str("a.b"), "pad_zeros", [rt.V.int(5)])]));
+    print(rt.showArgs([rt.V.str("-.5|"), rt.method(rt.V.str("-.5"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("empty|"), rt.method(rt.V.str(""), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("wide|"), rt.method(rt.V.str("12345"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("plus|"), rt.method(rt.V.str("+5"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("space|"), rt.method(rt.V.str(" 5"), "pad_zeros", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("s0|"), rt.method(rt.V.str("a/b/c"), "get_slicec", [rt.V.int(47), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("s1|"), rt.method(rt.V.str("a/b/c"), "get_slicec", [rt.V.int(47), rt.V.int(1)])]));
+    print(rt.showArgs([rt.V.str("s2|"), rt.method(rt.V.str("a/b/c"), "get_slicec", [rt.V.int(47), rt.V.int(2)])]));
+    print(rt.showArgs([rt.V.str("s5|"), rt.method(rt.V.str("a/b/c"), "get_slicec", [rt.V.int(47), rt.V.int(5)])]));
+    print(rt.showArgs([rt.V.str("sneg|"), rt.method(rt.V.str("a/b/c"), "get_slicec", [rt.V.int(47), rt.V.int((-1))])]));
+    print(rt.showArgs([rt.V.str("sempty|"), rt.method(rt.V.str(""), "get_slicec", [rt.V.int(47), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("sdot|"), rt.method(rt.V.str("a.b"), "get_slicec", [rt.V.int(46), rt.V.int(1)])]));
+    print(rt.showArgs([rt.V.str("sdup|"), rt.method(rt.V.str("a//b"), "get_slicec", [rt.V.int(47), rt.V.int(1)])]));
+    print(rt.showArgs([rt.V.str("snodiv0|"), rt.method(rt.V.str("abc"), "get_slicec", [rt.V.int(1), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("snodiv3|"), rt.method(rt.V.str("abc"), "get_slicec", [rt.V.int(1), rt.V.int(3)])]));
     this.quit();
   }
   
