@@ -249,3 +249,54 @@ sqrt(0) => 3|0.0
 sqrt(-1) => 3|nan
 sqrt(2) => 3|1.4142135623731
 sqrt(INF) => 3|inf
+vs(7) => 7
+vs(-17) => -17
+vs(2147483648) => 2147483648
+vs(1 << 62) => 4611686018427387904
+vs(null) => null
+vs(true) => true
+vs(false) => false
+vs(x) => "x"
+vs(empty str) => ""
+vs(a"b) => "a\"b"
+vs(backslash) => "\\"
+vs(tab+nl) => "line1
+line2	tab"
+vs(unicode) => "é😀"
+vs(&"name") => &"name"
+vs([1, 2]) => [1, 2]
+vs([]) => []
+vs(["a", null, true]) => ["a", null, true]
+vs([[], {}]) => [[], {}]
+vs({"a": 1}) => {
+"a": 1
+}
+vs({}) => {}
+vs({2: "a", 1: "b"}) => {
+1: "b",
+2: "a"
+}
+vs({"B": 1, "a": 2, "A": 3}) => {
+"A": 3,
+"B": 1,
+"a": 2
+}
+vs({null: 3, true: 1}) => {
+null: 3,
+true: 1
+}
+vs(nest dict) => {
+"a": {
+"b": {
+"c": 1
+}
+}
+}
+vs(dict of arrays) => {
+"a": [[1, 2], [3]]
+}
+vs(PackedByteArray([1, 2])) => PackedByteArray(1, 2)
+vs(PackedByteArray()) => PackedByteArray()
+vs(PackedInt32Array([1, 2])) => PackedInt32Array(1, 2)
+vs(PackedInt64Array([1])) => PackedInt64Array(1)
+vs(PackedStringArray(["a", "b"])) => PackedStringArray("a", "b")

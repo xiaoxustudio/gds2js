@@ -92,6 +92,12 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   bool: (a) => `rt.toBool(${a.join(", ")})`,
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
   hash: (a) => `rt.variantHash([${a.join(", ")}])`,
+  var_to_str: (a) => {
+    if (a.length !== 1) {
+      throw new UnsupportedError("var-to-str-arity", `var_to_str() 只发单实参形状（收到 ${a.length} 个）：4.6.3 的第二个实参是缩进串，装字典的数组跟着换行、缩进还按深度累加，式子没量出前不猜`);
+    }
+    return `rt.V.str(rt.varToStr(${a[0]}))`;
+  },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,

@@ -53,6 +53,7 @@ import {
   truthyOf,
   valueEq,
   valueSame,
+  varToStr,
 } from "@gds2js/runtime/runtime/values";
 import {
   asColor,
@@ -689,6 +690,51 @@ eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValid
   eq("234", "get_slicec 空串与空段", `${strGetSlicec("", 47, 0)}|${strGetSlicec("a//b", 47, 1)}`, "|");
   eq("234", "get_slicec 找不到分隔符：0 段是整串、其余空", `${strGetSlicec("abc", 1, 0)}|${strGetSlicec("abc", 1, 3)}`, "abc|");
   eq("234", "get_slicec 走 method 分发", show(method(V.str("a/b/c"), "get_slicec", [I(47), I(1)])), "b");
+}
+
+{
+  const arrOf = (xs: Variant[]) => V.array(GArray.of(xs));
+  const gd = (pairs: [Variant, Variant][]) => {
+    const g = new GDict();
+    for (const [k, v] of pairs) g.set(k, v);
+    return V.dict(g);
+  };
+  /** 引擎实测的形状逐格对上；没实测过的类型走响亮拒，这里把 code 也当输出比一遍。 */
+  const vs = (v: Variant): string => {
+    try {
+      return varToStr(v);
+    } catch (e) {
+      return `[${(e as UnsupportedError).code}]`;
+    }
+  };
+
+  eq("236", "var_to_str 的整数按 int64 全宽打", `${vs(I(7))}|${vs(I(-17))}|${vs(I(2147483648))}|${vs(I(4611686018427387904n))}`, "7|-17|2147483648|4611686018427387904");
+  eq("236", "var_to_str 的 null 与布尔是小写", `${vs(V.nil())}|${vs(V.bool(true))}|${vs(V.bool(false))}`, "null|true|false");
+  eq("236", "var_to_str 的字符串加引号，只有引号与反斜杠转义", `${vs(S("x"))}|${vs(S(""))}|${vs(S('a"b'))}|${vs(S("a\\b"))}`, '"x"|""|"a\\"b"|"a\\\\b"');
+  eq("236", "var_to_str 的制表符回车响铃原样留着（引擎 hex 22 09 22）", vs(S("a\tb\rc\u0007d")), '"a\tb\rc\u0007d"');
+  eq("236", "var_to_str 不把非 ASCII 折成 \\u（引擎 hex 22 c3 a9 22）", `${vs(S("é"))}|${vs(S("😀"))}`, '"é"|"😀"');
+  eq("236", "var_to_str 的 StringName 前面挂 &", vs(V.stringName("name")), '&"name"');
+  eq("236", "var_to_str 的数组一行打完，空数组是 []", `${vs(arrOf([I(1), I(2)]))}|${vs(arrOf([]))}`, "[1, 2]|[]");
+  eq("236", "var_to_str 的数组按元素递归", vs(arrOf([S("a"), V.nil(), V.bool(true)])), '["a", null, true]');
+  eq("236", "var_to_str 的空容器套空容器", vs(arrOf([arrOf([]), gd([])])), "[[], {}]");
+  eq("236", "var_to_str 里装 pack 与 StringName", vs(arrOf([V.object(new GBytes([1, 2], "byte")), V.stringName("s")])), '[PackedByteArray(1, 2), &"s"]');
+  eq("236", "var_to_str 的字典上下各一行、键值冒号空格", vs(gd([[S("a"), I(1)]])), '{\n"a": 1\n}');
+  eq("236", "var_to_str 的空字典是单行 {}", vs(gd([])), "{}");
+  eq("236", "var_to_str 的字典按键排序：null<bool<int<float<String<StringName", vs(gd([[V.stringName("b"), I(1)], [S("a"), I(2)], [I(10), I(3)], [S("10"), I(4)], [V.bool(true), I(5)]])), '{\ntrue: 5,\n10: 3,\n"10": 4,\n"a": 2,\n&"b": 1\n}');
+  eq("236", "var_to_str 的同级字符串键按码点（引擎把 \"10\" 排在 \"a\" 前）", vs(gd([[S("B"), I(1)], [S("a"), I(2)], [S("A"), I(3)]])), '{\n"A": 3,\n"B": 1,\n"a": 2\n}');
+  eq("236", "var_to_str 的嵌套字典不缩进", vs(gd([[S("a"), gd([[S("b"), gd([[S("c"), I(1)]])]])]])), '{\n"a": {\n"b": {\n"c": 1\n}\n}\n}');
+  eq("236", "var_to_str 的字典里数组仍单行", vs(gd([[S("a"), arrOf([arrOf([I(1), I(2)]), arrOf([I(3)])])]])), '{\n"a": [[1, 2], [3]]\n}');
+  eq("236", "var_to_str 的 pack 打成构造器形状", `${vs(V.object(new GBytes([1, 2], "byte")))}|${vs(V.object(new GBytes([], "byte")))}`, "PackedByteArray(1, 2)|PackedByteArray()");
+  eq("236", "var_to_str 认 int32/int64/string 三支 pack", `${vs(V.object(new GBytes([1, 2], "int32")))}|${vs(V.object(new GBytes([1], "int64")))}|${vs(V.object(new GBytes(["a", "b"], "string")))}`, 'PackedInt32Array(1, 2)|PackedInt64Array(1)|PackedStringArray("a", "b")');
+  eq("236", "var_to_str 的浮点尾数没量出取数式子，响亮拒", vs(F(2.5)), "[var-to-str-float]");
+  eq("236", "var_to_str 撞见装浮点的数组也拒", vs(arrOf([F(1)])), "[var-to-str-float]");
+  eq("236", "var_to_str 撞见装浮点的 pack 也拒", vs(V.object(new GBytes([1.5], "float32"))), "[var-to-str-float]");
+  eq("236", "var_to_str 的对象形状没实测，响亮拒", vs(wrapValue(new GdScriptObject())), "[var-to-str-type]");
+  eq("236", "var_to_str 的数组键照元素递归打（引擎 onearrkey 那格）", vs(gd([[arrOf([I(1), I(2)]), I(9)]])), "{\n[1, 2]: 9\n}");
+  eq("236", "var_to_str 的字典键自己也是多行（引擎 onedictkey 那格）", vs(gd([[gd([[S("z"), I(1)]]), I(5)]])), '{\n{\n"z": 1\n}: 5\n}');
+  eq("236", "两个数组键的排序式子没量出，响亮拒", vs(gd([[arrOf([I(1), I(2)]), I(9)], [arrOf([I(3)]), I(8)]])), "[var-to-str-key]");
+  eq("236", "数组里装了字典就跟着字典换行（引擎 arrval 那格）", vs(arrOf([arrOf([I(1), I(2)]), gd([[I(3), I(4)]])])), "[[1, 2], {\n3: 4\n}]");
+  eq("236", "字典值是对象时照样响亮拒", vs(gd([[S("n"), wrapValue(new GdScriptObject())]])), "[var-to-str-type]");
 }
 
 

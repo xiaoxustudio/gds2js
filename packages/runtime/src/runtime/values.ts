@@ -8,7 +8,7 @@ import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
-import { bytesEq, GBytes, packItems, registerPackStringifier, utf8Decode } from "./packed";
+import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode } from "./packed";
 import { sortGodot } from "./sort";
 import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import type { GdIdentified } from "./identity";
@@ -1363,6 +1363,106 @@ function uriHexDigit(c: number): number {
 /** 引擎那道判据：`is_digit(ord) || is_ascii_upper_case(ord)` —— 大写字母全过，但 `G`..`Z` 到 `strtol` 那里就不是 hex 位了。 */
 function uriHexOk(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);
+}
+
+/** 字面量式的字符串：加引号，只转义 `"` 与 `\` —— 制表符与换行**按原字符写进去**（实测不是 `\t` / `\n`）。 */
+function vsQuote(s: string): string {
+  let out = '"';
+  for (const ch of s) {
+    if (ch === '"' || ch === "\\") out += "\\" + ch;
+    else out += ch;
+  }
+  return out + '"';
+}
+
+/** 字典键的排序：先按类型等级 `null < bool < int < float < String < StringName`，同级再按值（实测：`{1, 2.5, 0.5}` → `1、0.5、2.5`，`{"B","a","A"}` 按码点）。 */
+const VS_KEY_RANK: Partial<Record<number, number>> = {
+  [Tag.NIL]: 0,
+  [Tag.BOOL]: 1,
+  [Tag.INT]: 2,
+  [Tag.FLOAT]: 3,
+  [Tag.STRING]: 4,
+  [Tag.STRING_NAME]: 5,
+};
+
+function vsKeyCompare(a: Variant, b: Variant): number {
+  const ra = VS_KEY_RANK[a.t];
+  const rb = VS_KEY_RANK[b.t];
+  if (ra === undefined || rb === undefined) {
+    throw new UnsupportedError("var-to-str-key", `var_to_str() 的字典键只实测过 null / bool / int / float / String / StringName（收到 ${tagName(a.t)}）`);
+  }
+  if (ra !== rb) return ra - rb;
+  if (a.t === Tag.BOOL) return (a.v ? 1 : 0) - (b.v ? 1 : 0);
+  if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
+    const x = codepoints(a.v as string);
+    const y = codepoints(b.v as string);
+    const n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) {
+      const dx = (x[i] as string).codePointAt(0)!;
+      const dy = (y[i] as string).codePointAt(0)!;
+      if (dx !== dy) return dx - dy;
+    }
+    return x.length - y.length;
+  }
+  return numVal(a) - numVal(b);
+}
+
+/**
+ * `var_to_str()`：字面量通道，与 print 分岔的每一条都量过（S214 / S221 / S227 / S229）——
+ * nil 是 `null`（不是 `<null>`）、字符串带引号且只转义两个字符、数组自己不加换行（元素里有字典就跟着字典多行，S230）、
+ * **字典在任意深度多行且不缩进、键按 {@link vsKeyCompare} 排序**、空的 `{}` 与 `[]` 才是紧凑式、int 走 int64。
+ * **浮点与一切装浮点的形状都响亮拒**：4.6.3 的尾数是引擎自己的十进制生成器（S229 用算术造值排掉了「固定 `%.*g`」与「最短往返」两条路），
+ * 照 print 那套发就是静默错；值类型与 float/打包数组同理，只有元素全为整数或字符串的打包数组敢发。
+ */
+export function varToStr(v: Variant): string {
+  switch (v.t) {
+    case Tag.NIL:
+      return "null";
+    case Tag.BOOL:
+      return v.v ? "true" : "false";
+    case Tag.INT:
+      return String(v.v);
+    case Tag.FLOAT:
+      throw new UnsupportedError("var-to-str-float", `var_to_str() 的浮点尾数还没量出引擎的取数式子（S229），宁可不发也不照 print 抄`);
+    case Tag.STRING:
+      return vsQuote(v.v as string);
+    case Tag.STRING_NAME:
+      return `&${vsQuote(v.v as string)}`;
+    case Tag.ARRAY: {
+      const items = (v.v as GArray).raw();
+      const parts: string[] = [];
+      for (const item of items) parts.push(varToStr(item));
+      return `[${parts.join(", ")}]`;
+    }
+    case Tag.DICT: {
+      const d = v.v as GDict;
+      const keys = d.keys();
+      if (keys.length === 0) return "{}";
+      const vals = d.values();
+      const pairs = keys.map((k, i) => [k, vals[i] as Variant] as const);
+      pairs.sort((a, b) => vsKeyCompare(a[0], b[0]));
+      const lines: string[] = [];
+      for (const [k, val] of pairs) lines.push(`${varToStr(k)}: ${varToStr(val)}`);
+      return `{\n${lines.join(",\n")}\n}`;
+    }
+    case Tag.OBJECT: {
+      const inner = v.v;
+      if (inner instanceof GBytes) {
+        const items = packItems(inner as GBytes);
+        const flat: string[] = [];
+        for (const item of items) {
+          if (item.t === Tag.FLOAT || item.t === Tag.OBJECT) {
+            throw new UnsupportedError("var-to-str-float", `var_to_str() 的 ${packTypeName(inner.kind)} 里有浮点或对象元素，取数式子还没量出（S229）`);
+          }
+          flat.push(varToStr(item));
+        }
+        return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
+      }
+      throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
+    }
+    default:
+      throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的类型 ${tagName(v.t)}`);
+  }
 }
 
 const C_ESCAPES = new Map<number, string>([

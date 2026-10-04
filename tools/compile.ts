@@ -138,6 +138,27 @@ console.log(`  自兜底缺失 ${runFallbackMissing.length}（有 autoRun 尾巴
   console.log(`  未知调用守卫 ${cells.length - bad.length}/${cells.length} 格口径一致（应为 ${cells.length}）${bad.length > 0 ? "：" + bad.join(" | ") : ""}`);
   if (bad.length > 0) process.exitCode = 1;
 }
+/** `var_to_str()` 的缩进串：4.6.3 收第二个实参，但装字典的数组跟着换行、缩进按深度累加，式子没量出前只在发射期响亮拒。 */
+{
+  const cells: Array<{ name: string; call: string; want: "ok" | "var-to-str-arity" }> = [
+    { name: "单实参", call: "var_to_str(1)", want: "ok" },
+    { name: "带缩进串", call: 'var_to_str(1, "  ")', want: "var-to-str-arity" },
+    { name: "零实参", call: "var_to_str()", want: "var-to-str-arity" },
+  ];
+  const bad: string[] = [];
+  for (const c of cells) {
+    let got: string;
+    try {
+      emitModule(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\tprint(${c.call})\n\tquit()\n`)), GEN_EMIT_OPTS);
+      got = "ok";
+    } catch (e) {
+      got = e instanceof UnsupportedError ? ((e as { code?: string }).code ?? "无码") : "非 UnsupportedError";
+    }
+    if (got !== c.want) bad.push(`${c.name}: 期望 ${c.want}，实得 ${got}`);
+  }
+  console.log(`  var_to_str 单实参口径 ${cells.length - bad.length}/${cells.length} 格一致（应为 ${cells.length}）${bad.length > 0 ? "：" + bad.join(" | ") : ""}`);
+  if (bad.length > 0) process.exitCode = 1;
+}
 if (unsupported.length > 0) {
   console.log("\nemitter 缺口：");
   for (const u of unsupported) console.log(`  ${u.id.padEnd(30)} ${u.msg}`);

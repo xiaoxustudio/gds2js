@@ -261,6 +261,36 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("sqrt(-1) => "), rt.typeOf(rt.sqrt(rt.V.int((-1)))), rt.V.str("|"), rt.sqrt(rt.V.int((-1)))]));
     print(rt.showArgs([rt.V.str("sqrt(2) => "), rt.typeOf(rt.sqrt(rt.V.int(2))), rt.V.str("|"), rt.sqrt(rt.V.int(2))]));
     print(rt.showArgs([rt.V.str("sqrt(INF) => "), rt.typeOf(rt.sqrt(INF)), rt.V.str("|"), rt.sqrt(INF)]));
+    print(rt.showArgs([rt.V.str("vs(7) => "), rt.V.str(rt.varToStr(rt.V.int(7)))]));
+    print(rt.showArgs([rt.V.str("vs(-17) => "), rt.V.str(rt.varToStr(rt.V.int((-17))))]));
+    print(rt.showArgs([rt.V.str("vs(2147483648) => "), rt.V.str(rt.varToStr(rt.V.int(2147483648)))]));
+    print(rt.showArgs([rt.V.str("vs(1 << 62) => "), rt.V.str(rt.varToStr(rt.ops.shl(rt.V.int(1), rt.V.int(62))))]));
+    print(rt.showArgs([rt.V.str("vs(null) => "), rt.V.str(rt.varToStr(rt.V.nil()))]));
+    print(rt.showArgs([rt.V.str("vs(true) => "), rt.V.str(rt.varToStr(rt.V.bool(true)))]));
+    print(rt.showArgs([rt.V.str("vs(false) => "), rt.V.str(rt.varToStr(rt.V.bool(false)))]));
+    print(rt.showArgs([rt.V.str("vs(x) => "), rt.V.str(rt.varToStr(rt.V.str("x")))]));
+    print(rt.showArgs([rt.V.str("vs(empty str) => "), rt.V.str(rt.varToStr(rt.V.str("")))]));
+    print(rt.showArgs([rt.V.str("vs(a\"b) => "), rt.V.str(rt.varToStr(rt.V.str("a\"b")))]));
+    print(rt.showArgs([rt.V.str("vs(backslash) => "), rt.V.str(rt.varToStr(rt.V.str("\\")))]));
+    print(rt.showArgs([rt.V.str("vs(tab+nl) => "), rt.V.str(rt.varToStr(rt.V.str("line1\nline2\ttab")))]));
+    print(rt.showArgs([rt.V.str("vs(unicode) => "), rt.V.str(rt.varToStr(rt.V.str("é😀")))]));
+    print(rt.showArgs([rt.V.str("vs(&\"name\") => "), rt.V.str(rt.varToStr(rt.V.stringName("name")))]));
+    print(rt.showArgs([rt.V.str("vs([1, 2]) => "), rt.V.str(rt.varToStr(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))))]));
+    print(rt.showArgs([rt.V.str("vs([]) => "), rt.V.str(rt.varToStr(rt.V.array(rt.GArray.of([]))))]));
+    print(rt.showArgs([rt.V.str("vs([\"a\", null, true]) => "), rt.V.str(rt.varToStr(rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.nil(), rt.V.bool(true)]))))]));
+    print(rt.showArgs([rt.V.str("vs([[], {}]) => "), rt.V.str(rt.varToStr(rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([])), rt.dictOf([])]))))]));
+    print(rt.showArgs([rt.V.str("vs({\"a\": 1}) => "), rt.V.str(rt.varToStr(rt.dictOf([[rt.V.str("a"), rt.V.int(1)]])))]));
+    print(rt.showArgs([rt.V.str("vs({}) => "), rt.V.str(rt.varToStr(rt.dictOf([])))]));
+    print(rt.showArgs([rt.V.str("vs({2: \"a\", 1: \"b\"}) => "), rt.V.str(rt.varToStr(rt.dictOf([[rt.V.int(2), rt.V.str("a")], [rt.V.int(1), rt.V.str("b")]])))]));
+    print(rt.showArgs([rt.V.str("vs({\"B\": 1, \"a\": 2, \"A\": 3}) => "), rt.V.str(rt.varToStr(rt.dictOf([[rt.V.str("B"), rt.V.int(1)], [rt.V.str("a"), rt.V.int(2)], [rt.V.str("A"), rt.V.int(3)]])))]));
+    print(rt.showArgs([rt.V.str("vs({null: 3, true: 1}) => "), rt.V.str(rt.varToStr(rt.dictOf([[rt.V.nil(), rt.V.int(3)], [rt.V.bool(true), rt.V.int(1)]])))]));
+    print(rt.showArgs([rt.V.str("vs(nest dict) => "), rt.V.str(rt.varToStr(rt.dictOf([[rt.V.str("a"), rt.dictOf([[rt.V.str("b"), rt.dictOf([[rt.V.str("c"), rt.V.int(1)]])]])]])))]));
+    print(rt.showArgs([rt.V.str("vs(dict of arrays) => "), rt.V.str(rt.varToStr(rt.dictOf([[rt.V.str("a"), rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.array(rt.GArray.of([rt.V.int(3)]))]))]])))]));
+    print(rt.showArgs([rt.V.str("vs(PackedByteArray([1, 2])) => "), rt.V.str(rt.varToStr(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])))]));
+    print(rt.showArgs([rt.V.str("vs(PackedByteArray()) => "), rt.V.str(rt.varToStr(rt.bytesCtor([])))]));
+    print(rt.showArgs([rt.V.str("vs(PackedInt32Array([1, 2])) => "), rt.V.str(rt.varToStr(rt.packCtor("int32", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])))]));
+    print(rt.showArgs([rt.V.str("vs(PackedInt64Array([1])) => "), rt.V.str(rt.varToStr(rt.packCtor("int64", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])))]));
+    print(rt.showArgs([rt.V.str("vs(PackedStringArray([\"a\", \"b\"])) => "), rt.V.str(rt.varToStr(rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])))]));
     this.quit();
   }
   
