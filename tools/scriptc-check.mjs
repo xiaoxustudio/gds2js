@@ -5,14 +5,14 @@
 //   pnpm test:scriptc              默认的代表集（一族一格，秒级到分钟级）
 //   pnpm test:scriptc 064          只跑 id 含 064 的
 //   pnpm test:scriptc --all        全量（150 个：141 单文件 + 9 项目树；默认 4 路并发）
-//   pnpm test:scriptc --jobs=1     改并发度（1 就是老的串行跑法；筛选/代表集默认 1，全量与 --project 默认 4）
+//   pnpm test:scriptc --jobs=1     改并发度（1 就是老的串行跑法）
 //
 // 每个用例一份替身树（`tmp/sc-gate/<id>/`），并发铺开互不干扰；收尾只删本进程建过的那几份。
 // 剩一个口：两个进程**同时跑同一个 id** 还是会互删替身树（开工先清自己那个目录）。
 import { spawn } from "node:child_process";
 import { cpus } from "node:os";
 
-/** 异步版 spawnSync：全量门要靠它把用例铺开跑。stdout 与 stderr 分开存，out 是合成后的原文。 */
+/** 异步版 spawnSync：全量门要靠它把多个用例叠在一起跑。 */
 function sp(cmd, cmdArgs, opts = {}) {
   return new Promise((resolve) => {
     const child = spawn(cmd, cmdArgs, { ...opts, shell: opts.shell === true });
@@ -36,16 +36,16 @@ import { TREE_FACE } from "../packages/runtime/src/tree-face.ts";
 const args = process.argv.slice(2);
 const all = args.includes("--all");
 const keep = args.includes("--keep");
-// `--project`：只跑项目树那几个用例，走真命令 `export --pack scriptc`；单跑一轮几十分钟。
+// `--project`：只跑项目树那几个用例，走真命令 `export --pack scriptc`。
 const projectOnly = args.includes("--project");
 const filter = args.find((a) => !a.startsWith("--")) || "";
-// `--jobs=N`：并行跑几个用例。全量/项目树默认铺到 4，筛选和代表集仍是 1。
+// 判不出并发度就落回默认而不是 0：0 个 worker 会「0 例 0 绿」静默放行。
 const jobsArg = args.find((a) => a.startsWith("--jobs="));
 const jobsParsed = jobsArg === undefined ? NaN : Number(jobsArg.split("=")[1]);
 const JOBS =
   Number.isFinite(jobsParsed) && jobsParsed >= 1 ? Math.floor(jobsParsed) : all || projectOnly ? Math.min(4, cpus().length) : 1;
 const WORK = join(ROOT, "tmp", "sc-gate");
-/** 本进程建过的替身树；收尾只删这些，不连锅端 `tmp/sc-gate` —— 否则会把另一个门进程正在编的那份删掉。 */
+/** 收尾只删本进程建过的这几份，不连锅端 `tmp/sc-gate` —— 那样会把另一个门进程正在编的替身树删掉。 */
 const created = [];
 
 // 代表集：一族一格各一个
@@ -218,7 +218,7 @@ async function gateOne(id) {
 
 const markOf = (row) => (row.exact ? "✓ 出货一致" : row.built ? (row.ran ? "✗ 输出不符" : "✗ 跑挂") : "✗ 编不过");
 
-// 每个用例只碰自己的 tmp/sc-gate/<id>/，铺开跑互不干扰；输出按用例原序回显。
+// 谁先编完不一定，所以按用例原序回显。
 const results = new Array(cases.length);
 let cursor = 0;
 async function worker() {

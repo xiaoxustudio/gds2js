@@ -148,10 +148,7 @@ function hashDouble(d: number): number {
   return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), MURMUR_SEED);
 }
 
-/**
- * 一个 Variant 的 Godot 哈希数 —— 全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 同一条。
- * 容器按 `recursive_hash`：类型标签起手，逐个把元素哈希折进累加器，最后 fmix32 收尾。
- */
+/** 一个 Variant 的 Godot 哈希数：全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 共用；容器那一支照引擎的 `recursive_hash`。 */
 export function variantHashNumber(v: Variant): number {
   switch (v.t) {
     case Tag.NIL:
@@ -189,7 +186,7 @@ export function variantHashNumber(v: Variant): number {
   }
 }
 
-/** 全局 `hash()`：只一个参数，结果按无符号 32 位宽成 int。 */
+/** 全局 `hash()`：Godot 给的是无符号 32 位，宽成 int 印出来。 */
 export function variantHash(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("arity", `hash() 只接受 1 个参数（收到 ${args.length} 个）`);

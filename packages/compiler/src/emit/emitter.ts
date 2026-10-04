@@ -162,10 +162,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-/**
- * 「Godot 4.6.3 有、我们这一层还没实现」的全局函数：一支一支脚本量出来的（不存在的是
- * `Function "x()" not found in base self.`，这些是能过解析、我们得响亮拒的那一批）。
- */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
 /** 分析层拿它区分「Godot 也不认的名字」与「Godot 认、我们拒的名字」：两张表都是实测来的，摸不得。 */
