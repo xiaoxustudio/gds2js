@@ -368,6 +368,35 @@ console.log("⑨b run --watch：改 .gd 要真的再执行一次脚本");
   else ok("run --watch 改文件后程序真的又跑了一遍");
 }
 
+/* 9c) run-project 过交叉点（≥ BUNDLE_FROM_MODULES）改走「打成单文件再装载」：装载方式不该改变语义 ——
+ *     exe 那支岛里没打包器（恒逐文件），node 那支打包，两支与显式关打包的 node 必须三方输出逐字相等。 */
+console.log("⑨c run-project 大工程：打包装载与逐文件装载输出逐字相等");
+{
+  const dir = join(WD, "wide-project");
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(join(dir, "lib"), { recursive: true });
+  writeFileSync(join(dir, "project.godot"), '[application]\nconfig/name="wide"\n', "utf8");
+  const N = 120;
+  for (let i = 0; i < N; i++) {
+    writeFileSync(join(dir, "lib", "m" + i + ".gd"), `class_name W${i}\n\nvar x = ${i}\n\nfunc twice():\n\treturn x * 2\n`, "utf8");
+  }
+  let main = "extends SceneTree\n";
+  for (let i = 0; i < N; i++) main += `const B${i} = preload("res://lib/m${i}.gd")\n`;
+  main += `\nfunc _initialize():\n\tprint("ok|", B0.new().twice(), B${N - 1}.new().twice())\n\tquit()\n`;
+  writeFileSync(join(dir, "main.gd"), main, "utf8");
+  const args = ["run-project", join(dir, "main.gd"), "--res-root", dir];
+  const bundled = cliNode(args, ROOT);
+  process.env.GDS2JS_RUN_BUNDLE = "0";
+  const perFile = cliNode(args, ROOT);
+  delete process.env.GDS2JS_RUN_BUNDLE;
+  const exeRun = cliExe(args, ROOT);
+  if (bundled.status !== 0) fail(`node（打包）退出码 ${bundled.status}：${bundled.out.slice(0, 200)}`);
+  else if (perFile.out !== bundled.out) fail(`打包改变了输出：\n    逐文件=${JSON.stringify(perFile.out.slice(0, 120))}\n    打包=${JSON.stringify(bundled.out.slice(0, 120))}`);
+  else if (exeRun.status !== 0) fail(`exe（逐文件）退出码 ${exeRun.status}：${exeRun.out.slice(0, 200)}`);
+  else if (exeRun.out !== bundled.out) fail(`exe 与 node（打包）输出不同：\n    exe=${JSON.stringify(exeRun.out.slice(0, 120))}\n    node=${JSON.stringify(bundled.out.slice(0, 120))}`);
+  else ok(`${String(N)} 模块工程三方一致：${JSON.stringify(bundled.out.trim().slice(0, 40))}`);
+}
+
 console.log("");
 console.log(`原生 CLI 等价性门：通过 ${String(okCount)} 项，失败 ${String(bad.length)} 项`);
 for (const b of bad) console.log(`  红：${b}`);

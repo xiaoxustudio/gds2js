@@ -9,10 +9,15 @@ export async function bundlingAvailable(): Promise<boolean> {
   }
 }
 
-/** 把 `entry` 连同它的 import 图压成 outDir 下的一个文件（调用方先确认 `bundlingAvailable()`）。 */
-export async function bundleModule(entry: string, outDir: string): Promise<void> {
+/**
+ * 把 `entry` 连同它的 import 图压成 outDir 下的一个文件（调用方先确认 `bundlingAvailable()`）。
+ * `quiet` 是给 `run-project` 用的：那条路的契约是「脚本的 print 就是命令输出」，而 tsdown 的进度行
+ * 走的是 console.log（实测只有 `logLevel:"silent"` 压得住，`silent:true`/`logger:false` 都照漏）。
+ * 构建类命令（--runtime-mode single）保持今天的样子，不在这格动。
+ */
+export async function bundleModule(entry: string, outDir: string, quiet = false): Promise<void> {
   const { build } = await import("tsdown");
-  await build({
+  const opts: Record<string, unknown> = {
     entry,
     outDir,
     format: "esm",
@@ -21,5 +26,7 @@ export async function bundleModule(entry: string, outDir: string): Promise<void>
     clean: true,
     config: false,
     silent: true,
-  } as Parameters<typeof build>[0]);
+  };
+  if (quiet) opts.logLevel = "silent";
+  await build(opts as Parameters<typeof build>[0]);
 }

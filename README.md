@@ -76,7 +76,7 @@ gds2js export         <entry.gd>    # 打成 Node 独立可执行文件（SEA）
 
 改文件反复试的小循环用 `gds2js run <f.gd> --watch`：进程不退出，runtime 只装载一次，实测「改文件 → 看到程序的新输出」约 **290 ms**，其中 250 ms 轮询 + 80 ms 去抖是设计上限（`fs.watch` 在静态目标没有 lowering，所以走摘要轮询），编译与执行只占剩下的几十毫秒以内。
 
-大工程的 `check-project` / `build-project` 走 **IR 缓存**（按源码内容 + 编译器内容戳寻址，落在系统临时目录，不进工程目录；改编译器立刻整体失效）。600 模块实测 `check-project` 快 **17%**（|t|=10.7）。`run-project` 不吃这个收益——它的三秒里约三分之二花在 Node 逐份装载产物上（601 份 `.mts` 888 ms vs 打成单文件 95 ms），那一格还没做。开关：`GDS2JS_IR_CACHE=0` 绕过，`GDS2JS_IR_CACHE_DIR` 指目录；静态出货 exe 里缓存默认透传（岛上没有 `node:crypto`）。
+大工程的 `check-project` / `build-project` 走 **IR 缓存**（按源码内容 + 编译器内容戳寻址，落在系统临时目录，不进工程目录；改编译器立刻整体失效）。600 模块实测 `check-project` 快 **17%**（|t|=10.7）。`run-project` 不吃这个收益——它的三秒里约三分之二花在 Node 逐份装载产物上（601 份 `.mts` 888 ms vs 打成单文件 95 ms）。**工程 ≥ 100 个模块时 `run-project` 改为先打成单文件产物再装载**（600 模块实测 3473 → 2464 ms（−27.8%），两轮配对 12/12 轮都更快，输出逐字一样；阈值是量出来的：50 模块上打包还亏 170 ms）。开关 `GDS2JS_RUN_BUNDLE=0`；原生 exe 里没带打包器，那支照旧逐文件——`test:cli-native` 的 ⑨c 格要求「打包 / 不打包 / exe」三方输出逐字相等。缓存这边的开关是 `GDS2JS_IR_CACHE=0`（绕过）与 `GDS2JS_IR_CACHE_DIR`（指目录）；静态出货 exe 里缓存默认透传，因为岛上没有 `node:crypto`。
 
 ## 产物的运行时打包模式（`--runtime-mode`）
 
