@@ -155,6 +155,7 @@ pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字�
 pnpm regen:case-table # 再生成 runtime 的 case-table.ts（探头 000-probe-cs-* 现搭现弃不入库；只改表请走它）
 pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上；每 kernel 连跑 3 轮取最小，GDS2JS_BENCH_ROUNDS 可调）
 pnpm bench:ab        # 交替配对 A/B：pnpm bench:ab --rounds=6 <仓内文件>=<候选文件>，报配对差 ±SE 与 |t|（|t|<2 就是量不出来）
+pnpm bench:scriptc   # 同一张 kernel 表编成 scriptc 原生 exe 量每次调用（要 zig + scriptc；小格子受基线噪声限制，见 ROADMAP §1.19）
 pnpm latency         # CLI 端到端延迟门：交替配对量各条调用路径的 run 延迟（同上，|t|<2 不算数）
 pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
 ```
