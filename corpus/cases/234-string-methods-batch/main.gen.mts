@@ -159,6 +159,18 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.method(rt.V.str("1_0"), "bin_to_int", [])]));
     print(rt.showArgs([rt.method(rt.V.str("11111111111111111111111111111111111111111111111111111111111111"), "bin_to_int", [])]));
     print(rt.showArgs([rt.method(rt.V.str("-0"), "bin_to_int", [])]));
+    print(rt.showArgs([rt.method(rt.V.str("aaaa"), "similarity", [rt.V.str("aa")])]));
+    print(rt.showArgs([rt.method(rt.V.str("aaaaa"), "similarity", [rt.V.str("aaa")])]));
+    print(rt.showArgs([rt.method(rt.V.str("abc"), "similarity", [rt.V.str("axc")])]));
+    print(rt.showArgs([rt.method(rt.V.str("hello"), "similarity", [rt.V.str("hallo")])]));
+    print(rt.showArgs([rt.method(rt.V.str("Hello"), "similarity", [rt.V.str("hello")])]));
+    print(rt.showArgs([rt.method(rt.V.str("kitten"), "similarity", [rt.V.str("sitting")])]));
+    print(rt.showArgs([rt.method(rt.V.str("hello"), "similarity", [rt.V.str("hell")])]));
+    print(rt.showArgs([rt.method(rt.V.str("abcde"), "similarity", [rt.V.str("abcdefgh")])]));
+    print(rt.showArgs([rt.method(rt.V.str("abc"), "similarity", [rt.V.str("abc")])]));
+    print(rt.showArgs([rt.method(rt.V.str(""), "similarity", [rt.V.str("")])]));
+    print(rt.showArgs([rt.method(rt.V.str("a"), "similarity", [rt.V.str("ab")])]));
+    print(rt.showArgs([rt.method(rt.V.str(""), "similarity", [rt.V.str("ab")])]));
     this.quit();
   }
   

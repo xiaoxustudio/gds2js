@@ -1193,6 +1193,28 @@ export function strRepeat(s: string, n: number): string {
   return out;
 }
 
+/** `similarity()`：引擎是**交叠 bigram 的 Dice 系数** —— 先判全等给 1，任一边不足两个码点给 0，其余 `2 × 交集 / (两边 bigram 数之和)`；交集是「源的每个 bigram 只要在目标里出现就计一次」，目标不被消耗，所以 `aaaa` 对 `aa` 能给到 1.5（大于 1 不是 bug）。返回值在 C++ 那边是 `float`，所以要过一遍 float32。 */
+export function strSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  const ac = codepoints(a);
+  const bc = codepoints(b);
+  if (ac.length < 2 || bc.length < 2) return 0;
+  const src = strBigrams(ac);
+  const tgt = strBigrams(bc);
+  let inter = 0;
+  for (const x of src) {
+    if (tgt.includes(x)) inter++;
+  }
+  return Math.fround((2 * inter) / (src.length + tgt.length));
+}
+
+/** 重叠二字组，`length() - 1` 个：循环上界保证两个下标都在界内。 */
+function strBigrams(chars: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i + 1 < chars.length; i++) out.push((chars[i] as string) + (chars[i + 1] as string));
+  return out;
+}
+
 export function strStartsWith(s: string, pre: string): boolean {
   const a = codepoints(s);
   const b = codepoints(pre);

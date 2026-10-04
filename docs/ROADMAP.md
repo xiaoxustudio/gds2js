@@ -251,6 +251,15 @@
 - **取舍**：先接 `var_to_str` / `str_to_var`（形状已全量齐、Tier 1 里真有用），`convert` / `type_convert` 等同一条标量真源合出来后再按各自「解析期允许的形状」分岔。四支在实现前留在 `GLOBAL_TODO_FUNCTIONS` 抛 `[emit-builtin]`；语料也等实现那一轮与 JS 侧一起进 —— 只把 Godot 侧的读数放进「跑得出结果」那 152 格，会把 diff 的账拆成两半，不划算。
 - **门**：本轮没动实现，门的读数与上一提交一致（compile 160/229 + 守卫 8/8、ir/sema 229/229、ops 1428/0、diff 152/152 逐字节、typecheck 无 `error TS`）。
 
+### 1.25 `similarity` 从源码里读出来了：拟合不动就去看引擎怎么写的（2026-10-04，§6 第 15 条那一格）
+
+- **用的还是 S212 那招**：S206 留下的九个读数用 LCS 比值与 Levenshtein 都拟合不出，就不猜第十种式子 —— 读本机 `E:/编程练习/godot` 那份 **4.3.0 树**的 `core/string/ustring.cpp:3881`。式子是**交叠 bigram 的 Dice 系数**：`operator==` 先给 1.0，任一边长度不足 2 给 0.0，其余 `2 × 交集 / (两边 bigram 数之和)`，而交集「源的每个 bigram 在目标里出现就计一次、不消耗目标」—— 这条正是 `"aaaa"`/`"aa"` 给 **1.5** 的原因，**大于 1 不是 bug 是式子**，拟合时最容易把它当噪声扔掉。
+- **一处类型的账**：函数在 C++ 那边返回 `float`，所以 `4/3` 打出来是 `1.33333337306976`。实现里结果过一遍 `Math.fround`（`color.ts` / `vector2.ts` 早就这么办，scriptc 有 lowering），不然我们的 double 打印永远对不上。`bigrams()` 也顺带读了：`length() - 1` 个**重叠**二字组，按码点走（复用 `codepoints()`，非 BMP 算一个）。
+- **出货与钉子**：`strSimilarity` 落在 `values.ts` 的字符串族里，`methods.ts` 加 `case "similarity"`；ops 那组 234 从「公式没拟合，仍拒」换成 **10 格实测值**（总 **1437/0**），语料 `234-string-methods-batch` 末尾加 12 行并**重生成 golden** —— 新生成的 golden 顺手把两格边界也量了：`""`/`""` 给 `1.0`（等号判在长度检查之前）、`"a"`/`"ab"` 与 `""`/`"ab"` 给 `0.0`。diff **152/152 逐字节**。
+- **一条工具顺序的坑（记下来别再踩）**：改完 `main.gd` 只重生成 golden、没重跑 `test:compile` 就去看 `test:diff`，会报「静默错误 1」—— 因为 diff 跑的是上一轮的 `main.gen.mts`，产物里没有那 12 行。这次先 `compile` 再 `diff` 就 0 静默。**golden 与产物必须同轮生成**，否则最优先那一格会自己造出来。
+- **门**：typecheck 无 `error TS`、ops **1437/0**、diff **152/152 逐字节**（golden 238/238 未漂移）、compile **160/229**（emitter 缺口 0、守卫 8/8）、ir **229/229**、sema **229/229**（误报/漏报/崩溃 0）、`pkgmodes` 失败 0、treeface **17/0**、`test:scriptc` 代表集 **10/10 出货一致**（234 那一格现在也走 AOT exe）、`cli-native` **22/0**、`test:export` **ok 10 / 环境记账 3 / FAIL 0**。
+- **下一格已经有着落了**：同一份源码里 `pad_zeros`（4789 行）与 `get_slicec`（1288 行）都有明确式子 —— `pad_zeros` 是「以小数点为界，跳过前导非数字，把 `0` 插到数字段开头」，S206 那四条看着互相矛盾的读数（`".5"` 不动、`"abc"`→`abc00000`、`"--5"`→`--05`）在这条式子下应当各自消解 —— 但 S206 没记下当时传的 `p_digits`，所以这只是**待验的推论**，探头要按已知参数把四格重打一遍才算数；`get_slicec` 的第一参数是 **`char32_t` 码点**不是 String，所以 `(1, 0)` 给整串、`(1, 非 0)` 给空，与文档写的 `(delimiter, slice)` 根本不是一回事。两格的探头在 `tmp/probe-pad-slice/`，量过之后再出货；`uri_decode` 的非法转义与 `format` 的 `placeholder` 第二参仍照 S206 响亮拒。
+
 ---
 
 ## 2. 当前任务与待办

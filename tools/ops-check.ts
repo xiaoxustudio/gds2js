@@ -659,7 +659,16 @@ eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValid
   shouldThrow("234", "count 的 chars 真值响亮拒", () => method(V.str("hello"), "count", [V.str("l"), V.bool(true)]));
   shouldThrow("234", "count 的第 3 个参数没量过", () => method(V.str("hello"), "count", [V.str("l"), V.bool(false), I(1)]));
   shouldThrow("234", "pad_zeros 口径没拟合，仍拒", () => method(V.str("5"), "pad_zeros", [I(3)]));
-  shouldThrow("234", "similarity 公式没拟合，仍拒", () => method(V.str("ab"), "similarity", [V.str("ba")]));
+  eq("234", "similarity 是交叠 bigram 的 Dice 系数（引擎读数 1.5 那格）", show(method(V.str("aaaa"), "similarity", [V.str("aa")])), "1.5");
+  eq("234", "similarity 的返回是 float32（4/3 那格）", show(method(V.str("aaaaa"), "similarity", [V.str("aaa")])), "1.33333337306976");
+  eq("234", "similarity 无公共 bigram", show(method(V.str("abc"), "similarity", [V.str("axc")])), "0.0");
+  eq("234", "similarity hello/hallo", show(method(V.str("hello"), "similarity", [V.str("hallo")])), "0.5");
+  eq("234", "similarity 分大小写", show(method(V.str("Hello"), "similarity", [V.str("hello")])), "0.75");
+  eq("234", "similarity kitten/sitting", show(method(V.str("kitten"), "similarity", [V.str("sitting")])), "0.36363637447357");
+  eq("234", "similarity hello/hell", show(method(V.str("hello"), "similarity", [V.str("hell")])), "0.85714286565781");
+  eq("234", "similarity 一边是另一边的前缀", show(method(V.str("abcde"), "similarity", [V.str("abcdefgh")])), "0.72727274894714");
+  eq("234", "similarity 全等先给 1（空串也算全等）", `${show(method(V.str("abc"), "similarity", [V.str("abc")]))}|${show(method(V.str(""), "similarity", [V.str("")]))}`, "1.0|1.0");
+  eq("234", "similarity 任一边不足两个码点给 0", `${show(method(V.str("a"), "similarity", [V.str("ab")]))}|${show(method(V.str(""), "similarity", [V.str("ab")]))}`, "0.0|0.0");
   shouldThrow("234", "uri_decode 的非法转义形状没量清，仍拒", () => method(V.str("a%2"), "uri_decode", []));
   shouldThrow("234", "get_slicec 的 (int, int) 形状没解释清，仍拒", () => method(V.str("a/b/c"), "get_slicec", [I(1), I(0)]));
 }

@@ -7,7 +7,7 @@ import type { GdIdentified } from "./identity";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strInsertAt, strIsValidFilename, strJoin, strLength, strRepeat, strReplace, strSplit,
-  strSplitCapped, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriEncode, strCmp, toStringNameSlot, truthyOf } from "./values";
+  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriEncode, strCmp, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -785,6 +785,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.str(strRepeat(s, intArg(args, 0, "repeat")));
         }
+        case "similarity":
+          return V.float(strSimilarity(s, asString(one(args, "similarity"), "similarity")));
         case "strip_edges": {
           if (args.length !== 0) {
             throw new GodotRuntimeError("arity", `strip_edges() 不接受参数（收到 ${args.length} 个）`);
