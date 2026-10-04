@@ -51,7 +51,7 @@
 | P3 Emitter 与语言特性 | 2–3 周 | 表达式/语句发射、函数/类/继承、`super`、属性 setter/getter、`is`/`as`、signal。 |
 | P4 `await` 与信号 | 1 周 | await → async 函数、`awaitSignal`、Signal 参数归一、`await <非信号>` 直译。 |
 | P5 工程层 | 进行中 | 宿主入口（`gds2js/host`）、工程编译、打包三模式（import / local / single）。 |
-| 5.5 性能（D2） | 进行中 | 先 benchmark 后优化；收益量化 + golden 逐字节不变 + 校验值一致三重护栏。 |
+| 5.5 性能（D2） | 进行中 | 先 benchmark 后优化；读数已出（§1.10：整体 5.2×，两格数组 kernel 仍慢于 Godot），优化未动。收益量化 + golden 逐字节不变 + 校验值一致三重护栏。 |
 | P6 宿主与性能（Tier 2+） | 暂不启动 | 用户明确 Tier 1 纯语言优先；要开再单独评估。 |
 
 ### 1.2 阶段计划与判据（2026-10-03：native CLI / scriptc 迁移）
@@ -150,6 +150,12 @@
 - **readings**：`test:scriptc --all --jobs=4` **150 例、wall 2452s（40 分 52 秒）、149 格逐字节一致** —— 唯一红的 `039-cross-file-ref` 是本轮我自己并发单跑探针造成的（旧收尾会把 `tmp/sc-gate` 连锅端掉），串行重跑 22s ✓ 出货一致，等于全绿。代表集：暖缓存串行 14s / 并发 4 路 10s / 冷缓存 377s（那 377s 是 scriptc 首轮编 stdlib 的固定成本，与用例数无关）。compile 158/227、生成物 0 漂移。
 - **`--jobs=N`**：门按用例铺开 —— 每例一份替身树（`tmp/sc-gate/<id>/`），互不碰；全量与 `--project` 默认 4，筛选与代表集默认 1（所以老命令的跑法没变）。`--jobs=` / `--jobs=abc` 落回默认而不是 0：判不出并发度时若起 0 个 worker，就会「0 例 0 绿」静默放行，收尾判分现在按 `cases.length` 而不是 `rows.length` 算。
 - **收尾口径改了**：门只删本进程建过的那几份替身树，不再连锅端工作根 —— `039` 那格就是被这条老口径坏掉的。剩一个口：两个进程同时跑**同一个 id** 仍会互删（开工先清自己那个目录），已写进门头注释。
+
+### 1.10 首批性能读数（2026-10-04，5.5 的头一遍）
+
+- **readings**：`pnpm bench` 合计 **85.42 / 88.01 ms**、`pnpm bench:godot` **441.54 / 480.17 ms**（各跑两遍，抖动约 3% / 9%），**14/14 kernel 校验值与 Godot 同字面** —— 三重护栏里「校验值一致」这条从今天起有基线了。裁判同一台机器同一个 `Godot_v4.6.3-stable_win64_console.exe`。
+- **整体快 5.2×**（两遍 5.2 / 5.5）。最赚的是调用类 kernel —— `helper-int` 24.3×、`helper-assign` 26.8×：GDScript 的动态调用在这里贵得多，而我们发射的是普通 JS 函数调用。
+- **两格我们更慢，两遍都复现，不是噪声**：`array-for-range` 0.4×（17.4 vs 6.6 ms）、`array-write` 0.8×（23.8 vs 18.8 ms）—— 数组下标读/写加 `for … in range()` 的定长循环，正是 5.5 该先动的位置；它们走的还是 §1.1 里 P2.5 那行的 v1 口径（`ops.*` 动态路径 + Variant 全程装箱）。
 
 ---
 
@@ -258,4 +264,4 @@
 - 任何引擎 API（`Node` / `SceneTree` / `add_child` …）—— Tier 1 遇到就抛 `unsupported`
 - GDScript 3.x 兼容（`yield` / `setget`）
 - 编辑器 / LSP
-- 性能优化 —— 先要正确，数字等有 benchmark 再说
+- 性能优化 —— 先要正确；benchmark 读数已出（§1.10），真要动优化走 5.5 那三重护栏（收益量化 + golden 逐字节不变 + 校验值一致）
