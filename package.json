@@ -6,7 +6,7 @@
   "packageManager": "pnpm@12.9.0",
   "description": "将 .gds 转义为 js 运行（monorepo 根：只放工具链与门脚本，对外面在 packages/gds2js）",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=24.18"
   },
   "scripts": {
     "test:golden": "node tools/golden.mjs",
@@ -37,7 +37,7 @@
   "devDependencies": {
     "@gds2js/compiler": "workspace:*",
     "@gds2js/runtime": "workspace:*",
-    "@types/node": "^24.19.0",
+    "@types/node": "^24.19.1",
     "commander": "^15.0.0",
     "gds2js": "workspace:*",
     "tree-sitter-cli": "^0.27.0",
