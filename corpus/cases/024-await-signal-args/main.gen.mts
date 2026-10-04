@@ -18,29 +18,29 @@ export class Main extends SceneTree {
   
   async wait_zero(): Promise<unknown> {
     rt.method(rt.methodCallable(rt.V.object(this), "fire_zero"), "call_deferred", []);
-    return (await rt.awaitValue(this.zero));
+    return (await rt.awaitValue(rt.wrapValue(this.zero)));
   }
   
   async wait_one(): Promise<unknown> {
     rt.method(rt.methodCallable(rt.V.object(this), "fire_one"), "call_deferred", []);
-    return (await rt.awaitValue(this.one));
+    return (await rt.awaitValue(rt.wrapValue(this.one)));
   }
   
   async wait_two(): Promise<unknown> {
     rt.method(rt.methodCallable(rt.V.object(this), "fire_two"), "call_deferred", []);
-    return (await rt.awaitValue(this.two));
+    return (await rt.awaitValue(rt.wrapValue(this.two)));
   }
   
   fire_zero(): void {
-    rt.method(this.zero, "emit", []);
+    rt.method(rt.wrapValue(this.zero), "emit", []);
   }
   
   fire_one(): void {
-    rt.method(this.one, "emit", [rt.V.int(7)]);
+    rt.method(rt.wrapValue(this.one), "emit", [rt.V.int(7)]);
   }
   
   fire_two(): void {
-    rt.method(this.two, "emit", [rt.V.int(1), rt.V.int(2)]);
+    rt.method(rt.wrapValue(this.two), "emit", [rt.V.int(1), rt.V.int(2)]);
   }
   
     override _process(_d: number): Promise<unknown> { return this.__gd__process(rt.V.float(_d)); }

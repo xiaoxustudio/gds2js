@@ -19,7 +19,7 @@ export class Main extends SceneTree {
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let s = this.fired;
+    let s = rt.wrapValue(this.fired);
     print(rt.showArgs([rt.V.str("r1 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
     rt.method(s, "emit", [rt.V.int(1)]);
     rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);

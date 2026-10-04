@@ -14,11 +14,11 @@ export class Main extends SceneTree {
   async __gd__initialize(): Promise<void> {
     let b = rt.V.object(new Box());
     let cb = rt.methodCallable(rt.V.object(this), "ifn");
-    let sig = this.fired;
+    let sig = rt.wrapValue(this.fired);
     print(rt.showArgs([rt.V.str("u1 "), rt.typeOf(cb)]));
     print(rt.showArgs([rt.V.str("u2 "), rt.typeOf(rt.methodCallable(rt.V.object(this), "ifn"))]));
     print(rt.showArgs([rt.V.str("u3 "), rt.typeOf(sig)]));
-    print(rt.showArgs([rt.V.str("u4 "), rt.typeOf(this.fired)]));
+    print(rt.showArgs([rt.V.str("u4 "), rt.typeOf(rt.wrapValue(this.fired))]));
     print(rt.showArgs([rt.V.str("u5 "), rt.typeOf(rt.wrapValue(rt.attribute(b, "boxed")))]));
     print(rt.showArgs([rt.V.str("u6 "), rt.method(cb, "call", [])]));
     print(rt.showArgs([rt.V.str("u7 "), rt.typeOf(rt.wrapValue(rt.attribute(b, "n")))]));

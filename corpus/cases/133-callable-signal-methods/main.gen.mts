@@ -14,13 +14,13 @@ export class Main extends SceneTree {
   async __gd__initialize(): Promise<void> {
     let a = rt.V.object(new A());
     let cb = rt.wrapValue(rt.attribute(a, "im"));
-    print(rt.showArgs([rt.V.str("u1 "), rt.typeOf(rt.methodCallable(rt.V.object(this), "top")), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.attribute(a, "im"))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_A), "sm"))), rt.V.str(" "), rt.typeOf(this.fired)]));
-    print(rt.showArgs([rt.V.str("u2 "), rt.method(rt.methodCallable(rt.V.object(this), "top"), "is_null", []), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(a, "im")), "is_null", []), rt.V.str(" "), rt.method(this.fired, "is_null", [])]));
+    print(rt.showArgs([rt.V.str("u1 "), rt.typeOf(rt.methodCallable(rt.V.object(this), "top")), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.attribute(a, "im"))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_A), "sm"))), rt.V.str(" "), rt.typeOf(rt.wrapValue(this.fired))]));
+    print(rt.showArgs([rt.V.str("u2 "), rt.method(rt.methodCallable(rt.V.object(this), "top"), "is_null", []), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(a, "im")), "is_null", []), rt.V.str(" "), rt.method(rt.wrapValue(this.fired), "is_null", [])]));
     print(rt.showArgs([rt.V.str("u3 "), rt.method(rt.methodCallable(rt.V.object(this), "top"), "is_valid", []), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(a, "im")), "is_valid", [])]));
     print(rt.showArgs([rt.V.str("u4 "), rt.method(rt.methodCallable(rt.V.object(this), "top"), "get_method", []), rt.V.str(" | "), rt.method(rt.wrapValue(rt.attribute(a, "im")), "get_method", []), rt.V.str(" | "), rt.method(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_A), "sm")), "get_method", [])]));
     print(rt.showArgs([rt.V.str("u5 "), rt.method(rt.methodCallable(rt.V.object(this), "top"), "call", [rt.V.int(5)]), rt.V.str(" "), rt.method(rt.methodCallable(rt.V.object(this), "top"), "callv", [rt.V.array(rt.GArray.of([rt.V.int(6)]))])]));
     print(rt.showArgs([rt.V.str("u6 "), rt.method(cb, "call", [rt.V.int(21)]), rt.V.str(" "), rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.int(5)]))])]));
-    print(rt.showArgs([rt.V.str("u7 "), rt.method(this.fired, "get_name", [])]));
+    print(rt.showArgs([rt.V.str("u7 "), rt.method(rt.wrapValue(this.fired), "get_name", [])]));
     print(rt.showArgs([rt.V.str("u8 "), rt.method(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_A), "sm")), "call", [rt.V.int(9)])]));
     print(rt.showArgs([rt.V.str("u9 "), rt.method(cb, "is_null", []), rt.V.str(" "), rt.method(cb, "get_method", [])]));
     this.quit();
