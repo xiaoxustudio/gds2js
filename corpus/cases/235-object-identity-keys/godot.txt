@@ -21,3 +21,8 @@
 21|3|2
 22|true|false
 23|1|1|true
+24|true|26|false
+25|1|1|true
+26|2|true|true
+27|true|true
+28|true|false

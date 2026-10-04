@@ -67,4 +67,12 @@ func _initialize():
 	var le := {}
 	le[l] = 1
 	print("23|", le.size(), "|", le[l], "|", [l].has(l))
+	print("24|", fired == fired, "|", typeof(fired), "|", fired != fired)
+	var sd := {}
+	sd[fired] = 1
+	print("25|", sd.size(), "|", sd[fired], "|", sd.has(fired))
+	sd[p] = 2
+	print("26|", sd.size(), "|", sd.has(fired), "|", sd.has(p))
+	print("27|", [fired].has(fired), "|", [fired, p].has(p))
+	print("28|", {fired: 1} == {fired: 1}, "|", {fired: 1} == {p: 1})
 	quit()

@@ -173,6 +173,7 @@ export const GLOBAL_IMPLEMENTED: Set<string> = new Set([...Object.keys(BUILTIN),
 
 /** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
+let MODULE_SIGNALS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
 let MODULE_CLASSES = new Set<string>();
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
@@ -262,6 +263,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     ...m.signals.map((s) => s.name),
     ...(opts.inheritedMembers ?? []),
   ]);
+  /** 信号字段落的是裸 `rt.Signal`，当值用（比较、当字典键、进数组、`typeof`）必须先装箱成 Variant —— 直接递出去会在运行期变成没有类型的裸对象。 */
+  MODULE_SIGNALS = new Set(m.signals.map((s) => s.name));
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
   CURRENT_CLASS = className;
   STATIC_FUNCS = new Set(m.funcs.filter((f) => f.isStatic).map((f) => f.name));
@@ -2790,7 +2793,7 @@ function emitExprVar(e: Expr): string {
       if (STATIC_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(__gd_d_${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
-      if (MODULE_VARS.has(e.name)) return `this.${e.name}`;
+      if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       return e.name;
 
     case "unary":

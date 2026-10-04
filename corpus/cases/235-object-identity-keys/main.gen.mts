@@ -113,6 +113,20 @@ export class Main extends SceneTree {
       if (_nv !== null) le = _nv;
     }
     print(rt.showArgs([rt.V.str("23|"), rt.method(le, "size", []), rt.V.str("|"), rt.wrapValue(rt.index(le, l)), rt.V.str("|"), rt.method(rt.V.array(rt.GArray.of([l])), "has", [l])]));
+    print(rt.showArgs([rt.V.str("24|"), rt.ops.eq(rt.wrapValue(this.fired), rt.wrapValue(this.fired)), rt.V.str("|"), rt.typeOf(rt.wrapValue(this.fired)), rt.V.str("|"), rt.ops.neq(rt.wrapValue(this.fired), rt.wrapValue(this.fired))]));
+    let sd = rt.dictOf([]);
+    {
+      const _nv = rt.writeIdx(sd, rt.wrapValue(this.fired), rt.V.int(1));
+      if (_nv !== null) sd = _nv;
+    }
+    print(rt.showArgs([rt.V.str("25|"), rt.method(sd, "size", []), rt.V.str("|"), rt.wrapValue(rt.index(sd, rt.wrapValue(this.fired))), rt.V.str("|"), rt.method(sd, "has", [rt.wrapValue(this.fired)])]));
+    {
+      const _nv = rt.writeIdx(sd, p, rt.V.int(2));
+      if (_nv !== null) sd = _nv;
+    }
+    print(rt.showArgs([rt.V.str("26|"), rt.method(sd, "size", []), rt.V.str("|"), rt.method(sd, "has", [rt.wrapValue(this.fired)]), rt.V.str("|"), rt.method(sd, "has", [p])]));
+    print(rt.showArgs([rt.V.str("27|"), rt.method(rt.V.array(rt.GArray.of([rt.wrapValue(this.fired)])), "has", [rt.wrapValue(this.fired)]), rt.V.str("|"), rt.method(rt.V.array(rt.GArray.of([rt.wrapValue(this.fired), p])), "has", [p])]));
+    print(rt.showArgs([rt.V.str("28|"), rt.ops.eq(rt.dictOf([[rt.wrapValue(this.fired), rt.V.int(1)]]), rt.dictOf([[rt.wrapValue(this.fired), rt.V.int(1)]])), rt.V.str("|"), rt.ops.eq(rt.dictOf([[rt.wrapValue(this.fired), rt.V.int(1)]]), rt.dictOf([[p, rt.V.int(1)]]))]));
     this.quit();
   }
   
