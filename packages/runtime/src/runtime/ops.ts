@@ -132,6 +132,10 @@ export const ops = {
   },
 
   mul(a: Variant, b: Variant): Variant {
+    // 数值先短路：下面那串向量/颜色探针都要求 Tag.OBJECT，两个数值跑完它们必然全落空（node 侧量不出差别，AOT 侧是热路径）。
+    if (isNum(a) && isNum(b)) {
+      return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x * y) : V.float(num(a) * num(b));
+    }
     const va = asVec2(a);
     const vb = asVec2(b);
     if (va && vb) return V.object(new GVector2(va.x * vb.x, va.y * vb.y));
@@ -165,10 +169,7 @@ export const ops = {
       return color(caMul.r * num(b), caMul.g * num(b), caMul.b * num(b), caMul.a * num(b));
     if (cbMul && isNum(a))
       return color(cbMul.r * num(a), cbMul.g * num(a), cbMul.b * num(a), cbMul.a * num(a));
-    if (!isNum(a) || !isNum(b)) {
-      throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
-    }
-    return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x * y) : V.float(num(a) * num(b));
+    throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
   },
 
   div(a: Variant, b: Variant): Variant {

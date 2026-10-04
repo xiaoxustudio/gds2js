@@ -853,9 +853,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
 export function index(raw: unknown, idx: Variant): Variant {
   const obj = norm(raw);
-  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArg([idx], 0, "下标"));
+  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArgIdx(idx, "下标"));
   if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
-  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArg([idx], 0, "下标")));
+  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArgIdx(idx, "下标")));
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
@@ -924,6 +924,11 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
 /** `v[0] = E`：基是值类型就回报新值，容器/字典的下标赋值原地处理（返回 null）；基收 `unknown` 是因为发射器递来的读式（`rt.attribute` / `rt.index`）就是这个类型。 */
 export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | null {
   const base = norm(raw);
+  // 数组/字典/字符串不可能是向量那批 —— 先落回 setIndex，省掉下面六个 instanceof（下标写是热路径）。
+  if (base.t !== Tag.OBJECT) {
+    setIndex(base, idx, value);
+    return null;
+  }
   if (base.t === Tag.OBJECT && base.v instanceof GVector2) {
     return vecWrite(base.v as GVector2, idx, value, "index");
   }
@@ -949,7 +954,7 @@ export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | 
 export function setIndex(raw: unknown, idx: Variant, val: Variant): void {
   const obj = norm(raw);
   if (obj.t === Tag.ARRAY) {
-    asArray(obj, "下标赋值").set(intArg([idx], 0, "下标赋值"), val);
+    asArray(obj, "下标赋值").set(intArgIdx(idx, "下标赋值"), val);
     return;
   }
   if (obj.t === Tag.DICT) {
@@ -1082,6 +1087,14 @@ function intArg(args: Variant[], i: number, who: string): number {
   const a = args[i];
   if (a === undefined || a.t !== Tag.INT) {
     throw new UnsupportedError("need-int-arg", `${who} 的第 ${i} 个参数需要 int`);
+  }
+  return intToNum(a.v as IntPayload);
+}
+
+/** 下标那三处（读、字符串取字符、写）只有一个 int 参：直接收 Variant，别为它现造一个参数数组。报错文本与 intArg 一致。 */
+function intArgIdx(a: Variant, who: string): number {
+  if (a.t !== Tag.INT) {
+    throw new UnsupportedError("need-int-arg", `${who} 的第 0 个参数需要 int`);
   }
   return intToNum(a.v as IntPayload);
 }
