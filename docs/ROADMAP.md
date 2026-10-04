@@ -279,6 +279,14 @@
 - **门**：typecheck 无 `error TS`、ops **1452/0**、diff **152/152 逐字节**（golden 238/238 未漂移）、compile **160/229**（emitter 缺口 0、未知调用守卫 8/8）、ir **229/229**、sema **229/229**（误报/漏报/崩溃 0）、`pkgmodes` 失败 0、treeface **17/0**、`test:scriptc` 代表集 **10/10 出货一致**（那 16 行新格子也过了原生 exe）、`cli-native` **22/0**。
 - **§6 第 15 条剩两格**：`format` 的 `placeholder` 第二参、`count` 的 `chars` 真值 + 第 3 个 int 参数 —— 同一份源码里应该也有式子可读，下一轮接着收。
 
+### 1.28 `format` 量了 18 格，撞到第一条「4.3 源码 ≠ 4.6.3」的证据（2026-10-04，仍不硬装）
+
+- **前三格都是同一个套路成的**：`similarity`（S215）、`pad_zeros` / `get_slicec`（S216）、`uri_decode`（S217/S218）—— 读 4.3.0 树的式子 → 判引擎逐格对 → 对上才写。这轮换 `format`，式子也读出来了（`ustring.cpp:3940`），18 格也量了（`tmp/probe-format/`），**但式子只对上了一半**。
+- **对上的那一半**：给了第二参时，4.6.3 就是 4.3 那条式子 —— 占位符含 `_` 就按 `placeholder.replace("_", 下标或键)` 全串替换（`"_0 _1"` → `_a _b`、`"_0 _0"` → `_a _a`、`"A_1_B"` 用 `"_1"` 原样），不含 `_` 就 `replace_first`（`"[%s]"` → `1`，`"[0]"` 与 `"{0} {1}"` 原样）；内层数组必须是 2 元键值对；字典按 `"{键}"` 替（`"{a}-{b}"` → `1-2`）。
+- **对不上的那一半，而且更要紧**：**缺省占位符在 4.6.3 是 `"{0}"` 而不是 `"{}"`** —— `"{}".format([1])` 原样、`"{0}".format(["x"])` 却给 `x`；引擎的错误行也从 4.3 那句 `STRING.format Inner Array size != 2` 换成了 `Invalid format: the inner Array at index 0 needs to contain only 2 elements, as a key-value pair.`（`at: format (core/string/ustring.cpp:3569)`），非容器那句也从 `use Array or Dictionary.` 变成带 Object 的版本。**结论：4.3.0 树不是 4.6.3 的替身**，它在 String 这一族里能给式子但不能给默认值与文案；S215/S216/S218 那三格之所以能出货，是因为**判引擎逐格点过头**，不是因为读了源码。这条记法以后照抄：读源码只算提出式子，量过才算数。
+- **所以这格仍不进实现**：缺省那一半还要再量（键的顺序、非字符串键、值转文本走哪套 print、`{}` 与 `{0}` 混排），量齐之前 `format` 继续走 `string-method` 那格响亮拒；18 格数据与两版差异全记在 S219。
+- **门**：本轮只动文档与 `tmp/` 探头，代码与语料未变，门的读数与上一提交（`uri_decode`）一字一样：compile 160/229 + 守卫 8/8、ir 229/229、sema 229/229、ops 1452/0、diff 152/152 逐字节、typecheck 无 `error TS`、pkgmodes 失败 0、treeface 17/0、scriptc 代表集 10/10、cli-native 22/0。
+
 ---
 
 ## 2. 当前任务与待办
