@@ -4,8 +4,30 @@
 //
 //   pnpm test:scriptc              默认的代表集（一族一格，秒级到分钟级）
 //   pnpm test:scriptc 064          只跑 id 含 064 的
-//   pnpm test:scriptc --all        全量（单文件 + 项目树，142 个上下，一轮要几十分钟）
-import { spawnSync } from "node:child_process";
+//   pnpm test:scriptc --all        全量（150 个：141 单文件 + 9 项目树；默认 4 路并发）
+//   pnpm test:scriptc --jobs=1     改并发度（1 就是老的串行跑法；筛选/代表集默认 1，全量与 --project 默认 4）
+//
+// 每个用例一份替身树（`tmp/sc-gate/<id>/`），并发铺开互不干扰；收尾只删本进程建过的那几份。
+// 剩一个口：两个进程**同时跑同一个 id** 还是会互删替身树（开工先清自己那个目录）。
+import { spawn } from "node:child_process";
+import { cpus } from "node:os";
+
+/** 异步版 spawnSync：全量门要靠它把用例铺开跑。stdout 与 stderr 分开存，out 是合成后的原文。 */
+function sp(cmd, cmdArgs, opts = {}) {
+  return new Promise((resolve) => {
+    const child = spawn(cmd, cmdArgs, { ...opts, shell: opts.shell === true });
+    let stdout = "";
+    let stderr = "";
+    if (child.stdout !== null) child.stdout.setEncoding("utf8").on("data", (d) => (stdout += d));
+    if (child.stderr !== null) child.stderr.setEncoding("utf8").on("data", (d) => (stderr += d));
+    const done = (status) => resolve({ status, stdout, stderr, out: stdout + stderr });
+    child.on("error", (e) => {
+      stderr += String(e);
+      done(-1);
+    });
+    child.on("close", done);
+  });
+}
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ROOT, caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden } from "./lib.mjs";
@@ -17,7 +39,14 @@ const keep = args.includes("--keep");
 // `--project`：只跑项目树那几个用例，走真命令 `export --pack scriptc`；单跑一轮几十分钟。
 const projectOnly = args.includes("--project");
 const filter = args.find((a) => !a.startsWith("--")) || "";
+// `--jobs=N`：并行跑几个用例。全量/项目树默认铺到 4，筛选和代表集仍是 1。
+const jobsArg = args.find((a) => a.startsWith("--jobs="));
+const jobsParsed = jobsArg === undefined ? NaN : Number(jobsArg.split("=")[1]);
+const JOBS =
+  Number.isFinite(jobsParsed) && jobsParsed >= 1 ? Math.floor(jobsParsed) : all || projectOnly ? Math.min(4, cpus().length) : 1;
 const WORK = join(ROOT, "tmp", "sc-gate");
+/** 本进程建过的替身树；收尾只删这些，不连锅端 `tmp/sc-gate` —— 否则会把另一个门进程正在编的那份删掉。 */
+const created = [];
 
 // 代表集：一族一格各一个
 const DEFAULT_SET = [
@@ -95,6 +124,7 @@ function prepare(id) {
   const dir = join(WORK, id);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  created.push(dir);
   const src = readFileSync(genFile(id), "utf8");
   const zstd = NEED_ZSTD.test(src);
   // 产物树里的替身宿主（zstd）或仓库源码宿主（普通）——两个说明符都从 tree-face 清单算。
@@ -110,11 +140,11 @@ function prepare(id) {
   return { dir, file, zstd };
 }
 
-function scBuild(file, dynamic) {
+async function scBuild(file, dynamic) {
   const args = ["build", file, "--strip"];
   if (dynamic === true) args.push("--dynamic");
-  const r = spawnSync("scriptc", args, { encoding: "utf8", cwd: ROOT, timeout: 600000 });
-  return { code: r.status, out: `${r.stdout ?? ""}${r.stderr ?? ""}` };
+  const r = await sp("scriptc", args, { cwd: ROOT, timeout: 600000 });
+  return { code: r.status, out: r.out };
 }
 
 function exePath(dir) {
@@ -130,50 +160,50 @@ function scNote(out, fallback) {
 }
 
 /** 项目树用例：走用户那条命令 `export --pack scriptc`，门才同时量到「树里只有一份 runtime 源码」。 */
-function gateProject(id) {
+async function gateProject(id) {
   const dir = join(WORK, id);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
+  created.push(dir);
   const exe = join(dir, "case.exe");
   const treeDir = join(caseDir(id), ".gds2js-export");
-  const r = spawnSync(
+  const r = await sp(
     "npx",
     ["tsx", "packages/gds2js/src/cli.ts", "export", caseScript(id), "--pack", "scriptc", "-o", exe, "--keep-bundle"],
-    { encoding: "utf8", shell: true, cwd: ROOT, timeout: 1_500_000 },
+    { shell: true, cwd: ROOT, timeout: 1_500_000 },
   );
-  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   const built = existsSync(exe);
   if (!keep && built) rmSync(treeDir, { recursive: true, force: true });
-  return { built, exe, out, code: r.status };
+  return { built, exe, out: r.out, code: r.status };
 }
 
 const rows = [];
 const cases = pickCases();
 console.log(
-  `scriptc 出货门：${cases.length} 个用例${all ? "（全量）" : projectOnly ? "（项目树）" : filter !== "" ? "（筛选）" : "（代表集）"}\n`,
+  `scriptc 出货门：${cases.length} 个用例${all ? "（全量）" : projectOnly ? "（项目树）" : filter !== "" ? "（筛选）" : "（代表集）"}，并发 ${JOBS}\n`,
 );
-for (const id of cases) {
+
+async function gateOne(id) {
   const row = { id, built: false, ran: false, exact: false, note: "" };
   let exe = null;
   if (caseIsProject(id)) {
-    const g = gateProject(id);
+    const g = await gateProject(id);
     row.built = g.built;
     exe = g.exe;
-    if (!g.built) row.note = scNote(g.out, `export 退出 ${g.code}`);
+    if (!g.built) row.note = scNote(g.out, `export 退出 ${String(g.code)}`);
   } else {
     const { dir, file, zstd } = prepare(id);
-    const build = scBuild(file, zstd);
+    const build = await scBuild(file, zstd);
     exe = exePath(dir);
     row.built = build.code === 0 && exe !== null;
-    if (!row.built) row.note = scNote(build.out, `build 退出 ${build.code}`);
+    if (!row.built) row.note = scNote(build.out, `build 退出 ${String(build.code)}`);
   }
   if (row.built) {
-    const run = spawnSync(exe, [], { encoding: "utf8", timeout: 30000 });
-    const raw = `${run.stdout ?? ""}`;
+    const run = await sp(exe, [], { timeout: 30000 });
     row.ran = run.status === 0;
-    if (!row.ran) row.note = `exe 退出 ${run.status}：${((run.stderr ?? "") || "").trim().split("\n")[0]?.slice(0, 140) ?? ""}`;
+    if (!row.ran) row.note = `exe 退出 ${String(run.status)}：${run.stderr.trim().split("\n")[0]?.slice(0, 140) ?? ""}`;
     else {
-      const got = normalize(raw, caseScript(id));
+      const got = normalize(run.stdout, caseScript(id));
       row.exact = got === readGolden(id);
       if (!row.exact) {
         const g = readGolden(id).split("\n");
@@ -183,14 +213,29 @@ for (const id of cases) {
       }
     }
   }
-  rows.push(row);
-  const mark = row.exact ? "✓ 出货一致" : row.built ? (row.ran ? "✗ 输出不符" : "✗ 跑挂") : "✗ 编不过";
-  console.log(`  ${id.padEnd(34)} ${mark}${row.note ? `  ${row.note}` : ""}`);
+  return row;
 }
+
+const markOf = (row) => (row.exact ? "✓ 出货一致" : row.built ? (row.ran ? "✗ 输出不符" : "✗ 跑挂") : "✗ 编不过");
+
+// 每个用例只碰自己的 tmp/sc-gate/<id>/，铺开跑互不干扰；输出按用例原序回显。
+const results = new Array(cases.length);
+let cursor = 0;
+async function worker() {
+  for (;;) {
+    const i = cursor++;
+    if (i >= cases.length) return;
+    const row = await gateOne(cases[i]);
+    results[i] = row;
+    console.log(`  ${row.id.padEnd(34)} ${markOf(row)}${row.note ? `  ${row.note}` : ""}`);
+  }
+}
+await Promise.all(Array.from({ length: Math.min(JOBS, cases.length) }, worker));
+for (const row of results) rows.push(row);
 
 const built = rows.filter((r) => r.built).length;
 const ran = rows.filter((r) => r.ran).length;
 const exact = rows.filter((r) => r.exact).length;
 console.log(`\n出货 ${built}/${rows.length} 编过、${ran}/${rows.length} 跑通、逐字节一致 ${exact}/${rows.length}`);
-if (!keep) rmSync(WORK, { recursive: true, force: true });
-process.exit(exact === rows.length ? 0 : 1);
+if (!keep) for (const dir of created) rmSync(dir, { recursive: true, force: true });
+process.exit(exact === cases.length ? 0 : 1);

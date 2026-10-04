@@ -145,6 +145,12 @@
 - **修掉的洞**：`this.<signal>` 当值用时没装箱，于是 `fired == fired` 假、`d[fired] = 1` 抛 `dict-key-type`。发射器现在按「模块级信号名」只在**值路径**上包一层 `rt.wrapValue`，`fired.emit(...)` 与 `await fired` 两条属性/等待路径照旧拿裸对象。五格实测口径进了语料 `235`（24–28 行），S211 记口径，§6 第 16 条③ 就此收掉 —— 身份号那层上一轮已经就位，缺的只有装箱。
 - **哈希那一格推进到「只差三段本体」**：从上游 `Variant::hash` 读到 int 走 `hash_one_uint64`、float 走 `hash_murmur3_one_double`、对象走指针的 `hash_one_uint64`（这条同时解释了为什么对象号天生不可复现）、数组/字典是 `hash_murmur3_one_32(elem_hash, h)` 逐个折叠再收尾混合。剩下的未知收窄到 `hash_one_uint64`、`hash_murmur3_one_32` 与折叠的种子/收尾三式，S208 的实测数就是逆它们的靶子；盲拟合这轮试过（经典 murmur 变体对不上 `hash(7)`），不再靠猜推进。
 
+### 1.9 出货门铺开跑（2026-10-04）
+
+- **readings**：`test:scriptc --all --jobs=4` **150 例、wall 2452s（40 分 52 秒）、149 格逐字节一致** —— 唯一红的 `039-cross-file-ref` 是本轮我自己并发单跑探针造成的（旧收尾会把 `tmp/sc-gate` 连锅端掉），串行重跑 22s ✓ 出货一致，等于全绿。代表集：暖缓存串行 14s / 并发 4 路 10s / 冷缓存 377s（那 377s 是 scriptc 首轮编 stdlib 的固定成本，与用例数无关）。compile 158/227、生成物 0 漂移。
+- **`--jobs=N`**：门按用例铺开 —— 每例一份替身树（`tmp/sc-gate/<id>/`），互不碰；全量与 `--project` 默认 4，筛选与代表集默认 1（所以老命令的跑法没变）。`--jobs=` / `--jobs=abc` 落回默认而不是 0：判不出并发度时若起 0 个 worker，就会「0 例 0 绿」静默放行，收尾判分现在按 `cases.length` 而不是 `rows.length` 算。
+- **收尾口径改了**：门只删本进程建过的那几份替身树，不再连锅端工作根 —— `039` 那格就是被这条老口径坏掉的。剩一个口：两个进程同时跑**同一个 id** 仍会互删（开工先清自己那个目录），已写进门头注释。
+
 ---
 
 ## 2. 当前任务与待办
@@ -231,12 +237,14 @@
     devDeps 里是**解析锚点**，别随 `packages/gds2js` 的依赖清理顺手摘掉（摘掉就是 SC1010 + SC0001 两条）；
     ② tsdown 的 dts 程序面走根 tsconfig，根 `include` 里的 `packages` 不能删；③ cli-native 的 scratch 用
     「`@gds2js/*` 逐文件相对化」而不是 node_modules（落进 node_modules 会被 scriptc 当包代码收进岛）。
-    生成物口径：216 份 `main.gen.mts` 的运行时说明符是 `../../../packages/runtime/src/runtime/index`
+    生成物口径：227 份 `main.gen.mts`（2026-10-03 写这条时是 216 份）的运行时说明符是 `../../../packages/runtime/src/runtime/index`
     （现由 `tools/compile.ts` 的 `GEN_EMIT_OPTS` 显式声明；emitter 已不带仓库布局默认值）；corpus 之外
     （examples/multi、bench/.out）仍走裸名 `gds2js/runtime`，由 workspace 链接解析。
     **收尾口径（2026-10-03）**：全量 `test:scriptc --all` 因耗时（约 2 分钟/例，全量 3.5~5 小时）按用户拍板
     中途停掉，改单跑 `161` 验证 zstd 路径（✓ 出货一致）；验收以代表集 10/10 + 项目树 9/9 + 原生 20/20 +
     `test:export` ok 17/FAIL 0 + `test:pkgmodes` 失败 0 + 五道 node 门（compile/ir/sema/ops/diff）为准。
+    **改口径（2026-10-04，§1.9）**：门按用例铺开跑了 —— 全量 150 例 **40 分 52 秒**、逐字节全绿，
+    「中途停掉」那套验收不再是默认形状（要全绿就直接 `pnpm test:scriptc --all`）。
 13. 架构整改轮（§1.3）后的常驻项：改产物树/HOME 布局先跑 `test:treeface`；`case-table.ts` 只走
     `pnpm regen:case-table`；`case-flags.ts` 只走 `pnpm regen:case-flags`（两张都是实测生成物，别手改）；native seam 新增分岔口照「复制 `*.native.ts` 覆盖」办理；
     改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑 `node tools/scriptc-check.mjs 234`（38s 面探针，`pnpm release` 的 2b 就是它）再提交。
