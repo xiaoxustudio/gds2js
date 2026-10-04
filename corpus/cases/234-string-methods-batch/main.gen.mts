@@ -194,6 +194,22 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("sdup|"), rt.method(rt.V.str("a//b"), "get_slicec", [rt.V.int(47), rt.V.int(1)])]));
     print(rt.showArgs([rt.V.str("snodiv0|"), rt.method(rt.V.str("abc"), "get_slicec", [rt.V.int(1), rt.V.int(0)])]));
     print(rt.showArgs([rt.V.str("snodiv3|"), rt.method(rt.V.str("abc"), "get_slicec", [rt.V.int(1), rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("d1|"), rt.method(rt.V.str("%2F"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d2|"), rt.method(rt.V.str("%2f"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d3|"), rt.method(rt.V.str("%%41"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d4|"), rt.method(rt.V.str("%%"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d5|"), rt.method(rt.V.str("a%41"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d6|"), rt.method(rt.V.str("x%4"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d7|"), rt.method(rt.V.str("%zz"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d8|"), rt.method(rt.V.str("%%4"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d9|"), rt.method(rt.V.str("%G1"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d10|"), rt.method(rt.V.str("a+b"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d11|"), rt.method(rt.V.str("%25"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d12|"), rt.method(rt.V.str("%C3%A9"), "uri_decode", []), rt.V.str("|"), rt.method(rt.method(rt.V.str("%C3%A9"), "uri_decode", []), "length", [])]));
+    print(rt.showArgs([rt.V.str("d13|"), rt.method(rt.V.str("%F0%9F%98%80"), "uri_decode", []), rt.V.str("|"), rt.method(rt.method(rt.V.str("%F0%9F%98%80"), "uri_decode", []), "length", [])]));
+    print(rt.showArgs([rt.V.str("d14|"), rt.method(rt.V.str("%41%42%43"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d15|"), rt.method(rt.V.str(""), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("d16|"), rt.method(rt.V.str("%"), "uri_decode", [])]));
     this.quit();
   }
   

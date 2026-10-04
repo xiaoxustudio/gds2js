@@ -202,3 +202,19 @@ sdot|b
 sdup|
 snodiv0|abc
 snodiv3|
+d1|/
+d2|2f
+d3|%A
+d4|%%
+d5|aA
+d6|x%4
+d7|%zz
+d8|%%4
+d9|
+d10|a b
+d11|%
+d12|é|1
+d13|😀|1
+d14|ABC
+d15|
+d16|%

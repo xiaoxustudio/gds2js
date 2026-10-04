@@ -34,6 +34,7 @@ import {
   strRepeat,
   strStartsWith,
   strStripEdges,
+  strUriDecode,
   strUnicodeAt,
   strUriEncode,
   strBuiltin,
@@ -675,7 +676,14 @@ eq("234", "文件名非法字符表", `${strIsValidFilename("a/b")}|${strIsValid
   eq("234", "similarity 一边是另一边的前缀", show(method(V.str("abcde"), "similarity", [V.str("abcdefgh")])), "0.72727274894714");
   eq("234", "similarity 全等先给 1（空串也算全等）", `${show(method(V.str("abc"), "similarity", [V.str("abc")]))}|${show(method(V.str(""), "similarity", [V.str("")]))}`, "1.0|1.0");
   eq("234", "similarity 任一边不足两个码点给 0", `${show(method(V.str("a"), "similarity", [V.str("ab")]))}|${show(method(V.str(""), "similarity", [V.str("ab")]))}`, "0.0|0.0");
-  shouldThrow("234", "uri_decode 的非法转义形状没量清，仍拒", () => method(V.str("a%2"), "uri_decode", []));
+  eq("234", "uri_decode 只认 0-9 与 A-Z 当 hex 位", `${strUriDecode("%2F")}|${strUriDecode("%2f")}`, "/|2f");
+  eq("234", "uri_decode 第一位不合式就留下百分号", `${strUriDecode("%%41")}|${strUriDecode("%zz")}`, "%A|%zz");
+  eq("234", "uri_decode 的「还剩两位」是严格小于", `${strUriDecode("a%41")}|${strUriDecode("x%4")}|${strUriDecode("%%4")}`, "aA|x%4|%%4");
+  eq("234", "uri_decode 的 strtol 是部分解析，撞 NUL 就截断", `${strUriDecode("%G1")}|${strUriDecode("%4Z")}`, "|\u0004");
+  eq("234", "uri_decode 把加号换成空格", `${strUriDecode("a+b")}|${strUriDecode("+")}|${strUriDecode("%25")}`, "a b| |%");
+  eq("234", "uri_decode 多字节按 UTF-8 重组成一个码点", `${strUriDecode("%C3%A9")}|${strUriDecode("%F0%9F%98%80")}|${strUriDecode("%41%42%43")}`, "é|😀|ABC");
+  eq("234", "uri_decode 非法字节给一个 U+FFFD", strUriDecode("%FF"), "\uFFFD");
+  eq("234", "uri_decode 走 method 分发", show(method(V.str("a%2"), "uri_decode", [])), "a%2");
   eq("234", "get_slicec 的分隔符是码点不是串", `${strGetSlicec("a/b/c", 47, 0)}|${strGetSlicec("a/b/c", 47, 1)}|${strGetSlicec("a/b/c", 47, 2)}|${strGetSlicec("a.b", 46, 1)}`, "a|b|c|b");
   eq("234", "get_slicec 负段号与越界给空串", `${strGetSlicec("a/b/c", 47, -1)}|${strGetSlicec("a/b/c", 47, 5)}|${strGetSlicec("1,2", 44, 9)}`, "||");
   eq("234", "get_slicec 空串与空段", `${strGetSlicec("", 47, 0)}|${strGetSlicec("a//b", 47, 1)}`, "|");

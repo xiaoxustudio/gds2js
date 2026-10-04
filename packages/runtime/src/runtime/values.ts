@@ -8,7 +8,7 @@ import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
-import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
+import { bytesEq, GBytes, packItems, registerPackStringifier, utf8Decode } from "./packed";
 import { sortGodot } from "./sort";
 import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import type { GdIdentified } from "./identity";
@@ -1315,6 +1315,54 @@ export function strUriEncode(s: string): string {
     else for (const b of enc.encode(ch)) out += "%" + hex2(b);
   }
   return out;
+}
+
+/**
+ * `uri_decode()`：引擎的式子在 `core/string/ustring.cpp:4542`，走的是 **UTF-8 字节**。三处最容易踩的地方都量过：
+ * ① 合法 hex 位只认 `0-9` 与 `A-Z` —— **小写 a-f 不算**，所以 `"%2f"` 把 `%` 吃掉、后两位照常输出成 `2f`；
+ * ② 「后面还有两位」的判据是 `i + 2 < 字节数`（严格小于），于是 `"x%4"` 与 `"%%4"` 都留下了 `%`；
+ * ③ `strtol` 是**部分**解析：`"%G1"` 折成 `0x00`、`"%4Z"` 折成 `0x04`，而重组按 strlen 取长度 —— **撞到 0 就截断**，故 `"%G1"` 是空串。
+ * `+` 一律换空格；非法字节序列由 UTF-8 状态机给一个 U+FFFD（引擎那边还会往 stderr 打一句 ERROR，那行不属于产物）。
+ */
+export function strUriDecode(s: string): string {
+  const src = Array.from(new TextEncoder().encode(s));
+  const res: number[] = [];
+  for (let i = 0; i < src.length; i++) {
+    const b = src[i] as number;
+    if (b === 0x25 && i + 2 < src.length) {
+      const o1 = src[i + 1] as number;
+      if (!uriHexOk(o1)) {
+        res.push(0x25);
+      } else {
+        const o2 = src[i + 2] as number;
+        if (uriHexOk(o2)) {
+          const hi = uriHexDigit(o1);
+          const lo = uriHexDigit(o2);
+          res.push(hi < 0 ? 0 : lo < 0 ? hi : hi * 16 + lo);
+          i += 2;
+        }
+      }
+    } else if (b === 0x2b) {
+      res.push(0x20);
+    } else {
+      res.push(b);
+    }
+  }
+  const nul = res.indexOf(0);
+  return utf8Decode(nul === -1 ? res : res.slice(0, nul));
+}
+
+/** `strtol(…, 16)` 认的位（含小写 a-f，虽然外层那道 `A-Z` 判据先把小写挡在外面了）。 */
+function uriHexDigit(c: number): number {
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
+  if (c >= 0x61 && c <= 0x66) return c - 0x61 + 10;
+  return -1;
+}
+
+/** 引擎那道判据：`is_digit(ord) || is_ascii_upper_case(ord)` —— 大写字母全过，但 `G`..`Z` 到 `strtol` 那里就不是 hex 位了。 */
+function uriHexOk(c: number): boolean {
+  return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);
 }
 
 const C_ESCAPES = new Map<number, string>([
