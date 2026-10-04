@@ -288,6 +288,14 @@
 - **同一批还顺手把 `convert` / `type_convert` 的标量表量全了（S220）**：14 格对上（`"abc"` 转 bool 是 **true**、`null` 转 String 是六字符的 `"<null>"`、`"7abc"` 转 int 是 7、空字典打印 `{  }`），中止整支脚本的那格是 `convert([], TYPE_INT)`，报的却是「utility function "convert()" 不存在」—— 同一份文件前面十格 `convert()` 都跑通，所以那句拒在哪一层没定，数组转标量这条线单独量过之前不写进实现。
 - **门**：本轮只动文档与 `tmp/` 探头，代码与语料未变，门的读数与上一提交（`uri_decode`）一字一样：compile 160/229 + 守卫 8/8、ir 229/229、sema 229/229、ops 1452/0、diff 152/152 逐字节、typecheck 无 `error TS`、pkgmodes 失败 0、treeface 17/0、scriptc 代表集 10/10、cli-native 22/0。
 
+### 1.29 `var_to_str`：量到一条会让「复用 print」变成静默错的分岔（2026-10-04，§6 第 17 条②续，本轮零代码）
+
+- **为什么单独一节**：这一格的价值不在实现，而在**拦下一个看起来最省事的错做法**。`var_to_str` 最自然的写法是复用 `strFloat` / `show`，实测却分家：`print(1e20)` 给 `100000000000000000000.0`，`var_to_str(1e20)` 给 `1e+20`；`var_to_str(1e14)` 还是定点、`1e15` 就换指数式。我们的 `strFloat` 与 print 一字一样，所以照抄下去编译得过、跑得出结果，**只有大数量级的数字会静默错** —— 正是 §1.12 之后一直在防的那类。
+- **第二条不好抄的**：字典的键在 `var_to_str` 里**要排序**（类型等级 `null < bool < int < float < String < StringName`，同级再按值），print 却是插入序单行式。`{1, 2.5, 0.5}` 给 `1、0.5、2.5` 说明「按值排」不够，等级在先；`{"B","a","A"}` 给码点序，不是不分大小写。
+- **可以照抄的部分也量清了**：nil 是 `null`、字符串只转义 `"` 与 `\`（制表与换行按原字符）、数组单行、`Callable()` / `Signal()` 可复现、值类型与打包数组给构造式且**打包数组摊平**、打包元素里的整数值不带 `.0` 而标量带、空容器是紧凑式。全在 S221。
+- **本轮代码一行没加**：中途写进去的 `varToStr` 已整块撤回（`git checkout` 掉那 110 行），因为浮点那两条界的边角、嵌套容器的深度闸门、次正规数都还没量 —— 按红线「没依据的不准写进实现」，半条式子的实现比不写更贵。`var_to_str` / `str_to_var` / `convert` / `type_convert` 继续在 `GLOBAL_TODO_FUNCTIONS` 抛 `[emit-builtin]`。
+- **门**：只动文档与 `tmp/` 探头，读数与 `uri_decode` 那一轮一字一样（compile 160/229 + 守卫 8/8、ir/sema 229/229、ops 1452/0、diff 152/152 逐字节、typecheck 干净、pkgmodes 0、treeface 17/0、scriptc 10/10、cli-native 22/0）。
+
 ---
 
 ## 2. 当前任务与待办
