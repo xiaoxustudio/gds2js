@@ -76,6 +76,8 @@ gds2js export         <entry.gd>    # 打成 Node 独立可执行文件（SEA）
 
 改文件反复试的小循环用 `gds2js run <f.gd> --watch`：进程不退出，runtime 只装载一次，实测「改文件 → 看到程序的新输出」约 **290 ms**，其中 250 ms 轮询 + 80 ms 去抖是设计上限（`fs.watch` 在静态目标没有 lowering，所以走摘要轮询），编译与执行只占剩下的几十毫秒以内。
 
+大工程的 `check-project` / `build-project` 走 **IR 缓存**（按源码内容 + 编译器内容戳寻址，落在系统临时目录，不进工程目录；改编译器立刻整体失效）。600 模块实测 `check-project` 快 **17%**（|t|=10.7）。`run-project` 不吃这个收益——它的三秒里约三分之二花在 Node 逐份装载产物上（601 份 `.mts` 888 ms vs 打成单文件 95 ms），那一格还没做。开关：`GDS2JS_IR_CACHE=0` 绕过，`GDS2JS_IR_CACHE_DIR` 指目录；静态出货 exe 里缓存默认透传（岛上没有 `node:crypto`）。
+
 ## 产物的运行时打包模式（`--runtime-mode`）
 
 编译产物默认 `import "gds2js/runtime"` / `"gds2js/host"`。三种模式决定产物运行时**如何拿到 gds2js 运行时**：

@@ -65,6 +65,7 @@ console.log(`复制了 ${pkgFiles.length} 份包源码 → ${SCRATCH}`);
  *    原生 exe 里这四样都不存在，所以同名换实现，其余源码一行不改。 */
 const SEAMS = [
   ["packages/compiler/src/parse/parser.native.ts", "packages/compiler/src/parse/parser.ts"],
+  ["packages/compiler/src/compile/ir-cache.native.ts", "packages/compiler/src/compile/ir-cache.ts"],
   ["packages/gds2js/src/bundle.native.ts", "packages/gds2js/src/bundle.ts"],
   ["packages/gds2js/src/exec.native.ts", "packages/gds2js/src/exec.ts"],
   ["packages/compiler/src/home.native.ts", "packages/compiler/src/home.ts"],

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { cachedLower } from "./ir-cache";
 import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
 import type { RawSourceMap } from "../emit/sourcemap";
 import type { Diagnostic } from "../lower/analyze";
@@ -221,7 +222,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       throw new UnsupportedError("missing-file", `找不到脚本文件：${resPath}（${absPath}）`);
     }
     const src = readFileSync(absPath, "utf8");
-    const module = lower(await parseSource(src));
+    const module = await cachedLower(src, async () => lower(await parseSource(src)));
     const l: Loaded = {
       resPath,
       absPath,
