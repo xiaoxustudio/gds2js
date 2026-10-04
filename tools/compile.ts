@@ -2,6 +2,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { analyze } from "@gds2js/compiler/lower/analyze";
+import { GLOBAL_TODO_FUNCTIONS } from "@gds2js/compiler/lower/globals";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
@@ -81,6 +82,24 @@ console.log(`  语义分析拦下（预期报错用例） ${rejected.length}`);
 console.log(`  emitter 不支持 ${unsupported.length}`);
 console.log(`  pack codec 口径不一致 ${packCodecMismatch.length}（文本 regex vs IR 标志，应为 0）`);
 console.log(`  自兜底缺失 ${runFallbackMissing.length}（有 autoRun 尾巴却没 reportRunFailure，应为 0）`);
+
+/** 全局拒答清单：清单上的名字必须真的在发射期抛 emit-builtin —— 实现了却忘了从清单划走，就是清单在烂。 */
+{
+  const stale: string[] = [];
+  for (const name of GLOBAL_TODO_FUNCTIONS) {
+    const src = `extends SceneTree\n\nfunc _initialize():\n\tprint(${name}())\n\tquit()\n`;
+    let code = "";
+    try {
+      emitModule(lower(await parseSource(src)), GEN_EMIT_OPTS);
+      code = "居然编得过";
+    } catch (e) {
+      code = e instanceof UnsupportedError ? ((e as { code?: string }).code ?? "无码") : "非 UnsupportedError";
+    }
+    if (code !== "emit-builtin") stale.push(`${name}:${code}`);
+  }
+  console.log(`  全局拒答清单失效 ${stale.length}（应为 0）${stale.length > 0 ? "：" + stale.join(", ") : ""}`);
+  if (stale.length > 0) process.exitCode = 1;
+}
 if (unsupported.length > 0) {
   console.log("\nemitter 缺口：");
   for (const u of unsupported) console.log(`  ${u.id.padEnd(30)} ${u.msg}`);

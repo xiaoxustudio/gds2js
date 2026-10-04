@@ -1,6 +1,31 @@
 /** GDScript 的全局常量（`PI` / `TAU` / `INF` / `NAN` 与 `CONNECT_*`）：kind 是它的类型归类，value 是发射用的表达式文本。 */
 export type GlobalConst = { kind: "float" | "int"; value: string };
 
+/**
+ * 实测「Godot 4.6.3 有这个名字、能过解析，但我们还没实现」的全局函数（一支脚本一个名字量出来的，
+ * 不存在的会给 `Function "x()" not found in base self.`，那批不在这里）。
+ * 随机数一族不进 `test:diff`：同一个 seed 的序列要复刻得先逆引擎的 PCG；`weakref` / `instance_from_id`
+ * / `get_stack` 的打印带指针号，属「复现不了的打印」那一族。
+ */
+export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
+  "var_to_str",
+  "str_to_var",
+  "type_convert",
+  "convert",
+  "weakref",
+  "instance_from_id",
+  "get_stack",
+  "print_stack",
+  "seed",
+  "randomize",
+  "randi",
+  "randf",
+  "randi_range",
+  "randf_range",
+  "randfn",
+]);
+
+
 export const GLOBAL_CONSTANTS: Readonly<Record<string, GlobalConst>> = Object.freeze({
   // typeof 3（float）
   PI: { kind: "float", value: "3.141592653589793" },

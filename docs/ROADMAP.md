@@ -129,6 +129,16 @@
 
 ---
 
+### 1.7 全局函数族（2026-10-04，把抄来的拒答清单换成量出来的）
+
+- **readings**：compile **158/227**（新增一格「全局拒答清单失效 0」）、ir **227/227**、sema **227/227**（误报/漏报/崩溃 0）、ops 1425/0、diff **150/150 逐字节**（静默/崩溃/未实现 0）、treeface 17/0、`test:scriptc 236` 出货一致、typecheck 3/3。
+- **落的一族**：`sign(i/f)` `floor(f/i)` `ceil(f/i)` `round(f/i)` `fmod` `posmod` `fposmod` `wrapi` `wrapf` `lerp(f)` `inverse_lerp` `move_toward` `snapped(f/i)` `deg_to_rad` `rad_to_deg` `angle_difference` `is_equal_approx` `is_zero_approx` `is_nan` `is_inf` `is_finite` `min/max(i/f)` `clamp(f/i)` `smoothstep` `ease` `cubic_interpolate` `remap` `exp` `log` `pow` + 修好的 `abs`。语料 `236-global-math-family` 251 行逐字节，类型规则全记在 S209。
+- **量出来的一条静默错**：`abs(-3)` 在 Godot 是 **int 3**，我们恒给 float —— 之前没有一条用例钉它，所以没人看见。（`sqrt(1e300)` 那 150 位数字也顺手证明了浮点打印口径。）
+- **拒答清单原来是抄的**：`BUILTIN_TODO` 里五条名字全是死的（`Vector2i/Vector3/Vector3i` 早走 `BUILTIN` 构造表、`load/preload` 各有分支，实测三个构造器都跑得出来）。现在这份清单换成**实测存在、我们未实现**的 15 个全局函数（转换族 + 随机族 + `weakref`/`instance_from_id`/`get_stack`/`print_stack`），并由 `test:compile` 新增的那格逐个现编现验：**清单上的名字必须真的抛 `emit-builtin`**，实现了忘了划走就会红。
+- **试过又撤回的一条**：想让「认不出归属的全局调用」在发射期响亮拒（今天它是 `this.wrapi(...)` → 裸 JS `TypeError`）。实测这条守卫打挂 156 个用例 —— `quit()` 属于宿主基类、`helper()` 属于内部类/局部，分析层的 `scope.has` 又不涵盖模块级函数。要做就得先有一张跨作用域成员表，记在 §6 第 17 条①，这轮不硬上。
+
+---
+
 ## 2. 当前任务与待办
 
 **决策 / 发布类**

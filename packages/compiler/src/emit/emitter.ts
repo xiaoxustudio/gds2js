@@ -1,5 +1,5 @@
 import { staticMemberFn } from "../lower/ir";
-import { GLOBAL_CONSTANTS, isGlobalConst } from "../lower/globals";
+import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
@@ -111,16 +111,65 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
+  sign: (a) => `rt.gSign(${a[0]})`,
+  signi: (a) => `rt.gSignI(${a[0]})`,
+  signf: (a) => `rt.gSignF(${a[0]})`,
+  floor: (a) => `rt.gFloor(${a[0]}, "auto")`,
+  floorf: (a) => `rt.gFloor(${a[0]}, "float")`,
+  floori: (a) => `rt.gFloor(${a[0]}, "int")`,
+  ceil: (a) => `rt.gCeil(${a[0]}, "auto")`,
+  ceilf: (a) => `rt.gCeil(${a[0]}, "float")`,
+  ceili: (a) => `rt.gCeil(${a[0]}, "int")`,
+  round: (a) => `rt.gRound(${a[0]}, "auto")`,
+  roundf: (a) => `rt.gRound(${a[0]}, "float")`,
+  roundi: (a) => `rt.gRound(${a[0]}, "int")`,
+  posmod: (a) => `rt.gPosmod(${a[0]}, ${a[1]})`,
+  fposmod: (a) => `rt.gFposmod(${a[0]}, ${a[1]})`,
+  fmod: (a) => `rt.gFmod(${a[0]}, ${a[1]})`,
+  wrapi: (a) => `rt.gWrap(${a[0]}, ${a[1]}, ${a[2]}, true)`,
+  wrapf: (a) => `rt.gWrap(${a[0]}, ${a[1]}, ${a[2]}, false)`,
+  lerp: (a) => `rt.gLerp(${a[0]}, ${a[1]}, ${a[2]})`,
+  lerpf: (a) => `rt.gLerp(${a[0]}, ${a[1]}, ${a[2]})`,
+  inverse_lerp: (a) => `rt.gInverseLerp(${a[0]}, ${a[1]}, ${a[2]})`,
+  move_toward: (a) => `rt.gMoveToward(${a[0]}, ${a[1]}, ${a[2]})`,
+  snapped: (a) => `rt.gSnapped(${a[0]}, ${a[1]})`,
+  snappedf: (a) => `rt.gSnappedF(${a[0]}, ${a[1]})`,
+  snappedi: (a) => `rt.gSnappedI(${a[0]}, ${a[1]})`,
+  deg_to_rad: (a) => `rt.gDegToRad(${a[0]})`,
+  rad_to_deg: (a) => `rt.gRadToDeg(${a[0]})`,
+  angle_difference: (a) => `rt.gAngleDifference(${a[0]}, ${a[1]})`,
+  is_equal_approx: (a) => `rt.gIsEqualApprox(${a[0]}, ${a[1]})`,
+  is_zero_approx: (a) => `rt.gIsZeroApprox(${a[0]})`,
+  is_nan: (a) => `rt.gIsNan(${a[0]})`,
+  is_inf: (a) => `rt.gIsInf(${a[0]})`,
+  is_finite: (a) => `rt.gIsFinite(${a[0]})`,
+  min: (a) => `rt.gMin(${a[0]}, ${a[1]})`,
+  max: (a) => `rt.gMax(${a[0]}, ${a[1]})`,
+  mini: (a) => `rt.gMinI(${a[0]}, ${a[1]})`,
+  maxi: (a) => `rt.gMaxI(${a[0]}, ${a[1]})`,
+  minf: (a) => `rt.gMinF(${a[0]}, ${a[1]})`,
+  maxf: (a) => `rt.gMaxF(${a[0]}, ${a[1]})`,
+  clamp: (a) => `rt.gClamp(${a[0]}, ${a[1]}, ${a[2]}, "auto")`,
+  clampf: (a) => `rt.gClamp(${a[0]}, ${a[1]}, ${a[2]}, "float")`,
+  clampi: (a) => `rt.gClamp(${a[0]}, ${a[1]}, ${a[2]}, "int")`,
+  smoothstep: (a) => `rt.gSmoothstep(${a[0]}, ${a[1]}, ${a[2]})`,
+  ease: (a) => `rt.gEase(${a[0]}, ${a[1]})`,
+  cubic_interpolate: (a) => `rt.gCubic(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  remap: (a) => `rt.gRemap(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  exp: (a) => `rt.gExp(${a[0]})`,
+  log: (a) => `rt.gLog(${a[0]})`,
+  pow: (a) => `rt.gPow(${a[0]}, ${a[1]})`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
-const BUILTIN_TODO = new Set([
-  "Vector2i",
-  "Vector3",
-  "Vector3i",
-  "load",
-  "preload",
-]);
+/**
+ * 「Godot 4.6.3 有、我们这一层还没实现」的全局函数：一支一支脚本量出来的（不存在的是
+ * `Function "x()" not found in base self.`，这些是能过解析、我们得响亮拒的那一批）。
+ */
+const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
+
+/** 分析层拿它区分「Godot 也不认的名字」与「Godot 认、我们拒的名字」：两张表都是实测来的，摸不得。 */
+export const GLOBAL_IMPLEMENTED: Set<string> = new Set([...Object.keys(BUILTIN), "print", "load", "preload"]);
 
 /** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
