@@ -9,6 +9,11 @@ import { emitOptsFor } from "./build";
 /** 临时产物的名字前缀（跑完即删；留着是给 --keep 看生成代码用的）。 */
 export const RUN_TMP = ".gds2js-run-";
 
+// `--watch` 是在同一个进程里重跑命令的，而 Node 按解析后的 URL 缓存 ES 模块 ——
+// 名字只带 pid 的话第二次 import 拿到的是缓存模块，脚本**不会再执行**（实测只多一行「重新运行」）。
+let runSeq = 0;
+const runTag = (): string => `${RUN_TMP}${process.pid}-${++runSeq}`;
+
 export async function runSingle(ctx: Ctx): Promise<boolean> {
   if (ctx.runtimeMode === "local") {
     console.error(`${ctx.input}:  error  run 不支持 --runtime-mode local（会往源目录旁挂 standalone；要旁挂请先 build）`);
@@ -21,7 +26,7 @@ export async function runSingle(ctx: Ctx): Promise<boolean> {
   }
   if (!printDiags(loaded.diags)) return false;
 
-  const tmpPath = join(dirname(ctx.input), `${RUN_TMP}${process.pid}.mts`);
+  const tmpPath = join(dirname(ctx.input), `${runTag()}.mts`);
   try {
     writeFileSync(tmpPath, emitModule(loaded.ir, emitOptsFor({ ...ctx, run: true }, tmpPath)), "utf8");
   } catch (e) {
@@ -49,7 +54,7 @@ export async function runProject(ctx: Ctx): Promise<boolean> {
     console.error(`${ctx.input}:  error  run-project 只支持 --runtime-mode import（local/single 请先 build-project 再 node 产物）`);
     return false;
   }
-  const outDir = join(ctx.resRoot, `${RUN_TMP}${process.pid}`);
+  const outDir = join(ctx.resRoot, runTag());
   let result: CompileResult;
   try {
     result = await compileProject({

@@ -345,6 +345,29 @@ console.log("⑨ --watch：改 .gd 要真的重跑");
   else ok("监听起来了，改 .gd 触发了一次重新运行");
 }
 
+/* 9b) `run --watch`：光看「重新运行」那行不够 —— 重跑若写同名临时产物，Node 按 URL 缓存 ES 模块，
+ * 命令重跑了但脚本不会再执行（这个洞真出现过）。这一格要的是**程序自己的第二次、不同输出的**。 */
+console.log("⑨b run --watch：改 .gd 要真的再执行一次脚本");
+{
+  const dir = join(WD, "watch-run");
+  mkdirSync(dir, { recursive: true });
+  const gd = join(dir, "main.gd");
+  const script = (tag) => `extends SceneTree\n\nfunc _initialize():\n\tprint("${tag}")\n\tquit()\n`;
+  writeFileSync(gd, script("watch-a"), "utf8");
+  const child = spawn(EXE, ["run", gd, "--watch"], { cwd: ROOT, windowsHide: true });
+  let buf = "";
+  child.stdout.on("data", (c) => { buf += String(c); });
+  child.stderr.on("data", (c) => { buf += String(c); });
+  const sawFirst = await until(() => buf.includes("watch-a"), 30000);
+  if (sawFirst) writeFileSync(gd, script("watch-b"), "utf8");
+  const sawSecond = sawFirst && (await until(() => buf.includes("watch-b"), 30000));
+  child.kill();
+  await until(() => child.exitCode !== null, 5000);
+  if (!sawFirst) fail(`run --watch 第一次没执行（30 秒内没见 watch-a）：${buf.slice(0, 200)}`);
+  else if (!sawSecond) fail(`改了 .gd 之后脚本没有再执行一次（命令重跑了、程序没重跑 —— 产物名撞了模块缓存？）：${buf.slice(-240)}`);
+  else ok("run --watch 改文件后程序真的又跑了一遍");
+}
+
 console.log("");
 console.log(`原生 CLI 等价性门：通过 ${String(okCount)} 项，失败 ${String(bad.length)} 项`);
 for (const b of bad) console.log(`  红：${b}`);
