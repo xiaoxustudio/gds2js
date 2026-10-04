@@ -7,6 +7,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 import { KERNELS, tableHeader, tableRow, type BenchRow, type Kernel } from "./bench-kernels";
 
 const OUT = resolve("bench/.out");
+const ROUNDS = Math.max(1, Number(process.env.GDS2JS_BENCH_ROUNDS) || 3);
 
 async function compileKernel(k: Kernel): Promise<string> {
   const src = `class_name K\n\n${k.helpers ?? ""}func bench():${k.body}`;
@@ -32,11 +33,16 @@ async function main(): Promise<void> {
     const inst = new mod.K();
     inst.bench();
     let checksum: unknown = null;
-    const t0 = performance.now();
-    for (let r = 0; r < k.reps; r++) checksum = inst.bench().v;
-    rows.push({ name: k.name, ms: (performance.now() - t0) / k.reps, checksum: String(checksum) });
+    // 单次读数在这台机器上能飘 ±30%，所以一轮里再跑 R 遍取最小值（GDS2JS_BENCH_ROUNDS）。
+    let best = Number.POSITIVE_INFINITY;
+    for (let q = 0; q < ROUNDS; q++) {
+      const t0 = performance.now();
+      for (let r = 0; r < k.reps; r++) checksum = inst.bench().v;
+      best = Math.min(best, (performance.now() - t0) / k.reps);
+    }
+    rows.push({ name: k.name, ms: best, checksum: String(checksum) });
   }
-  console.log(tableHeader("gds2js benchmark —— 基线（emitter 全程 ops.* 动态路径 + Variant 装箱）\n").join("\n"));
+  console.log(tableHeader(`gds2js benchmark —— 基线（emitter 全程 ops.* 动态路径 + Variant 装箱）· 每个 kernel ${ROUNDS} 轮取最小\n`).join("\n"));
   for (const r of rows) console.log(tableRow(r));
   console.log(`---------------------  ---------`);
   console.log(`${"合计".padEnd(20)} ${rows.reduce((a, r) => a + r.ms, 0).toFixed(2).padStart(8)}`);

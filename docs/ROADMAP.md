@@ -162,6 +162,13 @@
 
 - **readings**：compile **159/228**、ir **228/228**、sema **228/228**（误报/漏报/崩溃 0）、ops **1428/0**（098 那三格「还没逆出来」的拒答断言换成实测数）、diff **151/151 逐字节**（新增语料 `237-hash-chain` 35 行）、`test:scriptc 237` 出货一致、`pnpm typecheck` 无 `error TS`。
 - **出货那一面复跑过**（改的是 runtime 源码，不只是门）：`test:pkgmodes` 失败 0、`test:cli-native` **20/0**、`test:treeface` **17/0**、代表集 **10/10 出货一致**；`test:export` **ok 10 / 环境记账 3 / FAIL 0** —— 记账那三格都是 `node/*`（SEA 要 Node ≥25.7，本机 nvm 里最高只有 24.8.0），与这轮改动无关。
+
+### 1.12 5.5 的第一次优化尝试：仪器先于优化（2026-10-04）
+
+- **两次改动都量不出收益，都已回退**：① `ops.i64` 给 int×int 加 number 短路（避开 `intToBig`）—— 5 轮对 5 轮、每个 kernel 取最小值：**76.43 → 76.94 ms，−0.7%**；② `normInt` 先看是否落在安全整数区再决定要不要做 bigint 取模（避开 `wrap64`）—— 交错配对 12 轮：**|t| = 0.65，42 组里 14 组更快**。两份都写完了、`test:ops` 1428/0、`test:diff` 151/151 逐字节、005/006/055 那几个 int64 溢出例还过了 scriptc 出货门 —— 但**没有收益就不进主干**，回退。
+- **真正的发现是仪器**：拿**同一份代码**自对照（base vs base）跑交错配对，读数照样飘 —— 单轮总时 82→281 ms，四组配对差 **+23.5% / +2.2% / −1.1% / +14.9%**，工具对「零改动」报出 **−5.4%、|t| = 1.46**。也就是说这台机器上，小于两成的效应本来就无法证明，之前 §1.10 那 5.2× 之所以敢写，是因为效应本身有五倍。
+- **落下的仪器**：`pnpm bench` 现在每 kernel 连跑 `GDS2JS_BENCH_ROUNDS`（默认 3）轮取最小值，同窗口内散布压到 ~1.4%；新增 `pnpm bench:ab --rounds=N <仓内文件>=<候选文件>` 做交替配对，自己把 base 与候选来回写、跑完还原，打印配对差均值 ± SE 与 |t|，并顺手校验各轮 checksum 一字一致。**以后 5.5 的「收益量化」这一栏只认 `bench:ab` 的 |t| ≥ 2，不认两次独立运行。**
+- **热点复测（这次仪器对了，结论也翻了一个）**：400 遍 `array-write` 自采样里 `writeIdx` 829 ms、`normInt` 677 ms、`mul` 674 ms、`wrapValue` 658 ms、`index` 629 ms —— `intToBig` 根本不在榜上，所以①那条假设从一开始就是错的。两格慢 kernel 的下一个人该先量 `ops.writeIdx` / `wrapValue` 这两处，而不是算术轨。
 - **式子的出处**：拟合到此为止 —— 上一小节那 21 个公开 murmur/fmix 变体全灭之后，在本机 `E:/编程练习/godot` 找到一份 **4.3.0 引擎源码树**，直接读 `core/templates/hashfuncs.h` 与 `core/variant/{array,dictionary}.cpp`。`hash_one_uint64` 原来是 **SuperFastHash 的 patter**（`(~v)+(v<<18)`、`*21`、`+ (v<<6)`、异或移位收尾，全程 64 位回绕），不是 murmur；murmur 那一轮的默认种子是 `0x7F07C65`。4.6.3 的裁判二进制对 4.3 的式子逐条点头 —— 这条链跨版本没动。
 - **实现与对撞**：`variantHashNumber` 一处真源，全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 都走它；22 个定住的数在真实运行时代码路径上全中，容器那格的关键是**起手把类型标签折进种子**（Array=28 / Dictionary=27，用的是 Godot 的 `Variant.Type`，不是我们内部的 Tag 编号），字典再按插入序把键、值交替折。`hash(0.0)==hash(-0.0)` 实测确认了引擎那句 ±0 归一。
 - **仍然拒的两格**（没测就不写）：`hash(NaN)` —— 引擎先换成 C++ `NAN` 常量的位型，那 8 个字节我们没实测；对象 / Vector2 / Color 等 —— 引擎走指针号，天生不可复现。深层嵌套也照实递归：引擎的 `recursive_hash` 越过 `MAX_RECURSION` 会 ERR_PRINT 后直接给 0，这条没测过就先进 §6 的待补测（S212 记着）。

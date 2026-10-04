@@ -135,6 +135,7 @@ pnpm test:pkgmodes   # local/single 两模式的回归：逐用例 node 跑对�
 pnpm test:export     # export 的回归：node(SEA+VFS) / scriptc 两支各真打一个 exe（stdout 逐字节 + 抛错须非 0 退出 + 门禁该响的响 + 中间件清干净）；要先前 pnpm build
 pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字节对 Godot golden（默认跑代表集；--all 全量、--project 只跑 9 个项目树用例、--jobs=N 控并发）
 pnpm regen:case-table # 再生成 runtime 的 case-table.ts（探头 000-probe-cs-* 现搭现弃不入库；只改表请走它）
-pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上）
+pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上；每 kernel 连跑 3 轮取最小，GDS2JS_BENCH_ROUNDS 可调）
+pnpm bench:ab        # 交替配对 A/B：pnpm bench:ab --rounds=6 <仓内文件>=<候选文件>，报配对差 ±SE 与 |t|（|t|<2 就是量不出来）
 pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
 ```

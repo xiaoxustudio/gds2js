@@ -29,7 +29,8 @@
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "dev": "tsx packages/gds2js/src/cli.ts",
-    "watch": "pnpm --filter gds2js watch"
+    "watch": "pnpm --filter gds2js watch",
+    "bench:ab": "node tools/bench-ab.ts"
   },
   "devDependencies": {
     "@gds2js/compiler": "workspace:*",
