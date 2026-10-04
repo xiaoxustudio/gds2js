@@ -98,6 +98,12 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
     }
     return `rt.V.str(rt.varToStr(${a[0]}))`;
   },
+  str_to_var: (a) => {
+    if (a.length !== 1) {
+      throw new UnsupportedError("str-to-var-arity", `str_to_var() 只发单实参形状（收到 ${a.length} 个）`);
+    }
+    return `rt.strToVar(${a[0]})`;
+  },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,

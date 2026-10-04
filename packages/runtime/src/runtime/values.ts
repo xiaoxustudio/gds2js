@@ -1,14 +1,16 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { hexUpper } from "./numstr";
+import { hexUpper, strToInt } from "./numstr";
 import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
-import { GVector2, asVec2, vecCmp } from "./vector2";
+import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
 import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
-import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode } from "./packed";
+import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode, toElem } from "./packed";
+import type { PackElem, PackKind } from "./packed";
+import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import type { GdIdentified } from "./identity";
@@ -1463,6 +1465,303 @@ export function varToStr(v: Variant): string {
     default:
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的类型 ${tagName(v.t)}`);
   }
+}
+
+const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+/** `PackedXArray(...)` 那七支：名字 → pack 形状，实测的 arity 与元素形状一支一张。 */
+const SV_PACK_CTORS: Record<string, PackKind> = {
+  PackedByteArray: "byte",
+  PackedInt32Array: "int32",
+  PackedInt64Array: "int64",
+  PackedFloat32Array: "float32",
+  PackedFloat64Array: "float64",
+  PackedStringArray: "string",
+  PackedVector2Array: "vector2",
+};
+/** 引擎给得出值、我们这边没有对应形状的（实测 `Rect2(1, 2, 3, 4)` 是 typeof 7、`Quaternion(1, 2, 3, 4)` 是 15）：宁可响亮拒，也不发一个 null 出去。 */
+const SV_UNSHIPPED_CTORS = new Set(["Rect2", "Quaternion", "PackedVector3Array", "PackedColorArray"]);
+
+function svIsDigit(c: string): boolean {
+  return c >= "0" && c <= "9";
+}
+
+function svIsIdentStart(c: string): boolean {
+  return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_";
+}
+
+function svHexVal(c: string): number | null {
+  const o = c.charCodeAt(0);
+  if (o >= 0x30 && o <= 0x39) return o - 0x30;
+  if (o >= 0x41 && o <= 0x46) return o - 0x41 + 10;
+  if (o >= 0x61 && o <= 0x66) return o - 0x61 + 10;
+  return null;
+}
+
+/** 构造参数只量过数字：`Vector2("1", 2)` 与 `Vector2(Vector2(1, 2), 3)` 实测都是 null。 */
+function svNumArg(v: Variant | null): Variant | null {
+  if (v === null || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) return null;
+  return v;
+}
+
+/**
+ * `str_to_var()`：读侧的语法一支一支量过（S231），与 {@link varToStr} 是两条通道，别互相抄。
+ * 顶部只认一个值，后面跟着什么都不看（`1 2` → 1、`Vector2(1, 2) 3` → Vector2）；认不出的写法给 null
+ * —— 裸词、大写 `INF`、`'单引号'`、`(1, 2)`、`{: 1}`、容器里缺逗号、`Vector2()` 的 arity 不对，实测全是 null。
+ * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支），或者量到六位数却没量越界的 `\U` —— 响亮拒，不猜。
+ */
+export function strToVar(v: Variant): Variant {
+  if (v.t !== Tag.STRING) {
+    throw new UnsupportedError("str-to-var-arg", `str_to_var() 收到 ${tagName(v.t)}：只量过 String 那一支，其余形状不猜`);
+  }
+  const cs = codepoints(v.v as string);
+  let i = 0;
+
+  const ws = (): void => {
+    while (i < cs.length) {
+      const c = cs[i] as string;
+      if (c === " " || c === "\t" || c === "\n" || c === "\r") i++;
+      else break;
+    }
+  };
+  const at = (c: string): boolean => cs[i] === c;
+  const eat = (c: string): boolean => {
+    if (cs[i] !== c) return false;
+    i++;
+    return true;
+  };
+
+  /** 数字一段：`.` 与 `e` 只在实测到的形状里出现，`1e` / `1e+` / `1.` 都算 float 1.0，`1.5.2` 停在第二个点。 */
+  const number = (): Variant | null => {
+    const start = i;
+    let neg = false;
+    if (at("-")) {
+      neg = true;
+      i++;
+      if (i >= cs.length || !svIsDigit(cs[i] as string)) {
+        // `-` 后面跟的不是数字也不是 `inf` 就整段作废：`-`、`- 7`、`-nan` 三格实测都是 null
+        if (matchWord("inf")) return V.float(-Infinity);
+        i = start;
+        return null;
+      }
+    }
+    let text = neg ? "-" : "";
+    while (i < cs.length && svIsDigit(cs[i] as string)) text += cs[i++];
+    if (text.length === (neg ? 1 : 0)) {
+      i = start;
+      return null;
+    }
+    let isFloat = false;
+    let frac = "";
+    if (at(".")) {
+      isFloat = true;
+      i++;
+      while (i < cs.length && svIsDigit(cs[i] as string)) frac += cs[i++];
+    }
+    let exp = "";
+    if (at("e") || at("E")) {
+      isFloat = true;
+      i++;
+      let expSign = "";
+      if (eat("-")) expSign = "-";
+      else eat("+");
+      let digits = "";
+      while (i < cs.length && svIsDigit(cs[i] as string)) digits += cs[i++];
+      if (digits.length > 0) exp = `e${expSign}${digits}`;
+    }
+    if (!isFloat) return V.int(strToInt(text));
+    return V.float(parseGdDouble(`${text}${frac.length > 0 ? `.${frac}` : ""}${exp}`));
+  };
+
+  /** 字符串体：`"` 与 `\` 之外只有量过的那十个转义；`\a` `\v` `\q` `\x` `\0` 都是「去掉反斜杠留原字符」。 */
+  const string = (asName: boolean): Variant | null => {
+    i++;
+    let out = "";
+    for (;;) {
+      if (i >= cs.length) return null;
+      const c = cs[i++] as string;
+      if (c === '"') break;
+      if (c !== "\\") {
+        out += c;
+        continue;
+      }
+      const e = cs[i++];
+      if (e === undefined) return null;
+      switch (e) {
+        case "n":
+          out += "\n";
+          break;
+        case "t":
+          out += "\t";
+          break;
+        case "r":
+          out += "\r";
+          break;
+        case "b":
+          out += "\b";
+          break;
+        case "f":
+          out += "\f";
+          break;
+        case '"':
+        case "'":
+        case "\\":
+        case "/":
+          out += e;
+          break;
+        case "u": {
+          let val = 0;
+          for (let k = 0; k < 4; k++) {
+            if (i >= cs.length) return null;
+            const h = svHexVal(cs[i] as string);
+            if (h === null) return null;
+            val = val * 16 + h;
+            i++;
+          }
+          if (val >= 0xd800 && val <= 0xdfff) return null;
+          out += String.fromCodePoint(val);
+          break;
+        }
+        case "U":
+          throw new UnsupportedError("str-to-var-shape", `str_to_var() 的 \\U 实测吃掉六个十六进制位（"\\U0001F600" 给 U+01F6 再留 "00"），越界与代理区的处理没量过，先不猜`);
+        default:
+          out += e;
+      }
+    }
+    return asName ? V.stringName(out) : V.str(out);
+  };
+
+  const matchWord = (word: string): boolean => {
+    for (let k = 0; k < word.length; k++) {
+      if (cs[i + k] !== word[k]) return false;
+    }
+    const after = cs[i + word.length];
+    if (after !== undefined && (svIsIdentStart(after) || svIsDigit(after))) return false;
+    i += word.length;
+    return true;
+  };
+
+  const array = (): Variant | null => {
+    i++;
+    const g = GArray.of([]);
+    ws();
+    if (eat("]")) return V.array(g);
+    for (;;) {
+      const item = value();
+      if (item === null) return null;
+      g.raw().push(item);
+      ws();
+      if (eat(",")) {
+        ws();
+        if (eat("]")) return V.array(g);
+        continue;
+      }
+      if (eat("]")) return V.array(g);
+      return null;
+    }
+  };
+
+  const dict = (): Variant | null => {
+    i++;
+    const d = new GDict();
+    ws();
+    if (eat("}")) return V.dict(d);
+    for (;;) {
+      const k = value();
+      if (k === null) return null;
+      ws();
+      if (!eat(":")) return null;
+      const val = value();
+      if (val === null) return null;
+      d.set(k, val);
+      ws();
+      if (eat(",")) {
+        ws();
+        if (eat("}")) return V.dict(d);
+        continue;
+      }
+      if (eat("}")) return V.dict(d);
+      return null;
+    }
+  };
+
+  /** `Name(args)`：arity、元素类型、逗号规则全按实测的那几支；`Vector2 (1, 2)` 的空格是量过能吃的。 */
+  const ctor = (word: string): Variant | null => {
+    if (SV_UNSHIPPED_CTORS.has(word)) {
+      throw new UnsupportedError("str-to-var-type", `str_to_var() 的 ${word}(...) 引擎给得出值（实测 Rect2 是 typeof 7、Quaternion 是 15），我们没这个形状`);
+    }
+    if (!SV_VALUE_CTORS.has(word) && SV_PACK_CTORS[word] === undefined) {
+      throw new UnsupportedError("str-to-var-shape", `str_to_var() 的构造式名字「${word}」没量过：实测只有 NoSuchType 那种引擎不认的给 null，分不清就不猜`);
+    }
+    const kind = SV_PACK_CTORS[word];
+    i++;
+    const args: Variant[] = [];
+    ws();
+    if (!eat(")")) {
+      for (;;) {
+        // 参数形状一支一张：`PackedStringArray("a")` 只吃过串，`PackedStringArray(1)`、`Vector2("1", 2)`、`Vector2(Vector2(1, 2), 3)` 实测全是 null
+        const a = kind === "string" ? (at('"') ? string(false) : null) : svNumArg(number());
+        if (a === null) return null;
+        args.push(a);
+        ws();
+        if (eat(",")) {
+          ws();
+          if (at(")")) return null;
+          continue;
+        }
+        if (eat(")")) break;
+        return null;
+      }
+    }
+    const n = (k: number): number => numVal(args[k] as Variant);
+    if (word === "Vector2") return args.length === 2 ? vector2(n(0), n(1)) : null;
+    if (word === "Vector3") return args.length === 3 ? vector3(n(0), n(1), n(2)) : null;
+    if (word === "Vector2i") return args.length === 2 ? vector2i(Math.trunc(n(0)), Math.trunc(n(1))) : null;
+    if (word === "Vector3i") return args.length === 3 ? vector3i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2))) : null;
+    if (word === "Color") return args.length === 4 ? color(n(0), n(1), n(2), n(3)) : null;
+    const pack = SV_PACK_CTORS[word] as PackKind;
+    if (pack === "vector2") {
+      if (args.length % 2 !== 0) {
+        throw new UnsupportedError("str-to-var-shape", `PackedVector2Array(...) 的奇数参数个数没量过（实测只量了 (1, 2) 这一格）`);
+      }
+      const items: PackElem[] = [];
+      for (let k = 0; k + 1 < args.length; k += 2) items.push(new GVector2(n(k), n(k + 1)));
+      return V.object(new GBytes(items, pack));
+    }
+    return V.object(new GBytes(args.map((a) => toElem(pack, a)), pack));
+  };
+
+  /** null 是「这条写法引擎也解析不出来」，与量过的那批 null 同一形。 */
+  function value(): Variant | null {
+    ws();
+    if (i >= cs.length) return null;
+    const c = cs[i] as string;
+    if (c === "[") return array();
+    if (c === "{") return dict();
+    if (c === '"') return string(false);
+    if (c === "&") {
+      if (cs[i + 1] !== '"') return null;
+      i++;
+      return string(true);
+    }
+    if (c === "-" || svIsDigit(c)) return number();
+    if (!svIsIdentStart(c)) return null;
+    const start = i;
+    let word = "";
+    while (i < cs.length && (svIsIdentStart(cs[i] as string) || svIsDigit(cs[i] as string))) word += cs[i++];
+    if (word === "null") return V.nil();
+    if (word === "true") return V.bool(true);
+    if (word === "false") return V.bool(false);
+    if (word === "inf") return V.float(Infinity);
+    if (word === "inf_neg") return V.float(-Infinity);
+    if (word === "nan") return V.float(NaN);
+    ws();
+    if (at("(")) return ctor(word);
+    i = start;
+    return null;
+  }
+
+  const got = value();
+  return got === null ? V.nil() : got;
 }
 
 const C_ESCAPES = new Map<number, string>([

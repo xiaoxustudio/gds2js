@@ -140,10 +140,13 @@ console.log(`  自兜底缺失 ${runFallbackMissing.length}（有 autoRun 尾巴
 }
 /** `var_to_str()` 的缩进串：4.6.3 收第二个实参，但装字典的数组跟着换行、缩进按深度累加，式子没量出前只在发射期响亮拒。 */
 {
-  const cells: Array<{ name: string; call: string; want: "ok" | "var-to-str-arity" }> = [
-    { name: "单实参", call: "var_to_str(1)", want: "ok" },
-    { name: "带缩进串", call: 'var_to_str(1, "  ")', want: "var-to-str-arity" },
-    { name: "零实参", call: "var_to_str()", want: "var-to-str-arity" },
+  const cells: Array<{ name: string; call: string; want: "ok" | "var-to-str-arity" | "str-to-var-arity" }> = [
+    { name: "var_to_str 单实参", call: "var_to_str(1)", want: "ok" },
+    { name: "var_to_str 带缩进串", call: 'var_to_str(1, "  ")', want: "var-to-str-arity" },
+    { name: "var_to_str 零实参", call: "var_to_str()", want: "var-to-str-arity" },
+    { name: "str_to_var 单实参", call: 'str_to_var("1")', want: "ok" },
+    { name: "str_to_var 零实参", call: "str_to_var()", want: "str-to-var-arity" },
+    { name: "str_to_var 多实参", call: 'str_to_var("1", 2)', want: "str-to-var-arity" },
   ];
   const bad: string[] = [];
   for (const c of cells) {
@@ -156,7 +159,7 @@ console.log(`  自兜底缺失 ${runFallbackMissing.length}（有 autoRun 尾巴
     }
     if (got !== c.want) bad.push(`${c.name}: 期望 ${c.want}，实得 ${got}`);
   }
-  console.log(`  var_to_str 单实参口径 ${cells.length - bad.length}/${cells.length} 格一致（应为 ${cells.length}）${bad.length > 0 ? "：" + bad.join(" | ") : ""}`);
+  console.log(`  转换族单实参口径 ${cells.length - bad.length}/${cells.length} 格一致（应为 ${cells.length}）${bad.length > 0 ? "：" + bad.join(" | ") : ""}`);
   if (bad.length > 0) process.exitCode = 1;
 }
 if (unsupported.length > 0) {

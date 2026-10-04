@@ -308,6 +308,13 @@
 - **两条新账，都没写进实现**：① 4.6.3 的 `var_to_str` 有第二个实参 `indent: String`，而本机 4.3 树 `core/variant/` 里 grep 不到 `indent` —— 又一处「4.3 ≠ 4.6.3」（§1.28 的 `format` 是第一条）；缩进串还会让装字典的数组变成多行，收尾那个 `]` 一会儿顶格一会儿缩两档，式子没排出来。② 串里的 U+0000 在 `to_utf8_buffer()` 那层就变成 `ef bf bd`（`char(0)` 的 `length()` 仍是 1），`c_escape` 同输入同结果 —— 这是**所有打印共用**的 String→UTF8 层，归 §6 新增的第 18 条，不记在 `var_to_str` 头上。
 - **账**：语料 236 加 31 格、ops 加 27 格（1452→1479），`test:compile` 160/229、`emitter 不支持 0`、`全局拒答清单失效 0`、新增「var_to_str 单实参口径 3/3」门格，`test:diff` 逐字节一致 152/152、静默错误 0。下一支照 S214 已有的二十格发 `str_to_var`。
 
+### 1.32 `str_to_var` 的读侧语法量清并发出：155 格与引擎逐格对上，读不懂的地方给 null、没量过的给响亮拒（2026-10-04，§6 第 17 条②、S231）
+
+- **一条规则把 S214 的怪账全清了**：`str_to_var` 顶部**只读一个值，后面跟着的不看**。于是「`0x10` 给 0」「`0b11` 给 0」「`1_000` 给 1」「`1.5.2` 给 1.5」「`1 2` 给 1」不是四条各自古怪的容忍行为，而是同一条读到就停。剩下的量点摊成六支探头（`sv_grammar` / `sv_escapes2` / `sv_more` / `sv_more2` / `sv_last` / `sv_ws`），155 格与判引擎逐格对上的表在 `tmp/sv-check.ts`。
+- **发出去的**：小写 `null` / `true` / `false` / `inf` / `-inf` / `inf_neg` / `nan`；数字带点带指数、int 饱和到 INT64_MAX；字符串的双引号加十个转义（`\n \t \r \b \f \\ \/ \" \'` 与 `\u` 四位十六进制），其余字母是「删掉反斜杠留原字符」（`\a` → `a`、`\x41` → `x41`），代理区与非十六进制的 `\u` 整串作废；`&"名字"`；数组与字典（尾逗号收、缺逗号作废、多行写法照收、重复键后者盖前者）；`Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` 五支值类型（arity 严格、整型那两支截断）与七支 pack 构造式（byte 回绕 300→44、-1→255，float 收 int，串 pack 只收串）。认不出的一律给 null —— 那批二十余格实测全是 null。
+- **拒的三类**：`\U` 量到「吃六个十六进制位」但越界与代理区凑不成式子 → `[str-to-var-shape]`；`Rect2`（typeof 7）/ `Quaternion`（15）/ `PackedVector3Array` / `PackedColorArray` 是引擎给得出值而我们没有的形状 → `[str-to-var-type]`；构造式名字认不出时**不发那个可能是错的 null**（只量过 `NoSuchType(1)` 那一格给 null，「Godot 认识哪些名字」那张表没量）→ `[str-to-var-shape]`。双实参与非 String 实参分别抛 `[str-to-var-arity]` / `[str-to-var-arg]`，前者钉在 `test:compile` 新改的「转换族单实参口径 6/6」。
+- **账**：语料 236 加 43 格、ops 加 30 格（1479→1509）。`test:compile` 160/229、各桶全清、守卫 8/8 与 6/6，`test:diff` 逐字节一致 152/152、静默错误 0、崩溃 0。转换族只剩 `convert` / `type_convert` 两支没合出真源（S214 已量清标量表，卡在数组→标量那一格引擎在运行期拒）。
+
 ---
 
 ## 2. 当前任务与待办
