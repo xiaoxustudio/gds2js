@@ -148,8 +148,11 @@ function hashDouble(d: number): number {
   return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), MURMUR_SEED);
 }
 
+/** 引擎的 `MAX_RECURSION`（100）截住容器哈希：实测数到第 102 层那一支给 0，`ERR_PRINT` 只进 stderr、不进 stdout。 */
+const HASH_MAX_RECURSION = 100;
+
 /** 一个 Variant 的 Godot 哈希数：全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 共用；容器那一支照引擎的 `recursive_hash`。 */
-export function variantHashNumber(v: Variant): number {
+export function variantHashNumber(v: Variant, depth = 0): number {
   switch (v.t) {
     case Tag.NIL:
       return 0;
@@ -163,18 +166,20 @@ export function variantHashNumber(v: Variant): number {
     case Tag.STRING_NAME:
       return hashDjb2(v.v as string);
     case Tag.ARRAY: {
+      if (depth > HASH_MAX_RECURSION) return 0;
       let h = murmurOne32(GD_TYPE.ARRAY, MURMUR_SEED);
-      for (const e of (v.v as GArray).raw()) h = murmurOne32(variantHashNumber(e), h);
+      for (const e of (v.v as GArray).raw()) h = murmurOne32(variantHashNumber(e, depth + 1), h);
       return fmix32(h);
     }
     case Tag.DICT: {
+      if (depth > HASH_MAX_RECURSION) return 0;
       const d = v.v as GDict;
       const ks = d.keys();
       const vs = d.values();
       let h = murmurOne32(GD_TYPE.DICTIONARY, MURMUR_SEED);
       for (let i = 0; i < ks.length; i++) {
-        h = murmurOne32(variantHashNumber(ks[i] as Variant), h);
-        h = murmurOne32(variantHashNumber(vs[i] as Variant), h);
+        h = murmurOne32(variantHashNumber(ks[i] as Variant, depth + 1), h);
+        h = murmurOne32(variantHashNumber(vs[i] as Variant, depth + 1), h);
       }
       return fmix32(h);
     }
