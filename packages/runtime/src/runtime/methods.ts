@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
-import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt } from "./builtins";
+import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber } from "./builtins";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, ClassDesc, type Fn } from "./object";
 import type { GdIdentified } from "./identity";
@@ -556,6 +556,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return a.extreme(true, isLess) ?? V.nil();
         case "max":
           return a.extreme(false, isLess) ?? V.nil();
+        case "hash":
+          return V.int(variantHashNumber(obj));
         default:
           // `join` 在 Array 上**根本没有**（它是 String 的方法）：接收者是推断出来的 var 时解析期放过，运行期给下面那句
           if (name === "join") throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function 'join' in base 'Array'.`);
@@ -597,6 +599,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "duplicate":
           return V.dict(d.duplicate(boolArgOr(args, 0, false)));
+        case "hash":
+          return V.int(variantHashNumber(obj));
         default:
           // 字典上同样没有 `join`
           if (name === "join") throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function 'join' in base 'Dictionary'.`);

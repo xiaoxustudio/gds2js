@@ -144,7 +144,7 @@
 - **readings**：compile **158/227**、ir **227/227**、sema **227/227**（误报/漏报/崩溃 0）、ops 1425/0、diff **150/150 逐字节**、treeface 17/0、`pnpm typecheck` 3/3、`test:scriptc 235` 出货一致、`test:cli-native` 20/0、`test:pkgmodes` 失败 0。
 - **修掉的洞**：`this.<signal>` 当值用时没装箱，于是 `fired == fired` 假、`d[fired] = 1` 抛 `dict-key-type`。发射器现在按「模块级信号名」只在**值路径**上包一层 `rt.wrapValue`，`fired.emit(...)` 与 `await fired` 两条属性/等待路径照旧拿裸对象。五格实测口径进了语料 `235`（24–28 行），S211 记口径，§6 第 16 条③ 就此收掉 —— 身份号那层上一轮已经就位，缺的只有装箱。
 - **哈希那一格推进到「只差三段本体」**：从上游 `Variant::hash` 读到 int 走 `hash_one_uint64`、float 走 `hash_murmur3_one_double`、对象走指针的 `hash_one_uint64`（这条同时解释了为什么对象号天生不可复现）、数组/字典是 `hash_murmur3_one_32(elem_hash, h)` 逐个折叠再收尾混合。剩下的未知收窄到 `hash_one_uint64`、`hash_murmur3_one_32` 与折叠的种子/收尾三式，S208 的实测数就是逆它们的靶子；盲拟合这轮试过（经典 murmur 变体对不上 `hash(7)`），不再靠猜推进。
-- **§1.8 那条哈希线索今天撞到墙，而且撞得有意义**：21 个**公开**式子（murmur3 x86_32 四个种子 × 三种接法、fmix32/fmix64/wyhash/djb2）全部对不上 `hash(7)=2503556531`；新测的 int 序列几乎线性（相邻差稳定在 3.5765e8 上下抖动，`hash(0)`…`hash(8)`、`hash(255/256/65535/65536/±1/1000000007)` 都定在 S208 那条旁边），avalanching 混合给不出这种形状 —— 「int 走经典 murmur/fmix 那一族」可以排除，剩下那条带舍入的乘高/折叠没有上游源码就逆不动（本机只有引擎二进制，网络取不到源码）。拒答照旧，一个数都没写进实现。
+- **§1.8 那条哈希线索今天撞到墙，而且撞得有意义**：21 个**公开**式子（murmur3 x86_32 四个种子 × 三种接法、fmix32/fmix64/wyhash/djb2）全部对不上 `hash(7)=2503556531`；新测的 int 序列几乎线性（相邻差稳定在 3.5765e8 上下抖动，`hash(0)`…`hash(8)`、`hash(255/256/65535/65536/±1/1000000007)` 都定在 S208 那条旁边），avalanching 混合给不出这种形状 —— 「int 走经典 murmur/fmix 那一族」可以排除，拟合这条路到此为止；**当天稍后翻盘**：本机 `E:/编程练习/godot` 有一份 4.3.0 源码树，读出的式子不是 murmur 而是 SuperFastHash 的 patter，22 个数全中 —— 落进实现的过程与剩下的两格拒答记在 §1.11 / S212。
 
 ### 1.9 出货门铺开跑（2026-10-04）
 
@@ -157,6 +157,14 @@
 - **readings**：`pnpm bench` 合计 **85.42 / 88.01 ms**、`pnpm bench:godot` **441.54 / 480.17 ms**（各跑两遍，抖动约 3% / 9%），**14/14 kernel 校验值与 Godot 同字面** —— 三重护栏里「校验值一致」这条从今天起有基线了。裁判同一台机器同一个 `Godot_v4.6.3-stable_win64_console.exe`。
 - **整体快 5.2×**（两遍 5.2 / 5.5）。最赚的是调用类 kernel —— `helper-int` 24.3×、`helper-assign` 26.8×：GDScript 的动态调用在这里贵得多，而我们发射的是普通 JS 函数调用。
 - **两格我们更慢，两遍都复现，不是噪声**：`array-for-range` 0.4×（17.4 vs 6.6 ms）、`array-write` 0.8×（23.8 vs 18.8 ms）—— 数组下标读/写加 `for … in range()` 的定长循环，正是 5.5 该先动的位置；它们走的还是 §1.1 里 P2.5 那行的 v1 口径（`ops.*` 动态路径 + Variant 全程装箱）。
+
+### 1.11 非字符串的 `hash()` 落进实现（2026-10-04，§1.8 那条线索收口）
+
+- **readings**：compile **159/228**、ir **228/228**、sema **228/228**（误报/漏报/崩溃 0）、ops **1428/0**（098 那三格「还没逆出来」的拒答断言换成实测数）、diff **151/151 逐字节**（新增语料 `237-hash-chain` 35 行）、`test:scriptc 237` 出货一致、`pnpm typecheck` 无 `error TS`。
+- **式子的出处**：拟合到此为止 —— 上一小节那 21 个公开 murmur/fmix 变体全灭之后，在本机 `E:/编程练习/godot` 找到一份 **4.3.0 引擎源码树**，直接读 `core/templates/hashfuncs.h` 与 `core/variant/{array,dictionary}.cpp`。`hash_one_uint64` 原来是 **SuperFastHash 的 patter**（`(~v)+(v<<18)`、`*21`、`+ (v<<6)`、异或移位收尾，全程 64 位回绕），不是 murmur；murmur 那一轮的默认种子是 `0x7F07C65`。4.6.3 的裁判二进制对 4.3 的式子逐条点头 —— 这条链跨版本没动。
+- **实现与对撞**：`variantHashNumber` 一处真源，全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 都走它；22 个定住的数在真实运行时代码路径上全中，容器那格的关键是**起手把类型标签折进种子**（Array=28 / Dictionary=27，用的是 Godot 的 `Variant.Type`，不是我们内部的 Tag 编号），字典再按插入序把键、值交替折。`hash(0.0)==hash(-0.0)` 实测确认了引擎那句 ±0 归一。
+- **仍然拒的两格**（没测就不写）：`hash(NaN)` —— 引擎先换成 C++ `NAN` 常量的位型，那 8 个字节我们没实测；对象 / Vector2 / Color 等 —— 引擎走指针号，天生不可复现。深层嵌套也照实递归：引擎的 `recursive_hash` 越过 `MAX_RECURSION` 会 ERR_PRINT 后直接给 0，这条没测过就先进 §6 的待补测（S212 记着）。
+- **scriptc 面又量到一条**：`BigUint64Array` **没有 lowering（SC2020）** —— 双精度取那两个 32 位字得用 `DataView`（和 `ops.ts` 里 bigint 那套同一套路）。这条是 `test:scriptc 237` 逼出来的：node 侧 22/22 全对、scriptc 那一支直接编不过。
 
 ---
 

@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, intArgBig, show, strLength, truthyOf } from "./values";
+import { GArray, GDict, intArgBig, show, strLength, truthyOf } from "./values";
 import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
@@ -96,16 +96,105 @@ export function hashDjb2(s: string): number {
   return h;
 }
 
-/** 全局 `hash()`：字符串族走 djb2（StringName 就是内容的 hash）、bool 给 1/0、null 给 0；其余类型是 Godot 的 murmur3 链，算式未逆出 → 响亮报缺，不拿 JS 自己的一套顶替。 */
+/** Godot 的 `Variant.Type` 编号 —— 容器哈希起手混的是引擎那侧的类型标签，不是我们内部的 Tag。 */
+const GD_TYPE = { DICTIONARY: 27, ARRAY: 28 } as const;
+const MURMUR_SEED = 0x7f07c65;
+const MASK64 = (1n << 64n) - 1n;
+// 双精度的两个 32 位字：bigint 的 BigUint64Array 在 scriptc 没有 lowering，DataView 有（与 ops.ts 同一套路）。
+const F64_VIEW = new DataView(new ArrayBuffer(8));
+
+/** murmur3 x86_32 的一轮（引擎 `hash_murmur3_one_32`，默认种子 0x7f07c65）。纯函数。 */
+function murmurOne32(pIn: number, pSeed: number): number {
+  let k = Math.imul(pIn >>> 0, 0xcc9e2d51) >>> 0;
+  k = ((k << 15) | (k >>> 17)) >>> 0;
+  k = Math.imul(k, 0x1b873593) >>> 0;
+  let s = (pSeed ^ k) >>> 0;
+  s = ((s << 13) | (s >>> 19)) >>> 0;
+  return (Math.imul(s, 5) + 0xe6546b64) >>> 0;
+}
+
+/** murmur3 的收尾混合（引擎 `hash_fmix32`）。纯函数。 */
+function fmix32(h: number): number {
+  let x = (h ^ (h >>> 16)) >>> 0;
+  x = Math.imul(x, 0x85ebca6b) >>> 0;
+  x = (x ^ (x >>> 13)) >>> 0;
+  x = Math.imul(x, 0xc2b2ae35) >>> 0;
+  return (x ^ (x >>> 16)) >>> 0;
+}
+
+/** 引擎的 `hash_one_uint64`：SuperFastHash 那段 patter，按 64 位回绕。纯函数。 */
+function hashOneUint64(key: bigint): number {
+  let v = key & MASK64;
+  v = (((~v) & MASK64) + ((v << 18n) & MASK64)) & MASK64;
+  v = (v ^ (v >> 31n)) & MASK64;
+  v = (v * 21n) & MASK64;
+  v = (v ^ (v >> 11n)) & MASK64;
+  v = (v + ((v << 6n) & MASK64)) & MASK64;
+  v = (v ^ (v >> 22n)) & MASK64;
+  return Number(v & 0xffffffffn);
+}
+
+/** `hash_murmur3_one_64`：低字先、高字后。纯函数。 */
+function murmurOne64Words(lo: number, hi: number, seed: number): number {
+  return murmurOne32(hi >>> 0, murmurOne32(lo >>> 0, seed));
+}
+
+/** `hash_murmur3_one_double`：先把 ±0 归一，再按 IEEE754 的两个字折叠。 */
+function hashDouble(d: number): number {
+  if (Number.isNaN(d)) {
+    throw new UnsupportedError("hash-nan", "hash() 收到 NaN：引擎把它换成 C++ 的 NAN 常量的位型，那一位型没实测过");
+  }
+  F64_VIEW.setFloat64(0, d === 0 ? 0 : d, true);
+  return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), MURMUR_SEED);
+}
+
+/**
+ * 一个 Variant 的 Godot 哈希数 —— 全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 同一条。
+ * 容器按 `recursive_hash`：类型标签起手，逐个把元素哈希折进累加器，最后 fmix32 收尾。
+ */
+export function variantHashNumber(v: Variant): number {
+  switch (v.t) {
+    case Tag.NIL:
+      return 0;
+    case Tag.BOOL:
+      return v.v ? 1 : 0;
+    case Tag.INT:
+      return hashOneUint64(intToBig(v.v as IntPayload));
+    case Tag.FLOAT:
+      return hashDouble(v.v as number);
+    case Tag.STRING:
+    case Tag.STRING_NAME:
+      return hashDjb2(v.v as string);
+    case Tag.ARRAY: {
+      let h = murmurOne32(GD_TYPE.ARRAY, MURMUR_SEED);
+      for (const e of (v.v as GArray).raw()) h = murmurOne32(variantHashNumber(e), h);
+      return fmix32(h);
+    }
+    case Tag.DICT: {
+      const d = v.v as GDict;
+      const ks = d.keys();
+      const vs = d.values();
+      let h = murmurOne32(GD_TYPE.DICTIONARY, MURMUR_SEED);
+      for (let i = 0; i < ks.length; i++) {
+        h = murmurOne32(variantHashNumber(ks[i] as Variant), h);
+        h = murmurOne32(variantHashNumber(vs[i] as Variant), h);
+      }
+      return fmix32(h);
+    }
+    default:
+      throw new UnsupportedError(
+        "hash-type",
+        `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`,
+      );
+  }
+}
+
+/** 全局 `hash()`：只一个参数，结果按无符号 32 位宽成 int。 */
 export function variantHash(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("arity", `hash() 只接受 1 个参数（收到 ${args.length} 个）`);
   }
-  const v = args[0] as Variant;
-  if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(hashDjb2(v.v as string));
-  if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
-  if (v.t === Tag.NIL) return V.int(0);
-  throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：Godot 那侧是非字符串的 murmur3 链，算式未逆出`);
+  return V.int(variantHashNumber(args[0] as Variant));
 }
 
 export function sqrt(v: Variant): Variant {
