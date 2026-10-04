@@ -242,6 +242,15 @@
 - **门**：typecheck 无 `error TS`、compile **160/229**（emitter 缺口 0）+ 守卫 **8/8**、ir **229/229**、sema **229/229**（误报/漏报/崩溃 0）、ops **1428/0**、diff **152/152 逐字节**（golden 238/238 未漂移）、`pkgmodes` 失败 0、treeface **17/0**、`test:scriptc` 代表集 **10/10 出货一致**、`cli-native` **22/0**、`test:export` **ok 10 / 环境记账 3 / FAIL 0**（记账那三格仍是 SEA 要 Node ≥25.7）—— 改的是发射器与工程编译，出货那一面全复跑过。
 - **还剩的一格**（照实记在 S213 末尾）：值位置的未知名字（`var f = wrapi`）仍发成裸 JS 标识符、运行期 `ReferenceError` —— 那是同一张表的「取值」版，这轮没动，不顺手扩。
 
+### 1.24 转换族量清了，剩下的是实现（2026-10-04，§6 第 17 条②收口，明细全在 S214）
+
+- **为什么这轮只量不写**：S210/S213 的账都落在「有依据才写」这条线上，而转换族四支连**参数顺序**都没验过 —— 上一轮的探针被自己的引号写法带废（`Expected closing ")"`）。四支一支一支过判引擎（`tmp/probe-convert/`，八个探头文件、每支单独一份，一个解析错不会遮住另一支）。
+- **两条推翻老文档的形状**：`convert` 与 `type_convert` 在 4.6.3 都是**值在前、类型在后**，`type_convert(TYPE_INT, "7")` 那种顺序写法直接 `Cannot pass a value of type "String" as "int."`；而且两支**解析期**允许的类型集合不一样 —— `convert(x, TYPE_STRING)` / `convert(x, TYPE_VECTOR2)` 是 `Invalid call for function "convert".`，`type_convert` 那两支却过得去（`type_convert(7, TYPE_STRING)` → `"7"`，`type_convert("1,2", TYPE_VECTOR2)` → `(0.0, 0.0)`）。
+- **`var_to_str` 的真形状**：字典在**任意深度**都多行美化且**不缩进**、键一律带引号，数组恒单行，只有空的 `{}` / `[]` 是紧凑式；字符串里制表符与换行**按原字符写入**（不是 `\t` / `\n`），`"` 与 `\` 转义；`-0.0` 归一 `0.0`，指数式是 `1e+20` / `1e-07` / `-1e+20`（指数带符号、补足两位），INF/NAN 是 `inf` / `nan`；值类型与打包数组给构造式（`Vector2(1, 2)`、`Color(1, 0.5, 0.25, 1)`、`&"name"`、`PackedByteArray(1, 2)`）。
+- **`str_to_var` 的认与不认**：`"[1,]"` 收尾逗号、`"[1"` 给 null；`"true"` 是布尔而 `"TRUE"` / `"True"` 是 null；`"&\"name\""` 给 StringName(21)、`"Vector2(1, 2)"` 给 (5)、`"Vector2i(1, 2)"` 给 (6)，**`"Color(1, 0, 0)"` 却给 null**；`"0x10"` / `"0b11"` 都给 **0**（进制前缀不认）、`"+7"` 给 null、`" 7 "` 给 7、`"1e3"` 给 `1000.0`、`"inf"` 给 INF float 而 `"NaN"` 给 null；`"{}"` 是空字典（打印 `{  }` 两个空格）。
+- **取舍**：先接 `var_to_str` / `str_to_var`（形状已全量齐、Tier 1 里真有用），`convert` / `type_convert` 等同一条标量真源合出来后再按各自「解析期允许的形状」分岔。四支在实现前留在 `GLOBAL_TODO_FUNCTIONS` 抛 `[emit-builtin]`；语料也等实现那一轮与 JS 侧一起进 —— 只把 Godot 侧的读数放进「跑得出结果」那 152 格，会把 diff 的账拆成两半，不划算。
+- **门**：本轮没动实现，门的读数与上一提交一致（compile 160/229 + 守卫 8/8、ir/sema 229/229、ops 1428/0、diff 152/152 逐字节、typecheck 无 `error TS`）。
+
 ---
 
 ## 2. 当前任务与待办
