@@ -3,6 +3,9 @@
 import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, SceneTree } from "../../../tools/harness/scene-tree";
 
+const INF = rt.V.float(Number.POSITIVE_INFINITY);
+const NAN = rt.V.float(Number.NaN);
+
 export class Main extends SceneTree {
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
@@ -210,6 +213,81 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("d14|"), rt.method(rt.V.str("%41%42%43"), "uri_decode", [])]));
     print(rt.showArgs([rt.V.str("d15|"), rt.method(rt.V.str(""), "uri_decode", [])]));
     print(rt.showArgs([rt.V.str("d16|"), rt.method(rt.V.str("%"), "uri_decode", [])]));
+    print(rt.showArgs([rt.V.str("f01|"), rt.method(rt.V.str("{0} {1} {0}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])]));
+    print(rt.showArgs([rt.V.str("f02|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])]));
+    print(rt.showArgs([rt.V.str("f03|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.float(1.5)]))])]));
+    print(rt.showArgs([rt.V.str("f04|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.float(10000000000)]))])]));
+    print(rt.showArgs([rt.V.str("f05|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.float((1 / 3))]))])]));
+    print(rt.showArgs([rt.V.str("f06|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.float(1e-7)]))])]));
+    print(rt.showArgs([rt.V.str("f07|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([INF]))])]));
+    print(rt.showArgs([rt.V.str("f08|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.ops.neg(INF)]))])]));
+    print(rt.showArgs([rt.V.str("f09|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([NAN]))])]));
+    print(rt.showArgs([rt.V.str("f10|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.bool(true)]))])]));
+    print(rt.showArgs([rt.V.str("f11|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.nil()]))])]));
+    print(rt.showArgs([rt.V.str("f12|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]))])]));
+    print(rt.showArgs([rt.V.str("f13|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.dictOf([[rt.V.str("a"), rt.V.int(1)]])]))])]));
+    print(rt.showArgs([rt.V.str("f14|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)])]))])]));
+    print(rt.showArgs([rt.V.str("f15|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.stringName("n")]))])]));
+    print(rt.showArgs([rt.V.str("f16|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]))])]));
+    print(rt.showArgs([rt.V.str("f17|"), rt.method(rt.V.str("{1}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])]));
+    print(rt.showArgs([rt.V.str("f18|"), rt.method(rt.V.str("{5}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a")]))])]));
+    print(rt.showArgs([rt.V.str("f19|"), rt.method(rt.V.str("{0}{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(2)]))])]));
+    print(rt.showArgs([rt.V.str("f20|"), rt.method(rt.V.str("plain"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])]));
+    print(rt.showArgs([rt.V.str("f21|"), rt.method(rt.V.str("{a}"), "format", [rt.dictOf([[rt.V.str("b"), rt.V.int(1)]])])]));
+    print(rt.showArgs([rt.V.str("f22|"), rt.method(rt.V.str("{0} {}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])]));
+    print(rt.showArgs([rt.V.str("f23|"), rt.method(rt.V.str("{} {0}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])]));
+    print(rt.showArgs([rt.V.str("f24|"), rt.method(rt.V.str("{{0}}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])]));
+    print(rt.showArgs([rt.V.str("f25|"), rt.method(rt.V.str("{0x1}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])]));
+    print(rt.showArgs([rt.V.str("f26|"), rt.method(rt.V.str("{a}{b}"), "format", [rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]])])]));
+    print(rt.showArgs([rt.V.str("f27|"), rt.method(rt.V.str("{b} {a} {b}"), "format", [rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]])])]));
+    print(rt.showArgs([rt.V.str("f28|"), rt.method(rt.V.str("{name}"), "format", [rt.dictOf([[rt.V.str("name"), rt.V.float(1.5)]])])]));
+    print(rt.showArgs([rt.V.str("f29|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.dictOf([])]))])]));
+    print(rt.showArgs([rt.V.str("f30|"), rt.method(rt.V.str("{0} {2}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")]))])]));
+    print(rt.showArgs([rt.V.str("f31|"), rt.method(rt.V.str("{-1}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a")]))])]));
+    print(rt.showArgs([rt.V.str("f32|"), rt.method(rt.V.str("{0}"), "format", [rt.dictOf([[rt.V.int(0), rt.V.str("z")]])])]));
+    print(rt.showArgs([rt.V.str("f33|"), rt.method(rt.V.str("{1}"), "format", [rt.dictOf([[rt.V.int(1), rt.V.str("x")]])])]));
+    print(rt.showArgs([rt.V.str("f34|"), rt.method(rt.V.str("{0} {1} {2}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]));
+    print(rt.showArgs([rt.V.str("f35|"), rt.method(rt.V.str("%s"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)]))])]));
+    print(rt.showArgs([rt.V.str("f36|"), rt.method(rt.V.str("{0}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("%"), rt.V.int(1)]))])]));
+    print(rt.showArgs([rt.V.str("f37|"), rt.method(rt.V.str("{1} {0}"), "format", [rt.dictOf([[rt.V.str("1"), rt.V.str("one")], [rt.V.int(1), rt.V.str("int")]])])]));
+    print(rt.showArgs([rt.V.str("f38|"), rt.method(rt.V.str("{true} {1.5} {-2} {n}"), "format", [rt.dictOf([[rt.V.bool(true), rt.V.str("T")], [rt.V.float(1.5), rt.V.str("F")], [rt.V.int((-2)), rt.V.str("N")], [rt.V.stringName("n"), rt.V.str("S")]])])]));
+    print(rt.showArgs([rt.V.str("f39|"), rt.method(rt.V.str("{a} {b}"), "format", [rt.dictOf([[rt.V.str("b"), rt.V.str("z")], [rt.V.str("a"), rt.V.str("{b}")]])])]));
+    print(rt.showArgs([rt.V.str("f40|"), rt.method(rt.V.str("{a} {b}"), "format", [rt.dictOf([[rt.V.str("a"), rt.V.str("{b}")], [rt.V.str("b"), rt.V.str("z")]])])]));
+    print(rt.showArgs([rt.V.str("f41|"), rt.method(rt.V.str("{a} {b}"), "format", [rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.array(rt.GArray.of([rt.V.str("x")]))]])])]));
+    print(rt.showArgs([rt.V.str("f42|"), rt.method(rt.V.str("{k} {0}"), "format", [rt.dictOf([[rt.V.str("k"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]])])]));
+    print(rt.showArgs([rt.V.str("f43|"), rt.method(rt.V.str("{0} {0} {1} {1}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("A"), rt.V.str("B")]))])]));
+    print(rt.showArgs([rt.V.str("f44|"), rt.method(rt.V.str("{0} {1} {2} {3}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.int(3)])), rt.V.str("x"), rt.V.int(4)]))])]));
+    print(rt.showArgs([rt.V.str("f45|"), rt.method(rt.V.str("{0} {1}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")])), rt.V.str("{}")])]));
+    print(rt.showArgs([rt.V.str("f46|"), rt.method(rt.V.str("{} {}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")])), rt.V.str("{}")])]));
+    print(rt.showArgs([rt.V.str("f47|"), rt.method(rt.V.str("_0 _1"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")])), rt.V.str("_")])]));
+    print(rt.showArgs([rt.V.str("f48|"), rt.method(rt.V.str("_0 _0"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")])), rt.V.str("_")])]));
+    print(rt.showArgs([rt.V.str("f49|"), rt.method(rt.V.str("{_0} {_1}"), "format", [rt.V.array(rt.GArray.of([rt.V.str("a"), rt.V.str("b")])), rt.V.str("{_}")])]));
+    print(rt.showArgs([rt.V.str("f50|"), rt.method(rt.V.str("A_1_B"), "format", [rt.V.array(rt.GArray.of([rt.V.str("v")])), rt.V.str("_1")])]));
+    print(rt.showArgs([rt.V.str("f51|"), rt.method(rt.V.str("[%s]"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.str("[%s]")])]));
+    print(rt.showArgs([rt.V.str("f52|"), rt.method(rt.V.str("[0]"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.str("[]")])]));
+    print(rt.showArgs([rt.V.str("f53|"), rt.method(rt.V.str("{a} {b}"), "format", [rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]), rt.V.str("_")])]));
+    print(rt.showArgs([rt.V.str("f54|"), rt.method(rt.V.str("x_name"), "format", [rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.str("name"), rt.V.str("R")]))])), rt.V.str("_")])]));
+    print(rt.showArgs([rt.V.str("f55|"), rt.method(rt.V.str("ab"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), rt.V.str("")])]));
+    print(rt.showArgs([rt.V.str("f56|"), rt.method(rt.V.str("{0} {0}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(7)])), rt.V.str("{_0}")])]));
+    print(rt.showArgs([rt.V.str("f57|"), rt.method(rt.V.str("{0} {}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]));
+    print(rt.showArgs([rt.V.str("c01|"), rt.method(rt.V.str("aaa"), "count", [rt.V.str("aa")])]));
+    print(rt.showArgs([rt.V.str("c02|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("c03|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(0), rt.V.int(2)])]));
+    print(rt.showArgs([rt.V.str("c04|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(1), rt.V.int(4)])]));
+    print(rt.showArgs([rt.V.str("c05|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(3), rt.V.int(1)])]));
+    print(rt.showArgs([rt.V.str("c06|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int((-1)), rt.V.int(4)])]));
+    print(rt.showArgs([rt.V.str("c07|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(0), rt.V.int((-1))])]));
+    print(rt.showArgs([rt.V.str("c08|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(0), rt.V.int(99)])]));
+    print(rt.showArgs([rt.V.str("c09|"), rt.method(rt.V.str("banana"), "count", [rt.V.str("ana")])]));
+    print(rt.showArgs([rt.V.str("c10|"), rt.method(rt.V.str("abc"), "count", [rt.V.str("")])]));
+    print(rt.showArgs([rt.V.str("c11|"), rt.method(rt.V.str("AaAa"), "countn", [rt.V.str("a"), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("c12|"), rt.method(rt.V.str("AaAa"), "countn", [rt.V.str("a"), rt.V.int(1), rt.V.int(4)])]));
+    print(rt.showArgs([rt.V.str("c13|"), rt.method(rt.V.str("aé日"), "count", [rt.V.str("aé"), rt.V.int(0), rt.V.int(2)])]));
+    print(rt.showArgs([rt.V.str("c14|"), rt.method(rt.V.str("aaaa"), "count", [rt.V.str("aa"), rt.V.int(1), rt.V.int(4)])]));
+    print(rt.showArgs([rt.V.str("c15|"), rt.method(rt.V.str("hello"), "count", [rt.V.str("l"), rt.V.int(2), rt.V.int(4)])]));
+    print(rt.showArgs([rt.V.str("c16|"), rt.method(rt.V.str("abab"), "count", [rt.V.str("ab"), rt.V.int(4), rt.V.int(4)])]));
+    print(rt.showArgs([rt.V.str("c17|"), rt.method(rt.V.str("aXbXc"), "countn", [rt.V.str("xyz"), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("c18|"), rt.method(rt.V.str("😀😀a"), "count", [rt.V.str("😀"), rt.V.int(0), rt.V.int(0)])]));
     this.quit();
   }
   

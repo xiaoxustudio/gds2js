@@ -1277,19 +1277,66 @@ export function strUnicodeAt(s: string, i: number): number {
   return c.codePointAt(0) as number;
 }
 
-/** `count` 是非重叠计数；空针子给 0，不是「长度 + 1」。 */
-export function strCount(hay: string, needle: string, insensitive = false): number {
+/** `count` 是非重叠计数；空针子给 0，不是「长度 + 1」。`from` / `to` 是码点下标的窗口：`to` 给 0 表示到末尾，任一为负或 `from >= to` 直接 0。 */
+export function strCount(hay: string, needle: string, insensitive = false, from = 0, to = 0): number {
   if (needle === "") return 0;
+  const cs = codepoints(hay);
   const step = codepoints(needle).length;
+  if (cs.length < step) return 0;
+  if (from < 0 || to < 0) return 0;
+  const end = to === 0 ? cs.length : Math.min(to, cs.length);
+  if (from >= end) return 0;
+  const win = cs.slice(from, end).join("");
   let n = 0;
   let at = 0;
   for (;;) {
-    const i = strFind(hay, needle, at, false, insensitive);
+    const i = strFind(win, needle, at, false, insensitive);
     if (i < 0) break;
     n++;
     at = i + step;
   }
   return n;
+}
+
+/**
+ * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
+ * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
+ */
+export function strFormatV(text: string, v: Variant, ph: string): string {
+  const items: Array<[string, Variant]> = [];
+  if (v.t === Tag.ARRAY) {
+    const raw = (v.v as GArray).raw();
+    for (let j = 0; j < raw.length; j++) {
+      const el = raw[j] as Variant;
+      if (el.t === Tag.ARRAY) {
+        const pair = (el.v as GArray).raw();
+        if (pair.length !== 2) continue;
+        items.push([show(pair[0] as Variant), pair[1] as Variant]);
+      } else {
+        items.push([String(j), el]);
+      }
+    }
+  } else if (v.t === Tag.DICT) {
+    const d = v.v as GDict;
+    const keys = d.keys();
+    const vals = d.values();
+    for (let j = 0; j < keys.length; j++) items.push([show(keys[j] as Variant), vals[j] as Variant]);
+  } else if (v.t === Tag.OBJECT) {
+    throw new UnsupportedError("format-object", "String.format() 的 Object 实参按属性表替换（实测属性 k 换掉了 {k}），属性的顺序与集合没量过");
+  } else {
+    return text;
+  }
+  const hasMark = ph.indexOf("_") >= 0;
+  let out = text;
+  for (const [key, val] of items) {
+    const valText = show(val);
+    if (hasMark) out = strReplace(out, ph.split("_").join(key), valText);
+    else if (ph !== "") {
+      const at = out.indexOf(ph);
+      if (at >= 0) out = out.slice(0, at) + valText + out.slice(at + ph.length);
+    }
+  }
+  return out;
 }
 
 const BAD_FILENAME = new Set(["\"", "%", "*", "/", ":", "<", ">", "?", "\\", "|"]);

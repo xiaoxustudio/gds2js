@@ -7,7 +7,8 @@ import { lengthOf, toInt } from "@gds2js/runtime/runtime/builtins";
 import { index, method } from "@gds2js/runtime/runtime/methods";
 import { isLess, ops, strOps } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GArray, GDict, keyOf, show, strBinToInt, strCase, strCaseStyle, strCapitalize, strCEscape, strCount, strEndsWith, strEraseAt, strFind, strFloat, strGetSlice, strInsertAt, strIsValidFilename, strGetSlicec, strPadZeros, strRepeat, strStartsWith, strStripEdges, strUriDecode, strUnicodeAt, strUriEncode, strFormat, strReplace, stringCtor, stringNameCtor, stringStatic, truthyOf, valueEq } from "@gds2js/runtime/runtime/values";
+import { GArray, GDict, keyOf, show, strBinToInt, strCase, strCaseStyle, strCapitalize, strCEscape, strCount, strEndsWith, strEraseAt, strFind, strFloat, strGetSlice, strInsertAt, strIsValidFilename, strGetSlicec, strPadZeros, strRepeat, strStartsWith, strStripEdges, strUriDecode, strUnicodeAt, strUriEncode, strFormat, strFormatV, strReplace, stringCtor, stringNameCtor, stringStatic, truthyOf, valueEq } from "@gds2js/runtime/runtime/values";
+import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/values · String 方法族", () => {
@@ -479,5 +480,49 @@ describe("runtime/values · String 方法族", () => {
       d.set(V.str("a"), V.int(1));
       return method(V.str(", "), "join", [V.dict(d)]);
     });
+  });
+});
+
+describe("runtime/values · count 的 from/to 窗口与 format 的两条通道", () => {
+  it("234 · count 的窗口、非重叠与 countn", async () => {
+    eq("234", "count 的第二三个实参是 from / to（不是布尔）", `${strCount("abab", "ab", false, 0, 0)}|${strCount("abab", "ab", false, 0, 2)}|${strCount("abab", "ab", false, 1, 4)}`, "2|1|1");
+    eq("234", "to 给 0 就是到末尾、超出末尾自动夹住", `${strCount("abab", "ab", false, 0, 99)}|${strCount("abab", "ab")}`, "2|2");
+    eq("234", "from >= to、任一为负、from 到末尾都直接 0", `${strCount("abab", "ab", false, 3, 1)}|${strCount("abab", "ab", false, -1, 4)}|${strCount("abab", "ab", false, 0, -1)}|${strCount("abab", "ab", false, 4, 4)}`, "0|0|0|0");
+    eq("234", "数的是非重叠出现（banana 的 ana 只有一处）", `${strCount("aaa", "aa")}|${strCount("banana", "ana")}|${strCount("aaaa", "aa")}|${strCount("aaaaa", "aa")}`, "1|1|2|2");
+    eq("234", "窗口下标是码点不是 UTF-16 单元", `${strCount("aé日", "aé", false, 0, 2)}|${strCount("é😀a", "😀")}`, "1|1");
+    eq("234", "countn 同窗口下 insensitive", `${strCount("AaAa", "a", true, 0, 0)}|${strCount("AaAa", "a", true, 1, 4)}|${strCount("AaAa", "a", false, 0, 0)}`, "4|3|2");
+    eq("234", "空 needle 恒 0，比串还长的 needle 也 0", `${strCount("abc", "")}|${strCount("ab", "abc")}`, "0|0");
+    eq("234", "走 method 派发拿得到窗口两个参数", String((method(V.str("hello"), "count", [S("l"), I(2), I(4)]) as Variant).v), "2");
+    shouldThrow("234", "count 少实参要响（引擎是 Too few arguments）", () => method(V.str("abc"), "count", []));
+    shouldThrow("234", "count 第 4 个实参要响（Expected at most 3）", () => method(V.str("abc"), "count", [S("a"), I(0), I(1), I(2)]));
+    shouldThrow("234", "count 的 from 给非 int 响亮拒", () => method(V.str("abc"), "count", [S("a"), V.float(1)]));
+  });
+
+  it("234 · format 的缺省占位符是 {_}", async () => {
+    const arrOf = (...xs: Variant[]) => V.array(GArray.of(xs));
+    const gd = (pairs: [Variant, Variant][]) => {
+      const g = new GDict();
+      for (const [k, v] of pairs) g.set(k, v);
+      return V.dict(g);
+    };
+    const fm = (text: string, v: Variant, ph?: string): string => strFormatV(text, v, ph ?? "{_}");
+    eq("234", "缺省通道按 {下标} 全串替换，重复占位符每个都换", `${fm("{0} {1} {0}", arrOf(S("a"), S("b")))}|${fm("{0}{0}", arrOf(V.int(2)))}`, "a b a|22");
+    eq("234", "字典通道按插入顺序换 {键}，后换的能盖前换的", `${fm("{b} {a} {b}", gd([[S("a"), V.int(1)], [S("b"), V.int(2)]]))}|${fm("{a} {b}", gd([[S("a"), S("{b}")], [S("b"), S("z")]]))}`, "2 1 2|z z");
+    eq("234", "键的文本就是 print：bool / float / 负 int / StringName 各一格", fm("{true} {1.5} {-2} {n}", gd([[V.bool(true), S("T")], [F(1.5), S("F")], [I(-2), S("N")], [V.stringName("n"), S("S")]])), "T F N S");
+    eq("234", "值的文本也走 print（null 是 <null>、字典带空格、向量带 .0）", `${fm("{0}", arrOf(V.nil()))}|${fm("{0}", arrOf(gd([[S("a"), V.int(1)]])))}|${fm("{0} {1}", arrOf(V.str("x"), gd([])))}`, "<null>|{ \"a\": 1 }|x {  }");
+    eq("234", "换进去的文本还会被后面的下标再换（先 {0} 后 {1}）", fm("{0} {1}", arrOf(S("{1}"), S("z"))), "z z");
+    eq("234", "装字典的数组元素照样打出来，装数组的数组按 2 元键值对解", `${fm("{0}", arrOf(arrOf(V.int(1), V.int(2))))}|${fm("{name}", arrOf(arrOf(S("name"), S("R"))))}`, "{0}|R");
+    eq("234", "非 Array / Dictionary 的实参原样返回（引擎只往 stderr 打一句）", `${fm("{0}", V.int(5))}|${fm("{0}", S("ab"))}|${fm("{0}", V.stringName("n"))}|${fm("{0} {1}", V.bool(true))}`, "{0}|{0}|{0}|{0} {1}");
+    eq("234", "给了占位符：含 _ 时把 _ 换成键名再全串替换，不含时对每个值做一次 replace_first", `${fm("{a} {b}", gd([[S("a"), V.int(1)], [S("b"), V.int(2)]]), "{_}")}|${fm("{} {}", arrOf(S("a"), S("b")), "{}")}`, "1 2|a b");
+    eq("234", "文本写下标而占位符给 {\"_\"}：needle 成了 {0}，一格都换不着（与引擎同形）", fm("{_0} {_1}", arrOf(S("a"), S("b")), "{_}"), "{_0} {_1}");
+    eq("234", "显式给 \"{}\" 与不给是两条道（前者把 {} 当字面量）", `${fm("{0} {}", arrOf(V.int(1), V.int(2)), "{}")}|${fm("{0} {}", arrOf(V.int(1), V.int(2)))}`, "{0} 1|1 {}");
+    eq("234", "占位符里没有那个子串就一格都不换", `${fm("A_1_B", arrOf(S("v")), "_1")}|${fm("[0]", arrOf(V.int(1)), "[]")}|${fm("ab", arrOf(V.int(1), V.int(2)), "")}`, "A_1_B|[0]|ab");
+    eq("234", "缺省占位符里多个 _ 一起换（走的是 String.replace 的口径）", fm("00", arrOf(V.int(7)), "__"), "7");
+    eq("234", "数组元素里那个不是 2 元的数组被静默跳过", fm("{0} {1}", arrOf(arrOf(V.int(1)), V.int(2))), "{0} 2");
+    eq("234", "走 method 派发：一个实参用缺省占位符，两个实参用给的那支", String((method(V.str("{a} {b}"), "format", [gd([[S("a"), V.int(1)], [S("b"), V.int(2)]])]) as Variant).v), "1 2");
+    eq("234", "method 派发带占位符那一支", String((method(V.str("k:{k}"), "format", [gd([[S("k"), V.int(3)]]), S("{_}")]) as Variant).v), "k:3");
+    shouldThrow("234", "format 少实参要响（Too few arguments，Expected at least 1）", () => method(V.str("{0}"), "format", []));
+    shouldThrow("234", "format 第 3 个实参要响（Expected at most 2）", () => method(V.str("{0}"), "format", [arrOf(V.int(1)), S("{}"), V.int(3)]));
+    shouldThrow("234", "Object 实参走属性表那条道，属性顺序没量过 → 响亮拒", () => strFormatV("{k}", wrapValue(new GdScriptObject()), "{_}"));
   });
 });

@@ -7,7 +7,7 @@ import type { GdIdentified } from "./identity";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
-  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, toStringNameSlot, truthyOf } from "./values";
+  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -849,13 +849,20 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           if (args.length > 3) {
             throw new GodotRuntimeError("arity", `Too many arguments for "${name}()" call. Expected at most 3 but received ${args.length}.`);
           }
-          if (args.length >= 2 && boolArg(args, 1, name)) {
-            throw new UnsupportedError("string-count-chars", `${name}() 的 chars 参数只实测过 false（真值那格见 SEMANTICS §6）`);
+          // 第二、三个参数是 `from` / `to`（码点下标），不是布尔：41 格实测把这条钉死了（S232）
+          const from = args.length >= 2 ? intArg(args, 1, name) : 0;
+          const to = args.length >= 3 ? intArg(args, 2, name) : 0;
+          return V.int(strCount(s, asString(args[0] as Variant, name), name === "countn", from, to));
+        }
+        case "format": {
+          if (args.length < 1) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "format()" call. Expected at least 1 but received ${args.length}.`);
           }
-          if (args.length === 3) {
-            throw new UnsupportedError("string-count-third", `${name}() 的第 3 个参数（int）没量过它管什么`);
+          if (args.length > 2) {
+            throw new GodotRuntimeError("arity", `Too many arguments for "format()" call. Expected at most 2 but received ${args.length}.`);
           }
-          return V.int(strCount(s, asString(args[0] as Variant, name), name === "countn"));
+          const ph = args.length >= 2 ? asString(args[1] as Variant, "format") : "{_}";
+          return V.str(strFormatV(s, args[0] as Variant, ph));
         }
         case "md5_text":
           if (args.length !== 0) {
