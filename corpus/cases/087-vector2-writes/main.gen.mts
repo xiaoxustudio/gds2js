@@ -161,6 +161,8 @@ const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof M
 rt.registerFieldTypes(__gd_d_Main, {"m": "Vector2"});
 rt.registerMethodArities(__gd_d_Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
+rt.registerScriptLabel(__gd_d_Main, "main.gd");
+rt.registerScript("res://main.gd", __gd_d_Main);
 const __gd_entry = new Main();
 try {
   await __gd_entry.run();

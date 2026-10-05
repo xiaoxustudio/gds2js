@@ -3,10 +3,10 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { callableEq, callableSame, callableOf, CallableBox, registerClass, registerMethodArities, registerNativeBase, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { callableEq, callableSame, callableOf, CallableBox, methodCallable, nullCallable, registerClass, registerMethodArities, registerNativeBase, registerScriptLabel, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { attribute, method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GArray, GDict, keyOf, show, strBuiltin } from "@gds2js/runtime/runtime/values";
+import { GArray, GDict, keyOf, show, strBuiltin, varToStr } from "@gds2js/runtime/runtime/values";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { gdDispatchByName } from "./support/gd-dispatch";
 import { I } from "./support/variants";
@@ -137,10 +137,37 @@ describe("runtime/object · Callable", () => {
       const dOuter = registerClass("Outer", Outer, () => new Outer(), (o) => o instanceof Outer);
       registerMethodArities(dOuter, { topfn: [2, 2] });
       registerNativeBase(dOuter, "SceneTree");
+      registerScriptLabel(dOuter, "main.gd");
       const c = attribute(new Outer(), "topfn") as Variant;
-      shouldThrow("215", "外层脚本自己的方法那一形标签要**文件名**→ 响亮拒，不发半对文本", () =>
-        method(c, "call", [V.int(1)]),
+      // 实测标签 `<原生基类>(<class_name 或文件名>)::<方法>`：q10 的 SceneTree(main.gd)::top 与 m10 同一串
+      eq(
+        "241",
+        "外层脚本自己的方法那一形现在发得出（标签带文件名那一截）",
+        errText(() => method(c, "call", [V.int(1)])),
+        "Invalid call to function 'SceneTree(main.gd)::topfn (Callable)'. Expected 2 argument(s).",
       );
+      eq("241", "同一支的打印走的是那句标签", show(c), "SceneTree(main.gd)::topfn");
+      eq("241", "绑过实参不改打印", show(method(c, "bind", [V.int(3)])), "SceneTree(main.gd)::topfn");
+      eq("241", "var_to_str 里方法 Callable 也是 Callable()（实测 w09 / s08）", `${varToStr(c)}|${varToStr(method(c, "bind", [V.int(3)]))}`, "Callable()|Callable()");
+    }
+    {
+      class Util {}
+      const dUtil = registerClass("Util", Util, () => new Util(), (o) => o instanceof Util);
+      registerNativeBase(dUtil, "RefCounted");
+      registerScriptLabel(dUtil, "Util");
+      registerStaticMethods(dUtil, ["stat"], { stat: () => V.int(6) });
+      class Nodey {}
+      const dNodey = registerClass("Nodey", Nodey, () => new Nodey(), (o) => o instanceof Nodey);
+      registerNativeBase(dNodey, "Node");
+      registerScriptLabel(dNodey, "nodey.gd");
+      class Kid {}
+      const dKid = registerClass("Kid", Kid, () => new Kid(), (o) => o instanceof Kid);
+      registerNativeBase(dKid, "RefCounted");
+      eq("241", "class_name 就是括号那一截（实测 RefCounted(Util)::hi）", show(methodCallable(wrapValue(new Util()), "hi")), "RefCounted(Util)::hi");
+      eq("241", "带文件名的类的静态方法仍是 GDScript::<名>（实测 s01）", show(methodCallable(V.object(dUtil), "stat")), "GDScript::stat");
+      eq("241", "宿主基类不是 RefCounted 时前面跟着走（实测 Node(nodey.gd)::hi）", show(methodCallable(wrapValue(new Nodey()), "hi")), "Node(nodey.gd)::hi");
+      eq("241", "内部类没有括号那一截（实测 q01 的 RefCounted::three）", show(methodCallable(wrapValue(new Kid()), "three")), "RefCounted::three");
+      eq("241", "空 Callable 与 lambda 的打印（q07 / q05）", `${show(nullCallable())}|${show(callableOf(() => V.nil(), 1))}`, "null::null|<anonymous lambda>(lambda)");
     }
   });
 });

@@ -12,8 +12,7 @@ import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8
 import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
-import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
-import { globalCallableLabel } from "./global-names";
+import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
@@ -1511,10 +1510,8 @@ export function varToStr(v: Variant): string {
         }
         return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
       }
-      // Callable 实测都印成 `Callable()`（lambda、空 Callable、绑过实参的、全局的那四支都一样）；方法 Callable 这一形没量到，仍走下面那句拒。
-      if (isCallable(v)) {
-        if ((inner as CallableBox).object === null) return "Callable()";
-      }
+      // Callable 五支实测都印成 `Callable()`（方法、静态、lambda、空 Callable、全局的、绑过实参的都一样）
+      if (isCallable(v)) return "Callable()";
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
     }
     default:
@@ -2294,10 +2291,9 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
-      // 全局 Callable 实测打印 `@GlobalScope::abs` 这一串（绑过实参照旧），方法 Callable 的打印形状没量过，仍走下面那句拒。
+      // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null
       if (isCallable(v)) {
-        const box = inner as CallableBox;
-        const label = box.object === null && box.name !== null ? globalCallableLabel(box.name) : null;
+        const label = callableLabel(inner as CallableBox);
         if (label !== null) return label;
       }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");

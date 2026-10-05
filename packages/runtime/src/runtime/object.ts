@@ -1,11 +1,11 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
-import { CallableBox, isNullCallable, type Fn } from "./callable";
+import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
 import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
 
 // Callable 盒子的**形状**与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，不能反向 import 本模块），这里只把外需要的几样转出去。
-export { CallableBox, callableEq, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
+export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
 
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
@@ -116,6 +116,8 @@ export class ClassDesc {
   check: (o: object) => boolean;
   /** `get_class()` 要的那个**原生**基类名，不是脚本类名。 */
   nativeBase: string | null;
+  /** Callable 标签里括号那一截：`class_name` 声明的名字，没有就是脚本文件名；内部类不登记（引擎那侧就没有括号）。 */
+  scriptLabel: string | null;
   fieldTypes: Record<string, string> | null;
   methodArities: Record<string, [number, number]> | null;
   staticVars: Record<string, string> | null;
@@ -126,6 +128,7 @@ export class ClassDesc {
     this.make = make;
     this.check = check;
     this.nativeBase = null;
+    this.scriptLabel = null;
     this.fieldTypes = null;
     this.methodArities = null;
     this.staticVars = null;
@@ -310,6 +313,31 @@ export function nativeBaseOf(target: unknown): string | null {
   }
   return null;
 }
+
+/** 登记 Callable 标签里那截括号名（`Util` 这种 `class_name`，或 `main.gd` 这种文件名）。 */
+export function registerScriptLabel(desc: ClassDesc, label: string): void {
+  desc.scriptLabel = label;
+}
+
+/** 沿 `base` 链找最近登记过的脚本名：内部类一路没有，标签就不带括号。 */
+export function scriptLabelOf(target: unknown): string | null {
+  for (let d = descOf(target); d !== null; d = d.base) {
+    if (d.scriptLabel !== null) return d.scriptLabel;
+  }
+  return null;
+}
+
+// Callable 标签里「挂在某个脚本类上的那两支」要知道类的身份，而本模块才是知道那一层的地方。
+registerCallableLabelHook((box) => {
+  const inner = box.object?.v;
+  const name = box.name;
+  if (inner === undefined || name === null) return null;
+  if (hasStaticName(inner, name)) return `GDScript::${name}`;
+  const base = nativeBaseOf(inner);
+  if (base === null) return null;
+  const label = scriptLabelOf(inner);
+  return label === null ? `${base}::${name}` : `${base}(${label})::${name}`;
+});
 
 // ---------------------------------------------------------------- meta 存储
 // meta 的存在处**不能**是 `WeakMap`：它的 `.get()` 在静态编译目标上给 `unknown`；代价是这些对象不再会被回收。

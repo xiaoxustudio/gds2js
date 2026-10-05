@@ -51,6 +51,8 @@ rt.registerStaticVars(__gd_d_Main, {"osv": "int"}, {"osv": { get: (): rt.Variant
 rt.registerMethodArities(__gd_d_Main, { "bumpOuter": [0, 0], "_initialize": [0, 0] });
 rt.registerStaticMethods(__gd_d_Main, ["bumpOuter"], {"bumpOuter": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Main.bumpOuter())});
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
+rt.registerScriptLabel(__gd_d_Main, "main.gd");
+rt.registerScript("res://main.gd", __gd_d_Main);
 class A extends rt.GdScriptObject {
   static x = rt.toInt(rt.V.int(1));
   static plain = rt.V.int(2);

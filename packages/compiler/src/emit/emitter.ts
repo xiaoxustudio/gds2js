@@ -444,6 +444,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (baseClass.kind !== "import") {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
+  // Callable 标签里那截括号实测是 `class_name`，没有就用文件名（`RefCounted(Util)::hi` / `SceneTree(main.gd)::top`）。
+  const scriptLabel = m.className ?? (resPath ? resPath.split("/").pop() ?? null : null);
+  if (scriptLabel !== null && scriptLabel !== undefined) {
+    out.push(`rt.registerScriptLabel(__gd_d_${className}, ${JSON.stringify(scriptLabel)});`);
+  }
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, __gd_d_${className});`);
 
   for (const c of orderInnerClasses(m.innerClasses)) {

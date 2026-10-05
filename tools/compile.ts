@@ -11,10 +11,12 @@ import { caseDir, caseScript, listSingleCases } from "./lib.mjs";
 const filter = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 const cases = listSingleCases(filter);
 
-/** 生成物落在 corpus/cases/<id>/：runtime 与测试宿主都按仓库原位（三级回溯）—— 这两个值以前是 emitter 的默认值，现在由调用方声明。 */
+/** 生成物落在 corpus/cases/<id>/：runtime 与测试宿主都按仓库原位（三级回溯）—— 这两个值以前是 emitter 的默认值，现在由调用方声明。
+ *  resPath 与 compileProject 给用例算出来的一致（res://main.gd），Callable 标签那截括号名要用它。 */
 const GEN_EMIT_OPTS = {
   runtimeImport: "../../../packages/runtime/src/runtime/index",
   hostImport: "../../../tools/harness/scene-tree",
+  resPath: "res://main.gd",
 };
 
 let compiled = 0;

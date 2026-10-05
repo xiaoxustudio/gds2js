@@ -324,9 +324,11 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     // 原生那支是起子进程跑产物的，产物的正文得从子进程 stderr 接回来才算报全。
     const dir = join(WD, "refuse");
     const gd = join(dir, "uns.gd");
+    // 这一族的式样是「还没实现」，不是「随便一句错」：`split_floats` 在 String 的 switch 里没有分支，
+    // 走 `[string-method]` 那句响亮拒。（早先用的 `pad_zeros` 已经发出去了，产物不再报错，退出码变 0。）
     writeFileSync(
       gd,
-      'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".pad_zeros(3))\n\tquit()\n',
+      'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".split_floats(","))\n\tquit()\n',
       "utf8",
     );
     const nRun = cliNode(["run", gd], ROOT);

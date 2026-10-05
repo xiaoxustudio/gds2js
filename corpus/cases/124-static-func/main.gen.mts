@@ -57,6 +57,8 @@ rt.registerFieldTypes(__gd_d_Main, {"TOP": "int"});
 rt.registerMethodArities(__gd_d_Main, { "helper": [0, 0], "usehelper": [0, 0], "outerbare": [0, 0], "_initialize": [0, 0] });
 rt.registerStaticMethods(__gd_d_Main, ["helper","usehelper"], {"helper": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Main.helper()), "usehelper": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Main.usehelper())});
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
+rt.registerScriptLabel(__gd_d_Main, "main.gd");
+rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
   CV = rt.toInt(rt.V.int(99));
   static CV = rt.toInt(rt.V.int(99));

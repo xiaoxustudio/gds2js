@@ -1,0 +1,19 @@
+q01|RefCounted::three
+q02|25|[RefCounted::three]
+q03|GDScript::sm
+q04|[GDScript::sm]
+q05|<anonymous lambda>(lambda)
+q06|[<anonymous lambda>(lambda)]
+q07|null::null
+q08|[null::null]
+q09|RefCounted::three
+q10|SceneTree(main.gd)::top
+q11|[SceneTree(main.gd)::top, <anonymous lambda>(lambda), null::null]
+q12|RefCounted::three
+q14|@GlobalScope::abs
+q15|[Callable(), Callable(), Callable(), Callable(), Callable(), Callable()]
+q16|123|4
+q17|RefCounted::three|25
+q18|true|false|true
+q19|three|21|top
+q20|RefCounted::three|false

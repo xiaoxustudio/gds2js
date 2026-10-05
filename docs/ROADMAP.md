@@ -385,6 +385,15 @@
 - **账**：语料 239（64 格）+ 240（19 格）、ops 新增 `global-callable.test.ts` 46 格、guards 新增「值位置 Callable 78/78」；`test:diff` **154/154 逐字节**、静默错误 0，`pnpm test` **912 例 / ops 1601 条**全过，`test:scriptc` 10/10，原生 CLI 重编后 **22/22**，`pnpm typecheck` 4/4。
 - **还欠的两格**：引擎类名当值用仍是误拦（`ClassDB` 名单 + 带号的打印没定口径，§6 第 19 条）、`hash(全局 Callable)` 与 `"{0}".format(abs)` 那两格读数没合桌（§6 第 20 条）。
 
+### 1.41 `print(o.method)` 发出去：五种 Callable 形状共用一句标签（2026-10-05，S239，语料 241）
+
+- **先量再动手**：`corpus/cases/241` 的 20 格与 `tmp/probe-callable-print/`（带 `project.godot` 的四份脚本：`class_name Util`、无 class_name 的 `implicit.gd`、`extends "res://util.gd"` 的 `child.gd`、`extends Node` 的 `nodey.gd`）一起量出标签规则 —— `<原生基类>[(<class_name ?? 文件名>)]::<方法>`，内部类没有括号那一截、静态一律 `GDScript::<名>`、空的是 `null::null`、lambda 是 `<anonymous lambda>(lambda)`，绑过实参不改它。
+- **一句标签两处用**：打印与 `Invalid call to function '… (Callable)'` 实测是同一串，所以合成 `callableLabel()` 一个出口 —— `show()` 与 `callableCallLabel()` 都读它，S212 那格「外层脚本自己的方法要文件名、发不出就拒」的 `[callable-arity-label]` 随之销账（ops 里那条 `shouldThrow` 换成实测那句 `SceneTree(main.gd)::topfn`）。
+- **叶子拿不到类身份**：`callable.ts` 是最叶子，`object.ts` 在 import 时把「静态 / 实例方法」那两支挂成 hook；`ClassDesc` 多一个 `scriptLabel`，由发射器按 `m.className ?? basename(resPath)` 登记 —— 语料 codegen 的 `GEN_EMIT_OPTS` 因此补 `resPath: "res://main.gd"`，与 `compileProject` 给用例算出来的那个值一致。
+- **`var_to_str` 顺手补齐**：方法 / 静态 / lambda / 空 / 全局 / 绑过的六格实测全打 `Callable()`，`[var-to-str-type]` 那支的适用面缩到「真有形状却没量过」的。
+- **账**：语料 241（19 格）、ops 新增 10 格（1609），`test:diff` **155/155 逐字节**、静默 0，`pnpm test` 915 例，`pnpm typecheck` 4/4。撞出来的工作规则记在 §2 第 13 条：**新增 runtime 导出要先 `pnpm build`** —— 工程形状的用例吃的是 `gds2js/dist/runtime.mjs` 那份副本，这次十来个用例一起报 `registerScriptLabel is not a function` 就是它。
+- **没发的两格**：静态方法 Callable 当字典键（打印量到了 `{ GDScript::sm: 1 }`，键要的类身份号没有，按标签分格会把两类别名同名的并成一格 → §6 第 21 条）、`Callable.get_object()`（两支都带进程内号 → §6 第 22 条）。
+
 ---
 
 ## 2. 当前任务与待办
@@ -482,6 +491,7 @@
 13. 架构整改轮（§1.3）后的常驻项：改产物树/HOME 布局先跑 `test:treeface`；`case-table.ts` 只走
     `pnpm regen:case-table`；`case-flags.ts` 只走 `pnpm regen:case-flags`（两张都是实测生成物，别手改）；native seam 新增分岔口照「复制 `*.native.ts` 覆盖」办理；
     改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑 `node tools/scriptc-check.mjs 234`（38s 面探针，`pnpm release` 的 2b 就是它）再提交。
+    新增 runtime 的**导出名**还要先 `pnpm build`：语料里的工程形状用例（带 `project.godot` 那十来个）产物 import 的是 `gds2js/runtime` → `packages/gds2js/dist/runtime.mjs`，那是份打包副本，不重建就报 `__vite_ssr_import_0__.xxx is not a function`（S239 这轮就是这么撞上的）。
 14. 两条观察项（记录，不动）：dist 内容哈希块名（HOME/export 均按 glob/目录读，无门依赖具体块名）；
     门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）。
 

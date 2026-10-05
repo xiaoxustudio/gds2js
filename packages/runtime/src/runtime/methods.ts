@@ -9,7 +9,7 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { CallableBox, boundArgsOf, callableArityBounds, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import type { GdIdentified } from "./identity";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
@@ -143,21 +143,11 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   return callCallableBox(box, args);
 }
 
-/** 那句报错里的**函数标签**，四种接收者四种形状：lambda → `<anonymous lambda>(lambda)`；静态方法 → `GDScript::<名字>`；内部类实例 → 只印原生基类 `RefCounted::<名字>`；外层脚本自己的方法要产物知道 `.gd` 的名字，响亮拒。 */
+/** 那句报错里的**函数标签**，与打印用的是同一串（五种形状实测过：空、lambda、全局、静态、方法）。 */
 function callableCallLabel(box: CallableBox): string {
-  const name = box.name;
-  if (name === null) return "<anonymous lambda>(lambda)";
-  // 全局 Callable 的标签实测是 `@GlobalScope::abs`，`len` / `load` / `range` / `convert` 那几支在 `@GDScript::` 侧
-  if (box.object === null) {
-    const label = globalCallableLabel(name);
-    if (label !== null) return label;
-  }
-  const inner = box.object?.v;
-  if (inner !== undefined && hasStaticName(inner, name)) return `GDScript::${name}`;
-  const native = inner === undefined ? null : nativeBaseOf(inner);
-  if (native === null) throw new UnsupportedError("callable-arity-label", "还不知道这个 Callable 的函数标签");
-  if (native === "RefCounted") return `RefCounted::${name}`;
-  throw new UnsupportedError("callable-arity-label", `${native} 的函数标签要脚本文件名（docs/SEMANTICS.md §6 的挂账），这一格没发出去过`);
+  const label = callableLabel(box);
+  if (label !== null) return label;
+  throw new UnsupportedError("callable-arity-label", "还不知道这个 Callable 的函数标签");
 }
 
 /** Callable 的方法面：方法 Callable、静态方法 Callable、lambda、`Callable()` 空 Callable 四种形状共用这一张表。 */

@@ -42,7 +42,7 @@ describe("runtime/global-callable · 全局函数的 Callable 值", () => {
     eq("239", "绑过实参照旧印同一串（实测 abs.bind() 那格）", show(method(globalCallable("abs"), "bind", [I(1)])), "@GlobalScope::abs");
     eq("239", "数组里印的是同一串，元素不加引号", run(() => arrOf(globalCallable("abs"), globalCallable("len"))), "28|[@GlobalScope::abs, @GDScript::len]");
     eq("239", "is_valid 真、is_null 假（实测 p17 那格）", `${run(() => method(globalCallable("abs"), "is_valid", []))}|${run(() => method(globalCallable("abs"), "is_null", []))}`, "1|true|1|false");
-    eq("239", "var_to_str 的四支实测都是 Callable()（方法 Callable 那形没量）", `${varToStr(globalCallable("abs"))}|${varToStr(nullCallable())}|${varToStr(callable(() => V.nil(), 0))}|${code(() => V.str(varToStr(methodCallable(V.object({}), "m"))))}`, "Callable()|Callable()|Callable()|[var-to-str-type]");
+    eq("239", "var_to_str 里 Callable 实测都是 Callable()（全局 / 空 / lambda / 方法四支同一条，见 S239）", `${varToStr(globalCallable("abs"))}|${varToStr(nullCallable())}|${varToStr(callable(() => V.nil(), 0))}|${varToStr(methodCallable(V.object({}), "m"))}`, "Callable()|Callable()|Callable()|Callable()");
     eq("239", "get_method 是 StringName（typeof 21），不是 String", `${run(() => method(globalCallable("abs"), "get_method", []))}|${run(() => method(globalCallable("len"), "get_method", []))}`, "21|abs|21|len");
     eq("239", "get_argument_count 走实测读数：abs 1、max 2、lerp 3、range 0、prints 1", [
       run(() => method(globalCallable("abs"), "get_argument_count", [])),
