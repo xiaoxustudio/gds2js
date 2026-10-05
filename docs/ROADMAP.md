@@ -315,6 +315,101 @@
 - **拒的三类**：`\U` 量到「吃六个十六进制位」但越界与代理区凑不成式子 → `[str-to-var-shape]`；`Rect2`（typeof 7）/ `Quaternion`（15）/ `PackedVector3Array` / `PackedColorArray` 是引擎给得出值而我们没有的形状 → `[str-to-var-type]`；构造式名字认不出时**不发那个可能是错的 null**（只量过 `NoSuchType(1)` 那一格给 null，「Godot 认识哪些名字」那张表没量）→ `[str-to-var-shape]`。双实参与非 String 实参分别抛 `[str-to-var-arity]` / `[str-to-var-arg]`，前者钉在 `test:compile` 新改的「转换族单实参口径 6/6」。
 - **账**：语料 236 加 43 格、ops 加 30 格（1479→1509）。`test:compile` 160/229、各桶全清、守卫 8/8 与 6/6，`test:diff` 逐字节一致 152/152、静默错误 0、崩溃 0。转换族只剩 `convert` / `type_convert` 两支没合出真源（S214 已量清标量表，卡在数组→标量那一格引擎在运行期拒）。
 
+### 1.33 十一支门全量迁到 Vitest：搬进各自的包，历史读数一行没动（2026-10-05，纯测试基建，零产品代码改动）
+
+- **动因**：`tools/` 下 27 支手写门脚本靠 `pass++` / `fails.push()` / `process.exit(1)` 三件套自证，其中 `ops-check.ts` 一个文件 3442 行、1509 条断言 —— 改一格要滚三千行；runtime 的单测躺在仓库根而不在 `packages/runtime` 里；没有 watch、没有按名过滤。这轮把**全部 11 支 `test:*` 门**迁到 Vitest（`vitest@5.0.3` + `vite@8.3.2`，单一根配置四个 project），11 个脚本名全部存活、10 个改指向。
+- **分层**：快层 `pnpm test`（testkit + runtime + compiler + repo，**零外部依赖、零 build，实测 4.62s**）；E2E 层 `pnpm test:e2e`（六支，串行、缺料自动 skip）；`pnpm test:all` 两层全跑。快层能零 build 是因为 Node 24 直接把 workspace 的 exports 映射解析到 `.ts` 源码（`import.meta.resolve('@gds2js/runtime/runtime/ops')` → `packages/runtime/src/runtime/ops.ts`），Vite 同样吃得下，所以不需要 `resolve.alias`、也不需要 `^build` 前置。
+- **三态统一**：今天只有 `export-check.ts` 有 `ok|refused|no-lib|crash|FAIL` 五态，其余五支只有 ok/fail 两态 —— 缺 Godot/scriptc/zig 时要么静默变绿、要么一堆看不懂的紅。现在 `refused`/`no-lib` 一律 `ctx.skip(true, note)`（S1 实测原因会显示在方括号里），红只剩一个意思：真的坏了。**一处有意的行为变更**：`diff.mjs` 的 `crashed` 与 `export-check.ts` 的 `crash` 从 tolerated（不退非 0）改成 fail，依据是 `diff.mjs:53` 自己的注释「崩溃和「没做」必须分开算：前者是 bug，后者是排期」；S0 基线实测两者都是 0，所以迁移当天没变红。
+- **读数保真靠 `task.meta` + 自定义 reporter**：1509 这个数**不等于**静态调用点数（1403）—— region 280-390 的 `runMut` 那类表驱动 helper 会循环生成断言，只有运行时才知道总数。而断言散在 23 个文件里、`isolate` 下模块作用域互不相通，所以计数写进 `task.meta`、由 reporter 在主进程重新加总。Vitest 5 的 API 与文档印象差得挺远，实测修正了六处：`getCurrentTest` 不再从主入口导出（改 `TestRunner.getCurrentTest()`）、`Reporter.onFinished(files)` 换成 `onTestRunEnd(testModules)`、`meta` 从属性变方法、类型在 `vitest/node` 而非 `vitest/reporters`、`poolOptions` 整个删了（`singleFork` → `maxWorkers:1`）、`it.each` 的回调**拿不到 context**（所以 `corpus-diff` 改用 `for` 循环建 `it()`）。
+- **ops 的拆分：codemod 只在 region 级动刀，绝不解析实参列表**。`eq`/`shouldThrow` 的签名原样保留、只是从局部声明变成 import，所以 1403 个调用点（含跨 5 行、带嵌套括号与中文模板字面量的那些）一个都不碰，codemod 退化成「按行区间切 region → 贴进 `it()` 体 → 拼 import 前奏」。region 边界不靠手写词法器（TS 7.0.2 是 Go 移植版、不暴露 `createSourceFile`），而靠这份文件的排版约定：**顶层裸块的 `{`/`}` 必定顶格单独成行**，且实测「反引号数为奇数的行 = 0」证明没有跨行模板串，判据无歧义。机械发现 68 个顶格块 + 9 段无声明顶层语句 = 77 个 region，其中 **511 行那一格（`eq("009","[1,2]==[1,2]",…)`）是顶层裸语句、原归属表漏了它** —— 被「每个 region 必须恰好落进一项归属」的断言当场抓住，否则会静默丢掉一条断言。
+- **一个 `it()` = 一个原子 region，不是一格一个**：region 内的 `eq` 读的是它前面语句累积下来的状态（`g.set(-1, I(9))` 就夹在两条断言之间），拆细会让第一格之后全红。反过来语料门（ir/sema/diff/golden/scriptc）用例之间无共享可变状态，就一例一个 `it()`，于是 `-t 088-vector2-write-error` 能一秒重跑单例。
+- **计划书里 `isolate: true` 那条硬性要求被证伪，改成 `false`**：理由是 `registerClass("Holder", …)` 在 2307 与 3123 各登记一次、"靠源码顺序侥幸不撞"。核实后不成立 —— `nameClass`（`object.ts:177-180`）是 `CLASS_REGISTRY.set(name, desc)`，撞名只覆盖不抛；两处各自接住自己返回的 descriptor 直接用，全文没有任何地方按名字回查 `"Holder"`。实测 `isolate:false` 得到**逐字相同**的 1509/0，且 **2.36s vs 15.95s（6 倍）**。`isolate:false` 恰恰是对旧执行形状的忠实复现：`tsx tools/ops-check.ts` 本来就是一个进程、一份模块注册表、76 个 region 顺序跑。
+- **没迁的四类**（它们改写仓库，不是断言）：`golden.mjs` 重生模式（写 238 个 golden，且**旧版缺 Godot 存在性守卫** —— 缺了会把整个语料覆盖成 `<<GDS2JS_SPAWN_ERROR>>`；迁过来的 `golden-drift.test.ts` 补上了这道守卫）、`bench-ab.ts`（测量期间**覆写真实源文件**、从内存还原，测试运行器里的硬性禁区）、`release.mjs`、`case-*.mjs` codegen。四支 bench 与 `latency` 零断言、只出读数并交接 `bench/.out/js.json`，也留为脚本。`test:golden` 与 `test:compile` 名字虽叫 `test:` 但实为 codegen，逐字不动。
+- **两处被迁移逼出来的修正**：① `newestInputMtime()`（cli-native 判 exe 陈旧）递归 walk 整个 `packages/`，测试搬进 `packages/*/test/` 后会导致「改一个测试文件 → exe 判过期 → 每次重建几分钟」，所以 walk 里排除 `test` 与 `node_modules`（exe 的真实输入集没变）。② `tools/release.mjs` 按文件路径直接调 `scriptc-check.mjs` 与 `cli-native-check.mjs`，删掉它们会打断发布流水线，已改成调 vitest；scriptc 的 case-id 过滤走 `GDS2JS_SCRIPTC_FILTER` 而不是 `-t`（`-t` 只过滤**已收集**的测试，挑不出代表集之外的用例）。
+- **测试文件一律不进 `packages/*/src/`**：`export-ts-tree.ts:32` 的 `copyTreeTs` 会把 `packages/runtime/src/` 下每个 `.ts` 递归拷进 `--pack scriptc` 的产物树。`tools/harness/scene-tree.ts` 路径**冻结**（244 个已提交的 `main.gen.mts` 里硬编码了 `../../../tools/harness/scene-tree`），`corpus/` 与 `GEN_EMIT_OPTS` 一个字没动 —— `git ls-files -s -- corpus` 的 728 个 blob SHA 迁移前后全等。
+- **账**（迁移前后逐字对照，全部由新旧并排跑 + 负对照验过）：`ops 自校验：通过 1509，失败 0`（23 文件 79 个 `it()`，2.36s；旧 1.98s）· `Lowering 成功 229/229`（1.20s，旧 2.42s）· `命中 229/229 误报 0 漏报 0 崩溃 0`、17 例 runtimeOnly 清单逐条相同（1.55s，旧 2.64s）· `tree-face 对账：通过 17 项，失败 0 项` · 守卫三行 `0 / 8-8 / 6-6` 从 `test:compile` 移到新的 `test:guards`（33 格），`test:compile` 剩下 5 行含 `编译成功 160/229` 逐字不变 · `test:diff` 六行看板逐字相同（152/238、86/238、238/238、152/152、152/152、0/0/0），6.84s（旧「几分钟」）· `失败 0 项`（pkgmodes）· `出货 10/10 编过、10/10 跑通、逐字节一致 10/10` · `汇总：ok 10 / 上游或环境记账 3 / FAIL 0` · `原生 CLI 等价性门：通过 22 项，失败 0 项` · `合计: OK 152 / 编译或运行报错 69 / 超时 17 / 漂移或缺 golden 0`。**`pnpm typecheck` 3/3 → 4/4**（testkit 是第四个），另加 `tsconfig.test.json` 覆盖根级 `test/`（根 tsconfig 那份 `include: ["tools","packages"]` 其实没人跑，且有 9 个既存错误在 `bench-ab.ts`/`bench-scriptc.ts`，与本轮无关、没碰）。**静态调用点完整性另有一道独立校验**：原文件 1233 个 `eq(` + 170 个 `shouldThrow(` = 1403，23 个生成文件里同样是 1403，没漏没重。
+- **遗留（都是装饰性的，不影响判定）**：① 23 个 runtime 测试文件各带一份未裁剪的 103 行 import 前奏（共约 2400 行冗余）—— 这是刻意取舍：根 tsconfig 没开 `noUnusedLocals`，全量照抄一举消灭了「漏了某个 import」整类失败，裁剪留作单独一轮。② `docs/SEMANTICS.md` 有约 8 处把 "ops-check" 当语义钉点的代名词引用（「只钉 ops-check、不进语料」「ops-check +10 条 → 1259」），那是历史实测记录、不该改写；现在 "ops-check" 指的是 `packages/runtime/test/`。③ `tools/compile.ts:40` 写进 `main.gen.mts` 的 stub 文本里提到 "js-runner"，改一个字就是 244 份产物的 churn，所以原样留着。
+
+### 1.34 清掉 tools/ 的最后三段判据，并给生成源码补上漂移门（2026-10-05，接 §1.33）
+
+- **还剩什么**：§1.33 之后 `tools/` 16 支里没有一支是「测试」了，但有两处判据藏得很不舒服。① `compile.ts` 里剩的 `pack codec 口径不一致 0` 与 `自兜底缺失 0` —— 两处都设 `process.exitCode = 1`，是真断言，却住在一个 codegen 脚本里，只有记得跑 `test:compile` 才生效。② 生成物 `packages/runtime/src/runtime/case-{table,flags}.ts` 文件头写着「别手改，改请重跑生成流程」，但**没有任何门能发现有人手改了它**，也发现不了「regen 跑了没提交」；golden 在 §1.33 有了漂移门，生成源码一直没有。
+- **①迁进快层**：新建 `packages/compiler/test/emit-invariants.test.ts`，229 例各验两条 —— 扫产物文本得到的 `NEED_ZSTD_TEXT` 必须与 lowering 记下的 `ir.usesPackCodec` 一致；有 `const __gd_entry = new …` 尾巴的产物必须含 `rt.reportRunFailure(`（直接跑产物时外面没有 CLI 那层 try/catch，缺兜底就是一坨 Uncaught 栈）。两条判据**互相独立**（一条看发射出的字符串、一条看 IR 标志），所以互锁有牙。语义分析/发射器拦下的那 69 例没有产物可验，与旧实现同样跳过。`compile.ts` 自此是纯 codegen（三行统计、不设 exitCode），两条读数原文迁进新门的 afterAll。
+- **顺手把那条正则收成一份**：旧实现把 `/,\s*"(?:compress|decompress)"\s*,/` 抄在 `tools/compile.ts:20` 与 `tools/scriptc-check.mjs:70` 两处（注释里明说是同一条口径），两份字面量之间没有编译期联系。现在 `test/support/pack-codec.ts` 单份导出，`emit-invariants.test.ts` 与 `test/e2e/scriptc.test.ts` 各引一次 —— 共享的只是正则，文本侧与 IR 侧依旧独立。
+- **②补生成源码漂移门**：把两支生成脚本的「算内容」与「写盘」拆开 —— 新增 `tools/case-codegen.mjs`（纯函数：解析 golden → 算区间 → 拼最终文件内容）+ `case-codegen.d.mts`（沿用 `lib.d.mts` 那套 .mjs 配 .d.mts 的约定），`case-table.mjs` / `case-flags.mjs` 瘦成「读 golden → 调它 → 写盘」。`test/e2e/codegen-drift.test.ts` 复用同一份纯计算，算出「现在该是什么」与盘上已提交的逐字节比，一个字都不写。**先验证抽取忠实**：重跑两支脚本后 `case-table.ts` / `case-flags.ts` 在 git 里仍是 0 脏文件，才谈得上门。
+- **一道被 autocrlf 逼出来的修正**：漂移门第一次写完是绿的，但那次绿是**假的** —— 我在跑脚本之后才建门，而脚本用模板字面量写盘产出 LF，恰好与 committed 的 LF blob 相符。做负对照（手改一个导出名 → 门红 ✓ → `git checkout --` 还原 → **门仍然红**）才挖出来：本机 `core.autocrlf=true`，committed blob 是 182 行 LF / 7606 字节，`git checkout` 把工作树重写成 182 行 CRLF / 7788 字节。比的是内容不是行尾策略，于是两边先统一成 LF 再比；改完复验：CRLF 工作树下绿、手改函数名即红、还原即绿。⚠ 同一个坑在 golden 比对那边潜伏着（corpus 的 golden 是 LF，一旦被 re-smudge 成 CRLF，`normalize()` 产出的 LF 就对不上）—— 那是既有事实、本轮没动，**值得单开一轮加 `.gitattributes`**。
+- **一处诚实的限制**：探头用例 `000-probe-cs-*` / `000-probe-cf-*` 是 gitignored（"现搭现弃不入库"），所以新克隆的机器上 `test:codegen` 整支 skip。它防的是「手改生成物」与「regen 跑了没提交」这两类真事故；**Godot 侧的分类/映射本身变了没有**，仍要跑 `pnpm regen:case-table` / `regen:case-flags`（会重搭探头、真起 Godot）才知道。
+- **顺带**：修掉 4 处指向已删文件的过期注释（`tree-face.ts` 的消费者清单两条、`host-scriptc.ts`、`host-node.ts`、`lib.mjs` 的工具清单）；扫了一遍**被跟踪文件里没有零引用的孤儿**（§1.33 删掉那 10 支之后没留死源码）；本次会话在 `tmp/` 下的 9 项脚手架已清（`tmp/` 本身 gitignored，从未污染仓库）。
+- **账**：新门 `emit-invariants` 229 例、`codegen-drift` 2 例，两条互锁读数 `pack codec 口径不一致 0` 与 `自兜底缺失 0` 逐字沿用、另附「各验了 229 / 229 例」；compiler project 从 3 文件 491 例变 **4 文件 720 例 / 4.10s**；快层 `pnpm test` 仍全绿、`pnpm typecheck` 4/4；`git ls-files -s -- corpus` 的 728 个 blob SHA 与 §1.33 的 S0 基线仍全等，`test:compile` 剩下三行 `160/229 / 69 / 0` 未变。新增根脚本 `test:codegen`；11 个旧 `test:*` 名字继续存活。
+
+### 1.35 `count` 的 from/to 窗口与 `format` 的缺省占位符 `{_}`：两格按 4.6.3 重写，S219 的账结清（2026-10-05，§6 第 15 条、S232）
+
+- **两处老口径是错的，实测把方向掰回来**：`count` / `countn` 的第 2、3 实参不是 `chars` / `limit` 而是 **`from` / `to` 码点窗口**（41 格，含 `"aé日".count("aé", 0, 2)` = 1、`"😀😀a".count("😀")` = 2 这种 UTF-16 与码点分岔的格），`string-count-chars` / `string-count-third` 两条拒直接删掉；`format` 的缺省占位符实测是 **`"{_}"`**，不是 S219 猜的 `"{0}"` —— `{0}` 是键文本渲染出来的样子，所以 `"{}".format([1])` 原样而 `"{0}".format([1])` 给 `1`，S219 那一批「`{}` 留着」的读数全部由这一条解释。
+- **`format` 的两条通道**：占位符含 `_` 时把 `_` 换成键文本再做**全串替换**，不含时对每个值做一次 `replace_first`；键文本与值文本都走 print 那套（`null` → `<null>`、float 15 位、StringName 不带 `&`、字典 `{ "a": 1 }`）。Array 通道里**恰 2 元的数组元素按 (键, 值) 解**、不是 2 元的跳过；Dictionary 通道**按插入顺序遍历键**（`{a} {b}` 配 `{"a":"{b}","b":"z"}` 给 `z z`，反过来给 `{b} z`，一正一反把「遍历键」与「扫描花括号」两种猜想分开）。值转文本与 `var_to_str` 是两条道（后者负无穷写 `inf_neg`，这里写 `-inf`，S230 反过来也用上了）。
+- **两处没写进实现**：Object 实参那一支引擎确实按属性表替换（实测属性 `k` 换掉 `{k}`），但属性的集合与顺序没量过 → 抛 `[format-object]`；不是 2 元的内层数组被跳过时引擎往 stderr 打 `Invalid format: the inner Array at index N …` 加 `at: ustring.cpp:3569` 与一段回栈，那几行带引擎源文件行号、属「复现不了的打印」，所以我们的跳过是静默的、这类格不进语料（差异写在 S232 账上）。
+- **账**：语料 234 加 62 格（format 44 + count 18）、ops 加 29 格（1509→1538）；`test:diff` 152/152 逐字节、静默错误 0，`pnpm test` 810 例全过、treeface 17/17、typecheck 4/4。§6 第 15 条这一族从此只剩 `format` 的 Object 那一支（`[format-object]`）；「值位置的未知名字」那格仍记在 §6 第 17 条①的尾巴上。
+
+### 1.36 `TYPE_*` 整族量清并发出：37 支常量 + `TYPE_MAX`，量法本身是一条新门道（2026-10-05，S233，#23 的前置）
+
+- **难点不在读数在探针**：`TYPE_LAMBDA` 那种「名字不存在」在 GDScript 是**解析期**错，一支脚本里写错一个名就整支编不过、后面的格子全看不见。做法是换成运行时编译 —— `GDScript.new()` 写 `source_code`、`reload(true)`，编不过就是没这个名字，一趟把 39 个候选全量完（探针 `tmp/probe-types/list_types.gd`）。这条办法对「逐名验证一个会被解析期拦死的集合」通用，后面量 `convert` 各自接受哪些 `TYPE_` 直接照抄。
+- **读数**：0…11、14…18、20…39 连续对上（`TYPE_PLANE` 14、`TYPE_COLOR` 20、`TYPE_MAX` 39），**12 / 13 / 19 三个号没有名字**（enum 本身的洞，不是漏抄），`TYPE_LAMBDA` / `TYPE_CONST` 实测不存在。九支 pack 是 29…38，其中 38 是 `TYPE_PACKED_VECTOR4_ARRAY`。每支都另用 `typeof(样本)` 复核过，两套读数一格不差；语料 236 加 37 格打印 + 17 格 `typeof(x) == TYPE_X`，逐字节一致 152/152、`pnpm test` 810 例、ops 1538、treeface 17/17 全清。
+- **这格的意义是把 #21 的最后一层剥开**：`convert` / `type_convert` 此前连编译都过不了（`TYPE_INT` 是个未知标识符），现在常量在手，卡点收敛成两条可量的实验 —— 两支函数各自的解析期接受集合（用上面那套内层脚本法）、以及 `convert([], TYPE_INT)` 那句运行期拒到底在哪一层。
+
+### 1.37 `convert` 与 `type_convert` 的接受集合一次量完：解析期按第一实参的静态类型分岔（2026-10-05，S234，本轮零代码）
+
+- **量法沿用 §1.36 那条内层脚本**：340 个 (字面量实参, 目标 `TYPE_`) 组合一支脚本编一次，编不过就是解析期拒。跑出来 **254 行读数 + 86 行解析拒 + 33 句运行期报错**，S214 那句「`convert(x, TYPE_STRING)` 解析期拒」原来只对了一半。
+- **分岔形状**：null 实参十个目标全拒；bool / int / float 只过 BOOL / INT / FLOAT / COLOR；String / StringName 过 INT / FLOAT / STRING / STRING_NAME / COLOR 但 **BOOL 在解析期拒**；`Color(...)` / `Vector2(...)` 只过同型目标；**容器实参全过解析期、运行时才拒**（除同型那一格外一律 null，且引擎报的是 `Invalid call. Nonexistent GDScript utility function "convert()."` —— S220 那格「文案指错函数」到这里成体系）。`type_convert` 一支都不拒，转不出来就给就近默认值（`null` 转 String 是六字符 `<null>`、数组转 String 是打印文本、转 pack 按元素搬）。
+- **为什么不硬装**：三支各自的活不同。`convert` 要在发射期复刻「按静态类型的接受集合」（86 格的文案）；字符串转 Color 走的是**颜色名字查表**，查不到给 `(0.0, 0.0, 0.0, 1.0)` 并往 stderr 打 `Invalid color name: …`，而那张名字表我们没有（只量到 `"abc"` → `(0.6667, 0.7333, 0.8, 1.0)` 这种回退），这一支按红线只能抛；`type_convert` 的表齐了，但目标里 Rect2 / Plane / RID / Object 那批是「引擎给得出值、我们没形状」，处置照 S231 那条走响亮拒。三支都还在 `GLOBAL_TODO_FUNCTIONS` 里抛 `[emit-builtin]`，代码一行没加。
+- **下一步的形状已经很清楚**：先做 `type_convert` 的标量与容器表（目标限我们有的那 14 支），`convert` 等发射期那张「静态类型 × 目标」的接受集合表做完再接，颜色名那支单独量表。
+
+### 1.38 `convert` 与 `type_convert` 发出：653 格对照用探针读数直接生成，三条没量的照旧响亮拒（2026-10-05，S235，#21 收口）
+
+- **对照的做法值得留**：读数不在人手里过一遍 —— `tmp/conv-check.ts` 读四支探头的原始日志（`matrix1` / `matrix2` / `extra` / `gaps`），把每行 `R|函数|输入|目标|typeof|打印` 折成我们这边的 `variantConvert` 输出逐格比，**653 格全中**，只有 10 格按形状拒（字符串转 Color）。人抄表才会错，机器读日志不会。
+- **两支的分岔就一句话**：`convert()` 凑不出来给 null，`type_convert()` 给该类型的就近默认值；目标号越界（`-1`、`TYPE_MAX`）两支都原样返回。发出去的形状里两条读数挺有意思：`int` 转 Color 是 **0xRRGGBBAA 拆字节**（255 → alpha 1.0、256 → 蓝 0.0039、-1 → 全 1），字符串转 int 走 `String.to_int()` 那条「跳过非数字、遇点就停」的道（`"0x10"` → 10、`"1e3"` → 13，与 28 格 `to_int` 读数一格不差）。
+- **顺带修到两处真问题**：① `truthyOf` 原来对所有 OBJECT 给真，实测空 `PackedByteArray` 是假（`type_convert(PackedByteArray(), TYPE_BOOL)` → false）；② 同型 pack 转换**必须拷一份**（实测写回不串原包），而数组与字典是**同一个对象**（`append` 串得回去）—— 第一版按 identity 发出去，被语料 236 的 `id2` 一格当场抓住（diff 151/152、静默错误 1），改成拷贝后 152/152。
+- **三条没写进去的**：颜色名表（`"abc"` → `(0.6667, 0.7333, 0.8, 1.0)`，我们只会 `#rgb` 那一半也不敢半装）、没形状的 16 支目标类型（`[convert-target]`），以及**发射期那张「按第一实参静态类型的解析期接受集合」** —— 我们的编译器现在会放过引擎解析期拒掉的 86 格，运行期照未定型那条道给 null；这是诊断口径的差异（那 86 格在引擎里根本跑不到输出），要补的是发射期的静态类型判定，记在 §6 第 17 条②。
+- **账**：语料 236 加 50 格、ops 加 17 格（1538→1555）、转换族口径门格 6→11，`test:diff` 152/152 逐字节、静默错误 0，`pnpm test` 814 例、typecheck 4/4。
+
+### 1.39 值位置未知名字的十格读数：引擎那句是解析期错，而内置函数当值用是合法的 `@GlobalScope::abs`（2026-10-05，S236，本轮零代码）
+
+- **两条一起量的才有意义**：未知标识符在 var 初始化式 / `print` 实参 / 内部类方法体 / 模块字段 / `if` 条件 / 不存在的 `TYPE_` 与常量名上，全是同一句解析期错 `Identifier "X" not declared in the current scope.`（十格一支不漏）；而 `var f = abs`、`= str`、`= print` 三支**编得过也跑得通**，打出来是 `@GlobalScope::abs` 这种 Callable —— 内置函数在值位置上是一等值，不是保留字。
+- **判据早就在编译路径上跑着，本轮推翻的是这个猜测**：`undeclared-identifier` 连文案都写好在 `lower/analyze.ts` 的 `case "ident"` 里，把十格喂进 `compileProject` 一看，五格未知名全报出来了（上一节记的「只挂在 check-project 路上、编译路径没跑它」是因为那十格当时用 `lower()` + `emitModule()` 直编、绕开了工程级检查，读数是假的，已在 S236 就地改正）。**真问题变成两条误拦**：内置函数当值用（`var f = abs` / `str` / `print`）引擎合法、typeof 25、打 `@GlobalScope::abs`，而且 16 格 `c.callv(...)` 实测与直接调用逐格一致（`hash(7)` 还是 S208 那个 2503556531）—— 我们报 `undeclared-identifier` 把合法工程拦了；引擎类名当值用（`var k = Node`，typeof 24）同理被拦，只是它的打印是 `<GDScriptNativeClass#号>` 属复现不了那一族。反过来 `int` / `float` / `bool` 这批确实不能当值用，引擎是两句错（`Builtin type cannot be used as a name on its own.` + 那句 not declared），我们只报一句，方向没错。顺带一格：**`Callable.get_name()` 在 4.6.3 不存在**。
+- **于是 #24 的活变了性质**：不是「把判据搬到编译期」，而是「把值位置该认的名单补全，并给内置名发出真 Callable」—— 名单要含我们量过的内置函数名（`BUILTIN` ∪ `GLOBAL_TODO_FUNCTIONS`，没实现的那些给得出值但 `.call(...)` 要响亮拒）与引擎类名，`match` 绑定与 lambda 形参这些**已经**在 `analyze()` 的 scope 里（十格里 `match`、lambda 两格都是「编得过、零诊断」，正好证反面）。少一项就是拦死合法工程，所以这格得连着名单一次做完，已记在任务 #24。
+- **本轮零代码**：语料、门、产物都没动，`pnpm test` 814 例照旧全过。
+
+### 1.40 #24 发出去：值位置的 78 个内置名不再误拦，`var f = abs` 是真 Callable（2026-10-05，S237 / S238，语料 239 / 240）
+
+- **判据搬到分析器，不是搬到发射器**：作用域本来就只有 `lower/analyze.ts` 有，所以取值点由它记账、发射器认号发 `rt.globalCallable(名)`。三格遮蔽实测都按这个方向才对（`gc8`）：`var len = 5` 之后 `len` 归局部而 `abs` 还是全局；`var abs = 7` **之前**那一读仍是全局；lambda 形参 `abs` 只在体内盖住。中途试过的「发射器自己收一份局部名超集」被这三格否掉了 —— 超集会吃掉声明之前的那读，还会把 `UNBOXED` 的裸值优化按名字整支盖上去（真跑出来是 `Cannot access 'len' before initialization`）。
+- **记账用 `名@行:列` 而不是节点身份**：原生 CLI 那条 scriptc 通道报 **SC1090**（对象进 `WeakSet` 不属于能跨界那几种形状），loc 键既过得去又抗重复 lower。顺带把 `tools/compile.ts` 从「诊断 lower 一遍、发射再 lower 一遍」并成一份 IR 走 analyze → emit。
+- **表在运行时、名单只有一份**：新增 `runtime/global-names.ts` 收实测的 78 行（`scope` 前缀 / `get_argument_count()` 读数 / `.call()` 区间），分析器与发射器都从它取键，`methods.ts` 那张「名字 → 式子」表由 ops 门钉住与实测表一一对上（60 支发得出、18 支只拒调用不拒取值）。变元两支单独量：`str` 是 `[1, ∞)`、`range` 是 `[1, 3]`。
+- **顺手修掉三处**：`get_method()` 四种形状实测都是 **StringName（typeof 21）**，我们一直在发 String；`get_bound_arguments_count()` 从没发过；**`X.bind()` 零实参也算绑过**（四支实测全一致，S238）—— 盒子因此多一个 `boundOnce`，等式与字典键读它，`bound.length` 只喂 `get_bound_arguments*()`。另加一种字典键编码 `g:<名>:<绑过>`。
+- **账**：语料 239（64 格）+ 240（19 格）、ops 新增 `global-callable.test.ts` 46 格、guards 新增「值位置 Callable 78/78」；`test:diff` **154/154 逐字节**、静默错误 0，`pnpm test` **912 例 / ops 1601 条**全过，`test:scriptc` 10/10，原生 CLI 重编后 **22/22**，`pnpm typecheck` 4/4。
+- **还欠的两格**：引擎类名当值用仍是误拦（`ClassDB` 名单 + 带号的打印没定口径，§6 第 19 条）、`hash(全局 Callable)` 与 `"{0}".format(abs)` 那两格读数没合桌（§6 第 20 条）。
+
+### 1.41 `print(o.method)` 发出去：五种 Callable 形状共用一句标签（2026-10-05，S239，语料 241）
+
+- **先量再动手**：`corpus/cases/241` 的 20 格与 `tmp/probe-callable-print/`（带 `project.godot` 的四份脚本：`class_name Util`、无 class_name 的 `implicit.gd`、`extends "res://util.gd"` 的 `child.gd`、`extends Node` 的 `nodey.gd`）一起量出标签规则 —— `<原生基类>[(<class_name ?? 文件名>)]::<方法>`，内部类没有括号那一截、静态一律 `GDScript::<名>`、空的是 `null::null`、lambda 是 `<anonymous lambda>(lambda)`，绑过实参不改它。
+- **一句标签两处用**：打印与 `Invalid call to function '… (Callable)'` 实测是同一串，所以合成 `callableLabel()` 一个出口 —— `show()` 与 `callableCallLabel()` 都读它，S212 那格「外层脚本自己的方法要文件名、发不出就拒」的 `[callable-arity-label]` 随之销账（ops 里那条 `shouldThrow` 换成实测那句 `SceneTree(main.gd)::topfn`）。
+- **叶子拿不到类身份**：`callable.ts` 是最叶子，`object.ts` 在 import 时把「静态 / 实例方法」那两支挂成 hook；`ClassDesc` 多一个 `scriptLabel`，由发射器按 `m.className ?? basename(resPath)` 登记 —— 语料 codegen 的 `GEN_EMIT_OPTS` 因此补 `resPath: "res://main.gd"`，与 `compileProject` 给用例算出来的那个值一致。
+- **`var_to_str` 顺手补齐**：方法 / 静态 / lambda / 空 / 全局 / 绑过的六格实测全打 `Callable()`，`[var-to-str-type]` 那支的适用面缩到「真有形状却没量过」的。
+- **账**：语料 241（19 格）、ops 新增 10 格（1609），`test:diff` **155/155 逐字节**、静默 0，`pnpm test` 915 例，`pnpm typecheck` 4/4。撞出来的工作规则记在 §2 第 13 条：**新增 runtime 导出要先 `pnpm build`** —— 工程形状的用例吃的是 `gds2js/dist/runtime.mjs` 那份副本，这次十来个用例一起报 `registerScriptLabel is not a function` 就是它。
+- **没发的两格**：静态方法 Callable 当字典键（打印量到了 `{ GDScript::sm: 1 }`，键要的类身份号没有，按标签分格会把两类别名同名的并成一格 → §6 第 21 条）、`Callable.get_object()`（两支都带进程内号 → §6 第 22 条）。
+
+### 1.42 §1.41 那两格的第一格：静态 Callable 的字典键吃类身份号（2026-10-05，S240，语料 241 再加 6 格）
+
+- **先把「会不会撞键」量出来**：探针项目里放四个都叫 `shared` 的静态方法 —— `Util` / `Widged` 两个 `class_name` 类加 `Kid` / `Cub` 两个内部类 —— 一起塞进一张字典给 `d.size()` 4、逐键取回各自的值、两两 `==` 全假、`has` / `erase` 按类走、`.call()` 各调各的，而 `str(d)` 打出来是四串一模一样的 `GDScript::shared`（k01–k07）。上一轮担心「按标签分格会把两格并成一格」就是这么量死的：引擎的等式跟打印不是一条，键必须吃**类身份**。
+- **实现只多一个字段**：`ClassDesc` 拿 `nextObjectId()` 发一个 `readonly gdObjectId`，与 `GdIdentified` 同形 —— `callableKey` 里那条 `q:<号>:<名>:<绑过>` 原本只认实例，现在类值也走同一条，判据一行没加。标签那头照常 `GDScript::<名>`，所以「同一串两格」是引擎本来的样子。
+- **账**：语料 241 从 19 格长到 25 格（r01–r06）、ops 1610（新增一格比 `keyOf` 不同 + `GDict` 两格），`pnpm build` 后 `test:diff` 与 drift 门一起重跑；`[show-type]` / `dict-key-type` 这两支拒口又各少一类形状。
+- **剩的那格**：`Callable.get_object()` 两支都带进程内的号（§6 第 22 条），要先定「关系对、数字不对」这一族在语料里怎么记。
+
+### 1.43 文本进 Color 全量齐：名字表补齐、hex 四位与两条拒口销账（2026-10-05，S241，语料 242）
+
+- **名表这一族 4.3 与 4.6.3 没有分岔**：把源码 `color_names.inc` 的 146 支逐个喂给判断引擎的 `Color("<名>")`，回读 `to_html(true)` 与表里整数逐支比 —— **零出入**（`tmp/probe-color-names/names.log`）。我们那张只有 138 支，补齐差的八支（`dark_khaki` `light_goldenrod` `medium_orchid` `transparent` `web_gray` `web_green` `web_maroon` `web_purple`），文件由 `tmp/probe-color-names/regen.ts` 从读数生成、不再手抄；表里只有 `GRAY` 没有 `GREY` 也照实测留成缺口。
+- **抓出两处静默错**（不是拒口，是给了错值）：① 引擎查名前会抹掉 空格 / `-` / `_` / `'` / `.` 五种分隔符再转大写，我们只抹下划线，于是 `Color("web green")` 给 `(0,0,0,1)`；② hex 的「一数字一通道」有 3 位**和 4 位**两档，我们只展 3 位，`Color("f00f")` 同样静默变黑。两格都是语料 242 的 golden 对拍抓出来的。
+- **发出 `Color.html_is_valid()`**（只认长度 3/4/6/8 与十六进制位，`#` 可省：`"#f0"` 假、`"#fff"` 真、`"#"` 假），并把 `convert` / `type_convert` 的 `[convert-color-string]` 销掉：两支都吃 String 的名字 + hex，认不出给 `(0,0,0,1)` 而不是 null。
+- **一条不许顺手统一的分岔**：StringName 只在 `convert` 那一侧认，`type_convert(&"red", TYPE_COLOR)` 与 `type_convert(&"00ff00", TYPE_COLOR)` 实测都给 `(0,0,0,1)`（`sn.log` w01）—— 照读数分开走。
+- **顺带钉两笔「4.6.3 没有的名字」**：`String.to_color()`、`Color.from_uint()` / `from_uint8()` 都是解析期 `Cannot find member`（探头前两版就死在这上面）。
+- **账**：语料 242（15 格）、ops 新增 `color-text.test.ts` 14 格（1624 条），`convert.test.ts` 那条「响亮拒」的老读数改成实测值；`pnpm test` 921 例、`test:diff` **156/156 逐字节**、drift 244、静默错误 0，`pnpm build` 后 scriptc / pkg-modes / export / 原生 CLI 一起重跑。
+
 ---
 
 ## 2. 当前任务与待办
@@ -412,10 +507,11 @@
 13. 架构整改轮（§1.3）后的常驻项：改产物树/HOME 布局先跑 `test:treeface`；`case-table.ts` 只走
     `pnpm regen:case-table`；`case-flags.ts` 只走 `pnpm regen:case-flags`（两张都是实测生成物，别手改）；native seam 新增分岔口照「复制 `*.native.ts` 覆盖」办理；
     改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑 `node tools/scriptc-check.mjs 234`（38s 面探针，`pnpm release` 的 2b 就是它）再提交。
+    新增 runtime 的**导出名**还要先 `pnpm build`：语料里的工程形状用例（带 `project.godot` 那十来个）产物 import 的是 `gds2js/runtime` → `packages/gds2js/dist/runtime.mjs`，那是份打包副本，不重建就报 `__vite_ssr_import_0__.xxx is not a function`（S239 这轮就是这么撞上的）。
 14. 两条观察项（记录，不动）：dist 内容哈希块名（HOME/export 均按 glob/目录读，无门依赖具体块名）；
     门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）。
 
-14. **转换族与 `format` 的四个卡点（2026-10-04 记，读数全在 S214 / S219 / S220 / S221 / S225 / S226 / S227）**：① `var_to_str` 的浮点 —— **S230 已经把非浮点那半发出去了（浮点抛 `[var-to-str-float]`），这一格欠的就是剩下的尾数**：出处已定位（`VariantWriter` 的 FLOAT 支 → `rtos_fix` → `String::num_scientific`，`%g` 家族 + 去尾随零 + 「无点无 e 才补 `.0`」；零短路给 `0`、负无穷是 `inf_neg` 而 print 给 `-inf`），还剩两格不被任何固定 precision 解释：最小正规数与次正规数都给 `0.0`、`1e23` 要 16 位而 `7e22` 要 17 位 —— 要的是把 4.6.3 那个 `%g` 的**实际行为**量成一表，别再猜精度。② `str_to_var` 的认与不认**已经量齐**（S214），只欠实现 —— **S231 已发出**（155 格逐格对上；`\U` 吃六位数却量不出越界处理、构造式名字认不出、实参不是 String 三条分别抛 `[str-to-var-shape]` / `[str-to-var-type]` / `[str-to-var-arg]`）。③ `convert` / `type_convert` 标量表已齐（S220），卡在 `convert([], TYPE_INT)` 那条**运行期**拒（引擎文案连函数名都指错了），数组→标量按什么判要先量；**这一轮又加一道前置**：`TYPE_*` 那族常量一支都没接（编译器与运行时里 grep 不到 `TYPE_`，`convert(x, TYPE_INT)` 今天连编译都过不了），所以这两支的地基是先量那张常量表与两支各自「解析期允许哪些 TYPE_」的集合。④ `format`：4.3 的式子只解释得通「给了第二参」那一半，缺省占位符在 4.6.3 已是 `"{0}"`（S219），键序/非字符串键/值转文本那一路还要再量。**①的一条更正（S228）**：`var_to_str` 那两处「极小值给 `0.0`」的反常已经查到是**字面量解析**掉的，不是 writer 的问题 —— ①里剩下的只有「尾数 16 位还是 17 位」一问，做法是把待测值用**算术**造出来绕开解析层，再看是不是纯 `%.*g` 舍入。**共同前提**：任务 #18（AOT 那 ~140 倍的装箱账）要的是单态/去装箱的设计拍板，不由代码侧决定，仍未定。
+14. **转换族与 `format` 的四个卡点（2026-10-04 记，读数全在 S214 / S219 / S220 / S221 / S225 / S226 / S227）**：① `var_to_str` 的浮点 —— **S230 已经把非浮点那半发出去了（浮点抛 `[var-to-str-float]`），这一格欠的就是剩下的尾数**：出处已定位（`VariantWriter` 的 FLOAT 支 → `rtos_fix` → `String::num_scientific`，`%g` 家族 + 去尾随零 + 「无点无 e 才补 `.0`」；零短路给 `0`、负无穷是 `inf_neg` 而 print 给 `-inf`），还剩两格不被任何固定 precision 解释：最小正规数与次正规数都给 `0.0`、`1e23` 要 16 位而 `7e22` 要 17 位 —— 要的是把 4.6.3 那个 `%g` 的**实际行为**量成一表，别再猜精度。② `str_to_var` 的认与不认**已经量齐**（S214），只欠实现 —— **S231 已发出**（155 格逐格对上；`\U` 吃六位数却量不出越界处理、构造式名字认不出、实参不是 String 三条分别抛 `[str-to-var-shape]` / `[str-to-var-type]` / `[str-to-var-arg]`）。③ `convert` / `type_convert` 标量表已齐（S220），卡在 `convert([], TYPE_INT)` 那条**运行期**拒（引擎文案连函数名都指错了），数组→标量按什么判要先量；**那道前置已解（S233）**：`TYPE_*` 整族 37 支 + `TYPE_MAX` 量清并发出（逐名用 `GDScript.reload` 编内层脚本，避免一个不存在的名字带废整支探针；每支又与 `typeof(样本)` 对了一遍），语料 236 钉了 37 格打印 + 17 格 `typeof(x) == TYPE_X`。这两支剩下的量测在 §1.37 一次跑完（340 格矩阵）：解析期接受集合按第一实参的静态类型分岔，`type_convert` 一支都不拒。④ `format`：**已出货（S232）**，而且 S219 那格「缺省占位符是 `"{0}"`」的读数也纠正了 —— 占位符本身是 `"{_}"`，`{0}` 是键文本渲染出来的样子；键序（字典按插入顺序遍历键）、非字符串键、值转文本（走 print 那套）全量过，只剩 Object 那一支抛 `[format-object]`。**①的一条更正（S228）**：`var_to_str` 那两处「极小值给 `0.0`」的反常已经查到是**字面量解析**掉的，不是 writer 的问题 —— ①里剩下的只有「尾数 16 位还是 17 位」一问，做法是把待测值用**算术**造出来绕开解析层，再看是不是纯 `%.*g` 舍入。**共同前提**：任务 #18（AOT 那 ~140 倍的装箱账）要的是单态/去装箱的设计拍板，不由代码侧决定，仍未定。
 
 ---
 

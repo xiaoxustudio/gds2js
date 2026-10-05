@@ -5,7 +5,8 @@
   "type": "module",
   "description": "gds2js 编译器（parse / lower / emit / compile + home）；源码以 .ts 出货。",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --config ../../vitest.config.ts --project compiler"
   },
   "exports": {
     "./*": "./src/*.ts",
@@ -14,5 +15,8 @@
   "dependencies": {
     "@gds2js/runtime": "workspace:*",
     "web-tree-sitter": "^0.27.0"
+  },
+  "devDependencies": {
+    "@gds2js/testkit": "workspace:*"
   }
 }

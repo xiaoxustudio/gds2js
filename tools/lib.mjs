@@ -41,7 +41,8 @@ export function caseIsProject(id) {
   return existsSync(join(caseDir(id), "project.godot"));
 }
 
-/** 单文件工具（compile / ir-check / sema-check）的用例集：排除工程用例。 */
+/** 单文件工具的用例集：排除工程用例。吃它的有 tools/compile.ts 与
+ *  packages/compiler/test/{ir,sema,emit-invariants}.test.ts。 */
 export function listSingleCases(filter = "") {
   return listCases(filter).filter((id) => !caseIsProject(id));
 }

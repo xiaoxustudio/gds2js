@@ -34,8 +34,15 @@ function listTs(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
     const st = statSync(p);
-    if (st.isDirectory()) listTs(p, out);
-    else if (name.endsWith(".ts")) out.push(p);
+    if (st.isDirectory()) {
+      // 测试面不进 exe：packages/*/test/ 是 Vitest 的测试（见 README「测试」—— 测试文件
+      // 一律不放进 src/，因为 copyTreeTs 会扫 src/ 进出货产物树；这里 listTs 是第二条
+      // 会扫到 test/ 的路径）。它们 import `vitest` 与 @gds2js/testkit，两者都不在
+      // 步骤 2c 的相对化目标里（那个循环只认 runtime/compiler/gds2js 三包），
+      // 落进 scratch 就会被 133 行「还剩没相对化的 @gds2js 说明符」判成构建失败。
+      if (name === "test") continue;
+      listTs(p, out);
+    } else if (name.endsWith(".ts")) out.push(p);
   }
   return out;
 }

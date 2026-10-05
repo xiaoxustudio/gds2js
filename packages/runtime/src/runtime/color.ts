@@ -47,11 +47,13 @@ function strArg(v: Variant | undefined, who: string): string {
 /** 解析失败时的兜底色：`Color(String)` 与 `Color.html` 都用 (0,0,0,1)。 */
 const ZERO_COLOR = (): Variant => color(0, 0, 0, 1);
 
-/** 名字查表用的键：下划线可有可无、大小写不敏感。 */
+/** 名字查表用的键：引擎把 空格、`-`、`_`、`'`、`.` 五种都抹掉再转大写（`"web green"` `"web-green"` `"WEB_GREEN"` 都算 web_green），表里的下划线同样得抹掉才对得上。 */
+const NAME_SEPS = /[ \-_'".]/g;
+
 function namedOf(s: string): number | undefined {
-  const key = s.toLowerCase().replace(/_/g, "");
+  const key = s.toLowerCase().replace(NAME_SEPS, "");
   for (const name in COLOR_NAMED) {
-    if (name.replace(/_/g, "") === key) return COLOR_NAMED[name];
+    if (name.replace(NAME_SEPS, "") === key) return COLOR_NAMED[name];
   }
   return undefined;
 }
@@ -62,19 +64,32 @@ function packedColor(packed: number): Variant {
   return color(b(2) / 255, b(1) / 255, b(0) / 255, b(3) / 255);
 }
 
-/** 十六进制解析：`#` 可省，长度 3（`f00`→`ff0000`）/ 6（RGB）/ 8（RGBA，**alpha 在后**），其余长度或非法字符给 null；`names` 为 false 时不查名字表 —— 这是 `Color.html` 与 `Color(String)` 的唯一区别。 */
+/** 十六进制解析：`#` 可省，长度 3（`f00`→`ff0000`）/ 4（`f00f`→`ff0000ff`，一数字一通道）/ 6（RGB）/ 8（RGBA，**alpha 在后**），其余长度或非法字符给 null；`names` 为 false 时不查名字表 —— 这是 `Color.html` 与 `Color(String)` 的唯一区别。 */
 function parseColor(s: string, names: boolean): Variant | null {
   if (names) {
     const packed = namedOf(s);
     if (packed !== undefined) return packedColor(packed);
   }
   let h = s[0] === "#" ? s.slice(1) : s;
-  if (h.length === 3) h = h[0]! + h[0]! + h[1]! + h[1]! + h[2]! + h[2]!;
+  if (h.length === 3 || h.length === 4) h = h.split("").map((d) => d + d).join("");
   if (h.length !== 6 && h.length !== 8) return null;
   if (!/^[0-9a-fA-F]+$/.test(h)) return null;
   const byte = (i: number) => parseInt(h.slice(i, i + 2), 16);
   const a = h.length === 8 ? byte(6) : 255;
   return color(byte(0) / 255, byte(2) / 255, byte(4) / 255, a / 255);
+}
+
+/** `Color.html_is_valid()` 的判据：非空、可省 `#`、去掉后长度只认 3 / 4 / 6 / 8，且每一位都是十六进制数字。 */
+function htmlIsValid(s: string): boolean {
+  if (s.length === 0) return false;
+  const h = s[0] === "#" ? s.slice(1) : s;
+  if (!(h.length === 3 || h.length === 4 || h.length === 6 || h.length === 8)) return false;
+  return /^[0-9a-fA-F]+$/.test(h);
+}
+
+/** 文本 → Color 的那条道（名字表优先、再 hex、都不中给 `(0,0,0,1)`）：构造器、Color 槽与 `convert()` 共用。 */
+export function colorFromText(s: string): Variant {
+  return parseColor(s, true) ?? ZERO_COLOR();
 }
 
 /** int → Color 的 **packed RGBA** 那一形（构造器与槽共用，见 `colorNew` 与 `tryColorSlot`）。 */
@@ -165,6 +180,12 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
           numArg(args[2], "from_hsv"),
           args.length === 4 ? numArg(args[3], "from_hsv") : 1,
         );
+      }
+      case "html_is_valid": {
+        if (args.length !== 1) {
+          throw new UnsupportedError("color-arity", `Color.html_is_valid() 只收 1 个字符串（收到 ${args.length} 个）`);
+        }
+        return V.bool(htmlIsValid(strArg(args[0], "html_is_valid")));
       }
       default:
         throw new UnsupportedError("color-static", `Color.${name}(...) 未实现`);

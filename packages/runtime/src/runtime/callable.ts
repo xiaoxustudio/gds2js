@@ -1,4 +1,5 @@
 import { Tag, V, type Variant } from "./tags";
+import { globalCallableLabel } from "./global-names";
 import { nextObjectId } from "./identity";
 
 /** Callable 盒子里的调用体：只收一个数组，不 rest、不 spread、不用可选形参。 */
@@ -14,6 +15,8 @@ export class CallableBox {
   bound: Variant[];
   /** 声明形参数；只有 lambda 用得上（方法那条走 `methodAritiesOf` 的表）。 */
   arity: number | null;
+  /** `bind()` 有没有被**调用过**：零实参的 `bind()` 也算绑过（实测四支都一样 —— `o.m.bind() == o.m`、`abs.bind() == abs`、`lam.bind() == lam` 全是假）。 */
+  boundOnce: boolean;
   /** lambda 的等式是盒子身份，所以盒子得有自己的号。 */
   readonly gdObjectId: number = nextObjectId();
   constructor(
@@ -22,12 +25,14 @@ export class CallableBox {
     object: Variant | null = null,
     bound: Variant[] = [],
     arity: number | null = null,
+    boundOnce = false,
   ) {
     this.fn = fn;
     this.name = name;
     this.object = object;
     this.bound = bound;
     this.arity = arity;
+    this.boundOnce = boundOnce;
   }
 }
 
@@ -64,9 +69,28 @@ export function callableSame(a: CallableBox, b: CallableBox): boolean {
  */
 export function callableEq(a: CallableBox, b: CallableBox): boolean {
   if (!callableSame(a, b)) return false;
-  return (a.bound.length === 0) === (b.bound.length === 0);
+  return a.boundOnce === b.boundOnce;
 }
 
 /** `Callable()` 造出来的空 Callable：typeof 仍是 25。 */export function nullCallable(): Variant {
   return V.object(new CallableBox());
+}
+
+/**
+ * Callable 的标签 —— 打印、`Invalid call to function '<标签> (Callable)'` 与 var_to_str 之外的那几处都吃同一串：
+ * 空 Callable `null::null`、lambda `<anonymous lambda>(lambda)`、全局 `@GlobalScope::abs`（`len` 那批在 `@GDScript::`）、
+ * 静态 `GDScript::<名>`、实例方法 `<原生基类>[(<脚本名>)]::<名>`（内部类没有括号那一截）。
+ * 后两支要知道类的身份，`object.ts` 在 import 时把那段挂进来（本模块是叶子，反向 import 会成环）。
+ */
+let labelHook: ((box: CallableBox) => string | null) | null = null;
+
+export function registerCallableLabelHook(f: (box: CallableBox) => string | null): void {
+  labelHook = f;
+}
+
+export function callableLabel(box: CallableBox): string | null {
+  if (isNullCallable(box)) return "null::null";
+  if (box.name === null) return "<anonymous lambda>(lambda)";
+  if (box.object === null) return globalCallableLabel(box.name);
+  return labelHook === null ? null : labelHook(box);
 }

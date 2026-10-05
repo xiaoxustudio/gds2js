@@ -5,7 +5,8 @@
   "type": "module",
   "description": "gds2js 运行时（含 host 系与 zstd 出货面）；源码以 .ts 出货，供产物树与 workspace 内消费。",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --config ../../vitest.config.ts --project runtime"
   },
   "exports": {
     ".": "./src/runtime/index.ts",
@@ -17,5 +18,8 @@
     "./tree-face": "./src/tree-face.ts",
     "./runtime/*": "./src/runtime/*.ts",
     "./package.json": "./package.json"
+  },
+  "devDependencies": {
+    "@gds2js/testkit": "workspace:*"
   }
 }

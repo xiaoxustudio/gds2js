@@ -342,3 +342,104 @@ sv(multiline dict) => 27|{ "a": 1, "b": 2 }
 sv(dup key) => 27|{ 1: 3 }
 sv(deep) => 27|{ "a": { "b": [1, { &"c": 2 }] } }
 sv(empty) => 0|<null>
+TYPE_NIL => 0
+TYPE_BOOL => 1
+TYPE_INT => 2
+TYPE_FLOAT => 3
+TYPE_STRING => 4
+TYPE_VECTOR2 => 5
+TYPE_VECTOR2I => 6
+TYPE_RECT2 => 7
+TYPE_RECT2I => 8
+TYPE_VECTOR3 => 9
+TYPE_VECTOR3I => 10
+TYPE_TRANSFORM2D => 11
+TYPE_PLANE => 14
+TYPE_QUATERNION => 15
+TYPE_AABB => 16
+TYPE_BASIS => 17
+TYPE_TRANSFORM3D => 18
+TYPE_COLOR => 20
+TYPE_STRING_NAME => 21
+TYPE_NODE_PATH => 22
+TYPE_RID => 23
+TYPE_OBJECT => 24
+TYPE_CALLABLE => 25
+TYPE_SIGNAL => 26
+TYPE_DICTIONARY => 27
+TYPE_ARRAY => 28
+TYPE_PACKED_BYTE_ARRAY => 29
+TYPE_PACKED_INT32_ARRAY => 30
+TYPE_PACKED_INT64_ARRAY => 31
+TYPE_PACKED_FLOAT32_ARRAY => 32
+TYPE_PACKED_FLOAT64_ARRAY => 33
+TYPE_PACKED_STRING_ARRAY => 34
+TYPE_PACKED_VECTOR2_ARRAY => 35
+TYPE_PACKED_VECTOR3_ARRAY => 36
+TYPE_PACKED_COLOR_ARRAY => 37
+TYPE_PACKED_VECTOR4_ARRAY => 38
+TYPE_MAX => 39
+tc-nil|true
+tc-bool|true
+tc-int|true
+tc-float|true
+tc-string|true
+tc-name|true
+tc-vec2|true
+tc-vec2i|true
+tc-vec3|true
+tc-vec3i|true
+tc-color|true
+tc-dict|true
+tc-array|true
+tc-bytes|true
+tc-i32|true
+tc-strs|true
+tc-self|true|2|true
+cv11|1|true
+cv12|2|1
+cv13|3|1.0
+cv14|1|false
+cv15|2|2
+cv16|2|-2
+cv17|2|1
+cv18|3|1.0
+cv19|20|(0.0, 0.0, 0.0, 0.0039)
+cv20|20|(0.0, 0.0, 0.0, 0.0)
+cv21|20|(0.0, 0.0, 0.0, 1.0)
+cv22|20|(0.0, 0.0, 0.0039, 0.0)
+cv23|20|(1.0, 1.0, 1.0, 1.0)
+cv24|2|7
+cv25|2|0
+cv26|3|1000.0
+cv27|2|10
+cv28|4|7
+cv29|21|7
+cv30|5|(1.0, 2.0)
+cv31|6|(1, 2)
+cv32|10|(1, 2, 3)
+cv33|20|(1.0, 0.0, 0.0, 1.0)
+cv34|28|[1, 2]
+cv35|30|[1, 2]
+cv36|34|["1", "2"]
+cv37|27|{ "a": 1 }
+cv38|28|[1, 2]
+tv11|4|1
+tv12|4|<null>
+tv13|21|
+tv14|1|true
+tv15|1|false
+tv16|1|true
+tv17|1|false
+tv18|9|(0.0, 0.0, 0.0)
+tv19|28|[]
+tv20|27|{  }
+tv21|5|(1.0, 2.0)
+tv22|10|(1, 2, 0)
+tv23|9|(1.0, 2.0, 3.0)
+tv24|20|(0.0, 0.0, 0.0, 1.0)
+tv25|30|[0]
+tv26|4|{ "a": 1 }
+tv27|2|1
+id1|[1, 2, 3]|[1, 2, 3]|true
+id2|[1, 2]|[9, 2]

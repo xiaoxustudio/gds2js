@@ -3,6 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
+import { isGlobalValueRead } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -103,6 +104,18 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
       throw new UnsupportedError("str-to-var-arity", `str_to_var() 只发单实参形状（收到 ${a.length} 个）`);
     }
     return `rt.strToVar(${a[0]})`;
+  },
+  convert: (a) => {
+    if (a.length !== 2) {
+      throw new UnsupportedError("convert-arity", `Too few arguments for "convert()" call. Expected 2 but received ${a.length}.`);
+    }
+    return `rt.variantConvert(${a[0]}, ${a[1]}, true)`;
+  },
+  type_convert: (a) => {
+    if (a.length !== 2) {
+      throw new UnsupportedError("convert-arity", `Too few arguments for "type_convert()" call. Expected 2 but received ${a.length}.`);
+    }
+    return `rt.variantConvert(${a[0]}, ${a[1]}, false)`;
   },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
@@ -430,6 +443,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(__gd_d_${className}, ${JSON.stringify(moduleStatics)}, ${staticsTableLiteral(className, m.funcs)});`);
   if (baseClass.kind !== "import") {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
+  }
+  // Callable 标签里那截括号实测是 `class_name`，没有就用文件名（`RefCounted(Util)::hi` / `SceneTree(main.gd)::top`）。
+  const scriptLabel = m.className ?? (resPath ? resPath.split("/").pop() ?? null : null);
+  if (scriptLabel !== null && scriptLabel !== undefined) {
+    out.push(`rt.registerScriptLabel(__gd_d_${className}, ${JSON.stringify(scriptLabel)});`);
   }
   if (resPath) out.push(`rt.registerScript(${JSON.stringify(resPath)}, __gd_d_${className});`);
 
@@ -1753,6 +1771,11 @@ function computeUnboxed(
 
   const walkExpr = (e: Expr, inLambda: boolean): void => {
     switch (e.kind) {
+      case "ident":
+        // 分析器记下的全局函数取值点：同一个名字在本函数里既当全局又当局部时（实测 `var len = 5` 之前的 `len` 是全局 Callable），
+        // 裸值通道按名字整支覆盖会把两处搅在一起，所以这个名字整个退出裸值优化。
+        if (isGlobalValueRead(e)) excluded.add(e.name);
+        break;
       case "lambda":
         e.body.forEach((s) => walkStmt(s, true));
         break;
@@ -2817,6 +2840,8 @@ function emitExprVar(e: Expr): string {
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
+      // 全局函数的取值点：分析器按真实作用域记的号，实测一律给 `@GlobalScope::<名字>` 的 Callable（typeof 25）
+      if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":

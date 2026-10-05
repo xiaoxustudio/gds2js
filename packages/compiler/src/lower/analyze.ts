@@ -1,5 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
+import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
@@ -106,8 +107,25 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkInitContracts(m, new Set(globals), diags);
+  recordInitValueReads(m, moduleScope, coroutines);
 
   return diags;
+}
+
+/** 字段初值不在 `checkFunc` 的作用域走查里，这里只补记「全局函数取值点」，诊断一律丢进一张空表：多记无害，发射器那几支成员分支排在前面会先接住。 */
+function recordInitValueReads(m: Module, scope: Scope, coroutines: Set<string>): void {
+  const scratch: Diagnostic[] = [];
+  const walkVars = (list: VarDecl[]): void => {
+    for (const v of list) if (v.init !== null) walkExpr(v.init, scope, coroutines, scratch);
+  };
+  const walkClasses = (list: ClassDecl[]): void => {
+    for (const c of list) {
+      walkVars(c.vars);
+      walkClasses(c.innerClasses);
+    }
+  };
+  walkVars(m.vars);
+  walkClasses(m.innerClasses);
 }
 
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
@@ -1831,6 +1849,21 @@ function patternBindings(p: Pattern): string[] {
   }
 }
 
+/**
+ * 分析器按真实作用域认过的「全局函数取值点」（`var f = abs` 那一格）：作用域归作用域管，
+ * 发射器只认这个记号，不再自己猜局部名 —— 实测 `var len = 5` 之后同函数里的 `abs` 仍取全局、
+ * lambda 形参 `abs` 只在形参体内盖住全局，两种都按这个记号发得对。
+ * 记账用 `行:列:名字` 而不是节点身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090），
+ * 而同一个模块重 lower 一遍的 loc 一模一样，所以这条式子两头都走得通。
+ */
+const globalValueReads = new Set<string>();
+
+const gvKey = (name: string, line: number, col: number): string => `${name}@${line}:${col}`;
+
+export function isGlobalValueRead(e: Expr): boolean {
+  return e.kind === "ident" && globalValueReads.has(gvKey(e.name, e.loc.line, e.loc.col));
+}
+
 function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnostic[], awaited = false): void {
   switch (e.kind) {
     case "lit":
@@ -1848,12 +1881,15 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         }
         return;
       }
+      // 实测「能当值用的全局函数名」（那 78 个）取值合法：一律 typeof 25、打印 `@GlobalScope::<名字>`，所以记下节点、不报「没声明」
       if (!scope.has(e.name) && !isGlobalConst(e.name)) {
-        diags.push({
-          code: "undeclared-identifier",
-          message: `Identifier "${e.name}" not declared in the current scope.`,
-          loc: e.loc,
-        });
+        if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+        else
+          diags.push({
+            code: "undeclared-identifier",
+            message: `Identifier "${e.name}" not declared in the current scope.`,
+            loc: e.loc,
+          });
       }
       return;
 

@@ -1,10 +1,11 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
-import { CallableBox, isNullCallable, type Fn } from "./callable";
+import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
+import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
 
 // Callable 盒子的**形状**与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，不能反向 import 本模块），这里只把外需要的几样转出去。
-export { CallableBox, callableEq, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
+export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
 
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
@@ -31,10 +32,11 @@ export function callableOf(fn: Fn, arity: number | null = null): Variant {
   return callable(fn, arity);
 }
 
-/** 声明的**必填**实参数：方法从方法表里拿、lambda 从盒子里拿，拿不到给 null。 */
+/** 声明的**必填**实参数：方法从方法表里拿、全局 Callable 从实测那张表拿、lambda 从盒子里拿，拿不到给 null。 */
 export function requiredArgCount(box: CallableBox): number | null {
   if (box.name !== null) {
-    const table = box.object === null ? null : methodAritiesOf(box.object.v);
+    if (box.object === null) return globalCallableRow(box.name)?.bounds?.[0] ?? null;
+    const table = methodAritiesOf(box.object.v);
     const row = table?.[box.name];
     return row === undefined ? null : row[0];
   }
@@ -54,7 +56,9 @@ export function declaredArgCount(box: CallableBox): number | null {
   if (isNullCallable(box)) return 0;
   const name = box.name;
   if (name !== null) {
-    const table = box.object === null ? null : methodAritiesOf(box.object.v);
+    // 全局 Callable 的 `get_argument_count()` 是实测读数，与 `.call()` 认的区间是两回事（`str` 声明 1 个、变元无上限）。
+    if (box.object === null) return globalCallableRow(name)?.argc ?? null;
+    const table = methodAritiesOf(box.object.v);
     const row = table?.[name];
     // `[必填, 全部]` 两值不等说明有默认值形参 —— Godot 在那一形上给什么没有可靠口径，不猜。
     if (row === undefined || row[0] !== row[1]) return null;
@@ -69,7 +73,10 @@ export function callableArityBounds(box: CallableBox): [number, number] | null {
   if (isNullCallable(box)) return null;
   const name = box.name;
   if (name !== null) {
-    if (box.object === null) return null;
+    if (box.object === null) {
+      const b = globalCallableRow(name)?.bounds;
+      return b === undefined || b === null ? null : [b[0], b[1]];
+    }
     return methodAritiesOf(box.object.v)?.[name] ?? null;
   }
   const n = box.arity ?? 0;
@@ -107,8 +114,12 @@ export class ClassDesc {
   base: ClassDesc | null;
   make: (args: Variant[]) => object;
   check: (o: object) => boolean;
+  /** 类身份自己也要有号：静态方法的 Callable 挂在「类值」上当接收者，实测四个同名静态（两个 `class_name` 类 + 两个内部类）进同一张字典是**四格**，标签却一模一样都是 `GDScript::shared` —— 键只能吃这个号。 */
+  readonly gdObjectId: number = nextObjectId();
   /** `get_class()` 要的那个**原生**基类名，不是脚本类名。 */
   nativeBase: string | null;
+  /** Callable 标签里括号那一截：`class_name` 声明的名字，没有就是脚本文件名；内部类不登记（引擎那侧就没有括号）。 */
+  scriptLabel: string | null;
   fieldTypes: Record<string, string> | null;
   methodArities: Record<string, [number, number]> | null;
   staticVars: Record<string, string> | null;
@@ -119,6 +130,7 @@ export class ClassDesc {
     this.make = make;
     this.check = check;
     this.nativeBase = null;
+    this.scriptLabel = null;
     this.fieldTypes = null;
     this.methodArities = null;
     this.staticVars = null;
@@ -303,6 +315,31 @@ export function nativeBaseOf(target: unknown): string | null {
   }
   return null;
 }
+
+/** 登记 Callable 标签里那截括号名（`Util` 这种 `class_name`，或 `main.gd` 这种文件名）。 */
+export function registerScriptLabel(desc: ClassDesc, label: string): void {
+  desc.scriptLabel = label;
+}
+
+/** 沿 `base` 链找最近登记过的脚本名：内部类一路没有，标签就不带括号。 */
+export function scriptLabelOf(target: unknown): string | null {
+  for (let d = descOf(target); d !== null; d = d.base) {
+    if (d.scriptLabel !== null) return d.scriptLabel;
+  }
+  return null;
+}
+
+// Callable 标签里「挂在某个脚本类上的那两支」要知道类的身份，而本模块才是知道那一层的地方。
+registerCallableLabelHook((box) => {
+  const inner = box.object?.v;
+  const name = box.name;
+  if (inner === undefined || name === null) return null;
+  if (hasStaticName(inner, name)) return `GDScript::${name}`;
+  const base = nativeBaseOf(inner);
+  if (base === null) return null;
+  const label = scriptLabelOf(inner);
+  return label === null ? `${base}::${name}` : `${base}(${label})::${name}`;
+});
 
 // ---------------------------------------------------------------- meta 存储
 // meta 的存在处**不能**是 `WeakMap`：它的 `.get()` 在静态编译目标上给 `unknown`；代价是这些对象不再会被回收。

@@ -1,0 +1,62 @@
+abs => 25|@GlobalScope::abs
+str => 25|@GlobalScope::str
+len => 25|@GDScript::len
+range => 25|@GDScript::range
+convert => 25|@GDScript::convert
+type_convert => 25|@GlobalScope::type_convert
+load => 25|@GDScript::load
+prints => 25|@GlobalScope::prints
+push_warning => 25|@GlobalScope::push_warning
+randi => 25|@GlobalScope::randi
+seed => 25|@GlobalScope::seed
+weakref => 25|@GlobalScope::weakref
+get_stack => 25|@GDScript::get_stack
+wrapi => 25|@GlobalScope::wrapi
+var_to_str => 25|@GlobalScope::var_to_str
+fmt|@GlobalScope::abs
+eq|true|false|true|false|false
+eqvar|25|@GlobalScope::abs|true|false
+face|true|false|21|abs
+face2|1|2|3|0|1
+face3|0|2|[1, 2]
+face4|abs|false|true
+call-abs|2|3
+call-minmax|7|2|7|2|7.0
+call-str|4|123|5
+call-len|4|2
+call-range|28|[0, 1, 2]|[1, 2, 3, 4]|[1]|[]
+call-convert|7|7
+call-vts|[1, 2]|[1, 2]
+call-hash|2503556531
+call-sign|-1|-1.0|-1
+call-pow|3.0|1024.0|1.0|0.0
+call-round|3.0|4.0|4.0|3.0|4|3
+call-clamp|3|3|3.0
+call-wrap|2|2.0
+call-mod|2|2.0|2.0
+call-mix|1.5|1.5|0.25
+call-geom|3.0|1.0|5|1.0
+call-ang|3.14159265358979|180.0|-3.14159265358979
+call-cmp|true|true|true|true|true
+call-adv|0.25|0.5|1.0|1.5
+call-typeof|2|4
+call-f|5|@GlobalScope::abs
+callv|4|0|<null>
+callv2|<null>|7
+bind|8|9
+arr|[@GlobalScope::abs, @GDScript::len, @GlobalScope::prints]
+arrhas|true|false
+dicthas|true|false
+dictstr|{ "a": @GlobalScope::abs }
+vts|Callable()|Callable()
+lamvts|Callable()
+inner|25|@GlobalScope::abs|2
+static|@GDScript::len|4
+lambda|25|@GlobalScope::max|9
+shadow|5|2|@GlobalScope::abs
+shadow2|7|2|@GlobalScope::str
+shadow3|[9, 2, @GlobalScope::sign]
+shadow4|0
+shadow4|1
+shadow4|2
+afterfor|@GlobalScope::sign|@GlobalScope::abs

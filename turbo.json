@@ -8,6 +8,12 @@
     "typecheck": {
       "dependsOn": ["^typecheck"],
       "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^typecheck"],
+      "outputs": [],
+      "inputs": ["src/**/*.ts", "test/**/*.ts", "package.json", "tsconfig.json"],
+      "cache": false
     }
   }
 }

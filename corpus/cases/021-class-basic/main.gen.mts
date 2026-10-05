@@ -25,6 +25,8 @@ export class Main extends SceneTree {
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
+rt.registerScriptLabel(__gd_d_Main, "main.gd");
+rt.registerScript("res://main.gd", __gd_d_Main);
 class Base extends rt.GdScriptObject {
   hp = rt.V.int(10);
 
