@@ -12,6 +12,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { analyze } from "@gds2js/compiler/lower/analyze";
+import { ENGINE_CLASS_NAMES } from "@gds2js/compiler/lower/engine-classes";
 import { GLOBAL_TODO_FUNCTIONS } from "@gds2js/compiler/lower/globals";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
@@ -143,7 +144,12 @@ describe("值位置的全局函数名", () => {
     { name: "类型名 int 仍拦", src: MOD("var k = int"), want: "diag:undeclared-identifier" },
     { name: "类型名 Vector2 仍拦", src: MOD("var k = Vector2"), want: "diag:undeclared-identifier" },
     { name: "不存在的名字仍拦", src: MOD("var k = no_such_value_900"), want: "diag:undeclared-identifier" },
-    { name: "引擎类名仍拦（那格在 §6 挂账）", src: MOD("var k = Node"), want: "diag:undeclared-identifier" },
+    // 引擎类名当值用实测合法（typeof 24、等式按类）：分析器放行、发射器发身份盒子，带号的打印与 .new() 在运行时各自拒
+    { name: "引擎类名当值用发 nativeClass", src: MOD("var k = Node"), want: 'rt.nativeClass("Node")' },
+    { name: "打印类值走的还是那支", src: MOD("print(Node)"), want: 'rt.nativeClass("Node")' },
+    { name: "Node.new() 的接收者也发出去", src: MOD("var k = Node.new()"), want: 'rt.nativeClass("Node")' },
+    { name: "类名大小写是硬的（HttpRequest 不在名单里）", src: MOD("var k = HttpRequest"), want: "diag:undeclared-identifier" },
+    { name: "不存在的类名仍拦", src: MOD("var k = NonexistentClass900"), want: "diag:undeclared-identifier" },
     { name: "preload 取值仍拦（引擎也是解析期拒）", src: MOD("var k = preload"), want: "diag:undeclared-identifier" },
     { name: ".call 的接收者走同一条", src: MOD("print(abs.call(-3))"), want: 'rt.method(rt.globalCallable("abs"), "call"' },
     { name: "数组元素位也发 Callable", src: MOD("print([abs])"), want: 'rt.globalCallable("abs")' },
@@ -167,6 +173,20 @@ describe("值位置的全局函数名", () => {
     // ③ lambda 形参只在形参体内盖住全局（实测 s07 的 [9, 2]）
     const lam = await emitted(BODY(["var g = func (abs): return abs", "print(abs)", "print(g.call(9))"]));
     expect(lam.includes(`rt.globalCallable("abs")`), "lambda 形参不该把外层的 abs 也吃掉").toBe(true);
+    // ④ 类名可以当局部名（实测 var-Node / param-Node 两支都过解析），那读数是局部不是类值
+    const shadowClass = await emitted(BODY(["var Node = 1", "print(Node)"]));
+    expect(shadowClass.includes(`rt.nativeClass("Node")`), "声明过的 Node 该发局部").toBe(false);
+  });
+
+  it("引擎类名名单本身（1053 支、与其他两张名单零交集）", async () => {
+    expect(ENGINE_CLASS_NAMES.size, "ClassDB.get_class_list() 的读数").toBe(1053);
+    for (const n of ["Node", "Object", "Resource", "Label", "GDScript", "HTTPRequest", "AStar2D"]) {
+      expect(ENGINE_CLASS_NAMES.has(n), `${n} 不在名单里`).toBe(true);
+    }
+    const clash = [...GLOBAL_VALUE_NAMES].filter((n) => ENGINE_CLASS_NAMES.has(n));
+    expect(clash, `与「能当值用的 78 支全局函数名」撞了：${clash.join(",")}`).toEqual([]);
+    const types = ["Array", "Callable", "Color", "PackedByteArray", "PackedStringArray", "String", "StringName", "Vector2", "Vector3i", "bool", "float", "int"];
+    expect(types.filter((n) => ENGINE_CLASS_NAMES.has(n)), "与值位置解析期拒的类型名撞了").toEqual([]);
   });
 
   it("拒答清单与实测表的口径对得上", async () => {

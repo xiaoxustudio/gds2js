@@ -410,6 +410,13 @@
 - **顺带钉两笔「4.6.3 没有的名字」**：`String.to_color()`、`Color.from_uint()` / `from_uint8()` 都是解析期 `Cannot find member`（探头前两版就死在这上面）。
 - **账**：语料 242（15 格）、ops 新增 `color-text.test.ts` 14 格（1624 条），`convert.test.ts` 那条「响亮拒」的老读数改成实测值；`pnpm test` 921 例、`test:diff` **156/156 逐字节**、drift 244、静默错误 0，`pnpm build` 后 scriptc / pkg-modes / export / 原生 CLI 一起重跑。
 
+### 1.44 引擎类名当值用：误拦停了，发的是身份盒子（2026-10-05，S242，语料 243）
+
+- **名单先量齐**：4.6.3 的 `ClassDB.get_class_list()` 是 **1053 支**，一支一名冻成 `packages/compiler/src/lower/engine-classes.ts`；大小写硬（`HttpRequest` 与 `NonexistentClass900` 解析期就拒），与 78 支「能当值用的函数名」、21 支「类型名兼函数名」零交集 —— 三条都由 guards 钉住。
+- **放行照旧走真实作用域**：类名**可以当局部名**（`var Node = 1`、`func v(Node)` 实测都过），所以这次是分析器在同一套 `名@行:列` 记号上记的第二类，被局部盖住的读还是发局部；发射器发 `rt.nativeClass("<名>")`，一个类名一个盒子（`Map` 记忆），于是 `typeof` 24、`Node == Node` 真、`Node == Label` 假、`{Node: 1, Label: 2}` 两格、`count(Node)` 2 全都白拿。
+- **复现不了的两支各给一条拒**：打印带进程内的号（`<GDScriptNativeClass#…>`）→ `[show-native-class]`；`Node.new()` 实测造得出 `<Node#…>` 的实例、类值的属性面没建模 → `[native-class-member]`。语料 243 因此只钉身份读数（10 格），带号的一律不进 —— §6 第 19 条就此从「误拦」收窄成「带号打印怎么记 + Tier 2 的实例化」。
+- **账**：ops 新增 `native-class.test.ts` 9 格、guards 新增 6 格（123→128），`test:diff` **157/157 逐字节**、静默 0，`pnpm test` 931 例 / ops 1633 条，drift 245、scriptc 10/10、pkg-modes 与 export ok 10 / FAIL 0，`pnpm build`（新增 runtime 导出）后原生 CLI 重编再 22/22。
+
 ---
 
 ## 2. 当前任务与待办

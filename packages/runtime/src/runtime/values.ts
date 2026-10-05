@@ -13,6 +13,7 @@ import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
+import { GdNativeClass } from "./native-class";
 import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
@@ -2290,6 +2291,10 @@ export function show(v: Variant, depth = 0): string {
       }
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
+      }
+      // 引擎类值（`var k = Node`）实测打 `<GDScriptNativeClass#一个号>` —— 号是进程内的，复现不了，只能拒
+      if (inner instanceof GdNativeClass) {
+        throw new UnsupportedError("show-native-class", `print 复现不了引擎类 ${inner.className} 的打印（实测带进程内的号：<GDScriptNativeClass#…>）`);
       }
       // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null
       if (isCallable(v)) {

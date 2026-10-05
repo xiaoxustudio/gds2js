@@ -1,5 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
+import { ENGINE_CLASS_NAMES } from "./engine-classes";
 import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
@@ -1858,10 +1859,17 @@ function patternBindings(p: Pattern): string[] {
  */
 const globalValueReads = new Set<string>();
 
+/** 同一套记号记的第二类：引擎类名当值用（`var k = Node`）—— 取值合法、等式按类，但那支打印带进程内的号，发射器据此响亮拒。 */
+const nativeClassReads = new Set<string>();
+
 const gvKey = (name: string, line: number, col: number): string => `${name}@${line}:${col}`;
 
 export function isGlobalValueRead(e: Expr): boolean {
   return e.kind === "ident" && globalValueReads.has(gvKey(e.name, e.loc.line, e.loc.col));
+}
+
+export function isNativeClassValueRead(e: Expr): boolean {
+  return e.kind === "ident" && nativeClassReads.has(gvKey(e.name, e.loc.line, e.loc.col));
 }
 
 function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnostic[], awaited = false): void {
@@ -1884,6 +1892,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       // 实测「能当值用的全局函数名」（那 78 个）取值合法：一律 typeof 25、打印 `@GlobalScope::<名字>`，所以记下节点、不报「没声明」
       if (!scope.has(e.name) && !isGlobalConst(e.name)) {
         if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+        // 引擎类名当值用同样合法（typeof 24、等式按类），只是那支打印带进程内的号 —— 记下来交给发射器拒
+        else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         else
           diags.push({
             code: "undeclared-identifier",

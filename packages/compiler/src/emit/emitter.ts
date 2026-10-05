@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isGlobalValueRead } from "../lower/analyze";
+import { isGlobalValueRead, isNativeClassValueRead } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -2842,6 +2842,8 @@ function emitExprVar(e: Expr): string {
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       // 全局函数的取值点：分析器按真实作用域记的号，实测一律给 `@GlobalScope::<名字>` 的 Callable（typeof 25）
       if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
+      // 引擎类名的取值点：实测 typeof 24、等式按类，发一个身份盒子；打印与 `.new()` 那两支在运行时各自响亮拒
+      if (isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":

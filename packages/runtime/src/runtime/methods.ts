@@ -11,6 +11,7 @@ import { typeOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import type { GdIdentified } from "./identity";
+import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
@@ -231,6 +232,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
 
+    if (inner instanceof GdNativeClass) {
+      throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（实测 Node.new() 造得出实例、我们不发）`);
+    }
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
@@ -1044,6 +1048,10 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);
   if (obj.t === Tag.OBJECT) {
+    // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本
+    if (obj.v instanceof GdNativeClass) {
+      throw new UnsupportedError("native-class-member", `引擎类 ${obj.v.className} 的 .${name} 还没建模（实测能取值、能比等式，打出来带进程内的号）`);
+    }
     const vec = obj.v instanceof GVector2 ? (obj.v as GVector2) : null;
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
     const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
