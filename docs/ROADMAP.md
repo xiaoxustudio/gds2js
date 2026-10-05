@@ -417,6 +417,14 @@
 - **复现不了的两支各给一条拒**：打印带进程内的号（`<GDScriptNativeClass#…>`）→ `[show-native-class]`；`Node.new()` 实测造得出 `<Node#…>` 的实例、类值的属性面没建模 → `[native-class-member]`。语料 243 因此只钉身份读数（10 格），带号的一律不进 —— §6 第 19 条就此从「误拦」收窄成「带号打印怎么记 + Tier 2 的实例化」。
 - **账**：ops 新增 `native-class.test.ts` 9 格、guards 新增 6 格（123→128），`test:diff` **157/157 逐字节**、静默 0，`pnpm test` 931 例 / ops 1633 条，drift 245、scriptc 10/10、pkg-modes 与 export ok 10 / FAIL 0，`pnpm build`（新增 runtime 导出）后原生 CLI 重编再 22/22。
 
+### 1.45 `char(n)` 的码点闸门：U+FFFD 是建串那一刻换的，78 支变 79 支（2026-10-06，S243，语料 244）
+
+- **§6 第 18 条② 的那一问有答案了**：`char(0).unicode_at(0)` 就是 65533、`length()` 仍是 1、`to_utf8_buffer()` 是 `ef bf bd` —— 换字符发生在**建串**那一刻，不是 String→UTF8 那层，所以 `print` / `c_escape` / `var_to_str` 三条通道天然一致（`var_to_str(char(0))` 长 3、`"a"+char(0)+"b"` 是 3 个码点，两处都是这么来的）。四类不合法同一个结果：`0`、负数、代理区 `D800`–`DFFF`、超过 `0x10FFFF`；合法侧把边界钉在 `1 / 65 / 0x7F / 0x80 / 0x10FFFF`。
+- **带 `Unicode parsing error` 的那几格进不了语料**：引擎除了给值还往 stderr 打一句，`normalize()` 只剔 `core/variant/` 那几帧，这句会留在 golden 里而 JS 侧发不出 —— 所以这类读数只进 ops，语料 244 清一色合法码点（12 格，含 `é` 的 `195,169` 与 U+10FFFF 的 utf8 长度 4）。
+- **arity 两句从解析期搬到发射期**：`char()` / `char(1, 2)` 引擎是**解析期**拒（脚本到不了输出），文案 `Too few arguments for "char()" call. Expected at least 1 but received 0.` 与 `Too many arguments … Expected at most 1 but received 2.` 一字不差地钉在 guards 的 `[char-arity]` 两格上。
+- **`char` 补进「能当值用的全局函数名」表，78 → 79**：`typeof` 25、打印 `@GDScript::char`、`get_argument_count()` 1、`.call(65)` → `"A"`、等式按名；顺带把 `String.chr` 与全局 `char` 合成一支 `stringChr`（实测两支相等），两条通道不再可能分岔。实参收敛仍是 int 那条道（`char(1.5)` → 1、`char(2.9)` → 2）。
+- **账**：语料 244（12 格）、ops 新增 `char-codepoint.test.ts` 14 格（1633→1647）、guards 新增一格（128→130 例），`test:compile` 166/235，`test:diff` **158/158 逐字节**、静默 0，drift 两道全绿（golden 244/244、codegen 2/2），`pnpm test` 939 例，`pnpm build` 后 pkg-modes 25/25、export ok 10 / FAIL 0、面探针 1/1（57s；顺手把 §2 第 13 条里那条已经不存在的 `tools/scriptc-check.mjs` 改成 `GDS2JS_SCRIPTC_FILTER` + `pnpm test:scriptc`）、原生 CLI 20/20、typecheck 4/4。
+
 ---
 
 ## 2. 当前任务与待办
@@ -513,7 +521,7 @@
     「中途停掉」那套验收不再是默认形状（要全绿就直接 `pnpm test:scriptc --all`）。
 13. 架构整改轮（§1.3）后的常驻项：改产物树/HOME 布局先跑 `test:treeface`；`case-table.ts` 只走
     `pnpm regen:case-table`；`case-flags.ts` 只走 `pnpm regen:case-flags`（两张都是实测生成物，别手改）；native seam 新增分岔口照「复制 `*.native.ts` 覆盖」办理；
-    改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑 `node tools/scriptc-check.mjs 234`（38s 面探针，`pnpm release` 的 2b 就是它）再提交。
+    改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑「`GDS2JS_SCRIPTC_FILTER=234-string-methods-batch` + `pnpm test:scriptc`」（57s 面探针，`pnpm release` 的 2b 就是它；门迁进 Vitest 后 `tools/scriptc-check.mjs` 已不存在，过滤器只认这个环境变量）再提交。
     新增 runtime 的**导出名**还要先 `pnpm build`：语料里的工程形状用例（带 `project.godot` 那十来个）产物 import 的是 `gds2js/runtime` → `packages/gds2js/dist/runtime.mjs`，那是份打包副本，不重建就报 `__vite_ssr_import_0__.xxx is not a function`（S239 这轮就是这么撞上的）。
 14. 两条观察项（记录，不动）：dist 内容哈希块名（HOME/export 均按 glob/目录读，无门依赖具体块名）；
     门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）。

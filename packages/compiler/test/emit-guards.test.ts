@@ -116,7 +116,7 @@ describe("转换族单实参口径", () => {
 });
 
 // ── ④ 值位置的全局函数名 ───────────────────────────────────────────
-/** 实测「能当值用的那 78 支」在分析器不再报未声明、发射器发真的 Callable；21 支类型名照旧拦（引擎解析期就拒）。
+/** 实测「能当值用的那 79 支」在分析器不再报未声明、发射器发真的 Callable；21 支类型名照旧拦（引擎解析期就拒）。
  *  取值点是 analyze 记的号，所以这一族每格都先 analyze 再 emit —— 跳过 analyze 就退化成裸 JS 标识符。 */
 async function emitted(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
@@ -161,6 +161,25 @@ describe("值位置的全局函数名", () => {
     expect(ok, `${name}：期望 ${want}，实得 ${got.slice(0, 90)}`).toBe(true);
   });
 
+  it("char 的实参数两句文案按实测发（引擎是解析期拒，我们是发射期拒）", async () => {
+    expect(await classify(PRINT("char(65)"), "ok")).toBe("ok");
+    const few = await classify(PRINT("char()"), "ok");
+    expect(few).toBe("char-arity");
+    const many = await classify(PRINT("char(1, 2)"), "ok");
+    expect(many).toBe("char-arity");
+    const text = async (src: string): Promise<string> => {
+      try {
+        emitModule(lower(await parseSource(src)), EMIT_OPTS_PROBE);
+        return "居然编得过";
+      } catch (e) {
+        return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+      }
+    };
+    expect(await text(PRINT("char()"))).toBe('Too few arguments for "char()" call. Expected at least 1 but received 0.');
+    expect(await text(PRINT("char(1, 2)"))).toBe('Too many arguments for "char()" call. Expected at most 1 but received 2.');
+    expect(await emitted(MOD("print(char(65))"))).toContain("rt.stringChr(");
+  });
+
   it("局部遮蔽的三格按实测方向走", async () => {
     // ① 声明在前：读数归局部（实测 s04 的 len）
     const before = await emitted(BODY(["var len = 5", "print(len)", "print(abs)"]));
@@ -184,14 +203,14 @@ describe("值位置的全局函数名", () => {
       expect(ENGINE_CLASS_NAMES.has(n), `${n} 不在名单里`).toBe(true);
     }
     const clash = [...GLOBAL_VALUE_NAMES].filter((n) => ENGINE_CLASS_NAMES.has(n));
-    expect(clash, `与「能当值用的 78 支全局函数名」撞了：${clash.join(",")}`).toEqual([]);
+    expect(clash, `与「能当值用的 79 支全局函数名」撞了：${clash.join(",")}`).toEqual([]);
     const types = ["Array", "Callable", "Color", "PackedByteArray", "PackedStringArray", "String", "StringName", "Vector2", "Vector3i", "bool", "float", "int"];
     expect(types.filter((n) => ENGINE_CLASS_NAMES.has(n)), "与值位置解析期拒的类型名撞了").toEqual([]);
   });
 
   it("拒答清单与实测表的口径对得上", async () => {
     const stale = TODO_NAMES.filter((n) => !GLOBAL_VALUE_NAMES.has(n));
-    expect(stale, `GLOBAL_TODO_FUNCTIONS 里有名字不在实测的 78 支里：${stale.join(",")}`).toEqual([]);
+    expect(stale, `GLOBAL_TODO_FUNCTIONS 里有名字不在实测的 79 支里：${stale.join(",")}`).toEqual([]);
     const loose = [...GLOBAL_VALUE_NAMES].filter((n) => GLOBAL_TODO_FUNCTIONS.has(n) && GLOBAL_CALLABLES[n]!.bounds !== null);
     expect(loose, `该拒的那支里有人领了区间闸门：${loose.join(",")}`).toEqual([]);
   });

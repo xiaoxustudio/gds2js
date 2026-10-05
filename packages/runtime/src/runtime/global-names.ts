@@ -1,5 +1,5 @@
 /**
- * 4.6.3 实测「能当值用的全局函数名」表（一支脚本一个名字量出来的：`tmp/probe-unknown-value/value_names.log`
+ * 4.6.3 实测「能当值用的全局函数名」那 79 支的表（一支脚本一个名字量出来的：`tmp/probe-unknown-value/value_names.log`
  * 给能不能过解析与打印形状，`gc6.log` 给 `get_argument_count()` 与 `get_method()`，`gc7.log` 给变元的上下界）。
  * 类型名（`int` / `Vector2` / `PackedByteArray` 那 21 个）在值位置是**解析期就拒**的，一张都不在这表里。
  */
@@ -27,6 +27,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   ceil: GS(1),
   ceilf: GS(1),
   ceili: GS(1),
+  char: GD(1),
   clamp: GS(3),
   clampf: GS(3),
   clampi: GS(3),
@@ -102,7 +103,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   wrapi: GS(3),
 });
 
-/** 这 78 个名字在值位置合法（实测一律 `typeof 25`）：分析器放行、发射器据此发全局 Callable 的唯一依据。 */
+/** 这 79 个名字在值位置合法（实测一律 `typeof 25`）：分析器放行、发射器据此发全局 Callable 的唯一依据。 */
 export const GLOBAL_VALUE_NAMES: ReadonlySet<string> = new Set(Object.keys(GLOBAL_CALLABLES));
 
 /** 打印形式与那句 `Invalid call to function '… (Callable)'` 里的函数标签：实测是 `@<注册表>::<名字>`，`len` / `load` / `range` / `convert` / `get_stack` / `print_stack` 在 `@GDScript` 那侧。 */
@@ -111,7 +112,7 @@ export function globalCallableLabel(name: string): string | null {
   return row === undefined ? null : `@${row.scope}::${name}`;
 }
 
-/** 全局 Callable 的行；不是这 78 个名字之一给 null。 */
+/** 全局 Callable 的行；不是这 79 个名字之一给 null。 */
 export function globalCallableRow(name: string | null): GlobalCallableRow | null {
   if (name === null) return null;
   return GLOBAL_CALLABLES[name] ?? null;

@@ -118,6 +118,16 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
     return `rt.variantConvert(${a[0]}, ${a[1]}, false)`;
   },
   abs: (a) => `rt.abs(${a.join(", ")})`,
+  char: (a) => {
+    // 实测两支解析期报错的原文（少给与多给措辞不同），照抄进拒口
+    if (a.length === 0) {
+      throw new UnsupportedError("char-arity", 'Too few arguments for "char()" call. Expected at least 1 but received 0.');
+    }
+    if (a.length !== 1) {
+      throw new UnsupportedError("char-arity", `Too many arguments for "char()" call. Expected at most 1 but received ${a.length}.`);
+    }
+    return `rt.stringChr(${a[0]})`;
+  },
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,

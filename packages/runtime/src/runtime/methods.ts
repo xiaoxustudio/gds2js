@@ -15,7 +15,7 @@ import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
-  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf,
+  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strBuiltin, varToStr, strToVar } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -1177,6 +1177,7 @@ function ga(a: Variant[], i: number): Variant {
 /** 全局 Callable 的「名字 → 式子」：一支一支对着实测的调用路径写的，与发射器那张 `BUILTIN` 表同形。 */
 const GLOBAL_IMPL: Record<string, Fn> = {
   abs: (a) => abs(ga(a, 0)),
+  char: (a) => stringChr(ga(a, 0)),
   angle_difference: (a) => gAngleDifference(ga(a, 0), ga(a, 1)),
   ceil: (a) => gCeil(ga(a, 0), "auto"),
   ceilf: (a) => gCeil(ga(a, 0), "float"),
@@ -1250,7 +1251,7 @@ export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.k
 export function globalCallable(name: string): Variant {
   const row = GLOBAL_CALLABLES[name];
   if (row === undefined) {
-    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 78 个里`);
+    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 79 个里`);
   }
   const impl = GLOBAL_IMPL[name];
   const fn: Fn =
