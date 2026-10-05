@@ -109,6 +109,7 @@ class Inner extends rt.GdScriptObject {
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerFieldTypes(__gd_d_Inner, {"prop": "int", "ro": "int", "ref": "int"});
+rt.registerScriptProps(__gd_d_Inner, ["raw","prop","ro","ref","rraw"]);
 rt.registerMethodArities(__gd_d_Inner, { "_getr": [0, 0], "_setr": [1, 1], "setvia": [1, 1] });
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
 

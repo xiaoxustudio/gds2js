@@ -37,6 +37,7 @@ class Thing extends rt.GdScriptObject {
 }
 const __gd_d_Thing = rt.defineClass(Thing, () => new Thing(), (o) => o instanceof Thing);
 rt.nameClass(__gd_d_Thing, "Thing");
+rt.registerScriptProps(__gd_d_Thing, ["a"]);
 rt.registerNativeBase(__gd_d_Thing, "RefCounted");
 
 const __gd_entry = new Main();

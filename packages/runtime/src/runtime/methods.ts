@@ -4,17 +4,22 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
-  gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap } from "./builtins";
+  gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame,
+  gTypeString, gErrorString, gTypeExists,
+  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
+  gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import type { GdIdentified } from "./identity";
+import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
-  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf,
+  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strBuiltin, varToStr, strToVar } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -98,9 +103,16 @@ function descFor(inner: unknown): ClassDesc | null {
   return descOf(inner);
 }
 
-/** `Callable()`（空 Callable）与 `Callable(对象, "方法名")` 两个构造式；一参形在 Godot 是解析期那句，运行期先响亮拒。 */
+/** `Callable()`、`Callable(Callable)` 与 `Callable(对象, "方法名")` 三个构造式（实测都通）。 */
 export function callableCtor(args: Variant[]): Variant {
   if (args.length === 0) return nullCallable();
+  if (args.length === 1) {
+    // 实测 `Callable(abs) == abs` 真、typeof 25、哈希同值（`tmp/probe-hash-callable/ctor.log` w01）。
+    // 其余单实参在引擎是解析期那句 "No constructor of "Callable" matches the signature "Callable(String)"."，到不了运行期。
+    const only = args[0] as Variant;
+    if (isCallableBox(only.v)) return only;
+    throw new UnsupportedError("callable-ctor", `Callable(x) 这一格只量过实参本身就是 Callable（收到 ${tagName(only.t)}）`);
+  }
   if (args.length === 2) {
     const [obj, name] = args as [Variant, Variant | undefined];
     if (name === undefined || (name.t !== Tag.STRING && name.t !== Tag.STRING_NAME)) {
@@ -110,7 +122,7 @@ export function callableCtor(args: Variant[]): Variant {
   }
   throw new UnsupportedError(
     "callable-ctor",
-    `Callable() 只量过 0 参与 2 参（收到 ${args.length} 个；1 参那一格在 Godot 是解析期拒）`,
+    `Callable() 只量过 0、1、2 参（收到 ${args.length} 个）`,
   );
 }
 
@@ -211,6 +223,18 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       if (empty) return V.stringName("");
       return V.stringName("<anonymous lambda>");
     }
+    case "get_object": {
+      // 实测：方法 Callable 给接收者实例（`== o` 真、跨实例假），静态给那个类值（`== Inner` 真、`== 外层脚本` 假）；
+      // lambda 给**定义它那个类的 GDScript 对象**（`== self` 假、`== get_script()` 真），空 Callable 与全局内置给
+      // typeof 24 的 null Object（打 `<Object#null>`、`== null` 真）—— 后两形我们没有，响亮拒。
+      if (box.object === null) {
+        throw new UnsupportedError(
+          "callable-get-object",
+          "get_object() 这一支要给的是我们没建模的对象：lambda 的 owner 是定义它那个类的 GDScript 对象，空 Callable 与全局内置是 typeof 24 的 null Object（探头 tmp/probe-callable-object）",
+        );
+      }
+      return box.object;
+    }
     case "is_null":
       // 四种形状里只有空 Callable 为真；绑过实参就不再是空的
       return V.bool(empty && bound.length === 0);
@@ -231,6 +255,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
 
+    if (inner instanceof GdNativeClass) {
+      throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（实测 Node.new() 造得出实例、我们不发）`);
+    }
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
@@ -1044,6 +1071,10 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);
   if (obj.t === Tag.OBJECT) {
+    // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本
+    if (obj.v instanceof GdNativeClass) {
+      throw new UnsupportedError("native-class-member", `引擎类 ${obj.v.className} 的 .${name} 还没建模（实测能取值、能比等式，打出来带进程内的号）`);
+    }
     const vec = obj.v instanceof GVector2 ? (obj.v as GVector2) : null;
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
     const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
@@ -1169,6 +1200,37 @@ function ga(a: Variant[], i: number): Variant {
 /** 全局 Callable 的「名字 → 式子」：一支一支对着实测的调用路径写的，与发射器那张 `BUILTIN` 表同形。 */
 const GLOBAL_IMPL: Record<string, Fn> = {
   abs: (a) => abs(ga(a, 0)),
+  absf: (a) => gAbsF(ga(a, 0)),
+  absi: (a) => gAbsI(ga(a, 0)),
+  error_string: (a) => gErrorString(ga(a, 0)),
+  type_string: (a) => gTypeString(ga(a, 0)),
+  type_exists: (a) => gTypeExists(ga(a, 0)),
+  acos: (a) => gAcos(ga(a, 0)),
+  acosh: (a) => gAcosh(ga(a, 0)),
+  asin: (a) => gAsin(ga(a, 0)),
+  asinh: (a) => gAsinh(ga(a, 0)),
+  atan: (a) => gAtan(ga(a, 0)),
+  atan2: (a) => gAtan2(ga(a, 0), ga(a, 1)),
+  atanh: (a) => gAtanh(ga(a, 0)),
+  cos: (a) => gCos(ga(a, 0)),
+  cosh: (a) => gCosh(ga(a, 0)),
+  sin: (a) => gSin(ga(a, 0)),
+  sinh: (a) => gSinh(ga(a, 0)),
+  tan: (a) => gTan(ga(a, 0)),
+  tanh: (a) => gTanh(ga(a, 0)),
+  bezier_derivative: (a) => gBezierDerivative(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
+  bezier_interpolate: (a) => gBezierInterpolate(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
+  cubic_interpolate_angle: (a) => gCubicAngle(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
+  cubic_interpolate_angle_in_time: (a) => gCubicAngleInTime(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4), ga(a, 5), ga(a, 6), ga(a, 7)),
+  cubic_interpolate_in_time: (a) => gCubicInTime(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4), ga(a, 5), ga(a, 6), ga(a, 7)),
+  db_to_linear: (a) => gDbToLinear(ga(a, 0)),
+  lerp_angle: (a) => gLerpAngle(ga(a, 0), ga(a, 1), ga(a, 2)),
+  linear_to_db: (a) => gLinearToDb(ga(a, 0)),
+  nearest_po2: (a) => gNearestPo2(ga(a, 0)),
+  pingpong: (a) => gPingpong(ga(a, 0), ga(a, 1)),
+  rotate_toward: (a) => gRotateToward(ga(a, 0), ga(a, 1), ga(a, 2)),
+  step_decimals: (a) => gStepDecimals(ga(a, 0)),
+  char: (a) => stringChr(ga(a, 0)),
   angle_difference: (a) => gAngleDifference(ga(a, 0), ga(a, 1)),
   ceil: (a) => gCeil(ga(a, 0), "auto"),
   ceilf: (a) => gCeil(ga(a, 0), "float"),
@@ -1192,6 +1254,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   is_finite: (a) => gIsFinite(ga(a, 0)),
   is_inf: (a) => gIsInf(ga(a, 0)),
   is_nan: (a) => gIsNan(ga(a, 0)),
+  is_same: (a) => gIsSame(ga(a, 0), ga(a, 1)),
   is_zero_approx: (a) => gIsZeroApprox(ga(a, 0)),
   len: (a) => lengthOf(ga(a, 0)),
   lerp: (a) => gLerp(ga(a, 0), ga(a, 1), ga(a, 2)),
@@ -1226,6 +1289,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   type_convert: (a) => variantConvert(ga(a, 0), ga(a, 1), false),
   typeof: (a) => typeOf(ga(a, 0)),
   var_to_str: (a) => V.str(varToStr(ga(a, 0))),
+  wrap: (a) => gWrapAny(ga(a, 0), ga(a, 1), ga(a, 2)),
   wrapf: (a) => gWrap(ga(a, 0), ga(a, 1), ga(a, 2), false),
   wrapi: (a) => gWrap(ga(a, 0), ga(a, 1), ga(a, 2), true),
 };
@@ -1236,13 +1300,13 @@ export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.k
 /**
  * 全局函数的 Callable 值：`var f = abs` 实测给 `typeof 25`、打印 `@GlobalScope::abs`，`.call()` 走各自那个式子，
  * 等式按 `(名字, 接收者)` 走 —— 全局那支的接收者是 null，所以同名两个盒子相等（实测 `str_to_var == str_to_var` 真）。
- * 我们没实现那个式子的 18 支（`GLOBAL_CALLABLES` 里 `bounds` 为 null 的）照发盒子：值、`get_method()`、`get_argument_count()`
+ * 我们没实现那个式子的 36 支（`GLOBAL_CALLABLES` 里 `bounds` 为 null 的）照发盒子：值、`get_method()`、`get_argument_count()`
  * 都是实测读数，只有 `.call()` 响亮拒。
  */
 export function globalCallable(name: string): Variant {
   const row = GLOBAL_CALLABLES[name];
   if (row === undefined) {
-    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 78 个里`);
+    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 126 个里`);
   }
   const impl = GLOBAL_IMPL[name];
   const fn: Fn =

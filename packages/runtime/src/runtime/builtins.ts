@@ -1,8 +1,11 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, show, strLength, truthyOf } from "./values";
+import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq } from "./values";
 import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
+import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
+import { typeOf } from "./patterns";
+import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
@@ -183,6 +186,20 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       }
       return fmix32(h);
     }
+    case Tag.OBJECT: {
+      if (!isCallableBox(v.v)) {
+        throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
+      }
+      const box = v.v as CallableBox;
+      // 实测两条：全局内置那一族折出来就是名字那支 String 哈希（十六支一名一名对上，`tmp/probe-hash-callable/`）；
+      // 空 Callable 走引擎非 custom 那条 —— 名字空串 + 对象 0，再 fmix32。
+      if (isNullCallable(box)) return fmix32(murmurOne64Words(0, 0, hashDjb2("")));
+      if (box.object === null && box.name !== null) return hashDjb2(box.name);
+      throw new UnsupportedError(
+        "hash-callable",
+        "方法 / 静态 / lambda 的 Callable 哈希折的是引擎那侧的函数标识：lambda 两次跑就换数，方法与静态这两轮同值但名字、对象号五支候选式子都对不上（fit.mjs），不猜",
+      );
+    }
     default:
       throw new UnsupportedError(
         "hash-type",
@@ -206,7 +223,8 @@ export function sqrt(v: Variant): Variant {
 export function abs(v: Variant): Variant {
   if (v.t === Tag.INT) {
     const x = intToBig(v.v as IntPayload);
-    return V.int(x < 0n ? -x : x);
+    // `abs(INT64_MIN)` 回绕回 INT64_MIN（实测 e13），不是 +2^63。
+    return V.int(x < 0n ? wrap64(-x) : x);
   }
   return V.float(Math.abs(num(v)) + 0);
 }
@@ -377,6 +395,7 @@ export function gSnappedI(x: Variant, step: Variant): Variant {
 }
 
 const PI_D = 3.14159265358979323846;
+const TAU_D = 2 * PI_D;
 
 export function gDegToRad(v: Variant): Variant {
   return V.float(fl(v) * (PI_D / 180) + 0);
@@ -388,12 +407,7 @@ export function gRadToDeg(v: Variant): Variant {
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
 export function gAngleDifference(from: Variant, to: Variant): Variant {
-  const TAU = 2 * PI_D;
-  let d = (fl(to) - fl(from)) % TAU;
-  if (d > PI_D) d -= TAU;
-  else if (d < -PI_D) d += TAU;
-  if (approxEq(d, PI_D)) d = -PI_D;
-  return V.float(d + 0);
+  return V.float(angleDiff(fl(from), fl(to)));
 }
 
 function approxEq(a: number, b: number): boolean {
@@ -578,4 +592,287 @@ export function rangeSeq(args: Variant[]): number[] {
 /** range(end) / range(start, end) / range(start, end, step) */
 export function range(args: Variant[]): GArray {
   return GArray.of(rangeSeq(args).map((i) => V.int(i)));
+}
+
+/** `absf` / `absi`：实测只吃 INT / FLOAT / BOOL（String、StringName、Nil、Array、Vector2 那一格引擎报 Invalid type 并掐掉本次调用，实测 f01–f12）。 */
+export function gAbsF(v: Variant): Variant {
+  return V.float(Math.abs(numArg(v, "absf() 的参数")) + 0);
+}
+
+export function gAbsI(v: Variant): Variant {
+  const x = intArgBig(v, "absi() 的参数");
+  return V.int(x < 0n ? wrap64(-x) : x);
+}
+
+/** 这一族「float 形参」的取数：bool 折成 1/0（实测 a05 / k01），其余非数值同 intArgBig 那侧报运行时错（f01–f12 / k02–k03）。 */
+function numArg(v: Variant, who: string): number {
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
+    throw new GodotRuntimeError("arg-float", `${who} 需要 float，收到 ${tagName(v.t)}`);
+  }
+  return v.t === Tag.FLOAT ? (v.v as number) : intToNum(v.v as IntPayload);
+}
+
+/**
+ * 三角与双曲那一族（实测 h.log 435 格 + l.log 56 格逐格比对）：式子就是引擎那句 `::sin` / `::cos`，
+ * 但引擎那侧的幅度归约从某一刻开始丢有效位 —— `cos` 在 1e6、`sin` 在 1e7 就与本机的式子差在第 12~14 位，
+ * 所以两支只发到量过的那一格，再大响亮拒；`tan` 一路到 1e300 都对得上，不设限。
+ */
+const SIN_LIMIT = 1e6;
+const COS_LIMIT = 1e5;
+const HALF_PI = Math.PI / 2;
+
+function trig(name: string, v: Variant, f: (x: number) => number, limit: number | null): Variant {
+  const x = numArg(v, `${name}() 的参数`);
+  if (limit !== null && Number.isFinite(x) && Math.abs(x) > limit) {
+    throw new UnsupportedError("trig-large-arg", `${name}() 收到 ${show(V.float(x))}：|x| 超过实测的 ${String(limit)}，引擎那侧的归约从这一档开始丢有效位（没量过的不发）`);
+  }
+  return V.float(f(x));
+}
+
+export const gSin = (v: Variant): Variant => trig("sin", v, Math.sin, SIN_LIMIT);
+export const gCos = (v: Variant): Variant => trig("cos", v, Math.cos, COS_LIMIT);
+export const gTan = (v: Variant): Variant => trig("tan", v, Math.tan, null);
+export const gAtan = (v: Variant): Variant => trig("atan", v, Math.atan, null);
+export const gSinh = (v: Variant): Variant => trig("sinh", v, Math.sinh, null);
+export const gCosh = (v: Variant): Variant => trig("cosh", v, Math.cosh, null);
+export const gTanh = (v: Variant): Variant => trig("tanh", v, Math.tanh, null);
+export const gAsinh = (v: Variant): Variant => trig("asinh", v, Math.asinh, null);
+
+/** `asin` / `acos` / `acosh` / `atanh` 引擎都先夹再算（`core/math/math_funcs.h` 那四行「Always does clamping」+ 实测 k04–k08 / j.log / e.log），夹出来的是常量。 */
+export function gAsin(v: Variant): Variant {
+  const x = numArg(v, "asin() 的参数");
+  if (x < -1) return V.float(-HALF_PI);
+  if (x > 1) return V.float(HALF_PI);
+  return V.float(Math.asin(x));
+}
+
+export function gAcos(v: Variant): Variant {
+  const x = numArg(v, "acos() 的参数");
+  if (x < -1) return V.float(Math.PI);
+  if (x > 1) return V.float(0);
+  return V.float(Math.acos(x));
+}
+
+export function gAcosh(v: Variant): Variant {
+  const x = numArg(v, "acosh() 的参数");
+  if (x < 1) return V.float(0);
+  return V.float(Math.acosh(x));
+}
+
+export function gAtanh(v: Variant): Variant {
+  const x = numArg(v, "atanh() 的参数");
+  if (x <= -1) return V.float(-Infinity);
+  if (x >= 1) return V.float(Infinity);
+  return V.float(Math.atanh(x));
+}
+
+export function gAtan2(y: Variant, x: Variant): Variant {
+  return V.float(Math.atan2(numArg(y, "atan2() 的第一参"), numArg(x, "atan2() 的第二参")));
+}
+
+/** 引擎的两个 dB 常数（4.3 树 `core/math/math_funcs.h`：`ln(10)/20` 与 `20/ln(10)`）。 */
+const DB_TO_LINEAR_K = 0.11512925464970228420089957273422;
+const LINEAR_TO_DB_K = 8.6858896380650365530225783783321;
+
+export function gDbToLinear(v: Variant): Variant {
+  return V.float(Math.exp(numArg(v, "db_to_linear() 的参数") * DB_TO_LINEAR_K) + 0);
+}
+
+export function gLinearToDb(v: Variant): Variant {
+  return V.float(Math.log(numArg(v, "linear_to_db() 的参数")) * LINEAR_TO_DB_K);
+}
+
+/** `pingpong(值, 周期)`：`length == 0` 那格实测给 0.0（n.log pp|1.5,0.0），式子是引擎那句 `abs(fract((v-l)/(2l))*2l - l)`。 */
+export function gPingpong(v: Variant, length: Variant): Variant {
+  const value = numArg(v, "pingpong() 的值");
+  const l = numArg(length, "pingpong() 的周期");
+  if (l === 0) return V.float(0);
+  const x = (value - l) / (l * 2);
+  return V.float(Math.abs((x - Math.floor(x)) * l * 2 - l) + 0);
+}
+
+/** `step_decimals()` 不是对数式的：引擎拿小数部分去比那张 10 格的门槛表（`math_funcs.cpp`），门槛是 `0.9999 / 0.09999 / …`。 */
+const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000009999, 0.0000009999, 0.00000009999, 0.000000009999, 0.0000000009999];
+
+export function gStepDecimals(v: Variant): Variant {
+  const x = Math.abs(numArg(v, "step_decimals() 的参数"));
+  const decs = x - Math.trunc(x);
+  let i = 0;
+  for (const t of STEP_THRESHOLDS) {
+    if (decs >= t) return V.int(i);
+    i++;
+  }
+  return V.int(0);
+}
+
+/** `nearest_po2()`：无符号那侧「进一位再抹平」的式子（`typedefs.h` 的 `nearest_power_of_2_templated`），回绕都按 64 位走 —— 实测 `0 → 0`、`-3 → 0`、`3 → 4`、`5 → 8`。 */
+export function gNearestPo2(v: Variant): Variant {
+  let u = intArgBig(v, "nearest_po2() 的参数") & MASK64;
+  u = (u - 1n) & MASK64;
+  for (const s of [1, 2, 4, 8, 16, 32]) u = (u | (u >> BigInt(s))) & MASK64;
+  return V.int(wrap64((u + 1n) & MASK64));
+}
+
+/** 引擎那句 `fmod(2*fmod(to-from, TAU), TAU)` 折出来的最短弧（实测 q01–q03：正好 ±π 才翻，差 1e-9 都不翻）。 */
+function angleDiff(from: number, to: number): number {
+  const d = (to - from) % TAU_D;
+  return ((2 * d) % TAU_D - d) + 0;
+}
+
+export function gLerpAngle(from: Variant, to: Variant, w: Variant): Variant {
+  const a = numArg(from, "lerp_angle() 的起点");
+  return V.float(a + angleDiff(a, numArg(to, "lerp_angle() 的终点")) * numArg(w, "lerp_angle() 的权重") + 0);
+}
+
+/** `rotate_toward`：实参先夹进 `|差| - π … |差|` 再按弧的符号走（负 delta 那格没量过，照式子给，语料里不钉）。 */
+export function gRotateToward(from: Variant, to: Variant, delta: Variant): Variant {
+  const a = numArg(from, "rotate_toward() 的起点");
+  const diff = angleDiff(a, numArg(to, "rotate_toward() 的终点"));
+  const absDiff = Math.abs(diff);
+  const d = Math.min(Math.max(numArg(delta, "rotate_toward() 的步长"), absDiff - PI_D), absDiff);
+  return V.float(a + d * (diff >= 0 ? 1 : -1) + 0);
+}
+
+export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
+  const p = numArg(s1, "bezier_interpolate() 的起点");
+  const a = numArg(c1, "bezier_interpolate() 的第一控制点");
+  const b = numArg(c2, "bezier_interpolate() 的第二控制点");
+  const q = numArg(e, "bezier_interpolate() 的终点");
+  const w = numArg(t, "bezier_interpolate() 的 t");
+  const omt = 1 - w;
+  const omt2 = omt * omt;
+  const t2 = w * w;
+  return V.float(p * omt2 * omt + a * omt2 * w * 3 + b * omt * t2 * 3 + q * t2 * w + 0);
+}
+
+export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
+  const p = numArg(s1, "bezier_derivative() 的起点");
+  const a = numArg(c1, "bezier_derivative() 的第一控制点");
+  const b = numArg(c2, "bezier_derivative() 的第二控制点");
+  const q = numArg(e, "bezier_derivative() 的终点");
+  const w = numArg(t, "bezier_derivative() 的 t");
+  const omt = 1 - w;
+  return V.float((a - p) * 3 * omt * omt + (b - a) * 6 * omt * w + (q - b) * 3 * w * w + 0);
+}
+
+/** 角度版先把四个控制点折到 `from` 附近（引擎那六行 `fmod` 的式子），再走 `cubic_interpolate`。 */
+function angleRots(from: number, to: number, pre: number, post: number): [number, number, number, number] {
+  const fromRot = from % TAU_D;
+  const preDiff = (pre - fromRot) % TAU_D;
+  const preRot = fromRot + ((2 * preDiff) % TAU_D) - preDiff;
+  const toDiff = (to - fromRot) % TAU_D;
+  const toRot = fromRot + ((2 * toDiff) % TAU_D) - toDiff;
+  const postDiff = (post - toRot) % TAU_D;
+  const postRot = toRot + ((2 * postDiff) % TAU_D) - postDiff;
+  return [fromRot, toRot, preRot, postRot];
+}
+
+function cubicNum(from: number, to: number, pre: number, post: number, t: number): number {
+  return 0.5 * (from * 2 + (to - pre) * t + (pre * 2 - from * 5 + to * 4 - post) * t * t +
+    (pre * -1 + from * 3 - to * 3 + post) * t * t * t);
+}
+
+function lerpNum(a: number, b: number, w: number): number {
+  return a + (b - a) * w;
+}
+
+function cubicInTimeNum(from: number, to: number, pre: number, post: number, w: number, toT: number, preT: number, postT: number): number {
+  const t = lerpNum(0, toT, w);
+  const a1 = lerpNum(pre, from, preT === 0 ? 0 : (t - preT) / -preT);
+  const a2 = lerpNum(from, to, toT === 0 ? 0.5 : t / toT);
+  const a3 = lerpNum(to, post, postT - toT === 0 ? 1 : (t - toT) / (postT - toT));
+  const b1 = lerpNum(a1, a2, toT - preT === 0 ? 0 : (t - preT) / (toT - preT));
+  const b2 = lerpNum(a2, a3, postT === 0 ? 1 : t / postT);
+  return lerpNum(b1, b2, toT === 0 ? 0.5 : t / toT);
+}
+
+export function gCubicAngle(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant): Variant {
+  const a = numArg(from, "cubic_interpolate_angle() 的起点");
+  const r = angleRots(a, numArg(to, "cubic_interpolate_angle() 的终点"), numArg(pre, "cubic_interpolate_angle() 的前一控制点"), numArg(post, "cubic_interpolate_angle() 的后一控制点"));
+  return V.float(cubicNum(r[0], r[1], r[2], r[3], numArg(w, "cubic_interpolate_angle() 的权重")) + 0);
+}
+
+export function gCubicInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
+  return V.float(cubicInTimeNum(
+    numArg(from, "cubic_interpolate_in_time() 的起点"), numArg(to, "cubic_interpolate_in_time() 的终点"),
+    numArg(pre, "cubic_interpolate_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_in_time() 的后一控制点"),
+    numArg(w, "cubic_interpolate_in_time() 的权重"), numArg(toT, "cubic_interpolate_in_time() 的 to_t"),
+    numArg(preT, "cubic_interpolate_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_in_time() 的 post_t")) + 0);
+}
+
+export function gCubicAngleInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
+  const a = numArg(from, "cubic_interpolate_angle_in_time() 的起点");
+  const r = angleRots(a, numArg(to, "cubic_interpolate_angle_in_time() 的终点"), numArg(pre, "cubic_interpolate_angle_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_angle_in_time() 的后一控制点"));
+  return V.float(cubicInTimeNum(r[0], r[1], r[2], r[3],
+    numArg(w, "cubic_interpolate_angle_in_time() 的权重"), numArg(toT, "cubic_interpolate_angle_in_time() 的 to_t"),
+    numArg(preT, "cubic_interpolate_angle_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_angle_in_time() 的 post_t")) + 0);
+}
+
+/** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */
+export function gWrapAny(v: Variant, lo: Variant, hi: Variant): Variant {
+  return gWrap(v, lo, hi, v.t === Tag.INT && lo.t === Tag.INT && hi.t === Tag.INT);
+}
+
+/**
+ * `is_same(a, b)`：先比引擎那侧的类型，再按类型走「同一性」。
+ * 容器 / pack / 信号 / 对象与类值看身份，Callable 看等式（绑过没绑过算不等），
+ * 结构体与标量看值 —— 浮点的 NaN 自己相等、0.0 与 -0.0 相等（实测 d06 / e08）。
+ */
+export function gIsSame(a: Variant, b: Variant): Variant {
+  const ta = (typeOf(a) as Variant).v as number;
+  if ((typeOf(b) as Variant).v !== ta) return V.bool(false);
+  if (ta === 2) {
+    return V.bool(intToBig(a.v as IntPayload) === intToBig(b.v as IntPayload));
+  }
+  if (ta === 3) {
+    const x = a.v as number;
+    const y = b.v as number;
+    return V.bool(x === y || (Number.isNaN(x) && Number.isNaN(y)));
+  }
+  if (ta === 25) return V.bool(callableEq(a.v as CallableBox, b.v as CallableBox));
+  if (ta === 24 || ta === 26 || ta === 27 || ta === 28 || isBytes(a)) return V.bool(a.v === b.v);
+  return V.bool(valueEq(a, b));
+}
+
+/** `type_string()` 的 0–38 号名表（实测 `tmp/probe-small-builtins/r.log`；39 往上给 `<invalid type>`）。 */
+const TYPE_NAMES = ["Nil", "bool", "int", "float", "String", "Vector2", "Vector2i", "Rect2", "Rect2i", "Vector3",
+  "Vector3i", "Transform2D", "Vector4", "Vector4i", "Plane", "Quaternion", "AABB", "Basis", "Transform3D",
+  "Projection", "Color", "StringName", "NodePath", "RID", "Object", "Callable", "Signal", "Dictionary", "Array",
+  "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray", "PackedVector4Array"];
+
+/** `error_string()` 的 0–48 号名表（同探头；49 往上、负数与 INT64_MAX 都给 `(invalid error code)`）。 */
+const ERROR_NAMES = ["OK", "Failed", "Unavailable", "Unconfigured", "Unauthorized", "Parameter out of range",
+  "Out of memory", "File not found", "File: Bad drive", "File: Bad path", "File: Permission denied",
+  "File already in use", "Can't open file", "Can't write file", "Can't read file", "File unrecognized",
+  "File corrupt", "Missing dependencies for file", "End of file", "Can't open", "Can't create", "Query failed",
+  "Already in use", "Locked", "Timeout", "Can't connect", "Can't resolve", "Connection error",
+  "Can't acquire resource", "Can't fork", "Invalid data", "Invalid parameter", "Already exists",
+  "Does not exist", "Can't read database", "Can't write database", "Compilation failed", "Method not found",
+  "Link failed", "Script failed", "Cyclic link detected", "Invalid declaration", "Duplicate symbol",
+  "Parse error", "Busy", "Skip", "Help", "Bug", "Printer on fire"];
+
+/** 引擎这两支的形参是 int32：先按 32 位回绕再查表 —— 实测 `error_string(INT64_MIN)` 给 **OK**（低 32 位是 0），`error_string(-1)` 给 `(invalid error code)`。 */
+function nameById(v: Variant, who: string, names: string[], fallback: string): Variant {
+  let x = intArgBig(v, who) % 4294967296n;
+  if (x < 0n) x += 4294967296n;
+  if (x >= 2147483648n) x -= 4294967296n;
+  return x >= 0 && x < BigInt(names.length) ? V.str(names[Number(x)] as string) : V.str(fallback);
+}
+
+export function gTypeString(v: Variant): Variant {
+  return nameById(v, "type_string() 的参数", TYPE_NAMES, "<invalid type>");
+}
+
+export function gErrorString(v: Variant): Variant {
+  return nameById(v, "error_string() 的参数", ERROR_NAMES, "(invalid error code)");
+}
+
+/** `type_exists()`：判据就是这张 ClassDB 名单；实参只量过 String，其余类型响亮拒（连 StringName 都没量）。 */
+export function gTypeExists(v: Variant): Variant {
+  if (v.t !== Tag.STRING) {
+    throw new UnsupportedError("type-exists-arg", `type_exists() 的实参只量过 String（收到 ${tagName(v.t)}）`);
+  }
+  return V.bool(ENGINE_CLASS_NAMES.has(v.v as string));
 }

@@ -74,6 +74,7 @@ class Box extends rt.GdScriptObject {
 const __gd_d_Box = rt.defineClass(Box, () => new Box(), (o) => o instanceof Box);
 rt.nameClass(__gd_d_Box, "Box");
 rt.registerFieldTypes(__gd_d_Box, {"m": "Vector2"});
+rt.registerScriptProps(__gd_d_Box, ["m"]);
 rt.registerMethodArities(__gd_d_Box, { "getm": [0, 0] });
 rt.registerNativeBase(__gd_d_Box, "RefCounted");
 

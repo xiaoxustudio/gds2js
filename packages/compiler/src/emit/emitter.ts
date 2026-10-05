@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isGlobalValueRead } from "../lower/analyze";
+import { isGlobalValueRead, isNativeClassValueRead } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -84,6 +84,51 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   );
 }
 
+/** 4.6.3 解析期那两句原文（探头 `tmp/probe-arity/arity.log`，20 支一名两形）：少给报 `at least`、多给报 `at most`。 */
+function aritySentence(name: string, min: number, max: number, got: number): string {
+  return got < min
+    ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(got)}.`
+    : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(got)}.`;
+}
+
+/** 实测过的内置函数实参区间；表外的名字（`print` / `str` / `range` 这些变元与类型构造器）不拦 —— 没量过就不说。 */
+const BUILTIN_ARITY: Record<string, [number, number]> = {
+  abs: [1, 1],
+  angle_difference: [2, 2],
+  bezier_derivative: [5, 5],
+  bezier_interpolate: [5, 5],
+  char: [1, 1],
+  clamp: [3, 3],
+  clampi: [3, 3],
+  cubic_interpolate_in_time: [8, 8],
+  is_same: [2, 2],
+  lerp: [3, 3],
+  max: [2, Number.POSITIVE_INFINITY],
+  min: [2, Number.POSITIVE_INFINITY],
+  move_toward: [3, 3],
+  pingpong: [2, 2],
+  posmod: [2, 2],
+  remap: [5, 5],
+  rotate_toward: [3, 3],
+  sign: [1, 1],
+  smoothstep: [3, 3],
+  snapped: [2, 2],
+  step_decimals: [1, 1],
+  str_to_var: [1, 1],
+  var_to_str: [1, 1],
+  wrap: [3, 3],
+};
+
+/** 少给 / 多给在引擎是解析期拒；这里同样在发射期拒，措辞照原文，`code` 沿用已出货那三支的。 */
+function checkBuiltinArity(name: string, got: number): void {
+  const ar = BUILTIN_ARITY[name];
+  if (ar === undefined) return;
+  if (got >= ar[0] && got <= ar[1]) return;
+  const code = name === "char" ? "char-arity" : name === "var_to_str" ? "var-to-str-arity"
+    : name === "str_to_var" ? "str-to-var-arity" : "builtin-arity";
+  throw new UnsupportedError(code, aritySentence(name, ar[0], ar[1], got));
+}
+
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
@@ -94,15 +139,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
   hash: (a) => `rt.variantHash([${a.join(", ")}])`,
   var_to_str: (a) => {
-    if (a.length !== 1) {
-      throw new UnsupportedError("var-to-str-arity", `var_to_str() 只发单实参形状（收到 ${a.length} 个）：4.6.3 的第二个实参是缩进串，装字典的数组跟着换行、缩进还按深度累加，式子没量出前不猜`);
-    }
     return `rt.V.str(rt.varToStr(${a[0]}))`;
   },
   str_to_var: (a) => {
-    if (a.length !== 1) {
-      throw new UnsupportedError("str-to-var-arity", `str_to_var() 只发单实参形状（收到 ${a.length} 个）`);
-    }
     return `rt.strToVar(${a[0]})`;
   },
   convert: (a) => {
@@ -118,6 +157,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
     return `rt.variantConvert(${a[0]}, ${a[1]}, false)`;
   },
   abs: (a) => `rt.abs(${a.join(", ")})`,
+  char: (a) => {
+    return `rt.stringChr(${a[0]})`;
+  },
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,
   Vector2: (a) => `rt.vector2New([${a.join(", ")}])`,
@@ -154,6 +196,38 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   fposmod: (a) => `rt.gFposmod(${a[0]}, ${a[1]})`,
   fmod: (a) => `rt.gFmod(${a[0]}, ${a[1]})`,
   wrapi: (a) => `rt.gWrap(${a[0]}, ${a[1]}, ${a[2]}, true)`,
+  wrap: (a) => `rt.gWrapAny(${a[0]}, ${a[1]}, ${a[2]})`,
+  absf: (a) => `rt.gAbsF(${a[0]})`,
+  absi: (a) => `rt.gAbsI(${a[0]})`,
+  is_same: (a) => `rt.gIsSame(${a[0]}, ${a[1]})`,
+  type_string: (a) => `rt.gTypeString(${a[0]})`,
+  error_string: (a) => `rt.gErrorString(${a[0]})`,
+  type_exists: (a) => `rt.gTypeExists(${a[0]})`,
+  sin: (a) => `rt.gSin(${a[0]})`,
+  cos: (a) => `rt.gCos(${a[0]})`,
+  tan: (a) => `rt.gTan(${a[0]})`,
+  asin: (a) => `rt.gAsin(${a[0]})`,
+  acos: (a) => `rt.gAcos(${a[0]})`,
+  atan: (a) => `rt.gAtan(${a[0]})`,
+  atan2: (a) => `rt.gAtan2(${a[0]}, ${a[1]})`,
+  sinh: (a) => `rt.gSinh(${a[0]})`,
+  cosh: (a) => `rt.gCosh(${a[0]})`,
+  tanh: (a) => `rt.gTanh(${a[0]})`,
+  asinh: (a) => `rt.gAsinh(${a[0]})`,
+  acosh: (a) => `rt.gAcosh(${a[0]})`,
+  atanh: (a) => `rt.gAtanh(${a[0]})`,
+  db_to_linear: (a) => `rt.gDbToLinear(${a[0]})`,
+  linear_to_db: (a) => `rt.gLinearToDb(${a[0]})`,
+  pingpong: (a) => `rt.gPingpong(${a[0]}, ${a[1]})`,
+  step_decimals: (a) => `rt.gStepDecimals(${a[0]})`,
+  nearest_po2: (a) => `rt.gNearestPo2(${a[0]})`,
+  rotate_toward: (a) => `rt.gRotateToward(${a[0]}, ${a[1]}, ${a[2]})`,
+  lerp_angle: (a) => `rt.gLerpAngle(${a[0]}, ${a[1]}, ${a[2]})`,
+  bezier_interpolate: (a) => `rt.gBezierInterpolate(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  bezier_derivative: (a) => `rt.gBezierDerivative(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  cubic_interpolate_angle: (a) => `rt.gCubicAngle(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]})`,
+  cubic_interpolate_in_time: (a) => `rt.gCubicInTime(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]}, ${a[5]}, ${a[6]}, ${a[7]})`,
+  cubic_interpolate_angle_in_time: (a) => `rt.gCubicAngleInTime(${a[0]}, ${a[1]}, ${a[2]}, ${a[3]}, ${a[4]}, ${a[5]}, ${a[6]}, ${a[7]})`,
   wrapf: (a) => `rt.gWrap(${a[0]}, ${a[1]}, ${a[2]}, false)`,
   lerp: (a) => `rt.gLerp(${a[0]}, ${a[1]}, ${a[2]})`,
   lerpf: (a) => `rt.gLerp(${a[0]}, ${a[1]}, ${a[2]})`,
@@ -434,6 +508,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   }
   const moduleFields = fieldTypesLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(__gd_d_${className}, ${moduleFields});`);
+  const moduleProps = scriptPropsLiteral(m.vars.filter((v) => !v.isStatic));
+  if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps});`);
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   const moduleStaticSlots = staticVarSlotsLiteral(className, m.vars);
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
@@ -485,6 +561,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   LOCAL_TYPES = new Map();
   CLASS_FUNCS = new Set();
   return { code, map };
+}
+
+/** 脚本变量名的声明顺序表：`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
+function scriptPropsLiteral(vars: readonly { name: string }[]): string | null {
+  return vars.length === 0 ? null : JSON.stringify(vars.map((v) => v.name));
 }
 
 function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; accessor?: PropAccessor | null }[]): string | null {
@@ -683,6 +764,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   }
   const declFields = fieldTypesLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declFields !== null) lines.push(`rt.registerFieldTypes(__gd_d_${decl.name}, ${declFields});`);
+  const declProps = scriptPropsLiteral(decl.vars.filter((v) => !v.isStatic));
+  if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps});`);
   const declStaticVars = staticVarTableLiteral(decl.vars);
   const declStaticSlots = staticVarSlotsLiteral(decl.name, decl.vars);
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);
@@ -2842,6 +2925,8 @@ function emitExprVar(e: Expr): string {
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       // 全局函数的取值点：分析器按真实作用域记的号，实测一律给 `@GlobalScope::<名字>` 的 Callable（typeof 25）
       if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
+      // 引擎类名的取值点：实测 typeof 24、等式按类，发一个身份盒子；打印与 `.new()` 那两支在运行时各自响亮拒
+      if (isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":
@@ -3107,7 +3192,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     }
 
     const builtin = BUILTIN[name];
-    if (builtin) return builtin(args);
+    if (builtin) {
+      checkBuiltinArity(name, e.args.length);
+      return builtin(args);
+    }
     if (name === "super") {
       // `_init` 里的 `super(...)` 调父类 `_init` 的体（调两次就跑两遍）；别的方法里的 `super()` 调父类的同名方法。
       if (!INIT_HAS_BASE) {

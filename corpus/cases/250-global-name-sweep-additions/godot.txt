@@ -1,0 +1,10 @@
+g01|25|sin|1|@GlobalScope::sin
+g02|25|@GDScript::type_exists|1
+g03|@GDScript::inst_to_dict|1
+g04|@GlobalScope::wrap|3
+g05|@GlobalScope::rid_allocate_id|0
+g06|3|true|2|false
+g07|true|true
+g08|4|@GlobalScope::nearest_po2|@GlobalScope::var_to_bytes
+g09|false|true|true
+g10|25|@GlobalScope::atan2|2

@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
-import { GArray, GDict } from "./values";
+import { GArray, GDict, registerScriptPropsHook } from "./values";
 import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
 import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
@@ -121,6 +121,8 @@ export class ClassDesc {
   /** Callable 标签里括号那一截：`class_name` 声明的名字，没有就是脚本文件名；内部类不登记（引擎那侧就没有括号）。 */
   scriptLabel: string | null;
   fieldTypes: Record<string, string> | null;
+  /** 自己类的脚本变量名，按声明顺序 —— `String.format()` 的属性替换要这个顺序（引擎是「自己类在前、基类在后」）。 */
+  scriptProps: string[] | null;
   methodArities: Record<string, [number, number]> | null;
   staticVars: Record<string, string> | null;
   // 静态方法的名字表 / 调用入口与静态变量的读写格不放在字段里，改挂模块级的 `Map<object, …>`（键是 desc 本身）。
@@ -132,6 +134,7 @@ export class ClassDesc {
     this.nativeBase = null;
     this.scriptLabel = null;
     this.fieldTypes = null;
+    this.scriptProps = null;
     this.methodArities = null;
     this.staticVars = null;
   }
@@ -209,6 +212,11 @@ export function setClassBase(desc: ClassDesc, base: ClassDesc | null | undefined
 
 export function registerFieldTypes(desc: ClassDesc, table: Record<string, string>): void {
   desc.fieldTypes = table;
+}
+
+/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它替换。 */
+export function registerScriptProps(desc: ClassDesc, names: string[]): void {
+  desc.scriptProps = names;
 }
 
 /** 方法名的 `[必填实参数, 全部实参数]` 表：arity 检查要用**两个**数，少给与多给 Godot 两边都管。 */
@@ -339,6 +347,23 @@ registerCallableLabelHook((box) => {
   if (base === null) return null;
   const label = scriptLabelOf(inner);
   return label === null ? `${base}::${name}` : `${base}(${label})::${name}`;
+});
+
+// `String.format()` 的属性替换按「自己类在前、基类在后」走，只有本模块看得见继承链。
+registerScriptPropsHook((inner) => {
+  if (!(inner instanceof GdScriptObject)) return null;
+  const desc = descOf(inner);
+  if (desc === null) return null;
+  const props: Array<{ name: string; value: Variant }> = [];
+  let unmodeledBase: string | null = null;
+  const box = inner as unknown as Record<string, Variant>;
+  for (let d: ClassDesc | null = desc; d !== null; d = d.base) {
+    if (d.nativeBase !== null && d.nativeBase !== "RefCounted" && d.nativeBase !== "Object") unmodeledBase = d.nativeBase;
+    const names = d.scriptProps;
+    if (names === null) continue;
+    for (const name of names) props.push({ name, value: box[name] as Variant });
+  }
+  return { props, unmodeledBase };
 });
 
 // ---------------------------------------------------------------- meta 存储

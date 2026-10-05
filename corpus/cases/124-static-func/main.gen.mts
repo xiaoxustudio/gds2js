@@ -54,6 +54,7 @@ export class Main extends SceneTree {
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerFieldTypes(__gd_d_Main, {"TOP": "int"});
+rt.registerScriptProps(__gd_d_Main, ["TOP"]);
 rt.registerMethodArities(__gd_d_Main, { "helper": [0, 0], "usehelper": [0, 0], "outerbare": [0, 0], "_initialize": [0, 0] });
 rt.registerStaticMethods(__gd_d_Main, ["helper","usehelper"], {"helper": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Main.helper()), "usehelper": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Main.usehelper())});
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
@@ -102,6 +103,7 @@ class Inner extends rt.GdScriptObject {
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerFieldTypes(__gd_d_Inner, {"CV": "int", "mv": "int"});
+rt.registerScriptProps(__gd_d_Inner, ["CV","mv"]);
 rt.registerMethodArities(__gd_d_Inner, { "make": [0, 0], "twice": [1, 1], "selfcall": [0, 0], "readconst": [0, 0], "rec": [1, 1], "usestatic": [0, 0] });
 rt.registerStaticMethods(__gd_d_Inner, ["make","twice","selfcall","readconst","rec"], {"make": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.make()), "twice": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.twice(a[0] as rt.Variant)), "selfcall": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.selfcall()), "readconst": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.readconst()), "rec": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.rec(a[0] as rt.Variant))});
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");

@@ -34,6 +34,7 @@ export class Main extends SceneTree {
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerFieldTypes(__gd_d_Main, {"TOP": "int", "NAME": "String"});
+rt.registerScriptProps(__gd_d_Main, ["TOP","NAME"]);
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -75,6 +76,7 @@ class Inner extends rt.GdScriptObject {
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerFieldTypes(__gd_d_Inner, {"TOP": "int"});
+rt.registerScriptProps(__gd_d_Inner, ["TOP"]);
 rt.registerMethodArities(__gd_d_Inner, { "read_outer": [0, 0], "read_shadow": [0, 0], "read_static_outer": [0, 0], "read_static_shadow": [0, 0], "via_self_dot": [0, 0] });
 rt.registerStaticMethods(__gd_d_Inner, ["read_static_outer","read_static_shadow"], {"read_static_outer": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.read_static_outer()), "read_static_shadow": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.read_static_shadow())});
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");

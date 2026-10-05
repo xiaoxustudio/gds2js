@@ -83,6 +83,7 @@ class Base extends rt.GdScriptObject {
 const __gd_d_Base = rt.defineClass(Base, (a) => new Base(...a), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
 rt.registerFieldTypes(__gd_d_Base, {"bx": "int"});
+rt.registerScriptProps(__gd_d_Base, ["bx"]);
 rt.registerMethodArities(__gd_d_Base, { "_mk": [1, 1], "tag": [0, 0] });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
 
@@ -105,6 +106,7 @@ const __gd_d_NoInit = rt.defineClass(NoInit, (a) => new NoInit(...a), (o) => o i
 rt.nameClass(__gd_d_NoInit, "NoInit");
 rt.setClassBase(__gd_d_NoInit, rt.lookupClass("Base") ?? null);
 rt.registerFieldTypes(__gd_d_NoInit, {"cx": "int"});
+rt.registerScriptProps(__gd_d_NoInit, ["cx"]);
 
 class Own extends Base {
   declare cx2: rt.Variant;
@@ -132,6 +134,7 @@ const __gd_d_Own = rt.defineClass(Own, (a) => new Own(...a), (o) => o instanceof
 rt.nameClass(__gd_d_Own, "Own");
 rt.setClassBase(__gd_d_Own, rt.lookupClass("Base") ?? null);
 rt.registerFieldTypes(__gd_d_Own, {"cx2": "int"});
+rt.registerScriptProps(__gd_d_Own, ["cx2"]);
 
 class Grand extends Own {
   declare gx: rt.Variant;
@@ -159,6 +162,7 @@ const __gd_d_Grand = rt.defineClass(Grand, (a) => new Grand(...a), (o) => o inst
 rt.nameClass(__gd_d_Grand, "Grand");
 rt.setClassBase(__gd_d_Grand, rt.lookupClass("Own") ?? null);
 rt.registerFieldTypes(__gd_d_Grand, {"gx": "int"});
+rt.registerScriptProps(__gd_d_Grand, ["gx"]);
 
 class Needs extends rt.GdScriptObject {
   constructor(...__gd_new_args: rt.Variant[]) {
@@ -190,6 +194,7 @@ class Needs extends rt.GdScriptObject {
 const __gd_d_Needs = rt.defineClass(Needs, (a) => new Needs(...a), (o) => o instanceof Needs);
 rt.nameClass(__gd_d_Needs, "Needs");
 rt.registerFieldTypes(__gd_d_Needs, {"n": "int"});
+rt.registerScriptProps(__gd_d_Needs, ["n"]);
 rt.registerNativeBase(__gd_d_Needs, "RefCounted");
 
 class SkipParent extends Needs {
@@ -232,6 +237,7 @@ const __gd_d_Forwarded = rt.defineClass(Forwarded, (a) => new Forwarded(...a), (
 rt.nameClass(__gd_d_Forwarded, "Forwarded");
 rt.setClassBase(__gd_d_Forwarded, rt.lookupClass("Needs") ?? null);
 rt.registerFieldTypes(__gd_d_Forwarded, {"k": "int"});
+rt.registerScriptProps(__gd_d_Forwarded, ["k"]);
 
 class SuperOther extends Base {
   override __gd_fields__() {

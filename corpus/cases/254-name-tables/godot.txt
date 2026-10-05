@@ -1,0 +1,99 @@
+t|0|Nil|4
+t|1|bool|4
+t|2|int|4
+t|3|float|4
+t|4|String|4
+t|5|Vector2|4
+t|6|Vector2i|4
+t|7|Rect2|4
+t|8|Rect2i|4
+t|9|Vector3|4
+t|10|Vector3i|4
+t|11|Transform2D|4
+t|12|Vector4|4
+t|13|Vector4i|4
+t|14|Plane|4
+t|15|Quaternion|4
+t|16|AABB|4
+t|17|Basis|4
+t|18|Transform3D|4
+t|19|Projection|4
+t|20|Color|4
+t|21|StringName|4
+t|22|NodePath|4
+t|23|RID|4
+t|24|Object|4
+t|25|Callable|4
+t|26|Signal|4
+t|27|Dictionary|4
+t|28|Array|4
+t|29|PackedByteArray|4
+t|30|PackedInt32Array|4
+t|31|PackedInt64Array|4
+t|32|PackedFloat32Array|4
+t|33|PackedFloat64Array|4
+t|34|PackedStringArray|4
+t|35|PackedVector2Array|4
+t|36|PackedVector3Array|4
+t|37|PackedColorArray|4
+t|38|PackedVector4Array|4
+t|39|<invalid type>|4
+t|40|<invalid type>|4
+e|0|OK|4
+e|1|Failed|4
+e|2|Unavailable|4
+e|3|Unconfigured|4
+e|4|Unauthorized|4
+e|5|Parameter out of range|4
+e|6|Out of memory|4
+e|7|File not found|4
+e|8|File: Bad drive|4
+e|9|File: Bad path|4
+e|10|File: Permission denied|4
+e|11|File already in use|4
+e|12|Can't open file|4
+e|13|Can't write file|4
+e|14|Can't read file|4
+e|15|File unrecognized|4
+e|16|File corrupt|4
+e|17|Missing dependencies for file|4
+e|18|End of file|4
+e|19|Can't open|4
+e|20|Can't create|4
+e|21|Query failed|4
+e|22|Already in use|4
+e|23|Locked|4
+e|24|Timeout|4
+e|25|Can't connect|4
+e|26|Can't resolve|4
+e|27|Connection error|4
+e|28|Can't acquire resource|4
+e|29|Can't fork|4
+e|30|Invalid data|4
+e|31|Invalid parameter|4
+e|32|Already exists|4
+e|33|Does not exist|4
+e|34|Can't read database|4
+e|35|Can't write database|4
+e|36|Compilation failed|4
+e|37|Method not found|4
+e|38|Link failed|4
+e|39|Script failed|4
+e|40|Cyclic link detected|4
+e|41|Invalid declaration|4
+e|42|Duplicate symbol|4
+e|43|Parse error|4
+e|44|Busy|4
+e|45|Skip|4
+e|46|Help|4
+e|47|Bug|4
+e|48|Printer on fire|4
+e|49|(invalid error code)|4
+e|50|(invalid error code)|4
+e|neg|(invalid error code)|OK
+e|big|(invalid error code)|<invalid type>
+k01|int|Nil|OK|File corrupt
+k02|25|@GlobalScope::type_string|type_string|1
+k03|25|@GlobalScope::error_string|error_string|1
+k04|342238717|342238717|true|false
+k05|Array|Printer on fire

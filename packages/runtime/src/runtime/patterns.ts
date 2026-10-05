@@ -1,6 +1,7 @@
 import { UnsupportedError } from "./errors";
-import { isCallableBox, isVariant, lookupClass, objIs, wrapValue } from "./object";
+import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
 import { Signal } from "./signal";
+import { GdNativeClass } from "./native-class";
 import { Tag, V, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
@@ -111,11 +112,41 @@ function packKindMatches(v: Variant, kind: PackKind): boolean {
   return isBytes(v) && packBytes(v).kind === kind;
 }
 
+/** 引擎类名的 `is`：探头 `tmp/probe-is-class/` 量过这七个名（表外的响亮拒）。 */
+const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "SceneTree", "MainLoop"];
+
+/** 脚本实例那条链上的引擎基类：量过的只有 RefCounted 与宿主 SceneTree 两条。 */
+function instanceClassNames(base: string | null): string[] | null {
+  if (base === "RefCounted") return ["Object", "RefCounted"];
+  if (base === "SceneTree") return ["Object", "SceneTree", "MainLoop"];
+  return null;
+}
+
+/** 三类「真 Object」各有各的表：脚本实例、脚本类值（m06 / n08）、引擎类值（n07）。 */
+function engineClassIs(v: Variant, name: string): boolean | null {
+  if (name === "Callable") return v.t === Tag.OBJECT && isCallableBox(v.v);
+  if (PROBED_CLASS_NAMES.indexOf(name) < 0) return null;
+  if (v.t !== Tag.OBJECT) return false;
+  const inner = v.v;
+  if (inner instanceof Signal) return null;
+  if (inner instanceof GdScriptObject) {
+    const names = instanceClassNames(nativeBaseOf(inner));
+    return names === null ? null : names.indexOf(name) >= 0;
+  }
+  if (inner instanceof ClassDesc) return name === "Object" || name === "RefCounted" || name === "Resource" || name === "GDScript";
+  if (inner instanceof GdNativeClass) return name === "Object" || name === "RefCounted";
+  return false;
+}
+
 export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
   const pk = PACK_TYPES[name];
   if (pk !== undefined) return V.bool(packKindMatches(v, pk));
-  if (name === "Object" && isBytes(v)) return V.bool(false);
+  if (PROBED_CLASS_NAMES.indexOf(name) >= 0 || name === "Callable") {
+    const e = engineClassIs(v, name);
+    if (e !== null) return V.bool(e);
+    throw new UnsupportedError("is-type", `is ${name} 这一支没量过（探头 tmp/probe-is-class/ 只量过 ${PROBED_CLASS_NAMES.join(" / ")} 与 Callable）`);
+  }
   const t = builtinTag(name);
   if (t !== undefined) return V.bool(v.t === t);
   const math = MATH_TYPES[name];

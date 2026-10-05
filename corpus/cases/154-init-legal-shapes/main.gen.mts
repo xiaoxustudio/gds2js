@@ -102,6 +102,7 @@ class NeedsArg extends rt.GdScriptObject {
 const __gd_d_NeedsArg = rt.defineClass(NeedsArg, (a) => new NeedsArg(...a), (o) => o instanceof NeedsArg);
 rt.nameClass(__gd_d_NeedsArg, "NeedsArg");
 rt.registerFieldTypes(__gd_d_NeedsArg, {"n": "int"});
+rt.registerScriptProps(__gd_d_NeedsArg, ["n"]);
 rt.registerNativeBase(__gd_d_NeedsArg, "RefCounted");
 
 class Forward extends NeedsArg {
@@ -123,6 +124,7 @@ const __gd_d_Forward = rt.defineClass(Forward, (a) => new Forward(...a), (o) => 
 rt.nameClass(__gd_d_Forward, "Forward");
 rt.setClassBase(__gd_d_Forward, rt.lookupClass("NeedsArg") ?? null);
 rt.registerFieldTypes(__gd_d_Forward, {"k": "int"});
+rt.registerScriptProps(__gd_d_Forward, ["k"]);
 
 class Right extends NeedsArg {
   override __gd_fields__() {

@@ -11,6 +11,7 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "weakref",
   "instance_from_id",
   "get_stack",
+  "print_debug",
   "print_stack",
   "seed",
   "randomize",
@@ -27,6 +28,22 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "print_verbose",
   "push_error",
   "push_warning",
+  // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。
+  // 少了这一批，`sin(0.5)` 这种合法调用会被报成 `[call-unknown]`「Godot 也没有这个名字」—— 那是假话，而且值位置还会被误拦。
+  "bytes_to_var",
+  "bytes_to_var_with_objects",
+  "dict_to_inst",
+  "inst_to_dict",
+  "is_instance_of",
+  "is_instance_id_valid",
+  "is_instance_valid",
+  "printerr",
+  "printraw",
+  "rand_from_seed",
+  "rid_allocate_id",
+  "rid_from_int64",
+  "var_to_bytes",
+  "var_to_bytes_with_objects",
 ]);
 
 

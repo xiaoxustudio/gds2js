@@ -1,0 +1,10 @@
+n01|24|24|24
+n02|true|false|true
+n03|true|false|24
+n04|2|true|1|2
+n05|true
+n06|3|true|2
+n07|false|24
+n08|true
+n09|true|24
+n10|true|1

@@ -13,6 +13,7 @@ import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
+import { GdNativeClass } from "./native-class";
 import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
@@ -1301,6 +1302,14 @@ export function strCount(hay: string, needle: string, insensitive = false, from 
   return n;
 }
 
+/** 脚本实例给 `String.format()` 用的属性面：`props` 已按引擎的替换顺序排好，`unmodeledBase` 是那条链上的原生基类名（没量过属性表的那种）。非脚本实例（Callable、pack、类值、信号）给 null —— 引擎不当它们是 Object。 */
+export type ScriptPropFace = { props: Array<{ name: string; value: Variant }>; unmodeledBase: string | null };
+let scriptPropsHook: ((inner: object) => ScriptPropFace | null) | null = null;
+
+export function registerScriptPropsHook(f: (inner: object) => ScriptPropFace | null): void {
+  scriptPropsHook = f;
+}
+
 /**
  * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
  * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
@@ -1325,7 +1334,23 @@ export function strFormatV(text: string, v: Variant, ph: string): string {
     const vals = d.values();
     for (let j = 0; j < keys.length; j++) items.push([show(keys[j] as Variant), vals[j] as Variant]);
   } else if (v.t === Tag.OBJECT) {
-    throw new UnsupportedError("format-object", "String.format() 的 Object 实参按属性表替换（实测属性 k 换掉了 {k}），属性的顺序与集合没量过");
+    const face = scriptPropsHook === null ? null : scriptPropsHook(v.v as object);
+    if (face === null) return text;
+    if (face.unmodeledBase !== null) {
+      throw new UnsupportedError("format-object", `String.format() 的实参是挂在 ${face.unmodeledBase} 上的脚本实例：引擎那一侧的属性表没量过，不猜`);
+    }
+    const scriptKey = ph.split("_").join("script");
+    if (scriptKey !== "" && text.indexOf(scriptKey) >= 0) {
+      throw new UnsupportedError("format-object", `String.format() 撞上 ${scriptKey}：引擎那一格打的是 ():<GDScript#一个进程内的号>，复现不了`);
+    }
+    // 实测的顺序是「自己类的变量在前、基类在后」，每个属性把自己那一格的全部分量换掉，换进来的值不再二次替换。
+    let objOut = text;
+    for (const p of face.props) {
+      const key = ph.split("_").join(p.name);
+      if (key === "") continue;
+      objOut = strReplace(objOut, key, show(p.value));
+    }
+    return objOut;
   } else {
     return text;
   }
@@ -1559,7 +1584,7 @@ function svNumArg(v: Variant | null): Variant | null {
  * `str_to_var()`：读侧的语法一支一支量过（S231），与 {@link varToStr} 是两条通道，别互相抄。
  * 顶部只认一个值，后面跟着什么都不看（`1 2` → 1、`Vector2(1, 2) 3` → Vector2）；认不出的写法给 null
  * —— 裸词、大写 `INF`、`'单引号'`、`(1, 2)`、`{: 1}`、容器里缺逗号、`Vector2()` 的 arity 不对，实测全是 null。
- * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支），或者量到六位数却没量越界的 `\U` —— 响亮拒，不猜。
+ * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支）—— 响亮拒，不猜。
  */
 export function strToVar(v: Variant): Variant {
   if (v.t !== Tag.STRING) {
@@ -1670,11 +1695,23 @@ export function strToVar(v: Variant): Variant {
             i++;
           }
           if (val >= 0xd800 && val <= 0xdfff) return null;
-          out += String.fromCodePoint(val);
+          out += String.fromCodePoint(val === 0 ? 0xfffd : val);
           break;
         }
-        case "U":
-          throw new UnsupportedError("str-to-var-shape", `str_to_var() 的 \\U 实测吃掉六个十六进制位（"\\U0001F600" 给 U+01F6 再留 "00"），越界与代理区的处理没量过，先不猜`);
+        case "U": {
+          // 引擎这一支只吃**六**位（不是八位），多出来的照字面留在串里；越界折 U+FFFD、代理区整串作废。
+          let val = 0;
+          for (let k = 0; k < 6; k++) {
+            if (i >= cs.length) return null;
+            const h = svHexVal(cs[i] as string);
+            if (h === null) return null;
+            val = val * 16 + h;
+            i++;
+          }
+          if (val >= 0xd800 && val <= 0xdfff) return null;
+          out += String.fromCodePoint(val === 0 || val > 0x10ffff ? 0xfffd : val);
+          break;
+        }
         default:
           out += e;
       }
@@ -2052,13 +2089,15 @@ function digits17(n: number): string {
   return `${neg ? "-" : ""}${String(q)}${"0".repeat(tail)}`;
 }
 
-/** 浮点转字符串（Godot 的 print 口径）：`nan` / `inf` / `-inf` 原样，0 与 -0.0 都印 `0.0`；整数值给约 17 位有效数字 + `.0`，非整数按整数位数定小数位再去尾随零。 */
+/** 浮点转字符串（Godot 的 print 口径）：`nan` / `inf` / `-inf` 原样，0 与 -0.0 都印 `0.0`；整数值先试 int64（装得下就精确展开，装不下回到约 17 位有效数字）再补 `.0`，非整数按整数位数定小数位再去尾随零。 */
 export function strFloat(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
   if (n === -Infinity) return "-inf";
   if (n === 0) return "0.0";
-  if (Number.isInteger(n)) return `${digits17(n)}.0`;
+  // 引擎那侧是 `p_num == (double)(int64_t)p_num` 这一眼：落进 int64 就整数的十进制展开原样印（实测 2^62、2^63-1024、123456789012345678.0），
+  // 落不进去才换成 17 位有效数字（实测 2^63 → 9223372036854775800.0、1e19 → 10000000000000000000.0）。
+  if (Number.isInteger(n)) return `${n >= -(2 ** 63) && n < 2 ** 63 ? String(BigInt(n)) : digits17(n)}.0`;
   const intDigits = Math.max(0, Math.floor(Math.log10(Math.abs(n))) + 1);
   const decimals = Math.max(0, Math.min(14, 15 - intDigits));
   if (decimals === 0) {
@@ -2146,15 +2185,20 @@ export function strHumanizeSize(v: Variant): Variant {
   return V.str(digits === 0 ? `${Math.trunc(value)} ${unit}` : `${trunc.toFixed(digits)} ${unit}`);
 }
 
+/** 码点 → 一位字符串：实测 `char(0)` 与 `String.chr(0)` 是同一支 —— 0、负数、代理区、> U+10FFFF 一律换成 U+FFFD（引擎在建串那一刻就换，并往 stderr 打一句 Unicode parsing error）。 */
+export function stringChr(cp: Variant): Variant {
+  const n = intArgBig(cp, "char() 的参数");
+  const bad = n <= 0n || n > 0x10ffffn || (n >= 0xd800n && n <= 0xdfff);
+  return V.str(String.fromCodePoint(bad ? 0xfffd : Number(n)));
+}
+
 /** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
 export function stringStatic(name: string, args: Variant[] = []): Variant {
   switch (name) {
     case "chr": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.chr() 缺少参数");
-      const cp = intArgBig(v, "String.chr() 的参数");
-      const bad = cp <= 0n || cp > 0x10ffffn || (cp >= 0xd800n && cp <= 0xdfff);
-      return V.str(String.fromCodePoint(bad ? 0xfffd : Number(cp)));
+      return stringChr(v);
     }
     case "num": {
       const v = args[0];
@@ -2290,6 +2334,10 @@ export function show(v: Variant, depth = 0): string {
       }
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
+      }
+      // 引擎类值（`var k = Node`）实测打 `<GDScriptNativeClass#一个号>` —— 号是进程内的，复现不了，只能拒
+      if (inner instanceof GdNativeClass) {
+        throw new UnsupportedError("show-native-class", `print 复现不了引擎类 ${inner.className} 的打印（实测带进程内的号：<GDScriptNativeClass#…>）`);
       }
       // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null
       if (isCallable(v)) {
