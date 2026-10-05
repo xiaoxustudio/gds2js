@@ -8,8 +8,6 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
  * / `get_stack` 的打印带指针号，属「复现不了的打印」那一族。
  */
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
-  "type_convert",
-  "convert",
   "weakref",
   "instance_from_id",
   "get_stack",

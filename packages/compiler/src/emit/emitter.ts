@@ -104,6 +104,18 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
     }
     return `rt.strToVar(${a[0]})`;
   },
+  convert: (a) => {
+    if (a.length !== 2) {
+      throw new UnsupportedError("convert-arity", `Too few arguments for "convert()" call. Expected 2 but received ${a.length}.`);
+    }
+    return `rt.variantConvert(${a[0]}, ${a[1]}, true)`;
+  },
+  type_convert: (a) => {
+    if (a.length !== 2) {
+      throw new UnsupportedError("convert-arity", `Too few arguments for "type_convert()" call. Expected 2 but received ${a.length}.`);
+    }
+    return `rt.variantConvert(${a[0]}, ${a[1]}, false)`;
+  },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
   typeof: (a) => `rt.typeOf(${a.join(", ")})`,

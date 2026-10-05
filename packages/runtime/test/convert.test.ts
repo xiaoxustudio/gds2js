@@ -8,6 +8,10 @@ import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, strToVar, varToStr } from "@gds2js/runtime/runtime/values";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { variantConvert } from "@gds2js/runtime/runtime/convert";
+import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/vector3";
+import { vector3i } from "@gds2js/runtime/runtime/vector3i";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { F, I, S } from "./support/variants";
 
@@ -95,5 +99,57 @@ describe("runtime · 类型转换族（236）", () => {
     eq("236", "str_to_var 撞见没量过的构造式名字响亮拒（引擎的 null 只量过 NoSuchType 那一格）", sv("NoSuchType(1)"), "[str-to-var-shape]");
     eq("236", "str_to_var 的实参只量过 String：给 int 就拒", String(((() => { try { return strToVar(I(7)); } catch (e) { return `[${(e as UnsupportedError).code}]`; } })())), "[str-to-var-arg]");
     eq("236", "var_to_str 打出去的写法，str_to_var 能原样读回来", sv(vs(gd([[S("a"), arrOf([I(1), gd([[S("b"), I(2)]])])], [I(3), S("z")]]))), '27|{ 3: "z", "a": [1, { "b": 2 }] }');
+  });
+});
+
+describe("runtime/convert · convert 与 type_convert 的目标表", () => {
+  it("236 · 两支转换的目标表、就近默认值与三条响亮拒", async () => {
+    const arrOf = (...xs: Variant[]): Variant => V.array(GArray.of(xs));
+    const gd = (pairs: [Variant, Variant][]): Variant => {
+      const g = new GDict();
+      for (const [k, v] of pairs) g.set(k, v);
+      return V.dict(g);
+    };
+    const cv = (v: Variant, t: number, strict: boolean): string => {
+      try {
+        const r = variantConvert(v, I(t), strict);
+        return `${String((typeOf(r) as { v: number }).v)}|${show(r)}`;
+      } catch (e) {
+        return `[${(e as UnsupportedError).code}]`;
+      }
+    };
+    eq("236", "convert 的标量三支：bool / int / float，浮点截断往零走", `${cv(I(1), 1, true)}|${cv(I(0), 1, true)}|${cv(F(2.7), 2, true)}|${cv(F(-2.7), 2, true)}|${cv(F(2.7), 3, true)}`, "1|true|1|false|2|2|2|-2|3|2.7");
+    eq("236", "convert 的字符串走 to_int 那条道（0x10 取 10、1e3 取 13）", `${cv(S("7"), 2, true)}|${cv(S("abc"), 2, true)}|${cv(S("0x10"), 2, true)}|${cv(S("1e3"), 2, true)}|${cv(S("1e3"), 3, true)}`, "2|7|2|0|2|10|2|13|3|1000.0");
+    eq("236", "convert 的 String 与 StringName：掉 & 才算文本", `${cv(S("x"), 4, true)}|${cv(V.stringName("x"), 4, true)}|${cv(S("x"), 21, true)}|${cv(I(1), 4, true)}`, "4|x|4|x|21|x|0|<null>");
+    eq("236", "convert 的向量族：同族两支过、跨族给 null", `${cv(vector2(1.7, 2), 6, true)}|${cv(vector3(1, 2, 3), 10, true)}|${cv(vector2(1, 2), 9, true)}|${cv(I(1), 5, true)}`, "6|(1, 2)|10|(1, 2, 3)|0|<null>|0|<null>");
+    eq("236", "convert 的 int 转 Color 是 0xRRGGBBAA 拆字节", `${cv(I(1), 20, true)}|${cv(I(255), 20, true)}|${cv(I(256), 20, true)}|${cv(I(-1), 20, true)}`, "20|(0.0, 0.0, 0.0, 0.0039)|20|(0.0, 0.0, 0.0, 1.0)|20|(0.0, 0.0, 0.0039, 0.0)|20|(1.0, 1.0, 1.0, 1.0)");
+    eq("236", "convert 的数组进 pack、pack 进数组", `${cv(arrOf(I(1), I(2)), 30, true)}|${cv(arrOf(S("a")), 30, true)}|${cv(arrOf(I(1), I(2)), 34, true)}|${cv(V.object(new GBytes([1, 2], "byte")), 28, true)}`, '30|[1, 2]|30|[0]|34|["1", "2"]|28|[1, 2]');
+    eq("236", "convert 的跨种 pack 与给不出的形状都是 null", `${cv(V.object(new GBytes([1, 2], "byte")), 30, true)}|${cv(arrOf(I(1)), 27, true)}|${cv(gd([]), 28, true)}`, "0|<null>|0|<null>|0|<null>");
+    eq("236", "type_convert 的就近默认值：零向量、空名、空容器", `${cv(I(7), 5, false)}|${cv(I(7), 21, false)}|${cv(arrOf(), 1, false)}|${cv(S(""), 1, false)}|${cv(I(7), 28, false)}|${cv(I(7), 27, false)}`, "5|(0.0, 0.0)|21||1|false|1|false|28|[]|27|{  }");
+    eq("236", "type_convert 的 String 走 print：null 给 <null>", `${cv(V.nil(), 4, false)}|${cv(gd([]), 4, false)}|${cv(V.stringName("s"), 4, false)}`, "4|<null>|4|{  }|4|s");
+    eq("236", "type_convert 的向量跨族：v3 掉 z、v2 补 0", `${cv(vector3(1, 2, 3), 5, false)}|${cv(vector2(1, 2), 10, false)}|${cv(vector3i(1, 2, 3), 6, false)}`, "5|(1.0, 2.0)|10|(1, 2, 0)|6|(1, 2)");
+    eq("236", "空 pack 是假（引擎 type_convert(PackedByteArray(), TYPE_BOOL) 那一格）", cv(V.object(new GBytes([], "byte")), 1, false), "1|false");
+    eq("236", "越界目标原样返回（实测 -1 与 TYPE_MAX 两格）", `${cv(I(7), -1, false)}|${cv(I(7), 39, true)}`, "2|7|2|7");
+    eq("236", "我们没形状的目标类型响亮拒（Rect2 / Callable / PackedColorArray）", `${cv(I(7), 7, true)}|${cv(I(7), 25, false)}|${cv(I(7), 37, false)}`, "[convert-target]|[convert-target]|[convert-target]");
+    eq("236", "目标实参不是 int 响亮拒", String(((() => {
+      try {
+        return show(variantConvert(I(7), S("2"), true));
+      } catch (e) {
+        return `[${(e as UnsupportedError).code}]`;
+      }
+    })())), "[convert-target]");
+    eq("236", "字符串转 Color 走名字表，没量过就响亮拒（两支同一条）", `${cv(S("red"), 20, true)}|${cv(S("red"), 20, false)}`, "[convert-color-string]|[convert-color-string]");
+    eq("236", "pack 的同型转换拷一份（实测写回不串原包）", (() => {
+      const src = V.object(new GBytes([1, 2], "byte"));
+      const copy = variantConvert(src, I(29), true) as Variant;
+      (copy.v as GBytes).raw()[0] = 9;
+      return `${show(src)}|${show(copy)}`;
+    })(), "[1, 2]|[9, 2]");
+    eq("236", "数组与字典的同型转换是同一个对象（实测 append 会串回去）", (() => {
+      const a = arrOf(I(1));
+      const b = variantConvert(a, I(28), true) as Variant;
+      (b.v as GArray).raw().push(I(2));
+      return `${show(a)}|${String(a === b)}`;
+    })(), "[1, 2]|true");
   });
 });

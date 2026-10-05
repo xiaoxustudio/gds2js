@@ -89,7 +89,7 @@ describe("未知调用守卫", () => {
 const CONVERT_ARITY_CELLS: Array<{
   name: string;
   call: string;
-  want: "ok" | "var-to-str-arity" | "str-to-var-arity";
+  want: "ok" | "var-to-str-arity" | "str-to-var-arity" | "convert-arity";
 }> = [
   { name: "var_to_str 单实参", call: "var_to_str(1)", want: "ok" },
   { name: "var_to_str 带缩进串", call: 'var_to_str(1, "  ")', want: "var-to-str-arity" },
@@ -97,6 +97,11 @@ const CONVERT_ARITY_CELLS: Array<{
   { name: "str_to_var 单实参", call: 'str_to_var("1")', want: "ok" },
   { name: "str_to_var 零实参", call: "str_to_var()", want: "str-to-var-arity" },
   { name: "str_to_var 多实参", call: 'str_to_var("1", 2)', want: "str-to-var-arity" },
+  { name: "convert 两实参", call: "convert(1, TYPE_INT)", want: "ok" },
+  { name: "convert 少实参", call: "convert(1)", want: "convert-arity" },
+  { name: "convert 多实参", call: "convert(1, TYPE_INT, 2)", want: "convert-arity" },
+  { name: "type_convert 两实参", call: "type_convert(1, TYPE_STRING)", want: "ok" },
+  { name: "type_convert 少实参", call: "type_convert()", want: "convert-arity" },
 ];
 const arityBad: string[] = [];
 

@@ -2457,7 +2457,8 @@ export function truthyOf(v: Variant): boolean {
     case Tag.DICT:
       return (v.v as GDict).size() !== 0;
     case Tag.OBJECT:
-      return true;
+      // 空的 Packed\*Array 是假：实测 `type_convert(PackedByteArray(), TYPE_BOOL)` 给 false，值类型不受这条影响
+      return v.v instanceof GBytes ? (v.v as GBytes).length !== 0 : true;
   }
   return false;
 }
