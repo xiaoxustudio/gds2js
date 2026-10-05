@@ -13,6 +13,7 @@ import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
+import { globalCallableLabel } from "./global-names";
 import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
@@ -29,11 +30,14 @@ export function keyOf(v: Variant): string {
 /** Callable 的键位：空 Callable 一律同键；方法按「接收者身份 + 方法名 + 绑过没绑过」；lambda 按盒子身份。 */
 function callableKey(box: CallableBox): string {
   if (isNullCallable(box)) return "y:";
+  const boundTag = box.boundOnce ? "1" : "0";
   if (box.name !== null) {
     const recv = box.object;
-    if (recv !== null && recv.t === Tag.OBJECT && !(recv.v instanceof GBytes)) {
+    // 全局 Callable（`abs` 这类）实测等式只看「名字 + 绑过没绑过」：`{abs: 1}.has(abs)` 真、`.has(abs.bind())` 假
+    if (recv === null) return `g:${box.name}:${boundTag}`;
+    if (recv.t === Tag.OBJECT && !(recv.v instanceof GBytes)) {
       const id = (recv.v as GdIdentified).gdObjectId;
-      if (id > 0) return `q:${String(id)}:${box.name}:${box.bound.length === 0 ? "0" : "1"}`;
+      if (id > 0) return `q:${String(id)}:${box.name}:${boundTag}`;
     }
     throw new UnsupportedError("dict-key-type", "这种接收者的方法 Callable 当字典键还没量过");
   }
@@ -1507,6 +1511,10 @@ export function varToStr(v: Variant): string {
         }
         return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
       }
+      // Callable 实测都印成 `Callable()`（lambda、空 Callable、绑过实参的、全局的那四支都一样）；方法 Callable 这一形没量到，仍走下面那句拒。
+      if (isCallable(v)) {
+        if ((inner as CallableBox).object === null) return "Callable()";
+      }
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
     }
     default:
@@ -2285,6 +2293,12 @@ export function show(v: Variant, depth = 0): string {
       }
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
+      }
+      // 全局 Callable 实测打印 `@GlobalScope::abs` 这一串（绑过实参照旧），方法 Callable 的打印形状没量过，仍走下面那句拒。
+      if (isCallable(v)) {
+        const box = inner as CallableBox;
+        const label = box.object === null && box.name !== null ? globalCallableLabel(box.name) : null;
+        if (label !== null) return label;
       }
       throw new UnsupportedError("show-type", "print 不支持该对象类型");
     }

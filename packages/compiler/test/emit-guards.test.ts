@@ -1,9 +1,8 @@
 /**
- * 发射期守卫的三段 cell table（从 tools/compile.ts 的守卫段迁出）。
+ * 发射期守卫的四段 cell table（从 tools/compile.ts 的守卫段迁出）。
  *
- * 这三段与 compile.ts 的语料循环无关：它们不看 corpus，只用内联的 GDScript 片段探
- * 「发射期抛不抛、抛什么 code」。抽出来后 compile.ts 只剩语料编译与它自己的读数，
- * 三段守卫的读数改由本文件 afterAll 打印（文本逐字沿用，仍可直接 grep）。
+ * 这四段与 compile.ts 的语料循环无关：它们不看 corpus，只用内联的 GDScript 片段探
+ * 「发射期抛不抛、抛什么 code」。抽出来后 compile.ts 只剩语料编译与它自己的读数，四段守卫的读数改由本文件 afterAll 打印（文本逐字沿用，仍可直接 grep）。
  *
  * 判据只有「抛不抛 + code」，产物文本不参与断言，所以这里用的是探测用的
  * EMIT_OPTS_PROBE 而不是 compile.ts 里那个冻结的 GEN_EMIT_OPTS —— emitModule
@@ -12,10 +11,12 @@
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { analyze } from "@gds2js/compiler/lower/analyze";
 import { GLOBAL_TODO_FUNCTIONS } from "@gds2js/compiler/lower/globals";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 
 const EMIT_OPTS_PROBE = { runtimeImport: "rt", hostImport: "host" };
 
@@ -113,8 +114,71 @@ describe("转换族单实参口径", () => {
   });
 });
 
+// ── ④ 值位置的全局函数名 ───────────────────────────────────────────
+/** 实测「能当值用的那 78 支」在分析器不再报未声明、发射器发真的 Callable；21 支类型名照旧拦（引擎解析期就拒）。
+ *  取值点是 analyze 记的号，所以这一族每格都先 analyze 再 emit —— 跳过 analyze 就退化成裸 JS 标识符。 */
+async function emitted(src: string): Promise<string> {
+  const ir = lower(await parseSource(src));
+  const diags = analyze(ir);
+  if (diags.length > 0) return `diag:${diags[0]!.code}`;
+  return emitModule(ir, EMIT_OPTS_PROBE);
+}
+/** 多行函数体：MOD 只给一行，遮蔽那几格得两行式子才试得出来。 */
+const BODY = (lines: string[]): string =>
+  `extends SceneTree\n\nfunc _initialize():\n${lines.map((l) => `\t${l}`).join("\n")}\n\tquit()\n`;
+
+const VALUE_NAMES = [...GLOBAL_VALUE_NAMES];
+const valueBad: string[] = [];
+
+describe("值位置的全局函数名", () => {
+  it.each(VALUE_NAMES)("%s 取值放行并发出 Callable", async (name) => {
+    const got = await emitted(MOD(`var f = ${name}`));
+    const want = `rt.globalCallable(${JSON.stringify(name)})`;
+    const ok = got.includes(want);
+    if (!ok) valueBad.push(`${name}: ${got.slice(0, 60)}`);
+    expect(ok, `${name} 期望发出 ${want}`).toBe(true);
+  });
+
+  const VALUE_CELLS: Array<{ name: string; src: string; want: string }> = [
+    { name: "类型名 int 仍拦", src: MOD("var k = int"), want: "diag:undeclared-identifier" },
+    { name: "类型名 Vector2 仍拦", src: MOD("var k = Vector2"), want: "diag:undeclared-identifier" },
+    { name: "不存在的名字仍拦", src: MOD("var k = no_such_value_900"), want: "diag:undeclared-identifier" },
+    { name: "引擎类名仍拦（那格在 §6 挂账）", src: MOD("var k = Node"), want: "diag:undeclared-identifier" },
+    { name: "preload 取值仍拦（引擎也是解析期拒）", src: MOD("var k = preload"), want: "diag:undeclared-identifier" },
+    { name: ".call 的接收者走同一条", src: MOD("print(abs.call(-3))"), want: 'rt.method(rt.globalCallable("abs"), "call"' },
+    { name: "数组元素位也发 Callable", src: MOD("print([abs])"), want: 'rt.globalCallable("abs")' },
+  ];
+
+  it.each(VALUE_CELLS)("$name", async ({ src, want, name }) => {
+    const got = await emitted(src);
+    const ok = want.startsWith("diag:") ? got === want : got.includes(want);
+    expect(ok, `${name}：期望 ${want}，实得 ${got.slice(0, 90)}`).toBe(true);
+  });
+
+  it("局部遮蔽的三格按实测方向走", async () => {
+    // ① 声明在前：读数归局部（实测 s04 的 len）
+    const before = await emitted(BODY(["var len = 5", "print(len)", "print(abs)"]));
+    expect(before.includes(`rt.globalCallable("len")`), `len 该归局部：${before.slice(0, 120)}`).toBe(false);
+    expect(before.includes(`rt.globalCallable("abs")`), "abs 没被 len 的声明带走").toBe(true);
+    // ② 声明在后：前面那读还是全局（实测 s04|5|2|@GlobalScope::abs 与 s06|7 两格）
+    const after = await emitted(BODY(["print(abs)", "var abs = 7", "print(abs)"]));
+    expect(after.includes(`rt.globalCallable("abs")`), "声明之前的读数还是全局 Callable").toBe(true);
+    expect(after.includes("let abs"), "声明之后的读数归局部").toBe(true);
+    // ③ lambda 形参只在形参体内盖住全局（实测 s07 的 [9, 2]）
+    const lam = await emitted(BODY(["var g = func (abs): return abs", "print(abs)", "print(g.call(9))"]));
+    expect(lam.includes(`rt.globalCallable("abs")`), "lambda 形参不该把外层的 abs 也吃掉").toBe(true);
+  });
+
+  it("拒答清单与实测表的口径对得上", async () => {
+    const stale = TODO_NAMES.filter((n) => !GLOBAL_VALUE_NAMES.has(n));
+    expect(stale, `GLOBAL_TODO_FUNCTIONS 里有名字不在实测的 78 支里：${stale.join(",")}`).toEqual([]);
+    const loose = [...GLOBAL_VALUE_NAMES].filter((n) => GLOBAL_TODO_FUNCTIONS.has(n) && GLOBAL_CALLABLES[n]!.bounds !== null);
+    expect(loose, `该拒的那支里有人领了区间闸门：${loose.join(",")}`).toEqual([]);
+  });
+});
+
 afterAll(() => {
-  // 三行读数逐字沿用 compile.ts:100 / 138 / 162，含前导两空格，便于按老样子 grep。
+  // 四行读数逐字沿用 compile.ts:100 / 138 / 162，含前导两空格，便于按老样子 grep。
   console.log(
     `  全局拒答清单失效 ${stale.length}（应为 0）${stale.length > 0 ? "：" + stale.join(", ") : ""}`,
   );
@@ -123,5 +187,8 @@ afterAll(() => {
   );
   console.log(
     `  转换族单实参口径 ${CONVERT_ARITY_CELLS.length - arityBad.length}/${CONVERT_ARITY_CELLS.length} 格一致（应为 ${CONVERT_ARITY_CELLS.length}）${arityBad.length > 0 ? "：" + arityBad.join(" | ") : ""}`,
+  );
+  console.log(
+    `  值位置 Callable ${VALUE_NAMES.length - valueBad.length}/${VALUE_NAMES.length} 支一致（应为 ${VALUE_NAMES.length}）${valueBad.length > 0 ? "：" + valueBad.join(", ") : ""}`,
   );
 });

@@ -14,6 +14,8 @@ export class CallableBox {
   bound: Variant[];
   /** 声明形参数；只有 lambda 用得上（方法那条走 `methodAritiesOf` 的表）。 */
   arity: number | null;
+  /** `bind()` 有没有被**调用过**：零实参的 `bind()` 也算绑过（实测四支都一样 —— `o.m.bind() == o.m`、`abs.bind() == abs`、`lam.bind() == lam` 全是假）。 */
+  boundOnce: boolean;
   /** lambda 的等式是盒子身份，所以盒子得有自己的号。 */
   readonly gdObjectId: number = nextObjectId();
   constructor(
@@ -22,12 +24,14 @@ export class CallableBox {
     object: Variant | null = null,
     bound: Variant[] = [],
     arity: number | null = null,
+    boundOnce = false,
   ) {
     this.fn = fn;
     this.name = name;
     this.object = object;
     this.bound = bound;
     this.arity = arity;
+    this.boundOnce = boundOnce;
   }
 }
 
@@ -64,7 +68,7 @@ export function callableSame(a: CallableBox, b: CallableBox): boolean {
  */
 export function callableEq(a: CallableBox, b: CallableBox): boolean {
   if (!callableSame(a, b)) return false;
-  return (a.bound.length === 0) === (b.bound.length === 0);
+  return a.boundOnce === b.boundOnce;
 }
 
 /** `Callable()` 造出来的空 Callable：typeof 仍是 25。 */export function nullCallable(): Variant {

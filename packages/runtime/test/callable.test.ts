@@ -29,8 +29,8 @@ describe("runtime/object · Callable", () => {
     eq("235", "erase 用身份命中", `${d.erase(v1b)}|${d.size()}|${d.has(v1)}`, "true|1|false");
     const recv = v1;
     const mPlain = new CallableBox(null, "m", recv, [], null);
-    const mBound = new CallableBox(null, "m", recv, [I(1)], null);
-    const mBound2 = new CallableBox(null, "m", recv, [I(2)], null);
+    const mBound = new CallableBox(null, "m", recv, [I(1)], null, true);
+    const mBound2 = new CallableBox(null, "m", recv, [I(2)], null, true);
     eq("235", "方法 Callable：读两次相等", callableEq(mPlain, new CallableBox(null, "m", recv, [], null)), true);
     eq("235", "绑没绑过进等式", callableEq(mPlain, mBound), false);
     eq("235", "绑定实参不进等式", callableEq(mBound, mBound2), true);

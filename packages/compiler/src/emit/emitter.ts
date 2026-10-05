@@ -3,6 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
+import { isGlobalValueRead } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -1765,6 +1766,11 @@ function computeUnboxed(
 
   const walkExpr = (e: Expr, inLambda: boolean): void => {
     switch (e.kind) {
+      case "ident":
+        // 分析器记下的全局函数取值点：同一个名字在本函数里既当全局又当局部时（实测 `var len = 5` 之前的 `len` 是全局 Callable），
+        // 裸值通道按名字整支覆盖会把两处搅在一起，所以这个名字整个退出裸值优化。
+        if (isGlobalValueRead(e)) excluded.add(e.name);
+        break;
       case "lambda":
         e.body.forEach((s) => walkStmt(s, true));
         break;
@@ -2829,6 +2835,8 @@ function emitExprVar(e: Expr): string {
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
+      // 全局函数的取值点：分析器按真实作用域记的号，实测一律给 `@GlobalScope::<名字>` 的 Callable（typeof 25）
+      if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":

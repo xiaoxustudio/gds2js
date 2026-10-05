@@ -1,6 +1,7 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
 import { GArray, GDict } from "./values";
 import { CallableBox, isNullCallable, type Fn } from "./callable";
+import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
 
 // Callable 盒子的**形状**与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，不能反向 import 本模块），这里只把外需要的几样转出去。
@@ -31,10 +32,11 @@ export function callableOf(fn: Fn, arity: number | null = null): Variant {
   return callable(fn, arity);
 }
 
-/** 声明的**必填**实参数：方法从方法表里拿、lambda 从盒子里拿，拿不到给 null。 */
+/** 声明的**必填**实参数：方法从方法表里拿、全局 Callable 从实测那张表拿、lambda 从盒子里拿，拿不到给 null。 */
 export function requiredArgCount(box: CallableBox): number | null {
   if (box.name !== null) {
-    const table = box.object === null ? null : methodAritiesOf(box.object.v);
+    if (box.object === null) return globalCallableRow(box.name)?.bounds?.[0] ?? null;
+    const table = methodAritiesOf(box.object.v);
     const row = table?.[box.name];
     return row === undefined ? null : row[0];
   }
@@ -54,7 +56,9 @@ export function declaredArgCount(box: CallableBox): number | null {
   if (isNullCallable(box)) return 0;
   const name = box.name;
   if (name !== null) {
-    const table = box.object === null ? null : methodAritiesOf(box.object.v);
+    // 全局 Callable 的 `get_argument_count()` 是实测读数，与 `.call()` 认的区间是两回事（`str` 声明 1 个、变元无上限）。
+    if (box.object === null) return globalCallableRow(name)?.argc ?? null;
+    const table = methodAritiesOf(box.object.v);
     const row = table?.[name];
     // `[必填, 全部]` 两值不等说明有默认值形参 —— Godot 在那一形上给什么没有可靠口径，不猜。
     if (row === undefined || row[0] !== row[1]) return null;
@@ -69,7 +73,10 @@ export function callableArityBounds(box: CallableBox): [number, number] | null {
   if (isNullCallable(box)) return null;
   const name = box.name;
   if (name !== null) {
-    if (box.object === null) return null;
+    if (box.object === null) {
+      const b = globalCallableRow(name)?.bounds;
+      return b === undefined || b === null ? null : [b[0], b[1]];
+    }
     return methodAritiesOf(box.object.v)?.[name] ?? null;
   }
   const n = box.arity ?? 0;

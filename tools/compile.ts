@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
+import type { Module } from "@gds2js/compiler/lower/ir";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { caseDir, caseScript, listSingleCases } from "./lib.mjs";
@@ -36,9 +37,11 @@ const writeStub = (id: string, reason: string): void => {
 for (const id of cases) {
   const src = readFileSync(caseScript(id), "utf8");
 
+  let ir: Module | null = null;
   let diags: Array<{ code: string; message: string }> = [];
   try {
-    diags = analyze(lower(await parseSource(src)));
+    ir = lower(await parseSource(src));
+    diags = analyze(ir);
   } catch (e) {
     writeStub(id, `lowering 崩溃：${e instanceof Error ? e.message : String(e)}`);
     unsupported.push({ id, msg: String(e) });
@@ -51,8 +54,8 @@ for (const id of cases) {
   }
 
   try {
-    const ir = lower(await parseSource(src));
-    const gen = emitModule(ir, GEN_EMIT_OPTS);
+    // 发的是分析器走过的那一份 IR：取值点按 loc 记号对得上，但重新 lower 一遍只是白花一次时间
+    const gen = emitModule(ir!, GEN_EMIT_OPTS);
     writeFileSync(join(caseDir(id), "main.gen.mts"), gen, "utf8");
     compiled++;
   } catch (e) {

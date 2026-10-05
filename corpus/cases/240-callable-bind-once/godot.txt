@@ -1,0 +1,19 @@
+b01|false|true
+b02|true|false
+b03|false|true
+b04|false|false
+b05|false|true
+b06|[]|0
+b07|false|true
+b08|123
+b09|false|12
+b10|false|true
+b11|false|false
+b12|123|7
+b13|three|21
+b14|abs|21|true
+b15|<anonymous lambda>|21
+b16||21|true
+b17|three|21
+b18|len|21
+b19|3|1|1

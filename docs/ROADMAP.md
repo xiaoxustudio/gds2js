@@ -376,6 +376,15 @@
 - **于是 #24 的活变了性质**：不是「把判据搬到编译期」，而是「把值位置该认的名单补全，并给内置名发出真 Callable」—— 名单要含我们量过的内置函数名（`BUILTIN` ∪ `GLOBAL_TODO_FUNCTIONS`，没实现的那些给得出值但 `.call(...)` 要响亮拒）与引擎类名，`match` 绑定与 lambda 形参这些**已经**在 `analyze()` 的 scope 里（十格里 `match`、lambda 两格都是「编得过、零诊断」，正好证反面）。少一项就是拦死合法工程，所以这格得连着名单一次做完，已记在任务 #24。
 - **本轮零代码**：语料、门、产物都没动，`pnpm test` 814 例照旧全过。
 
+### 1.40 #24 发出去：值位置的 78 个内置名不再误拦，`var f = abs` 是真 Callable（2026-10-05，S237 / S238，语料 239 / 240）
+
+- **判据搬到分析器，不是搬到发射器**：作用域本来就只有 `lower/analyze.ts` 有，所以取值点由它记账、发射器认号发 `rt.globalCallable(名)`。三格遮蔽实测都按这个方向才对（`gc8`）：`var len = 5` 之后 `len` 归局部而 `abs` 还是全局；`var abs = 7` **之前**那一读仍是全局；lambda 形参 `abs` 只在体内盖住。中途试过的「发射器自己收一份局部名超集」被这三格否掉了 —— 超集会吃掉声明之前的那读，还会把 `UNBOXED` 的裸值优化按名字整支盖上去（真跑出来是 `Cannot access 'len' before initialization`）。
+- **记账用 `名@行:列` 而不是节点身份**：原生 CLI 那条 scriptc 通道报 **SC1090**（对象进 `WeakSet` 不属于能跨界那几种形状），loc 键既过得去又抗重复 lower。顺带把 `tools/compile.ts` 从「诊断 lower 一遍、发射再 lower 一遍」并成一份 IR 走 analyze → emit。
+- **表在运行时、名单只有一份**：新增 `runtime/global-names.ts` 收实测的 78 行（`scope` 前缀 / `get_argument_count()` 读数 / `.call()` 区间），分析器与发射器都从它取键，`methods.ts` 那张「名字 → 式子」表由 ops 门钉住与实测表一一对上（60 支发得出、18 支只拒调用不拒取值）。变元两支单独量：`str` 是 `[1, ∞)`、`range` 是 `[1, 3]`。
+- **顺手修掉三处**：`get_method()` 四种形状实测都是 **StringName（typeof 21）**，我们一直在发 String；`get_bound_arguments_count()` 从没发过；**`X.bind()` 零实参也算绑过**（四支实测全一致，S238）—— 盒子因此多一个 `boundOnce`，等式与字典键读它，`bound.length` 只喂 `get_bound_arguments*()`。另加一种字典键编码 `g:<名>:<绑过>`。
+- **账**：语料 239（64 格）+ 240（19 格）、ops 新增 `global-callable.test.ts` 46 格、guards 新增「值位置 Callable 78/78」；`test:diff` **154/154 逐字节**、静默错误 0，`pnpm test` **912 例 / ops 1601 条**全过，`test:scriptc` 10/10，原生 CLI 重编后 **22/22**，`pnpm typecheck` 4/4。
+- **还欠的两格**：引擎类名当值用仍是误拦（`ClassDB` 名单 + 带号的打印没定口径，§6 第 19 条）、`hash(全局 Callable)` 与 `"{0}".format(abs)` 那两格读数没合桌（§6 第 20 条）。
+
 ---
 
 ## 2. 当前任务与待办
