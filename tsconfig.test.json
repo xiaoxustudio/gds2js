@@ -1,0 +1,11 @@
+{
+  // 根 tsconfig 的 include 是 ["tools","packages"]，但没有任何脚本真去跑它：
+  // `pnpm typecheck` 走 turbo，只跑各包自己的 tsconfig（include 都被覆盖成 ["./"]）。
+  // 而那份根 program 目前有 9 个既存错误（tools/bench-ab.ts 8 个、tools/bench-scriptc.ts 1 个），
+  // 都不在测试范围内。
+  //
+  // 所以这里单开一份，只覆盖根级 test/ 与 vitest.config.ts ——
+  // 包内的 packages/*/test/ 已经被各包自己的 tsconfig（include: ["./"]）覆盖，不重复。
+  "extends": "./tsconfig.json",
+  "include": ["test", "vitest.config.ts"]
+}

@@ -1,0 +1,125 @@
+// 由 tools/ops-check.ts 机械搬迁：region 2255-2286, 2297-2316, 2318-2338, 2371-2402。
+// 断言口径、以及「一个 it() = 一个原子 region、不可再拆成一格一个 it()」的理由，见 @gds2js/testkit。
+
+import { describe, it } from "vitest";
+import { eq, shouldThrow } from "@gds2js/testkit";
+import { registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject } from "@gds2js/runtime/runtime/object";
+import { attribute, method, writeProp } from "@gds2js/runtime/runtime/methods";
+import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
+import { show } from "@gds2js/runtime/runtime/values";
+import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { typeOf } from "@gds2js/runtime/runtime/patterns";
+import { vector2i } from "@gds2js/runtime/runtime/vector2i";
+import { gdDispatchByName } from "./support/gd-dispatch";
+import { F, I, S } from "./support/variants";
+
+describe("runtime/object · 类、字段与元信息", () => {
+  it("step58b · int 字段收 float 截断", async () => {
+    class Inner extends GdScriptObject {
+      m: Variant = I(1);
+      t: Variant = I(2);
+      s: Variant = S("a");
+      v: Variant = vector2(0, 0);
+      getm(): Variant {
+        return this.m;
+      }
+      override __gdDispatch(name: string, args: Variant[]): Variant | null {
+        return gdDispatchByName(this, name, args);
+      }
+    }
+    const dInner = registerClass("Inner", Inner, () => new Inner(), (o) => o instanceof Inner);
+    registerFieldTypes(dInner, { t: "int", s: "String", v: "Vector2" });
+    const obj = V.object(new Inner());
+    const field = (k: string): string => show((obj.v as Record<string, Variant>)[k] as Variant);
+
+    writeProp(obj, "t", F(5.5));
+    eq("step58b", "int 字段收 float 截断", field("t"), "5");
+    writeProp(obj, "t", S("12abc"));
+    eq("step58b", "int 字段收数字串走 int(字符串)", field("t"), "12");
+    writeProp(obj, "s", V.stringName("nm"));
+    eq("step58b", "String 字段收 StringName", field("s"), "nm");
+    writeProp(obj, "v", vector2i(3, 4));
+    eq("step58b", "Vector2 字段收 Vector2i 升级", field("v"), "(3.0, 4.0)");
+    writeProp(obj, "m", S("x"));
+    eq("step58b", "未定型字段原样存", field("m"), "x");
+    shouldThrow("step58b", "String 字段拒 int（不是转成 \"5\"）", () => writeProp(obj, "s", I(5)));
+    shouldThrow("step58b", "未知键拒（形体）", () => writeProp(obj, "zz", I(1)));
+    shouldThrow("step58b", "写方法名也拒（与未知键同文本）", () => writeProp(obj, "getm", I(5)));
+  });
+
+  it("step62 · A.f() 从类对象调得到", async () => {
+    class Holder {
+      mv = V.int(1);
+      static make(): Variant {
+        return V.str("made");
+      }
+      static twice(x: Variant): Variant {
+        return V.int(42);
+      }
+    }
+    const dHolder = registerClass("Holder", Holder, () => new Holder(), (o) => o instanceof Holder);
+    registerStaticMethods(dHolder, ["make", "twice"], { make: (): Variant => Holder.make(), twice: (a: Variant[]): Variant => Holder.twice(a[0] as Variant) });
+    const h = new Holder();
+    eq("step62", "A.f() 从类对象调得到", `${method(Holder, "make", []).v}`, "made");
+    eq("step62", "p.f() 从实例也调得到，同一个结果", `${method(V.object(h), "make", []).v}`, "made");
+    eq("step62", "A.f 取值是 Callable（typeof → 25）", `${typeOf(attribute(Holder, "make")).v}`, "25");
+    eq("step62", "p.f 取值同样是 Callable", `${typeOf(attribute(V.object(h), "make")).v}`, "25");
+    eq("step62", "取到的 Callable 照样能 call，实参照传", `${method(attribute(Holder, "twice"), "call", [V.int(21)]).v}`, "42");
+    shouldThrow("step62", "没登记的 name/length 不当成方法（显式表的意义）", () => method(V.object(h), "name", []));
+  });
+
+  it("step63 · 类对象读得到那一格", async () => {
+    class Box {
+      static x = V.int(1);
+      static plain = V.int(2);
+    }
+    const dBox = registerClass("Box", Box, () => new Box(), (o) => o instanceof Box);
+    registerStaticVars(dBox, { x: "int", plain: "" }, {
+      x: { get: (): Variant => Box.x, set: (v: Variant): void => { Box.x = v; } },
+      plain: { get: (): Variant => Box.plain, set: (v: Variant): void => { Box.plain = v; } },
+    });
+    const b = new Box();
+    eq("step63", "类对象读得到那一格", `${(attribute(Box, "x") as Variant).v}`, "1");
+    eq("step63", "实例读的是**同一格**", `${(attribute(V.object(b), "x") as Variant).v}`, "1");
+    writeProp(Box, "x", F(5.5));
+    eq("step63", "类名写：int 槽收 float 截断", `${(Box.x as Variant).v}`, "5");
+    writeProp(V.object(b), "x", S("12abc"));
+    eq("step63", "实例写、类名读到（真是共享的）", `${(attribute(Box, "x") as Variant).v}`, "12");
+    writeProp(Box, "plain", S("s"));
+    eq("step63", "没实测类型的槽原样存（不编造规则）", `${(attribute(Box, "plain") as Variant).t}`, `${Tag.STRING}`);
+    shouldThrow("step63", "静态表里没有的键照旧响拒", () => writeProp(V.object(new Box()), "zz", I(1)));
+  });
+
+  it("step66 · get_class 给的是**原生基类**而不是脚本名", async () => {
+    class Obj extends GdScriptObject {
+      im(): Variant {
+        return V.int(1);
+      }
+      static sm(): Variant {
+        return V.nil();
+      }
+    }
+    const dObj = registerClass("Obj", Obj, () => new Obj(), (o) => o instanceof Obj);
+    registerStaticMethods(dObj, ["sm"], { sm: (): Variant => Obj.sm() });
+    registerNativeBase(dObj, "RefCounted");
+    const o = new Obj();
+    eq("step66", "get_class 给的是**原生基类**而不是脚本名", `${method(V.object(o), "get_class", []).v}`, "RefCounted");
+    eq("step66", "has_method：自己的 / 静态的 / Object 自带的都真，全局函数与空串假", [
+      method(V.object(o), "has_method", [V.str("im")]).v,
+      method(V.object(o), "has_method", [V.str("sm")]).v,
+      method(V.object(o), "has_method", [V.str("get_class")]).v,
+      method(V.object(o), "has_method", [V.str("print")]).v,
+      method(V.object(o), "has_method", [V.str("")]).v,
+    ].join(","), "true,true,true,false,false");
+    setMeta(o, V.stringName("sn"), I(6));
+    eq("step66", "StringName 写进去、String 键读得到", [
+      method(V.object(o), "has_meta", [V.str("sn")]).v,
+      method(V.object(o), "get_meta", [V.str("sn")]).v,
+    ].join(" "), "true 6");
+    eq("step66", "get_meta 两参形给默认值", `${method(V.object(o), "get_meta", [V.str("nope"), I(99)]).v}`, "99");
+    eq("step66", "get_meta 一参形缺键给 null 且**继续跑**", `${method(V.object(o), "get_meta", [V.str("nope")]).t}`, `${Tag.NIL}`);
+    method(V.object(o), "remove_meta", [V.str("sn")]);
+    eq("step66", "remove_meta 之后 has_meta 假", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
+    shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
+  });
+});

@@ -1,37 +1,35 @@
+#!/usr/bin/env node
+// case-table 的落盘侧：读探头 golden → 调 tools/case-codegen.mjs 算内容 → 写进 runtime。
+// 「算什么」与「怎么写」分开的理由见 case-codegen.mjs 头注释：
+// test/e2e/codegen-drift.test.ts 要复用同一份计算来做漂移门，但绝不写盘。
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { computeCaseTable, parseCaseTableRows, renderCaseTable } from "./case-codegen.mjs";
 
 const OUT = "packages/runtime/src/runtime/case-table.ts";
 const BS = String.fromCharCode(92);
 
-const rows = [];
-for (const dir of readdirSync("corpus/cases").filter((d) => d.startsWith("000-probe-cs-"))) {
+const probeDirs = readdirSync("corpus/cases").filter((d) => d.startsWith("000-probe-cs-"));
+const goldens = [];
+for (const dir of probeDirs) {
   const path = `corpus/cases/${dir}/godot.txt`;
   if (!existsSync(path)) {
     console.error(`缺 golden：${path}（先跑 node tools/golden.mjs 000-probe-cs）`);
     process.exit(1);
   }
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    if (!line.includes("|")) continue;
-    const parts = line.split("|");
-    if (parts.length !== 3) {
-      console.error(`golden 里有字段数异常的行：${JSON.stringify(line)}`);
-      process.exit(1);
-    }
-    rows.push({ cp: parseInt(parts[0], 16), up: parts[1], low: parts[2] });
-  }
+  goldens.push(readFileSync(path, "utf8"));
 }
-rows.sort((a, b) => a.cp - b.cp);
-if (rows.length === 0) {
-  console.error("一个码点都没扫到，先跑 tools/case-probe.mjs");
+
+let rows;
+let stats;
+try {
+  rows = parseCaseTableRows(goldens);
+  stats = computeCaseTable(rows);
+} catch (e) {
+  console.error(e instanceof Error ? e.message : String(e));
   process.exit(1);
 }
 
-const hex = (cp) => "U+" + cp.toString(16).toUpperCase().padStart(4, "0");
-const esc = (cp) =>
-  cp > 0xffff ? BS + "u{" + cp.toString(16).toUpperCase() + "}" : BS + "u" + cp.toString(16).toUpperCase().padStart(4, "0");
-const escStr = (s) => [...s].map((c) => esc(c.codePointAt(0))).join("");
-
-/** 已有的表（用来报告「哪些是这次新发现的」） */
+/** 已有的表（只用来报告「哪些是这次新发现的」，不参与产物内容）。 */
 const covered = new Set();
 if (existsSync(OUT)) {
   const prev = readFileSync(OUT, "utf8");
@@ -40,60 +38,28 @@ if (existsSync(OUT)) {
   }
 }
 
-const fixUp = new Map();
-const fixLow = new Map();
-let agree = 0;
-let multi = 0;
-const fresh = [];
+const hex = (cp) => "U+" + cp.toString(16).toUpperCase().padStart(4, "0");
+const esc = (cp) =>
+  cp > 0xffff ? BS + "u{" + cp.toString(16).toUpperCase() + "}" : BS + "u" + cp.toString(16).toUpperCase().padStart(4, "0");
+const escStr = (s) => [...s].map((c) => esc(c.codePointAt(0))).join("");
 
+const fresh = [];
 for (const r of rows) {
   const ch = String.fromCodePoint(r.cp);
-  const ju = ch.toUpperCase();
-  const jl = ch.toLowerCase();
-  if ([...r.up].length > 1 || [...r.low].length > 1) multi++;
-  let same = true;
-  if (r.up !== ju) {
-    same = false;
-    fixUp.set(ch, r.up);
-    if (!covered.has(`${hex(r.cp)}:to_upper:${escStr(r.up)}`)) fresh.push(`UP  ${hex(r.cp)} godot=${escStr(r.up)} js=${escStr(ju)}`);
+  if (r.up !== ch.toUpperCase() && !covered.has(`${hex(r.cp)}:to_upper:${escStr(r.up)}`)) {
+    fresh.push(`UP  ${hex(r.cp)} godot=${escStr(r.up)} js=${escStr(ch.toUpperCase())}`);
   }
-  if (r.low !== jl) {
-    same = false;
-    fixLow.set(ch, r.low);
-    if (!covered.has(`${hex(r.cp)}:to_lower:${escStr(r.low)}`)) fresh.push(`LOW ${hex(r.cp)} godot=${escStr(r.low)} js=${escStr(jl)}`);
+  if (r.low !== ch.toLowerCase() && !covered.has(`${hex(r.cp)}:to_lower:${escStr(r.low)}`)) {
+    fresh.push(`LOW ${hex(r.cp)} godot=${escStr(r.low)} js=${escStr(ch.toLowerCase())}`);
   }
-  if (same) agree++;
 }
 
-const emit = (name, dir, map) => {
-  const keys = [...map.keys()].sort((a, b) => a.codePointAt(0) - b.codePointAt(0));
-  const body = keys.map((k) => `  "${esc(k.codePointAt(0))}": "${escStr(map.get(k))}", // ${hex(k.codePointAt(0))} ${dir}`);
-  return `export const ${name}: Readonly<Record<string, string>> = {\n${body.join("\n")}\n};`;
-};
+writeFileSync(OUT, renderCaseTable(rows, stats), "utf8");
 
-const header = `/**
- * Godot 与 JS 的大小写映射**不一致**的码点表 —— 生成物，别手改，改请重跑生成流程。
- *
- *   node tools/case-probe.mjs
- *   node tools/golden.mjs 000-probe-cs
- *   node tools/case-table.mjs
- *
- * 数据来自 ${rows.length} 个码点（= JS 里存在大小写映射的全部码点，BMP 与卫星平面都算）
- * 在 Godot 4.6.3 下的实测结果；其中 ${agree} 个与 JS 一致、不需要进表。
- * 两条实测出来的规律，运行时就按它们设计：
- *  - Godot 的 to_upper/to_lower **永不撑开**（${rows.length} 个码点里 0 个多码点结果），
- *    所以「JS 结果长度变了吗」可以当作「需不需要查表」的筛子；
- *  - 反过来，JS 与 Godot 都给单码点却**给的不是同一个字符**的情况真实存在
- *    （Bassa Vah U+16EA0…U+16ED3 整段、U+A7CE…U+A7D5：Godot 视为无大小写），
- *    所以不能只处理"撑开"那一类，必须整段对账 —— 这张表就是对账的产物。
- * 未在表内且 JS 也没撑开的码点：JS 的单码点结果与 Godot 实测相同（本轮已全量验证）。
- */
-`;
-
-writeFileSync(OUT, header + "\n" + emit("CASE_UPPER_FIX", "to_upper", fixUp) + "\n\n" + emit("CASE_LOWER_FIX", "to_lower", fixLow) + "\n");
-
-console.log(`扫到 ${rows.length} 个码点：与 JS 一致 ${agree}，进表 upper ${fixUp.size} + lower ${fixLow.size} → ${OUT}`);
-console.log(`Godot 给出多码点结果的：${multi} 个（应为 0，非 0 说明"简单映射"的前提破了）`);
+console.log(
+  `${OUT}：扫到 ${rows.length} 个码点：与 JS 一致 ${stats.agree}，进表 upper ${stats.fixUp.size} + lower ${stats.fixLow.size}`,
+);
+console.log(`Godot 给出多码点结果的：${stats.multi} 个（应为 0，非 0 说明"简单映射"的前提破了）`);
 if (covered.size > 0) {
   console.log(`与上一版表相比新增/变动 ${fresh.length} 条${fresh.length ? "：" : "（表没变）"}`);
   for (const l of fresh.slice(0, 30)) console.log("  " + l);

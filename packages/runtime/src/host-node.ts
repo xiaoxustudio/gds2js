@@ -4,7 +4,7 @@
 //
 // 也不能静态 `import "node:zlib"` —— `single` 那支产物是把 runtime 整个内联进一个自包含 ESM，
 // 静态 import 要么留下顶层 import（打包门的「零顶层 import」当场红），要么被改写成
-// ESM 里的 `require("node:zlib")` 而 `ReferenceError`（两条都在 pkg-modes-check 里抓到过）。
+// ESM 里的 `require("node:zlib")` 而 `ReferenceError`（两条都在 pkg-modes 门里抓到过，现 test/e2e/pkg-modes.test.ts）。
 // 所以走 `process.getBuiltinModule`：`process` 是全局、不产生任何 import，SEA 与内联产物 alike 都能用。
 export * from "./host";
 import { registerZipCodec } from "./runtime/packed";

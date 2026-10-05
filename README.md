@@ -24,12 +24,21 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。管�
 
 ```
 packages/runtime    @gds2js/runtime   运行时 + host 系（各包 TS 源码都在包内 src/；`--pack scriptc` 的产物树直接铺它）
+packages/runtime/test/                runtime 单测（23 个文件，原 tools/ops-check.ts）
 packages/compiler   @gds2js/compiler  parse / lower / emit / compile（+ home）
+packages/compiler/test/               语料门：ir / sema / 发射期守卫
+packages/testkit    @gds2js/testkit   门共用的断言口径（eq/shouldThrow/ok/bad）；只依赖 vitest，不依赖任何 @gds2js/* 以免成环
 packages/gds2js     gds2js            CLI 与发布面：bin、exports、dist/*.mjs|cjs（tsdown 配置在包根）
-根                  门脚本（tools/，见「测试」）、corpus/、examples/、bench/、native/、docs/
+test/repo/                            仓库不变量门（tree-face 对账）
+test/e2e/                             六支 E2E 门（diff / golden 漂移 / pkgmodes / scriptc / export / cli-native）
+根                  门脚本（tools/，见「测试」）、corpus/、examples/、bench/、native/、docs/、vitest.config.ts
 ```
 
-`turbo` 只编排**包级** `build` / `typecheck`；门入口保持 `pnpm test:*` 不变（以仓库根为 cwd）。
+⚠ 测试文件**不能**放进 `packages/*/src/`：`export --pack scriptc` 的 `copyTreeTs`
+（`packages/gds2js/src/cli/export-ts-tree.ts:32,114-122`）会把 `packages/runtime/src/` 下
+每一个 `.ts` 递归拷进出货产物树，测试混进去会以很难查的方式打红 `test:scriptc` / `test:export`。
+
+`turbo` 编排**包级** `build` / `typecheck` / `test`（`test` 不缓存：语料在包外，缓存会变成过期绿）；门入口保持 `pnpm test:*` 不变（以仓库根为 cwd）。根 `typecheck` 另跑一趟 `tsconfig.test.json`，覆盖根级 `test/` 与 `vitest.config.ts`。
 
 ## 构建
 
@@ -142,20 +151,107 @@ node build/x.mts          # Node >= 22.18（类型剥离默认开启，与 engin
 
 ## 测试
 
+测试跑在 **Vitest** 上（根 `vitest.config.ts`，四个 project），分两层。
+**快层**零外部依赖、零 build，秒级；**E2E 层**串行跑，缺外部工具时自动 skip 并说出缺什么。
+测试文件一律放在 `packages/<pkg>/test/` 或根 `test/`，**绝不放进 `packages/*/src/`** ——
+`export --pack scriptc` 的 `copyTreeTs` 会把 `packages/runtime/src/` 下每个 `.ts` 扫进出货产物树。
+
 ```bash
-pnpm test:diff       # Godot(裁判) vs 编译产物(被测)，逐字节 + 静默错误分桶（主链路，import 模式）
-pnpm test:golden     # 生成/校验 Godot golden（--check 只报漂移不写盘）
-pnpm test:treeface   # tree-face 对账：清单 ↔ 盘面 ↔ 三处消费者（改产物树/HOME 布局先跑它）
-pnpm test:compile    # 语料 → main.gen.mts（import 模式产物，0 churn 即无回归）
-pnpm test:ir / test:sema / test:ops
-pnpm test:cli-native # 原生 CLI 等价性：不带 node 的 gds2js.exe 与 node 侧逐字节/逐字对齐（要 zig + libtree-sitter + scriptc）
-pnpm test:pkgmodes   # local/single 两模式的回归：逐用例 node 跑对齐 golden + 子目录 local + single sourcemap 解码
-pnpm test:export     # export 的回归：node(SEA+VFS) / scriptc 两支各真打一个 exe（stdout 逐字节 + 抛错须非 0 退出 + 门禁该响的响 + 中间件清干净）；要先前 pnpm build
-pnpm test:scriptc    # scriptc 产物的语义门：真编 exe 真跑，逐字节对 Godot golden（默认跑代表集；--all 全量、--project 只跑 9 个项目树用例、--jobs=N 控并发）
-pnpm regen:case-table # 再生成 runtime 的 case-table.ts（探头 000-probe-cs-* 现搭现弃不入库；只改表请走它）
-pnpm bench           # D2 性能内核基准（gds2js 编译产物跑在 node 上；每 kernel 连跑 3 轮取最小，GDS2JS_BENCH_ROUNDS 可调）
-pnpm bench:ab        # 交替配对 A/B：pnpm bench:ab --rounds=6 <仓内文件>=<候选文件>，报配对差 ±SE 与 |t|（|t|<2 就是量不出来）
-pnpm bench:scriptc   # 同一张 kernel 表编成 scriptc 原生 exe 量每次调用（要 zig + scriptc；小格子受基线噪声限制，见 ROADMAP §1.19）
-pnpm latency         # CLI 端到端延迟门：交替配对量各条调用路径的 run 延迟（同上，|t|<2 不算数）
-pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
+# ── 快层：零外部依赖、零 build（实测 ~5s）─────────────────────────────
+pnpm test              # testkit + runtime + compiler + repo 四个 project 全跑
+pnpm test:unit         # 只 runtime + compiler
+pnpm test:ops          # runtime 单测：原 tools/ops-check.ts，1509 条断言拆成 23 个文件
+pnpm test:ir           # 语料 229 例 parse+lower 不抛
+pnpm test:sema         # 语义分析：恰好在 Godot 报 Parse Error 的那些用例上拒答
+pnpm test:guards       # 发射期守卫的 33 格 cell table（原内嵌在 test:compile 里）
+pnpm test:treeface     # tree-face 对账：清单 ↔ 盘面 ↔ 三处消费者（改产物树/HOME 布局先跑它）
+                       # 另：packages/compiler/test/emit-invariants.test.ts 随 pnpm test 跑，
+                       #    验「产物文本口径 === IR usesPackCodec 标志」与「autoRun 尾巴必须自兜底」
+                       #    两条互锁不变量（原先内嵌在 test:compile 里，只有记得跑才生效）
+
+# ── E2E 层：串行、缺料自动 skip（分钟级）──────────────────────────────
+pnpm test:e2e          # 六支全跑
+pnpm test:diff         # Godot golden vs 编译产物，逐字节 + 分桶看板（要 main.gen.mts，即先跑 test:compile）
+pnpm test:golden-check # 拿真 Godot 重跑 238 例查 golden 漂移（要 GODOT_BIN；只读不写盘）
+pnpm test:codegen      # 查生成源码漂移：case-table.ts / case-flags.ts 是否等于重跑 regen 该产出的
+                       #   （探头用例 gitignored，没跑过 regen:* 的机器上整支 skip；比对前归一行尾，
+                       #    因为 autocrlf=true 的机器上 git checkout 会把工作树变成 CRLF）
+pnpm test:pkgmodes     # single/local 两模式逐用例对齐 golden + 子目录 local + single sourcemap 解码（要 pnpm build）
+pnpm test:scriptc      # scriptc 真编 exe 真跑、逐字节对 Godot golden（要 scriptc）
+pnpm test:export       # export 的 node(SEA) / scriptc 两支各真打一个 exe（要 Windows + pnpm build；SEA 那几格另要 Node ≥ 25.7）
+pnpm test:cli-native   # 原生 gds2js.exe 与 node 侧 CLI 逐字节/逐字等价（要 zig + scriptc + libtree-sitter + pnpm build）
+
+pnpm test:all          # 两层全跑
 ```
+
+单例重跑靠 Vitest 的 `-t`（用例 id 就在测试名里），例如
+`pnpm exec vitest run --project compiler -t 088-vector2-write-error`。
+
+### 三态判定：红只剩一个意思
+
+E2E 各支门今天用不同形状表达「环境跑不了」，现已统一成 Vitest 的三态：
+
+| 判定 | 含义 | 落到 |
+| --- | --- | --- |
+| `ok` | 真的过了 | pass |
+| `refused` | 产品代码**故意**拒绝（能力边界、版本门槛） | skip（带原因） |
+| `no-lib` | 缺外部工具（scriptc / zig / Node ≥ 25.7 / Windows） | skip（带原因） |
+| `crash` | 子进程崩了 | **fail** |
+| `FAIL` | 判据不成立 | fail |
+
+`crash` 从旧版的 tolerated（不退非 0）改成 fail —— 依据是 `diff.mjs` 自己的注释
+「崩溃和「没做」必须分开算：前者是 bug，后者是排期」。
+
+`test:diff` 是**进度看板**不是普通门：`silent`（能跑但输出错）与 `crashed` 判红，
+`todo`（未实现，排期）/ `expectedErr`（Godot 侧本来就报错）/ `stale`（golden 缺失）都是 skip。
+六行看板读数照旧打印，`diff 152/152` 这条历史序列仍可 grep。
+
+### E2E 层的开关（旧命令行参数改成环境变量）
+
+```bash
+GDS2JS_SCRIPTC_ALL=1        # scriptc 全量（≈150 例），并发 4
+GDS2JS_SCRIPTC_PROJECT=1    # scriptc 只跑 9 个项目树用例
+GDS2JS_SCRIPTC_FILTER=064   # scriptc 按 case-id 子串挑（跑全部匹配，不只代表集）
+GDS2JS_SCRIPTC_KEEP=1       # scriptc 收尾不删替身树
+GDS2JS_CLI_NATIVE_QUICK=1   # cli-native 跳过 ④⑥ 两格 scriptc/SEA 出货
+GDS2JS_CLI_NATIVE_REBUILD=1 # 强制重编原生 exe
+GDS2JS_CLI_NATIVE_NO_REBUILD=1  # exe 过期时拒绝验旧货、直接红
+GDS2JS_SEMA_VERBOSE=1       # sema 逐例打印诊断码
+GODOT_BIN / TS_SRC / ZIG_CC / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落点（同旧版）
+```
+
+### 断言口径
+
+`@gds2js/testkit`（`packages/testkit`）提供 `eq` / `shouldThrow` / `ok` / `bad`，
+**逐字保留**旧门脚本的 `String(actual) === String(expected)` 口径 —— `String()` 会把
+`2` / `2n` / `"2"` 折成同一个 `"2"`。失败用 `expect.soft`：记一笔、继续跑、最后一起报，
+与旧实现「一坨 FAIL 行」的行为一致。要升级成类型化 matcher 请单开一轮，别夹在别的改动里。
+
+计数走 `task.meta` 回到主进程，由 `assert-count-reporter` 加总，
+所以 `ops 自校验：通过 1509，失败 0` 与 `tree-face 对账：通过 17 项，失败 0 项`
+这两行历史读数仍然照原样打印（1509 ≠ 1403 个静态调用点：有表驱动 helper 会循环生成断言）。
+
+### 留在 `tools/` 的脚本：它们改写仓库，不是断言
+
+```bash
+pnpm test:golden     # **重生** 238 个 corpus/cases/*/godot.txt（写盘！要 GODOT_BIN）
+pnpm test:compile    # 语料 → main.gen.mts（写盘；0 churn 即无回归）。
+                     #   本轮已削成**纯 codegen**：只写产物 + 报三行统计，不再设 exitCode ——
+                     #   原先内嵌的 5 段判据都迁进了快层（3 段 cell table → test:guards，
+                     #   2 条互锁不变量 → emit-invariants），随 pnpm test 每次都跑。
+pnpm regen:case-table # 再生成 runtime 的 case-table.ts（探头 000-probe-cs-* 现搭现弃不入库）
+pnpm regen:case-flags # 再生成 runtime 的 case-flags.ts
+                      #   两支的「算内容」抽进了 tools/case-codegen.mjs 纯函数，供
+                      #   pnpm test:codegen 那道漂移门复用（它一个字都不写）
+pnpm release         # 发布收口（版本一致性 → build → 两支门 → 落 release/ + sha256 → 冒烟）
+pnpm bench           # D2 性能内核基准（每 kernel 连跑 3 轮取最小，GDS2JS_BENCH_ROUNDS 可调）
+pnpm bench:ab        # 交替配对 A/B：pnpm bench:ab --rounds=6 <仓内文件>=<候选文件>
+                     #   ⚠ 测量期间**会覆写真实源文件**（从内存还原），别与任何别的事并行
+pnpm bench:scriptc   # 同一张 kernel 表编成 scriptc 原生 exe 量每次调用（要 zig + scriptc）
+pnpm bench:godot     # 同一批 kernel 在本地 Godot 里跑一遍，并与 pnpm bench 的结果并排算倍率
+pnpm latency         # CLI 端到端延迟门：交替配对量各条调用路径的 run 延迟（|t|<2 不算数）
+```
+
+`test:golden` 与 `test:compile` 名字虽叫 `test:` 但实为 codegen（分别写 238 个 golden 与
+244 个 `main.gen.mts`），所以不进 Vitest。`bench*` 与 `latency` 零断言、只出读数并互相交接
+`bench/.out/js.json`，也不进。`pnpm bench:ab` 尤其不能进测试运行器 —— 它会覆写 `packages/*/src/`。

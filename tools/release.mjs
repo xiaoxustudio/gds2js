@@ -57,11 +57,20 @@ console.log(`release: engines.node ${rootEngines}（根/gds2js/exec.native.ts �
 console.log("release: pnpm build …");
 runCmd("pnpm build");
 /* 2b) 面探针：一个把 runtime String 面拉满的用例走 scriptc 短路（本机 38s）。
- * 围栏类回归（新形状没 lowering、或旧形状被新代码变可达）在这里先炸，不用等等价性门那几分钟。 */
+ * 围栏类回归（新形状没 lowering、或旧形状被新代码变可达）在这里先炸，不用等等价性门那几分钟。
+ * 两支门都已迁到 Vitest（test/e2e/），所以这里改成调 runner。
+ * GDS2JS_SCRIPTC_FILTER 而不是 `-t`：`-t` 只过滤**已收集**的测试，挑不出代表集之外的用例，
+ * 而旧版 `scriptc-check.mjs <id>` 的语义是「有 filter 就跑全部匹配用例」。 */
 console.log("release: scriptc 面探针（234-string-methods-batch）…");
-run(process.execPath, [join(ROOT, "tools", "scriptc-check.mjs"), "234-string-methods-batch"]);
+// 在父进程里设、由子进程继承 —— 比 `set X=Y&& cmd` 那种 shell 专属写法稳，也不挑平台。
+process.env.GDS2JS_SCRIPTC_FILTER = "234-string-methods-batch";
+try {
+  runCmd("pnpm exec vitest run --project e2e scriptc.test.ts");
+} finally {
+  delete process.env.GDS2JS_SCRIPTC_FILTER;
+}
 console.log("release: 原生 CLI 等价性门…");
-run(process.execPath, [join(ROOT, "tools", "cli-native-check.mjs")]);
+runCmd("pnpm exec vitest run --project e2e cli-native.test.ts");
 
 /* 3) 落产物：release/gds2js-<version>-win64.exe + .sha256。 */
 const exe = join(ROOT, "tmp", "cli-native", "gds2js.exe");

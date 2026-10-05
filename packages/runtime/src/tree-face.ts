@@ -1,11 +1,11 @@
 /**
  * 「树面」= runtime 源码要落成的两种形态，一纸清单同时管住四个消费者：
  *   1. packages/gds2js/src/cli/export-ts-tree.ts —— `--pack scriptc` 的产物树（exportTsTree / exportTsProjectTree / copyZstdHost）
- *   2. tools/scriptc-check.mjs    —— 替身树（tmp/sc-gate/<id>/）对宿主源码相对路径的改写
+ *   2. test/e2e/scriptc.test.ts   —— 替身树（tmp/sc-gate/<id>/）对宿主源码相对路径的改写
  *   3. tools/cli-native.mjs       —— 原生 exe 内嵌家目录（HOME）的资产键
  *   4. 盘面本身：packages/runtime/src —— repo.* 指到的文件必须存在
  *
- * 不变量（tools/tree-face-check.ts 对账）：
+ * 不变量（test/repo/tree-face.test.ts 对账）：
  *   - tree.* 与 repo.* 同名同构 —— 产物树按源码原位铺，产物的 import 不用改；
  *   - home.* = home.srcPrefix + "/" + repo.* —— 家目录里那棵假树就是同一份布局带前缀。
  */
