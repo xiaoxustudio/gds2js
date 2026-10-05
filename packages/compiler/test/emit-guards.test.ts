@@ -161,12 +161,7 @@ describe("值位置的全局函数名", () => {
     expect(ok, `${name}：期望 ${want}，实得 ${got.slice(0, 90)}`).toBe(true);
   });
 
-  it("char 的实参数两句文案按实测发（引擎是解析期拒，我们是发射期拒）", async () => {
-    expect(await classify(PRINT("char(65)"), "ok")).toBe("ok");
-    const few = await classify(PRINT("char()"), "ok");
-    expect(few).toBe("char-arity");
-    const many = await classify(PRINT("char(1, 2)"), "ok");
-    expect(many).toBe("char-arity");
+  it("单实参那三支的 arity 文案按实测发（引擎是解析期拒，我们是发射期拒）", async () => {
     const text = async (src: string): Promise<string> => {
       try {
         emitModule(lower(await parseSource(src)), EMIT_OPTS_PROBE);
@@ -175,9 +170,18 @@ describe("值位置的全局函数名", () => {
         return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
       }
     };
-    expect(await text(PRINT("char()"))).toBe('Too few arguments for "char()" call. Expected at least 1 but received 0.');
-    expect(await text(PRINT("char(1, 2)"))).toBe('Too many arguments for "char()" call. Expected at most 1 but received 2.');
+    const names: Array<[string, string]> = [["char", "char-arity"], ["var_to_str", "var-to-str-arity"], ["str_to_var", "str-to-var-arity"]];
+    for (const [name, code] of names) {
+      const call = name === "str_to_var" ? `"1"` : "1";
+      expect(await classify(PRINT(`${name}(${call})`), "ok"), `${name} 单实参该编得过`).toBe("ok");
+      expect(await classify(PRINT(`${name}()`), "ok"), `${name} 零实参`).toBe(code);
+      expect(await classify(PRINT(`${name}(${call}, "  ")`), "ok"), `${name} 双实参`).toBe(code);
+      expect(await text(PRINT(`${name}()`)), `${name} 少给那句`).toBe(`Too few arguments for "${name}()" call. Expected at least 1 but received 0.`);
+      expect(await text(PRINT(`${name}(${call}, "  ")`)), `${name} 多给那句`).toBe(`Too many arguments for "${name}()" call. Expected at most 1 but received 2.`);
+    }
     expect(await emitted(MOD("print(char(65))"))).toContain("rt.stringChr(");
+    expect(await emitted(MOD('print(var_to_str(1))'))).toContain("rt.varToStr(");
+    expect(await emitted(MOD('print(str_to_var("1"))'))).toContain("rt.strToVar(");
   });
 
   it("局部遮蔽的三格按实测方向走", async () => {

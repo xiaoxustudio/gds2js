@@ -305,7 +305,7 @@
 ### 1.31 `var_to_str` 按「量到哪发到哪」发出去了：非浮点形状全上，浮点、对象、缩进串各留一句响亮拒（2026-10-04，§6 第 17 条②、S230）
 
 - **取舍**：S229 摆着两条路 —— 拿到 4.6.x 的 `num_scientific` 再发，或只发非浮点那一半。这轮走第二条，并把边界钉成三条 code：浮点抛 `[var-to-str-float]`（装浮点的数组与 pack 一起拒），对象与其余没量过的类型抛 `[var-to-str-type]`，两个容器键的排序抛 `[var-to-str-key]`，带缩进串的双实参在**发射期**就抛 `[var-to-str-arity]`。发出去的形状每条都有 hex 或引擎原文背书：**转义只碰 `"` 与 `\`**（制表符 `22 09 22`、响铃 `22 07 22`、é `22 c3 a9 22` 全原样写进串，同批输入走 `c_escape` 拿到的是 `5c 74` / `5c 61` —— 这条通道不是 `c_escape`，抄错就成静默错）；**键序** `null < bool < int < float < String < StringName`、同级字符串按码点（`"10"` 排在 `"a"` 前）；容器能当字典键（`[1, 2]: 9`），数组跟着里面的字典一起换行。
-- **两条新账，都没写进实现**：① 4.6.3 的 `var_to_str` 有第二个实参 `indent: String`，而本机 4.3 树 `core/variant/` 里 grep 不到 `indent` —— 又一处「4.3 ≠ 4.6.3」（§1.28 的 `format` 是第一条）；缩进串还会让装字典的数组变成多行，收尾那个 `]` 一会儿顶格一会儿缩两档，式子没排出来。② 串里的 U+0000 在 `to_utf8_buffer()` 那层就变成 `ef bf bd`（`char(0)` 的 `length()` 仍是 1），`c_escape` 同输入同结果 —— 这是**所有打印共用**的 String→UTF8 层，归 §6 新增的第 18 条，不记在 `var_to_str` 头上。
+- **两条新账，都没写进实现**：① 4.6.3 的 `var_to_str` 有第二个实参 `indent: String`，而本机 4.3 树 `core/variant/` 里 grep 不到 `indent` —— 又一处「4.3 ≠ 4.6.3」（§1.28 的 `format` 是第一条）；缩进串还会让装字典的数组变成多行，收尾那个 `]` 一会儿顶格一会儿缩两档，式子没排出来。 **这一条在 S244 被推翻**：判断引擎三个面各说一遍 —— 解析期那句 "Too many arguments for \"var_to_str()\" call. Expected at most 1 but received 2."、`get_argument_count()` 是 1、`.call` 的运行期闸门 "Expected 1 argument(s)" —— 4.6.3 也只认**一个**实参。方向反了：不是「4.3 没有而 4.6.3 有」，是两边都没有。② 串里的 U+0000 在 `to_utf8_buffer()` 那层就变成 `ef bf bd`（`char(0)` 的 `length()` 仍是 1），`c_escape` 同输入同结果 —— 这是**所有打印共用**的 String→UTF8 层，归 §6 新增的第 18 条，不记在 `var_to_str` 头上。
 - **账**：语料 236 加 31 格、ops 加 27 格（1452→1479），`test:compile` 160/229、`emitter 不支持 0`、`全局拒答清单失效 0`、新增「var_to_str 单实参口径 3/3」门格，`test:diff` 逐字节一致 152/152、静默错误 0。下一支照 S214 已有的二十格发 `str_to_var`。
 
 ### 1.32 `str_to_var` 的读侧语法量清并发出：155 格与引擎逐格对上，读不懂的地方给 null、没量过的给响亮拒（2026-10-04，§6 第 17 条②、S231）
@@ -424,6 +424,13 @@
 - **arity 两句从解析期搬到发射期**：`char()` / `char(1, 2)` 引擎是**解析期**拒（脚本到不了输出），文案 `Too few arguments for "char()" call. Expected at least 1 but received 0.` 与 `Too many arguments … Expected at most 1 but received 2.` 一字不差地钉在 guards 的 `[char-arity]` 两格上。
 - **`char` 补进「能当值用的全局函数名」表，78 → 79**：`typeof` 25、打印 `@GDScript::char`、`get_argument_count()` 1、`.call(65)` → `"A"`、等式按名；顺带把 `String.chr` 与全局 `char` 合成一支 `stringChr`（实测两支相等），两条通道不再可能分岔。实参收敛仍是 int 那条道（`char(1.5)` → 1、`char(2.9)` → 2）。
 - **账**：语料 244（12 格）、ops 新增 `char-codepoint.test.ts` 14 格（1633→1647）、guards 新增一格（128→130 例），`test:compile` 166/235，`test:diff` **158/158 逐字节**、静默 0，drift 两道全绿（golden 244/244、codegen 2/2），`pnpm test` 939 例，`pnpm build` 后 pkg-modes 25/25、export ok 10 / FAIL 0、面探针 1/1（57s；顺手把 §2 第 13 条里那条已经不存在的 `tools/scriptc-check.mjs` 改成 `GDS2JS_SCRIPTC_FILTER` + `pnpm test:scriptc`）、原生 CLI 20/20、typecheck 4/4。
+
+### 1.46 `var_to_str` 的「缩进串」是个假前提：4.6.3 也只认一个实参（2026-10-06，S244，§6 第 18 条① 销账）
+
+- **一问到底**：§6 第 18 条① 记的是「4.6.3 有第二个实参 `indent: String`、式子没量出来」，本轮不去量式子，先去量**到底有没有这个实参** —— 解析期一句 `Too many arguments for "var_to_str()" call. Expected at most 1 but received 2.`（三支实参那句是 `received 3`），`var_to_str()` 是 `Too few arguments … Expected at least 1 but received 0.`，`str_to_var` 三格同形；`get_argument_count()` 给 1；把 `var_to_str` 当 Callable 用 `.call({1: 2}, "->")` 撞的是运行期那句 `Invalid call to function '@GlobalScope::var_to_str (Callable)'. Expected 1 argument(s).`，`callv` 给两支实参按 S237 的口径安静 null。三个面各自独立、方向一致：**没有这个实参**。
+- **这条卡点因此从「欠量测」变成「已结清」**：所谓「缩进串会让装字典的数组一起换行、收尾的 `]` 一会儿顶格一会儿缩两档」不在这一版的行为里；§1.31 记的方向整个反了 —— 不是「4.3 没有、4.6.3 有」，是两边都没有，已在原文处补一句推翻。剩下真正的两格照旧挂着：浮点尾数（§6 第 18 条之外那条卡点）与 `str_to_var` 的③。
+- **实现只动文案**：`[var-to-str-arity]` / `[str-to-var-arity]` 的自造中文换成引擎那两句（少给 "at least 1"、多给 "at most 1"），三支单实参名（`char` / `var_to_str` / `str_to_var`）合成一支 `singleArgArity` —— 措辞只有一份，改一处不会漏两处；发射与拒的形状都没变。
+- **账**：guards 那一格从 1 支名扩成 3 支名 × 7 断言（编得过 / 零实参 code / 双实参 code / 两句原文 / 三支发射形状），仍 130 例全过；ops 1647 条与 typecheck 4/4 不变；`[var-to-str-arity]` 的拒口继续钉在「转换族单实参口径 11/11」。
 
 ---
 

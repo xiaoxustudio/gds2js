@@ -84,6 +84,16 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   );
 }
 
+/** 单实参那三支（char / var_to_str / str_to_var）实测两句措辞不同：少给是 "at least 1"，多给是 "at most 1"。 */
+function singleArgArity(code: string, name: string, got: number): UnsupportedError {
+  return new UnsupportedError(
+    code,
+    got === 0
+      ? `Too few arguments for "${name}()" call. Expected at least 1 but received 0.`
+      : `Too many arguments for "${name}()" call. Expected at most 1 but received ${String(got)}.`,
+  );
+}
+
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
@@ -94,15 +104,11 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
   hash: (a) => `rt.variantHash([${a.join(", ")}])`,
   var_to_str: (a) => {
-    if (a.length !== 1) {
-      throw new UnsupportedError("var-to-str-arity", `var_to_str() 只发单实参形状（收到 ${a.length} 个）：4.6.3 的第二个实参是缩进串，装字典的数组跟着换行、缩进还按深度累加，式子没量出前不猜`);
-    }
+    if (a.length !== 1) throw singleArgArity("var-to-str-arity", "var_to_str", a.length);
     return `rt.V.str(rt.varToStr(${a[0]}))`;
   },
   str_to_var: (a) => {
-    if (a.length !== 1) {
-      throw new UnsupportedError("str-to-var-arity", `str_to_var() 只发单实参形状（收到 ${a.length} 个）`);
-    }
+    if (a.length !== 1) throw singleArgArity("str-to-var-arity", "str_to_var", a.length);
     return `rt.strToVar(${a[0]})`;
   },
   convert: (a) => {
@@ -119,13 +125,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   char: (a) => {
-    // 实测两支解析期报错的原文（少给与多给措辞不同），照抄进拒口
-    if (a.length === 0) {
-      throw new UnsupportedError("char-arity", 'Too few arguments for "char()" call. Expected at least 1 but received 0.');
-    }
-    if (a.length !== 1) {
-      throw new UnsupportedError("char-arity", `Too many arguments for "char()" call. Expected at most 1 but received ${a.length}.`);
-    }
+    if (a.length !== 1) throw singleArgArity("char-arity", "char", a.length);
     return `rt.stringChr(${a[0]})`;
   },
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
