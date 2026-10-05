@@ -7,6 +7,10 @@ class Inner extends RefCounted:
 	static func sm(a):
 		return a
 
+class Cub extends RefCounted:
+	static func sm(a):
+		return a * 2
+
 func top(a):
 	return a
 
@@ -33,4 +37,13 @@ func _initialize():
 	print("q18|", o.three == o.three, "|", o.three == Inner.sm, "|", t == top)
 	print("q19|", o.three.get_method(), "|", typeof(o.three.get_method()), "|", t.get_method())
 	print("q20|", Inner.new().three, "|", o.three == Inner.new().three)
+	var d = {}
+	d[Inner.sm] = 1
+	d[Cub.sm] = 2
+	print("r01|", d.size(), "|", d[Inner.sm], "|", d[Cub.sm])
+	print("r02|", str(d))
+	print("r03|", d.has(Cub.sm), "|", d.erase(Cub.sm), "|", d.size())
+	print("r04|", str([Inner.sm, Cub.sm]), "|", Inner.sm == Cub.sm)
+	print("r05|", Inner.sm.call(3), "|", Cub.sm.call(3))
+	print("r06|", str({Inner.sm: 1, Cub.sm: 2}))
 	quit()

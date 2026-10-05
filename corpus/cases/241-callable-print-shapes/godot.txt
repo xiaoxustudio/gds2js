@@ -17,3 +17,9 @@ q17|RefCounted::three|25
 q18|true|false|true
 q19|three|21|top
 q20|RefCounted::three|false
+r01|2|1|2
+r02|{ GDScript::sm: 1, GDScript::sm: 2 }
+r03|true|true|1
+r04|[GDScript::sm, GDScript::sm]|false
+r05|3|6
+r06|{ GDScript::sm: 1, GDScript::sm: 2 }

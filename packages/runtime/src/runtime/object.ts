@@ -114,6 +114,8 @@ export class ClassDesc {
   base: ClassDesc | null;
   make: (args: Variant[]) => object;
   check: (o: object) => boolean;
+  /** 类身份自己也要有号：静态方法的 Callable 挂在「类值」上当接收者，实测四个同名静态（两个 `class_name` 类 + 两个内部类）进同一张字典是**四格**，标签却一模一样都是 `GDScript::shared` —— 键只能吃这个号。 */
+  readonly gdObjectId: number = nextObjectId();
   /** `get_class()` 要的那个**原生**基类名，不是脚本类名。 */
   nativeBase: string | null;
   /** Callable 标签里括号那一截：`class_name` 声明的名字，没有就是脚本文件名；内部类不登记（引擎那侧就没有括号）。 */

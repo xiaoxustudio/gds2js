@@ -35,6 +35,21 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("q18|"), rt.ops.eq(rt.wrapValue(rt.attribute(o, "three")), rt.wrapValue(rt.attribute(o, "three"))), rt.V.str("|"), rt.ops.eq(rt.wrapValue(rt.attribute(o, "three")), rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm"))), rt.V.str("|"), rt.ops.eq(t, rt.methodCallable(rt.V.object(this), "top"))]));
     print(rt.showArgs([rt.V.str("q19|"), rt.method(rt.wrapValue(rt.attribute(o, "three")), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.wrapValue(rt.attribute(o, "three")), "get_method", [])), rt.V.str("|"), rt.method(t, "get_method", [])]));
     print(rt.showArgs([rt.V.str("q20|"), rt.wrapValue(rt.attribute(rt.V.object(new Inner()), "three")), rt.V.str("|"), rt.ops.eq(rt.wrapValue(rt.attribute(o, "three")), rt.wrapValue(rt.attribute(rt.V.object(new Inner()), "three")))]));
+    let d = rt.dictOf([]);
+    {
+      const _nv = rt.writeIdx(d, rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm")), rt.V.int(1));
+      if (_nv !== null) d = _nv;
+    }
+    {
+      const _nv = rt.writeIdx(d, rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm")), rt.V.int(2));
+      if (_nv !== null) d = _nv;
+    }
+    print(rt.showArgs([rt.V.str("r01|"), rt.method(d, "size", []), rt.V.str("|"), rt.wrapValue(rt.index(d, rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm")))), rt.V.str("|"), rt.wrapValue(rt.index(d, rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm"))))]));
+    print(rt.showArgs([rt.V.str("r02|"), rt.strBuiltin([d])]));
+    print(rt.showArgs([rt.V.str("r03|"), rt.method(d, "has", [rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm"))]), rt.V.str("|"), rt.method(d, "erase", [rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm"))]), rt.V.str("|"), rt.method(d, "size", [])]));
+    print(rt.showArgs([rt.V.str("r04|"), rt.strBuiltin([rt.V.array(rt.GArray.of([rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm")), rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm"))]))]), rt.V.str("|"), rt.ops.eq(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm")), rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm")))]));
+    print(rt.showArgs([rt.V.str("r05|"), rt.method(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm")), "call", [rt.V.int(3)]), rt.V.str("|"), rt.method(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm")), "call", [rt.V.int(3)])]));
+    print(rt.showArgs([rt.V.str("r06|"), rt.strBuiltin([rt.dictOf([[rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sm")), rt.V.int(1)], [rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Cub), "sm")), rt.V.int(2)]])])]));
     this.quit();
   }
   
@@ -75,6 +90,24 @@ rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerMethodArities(__gd_d_Inner, { "three": [3, 3], "sm": [1, 1] });
 rt.registerStaticMethods(__gd_d_Inner, ["sm"], {"sm": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.sm(a[0] as rt.Variant))});
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
+
+class Cub extends rt.GdScriptObject {
+  static sm(a: rt.Variant): rt.Variant {
+    return rt.ops.mul(a, rt.V.int(2));
+  }
+  
+  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
+    switch (name) {
+      default: return super.__gdDispatch(name, args);
+    }
+  }
+
+}
+const __gd_d_Cub = rt.defineClass(Cub, () => new Cub(), (o) => o instanceof Cub);
+rt.nameClass(__gd_d_Cub, "Cub");
+rt.registerMethodArities(__gd_d_Cub, { "sm": [1, 1] });
+rt.registerStaticMethods(__gd_d_Cub, ["sm"], {"sm": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Cub.sm(a[0] as rt.Variant))});
+rt.registerNativeBase(__gd_d_Cub, "RefCounted");
 
 const __gd_entry = new Main();
 try {

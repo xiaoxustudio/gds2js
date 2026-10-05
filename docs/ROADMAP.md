@@ -394,6 +394,13 @@
 - **账**：语料 241（19 格）、ops 新增 10 格（1609），`test:diff` **155/155 逐字节**、静默 0，`pnpm test` 915 例，`pnpm typecheck` 4/4。撞出来的工作规则记在 §2 第 13 条：**新增 runtime 导出要先 `pnpm build`** —— 工程形状的用例吃的是 `gds2js/dist/runtime.mjs` 那份副本，这次十来个用例一起报 `registerScriptLabel is not a function` 就是它。
 - **没发的两格**：静态方法 Callable 当字典键（打印量到了 `{ GDScript::sm: 1 }`，键要的类身份号没有，按标签分格会把两类别名同名的并成一格 → §6 第 21 条）、`Callable.get_object()`（两支都带进程内号 → §6 第 22 条）。
 
+### 1.42 §1.41 那两格的第一格：静态 Callable 的字典键吃类身份号（2026-10-05，S240，语料 241 再加 6 格）
+
+- **先把「会不会撞键」量出来**：探针项目里放四个都叫 `shared` 的静态方法 —— `Util` / `Widged` 两个 `class_name` 类加 `Kid` / `Cub` 两个内部类 —— 一起塞进一张字典给 `d.size()` 4、逐键取回各自的值、两两 `==` 全假、`has` / `erase` 按类走、`.call()` 各调各的，而 `str(d)` 打出来是四串一模一样的 `GDScript::shared`（k01–k07）。上一轮担心「按标签分格会把两格并成一格」就是这么量死的：引擎的等式跟打印不是一条，键必须吃**类身份**。
+- **实现只多一个字段**：`ClassDesc` 拿 `nextObjectId()` 发一个 `readonly gdObjectId`，与 `GdIdentified` 同形 —— `callableKey` 里那条 `q:<号>:<名>:<绑过>` 原本只认实例，现在类值也走同一条，判据一行没加。标签那头照常 `GDScript::<名>`，所以「同一串两格」是引擎本来的样子。
+- **账**：语料 241 从 19 格长到 25 格（r01–r06）、ops 1610（新增一格比 `keyOf` 不同 + `GDict` 两格），`pnpm build` 后 `test:diff` 与 drift 门一起重跑；`[show-type]` / `dict-key-type` 这两支拒口又各少一类形状。
+- **剩的那格**：`Callable.get_object()` 两支都带进程内的号（§6 第 22 条），要先定「关系对、数字不对」这一族在语料里怎么记。
+
 ---
 
 ## 2. 当前任务与待办

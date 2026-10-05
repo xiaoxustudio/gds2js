@@ -168,6 +168,22 @@ describe("runtime/object · Callable", () => {
       eq("241", "宿主基类不是 RefCounted 时前面跟着走（实测 Node(nodey.gd)::hi）", show(methodCallable(wrapValue(new Nodey()), "hi")), "Node(nodey.gd)::hi");
       eq("241", "内部类没有括号那一截（实测 q01 的 RefCounted::three）", show(methodCallable(wrapValue(new Kid()), "three")), "RefCounted::three");
       eq("241", "空 Callable 与 lambda 的打印（q07 / q05）", `${show(nullCallable())}|${show(callableOf(() => V.nil(), 1))}`, "null::null|<anonymous lambda>(lambda)");
+      eq("241", "同名静态方法的两格：键按类身份分开，标签却一模一样（k01 / k02 / r02）", (() => {
+        class A {}
+        class B {}
+        const dA = registerClass("A", A, () => new A(), (o) => o instanceof A);
+        const dB = registerClass("B", B, () => new B(), (o) => o instanceof B);
+        registerNativeBase(dA, "RefCounted");
+        registerNativeBase(dB, "RefCounted");
+        registerStaticMethods(dA, ["sm"], { sm: () => V.int(1) });
+        registerStaticMethods(dB, ["sm"], { sm: () => V.int(2) });
+        const ka = methodCallable(V.object(dA), "sm");
+        const kb = methodCallable(V.object(dB), "sm");
+        const g = new GDict();
+        g.set(ka, V.int(1));
+        g.set(kb, V.int(2));
+        return `${String(g.size())}|${show(ka)}|${show(kb)}|${String(keyOf(ka) === keyOf(kb))}|${String(g.has(kb))}|${String(g.erase(ka))}|${String(g.size())}`;
+      })(), "2|GDScript::sm|GDScript::sm|false|true|true|1");
     }
   });
 });
