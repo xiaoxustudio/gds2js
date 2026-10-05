@@ -372,7 +372,8 @@
 ### 1.39 值位置未知名字的十格读数：引擎那句是解析期错，而内置函数当值用是合法的 `@GlobalScope::abs`（2026-10-05，S236，本轮零代码）
 
 - **两条一起量的才有意义**：未知标识符在 var 初始化式 / `print` 实参 / 内部类方法体 / 模块字段 / `if` 条件 / 不存在的 `TYPE_` 与常量名上，全是同一句解析期错 `Identifier "X" not declared in the current scope.`（十格一支不漏）；而 `var f = abs`、`= str`、`= print` 三支**编得过也跑得通**，打出来是 `@GlobalScope::abs` 这种 Callable —— 内置函数在值位置上是一等值，不是保留字。
-- **我们这边的现状分两层看**：`undeclared-identifier` 这条判据连文案都已经写好在 `lower/analyze.ts` 的 `case "ident"` 里，但它只挂在 `check-project` 那条静态检查路上，`lower()` → 产物这条路根本没跑它（十格全「编得过、零诊断」就是这么来的）。所以现在既不是「缺报错文本」也不是「缺判据」，缺的是**把判据搬到编译期时那张「什么算已声明」的名单** —— 引擎类名当值用、autoload、`match` 绑定、lambda 形参、内置 Callable 名都得在里面，少一项就把合法工程拦死；按 `analyze.ts` 自己那条「宁可漏报，不可误拦」的规矩，这一步必须连名单一起做，已记成任务 #24。
+- **判据早就在编译路径上跑着，本轮推翻的是这个猜测**：`undeclared-identifier` 连文案都写好在 `lower/analyze.ts` 的 `case "ident"` 里，把十格喂进 `compileProject` 一看，五格未知名全报出来了（上一节记的「只挂在 check-project 路上、编译路径没跑它」是因为那十格当时用 `lower()` + `emitModule()` 直编、绕开了工程级检查，读数是假的，已在 S236 就地改正）。**真问题变成两条误拦**：内置函数当值用（`var f = abs` / `str` / `print`）引擎合法、typeof 25、打 `@GlobalScope::abs`，而且 16 格 `c.callv(...)` 实测与直接调用逐格一致（`hash(7)` 还是 S208 那个 2503556531）—— 我们报 `undeclared-identifier` 把合法工程拦了；引擎类名当值用（`var k = Node`，typeof 24）同理被拦，只是它的打印是 `<GDScriptNativeClass#号>` 属复现不了那一族。反过来 `int` / `float` / `bool` 这批确实不能当值用，引擎是两句错（`Builtin type cannot be used as a name on its own.` + 那句 not declared），我们只报一句，方向没错。顺带一格：**`Callable.get_name()` 在 4.6.3 不存在**。
+- **于是 #24 的活变了性质**：不是「把判据搬到编译期」，而是「把值位置该认的名单补全，并给内置名发出真 Callable」—— 名单要含我们量过的内置函数名（`BUILTIN` ∪ `GLOBAL_TODO_FUNCTIONS`，没实现的那些给得出值但 `.call(...)` 要响亮拒）与引擎类名，`match` 绑定与 lambda 形参这些**已经**在 `analyze()` 的 scope 里（十格里 `match`、lambda 两格都是「编得过、零诊断」，正好证反面）。少一项就是拦死合法工程，所以这格得连着名单一次做完，已记在任务 #24。
 - **本轮零代码**：语料、门、产物都没动，`pnpm test` 814 例照旧全过。
 
 ---
