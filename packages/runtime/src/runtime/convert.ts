@@ -7,7 +7,7 @@ import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
 import { GVector3 } from "./vector3";
 import { GVector3i } from "./vector3i";
-import { GColor } from "./color";
+import { colorFromText, GColor } from "./color";
 
 /** 引擎 `Variant.Type` 里我们手里有形状的那二十支号（其余在 `variantConvert` 里响亮拒，S235）。 */
 const GT = {
@@ -145,9 +145,9 @@ export function variantConvert(v: Variant, target: Variant, strict: boolean): Va
     case GT.COLOR: {
       if (v.t === Tag.OBJECT && v.v instanceof GColor) return v;
       if (v.t === Tag.INT) return colorFromInt(intToBig(v.v as IntPayload));
-      if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) {
-        throw new UnsupportedError("convert-color-string", "convert() 的字符串转 Color 走 #rrggbb 与颜色名两套（实测 \"abc\" → (0.6667, 0.7333, 0.8, 1.0)），颜色名表没量过，先不猜");
-      }
+      if (v.t === Tag.STRING) return colorFromText(v.v as string);
+      // 实测两支不一样：`convert(&"red", TYPE_COLOR)` 名字与 hex 都走，`type_convert(&"red", TYPE_COLOR)` 连 `"00ff00"` 都不认，直接给 `(0,0,0,1)`
+      if (v.t === Tag.STRING_NAME) return strict ? colorFromText(v.v as string) : V.object(new GColor(0, 0, 0, 1));
       return strict ? V.nil() : V.object(new GColor(0, 0, 0, 1));
     }
     case GT.ARRAY:

@@ -138,7 +138,7 @@ describe("runtime/convert · convert 与 type_convert 的目标表", () => {
         return `[${(e as UnsupportedError).code}]`;
       }
     })())), "[convert-target]");
-    eq("236", "字符串转 Color 走名字表，没量过就响亮拒（两支同一条）", `${cv(S("red"), 20, true)}|${cv(S("red"), 20, false)}`, "[convert-color-string]|[convert-color-string]");
+    eq("236", "字符串转 Color 走名字表与 hex（S241 量齐后发出，认不出的给 (0,0,0,1) 而不是 null）", `${cv(S("red"), 20, true)}|${cv(S("red"), 20, false)}`, "20|(1.0, 0.0, 0.0, 1.0)|20|(1.0, 0.0, 0.0, 1.0)");
     eq("236", "pack 的同型转换拷一份（实测写回不串原包）", (() => {
       const src = V.object(new GBytes([1, 2], "byte"));
       const copy = variantConvert(src, I(29), true) as Variant;

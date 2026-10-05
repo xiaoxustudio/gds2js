@@ -401,6 +401,15 @@
 - **账**：语料 241 从 19 格长到 25 格（r01–r06）、ops 1610（新增一格比 `keyOf` 不同 + `GDict` 两格），`pnpm build` 后 `test:diff` 与 drift 门一起重跑；`[show-type]` / `dict-key-type` 这两支拒口又各少一类形状。
 - **剩的那格**：`Callable.get_object()` 两支都带进程内的号（§6 第 22 条），要先定「关系对、数字不对」这一族在语料里怎么记。
 
+### 1.43 文本进 Color 全量齐：名字表补齐、hex 四位与两条拒口销账（2026-10-05，S241，语料 242）
+
+- **名表这一族 4.3 与 4.6.3 没有分岔**：把源码 `color_names.inc` 的 146 支逐个喂给判断引擎的 `Color("<名>")`，回读 `to_html(true)` 与表里整数逐支比 —— **零出入**（`tmp/probe-color-names/names.log`）。我们那张只有 138 支，补齐差的八支（`dark_khaki` `light_goldenrod` `medium_orchid` `transparent` `web_gray` `web_green` `web_maroon` `web_purple`），文件由 `tmp/probe-color-names/regen.ts` 从读数生成、不再手抄；表里只有 `GRAY` 没有 `GREY` 也照实测留成缺口。
+- **抓出两处静默错**（不是拒口，是给了错值）：① 引擎查名前会抹掉 空格 / `-` / `_` / `'` / `.` 五种分隔符再转大写，我们只抹下划线，于是 `Color("web green")` 给 `(0,0,0,1)`；② hex 的「一数字一通道」有 3 位**和 4 位**两档，我们只展 3 位，`Color("f00f")` 同样静默变黑。两格都是语料 242 的 golden 对拍抓出来的。
+- **发出 `Color.html_is_valid()`**（只认长度 3/4/6/8 与十六进制位，`#` 可省：`"#f0"` 假、`"#fff"` 真、`"#"` 假），并把 `convert` / `type_convert` 的 `[convert-color-string]` 销掉：两支都吃 String 的名字 + hex，认不出给 `(0,0,0,1)` 而不是 null。
+- **一条不许顺手统一的分岔**：StringName 只在 `convert` 那一侧认，`type_convert(&"red", TYPE_COLOR)` 与 `type_convert(&"00ff00", TYPE_COLOR)` 实测都给 `(0,0,0,1)`（`sn.log` w01）—— 照读数分开走。
+- **顺带钉两笔「4.6.3 没有的名字」**：`String.to_color()`、`Color.from_uint()` / `from_uint8()` 都是解析期 `Cannot find member`（探头前两版就死在这上面）。
+- **账**：语料 242（15 格）、ops 新增 `color-text.test.ts` 14 格（1624 条），`convert.test.ts` 那条「响亮拒」的老读数改成实测值；`pnpm test` 921 例、`test:diff` **156/156 逐字节**、drift 244、静默错误 0，`pnpm build` 后 scriptc / pkg-modes / export / 原生 CLI 一起重跑。
+
 ---
 
 ## 2. 当前任务与待办
