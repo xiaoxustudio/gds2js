@@ -432,6 +432,16 @@
 - **实现只动文案**：`[var-to-str-arity]` / `[str-to-var-arity]` 的自造中文换成引擎那两句（少给 "at least 1"、多给 "at most 1"），三支单实参名（`char` / `var_to_str` / `str_to_var`）合成一支 `singleArgArity` —— 措辞只有一份，改一处不会漏两处；发射与拒的形状都没变。
 - **账**：guards 那一格从 1 支名扩成 3 支名 × 7 断言（编得过 / 零实参 code / 双实参 code / 两句原文 / 三支发射形状），仍 130 例全过；ops 1647 条与 typecheck 4/4 不变；`[var-to-str-arity]` 的拒口继续钉在「转换族单实参口径 11/11」。
 
+### 1.47 `str_to_var` 的 `\U` 发出去了：六位、越界折 U+FFFD、代理区整串作废（2026-10-06，S245，语料 245，§6 第 18 条③ 收窄）
+
+- **量法**：`\U` 这种「吃掉几位」的问题只能靠**尾数留不留**来判 —— 探头把 `\\U0001F600` 之类喂进 `str_to_var`，读回 `length()`、`unicode_at(0)` 与 `to_utf8_buffer().hex_encode()` 三栏，四批共 45 格（`tmp/probe-str-to-var-u/`）。结论是一条四档式子：**读满六位**十六进制位（大小写都收），六位不足或夹非十六进制位 → **整串作废给 null**；读到的值在代理区 → 同样是**整串作废**；`> U+10FFFF` 或 `0` → **U+FFFD**；其余照本来的码点。多出来的第 7、8 位**照字面留在串里**（`10FFFF` 给 U+10FF + `FF`，`FFFFFFF` 给 U+FFFD + `F`）。
+- **顺手抓出一格静默错**：`"\u0000"` 引擎给 U+FFFD（长度 1、字节 `ef bf bd`），我们以前在这里发的是真 NUL —— 语料与 ops 都没有这一格，所以它一直没被发现。同一批还量清「非字符」`U+FFFE` / `U+FFFF` 两支**照收**，折叠名单里没有它们。
+- **报警的那两类不进语料**：NUL 与越界两支引擎除了给值还往 stderr 打 `Unicode parsing error …`（`Invalid unicode codepoint (那六位小写原文)` / `Unexpected NUL character`），`normalize()` 滤不掉，所以这几格只进 ops；语料 245 钉的是不报警的 12 格，一次跑绿。与语料 `075-escape-unicode`（GDScript 自己的字面量也是六位）正好成对：读侧与解析侧同一条位数。
+- **`[str-to-var-shape]` 从此只剩一张表**：构造式的名字仍只量过「`NoSuchType(1)` 给 null」与「`Rect2` 给真值」两头，中间那张「Godot 到底认识哪些名字」的表没量，认不出就抛，不发可能是错的 null。
+- **另外修了一处文档伤**：上一轮那条脚本化的 §6 改写把 item 18 之后的内容整段截掉了（19–22 条与「## 7. 语料索引」共 33 行），本轮从 `4f483a7` 取回并逐行核过 —— 教训是脚本改文档时 `slice` 的**尾段**必须显式接回去，锚点找不到要抛而不是凑。
+- **账**：语料 245（12 格）、ops 新增 `str-to-var-upper-u.test.ts` 19 格（1647→1666），`convert.test.ts` 那格旧的 `[str-to-var-shape]` 读数换成实测值；`pnpm test` 944 例、`test:compile` 167/236、`test:diff` **159/159 逐字节**、静默 0，golden 漂移 **0**（245/245 一次绿，超时 17 与解析报错 69 是那两族的既有形状）、codegen drift 2/2，面探针 1/1，pkg-modes 25/25，原生 CLI 重编后 20/20，export ok 10 / FAIL 0，typecheck 4/4。
+- **一次误报值得记**：golden 检测与别的引擎门**并发**跑时，445 行 golden 的 `236-global-math-family` 会被判成超时并误报漂移 —— 本轮第一次就是这么报的，单独重跑 245/245 全绿。已写进 §2 第 14 条的观察项。
+
 ---
 
 ## 2. 当前任务与待办
@@ -530,8 +540,8 @@
     `pnpm regen:case-table`；`case-flags.ts` 只走 `pnpm regen:case-flags`（两张都是实测生成物，别手改）；native seam 新增分岔口照「复制 `*.native.ts` 覆盖」办理；
     改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑「`GDS2JS_SCRIPTC_FILTER=234-string-methods-batch` + `pnpm test:scriptc`」（57s 面探针，`pnpm release` 的 2b 就是它；门迁进 Vitest 后 `tools/scriptc-check.mjs` 已不存在，过滤器只认这个环境变量）再提交。
     新增 runtime 的**导出名**还要先 `pnpm build`：语料里的工程形状用例（带 `project.godot` 那十来个）产物 import 的是 `gds2js/runtime` → `packages/gds2js/dist/runtime.mjs`，那是份打包副本，不重建就报 `__vite_ssr_import_0__.xxx is not a function`（S239 这轮就是这么撞上的）。
-14. 两条观察项（记录，不动）：dist 内容哈希块名（HOME/export 均按 glob/目录读，无门依赖具体块名）；
-    门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）。
+14. 三条观察项（记录，不动）：dist 内容哈希块名（HOME/export 均按 glob/目录读，无门依赖具体块名）；
+    门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）；**两道引擎门不要并发** —— golden 检测在抢 CPU 时把大 golden（`236` 那 445 行）判成超时并误报漂移，2026-10-06 实测一次「并发报漂移、单跑 245/245 全绿」，查漂移那几分钟别顺手跑探头或另一道门。
 
 14. **转换族与 `format` 的四个卡点（2026-10-04 记，读数全在 S214 / S219 / S220 / S221 / S225 / S226 / S227）**：① `var_to_str` 的浮点 —— **S230 已经把非浮点那半发出去了（浮点抛 `[var-to-str-float]`），这一格欠的就是剩下的尾数**：出处已定位（`VariantWriter` 的 FLOAT 支 → `rtos_fix` → `String::num_scientific`，`%g` 家族 + 去尾随零 + 「无点无 e 才补 `.0`」；零短路给 `0`、负无穷是 `inf_neg` 而 print 给 `-inf`），还剩两格不被任何固定 precision 解释：最小正规数与次正规数都给 `0.0`、`1e23` 要 16 位而 `7e22` 要 17 位 —— 要的是把 4.6.3 那个 `%g` 的**实际行为**量成一表，别再猜精度。② `str_to_var` 的认与不认**已经量齐**（S214），只欠实现 —— **S231 已发出**（155 格逐格对上；`\U` 吃六位数却量不出越界处理、构造式名字认不出、实参不是 String 三条分别抛 `[str-to-var-shape]` / `[str-to-var-type]` / `[str-to-var-arg]`）。③ `convert` / `type_convert` 标量表已齐（S220），卡在 `convert([], TYPE_INT)` 那条**运行期**拒（引擎文案连函数名都指错了），数组→标量按什么判要先量；**那道前置已解（S233）**：`TYPE_*` 整族 37 支 + `TYPE_MAX` 量清并发出（逐名用 `GDScript.reload` 编内层脚本，避免一个不存在的名字带废整支探针；每支又与 `typeof(样本)` 对了一遍），语料 236 钉了 37 格打印 + 17 格 `typeof(x) == TYPE_X`。这两支剩下的量测在 §1.37 一次跑完（340 格矩阵）：解析期接受集合按第一实参的静态类型分岔，`type_convert` 一支都不拒。④ `format`：**已出货（S232）**，而且 S219 那格「缺省占位符是 `"{0}"`」的读数也纠正了 —— 占位符本身是 `"{_}"`，`{0}` 是键文本渲染出来的样子；键序（字典按插入顺序遍历键）、非字符串键、值转文本（走 print 那套）全量过，只剩 Object 那一支抛 `[format-object]`。**①的一条更正（S228）**：`var_to_str` 那两处「极小值给 `0.0`」的反常已经查到是**字面量解析**掉的，不是 writer 的问题 —— ①里剩下的只有「尾数 16 位还是 17 位」一问，做法是把待测值用**算术**造出来绕开解析层，再看是不是纯 `%.*g` 舍入。**共同前提**：任务 #18（AOT 那 ~140 倍的装箱账）要的是单态/去装箱的设计拍板，不由代码侧决定，仍未定。
 

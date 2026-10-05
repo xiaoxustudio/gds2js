@@ -1560,7 +1560,7 @@ function svNumArg(v: Variant | null): Variant | null {
  * `str_to_var()`：读侧的语法一支一支量过（S231），与 {@link varToStr} 是两条通道，别互相抄。
  * 顶部只认一个值，后面跟着什么都不看（`1 2` → 1、`Vector2(1, 2) 3` → Vector2）；认不出的写法给 null
  * —— 裸词、大写 `INF`、`'单引号'`、`(1, 2)`、`{: 1}`、容器里缺逗号、`Vector2()` 的 arity 不对，实测全是 null。
- * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支），或者量到六位数却没量越界的 `\U` —— 响亮拒，不猜。
+ * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支）—— 响亮拒，不猜。
  */
 export function strToVar(v: Variant): Variant {
   if (v.t !== Tag.STRING) {
@@ -1671,11 +1671,23 @@ export function strToVar(v: Variant): Variant {
             i++;
           }
           if (val >= 0xd800 && val <= 0xdfff) return null;
-          out += String.fromCodePoint(val);
+          out += String.fromCodePoint(val === 0 ? 0xfffd : val);
           break;
         }
-        case "U":
-          throw new UnsupportedError("str-to-var-shape", `str_to_var() 的 \\U 实测吃掉六个十六进制位（"\\U0001F600" 给 U+01F6 再留 "00"），越界与代理区的处理没量过，先不猜`);
+        case "U": {
+          // 引擎这一支只吃**六**位（不是八位），多出来的照字面留在串里；越界折 U+FFFD、代理区整串作废。
+          let val = 0;
+          for (let k = 0; k < 6; k++) {
+            if (i >= cs.length) return null;
+            const h = svHexVal(cs[i] as string);
+            if (h === null) return null;
+            val = val * 16 + h;
+            i++;
+          }
+          if (val >= 0xd800 && val <= 0xdfff) return null;
+          out += String.fromCodePoint(val === 0 || val > 0x10ffff ? 0xfffd : val);
+          break;
+        }
         default:
           out += e;
       }
