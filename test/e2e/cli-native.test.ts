@@ -477,6 +477,7 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
   //      ES 模块，命令重跑了但脚本不会再执行（这个洞真出现过）。要的是程序自己的第二次、不同输出的。──
   it("⑨b run --watch：改 .gd 要真的再执行一次脚本", async () => {
     const dir = join(WD, "watch-run");
+    rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
     const gd = join(dir, "main.gd");
     const script = (tag: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint("${tag}")\n\tquit()\n`;

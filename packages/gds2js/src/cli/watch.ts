@@ -64,11 +64,15 @@ export function startWatch(ctx: Ctx, runners: Record<CmdName, Runner>): void {
     }, 80);
   };
 
+  let primed = false;
   let last = "";
   const poll = (): void => {
     const sig = gdSignature(watchDir, isProject);
-    if (last !== "" && sig !== last) onChange();
+    // 空摘要既可能是「目录里没有 .gd」也可能是「这一刻读不到目录」，不能拿来当「第一次采样」的记号 ——
+    // 用记号的话，首拍读空就永远不再比对，改文件也不会重跑。
+    if (primed && sig !== last) onChange();
     last = sig;
+    primed = true;
   };
   poll();
   setInterval(poll, WATCH_POLL_MS);
