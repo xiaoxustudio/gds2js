@@ -1,6 +1,7 @@
-// 引擎类名的 `is`（探头 `tmp/probe-is-class/` 两张矩阵 is.log / is2.log）：
-// 量过的七个名 + Callable 按形状表回答，表外的名与没量过的形状一律响亮拒。
-// 语料 248 钉的是不报警的那 14 行；这里补拒口与引擎类值那两格。
+// 引擎类名的 `is`（探头 `tmp/probe-is-class/` 两张矩阵 is.log / is2.log 与 `tmp/probe-is-unprobed/is.log` 那 208 格）：
+// 量过的七个名 + Callable 按形状表回答；表外的**引擎类名**对 Tier 1 每一种形状都是假（那 208 格量的就是这件事，
+// 里面 14 个真值全落在表内那 7 支的链上），信号值对每一支类名也假。真不在名单里的名字（`HttpRequest` 这种大小写不对的）照旧响亮拒。
+// 语料 248 钉的是表内那 14 行，语料 258 钉的是整张 208 格矩阵；这里补拒口与引擎类值那两格。
 
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
@@ -49,11 +50,19 @@ describe("runtime/patterns · 引擎类名的 is", () => {
     eq("248", "null 什么都不是（m12 同形：y11）", `${is(V.nil(), "Object")}|${is(V.nil(), "RefCounted")}`, "false|false");
   });
 
-  it("248 · 没量过的名与形状响亮拒", async () => {
+  it("258 · 表外的引擎类名与信号值按实测给假，只有不成其为类名的才拒", async () => {
     const inst = wrapValue(new Plain());
-    eq("248", "表外的引擎类名不猜（HttpRequest 只量过它是 1053 支名单里的一支）", is(inst, "HttpRequest"), "[is-type]");
-    eq("248", "信号值对任何类名都没量过", is(V.object(new Signal("fired")), "Object"), "[is-type]");
-    eq("248", "没登记引擎基类的实例（`extends Resource` 那一族）不猜", (() => {
+    const sig = V.object(new Signal("fired"));
+    const outside = ["Node2D", "Label", "Timer", "HTTPRequest", "Image", "InputEvent", "Camera3D", "StyleBoxFlat"];
+    const inside = ["Object", "RefCounted", "Resource", "GDScript", "Node", "SceneTree", "MainLoop", "Callable"];
+    eq("258", "脚本实例对表外那 8 支全假（is.log c001–c016 那两列）", outside.map((n) => is(inst, n)).join("|"), "false|false|false|false|false|false|false|false");
+    eq("258", "引擎类值对表外那 8 支也假（n07「Node is Node 假」的推广）", outside.map((n) => is(nativeClass("Node"), n)).join("|"), "false|false|false|false|false|false|false|false");
+    eq("258", "脚本类值对表外那 8 支也假", outside.map((n) => is(V.object(plainDesc), n)).join("|"), "false|false|false|false|false|false|false|false");
+    eq("258", "信号值对表内那 7 支与 Callable 全假（is.log 那 16 格里信号的那 15 支）", inside.map((n) => is(sig, n)).join("|"), "false|false|false|false|false|false|false|false");
+    eq("258", "信号值对表外的引擎类名也假", outside.map((n) => is(sig, n)).join("|"), "false|false|false|false|false|false|false|false");
+    eq("258", "非对象形状对表外的引擎类名假（不走进表内那张链表）", `${is(vector2(1, 2), "Node2D")}|${is(S("x"), "Image")}|${is(I(1), "Timer")}|${is(V.nil(), "Label")}`, "false|false|false|false");
+    eq("258", "大小写不对的名字不是类名，照旧响亮拒", is(inst, "HttpRequest"), "[is-type]");
+    eq("258", "没登记引擎基类的实例（`extends Resource` 那一族）不猜", (() => {
       class Weird extends GdScriptObject {}
       const d = defineClass(Weird, () => new Weird(), (o: object) => o instanceof Weird);
       void d;

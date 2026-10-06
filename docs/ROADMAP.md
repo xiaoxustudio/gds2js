@@ -589,6 +589,15 @@
 - 顺手修了一处盘面损伤：S256 那一行在前几轮插入之后**断了** —— 它的续段（当时红的出货门那六格的读数）漂到 S259 之后，S256 行尾还少了收口的竖线。已接回同一行，并把「现在是红的、未结」那句改成已结的留档口径（结清记录在 S257 与 §1.60）；S258 / S259 粘成一行的那处也拆开了。
 - **账**：语料 257（125 行）、`test:diff` 171/171、`test:compile` 179/248、`pnpm test` 1062 例、ops 1799、guards 189 例、`test:codegen` 2/2、`test:pkgmodes` 25/25、面探针 `234-` 1/1 与 `257-` 1/1、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 27→**26**（打印一族只剩 `print_debug` / `print_stack` / `push_error` / `push_warning` 四支带缘由的拒）。出货另两门：`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20（`④ 工程 export --pack scriptc` 128 秒那格第一次跑红，报的是「门在跑的时候改了 runtime 源文件」，不是产物问题 —— 已记进 §2 第 14 条那串误报形态）。
 
+### 1.63 `is` 的两条拒口一次量清：表外的引擎类名与信号值都按实测发假（2026-10-07，S260，语料 258，S248 ④ 留的两条欠账结清）
+
+- **缺口是 S248 ④ 留的三条**：表外的引擎类名（`is Node2D` 这一族）、信号值对任何类名、以及没登记引擎基类的实例。第三条 Tier 1 走不到（`extends Resource` 在发射期就先抛 `[class-extends]`），前两条要的只是一张矩阵 —— 一次引擎跑 208 格就齐了：16 支类名 × 13 种形状，全走 `objs[i] is 名` 那种动态形（静态类型对不上时引擎解析期就拒，S248 ② 那条）。
+- **读数**：208 格里只有 14 格给真，而且**没有一格真值来自表外的名字** —— 真值全落在表内那 7 支的链上（实例 → Object/RefCounted；`self` → Object/SceneTree/MainLoop；脚本类值 → Object/RefCounted/Resource/GDScript；引擎类值 → Object/RefCounted；`abs` → Callable）。信号值那一列 16 格全假。所以「表外名一律假」是量出来的，不是拿继承树推的；`as` 那条仍然没动（一条读数都没有）。
+- **实现落成一条判据**：`patterns.ts` 的 `isType` 在 `lookupClass`（脚本自己声明的类名）之后加一格 —— 名字在 `ENGINE_CLASS_NAMES`（S242 冻的 1053 支）里就发假，不在才抛 `[is-type]`。于是 `is Node2D` 发假、`is HttpRequest`（大小写不对，不是类名）照旧响亮拒；`engineClassIs` 里信号值那一格从 `null` 改成 `false`。排在 `lookupClass` 后面是有意的：用户自己写的 `class Node` 不能被引擎名单抢走。
+- **语料 258 就是那张矩阵**（208 行 golden、其中 14 个真），探头脚本与它同一份 —— 以后重跑 `node tools/golden.mjs 258-` 就复查了整张表。ops `is-engine-class-names.test.ts` 从 10 格补到 15 格，钉的是「表外名对四类形状都假」「信号值那一列」「大小写不对的名字仍拒」这三格。
+- **账**：`test:diff` **172/172 逐字节、静默 0、崩溃 0**、`test:compile` 180/249、`pnpm test` 1065 例、ops 自校验 1799→**1804**、guards 189 例、`test:codegen` 2/2、tree-face 17 项、`test:pkgmodes` 25/25、面探针 `234-` 1/1（改了 runtime 的函数形状就过面探针，§2 第 13 条那条口径）、`258-` AOT 1/1、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20、typecheck 4/4 与 `tsconfig.test.json`。
+
+
 ---
 
 ## 2. 当前任务与待办
