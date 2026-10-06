@@ -548,6 +548,15 @@
 - **计数**：可派发 90→92、该拒 36→34，§6 第 23 条剩 14 支。
 - **账**：语料 254（100 行）、ops 仍 1782（这条只成语料）、`pnpm test` 1055 例、`test:compile` 176/245、`test:diff` 168/168 逐字节、静默 0、codegen 2/2、typecheck 4/4。
 
+### 1.59 `type_exists` 发出：判据就是那张 ClassDB 名单；顺手量到 scriptc 对 Callable 的 `==` 说 SC1043（2026-10-06，S256，语料 255，§6 第 23 条再收窄）
+
+- **规则一支一名量出来的**：`tmp/probe-small-builtins/s.log` 73 格（39 支内建类型名 + 16 支类名 + 11 支近似串 + 4 支边界名）与 `ENGINE_CLASS_NAMES` 比对**零不一致** —— `type_exists("TextServer")` 真、`"EditorNode"` 假（这一版 ClassDB 里没有）、38 支内建类型名里只有 `Object` 真（它同时是 ClassDB 的类），`"Variant"` 也假。
+- **因此名单换了住处**：判据要在运行期用（`.call()` 那一侧），所以 `engine-classes.ts` 从 `packages/compiler/src/lower/` 移到 `packages/runtime/src/runtime/`，分析器与 guards 改从 runtime 取 —— 方向仍是编译期依赖运行时，没有第二份名单。
+- **计数**：可派发 92→93、该拒 34→33，第二批 44 支里剩 13 支。
+- **AOT 这一侧撞出一条新的**：`255-type-exists` 走 scriptc 出货门报 2 个 `error SC1043: comparing non-number, non-string values are not supported yet` —— 就是语料里那两格 Callable 的 `==`（`type_exists == type_exists`、`type_exists == error_string`）。JS 侧两者都对（169/169 逐字节），拒的是 AOT 那侧的 `==` lowering 不覆盖对象比较；这一条与任务 #18（装箱账）同属 AOT 轨道，别把它当语义问题处理。探针 `is_same(a, b)` 那一形在 252 已通过 scriptc，说明走运行时的比较是安全的。
+- **实参只量过 String**：`type_exists(StringName)` / 数字实参都没读数，因此 `gTypeExists` 对非 String 抛 `[type-exists-arg]`。
+- **账**：语料 255（76 行逐字节）、ops 仍 1782、`pnpm test` 1057 例、`test:compile` 177/246、`test:diff` 169/169 逐字节、静默 0、崩溃 0，codegen 2/2、typecheck 4/4 与 `tsconfig.test.json` 全过；scriptc 对 255 报上面那两条 SC1043（JS 门全绿，AOT 门此格不复跑为绿之前，255 不进代表集）。
+
 ---
 
 ## 2. 当前任务与待办

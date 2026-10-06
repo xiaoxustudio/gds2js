@@ -5,6 +5,9 @@
  * `typeof` 给 24、`k == Node` 真、`k == Label` 假（`tmp/probe-unknown-value/gc2.log`、`shadow.gd`），
  * 而大小写是硬的：`HttpRequest` 与 `NonexistentClass900` 同样在解析期就拒。
  * 与另外两张实测名单零交集：21 支「类型名兼函数名」（值位置解析期拒）与 78 支「能当值用的全局函数名」都不在这里。
+ *
+ * 这张名单还是 `type_exists()` 的判据（S256：探头 `tmp/probe-small-builtins/s.log` 的 73 格零不一致 ——
+ * `ImageFormat` / `EditorNode` 假、`TextServer` 与 `PhysicsServer2D` 真，38 支内建类型名里只有 `Object` 真）。
  */
 export const ENGINE_CLASS_NAMES: ReadonlySet<string> = new Set([
   "AESContext",

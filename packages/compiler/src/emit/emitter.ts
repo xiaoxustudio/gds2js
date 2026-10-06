@@ -202,6 +202,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   is_same: (a) => `rt.gIsSame(${a[0]}, ${a[1]})`,
   type_string: (a) => `rt.gTypeString(${a[0]})`,
   error_string: (a) => `rt.gErrorString(${a[0]})`,
+  type_exists: (a) => `rt.gTypeExists(${a[0]})`,
   sin: (a) => `rt.gSin(${a[0]})`,
   cos: (a) => `rt.gCos(${a[0]})`,
   tan: (a) => `rt.gTan(${a[0]})`,

@@ -5,6 +5,7 @@ import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq } from "./
 import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { typeOf } from "./patterns";
+import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
@@ -866,4 +867,12 @@ export function gTypeString(v: Variant): Variant {
 
 export function gErrorString(v: Variant): Variant {
   return nameById(v, "error_string() 的参数", ERROR_NAMES, "(invalid error code)");
+}
+
+/** `type_exists()`：判据就是这张 ClassDB 名单；实参只量过 String，其余类型响亮拒（连 StringName 都没量）。 */
+export function gTypeExists(v: Variant): Variant {
+  if (v.t !== Tag.STRING) {
+    throw new UnsupportedError("type-exists-arg", `type_exists() 的实参只量过 String（收到 ${tagName(v.t)}）`);
+  }
+  return V.bool(ENGINE_CLASS_NAMES.has(v.v as string));
 }

@@ -138,7 +138,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   tan: GS(1),
   tanh: GS(1),
   type_convert: GS(2),
-  type_exists: TODO("GDScript", 1),
+  type_exists: GD(1),
   type_string: GS(1),
   typeof: GS(1),
   var_to_bytes: TODO("GlobalScope", 1),

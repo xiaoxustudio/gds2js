@@ -42,7 +42,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "rand_from_seed",
   "rid_allocate_id",
   "rid_from_int64",
-  "type_exists",
   "var_to_bytes",
   "var_to_bytes_with_objects",
 ]);

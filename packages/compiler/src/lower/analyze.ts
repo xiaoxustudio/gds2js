@@ -1,6 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
-import { ENGINE_CLASS_NAMES } from "./engine-classes";
+import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
