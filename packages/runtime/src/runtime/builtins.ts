@@ -855,10 +855,9 @@ const ERROR_NAMES = ["OK", "Failed", "Unavailable", "Unconfigured", "Unauthorize
 
 /** 引擎这两支的形参是 int32：先按 32 位回绕再查表 —— 实测 `error_string(INT64_MIN)` 给 **OK**（低 32 位是 0），`error_string(-1)` 给 `(invalid error code)`。 */
 function nameById(v: Variant, who: string, names: string[], fallback: string): Variant {
-  let x = intArgBig(v, who) % 4294967296n;
-  if (x < 0n) x += 4294967296n;
-  if (x >= 2147483648n) x -= 4294967296n;
-  return x >= 0 && x < BigInt(names.length) ? V.str(names[Number(x)] as string) : V.str(fallback);
+  // 折成 int32 走 BigInt.asIntN：scriptc 对下面那种 bigint 关系运算没有 lowering（报 SC1043），语义与实测读数一致。
+  const x = Number(BigInt.asIntN(32, intArgBig(v, who)));
+  return x >= 0 && x < names.length ? V.str(names[x] as string) : V.str(fallback);
 }
 
 export function gTypeString(v: Variant): Variant {

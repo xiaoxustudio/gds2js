@@ -559,6 +559,17 @@
 - **出货门现在是红的（下一轮第一件事就是它）**：HEAD 上重跑三连门，`test:export` 的 scriptc 四格（`scriptc/nested`、`scriptc/散装单文件`、`--pack scriptc`、`默认 pack`）全报 `scriptc 没能出货: FAIL`，`test:cli-native` 的 `④ 工程 export --pack scriptc` 同一条（`⑨b run --watch` 那格的 30 秒窗口这轮又超时），`test:pkgmodes` 被同一条拉着红。JS 侧的门这轮全绿（`pnpm test` 1057、`test:compile` 177/246、`test:diff` 169/169 逐字节、codegen、typecheck、golden），所以红的是 **AOT 打包轨**：上一次这三连门全绿是 12:09–12:36（在 `56e6d9f` 之前），嫌疑窗是 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b`，先二分再谈发货。
 - **二分的第一手证据（本轮补测，未 fix）**：面探针那格 `234-string-methods-batch` 今天 12:21 还是 1/1 逐字节一致，HEAD 上重跑成 `0/1 编过` —— 也就是说 AOT 不是「某份夹具撞上新语句」，而是**整条打包轨红了**。嫌疑窗因此收窄到 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b` 这四支之内，而 **头号嫌疑是 `6e8be7b` 把 1053 支的 `ENGINE_CLASS_NAMES` 挪进运行时包**（scriptc 要把这份大文字表编进产物）。本轮两次试 `git revert 6e8be7b` 都没拿到能判定的读数：第一次参数写错（`--no-edit -q` 不是 revert 的合法组合）没执行；第二次 `-n` 在两份文档上撞出冲突、`pnpm build` 又走了 turbo 缓存（169ms FULL TURBO），所以那次 234 的「还是 0/1」不算证据。实验作废、工作树已 `reset --hard` 回到 HEAD 并核过干净（255 那三份文件在位），这个假设**仍未验过**。正确做法是 `git bisect good f7c0cc1 .. bad HEAD`（中间四支，两步就够），每步只跑 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc`；二分到的那一支再决定是回退还是就地修（若确是名单进包那一支，就把名单留在编译期、`type_exists` 由分析器折叠或注入）。
 - **原因抓到了（不再是嫌疑）**：面探针 `234-string-methods-batch` 的失败详情是 2 个 `error SC1043: comparing non-number, non-string values are not supported yet` —— 与 255 那两格 Callable `==` 同一条错，但 234 里根本没有那种式子。scriptc 编的是**整个运行时包**，所以只要运行时代码里出现 scriptc 不支持的比较，每一份产物都会红。嫌疑落点因此是这轮往运行时里加的 **bigint 比较**：`56e6d9f` 的 `gNearestPo2`（`x >= 0n`、`x < BigInt(...)`）与 `05a7bc7` 的 `nameById`（`x >= 0 && x < BigInt(names.length)`）—— 两者都是 bigint 之间的关系运算，而 `234` 最后一次全绿（12:21）正是在 `56e6d9f` 之前。修法不是回退功能：把这两处改成不走 bigint 关系运算的写法（例如先 `Number.isSafeInteger` 分流、或用 `toString()` 长度与首字符比较、或让 `nearest_po2` 走纯 `Number` 路径并在越界处响亮拒），改完只需 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc` 一条就能判（2 分钟），绿了再补 `255` 与出货门。
+- （本条的嫌疑已由 §1.60 证否：真凶是 `nameById` 里那两处 bigint 关系运算，1 分钟就能复现与判绿。）
+
+### 1.60 AOT 红的原因抓到并修好了：运行时的两处 bigint 关系运算没有 lowering（2026-10-06，S257，任务 #37 结清）
+
+- **先纠正我上一轮的猜法**：`docs/ROADMAP.md` §1.59 里写「头号嫌疑是 1053 支名单进包」——**错了**。查了 scriptc 文档（`/docs/limitations`：BigInt 的字面量、运算符、转换、Map/Set 元素都在支持之列，不支持的是 `BigInt64Array`/`BigUint64Array` 与 bigint 越过嵌入引擎边界），再用 `export --pack scriptc` 直接复现，错误原文指得很清楚：
+  `.gds2js-export/runtime/builtins.ts:859:15 error SC1043: comparing non-number, non-string values are not supported yet`，两处都在 `nameById` 里 —— `if (x < 0n) x += 4294967296n;` 与 `if (x >= 2147483648n) x -= 4294967296n;`（S255 为了复刻引擎那一眼 int32 回绕手写的折位）。
+- **为什么同一天别的 bigint 比较没红**：同一文件里 `x < 0n ? wrap64(-x) : x`（S251 加的 `abs`/`absi` 那两处）**编得过**。差别不在「有没有 bigint 比较」，而在比较的对象是**刚做过 `% 4294967296n` 的局部量与六个十六进制位的字面量**这一组合；scriptc 文档并没把这条写成限制，所以按实测当事实记着，别再靠文档推断。
+- **修法不动语义**：折 int32 改走 `Number(BigInt.asIntN(32, intArgBig(v, who)))` 一句，比较全部退回 Number 域 —— 与 S255 那 4 格溢出读数（`error_string(INT64_MIN)` → `OK`、`error_string(-1)` → `(invalid error code)`、`type_string(INT64_MAX)` → `<invalid type>`）完全一致，语料一字未改。
+- **判据（都是实跑）**：`234-string-methods-batch` 面探针从 `0/1 编过` 回到 **1/1 编过、1/1 跑通、逐字节一致 1/1**；`test:diff` 回到 **169/169 逐字节、静默 0、崩溃 0**。
+- **一条附带教训**：`git revert -n` + `git reset --hard` 之后，255 那三份文件被 autocrlf 换成了 CRLF，语料门立刻报「第 1 行不一致」——那是行尾噪声不是语义错。凡是动过这类 git 操作，跑门之前先把 corpus 文件归一回 LF（本轮就是 `split("\r\n").join("\n")` 一遍）。
+- **账**：面探针 1/1、`test:diff` 169/169、guards 全过；`test:pkgmodes` / `test:export` / `test:cli-native` 三连的读数记在下一条（本条写下时它们还在跑）。
 
 ---
 
