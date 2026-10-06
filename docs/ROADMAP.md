@@ -557,6 +557,7 @@
 - **实参只量过 String**：`type_exists(StringName)` / 数字实参都没读数，因此 `gTypeExists` 对非 String 抛 `[type-exists-arg]`。
 - **账**：语料 255（76 行逐字节）、ops 仍 1782、`pnpm test` 1057 例、`test:compile` 177/246、`test:diff` 169/169 逐字节、静默 0、崩溃 0，codegen 2/2、typecheck 4/4 与 `tsconfig.test.json` 全过；scriptc 对 255 报上面那两条 SC1043（JS 门全绿，AOT 门此格不复跑为绿之前，255 不进代表集）。
 - **出货门现在是红的（下一轮第一件事就是它）**：HEAD 上重跑三连门，`test:export` 的 scriptc 四格（`scriptc/nested`、`scriptc/散装单文件`、`--pack scriptc`、`默认 pack`）全报 `scriptc 没能出货: FAIL`，`test:cli-native` 的 `④ 工程 export --pack scriptc` 同一条（`⑨b run --watch` 那格的 30 秒窗口这轮又超时），`test:pkgmodes` 被同一条拉着红。JS 侧的门这轮全绿（`pnpm test` 1057、`test:compile` 177/246、`test:diff` 169/169 逐字节、codegen、typecheck、golden），所以红的是 **AOT 打包轨**：上一次这三连门全绿是 12:09–12:36（在 `56e6d9f` 之前），嫌疑窗是 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b`，先二分再谈发货。
+- **二分的第一手证据（本轮补测，未 fix）**：面探针那格 `234-string-methods-batch` 今天 12:21 还是 1/1 逐字节一致，HEAD 上重跑成 `0/1 编过` —— 也就是说 AOT 不是「某份夹具撞上新语句」，而是**整条打包轨红了**。嫌疑窗因此收窄到 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b` 这四支之内，而 **头号嫌疑是 `6e8be7b` 把 1053 支的 `ENGINE_CLASS_NAMES` 挪进运行时包**（scriptc 要把这份大文字表编进产物）。本轮试过 `git revert 6e8be7b` 但命令参数写错（`--no-edit -q` 不是 revert 的合法组合）没执行，工作树已确认干净、无未完成序列，所以这个假设**还没验过**。下一轮第一件事：`git revert -n 6e8be7b`（或临时把名单留在编译期、运行时改回注入）后只跑 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc` 这一条，2 分钟就能判真假；真则把名单请回编译期、`type_exists` 改由分析器折叠或注入。
 
 ---
 
