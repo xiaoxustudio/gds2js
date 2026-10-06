@@ -559,7 +559,105 @@
 - **出货门现在是红的（下一轮第一件事就是它）**：HEAD 上重跑三连门，`test:export` 的 scriptc 四格（`scriptc/nested`、`scriptc/散装单文件`、`--pack scriptc`、`默认 pack`）全报 `scriptc 没能出货: FAIL`，`test:cli-native` 的 `④ 工程 export --pack scriptc` 同一条（`⑨b run --watch` 那格的 30 秒窗口这轮又超时），`test:pkgmodes` 被同一条拉着红。JS 侧的门这轮全绿（`pnpm test` 1057、`test:compile` 177/246、`test:diff` 169/169 逐字节、codegen、typecheck、golden），所以红的是 **AOT 打包轨**：上一次这三连门全绿是 12:09–12:36（在 `56e6d9f` 之前），嫌疑窗是 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b`，先二分再谈发货。
 - **二分的第一手证据（本轮补测，未 fix）**：面探针那格 `234-string-methods-batch` 今天 12:21 还是 1/1 逐字节一致，HEAD 上重跑成 `0/1 编过` —— 也就是说 AOT 不是「某份夹具撞上新语句」，而是**整条打包轨红了**。嫌疑窗因此收窄到 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b` 这四支之内，而 **头号嫌疑是 `6e8be7b` 把 1053 支的 `ENGINE_CLASS_NAMES` 挪进运行时包**（scriptc 要把这份大文字表编进产物）。本轮两次试 `git revert 6e8be7b` 都没拿到能判定的读数：第一次参数写错（`--no-edit -q` 不是 revert 的合法组合）没执行；第二次 `-n` 在两份文档上撞出冲突、`pnpm build` 又走了 turbo 缓存（169ms FULL TURBO），所以那次 234 的「还是 0/1」不算证据。实验作废、工作树已 `reset --hard` 回到 HEAD 并核过干净（255 那三份文件在位），这个假设**仍未验过**。正确做法是 `git bisect good f7c0cc1 .. bad HEAD`（中间四支，两步就够），每步只跑 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc`；二分到的那一支再决定是回退还是就地修（若确是名单进包那一支，就把名单留在编译期、`type_exists` 由分析器折叠或注入）。
 - **原因抓到了（不再是嫌疑）**：面探针 `234-string-methods-batch` 的失败详情是 2 个 `error SC1043: comparing non-number, non-string values are not supported yet` —— 与 255 那两格 Callable `==` 同一条错，但 234 里根本没有那种式子。scriptc 编的是**整个运行时包**，所以只要运行时代码里出现 scriptc 不支持的比较，每一份产物都会红。嫌疑落点因此是这轮往运行时里加的 **bigint 比较**：`56e6d9f` 的 `gNearestPo2`（`x >= 0n`、`x < BigInt(...)`）与 `05a7bc7` 的 `nameById`（`x >= 0 && x < BigInt(names.length)`）—— 两者都是 bigint 之间的关系运算，而 `234` 最后一次全绿（12:21）正是在 `56e6d9f` 之前。修法不是回退功能：把这两处改成不走 bigint 关系运算的写法（例如先 `Number.isSafeInteger` 分流、或用 `toString()` 长度与首字符比较、或让 `nearest_po2` 走纯 `Number` 路径并在越界处响亮拒），改完只需 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc` 一条就能判（2 分钟），绿了再补 `255` 与出货门。
+- （本条的嫌疑已由 §1.60 证否：真凶是 `nameById` 里那两处 bigint 关系运算，1 分钟就能复现与判绿。）
 
+### 1.60 AOT 红的原因抓到并修好了：运行时的两处 bigint 关系运算没有 lowering（2026-10-06，S257，任务 #37 结清）
+
+- **先纠正我上一轮的猜法**：`docs/ROADMAP.md` §1.59 里写「头号嫌疑是 1053 支名单进包」——**错了**。查了 scriptc 文档（`/docs/limitations`：BigInt 的字面量、运算符、转换、Map/Set 元素都在支持之列，不支持的是 `BigInt64Array`/`BigUint64Array` 与 bigint 越过嵌入引擎边界），再用 `export --pack scriptc` 直接复现，错误原文指得很清楚：
+  `.gds2js-export/runtime/builtins.ts:859:15 error SC1043: comparing non-number, non-string values are not supported yet`，两处都在 `nameById` 里 —— `if (x < 0n) x += 4294967296n;` 与 `if (x >= 2147483648n) x -= 4294967296n;`（S255 为了复刻引擎那一眼 int32 回绕手写的折位）。
+- **为什么同一天别的 bigint 比较没红**：同一文件里 `x < 0n ? wrap64(-x) : x`（S251 加的 `abs`/`absi` 那两处）**编得过**。差别不在「有没有 bigint 比较」，而在比较的对象是**刚做过 `% 4294967296n` 的局部量与六个十六进制位的字面量**这一组合；scriptc 文档并没把这条写成限制，所以按实测当事实记着，别再靠文档推断。
+- **修法不动语义**：折 int32 改走 `Number(BigInt.asIntN(32, intArgBig(v, who)))` 一句，比较全部退回 Number 域 —— 与 S255 那 4 格溢出读数（`error_string(INT64_MIN)` → `OK`、`error_string(-1)` → `(invalid error code)`、`type_string(INT64_MAX)` → `<invalid type>`）完全一致，语料一字未改。
+- **判据（都是实跑）**：`234-string-methods-batch` 面探针从 `0/1 编过` 回到 **1/1 编过、1/1 跑通、逐字节一致 1/1**；`test:diff` 回到 **169/169 逐字节、静默 0、崩溃 0**。
+- **一条附带教训**：`git revert -n` + `git reset --hard` 之后，255 那三份文件被 autocrlf 换成了 CRLF，语料门立刻报「第 1 行不一致」——那是行尾噪声不是语义错。凡是动过这类 git 操作，跑门之前先把 corpus 文件归一回 LF（本轮就是 `split("\r\n").join("\n")` 一遍）。
+- **账**：面探针 1/1、`test:diff` 169/169 逐字节（静默 0、崩溃 0）、guards 全过、typecheck 4/4 与 `tsconfig.test.json`；出货三连读完并全绿 —— `test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0（红的正是它那四格 scriptc 格）、`test:cli-native` 20/20（含 `④ 工程 export --pack scriptc` 与 `⑨b run --watch`）。§1.59 那条红账到此销掉。
+
+### 1.61 打印一族按原始字节重重量一遍：五支发出、五支把缘由写进错文（2026-10-07，S258，语料 256，§6 第 23 条再收窄）
+
+- **上一轮那份读数是错的，错在探头**：`tmp/probe-prints/prints.log` 记 stdout 时把空行滤掉了，于是 `prints()` / `printt()` 被写成「一行都不出」，`printerr()` 也被读成「什么都不出」。按原始字节重量（`zero-arg.log` 14 格 + `err-shape.log` 5 格）才看清零实参那格五支各不一样：`print()` / `prints()` / `printt()` 照旧结尾一行，`printraw()` / `print_verbose()` 什么都不动（连 `printraw` 那半行都不开），`printerr()` 只往 **stderr** 落一个换行。这轮之所以发现得早，是因为语料 256 里放了 `printraw("A")` + 零实参 + `print("B")` 那种夹心格 —— golden 一记就是 `A` / `B` 两行，跟实现给的 `AB` 一行当场对不上。**教训写进口径里：滤空行的探头不能用来判「出不出行」。**
+- **发的五支**（形状全部来自实测）：`prints` 实参间一个空格、`printt` 一个制表符、`printraw` 无分隔且不结尾、`printerr` 无分隔且走 stderr、`print_verbose` 在默认声级下整支不出声（4.3 树 `variant_utility.cpp:997` 那句 `if (OS::is_stdout_verbose())` 正是这一格 —— 我们的宿主没有声级旗标，所以发成空操作而不是凭空定一条）。实参照旧「全部先求值再逐个 show」（S170 ⑦），分隔符只出现在实参之间。
+- **宿主因此多了一个状态**：`printraw` 那半行。下一条结尾的行把它并到行首（`printraw("A") prints("s","t") print("B")` → `As t` / `B`），程序收尾时按原样落盘、不补换行（`printraw("only")` 的 stdout 就是 `only`，与引擎同形）。`resetOut()` 一并清它，否则上个用例的半行会串进下个用例。
+- **两条门的分流口径之前不一致，这轮对齐了**：`godot.txt` 的定义是 stdout 拼 stderr（`tools/lib.mjs:88`），而 JS 侧两个门都只看 stdout —— `test/support/js-runner.ts` 现在两路一起收，`test/e2e/scriptc.test.ts:225` 从 `run.stdout` 换成 `run.out`。改之前 `256-` 在出货门报「第 22 行 godot="e12true" js=""」，那正是 `printerr` 那行：不是产品少了输出，是门少收了一路。
+- **仍拒的五支开始说实话**：`emitter.ts` 新增 `BUILTIN_TODO_WHY`，错文里带上实测到的那半截 —— `print_rich`（bbcode→ANSI 只量过 `[b]`）、`print_debug`（第二行是 `At: res://<脚本>:<行>:<函数>()`）、`print_stack`（帧里带指针号）、`push_error` / `push_warning`（stderr 四行，含 `at: push_error (core/variant/variant_utility.cpp:1024)` 与 GDScript backtrace）。这些读数原样留在 `tmp/probe-prints/prints.log`，等「带脚本身份的打印」那条口径定了再一起做。
+- **账**：语料 256 共 22 行逐字节（末行来自 stderr）、`test:diff` **170/170**（静默 0、崩溃 0）、`test:compile` 178/247、`pnpm test` 1060 例、ops 1799、guards 190 例（新增「打印一族的发射与拒答」2 例）、`packages/runtime/test/print-family.test.ts` 3 例 17 格（钉的正是 golden 里看不见的那几格）、tree-face 17 项、`test:codegen` 2/2、面探针 `234-` 1/1、`256-` AOT 逐字节 1/1（`process.stderr.write` 在静态目标上出得来）、`test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 20/20（含 `④ 工程 export --pack scriptc` —— 换新的宿主 import 行之后静态出货照样逐字节）、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 32→**27**。golden 漂移门本轮不重跑整批：256 那份 golden 就是这轮从裁判引擎记下来的，其余用例的 `main.gd` 一字未动（改的只有 JS 侧的宿主 import 行）。
+
+### 1.62 `print_rich` 的 bbcode 整张表发出，颜色那一族按 4.6.3 的规矩走（2026-10-07，S259，语料 257，§6 第 23 条再收窄）
+
+- 起点是上一轮拒它的那句理由（「bbcode→ANSI 只量过 `[b]`」）。这张表其实是**有源码的有限表** —— 4.3 树 `core/string/print_string.cpp:88-169` 就是 61 条 `String::replace` 再加一个尾部复位。搬过来之后第一次对表，87 格里 5 格对不上，全在 `*color=` 那一族。
+- 那 5 格说明 4.6.3 换了规矩，量出来是（`tmp/probe-rich/colors.log` 27 格）：名字表那 13 色照旧走各自的老码，**表外**的值一律解析成 Color 再发 24 位 —— `[color=#ff0000]` / `[color=ff0000]` / `[color=#f00]` 都是 `38;2;255;0;0`，`bgcolor` 是 `48;2`，`fgcolor` 两段串起来；解析不中的（`bogus` / `grey` / 空串 / `#gg0000`）发 `0;0;0`；alpha 不参与（`#ff000080` 与 `#ff0000ff` 同形）；4.3 那三道 `contains("[color")` 闸门在 4.6.3 已经没了（光一个 `[/color]` 也转成 `39`）；Color 自己那张名字表仍生效（`[color= red]`、`[color=RED]` 都成 `255;0;0`），而 bbcode 名表是精确小写（`gray` → `90`，不是 Color 那边的 `128;128;128`）。
+- **取字节是截断不是四舍五入**（C 那句 `(uint8)(ch*255.0)`），解析直接复用 S241 的 `colorFromText` —— 同一个 `/255` 除法配反向的 `*255`，八格刁串十六进制（`#010203` / `#808080` / `#7f7f7f` / `#aaaaaa` / `#555555` / `#050a14` / `#abcdef` / `#fefffd`）才逐字对得上。没闭合的标签（`[color=#ff0000`、`[color=`）实测就是原样出，照这条写、不多猜。
+- **判据**：116 格逐字节对完才发（`tmp/probe-rich/rich.log` 存着两侧的整段原文）；**那份探头脚本已经进了盘面** —— 语料 257 的 `main.gd` 就是它（131 行脚本、125 行 golden），以后重跑对表只要 `node tools/golden.mjs 257-`，不依赖 `tmp/`。末尾另加了五格夹心格钉接缝：`printraw("q1")` + `print_rich("[b]q2[/b]")` 实测是一行 `q1\u001b[1mq2\u001b[22m\u001b[0m`（`print_rich` 接得住 `printraw` 那半行，复位补在整行末尾），`print_rich("[center]q8[/center]")` 那种串里带换行的也照实测走。`test:diff` **171/171 逐字节、静默 0、崩溃 0**。AOT 一并过了 —— `257-print-rich` 在 scriptc 出货门 1/1 编过、跑通、125 行逐字节，`indexOf(needle, from)` / `slice` / `Math.floor` 这套式子在静态目标上出得来。
+- 顺手修了一处盘面损伤：S256 那一行在前几轮插入之后**断了** —— 它的续段（当时红的出货门那六格的读数）漂到 S259 之后，S256 行尾还少了收口的竖线。已接回同一行，并把「现在是红的、未结」那句改成已结的留档口径（结清记录在 S257 与 §1.60）；S258 / S259 粘成一行的那处也拆开了。
+- **账**：语料 257（125 行）、`test:diff` 171/171、`test:compile` 179/248、`pnpm test` 1062 例、ops 1799、guards 189 例、`test:codegen` 2/2、`test:pkgmodes` 25/25、面探针 `234-` 1/1 与 `257-` 1/1、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 27→**26**（打印一族只剩 `print_debug` / `print_stack` / `push_error` / `push_warning` 四支带缘由的拒）。出货另两门：`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20（`④ 工程 export --pack scriptc` 128 秒那格第一次跑红，报的是「门在跑的时候改了 runtime 源文件」，不是产物问题 —— 已记进 §2 第 14 条那串误报形态）。
+
+### 1.63 `is` 的两条拒口一次量清：表外的引擎类名与信号值都按实测发假（2026-10-07，S260，语料 258，S248 ④ 留的两条欠账结清）
+
+- **缺口是 S248 ④ 留的三条**：表外的引擎类名（`is Node2D` 这一族）、信号值对任何类名、以及没登记引擎基类的实例。第三条 Tier 1 走不到（`extends Resource` 在发射期就先抛 `[class-extends]`），前两条要的只是一张矩阵 —— 一次引擎跑 208 格就齐了：16 支类名 × 13 种形状，全走 `objs[i] is 名` 那种动态形（静态类型对不上时引擎解析期就拒，S248 ② 那条）。
+- **读数**：208 格里只有 14 格给真，而且**没有一格真值来自表外的名字** —— 真值全落在表内那 7 支的链上（实例 → Object/RefCounted；`self` → Object/SceneTree/MainLoop；脚本类值 → Object/RefCounted/Resource/GDScript；引擎类值 → Object/RefCounted；`abs` → Callable）。信号值那一列 16 格全假。所以「表外名一律假」是量出来的，不是拿继承树推的；`as` 那条仍然没动（一条读数都没有）。
+- **实现落成一条判据**：`patterns.ts` 的 `isType` 在 `lookupClass`（脚本自己声明的类名）之后加一格 —— 名字在 `ENGINE_CLASS_NAMES`（S242 冻的 1053 支）里就发假，不在才抛 `[is-type]`。于是 `is Node2D` 发假、`is HttpRequest`（大小写不对，不是类名）照旧响亮拒；`engineClassIs` 里信号值那一格从 `null` 改成 `false`。排在 `lookupClass` 后面是有意的：用户自己写的 `class Node` 不能被引擎名单抢走。
+- **语料 258 就是那张矩阵**（208 行 golden、其中 14 个真），探头脚本与它同一份 —— 以后重跑 `node tools/golden.mjs 258-` 就复查了整张表。ops `is-engine-class-names.test.ts` 从 10 格补到 15 格，钉的是「表外名对四类形状都假」「信号值那一列」「大小写不对的名字仍拒」这三格。
+- **账**：`test:diff` **172/172 逐字节、静默 0、崩溃 0**、`test:compile` 180/249、`pnpm test` 1065 例、ops 自校验 1799→**1804**、guards 189 例、`test:codegen` 2/2、tree-face 17 项、`test:pkgmodes` 25/25、面探针 `234-` 1/1（改了 runtime 的函数形状就过面探针，§2 第 13 条那条口径）、`258-` AOT 1/1、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20、typecheck 4/4 与 `tsconfig.test.json`。
+
+
+### 1.64 随机族八支发出：pcg32 复刻，`randf()` 按 4.6.3 的 float32 除法走（2026-10-07，S261，语料 259，§6 第 23 条再收窄）
+
+- **这一族欠的是「同一个 seed 的序列要复刻」**，§6 第 23 条与 globals 的抬头都这么写。式子其实全在 4.3 树里：`thirdparty/misc/pcg.cpp` 的 XSH-RR 与 srandom 两步预热、`core/math/random_pcg.h` 的 `randd()`（CLZ + ldexp，三发）与 `random(int,int)`、`core/math/math_funcs.cpp` 的 `default_rand` 常数与 `rand_from_seed` 那支「下一发 + 原 seed」。先照 4.3 搬完，再拿引擎逐格对 —— 261 格里 81 格不对，**全在 `randf()` 与 `randi_range()` 两支**。
+- **`randf()` 与 4.3 不一样**：4.6.3 只吃一发，值是 `rand()/2^32` **落在 float32 上**再 widen。seed(0) 组那格实测 `0.47646453976631`，纯 double 除法给 `0.47646454931237`（差在第 9 位），4.3 那支 CLZ float 版要吃两发 —— 照搬会把后面每一格都挪位。`randd()` 反倒是三发制，照 4.3 一字不差对得上。
+- **`randi_range()` 折实参不折跨度**：两个实参先按 int32 折（`randi_range(0, 4294967295)` 走的是 (0, -1) 那一格，给 `0`），跨度却是宽类型算的：`randi_range(INT32_MIN, INT32_MAX)` 实测 `-335896151` = 首发 `1811587497` − 2^31，也就是 bound 取 2^32；要是按 C 那句 `abs(p_from-p_to)+1` 折回 int32，bound 会变成 2、给不出这个数。`from == to` 那一格直接回、一发不吃（后面那发 randi 照样是首发）✓。
+- **开局是播过种的**：同一支脚本连跑两次，未 seed 的首发 `randi()` 是 1956456239 / 2444007460，而 `seed(1234)` 之后三格两次一字不差 —— 所以引擎启动时 randomize 过一次。这边同样按时钟播一次（`Date.now()`，毫秒级，不是引擎那句 unix_time+ticks），**性质对齐而不是数值对齐**：不可复现这件事对齐，具体数字本来就没人能钉；语料因此每格都先 seed，未 seed 那一形不进任何门。
+- **元数与两句**照 `variant_utility.cpp:1784-1791` 的 FUNCBIND 注册表，八格 Too few / Too many 在 4.6.3 一支一名量过（零实参那三支的多给句就是 `Expected at most 0 but received 1.`），进了 `BUILTIN_ARITY`；实参类型仍走数学族那条老闸（非数值抛 `[arg-int]` / `[arg-float]`，引擎那几句是转换期的、这一族没量过原文就不冒充），float 落 int 槽按既有截断规矩收。
+- **账**：语料 259（274 行 golden 逐字节）+ 读数表 `tmp/probe-rand/rand-map.tsv`、`test:diff` **173/173**（静默 0、崩溃 0）、`test:compile` 181/250、`pnpm test` 1067 例、ops 自校验 1804→**1819**、guards 183 例（新增「随机族的发射与元数闸门」2 例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、面探针 `234-` 1/1（`Date.now()` 与 BigInt 位运算在静态目标上 lowering 得过来）、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 26→**18**，名表里可派发 93→**101**、该拒 33→**25**。**AOT 也补跑完了**：`259-` 的单例 scriptc 出货门 1/1 编过、1/1 跑通、274 行逐字节一致 —— `Date.now()`、BigInt 位运算与拒绝采样循环在静态目标上全都 lowering 得过来。
+
+### 1.65 身份族按合成号口径发出：发号器顺手登记，`<基类名#号>` 双侧掩号进语料（2026-10-07，S263，语料 260，§6 第 19 条收窄）
+
+- **这一条把 S262 那份读数花掉了**：`nextObjectId()` 原先只发号、不记「号 → 对象」，所以 `instance_from_id()` 无从查起；现在发完把自己挂进 `LIVE` 那张表，`GdScriptObject` 的字段初始化相应改成 `nextObjectId(this)`。四支全局函数（`weakref` / `instance_from_id` / `is_instance_valid` / `is_instance_id_valid`）从发射期拒答清单划进 `BUILTIN` + `BUILTIN_ARITY` + `GLOBAL_IMPL`，名表里那四行跟着从 TODO 翻成 GS。元数那八句是当场一支一名量回来的（`tmp/probe-ids-arity/arity.log`），与前一轮随机族同一套做法。
+- **号只保证「自己的算术」**：同对象同号、`a < b`、`instance_from_id(id) == a` 钉得住，与引擎的数字对不对得上没人钉 —— 所以 `tools/lib.mjs` 的 normalize 多了一条 `<类名#-数字> → <类名#号>`，golden 与产物**两侧同一条掩法**（不是只抹平我们这一侧），`260-object-identity` 那 39 行因此能逐字节比。
+- **打印那一格欠的是「基类名」**：`Inner extends RefCounted` 印 `<RefCounted#…>` 而不是 `<Inner#…>`，走 `nativeBaseOf`；为了不打断 values.ts → object.ts 那条 import 环，沿用与 `scriptPropsHook` 同一个注入口（`registerObjectLabelHook`）。
+- **AOT 的读数：一条真围栏、一条撤掉的误记**（明细在 S263 ⑦）。真的那条是 `(an ? b : a).t` —— 条件式直接当接收者报 SC1090；JS 的 `WeakRef` 也确实在静态目标上编不过（复测过的三行：SC2009「`Map<number, WeakRef<object>>` 里 value 那维编不过」、SC1090「Map 的值只能是 number/string/boolean/record/class 实例/数组/promise/Map/Set 或其联合」、SC2020「这个签名的 `Map.set` 还没有 lowering」，所以登记处是强引用表）。**撤掉的那条**：「本轮新写的 `class` 被 `instanceof` 用到就报 SC1090」是把两个症状混在一起了 —— 拿 class 版（`GdNullObject` / `WeakRefBox` + `instanceof`）重跑 `234-` 面探针 **1/1 编过、逐字节一致**，说明 class 与 `instanceof` 本来就过得去（`GVector2` / `GColor` 这些老结构体一直是 class），代码已改回 class 版。**这一发的新读数是「报错带行列」**（`values.ts:2458:48`）：拿到它靠的是 `GDS2JS_SCRIPTC_KEEP=1` 把替身树留在 `tmp/sc-gate/<用例>/`，再 `scriptc build <那棵树>/main.mts --strip` 直接读全文 —— 以前只在门的 120 字截断里猜，改形状试了好几轮。
+- **生命周期那一格明说不复刻**：`LIVE` 是强引用，被丢弃的 RefCounted 在我们这一侧仍查得回、仍算「有效」，引擎那边已回收并把号作废。这一形留在 §6 第 19 条，与 `CONNECT_DEFERRED` 那一格同一个前提：先有宿主的对象生命周期模型才谈得上。
+- **没量过的照旧响亮拒**：`weakref(5)` 抛 `[weakref-arg]`、`WeakRef.is_null()` 抛 `[weakref-method]`；`is_instance_valid` 的「真」只发实测过的那几类（引擎类值 `Node` / `SceneTree` 两格是本轮当场补量的，`tmp/probe-ids-more/m.log`）。
+- **账**：语料 260（39 行逐字节）+ ops `object-identity.test.ts` 4 段 15 格 + guards **179 → 181** 例；发射期拒答清单 **18 → 14**、名表可派发 **101 → 105** / 该拒 **25 → 21**；`pnpm test` 1072 例、ops 自校验 1834、`test:compile` 182/251、`test:diff` **174/174**（共 260 个用例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0、typecheck 4/4 与 `tsconfig.test.json`；AOT 面探针 `234-` **1/1**、`260-` 单例出货门 **1/1 编过 + 1/1 跑通 + 39 行逐字节**、`test:cli-native` 重编 exe 后 **20 例 / 22 格全过**。同一轮里 CLI 门 `⑨b run --watch` 那格的红另有一笔账，见 §1.66。
+
+
+### 1.66 `⑨b run --watch` 又在整跑里红：门改成「等长保存也看得见」，原生那一侧还剩一形没量清（2026-10-07，CLI 门，§1.56 的续）
+
+- **现象与 §1.56 一字不差**：整跑 `test:cli-native` 时 `⑨b` 判失败，缓冲里只有脚本第一次的 `watch-a` 与那句 `👀 监听 …` 横幅，连「—— 重新运行 ——」都没出现；同一轮里 `⑨`（`check --watch`）是过的。
+- **门自己的两处形状问题（都改了）**：① 旧门等的是 `watch-a`，而横幅在原生那一支比脚本 stdout **晚 25ms** 到（本机追踪：`watch-a` +320ms、`监听` +345ms），于是「第一次采样」可能已经带着改后的摘要 —— 改成 `监听` 与 `watch-a` 都出现才动手。② `watch-a` / `watch-b` **等长**，摘要 `路径:mtime:大小` 里只剩 mtime 一维会动，这一格对 mtime 的分辨率有依赖而 `⑨` 没有（它走 `appendFileSync`，尺寸必变，所以从不红）—— 第二次保存改成 `watch-bb`，让尺寸那一维也动。这一格要钉的洞（重跑写同名产物 → 第二次执行被 ES 模块缓存吃掉）与文件长度无关，改夹具不削弱它。
+- **扫出来的形状（数据在此，不写死因果）**：`tmp/wsweep.mjs` 按固定延迟写盘、看六秒内认不认。原生 exe：+225ms 不重跑、+613ms 重跑、+1236ms 不重跑、+3015ms 重跑；父侧 `statSync` 每次都报出真实变了的 mtime（+231 / +612 / +1234 / +3014ms），所以不是没写进去。同一条扫法在 node CLI 是 **0|6|12|30 四格全重跑**（node 冷启约 1s，四次写都在横幅之后）。改完夹具后 `⑨b` 单点与整跑都过。
+- **产品那一侧留着的那一形**：`--watch` 在原生目标上对某些「mtime 变了、尺寸没变」的保存不反应，而同一份 `watch.ts` 在 node 上看得见 —— 差别在 scriptc 那一侧的 `statSync().mtimeMs` 或轮询本身，**这一轮没量清，所以不动实现**（要动先按数据来：拿一份 scriptc 小探头把同一个文件的 mtime 在两侧对印）。已记 §2 待办。
+
+### 1.67 RID 一族发出：两支全局函数、一个真值型，比序那一格是语料抓出来的（2026-10-07，S264，语料 261，§2 那条身份决定的 RID 半截结清）
+
+- **先量后写**：`typeof` 23、`RID(<号>)` 的打印、字典键分格、`get_id()`、`hash()` 五格、四种实参折法、十种来源的运算符报错句 —— 全是一把一把探头量出来的（`tmp/probe-rid/`、`tmp/probe-rid2/`、`tmp/probe-rid3/`、`tmp/probe-rid4/`）。哈希那一格是白捡的：4.3 的 `core/variant/variant.cpp` 里 RID 分支就是 `hash_one_uint64(get_id())`，而 `hashOneUint64` 在转换族那一轮已经实现过 —— 五格读数一名一名对上就发出去了。
+- **比序是语料抓的，不是读源码读出来的**：第一版按带符号 bigint 比，`rid_from_int64(-1) < rid_from_int64(0)` 我们给真、引擎给**假**。r23 那一格红了才回头补量，量出「无符号」这条（`tmp/probe-rid3/unsigned.gd` 四格：`-1` 折成 2^64-1，是最大的那一个）。这类「看着显然」的格子正是 golden 的价值所在 —— 单位测试是我自己写的，只有引擎那侧能说不。
+- **`!=` 那句里写的运算符名**：引擎按你写的那个运算符发句，而我们 `valueEq` 里两处报错把 `==` 写死了 —— RID 要接这句就得先修这个口径。做法是 `valueEq` 多收一个运算名参数、`ops.neq` 把 `!=` 传下去，**只用在新加的 RID 那一支**：Callable 与结构体那两处仍按量过的 `==` 发，不拿 `!=` 去外推（那两句的 `!=` 形状这轮没量）。
+- **`rid_allocate_id()` 不是 S262 那笔合成号账**：它给的就是引擎公开的那个整数，起点 13241、连号、两份独立脚本首格同值 —— 所以逐字钉得住，与「对象号自造 + 语料掩号」是两件事，别并成一条。
+- **值只能从两支来**：`RID(5)` 在引擎是解析期那句 `No constructor of "RID" matches the signature "RID(int)"`，`RID()` 那一形仍走引擎类值的拒（S242），所以 runtime 里没有 RID 构造函数。`int(rid)` / `String(rid)` 两格的引擎原文是 `Invalid call. Nonexistent 'int' constructor.`（Vector2 那一格同句，说明它不是 RID 专属）—— 我们这两支仍发转换族自家那句 `[to-int]`，**口径差写在 S264 ⑦，不当已对齐**。
+- **AOT 新围栏 SC1043**：`nextRid += 1n` 在静态目标上报 `comparing non-number, non-string values are not supported yet`（`rid.ts:26`），改成 number 累加 + 出号时一次 `BigInt()`；号段远在 2^53 之内，语义一字未动。同一轮又确认了一遍 S263 撤掉误记之后的一半事实：`class GdRid` 带 bigint 字段、`instanceof` 派发，静态目标上都过得去。
+- **账**：语料 261（41 行逐字节）+ ops `rid-family.test.ts` 4 段 13 格 + guards 新 2 例；发射期拒答清单 14→**12**、名表可派发 105→**107** / 该拒 21→**19**；`pnpm test` 1079 例、ops 自校验 1834→**1850**、guards 181 例、`test:compile` 183/252、`test:diff` **175/175**（共 261 个用例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 重编 exe 后 **20 例 / 22 格全过**、typecheck 4/4 与 `tsconfig.test.json`；AOT 面探针 `234-` **1/1**、`261-rid-family` **1/1 编过 + 1/1 跑通 + 41 行逐字节**。
+
+### 1.68 负零与无穷：`%` 格式那一族四处静默错修掉，另量到常量池把 `0.0` 与 `-0.0` 当一个（2026-10-07，S265，语料 262）
+
+- **起点是待办里的「`atan2(-0.0, 0.0)` 对不对得上」**：量完的答案是 **atan2 本来就对得上** —— 4.3 树里 `Math::atan2` 就是 `::atan2`（`core/math/math_funcs.h:88`），四个零角 `0.0 / -0.0 / ±3.14159265358979` 与 JS 一字不差。看着像不一致，是因为**打印那一层把 `-0.0` 的号藏了**（`print(-0.0)` 给 `0.0`），而 `"%.1f"` 不藏（给 `-0.0`）—— 同一条式子在两条路上形状不同，这格只能靠量，不能靠想。
+- **真正错的是 `String % float` 那一支，四处全是静默错**：① `%.1f` / `%f` 对 `-0.0` 我们发 `0.0`（判负用的是 `v < 0`，而 `-0 < 0` 在 JS 里是假），引擎留号；② 非有限值我们发 JS 那三个词 `Infinity` / `-Infinity` / `NaN`，引擎发 `inf` / `-inf` / `nan`；③ `0` 那旗标对普通数垫零（`%09.1f` 对 1.5 给 `0000001.5`），对那三个词**不垫**（给六个空格 + `inf`）—— 只看一种形状看不出来；④ `%d` 收 float 走 C 那句 `(int64)` 转换：范围内向零截断（`1.5 → 1`、`-1.5 → -1`），**越界与非有限一律 `-9223372036854775808`**（±inf / nan / 1e30 三格同值，x64 的 integer-indeterminate 结果），我们原来直接把 `Infinity` 印了出去。
+- **一条不打算复刻的引擎行为**（量清楚了但故意不对齐，理由写在 S265 ④）：同一份脚本里 `0.0` 与 `-0.0` 进的是**同一个常量槽**（相等又同哈希），谁先出现谁定全场那个零的号 —— 先写 `var pz = 0.0` 再写 `var nz = -0.0`，`1.0 / nz` 给 `inf`；两行调换，同一支脚本里 `1.0 / pz` 给 `-inf`（`tmp/probe-sign0/{plusfirst,minusfirst}.gd` 只差行序）。复刻它要照搬常量池的插入顺序，那是实现细节不是语义，而且「读起来是 `-0.0` 的代码在我们这里就真拿到 `-0.0`」这条更可取。语料 262 因此只用运行时算出来的零（`var nz = pz * -1.0`）与纯字面量两种形状。
+- **账**：语料 262（33 行逐字节）+ ops `format-signed-zero.test.ts` 3 段 11 格；`test:diff` **176/176**（共 262 个用例，静默 0、崩溃 0）、`pnpm test` 1085 例、ops 自校验 1850→**1860**、guards 181 例、`test:compile` 184/253、typecheck 4/4；AOT 面探针 `234-` **1/1**、`262-negative-zero` **1/1 编过 + 1/1 跑通 + 33 行逐字节**；出货三门 `test:pkgmodes` 25/25、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 重编 exe 后 20 例 / 22 格全过。
+
+### 1.69 `print_debug` 发出：`At:` 那一行的路径、行号与函数名都是发射期已知的（2026-10-07，S266，语料 263，§6 第 23 条打印那一族再收窄）
+
+- **待办里那句「要产物报出自己的脚本身份」是个误判**：量完发现引擎只打**一帧**（调用点自己那一句），不是整条栈 —— 路径、行号、函数名三样在发射期全是静态的，不需要运行时的调用栈地基。四个形状的探头各跑一遍就定了形：`_initialize()` / 具名函数 / 静态 / `_init` / 内部类方法 / lambda，读数在 `tmp/probe-pdebug/`。
+- **两处形状细节**：`At:` 前是三个空格（与 `SCRIPT ERROR` 那句的 `   at:` 同宽但大写 A，且**没有** `GDScript backtrace` 那一段）；函数名**不带类前缀**（`m()` 而不是 `RefCounted (C)::m()`），lambda 那一格是 `<anonymous lambda>()`。后者单独用一个 `LAMBDA_DEPTH` 记，不碰 `CURRENT_FUNC` —— 那个变量还管着 `super()` 的发射。
+- **`push_error` / `push_warning` / `print_stack` / `get_stack` 仍拒，理由量清楚了**：那四支要的是整条栈（实测四行里逐帧 `[0] leaf (路径:4)` / `[1] mid (路径:7)` / `[2] _initialize (路径:10)`），外加一句引擎自己的源码位置 `at: push_error (core/variant/variant_utility.cpp:1024)` —— 语料侧的 normalize 只滤 `core/variant/` 那一族，WARNING 那支滤不掉，所以这一格**不能靠掩码混过去**；产物要发它得先有「每帧 .gd 行号」的地基（与 #18 那条去箱化同一类工程）。
+- **零实参那格**：`print_debug()` 第一句是空行 —— 只有按原始字节量才看得见（`tmp/probe-pdebug/zero2.gd`），normalize 会把空行滤掉，所以 ops 那两格钉的就是这个滤完看不见的形状。
+- **账**：发射期拒答清单 12→**11**；`test:diff` **177/177**（共 263 个用例，静默 0、崩溃 0）、`pnpm test` 1085 例、ops 自校验 1860、guards 181、`test:compile` 185/254、codegen 2/2、pkgmodes 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 重编 exe 后 20 例 / 22 格全过、typecheck 4/4、AOT 面探针 `234-` **1/1**。产物面 churn 另记一笔：`HOST_PRINT_NAMES` 多一个名字 → 184 份 `main.gen.mts` 的宿主 import 行各改一行，逐字节输出一条没变。
+
+### 1.70 NodePath 的读数一次量齐：`hash()` 在 4.6.3 换了式子，两处钉不住（2026-10-07，S267，读数轮 · 无实现变更）
+
+- **为什么要单独一轮**：`inst_to_dict` / `dict_to_inst` 那两支持续被记成「欠对象模型」，但实测它们的字典里根本没有实例号 —— 欠的是 **`@subpath` 那个 NodePath 值型**（`{ "@subpath": ^"Inner", "@path": "res://…", &"k": 1 }`）。于是先把 NodePath 一族量清，别照着 4.3 的式子写实现。
+- **量到的形状**：`typeof` **22**；三种打印（`str()` 给折好的路径串、容器与字典键给 `^"<串>"`、`var_to_str` 给 `NodePath("<串>")`）；等式按「绝对位 + 名字表 + 子名表」；`get_name(i)` / `get_subname(i)` 返回的是 **StringName（typeof 21）**；八支方法齐，而 `get_name_index` / `simplify` / `to_i` / `get_total_name_count` / `get_index_in_parent` / `re_substitute` 在 4.6.3 的 GDScript 绑定里根本不存在。
+- **解析式子有三处与 4.3 那份 `node_path.cpp` 不同**：`\:` 是**真转义**（`a\:b` 一个名字、打印把反斜杠带回来、且不等价于 `a:b`），`\/` **不是**（`a\/b` 两个名字，第一个是 `a\`）；结尾空子名被允许（`x:` → 0 个子名、`str()` 丢掉冒号、与 `x` 相等）；大小写保留且区分；空格不裁；`"."` 是普通名字而 `"/"` 是「绝对 + 零名字」。
+- **两处钉不住，实现时只能拒**：① `hash(NodePath)` 的式子变了 —— 4.3 是「绝对位起手 1、再把各名 `StringName::hash()` 异或」，实测三格候选全假（`hash(NodePath("a"))` = 3608900604，而 `hash(&"a")` = 177670 = `hash("a")`，这一条同名哈希相等的口径倒是量到了），没逆出来就按 S237 那批 Callable 哈希的先例拒；② `get_name(3)` 越界**不崩**，回空 StringName 并往 stderr 打 `ERROR: Index p_idx = 3 is out of bounds (data->path.size() = 1).` + `at: get_name (core/string/node_path.cpp:69)` —— 那句带引擎自己的 C++ 文件名与行号，normalize 只滤 `core/variant/` 那一族，滤不掉，所以越界那一形也进不了实现。
+- **下一轮照这份数做就行**：值型 + 解析式子 + 三种打印 + 等式 + `keyOf` 的 `^` 桶 + 八支方法（越界与哈希两支拒）+ `NodePath(String)` 构造 + 与 int / String / StringName 的比较按 RID 那一套模板（S264 刚铺好）；`convert(NodePath, TYPE_STRING)` 与 `String(NodePath)` 实测就是 `str()` 那一串，可以并进去。做完 `inst_to_dict` 就只欠 `@path` 的 res 路径与 `dict_to_inst` 的「跳过 `_init` 造实例」两件事。
+- **账**：无实现变更，八份探头与全部读数在 `tmp/probe-nodepath/`；本轮出货门一字未动（`test:diff` 177/177、ops 1860、guards 181 仍如 §1.69 所记）。
 ---
 
 ## 2. 当前任务与待办
@@ -567,6 +665,7 @@
 **决策 / 发布类**
 
 1. **#27 已决（§0 I）：SEA 保留。**
+1. **身份数字（instance id / `<Base#id>` 打印 / RID / WeakRef）已决（2026-10-07，S262）：产物自造稳定合成号** —— 形状照引擎、号按进程内分配顺序发，语料里带号的格子一律掩号再比；引擎那边读数是 30 格两遍一字不差（`tmp/probe-ids/ids2-1.log`），但号**起点**是引擎选的，跨版本不保证，所以逐字复刻那条路不通。`hash(Callable)` 那一格因此继续欠着（它的数是从号算出来的）。**这一条已经花掉（S263，语料 260）**：`get_instance_id()` / `instance_from_id()` / `is_instance_valid()` / `is_instance_id_valid()` / `weakref()` 与 `<基类名#号>` 的打印都按这条口径发出了。**RID 那两支也跟着花掉了（S264，语料 261）**，但它不属于这笔合成号账：`rid_allocate_id()` 给的整数、`RID(n)` 的打印与 `hash(RID)` 都有固定读数（起点 13241、五格哈希与 4.3 的 `hash_one_uint64(get_id())` 一名一名对上），所以是逐字钉住的，不走掩号那条路。仍欠的是 `hash(Callable)`（它的数从引擎侧的函数标识算，合成号对不上）。
 2. **#29 已决（§0 H）：形态 A；`pnpm release` 已落地**（版本戳 0.1.0 起、`gds2js --version`、release/ 产物 + sha256）。
    许可备查：scriptc 是 Apache-2.0、无 NOTICE，随包分发本来允许（若将来改 B 再启用）。
 3. ~~**#30** `engines.node`（25.7 只服务 `--pack node` 那支，位置可能写错了）~~ —— **已实测并改正（2026-10-03）**：
@@ -646,7 +745,7 @@
     devDeps 里是**解析锚点**，别随 `packages/gds2js` 的依赖清理顺手摘掉（摘掉就是 SC1010 + SC0001 两条）；
     ② tsdown 的 dts 程序面走根 tsconfig，根 `include` 里的 `packages` 不能删；③ cli-native 的 scratch 用
     「`@gds2js/*` 逐文件相对化」而不是 node_modules（落进 node_modules 会被 scriptc 当包代码收进岛）。
-    生成物口径：227 份 `main.gen.mts`（2026-10-03 写这条时是 216 份）的运行时说明符是 `../../../packages/runtime/src/runtime/index`
+    生成物口径：248 份 `main.gen.mts`（2026-10-03 写这条时是 216 份，2026-10-07 数了一遍是 248 份 = 语料 248 例全部有产物，被分析拦下的那些是抛错的占位文件）的运行时说明符是 `../../../packages/runtime/src/runtime/index`
     （现由 `tools/compile.ts` 的 `GEN_EMIT_OPTS` 显式声明；emitter 已不带仓库布局默认值）；corpus 之外
     （examples/multi、bench/.out）仍走裸名 `gds2js/runtime`，由 workspace 链接解析。
     **收尾口径（2026-10-03）**：全量 `test:scriptc --all` 因耗时（约 2 分钟/例，全量 3.5~5 小时）按用户拍板
@@ -659,9 +758,11 @@
     改 `packages/runtime/src` 内的**发射形状/函数形状**（新增 helper、往函数表塞值、换码点展开写法）先跑「`GDS2JS_SCRIPTC_FILTER=234-string-methods-batch` + `pnpm test:scriptc`」（57s 面探针，`pnpm release` 的 2b 就是它；门迁进 Vitest 后 `tools/scriptc-check.mjs` 已不存在，过滤器只认这个环境变量）再提交。
     新增 runtime 的**导出名**还要先 `pnpm build`：语料里的工程形状用例（带 `project.godot` 那十来个）产物 import 的是 `gds2js/runtime` → `packages/gds2js/dist/runtime.mjs`，那是份打包副本，不重建就报 `__vite_ssr_import_0__.xxx is not a function`（S239 这轮就是这么撞上的）。
 14. 三条观察项（记录，不动）：dist 内容哈希块名（HOME/export 均按 glob/目录读，无门依赖具体块名）；
-    门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）；**两道引擎门不要并发** —— golden 检测在抢 CPU 时把大 golden（`236` 那 445 行）判成超时并误报漂移，2026-10-06 实测一次「并发报漂移、单跑 245/245 全绿」，查漂移那几分钟别顺手跑探头或另一道门。**同一道门第二种误报形态：冷启动段**——2026-10-06 又一轮整跑 1225s（前一轮 522s），把最前面的 001–006 判成超时报漂移，逐格单跑 6/6 干净、每格 1.5–2.2s；因此这一门报了超时先别改 golden，按 `vitest run --project e2e golden-drift -t "00[1-6]-"` 把点名的几格复跑一遍再定。
+    门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）；**两道引擎门不要并发** —— golden 检测在抢 CPU 时把大 golden（`236` 那 445 行）判成超时并误报漂移，2026-10-06 实测一次「并发报漂移、单跑 245/245 全绿」，查漂移那几分钟别顺手跑探头或另一道门。**同一道门第二种误报形态：冷启动段**——2026-10-06 又一轮整跑 1225s（前一轮 522s），把最前面的 001–006 判成超时报漂移，逐格单跑 6/6 干净、每格 1.5–2.2s；因此这一门报了超时先别改 golden，按 `vitest run --project e2e golden-drift -t "00[1-6]-"` 把点名的几格复跑一遍再定。**第三种误报形态是门自己在跑、这边改源码**：2026-10-07 的 `test:cli-native` ④ 报 `✗ 模块树不一致：runtime/rich-ansi.ts 内容不同` —— 那颗格是把 exe 内嵌的 runtime 源码树与工作区逐文件比，而 `pnpm build` 之后exe 就定型了；那一轮在门跑着的时候改了 rich-ansi.ts 的注释，读到的就是「内嵌的那份 ≠ 现在这份」。源码定稿再跑出货门，重跑一次即 20/20（④ 那格实测 128 秒）。
 
 14. **转换族与 `format` 的四个卡点（2026-10-04 记，读数全在 S214 / S219 / S220 / S221 / S225 / S226 / S227）**：① `var_to_str` 的浮点 —— **S230 已经把非浮点那半发出去了（浮点抛 `[var-to-str-float]`），这一格欠的就是剩下的尾数**：出处已定位（`VariantWriter` 的 FLOAT 支 → `rtos_fix` → `String::num_scientific`，`%g` 家族 + 去尾随零 + 「无点无 e 才补 `.0`」；零短路给 `0`、负无穷是 `inf_neg` 而 print 给 `-inf`），还剩两格不被任何固定 precision 解释：最小正规数与次正规数都给 `0.0`、`1e23` 要 16 位而 `7e22` 要 17 位 —— 要的是把 4.6.3 那个 `%g` 的**实际行为**量成一表，别再猜精度。② `str_to_var` 的认与不认**已经量齐**（S214），只欠实现 —— **S231 已发出**（155 格逐格对上；`\U` 吃六位数却量不出越界处理、构造式名字认不出、实参不是 String 三条分别抛 `[str-to-var-shape]` / `[str-to-var-type]` / `[str-to-var-arg]`）。③ `convert` / `type_convert` 标量表已齐（S220），卡在 `convert([], TYPE_INT)` 那条**运行期**拒（引擎文案连函数名都指错了），数组→标量按什么判要先量；**那道前置已解（S233）**：`TYPE_*` 整族 37 支 + `TYPE_MAX` 量清并发出（逐名用 `GDScript.reload` 编内层脚本，避免一个不存在的名字带废整支探针；每支又与 `typeof(样本)` 对了一遍），语料 236 钉了 37 格打印 + 17 格 `typeof(x) == TYPE_X`。这两支剩下的量测在 §1.37 一次跑完（340 格矩阵）：解析期接受集合按第一实参的静态类型分岔，`type_convert` 一支都不拒。④ `format`：**已出货（S232）**，而且 S219 那格「缺省占位符是 `"{0}"`」的读数也纠正了 —— 占位符本身是 `"{_}"`，`{0}` 是键文本渲染出来的样子；键序（字典按插入顺序遍历键）、非字符串键、值转文本（走 print 那套）全量过，只剩 Object 那一支抛 `[format-object]`。**①的一条更正（S228）**：`var_to_str` 那两处「极小值给 `0.0`」的反常已经查到是**字面量解析**掉的，不是 writer 的问题 —— ①里剩下的只有「尾数 16 位还是 17 位」一问，做法是把待测值用**算术**造出来绕开解析层，再看是不是纯 `%.*g` 舍入。**共同前提**：任务 #18（AOT 那 ~140 倍的装箱账）要的是单态/去装箱的设计拍板，不由代码侧决定，仍未定。
+
+15. **`run --watch` 在原生目标上看不见「mtime 变了、字节数没变」的保存（2026-10-07 记，§1.66，未动实现）**：`gdSignature` 是 `路径:mtime:大小` 三段，node 侧四格延迟扫（0/6/12/30s）全部重跑，原生 exe 同一把扫法有两格不重跑，而父侧 `statSync` 每次都报出真实变了的 mtime —— 也就是失灵点在 scriptc 那一侧的读数或轮询里，**没量清就不改实现**。要动先做探头：一份只用 `node:fs` 的小 scriptc 产物，对同一个文件反复 `statSync().mtimeMs` 并与 node 同印一份，两侧数字对上了才知道该给摘要加哪一维（内容指纹 / 首块尺寸 / ctime）。门这边已经先把不确定性拿掉：`⑨b` 两次保存改成不等长（尺寸维必变），并等 `监听` + 首跑都出现再动手。
 
 ---
 

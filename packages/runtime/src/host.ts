@@ -1,27 +1,62 @@
 import { Signal } from "./runtime/signal";
 import { GdScriptObject } from "./runtime/object";
 import type { Variant } from "./runtime/tags";
-import { truthyOf } from "./runtime/values";
+import { richAnsi } from "./runtime/rich-ansi";
+import { showArgsSep, truthyOf } from "./runtime/values";
 
 let out: string[] = [];
+let pending = "";
+
+function addLine(text: string): void {
+  out.push(pending + text);
+  pending = "";
+}
 
 /** 记录一次 print 的输出。签名收 `string[]` 而不是 `unknown[]`：后者在静态编译目标上没有表示形式。 */
 export function print(...args: string[]): void {
-  out.push(args.join(""));
+  addLine(args.join(""));
+}
+
+export function printJoined(sep: string, args: Variant[]): void {
+  addLine(showArgsSep(args, sep));
+}
+
+export function printRaw(args: Variant[]): void {
+  if (args.length === 0) return;
+  pending += showArgsSep(args, "");
+}
+
+export function printErr(args: Variant[]): void {
+  process.stderr.write(showArgsSep(args, "") + "\n");
+}
+
+export function printVerbose(_args: Variant[]): void {}
+
+export function printRich(args: Variant[]): void {
+  addLine(richAnsi(showArgsSep(args, "")));
+}
+
+export function printDebug(args: Variant[], file: string, line: number, fn: string): void {
+  addLine(showArgsSep(args, ""));
+  addLine(`   At: ${file}:${String(line)}:${fn}()`);
 }
 
 export function flush(): void {
-  process.stdout.write(out.join("\n") + (out.length > 0 ? "\n" : ""));
+  if (out.length > 0) process.stdout.write(out.join("\n") + "\n");
+  if (pending !== "") process.stdout.write(pending);
   out = [];
+  pending = "";
 }
 
 export function captured(): string {
-  return out.join("\n");
+  if (pending === "") return out.join("\n");
+  return out.join("\n") + (out.length > 0 ? "\n" : "") + pending;
 }
 
 /** 用例之间必须清干净：上一个用例若中途抛错，没 flush 的输出会串到下一个 */
 export function resetOut(): void {
   out = [];
+  pending = "";
 }
 
 class Timer {

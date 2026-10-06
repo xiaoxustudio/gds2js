@@ -222,7 +222,7 @@ async function gateOne(id: string): Promise<Row> {
     if (!row.ran) {
       row.note = `exe 退出 ${String(run.status)}：${run.stderr.trim().split("\n")[0]?.slice(0, 140) ?? ""}`;
     } else {
-      const got = normalize(run.stdout, caseScript(id));
+      const got = normalize(run.out, caseScript(id));
       const golden = readGolden(id);
       row.exact = got === golden;
       if (!row.exact) {

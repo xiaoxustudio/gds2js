@@ -6,6 +6,8 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
   gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame,
   gTypeString, gErrorString, gTypeExists,
+  gWeakref, gInstanceFromId, gIsInstanceValid, gIsInstanceIdValid, gRidFromInt64, gRidAllocateId,
+  gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
@@ -14,6 +16,8 @@ import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { isWeakRefBox } from "./identity";
+import { asRid } from "./rid";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -308,6 +312,28 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("signal-method", `Invalid call. Nonexistent function '${name}' in base 'Signal'.`);
       }
       throw new UnsupportedError("signal-method", `Signal.${name}() 未实现`);
+    }
+
+    const ridv = asRid(obj);
+    if (ridv !== null) {
+      if (name === "get_id") {
+        if (args.length !== 0) {
+          throw new GodotRuntimeError("arity", `Too many arguments for "get_id()" call. Expected at most 0 but received ${String(args.length)}.`);
+        }
+        return V.int(ridv.id);
+      }
+      // 实测 RID 上只有 get_id()：别的名给运行期那句 Nonexistent function
+      throw new GodotRuntimeError("rid-method", `Invalid call. Nonexistent function '${name}' in base 'RID'.`);
+    }
+
+    if (isWeakRefBox(inner)) {
+      if (name !== "get_ref") {
+        throw new UnsupportedError("weakref-method", `WeakRef.${name}() 没量过（只发得出实测的 get_ref()）`);
+      }
+      if (args.length !== 0) {
+        throw new GodotRuntimeError("arity", `get_ref() 不接受参数（收到 ${args.length} 个）`);
+      }
+      return inner.target === null ? V.nil() : inner.target;
     }
 
     if (isCallableBox(inner)) {
@@ -1271,6 +1297,20 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   posmod: (a) => gPosmod(ga(a, 0), ga(a, 1)),
   pow: (a) => gPow(ga(a, 0), ga(a, 1)),
   rad_to_deg: (a) => gRadToDeg(ga(a, 0)),
+  weakref: (a) => gWeakref(ga(a, 0)),
+  rid_from_int64: (a) => gRidFromInt64(ga(a, 0)),
+  rid_allocate_id: () => gRidAllocateId(),
+  instance_from_id: (a) => gInstanceFromId(ga(a, 0)),
+  is_instance_valid: (a) => gIsInstanceValid(ga(a, 0)),
+  is_instance_id_valid: (a) => gIsInstanceIdValid(ga(a, 0)),
+  randi: () => gRandi(),
+  randf: () => gRandf(),
+  randomize: () => gRandomize(),
+  seed: (a) => gSeed(ga(a, 0)),
+  rand_from_seed: (a) => gRandFromSeed(ga(a, 0)),
+  randi_range: (a) => gRandiRange(ga(a, 0), ga(a, 1)),
+  randf_range: (a) => gRandfRange(ga(a, 0), ga(a, 1)),
+  randfn: (a) => gRandfn(ga(a, 0), ga(a, 1)),
   range: (a) => V.array(gRange(a)),
   remap: (a) => gRemap(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
   round: (a) => gRound(ga(a, 0), "auto"),

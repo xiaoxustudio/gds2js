@@ -36,11 +36,13 @@ describe("runtime/native-class · 引擎类值", () => {
     })(), "3|2");
   });
 
-  it("243 · 带号的打印与没建模的成员面各自响亮拒", async () => {
-    eq("243", "打印复现不了那个号 → [show-native-class]", code(() => show(nativeClass("Node"))), "[show-native-class]");
-    eq("243", "str() 同一支（走的还是 show）", code(() => show(nativeClass("Resource"))), "[show-native-class]");
+  it("243 · 带号的打印发得出形状，没建模的成员面仍响亮拒", async () => {
+    // 号是我们自己按分配顺序发的，语料两侧都先掩成 `<类名#号>` 再比（S263）；形状与身份关系照样钉得住。
+    const mask = (s: string): string => s.replace(/#-?\d+>/, "#号>");
+    eq("243", "引擎类值印 <GDScriptNativeClass#号>", mask(show(nativeClass("Node"))), "<GDScriptNativeClass#号>");
+    eq("243", "同名两次是同一个号（`Node == Node` 那条身份的另一半）", `${mask(show(nativeClass("Resource")))}|${String(show(nativeClass("Node")) === show(nativeClass("Node")))}`, "<GDScriptNativeClass#号>|true");
     eq("243", ".new() 不发 → [native-class-member]", code(() => method(nativeClass("Node"), "new", [])), "[native-class-member]");
     eq("243", "属性面同样拒（名字进那句文案）", code(() => attribute(nativeClass("Label"), "text")), "[native-class-member]");
-    eq("243", "var_to_str 那一支压根没量，走它自己那条拒", code(() => show(V.array(GArray.of([nativeClass("Node")])))), "[show-native-class]");
+    eq("243", "容器里也走得通（var_to_str 那一支仍没量，走它自己那条拒）", mask(show(V.array(GArray.of([nativeClass("Node")])))), "[<GDScriptNativeClass#号>]");
   });
 });

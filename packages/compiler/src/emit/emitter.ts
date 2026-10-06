@@ -108,7 +108,21 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   move_toward: [3, 3],
   pingpong: [2, 2],
   posmod: [2, 2],
+  rand_from_seed: [1, 1],
+  randf: [0, 0],
+  randf_range: [2, 2],
+  randfn: [2, 2],
+  randi: [0, 0],
+  randi_range: [2, 2],
+  randomize: [0, 0],
+  seed: [1, 1],
   remap: [5, 5],
+  instance_from_id: [1, 1],
+  is_instance_id_valid: [1, 1],
+  is_instance_valid: [1, 1],
+  weakref: [1, 1],
+  rid_from_int64: [1, 1],
+  rid_allocate_id: [0, 0],
   rotate_toward: [3, 3],
   sign: [1, 1],
   smoothstep: [3, 3],
@@ -180,6 +194,20 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
+  is_instance_valid: (a) => `rt.gIsInstanceValid(${a[0]})`,
+  is_instance_id_valid: (a) => `rt.gIsInstanceIdValid(${a[0]})`,
+  instance_from_id: (a) => `rt.gInstanceFromId(${a[0]})`,
+  weakref: (a) => `rt.gWeakref(${a[0]})`,
+  rid_from_int64: (a) => `rt.gRidFromInt64(${a[0]})`,
+  rid_allocate_id: () => "rt.gRidAllocateId()",
+  randi: () => "rt.gRandi()",
+  randf: () => "rt.gRandf()",
+  randomize: () => "rt.gRandomize()",
+  seed: (a) => `rt.gSeed(${a[0]})`,
+  rand_from_seed: (a) => `rt.gRandFromSeed(${a[0]})`,
+  randi_range: (a) => `rt.gRandiRange(${a[0]}, ${a[1]})`,
+  randf_range: (a) => `rt.gRandfRange(${a[0]}, ${a[1]})`,
+  randfn: (a) => `rt.gRandfn(${a[0]}, ${a[1]})`,
   sign: (a) => `rt.gSign(${a[0]})`,
   signi: (a) => `rt.gSignI(${a[0]})`,
   signf: (a) => `rt.gSignF(${a[0]})`,
@@ -265,9 +293,30 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
-/** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加 `print` / `load` / `preload`。
+const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
+  print_stack: "回溯帧的打印带指针号与行号，复现不了",
+  push_error: "实测走 stderr 的四行里有 `at: push_error (core/variant/variant_utility.cpp:1024)` 与 GDScript backtrace",
+  push_warning: "实测走 stderr 的四行里有 `at: push_warning (core/variant/variant_utility.cpp:1034)` 与 GDScript backtrace",
+};
+
+export const HOST_PRINT_NAMES: readonly string[] = [
+  "print",
+  "printJoined",
+  "printRaw",
+  "printErr",
+  "printVerbose",
+  "printRich",
+  "printDebug",
+];
+
+/** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加打印一族与 `load` / `preload`。
  *  与 `GLOBAL_TODO_FUNCTIONS`（Godot 有、我们拒）相对，两份都是量出来的，摸不得。 */
-export const GLOBAL_IMPLEMENTED: Set<string> = new Set([...Object.keys(BUILTIN), "print", "load", "preload"]);
+export const GLOBAL_IMPLEMENTED: Set<string> = new Set([
+  ...Object.keys(BUILTIN),
+  ...HOST_PRINT_NAMES,
+  "load",
+  "preload",
+]);
 
 /** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
@@ -286,6 +335,11 @@ let LOADS = new Map<string, string>();
 let IN_INIT = false;
 let INIT_HAS_BASE = false;
 let CURRENT_FUNC = "";
+/** print_debug 的 `At:` 里那个 `<函数>()`：lambda 体内发射时套一层，实测那格引擎打的是 `<anonymous lambda>()`（`tmp/probe-pdebug/d-lambda.gd`）。
+ *  不动 `CURRENT_FUNC` 是因为它还管着 `super()` 的发射，两者要的形状不是一回事。 */
+let LAMBDA_DEPTH = 0;
+/** 本模块在 `At:` 那一行里印的路径：工程模式是 res 路径（与引擎同一串），单文件模式退到输入路径。 */
+let DEBUG_FILE = "";
 /** `_init` 发成协议形状的方法（true）还是 JS constructor（false）：只有链上有脚本继承边的类才需要协议形状。 */
 let INIT_AS_METHOD = false;
 /** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
@@ -332,7 +386,7 @@ function standaloneInlineHeader(body: string): string {
     .map((l) => (l.length ? `  ${l}` : l))
     .join("\n");
   return [
-    "const { rt, print, SceneTree } = (() => {",
+    `const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree } = (() => {`,
     "  const module = { exports: {} };",
     "  const exports = module.exports;",
     indented,
@@ -347,6 +401,7 @@ export function emitModule(m: Module, opts: EmitOptions): string {
 
 export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   MAP_ACTIVE = opts.sourcemap === true;
+  LAMBDA_DEPTH = 0;
   LINE_MAPPINGS = [];
   const runtimeImport = opts.runtimeImport;
   const hostImport = opts.hostImport;
@@ -354,6 +409,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const className = opts.className ?? "Main";
   const classRefs = opts.classRefs ?? [];
   const resPath = opts.resPath;
+  DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -417,11 +473,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   } else if (runtimeMode === "local") {
     const p = opts.standaloneRequirePath ?? "./gds2js-standalone.cjs";
     out.push(`import { createRequire } from "node:module";`);
-    out.push(`const { rt, print, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
+    out.push(`const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
   } else {
     out.push(`import * as rt from "${runtimeImport}";`);
     if (hostImport) {
-      const hostNames = baseClass.kind === "host" ? ["print", "SceneTree"] : ["print"];
+      const hostNames = baseClass.kind === "host" ? [...HOST_PRINT_NAMES, "SceneTree"] : [...HOST_PRINT_NAMES];
       out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
     }
   }
@@ -2979,7 +3035,14 @@ function emitExprVar(e: Expr): string {
       if (e.params.some((p) => p.default !== null)) {
         throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
       }
-      const body = e.body.flatMap((st) => emitStmt(st, false).map((l) => `      ${l}`));
+      const body = e.body.flatMap((st) => {
+        LAMBDA_DEPTH += 1;
+        try {
+          return emitStmt(st, false).map((l) => `      ${l}`);
+        } finally {
+          LAMBDA_DEPTH -= 1;
+        }
+      });
       // 盒子里的式子统一收一个数组，所以按位置把形参绑成同名 const，并把声明形参数一起交给盒子。
       const bind = e.params.map((p, i) => `      const ${p.name} = __a[${i}] as rt.Variant;`);
       return [
@@ -3172,6 +3235,18 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
   if (e.callee.kind === "ident") {
     const name = e.callee.name;
     if (name === "print") return `print(rt.showArgs([${args.join(", ")}]))`;
+    if (name === "prints") return `printJoined(" ", [${args.join(", ")}])`;
+    if (name === "printt") return `printJoined("\\t", [${args.join(", ")}])`;
+    if (name === "printraw") return `printRaw([${args.join(", ")}])`;
+    if (name === "printerr") return `printErr([${args.join(", ")}])`;
+    if (name === "print_verbose") return `printVerbose([${args.join(", ")}])`;
+    if (name === "print_rich") return `printRich([${args.join(", ")}])`;
+    if (name === "print_debug") {
+      // 实测两句都走 stdout，第二句的 `()` 前是**调用点所在函数**的名：lambda 里是 `<anonymous lambda>`，
+      // 具名函数与静态都只写名字本身（不带类前缀），读数 `tmp/probe-pdebug/{d-lambda,d_static,d_inner}.gd`
+      const fnLabel = LAMBDA_DEPTH > 0 ? "<anonymous lambda>" : CURRENT_FUNC;
+      return `printDebug([${args.join(", ")}], ${JSON.stringify(DEBUG_FILE)}, ${String(e.loc.line)}, ${JSON.stringify(fnLabel)})`;
+    }
 
     if (name === "preload") {
       const a = e.args[0];
@@ -3208,7 +3283,11 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       return `super.${CURRENT_FUNC}(${args.join(", ")})`;
     }
     if (BUILTIN_TODO.has(name)) {
-      throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
+      const why = BUILTIN_TODO_WHY[name];
+      throw new UnsupportedError(
+        "emit-builtin",
+        why ? `内置函数 ${name}() 不发：${why}` : `内置函数 ${name}() 还没实现`,
+      );
     }
     if (STATIC_FUNCS.has(name)) return `${CURRENT_CLASS}.${name}(${args.join(", ")})`;
     if (!callableInScope(name)) {

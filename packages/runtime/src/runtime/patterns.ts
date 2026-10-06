@@ -1,4 +1,5 @@
 import { UnsupportedError } from "./errors";
+import { ENGINE_CLASS_NAMES } from "./engine-classes";
 import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
 import { Signal } from "./signal";
 import { GdNativeClass } from "./native-class";
@@ -11,6 +12,7 @@ import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
+import { GdRid } from "./rid";
 
 export type Pat =
   | { k: "wild" }
@@ -122,13 +124,13 @@ function instanceClassNames(base: string | null): string[] | null {
   return null;
 }
 
-/** 三类「真 Object」各有各的表：脚本实例、脚本类值（m06 / n08）、引擎类值（n07）。 */
+/** 一个值是不是某引擎类名的实例：按四类形状各查各的表。 */
 function engineClassIs(v: Variant, name: string): boolean | null {
   if (name === "Callable") return v.t === Tag.OBJECT && isCallableBox(v.v);
-  if (PROBED_CLASS_NAMES.indexOf(name) < 0) return null;
   if (v.t !== Tag.OBJECT) return false;
   const inner = v.v;
-  if (inner instanceof Signal) return null;
+  if (inner instanceof Signal) return false;
+  if (PROBED_CLASS_NAMES.indexOf(name) < 0) return null;
   if (inner instanceof GdScriptObject) {
     const names = instanceClassNames(nativeBaseOf(inner));
     return names === null ? null : names.indexOf(name) >= 0;
@@ -145,7 +147,7 @@ export function isType(v: Variant, name: string): Variant {
   if (PROBED_CLASS_NAMES.indexOf(name) >= 0 || name === "Callable") {
     const e = engineClassIs(v, name);
     if (e !== null) return V.bool(e);
-    throw new UnsupportedError("is-type", `is ${name} 这一支没量过（探头 tmp/probe-is-class/ 只量过 ${PROBED_CLASS_NAMES.join(" / ")} 与 Callable）`);
+    throw new UnsupportedError("is-type", `is ${name} 这一支没量过（表内那 7 支的形状、信号值那 16 格都量过 —— tmp/probe-is-class/ 与 tmp/probe-is-unprobed/is.log）`);
   }
   const t = builtinTag(name);
   if (t !== undefined) return V.bool(v.t === t);
@@ -155,6 +157,7 @@ export function isType(v: Variant, name: string): Variant {
   if (desc !== undefined) {
     return V.bool(objIs(v, desc));
   }
+  if (ENGINE_CLASS_NAMES.has(name)) return V.bool(false);
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
 
@@ -202,6 +205,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
+  if (v.t === Tag.OBJECT && v.v instanceof GdRid) return V.int(23);
   if (v.t === Tag.OBJECT && isCallableBox(v.v)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }

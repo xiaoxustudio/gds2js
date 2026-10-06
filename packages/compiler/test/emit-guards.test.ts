@@ -49,6 +49,159 @@ describe("全局拒答清单仍响亮拒", () => {
   });
 });
 
+// ── ①b 打印一族：发的五支各走一个宿主名，拒的五支要把实测到的缘由说出口 ──────
+describe("打印一族的发射与拒答", () => {
+  const msg = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+
+  it("prints / printt / printraw / printerr / print_verbose / print_rich 发成宿主的六支", async () => {
+    const code = await emitted(BODY(['prints("a", 1)', "quit()"]));
+    expect(code, "宿主那条 import 要带上六支的名字").toContain(
+      'import { print, printJoined, printRaw, printErr, printVerbose, printRich, SceneTree } from "host";',
+    );
+    expect(code, "prints 是一个空格").toContain('printJoined(" ", [');
+    expect(await emitted(BODY(['printt("a", 1)', "quit()"])), "printt 是制表符").toContain('printJoined("\\t", [');
+    expect(await emitted(BODY(['printraw("a")', "quit()"])), "printraw 走 printRaw").toContain("printRaw([");
+    expect(await emitted(BODY(['printerr("a")', "quit()"])), "printerr 走 printErr").toContain("printErr([");
+    expect(await emitted(BODY(['print_verbose("a")', "quit()"])), "print_verbose 走 printVerbose").toContain(
+      "printVerbose([",
+    );
+    expect(await emitted(BODY(['print_rich("[b]x[/b]")', "quit()"])), "print_rich 走 printRich").toContain("printRich([");
+    expect(await classify(PRINT('prints("a")'), "ok"), "prints 单实参编得过").toBe("ok");
+    expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
+  });
+
+  it("拒的四支把缘由写在错文里", async () => {
+    for (const [name, want] of [
+      ["print_debug", "At:"],
+      ["print_stack", "指针号"],
+      ["push_error", "variant_utility.cpp:1024"],
+      ["push_warning", "variant_utility.cpp:1034"],
+    ] as Array<[string, string]>) {
+      expect(await classify(PRINT(`${name}()`), "ok"), `${name} 该拒`).toBe("emit-builtin");
+      expect(await msg(PRINT(`${name}()`)), `${name} 的错文`).toContain(want);
+    }
+  });
+});
+
+// ── ①c 随机族：八支发成 rt.g*，元数闸门那八句是 4.6.3 一支一名量出来的（S261） ──────
+describe("随机族的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["randi(1)", 'Too many arguments for "randi()" call. Expected at most 0 but received 1.'],
+    ["randf(2)", 'Too many arguments for "randf()" call. Expected at most 0 but received 1.'],
+    ["randomize(1)", 'Too many arguments for "randomize()" call. Expected at most 0 but received 1.'],
+    ["seed()", 'Too few arguments for "seed()" call. Expected at least 1 but received 0.'],
+    ["rand_from_seed()", 'Too few arguments for "rand_from_seed()" call. Expected at least 1 but received 0.'],
+    ["randfn(1)", 'Too few arguments for "randfn()" call. Expected at least 2 but received 1.'],
+    ["randi_range(1, 2, 3)", 'Too many arguments for "randi_range()" call. Expected at most 2 but received 3.'],
+    ["randf_range(1)", 'Too few arguments for "randf_range()" call. Expected at least 2 but received 1.'],
+  ];
+
+  it("八支各发成自己的 rt.g*", async () => {
+    expect(await emitted(BODY(["seed(7)", "randi()", "randf()", "quit()"]))).toContain("rt.gSeed(");
+    expect(await emitted(BODY(["randi()", "quit()"]))).toContain("rt.gRandi()");
+    expect(await emitted(BODY(["randf()", "quit()"]))).toContain("rt.gRandf()");
+    expect(await emitted(BODY(["randomize()", "quit()"]))).toContain("rt.gRandomize()");
+    expect(await emitted(BODY(["rand_from_seed(1)", "quit()"]))).toContain("rt.gRandFromSeed(");
+    expect(await emitted(BODY(["randi_range(1, 6)", "quit()"]))).toContain("rt.gRandiRange(");
+    expect(await emitted(BODY(["randf_range(1.0, 2.0)", "quit()"]))).toContain("rt.gRandfRange(");
+    expect(await emitted(BODY(["randfn(0.0, 1.0)", "quit()"]))).toContain("rt.gRandfn(");
+    expect(await classify(PRINT("randi()"), "ok"), "randi 零实参编得过").toBe("ok");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①d 身份族：四支发成 rt.g*，元数闸门那八句是 4.6.3 一支一名量出来的（S263，探头 tmp/probe-ids-arity/arity.log） ──
+describe("身份族的发射与元数闸门", () => {
+  const body = (stmts: string[]): string =>
+    `extends SceneTree\n\nfunc _initialize():\n${stmts.map((s) => `\t${s}`).join("\n")}\n`;
+  const DECL = ["var a = 1", "var i = 1"];
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["weakref()", 'Too few arguments for "weakref()" call. Expected at least 1 but received 0.'],
+    ["weakref(a, a)", 'Too many arguments for "weakref()" call. Expected at most 1 but received 2.'],
+    ["instance_from_id()", 'Too few arguments for "instance_from_id()" call. Expected at least 1 but received 0.'],
+    ["instance_from_id(i, 1)", 'Too many arguments for "instance_from_id()" call. Expected at most 1 but received 2.'],
+    ["is_instance_valid()", 'Too few arguments for "is_instance_valid()" call. Expected at least 1 but received 0.'],
+    ["is_instance_valid(a, a)", 'Too many arguments for "is_instance_valid()" call. Expected at most 1 but received 2.'],
+    ["is_instance_id_valid()", 'Too few arguments for "is_instance_id_valid()" call. Expected at least 1 but received 0.'],
+    ["is_instance_id_valid(1, 2)", 'Too many arguments for "is_instance_id_valid()" call. Expected at most 1 but received 2.'],
+  ];
+
+  it("四支各发成自己的 rt.g*", async () => {
+    expect(await emitted(body([...DECL, "weakref(a)", "quit()"]))).toContain("rt.gWeakref(");
+    expect(await emitted(body([...DECL, "instance_from_id(i)", "quit()"]))).toContain("rt.gInstanceFromId(");
+    expect(await emitted(body([...DECL, "is_instance_valid(a)", "quit()"]))).toContain("rt.gIsInstanceValid(");
+    expect(await emitted(body([...DECL, "is_instance_id_valid(i)", "quit()"]))).toContain("rt.gIsInstanceIdValid(");
+    expect(await classify(body([...DECL, "print(weakref(a))", "quit()"]), "ok"), "weakref 一支该编得过").toBe("ok");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      const src = body([...DECL, call, "quit()"]);
+      expect(await classify(src, "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(src), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①e RID 族：两支发成 rt.g*，元数三句是 4.6.3 一支一名量出来的（S264，探头 tmp/probe-rid2/*.log、tmp/probe-rid3/tm.gd） ──
+describe("RID 族的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["rid_from_int64()", 'Too few arguments for "rid_from_int64()" call. Expected at least 1 but received 0.'],
+    ["rid_from_int64(1, 2)", 'Too many arguments for "rid_from_int64()" call. Expected at most 1 but received 2.'],
+    ["rid_allocate_id(1)", 'Too many arguments for "rid_allocate_id()" call. Expected at most 0 but received 1.'],
+  ];
+
+  it("两支各发成自己的 rt.g*", async () => {
+    expect(await emitted(BODY(["rid_from_int64(5)", "quit()"]))).toContain("rt.gRidFromInt64(");
+    expect(await emitted(BODY(["rid_allocate_id()", "quit()"]))).toContain("rt.gRidAllocateId()");
+    expect(await classify(PRINT("rid_from_int64(5)"), "ok"), "一支实参该编得过").toBe("ok");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

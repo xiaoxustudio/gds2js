@@ -1,0 +1,16 @@
+one[1, { "a": 2 }]3.0
+   At: <case>/main.gd:20:_initialize()
+   At: <case>/main.gd:21:_initialize()
+stdout between
+leaf
+   At: <case>/main.gd:14:leaf()
+in _init
+   At: <case>/main.gd:11:_init()
+in m2
+   At: <case>/main.gd:5:m()
+in static
+   At: <case>/main.gd:8:sf()
+in lambda
+   At: <case>/main.gd:28:<anonymous lambda>()
+last<null>true
+   At: <case>/main.gd:30:_initialize()

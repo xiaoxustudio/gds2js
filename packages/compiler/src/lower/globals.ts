@@ -4,28 +4,11 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
 /**
  * 实测「Godot 4.6.3 有这个名字、能过解析，但我们还没实现」的全局函数（一支脚本一个名字量出来的，
  * 不存在的会给 `Function "x()" not found in base self.`，那批不在这里）。
- * 随机数一族不进 `test:diff`：同一个 seed 的序列要复刻得先逆引擎的 PCG；`weakref` / `instance_from_id`
- * / `get_stack` 的打印带指针号，属「复现不了的打印」那一族。
+ * 带实例号的那一族（`weakref` / `instance_from_id` / `is_instance_*`）已按 S263 的合成号口径发出，不在这张清单里。
  */
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
-  "weakref",
-  "instance_from_id",
   "get_stack",
-  "print_debug",
   "print_stack",
-  "seed",
-  "randomize",
-  "randi",
-  "randf",
-  "randi_range",
-  "randf_range",
-  "randfn",
-  // 4.6.3 实测「有这个名字、能过解析」的打印一族（`prints` 参数间一个空格、`printt` 一个制表符、`print_rich` 直接拼、
-  // `print_verbose` 在 headless 下不出声、`push_warning` 的 `WARNING:` 那行实测走 stderr）：我们没实现，拒的措辞得是「我们拒」而不是「Godot 也没有」。
-  "prints",
-  "printt",
-  "print_rich",
-  "print_verbose",
   "push_error",
   "push_warning",
   // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。
@@ -35,13 +18,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "dict_to_inst",
   "inst_to_dict",
   "is_instance_of",
-  "is_instance_id_valid",
-  "is_instance_valid",
-  "printerr",
-  "printraw",
-  "rand_from_seed",
-  "rid_allocate_id",
-  "rid_from_int64",
   "var_to_bytes",
   "var_to_bytes_with_objects",
 ]);

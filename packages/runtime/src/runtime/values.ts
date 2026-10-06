@@ -14,7 +14,9 @@ import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import { GdNativeClass } from "./native-class";
+import { isNullRefValue, isWeakRefBox, NULL_OBJECT } from "./identity";
 import type { GdIdentified } from "./identity";
+import { asRid, ridText } from "./rid";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -93,6 +95,8 @@ function keyOfIn(v: Variant, depth: number): string {
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
+      const ridKey = asRid(v);
+      if (ridKey !== null) return "r:" + String(ridKey.id);
       if (isCallable(v)) return callableKey(v.v as CallableBox);
       if (!(v.v instanceof GBytes)) {
         const id = (v.v as GdIdentified).gdObjectId;
@@ -1310,6 +1314,13 @@ export function registerScriptPropsHook(f: (inner: object) => ScriptPropFace | n
   scriptPropsHook = f;
 }
 
+/** 脚本实例的打印形状（`<原生基类名#身份号>`）：号在本模块发，基类名只有 object.ts 知道，所以走同一套注入。 */
+let objectLabelHook: ((inner: object) => string | null) | null = null;
+
+export function registerObjectLabelHook(f: (inner: object) => string | null): void {
+  objectLabelHook = f;
+}
+
 /**
  * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
  * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
@@ -1535,6 +1546,9 @@ export function varToStr(v: Variant): string {
         }
         return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
       }
+      // RID 与 print / str 同一条式子：实测 var_to_str(rid_from_int64(5)) 给 `RID(5)`（语料 261 的 r05）
+      const ridV = asRid(v);
+      if (ridV !== null) return ridText(ridV);
       // Callable 五支实测都印成 `Callable()`（方法、静态、lambda、空 Callable、全局的、绑过实参的都一样）
       if (isCallable(v)) return "Callable()";
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
@@ -1876,6 +1890,8 @@ export function strCEscape(s: string): string {
   return out;
 }
 
+/** int64 的下界幅值：`%d` 收越界与非有限的 float 时，引擎一律给 -9223372036854775808（w04–w06）。 */
+const TWO_63_B = 9223372036854775808;
 const INT64_MAX_B = 9223372036854775807n;
 
 /** 只认前置的 `-`（`+101` 实测整串判 0）与可选的 `0b` 前缀；其余任何非 01 字符都把整串判成 0，超出 int64 饱和到 MAX（符号后加）。 */
@@ -2039,9 +2055,19 @@ export function strFormat(fmt: string, args: Variant[]): string {
             body = Math.abs(p).toString();
           }
         } else {
-          const v = Math.trunc(fmtNum(a, sp));
-          neg = v < 0;
-          body = Math.abs(v).toString();
+          // float 走 C 那句 `(int64)trunc(v)`：实测 1.5 → 1、-1.5 → -1，而 ±inf / nan / 1e30 这三种越界一律给
+          // -9223372036854775808（x64 的 integer-indeterminate 结果，w04–w06 三格同值）。
+          const v = fmtNum(a, sp);
+          const t = Number.isFinite(v) ? Math.trunc(v) : Number.NaN;
+          const inRange = Number.isFinite(t) && t >= -TWO_63_B && t < TWO_63_B;
+          if (!inRange) {
+            neg = true;
+            body = "9223372036854775808";
+          } else {
+            const b = BigInt(t);
+            neg = b < 0n;
+            body = (neg ? -b : b).toString();
+          }
         }
         const sign = neg ? "-" : sp.flags.includes("+") ? "+" : "";
         out += padFmt(body, sign, sp);
@@ -2049,8 +2075,19 @@ export function strFormat(fmt: string, args: Variant[]): string {
       }
       case "f": {
         const v = fmtNum(a, sp);
+        if (!Number.isFinite(v)) {
+          // 实测 ±inf 印 `inf` / `-inf`、nan 印 `nan`（与 `%s` 那三个词同形），宽度按空格补 ——
+          // `0` 那旗标对这三个词不起作用（`%09.1f` 对 INF 给六空格 + inf，w02），对普通数才起（w03）
+          const words = sp.flags.replace("0", "");
+          const body = Number.isNaN(v) ? "nan" : "inf";
+          const sign = Number.isNaN(v) ? "" : v < 0 ? "-" : sp.flags.includes("+") ? "+" : "";
+          out += padFmt(body, sign, { ...sp, flags: words });
+          break;
+        }
         const body = Math.abs(v).toFixed(sp.prec ?? 6);
-        out += padFmt(body, v < 0 ? "-" : sp.flags.includes("+") ? "+" : "", sp);
+        // -0 的号要留着：实测 `%.1f` 给 `-0.0`、`%f` 给 `-0.000000`，而 `v < 0` 对 -0 是假
+        const neg = Object.is(v, -0) || v < 0;
+        out += padFmt(body, neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
         break;
       }
       case "x":
@@ -2281,11 +2318,19 @@ export const COMPARE_DEPTH = 52;
 
 registerPackStringifier((v) => show(v));
 
+/** 按 `sep` 把实参逐个 show 后拼起来。 */
+export function showArgsSep(args: Variant[], sep: string): string {
+  let out = "";
+  for (let i = 0; i < args.length; i++) {
+    if (i > 0) out += sep;
+    out += show(args[i] as Variant);
+  }
+  return out;
+}
+
 /** `print(a, b, c)` 的口径：**先把所有实参求值完，才开始逐个转字符串**，所以整串实参交到这里按顺序 show、用空串拼。 */
 export function showArgs(args: Variant[]): string {
-  let out = "";
-  for (const a of args) out += show(a);
-  return out;
+  return showArgsSep(args, "");
 }
 
 /** 顶层 print：字符串不加引号 */
@@ -2335,10 +2380,14 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
-      // 引擎类值（`var k = Node`）实测打 `<GDScriptNativeClass#一个号>` —— 号是进程内的，复现不了，只能拒
-      if (inner instanceof GdNativeClass) {
-        throw new UnsupportedError("show-native-class", `print 复现不了引擎类 ${inner.className} 的打印（实测带进程内的号：<GDScriptNativeClass#…>）`);
-      }
+      // 引擎类值与 weakref 都带进程内的号，形状照实测发；号在语料两侧都先掩掉再比。
+      const innerRid = asRid(v);
+      if (innerRid !== null) return ridText(innerRid);
+      if (isNullRefValue(inner)) return "<Object#null>";
+      if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
+      if (isWeakRefBox(inner)) return `<WeakRef#${String(inner.gdObjectId)}>`;
+      const shape = objectLabelHook === null ? null : objectLabelHook(inner as object);
+      if (shape !== null) return shape;
       // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null
       if (isCallable(v)) {
         const label = callableLabel(inner as CallableBox);
@@ -2376,11 +2425,12 @@ export function valueTypeName(x: Variant): string {
   if (asVec2i(x) !== null) return "Vector2i";
   if (asVec3i(x) !== null) return "Vector3i";
   if (asColor(x) !== null) return "Color";
+  if (asRid(x) !== null) return "RID";
   if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }
 
-export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
+export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const ta = a.t;
   const tb = b.t;
   const a2 = asVec2(a);
@@ -2393,6 +2443,16 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   const bi3 = asVec3i(b);
   const ac = asColor(a);
   const bc = asColor(b);
+  const ar = asRid(a);
+  const br = asRid(b);
+  // RID 的等式按号走；与 null 比给假（实测 n01 / h26），与其他一切比是运行期那一句（int / float / bool / String / StringName / Array / Dictionary / Vector2 / Color / Object / Callable 各量过一格）
+  if (ar !== null || br !== null) {
+    if (ar !== null && br !== null) return String(ar.id) === String(br.id);
+    const ridOther: Variant = ar !== null ? b : a;
+    if (ridOther.t === Tag.NIL) return false;
+    // 两句都量过：`==` 与 `!=` 的原文各一格（y04 / ne_int），运算符名就按写的那一个发
+    throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+  }
   if (
     a2 !== null ||
     b2 !== null ||
@@ -2433,6 +2493,14 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     if (other.t === Tag.INT) {
       throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
     }
+  }
+  // 空对象引用（`instance_from_id` 找不到号给的那一个）与 null 相等，与其他一切都不等（实测 q01–q04）
+  const an = a.t === Tag.OBJECT && isNullRefValue(a.v);
+  const bn = b.t === Tag.OBJECT && isNullRefValue(b.v);
+  if (an || bn) {
+    if (an && bn) return true;
+    const other = an ? b : a;
+    return other.t === Tag.NIL;
   }
   if (ta !== tb) return false;
   switch (ta) {
