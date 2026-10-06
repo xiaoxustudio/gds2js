@@ -444,6 +444,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   }
   const moduleFields = fieldTypesLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(__gd_d_${className}, ${moduleFields});`);
+  const moduleProps = scriptPropsLiteral(m.vars.filter((v) => !v.isStatic));
+  if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps});`);
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   const moduleStaticSlots = staticVarSlotsLiteral(className, m.vars);
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
@@ -495,6 +497,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   LOCAL_TYPES = new Map();
   CLASS_FUNCS = new Set();
   return { code, map };
+}
+
+/** 脚本变量名的声明顺序表：`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
+function scriptPropsLiteral(vars: readonly { name: string }[]): string | null {
+  return vars.length === 0 ? null : JSON.stringify(vars.map((v) => v.name));
 }
 
 function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; accessor?: PropAccessor | null }[]): string | null {
@@ -693,6 +700,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   }
   const declFields = fieldTypesLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declFields !== null) lines.push(`rt.registerFieldTypes(__gd_d_${decl.name}, ${declFields});`);
+  const declProps = scriptPropsLiteral(decl.vars.filter((v) => !v.isStatic));
+  if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps});`);
   const declStaticVars = staticVarTableLiteral(decl.vars);
   const declStaticSlots = staticVarSlotsLiteral(decl.name, decl.vars);
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);

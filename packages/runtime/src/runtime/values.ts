@@ -1302,6 +1302,14 @@ export function strCount(hay: string, needle: string, insensitive = false, from 
   return n;
 }
 
+/** 脚本实例给 `String.format()` 用的属性面：`props` 已按引擎的替换顺序排好，`unmodeledBase` 是那条链上的原生基类名（没量过属性表的那种）。非脚本实例（Callable、pack、类值、信号）给 null —— 引擎不当它们是 Object。 */
+export type ScriptPropFace = { props: Array<{ name: string; value: Variant }>; unmodeledBase: string | null };
+let scriptPropsHook: ((inner: object) => ScriptPropFace | null) | null = null;
+
+export function registerScriptPropsHook(f: (inner: object) => ScriptPropFace | null): void {
+  scriptPropsHook = f;
+}
+
 /**
  * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
  * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
@@ -1326,7 +1334,23 @@ export function strFormatV(text: string, v: Variant, ph: string): string {
     const vals = d.values();
     for (let j = 0; j < keys.length; j++) items.push([show(keys[j] as Variant), vals[j] as Variant]);
   } else if (v.t === Tag.OBJECT) {
-    throw new UnsupportedError("format-object", "String.format() 的 Object 实参按属性表替换（实测属性 k 换掉了 {k}），属性的顺序与集合没量过");
+    const face = scriptPropsHook === null ? null : scriptPropsHook(v.v as object);
+    if (face === null) return text;
+    if (face.unmodeledBase !== null) {
+      throw new UnsupportedError("format-object", `String.format() 的实参是挂在 ${face.unmodeledBase} 上的脚本实例：引擎那一侧的属性表没量过，不猜`);
+    }
+    const scriptKey = ph.split("_").join("script");
+    if (scriptKey !== "" && text.indexOf(scriptKey) >= 0) {
+      throw new UnsupportedError("format-object", `String.format() 撞上 ${scriptKey}：引擎那一格打的是 ():<GDScript#一个进程内的号>，复现不了`);
+    }
+    // 实测的顺序是「自己类的变量在前、基类在后」，每个属性把自己那一格的全部分量换掉，换进来的值不再二次替换。
+    let objOut = text;
+    for (const p of face.props) {
+      const key = ph.split("_").join(p.name);
+      if (key === "") continue;
+      objOut = strReplace(objOut, key, show(p.value));
+    }
+    return objOut;
   } else {
     return text;
   }

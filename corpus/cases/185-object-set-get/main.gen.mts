@@ -47,6 +47,7 @@ class Thing extends rt.GdScriptObject {
 const __gd_d_Thing = rt.defineClass(Thing, () => new Thing(), (o) => o instanceof Thing);
 rt.nameClass(__gd_d_Thing, "Thing");
 rt.registerFieldTypes(__gd_d_Thing, {"s": "String"});
+rt.registerScriptProps(__gd_d_Thing, ["a","s"]);
 rt.registerMethodArities(__gd_d_Thing, { "hi": [0, 0] });
 rt.registerNativeBase(__gd_d_Thing, "RefCounted");
 

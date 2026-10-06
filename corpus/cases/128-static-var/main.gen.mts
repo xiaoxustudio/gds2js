@@ -80,6 +80,7 @@ class A extends rt.GdScriptObject {
 const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
 rt.nameClass(__gd_d_A, "A");
 rt.registerFieldTypes(__gd_d_A, {"mv": "int"});
+rt.registerScriptProps(__gd_d_A, ["mv"]);
 rt.registerStaticVars(__gd_d_A, {"x": "int", "plain": "", "lit": "", "computed": "int"}, {"x": { get: (): rt.Variant => A.x, set: (__v: rt.Variant): void => { A.x = __v; } }, "plain": { get: (): rt.Variant => A.plain, set: (__v: rt.Variant): void => { A.plain = __v; } }, "lit": { get: (): rt.Variant => A.lit, set: (__v: rt.Variant): void => { A.lit = __v; } }, "computed": { get: (): rt.Variant => A.computed, set: (__v: rt.Variant): void => { A.computed = __v; } }});
 rt.registerMethodArities(__gd_d_A, { "setx": [1, 1], "fromInstance": [0, 0] });
 rt.registerStaticMethods(__gd_d_A, ["setx"], {"setx": (a: rt.Variant[]): rt.Variant => rt.wrapValue(A.setx(a[0] as rt.Variant))});

@@ -235,6 +235,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerScriptProps(__gd_d_Main, ["LIMIT"]);
 rt.registerMethodArities(__gd_d_Main, { "g": [2, 2], "pick": [2, 2], "comma": [2, 2], "only_guards": [2, 2], "guard_and": [2, 2], "outer_locals": [2, 2], "container_guards": [2, 2], "guard_sees_outer_bind": [2, 2], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");

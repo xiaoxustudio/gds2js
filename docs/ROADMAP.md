@@ -440,6 +440,15 @@
 - **`[str-to-var-shape]` 从此只剩一张表**：构造式的名字仍只量过「`NoSuchType(1)` 给 null」与「`Rect2` 给真值」两头，中间那张「Godot 到底认识哪些名字」的表没量，认不出就抛，不发可能是错的 null。
 - **另外修了一处文档伤**：上一轮那条脚本化的 §6 改写把 item 18 之后的内容整段截掉了（19–22 条与「## 7. 语料索引」共 33 行），本轮从 `4f483a7` 取回并逐行核过 —— 教训是脚本改文档时 `slice` 的**尾段**必须显式接回去，锚点找不到要抛而不是凑。
 - **账**：语料 245（12 格）、ops 新增 `str-to-var-upper-u.test.ts` 19 格（1647→1666），`convert.test.ts` 那格旧的 `[str-to-var-shape]` 读数换成实测值；`pnpm test` 944 例、`test:compile` 167/236、`test:diff` **159/159 逐字节**、静默 0，golden 漂移 **0**（245/245 一次绿，超时 17 与解析报错 69 是那两族的既有形状）、codegen drift 2/2，面探针 1/1，pkg-modes 25/25，原生 CLI 重编后 20/20，export ok 10 / FAIL 0，typecheck 4/4。
+
+### 1.48 `format` 的 Object 实参发出去了：属性表按「自己类在前、基类在后」（2026-10-06，S246，语料 246，§6 第 20 条② 结账）
+
+- **先量族、再量式子**：`tmp/probe-format-nontainer/` 五批探头把「实参不是容器」的每一形都喂了一遍 —— nil / bool / int / float / String / StringName / Vector2 / Color / Callable / 空 Callable / pack / 引擎类值 / 信号 / 宿主 int。引擎的动作统一是**不改串**，另外往 stderr 打 `ERROR: Invalid type: use Array, Dictionary or Object.`。我们标量那半本来就是这个行为，只有 OBJECT 整支在 `[format-object]` 后面拒着；现在 Callable / pack / 类值 / 信号四形也归到「原样返回」，因为它们不是引擎意义上的 `Object*`。
+- **真对象那一支的式子只有一句顺序**：按属性表逐个把占位符里的 `_` 换成属性名、再全串替换，值走 print；认不出的键留着、大小写硬。顺序实测是**自己类在前、基类在后** —— `Kid{three,back}` 挂 `Base{two,holder}`、`holder` 的值是 `"{three}"` 时，`"{holder}|{three}|{two}"` 给 `{three}|3|2`（换成基类先走就是 `3|3|2`，静默错）。这条顺序是本轮唯一「不量就会写错」的地方。
+- **因此发射器多发一行**：带脚本变量的类各发一条 `rt.registerScriptProps(__gd_d_X, […])`（声明顺序），运行时沿 `desc.base` 串成引擎那张表。挂着的 `fieldTypes` 顶不上 —— 它只登带类型且类型受支持的字段，未定型的脚本变量根本不在表里。代价是 36 份 `main.gen.mts` 重生成（codegen 门 2/2 认了）。
+- **仍拒的两格**：`{script}` 引擎打 `():<GDScript#一个进程内的号>`；挂在没量过属性表的原生基类（Node / Resource 那一族）上的脚本实例。后者在 Tier 1 现在也走不到 —— `Node.new()` 自己先吃 `[native-class-member]`。
+- **缺省占位符那一格别再猜**：`"{_}"` 对 Object 不成立（`{_}={_}`、`{}` 都原样），显式占位符不含 `_` 时对所有属性都是同一个字面量。数组与字典两条通道一格没动，实测过才算。
+- **账**：语料 246（14 格）、ops 新增 `format-object-props.test.ts` 17 格（1666→1683），`string.test.ts` 那格「响亮拒」读数换成实测值；`pnpm test` 950 例、`test:compile` 168/237、`test:diff` **160/160 逐字节**、静默 0，golden 漂移 246/246 全绿（漂移 0）、codegen 2/2、guards 130 例、pkg-modes 25/25、面探针 1/1 与代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
 - **一次误报值得记**：golden 检测与别的引擎门**并发**跑时，445 行 golden 的 `236-global-math-family` 会被判成超时并误报漂移 —— 本轮第一次就是这么报的，单独重跑 245/245 全绿。已写进 §2 第 14 条的观察项。
 
 ---

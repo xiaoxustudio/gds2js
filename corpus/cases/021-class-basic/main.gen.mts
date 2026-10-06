@@ -44,6 +44,7 @@ class Base extends rt.GdScriptObject {
 }
 const __gd_d_Base = rt.defineClass(Base, () => new Base(), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
+rt.registerScriptProps(__gd_d_Base, ["hp"]);
 rt.registerMethodArities(__gd_d_Base, { "tag": [0, 0] });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
 

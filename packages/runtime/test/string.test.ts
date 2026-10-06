@@ -523,6 +523,6 @@ describe("runtime/values · count 的 from/to 窗口与 format 的两条通道",
     eq("234", "method 派发带占位符那一支", String((method(V.str("k:{k}"), "format", [gd([[S("k"), V.int(3)]]), S("{_}")]) as Variant).v), "k:3");
     shouldThrow("234", "format 少实参要响（Too few arguments，Expected at least 1）", () => method(V.str("{0}"), "format", []));
     shouldThrow("234", "format 第 3 个实参要响（Expected at most 2）", () => method(V.str("{0}"), "format", [arrOf(V.int(1)), S("{}"), V.int(3)]));
-    shouldThrow("234", "Object 实参走属性表那条道，属性顺序没量过 → 响亮拒", () => strFormatV("{k}", wrapValue(new GdScriptObject()), "{_}"));
+    eq("234", "Object 实参：属性表里没有那一格就原样留着（g07 / k05 实测）", strFormatV("{k}", wrapValue(new GdScriptObject()), "{_}"), "{k}");
   });
 });

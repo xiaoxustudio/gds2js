@@ -46,6 +46,7 @@ export class Main extends SceneTree {
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerFieldTypes(__gd_d_Main, {"fd_int": "int", "fd_float": "float"});
+rt.registerScriptProps(__gd_d_Main, ["fd_int","fd_float","fd_color","fd_vec2i","fd_name"]);
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
