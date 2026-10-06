@@ -833,3 +833,37 @@ export function gIsSame(a: Variant, b: Variant): Variant {
   if (ta === 24 || ta === 26 || ta === 27 || ta === 28 || isBytes(a)) return V.bool(a.v === b.v);
   return V.bool(valueEq(a, b));
 }
+
+/** `type_string()` 的 0–38 号名表（实测 `tmp/probe-small-builtins/r.log`；39 往上给 `<invalid type>`）。 */
+const TYPE_NAMES = ["Nil", "bool", "int", "float", "String", "Vector2", "Vector2i", "Rect2", "Rect2i", "Vector3",
+  "Vector3i", "Transform2D", "Vector4", "Vector4i", "Plane", "Quaternion", "AABB", "Basis", "Transform3D",
+  "Projection", "Color", "StringName", "NodePath", "RID", "Object", "Callable", "Signal", "Dictionary", "Array",
+  "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray", "PackedVector4Array"];
+
+/** `error_string()` 的 0–48 号名表（同探头；49 往上、负数与 INT64_MAX 都给 `(invalid error code)`）。 */
+const ERROR_NAMES = ["OK", "Failed", "Unavailable", "Unconfigured", "Unauthorized", "Parameter out of range",
+  "Out of memory", "File not found", "File: Bad drive", "File: Bad path", "File: Permission denied",
+  "File already in use", "Can't open file", "Can't write file", "Can't read file", "File unrecognized",
+  "File corrupt", "Missing dependencies for file", "End of file", "Can't open", "Can't create", "Query failed",
+  "Already in use", "Locked", "Timeout", "Can't connect", "Can't resolve", "Connection error",
+  "Can't acquire resource", "Can't fork", "Invalid data", "Invalid parameter", "Already exists",
+  "Does not exist", "Can't read database", "Can't write database", "Compilation failed", "Method not found",
+  "Link failed", "Script failed", "Cyclic link detected", "Invalid declaration", "Duplicate symbol",
+  "Parse error", "Busy", "Skip", "Help", "Bug", "Printer on fire"];
+
+/** 引擎这两支的形参是 int32：先按 32 位回绕再查表 —— 实测 `error_string(INT64_MIN)` 给 **OK**（低 32 位是 0），`error_string(-1)` 给 `(invalid error code)`。 */
+function nameById(v: Variant, who: string, names: string[], fallback: string): Variant {
+  let x = intArgBig(v, who) % 4294967296n;
+  if (x < 0n) x += 4294967296n;
+  if (x >= 2147483648n) x -= 4294967296n;
+  return x >= 0 && x < BigInt(names.length) ? V.str(names[Number(x)] as string) : V.str(fallback);
+}
+
+export function gTypeString(v: Variant): Variant {
+  return nameById(v, "type_string() 的参数", TYPE_NAMES, "<invalid type>");
+}
+
+export function gErrorString(v: Variant): Variant {
+  return nameById(v, "error_string() 的参数", ERROR_NAMES, "(invalid error code)");
+}
