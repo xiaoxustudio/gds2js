@@ -1,0 +1,14 @@
+y01|true|true|false|false|false|false|false|24
+y02|true|true|true|true|false|false|false|24
+y03|false|false|false|false|false|true|false|5
+y04|false|false|false|false|false|false|true|28
+y05|false|false|false|false|false|false|false|27
+y06|false|false|false|false|false|false|false|29
+y07|false|false|false|false|false|false|false|4
+y08|false|false|false|false|false|false|false|2
+y09|false|false|false|false|true|false|false|25
+y10|false|false|false|false|true|false|false|25
+y11|false|false|false|false|false|false|false|0
+y12|true|false|false|false|false|false|false|24
+y13|true|true|true
+y14|false|false|false

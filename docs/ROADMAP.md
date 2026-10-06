@@ -458,6 +458,15 @@
 - **两笔「4.6.3 没有的名字」**：`Callable.get_object_instance_id()` 与 `Callable.is_equal()` 都在解析期就 `Nonexistent function`（Godot 3 的两支没搬过来）—— 探头前两版死在这上面，记下来免得再去撞。
 - **§6 第 22 条就此收窄**：值发出去了，**打印**那一格仍复现不了（`(文件):<GDScript#一个进程内的号>`），继续挂在「带号的打印怎么记」那条口径下面。
 - **账**：语料 247（9 格）、ops 新增 `callable-get-object.test.ts` 6 格（1683→1689），`pnpm test` 954 例、`test:compile` 169/238、`test:diff` **161/161 逐字节**、静默 0，golden 漂移 247/247 全绿（漂移 0）、codegen 2/2、pkg-modes 25/25、面探针 1/1 与代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
+
+### 1.50 `is` 认引擎类名，顺手抓出「结构体也算 Object」那格静默错（2026-10-06，S248，语料 248）
+
+- **入口是自家语料**：写 247 时 `cm.get_object() is RefCounted` 被我们的 `[is-type]` 拦下，引擎却给真。往回查发现两条毛病叠着 —— 名字表外的一律拒，而 `is Object` 是按**内部** Tag.OBJECT 判的。
+- **静默错那条**：`Vector2(1, 2) is Object`、`PackedByteArray([1]) is Object`、`o.m is Object` 三条我们此前都给真，引擎三条都是假（m07 / m10 / n01 / n10）。以前照不着是因为实参一旦带静态类型，引擎**解析期**就拒（`Expression is of type "Vector2" so it can't be of type "Object".`）；换成 Variant（数组元素、`get_object()` 的返回值）这条通道就开了。这类「只有动态位才走到」的格子正是语料该钉的。
+- **发出去的是一张形状表**：量过的名字只有 Object / RefCounted / Resource / GDScript / Node / SceneTree / MainLoop 七支，外加按盒子判的 Callable。脚本实例看登记的引擎基类（RefCounted 一条链、宿主 SceneTree 一条链 —— `self is RefCounted` 实测假），脚本类值一条四真的链（m06 / n08），引擎类值只有 {Object, RefCounted} 且 **`Node is Node` 假**（n07）。
+- **三条仍拒，都是没量过**：表外的引擎类名、信号值对任何类名、以及**没登记引擎基类的实例** —— 发射器目前把 `extends Resource` / `extends Node` 拍平成 RefCounted，那条链我们不知道，所以宁可不给真假。`as` 那一条一格实测都没有，故原样不动。
+- **两笔解析期读数**：`Comparable` 在 4.6.3 不是类；实例化 Node / Resource 会让引擎退出时打 `WARNING: ObjectDB instances leaked at exit`，所以那两形只进 ops 与探头，不进语料。
+- **账**：语料 248（14 行）、ops 新增 `is-engine-class-names.test.ts` 10 格（1689→1699），`pnpm test` 959 例、`test:compile` 170/239、`test:diff` **162/162 逐字节**、静默 0，golden 漂移 248/248 一次跑绿（漂移 0）、codegen 2/2、guards 130 例、pkg-modes 25/25、scriptc 代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
 - **一次误报值得记**：golden 检测与别的引擎门**并发**跑时，445 行 golden 的 `236-global-math-family` 会被判成超时并误报漂移 —— 本轮第一次就是这么报的，单独重跑 245/245 全绿。已写进 §2 第 14 条的观察项。
 
 ---
