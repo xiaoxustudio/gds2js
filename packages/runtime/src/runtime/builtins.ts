@@ -394,6 +394,7 @@ export function gSnappedI(x: Variant, step: Variant): Variant {
 }
 
 const PI_D = 3.14159265358979323846;
+const TAU_D = 2 * PI_D;
 
 export function gDegToRad(v: Variant): Variant {
   return V.float(fl(v) * (PI_D / 180) + 0);
@@ -405,12 +406,7 @@ export function gRadToDeg(v: Variant): Variant {
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
 export function gAngleDifference(from: Variant, to: Variant): Variant {
-  const TAU = 2 * PI_D;
-  let d = (fl(to) - fl(from)) % TAU;
-  if (d > PI_D) d -= TAU;
-  else if (d < -PI_D) d += TAU;
-  if (approxEq(d, PI_D)) d = -PI_D;
-  return V.float(d + 0);
+  return V.float(angleDiff(fl(from), fl(to)));
 }
 
 function approxEq(a: number, b: number): boolean {
@@ -672,6 +668,144 @@ export function gAtanh(v: Variant): Variant {
 
 export function gAtan2(y: Variant, x: Variant): Variant {
   return V.float(Math.atan2(numArg(y, "atan2() 的第一参"), numArg(x, "atan2() 的第二参")));
+}
+
+/** 引擎的两个 dB 常数（4.3 树 `core/math/math_funcs.h`：`ln(10)/20` 与 `20/ln(10)`）。 */
+const DB_TO_LINEAR_K = 0.11512925464970228420089957273422;
+const LINEAR_TO_DB_K = 8.6858896380650365530225783783321;
+
+export function gDbToLinear(v: Variant): Variant {
+  return V.float(Math.exp(numArg(v, "db_to_linear() 的参数") * DB_TO_LINEAR_K) + 0);
+}
+
+export function gLinearToDb(v: Variant): Variant {
+  return V.float(Math.log(numArg(v, "linear_to_db() 的参数")) * LINEAR_TO_DB_K);
+}
+
+/** `pingpong(值, 周期)`：`length == 0` 那格实测给 0.0（n.log pp|1.5,0.0），式子是引擎那句 `abs(fract((v-l)/(2l))*2l - l)`。 */
+export function gPingpong(v: Variant, length: Variant): Variant {
+  const value = numArg(v, "pingpong() 的值");
+  const l = numArg(length, "pingpong() 的周期");
+  if (l === 0) return V.float(0);
+  const x = (value - l) / (l * 2);
+  return V.float(Math.abs((x - Math.floor(x)) * l * 2 - l) + 0);
+}
+
+/** `step_decimals()` 不是对数式的：引擎拿小数部分去比那张 10 格的门槛表（`math_funcs.cpp`），门槛是 `0.9999 / 0.09999 / …`。 */
+const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000009999, 0.0000009999, 0.00000009999, 0.000000009999, 0.0000000009999];
+
+export function gStepDecimals(v: Variant): Variant {
+  const x = Math.abs(numArg(v, "step_decimals() 的参数"));
+  const decs = x - Math.trunc(x);
+  let i = 0;
+  for (const t of STEP_THRESHOLDS) {
+    if (decs >= t) return V.int(i);
+    i++;
+  }
+  return V.int(0);
+}
+
+/** `nearest_po2()`：无符号那侧「进一位再抹平」的式子（`typedefs.h` 的 `nearest_power_of_2_templated`），回绕都按 64 位走 —— 实测 `0 → 0`、`-3 → 0`、`3 → 4`、`5 → 8`。 */
+export function gNearestPo2(v: Variant): Variant {
+  let u = intArgBig(v, "nearest_po2() 的参数") & MASK64;
+  u = (u - 1n) & MASK64;
+  for (const s of [1, 2, 4, 8, 16, 32]) u = (u | (u >> BigInt(s))) & MASK64;
+  return V.int(wrap64((u + 1n) & MASK64));
+}
+
+/** 引擎那句 `fmod(2*fmod(to-from, TAU), TAU)` 折出来的最短弧（实测 q01–q03：正好 ±π 才翻，差 1e-9 都不翻）。 */
+function angleDiff(from: number, to: number): number {
+  const d = (to - from) % TAU_D;
+  return ((2 * d) % TAU_D - d) + 0;
+}
+
+export function gLerpAngle(from: Variant, to: Variant, w: Variant): Variant {
+  const a = numArg(from, "lerp_angle() 的起点");
+  return V.float(a + angleDiff(a, numArg(to, "lerp_angle() 的终点")) * numArg(w, "lerp_angle() 的权重") + 0);
+}
+
+/** `rotate_toward`：实参先夹进 `|差| - π … |差|` 再按弧的符号走（负 delta 那格没量过，照式子给，语料里不钉）。 */
+export function gRotateToward(from: Variant, to: Variant, delta: Variant): Variant {
+  const a = numArg(from, "rotate_toward() 的起点");
+  const diff = angleDiff(a, numArg(to, "rotate_toward() 的终点"));
+  const absDiff = Math.abs(diff);
+  const d = Math.min(Math.max(numArg(delta, "rotate_toward() 的步长"), absDiff - PI_D), absDiff);
+  return V.float(a + d * (diff >= 0 ? 1 : -1) + 0);
+}
+
+export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
+  const p = numArg(s1, "bezier_interpolate() 的起点");
+  const a = numArg(c1, "bezier_interpolate() 的第一控制点");
+  const b = numArg(c2, "bezier_interpolate() 的第二控制点");
+  const q = numArg(e, "bezier_interpolate() 的终点");
+  const w = numArg(t, "bezier_interpolate() 的 t");
+  const omt = 1 - w;
+  const omt2 = omt * omt;
+  const t2 = w * w;
+  return V.float(p * omt2 * omt + a * omt2 * w * 3 + b * omt * t2 * 3 + q * t2 * w + 0);
+}
+
+export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
+  const p = numArg(s1, "bezier_derivative() 的起点");
+  const a = numArg(c1, "bezier_derivative() 的第一控制点");
+  const b = numArg(c2, "bezier_derivative() 的第二控制点");
+  const q = numArg(e, "bezier_derivative() 的终点");
+  const w = numArg(t, "bezier_derivative() 的 t");
+  const omt = 1 - w;
+  return V.float((a - p) * 3 * omt * omt + (b - a) * 6 * omt * w + (q - b) * 3 * w * w + 0);
+}
+
+/** 角度版先把四个控制点折到 `from` 附近（引擎那六行 `fmod` 的式子），再走 `cubic_interpolate`。 */
+function angleRots(from: number, to: number, pre: number, post: number): [number, number, number, number] {
+  const fromRot = from % TAU_D;
+  const preDiff = (pre - fromRot) % TAU_D;
+  const preRot = fromRot + ((2 * preDiff) % TAU_D) - preDiff;
+  const toDiff = (to - fromRot) % TAU_D;
+  const toRot = fromRot + ((2 * toDiff) % TAU_D) - toDiff;
+  const postDiff = (post - toRot) % TAU_D;
+  const postRot = toRot + ((2 * postDiff) % TAU_D) - postDiff;
+  return [fromRot, toRot, preRot, postRot];
+}
+
+function cubicNum(from: number, to: number, pre: number, post: number, t: number): number {
+  return 0.5 * (from * 2 + (to - pre) * t + (pre * 2 - from * 5 + to * 4 - post) * t * t +
+    (pre * -1 + from * 3 - to * 3 + post) * t * t * t);
+}
+
+function lerpNum(a: number, b: number, w: number): number {
+  return a + (b - a) * w;
+}
+
+function cubicInTimeNum(from: number, to: number, pre: number, post: number, w: number, toT: number, preT: number, postT: number): number {
+  const t = lerpNum(0, toT, w);
+  const a1 = lerpNum(pre, from, preT === 0 ? 0 : (t - preT) / -preT);
+  const a2 = lerpNum(from, to, toT === 0 ? 0.5 : t / toT);
+  const a3 = lerpNum(to, post, postT - toT === 0 ? 1 : (t - toT) / (postT - toT));
+  const b1 = lerpNum(a1, a2, toT - preT === 0 ? 0 : (t - preT) / (toT - preT));
+  const b2 = lerpNum(a2, a3, postT === 0 ? 1 : t / postT);
+  return lerpNum(b1, b2, toT === 0 ? 0.5 : t / toT);
+}
+
+export function gCubicAngle(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant): Variant {
+  const a = numArg(from, "cubic_interpolate_angle() 的起点");
+  const r = angleRots(a, numArg(to, "cubic_interpolate_angle() 的终点"), numArg(pre, "cubic_interpolate_angle() 的前一控制点"), numArg(post, "cubic_interpolate_angle() 的后一控制点"));
+  return V.float(cubicNum(r[0], r[1], r[2], r[3], numArg(w, "cubic_interpolate_angle() 的权重")) + 0);
+}
+
+export function gCubicInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
+  return V.float(cubicInTimeNum(
+    numArg(from, "cubic_interpolate_in_time() 的起点"), numArg(to, "cubic_interpolate_in_time() 的终点"),
+    numArg(pre, "cubic_interpolate_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_in_time() 的后一控制点"),
+    numArg(w, "cubic_interpolate_in_time() 的权重"), numArg(toT, "cubic_interpolate_in_time() 的 to_t"),
+    numArg(preT, "cubic_interpolate_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_in_time() 的 post_t")) + 0);
+}
+
+export function gCubicAngleInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
+  const a = numArg(from, "cubic_interpolate_angle_in_time() 的起点");
+  const r = angleRots(a, numArg(to, "cubic_interpolate_angle_in_time() 的终点"), numArg(pre, "cubic_interpolate_angle_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_angle_in_time() 的后一控制点"));
+  return V.float(cubicInTimeNum(r[0], r[1], r[2], r[3],
+    numArg(w, "cubic_interpolate_angle_in_time() 的权重"), numArg(toT, "cubic_interpolate_angle_in_time() 的 to_t"),
+    numArg(preT, "cubic_interpolate_angle_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_angle_in_time() 的 post_t")) + 0);
 }
 
 /** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */

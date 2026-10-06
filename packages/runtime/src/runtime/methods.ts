@@ -5,7 +5,9 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
   gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame,
-  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh } from "./builtins";
+  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
+  gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
@@ -1212,6 +1214,18 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   sinh: (a) => gSinh(ga(a, 0)),
   tan: (a) => gTan(ga(a, 0)),
   tanh: (a) => gTanh(ga(a, 0)),
+  bezier_derivative: (a) => gBezierDerivative(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
+  bezier_interpolate: (a) => gBezierInterpolate(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
+  cubic_interpolate_angle: (a) => gCubicAngle(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4)),
+  cubic_interpolate_angle_in_time: (a) => gCubicAngleInTime(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4), ga(a, 5), ga(a, 6), ga(a, 7)),
+  cubic_interpolate_in_time: (a) => gCubicInTime(ga(a, 0), ga(a, 1), ga(a, 2), ga(a, 3), ga(a, 4), ga(a, 5), ga(a, 6), ga(a, 7)),
+  db_to_linear: (a) => gDbToLinear(ga(a, 0)),
+  lerp_angle: (a) => gLerpAngle(ga(a, 0), ga(a, 1), ga(a, 2)),
+  linear_to_db: (a) => gLinearToDb(ga(a, 0)),
+  nearest_po2: (a) => gNearestPo2(ga(a, 0)),
+  pingpong: (a) => gPingpong(ga(a, 0), ga(a, 1)),
+  rotate_toward: (a) => gRotateToward(ga(a, 0), ga(a, 1), ga(a, 2)),
+  step_decimals: (a) => gStepDecimals(ga(a, 0)),
   char: (a) => stringChr(ga(a, 0)),
   angle_difference: (a) => gAngleDifference(ga(a, 0), ga(a, 1)),
   ceil: (a) => gCeil(ga(a, 0), "auto"),
@@ -1282,7 +1296,7 @@ export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.k
 /**
  * 全局函数的 Callable 值：`var f = abs` 实测给 `typeof 25`、打印 `@GlobalScope::abs`，`.call()` 走各自那个式子，
  * 等式按 `(名字, 接收者)` 走 —— 全局那支的接收者是 null，所以同名两个盒子相等（实测 `str_to_var == str_to_var` 真）。
- * 我们没实现那个式子的 58 支（`GLOBAL_CALLABLES` 里 `bounds` 为 null 的）照发盒子：值、`get_method()`、`get_argument_count()`
+ * 我们没实现那个式子的 36 支（`GLOBAL_CALLABLES` 里 `bounds` 为 null 的）照发盒子：值、`get_method()`、`get_argument_count()`
  * 都是实测读数，只有 `.call()` 响亮拒。
  */
 export function globalCallable(name: string): Variant {
