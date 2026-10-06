@@ -4,7 +4,8 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
-  gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame } from "./builtins";
+  gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame,
+  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
@@ -1198,6 +1199,19 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   abs: (a) => abs(ga(a, 0)),
   absf: (a) => gAbsF(ga(a, 0)),
   absi: (a) => gAbsI(ga(a, 0)),
+  acos: (a) => gAcos(ga(a, 0)),
+  acosh: (a) => gAcosh(ga(a, 0)),
+  asin: (a) => gAsin(ga(a, 0)),
+  asinh: (a) => gAsinh(ga(a, 0)),
+  atan: (a) => gAtan(ga(a, 0)),
+  atan2: (a) => gAtan2(ga(a, 0), ga(a, 1)),
+  atanh: (a) => gAtanh(ga(a, 0)),
+  cos: (a) => gCos(ga(a, 0)),
+  cosh: (a) => gCosh(ga(a, 0)),
+  sin: (a) => gSin(ga(a, 0)),
+  sinh: (a) => gSinh(ga(a, 0)),
+  tan: (a) => gTan(ga(a, 0)),
+  tanh: (a) => gTanh(ga(a, 0)),
   char: (a) => stringChr(ga(a, 0)),
   angle_difference: (a) => gAngleDifference(ga(a, 0), ga(a, 1)),
   ceil: (a) => gCeil(ga(a, 0), "auto"),
@@ -1274,7 +1288,7 @@ export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.k
 export function globalCallable(name: string): Variant {
   const row = GLOBAL_CALLABLES[name];
   if (row === undefined) {
-    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 123 个里`);
+    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 126 个里`);
   }
   const impl = GLOBAL_IMPL[name];
   const fn: Fn =

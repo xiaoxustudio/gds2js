@@ -500,6 +500,19 @@
 - **表里的计数**：可派发 61→**65**、该拒 62→**58**，`GLOBAL_IMPL` 多四行、`GLOBAL_TODO_FUNCTIONS` 少四个；`methods.ts` 里那句「没实现的 18 支」是老账，一并换成 58。
 - **账**：语料 251（32 行）、ops 1712→**1749**（新门 `small-builtins.test.ts` 37 格），`pnpm test` 1059 例、`test:compile` 173/242、`test:diff` **165/165 逐字节**、静默 0，golden 漂移单跑 251/251 全绿（漂移 0、缺 golden 0），codegen 2/2、guards 214 例、pkg-modes 25/25、面探针 1/1、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
 
+### 1.54 三角与双曲 13 支发出，名表换成按 doc XML 重核（2026-10-06，S252，语料 252，§6 第 23 条再收窄）
+
+- **为什么这一族先做**：44 支剩下的部分要么要新地基（对象模型、宿主打印、RID），要么要逆 PCG；三角与双曲是纯式子，边界也能一支一名量。
+- **量法是逐格比文本而不是比数值**：`h.gd` 一支函数 × 25 个实参 = 435 格、`l.gd` 再补幅度阶梯 56 格，比的是「`value|typeof` 两栏文本」—— 数值上 5e-15 的差在打印里看不见，只有文本比法才会漏。
+- **引擎的 `::sin` 在大幅度上丢位**：`cos` 从 1e6、`sin` 从 1e7 起与本机的式子差到第 11~14 位（`sin(1e10)` 引擎 `-0.48750602507627` vs `-0.48750602508751`）。本机的更准，但裁判是引擎 —— 于是 `sin` / `cos` **只发到量过的那一格**（1e6 / 1e5），过界抛 `[trig-large-arg]`；`tan` 到 1e300 都对得上，不设限。
+- **四支反函数引擎先夹再算**（4.3 树 `math_funcs.h` 那四行「Always does clamping」＋实测）：`asin(±2)` → ±π/2、`acos(2)` → `0.0` / `acos(-2)` → π、`acosh(<1)` → `0.0`、`atanh(>1)` → ±inf；NaN 不夹。
+- **名表换了来源**：上轮那 133 支是从 `variant_utility.cpp` 的 `VariantUtilityFunctions::` 声明扫的，**漏了 `FUNCBINDR(...)` 那张注册表**，于是 `acosh` 整支没进候选。换成 4.3 的 `doc/classes/@GlobalScope.xml` ∪ `modules/gdscript/doc_classes/@GDScript.xml`（128 支）再核，缺的只剩五支；实测 `preload` / `assert` 在值位置不合法（前者 `Expected "(" after "preload".`），`acosh` / `is_instance_of` / `print_debug` 合法 → 表 123 → **126**。
+- **两支只发形状**：`is_instance_of`（`@GDScript`、argc 2）与 `print_debug`（`@GDScript`、argc 0）的量法与上轮那 44 支一样（`GDScript.new()` 里 `return <名>`），式子没量，`.call` 抛 `[global-callable-call]`。
+- **AOT 面上白捡一整个函数族**：`252-trig-family` 单独走 scriptc 出货门 1/1 逐字节一致 —— `Math.asinh/acosh/atanh/cosh/tanh/sinh` 这些以前从没在 AOT 面上跑过，都有 lowering。
+- **计数**：可派发 65→78、该拒 58→48（40 支欠账减到 28 支，另加两支新名）；`@GDScript` 标签前缀十支变十二支。
+- **还欠**：`atan2(-0.0, 0.0)` 那一格（引擎 `-π`、本机负零，而负零在 stdout 里看不出来）；`sin`/`cos` 上限之外的幅度要匹配就得逆引擎那套归约；4.4+ 新增的名字在 4.3 的 doc XML 里也不会有，仍是同一条覆盖性提醒。
+- **账**：语料 252（54 行）、ops 1749→1768，`pnpm test` 1059 例、`test:compile` 174/243、`test:diff` 166/166 逐字节、静默 0，golden 漂移单跑 252/252，codegen 2/2，guards 全过，pkg-modes 25/25，面探针 1/1 与 `252-` 的 scriptc 1/1，原生 CLI 重编后 20/20，export ok 10 / FAIL 0，typecheck 4/4。
+
 ---
 
 ## 2. 当前任务与待办

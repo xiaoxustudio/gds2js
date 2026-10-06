@@ -599,7 +599,7 @@ export function range(args: Variant[]): GArray {
 
 /** `absf` / `absi`：实测只吃 INT / FLOAT / BOOL（String、StringName、Nil、Array、Vector2 那一格引擎报 Invalid type 并掐掉本次调用，实测 f01–f12）。 */
 export function gAbsF(v: Variant): Variant {
-  return V.float(Math.abs(flArg(v, "absf() 的参数")) + 0);
+  return V.float(Math.abs(numArg(v, "absf() 的参数")) + 0);
 }
 
 export function gAbsI(v: Variant): Variant {
@@ -607,13 +607,71 @@ export function gAbsI(v: Variant): Variant {
   return V.int(x < 0n ? wrap64(-x) : x);
 }
 
-/** absf 的取数：bool 折成 1/0（实测 a05），其余非数值同 intArgBig 那侧报运行时错。 */
-function flArg(v: Variant, who: string): number {
+/** 这一族「float 形参」的取数：bool 折成 1/0（实测 a05 / k01），其余非数值同 intArgBig 那侧报运行时错（f01–f12 / k02–k03）。 */
+function numArg(v: Variant, who: string): number {
   if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new GodotRuntimeError("arg-float", `${who} 需要 float，收到 ${tagName(v.t)}`);
   }
   return v.t === Tag.FLOAT ? (v.v as number) : intToNum(v.v as IntPayload);
+}
+
+/**
+ * 三角与双曲那一族（实测 h.log 435 格 + l.log 56 格逐格比对）：式子就是引擎那句 `::sin` / `::cos`，
+ * 但引擎那侧的幅度归约从某一刻开始丢有效位 —— `cos` 在 1e6、`sin` 在 1e7 就与本机的式子差在第 12~14 位，
+ * 所以两支只发到量过的那一格，再大响亮拒；`tan` 一路到 1e300 都对得上，不设限。
+ */
+const SIN_LIMIT = 1e6;
+const COS_LIMIT = 1e5;
+const HALF_PI = Math.PI / 2;
+
+function trig(name: string, v: Variant, f: (x: number) => number, limit: number | null): Variant {
+  const x = numArg(v, `${name}() 的参数`);
+  if (limit !== null && Number.isFinite(x) && Math.abs(x) > limit) {
+    throw new UnsupportedError("trig-large-arg", `${name}() 收到 ${show(V.float(x))}：|x| 超过实测的 ${String(limit)}，引擎那侧的归约从这一档开始丢有效位（没量过的不发）`);
+  }
+  return V.float(f(x));
+}
+
+export const gSin = (v: Variant): Variant => trig("sin", v, Math.sin, SIN_LIMIT);
+export const gCos = (v: Variant): Variant => trig("cos", v, Math.cos, COS_LIMIT);
+export const gTan = (v: Variant): Variant => trig("tan", v, Math.tan, null);
+export const gAtan = (v: Variant): Variant => trig("atan", v, Math.atan, null);
+export const gSinh = (v: Variant): Variant => trig("sinh", v, Math.sinh, null);
+export const gCosh = (v: Variant): Variant => trig("cosh", v, Math.cosh, null);
+export const gTanh = (v: Variant): Variant => trig("tanh", v, Math.tanh, null);
+export const gAsinh = (v: Variant): Variant => trig("asinh", v, Math.asinh, null);
+
+/** `asin` / `acos` / `acosh` / `atanh` 引擎都先夹再算（`core/math/math_funcs.h` 那四行「Always does clamping」+ 实测 k04–k08 / j.log / e.log），夹出来的是常量。 */
+export function gAsin(v: Variant): Variant {
+  const x = numArg(v, "asin() 的参数");
+  if (x < -1) return V.float(-HALF_PI);
+  if (x > 1) return V.float(HALF_PI);
+  return V.float(Math.asin(x));
+}
+
+export function gAcos(v: Variant): Variant {
+  const x = numArg(v, "acos() 的参数");
+  if (x < -1) return V.float(Math.PI);
+  if (x > 1) return V.float(0);
+  return V.float(Math.acos(x));
+}
+
+export function gAcosh(v: Variant): Variant {
+  const x = numArg(v, "acosh() 的参数");
+  if (x < 1) return V.float(0);
+  return V.float(Math.acosh(x));
+}
+
+export function gAtanh(v: Variant): Variant {
+  const x = numArg(v, "atanh() 的参数");
+  if (x <= -1) return V.float(-Infinity);
+  if (x >= 1) return V.float(Infinity);
+  return V.float(Math.atanh(x));
+}
+
+export function gAtan2(y: Variant, x: Variant): Variant {
+  return V.float(Math.atan2(numArg(y, "atan2() 的第一参"), numArg(x, "atan2() 的第二参")));
 }
 
 /** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */
