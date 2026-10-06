@@ -569,7 +569,7 @@
 - **修法不动语义**：折 int32 改走 `Number(BigInt.asIntN(32, intArgBig(v, who)))` 一句，比较全部退回 Number 域 —— 与 S255 那 4 格溢出读数（`error_string(INT64_MIN)` → `OK`、`error_string(-1)` → `(invalid error code)`、`type_string(INT64_MAX)` → `<invalid type>`）完全一致，语料一字未改。
 - **判据（都是实跑）**：`234-string-methods-batch` 面探针从 `0/1 编过` 回到 **1/1 编过、1/1 跑通、逐字节一致 1/1**；`test:diff` 回到 **169/169 逐字节、静默 0、崩溃 0**。
 - **一条附带教训**：`git revert -n` + `git reset --hard` 之后，255 那三份文件被 autocrlf 换成了 CRLF，语料门立刻报「第 1 行不一致」——那是行尾噪声不是语义错。凡是动过这类 git 操作，跑门之前先把 corpus 文件归一回 LF（本轮就是 `split("\r\n").join("\n")` 一遍）。
-- **账**：面探针 1/1、`test:diff` 169/169、guards 全过；`test:pkgmodes` / `test:export` / `test:cli-native` 三连的读数记在下一条（本条写下时它们还在跑）。
+- **账**：面探针 1/1、`test:diff` 169/169 逐字节（静默 0、崩溃 0）、guards 全过、typecheck 4/4 与 `tsconfig.test.json`；出货三连读完并全绿 —— `test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0（红的正是它那四格 scriptc 格）、`test:cli-native` 20/20（含 `④ 工程 export --pack scriptc` 与 `⑨b run --watch`）。§1.59 那条红账到此销掉。
 
 ---
 
