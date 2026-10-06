@@ -1,4 +1,4 @@
-// 4.6.3 实测的「全局函数当值用」那 79 支：取值形状、`.call` 派发、arity 那几句、没实现的响亮拒，
+// 4.6.3 实测的「全局函数当值用」那 123 支：取值形状、`.call` 派发、arity 那几句、没实现的响亮拒，
 // 以及「实测表与式子表一一对上」这条防漂移判据。读数来自 tmp/probe-unknown-value/{gc1,gc4,gc6,gc7,gc8,gc9}.log。
 
 import { describe, it } from "vitest";
@@ -99,15 +99,15 @@ describe("runtime/global-callable · 全局函数的 Callable 值", () => {
 
   it("239 · 实测表与式子表一一对上", async () => {
     const names = Object.keys(GLOBAL_CALLABLES);
-    eq("239", "实测「能当值用的名字」是 79 支", String(names.length), "79");
-    eq("239", "值名集合就是这张表的键", String(GLOBAL_VALUE_NAMES.size), "79");
+    eq("239", "实测「能当值用的名字」是 123 支", String(names.length), "123");
+    eq("239", "值名集合就是这张表的键", String(GLOBAL_VALUE_NAMES.size), "123");
     const needCall = names.filter((n) => GLOBAL_CALLABLES[n]!.bounds !== null);
     const missing = needCall.filter((n) => !GLOBAL_CALLABLE_IMPLEMENTED.has(n));
     eq("239", "有区间的每一支都发得出式子（漏一支就在这里现形）", `${String(needCall.length)}|${missing.join(",")}`, "61|");
     const extra = [...GLOBAL_CALLABLE_IMPLEMENTED].filter((n) => GLOBAL_CALLABLES[n]?.bounds === null);
     eq("239", "式子表里没有「该拒的那支」（拒与发不能同时挂在一个名字上）", extra.join(","), "");
-    eq("239", "该拒的 18 支：区间是 null", String(names.filter((n) => GLOBAL_CALLABLES[n]!.bounds === null).length), "18");
+    eq("239", "该拒的 62 支：区间是 null", String(names.filter((n) => GLOBAL_CALLABLES[n]!.bounds === null).length), "62");
     eq("239", "类型名一支都不在表里（实测值位置全被解析期拒）", ["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Callable", "PackedByteArray", "PackedStringArray"].filter((n) => GLOBAL_VALUE_NAMES.has(n)).join(","), "");
-    eq("239", "标签前缀只有两种：@GDScript 那批是实测的七支", names.filter((n) => GLOBAL_CALLABLES[n]!.scope === "GDScript").sort().join(","), "char,convert,get_stack,len,load,print_stack,range");
+    eq("239", "标签前缀只有两种：@GDScript 那批是实测的十支", names.filter((n) => GLOBAL_CALLABLES[n]!.scope === "GDScript").sort().join(","), "char,convert,dict_to_inst,get_stack,inst_to_dict,len,load,print_stack,range,type_exists");
   });
 });

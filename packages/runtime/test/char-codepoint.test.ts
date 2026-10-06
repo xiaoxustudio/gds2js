@@ -35,7 +35,7 @@ describe("runtime/char · 码点不合法就换 U+FFFD", () => {
     eq("244", "拼进字符串里也不变回来：a + char(0) + b 是 3 个码点", String(("a" + (stringChr(I(0)).v as string) + "b").length), "3");
   });
 
-  it("244 · char 也在「能当值用的全局函数名」那 79 支里", async () => {
+  it("244 · char 也在「能当值用的全局函数名」那 123 支里", async () => {
     eq("244", "取值 typeof 25、打印 @GDScript::char（实测 h07）", `${String((method(globalCallable("char"), "is_valid", []) as Variant).v)}|${show(globalCallable("char"))}`, "true|@GDScript::char");
     eq("244", "get_argument_count 1、get_method 是 StringName 的 char", `${String((method(globalCallable("char"), "get_argument_count", []) as Variant).v)}|${(method(globalCallable("char"), "get_method", []) as Variant).v}`, "1|char");
     eq("244", ".call 两支实测（h08：65 与 65533）", `${(callChar(I(65)) as Variant).v}|${(callChar(I(0)) as Variant).v}`, "A|\uFFFD");

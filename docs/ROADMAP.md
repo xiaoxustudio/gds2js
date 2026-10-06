@@ -477,6 +477,16 @@
 - **代码里那句旧账是错的**：`callableCtor` 注释与拒口都写着「1 参那一格在 Godot 是解析期拒」。实测 `Callable(abs)` 通、`== abs` 真、typeof 25、哈希同值；解析期拒的是 `Callable("abs")` / `Callable(5)` / `Callable(null)` / `Callable(Callable, String)` 这些签名。发出去的规则因此是「单实参本身就是 Callable → 原样给回」，其余单实参抛 `[callable-ctor]`。
 - **撞出一张表的缺口，记成 §6 第 23 条**：`type_exists` 值位置合法（`hash(type_exists)` = 4093741862），我们的 79 支表里没有它，分析器报 `undeclared-identifier` —— 那张表当初只扫了我们自己的名单，从没与引擎的全局函数表对过差集。下一轮把差集量出来（一支一名验 `typeof` / 打印 / `get_argument_count()`）。
 - **账**：语料 249（9 行）、ops 新增 `hash-callable.test.ts` 13 格（1699→1712），`pnpm test` 964 例、`test:compile` 171/240、`test:diff` **163/163 逐字节**、静默 0，golden 漂移 249/249 全绿（漂移 0）、codegen 2/2、guards 130 例、pkg-modes 25/25、面探针 1/1、原生 CLI 20/20、export ok 10 / FAIL 0、typecheck 4/4。
+
+### 1.52 全局函数名表补了 44 支：`sin` 这一批以前被当成「Godot 没这个名字」（2026-10-06，S250，语料 250，§6 第 23 条结清一轮）
+
+- **怎么暴露的**：查 §6 第 23 条时先试 `print(sin(0.5))`。引擎给数，我们给 `[call-unknown] Function "sin()" not found in base self.`；`var f = sin` 另一句 `Identifier "sin" not declared`。**两句都在说「Godot 没这个名字」，而引擎两种都收** —— 这是「误拦合法工程」那一族里最大的一次（表只有 79 支，而引擎那族是 123 支）。
+- **枚举拿不到，只能扫**：4.6.3 不把 `@GlobalScope` / `@GDScript` 当 ClassDB 类（`class_exists("@GlobalScope")` 假、`class_get_method_list` 空），DocData 也不在这个构建里 —— 所以候选池是 4.3 树 `core/variant/variant_utility.cpp` 的 `VariantUtilityFunctions::` 那一族 ∪ 我们两张名单 ∪ 4.4+ 已知的新名字，共 133 支；每支塞进 `GDScript.new()` 的 `func f(): return <名>` 里 `reload()`，成功才算合法，再读 `typeof` / 标签 / `get_argument_count()`。**123 收 10 拒**。
+- **拒的那十支**：`acosd` `asindeg` `invalidate_nodes`（没有）、`assert`（是关键字）、`int` `float`（那 21 支「类型名兼函数名」）、`hex` `hex64` `rgb8` `rgb16`（4.6.3 不是全局函数）—— 这十支照旧 `undeclared-identifier`，方向与引擎一致。
+- **发出去的是数据不是实现**：44 支新行一律 `TODO(scope, argc)`，区间 null ⇒ 取值、打印（`@GlobalScope::sin` / `@GDScript::type_exists`）、等式、字典键、`get_method()` / `get_argument_count()`、`hash()` 都按实测发，只有 `.call` 抛 `[global-callable-call]`；调用那一头则从 `[call-unknown]` 换回 `[emit-builtin] 内置函数 sin() 还没实现` —— 这正是 §6 第 17 条① 定的口径（「Godot 有、我们没做」要说成「我们拒」）。
+- **标签前缀那张表第一次变宽**：`@GDScript` 那侧从七支变十支（多了 `dict_to_inst` `inst_to_dict` `type_exists`），guards 的「值位置 Callable」从 79 支变 123 支，整族从 130 例涨到 218 例。
+- **还欠**：44 支的实现（数学那一族多半能从 4.3 树读出式子再逐格验；`inst_to_dict` / `dict_to_inst` 要对象模型，`printerr` / `printraw` 要宿主打印通道，`rid_*` 是 RID 形状），以及候选池的覆盖 —— 4.6 独有的名字若还有漏网的，量到再补。
+- **账**：语料 250（10 行）、guards 218 例（123/123 那一族）、ops 沿用 1712 条，`pnpm test` 1052 例、`test:compile` 172/241、`test:diff` **164/164 逐字节**、静默 0，golden 漂移 单跑 250/250 全绿（漂移 0）、codegen 2/2、pkg-modes 25/25、面探针 1/1 与代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
 - **一次误报值得记**：golden 检测与别的引擎门**并发**跑时，445 行 golden 的 `236-global-math-family` 会被判成超时并误报漂移 —— 本轮第一次就是这么报的，单独重跑 245/245 全绿。已写进 §2 第 14 条的观察项。
 
 ---
