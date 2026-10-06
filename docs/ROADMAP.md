@@ -467,6 +467,16 @@
 - **三条仍拒，都是没量过**：表外的引擎类名、信号值对任何类名、以及**没登记引擎基类的实例**。第三条 Tier 1 现在走不到 —— `class X extends Resource` 在发射期先抛 `[class-extends]`（引擎类型属 Tier 2），它是防御性的拒；顺手把两条真链量下来留给 Tier 2 当靶子（Resource → {Object, RefCounted, Resource}、Node → {Object, Node}，类值则 `Res is Resource` 真、`Nodey is Node` 假，读数在 `tmp/probe-is-class/base-chain/`，那条探头本身因基类未发出而不进语料）。`as` 那一条一格实测都没有，故原样不动。
 - **两笔解析期读数**：`Comparable` 在 4.6.3 不是类；实例化 Node / Resource 会让引擎退出时打 `WARNING: ObjectDB instances leaked at exit`，所以那两形只进 ops 与探头，不进语料。
 - **账**：语料 248（14 行）、ops 新增 `is-engine-class-names.test.ts` 10 格（1689→1699），`pnpm test` 959 例、`test:compile` 170/239、`test:diff` **162/162 逐字节**、静默 0，golden 漂移 248/248 一次跑绿（漂移 0）、codegen 2/2、guards 130 例、pkg-modes 25/25、scriptc 代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
+
+### 1.51 `hash()` 的 Callable 那一支：内置那族折的就是名字哈希（16 支全中）（2026-10-06，S249，语料 249，§6 第 20 条① 结清）
+
+- **先问稳不稳**：§6 第 20 条① 卡的是「跨进程还没验」。同一支探头连跑两个进程，`abs` `sign` `len` `str` `range` `load` `print` `str_to_var` 八个数一字不差 —— 这一族不是指针号，可以走靶子路线。
+- **式子来自 4.3 树 + 16 支靶子**：`core/variant/callable.cpp:248` 那条是 `method.hash()` → `hash_murmur3_one_64(object, …)` → `hash_fmix32(…)`，而内置那一族走 `is_custom()` 分支，实测**折出来直接等于名字那支 String 哈希** —— 用 S212 已有的名字哈希逐名算，16 支全中（含 `type_convert` `convert` `ceil` `floor` `max` `min` `sqrt` `hash`），于是 `hash(abs) == hash("abs")` 这种同值关系也进了语料。
+- **空 Callable 才是那条非 custom 式子**：名字空串（5381）+ 对象 0 折两轮再 fmix32 → 2661229415，一次中。
+- **三支继续拒**：方法 3706878008、静态 346654436 这两轮稳定但五支候选式子都对不上（`fit.mjs`），lambda 两轮就换数（697588052 / 1141399711）—— 折的是引擎侧的函数标识，Tier 1 复现不了就抛 `[hash-callable]`，不发「大概是名字哈希」的数。顺带一条：绑实参不改数（`hash(o.m.bind(1)) == hash(o.m)`）。
+- **代码里那句旧账是错的**：`callableCtor` 注释与拒口都写着「1 参那一格在 Godot 是解析期拒」。实测 `Callable(abs)` 通、`== abs` 真、typeof 25、哈希同值；解析期拒的是 `Callable("abs")` / `Callable(5)` / `Callable(null)` / `Callable(Callable, String)` 这些签名。发出去的规则因此是「单实参本身就是 Callable → 原样给回」，其余单实参抛 `[callable-ctor]`。
+- **撞出一张表的缺口，记成 §6 第 23 条**：`type_exists` 值位置合法（`hash(type_exists)` = 4093741862），我们的 79 支表里没有它，分析器报 `undeclared-identifier` —— 那张表当初只扫了我们自己的名单，从没与引擎的全局函数表对过差集。下一轮把差集量出来（一支一名验 `typeof` / 打印 / `get_argument_count()`）。
+- **账**：语料 249（9 行）、ops 新增 `hash-callable.test.ts` 13 格（1699→1712），`pnpm test` 964 例、`test:compile` 171/240、`test:diff` **163/163 逐字节**、静默 0，golden 漂移 249/249 全绿（漂移 0）、codegen 2/2、guards 130 例、pkg-modes 25/25、面探针 1/1、原生 CLI 20/20、export ok 10 / FAIL 0、typecheck 4/4。
 - **一次误报值得记**：golden 检测与别的引擎门**并发**跑时，445 行 golden 的 `236-global-math-family` 会被判成超时并误报漂移 —— 本轮第一次就是这么报的，单独重跑 245/245 全绿。已写进 §2 第 14 条的观察项。
 
 ---

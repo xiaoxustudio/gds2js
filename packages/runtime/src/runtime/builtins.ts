@@ -3,6 +3,7 @@ import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } fr
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, GDict, intArgBig, show, strLength, truthyOf } from "./values";
 import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
+import { CallableBox, isCallableBox, isNullCallable } from "./callable";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
@@ -182,6 +183,20 @@ export function variantHashNumber(v: Variant, depth = 0): number {
         h = murmurOne32(variantHashNumber(vs[i] as Variant, depth + 1), h);
       }
       return fmix32(h);
+    }
+    case Tag.OBJECT: {
+      if (!isCallableBox(v.v)) {
+        throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
+      }
+      const box = v.v as CallableBox;
+      // 实测两条：全局内置那一族折出来就是名字那支 String 哈希（十六支一名一名对上，`tmp/probe-hash-callable/`）；
+      // 空 Callable 走引擎非 custom 那条 —— 名字空串 + 对象 0，再 fmix32。
+      if (isNullCallable(box)) return fmix32(murmurOne64Words(0, 0, hashDjb2("")));
+      if (box.object === null && box.name !== null) return hashDjb2(box.name);
+      throw new UnsupportedError(
+        "hash-callable",
+        "方法 / 静态 / lambda 的 Callable 哈希折的是引擎那侧的函数标识：lambda 两次跑就换数，方法与静态这两轮同值但名字、对象号五支候选式子都对不上（fit.mjs），不猜",
+      );
     }
     default:
       throw new UnsupportedError(

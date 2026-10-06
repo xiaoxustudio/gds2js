@@ -99,9 +99,16 @@ function descFor(inner: unknown): ClassDesc | null {
   return descOf(inner);
 }
 
-/** `Callable()`（空 Callable）与 `Callable(对象, "方法名")` 两个构造式；一参形在 Godot 是解析期那句，运行期先响亮拒。 */
+/** `Callable()`、`Callable(Callable)` 与 `Callable(对象, "方法名")` 三个构造式（实测都通）。 */
 export function callableCtor(args: Variant[]): Variant {
   if (args.length === 0) return nullCallable();
+  if (args.length === 1) {
+    // 实测 `Callable(abs) == abs` 真、typeof 25、哈希同值（`tmp/probe-hash-callable/ctor.log` w01）。
+    // 其余单实参在引擎是解析期那句 "No constructor of "Callable" matches the signature "Callable(String)"."，到不了运行期。
+    const only = args[0] as Variant;
+    if (isCallableBox(only.v)) return only;
+    throw new UnsupportedError("callable-ctor", `Callable(x) 这一格只量过实参本身就是 Callable（收到 ${tagName(only.t)}）`);
+  }
   if (args.length === 2) {
     const [obj, name] = args as [Variant, Variant | undefined];
     if (name === undefined || (name.t !== Tag.STRING && name.t !== Tag.STRING_NAME)) {
@@ -111,7 +118,7 @@ export function callableCtor(args: Variant[]): Variant {
   }
   throw new UnsupportedError(
     "callable-ctor",
-    `Callable() 只量过 0 参与 2 参（收到 ${args.length} 个；1 参那一格在 Godot 是解析期拒）`,
+    `Callable() 只量过 0、1、2 参（收到 ${args.length} 个）`,
   );
 }
 
