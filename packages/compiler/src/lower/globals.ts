@@ -29,8 +29,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "push_warning",
   // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。
   // 少了这一批，`sin(0.5)` 这种合法调用会被报成 `[call-unknown]`「Godot 也没有这个名字」—— 那是假话，而且值位置还会被误拦。
-  "absf",
-  "absi",
   "acos",
   "asin",
   "asinh",
@@ -52,7 +50,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "inst_to_dict",
   "is_instance_id_valid",
   "is_instance_valid",
-  "is_same",
   "lerp_angle",
   "linear_to_db",
   "nearest_po2",
@@ -72,7 +69,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "type_string",
   "var_to_bytes",
   "var_to_bytes_with_objects",
-  "wrap",
 ]);
 
 

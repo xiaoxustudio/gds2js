@@ -4,7 +4,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
-  gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap } from "./builtins";
+  gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
@@ -1196,6 +1196,8 @@ function ga(a: Variant[], i: number): Variant {
 /** 全局 Callable 的「名字 → 式子」：一支一支对着实测的调用路径写的，与发射器那张 `BUILTIN` 表同形。 */
 const GLOBAL_IMPL: Record<string, Fn> = {
   abs: (a) => abs(ga(a, 0)),
+  absf: (a) => gAbsF(ga(a, 0)),
+  absi: (a) => gAbsI(ga(a, 0)),
   char: (a) => stringChr(ga(a, 0)),
   angle_difference: (a) => gAngleDifference(ga(a, 0), ga(a, 1)),
   ceil: (a) => gCeil(ga(a, 0), "auto"),
@@ -1220,6 +1222,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   is_finite: (a) => gIsFinite(ga(a, 0)),
   is_inf: (a) => gIsInf(ga(a, 0)),
   is_nan: (a) => gIsNan(ga(a, 0)),
+  is_same: (a) => gIsSame(ga(a, 0), ga(a, 1)),
   is_zero_approx: (a) => gIsZeroApprox(ga(a, 0)),
   len: (a) => lengthOf(ga(a, 0)),
   lerp: (a) => gLerp(ga(a, 0), ga(a, 1), ga(a, 2)),
@@ -1254,6 +1257,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   type_convert: (a) => variantConvert(ga(a, 0), ga(a, 1), false),
   typeof: (a) => typeOf(ga(a, 0)),
   var_to_str: (a) => V.str(varToStr(ga(a, 0))),
+  wrap: (a) => gWrapAny(ga(a, 0), ga(a, 1), ga(a, 2)),
   wrapf: (a) => gWrap(ga(a, 0), ga(a, 1), ga(a, 2), false),
   wrapi: (a) => gWrap(ga(a, 0), ga(a, 1), ga(a, 2), true),
 };
@@ -1264,13 +1268,13 @@ export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.k
 /**
  * 全局函数的 Callable 值：`var f = abs` 实测给 `typeof 25`、打印 `@GlobalScope::abs`，`.call()` 走各自那个式子，
  * 等式按 `(名字, 接收者)` 走 —— 全局那支的接收者是 null，所以同名两个盒子相等（实测 `str_to_var == str_to_var` 真）。
- * 我们没实现那个式子的 18 支（`GLOBAL_CALLABLES` 里 `bounds` 为 null 的）照发盒子：值、`get_method()`、`get_argument_count()`
+ * 我们没实现那个式子的 58 支（`GLOBAL_CALLABLES` 里 `bounds` 为 null 的）照发盒子：值、`get_method()`、`get_argument_count()`
  * 都是实测读数，只有 `.call()` 响亮拒。
  */
 export function globalCallable(name: string): Variant {
   const row = GLOBAL_CALLABLES[name];
   if (row === undefined) {
-    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 79 个里`);
+    throw new UnsupportedError("global-callable-name", `${name} 不在实测「能当值用的全局函数名」那 123 个里`);
   }
   const impl = GLOBAL_IMPL[name];
   const fn: Fn =

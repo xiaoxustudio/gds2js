@@ -1,9 +1,10 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, show, strLength, truthyOf } from "./values";
+import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq } from "./values";
 import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
-import { CallableBox, isCallableBox, isNullCallable } from "./callable";
+import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
+import { typeOf } from "./patterns";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
@@ -221,7 +222,8 @@ export function sqrt(v: Variant): Variant {
 export function abs(v: Variant): Variant {
   if (v.t === Tag.INT) {
     const x = intToBig(v.v as IntPayload);
-    return V.int(x < 0n ? -x : x);
+    // `abs(INT64_MIN)` 回绕回 INT64_MIN（实测 e13），不是 +2^63。
+    return V.int(x < 0n ? wrap64(-x) : x);
   }
   return V.float(Math.abs(num(v)) + 0);
 }
@@ -593,4 +595,49 @@ export function rangeSeq(args: Variant[]): number[] {
 /** range(end) / range(start, end) / range(start, end, step) */
 export function range(args: Variant[]): GArray {
   return GArray.of(rangeSeq(args).map((i) => V.int(i)));
+}
+
+/** `absf` / `absi`：实测只吃 INT / FLOAT / BOOL（String、StringName、Nil、Array、Vector2 那一格引擎报 Invalid type 并掐掉本次调用，实测 f01–f12）。 */
+export function gAbsF(v: Variant): Variant {
+  return V.float(Math.abs(flArg(v, "absf() 的参数")) + 0);
+}
+
+export function gAbsI(v: Variant): Variant {
+  const x = intArgBig(v, "absi() 的参数");
+  return V.int(x < 0n ? wrap64(-x) : x);
+}
+
+/** absf 的取数：bool 折成 1/0（实测 a05），其余非数值同 intArgBig 那侧报运行时错。 */
+function flArg(v: Variant, who: string): number {
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
+    throw new GodotRuntimeError("arg-float", `${who} 需要 float，收到 ${tagName(v.t)}`);
+  }
+  return v.t === Tag.FLOAT ? (v.v as number) : intToNum(v.v as IntPayload);
+}
+
+/** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */
+export function gWrapAny(v: Variant, lo: Variant, hi: Variant): Variant {
+  return gWrap(v, lo, hi, v.t === Tag.INT && lo.t === Tag.INT && hi.t === Tag.INT);
+}
+
+/**
+ * `is_same(a, b)`：先比引擎那侧的类型，再按类型走「同一性」。
+ * 容器 / pack / 信号 / 对象与类值看身份，Callable 看等式（绑过没绑过算不等），
+ * 结构体与标量看值 —— 浮点的 NaN 自己相等、0.0 与 -0.0 相等（实测 d06 / e08）。
+ */
+export function gIsSame(a: Variant, b: Variant): Variant {
+  const ta = (typeOf(a) as Variant).v as number;
+  if ((typeOf(b) as Variant).v !== ta) return V.bool(false);
+  if (ta === 2) {
+    return V.bool(intToBig(a.v as IntPayload) === intToBig(b.v as IntPayload));
+  }
+  if (ta === 3) {
+    const x = a.v as number;
+    const y = b.v as number;
+    return V.bool(x === y || (Number.isNaN(x) && Number.isNaN(y)));
+  }
+  if (ta === 25) return V.bool(callableEq(a.v as CallableBox, b.v as CallableBox));
+  if (ta === 24 || ta === 26 || ta === 27 || ta === 28 || isBytes(a)) return V.bool(a.v === b.v);
+  return V.bool(valueEq(a, b));
 }

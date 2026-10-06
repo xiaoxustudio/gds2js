@@ -2089,13 +2089,15 @@ function digits17(n: number): string {
   return `${neg ? "-" : ""}${String(q)}${"0".repeat(tail)}`;
 }
 
-/** 浮点转字符串（Godot 的 print 口径）：`nan` / `inf` / `-inf` 原样，0 与 -0.0 都印 `0.0`；整数值给约 17 位有效数字 + `.0`，非整数按整数位数定小数位再去尾随零。 */
+/** 浮点转字符串（Godot 的 print 口径）：`nan` / `inf` / `-inf` 原样，0 与 -0.0 都印 `0.0`；整数值先试 int64（装得下就精确展开，装不下回到约 17 位有效数字）再补 `.0`，非整数按整数位数定小数位再去尾随零。 */
 export function strFloat(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
   if (n === -Infinity) return "-inf";
   if (n === 0) return "0.0";
-  if (Number.isInteger(n)) return `${digits17(n)}.0`;
+  // 引擎那侧是 `p_num == (double)(int64_t)p_num` 这一眼：落进 int64 就整数的十进制展开原样印（实测 2^62、2^63-1024、123456789012345678.0），
+  // 落不进去才换成 17 位有效数字（实测 2^63 → 9223372036854775800.0、1e19 → 10000000000000000000.0）。
+  if (Number.isInteger(n)) return `${n >= -(2 ** 63) && n < 2 ** 63 ? String(BigInt(n)) : digits17(n)}.0`;
   const intDigits = Math.max(0, Math.floor(Math.log10(Math.abs(n))) + 1);
   const decimals = Math.max(0, Math.min(14, 15 - intDigits));
   if (decimals === 0) {

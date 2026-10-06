@@ -23,8 +23,8 @@ const TODO = (scope: GlobalScopeTag, argc: number): GlobalCallableRow => ({ scop
 
 export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Object.freeze({
   abs: GS(1),
-  absf: TODO("GlobalScope", 1),
-  absi: TODO("GlobalScope", 1),
+  absf: GS(1),
+  absi: GS(1),
   acos: TODO("GlobalScope", 1),
   angle_difference: GS(2),
   asin: TODO("GlobalScope", 1),
@@ -72,7 +72,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   is_instance_id_valid: TODO("GlobalScope", 1),
   is_instance_valid: TODO("GlobalScope", 1),
   is_nan: GS(1),
-  is_same: TODO("GlobalScope", 2),
+  is_same: GS(2),
   is_zero_approx: GS(1),
   len: GD(1),
   lerp: GS(3),
@@ -142,7 +142,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   var_to_bytes_with_objects: TODO("GlobalScope", 1),
   var_to_str: GS(1),
   weakref: TODO("GlobalScope", 1),
-  wrap: TODO("GlobalScope", 3),
+  wrap: GS(3),
   wrapf: GS(3),
   wrapi: GS(3),
 });
