@@ -84,14 +84,49 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   );
 }
 
-/** 单实参那三支（char / var_to_str / str_to_var）实测两句措辞不同：少给是 "at least 1"，多给是 "at most 1"。 */
-function singleArgArity(code: string, name: string, got: number): UnsupportedError {
-  return new UnsupportedError(
-    code,
-    got === 0
-      ? `Too few arguments for "${name}()" call. Expected at least 1 but received 0.`
-      : `Too many arguments for "${name}()" call. Expected at most 1 but received ${String(got)}.`,
-  );
+/** 4.6.3 解析期那两句原文（探头 `tmp/probe-arity/arity.log`，20 支一名两形）：少给报 `at least`、多给报 `at most`。 */
+function aritySentence(name: string, min: number, max: number, got: number): string {
+  return got < min
+    ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(got)}.`
+    : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(got)}.`;
+}
+
+/** 实测过的内置函数实参区间；表外的名字（`print` / `str` / `range` 这些变元与类型构造器）不拦 —— 没量过就不说。 */
+const BUILTIN_ARITY: Record<string, [number, number]> = {
+  abs: [1, 1],
+  angle_difference: [2, 2],
+  bezier_derivative: [5, 5],
+  bezier_interpolate: [5, 5],
+  char: [1, 1],
+  clamp: [3, 3],
+  clampi: [3, 3],
+  cubic_interpolate_in_time: [8, 8],
+  is_same: [2, 2],
+  lerp: [3, 3],
+  max: [2, Number.POSITIVE_INFINITY],
+  min: [2, Number.POSITIVE_INFINITY],
+  move_toward: [3, 3],
+  pingpong: [2, 2],
+  posmod: [2, 2],
+  remap: [5, 5],
+  rotate_toward: [3, 3],
+  sign: [1, 1],
+  smoothstep: [3, 3],
+  snapped: [2, 2],
+  step_decimals: [1, 1],
+  str_to_var: [1, 1],
+  var_to_str: [1, 1],
+  wrap: [3, 3],
+};
+
+/** 少给 / 多给在引擎是解析期拒；这里同样在发射期拒，措辞照原文，`code` 沿用已出货那三支的。 */
+function checkBuiltinArity(name: string, got: number): void {
+  const ar = BUILTIN_ARITY[name];
+  if (ar === undefined) return;
+  if (got >= ar[0] && got <= ar[1]) return;
+  const code = name === "char" ? "char-arity" : name === "var_to_str" ? "var-to-str-arity"
+    : name === "str_to_var" ? "str-to-var-arity" : "builtin-arity";
+  throw new UnsupportedError(code, aritySentence(name, ar[0], ar[1], got));
 }
 
 /** 映射到运行时的内置函数 */
@@ -104,11 +139,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   sqrt: (a) => `rt.sqrt(${a.join(", ")})`,
   hash: (a) => `rt.variantHash([${a.join(", ")}])`,
   var_to_str: (a) => {
-    if (a.length !== 1) throw singleArgArity("var-to-str-arity", "var_to_str", a.length);
     return `rt.V.str(rt.varToStr(${a[0]}))`;
   },
   str_to_var: (a) => {
-    if (a.length !== 1) throw singleArgArity("str-to-var-arity", "str_to_var", a.length);
     return `rt.strToVar(${a[0]})`;
   },
   convert: (a) => {
@@ -125,7 +158,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   },
   abs: (a) => `rt.abs(${a.join(", ")})`,
   char: (a) => {
-    if (a.length !== 1) throw singleArgArity("char-arity", "char", a.length);
     return `rt.stringChr(${a[0]})`;
   },
   len: (a) => `rt.lengthOf(${a.join(", ")})`,
@@ -3157,7 +3189,10 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     }
 
     const builtin = BUILTIN[name];
-    if (builtin) return builtin(args);
+    if (builtin) {
+      checkBuiltinArity(name, e.args.length);
+      return builtin(args);
+    }
     if (name === "super") {
       // `_init` 里的 `super(...)` 调父类 `_init` 的体（调两次就跑两遍）；别的方法里的 `super()` 调父类的同名方法。
       if (!INIT_HAS_BASE) {

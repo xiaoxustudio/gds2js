@@ -184,6 +184,40 @@ describe("值位置的全局函数名", () => {
     expect(await emitted(MOD('print(str_to_var("1"))'))).toContain("rt.strToVar(");
   });
 
+  it("内置函数的实参数按实测区间拦（引擎那两句原文）", async () => {
+    const text = async (src: string): Promise<string> => {
+      try {
+        await emitted(src);
+        return "居然编得过";
+      } catch (e) {
+        return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+      }
+    };
+    // 读数来自 `tmp/probe-arity/arity.log`：一支名两形（少给 / 多给），全部一字不差
+    const shapes: Array<[string, number, string]> = [
+      ["clamp", 3, "1"], ["angle_difference", 2, "1.0"], ["pingpong", 2, "7.0"],
+      ["rotate_toward", 3, "1.0"], ["bezier_interpolate", 5, "1.0"], ["cubic_interpolate_in_time", 8, "1.0"],
+      ["step_decimals", 1, "0.5"], ["is_same", 2, "1"], ["move_toward", 3, "1.0"], ["remap", 5, "1.0"],
+    ];
+    for (const [name, want, sample] of shapes) {
+      const few = Array.from({ length: want - 1 }, () => sample).join(", ");
+      const ok = Array.from({ length: want }, () => sample).join(", ");
+      const many = Array.from({ length: want + 1 }, () => sample).join(", ");
+      expect(await classify(PRINT(`${name}(${ok})`), "ok"), `${name} 正好 ${String(want)} 支该编得过`).toBe("ok");
+      expect(await text(PRINT(`${name}(${few})`)), `${name} 少给那句`).toBe(
+        `Too few arguments for "${name}()" call. Expected at least ${String(want)} but received ${String(want - 1)}.`);
+      expect(await text(PRINT(`${name}(${many})`)), `${name} 多给那句`).toBe(
+        `Too many arguments for "${name}()" call. Expected at most ${String(want)} but received ${String(want + 1)}.`);
+    }
+    // min / max 实测是「至少 2、上不封顶」：三支与四支都编得过
+    expect(await classify(PRINT("min(1, 2, 3)"), "ok"), "min 三支不拦").toBe("ok");
+    expect(await classify(PRINT("max(1, 2, 3, 4)"), "ok"), "max 四支不拦").toBe("ok");
+    expect(await text(PRINT("min(1)")), "min 一支那句").toBe(`Too few arguments for "min()" call. Expected at least 2 but received 1.`);
+    // 表外的名字不拦：print 是变元、`int()` 是类型构造器，两句都没在这一族量过
+    expect(await classify(PRINT("print(1, 2, 3)"), "ok"), "print 的变元不参与拦").toBe("ok");
+    expect(await classify(MOD("var x = str(1, 2, 3)"), "ok"), "str 的变元不参与拦").toBe("ok");
+  });
+
   it("局部遮蔽的三格按实测方向走", async () => {
     // ① 声明在前：读数归局部（实测 s04 的 len）
     const before = await emitted(BODY(["var len = 5", "print(len)", "print(abs)"]));
