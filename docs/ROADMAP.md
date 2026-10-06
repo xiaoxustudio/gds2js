@@ -571,6 +571,15 @@
 - **一条附带教训**：`git revert -n` + `git reset --hard` 之后，255 那三份文件被 autocrlf 换成了 CRLF，语料门立刻报「第 1 行不一致」——那是行尾噪声不是语义错。凡是动过这类 git 操作，跑门之前先把 corpus 文件归一回 LF（本轮就是 `split("\r\n").join("\n")` 一遍）。
 - **账**：面探针 1/1、`test:diff` 169/169 逐字节（静默 0、崩溃 0）、guards 全过、typecheck 4/4 与 `tsconfig.test.json`；出货三连读完并全绿 —— `test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0（红的正是它那四格 scriptc 格）、`test:cli-native` 20/20（含 `④ 工程 export --pack scriptc` 与 `⑨b run --watch`）。§1.59 那条红账到此销掉。
 
+### 1.61 打印一族按原始字节重重量一遍：五支发出、五支把缘由写进错文（2026-10-07，S258，语料 256，§6 第 23 条再收窄）
+
+- **上一轮那份读数是错的，错在探头**：`tmp/probe-prints/prints.log` 记 stdout 时把空行滤掉了，于是 `prints()` / `printt()` 被写成「一行都不出」，`printerr()` 也被读成「什么都不出」。按原始字节重量（`zero-arg.log` 14 格 + `err-shape.log` 5 格）才看清零实参那格五支各不一样：`print()` / `prints()` / `printt()` 照旧结尾一行，`printraw()` / `print_verbose()` 什么都不动（连 `printraw` 那半行都不开），`printerr()` 只往 **stderr** 落一个换行。这轮之所以发现得早，是因为语料 256 里放了 `printraw("A")` + 零实参 + `print("B")` 那种夹心格 —— golden 一记就是 `A` / `B` 两行，跟实现给的 `AB` 一行当场对不上。**教训写进口径里：滤空行的探头不能用来判「出不出行」。**
+- **发的五支**（形状全部来自实测）：`prints` 实参间一个空格、`printt` 一个制表符、`printraw` 无分隔且不结尾、`printerr` 无分隔且走 stderr、`print_verbose` 在默认声级下整支不出声（4.3 树 `variant_utility.cpp:997` 那句 `if (OS::is_stdout_verbose())` 正是这一格 —— 我们的宿主没有声级旗标，所以发成空操作而不是凭空定一条）。实参照旧「全部先求值再逐个 show」（S170 ⑦），分隔符只出现在实参之间。
+- **宿主因此多了一个状态**：`printraw` 那半行。下一条结尾的行把它并到行首（`printraw("A") prints("s","t") print("B")` → `As t` / `B`），程序收尾时按原样落盘、不补换行（`printraw("only")` 的 stdout 就是 `only`，与引擎同形）。`resetOut()` 一并清它，否则上个用例的半行会串进下个用例。
+- **两条门的分流口径之前不一致，这轮对齐了**：`godot.txt` 的定义是 stdout 拼 stderr（`tools/lib.mjs:88`），而 JS 侧两个门都只看 stdout —— `test/support/js-runner.ts` 现在两路一起收，`test/e2e/scriptc.test.ts:225` 从 `run.stdout` 换成 `run.out`。改之前 `256-` 在出货门报「第 22 行 godot="e12true" js=""」，那正是 `printerr` 那行：不是产品少了输出，是门少收了一路。
+- **仍拒的五支开始说实话**：`emitter.ts` 新增 `BUILTIN_TODO_WHY`，错文里带上实测到的那半截 —— `print_rich`（bbcode→ANSI 只量过 `[b]`）、`print_debug`（第二行是 `At: res://<脚本>:<行>:<函数>()`）、`print_stack`（帧里带指针号）、`push_error` / `push_warning`（stderr 四行，含 `at: push_error (core/variant/variant_utility.cpp:1024)` 与 GDScript backtrace）。这些读数原样留在 `tmp/probe-prints/prints.log`，等「带脚本身份的打印」那条口径定了再一起做。
+- **账**：语料 256 共 22 行逐字节（末行来自 stderr）、`test:diff` **170/170**（静默 0、崩溃 0）、`test:compile` 178/247、`pnpm test` 1060 例、ops 1799、guards 190 例（新增「打印一族的发射与拒答」2 例）、`packages/runtime/test/print-family.test.ts` 3 例 17 格（钉的正是 golden 里看不见的那几格）、tree-face 17 项、`test:codegen` 2/2、面探针 `234-` 1/1、`256-` AOT 逐字节 1/1（`process.stderr.write` 在静态目标上出得来）、`test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 20/20（含 `④ 工程 export --pack scriptc` —— 换新的宿主 import 行之后静态出货照样逐字节）、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 32→**27**。golden 漂移门本轮不重跑整批：256 那份 golden 就是这轮从裁判引擎记下来的，其余用例的 `main.gd` 一字未动（改的只有 JS 侧的宿主 import 行）。
+
 ---
 
 ## 2. 当前任务与待办

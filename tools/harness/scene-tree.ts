@@ -4,4 +4,14 @@ import { claimRunReporting } from "@gds2js/runtime/runtime/errors";
 // 不许产物自己印一行、更不许把 process.exitCode 改成非 0。声明「归我报」，产物顶层就只再抛不改口。
 claimRunReporting();
 
-export { print, flush, captured, resetOut as reset, SceneTree } from "@gds2js/runtime/host-node";
+export {
+  print,
+  printJoined,
+  printRaw,
+  printErr,
+  printVerbose,
+  flush,
+  captured,
+  resetOut as reset,
+  SceneTree,
+} from "@gds2js/runtime/host-node";

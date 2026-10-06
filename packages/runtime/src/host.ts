@@ -1,27 +1,60 @@
 import { Signal } from "./runtime/signal";
 import { GdScriptObject } from "./runtime/object";
 import type { Variant } from "./runtime/tags";
-import { truthyOf } from "./runtime/values";
+import { showArgsSep, truthyOf } from "./runtime/values";
 
+/** 已经结尾的行，一条一个元素。 */
 let out: string[] = [];
+/** `printraw` 留下的那半行：实测它不结尾，下一条 `print` 接在同一行上（`printraw("a")` + `print("b")` → 一行 `ab`）。 */
+let pending = "";
+
+/** 一条结尾的行落进缓冲，顺带把 `printraw` 那半行并到行首。 */
+function addLine(text: string): void {
+  out.push(pending + text);
+  pending = "";
+}
 
 /** 记录一次 print 的输出。签名收 `string[]` 而不是 `unknown[]`：后者在静态编译目标上没有表示形式。 */
 export function print(...args: string[]): void {
-  out.push(args.join(""));
+  addLine(args.join(""));
 }
 
+/** `prints` / `printt`：实参之间一个空格 / 一个制表符。零实参那格实测仍结尾一行（`printraw("A")` + `prints()` + `print("B")` → 两行 `A` / `B`）。 */
+export function printJoined(sep: string, args: Variant[]): void {
+  addLine(showArgsSep(args, sep));
+}
+
+/** `printraw`：无分隔、不结尾；实测零实参连那半行都不开（`printraw("A")` + `printraw()` + `print("B")` → 一行 `AB`）。 */
+export function printRaw(args: Variant[]): void {
+  if (args.length === 0) return;
+  pending += showArgsSep(args, "");
+}
+
+/** `printerr`：实测走 stderr、实参之间无分隔、结尾一个换行；零实参就只落那个换行。 */
+export function printErr(args: Variant[]): void {
+  process.stderr.write(showArgsSep(args, "") + "\n");
+}
+
+/** `print_verbose`：实测 headless 默认声级下不出声（实参照常求值，只是没人听）。要跟随声级开关得先给 CLI 加那条旗标。 */
+export function printVerbose(_args: Variant[]): void {}
+
 export function flush(): void {
-  process.stdout.write(out.join("\n") + (out.length > 0 ? "\n" : ""));
+  if (out.length > 0) process.stdout.write(out.join("\n") + "\n");
+  // 引擎不给 printraw 补结尾换行，这里也不补。
+  if (pending !== "") process.stdout.write(pending);
   out = [];
+  pending = "";
 }
 
 export function captured(): string {
-  return out.join("\n");
+  if (pending === "") return out.join("\n");
+  return out.join("\n") + (out.length > 0 ? "\n" : "") + pending;
 }
 
 /** 用例之间必须清干净：上一个用例若中途抛错，没 flush 的输出会串到下一个 */
 export function resetOut(): void {
   out = [];
+  pending = "";
 }
 
 class Timer {

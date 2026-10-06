@@ -1,7 +1,7 @@
 // 由 gds2js 从 main.gd 编译生成 —— 不要手改。
 
 import * as rt from "../../../packages/runtime/src/runtime/index";
-import { print, SceneTree } from "../../../tools/harness/scene-tree";
+import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "../../../tools/harness/scene-tree";
 
 const TYPE_COLOR = rt.V.int(20);
 

@@ -1,0 +1,22 @@
+x true <null> [1, 2] sn (1.0, 2.0)
+a 1
+aa	b	3
+solo
+r1r2
+m1
+m2m3m4
+p1p2 p3
+p4
+t1t2	t3
+t4
+z1
+z2
+z3
+z4
+z5z6
+z7z9
+w1
+w2
+y1y2
+post
+e12true

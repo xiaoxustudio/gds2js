@@ -2281,11 +2281,19 @@ export const COMPARE_DEPTH = 52;
 
 registerPackStringifier((v) => show(v));
 
+/** `print` 系的实参分隔：`print` / `printerr` / `printraw` 是空串，`prints` 一个空格，`printt` 一个制表符（实测 S256）。 */
+export function showArgsSep(args: Variant[], sep: string): string {
+  let out = "";
+  for (let i = 0; i < args.length; i++) {
+    if (i > 0) out += sep;
+    out += show(args[i] as Variant);
+  }
+  return out;
+}
+
 /** `print(a, b, c)` 的口径：**先把所有实参求值完，才开始逐个转字符串**，所以整串实参交到这里按顺序 show、用空串拼。 */
 export function showArgs(args: Variant[]): string {
-  let out = "";
-  for (const a of args) out += show(a);
-  return out;
+  return showArgsSep(args, "");
 }
 
 /** 顶层 print：字符串不加引号 */

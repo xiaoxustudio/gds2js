@@ -1,5 +1,5 @@
 /**
- * 在本进程内跑语料产物并捕获它写到 stdout 的字节。
+ * 在本进程内跑语料产物并捕获它写到 stdout 与 stderr 的字节（golden 那侧就是两路拼起来的）。
  *
  * 1. **逐用例清缓冲**：host.ts 的 `out` 是模块级数组，上个用例若中途抛错，没 flush 的输出
  *    会串到下一个，所以两条路都先 `harness.reset()`（它就是 host.ts `resetOut` 的再导出）。
@@ -22,7 +22,7 @@ import { compileProject } from "@gds2js/compiler/compile/project";
 import * as harness from "../../tools/harness/scene-tree";
 import { caseDir, caseIsProject, CORPUS } from "./lib-bridge";
 
-/** 跑一个用例，返回它写到 stdout 的字节；没有产物可跑就返回 null（= 未实现，不是崩溃）。 */
+/** 跑一个用例，返回它写到 stdout 与 stderr 的字节；没有产物可跑就返回 null（= 未实现，不是崩溃）。 */
 export default async function runCase(id: string): Promise<string | null> {
   if (caseIsProject(id)) return runProjectCase(id);
 
@@ -61,16 +61,24 @@ async function runProjectCase(id: string): Promise<string> {
 }
 
 async function captureStdout(fn: () => Promise<unknown>): Promise<string> {
-  const chunks: string[] = [];
+  const out: string[] = [];
+  const err: string[] = [];
   const original = process.stdout.write.bind(process.stdout);
+  const originalErr = process.stderr.write.bind(process.stderr);
   process.stdout.write = (chunk: unknown) => {
-    chunks.push(String(chunk));
+    out.push(String(chunk));
+    return true;
+  };
+  process.stderr.write = (chunk: unknown) => {
+    err.push(String(chunk));
     return true;
   };
   try {
     await fn();
   } finally {
     process.stdout.write = original;
+    process.stderr.write = originalErr;
   }
-  return chunks.join("");
+  // golden 那侧就是 stdout 拼 stderr（tools/lib.mjs:88），两路各归一路、不比对相互次序。
+  return out.join("") + err.join("");
 }

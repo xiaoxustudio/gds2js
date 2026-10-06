@@ -222,7 +222,9 @@ async function gateOne(id: string): Promise<Row> {
     if (!row.ran) {
       row.note = `exe 退出 ${String(run.status)}：${run.stderr.trim().split("\n")[0]?.slice(0, 140) ?? ""}`;
     } else {
-      const got = normalize(run.stdout, caseScript(id));
+      // golden 那侧就是 stdout 拼 stderr（tools/lib.mjs:88），这里同形：只看 stdout 会把写 stderr 的
+      // 那一支（`printerr`）当成缺行，语料门（corpus-diff 走 test/support/js-runner）也是两路一起收的。
+      const got = normalize(run.out, caseScript(id));
       const golden = readGolden(id);
       row.exact = got === golden;
       if (!row.exact) {

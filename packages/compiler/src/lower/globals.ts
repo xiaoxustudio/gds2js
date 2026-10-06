@@ -20,12 +20,11 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "randi_range",
   "randf_range",
   "randfn",
-  // 4.6.3 实测「有这个名字、能过解析」的打印一族（`prints` 参数间一个空格、`printt` 一个制表符、`print_rich` 直接拼、
-  // `print_verbose` 在 headless 下不出声、`push_warning` 的 `WARNING:` 那行实测走 stderr）：我们没实现，拒的措辞得是「我们拒」而不是「Godot 也没有」。
-  "prints",
-  "printt",
+  // 4.6.3 实测的打印一族里，形状能完全复刻的五支已经发了（`prints` 一个空格、`printt` 一个制表符、`printraw` 不结尾、
+  // `printerr` 走 stderr、`print_verbose` 在默认声级下不出声 —— `tmp/probe-prints/prints.log`，S256）。
+  // 剩下这几支的读数里挂着只有引擎知道的东西（bbcode 转义表、`At:` 那行的脚本身份、`variant_utility.cpp` 的行号与 backtrace），
+  // 发出去就是猜，所以拒，并把拒的缘由一并印出来（`emitter.ts` 的 BUILTIN_TODO_WHY）。
   "print_rich",
-  "print_verbose",
   "push_error",
   "push_warning",
   // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。
@@ -37,8 +36,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "is_instance_of",
   "is_instance_id_valid",
   "is_instance_valid",
-  "printerr",
-  "printraw",
   "rand_from_seed",
   "rid_allocate_id",
   "rid_from_int64",

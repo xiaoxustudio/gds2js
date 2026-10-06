@@ -1,7 +1,7 @@
 // 由 gds2js 从 main.gd 编译生成 —— 不要手改。
 
 import * as rt from "../../../packages/runtime/src/runtime/index";
-import { print, SceneTree } from "../../../tools/harness/scene-tree";
+import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "../../../tools/harness/scene-tree";
 
 const Suit = rt.dictOf([[rt.V.str("HEARTS"), rt.V.int(0)], [rt.V.str("DIAMONDS"), rt.V.int(5)], [rt.V.str("CLUBS"), rt.V.int(6)]]);
 const ANON_A = rt.V.int(0);

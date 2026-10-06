@@ -265,9 +265,32 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
-/** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加 `print` / `load` / `preload`。
+/** 这几支拒的缘由是实测读数里挂着只有引擎知道的东西，报错时把它们说出来，别只留一句「还没实现」。 */
+const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
+  print_rich: "bbcode 到 ANSI 的映射只量过 [b] 那一格，整张表没测过",
+  print_debug: "读数第二行是 `At: res://<脚本>:<行>:<函数>()`，要产物报出自己的脚本身份，属带 id 打印那一族",
+  print_stack: "回溯帧的打印带指针号与行号，复现不了",
+  push_error: "实测走 stderr 的四行里有 `at: push_error (core/variant/variant_utility.cpp:1024)` 与 GDScript backtrace",
+  push_warning: "实测走 stderr 的四行里有 `at: push_warning (core/variant/variant_utility.cpp:1034)` 与 GDScript backtrace",
+};
+
+/** 打印一族在宿主侧的落点：`print` 是旧的那支，其余五支由 `prints` / `printt` / `printraw` / `printerr` / `print_verbose` 直接发名调用。 */
+export const HOST_PRINT_NAMES: readonly string[] = [
+  "print",
+  "printJoined",
+  "printRaw",
+  "printErr",
+  "printVerbose",
+];
+
+/** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加打印一族与 `load` / `preload`。
  *  与 `GLOBAL_TODO_FUNCTIONS`（Godot 有、我们拒）相对，两份都是量出来的，摸不得。 */
-export const GLOBAL_IMPLEMENTED: Set<string> = new Set([...Object.keys(BUILTIN), "print", "load", "preload"]);
+export const GLOBAL_IMPLEMENTED: Set<string> = new Set([
+  ...Object.keys(BUILTIN),
+  ...HOST_PRINT_NAMES,
+  "load",
+  "preload",
+]);
 
 /** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
@@ -332,7 +355,7 @@ function standaloneInlineHeader(body: string): string {
     .map((l) => (l.length ? `  ${l}` : l))
     .join("\n");
   return [
-    "const { rt, print, SceneTree } = (() => {",
+    `const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree } = (() => {`,
     "  const module = { exports: {} };",
     "  const exports = module.exports;",
     indented,
@@ -417,11 +440,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   } else if (runtimeMode === "local") {
     const p = opts.standaloneRequirePath ?? "./gds2js-standalone.cjs";
     out.push(`import { createRequire } from "node:module";`);
-    out.push(`const { rt, print, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
+    out.push(`const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
   } else {
     out.push(`import * as rt from "${runtimeImport}";`);
     if (hostImport) {
-      const hostNames = baseClass.kind === "host" ? ["print", "SceneTree"] : ["print"];
+      const hostNames = baseClass.kind === "host" ? [...HOST_PRINT_NAMES, "SceneTree"] : [...HOST_PRINT_NAMES];
       out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
     }
   }
@@ -3172,6 +3195,14 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
   if (e.callee.kind === "ident") {
     const name = e.callee.name;
     if (name === "print") return `print(rt.showArgs([${args.join(", ")}]))`;
+    // 实测的打印一族（S256）：`prints` 实参间一个空格、`printt` 一个制表符、`printraw` 不结尾、
+    // `printerr` 走 stderr、`print_verbose` 在默认声级下不出声。零实参那格各支不一样（`prints()` / `printt()` 照结尾一行、
+    // `printraw()` 与 `print_verbose()` 什么都不动、`printerr()` 只往 stderr 落一个换行），形状全在宿主里按实测走。
+    if (name === "prints") return `printJoined(" ", [${args.join(", ")}])`;
+    if (name === "printt") return `printJoined("\\t", [${args.join(", ")}])`;
+    if (name === "printraw") return `printRaw([${args.join(", ")}])`;
+    if (name === "printerr") return `printErr([${args.join(", ")}])`;
+    if (name === "print_verbose") return `printVerbose([${args.join(", ")}])`;
 
     if (name === "preload") {
       const a = e.args[0];
@@ -3208,7 +3239,11 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       return `super.${CURRENT_FUNC}(${args.join(", ")})`;
     }
     if (BUILTIN_TODO.has(name)) {
-      throw new UnsupportedError("emit-builtin", `内置函数 ${name}() 还没实现`);
+      const why = BUILTIN_TODO_WHY[name];
+      throw new UnsupportedError(
+        "emit-builtin",
+        why ? `内置函数 ${name}() 不发：${why}` : `内置函数 ${name}() 还没实现`,
+      );
     }
     if (STATIC_FUNCS.has(name)) return `${CURRENT_CLASS}.${name}(${args.join(", ")})`;
     if (!callableInScope(name)) {

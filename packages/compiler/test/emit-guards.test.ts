@@ -49,6 +49,47 @@ describe("全局拒答清单仍响亮拒", () => {
   });
 });
 
+// ── ①b 打印一族：发的五支各走一个宿主名，拒的五支要把实测到的缘由说出口 ──────
+describe("打印一族的发射与拒答", () => {
+  const msg = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+
+  it("prints / printt / printraw / printerr / print_verbose 发成宿主的五支", async () => {
+    const code = await emitted(BODY(['prints("a", 1)', "quit()"]));
+    expect(code, "宿主那条 import 要带上五支的名字").toContain(
+      'import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "host";',
+    );
+    expect(code, "prints 是一个空格").toContain('printJoined(" ", [');
+    expect(await emitted(BODY(['printt("a", 1)', "quit()"])), "printt 是制表符").toContain('printJoined("\\t", [');
+    expect(await emitted(BODY(['printraw("a")', "quit()"])), "printraw 走 printRaw").toContain("printRaw([");
+    expect(await emitted(BODY(['printerr("a")', "quit()"])), "printerr 走 printErr").toContain("printErr([");
+    expect(await emitted(BODY(['print_verbose("a")', "quit()"])), "print_verbose 走 printVerbose").toContain(
+      "printVerbose([",
+    );
+    expect(await classify(PRINT('prints("a")'), "ok"), "prints 单实参编得过").toBe("ok");
+    expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
+  });
+
+  it("拒的五支把缘由写在错文里", async () => {
+    for (const [name, want] of [
+      ["print_rich", "bbcode"],
+      ["print_debug", "At:"],
+      ["print_stack", "指针号"],
+      ["push_error", "variant_utility.cpp:1024"],
+      ["push_warning", "variant_utility.cpp:1034"],
+    ] as Array<[string, string]>) {
+      expect(await classify(PRINT(`${name}()`), "ok"), `${name} 该拒`).toBe("emit-builtin");
+      expect(await msg(PRINT(`${name}()`)), `${name} 的错文`).toContain(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

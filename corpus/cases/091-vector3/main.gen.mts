@@ -1,7 +1,7 @@
 // 由 gds2js 从 main.gd 编译生成 —— 不要手改。
 
 import * as rt from "../../../packages/runtime/src/runtime/index";
-import { print, SceneTree } from "../../../tools/harness/scene-tree";
+import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   m = rt.toVec3(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]));
