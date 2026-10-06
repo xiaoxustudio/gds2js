@@ -556,6 +556,7 @@
 - **AOT 这一条是旧暴露、不是本轮写坏**：`255-type-exists` 走 scriptc 出货门报 2 个 `error SC1043: comparing non-number, non-string values are not supported yet` —— 就是语料里那两格 Callable 的 `==`（`type_exists == type_exists`、`type_exists == error_string`）。把语料翻了一遍：`239-global-callable-values` 与 `250-global-name-sweep-additions` 里有同样的裸 `==`，那两轮只跑过面探针与代表集，没单独跑这两格 —— 欠的是 AOT 的对象比较 lowering。JS 侧两者都对（169/169 逐字节），拒的是 AOT 那侧的 `==` lowering 不覆盖对象比较；这一条与任务 #18（装箱账）同属 AOT 轨道，别把它当语义问题处理。探针 `is_same(a, b)` 那一形在 252 已通过 scriptc，说明走运行时的比较是安全的。
 - **实参只量过 String**：`type_exists(StringName)` / 数字实参都没读数，因此 `gTypeExists` 对非 String 抛 `[type-exists-arg]`。
 - **账**：语料 255（76 行逐字节）、ops 仍 1782、`pnpm test` 1057 例、`test:compile` 177/246、`test:diff` 169/169 逐字节、静默 0、崩溃 0，codegen 2/2、typecheck 4/4 与 `tsconfig.test.json` 全过；scriptc 对 255 报上面那两条 SC1043（JS 门全绿，AOT 门此格不复跑为绿之前，255 不进代表集）。
+- **出货门现在是红的（下一轮第一件事就是它）**：HEAD 上重跑三连门，`test:export` 的 scriptc 四格（`scriptc/nested`、`scriptc/散装单文件`、`--pack scriptc`、`默认 pack`）全报 `scriptc 没能出货: FAIL`，`test:cli-native` 的 `④ 工程 export --pack scriptc` 同一条（`⑨b run --watch` 那格的 30 秒窗口这轮又超时），`test:pkgmodes` 被同一条拉着红。JS 侧的门这轮全绿（`pnpm test` 1057、`test:compile` 177/246、`test:diff` 169/169 逐字节、codegen、typecheck、golden），所以红的是 **AOT 打包轨**：上一次这三连门全绿是 12:09–12:36（在 `56e6d9f` 之前），嫌疑窗是 `56e6d9f → da355c8 → 05a7bc7 → 6e8be7b`，先二分再谈发货。
 
 ---
 
