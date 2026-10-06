@@ -1,7 +1,7 @@
 // 由 gds2js 从 main.gd 编译生成 —— 不要手改。
 
 import * as rt from "../../../packages/runtime/src/runtime/index";
-import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "../../../tools/harness/scene-tree";
+import { print, printJoined, printRaw, printErr, printVerbose, printRich, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   HAYS = rt.V.array(rt.GArray.of([rt.V.str("hello"), rt.V.str("Hello World"), rt.V.str("aaa"), rt.V.str("ababab"), rt.V.str("a"), rt.V.str("0123456789"), rt.V.str("xYxyX"), rt.V.str("test_case-1.2"), rt.V.str("i am"), rt.V.str("McDonald")]));

@@ -10,6 +10,7 @@ export {
   printRaw,
   printErr,
   printVerbose,
+  printRich,
   flush,
   captured,
   resetOut as reset,

@@ -1,7 +1,7 @@
 // 由 gds2js 从 main.gd 编译生成 —— 不要手改。
 
 import * as rt from "../../../packages/runtime/src/runtime/index";
-import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "../../../tools/harness/scene-tree";
+import { print, printJoined, printRaw, printErr, printVerbose, printRich, SceneTree } from "../../../tools/harness/scene-tree";
 
 const TYPE_INT = rt.V.int(2);
 const TYPE_NIL = rt.V.int(0);

@@ -20,11 +20,10 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "randi_range",
   "randf_range",
   "randfn",
-  // 4.6.3 实测的打印一族里，形状能完全复刻的五支已经发了（`prints` 一个空格、`printt` 一个制表符、`printraw` 不结尾、
-  // `printerr` 走 stderr、`print_verbose` 在默认声级下不出声 —— `tmp/probe-prints/prints.log`，S256）。
-  // 剩下这几支的读数里挂着只有引擎知道的东西（bbcode 转义表、`At:` 那行的脚本身份、`variant_utility.cpp` 的行号与 backtrace），
-  // 发出去就是猜，所以拒，并把拒的缘由一并印出来（`emitter.ts` 的 BUILTIN_TODO_WHY）。
-  "print_rich",
+  // 4.6.3 实测的打印一族里，形状能完全复刻的六支已经发了（`prints` 一个空格、`printt` 一个制表符、`printraw` 不结尾、
+  // `printerr` 走 stderr、`print_verbose` 在默认声级下不出声、`print_rich` 过 bbcode→ANSI 表 —— `tmp/probe-prints/prints.log`
+  // 与 `tmp/probe-rich/rich.log`，S256 / S259）。剩下这几支的读数里挂着只有引擎知道的东西（`At:` 那行的脚本身份、
+  // `variant_utility.cpp` 的行号与 backtrace），发出去就是猜，所以拒，并把拒的缘由一并印出来（`emitter.ts` 的 BUILTIN_TODO_WHY）。
   "push_error",
   "push_warning",
   // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。

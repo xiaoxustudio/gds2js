@@ -60,10 +60,10 @@ describe("打印一族的发射与拒答", () => {
     }
   };
 
-  it("prints / printt / printraw / printerr / print_verbose 发成宿主的五支", async () => {
+  it("prints / printt / printraw / printerr / print_verbose / print_rich 发成宿主的六支", async () => {
     const code = await emitted(BODY(['prints("a", 1)', "quit()"]));
-    expect(code, "宿主那条 import 要带上五支的名字").toContain(
-      'import { print, printJoined, printRaw, printErr, printVerbose, SceneTree } from "host";',
+    expect(code, "宿主那条 import 要带上六支的名字").toContain(
+      'import { print, printJoined, printRaw, printErr, printVerbose, printRich, SceneTree } from "host";',
     );
     expect(code, "prints 是一个空格").toContain('printJoined(" ", [');
     expect(await emitted(BODY(['printt("a", 1)', "quit()"])), "printt 是制表符").toContain('printJoined("\\t", [');
@@ -72,13 +72,13 @@ describe("打印一族的发射与拒答", () => {
     expect(await emitted(BODY(['print_verbose("a")', "quit()"])), "print_verbose 走 printVerbose").toContain(
       "printVerbose([",
     );
+    expect(await emitted(BODY(['print_rich("[b]x[/b]")', "quit()"])), "print_rich 走 printRich").toContain("printRich([");
     expect(await classify(PRINT('prints("a")'), "ok"), "prints 单实参编得过").toBe("ok");
     expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
   });
 
-  it("拒的五支把缘由写在错文里", async () => {
+  it("拒的四支把缘由写在错文里", async () => {
     for (const [name, want] of [
-      ["print_rich", "bbcode"],
       ["print_debug", "At:"],
       ["print_stack", "指针号"],
       ["push_error", "variant_utility.cpp:1024"],

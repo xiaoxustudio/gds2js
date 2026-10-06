@@ -1,6 +1,7 @@
 import { Signal } from "./runtime/signal";
 import { GdScriptObject } from "./runtime/object";
 import type { Variant } from "./runtime/tags";
+import { richAnsi } from "./runtime/rich-ansi";
 import { showArgsSep, truthyOf } from "./runtime/values";
 
 /** 已经结尾的行，一条一个元素。 */
@@ -37,6 +38,11 @@ export function printErr(args: Variant[]): void {
 
 /** `print_verbose`：实测 headless 默认声级下不出声（实参照常求值，只是没人听）。要跟随声级开关得先给 CLI 加那条旗标。 */
 export function printVerbose(_args: Variant[]): void {}
+
+/** `print_rich`：实参无分隔拼起来，整串过 bbcode→ANSI 那张表，尾巴补一个复位再结尾（实测零实参就只出复位序列）。 */
+export function printRich(args: Variant[]): void {
+  addLine(richAnsi(showArgsSep(args, "")));
+}
 
 export function flush(): void {
   if (out.length > 0) process.stdout.write(out.join("\n") + "\n");
