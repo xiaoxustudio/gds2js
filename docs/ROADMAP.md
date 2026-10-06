@@ -449,6 +449,15 @@
 - **仍拒的两格**：`{script}` 引擎打 `():<GDScript#一个进程内的号>`；挂在没量过属性表的原生基类（Node / Resource 那一族）上的脚本实例。后者在 Tier 1 现在也走不到 —— `Node.new()` 自己先吃 `[native-class-member]`。
 - **缺省占位符那一格别再猜**：`"{_}"` 对 Object 不成立（`{_}={_}`、`{}` 都原样），显式占位符不含 `_` 时对所有属性都是同一个字面量。数组与字典两条通道一格没动，实测过才算。
 - **账**：语料 246（14 格）、ops 新增 `format-object-props.test.ts` 17 格（1666→1683），`string.test.ts` 那格「响亮拒」读数换成实测值；`pnpm test` 950 例、`test:compile` 168/237、`test:diff` **160/160 逐字节**、静默 0，golden 漂移 246/246 全绿（漂移 0）、codegen 2/2、guards 130 例、pkg-modes 25/25、面探针 1/1 与代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
+
+### 1.49 `Callable.get_object()` 发出方法与静态两形（2026-10-06，S247，语料 247，§6 第 22 条收窄）
+
+- **量的是关系不是号**：四形一起喂（`tmp/probe-callable-object/`，方法 / 静态 / lambda / 空 Callable / 全局内置 / 绑过的）。方法那形 `o.m.get_object() == o` 真、跨实例假、`.v` 取得到、`get_class()` 是 `RefCounted`；脚本自己的方法给 `self`；**绑过实参不改 owner**。这些全是可复现的关系，所以进了语料（247 的 9 格，逐字节一次过）。
+- **静态那一形是白拿的**：`Inner.sstat.get_object() == Inner` 实测真 —— 我们的静态 Callable 接收者本来就是类值，`box.object` 原样返回就是同一条等式；`== 外层脚本` 假也对得上。
+- **拒的两形各有理由**：lambda 的 owner 是**定义它那个类的 GDScript 对象**（`== get_script()` 真、`== self` 假，而内部类方法里造的 lambda 连外层脚本都不是 —— u04 两格都假），我们没有一个用户能拿到同一个身份的 GDScript 对象值；空 Callable 与全局内置给的是 **typeof 24 的 null Object**（`<Object#null>`、`== null` 真），这个形状我们根本没有。两支都抛 `[callable-get-object]`，不发「大概是 null」的东西 —— 发 `V.nil()` 会把 typeof 从 24 变成 0，那是把拒换成静默错。
+- **两笔「4.6.3 没有的名字」**：`Callable.get_object_instance_id()` 与 `Callable.is_equal()` 都在解析期就 `Nonexistent function`（Godot 3 的两支没搬过来）—— 探头前两版死在这上面，记下来免得再去撞。
+- **§6 第 22 条就此收窄**：值发出去了，**打印**那一格仍复现不了（`(文件):<GDScript#一个进程内的号>`），继续挂在「带号的打印怎么记」那条口径下面。
+- **账**：语料 247（9 格）、ops 新增 `callable-get-object.test.ts` 6 格（1683→1689），`pnpm test` 954 例、`test:compile` 169/238、`test:diff` **161/161 逐字节**、静默 0，golden 漂移 247/247 全绿（漂移 0）、codegen 2/2、pkg-modes 25/25、面探针 1/1 与代表集 10/10、原生 CLI 重编后 20/20、export ok 10 / FAIL 0、typecheck 4/4。
 - **一次误报值得记**：golden 检测与别的引擎门**并发**跑时，445 行 golden 的 `236-global-math-family` 会被判成超时并误报漂移 —— 本轮第一次就是这么报的，单独重跑 245/245 全绿。已写进 §2 第 14 条的观察项。
 
 ---

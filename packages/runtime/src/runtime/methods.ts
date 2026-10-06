@@ -212,6 +212,18 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       if (empty) return V.stringName("");
       return V.stringName("<anonymous lambda>");
     }
+    case "get_object": {
+      // 实测：方法 Callable 给接收者实例（`== o` 真、跨实例假），静态给那个类值（`== Inner` 真、`== 外层脚本` 假）；
+      // lambda 给**定义它那个类的 GDScript 对象**（`== self` 假、`== get_script()` 真），空 Callable 与全局内置给
+      // typeof 24 的 null Object（打 `<Object#null>`、`== null` 真）—— 后两形我们没有，响亮拒。
+      if (box.object === null) {
+        throw new UnsupportedError(
+          "callable-get-object",
+          "get_object() 这一支要给的是我们没建模的对象：lambda 的 owner 是定义它那个类的 GDScript 对象，空 Callable 与全局内置是 typeof 24 的 null Object（探头 tmp/probe-callable-object）",
+        );
+      }
+      return box.object;
+    }
     case "is_null":
       // 四种形状里只有空 Callable 为真；绑过实参就不再是空的
       return V.bool(empty && bound.length === 0);
