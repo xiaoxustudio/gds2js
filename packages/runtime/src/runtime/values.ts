@@ -1890,6 +1890,8 @@ export function strCEscape(s: string): string {
   return out;
 }
 
+/** int64 的下界幅值：`%d` 收越界与非有限的 float 时，引擎一律给 -9223372036854775808（w04–w06）。 */
+const TWO_63_B = 9223372036854775808;
 const INT64_MAX_B = 9223372036854775807n;
 
 /** 只认前置的 `-`（`+101` 实测整串判 0）与可选的 `0b` 前缀；其余任何非 01 字符都把整串判成 0，超出 int64 饱和到 MAX（符号后加）。 */
@@ -2053,9 +2055,19 @@ export function strFormat(fmt: string, args: Variant[]): string {
             body = Math.abs(p).toString();
           }
         } else {
-          const v = Math.trunc(fmtNum(a, sp));
-          neg = v < 0;
-          body = Math.abs(v).toString();
+          // float 走 C 那句 `(int64)trunc(v)`：实测 1.5 → 1、-1.5 → -1，而 ±inf / nan / 1e30 这三种越界一律给
+          // -9223372036854775808（x64 的 integer-indeterminate 结果，w04–w06 三格同值）。
+          const v = fmtNum(a, sp);
+          const t = Number.isFinite(v) ? Math.trunc(v) : Number.NaN;
+          const inRange = Number.isFinite(t) && t >= -TWO_63_B && t < TWO_63_B;
+          if (!inRange) {
+            neg = true;
+            body = "9223372036854775808";
+          } else {
+            const b = BigInt(t);
+            neg = b < 0n;
+            body = (neg ? -b : b).toString();
+          }
         }
         const sign = neg ? "-" : sp.flags.includes("+") ? "+" : "";
         out += padFmt(body, sign, sp);
@@ -2063,8 +2075,19 @@ export function strFormat(fmt: string, args: Variant[]): string {
       }
       case "f": {
         const v = fmtNum(a, sp);
+        if (!Number.isFinite(v)) {
+          // 实测 ±inf 印 `inf` / `-inf`、nan 印 `nan`（与 `%s` 那三个词同形），宽度按空格补 ——
+          // `0` 那旗标对这三个词不起作用（`%09.1f` 对 INF 给六空格 + inf，w02），对普通数才起（w03）
+          const words = sp.flags.replace("0", "");
+          const body = Number.isNaN(v) ? "nan" : "inf";
+          const sign = Number.isNaN(v) ? "" : v < 0 ? "-" : sp.flags.includes("+") ? "+" : "";
+          out += padFmt(body, sign, { ...sp, flags: words });
+          break;
+        }
         const body = Math.abs(v).toFixed(sp.prec ?? 6);
-        out += padFmt(body, v < 0 ? "-" : sp.flags.includes("+") ? "+" : "", sp);
+        // -0 的号要留着：实测 `%.1f` 给 `-0.0`、`%f` 给 `-0.000000`，而 `v < 0` 对 -0 是假
+        const neg = Object.is(v, -0) || v < 0;
+        out += padFmt(body, neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
         break;
       }
       case "x":
