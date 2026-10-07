@@ -16,6 +16,7 @@ import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, ty
 import { GdNativeClass } from "./native-class";
 import { isNullRefValue, isWeakRefBox, NULL_OBJECT } from "./identity";
 import type { GdIdentified } from "./identity";
+import { asRid, ridText } from "./rid";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -94,6 +95,8 @@ function keyOfIn(v: Variant, depth: number): string {
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
+      const ridKey = asRid(v);
+      if (ridKey !== null) return "r:" + String(ridKey.id);
       if (isCallable(v)) return callableKey(v.v as CallableBox);
       if (!(v.v instanceof GBytes)) {
         const id = (v.v as GdIdentified).gdObjectId;
@@ -1543,6 +1546,9 @@ export function varToStr(v: Variant): string {
         }
         return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
       }
+      // RID 与 print / str 同一条式子：实测 var_to_str(rid_from_int64(5)) 给 `RID(5)`（语料 261 的 r05）
+      const ridV = asRid(v);
+      if (ridV !== null) return ridText(ridV);
       // Callable 五支实测都印成 `Callable()`（方法、静态、lambda、空 Callable、全局的、绑过实参的都一样）
       if (isCallable(v)) return "Callable()";
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
@@ -2352,6 +2358,8 @@ export function show(v: Variant, depth = 0): string {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
       // 引擎类值与 weakref 都带进程内的号，形状照实测发；号在语料两侧都先掩掉再比。
+      const innerRid = asRid(v);
+      if (innerRid !== null) return ridText(innerRid);
       if (isNullRefValue(inner)) return "<Object#null>";
       if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
       if (isWeakRefBox(inner)) return `<WeakRef#${String(inner.gdObjectId)}>`;
@@ -2394,11 +2402,12 @@ export function valueTypeName(x: Variant): string {
   if (asVec2i(x) !== null) return "Vector2i";
   if (asVec3i(x) !== null) return "Vector3i";
   if (asColor(x) !== null) return "Color";
+  if (asRid(x) !== null) return "RID";
   if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }
 
-export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
+export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const ta = a.t;
   const tb = b.t;
   const a2 = asVec2(a);
@@ -2411,6 +2420,16 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
   const bi3 = asVec3i(b);
   const ac = asColor(a);
   const bc = asColor(b);
+  const ar = asRid(a);
+  const br = asRid(b);
+  // RID 的等式按号走；与 null 比给假（实测 n01 / h26），与其他一切比是运行期那一句（int / float / bool / String / StringName / Array / Dictionary / Vector2 / Color / Object / Callable 各量过一格）
+  if (ar !== null || br !== null) {
+    if (ar !== null && br !== null) return String(ar.id) === String(br.id);
+    const ridOther: Variant = ar !== null ? b : a;
+    if (ridOther.t === Tag.NIL) return false;
+    // 两句都量过：`==` 与 `!=` 的原文各一格（y04 / ne_int），运算符名就按写的那一个发
+    throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+  }
   if (
     a2 !== null ||
     b2 !== null ||

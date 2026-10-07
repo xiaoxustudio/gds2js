@@ -19,8 +19,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "dict_to_inst",
   "inst_to_dict",
   "is_instance_of",
-  "rid_allocate_id",
-  "rid_from_int64",
   "var_to_bytes",
   "var_to_bytes_with_objects",
 ]);

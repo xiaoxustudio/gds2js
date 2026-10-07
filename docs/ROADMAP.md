@@ -625,6 +625,16 @@
 - **扫出来的形状（数据在此，不写死因果）**：`tmp/wsweep.mjs` 按固定延迟写盘、看六秒内认不认。原生 exe：+225ms 不重跑、+613ms 重跑、+1236ms 不重跑、+3015ms 重跑；父侧 `statSync` 每次都报出真实变了的 mtime（+231 / +612 / +1234 / +3014ms），所以不是没写进去。同一条扫法在 node CLI 是 **0|6|12|30 四格全重跑**（node 冷启约 1s，四次写都在横幅之后）。改完夹具后 `⑨b` 单点与整跑都过。
 - **产品那一侧留着的那一形**：`--watch` 在原生目标上对某些「mtime 变了、尺寸没变」的保存不反应，而同一份 `watch.ts` 在 node 上看得见 —— 差别在 scriptc 那一侧的 `statSync().mtimeMs` 或轮询本身，**这一轮没量清，所以不动实现**（要动先按数据来：拿一份 scriptc 小探头把同一个文件的 mtime 在两侧对印）。已记 §2 待办。
 
+### 1.67 RID 一族发出：两支全局函数、一个真值型，比序那一格是语料抓出来的（2026-10-07，S264，语料 261，§2 那条身份决定的 RID 半截结清）
+
+- **先量后写**：`typeof` 23、`RID(<号>)` 的打印、字典键分格、`get_id()`、`hash()` 五格、四种实参折法、十种来源的运算符报错句 —— 全是一把一把探头量出来的（`tmp/probe-rid/`、`tmp/probe-rid2/`、`tmp/probe-rid3/`、`tmp/probe-rid4/`）。哈希那一格是白捡的：4.3 的 `core/variant/variant.cpp` 里 RID 分支就是 `hash_one_uint64(get_id())`，而 `hashOneUint64` 在转换族那一轮已经实现过 —— 五格读数一名一名对上就发出去了。
+- **比序是语料抓的，不是读源码读出来的**：第一版按带符号 bigint 比，`rid_from_int64(-1) < rid_from_int64(0)` 我们给真、引擎给**假**。r23 那一格红了才回头补量，量出「无符号」这条（`tmp/probe-rid3/unsigned.gd` 四格：`-1` 折成 2^64-1，是最大的那一个）。这类「看着显然」的格子正是 golden 的价值所在 —— 单位测试是我自己写的，只有引擎那侧能说不。
+- **`!=` 那句里写的运算符名**：引擎按你写的那个运算符发句，而我们 `valueEq` 里两处报错把 `==` 写死了 —— RID 要接这句就得先修这个口径。做法是 `valueEq` 多收一个运算名参数、`ops.neq` 把 `!=` 传下去，**只用在新加的 RID 那一支**：Callable 与结构体那两处仍按量过的 `==` 发，不拿 `!=` 去外推（那两句的 `!=` 形状这轮没量）。
+- **`rid_allocate_id()` 不是 S262 那笔合成号账**：它给的就是引擎公开的那个整数，起点 13241、连号、两份独立脚本首格同值 —— 所以逐字钉得住，与「对象号自造 + 语料掩号」是两件事，别并成一条。
+- **值只能从两支来**：`RID(5)` 在引擎是解析期那句 `No constructor of "RID" matches the signature "RID(int)"`，`RID()` 那一形仍走引擎类值的拒（S242），所以 runtime 里没有 RID 构造函数。`int(rid)` / `String(rid)` 两格的引擎原文是 `Invalid call. Nonexistent 'int' constructor.`（Vector2 那一格同句，说明它不是 RID 专属）—— 我们这两支仍发转换族自家那句 `[to-int]`，**口径差写在 S264 ⑦，不当已对齐**。
+- **AOT 新围栏 SC1043**：`nextRid += 1n` 在静态目标上报 `comparing non-number, non-string values are not supported yet`（`rid.ts:26`），改成 number 累加 + 出号时一次 `BigInt()`；号段远在 2^53 之内，语义一字未动。同一轮又确认了一遍 S263 撤掉误记之后的一半事实：`class GdRid` 带 bigint 字段、`instanceof` 派发，静态目标上都过得去。
+- **账**：语料 261（41 行逐字节）+ ops `rid-family.test.ts` 4 段 13 格 + guards 新 2 例；发射期拒答清单 14→**12**、名表可派发 105→**107** / 该拒 21→**19**；`pnpm test` 1079 例、ops 自校验 1834→**1850**、guards 181 例、`test:compile` 183/252、`test:diff` **175/175**（共 261 个用例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 重编 exe 后 **20 例 / 22 格全过**、typecheck 4/4 与 `tsconfig.test.json`；AOT 面探针 `234-` **1/1**、`261-rid-family` **1/1 编过 + 1/1 跑通 + 41 行逐字节**。
+
 ---
 
 ## 2. 当前任务与待办
@@ -632,7 +642,7 @@
 **决策 / 发布类**
 
 1. **#27 已决（§0 I）：SEA 保留。**
-1. **身份数字（instance id / `<Base#id>` 打印 / RID / WeakRef）已决（2026-10-07，S262）：产物自造稳定合成号** —— 形状照引擎、号按进程内分配顺序发，语料里带号的格子一律掩号再比；引擎那边读数是 30 格两遍一字不差（`tmp/probe-ids/ids2-1.log`），但号**起点**是引擎选的，跨版本不保证，所以逐字复刻那条路不通。`hash(Callable)` 那一格因此继续欠着（它的数是从号算出来的）。**这一条已经花掉（S263，语料 260）**：`get_instance_id()` / `instance_from_id()` / `is_instance_valid()` / `is_instance_id_valid()` / `weakref()` 与 `<基类名#号>` 的打印都按这条口径发出了；RID 那三支（`rid_allocate_id` / `rid_from_int64` 的号与 `RID(n)` 的打印）与 `hash(RID())` 仍按「没量透就不发」留在拒答清单里。
+1. **身份数字（instance id / `<Base#id>` 打印 / RID / WeakRef）已决（2026-10-07，S262）：产物自造稳定合成号** —— 形状照引擎、号按进程内分配顺序发，语料里带号的格子一律掩号再比；引擎那边读数是 30 格两遍一字不差（`tmp/probe-ids/ids2-1.log`），但号**起点**是引擎选的，跨版本不保证，所以逐字复刻那条路不通。`hash(Callable)` 那一格因此继续欠着（它的数是从号算出来的）。**这一条已经花掉（S263，语料 260）**：`get_instance_id()` / `instance_from_id()` / `is_instance_valid()` / `is_instance_id_valid()` / `weakref()` 与 `<基类名#号>` 的打印都按这条口径发出了。**RID 那两支也跟着花掉了（S264，语料 261）**，但它不属于这笔合成号账：`rid_allocate_id()` 给的整数、`RID(n)` 的打印与 `hash(RID)` 都有固定读数（起点 13241、五格哈希与 4.3 的 `hash_one_uint64(get_id())` 一名一名对上），所以是逐字钉住的，不走掩号那条路。仍欠的是 `hash(Callable)`（它的数从引擎侧的函数标识算，合成号对不上）。
 2. **#29 已决（§0 H）：形态 A；`pnpm release` 已落地**（版本戳 0.1.0 起、`gds2js --version`、release/ 产物 + sha256）。
    许可备查：scriptc 是 Apache-2.0、无 NOTICE，随包分发本来允许（若将来改 B 再启用）。
 3. ~~**#30** `engines.node`（25.7 只服务 `--pack node` 那支，位置可能写错了）~~ —— **已实测并改正（2026-10-03）**：

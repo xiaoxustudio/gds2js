@@ -1,13 +1,14 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq } from "./values";
+import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
 import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
 import { ClassDesc, GdScriptObject } from "./object";
 import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
+import { GdRid, allocateRid, rid } from "./rid";
 import { typeOf } from "./patterns";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
@@ -191,6 +192,8 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       return fmix32(h);
     }
     case Tag.OBJECT: {
+      // 引擎那支是 hash_one_uint64(RID::get_id())（core/variant/variant.cpp 的 RID 分支）；实测 0 / 1 / 5 / -1 / 13241 五格全中
+      if (v.v instanceof GdRid) return hashOneUint64(intToBig((v.v as GdRid).id));
       if (!isCallableBox(v.v)) {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
       }
@@ -1027,6 +1030,38 @@ export function gWeakref(v: Variant): Variant {
     throw new UnsupportedError("weakref-arg", `weakref() 只量过对象与 null（收到 ${tagName(v.t)}）`);
   }
   return V.object(weakRefBox(v));
+}
+
+/** 报错文本里的来源名：Godot 管 null 叫 Nil，其余走 valueTypeName（它认得 RID / Vector2 这些结构体）。 */
+function utilityArgLabel(v: Variant): string {
+  return v.t === Tag.NIL ? "Nil" : valueTypeName(v);
+}
+
+/** 实测收 int / float（向零截断：1.7 → RID(1)）/ bool（true → RID(1)）；String 与 Nil 两格量过引擎那句原文，其余来源按同一条式子代入。 */
+function ridArgBig(v: Variant): bigint {
+  if (v.t === Tag.INT) return intToBig(v.v as IntPayload);
+  if (v.t === Tag.BOOL) return v.v ? 1n : 0n;
+  if (v.t === Tag.FLOAT) {
+    const n = v.v as number;
+    if (!Number.isFinite(n)) {
+      throw new UnsupportedError("rid-arg-float", `rid_from_int64() 的非有限浮点实参没量过（收到 ${String(n)}）`);
+    }
+    return BigInt(Math.trunc(n));
+  }
+  throw new GodotRuntimeError(
+    "rid-arg",
+    `Invalid type in utility function "rid_from_int64()". Cannot convert argument 1 from ${utilityArgLabel(v)} to int.`,
+  );
+}
+
+/** `RID` 只能从这两支来：实测 `RID(int)` 是解析期那句「No constructor of "RID" matches the signature "RID(int)"」，所以不发构造函数。 */
+export function gRidFromInt64(v: Variant): Variant {
+  return rid(ridArgBig(v));
+}
+
+/** 实测新进程里连读 13241 / 13242 / 13243，另一份脚本首格同为 13241 —— 起点固定、每调一次加一。 */
+export function gRidAllocateId(): Variant {
+  return V.int(allocateRid());
 }
 
 export function gRandFromSeed(v: Variant): Variant {

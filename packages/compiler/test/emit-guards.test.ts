@@ -172,6 +172,36 @@ describe("身份族的发射与元数闸门", () => {
   });
 });
 
+// ── ①e RID 族：两支发成 rt.g*，元数三句是 4.6.3 一支一名量出来的（S264，探头 tmp/probe-rid2/*.log、tmp/probe-rid3/tm.gd） ──
+describe("RID 族的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["rid_from_int64()", 'Too few arguments for "rid_from_int64()" call. Expected at least 1 but received 0.'],
+    ["rid_from_int64(1, 2)", 'Too many arguments for "rid_from_int64()" call. Expected at most 1 but received 2.'],
+    ["rid_allocate_id(1)", 'Too many arguments for "rid_allocate_id()" call. Expected at most 0 but received 1.'],
+  ];
+
+  it("两支各发成自己的 rt.g*", async () => {
+    expect(await emitted(BODY(["rid_from_int64(5)", "quit()"]))).toContain("rt.gRidFromInt64(");
+    expect(await emitted(BODY(["rid_allocate_id()", "quit()"]))).toContain("rt.gRidAllocateId()");
+    expect(await classify(PRINT("rid_from_int64(5)"), "ok"), "一支实参该编得过").toBe("ok");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

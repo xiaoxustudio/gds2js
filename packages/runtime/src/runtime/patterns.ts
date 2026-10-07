@@ -12,6 +12,7 @@ import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
+import { GdRid } from "./rid";
 
 export type Pat =
   | { k: "wild" }
@@ -204,6 +205,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
+  if (v.t === Tag.OBJECT && v.v instanceof GdRid) return V.int(23);
   if (v.t === Tag.OBJECT && isCallableBox(v.v)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }

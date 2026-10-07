@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
+import { asRid } from "./rid";
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
 import { asColor, color, colorCmp, GColor } from "./color";
@@ -273,19 +274,19 @@ export const ops = {
     return V.bool(valueEq(a, b));
   },
   neq(a: Variant, b: Variant): Variant {
-    return V.bool(!valueEq(a, b));
+    return V.bool(!valueEq(a, b, 0, "!="));
   },
   lt(a: Variant, b: Variant): Variant {
-    return V.bool(compare(a, b) < 0);
+    return V.bool(compare(a, b, "<") < 0);
   },
   lte(a: Variant, b: Variant): Variant {
-    return V.bool(compare(a, b) <= 0);
+    return V.bool(compare(a, b, "<=") <= 0);
   },
   gt(a: Variant, b: Variant): Variant {
-    return V.bool(compare(a, b) > 0);
+    return V.bool(compare(a, b, ">") > 0);
   },
   gte(a: Variant, b: Variant): Variant {
-    return V.bool(compare(a, b) >= 0);
+    return V.bool(compare(a, b, ">=") >= 0);
   },
 
   truthy(a: Variant): boolean {
@@ -337,7 +338,7 @@ export const ops = {
   },
 };
 
-function compare(a: Variant, b: Variant): number {
+function compare(a: Variant, b: Variant, op = "<"): number {
   if (isNum(a) && isNum(b)) {
     if (a.t === Tag.INT && b.t === Tag.INT) {
       const x = intToBig(a.v as IntPayload);
@@ -356,6 +357,18 @@ function compare(a: Variant, b: Variant): number {
       "compare-string-name",
       `StringName 的 < / > 按 Godot 内部指针序，无可靠口径（实测 &"zzz" < &"abc" 为真），拒绝${tagName(a.t)} 与 ${tagName(b.t)} 比大小`,
     );
+  }
+  // RID 按号比大小，比的是**无符号**号：实测 rid_from_int64(-1) < rid_from_int64(0) 假、反向真（-1 折成 2^64-1 是最大的那个）
+  const ra = asRid(a);
+  const rb = asRid(b);
+  if (ra !== null && rb !== null) {
+    const rx = BigInt.asUintN(64, intToBig(ra.id));
+    const ry = BigInt.asUintN(64, intToBig(rb.id));
+    return rx === ry ? 0 : rx < ry ? -1 : 1;
+  }
+  // 只有一边是 RID 就是运行期那一句：四个运算符各量过一格（与 int 的 < / <= / > / >=，外加与 String 的 <）
+  if (ra !== null || rb !== null) {
+    throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   const va = asVec2(a);
   const vb = asVec2(b);
