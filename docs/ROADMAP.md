@@ -642,6 +642,22 @@
 - **一条不打算复刻的引擎行为**（量清楚了但故意不对齐，理由写在 S265 ④）：同一份脚本里 `0.0` 与 `-0.0` 进的是**同一个常量槽**（相等又同哈希），谁先出现谁定全场那个零的号 —— 先写 `var pz = 0.0` 再写 `var nz = -0.0`，`1.0 / nz` 给 `inf`；两行调换，同一支脚本里 `1.0 / pz` 给 `-inf`（`tmp/probe-sign0/{plusfirst,minusfirst}.gd` 只差行序）。复刻它要照搬常量池的插入顺序，那是实现细节不是语义，而且「读起来是 `-0.0` 的代码在我们这里就真拿到 `-0.0`」这条更可取。语料 262 因此只用运行时算出来的零（`var nz = pz * -1.0`）与纯字面量两种形状。
 - **账**：语料 262（33 行逐字节）+ ops `format-signed-zero.test.ts` 3 段 11 格；`test:diff` **176/176**（共 262 个用例，静默 0、崩溃 0）、`pnpm test` 1085 例、ops 自校验 1850→**1860**、guards 181 例、`test:compile` 184/253、typecheck 4/4；AOT 面探针 `234-` **1/1**、`262-negative-zero` **1/1 编过 + 1/1 跑通 + 33 行逐字节**；出货三门 `test:pkgmodes` 25/25、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 重编 exe 后 20 例 / 22 格全过。
 
+### 1.69 `print_debug` 发出：`At:` 那一行的路径、行号与函数名都是发射期已知的（2026-10-07，S266，语料 263，§6 第 23 条打印那一族再收窄）
+
+- **待办里那句「要产物报出自己的脚本身份」是个误判**：量完发现引擎只打**一帧**（调用点自己那一句），不是整条栈 —— 路径、行号、函数名三样在发射期全是静态的，不需要运行时的调用栈地基。四个形状的探头各跑一遍就定了形：`_initialize()` / 具名函数 / 静态 / `_init` / 内部类方法 / lambda，读数在 `tmp/probe-pdebug/`。
+- **两处形状细节**：`At:` 前是三个空格（与 `SCRIPT ERROR` 那句的 `   at:` 同宽但大写 A，且**没有** `GDScript backtrace` 那一段）；函数名**不带类前缀**（`m()` 而不是 `RefCounted (C)::m()`），lambda 那一格是 `<anonymous lambda>()`。后者单独用一个 `LAMBDA_DEPTH` 记，不碰 `CURRENT_FUNC` —— 那个变量还管着 `super()` 的发射。
+- **`push_error` / `push_warning` / `print_stack` / `get_stack` 仍拒，理由量清楚了**：那四支要的是整条栈（实测四行里逐帧 `[0] leaf (路径:4)` / `[1] mid (路径:7)` / `[2] _initialize (路径:10)`），外加一句引擎自己的源码位置 `at: push_error (core/variant/variant_utility.cpp:1024)` —— 语料侧的 normalize 只滤 `core/variant/` 那一族，WARNING 那支滤不掉，所以这一格**不能靠掩码混过去**；产物要发它得先有「每帧 .gd 行号」的地基（与 #18 那条去箱化同一类工程）。
+- **零实参那格**：`print_debug()` 第一句是空行 —— 只有按原始字节量才看得见（`tmp/probe-pdebug/zero2.gd`），normalize 会把空行滤掉，所以 ops 那两格钉的就是这个滤完看不见的形状。
+- **账**：发射期拒答清单 12→**11**；`test:diff` **177/177**（共 263 个用例，静默 0、崩溃 0）、`pnpm test` 1085 例、ops 自校验 1860、guards 181、`test:compile` 185/254、codegen 2/2、pkgmodes 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 重编 exe 后 20 例 / 22 格全过、typecheck 4/4、AOT 面探针 `234-` **1/1**。产物面 churn 另记一笔：`HOST_PRINT_NAMES` 多一个名字 → 184 份 `main.gen.mts` 的宿主 import 行各改一行，逐字节输出一条没变。
+
+### 1.70 NodePath 的读数一次量齐：`hash()` 在 4.6.3 换了式子，两处钉不住（2026-10-07，S267，读数轮 · 无实现变更）
+
+- **为什么要单独一轮**：`inst_to_dict` / `dict_to_inst` 那两支持续被记成「欠对象模型」，但实测它们的字典里根本没有实例号 —— 欠的是 **`@subpath` 那个 NodePath 值型**（`{ "@subpath": ^"Inner", "@path": "res://…", &"k": 1 }`）。于是先把 NodePath 一族量清，别照着 4.3 的式子写实现。
+- **量到的形状**：`typeof` **22**；三种打印（`str()` 给折好的路径串、容器与字典键给 `^"<串>"`、`var_to_str` 给 `NodePath("<串>")`）；等式按「绝对位 + 名字表 + 子名表」；`get_name(i)` / `get_subname(i)` 返回的是 **StringName（typeof 21）**；八支方法齐，而 `get_name_index` / `simplify` / `to_i` / `get_total_name_count` / `get_index_in_parent` / `re_substitute` 在 4.6.3 的 GDScript 绑定里根本不存在。
+- **解析式子有三处与 4.3 那份 `node_path.cpp` 不同**：`\:` 是**真转义**（`a\:b` 一个名字、打印把反斜杠带回来、且不等价于 `a:b`），`\/` **不是**（`a\/b` 两个名字，第一个是 `a\`）；结尾空子名被允许（`x:` → 0 个子名、`str()` 丢掉冒号、与 `x` 相等）；大小写保留且区分；空格不裁；`"."` 是普通名字而 `"/"` 是「绝对 + 零名字」。
+- **两处钉不住，实现时只能拒**：① `hash(NodePath)` 的式子变了 —— 4.3 是「绝对位起手 1、再把各名 `StringName::hash()` 异或」，实测三格候选全假（`hash(NodePath("a"))` = 3608900604，而 `hash(&"a")` = 177670 = `hash("a")`，这一条同名哈希相等的口径倒是量到了），没逆出来就按 S237 那批 Callable 哈希的先例拒；② `get_name(3)` 越界**不崩**，回空 StringName 并往 stderr 打 `ERROR: Index p_idx = 3 is out of bounds (data->path.size() = 1).` + `at: get_name (core/string/node_path.cpp:69)` —— 那句带引擎自己的 C++ 文件名与行号，normalize 只滤 `core/variant/` 那一族，滤不掉，所以越界那一形也进不了实现。
+- **下一轮照这份数做就行**：值型 + 解析式子 + 三种打印 + 等式 + `keyOf` 的 `^` 桶 + 八支方法（越界与哈希两支拒）+ `NodePath(String)` 构造 + 与 int / String / StringName 的比较按 RID 那一套模板（S264 刚铺好）；`convert(NodePath, TYPE_STRING)` 与 `String(NodePath)` 实测就是 `str()` 那一串，可以并进去。做完 `inst_to_dict` 就只欠 `@path` 的 res 路径与 `dict_to_inst` 的「跳过 `_init` 造实例」两件事。
+- **账**：无实现变更，八份探头与全部读数在 `tmp/probe-nodepath/`；本轮出货门一字未动（`test:diff` 177/177、ops 1860、guards 181 仍如 §1.69 所记）。
 ---
 
 ## 2. 当前任务与待办
