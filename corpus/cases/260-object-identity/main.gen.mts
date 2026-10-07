@@ -61,6 +61,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -78,6 +79,7 @@ class Plain extends rt.GdScriptObject {
 const __gd_d_Plain = rt.defineClass(Plain, () => new Plain(), (o) => o instanceof Plain);
 rt.nameClass(__gd_d_Plain, "Plain");
 rt.registerScriptProps(__gd_d_Plain, ["k"]);
+rt.registerDictIdentity(__gd_d_Plain, "res://main.gd", "Plain", ["k"], {}, (o) => { const s = o as Plain; return [s.k]; });
 rt.registerNativeBase(__gd_d_Plain, "RefCounted");
 
 class Inner extends rt.GdScriptObject {
@@ -99,6 +101,7 @@ class Inner extends rt.GdScriptObject {
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerScriptProps(__gd_d_Inner, ["k"]);
+rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", ["k"], {}, (o) => { const s = o as Inner; return [s.k]; });
 rt.registerMethodArities(__gd_d_Inner, { "meth": [0, 0] });
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
 

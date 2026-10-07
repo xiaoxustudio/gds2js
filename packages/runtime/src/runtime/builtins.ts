@@ -5,11 +5,16 @@ import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq, valueType
 import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
-import { ClassDesc, GdScriptObject } from "./object";
+import { ClassDesc, GdScriptObject, dictShapeOf } from "./object";
 import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { GdRid, allocateRid, rid } from "./rid";
-import { GdNodePath } from "./node-path";
+import { GdNodePath, emptyNodePath, nodePathValue } from "./node-path";
+import { GVector2 } from "./vector2";
+import { GVector2i } from "./vector2i";
+import { GVector3 } from "./vector3";
+import { GVector3i } from "./vector3i";
+import { GColor } from "./color";
 import { typeOf } from "./patterns";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
@@ -1068,6 +1073,92 @@ export function gRidFromInt64(v: Variant): Variant {
 /** 实测新进程里连读 13241 / 13242 / 13243，另一份脚本首格同为 13241 —— 起点固定、每调一次加一。 */
 export function gRidAllocateId(): Variant {
   return V.int(allocateRid());
+}
+
+/**
+ * `inst_to_dict` 里带 get/set 的属性出门的默认值：引擎**不调 getter**（S269 ④ 十六格实测），
+ * 与「声明了类型却没赋值的普通 var」那一格一字不差。表外的类型名（Rect2 / Callable / 脚本类名…）响亮拒。
+ */
+function dictTypeDefault(t: string | null): Variant {
+  if (t === null) return V.nil();
+  switch (t) {
+    case "int":
+      return V.int(0);
+    case "float":
+      return V.float(0);
+    case "bool":
+      return V.bool(false);
+    case "String":
+      return V.str("");
+    case "StringName":
+      return V.stringName("");
+    case "Vector2":
+      return V.object(new GVector2(0, 0));
+    case "Vector2i":
+      return V.object(new GVector2i(0, 0));
+    case "Vector3":
+      return V.object(new GVector3(0, 0, 0));
+    case "Vector3i":
+      return V.object(new GVector3i(0, 0, 0));
+    case "Color":
+      return V.object(new GColor(0, 0, 0, 1));
+    case "NodePath":
+      return emptyNodePath();
+    case "Array":
+      return V.array(GArray.of([]));
+    case "Dictionary":
+      return V.dict(new GDict());
+    case "PackedByteArray":
+      return V.object(new GBytes([], "byte"));
+    case "PackedStringArray":
+      return V.object(new GBytes([], "string"));
+    default:
+      throw new UnsupportedError(
+        "inst-to-dict-acc-type",
+        `inst_to_dict() 里 ${t} 类型的 get/set 属性没量过出门值（S269 ④ 量齐的是十六种形状），不猜`,
+      );
+  }
+}
+
+/**
+ * `inst_to_dict(obj)`（S269）：`{ "@subpath": 类路径的 NodePath, "@path": 模块 res 路径, <字段名 StringName>: 值 }`。
+ * 三段都有读数：`null` 实参给 null、类值给运行期那一句、字段序是**基类在前**（与 `String.format()` 反着走），
+ * 对象与容器出门的是引用而不是序列化。
+ */
+export function gInstToDict(v: Variant): Variant {
+  if (v.t === Tag.NIL) return V.nil();
+  if (v.t !== Tag.OBJECT) {
+    throw new UnsupportedError(
+      "inst-to-dict-arg",
+      `inst_to_dict() 的实参只量过脚本实例、类值与 null（收到 ${valueTypeName(v)}）：静态不合式的来源在引擎是解析期那句 argument 1 should be "Object"`,
+    );
+  }
+  const inner = v.v as object;
+  if (inner instanceof ClassDesc || inner instanceof GdNativeClass) {
+    throw new GodotRuntimeError(
+      "inst-to-dict",
+      `Error calling GDScript utility function "inst_to_dict()": Not a script with an instance.`,
+    );
+  }
+  const shape = dictShapeOf(inner);
+  if (shape === null) {
+    throw new UnsupportedError("inst-to-dict-arg", `inst_to_dict() 的实参是 ${valueTypeName(v)}：只有脚本实例量过这一支`);
+  }
+  if (shape.resPath === null) {
+    throw new UnsupportedError("inst-to-dict-path", "inst_to_dict() 发不出 @path：这份产物没有模块的 res 路径（单文件模式），那一格没量过");
+  }
+  const d = new GDict();
+  d.set(V.str("@subpath"), nodePathValue(shape.classPath));
+  d.set(V.str("@path"), V.str(shape.resPath));
+  const acc = shape.accessors;
+  for (let i = 0; i < shape.names.length; i++) {
+    const name = shape.names[i] as string;
+    // `undefined` = 普通字段（读数器已经按同一顺序把值取好了）；`null` = 无类型的 get/set 属性（出门 `<null>`）。
+    const declared = acc[name] as string | null | undefined;
+    const value = declared === undefined ? (shape.values[i] as Variant) : dictTypeDefault(declared);
+    d.set(V.stringName(name), value);
+  }
+  return V.dict(d);
 }
 
 export function gRandFromSeed(v: Variant): Variant {

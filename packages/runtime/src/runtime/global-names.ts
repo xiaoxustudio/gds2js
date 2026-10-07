@@ -64,7 +64,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   fposmod: GS(2),
   get_stack: TODO("GDScript", 0),
   hash: GS(1),
-  inst_to_dict: TODO("GDScript", 1),
+  inst_to_dict: GD(1),
   instance_from_id: GS(1),
   inverse_lerp: GS(3),
   is_equal_approx: GS(2),

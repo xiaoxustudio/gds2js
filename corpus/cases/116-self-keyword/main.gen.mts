@@ -48,6 +48,7 @@ export class Main extends SceneTree {
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerScriptProps(__gd_d_Main, ["outervar","outer_self"]);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", ["outervar","outer_self"], {}, (o) => { const s = o as Main; return [s.outervar, s.outer_self]; });
 rt.registerMethodArities(__gd_d_Main, { "useobj": [1, 1], "hello": [0, 0], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -102,6 +103,7 @@ class Box extends rt.GdScriptObject {
 const __gd_d_Box = rt.defineClass(Box, () => new Box(), (o) => o instanceof Box);
 rt.nameClass(__gd_d_Box, "Box");
 rt.registerScriptProps(__gd_d_Box, ["n"]);
+rt.registerDictIdentity(__gd_d_Box, "res://main.gd", "Box", ["n"], {}, (o) => { const s = o as Box; return [s.n]; });
 rt.registerMethodArities(__gd_d_Box, { "getn": [0, 0], "readself": [0, 0], "bump": [0, 0], "setn": [1, 1], "me": [0, 0], "sameother": [1, 1], "ty": [0, 0] });
 rt.registerNativeBase(__gd_d_Box, "RefCounted");
 

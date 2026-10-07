@@ -75,6 +75,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -96,6 +97,7 @@ const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceo
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerFieldTypes(__gd_d_Inner, {"t": "int", "s": "String", "v": "Vector2"});
 rt.registerScriptProps(__gd_d_Inner, ["m","t","s","v"]);
+rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", ["m","t","s","v"], {}, (o) => { const s = o as Inner; return [s.m, s.t, s.s, s.v]; });
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
 
 const __gd_entry = new Main();

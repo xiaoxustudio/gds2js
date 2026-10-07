@@ -64,6 +64,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "top": [1, 1], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -87,6 +88,7 @@ class Inner extends rt.GdScriptObject {
 }
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
+rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", [], {}, (o) => { const s = o as Inner; return []; });
 rt.registerMethodArities(__gd_d_Inner, { "three": [3, 3], "sm": [1, 1] });
 rt.registerStaticMethods(__gd_d_Inner, ["sm"], {"sm": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.sm(a[0] as rt.Variant))});
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
@@ -105,6 +107,7 @@ class Cub extends rt.GdScriptObject {
 }
 const __gd_d_Cub = rt.defineClass(Cub, () => new Cub(), (o) => o instanceof Cub);
 rt.nameClass(__gd_d_Cub, "Cub");
+rt.registerDictIdentity(__gd_d_Cub, "res://main.gd", "Cub", [], {}, (o) => { const s = o as Cub; return []; });
 rt.registerMethodArities(__gd_d_Cub, { "sm": [1, 1] });
 rt.registerStaticMethods(__gd_d_Cub, ["sm"], {"sm": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Cub.sm(a[0] as rt.Variant))});
 rt.registerNativeBase(__gd_d_Cub, "RefCounted");

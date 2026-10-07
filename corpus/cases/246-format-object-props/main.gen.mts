@@ -35,6 +35,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -64,6 +65,7 @@ class Base extends rt.GdScriptObject {
 const __gd_d_Base = rt.defineClass(Base, (a) => new Base(...a), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
 rt.registerScriptProps(__gd_d_Base, ["two","holder"]);
+rt.registerDictIdentity(__gd_d_Base, "res://main.gd", "Base", ["two","holder"], {}, (o) => { const s = o as Base; return [s.two, s.holder]; });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
 
 class Kid extends Base {
@@ -87,6 +89,7 @@ const __gd_d_Kid = rt.defineClass(Kid, (a) => new Kid(...a), (o) => o instanceof
 rt.nameClass(__gd_d_Kid, "Kid");
 rt.setClassBase(__gd_d_Kid, rt.lookupClass("Base") ?? null);
 rt.registerScriptProps(__gd_d_Kid, ["three","back"]);
+rt.registerDictIdentity(__gd_d_Kid, "res://main.gd", "Kid", ["three","back"], {}, (o) => { const s = o as Kid; return [s.three, s.back]; });
 
 class Thing extends rt.GdScriptObject {
   alpha = rt.V.int(1);
@@ -108,6 +111,7 @@ class Thing extends rt.GdScriptObject {
 const __gd_d_Thing = rt.defineClass(Thing, () => new Thing(), (o) => o instanceof Thing);
 rt.nameClass(__gd_d_Thing, "Thing");
 rt.registerScriptProps(__gd_d_Thing, ["alpha","beta","note","twice","lower","deep","f","s"]);
+rt.registerDictIdentity(__gd_d_Thing, "res://main.gd", "Thing", ["alpha","beta","note","twice","lower","deep","f","s"], {}, (o) => { const s = o as Thing; return [s.alpha, s.beta, s.note, s.twice, s.lower, s.deep, s.f, s.s]; });
 rt.registerNativeBase(__gd_d_Thing, "RefCounted");
 
 const __gd_entry = new Main();

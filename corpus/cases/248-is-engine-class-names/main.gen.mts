@@ -40,6 +40,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "row": [2, 2], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -62,6 +63,7 @@ class Inner extends rt.GdScriptObject {
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerScriptProps(__gd_d_Inner, ["v"]);
+rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", ["v"], {}, (o) => { const s = o as Inner; return [s.v]; });
 rt.registerMethodArities(__gd_d_Inner, { "m": [1, 1] });
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
 

@@ -137,6 +137,15 @@ export class ClassDesc {
   scriptProps: string[] | null;
   methodArities: Record<string, [number, number]> | null;
   staticVars: Record<string, string> | null;
+  /** `inst_to_dict` 的四段身份：所属模块的 res 路径、自己的类路径（模块根类是空串）、进门名单的变量名、带 get/set 的属性名 → 声明类型。 */
+  dictResPath: string | null;
+  dictClassPath: string | null;
+  dictNames: string[] | null;
+  dictAccessors: Record<string, string | null> | null;
+  /** 读数器：按 `dictNames` 的顺序把自己的字段值取出来（accessor 那一格给 nil，由 `inst_to_dict` 换成类型默认值）。
+   *  发不出去的原因是静态目标上不能拿类实例当 `Record<string, Variant>` 索引 —— scriptc 会拿记录形状去校验实例自己的槽，
+   *  第一格就撞 `gdObjectId`（实测 `expected object at $.gdObjectId, got number`），所以读字段的式子由发射器按类静态写好。 */
+  dictValues: ((o: object) => Variant[]) | null;
   // 静态方法的名字表 / 调用入口与静态变量的读写格不放在字段里，改挂模块级的 `Map<object, …>`（键是 desc 本身）。
   constructor(name: string, make: (args: Variant[]) => object, check: (o: object) => boolean) {
     this.name = name;
@@ -149,6 +158,11 @@ export class ClassDesc {
     this.scriptProps = null;
     this.methodArities = null;
     this.staticVars = null;
+    this.dictResPath = null;
+    this.dictClassPath = null;
+    this.dictNames = null;
+    this.dictAccessors = null;
+    this.dictValues = null;
   }
 }
 
@@ -229,6 +243,54 @@ export function registerFieldTypes(desc: ClassDesc, table: Record<string, string
 /** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它替换。 */
 export function registerScriptProps(desc: ClassDesc, names: string[]): void {
   desc.scriptProps = names;
+}
+
+/**
+ * `inst_to_dict` 的类身份四段（S269）：`resPath` 是所属模块的 res 路径（单文件模式没有 → 传 null，调用处响亮拒），
+ * `classPath` 是类路径（模块根类空串、内嵌类是类名），`names` 是进门名单（`const` / `static var` / `signal` 都不在里头），
+ * `accessors` 是带 get/set 的属性名 → 声明类型（null = 无类型）—— 引擎对这类属性**不调 getter**，出门的是声明类型的默认值。
+ */
+export function registerDictIdentity(
+  desc: ClassDesc,
+  resPath: string | null,
+  classPath: string,
+  names: string[],
+  accessors: Record<string, string | null>,
+  reader: (o: object) => Variant[],
+): void {
+  desc.dictResPath = resPath;
+  desc.dictClassPath = classPath;
+  desc.dictNames = names;
+  desc.dictAccessors = accessors;
+  desc.dictValues = reader;
+}
+
+/** 一个脚本实例进 `inst_to_dict` 时要的全部读数。字段序是**基类在前**（S269 ③），与 `String.format()` 那条「自己类在前」反着走。 */
+export function dictShapeOf(target: unknown): {
+  resPath: string | null;
+  classPath: string;
+  names: string[];
+  accessors: Record<string, string | null>;
+  values: Variant[];
+} | null {
+  const desc = descOf(target);
+  if (desc === null || desc.dictNames === null) return null;
+  const chain: ClassDesc[] = [];
+  for (let d: ClassDesc | null = desc; d !== null; d = d.base) chain.push(d);
+  const names: string[] = [];
+  const values: Variant[] = [];
+  const accessors: Record<string, string | null> = {};
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const d = chain[i] as ClassDesc;
+    const own = d.dictNames;
+    if (own === null) continue;
+    for (const n of own) names.push(n);
+    const vals = d.dictValues === null ? null : d.dictValues(target as object);
+    for (let j = 0; j < own.length; j++) values.push(vals === null ? V.nil() : (vals[j] as Variant));
+    const acc = d.dictAccessors;
+    if (acc !== null) for (const key of Object.keys(acc)) accessors[key] = acc[key] as string | null;
+  }
+  return { resPath: desc.dictResPath, classPath: desc.dictClassPath ?? "", names, accessors, values };
 }
 
 /** 方法名的 `[必填实参数, 全部实参数]` 表：arity 检查要用**两个**数，少给与多给 Godot 两边都管。 */

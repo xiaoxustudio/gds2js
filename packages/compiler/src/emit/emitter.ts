@@ -123,6 +123,7 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   weakref: [1, 1],
   rid_from_int64: [1, 1],
   rid_allocate_id: [0, 0],
+  inst_to_dict: [1, 1],
   rotate_toward: [3, 3],
   sign: [1, 1],
   smoothstep: [3, 3],
@@ -201,6 +202,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   weakref: (a) => `rt.gWeakref(${a[0]})`,
   rid_from_int64: (a) => `rt.gRidFromInt64(${a[0]})`,
   rid_allocate_id: () => "rt.gRidAllocateId()",
+  inst_to_dict: (a) => `rt.gInstToDict(${a[0]})`,
   randi: () => "rt.gRandi()",
   randf: () => "rt.gRandf()",
   randomize: () => "rt.gRandomize()",
@@ -341,6 +343,8 @@ let CURRENT_FUNC = "";
 let LAMBDA_DEPTH = 0;
 /** 本模块在 `At:` 那一行里印的路径：工程模式是 res 路径（与引擎同一串），单文件模式退到输入路径。 */
 let DEBUG_FILE = "";
+/** `inst_to_dict` 的 `@path` 那一格只认 res 路径（S269 ②）：单文件模式没有它，发 null 让运行期响亮拒。 */
+let MODULE_RES_PATH: string | null = null;
 /** `_init` 发成协议形状的方法（true）还是 JS constructor（false）：只有链上有脚本继承边的类才需要协议形状。 */
 let INIT_AS_METHOD = false;
 /** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
@@ -411,6 +415,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const classRefs = opts.classRefs ?? [];
   const resPath = opts.resPath;
   DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
+  MODULE_RES_PATH = resPath ?? null;
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -567,6 +572,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(__gd_d_${className}, ${moduleFields});`);
   const moduleProps = scriptPropsLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps});`);
+  out.push(dictIdentityLiteral(`__gd_d_${className}`, "", m.vars, className));
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   const moduleStaticSlots = staticVarSlotsLiteral(className, m.vars);
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
@@ -623,6 +629,24 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
 /** 脚本变量名的声明顺序表：`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
 function scriptPropsLiteral(vars: readonly { name: string }[]): string | null {
   return vars.length === 0 ? null : JSON.stringify(vars.map((v) => v.name));
+}
+
+/** 一个类的 `inst_to_dict` 身份五段：res 路径（单文件模式发 null，运行期响亮拒）、类路径、名单、accessor 类型表、读数器。
+ *  读数器是静态写的取值式子：静态编译目标上不能拿类实例当 `Record<string, Variant>` 索引（scriptc 会用记录形状去校验实例
+ *  自己的槽，第一格就撞 `gdObjectId`），所以「按名单顺序把自己的字段取出来」这件事只有发射器知道怎么拼。 */
+function dictIdentityLiteral(descVar: string, classPath: string, vars: readonly VarDecl[], className: string): string {
+  const res = MODULE_RES_PATH === null ? "null" : JSON.stringify(MODULE_RES_PATH);
+  const kept = vars.filter((v) => !v.isStatic && !v.isConst);
+  const names = JSON.stringify(kept.map((v) => v.name));
+  const accRows: string[] = [];
+  for (const v of vars) {
+    if (v.accessor === null || v.accessor === undefined) continue;
+    const base = v.type !== null && v.type.kind === "named" ? v.type.name.replace(/\[.*\]$/, "") : null;
+    accRows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base)}`);
+  }
+  const acc = accRows.length === 0 ? "{}" : `{${accRows.join(", ")}}`;
+  const reads = kept.map((v) => (v.accessor === null || v.accessor === undefined ? `s.${v.name}` : "rt.V.nil()")).join(", ");
+  return `rt.registerDictIdentity(${descVar}, ${res}, ${JSON.stringify(classPath)}, ${names}, ${acc}, (o) => { const s = o as ${className}; return [${reads}]; });`;
 }
 
 function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; accessor?: PropAccessor | null }[]): string | null {
@@ -823,6 +847,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declFields !== null) lines.push(`rt.registerFieldTypes(__gd_d_${decl.name}, ${declFields});`);
   const declProps = scriptPropsLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps});`);
+  lines.push(dictIdentityLiteral(`__gd_d_${decl.name}`, decl.name, decl.vars, decl.name));
   const declStaticVars = staticVarTableLiteral(decl.vars);
   const declStaticSlots = staticVarSlotsLiteral(decl.name, decl.vars);
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);

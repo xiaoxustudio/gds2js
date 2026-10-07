@@ -237,6 +237,42 @@ describe("NodePath 族的发射闸门", () => {
   });
 });
 
+// ── ①g `inst_to_dict`：发成 rt.gInstToDict、每个类都带一份 dict 身份，元数两句是一支一名量出来的（S269，探头 tmp/probe-inst/）──
+describe("inst_to_dict 的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["inst_to_dict()", 'Too few arguments for "inst_to_dict()" call. Expected at least 1 but received 0.'],
+    ["inst_to_dict(1, 2)", 'Too many arguments for "inst_to_dict()" call. Expected at most 1 but received 2.'],
+  ];
+
+  it("发成 rt.gInstToDict，模块根类与内嵌类各登记一份身份", async () => {
+    expect(await emitted(BODY(["inst_to_dict(self)", "quit()"]))).toContain("rt.gInstToDict(");
+    const inner = await emitted(
+      `extends SceneTree\n\nclass Inner extends RefCounted:\n\tvar k = 1\n\tvar p: int:\n\t\tget: return 3\n\nfunc _initialize():\n\tquit()\n`,
+    );
+    expect(inner, "模块根类登记空类路径").toContain(
+      'rt.registerDictIdentity(__gd_d_Main, null, "", [], {}, (o) => { const s = o as Main; return []; });',
+    );
+    expect(inner, "内嵌类登记自己的类路径、accessor 的声明类型与静态写好的读数器").toContain(
+      'rt.registerDictIdentity(__gd_d_Inner, null, "Inner", ["k","p"], {"p": "int"}, (o) => { const s = o as Inner; return [s.k, rt.V.nil()]; });',
+    );
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

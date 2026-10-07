@@ -34,6 +34,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -71,6 +72,7 @@ class Base extends rt.GdScriptObject {
 }
 const __gd_d_Base = rt.defineClass(Base, (a) => new Base(...a), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
+rt.registerDictIdentity(__gd_d_Base, "res://main.gd", "Base", [], {}, (o) => { const s = o as Base; return []; });
 rt.registerMethodArities(__gd_d_Base, { "three": [3, 3], "twice": [1, 2], "stwo": [2, 2] });
 rt.registerStaticMethods(__gd_d_Base, ["stwo"], {"stwo": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Base.stwo(a[0] as rt.Variant, a[1] as rt.Variant))});
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
@@ -95,6 +97,7 @@ class Derived extends Base {
 const __gd_d_Derived = rt.defineClass(Derived, (a) => new Derived(...a), (o) => o instanceof Derived);
 rt.nameClass(__gd_d_Derived, "Derived");
 rt.setClassBase(__gd_d_Derived, rt.lookupClass("Base") ?? null);
+rt.registerDictIdentity(__gd_d_Derived, "res://main.gd", "Derived", [], {}, (o) => { const s = o as Derived; return []; });
 rt.registerMethodArities(__gd_d_Derived, { "own": [1, 1] });
 
 const __gd_entry = new Main();
