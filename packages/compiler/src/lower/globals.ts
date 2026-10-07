@@ -4,7 +4,8 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
 /**
  * 实测「Godot 4.6.3 有这个名字、能过解析，但我们还没实现」的全局函数（一支脚本一个名字量出来的，
  * 不存在的会给 `Function "x()" not found in base self.`，那批不在这里）。
- * 随机数一族不进 `test:diff`：同一个 seed 的序列要复刻得先逆引擎的 PCG；`weakref` / `instance_from_id`
+ * 随机数一族已按 PCG 复刻并发出（S261，语料 259 的 268 格逐字节）—— 式子在 4.3 树的 `thirdparty/misc/pcg.cpp` 与 `core/math/random_pcg.h`；
+ * `randf()` 那一支按 4.6.3 的读数改写成 float32 除法（4.3 那支两发的 CLZ 版对不上）。`weakref` / `instance_from_id`
  * / `get_stack` 的打印带指针号，属「复现不了的打印」那一族。
  */
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
@@ -13,13 +14,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "get_stack",
   "print_debug",
   "print_stack",
-  "seed",
-  "randomize",
-  "randi",
-  "randf",
-  "randi_range",
-  "randf_range",
-  "randfn",
   // 4.6.3 实测的打印一族里，形状能完全复刻的六支已经发了（`prints` 一个空格、`printt` 一个制表符、`printraw` 不结尾、
   // `printerr` 走 stderr、`print_verbose` 在默认声级下不出声、`print_rich` 过 bbcode→ANSI 表 —— `tmp/probe-prints/prints.log`
   // 与 `tmp/probe-rich/rich.log`，S256 / S259）。剩下这几支的读数里挂着只有引擎知道的东西（`At:` 那行的脚本身份、
@@ -35,7 +29,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "is_instance_of",
   "is_instance_id_valid",
   "is_instance_valid",
-  "rand_from_seed",
   "rid_allocate_id",
   "rid_from_int64",
   "var_to_bytes",

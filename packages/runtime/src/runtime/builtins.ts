@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq } from "./values";
-import { GBytes, isBytes, packBytes, packTypeName } from "./packed";
+import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { typeOf } from "./patterns";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
@@ -874,4 +874,146 @@ export function gTypeExists(v: Variant): Variant {
     throw new UnsupportedError("type-exists-arg", `type_exists() 的实参只量过 String（收到 ${tagName(v.t)}）`);
   }
   return V.bool(ENGINE_CLASS_NAMES.has(v.v as string));
+}
+
+/**
+ * 全局随机族。式子来自 4.3 树的 `thirdparty/misc/pcg.cpp`（XSH-RR 输出与 srandom 两步预热）、
+ * `core/math/random_pcg.h`（`randd()` 的 CLZ + ldexp 那一支、`random(int,int)` 的 `rand(abs(from-to)+1) + MIN(from,to)`）与
+ * `core/math/math_funcs.cpp`（`default_rand` 的两个常数、`rand_from_seed()` 返回「下一发 + 原 seed」那一形）。
+ * 与 4.3 唯一的差别是量出来的：4.6.3 的 `randf()` 一发 `rand()` 除 2^32（4.3 那支 CLZ 版要两发），
+ * 而 `randd()` 仍是三发。读数逐格对过：`tmp/probe-rand/rand.log` 与语料 259。
+ */
+const PCG_MUL = 6364136223846793005n;
+const PCG_INC = 1442695040888963407n;
+const PCG_MASK = 18446744073709551615n;
+/** `RandomPCG::DEFAULT_SEED` —— 开局那一台的播种值（引擎随后会 `Math::randomize()`，见 `bootRand`）。 */
+const PCG_DEFAULT_SEED = 12047754176567800795n;
+/** 单精度档的 `CMP_EPSILON`：`randfn()` 只在那一眼以下加它，防 `log(0)` 出 inf。 */
+const CMP_EPSILON = 0.00001;
+const MATH_TAU = 6.283185307179586;
+
+type Pcg = { state: bigint; inc: bigint };
+
+const DEFAULT_RAND: Pcg = { state: 0n, inc: 1n };
+
+/** pcg32 的那一步：先推进状态，再用**旧**状态算 XSH-RR 输出。 */
+function pcgNext(rng: Pcg): number {
+  const old = rng.state;
+  rng.state = (old * PCG_MUL + (rng.inc | 1n)) & PCG_MASK;
+  const xs = Number((((old >> 18n) ^ old) >> 27n) & 0xffffffffn);
+  const rot = Number(old >> 59n);
+  return ((xs >>> rot) | (xs << ((-rot) & 31))) >>> 0;
+}
+
+/** `pcg32_srandom_r`：inc 走 `(seq<<1)|1`，再预热两步、中间把 seed 加进 state。 */
+function pcgSeedTo(rng: Pcg, seed: bigint): void {
+  rng.state = 0n;
+  rng.inc = ((PCG_INC << 1n) | 1n) & PCG_MASK;
+  pcgNext(rng);
+  rng.state = (rng.state + (seed & PCG_MASK)) & PCG_MASK;
+  pcgNext(rng);
+}
+
+function pcgClz32(x: number): number {
+  let n = x >>> 0;
+  if (n === 0) return 32;
+  let c = 0;
+  while ((n & 0x80000000) === 0) {
+    c++;
+    n = (n << 1) >>> 0;
+  }
+  return c;
+}
+
+/** `randd()`：第一发当指数种子（0 就直接给 0），后两发拼 53 位尾数并硬塞 MSB/LSB，再按 `ldexp(值, -64-CLZ)` 落地。 */
+function pcgRandd(rng: Pcg): number {
+  const proto = pcgNext(rng);
+  if (proto === 0) return 0;
+  const hi = BigInt(pcgNext(rng));
+  const lo = BigInt(pcgNext(rng));
+  const sig = (((hi << 32n) | lo) | 0x8000000000000001n) & PCG_MASK;
+  return Number(sig) * Math.pow(2, -64 - pcgClz32(proto));
+}
+
+/** `pcg32_boundedrand_r`：拒绝采样，门槛是 C 那句 `(0x100000000 - bound) % bound`。 */
+function pcgBounded(rng: Pcg, bound: number): number {
+  const threshold = bound >= 4294967296 ? 0 : (4294967296 - bound) % bound;
+  for (;;) {
+    const r = pcgNext(rng);
+    if (r >= threshold) return r % bound;
+  }
+}
+
+/** 引擎实测两次启动的首发 `randi()` 不同 —— 开局就播过一次种。这边同样按时钟播一次（毫秒级，性质一致：不可复现）。 */
+let BOOTED = false;
+
+function pcgTimeSeed(): bigint {
+  const ms = BigInt(Date.now());
+  return BigInt.asUintN(64, (ms / 1000n + (ms % 1000n) * 1000n) * DEFAULT_RAND.state + PCG_INC);
+}
+
+function bootRand(): void {
+  if (BOOTED) return;
+  BOOTED = true;
+  pcgSeedTo(DEFAULT_RAND, PCG_DEFAULT_SEED);
+  pcgSeedTo(DEFAULT_RAND, pcgTimeSeed());
+}
+
+export function gSeed(v: Variant): Variant {
+  bootRand();
+  pcgSeedTo(DEFAULT_RAND, intArgBig(v, "seed() 的实参"));
+  return V.nil();
+}
+
+export function gRandomize(): Variant {
+  bootRand();
+  pcgSeedTo(DEFAULT_RAND, pcgTimeSeed());
+  return V.nil();
+}
+
+export function gRandi(): Variant {
+  bootRand();
+  return V.int(BigInt(pcgNext(DEFAULT_RAND)));
+}
+
+/** 4.6.3 实测：`randf()` 只一发，值是 `rand()/2^32` 落在 **float32** 上再 widen 回 double（4.3 那支 CLZ float 版要两发，读数对不上）。 */
+export function gRandf(): Variant {
+  bootRand();
+  return V.float(Math.fround(pcgNext(DEFAULT_RAND) / 4294967296));
+}
+
+export function gRandiRange(from: Variant, to: Variant): Variant {
+  bootRand();
+  const a = Number(BigInt.asIntN(32, intArgBig(from, "randi_range() 的第一参")));
+  const b = Number(BigInt.asIntN(32, intArgBig(to, "randi_range() 的第二参")));
+  if (a === b) return V.int(BigInt(a));
+  // 两个实参折成 int32（实测 `randi_range(0, 4294967295)` 走的是 (0, -1) 那一格、`randi_range(2147483648, 2147483649)` 走 (0, 1)），
+  // 但跨度是宽类型算的：`randi_range(-2147483648, 2147483647)` 实测给 -335896151 = 首发 1811587497 − 2^31，跨度是 2^32 而不是折回 int32 的 2。
+  const bound = Math.abs(a - b) + 1;
+  return V.int(BigInt(pcgBounded(DEFAULT_RAND, bound) + Math.min(a, b)));
+}
+
+export function gRandfRange(from: Variant, to: Variant): Variant {
+  bootRand();
+  const a = numArg(from, "randf_range() 的第一参");
+  const b = numArg(to, "randf_range() 的第二参");
+  return V.float(pcgRandd(DEFAULT_RAND) * (b - a) + a);
+}
+
+/** Box-Muller：两发 `randd()`（一共 6 发，实测下一发 `randi()` 正好落在 o7），第一发低于 `CMP_EPSILON` 时加它。 */
+export function gRandfn(mean: Variant, dev: Variant): Variant {
+  bootRand();
+  const m = numArg(mean, "randfn() 的均值");
+  const d = numArg(dev, "randfn() 的标准差");
+  let temp = pcgRandd(DEFAULT_RAND);
+  if (temp < CMP_EPSILON) temp += CMP_EPSILON;
+  return V.float(m + d * (Math.cos(MATH_TAU * pcgRandd(DEFAULT_RAND)) * Math.sqrt(-2.0 * Math.log(temp))));
+}
+
+/** 局部生成器，不动全局那一台；返回 `[下一发, 原 seed]`（`Math::rand_from_seed` 就是把入参原样写回第二格）。 */
+export function gRandFromSeed(v: Variant): Variant {
+  const s = intArgBig(v, "rand_from_seed() 的实参");
+  const local: Pcg = { state: 0n, inc: 1n };
+  pcgSeedTo(local, s);
+  return packCtor("int64", [V.array(GArray.of([V.int(BigInt(pcgNext(local))), V.int(s)]))]);
 }

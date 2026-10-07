@@ -598,6 +598,15 @@
 - **账**：`test:diff` **172/172 逐字节、静默 0、崩溃 0**、`test:compile` 180/249、`pnpm test` 1065 例、ops 自校验 1799→**1804**、guards 189 例、`test:codegen` 2/2、tree-face 17 项、`test:pkgmodes` 25/25、面探针 `234-` 1/1（改了 runtime 的函数形状就过面探针，§2 第 13 条那条口径）、`258-` AOT 1/1、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20、typecheck 4/4 与 `tsconfig.test.json`。
 
 
+### 1.64 随机族八支发出：pcg32 复刻，`randf()` 按 4.6.3 的 float32 除法走（2026-10-07，S261，语料 259，§6 第 23 条再收窄）
+
+- **这一族欠的是「同一个 seed 的序列要复刻」**，§6 第 23 条与 globals 的抬头都这么写。式子其实全在 4.3 树里：`thirdparty/misc/pcg.cpp` 的 XSH-RR 与 srandom 两步预热、`core/math/random_pcg.h` 的 `randd()`（CLZ + ldexp，三发）与 `random(int,int)`、`core/math/math_funcs.cpp` 的 `default_rand` 常数与 `rand_from_seed` 那支「下一发 + 原 seed」。先照 4.3 搬完，再拿引擎逐格对 —— 261 格里 81 格不对，**全在 `randf()` 与 `randi_range()` 两支**。
+- **`randf()` 与 4.3 不一样**：4.6.3 只吃一发，值是 `rand()/2^32` **落在 float32 上**再 widen。seed(0) 组那格实测 `0.47646453976631`，纯 double 除法给 `0.47646454931237`（差在第 9 位），4.3 那支 CLZ float 版要吃两发 —— 照搬会把后面每一格都挪位。`randd()` 反倒是三发制，照 4.3 一字不差对得上。
+- **`randi_range()` 折实参不折跨度**：两个实参先按 int32 折（`randi_range(0, 4294967295)` 走的是 (0, -1) 那一格，给 `0`），跨度却是宽类型算的：`randi_range(INT32_MIN, INT32_MAX)` 实测 `-335896151` = 首发 `1811587497` − 2^31，也就是 bound 取 2^32；要是按 C 那句 `abs(p_from-p_to)+1` 折回 int32，bound 会变成 2、给不出这个数。`from == to` 那一格直接回、一发不吃（后面那发 randi 照样是首发）✓。
+- **开局是播过种的**：同一支脚本连跑两次，未 seed 的首发 `randi()` 是 1956456239 / 2444007460，而 `seed(1234)` 之后三格两次一字不差 —— 所以引擎启动时 randomize 过一次。这边同样按时钟播一次（`Date.now()`，毫秒级，不是引擎那句 unix_time+ticks），**性质对齐而不是数值对齐**：不可复现这件事对齐，具体数字本来就没人能钉；语料因此每格都先 seed，未 seed 那一形不进任何门。
+- **元数与两句**照 `variant_utility.cpp:1784-1791` 的 FUNCBIND 注册表，八格 Too few / Too many 在 4.6.3 一支一名量过（零实参那三支的多给句就是 `Expected at most 0 but received 1.`），进了 `BUILTIN_ARITY`；实参类型仍走数学族那条老闸（非数值抛 `[arg-int]` / `[arg-float]`，引擎那几句是转换期的、这一族没量过原文就不冒充），float 落 int 槽按既有截断规矩收。
+- **账**：语料 259（274 行 golden 逐字节）+ 读数表 `tmp/probe-rand/rand-map.tsv`、`test:diff` **173/173**（静默 0、崩溃 0）、`test:compile` 181/250、`pnpm test` 1067 例、ops 自校验 1804→**1819**、guards 183 例（新增「随机族的发射与元数闸门」2 例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、面探针 `234-` 1/1（`Date.now()` 与 BigInt 位运算在静态目标上 lowering 得过来）、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 26→**18**，名表里可派发 93→**101**、该拒 33→**25**。**这一格欠着**：`259-` 的单例 scriptc 出货门本轮没跑完（长跑被打断），下一轮第一件事就是补它，别把 259 当成已在 AOT 面上绿过。
+
 ---
 
 ## 2. 当前任务与待办

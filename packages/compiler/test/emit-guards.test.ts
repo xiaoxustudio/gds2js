@@ -90,6 +90,47 @@ describe("打印一族的发射与拒答", () => {
   });
 });
 
+// ── ①c 随机族：八支发成 rt.g*，元数闸门那八句是 4.6.3 一支一名量出来的（S261） ──────
+describe("随机族的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["randi(1)", 'Too many arguments for "randi()" call. Expected at most 0 but received 1.'],
+    ["randf(2)", 'Too many arguments for "randf()" call. Expected at most 0 but received 1.'],
+    ["randomize(1)", 'Too many arguments for "randomize()" call. Expected at most 0 but received 1.'],
+    ["seed()", 'Too few arguments for "seed()" call. Expected at least 1 but received 0.'],
+    ["rand_from_seed()", 'Too few arguments for "rand_from_seed()" call. Expected at least 1 but received 0.'],
+    ["randfn(1)", 'Too few arguments for "randfn()" call. Expected at least 2 but received 1.'],
+    ["randi_range(1, 2, 3)", 'Too many arguments for "randi_range()" call. Expected at most 2 but received 3.'],
+    ["randf_range(1)", 'Too few arguments for "randf_range()" call. Expected at least 2 but received 1.'],
+  ];
+
+  it("八支各发成自己的 rt.g*", async () => {
+    expect(await emitted(BODY(["seed(7)", "randi()", "randf()", "quit()"]))).toContain("rt.gSeed(");
+    expect(await emitted(BODY(["randi()", "quit()"]))).toContain("rt.gRandi()");
+    expect(await emitted(BODY(["randf()", "quit()"]))).toContain("rt.gRandf()");
+    expect(await emitted(BODY(["randomize()", "quit()"]))).toContain("rt.gRandomize()");
+    expect(await emitted(BODY(["rand_from_seed(1)", "quit()"]))).toContain("rt.gRandFromSeed(");
+    expect(await emitted(BODY(["randi_range(1, 6)", "quit()"]))).toContain("rt.gRandiRange(");
+    expect(await emitted(BODY(["randf_range(1.0, 2.0)", "quit()"]))).toContain("rt.gRandfRange(");
+    expect(await emitted(BODY(["randfn(0.0, 1.0)", "quit()"]))).toContain("rt.gRandfn(");
+    expect(await classify(PRINT("randi()"), "ok"), "randi 零实参编得过").toBe("ok");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状
