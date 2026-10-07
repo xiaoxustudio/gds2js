@@ -675,7 +675,8 @@
 - **NodePath 就位之后这一族只剩自己的形状**：十一份探头一次跑完（`tmp/probe-inst/`），返回 Dictionary（typeof 27）、`"@subpath"` / `"@path"` 是 String 键而字段键是 StringName、键序 `@subpath → @path → 声明序`。
 - **`@subpath` 是「类路径」**：模块根类是**空 NodePath**，内嵌类是 `Inner`，三层是 `A/B/C`（`get_name_count()` 3）；`@path` 始终是模块那份脚本的路径。没有 S268 那个值型就印不出 `^"Inner"` 这一形 —— 这正是 §1.70 记下「先量 NodePath」的原因。
 - **进门名单量死**：`var` 全进（无初值、`_` 前缀、`@export`），`const` / `static var` / `signal` 都不进；脚本继承链按**基类字段在前**合并；宿主基类自己的属性（`script` 那一族）一条不进。
-- **最反直觉的一格**：带 `get/set` 的属性**不调 getter**，出门的是声明类型的默认值 —— 同一台对象 `.ai` 读出来 42，字典里是 0。十一种类型各量一格（int 0 / float 0.0 / bool false / String `""` / StringName `&""` / Vector2 `(0.0, 0.0)` / Array `[]` / Dictionary `{ }` / 无类型 `<null>` / NodePath `^""` / Color `(0.0, 0.0, 0.0, 1.0)`），与「typed 但没赋值的普通 var」那一格一字不差，所以实现里就复用那张默认值表。
+- **最反直觉的一格**：带 `get/set` 的属性**不调 getter**，出门的是声明类型的默认值 —— 同一台对象 `.ai` 读出来 42，字典里是 0。十六种类型量齐（int 0 / float 0.0 / bool false / String `""` / StringName `&""` / Vector2 `(0.0, 0.0)` / Vector2i `(0, 0)` / Vector3 `(0.0, 0.0, 0.0)` / Vector3i `(0, 0, 0)` / Array `[]` / Dictionary `{ }` / 无类型 `<null>` / NodePath `^""` / Color `(0.0, 0.0, 0.0, 1.0)` / 两种 pack 空串），与「typed 但没赋值的普通 var」那一格一字不差，所以实现里就复用那张默认值表。
+- **一条顺序陷阱**：`inst_to_dict` 的继承链是**基类字段在前**，而 S232 量过的 `String.format()` 属性序是**自己类在前、基类在后** —— 两条路反着走，别为了省事共用一个走链的辅助函数。
 - **值是引用**：对象字段出门是 `<RefCounted#号>`（语料侧掩号），数组与字典是原值，**不递归序列化**。
 - **`dict_to_inst` 跳过 `_init` 量清了**：`_init` 里的 print 副作用在 `new()` 打一次、在 `dict_to_inst` 一次没打，字段照灌、类型照对（`b is WithInit` 真）。四格报错也齐：缺 `@path`、路径加载不到（前面还带两句 ERROR）、`@subpath` 指名不存在的类，以及**缺 `@subpath` 就是造模块根类** —— 那一格真造出了一台 `<SceneTree#号>` 并漏出一片 RID，Tier 1 发不出，实现按响亮拒处理。
 - **新记一条方法学**：这几句报错过 `RTR()`，本机默认语言是中文（量到 `不是带有实例的脚本。`），**要英文原文得给引擎加 `--language en`**（`Not a script with an instance.`）。这类文案随跑门机器的语言漂，所以**不进语料、只进 ops**，中英两形都写进文档。
