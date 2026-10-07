@@ -491,10 +491,16 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
       buf += String(c);
     });
     try {
-      const sawFirst = await until(() => buf.includes("watch-a"), 30000);
-      if (sawFirst) writeFileSync(gd, script("watch-b"), "utf8");
-      const sawSecond = sawFirst && (await until(() => buf.includes("watch-b"), 30000));
-      if (!sawFirst) cell(false, `run --watch 第一次没执行（30 秒内没见 watch-a）：${buf.slice(0, 200)}`);
+      // 两处形状都要钉住：① 写盘必须等到「监听」那一句出来之后（priming 那次采样就在打印这句的同一个同步段里，
+      //    而脚本的 stdout 比它早到 —— 实测原生 exe 冷启 `watch-a` +320ms、`监听` +345ms，抢在那 25ms 里改文件，
+      //    首拍采到的就是改后的摘要）；② 两次保存的**字节数要不同**，摘要 `路径:mtime:大小` 里尺寸那一维才动 ——
+      //    `watch-a` / `watch-b` 等长时这一格只对 mtime 分辨率有依赖，而「mtime 变了、尺寸没变」那一形在原生目标上
+      //    时有看不见（§1.66 的扫法），门不该建在那上面。这一格真正要钉的洞（重跑写同名产物 → 第二次执行被
+      //    ES 模块缓存吃掉）与文件长度无关，改夹具不削弱它。
+      const sawArmed = await until(() => buf.includes("监听") && buf.includes("watch-a"), 30000);
+      if (sawArmed) writeFileSync(gd, script("watch-bb"), "utf8");
+      const sawSecond = sawArmed && (await until(() => buf.includes("watch-bb"), 30000));
+      if (!sawArmed) cell(false, `没等到「监听」+首跑（30 秒内）：${buf.slice(0, 200)}`);
       else {
         cell(
           sawSecond,

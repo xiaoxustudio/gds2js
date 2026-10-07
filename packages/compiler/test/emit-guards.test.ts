@@ -131,6 +131,47 @@ describe("随机族的发射与元数闸门", () => {
   });
 });
 
+// ── ①d 身份族：四支发成 rt.g*，元数闸门那八句是 4.6.3 一支一名量出来的（S263，探头 tmp/probe-ids-arity/arity.log） ──
+describe("身份族的发射与元数闸门", () => {
+  const body = (stmts: string[]): string =>
+    `extends SceneTree\n\nfunc _initialize():\n${stmts.map((s) => `\t${s}`).join("\n")}\n`;
+  const DECL = ["var a = 1", "var i = 1"];
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["weakref()", 'Too few arguments for "weakref()" call. Expected at least 1 but received 0.'],
+    ["weakref(a, a)", 'Too many arguments for "weakref()" call. Expected at most 1 but received 2.'],
+    ["instance_from_id()", 'Too few arguments for "instance_from_id()" call. Expected at least 1 but received 0.'],
+    ["instance_from_id(i, 1)", 'Too many arguments for "instance_from_id()" call. Expected at most 1 but received 2.'],
+    ["is_instance_valid()", 'Too few arguments for "is_instance_valid()" call. Expected at least 1 but received 0.'],
+    ["is_instance_valid(a, a)", 'Too many arguments for "is_instance_valid()" call. Expected at most 1 but received 2.'],
+    ["is_instance_id_valid()", 'Too few arguments for "is_instance_id_valid()" call. Expected at least 1 but received 0.'],
+    ["is_instance_id_valid(1, 2)", 'Too many arguments for "is_instance_id_valid()" call. Expected at most 1 but received 2.'],
+  ];
+
+  it("四支各发成自己的 rt.g*", async () => {
+    expect(await emitted(body([...DECL, "weakref(a)", "quit()"]))).toContain("rt.gWeakref(");
+    expect(await emitted(body([...DECL, "instance_from_id(i)", "quit()"]))).toContain("rt.gInstanceFromId(");
+    expect(await emitted(body([...DECL, "is_instance_valid(a)", "quit()"]))).toContain("rt.gIsInstanceValid(");
+    expect(await emitted(body([...DECL, "is_instance_id_valid(i)", "quit()"]))).toContain("rt.gIsInstanceIdValid(");
+    expect(await classify(body([...DECL, "print(weakref(a))", "quit()"]), "ok"), "weakref 一支该编得过").toBe("ok");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      const src = body([...DECL, call, "quit()"]);
+      expect(await classify(src, "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(src), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

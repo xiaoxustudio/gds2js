@@ -607,6 +607,24 @@
 - **元数与两句**照 `variant_utility.cpp:1784-1791` 的 FUNCBIND 注册表，八格 Too few / Too many 在 4.6.3 一支一名量过（零实参那三支的多给句就是 `Expected at most 0 but received 1.`），进了 `BUILTIN_ARITY`；实参类型仍走数学族那条老闸（非数值抛 `[arg-int]` / `[arg-float]`，引擎那几句是转换期的、这一族没量过原文就不冒充），float 落 int 槽按既有截断规矩收。
 - **账**：语料 259（274 行 golden 逐字节）+ 读数表 `tmp/probe-rand/rand-map.tsv`、`test:diff` **173/173**（静默 0、崩溃 0）、`test:compile` 181/250、`pnpm test` 1067 例、ops 自校验 1804→**1819**、guards 183 例（新增「随机族的发射与元数闸门」2 例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、面探针 `234-` 1/1（`Date.now()` 与 BigInt 位运算在静态目标上 lowering 得过来）、`test:export` ok 10 / 记账 3 / FAIL 0、`test:cli-native` 20/20、typecheck 4/4 与 `tsconfig.test.json`；发射期拒答清单 26→**18**，名表里可派发 93→**101**、该拒 33→**25**。**AOT 也补跑完了**：`259-` 的单例 scriptc 出货门 1/1 编过、1/1 跑通、274 行逐字节一致 —— `Date.now()`、BigInt 位运算与拒绝采样循环在静态目标上全都 lowering 得过来。
 
+### 1.65 身份族按合成号口径发出：发号器顺手登记，`<基类名#号>` 双侧掩号进语料（2026-10-07，S263，语料 260，§6 第 19 条收窄）
+
+- **这一条把 S262 那份读数花掉了**：`nextObjectId()` 原先只发号、不记「号 → 对象」，所以 `instance_from_id()` 无从查起；现在发完把自己挂进 `LIVE` 那张表，`GdScriptObject` 的字段初始化相应改成 `nextObjectId(this)`。四支全局函数（`weakref` / `instance_from_id` / `is_instance_valid` / `is_instance_id_valid`）从发射期拒答清单划进 `BUILTIN` + `BUILTIN_ARITY` + `GLOBAL_IMPL`，名表里那四行跟着从 TODO 翻成 GS。元数那八句是当场一支一名量回来的（`tmp/probe-ids-arity/arity.log`），与前一轮随机族同一套做法。
+- **号只保证「自己的算术」**：同对象同号、`a < b`、`instance_from_id(id) == a` 钉得住，与引擎的数字对不对得上没人钉 —— 所以 `tools/lib.mjs` 的 normalize 多了一条 `<类名#-数字> → <类名#号>`，golden 与产物**两侧同一条掩法**（不是只抹平我们这一侧），`260-object-identity` 那 39 行因此能逐字节比。
+- **打印那一格欠的是「基类名」**：`Inner extends RefCounted` 印 `<RefCounted#…>` 而不是 `<Inner#…>`，走 `nativeBaseOf`；为了不打断 values.ts → object.ts 那条 import 环，沿用与 `scriptPropsHook` 同一个注入口（`registerObjectLabelHook`）。
+- **三道 AOT 围栏**（明细在 S263 ⑦）：JS 的 `WeakRef` 没有 lowering；本轮新写的 `class` 只要被 `instanceof` 用到就 SC1090；`(an ? b : a).t` 这种「条件式直接当接收者」也 SC1090。**这一发的新读数是「报错带行列」**（`values.ts:2458:48`）：拿到它靠的是 `GDS2JS_SCRIPTC_KEEP=1` 把替身树留在 `tmp/sc-gate/<用例>/`，再 `scriptc build <那棵树>/main.mts --strip` 直接读全文 —— 以前只在门的 120 字截断里猜，改形状试了好几轮。
+- **生命周期那一格明说不复刻**：`LIVE` 是强引用，被丢弃的 RefCounted 在我们这一侧仍查得回、仍算「有效」，引擎那边已回收并把号作废。这一形留在 §6 第 19 条，与 `CONNECT_DEFERRED` 那一格同一个前提：先有宿主的对象生命周期模型才谈得上。
+- **没量过的照旧响亮拒**：`weakref(5)` 抛 `[weakref-arg]`、`WeakRef.is_null()` 抛 `[weakref-method]`；`is_instance_valid` 的「真」只发实测过的那几类（引擎类值 `Node` / `SceneTree` 两格是本轮当场补量的，`tmp/probe-ids-more/m.log`）。
+- **账**：语料 260（39 行逐字节）+ ops `object-identity.test.ts` 4 段 15 格 + guards **179 → 181** 例；发射期拒答清单 **18 → 14**、名表可派发 **101 → 105** / 该拒 **25 → 21**；`pnpm test` 1072 例、ops 自校验 1834、`test:compile` 182/251、`test:diff` **174/174**（共 260 个用例）、`test:codegen` 2/2、`test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0、typecheck 4/4 与 `tsconfig.test.json`；AOT 面探针 `234-` **1/1**、`260-` 单例出货门 **1/1 编过 + 1/1 跑通 + 39 行逐字节**、`test:cli-native` 重编 exe 后 **20 例 / 22 格全过**。同一轮里 CLI 门 `⑨b run --watch` 那格的红另有一笔账，见 §1.66。
+
+
+### 1.66 `⑨b run --watch` 又在整跑里红：门改成「等长保存也看得见」，原生那一侧还剩一形没量清（2026-10-07，CLI 门，§1.56 的续）
+
+- **现象与 §1.56 一字不差**：整跑 `test:cli-native` 时 `⑨b` 判失败，缓冲里只有脚本第一次的 `watch-a` 与那句 `👀 监听 …` 横幅，连「—— 重新运行 ——」都没出现；同一轮里 `⑨`（`check --watch`）是过的。
+- **门自己的两处形状问题（都改了）**：① 旧门等的是 `watch-a`，而横幅在原生那一支比脚本 stdout **晚 25ms** 到（本机追踪：`watch-a` +320ms、`监听` +345ms），于是「第一次采样」可能已经带着改后的摘要 —— 改成 `监听` 与 `watch-a` 都出现才动手。② `watch-a` / `watch-b` **等长**，摘要 `路径:mtime:大小` 里只剩 mtime 一维会动，这一格对 mtime 的分辨率有依赖而 `⑨` 没有（它走 `appendFileSync`，尺寸必变，所以从不红）—— 第二次保存改成 `watch-bb`，让尺寸那一维也动。这一格要钉的洞（重跑写同名产物 → 第二次执行被 ES 模块缓存吃掉）与文件长度无关，改夹具不削弱它。
+- **扫出来的形状（数据在此，不写死因果）**：`tmp/wsweep.mjs` 按固定延迟写盘、看六秒内认不认。原生 exe：+225ms 不重跑、+613ms 重跑、+1236ms 不重跑、+3015ms 重跑；父侧 `statSync` 每次都报出真实变了的 mtime（+231 / +612 / +1234 / +3014ms），所以不是没写进去。同一条扫法在 node CLI 是 **0|6|12|30 四格全重跑**（node 冷启约 1s，四次写都在横幅之后）。改完夹具后 `⑨b` 单点与整跑都过。
+- **产品那一侧留着的那一形**：`--watch` 在原生目标上对某些「mtime 变了、尺寸没变」的保存不反应，而同一份 `watch.ts` 在 node 上看得见 —— 差别在 scriptc 那一侧的 `statSync().mtimeMs` 或轮询本身，**这一轮没量清，所以不动实现**（要动先按数据来：拿一份 scriptc 小探头把同一个文件的 mtime 在两侧对印）。已记 §2 待办。
+
 ---
 
 ## 2. 当前任务与待办
@@ -614,7 +632,7 @@
 **决策 / 发布类**
 
 1. **#27 已决（§0 I）：SEA 保留。**
-1. **身份数字（instance id / `<Base#id>` 打印 / RID / WeakRef）已决（2026-10-07，S262）：产物自造稳定合成号** —— 形状照引擎、号按进程内分配顺序发，语料里带号的格子一律掩号再比；引擎那边读数是 30 格两遍一字不差（`tmp/probe-ids/ids2-1.log`），但号**起点**是引擎选的，跨版本不保证，所以逐字复刻那条路不通。`hash(Callable)` 那一格因此继续欠着（它的数是从号算出来的）。
+1. **身份数字（instance id / `<Base#id>` 打印 / RID / WeakRef）已决（2026-10-07，S262）：产物自造稳定合成号** —— 形状照引擎、号按进程内分配顺序发，语料里带号的格子一律掩号再比；引擎那边读数是 30 格两遍一字不差（`tmp/probe-ids/ids2-1.log`），但号**起点**是引擎选的，跨版本不保证，所以逐字复刻那条路不通。`hash(Callable)` 那一格因此继续欠着（它的数是从号算出来的）。**这一条已经花掉（S263，语料 260）**：`get_instance_id()` / `instance_from_id()` / `is_instance_valid()` / `is_instance_id_valid()` / `weakref()` 与 `<基类名#号>` 的打印都按这条口径发出了；RID 那三支（`rid_allocate_id` / `rid_from_int64` 的号与 `RID(n)` 的打印）与 `hash(RID())` 仍按「没量透就不发」留在拒答清单里。
 2. **#29 已决（§0 H）：形态 A；`pnpm release` 已落地**（版本戳 0.1.0 起、`gds2js --version`、release/ 产物 + sha256）。
    许可备查：scriptc 是 Apache-2.0、无 NOTICE，随包分发本来允许（若将来改 B 再启用）。
 3. ~~**#30** `engines.node`（25.7 只服务 `--pack node` 那支，位置可能写错了）~~ —— **已实测并改正（2026-10-03）**：
@@ -710,6 +728,8 @@
     门粒度（无子集运行能力，靠各门自带 `--quick`/筛选参数）；**两道引擎门不要并发** —— golden 检测在抢 CPU 时把大 golden（`236` 那 445 行）判成超时并误报漂移，2026-10-06 实测一次「并发报漂移、单跑 245/245 全绿」，查漂移那几分钟别顺手跑探头或另一道门。**同一道门第二种误报形态：冷启动段**——2026-10-06 又一轮整跑 1225s（前一轮 522s），把最前面的 001–006 判成超时报漂移，逐格单跑 6/6 干净、每格 1.5–2.2s；因此这一门报了超时先别改 golden，按 `vitest run --project e2e golden-drift -t "00[1-6]-"` 把点名的几格复跑一遍再定。**第三种误报形态是门自己在跑、这边改源码**：2026-10-07 的 `test:cli-native` ④ 报 `✗ 模块树不一致：runtime/rich-ansi.ts 内容不同` —— 那颗格是把 exe 内嵌的 runtime 源码树与工作区逐文件比，而 `pnpm build` 之后exe 就定型了；那一轮在门跑着的时候改了 rich-ansi.ts 的注释，读到的就是「内嵌的那份 ≠ 现在这份」。源码定稿再跑出货门，重跑一次即 20/20（④ 那格实测 128 秒）。
 
 14. **转换族与 `format` 的四个卡点（2026-10-04 记，读数全在 S214 / S219 / S220 / S221 / S225 / S226 / S227）**：① `var_to_str` 的浮点 —— **S230 已经把非浮点那半发出去了（浮点抛 `[var-to-str-float]`），这一格欠的就是剩下的尾数**：出处已定位（`VariantWriter` 的 FLOAT 支 → `rtos_fix` → `String::num_scientific`，`%g` 家族 + 去尾随零 + 「无点无 e 才补 `.0`」；零短路给 `0`、负无穷是 `inf_neg` 而 print 给 `-inf`），还剩两格不被任何固定 precision 解释：最小正规数与次正规数都给 `0.0`、`1e23` 要 16 位而 `7e22` 要 17 位 —— 要的是把 4.6.3 那个 `%g` 的**实际行为**量成一表，别再猜精度。② `str_to_var` 的认与不认**已经量齐**（S214），只欠实现 —— **S231 已发出**（155 格逐格对上；`\U` 吃六位数却量不出越界处理、构造式名字认不出、实参不是 String 三条分别抛 `[str-to-var-shape]` / `[str-to-var-type]` / `[str-to-var-arg]`）。③ `convert` / `type_convert` 标量表已齐（S220），卡在 `convert([], TYPE_INT)` 那条**运行期**拒（引擎文案连函数名都指错了），数组→标量按什么判要先量；**那道前置已解（S233）**：`TYPE_*` 整族 37 支 + `TYPE_MAX` 量清并发出（逐名用 `GDScript.reload` 编内层脚本，避免一个不存在的名字带废整支探针；每支又与 `typeof(样本)` 对了一遍），语料 236 钉了 37 格打印 + 17 格 `typeof(x) == TYPE_X`。这两支剩下的量测在 §1.37 一次跑完（340 格矩阵）：解析期接受集合按第一实参的静态类型分岔，`type_convert` 一支都不拒。④ `format`：**已出货（S232）**，而且 S219 那格「缺省占位符是 `"{0}"`」的读数也纠正了 —— 占位符本身是 `"{_}"`，`{0}` 是键文本渲染出来的样子；键序（字典按插入顺序遍历键）、非字符串键、值转文本（走 print 那套）全量过，只剩 Object 那一支抛 `[format-object]`。**①的一条更正（S228）**：`var_to_str` 那两处「极小值给 `0.0`」的反常已经查到是**字面量解析**掉的，不是 writer 的问题 —— ①里剩下的只有「尾数 16 位还是 17 位」一问，做法是把待测值用**算术**造出来绕开解析层，再看是不是纯 `%.*g` 舍入。**共同前提**：任务 #18（AOT 那 ~140 倍的装箱账）要的是单态/去装箱的设计拍板，不由代码侧决定，仍未定。
+
+15. **`run --watch` 在原生目标上看不见「mtime 变了、字节数没变」的保存（2026-10-07 记，§1.66，未动实现）**：`gdSignature` 是 `路径:mtime:大小` 三段，node 侧四格延迟扫（0/6/12/30s）全部重跑，原生 exe 同一把扫法有两格不重跑，而父侧 `statSync` 每次都报出真实变了的 mtime —— 也就是失灵点在 scriptc 那一侧的读数或轮询里，**没量清就不改实现**。要动先做探头：一份只用 `node:fs` 的小 scriptc 产物，对同一个文件反复 `statSync().mtimeMs` 并与 node 同印一份，两侧数字对上了才知道该给摘要加哪一维（内容指纹 / 首块尺寸 / ctime）。门这边已经先把不确定性拿掉：`⑨b` 两次保存改成不等长（尺寸维必变），并等 `监听` + 首跑都出现再动手。
 
 ---
 

@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
-import { GArray, GDict, registerScriptPropsHook } from "./values";
+import { GArray, GDict, registerObjectLabelHook, registerScriptPropsHook } from "./values";
 import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
 import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
@@ -9,13 +9,16 @@ export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCal
 
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
-  /** 实例身份号：`get_instance_id()`、对象当字典键、数组里的成员判定都吃它（Godot 那侧是指针派生的号，跨运行不定，所以只复现关系不复现数字）。 */
-  readonly gdObjectId: number = nextObjectId();
+  readonly gdObjectId: number = nextObjectId(this);
   /** 命中给装箱值（调用方再 `wrapValue` 也无妨 —— `wrapValue` 对 Variant 原样返回）；没这个方法给 null。 */
   __gdDispatch(_name: string, _args: Variant[]): Variant | null {
     return null;
   }
 }
+
+/** 空对象引用与 `weakref()` 的盒子住在叶子模块 `identity.ts`（`values.ts` 的打印与等式都要读它们，不能反向 import 本模块）。 */
+export { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox, nextObjectId } from "./identity";
+export type { GdIdentified, NullRef, WeakRefBox } from "./identity";
 
 /** lambda 的 Callable 盒子（`rt.callable((a) => {...}, 形参数)`）。 */
 export function callable(fn: Fn, arity: number | null = null): Variant {
@@ -364,6 +367,12 @@ registerScriptPropsHook((inner) => {
     for (const name of names) props.push({ name, value: box[name] as Variant });
   }
   return { props, unmodeledBase };
+});
+
+registerObjectLabelHook((inner) => {
+  if (!(inner instanceof GdScriptObject)) return null;
+  const base = nativeBaseOf(inner);
+  return base === null ? null : `<${base}#${String(inner.gdObjectId)}>`;
 });
 
 // ---------------------------------------------------------------- meta 存储

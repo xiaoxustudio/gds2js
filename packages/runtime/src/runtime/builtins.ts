@@ -4,6 +4,10 @@ import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq } from "./values";
 import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
+import { Signal } from "./signal";
+import { ClassDesc, GdScriptObject } from "./object";
+import { GdNativeClass } from "./native-class";
+import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { typeOf } from "./patterns";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
@@ -994,6 +998,35 @@ export function gRandfn(mean: Variant, dev: Variant): Variant {
   let temp = pcgRandd(DEFAULT_RAND);
   if (temp < CMP_EPSILON) temp += CMP_EPSILON;
   return V.float(m + d * (Math.cos(MATH_TAU * pcgRandd(DEFAULT_RAND)) * Math.sqrt(-2.0 * Math.log(temp))));
+}
+
+/** 实测为真的那四类：脚本实例、脚本类值、引擎类值、weakref 本身。空对象引用与 Callable / Signal / 结构体 / 容器 / nil 都是假。 */
+export function gIsInstanceValid(v: Variant): Variant {
+  if (v.t !== Tag.OBJECT) return V.bool(false);
+  const inner = v.v;
+  if (isNullRefValue(inner) || isCallableBox(inner) || inner instanceof Signal) return V.bool(false);
+  return V.bool(
+    inner instanceof GdScriptObject || inner instanceof ClassDesc || inner instanceof GdNativeClass || isWeakRefBox(inner),
+  );
+}
+
+/** 号还在就返回那个对象，不在返回空对象引用（typeof 24、与 null 相等、印 `<Object#null>`）。 */
+export function gInstanceFromId(v: Variant): Variant {
+  const live = liveObjectOf(Number(BigInt.asIntN(64, intArgBig(v, "instance_from_id() 的实参"))));
+  return live === null ? V.object(NULL_OBJECT) : V.object(live);
+}
+
+export function gIsInstanceIdValid(v: Variant): Variant {
+  return V.bool(liveObjectOf(Number(BigInt.asIntN(64, intArgBig(v, "is_instance_id_valid() 的实参")))) !== null);
+}
+
+/** 只有对象与 null 量过（`weakref(null).get_ref()` 给 `<null>`），其余实参这一族没依据就拒。 */
+export function gWeakref(v: Variant): Variant {
+  if (v.t === Tag.NIL) return V.object(weakRefBox(null));
+  if (!gIsInstanceValid(v).v) {
+    throw new UnsupportedError("weakref-arg", `weakref() 只量过对象与 null（收到 ${tagName(v.t)}）`);
+  }
+  return V.object(weakRefBox(v));
 }
 
 export function gRandFromSeed(v: Variant): Variant {

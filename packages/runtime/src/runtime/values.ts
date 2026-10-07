@@ -14,6 +14,7 @@ import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import { GdNativeClass } from "./native-class";
+import { isNullRefValue, isWeakRefBox, NULL_OBJECT } from "./identity";
 import type { GdIdentified } from "./identity";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
@@ -1310,6 +1311,13 @@ export function registerScriptPropsHook(f: (inner: object) => ScriptPropFace | n
   scriptPropsHook = f;
 }
 
+/** 脚本实例的打印形状（`<原生基类名#身份号>`）：号在本模块发，基类名只有 object.ts 知道，所以走同一套注入。 */
+let objectLabelHook: ((inner: object) => string | null) | null = null;
+
+export function registerObjectLabelHook(f: (inner: object) => string | null): void {
+  objectLabelHook = f;
+}
+
 /**
  * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
  * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
@@ -2343,10 +2351,12 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
-      // 引擎类值（`var k = Node`）实测打 `<GDScriptNativeClass#一个号>` —— 号是进程内的，复现不了，只能拒
-      if (inner instanceof GdNativeClass) {
-        throw new UnsupportedError("show-native-class", `print 复现不了引擎类 ${inner.className} 的打印（实测带进程内的号：<GDScriptNativeClass#…>）`);
-      }
+      // 引擎类值与 weakref 都带进程内的号，形状照实测发；号在语料两侧都先掩掉再比。
+      if (isNullRefValue(inner)) return "<Object#null>";
+      if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
+      if (isWeakRefBox(inner)) return `<WeakRef#${String((inner as { gdObjectId: number }).gdObjectId)}>`;
+      const shape = objectLabelHook === null ? null : objectLabelHook(inner as object);
+      if (shape !== null) return shape;
       // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null
       if (isCallable(v)) {
         const label = callableLabel(inner as CallableBox);
@@ -2441,6 +2451,14 @@ export function valueEq(a: Variant, b: Variant, depth = 0): boolean {
     if (other.t === Tag.INT) {
       throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
     }
+  }
+  // 空对象引用（`instance_from_id` 找不到号给的那一个）与 null 相等，与其他一切都不等（实测 q01–q04）
+  const an = a.t === Tag.OBJECT && isNullRefValue(a.v);
+  const bn = b.t === Tag.OBJECT && isNullRefValue(b.v);
+  if (an || bn) {
+    if (an && bn) return true;
+    const other = an ? b : a;
+    return other.t === Tag.NIL;
   }
   if (ta !== tb) return false;
   switch (ta) {

@@ -4,11 +4,9 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
 /**
  * 实测「Godot 4.6.3 有这个名字、能过解析，但我们还没实现」的全局函数（一支脚本一个名字量出来的，
  * 不存在的会给 `Function "x()" not found in base self.`，那批不在这里）。
- * `weakref` / `instance_from_id` / `get_stack` 的打印带实例号，按 S262 那条合成号口径处理。
+ * 带实例号的那一族（`weakref` / `instance_from_id` / `is_instance_*`）已按 S263 的合成号口径发出，不在这张清单里。
  */
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
-  "weakref",
-  "instance_from_id",
   "get_stack",
   "print_debug",
   "print_stack",
@@ -21,8 +19,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "dict_to_inst",
   "inst_to_dict",
   "is_instance_of",
-  "is_instance_id_valid",
-  "is_instance_valid",
   "rid_allocate_id",
   "rid_from_int64",
   "var_to_bytes",

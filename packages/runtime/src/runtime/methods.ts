@@ -6,6 +6,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
   gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame,
   gTypeString, gErrorString, gTypeExists,
+  gWeakref, gInstanceFromId, gIsInstanceValid, gIsInstanceIdValid,
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
@@ -15,6 +16,7 @@ import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { isWeakRefBox } from "./identity";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -309,6 +311,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("signal-method", `Invalid call. Nonexistent function '${name}' in base 'Signal'.`);
       }
       throw new UnsupportedError("signal-method", `Signal.${name}() 未实现`);
+    }
+
+    if (isWeakRefBox(inner)) {
+      if (name !== "get_ref") {
+        throw new UnsupportedError("weakref-method", `WeakRef.${name}() 没量过（只发得出实测的 get_ref()）`);
+      }
+      if (args.length !== 0) {
+        throw new GodotRuntimeError("arity", `get_ref() 不接受参数（收到 ${args.length} 个）`);
+      }
+      return inner.target === null ? V.nil() : inner.target;
     }
 
     if (isCallableBox(inner)) {
@@ -1272,6 +1284,10 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   posmod: (a) => gPosmod(ga(a, 0), ga(a, 1)),
   pow: (a) => gPow(ga(a, 0), ga(a, 1)),
   rad_to_deg: (a) => gRadToDeg(ga(a, 0)),
+  weakref: (a) => gWeakref(ga(a, 0)),
+  instance_from_id: (a) => gInstanceFromId(ga(a, 0)),
+  is_instance_valid: (a) => gIsInstanceValid(ga(a, 0)),
+  is_instance_id_valid: (a) => gIsInstanceIdValid(ga(a, 0)),
   randi: () => gRandi(),
   randf: () => gRandf(),
   randomize: () => gRandomize(),
