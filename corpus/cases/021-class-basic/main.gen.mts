@@ -23,6 +23,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -44,7 +45,8 @@ class Base extends rt.GdScriptObject {
 }
 const __gd_d_Base = rt.defineClass(Base, () => new Base(), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
-rt.registerScriptProps(__gd_d_Base, ["hp"]);
+rt.registerScriptProps(__gd_d_Base, ["hp"], (o) => { const s = o as Base; return [s.hp]; });
+rt.registerDictIdentity(__gd_d_Base, "res://main.gd", "Base", ["hp"], {}, (o) => { const s = o as Base; return [s.hp]; });
 rt.registerMethodArities(__gd_d_Base, { "tag": [0, 0] });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
 

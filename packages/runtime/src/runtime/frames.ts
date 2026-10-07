@@ -1,0 +1,89 @@
+import { V, type Variant } from "./tags";
+import { GArray, GDict, showArgsSep } from "./values";
+
+/** 一帧：脚本路径、函数名（lambda 是 `<anonymous lambda>`）与这一帧当前执行到的行。 */
+type Frame = { source: string; fn: string; line: number };
+
+const STACK: Frame[] = [];
+
+/** 进一支函数：把进栈前的深度交给调用方，退出时按它复位 —— 协程交错时才不会把别人的帧摘走。 */
+export function frameEnter(source: string, fn: string): number {
+  const depth = STACK.length;
+  STACK.push({ source, fn, line: 0 });
+  return depth;
+}
+
+export function frameExit(depth: number): void {
+  if (depth <= STACK.length) STACK.length = depth;
+}
+
+/** 本帧当前走到 `.gd` 的哪一行：栈顶那帧报的就是这一格，父帧报的是调用点那一行。 */
+export function frameLine(line: number): void {
+  const top = STACK[STACK.length - 1];
+  if (top !== undefined) top.line = line;
+}
+
+/** 帧序列，最近的在前（`print_stack` / `get_stack` / `push_error` 三块共用）。 */
+function stackFrames(): Frame[] {
+  const out: Frame[] = [];
+  for (let i = STACK.length - 1; i >= 0; i--) {
+    const f = STACK[i];
+    if (f !== undefined) out.push(f);
+  }
+  return out;
+}
+
+/** `print_stack()` 的每帧一行实测走 stdout，要与其余 print 同序 —— 宿主装载时把自己的行缓冲登记进来。 */
+let printSink: ((line: string) => void) | null = null;
+
+export function setStackPrintSink(fn: (line: string) => void): void {
+  printSink = fn;
+}
+
+function writeStdoutLine(line: string): void {
+  if (printSink !== null) printSink(line);
+  else process.stdout.write(line + "\n");
+}
+
+/** `print_stack()`：每帧一行、没有表头（实测 stdout，语料 273）。 */
+export function gPrintStack(): Variant {
+  for (const line of stackFrameLines()) writeStdoutLine(line);
+  return V.nil();
+}
+
+export function stackFrameLines(): string[] {
+  return stackFrames().map((f, i) => `Frame ${String(i)} - ${f.source}:${String(f.line)} in function '${f.fn}'`);
+}
+
+/** `push_error` / `push_warning` 那一块：首行 + `at:` + backtrace 表头 + 每帧一行（实测原文，语料 273）。 */
+export function stackBlockLines(head: string, at: string, args: Variant[]): string[] {
+  const out = [`${head}: ${showArgsSep(args, "")}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
+  for (const [i, f] of stackFrames().entries()) out.push(`       [${String(i)}] ${f.fn} (${f.source}:${String(f.line)})`);
+  return out;
+}
+
+/** 两支 push 整块走 stderr，且都不中断脚本（实测 `push_error` 前后的 print 照打，空实参照打 `ERROR: `）。 */
+function pushBlock(head: string, at: string, args: Variant[]): Variant {
+  process.stderr.write(stackBlockLines(head, at, args).join("\n") + "\n");
+  return V.nil();
+}
+
+export function gPushError(args: Variant[]): Variant {
+  return pushBlock("ERROR", "push_error (core/variant/variant_utility.cpp:1024)", args);
+}
+
+export function gPushWarning(args: Variant[]): Variant {
+  return pushBlock("WARNING", "push_warning (core/variant/variant_utility.cpp:1034)", args);
+}
+
+/** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
+export function gGetStack(): Variant {
+  const rows = stackFrames().map((f) => {
+    const d = new GDict();
+    d.set(V.str("source"), V.str(f.source));
+    d.set(V.str("function"), V.str(f.fn));
+    d.set(V.str("line"), V.int(f.line));
+    return V.dict(d);
+  });
+  return V.array(GArray.of(rows));
+}

@@ -41,6 +41,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "leaf": [0, 0], "mid": [0, 0], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -56,7 +57,9 @@ class C extends rt.GdScriptObject {
   
   constructor() {
     super();
-    printDebug([rt.V.str("in _init")], "res://main.gd", 11, "_init");
+    if (!rt.bareConstruction()) {
+      printDebug([rt.V.str("in _init")], "res://main.gd", 11, "_init");
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -69,6 +72,7 @@ class C extends rt.GdScriptObject {
 }
 const __gd_d_C = rt.defineClass(C, () => new C(), (o) => o instanceof C);
 rt.nameClass(__gd_d_C, "C");
+rt.registerDictIdentity(__gd_d_C, "res://main.gd", "C", [], {}, (o) => { const s = o as C; return []; });
 rt.registerMethodArities(__gd_d_C, { "m": [0, 0], "sf": [0, 0] });
 rt.registerStaticMethods(__gd_d_C, ["sf"], {"sf": (a: rt.Variant[]): rt.Variant => rt.wrapValue(C.sf())});
 rt.registerNativeBase(__gd_d_C, "RefCounted");

@@ -1,4 +1,5 @@
 import { Signal } from "./runtime/signal";
+import { setStackPrintSink } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/object";
 import type { Variant } from "./runtime/tags";
 import { richAnsi } from "./runtime/rich-ansi";
@@ -11,6 +12,9 @@ function addLine(text: string): void {
   out.push(pending + text);
   pending = "";
 }
+
+// `print_stack()` 的每一行都要与其余 print 同序，所以宿主把自己的行缓冲交给 runtime 那一侧。
+setStackPrintSink(addLine);
 
 /** 记录一次 print 的输出。签名收 `string[]` 而不是 `unknown[]`：后者在静态编译目标上没有表示形式。 */
 export function print(...args: string[]): void {

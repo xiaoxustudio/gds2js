@@ -654,10 +654,152 @@
 
 - **为什么要单独一轮**：`inst_to_dict` / `dict_to_inst` 那两支持续被记成「欠对象模型」，但实测它们的字典里根本没有实例号 —— 欠的是 **`@subpath` 那个 NodePath 值型**（`{ "@subpath": ^"Inner", "@path": "res://…", &"k": 1 }`）。于是先把 NodePath 一族量清，别照着 4.3 的式子写实现。
 - **量到的形状**：`typeof` **22**；三种打印（`str()` 给折好的路径串、容器与字典键给 `^"<串>"`、`var_to_str` 给 `NodePath("<串>")`）；等式按「绝对位 + 名字表 + 子名表」；`get_name(i)` / `get_subname(i)` 返回的是 **StringName（typeof 21）**；八支方法齐，而 `get_name_index` / `simplify` / `to_i` / `get_total_name_count` / `get_index_in_parent` / `re_substitute` 在 4.6.3 的 GDScript 绑定里根本不存在。
-- **解析式子有三处与 4.3 那份 `node_path.cpp` 不同**：`\:` 是**真转义**（`a\:b` 一个名字、打印把反斜杠带回来、且不等价于 `a:b`），`\/` **不是**（`a\/b` 两个名字，第一个是 `a\`）；结尾空子名被允许（`x:` → 0 个子名、`str()` 丢掉冒号、与 `x` 相等）；大小写保留且区分；空格不裁；`"."` 是普通名字而 `"/"` 是「绝对 + 零名字」。
+- **解析式子有三处与 4.3 那份 `node_path.cpp` 不同**：`\:` 是**真转义**（`a\:b` 一个名字、打印把反斜杠带回来、且不等价于 `a:b`），`\/` **不是**（`a\/b` 两个名字，第一个是 `a\`）；结尾空子名被允许（`x:` → 0 个子名、`str()` 丢掉冒号、与 `x` 相等）；大小写保留且区分；空格不裁；`"."` 是普通名字而 `"/"` 是「绝对 + 零名字」。**这一条的第一句已撤账（S268 ①）**：4.6.3 没有任何转义，`a\:b` 是「名字 `a\` + 子名 `b`」，把名数 1 当成了「一个带转义冒号的名字」。
 - **两处钉不住，实现时只能拒**：① `hash(NodePath)` 的式子变了 —— 4.3 是「绝对位起手 1、再把各名 `StringName::hash()` 异或」，实测三格候选全假（`hash(NodePath("a"))` = 3608900604，而 `hash(&"a")` = 177670 = `hash("a")`，这一条同名哈希相等的口径倒是量到了），没逆出来就按 S237 那批 Callable 哈希的先例拒；② `get_name(3)` 越界**不崩**，回空 StringName 并往 stderr 打 `ERROR: Index p_idx = 3 is out of bounds (data->path.size() = 1).` + `at: get_name (core/string/node_path.cpp:69)` —— 那句带引擎自己的 C++ 文件名与行号，normalize 只滤 `core/variant/` 那一族，滤不掉，所以越界那一形也进不了实现。
 - **下一轮照这份数做就行**：值型 + 解析式子 + 三种打印 + 等式 + `keyOf` 的 `^` 桶 + 八支方法（越界与哈希两支拒）+ `NodePath(String)` 构造 + 与 int / String / StringName 的比较按 RID 那一套模板（S264 刚铺好）；`convert(NodePath, TYPE_STRING)` 与 `String(NodePath)` 实测就是 `str()` 那一串，可以并进去。做完 `inst_to_dict` 就只欠 `@path` 的 res 路径与 `dict_to_inst` 的「跳过 `_init` 造实例」两件事。
 - **账**：无实现变更，八份探头与全部读数在 `tmp/probe-nodepath/`；本轮出货门一字未动（`test:diff` 177/177、ops 1860、guards 181 仍如 §1.69 所记）。
+
+### 1.71 NodePath 一族发出：解析式子里根本没有转义，那一格是语料抓回来的（2026-10-08，S268，语料 264，§1.70 那份清单花掉）
+
+- **S267 ④ 读反了一条**：`a\:b` 不是「带转义冒号的一个名字」，而是「名字 `a\` + 子名 `b`」—— 名数 1、**子名数也是 1**。上一轮只看了 `get_name_count()` 与 `str()` 两格就下了结论，这一轮补了 `get_subname_count()` / `get_name(0)` / `get_subname(0)` 三格才发现；第一版实现照 S267 写，是语料 264 的 n56 那格（引擎给 1）把它抓回来的。式子回到 4.3 那句 `path.find(":")`：**没有任何转义**，反斜杠只是普通字符。
+- **打印三形分两条路**：裸串（`str()` / `print()` / `"%s"`）不过 escape，容器里的 `^"…"` 与 `var_to_str` 的 `NodePath("…")` 过 4.3 的 `String::c_escape()`（`variant.cpp:1681` / `variant_parser.cpp:1953` 两处同一条式子）—— 同一个值 `a\:b` 在数组里是 `[^"a\\:b"]`，两条路差一个反斜杠，只量一条就会写错另一条。
+- **`var_to_str` 的字典键等级多一格，且并列按插入序**：七键实测 `null < bool < int < float < String < StringName < NodePath`；同为 NodePath 的五键是 `/a、z、a、a/b、""`（插入序，不是码点序）。这一格的另一侧是 `vsKeyCompare` 原来只认六个 Tag，NodePath 骑在 `Tag.OBJECT` 上就一句「没量过」拒掉 —— 语料跑第一遍就是这儿崩的。
+- **与 RID 不同的一条**：NodePath **不参与排序**。两侧都是它时 `<` `<=` `>` `>=` 四句全是运行期那句 `Invalid operands`（RID 那边按无符号号可比），`+` 与 `-` 同样。等式那侧来源累计八种（补了 float / bool / Array / Dictionary / Vector2 五格）。
+- **方法七支发出、两支拒**：六句元数文一支一名量齐；`hash()` 与越界下标仍拒（前者是 S267 ⑥a 的账 —— 4.6.3 换了式子且没逆出来，后者要打的是带引擎自己 C++ 文件与行号的 ERROR）。`get_as_property_path()` 的式子是「零名字原样回，否则名字折成第一个子名、绝对位丢掉」，五形实测过。
+- **构造走签名句而不是元数句**：`NodePath(String, String)` 与 `NodePath(int)` 引擎说的都是 `No constructor of "NodePath" matches the signature …`，所以这一支**不进 `BUILTIN_ARITY`**（那张表发的是 `Too few/many arguments`，跟错了就成假话）。
+- **下一轮**：NodePath 已经在 `{ "@subpath": ^"Inner", … }` 那条路上就位 —— `inst_to_dict` 只欠 `@path` 的 res 路径怎么发，`dict_to_inst` 只欠「跳过 `_init` 造实例」。另有一格没量：`StringName` 在容器里的 `&"…"` 那条**没过** `c_escape()`（我们这边 `repr` 对 StringName 也不转义），要钉得另起探头。
+- **账**：语料 264 共 115 行 golden 逐字节；`test:diff` **178/178**（共 264 个用例，静默 0、崩溃 0），全量引擎复测 `test:golden-check` **264/264、漂移 0**（17 格 TIMEOUT 全是 golden 本身就带 `<<GDS2JS_TIMEOUT>>` 的挂起类用例，重跑一字不差 —— 同一门跑到一半被并发探头抢 CPU 时会多报成 19 格超时并把 2 格报成漂移，所以读数只算独跑那一次）、`pnpm test` **1098** 例、ops 自校验 1860→**1884**、guards 现共 **183** 例、`test:compile` 186/255、codegen 2/2、pkgmodes 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 重编 exe 后 20 例 / 22 格全过、typecheck 4/4；AOT 单例门 `264-node-path` 与面探针 `234-` 各 **1/1 编过 + 1/1 跑通 + 逐字节一致**。发射期拒答清单仍 **11**（NodePath 是构造器不是全局函数，名表两张数不动）。**两门在 HEAD 上是红的、本论一并修好**：守卫那两格是 S266 漏改（宿主 import 从六支变七支、`print_debug` 还挂在「拒的四支」里）；pkgmodes 那格与本论无关 —— `packages/gds2js/dist` 不入库，S266 那轮没重跑 `pnpm build` 就跑门，`dist/host.mjs` 里自然没有 `printDebug`，`pnpm build` 之后 25/25。**往后每轮跑 pkgmodes 之前先 `pnpm build`。**
+
+### 1.72 `inst_to_dict` / `dict_to_inst` 的读数一次量齐：`@subpath` 是类路径，get/set 属性出门的是类型默认值（2026-10-08，S269，读数轮 · 无实现变更）
+
+- **NodePath 就位之后这一族只剩自己的形状**：十一份探头一次跑完（`tmp/probe-inst/`），返回 Dictionary（typeof 27）、`"@subpath"` / `"@path"` 是 String 键而字段键是 StringName、键序 `@subpath → @path → 声明序`。
+- **`@subpath` 是「类路径」**：模块根类是**空 NodePath**，内嵌类是 `Inner`，三层是 `A/B/C`（`get_name_count()` 3）；`@path` 始终是模块那份脚本的路径。没有 S268 那个值型就印不出 `^"Inner"` 这一形 —— 这正是 §1.70 记下「先量 NodePath」的原因。
+- **进门名单量死**：`var` 全进（无初值、`_` 前缀、`@export`），`const` / `static var` / `signal` 都不进；脚本继承链按**基类字段在前**合并；宿主基类自己的属性（`script` 那一族）一条不进。
+- **最反直觉的一格**：带 `get/set` 的属性**不调 getter**，出门的是声明类型的默认值 —— 同一台对象 `.ai` 读出来 42，字典里是 0。十六种类型量齐（int 0 / float 0.0 / bool false / String `""` / StringName `&""` / Vector2 `(0.0, 0.0)` / Vector2i `(0, 0)` / Vector3 `(0.0, 0.0, 0.0)` / Vector3i `(0, 0, 0)` / Array `[]` / Dictionary `{ }` / 无类型 `<null>` / NodePath `^""` / Color `(0.0, 0.0, 0.0, 1.0)` / 两种 pack 空串），与「typed 但没赋值的普通 var」那一格一字不差，所以实现里就复用那张默认值表。
+- **一条顺序陷阱**：`inst_to_dict` 的继承链是**基类字段在前**，而 S232 量过的 `String.format()` 属性序是**自己类在前、基类在后** —— 两条路反着走，别为了省事共用一个走链的辅助函数。
+- **值是引用**：对象字段出门是 `<RefCounted#号>`（语料侧掩号），数组与字典是原值，**不递归序列化**。
+- **`dict_to_inst` 跳过 `_init` 量清了**：`_init` 里的 print 副作用在 `new()` 打一次、在 `dict_to_inst` 一次没打，字段照灌、类型照对（`b is WithInit` 真）。四格报错也齐：缺 `@path`、路径加载不到（前面还带两句 ERROR）、`@subpath` 指名不存在的类，以及**缺 `@subpath` 就是造模块根类** —— 那一格真造出了一台 `<SceneTree#号>` 并漏出一片 RID，Tier 1 发不出，实现按响亮拒处理。
+- **新记一条方法学**：这几句报错过 `RTR()`，本机默认语言是中文（量到 `不是带有实例的脚本。`），**要英文原文得给引擎加 `--language en`**（`Not a script with an instance.`）。这类文案随跑门机器的语言漂，所以**不进语料、只进 ops**，中英两形都写进文档。
+- **账**：无实现变更，门读数沿用 §1.71 那一笔。下一轮照 S269 ⑨ 那份前置清单做 `inst_to_dict`（类路径登记 / 继承链字段合并 / accessor 的类型表），再单独一轮做 `dict_to_inst`。
+
+---
+
+### 1.73 `inst_to_dict` 发出：类身份四段由发射器静态登记，顺带撞到一条静态目标的新围栏（2026-10-08，S270，语料 265，§1.72 那份清单花掉一半）
+
+- **进门名单与出门值都照 S269**：`@subpath`（NodePath 的类路径，根类为空）+ `@path`（模块 res 路径）是 String 键、字段键是 StringName、键序 `@subpath → @path → 声明序`；`const` / `static var` / `signal` 不进；继承链**基类在前**；带 get/set 的属性**不调 getter**，出门的是声明类型默认值（runtime 那张表贴了十六种实测形状，表外如 Rect2 响亮拒）。
+- **静态目标的新围栏：类实例不能当 `Record<string, Variant>` 索引**。scriptc **编得过、跑起来炸**：`expected object at $.gdObjectId, got number`（build 侧对同一式子给 SC2002 `record shapes must match exactly or width-coerce`）—— 它拿记录形状去校验实例自己的槽，第一格就是 `gdObjectId`。改成**发射器静态拼读数器**：`rt.registerDictIdentity(desc, resPath, classPath, names, accessors, (o) => { const s = o as Inner; return [s.k, rt.V.nil()]; })`。定位靠 `tmp/sc-gate/265-inst-to-dict/probe.mts` 那种一步步 step 的探针，比猜式子快得多。
+- **顺带抓到一条 HEAD 上就有的 AOT 洞**：语料 246（`String.format()` 吃脚本实例）在 scriptc 上挂的就是同一句，来源是 S232 `scriptPropsHook` 里同一条 cast（`git diff` 证明本论没碰那段）。它一直不红是因为 **246 不在 scriptc 代表集里** —— 门从没走过这条路。已开**任务 #45**：把 hook 也换成静态读数器，并把这一形塞进代表集，让「node 过、AOT 炸」这类形状以后自动有门。
+- **拒答清单又短一支**：`inst_to_dict` 从发射期拒答清单划进 `BUILTIN` + `BUILTIN_ARITY` + `GLOBAL_CALLABLES`（名表可派发 107→**108**、该拒 19→**18**、清单 11→**10**）。元数两句走引擎原文；`Not a script with an instance.` 这类**过 `RTR()` 的文案只在 ops 钉**（本机默认语言给中文，英文要 `--language en`，S269 ⑧）。单文件模式没有 res 路径，`@path` 那一格抛 `[inst-to-dict-path]` 而不是编一个。
+- **下一轮**：`dict_to_inst` 一支（读数已在 S269 ⑦：跳过 `_init`、缺 `@path` / 加载不到 / `@subpath` 不存在的三句、缺 `@subpath` 就是造模块根类那一形 Tier 1 发不出要拒）。它要的是「按 res 路径找脚本 + 按类路径找内嵌类」，与 `load()` 那张表贴在一起。
+- **账**：语料 265 共 32 行 golden / 27 格逐字节；`test:diff` **179/179**（共 265 例，静默 0、崩溃 0）、`pnpm test` **1104** 例 / 48 文件、ops 自校验 1884→**1892**、guards **184** 例、`test:compile` 187/256、codegen 2/2、pkgmodes 25/25、export ok 10 / FAIL 0、cli-native 20 例全过、typecheck 4/4；AOT 单例门 `265-inst-to-dict` **1/1 编过 + 1/1 跑通 + 逐字节一致**。**产物面 churn**：186 份 `main.gen.mts` 各多一行 `rt.registerDictIdentity(…)`，逐字节输出一条没变。**门维护两笔**：跑 `test:pkgmodes` / `test:cli-native` 前先 `pnpm build`（§1.71 那条口径这次照做，两门直接绿）；`pnpm test:compile` 撞到一次 Windows 的 `UNKNOWN open` 写盘错，重跑即过 —— 它是环境抖动，不是编译器问题，但**门链里排在它后面的那几步必须跟着重跑**（本轮第一次 SC265 / DIFF 红就是拿旧产物跑的假红）。
+
+### 1.74 修掉 String.format 的静态目标洞：那条记录转换连留作兜底都不行（2026-10-08，S271，任务 #45 结清）
+
+- **它是 S270 ④ 顺手抓到的一笔**：语料 246（`String.format()` 吃脚本实例）在 scriptc 上跑挂 `expected object at $.gdObjectId, got number`，而 node 侧 15 格一直逐字节过 —— 「只有 AOT 才暴露」的形状，且因为 246 不在代表集里，门从来没过这条路。
+- **定位只能截**：`GDS2JS_SCRIPTC_KEEP=1` 留住替身树 → 按格删 `print` 重编重跑（全删退出 0、留任何 format 格就炸）→ 再写最小探针：同一台对象 `print` 出来是 `<RefCounted#3>` 正常，走 format 立刻炸 —— 锁定 `strFormatV` 的 OBJECT 分支里 S232 那句 `as unknown as Record<string, Variant>`。
+- **最有用的一条**：改成「有读数器走读数器、没有就按名索引」之后**还是炸同一句**。scriptc 对「对象 → 记录形状」的校验挂在**转换语句本身**，不是执行到分支才校验。把那条 cast 彻底删掉、读数器变成 `registerScriptProps` 的必填第三参，才真的过。**结论：这类式子不能留在函数体里当兜底。**
+- **node 语义没动**：`const` / `static var` 在类上、实例按名取本来是 `undefined`，`s.NAME` 同值；带 get/set 的属性两条路都会触发原型 getter。41 份产物只多了一个实参，`test:diff` 179/179 逐字节照旧。
+- **门补上了**：246 进 scriptc 代表集（10 → **11** 格），门注释写明为什么在这 —— 下次再出现「node 绿、exe 炸」的形状，代表集先响。
+- **账**：`test:scriptc` 代表集 **11/11 出货一致**、`test:diff` **179/179**（265 例）、`pnpm test` 1104 / 48 文件、ops 1892、guards 184、compile 187/256、codegen 2/2、pkgmodes 25/25、export ok 10 / FAIL 0、cli-native 20 例、typecheck 4/4。
+### 1.75 `dict_to_inst` 的读数补齐：三句失败的英文原文，加字典与字段不一致那三条口径（2026-10-08，S272，读数轮 · 无实现变更）
+
+- **为什么单独一小轮**：S269 ⑦ 已经把「跳过 `_init`」与三句失败量到了，但那三句是**中文**（本机默认语言，过 `RTR()`），实现要写进错文的是英文原文 —— 这次用 `--language en` 重跑一次取回，并把两形都留档。
+- **三条新口径**：字典**少**字段 → 那一格是**类声明的默认值**（不是 null，也不是 `_init` 的结果）；字典**多**出来的键 → **静默忽略**，不报错也不挂属性；字典改过的格 → 照字典值灌进去。合起来是「以类为准的构造 + 逐格 set，多余不管、缺失留默认」。
+- **还有一形只能拒**：`@path` 加载不到时引擎固定先打两句带自己 C++ 文件行号的 `ERROR:`（`load_source_code (modules/gdscript/gdscript.cpp:1127)` / `_load (core/io/resource_loader.cpp:343)`），normalize 滤不掉那两形，所以实现只发第三句。缺 `@subpath` 是造**模块根类** —— 在语料宿主里那是 `SceneTree`，Tier 1 发不出实例，按响亮拒处理。
+- **实现的前置已经就位大半**：`registerDictIdentity` 每类都带 `(resPath, classPath)`，查找表直接能用；缺的是「只跑字段初始化子、不跑 `_init` 体」那个构造入口（发射器本来就把这两步分开）。
+- **账**：无实现变更，门读数沿用 §1.74 那一笔。
+
+### 1.76 `dict_to_inst` 发出：一条不跑 `_init` 的构造入口，加实例上那张按名原值表（2026-10-08，S273，语料 266，§1.75 那份读数花掉）
+
+- **认类那一步是白捡的**：`registerDictIdentity` 早就按 `(resPath, classPath)` 登记了每一类（S270 为它准备的），`@path` + `@subpath` 直接查表；两句「认不到」的分岔靠「空类路径那一格在不在表里」判（产物一定会登记模块根类），于是 `can't load script at @path` 与 `invalid subclasses` 各归各。
+- **真正要新造的是构造入口**：`rt.beginBareConstruction()` / `endBareConstruction()` / `bareConstruction()` 一面旗，`desc.make([])` 期间举着；发射器把**两处** `_init` 入口都关到旗子后面 —— `emitInitAsConstructor` 整个体进 `if (!rt.bareConstruction()) { … }`，`emitRootConstructor` 那条派发路加同一个前置。字段初始化子本来就在 `_init` 外面，正好就是引擎要的那半截。语料 t10/t13 钉住「`_init` 里的 print 一次都不打、字段仍从字典灌进去」。
+- **一条被读错的口径当场改正**（探头 `tmp/probe-inst/h-share.gd`）：S269 ④ / S270 ② 写的「带 get/set 的属性出门的是声明类型的默认值」在 `new()` 这一形上与真相同读数，实读的是**实例上那张按名索引的原值表** —— `dict_to_inst` 灌 accessor 那一格**不调 setter**，但值存进了这一台实例，`inst_to_dict` 再出门就带它（语料 t22 印 `&"v": 2` 而 `_v` 仍是 1、`ab.v` 走 getter 也仍是 1），同类的旁两台照旧默认（h01/h03/h04）。实现是 `GdScriptObject` 多一面懒创建的 `__gd_dict_written__`，`gInstToDict` 在「灌过的原值」与那张十六形默认值表之间按它选；**265 那份 golden 一字未变**（`test:diff` 180/180），旧账不用翻。
+- **又是只有静态目标才验得出来的形状**：「实例上那张按名的表」与「不跑 `_init` 的构造路」两条都落在 AOT 的射程里，所以 266 进 `test:scriptc` 代表集（**11 → 12** 格），与 246 作对；单例门 **1/1 编过 + 1/1 跑通 + 逐字节一致 1/1**。
+- **仍按响亮拒处理的两形**：缺 `@subpath`（或 `@subpath` 是空 NodePath，即 `inst_to_dict` 对模块根类发的那一格）要造的是宿主根类，引擎实测造出 `<SceneTree#号>` 并漏一片 RID，Tier 1 发不出、别的宿主基类也没量过 → `[dict-to-inst-root]`；`@path` 加载不到时引擎前那两句带自己 C++ 文件行号的 `ERROR:` 不复刻，只发第三句。
+- **账**：发射期拒答清单 10 → **9**、名表可派发 108 → **109** / 该拒 18 → **17**；`test:diff` **180/180**（共 266 个用例，静默 0、崩溃 0）、`pnpm test` **1111** 例 / 49 文件、ops 自校验 **1906**、guards **185**、`test:compile` **188/257**、`test:golden-check` **266/266** 漂移 0、`test:codegen` 2/2、`pnpm build` 后 `test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 20 例、typecheck 4/4；产物 churn 15 份 `main.gen.mts` 套上裸构造守卫，输出逐字节没变。
+
+### 1.77 `is_instance_of` 发出：第二参三形各走各的表，界量在 TYPE_MAX 那一格（2026-10-08，S274，语料 267）
+
+- **为什么这一支值得单独一轮**：它是拒答清单上最后一支「语言层」的全局函数 —— 剩下的 `bytes_to_var` / `var_to_bytes` 是引擎的二进制序列格式，`print_stack` / `get_stack` / `push_error` / `push_warning` 要的是逐帧 `.gd` 栈，都不是补一格读数就能发出去的。
+- **三形各走各的表**（这是这一轮的实际形状）：int 那一形是 `typeof` 同一张码表的**严格同型**比较（`&"x"` 对 TYPE_STRING 假、对 TYPE_STRING_NAME 真；实例对 24 真、对 27 假；RID 对 TYPE_OBJECT 假）；类值那一形走脚本 `is` 那条链（继承真、别家假）；引擎类值那一形走 `is` 量过的那七支。所以实现里没有任何新表 —— 复用 S258 那批链，加一条 `typeof(值) === 那个数`。
+- **界是量出来的，不是推出来的**：38 有读数、**39 起报错**，而 39 正是 `TYPE_MAX` 那一格（S224 的常数表）；字面量与变量两形都落在这句上。顺手记下两侧的一处差异：越界的**字面量**在引擎是解析期（整支脚本加载失败），我们是运行期 —— 要复刻得先让 IR 认得出「这格实参是字面量 int」，写进 §6 第 26 条，没动实现。
+- **第一参不是对象不报错**：null / int / String / RID 四格都是假。这一形容易猜成「运行期那一句」，量了才知道引擎忍着。
+- **两句失败原文与元数两句都是 `--language en` 量的**（本机默认语言中文，过 `RTR()`）：第二参不合式那句 String / 自己的实例 / 别人的实例 / null 四格共用；元数两句走 `BUILTIN_ARITY: [2, 2]`。Callable 那一眼照旧：`@GDScript::is_instance_of`、argc 2、`.call()` 只认恰好两支。
+- **表外的引擎类值仍拒**：`is_instance_of(a, Label)` 引擎给什么没量，`[is-instance-of-class]` 响亮拒 —— 这一形 Tier 1 里也几乎用不上。
+- **门**：267 进 scriptc 代表集（**12 → 13**）。它不是因为新围栏才进（`intToNum(klass.v as IntPayload)` 与 `rt.nativeClass(...)` 在静态目标上都过），而是因为这条式子的三分岔全靠 `instanceof` 与 union 载荷 —— 那正是只有 AOT 才会挑出来的形状。代表集 **13/13** 出货一致。
+- **账**：发射期拒答清单 9 → **8**、名表可派发 109 → **110** / 该拒 17 → **16**；`test:diff` **181/181**（共 267 个用例，静默 0、崩溃 0）、`pnpm test` **1117** 例 / 50 文件、ops 自校验 1906 → **1918**、guards **186**、`test:compile` **189/258**、`test:golden-check` **267/267** 漂移 0、`test:codegen` 2/2、`pnpm build` 后 `test:pkgmodes` 25/25、`test:export` ok 10 / FAIL 0、`test:cli-native` 20 例、typecheck 4/4。另把 `trig-family` 里「没式子的两支 `.call` 响亮拒」那格的样本换成 `var_to_bytes`：样本名字自己已经有式子了，留着就是门在讲假话。
+
+### 1.78 `^"a/b"` 字面量接上：词法与 `&"…"` 同一套，发射直接复用构造函数那条路（2026-10-08，S275，语料 268，§6 第 25 条结清）
+
+- **为什么单独一格**：S273 写 `dict_to_inst` 的闸门时撞上「`^"…"` 编不过」—— 值型早就出货（S267/S268），缺的只是 lowering，而语料里当时一格字面量都没有，门因此从没响过。
+- **量到的第一件事：字面量与构造函数是同一个值**。`^"a/b" == NodePath("a/b")` 真、`typeof` 22、print 与 `str()` 出门是裸文本、`var_to_str` 给 `NodePath("a/b")`、`is NodePath` 真、名字数 / 子名数 / `is_absolute()` / 空字面量 / `^"a:1"` / `^".."` / `^"$A/B"` 逐格与构造那一形一字不差；字典键也同一条（`{ ^"a/b": 1 }` 的 `has(NodePath("a/b"))` 真、`keys()` 给 `[^"a/b"]`）。于是实现只发 `rt.nodePathCtor([rt.V.str(文本)])`，**runtime 一行没改**。
+- **量到的第二件事：转义在词法器就解完了**。`^"a\tb"` 等于带真制表符那一串、不等于 `NodePath("a\\tb")`（反斜杠加 t 两个字符），`^"a\nb"` 打两行、`^"a\"b"` 给 `a"b`、`^"a\\b"` 给 `a\b`。lowering 因此就是 `unquote(stripCaret(text))`，与 `&"…"` 共用同一个 `unquote`；这与 S267 那条「NodePath 自己的文本不认转义」不打架 —— 一层是词法、一层是路径解析。
+- **一处刻意不给静态名**：`staticType` 对 `node_path` 给 null（那张表还喂着打印、运算与 pack 实参的判据，NodePath 字面量在里面的口径没量过），走动态路；语料 34 格逐字节证明够用。
+- **顺手取回、但没实现**：`hash(NodePath)` 七个数（`^"a/b"` = 1780534522、`^""` = 0、`a/b/c` = 1023628924、`a:1` = 1043212071、`/a/b` = 2514432773、`a b` = 787445055、`a/b:0` = 1488325207），与同批文本的 `hash()` 全不一样（`hash("a/b")` = 193484279）—— 不是「把文本再走一遍字符串那条链」。照 S208 反 murmur3 的方法反推之前继续拒；读数进 §6 第 27 条。两句解析期的运算错文也量了（`Invalid operands to operator + / <, NodePath …`），与 S268 的自家拒同向，只写文档。
+- **顺带量清一族跨型比较，并当场抓到一格自家 bug**（`tmp/probe-np-lit/dyn.mts` 七份 + `cmp.mts` 四份）：算子里（`==` / `!=` / `<` / `+`）NodePath 与 String / StringName 一比就是错 —— 静态形是解析期 `Invalid operands to operator ==, NodePath and String.`，**动态形（实参 untyped）是运行期 `Invalid operands 'String' and 'NodePath' in operator '=='.`**，而这句与 S268 那轮自家抛的**一字相同**（等于反向验了一遍那轮的拒答文案）。但**容器与 match 臂走的是另一条不抛的比较**：`^"a/b" in [^"a/b"]` 真、`arr.has("a/b")` 假、`&"a/b" in {^"a/b": 1}` 假、`d.get("a/b", 0)` 给 0、`match p: ^"a/b":` 只认 NodePath。**bug 就在这**：`Array.has` 与 `in` 用的 `valueSame` 对 OBJECT 载荷按 JS 引用比，而 NodePath 盒子每次读都是新建的 —— 于是那两格我们假、引擎真（语料 t35 / t37 照出来）。修法与 Callable 那条同形：给 `valueSame` 加一条 `sameNodePath` 的结构比较。**这是本轮唯一动到 runtime 的地方**，`test:diff` 182/182 逐字节一条没变。
+- **`^"…"` 仍进不了 match 臂**：臂比较引擎那里不抛，我们把臂降成会抛的 `==`，两条口径不一样，`lowerPattern` 因此没收 `node_path`（报 `[pattern] 模式 node_path 未支持`），要发的先补三件测量 —— 见 §6 第 28 条。
+- **门**：语料 268 共 43 行 / 42 格逐字节；guards「NodePath 族的发射闸门」加了两形字面量与三格放行；`test:compile` **190/259**。**代表集这轮补了一格**（13 → 14）：清点在册那 12 支的产物，`nodePathCtor` / `NodePath(` 出现 **0 次** —— 也就是 NodePath 这一族（264 构造 + 268 字面量）从来没被静态目标门量过，268 进去把两条路一起挂上门。
+- **账**：`test:diff` **182/182** 逐字节（共 268 个用例，静默 0、崩溃 0、未实现 0）、typecheck 4/4、`pnpm test` **1120** 例 / 50 文件、ops 自校验 **1918**、guards **186**、`test:compile` **190/259**、`test:golden-check` **268/268** 漂移 0、`test:codegen` 2/2、`pnpm build` 后 `test:pkgmodes` 25/25、`test:export` ok 10 / 环境记账 3 / FAIL 0、`test:cli-native` 20 例；scriptc 代表集 **14/14** 出货一致（含 268）。
+
+### 1.79 `push_error` / `push_warning` / `print_stack` / `get_stack` 的读数补齐：四支缺的是运行期帧栈，不是文案（2026-10-08，S276，读数轮 · 无实现变更）
+
+- **为什么先量不先发**：§2 第 18 条把这四支归到「要逐帧栈的那堆」，当时并没有量过。这轮一次取回 15 格（全 `--language en`），文案与形状都定了，只剩一件工程活。
+- **三件与直觉不同的读数**：① `push_error()` 空实参照打、多实参按 `print` 那条顺次拼（`push_warning("a", "b")` → `WARNING: ab`），元数是 0..N 而不是恰好 1；② 这两支**不中断脚本**，前后语句照跑；③ `get_stack()` 的帧字典键序固定 `source` / `function` / `line`，函数名是**裸名**（静态方法不带类名、lambda 是 `<anonymous lambda>`），C++ 帧一条不出；`print_stack()` 每帧一行 `Frame N - 路径:行 in function '名'` 且**没有表头**，只收 0 支。
+- **门的一条硬约束**：那两块的 `at:` 行是 `core/variant/variant_utility.cpp`，normalize 会把**整块 `ERROR:` 连同帧一起滤掉**，`WARNING:` 那块滤不掉 —— 于是 `push_error` 在语料侧不可见，只有 `push_warning` / `print_stack` / `get_stack` 真能进逐字节对账。下一轮别把「被滤掉」当成「不用实现」，也别只给 `push_error` 写语料格。
+- **缺的那件活**：产物运行时要能报出 `(函数名, .gd 行号)` 的帧栈。`mark(genLine, loc)` 现在只喂 source map，`LINE_MAPPINGS` 编译期就丢，runtime 无帧栈；要么每个函数体一对 push/pop + 一张运行期「产物行 → `.gd` 行」表，要么只在拿得到行号的路径上出货。**四支继续留在拒答清单（现共 8 支）**。
+- **下一轮不用再测的（`frames.mts` 八格已量）**：帧是真调用栈（`[signal_received:21, _initialize:18]`）；`await f()` 与 `f.call()` 形状相同、不插帧；**每帧 line 是这一帧当前执行的行**（栈顶是 `get_stack()` 自己那行，父帧是调用点那行）；递归不截断（`rec(400)` 给 402 帧）；lambda 的帧名是 `<anonymous lambda>`。所以只有用到那四支的模块需要逐语句打点，其余模块保持零开销 —— 打点方案要在 node 与 scriptc 两侧都可信（`mark()` 那张表编译期就丢，AOT 没有可信的 `Error().stack` 行号）。
+- **元数与标签的实测**（`arity.mts`）：`push_error` / `push_warning` 属 `@GlobalScope::`（argc 1，但实参是 **0..N 顺次拼**，`push_error("a","b","c")` 给 `abc`）；`get_stack` / `print_stack` 属 `@GDScript::`、argc 0、多给报 `Expected at most 0`。两块文本走 **stderr**，而门的 `runGodot` 是 stdout 拼 stderr —— 写语料时这两块只能排在所有 print 之后。
+- **发射侧的省活方案（读数量完才知道可行）**：帧的 `line` 只有两种来源 —— 栈顶那帧是「本函数里那句 `get_stack` / `push_error` 所在行」，父帧是「它调用下游那一行」。两类都是**调用点**，所以打点只需包在 call 表达式外面（`(rt.frameAt(41), foo())` 这种逗号式）而不是每条语句都打；进出函数一对 `frameEnter` / `frameLeave`，为了让 `return` 与异常都弹干净，flag 打开的模块才把函数体套 `try/finally`。**没用到这四支的模块一行打点都不加**（零开销），flag 在发射期扫模块 AST 就能定。
+- **账**：无实现变更，门读数沿用 §1.78 那一笔（`test:diff` 182/182、`test:golden-check` 268/268 漂移 0、scriptc 代表集 14/14、ops 1918、guards 186）。
+
+### 1.80 把 `is_instance_of` 的越界字面量搬到分析期：分岔看的是第一参（2026-10-08，S277，§6 第 26 条结清）
+
+- **为什么值得单独一格**：S274 出货时把这一形留在「运行期那一句」，并记了一句「字面量越界在引擎是解析期」—— 那句话不准确。补量之后规则不是范围也不是第二参的字面量性，而是**第一参是不是字面量**：`is_instance_of(5, 1000)` 解析期拒，`is_instance_of(a, 999)` 与 `(a, 99)` 却走到运行期那句（`tmp/probe-is/arg1.mts` + `boundary.mts`，12 个数值全跑过）。
+- **落点选在分析器**：`tools/compile.ts` 的分账要求「emitter 不支持」保持 0，而这一形在引擎本来就是分析期的事，所以新增 `instanceOfTypeArgMessage`（diagnostic 码 `instance-of-type-arg`），界只留一个常量 38（= `TYPE_MAX` 前一格：实测 38 照跑、39 拒）。`-1` 在 IR 里是一元负号套字面量，也算字面量。
+- **语料侧只能走预期报错**：引擎那一形整支脚本加载失败，golden 记的就是那四行；这类格子 JS 侧不参与逐字节对拍，所以对它作数的是 `test:compile` 的两行分账：**分析器拦下 69 → 70、emitter 不支持保持 0**。
+- **两侧合成一条口径**：分析期只吃「两参都是字面量」那一形，其余全交给运行期那句引擎原文（运行期侧一字未动）。
+- **账**：typecheck 4/4、`test:compile` **190/260**（拦下 70、缺口 0）、guards **187**、`test:diff` **182/182** 逐字节（共 269 例）；`pnpm test` 与 golden-check / codegen / scriptc / pkgmodes / export / cli-native 的读数记在提交信息里。
+
+### 1.81 match 臂用的是另一条等式：`^"a/b"` 进模式位，异型只走默认不抛（2026-10-08，S278，语料 270，§6 第 28 条前半结清）
+
+- **这一格是 S275 那轮欠的**：当时发现臂比较不抛、我们的臂却降成会抛的 `==`，两条形都不发。这轮把量清的那半补上：`^"…"` 可以当手臂，异型落 `_`。
+- **量的关键三格**（`tmp/probe-match-arm/run.mts`）：五臂同摆时 StringName 与 String 都落字符串臂、NodePath 只落自己的臂；只摆字符串臂时 `NodePath("a/b")` 落 `_`（**不报错**）；而 `when q == ^"a/b"` 的 guard 遇到 String 照旧是运行期那句带 backtrace 的错 —— 一条链上两条等式，分得很清。
+- **实现最小**：`lowerPattern` 收 `node_path`（与 `&"…"` 共用 `unquote`），发射复用 `rt.patLit(...)`；`patterns.ts` 的 `armEq` 只在有一侧是 NodePath 时接管，其余仍走 `valueEq`。RID 手臂故意不动：引擎那里 `rid_from_int64(5)` 根本不算常量表达式，而 RID Subject 对上别的手臂给什么没量 —— 按红线不猜。
+- **剩下的是「还有哪些构造能当手臂」**：一次量齐了（`arms.mts` + `ctors.mts` 二十余格）—— 引擎收 15 种构造式手臂（`Vector2` / `Rect2i` / `Transform2D` / `Quaternion` / `Basis` / `StringName` / `Callable()` 等）、拒 `AABB` / `Array` / `Dictionary` / `rid_from_int64` / `str` / `A.new()` 与非常量实参；本轮只收了**等式也量过**的 `NodePath("字符串字面量")`（与 `^"…"` 同一支），其余的要先逐型量「异型 Subject 遇到它抛不抛」再发。全表在 §6 第 28 条。
+- **账**：语料 270 共 16 格逐字节、`test:compile` **191/261**（emitter 缺口 0）、guards **188**；其余门读数见提交信息。
+
+
+
+### 1.84 产物有了运行期帧栈，调用栈那一族四支随之出货（2026-10-08，S281，§2 第 18 条第一堆结清）
+
+- **这一格欠的不是读数**：S276 早就把四支的文本、元数、键序与帧语义量全了，卡的是「产物运行期能不能报出 `(函数名, .gd 行)`」。今天的答案是**能，而且便宜**：函数体一对 `rt.frameEnter` / `rt.frameExit`（后者在 `finally` 里，提前 return 与抛错都不留帧），每条语句一行 `rt.frameLine`。
+- **成本按模块付**：lowering 挂 `usesStack` 标志（照 `usesPackCodec` 那一支的写法），只有用到这四支的模块才发帧点，其余产物的函数体一字不变 —— `test:diff` 186/186 就是这条不变性的证据。跨文件的工程由 project.ts 把整份工程 OR 成一把旗，帧链才不断。
+- **一处形状上的取舍**：`print_stack()` 实测走 stdout、要与其余 print 同序，而 stdout 的缓冲在宿主手里 —— 所以 runtime 只留一个出口槽，宿主装载时登记自己的 `addLine`（与 `packed.ts` 的三组槽同一种接法）。这样 `.call()` 那条路（runtime 侧）与直接调用（宿主侧）共用一份实现，不会写出两套文本。
+- **语料看不见的部分另开一门**：normalize 滤掉整块 `ERROR:`，所以 `push_error` 的逐行文案改由 ops 的 12 格钉（英文原文靠 `--language en` 量的）；`print_stack` / `get_stack` / `push_warning` 三样真进了逐字节对账。
+- **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
+- **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
+
+### 1.85 复测「原生 --watch 看不见同尺寸保存」：读数层是干净的，门改建在等长保存上（2026-10-08，§2 第 15 条结清）
+
+- **为什么值得单独一格**：这条挂着的是「原生开发循环漏保存」这种用户直接踩得到的洞，而且 §1.66 当年写的是「没量清就不改实现」—— 挂着不动就等于留着一个没人负责的怀疑。这轮把量清的部分一次量清了。
+- **探头怎么做的**：`tmp/probe-watch/stat.mts` 只用 `node:fs` + `setTimeout`，scriptc 编成 exe 后每 400ms 印一次 `mtimeMs/round/size/typeof/ctimeMs/ino`；父侧 node 同拍读同一个文件。四次外部写入里 **B、C 两格是同尺寸**（8 字节不变，只动 mtime）—— exe 侧数字与父侧逐格相同，一个都没漏。顺带把 scriptc 的 `Stats` 支持面量出来：`st.mtime` 没有 lowering（SC2020），`mtimeMs/ctimeMs/atimeMs/size/ino/...` 有。
+- **真 CLI 也照同一把扫法复测**：`cli-run.mts` 两侧各跑一次 `run main.gd --watch`（原生 exe 与 `node --import tsx` 跑源码），arm 之后 0.3/3/6/12 秒各写一次**等长** 62 字节的脚本 —— 两侧都是 4 次「重新运行」、`t000…t004` 五个标签全印出。**结论：§2 第 15 条的 premise 不成立，`gdSignature` 一字未改**（没有可修的失灵）。
+- **当年那两格怎么解释**：最可疑的是 ⑨b 记的那个真洞 —— 重跑写同名产物时第二次执行被 ES 模块缓存吃掉，于是「看起来像没触发」。那个洞在打成单文件装载那一轮已经修掉，而门为了绕开它把夹具改成不等长保存，反倒把「只有 mtime 动」这一维留在无人看守的状态。这轮把夹具改回**等长**（`watch-a` → `watch-b`），门从此正对着这条。
+- **账**：`test:cli-native` 20/20（⑨b 夹具换成等长保存后仍全绿）、typecheck 4/4；其余门不受影响（本轮没有实现变更，只动了一格门的夹具与两处文档）。
+### 1.83 构造式手臂收进模式位：七支走 `const` 那条现成发射（2026-10-08，S280，语料 272，§6 第 28 条再窄一格）
+
+- **上一轮的同型判把这条路铺平了**：S279 之后「异型 Subject 假而不抛」对每一支都成立，所以剩下的只是「引擎收哪些构造、我们有没有那个值型」。量过的七支（`Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` / `StringName` / `Callable`）今天一次收进来。
+- **实现只往表里加东西**：`lowerPattern` 的 `case "call"` 除 `NodePath("…")` 外再认一张 `CTOR_ARMS`（名字 → 实测元数，实参必须全是字面量），降成 `{kind: "const"}`，发射复用 `rt.patConst(emitExpr(...))`；runtime 一字未动 —— 手臂比较仍由 S279 那条 `armKind` + `valueEq` 判。
+- **读数里最容易被猜错的两格**：`Vector2(1, 2)` 臂**收** `Vector2(1.0, 2.0)`（t03，构造实参一旦算出值就只剩 Vector2 这一支型，与 S279 的 int/float 不互认不打架），而 `Vector2i(1, 2)` 臂遇 `Vector2(1, 2)` 走 `_`（t10，跨向量族靠原型分组拦住）。
+- **保守面写清**：`Vector2(1)` / `Color(1, 2, 3)` / `Vector2(-1, 2)` 这三形引擎收不收没量过，白名单按名字 + 实测元数 + 全字面量实参卡住，所以一并拒 —— 这是我们的取舍，不是复刻引擎。表内剩下的七支（`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `Signal`）卡在 Tier 1 没有那些值型，值型到位后往表里加名字就行。
+- **账**：语料 272 共 32 格逐字节、`test:compile` **193/263**（emitter 缺口 0）、`test:diff` **185/185**、guards **190**、`pnpm test` **1136**、ops 1918、scriptc 代表集 **15**（新用例进集合）；其余读数见提交信息。
+### 1.82 match 臂的等式补成整族：同型才比，异型假而不抛（2026-10-08，S279，语料 271，§6 第 28 条第一件事结清）
+
+- **S278 只把「异型即假」接到了 NodePath 上**，其余形状仍走算子等式。这轮一次量齐（`tmp/probe-match-arm2/run.mts` 17 格一臂一脚本）：臂那一侧是 `hash_compare` 的口径 —— **数字不做 int/float 跨型合一**（`5` 臂遇到 `5.0` 落 `_`，双向都验），**只有 String 与 StringName 互认**，**异型一律假而不抛**。算子 `==` 那条照旧（`5 == 5.0` 仍真、RID 对上 int 仍抛），`when` guard 也照旧。
+- **旧实现有两支错**：`5` 臂遇到 `Vector2` / RID 会抛 `Invalid operands 'int' and 'Vector2' in operator '=='.`（`tmp/probe-arm-strict/old-throw.mts` 复现，引擎那格是 `_`）；`5` 臂遇到 `5.0` 会**静默命中**，而引擎走 `_`。前者是崩溃、后者是错输出，都在这轮一次改掉。
+- **实现一处**：`patterns.ts` 新增 `armKind`，`armEq` 改成「同型才交给 `valueEq`」—— String / StringName 并一支，非 OBJECT 按 Tag，OBJECT 按原型，Callable 盒子单独并一支免得每次读属性新建的盒子把等式拆散。容器臂的递归本来就在 `matches` 里，所以 `[1, 2]` 臂遇到 `[1.0, 2.0]`、`{"a": 1}` 臂遇到 `{"a": 1.0}` 自然各比各的型（t26 / t33 钉住）。
+- **顺手钉住两格读数**：`null` 当手臂合法且只认 `null`（t16–t18），NodePath 臂对 String / int / RID / Vector2 全是 `_`（t36–t40，与语料 270 同口径）。
+- **账**：语料 271 共 40 格逐字节、`test:compile` **192/262**（拦下 70、emitter 缺口 0）、`test:diff` **184/184**、`pnpm test` **1131**、ops 1918、golden-check 271 格漂移 0；typecheck / codegen / scriptc / pkgmodes / export / cli-native 的读数见提交信息。
 ---
 
 ## 2. 当前任务与待办
@@ -762,7 +904,11 @@
 
 14. **转换族与 `format` 的四个卡点（2026-10-04 记，读数全在 S214 / S219 / S220 / S221 / S225 / S226 / S227）**：① `var_to_str` 的浮点 —— **S230 已经把非浮点那半发出去了（浮点抛 `[var-to-str-float]`），这一格欠的就是剩下的尾数**：出处已定位（`VariantWriter` 的 FLOAT 支 → `rtos_fix` → `String::num_scientific`，`%g` 家族 + 去尾随零 + 「无点无 e 才补 `.0`」；零短路给 `0`、负无穷是 `inf_neg` 而 print 给 `-inf`），还剩两格不被任何固定 precision 解释：最小正规数与次正规数都给 `0.0`、`1e23` 要 16 位而 `7e22` 要 17 位 —— 要的是把 4.6.3 那个 `%g` 的**实际行为**量成一表，别再猜精度。② `str_to_var` 的认与不认**已经量齐**（S214），只欠实现 —— **S231 已发出**（155 格逐格对上；`\U` 吃六位数却量不出越界处理、构造式名字认不出、实参不是 String 三条分别抛 `[str-to-var-shape]` / `[str-to-var-type]` / `[str-to-var-arg]`）。③ `convert` / `type_convert` 标量表已齐（S220），卡在 `convert([], TYPE_INT)` 那条**运行期**拒（引擎文案连函数名都指错了），数组→标量按什么判要先量；**那道前置已解（S233）**：`TYPE_*` 整族 37 支 + `TYPE_MAX` 量清并发出（逐名用 `GDScript.reload` 编内层脚本，避免一个不存在的名字带废整支探针；每支又与 `typeof(样本)` 对了一遍），语料 236 钉了 37 格打印 + 17 格 `typeof(x) == TYPE_X`。这两支剩下的量测在 §1.37 一次跑完（340 格矩阵）：解析期接受集合按第一实参的静态类型分岔，`type_convert` 一支都不拒。④ `format`：**已出货（S232）**，而且 S219 那格「缺省占位符是 `"{0}"`」的读数也纠正了 —— 占位符本身是 `"{_}"`，`{0}` 是键文本渲染出来的样子；键序（字典按插入顺序遍历键）、非字符串键、值转文本（走 print 那套）全量过，只剩 Object 那一支抛 `[format-object]`。**①的一条更正（S228）**：`var_to_str` 那两处「极小值给 `0.0`」的反常已经查到是**字面量解析**掉的，不是 writer 的问题 —— ①里剩下的只有「尾数 16 位还是 17 位」一问，做法是把待测值用**算术**造出来绕开解析层，再看是不是纯 `%.*g` 舍入。**共同前提**：任务 #18（AOT 那 ~140 倍的装箱账）要的是单态/去装箱的设计拍板，不由代码侧决定，仍未定。
 
-15. **`run --watch` 在原生目标上看不见「mtime 变了、字节数没变」的保存（2026-10-07 记，§1.66，未动实现）**：`gdSignature` 是 `路径:mtime:大小` 三段，node 侧四格延迟扫（0/6/12/30s）全部重跑，原生 exe 同一把扫法有两格不重跑，而父侧 `statSync` 每次都报出真实变了的 mtime —— 也就是失灵点在 scriptc 那一侧的读数或轮询里，**没量清就不改实现**。要动先做探头：一份只用 `node:fs` 的小 scriptc 产物，对同一个文件反复 `statSync().mtimeMs` 并与 node 同印一份，两侧数字对上了才知道该给摘要加哪一维（内容指纹 / 首块尺寸 / ctime）。门这边已经先把不确定性拿掉：`⑨b` 两次保存改成不等长（尺寸维必变），并等 `监听` + 首跑都出现再动手。
+15. ~~**`run --watch` 在原生目标上看不见「mtime 变了、字节数没变」的保存（2026-10-07 记，§1.66，未动实现）**~~ —— **2026-10-08 复测：这一条不成立，门已改建在等长保存上（§1.85，`tmp/probe-watch/`）**。① **读数层先洗清**：把「每 400ms 读一次同一份文件」的小探头用 scriptc 编成 exe（`stat.mts`），父侧 node 同拍读一遍 —— 四拍里两拍是**同尺寸**保存（8 字节不动），exe 报的 `mtimeMs` 与父侧逐格相同（`…413907.558 → …417499.2285 → …418705.657 → …419917.1272`），`Math.round(mtimeMs)` 摘要维也相同，`ctimeMs` 一起跟上，`ino` 不变。顺手量到 scriptc 的 `Stats` 面：`st.mtime.getTime()` 直接编不过（`error SC2020: 'Stats.mtime' is typed by @types/node but has no scriptc lowering yet`，hint 列的是 `isFile()/isDirectory()/isSymbolicLink()/dev/ino/size/blocks/nlink/atimeMs/mtimeMs/ctimeMs`）。② **真 CLI 复测**（`cli-run.mts`，exe 与 `tsx` 跑源码两侧同一段扫法：等「监听」+ 首跑之后 0.3/3/6/12s 各写一次**等长** 62 字节的 `main.gd`）：两侧都是「重新运行」4 次、标签 `t000…t004` 全印出。③ **所以没改 `gdSignature`**（没有可修的失灵），当年那两格没重跑更像 ⑨b 记的那个洞的连带现象（重跑写同名产物 → 第二次执行被 ES 模块缓存吃掉；那洞在打成单文件装载那一轮已修，当时门为了绕开它把夹具改成不等长）。④ **门反过来收紧**：`test/e2e/cli-native.test.ts` 的 ⑨b 夹具从 `watch-a` / `watch-bb` 改回**等长**的 `watch-a` / `watch-b`，「只有 mtime 动」这一维从此由门看着。
+16. ~~**NodePath 值型已发出（2026-10-08，S268，语料 264），`inst_to_dict` 也已发出（同日 S270，语料 265）—— 这一族只剩 `dict_to_inst` 一支**~~ —— **`dict_to_inst` 同日也已发出（S273，语料 266，§1.76），NodePath / `inst_to_dict` / `dict_to_inst` 这一族到齐**：它要那三件都已就位 —— 查找表用 `registerDictIdentity` 的 `(resPath, classPath)`、跳过 `_init` 靠新的 `rt.bareConstruction()` 旗（发射器两处 `_init` 入口都关到旗子后面）、字典与字段不一致那三条口径照语料 t14/t16/t22 落地。留在拒答清单上的只剩「造不出宿主根类」那一形（缺 `@subpath` 或 `@subpath` 是空 NodePath，`[dict-to-inst-root]`）。发射期拒答清单现共 **8** 支（`is_instance_of` 已在 S274 发出，见 §1.77）。**门维护口径**：`packages/gds2js/dist` 不入库，而 `test:pkgmodes` 与 `test:cli-native` 吃的就是那份 dist / exe —— 改了 `packages/*/src` 之后**先 `pnpm build` 再跑这两门**，否则报的是「`printDebug` is not exported by dist/host.mjs」这类过货假红（S268 那轮撞到并写进 §1.71，S270 起照做，两门直接绿；S273 这轮 `test:diff` 也吃 dist，项目树用例报的 `bareConstruction is not a function` 就是同一类假红）。
+17. ~~**「node 跑得通、scriptc 出的 exe 当场炸」这类形状只有一格已知未修（2026-10-08 记，S270 ④，任务 #45）**~~ —— **同日已修并已进门（S271，任务 #45 结清）**：语料 246（`String.format()` 的实参是脚本实例）当时在 `GDS2JS_SCRIPTC_FILTER=246` 下跑挂 `expected object at $.gdObjectId, got number`，根源是 S232 `scriptPropsHook` 里那条「把类实例当 `Record<string, Variant>` 索引」。修法与 §1.73 同一套（发射器按名单同序静态拼取值闭包），但**多量到一条**：scriptc 的校验挂在**转换语句本身**，把它留在函数体里当兜底也会炸 —— 所以 `registerScriptProps` 的读数器是**必填**第三参。**门也补上了**：246 进 scriptc 代表集（10 → 11 格），门注释写明它是这类形状的唯一已知样本，往后「只有 AOT 才暴露」的问题会先在这里响。**S273 又补一格**（11 → 12）：语料 266 是它的同类续集 —— 「实例上那张按名的原值表」与「不跑 `_init` 的构造路」两条都只有静态目标才验得出来。**S274 再补一格**（12 → 13）：语料 267 的三分岔全靠 `instanceof` 与 union 载荷。
+
+18. **拒答清单剩下的四支只剩二进制序列那一族（2026-10-08 记，S274 之后；第一堆已结清 —— S281 / §1.84 出货）**：① ~~**要逐帧栈的四支**~~ —— **已按 S276 / S281 全部发出（`push_error` / `push_warning` / `print_stack` / `get_stack`）**：产物有了运行期帧栈（函数体一对 `rt.frameEnter` / `rt.frameExit`，每条语句一行 `rt.frameLine`，只有用到的模块才打点），语料 273 钉了 22 行逐字节，ops 钉了 `ERROR:` 那块被 normalize 滤掉的那半 —— `print_stack` / `get_stack` / `push_error` / `push_warning`。形状与文案都量清了：`push_error` / `push_warning` 是「首行 + `at: … (core/variant/variant_utility.cpp:…)` + backtrace 表头 + 每帧一行」且不中断脚本、元数 0..N；`print_stack()` 每帧一行 `Frame N - 路径:行 in function '名'`（无表头、只收 0 支）；`get_stack()` 给 Array，帧字典键序固定 `source` / `function` / `line`，函数名是裸名、lambda 是 `<anonymous lambda>`、C++ 帧不出。**缺的是工程活不是数**：产物运行时要能报出 `(函数名, .gd 行号)` 的调用栈 —— `mark(genLine, loc)` 现在只喂 source map（`LINE_MAPPINGS` 编译期用完就丢），runtime 也没有帧栈。所以下一件要做的是「每支函数体一对 push/pop + 一张运行期产物行→`.gd` 行的表」这一件 emitter+runtime 的配套活；顺带记着 normalize 会把整块 `ERROR:` 滤掉，`push_error` 进不了语料对账 —— 那一块由 ops `stack-frames.test.ts` 钉。还欠的三形也记在 S281 ⑧：await 信号后重开的帧栈、字段初始化子的 `@implicit_new` 帧、两条协程同时活着时的顺序。② **二进制序列格式的四支** —— `var_to_bytes` / `var_to_bytes_with_objects` / `bytes_to_var` / `bytes_to_var_with_objects`。这堆不是补读数就能发的：`var_to_bytes` 的输出是引擎的 Variant 二进制编码（带类型头、长度与 variant object 表），要么整族照 `core/variant/variant.cpp` 的 `encode/decode` 实现并逐字节量，要么继续挂着 —— **别只发一个「看起来像」的字节串**，那是把 Tier 1 的等式换成猜。另有 §6 第 26 条（越界字面量的解析期那句）、第 27 条（`hash(NodePath)` 七个数已取回、六形式子已排除）与第 28 条（臂的等式已整族量清（S279）、`^"…"` 与 `NodePath("…")` 都能当手臂，剩下的只是其余构造式手臂的发射式子）三笔小账；§6 第 25 条（`^"a/b"` 字面量的 lowering）已结清（S275，语料 268）。
 
 ---
 

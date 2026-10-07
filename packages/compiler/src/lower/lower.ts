@@ -56,11 +56,16 @@ function lowerType(n: SyntaxNode): TypeRef {
 
 /** `lower()` 一次调用内累计：这一份模块有没有 compress()/decompress() 调用。 */
 let packCodecUse = false;
+/** `lower()` 一次调用内累计：这一份模块有没有提到调用栈那一族的四个名字（含当值用的 `var c = push_error`）。 */
+let stackUse = false;
+const STACK_NAMES = new Set(["get_stack", "print_stack", "push_error", "push_warning"]);
 
 export function lower(tree: Tree): Module {
   packCodecUse = false;
+  stackUse = false;
   const m = lowerModule(tree.rootNode);
   if (packCodecUse) m.usesPackCodec = true;
+  if (stackUse) m.usesStack = true;
   return m;
 }
 
@@ -432,6 +437,15 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "lit", lit: "string", value: unquote(n.text) };
     case "string_name":
       return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)) };
+    case "node_path":
+      return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)) };
+    case "call": {
+      // 手臂里引擎还认构造调用：`NodePath("…")` 发成字面量臂，其余七支量过的构造走 `const` 那条现成发射（语料 272 钉住每支的命中与不命中）。
+      const np = nodePathArm(n);
+      if (np !== null) return { kind: "lit", lit: "node_path", value: np };
+      if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
+      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
+    }
     case "true":
       return { kind: "lit", lit: "bool", value: true };
     case "false":
@@ -464,14 +478,18 @@ function lowerExpr(n: SyntaxNode): Expr {
       return { kind: "lit", lit: "string", value: unquote(n.text), loc: c };
     case "string_name":
       return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)), loc: c };
+    case "node_path":
+      return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)), loc: c };
     case "true":
       return { kind: "lit", lit: "bool", value: true, loc: c };
     case "false":
       return { kind: "lit", lit: "bool", value: false, loc: c };
     case "null":
       return { kind: "lit", lit: "null", value: null, loc: c };
-    case "identifier":
+    case "identifier": {
+      if (STACK_NAMES.has(n.text)) stackUse = true;
       return { kind: "ident", name: n.text, loc: c };
+    }
     case "parenthesized_expression":
       return lowerExpr(need(named(n)[0], "括号表达式"));
     case "unary_operator":
@@ -560,6 +578,47 @@ function lowerExpr(n: SyntaxNode): Expr {
 /** `&"abc"` 的 CST 文本连前导 `&` 一起给，剥掉后才能和 String 共用同一套转义解码。 */
 function stripAmp(text: string): string {
   return text.startsWith("&") ? text.slice(1) : text;
+}
+
+function stripCaret(text: string): string {
+  return text.startsWith("^") ? text.slice(1) : text;
+}
+
+/** 手臂里量过的构造式：名字与元数对上、且每个实参都是字面量才收（`tmp/probe-match-arm/{arms,ctors}.mts` 与语料 272）。负数实参与 `Color(1, 2, 3)` 那几形没量过，照旧落在拒的那一堆里。 */
+const CTOR_ARMS: Record<string, number> = {
+  Vector2: 2,
+  Vector2i: 2,
+  Vector3: 3,
+  Vector3i: 3,
+  Color: 4,
+  StringName: 1,
+  Callable: 0,
+};
+
+const ARM_ARG_LITERALS = ["integer", "float", "string", "string_name", "node_path", "true", "false", "null"];
+
+function ctorArm(n: SyntaxNode): boolean {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier") return false;
+  const arity = CTOR_ARMS[callee.text];
+  if (arity === undefined) return false;
+  const argsNode = field(n, "arguments");
+  const args = argsNode === null ? [] : named(argsNode);
+  if (args.length !== arity) return false;
+  return args.every((a) => ARM_ARG_LITERALS.indexOf(a.type) >= 0);
+}
+
+/** 手臂只认量过的那一支构造：`NodePath("…")` 带一支字符串字面量实参（`tmp/probe-match-arm/arms.mts`）。 */
+function nodePathArm(n: SyntaxNode): string | null {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier" || callee.text !== "NodePath") return null;
+  const argsNode = field(n, "arguments");
+  if (argsNode === null) return null;
+  const args = named(argsNode);
+  if (args.length !== 1) return null;
+  const only = args[0] ?? null;
+  if (only === null || only.type !== "string") return null;
+  return unquote(only.text);
 }
 
 function unquote(raw: string): string {

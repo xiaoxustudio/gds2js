@@ -10,6 +10,8 @@ export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCal
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
   readonly gdObjectId: number = nextObjectId(this);
+  /** `dict_to_inst` 灌进带 get/set 属性的原值（引擎不调 setter，值只住在这一台实例上，S272 ③）。 */
+  __gd_dict_written__: Record<string, Variant> | null = null;
   /** 命中给装箱值（调用方再 `wrapValue` 也无妨 —— `wrapValue` 对 Variant 原样返回）；没这个方法给 null。 */
   __gdDispatch(_name: string, _args: Variant[]): Variant | null {
     return null;
@@ -135,8 +137,19 @@ export class ClassDesc {
   fieldTypes: Record<string, string> | null;
   /** 自己类的脚本变量名，按声明顺序 —— `String.format()` 的属性替换要这个顺序（引擎是「自己类在前、基类在后」）。 */
   scriptProps: string[] | null;
+  /** 与 `scriptProps` 同序的取值闭包，由发射器静态拼；手写的测试替身可以没有。 */
+  scriptValues: ((o: object) => Variant[]) | null;
   methodArities: Record<string, [number, number]> | null;
   staticVars: Record<string, string> | null;
+  /** `inst_to_dict` 的四段身份：所属模块的 res 路径、自己的类路径（模块根类是空串）、进门名单的变量名、带 get/set 的属性名 → 声明类型。 */
+  dictResPath: string | null;
+  dictClassPath: string | null;
+  dictNames: string[] | null;
+  dictAccessors: Record<string, string | null> | null;
+  /** 读数器：按 `dictNames` 的顺序把自己的字段值取出来（accessor 那一格给 nil，由 `inst_to_dict` 换成类型默认值）。
+   *  发不出去的原因是静态目标上不能拿类实例当 `Record<string, Variant>` 索引 —— scriptc 会拿记录形状去校验实例自己的槽，
+   *  第一格就撞 `gdObjectId`（实测 `expected object at $.gdObjectId, got number`），所以读字段的式子由发射器按类静态写好。 */
+  dictValues: ((o: object) => Variant[]) | null;
   // 静态方法的名字表 / 调用入口与静态变量的读写格不放在字段里，改挂模块级的 `Map<object, …>`（键是 desc 本身）。
   constructor(name: string, make: (args: Variant[]) => object, check: (o: object) => boolean) {
     this.name = name;
@@ -147,8 +160,15 @@ export class ClassDesc {
     this.scriptLabel = null;
     this.fieldTypes = null;
     this.scriptProps = null;
+    this.scriptValues = null;
+    this.scriptValues = null;
     this.methodArities = null;
     this.staticVars = null;
+    this.dictResPath = null;
+    this.dictClassPath = null;
+    this.dictNames = null;
+    this.dictAccessors = null;
+    this.dictValues = null;
   }
 }
 
@@ -226,9 +246,100 @@ export function registerFieldTypes(desc: ClassDesc, table: Record<string, string
   desc.fieldTypes = table;
 }
 
-/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它替换。 */
-export function registerScriptProps(desc: ClassDesc, names: string[]): void {
+/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它替换。
+ *  `reader` 是发射器按同一顺序静态拼出来的取值闭包：静态编译目标上连「把实例当 `Record<string, Variant>` 的那次转换」
+ *  本身都不允许 —— scriptc 会拿记录形状去校验对象（第一格就是 `gdObjectId`），所以那条式子在这里一句都不能出现（S271）。 */
+export function registerScriptProps(desc: ClassDesc, names: string[], reader: (o: object) => Variant[]): void {
   desc.scriptProps = names;
+  desc.scriptValues = reader;
+}
+
+/**
+ * `inst_to_dict` 的类身份四段（S269）：`resPath` 是所属模块的 res 路径（单文件模式没有 → 传 null，调用处响亮拒），
+ * `classPath` 是类路径（模块根类空串、内嵌类是类名），`names` 是进门名单（`const` / `static var` / `signal` 都不在里头），
+ * `accessors` 是带 get/set 的属性名 → 声明类型（null = 无类型）—— 引擎对这类属性**不调 getter**，出门的是声明类型的默认值。
+ */
+export function registerDictIdentity(
+  desc: ClassDesc,
+  resPath: string | null,
+  classPath: string,
+  names: string[],
+  accessors: Record<string, string | null>,
+  reader: (o: object) => Variant[],
+): void {
+  desc.dictResPath = resPath;
+  desc.dictClassPath = classPath;
+  desc.dictNames = names;
+  desc.dictAccessors = accessors;
+  desc.dictValues = reader;
+  // 反查表：`dict_to_inst` 拿 `@path` + `@subpath` 认类（S272 ④）。单文件模式没有 res 路径，那一格进不了表。
+  if (resPath !== null) DICT_REGISTRY.set(dictKey(resPath, classPath), desc);
+}
+
+/** `(res 路径, 类路径)` → 类：类路径是空串就指模块根类（引擎那一形造的是脚本自己的根类）。 */
+export function dictDescOf(resPath: string, classPath: string): ClassDesc | null {
+  const hit = DICT_REGISTRY.get(dictKey(resPath, classPath));
+  return hit === undefined ? null : hit;
+}
+
+function dictKey(resPath: string, classPath: string): string {
+  return `${resPath}#${classPath}`;
+}
+
+/** 裸构造模式：`dict_to_inst` 造实例时**不跑 `_init`**（S269 ⑦ 实测：`_init` 的副作用一次都不打，字段仍从字典灌进去）。
+ *  构造器里的字段初始化子照跑 —— 那部分与 `_init` 是两个步骤，缺的字段才拿得到类声明的默认值（S272 ③）。 */
+let BARE_DEPTH = 0;
+
+export function beginBareConstruction(): void {
+  BARE_DEPTH += 1;
+}
+
+export function endBareConstruction(): void {
+  BARE_DEPTH -= 1;
+}
+
+export function bareConstruction(): boolean {
+  return BARE_DEPTH > 0;
+}
+
+/** 一个脚本实例进 `inst_to_dict` 时要的全部读数。字段序是**基类在前**（S269 ③），与 `String.format()` 那条「自己类在前」反着走。 */
+export function dictShapeOf(target: unknown): {
+  resPath: string | null;
+  classPath: string;
+  names: string[];
+  accessors: Record<string, string | null>;
+  values: Variant[];
+} | null {
+  const desc = descOf(target);
+  if (desc === null || desc.dictNames === null) return null;
+  const chain: ClassDesc[] = [];
+  for (let d: ClassDesc | null = desc; d !== null; d = d.base) chain.push(d);
+  const names: string[] = [];
+  const values: Variant[] = [];
+  const accessors: Record<string, string | null> = {};
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const d = chain[i] as ClassDesc;
+    const own = d.dictNames;
+    if (own === null) continue;
+    for (const n of own) names.push(n);
+    const vals = d.dictValues === null ? null : d.dictValues(target as object);
+    for (let j = 0; j < own.length; j++) values.push(vals === null ? V.nil() : (vals[j] as Variant));
+    const acc = d.dictAccessors;
+    if (acc !== null) for (const key of Object.keys(acc)) accessors[key] = acc[key] as string | null;
+  }
+  return { resPath: desc.dictResPath, classPath: desc.dictClassPath ?? "", names, accessors, values };
+}
+
+/** 这台实例上由 `dict_to_inst` 灌进 get/set 属性的原值；没灌过就是 null（`inst_to_dict` 据此在「灌过的值」与「声明类型默认值」之间选）。 */
+export function dictWrittenOf(target: object): Record<string, Variant> | null {
+  return target instanceof GdScriptObject ? target.__gd_dict_written__ : null;
+}
+
+/** 灌一格原值：表是懒创建的，普通构造一台实例都不会带它。 */
+export function writeDictWritten(target: object, name: string, value: Variant): void {
+  if (!(target instanceof GdScriptObject)) return;
+  if (target.__gd_dict_written__ === null) target.__gd_dict_written__ = {};
+  target.__gd_dict_written__[name] = value;
 }
 
 /** 方法名的 `[必填实参数, 全部实参数]` 表：arity 检查要用**两个**数，少给与多给 Godot 两边都管。 */
@@ -368,12 +479,13 @@ registerScriptPropsHook((inner) => {
   if (desc === null) return null;
   const props: Array<{ name: string; value: Variant }> = [];
   let unmodeledBase: string | null = null;
-  const box = inner as unknown as Record<string, Variant>;
   for (let d: ClassDesc | null = desc; d !== null; d = d.base) {
     if (d.nativeBase !== null && d.nativeBase !== "RefCounted" && d.nativeBase !== "Object") unmodeledBase = d.nativeBase;
     const names = d.scriptProps;
-    if (names === null) continue;
-    for (const name of names) props.push({ name, value: box[name] as Variant });
+    const vals = d.scriptValues;
+    if (names === null || vals === null) continue;
+    const read = vals(inner);
+    for (let j = 0; j < names.length; j++) props.push({ name: names[j] as string, value: read[j] as Variant });
   }
   return { props, unmodeledBase };
 });
@@ -443,6 +555,8 @@ export function lookupClass(name: string): ClassDesc | undefined {
 
 /** res:// 路径 → 该脚本的类。preload/load 按路径取"脚本"这个值。 */
 const SCRIPT_REGISTRY = new Map<string, ClassDesc>();
+/** `(res 路径#类路径)` → 类，由 `registerDictIdentity` 填；`dict_to_inst` 的反查表。 */
+const DICT_REGISTRY = new Map<string, ClassDesc>();
 
 export function registerScript(resPath: string, desc: ClassDesc): void {
   SCRIPT_REGISTRY.set(resPath, desc);

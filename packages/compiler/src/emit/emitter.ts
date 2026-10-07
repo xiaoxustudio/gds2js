@@ -34,6 +34,8 @@ export interface EmitOptions {
   rawAbiExternal?: string[];
   /** 本模块的类被工程里别的脚本类 extends：构造要走协议形状，由 project.ts 按 extends 边给出。 */
   extendedByScript?: boolean;
+  /** 工程里有别的脚本用了调用栈那一族（`get_stack` 等四支）：本模块也要打帧点，跨文件的帧链才不断（S281 ⑤）。 */
+  frames?: boolean;
   runtimeMode?: "import" | "local" | "single";
   standaloneRequirePath?: string;
   standaloneInline?: string;
@@ -119,10 +121,15 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   remap: [5, 5],
   instance_from_id: [1, 1],
   is_instance_id_valid: [1, 1],
+  is_instance_of: [2, 2],
   is_instance_valid: [1, 1],
   weakref: [1, 1],
   rid_from_int64: [1, 1],
   rid_allocate_id: [0, 0],
+  inst_to_dict: [1, 1],
+  dict_to_inst: [1, 1],
+  get_stack: [0, 0],
+  print_stack: [0, 0],
   rotate_toward: [3, 3],
   sign: [1, 1],
   smoothstep: [3, 3],
@@ -183,6 +190,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
+  NodePath: (a) => `rt.nodePathCtor([${a.join(", ")}])`,
   PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
   PackedInt32Array: (a) => `rt.packCtor("int32", [${a.join(", ")}])`,
   PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
@@ -194,12 +202,15 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
+  is_instance_of: (a) => `rt.gIsInstanceOf(${a[0]}, ${a[1]})`,
   is_instance_valid: (a) => `rt.gIsInstanceValid(${a[0]})`,
   is_instance_id_valid: (a) => `rt.gIsInstanceIdValid(${a[0]})`,
   instance_from_id: (a) => `rt.gInstanceFromId(${a[0]})`,
   weakref: (a) => `rt.gWeakref(${a[0]})`,
   rid_from_int64: (a) => `rt.gRidFromInt64(${a[0]})`,
   rid_allocate_id: () => "rt.gRidAllocateId()",
+  inst_to_dict: (a) => `rt.gInstToDict(${a[0]})`,
+  dict_to_inst: (a) => `rt.gDictToInst(${a[0]})`,
   randi: () => "rt.gRandi()",
   randf: () => "rt.gRandf()",
   randomize: () => "rt.gRandomize()",
@@ -288,15 +299,22 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   exp: (a) => `rt.gExp(${a[0]})`,
   log: (a) => `rt.gLog(${a[0]})`,
   pow: (a) => `rt.gPow(${a[0]}, ${a[1]})`,
+  // 调用栈那一族（S281）：四支都在 runtime 那一侧，`.call()` 与直接调用共用同一条实现；
+  // 帧的行号由模块里的打点供（`rt.frameEnter` / `rt.frameLine`），没用到这四支的模块一行都不发。
+  get_stack: () => "rt.gGetStack()",
+  print_stack: () => "rt.gPrintStack()",
+  push_error: (a) => `rt.gPushError([${a.join(", ")}])`,
+  push_warning: (a) => `rt.gPushWarning([${a.join(", ")}])`,
 };
 
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
 const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
-  print_stack: "回溯帧的打印带指针号与行号，复现不了",
-  push_error: "实测走 stderr 的四行里有 `at: push_error (core/variant/variant_utility.cpp:1024)` 与 GDScript backtrace",
-  push_warning: "实测走 stderr 的四行里有 `at: push_warning (core/variant/variant_utility.cpp:1034)` 与 GDScript backtrace",
+  bytes_to_var: "解的是引擎的 Variant 二进制编码，整族格式没逐字节量过",
+  bytes_to_var_with_objects: "解的是引擎的 Variant 二进制编码（带对象表），整族格式没逐字节量过",
+  var_to_bytes: "编的是引擎的 Variant 二进制编码，整族格式没逐字节量过",
+  var_to_bytes_with_objects: "编的是引擎的 Variant 二进制编码（带对象表），整族格式没逐字节量过",
 };
 
 export const HOST_PRINT_NAMES: readonly string[] = [
@@ -340,6 +358,10 @@ let CURRENT_FUNC = "";
 let LAMBDA_DEPTH = 0;
 /** 本模块在 `At:` 那一行里印的路径：工程模式是 res 路径（与引擎同一串），单文件模式退到输入路径。 */
 let DEBUG_FILE = "";
+/** 这一份产物要不要帧打点（`rt.frameEnter` / `rt.frameLine`）：只有编进这四支之一的模块要，其余模块一行都不加（S281 ⑤）。 */
+let FRAMES_ON = false;
+/** `inst_to_dict` 的 `@path` 那一格只认 res 路径（S269 ②）：单文件模式没有它，发 null 让运行期响亮拒。 */
+let MODULE_RES_PATH: string | null = null;
 /** `_init` 发成协议形状的方法（true）还是 JS constructor（false）：只有链上有脚本继承边的类才需要协议形状。 */
 let INIT_AS_METHOD = false;
 /** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
@@ -410,6 +432,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const classRefs = opts.classRefs ?? [];
   const resPath = opts.resPath;
   DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
+  MODULE_RES_PATH = resPath ?? null;
+  FRAMES_ON = m.usesStack === true || opts.frames === true;
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -565,7 +589,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const moduleFields = fieldTypesLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(__gd_d_${className}, ${moduleFields});`);
   const moduleProps = scriptPropsLiteral(m.vars.filter((v) => !v.isStatic));
-  if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps});`);
+  const modulePropVars = m.vars.filter((v) => !v.isStatic);
+  if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps}, ${scriptPropsReaderLiteral(className, modulePropVars)});`);
+  out.push(dictIdentityLiteral(`__gd_d_${className}`, "", m.vars, className));
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   const moduleStaticSlots = staticVarSlotsLiteral(className, m.vars);
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
@@ -619,9 +645,35 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   return { code, map };
 }
 
-/** 脚本变量名的声明顺序表：`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
+/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
 function scriptPropsLiteral(vars: readonly { name: string }[]): string | null {
   return vars.length === 0 ? null : JSON.stringify(vars.map((v) => v.name));
+}
+
+/** `scriptProps` 那串名字的取值闭包，与名单同序：静态目标上不能拿实例当 `Record<string, Variant>` 索引（S270 ③）。
+ *  常量与 `static var` 发的是 `static NAME = …`，实例上按名取本来就是 `undefined`，`s.NAME` 同一个结果；
+ *  带 get/set 的属性在 JS 里是原型上的 getter，两条路也都会触发它 —— 所以逐格 `s.<名>` 与原来的按名索引一字不差。 */
+function scriptPropsReaderLiteral(className: string, vars: readonly { name: string }[]): string {
+  const reads = vars.map((v) => `s.${v.name}`).join(", ");
+  return `(o) => { const s = o as ${className}; return [${reads}]; }`;
+}
+
+/** 一个类的 `inst_to_dict` 身份五段：res 路径（单文件模式发 null，运行期响亮拒）、类路径、名单、accessor 类型表、读数器。
+ *  读数器是静态写的取值式子：静态编译目标上不能拿类实例当 `Record<string, Variant>` 索引（scriptc 会用记录形状去校验实例
+ *  自己的槽，第一格就撞 `gdObjectId`），所以「按名单顺序把自己的字段取出来」这件事只有发射器知道怎么拼。 */
+function dictIdentityLiteral(descVar: string, classPath: string, vars: readonly VarDecl[], className: string): string {
+  const res = MODULE_RES_PATH === null ? "null" : JSON.stringify(MODULE_RES_PATH);
+  const kept = vars.filter((v) => !v.isStatic && !v.isConst);
+  const names = JSON.stringify(kept.map((v) => v.name));
+  const accRows: string[] = [];
+  for (const v of vars) {
+    if (v.accessor === null || v.accessor === undefined) continue;
+    const base = v.type !== null && v.type.kind === "named" ? v.type.name.replace(/\[.*\]$/, "") : null;
+    accRows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base)}`);
+  }
+  const acc = accRows.length === 0 ? "{}" : `{${accRows.join(", ")}}`;
+  const reads = kept.map((v) => (v.accessor === null || v.accessor === undefined ? `s.${v.name}` : "rt.V.nil()")).join(", ");
+  return `rt.registerDictIdentity(${descVar}, ${res}, ${JSON.stringify(classPath)}, ${names}, ${acc}, (o) => { const s = o as ${className}; return [${reads}]; });`;
 }
 
 function fieldTypesLiteral(vars: readonly { name: string; type: TypeRef | null; accessor?: PropAccessor | null }[]): string | null {
@@ -820,8 +872,10 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   }
   const declFields = fieldTypesLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declFields !== null) lines.push(`rt.registerFieldTypes(__gd_d_${decl.name}, ${declFields});`);
-  const declProps = scriptPropsLiteral(decl.vars.filter((v) => !v.isStatic));
-  if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps});`);
+  const declPropVars = decl.vars.filter((v) => !v.isStatic);
+  const declProps = scriptPropsLiteral(declPropVars);
+  if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps}, ${scriptPropsReaderLiteral(decl.name, declPropVars)});`);
+  lines.push(dictIdentityLiteral(`__gd_d_${decl.name}`, decl.name, decl.vars, decl.name));
   const declStaticVars = staticVarTableLiteral(decl.vars);
   const declStaticSlots = staticVarSlotsLiteral(decl.name, decl.vars);
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);
@@ -996,6 +1050,25 @@ function makeClosure(className: string, init: FuncDecl | undefined, protoShape: 
   return `(a) => new ${className}(${fwd})`;
 }
 
+/** 帧打点三件套（S281）：进栈一对 try/finally、每条语句一行当前行。只有编进 `get_stack` 那一族的模块才发，其余产物一行都不加。 */
+function frameEnterLines(name: string): string[] {
+  if (!FRAMES_ON) return [];
+  return [
+    `  const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, ${JSON.stringify(name)});`,
+    "  try {",
+  ];
+}
+
+function frameExitLines(): string[] {
+  if (!FRAMES_ON) return [];
+  return ["  } finally {", "    rt.frameExit(__gd_frame);", "  }"];
+}
+
+function frameStmtLines(loc: { line: number } | undefined): string[] {
+  if (!FRAMES_ON || loc === undefined) return [];
+  return [`rt.frameLine(${String(loc.line)});`];
+}
+
 function emitFuncInner(f: FuncDecl, base = 0): string[] {
   if (f.isStatic && (f.name === "_init" || f.name === "_initialize" || f.name === "_process")) {
     throw new UnsupportedError("static-entry", `静态的 ${f.name}() 还没实测过行为，不猜着发`);
@@ -1042,12 +1115,15 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   UNBOXED = layout.unboxed;
   RAW_ARRAYS = layout.arrays;
   RAW_DICTS = layout.dicts;
+  const pad = FRAMES_ON ? "    " : "  ";
+  lines.push(...frameEnterLines(f.name));
   try {
     // 实例方法才发入口槽位（静态方法的 base 标签未定；裸 ABI 不收带类型的函数）。
-    if (!f.isStatic) for (const line of emitParamSlots(f)) lines.push(`  ${line}`);
+    if (!f.isStatic) for (const line of emitParamSlots(f)) lines.push(`${pad}${line}`);
     for (const s of f.body) {
+
       mark(base + lines.length, s.loc);
-      for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`  ${line}`);
+      for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`${pad}${line}`);
     }
   } finally {
     UNBOXED = savedUnboxed;
@@ -1056,6 +1132,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     RAW_DICTS = savedDicts;
     CURRENT_FUNC = savedFunc;
   }
+  lines.push(...frameExitLines());
   lines.push("}");
   lines.push("");
   return lines;
@@ -1065,6 +1142,8 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
 function emitInitMethod(f: FuncDecl, base: number): string[] {
   // 协议形状下所有 `_init` 都发同一个 rest 签名（静态编译目标拒换签名的覆写）；形参名与默认值在体首的绑定里还原。
   const lines = [`${INHERITED_METHODS.has("_init") ? "override " : ""}_init(...__gd_init_args: rt.Variant[]): void {`];
+  const pad = FRAMES_ON ? "    " : "  ";
+  lines.push(...frameEnterLines("_init"));
   f.params.forEach((p, i) => {
     const got = `__gd_init_args[${i}] as rt.Variant`;
     let value = got;
@@ -1076,7 +1155,7 @@ function emitInitMethod(f: FuncDecl, base: number): string[] {
     }
     const slot = slotTypeName(p.type);
     if (slot !== null) value = `rt.paramSlot(${value}, ${JSON.stringify(slot)}, ${i + 1}, ${JSON.stringify(f.name)}, this)`;
-    lines.push(`  const ${p.name} = ${value};`);
+    lines.push(`${pad}const ${p.name} = ${value};`);
   });
   mark(base, f.loc);
   const savedIn = IN_INIT;
@@ -1087,14 +1166,16 @@ function emitInitMethod(f: FuncDecl, base: number): string[] {
   UNBOXED = computeUnboxed(f);
   try {
     for (const s of f.body) {
+
       mark(base + lines.length, s.loc);
-      for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
+      for (const line of emitStmt(s, false)) lines.push(`${pad}${line}`);
     }
   } finally {
     IN_INIT = savedIn;
     UNBOXED = savedUnboxed;
     CURRENT_FUNC = savedFunc;
   }
+  lines.push(...frameExitLines());
   lines.push("}");
   lines.push("");
   return lines;
@@ -1113,20 +1194,27 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
     first.expr.callee.kind === "ident" &&
     first.expr.callee.name === "super";
   if (!explicitSuper && hostSuper) lines.push("  super();");
+  // `_init` 的体整个进守卫里：`dict_to_inst` 的裸构造只要字段初始化子（那是类的字段声明，不在这段里）与 super 链。
+  lines.push("  if (!rt.bareConstruction()) {");
+  const pad = FRAMES_ON ? "      " : "    ";
+  lines.push(...frameEnterLines("_init").map((l) => `    ${l}`));
   const savedUnboxed = UNBOXED;
   const savedFunc = CURRENT_FUNC;
   UNBOXED = computeUnboxed(f);
   CURRENT_FUNC = "_init";
   try {
-    for (const line of emitParamSlots(f)) lines.push(`  ${line}`);
+    for (const line of emitParamSlots(f)) lines.push(`${pad}${line}`);
     for (const s of f.body) {
+
       mark(base + lines.length, s.loc);
-      for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
+      for (const line of emitStmt(s, false)) lines.push(`${pad}${line}`);
     }
   } finally {
     UNBOXED = savedUnboxed;
     CURRENT_FUNC = savedFunc;
   }
+  lines.push(...frameExitLines().map((l) => `    ${l}`));
+  lines.push("  }");
   lines.push("}");
   lines.push("");
   return lines;
@@ -1368,7 +1456,8 @@ function emitRootConstructor(hostSuper: boolean): string[] {
   const out = ["  constructor(...__gd_new_args: rt.Variant[]) {"];
   if (hostSuper) out.push("    super();");
   out.push("    this.__gd_fields__();");
-  out.push("    this.__gdDispatch(\"_init\", __gd_new_args);");
+  // 裸构造（`dict_to_inst`）只跑字段初始化子，不跑 `_init`（S269 ⑦）
+  out.push("    if (!rt.bareConstruction()) this.__gdDispatch(\"_init\", __gd_new_args);");
   out.push("  }");
   out.push("");
   return out;
@@ -1402,7 +1491,12 @@ function rawElemTs(k: ElemKind): "number" | "string" {
   return leafOf(k) === "str" ? "string" : "number";
 }
 
+/** 每条语句一行当前行：嵌套在 if / for / 里的语句也打，栈顶那帧报的才是「这一帧当前执行到哪一行」（S281 ③）。 */
 function emitStmt(s: Stmt, voidReturn: boolean): string[] {
+  return [...frameStmtLines(s.loc), ...emitStmtInner(s, voidReturn)];
+}
+
+function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
   switch (s.kind) {
     case "var": {
       const ek = RAW_ARRAYS.get(s.name);
@@ -3035,20 +3129,25 @@ function emitExprVar(e: Expr): string {
       if (e.params.some((p) => p.default !== null)) {
         throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
       }
+      const lpad = FRAMES_ON ? "        " : "      ";
       const body = e.body.flatMap((st) => {
         LAMBDA_DEPTH += 1;
         try {
-          return emitStmt(st, false).map((l) => `      ${l}`);
+          return emitStmt(st, false).map((l) => `${lpad}${l}`);
         } finally {
           LAMBDA_DEPTH -= 1;
         }
       });
       // 盒子里的式子统一收一个数组，所以按位置把形参绑成同名 const，并把声明形参数一起交给盒子。
-      const bind = e.params.map((p, i) => `      const ${p.name} = __a[${i}] as rt.Variant;`);
+      const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant;`);
       return [
         `rt.callable((__a: rt.Variant[]) => {`,
-        ...bind,
-        ...body,
+        ...(FRAMES_ON
+          ? [`        const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "<anonymous lambda>");`, "        try {"]
+          : []),
+        ...(FRAMES_ON ? bind.map((l) => `  ${l}`) : bind),
+        ...(FRAMES_ON ? body.map((l) => `  ${l}`) : body),
+        ...(FRAMES_ON ? ["        } finally {", "          rt.frameExit(__gd_frame);", "        }"] : []),
         `    }, ${e.params.length})`,
       ].join("\n");
     }
@@ -3069,6 +3168,7 @@ function emitLit(lit: string, value: string | number | bigint | boolean | null):
   if (lit === "float") return `rt.V.float(${String(value)})`;
   if (lit === "string") return `rt.V.str(${JSON.stringify(String(value))})`;
   if (lit === "string_name") return `rt.V.stringName(${JSON.stringify(String(value))})`;
+  if (lit === "node_path") return `rt.nodePathCtor([rt.V.str(${JSON.stringify(String(value))})])`;
   if (lit === "bool") return `rt.V.bool(${String(value)})`;
   return "rt.V.nil()";
 }

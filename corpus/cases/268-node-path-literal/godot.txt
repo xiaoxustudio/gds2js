@@ -1,0 +1,43 @@
+t01|a/b
+t02|22
+t03|a/b
+t04|NodePath("a/b")
+t05|true
+t06|2|b
+t07|false|true
+t08|true
+t09|
+t10|a:1
+t11|中/文
+t12|a b
+t13|{ ^"a/b": 1 }
+t14|true
+t15|[^"a/b"]
+t16|1
+t17|n0/one
+t18|true
+t19|false
+t20|x/y|22|true
+t21|true
+t22|false
+t23|a	b
+t24|NodePath("a\tb")
+t25|1
+t26|a
+b
+t27|a"b
+t28|a\b
+t29|a/b:0:1
+t30|2|1
+t31|true
+t32|false
+t33|..
+t34|0
+t35|true
+t36|false
+t37|true
+t38|false
+t39|false
+t40|false
+t41|0
+t42|true

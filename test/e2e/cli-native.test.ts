@@ -493,13 +493,14 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     try {
       // 两处形状都要钉住：① 写盘必须等到「监听」那一句出来之后（priming 那次采样就在打印这句的同一个同步段里，
       //    而脚本的 stdout 比它早到 —— 实测原生 exe 冷启 `watch-a` +320ms、`监听` +345ms，抢在那 25ms 里改文件，
-      //    首拍采到的就是改后的摘要）；② 两次保存的**字节数要不同**，摘要 `路径:mtime:大小` 里尺寸那一维才动 ——
-      //    `watch-a` / `watch-b` 等长时这一格只对 mtime 分辨率有依赖，而「mtime 变了、尺寸没变」那一形在原生目标上
-      //    时有看不见（§1.66 的扫法），门不该建在那上面。这一格真正要钉的洞（重跑写同名产物 → 第二次执行被
-      //    ES 模块缓存吃掉）与文件长度无关，改夹具不削弱它。
+      //    首拍采到的就是改后的摘要）；② 两次保存**等长**，摘要 `路径:mtime:大小` 里只有 mtime 那一维动 ——
+      //    2026-10-08 复测（`tmp/probe-watch/`）：scriptc 的 `statSync` 每拍都报真实的 mtimeMs / ctimeMs / size，与
+      //    node 逐格相同，「mtime 变了、字节数没变」在原生目标上四格全重跑，§2 第 15 条当年那句「原生看不见同尺寸
+      //    保存」不再成立，所以门正当就建在等长保存上。这一格真正要钉的洞（重跑写同名产物 → 第二次执行被
+      //    ES 模块缓存吃掉）与文件长度无关。
       const sawArmed = await until(() => buf.includes("监听") && buf.includes("watch-a"), 30000);
-      if (sawArmed) writeFileSync(gd, script("watch-bb"), "utf8");
-      const sawSecond = sawArmed && (await until(() => buf.includes("watch-bb"), 30000));
+      if (sawArmed) writeFileSync(gd, script("watch-b"), "utf8");
+      const sawSecond = sawArmed && (await until(() => buf.includes("watch-b"), 30000));
       if (!sawArmed) cell(false, `没等到「监听」+首跑（30 秒内）：${buf.slice(0, 200)}`);
       else {
         cell(

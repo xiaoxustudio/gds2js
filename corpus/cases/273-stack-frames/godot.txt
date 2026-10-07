@@ -1,0 +1,22 @@
+Frame 0 - <case>/main.gd:15 in function 'deep'
+Frame 1 - <case>/main.gd:20 in function 'mid'
+Frame 2 - <case>/main.gd:33 in function '_initialize'
+m|[{ "source": "<case>/main.gd", "function": "deep", "line": 16 }, { "source": "<case>/main.gd", "function": "mid", "line": 20 }, { "source": "<case>/main.gd", "function": "_initialize", "line": 33 }]
+m|3
+Frame 0 - <case>/main.gd:23 in function '<anonymous lambda>'
+Frame 1 - <case>/main.gd:24 in function 'lam'
+Frame 2 - <case>/main.gd:34 in function '_initialize'
+Frame 0 - <case>/main.gd:28 in function 'rec'
+Frame 1 - <case>/main.gd:30 in function 'rec'
+Frame 2 - <case>/main.gd:35 in function '_initialize'
+Frame 0 - <case>/main.gd:12 in function '_init'
+Frame 1 - <case>/main.gd:36 in function '_initialize'
+Frame 0 - <case>/main.gd:5 in function 'meth'
+Frame 1 - <case>/main.gd:38 in function '_initialize'
+Frame 0 - <case>/main.gd:8 in function 'hi'
+Frame 1 - <case>/main.gd:39 in function '_initialize'
+z|done
+WARNING: w1w25
+   at: push_warning (core/variant/variant_utility.cpp:1034)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:40)

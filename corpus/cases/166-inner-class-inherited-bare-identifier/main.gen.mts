@@ -26,6 +26,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -34,7 +35,7 @@ class NoInit extends rt.GdScriptObject {
   constructor(...__gd_new_args: rt.Variant[]) {
     super();
     this.__gd_fields__();
-    this.__gdDispatch("_init", __gd_new_args);
+    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);
   }
 
   declare a: rt.Variant;
@@ -63,7 +64,8 @@ class NoInit extends rt.GdScriptObject {
 }
 const __gd_d_NoInit = rt.defineClass(NoInit, (a) => new NoInit(...a), (o) => o instanceof NoInit);
 rt.nameClass(__gd_d_NoInit, "NoInit");
-rt.registerScriptProps(__gd_d_NoInit, ["a","shadow","CA"]);
+rt.registerScriptProps(__gd_d_NoInit, ["a","shadow","CA"], (o) => { const s = o as NoInit; return [s.a, s.shadow, s.CA]; });
+rt.registerDictIdentity(__gd_d_NoInit, "res://main.gd", "NoInit", ["a","shadow"], {}, (o) => { const s = o as NoInit; return [s.a, s.shadow]; });
 rt.registerMethodArities(__gd_d_NoInit, { "get_a": [0, 0] });
 rt.registerNativeBase(__gd_d_NoInit, "RefCounted");
 
@@ -93,6 +95,7 @@ class Plain extends NoInit {
 const __gd_d_Plain = rt.defineClass(Plain, (a) => new Plain(...a), (o) => o instanceof Plain);
 rt.nameClass(__gd_d_Plain, "Plain");
 rt.setClassBase(__gd_d_Plain, rt.lookupClass("NoInit") ?? null);
+rt.registerDictIdentity(__gd_d_Plain, "res://main.gd", "Plain", [], {}, (o) => { const s = o as Plain; return []; });
 rt.registerMethodArities(__gd_d_Plain, { "show": [0, 0] });
 
 class Mid extends Plain {
@@ -124,7 +127,8 @@ class Mid extends Plain {
 const __gd_d_Mid = rt.defineClass(Mid, (a) => new Mid(...a), (o) => o instanceof Mid);
 rt.nameClass(__gd_d_Mid, "Mid");
 rt.setClassBase(__gd_d_Mid, rt.lookupClass("Plain") ?? null);
-rt.registerScriptProps(__gd_d_Mid, ["b"]);
+rt.registerScriptProps(__gd_d_Mid, ["b"], (o) => { const s = o as Mid; return [s.b]; });
+rt.registerDictIdentity(__gd_d_Mid, "res://main.gd", "Mid", ["b"], {}, (o) => { const s = o as Mid; return [s.b]; });
 rt.registerMethodArities(__gd_d_Mid, { "bare": [0, 0], "bump": [0, 0] });
 
 const __gd_entry = new Main();

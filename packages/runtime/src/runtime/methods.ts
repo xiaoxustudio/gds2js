@@ -6,25 +6,27 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gMoveToward, gPosmod, gPow, gRemap, gRound, gSign, gSignF, gSignI,
   gSmoothstep, gSnapped, gSnappedF, gSnappedI, gWrap, gAbsF, gAbsI, gWrapAny, gIsSame,
   gTypeString, gErrorString, gTypeExists,
-  gWeakref, gInstanceFromId, gIsInstanceValid, gIsInstanceIdValid, gRidFromInt64, gRidAllocateId,
+  gWeakref, gInstanceFromId, gIsInstanceValid, gIsInstanceIdValid, gRidFromInt64, gRidAllocateId, gInstToDict,
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
-import { typeOf } from "./patterns";
+import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
+import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
+import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -325,6 +327,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       // 实测 RID 上只有 get_id()：别的名给运行期那句 Nonexistent function
       throw new GodotRuntimeError("rid-method", `Invalid call. Nonexistent function '${name}' in base 'RID'.`);
     }
+
+    const npv = asNodePath(obj);
+    if (npv !== null) return nodePathMethod(npv, name, args);
 
     if (isWeakRefBox(inner)) {
       if (name !== "get_ref") {
@@ -1225,6 +1230,10 @@ function ga(a: Variant[], i: number): Variant {
 
 /** 全局 Callable 的「名字 → 式子」：一支一支对着实测的调用路径写的，与发射器那张 `BUILTIN` 表同形。 */
 const GLOBAL_IMPL: Record<string, Fn> = {
+  get_stack: () => gGetStack(),
+  print_stack: () => gPrintStack(),
+  push_error: (a) => gPushError(a),
+  push_warning: (a) => gPushWarning(a),
   abs: (a) => abs(ga(a, 0)),
   absf: (a) => gAbsF(ga(a, 0)),
   absi: (a) => gAbsI(ga(a, 0)),
@@ -1300,7 +1309,10 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   weakref: (a) => gWeakref(ga(a, 0)),
   rid_from_int64: (a) => gRidFromInt64(ga(a, 0)),
   rid_allocate_id: () => gRidAllocateId(),
+  inst_to_dict: (a) => gInstToDict(ga(a, 0)),
+  dict_to_inst: (a) => gDictToInst(ga(a, 0)),
   instance_from_id: (a) => gInstanceFromId(ga(a, 0)),
+  is_instance_of: (a) => gIsInstanceOf(ga(a, 0), ga(a, 1)),
   is_instance_valid: (a) => gIsInstanceValid(ga(a, 0)),
   is_instance_id_valid: (a) => gIsInstanceIdValid(ga(a, 0)),
   randi: () => gRandi(),
@@ -1335,6 +1347,94 @@ const GLOBAL_IMPL: Record<string, Fn> = {
 };
 
 /** 式子发出去了的那些名字：与实测表里「有区间闸门」的那批一一对上才算数（口径钉在 callable.test.ts）。 */
+/** `dict_to_inst(dict)`（S269 ⑦ / S272 / S273）：按 `@path` + `@subpath` 认类、裸构造（不跑 `_init`），再把字典里认得的字段灌进实例 —— 普通字段写槽，带 get/set 的写实例上那张原值表（setter 不调）。失败三句是 4.6.3 原文，`@path` 加载不到时引擎前面那两句带 C++ 行号的 ERROR 不复刻。 */
+export function gDictToInst(v: Variant): Variant {
+  if (v.t !== Tag.DICT) {
+    throw new GodotRuntimeError(
+      "dict-to-inst-arg",
+      `Invalid type in GDScript utility function "dict_to_inst()". Cannot convert argument 1 from ${valueTypeName(v)} to Dictionary.`,
+    );
+  }
+  const d = v.v as GDict;
+  const keys = d.keys();
+  const vals = d.values();
+  let resPath: string | null = null;
+  let classPath = "";
+  const entries: Array<{ name: string; value: Variant }> = [];
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i] as Variant;
+    const val = vals[i] as Variant;
+    const text = dictKeyName(k);
+    if (text === "@path") {
+      resPath = dictPathText(val);
+      continue;
+    }
+    if (text === "@subpath") {
+      classPath = dictPathText(val) ?? "";
+      continue;
+    }
+    if (text !== null) entries.push({ name: text, value: val });
+  }
+  if (resPath === null) {
+    throw new GodotRuntimeError(
+      "dict-to-inst",
+      `Error calling GDScript utility function "dict_to_inst()": Invalid instance dictionary format (missing @path).`,
+    );
+  }
+  const desc = dictDescOf(resPath, classPath);
+  if (desc === null) {
+    if (dictDescOf(resPath, "") === null) {
+      throw new GodotRuntimeError(
+        "dict-to-inst",
+        `Error calling GDScript utility function "dict_to_inst()": Invalid instance dictionary format (can't load script at @path).`,
+      );
+    }
+    throw new GodotRuntimeError(
+      "dict-to-inst",
+      `Error calling GDScript utility function "dict_to_inst()": Invalid instance dictionary (invalid subclasses).`,
+    );
+  }
+  if (classPath === "") {
+    throw new UnsupportedError(
+      "dict-to-inst-root",
+      `dict_to_inst() 造模块根类那一形（缺 @subpath 或 @subpath 是空路径）只量过 extends SceneTree 的模块：引擎真会造出宿主实例（实测造出 <SceneTree#号> 并漏出一片 RID），Tier 1 发不出那种实例，别的宿主基类也没量过，不猜`,
+    );
+  }
+  beginBareConstruction();
+  let inst: object;
+  try {
+    inst = desc.make([]);
+  } finally {
+    endBareConstruction();
+  }
+  const box = V.object(inst);
+  const shape = dictShapeOf(inst);
+  if (shape !== null) {
+    const accNames = Object.keys(shape.accessors);
+    for (const e of entries) {
+      if (shape.names.indexOf(e.name) < 0) continue;
+      // 带 get/set 的属性进实例上那张原值表：setter 一次都不跑，而 inst_to_dict 会把这一格原样带出门（S272 ③ / S273 ④）。
+      if (accNames.indexOf(e.name) >= 0) writeDictWritten(inst, e.name, e.value);
+      else writeProp(box, e.name, e.value);
+    }
+  }
+  return box;
+}
+
+/** 字典键的名字：String 与 StringName 同形（引擎那两形都认，`@subpath` 给 String 也造得出实例，实测 s01）。 */
+function dictKeyName(k: Variant): string | null {
+  if (k.t === Tag.STRING || k.t === Tag.STRING_NAME) return k.v as string;
+  return null;
+}
+
+/** `@path` / `@subpath` 的值：String 与 NodePath 都认（实测 `@path` 给 `^"res://x.gd"` 也会被当路径用）。 */
+function dictPathText(val: Variant): string | null {
+  if (val.t === Tag.STRING || val.t === Tag.STRING_NAME) return val.v as string;
+  const np = asNodePath(val);
+  if (np !== null) return nodePathText(np);
+  throw new UnsupportedError("dict-to-inst-value", `dict_to_inst() 的 @path / @subpath 只量过 String 与 NodePath（收到 ${valueTypeName(val)}）`);
+}
+
 export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.keys(GLOBAL_IMPL));
 
 /**

@@ -25,6 +25,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -33,7 +34,7 @@ class Bare extends rt.GdScriptObject {
   constructor(...__gd_new_args: rt.Variant[]) {
     super();
     this.__gd_fields__();
-    this.__gdDispatch("_init", __gd_new_args);
+    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);
   }
 
   __gd_fields__() {
@@ -54,6 +55,7 @@ class Bare extends rt.GdScriptObject {
 }
 const __gd_d_Bare = rt.defineClass(Bare, (a) => new Bare(...a), (o) => o instanceof Bare);
 rt.nameClass(__gd_d_Bare, "Bare");
+rt.registerDictIdentity(__gd_d_Bare, "res://main.gd", "Bare", [], {}, (o) => { const s = o as Bare; return []; });
 rt.registerNativeBase(__gd_d_Bare, "RefCounted");
 
 class Empty extends Bare {
@@ -71,12 +73,13 @@ class Empty extends Bare {
 const __gd_d_Empty = rt.defineClass(Empty, (a) => new Empty(...a), (o) => o instanceof Empty);
 rt.nameClass(__gd_d_Empty, "Empty");
 rt.setClassBase(__gd_d_Empty, rt.lookupClass("Bare") ?? null);
+rt.registerDictIdentity(__gd_d_Empty, "res://main.gd", "Empty", [], {}, (o) => { const s = o as Empty; return []; });
 
 class NeedsArg extends rt.GdScriptObject {
   constructor(...__gd_new_args: rt.Variant[]) {
     super();
     this.__gd_fields__();
-    this.__gdDispatch("_init", __gd_new_args);
+    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);
   }
 
   declare n: rt.Variant;
@@ -102,7 +105,8 @@ class NeedsArg extends rt.GdScriptObject {
 const __gd_d_NeedsArg = rt.defineClass(NeedsArg, (a) => new NeedsArg(...a), (o) => o instanceof NeedsArg);
 rt.nameClass(__gd_d_NeedsArg, "NeedsArg");
 rt.registerFieldTypes(__gd_d_NeedsArg, {"n": "int"});
-rt.registerScriptProps(__gd_d_NeedsArg, ["n"]);
+rt.registerScriptProps(__gd_d_NeedsArg, ["n"], (o) => { const s = o as NeedsArg; return [s.n]; });
+rt.registerDictIdentity(__gd_d_NeedsArg, "res://main.gd", "NeedsArg", ["n"], {}, (o) => { const s = o as NeedsArg; return [s.n]; });
 rt.registerNativeBase(__gd_d_NeedsArg, "RefCounted");
 
 class Forward extends NeedsArg {
@@ -124,7 +128,8 @@ const __gd_d_Forward = rt.defineClass(Forward, (a) => new Forward(...a), (o) => 
 rt.nameClass(__gd_d_Forward, "Forward");
 rt.setClassBase(__gd_d_Forward, rt.lookupClass("NeedsArg") ?? null);
 rt.registerFieldTypes(__gd_d_Forward, {"k": "int"});
-rt.registerScriptProps(__gd_d_Forward, ["k"]);
+rt.registerScriptProps(__gd_d_Forward, ["k"], (o) => { const s = o as Forward; return [s.k]; });
+rt.registerDictIdentity(__gd_d_Forward, "res://main.gd", "Forward", ["k"], {}, (o) => { const s = o as Forward; return [s.k]; });
 
 class Right extends NeedsArg {
   override __gd_fields__() {
@@ -148,6 +153,7 @@ class Right extends NeedsArg {
 const __gd_d_Right = rt.defineClass(Right, (a) => new Right(...a), (o) => o instanceof Right);
 rt.nameClass(__gd_d_Right, "Right");
 rt.setClassBase(__gd_d_Right, rt.lookupClass("NeedsArg") ?? null);
+rt.registerDictIdentity(__gd_d_Right, "res://main.gd", "Right", [], {}, (o) => { const s = o as Right; return []; });
 
 const __gd_entry = new Main();
 try {

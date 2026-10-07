@@ -1,9 +1,9 @@
-import { UnsupportedError } from "./errors";
+import { UnsupportedError, GodotRuntimeError } from "./errors";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
 import { Signal } from "./signal";
 import { GdNativeClass } from "./native-class";
-import { Tag, V, type TagValue, type Variant } from "./tags";
+import { Tag, V, intToNum, type IntPayload, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
@@ -13,6 +13,7 @@ import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
 import { GdRid } from "./rid";
+import { asNodePath, GdNodePath, nodePathValue } from "./node-path";
 
 export type Pat =
   | { k: "wild" }
@@ -38,6 +39,23 @@ export function matchPattern(subject: Variant, p: Pat): Variant[] | null {
   return matches(subject, p, out) ? out : null;
 }
 
+/** 手臂的型别：String 与 StringName 算一支，其余非 OBJECT 按 Tag，OBJECT 按原型 —— Callable 盒子并成一支，免得每次读属性新建的盒子把同一条等式拆散。 */
+function armKind(v: Variant): unknown {
+  if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return "string";
+  if (v.t !== Tag.OBJECT) return v.t;
+  const o = v.v;
+  if (o === null || typeof o !== "object") return "object";
+  if (isCallableBox(o)) return "callable";
+  return Object.getPrototypeOf(o);
+}
+
+/** 臂那一侧是**类型严格**的等式（S279 量的）：`5` 臂遇到 `5.0` 走 `_`，`Vector2(1, 2)` 臂遇到 RID / null 同样走 `_`；只有 String 与 StringName 互认。异型一律假 —— 不像算子 `==` 那样抛。 */
+function armEq(s: Variant, v: Variant): boolean {
+  const ks = armKind(s);
+  if (ks !== armKind(v)) return false;
+  return valueEq(s, v);
+}
+
 function matches(s: Variant, p: Pat, out: Variant[]): boolean {
   switch (p.k) {
     case "wild":
@@ -46,9 +64,9 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
       out.push(s);
       return true;
     case "lit":
-      return valueEq(s, p.v);
+      return armEq(s, p.v);
     case "const":
-      return valueEq(s, p.v);
+      return armEq(s, p.v);
     case "arr": {
       if (s.t !== Tag.ARRAY) return false;
       const items = (s.v as GArray).raw();
@@ -144,6 +162,8 @@ export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
   const pk = PACK_TYPES[name];
   if (pk !== undefined) return V.bool(packKindMatches(v, pk));
+  // 实测 `NodePath("x") is NodePath` 真（g7）：`NodePath` 既不是 ClassDB 的类值，也不在 `builtinTag` 那张表里，单列一条。
+  if (name === "NodePath") return V.bool(asNodePath(v) !== null);
   if (PROBED_CLASS_NAMES.indexOf(name) >= 0 || name === "Callable") {
     const e = engineClassIs(v, name);
     if (e !== null) return V.bool(e);
@@ -161,12 +181,50 @@ export function isType(v: Variant, name: string): Variant {
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
 
+/** TYPE_* 那一族的合法码数：实测 `TYPE_MAX` 是 39（S224 那张常数表），越界的 int 抛函数里那一句。 */
+const IS_INSTANCE_OF_TYPE_COUNT = 39;
+
+/** `is_instance_of(值, TYPE_* 常数 | 脚本类值 | 引擎类值)`（S274）：int 那形比的是 `typeof` 的同一张码表，两种类值复用 `is` 量过的两条链，其余第二参抛引擎运行期那一句。 */
+export function gIsInstanceOf(obj: Variant, klass: Variant): Variant {
+  if (klass.t === Tag.INT) {
+    const t = intToNum(klass.v as IntPayload);
+    if (t < 0 || t >= IS_INSTANCE_OF_TYPE_COUNT) {
+      throw new GodotRuntimeError(
+        "is-instance-of-type",
+        `Error calling GDScript utility function "is_instance_of()": Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.`,
+      );
+    }
+    return V.bool(intToNum(typeOf(obj).v as IntPayload) === t);
+  }
+  if (klass.t === Tag.OBJECT) {
+    const inner = klass.v;
+    if (inner instanceof ClassDesc) return V.bool(objIs(obj, inner));
+    if (inner instanceof GdNativeClass) {
+      const e = engineClassIs(obj, inner.className);
+      if (e === null) {
+        throw new UnsupportedError("is-instance-of-class", `is_instance_of() 的引擎类值只量过 is 那七支（收到 ${inner.className}），不猜`);
+      }
+      return V.bool(e);
+    }
+  }
+  throw new GodotRuntimeError(
+    "is-instance-of-arg",
+    `Error calling GDScript utility function "is_instance_of()": Invalid type argument for is_instance_of(), should be a TYPE_* constant, a class or a script.`,
+  );
+}
+
 export function asType(v: Variant, name: string): Variant {
   if (name === "Variant") return v;
   const pk = PACK_TYPES[name];
   if (pk !== undefined) {
     if (packKindMatches(v, pk)) return v;
     throw new UnsupportedError("as-type-pack", `as ${name} 只量过形状相符的 pack（收到的是别的东西）`);
+  }
+  // `as NodePath`：同型原样回、String 与 StringName 走解析式子，其余来源是运行期那一句（null / int / bool / Dictionary 四格同一句）
+  if (name === "NodePath") {
+    if (asNodePath(v) !== null) return v;
+    if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return nodePathValue(v.v as string);
+    throw new GodotRuntimeError("as-node-path", `Invalid cast: could not convert value to 'NodePath'.`);
   }
   const t = builtinTag(name);
   if (t !== undefined) return v.t === t ? v : V.nil();
@@ -206,6 +264,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
   if (v.t === Tag.OBJECT && v.v instanceof GdRid) return V.int(23);
+  if (v.t === Tag.OBJECT && v.v instanceof GdNodePath) return V.int(22);
   if (v.t === Tag.OBJECT && isCallableBox(v.v)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }

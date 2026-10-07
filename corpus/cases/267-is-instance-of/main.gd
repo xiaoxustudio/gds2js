@@ -1,0 +1,65 @@
+extends SceneTree
+
+class A extends RefCounted:
+	var x = 1
+
+class B extends A:
+	var y = 2
+
+class Other extends RefCounted:
+	var z = 3
+
+func _initialize():
+	var a = A.new()
+	var b = B.new()
+	print("t01|", is_instance_of(a, A))
+	print("t02|", is_instance_of(a, B))
+	print("t03|", is_instance_of(b, A))
+	print("t04|", is_instance_of(b, B))
+	print("t05|", is_instance_of(a, RefCounted))
+	print("t06|", is_instance_of(a, Object))
+	print("t07|", is_instance_of(a, SceneTree))
+	print("t08|", is_instance_of(self, SceneTree))
+	print("t09|", is_instance_of(self, MainLoop))
+	print("t10|", is_instance_of(self, Object))
+	print("t11|", is_instance_of(self, A))
+	print("t12|", is_instance_of(self, RefCounted))
+	print("t13|", typeof(is_instance_of(a, A)))
+	print("t14|", is_instance_of(null, A))
+	print("t15|", is_instance_of(null, RefCounted))
+	print("t16|", is_instance_of(5, A))
+	print("t17|", is_instance_of("x", A))
+	print("t18|", is_instance_of(a, TYPE_INT))
+	print("t19|", is_instance_of(a, TYPE_OBJECT))
+	print("t20|", is_instance_of(5, TYPE_INT))
+	print("t21|", is_instance_of(&"x", TYPE_STRING))
+	print("t22|", is_instance_of(&"x", TYPE_STRING_NAME))
+	print("t23|", is_instance_of(NodePath("a"), TYPE_NODE_PATH))
+	print("t24|", is_instance_of(3.5, TYPE_FLOAT))
+	print("t25|", is_instance_of(3.5, TYPE_INT))
+	print("t26|", is_instance_of(true, TYPE_BOOL))
+	print("t27|", is_instance_of([1], TYPE_ARRAY))
+	print("t28|", is_instance_of({}, TYPE_DICTIONARY))
+	print("t29|", is_instance_of(Vector2(1, 2), TYPE_VECTOR2))
+	print("t30|", is_instance_of(a, 24))
+	print("t31|", is_instance_of(a, 27))
+	print("t32|", is_instance_of(A, RefCounted))
+	print("t33|", is_instance_of(A, Object))
+	print("t34|", is_instance_of(A, GDScript))
+	print("t35|", is_instance_of(RefCounted, Object))
+	print("t36|", is_instance_of(RefCounted, RefCounted))
+	print("t37|", is_instance_of(A, SceneTree))
+	print("t38|", is_instance_of(rid_from_int64(5), Object))
+	print("t39|", is_instance_of(rid_from_int64(5), TYPE_OBJECT))
+	print("t40|", is_instance_of)
+	print("t41|", is_instance_of.get_argument_count())
+	print("t42|", is_instance_of.call(a, A))
+	print("t43|", is_instance_of(a, Other))
+	print("t44|", is_instance_of(b, RefCounted))
+	print("t45|", is_instance_of(dict_to_inst(inst_to_dict(a)), A))
+	print("t46|", is_instance_of(5, TYPE_NIL))
+	print("t47|", is_instance_of(a, TYPE_NIL))
+	print("t48|", is_instance_of(&"x", TYPE_NODE_PATH))
+	print("t49|", is_instance_of(Other.new(), A))
+	print("t50|", is_instance_of(dict_to_inst(inst_to_dict(a)), Other))
+	quit()

@@ -29,7 +29,7 @@ class Plain extends GdScriptObject {
 }
 const plainDesc: ClassDesc = defineClass(Plain, () => new Plain(), (o: object) => o instanceof Plain);
 registerNativeBase(plainDesc, "RefCounted");
-registerScriptProps(plainDesc, ["v"]);
+registerScriptProps(plainDesc, ["v"], (o: object) => [(o as Plain).v]);
 
 const idOf = (v: Variant): number => (v.v as { gdObjectId: number }).gdObjectId;
 const maskId = (s: string): string => s.replace(/#-?\d+>/, "#号>");

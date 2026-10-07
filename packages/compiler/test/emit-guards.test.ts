@@ -62,8 +62,8 @@ describe("打印一族的发射与拒答", () => {
 
   it("prints / printt / printraw / printerr / print_verbose / print_rich 发成宿主的六支", async () => {
     const code = await emitted(BODY(['prints("a", 1)', "quit()"]));
-    expect(code, "宿主那条 import 要带上六支的名字").toContain(
-      'import { print, printJoined, printRaw, printErr, printVerbose, printRich, SceneTree } from "host";',
+    expect(code, "宿主那条 import 要带上七支的名字").toContain(
+      'import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "host";',
     );
     expect(code, "prints 是一个空格").toContain('printJoined(" ", [');
     expect(await emitted(BODY(['printt("a", 1)', "quit()"])), "printt 是制表符").toContain('printJoined("\\t", [');
@@ -79,14 +79,75 @@ describe("打印一族的发射与拒答", () => {
 
   it("拒的四支把缘由写在错文里", async () => {
     for (const [name, want] of [
-      ["print_debug", "At:"],
-      ["print_stack", "指针号"],
-      ["push_error", "variant_utility.cpp:1024"],
-      ["push_warning", "variant_utility.cpp:1034"],
+      ["var_to_bytes", "二进制编码"],
+      ["var_to_bytes_with_objects", "对象表"],
+      ["bytes_to_var", "没逐字节量过"],
+      ["bytes_to_var_with_objects", "对象表"],
     ] as Array<[string, string]>) {
       expect(await classify(PRINT(`${name}()`), "ok"), `${name} 该拒`).toBe("emit-builtin");
       expect(await msg(PRINT(`${name}()`)), `${name} 的错文`).toContain(want);
     }
+  });
+
+  it("print_debug 已按 S266 发出：走宿主的 printDebug 并带上调用点", async () => {
+    const code = await emitted(BODY(['print_debug("x")', "quit()"]));
+    expect(code, "print_debug 走 printDebug").toContain('printDebug([rt.V.str("x")]');
+    expect(code, "第二句的 At: 由发射器写好路径、行号与所在函数").toContain('.gd", 4, "_initialize")');
+  });
+});
+
+// ── ①i 调用栈那一族：四支都发得出，帧打点只进用到它们的模块（S281，语料 273）──
+describe("调用栈一族的发射与帧打点", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ROWS: Array<[string, string]> = [
+    ["print_stack()", "rt.gPrintStack()"],
+    ["get_stack()", "rt.gGetStack()"],
+    ['push_error("boom")', 'rt.gPushError([rt.V.str("boom")])'],
+    ['push_warning("a", "b")', 'rt.gPushWarning([rt.V.str("a"), rt.V.str("b")])'],
+  ];
+  const FRAMED = "extends SceneTree\n\nfunc deep():\n\tprint_stack()\n\nfunc _initialize():\n\tdeep()\n\tquit()\n";
+  const PLAIN = "extends SceneTree\n\nfunc deep():\n\tprint(1)\n\nfunc _initialize():\n\tdeep()\n\tquit()\n";
+
+  it("四支各发各的 runtime 名", async () => {
+    for (const [call, want] of ROWS) {
+      const src = PRINT(call);
+      expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${call} 的发射`).toContain(want);
+    }
+  });
+
+  it("用到才打点：一进一出配 finally，语句各带自己的行号", async () => {
+    const code = await emitted(FRAMED);
+    expect(code, "帧按函数名进栈").toContain('rt.frameEnter("Main.gd", "deep")');
+    expect(code, "栈顶那一帧报的是当前语句行").toContain("rt.frameLine(4);");
+    expect(code, "退栈在 finally 里，提前 return 与抛错都不留帧").toContain("rt.frameExit(__gd_frame);");
+  });
+
+  it("没用到这四支的产物一行打点都不加", async () => {
+    const code = await emitted(PLAIN);
+    expect(code, "其余模块零开销").not.toContain("rt.frameEnter");
+    expect(code, "连行号打点也没有").not.toContain("rt.frameLine");
+  });
+
+  it("print_stack 与 get_stack 只收 0 支，push_* 却是 0..N", async () => {
+    expect(await classify(PRINT("print_stack(1)"), "ok"), "print_stack 多给该拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("print_stack(1)"))).toBe(
+      'Too many arguments for "print_stack()" call. Expected at most 0 but received 1.',
+    );
+    expect(await classify(PRINT("get_stack(1)"), "ok"), "get_stack 多给该拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("get_stack(1)"))).toBe(
+      'Too many arguments for "get_stack()" call. Expected at most 0 but received 1.',
+    );
+    expect(await classify(PRINT('push_error("a", "b", "c")'), "ok"), "push_error 是 0..N").toBe("ok");
+    expect(await classify(PRINT("push_error()"), "ok"), "空实参照打（实测出一句 `ERROR: `）").toBe("ok");
+    expect(await classify(PRINT('push_warning("a", 5)'), "ok"), "push_warning 也拼实参").toBe("ok");
   });
 });
 
@@ -198,6 +259,214 @@ describe("RID 族的发射与元数闸门", () => {
     for (const [call, want] of ARITY) {
       expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
       expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①f NodePath 族：构造三形与 `^"…"` 字面量都发成 rt.nodePathCtor，方法链 / is / as / 定型变量 / 字典键都编得过（S268 / S275）──
+describe("NodePath 族的发射闸门", () => {
+  const CTORS: Array<[string, string]> = [
+    ['NodePath("a/b")', 'rt.nodePathCtor([rt.V.str("a/b")])'],
+    ["NodePath()", "rt.nodePathCtor([])"],
+    ['NodePath(&"a")', 'rt.nodePathCtor([rt.V.stringName("a")])'],
+    ['^"a/b"', 'rt.nodePathCtor([rt.V.str("a/b")])'],
+    ['^"a\\tb"', 'rt.nodePathCtor([rt.V.str("a\\tb")])'],
+  ];
+  const PASSING: string[] = [
+    'print(NodePath("a/b").get_name(0))',
+    'print(NodePath("a") is NodePath)',
+    'print(str(NodePath("a") as NodePath))',
+    'var p: NodePath = NodePath("a")',
+    'var d = {}\n\td[NodePath("a")] = 1\n\tprint(d)',
+    'print(^"a/b" == NodePath("a/b"))',
+    'var p: NodePath = ^"a/b"',
+    'var d = { ^"a/b": 1 }\n\tprint(d.keys())',
+    'var p = NodePath("a")\n\tmatch p:\n\t\t^"a":\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
+    'match ^"a":\n\t\t"a":\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
+    'var p = NodePath("a")\n\tmatch p:\n\t\tNodePath("a"):\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
+  ];
+
+  it("臂里的字面量走 rt.patLit(rt.nodePathCtor(...))，异型臂不抛只走默认", async () => {
+    const src = await emitted(MOD('var p = NodePath("a")\n\tmatch p:\n\t\t^"a":\n\t\t\tprint(1)'));
+    expect(src, "模式位也发同一个式子").toContain("rt.patLit(rt.nodePathCtor([rt.V.str(\"a\")]))");
+  });
+
+  it("三种构造形与字面量都发成同一个 rt.nodePathCtor（实测 c1 / P7 / a05 三形 + b01 转义那格）", async () => {
+    for (const [call, want] of CTORS) {
+      const src = PRINT(call);
+      expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${call} 的发射`).toContain(want);
+    }
+  });
+
+  it("方法链、is / as、定型变量与字典键都不拦", async () => {
+    for (const body of PASSING) {
+      expect(await classify(MOD(body), "ok"), body.replace(/\n\t/g, " ")).toBe("ok");
+    }
+  });
+});
+
+// ── ①h 构造式手臂：量过的七支走 rt.patConst(<构造式>)，表外与非常量实参照旧拦（S280，语料 272）──
+describe("构造式手臂的发射闸门", () => {
+  const ARMS: Array<[string, string]> = [
+    ["Vector2(1, 2)", "rt.patConst(rt.vector2New([rt.V.int(1), rt.V.int(2)]))"],
+    ["Vector2i(1, 2)", "rt.patConst(rt.vector2iNew([rt.V.int(1), rt.V.int(2)]))"],
+    ["Vector3(1, 2, 3)", "rt.patConst(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))"],
+    ["Vector3i(1, 2, 3)", "rt.patConst(rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))"],
+    ["Color(1, 2, 3, 4)", "rt.patConst(rt.colorNew([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]))"],
+    ['StringName("a")', 'rt.patConst(rt.stringNameCtor([rt.V.str("a")]))'],
+    ["Callable()", "rt.patConst(rt.callableCtor([]))"],
+  ];
+  const REFUSED: string[] = [
+    "AABB(Vector2(1, 2), Vector2(3, 4))",
+    "Array([1])",
+    'Dictionary({"a": 1})',
+    "rid_from_int64(5)",
+    "str(1)",
+    "Vector2(1, x)",
+    "Vector2(1)",
+    "Color(1, 2, 3)",
+    "Vector2(-1, 2)",
+  ];
+  const armSrc = (arm: string): string =>
+    MOD(`var x = 5\n\tvar y = 2\n\tmatch x:\n\t\t${arm}:\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)`);
+
+  it("七支各发各的构造式", async () => {
+    for (const [arm, want] of ARMS) {
+      const src = armSrc(arm);
+      expect(await classify(src, "ok"), `${arm} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${arm} 的发射`).toContain(want);
+    }
+  });
+
+  it("表外的构造与非常量实参仍拦在模式位", async () => {
+    for (const arm of REFUSED) {
+      expect(await classify(armSrc(arm), "ok"), `${arm} 该拦下来`).not.toBe("ok");
+    }
+  });
+});
+
+// ── ①g `inst_to_dict`：发成 rt.gInstToDict、每个类都带一份 dict 身份，元数两句是一支一名量出来的（S269，探头 tmp/probe-inst/）──
+describe("inst_to_dict 的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["inst_to_dict()", 'Too few arguments for "inst_to_dict()" call. Expected at least 1 but received 0.'],
+    ["inst_to_dict(1, 2)", 'Too many arguments for "inst_to_dict()" call. Expected at most 1 but received 2.'],
+  ];
+
+  it("发成 rt.gInstToDict，模块根类与内嵌类各登记一份身份", async () => {
+    expect(await emitted(BODY(["inst_to_dict(self)", "quit()"]))).toContain("rt.gInstToDict(");
+    const inner = await emitted(
+      `extends SceneTree\n\nclass Inner extends RefCounted:\n\tvar k = 1\n\tvar p: int:\n\t\tget: return 3\n\nfunc _initialize():\n\tquit()\n`,
+    );
+    expect(inner, "模块根类登记空类路径").toContain(
+      'rt.registerDictIdentity(__gd_d_Main, null, "", [], {}, (o) => { const s = o as Main; return []; });',
+    );
+    expect(inner, "内嵌类登记自己的类路径、accessor 的声明类型与静态写好的读数器").toContain(
+      'rt.registerDictIdentity(__gd_d_Inner, null, "Inner", ["k","p"], {"p": "int"}, (o) => { const s = o as Inner; return [s.k, rt.V.nil()]; });',
+    );
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①h `dict_to_inst`：发成 rt.gDictToInst，元数两句与 inst_to_dict 同形（S272，探头 tmp/probe-inst/）──
+describe("dict_to_inst 的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["dict_to_inst()", 'Too few arguments for "dict_to_inst()" call. Expected at least 1 but received 0.'],
+    ["dict_to_inst(1, 2)", 'Too many arguments for "dict_to_inst()" call. Expected at most 1 but received 2.'],
+  ];
+
+  it("发成 rt.gDictToInst，构造侧带上裸构造守卫", async () => {
+    expect(await emitted(BODY(["quit()", 'print(dict_to_inst({"@path": "res://main.gd", "@subpath": NodePath("Inner")}))']))).toContain("rt.gDictToInst(");
+    const withInit = await emitted(
+      "extends SceneTree\n\nclass Plain extends RefCounted:\n\tvar q = 2\n\nclass Sub extends Plain:\n\tvar r = 3\n\nclass Inner extends RefCounted:\n\tvar k = 1\n\n\tfunc _init():\n\t\tk = 7\n\nfunc _initialize():\n\tprint(dict_to_inst(inst_to_dict(Inner.new())))\n\tquit()\n",
+    );
+    expect(withInit, "_init 的体整个进裸构造守卫里（dict_to_inst 造实例时一句都不跑，S269 ⑦）").toContain("if (!rt.bareConstruction()) {");
+    expect(withInit, "根构造器的 _init 派发也在守卫里").toContain('if (!rt.bareConstruction()) this.__gdDispatch("_init"');
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①i `is_instance_of`：发成 rt.gIsInstanceOf，元数两句是 `--language en` 量的原文（S274，探头 tmp/probe-is/）──
+describe("is_instance_of 的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["is_instance_of(self)", 'Too few arguments for "is_instance_of()" call. Expected at least 2 but received 1.'],
+    ["is_instance_of(self, RefCounted, RefCounted)", 'Too many arguments for "is_instance_of()" call. Expected at most 2 but received 3.'],
+  ];
+
+  it("发成 rt.gIsInstanceOf，类值与引擎类值都按实参进去", async () => {
+    const src = await emitted(BODY(["quit()", "print(is_instance_of(self, RefCounted))", "print(is_instance_of(self, Object))"]));
+    expect(src, "第二参发成那份引擎类值").toContain("rt.gIsInstanceOf(");
+    expect(src).toContain("rt.nativeClass(\"RefCounted\")");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①j `is_instance_of` 的解析期那句：只在两参都是字面量 int 且第二参越界时拦（S274 / §6 第 26 条，探头 tmp/probe-is/arg1.mts）──
+describe("is_instance_of 的字面量类型实参闸门", () => {
+  const MOD2 = (body: string): string =>
+    `extends SceneTree\n\nclass A extends RefCounted:\n\tvar x = 1\n\nfunc _initialize():\n\tvar a = A.new()\n\t${body}\n\tquit()\n`;
+  const REFUSED: Array<[string, string]> = [
+    ["print(is_instance_of(5, 999))", "第二参越界"],
+    ["print(is_instance_of(5, -1))", "负数同句"],
+    ["print(is_instance_of(5, 39))", "39 就是 TYPE_MAX 那一格"],
+  ];
+  const PASSED: Array<[string, string]> = [
+    ["print(is_instance_of(5, 38))", "界内照发"],
+    ["print(is_instance_of(5, TYPE_OBJECT))", "常数名照发"],
+    ["print(is_instance_of(a, 999))", "第一参是变量 → 交给运行期那一句"],
+    ["print(is_instance_of(a, t))", "两参都是变量"],
+  ];
+
+  it("该拦的按解析期那句拦，该发的不误拦", async () => {
+    for (const [call, why] of REFUSED) {
+      const out = await emitted(MOD2(call).replace("var a = A.new()\n", "var a = A.new()\n\tvar t = 3\n"));
+      expect(out, `${call} —— ${why}`).toBe("diag:instance-of-type-arg");
+    }
+    for (const [call, why] of PASSED) {
+      const out = await emitted(MOD2(call).replace("var a = A.new()\n", "var a = A.new()\n\tvar t = 3\n"));
+      expect(out, `${call} —— ${why}`).not.toBe("diag:instance-of-type-arg");
     }
   });
 });

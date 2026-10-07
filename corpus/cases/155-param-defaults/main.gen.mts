@@ -40,7 +40,8 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
-rt.registerScriptProps(__gd_d_Main, ["K"]);
+rt.registerScriptProps(__gd_d_Main, ["K"], (o) => { const s = o as Main; return [s.K]; });
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
@@ -131,6 +132,7 @@ class A extends rt.GdScriptObject {
 }
 const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
 rt.nameClass(__gd_d_A, "A");
+rt.registerDictIdentity(__gd_d_A, "res://main.gd", "A", [], {}, (o) => { const s = o as A; return []; });
 rt.registerMethodArities(__gd_d_A, { "sf": [1, 2], "one": [1, 2], "expr_default": [0, 1], "arr_default": [0, 1], "vec_default": [0, 1], "null_default": [0, 1], "refs_earlier": [1, 2], "const_default": [0, 1], "method_default": [0, 1], "helper": [0, 0], "str_slot": [0, 1], "float_into_int_slot": [0, 1], "float_into_int_math": [0, 1], "call_it": [0, 0] });
 rt.registerStaticMethods(__gd_d_A, ["sf"], {"sf": (a: rt.Variant[]): rt.Variant => rt.wrapValue(A.sf(a[0] as rt.Variant, a.length > 1 ? (a[1] as rt.Variant) : undefined))});
 rt.registerNativeBase(__gd_d_A, "RefCounted");
@@ -140,9 +142,11 @@ class Needs extends rt.GdScriptObject {
 
   constructor(p_a: rt.Variant = rt.toInt(rt.V.int(7))) {
     super();
-    p_a = rt.paramSlot(p_a, "int", 1, "_init", this);
-    this.a = rt.toInt(p_a);
-    print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a)]));
+    if (!rt.bareConstruction()) {
+      p_a = rt.paramSlot(p_a, "int", 1, "_init", this);
+      this.a = rt.toInt(p_a);
+      print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a)]));
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -155,7 +159,8 @@ class Needs extends rt.GdScriptObject {
 const __gd_d_Needs = rt.defineClass(Needs, (a) => new Needs(a.length > 0 ? (a[0] as rt.Variant) : undefined), (o) => o instanceof Needs);
 rt.nameClass(__gd_d_Needs, "Needs");
 rt.registerFieldTypes(__gd_d_Needs, {"a": "int"});
-rt.registerScriptProps(__gd_d_Needs, ["a"]);
+rt.registerScriptProps(__gd_d_Needs, ["a"], (o) => { const s = o as Needs; return [s.a]; });
+rt.registerDictIdentity(__gd_d_Needs, "res://main.gd", "Needs", ["a"], {}, (o) => { const s = o as Needs; return [s.a]; });
 rt.registerNativeBase(__gd_d_Needs, "RefCounted");
 
 const __gd_entry = new Main();
