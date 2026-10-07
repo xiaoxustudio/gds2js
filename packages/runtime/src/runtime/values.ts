@@ -2354,7 +2354,7 @@ export function show(v: Variant, depth = 0): string {
       // 引擎类值与 weakref 都带进程内的号，形状照实测发；号在语料两侧都先掩掉再比。
       if (isNullRefValue(inner)) return "<Object#null>";
       if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
-      if (isWeakRefBox(inner)) return `<WeakRef#${String((inner as { gdObjectId: number }).gdObjectId)}>`;
+      if (isWeakRefBox(inner)) return `<WeakRef#${String(inner.gdObjectId)}>`;
       const shape = objectLabelHook === null ? null : objectLabelHook(inner as object);
       if (shape !== null) return shape;
       // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null

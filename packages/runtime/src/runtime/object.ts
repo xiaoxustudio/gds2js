@@ -17,8 +17,17 @@ export class GdScriptObject {
 }
 
 /** 空对象引用与 `weakref()` 的盒子住在叶子模块 `identity.ts`（`values.ts` 的打印与等式都要读它们，不能反向 import 本模块）。 */
-export { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox, nextObjectId } from "./identity";
-export type { GdIdentified, NullRef, WeakRefBox } from "./identity";
+export {
+  GdNullObject,
+  NULL_OBJECT,
+  WeakRefBox,
+  isNullRefValue,
+  isWeakRefBox,
+  liveObjectOf,
+  nextObjectId,
+  weakRefBox,
+} from "./identity";
+export type { GdIdentified } from "./identity";
 
 /** lambda 的 Callable 盒子（`rt.callable((a) => {...}, 形参数)`）。 */
 export function callable(fn: Fn, arity: number | null = null): Variant {
