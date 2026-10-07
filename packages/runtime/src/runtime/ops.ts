@@ -1,6 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asRid } from "./rid";
+import { asNodePath } from "./node-path";
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
 import { asColor, color, colorCmp, GColor } from "./color";
@@ -106,6 +107,10 @@ export const ops = {
     const cbAdd = asColor(b);
     if (caAdd && cbAdd)
       return color(caAdd.r + cbAdd.r, caAdd.g + cbAdd.g, caAdd.b + cbAdd.b, caAdd.a + cbAdd.a);
+    // 实测 NodePath 的 `+` 两个来源都是运行期那一句（与 NodePath 与与 String 各一格）
+    if (asNodePath(a) !== null || asNodePath(b) !== null) {
+      throw new GodotRuntimeError("add-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '+'.`);
+    }
     throw new UnsupportedError("add-operands", `+ 不支持 ${tagName(a.t)} + ${tagName(b.t)}`);
   },
 
@@ -126,6 +131,9 @@ export const ops = {
     const cbSub = asColor(b);
     if (caSub && cbSub)
       return color(caSub.r - cbSub.r, caSub.g - cbSub.g, caSub.b - cbSub.b, caSub.a - cbSub.a);
+    if (asNodePath(a) !== null || asNodePath(b) !== null) {
+      throw new GodotRuntimeError("sub-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '-'.`);
+    }
     if (!isNum(a) || !isNum(b)) {
       throw new UnsupportedError("sub-operands", `- 不支持 ${tagName(a.t)} - ${tagName(b.t)}`);
     }
@@ -368,6 +376,10 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   }
   // 只有一边是 RID 就是运行期那一句：四个运算符各量过一格（与 int 的 < / <= / > / >=，外加与 String 的 <）
   if (ra !== null || rb !== null) {
+    throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+  }
+  // NodePath 不排序：实测两侧都是它时 `<` `<=` `>` `>=` 四句照旧是运行期那一句（RID 按号比序那条在这儿不成立），与 String 比的 `<` 也量过一格
+  if (asNodePath(a) !== null || asNodePath(b) !== null) {
     throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   const va = asVec2(a);

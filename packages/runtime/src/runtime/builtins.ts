@@ -9,6 +9,7 @@ import { ClassDesc, GdScriptObject } from "./object";
 import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { GdRid, allocateRid, rid } from "./rid";
+import { GdNodePath } from "./node-path";
 import { typeOf } from "./patterns";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
@@ -194,6 +195,11 @@ export function variantHashNumber(v: Variant, depth = 0): number {
     case Tag.OBJECT: {
       // 引擎那支是 hash_one_uint64(RID::get_id())（core/variant/variant.cpp 的 RID 分支）；实测 0 / 1 / 5 / -1 / 13241 五格全中
       if (v.v instanceof GdRid) return hashOneUint64(intToBig((v.v as GdRid).id));
+      // NodePath 的式子没逆出来：实测 hash(NodePath("a")) = 3608900604、hash(NodePath("a/b")) = 1780534522、hash(NodePath("")) = 0，
+      // 4.3 那支「绝对位起手 1、再把各名 StringName 哈希异或」六格全不中（S267 ⑥a）—— `NodePath.hash()` 走同一条式子，也拒。
+      if (v.v instanceof GdNodePath) {
+        throw new UnsupportedError("hash-node-path", "NodePath 的哈希式子没逆出来（4.3 的异或式子实测不成立，S267 ⑥a），不发");
+      }
       if (!isCallableBox(v.v)) {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
       }

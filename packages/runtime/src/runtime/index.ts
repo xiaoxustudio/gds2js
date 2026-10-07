@@ -16,5 +16,6 @@ export * from "./vector3i";
 export * from "./color";
 export * from "./packed";
 export * from "./convert";
+export * from "./node-path";
 export * from "./global-names";
 export * from "./native-class";

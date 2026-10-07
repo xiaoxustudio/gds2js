@@ -17,6 +17,7 @@ import { GdNativeClass } from "./native-class";
 import { isNullRefValue, isWeakRefBox, NULL_OBJECT } from "./identity";
 import type { GdIdentified } from "./identity";
 import { asRid, ridText } from "./rid";
+import { asNodePath, emptyNodePath, nodePathText, nodePathValue, sameNodePath } from "./node-path";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -97,6 +98,8 @@ function keyOfIn(v: Variant, depth: number): string {
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
       const ridKey = asRid(v);
       if (ridKey !== null) return "r:" + String(ridKey.id);
+      const npKey = asNodePath(v);
+      if (npKey !== null) return "^" + nodePathText(npKey);
       if (isCallable(v)) return callableKey(v.v as CallableBox);
       if (!(v.v instanceof GBytes)) {
         const id = (v.v as GdIdentified).gdObjectId;
@@ -1463,7 +1466,7 @@ function vsQuote(s: string): string {
   return out + '"';
 }
 
-/** 字典键的排序：先按类型等级 `null < bool < int < float < String < StringName`，同级再按值（实测：`{1, 2.5, 0.5}` → `1、0.5、2.5`，`{"B","a","A"}` 按码点）。 */
+/** 字典键的排序：先按类型等级 `null < bool < int < float < String < StringName < NodePath`，同级再按值（实测：`{1, 2.5, 0.5}` → `1、0.5、2.5`，`{"B","a","A"}` 按码点）。 */
 const VS_KEY_RANK: Partial<Record<number, number>> = {
   [Tag.NIL]: 0,
   [Tag.BOOL]: 1,
@@ -1473,13 +1476,23 @@ const VS_KEY_RANK: Partial<Record<number, number>> = {
   [Tag.STRING_NAME]: 5,
 };
 
+/** NodePath 骑在 Tag.OBJECT 上，等级查不进那张表，单列一条：实测同一本字典里 `"s"`、`&"sn"` 都在它之前、
+ *  七个键的序是 `null、true、7、1.5、"s"、&"sn"、NodePath`（`tmp/probe-nodepath/o-o1.gd`）。 */
+const VS_RANK_NODE_PATH = 6;
+
+function vsKeyRank(v: Variant): number | undefined {
+  return asNodePath(v) !== null ? VS_RANK_NODE_PATH : VS_KEY_RANK[v.t];
+}
+
 function vsKeyCompare(a: Variant, b: Variant): number {
-  const ra = VS_KEY_RANK[a.t];
-  const rb = VS_KEY_RANK[b.t];
+  const ra = vsKeyRank(a);
+  const rb = vsKeyRank(b);
   if (ra === undefined || rb === undefined) {
-    throw new UnsupportedError("var-to-str-key", `var_to_str() 的字典键只实测过 null / bool / int / float / String / StringName（收到 ${tagName(a.t)}）`);
+    throw new UnsupportedError("var-to-str-key", `var_to_str() 的字典键只实测过 null / bool / int / float / String / StringName / NodePath（收到 ${valueTypeName(a)}）`);
   }
   if (ra !== rb) return ra - rb;
+  // 同为 NodePath 的并列键按插入序出门（实测五个键：`/a、z、a、a/b、""`，不是按码点排的）
+  if (asNodePath(a) !== null) return 0;
   if (a.t === Tag.BOOL) return (a.v ? 1 : 0) - (b.v ? 1 : 0);
   if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
     const x = codepoints(a.v as string);
@@ -1546,6 +1559,8 @@ export function varToStr(v: Variant): string {
         }
         return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
       }
+      const npV = asNodePath(v);
+      if (npV !== null) return `NodePath("${strCEscape(nodePathText(npV))}")`;
       // RID 与 print / str 同一条式子：实测 var_to_str(rid_from_int64(5)) 给 `RID(5)`（语料 261 的 r05）
       const ridV = asRid(v);
       if (ridV !== null) return ridText(ridV);
@@ -2282,6 +2297,9 @@ export function stringCtor(args: Variant[]): Variant {
     throw new GodotRuntimeError("string-ctor-arity", `String() 只接受 1 个参数（收到 ${args.length} 个）`);
   }
   const v = args[0] as Variant;
+  // 实测 `String(NodePath("a:b"))` 给 `a:b`、typeof 4（v04 / r16 / r17 三格）
+  const np = asNodePath(v);
+  if (np !== null) return V.str(nodePathText(np));
   if (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME) {
     throw new GodotRuntimeError("string-ctor", `没有 String(${tagName(v.t)}) 这个构造器（Godot 是 Parse Error）`);
   }
@@ -2301,6 +2319,22 @@ export function stringNameCtor(args: Variant[]): Variant {
     );
   }
   return V.stringName(v.v as string);
+}
+
+/** `NodePath()` / `NodePath(String)` / `NodePath(StringName)` / `NodePath(NodePath)` 四形实测都有；其余元数与
+ *  实参类型是那句 `No constructor of "NodePath" matches the signature "NodePath(…)"`（量过 `NodePath(int)` 与
+ *  `NodePath(String, String)` 两格，括号里的名字就是 `valueTypeName` 那一张）。 */
+export function nodePathCtor(args: Variant[]): Variant {
+  if (args.length === 0) return emptyNodePath();
+  if (args.length === 1) {
+    const v = args[0] as Variant;
+    if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return nodePathValue(v.v as string);
+    if (asNodePath(v) !== null) return v;
+  }
+  throw new GodotRuntimeError(
+    "node-path-ctor",
+    `No constructor of "NodePath" matches the signature "NodePath(${args.map((a) => valueTypeName(a)).join(", ")})".`,
+  );
 }
 
 /** **StringName 槽**（变量 / 字段 / 容器元素与键 / 形参默认值）：只收 StringName / String，装不下就响亮报，不原样塞进去。 */
@@ -2383,6 +2417,8 @@ export function show(v: Variant, depth = 0): string {
       // 引擎类值与 weakref 都带进程内的号，形状照实测发；号在语料两侧都先掩掉再比。
       const innerRid = asRid(v);
       if (innerRid !== null) return ridText(innerRid);
+      const innerNp = asNodePath(v);
+      if (innerNp !== null) return nodePathText(innerNp);
       if (isNullRefValue(inner)) return "<Object#null>";
       if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
       if (isWeakRefBox(inner)) return `<WeakRef#${String(inner.gdObjectId)}>`;
@@ -2404,6 +2440,8 @@ export function show(v: Variant, depth = 0): string {
 export function repr(v: Variant, depth = 0): string {
   if (v.t === Tag.STRING) return `"${v.v as string}"`;
   if (v.t === Tag.STRING_NAME) return `&"${v.v as string}"`;
+  const np = asNodePath(v);
+  if (np !== null) return `^"${strCEscape(nodePathText(np))}"`;
   return show(v, depth);
 }
 
@@ -2426,6 +2464,7 @@ export function valueTypeName(x: Variant): string {
   if (asVec3i(x) !== null) return "Vector3i";
   if (asColor(x) !== null) return "Color";
   if (asRid(x) !== null) return "RID";
+  if (asNodePath(x) !== null) return "NodePath";
   if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }
@@ -2445,6 +2484,8 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const bc = asColor(b);
   const ar = asRid(a);
   const br = asRid(b);
+  const anp = asNodePath(a);
+  const bnp = asNodePath(b);
   // RID 的等式按号走；与 null 比给假（实测 n01 / h26），与其他一切比是运行期那一句（int / float / bool / String / StringName / Array / Dictionary / Vector2 / Color / Object / Callable 各量过一格）
   if (ar !== null || br !== null) {
     if (ar !== null && br !== null) return String(ar.id) === String(br.id);
@@ -2475,6 +2516,12 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
       a2 !== null || a3 !== null || ai !== null || ai3 !== null || ac !== null ? b : a;
     if (other.t === Tag.NIL) return false;
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
+  }
+  if (anp !== null || bnp !== null) {
+    if (anp !== null && bnp !== null) return sameNodePath(anp, bnp);
+    const npOther: Variant = anp !== null ? b : a;
+    if (npOther.t === Tag.NIL) return false;
+    throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   if (ta === Tag.INT || ta === Tag.FLOAT) {
     if (tb === Tag.INT && ta === Tag.INT) return (a.v as IntPayload) === (b.v as IntPayload);

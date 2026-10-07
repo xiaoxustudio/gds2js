@@ -62,8 +62,8 @@ describe("打印一族的发射与拒答", () => {
 
   it("prints / printt / printraw / printerr / print_verbose / print_rich 发成宿主的六支", async () => {
     const code = await emitted(BODY(['prints("a", 1)', "quit()"]));
-    expect(code, "宿主那条 import 要带上六支的名字").toContain(
-      'import { print, printJoined, printRaw, printErr, printVerbose, printRich, SceneTree } from "host";',
+    expect(code, "宿主那条 import 要带上七支的名字").toContain(
+      'import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "host";',
     );
     expect(code, "prints 是一个空格").toContain('printJoined(" ", [');
     expect(await emitted(BODY(['printt("a", 1)', "quit()"])), "printt 是制表符").toContain('printJoined("\\t", [');
@@ -77,9 +77,8 @@ describe("打印一族的发射与拒答", () => {
     expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
   });
 
-  it("拒的四支把缘由写在错文里", async () => {
+  it("拒的三支把缘由写在错文里", async () => {
     for (const [name, want] of [
-      ["print_debug", "At:"],
       ["print_stack", "指针号"],
       ["push_error", "variant_utility.cpp:1024"],
       ["push_warning", "variant_utility.cpp:1034"],
@@ -87,6 +86,12 @@ describe("打印一族的发射与拒答", () => {
       expect(await classify(PRINT(`${name}()`), "ok"), `${name} 该拒`).toBe("emit-builtin");
       expect(await msg(PRINT(`${name}()`)), `${name} 的错文`).toContain(want);
     }
+  });
+
+  it("print_debug 已按 S266 发出：走宿主的 printDebug 并带上调用点", async () => {
+    const code = await emitted(BODY(['print_debug("x")', "quit()"]));
+    expect(code, "print_debug 走 printDebug").toContain('printDebug([rt.V.str("x")]');
+    expect(code, "第二句的 At: 由发射器写好路径、行号与所在函数").toContain('.gd", 4, "_initialize")');
   });
 });
 
@@ -198,6 +203,36 @@ describe("RID 族的发射与元数闸门", () => {
     for (const [call, want] of ARITY) {
       expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
       expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
+// ── ①f NodePath 族：构造三形发成 rt.nodePathCtor，方法链 / is / as / 定型变量 / 字典键都编得过（S268）──
+describe("NodePath 族的发射闸门", () => {
+  const CTORS: Array<[string, string]> = [
+    ['NodePath("a/b")', 'rt.nodePathCtor([rt.V.str("a/b")])'],
+    ["NodePath()", "rt.nodePathCtor([])"],
+    ['NodePath(&"a")', 'rt.nodePathCtor([rt.V.stringName("a")])'],
+  ];
+  const PASSING: string[] = [
+    'print(NodePath("a/b").get_name(0))',
+    'print(NodePath("a") is NodePath)',
+    'print(str(NodePath("a") as NodePath))',
+    'var p: NodePath = NodePath("a")',
+    'var d = {}\n\td[NodePath("a")] = 1\n\tprint(d)',
+  ];
+
+  it("三种构造形各发各的 rt.nodePathCtor（实测 c1 / P7 三格）", async () => {
+    for (const [call, want] of CTORS) {
+      const src = PRINT(call);
+      expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${call} 的发射`).toContain(want);
+    }
+  });
+
+  it("方法链、is / as、定型变量与字典键都不拦", async () => {
+    for (const body of PASSING) {
+      expect(await classify(MOD(body), "ok"), body.replace(/\n\t/g, " ")).toBe("ok");
     }
   });
 });

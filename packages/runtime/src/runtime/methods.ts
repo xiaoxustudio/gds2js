@@ -18,6 +18,7 @@ import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
+import { asNodePath, nodePathMethod } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -325,6 +326,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       // 实测 RID 上只有 get_id()：别的名给运行期那句 Nonexistent function
       throw new GodotRuntimeError("rid-method", `Invalid call. Nonexistent function '${name}' in base 'RID'.`);
     }
+
+    const npv = asNodePath(obj);
+    if (npv !== null) return nodePathMethod(npv, name, args);
 
     if (isWeakRefBox(inner)) {
       if (name !== "get_ref") {

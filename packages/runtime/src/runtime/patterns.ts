@@ -1,4 +1,4 @@
-import { UnsupportedError } from "./errors";
+import { UnsupportedError, GodotRuntimeError } from "./errors";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
 import { Signal } from "./signal";
@@ -13,6 +13,7 @@ import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
 import { GdRid } from "./rid";
+import { asNodePath, GdNodePath, nodePathValue } from "./node-path";
 
 export type Pat =
   | { k: "wild" }
@@ -144,6 +145,8 @@ export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
   const pk = PACK_TYPES[name];
   if (pk !== undefined) return V.bool(packKindMatches(v, pk));
+  // 实测 `NodePath("x") is NodePath` 真（g7）：`NodePath` 既不是 ClassDB 的类值，也不在 `builtinTag` 那张表里，单列一条。
+  if (name === "NodePath") return V.bool(asNodePath(v) !== null);
   if (PROBED_CLASS_NAMES.indexOf(name) >= 0 || name === "Callable") {
     const e = engineClassIs(v, name);
     if (e !== null) return V.bool(e);
@@ -167,6 +170,12 @@ export function asType(v: Variant, name: string): Variant {
   if (pk !== undefined) {
     if (packKindMatches(v, pk)) return v;
     throw new UnsupportedError("as-type-pack", `as ${name} 只量过形状相符的 pack（收到的是别的东西）`);
+  }
+  // `as NodePath`：同型原样回、String 与 StringName 走解析式子，其余来源是运行期那一句（null / int / bool / Dictionary 四格同一句）
+  if (name === "NodePath") {
+    if (asNodePath(v) !== null) return v;
+    if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return nodePathValue(v.v as string);
+    throw new GodotRuntimeError("as-node-path", `Invalid cast: could not convert value to 'NodePath'.`);
   }
   const t = builtinTag(name);
   if (t !== undefined) return v.t === t ? v : V.nil();
@@ -206,6 +215,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));
   if (v.t === Tag.OBJECT && v.v instanceof Signal) return V.int(26);
   if (v.t === Tag.OBJECT && v.v instanceof GdRid) return V.int(23);
+  if (v.t === Tag.OBJECT && v.v instanceof GdNodePath) return V.int(22);
   if (v.t === Tag.OBJECT && isCallableBox(v.v)) return V.int(25);
   return V.int(GODOT_TYPE[v.t]);
 }

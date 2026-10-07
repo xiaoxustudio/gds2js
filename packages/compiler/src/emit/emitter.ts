@@ -183,6 +183,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
+  NodePath: (a) => `rt.nodePathCtor([${a.join(", ")}])`,
   PackedByteArray: (a) => `rt.bytesCtor([${a.join(", ")}])`,
   PackedInt32Array: (a) => `rt.packCtor("int32", [${a.join(", ")}])`,
   PackedInt64Array: (a) => `rt.packCtor("int64", [${a.join(", ")}])`,
