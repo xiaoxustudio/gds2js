@@ -6,7 +6,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { flush, print, printErr, printJoined, printRaw, printVerbose, resetOut } from "@gds2js/runtime/host";
+import { flush, print, printDebug, printErr, printJoined, printRaw, printVerbose, resetOut } from "@gds2js/runtime/host";
 
 const s = (t: string): Variant => V.str(t);
 

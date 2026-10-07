@@ -8,7 +8,6 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
  */
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   "get_stack",
-  "print_debug",
   "print_stack",
   "push_error",
   "push_warning",

@@ -294,7 +294,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
 const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
-  print_debug: "读数第二行是 `At: res://<脚本>:<行>:<函数>()`，要产物报出自己的脚本身份，属带 id 打印那一族",
   print_stack: "回溯帧的打印带指针号与行号，复现不了",
   push_error: "实测走 stderr 的四行里有 `at: push_error (core/variant/variant_utility.cpp:1024)` 与 GDScript backtrace",
   push_warning: "实测走 stderr 的四行里有 `at: push_warning (core/variant/variant_utility.cpp:1034)` 与 GDScript backtrace",
@@ -307,6 +306,7 @@ export const HOST_PRINT_NAMES: readonly string[] = [
   "printErr",
   "printVerbose",
   "printRich",
+  "printDebug",
 ];
 
 /** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加打印一族与 `load` / `preload`。
@@ -335,6 +335,11 @@ let LOADS = new Map<string, string>();
 let IN_INIT = false;
 let INIT_HAS_BASE = false;
 let CURRENT_FUNC = "";
+/** print_debug 的 `At:` 里那个 `<函数>()`：lambda 体内发射时套一层，实测那格引擎打的是 `<anonymous lambda>()`（`tmp/probe-pdebug/d-lambda.gd`）。
+ *  不动 `CURRENT_FUNC` 是因为它还管着 `super()` 的发射，两者要的形状不是一回事。 */
+let LAMBDA_DEPTH = 0;
+/** 本模块在 `At:` 那一行里印的路径：工程模式是 res 路径（与引擎同一串），单文件模式退到输入路径。 */
+let DEBUG_FILE = "";
 /** `_init` 发成协议形状的方法（true）还是 JS constructor（false）：只有链上有脚本继承边的类才需要协议形状。 */
 let INIT_AS_METHOD = false;
 /** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
@@ -396,6 +401,7 @@ export function emitModule(m: Module, opts: EmitOptions): string {
 
 export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   MAP_ACTIVE = opts.sourcemap === true;
+  LAMBDA_DEPTH = 0;
   LINE_MAPPINGS = [];
   const runtimeImport = opts.runtimeImport;
   const hostImport = opts.hostImport;
@@ -403,6 +409,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const className = opts.className ?? "Main";
   const classRefs = opts.classRefs ?? [];
   const resPath = opts.resPath;
+  DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -3028,7 +3035,14 @@ function emitExprVar(e: Expr): string {
       if (e.params.some((p) => p.default !== null)) {
         throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
       }
-      const body = e.body.flatMap((st) => emitStmt(st, false).map((l) => `      ${l}`));
+      const body = e.body.flatMap((st) => {
+        LAMBDA_DEPTH += 1;
+        try {
+          return emitStmt(st, false).map((l) => `      ${l}`);
+        } finally {
+          LAMBDA_DEPTH -= 1;
+        }
+      });
       // 盒子里的式子统一收一个数组，所以按位置把形参绑成同名 const，并把声明形参数一起交给盒子。
       const bind = e.params.map((p, i) => `      const ${p.name} = __a[${i}] as rt.Variant;`);
       return [
@@ -3227,6 +3241,12 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     if (name === "printerr") return `printErr([${args.join(", ")}])`;
     if (name === "print_verbose") return `printVerbose([${args.join(", ")}])`;
     if (name === "print_rich") return `printRich([${args.join(", ")}])`;
+    if (name === "print_debug") {
+      // 实测两句都走 stdout，第二句的 `()` 前是**调用点所在函数**的名：lambda 里是 `<anonymous lambda>`，
+      // 具名函数与静态都只写名字本身（不带类前缀），读数 `tmp/probe-pdebug/{d-lambda,d_static,d_inner}.gd`
+      const fnLabel = LAMBDA_DEPTH > 0 ? "<anonymous lambda>" : CURRENT_FUNC;
+      return `printDebug([${args.join(", ")}], ${JSON.stringify(DEBUG_FILE)}, ${String(e.loc.line)}, ${JSON.stringify(fnLabel)})`;
+    }
 
     if (name === "preload") {
       const a = e.args[0];

@@ -11,6 +11,7 @@ export {
   printErr,
   printVerbose,
   printRich,
+  printDebug,
   flush,
   captured,
   resetOut as reset,

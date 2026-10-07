@@ -36,6 +36,11 @@ export function printRich(args: Variant[]): void {
   addLine(richAnsi(showArgsSep(args, "")));
 }
 
+export function printDebug(args: Variant[], file: string, line: number, fn: string): void {
+  addLine(showArgsSep(args, ""));
+  addLine(`   At: ${file}:${String(line)}:${fn}()`);
+}
+
 export function flush(): void {
   if (out.length > 0) process.stdout.write(out.join("\n") + "\n");
   if (pending !== "") process.stdout.write(pending);

@@ -10,5 +10,6 @@ export const printRaw = host.printRaw;
 export const printErr = host.printErr;
 export const printVerbose = host.printVerbose;
 export const printRich = host.printRich;
+export const printDebug = host.printDebug;
 /** 整个运行时命名空间，产物里以 `rt.*` 引用。 */
 export const rt = runtime;
