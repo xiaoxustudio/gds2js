@@ -2281,7 +2281,7 @@ export const COMPARE_DEPTH = 52;
 
 registerPackStringifier((v) => show(v));
 
-/** `print` 系的实参分隔：`print` / `printerr` / `printraw` 是空串，`prints` 一个空格，`printt` 一个制表符（实测 S256）。 */
+/** 按 `sep` 把实参逐个 show 后拼起来。 */
 export function showArgsSep(args: Variant[], sep: string): string {
   let out = "";
   for (let i = 0; i < args.length; i++) {

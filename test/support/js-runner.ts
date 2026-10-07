@@ -1,5 +1,5 @@
 /**
- * 在本进程内跑语料产物并捕获它写到 stdout 与 stderr 的字节（golden 那侧就是两路拼起来的）。
+ * 在本进程内跑语料产物并捕获它写到 stdout 与 stderr 的字节。
  *
  * 1. **逐用例清缓冲**：host.ts 的 `out` 是模块级数组，上个用例若中途抛错，没 flush 的输出
  *    会串到下一个，所以两条路都先 `harness.reset()`（它就是 host.ts `resetOut` 的再导出）。
@@ -79,6 +79,5 @@ async function captureStdout(fn: () => Promise<unknown>): Promise<string> {
     process.stdout.write = original;
     process.stderr.write = originalErr;
   }
-  // golden 那侧就是 stdout 拼 stderr（tools/lib.mjs:88），两路各归一路、不比对相互次序。
   return out.join("") + err.join("");
 }

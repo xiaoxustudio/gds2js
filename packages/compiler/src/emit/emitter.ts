@@ -108,7 +108,6 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   move_toward: [3, 3],
   pingpong: [2, 2],
   posmod: [2, 2],
-  // 元数照 4.3 树 variant_utility.cpp:1784-1791 的 FUNCBIND 注册表（sarray 里就是参数名）；八支的 Too few/many 两句在 4.6.3 一支一名量过（S261）。
   rand_from_seed: [1, 1],
   randf: [0, 0],
   randf_range: [2, 2],
@@ -282,7 +281,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
-/** 这几支拒的缘由是实测读数里挂着只有引擎知道的东西，报错时把它们说出来，别只留一句「还没实现」。 */
 const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
   print_debug: "读数第二行是 `At: res://<脚本>:<行>:<函数>()`，要产物报出自己的脚本身份，属带 id 打印那一族",
   print_stack: "回溯帧的打印带指针号与行号，复现不了",
@@ -290,7 +288,6 @@ const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
   push_warning: "实测走 stderr 的四行里有 `at: push_warning (core/variant/variant_utility.cpp:1034)` 与 GDScript backtrace",
 };
 
-/** 打印一族在宿主侧的落点：`print` 是旧的那支，其余六支由 `prints` / `printt` / `printraw` / `printerr` / `print_verbose` / `print_rich` 直接发名调用。 */
 export const HOST_PRINT_NAMES: readonly string[] = [
   "print",
   "printJoined",
@@ -3212,10 +3209,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
   if (e.callee.kind === "ident") {
     const name = e.callee.name;
     if (name === "print") return `print(rt.showArgs([${args.join(", ")}]))`;
-    // 实测的打印一族（S256 / S259）：`prints` 实参间一个空格、`printt` 一个制表符、`printraw` 不结尾、
-    // `printerr` 走 stderr、`print_verbose` 在默认声级下不出声、`print_rich` 过 bbcode→ANSI 那张表再补一个复位。
-    // 零实参那格各支不一样（`prints()` / `printt()` 照结尾一行、`printraw()` 与 `print_verbose()` 什么都不动、
-    // `printerr()` 只往 stderr 落一个换行、`print_rich()` 只出那个复位），形状全在宿主里按实测走。
     if (name === "prints") return `printJoined(" ", [${args.join(", ")}])`;
     if (name === "printt") return `printJoined("\\t", [${args.join(", ")}])`;
     if (name === "printraw") return `printRaw([${args.join(", ")}])`;

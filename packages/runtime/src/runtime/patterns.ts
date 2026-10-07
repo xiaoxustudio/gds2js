@@ -123,7 +123,7 @@ function instanceClassNames(base: string | null): string[] | null {
   return null;
 }
 
-/** 三类「真 Object」各有各的表：脚本实例、脚本类值（m06 / n08）、引擎类值（n07）；信号值对每一支类名都是假（is.log 那 16 格）。 */
+/** 一个值是不是某引擎类名的实例：按四类形状各查各的表。 */
 function engineClassIs(v: Variant, name: string): boolean | null {
   if (name === "Callable") return v.t === Tag.OBJECT && isCallableBox(v.v);
   if (v.t !== Tag.OBJECT) return false;
@@ -156,8 +156,6 @@ export function isType(v: Variant, name: string): Variant {
   if (desc !== undefined) {
     return V.bool(objIs(v, desc));
   }
-  // 表外的引擎类名：Tier 1 手里的形状没有一条的继承链够得着它们（208 格实测：8 支表外名 × 13 种形状全假），
-  // 而脚本类名在上面那格 lookupClass 就已经截走了，所以这里给假不是推断。
   if (ENGINE_CLASS_NAMES.has(name)) return V.bool(false);
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
