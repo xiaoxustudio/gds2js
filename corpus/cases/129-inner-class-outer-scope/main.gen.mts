@@ -31,7 +31,7 @@ export class Main extends SceneTree {
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerFieldTypes(__gd_d_Main, {"TOP": "int"});
-rt.registerScriptProps(__gd_d_Main, ["TOP"]);
+rt.registerScriptProps(__gd_d_Main, ["TOP"], (o) => { const s = o as Main; return [s.TOP]; });
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
@@ -56,7 +56,7 @@ class Other extends rt.GdScriptObject {
 const __gd_d_Other = rt.defineClass(Other, () => new Other(), (o) => o instanceof Other);
 rt.nameClass(__gd_d_Other, "Other");
 rt.registerFieldTypes(__gd_d_Other, {"OC": "int"});
-rt.registerScriptProps(__gd_d_Other, ["OC"]);
+rt.registerScriptProps(__gd_d_Other, ["OC"], (o) => { const s = o as Other; return [s.OC]; });
 rt.registerDictIdentity(__gd_d_Other, "res://main.gd", "Other", [], {}, (o) => { const s = o as Other; return []; });
 rt.registerMethodArities(__gd_d_Other, { "getoc": [0, 0] });
 rt.registerNativeBase(__gd_d_Other, "RefCounted");
@@ -95,7 +95,7 @@ class Inner extends rt.GdScriptObject {
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
 rt.registerFieldTypes(__gd_d_Inner, {"IC": "int"});
-rt.registerScriptProps(__gd_d_Inner, ["IC"]);
+rt.registerScriptProps(__gd_d_Inner, ["IC"], (o) => { const s = o as Inner; return [s.IC]; });
 rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", [], {}, (o) => { const s = o as Inner; return []; });
 rt.registerMethodArities(__gd_d_Inner, { "useconst": [0, 0], "useenum": [0, 0], "useother": [0, 0], "ownconst": [0, 0] });
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");

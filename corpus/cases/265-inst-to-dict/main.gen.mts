@@ -75,7 +75,7 @@ class Inner extends rt.GdScriptObject {
 }
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
-rt.registerScriptProps(__gd_d_Inner, ["C","k","s"]);
+rt.registerScriptProps(__gd_d_Inner, ["C","k","s"], (o) => { const s = o as Inner; return [s.C, s.k, s.s]; });
 rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", ["k","s"], {}, (o) => { const s = o as Inner; return [s.k, s.s]; });
 rt.registerStaticVars(__gd_d_Inner, {"sv": ""}, {"sv": { get: (): rt.Variant => Inner.sv, set: (__v: rt.Variant): void => { Inner.sv = __v; } }});
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
@@ -115,7 +115,7 @@ class Base extends rt.GdScriptObject {
 }
 const __gd_d_Base = rt.defineClass(Base, (a) => new Base(...a), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
-rt.registerScriptProps(__gd_d_Base, ["a"]);
+rt.registerScriptProps(__gd_d_Base, ["a"], (o) => { const s = o as Base; return [s.a]; });
 rt.registerDictIdentity(__gd_d_Base, "res://main.gd", "Base", ["a"], {}, (o) => { const s = o as Base; return [s.a]; });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
 
@@ -137,7 +137,7 @@ class Derived extends Base {
 const __gd_d_Derived = rt.defineClass(Derived, (a) => new Derived(...a), (o) => o instanceof Derived);
 rt.nameClass(__gd_d_Derived, "Derived");
 rt.setClassBase(__gd_d_Derived, rt.lookupClass("Base") ?? null);
-rt.registerScriptProps(__gd_d_Derived, ["b"]);
+rt.registerScriptProps(__gd_d_Derived, ["b"], (o) => { const s = o as Derived; return [s.b]; });
 rt.registerDictIdentity(__gd_d_Derived, "res://main.gd", "Derived", ["b"], {}, (o) => { const s = o as Derived; return [s.b]; });
 
 class Acc extends rt.GdScriptObject {
@@ -249,7 +249,7 @@ class Acc extends rt.GdScriptObject {
 const __gd_d_Acc = rt.defineClass(Acc, () => new Acc(), (o) => o instanceof Acc);
 rt.nameClass(__gd_d_Acc, "Acc");
 rt.registerFieldTypes(__gd_d_Acc, {"ai": "int", "af": "float", "ab": "bool", "ast": "String", "asn": "accessor", "av": "Vector2", "avi": "accessor", "av3": "accessor", "av3i": "accessor", "ac": "accessor", "anp": "accessor", "ad": "accessor", "adi": "accessor", "au": "accessor", "apb": "accessor", "aps": "accessor"});
-rt.registerScriptProps(__gd_d_Acc, ["_v","ai","af","ab","ast","asn","av","avi","av3","av3i","ac","anp","ad","adi","au","apb","aps"]);
+rt.registerScriptProps(__gd_d_Acc, ["_v","ai","af","ab","ast","asn","av","avi","av3","av3i","ac","anp","ad","adi","au","apb","aps"], (o) => { const s = o as Acc; return [s._v, s.ai, s.af, s.ab, s.ast, s.asn, s.av, s.avi, s.av3, s.av3i, s.ac, s.anp, s.ad, s.adi, s.au, s.apb, s.aps]; });
 rt.registerDictIdentity(__gd_d_Acc, "res://main.gd", "Acc", ["_v","ai","af","ab","ast","asn","av","avi","av3","av3i","ac","anp","ad","adi","au","apb","aps"], {"ai": "int", "af": "float", "ab": "bool", "ast": "String", "asn": "StringName", "av": "Vector2", "avi": "Vector2i", "av3": "Vector3", "av3i": "Vector3i", "ac": "Color", "anp": "NodePath", "ad": "Array", "adi": "Dictionary", "au": null, "apb": "PackedByteArray", "aps": "PackedStringArray"}, (o) => { const s = o as Acc; return [s._v, rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil()]; });
 rt.registerNativeBase(__gd_d_Acc, "RefCounted");
 
@@ -275,7 +275,7 @@ class Box extends rt.GdScriptObject {
 const __gd_d_Box = rt.defineClass(Box, () => new Box(), (o) => o instanceof Box);
 rt.nameClass(__gd_d_Box, "Box");
 rt.registerFieldTypes(__gd_d_Box, {"typedint": "int", "typedstr": "String"});
-rt.registerScriptProps(__gd_d_Box, ["plain","typedint","typedstr","nilf","arr","d","sn","np","rid","leaf"]);
+rt.registerScriptProps(__gd_d_Box, ["plain","typedint","typedstr","nilf","arr","d","sn","np","rid","leaf"], (o) => { const s = o as Box; return [s.plain, s.typedint, s.typedstr, s.nilf, s.arr, s.d, s.sn, s.np, s.rid, s.leaf]; });
 rt.registerDictIdentity(__gd_d_Box, "res://main.gd", "Box", ["plain","typedint","typedstr","nilf","arr","d","sn","np","rid","leaf"], {}, (o) => { const s = o as Box; return [s.plain, s.typedint, s.typedstr, s.nilf, s.arr, s.d, s.sn, s.np, s.rid, s.leaf]; });
 rt.registerNativeBase(__gd_d_Box, "RefCounted");
 
@@ -296,7 +296,7 @@ class WithInit extends rt.GdScriptObject {
 }
 const __gd_d_WithInit = rt.defineClass(WithInit, () => new WithInit(), (o) => o instanceof WithInit);
 rt.nameClass(__gd_d_WithInit, "WithInit");
-rt.registerScriptProps(__gd_d_WithInit, ["touched"]);
+rt.registerScriptProps(__gd_d_WithInit, ["touched"], (o) => { const s = o as WithInit; return [s.touched]; });
 rt.registerDictIdentity(__gd_d_WithInit, "res://main.gd", "WithInit", ["touched"], {}, (o) => { const s = o as WithInit; return [s.touched]; });
 rt.registerNativeBase(__gd_d_WithInit, "RefCounted");
 

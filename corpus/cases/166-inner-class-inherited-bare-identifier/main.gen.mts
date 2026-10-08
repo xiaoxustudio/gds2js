@@ -64,7 +64,7 @@ class NoInit extends rt.GdScriptObject {
 }
 const __gd_d_NoInit = rt.defineClass(NoInit, (a) => new NoInit(...a), (o) => o instanceof NoInit);
 rt.nameClass(__gd_d_NoInit, "NoInit");
-rt.registerScriptProps(__gd_d_NoInit, ["a","shadow","CA"]);
+rt.registerScriptProps(__gd_d_NoInit, ["a","shadow","CA"], (o) => { const s = o as NoInit; return [s.a, s.shadow, s.CA]; });
 rt.registerDictIdentity(__gd_d_NoInit, "res://main.gd", "NoInit", ["a","shadow"], {}, (o) => { const s = o as NoInit; return [s.a, s.shadow]; });
 rt.registerMethodArities(__gd_d_NoInit, { "get_a": [0, 0] });
 rt.registerNativeBase(__gd_d_NoInit, "RefCounted");
@@ -127,7 +127,7 @@ class Mid extends Plain {
 const __gd_d_Mid = rt.defineClass(Mid, (a) => new Mid(...a), (o) => o instanceof Mid);
 rt.nameClass(__gd_d_Mid, "Mid");
 rt.setClassBase(__gd_d_Mid, rt.lookupClass("Plain") ?? null);
-rt.registerScriptProps(__gd_d_Mid, ["b"]);
+rt.registerScriptProps(__gd_d_Mid, ["b"], (o) => { const s = o as Mid; return [s.b]; });
 rt.registerDictIdentity(__gd_d_Mid, "res://main.gd", "Mid", ["b"], {}, (o) => { const s = o as Mid; return [s.b]; });
 rt.registerMethodArities(__gd_d_Mid, { "bare": [0, 0], "bump": [0, 0] });
 

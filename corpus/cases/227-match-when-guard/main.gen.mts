@@ -235,7 +235,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
-rt.registerScriptProps(__gd_d_Main, ["LIMIT"]);
+rt.registerScriptProps(__gd_d_Main, ["LIMIT"], (o) => { const s = o as Main; return [s.LIMIT]; });
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "g": [2, 2], "pick": [2, 2], "comma": [2, 2], "only_guards": [2, 2], "guard_and": [2, 2], "outer_locals": [2, 2], "container_guards": [2, 2], "guard_sees_outer_bind": [2, 2], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");

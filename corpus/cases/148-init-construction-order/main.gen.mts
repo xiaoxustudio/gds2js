@@ -84,7 +84,7 @@ class Base extends rt.GdScriptObject {
 const __gd_d_Base = rt.defineClass(Base, (a) => new Base(...a), (o) => o instanceof Base);
 rt.nameClass(__gd_d_Base, "Base");
 rt.registerFieldTypes(__gd_d_Base, {"bx": "int"});
-rt.registerScriptProps(__gd_d_Base, ["bx"]);
+rt.registerScriptProps(__gd_d_Base, ["bx"], (o) => { const s = o as Base; return [s.bx]; });
 rt.registerDictIdentity(__gd_d_Base, "res://main.gd", "Base", ["bx"], {}, (o) => { const s = o as Base; return [s.bx]; });
 rt.registerMethodArities(__gd_d_Base, { "_mk": [1, 1], "tag": [0, 0] });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
@@ -108,7 +108,7 @@ const __gd_d_NoInit = rt.defineClass(NoInit, (a) => new NoInit(...a), (o) => o i
 rt.nameClass(__gd_d_NoInit, "NoInit");
 rt.setClassBase(__gd_d_NoInit, rt.lookupClass("Base") ?? null);
 rt.registerFieldTypes(__gd_d_NoInit, {"cx": "int"});
-rt.registerScriptProps(__gd_d_NoInit, ["cx"]);
+rt.registerScriptProps(__gd_d_NoInit, ["cx"], (o) => { const s = o as NoInit; return [s.cx]; });
 rt.registerDictIdentity(__gd_d_NoInit, "res://main.gd", "NoInit", ["cx"], {}, (o) => { const s = o as NoInit; return [s.cx]; });
 
 class Own extends Base {
@@ -137,7 +137,7 @@ const __gd_d_Own = rt.defineClass(Own, (a) => new Own(...a), (o) => o instanceof
 rt.nameClass(__gd_d_Own, "Own");
 rt.setClassBase(__gd_d_Own, rt.lookupClass("Base") ?? null);
 rt.registerFieldTypes(__gd_d_Own, {"cx2": "int"});
-rt.registerScriptProps(__gd_d_Own, ["cx2"]);
+rt.registerScriptProps(__gd_d_Own, ["cx2"], (o) => { const s = o as Own; return [s.cx2]; });
 rt.registerDictIdentity(__gd_d_Own, "res://main.gd", "Own", ["cx2"], {}, (o) => { const s = o as Own; return [s.cx2]; });
 
 class Grand extends Own {
@@ -166,7 +166,7 @@ const __gd_d_Grand = rt.defineClass(Grand, (a) => new Grand(...a), (o) => o inst
 rt.nameClass(__gd_d_Grand, "Grand");
 rt.setClassBase(__gd_d_Grand, rt.lookupClass("Own") ?? null);
 rt.registerFieldTypes(__gd_d_Grand, {"gx": "int"});
-rt.registerScriptProps(__gd_d_Grand, ["gx"]);
+rt.registerScriptProps(__gd_d_Grand, ["gx"], (o) => { const s = o as Grand; return [s.gx]; });
 rt.registerDictIdentity(__gd_d_Grand, "res://main.gd", "Grand", ["gx"], {}, (o) => { const s = o as Grand; return [s.gx]; });
 
 class Needs extends rt.GdScriptObject {
@@ -199,7 +199,7 @@ class Needs extends rt.GdScriptObject {
 const __gd_d_Needs = rt.defineClass(Needs, (a) => new Needs(...a), (o) => o instanceof Needs);
 rt.nameClass(__gd_d_Needs, "Needs");
 rt.registerFieldTypes(__gd_d_Needs, {"n": "int"});
-rt.registerScriptProps(__gd_d_Needs, ["n"]);
+rt.registerScriptProps(__gd_d_Needs, ["n"], (o) => { const s = o as Needs; return [s.n]; });
 rt.registerDictIdentity(__gd_d_Needs, "res://main.gd", "Needs", ["n"], {}, (o) => { const s = o as Needs; return [s.n]; });
 rt.registerNativeBase(__gd_d_Needs, "RefCounted");
 
@@ -244,7 +244,7 @@ const __gd_d_Forwarded = rt.defineClass(Forwarded, (a) => new Forwarded(...a), (
 rt.nameClass(__gd_d_Forwarded, "Forwarded");
 rt.setClassBase(__gd_d_Forwarded, rt.lookupClass("Needs") ?? null);
 rt.registerFieldTypes(__gd_d_Forwarded, {"k": "int"});
-rt.registerScriptProps(__gd_d_Forwarded, ["k"]);
+rt.registerScriptProps(__gd_d_Forwarded, ["k"], (o) => { const s = o as Forwarded; return [s.k]; });
 rt.registerDictIdentity(__gd_d_Forwarded, "res://main.gd", "Forwarded", ["k"], {}, (o) => { const s = o as Forwarded; return [s.k]; });
 
 class SuperOther extends Base {

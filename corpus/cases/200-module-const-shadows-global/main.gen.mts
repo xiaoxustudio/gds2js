@@ -27,7 +27,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
-rt.registerScriptProps(__gd_d_Main, ["PI"]);
+rt.registerScriptProps(__gd_d_Main, ["PI"], (o) => { const s = o as Main; return [s.PI]; });
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
@@ -50,7 +50,7 @@ class Thing extends rt.GdScriptObject {
 }
 const __gd_d_Thing = rt.defineClass(Thing, () => new Thing(), (o) => o instanceof Thing);
 rt.nameClass(__gd_d_Thing, "Thing");
-rt.registerScriptProps(__gd_d_Thing, ["PIISH"]);
+rt.registerScriptProps(__gd_d_Thing, ["PIISH"], (o) => { const s = o as Thing; return [s.PIISH]; });
 rt.registerDictIdentity(__gd_d_Thing, "res://main.gd", "Thing", [], {}, (o) => { const s = o as Thing; return []; });
 rt.registerMethodArities(__gd_d_Thing, { "sm": [0, 0] });
 rt.registerStaticMethods(__gd_d_Thing, ["sm"], {"sm": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Thing.sm())});

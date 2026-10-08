@@ -36,7 +36,7 @@ class Plain extends GdScriptObject {
 }
 const plainDesc: ClassDesc = defineClass(Plain, () => new Plain(), (o: object) => o instanceof Plain);
 registerNativeBase(plainDesc, "RefCounted");
-registerScriptProps(plainDesc, ["v"]);
+registerScriptProps(plainDesc, ["v"], (o: object) => [(o as Plain).v]);
 
 describe("runtime/patterns · 引擎类名的 is", () => {
   it("248 · 三条形状表与拒口", async () => {

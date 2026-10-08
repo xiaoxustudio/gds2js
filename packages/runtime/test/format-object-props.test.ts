@@ -25,8 +25,8 @@ class Kid extends Base {
 const baseDesc: ClassDesc = defineClass(Base, () => new Base(), (o: object) => o instanceof Base);
 const kidDesc: ClassDesc = defineClass(Kid, () => new Kid(), (o: object) => o instanceof Kid);
 setClassBase(kidDesc, baseDesc);
-registerScriptProps(kidDesc, ["three", "back"]);
-registerScriptProps(baseDesc, ["two", "holder", "arr"]);
+registerScriptProps(kidDesc, ["three", "back"], (o: object) => { const s = o as Kid; return [s.three, s.back]; });
+registerScriptProps(baseDesc, ["two", "holder", "arr"], (o: object) => { const s = o as Base; return [s.two, s.holder, s.arr]; });
 
 const of = (text: string, v: Variant, ph?: string): string => {
   try {

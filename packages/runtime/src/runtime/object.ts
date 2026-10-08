@@ -135,6 +135,8 @@ export class ClassDesc {
   fieldTypes: Record<string, string> | null;
   /** 自己类的脚本变量名，按声明顺序 —— `String.format()` 的属性替换要这个顺序（引擎是「自己类在前、基类在后」）。 */
   scriptProps: string[] | null;
+  /** 与 `scriptProps` 同序的取值闭包，由发射器静态拼；手写的测试替身可以没有。 */
+  scriptValues: ((o: object) => Variant[]) | null;
   methodArities: Record<string, [number, number]> | null;
   staticVars: Record<string, string> | null;
   /** `inst_to_dict` 的四段身份：所属模块的 res 路径、自己的类路径（模块根类是空串）、进门名单的变量名、带 get/set 的属性名 → 声明类型。 */
@@ -156,6 +158,8 @@ export class ClassDesc {
     this.scriptLabel = null;
     this.fieldTypes = null;
     this.scriptProps = null;
+    this.scriptValues = null;
+    this.scriptValues = null;
     this.methodArities = null;
     this.staticVars = null;
     this.dictResPath = null;
@@ -240,9 +244,12 @@ export function registerFieldTypes(desc: ClassDesc, table: Record<string, string
   desc.fieldTypes = table;
 }
 
-/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它替换。 */
-export function registerScriptProps(desc: ClassDesc, names: string[]): void {
+/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它替换。
+ *  `reader` 是发射器按同一顺序静态拼出来的取值闭包：静态编译目标上连「把实例当 `Record<string, Variant>` 的那次转换」
+ *  本身都不允许 —— scriptc 会拿记录形状去校验对象（第一格就是 `gdObjectId`），所以那条式子在这里一句都不能出现（S271）。 */
+export function registerScriptProps(desc: ClassDesc, names: string[], reader: (o: object) => Variant[]): void {
   desc.scriptProps = names;
+  desc.scriptValues = reader;
 }
 
 /**
@@ -430,12 +437,13 @@ registerScriptPropsHook((inner) => {
   if (desc === null) return null;
   const props: Array<{ name: string; value: Variant }> = [];
   let unmodeledBase: string | null = null;
-  const box = inner as unknown as Record<string, Variant>;
   for (let d: ClassDesc | null = desc; d !== null; d = d.base) {
     if (d.nativeBase !== null && d.nativeBase !== "RefCounted" && d.nativeBase !== "Object") unmodeledBase = d.nativeBase;
     const names = d.scriptProps;
-    if (names === null) continue;
-    for (const name of names) props.push({ name, value: box[name] as Variant });
+    const vals = d.scriptValues;
+    if (names === null || vals === null) continue;
+    const read = vals(inner);
+    for (let j = 0; j < names.length; j++) props.push({ name: names[j] as string, value: read[j] as Variant });
   }
   return { props, unmodeledBase };
 });

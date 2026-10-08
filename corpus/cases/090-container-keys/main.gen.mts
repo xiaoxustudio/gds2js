@@ -157,7 +157,7 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
-rt.registerScriptProps(__gd_d_Main, ["td"]);
+rt.registerScriptProps(__gd_d_Main, ["td"], (o) => { const s = o as Main; return [s.td]; });
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", ["td"], {}, (o) => { const s = o as Main; return [s.td]; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");

@@ -65,7 +65,7 @@ class Inner extends rt.GdScriptObject {
 }
 const __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
 rt.nameClass(__gd_d_Inner, "Inner");
-rt.registerScriptProps(__gd_d_Inner, ["v"]);
+rt.registerScriptProps(__gd_d_Inner, ["v"], (o) => { const s = o as Inner; return [s.v]; });
 rt.registerDictIdentity(__gd_d_Inner, "res://main.gd", "Inner", ["v"], {}, (o) => { const s = o as Inner; return [s.v]; });
 rt.registerMethodArities(__gd_d_Inner, { "m": [1, 1], "sstat": [1, 1] });
 rt.registerStaticMethods(__gd_d_Inner, ["sstat"], {"sstat": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Inner.sstat(a[0] as rt.Variant))});

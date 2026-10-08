@@ -571,7 +571,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const moduleFields = fieldTypesLiteral(m.vars.filter((v) => !v.isStatic));
   if (moduleFields !== null) out.push(`rt.registerFieldTypes(__gd_d_${className}, ${moduleFields});`);
   const moduleProps = scriptPropsLiteral(m.vars.filter((v) => !v.isStatic));
-  if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps});`);
+  const modulePropVars = m.vars.filter((v) => !v.isStatic);
+  if (moduleProps !== null) out.push(`rt.registerScriptProps(__gd_d_${className}, ${moduleProps}, ${scriptPropsReaderLiteral(className, modulePropVars)});`);
   out.push(dictIdentityLiteral(`__gd_d_${className}`, "", m.vars, className));
   const moduleStaticVars = staticVarTableLiteral(m.vars);
   const moduleStaticSlots = staticVarSlotsLiteral(className, m.vars);
@@ -626,9 +627,17 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   return { code, map };
 }
 
-/** 脚本变量名的声明顺序表：`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
+/** 自己类的脚本变量名表（声明顺序），`String.format()` 的实参是脚本实例时按它逐个替换（引擎顺序是自己类在前、基类在后）。 */
 function scriptPropsLiteral(vars: readonly { name: string }[]): string | null {
   return vars.length === 0 ? null : JSON.stringify(vars.map((v) => v.name));
+}
+
+/** `scriptProps` 那串名字的取值闭包，与名单同序：静态目标上不能拿实例当 `Record<string, Variant>` 索引（S270 ③）。
+ *  常量与 `static var` 发的是 `static NAME = …`，实例上按名取本来就是 `undefined`，`s.NAME` 同一个结果；
+ *  带 get/set 的属性在 JS 里是原型上的 getter，两条路也都会触发它 —— 所以逐格 `s.<名>` 与原来的按名索引一字不差。 */
+function scriptPropsReaderLiteral(className: string, vars: readonly { name: string }[]): string {
+  const reads = vars.map((v) => `s.${v.name}`).join(", ");
+  return `(o) => { const s = o as ${className}; return [${reads}]; }`;
 }
 
 /** 一个类的 `inst_to_dict` 身份五段：res 路径（单文件模式发 null，运行期响亮拒）、类路径、名单、accessor 类型表、读数器。
@@ -845,8 +854,9 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   }
   const declFields = fieldTypesLiteral(decl.vars.filter((v) => !v.isStatic));
   if (declFields !== null) lines.push(`rt.registerFieldTypes(__gd_d_${decl.name}, ${declFields});`);
-  const declProps = scriptPropsLiteral(decl.vars.filter((v) => !v.isStatic));
-  if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps});`);
+  const declPropVars = decl.vars.filter((v) => !v.isStatic);
+  const declProps = scriptPropsLiteral(declPropVars);
+  if (declProps !== null) lines.push(`rt.registerScriptProps(__gd_d_${decl.name}, ${declProps}, ${scriptPropsReaderLiteral(decl.name, declPropVars)});`);
   lines.push(dictIdentityLiteral(`__gd_d_${decl.name}`, decl.name, decl.vars, decl.name));
   const declStaticVars = staticVarTableLiteral(decl.vars);
   const declStaticSlots = staticVarSlotsLiteral(decl.name, decl.vars);
