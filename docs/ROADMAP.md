@@ -748,6 +748,8 @@
 - **门的一条硬约束**：那两块的 `at:` 行是 `core/variant/variant_utility.cpp`，normalize 会把**整块 `ERROR:` 连同帧一起滤掉**，`WARNING:` 那块滤不掉 —— 于是 `push_error` 在语料侧不可见，只有 `push_warning` / `print_stack` / `get_stack` 真能进逐字节对账。下一轮别把「被滤掉」当成「不用实现」，也别只给 `push_error` 写语料格。
 - **缺的那件活**：产物运行时要能报出 `(函数名, .gd 行号)` 的帧栈。`mark(genLine, loc)` 现在只喂 source map，`LINE_MAPPINGS` 编译期就丢，runtime 无帧栈；要么每个函数体一对 push/pop + 一张运行期「产物行 → `.gd` 行」表，要么只在拿得到行号的路径上出货。**四支继续留在拒答清单（现共 8 支）**。
 - **下一轮不用再测的（`frames.mts` 八格已量）**：帧是真调用栈（`[signal_received:21, _initialize:18]`）；`await f()` 与 `f.call()` 形状相同、不插帧；**每帧 line 是这一帧当前执行的行**（栈顶是 `get_stack()` 自己那行，父帧是调用点那行）；递归不截断（`rec(400)` 给 402 帧）；lambda 的帧名是 `<anonymous lambda>`。所以只有用到那四支的模块需要逐语句打点，其余模块保持零开销 —— 打点方案要在 node 与 scriptc 两侧都可信（`mark()` 那张表编译期就丢，AOT 没有可信的 `Error().stack` 行号）。
+- **元数与标签的实测**（`arity.mts`）：`push_error` / `push_warning` 属 `@GlobalScope::`（argc 1，但实参是 **0..N 顺次拼**，`push_error("a","b","c")` 给 `abc`）；`get_stack` / `print_stack` 属 `@GDScript::`、argc 0、多给报 `Expected at most 0`。两块文本走 **stderr**，而门的 `runGodot` 是 stdout 拼 stderr —— 写语料时这两块只能排在所有 print 之后。
+- **发射侧的省活方案（读数量完才知道可行）**：帧的 `line` 只有两种来源 —— 栈顶那帧是「本函数里那句 `get_stack` / `push_error` 所在行」，父帧是「它调用下游那一行」。两类都是**调用点**，所以打点只需包在 call 表达式外面（`(rt.frameAt(41), foo())` 这种逗号式）而不是每条语句都打；进出函数一对 `frameEnter` / `frameLeave`，为了让 `return` 与异常都弹干净，flag 打开的模块才把函数体套 `try/finally`。**没用到这四支的模块一行打点都不加**（零开销），flag 在发射期扫模块 AST 就能定。
 - **账**：无实现变更，门读数沿用 §1.78 那一笔（`test:diff` 182/182、`test:golden-check` 268/268 漂移 0、scriptc 代表集 14/14、ops 1918、guards 186）。
 ---
 
