@@ -765,7 +765,7 @@
 - **这一格是 S275 那轮欠的**：当时发现臂比较不抛、我们的臂却降成会抛的 `==`，两条形都不发。这轮把量清的那半补上：`^"…"` 可以当手臂，异型落 `_`。
 - **量的关键三格**（`tmp/probe-match-arm/run.mts`）：五臂同摆时 StringName 与 String 都落字符串臂、NodePath 只落自己的臂；只摆字符串臂时 `NodePath("a/b")` 落 `_`（**不报错**）；而 `when q == ^"a/b"` 的 guard 遇到 String 照旧是运行期那句带 backtrace 的错 —— 一条链上两条等式，分得很清。
 - **实现最小**：`lowerPattern` 收 `node_path`（与 `&"…"` 共用 `unquote`），发射复用 `rt.patLit(...)`；`patterns.ts` 的 `armEq` 只在有一侧是 NodePath 时接管，其余仍走 `valueEq`。RID 手臂故意不动：引擎那里 `rid_from_int64(5)` 根本不算常量表达式，而 RID Subject 对上别的手臂给什么没量 —— 按红线不猜。
-- **剩下两格记在 §6 第 28 条**：`Vector2(1, 2)` 那种调用式手臂（引擎认，我们报 `[pattern] 模式 call 未支持`，读数已记）与 RID 那一形。
+- **剩下的是「还有哪些构造能当手臂」**：一次量齐了（`arms.mts` + `ctors.mts` 二十余格）—— 引擎收 15 种构造式手臂（`Vector2` / `Rect2i` / `Transform2D` / `Quaternion` / `Basis` / `StringName` / `Callable()` 等）、拒 `AABB` / `Array` / `Dictionary` / `rid_from_int64` / `str` / `A.new()` 与非常量实参；本轮只收了**等式也量过**的 `NodePath("字符串字面量")`（与 `^"…"` 同一支），其余的要先逐型量「异型 Subject 遇到它抛不抛」再发。全表在 §6 第 28 条。
 - **账**：语料 270 共 16 格逐字节、`test:compile` **191/261**（emitter 缺口 0）、guards **188**；其余门读数见提交信息。
 ---
 
