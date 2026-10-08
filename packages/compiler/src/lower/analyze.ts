@@ -475,6 +475,26 @@ function valueSlotHolds(slot: string, st: NonNullable<StaticType>): boolean {
   return ok !== undefined && ok.includes(st);
 }
 
+/** `is_instance_of` 的解析期那句只在**两参都是字面量 int** 时出现，界与运行期那条同（38 照跑、39 = `TYPE_MAX` 起拒；S274 / §6 第 26 条量的）。 */
+const INSTANCE_OF_TYPE_LAST = 38;
+
+function instanceOfTypeArgMessage(e: Extract<Expr, { kind: "call" }>): string | null {
+  const first = e.args[0];
+  const second = e.args[1];
+  if (first === undefined || second === undefined) return null;
+  if (first.kind !== "lit" || first.lit !== "int") return null;
+  // `-1` 在 IR 里是一元负号套字面量，引擎那侧同样是解析期那句（实测）
+  const t =
+    second.kind === "lit" && second.lit === "int"
+      ? Number(second.value)
+      : second.kind === "unary" && second.op === "-" && second.operand.kind === "lit" && second.operand.lit === "int"
+        ? -Number(second.operand.value)
+        : null;
+  if (t === null) return null;
+  if (t >= 0 && t <= INSTANCE_OF_TYPE_LAST) return null;
+  return `Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.`;
+}
+
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
   /** 也管值类型槽：`var c: Color = Vector3(1, 2, 3)` 这类 Godot 在解析期就两句拒 */
   const scalarType = (t: TypeRef | null): string | null => {
@@ -583,10 +603,15 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
         case "lambda":
           checkBody(e.body, decls);
           return;
-        case "call":
+        case "call": {
+          if (e.callee.kind === "ident" && e.callee.name === "is_instance_of") {
+            const msg = instanceOfTypeArgMessage(e);
+            if (msg !== null) diags.push({ code: "instance-of-type-arg", message: msg, loc: e.loc });
+          }
           expr(e.callee);
           e.args.forEach(expr);
           return;
+        }
         case "binary":
           expr(e.left);
           expr(e.right);

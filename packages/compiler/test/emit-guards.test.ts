@@ -339,6 +339,34 @@ describe("is_instance_of 的发射与元数闸门", () => {
   });
 });
 
+// ── ①j `is_instance_of` 的解析期那句：只在两参都是字面量 int 且第二参越界时拦（S274 / §6 第 26 条，探头 tmp/probe-is/arg1.mts）──
+describe("is_instance_of 的字面量类型实参闸门", () => {
+  const MOD2 = (body: string): string =>
+    `extends SceneTree\n\nclass A extends RefCounted:\n\tvar x = 1\n\nfunc _initialize():\n\tvar a = A.new()\n\t${body}\n\tquit()\n`;
+  const REFUSED: Array<[string, string]> = [
+    ["print(is_instance_of(5, 999))", "第二参越界"],
+    ["print(is_instance_of(5, -1))", "负数同句"],
+    ["print(is_instance_of(5, 39))", "39 就是 TYPE_MAX 那一格"],
+  ];
+  const PASSED: Array<[string, string]> = [
+    ["print(is_instance_of(5, 38))", "界内照发"],
+    ["print(is_instance_of(5, TYPE_OBJECT))", "常数名照发"],
+    ["print(is_instance_of(a, 999))", "第一参是变量 → 交给运行期那一句"],
+    ["print(is_instance_of(a, t))", "两参都是变量"],
+  ];
+
+  it("该拦的按解析期那句拦，该发的不误拦", async () => {
+    for (const [call, why] of REFUSED) {
+      const out = await emitted(MOD2(call).replace("var a = A.new()\n", "var a = A.new()\n\tvar t = 3\n"));
+      expect(out, `${call} —— ${why}`).toBe("diag:instance-of-type-arg");
+    }
+    for (const [call, why] of PASSED) {
+      const out = await emitted(MOD2(call).replace("var a = A.new()\n", "var a = A.new()\n\tvar t = 3\n"));
+      expect(out, `${call} —— ${why}`).not.toBe("diag:instance-of-type-arg");
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状
