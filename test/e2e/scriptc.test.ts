@@ -56,6 +56,7 @@ const DEFAULT_SET = [
   "234-string-methods-batch",
   "246-format-object-props",
   "266-dict-to-inst",
+  "267-is-instance-of",
   "032-preload-load",
 ];
 

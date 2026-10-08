@@ -63,9 +63,9 @@ describe("runtime/trig-family · 三角与双曲", () => {
 
   it("252 · 三支新行的形状", async () => {
     eq("252", "acosh 有式子，发的是实测读数", shape("acosh"), "25|@GlobalScope::acosh|acosh|1");
-    eq("252", "is_instance_of 只发形状（式子没量过）", shape("is_instance_of"), "25|@GDScript::is_instance_of|is_instance_of|2");
+    eq("252", "is_instance_of 那一眼形状照旧（式子在 S274 才补上）", shape("is_instance_of"), "25|@GDScript::is_instance_of|is_instance_of|2");
     eq("252", "print_debug 同上，argc 是 0", shape("print_debug"), "25|@GDScript::print_debug|print_debug|0");
-    eq("252", "没式子的两支 .call 响亮拒", `${call("is_instance_of", I(1), I(2))}|${call("print_debug", S("x"))}`, "[global-callable-call]|[global-callable-call]");
+    eq("252", "没式子的两支 .call 响亮拒", `${call("var_to_bytes", I(1))}|${call("print_debug", S("x"))}`, "[global-callable-call]|[global-callable-call]");
     eq("252", "acosh 走 .call 给数（m02 / m03）", `${call("acosh", I(2))}|${call("acosh", F(0.5))}`, "3|1.31695789692482|3|0.0");
   });
 });

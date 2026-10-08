@@ -15,7 +15,6 @@ export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
   // 少了这一批，`sin(0.5)` 这种合法调用会被报成 `[call-unknown]`「Godot 也没有这个名字」—— 那是假话，而且值位置还会被误拦。
   "bytes_to_var",
   "bytes_to_var_with_objects",
-  "is_instance_of",
   "var_to_bytes",
   "var_to_bytes_with_objects",
 ]);

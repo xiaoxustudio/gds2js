@@ -305,6 +305,35 @@ describe("dict_to_inst 的发射与元数闸门", () => {
   });
 });
 
+// ── ①i `is_instance_of`：发成 rt.gIsInstanceOf，元数两句是 `--language en` 量的原文（S274，探头 tmp/probe-is/）──
+describe("is_instance_of 的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["is_instance_of(self)", 'Too few arguments for "is_instance_of()" call. Expected at least 2 but received 1.'],
+    ["is_instance_of(self, RefCounted, RefCounted)", 'Too many arguments for "is_instance_of()" call. Expected at most 2 but received 3.'],
+  ];
+
+  it("发成 rt.gIsInstanceOf，类值与引擎类值都按实参进去", async () => {
+    const src = await emitted(BODY(["quit()", "print(is_instance_of(self, RefCounted))", "print(is_instance_of(self, Object))"]));
+    expect(src, "第二参发成那份引擎类值").toContain("rt.gIsInstanceOf(");
+    expect(src).toContain("rt.nativeClass(\"RefCounted\")");
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

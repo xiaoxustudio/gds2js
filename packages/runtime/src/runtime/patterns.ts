@@ -3,7 +3,7 @@ import { ENGINE_CLASS_NAMES } from "./engine-classes";
 import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
 import { Signal } from "./signal";
 import { GdNativeClass } from "./native-class";
-import { Tag, V, type TagValue, type Variant } from "./tags";
+import { Tag, V, intToNum, type IntPayload, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
@@ -162,6 +162,44 @@ export function isType(v: Variant, name: string): Variant {
   }
   if (ENGINE_CLASS_NAMES.has(name)) return V.bool(false);
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
+}
+
+/** TYPE_* 那一族的合法码数：实测 `TYPE_MAX` 是 39（S224 那张常数表），越界的 int 走上面那一句。 */
+const IS_INSTANCE_OF_TYPE_COUNT = 39;
+
+/**
+ * `is_instance_of(值, 第二参)`（S274，探头 `tmp/probe-is/`）三形各有读数：
+ * ① int = TYPE_* 那一族，比的是**严格同型**（`&"x"` 对 TYPE_STRING 假、对 TYPE_STRING_NAME 真；
+ *    脚本实例对 24 真、对 27 假），越界那一句是运行期的（字面量越界在引擎是解析期，见 §6）；
+ * ② 类值（脚本内嵌类、`load()` 那份脚本）走 `is` 那条已量过的脚本链；
+ * ③ 引擎类值走 `is` 量过的那七支。其余第二参（String / 实例 / null）都是引擎那一句。
+ */
+export function gIsInstanceOf(obj: Variant, klass: Variant): Variant {
+  if (klass.t === Tag.INT) {
+    const t = intToNum(klass.v as IntPayload);
+    if (t < 0 || t >= IS_INSTANCE_OF_TYPE_COUNT) {
+      throw new GodotRuntimeError(
+        "is-instance-of-type",
+        `Error calling GDScript utility function "is_instance_of()": Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.`,
+      );
+    }
+    return V.bool(intToNum(typeOf(obj).v as IntPayload) === t);
+  }
+  if (klass.t === Tag.OBJECT) {
+    const inner = klass.v;
+    if (inner instanceof ClassDesc) return V.bool(objIs(obj, inner));
+    if (inner instanceof GdNativeClass) {
+      const e = engineClassIs(obj, inner.className);
+      if (e === null) {
+        throw new UnsupportedError("is-instance-of-class", `is_instance_of() 的引擎类值只量过 is 那七支（收到 ${inner.className}），不猜`);
+      }
+      return V.bool(e);
+    }
+  }
+  throw new GodotRuntimeError(
+    "is-instance-of-arg",
+    `Error calling GDScript utility function "is_instance_of()": Invalid type argument for is_instance_of(), should be a TYPE_* constant, a class or a script.`,
+  );
 }
 
 export function asType(v: Variant, name: string): Variant {

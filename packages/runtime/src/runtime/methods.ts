@@ -13,7 +13,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
-import { typeOf } from "./patterns";
+import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { isWeakRefBox } from "./identity";
@@ -1307,6 +1307,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   inst_to_dict: (a) => gInstToDict(ga(a, 0)),
   dict_to_inst: (a) => gDictToInst(ga(a, 0)),
   instance_from_id: (a) => gInstanceFromId(ga(a, 0)),
+  is_instance_of: (a) => gIsInstanceOf(ga(a, 0), ga(a, 1)),
   is_instance_valid: (a) => gIsInstanceValid(ga(a, 0)),
   is_instance_id_valid: (a) => gIsInstanceIdValid(ga(a, 0)),
   randi: () => gRandi(),

@@ -71,7 +71,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   is_finite: GS(1),
   is_inf: GS(1),
   is_instance_id_valid: GS(1),
-  is_instance_of: TODO("GDScript", 2),
+  is_instance_of: GD(2),
   is_instance_valid: GS(1),
   is_nan: GS(1),
   is_same: GS(2),
