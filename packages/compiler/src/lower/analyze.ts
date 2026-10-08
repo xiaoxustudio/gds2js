@@ -1982,6 +1982,8 @@ function staticType(e: Expr): StaticType {
       if (e.lit === "int") return "int";
       if (e.lit === "float") return "float";
       if (e.lit === "string" || e.lit === "string_name") return "String";
+      // `^"…"` 与 `NodePath("…")` 同款：静态名没量过进哪张判据表，留 null 走动态路（S275）。
+      if (e.lit === "node_path") return null;
       if (e.lit === "bool") return "bool";
       return "null";
     case "array":

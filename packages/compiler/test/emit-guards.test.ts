@@ -207,12 +207,14 @@ describe("RID 族的发射与元数闸门", () => {
   });
 });
 
-// ── ①f NodePath 族：构造三形发成 rt.nodePathCtor，方法链 / is / as / 定型变量 / 字典键都编得过（S268）──
+// ── ①f NodePath 族：构造三形与 `^"…"` 字面量都发成 rt.nodePathCtor，方法链 / is / as / 定型变量 / 字典键都编得过（S268 / S275）──
 describe("NodePath 族的发射闸门", () => {
   const CTORS: Array<[string, string]> = [
     ['NodePath("a/b")', 'rt.nodePathCtor([rt.V.str("a/b")])'],
     ["NodePath()", "rt.nodePathCtor([])"],
     ['NodePath(&"a")', 'rt.nodePathCtor([rt.V.stringName("a")])'],
+    ['^"a/b"', 'rt.nodePathCtor([rt.V.str("a/b")])'],
+    ['^"a\\tb"', 'rt.nodePathCtor([rt.V.str("a\\tb")])'],
   ];
   const PASSING: string[] = [
     'print(NodePath("a/b").get_name(0))',
@@ -220,9 +222,12 @@ describe("NodePath 族的发射闸门", () => {
     'print(str(NodePath("a") as NodePath))',
     'var p: NodePath = NodePath("a")',
     'var d = {}\n\td[NodePath("a")] = 1\n\tprint(d)',
+    'print(^"a/b" == NodePath("a/b"))',
+    'var p: NodePath = ^"a/b"',
+    'var d = { ^"a/b": 1 }\n\tprint(d.keys())',
   ];
 
-  it("三种构造形各发各的 rt.nodePathCtor（实测 c1 / P7 三格）", async () => {
+  it("三种构造形与字面量都发成同一个 rt.nodePathCtor（实测 c1 / P7 / a05 三形 + b01 转义那格）", async () => {
     for (const [call, want] of CTORS) {
       const src = PRINT(call);
       expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");

@@ -464,6 +464,8 @@ function lowerExpr(n: SyntaxNode): Expr {
       return { kind: "lit", lit: "string", value: unquote(n.text), loc: c };
     case "string_name":
       return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)), loc: c };
+    case "node_path":
+      return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)), loc: c };
     case "true":
       return { kind: "lit", lit: "bool", value: true, loc: c };
     case "false":
@@ -560,6 +562,10 @@ function lowerExpr(n: SyntaxNode): Expr {
 /** `&"abc"` 的 CST 文本连前导 `&` 一起给，剥掉后才能和 String 共用同一套转义解码。 */
 function stripAmp(text: string): string {
   return text.startsWith("&") ? text.slice(1) : text;
+}
+
+function stripCaret(text: string): string {
+  return text.startsWith("^") ? text.slice(1) : text;
 }
 
 function unquote(raw: string): string {

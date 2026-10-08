@@ -3113,6 +3113,7 @@ function emitLit(lit: string, value: string | number | bigint | boolean | null):
   if (lit === "float") return `rt.V.float(${String(value)})`;
   if (lit === "string") return `rt.V.str(${JSON.stringify(String(value))})`;
   if (lit === "string_name") return `rt.V.stringName(${JSON.stringify(String(value))})`;
+  if (lit === "node_path") return `rt.nodePathCtor([rt.V.str(${JSON.stringify(String(value))})])`;
   if (lit === "bool") return `rt.V.bool(${String(value)})`;
   return "rt.V.nil()";
 }

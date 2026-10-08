@@ -3,7 +3,7 @@ export interface Loc {
   col: number;
 }
 
-export type LitKind = "int" | "float" | "string" | "string_name" | "bool" | "null";
+export type LitKind = "int" | "float" | "string" | "string_name" | "node_path" | "bool" | "null";
 
 export type Expr =
   | { kind: "lit"; lit: LitKind; value: string | number | bigint | boolean | null; loc: Loc }

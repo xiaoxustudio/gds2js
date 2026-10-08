@@ -2606,6 +2606,12 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       }
       // Callable 走与 `==` 同一条等式：盒子每次读都是新建的，按 JS 引用比会把真判成假
       if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
+      // NodePath 同理（实测 `^"a/b" in [^"a/b"]` 与 `arr.has(^"a/b")` 都真）
+      {
+        const npa = asNodePath(a);
+        const npb = asNodePath(b);
+        if (npa !== null && npb !== null) return sameNodePath(npa, npb);
+      }
       return a.v === b.v;
     default:
       return a.v === b.v;
