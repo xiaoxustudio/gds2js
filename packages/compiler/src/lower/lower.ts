@@ -435,10 +435,10 @@ function lowerPattern(n: SyntaxNode): Pattern {
     case "node_path":
       return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)) };
     case "call": {
-      // 手臂里引擎还认构造调用，本轮只收量过的那一支：`match p: NodePath("a/b")`（`tmp/probe-match-arm/arms.mts`，
-      // 其余构造名与 `Vector2(1, x)` 那种非常量实参的读数记在 §6 第 28 条）。
+      // 手臂里引擎还认构造调用：`NodePath("…")` 发成字面量臂，其余七支量过的构造走 `const` 那条现成发射（语料 272 钉住每支的命中与不命中）。
       const np = nodePathArm(n);
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
+      if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
     case "true":
@@ -575,6 +575,30 @@ function stripAmp(text: string): string {
 
 function stripCaret(text: string): string {
   return text.startsWith("^") ? text.slice(1) : text;
+}
+
+/** 手臂里量过的构造式：名字与元数对上、且每个实参都是字面量才收（`tmp/probe-match-arm/{arms,ctors}.mts` 与语料 272）。负数实参与 `Color(1, 2, 3)` 那几形没量过，照旧落在拒的那一堆里。 */
+const CTOR_ARMS: Record<string, number> = {
+  Vector2: 2,
+  Vector2i: 2,
+  Vector3: 3,
+  Vector3i: 3,
+  Color: 4,
+  StringName: 1,
+  Callable: 0,
+};
+
+const ARM_ARG_LITERALS = ["integer", "float", "string", "string_name", "node_path", "true", "false", "null"];
+
+function ctorArm(n: SyntaxNode): boolean {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier") return false;
+  const arity = CTOR_ARMS[callee.text];
+  if (arity === undefined) return false;
+  const argsNode = field(n, "arguments");
+  const args = argsNode === null ? [] : named(argsNode);
+  if (args.length !== arity) return false;
+  return args.every((a) => ARM_ARG_LITERALS.indexOf(a.type) >= 0);
 }
 
 /** 手臂只认量过的那一支构造：`NodePath("…")` 带一支字符串字面量实参（`tmp/probe-match-arm/arms.mts`）。 */

@@ -59,6 +59,7 @@ const DEFAULT_SET = [
   "266-dict-to-inst",
   "267-is-instance-of",
   "268-node-path-literal",
+  "272-ctor-match-arms",
   "032-preload-load",
 ];
 

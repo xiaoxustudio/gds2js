@@ -250,6 +250,46 @@ describe("NodePath 族的发射闸门", () => {
   });
 });
 
+// ── ①h 构造式手臂：量过的七支走 rt.patConst(<构造式>)，表外与非常量实参照旧拦（S280，语料 272）──
+describe("构造式手臂的发射闸门", () => {
+  const ARMS: Array<[string, string]> = [
+    ["Vector2(1, 2)", "rt.patConst(rt.vector2New([rt.V.int(1), rt.V.int(2)]))"],
+    ["Vector2i(1, 2)", "rt.patConst(rt.vector2iNew([rt.V.int(1), rt.V.int(2)]))"],
+    ["Vector3(1, 2, 3)", "rt.patConst(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))"],
+    ["Vector3i(1, 2, 3)", "rt.patConst(rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))"],
+    ["Color(1, 2, 3, 4)", "rt.patConst(rt.colorNew([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]))"],
+    ['StringName("a")', 'rt.patConst(rt.stringNameCtor([rt.V.str("a")]))'],
+    ["Callable()", "rt.patConst(rt.callableCtor([]))"],
+  ];
+  const REFUSED: string[] = [
+    "AABB(Vector2(1, 2), Vector2(3, 4))",
+    "Array([1])",
+    'Dictionary({"a": 1})',
+    "rid_from_int64(5)",
+    "str(1)",
+    "Vector2(1, x)",
+    "Vector2(1)",
+    "Color(1, 2, 3)",
+    "Vector2(-1, 2)",
+  ];
+  const armSrc = (arm: string): string =>
+    MOD(`var x = 5\n\tvar y = 2\n\tmatch x:\n\t\t${arm}:\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)`);
+
+  it("七支各发各的构造式", async () => {
+    for (const [arm, want] of ARMS) {
+      const src = armSrc(arm);
+      expect(await classify(src, "ok"), `${arm} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${arm} 的发射`).toContain(want);
+    }
+  });
+
+  it("表外的构造与非常量实参仍拦在模式位", async () => {
+    for (const arm of REFUSED) {
+      expect(await classify(armSrc(arm), "ok"), `${arm} 该拦下来`).not.toBe("ok");
+    }
+  });
+});
+
 // ── ①g `inst_to_dict`：发成 rt.gInstToDict、每个类都带一份 dict 身份，元数两句是一支一名量出来的（S269，探头 tmp/probe-inst/）──
 describe("inst_to_dict 的发射与元数闸门", () => {
   const textOf = async (src: string): Promise<string> => {
