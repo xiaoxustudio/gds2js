@@ -164,16 +164,10 @@ export function isType(v: Variant, name: string): Variant {
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
 
-/** TYPE_* 那一族的合法码数：实测 `TYPE_MAX` 是 39（S224 那张常数表），越界的 int 走上面那一句。 */
+/** TYPE_* 那一族的合法码数：实测 `TYPE_MAX` 是 39（S224 那张常数表），越界的 int 抛函数里那一句。 */
 const IS_INSTANCE_OF_TYPE_COUNT = 39;
 
-/**
- * `is_instance_of(值, 第二参)`（S274，探头 `tmp/probe-is/`）三形各有读数：
- * ① int = TYPE_* 那一族，比的是**严格同型**（`&"x"` 对 TYPE_STRING 假、对 TYPE_STRING_NAME 真；
- *    脚本实例对 24 真、对 27 假），越界那一句是运行期的（字面量越界在引擎是解析期，见 §6）；
- * ② 类值（脚本内嵌类、`load()` 那份脚本）走 `is` 那条已量过的脚本链；
- * ③ 引擎类值走 `is` 量过的那七支。其余第二参（String / 实例 / null）都是引擎那一句。
- */
+/** `is_instance_of(值, TYPE_* 常数 | 脚本类值 | 引擎类值)`（S274）：int 那形比的是 `typeof` 的同一张码表，两种类值复用 `is` 量过的两条链，其余第二参抛引擎运行期那一句。 */
 export function gIsInstanceOf(obj: Variant, klass: Variant): Variant {
   if (klass.t === Tag.INT) {
     const t = intToNum(klass.v as IntPayload);

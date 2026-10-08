@@ -1342,13 +1342,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
 };
 
 /** 式子发出去了的那些名字：与实测表里「有区间闸门」的那批一一对上才算数（口径钉在 callable.test.ts）。 */
-/**
- * `dict_to_inst(dict)`（S269 ⑦ / S272）：按 `@path` + `@subpath` 认类、**裸构造（不跑 `_init`）**、再把字典里
- * 认得的字段名灌进去。三条实测口径：字典里少的字段留类声明的默认值、多的键静默忽略、带 get/set 的属性**不调 setter**
- * （k02 那格：字典给 `&"v": 2`，`_v` 仍是默认值 1；但 `inst_to_dict` 会把 `v` 原样带出门，S272 ③）。
- * 失败三句是 4.6.3 的原文（英文用 `--language en` 量的）；`@path` 加载不到时引擎前面还打两句带自己 C++ 文件行号
- * 的 ERROR，那两句不复刻。
- */
+/** `dict_to_inst(dict)`（S269 ⑦ / S272 / S273）：按 `@path` + `@subpath` 认类、裸构造（不跑 `_init`），再把字典里认得的字段灌进实例 —— 普通字段写槽，带 get/set 的写实例上那张原值表（setter 不调）。失败三句是 4.6.3 原文，`@path` 加载不到时引擎前面那两句带 C++ 行号的 ERROR 不复刻。 */
 export function gDictToInst(v: Variant): Variant {
   if (v.t !== Tag.DICT) {
     throw new GodotRuntimeError(
@@ -1414,8 +1408,7 @@ export function gDictToInst(v: Variant): Variant {
     const accNames = Object.keys(shape.accessors);
     for (const e of entries) {
       if (shape.names.indexOf(e.name) < 0) continue;
-      // 带 get/set 的属性进实例上那张原值表：setter 一次都不跑（实测 `set(x): _v = x * 10` 没被调，`_v` 仍是声明的默认值），
-      // 但 `inst_to_dict` 会把这一格原样带出门（S272 ③）。
+      // 带 get/set 的属性进实例上那张原值表：setter 一次都不跑，而 inst_to_dict 会把这一格原样带出门（S272 ③ / S273 ④）。
       if (accNames.indexOf(e.name) >= 0) writeDictWritten(inst, e.name, e.value);
       else writeProp(box, e.name, e.value);
     }
