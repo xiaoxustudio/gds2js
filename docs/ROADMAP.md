@@ -747,6 +747,7 @@
 - **三件与直觉不同的读数**：① `push_error()` 空实参照打、多实参按 `print` 那条顺次拼（`push_warning("a", "b")` → `WARNING: ab`），元数是 0..N 而不是恰好 1；② 这两支**不中断脚本**，前后语句照跑；③ `get_stack()` 的帧字典键序固定 `source` / `function` / `line`，函数名是**裸名**（静态方法不带类名、lambda 是 `<anonymous lambda>`），C++ 帧一条不出；`print_stack()` 每帧一行 `Frame N - 路径:行 in function '名'` 且**没有表头**，只收 0 支。
 - **门的一条硬约束**：那两块的 `at:` 行是 `core/variant/variant_utility.cpp`，normalize 会把**整块 `ERROR:` 连同帧一起滤掉**，`WARNING:` 那块滤不掉 —— 于是 `push_error` 在语料侧不可见，只有 `push_warning` / `print_stack` / `get_stack` 真能进逐字节对账。下一轮别把「被滤掉」当成「不用实现」，也别只给 `push_error` 写语料格。
 - **缺的那件活**：产物运行时要能报出 `(函数名, .gd 行号)` 的帧栈。`mark(genLine, loc)` 现在只喂 source map，`LINE_MAPPINGS` 编译期就丢，runtime 无帧栈；要么每个函数体一对 push/pop + 一张运行期「产物行 → `.gd` 行」表，要么只在拿得到行号的路径上出货。**四支继续留在拒答清单（现共 8 支）**。
+- **下一轮不用再测的（`frames.mts` 八格已量）**：帧是真调用栈（`[signal_received:21, _initialize:18]`）；`await f()` 与 `f.call()` 形状相同、不插帧；**每帧 line 是这一帧当前执行的行**（栈顶是 `get_stack()` 自己那行，父帧是调用点那行）；递归不截断（`rec(400)` 给 402 帧）；lambda 的帧名是 `<anonymous lambda>`。所以只有用到那四支的模块需要逐语句打点，其余模块保持零开销 —— 打点方案要在 node 与 scriptc 两侧都可信（`mark()` 那张表编译期就丢，AOT 没有可信的 `Error().stack` 行号）。
 - **账**：无实现变更，门读数沿用 §1.78 那一笔（`test:diff` 182/182、`test:golden-check` 268/268 漂移 0、scriptc 代表集 14/14、ops 1918、guards 186）。
 ---
 
