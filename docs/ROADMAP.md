@@ -768,6 +768,14 @@
 - **剩下的是「还有哪些构造能当手臂」**：一次量齐了（`arms.mts` + `ctors.mts` 二十余格）—— 引擎收 15 种构造式手臂（`Vector2` / `Rect2i` / `Transform2D` / `Quaternion` / `Basis` / `StringName` / `Callable()` 等）、拒 `AABB` / `Array` / `Dictionary` / `rid_from_int64` / `str` / `A.new()` 与非常量实参；本轮只收了**等式也量过**的 `NodePath("字符串字面量")`（与 `^"…"` 同一支），其余的要先逐型量「异型 Subject 遇到它抛不抛」再发。全表在 §6 第 28 条。
 - **账**：语料 270 共 16 格逐字节、`test:compile` **191/261**（emitter 缺口 0）、guards **188**；其余门读数见提交信息。
 
+
+### 1.83 构造式手臂收进模式位：七支走 `const` 那条现成发射（2026-10-08，S280，语料 272，§6 第 28 条再窄一格）
+
+- **上一轮的同型判把这条路铺平了**：S279 之后「异型 Subject 假而不抛」对每一支都成立，所以剩下的只是「引擎收哪些构造、我们有没有那个值型」。量过的七支（`Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` / `StringName` / `Callable`）今天一次收进来。
+- **实现只往表里加东西**：`lowerPattern` 的 `case "call"` 除 `NodePath("…")` 外再认一张 `CTOR_ARMS`（名字 → 实测元数，实参必须全是字面量），降成 `{kind: "const"}`，发射复用 `rt.patConst(emitExpr(...))`；runtime 一字未动 —— 手臂比较仍由 S279 那条 `armKind` + `valueEq` 判。
+- **读数里最容易被猜错的两格**：`Vector2(1, 2)` 臂**收** `Vector2(1.0, 2.0)`（t03，构造实参一旦算出值就只剩 Vector2 这一支型，与 S279 的 int/float 不互认不打架），而 `Vector2i(1, 2)` 臂遇 `Vector2(1, 2)` 走 `_`（t10，跨向量族靠原型分组拦住）。
+- **保守面写清**：`Vector2(1)` / `Color(1, 2, 3)` / `Vector2(-1, 2)` 这三形引擎收不收没量过，白名单按名字 + 实测元数 + 全字面量实参卡住，所以一并拒 —— 这是我们的取舍，不是复刻引擎。表内剩下的七支（`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `Signal`）卡在 Tier 1 没有那些值型，值型到位后往表里加名字就行。
+- **账**：语料 272 共 32 格逐字节、`test:compile` **193/263**（emitter 缺口 0）、`test:diff` **185/185**、guards **190**、`pnpm test` **1136**、ops 1918、scriptc 代表集 **15**（新用例进集合）；其余读数见提交信息。
 ### 1.82 match 臂的等式补成整族：同型才比，异型假而不抛（2026-10-08，S279，语料 271，§6 第 28 条第一件事结清）
 
 - **S278 只把「异型即假」接到了 NodePath 上**，其余形状仍走算子等式。这轮一次量齐（`tmp/probe-match-arm2/run.mts` 17 格一臂一脚本）：臂那一侧是 `hash_compare` 的口径 —— **数字不做 int/float 跨型合一**（`5` 臂遇到 `5.0` 落 `_`，双向都验），**只有 String 与 StringName 互认**，**异型一律假而不抛**。算子 `==` 那条照旧（`5 == 5.0` 仍真、RID 对上 int 仍抛），`when` guard 也照旧。
