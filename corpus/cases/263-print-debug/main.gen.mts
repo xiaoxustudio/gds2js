@@ -57,7 +57,9 @@ class C extends rt.GdScriptObject {
   
   constructor() {
     super();
-    printDebug([rt.V.str("in _init")], "res://main.gd", 11, "_init");
+    if (!rt.bareConstruction()) {
+      printDebug([rt.V.str("in _init")], "res://main.gd", 11, "_init");
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

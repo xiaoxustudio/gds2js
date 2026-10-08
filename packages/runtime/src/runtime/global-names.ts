@@ -53,7 +53,7 @@ export const GLOBAL_CALLABLES: Readonly<Record<string, GlobalCallableRow>> = Obj
   cubic_interpolate_in_time: GS(8),
   db_to_linear: GS(1),
   deg_to_rad: GS(1),
-  dict_to_inst: TODO("GDScript", 1),
+  dict_to_inst: GD(1),
   ease: GS(2),
   error_string: GS(1),
   exp: GS(1),

@@ -1,0 +1,35 @@
+t01|24
+t02|true
+t03|1|x
+t04|{ "@subpath": ^"Inner", "@path": "<case>/main.gd", &"k": 1, &"s": "x" }
+t05|{
+"@path": "<case>/main.gd",
+"@subpath": NodePath("Inner"),
+&"k": 1,
+&"s": "x"
+}
+t06|false
+t07|false
+t08|true
+t09|["@subpath", "@path", &"k", &"s"]
+SIDE
+t10|99
+t11|true
+t12|{ "@subpath": ^"WithInit", "@path": "<case>/main.gd", &"touched": 99 }
+t13|99
+t14|1|2
+t15|{ "@subpath": ^"Derived", "@path": "<case>/main.gd", &"a": 1, &"b": 2 }
+t16|{ "@subpath": ^"Box", "@path": "<case>/main.gd", &"plain": <null>, &"arr": [1, 2], &"dic": { "a": 1 }, &"leaf": <null> }
+t17|true
+t18|true
+t19|<null>|<null>|[1, 2]|{ "a": 1 }
+t20|{ "@subpath": ^"Acc", "@path": "<case>/main.gd", &"_v": 1, &"v": <null> }
+t21|1|1
+t22|{ "@subpath": ^"Acc", "@path": "<case>/main.gd", &"_v": 1, &"v": 2 }
+t23|3|3
+t24|true
+t25|5|x
+t26|{ "@subpath": ^"Inner", "@path": "<case>/main.gd", &"k": 5, &"s": "x" }
+t27|true
+t28|x
+t29|1|8

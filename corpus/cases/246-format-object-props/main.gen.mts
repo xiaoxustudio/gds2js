@@ -44,7 +44,7 @@ class Base extends rt.GdScriptObject {
   constructor(...__gd_new_args: rt.Variant[]) {
     super();
     this.__gd_fields__();
-    this.__gdDispatch("_init", __gd_new_args);
+    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);
   }
 
   declare two: rt.Variant;

@@ -124,6 +124,7 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   rid_from_int64: [1, 1],
   rid_allocate_id: [0, 0],
   inst_to_dict: [1, 1],
+  dict_to_inst: [1, 1],
   rotate_toward: [3, 3],
   sign: [1, 1],
   smoothstep: [3, 3],
@@ -203,6 +204,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   rid_from_int64: (a) => `rt.gRidFromInt64(${a[0]})`,
   rid_allocate_id: () => "rt.gRidAllocateId()",
   inst_to_dict: (a) => `rt.gInstToDict(${a[0]})`,
+  dict_to_inst: (a) => `rt.gDictToInst(${a[0]})`,
   randi: () => "rt.gRandi()",
   randf: () => "rt.gRandf()",
   randomize: () => "rt.gRandomize()",
@@ -1149,20 +1151,23 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
     first.expr.callee.kind === "ident" &&
     first.expr.callee.name === "super";
   if (!explicitSuper && hostSuper) lines.push("  super();");
+  // `_init` 的体整个进守卫里：`dict_to_inst` 的裸构造只要字段初始化子（那是类的字段声明，不在这段里）与 super 链。
+  lines.push("  if (!rt.bareConstruction()) {");
   const savedUnboxed = UNBOXED;
   const savedFunc = CURRENT_FUNC;
   UNBOXED = computeUnboxed(f);
   CURRENT_FUNC = "_init";
   try {
-    for (const line of emitParamSlots(f)) lines.push(`  ${line}`);
+    for (const line of emitParamSlots(f)) lines.push(`    ${line}`);
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
-      for (const line of emitStmt(s, false)) lines.push(`  ${line}`);
+      for (const line of emitStmt(s, false)) lines.push(`    ${line}`);
     }
   } finally {
     UNBOXED = savedUnboxed;
     CURRENT_FUNC = savedFunc;
   }
+  lines.push("  }");
   lines.push("}");
   lines.push("");
   return lines;
@@ -1404,7 +1409,8 @@ function emitRootConstructor(hostSuper: boolean): string[] {
   const out = ["  constructor(...__gd_new_args: rt.Variant[]) {"];
   if (hostSuper) out.push("    super();");
   out.push("    this.__gd_fields__();");
-  out.push("    this.__gdDispatch(\"_init\", __gd_new_args);");
+  // 裸构造（`dict_to_inst`）只跑字段初始化子，不跑 `_init`（S269 ⑦）
+  out.push("    if (!rt.bareConstruction()) this.__gdDispatch(\"_init\", __gd_new_args);");
   out.push("  }");
   out.push("");
   return out;

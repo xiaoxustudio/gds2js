@@ -10,6 +10,8 @@ export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCal
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
   readonly gdObjectId: number = nextObjectId(this);
+  /** `dict_to_inst` 灌进带 get/set 属性的原值（引擎不调 setter，值只住在这一台实例上，S272 ③）。 */
+  __gd_dict_written__: Record<string, Variant> | null = null;
   /** 命中给装箱值（调用方再 `wrapValue` 也无妨 —— `wrapValue` 对 Variant 原样返回）；没这个方法给 null。 */
   __gdDispatch(_name: string, _args: Variant[]): Variant | null {
     return null;
@@ -270,6 +272,34 @@ export function registerDictIdentity(
   desc.dictNames = names;
   desc.dictAccessors = accessors;
   desc.dictValues = reader;
+  // 反查表：`dict_to_inst` 拿 `@path` + `@subpath` 认类（S272 ④）。单文件模式没有 res 路径，那一格进不了表。
+  if (resPath !== null) DICT_REGISTRY.set(dictKey(resPath, classPath), desc);
+}
+
+/** `(res 路径, 类路径)` → 类：类路径是空串就指模块根类（引擎那一形造的是脚本自己的根类）。 */
+export function dictDescOf(resPath: string, classPath: string): ClassDesc | null {
+  const hit = DICT_REGISTRY.get(dictKey(resPath, classPath));
+  return hit === undefined ? null : hit;
+}
+
+function dictKey(resPath: string, classPath: string): string {
+  return `${resPath}#${classPath}`;
+}
+
+/** 裸构造模式：`dict_to_inst` 造实例时**不跑 `_init`**（S269 ⑦ 实测：`_init` 的副作用一次都不打，字段仍从字典灌进去）。
+ *  构造器里的字段初始化子照跑 —— 那部分与 `_init` 是两个步骤，缺的字段才拿得到类声明的默认值（S272 ③）。 */
+let BARE_DEPTH = 0;
+
+export function beginBareConstruction(): void {
+  BARE_DEPTH += 1;
+}
+
+export function endBareConstruction(): void {
+  BARE_DEPTH -= 1;
+}
+
+export function bareConstruction(): boolean {
+  return BARE_DEPTH > 0;
 }
 
 /** 一个脚本实例进 `inst_to_dict` 时要的全部读数。字段序是**基类在前**（S269 ③），与 `String.format()` 那条「自己类在前」反着走。 */
@@ -298,6 +328,18 @@ export function dictShapeOf(target: unknown): {
     if (acc !== null) for (const key of Object.keys(acc)) accessors[key] = acc[key] as string | null;
   }
   return { resPath: desc.dictResPath, classPath: desc.dictClassPath ?? "", names, accessors, values };
+}
+
+/** 这台实例上由 `dict_to_inst` 灌进 get/set 属性的原值；没灌过就是 null（`inst_to_dict` 据此在「灌过的值」与「声明类型默认值」之间选）。 */
+export function dictWrittenOf(target: object): Record<string, Variant> | null {
+  return target instanceof GdScriptObject ? target.__gd_dict_written__ : null;
+}
+
+/** 灌一格原值：表是懒创建的，普通构造一台实例都不会带它。 */
+export function writeDictWritten(target: object, name: string, value: Variant): void {
+  if (!(target instanceof GdScriptObject)) return;
+  if (target.__gd_dict_written__ === null) target.__gd_dict_written__ = {};
+  target.__gd_dict_written__[name] = value;
 }
 
 /** 方法名的 `[必填实参数, 全部实参数]` 表：arity 检查要用**两个**数，少给与多给 Godot 两边都管。 */
@@ -513,6 +555,8 @@ export function lookupClass(name: string): ClassDesc | undefined {
 
 /** res:// 路径 → 该脚本的类。preload/load 按路径取"脚本"这个值。 */
 const SCRIPT_REGISTRY = new Map<string, ClassDesc>();
+/** `(res 路径#类路径)` → 类，由 `registerDictIdentity` 填；`dict_to_inst` 的反查表。 */
+const DICT_REGISTRY = new Map<string, ClassDesc>();
 
 export function registerScript(resPath: string, desc: ClassDesc): void {
   SCRIPT_REGISTRY.set(resPath, desc);

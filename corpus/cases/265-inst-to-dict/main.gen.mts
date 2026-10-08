@@ -97,7 +97,7 @@ class Base extends rt.GdScriptObject {
   constructor(...__gd_new_args: rt.Variant[]) {
     super();
     this.__gd_fields__();
-    this.__gdDispatch("_init", __gd_new_args);
+    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);
   }
 
   declare a: rt.Variant;
@@ -284,7 +284,9 @@ class WithInit extends rt.GdScriptObject {
 
   constructor() {
     super();
-    this.touched = rt.V.int(99);
+    if (!rt.bareConstruction()) {
+      this.touched = rt.V.int(99);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

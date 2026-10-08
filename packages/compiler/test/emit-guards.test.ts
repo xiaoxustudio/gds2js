@@ -273,6 +273,38 @@ describe("inst_to_dict 的发射与元数闸门", () => {
   });
 });
 
+// ── ①h `dict_to_inst`：发成 rt.gDictToInst，元数两句与 inst_to_dict 同形（S272，探头 tmp/probe-inst/）──
+describe("dict_to_inst 的发射与元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["dict_to_inst()", 'Too few arguments for "dict_to_inst()" call. Expected at least 1 but received 0.'],
+    ["dict_to_inst(1, 2)", 'Too many arguments for "dict_to_inst()" call. Expected at most 1 but received 2.'],
+  ];
+
+  it("发成 rt.gDictToInst，构造侧带上裸构造守卫", async () => {
+    expect(await emitted(BODY(["quit()", 'print(dict_to_inst({"@path": "res://main.gd", "@subpath": NodePath("Inner")}))']))).toContain("rt.gDictToInst(");
+    const withInit = await emitted(
+      "extends SceneTree\n\nclass Plain extends RefCounted:\n\tvar q = 2\n\nclass Sub extends Plain:\n\tvar r = 3\n\nclass Inner extends RefCounted:\n\tvar k = 1\n\n\tfunc _init():\n\t\tk = 7\n\nfunc _initialize():\n\tprint(dict_to_inst(inst_to_dict(Inner.new())))\n\tquit()\n",
+    );
+    expect(withInit, "_init 的体整个进裸构造守卫里（dict_to_inst 造实例时一句都不跑，S269 ⑦）").toContain("if (!rt.bareConstruction()) {");
+    expect(withInit, "根构造器的 _init 派发也在守卫里").toContain('if (!rt.bareConstruction()) this.__gdDispatch("_init"');
+  });
+
+  it("少给与多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+});
+
 // ── ② 未知调用守卫 ─────────────────────────────────────────────────
 /** 拒的五格与判引擎是同一条式子（callee 名不按局部解、不按类名解、不在成员表里 →
  *  解析期就 `not found in base self.`），放行的三格是守卫容易误拦的形状

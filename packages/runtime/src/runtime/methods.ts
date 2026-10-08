@@ -15,17 +15,17 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
-import { asNodePath, nodePathMethod } from "./node-path";
+import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName } from "./values";
 import { isLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -1305,6 +1305,7 @@ const GLOBAL_IMPL: Record<string, Fn> = {
   rid_from_int64: (a) => gRidFromInt64(ga(a, 0)),
   rid_allocate_id: () => gRidAllocateId(),
   inst_to_dict: (a) => gInstToDict(ga(a, 0)),
+  dict_to_inst: (a) => gDictToInst(ga(a, 0)),
   instance_from_id: (a) => gInstanceFromId(ga(a, 0)),
   is_instance_valid: (a) => gIsInstanceValid(ga(a, 0)),
   is_instance_id_valid: (a) => gIsInstanceIdValid(ga(a, 0)),
@@ -1340,6 +1341,101 @@ const GLOBAL_IMPL: Record<string, Fn> = {
 };
 
 /** 式子发出去了的那些名字：与实测表里「有区间闸门」的那批一一对上才算数（口径钉在 callable.test.ts）。 */
+/**
+ * `dict_to_inst(dict)`（S269 ⑦ / S272）：按 `@path` + `@subpath` 认类、**裸构造（不跑 `_init`）**、再把字典里
+ * 认得的字段名灌进去。三条实测口径：字典里少的字段留类声明的默认值、多的键静默忽略、带 get/set 的属性**不调 setter**
+ * （k02 那格：字典给 `&"v": 2`，`_v` 仍是默认值 1；但 `inst_to_dict` 会把 `v` 原样带出门，S272 ③）。
+ * 失败三句是 4.6.3 的原文（英文用 `--language en` 量的）；`@path` 加载不到时引擎前面还打两句带自己 C++ 文件行号
+ * 的 ERROR，那两句不复刻。
+ */
+export function gDictToInst(v: Variant): Variant {
+  if (v.t !== Tag.DICT) {
+    throw new GodotRuntimeError(
+      "dict-to-inst-arg",
+      `Invalid type in GDScript utility function "dict_to_inst()". Cannot convert argument 1 from ${valueTypeName(v)} to Dictionary.`,
+    );
+  }
+  const d = v.v as GDict;
+  const keys = d.keys();
+  const vals = d.values();
+  let resPath: string | null = null;
+  let classPath = "";
+  const entries: Array<{ name: string; value: Variant }> = [];
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i] as Variant;
+    const val = vals[i] as Variant;
+    const text = dictKeyName(k);
+    if (text === "@path") {
+      resPath = dictPathText(val);
+      continue;
+    }
+    if (text === "@subpath") {
+      classPath = dictPathText(val) ?? "";
+      continue;
+    }
+    if (text !== null) entries.push({ name: text, value: val });
+  }
+  if (resPath === null) {
+    throw new GodotRuntimeError(
+      "dict-to-inst",
+      `Error calling GDScript utility function "dict_to_inst()": Invalid instance dictionary format (missing @path).`,
+    );
+  }
+  const desc = dictDescOf(resPath, classPath);
+  if (desc === null) {
+    if (dictDescOf(resPath, "") === null) {
+      throw new GodotRuntimeError(
+        "dict-to-inst",
+        `Error calling GDScript utility function "dict_to_inst()": Invalid instance dictionary format (can't load script at @path).`,
+      );
+    }
+    throw new GodotRuntimeError(
+      "dict-to-inst",
+      `Error calling GDScript utility function "dict_to_inst()": Invalid instance dictionary (invalid subclasses).`,
+    );
+  }
+  if (classPath === "") {
+    throw new UnsupportedError(
+      "dict-to-inst-root",
+      `dict_to_inst() 造模块根类那一形（缺 @subpath 或 @subpath 是空路径）只量过 extends SceneTree 的模块：引擎真会造出宿主实例（实测造出 <SceneTree#号> 并漏出一片 RID），Tier 1 发不出那种实例，别的宿主基类也没量过，不猜`,
+    );
+  }
+  beginBareConstruction();
+  let inst: object;
+  try {
+    inst = desc.make([]);
+  } finally {
+    endBareConstruction();
+  }
+  const box = V.object(inst);
+  const shape = dictShapeOf(inst);
+  if (shape !== null) {
+    const accNames = Object.keys(shape.accessors);
+    for (const e of entries) {
+      if (shape.names.indexOf(e.name) < 0) continue;
+      // 带 get/set 的属性进实例上那张原值表：setter 一次都不跑（实测 `set(x): _v = x * 10` 没被调，`_v` 仍是声明的默认值），
+      // 但 `inst_to_dict` 会把这一格原样带出门（S272 ③）。
+      if (accNames.indexOf(e.name) >= 0) writeDictWritten(inst, e.name, e.value);
+      else writeProp(box, e.name, e.value);
+    }
+  }
+  return box;
+}
+
+/** 字典键的名字：String 与 StringName 同形（引擎那两形都认，`@subpath` 给 String 也造得出实例，实测 s01）。 */
+function dictKeyName(k: Variant): string | null {
+  if (k.t === Tag.STRING || k.t === Tag.STRING_NAME) return k.v as string;
+  return null;
+}
+
+/** `@path` / `@subpath` 的值：String 与 NodePath 都认（实测 `@path` 给 `^"res://x.gd"` 也会被当路径用）。 */
+function dictPathText(val: Variant): string | null {
+  if (val.t === Tag.STRING || val.t === Tag.STRING_NAME) return val.v as string;
+  const np = asNodePath(val);
+  if (np !== null) return nodePathText(np);
+  throw new UnsupportedError("dict-to-inst-value", `dict_to_inst() 的 @path / @subpath 只量过 String 与 NodePath（收到 ${valueTypeName(val)}）`);
+}
+
 export const GLOBAL_CALLABLE_IMPLEMENTED: ReadonlySet<string> = new Set(Object.keys(GLOBAL_IMPL));
 
 /**

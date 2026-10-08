@@ -142,9 +142,11 @@ class Needs extends rt.GdScriptObject {
 
   constructor(p_a: rt.Variant = rt.toInt(rt.V.int(7))) {
     super();
-    p_a = rt.paramSlot(p_a, "int", 1, "_init", this);
-    this.a = rt.toInt(p_a);
-    print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a)]));
+    if (!rt.bareConstruction()) {
+      p_a = rt.paramSlot(p_a, "int", 1, "_init", this);
+      this.a = rt.toInt(p_a);
+      print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a)]));
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

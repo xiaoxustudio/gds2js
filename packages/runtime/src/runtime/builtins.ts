@@ -5,7 +5,7 @@ import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq, valueType
 import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
-import { ClassDesc, GdScriptObject, dictShapeOf } from "./object";
+import { ClassDesc, GdScriptObject, dictShapeOf, dictWrittenOf } from "./object";
 import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { GdRid, allocateRid, rid } from "./rid";
@@ -1151,11 +1151,14 @@ export function gInstToDict(v: Variant): Variant {
   d.set(V.str("@subpath"), nodePathValue(shape.classPath));
   d.set(V.str("@path"), V.str(shape.resPath));
   const acc = shape.accessors;
+  const written = Object.keys(acc).length === 0 ? null : dictWrittenOf(inner);
   for (let i = 0; i < shape.names.length; i++) {
     const name = shape.names[i] as string;
     // `undefined` = 普通字段（读数器已经按同一顺序把值取好了）；`null` = 无类型的 get/set 属性（出门 `<null>`）。
     const declared = acc[name] as string | null | undefined;
-    const value = declared === undefined ? (shape.values[i] as Variant) : dictTypeDefault(declared);
+    // 带 get/set 的属性：引擎不调 getter，出门的是声明类型的默认值（S269 ④）；但 `dict_to_inst` 灌过那一格就改出门灌进去的原值（S272 ③）。
+    const carried = declared === undefined || written === null ? undefined : written[name];
+    const value = declared === undefined ? (shape.values[i] as Variant) : carried === undefined ? dictTypeDefault(declared) : carried;
     d.set(V.stringName(name), value);
   }
   return V.dict(d);

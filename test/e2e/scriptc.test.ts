@@ -42,7 +42,8 @@ const WORK = join(ROOT, "tmp", "sc-gate");
 /** 收尾只删本进程建过的这几份，不连锅端 `tmp/sc-gate` —— 那样会把另一个门进程正在编的替身树删掉。 */
 const created: string[] = [];
 
-/** 代表集：一族一格各一个。`246` 是「node 过、静态目标炸」那类的闸 —— 属性面按名索引只在 AOT 上暴露（S270 ④）。 */
+/** 代表集：一族一格各一个。`246` 是「node 过、静态目标炸」那类的闸 —— 属性面按名索引只在 AOT 上暴露（S270 ④）。
+ *  `266` 是它的续集：`dict_to_inst` 要的是「实例上那张按名的原值表 + 不跑 `_init` 的构造路」，两条都只有 AOT 才验得出来。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -54,6 +55,7 @@ const DEFAULT_SET = [
   "200-module-const-shadows-global",
   "234-string-methods-batch",
   "246-format-object-props",
+  "266-dict-to-inst",
   "032-preload-load",
 ];
 
