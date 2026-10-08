@@ -227,6 +227,7 @@ describe("NodePath 族的发射闸门", () => {
     'var d = { ^"a/b": 1 }\n\tprint(d.keys())',
     'var p = NodePath("a")\n\tmatch p:\n\t\t^"a":\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
     'match ^"a":\n\t\t"a":\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
+    'var p = NodePath("a")\n\tmatch p:\n\t\tNodePath("a"):\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
   ];
 
   it("臂里的字面量走 rt.patLit(rt.nodePathCtor(...))，异型臂不抛只走默认", async () => {

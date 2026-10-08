@@ -29,6 +29,13 @@ func n(p, tag):
 		_:
 			print(tag, "other")
 
+func c2(p, tag):
+	match p:
+		NodePath("a/b"):
+			print(tag, "np-call-arm")
+		_:
+			print(tag, "other")
+
 func _initialize():
 	g(^"a/b", "t01|")
 	g(NodePath("a/b"), "t02|")
@@ -46,4 +53,9 @@ func _initialize():
 	n(&"a/b", "t14|")
 	n(5, "t15|")
 	n(^"a/b", "t16|")
+	c2(NodePath("a/b"), "t17|")
+	c2(^"a/b", "t18|")
+	c2("a/b", "t19|")
+	c2(&"a/b", "t20|")
+	c2(5, "t21|")
 	quit()

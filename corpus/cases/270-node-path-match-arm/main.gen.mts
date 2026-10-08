@@ -69,6 +69,21 @@ export class Main extends SceneTree {
     } while (false);
   }
   
+  c2(p: rt.Variant, tag: rt.Variant): void {
+    do {
+      const __m0 = rt.matchPattern(p, rt.patLit(rt.nodePathCtor([rt.V.str("a/b")])));
+      if (__m0 !== null) {
+        print(rt.showArgs([tag, rt.V.str("np-call-arm")]));
+        break;
+      }
+      const __m1 = rt.matchPattern(p, rt.patWild());
+      if (__m1 !== null) {
+        print(rt.showArgs([tag, rt.V.str("other")]));
+        break;
+      }
+    } while (false);
+  }
+  
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
     this.g(rt.nodePathCtor([rt.V.str("a/b")]), rt.V.str("t01|"));
@@ -87,6 +102,11 @@ export class Main extends SceneTree {
     this.n(rt.V.stringName("a/b"), rt.V.str("t14|"));
     this.n(rt.V.int(5), rt.V.str("t15|"));
     this.n(rt.nodePathCtor([rt.V.str("a/b")]), rt.V.str("t16|"));
+    this.c2(rt.nodePathCtor([rt.V.str("a/b")]), rt.V.str("t17|"));
+    this.c2(rt.nodePathCtor([rt.V.str("a/b")]), rt.V.str("t18|"));
+    this.c2(rt.V.str("a/b"), rt.V.str("t19|"));
+    this.c2(rt.V.stringName("a/b"), rt.V.str("t20|"));
+    this.c2(rt.V.int(5), rt.V.str("t21|"));
     this.quit();
   }
   
@@ -95,6 +115,7 @@ export class Main extends SceneTree {
       case "g": return rt.wrapValue(this.g(args[0] as rt.Variant, args[1] as rt.Variant));
       case "h": return rt.wrapValue(this.h(args[0] as rt.Variant, args[1] as rt.Variant));
       case "n": return rt.wrapValue(this.n(args[0] as rt.Variant, args[1] as rt.Variant));
+      case "c2": return rt.wrapValue(this.c2(args[0] as rt.Variant, args[1] as rt.Variant));
       case "_initialize": return rt.wrapValue(this.__gd__initialize());
       default: return super.__gdDispatch(name, args);
     }
@@ -104,7 +125,7 @@ export class Main extends SceneTree {
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
-rt.registerMethodArities(__gd_d_Main, { "g": [2, 2], "h": [2, 2], "n": [2, 2], "_initialize": [0, 0] });
+rt.registerMethodArities(__gd_d_Main, { "g": [2, 2], "h": [2, 2], "n": [2, 2], "c2": [2, 2], "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);

@@ -434,6 +434,13 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)) };
     case "node_path":
       return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)) };
+    case "call": {
+      // 手臂里引擎还认构造调用，本轮只收量过的那一支：`match p: NodePath("a/b")`（`tmp/probe-match-arm/arms.mts`，
+      // 其余构造名与 `Vector2(1, x)` 那种非常量实参的读数记在 §6 第 28 条）。
+      const np = nodePathArm(n);
+      if (np !== null) return { kind: "lit", lit: "node_path", value: np };
+      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
+    }
     case "true":
       return { kind: "lit", lit: "bool", value: true };
     case "false":
@@ -568,6 +575,19 @@ function stripAmp(text: string): string {
 
 function stripCaret(text: string): string {
   return text.startsWith("^") ? text.slice(1) : text;
+}
+
+/** 手臂只认量过的那一支构造：`NodePath("…")` 带一支字符串字面量实参（`tmp/probe-match-arm/arms.mts`）。 */
+function nodePathArm(n: SyntaxNode): string | null {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier" || callee.text !== "NodePath") return null;
+  const argsNode = field(n, "arguments");
+  if (argsNode === null) return null;
+  const args = named(argsNode);
+  if (args.length !== 1) return null;
+  const only = args[0] ?? null;
+  if (only === null || only.type !== "string") return null;
+  return unquote(only.text);
 }
 
 function unquote(raw: string): string {
