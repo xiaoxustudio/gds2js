@@ -13,7 +13,7 @@ import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
 import { GdRid } from "./rid";
-import { asNodePath, GdNodePath, nodePathValue, sameNodePath } from "./node-path";
+import { asNodePath, GdNodePath, nodePathValue } from "./node-path";
 
 export type Pat =
   | { k: "wild" }
@@ -39,12 +39,21 @@ export function matchPattern(subject: Variant, p: Pat): Variant[] | null {
   return matches(subject, p, out) ? out : null;
 }
 
+/** 手臂的型别：String 与 StringName 算一支，其余非 OBJECT 按 Tag，OBJECT 按原型 —— Callable 盒子并成一支，免得每次读属性新建的盒子把同一条等式拆散。 */
+function armKind(v: Variant): unknown {
+  if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return "string";
+  if (v.t !== Tag.OBJECT) return v.t;
+  const o = v.v;
+  if (o === null || typeof o !== "object") return "object";
+  if (isCallableBox(o)) return "callable";
+  return Object.getPrototypeOf(o);
+}
+
+/** 臂那一侧是**类型严格**的等式（S279 量的）：`5` 臂遇到 `5.0` 走 `_`，`Vector2(1, 2)` 臂遇到 RID / null 同样走 `_`；只有 String 与 StringName 互认。异型一律假 —— 不像算子 `==` 那样抛。 */
 function armEq(s: Variant, v: Variant): boolean {
-  // match 臂的等式不抛：异型一律假（实测 m01 / m04 / m05 —— `^"a/b"` 臂遇到 String 走 `_`，`Vector2(1, 2)` 臂遇到 String 也走 `_`）。
-  const sp = asNodePath(s);
-  const vp = asNodePath(v);
-  if (sp === null && vp === null) return valueEq(s, v);
-  return sp !== null && vp !== null && sameNodePath(sp, vp);
+  const ks = armKind(s);
+  if (ks !== armKind(v)) return false;
+  return valueEq(s, v);
 }
 
 function matches(s: Variant, p: Pat, out: Variant[]): boolean {
