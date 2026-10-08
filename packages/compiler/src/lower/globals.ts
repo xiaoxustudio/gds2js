@@ -7,10 +7,6 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
  * 带实例号的那一族（`weakref` / `instance_from_id` / `is_instance_*`）已按 S263 的合成号口径发出，不在这张清单里。
  */
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
-  "get_stack",
-  "print_stack",
-  "push_error",
-  "push_warning",
   // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。
   // 少了这一批，`sin(0.5)` 这种合法调用会被报成 `[call-unknown]`「Godot 也没有这个名字」—— 那是假话，而且值位置还会被误拦。
   "bytes_to_var",

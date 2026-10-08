@@ -332,6 +332,8 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   }
 
   const modules: CompiledModule[] = [];
+  // 调用栈那一族是全工程一事的：任何一份脚本提到它，每一份都打帧点，跨文件的帧链才不断（S281 ⑤）。
+  const projectFrames = [...loaded.values()].some((l) => l.module.usesStack === true);
   for (const l of loaded.values()) {
     const inherited = inheritedMembers(l, loaded, classIndex);
     const globals = new Set<string>([...classIndex.keys(), ...inherited]);
@@ -402,6 +404,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
         ? l.module.funcs.map((f) => f.name)
         : [...attrNames],
       extendedByScript: extendedModules.has(l.resPath),
+      frames: projectFrames,
       runtimeMode: opts.runtimeMode ?? "import",
       standaloneInline: opts.standaloneInline,
       standaloneRequirePath:

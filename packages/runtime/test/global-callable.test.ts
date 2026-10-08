@@ -90,12 +90,14 @@ describe("runtime/global-callable · 全局函数的 Callable 值", () => {
   });
 
   it("239 · 没实现的式子只拒调用，不拒取值", async () => {
-    // 随机族那七支已入派发表（S261），这里只剩打印族与实例身份那一族。
-    const refused = ["prints", "printt", "print_rich", "print_verbose", "push_error", "push_warning", "get_stack", "print_stack", "print"];
+    // 随机族那七支已入派发表（S261）、调用栈那一族四支也跟着 S281 入了，这里只剩打印族。
+    const refused = ["prints", "printt", "print_rich", "print_verbose", "print"];
     eq("239", "这批没实现的族：.call 都是 [global-callable-call]", refused.map((n) => code(() => method(globalCallable(n), "call", [I(1)]))).join("|"), refused.map(() => "[global-callable-call]").join("|"));
     eq("239", "同一批的 callv 也拒（区间闸门是 null，跳过去直接撞式子）", refused.map((n) => code(() => method(globalCallable(n), "callv", [arrOf()]))).join("|"), refused.map(() => "[global-callable-call]").join("|"));
     eq("239", "同一批的等式与面照常发：abs.bind() == abs 假、bind(1) == bind(2) 真", `${run(() => method(nullCallable(), "is_null", []))}|${code(() => method(globalCallable("prints"), "is_valid", []))}`, "1|true|通过");
     eq("239", "名字不在实测表里（发射器不该发出来）响亮拒", code(() => globalCallable("NoSuchGlobal")), "[global-callable-name]");
+    // 调用栈那一族四支已入派发表（S281）：`.call()` 走的是同一套式子，区间闸门也照实测（print_stack 只收 0 支）。
+    eq("239", "get_stack.call() 给 Array（typeof 28）的空栈、print_stack.call(1) 撞区间那句", `${run(() => method(globalCallable("get_stack"), "call", []))}|${code(() => method(globalCallable("print_stack"), "call", [I(1)]))}`, "28|[]|[callable-arity]");
   });
 
   it("239 · 实测表与式子表一一对上", async () => {
@@ -104,10 +106,10 @@ describe("runtime/global-callable · 全局函数的 Callable 值", () => {
     eq("239", "值名集合就是这张表的键", String(GLOBAL_VALUE_NAMES.size), "126");
     const needCall = names.filter((n) => GLOBAL_CALLABLES[n]!.bounds !== null);
     const missing = needCall.filter((n) => !GLOBAL_CALLABLE_IMPLEMENTED.has(n));
-    eq("239", "有区间的每一支都发得出式子（漏一支就在这里现形）", `${String(needCall.length)}|${missing.join(",")}`, "110|");
+    eq("239", "有区间的每一支都发得出式子（漏一支就在这里现形）", `${String(needCall.length)}|${missing.join(",")}`, "114|");
     const extra = [...GLOBAL_CALLABLE_IMPLEMENTED].filter((n) => GLOBAL_CALLABLES[n]?.bounds === null);
     eq("239", "式子表里没有「该拒的那支」（拒与发不能同时挂在一个名字上）", extra.join(","), "");
-    eq("239", "该拒的 16 支：区间是 null", String(names.filter((n) => GLOBAL_CALLABLES[n]!.bounds === null).length), "16");
+    eq("239", "该拒的 12 支：区间是 null", String(names.filter((n) => GLOBAL_CALLABLES[n]!.bounds === null).length), "12");
     eq("239", "类型名一支都不在表里（实测值位置全被解析期拒）", ["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Callable", "PackedByteArray", "PackedStringArray"].filter((n) => GLOBAL_VALUE_NAMES.has(n)).join(","), "");
     eq("239", "标签前缀只有两种：@GDScript 那批是实测的十二支", names.filter((n) => GLOBAL_CALLABLES[n]!.scope === "GDScript").sort().join(","), "char,convert,dict_to_inst,get_stack,inst_to_dict,is_instance_of,len,load,print_debug,print_stack,range,type_exists");
   });

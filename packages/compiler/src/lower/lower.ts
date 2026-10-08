@@ -56,11 +56,16 @@ function lowerType(n: SyntaxNode): TypeRef {
 
 /** `lower()` 一次调用内累计：这一份模块有没有 compress()/decompress() 调用。 */
 let packCodecUse = false;
+/** `lower()` 一次调用内累计：这一份模块有没有提到调用栈那一族的四个名字（含当值用的 `var c = push_error`）。 */
+let stackUse = false;
+const STACK_NAMES = new Set(["get_stack", "print_stack", "push_error", "push_warning"]);
 
 export function lower(tree: Tree): Module {
   packCodecUse = false;
+  stackUse = false;
   const m = lowerModule(tree.rootNode);
   if (packCodecUse) m.usesPackCodec = true;
+  if (stackUse) m.usesStack = true;
   return m;
 }
 
@@ -481,8 +486,10 @@ function lowerExpr(n: SyntaxNode): Expr {
       return { kind: "lit", lit: "bool", value: false, loc: c };
     case "null":
       return { kind: "lit", lit: "null", value: null, loc: c };
-    case "identifier":
+    case "identifier": {
+      if (STACK_NAMES.has(n.text)) stackUse = true;
       return { kind: "ident", name: n.text, loc: c };
+    }
     case "parenthesized_expression":
       return lowerExpr(need(named(n)[0], "括号表达式"));
     case "unary_operator":

@@ -60,6 +60,7 @@ const DEFAULT_SET = [
   "267-is-instance-of",
   "268-node-path-literal",
   "272-ctor-match-arms",
+  "273-stack-frames",
   "032-preload-load",
 ];
 

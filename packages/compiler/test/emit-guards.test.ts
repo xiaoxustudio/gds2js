@@ -77,11 +77,12 @@ describe("打印一族的发射与拒答", () => {
     expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
   });
 
-  it("拒的三支把缘由写在错文里", async () => {
+  it("拒的四支把缘由写在错文里", async () => {
     for (const [name, want] of [
-      ["print_stack", "指针号"],
-      ["push_error", "variant_utility.cpp:1024"],
-      ["push_warning", "variant_utility.cpp:1034"],
+      ["var_to_bytes", "二进制编码"],
+      ["var_to_bytes_with_objects", "对象表"],
+      ["bytes_to_var", "没逐字节量过"],
+      ["bytes_to_var_with_objects", "对象表"],
     ] as Array<[string, string]>) {
       expect(await classify(PRINT(`${name}()`), "ok"), `${name} 该拒`).toBe("emit-builtin");
       expect(await msg(PRINT(`${name}()`)), `${name} 的错文`).toContain(want);
@@ -92,6 +93,61 @@ describe("打印一族的发射与拒答", () => {
     const code = await emitted(BODY(['print_debug("x")', "quit()"]));
     expect(code, "print_debug 走 printDebug").toContain('printDebug([rt.V.str("x")]');
     expect(code, "第二句的 At: 由发射器写好路径、行号与所在函数").toContain('.gd", 4, "_initialize")');
+  });
+});
+
+// ── ①i 调用栈那一族：四支都发得出，帧打点只进用到它们的模块（S281，语料 273）──
+describe("调用栈一族的发射与帧打点", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ROWS: Array<[string, string]> = [
+    ["print_stack()", "rt.gPrintStack()"],
+    ["get_stack()", "rt.gGetStack()"],
+    ['push_error("boom")', 'rt.gPushError([rt.V.str("boom")])'],
+    ['push_warning("a", "b")', 'rt.gPushWarning([rt.V.str("a"), rt.V.str("b")])'],
+  ];
+  const FRAMED = "extends SceneTree\n\nfunc deep():\n\tprint_stack()\n\nfunc _initialize():\n\tdeep()\n\tquit()\n";
+  const PLAIN = "extends SceneTree\n\nfunc deep():\n\tprint(1)\n\nfunc _initialize():\n\tdeep()\n\tquit()\n";
+
+  it("四支各发各的 runtime 名", async () => {
+    for (const [call, want] of ROWS) {
+      const src = PRINT(call);
+      expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${call} 的发射`).toContain(want);
+    }
+  });
+
+  it("用到才打点：一进一出配 finally，语句各带自己的行号", async () => {
+    const code = await emitted(FRAMED);
+    expect(code, "帧按函数名进栈").toContain('rt.frameEnter("Main.gd", "deep")');
+    expect(code, "栈顶那一帧报的是当前语句行").toContain("rt.frameLine(4);");
+    expect(code, "退栈在 finally 里，提前 return 与抛错都不留帧").toContain("rt.frameExit(__gd_frame);");
+  });
+
+  it("没用到这四支的产物一行打点都不加", async () => {
+    const code = await emitted(PLAIN);
+    expect(code, "其余模块零开销").not.toContain("rt.frameEnter");
+    expect(code, "连行号打点也没有").not.toContain("rt.frameLine");
+  });
+
+  it("print_stack 与 get_stack 只收 0 支，push_* 却是 0..N", async () => {
+    expect(await classify(PRINT("print_stack(1)"), "ok"), "print_stack 多给该拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("print_stack(1)"))).toBe(
+      'Too many arguments for "print_stack()" call. Expected at most 0 but received 1.',
+    );
+    expect(await classify(PRINT("get_stack(1)"), "ok"), "get_stack 多给该拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("get_stack(1)"))).toBe(
+      'Too many arguments for "get_stack()" call. Expected at most 0 but received 1.',
+    );
+    expect(await classify(PRINT('push_error("a", "b", "c")'), "ok"), "push_error 是 0..N").toBe("ok");
+    expect(await classify(PRINT("push_error()"), "ok"), "空实参照打（实测出一句 `ERROR: `）").toBe("ok");
+    expect(await classify(PRINT('push_warning("a", 5)'), "ok"), "push_warning 也拼实参").toBe("ok");
   });
 });
 

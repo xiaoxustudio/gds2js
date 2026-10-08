@@ -18,6 +18,7 @@ import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
+import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
 import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
@@ -1229,6 +1230,10 @@ function ga(a: Variant[], i: number): Variant {
 
 /** 全局 Callable 的「名字 → 式子」：一支一支对着实测的调用路径写的，与发射器那张 `BUILTIN` 表同形。 */
 const GLOBAL_IMPL: Record<string, Fn> = {
+  get_stack: () => gGetStack(),
+  print_stack: () => gPrintStack(),
+  push_error: (a) => gPushError(a),
+  push_warning: (a) => gPushWarning(a),
   abs: (a) => abs(ga(a, 0)),
   absf: (a) => gAbsF(ga(a, 0)),
   absi: (a) => gAbsI(ga(a, 0)),

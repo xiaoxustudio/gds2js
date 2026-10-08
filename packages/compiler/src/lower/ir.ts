@@ -139,4 +139,6 @@ export interface Module {
   innerClasses: ClassDecl[];
   /** 用了 PackedByteArray 的 compress()/decompress() —— `--pack scriptc` 据此铺 zstd 宿主并加 `--dynamic`。 */
   usesPackCodec?: boolean;
+  /** 用了 `get_stack` / `print_stack` / `push_error` / `push_warning` 之一 —— 发射器据此给本模块的函数体打帧点（S281 ⑤）。 */
+  usesStack?: boolean;
 }
