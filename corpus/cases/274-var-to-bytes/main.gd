@@ -1,0 +1,43 @@
+extends SceneTree
+
+func enc(tag, v):
+	var b = var_to_bytes(v)
+	print(tag, "vb|", b)
+	var r = bytes_to_var(b)
+	print(tag, "rt|", r == v, "|", typeof(r), "|", str(r))
+
+func raw(tag, bytes):
+	var r = bytes_to_var(PackedByteArray(bytes))
+	print(tag, "bad|", typeof(r), "|", str(r))
+
+func _initialize():
+	enc("t01|", null)
+	enc("t02|", true)
+	enc("t03|", false)
+	enc("t04|", 5)
+	enc("t05|", -1)
+	enc("t06|", 2147483647)
+	enc("t07|", -2147483648)
+	enc("t08|", 4294967296)
+	enc("t09|", 0.0)
+	enc("t10|", 1.5)
+	enc("t11|", 0.1)
+	enc("t12|", PI)
+	enc("t13|", -2.5)
+	enc("t14|", 16777216.0)
+	enc("t15|", 16777217.0)
+	enc("t16|", "abc")
+	enc("t17|", "héllo")
+	enc("t18|", "😀")
+	enc("t19|", &"a")
+	enc("t20|", Vector2(1, 2))
+	enc("t21|", Vector3(1, 2, 3))
+	enc("t22|", Vector2i(1, 2))
+	enc("t23|", Color(0.25, 0.5, 0.75, 1))
+	enc("t24|", [1, 2])
+	enc("t25|", [1, [2, 3]])
+	enc("t26|", { "a": 1 })
+	enc("t27|", PackedByteArray([1, 2, 3]))
+	enc("t28|", PackedFloat64Array([1.5]))
+	enc("t29|", -0.0)
+	quit()

@@ -61,6 +61,7 @@ const DEFAULT_SET = [
   "268-node-path-literal",
   "272-ctor-match-arms",
   "273-stack-frames",
+  "274-var-to-bytes",
   "032-preload-load",
 ];
 

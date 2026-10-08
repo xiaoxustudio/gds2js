@@ -10,6 +10,7 @@ export * from "./object";
 export * from "./slots";
 export * from "./patterns";
 export * from "./frames";
+export * from "./var-bytes";
 export * from "./vector2";
 export * from "./vector3";
 export * from "./vector2i";

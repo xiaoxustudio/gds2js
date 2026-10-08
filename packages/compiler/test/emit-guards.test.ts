@@ -77,15 +77,13 @@ describe("打印一族的发射与拒答", () => {
     expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
   });
 
-  it("拒的四支把缘由写在错文里", async () => {
+  it("仍拒的两支把缘由写在错文里", async () => {
     for (const [name, want] of [
-      ["var_to_bytes", "二进制编码"],
       ["var_to_bytes_with_objects", "对象表"],
-      ["bytes_to_var", "没逐字节量过"],
       ["bytes_to_var_with_objects", "对象表"],
     ] as Array<[string, string]>) {
-      expect(await classify(PRINT(`${name}()`), "ok"), `${name} 该拒`).toBe("emit-builtin");
-      expect(await msg(PRINT(`${name}()`)), `${name} 的错文`).toContain(want);
+      expect(await classify(PRINT(`${name}(5)`), "ok"), `${name} 该拒`).toBe("emit-builtin");
+      expect(await msg(PRINT(`${name}(5)`)), `${name} 的错文`).toContain(want);
     }
   });
 
@@ -343,6 +341,39 @@ describe("构造式手臂的发射闸门", () => {
     for (const arm of REFUSED) {
       expect(await classify(armSrc(arm), "ok"), `${arm} 该拦下来`).not.toBe("ok");
     }
+  });
+});
+
+// ── ①j 二进制序列那两支：发成 rt.gVarToBytes / rt.gBytesToVar，元数一句照引擎，带对象表的仍拒（S282，语料 274）──
+describe("var_to_bytes 族的发射闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ROWS: Array<[string, string]> = [
+    ["var_to_bytes(5)", "rt.gVarToBytes(rt.V.int(5))"],
+    ["bytes_to_var(var_to_bytes(5))", "rt.gBytesToVar(rt.gVarToBytes(rt.V.int(5)))"],
+  ];
+
+  it("两支各发各的 runtime 名", async () => {
+    for (const [call, want] of ROWS) {
+      const src = PRINT(call);
+      expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");
+      expect(await emitted(src), `${call} 的发射`).toContain(want);
+    }
+  });
+
+  it("少给与多给是引擎那两句", async () => {
+    expect(await classify(PRINT("var_to_bytes()"), "ok"), "var_to_bytes 少给该拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("var_to_bytes()"))).toBe('Too few arguments for "var_to_bytes()" call. Expected at least 1 but received 0.');
+    expect(await classify(PRINT("bytes_to_var()"), "ok"), "bytes_to_var 少给该拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("bytes_to_var()"))).toBe('Too few arguments for "bytes_to_var()" call. Expected at least 1 but received 0.');
+    expect(await classify(PRINT("var_to_bytes(5, 6)"), "ok"), "多给也拦").toBe("builtin-arity");
+    expect(await textOf(PRINT("var_to_bytes(5, 6)"))).toBe('Too many arguments for "var_to_bytes()" call. Expected at most 1 but received 2.');
   });
 });
 
