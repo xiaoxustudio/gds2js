@@ -759,6 +759,14 @@
 - **语料侧只能走预期报错**：引擎那一形整支脚本加载失败，golden 记的就是那四行；这类格子 JS 侧不参与逐字节对拍，所以对它作数的是 `test:compile` 的两行分账：**分析器拦下 69 → 70、emitter 不支持保持 0**。
 - **两侧合成一条口径**：分析期只吃「两参都是字面量」那一形，其余全交给运行期那句引擎原文（运行期侧一字未动）。
 - **账**：typecheck 4/4、`test:compile` **190/260**（拦下 70、缺口 0）、guards **187**、`test:diff` **182/182** 逐字节（共 269 例）；`pnpm test` 与 golden-check / codegen / scriptc / pkgmodes / export / cli-native 的读数记在提交信息里。
+
+### 1.81 match 臂用的是另一条等式：`^"a/b"` 进模式位，异型只走默认不抛（2026-10-08，S278，语料 270，§6 第 28 条前半结清）
+
+- **这一格是 S275 那轮欠的**：当时发现臂比较不抛、我们的臂却降成会抛的 `==`，两条形都不发。这轮把量清的那半补上：`^"…"` 可以当手臂，异型落 `_`。
+- **量的关键三格**（`tmp/probe-match-arm/run.mts`）：五臂同摆时 StringName 与 String 都落字符串臂、NodePath 只落自己的臂；只摆字符串臂时 `NodePath("a/b")` 落 `_`（**不报错**）；而 `when q == ^"a/b"` 的 guard 遇到 String 照旧是运行期那句带 backtrace 的错 —— 一条链上两条等式，分得很清。
+- **实现最小**：`lowerPattern` 收 `node_path`（与 `&"…"` 共用 `unquote`），发射复用 `rt.patLit(...)`；`patterns.ts` 的 `armEq` 只在有一侧是 NodePath 时接管，其余仍走 `valueEq`。RID 手臂故意不动：引擎那里 `rid_from_int64(5)` 根本不算常量表达式，而 RID Subject 对上别的手臂给什么没量 —— 按红线不猜。
+- **剩下两格记在 §6 第 28 条**：`Vector2(1, 2)` 那种调用式手臂（引擎认，我们报 `[pattern] 模式 call 未支持`，读数已记）与 RID 那一形。
+- **账**：语料 270 共 16 格逐字节、`test:compile` **191/261**（emitter 缺口 0）、guards **188**；其余门读数见提交信息。
 ---
 
 ## 2. 当前任务与待办
