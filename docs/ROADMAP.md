@@ -751,6 +751,14 @@
 - **元数与标签的实测**（`arity.mts`）：`push_error` / `push_warning` 属 `@GlobalScope::`（argc 1，但实参是 **0..N 顺次拼**，`push_error("a","b","c")` 给 `abc`）；`get_stack` / `print_stack` 属 `@GDScript::`、argc 0、多给报 `Expected at most 0`。两块文本走 **stderr**，而门的 `runGodot` 是 stdout 拼 stderr —— 写语料时这两块只能排在所有 print 之后。
 - **发射侧的省活方案（读数量完才知道可行）**：帧的 `line` 只有两种来源 —— 栈顶那帧是「本函数里那句 `get_stack` / `push_error` 所在行」，父帧是「它调用下游那一行」。两类都是**调用点**，所以打点只需包在 call 表达式外面（`(rt.frameAt(41), foo())` 这种逗号式）而不是每条语句都打；进出函数一对 `frameEnter` / `frameLeave`，为了让 `return` 与异常都弹干净，flag 打开的模块才把函数体套 `try/finally`。**没用到这四支的模块一行打点都不加**（零开销），flag 在发射期扫模块 AST 就能定。
 - **账**：无实现变更，门读数沿用 §1.78 那一笔（`test:diff` 182/182、`test:golden-check` 268/268 漂移 0、scriptc 代表集 14/14、ops 1918、guards 186）。
+
+### 1.80 把 `is_instance_of` 的越界字面量搬到分析期：分岔看的是第一参（2026-10-08，S277，§6 第 26 条结清）
+
+- **为什么值得单独一格**：S274 出货时把这一形留在「运行期那一句」，并记了一句「字面量越界在引擎是解析期」—— 那句话不准确。补量之后规则不是范围也不是第二参的字面量性，而是**第一参是不是字面量**：`is_instance_of(5, 1000)` 解析期拒，`is_instance_of(a, 999)` 与 `(a, 99)` 却走到运行期那句（`tmp/probe-is/arg1.mts` + `boundary.mts`，12 个数值全跑过）。
+- **落点选在分析器**：`tools/compile.ts` 的分账要求「emitter 不支持」保持 0，而这一形在引擎本来就是分析期的事，所以新增 `instanceOfTypeArgMessage`（diagnostic 码 `instance-of-type-arg`），界只留一个常量 38（= `TYPE_MAX` 前一格：实测 38 照跑、39 拒）。`-1` 在 IR 里是一元负号套字面量，也算字面量。
+- **语料侧只能走预期报错**：引擎那一形整支脚本加载失败，golden 记的就是那四行；这类格子 JS 侧不参与逐字节对拍，所以对它作数的是 `test:compile` 的两行分账：**分析器拦下 69 → 70、emitter 不支持保持 0**。
+- **两侧合成一条口径**：分析期只吃「两参都是字面量」那一形，其余全交给运行期那句引擎原文（运行期侧一字未动）。
+- **账**：typecheck 4/4、`test:compile` **190/260**（拦下 70、缺口 0）、guards **187**、`test:diff` **182/182** 逐字节（共 269 例）；`pnpm test` 与 golden-check / codegen / scriptc / pkgmodes / export / cli-native 的读数记在提交信息里。
 ---
 
 ## 2. 当前任务与待办
