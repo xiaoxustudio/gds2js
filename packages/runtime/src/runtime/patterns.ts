@@ -13,7 +13,7 @@ import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
 import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
 import { GdRid } from "./rid";
-import { asNodePath, GdNodePath, nodePathValue } from "./node-path";
+import { asNodePath, GdNodePath, nodePathValue, sameNodePath } from "./node-path";
 
 export type Pat =
   | { k: "wild" }
@@ -39,6 +39,14 @@ export function matchPattern(subject: Variant, p: Pat): Variant[] | null {
   return matches(subject, p, out) ? out : null;
 }
 
+function armEq(s: Variant, v: Variant): boolean {
+  // match 臂的等式不抛：异型一律假（实测 m01 / m04 / m05 —— `^"a/b"` 臂遇到 String 走 `_`，`Vector2(1, 2)` 臂遇到 String 也走 `_`）。
+  const sp = asNodePath(s);
+  const vp = asNodePath(v);
+  if (sp === null && vp === null) return valueEq(s, v);
+  return sp !== null && vp !== null && sameNodePath(sp, vp);
+}
+
 function matches(s: Variant, p: Pat, out: Variant[]): boolean {
   switch (p.k) {
     case "wild":
@@ -47,9 +55,9 @@ function matches(s: Variant, p: Pat, out: Variant[]): boolean {
       out.push(s);
       return true;
     case "lit":
-      return valueEq(s, p.v);
+      return armEq(s, p.v);
     case "const":
-      return valueEq(s, p.v);
+      return armEq(s, p.v);
     case "arr": {
       if (s.t !== Tag.ARRAY) return false;
       const items = (s.v as GArray).raw();

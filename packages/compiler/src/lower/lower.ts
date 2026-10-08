@@ -432,6 +432,8 @@ function lowerPattern(n: SyntaxNode): Pattern {
       return { kind: "lit", lit: "string", value: unquote(n.text) };
     case "string_name":
       return { kind: "lit", lit: "string_name", value: unquote(stripAmp(n.text)) };
+    case "node_path":
+      return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)) };
     case "true":
       return { kind: "lit", lit: "bool", value: true };
     case "false":

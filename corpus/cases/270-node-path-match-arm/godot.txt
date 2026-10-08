@@ -1,0 +1,16 @@
+t01|np-arm
+t02|np-arm
+t03|string-arm
+t04|string-arm
+t05|int-arm
+t06|array-arm
+t07|other
+t08|other
+t09|other
+t10|other
+t11|string-arm
+t12|string-arm
+t13|other
+t14|other
+t15|other
+t16|np-arm

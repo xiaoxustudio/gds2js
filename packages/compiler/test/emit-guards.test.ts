@@ -225,7 +225,14 @@ describe("NodePath 族的发射闸门", () => {
     'print(^"a/b" == NodePath("a/b"))',
     'var p: NodePath = ^"a/b"',
     'var d = { ^"a/b": 1 }\n\tprint(d.keys())',
+    'var p = NodePath("a")\n\tmatch p:\n\t\t^"a":\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
+    'match ^"a":\n\t\t"a":\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)',
   ];
+
+  it("臂里的字面量走 rt.patLit(rt.nodePathCtor(...))，异型臂不抛只走默认", async () => {
+    const src = await emitted(MOD('var p = NodePath("a")\n\tmatch p:\n\t\t^"a":\n\t\t\tprint(1)'));
+    expect(src, "模式位也发同一个式子").toContain("rt.patLit(rt.nodePathCtor([rt.V.str(\"a\")]))");
+  });
 
   it("三种构造形与字面量都发成同一个 rt.nodePathCtor（实测 c1 / P7 / a05 三形 + b01 转义那格）", async () => {
     for (const [call, want] of CTORS) {
