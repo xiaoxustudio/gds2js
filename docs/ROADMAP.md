@@ -682,6 +682,8 @@
 - **新记一条方法学**：这几句报错过 `RTR()`，本机默认语言是中文（量到 `不是带有实例的脚本。`），**要英文原文得给引擎加 `--language en`**（`Not a script with an instance.`）。这类文案随跑门机器的语言漂，所以**不进语料、只进 ops**，中英两形都写进文档。
 - **账**：无实现变更，门读数沿用 §1.71 那一笔。下一轮照 S269 ⑨ 那份前置清单做 `inst_to_dict`（类路径登记 / 继承链字段合并 / accessor 的类型表），再单独一轮做 `dict_to_inst`。
 
+---
+
 ### 1.73 `inst_to_dict` 发出：类身份四段由发射器静态登记，顺带撞到一条静态目标的新围栏（2026-10-08，S270，语料 265，§1.72 那份清单花掉一半）
 
 - **进门名单与出门值都照 S269**：`@subpath`（NodePath 的类路径，根类为空）+ `@path`（模块 res 路径）是 String 键、字段键是 StringName、键序 `@subpath → @path → 声明序`；`const` / `static var` / `signal` 不进；继承链**基类在前**；带 get/set 的属性**不调 getter**，出门的是声明类型默认值（runtime 那张表贴了十六种实测形状，表外如 Rect2 响亮拒）。
@@ -690,6 +692,15 @@
 - **拒答清单又短一支**：`inst_to_dict` 从发射期拒答清单划进 `BUILTIN` + `BUILTIN_ARITY` + `GLOBAL_CALLABLES`（名表可派发 107→**108**、该拒 19→**18**、清单 11→**10**）。元数两句走引擎原文；`Not a script with an instance.` 这类**过 `RTR()` 的文案只在 ops 钉**（本机默认语言给中文，英文要 `--language en`，S269 ⑧）。单文件模式没有 res 路径，`@path` 那一格抛 `[inst-to-dict-path]` 而不是编一个。
 - **下一轮**：`dict_to_inst` 一支（读数已在 S269 ⑦：跳过 `_init`、缺 `@path` / 加载不到 / `@subpath` 不存在的三句、缺 `@subpath` 就是造模块根类那一形 Tier 1 发不出要拒）。它要的是「按 res 路径找脚本 + 按类路径找内嵌类」，与 `load()` 那张表贴在一起。
 - **账**：语料 265 共 32 行 golden / 27 格逐字节；`test:diff` **179/179**（共 265 例，静默 0、崩溃 0）、`pnpm test` **1104** 例 / 48 文件、ops 自校验 1884→**1892**、guards **184** 例、`test:compile` 187/256、codegen 2/2、pkgmodes 25/25、export ok 10 / FAIL 0、cli-native 20 例全过、typecheck 4/4；AOT 单例门 `265-inst-to-dict` **1/1 编过 + 1/1 跑通 + 逐字节一致**。**产物面 churn**：186 份 `main.gen.mts` 各多一行 `rt.registerDictIdentity(…)`，逐字节输出一条没变。**门维护两笔**：跑 `test:pkgmodes` / `test:cli-native` 前先 `pnpm build`（§1.71 那条口径这次照做，两门直接绿）；`pnpm test:compile` 撞到一次 Windows 的 `UNKNOWN open` 写盘错，重跑即过 —— 它是环境抖动，不是编译器问题，但**门链里排在它后面的那几步必须跟着重跑**（本轮第一次 SC265 / DIFF 红就是拿旧产物跑的假红）。
+
+### 1.74 修掉 String.format 的静态目标洞：那条记录转换连留作兜底都不行（2026-10-08，S271，任务 #45 结清）
+
+- **它是 S270 ④ 顺手抓到的一笔**：语料 246（`String.format()` 吃脚本实例）在 scriptc 上跑挂 `expected object at $.gdObjectId, got number`，而 node 侧 15 格一直逐字节过 —— 「只有 AOT 才暴露」的形状，且因为 246 不在代表集里，门从来没过这条路。
+- **定位只能截**：`GDS2JS_SCRIPTC_KEEP=1` 留住替身树 → 按格删 `print` 重编重跑（全删退出 0、留任何 format 格就炸）→ 再写最小探针：同一台对象 `print` 出来是 `<RefCounted#3>` 正常，走 format 立刻炸 —— 锁定 `strFormatV` 的 OBJECT 分支里 S232 那句 `as unknown as Record<string, Variant>`。
+- **最有用的一条**：改成「有读数器走读数器、没有就按名索引」之后**还是炸同一句**。scriptc 对「对象 → 记录形状」的校验挂在**转换语句本身**，不是执行到分支才校验。把那条 cast 彻底删掉、读数器变成 `registerScriptProps` 的必填第三参，才真的过。**结论：这类式子不能留在函数体里当兜底。**
+- **node 语义没动**：`const` / `static var` 在类上、实例按名取本来是 `undefined`，`s.NAME` 同值；带 get/set 的属性两条路都会触发原型 getter。41 份产物只多了一个实参，`test:diff` 179/179 逐字节照旧。
+- **门补上了**：246 进 scriptc 代表集（10 → **11** 格），门注释写明为什么在这 —— 下次再出现「node 绿、exe 炸」的形状，代表集先响。
+- **账**：`test:scriptc` 代表集 **11/11 出货一致**、`test:diff` **179/179**（265 例）、`pnpm test` 1104 / 48 文件、ops 1892、guards 184、compile 187/256、codegen 2/2、pkgmodes 25/25、export ok 10 / FAIL 0、cli-native 20 例、typecheck 4/4。
 ---
 
 ## 2. 当前任务与待办
@@ -796,7 +807,7 @@
 
 15. **`run --watch` 在原生目标上看不见「mtime 变了、字节数没变」的保存（2026-10-07 记，§1.66，未动实现）**：`gdSignature` 是 `路径:mtime:大小` 三段，node 侧四格延迟扫（0/6/12/30s）全部重跑，原生 exe 同一把扫法有两格不重跑，而父侧 `statSync` 每次都报出真实变了的 mtime —— 也就是失灵点在 scriptc 那一侧的读数或轮询里，**没量清就不改实现**。要动先做探头：一份只用 `node:fs` 的小 scriptc 产物，对同一个文件反复 `statSync().mtimeMs` 并与 node 同印一份，两侧数字对上了才知道该给摘要加哪一维（内容指纹 / 首块尺寸 / ctime）。门这边已经先把不确定性拿掉：`⑨b` 两次保存改成不等长（尺寸维必变），并等 `监听` + 首跑都出现再动手。
 16. **NodePath 值型已发出（2026-10-08，S268，语料 264），`inst_to_dict` 也已发出（同日 S270，语料 265）—— 这一族只剩 `dict_to_inst` 一支**：它要的是「按 res 路径找脚本 + 按类路径找内嵌类 + **跳过 `_init`** 造实例」（读数都在 S269 ⑦：缺 `@path`、路径加载不到、`@subpath` 指名不存在的类三句都已量；缺 `@subpath` 就是造模块根类那一形在 Tier 1 发不出，按响亮拒处理）。所以它仍留在发射期拒答清单（现共 **10** 支）上，不猜。**门维护口径**：`packages/gds2js/dist` 不入库，而 `test:pkgmodes` 与 `test:cli-native` 吃的就是那份 dist / exe —— 改了 `packages/*/src` 之后**先 `pnpm build` 再跑这两门**，否则报的是「`printDebug` is not exported by dist/host.mjs」这类过货假红（S268 那轮撞到并写进 §1.71，S270 这轮照做，两门直接绿）。
-17. **「node 跑得通、scriptc 出的 exe 当场炸」这类形状目前只有一格已知未修（2026-10-08 记，S270 ④，任务 #45）**：语料 246（`String.format()` 的实参是脚本实例）在 `GDS2JS_SCRIPTC_FILTER=246` 下跑挂 `expected object at $.gdObjectId, got number`，根源是 S232 `scriptPropsHook` 里那条「把类实例当 `Record<string, Variant>` 索引」—— 静态目标会拿记录形状去校验实例自己的槽，第一格就是 `gdObjectId`（build 侧同一式子给 SC2002）。修法就是 §1.73 那套静态读数器。**真正的缺口是门**：246 不在 scriptc 代表集里，所以这类问题不会自己现形；任务 #45 的第二半就是把这一形加进代表集，让「只有 AOT 才暴露」的形状从此有闸。
+17. ~~**「node 跑得通、scriptc 出的 exe 当场炸」这类形状只有一格已知未修（2026-10-08 记，S270 ④，任务 #45）**~~ —— **同日已修并已进门（S271，任务 #45 结清）**：语料 246（`String.format()` 的实参是脚本实例）当时在 `GDS2JS_SCRIPTC_FILTER=246` 下跑挂 `expected object at $.gdObjectId, got number`，根源是 S232 `scriptPropsHook` 里那条「把类实例当 `Record<string, Variant>` 索引」。修法与 §1.73 同一套（发射器按名单同序静态拼取值闭包），但**多量到一条**：scriptc 的校验挂在**转换语句本身**，把它留在函数体里当兜底也会炸 —— 所以 `registerScriptProps` 的读数器是**必填**第三参。**门也补上了**：246 进 scriptc 代表集（10 → 11 格），门注释写明它是这类形状的唯一已知样本，往后「只有 AOT 才暴露」的问题会先在这里响。
 
 ---
 
