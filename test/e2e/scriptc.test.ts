@@ -61,6 +61,15 @@ const DEFAULT_SET = [
   "268-node-path-literal",
   "272-ctor-match-arms",
   "273-stack-frames",
+  "274-var-to-bytes",
+  "275-wire-format-shapes",
+  "276-object-identity-bytes",
+  "277-object-table-shapes",
+  "278-var-to-str-float",
+  "279-decimal-reader",
+  "280-pow-precedence",
+  "281-int-pow-negative",
+  "282-vector-slide-bounce",
   "032-preload-load",
 ];
 

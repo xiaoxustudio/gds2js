@@ -48,3 +48,18 @@ export function weakRefBox(target: Variant | null): WeakRefBox {
 export function isWeakRefBox(inner: unknown): inner is WeakRefBox {
   return inner instanceof WeakRefBox;
 }
+
+/** `bytes_to_var()` 读到「身份直写」那一支 OBJECT 时造的盒子：自己占一个号（实测印 `<EncodedObjectAsID#号>`），
+ *  `get_object_id()` 给的是字节里那个号，与盒子自己的号无关（S285 ②）。 */
+export class EncodedObjectIdBox {
+  readonly gdObjectId: number = nextObjectId(this);
+  constructor(readonly storedId: number | bigint) {}
+}
+
+export function encodedObjectIdBox(storedId: number | bigint): EncodedObjectIdBox {
+  return new EncodedObjectIdBox(storedId);
+}
+
+export function isEncodedObjectIdBox(inner: unknown): inner is EncodedObjectIdBox {
+  return inner instanceof EncodedObjectIdBox;
+}

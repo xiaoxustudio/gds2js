@@ -562,17 +562,51 @@ function lowerExpr(n: SyntaxNode): Expr {
       const argsNode = field(n, "arguments");
       return { kind: "call", callee, args: argsNode ? named(argsNode).map(lowerExpr) : [], loc: c };
     }
-    case "binary_operator": {
-      const op = operatorOf(n);
-      const left = lowerExpr(need(field(n, "left"), "左操作数"));
-      const right = need(field(n, "right"), "右操作数");
-      if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
-      if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
-      return { kind: "binary", op, left, right: lowerExpr(right), loc: c };
-    }
+    case "binary_operator":
+      return lowerBinary(n, c);
     default:
       throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
   }
+}
+
+/** 引擎那一层的结合表：`**` 比 `*` `/` `%` 紧，四支都左结合（`tmp/probe-pow/`）。 */
+const MUL_LEVEL: Record<string, number> = { "**": 2, "*": 1, "/": 1, "%": 1 };
+
+/** 同一层的乘除模幂先按源码顺序摊平，再照这张表重排 —— 语法树把 `**` 排在 `*` `/` `%` 之后，直接用会给错值。 */
+function lowerBinary(n: SyntaxNode, c: Loc): Expr {
+  const op = operatorOf(n);
+  if (MUL_LEVEL[op] === undefined) {
+    const left = lowerExpr(need(field(n, "left"), "左操作数"));
+    const right = need(field(n, "right"), "右操作数");
+    if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
+    if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
+    return { kind: "binary", op, left, right: lowerExpr(right), loc: c };
+  }
+  const operands: SyntaxNode[] = [];
+  const ops: Array<{ op: string; node: SyntaxNode }> = [];
+  collectMulChain(n, operands, ops);
+  let at = 0;
+  const climb = (min: number): Expr => {
+    let left = lowerExpr(operands[at++]!);
+    while (at - 1 < ops.length && MUL_LEVEL[ops[at - 1]!.op]! >= min) {
+      const step = ops[at - 1]!;
+      const right = climb(MUL_LEVEL[step.op]! + 1);
+      left = { kind: "binary", op: step.op, left, right, loc: loc(step.node) };
+    }
+    return left;
+  };
+  return climb(1);
+}
+
+/** 摊平只吃没有括号包着的同层二元节点：`parenthesized_expression` 是另一种节点，天然挡住合并。 */
+function collectMulChain(n: SyntaxNode, operands: SyntaxNode[], ops: Array<{ op: string; node: SyntaxNode }>): void {
+  if (n.type === "binary_operator" && MUL_LEVEL[operatorOf(n)] !== undefined) {
+    collectMulChain(need(field(n, "left"), "左操作数"), operands, ops);
+    ops.push({ op: operatorOf(n), node: n });
+    collectMulChain(need(field(n, "right"), "右操作数"), operands, ops);
+    return;
+  }
+  operands.push(n);
 }
 
 /** `&"abc"` 的 CST 文本连前导 `&` 一起给，剥掉后才能和 String 共用同一套转义解码。 */
@@ -692,25 +726,26 @@ function unquote(raw: string): string {
       out += p;
       continue;
     }
-    if (p >= 0xd800 && p <= 0xdbff) {
+    const hi = p as number;
+    if (hi >= 0xd800 && hi <= 0xdbff) {
       const q = parts[k + 1];
       if (typeof q === "number" && q >= 0xdc00 && q <= 0xdfff) {
-        out += String.fromCodePoint(0x10000 + ((p - 0xd800) << 10) + (q - 0xdc00));
+        out += String.fromCodePoint(0x10000 + (hi - 0xd800) * 1024 + (q - 0xdc00));
         k++;
         continue;
       }
       throw new UnsupportedError(
         "string-escape",
-        `\\u${p.toString(16)} 是孤立的前置代理（Godot: Invalid UTF-16 sequence in string, unpaired lead surrogate）`,
+        `\\u${hi.toString(16)} 是孤立的前置代理（Godot: Invalid UTF-16 sequence in string, unpaired lead surrogate）`,
       );
     }
-    if (p >= 0xdc00 && p <= 0xdfff) {
+    if (hi >= 0xdc00 && hi <= 0xdfff) {
       throw new UnsupportedError(
         "string-escape",
-        `\\u${p.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
+        `\\u${hi.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
       );
     }
-    out += p === 0 || p > 0x10ffff ? "\uFFFD" : String.fromCodePoint(p);
+    out += hi === 0 || hi > 0x10ffff ? "\uFFFD" : String.fromCodePoint(hi);
   }
   return out;
 }

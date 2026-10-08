@@ -101,9 +101,13 @@ function arity(args: Variant[], n: number, who: string): void {
 }
 
 const lengthSq = (v: GVector3) => add(add(mul(v.x, v.x), mul(v.y, v.y)), mul(v.z, v.z));
+const dot3 = (a: GVector3, b: GVector3) => add(add(mul(a.x, b.x), mul(a.y, b.y)), mul(a.z, b.z));
 const flen = (x: number, y: number, z: number) => r(Math.sqrt(add(add(mul(x, x), mul(y, y)), mul(z, z))));
 
-/** Vector3 的方法面：复现不了的（`bounce` / `slide` / `reflect`）与未知成员都响亮报缺。 */
+/** `is_normalized()` 那一条判据，与 Vector2 同一口径（epsilon 两侧实测过）。 */
+const isUnit = (v: GVector3) => r(Math.abs(sub(lengthSq(v), 1))) < NORMALIZED_EPS;
+
+/** Vector3 的方法面：未知成员响亮报缺。 */
 export function vector3Method(v: GVector3, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length":
@@ -302,11 +306,33 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
     case "is_finite":
       arity(args, 0, "is_finite");
       return V.bool(Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z));
-    case "bounce":
-    case "slide":
-      throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（法向不是单位向量时 Godot 给零向量还往 stderr 打一行，产物复现不了）`);
-    case "reflect":
-      throw new UnsupportedError("vector3-method", "Vector3.reflect() 未实现（六个实测点互相矛盾，逆不出唯一公式）");
+    case "slide": {
+      arity(args, 1, "slide");
+      const n = vecArg(args, 0, "slide");
+      if (!isUnit(n)) return vector3(0, 0, 0);
+      const d = dot3(v, n);
+      return vector3(sub(v.x, mul(n.x, d)), sub(v.y, mul(n.y, d)), sub(v.z, mul(n.z, d)));
+    }
+    case "reflect": {
+      arity(args, 1, "reflect");
+      const n = vecArg(args, 0, "reflect");
+      if (!isUnit(n)) return vector3(0, 0, 0);
+      const k = mul(2, dot3(v, n));
+      return vector3(sub(mul(k, n.x), v.x), sub(mul(k, n.y), v.y), sub(mul(k, n.z), v.z));
+    }
+    case "bounce": {
+      arity(args, 1, "bounce");
+      const n = vecArg(args, 0, "bounce");
+      if (!isUnit(n)) return vector3(0, 0, 0);
+      const k = mul(2, dot3(v, n));
+      return vector3(sub(v.x, mul(k, n.x)), sub(v.y, mul(k, n.y)), sub(v.z, mul(k, n.z)));
+    }
+    case "project": {
+      arity(args, 1, "project");
+      const n = vecArg(args, 0, "project");
+      const k = div(dot3(v, n), lengthSq(n));
+      return vector3(mul(n.x, k), mul(n.y, k), mul(n.z, k));
+    }
     default:
       throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（实测不存在或没探针）`);
   }

@@ -7,7 +7,7 @@ import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, strToVar, varToStr } from "@gds2js/runtime/runtime/values";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes, toElem } from "@gds2js/runtime/runtime/packed";
 import { variantConvert } from "@gds2js/runtime/runtime/convert";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { vector3 } from "@gds2js/runtime/runtime/vector3";
@@ -31,6 +31,8 @@ describe("runtime · 类型转换族（236）", () => {
         return `[${(e as UnsupportedError).code}]`;
       }
     };
+    /** float32 的 pack 要过元素折算（真程序走的就是这条），不然存的是 double 原值。 */
+    const f32 = (...xs: number[]): Variant => V.object(new GBytes(xs.map((x) => toElem("float32", F(x))), "float32"));
 
     eq("236", "var_to_str 的整数按 int64 全宽打", `${vs(I(7))}|${vs(I(-17))}|${vs(I(2147483648))}|${vs(I(4611686018427387904n))}`, "7|-17|2147483648|4611686018427387904");
     eq("236", "var_to_str 的 null 与布尔是小写", `${vs(V.nil())}|${vs(V.bool(true))}|${vs(V.bool(false))}`, "null|true|false");
@@ -50,9 +52,11 @@ describe("runtime · 类型转换族（236）", () => {
     eq("236", "var_to_str 的字典里数组仍单行", vs(gd([[S("a"), arrOf([arrOf([I(1), I(2)]), arrOf([I(3)])])]])), '{\n"a": [[1, 2], [3]]\n}');
     eq("236", "var_to_str 的 pack 打成构造器形状", `${vs(V.object(new GBytes([1, 2], "byte")))}|${vs(V.object(new GBytes([], "byte")))}`, "PackedByteArray(1, 2)|PackedByteArray()");
     eq("236", "var_to_str 认 int32/int64/string 三支 pack", `${vs(V.object(new GBytes([1, 2], "int32")))}|${vs(V.object(new GBytes([1], "int64")))}|${vs(V.object(new GBytes(["a", "b"], "string")))}`, 'PackedInt32Array(1, 2)|PackedInt64Array(1)|PackedStringArray("a", "b")');
-    eq("236", "var_to_str 的浮点尾数没量出取数式子，响亮拒", vs(F(2.5)), "[var-to-str-float]");
-    eq("236", "var_to_str 撞见装浮点的数组也拒", vs(arrOf([F(1)])), "[var-to-str-float]");
-    eq("236", "var_to_str 撞见装浮点的 pack 也拒", vs(V.object(new GBytes([1.5], "float32"))), "[var-to-str-float]");
+    eq("236", "var_to_str 的浮点尾数走引擎那侧的 Grisu2 生成器（S289，读数 tmp/prec/ops.log）", `${vs(F(2.5))}|${vs(F(1.0))}|${vs(F(-0.0))}`, "2.5|1.0|0.0");
+    eq("236", "var_to_str 的数组元素照样是浮点字面量（S289 o02/o14）", `${vs(arrOf([F(1)]))}|${vs(arrOf([F(2.5), arrOf([F(0.00001)])]))}`, "[1.0]|[2.5, [1e-05]]");
+    eq("236", "var_to_str 的 pack 元素不补 .0（S289 o03/o04/o05）", `${vs(f32(1.5))}|${vs(f32(0.1, 2, 0.5))}|${vs(V.object(new GBytes([2 ** 63], "float64")))}`, "PackedFloat32Array(1.5)|PackedFloat32Array(0.1, 2, 0.5)|PackedFloat64Array(9.223372e+18)");
+    eq("236", "装得下 float32 的值按 float 的尾数打，装不下按 double（S289 f09/f14/f20/o11）", `${vs(F(2 ** 63))}|${vs(F(1e22 * 10))}|${vs(F(5e-324))}|${vs(f32(1e22 * 10))}`, "9.223372e+18|9.999999999999999e+22|5e-324|PackedFloat32Array(1e+23)");
+    eq("236", "var_to_str 的字典值位上的浮点（S289 o09）", vs(gd([[S("k"), F(2.5)]])), '{\n"k": 2.5\n}');
     eq("236", "var_to_str 的对象形状没实测，响亮拒", vs(wrapValue(new GdScriptObject())), "[var-to-str-type]");
     eq("236", "var_to_str 的数组键照元素递归打（引擎 onearrkey 那格）", vs(gd([[arrOf([I(1), I(2)]), I(9)]])), "{\n[1, 2]: 9\n}");
     eq("236", "var_to_str 的字典键自己也是多行（引擎 onedictkey 那格）", vs(gd([[gd([[S("z"), I(1)]]), I(5)]])), '{\n{\n"z": 1\n}: 5\n}');
