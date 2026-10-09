@@ -692,25 +692,26 @@ function unquote(raw: string): string {
       out += p;
       continue;
     }
-    if (p >= 0xd800 && p <= 0xdbff) {
+    const hi = p as number;
+    if (hi >= 0xd800 && hi <= 0xdbff) {
       const q = parts[k + 1];
       if (typeof q === "number" && q >= 0xdc00 && q <= 0xdfff) {
-        out += String.fromCodePoint(0x10000 + ((p - 0xd800) << 10) + (q - 0xdc00));
+        out += String.fromCodePoint(0x10000 + (hi - 0xd800) * 1024 + (q - 0xdc00));
         k++;
         continue;
       }
       throw new UnsupportedError(
         "string-escape",
-        `\\u${p.toString(16)} 是孤立的前置代理（Godot: Invalid UTF-16 sequence in string, unpaired lead surrogate）`,
+        `\\u${hi.toString(16)} 是孤立的前置代理（Godot: Invalid UTF-16 sequence in string, unpaired lead surrogate）`,
       );
     }
-    if (p >= 0xdc00 && p <= 0xdfff) {
+    if (hi >= 0xdc00 && hi <= 0xdfff) {
       throw new UnsupportedError(
         "string-escape",
-        `\\u${p.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
+        `\\u${hi.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
       );
     }
-    out += p === 0 || p > 0x10ffff ? "\uFFFD" : String.fromCodePoint(p);
+    out += hi === 0 || hi > 0x10ffff ? "\uFFFD" : String.fromCodePoint(hi);
   }
   return out;
 }

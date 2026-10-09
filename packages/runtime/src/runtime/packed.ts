@@ -405,17 +405,18 @@ export function packCtor(kind: PackKind, args: Variant[]): Variant {
   }
   if (args.length === 0) return V.object(new GBytes([], kind));
   const src = args[0] as Variant;
-  const out = new GBytes([], kind);
+  // 元素先攒在局部数组里再交给构造器：静态编译目标上「往方法返回的数组里 push」是空操作（S289 的 scriptc 读数）。
+  const items: PackElem[] = [];
   if (src.t === Tag.ARRAY) {
-    for (const item of (src.v as GArray).raw()) out.raw().push(toElem(kind, item));
+    for (const item of (src.v as GArray).raw()) items.push(toElem(kind, item));
   } else if (isBytes(src)) {
     const sb = packBytes(src);
     if (sb.kind !== kind) {
       throw new UnsupportedError("packed-ctor-kind", `${PACK_TYPE_NAME[kind]}(${packTypeName(sb.kind)}) 这种跨 pack 的拷贝没实测过`);
     }
-    for (const item of sb.raw()) out.raw().push(item);
+    for (const item of sb.raw()) items.push(item);
   }
-  return V.object(out);
+  return V.object(new GBytes(items, kind));
 }
 
 export function bytesCtor(args: Variant[]): Variant {

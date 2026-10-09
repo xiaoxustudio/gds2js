@@ -11,6 +11,7 @@ import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode, toElem } from "./packed";
 import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
+import { floatConstructText, rtosFix } from "./grisu2";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import { GdNativeClass } from "./native-class";
@@ -1512,8 +1513,8 @@ function vsKeyCompare(a: Variant, b: Variant): number {
  * `var_to_str()`：字面量通道，与 print 分岔的每一条都量过（S214 / S221 / S227 / S229）——
  * nil 是 `null`（不是 `<null>`）、字符串带引号且只转义两个字符、数组自己不加换行（元素里有字典就跟着字典多行，S230）、
  * **字典在任意深度多行且不缩进、键按 {@link vsKeyCompare} 排序**、空的 `{}` 与 `[]` 才是紧凑式、int 走 int64。
- * **浮点与一切装浮点的形状都响亮拒**：4.6.3 的尾数是引擎自己的十进制生成器（S229 用算术造值排掉了「固定 `%.*g`」与「最短往返」两条路），
- * 照 print 那套发就是静默错；值类型与 float/打包数组同理，只有元素全为整数或字符串的打包数组敢发。
+ * 浮点尾数走引擎那侧的 Grisu2 生成器（S289），与 print 的「14 位定点」是两条式子，别互相抄；
+ * **打包数组的元素不补 `.0`**（实测 `PackedFloat64Array(1.5, 2, …)`，S289），只有 FLOAT 那支补。
  */
 export function varToStr(v: Variant): string {
   switch (v.t) {
@@ -1524,7 +1525,7 @@ export function varToStr(v: Variant): string {
     case Tag.INT:
       return String(v.v);
     case Tag.FLOAT:
-      throw new UnsupportedError("var-to-str-float", `var_to_str() 的浮点尾数还没量出引擎的取数式子（S229），宁可不发也不照 print 抄`);
+      return floatConstructText(v.v as number);
     case Tag.STRING:
       return vsQuote(v.v as string);
     case Tag.STRING_NAME:
@@ -1552,10 +1553,10 @@ export function varToStr(v: Variant): string {
         const items = packItems(inner as GBytes);
         const flat: string[] = [];
         for (const item of items) {
-          if (item.t === Tag.FLOAT || item.t === Tag.OBJECT) {
-            throw new UnsupportedError("var-to-str-float", `var_to_str() 的 ${packTypeName(inner.kind)} 里有浮点或对象元素，取数式子还没量出（S229）`);
+          if (item.t === Tag.OBJECT) {
+            throw new UnsupportedError("var-to-str-pack", `var_to_str() 的 ${packTypeName(inner.kind)} 里有对象元素，那一形还没量出`);
           }
-          flat.push(varToStr(item));
+          flat.push(item.t === Tag.FLOAT ? rtosFix(item.v as number, true) : varToStr(item));
         }
         return `${packTypeName(inner.kind)}(${flat.join(", ")})`;
       }
@@ -1766,7 +1767,7 @@ export function strToVar(v: Variant): Variant {
     for (;;) {
       const item = value();
       if (item === null) return null;
-      g.raw().push(item);
+      g.append(item);
       ws();
       if (eat(",")) {
         ws();
