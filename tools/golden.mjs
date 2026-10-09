@@ -4,6 +4,7 @@ import {
   caseIsProject,
   caseScript,
   godotOk,
+  hangBudget,
   listCases,
   normalize,
   readGolden,
@@ -33,7 +34,8 @@ let drift = 0;
 for (const id of cases) {
   const gd = caseScript(id);
   const projectPath = caseIsProject(id) ? caseDir(id) : null;
-  const { text, timedOut } = runGodot(gd, { projectPath });
+  const prev = readGolden(id);
+  const { text, timedOut } = runGodot(gd, { projectPath, timeoutMs: hangBudget(prev) });
   const norm = normalize(text, gd);
   const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
   if (timedOut) timeout++;
@@ -41,7 +43,6 @@ for (const id of cases) {
   else parseErr++;
 
   if (checkOnly) {
-    const prev = readGolden(id);
     if (prev === null) {
       console.log(`  ${id.padEnd(34)} ${status.padEnd(12)} 缺 golden`);
       drift++;
@@ -52,7 +53,6 @@ for (const id of cases) {
     continue;
   }
 
-  const prev = readGolden(id);
   const changed = prev !== null && prev !== norm;
   if (changed) drift++;
   writeGolden(id, norm);

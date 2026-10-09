@@ -13,6 +13,13 @@ export const GODOT_BIN =
 /** 单次 Godot 运行的上限，「卡住了没输出」的护栏；用 GDS2JS_GODOT_TIMEOUT_MS 按机器状况放大。 */
 export const DEFAULT_TIMEOUT_MS = Number(process.env.GDS2JS_GODOT_TIMEOUT_MS) || 15000;
 
+/** golden 里带 `<<GDS2JS_TIMEOUT>>` 的那一族是「运行期脚本报错 → 后面的 quit() 永远到不了」：
+ *  读数在冷启动那几秒里就打完了，等满整段超时只是白等（17 例每例 15 秒）。预算取 DEFAULT 的三分之一、
+ *  下限 4 秒，慢机器用 GDS2JS_GODOT_TIMEOUT_MS 放大时两道一起放大；万一提前杀导致文本对不上，门报「漂移」而不是静默。 */
+export function hangBudget(golden) {
+  return (golden ?? "").includes("<<GDS2JS_TIMEOUT>>") ? Math.max(4000, Math.ceil(DEFAULT_TIMEOUT_MS / 3)) : DEFAULT_TIMEOUT_MS;
+}
+
 /** 探头用例（000-probe-cs-*）是 case-table 的原料，不是语料：除非 filter 点名 000-，否则不进任何门。 */
 export function listCases(filter = "") {
   if (!existsSync(CORPUS)) return [];

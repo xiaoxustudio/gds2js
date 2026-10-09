@@ -18,3 +18,4 @@ export declare function normalize(text: string, gdPath?: string): string;
 export declare function readGolden(id: string): string | null;
 export declare function writeGolden(id: string, text: string): void;
 export declare function godotOk(golden: string | null): boolean;
+export declare function hangBudget(golden: string | null): number;

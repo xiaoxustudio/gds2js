@@ -19,6 +19,7 @@ import {
   caseScript,
   GODOT_BIN,
   godotOk,
+  hangBudget,
   listCases,
   normalize,
   readGolden,
@@ -40,14 +41,14 @@ describe.skipIf(!hasGodot)(`golden 漂移检测${SKIP_WHY}`, () => {
     it(id, () => {
       const gd = caseScript(id);
       const projectPath = caseIsProject(id) ? caseDir(id) : null;
-      const { text, timedOut } = runGodot(gd, { projectPath });
+      const prev = readGolden(id);
+      const { text, timedOut } = runGodot(gd, { projectPath, timeoutMs: hangBudget(prev) });
       const norm = normalize(text, gd);
       const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
       if (timedOut) timeout++;
       else if (status === "OK") ok++;
       else parseErr++;
 
-      const prev = readGolden(id);
       // 「缺 golden」与「漂移」共用同一个 drift 计数（读数的口径），但区别写进失败消息，
       // 好让人知道该跑 pnpm test:golden 还是去查 Godot 版本。
       if (prev === null) {
