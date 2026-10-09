@@ -779,6 +779,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.97 golden 门那 17 格「卡住」的用例不再白等满超时：任务 #63 的前提先收回（2026-10-09）
+
+- **原任务是错的**：#63 当初写的是「把 case 210 的 golden 重录到没有 `<<GDS2JS_TIMEOUT>>` 标记」。读了那格的正文才明白 —— 那一族 17 格的 golden 记的是**运行期 SCRIPT ERROR**（`210` 是 `c.call(2)` 实参不够：`Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s).`），脚本报错就中止，后面的 `quit()` 永远到不了，进程因此不会自己退出。标记不是仪器失灵，它记的就是真行为：**是我们把它杀了**。把标记抹掉等于造假，所以这条收回，改成量得到的那一半。
+- **白等的账**：每格为了等这个「再也不会来输出」的状态要等满 15 秒（`DEFAULT_TIMEOUT_MS`），17 格就是 255 秒 —— 占 `test:golden-check` 单轮的四分之一。现在 `tools/lib.mjs` 多一条 `hangBudget(golden)`：golden 里已经带标记的用例只按三分之一段预算跑（15000 → 5000，下限 4000；慢机器用 `GDS2JS_GODOT_TIMEOUT_MS` 放大时两道一起放大），两个消费者 `tools/golden.mjs` 与 `test/e2e/golden-drift.test.ts` 都走它，`.d.mts` 那份声明同步补上（漏了它 typecheck 立刻 TS2305，这条门是有效的）。
+- **验收**：17 格逐格 `--check`，读数全是「超时 1 / 漂移 0」—— 提前杀不影响 captured 文本，读数在冷启动那几秒里就打完了，而且**那一族没有一行退出噪声**（`Thread destroyed` / `RID leaked` / `PagedAllocator` 都没出现，所以原任务里「先加噪声过滤再重录」的前置也不需要）。全门一轮 **1028 s → 746 s（−282 s）**，按 17 格 × 省 10 秒算的下限是 170 秒，多出来的是两轮之间的本机浮动；这格是门的耗时，不是产品性能读数，不受 `|t| ≥ 2` 那条管。
+- **其余门**：`pnpm test` **1175**（ops 1981/0、tree-face 17/0）、typecheck **4/4 无 `error TS`**、`test:compile` 201/271 且 emitter 不支持 0、`test:diff` **194/194 逐字节**（静默错 0、崩溃 0、未实现 0）、golden-check **OK 194 / 报错 70 / 超时 17 / 漂移 0**（分类一字未动）。`packages/` 一个文件都没改，出货产物与 exe 逐字节是上一轮的，所以 `test:scriptc` / `pkgmodes` / `export` / `cli-native` 这轮重跑没有新信息，没占机器。
+- **还开着的**：`.gitattributes` 那一问（§1.96 记的行尾假红 —— 本轮又被 `git` 的 autocrlf 提醒了一次：`corpus/cases/280-pow-precedence/` 三份文件在工作树里是 CRLF、库里是 LF，`git status` 就报 M，内容差为零）。要不要加、怎么加，是用户的口径，不由代码侧定。
+
 ### 1.96 整数负次幂：一条 `int()` 的饱和式子就把「平台行为」那一问解释掉（2026-10-09，S292）
 
 - **为什么这一轮做它**：`[int-pow-negative]` 是**用户可见的拒答** —— 同一句 `2 ** -3`，引擎给 `0`，我们的产物当场抛错。S291 已经把「还缺哪三批」写在 §6 第 31 条上，量齐就能把这支摘掉。
