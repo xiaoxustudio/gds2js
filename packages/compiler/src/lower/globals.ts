@@ -4,14 +4,9 @@ export type GlobalConst = { kind: "float" | "int"; value: string };
 /**
  * 实测「Godot 4.6.3 有这个名字、能过解析，但我们还没实现」的全局函数（一支脚本一个名字量出来的，
  * 不存在的会给 `Function "x()" not found in base self.`，那批不在这里）。
- * 带实例号的那一族（`weakref` / `instance_from_id` / `is_instance_*`）已按 S263 的合成号口径发出，不在这张清单里。
+ * 最后两支 `bytes_to_var_with_objects` / `var_to_bytes_with_objects` 已按 S284 的读数发出，这张表到此为空。
  */
-export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set([
-  // 4.6.3 一支一名扫出来的第二批（`tmp/probe-global-names/sweep.log`：133 个候选里 44 支解析期合法、我们没实现）。
-  // 少了这一批，`sin(0.5)` 这种合法调用会被报成 `[call-unknown]`「Godot 也没有这个名字」—— 那是假话，而且值位置还会被误拦。
-  "bytes_to_var_with_objects",
-  "var_to_bytes_with_objects",
-]);
+export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set<string>([]);
 
 
 export const GLOBAL_CONSTANTS: Readonly<Record<string, GlobalConst>> = Object.freeze({

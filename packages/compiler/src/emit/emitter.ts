@@ -129,7 +129,9 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   inst_to_dict: [1, 1],
   dict_to_inst: [1, 1],
   var_to_bytes: [1, 1],
+  var_to_bytes_with_objects: [1, 1],
   bytes_to_var: [1, 1],
+  bytes_to_var_with_objects: [1, 1],
   get_stack: [0, 0],
   print_stack: [0, 0],
   rotate_toward: [3, 3],
@@ -304,7 +306,9 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   // 调用栈那一族（S281）：四支都在 runtime 那一侧，`.call()` 与直接调用共用同一条实现；
   // 帧的行号由模块里的打点供（`rt.frameEnter` / `rt.frameLine`），没用到这四支的模块一行都不发。
   var_to_bytes: (a) => `rt.gVarToBytes(${a[0]})`,
+  var_to_bytes_with_objects: (a) => `rt.gVarToBytesWithObjects(${a[0]})`,
   bytes_to_var: (a) => `rt.gBytesToVar(${a[0]})`,
+  bytes_to_var_with_objects: (a) => `rt.gBytesToVarWithObjects(${a[0]})`,
   get_stack: () => "rt.gGetStack()",
   print_stack: () => "rt.gPrintStack()",
   push_error: (a) => `rt.gPushError([${a.join(", ")}])`,
@@ -314,10 +318,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
 /** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
-const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {
-  bytes_to_var_with_objects: "对象表那一支的字节布局（带类名与属性表）没逐字节量过",
-  var_to_bytes_with_objects: "对象表那一支的字节布局（带类名与属性表）没逐字节量过",
-};
+const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {};
 
 export const HOST_PRINT_NAMES: readonly string[] = [
   "print",

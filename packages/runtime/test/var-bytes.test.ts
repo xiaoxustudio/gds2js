@@ -1,6 +1,6 @@
-// var_to_bytes / bytes_to_var（语料 274 / 275 / 276 钉了逐字节形状；本门钉语料看不见的那些：四形坏字节都回 NIL、
-// 没量过的那一批形状一律响亮拒、窄身判据的边界格、九种 pack 与定型容器的解回来那侧、身份那一支的盒子。
-// 读数：`tmp/probe-varbytes/`，S282 / S283 / S284）。
+// var_to_bytes / bytes_to_var 一族（语料 274 / 275 / 276 / 277 钉了逐字节形状；本门钉语料看不见的那些：四形坏字节都回 NIL、
+// 没量过的那一批形状一律响亮拒、窄身判据的边界格、九种 pack 与定型容器的解回来那侧、身份那一支的盒子与对象表的编解码两端。
+// 读数：`tmp/probe-varbytes/`，S282 / S283 / S284 / S285 / S286）。
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
@@ -16,9 +16,9 @@ import { Signal } from "@gds2js/runtime/runtime/signal";
 import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
 import { nullCallable } from "@gds2js/runtime/runtime/callable";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
-import { GdScriptObject } from "@gds2js/runtime/runtime/object";
+import { defineClass, GdScriptObject, registerDictIdentity, registerNativeBase } from "@gds2js/runtime/runtime/object";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { gBytesToVar, gVarToBytes } from "@gds2js/runtime/runtime/var-bytes";
+import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "@gds2js/runtime/runtime/var-bytes";
 
 const bytes = (nums: number[]): Variant => V.object(GBytes.of(nums, "byte"));
 const code = (fn: () => unknown): string => {
@@ -31,6 +31,8 @@ const code = (fn: () => unknown): string => {
 };
 /** 编出来的字节串（期望值全部取语料里引擎自己打的那一列）。 */
 const vb = (v: Variant): string => showArgs([gVarToBytes(v)]);
+/** 带对象表那一支的编码串（期望值取语料 277 引擎那一列）。 */
+const vb2 = (v: Variant): string => showArgs([gVarToBytesWithObjects(v)]);
 /** 编完再解回来：拿引擎打的值形态作对照。 */
 const rt = (v: Variant): string => showArgs([gBytesToVar(gVarToBytes(v))]);
 
@@ -130,6 +132,60 @@ describe("runtime/var-bytes · 坏字节与没量过的形状", () => {
     eq("283", "Dictionary[String, int] 的头部挂 5（键 1、值 4），两枚类型码在个数之前", vb(dict), "[27, 0, 5, 0, 4, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0, 1, 0, 0, 0, 97, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0]");
     const d2 = gBytesToVar(gVarToBytes(dict));
     eq("283", "解回来的字典两端标注都在", `${String((d2.v as GDict).keyKind)}|${String((d2.v as GDict).valKind)}`, "String|int");
+  });
+
+  it("对象表那侧的解码：四形给 <null>、空类名给空对象，宿主类本体响亮拒（S286；引擎那几句带 core/io/marshalls.cpp 的 at: 行，normalize 滤不掉，进不了语料）", () => {
+    const NIL = [0, 0, 0, 0];
+    const strVariant = (t: string): number[] => {
+      const b = [...Buffer.from(t, "utf8")];
+      const out = [4, 0, 0, 0, b.length, 0, 0, 0, ...b];
+      while (out.length % 4 !== 0) out.push(0);
+      return out;
+    };
+    /** 表条目照 S284 ② 的形状手抄：类名与属性名都不带变体头部，只有值是整支变体。 */
+    const table = (cls: string, props: Array<[string, number[]]>): Variant => {
+      const out: number[] = [24, 0, 0, 0];
+      const s = (t: string): void => {
+        const b = [...Buffer.from(t, "utf8")];
+        out.push(b.length, 0, 0, 0, ...b);
+        while (out.length % 4 !== 0) out.push(0);
+      };
+      s(cls);
+      out.push(props.length, 0, 0, 0);
+      for (const [n, v] of props) {
+        s(n);
+        out.push(...v);
+      }
+      return bytes(out);
+    };
+    eq("286", "类名不在 ClassDB 里 → <null>（引擎：Cannot get class）", showArgs([gBytesToVarWithObjects(table("NoSuchThing", []))]), "<null>");
+    eq("286", "空类名 → 空对象引用（实测就是 <Object#null>）", showArgs([gBytesToVarWithObjects(table("", []))]), "<Object#null>");
+    eq("286", "script 指向加载不到的路径 → <null>（引擎：Invalid script path）", showArgs([gBytesToVarWithObjects(table("RefCounted", [["script", strVariant("res://nope.gd")]]))]), "<null>");
+    eq("286", "空字节也按实测给 <null>（内嵌类那条编码失败的就是空字节）", showArgs([gBytesToVarWithObjects(bytes([]))]), "<null>");
+    eq("286", "script 是 NIL —— 那是宿主实例本体，Tier 1 造不出，响亮拒", code(() => gBytesToVarWithObjects(table("RefCounted", [["script", NIL]]))), "[bytes-to-var-object-class]");
+    eq("286", "没有 script 那一格同样造不出，响亮拒", code(() => gBytesToVarWithObjects(table("Node", []))), "[bytes-to-var-object-class]");
+    eq("286", "除 script 外还有别的属性：那一格怎么落没量过，响亮拒", code(() => gBytesToVarWithObjects(table("RefCounted", [["script", strVariant("res://box.gd")], ["answer", [2, 0, 0, 0, 42, 0, 0, 0]]]))), "[bytes-to-var-object-prop]");
+  });
+
+  it("对象表那侧的编码：条目、空数组与没量过的宿主基类（S286，语料 277 钉的是项目树那一形）", () => {
+    class Box extends GdScriptObject {}
+    const shape = defineClass(Box, () => new Box(), (o) => o instanceof Box);
+    registerNativeBase(shape, "RefCounted");
+    registerDictIdentity(shape, "res://box.gd", "", [], {}, () => []);
+    class Inner extends GdScriptObject {}
+    const innerShape = defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);
+    registerNativeBase(innerShape, "RefCounted");
+    registerDictIdentity(innerShape, "res://box.gd", "Inner", [], {}, () => []);
+    class Other extends GdScriptObject {}
+    const otherShape = defineClass(Other, () => new Other(), (o) => o instanceof Other);
+    registerNativeBase(otherShape, "SceneTree");
+    registerDictIdentity(otherShape, "res://main.gd", "", [], {}, () => []);
+
+    eq("286", "条目照实测形状：类名串 + 一格属性 + 整支 STRING 的路径", vb2(V.object(new Box())), "[24, 0, 0, 0, 10, 0, 0, 0, 82, 101, 102, 67, 111, 117, 110, 116, 101, 100, 0, 0, 1, 0, 0, 0, 6, 0, 0, 0, 115, 99, 114, 105, 112, 116, 0, 0, 4, 0, 0, 0, 12, 0, 0, 0, 114, 101, 115, 58, 47, 47, 98, 111, 120, 46, 103, 100]");
+    eq("286", "解回来是同一支类的实例（打印按宿主基类名）", String(showArgs([gBytesToVarWithObjects(gVarToBytesWithObjects(V.object(new Box())))]).startsWith("<RefCounted#")), "true");
+    eq("286", "非对象值的编码与不挂表那支一字不差", `${vb2(V.int(5))}|${vb(V.int(5))}`, "[2, 0, 0, 0, 5, 0, 0, 0]|[2, 0, 0, 0, 5, 0, 0, 0]");
+    eq("286", "内嵌类：引擎打一句失败并回空数组，我们照这一形发", vb2(V.object(new Inner())), "[]");
+    eq("286", "宿主基类不是 RefCounted —— 表里那几格没量过，响亮拒", code(() => gVarToBytesWithObjects(V.object(new Other()))), "[var-to-bytes-object-class]");
   });
 
   it("往返过的两支：int64 走宽头部、pack 的填充只补到四倍数", () => {

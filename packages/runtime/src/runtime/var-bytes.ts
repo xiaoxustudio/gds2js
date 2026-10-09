@@ -8,8 +8,9 @@ import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
 import { GdNodePath } from "./node-path";
-import { GdScriptObject } from "./object";
-import { encodedObjectIdBox } from "./identity";
+import { beginBareConstruction, descOf, dictDescOf, endBareConstruction, GdScriptObject, nativeBaseOf } from "./object";
+import { encodedObjectIdBox, NULL_OBJECT } from "./identity";
+import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 /** 引擎 `VariantWriter::encode` 的头部标志：实测到的只有 `1 << 16`（int64 / double / 定型数组都挂它）。 */
 const FLAG_WIDE = 1;
@@ -41,6 +42,11 @@ const T_PACKED_V3 = 36;
 const T_PACKED_COLOR = 37;
 const T_VECTOR3I = 10;
 const T_OBJECT = 24;
+
+/** 编码侧的信号：路径拿不出来时引擎回的是**一个空 PackedByteArray**（并打一句 `Failed to encode a path to a custom script`），不是错。 */
+const CODE_NO_SCRIPT_PATH = "var-to-bytes-no-script-path";
+/** 解码侧的响亮拒：类名是宿主类，Tier 1 造不出那种实例（D4），这一支不进 try/catch 的吞名单。 */
+const CODE_CANNOT_BUILD = "bytes-to-var-object-class";
 
 const PACK_TYPE_CODE: Record<PackKind, number> = {
   byte: T_PACKED_BYTE_ARRAY,
@@ -192,6 +198,8 @@ function refuseUnmeasured(v: Variant): void {
 class Writer {
   readonly bytes: number[] = [];
 
+  constructor(readonly allowObjects: boolean = false) {}
+
   u32(x: number): void {
     const v = x >>> 0;
     this.bytes.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff);
@@ -269,6 +277,25 @@ class Writer {
         this.f32((e as GColor).a);
         return;
     }
+  }
+
+  /** 表里那一支：类名串、属性数、逐格「名串 + 整支变体」（S284 ②③）。Tier 1 没有 `@export`，
+   *  而普通 `var` 本来就不进 storage 那一族，所以表里只有 `script` 一格；路径拿不出来那一形引擎回**空数组**（S284 的 `objects.mts` 七格全是 0 字节）。 */
+  objectEntry(o: GdScriptObject): void {
+    const desc = descOf(o);
+    if (desc === null || desc.dictResPath === null || desc.dictClassPath !== "") {
+      throw new UnsupportedError(CODE_NO_SCRIPT_PATH, "这一支拿不出可上线的脚本路径");
+    }
+    const base = nativeBaseOf(o);
+    if (base !== "RefCounted") {
+      throw new UnsupportedError("var-to-bytes-object-class", `var_to_bytes_with_objects() 只量过宿主基类 RefCounted 的实例（收到 ${String(base)}）：表里的类名与属性没实测，响亮拒`);
+    }
+    this.header(T_OBJECT);
+    this.str(base);
+    this.u32(1);
+    this.str("script");
+    this.header(T_STRING);
+    this.str(desc.dictResPath);
   }
 
   variant(v: Variant): void {
@@ -398,6 +425,10 @@ class Writer {
           return;
         }
         if (o instanceof GdScriptObject) {
+          if (this.allowObjects) {
+            this.objectEntry(o);
+            return;
+          }
           // 实测：不挂对象表那一支把身份号直写 —— 24,0,1,0 再一枚 int64（S284 ①）
           this.header(T_OBJECT, true);
           this.u64(BigInt(o.gdObjectId));
@@ -416,10 +447,23 @@ export function gVarToBytes(v: Variant): Variant {
   return V.object(GBytes.of(w.bytes, "byte"));
 }
 
+/** `var_to_bytes_with_objects(值)`：同一台编码器，只是 OBJECT 那一支改写成内联条目（S284 ②）。
+ *  脚本路径拿不出来那一形按实测回**空数组**（`tmp/probe-varbytes/objects.mts` 那七格全是 0 字节），不是错。 */
+export function gVarToBytesWithObjects(v: Variant): Variant {
+  const w = new Writer(true);
+  try {
+    w.variant(v);
+  } catch (e) {
+    if (e instanceof UnsupportedError && e.code === CODE_NO_SCRIPT_PATH) return V.object(GBytes.of([], "byte"));
+    throw e;
+  }
+  return V.object(GBytes.of(w.bytes, "byte"));
+}
+
 class Reader {
   i = 0;
 
-  constructor(readonly b: readonly number[]) {}
+  constructor(readonly b: readonly number[], readonly allowObjects: boolean = false) {}
 
   get left(): number {
     return this.b.length - this.i;
@@ -512,6 +556,19 @@ class Reader {
     }
   }
 
+  /** 条目照 S284 ② 那份形状读：类名串、属性数、逐格「名串 + 整支变体」，两个串都不带变体头部。纯函数式的一次顺序读。 */
+  objectEntry(): Variant {
+    const cls = this.str();
+    const n = this.u32();
+    const names: string[] = [];
+    const values: Variant[] = [];
+    for (let k = 0; k < n; k++) {
+      names.push(this.str());
+      values.push(this.variant());
+    }
+    return builtObject(cls, names, values);
+  }
+
   variant(): Variant {
     if (this.left < 4) throw new UnsupportedError("bytes-to-var-truncated", "截了");
     const h = this.u32() >>> 0;
@@ -585,8 +642,9 @@ class Reader {
       }
       case T_OBJECT: {
         // 实测：带号那一支解回 EncodedObjectAsID（盒子自己另占一个号），内联条目那一支在没开对象表的解码器里回 <null>（S285 ②③）
-        if ((flags & FLAG_WIDE) === 0) throw new UnsupportedError("bytes-to-var-object", "对象表那一支要的是 bytes_to_var_with_objects()");
-        return V.object(encodedObjectIdBox(this.u64()));
+        if ((flags & FLAG_WIDE) !== 0) return V.object(encodedObjectIdBox(this.u64()));
+        if (!this.allowObjects) throw new UnsupportedError("bytes-to-var-object", "对象表那一支要的是 bytes_to_var_with_objects()");
+        return this.objectEntry();
       }
       case T_NODE_PATH: {
         const names = (this.u32() >>> 0) & 0x7fffffff;
@@ -612,16 +670,57 @@ class Reader {
   }
 }
 
-/** `bytes_to_var(字节)`：读不通就按实测那几格给 `<null>`（坏头部、截断、类型码越界三形都量过是 NIL，不抛）。 */
-export function gBytesToVar(v: Variant): Variant {
+/** 实测：空类名给的是空对象引用 `<Object#null>`；类名在 ClassDB 里不存在给 `<null>`（引擎那句 `Cannot get class` 没有 `at:` 行）；
+ *  `script` 指向加载不到的路径也给 `<null>`（`Invalid script path`）。宿主类名 Tier 1 造不出实例，那句不吞、响亮拒（S284 ⑤）。 */
+function builtObject(cls: string, names: string[], values: Variant[]): Variant {
+  if (cls === "") return V.object(NULL_OBJECT);
+  if (!ENGINE_CLASS_NAMES.has(cls)) return V.nil();
+  let script: Variant | null = null;
+  for (let k = 0; k < names.length; k++) {
+    if (names[k] === "script") script = values[k] as Variant;
+  }
+  if (script === null || script.t !== Tag.STRING) {
+    throw new UnsupportedError(CODE_CANNOT_BUILD, `bytes_to_var_with_objects() 读到宿主类 ${cls} 的条目：Tier 1 造不出宿主实例，响亮拒`);
+  }
+  if (names.length !== 1) {
+    throw new UnsupportedError("bytes-to-var-object-prop", `bytes_to_var_with_objects() 读到 ${cls} 带 ${String(names.length)} 格属性的条目：除 script 之外那几格怎么落没量过，响亮拒`);
+  }
+  const desc = dictDescOf(script.v as string, "");
+  if (desc === null) return V.nil();
+  beginBareConstruction();
+  let inst: object;
+  try {
+    inst = desc.make([]);
+  } finally {
+    endBareConstruction();
+  }
+  return V.object(inst);
+}
+
+/** 开对象表那侧不吞的码：这三形不是「字节读不通」，而是我们造不出 / 没量过，按红线要响。 */
+const LOUD_WITH_OBJECTS: ReadonlySet<string> = new Set([CODE_CANNOT_BUILD, "bytes-to-var-object-prop", "bytes-to-var-elemkind"]);
+const LOUD_NONE: ReadonlySet<string> = new Set<string>([]);
+
+function readBytes(v: Variant, allowObjects: boolean, loud: ReadonlySet<string>): Variant {
   if (v.t !== Tag.OBJECT || !(v.v instanceof GBytes)) {
     throw new UnsupportedError("bytes-to-var-arg", `bytes_to_var() 的第一参要的是 PackedByteArray（收到的是别的东西），这一形没量过`);
   }
   const bytes = (v.v as GBytes).raw().map((x) => Number(x) & 0xff);
-  const r = new Reader(bytes);
+  const r = new Reader(bytes, allowObjects);
   try {
     return r.variant();
-  } catch {
+  } catch (e) {
+    if (e instanceof UnsupportedError && loud.has(e.code)) throw e;
     return V.nil();
   }
+}
+
+/** `bytes_to_var(字节)`：读不通就按实测那几格给 `<null>`（坏头部、截断、类型码越界三形都量过是 NIL，不抛）。 */
+export function gBytesToVar(v: Variant): Variant {
+  return readBytes(v, false, LOUD_NONE);
+}
+
+/** `bytes_to_var_with_objects(字节)`：同一条解码器，只是开了对象表那一支（S284 ②）。 */
+export function gBytesToVarWithObjects(v: Variant): Variant {
+  return readBytes(v, true, LOUD_WITH_OBJECTS);
 }

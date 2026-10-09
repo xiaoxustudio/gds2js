@@ -19,7 +19,7 @@ import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, className
 import { isEncodedObjectIdBox, isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
-import { gBytesToVar, gVarToBytes } from "./var-bytes";
+import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
@@ -1242,7 +1242,9 @@ function ga(a: Variant[], i: number): Variant {
 /** 全局 Callable 的「名字 → 式子」：一支一支对着实测的调用路径写的，与发射器那张 `BUILTIN` 表同形。 */
 const GLOBAL_IMPL: Record<string, Fn> = {
   var_to_bytes: (a) => gVarToBytes(ga(a, 0)),
+  var_to_bytes_with_objects: (a) => gVarToBytesWithObjects(ga(a, 0)),
   bytes_to_var: (a) => gBytesToVar(ga(a, 0)),
+  bytes_to_var_with_objects: (a) => gBytesToVarWithObjects(ga(a, 0)),
   get_stack: () => gGetStack(),
   print_stack: () => gPrintStack(),
   push_error: (a) => gPushError(a),

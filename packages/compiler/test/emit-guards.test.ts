@@ -37,15 +37,18 @@ const IN = (body: string): string =>
 const PRINT = (call: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint(${call})\n\tquit()\n`;
 
 // ── ① 全局拒答清单 ─────────────────────────────────────────────────
-// 清单上的名字必须真的在发射期抛 emit-builtin —— 实现了却忘了从清单划走，就是清单在烂。
+// 清单上残留的名字必须真的在发射期抛 emit-builtin —— 实现了却忘了从清单划走，就是清单在烂。
 const TODO_NAMES = [...GLOBAL_TODO_FUNCTIONS];
 const stale: string[] = [];
 
 describe("全局拒答清单仍响亮拒", () => {
-  it.each(TODO_NAMES)("%s", async (name) => {
-    const code = await classify(PRINT(`${name}()`), "居然编得过");
-    if (code !== "emit-builtin") stale.push(`${name}:${code}`);
-    expect(code, `${name} 期望发射期抛 emit-builtin`).toBe("emit-builtin");
+  it("清单在 S286 之后清空：残留的名字必须真的还在发射期抛 emit-builtin", async () => {
+    expect(TODO_NAMES.join(","), "发射期的拒答清单现在应当为空（最后两支已发出）").toBe("");
+    for (const name of TODO_NAMES) {
+      const code = await classify(PRINT(`${name}()`), "居然编得过");
+      if (code !== "emit-builtin") stale.push(`${name}:${code}`);
+      expect(code, `${name} 期望发射期抛 emit-builtin`).toBe("emit-builtin");
+    }
   });
 });
 
@@ -77,14 +80,13 @@ describe("打印一族的发射与拒答", () => {
     expect(await classify(PRINT("prints()"), "ok"), "prints 零实参也编得过（实测出一行空行）").toBe("ok");
   });
 
-  it("仍拒的两支把缘由写在错文里", async () => {
-    for (const [name, want] of [
-      ["var_to_bytes_with_objects", "对象表"],
-      ["bytes_to_var_with_objects", "对象表"],
-    ] as Array<[string, string]>) {
-      expect(await classify(PRINT(`${name}(5)`), "ok"), `${name} 该拒`).toBe("emit-builtin");
-      expect(await msg(PRINT(`${name}(5)`)), `${name} 的错文`).toContain(want);
-    }
+  it("带对象表那两支按 S284 发出：各自走 runtime 的那一条式子", async () => {
+    expect(await emitted(BODY(['print(var_to_bytes_with_objects(5))', "quit()"])), "编码那支走 gVarToBytesWithObjects").toContain(
+      "rt.gVarToBytesWithObjects(rt.V.int(5))",
+    );
+    expect(await emitted(BODY(['print(bytes_to_var_with_objects(var_to_bytes_with_objects(5)))', "quit()"])), "解码那支走 gBytesToVarWithObjects").toContain(
+      "rt.gBytesToVarWithObjects(rt.gVarToBytesWithObjects(rt.V.int(5)))",
+    );
   });
 
   it("print_debug 已按 S266 发出：走宿主的 printDebug 并带上调用点", async () => {
@@ -356,10 +358,12 @@ describe("var_to_bytes 族的发射闸门", () => {
   };
   const ROWS: Array<[string, string]> = [
     ["var_to_bytes(5)", "rt.gVarToBytes(rt.V.int(5))"],
+    ["var_to_bytes_with_objects(5)", "rt.gVarToBytesWithObjects(rt.V.int(5))"],
     ["bytes_to_var(var_to_bytes(5))", "rt.gBytesToVar(rt.gVarToBytes(rt.V.int(5)))"],
+    ["bytes_to_var_with_objects(bytes_to_var(var_to_bytes(5)))", "rt.gBytesToVarWithObjects(rt.gBytesToVar(rt.gVarToBytes(rt.V.int(5))))"],
   ];
 
-  it("两支各发各的 runtime 名", async () => {
+  it("四支各发各的 runtime 名", async () => {
     for (const [call, want] of ROWS) {
       const src = PRINT(call);
       expect(await classify(src, "ok"), `${call} 该编得过`).toBe("ok");
@@ -372,6 +376,8 @@ describe("var_to_bytes 族的发射闸门", () => {
     expect(await textOf(PRINT("var_to_bytes()"))).toBe('Too few arguments for "var_to_bytes()" call. Expected at least 1 but received 0.');
     expect(await classify(PRINT("bytes_to_var()"), "ok"), "bytes_to_var 少给该拦").toBe("builtin-arity");
     expect(await textOf(PRINT("bytes_to_var()"))).toBe('Too few arguments for "bytes_to_var()" call. Expected at least 1 but received 0.');
+    expect(await textOf(PRINT("var_to_bytes_with_objects(1, 2)"))).toBe('Too many arguments for "var_to_bytes_with_objects()" call. Expected at most 1 but received 2.');
+    expect(await textOf(PRINT("bytes_to_var_with_objects()"))).toBe('Too few arguments for "bytes_to_var_with_objects()" call. Expected at least 1 but received 0.');
     expect(await classify(PRINT("var_to_bytes(5, 6)"), "ok"), "多给也拦").toBe("builtin-arity");
     expect(await textOf(PRINT("var_to_bytes(5, 6)"))).toBe('Too many arguments for "var_to_bytes()" call. Expected at most 1 but received 2.');
   });

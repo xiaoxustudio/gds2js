@@ -64,6 +64,7 @@ const DEFAULT_SET = [
   "274-var-to-bytes",
   "275-wire-format-shapes",
   "276-object-identity-bytes",
+  "277-object-table-shapes",
   "032-preload-load",
 ];
 
