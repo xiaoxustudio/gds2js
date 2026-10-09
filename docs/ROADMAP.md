@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.98 `Vector2` / `Vector3` 的四支几何方法：一条 normalize 口径把「复现不了」改写成「不复刻」
+
+- **为什么挑这支**：S95 记的是「有成员但**故意不接**」，理由有两条 —— `reflect` 「六个实测点互相矛盾」、`bounce`/`slide` 「法向不是单位向量时引擎除了给零向量还往 stderr 打一行，产物复现不了」。这轮两条都站不住：矛盾是采样点里混了非单位法向，而「复现不了」把**值**和**stderr** 混在一句话里 —— 值从来就复现得了，只有那行带 C++ 文件行号的 ERROR 不属于产物（§1.26 早就定过这个口径）。
+- **量到的**：64 形两侧对撞（`tmp/probe-slide/slide.mts`：`{slide, bounce, reflect, project}` × 8 组法向 × Vector2/Vector3）+ 8 格 epsilon 边界（`eps.mts`）+ 8 格补测（`t3.mts`）。式子与 4.3 树的 `core/math/vector2.cpp:177` / `vector3.h:582` 同形，逐分量 float32：`slide = v − n·(v·n)`、`reflect = 2·n·(v·n) − v`、`bounce = −reflect`、`project = n·((v·n)/(n·n))`。前三支的法向要过 `is_normalized()`，不合格给零向量；`project` 不设门槛，零法向落 `(nan, nan)`。epsilon 与 `is_normalized` 同一把尺、而且是 `<` 不是 `<=`：Δlen² = 9.986e-4 过，整 1.000e-3 不过。
+- **门那一侧的一处真修**：要让这些格进语料对账，得先让 `tools/lib.mjs` 的 `normalize` 认得这类引擎内部 ERROR 块。它原来的 `ENGINE_FRAME` 只认 `core/variant/`，本轮扩到 `\.?/?core/(variant|math)/` —— **顺带量到 Vector3 那支的帧带 `./` 前缀**（`at: slide (./core/math/vector3.h:582)`），只加 `core/math` 不加 `./` 的话那三块会留在 golden 里、`test:diff` 立刻报静默错（第一次跑就是这样，读数 `第 49 行 godot: ERROR: … js:`）。扩规则前后确认过：全仓只有新用例带 `./core/` 帧，既有 281 份 golden 一格没被这条改写。
+- **两侧同值之后**：语料 282 钉 48 格，含非单位法向那 8 格（s04 / s05 / s06 / s08 / b04 / t05 / t06 / u03 全走零向量）与 epsilon 两侧各一格（s07 过、s08 不过）；返回类型也钉进同一批（`typeof` 给 5 / 9，与 S233 的 `TYPE_*` 表同口径）。`packages/runtime/test/vector3.test.ts` 里三格「未实现要响」的护栏换成实测值 —— 只在读过引擎之后改期望，没有为了过门改数字。
+- **门**：golden-check **OK 195 / 报错 70 / 超时 17 / 漂移 0**（708.5 s，比上一轮的 746 s 又快一点，仍是 §1.97 那条预算在起作用）、`test:diff` **195/195 逐字节**（静默错 0、崩溃 0、未实现 0）、`pnpm test` **1178**（ops 自校验 1981/0、tree-face 17/0）、typecheck **4/4 无 `error TS`**、`test:compile` 202/272 且 emitter 不支持 0、`test:codegen` 2/2、`test:scriptc` 代表集 **25/25 编过、跑通、逐字节一致**（282 在列 —— 这四支在 AOT 目标上也是同一条式子）、`test:pkgmodes` **25/25**、`test:export` 10 过 / 9 跳、`test:cli-native` 报「原生 exe 过期，自动重建…」后 **22 项 / 0 失败**。
+- **下一轮**：`Vector2i` / `Vector3i` 的对应缺口（`vector2i-method` / `vector3i-method` 那几处仍写着「实测不存在或未实现」，整数版有没有这套几何要先量）；§6 第 29 条那三形对象表；S281 ⑧ 的三形帧；任务 #58 那把性能尺子（要用户拍板去不去装箱）。
+
 ### 1.97 golden 门那 17 格「卡住」的用例不再白等满超时：任务 #63 的前提先收回（2026-10-09）
 
 - **原任务是错的**：#63 当初写的是「把 case 210 的 golden 重录到没有 `<<GDS2JS_TIMEOUT>>` 标记」。读了那格的正文才明白 —— 那一族 17 格的 golden 记的是**运行期 SCRIPT ERROR**（`210` 是 `c.call(2)` 实参不够：`Invalid call to function 'RefCounted::three (Callable)'. Expected 3 argument(s).`），脚本报错就中止，后面的 `quit()` 永远到不了，进程因此不会自己退出。标记不是仪器失灵，它记的就是真行为：**是我们把它杀了**。把标记抹掉等于造假，所以这条收回，改成量得到的那一半。
