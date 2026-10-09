@@ -780,6 +780,14 @@
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
 
+### 1.89 OBJECT 的身份那一支出货，`bytes_to_var` 从此多一个值型（2026-10-09，S285，语料 276，§6 第 29 条第 ① 项收窄）
+
+- **发出去的三格**：`var_to_bytes(实例)` = `24,0,1,0` + int64 号共 12 字节（容器里递归同一支：两支实例的数组 32 字节、`{"k": 实例}` 32 字节）；`bytes_to_var` 读这一支回 `EncodedObjectAsID` 的盒子；descriptor 那一支在没开对象表的解码器里回 `<null>`（引擎那句 `ERR_UNAUTHORIZED` 后面没有 `at:` 行，与坏字节那四格同样进不了语料，由 ops 钉）。
+- **新值型只照读数发得出那么多**：typeof 24、打印 `<EncodedObjectAsID#号>`、成员只发实测的 `get_object_id()`。**打印里那个号是盒子自己的**，字节里那个要 `get_object_id()` 才拿得到（实测两数不同），两次解出来的盒子 `==` 是假 —— 这三格决定了盒子必须自己占一个身份号，不能把 storedId 当成打印的那一个。
+- **号不进语料这条是硬约束**：normalize 只掩 `<类名#号>` 那种文本，字节里的 int64 没得掩，所以语料钉「总长 + 头部四字节 + 掩码后的打印 + 比较式」，`get_object_id()` 与 `get_instance_id()` 的相等那格留在 ops（同侧对拍，跨侧比号一律撤）。
+- **仍拒的两支**：`var_to_bytes_with_objects` 要 descriptor 那一形（宿主基类名 + storage 属性），`bytes_to_var_with_objects` 还要按 res 路径造实例、跳过 `_init` 的重建（现成路是 `dictDescOf` + `bareConstruction`）。这一对得连项目树语料一起接，所以留作下一轮；宿主类名的实例（`RefCounted` / `Node` / `StyleBoxFlat`）Tier 1 根本造不出，接的时候按红线响亮拒 —— 前置清单在 S284 ⑥。
+- **账**：语料 276（11 行 golden 逐字节，首轮即一致）、`test:compile` 196→**197**/267（emitter 缺口 0）、`test:diff` 188→**189**/189、ops 1957→**1964**、`pnpm test` 1157→**1162**、guards 仍 **190**、scriptc 代表集 18→**19**；golden-check / pkgmodes / export / cli-native 的读数见提交信息。
+
 ### 1.88 对象表那一族一次量齐：没有序号也不共享，进表的只有 storage 属性（2026-10-09，S284，读数轮 · 无实现变更）
 
 - **为什么非得在项目树里量**：`--script` 那条路上脚本实例**根本编不出来** —— 引擎自己打 `ERROR: Failed to encode a path to a custom script` 并返回一个空 PackedByteArray（`objects.mts` 那七格全是 0 字节）。换成带路径的项目树（`thing.gd` / `sub.gd` / `exp.gd` 三支脚本，再加宿主 `StyleBoxFlat` 与 `Node` 各一格）之后，读数一次到位。
