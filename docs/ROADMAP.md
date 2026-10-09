@@ -780,6 +780,14 @@
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
 
+### 1.90 对象表两端接上：发射期那张拒答清单到此清空（2026-10-09，S286，语料 277，§6 第 29 条第 ① 项花掉）
+
+- **为什么这一轮值得两端一起做**：S284 把形状量齐之后，编码侧只剩「类名 + `script` 一格」，解码侧要的正是 `dict_to_inst` 那条现成路（`dictDescOf` 认类 + `beginBareConstruction` 跳过 `_init`）—— 两端各缺一半就都发不出去，一起做才闭环。Tier 1 没有 `@export`，而普通 `var` 本来就不进 storage 那一族（S284 ③ 那格 `var plain` 一字不写），于是「表里只有 `script`」这一形正好是我们发得出来也解得回去的那一形。
+- **反直觉的一格**：内嵌类的实例**编码不出来** —— 引擎打 `Failed to encode a path to a custom script` 并回一个空 PackedByteArray。我们照这一形发空数组（不搬 stderr）；同一条路上 `bytes_to_var` 读到条目也回 `<null>`（`Condition "!p_allow_objects"`）。这两形与 `Cannot get class` 都带 `core/io/marshalls.cpp` 的 `at:` 行，normalize 滤不掉，第一版语料 277 因此 golden 里多出六段 ERROR —— 撤出后 24 行一字不差，三形改由 ops 钉。
+- **吞与不吞分成两份名单**：`bytes_to_var` 仍按实测把读不通的四形全吞成 `<null>`；`bytes_to_var_with_objects` 只吞「字节读不通」那一族，宿主类名本体、除 `script` 外的属性、不认识的元素类型码三形**照旧抛出**（不是字节坏了，是我们造不出 / 没量过）。同一台解码器、两条吞名单，这条分界写进 S286 ③。
+- **清单清空之后仍留闸门**：`GLOBAL_TODO_FUNCTIONS` 现在是空集，`emit-builtin` 那道闸门和它的守卫格留着（清单里再有名字就必须真的抛），guards 因此从 190 变 189（那条按名字展开的拒答守卫并成一格「清单应为空」）；`GLOBAL_CALLABLES` 有区间的 116→118、该拒的 10→8（剩下的全是打印族）。
+- **账**：语料 277（项目树 24 行 golden 逐字节，首轮即一致）、`test:compile` 197/267（emitter 缺口 0）、`test:diff` 189→**190**/190、ops 1964→**1976**、`pnpm test` 1162→**1163**、guards 190→**189**、scriptc 代表集 19→**20**（这一格是项目树用例，走真命令 `export --pack scriptc`）；golden-check / pkgmodes / export / cli-native 的读数见提交信息。
+
 ### 1.89 OBJECT 的身份那一支出货，`bytes_to_var` 从此多一个值型（2026-10-09，S285，语料 276，§6 第 29 条第 ① 项收窄）
 
 - **发出去的三格**：`var_to_bytes(实例)` = `24,0,1,0` + int64 号共 12 字节（容器里递归同一支：两支实例的数组 32 字节、`{"k": 实例}` 32 字节）；`bytes_to_var` 读这一支回 `EncodedObjectAsID` 的盒子；descriptor 那一支在没开对象表的解码器里回 `<null>`（引擎那句 `ERR_UNAUTHORIZED` 后面没有 `at:` 行，与坏字节那四格同样进不了语料，由 ops 钉）。
