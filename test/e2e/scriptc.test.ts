@@ -62,6 +62,7 @@ const DEFAULT_SET = [
   "272-ctor-match-arms",
   "273-stack-frames",
   "274-var-to-bytes",
+  "275-wire-format-shapes",
   "032-preload-load",
 ];
 

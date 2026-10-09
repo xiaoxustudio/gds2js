@@ -20,6 +20,7 @@ export class Main extends SceneTree {
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
+    let zero = 0;
     this.enc(rt.V.str("t01|"), rt.V.nil());
     this.enc(rt.V.str("t02|"), rt.V.bool(true));
     this.enc(rt.V.str("t03|"), rt.V.bool(false));
@@ -48,7 +49,7 @@ export class Main extends SceneTree {
     this.enc(rt.V.str("t26|"), rt.dictOf([[rt.V.str("a"), rt.V.int(1)]]));
     this.enc(rt.V.str("t27|"), rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]));
     this.enc(rt.V.str("t28|"), rt.packCtor("float64", [rt.V.array(rt.GArray.of([rt.V.float(1.5)]))]));
-    this.enc(rt.V.str("t29|"), rt.V.float((-0)));
+    this.enc(rt.V.str("t29|"), rt.V.float((-zero)));
     this.quit();
   }
   

@@ -11,6 +11,7 @@ func raw(tag, bytes):
 	print(tag, "bad|", typeof(r), "|", str(r))
 
 func _initialize():
+	var zero = 0.0
 	enc("t01|", null)
 	enc("t02|", true)
 	enc("t03|", false)
@@ -39,5 +40,5 @@ func _initialize():
 	enc("t26|", { "a": 1 })
 	enc("t27|", PackedByteArray([1, 2, 3]))
 	enc("t28|", PackedFloat64Array([1.5]))
-	enc("t29|", -0.0)
+	enc("t29|", -zero)
 	quit()

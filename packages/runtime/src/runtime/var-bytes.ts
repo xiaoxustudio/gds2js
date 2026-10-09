@@ -1,11 +1,13 @@
 import { UnsupportedError } from "./errors";
 import { Tag, V, type Variant } from "./tags";
-import { GArray, GDict } from "./values";
-import { GBytes } from "./packed";
+import { GArray, GDict, type ElemKind } from "./values";
+import { GBytes, type PackElem, type PackKind } from "./packed";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
 import { GVector2i } from "./vector2i";
+import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
+import { GdNodePath } from "./node-path";
 
 /** 引擎 `VariantWriter::encode` 的头部标志：实测到的只有 `1 << 16`（int64 / double / 定型数组都挂它）。 */
 const FLAG_WIDE = 1;
@@ -27,6 +29,63 @@ const T_PACKED_BYTE_ARRAY = 29;
 const T_PACKED_FLOAT64_ARRAY = 33;
 /** 实测 `bytes_to_var` 的 `(header & 0xFF) >= VARIANT_MAX` 判据：引擎那句给的是 39 那一格。 */
 const VARIANT_MAX = 39;
+const T_NODE_PATH = 22;
+const T_PACKED_I32 = 30;
+const T_PACKED_I64 = 31;
+const T_PACKED_F32 = 32;
+const T_PACKED_STR = 34;
+const T_PACKED_V2 = 35;
+const T_PACKED_V3 = 36;
+const T_PACKED_COLOR = 37;
+const T_VECTOR3I = 10;
+
+const PACK_TYPE_CODE: Record<PackKind, number> = {
+  byte: T_PACKED_BYTE_ARRAY,
+  int32: T_PACKED_I32,
+  int64: T_PACKED_I64,
+  float32: T_PACKED_F32,
+  float64: T_PACKED_FLOAT64_ARRAY,
+  string: T_PACKED_STR,
+  vector2: T_PACKED_V2,
+  vector3: T_PACKED_V3,
+  color: T_PACKED_COLOR,
+};
+
+const CODE_PACK: Record<number, PackKind> = {};
+for (const k of Object.keys(PACK_TYPE_CODE) as PackKind[]) CODE_PACK[PACK_TYPE_CODE[k]] = k;
+
+/** 定型数组 / 字典头部那枚类型码：`ElemKind` 的十二支都在 S224 那张 TYPE_* 表里，容器里再各量一枚（语料 275）。 */
+const ELEM_TYPE: Record<ElemKind, number> = {
+  bool: 1,
+  int: 2,
+  float: 3,
+  String: 4,
+  Vector2: 5,
+  Vector2i: 6,
+  Vector3: 9,
+  Vector3i: 10,
+  Color: 20,
+  StringName: 21,
+  Dictionary: 27,
+  Array: 28,
+};
+
+const TYPE_ELEM: Record<number, ElemKind> = {};
+for (const k of Object.keys(ELEM_TYPE) as ElemKind[]) TYPE_ELEM[ELEM_TYPE[k]] = k;
+
+/** 反向：ElemKind 折成头部的类型码。表外的字符串（例如值位置写 Variant）绝不能写成 NaN 字节。 */
+function elemCode(kind: ElemKind): number {
+  const c = ELEM_TYPE[kind];
+  if (c === undefined) throw new UnsupportedError("var-to-bytes-elemkind", `var_to_bytes() 的容器元素标注 ${String(kind)} 不在量过的类型码表里，响亮拒`);
+  return c;
+}
+
+/** 头部那枚类型码折回 ElemKind：表外（对象、引擎类值那一族）响亮拒。 */
+function elemKindOf(code: number): ElemKind {
+  const k = TYPE_ELEM[code & 0xff];
+  if (k === undefined) throw new UnsupportedError("bytes-to-var-elemkind", `bytes_to_var() 读到没量过的容器元素类型码 ${String(code)}`);
+  return k;
+}
 
 const SCRATCH = new DataView(new ArrayBuffer(8));
 const U64 = 18446744073709551616n;
@@ -41,9 +100,9 @@ function low32(x: bigint): number {
   return Number(((x % U32) + U32) % U32);
 }
 
+/** float32 的四个字节：符号位照 IEEE 写（实测 `-z` 那一支给 `0,0,0,128`，`0.0` 给全零）。纯函数。 */
 function float32Bits(x: number): number {
-  // 实测：`var_to_bytes(-0.0)` 的四个字节是全零（语料 274 的 t29），引擎在这一支把负零的号丢掉。
-  SCRATCH.setFloat32(0, x === 0 ? 0 : x, true);
+  SCRATCH.setFloat32(0, x, true);
   return SCRATCH.getUint32(0, true);
 }
 
@@ -109,19 +168,21 @@ function fromUtf8(bytes: number[]): string {
 
 /** 一个值能不能编：把没量过的形状在这里一次拦清，别让它们流进式子里。 */
 function refuseUnmeasured(v: Variant): void {
-  if (v.t === Tag.OBJECT) {
-    const o = v.v;
-    if (o instanceof GBytes && o.kind !== "byte" && o.kind !== "float64") {
-      throw new UnsupportedError("var-to-bytes-pack", `var_to_bytes() 只量过 PackedByteArray 与 PackedFloat64Array 两支 pack（收到 ${o.kind}），其余 pack 的字节布局没实测过，不发`);
-    }
-    if (!(o instanceof GVector2) && !(o instanceof GVector3) && !(o instanceof GVector2i) && !(o instanceof GColor) && !(o instanceof GBytes)) {
-      throw new UnsupportedError("var-to-bytes-object", `var_to_bytes() 的这一支还没量过（收到 ${typeof o === "object" && o !== null ? (o as object).constructor.name : String(o)}）：对象、RID、NodePath、Callable、Signal 与 Vector3i 的编码都没实测，按红线响亮拒`);
-    }
+  if (v.t !== Tag.OBJECT) return;
+  const o = v.v;
+  if (
+    o instanceof GVector2 ||
+    o instanceof GVector3 ||
+    o instanceof GVector2i ||
+    o instanceof GVector3i ||
+    o instanceof GColor ||
+    o instanceof GBytes ||
+    o instanceof GdNodePath
+  ) {
     return;
   }
-  if (v.t === Tag.FLOAT && Number.isNaN(v.v as number)) {
-    throw new UnsupportedError("var-to-bytes-nan", "var_to_bytes() 收到 NaN：引擎那侧头部另挂一位标志，那一格没量过，不猜");
-  }
+  const name = typeof o === "object" && o !== null ? (o as object).constructor.name : String(o);
+  throw new UnsupportedError("var-to-bytes-object", `var_to_bytes() 的这一支还没量过（收到 ${name}）：对象、RID、Callable 与 Signal 的编码都没实测，按红线响亮拒`);
 }
 
 class Writer {
@@ -159,6 +220,53 @@ class Writer {
     while (this.bytes.length % 4 !== 0) this.bytes.push(0);
   }
 
+  /** pack 里的字符串把终止符一起算进长度（实测 "a" 写 2、"abc" 写 4、"é" 写 3），数据仍只补零到 4 的倍数。 */
+  strPacked(s: string): void {
+    const b = utf8(s);
+    this.u32(b.length + 1);
+    this.bytes.push(...b);
+    while (this.bytes.length % 4 !== 0) this.bytes.push(0);
+  }
+
+  packElem(kind: PackKind, e: PackElem): void {
+    switch (kind) {
+      case "byte":
+        this.bytes.push(Number(e) & 0xff);
+        return;
+      case "int32":
+        this.u32(Number(e));
+        return;
+      case "int64":
+        this.u64(typeof e === "bigint" ? e : BigInt(Number(e)));
+        return;
+      case "float32":
+        this.f32(Number(e));
+        return;
+      case "float64":
+        this.f64(Number(e));
+        return;
+      case "string":
+        // 静态目标不接受对带对象分支的 union 做 String 转换（SC1090）；错型格子照模型折成默认格，与 `defaultElem("string")` 同值。
+        this.strPacked(typeof e === "string" ? e : "");
+        return;
+      case "vector2":
+        this.f32((e as GVector2).x);
+        this.f32((e as GVector2).y);
+        return;
+      case "vector3":
+        this.f32((e as GVector3).x);
+        this.f32((e as GVector3).y);
+        this.f32((e as GVector3).z);
+        return;
+      case "color":
+        this.f32((e as GColor).r);
+        this.f32((e as GColor).g);
+        this.f32((e as GColor).b);
+        this.f32((e as GColor).a);
+        return;
+    }
+  }
+
   variant(v: Variant): void {
     refuseUnmeasured(v);
     switch (v.t) {
@@ -183,6 +291,7 @@ class Writer {
       case Tag.FLOAT: {
         // 静态目标不比对 `unknown`：先收到 number 格子里（SC1043）。
         const f = v.v as number;
+        // 实测判据只有一条：float32 折回来还是它自己就走窄身（NaN 因为 NaN != NaN 自然落进宽身，±inf 与 2 的幂都在窄身那侧）
         if (bitsToFloat32(float32Bits(f)) === f) {
           this.header(T_FLOAT);
           this.f32(f);
@@ -202,23 +311,26 @@ class Writer {
         return;
       case Tag.ARRAY: {
         const a = v.v as GArray;
-        if (a.elemKind() !== null) {
-          throw new UnsupportedError("var-to-bytes-typed", "var_to_bytes() 收到定型数组：头部要再挂一枚 typed_flags（读数记在 §6 第 29 条），实现还没接，响亮拒");
-        }
         const items = a.raw();
-        this.header(T_ARRAY);
+        const kind = a.elemKind();
+        // 实测：定型数组头部挂宽位，再跟一枚「元素类型码」字（Array[int] 给 2、Array[String] 给 4、Array[Array] 给 28）
+        this.header(T_ARRAY, kind !== null);
+        if (kind !== null) this.u32(elemCode(kind));
         this.u32(items.length);
         for (const e of items) this.variant(e);
         return;
       }
       case Tag.DICT: {
         const d = v.v as GDict;
-        if (d.keyKind !== null || d.valKind !== null) {
-          throw new UnsupportedError("var-to-bytes-typed", "var_to_bytes() 收到定型字典：那一形的头部没量过，响亮拒");
+        if (d.keyKind === null && d.valKind !== null) {
+          throw new UnsupportedError("var-to-bytes-typed", "var_to_bytes() 收到「只有值类型」的字典：引擎那侧的头部位（键 1、值 4）没量过这一形，响亮拒");
         }
         const ks = d.keys();
         const vs = d.values();
-        this.header(T_DICTIONARY);
+        // 实测：头部高位 1 = 带键类型、再加 4 = 连值类型一起带；类型码写在个数之前
+        this.u32(T_DICTIONARY | ((d.keyKind !== null ? (d.valKind !== null ? 5 : 1) : 0) << 16));
+        if (d.keyKind !== null) this.u32(elemCode(d.keyKind));
+        if (d.valKind !== null) this.u32(elemCode(d.valKind));
         this.u32(ks.length);
         for (let i = 0; i < ks.length; i++) {
           this.variant(ks[i] as Variant);
@@ -247,6 +359,13 @@ class Writer {
           this.u32(o.y);
           return;
         }
+        if (o instanceof GVector3i) {
+          this.header(T_VECTOR3I);
+          this.u32(o.x);
+          this.u32(o.y);
+          this.u32(o.z);
+          return;
+        }
         if (o instanceof GColor) {
           this.header(T_COLOR);
           this.f32(o.r);
@@ -257,16 +376,21 @@ class Writer {
         }
         if (o instanceof GBytes) {
           const items = o.raw();
-          if (o.kind === "byte") {
-            this.header(T_PACKED_BYTE_ARRAY);
-            this.u32(items.length);
-            for (const e of items) this.bytes.push((e as number) & 0xff);
-            while (this.bytes.length % 4 !== 0) this.bytes.push(0);
-            return;
-          }
-          this.header(T_PACKED_FLOAT64_ARRAY);
+          this.header(PACK_TYPE_CODE[o.kind]);
           this.u32(items.length);
-          for (const e of items) this.f64(e as number);
+          for (const e of items) this.packElem(o.kind, e);
+          // 只有字节那一族要补零到 4（实测 PackedInt32Array([]) 就八字节，元素本身都是 4 的倍数）
+          if (o.kind === "byte") while (this.bytes.length % 4 !== 0) this.bytes.push(0);
+          return;
+        }
+        if (o instanceof GdNodePath) {
+          // 实测三个计数字：第一个是「名字数 | 1<<31」（那一位恒置），再子名数、绝对位；其后每段「长度 + UTF-8 补零」
+          this.header(T_NODE_PATH);
+          this.u32(0x80000000 | o.names.length);
+          this.u32(o.subnames.length);
+          this.u32(o.absolute ? 1 : 0);
+          for (const n of o.names) this.str(n);
+          for (const n of o.subnames) this.str(n);
           return;
         }
         throw new UnsupportedError("var-to-bytes-object", "var_to_bytes() 的这一支没量过，响亮拒");
@@ -333,6 +457,51 @@ class Reader {
     return fromUtf8(slice);
   }
 
+  /** pack 里的字符串：长度含终止符，数据只占 utf8 的字节数，再补零到 4 的倍数。 */
+  strPacked(): string {
+    const n = this.u32() - 1;
+    const pad = n + ((4 - (n % 4)) % 4);
+    this.need(pad);
+    const slice = this.b.slice(this.i, this.i + n);
+    this.i += pad;
+    return fromUtf8(slice);
+  }
+
+  packElem(kind: PackKind): PackElem {
+    switch (kind) {
+      case "byte":
+        return this.b[this.i++] as number;
+      case "int32":
+        return this.i32();
+      case "int64":
+        return this.u64();
+      case "float32":
+        return this.f32();
+      case "float64":
+        return this.f64();
+      case "string":
+        return this.strPacked();
+      case "vector2": {
+        const x = this.f32();
+        const y = this.f32();
+        return new GVector2(x, y);
+      }
+      case "vector3": {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        return new GVector3(x, y, z);
+      }
+      case "color": {
+        const r = this.f32();
+        const g = this.f32();
+        const b = this.f32();
+        const a = this.f32();
+        return new GColor(r, g, b, a);
+      }
+    }
+  }
+
   variant(): Variant {
     if (this.left < 4) throw new UnsupportedError("bytes-to-var-truncated", "截了");
     const h = this.u32() >>> 0;
@@ -364,6 +533,12 @@ class Reader {
         const y = this.i32();
         return V.object(new GVector2i(x, y));
       }
+      case T_VECTOR3I: {
+        const x = this.i32();
+        const y = this.i32();
+        const z = this.i32();
+        return V.object(new GVector3i(x, y, z));
+      }
       case T_VECTOR3: {
         const x = this.f32();
         const y = this.f32();
@@ -378,37 +553,46 @@ class Reader {
         return V.object(new GColor(r, g, b, a));
       }
       case T_ARRAY: {
-        if ((flags & FLAG_WIDE) !== 0) throw new UnsupportedError("bytes-to-var-typed", "bytes_to_var() 读到定型数组：那一支的 stampElem 复位没量过，响亮拒");
+        const kind = (flags & FLAG_WIDE) !== 0 ? elemKindOf(this.u32()) : null;
         const n = this.u32();
         const items: Variant[] = [];
         for (let k = 0; k < n; k++) items.push(this.variant());
-        return V.array(GArray.of(items));
+        const arr = GArray.of(items);
+        if (kind !== null) arr.stampElem(kind);
+        return V.array(arr);
       }
       case T_DICTIONARY: {
+        const keyKind = (flags & 1) !== 0 ? elemKindOf(this.u32()) : null;
+        const valKind = (flags & 4) !== 0 ? elemKindOf(this.u32()) : null;
         const n = this.u32();
         const d = new GDict();
+        if (keyKind !== null && valKind !== null) d.stampElem(keyKind, valKind);
         for (let k = 0; k < n; k++) {
           const key = this.variant();
           d.set(key, this.variant());
         }
         return V.dict(d);
       }
-      case T_PACKED_BYTE_ARRAY: {
-        const n = this.u32();
-        const pad = n + ((4 - (n % 4)) % 4);
-        this.need(pad);
-        const items = this.b.slice(this.i, this.i + n);
-        this.i += pad;
-        return V.object(GBytes.of(items, "byte"));
+      case T_NODE_PATH: {
+        const names = (this.u32() >>> 0) & 0x7fffffff;
+        const subs = this.u32();
+        const absolute = this.u32() !== 0;
+        const ns: string[] = [];
+        const ss: string[] = [];
+        for (let k = 0; k < names; k++) ns.push(this.str());
+        for (let k = 0; k < subs; k++) ss.push(this.str());
+        return V.object(new GdNodePath(absolute, ns, ss, names === 0 && subs === 0 && !absolute));
       }
-      case T_PACKED_FLOAT64_ARRAY: {
+      default: {
+        const kind = CODE_PACK[type];
+        if (kind === undefined) throw new UnsupportedError("bytes-to-var-type", `bytes_to_var() 读到没量过的类型码 ${String(type)}`);
         const n = this.u32();
-        const items: number[] = [];
-        for (let k = 0; k < n; k++) items.push(this.f64());
-        return V.object(GBytes.of(items, "float64"));
+        const items: PackElem[] = [];
+        for (let k = 0; k < n; k++) items.push(this.packElem(kind));
+        // 只有字节那一族在元素后面补零到 4 的倍数
+        if (kind === "byte") this.i += (4 - (this.i % 4)) % 4;
+        return V.object(GBytes.of(items, kind));
       }
-      default:
-        throw new UnsupportedError("bytes-to-var-type", `bytes_to_var() 读到没量过的类型码 ${String(type)}`);
     }
   }
 }
