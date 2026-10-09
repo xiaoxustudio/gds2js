@@ -67,6 +67,7 @@ const DEFAULT_SET = [
   "277-object-table-shapes",
   "278-var-to-str-float",
   "279-decimal-reader",
+  "280-pow-precedence",
   "032-preload-load",
 ];
 
