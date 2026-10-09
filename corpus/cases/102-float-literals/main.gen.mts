@@ -22,7 +22,7 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("f7 "), rt.toInt(rt.V.float(g))]));
     let h = 1;
     print(rt.showArgs([rt.V.str("f8 "), rt.V.float(h), rt.V.str(" | "), rt.toInt(rt.V.float(h))]));
-    print(rt.showArgs([rt.V.str("f9 "), rt.toInt(rt.V.float((1e-23 * 1e+30))), rt.V.str(" | "), rt.V.float((1e-23 * 1e+30))]));
+    print(rt.showArgs([rt.V.str("f9 "), rt.toInt(rt.V.float((1.0000000000000001e-23 * 1e+30))), rt.V.str(" | "), rt.V.float((1.0000000000000001e-23 * 1e+30))]));
     print(rt.showArgs([rt.V.str("f10 "), rt.V.bool((a === 9007199254740994)), rt.V.str(" | "), rt.V.bool((a > 9007199254740992)), rt.V.str(" | "), rt.V.bool((d < 1.2345678901e-7))]));
     let i = 1000000.25;
     print(rt.showArgs([rt.V.str("f11 "), rt.toInt(rt.V.float(i)), rt.V.str(" | "), rt.V.float(i)]));
