@@ -14,7 +14,7 @@ import { parseGdDouble } from "../shared/double";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import { GdNativeClass } from "./native-class";
-import { isNullRefValue, isWeakRefBox, NULL_OBJECT } from "./identity";
+import { isEncodedObjectIdBox, isNullRefValue, isWeakRefBox, NULL_OBJECT } from "./identity";
 import type { GdIdentified } from "./identity";
 import { asRid, ridText } from "./rid";
 import { asNodePath, emptyNodePath, nodePathText, nodePathValue, sameNodePath } from "./node-path";
@@ -2422,6 +2422,7 @@ export function show(v: Variant, depth = 0): string {
       if (isNullRefValue(inner)) return "<Object#null>";
       if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
       if (isWeakRefBox(inner)) return `<WeakRef#${String(inner.gdObjectId)}>`;
+      if (isEncodedObjectIdBox(inner)) return `<EncodedObjectAsID#${String(inner.gdObjectId)}>`;
       const shape = objectLabelHook === null ? null : objectLabelHook(inner as object);
       if (shape !== null) return shape;
       // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null

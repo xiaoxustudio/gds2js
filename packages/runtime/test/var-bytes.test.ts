@@ -1,6 +1,6 @@
-// var_to_bytes / bytes_to_var（语料 274 / 275 钉了逐字节形状；本门钉语料看不见的那些：四形坏字节都回 NIL、
-// 没量过的那一批形状一律响亮拒、窄身判据的边界格、九种 pack 与定型容器的解回来那侧。
-// 读数：`tmp/probe-varbytes/`，S282 / S283）。
+// var_to_bytes / bytes_to_var（语料 274 / 275 / 276 钉了逐字节形状；本门钉语料看不见的那些：四形坏字节都回 NIL、
+// 没量过的那一批形状一律响亮拒、窄身判据的边界格、九种 pack 与定型容器的解回来那侧、身份那一支的盒子。
+// 读数：`tmp/probe-varbytes/`，S282 / S283 / S284）。
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
@@ -16,6 +16,8 @@ import { Signal } from "@gds2js/runtime/runtime/signal";
 import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
 import { nullCallable } from "@gds2js/runtime/runtime/callable";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { GdScriptObject } from "@gds2js/runtime/runtime/object";
+import { method } from "@gds2js/runtime/runtime/methods";
 import { gBytesToVar, gVarToBytes } from "@gds2js/runtime/runtime/var-bytes";
 
 const bytes = (nums: number[]): Variant => V.object(GBytes.of(nums, "byte"));
@@ -62,6 +64,24 @@ describe("runtime/var-bytes · 坏字节与没量过的形状", () => {
     eq("283", "NaN 因为 NaN != NaN 自然落宽身、±inf 在窄身那侧", `${vb(V.float(NaN))}|${vb(V.float(Infinity))}|${vb(V.float(-Infinity))}`, "[3, 0, 1, 0, 0, 0, 0, 0, 0, 0, 248, 127]|[3, 0, 0, 0, 0, 0, 128, 127]|[3, 0, 0, 0, 0, 0, 128, 255]");
     eq("283", "2^-1075 在双精度就已经是 0，窄身全零", vb(V.float(2 ** -1075)), "[3, 0, 0, 0, 0, 0, 0, 0]");
     eq("283", "解回来：窄身那两支是同一个值、宽身那两支按 double 复现", `${rt(V.float(2 ** -149))}|${rt(V.float(2 ** -1022))}|${rt(V.float(0.1))}`, "0.0|0.0|0.1");
+  });
+
+  it("实例那一支：身份直写 12 字节，解回来是 EncodedObjectAsID 的盒子（S284 ①，语料 276 钉掩码后的打印）", () => {
+    const inst = V.object(new GdScriptObject());
+    const enc = gVarToBytes(inst);
+    eq("284", "头部是 24,0,1,0（类型 24 挂宽位），整支 12 字节", `${showArgs([enc]).slice(1).split(", ").slice(0, 4).join(", ")}|${String((enc.v as GBytes).raw().length)}`, "24, 0, 1, 0|12");
+    const box = gBytesToVar(enc);
+    const text = showArgs([box]);
+    eq("284", "打印是 <EncodedObjectAsID#号>，号是盒子自己另占的那一个", `${text.startsWith("<EncodedObjectAsID#") && text.endsWith(">") ? "形对" : "走样"}|${text.includes(String((inst.v as GdScriptObject).gdObjectId)) ? "漏了实例的号" : "没漏"}`, "形对|没漏");
+    eq("284", "get_object_id() 给的是字节里那个号，与实例自己的号同一个数", showArgs([method(box, "get_object_id", [])]), showArgs([V.int((inst.v as GdScriptObject).gdObjectId)]));
+    eq("284", "两次解出来的盒子是两个不同对象（实测 == 假）", String(gBytesToVar(enc).v === box.v), "false");
+    eq("284", "盒子上没量过的成员响亮拒", code(() => method(box, "get_ref", [])), "[encoded-object-id-method]");
+  });
+
+  it("内联条目那一支：没开对象表的解码器给 <null>（引擎那两句 ERROR 没有 at: 行，进不了语料）", () => {
+    const tableForm = bytes([24, 0, 0, 0, 10, 0, 0, 0, 82, 101, 102, 67, 111, 117, 110, 116, 101, 100, 0, 0, 1, 0, 0, 0]);
+    eq("284", "读得不完整也算读不通", showArgs([gBytesToVar(tableForm)]), "<null>");
+    eq("284", "整条目补全也一样：<null>（引擎那句是 ERR_UNAUTHORIZED）", showArgs([gBytesToVar(bytes([24, 0, 0, 0, 4, 0, 0, 0, 79, 98, 106, 0, 0, 0, 0, 0]))]), "<null>");
   });
 
   it("九种 pack 的字节与解回来（期望全取语料 275 引擎那一列）", () => {

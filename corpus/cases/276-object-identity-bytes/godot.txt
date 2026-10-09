@@ -1,0 +1,11 @@
+h01|sz|12|[24, 0, 1, 0]
+h02|sz|32|[28, 0, 0, 0]
+h03|sz|32|[27, 0, 0, 0]
+h04|sz|20|[28, 0, 0, 0]
+s01|t|24|<EncodedObjectAsID#号>
+s02|t|1|false
+s03|t|1|true
+s04|t|1|true
+s05|t|1|false
+s07|t|24|<EncodedObjectAsID#号>
+s08|t|24|<EncodedObjectAsID#号>

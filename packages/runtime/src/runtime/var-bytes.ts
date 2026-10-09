@@ -8,6 +8,8 @@ import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
 import { GdNodePath } from "./node-path";
+import { GdScriptObject } from "./object";
+import { encodedObjectIdBox } from "./identity";
 
 /** 引擎 `VariantWriter::encode` 的头部标志：实测到的只有 `1 << 16`（int64 / double / 定型数组都挂它）。 */
 const FLAG_WIDE = 1;
@@ -38,6 +40,7 @@ const T_PACKED_V2 = 35;
 const T_PACKED_V3 = 36;
 const T_PACKED_COLOR = 37;
 const T_VECTOR3I = 10;
+const T_OBJECT = 24;
 
 const PACK_TYPE_CODE: Record<PackKind, number> = {
   byte: T_PACKED_BYTE_ARRAY,
@@ -177,12 +180,13 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GVector3i ||
     o instanceof GColor ||
     o instanceof GBytes ||
-    o instanceof GdNodePath
+    o instanceof GdNodePath ||
+    o instanceof GdScriptObject
   ) {
     return;
   }
   const name = typeof o === "object" && o !== null ? (o as object).constructor.name : String(o);
-  throw new UnsupportedError("var-to-bytes-object", `var_to_bytes() 的这一支还没量过（收到 ${name}）：对象、RID、Callable 与 Signal 的编码都没实测，按红线响亮拒`);
+  throw new UnsupportedError("var-to-bytes-object", `var_to_bytes() 的这一支还没量过（收到 ${name}）：RID、Callable 与 Signal 的编码都没实测，按红线响亮拒`);
 }
 
 class Writer {
@@ -393,6 +397,12 @@ class Writer {
           for (const n of o.subnames) this.str(n);
           return;
         }
+        if (o instanceof GdScriptObject) {
+          // 实测：不挂对象表那一支把身份号直写 —— 24,0,1,0 再一枚 int64（S284 ①）
+          this.header(T_OBJECT, true);
+          this.u64(BigInt(o.gdObjectId));
+          return;
+        }
         throw new UnsupportedError("var-to-bytes-object", "var_to_bytes() 的这一支没量过，响亮拒");
       }
     }
@@ -572,6 +582,11 @@ class Reader {
           d.set(key, this.variant());
         }
         return V.dict(d);
+      }
+      case T_OBJECT: {
+        // 实测：带号那一支解回 EncodedObjectAsID（盒子自己另占一个号），内联条目那一支在没开对象表的解码器里回 <null>（S285 ②③）
+        if ((flags & FLAG_WIDE) === 0) throw new UnsupportedError("bytes-to-var-object", "对象表那一支要的是 bytes_to_var_with_objects()");
+        return V.object(encodedObjectIdBox(this.u64()));
       }
       case T_NODE_PATH: {
         const names = (this.u32() >>> 0) & 0x7fffffff;

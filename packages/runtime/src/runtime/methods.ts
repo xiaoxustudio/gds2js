@@ -16,7 +16,7 @@ import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
-import { isWeakRefBox } from "./identity";
+import { isEncodedObjectIdBox, isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
 import { gBytesToVar, gVarToBytes } from "./var-bytes";
@@ -340,6 +340,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("arity", `get_ref() 不接受参数（收到 ${args.length} 个）`);
       }
       return inner.target === null ? V.nil() : inner.target;
+    }
+
+    if (isEncodedObjectIdBox(inner)) {
+      if (name !== "get_object_id") {
+        throw new UnsupportedError("encoded-object-id-method", `EncodedObjectAsID.${name}() 没量过（只发得出实测的 get_object_id()）`);
+      }
+      if (args.length !== 0) {
+        throw new GodotRuntimeError("arity", `get_object_id() 不接受参数（收到 ${args.length} 个）`);
+      }
+      return V.int(inner.storedId);
     }
 
     if (isCallableBox(inner)) {

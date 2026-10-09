@@ -63,6 +63,7 @@ const DEFAULT_SET = [
   "273-stack-frames",
   "274-var-to-bytes",
   "275-wire-format-shapes",
+  "276-object-identity-bytes",
   "032-preload-load",
 ];
 
