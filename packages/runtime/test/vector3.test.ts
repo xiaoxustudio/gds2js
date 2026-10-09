@@ -60,9 +60,9 @@ describe("runtime/vector3", () => {
     );
     eq("091", "is_normalized / is_finite", `${m3(V3(1, 1, 1), "is_normalized").v}/${m3(V3(1, 0, 0), "is_normalized").v}/${m3(V3(0.7071067811865475, 0.7071067811865475, 0), "is_normalized").v}/${m3(V3(1e300, 0, 0), "is_finite").v}/${m3(V3(1, 2, 3), "is_finite").v}`, "false/true/true/false/true");
 
-    for (const n of ["reflect", "bounce", "slide"]) {
-      shouldThrow("091", `Vector3.${n}() 未实现要响`, () => m3(V3(1, 2, 3), n, V3(0, 1, 0)));
-    }
+    eq("091", "slide / reflect / bounce / project 与引擎同值（法向 (0,1,0)）", `${vv(m3(V3(1, 2, 3), "slide", V3(0, 1, 0)))}/${vv(m3(V3(1, 2, 3), "reflect", V3(0, 1, 0)))}/${vv(m3(V3(1, 2, 3), "bounce", V3(0, 1, 0)))}/${vv(m3(V3(1, 2, 3), "project", V3(0, 1, 0)))}`, "(1.0, 0.0, 3.0)/(-1.0, 2.0, -3.0)/(1.0, -2.0, 3.0)/(0.0, 2.0, 0.0)");
+    eq("091", "法向不是单位向量：slide / reflect / bounce 给零向量（引擎多打一行 core/math 的 ERROR，那一行不属于产物）", `${vv(m3(V3(1, 2, 3), "slide", V3(0, 2, 0)))}/${vv(m3(V3(1, 2, 3), "reflect", V3(1, 1, 1)))}/${vv(m3(V3(1, 2, 3), "bounce", V3(0, 0, 0)))}`, "(0.0, 0.0, 0.0)/(0.0, 0.0, 0.0)/(0.0, 0.0, 0.0)");
+    eq("091", "project 不设门槛：零法向给 nan", `${vv(m3(V3(1, 2, 3), "project", V3(0, 0, 0)))}/${vv(m3(V3(1, 2, 3), "project", V3(0, 2, 0)))}`, "(nan, nan, nan)/(0.0, 2.0, 0.0)");
     eq("093", "Vector3.clampf 与 clamp 同值", `${vv(m3(V3(1, 2, 3), "clampf", F(1.5), F(2.5)))}/${vv(m3(V3(3, 2, 1), "clampf", F(1.5), F(2.5)))}/${vv(m3(V3(-1, 2, 5), "clampf", F(0), F(1)))}`, "(1.5, 2.0, 2.5)/(2.5, 2.0, 1.5)/(0.0, 1.0, 1.0)");
     eq("093", "Vector3.is_zero_approx", `${m3(V3(0, 0, 0), "is_zero_approx").v}/${m3(V3(0.000009, 0, 0), "is_zero_approx").v}/${m3(V3(0.00001, 0, 0), "is_zero_approx").v}/${m3(V3(0, 0, -0.00002), "is_zero_approx").v}`, "true/true/false/false");
     eq("093", "Vector3.is_normalized 用 1e-3（用 1e-5 会把 0.9995 判错）", `${m3(V3(0.9995, 0, 0), "is_normalized").v}/${m3(V3(0.9992, 0, 0), "is_normalized").v}/${m3(V3(0.5774, 0.5774, 0.5774), "is_normalized").v}/${m3(V3(1, 1, 0.045), "is_normalized").v}`, "true/false/true/false");

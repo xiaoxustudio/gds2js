@@ -99,7 +99,10 @@ const add = (a: number, b: number) => r(a + b);
 const sub = (a: number, b: number) => r(a - b);
 const flen = (x: number, y: number) => r(Math.sqrt(add(mul(x, x), mul(y, y))));
 
-/** Vector2 的方法面：按名字派发，复现不了的（`slide` / `bounce`）与未知成员都响亮报缺。 */
+/** `is_normalized()` 那一条判据（epsilon 两侧实测：Δlen² = 9.986e-4 过，1.000e-3 不过）。 */
+const isUnit = (x: number, y: number) => r(Math.abs(sub(add(mul(x, x), mul(y, y)), 1))) < NORMALIZED_EPS;
+
+/** Vector2 的方法面：按名字派发，未知成员响亮报缺。 */
 export function vector2Method(v: GVector2, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length":
@@ -245,9 +248,33 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       const ls = add(mul(v.x, v.x), mul(v.y, v.y));
       return V.bool(r(Math.abs(sub(ls, 1))) < NORMALIZED_EPS);
     }
-    case "slide":
-    case "bounce":
-      throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现（法向不是单位向量时 Godot 除了给零向量还往 stderr 打一行，产物复现不了）`);
+    case "slide": {
+      arity(args, 1, "slide");
+      const n = vecArg(args, 0, "slide");
+      if (!isUnit(n.x, n.y)) return vector2(0, 0);
+      const d = add(mul(v.x, n.x), mul(v.y, n.y));
+      return vector2(sub(v.x, mul(n.x, d)), sub(v.y, mul(n.y, d)));
+    }
+    case "reflect": {
+      arity(args, 1, "reflect");
+      const n = vecArg(args, 0, "reflect");
+      if (!isUnit(n.x, n.y)) return vector2(0, 0);
+      const k = mul(2, add(mul(v.x, n.x), mul(v.y, n.y)));
+      return vector2(sub(mul(k, n.x), v.x), sub(mul(k, n.y), v.y));
+    }
+    case "bounce": {
+      arity(args, 1, "bounce");
+      const n = vecArg(args, 0, "bounce");
+      if (!isUnit(n.x, n.y)) return vector2(0, 0);
+      const k = mul(2, add(mul(v.x, n.x), mul(v.y, n.y)));
+      return vector2(sub(v.x, mul(k, n.x)), sub(v.y, mul(k, n.y)));
+    }
+    case "project": {
+      arity(args, 1, "project");
+      const n = vecArg(args, 0, "project");
+      const k = div(add(mul(v.x, n.x), mul(v.y, n.y)), add(mul(n.x, n.x), mul(n.y, n.y)));
+      return vector2(mul(n.x, k), mul(n.y, k));
+    }
     default:
       throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现`);
   }

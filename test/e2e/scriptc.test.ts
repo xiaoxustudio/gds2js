@@ -69,6 +69,7 @@ const DEFAULT_SET = [
   "279-decimal-reader",
   "280-pow-precedence",
   "281-int-pow-negative",
+  "282-vector-slide-bounce",
   "032-preload-load",
 ];
 
