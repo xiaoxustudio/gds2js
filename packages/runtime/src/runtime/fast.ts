@@ -162,7 +162,11 @@ export const fast = {
     return a % b;
   },
   iPow(a: number, b: number): number {
-    if (b < 0) throw new UnsupportedError("int-pow-negative", "负整数次幂（未补测）");
+    if (b < 0) {
+      const r = Math.trunc(Math.pow(a, b));
+      if (!Number.isSafeInteger(r)) throw int64(r);
+      return r;
+    }
     return Math.pow(a, b);
   },
   fPow(a: number, b: number): number {

@@ -68,6 +68,7 @@ const DEFAULT_SET = [
   "278-var-to-str-float",
   "279-decimal-reader",
   "280-pow-precedence",
+  "281-int-pow-negative",
   "032-preload-load",
 ];
 

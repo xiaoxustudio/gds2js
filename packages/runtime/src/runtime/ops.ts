@@ -6,6 +6,7 @@ import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
 import { asColor, color, colorCmp, GColor } from "./color";
 import { bytesConcat, GBytes } from "./packed";
+import { INT64_MIN, TWO_63 } from "./numstr";
 import {
   add32,
   asVec2i,
@@ -253,7 +254,9 @@ export const ops = {
       const [x, y] = intPair(a, b, "**");
       const e = intToBig(y);
       if (e < 0n) {
-        throw new UnsupportedError("int-pow-negative", "负整数次幂（未补测）");
+        const p = Math.pow(intToNum(x), Number(e));
+        if (!Number.isFinite(p) || Math.abs(p) >= TWO_63) return V.int(INT64_MIN);
+        return V.int(Math.trunc(p));
       }
       return V.int(bigPow(intToBig(x), e));
     }
