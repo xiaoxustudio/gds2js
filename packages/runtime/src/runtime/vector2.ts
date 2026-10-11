@@ -72,9 +72,10 @@ export function vector2Const(name: string): Variant {
 }
 
 /** 标量实参：int/float 收成 number，其余响亮报错。 */
+/** 数值实参在调用边界上就是 `real_t`：float 折回 float32，int 收成 number，其余响亮报错（S313 的判据是 1e7 量级那两格 cubic —— 不折就差 1 个 ULP）。 */
 function scalar(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("vector2-arity", `Vector2.${who} 缺少实参`);
-  if (v.t === Tag.FLOAT) return v.v as number;
+  if (v.t === Tag.FLOAT) return r(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as number | bigint);
   throw new UnsupportedError("vector2-arg", `Vector2.${who} 需要数值实参，收到 ${v.t}`);
 }
@@ -88,7 +89,7 @@ function vecArg(args: Variant[], i: number, who: string): GVector2 {
 
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
-    throw new UnsupportedError("vector2-arity", `Vector2.${who} 需要 ${n} 个实参（收到 ${args.length} 个）`);
+    throw new GodotRuntimeError("vector2-arity", `Invalid call to function '${who}' in base 'Vector2'. Expected ${n} argument(s).`);
   }
 }
 
@@ -98,6 +99,15 @@ const div = (a: number, b: number) => r(a / b);
 const add = (a: number, b: number) => r(a + b);
 const sub = (a: number, b: number) => r(a - b);
 const flen = (x: number, y: number) => r(Math.sqrt(add(mul(x, x), mul(y, y))));
+
+/** 与全局 `fposmod` 同一条实测口径：模数为 0 或商不有限都给 nan，负模数也走 `a - b*floor(a/b)` 这一支。 */
+const fposmod = (a: number, b: number): number => (b === 0 || !Number.isFinite(a / b) ? NaN : a - b * Math.floor(a / b) + 0);
+
+/** 值类型这五族的 clamp 实测是「先比下界、再比上界」：`Vector2i(3, -4).clamp(Vector2i(2, -2), Vector2i(-2, 2))` 给 `(-2, -2)`，
+ *  此前出货的 `Math.max(lo, Math.min(hi, v))` 给 `(2, -2)`；`Math.min(Math.max(v, lo), hi)` 在这一格巧合，
+ *  到 `Vector2(-4, 4).clamp(Vector2(3, 4), Vector2(-1, -2))`（引擎 `(3.0, -2.0)`）就给 `(-1.0, …)` —— CLX / CLY / CLZ 三行钉住（S306）。
+ *  全局 `clamp()` / `clampf()` 是**另一条**口径（实测 `clamp(1, 2, 0)` 给 0，正是这一支给 `2` 的那一格），别把两边对齐。 */
+export const clamp = (n: number, lo: number, hi: number): number => (n < lo ? lo : n > hi ? hi : n);
 
 /** `is_normalized()` 那一条判据（epsilon 两侧实测：Δlen² = 9.986e-4 过，1.000e-3 不过）。 */
 const isUnit = (x: number, y: number) => r(Math.abs(sub(add(mul(x, x), mul(y, y)), 1))) < NORMALIZED_EPS;
@@ -158,7 +168,9 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(Math.ceil(v.x), Math.ceil(v.y));
     case "round": {
       arity(args, 0, "round");
-      const h = (n: number) => (n < 0 ? -Math.round(-n) : Math.round(n));
+      // `Math::round` 的形状：负数 `ceil(x - 0.5)`、非负 `floor(x + 0.5)`，**加法先舍回 float32**
+      // （`0.49999997` 那一格：double 里 `x+0.5 = 0.99999997` 折回 float32 就是 `1.0`，引擎给 1，double 写法给 0）
+      const h = (n: number) => (n < 0 ? Math.ceil(sub(n, 0.5)) : Math.floor(add(n, 0.5)));
       return vector2(h(v.x), h(v.y));
     }
     case "snapped": {
@@ -166,6 +178,124 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       const o = vecArg(args, 0, "snapped");
       const snap = (n: number, s: number) => (s === 0 ? n : mul(s, Math.floor(add(div(n, s), 0.5))));
       return vector2(snap(v.x, o.x), snap(v.y, o.y));
+    }
+    case "min": {
+      arity(args, 1, "min");
+      const o = vecArg(args, 0, "min");
+      return vector2(Math.min(v.x, o.x), Math.min(v.y, o.y));
+    }
+    case "max": {
+      arity(args, 1, "max");
+      const o = vecArg(args, 0, "max");
+      return vector2(Math.max(v.x, o.x), Math.max(v.y, o.y));
+    }
+    case "minf": {
+      arity(args, 1, "minf");
+      const s = scalar(args[0], "minf");
+      return vector2(Math.min(v.x, s), Math.min(v.y, s));
+    }
+    case "maxf": {
+      arity(args, 1, "maxf");
+      const s = scalar(args[0], "maxf");
+      return vector2(Math.max(v.x, s), Math.max(v.y, s));
+    }
+    case "clamp": {
+      arity(args, 2, "clamp");
+      const lo = vecArg(args, 0, "clamp");
+      const hi = vecArg(args, 1, "clamp");
+      return vector2(clamp(v.x, lo.x, hi.x), clamp(v.y, lo.y, hi.y));
+    }
+    case "clampf": {
+      arity(args, 2, "clampf");
+      const lo = scalar(args[0], "clampf");
+      const hi = scalar(args[1], "clampf");
+      return vector2(clamp(v.x, lo, hi), clamp(v.y, lo, hi));
+    }
+    case "snappedf": {
+      arity(args, 1, "snappedf");
+      const s = scalar(args[0], "snappedf");
+      const snap = (n: number, k: number) => (k === 0 ? n : mul(k, Math.floor(add(div(n, k), 0.5))));
+      return vector2(snap(v.x, s), snap(v.y, s));
+    }
+    case "posmod": {
+      arity(args, 1, "posmod");
+      const s = scalar(args[0], "posmod");
+      return vector2(fposmod(v.x, s), fposmod(v.y, s));
+    }
+    case "posmodv": {
+      arity(args, 1, "posmodv");
+      const o = vecArg(args, 0, "posmodv");
+      return vector2(fposmod(v.x, o.x), fposmod(v.y, o.y));
+    }
+    case "bezier_interpolate": {
+      // 舍入点照引擎的表达式：`u=1-t`、`this*u3 + ((3*u2)*t)*c1 + ((3*u)*t2)*c2 + end*t3`，每步折回 float32（S310）
+      arity(args, 4, "bezier_interpolate");
+      const c1 = vecArg(args, 0, "bezier_interpolate");
+      const c2 = vecArg(args, 1, "bezier_interpolate");
+      const e = vecArg(args, 2, "bezier_interpolate");
+      const t = scalar(args[3], "bezier_interpolate");
+      const u = sub(1, t);
+      const u2 = mul(u, u);
+      const u3 = mul(u2, u);
+      const t2 = mul(t, t);
+      const t3 = mul(t2, t);
+      const bz = (a: number, b: number, c: number, d: number) =>
+        add(add(add(mul(a, u3), mul(mul(mul(3, u2), t), b)), mul(mul(mul(3, u), t2), c)), mul(d, t3));
+      return vector2(bz(v.x, c1.x, c2.x, e.x), bz(v.y, c1.y, c2.y, e.y));
+    }
+    case "cubic_interpolate": {
+      // GDScript 那侧的形参是 `(b, pre, post, weight)`：p0=pre、p1=自己、p2=b、p3=post
+      arity(args, 4, "cubic_interpolate");
+      const b = vecArg(args, 0, "cubic_interpolate");
+      const pre = vecArg(args, 1, "cubic_interpolate");
+      const post = vecArg(args, 2, "cubic_interpolate");
+      const t = scalar(args[3], "cubic_interpolate");
+      // 与 `Vector3` 同一支：`(2p1 + (p2-p0)t + ((2p0-5p1)+4p2-p3)t² + ((3(p1-p2)-p0)+p3)t³) * 0.5`，
+      // 两项系数按 C++ 从左到右结合；`t` 在调用边界上已经是 float32（S313 —— 24 格 V2 + 15 格 V3 全合，含 1e7 那三格）
+      const t2 = mul(t, t);
+      const t3 = mul(t, t2);
+      const ci = (p0: number, p1: number, p2: number, p3: number) => {
+        const c2 = sub(add(sub(mul(2, p0), mul(5, p1)), mul(4, p2)), p3);
+        const c3 = add(sub(mul(3, sub(p1, p2)), p0), p3);
+        return mul(0.5, add(add(add(mul(2, p1), mul(sub(p2, p0), t)), mul(c2, t2)), mul(c3, t3)));
+      };
+      return vector2(ci(pre.x, v.x, b.x, post.x), ci(pre.y, v.y, b.y, post.y));
+    }
+    case "cubic_interpolate_in_time": {
+      // 段 [0,1] 上的三次 Hermite，两端切线取「相邻两段割线按另一侧跨度加权」：
+      // `m1 = (d0 + d1*α)/(1+α)`、`m2 = (d1*β + d2)/(1+β)`，其中 α = Δ0/Δ1、β = Δ2/Δ1（**切线必须先按段长 Δ1 归一**，不归一等于少乘一个 Δ1，K/G/H/V/W 六行会同时错）；
+      // Δ0 = `-pre_time`、Δ1 = `b_time`、Δ2 = `post_time - b_time`（自己那一端的 knot 时间是 0）。S315：α∈{0.1,0.25,0.5,1,2,4} 六档 × 六个 weight 的基函数逐项合。
+      // **跨度退化那一支照旧响亮拒**：`Δ0 == 0`（pre_time 与自己的 knot 重合）等形，引擎给的是有限值而这条式子在那里除零，它的算法没量出来（§6 第 41 条）。
+      arity(args, 7, "cubic_interpolate_in_time");
+      const b = vecArg(args, 0, "cubic_interpolate_in_time");
+      const pre = vecArg(args, 1, "cubic_interpolate_in_time");
+      const post = vecArg(args, 2, "cubic_interpolate_in_time");
+      const w = scalar(args[3], "cubic_interpolate_in_time");
+      const g0 = sub(0, scalar(args[5], "cubic_interpolate_in_time"));
+      const g1 = scalar(args[4], "cubic_interpolate_in_time");
+      const g2 = sub(scalar(args[6], "cubic_interpolate_in_time"), g1);
+      if (g0 === 0 || g1 === 0 || g2 === 0 || add(g0, g1) === 0 || add(g1, g2) === 0) {
+        throw new UnsupportedError("vector2-method", "Vector2.cubic_interpolate_in_time() 的退化时间跨度（某段为零或相邻两段相消）没量出式子");
+      }
+      // 跨度先按**段长 g1 归一**（α = g0/g1、β = g2/g1）—— 不归一会把切线少乘一个 g1，K/G/H 那批格各差一档（S315 亲踩）
+      const a = div(g0, g1);
+      const c = div(g2, g1);
+      const one = 1;
+      const it = (p0: number, p1: number, p2: number, p3: number) => {
+        const d0 = div(sub(p1, p0), a);
+        const d1 = sub(p2, p1);
+        const d2 = div(sub(p3, p2), c);
+        const m1 = div(add(mul(d0, one), mul(d1, a)), add(a, one));
+        const m2 = div(add(mul(d1, c), mul(d2, one)), add(one, c));
+        const t2 = mul(w, w);
+        const t3 = mul(w, t2);
+        const h00 = sub(sub(mul(2, t3), mul(3, t2)), -1);
+        const h10 = sub(sub(t3, mul(2, t2)), -w);
+        const h01 = add(mul(-2, t3), mul(3, t2));
+        const h11 = sub(t3, t2);
+        return add(add(add(mul(h00, p1), mul(h10, m1)), mul(h01, p2)), mul(h11, m2));
+      };
+      return vector2(it(pre.x, v.x, b.x, post.x), it(pre.y, v.y, b.y, post.y));
     }
     case "lerp": {
       arity(args, 2, "lerp");
@@ -184,12 +314,28 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(add(v.x, mul(div(vx, len), d)), add(v.y, mul(div(vy, len), d)));
     }
     case "limit_length": {
-      arity(args, 1, "limit_length");
-      const max = scalar(args[0], "limit_length");
+      // 引擎的形参是 `limit_length(length = 1.0)`，**0 支也收**（实测 `Vector2(3, 4).limit_length()` 给 `(0.6, 0.8)`；S304）
+      if (args.length > 1) arity(args, 1, "limit_length");
+      const max = args.length === 0 ? 1 : scalar(args[0], "limit_length");
       const len = flen(v.x, v.y);
       if (!(len > max)) return vector2(v.x, v.y);
+      // 零长保护：`Vector2(0, 0).limit_length(-1.0)` 实测给 `(0.0, 0.0)`，少了这一支会算出 `0/0` 的 nan。
+      // 门槛是「长度非零」而非某个 epsilon —— 实测 5e-6 这一档照样缩放到 `(0.0, 0.0)`（S304 的 LL2 / LLS 行）
+      if (len === 0) return vector2(v.x, v.y);
       return vector2(mul(div(v.x, len), max), mul(div(v.y, len), max));
     }
+    case "from_angle": {
+      arity(args, 1, "from_angle");
+      const t = r(scalar(args[0], "from_angle"));
+      return vector2(r(Math.cos(t)), r(Math.sin(t)));
+    }
+    case "min_axis_index":
+      // 实测式子是**严格的** `<`：并列时 min 给后面的下标、max 给前面的（S304 的 9 格含 (2,2) / 负数 / 零向量 / INF / NAN）
+      arity(args, 0, "min_axis_index");
+      return V.int(v.x < v.y ? 0 : 1);
+    case "max_axis_index":
+      arity(args, 0, "max_axis_index");
+      return V.int(v.x < v.y ? 1 : 0);
     case "orthogonal":
       arity(args, 0, "orthogonal");
       return vector2(v.y, -v.x);
@@ -225,6 +371,12 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       arity(args, 2, "slerp");
       const o = vecArg(args, 0, "slerp");
       const w = scalar(args[1], "slerp");
+      // 两端任一长度为零时**退回普通 lerp**（实测 `Vector2(0,0).slerp(Vector2(1,-1), 0.3)` 给 `(0.3, -0.3)`；S311）
+      const lsq = add(mul(v.x, v.x), mul(v.y, v.y));
+      const osq = add(mul(o.x, o.x), mul(o.y, o.y));
+      if (lsq === 0 || osq === 0) {
+        return vector2(add(v.x, mul(sub(o.x, v.x), w)), add(v.y, mul(sub(o.y, v.y), w)));
+      }
       const aa = Math.atan2(v.y, v.x);
       const ab = Math.atan2(o.y, o.x);
       let d = ab - aa;
@@ -275,6 +427,9 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       const k = div(add(mul(v.x, n.x), mul(v.y, n.y)), add(mul(n.x, n.x), mul(n.y, n.y)));
       return vector2(mul(n.x, k), mul(n.y, k));
     }
+    case "inverse":
+      // 实测这支只在 Vector3 上有；Vector2 / Vector2i / Vector3i 全给运行期那句（S304）
+      throw new GodotRuntimeError("vector2-method", `Invalid call. Nonexistent function 'inverse' in base 'Vector2'.`);
     default:
       throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现`);
   }

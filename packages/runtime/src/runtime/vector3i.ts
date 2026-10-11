@@ -1,7 +1,7 @@
-import { UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { vecFailKey } from "./vector2";
-import { add32, div32, mod32, mul32, sub32, wrap32 } from "./vector2i";
+import { clamp, vecFailKey } from "./vector2";
+import { add32, div32, mod32, mul32, sat32, sub32, wrap32 } from "./vector2i";
 import { GVector3, registerVec3iParts, vector3 } from "./vector3";
 
 /** Vector3i：第三个 int32 值类型，三个分量都向零截断 + 回绕到 int32。 */
@@ -190,9 +190,9 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
       const lo = vecArg(args, 0, "clamp");
       const hi = vecArg(args, 1, "clamp");
       return vector3i(
-        Math.max(lo.x, Math.min(hi.x, v.x)),
-        Math.max(lo.y, Math.min(hi.y, v.y)),
-        Math.max(lo.z, Math.min(hi.z, v.z)),
+        clamp(v.x, lo.x, hi.x),
+        clamp(v.y, lo.y, hi.y),
+        clamp(v.z, lo.z, hi.z),
       );
     }
     case "length":
@@ -202,11 +202,12 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
       arity(args, 0, "length_squared");
       return V.int(sq64v3(v));
     case "min_axis_index":
+      // 式子照 4.6.3 的**严格** `<`：并列时 min 给后面的下标（(4,4,4) 引擎给 2，`<=` 的写法会给 0）—— S304
       arity(args, 0, "min_axis_index");
-      return V.int(v.x <= v.y && v.x <= v.z ? 0 : v.y <= v.z ? 1 : 2);
+      return V.int(v.x < v.y ? (v.x < v.z ? 0 : 2) : v.y < v.z ? 1 : 2);
     case "max_axis_index":
       arity(args, 0, "max_axis_index");
-      return V.int(v.x >= v.y && v.x >= v.z ? 0 : v.y >= v.z ? 1 : 2);
+      return V.int(v.x < v.y ? (v.y < v.z ? 2 : 1) : v.x < v.z ? 2 : 0);
     case "distance_to": {
       arity(args, 1, "distance_to");
       const o = vecArg(args, 0, "distance_to");
@@ -220,9 +221,31 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
     case "snapped": {
       arity(args, 1, "snapped");
       const o = vecArg(args, 0, "snapped");
-      // 步长为 0 的那一维原样不动；式子与 Vector2i 的 snapped 同一条。
-      const snap = (n: number, s: number) => (s === 0 ? n : wrap32(s * Math.floor(n / s + 0.5)));
+      // 步长为 0 的那一维原样不动；式子与 Vector2i 的 snapped 同一条（饱和不回绕，S306 的 SNAP 行）。
+      const snap = (n: number, s: number) => (s === 0 ? n : sat32(s * Math.floor(n / s + 0.5)));
       return vector3i(snap(v.x, o.x), snap(v.y, o.y), snap(v.z, o.z));
+    }
+    case "mini": {
+      arity(args, 1, "mini");
+      const s = wrap32(intArg(args[0], "mini"));
+      return vector3i(Math.min(v.x, s), Math.min(v.y, s), Math.min(v.z, s));
+    }
+    case "maxi": {
+      arity(args, 1, "maxi");
+      const s = wrap32(intArg(args[0], "maxi"));
+      return vector3i(Math.max(v.x, s), Math.max(v.y, s), Math.max(v.z, s));
+    }
+    case "clampi": {
+      arity(args, 2, "clampi");
+      const lo = wrap32(intArg(args[0], "clampi"));
+      const hi = wrap32(intArg(args[1], "clampi"));
+      return vector3i(clamp(v.x, lo, hi), clamp(v.y, lo, hi), clamp(v.z, lo, hi));
+    }
+    case "snappedi": {
+      arity(args, 1, "snappedi");
+      const s = wrap32(intArg(args[0], "snappedi"));
+      const snap = (n: number) => (s === 0 ? n : sat32(s * Math.floor(n / s + 0.5)));
+      return vector3i(snap(v.x), snap(v.y), snap(v.z));
     }
     case "axis_get":
     case "axis_set":
@@ -257,7 +280,8 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
     case "ceildiv":
     case "signwrapping":
     case "pow":
-      throw new UnsupportedError("vector3i-method", `Vector3i.${name}() 实测不存在（4.6.3 实测）`);
+    case "inverse":
+      throw new GodotRuntimeError("vector3i-method", `Invalid call. Nonexistent function '${name}' in base 'Vector3i'.`);
     default:
       throw new UnsupportedError("vector3i-method", `Vector3i.${name}() 未实现`);
   }
@@ -266,7 +290,7 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
 /** 实参个数：对不上响亮报缺。 */
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
-    throw new UnsupportedError("vector3i-arity", `Vector3i.${who} 需要 ${n} 个实参（收到 ${args.length} 个）`);
+    throw new GodotRuntimeError("vector3i-arity", `Invalid call to function '${who}' in base 'Vector3i'. Expected ${n} argument(s).`);
   }
 }
 
@@ -280,8 +304,10 @@ function vecArg(args: Variant[], i: number, who: string): GVector3i {
 /** 精确 int64 的平方和：`length_squared` / `distance_squared_to` 都不回绕。 */
 const sq64v3 = (v: GVector3i) => BigInt(v.x) * BigInt(v.x) + BigInt(v.y) * BigInt(v.y) + BigInt(v.z) * BigInt(v.z);
 const sq64d3 = (a: GVector3i, b: GVector3i) => {
-  const dx = BigInt(a.x) - BigInt(b.x);
-  const dy = BigInt(a.y) - BigInt(b.y);
-  const dz = BigInt(a.z) - BigInt(b.z);
-  return dx * dx + dy * dy + dz * dz;
+  // 差值先按 **int32 回绕**（与 `Vector2i` 那两支同一条；实测 `Vector3i(2147483647, -2147483648, 1).distance_to(Vector3i(7, 9, 11))`
+  // 走的是回绕后的差值，不回绕会多出 1.2e-8 的相对偏差；S311）
+  const dx = sub32(b.x, a.x);
+  const dy = sub32(b.y, a.y);
+  const dz = sub32(b.z, a.z);
+  return BigInt(dx) * BigInt(dx) + BigInt(dy) * BigInt(dy) + BigInt(dz) * BigInt(dz);
 };

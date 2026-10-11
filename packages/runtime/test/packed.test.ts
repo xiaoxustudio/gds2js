@@ -519,6 +519,9 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     eq("223", "Array 与 Dictionary 上也根本没有 join（j2 / j6 / j7：它是 String 的方法）",
       `${errText102(() => method(V.array(GArray.of([I(1), I(2)])), "join", [S("-")]))} || ${errText102(() => method(V.dict(new GDict()), "join", [S("-")]))}`,
       "Invalid call. Nonexistent function 'join' in base 'Array'. || Invalid call. Nonexistent function 'join' in base 'Dictionary'.");
+    eq("300", "Array 上也没有 concat（那是 JS 的 API：String / Array / Dictionary 三族 180 名逐个过裁判，唯一那一格幽灵名）",
+      errText102(() => method(V.array(GArray.of([I(1), I(2)])), "concat", [V.array(GArray.of([I(3)]))])),
+      "Invalid call. Nonexistent function 'concat' in base 'Array'.");
     eq("219", "join 九支全都没有（这一轮补了 byte / i64 / f32 / v3 / color 五支，与此前四支合成整族）",
       errText102(() => method(str2(), "join", [S("-")])),
       "Invalid call. Nonexistent function 'join' in base 'PackedStringArray'.");

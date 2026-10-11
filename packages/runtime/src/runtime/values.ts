@@ -2171,12 +2171,18 @@ export function strColor(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
-/** Vector2 分量的打印格式：**小数值**走固定 6 位小数再去尾随零（至少留一位小数），**整数值**走 strFloat 的 17 位有效数字展开；分量是 float32，两条路不会在同一分量上打架。 */
+/** Vector2 分量的打印格式：**整数值**走 strFloat 的展开，**非整数值**的小数位数按量级收缩 —— `6 - trunc(log10(|x|))` 再夹进 `0..6`（S312）。
+ *  实测 12.34567 给 5 位、123.4567 给 4 位、123456.7 给 1 位、2777777.75 给 `2777778`（0 位）、而 `|x| < 1` 一律封顶 6 位（0.000123456 给 `0.000123`）；
+ *  量级那一折是 float32 的 `log10`，所以 999999.875 与 9999.9995 都进到上一档去（实测给 `1000000` 与 `10000.0`）；
+ *  小数位为 0 时**不做去尾随零**（否则 `1000000` 会被削成 `1`），而 `.0` 只由分量本身的值是否整数决定（实测 `Vector2(3430000.75, 3430001.0)` 给 `(3430001, 3430001.0)`）。 */
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
   if (Number.isInteger(n)) return strFloat(n);
-  const t = n.toFixed(6).replace(/0+$/, "");
+  const magnitude = Math.trunc(Math.fround(Math.log10(Math.abs(n))));
+  const decimals = Math.max(0, Math.min(6, 6 - magnitude));
+  if (decimals === 0) return n.toFixed(0);
+  const t = n.toFixed(decimals).replace(/0+$/, "");
   return t.endsWith(".") ? `${t}0` : t;
 }
 
@@ -2440,8 +2446,10 @@ export function show(v: Variant, depth = 0): string {
 
 /** 容器内嵌：字符串要加引号 */
 export function repr(v: Variant, depth = 0): string {
-  if (v.t === Tag.STRING) return `"${v.v as string}"`;
-  if (v.t === Tag.STRING_NAME) return `&"${v.v as string}"`;
+  // 容器里的 String 与 StringName 走的是 `String::c_escape()`（实测 `["a\"b"]` / `["a\'b"]` / `["a\tb"]`，而 ESC 与 U+001B 那类留原样），
+  // 与顶层 `var_to_str(串)` 那条不是同一把尺（那条只转 `"` 与 `\\`、控制字符留原样）—— 与 NodePath 那一支同源。
+  if (v.t === Tag.STRING) return `"${strCEscape(v.v as string)}"`;
+  if (v.t === Tag.STRING_NAME) return `&"${strCEscape(v.v as string)}"`;
   const np = asNodePath(v);
   if (np !== null) return `^"${strCEscape(nodePathText(np))}"`;
   return show(v, depth);

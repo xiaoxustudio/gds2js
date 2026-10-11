@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GVector2, registerVec2iParts, vecFailKey, vector2 } from "./vector2";
+import { GVector2, clamp, registerVec2iParts, vecFailKey, vector2 } from "./vector2";
 
 export class GVector2i {
   x: number;
@@ -29,6 +29,14 @@ const isub = (a: number, b: number) => wrap32(BigInt(a) - BigInt(b));
 const imul = (a: number, b: number) => wrap32(BigInt(a) * BigInt(b));
 const idiv = (a: number, b: number) => wrap32(BigInt(a) / BigInt(b));
 const imod = (a: number, b: number) => wrap32(BigInt(a) % BigInt(b));
+/** `snapped` 那一族给的是**饱和**而不是回绕：`Vector2i(2147483647, -2147483648).snapped(Vector2i(5, 5))` 的第二支引擎留 `INT32_MIN`，回绕写法会给 `2147483646`（S306 的 SNAP 行）。 */
+export function sat32(v: number | bigint): number {
+  const b = typeof v === "bigint" ? v : BigInt(Math.trunc(v));
+  if (b > 2147483647n) return 2147483647;
+  if (b < -2147483648n) return -2147483648;
+  return Number(b);
+}
+
 /** 不回绕的那一条：`length_squared` 给的是精确 int64。 */
 const sq64 = (a: number, b: number) => BigInt(a) * BigInt(a) + BigInt(b) * BigInt(b);
 
@@ -108,7 +116,7 @@ function vecArg(args: Variant[], i: number, who: string): GVector2i {
 
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
-    throw new UnsupportedError("vector2i-arity", `Vector2i.${who} 需要 ${n} 个实参（收到 ${args.length} 个）`);
+    throw new GodotRuntimeError("vector2i-arity", `Invalid call to function '${who}' in base 'Vector2i'. Expected ${n} argument(s).`);
   }
 }
 
@@ -137,13 +145,35 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       arity(args, 2, "clamp");
       const lo = vecArg(args, 0, "clamp");
       const hi = vecArg(args, 1, "clamp");
-      return vector2i(Math.max(lo.x, Math.min(hi.x, v.x)), Math.max(lo.y, Math.min(hi.y, v.y)));
+      return vector2i(clamp(v.x, lo.x, hi.x), clamp(v.y, lo.y, hi.y));
     }
     case "snapped": {
       arity(args, 1, "snapped");
       const o = vecArg(args, 0, "snapped");
-      const snap = (n: number, s: number) => (s === 0 ? n : wrap32(s * Math.floor(n / s + 0.5)));
+      const snap = (n: number, s: number) => (s === 0 ? n : sat32(s * Math.floor(n / s + 0.5)));
       return vector2i(snap(v.x, o.x), snap(v.y, o.y));
+    }
+    case "mini": {
+      arity(args, 1, "mini");
+      const s = wrap32(intArg(args[0], "mini"));
+      return vector2i(Math.min(v.x, s), Math.min(v.y, s));
+    }
+    case "maxi": {
+      arity(args, 1, "maxi");
+      const s = wrap32(intArg(args[0], "maxi"));
+      return vector2i(Math.max(v.x, s), Math.max(v.y, s));
+    }
+    case "clampi": {
+      arity(args, 2, "clampi");
+      const lo = wrap32(intArg(args[0], "clampi"));
+      const hi = wrap32(intArg(args[1], "clampi"));
+      return vector2i(clamp(v.x, lo, hi), clamp(v.y, lo, hi));
+    }
+    case "snappedi": {
+      arity(args, 1, "snappedi");
+      const s = wrap32(intArg(args[0], "snappedi"));
+      const snap = (n: number) => (s === 0 ? n : sat32(s * Math.floor(n / s + 0.5)));
+      return vector2i(snap(v.x), snap(v.y));
     }
     case "length":
       arity(args, 0, "length");
@@ -153,7 +183,8 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       return V.int(sq64(v.x, v.y));
     case "aspect":
       arity(args, 0, "aspect");
-      return V.float(v.x / v.y);
+      // 除法要折回 float32（`Vector2i(2147483647, -2147483648).aspect()` 引擎给 `-1.0`，double 那条给 `-0.99999999953434`；S311）
+      return V.float(Math.fround(v.x / v.y));
     case "distance_to": {
       arity(args, 1, "distance_to");
       const o = vecArg(args, 0, "distance_to");
@@ -169,11 +200,12 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       return V.int(BigInt(dx) * BigInt(dx) + BigInt(dy) * BigInt(dy));
     }
     case "min_axis_index":
+      // 引擎是 `x < y ? 0 : 1`：并列给**后面**那个下标（(2,2) 给 1），`<=` 的写法会给 0 —— S304
       arity(args, 0, "min_axis_index");
-      return V.int(v.x <= v.y ? 0 : 1);
+      return V.int(v.x < v.y ? 0 : 1);
     case "max_axis_index":
       arity(args, 0, "max_axis_index");
-      return V.int(v.x >= v.y ? 0 : 1);
+      return V.int(v.x < v.y ? 1 : 0);
     case "is_normalized":
     case "is_equal_approx":
     case "normalized":
@@ -188,7 +220,8 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
     case "floordiv":
     case "posmod":
     case "signwrapping":
-      throw new UnsupportedError("vector2i-method", `Vector2i.${name}() 实测不存在（4.6.3 探针）`);
+    case "inverse":
+      throw new GodotRuntimeError("vector2i-method", `Invalid call. Nonexistent function '${name}' in base 'Vector2i'.`);
     default:
       throw new UnsupportedError("vector2i-method", `Vector2i.${name}() 未实现`);
   }

@@ -1,6 +1,6 @@
-import { UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { CMP_EPS, NORMALIZED_EPS, approxEq, lerpLen, vecFailKey } from "./vector2";
+import { CMP_EPS, NORMALIZED_EPS, approxEq, clamp, lerpLen, vecFailKey, vector2 } from "./vector2";
 
 export class GVector3 {
   x: number;
@@ -80,9 +80,10 @@ export function vector3Const(name: string): Variant {
 }
 
 /** 标量实参：int/float 收成 number，其余响亮报错。 */
+/** 数值实参在调用边界上就是 `real_t`：float 折回 float32（S313，与 `Vector2` 同一条）。 */
 function scalar(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("vector3-arity", `Vector3.${who} 缺少实参`);
-  if (v.t === Tag.FLOAT) return v.v as number;
+  if (v.t === Tag.FLOAT) return r(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
   throw new UnsupportedError("vector3-arg", `Vector3.${who} 需要数值实参，收到 ${v.t}`);
 }
@@ -96,13 +97,17 @@ function vecArg(args: Variant[], i: number, who: string): GVector3 {
 
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
-    throw new UnsupportedError("vector3-arity", `Vector3.${who} 需要 ${n} 个实参（收到 ${args.length} 个）`);
+    // 运行期这一句的 N 取的是**声明的形参数**（带默认实参那族也报上界，实测 `a[2].from_hsv(0)` 给 4 而非 3；S305）
+    throw new GodotRuntimeError("vector3-arity", `Invalid call to function '${who}' in base 'Vector3'. Expected ${n} argument(s).`);
   }
 }
 
 const lengthSq = (v: GVector3) => add(add(mul(v.x, v.x), mul(v.y, v.y)), mul(v.z, v.z));
 const dot3 = (a: GVector3, b: GVector3) => add(add(mul(a.x, b.x), mul(a.y, b.y)), mul(a.z, b.z));
 const flen = (x: number, y: number, z: number) => r(Math.sqrt(add(add(mul(x, x), mul(y, y)), mul(z, z))));
+
+/** 与全局 `fposmod` 同一条实测口径：模数为 0 或商不有限都给 nan，负模数也走 `a - b*floor(a/b)` 这一支。 */
+const fposmod = (a: number, b: number): number => (b === 0 || !Number.isFinite(a / b) ? NaN : a - b * Math.floor(a / b) + 0);
 
 /** `is_normalized()` 那一条判据，与 Vector2 同一口径（epsilon 两侧实测过）。 */
 const isUnit = (v: GVector3) => r(Math.abs(sub(lengthSq(v), 1))) < NORMALIZED_EPS;
@@ -167,7 +172,8 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(Math.ceil(v.x), Math.ceil(v.y), Math.ceil(v.z));
     case "round": {
       arity(args, 0, "round");
-      const h = (n: number) => (n < 0 ? -Math.round(-n) : Math.round(n));
+      // 与 Vector2 同一条：先舍回 float32 再取整（S311）
+      const h = (n: number) => (n < 0 ? Math.ceil(sub(n, 0.5)) : Math.floor(add(n, 0.5)));
       return vector3(h(v.x), h(v.y), h(v.z));
     }
     case "snapped": {
@@ -182,11 +188,59 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const snap = (n: number) => (s === 0 ? n : mul(s, Math.floor(add(div(n, s), 0.5))));
       return vector3(snap(v.x), snap(v.y), snap(v.z));
     }
+    case "minf": {
+      arity(args, 1, "minf");
+      const s = scalar(args[0], "minf");
+      return vector3(Math.min(v.x, s), Math.min(v.y, s), Math.min(v.z, s));
+    }
+    case "maxf": {
+      arity(args, 1, "maxf");
+      const s = scalar(args[0], "maxf");
+      return vector3(Math.max(v.x, s), Math.max(v.y, s), Math.max(v.z, s));
+    }
+    case "posmod": {
+      arity(args, 1, "posmod");
+      const s = scalar(args[0], "posmod");
+      return vector3(fposmod(v.x, s), fposmod(v.y, s), fposmod(v.z, s));
+    }
+    case "posmodv": {
+      arity(args, 1, "posmodv");
+      const o = vecArg(args, 0, "posmodv");
+      return vector3(fposmod(v.x, o.x), fposmod(v.y, o.y), fposmod(v.z, o.z));
+    }
     case "lerp": {
       arity(args, 2, "lerp");
       const o = vecArg(args, 0, "lerp");
       const w = scalar(args[1], "lerp");
       return vector3(add(v.x, mul(sub(o.x, v.x), w)), add(v.y, mul(sub(o.y, v.y), w)), add(v.z, mul(sub(o.z, v.z), w)));
+    }
+    case "move_toward": {
+      // 与 `Vector2` 那一条同形：`v + ((o - v) / len) * delta`，`len` 为零或不超过 `delta` 时直接落到目标（S313 的第 46 格：
+      // 19 支 MT3 全合，之前那两格「差 1～3 ULP」是旧打印口径固定 6 位小数造成的假分岔 —— `|x| ≈ 14` 引擎只印 5 位）
+      arity(args, 2, "move_toward");
+      const o = vecArg(args, 0, "move_toward");
+      const d = scalar(args[1], "move_toward");
+      const vx = sub(o.x, v.x);
+      const vy = sub(o.y, v.y);
+      const vz = sub(o.z, v.z);
+      const len = flen(vx, vy, vz);
+      if (len === 0 || len <= d) return vector3(o.x, o.y, o.z);
+      return vector3(add(v.x, mul(div(vx, len), d)), add(v.y, mul(div(vy, len), d)), add(v.z, mul(div(vz, len), d)));
+    }
+    case "bezier_interpolate": {
+      arity(args, 4, "bezier_interpolate");
+      const c1 = vecArg(args, 0, "bezier_interpolate");
+      const c2 = vecArg(args, 1, "bezier_interpolate");
+      const e = vecArg(args, 2, "bezier_interpolate");
+      const t = scalar(args[3], "bezier_interpolate");
+      const u = sub(1, t);
+      const u2 = mul(u, u);
+      const u3 = mul(u2, u);
+      const t2 = mul(t, t);
+      const t3 = mul(t2, t);
+      const bz = (a: number, b: number, c: number, d: number) =>
+        add(add(add(mul(a, u3), mul(mul(mul(3, u2), t), b)), mul(mul(mul(3, u), t2), c)), mul(d, t3));
+      return vector3(bz(v.x, c1.x, c2.x, e.x), bz(v.y, c1.y, c2.y, e.y), bz(v.z, c1.z, c2.z, e.z));
     }
     case "cubic_interpolate": {
       arity(args, 4, "cubic_interpolate");
@@ -199,11 +253,47 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const cubic = (zero: number, one: number, two: number, three: number) => {
         const p0 = mul(2, one);
         const p1 = mul(sub(two, zero), w);
-        const p2 = mul(sub(sub(add(mul(2, zero), mul(4, two)), mul(5, one)), three), t2);
-        const p3 = mul(sub(sub(add(mul(3, one), three), zero), mul(3, two)), t3);
+        // 两项系数按 C++ 源码的从左到右结合：`2p0 - 5p1 + 4p2 - p3` 与 `3*(p1 - p2) - p0 + p3`（S313：
+        // 原来的 `(2p0+4p2)-5p1-p3` 与 `(3p1+p3)-p0-3p2` 在 3573.422 / 9058.08 / 1e7 那三格上各差 1 个 float32 ULP）
+        const p2 = mul(sub(add(sub(mul(2, zero), mul(5, one)), mul(4, two)), three), t2);
+        const p3 = mul(add(sub(mul(3, sub(one, two)), zero), three), t3);
         return mul(0.5, add(add(add(p0, p1), p2), p3));
       };
       return vector3(cubic(pre.x, v.x, b.x, post.x), cubic(pre.y, v.y, b.y, post.y), cubic(pre.z, v.z, b.z, post.z));
+    }
+    case "cubic_interpolate_in_time": {
+      // 与 `Vector2` 那一条同形（S315）：段 [0,1] 的三次 Hermite，两端切线 = 相邻两段割线按另一侧跨度加权。
+      // 跨度退化那一支同样响亮拒（引擎给有限值而这里要除零，式子没量出来）。
+      arity(args, 7, "cubic_interpolate_in_time");
+      const b = vecArg(args, 0, "cubic_interpolate_in_time");
+      const pre = vecArg(args, 1, "cubic_interpolate_in_time");
+      const post = vecArg(args, 2, "cubic_interpolate_in_time");
+      const w = scalar(args[3], "cubic_interpolate_in_time");
+      const g0 = sub(0, scalar(args[5], "cubic_interpolate_in_time"));
+      const g1 = scalar(args[4], "cubic_interpolate_in_time");
+      const g2 = sub(scalar(args[6], "cubic_interpolate_in_time"), g1);
+      if (g0 === 0 || g1 === 0 || g2 === 0 || add(g0, g1) === 0 || add(g1, g2) === 0) {
+        throw new UnsupportedError("vector3-method", "Vector3.cubic_interpolate_in_time() 的退化时间跨度（某段为零或相邻两段相消）没量出式子");
+      }
+      const t2 = mul(w, w);
+      const t3 = mul(w, t2);
+      const h00 = sub(sub(mul(2, t3), mul(3, t2)), -1);
+      const h10 = sub(sub(t3, mul(2, t2)), -w);
+      const h01 = add(mul(-2, t3), mul(3, t2));
+      const h11 = sub(t3, t2);
+      // 跨度按段长 g1 归一之后，切线才是「按 weight 那一段」的斜率（S315，与 Vector2 同一条）
+      const a = div(g0, g1);
+      const c = div(g2, g1);
+      const one = 1;
+      const it = (p0: number, p1: number, p2: number, p3: number) => {
+        const d0 = div(sub(p1, p0), a);
+        const d1 = sub(p2, p1);
+        const d2 = div(sub(p3, p2), c);
+        const m1 = div(add(mul(d0, one), mul(d1, a)), add(a, one));
+        const m2 = div(add(mul(d1, c), mul(d2, one)), add(one, c));
+        return add(add(add(mul(h00, p1), mul(h10, m1)), mul(h01, p2)), mul(h11, m2));
+      };
+      return vector3(it(pre.x, v.x, b.x, post.x), it(pre.y, v.y, b.y, post.y), it(pre.z, v.z, b.z, post.z));
     }
     case "min": {
       arity(args, 1, "min");
@@ -220,16 +310,19 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const lo = vecArg(args, 0, "clamp");
       const hi = vecArg(args, 1, "clamp");
       return vector3(
-        Math.max(lo.x, Math.min(hi.x, v.x)),
-        Math.max(lo.y, Math.min(hi.y, v.y)),
-        Math.max(lo.z, Math.min(hi.z, v.z)),
+        clamp(v.x, lo.x, hi.x),
+        clamp(v.y, lo.y, hi.y),
+        clamp(v.z, lo.z, hi.z),
       );
     }
     case "limit_length": {
-      arity(args, 1, "limit_length");
-      const max = scalar(args[0], "limit_length");
+      // 与 Vector2 同：`limit_length(length = 1.0)` 带默认实参，0 支也收（S304）
+      if (args.length > 1) arity(args, 1, "limit_length");
+      const max = args.length === 0 ? 1 : scalar(args[0], "limit_length");
       const len = flen(v.x, v.y, v.z);
       if (!(len > max)) return vector3(v.x, v.y, v.z);
+      // 与 Vector2 同一条零长保护，门槛同样是「长度非零」（S304 的 LL3 / LLS 行）
+      if (len === 0) return vector3(v.x, v.y, v.z);
       return vector3(mul(div(v.x, len), max), mul(div(v.y, len), max), mul(div(v.z, len), max));
     }
     case "angle_to": {
@@ -241,13 +334,33 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const dot = add(add(mul(v.x, o.x), mul(v.y, o.y)), mul(v.z, o.z));
       return V.float(r(Math.atan2(flen(cx, cy, cz), dot)));
     }
+    case "signed_angle_to": {
+      arity(args, 2, "signed_angle_to");
+      const o = vecArg(args, 0, "signed_angle_to");
+      const ax = vecArg(args, 1, "signed_angle_to");
+      const cx = sub(mul(v.y, o.z), mul(v.z, o.y));
+      const cy = sub(mul(v.z, o.x), mul(v.x, o.z));
+      const cz = sub(mul(v.x, o.y), mul(v.y, o.x));
+      const signed = add(add(mul(cx, ax.x), mul(cy, ax.y)), mul(cz, ax.z));
+      // 反平行那一格（`Vector3(1, 2, 3).signed_angle_to(Vector3(-1, -2, -3), Vector3(0, 0, 1))`）实测给 `pi`：
+      // 既没有「叉积为零就先返 0」那道判据，`sign(0)` 也取 `+1`（S308）
+      const dot = add(add(mul(v.x, o.x), mul(v.y, o.y)), mul(v.z, o.z));
+      const ang = r(Math.atan2(flen(cx, cy, cz), dot));
+      return V.float(r((signed < 0 ? -1 : 1) * ang));
+    }
     case "min_axis_index": {
+      // 式子照 4.6.3 的**严格** `<` 嵌套：并列时 min 给后面的下标、max 给前面的，NaN 走 else 分支（S304 的 21 格；镜像写法在两形上给出不同下标）
       arity(args, 0, "min_axis_index");
-      return V.int(v.x <= v.y ? (v.x <= v.z ? 0 : 2) : v.y <= v.z ? 1 : 2);
+      return V.int(v.x < v.y ? (v.x < v.z ? 0 : 2) : v.y < v.z ? 1 : 2);
     }
     case "max_axis_index": {
       arity(args, 0, "max_axis_index");
-      return V.int(v.x >= v.y ? (v.x >= v.z ? 0 : 2) : v.y >= v.z ? 1 : 2);
+      return V.int(v.x < v.y ? (v.y < v.z ? 2 : 1) : v.x < v.z ? 2 : 0);
+    }
+    case "inverse": {
+      // 实测逐分量 1/x，**没有零保护**：(0,0,0) 给 (inf, inf, inf)、(INF,0,0) 给 (0.0, inf, inf)、(NAN,0,1) 给 (nan, inf, 1.0)
+      arity(args, 0, "inverse");
+      return vector3(div(1, v.x), div(1, v.y), div(1, v.z));
     }
     case "is_equal_approx": {
       arity(args, 1, "is_equal_approx");
@@ -266,9 +379,9 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const lo = scalar(args[0], "clampf");
       const hi = scalar(args[1], "clampf");
       return vector3(
-        Math.max(lo, Math.min(hi, v.x)),
-        Math.max(lo, Math.min(hi, v.y)),
-        Math.max(lo, Math.min(hi, v.z)),
+        clamp(v.x, lo, hi),
+        clamp(v.y, lo, hi),
+        clamp(v.z, lo, hi),
       );
     }
     case "slerp": {
@@ -332,6 +445,19 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const n = vecArg(args, 0, "project");
       const k = div(dot3(v, n), lengthSq(n));
       return vector3(mul(n.x, k), mul(n.y, k), mul(n.z, k));
+    }
+    case "octahedron_encode": {
+      arity(args, 0, "octahedron_encode");
+      const l1 = add(add(Math.abs(v.x), Math.abs(v.y)), Math.abs(v.z));
+      const u = div(v.x, l1);
+      const w = div(v.y, l1);
+      let ou = u;
+      let ow = w;
+      if (v.z < 0) {
+        ou = mul(sub(1, Math.abs(w)), u >= 0 ? 1 : -1);
+        ow = mul(sub(1, Math.abs(u)), w >= 0 ? 1 : -1);
+      }
+      return vector2(add(mul(ou, 0.5), 0.5), add(mul(ow, 0.5), 0.5));
     }
     default:
       throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（实测不存在或没探针）`);

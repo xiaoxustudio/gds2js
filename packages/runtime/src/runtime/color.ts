@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { CMP_EPS, approxEq, vecFailKey } from "./vector2";
+import { CMP_EPS, approxEq, clamp, vecFailKey } from "./vector2";
 import { COLOR_NAMED } from "./color-named";
 
 export class GColor {
@@ -31,9 +31,10 @@ export function asColor(v: Variant): GColor | null {
 }
 
 /** 数值实参：int/float 收成 number，其余响亮报错。 */
+/** 数值实参：float 在调用边界上折回 `real_t`（S313，与 Vector 两支同一条），int 收成 number，其余响亮报错。 */
 function numArg(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
-  if (v.t === Tag.FLOAT) return v.v as number;
+  if (v.t === Tag.FLOAT) return r32(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
   throw new UnsupportedError("color-arg", `Color.${who} 需要数值实参，收到 ${tagName(v.t)}`);
 }
@@ -43,6 +44,24 @@ function strArg(v: Variant | undefined, who: string): string {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return v.v as string;
   throw new UnsupportedError("color-arg", `Color.${who} 需要字符串实参，收到 ${tagName(v.t)}`);
 }
+
+/** `hex` / `hex64` 的实参：只收 int，按无符号截到低 32 / 64 位（实测 `Color.hex(-1)` 与 `Color.hex(0xFFFFFFFF)` 同值、`Color.hex(4294967296)` 给全零）。 */
+function intBits(v: Variant | undefined, who: string, bits: number): bigint {
+  if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
+  if (v.t !== Tag.INT) throw new UnsupportedError("color-arg", `Color.${who} 需要 int 实参，收到 ${tagName(v.t)}`);
+  return intToBig(v.v as IntPayload) & ((1n << BigInt(bits)) - 1n);
+}
+
+/** `hex` / `hex64` 的通道切法：高位在前（与 `to_rgba32` / `to_rgba64` 那一路同序），标度分别是 255 与 65535。 */
+const fromHex32 = (h: bigint): Variant => {
+  const b = (sh: number) => div(Number((h >> BigInt(sh)) & 0xffn), 255);
+  return color(b(24), b(16), b(8), b(0));
+};
+
+const fromHex64 = (h: bigint): Variant => {
+  const s = (sh: number) => div(Number((h >> BigInt(sh)) & 0xffffn), 65535);
+  return color(s(48), s(32), s(16), s(0));
+};
 
 /** 解析失败时的兜底色：`Color(String)` 与 `Color.html` 都用 (0,0,0,1)。 */
 const ZERO_COLOR = (): Variant => color(0, 0, 0, 1);
@@ -187,6 +206,18 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
         }
         return V.bool(htmlIsValid(strArg(args[0], "html_is_valid")));
       }
+      case "hex": {
+        if (args.length !== 1) {
+          throw new UnsupportedError("color-arity", `Color.hex() 只收 1 个 int（收到 ${args.length} 个）`);
+        }
+        return fromHex32(intBits(args[0], "hex", 32));
+      }
+      case "hex64": {
+        if (args.length !== 1) {
+          throw new UnsupportedError("color-arity", `Color.hex64() 只收 1 个 int（收到 ${args.length} 个）`);
+        }
+        return fromHex64(intBits(args[0], "hex64", 64));
+      }
       default:
         throw new UnsupportedError("color-static", `Color.${name}(...) 未实现`);
     }
@@ -277,7 +308,7 @@ function byteOf(n: number): number {
 
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
-    throw new UnsupportedError("color-arity", `Color.${who} 需要 ${n} 个实参（收到 ${args.length} 个）`);
+    throw new GodotRuntimeError("color-arity", `Invalid call to function '${who}' in base 'Color'. Expected ${n} argument(s).`);
   }
 }
 
@@ -288,10 +319,28 @@ function colArg(args: Variant[], i: number, who: string): GColor {
   return v;
 }
 
+/** 打包那一路（`to_rgba32` / `to_*64`）与属性读 `c.r8` **不是同一条口径**：`round(分量*标度)` 之后只留低 8/16 位（越界是**回绕**而不是夹紧），
+ *  非有限值（nan / ±inf）一律给 0。读数在语料 297 的 C32 / C64 两组：`Color(-0.2, 1.5, NAN, 0.5)` 的 rgba32 四字节是 `205,127,0,128`，
+ *  而同一支的 `r8` / `g8` 是 `0` / `255`（夹紧那一条）。 */
+const packChannel = (n: number, scale: number, mask: number): number => {
+  if (!Number.isFinite(n)) return 0;
+  const scaled = r32(n * scale);
+  return (scaled < 0 ? -Math.round(-scaled) : Math.round(scaled)) & mask;
+};
+
 /** 打包成 int32 再按无符号读回（交出去的是 64 位 int）。 */
+const pack8 = (n: number): number => packChannel(n, 255, 0xff);
+const pack16 = (n: number): number => packChannel(n, 65535, 0xffff);
+
 const pack32 = (bytes: number[]): Variant => {
   let out = 0n;
-  for (const b of bytes) out = (out << 8n) | BigInt(b & 0xff);
+  for (const b of bytes) out = (out << 8n) | BigInt(b);
+  return V.int(out);
+};
+
+const pack64 = (shorts: number[]): Variant => {
+  let out = 0n;
+  for (const s of shorts) out = (out << 16n) | BigInt(s);
   return V.int(out);
 };
 
@@ -299,26 +348,66 @@ const pack32 = (bytes: number[]): Variant => {
 export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   switch (name) {
     case "to_html": {
-      if (args.length > 1) {
-        throw new UnsupportedError("color-arity", `Color.to_html() 最多 1 个实参（收到 ${args.length} 个）`);
-      }
-      const hex = (n: number) => hexByte(byteOf(n));
+      if (args.length > 1) arity(args, 1, "to_html");
+      // 有限分量走 `byteOf` 那条**夹紧**（`Color(1.0039, 0.49999, 0.5000001, 0.99999).to_html()` 给 `ff7f80ff`），
+      // 非有限分量（nan / ±inf）一律 `00`（`Color(INF, -INF, 0.25, 1).to_html()` 给 `000040ff`，S311）
+      const hex = (n: number) => hexByte(Number.isFinite(n) ? byteOf(n) : 0);
       const body = hex(c.r) + hex(c.g) + hex(c.b);
       const withAlpha = args.length === 0 ? true : Boolean((args[0] as Variant).v);
       return V.str(withAlpha ? body + hex(c.a) : body);
     }
+    case "html":
+      // 静态那四支在实例上也能调，结果与静态一字一样（语料 298 的 S / F 行；元数先按引擎那句拦）
+      arity(args, 1, "html");
+      return colorStatic("html", args);
+    case "html_is_valid":
+      arity(args, 1, "html_is_valid");
+      return colorStatic("html_is_valid", args);
+    case "from_string":
+      arity(args, 2, "from_string");
+      return colorStatic("from_string", args);
+    case "from_hsv":
+      // 声明是 `from_hsv(h, s, v, alpha = 1.0)`，元数不对时运行期那句报 4（S305 ③）
+      if (args.length < 3 || args.length > 4) arity(args, 4, "from_hsv");
+      return colorStatic("from_hsv", args);
+    case "hex":
+      arity(args, 1, "hex");
+      return fromHex32(intBits(args[0], "hex", 32));
+    case "hex64":
+      arity(args, 1, "hex64");
+      return fromHex64(intBits(args[0], "hex64", 64));
+    case "blend": {
+      // `p_with` 叠在接收者**之上**（over）：alpha 不守恒时各通道按 `(src*srcA + (1-srcA)*dstA*dst) / outA`，outA 为 0 就全给零（S309）
+      arity(args, 1, "blend");
+      const s = colArg(args, 0, "blend");
+      const oa = add(s.a, mul(sub(1, s.a), c.a));
+      if (oa === 0) return color(0, 0, 0, 0);
+      const k = sub(1, s.a);
+      const ch = (sc: number, dc: number) => div(add(mul(sc, s.a), mul(k, mul(dc, c.a))), oa);
+      return color(ch(s.r, c.r), ch(s.g, c.g), ch(s.b, c.b), oa);
+    }
     case "to_rgba32":
       arity(args, 0, "to_rgba32");
-      return pack32([byteOf(c.r), byteOf(c.g), byteOf(c.b), byteOf(c.a)]);
+      return pack32([pack8(c.r), pack8(c.g), pack8(c.b), pack8(c.a)]);
     case "to_argb32":
       arity(args, 0, "to_argb32");
-      return pack32([byteOf(c.a), byteOf(c.r), byteOf(c.g), byteOf(c.b)]);
+      return pack32([pack8(c.a), pack8(c.r), pack8(c.g), pack8(c.b)]);
     case "to_abgr32":
       arity(args, 0, "to_abgr32");
-      return pack32([byteOf(c.a), byteOf(c.b), byteOf(c.g), byteOf(c.r)]);
+      return pack32([pack8(c.a), pack8(c.b), pack8(c.g), pack8(c.r)]);
+    case "to_rgba64":
+      arity(args, 0, "to_rgba64");
+      return pack64([pack16(c.r), pack16(c.g), pack16(c.b), pack16(c.a)]);
+    case "to_argb64":
+      arity(args, 0, "to_argb64");
+      return pack64([pack16(c.a), pack16(c.r), pack16(c.g), pack16(c.b)]);
+    case "to_abgr64":
+      arity(args, 0, "to_abgr64");
+      return pack64([pack16(c.a), pack16(c.b), pack16(c.g), pack16(c.r)]);
     case "get_luminance":
+      // 三项之和是**右结合**：`t1 + (t2 + t3)`（`Color(1.0039, 0.49999, 0.5000001, …)` 引擎给 `0.60712200403214`，左结合给 `0.60712206363678`；S311）
       arity(args, 0, "get_luminance");
-      return V.float(add(add(mul(0.2126, c.r), mul(0.7152, c.g)), mul(0.0722, c.b)));
+      return V.float(add(mul(0.2126, c.r), add(mul(0.7152, c.g), mul(0.0722, c.b))));
     case "lightened": {
       arity(args, 1, "lightened");
       const w = numArg(args[0], "lightened");
@@ -332,10 +421,12 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
     case "darkened": {
       arity(args, 1, "darkened");
       const w = numArg(args[0], "darkened");
+      // 引擎是乘性的 `分量 * (1 - amount)`：`-0.0` 保住号、`inf` 不被减成 nan（S311）
+      const k = sub(1, w);
       return color(
-        add(c.r, mul(sub(0, c.r), w)),
-        add(c.g, mul(sub(0, c.g), w)),
-        add(c.b, mul(sub(0, c.b), w)),
+        mul(c.r, k),
+        mul(c.g, k),
+        mul(c.b, k),
         c.a,
       );
     }
@@ -352,6 +443,23 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
         add(c.b, mul(sub(o.b, c.b), w)),
         add(c.a, mul(sub(o.a, c.a), w)),
       );
+    }
+    case "clamp": {
+      // 形参是 `clamp(min = Color(0,0,0,0), max = Color(1,1,1,1))`，0 支与 1 支都收（S305 的元数表：上界 2）
+      if (args.length > 2) arity(args, 2, "clamp");
+      const lo = args.length === 0 ? new GColor(0, 0, 0, 0) : colArg(args, 0, "clamp");
+      const hi = args.length < 2 ? new GColor(1, 1, 1, 1) : colArg(args, 1, "clamp");
+      return color(clamp(c.r, lo.r, hi.r), clamp(c.g, lo.g, hi.g), clamp(c.b, lo.b, hi.b), clamp(c.a, lo.a, hi.a));
+    }
+    case "linear_to_srgb": {
+      arity(args, 0, "linear_to_srgb");
+      const f = (n: number) => (n < r32(0.0031308) ? mul(n, 12.92) : sub(mul(r32(Math.pow(n, r32(1 / 2.4))), 1.055), 0.055));
+      return color(f(c.r), f(c.g), f(c.b), c.a);
+    }
+    case "srgb_to_linear": {
+      arity(args, 0, "srgb_to_linear");
+      const f = (n: number) => (n < r32(0.04045) ? div(n, 12.92) : r32(Math.pow(div(add(n, 0.055), 1.055), 2.4)));
+      return color(f(c.r), f(c.g), f(c.b), c.a);
     }
     case "is_equal_approx": {
       arity(args, 1, "is_equal_approx");
@@ -372,7 +480,7 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
     case "to_abgr8":
     case "to_bgra8":
     case "to_bgra32":
-      throw new UnsupportedError("color-method", `Color.${name}() 实测不存在（4.6.3 探针）`);
+      throw new GodotRuntimeError("color-method", `Invalid call. Nonexistent function '${name}' in base 'Color'.`);
     default:
       throw new UnsupportedError("color-method", `Color.${name}() 未实现`);
   }

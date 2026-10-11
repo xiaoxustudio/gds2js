@@ -251,9 +251,10 @@ export function abs(v: Variant): Variant {
 
 const INT_MIN_F = -9223372036854775808;
 
-/** int 载荷：2^53 内用 number，越界用 bigint（与装箱轨同一口径）。 */
+/** int 载荷：2^53 内用 number，越界用 bigint（与装箱轨同一口径）。int 那一侧没有负号零 —— `floori(-0.0)` 实测给的是 `0`（`1.0 / (floori(-0.0) * 1.0)` 给 `inf`），而 JS 的 `Math.floor(-0)` 是 `-0`，进槽之前折掉。 */
 function vi(n: number): Variant {
-  return Number.isSafeInteger(n) ? V.int(n) : V.int(BigInt(Math.trunc(n)));
+  const v = Object.is(n, -0) ? 0 : n;
+  return Number.isSafeInteger(v) ? V.int(v) : V.int(BigInt(Math.trunc(v)));
 }
 
 function isInt(v: Variant): boolean {
@@ -299,8 +300,9 @@ function roundThree(x: number, fn: (n: number) => number, mode: RoundMode): Vari
     if (!Number.isFinite(x)) return V.int(INT64_MIN);
     return vi(fn(x));
   }
-  if (mode === "float") return V.float(fn(x) + 0);
-  return V.float(fn(x) + 0);
+  // 实测 `floor(-0.0)` / `ceil(-0.0)` / `round(-0.0)` 三支都留号（`1.0 / (floor(-0.0) * 1.0)` 给 `-inf`），所以这里不能 `+ 0`
+  if (mode === "float") return V.float(fn(x));
+  return V.float(fn(x));
 }
 
 function intPassthrough(v: Variant, mode: RoundMode): Variant | null {
@@ -326,7 +328,9 @@ export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   const pas = intPassthrough(v, mode);
   if (pas !== null) return pas;
-  return roundThree(v.v as number, gdRound, mode);
+  // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
+  // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
+  return roundThree(v.v as number, (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
@@ -349,8 +353,9 @@ export function gFposmod(x: Variant, y: Variant): Variant {
   return V.float(a - b * Math.floor(a / b) + 0);
 }
 
+/** `fmod(-0.0, 1.0)` 实测留号（C 的 `fmod` 就是把被除数的号带下来），所以不 `+ 0`。 */
 export function gFmod(x: Variant, y: Variant): Variant {
-  return V.float(fl(x) % fl(y) + 0);
+  return V.float(fl(x) % fl(y));
 }
 
 export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Variant {
@@ -415,12 +420,13 @@ export function gSnappedI(x: Variant, step: Variant): Variant {
 const PI_D = 3.14159265358979323846;
 const TAU_D = 2 * PI_D;
 
+/** `deg_to_rad(-0.0)` 与 `rad_to_deg(-0.0)` 实测都留号（乘法在 IEEE 里就把号带过去），所以不 `+ 0`。 */
 export function gDegToRad(v: Variant): Variant {
-  return V.float(fl(v) * (PI_D / 180) + 0);
+  return V.float(fl(v) * (PI_D / 180));
 }
 
 export function gRadToDeg(v: Variant): Variant {
-  return V.float(fl(v) * (180 / PI_D) + 0);
+  return V.float(fl(v) * (180 / PI_D));
 }
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
@@ -505,7 +511,8 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
   const mx = mode === "int" ? intOf(hi) : fl(hi);
   const win = x > mx ? hi : x < mn ? lo : v;
   if (mode === "int") return vi(intOf(win));
-  if (mode === "float") return V.float(fl(win) + 0);
+  // `clampf(-0.0, 0.0, 1.0)` 实测留号（下界判的是 `<`，`-0.0 < 0.0` 假，落回原值），所以不 `+ 0`
+  if (mode === "float") return V.float(fl(win));
   if (mode === "auto" && !(x <= x)) return V.float(x);
   return win;
 }
