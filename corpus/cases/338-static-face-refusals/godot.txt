@@ -1,0 +1,20 @@
+SCRIPT ERROR: Parse Error: Name "RED" called as a function but is a "Color".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Name "ZERO" called as a function but is a "Vector2".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Name "AXIS_X" called as a function but is a "Vector3.Axis".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot find member "nope" in base "Vector2".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Function "nope()" not found in base Vector2.
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot call non-static function "length()" on the class "Vector2" directly. Make an instance instead.
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Too few arguments for "html()" call. Expected at least 1 but received 0.
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Too few arguments for "chr()" call. Expected at least 1 but received 0.
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Too few arguments for "from_rgba8()" call. Expected at least 3 but received 2.
+   at: GDScript::reload (<case>/main.gd:11)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { hexUpper, strToInt } from "./numstr";
-import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
+import { Tag, tagName, V, intToBig, intToNum, int64ParamBig, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
 import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
@@ -2171,12 +2171,18 @@ export function strColor(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
-/** Vector2 分量的打印格式：**小数值**走固定 6 位小数再去尾随零（至少留一位小数），**整数值**走 strFloat 的 17 位有效数字展开；分量是 float32，两条路不会在同一分量上打架。 */
+/** Vector2 分量的打印格式：**整数值**走 strFloat 的展开，**非整数值**的小数位数按量级收缩 —— `6 - trunc(log10(|x|))` 再夹进 `0..6`（S312）。
+ *  实测 12.34567 给 5 位、123.4567 给 4 位、123456.7 给 1 位、2777777.75 给 `2777778`（0 位）、而 `|x| < 1` 一律封顶 6 位（0.000123456 给 `0.000123`）；
+ *  量级那一折是 float32 的 `log10`，所以 999999.875 与 9999.9995 都进到上一档去（实测给 `1000000` 与 `10000.0`）；
+ *  小数位为 0 时**不做去尾随零**（否则 `1000000` 会被削成 `1`），而 `.0` 只由分量本身的值是否整数决定（实测 `Vector2(3430000.75, 3430001.0)` 给 `(3430001, 3430001.0)`）。 */
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
   if (Number.isInteger(n)) return strFloat(n);
-  const t = n.toFixed(6).replace(/0+$/, "");
+  const magnitude = Math.trunc(Math.fround(Math.log10(Math.abs(n))));
+  const decimals = Math.max(0, Math.min(6, 6 - magnitude));
+  if (decimals === 0) return n.toFixed(0);
+  const t = n.toFixed(decimals).replace(/0+$/, "");
   return t.endsWith(".") ? `${t}0` : t;
 }
 
@@ -2245,6 +2251,105 @@ export function stringChr(cp: Variant): Variant {
   return V.str(String.fromCodePoint(bad ? 0xfffd : Number(n)));
 }
 
+/** `num_uint64` 的实参按 **无符号** 解释（4.6.3 实测 `String.num_uint64(-1)` → `18446744073709551615`）：先折进 `[0, 2^64)`。 */
+function wrapUnsigned64(n: bigint): bigint {
+  return n & ((1n << 64n) - 1n);
+}
+
+/** 引擎的 `num_int64` / `num_uint64` 那一支（`core/string/ustring.cpp:1501` / `:1541`）：`base` 不在 `2..36` 给**空串**（引擎那侧另 push 一条 `ERROR:`，语料的 normalize 把整块 `ERROR:` 滤掉，所以这里不发也逐字节一样）；位数用「先数长度再倒着填」那一条，字母位只在 `mod >= 10` 时用 `capitalize_hex` 那一个字母表，余数取绝对值，除法按**向零截断**。 */
+function numInBase(n: bigint, base: number, cap: boolean, unsigned: boolean): string {
+  if (!Number.isInteger(base) || base < 2 || base > 36) return "";
+  const B = BigInt(base);
+  const sign = !unsigned && n < 0n;
+  let chars = 0;
+  let m = n;
+  do {
+    m = m / B;
+    chars++;
+  } while (m !== 0n);
+  if (sign) chars++;
+  const out: string[] = new Array(chars);
+  let i = chars;
+  m = n;
+  do {
+    const mod = m % B;
+    const d = mod < 0n ? -mod : mod;
+    i--;
+    out[i] = d >= 10n ? String.fromCharCode((cap ? 65 : 97) + Number(d) - 10) : String.fromCharCode(48 + Number(d));
+    m = m / B;
+  } while (m !== 0n);
+  if (sign) out[0] = "-";
+  return out.join("");
+}
+
+/** 双精度精确值 × 10^k，四舍五入（半程远离零）成 BigInt —— 引擎那侧是 `snprintf`，不能拿 `toFixed` 代。 */
+function scaledRound64(a: number, k: number): bigint {
+  const dv = new DataView(new ArrayBuffer(8));
+  dv.setFloat64(0, a, true);
+  const bits = dv.getBigUint64(0, true);
+  const expBits = Number((bits >> 52n) & 0x7ffn);
+  const mant = bits & ((1n << 52n) - 1n);
+  const m = expBits === 0 ? mant : mant | (1n << 52n);
+  const e = BigInt(expBits === 0 ? -1074 : expBits - 1075);
+  const ten = 10n ** BigInt(k);
+  if (e >= 0n) return m * 2n ** e * ten;
+  const num = m * ten;
+  const den = 2n ** -e;
+  const q = num / den;
+  const rem = num - q * den;
+  return rem * 2n >= den ? q + 1n : q;
+}
+
+/** 尾部削零，但小数点后面至少留一个零（`ustring.cpp` 那段 `// Destroy trailing zeroes, except one after period.`）。 */
+function stripTrailingZeros(src: string): string {
+  if (!src.includes(".")) return src;
+  const chars = src.split("");
+  let i = chars.length - 1;
+  while (i > 0) {
+    if (chars[i] === "0") chars[i] = "\0";
+    else if (chars[i] === ".") {
+      chars[i + 1] = "0";
+      break;
+    } else break;
+    i--;
+  }
+  return chars.join("").split("\0")[0]!;
+}
+
+/** 出货的 libc 只有 17 位有效数字：先算这一档在给定的数上能给到几位小数。 */
+function sigDigitCap(a: number): number {
+  const probe = scaledRound64(a, 30).toString().padStart(31, "0");
+  const intPart = probe.slice(0, probe.length - 30).replace(/^0+/, "");
+  if (intPart !== "") return 17 - intPart.length;
+  const frac = probe.slice(probe.length - 30);
+  let z = 0;
+  while (z < frac.length && frac[z] === "0") z++;
+  return 17 + z;
+}
+
+/** `String.num(number, decimals)`：`decimals < 0` → 14（`|x| > 10` 再减 `floor(log10|x|)`），超过 32 夹到 32，夹完还为负走 `%.lf` 那一支（默认 6 位）；`nan` / `inf` 先走前两条；结果削尾零。165 格逐字节对账在 `tmp/probe-num/fit3.mts`。 */
+export function strNumDecimals(x: number, decimals: number): string {
+  if (Number.isNaN(x)) return "nan";
+  if (!Number.isFinite(x)) return x < 0 ? "-inf" : "inf";
+  let p = decimals;
+  if (p < 0) {
+    p = 14;
+    const a = Math.abs(x);
+    if (a > 10) p -= Math.floor(Math.log10(a));
+  }
+  if (p > 32) p = 32;
+  if (p < 0) p = 6;
+  const a = Math.abs(x);
+  const effP = a === 0 ? p : Math.max(Math.min(p, sigDigitCap(a)), 0);
+  const q = scaledRound64(a, effP).toString().padStart(effP + 1, "0");
+  const ip = q.slice(0, q.length - effP) || "0";
+  const fp = q.slice(q.length - effP).padEnd(p, "0");
+  const body = p === 0 ? ip : `${ip}.${fp}`;
+  const out = stripTrailingZeros(body);
+  // 符号一律跟着实参走：一格一脚本实测 `String.num(-0.0, 2)` 给 `-0.0`、`(-0.0, 0)` 给 `-0`。
+  return `${x < 0 || Object.is(x, -0) ? "-" : ""}${out}`;
+}
+
 /** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
 export function stringStatic(name: string, args: Variant[] = []): Variant {
   switch (name) {
@@ -2256,15 +2361,21 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
     case "num": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.num() 缺少参数");
-      if (v.t === Tag.FLOAT) return V.str(strNum(v.v as number));
-      if (v.t === Tag.INT) return V.str(strNum(intToNum(v.v as IntPayload)));
-      if (v.t === Tag.BOOL) return V.str(strNum(v.v ? 1 : 0));
+      const d = args[1] === undefined ? -1 : Number(intArgBig(args[1], "String.num() 的 decimals"));
+      if (v.t === Tag.FLOAT) return V.str(strNumDecimals(v.v as number, d));
+      if (v.t === Tag.INT) return V.str(strNumDecimals(intToNum(v.v as IntPayload), d));
+      if (v.t === Tag.BOOL) return V.str(strNumDecimals(v.v ? 1 : 0, d));
       throw new GodotRuntimeError("string-arg", `String.num() 不接受 ${tagName(v.t)}`);
     }
-    case "num_int64": {
+    case "num_int64":
+    case "num_uint64": {
       const v = args[0];
-      if (v === undefined) throw new GodotRuntimeError("arity", "String.num_int64() 缺少参数");
-      return V.str(intArgBig(v, "String.num_int64() 的参数").toString());
+      if (v === undefined) throw new GodotRuntimeError("arity", `String.${name}() 缺少参数`);
+      const n0 = int64ParamBig(v, `String.${name}() 的参数`);
+      const base = args[1] === undefined ? 10 : Number(int64ParamBig(args[1], `String.${name}() 的 base`));
+      const cap = args[2] === undefined ? false : truthyOf(args[2]);
+      const n = name === "num_uint64" ? wrapUnsigned64(n0) : n0;
+      return V.str(numInBase(n, base, cap, name === "num_uint64"));
     }
     case "num_scientific": {
       const v = args[0];
@@ -2440,8 +2551,10 @@ export function show(v: Variant, depth = 0): string {
 
 /** 容器内嵌：字符串要加引号 */
 export function repr(v: Variant, depth = 0): string {
-  if (v.t === Tag.STRING) return `"${v.v as string}"`;
-  if (v.t === Tag.STRING_NAME) return `&"${v.v as string}"`;
+  // 容器里的 String 与 StringName 走的是 `String::c_escape()`（实测 `["a\"b"]` / `["a\'b"]` / `["a\tb"]`，而 ESC 与 U+001B 那类留原样），
+  // 与顶层 `var_to_str(串)` 那条不是同一把尺（那条只转 `"` 与 `\\`、控制字符留原样）—— 与 NodePath 那一支同源。
+  if (v.t === Tag.STRING) return `"${strCEscape(v.v as string)}"`;
+  if (v.t === Tag.STRING_NAME) return `&"${strCEscape(v.v as string)}"`;
   const np = asNodePath(v);
   if (np !== null) return `^"${strCEscape(nodePathText(np))}"`;
   return show(v, depth);

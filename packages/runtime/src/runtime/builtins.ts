@@ -251,9 +251,10 @@ export function abs(v: Variant): Variant {
 
 const INT_MIN_F = -9223372036854775808;
 
-/** int 载荷：2^53 内用 number，越界用 bigint（与装箱轨同一口径）。 */
+/** int 载荷：2^53 内用 number，越界用 bigint（与装箱轨同一口径）。int 那一侧没有负号零 —— `floori(-0.0)` 实测给的是 `0`（`1.0 / (floori(-0.0) * 1.0)` 给 `inf`），而 JS 的 `Math.floor(-0)` 是 `-0`，进槽之前折掉。 */
 function vi(n: number): Variant {
-  return Number.isSafeInteger(n) ? V.int(n) : V.int(BigInt(Math.trunc(n)));
+  const v = Object.is(n, -0) ? 0 : n;
+  return Number.isSafeInteger(v) ? V.int(v) : V.int(BigInt(Math.trunc(v)));
 }
 
 function isInt(v: Variant): boolean {
@@ -299,8 +300,9 @@ function roundThree(x: number, fn: (n: number) => number, mode: RoundMode): Vari
     if (!Number.isFinite(x)) return V.int(INT64_MIN);
     return vi(fn(x));
   }
-  if (mode === "float") return V.float(fn(x) + 0);
-  return V.float(fn(x) + 0);
+  // 实测 `floor(-0.0)` / `ceil(-0.0)` / `round(-0.0)` 三支都留号（`1.0 / (floor(-0.0) * 1.0)` 给 `-inf`），所以这里不能 `+ 0`
+  if (mode === "float") return V.float(fn(x));
+  return V.float(fn(x));
 }
 
 function intPassthrough(v: Variant, mode: RoundMode): Variant | null {
@@ -326,7 +328,9 @@ export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   const pas = intPassthrough(v, mode);
   if (pas !== null) return pas;
-  return roundThree(v.v as number, gdRound, mode);
+  // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
+  // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
+  return roundThree(v.v as number, (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
@@ -345,24 +349,38 @@ export function gPosmod(x: Variant, y: Variant): Variant {
 export function gFposmod(x: Variant, y: Variant): Variant {
   const a = fl(x);
   const b = fl(y);
-  if (b === 0 || !Number.isFinite(a / b)) return V.float(NaN);
-  return V.float(a - b * Math.floor(a / b) + 0);
+  // 源是 `fmod` 再把结果按号折回，不是 `a - b*floor(a/b)`：两者的最后一两位 double 会分岔（普查 8/30）。
+  let v = a % b;
+  if ((v < 0 && b > 0) || (v > 0 && b < 0)) v += b;
+  return V.float(v + 0);
 }
 
+/** `fmod(-0.0, 1.0)` 实测留号（C 的 `fmod` 就是把被除数的号带下来），所以不 `+ 0`。 */
 export function gFmod(x: Variant, y: Variant): Variant {
-  return V.float(fl(x) % fl(y) + 0);
+  return V.float(fl(x) % fl(y));
 }
 
 export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Variant {
-  const mn0 = asInt ? intOf(lo) : fl(lo);
-  const mx0 = asInt ? intOf(hi) : fl(hi);
-  const a = asInt ? intOf(v) : fl(v);
+  if (!asInt) {
+    // 引擎的 wrapf **不排序两端**：`range = max - min`，`is_zero_approx(range)` 就回 min；
+    // `result = value - range * floor((value - min) / range)`，最后 `is_equal_approx(result, max)` 再回 min。
+    const mn = fl(lo);
+    const mx = fl(hi);
+    const x = fl(v);
+    const range = mx - mn;
+    if (Math.abs(range) < CMP_EPSILON) return V.float(mn + 0);
+    const result = x - range * Math.floor((x - mn) / range);
+    return V.float((approxEq(result, mx) ? mn : result) + 0);
+  }
+  const mn0 = intOf(lo);
+  const mx0 = intOf(hi);
+  const a = intOf(v);
   const [mn, mx] = mn0 > mx0 ? [mx0, mn0] : [mn0, mx0];
   const range = mx - mn;
-  if (range === 0) return asInt ? vi(mn) : V.float(mn + 0);
+  if (range === 0) return vi(mn);
   const inside = a - mn;
-  const r = asInt ? inside - range * floorDiv(inside, range) : inside - range * Math.floor(inside / range);
-  return asInt ? vi(mn + r) : V.float(mn + r + 0);
+  const r = inside - range * floorDiv(inside, range);
+  return vi(mn + r);
 }
 
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
@@ -380,47 +398,49 @@ export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant
   const a = fl(from);
   const b = fl(to);
   const d = fl(delta);
-  if (Math.abs(b - a) <= Math.abs(d)) return V.float(b + 0);
-  const step = Math.min(Math.abs(d), Math.abs(b - a));
-  return V.float(a + (b < a ? -step : step) + 0);
+  // 引擎那句是 `abs(to - from) <= delta ? to : from + SIGN(to - from) * delta`：上界比的是**带号的 delta**，
+  // 所以 delta 为负时永远走后半支，也就是往 `to` 的反方向走（30 格普查里 22 格的分岔全在这条上）。
+  if (Math.abs(b - a) <= d) return V.float(b + 0);
+  return V.float(a + (b - a > 0 ? 1 : b - a < 0 ? -1 : 0) * d + 0);
 }
 
-/** `snapped` 的结果类型跟步长那一侧，但**商按 float 算**：`snapped(7.5, 3)` = round(2.5)·3 = 9，而 `snappedi(7, 3)` = round(2.33)·3 = 6。 */
+/** `snapped` 的结果类型跟步长那一侧，但**商按 float 算**：`snapped(7.5, 3)` = 9、`snappedi(7, 3)` = 6。折半的方向是 `floor(v / step + 0.5)`（往 +∞），不是 `round()` 的远离零 —— 实测 `snapped(-0.5, 1.0)` 给 `0.0`、`snapped(-7.5, 3.0)` 给 `-6.0`。 */
 export function gSnapped(x: Variant, step: Variant): Variant {
   const s = fl(step);
   const a = fl(x);
   if (isInt(step)) {
     if (s === 0) return vi(intOf(x));
-    return vi(Math.trunc(gdRound(a / s) * s));
+    return vi(Math.trunc(Math.floor(a / s + 0.5) * s));
   }
   if (s === 0) return V.float(a + 0);
-  return V.float(gdRound(a / s) * s + 0);
+  return V.float(Math.floor(a / s + 0.5) * s + 0);
 }
 
 export function gSnappedF(x: Variant, step: Variant): Variant {
   const a = fl(x);
   const s = fl(step);
   if (s === 0) return V.float(a + 0);
-  return V.float(gdRound(a / s) * s + 0);
+  return V.float(Math.floor(a / s + 0.5) * s + 0);
 }
 
-/** `snappedi` 两端都先折成 int（`snappedi(7, 3)` = 6、`snappedi(7, 0)` = 7）。 */
+/** `snappedi` 只在**结果**上取 int，实参不先截断（实测 `snappedi(7.5, 3.0)` 给 9 而不是 6；`snappedi(7, 0)` = 7）。 */
 export function gSnappedI(x: Variant, step: Variant): Variant {
-  const a = intOf(x);
-  const s = intOf(step);
-  if (s === 0) return vi(a);
-  return vi(gdRound(a / s) * s);
+  const a = fl(x);
+  const s = fl(step);
+  if (s === 0) return vi(Math.trunc(a));
+  return vi(Math.trunc(Math.floor(a / s + 0.5) * s));
 }
 
 const PI_D = 3.14159265358979323846;
 const TAU_D = 2 * PI_D;
 
+/** `deg_to_rad(-0.0)` 与 `rad_to_deg(-0.0)` 实测都留号（乘法在 IEEE 里就把号带过去），所以不 `+ 0`。 */
 export function gDegToRad(v: Variant): Variant {
-  return V.float(fl(v) * (PI_D / 180) + 0);
+  return V.float(fl(v) * (PI_D / 180));
 }
 
 export function gRadToDeg(v: Variant): Variant {
-  return V.float(fl(v) * (180 / PI_D) + 0);
+  return V.float(fl(v) * (180 / PI_D));
 }
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
@@ -505,7 +525,8 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
   const mx = mode === "int" ? intOf(hi) : fl(hi);
   const win = x > mx ? hi : x < mn ? lo : v;
   if (mode === "int") return vi(intOf(win));
-  if (mode === "float") return V.float(fl(win) + 0);
+  // `clampf(-0.0, 0.0, 1.0)` 实测留号（下界判的是 `<`，`-0.0 < 0.0` 假，落回原值），所以不 `+ 0`
+  if (mode === "float") return V.float(fl(win));
   if (mode === "auto" && !(x <= x)) return V.float(x);
   return win;
 }
@@ -514,24 +535,28 @@ export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
   const a = fl(from);
   const b = fl(to);
   const x = fl(s);
-  if (approxEq(a, b)) return V.float(a <= x ? 1.0 : 0.0);
-  if (a < b ? x <= a : x >= a) return V.float(a < b ? 0.0 : 1.0);
-  if (a < b ? x >= b : x <= b) return V.float(a < b ? 1.0 : 0.0);
-  const y = (x - a) / (b - a);
+  if (approxEq(a, b)) return V.float((a <= b ? (x <= a ? 0.0 : 1.0) : x <= b ? 1.0 : 0.0) + 0);
+  // 降序那一侧没有早退支：源里只有 `s = CLAMP((p_s - p_from) / (p_to - p_from), 0, 1)` 再走 `s*s*(3-2s)`，
+  // 原来那两条 `x <= a / x >= b` 早退在 a > b 时把 0 与 1 交错了（普查 30 格里 9 格分岔）。
+  const y = Math.min(Math.max((x - a) / (b - a), 0.0), 1.0);
   return V.float(y * y * (3.0 - 2.0 * y) + 0);
 }
 
-/** 只有正曲线实测过（`ease(0.5, 2)`=0.25、`ease(0.5, 3.5)`=0.08838834764832），负曲线那一格没量出式子，响亮拒。 */
+/** 绑定签名是 `ease(float x, float curve)`：两个实参先在调用边界折回 float32，式子本身走 `Math::ease` 的 double 那一支（168 格读数含负曲线）。 */
 export function gEase(delta: Variant, curve: Variant): Variant {
-  const c = fl(curve);
-  if (c === 0) return V.float(0.0);
-  if (c < 0) throw new UnsupportedError("ease-curve", "ease() 的负曲线值没量出式子");
-  let x = fl(delta);
-  if (approxEq(x, 0)) return V.float(0.0);
-  if (approxEq(x, 1)) return V.float(1.0);
+  const c = Math.fround(fl(curve));
+  let x = Math.fround(fl(delta));
   if (x < 0) x = 0;
-  if (x > 1) x = 1;
-  return V.float(Math.pow(x, c) + 0);
+  else if (x > 1.0) x = 1.0;
+  if (c > 0) {
+    if (c < 1.0) return V.float(1.0 - Math.pow(1.0 - x, 1.0 / c) + 0);
+    return V.float(Math.pow(x, c) + 0);
+  }
+  if (c < 0) {
+    if (x < 0.5) return V.float(Math.pow(x * 2.0, -c) * 0.5 + 0);
+    return V.float((1.0 - Math.pow(1.0 - (x - 0.5) * 2.0, -c)) * 0.5 + 0.5 + 0);
+  }
+  return V.float(0.0);
 }
 
 /** 实参顺序是 `(from, to, pre, after, weight)`：`cubic_interpolate(0,1,2,3,0.5)` 给 0.25、`(1,2,3,4,0.5)` 给 1.25。 */
@@ -541,8 +566,7 @@ export function gCubic(from: Variant, to: Variant, pre: Variant, after: Variant,
   const p2 = fl(pre);
   const p3 = fl(after);
   const t = fl(w);
-  const ret = 0.5 * (p0 * 2 + (p1 - p2) * t + (p2 * 2 - p0 * 5 + p1 * 4 - p3) * t * t + (p2 * -1 + p0 * 3 - p1 * 3 + p3) * t * t * t);
-  return V.float(ret + 0);
+  return V.float(cubicNum(p0, p1, p2, p3, t) + 0);
 }
 
 export function gRemap(v: Variant, fl0: Variant, fh: Variant, tl: Variant, th: Variant): Variant {
@@ -714,7 +738,9 @@ export function gPingpong(v: Variant, length: Variant): Variant {
 const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000009999, 0.0000009999, 0.00000009999, 0.000000009999, 0.0000000009999];
 
 export function gStepDecimals(v: Variant): Variant {
-  const x = Math.abs(numArg(v, "step_decimals() 的参数"));
+  // 绑定签名是 `step_decimals(float step)`：实参先在调用边界折回 float32，再进这张 double 门槛表
+  // （`0.9999` 折成 float32 是 `0.99989998…`，掉到门槛下面，实测 `step_decimals(0.9999)` 给 1）。
+  const x = Math.abs(Math.fround(numArg(v, "step_decimals() 的参数")));
   const decs = x - Math.trunc(x);
   let i = 0;
   for (const t of STEP_THRESHOLDS) {
@@ -760,8 +786,10 @@ export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Var
   const w = numArg(t, "bezier_interpolate() 的 t");
   const omt = 1 - w;
   const omt2 = omt * omt;
+  const omt3 = omt2 * omt;
   const t2 = w * w;
-  return V.float(p * omt2 * omt + a * omt2 * w * 3 + b * omt * t2 * 3 + q * t2 * w + 0);
+  const t3 = t2 * w;
+  return V.float(p * omt3 + a * omt2 * w * 3 + b * omt * t2 * 3 + q * t3 + 0);
 }
 
 export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
@@ -771,7 +799,9 @@ export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Vari
   const q = numArg(e, "bezier_derivative() 的终点");
   const w = numArg(t, "bezier_derivative() 的 t");
   const omt = 1 - w;
-  return V.float((a - p) * 3 * omt * omt + (b - a) * 6 * omt * w + (q - b) * 3 * w * w + 0);
+  const omt2 = omt * omt;
+  const t2 = w * w;
+  return V.float((a - p) * 3 * omt2 + (b - a) * 6 * omt * w + (q - b) * 3 * t2 + 0);
 }
 
 /** 角度版先把四个控制点折到 `from` 附近（引擎那六行 `fmod` 的式子），再走 `cubic_interpolate`。 */
@@ -787,8 +817,8 @@ function angleRots(from: number, to: number, pre: number, post: number): [number
 }
 
 function cubicNum(from: number, to: number, pre: number, post: number, t: number): number {
-  return 0.5 * (from * 2 + (to - pre) * t + (pre * 2 - from * 5 + to * 4 - post) * t * t +
-    (pre * -1 + from * 3 - to * 3 + post) * t * t * t);
+  const t2 = t * t;
+  return 0.5 * (from * 2 + (to - pre) * t + (pre * 2 - from * 5 + to * 4 - post) * t2 + (pre * -1 + from * 3 - to * 3 + post) * (t2 * t));
 }
 
 function lerpNum(a: number, b: number, w: number): number {

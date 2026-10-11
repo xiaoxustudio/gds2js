@@ -1,0 +1,6 @@
+A|v2 neg hit
+B|miss
+C|v3 neg hit
+D|v2i neg hit
+E|c3 hit
+F|c4 hit

@@ -44,7 +44,18 @@ const created: string[] = [];
 
 /** 代表集：一族一格各一个。`246` 是「node 过、静态目标炸」那类的闸 —— 属性面按名索引只在 AOT 上暴露（S270 ④）。
  *  `266` 是它的续集：`dict_to_inst` 要的是「实例上那张按名的原值表 + 不跑 `_init` 的构造路」，两条都只有 AOT 才验得出来。
- *  `268` 不是续集而是补账：NodePath 这一族（构造 + 字面量）此前在代表集里一格都没有。 */
+ *  `268` 不是续集而是补账：NodePath 这一族（构造 + 字面量）此前在代表集里一格都没有。
+ *  `285` 是这一轮新加的：符号零那几支（`floor` / `ceil` / `round` / `clampf` / `deg_to_rad` / `fmod` / `floori`）改的是运行时函数体里的算式，
+ *  其中 `round` 那一支多了一层内联箭头函数 —— 这类形状只有真编到静态目标才验得出来（S270 ④ 同一条路）。
+ *  `286` 是同一轮的第二格：容器元素的 `c_escape` 改的是 `values.ts` 里 `repr` 那一句，String / StringName 两条通道的出货文本都从它出（S296）。
+ *  `334` / `335` 是八面体解码与 `from_angle` 那一轮：两支都新走 `rt.vector3Const(name, [args])` / `rt.vector2Const(name, [args])` 那个带实参的静态口，
+ *  函数体里是 `Math.fround` 套 `Math.abs` / `Math.cos` 的算式与一条 `Number.isFinite` 的限 —— 这类只改运行时函数体的形状，同样只有真编到静态目标才验得出来（S322 / S323）。
+ *  `336` 是同族的第三格：`String.num(number, decimals)` 要从 IEEE754 位里拆 `m · 2^e`，用的是 `DataView` + `getBigUint64` + `BigInt` 的 `**` 与移位 ——
+ *  scriptc 对这类内建历来有围栏（S200 那四道坑），所以这一支不真编一遍不算数。
+ *  `339` 是同族的第四格：`bezier_derivative` 两支的函数体全是 `Math.fround` 套加乘减的直算式，没有一处能退回 double ——
+ *  静态目标上把中间量升成 double 就等于换了舍入模型，只有真编一遍才看得出来（S329）。
+ *  `340` 是同族的第五格：一轮普查把 `move_toward` / `smoothstep` / `wrapf` / `fposmod` 四支的函数体照源重写（早退支、带号比较、`is_equal_approx` 那一档），
+ *  改的全是运行期函数体里的算式与判据顺序 —— 同样是只有真编到静态目标才验得出来的形状（S331）。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -70,6 +81,30 @@ const DEFAULT_SET = [
   "280-pow-precedence",
   "281-int-pow-negative",
   "282-vector-slide-bounce",
+  "285-sign-zero-ops",
+  "286-container-escape",
+  "287-negative-ctor-arms",
+  "288-bound-argument-count",
+  "289-axis-index-inverse-limit",
+  "290-value-arity-calls",
+  "295-value-methods-batch",
+  "296-move-toward-chain",
+  "297-angle-and-64bit",
+  "298-color-hex-blend",
+  "299-bezier-cubic",
+  "300-value-edge-cells",
+  "301-float32-print-band",
+  "302-real-param-band",
+  "303-cubic-in-time",
+  "314-eol-in-brackets",
+  "334-vector3-octahedron-decode",
+  "335-vector2-from-angle",
+  "336-string-num-family",
+  "339-bezier-derivative",
+  "340-global-math-shapes",
+  "341-global-ease",
+  "342-step-decimals",
+  "343-snapped-and-predicates",
   "032-preload-load",
 ];
 

@@ -170,6 +170,32 @@ function callableCallLabel(box: CallableBox): string {
 }
 
 /** Callable 的方法面：方法 Callable、静态方法 Callable、lambda、`Callable()` 空 Callable 四种形状共用这一张表。 */
+/** 4.6.3 实测存在的 Callable 成员名（`tmp/probe-callable-names/sweep.mts` 二十四名一名一名过裁判）。
+ *  表外一律给运行期那句 `Nonexistent function` —— 与 Signal / RID / NodePath 同一条口径。
+ *  被抄来的清单污染掉的四名（`from` / `get_object_instance_id` / `is_equal` / `unbind_many`）在这一格里归位：它们 4.6.3 根本没有。 */
+const CALLABLE_METHOD_NAMES = new Set([
+  "bind",
+  "bindv",
+  "call",
+  "call_deferred",
+  "callv",
+  "create",
+  "get_argument_count",
+  "get_bound_arguments",
+  "get_bound_arguments_count",
+  "get_method",
+  "get_object",
+  "get_object_id",
+  "hash",
+  "is_custom",
+  "is_null",
+  "is_standard",
+  "is_valid",
+  "rpc",
+  "rpc_id",
+  "unbind",
+]);
+
 function callableMethod(box: CallableBox, name: string, args: Variant[]): Variant {
   const bound = boundArgsOf(box);
   const empty = isNullCallable(box);
@@ -195,7 +221,11 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
           "get_argument_count() 拿不到这个 Callable 的声明形参数（方法表里没有它，或它带默认值形参 —— 那一格没量）",
         );
       }
-      return V.int(declared - bound.length);
+      const left = declared - bound.length;
+      // 实测（`tmp/probe-binds-c/disc.gd` 与语料 288）：**方法 / 静态与 lambda 都是 `声明 − 已绑`，绑过头就给负数**
+      // （声明 1 支的方法绑 3 支给 −2、声明 1 支的 lambda 链式绑 2 支给 −1），只有**空 Callable 基**恒给 0
+      // （`Callable()` 绑 1 支、2 支、链式、绑 3 支全是 0）。
+      return V.int(isNullCallable(box) ? 0 : left);
     }
     case "call":
       return callableCall(box, args);
@@ -252,8 +282,14 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 空 Callable 假；lambda / 静态方法 / 方法 Callable 真
       return V.bool(!empty);
   }
+  if (!CALLABLE_METHOD_NAMES.has(name)) {
+    throw new GodotRuntimeError("callable-method", `Invalid call. Nonexistent function '${name}' in base 'Callable'.`);
+  }
   throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
 }
+
+/** Array 上实测**不存在**的成员名（4.6.3 一名一名过裁判，S300）：给的是运行期那句 `Nonexistent function`，不是「未实现」。 */
+const ARRAY_NO_METHOD = new Set(["join", "concat"]);
 
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
@@ -580,8 +616,6 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "sort":
           a.sort();
           return V.nil();
-        case "concat":
-          return V.array(a.concat(asArray(one(args, "concat"), "concat")));
         case "sort_custom": {
           const before = comparatorOf(args[0], "sort_custom");
           a.sortCustom(before);
@@ -635,8 +669,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "hash":
           return V.int(variantHashNumber(obj));
         default:
-          // `join` 在 Array 上**根本没有**（它是 String 的方法）：接收者是推断出来的 var 时解析期放过，运行期给下面那句
-          if (name === "join") throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function 'join' in base 'Array'.`);
+          // 这两个名在 Array 上**根本没有**：`join` 是 String 的方法（S171 量过），`concat` 是 JS 的 API —— S300 把 String / Array / Dictionary
+          // 三族 180 个成员名一名一名过了裁判，只有 `concat` 是「我们表里有、引擎没这名字」那一格。接收者是推断出来的 var 时解析期放过，运行期给下面那句。
+          if (ARRAY_NO_METHOD.has(name)) {
+            throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function '${name}' in base 'Array'.`);
+          }
           throw new UnsupportedError("array-method", `Array.${name}() 未实现`);
       }
     }

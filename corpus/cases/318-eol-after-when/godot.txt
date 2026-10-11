@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Expected expression for pattern guard after "when".
+   at: GDScript::reload (<case>/main.gd:5)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

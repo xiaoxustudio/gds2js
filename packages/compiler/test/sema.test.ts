@@ -14,6 +14,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { cases, caseScript, godotOk, isStaticReject, readGolden } from "./support/corpus";
 
 // 0 例会让 it.each([]) 注册 0 个测试而门报绿，理由见 ir.test.ts。
@@ -44,8 +45,12 @@ describe("analyze · 静态拒答口径与 Godot 对齐", () => {
     try {
       diags = analyze(lower(await parseSource(readFileSync(caseScript(id), "utf8"))));
     } catch (e) {
-      crashed = true;
-      diags = [{ code: "CRASH", message: e instanceof Error ? e.message : String(e) }];
+      // lowering 期的 UnsupportedError 与 analyze 的报错同格（都是响亮拒），不进「崩溃」桶。
+      if (e instanceof UnsupportedError) diags = [{ code: e.code, message: e.message }];
+      else {
+        crashed = true;
+        diags = [{ code: "CRASH", message: e instanceof Error ? e.message : String(e) }];
+      }
     }
 
     if (VERBOSE && diags.length > 0) {

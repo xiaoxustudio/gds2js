@@ -1,0 +1,13 @@
+9
+2|true|int
+3|true|float
+2|true|inti
+1|true|boolf
+1|true|bool
+0|true|nil
+4|true|str
+21|true|str
+5|true|vec
+2|false|-
+3|true|zero
+{ 1: "int", 1.0: "float", 0.0: "zero", true: "bool", "a": "str", 0: "inti", false: "boolf", <null>: "nil", (1.0, 2.0): "vec" }

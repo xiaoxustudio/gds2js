@@ -62,12 +62,13 @@ function cell(cond: boolean, failMsg: string): void {
   expect(cond, `✗ ${failMsg}`).toBe(true);
 }
 
-/** npm/pnpm 包装层噪声（例：pnpm 把 store-dir 注入子进程 env 后 npx 的告警）不是两侧的行为差异，
- *  比前必须剔掉 —— 不剔就会假红。 */
+/** npm/pnpm 包装层噪声（例：pnpm 把 store-dir 注入子进程 env 后 npx 的告警，或本机 `~/.npmrc` 里
+ *  多一个 `home` 键让 npm 每次吐一句 `Unknown user config`）不是两侧的行为差异，
+ *  比前必须剔掉 —— 不剔就会假红：exe 那支不经过 npx，node 那支经过，输出只差这一行。 */
 function cleanNoise(s: string): string {
   return s
     .split("\n")
-    .filter((l) => !/^npm warn Unknown env config /.test(l))
+    .filter((l) => !/^npm warn Unknown (?:env|user) config /.test(l))
     .join("\n");
 }
 

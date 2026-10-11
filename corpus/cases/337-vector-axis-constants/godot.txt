@@ -1,0 +1,22 @@
+V|Vector2.AXIS_X||0 | 2
+V|Vector2.AXIS_Y||1 | 2
+V|Vector2i.AXIS_X||0 | 2
+V|Vector2i.AXIS_Y||1 | 2
+V|Vector3.AXIS_X||0 | 2
+V|Vector3.AXIS_Y||1 | 2
+V|Vector3.AXIS_Z||2 | 2
+V|Vector3i.AXIS_X||0 | 2
+V|Vector3i.AXIS_Y||1 | 2
+V|Vector3i.AXIS_Z||2 | 2
+M|算式||-1 | 4 | true
+M|数组||[0, 1, 2] | [0, 1]
+T|int 标注||1
+T|推断||0 | 2
+T|v3 下标||20.0
+T|v2 下标||7.5 | 2.5
+T|v2i 下标||5
+T|v3i 下标||6
+A|arm0||x
+A|arm1||y
+A|arm2||z-guard
+A|arm3||none

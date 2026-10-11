@@ -306,7 +306,7 @@ describe("NodePath 族的发射闸门", () => {
   });
 });
 
-// ── ①h 构造式手臂：量过的七支走 rt.patConst(<构造式>)，表外与非常量实参照旧拦（S280，语料 272）──
+// ── ①h 构造式手臂：量过的形状各走 rt.patConst(<构造式>)，表外与非常量实参照旧拦（S280 语料 272；负数实参与 `Color` 三元是 S297 语料 287）──
 describe("构造式手臂的发射闸门", () => {
   const ARMS: Array<[string, string]> = [
     ["Vector2(1, 2)", "rt.patConst(rt.vector2New([rt.V.int(1), rt.V.int(2)]))"],
@@ -316,6 +316,12 @@ describe("构造式手臂的发射闸门", () => {
     ["Color(1, 2, 3, 4)", "rt.patConst(rt.colorNew([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]))"],
     ['StringName("a")', 'rt.patConst(rt.stringNameCtor([rt.V.str("a")]))'],
     ["Callable()", "rt.patConst(rt.callableCtor([]))"],
+    // 负数实参在语法树里是 `unary_operator` 套字面量，发射带着那层括号走，与当表达式用同一条路
+    ["Vector2(-1, 2)", "rt.patConst(rt.vector2New([rt.V.int((-1)), rt.V.int(2)]))"],
+    ["Vector2i(-1, 2)", "rt.patConst(rt.vector2iNew([rt.V.int((-1)), rt.V.int(2)]))"],
+    ["Vector3(-1, -2, -3)", "rt.patConst(rt.vector3New([rt.V.int((-1)), rt.V.int((-2)), rt.V.int((-3))]))"],
+    // 三元 Color 收：第四个通道默认 1.0，与 Color(1, 2, 3, 1) 撞上（实测 e 组那一格）
+    ["Color(1, 2, 3)", "rt.patConst(rt.colorNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))"],
   ];
   const REFUSED: string[] = [
     "AABB(Vector2(1, 2), Vector2(3, 4))",
@@ -324,14 +330,14 @@ describe("构造式手臂的发射闸门", () => {
     "rid_from_int64(5)",
     "str(1)",
     "Vector2(1, x)",
+    // 错元数：引擎发两句解析期拒（`No constructor of "Vector2" matches the signature "Vector2(int)".` + 那句常量表达式），
+    // 我们这一形仍按「表外就当没这形」拦，两句文案的账记 §6 第 28 条
     "Vector2(1)",
-    "Color(1, 2, 3)",
-    "Vector2(-1, 2)",
   ];
   const armSrc = (arm: string): string =>
     MOD(`var x = 5\n\tvar y = 2\n\tmatch x:\n\t\t${arm}:\n\t\t\tprint(1)\n\t\t_:\n\t\t\tprint(2)`);
 
-  it("七支各发各的构造式", async () => {
+  it("各支各发各的构造式", async () => {
     for (const [arm, want] of ARMS) {
       const src = armSrc(arm);
       expect(await classify(src, "ok"), `${arm} 该编得过`).toBe("ok");

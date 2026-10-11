@@ -1,0 +1,13 @@
+extends SceneTree
+
+func _initialize():
+	for w in [0.0, 0.3, 0.37, 0.5, 1.0, 1.25]:
+		print("U|", w, "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), w, 1.0, -1.0, 2.0), "|", Vector2(1, 2).cubic_interpolate(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), w))
+	print("K|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, 2.0, -1.0, 3.0), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, 1.0, -1.0, 3.0), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, 0.5, -0.25, 1.5), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, 1.3, -0.9, 2.1))
+	print("N|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, -1.0, -2.0, 0.5), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, -2.0, -5.0, -3.0), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5.5, 6), Vector2(7, 8), -0.4, 1.0, -3.0, 2.0))
+	print("G|", Vector2(2.5, 40021.5).cubic_interpolate_in_time(Vector2(-0.7, 4.5), Vector2(0.3, -0.7), Vector2(2.5, 2.5), 0.3, 1.3, -0.9, 2.1), "|", Vector2(1.5, 9876.5).cubic_interpolate_in_time(Vector2(-2.5, 0.125), Vector2(0.25, -0.5), Vector2(-1.5, 2.25), 0.37, 2.0, -1.0, 3.0))
+	print("H|", Vector2(0.1, 0.2).cubic_interpolate_in_time(Vector2(0.3, -0.4), Vector2(0.5, -0.6), Vector2(0.7, -0.8), 0.7, 1.3, -0.9, 2.1), "|", Vector2(12345.75, -9876.5).cubic_interpolate_in_time(Vector2(3000.25, 700.5), Vector2(-4000.75, 1000.125), Vector2(9000.5, -2000.25), 0.13, 0.5, -0.25, 1.5))
+	print("V|", Vector3(0.5, 12345.5, -1.25).cubic_interpolate_in_time(Vector3(1.5, -0.5, 2.5), Vector3(-2.5, 0.25, 1.5), Vector3(0.125, 3.5, -0.75), 0.3, 1.25, -1.5, 2.5), "|", Vector3(1, 2, 3).cubic_interpolate_in_time(Vector3(4, 5, 6), Vector3(7, 8, 9), Vector3(10, 11, 12), 0.37, 2.0, -1.0, 3.0))
+	print("W|", Vector3(0.1, 0.2, 0.3).cubic_interpolate_in_time(Vector3(0.4, -0.5, 0.6), Vector3(-0.7, 0.8, -0.9), Vector3(1.0, -1.1, 1.2), 1.25, 1.3, -0.9, 2.1), "|", Vector3(2.5, -40021.5, 0.5).cubic_interpolate_in_time(Vector3(-0.7, 4.5, 1.5), Vector3(0.3, -0.7, -2.5), Vector3(2.5, 2.5, 3.5), 0.5, -1.0, -2.0, 0.5))
+	print("X|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, INF, -1.0, 2.0), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), 0.3, 1.0, NAN, 2.0), "|", Vector2(1, 2).cubic_interpolate_in_time(Vector2(3, 4), Vector2(5, 6), Vector2(7, 8), NAN, 1.0, -1.0, 2.0))
+	quit()

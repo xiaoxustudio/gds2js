@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(int)".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").
+   at: GDScript::reload (<case>/main.gd:5)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

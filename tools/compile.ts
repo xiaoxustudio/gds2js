@@ -6,7 +6,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import type { Module } from "@gds2js/compiler/lower/ir";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
-import { caseDir, caseScript, listSingleCases } from "./lib.mjs";
+import { caseDir, caseScript, godotOk, listSingleCases, readGolden } from "./lib.mjs";
 
 const filter = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 const cases = listSingleCases(filter);
@@ -22,6 +22,7 @@ const GEN_EMIT_OPTS = {
 let compiled = 0;
 const rejected: string[] = [];
 const unsupported: Array<{ id: string; msg: string }> = [];
+const refused: Array<{ id: string; msg: string }> = [];
 
 /**
  * 不用 rmSync 删旧产物 —— 沙箱里 rmSync 会走回收站且可能超时。
@@ -45,8 +46,13 @@ for (const id of cases) {
     ir = lower(await parseSource(src));
     diags = analyze(ir);
   } catch (e) {
-    writeStub(id, `lowering 崩溃：${e instanceof Error ? e.message : String(e)}`);
-    unsupported.push({ id, msg: String(e) });
+    if (e instanceof UnsupportedError && !godotOk(readGolden(id))) {
+      refused.push({ id, msg: e.message });
+      writeStub(id, `lowering 响亮拒（引擎解析期同拒）：${e.message}`);
+    } else {
+      writeStub(id, `lowering 崩溃：${e instanceof Error ? e.message : String(e)}`);
+      unsupported.push({ id, msg: String(e) });
+    }
     continue;
   }
   if (diags.length > 0) {
@@ -72,6 +78,7 @@ for (const id of cases) {
 // packages/compiler/test/emit-invariants.test.ts，随快层 pnpm test 每次都跑。
 console.log(`编译成功 ${compiled}/${cases.length}`);
 console.log(`  语义分析拦下（预期报错用例） ${rejected.length}`);
+console.log(`  lowering 响亮拒（引擎解析期同拒） ${refused.length}`);
 console.log(`  emitter 不支持 ${unsupported.length}`);
 
 if (unsupported.length > 0) {

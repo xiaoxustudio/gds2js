@@ -45,6 +45,60 @@ function operatorOf(n: SyntaxNode): string {
   return op.text;
 }
 
+/** 成对括号之内才允许换行（S316 实测：括号里的运算符、元素、实参、键值跨行全放行）。 */
+const BRACKET_NODES = new Set(["parenthesized_expression", "array", "dictionary", "arguments", "subscript"]);
+
+/** CST 是无父指针的普通记录（`parse/cst.ts`），换行检查要的祖先链在这里现搭一份。 */
+const CST_PARENTS = new WeakMap<SyntaxNode, SyntaxNode>();
+
+function indexParents(n: SyntaxNode): void {
+  for (const c of n.children) {
+    CST_PARENTS.set(c, n);
+    indexParents(c);
+  }
+}
+
+function inBrackets(n: SyntaxNode | null | undefined): boolean {
+  for (let p = n ? CST_PARENTS.get(n) : undefined; p; p = CST_PARENTS.get(p)) {
+    if (BRACKET_NODES.has(p.type)) return true;
+  }
+  return false;
+}
+
+function tokenOf(n: SyntaxNode, text: string): SyntaxNode | null {
+  return n.children.find((c) => !c.isNamed && c.text === text) ?? null;
+}
+
+/** 换行落在这些位置时，引擎在解析期就拒；句子照抄实测那十句（`tmp/probe-eol/`，语料 304–313 各钉一句）。 */
+function continuationErr(sentence: string): never {
+  throw new UnsupportedError("line-continuation", sentence);
+}
+
+function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxNode | null, sentence: string): void {
+  if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence);
+}
+
+/** 复合赋值那一支：引擎对 11 种运算符换行给的都是 `=` 那一句（`tmp/probe-eol/readings5.txt`）。 */
+function operatorToken(n: SyntaxNode): SyntaxNode | null {
+  return n.children.find((c) => !c.isNamed) ?? null;
+}
+
+/** CST 记录只带起始位置，结束行就从自己的文本数换行 —— 冒号判据要的是「表达式在哪行收尾」。 */
+function lastRow(n: SyntaxNode): number {
+  let row = n.startPosition.row;
+  for (let i = 0; i < n.text.length; i++) if (n.text.charCodeAt(i) === 10) row++;
+  return row;
+}
+
+/** 冒号落在前一个孩子**收尾行**之后就是解析期错（括号收尾不算豁免，`tmp/probe-eol/readings8.txt`）。 */
+function checkColonHere(n: SyntaxNode, sentence: string): void {
+  const kids = n.children;
+  const at = kids.findIndex((c) => !c.isNamed && c.text === ":");
+  const colon = at < 1 ? undefined : kids[at];
+  const prev = at < 1 ? undefined : kids[at - 1];
+  if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence);
+}
+
 function named(n: SyntaxNode): SyntaxNode[] {
   return n.namedChildren;
 }
@@ -63,6 +117,7 @@ const STACK_NAMES = new Set(["get_stack", "print_stack", "push_error", "push_war
 export function lower(tree: Tree): Module {
   packCodecUse = false;
   stackUse = false;
+  indexParents(tree.rootNode);
   const m = lowerModule(tree.rootNode);
   if (packCodecUse) m.usesPackCodec = true;
   if (stackUse) m.usesStack = true;
@@ -124,6 +179,8 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
 function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
   const typeNode = field(n, "type");
   const valueNode = field(n, "value");
+  checkAfterToken(n, tokenOf(n, "="), valueNode, isConst ? 'Expected initializer expression for constant.' : 'Expected expression for variable initial value after "=".');
+  checkAfterToken(n, tokenOf(n, ":"), typeNode, 'Expected type after ":"');
   return {
     name: need(field(n, "name"), "变量名").text,
     type: typeNode ? lowerType(typeNode) : null,
@@ -188,6 +245,7 @@ function lowerEnum(n: SyntaxNode): EnumDecl {
 }
 
 function lowerClass(n: SyntaxNode): ClassDecl {
+  checkColonHere(n, 'Expected ":" after class declaration.');
   const body = need(field(n, "body"), "类体");
   const decl: ClassDecl = {
     name: need(field(n, "name"), "类名").text,
@@ -319,6 +377,7 @@ function lowerStmt(n: SyntaxNode): Stmt {
       return { kind: "expr", expr: lowerExpr(e), loc: c };
     }
     case "assignment":
+      checkAfterToken(n, tokenOf(n, "="), field(n, "right"), 'Expected an expression after "=".');
       return {
         kind: "assign",
         target: lowerExpr(need(field(n, "left"), "赋值左值")),
@@ -326,6 +385,8 @@ function lowerStmt(n: SyntaxNode): Stmt {
         loc: c,
       };
     case "augmented_assignment": {
+      const rightNode = field(n, "right");
+      checkAfterToken(n, operatorToken(n), rightNode, 'Expected an expression after "=".');
       const op = operatorOf(n).replace(/=$/, "");
       const left = lowerExpr(need(field(n, "left"), "赋值左值"));
       return {
@@ -353,21 +414,31 @@ function lowerStmt(n: SyntaxNode): Stmt {
       return { kind: "continue", loc: c };
     case "if_statement":
       return lowerIf(n);
-    case "for_statement":
+    case "for_statement": {
+      const loopVar = field(n, "left");
+      const iterable = field(n, "right");
+      checkAfterToken(n, tokenOf(n, "for"), loopVar, 'Expected loop variable name after "for".');
+      checkAfterToken(n, tokenOf(n, "in"), iterable, 'Expected iterable after "in".');
+      checkColonHere(n, 'Expected ":" after "for" condition.');
       return {
         kind: "for",
-        var: need(field(n, "left"), "循环变量").text,
-        iter: lowerExpr(need(field(n, "right"), "迭代对象")),
+        var: need(loopVar, "循环变量").text,
+        iter: lowerExpr(need(iterable, "迭代对象")),
         body: lowerBody(need(field(n, "body"), "循环体")),
         loc: c,
       };
-    case "while_statement":
+    }
+    case "while_statement": {
+      const condNode = field(n, "condition");
+      checkAfterToken(n, tokenOf(n, "while"), condNode, 'Expected conditional expression after "while".');
+      checkColonHere(n, 'Expected ":" after "while" condition.');
       return {
         kind: "while",
-        cond: lowerExpr(need(field(n, "condition"), "循环条件")),
+        cond: lowerExpr(need(condNode, "循环条件")),
         body: lowerBody(need(field(n, "body"), "循环体")),
         loc: c,
       };
+    }
     case "match_statement":
       return lowerMatch(n);
     default:
@@ -376,20 +447,27 @@ function lowerStmt(n: SyntaxNode): Stmt {
 }
 
 function lowerIf(n: SyntaxNode): Stmt {
+  const condNode = field(n, "condition");
+  checkAfterToken(n, tokenOf(n, "if"), condNode, 'Expected conditional expression after "if".');
+  checkColonHere(n, 'Expected ":" after "if" condition.');
   const branches: Extract<Stmt, { kind: "if" }>["branches"] = [
     {
-      cond: lowerExpr(need(field(n, "condition"), "if 条件")),
+      cond: lowerExpr(need(condNode, "if 条件")),
       body: lowerBody(need(field(n, "body"), "if 体")),
     },
   ];
   let alt = field(n, "alternative");
   while (alt) {
     if (alt.type === "elif_clause") {
+      const elifCond = field(alt, "condition");
+      checkAfterToken(alt, tokenOf(alt, "elif"), elifCond, 'Expected conditional expression after "elif".');
+      checkColonHere(alt, 'Expected ":" after "elif" condition.');
       branches.push({
-        cond: lowerExpr(need(field(alt, "condition"), "elif 条件")),
+        cond: lowerExpr(need(elifCond, "elif 条件")),
         body: lowerBody(need(field(alt, "body"), "elif 体")),
       });
     } else if (alt.type === "else_clause") {
+      checkColonHere(alt, 'Expected ":" after "else".');
       branches.push({ cond: null, body: lowerBody(need(field(alt, "body"), "else 体")) });
     } else {
       throw new UnsupportedError("if-alt", `if 分支 ${alt.type} 未支持`);
@@ -400,7 +478,10 @@ function lowerIf(n: SyntaxNode): Stmt {
 }
 
 function lowerMatch(n: SyntaxNode): Stmt {
-  const subject = lowerExpr(need(field(n, "value"), "match 主题"));
+  const subjectNode = field(n, "value");
+  checkAfterToken(n, tokenOf(n, "match"), subjectNode, 'Expected expression to test after "match".');
+  checkColonHere(n, 'Expected ":" after "match" expression.');
+  const subject = lowerExpr(need(subjectNode, "match 主题"));
   const body = need(field(n, "body"), "match 体");
   const arms: MatchArm[] = [];
   for (const section of named(body)) {
@@ -409,6 +490,11 @@ function lowerMatch(n: SyntaxNode): Stmt {
     }
     const sectionBody = lowerBody(need(field(section, "body"), "match 分支体"));
     const guardNode = named(section).find((x) => x.type === "pattern_guard");
+    if (guardNode) {
+      const condNode = field(guardNode, "condition") ?? named(guardNode)[0] ?? null;
+      checkAfterToken(guardNode, tokenOf(guardNode, "when"), condNode, 'Expected expression for pattern guard after "when".');
+      checkColonHere(section, 'Expected ":" after "match" pattern guard.');
+    }
     const guard = guardNode ? lowerExpr(need(field(guardNode, "condition") ?? named(guardNode)[0], "when 条件")) : null;
     const patternNodes = named(section).filter((x) => x !== guardNode && x.type !== "body");
     for (const p of patternNodes) {
@@ -440,10 +526,12 @@ function lowerPattern(n: SyntaxNode): Pattern {
     case "node_path":
       return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)) };
     case "call": {
-      // 手臂里引擎还认构造调用：`NodePath("…")` 发成字面量臂，其余七支量过的构造走 `const` 那条现成发射（语料 272 钉住每支的命中与不命中）。
+      // 手臂里引擎还认构造调用：`NodePath("…")` 发成字面量臂，其余合式的构造走 `const` 那条现成发射（语料 272 钉住每支的命中与不命中）。
       const np = nodePathArm(n);
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
+      const sig = armSignature(n);
+      if (sig !== null) throw new UnsupportedError("pattern-arm-signature", sig);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
     case "true":
@@ -492,8 +580,13 @@ function lowerExpr(n: SyntaxNode): Expr {
     }
     case "parenthesized_expression":
       return lowerExpr(need(named(n)[0], "括号表达式"));
-    case "unary_operator":
+    case "unary_operator": {
+      if (!inBrackets(n)) {
+        const operand = need(named(n)[0], "一元操作数");
+        checkAfterToken(n, n.children.find((k) => !k.isNamed) ?? null, operand, `Expected expression after "${operatorOf(n)}" operator.`);
+      }
       return { kind: "unary", op: operatorOf(n), operand: lowerExpr(need(named(n)[0], "一元操作数")), loc: c };
+    }
     case "await_expression":
       return { kind: "await", operand: lowerExpr(need(named(n)[0], "await 操作数")), loc: c };
     case "lambda": {
@@ -575,6 +668,10 @@ const MUL_LEVEL: Record<string, number> = { "**": 2, "*": 1, "/": 1, "%": 1 };
 /** 同一层的乘除模幂先按源码顺序摊平，再照这张表重排 —— 语法树把 `**` 排在 `*` `/` `%` 之后，直接用会给错值。 */
 function lowerBinary(n: SyntaxNode, c: Loc): Expr {
   const op = operatorOf(n);
+  if (!inBrackets(n)) {
+    const tok = n.children.find((k) => !k.isNamed) ?? null;
+    checkAfterToken(n, tok, field(n, "right"), `Expected expression after "${op}" operator.`);
+  }
   if (MUL_LEVEL[op] === undefined) {
     const left = lowerExpr(need(field(n, "left"), "左操作数"));
     const right = need(field(n, "right"), "右操作数");
@@ -618,28 +715,105 @@ function stripCaret(text: string): string {
   return text.startsWith("^") ? text.slice(1) : text;
 }
 
-/** 手臂里量过的构造式：名字与元数对上、且每个实参都是字面量才收（`tmp/probe-match-arm/{arms,ctors}.mts` 与语料 272）。负数实参与 `Color(1, 2, 3)` 那几形没量过，照旧落在拒的那一堆里。 */
-const CTOR_ARMS: Record<string, number> = {
-  Vector2: 2,
-  Vector2i: 2,
-  Vector3: 3,
-  Vector3i: 3,
-  Color: 4,
-  StringName: 1,
-  Callable: 0,
+/** 手臂里收下的构造式：键是类名，值是**实测收下的实参类型序列**（`tmp/probe-arm-arity/{sweep,sweep2,mix}.mts` 三批，
+ *  `sig-table*.txt` 与 `mix-table.txt`）。位置类：`N` 数字（int 与 float 混排实测都收）、`I` 只 int、`B` 带 bool、
+ *  `S` 字符串字面量、`V2` 嵌套的 `Vector2(...)`、`V3` 嵌套的 `Vector3(...)`、空数组是零实参。
+ *  `Color` 那一行的窄法就是读数本身：`(1)` 与 `(1, 2)` 与 `(1, 2.5)` 收，而 `(1.5)` 与 `(1.5, 1.5)` 拒。
+ *  **`Rect2` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` / `Signal` 这里故意缺席**：引擎手臂收它们，
+ *  可这七个类名的构造调用连**表达式位置**都编不过（`Function "Rect2()" not found in base self.`，`tmp/probe-arm-arity/emit.mts`），
+ *  收了只会把「lower 处拦」变成「emit 处拦」—— 等那七支构造接进全局可调用表再补进来（§6 第 43 条⑩）。 */
+const CTOR_ARMS: Record<string, string[][]> = {
+  Vector2: [[], ["N", "N"], ["B", "B"], ["V2"]],
+  Vector2i: [[], ["N", "N"], ["V2"]],
+  Vector3: [[], ["N", "N", "N"]],
+  Vector3i: [[], ["N", "N", "N"]],
+  StringName: [[], ["S"]],
+  NodePath: [[], ["S"]],
+  Callable: [[]],
+  Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
+  String: [[], ["S"]],
+  // 这两类手臂路上什么都不收：0 元给的是 pattern 那句、1..4 元给元数那句（`sig-table*.txt` 最后一行）。
+  Array: [],
+  Dictionary: [],
 };
 
-const ARM_ARG_LITERALS = ["integer", "float", "string", "string_name", "node_path", "true", "false", "null"];
+/** 实参位能认出来的类型：认不出就返回 null，整条手臂就当没量过。 */
+function armArgKind(n: SyntaxNode): string | null {
+  switch (n.type) {
+    case "integer":
+      return "int";
+    case "float":
+      return "float";
+    case "string":
+      return "String";
+    case "string_name":
+      return "StringName";
+    case "node_path":
+      return "NodePath";
+    case "true":
+    case "false":
+      return "bool";
+    case "unary_operator": {
+      if (n.text[0] !== "-") return null;
+      const inner = named(n);
+      if (inner.length !== 1) return null;
+      const k = armArgKind(inner[0]!);
+      return k === "int" || k === "float" ? k : null;
+    }
+    case "call": {
+      const callee = named(n)[0] ?? null;
+      if (callee === null || callee.type !== "identifier") return null;
+      const args = callArgs(n);
+      if (!ctorAccepts(callee.text, args.map(armArgKind))) return null;
+      return callee.text;
+    }
+    default:
+      return null;
+  }
+}
 
+function callArgs(n: SyntaxNode): SyntaxNode[] {
+  const argsNode = field(n, "arguments");
+  return argsNode === null ? [] : named(argsNode);
+}
+
+function ctorAccepts(name: string, kinds: Array<string | null>): boolean {
+  const rows = CTOR_ARMS[name];
+  if (rows === undefined) return false;
+  const args = kinds.length;
+  if (args === 0) return rows.some((row) => row.length === 0);
+  return rows.some((row) => row.length === args && row.every((slot, i) => slotForK(kinds[i] ?? null, slot)));
+}
+
+function slotForK(kind: string | null, slot: string): boolean {
+  if (kind === null) return false;
+  if (slot === "N") return kind === "int" || kind === "float";
+  if (slot === "I") return kind === "int";
+  if (slot === "B") return kind === "int" || kind === "float" || kind === "bool";
+  if (slot === "S") return kind === "String";
+  if (slot === "V2") return kind === "Vector2";
+  if (slot === "V3") return kind === "Vector3";
+  return kind === slot;
+}
+
+/** 手臂里的构造式：类名与实参类型序列对上实测那张表才收（`tmp/probe-arm-arity/*`，语料 272 钉住命中）。 */
 function ctorArm(n: SyntaxNode): boolean {
   const callee = named(n)[0] ?? null;
   if (callee === null || callee.type !== "identifier") return false;
-  const arity = CTOR_ARMS[callee.text];
-  if (arity === undefined) return false;
-  const argsNode = field(n, "arguments");
-  const args = argsNode === null ? [] : named(argsNode);
-  if (args.length !== arity) return false;
-  return args.every((a) => ARM_ARG_LITERALS.indexOf(a.type) >= 0);
+  return ctorAccepts(callee.text, callArgs(n).map(armArgKind));
+}
+
+/** 合不上表但每一格实参都认得出来时，发引擎那句原文：`No constructor of "X" matches the signature "X(类型, …)".`
+ *  （`tmp/probe-arm-arity/sig-table*.txt` 与 `mix-table.txt` 里被拒的那几十格，签名文本就是这个机械式）。 */
+function armSignature(n: SyntaxNode): string | null {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier") return null;
+  if (CTOR_ARMS[callee.text] === undefined) return null;
+  const args = callArgs(n);
+  if (args.length === 0) return null;
+  const kinds = args.map(armArgKind);
+  if (kinds.some((k) => k === null)) return null;
+  return `No constructor of "${callee.text}" matches the signature "${callee.text}(${kinds.join(", ")})".`;
 }
 
 /** 手臂只认量过的那一支构造：`NodePath("…")` 带一支字符串字面量实参（`tmp/probe-match-arm/arms.mts`）。 */

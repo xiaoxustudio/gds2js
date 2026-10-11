@@ -569,7 +569,8 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
     throw new UnsupportedError("packed-method", `${PACK_TYPE_NAME[kind]}.${name}() 还没实测过，不发出去`);
   }
   if (BYTE_ONLY.has(name) && kind !== "byte") {
-    throw new UnsupportedError("packed-method", `${PACK_TYPE_NAME[kind]}.${name}() 只在 PackedByteArray 上量过`);
+    // 这一组此前发的是中文自述；S302 一名一名过了裁判：引擎给的就是那句 Nonexistent function（`compress` / `to_int64_array` 等 11 格实测）
+    throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
   }
   switch (name) {
     case "size":
