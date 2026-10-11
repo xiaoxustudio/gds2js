@@ -2,6 +2,7 @@ import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
+import { strFloat } from "@gds2js/runtime/runtime/values";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
@@ -107,6 +108,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
   checkPackArgSlots(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
+  checkDictDuplicateKeys(m, diags);
+  checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
   recordInitValueReads(m, moduleScope, coroutines);
 
@@ -1389,6 +1392,263 @@ function checkFuncArgSlots(m: Module, globals: Set<string>, diags: Diagnostic[])
   }
 }
 
+/**
+ * 字典字面量的重复键：4.6.3 在**解析期**就拦，我们此前照收照跑（后写的值静默盖掉先写的）。
+ * 读数 `tmp/probe-negzero/{keys,keys2}.mts`（36 形），三条口径划定了查的范围：
+ * ① 只查折得出常量的键 —— `{1 + 1: 2, 2: 3}` 拒（折成 int 2 与后面的 `2` 同键），`{1: 1, x: 2}`（x 是变量）放过；
+ * ② 容器键不查 —— `{{1: 2}: 1, {1: 2}: 2}` 与 `{[1, 2]: 1, [1, 2]: 2}` 两侧都收（引擎那侧这两形不进常量表）；
+ * ③ 同键就是字典的桶判据 —— `String` 与 `StringName` 同键、`0.0` 与 `-0.0` 同键、`nan` 与 `nan` 同键，
+ *    而 `1` 与 `1.0`、`0` 与 `false`、`"1"` 与 `1` 各是两支键。
+ * 报的行号是**首次出现**那一格（跨行字典实测：重复在 7 行、报 6 行），一个字典里有几处重复就发几行。
+ */
+function checkDictDuplicateKeys(m: Module, diags: Diagnostic[]): void {
+  const expr = (e: Expr): void => {
+    switch (e.kind) {
+      case "index":
+        expr(e.obj);
+        expr(e.index);
+        return;
+      case "attribute":
+        expr(e.obj);
+        return;
+      case "binary":
+        expr(e.left);
+        expr(e.right);
+        return;
+      case "unary":
+      case "await":
+      case "is":
+      case "as":
+        expr(e.operand);
+        return;
+      case "array":
+        for (const it of e.items) expr(it);
+        return;
+      case "call":
+        expr(e.callee);
+        for (const a of e.args) expr(a);
+        return;
+      case "dict": {
+        const seen = new Map<string, Loc>();
+        for (const en of e.entries) {
+          expr(en.key);
+          expr(en.value);
+          const key = foldDictKey(en.key);
+          if (key === null) continue;
+          const token = dictKeyToken(key);
+          const first = seen.get(token);
+          if (first === undefined) seen.set(token, en.key.loc);
+          else diags.push({ code: "dict-dup-key", message: `Key "${dictKeyText(key)}" was already used in this dictionary.`, loc: first });
+        }
+        return;
+      }
+      case "lambda":
+        stmts(e.body);
+        return;
+      default:
+        return;
+    }
+  };
+  const stmts = (body: Stmt[]): void => {
+    for (const s of body) {
+      switch (s.kind) {
+        case "expr":
+          expr(s.expr);
+          continue;
+        case "var":
+          if (s.init !== null) expr(s.init);
+          continue;
+        case "assign":
+          expr(s.target);
+          expr(s.value);
+          continue;
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond !== null) expr(br.cond);
+            stmts(br.body);
+          }
+          continue;
+        case "for":
+          expr(s.iter);
+          stmts(s.body);
+          continue;
+        case "while":
+          expr(s.cond);
+          stmts(s.body);
+          continue;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) {
+            // 手臂里的 Pattern 字典不进这一族（引擎那侧查不查没量过），只查 guard 与体
+            if (arm.guard !== null) expr(arm.guard);
+            stmts(arm.body);
+          }
+          continue;
+        case "return":
+          if (s.value !== null) expr(s.value);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+  const vars = (list: VarDecl[]): void => {
+    for (const v of list) {
+      if (v.init !== null) expr(v.init);
+      const acc = v.accessor;
+      if (acc !== null) {
+        if (acc.getter.kind === "inline") stmts(acc.getter.body);
+        if (acc.setter !== null && acc.setter.kind === "inline") stmts(acc.setter.body);
+      }
+    }
+  };
+  const classes = (list: ClassDecl[]): void => {
+    for (const c of list) {
+      vars(c.vars);
+      for (const f of c.funcs) stmts(f.body);
+      classes(c.innerClasses);
+    }
+  };
+  vars(m.vars);
+  for (const f of m.funcs) stmts(f.body);
+  classes(m.innerClasses);
+}
+
+/** 能折成常量的键；折不出的一律 null（变量、下标、没量过的 `Color` / NodePath 之类）—— 误拦合法工程比漏一格贵得多。 */
+type DictKey =
+  | { t: "int"; v: bigint }
+  | { t: "float"; v: number }
+  | { t: "str"; v: string }
+  | { t: "bool"; v: boolean }
+  | { t: "null" }
+  | { t: "vec"; name: "Vector2" | "Vector3"; xs: number[] };
+
+function foldDictKey(e: Expr): DictKey | null {
+  if (e.kind === "lit") {
+    switch (e.lit) {
+      case "int":
+        return { t: "int", v: typeof e.value === "bigint" ? e.value : BigInt(Math.trunc(Number(e.value))) };
+      case "float":
+        return { t: "float", v: Number(e.value) };
+      case "string":
+      case "string_name":
+        return { t: "str", v: String(e.value) };
+      case "bool":
+        return { t: "bool", v: e.value === true };
+      case "null":
+        return { t: "null" };
+      default:
+        return null;
+    }
+  }
+  if (e.kind === "unary" && e.op === "-") {
+    const k = foldDictKey(e.operand);
+    if (k === null) return null;
+    if (k.t === "int") return { t: "int", v: -k.v };
+    if (k.t === "float") return { t: "float", v: -k.v };
+    if (k.t === "vec") return { t: "vec", name: k.name, xs: k.xs.map((x) => -x) };
+    return null;
+  }
+  if (e.kind === "binary") {
+    const a = foldDictKey(e.left);
+    const b = foldDictKey(e.right);
+    if (a === null || b === null) return null;
+    return foldDictBinary(e.op, a, b);
+  }
+  if (e.kind === "call" && e.callee.kind === "ident" && (e.callee.name === "Vector2" || e.callee.name === "Vector3")) {
+    const n = e.callee.name === "Vector2" ? 2 : 3;
+    if (e.args.length !== n) return null;
+    const xs: number[] = [];
+    for (const a of e.args) {
+      const k = foldDictKey(a);
+      if (k === null) return null;
+      if (k.t === "int") xs.push(Number(k.v));
+      else if (k.t === "float") xs.push(k.v);
+      else return null;
+    }
+    return { t: "vec", name: e.callee.name, xs };
+  }
+  return null;
+}
+
+/** 数值常量的算法按 S203 / S61 的口径：int 之间 `/` 是向零截断、`%` 同族，int 除零没量过就不折；一旦有 float 参与，`/` 走浮点（`1.0/0.0` 给 inf、`0.0/0.0` 给 nan，两形实测都当常量键收进重复判定），而 float 的 `%` 在引擎是解析期拒，也不折。 */
+function foldDictBinary(op: string, a: DictKey, b: DictKey): DictKey | null {
+  const num = (k: DictKey): number | bigint | null => (k.t === "int" ? k.v : k.t === "float" ? k.v : null);
+  const an = num(a);
+  const bn = num(b);
+  if (an === null || bn === null) return null;
+  if (typeof an === "bigint" && typeof bn === "bigint") {
+    switch (op) {
+      case "+":
+        return { t: "int", v: an + bn };
+      case "-":
+        return { t: "int", v: an - bn };
+      case "*":
+        return { t: "int", v: an * bn };
+      case "/":
+        return bn === 0n ? null : { t: "int", v: an / bn };
+      case "%":
+        return bn === 0n ? null : { t: "int", v: an % bn };
+      default:
+        return null;
+    }
+  }
+  const af = typeof an === "bigint" ? Number(an) : an;
+  const bf = typeof bn === "bigint" ? Number(bn) : bn;
+  switch (op) {
+    case "+":
+      return { t: "float", v: af + bf };
+    case "-":
+      return { t: "float", v: af - bf };
+    case "*":
+      return { t: "float", v: af * bf };
+    case "/":
+      return { t: "float", v: af / bf };
+    default:
+      return null;
+  }
+}
+
+/** 桶判据折成一个字符串：`-0.0` 与 `0.0` 同键（`${-0}` 出的就是 `"0"`），`nan` / `inf` / `-inf` 各成一格且**自己与自己同键**（实测 `nan` 那格引擎照拒）。 */
+function dictKeyToken(k: DictKey): string {
+  switch (k.t) {
+    case "int":
+      return `i:${k.v}`;
+    case "float":
+      return `f:${k.v}`;
+    case "str":
+      return `s:${k.v}`;
+    case "bool":
+      return `b:${k.v ? 1 : 0}`;
+    case "null":
+      return "n";
+    case "vec":
+      return `v:${k.name}:${k.xs.join(",")}`;
+  }
+}
+
+/** 文案里的键文本就是 `str(键)`：`0.0` 藏号（实测 `-0.0` 那格引擎报的是 `Key "0.0"`）、String 与 StringName 都不带引号、null 是 `<null>`。 */
+function dictKeyText(k: DictKey): string {
+  switch (k.t) {
+    case "int":
+      return String(k.v);
+    case "float":
+      return floatText(k.v);
+    case "str":
+      return k.v;
+    case "bool":
+      return k.v ? "true" : "false";
+    case "null":
+      return "<null>";
+    case "vec":
+      return `(${k.xs.map(floatText).join(", ")})`;
+  }
+}
+
+function floatText(v: number): string {
+  return Object.is(v, -0) ? strFloat(0) : strFloat(v);
+}
+
 function checkInitContracts(m: Module, globals: Set<string>, diags: Diagnostic[]): void {
   const inner = new Map<string, ClassDecl>();
   const index = (c: ClassDecl): void => {
@@ -2160,5 +2420,209 @@ function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diag
       message: `No constructor of "bool" matches the signature "bool(${t})".`,
       loc: e.loc,
     });
+  }
+}
+
+/** 值类型方法的元数表（S305）：154 名逐名过裁判（`tmp/probe-value-arity/{a,max,max6}.mts`），存 `[下界, 上界]` ——
+ *  148 名是定元数，只有六支带默认实参（`limit_length` 0..1、`Color.clamp` 0..2、`from_hsv` / `from_ok_hsl` 3..4、`to_html` 0..1）。 */
+const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
+  Vector2: {
+    abs: [0, 0], angle: [0, 0], angle_to: [1, 1], angle_to_point: [1, 1], aspect: [0, 0],
+    bezier_derivative: [4, 4], bezier_interpolate: [4, 4], bounce: [1, 1], ceil: [0, 0], clamp: [2, 2],
+    clampf: [2, 2], cross: [1, 1], cubic_interpolate: [4, 4], cubic_interpolate_in_time: [7, 7], direction_to: [1, 1],
+    distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1], floor: [0, 0], from_angle: [1, 1],
+    is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0], is_zero_approx: [0, 0], length: [0, 0],
+    length_squared: [0, 0], lerp: [2, 2], limit_length: [0, 1], max: [1, 1], max_axis_index: [0, 0],
+    maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0], minf: [1, 1], move_toward: [2, 2],
+    normalized: [0, 0], orthogonal: [0, 0], posmod: [1, 1], posmodv: [1, 1], project: [1, 1],
+    reflect: [1, 1], rotated: [1, 1], round: [0, 0], sign: [0, 0], slerp: [2, 2],
+    slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
+  },
+  Vector2i: {
+    abs: [0, 0], aspect: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1],
+    distance_to: [1, 1], length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0],
+    maxi: [1, 1], min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0],
+    snapped: [1, 1], snappedi: [1, 1],
+  },
+  Vector3: {
+    abs: [0, 0], angle_to: [1, 1], bezier_derivative: [4, 4], bezier_interpolate: [4, 4], bounce: [1, 1],
+    ceil: [0, 0], clamp: [2, 2], clampf: [2, 2], cross: [1, 1], cubic_interpolate: [4, 4],
+    cubic_interpolate_in_time: [7, 7], direction_to: [1, 1], distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1],
+    floor: [0, 0], inverse: [0, 0], is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0],
+    is_zero_approx: [0, 0], length: [0, 0], length_squared: [0, 0], lerp: [2, 2], limit_length: [0, 1],
+    max: [1, 1], max_axis_index: [0, 0], maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0],
+    minf: [1, 1], move_toward: [2, 2], normalized: [0, 0], octahedron_decode: [1, 1], octahedron_encode: [0, 0],
+    outer: [1, 1], posmod: [1, 1], posmodv: [1, 1], project: [1, 1], reflect: [1, 1],
+    rotated: [2, 2], round: [0, 0], sign: [0, 0], signed_angle_to: [2, 2], slerp: [2, 2],
+    slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
+  },
+  Vector3i: {
+    abs: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1], distance_to: [1, 1],
+    length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0], maxi: [1, 1],
+    min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0], snapped: [1, 1],
+    snappedi: [1, 1],
+  },
+  Color: {
+    blend: [1, 1], clamp: [0, 2], darkened: [1, 1], from_hsv: [3, 4], from_ok_hsl: [3, 4],
+    from_rgbe9995: [1, 1], from_string: [2, 2], get_luminance: [0, 0], hex: [1, 1], hex64: [1, 1],
+    html: [1, 1], html_is_valid: [1, 1], inverted: [0, 0], is_equal_approx: [1, 1], lerp: [2, 2],
+    lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
+    to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
+  },
+};
+
+/** 只认「名字本身就是这五支之一」的标注与字面量构造式，别的（`Variant`、自定义类、引擎类）一概不猜。 */
+function valueTypeAnnotation(t: TypeRef | null): string | null {
+  return t !== null && t.kind === "named" && t.name in VALUE_METHOD_ARITY ? t.name : null;
+}
+
+function valueCtorType(e: Expr | null): string | null {
+  return e !== null && e.kind === "call" && e.callee.kind === "ident" && e.callee.name in VALUE_METHOD_ARITY
+    ? e.callee.name
+    : null;
+}
+
+/**
+ * 值类型方法调用的实参数：引擎在**解析期**就按接收者的静态形拦（`tmp/probe-value-arity/recv.mts` 十二形）——
+ * 字面构造式、`var v: Vector2` 的标注（有没有初值都算）、`var v = Vector2(1, 2)` 的推断、形参标注、模块级 `var` 与 `const`
+ * 这五形全在解析期拦，连 `if false:` 那种永不执行的分支也拦；`var v: Variant` 与未定形 `Array` 的元素解析期放过、
+ * 成运行期那句（`tmp/probe-value-arity/rt.mts`）。链式（`normalized().angle_to()`）与定形 `Array[Vector2]` 的元素也是解析期拦，
+ * 但那要另两张表（方法返回类型 / 定形数组的元素形）—— 没量的不猜，那两形落进运行期那句，差的只是时机。
+ */
+function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
+  const moduleVars = new Map<string, string>();
+  for (const v of m.vars) {
+    const t = valueTypeAnnotation(v.type) ?? (v.type === null ? valueCtorType(v.init) : null);
+    if (t !== null) moduleVars.set(v.name, t);
+  }
+
+  const funcs: Array<{ f: FuncDecl; base: Map<string, string> }> = m.funcs.map((f) => ({ f, base: moduleVars }));
+  const collect = (c: ClassDecl): void => {
+    // 内部类的方法不给它预置模块级名字：那一侧引擎怎么判没量过，宁可漏拦也不误拦
+    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>() });
+    for (const x of c.innerClasses) collect(x);
+  };
+  for (const c of m.innerClasses) collect(c);
+
+  for (const { f, base } of funcs) {
+    const typed = new Map(base);
+    for (const p of f.params) {
+      const t = valueTypeAnnotation(p.type);
+      if (t !== null) typed.set(p.name, t);
+    }
+
+    const calls: Extract<Expr, { kind: "call" }>[] = [];
+    const varDecls: Extract<Stmt, { kind: "var" }>[] = [];
+    const assigned = new Set<string>();
+
+    const walkExpr = (e: Expr): void => {
+      switch (e.kind) {
+        case "attribute":
+          walkExpr(e.obj);
+          return;
+        case "index":
+          walkExpr(e.obj);
+          walkExpr(e.index);
+          return;
+        case "binary":
+          walkExpr(e.left);
+          walkExpr(e.right);
+          return;
+        case "unary":
+        case "await":
+        case "is":
+        case "as":
+          walkExpr(e.operand);
+          return;
+        case "array":
+          for (const it of e.items) walkExpr(it);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            walkExpr(en.key);
+            walkExpr(en.value);
+          }
+          return;
+        case "call":
+          calls.push(e);
+          walkExpr(e.callee);
+          for (const a of e.args) walkExpr(a);
+          return;
+        default:
+          return;
+      }
+    };
+
+    const walkStmt = (s: Stmt): void => {
+      switch (s.kind) {
+        case "expr":
+          walkExpr(s.expr);
+          return;
+        case "var":
+          varDecls.push(s);
+          if (s.init !== null) walkExpr(s.init);
+          return;
+        case "assign":
+          if (s.target.kind === "ident") assigned.add(s.target.name);
+          walkExpr(s.target);
+          walkExpr(s.value);
+          return;
+        case "if":
+          for (const br of s.branches) {
+            if (br.cond !== null) walkExpr(br.cond);
+            for (const x of br.body) walkStmt(x);
+          }
+          return;
+        case "for":
+          walkExpr(s.iter);
+          for (const x of s.body) walkStmt(x);
+          return;
+        case "while":
+          walkExpr(s.cond);
+          for (const x of s.body) walkStmt(x);
+          return;
+        case "match":
+          walkExpr(s.subject);
+          for (const arm of s.arms) {
+            if (arm.guard !== null) walkExpr(arm.guard);
+            for (const x of arm.body) walkStmt(x);
+          }
+          return;
+        case "return":
+          if (s.value !== null) walkExpr(s.value);
+          return;
+        default:
+          return;
+      }
+    };
+
+    for (const s of f.body) walkStmt(s);
+
+    for (const d of varDecls) {
+      // 没标注的名字一旦被重新赋值就没了保证；标注那一侧引擎不松口，不受这条影响
+      if (d.type === null && assigned.has(d.name)) continue;
+      // 标了别的类型（`Variant` 是实测到的那一形）就不许再拿初值猜：引擎那侧 `var v: Variant = Vector2(1, 2)` 解析期放过
+      const t = valueTypeAnnotation(d.type) ?? (d.type === null ? valueCtorType(d.init) : null);
+      if (t !== null) typed.set(d.name, t);
+    }
+
+    for (const e of calls) {
+      const callee = e.callee;
+      if (callee.kind !== "attribute") continue;
+      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : valueCtorType(callee.obj);
+      if (recv === null) continue;
+      const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
+      if (sig === undefined) continue;
+      const got = e.args.length;
+      if (got >= sig[0] && got <= sig[1]) continue;
+      diags.push({
+        code: "value-arity",
+        message:
+          got < sig[0]
+            ? `Too few arguments for "${callee.name}()" call. Expected at least ${sig[0]} but received ${got}.`
+            : `Too many arguments for "${callee.name}()" call. Expected at most ${sig[1]} but received ${got}.`,
+        loc: e.loc,
+      });
+    }
   }
 }

@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Expected ":" after class declaration.
+   at: GDScript::reload (<case>/main.gd:3)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

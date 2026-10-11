@@ -1,0 +1,11 @@
+n01 0 [] true
+n02 0 [1] false 25
+n03 0 [1, 2] false
+n04 0 [2, 1]
+n05 2 [] false
+n06 1 [7] 907 1
+o01 2 1 0
+o02 3 2 1
+over-method -2 [1, 2, 3]
+over-lambda -1 [1, 2] 2
+over-chained -1 [2, 1]

@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Key "name" was already used in this dictionary (at line 4).
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
