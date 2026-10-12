@@ -779,13 +779,23 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.132 `Vector3.octahedron_decode()` 发货：式子是从引擎源里读出来的，不是猜出来的（2026-10-12，S322，语料 334）
+
+- **卡点与解法**：S321 那轮把标准反折（`z < 0` 时按 `(1-|·|)*sign(·)` 折、`z` 翻号）否掉了，之后 `tmp/probe-oct/fit.mts` 的八条候选最好的一条还错 32/169。这一轮不再猜：直接读 4.6.3-stable 的 `core/math/vector3.cpp`，那支是 `n = (f.x, f.y, 1-|f.x|-|f.y|)` + **`t = CLAMP(-n.z, 0, 1)`** + `n.x += n.x >= 0 ? -t : t`（y 同形）+ `normalized()` —— 照它落地 **169/169 全合**，`t` 那个上夹 1 正是越界格里「水平分量各挪 ±1」的来源，也解释了 `z == 0` 一带为什么不折（`t = 0`）。
+- **源只当候选，判据仍是读数**：`tmp/probe-oct/fit2.mts` 拿 169 格同时试三条（CLAMP / 不夹 / 别支），CLAMP 支 169、不夹支 54 —— 记进 §6 第 36 条那句「式子反复猜不中就去读引擎自己的源」，同时把红线 1 的口径再钉一遍：**读了源也要拿格子验**。
+- **两种调用式一条式子**：静态式与实例式实测一字一样（`Vector3(1,2,3).octahedron_decode(Vector2(0.25,0.75))` → `(-0.707107, 0.707107, 0.0)`，实例被忽略），所以 `octaDecode` 挂在静态口（`vector3Const`，emitter 那条 `STATIC_MEMBER_FNS` 早已带 `args`）与 `vector3Method` 两处共用。实参口 `Vector2` 直收、`Vector2i` 走 `Vector2()` 那条升 float 的支（实测放行两支）。
+- **顺带量到一族时机差**：元数、实参类型、bare 成员引用这三形引擎全在**解析期**拒（四句原文见 §6 第 44 条），我们五形全编得过、运行期才响亮拒，而且 float 那一形报的是转换口的句子（基名写成 `Vector2()`）。要做的是 analyze 里给「内建类型名 + 该类型静态函数名单」加解析期判据 —— 但名单另一头 `Color` 那四支的引擎原文一格都没量过，先扫再动，记 §6 第 44 条⑤。
+- **非有限值五格**（`nan` 三支全 `nan`、`(INF, 0.5)` → `(nan, 0.0, nan)` 等）与 `.normalized()` 本身同一脾气，实测过 `Vector3(1, NAN, 2).normalized()` 也是三支全 `nan` —— 顺手排除了一条可疑：源里 `length_sq > 0` 那类写法若真成立，NAN 该给 `(0,0,0)`，实测不给，所以共用 helper 不动。
+- **门**：`pnpm test` **1603**（63 文件）、typecheck **4/4**、`test:diff` **216/216 逐字节**（静默 0、崩溃 0、未实现 0）、`test:compile` **223/323**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` **333 例零漂移**（OK 216 / 报错 100 / 超时 17）、语料 334 新钉 183 行。§6 第 36 条 7 → **6 名**。
+- **一处流程坑**：`cli run` 走的是 `packages/*/dist`，改完 runtime 不 build 就会拿旧代码做读数 —— 本轮那格「0 参撞常量句」的假象就是这么来的，重 `pnpm build` 之后才见到真正的元数句。**探针口径：改过 runtime 先 build，或直接 import `src`。**
+
 ### 1.131 更正：那七支构造子不是漏登记，是七个值类型整个没有（2026-10-12，§6 第 43 条⑪，出货代码不动）
 
 - **上一轮的推断错了一步**：`Rect2(1, 2, 3, 4)` 编不过，我看到 `Function "Rect2()" not found in base self.` 就写成「全局可调用表缺七行」，像是一下午就能补的活。翻 `packages/runtime/src/runtime/` 才看清：**`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` 连值类型的实现都没有**（没有对应文件，`Tag` 里没有槽，`Signal` 只有类型名），所以缺的是一整个类型族的值表示 + 方法面 + 打印 + 哈希 + 序列化，不是登记一笔的事。按 D4 与 §3，「Tier 1 要不要扩到这七个值类型」是**范围决定**，得用户拍板，不该我单方面开工。
 - **读数先存着**：一格一脚本扫了 36 形（`tmp/probe-ctors/godot.txt`），七支构造的 0 元默认值、收哪几种实参形状、拒的给什么签名全在里面 —— 三条要留意的：`Rect2i(Vector2(1.5, 2.5), Vector2(3, 4))` 是**截断**不是四舍五入；`Transform2D(0.5, Vector2(1, 2))`、`Basis(Vector3, 1.5)`、`Quaternion(Vector3, 0.5)` 三支带三角，开工就撞 S314 那把 libm 天花板；`AABB` 的实参**必须**是 Vector3 那一族（`AABB(Vector2, Vector2)` 引擎直接拒）。谁做谁省事，不必再量一遍。
 - **门**：本轮只动文档与 `tmp/` 探针，src 与语料一字未改 —— §1.130 那套门读数（`pnpm test` 1579、`test:diff` 215/215、golden-check 332 例零漂移、scriptc 41/41）继续有效。
 
-### 1.130 手臂构造式按实参类型接进 lower，顺带挖出七个类名的构造子缺口（2026-10-12，S322，语料 329–333）
+### 1.130 手臂构造式按实参类型接进 lower，顺带挖出七个类名的构造子缺口（2026-10-12，§6 第 43 条⑩，语料 329–333）
 
 - **做了什么**：`CTOR_ARMS` 从「类名→元数」换成**类名→实测收下的实参类型序列**（键来自 §6 第 43 条⑥⑦⑧那三批读数，340 格两侧对账零分歧），手臂里 `Vector2()`、`Vector2i(1, 2.5)`、`Vector2(Vector2(1, 2))`、`Color(1, 2, 3)`、`String("a")`、`Callable()` 等十七形从此编得过；同时**修掉一条 masking**：`StringName(1)` 与 `NodePath(1)` 旧表按元数放行（引擎拒），现在发引擎那句 `No constructor of "StringName" matches the signature "StringName(int)".`（四格语料 330–333 钉句子，门 `match-arm-ctors.test.ts` 49 形）。
 - **挖到的才是大头**：把表接上之后逐形试发射，发现 **`Rect2` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` / `Signal` 这七个类名的构造调用连表达式位置都编不过**（`Function "Rect2()" not found in base self.`）—— 也就是 `var r = Rect2(1, 2, 3, 4)` 这种极普通的 GDScript 我们今天照样拒。下一轮更正了原因（见 §1.131）：不是表少登记七行，而是**这七个值类型在运行时里整个没有**。

@@ -1,6 +1,17 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { CMP_EPS, NORMALIZED_EPS, approxEq, clamp, lerpLen, vecFailKey, vector2 } from "./vector2";
+import {
+  CMP_EPS,
+  NORMALIZED_EPS,
+  type GVector2,
+  approxEq,
+  asVec2,
+  clamp,
+  lerpLen,
+  vecFailKey,
+  vector2,
+  vector2New,
+} from "./vector2";
 
 export class GVector3 {
   x: number;
@@ -68,7 +79,43 @@ const VEC3_CONST: Record<string, [number, number, number]> = {
   BACK: [0, 0, 1],
 };
 
-export function vector3Const(name: string): Variant {
+/** 八面体解码的式子（4.6.3 实测 169 格全中，`tmp/probe-oct/grid.txt`）：`t` 夹在 [0,1]，两个水平分量各走 `>= 0` 那一支。 */
+function octaDecode(o: GVector2): Variant {
+  const fx = sub(mul(o.x, 2), 1);
+  const fy = sub(mul(o.y, 2), 1);
+  const fz = sub(sub(1, Math.abs(fx)), Math.abs(fy));
+  const t = clamp(-fz, 0, 1);
+  return normalized(add(fx, fx >= 0 ? -t : t), add(fy, fy >= 0 ? -t : t), fz);
+}
+
+/** 解码的实参口：`Vector2` 直接收，`Vector2i` 走 `Vector2()` 那条升 float 的支（4.6.3 实测 `Vector3.octahedron_decode(Vector2i(0, 0))` 给 (0.0, 0.0, -1.0)），其余响亮报错。 */
+function octArg(args: Variant[], i: number, who: string): GVector2 {
+  const a = args[i];
+  if (a === undefined) throw new UnsupportedError("vector3-arg", `Vector3.${who} 缺少实参`);
+  const v = asVec2(a);
+  if (v !== null) return v;
+  const conv = asVec2(vector2New([a]));
+  if (conv === null) throw new UnsupportedError("vector3-arg", `Vector3.${who} 的第 ${i + 1} 个实参需要 Vector2`);
+  return conv;
+}
+
+/** `Vector3.` 上的静态成员：九个常量，加上 `octahedron_decode`（静态式与实例式共用一条式子，实例被忽略，实测过）。 */
+export function vector3Const(name: string, args: Variant[] = []): Variant {
+  if (args.length > 0 || name === "octahedron_decode") {
+    switch (name) {
+      case "octahedron_decode": {
+        if (args.length !== 1) {
+          throw new UnsupportedError(
+            "vector3-arity",
+            `Vector3.octahedron_decode() 只收 1 个 Vector2（收到 ${args.length} 个）`,
+          );
+        }
+        return octaDecode(octArg(args, 0, "octahedron_decode"));
+      }
+      default:
+        throw new UnsupportedError("vector3-static", `Vector3.${name}() 未实现（实测不存在或没探针）`);
+    }
+  }
   const c = VEC3_CONST[name];
   if (!c) {
     throw new UnsupportedError(
@@ -458,6 +505,10 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
         ow = mul(sub(1, Math.abs(u)), w >= 0 ? 1 : -1);
       }
       return vector2(add(mul(ou, 0.5), 0.5), add(mul(ow, 0.5), 0.5));
+    }
+    case "octahedron_decode": {
+      arity(args, 1, "octahedron_decode");
+      return octaDecode(octArg(args, 0, "octahedron_decode"));
     }
     default:
       throw new UnsupportedError("vector3-method", `Vector3.${name}() 未实现（实测不存在或没探针）`);
