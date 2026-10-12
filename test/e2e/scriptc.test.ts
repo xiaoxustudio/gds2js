@@ -53,7 +53,9 @@ const created: string[] = [];
  *  `336` 是同族的第三格：`String.num(number, decimals)` 要从 IEEE754 位里拆 `m · 2^e`，用的是 `DataView` + `getBigUint64` + `BigInt` 的 `**` 与移位 ——
  *  scriptc 对这类内建历来有围栏（S200 那四道坑），所以这一支不真编一遍不算数。
  *  `339` 是同族的第四格：`bezier_derivative` 两支的函数体全是 `Math.fround` 套加乘减的直算式，没有一处能退回 double ——
- *  静态目标上把中间量升成 double 就等于换了舍入模型，只有真编一遍才看得出来（S329）。 */
+ *  静态目标上把中间量升成 double 就等于换了舍入模型，只有真编一遍才看得出来（S329）。
+ *  `340` 是同族的第五格：一轮普查把 `move_toward` / `smoothstep` / `wrapf` / `fposmod` 四支的函数体照源重写（早退支、带号比较、`is_equal_approx` 那一档），
+ *  改的全是运行期函数体里的算式与判据顺序 —— 同样是只有真编到静态目标才验得出来的形状（S331）。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -99,6 +101,7 @@ const DEFAULT_SET = [
   "335-vector2-from-angle",
   "336-string-num-family",
   "339-bezier-derivative",
+  "340-global-math-shapes",
   "032-preload-load",
 ];
 
