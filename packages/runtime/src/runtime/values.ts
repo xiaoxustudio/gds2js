@@ -2282,6 +2282,74 @@ function numInBase(n: bigint, base: number, cap: boolean, unsigned: boolean): st
   return out.join("");
 }
 
+/** 双精度精确值 × 10^k，四舍五入（半程远离零）成 BigInt —— 引擎那侧是 `snprintf`，不能拿 `toFixed` 代。 */
+function scaledRound64(a: number, k: number): bigint {
+  const dv = new DataView(new ArrayBuffer(8));
+  dv.setFloat64(0, a, true);
+  const bits = dv.getBigUint64(0, true);
+  const expBits = Number((bits >> 52n) & 0x7ffn);
+  const mant = bits & ((1n << 52n) - 1n);
+  const m = expBits === 0 ? mant : mant | (1n << 52n);
+  const e = BigInt(expBits === 0 ? -1074 : expBits - 1075);
+  const ten = 10n ** BigInt(k);
+  if (e >= 0n) return m * 2n ** e * ten;
+  const num = m * ten;
+  const den = 2n ** -e;
+  const q = num / den;
+  const rem = num - q * den;
+  return rem * 2n >= den ? q + 1n : q;
+}
+
+/** 尾部削零，但小数点后面至少留一个零（`ustring.cpp` 那段 `// Destroy trailing zeroes, except one after period.`）。 */
+function stripTrailingZeros(src: string): string {
+  if (!src.includes(".")) return src;
+  const chars = src.split("");
+  let i = chars.length - 1;
+  while (i > 0) {
+    if (chars[i] === "0") chars[i] = "\0";
+    else if (chars[i] === ".") {
+      chars[i + 1] = "0";
+      break;
+    } else break;
+    i--;
+  }
+  return chars.join("").split("\0")[0]!;
+}
+
+/** 出货的 libc 只有 17 位有效数字：先算这一档在给定的数上能给到几位小数。 */
+function sigDigitCap(a: number): number {
+  const probe = scaledRound64(a, 30).toString().padStart(31, "0");
+  const intPart = probe.slice(0, probe.length - 30).replace(/^0+/, "");
+  if (intPart !== "") return 17 - intPart.length;
+  const frac = probe.slice(probe.length - 30);
+  let z = 0;
+  while (z < frac.length && frac[z] === "0") z++;
+  return 17 + z;
+}
+
+/** `String.num(number, decimals)`：`decimals < 0` → 14（`|x| > 10` 再减 `floor(log10|x|)`），超过 32 夹到 32，夹完还为负走 `%.lf` 那一支（默认 6 位）；`nan` / `inf` 先走前两条；结果削尾零。165 格逐字节对账在 `tmp/probe-num/fit3.mts`。 */
+export function strNumDecimals(x: number, decimals: number): string {
+  if (Number.isNaN(x)) return "nan";
+  if (!Number.isFinite(x)) return x < 0 ? "-inf" : "inf";
+  let p = decimals;
+  if (p < 0) {
+    p = 14;
+    const a = Math.abs(x);
+    if (a > 10) p -= Math.floor(Math.log10(a));
+  }
+  if (p > 32) p = 32;
+  if (p < 0) p = 6;
+  const a = Math.abs(x);
+  const effP = a === 0 ? p : Math.max(Math.min(p, sigDigitCap(a)), 0);
+  const q = scaledRound64(a, effP).toString().padStart(effP + 1, "0");
+  const ip = q.slice(0, q.length - effP) || "0";
+  const fp = q.slice(q.length - effP).padEnd(p, "0");
+  const body = p === 0 ? ip : `${ip}.${fp}`;
+  const out = stripTrailingZeros(body);
+  // 符号一律跟着实参走：一格一脚本实测 `String.num(-0.0, 2)` 给 `-0.0`、`(-0.0, 0)` 给 `-0`。
+  return `${x < 0 || Object.is(x, -0) ? "-" : ""}${out}`;
+}
+
 /** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
 export function stringStatic(name: string, args: Variant[] = []): Variant {
   switch (name) {
@@ -2293,9 +2361,10 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
     case "num": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.num() 缺少参数");
-      if (v.t === Tag.FLOAT) return V.str(strNum(v.v as number));
-      if (v.t === Tag.INT) return V.str(strNum(intToNum(v.v as IntPayload)));
-      if (v.t === Tag.BOOL) return V.str(strNum(v.v ? 1 : 0));
+      const d = args[1] === undefined ? -1 : Number(intArgBig(args[1], "String.num() 的 decimals"));
+      if (v.t === Tag.FLOAT) return V.str(strNumDecimals(v.v as number, d));
+      if (v.t === Tag.INT) return V.str(strNumDecimals(intToNum(v.v as IntPayload), d));
+      if (v.t === Tag.BOOL) return V.str(strNumDecimals(v.v ? 1 : 0, d));
       throw new GodotRuntimeError("string-arg", `String.num() 不接受 ${tagName(v.t)}`);
     }
     case "num_int64":
