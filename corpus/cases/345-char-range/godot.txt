@@ -1,0 +1,12 @@
+SCRIPT ERROR: Parse Error: Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "char()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:8)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

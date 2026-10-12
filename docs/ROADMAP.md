@@ -779,6 +779,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.149 `char()` 越界接进解析期：字面量整数那一侧引擎拒，float / bool 那一侧它放过（2026-10-12，S336，语料 345）
+
+- **接 §1.147 记的 masking**：`char(-1)` 这类越界字面量引擎在**解析期**拒（`Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.`，一格一脚本量到四形），而我们发射器是 `char: (a) => rt.stringChr(...)`，看都不看 —— 编得过、跑起来才知道。
+- **边界要往两侧量，不然会接成过拦**：同一批探针里 `char(1.5)`、`char(1.0)`、`char(true)`、`char(-0.0)` 引擎**全放过**（实测算出 U+0001 与替换符），只有 int 字面量越界才拒。所以判据只吃「字面量 int」与「一元负号套字面量 int」两形（值按 bigint 走，避免 `9223372036854775807` 掉进 Number），别的表达式一律放过。
+- **还欠的两形都有读数**：`char("a")` 也是解析期拒，但句子是通用那一式 `argument 1 should be "int" but is "String".` —— 属于「全局函数 int 形参收到别的字面量类型」那一整族，126 支没扫，不在这轮；`var q := -1` 再 `char(q)` 是**运行期**错，而且文本带本地化中文（`Error calling GDScript utility function "char()"…`），既不伪造也不进语料。
+- **一条语料口径**：`char(0)` 打 NUL、`char(5535)` 是孤立代理（引擎自己会前缀 `Unicode parsing error…U+FFFD`），两形都不能进 golden —— 本轮第一次 148 格试跑就是被它们打挂的（读到 0 行），区间内其余形只在探针里量。
+- **门**：`pnpm test` **1998**（74 文件）、typecheck **4/4**、`test:compile` **232/334**（sema 拦下 75 → **76**、响亮拒 26、emitter 不支持 0）、`test:diff` **225/225**（跳过 119，静默 / 崩溃 / 未实现 全 0）、`test:golden --check` 语料 345 无漂移。
+
 ### 1.148 `posmod` 的模数为 0 发出：引擎给 0，那条 ERROR 由 `normalize` 滤掉（2026-10-12，S335，语料 344）
 
 - **接 §1.147 记的那条欠**：一格一脚本量到 `posmod(5|0|-5|2147483648|2^63-1, 0)` **全给 0**，引擎每格推 `ERROR: Division by zero in posmod is undefined. Returning 0 as fallback.` + `   at: posmod (./core/math/math_funcs.h:314)`。旧实现抛 `UnsupportedError`，注释自己写着「Godot 那侧这一格没量过」。

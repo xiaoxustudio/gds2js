@@ -2744,5 +2744,31 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         loc: e.loc,
       });
     }
+
+    // `char()` 的实参是**字面量整数**时，引擎在解析期就判区间；float / bool 那一侧它是放过的
+    // （`char(1.5)`、`char(true)` 实测都算得出 U+0001），所以这一支只碰 int 字面量与它的负号形。
+    for (const e of calls) {
+      const callee = e.callee;
+      if (callee.kind !== "ident" || callee.name !== "char" || e.args.length !== 1) continue;
+      const v = literalIntArg(e.args[0]!);
+      if (v === null || (v >= 0n && v <= 4294967295n)) continue;
+      diags.push({
+        code: "char-range",
+        message: 'Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.',
+        loc: e.loc,
+      });
+    }
   }
+}
+
+function literalIntArg(e: Expr): bigint | null {
+  const lit = (x: Expr): bigint | null =>
+    x.kind === "lit" && x.lit === "int" ? (typeof x.value === "bigint" ? x.value : BigInt(x.value as number)) : null;
+  const direct = lit(e);
+  if (direct !== null) return direct;
+  if (e.kind === "unary" && e.op === "-") {
+    const inner = lit(e.operand);
+    if (inner !== null) return -inner;
+  }
+  return null;
 }
