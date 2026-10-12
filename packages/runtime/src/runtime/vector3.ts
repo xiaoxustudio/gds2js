@@ -292,6 +292,20 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
         add(add(add(mul(a, u3), mul(mul(mul(3, u2), t), b)), mul(mul(mul(3, u), t2), c)), mul(d, t3));
       return vector3(bz(v.x, c1.x, c2.x, e.x), bz(v.y, c1.y, c2.y, e.y), bz(v.z, c1.z, c2.z, e.z));
     }
+    case "bezier_derivative": {
+      // 与 `Vector2` 同一支式子，每步折回 float32（`math_funcs.h` 的 float 那一支，134 格全合）
+      arity(args, 4, "bezier_derivative");
+      const c1 = vecArg(args, 0, "bezier_derivative");
+      const c2 = vecArg(args, 1, "bezier_derivative");
+      const e = vecArg(args, 2, "bezier_derivative");
+      const t = scalar(args[3], "bezier_derivative");
+      const omt = sub(1, t);
+      const omt2 = mul(omt, omt);
+      const t2 = mul(t, t);
+      const bd = (s: number, a: number, b: number, c: number) =>
+        add(add(mul(mul(sub(a, s), 3), omt2), mul(mul(mul(sub(b, a), 6), omt), t)), mul(mul(sub(c, b), 3), t2));
+      return vector3(bd(v.x, c1.x, c2.x, e.x), bd(v.y, c1.y, c2.y, e.y), bd(v.z, c1.z, c2.z, e.z));
+    }
     case "cubic_interpolate": {
       arity(args, 4, "cubic_interpolate");
       const b = vecArg(args, 0, "cubic_interpolate");

@@ -51,7 +51,9 @@ const created: string[] = [];
  *  `334` / `335` 是八面体解码与 `from_angle` 那一轮：两支都新走 `rt.vector3Const(name, [args])` / `rt.vector2Const(name, [args])` 那个带实参的静态口，
  *  函数体里是 `Math.fround` 套 `Math.abs` / `Math.cos` 的算式与一条 `Number.isFinite` 的限 —— 这类只改运行时函数体的形状，同样只有真编到静态目标才验得出来（S322 / S323）。
  *  `336` 是同族的第三格：`String.num(number, decimals)` 要从 IEEE754 位里拆 `m · 2^e`，用的是 `DataView` + `getBigUint64` + `BigInt` 的 `**` 与移位 ——
- *  scriptc 对这类内建历来有围栏（S200 那四道坑），所以这一支不真编一遍不算数。 */
+ *  scriptc 对这类内建历来有围栏（S200 那四道坑），所以这一支不真编一遍不算数。
+ *  `339` 是同族的第四格：`bezier_derivative` 两支的函数体全是 `Math.fround` 套加乘减的直算式，没有一处能退回 double ——
+ *  静态目标上把中间量升成 double 就等于换了舍入模型，只有真编一遍才看得出来（S329）。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -96,6 +98,7 @@ const DEFAULT_SET = [
   "334-vector3-octahedron-decode",
   "335-vector2-from-angle",
   "336-string-num-family",
+  "339-bezier-derivative",
   "032-preload-load",
 ];
 
