@@ -79,6 +79,9 @@ const VEC3_CONST: Record<string, [number, number, number]> = {
   BACK: [0, 0, 1],
 };
 
+/** 轴常量（`Vector3i` 那一张同形）：值实测是 int 0 / 1 / 2。 */
+const VEC3_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1, AXIS_Z: 2 };
+
 /** 八面体解码的式子（4.6.3 实测 169 格全中，`tmp/probe-oct/grid.txt`）：`t` 夹在 [0,1]，两个水平分量各走 `>= 0` 那一支。 */
 function octaDecode(o: GVector2): Variant {
   const fx = sub(mul(o.x, 2), 1);
@@ -117,13 +120,13 @@ export function vector3Const(name: string, args: Variant[] = []): Variant {
     }
   }
   const c = VEC3_CONST[name];
-  if (!c) {
-    throw new UnsupportedError(
-      "vector3-const",
-      `Vector3.${name} 不存在（4.6.3 实测只有 ${Object.keys(VEC3_CONST).join("/")}）`,
-    );
-  }
-  return vector3(c[0], c[1], c[2]);
+  if (c) return vector3(c[0], c[1], c[2]);
+  const i = VEC3_CONST_INT[name];
+  if (i !== undefined) return V.int(i);
+  throw new UnsupportedError(
+    "vector3-const",
+    `Vector3.${name} 不存在（4.6.3 实测只有 ${[...Object.keys(VEC3_CONST), ...Object.keys(VEC3_CONST_INT)].join("/")}）`,
+  );
 }
 
 /** 标量实参：int/float 收成 number，其余响亮报错。 */

@@ -63,6 +63,9 @@ const VEC2_CONST: Record<string, [number, number]> = {
   DOWN: [0, 1],
 };
 
+/** 轴常量：`typeof(Vector2.AXIS_X)` 实测是 2（int），而且**只有 X/Y**（`AXIS_Z` 解析期就拒）。 */
+const VEC2_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1 };
+
 /** `Vector2.` 上的静态函数只量到 `from_angle` 一支（4.6.3 实测：实例式也照样能调，实例被忽略，`tmp/probe-from-angle/one.gd`）。 */
 export function vector2Const(name: string, args: Variant[] = []): Variant {
   if (args.length > 0 || name === "from_angle") {
@@ -78,10 +81,13 @@ export function vector2Const(name: string, args: Variant[] = []): Variant {
     }
   }
   const c = VEC2_CONST[name];
-  if (!c) {
-    throw new UnsupportedError("vector2-const", `Vector2.${name} 不存在（4.6.3 实测只有 ${Object.keys(VEC2_CONST).join("/")}）`);
-  }
-  return vector2(c[0], c[1]);
+  if (c) return vector2(c[0], c[1]);
+  const i = VEC2_CONST_INT[name];
+  if (i !== undefined) return V.int(i);
+  throw new UnsupportedError(
+    "vector2-const",
+    `Vector2.${name} 不存在（4.6.3 实测只有 ${[...Object.keys(VEC2_CONST), ...Object.keys(VEC2_CONST_INT)].join("/")}）`,
+  );
 }
 
 /** 发货线定在 1e12：那以下 570 格（含 9 位小数的字面量）一字一样，之上分歧按值出现（`tmp/probe-from-angle/{sweep,edge2}.txt`），与标量 `sin` / `cos` 那两条限同一口径。 */

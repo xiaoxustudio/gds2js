@@ -96,15 +96,18 @@ const VEC2I_CONST: Record<string, [number, number]> = {
   MIN: [-2147483648, -2147483648],
 };
 
+/** 轴常量：与 `Vector2` 同一组（实测 `AXIS_X` = 0、`AXIS_Y` = 1，`AXIS_Z` 解析期就拒），值也是 int。 */
+const VEC2I_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1 };
+
 export function vector2iConst(name: string): Variant {
   const c = VEC2I_CONST[name];
-  if (!c) {
-    throw new UnsupportedError(
-      "vector2i-const",
-      `Vector2i.${name} 不存在（4.6.3 实测只有 ${Object.keys(VEC2I_CONST).join("/")}，INF 也没有）`,
-    );
-  }
-  return vector2i(c[0], c[1]);
+  if (c) return vector2i(c[0], c[1]);
+  const i = VEC2I_CONST_INT[name];
+  if (i !== undefined) return V.int(i);
+  throw new UnsupportedError(
+    "vector2i-const",
+    `Vector2i.${name} 不存在（4.6.3 实测只有 ${[...Object.keys(VEC2I_CONST), ...Object.keys(VEC2I_CONST_INT)].join("/")}，INF 也没有）`,
+  );
 }
 
 function vecArg(args: Variant[], i: number, who: string): GVector2i {

@@ -779,6 +779,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.140 轴常量发货：四张常量表里补上 int 那一条支（2026-10-12，S327，语料 337）
+
+- **接 §1.139 量的那一批**：`Vector3` / `Vector3i` 有 `AXIS_X/Y/Z` = `0/1/2`，`Vector2` / `Vector2i` 只有 `AXIS_X/Y` = `0/1`（`AXIS_Z` 解析期就拒），`Color` 一支也没有；值全是 int（`typeof` 给 `2`）。今天除 `Vector3i` 之外全被拦成「不存在」。
+- **实现**：`Vector3i` 本来就挂着 int 支（`VEC3I_CONST_INT`），本轮把 `Vector2` / `Vector2i` / `Vector3` 三张表各补一张同形的 int 表，读口先查向量表再查 int 表，「不存在」那句把两张表的名单并起来报 —— §1.139 里我写「四张表都是分量数组的形状」不准确，第三张本来就有 int 支，这条也在本轮回改里更正。
+- **连带验掉的几形**（都进语料 337，24 行逐字节）：`var i: int = Vector3.AXIS_Y`、`var v = Vector2i.AXIS_X` 的推断、`[Vector3.AXIS_X, …]` 打 `[0, 1, 2]`、`Vector3(10,20,30)[Vector3.AXIS_Y]` 取下标给 `20.0`、`match` 手臂 `Vector3.AXIS_X:` 命中 `0` / `Vector3i.AXIS_Y:` 命中 `1` / `Vector3.AXIS_Z when q == 2:` 命中 `2`、加减乘与 `==` 按 int 走。**发探针脚本时踩到自己写错的一形**：手臂守卫的关键字是 `when` 不是 `if`（写成 `if` 引擎给 `Expected "else" after ternary operator condition.`），而 `Vector2.AXIS_Z` 这种不存在的成员会把整份脚本带走 —— 两形都改成本轮实际进语料的写法。
+- **故意没接的两形**（与 §6 第 44、45 条同一处活）：轴常量**在实例上读不到**（解析期 `Cannot find member "AXIS_Z" in base "Vector3".`，我们目前放过属性读口）、**当函数调那句的槽位是枚举名**（`Name "AXIS_X" called as a function but is a "Vector3.Axis".`，我们今天报的是自述句）。
+- **门**：`pnpm test` **1682**（68 文件）、typecheck **4/4**、`test:diff` **219/219**（静默 / 崩溃 / 未实现 全 0）、`test:compile` **226/326**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` **336 例零漂移**（OK 219 / 报错 100 / 超时 17）。
+
 ### 1.139 轴常量一族量齐了：四个向量类型都有、值是 int，还带出两条新句子（2026-10-12，§6 第 45 条②，出货代码不动）
 
 - **读数量在哪**：`tmp/probe-axis/run.mts` → `readings.txt`，16 形一格一脚本（解析期错会带走整份脚本，只能一格一跑）。
