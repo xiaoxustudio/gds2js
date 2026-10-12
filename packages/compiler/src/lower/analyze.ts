@@ -1,5 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
+import { ARG_TYPE_FOLLOWS_FIRST, GLOBAL_ARG_TYPES } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { strFloat } from "@gds2js/runtime/runtime/values";
@@ -2758,6 +2759,32 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         loc: e.loc,
       });
     }
+
+    // 固定形参型那一族：`sqrt("a")` → `argument 1 should be "float" but is "String".`（103 位逐位实测）；
+    // `clamp` / `lerp` / `wrap` 的指定位是「跟第一参走」，第一参是 int / float 字面量时才知道期望型。
+    for (const e of calls) {
+      const callee = e.callee;
+      if (callee.kind !== "ident") continue;
+      const spec = GLOBAL_ARG_TYPES[callee.name];
+      const follows = ARG_TYPE_FOLLOWS_FIRST[callee.name];
+      if (spec === undefined && follows === undefined) continue;
+      const wants: Array<[number, "int" | "float"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
+      if (follows !== undefined) {
+        const first = e.args[0] === undefined ? null : numericLiteralKind(e.args[0]);
+        if (first !== null) for (const p of follows) wants.push([p, first]);
+      }
+      for (const [pos, want] of wants) {
+        const a = e.args[pos - 1];
+        if (a === undefined) continue;
+        const got = nonNumericLiteral(a);
+        if (got === null || got === want) continue;
+        diags.push({
+          code: "global-arg-type",
+          message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
+          loc: e.loc,
+        });
+      }
+    }
   }
 }
 
@@ -2770,5 +2797,29 @@ function literalIntArg(e: Expr): bigint | null {
     const inner = lit(e.operand);
     if (inner !== null) return -inner;
   }
+  return null;
+}
+
+/** 引擎这一族点名的都是「拿不出数字」的字面量形；int / float / bool 它都收（`sqrt(1)`、`sqrt(1.5)`、`sqrt(false)` 实测全过）。 */
+const NUMERIC_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+
+function nonNumericLiteral(e: Expr): string | null {
+  if (e.kind === "lit") {
+    if (e.lit === "string") return "String";
+    if (e.lit === "string_name") return "StringName";
+    if (e.lit === "node_path") return "NodePath";
+    if (e.lit === "null") return "null";
+    return null;
+  }
+  if (e.kind === "array") return "Array";
+  if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "call" && e.callee.kind === "ident" && NUMERIC_VALUE_CTORS.has(e.callee.name)) return e.callee.name;
+  return null;
+}
+
+function numericLiteralKind(e: Expr): "int" | "float" | null {
+  if (e.kind !== "lit") return null;
+  if (e.lit === "int") return "int";
+  if (e.lit === "float") return "float";
   return null;
 }

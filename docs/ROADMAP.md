@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.150 全局函数「形参收到非数字字面量」：102 位逐位实测成表，另 5 位是「跟第一参走」（2026-10-12，S337，语料 346）
+
+- **一族句子先分成三类**：A `argument N should be "T" but is "U".`（形参是具体类型）、B `Argument "x" must be "int", "float", …`（Variant + 允许集，每支名单不同）、C 各自一句（`range` 是运行期 `Invalid type…`、`len` 自一句、没名字那句还带 `Did you mean to use "remap()"?`）。本轮只接 A 类里 T 是 int / float 的位。
+- **普查怎么铺的**：126 支按我们表里的 argc 逐位塞 `"a"`、其余位给 1（189 位）→ A 108、收 17、其他 64；再把每条 A 的第一参换成 `1.0` 重测一遍，**期望型不变的才进表**（102 位 / 65 支），变的 5 位（`clamp` 2/3、`lerp` 2、`wrap` 2/3）另记一张「跟第一参」表，实现里只有第一参是 int / float 字面量时才知道期望型。表是生成的：`tmp/probe-argtype/gen-table.mts` → `packages/compiler/src/lower/global-arg-types.ts`。
+- **U 那一侧逐形量过界**：int / float / **bool** 字面量引擎都收（`sqrt(false)`、`sqrt(1e309)`、`char(1.5)`），拒的是 String / StringName / NodePath / null / Array / Dictionary 与 `Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` 构造式，报出来的名字就是它自己。
+- **被逐字节门救回来的一次过度概括**（本轮最值钱的一课）：把同一条规则套到 `inst_to_dict` 的 **Object** 位，语料 265 立刻变崩溃 —— **null 在 Object 位是收的**，现证就躺在语料 265 第 90 行 `typeof(inst_to_dict(null))`（那格在跑通桶里）。规则不能跨声明类型照搬，表因此只收 int / float 位，Object 位与 B 族一起留给 §6 第 50 条（`inst_to_dict(&"a")` 引擎确实拒，那一形还没接）。
+- **两侧都钉**：门 120 例里那 102 位的期望句逐字取自普查那一次的引擎读数，另有跟随 6 形与「不许误拦」12 形；语料 346 的 12 句与我们 diag 逐字比过（`tmp/probe-argtype/parity.mts`），0 处不同。
+- **门**：`pnpm test` **2121**（75 文件）、typecheck **4/4**、`test:compile` **232/335**（sema 拦下 76 → **77**、响亮拒 26、emitter 不支持 0）、`test:diff` **225/225**（跳过 120，静默 / 崩溃 / 未实现 全 0）、`test:golden --check` 346 无漂移。
+
 ### 1.149 `char()` 越界接进解析期：字面量整数那一侧引擎拒，float / bool 那一侧它放过（2026-10-12，S336，语料 345）
 
 - **接 §1.147 记的 masking**：`char(-1)` 这类越界字面量引擎在**解析期**拒（`Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.`，一格一脚本量到四形），而我们发射器是 `char: (a) => rt.stringChr(...)`，看都不看 —— 编得过、跑起来才知道。
