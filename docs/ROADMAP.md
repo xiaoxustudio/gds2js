@@ -779,12 +779,21 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.134 静态名这一整类数完了：引擎一共 33 支，Tier 1 里又翻出两支我们一直拦着的（2026-10-12，§6 第 46 条，出货代码不动）
+
+- **为什么要数**：S323 那一轮撞上的不是「一格欠账」而是**盘点口径漏了一整类** —— §6 第 36 条那份 50 名来自「名在实例方法表里、运行时报未实现」的扫描，而 `Vector2.from_angle` 这种只能在类名上调的名字根本走不到那条路。
+- **ClassDB 问不出来（实测负结论）**：`ClassDB.class_get_method_list` 对 19 个内建类型全给空表、`class_has_method("Vector2", "from_angle", false)` 给 `false`、`ClassDB.METHOD_FLAG_STATIC` 在 GDScript 里取不到。想一次性问出内建类型的方法面这条路今天不通 —— 别再试。
+- **通的是源**：`core/variant/variant_call.cpp` 里 `bind_static_method` / `bind_static_methodv` 全数一遍，得 33 支（`Vector2` 1、`Vector3` 1、`String` 6、`Color` 9、`Callable` 1、`Basis` 3、`Quaternion` 1、`Projection` 11；`Vector2i` / `Vector3i` / `StringName` / `NodePath` / `Array` / `Dictionary` / `Signal` 一支都没有）。照 S322 的口径，**源只当候选**，每一支要发之前还得一格一脚本量过。
+- **翻出来的两处过拦**：`String.num_uint64`（实测 `(-1)` → `18446744073709551615`，按 uint64 回绕）与 `Color.from_rgba8`（a 默认 255、**不夹范围** `300` → `1.1765`、float 实参先截断 —— S313 那条 call-boundary 口径的又一同族）。两支都还欠格子（`num_uint64` 欠 `1 << 63` 那一档与 base 越界，`from_rgba8` 欠 NAN / INF 实参与负数一侧的截断），量齐才发，记任务清单。
+- **不在本层的**：`Callable.create` 引擎要两支实参（实测元数句 `Too few arguments for "create()" call. Expected at least 2 but received 1.`），第一支是 `Object` —— 按 D4 与 §3 的口径属 Tier 1 之外；`Basis` / `Quaternion` / `Projection` 那 16 支跟着第 15 条那个「七个值类型要不要进 Tier 1」的范围决定一起躺着（`Projection` 连第 43 条⑪那份名单都没进过，本轮补记）。
+- **门**：本轮只动文档与 `tmp/` 探针（`tmp/probe-static-list/` 的 ClassDB 负结论 + `tmp/probe-static-gap/readings.txt` 的六格），src 与语料一字未改 —— §1.133 那套门读数（`pnpm test` 1627、`test:diff` 217/217、`test:golden --check` 334 例零漂移、`test:compile` 224/324）继续有效。
+
 ### 1.133 `Vector2.from_angle()` 发货：覆盖面盘点漏了「只能在类名上调」那一整类（2026-10-12，S323，语料 335）
 
 - **怎么撞上的**：给 §6 第 44 条量静态调用的句子时，顺手扫了一批「类名.名字」形，撞上 `Vector2.from_angle(0.5)` 引擎给 `(0.877583, 0.479426)` 而我们拒 —— 这一支**从来不在 §6 第 36 条那份 50 名里**，因为那份 survey 的口径是「名在实例方法表里、运行时报未实现」，静态名不在实例调用路径上，整类都没被盘点到（`octahedron_decode` 也是这一类，S322 发的正是它）。元数表里 `from_angle: [1, 1]` 早就有了，缺的只是实现口。
 - **式子与调用式**：`Vector2(cos(a), sin(a))`，实参先折 float32（S313 那条口径）、两个分量各折回 float32；静态式与实例式同一条式子、实例被忽略（两支实测一字一样），所以挂 `vector2Const` + `vector2Method` 两处共用 `fromAngle`，int 实参放行。
 - **发货线 1e12**：`[0, 1e12]` 六段 500 格（抖动到 9 位小数）+ 负零族 + 早先 68 格全合；1e12 之上是**按值**裂的 —— `75e13`、`2e14`、`4e14`、`1e15` 末位差 1，`1e20`、`1e30` 整支错，而 `1.5e14` 反而合，所以不给「大概到多少都安全」，只发到量过的那一档，之上抛 `trig-large-arg`（与标量 `sin` / `cos` 那两条限同一口径，同 S314 那把 libm 天花板）。
-- **语料与门**：语料 335 钉 38 行逐字节（含 `from_angle(PI)` → `(-1.0, -0.0)`、`PI / 2` → `(-0.0, 1.0)` 两支负零，与 NAN / INF / -INF 三支 `(nan, nan)`）；`pnpm test` **1627**（64 文件，新增 `vector2-from-angle.test.ts` 21 例）、typecheck **4/4**、`test:diff` **217/217**、`test:compile` **224/324**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` 见本条末。
+- **语料与门**：语料 335 钉 38 行逐字节（含 `from_angle(PI)` → `(-1.0, -0.0)`、`PI / 2` → `(-0.0, 1.0)` 两支负零，与 NAN / INF / -INF 三支 `(nan, nan)`）；`pnpm test` **1627**（64 文件，新增 `vector2-from-angle.test.ts` 21 例）、typecheck **4/4**、`test:diff` **217/217**、`test:compile` **224/324**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` **334 例零漂移**（OK 217 / 报错 100 / 超时 17）。
 - **顺带记下的三笔（§6 第 45 条）**：**新 masking** —— `Vector2.ZERO(1)` 这类「把常量当函数调」引擎解析期拒 `Name "ZERO" called as a function but is a "Vector2".`，我们照算常量放过；**新过拦** —— `Vector3.AXIS_X` 实测是 int `0`，我们的常量表只认九支；**两句原文族** —— 实例方法在类名上直接调、表外名字调用、bare 引用静态函数这三形各自的原句已存着，接进 analyze 的活是第 44 条那一件。
 - **`Color.from_string` 那一格另说**：引擎收 int 当兜底色（过解析），我们只认 Color 实参 —— 但实测那格没走到兜底支，int→Color 到底转成什么还没量，欠一格读数。
 
