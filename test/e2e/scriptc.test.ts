@@ -49,7 +49,9 @@ const created: string[] = [];
  *  其中 `round` 那一支多了一层内联箭头函数 —— 这类形状只有真编到静态目标才验得出来（S270 ④ 同一条路）。
  *  `286` 是同一轮的第二格：容器元素的 `c_escape` 改的是 `values.ts` 里 `repr` 那一句，String / StringName 两条通道的出货文本都从它出（S296）。
  *  `334` / `335` 是八面体解码与 `from_angle` 那一轮：两支都新走 `rt.vector3Const(name, [args])` / `rt.vector2Const(name, [args])` 那个带实参的静态口，
- *  函数体里是 `Math.fround` 套 `Math.abs` / `Math.cos` 的算式与一条 `Number.isFinite` 的限 —— 这类只改运行时函数体的形状，同样只有真编到静态目标才验得出来（S322 / S323）。 */
+ *  函数体里是 `Math.fround` 套 `Math.abs` / `Math.cos` 的算式与一条 `Number.isFinite` 的限 —— 这类只改运行时函数体的形状，同样只有真编到静态目标才验得出来（S322 / S323）。
+ *  `336` 是同族的第三格：`String.num(number, decimals)` 要从 IEEE754 位里拆 `m · 2^e`，用的是 `DataView` + `getBigUint64` + `BigInt` 的 `**` 与移位 ——
+ *  scriptc 对这类内建历来有围栏（S200 那四道坑），所以这一支不真编一遍不算数。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -93,6 +95,7 @@ const DEFAULT_SET = [
   "314-eol-in-brackets",
   "334-vector3-octahedron-decode",
   "335-vector2-from-angle",
+  "336-string-num-family",
   "032-preload-load",
 ];
 

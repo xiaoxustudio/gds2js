@@ -779,6 +779,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.137 原生门补上 336 那一格：`DataView` + `BigInt` 在 scriptc 上过得去（2026-10-12，§6 第 47 条⑦，出货代码不动）
+
+- **为什么要补**：§1.136 那支式子中到的东西代表集从没验过 —— 从 IEEE754 位里拆 `m · 2^e` 用的是 `new DataView(new ArrayBuffer(8))` + `getBigUint64` + `BigInt` 的 `**` 与移位，而 scriptc 对内建历来有围栏（S200 那四道坑：`globalThis` 往 `Record` 的转法、`spawnSync` 的 `env`、`split` 出来再展开……）。node 侧绿不代表静态目标绿。
+- **结果**：把 `336-string-num-family` 加进代表集后单跑 —— **编过、跑通、279 格逐字节一致**（46s）。这几样在 scriptc 上不炸，记下来免得下一轮重新试。同一轮 `pnpm test:scriptc` 全代表集 **43/43** 也是绿的（那是 §1.135/§1.136 两支进去之后的第一次全跑）。
+- **`Color.from_rgba8` 仍不发，卡点变了**：11 格读数早在 `tmp/probe-num/full-golden.txt`，式子也简单（`r / 255.0f`，`a` 默认 255、不夹范围），但形参是 **int64**，于是 float 实参先要按引擎那条折法走 —— 实测 `from_rgba8(1e20, 0, 0)` / `(NAN, 0, 0)` / `(INF, -INF, 0)` 全给 `(-36170088558100480.0, …)`，即 x86 `cvttsd2si` 的**整数不定值** `0x8000000000000000` 再除 255。我们的 `intArgBig` 对非有限浮点是抛错的，所以先要量齐「内建类型 int64 形参上的 float→int64 折法」（正常值、±0、`2^53`、`2^63`、`1e20`、`NAN`、`±INF`、负数截断方向）—— 这一条大概不只这一支用得到（`Color.hex` / `hex64`、`Vector2i` / `Vector3i` 的形参、`String.num_int64` 的 base 都是 int 形参，但**各自走的是不是同一条转换路一格都没量**）。量齐之前照旧响亮拒（§6 第 47 条⑦）。
+- **门**：本轮只动测试代表集与文档，src 与语料一字未改 —— §1.136 那套读数（`pnpm test` 1668、`test:diff` 218/218、`test:compile` 225/325、golden-check 335 例零漂移）继续有效。
+
 ### 1.136 `String.num(number, decimals)` 的第二实参接上：不能用 toFixed 代 snprintf（2026-10-12，S325，语料 336 长到 279 格）
 
 - **静默错值的另一半**：绑定是 `num(number, decimals = -1)`，而 `stringStatic` 只读 `args[0]` —— `String.num(3.14159, 2)` 我们给全长。§1.135 发了进制那一半，这一轮把 decimals 补上，`String` 那六支静态里只剩 `Color` 侧的 `from_rgba8` 还没发。
