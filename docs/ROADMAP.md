@@ -779,6 +779,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.139 轴常量一族量齐了：四个向量类型都有、值是 int，还带出两条新句子（2026-10-12，§6 第 45 条②，出货代码不动）
+
+- **读数量在哪**：`tmp/probe-axis/run.mts` → `readings.txt`，16 形一格一脚本（解析期错会带走整份脚本，只能一格一跑）。
+- **收的形**：`Vector3.AXIS_X/Y/Z` = `0/1/2`、`Vector3i.AXIS_X/Z` = `0/2`、`Vector2.AXIS_X` = `0`、`Vector2i.AXIS_X` = `0` —— **四个向量类型都有，值都是 int**；`Color.AXIS_X` 没有（`Cannot find member "AXIS_X" in base "Color".`）。我们今天全拦成「不存在」，是过拦。
+- **两条新句子**：① 轴常量**在实例上读不到** —— `Vector3(1, 2, 3).AXIS_Z` 解析期拒 `Cannot find member "AXIS_Z" in base "Vector3".`，跟「静态函数在实例上可调」（S322 ④ / S323 ②）正相反，所以这类名字是**只走类名**的；② 把它当函数调，句子里的槽位填的是**枚举名不是类型名** —— `Vector3.AXIS_X(1)` → `Name "AXIS_X" called as a function but is a "Vector3.Axis".`（§6 第 45 条①那条 `Name "X" called as a function but is a "T".` 的 `T` 在这里是 `Vector3.Axis`）。
+- **发出去要连带处理的**：值的形状是 int，而四张常量表现在都是「分量数组」的形状（`VEC3_CONST` 那种 `[number, number, number]`）—— 要么表里加一条 int 支，要么另挂一张轴表；同时 `var i: int = Vector3.AXIS_Y`、`match` 手臂里 `Vector3.AXIS_X:` 命中 subject `0`、`v[Vector3.AXIS_Y]` 取下标这三形都得跟着通（都实测过）。
+- **门**：本轮只动文档与 `tmp/` 探针，src 与语料一字未改 —— §1.138 那套读数（`pnpm test` 1673、`test:diff` 218/218、`test:compile` 225/325、golden-check 335 例零漂移、原生门 336 那一格 338 格逐字节）继续有效。
+
 ### 1.138 `Color.from_rgba8` 发货，顺带把 int64 形参的 float 折法量成了一条规则（2026-10-12，S326，语料 336 长到 338 格）
 
 - **§1.137 记的那个卡点解决了**：112 形一格一脚本扫下来（`tmp/probe-int64-arg/readings.txt`），`String.num_int64` / `num_uint64` / `Color.from_rgba8` / 全局 `int()` 四条 API 在 float→int64 上同一口径 —— 范围内向零截断，**越界与非有限一律给 `INT64_MIN`**（x86 `cvttsd2si` 的整数不定值）。全局 `int()` 我们本来就是这么发的（`builtins.ts` 的 `TWO_63` 那一支），本轮等于把同一条规则从「全局函数」扩到了「内建类型的形参」。
