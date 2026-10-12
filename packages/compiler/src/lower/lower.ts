@@ -526,10 +526,12 @@ function lowerPattern(n: SyntaxNode): Pattern {
     case "node_path":
       return { kind: "lit", lit: "node_path", value: unquote(stripCaret(n.text)) };
     case "call": {
-      // 手臂里引擎还认构造调用：`NodePath("…")` 发成字面量臂，其余七支量过的构造走 `const` 那条现成发射（语料 272 钉住每支的命中与不命中）。
+      // 手臂里引擎还认构造调用：`NodePath("…")` 发成字面量臂，其余合式的构造走 `const` 那条现成发射（语料 272 钉住每支的命中与不命中）。
       const np = nodePathArm(n);
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
+      const sig = armSignature(n);
+      if (sig !== null) throw new UnsupportedError("pattern-arm-signature", sig);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
     case "true":
@@ -713,38 +715,105 @@ function stripCaret(text: string): string {
   return text.startsWith("^") ? text.slice(1) : text;
 }
 
-/** 手臂里量过的构造式：名字与元数对上、且每个实参都合式才收（`tmp/probe-match-arm/{arms,ctors}.mts` 与语料 272）。
- *  负数实参与 `Color` 三元是 2026-10-10 量清的另一批（`tmp/probe-tails/tails.mts` 的 b01–b07）：`Vector2(-1, 2)` / `Vector3(-1, -2, -3)` / `Vector2i(-1, 2)` 引擎全收且命中，`Color(1, 2, 3)` 与 `Color(1, 2, 3, 1)` 撞上（第四个默认 1.0）。
- *  错元数那一形（`Vector2(1)`）引擎发**两句**解析期拒，与这里「不合式就当没这形」的走法不同，仍欠 —— §6 第 28 条。 */
-const CTOR_ARMS: Record<string, number[]> = {
-  Vector2: [2],
-  Vector2i: [2],
-  Vector3: [3],
-  Vector3i: [3],
-  Color: [3, 4],
-  StringName: [1],
-  Callable: [0],
+/** 手臂里收下的构造式：键是类名，值是**实测收下的实参类型序列**（`tmp/probe-arm-arity/{sweep,sweep2,mix}.mts` 三批，
+ *  `sig-table*.txt` 与 `mix-table.txt`）。位置类：`N` 数字（int 与 float 混排实测都收）、`I` 只 int、`B` 带 bool、
+ *  `S` 字符串字面量、`V2` 嵌套的 `Vector2(...)`、`V3` 嵌套的 `Vector3(...)`、空数组是零实参。
+ *  `Color` 那一行的窄法就是读数本身：`(1)` 与 `(1, 2)` 与 `(1, 2.5)` 收，而 `(1.5)` 与 `(1.5, 1.5)` 拒。
+ *  **`Rect2` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` / `Signal` 这里故意缺席**：引擎手臂收它们，
+ *  可这七个类名的构造调用连**表达式位置**都编不过（`Function "Rect2()" not found in base self.`，`tmp/probe-arm-arity/emit.mts`），
+ *  收了只会把「lower 处拦」变成「emit 处拦」—— 等那七支构造接进全局可调用表再补进来（§6 第 43 条⑩）。 */
+const CTOR_ARMS: Record<string, string[][]> = {
+  Vector2: [[], ["N", "N"], ["B", "B"], ["V2"]],
+  Vector2i: [[], ["N", "N"], ["V2"]],
+  Vector3: [[], ["N", "N", "N"]],
+  Vector3i: [[], ["N", "N", "N"]],
+  StringName: [[], ["S"]],
+  NodePath: [[], ["S"]],
+  Callable: [[]],
+  Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
+  String: [[], ["S"]],
+  // 这两类手臂路上什么都不收：0 元给的是 pattern 那句、1..4 元给元数那句（`sig-table*.txt` 最后一行）。
+  Array: [],
+  Dictionary: [],
 };
 
-const ARM_ARG_LITERALS = ["integer", "float", "string", "string_name", "node_path", "true", "false", "null"];
-
-/** 实参位：字面量，或一元负号套在整 / 浮字面量上 —— 语法树里没有负字面量这种节点，`-1` 是 `unary_operator` 包一个 `integer`。 */
-function armArg(n: SyntaxNode): boolean {
-  if (ARM_ARG_LITERALS.indexOf(n.type) >= 0) return true;
-  if (n.type !== "unary_operator" || n.text[0] !== "-") return false;
-  const inner = named(n);
-  return inner.length === 1 && (inner[0]?.type === "integer" || inner[0]?.type === "float");
+/** 实参位能认出来的类型：认不出就返回 null，整条手臂就当没量过。 */
+function armArgKind(n: SyntaxNode): string | null {
+  switch (n.type) {
+    case "integer":
+      return "int";
+    case "float":
+      return "float";
+    case "string":
+      return "String";
+    case "string_name":
+      return "StringName";
+    case "node_path":
+      return "NodePath";
+    case "true":
+    case "false":
+      return "bool";
+    case "unary_operator": {
+      if (n.text[0] !== "-") return null;
+      const inner = named(n);
+      if (inner.length !== 1) return null;
+      const k = armArgKind(inner[0]!);
+      return k === "int" || k === "float" ? k : null;
+    }
+    case "call": {
+      const callee = named(n)[0] ?? null;
+      if (callee === null || callee.type !== "identifier") return null;
+      const args = callArgs(n);
+      if (!ctorAccepts(callee.text, args.map(armArgKind))) return null;
+      return callee.text;
+    }
+    default:
+      return null;
+  }
 }
 
+function callArgs(n: SyntaxNode): SyntaxNode[] {
+  const argsNode = field(n, "arguments");
+  return argsNode === null ? [] : named(argsNode);
+}
+
+function ctorAccepts(name: string, kinds: Array<string | null>): boolean {
+  const rows = CTOR_ARMS[name];
+  if (rows === undefined) return false;
+  const args = kinds.length;
+  if (args === 0) return rows.some((row) => row.length === 0);
+  return rows.some((row) => row.length === args && row.every((slot, i) => slotForK(kinds[i] ?? null, slot)));
+}
+
+function slotForK(kind: string | null, slot: string): boolean {
+  if (kind === null) return false;
+  if (slot === "N") return kind === "int" || kind === "float";
+  if (slot === "I") return kind === "int";
+  if (slot === "B") return kind === "int" || kind === "float" || kind === "bool";
+  if (slot === "S") return kind === "String";
+  if (slot === "V2") return kind === "Vector2";
+  if (slot === "V3") return kind === "Vector3";
+  return kind === slot;
+}
+
+/** 手臂里的构造式：类名与实参类型序列对上实测那张表才收（`tmp/probe-arm-arity/*`，语料 272 钉住命中）。 */
 function ctorArm(n: SyntaxNode): boolean {
   const callee = named(n)[0] ?? null;
   if (callee === null || callee.type !== "identifier") return false;
-  const arities = CTOR_ARMS[callee.text];
-  if (arities === undefined) return false;
-  const argsNode = field(n, "arguments");
-  const args = argsNode === null ? [] : named(argsNode);
-  if (arities.indexOf(args.length) < 0) return false;
-  return args.every((a) => armArg(a));
+  return ctorAccepts(callee.text, callArgs(n).map(armArgKind));
+}
+
+/** 合不上表但每一格实参都认得出来时，发引擎那句原文：`No constructor of "X" matches the signature "X(类型, …)".`
+ *  （`tmp/probe-arm-arity/sig-table*.txt` 与 `mix-table.txt` 里被拒的那几十格，签名文本就是这个机械式）。 */
+function armSignature(n: SyntaxNode): string | null {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier") return null;
+  if (CTOR_ARMS[callee.text] === undefined) return null;
+  const args = callArgs(n);
+  if (args.length === 0) return null;
+  const kinds = args.map(armArgKind);
+  if (kinds.some((k) => k === null)) return null;
+  return `No constructor of "${callee.text}" matches the signature "${callee.text}(${kinds.join(", ")})".`;
 }
 
 /** 手臂只认量过的那一支构造：`NodePath("…")` 带一支字符串字面量实参（`tmp/probe-match-arm/arms.mts`）。 */
