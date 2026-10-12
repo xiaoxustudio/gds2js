@@ -103,6 +103,7 @@ const DEFAULT_SET = [
   "339-bezier-derivative",
   "340-global-math-shapes",
   "341-global-ease",
+  "342-step-decimals",
   "032-preload-load",
 ];
 

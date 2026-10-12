@@ -738,7 +738,9 @@ export function gPingpong(v: Variant, length: Variant): Variant {
 const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000009999, 0.0000009999, 0.00000009999, 0.000000009999, 0.0000000009999];
 
 export function gStepDecimals(v: Variant): Variant {
-  const x = Math.abs(numArg(v, "step_decimals() 的参数"));
+  // 绑定签名是 `step_decimals(float step)`：实参先在调用边界折回 float32，再进这张 double 门槛表
+  // （`0.9999` 折成 float32 是 `0.99989998…`，掉到门槛下面，实测 `step_decimals(0.9999)` 给 1）。
+  const x = Math.abs(Math.fround(numArg(v, "step_decimals() 的参数")));
   const decs = x - Math.trunc(x);
   let i = 0;
   for (const t of STEP_THRESHOLDS) {
