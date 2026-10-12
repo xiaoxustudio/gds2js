@@ -3,6 +3,7 @@ import { isGlobalConst } from "./globals";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { strFloat } from "@gds2js/runtime/runtime/values";
+import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
@@ -2483,6 +2484,113 @@ function valueCtorType(e: Expr | null): string | null {
 }
 
 /**
+ * 内建类型「类名.成员」那一面（4.6.3 一格一脚本量过六型 44 形，`tmp/probe-static-face/readings.txt`）。
+ * `statics` 必须是引擎真绑了的全集（名单来自 `core/variant/variant_call.cpp` 的 `bind_static_method`，见 §6 第 46 条）——
+ * 少一支就会误拦合法代码；`consts` / `axis` 只决定句子，少一支仍是拒、只是换成表外名字那两句。
+ */
+const STATIC_FACE: Record<string, { consts: readonly string[]; axis: readonly string[]; statics: Record<string, [number, number]> }> = {
+  Vector2: {
+    consts: ["ZERO", "ONE", "INF", "LEFT", "RIGHT", "UP", "DOWN"],
+    axis: ["AXIS_X", "AXIS_Y"],
+    statics: { from_angle: [1, 1] },
+  },
+  Vector2i: {
+    consts: ["ZERO", "ONE", "LEFT", "RIGHT", "UP", "DOWN", "MAX", "MIN"],
+    axis: ["AXIS_X", "AXIS_Y"],
+    statics: {},
+  },
+  Vector3: {
+    consts: ["ZERO", "ONE", "INF", "LEFT", "RIGHT", "UP", "DOWN", "FORWARD", "BACK"],
+    axis: ["AXIS_X", "AXIS_Y", "AXIS_Z"],
+    statics: { octahedron_decode: [1, 1] },
+  },
+  Vector3i: {
+    consts: ["ZERO", "ONE", "LEFT", "RIGHT", "UP", "DOWN", "FORWARD", "BACK", "MAX", "MIN"],
+    axis: ["AXIS_X", "AXIS_Y", "AXIS_Z"],
+    statics: {},
+  },
+  Color: {
+    consts: [],
+    axis: [],
+    statics: {
+      html: [1, 1],
+      html_is_valid: [1, 1],
+      from_string: [2, 2],
+      from_hsv: [3, 4],
+      from_ok_hsl: [3, 4],
+      from_rgba8: [3, 4],
+      from_rgbe9995: [1, 1],
+      hex: [1, 1],
+      hex64: [1, 1],
+    },
+  },
+  String: {
+    consts: [],
+    axis: [],
+    statics: {
+      chr: [1, 1],
+      num: [1, 2],
+      num_int64: [1, 3],
+      num_uint64: [1, 3],
+      num_scientific: [1, 1],
+      humanize_size: [1, 1],
+    },
+  },
+};
+
+function staticFaceConstName(t: string, name: string): boolean {
+  const face = STATIC_FACE[t];
+  if (face === undefined) return false;
+  return face.consts.includes(name) || face.axis.includes(name) || (t === "Color" && COLOR_NAMED[name.toLowerCase()] !== undefined);
+}
+
+/** 「类名.成员」的调用式：常量当函数调 / 静态函数元数 / 实例方法在类名上直接调 / 表外名字两句。 */
+function staticCallDiags(t: string, name: string, got: number): Array<{ code: string; message: string }> {
+  const face = STATIC_FACE[t];
+  if (face === undefined) return [];
+  if (staticFaceConstName(t, name)) {
+    const shown = face.axis.includes(name) ? `${t}.Axis` : t;
+    return [{ code: "static-const-call", message: `Name "${name}" called as a function but is a "${shown}".` }];
+  }
+  const sig = face.statics[name];
+  if (sig !== undefined) {
+    if (got >= sig[0] && got <= sig[1]) return [];
+    return [
+      {
+        code: "static-arity",
+        message:
+          got < sig[0]
+            ? `Too few arguments for "${name}()" call. Expected at least ${sig[0]} but received ${got}.`
+            : `Too many arguments for "${name}()" call. Expected at most ${sig[1]} but received ${got}.`,
+      },
+    ];
+  }
+  if (VALUE_METHOD_ARITY[t]?.[name] !== undefined) {
+    return [
+      {
+        code: "static-nonstatic-call",
+        message: `Cannot call non-static function "${name}()" on the class "${t}" directly. Make an instance instead.`,
+      },
+    ];
+  }
+  return [
+    { code: "static-member-unknown", message: `Cannot find member "${name}" in base "${t}".` },
+    { code: "static-member-unknown", message: `Function "${name}()" not found in base ${t}.` },
+  ];
+}
+
+/** 「类名.静态函数」当值引用（不调用）不是一等成员：引擎那句报两遍。 */
+function staticBareDiags(t: string, name: string): Array<{ code: string; message: string }> {
+  const face = STATIC_FACE[t];
+  if (face === undefined || face.statics[name] === undefined || staticFaceConstName(t, name)) return [];
+  const one = `Cannot find member "${name}" in base "${t}".`;
+  return [
+    { code: "static-member-unknown", message: one },
+    { code: "static-member-unknown", message: one },
+  ];
+}
+
+/**
  * 值类型方法调用的实参数：引擎在**解析期**就按接收者的静态形拦（`tmp/probe-value-arity/recv.mts` 十二形）——
  * 字面构造式、`var v: Vector2` 的标注（有没有初值都算）、`var v = Vector2(1, 2)` 的推断、形参标注、模块级 `var` 与 `const`
  * 这五形全在解析期拦，连 `if false:` 那种永不执行的分支也拦；`var v: Variant` 与未定形 `Array` 的元素解析期放过、
@@ -2512,12 +2620,17 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     }
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
+    const staticCallees = new Set<Expr>();
     const varDecls: Extract<Stmt, { kind: "var" }>[] = [];
     const assigned = new Set<string>();
 
     const walkExpr = (e: Expr): void => {
       switch (e.kind) {
         case "attribute":
+          // 「类名.静态函数」当值引用不是一等成员（引擎那句报两遍）；调用位置那一支在下面按元数判
+          if (!staticCallees.has(e) && e.obj.kind === "ident") {
+            for (const d of staticBareDiags(e.obj.name, e.name)) diags.push({ ...d, loc: e.loc });
+          }
           walkExpr(e.obj);
           return;
         case "index":
@@ -2545,6 +2658,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           return;
         case "call":
           calls.push(e);
+          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && e.callee.obj.name in STATIC_FACE) {
+            staticCallees.add(e.callee);
+          }
           walkExpr(e.callee);
           for (const a of e.args) walkExpr(a);
           return;
@@ -2609,6 +2725,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "attribute") continue;
+      if (callee.obj.kind === "ident" && callee.obj.name in STATIC_FACE) {
+        for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ ...d, loc: e.loc });
+        continue;
+      }
       const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : valueCtorType(callee.obj);
       if (recv === null) continue;
       const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
