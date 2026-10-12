@@ -779,6 +779,17 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.147 普查第二批逮到 `snapped` 全族的折半方向：源是 `floor(v/step + 0.5)`，往 +∞ 折（2026-10-12，S334，语料 343）
+
+- **换了一把尺子**：float 输出的普查要在 17 位上比，尾数级分岔既难归因又看不见（§1.143 / §1.144 那批）；这一批专挑**输出是 bool / int / 串**的全局函数 —— 这类输出没有地方躲，裂一格就是语义错。
+- **裂出来的就是 `snapped` 全族**：`snapped(-0.5, 1.0)` 引擎 `0.0` 我们 `-1.0`、`snapped(-7.5, 3.0)` 引擎 `-6.0` 我们 `-9.0`、`snappedi(0.5|1.5|2.5, 1.0)` 引擎 `1|2|3` 我们 `0|1|2`。根因是旧实现借用了 `round()`（远离零），而 `Math::snapped` 写的是 `floor(value / step + 0.5) * step`（往 +∞）；**旧注释「= round(2.5)·3」在正数上恰好同值，所以十几年门里从没区分过**。
+- **`snappedi` 另有一条**：旧实现先把两支实参 `intOf` 截断，而 `snappedi(7.5, 3.0)` 引擎给 9 —— 说明实参按 double 走、只在结果上取整。改完两条都对。
+- **同批一起钉进语料 343（154 行逐字节）**：`is_zero_approx` 的四个门槛格、`is_equal_approx` 十二对（`NAN/NAN`、`INF/INF` 给 true）、`is_finite / is_inf / is_nan`、`posmod / fposmod / fmod` 符号四角、`wrapi`（含 `wrapi(0, 5, 0)` → 5）、`nearest_po2` 十二格、`char` 四格、`min / max / sign / signf / abs` 的 ±0 混排。
+- **两条新欠都取到读数的（§6 第 49 条）**：`posmod(5, 0)` 引擎给 0 并推 `ERROR: Division by zero in posmod is undefined. Returning 0 as fallback.`，我们那支还在抛 `UnsupportedError`（那条注释说的「没量过」现在量了）；`char(-1)` / `char(4294967296)` 是**解析期**拒（`Expected an integer between 0 and 2^32 - 1`），而发射器 `char: (a) => rt.stringChr(...)` 根本不看区间 —— 一条 masking。各立任务。
+- **探针自己踩的坑记一条**：第一批 148 格试跑读到 0 行 —— `char(0)` 把 NUL 写进了 golden，`char(5535)`（孤立代理）让引擎前缀一行 `Unicode parsing error…U+FFFD`；剔掉这两格才有干净的 154 行。**往语料放串输出之前先想这两个形状**。
+- **另一条流程教训**：改完 runtime 用 `cli run` 复验，结果全是旧值 —— 那条路吃的是 `dist`，不是 `src`；本轮改用「语料 + `test:diff`」那条本来就 import `src` 的路复验（这条口径此前记过一次，这次再犯说明它值得写进文档）。
+- **门**：`pnpm test` **1977**（73 文件）、typecheck **4/4**、`test:compile` **231/332**、`test:diff` **224/224**（静默 / 崩溃 / 未实现 全 0）、`test:scriptc` 原生门 343 一格编过 / 跑通 / 逐字节一致 1/1。
+
 ### 1.146 `step_decimals` 也折 float32：全局函数里「绑定签名写 float」那一族只有两支（2026-10-12，S333，语料 342）
 
 - **普查之后的收尾一问**：§1.145 发现 `ease` 的分岔根因是绑定形参写着 `float`。那么**还有哪些全局是这种签名**？把 4.6.3 `core/variant/variant_utility.cpp` 挑一遍 —— 只有两支：`ease(float x, float curve)` 与 `step_decimals(float step)`，其余全是 `double` / `Variant`（这也解释了 §1.144 普查里十三支为什么全合）。

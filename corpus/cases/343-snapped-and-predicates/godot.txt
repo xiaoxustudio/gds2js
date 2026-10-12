@@ -1,0 +1,154 @@
+Z|is_zero_approx(0.0)|true
+Z|is_zero_approx(1e-6)|true
+Z|is_zero_approx(0.000009999)|true
+Z|is_zero_approx(0.00001)|false
+Z|is_zero_approx(0.0000100001)|false
+Z|is_zero_approx(-1e-6)|true
+Z|is_zero_approx(1e-4)|false
+Z|is_zero_approx(NAN)|false
+Z|is_zero_approx(INF)|false
+Z|is_zero_approx(0.0000099999)|true
+Q|is_equal_approx(0.0, 1e-6)|true
+Q|is_equal_approx(0.0, 0.00001)|false
+Q|is_equal_approx(0.0, 0.000009999)|true
+Q|is_equal_approx(1.0, 1.0000099)|true
+Q|is_equal_approx(1.0, 1.0000101)|false
+Q|is_equal_approx(100000.0, 100000.5)|true
+Q|is_equal_approx(100000.0, 100001.1)|false
+Q|is_equal_approx(0.0001, 0.00011)|true
+Q|is_equal_approx(1e8, 100000005.0)|true
+Q|is_equal_approx(-1.0, 1.0)|false
+Q|is_equal_approx(NAN, NAN)|false
+Q|is_equal_approx(INF, INF)|true
+F|is_finite(0.0)|true
+I|is_inf(0.0)|false
+N|is_nan(0.0)|false
+F|is_finite(INF)|false
+I|is_inf(INF)|true
+N|is_nan(INF)|false
+F|is_finite(-INF)|false
+I|is_inf(-INF)|true
+N|is_nan(-INF)|false
+F|is_finite(NAN)|false
+I|is_inf(NAN)|false
+N|is_nan(NAN)|true
+F|is_finite(1e300)|true
+I|is_inf(1e300)|false
+N|is_nan(1e300)|false
+SN|snapped(7.5, 3.0)|9.0
+SNF|snappedf(7.5, 3.0)|9.0
+SNI|snappedi(7.5, 3.0)|9
+SN|snapped(0.5, 1.0)|1.0
+SNF|snappedf(0.5, 1.0)|1.0
+SNI|snappedi(0.5, 1.0)|1
+SN|snapped(1.5, 1.0)|2.0
+SNF|snappedf(1.5, 1.0)|2.0
+SNI|snappedi(1.5, 1.0)|2
+SN|snapped(2.5, 1.0)|3.0
+SNF|snappedf(2.5, 1.0)|3.0
+SNI|snappedi(2.5, 1.0)|3
+SN|snapped(-0.5, 1.0)|0.0
+SNF|snappedf(-0.5, 1.0)|0.0
+SNI|snappedi(-0.5, 1.0)|0
+SN|snapped(-1.5, 1.0)|-1.0
+SNF|snappedf(-1.5, 1.0)|-1.0
+SNI|snappedi(-1.5, 1.0)|-1
+SN|snapped(1.25, 0.5)|1.5
+SNF|snappedf(1.25, 0.5)|1.5
+SNI|snappedi(1.25, 0.5)|1
+SN|snapped(2.675, 0.01)|2.68
+SNF|snappedf(2.675, 0.01)|2.68
+SNI|snappedi(2.675, 0.01)|2
+SN|snapped(0.0, 0.0)|0.0
+SNF|snappedf(0.0, 0.0)|0.0
+SNI|snappedi(0.0, 0.0)|0
+SN|snapped(1e9, 0.1)|1000000000.0
+SNF|snappedf(1e9, 0.1)|1000000000.0
+SNI|snappedi(1e9, 0.1)|1000000000
+SN|snapped(-7.5, 3.0)|-6.0
+SNF|snappedf(-7.5, 3.0)|-6.0
+SNI|snappedi(-7.5, 3.0)|-6
+PM|posmod(-3, 2)|1
+FPM|fposmod(float(-3), float(2))|1.0
+FM|fmod(float(-3), float(2))|-1.0
+PM|posmod(3, -2)|-1
+FPM|fposmod(float(3), float(-2))|-1.0
+FM|fmod(float(3), float(-2))|1.0
+PM|posmod(-3, -2)|-1
+FPM|fposmod(float(-3), float(-2))|-1.0
+FM|fmod(float(-3), float(-2))|-1.0
+PM|posmod(0, 5)|0
+FPM|fposmod(float(0), float(5))|0.0
+FM|fmod(float(0), float(5))|0.0
+PM|posmod(7, 4)|3
+FPM|fposmod(float(7), float(4))|3.0
+FM|fmod(float(7), float(4))|3.0
+PM|posmod(-7, 4)|1
+FPM|fposmod(float(-7), float(4))|1.0
+FM|fmod(float(-7), float(4))|-3.0
+PM|posmod(10, 3)|1
+FPM|fposmod(float(10), float(3))|1.0
+FM|fmod(float(10), float(3))|1.0
+WI|wrapi(7, 0, 5)|2
+WI|wrapi(-1, 0, 5)|4
+WI|wrapi(5, 0, 5)|0
+WI|wrapi(3, 3, 3)|3
+WI|wrapi(1000000007, 0, 10)|7
+P2|nearest_po2(0)|0
+P2|nearest_po2(1)|1
+P2|nearest_po2(2)|2
+P2|nearest_po2(3)|4
+P2|nearest_po2(5)|8
+P2|nearest_po2(7)|8
+P2|nearest_po2(8)|8
+P2|nearest_po2(-3)|0
+P2|nearest_po2(-1)|0
+P2|nearest_po2(1023)|1024
+P2|nearest_po2(1025)|2048
+P2|nearest_po2(1073741824)|1073741824
+CH|char(65)|A
+CH|char(12288)|　
+MI|min(1, 2.5)|1
+MA|max(1, 2.5)|2.5
+MI|min(2.5, 1)|1
+MA|max(2.5, 1)|2.5
+MI|min(-0.0, 0.0)|0.0
+MA|max(-0.0, 0.0)|0.0
+MI|min(0.0, -0.0)|0.0
+MA|max(0.0, -0.0)|0.0
+SG|sign(0.0)|0.0
+SF|signf(0.0)|0.0
+AB|abs(0.0)|0.0
+SG|sign(-0.0)|0.0
+SF|signf(-0.0)|0.0
+AB|abs(-0.0)|0.0
+SG|sign(-1)|-1
+SF|signf(-1)|-1.0
+AB|abs(-1)|1
+SG|sign(1)|1
+SF|signf(1)|1.0
+AB|abs(1)|1
+SNX|snapped(-7.5, -3.0)|-9.0
+SNX|snapped(7.5, -3.0)|6.0
+SNX|snappedf(-2.5, -1.0)|-3.0
+SNX|snapped(0.49999999999999994, 0.5)|0.5
+SNX|snappedi(1.4, 0.3)|1
+SNX|snappedi(-1.4, 0.3)|-1
+SNX|snappedi(-7.5, 3.0)|-6
+SNX|snappedi(8, -3)|9
+SNX|snapped(1e9, 0.1)|1000000000.0
+SNX|snapped(-1e9, 0.1)|-1000000000.0
+SNX|snapped(0.1, 0.0000001)|0.1
+SNX|snapped(2.675, 0.01)|2.68
+SNX|snapped(-2.675, 0.01)|-2.67
+SNX|snapped(5, 0)|5
+SNX|snappedf(5.0, 0.0)|5.0
+SNX|snappedi(5, 0)|5
+SNX|snappedi(5.5, 0)|5
+SNX|snapped(0.0, -1.0)|0.0
+SNX|snapped(-0.0, 1.0)|0.0
+SNX|snapped(7.5, 3)|9
+SNX|snappedf(1e-9, 1e-10)|0.000000001
+SNX|snapped(-1.5, -1.0)|-2.0
+SNX|snapped(1.5, -1.0)|1.0
+SNX|snappedi(-0.5, 1.0)|0

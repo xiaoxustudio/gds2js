@@ -104,6 +104,7 @@ const DEFAULT_SET = [
   "340-global-math-shapes",
   "341-global-ease",
   "342-step-decimals",
+  "343-snapped-and-predicates",
   "032-preload-load",
 ];
 

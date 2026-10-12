@@ -404,31 +404,31 @@ export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant
   return V.float(a + (b - a > 0 ? 1 : b - a < 0 ? -1 : 0) * d + 0);
 }
 
-/** `snapped` 的结果类型跟步长那一侧，但**商按 float 算**：`snapped(7.5, 3)` = round(2.5)·3 = 9，而 `snappedi(7, 3)` = round(2.33)·3 = 6。 */
+/** `snapped` 的结果类型跟步长那一侧，但**商按 float 算**：`snapped(7.5, 3)` = 9、`snappedi(7, 3)` = 6。折半的方向是 `floor(v / step + 0.5)`（往 +∞），不是 `round()` 的远离零 —— 实测 `snapped(-0.5, 1.0)` 给 `0.0`、`snapped(-7.5, 3.0)` 给 `-6.0`。 */
 export function gSnapped(x: Variant, step: Variant): Variant {
   const s = fl(step);
   const a = fl(x);
   if (isInt(step)) {
     if (s === 0) return vi(intOf(x));
-    return vi(Math.trunc(gdRound(a / s) * s));
+    return vi(Math.trunc(Math.floor(a / s + 0.5) * s));
   }
   if (s === 0) return V.float(a + 0);
-  return V.float(gdRound(a / s) * s + 0);
+  return V.float(Math.floor(a / s + 0.5) * s + 0);
 }
 
 export function gSnappedF(x: Variant, step: Variant): Variant {
   const a = fl(x);
   const s = fl(step);
   if (s === 0) return V.float(a + 0);
-  return V.float(gdRound(a / s) * s + 0);
+  return V.float(Math.floor(a / s + 0.5) * s + 0);
 }
 
-/** `snappedi` 两端都先折成 int（`snappedi(7, 3)` = 6、`snappedi(7, 0)` = 7）。 */
+/** `snappedi` 只在**结果**上取 int，实参不先截断（实测 `snappedi(7.5, 3.0)` 给 9 而不是 6；`snappedi(7, 0)` = 7）。 */
 export function gSnappedI(x: Variant, step: Variant): Variant {
-  const a = intOf(x);
-  const s = intOf(step);
-  if (s === 0) return vi(a);
-  return vi(gdRound(a / s) * s);
+  const a = fl(x);
+  const s = fl(step);
+  if (s === 0) return vi(Math.trunc(a));
+  return vi(Math.trunc(Math.floor(a / s + 0.5) * s));
 }
 
 const PI_D = 3.14159265358979323846;
