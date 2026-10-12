@@ -779,6 +779,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.148 `posmod` 的模数为 0 发出：引擎给 0，那条 ERROR 由 `normalize` 滤掉（2026-10-12，S335，语料 344）
+
+- **接 §1.147 记的那条欠**：一格一脚本量到 `posmod(5|0|-5|2147483648|2^63-1, 0)` **全给 0**，引擎每格推 `ERROR: Division by zero in posmod is undefined. Returning 0 as fallback.` + `   at: posmod (./core/math/math_funcs.h:314)`。旧实现抛 `UnsupportedError`，注释自己写着「Godot 那侧这一格没量过」。
+- **一条口径澄清**（顺手把旧记忆更正了）：`tools/lib.mjs` 的 `normalize` 会把 frame 命中 `core/(variant|math)/` 的引擎内部错误块**整块滤掉** —— 所以这类格子是能进语料的，出货只发那个值就行，不需要伪造 C++ 的行号。§1.147 的任务描述里「注意 golden 会带 ERROR 行、此前有 ERROR 行打挂逐字节门」那句是旧的担心，与 `numInBase` 的 base 越界同一口径，已在本条更正并写进 S335 ②。
+- **同批把「零除数 / 零步长」这一族钉齐**（22 行逐字节）：`fposmod / fmod` 的 0 除数给 `nan`、`wrapi(5,0,0)` 给 0、`wrapi(-3,2,2)` 给 2、`snapped(5,0)` 给 5、`snappedi(5,0)` 给 5、`snappedf(5.0,0.0)` 给 5.0、`snapped(2.5,0)` 与 `snappedi(2.5,0)` 都给 **2**（int 步长那侧结果也 int，且是截断）。最后这形同时把 §1.147 里 `snappedi` guard 改用的 `Math.trunc` 钉住了。
+- **门**：`pnpm test` **1980**（73 文件）、typecheck **4/4**、`test:compile` **232/333**（三档分类一字不变）、`test:diff` **225/225**（静默 / 崩溃 / 未实现 全 0）、`test:scriptc` 原生门 344 一格编过 / 跑通 / 逐字节一致 1/1。
+
 ### 1.147 普查第二批逮到 `snapped` 全族的折半方向：源是 `floor(v/step + 0.5)`，往 +∞ 折（2026-10-12，S334，语料 343）
 
 - **换了一把尺子**：float 输出的普查要在 17 位上比，尾数级分岔既难归因又看不见（§1.143 / §1.144 那批）；这一批专挑**输出是 bool / int / 串**的全局函数 —— 这类输出没有地方躲，裂一格就是语义错。

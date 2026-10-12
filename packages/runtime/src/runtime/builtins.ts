@@ -340,9 +340,9 @@ function floorDiv(a: number, b: number): number {
 export function gPosmod(x: Variant, y: Variant): Variant {
   const a = intOf(x);
   const b = intOf(y);
-  if (b === 0) {
-    throw new UnsupportedError("posmod-zero", "posmod() 的模数为 0（Godot 那侧这一格没量过）");
-  }
+  // 模数为 0 那一支引擎不报错也不夹：推一条 `Division by zero in posmod is undefined. Returning 0 as fallback.`
+  // 之后**给 0**（实测 5 / -5 / 0 / 2^31 四形都是 0；那条 ERROR 的 frame 在 `./core/math/`，语料的 normalize 整块滤掉，所以出货只需要发那个值）。
+  if (b === 0) return vi(0);
   return vi(a - b * floorDiv(a, b));
 }
 

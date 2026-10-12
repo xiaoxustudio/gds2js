@@ -105,6 +105,7 @@ const DEFAULT_SET = [
   "341-global-ease",
   "342-step-decimals",
   "343-snapped-and-predicates",
+  "344-zero-modulus",
   "032-preload-load",
 ];
 
