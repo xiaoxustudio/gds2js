@@ -102,6 +102,7 @@ const DEFAULT_SET = [
   "336-string-num-family",
   "339-bezier-derivative",
   "340-global-math-shapes",
+  "341-global-ease",
   "032-preload-load",
 ];
 

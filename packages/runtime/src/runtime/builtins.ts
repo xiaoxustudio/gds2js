@@ -542,17 +542,21 @@ export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
   return V.float(y * y * (3.0 - 2.0 * y) + 0);
 }
 
-/** 只有正曲线实测过（`ease(0.5, 2)`=0.25、`ease(0.5, 3.5)`=0.08838834764832），负曲线那一格没量出式子，响亮拒。 */
+/** 绑定签名是 `ease(float x, float curve)`：两个实参先在调用边界折回 float32，式子本身走 `Math::ease` 的 double 那一支（168 格读数含负曲线）。 */
 export function gEase(delta: Variant, curve: Variant): Variant {
-  const c = fl(curve);
-  if (c === 0) return V.float(0.0);
-  if (c < 0) throw new UnsupportedError("ease-curve", "ease() 的负曲线值没量出式子");
-  let x = fl(delta);
-  if (approxEq(x, 0)) return V.float(0.0);
-  if (approxEq(x, 1)) return V.float(1.0);
+  const c = Math.fround(fl(curve));
+  let x = Math.fround(fl(delta));
   if (x < 0) x = 0;
-  if (x > 1) x = 1;
-  return V.float(Math.pow(x, c) + 0);
+  else if (x > 1.0) x = 1.0;
+  if (c > 0) {
+    if (c < 1.0) return V.float(1.0 - Math.pow(1.0 - x, 1.0 / c) + 0);
+    return V.float(Math.pow(x, c) + 0);
+  }
+  if (c < 0) {
+    if (x < 0.5) return V.float(Math.pow(x * 2.0, -c) * 0.5 + 0);
+    return V.float((1.0 - Math.pow(1.0 - (x - 0.5) * 2.0, -c)) * 0.5 + 0.5 + 0);
+  }
+  return V.float(0.0);
 }
 
 /** 实参顺序是 `(from, to, pre, after, weight)`：`cubic_interpolate(0,1,2,3,0.5)` 给 0.25、`(1,2,3,4,0.5)` 给 1.25。 */
