@@ -2251,6 +2251,37 @@ export function stringChr(cp: Variant): Variant {
   return V.str(String.fromCodePoint(bad ? 0xfffd : Number(n)));
 }
 
+/** `num_uint64` 的实参按 **无符号** 解释（4.6.3 实测 `String.num_uint64(-1)` → `18446744073709551615`）：先折进 `[0, 2^64)`。 */
+function wrapUnsigned64(n: bigint): bigint {
+  return n & ((1n << 64n) - 1n);
+}
+
+/** 引擎的 `num_int64` / `num_uint64` 那一支（`core/string/ustring.cpp:1501` / `:1541`）：`base` 不在 `2..36` 给**空串**（引擎那侧另 push 一条 `ERROR:`，语料的 normalize 把整块 `ERROR:` 滤掉，所以这里不发也逐字节一样）；位数用「先数长度再倒着填」那一条，字母位只在 `mod >= 10` 时用 `capitalize_hex` 那一个字母表，余数取绝对值，除法按**向零截断**。 */
+function numInBase(n: bigint, base: number, cap: boolean, unsigned: boolean): string {
+  if (!Number.isInteger(base) || base < 2 || base > 36) return "";
+  const B = BigInt(base);
+  const sign = !unsigned && n < 0n;
+  let chars = 0;
+  let m = n;
+  do {
+    m = m / B;
+    chars++;
+  } while (m !== 0n);
+  if (sign) chars++;
+  const out: string[] = new Array(chars);
+  let i = chars;
+  m = n;
+  do {
+    const mod = m % B;
+    const d = mod < 0n ? -mod : mod;
+    i--;
+    out[i] = d >= 10n ? String.fromCharCode((cap ? 65 : 97) + Number(d) - 10) : String.fromCharCode(48 + Number(d));
+    m = m / B;
+  } while (m !== 0n);
+  if (sign) out[0] = "-";
+  return out.join("");
+}
+
 /** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
 export function stringStatic(name: string, args: Variant[] = []): Variant {
   switch (name) {
@@ -2267,10 +2298,15 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
       if (v.t === Tag.BOOL) return V.str(strNum(v.v ? 1 : 0));
       throw new GodotRuntimeError("string-arg", `String.num() 不接受 ${tagName(v.t)}`);
     }
-    case "num_int64": {
+    case "num_int64":
+    case "num_uint64": {
       const v = args[0];
-      if (v === undefined) throw new GodotRuntimeError("arity", "String.num_int64() 缺少参数");
-      return V.str(intArgBig(v, "String.num_int64() 的参数").toString());
+      if (v === undefined) throw new GodotRuntimeError("arity", `String.${name}() 缺少参数`);
+      const n0 = intArgBig(v, `String.${name}() 的参数`);
+      const base = args[1] === undefined ? 10 : Number(intArgBig(args[1], `String.${name}() 的 base`));
+      const cap = args[2] === undefined ? false : truthyOf(args[2]);
+      const n = name === "num_uint64" ? wrapUnsigned64(n0) : n0;
+      return V.str(numInBase(n, base, cap, name === "num_uint64"));
     }
     case "num_scientific": {
       const v = args[0];
