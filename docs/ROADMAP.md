@@ -779,10 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.131 更正：那七支构造子不是漏登记，是七个值类型整个没有（2026-10-12，§6 第 43 条⑪，出货代码不动）
+
+- **上一轮的推断错了一步**：`Rect2(1, 2, 3, 4)` 编不过，我看到 `Function "Rect2()" not found in base self.` 就写成「全局可调用表缺七行」，像是一下午就能补的活。翻 `packages/runtime/src/runtime/` 才看清：**`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` 连值类型的实现都没有**（没有对应文件，`Tag` 里没有槽，`Signal` 只有类型名），所以缺的是一整个类型族的值表示 + 方法面 + 打印 + 哈希 + 序列化，不是登记一笔的事。按 D4 与 §3，「Tier 1 要不要扩到这七个值类型」是**范围决定**，得用户拍板，不该我单方面开工。
+- **读数先存着**：一格一脚本扫了 36 形（`tmp/probe-ctors/godot.txt`），七支构造的 0 元默认值、收哪几种实参形状、拒的给什么签名全在里面 —— 三条要留意的：`Rect2i(Vector2(1.5, 2.5), Vector2(3, 4))` 是**截断**不是四舍五入；`Transform2D(0.5, Vector2(1, 2))`、`Basis(Vector3, 1.5)`、`Quaternion(Vector3, 0.5)` 三支带三角，开工就撞 S314 那把 libm 天花板；`AABB` 的实参**必须**是 Vector3 那一族（`AABB(Vector2, Vector2)` 引擎直接拒）。谁做谁省事，不必再量一遍。
+- **门**：本轮只动文档与 `tmp/` 探针，src 与语料一字未改 —— §1.130 那套门读数（`pnpm test` 1579、`test:diff` 215/215、golden-check 332 例零漂移、scriptc 41/41）继续有效。
+
 ### 1.130 手臂构造式按实参类型接进 lower，顺带挖出七个类名的构造子缺口（2026-10-12，S322，语料 329–333）
 
 - **做了什么**：`CTOR_ARMS` 从「类名→元数」换成**类名→实测收下的实参类型序列**（键来自 §6 第 43 条⑥⑦⑧那三批读数，340 格两侧对账零分歧），手臂里 `Vector2()`、`Vector2i(1, 2.5)`、`Vector2(Vector2(1, 2))`、`Color(1, 2, 3)`、`String("a")`、`Callable()` 等十七形从此编得过；同时**修掉一条 masking**：`StringName(1)` 与 `NodePath(1)` 旧表按元数放行（引擎拒），现在发引擎那句 `No constructor of "StringName" matches the signature "StringName(int)".`（四格语料 330–333 钉句子，门 `match-arm-ctors.test.ts` 49 形）。
-- **挖到的才是大头**：把表接上之后逐形试发射，发现 **`Rect2` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` / `Signal` 这七个类名的构造调用连表达式位置都编不过**（`Function "Rect2()" not found in base self.`）—— 也就是 `var r = Rect2(1, 2, 3, 4)` 这种极普通的 GDScript 我们今天照样拒。这不是手臂一族的账，是**全局可调用表缺了七支构造子**，价值比手臂高得多，已单开任务。
+- **挖到的才是大头**：把表接上之后逐形试发射，发现 **`Rect2` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` / `Signal` 这七个类名的构造调用连表达式位置都编不过**（`Function "Rect2()" not found in base self.`）—— 也就是 `var r = Rect2(1, 2, 3, 4)` 这种极普通的 GDScript 我们今天照样拒。下一轮更正了原因（见 §1.131）：不是表少登记七行，而是**这七个值类型在运行时里整个没有**。
 - **另一层**：`Color(1)` 与 `Color(1, 2)` 引擎手臂收，编译也能过，但**运行期** `color()` 不认两参数那一支 → 产物里抛错；而且实测 `Color(1, 2, 0, 1)` 与臂 `Color(1, 2)` **不等**（语料 329 第 4 行 `C|color-none`），说明引擎那支的默认位不是「b=0、a=1」。这两形因此退回表外继续响亮拒，欠的是「`Color(int)` / `Color(int,int)` 到底造出什么值」的读数。
 - **口径**：这一轮的取舍标准是「**手臂收不收，取决于这支构造在表达式位置能不能造出值**」—— 收了却在 emit 或运行期抛，等于把 lower 处的拦挪到 emit 处的拦，对用户没有区别；所以宁缺毋滥，缺的都写进 §6 第 43 条⑩与本条。
 - **门**：`pnpm test` **1579**（63 文件全绿，新增 `match-arm-ctors.test.ts`）、typecheck **4/4 无 `error TS`**、`test:diff` **215/215 逐字节**（静默 0、崩溃 0、未实现 0）、`test:compile` **222/322** 且 **emitter 不支持 0**（响亮拒 22 → **26**）、`test:golden --check` **332 例零漂移**（OK 215 / 报错 100 / 超时 17）、`test:scriptc` 代表集 **41/41 编过 + 跑通 + 逐字节**。
