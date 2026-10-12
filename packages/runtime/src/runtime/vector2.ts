@@ -63,12 +63,40 @@ const VEC2_CONST: Record<string, [number, number]> = {
   DOWN: [0, 1],
 };
 
-export function vector2Const(name: string): Variant {
+/** `Vector2.` 上的静态函数只量到 `from_angle` 一支（4.6.3 实测：实例式也照样能调，实例被忽略，`tmp/probe-from-angle/one.gd`）。 */
+export function vector2Const(name: string, args: Variant[] = []): Variant {
+  if (args.length > 0 || name === "from_angle") {
+    switch (name) {
+      case "from_angle": {
+        if (args.length !== 1) {
+          throw new UnsupportedError("vector2-arity", `Vector2.from_angle() 只收 1 个角度（收到 ${args.length} 个）`);
+        }
+        return fromAngle(scalar(args[0] as Variant, "from_angle"));
+      }
+      default:
+        throw new UnsupportedError("vector2-static", `Vector2.${name}() 未实现（实测不存在或没探针）`);
+    }
+  }
   const c = VEC2_CONST[name];
   if (!c) {
     throw new UnsupportedError("vector2-const", `Vector2.${name} 不存在（4.6.3 实测只有 ${Object.keys(VEC2_CONST).join("/")}）`);
   }
   return vector2(c[0], c[1]);
+}
+
+/** 发货线定在 1e12：那以下 570 格（含 9 位小数的字面量）一字一样，之上分歧按值出现（`tmp/probe-from-angle/{sweep,edge2}.txt`），与标量 `sin` / `cos` 那两条限同一口径。 */
+const FROM_ANGLE_LIMIT = 1e12;
+
+/** `Vector2.from_angle(a)`：实参先折 float32（S313 那条），分量是 `cos` / `sin` 各折回 float32。 */
+function fromAngle(a: number): Variant {
+  const x = r(a);
+  if (Number.isFinite(x) && Math.abs(x) > FROM_ANGLE_LIMIT) {
+    throw new UnsupportedError(
+      "trig-large-arg",
+      `from_angle() 收到 ${x}：|a| 超过实测的 ${FROM_ANGLE_LIMIT}，引擎的 cos / sin 从这一档开始在末位上裂（没量过的不发）`,
+    );
+  }
+  return vector2(Math.cos(x), Math.sin(x));
 }
 
 /** 标量实参：int/float 收成 number，其余响亮报错。 */
@@ -426,6 +454,11 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       const n = vecArg(args, 0, "project");
       const k = div(add(mul(v.x, n.x), mul(v.y, n.y)), add(mul(n.x, n.x), mul(n.y, n.y)));
       return vector2(mul(n.x, k), mul(n.y, k));
+    }
+    case "from_angle": {
+      // 静态式与实例式同一条式子，实例被忽略（实测两支都给 (0.877583, 0.479426)）
+      arity(args, 1, "from_angle");
+      return fromAngle(scalar(args[0] as Variant, "from_angle"));
     }
     case "inverse":
       // 实测这支只在 Vector3 上有；Vector2 / Vector2i / Vector3i 全给运行期那句（S304）
