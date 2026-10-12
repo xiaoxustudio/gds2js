@@ -297,8 +297,12 @@ function arity(args: Variant[], n: number, who: string): void {
 function vecArg(args: Variant[], i: number, who: string): GVector3i {
   const a = args[i];
   const v = a === undefined ? null : asVec3i(a);
-  if (!v) throw new UnsupportedError("vector3i-arg", `Vector3i.${who} 的第 ${i + 1} 个实参需要 Vector3i`);
-  return v;
+  if (v) return v;
+  // Vector3 交在 Vector3i 位上引擎逐分量折整数（`Vector3i(1, 2, 3).snapped(Vector3(1, 2, 3))` 一类，与 `Vector2i` 那支同一条）
+  if (a !== undefined && a.t === Tag.OBJECT && a.v instanceof GVector3) {
+    return new GVector3i(Math.trunc(a.v.x), Math.trunc(a.v.y), Math.trunc(a.v.z));
+  }
+  throw new UnsupportedError("vector3i-arg", `Vector3i.${who} 的第 ${i + 1} 个实参需要 Vector3i`);
 }
 
 /** 精确 int64 的平方和：`length_squared` / `distance_squared_to` 都不回绕。 */

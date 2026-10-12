@@ -1,0 +1,26 @@
+SCRIPT ERROR: Parse Error: Invalid argument for "sqrt()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "sqrt()" function: argument 1 should be "float" but is "Vector2".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid argument for "sqrt()" function: argument 1 should be "float" but is "null".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "char()" function: argument 1 should be "int" but is "StringName".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "posmod()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid argument for "absi()" function: argument 1 should be "int" but is "null".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Invalid argument for "nearest_po2()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Invalid argument for "wrap()" function: argument 3 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 2 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Invalid argument for "move_toward()" function: argument 2 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Invalid argument for "deg_to_rad()" function: argument 1 should be "float" but is "Color".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_equal_approx()" function: argument 2 should be "float" but is "NodePath".
+   at: GDScript::reload (<case>/main.gd:15)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

@@ -105,6 +105,9 @@ const DEFAULT_SET = [
   "341-global-ease",
   "342-step-decimals",
   "343-snapped-and-predicates",
+  "344-zero-modulus",
+  "348-global-vector-args",
+  "350-color-from-rgbe9995",
   "032-preload-load",
 ];
 

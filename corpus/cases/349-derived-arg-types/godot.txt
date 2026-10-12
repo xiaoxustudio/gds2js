@@ -1,0 +1,22 @@
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 2 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 3 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: argument 2 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: argument 2 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 2 should be "Color" but is "int".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: argument 2 should be "Color" but is "int".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 2 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 3 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: argument 2 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: argument 2 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:13)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

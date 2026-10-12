@@ -1,0 +1,190 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "all()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid argument for "any()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Array".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "append_array()" function: argument 1 should be "Array" but is "int".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Array".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "assign()" function: argument 1 should be "Array" but is "int".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid argument for "bsearch()" function: argument 2 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Invalid argument for "duplicate()" function: argument 1 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Invalid argument for "filter()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Invalid argument for "find()" function: argument 2 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Invalid argument for "find_custom()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Invalid argument for "insert()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Invalid argument for "map()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Invalid argument for "pop_at()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Invalid argument for "reduce()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: Invalid argument for "remove_at()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Invalid argument for "resize()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Invalid argument for "rfind()" function: argument 2 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Invalid argument for "rfind_custom()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Callable".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: Invalid argument for "sort_custom()" function: argument 1 should be "Callable" but is "int".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Dictionary".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: Invalid argument for "assign()" function: argument 1 should be "Dictionary" but is "int".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: Invalid argument for "duplicate()" function: argument 1 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Array".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Invalid argument for "has_all()" function: argument 1 should be "Array" but is "int".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Dictionary".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: Invalid argument for "merge()" function: argument 1 should be "Dictionary" but is "int".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Invalid argument for "begins_with()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:27)
+SCRIPT ERROR: Parse Error: Invalid argument for "casecmp_to()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:27)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: Invalid argument for "contains()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: Invalid argument for "ends_with()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:30)
+SCRIPT ERROR: Parse Error: Invalid argument for "erase()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:30)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:31)
+SCRIPT ERROR: Parse Error: Invalid argument for "find()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:31)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:32)
+SCRIPT ERROR: Parse Error: Invalid argument for "findn()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:32)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:33)
+SCRIPT ERROR: Parse Error: Invalid argument for "format()" function: argument 2 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:33)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:34)
+SCRIPT ERROR: Parse Error: Invalid argument for "get_slice()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:34)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:35)
+SCRIPT ERROR: Parse Error: Invalid argument for "get_slicec()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:35)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:36)
+SCRIPT ERROR: Parse Error: Invalid argument for "insert()" function: argument 2 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:36)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:37)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_valid_hex_number()" function: argument 1 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:37)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "PackedStringArray".
+   at: GDScript::reload (<case>/main.gd:38)
+SCRIPT ERROR: Parse Error: Invalid argument for "join()" function: argument 1 should be "PackedStringArray" but is "int".
+   at: GDScript::reload (<case>/main.gd:38)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:39)
+SCRIPT ERROR: Parse Error: Invalid argument for "left()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:39)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:40)
+SCRIPT ERROR: Parse Error: Invalid argument for "pad_zeros()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:40)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:41)
+SCRIPT ERROR: Parse Error: Invalid argument for "repeat()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:41)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:42)
+SCRIPT ERROR: Parse Error: Invalid argument for "replace()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:42)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:43)
+SCRIPT ERROR: Parse Error: Invalid argument for "replacen()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:43)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:44)
+SCRIPT ERROR: Parse Error: Invalid argument for "rfind()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:44)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:45)
+SCRIPT ERROR: Parse Error: Invalid argument for "rfindn()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:45)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:46)
+SCRIPT ERROR: Parse Error: Invalid argument for "right()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:46)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:47)
+SCRIPT ERROR: Parse Error: Invalid argument for "similarity()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:47)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:48)
+SCRIPT ERROR: Parse Error: Invalid argument for "strip_edges()" function: argument 1 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:48)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:49)
+SCRIPT ERROR: Parse Error: Invalid argument for "substr()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:49)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:50)
+SCRIPT ERROR: Parse Error: Invalid argument for "unicode_at()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:50)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

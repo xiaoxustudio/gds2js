@@ -1,0 +1,434 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "float" as "Color".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "blend()" function: argument 1 should be "Color" but is "float".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "float" as "Color".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 1 should be "Color" but is "float".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "darkened()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "from_hsv()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid argument for "from_ok_hsl()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Invalid argument for "from_rgbe9995()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Invalid argument for "from_string()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Invalid argument for "hex()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Invalid argument for "hex64()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Invalid argument for "html()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Invalid argument for "html_is_valid()" function: argument 1 should be "String" but is "int".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "float" as "Color".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_equal_approx()" function: argument 1 should be "Color" but is "float".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "float" as "Color".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: argument 1 should be "Color" but is "float".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: Invalid argument for "lightened()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Invalid argument for "to_html()" function: argument 1 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Invalid argument for "angle_to()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Invalid argument for "angle_to_point()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: Invalid argument for "bezier_derivative()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: Invalid argument for "bezier_interpolate()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: Invalid argument for "bounce()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: Invalid argument for "clampf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Invalid argument for "cross()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:27)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:27)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate_in_time()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: Invalid argument for "direction_to()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:30)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_squared_to()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:30)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:31)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_to()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:31)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:32)
+SCRIPT ERROR: Parse Error: Invalid argument for "dot()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:32)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:33)
+SCRIPT ERROR: Parse Error: Invalid argument for "from_angle()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:33)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:34)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_equal_approx()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:34)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:35)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:35)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:36)
+SCRIPT ERROR: Parse Error: Invalid argument for "limit_length()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:36)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:37)
+SCRIPT ERROR: Parse Error: Invalid argument for "max()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:37)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:38)
+SCRIPT ERROR: Parse Error: Invalid argument for "maxf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:38)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:39)
+SCRIPT ERROR: Parse Error: Invalid argument for "min()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:39)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:40)
+SCRIPT ERROR: Parse Error: Invalid argument for "minf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:40)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:41)
+SCRIPT ERROR: Parse Error: Invalid argument for "move_toward()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:41)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:42)
+SCRIPT ERROR: Parse Error: Invalid argument for "posmod()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:42)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:43)
+SCRIPT ERROR: Parse Error: Invalid argument for "posmodv()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:43)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:44)
+SCRIPT ERROR: Parse Error: Invalid argument for "project()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:44)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:45)
+SCRIPT ERROR: Parse Error: Invalid argument for "reflect()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:45)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:46)
+SCRIPT ERROR: Parse Error: Invalid argument for "rotated()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:46)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:47)
+SCRIPT ERROR: Parse Error: Invalid argument for "slerp()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:47)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:48)
+SCRIPT ERROR: Parse Error: Invalid argument for "slide()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:48)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:49)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:49)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:50)
+SCRIPT ERROR: Parse Error: Invalid argument for "snappedf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:50)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2i".
+   at: GDScript::reload (<case>/main.gd:51)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 1 should be "Vector2i" but is "int".
+   at: GDScript::reload (<case>/main.gd:51)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:52)
+SCRIPT ERROR: Parse Error: Invalid argument for "clampi()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:52)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2i".
+   at: GDScript::reload (<case>/main.gd:53)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_squared_to()" function: argument 1 should be "Vector2i" but is "int".
+   at: GDScript::reload (<case>/main.gd:53)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2i".
+   at: GDScript::reload (<case>/main.gd:54)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_to()" function: argument 1 should be "Vector2i" but is "int".
+   at: GDScript::reload (<case>/main.gd:54)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2i".
+   at: GDScript::reload (<case>/main.gd:55)
+SCRIPT ERROR: Parse Error: Invalid argument for "max()" function: argument 1 should be "Vector2i" but is "int".
+   at: GDScript::reload (<case>/main.gd:55)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:56)
+SCRIPT ERROR: Parse Error: Invalid argument for "maxi()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:56)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2i".
+   at: GDScript::reload (<case>/main.gd:57)
+SCRIPT ERROR: Parse Error: Invalid argument for "min()" function: argument 1 should be "Vector2i" but is "int".
+   at: GDScript::reload (<case>/main.gd:57)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:58)
+SCRIPT ERROR: Parse Error: Invalid argument for "mini()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:58)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2i".
+   at: GDScript::reload (<case>/main.gd:59)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: argument 1 should be "Vector2i" but is "int".
+   at: GDScript::reload (<case>/main.gd:59)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:60)
+SCRIPT ERROR: Parse Error: Invalid argument for "snappedi()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:60)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:61)
+SCRIPT ERROR: Parse Error: Invalid argument for "angle_to()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:61)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:62)
+SCRIPT ERROR: Parse Error: Invalid argument for "bezier_derivative()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:62)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:63)
+SCRIPT ERROR: Parse Error: Invalid argument for "bezier_interpolate()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:63)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:64)
+SCRIPT ERROR: Parse Error: Invalid argument for "bounce()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:64)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:65)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:65)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:66)
+SCRIPT ERROR: Parse Error: Invalid argument for "clampf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:66)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:67)
+SCRIPT ERROR: Parse Error: Invalid argument for "cross()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:67)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:68)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:68)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:69)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate_in_time()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:69)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:70)
+SCRIPT ERROR: Parse Error: Invalid argument for "direction_to()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:70)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:71)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_squared_to()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:71)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:72)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_to()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:72)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:73)
+SCRIPT ERROR: Parse Error: Invalid argument for "dot()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:73)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:74)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_equal_approx()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:74)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:75)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:75)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:76)
+SCRIPT ERROR: Parse Error: Invalid argument for "limit_length()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:76)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:77)
+SCRIPT ERROR: Parse Error: Invalid argument for "max()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:77)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:78)
+SCRIPT ERROR: Parse Error: Invalid argument for "maxf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:78)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:79)
+SCRIPT ERROR: Parse Error: Invalid argument for "min()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:79)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:80)
+SCRIPT ERROR: Parse Error: Invalid argument for "minf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:80)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:81)
+SCRIPT ERROR: Parse Error: Invalid argument for "move_toward()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:81)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:82)
+SCRIPT ERROR: Parse Error: Invalid argument for "octahedron_decode()" function: argument 1 should be "Vector2" but is "int".
+   at: GDScript::reload (<case>/main.gd:82)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:83)
+SCRIPT ERROR: Parse Error: Invalid argument for "outer()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:83)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:84)
+SCRIPT ERROR: Parse Error: Invalid argument for "posmod()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:84)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:85)
+SCRIPT ERROR: Parse Error: Invalid argument for "posmodv()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:85)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:86)
+SCRIPT ERROR: Parse Error: Invalid argument for "project()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:86)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:87)
+SCRIPT ERROR: Parse Error: Invalid argument for "reflect()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:87)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:88)
+SCRIPT ERROR: Parse Error: Invalid argument for "rotated()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:88)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:89)
+SCRIPT ERROR: Parse Error: Invalid argument for "signed_angle_to()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:89)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:90)
+SCRIPT ERROR: Parse Error: Invalid argument for "slerp()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:90)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:91)
+SCRIPT ERROR: Parse Error: Invalid argument for "slide()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:91)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:92)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: argument 1 should be "Vector3" but is "int".
+   at: GDScript::reload (<case>/main.gd:92)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:93)
+SCRIPT ERROR: Parse Error: Invalid argument for "snappedf()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:93)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3i".
+   at: GDScript::reload (<case>/main.gd:94)
+SCRIPT ERROR: Parse Error: Invalid argument for "clamp()" function: argument 1 should be "Vector3i" but is "int".
+   at: GDScript::reload (<case>/main.gd:94)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:95)
+SCRIPT ERROR: Parse Error: Invalid argument for "clampi()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:95)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3i".
+   at: GDScript::reload (<case>/main.gd:96)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_squared_to()" function: argument 1 should be "Vector3i" but is "int".
+   at: GDScript::reload (<case>/main.gd:96)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3i".
+   at: GDScript::reload (<case>/main.gd:97)
+SCRIPT ERROR: Parse Error: Invalid argument for "distance_to()" function: argument 1 should be "Vector3i" but is "int".
+   at: GDScript::reload (<case>/main.gd:97)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3i".
+   at: GDScript::reload (<case>/main.gd:98)
+SCRIPT ERROR: Parse Error: Invalid argument for "max()" function: argument 1 should be "Vector3i" but is "int".
+   at: GDScript::reload (<case>/main.gd:98)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:99)
+SCRIPT ERROR: Parse Error: Invalid argument for "maxi()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:99)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3i".
+   at: GDScript::reload (<case>/main.gd:100)
+SCRIPT ERROR: Parse Error: Invalid argument for "min()" function: argument 1 should be "Vector3i" but is "int".
+   at: GDScript::reload (<case>/main.gd:100)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:101)
+SCRIPT ERROR: Parse Error: Invalid argument for "mini()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:101)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Vector3i".
+   at: GDScript::reload (<case>/main.gd:102)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: argument 1 should be "Vector3i" but is "int".
+   at: GDScript::reload (<case>/main.gd:102)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:103)
+SCRIPT ERROR: Parse Error: Invalid argument for "snappedi()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:103)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:104)
+SCRIPT ERROR: Parse Error: Invalid argument for "bezier_derivative()" function: argument 1 should be "Vector2" but is "String".
+   at: GDScript::reload (<case>/main.gd:104)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:104)
+SCRIPT ERROR: Parse Error: Invalid argument for "bezier_derivative()" function: argument 4 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:104)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:105)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate()" function: argument 1 should be "Vector2" but is "String".
+   at: GDScript::reload (<case>/main.gd:105)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:105)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate()" function: argument 4 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:105)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "Vector3".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate_in_time()" function: argument 1 should be "Vector3" but is "String".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "Vector3" as "float".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate_in_time()" function: argument 5 should be "float" but is "Vector3".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "Vector3" as "float".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate_in_time()" function: argument 6 should be "float" but is "Vector3".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:106)
+SCRIPT ERROR: Parse Error: Invalid argument for "cubic_interpolate_in_time()" function: argument 7 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:106)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

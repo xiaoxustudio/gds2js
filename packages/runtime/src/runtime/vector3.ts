@@ -135,14 +135,20 @@ function scalar(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("vector3-arity", `Vector3.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return r(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
+  // bool 在数值位上折 0 / 1（`Vector3(1, 2, 3).cubic_interpolate(…, true)` 实测照算，与 `Vector2` 同一条）
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   throw new UnsupportedError("vector3-arg", `Vector3.${who} 需要数值实参，收到 ${v.t}`);
 }
 
 function vecArg(args: Variant[], i: number, who: string): GVector3 {
   const a = args[i];
   const v = a === undefined ? null : asVec3(a);
-  if (!v) throw new UnsupportedError("vector3-arg", `Vector3.${who} 的第 ${i + 1} 个实参需要 Vector3`);
-  return v;
+  if (v) return v;
+  // Vector3i 交在 Vector3 位上引擎按分量折（`Vector3(1, 2, 3).signed_angle_to(Vector3i(1, 2, 3), Vector3(1, 2, 3))` 实测给值），与构造式那一格同一登记
+  const inner = a !== undefined && a.t === Tag.OBJECT ? a.v : null;
+  const parts = inner !== null && typeof inner === "object" && vec3iParts !== null ? vec3iParts(inner) : null;
+  if (parts !== null) return new GVector3(parts[0] as number, parts[1] as number, parts[2] as number);
+  throw new UnsupportedError("vector3-arg", `Vector3.${who} 的第 ${i + 1} 个实参需要 Vector3`);
 }
 
 function arity(args: Variant[], n: number, who: string): void {

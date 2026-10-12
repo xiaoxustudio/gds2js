@@ -779,6 +779,161 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.165 `String.strip_edges(left, right)` 接上：那两位是真参数，判据还顺带钉出 `0 < 码点 <= 0x20`（2026-10-13，S352，语料 355）
+
+- **这一格是 S351 那把尺掉下来的第一族**：表里早就标了 `strip_edges` 的两位收 bool / int / float（元数 `[0,2]`），出货运行期却对任何实参抛「不接受参数」——「合法代码跑不动」那一侧。
+- **两位的语义**（读数 `strip.txt` 20 格）：第一位管左端、第二位管右端，默认都真；`strip_edges(false)` 只关左端（右端仍按默认裁），int / float 按 `≠ 0` 折（`(2, 2)`、`(-1, -1)`、`(1.5, 1.5)` 与 `(true, true)` 同值）。
+- **顺带钉出静默错值一处**：空白判据是 `0 < 码点 <= 0x20`，NUL **不裁**（`stripws.txt` 45 格，一格一码点、只印长度）；改前写的是 `<= 0x20`，缺 `> 0` 那一半 —— `"  abc" + char(0)` 我们会多裁一个字符。
+- **NUL 那一格进不了语料**：源文件里的 `\u0000` 让 GDScript 词法器推 `Unicode parsing error …`，那两行不带 `ERROR:` 前缀、`normalize()` 滤不掉，会被 golden 当成品内容收进去 → 逐字节永远对不上。判据钉在单测，语料那侧改印 `char(1)`（能进串也能印长度）。
+- **门**：`pnpm test` **12577**（89 文件）、typecheck **4/4**、`test:compile` **236/344**（sema 82、响亮拒 26）、`test:diff` **229/229** 逐字节（用例 354、golden 未漂移 354/354）；S351 那把尺重跑 **合 619 / 不合 60**，掉的正是这五格。
+
+### 1.164 审「引擎收下的那一侧」：758 格两侧取值逐格对，出货从 338 格不合降到 65 格（2026-10-13，S351，语料 354）
+
+- **前几轮接的是「引擎拒、我们跑」，这一轮反过来**：判据表把**收**的那一侧圈出来之后，每一格两侧都得给同一个值 —— 不然出货要么响亮抛（合法代码跑不动），要么给一个引擎不给的值（静默错值，最坏那一类）。尺子是 `tmp/probe-argtype/values.mts`：758 格逐格「引擎 print vs `show(method(...))`」。
+- **量出的折法全部落地**（读数 `fold8.txt` / `hexfold.txt` + 语料 354 的 21 行）：int 位吃 float（向零截断）与 bool（0 / 1），非有限与越界折 `INT64_MIN` 再按位截；bool 位吃 int / float 按 `≠ 0`，NaN 也算不等 0；String 位吃 StringName 与 NodePath（按其文本）；Color 位吃 Color / int（打包）/ String（按 html）；向量位吃另一形的向量逐分量截断。`String` / 容器 / 五型三面各按各自入口接（`foldInt` / `foldBool` / `asString` / `colArg` / `vecArg`）。
+- **一族里唯一的静默错值**：`Dictionary.set` 引擎返回 `true`，出货给 `null` —— 按读数改了。
+- **旧断言请回四支**：`string.test.ts` 里 `count` 的 from/to 与 `split` 的 max_splits 当年断的是「响亮拒」，实测引擎折得出值，断言照读数改成值。
+- **剩下 65 格全是欠实现、没有一格是「两侧都给值而值不同」**，四族已各立一条（§6 第 53 条）：`from_ok_hsl` 16、`cubic_interpolate_in_time` 退化跨度 24、`bsearch` 不可比值 14、`strip_edges(left, right)` 5，另 `rotated` 4 / `outer` 2 归第 5 项那两份名单。顺带在同一条里记下一处新发现的静默错值候选：`strip_edges` 裁的是 `0 < c <= ' '`，出货今天的 `<= 0x20` 不带 `> 0`。
+- **尺子自己的两处改动**：引擎读数按格缓存（`engine-cache.json`，重跑只量新格），并把每格两侧值全量落进 `values-all.txt`，门里的钉子逐格抄读数而不是抄结论。
+- **门**：`pnpm test` **12571**（88 文件）、typecheck **4/4**、`test:compile` **235/343**（sema 82、响亮拒 26）、`test:diff` **228/228** 逐字节（用例 353、golden 未漂移 353/353，静默 / 崩溃 / 未实现 全 0）。
+
+### 1.163 补账：值类型那张表也换三种接收者写法各量一整趟，0 格不同（2026-10-13，S350）
+
+- **欠的是验据不是功能**：S347 的判据挂在已有的接收者识别上（标注变量、形参、推断初值都会走进去），读数却只量了 `Vector2(1, 2).dot(1)` 那种字面量构造式。
+- **三趟各 2170 格**：`var v2: Vector2 = …` / `func _run(v2: Vector2, …)` / `var v2 = …`，与字面量那一趟逐格比 —— **同 2170、不同 0**（三形都是）。
+- **门里按密度钉**：标注变量逐格（最常见那一形，2170 格），形参与推断每位一格；引擎读数全在 `p6-*.txt` 留底。
+- **自纠**：头一趟报「1980 格不同」是探针的行号算错了（5 条声明之后语句从第 **9** 行起，`func _run` 那形从第 7 行起）—— **读数大面积不合，先怀疑尺子**。
+- **门**：`pnpm test` **12535**（86 文件）、typecheck **4/4**、`test:diff` **227/227** 逐字节不变（用例 352、golden 未漂移 352/352）。
+
+### 1.162 接收者换个写法还是同一套句子：字面量 / 标注变量 / 形参 / 推断四形各量一趟 1358 格（2026-10-13，S349）
+
+- **动机**：真实代码写的是 `var name: String` 再 `name.repeat("a")`，S348 那张表只认字面量接收者，最有用的那一半还留在「引擎拒、我们跑到运行期才响」。
+- **量的办法**：同一批 1358 格只换接收者写法，四形各一趟 —— `p3-typed.txt`（标注变量）、`p5-param.txt`（形参 `func _run(rs: String, ra: Array, rd: Dictionary)`）、`p5-infer.txt`（`var rs = "abc"`）；逐格与字面量那一趟比（`cmp-typed.mts` / `cmp-shapes.mts`），**三趟都是同 1358、不同 0** → 一张表四形共用，不用给键加「接收者写法」这一维。
+- **标注那一形内部也单独量**（`typed-variants.mts` 五格）：只标注不给初值、初值是 `String.num(1)` 那种非同面字面量，都说同一套句子；`Dictionary.get(…, …)` 那两位是 Variant，怎么写都收。
+- **两支新门**：`face-typed-receiver.test.ts` 1106 格 + `face-receiver-shapes.test.ts` 2212 格；两侧的筛子都是「句子点了别位就不算这格的判据」，`Array.find_custom` / `rfind_custom` 那一位 Callable 槽因此留在表外（字面量探针造不出合法填充）。
+- **出货那三支识别**：标注变量、形参、推断初值（推断沿用「没标注又被重新赋值就不保证」那条老闸门）。
+- **门**：`pnpm test` **10055**（85 文件）、typecheck **4/4**、`test:compile` **234/342**（sema 82）、`test:diff` **227/227** 逐字节不变（用例 352、golden 未漂移 352/352）。
+
+### 1.161 带类型标注的变量接收者与字面量接收者同一套句子：1358 格逐格比过，表照用（2026-10-13，S349）
+
+- **这一趟不是为了新句子，是为了「谁能当接收者」**：真实代码写的是 `var name: String` 再 `name.repeat("a")`，S348 那张表只认字面量接收者，等于最有用的那一半还留在运行期。
+- **口径**：同一批 1358 格只换接收者写法（`var rs: String = "abc"` / `var ra: Array` / `var rd: Dictionary`），`cmp-typed.mts` 逐格与字面量那一趟比 —— **同 1358、不同 0**，所以 `FACE_ARG_*` 的键不用加接收者这一维。
+- **两种形单独量**（`typed-variants.mts`）：标注了但不给初值、初值不是同面字面量（`String.num(1)`）都说同一套句子；`Dictionary.get(…, …)` 那两位是 Variant，怎么换都收。
+- **没量过所以没接**：形参接收者（`func f(s: String)`）与不带标注的推断接收者（`var s = "abc"`）—— 分析器只认 `var` 声明那一侧的标注（红线 1）。
+- **门**：`pnpm test` **7843**（84 文件）、typecheck **4/4**、`test:compile` **234/342**（sema 82 不变）、`test:diff` **227/227** 逐字节不变（用例 352、golden 未漂移 352/352）。
+
+### 1.160 String / 容器「字面量接收者」的形参拒接完：1246 格，元数是问引擎要的，顺带补上 join 少发的那一句（2026-10-13，S348，语料 353）
+
+- **元数先从引擎那里问**：出货的 `methods.ts` 只有名没有元数。第一趟每种方法只发两格（0 参与 3 参），拿 `Too few … at least K` / `Too many … at most N` 反推 `[min,max]`；**只有真换来「Too many」的支才算有上界**（97 支进表、`split` / `count` / `countn` / `slice` 那 5 支不进了就算）。
+- **判据带上元数**：读数全部建在「实参个数正好等于量过的那个上界」上，`FACE_SLOTS` 与两张表一起出货，别的元数不发（红线 1）。
+- **值类型那一面补了下界元数**：`packed.mts` 的 `minmax` 模式把 `min ≠ max` 的支在两种元数下各量一遍（2254 格 0 不合、0 跳过），判据放宽成「元数等于上界或下界」。
+- **`join` 的老表少一句**：`JOIN_BAD_ARG` 是早期手抄的，对 `int` / `float` / `bool` / `null` 只发 `Cannot pass …`，实测引擎发两句 —— 字面量实参改走量过的表（两句齐），变量实参那一支维持原状（没量过不动）。
+- **工具又自纠一次**：`mk-face-artifacts.mts` 的 A 式正则把函数名写成非捕获组，位号因此读到期望型，生成器报「拒 0 格」而复核脚本报一切正常 —— **两侧数字不一致就是工具坏了**（S342 ④ / §1.159 第三次应验）。
+- **门**：`pnpm test` **6737**（83 文件）、typecheck **4/4**、`test:compile` **234/342**（sema 81 → 82、emitter 不支持 0）、`test:diff` **227/227** 逐字节不变（用例 352、golden 未漂移 352/352）。
+
+### 1.159 值类型实例方法的形参拒整族接完：2170 格逐格对账，靠 packed 探针与自举的合法填充（2026-10-13，S347，语料 352）
+
+- **成本这一关先过**：五型 111 支方法 × 位 × 14 形 = 2170 格，一格一次 spawn 跑不完。改成 **packed 探针**：一个脚本 40 条 `var vN = <一格>`，引擎的分析期句子按行报，`at: …:LINE` 归格 —— 十来趟量完。
+- **合法填充是自举出来的**：先按接收者同形跑一趟，再用「句子点了哪几位」反推每一位被引擎放行过哪些形（别位违规不影响本位判定），拿这套填充重跑，两轮收敛成 `fillmap`（155 位全有干净读数）。
+- **一格工具 BUG 换来的纪律**：`fillmap` 的键是 `类型.方法#位|填充`，探针却按三段解析，静默退回同形填充，连跑三趟读数一点没动 —— **读数不动而判据本该动就是工具坏了**（S342 ④ 那条教训这次是它的续集）。
+- **两侧都是实测**：拒的 1789 格句子逐字钉（C+A 两式、容器只说 A 式、按位升序发）；收的 381 格里有 `c.to_html(128)`、`c.clamp(1, "a")`、`v.snapped(1)` 这种「看着像该拒其实收」的；两种填充族交叉核对没有任何一格出现「换个填充就收/拒翻面」（重载冲突 0 格）。
+- **门**：`pnpm test` **5404**（82 文件）、typecheck **4/4**、`test:compile` **234/341**（sema 80 → 81、emitter 不支持 0）、`test:diff` **227/227** 逐字节不变（用例 351、golden 未漂移 351/351）。
+- **下一块地**：String / Array / Dictionary / Packed* 那三面（引擎同样两句拒，原文已在 `inst.txt`），卡点是分析器要先认得出那三面的接收者形（§6 第 52 条⑥）。
+
+### 1.158 普查实例方法那一族的错类型实参：465 格里三格是静默错值，`Color.to_html` 的 bool 位先修（2026-10-13，S346，§6 第 52 条开新账）
+
+- **一把本地尺**（`sweep-inst.mts` 全枚举 `VALUE_METHOD_ARITY` 五型 111 支方法 × 位 × {String, null, Dictionary}）：**分析期 0 格拒、运行期响亮抛 459 格、发得出值 6 格**。
+- **那 6 格剔三格**：`c.html("a")` / `c.from_string("bff00", …)` 是静态名在实例上调，引擎给值、我们也给同值 —— 剩下的三格才是 bug：`Color.to_html("a")` 给 `ff0000ff`、`to_html(null)` 给 `ff0000`、`to_html({"a":1})` 给 `ff0000ff`，而引擎对这一位（声明是 **bool**）解析期两句拒。
+- **折法一起量一起钉**（`html.mts` 13 格）：`true` / `1` / `2` / `128` / `-1` / `0.5` / `1.5` → 带 alpha；`false` / `0` / `0.0` / `-0.0` → 不带；不传参 = 带。NaN / ±inf 没量过 → 响亮抛，不按真值编。
+- **459 格那一族是下一块地**（§6 第 52 条）：引擎在实例方法上说的还是同那两式（`Vector2.dot(1)`、`"abc".repeat("a")`、`[1,2].insert("a",1)`…），接法与静态名同构；成本卡在一格一次 spawn，`sweep-inst.mts` 之外要改成**一行一格的 packed 探针**（语料 347 那种 54 行 86 句就是同一趟量的，按行号归格）。
+- **门**：`pnpm test` **3231**（81 文件）、typecheck **4/4**、`test:diff` **227/227** 逐字节不变、ops 自校验 2127 / 0。
+
+### 1.157 静态名那一族形参拒接完：320 格全合，顺带把「引擎按位升序推句」钉进两条循环（2026-10-13，S345，语料 351）
+
+- **一名一位一 kind 一张表**：`statics.mts` 300 格 + `statics2` 20（`Color.from_string` 第一参钉合法值）+ `statics3` 10（`String.num_scientific` 按一元重量）+ `statics4` 30（三个四元名的第四位）→ `STATIC_ARG_AS` / `STATIC_ARG_TYPES` 17 支名，接法与全局函数同构；门 `static-arg-allow-list.test.ts` 320 格（229 拒 + 91 收）、复核尺 `check-statics.mts` 320 合 / 0 不合。
+- **两处探针自纠**：主探针把 `num_scientific` 上界抄成 `[1,2]`（出货 `[1,1]` 才对）、`from_string` 的第一参填充不合法 —— 生成器因此加了**污染哨**（第二句点到的位 ≠ 被测位就整格丢），这类抄错会自己冒出来，不用等门。
+- **`argc = min(上界, 3)` 的口径漏了四元名的第四位**：补测之前 `Color.from_rgba8(1, 1, 1, "a")` 引擎两句、我们一句都不发 —— 覆盖面口径本身也要被审。
+- **引擎按位升序推句**（`multi.mts` 14 格并排）：`Color.from_rgba8([1], Color(1, 0, 0, 1), 1)`、`randf_range([1], "a")` 两格我们发的是倒序；静态与全局两条循环都改成先按位归桶、再按位升序发，改后 9/14 一字一样。
+- **剩下 5 格是三笔新欠**（元数越界时类型句照发 / B 族首位拒后整族停 / 别位容器既加句也减句）—— 原文进 §6 第 51 条⑦，没量齐之前不进实现（红线 1）。
+- **门**：`pnpm test` **3209**（80 文件）、typecheck **4/4**、`test:compile` **234/340**（sema 79 → **80**、emitter 不支持 0）、`test:diff` **227/227** 逐字节不变（用例 350、预期报错 123、golden 未漂移 350/350）。
+
+### 1.156 `Color.from_rgbe9995` 发货：24 格一次过，含「装箱实参先折进 uint32」那一步（2026-10-13，S344，语料 350）
+
+- **式子照 4.6.3 的源抄**（`Color::from_rgbe9995(uint32_t)`：三个 9 位段 + 不掩码的 5 位指数 + `m = pow(2.0f, e - 15.0f - 9.0f)`），落地前先一把尺量 24 格（`tmp/probe-argtype/rgbe.mts`），实现完再逐格对一遍：**24/24 全合**，语料 350 的 20 行逐字节、原生门 1/1。
+- **中段格才是判据**（S310 ① 那条老教训）：`r=100,g=200,b=300,e=20` 给 `(6.25, 12.5, 18.75)`、`r=1,g=2,b=3,e=15` 给 `(0.002, 0.0039, 0.0059)`；全零 / 全 511 那种端点格分不清位段顺序与指数偏置。
+- **「折进 uint32」不是猜的**：`4294967296` 全零、`-1` 与 `0xFFFFFFFF` 同值、`1 << 40` 全零、`2147483648` 三位全零、`2147483647` 给 `0.998` —— `BigInt.asUintN(32, …)` 一条式子全合。
+- **顺带量到静态名的形参拒**（`Color.from_rgbe9995(&"a")` 两句一起推），但**静态方法那一族的形参判据还没接**（`STATIC_FACE` 今天只管元数与常量名）—— 记进 §6 第 51 条⑥。
+- **老教训又收一次费**：第一版把 `&"a"` / `1.5` 混进取值那一段，一个解析错把 24 行全打死（stdout 空）。一格一脚本之外，**取值段里不许混进会被解析期拒的形**。
+- **门**：`pnpm test` **2886**（79 文件）、typecheck **4/4**、`test:compile` **233/339**（sema 79 不变、emitter 不支持 0）、`test:diff` **227/227**（跳过 122，静默 / 崩溃 / 未实现 全 0）、`test:scriptc` 350 一格 1/1。
+
+### 1.155 「一位一句子」是探针给的错觉：434 格全句子矩阵把连推两句补满（2026-10-13，S342，语料 347 换 kind 重记）
+
+- **S338 的矩阵用 `lines.find(…)` 只取第一行 Parse Error**，于是「一个违规一句」看着像引擎的规矩。`matrix2.mts` 把同 434 格重跑、一次调用的**全部**句子收齐：声明类型那 16 位上每个被拒的 kind 都追一句 A 式（`Cannot pass a value of type "StringName" as "PackedByteArray".` + `argument 1 should be "PackedByteArray" but is "StringName".`）。
+- **出货照发**：`GLOBAL_ARG_AS` 第五列（`also`）从 54 格的抽样填满到逐 kind，`analyze` 在同一次调用里按引擎的顺序发两句；434 格里最多两句，没有第三种组合，所以表的形状没动。
+- **语料 347 换了一批 kind 重记**（`StringName` / `null` / `Vector2` / `Color`）：引擎 86 句、我们 86 句、逐字 0 处不同 —— 这一格门从此钉的是**句数**不只是拦不拦。
+- **一次生成器自纠**：`gen-table2.mts` 读新矩阵时沿用另一把尺的字段数（`slice(4)` 应为 `slice(3)`），表看着没变、测试格数从 403 掉到 269。**掉格子而不是掉判据 = 工具坏了**，这条按 S330 / S322 的老规矩记下来。
+- **门**：`pnpm test` 2861（78 文件）、typecheck 4/4、`test:compile` 233/338（sema 79）、`test:diff` 226/226（跳过 122，静默 / 崩溃 / 未实现 全 0）、`test:golden --check` 347 重记后无漂移。
+
+### 1.154 「跟第一参走」的向量与 Color 那一支接完：252 格派生矩阵，另把引擎不讲理的那四格落成例外表（2026-10-13，S341，语料 349）
+
+- **换一把尺子才量得到**：这一族的期望型由第一参决定，「一位塞一种字面量」那种测法只能量到第一处违规。新探针把**第一参钉死一形、其余位给同型合法值**，只换被测位（6 位 × Vector2 / Color / Vector3 三形 × 14 kind = 252 格，`tmp/probe-argtype/derived2.mts`）。
+- **接法**：新表 `DERIVED_ARG_TYPES`（`(第一参的形, 位, 那一位拒的 kind 名单)`）+ 一条新判据，句子仍是 A 式、期望型 = 第一参那一形；同型与 Array / Dictionary 在派生位是**收**的，名单里一个容器都没有。
+- **逮到自己一侧的一处过拦**：`wrap(Vector2(1, 2), [1], Vector2(1, 2))` 与 `wrap(Vector2(1, 2), {"a": 1}, …)`（含第三位同形共四格）引擎**一句都不推**，而 S337 那张 A 表按「非数字字面量就拒」会把它们拦下。四格按实测落成 `GLOBAL_ARG_SUPPRESS_OTHER`：其余位出现 Array / Dictionary 时那一句不发。
+- **引擎不讲理的那一格照录不美化**：第一参是 Color 时，`clamp(Color…, Color…, …)` 第二位推的竟是 `should be "Color" but is "Color"` —— 于是第三位那一形根本量不到（14 格全是第二位的句子），表里就没有那一位，欠记在 §6 第 51 条①。
+- **门**：`pnpm test` **2861**（78 文件）、typecheck **4/4**、`test:compile` **233/338**（sema 拦下 78 → **79**、响亮拒 26、emitter 不支持 0）、`test:diff` **226/226**（跳过 121 → 122，静默 / 崩溃 / 未实现 全 0）、语料 349 的 10 句与我们 diag 逐字 0 处不同、`--check` 无漂移。
+
+### 1.153 静默 NaN 的根子是共用的取数口子：`fl()` / `intOf()` 一次性堵掉，数值一族 141 格全数响亮拒（2026-10-13，S340）
+
+- **S339 修的是 `floor` 一支，病在共用的两口子上**：`fl(v)` 的 `intToNum(v.v as IntPayload)` 与 `intOf(v)` 的 `Math.trunc(v.v as number)` 对装箱的 String / 向量 / 字典都不报错，往下算成 NaN —— 数值一族 47 支全靠这两口。
+- **改前改后各跑一遍同一把尺**（`tmp/probe-argtype/precheck.mts`，47 支 × {String, Vector2, Dictionary} = 141 格）：改前 **74 格发编出来的值**（`nan` 31、`false` 15、`0.0` 11、`1.0` 9、`0` 6、±1/inf 2）、13 格抛 JS 的 `RangeError` / `TypeError`、只有 54 格本来就是 `arg-float` 那一式；改后 **141 格一格值都不发**（`UnsupportedError` 96 + `GodotRuntimeError` 45）。
+- **引擎那一侧本来就是拒**：S339 ⑤ 那 32 格运行期读数（`Error calling utility function "abs()": Argument "x" must be …`）—— 原句逐支还没量齐（§6 第 51 条③），所以这一轮只发我们自己的响亮拒，不冒充引擎文本。
+- **bool 一字不动**：`mathNum` 里 BOOL 明确折 1 / 0（实测 a05 / k01），int / float 两支走原路 —— 新分支只在「既不是数也不是 bool」那一侧，合法程序一个都不经过（`test:diff` 226/226 一字不变）。
+- **门**：`pnpm test` **2710**（78 文件）、typecheck **4/4**、ops 自校验 2127 / 0。
+
+### 1.152 允许集顺出来的静默错值：`floor(Vector2)` 给 NaN 那一族逐分量发出（2026-10-13，S339，语料 348）
+
+- **上一轮的表自己供了线索**：S338 量到 `abs` / `floor` / `ceil` / `round` / `sign` 的形参允许集带四种向量、`lerp` 还带 Color —— 引擎**收**这些形，而我们那几支的写法是 `roundThree(v.v as number, …)` / `one(v.v as number)` / `fl(…)`。实参是 `GVector2` 时就是拿对象当数：`floor(Vector2(-1.5, 2))` 出货给 **NaN**、`sign(Vector2(-1.5, 2))` 给 **0.0**，`snapped` 抛 JS `RangeError`、`lerp` 抛 `TypeError`。
+- **一格一脚本量 66 格**（`tmp/probe-argtype/vals.mts` → `vals.txt`）：20 格一元 × 四向量、`snapped` 同型两支、`lerp` 四支（含 `lerp(Color…, 0.5)` 与权重 2.5 那支——**权重不夹进 [0,1]**）、外加 32 格「Variant 装着串 / 数组 / 字典 / null」的运行期形状。
+- **式子就是值类型那一族**：按实参类型直接交给 `vector2Method` / `vector3Method` / `vector2iMethod` / `vector3iMethod` / `colorMethod` 已有的 `abs` / `floor` / `ceil` / `round` / `sign` / `snapped` / `lerp`；int 向量没有 `floor` / `ceil` / `round` 那三支方法，分量本来就是整数，实测原样给回。
+- **一形不采信**：`lerp(Vector2(0, 0), Vector2(4, 8), Vector2(0.5, 0.25))` 实测给 `(0.0, 0.0)`，既不是按轴插值也立不成「向量权重折成 0」那条规则（单格无第二判据），那一形继续不发。
+- **非数值实参按红线 1 改成响亮拒**：引擎运行期也拒（`Error calling utility function "abs()": Argument "x" must be …`），但逐支原句没取齐（`round` 缺、`lerp(1, X, .5)` 是另一式），所以出货先发我们自己的 `UnsupportedError`，不再静默给 NaN / 0；原句留 §6 第 51 条③。
+- **门**：语料 348 新钉 26 行逐字节 + `test:scriptc` 348 一格 1/1（41.2s）；`pnpm test` **2569**（77 文件）、typecheck **4/4**、`test:compile` **233/337**（sema 78 不变、emitter 不支持 0）、`test:diff` **226/226**（跳过 121，静默 / 崩溃 / 未实现 全 0，旧 225 例一字不变）。
+
+### 1.151 形参拒剩下的三族接完：434 格矩阵，同一次调用引擎会连推两句（2026-10-13，S338，语料 347）
+
+- **把 §1.150 留下的 B / C / Object 一次做完**：尺子从「一位一探针」换成「**一位 × 一种字面量**」—— 31 个位 × 14 形 = 434 格，每格一条引擎读数（`tmp/probe-argtype/matrix.mts` → `matrix.txt`），表由 `gen-table2.mts` 生成，门 406 例（`global-arg-allow-list.test.ts`）逐格钉句子与「不许误拦」，语料 347 钉 54 次调用。
+- **同位换 kind 就换句子，所以 refuse 名单必须逐 kind 存**：`bytes_to_var("a")` 说 `Cannot pass a value of type "String" as "PackedByteArray".`、`bytes_to_var({})` 说 `argument 1 should be "PackedByteArray" but is "Dictionary".`、`bytes_to_var([])` 收；`convert(1, "a")` 要 int 而 `convert(1, [])` 要 Variant.Type。上一轮那种「一位一个期望型」的写法在这里会漏句也会拦错。
+- **一次调用两句是数出来的不是猜的**：矩阵那一趟只记第一行，语料 347 第一版按它接完只对上半句 —— 于是把选中的 54 格逐格重跑、把每一次调用推的**全部** Parse Error 收齐（`counts.txt`）：C 族那 19 格是「先 as 句、再同位的 A 句」。出货照发两句后，引擎 73 句 / 我们 73 句、逐字不同 0 处。
+- **这一族对 bool / Color 的判法与 A 族相反**：A 族 102 位收 bool（`sqrt(false)` 算得出），B / C 族真拒；Color 字面量在 B 族也拒。反过来 `abs([])`、`floor({})`、`snapped([], 1)`、`lerp([], 1, 1)` 引擎全收 —— 一条都不许拦。
+- **两道门各逮到我们一侧的一条**：(a) `lerp` 第二参那句「跟第一参走」被当固定形照抄，合法的 `lerp(1, 2, 3)` 遭拦，`test/sema.test.ts` 236 那格（我们报错、Godot 通过）当场红 —— 表里因此加了「第一参是这些 kind 时整条让开」那一列；(b) 类型句抢在元数句前面，`test/emit-guards.test.ts` 里 `inst_to_dict(1, 2)` 退化成「居然编得过」—— 判据改成**实参个数不在 `GLOBAL_CALLABLES.bounds` 区间内时类型那一族一律不插手**。
+- **`convert` 的第一参不发**：`Invalid call for function "convert".` 说的是 (from, to) 那一对，`convert("42", TYPE_FLOAT)` 合法而 `convert("a", 1)` 被拒 —— 生成器里明确把它剔掉，欠在 §6 第 51 条④。
+- **三条欠都留了读数**：跟随第一参那一族的向量 / Color 支（11 格已在 `matrix.txt`，task #31）、C 族其余 kind 的双句（尺子 `matrix2.mts` 已备好，跑一次 434 格约 45 分钟）、B 族全局函数的**运行期**向量那一半（`floor(Vector2)` 出货现在给 NaN、`sign(Vector2)` 给 0.0，task #30，脚本 `vals.mts`）。
+- **门**：`pnpm test` **2530**（76 文件）、typecheck **4/4**、`test:compile` **232/336**（sema 拦下 77 → **78**、响亮拒 26、emitter 不支持 0）、`test:diff` **225/225**（跳过 120 → 121，静默 / 崩溃 / 未实现 全 0）、`test:golden` 347 新记后 `--check` 无漂移、既有 225 例一字不变。
+
+### 1.150 全局函数「形参收到非数字字面量」：102 位逐位实测成表，另 5 位是「跟第一参走」（2026-10-12，S337，语料 346）
+
+- **一族句子先分成三类**：A `argument N should be "T" but is "U".`（形参是具体类型）、B `Argument "x" must be "int", "float", …`（Variant + 允许集，每支名单不同）、C 各自一句（`range` 是运行期 `Invalid type…`、`len` 自一句、没名字那句还带 `Did you mean to use "remap()"?`）。本轮只接 A 类里 T 是 int / float 的位。
+- **普查怎么铺的**：126 支按我们表里的 argc 逐位塞 `"a"`、其余位给 1（189 位）→ A 108、收 17、其他 64；再把每条 A 的第一参换成 `1.0` 重测一遍，**期望型不变的才进表**（102 位 / 65 支），变的 5 位（`clamp` 2/3、`lerp` 2、`wrap` 2/3）另记一张「跟第一参」表，实现里只有第一参是 int / float 字面量时才知道期望型。表是生成的：`tmp/probe-argtype/gen-table.mts` → `packages/compiler/src/lower/global-arg-types.ts`。
+- **U 那一侧逐形量过界**：int / float / **bool** 字面量引擎都收（`sqrt(false)`、`sqrt(1e309)`、`char(1.5)`），拒的是 String / StringName / NodePath / null / Array / Dictionary 与 `Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` 构造式，报出来的名字就是它自己。
+- **被逐字节门救回来的一次过度概括**（本轮最值钱的一课）：把同一条规则套到 `inst_to_dict` 的 **Object** 位，语料 265 立刻变崩溃 —— **null 在 Object 位是收的**，现证就躺在语料 265 第 90 行 `typeof(inst_to_dict(null))`（那格在跑通桶里）。规则不能跨声明类型照搬，表因此只收 int / float 位，Object 位与 B 族一起留给 §6 第 50 条（`inst_to_dict(&"a")` 引擎确实拒，那一形还没接）。
+- **两侧都钉**：门 120 例里那 102 位的期望句逐字取自普查那一次的引擎读数，另有跟随 6 形与「不许误拦」12 形；语料 346 的 12 句与我们 diag 逐字比过（`tmp/probe-argtype/parity.mts`），0 处不同。
+- **门**：`pnpm test` **2121**（75 文件）、typecheck **4/4**、`test:compile` **232/335**（sema 拦下 76 → **77**、响亮拒 26、emitter 不支持 0）、`test:diff` **225/225**（跳过 120，静默 / 崩溃 / 未实现 全 0）、`test:golden --check` 346 无漂移。
+
+### 1.149 `char()` 越界接进解析期：字面量整数那一侧引擎拒，float / bool 那一侧它放过（2026-10-12，S336，语料 345）
+
+- **接 §1.147 记的 masking**：`char(-1)` 这类越界字面量引擎在**解析期**拒（`Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.`，一格一脚本量到四形），而我们发射器是 `char: (a) => rt.stringChr(...)`，看都不看 —— 编得过、跑起来才知道。
+- **边界要往两侧量，不然会接成过拦**：同一批探针里 `char(1.5)`、`char(1.0)`、`char(true)`、`char(-0.0)` 引擎**全放过**（实测算出 U+0001 与替换符），只有 int 字面量越界才拒。所以判据只吃「字面量 int」与「一元负号套字面量 int」两形（值按 bigint 走，避免 `9223372036854775807` 掉进 Number），别的表达式一律放过。
+- **还欠的两形都有读数**：`char("a")` 也是解析期拒，但句子是通用那一式 `argument 1 should be "int" but is "String".` —— 属于「全局函数 int 形参收到别的字面量类型」那一整族，126 支没扫，不在这轮；`var q := -1` 再 `char(q)` 是**运行期**错，而且文本带本地化中文（`Error calling GDScript utility function "char()"…`），既不伪造也不进语料。
+- **一条语料口径**：`char(0)` 打 NUL、`char(5535)` 是孤立代理（引擎自己会前缀 `Unicode parsing error…U+FFFD`），两形都不能进 golden —— 本轮第一次 148 格试跑就是被它们打挂的（读到 0 行），区间内其余形只在探针里量。
+- **门**：`pnpm test` **1998**（74 文件）、typecheck **4/4**、`test:compile` **232/334**（sema 拦下 75 → **76**、响亮拒 26、emitter 不支持 0）、`test:diff` **225/225**（跳过 119，静默 / 崩溃 / 未实现 全 0）、`test:golden --check` 语料 345 无漂移。
+
+### 1.148 `posmod` 的模数为 0 发出：引擎给 0，那条 ERROR 由 `normalize` 滤掉（2026-10-12，S335，语料 344）
+
+- **接 §1.147 记的那条欠**：一格一脚本量到 `posmod(5|0|-5|2147483648|2^63-1, 0)` **全给 0**，引擎每格推 `ERROR: Division by zero in posmod is undefined. Returning 0 as fallback.` + `   at: posmod (./core/math/math_funcs.h:314)`。旧实现抛 `UnsupportedError`，注释自己写着「Godot 那侧这一格没量过」。
+- **一条口径澄清**（顺手把旧记忆更正了）：`tools/lib.mjs` 的 `normalize` 会把 frame 命中 `core/(variant|math)/` 的引擎内部错误块**整块滤掉** —— 所以这类格子是能进语料的，出货只发那个值就行，不需要伪造 C++ 的行号。§1.147 的任务描述里「注意 golden 会带 ERROR 行、此前有 ERROR 行打挂逐字节门」那句是旧的担心，与 `numInBase` 的 base 越界同一口径，已在本条更正并写进 S335 ②。
+- **同批把「零除数 / 零步长」这一族钉齐**（22 行逐字节）：`fposmod / fmod` 的 0 除数给 `nan`、`wrapi(5,0,0)` 给 0、`wrapi(-3,2,2)` 给 2、`snapped(5,0)` 给 5、`snappedi(5,0)` 给 5、`snappedf(5.0,0.0)` 给 5.0、`snapped(2.5,0)` 与 `snappedi(2.5,0)` 都给 **2**（int 步长那侧结果也 int，且是截断）。最后这形同时把 §1.147 里 `snappedi` guard 改用的 `Math.trunc` 钉住了。
+- **门**：`pnpm test` **1980**（73 文件）、typecheck **4/4**、`test:compile` **232/333**（三档分类一字不变）、`test:diff` **225/225**（静默 / 崩溃 / 未实现 全 0）、`test:scriptc` 原生门 344 一格编过 / 跑通 / 逐字节一致 1/1。
+
 ### 1.147 普查第二批逮到 `snapped` 全族的折半方向：源是 `floor(v/step + 0.5)`，往 +∞ 折（2026-10-12，S334，语料 343）
 
 - **换了一把尺子**：float 输出的普查要在 17 位上比，尾数级分岔既难归因又看不见（§1.143 / §1.144 那批）；这一批专挑**输出是 bool / int / 串**的全局函数 —— 这类输出没有地方躲，裂一格就是语义错。

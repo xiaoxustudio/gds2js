@@ -52,6 +52,8 @@ export function asVec2i(v: Variant): GVector2i | null {
 function intArg(v: Variant | undefined, who: string): number | bigint {
   if (v === undefined) throw new UnsupportedError("vector2i-arity", `Vector2i.${who} 缺少实参`);
   if (v.t === Tag.INT) return intToBig(v.v as IntPayload);
+  // bool 在整数位上折 0 / 1（`Vector2i(1, 2).clampi(true, 1)` 实测照算，与 `Vector3i` 那一支同一条）
+  if (v.t === Tag.BOOL) return BigInt(v.v ? 1 : 0);
   if (v.t === Tag.FLOAT) {
     const n = v.v as number;
     if (!Number.isFinite(n)) {
@@ -113,8 +115,12 @@ export function vector2iConst(name: string): Variant {
 function vecArg(args: Variant[], i: number, who: string): GVector2i {
   const a = args[i];
   const v = a === undefined ? null : asVec2i(a);
-  if (!v) throw new UnsupportedError("vector2i-arg", `Vector2i.${who} 的第 ${i + 1} 个实参需要 Vector2i`);
-  return v;
+  if (v) return v;
+  // Vector2 交在 Vector2i 位上引擎逐分量折整数（`Vector2i(1, 2).max(Vector2(1, 2))` 实测 `(1, 2)`），与 `Vector2i(Vector2)` 构造式同一折法
+  if (a !== undefined && a.t === Tag.OBJECT && a.v instanceof GVector2) {
+    return new GVector2i(Math.trunc(a.v.x), Math.trunc(a.v.y));
+  }
+  throw new UnsupportedError("vector2i-arg", `Vector2i.${who} 的第 ${i + 1} 个实参需要 Vector2i`);
 }
 
 function arity(args: Variant[], n: number, who: string): void {

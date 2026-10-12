@@ -111,14 +111,20 @@ function scalar(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("vector2-arity", `Vector2.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return r(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as number | bigint);
+  // bool 在数值位上引擎收下来折 0 / 1（`Vector2(1, 2).bezier_derivative(Vector2(1, 2), Vector2(1, 2), Vector2(1, 2), true)` 实测给 `(0.0, 0.0)`）
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   throw new UnsupportedError("vector2-arg", `Vector2.${who} 需要数值实参，收到 ${v.t}`);
 }
 
 function vecArg(args: Variant[], i: number, who: string): GVector2 {
   const a = args[i];
   const v = a === undefined ? null : asVec2(a);
-  if (!v) throw new UnsupportedError("vector2-arg", `Vector2.${who} 的第 ${i + 1} 个实参需要 Vector2`);
-  return v;
+  if (v) return v;
+  // Vector2i 交在 Vector2 位上引擎按分量折（`Vector2(1, 2).angle_to(Vector2i(1, 2))` 实测 `0.0`），与构造式那一格同一登记
+  const inner = a !== undefined && a.t === Tag.OBJECT ? a.v : null;
+  const parts = inner !== null && typeof inner === "object" && vec2iParts !== null ? vec2iParts(inner) : null;
+  if (parts !== null) return new GVector2(parts[0] as number, parts[1] as number);
+  throw new UnsupportedError("vector2-arg", `Vector2.${who} 的第 ${i + 1} 个实参需要 Vector2`);
 }
 
 function arity(args: Variant[], n: number, who: string): void {
