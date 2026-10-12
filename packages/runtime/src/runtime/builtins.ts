@@ -548,8 +548,7 @@ export function gCubic(from: Variant, to: Variant, pre: Variant, after: Variant,
   const p2 = fl(pre);
   const p3 = fl(after);
   const t = fl(w);
-  const ret = 0.5 * (p0 * 2 + (p1 - p2) * t + (p2 * 2 - p0 * 5 + p1 * 4 - p3) * t * t + (p2 * -1 + p0 * 3 - p1 * 3 + p3) * t * t * t);
-  return V.float(ret + 0);
+  return V.float(cubicNum(p0, p1, p2, p3, t) + 0);
 }
 
 export function gRemap(v: Variant, fl0: Variant, fh: Variant, tl: Variant, th: Variant): Variant {
@@ -767,8 +766,10 @@ export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Var
   const w = numArg(t, "bezier_interpolate() 的 t");
   const omt = 1 - w;
   const omt2 = omt * omt;
+  const omt3 = omt2 * omt;
   const t2 = w * w;
-  return V.float(p * omt2 * omt + a * omt2 * w * 3 + b * omt * t2 * 3 + q * t2 * w + 0);
+  const t3 = t2 * w;
+  return V.float(p * omt3 + a * omt2 * w * 3 + b * omt * t2 * 3 + q * t3 + 0);
 }
 
 export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
@@ -778,7 +779,9 @@ export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Vari
   const q = numArg(e, "bezier_derivative() 的终点");
   const w = numArg(t, "bezier_derivative() 的 t");
   const omt = 1 - w;
-  return V.float((a - p) * 3 * omt * omt + (b - a) * 6 * omt * w + (q - b) * 3 * w * w + 0);
+  const omt2 = omt * omt;
+  const t2 = w * w;
+  return V.float((a - p) * 3 * omt2 + (b - a) * 6 * omt * w + (q - b) * 3 * t2 + 0);
 }
 
 /** 角度版先把四个控制点折到 `from` 附近（引擎那六行 `fmod` 的式子），再走 `cubic_interpolate`。 */
@@ -794,8 +797,8 @@ function angleRots(from: number, to: number, pre: number, post: number): [number
 }
 
 function cubicNum(from: number, to: number, pre: number, post: number, t: number): number {
-  return 0.5 * (from * 2 + (to - pre) * t + (pre * 2 - from * 5 + to * 4 - post) * t * t +
-    (pre * -1 + from * 3 - to * 3 + post) * t * t * t);
+  const t2 = t * t;
+  return 0.5 * (from * 2 + (to - pre) * t + (pre * 2 - from * 5 + to * 4 - post) * t2 + (pre * -1 + from * 3 - to * 3 + post) * (t2 * t));
 }
 
 function lerpNum(a: number, b: number, w: number): number {
