@@ -1,5 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { Tag, V, intToBig, intToNum, int64ParamBig, tagName, type IntPayload, type Variant } from "./tags";
 import { CMP_EPS, approxEq, clamp, vecFailKey } from "./vector2";
 import { COLOR_NAMED } from "./color-named";
 
@@ -217,6 +217,15 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
           throw new UnsupportedError("color-arity", `Color.hex64() 只收 1 个 int（收到 ${args.length} 个）`);
         }
         return fromHex64(intBits(args[0], "hex64", 64));
+      }
+      case "from_rgba8": {
+        if (args.length !== 3 && args.length !== 4) {
+          throw new UnsupportedError("color-arity", `Color.from_rgba8() 需要 3 或 4 个 int（收到 ${args.length} 个）`);
+        }
+        // 式子是 `int64 / 255.0f`：整数先升 float32 再除，不夹范围（实测 300 → 1.1765、-5 → -0.0196）。
+        const ch = (v: Variant | undefined, i: number): number =>
+          div(r32(Number(int64ParamBig(v, `Color.from_rgba8() 的第 ${i + 1} 个实参`))), 255);
+        return color(ch(args[0], 0), ch(args[1], 1), ch(args[2], 2), args[3] === undefined ? 1 : ch(args[3], 3));
       }
       default:
         throw new UnsupportedError("color-static", `Color.${name}(...) 未实现`);

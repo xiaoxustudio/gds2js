@@ -1,4 +1,4 @@
-import { UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "./errors";
 
 /**
  * 值标签。用普通对象而不是 `const enum`：const enum 是 TS 专属语法，
@@ -115,5 +115,23 @@ export function box(v: unknown, staticType: "int" | "float" | "bool" | "string")
       return V.bool(v as boolean);
     case "string":
       return V.str(v as string);
+  }
+}
+
+/** 内建函数 **int64 形参** 上的 float→int64 折法：四条 API 一格一脚本实测同一口径（`String.num_int64` / `num_uint64` / `Color.from_rgba8` / 全局 `int()`，读数 `tmp/probe-int64-arg/readings.txt`）—— 范围内向零截断，**越界与非有限一律给 `INT64_MIN`**（x86 `cvttsd2si` 的整数不定值），既不报错也不夹到边界。放这儿是因为 `values` 与 `color` 互引，谁都不能 import 谁。 */
+export function int64ParamBig(v: Variant | undefined, who: string): bigint {
+  if (v === undefined) throw new GodotRuntimeError("arg-int", `${who} 缺少实参`);
+  switch (v.t) {
+    case Tag.INT:
+      return intToBig(v.v as IntPayload);
+    case Tag.FLOAT: {
+      const n = v.v as number;
+      if (!Number.isFinite(n) || Math.abs(n) >= 9223372036854775808) return -9223372036854775808n;
+      return BigInt(Math.trunc(n));
+    }
+    case Tag.BOOL:
+      return v.v ? 1n : 0n;
+    default:
+      throw new GodotRuntimeError("arg-int", `${who} 需要 int，收到 ${tagName(v.t)}`);
   }
 }

@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { hexUpper, strToInt } from "./numstr";
-import { Tag, tagName, V, intToBig, intToNum, type IntPayload, type Variant } from "./tags";
+import { Tag, tagName, V, intToBig, intToNum, int64ParamBig, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
 import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
@@ -2371,8 +2371,8 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
     case "num_uint64": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", `String.${name}() 缺少参数`);
-      const n0 = intArgBig(v, `String.${name}() 的参数`);
-      const base = args[1] === undefined ? 10 : Number(intArgBig(args[1], `String.${name}() 的 base`));
+      const n0 = int64ParamBig(v, `String.${name}() 的参数`);
+      const base = args[1] === undefined ? 10 : Number(int64ParamBig(args[1], `String.${name}() 的 base`));
       const cap = args[2] === undefined ? false : truthyOf(args[2]);
       const n = name === "num_uint64" ? wrapUnsigned64(n0) : n0;
       return V.str(numInBase(n, base, cap, name === "num_uint64"));

@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.138 `Color.from_rgba8` 发货，顺带把 int64 形参的 float 折法量成了一条规则（2026-10-12，S326，语料 336 长到 338 格）
+
+- **§1.137 记的那个卡点解决了**：112 形一格一脚本扫下来（`tmp/probe-int64-arg/readings.txt`），`String.num_int64` / `num_uint64` / `Color.from_rgba8` / 全局 `int()` 四条 API 在 float→int64 上同一口径 —— 范围内向零截断，**越界与非有限一律给 `INT64_MIN`**（x86 `cvttsd2si` 的整数不定值）。全局 `int()` 我们本来就是这么发的（`builtins.ts` 的 `TWO_63` 那一支），本轮等于把同一条规则从「全局函数」扩到了「内建类型的形参」。
+- **`from_rgba8` 的式子**：`Color(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f)`，整数先升 float32 再除、`a` 默认 255、不夹范围。语料 336 补 59 格（含 `2^53`、`1e20`、`NAN`、`±INF` 那几形），338 格逐字节 0 分歧。
+- **一条看着不同其实同源的读数**：int32 形参那侧 `Vector2i(9007199254740992.0, 0)` / `(NAN, …)` 全给 `(0, 0)` —— 是「先折 int64 再 `static_cast<int32_t>` 取低 32 位」的后段（`INT64_MIN` 低 32 位正好是 0）。本轮没动 int32 那侧的现有路径。
+- **实现落点**：新 helper 叫 `int64ParamBig`，放 `tags.ts` —— `values` 引 `color`，`color` 不能反向引 `values`，这条规则两边都要用，叶子模块是唯一不成环的位置。
+- **故意没扩的三处**：`String.chr` / `humanize_size` / `num` 的 `decimals` 仍走旧的 `intArgBig`（非有限值在那些形参上引擎给什么没量过，红线 1）；`Color.from_rgba8` 的**实例式**调用没接（静态名在实例上能调只对 `html` / `hex` 那几支量过）。
+- **门**：`pnpm test` **1673**（67 文件）、typecheck **4/4**、`test:diff` **218/218**、`test:compile` **225/325**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` **335 例零漂移**（OK 218 / 报错 100 / 超时 17）。
+
 ### 1.137 原生门补上 336 那一格：`DataView` + `BigInt` 在 scriptc 上过得去（2026-10-12，§6 第 47 条⑦，出货代码不动）
 
 - **为什么要补**：§1.136 那支式子中到的东西代表集从没验过 —— 从 IEEE754 位里拆 `m · 2^e` 用的是 `new DataView(new ArrayBuffer(8))` + `getBigUint64` + `BigInt` 的 `**` 与移位，而 scriptc 对内建历来有围栏（S200 那四道坑：`globalThis` 往 `Record` 的转法、`spawnSync` 的 `env`、`split` 出来再展开……）。node 侧绿不代表静态目标绿。

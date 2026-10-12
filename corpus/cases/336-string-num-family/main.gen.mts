@@ -3,6 +3,9 @@
 import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
+const INF = rt.V.float(Number.POSITIVE_INFINITY);
+const NAN = rt.V.float(Number.NaN);
+
 export class Main extends SceneTree {
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
@@ -285,6 +288,65 @@ export class Main extends SceneTree {
     print(rt.showArgs([rt.V.str("C|String.num(0.005, 1)||"), rt.stringStatic("num", [rt.V.float(0.005), rt.V.int(1)])]));
     print(rt.showArgs([rt.V.str("C|String.num(0.005, 2)||"), rt.stringStatic("num", [rt.V.float(0.005), rt.V.int(2)])]));
     print(rt.showArgs([rt.V.str("C|String.num(0.005, 0)||"), rt.stringStatic("num", [rt.V.float(0.005), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1.5, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(1.5), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(1.5)||"), rt.stringStatic("num_int64", [rt.V.float(1.5)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(1.5)||"), rt.stringStatic("num_uint64", [rt.V.float(1.5)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1.5, 1.5, 1.5, 1.5)||"), rt.colorStatic("from_rgba8", [rt.V.float(1.5), rt.V.float(1.5), rt.V.float(1.5), rt.V.float(1.5)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-1.5, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float((-1.5)), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(-1.5)||"), rt.stringStatic("num_int64", [rt.V.float((-1.5))])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(-1.5)||"), rt.stringStatic("num_uint64", [rt.V.float((-1.5))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-1.5, -1.5, -1.5, -1.5)||"), rt.colorStatic("from_rgba8", [rt.V.float((-1.5)), rt.V.float((-1.5)), rt.V.float((-1.5)), rt.V.float((-1.5))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(0.9, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(0.9), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(0.9)||"), rt.stringStatic("num_int64", [rt.V.float(0.9)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(0.9)||"), rt.stringStatic("num_uint64", [rt.V.float(0.9)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(0.9, 0.9, 0.9, 0.9)||"), rt.colorStatic("from_rgba8", [rt.V.float(0.9), rt.V.float(0.9), rt.V.float(0.9), rt.V.float(0.9)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-0.9, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float((-0.9)), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(-0.9)||"), rt.stringStatic("num_int64", [rt.V.float((-0.9))])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(-0.9)||"), rt.stringStatic("num_uint64", [rt.V.float((-0.9))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-0.9, -0.9, -0.9, -0.9)||"), rt.colorStatic("from_rgba8", [rt.V.float((-0.9)), rt.V.float((-0.9)), rt.V.float((-0.9)), rt.V.float((-0.9))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(9007199254740992.0, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(9007199254740992), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(9007199254740992.0)||"), rt.stringStatic("num_int64", [rt.V.float(9007199254740992)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(9007199254740992.0)||"), rt.stringStatic("num_uint64", [rt.V.float(9007199254740992)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(9007199254740992.0, 9007199254740992.0, 9007199254740992.0, 9007199254740992.0)||"), rt.colorStatic("from_rgba8", [rt.V.float(9007199254740992), rt.V.float(9007199254740992), rt.V.float(9007199254740992), rt.V.float(9007199254740992)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(9223372036854775807.0, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(9223372036854776000), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(9223372036854775807.0)||"), rt.stringStatic("num_int64", [rt.V.float(9223372036854776000)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(9223372036854775807.0)||"), rt.stringStatic("num_uint64", [rt.V.float(9223372036854776000)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(9223372036854775807.0, 9223372036854775807.0, 9223372036854775807.0, 9223372036854775807.0)||"), rt.colorStatic("from_rgba8", [rt.V.float(9223372036854776000), rt.V.float(9223372036854776000), rt.V.float(9223372036854776000), rt.V.float(9223372036854776000)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1e19, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(10000000000000000000), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(1e19)||"), rt.stringStatic("num_int64", [rt.V.float(10000000000000000000)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(1e19)||"), rt.stringStatic("num_uint64", [rt.V.float(10000000000000000000)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1e19, 1e19, 1e19, 1e19)||"), rt.colorStatic("from_rgba8", [rt.V.float(10000000000000000000), rt.V.float(10000000000000000000), rt.V.float(10000000000000000000), rt.V.float(10000000000000000000)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1e20, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(100000000000000000000), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(1e20)||"), rt.stringStatic("num_int64", [rt.V.float(100000000000000000000)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(1e20)||"), rt.stringStatic("num_uint64", [rt.V.float(100000000000000000000)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1e20, 1e20, 1e20, 1e20)||"), rt.colorStatic("from_rgba8", [rt.V.float(100000000000000000000), rt.V.float(100000000000000000000), rt.V.float(100000000000000000000), rt.V.float(100000000000000000000)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-1e20, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float((-100000000000000000000)), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(-1e20)||"), rt.stringStatic("num_int64", [rt.V.float((-100000000000000000000))])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(-1e20)||"), rt.stringStatic("num_uint64", [rt.V.float((-100000000000000000000))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-1e20, -1e20, -1e20, -1e20)||"), rt.colorStatic("from_rgba8", [rt.V.float((-100000000000000000000)), rt.V.float((-100000000000000000000)), rt.V.float((-100000000000000000000)), rt.V.float((-100000000000000000000))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(NAN, 0, 0)||"), rt.colorStatic("from_rgba8", [NAN, rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(NAN)||"), rt.stringStatic("num_int64", [NAN])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(NAN)||"), rt.stringStatic("num_uint64", [NAN])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(NAN, NAN, NAN, NAN)||"), rt.colorStatic("from_rgba8", [NAN, NAN, NAN, NAN])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(INF, 0, 0)||"), rt.colorStatic("from_rgba8", [INF, rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(INF)||"), rt.stringStatic("num_int64", [INF])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(INF)||"), rt.stringStatic("num_uint64", [INF])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(INF, INF, INF, INF)||"), rt.colorStatic("from_rgba8", [INF, INF, INF, INF])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-INF, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.ops.neg(INF), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(-INF)||"), rt.stringStatic("num_int64", [rt.ops.neg(INF)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(-INF)||"), rt.stringStatic("num_uint64", [rt.ops.neg(INF)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-INF, -INF, -INF, -INF)||"), rt.colorStatic("from_rgba8", [rt.ops.neg(INF), rt.ops.neg(INF), rt.ops.neg(INF), rt.ops.neg(INF)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1e300, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float(1e+300), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(1e300)||"), rt.stringStatic("num_int64", [rt.V.float(1e+300)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(1e300)||"), rt.stringStatic("num_uint64", [rt.V.float(1e+300)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(1e300, 1e300, 1e300, 1e300)||"), rt.colorStatic("from_rgba8", [rt.V.float(1e+300), rt.V.float(1e+300), rt.V.float(1e+300), rt.V.float(1e+300)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-1e-9, 0, 0)||"), rt.colorStatic("from_rgba8", [rt.V.float((-1e-9)), rt.V.int(0), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|String.num_int64(-1e-9)||"), rt.stringStatic("num_int64", [rt.V.float((-1e-9))])]));
+    print(rt.showArgs([rt.V.str("C|String.num_uint64(-1e-9)||"), rt.stringStatic("num_uint64", [rt.V.float((-1e-9))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(-1e-9, -1e-9, -1e-9, -1e-9)||"), rt.colorStatic("from_rgba8", [rt.V.float((-1e-9)), rt.V.float((-1e-9)), rt.V.float((-1e-9)), rt.V.float((-1e-9))])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(300, -5, 0, 300)||"), rt.colorStatic("from_rgba8", [rt.V.int(300), rt.V.int((-5)), rt.V.int(0), rt.V.int(300)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(255, 128, 0)||"), rt.colorStatic("from_rgba8", [rt.V.int(255), rt.V.int(128), rt.V.int(0)])]));
+    print(rt.showArgs([rt.V.str("C|Color.from_rgba8(true, false, true)||"), rt.colorStatic("from_rgba8", [rt.V.bool(true), rt.V.bool(false), rt.V.bool(true)])]));
     this.quit();
   }
   
