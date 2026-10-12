@@ -786,7 +786,7 @@
 - **一条看着不同其实同源的读数**：int32 形参那侧 `Vector2i(9007199254740992.0, 0)` / `(NAN, …)` 全给 `(0, 0)` —— 是「先折 int64 再 `static_cast<int32_t>` 取低 32 位」的后段（`INT64_MIN` 低 32 位正好是 0）。本轮没动 int32 那侧的现有路径。
 - **实现落点**：新 helper 叫 `int64ParamBig`，放 `tags.ts` —— `values` 引 `color`，`color` 不能反向引 `values`，这条规则两边都要用，叶子模块是唯一不成环的位置。
 - **故意没扩的三处**：`String.chr` / `humanize_size` / `num` 的 `decimals` 仍走旧的 `intArgBig`（非有限值在那些形参上引擎给什么没量过，红线 1）；`Color.from_rgba8` 的**实例式**调用没接（静态名在实例上能调只对 `html` / `hex` 那几支量过）。
-- **门**：`pnpm test` **1673**（67 文件）、typecheck **4/4**、`test:diff` **218/218**、`test:compile` **225/325**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` **335 例零漂移**（OK 218 / 报错 100 / 超时 17）。
+- **门**：`pnpm test` **1673**（67 文件）、typecheck **4/4**、`test:diff` **218/218**、`test:compile` **225/325**（emitter 不支持 0、响亮拒 26 不变）、`test:golden --check` **335 例零漂移**（OK 218 / 报错 100 / 超时 17）；原生门里 336 那一格也跟着重跑了一遍 —— **338 格编过 + 跑通 + 逐字节一致**（`GDS2JS_SCRIPTC_FILTER=336`，约 1 分钟），新走的 `BigInt → Number → Math.fround → /255` 那一条在静态目标上同样不炸。
 
 ### 1.137 原生门补上 336 那一格：`DataView` + `BigInt` 在 scriptc 上过得去（2026-10-12，§6 第 47 条⑦，出货代码不动）
 
