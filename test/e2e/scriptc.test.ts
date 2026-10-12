@@ -47,7 +47,9 @@ const created: string[] = [];
  *  `268` 不是续集而是补账：NodePath 这一族（构造 + 字面量）此前在代表集里一格都没有。
  *  `285` 是这一轮新加的：符号零那几支（`floor` / `ceil` / `round` / `clampf` / `deg_to_rad` / `fmod` / `floori`）改的是运行时函数体里的算式，
  *  其中 `round` 那一支多了一层内联箭头函数 —— 这类形状只有真编到静态目标才验得出来（S270 ④ 同一条路）。
- *  `286` 是同一轮的第二格：容器元素的 `c_escape` 改的是 `values.ts` 里 `repr` 那一句，String / StringName 两条通道的出货文本都从它出（S296）。 */
+ *  `286` 是同一轮的第二格：容器元素的 `c_escape` 改的是 `values.ts` 里 `repr` 那一句，String / StringName 两条通道的出货文本都从它出（S296）。
+ *  `334` / `335` 是八面体解码与 `from_angle` 那一轮：两支都新走 `rt.vector3Const(name, [args])` / `rt.vector2Const(name, [args])` 那个带实参的静态口，
+ *  函数体里是 `Math.fround` 套 `Math.abs` / `Math.cos` 的算式与一条 `Number.isFinite` 的限 —— 这类只改运行时函数体的形状，同样只有真编到静态目标才验得出来（S322 / S323）。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -89,6 +91,8 @@ const DEFAULT_SET = [
   "302-real-param-band",
   "303-cubic-in-time",
   "314-eol-in-brackets",
+  "334-vector3-octahedron-decode",
+  "335-vector2-from-angle",
   "032-preload-load",
 ];
 
