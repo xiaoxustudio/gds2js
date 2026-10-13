@@ -165,8 +165,8 @@ describe("runtime/values · String 方法族", () => {
     eq("234", "get_slice 走 method 分发", show(method(s, "get_slice", [V.str("/"), I(1)])), "b");
     eq("234", "count 走 method 分发", show(method(V.str("hello"), "count", [V.str("l")])), "2");
     eq("234", "casecmp_to 走 method 分发", show(method(V.str("a"), "casecmp_to", [V.str("B")])), "1");
-    shouldThrow("234", "count 的 chars 真值响亮拒", () => method(V.str("hello"), "count", [V.str("l"), V.bool(true)]));
-    shouldThrow("234", "count 的第 3 个参数没量过", () => method(V.str("hello"), "count", [V.str("l"), V.bool(false), I(1)]));
+    eq("234", "count 的 from 给 bool 折成 0 / 1（实测 hello.count(l, true) 给 2）", show(method(V.str("hello"), "count", [V.str("l"), V.bool(true)])), "2");
+    eq("234", "count 的 to 给 bool 也折（实测 hello.count(l, false, 1) 给 0）", show(method(V.str("hello"), "count", [V.str("l"), V.bool(false), I(1)])), "0");
     eq("234", "pad_zeros 以小数点为界补零", `${strPadZeros("0.5", 3)}|${strPadZeros(".5", 3)}|${strPadZeros("5", 3)}`, "000.5|.5|005");
     eq("234", "pad_zeros 跳过前导非数字再插到数字段开头", `${strPadZeros("--5", 2)}|${strPadZeros("+5", 3)}|${strPadZeros(" 5", 3)}|${strPadZeros("-.5", 3)}`, "--05|+005| 005|-000.5");
     eq("234", "pad_zeros 界内没数字就是往后贴", `${strPadZeros("abc", 5)}|${strPadZeros("x", 3)}|${strPadZeros("a.b", 5)}`, "abc00000|x000|a00000.b");
@@ -383,9 +383,7 @@ describe("runtime/values · String 方法族", () => {
     shouldThrow("099", "split() 不收第四个参数", () =>
       method(V.str("a,b"), "split", [V.str(","), V.bool(true), V.int(1), V.bool(true)]),
     );
-    shouldThrow("099", "max_splits 要 int（float 实测是类型错）", () =>
-      method(V.str("a,b"), "split", [V.str(","), V.bool(true), V.float(1.5)]),
-    );
+    eq("099", "max_splits 给 float 按截断折（1.5 → 1）", show(method(V.str("a,b,c"), "split", [V.str(","), V.bool(true), V.float(1.5)])), '["a", "b,c"]');
   });
 
   it("103 · to_float 与字面量共用两次舍入（…993.0 → …994）", async () => {
@@ -495,7 +493,7 @@ describe("runtime/values · count 的 from/to 窗口与 format 的两条通道",
     eq("234", "走 method 派发拿得到窗口两个参数", String((method(V.str("hello"), "count", [S("l"), I(2), I(4)]) as Variant).v), "2");
     shouldThrow("234", "count 少实参要响（引擎是 Too few arguments）", () => method(V.str("abc"), "count", []));
     shouldThrow("234", "count 第 4 个实参要响（Expected at most 3）", () => method(V.str("abc"), "count", [S("a"), I(0), I(1), I(2)]));
-    shouldThrow("234", "count 的 from 给非 int 响亮拒", () => method(V.str("abc"), "count", [S("a"), V.float(1)]));
+    eq("234", "count 的 from 给 float 按截断折（实测 abc.count(a, 1.5) 给 0）", show(method(V.str("abc"), "count", [S("a"), V.float(1.5)])), "0");
   });
 
   it("234 · format 的缺省占位符是 {_}", async () => {

@@ -2,6 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, int64ParamBig, tagName, type IntPayload, type Variant } from "./tags";
 import { CMP_EPS, approxEq, clamp, vecFailKey } from "./vector2";
 import { COLOR_NAMED } from "./color-named";
+import { asNodePath, nodePathText } from "./node-path";
 
 export class GColor {
   r: number;
@@ -30,12 +31,13 @@ export function asColor(v: Variant): GColor | null {
   return v.t === Tag.OBJECT && v.v instanceof GColor ? (v.v as GColor) : null;
 }
 
-/** 数值实参：int/float 收成 number，其余响亮报错。 */
 /** 数值实参：float 在调用边界上折回 `real_t`（S313，与 Vector 两支同一条），int 收成 number，其余响亮报错。 */
 function numArg(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return r32(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
+  // bool 在数值位上引擎收下来折 0 / 1（`Color(1, 0, 0, 1).from_hsv(true, 1, 1)` 实测照算）
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   throw new UnsupportedError("color-arg", `Color.${who} 需要数值实参，收到 ${tagName(v.t)}`);
 }
 
@@ -53,14 +55,17 @@ function uppercaseSlot(v: Variant): boolean {
 function strArg(v: Variant | undefined, who: string): string {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return v.v as string;
+  // NodePath 在字符串位上引擎按其文本折（`Color.html(^"808080")` 实测给 `(0.502, 0.502, 0.502, 1.0)`，与给 `"808080"` 同值）
+  const np = asNodePath(v);
+  if (np !== null) return nodePathText(np);
   throw new UnsupportedError("color-arg", `Color.${who} 需要字符串实参，收到 ${tagName(v.t)}`);
 }
 
-/** `hex` / `hex64` 的实参：只收 int，按无符号截到低 32 / 64 位（实测 `Color.hex(-1)` 与 `Color.hex(0xFFFFFFFF)` 同值、`Color.hex(4294967296)` 给全零）。 */
+/** `hex` / `hex64` 的实参：那一位声明是 int，引擎收 int / float / bool（`tmp/probe-argtype/hexfold.txt`），
+ *  折法与其余 int 形参同一口径（`int64ParamBig`），再按无符号截到低 32 / 64 位（实测 `Color.hex(-1)` 与 `Color.hex(0xFFFFFFFF)` 同值、`Color.hex(4294967296)` 给全零）。 */
 function intBits(v: Variant | undefined, who: string, bits: number): bigint {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
-  if (v.t !== Tag.INT) throw new UnsupportedError("color-arg", `Color.${who} 需要 int 实参，收到 ${tagName(v.t)}`);
-  return intToBig(v.v as IntPayload) & ((1n << BigInt(bits)) - 1n);
+  return int64ParamBig(v, `Color.${who}`) & ((1n << BigInt(bits)) - 1n);
 }
 
 /** `hex` / `hex64` 的通道切法：高位在前（与 `to_rgba32` / `to_rgba64` 那一路同序），标度分别是 255 与 65535。 */
@@ -193,7 +198,9 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
             `Color.from_string() 需要 2 个参数（字符串 + 兜底色，收到 ${args.length} 个）`,
           );
         }
-        const fb = asColor(args[1] as Variant);
+        // 兜底色那一位与 **Color 槽**同口径：Color / int（打包）/ String（按 html）都收（实测 `from_string("a", 1)` 给 `(0.0, 0.0, 0.0, 0.0039)`、`from_string("a", "a")` 给 `(0.0, 0.0, 0.0, 1.0)`）
+        const folded = args[1] === undefined ? null : tryColorSlot(args[1]);
+        const fb = folded === null ? null : asColor(folded);
         if (fb === null) throw new UnsupportedError("color-arg", "Color.from_string() 的第 2 个实参需要 Color");
         return parseColor(strArg(args[0], "from_string"), true) ?? color(fb.r, fb.g, fb.b, fb.a);
       }
@@ -345,7 +352,9 @@ function arity(args: Variant[], n: number, who: string): void {
 
 function colArg(args: Variant[], i: number, who: string): GColor {
   const a = args[i];
-  const v = a === undefined ? null : asColor(a);
+  // Color 位上引擎收 Color / int（按打包值）/ String（按 html），实测 `c.blend(1)`、`c.clamp("a", Color(...))` 都算得出值（`tmp/probe-argtype/values.mts`）
+  const folded = a === undefined ? null : tryColorSlot(a);
+  const v = folded === null ? null : asColor(folded);
   if (!v) throw new UnsupportedError("color-arg", `Color.${who} 的第 ${i + 1} 个实参需要 Color`);
   return v;
 }
@@ -399,6 +408,9 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
     case "from_string":
       arity(args, 2, "from_string");
       return colorStatic("from_string", args);
+    case "from_rgbe9995":
+      // 静态那一支在实例上同样调得出，三格读数（int / float / bool 各一）与静态一字一样（`tmp/probe-argtype/values.txt`）
+      return colorStatic("from_rgbe9995", args);
     case "from_hsv":
       // 声明是 `from_hsv(h, s, v, alpha = 1.0)`，元数不对时运行期那句报 4（S305 ③）
       if (args.length < 3 || args.length > 4) arity(args, 4, "from_hsv");

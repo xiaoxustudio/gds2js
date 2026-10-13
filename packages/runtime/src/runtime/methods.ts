@@ -47,8 +47,14 @@ function asDict(v: Variant, who: string): GDict {
 }
 
 function asString(v: Variant, who: string): string {
-  if (v.t !== Tag.STRING) throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
-  return v.v as string;
+  if (v.t === Tag.STRING) return v.v as string;
+  // StringName 与 NodePath 在 String 位上引擎收下来并按其文本折（`"abc".contains(&"abc")` 真、`"abc".replace(^"a", "Z")` 给 `Zbc`）
+  if (v.t === Tag.STRING_NAME) return v.v as string;
+  if (v.t === Tag.OBJECT) {
+    const np = asNodePath(v);
+    if (np !== null) return nodePathText(np);
+  }
+  throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
 }
 
 /** 入口可能是裸 JS 值（lambda、引擎对象），先归一成 Variant */
@@ -692,7 +698,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return d.has(one(args, "get")) ? d.get(args[0] as Variant) : (args[1] ?? V.nil());
         case "set":
           d.set(args[0] as Variant, args[1] as Variant);
-          return V.nil();
+          // 引擎这一支返回 true（实测 `d.set("a", 2)` 印 `true`、`d.set(1, 5)` 也印 `true` 且键都真换掉了）
+          return V.bool(true);
         case "is_empty":
           return V.bool(d.isEmpty());
         case "erase":
@@ -773,10 +780,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           let parts: string[];
           if (args.length === 3) {
             const mx = args[2] as Variant;
-            if (mx.t !== Tag.INT) {
-              throw new GodotRuntimeError("split-arg", `split() 的第 3 个参数需要 int，收到 ${tagName(mx.t)}`);
-            }
-            const cap = intToNum(mx.v as IntPayload);
+            // maxsplit 那一位同样按 int 位的折法收（`"abc".split("a", 1, true)` 实测与给 1 一字一样）
+            const cap = foldInt(mx, `split() 的第 3 个参数需要 int`);
             parts = cap <= 0 ? strSplit(s, dm, allow) : strSplitCapped(s, dm, allow, cap);
           } else {
             parts = strSplit(s, dm, allow);
@@ -1227,44 +1232,61 @@ function argAt(args: Variant[], i: number, who: string): Variant {
   return a;
 }
 
+/** int 位上的实参：int 原样，float 按 C 的截断折、bool 折 0 / 1 —— 判据是 `tmp/probe-argtype/fold*.txt` 的读数
+ *  （`"abc".substr(1.9, 1)` 给 `b`、`"abc".left(true)` 给 `a`、`"abc".repeat(-0.5)` 给空串）。
+ *  非有限值与越出 int64 的那几格引擎一律折到 INT64_MIN（`left(1e19)`、`substr(NAN, 1)`、`split("a", -INF, 1)` 同形）。 */
+function foldInt(v: Variant, fail: string): number {
+  if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
+  if (v.t === Tag.FLOAT) {
+    const n = v.v as number;
+    if (!Number.isFinite(n) || Math.abs(n) >= 9223372036854775808) return -9223372036854775808;
+    return Math.trunc(n);
+  }
+  throw new UnsupportedError("need-int-arg", fail);
+}
+
+/** bool 位上的实参：int / float 按「不等于 0」折，NaN 也算不等 0（`"abc".split("a", NAN, 1)` 走的是 allow_empty 真那一支）。 */
+function foldBool(v: Variant, fail: string): boolean {
+  if (v.t === Tag.BOOL) return v.v as boolean;
+  if (v.t === Tag.INT) return intToNum(v.v as IntPayload) !== 0;
+  if (v.t === Tag.FLOAT) return Number.isNaN(v.v as number) || (v.v as number) !== 0;
+  throw new UnsupportedError("need-bool-arg", fail);
+}
+
 function intArg(args: Variant[], i: number, who: string): number {
   const a = args[i];
-  if (a === undefined || a.t !== Tag.INT) {
+  if (a === undefined) {
     throw new UnsupportedError("need-int-arg", `${who} 的第 ${i} 个参数需要 int`);
   }
-  return intToNum(a.v as IntPayload);
+  return foldInt(a, `${who} 的第 ${i} 个参数需要 int`);
 }
 
 /** 下标那三处（读、字符串取字符、写）只有一个 int 参：直接收 Variant，别为它现造一个参数数组。报错文本与 intArg 一致。 */
 function intArgIdx(a: Variant, who: string): number {
-  if (a.t !== Tag.INT) {
-    throw new UnsupportedError("need-int-arg", `${who} 的第 0 个参数需要 int`);
-  }
-  return intToNum(a.v as IntPayload);
+  return foldInt(a, `${who} 的第 0 个参数需要 int`);
 }
 
 /** 可选 int 参：省略时取 Godot 的默认值。 */
 function intArgOr(args: Variant[], i: number, dflt: number): number {
   const a = args[i];
   if (a === undefined) return dflt;
-  if (a.t !== Tag.INT) throw new UnsupportedError("need-int-arg", `第 ${i} 个参数需要 int`);
-  return intToNum(a.v as IntPayload);
+  return foldInt(a, `第 ${i} 个参数需要 int`);
 }
 
 function boolArg(args: Variant[], i: number, who: string): boolean {
   const a = args[i];
-  if (a === undefined || a.t !== Tag.BOOL) {
+  if (a === undefined) {
     throw new UnsupportedError("need-bool-arg", `${who} 的第 ${i} 个参数需要 bool`);
   }
-  return a.v as boolean;
+  return foldBool(a, `${who} 的第 ${i} 个参数需要 bool`);
 }
 
 /** 可选 bool 参：省略时取 Godot 的默认值。 */
 function boolArgOr(args: Variant[], i: number, dflt: boolean): boolean {
   const a = args[i];
   if (a === undefined) return dflt;
-  if (a.t !== Tag.BOOL) throw new UnsupportedError("need-bool-arg", `第 ${i} 个参数需要 bool`);
-  return a.v as boolean;
+  return foldBool(a, `第 ${i} 个参数需要 bool`);
 }
 
 /** 全局 Callable 的实参槽位：`.call()` 与 `callv()` 都先过实测的区间闸门，只剩 `call_deferred()` 那一形能空着进来（引擎侧没量），响亮拒。 */
