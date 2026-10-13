@@ -1,4 +1,5 @@
 import { staticMemberFn } from "./ir";
+import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "./static-arg-types";
 import { isGlobalConst } from "./globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
@@ -2736,6 +2737,33 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (callee.kind !== "attribute") continue;
       if (callee.obj.kind === "ident" && callee.obj.name in STATIC_FACE) {
         for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ ...d, loc: e.loc });
+        // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
+        const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];
+        if (bounds !== undefined && e.args.length >= bounds[0] && e.args.length <= bounds[1]) {
+          const skey = `${callee.obj.name}.${callee.name}`;
+          const byPos = new Map<number, Array<{ code: string; message: string }>>();
+          const put = (pos: number, code: string, message: string): void => {
+            const bucket = byPos.get(pos) ?? [];
+            bucket.push({ code, message });
+            byPos.set(pos, bucket);
+          };
+          for (const [pos, refuse, want, also] of STATIC_ARG_AS[skey] ?? []) {
+            const got = literalTypeName(e.args[pos - 1]);
+            if (got === null || !refuse.includes(got)) continue;
+            put(pos, "static-arg-pass", `Cannot pass a value of type "${got}" as "${want}".`);
+            if (also.includes(got)) {
+              put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            }
+          }
+          for (const [pos, refuse, want] of STATIC_ARG_TYPES[skey] ?? []) {
+            const got = literalTypeName(e.args[pos - 1]);
+            if (got === null || !refuse.includes(got)) continue;
+            put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+          }
+          for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+            for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+          }
+        }
         continue;
       }
       const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : valueCtorType(callee.obj);
@@ -2789,6 +2817,14 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       // 同位上两种期望型并存的（`convert` 的第二参：Array / Dictionary 说 Variant.Type、别的说 int）整条交给逐 kind 的名单
       const shouldPos = new Set((shouldRows ?? []).map(([pos]) => pos));
       const suppress = GLOBAL_ARG_SUPPRESS_OTHER[callee.name];
+      // 引擎按**位升序**逐位推句（`randf_range([1], "a")` 实测：第 1 位 A 式在前、第 2 位 as 那一对在后），
+      // 五族混在同一格时会互相错开，所以句子先按位归桶、再按位发。
+      const byPos = new Map<number, Array<{ code: string; message: string }>>();
+      const put = (pos: number, code: string, message: string): void => {
+        const bucket = byPos.get(pos) ?? [];
+        bucket.push({ code, message });
+        byPos.set(pos, bucket);
+      };
       const wants: Array<[number, "int" | "float"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
       if (follows !== undefined) {
         const first = e.args[0] === undefined ? null : numericLiteralKind(e.args[0]);
@@ -2804,11 +2840,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         const got = nonNumericLiteral(a);
         if (got === null || got === want) continue;
-        diags.push({
-          code: "global-arg-type",
-          message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
-          loc: e.loc,
-        });
+        put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
       }
 
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
@@ -2817,35 +2849,23 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
-        diags.push({ code: "global-arg-sentence", message: sentence, loc: e.loc });
+        put(pos, "global-arg-sentence", sentence);
       }
       for (const [pos, refuse, want, unlessFirst, also] of asRows ?? []) {
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
-        diags.push({
-          code: "global-arg-pass",
-          message: `Cannot pass a value of type "${got}" as "${want}".`,
-          loc: e.loc,
-        });
+        put(pos, "global-arg-pass", `Cannot pass a value of type "${got}" as "${want}".`);
         // 声明类型那一位引擎连推两句，第二句是同一位的 A 式（`counts.txt` 逐格数过才这么发）
         if ((also ?? []).includes(got)) {
-          diags.push({
-            code: "global-arg-type",
-            message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
-            loc: e.loc,
-          });
+          put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
         }
       }
       for (const [pos, refuse, want, unlessFirst] of shouldRows ?? []) {
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
-        diags.push({
-          code: "global-arg-type",
-          message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
-          loc: e.loc,
-        });
+        put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
       }
       // 「跟第一参走」的向量与 Color 那一支：期望型就是第一参那一形，那一位拒哪些形是逐 kind 量出来的
       for (const [want, pos, refuse] of DERIVED_ARG_TYPES[callee.name] ?? []) {
@@ -2857,11 +2877,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           const other = e.args.some((x, i) => i !== pos - 1 && suppress[1].includes(literalTypeName(x) ?? ""));
           if (other) continue;
         }
-        diags.push({
-          code: "global-arg-derived",
-          message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
-          loc: e.loc,
-        });
+        put(pos, "global-arg-derived", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+      }
+      for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+        for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
       }
     }
   }
