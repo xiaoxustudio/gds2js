@@ -398,7 +398,87 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   const zi3Cmp = asVec3i(a);
   const zj3Cmp = asVec3i(b);
   if (zi3Cmp && zj3Cmp) return vec3iCmp(zi3Cmp, zj3Cmp);
+  // 数组对数组：引擎逐元素比、异型按「形的秩」定方向、长度做平手（读数 `tmp/probe-argtype/{ordcmp4,ordcmp5,ordcmp8}.txt`）。
+  // 这一条与 `Array.sort()` 用的那条**不是同一条**（105 对逐对核过只有 106/210 相同），所以 sort 不在这儿走。
+  if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
+    const x = arrayLess(a, b);
+    const y = arrayLess(b, a);
+    return x && !y ? -1 : y && !x ? 1 : 0;
+  }
   throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
+}
+
+/** 容器元素的形秩：① 那条量成的全序，`null < bool < int < float < String < Vector2 < Vector2i < Vector3 < Vector3i < Color < StringName < NodePath < RID < Dictionary < Array`。
+ *  数值三个形**也按秩而不按值**（`[2.5] < [3]` 假、`[3] < [2.5]` 真；`[true] < [1]` 真）—— 引擎就是这样。 */
+function elemRank(v: Variant): number {
+  if (v.t === Tag.NIL) return 0;
+  if (v.t === Tag.BOOL) return 1;
+  if (v.t === Tag.INT) return 2;
+  if (v.t === Tag.FLOAT) return 3;
+  if (v.t === Tag.STRING) return 4;
+  if (asVec2(v) !== null) return 5;
+  if (asVec2i(v) !== null) return 6;
+  if (asVec3(v) !== null) return 7;
+  if (asVec3i(v) !== null) return 8;
+  if (asColor(v) !== null) return 9;
+  if (v.t === Tag.STRING_NAME) return 10;
+  if (asNodePath(v) !== null) return 11;
+  if (asRid(v) !== null) return 12;
+  if (v.t === Tag.DICT) return 13;
+  if (v.t === Tag.ARRAY) return 14;
+  throw new UnsupportedError("compare-elem", `容器元素的序只量到这 15 形，收到 ${tagName(v.t)}`);
+}
+
+/** 同型元素谁在前：数值 / 串 / 向量 / RID 按值，Color、NodePath、Dictionary **两头都假**（比不出但不报错），
+ *  StringName 引擎走的是 intern 指针序（`[&"aaa"] < [&"abc"]` 假而 `[&"a"] < [&"zzz"]` 真，文字序与反序都对不上）—— 复现不了，响亮拒。 */
+function elemLess(x: Variant, y: Variant): boolean {
+  const rx = elemRank(x);
+  const ry = elemRank(y);
+  if (rx !== ry) return rx < ry;
+  switch (rx) {
+    case 0:
+      return false;
+    case 1:
+      return !(x.v as boolean) && (y.v as boolean);
+    case 2:
+      return intToBig(x.v as IntPayload) < intToBig(y.v as IntPayload);
+    case 3:
+      return (x.v as number) < (y.v as number);
+    case 4:
+      return strCmp(x.v as string, y.v as string) < 0;
+    case 5:
+      return vecCmp(asVec2(x)!, asVec2(y)!) < 0;
+    case 6:
+      return vec2iCmp(asVec2i(x)!, asVec2i(y)!) < 0;
+    case 7:
+      return vec3Cmp(asVec3(x)!, asVec3(y)!) < 0;
+    case 8:
+      return vec3iCmp(asVec3i(x)!, asVec3i(y)!) < 0;
+    case 9:
+    case 11:
+    case 13:
+      return false;
+    case 10:
+      throw new UnsupportedError("compare-string-name", "StringName 的 < / > 按 Godot 内部指针序，无可靠口径（实测 &\"zzz\" < &\"abc\" 为真），拒绝 StringName 与 StringName 比大小");
+    case 12: {
+      const m = BigInt.asUintN(64, intToBig(asRid(x)!.id));
+      const n = BigInt.asUintN(64, intToBig(asRid(y)!.id));
+      return m < n;
+    }
+    default:
+      return arrayLess(x, y);
+  }
+}
+
+function arrayLess(x: Variant, y: Variant): boolean {
+  const xs = (x.v as GArray).raw();
+  const ys = (y.v as GArray).raw();
+  const n = Math.min(xs.length, ys.length);
+  for (let i = 0; i < n; i++) {
+    if (elemLess(xs[i] as Variant, ys[i] as Variant)) return true;
+    if (elemLess(ys[i] as Variant, xs[i] as Variant)) return false;
+  }
+  return ys.length > xs.length;
 }
 
 /** `a` 严格小于 `b`：与 `<`、`Array.sort()`、`bsearch`、`min` / `max` 共用 compare 这一个口径。 */

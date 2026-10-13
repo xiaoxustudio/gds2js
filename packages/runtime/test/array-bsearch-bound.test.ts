@@ -1,5 +1,5 @@
 /**
- * `Array.bsearch` / `bsearch_custom` 的那一条二分界循环：一格一行把 162 + 72 格引擎读数钉成门
+ * `Array.bsearch` / `bsearch_custom` 的那一条二分界循环：一格一行把 174 + 72 格引擎读数钉成门
  * （读数 `tmp/probe-argtype/{bsearch2,bsearch3}.txt`，尺 `tmp/probe-argtype/{fold10,fold11}.mts`）。
  * 四条判据都在这里面：**找不到给的是插入位、不是 -1**；**第二位 `before` 真 = lower_bound、假 = upper_bound**
  * （比较器换的是**实参顺序**，不是结果取反：真收 `(元素, 值)`、假收 `(值, 元素)` 再取反）；
@@ -179,6 +179,18 @@ const CELLS: Array<[Variant, Variant[], string, string]> = [
   [V.array(GArray.of([V.str("a"), V.str("b"), V.str("c")])), [V.bool(true)], "[\"a\", \"b\", \"c\"].bsearch(true)", "0"],
   [V.array(GArray.of([V.str("a"), V.str("b"), V.str("c")])), [V.bool(true), V.bool(true)], "[\"a\", \"b\", \"c\"].bsearch(true, true)", "0"],
   [V.array(GArray.of([V.str("a"), V.str("b"), V.str("c")])), [V.bool(true), V.bool(false)], "[\"a\", \"b\", \"c\"].bsearch(true, false)", "3"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.array(GArray.of([V.int(1n)]))], "[[1], [2]].bsearch([1])", "0"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.array(GArray.of([V.int(1n)])), V.bool(true)], "[[1], [2]].bsearch([1], true)", "0"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.array(GArray.of([V.int(1n)])), V.bool(false)], "[[1], [2]].bsearch([1], false)", "1"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.array(GArray.of([V.int(2n)]))], "[[1], [2]].bsearch([2])", "1"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.array(GArray.of([V.int(2n)])), V.bool(true)], "[[1], [2]].bsearch([2], true)", "1"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.array(GArray.of([V.int(2n)])), V.bool(false)], "[[1], [2]].bsearch([2], false)", "2"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.int(1n)], "[[1], [2]].bsearch(1)", "0"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.int(1n), V.bool(true)], "[[1], [2]].bsearch(1, true)", "0"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.int(1n), V.bool(false)], "[[1], [2]].bsearch(1, false)", "2"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.str("a")], "[[1], [2]].bsearch(\"a\")", "0"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.str("a"), V.bool(true)], "[[1], [2]].bsearch(\"a\", true)", "0"],
+  [V.array(GArray.of([V.array(GArray.of([V.int(1n)])), V.array(GArray.of([V.int(2n)]))])), [V.str("a"), V.bool(false)], "[[1], [2]].bsearch(\"a\", false)", "2"],
 ];
 
 const CUSTOM: Array<[Variant, Variant[], string, string]> = [
