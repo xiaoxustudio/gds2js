@@ -2633,6 +2633,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const p of f.params) {
       const t = valueTypeAnnotation(p.type);
       if (t !== null) typed.set(p.name, t);
+      if (p.type !== null && p.type.kind === "named" && FACE_ANNOTATIONS.has(p.type.name)) faceTyped.set(p.name, p.type.name);
     }
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
@@ -2737,6 +2738,11 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const t = valueTypeAnnotation(d.type) ?? (d.type === null ? valueCtorType(d.init) : null);
       if (t !== null) typed.set(d.name, t);
       if (d.type !== null && d.type.kind === "named" && FACE_ANNOTATIONS.has(d.type.name)) faceTyped.set(d.name, d.type.name);
+      // 没标注的初值那一侧也量过：`var rs = "abc"` 与 `var rs: String = "abc"` 说的句子逐格一样（`tmp/probe-argtype/p5-infer.txt` 1358 格 / 不同 0）
+      if (d.type === null && d.init !== null) {
+        const inferred = literalFaceType(d.init, new Map());
+        if (inferred !== null) faceTyped.set(d.name, inferred);
+      }
     }
 
     for (const e of calls) {
