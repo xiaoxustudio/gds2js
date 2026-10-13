@@ -1,0 +1,23 @@
+extends SceneTree
+
+func _initialize():
+	var v: Vector2 = Vector2(1, 2)
+	var b: Vector2 = Vector2(4, 8)
+	var pre: Vector2 = Vector2(-2, 1)
+	var post: Vector2 = Vector2(9, 3)
+	print("A|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 1, 0, 3), "|", v.cubic_interpolate_in_time(b, pre, post, 0.0, 1, 0, 3))
+	print("B|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 0, -1, 2), "|", v.cubic_interpolate_in_time(b, pre, post, 1, 0, -1, 2))
+	print("C|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 1, -1, 1), "|", v.cubic_interpolate_in_time(b, pre, post, 1, 1, -1, 1))
+	print("D|", v.cubic_interpolate_in_time(b, pre, post, 0.25, 1, 1, 3), "|", v.cubic_interpolate_in_time(b, pre, post, 0.75, 1, 1, 3))
+	print("E|", v.cubic_interpolate_in_time(b, pre, post, 0.25, 1, -1, 0), "|", v.cubic_interpolate_in_time(b, pre, post, 0.75, 1, -1, 0))
+	print("F|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 0, 0, 0), "|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 1, 1, 1))
+	print("G|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 1, 1, 1), "|", v.cubic_interpolate_in_time(b, pre, post, 0.5, 1, -1, -2))
+	var w: Vector3 = Vector3(1, 2, 3)
+	var b3: Vector3 = Vector3(4, 8, 5)
+	var pre3: Vector3 = Vector3(-2, 1, 0)
+	var post3: Vector3 = Vector3(9, 3, 6)
+	print("H|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.5, 1, 0, 3), "|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.5, 0, -1, 2))
+	print("I|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.5, 1, -1, 1), "|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.5, 1, 1, 1))
+	print("J|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.25, 1, -1, 0), "|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.75, 0, 0, 0))
+	print("K|", w.cubic_interpolate_in_time(b3, pre3, post3, 0.5, 1, -1, 3))
+	quit()

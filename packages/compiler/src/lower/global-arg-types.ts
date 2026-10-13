@@ -86,6 +86,22 @@ export const ARG_TYPE_FOLLOWS_FIRST: Readonly<Record<string, ReadonlyArray<numbe
   wrap: [2, 3],
 };
 
+/** 那几张表的数值位上**连 bool 字面量也拒**的位（`-1` = 该函数的每一位）；句子仍是 A 式、期望型照该位的型。
+ *  S362 的 113 格扫出来的分布：64 个函数、101 个 int / float 位里**只有这几处**拒 bool，其余 97 格引擎都收
+ *  （`absf(false)` 给 0.0、`sqrt(false)` 给 0.0、`lerp` 的权重位收 bool）。 */
+export const GLOBAL_ARG_BOOL_REFUSED: Readonly<Record<string, ReadonlyArray<number>>> = {
+  max: [-1],
+  min: [-1],
+  wrap: [1],
+};
+
+/** 「跟第一参走」那一族里**第一参可以是 bool** 的函数：那时后续位期望的是 bool，int / float 字面量反倒拒
+ *  （`clamp(true, 1, 2)` → argument 2 should be "bool" but is "int".）。`lerp` 的第一参走允许集、
+ *  `wrap` 的第一参直接拒 bool，两支都不在这儿。 */
+export const GLOBAL_ARG_FOLLOWS_BOOL: Readonly<Record<string, true>> = {
+  clamp: true,
+};
+
 /** `(位, 引擎拒的 kind 名单, 整句原文, 第一参是这些 kind 时整条让开)`。 */
 export const GLOBAL_ARG_SENTENCE: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string, readonly string[]]>>> = {
   abs: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"abs()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []]],

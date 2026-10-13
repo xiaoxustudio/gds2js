@@ -214,8 +214,8 @@ function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
       throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
     }
   }
-  if (getter === null) {
-    throw new UnsupportedError("property-setget", "只带 set 不带 get 的属性访问器还没实测过，先拒绝");
+  if (getter === null && setter === null) {
+    throw new UnsupportedError("property-setget", `属性访问器既没有 get 也没有 set：${JSON.stringify(n.children.map((c) => c.type).join(","))}`);
   }
   return { getter, setter };
 }

@@ -4,7 +4,7 @@ import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
-import { asColor, color, colorCmp, GColor } from "./color";
+import { asColor, color, GColor } from "./color";
 import { bytesConcat, GBytes } from "./packed";
 import { INT64_MIN, TWO_63 } from "./numstr";
 import {
@@ -360,6 +360,15 @@ function compare(a: Variant, b: Variant, op = "<"): number {
     const y = num(b);
     return x === y ? 0 : x < y ? -1 : 1;
   }
+  if (a.t === Tag.BOOL && b.t === Tag.BOOL) {
+    // 装箱 bool 对 bool：`<` / `>` 在运行时**合式**（false 在前 —— `[false, true].bsearch(true)` 给 1、`min()` 给 false，读数
+    // `tmp/probe-argtype/boolfamily.txt`），但 `<=` / `>=` 引擎当场拒，句子是标准那条 —— 源里写成静态已知的 bool 时更早，
+    // 是解析期两句（§6 第 56 条），那一层在 analyze 那边。
+    if (op === "<=" || op === ">=") {
+      throw new GodotRuntimeError("compare-operands", `Invalid operands 'bool' and 'bool' in operator '${op}'.`);
+    }
+    return a.v === b.v ? 0 : (a.v as boolean) ? 1 : -1;
+  }
   if (a.t === Tag.STRING && b.t === Tag.STRING) {
     return strCmp(a.v as string, b.v as string);
   }
@@ -391,18 +400,124 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   const wa3 = asVec3(a);
   const wb3 = asVec3(b);
   if (wa3 && wb3) return vec3Cmp(wa3, wb3);
-  if (asColor(a) !== null || asColor(b) !== null) colorCmp();
+  // Color 两侧都是它、或与别的东西比，引擎都是同一句运行期拒（实测 `Color < Color`、`Color < int`、`Color < [1]` 三形同文）
+  if (asColor(a) !== null || asColor(b) !== null) {
+    throw new GodotRuntimeError("color-cmp", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+  }
   const ziCmp = asVec2i(a);
   const zjCmp = asVec2i(b);
   if (ziCmp && zjCmp) return vec2iCmp(ziCmp, zjCmp);
   const zi3Cmp = asVec3i(a);
   const zj3Cmp = asVec3i(b);
   if (zi3Cmp && zj3Cmp) return vec3iCmp(zi3Cmp, zj3Cmp);
-  throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
+  // 数组对数组：引擎逐元素比、异型按「形的秩」定方向、长度做平手（读数 `tmp/probe-argtype/{ordcmp4,ordcmp5,ordcmp8}.txt`）。
+  // 这一条与 `Array.sort()` 用的那条**不是同一条**（105 对逐对核过只有 106/210 相同），所以 sort 不在这儿走。
+  if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
+    const x = arrayLess(a, b);
+    const y = arrayLess(b, a);
+    return x && !y ? -1 : y && !x ? 1 : 0;
+  }
+  throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
 }
 
-/** `a` 严格小于 `b`：与 `<`、`Array.sort()`、`bsearch`、`min` / `max` 共用 compare 这一个口径。 */
+/** 容器元素的形秩：① 那条量成的全序，`null < bool < int < float < String < Vector2 < Vector2i < Vector3 < Vector3i < Color < StringName < NodePath < RID < Dictionary < Array`。
+ *  数值三个形**也按秩而不按值**（`[2.5] < [3]` 假、`[3] < [2.5]` 真；`[true] < [1]` 真）—— 引擎就是这样。 */
+function elemRank(v: Variant): number {
+  if (v.t === Tag.NIL) return 0;
+  if (v.t === Tag.BOOL) return 1;
+  if (v.t === Tag.INT) return 2;
+  if (v.t === Tag.FLOAT) return 3;
+  if (v.t === Tag.STRING) return 4;
+  if (asVec2(v) !== null) return 5;
+  if (asVec2i(v) !== null) return 6;
+  if (asVec3(v) !== null) return 7;
+  if (asVec3i(v) !== null) return 8;
+  if (asColor(v) !== null) return 9;
+  if (v.t === Tag.STRING_NAME) return 10;
+  if (asNodePath(v) !== null) return 11;
+  if (asRid(v) !== null) return 12;
+  if (v.t === Tag.DICT) return 13;
+  if (v.t === Tag.ARRAY) return 14;
+  throw new UnsupportedError("compare-elem", `容器元素的序只量到这 15 形，收到 ${tagName(v.t)}`);
+}
+
+/** 同型元素谁在前：数值 / 串 / 向量 / RID 按值，Color、NodePath、Dictionary **两头都假**（比不出但不报错），
+ *  StringName 引擎走的是 intern 指针序（`[&"aaa"] < [&"abc"]` 假而 `[&"a"] < [&"zzz"]` 真，文字序与反序都对不上）—— 复现不了，响亮拒。 */
+function elemLess(x: Variant, y: Variant): boolean {
+  const rx = elemRank(x);
+  const ry = elemRank(y);
+  if (rx !== ry) return rx < ry;
+  switch (rx) {
+    case 0:
+      return false;
+    case 1:
+      return !(x.v as boolean) && (y.v as boolean);
+    case 2:
+      return intToBig(x.v as IntPayload) < intToBig(y.v as IntPayload);
+    case 3:
+      return (x.v as number) < (y.v as number);
+    case 4:
+      return strCmp(x.v as string, y.v as string) < 0;
+    case 5:
+      return vecCmp(asVec2(x)!, asVec2(y)!) < 0;
+    case 6:
+      return vec2iCmp(asVec2i(x)!, asVec2i(y)!) < 0;
+    case 7:
+      return vec3Cmp(asVec3(x)!, asVec3(y)!) < 0;
+    case 8:
+      return vec3iCmp(asVec3i(x)!, asVec3i(y)!) < 0;
+    case 9:
+    case 11:
+    case 13:
+      return false;
+    case 10:
+      throw new UnsupportedError("compare-string-name", "StringName 的 < / > 按 Godot 内部指针序，无可靠口径（实测 &\"zzz\" < &\"abc\" 为真），拒绝 StringName 与 StringName 比大小");
+    case 12: {
+      const m = BigInt.asUintN(64, intToBig(asRid(x)!.id));
+      const n = BigInt.asUintN(64, intToBig(asRid(y)!.id));
+      return m < n;
+    }
+    default:
+      return arrayLess(x, y);
+  }
+}
+
+function arrayLess(x: Variant, y: Variant): boolean {
+  const xs = (x.v as GArray).raw();
+  const ys = (y.v as GArray).raw();
+  const n = Math.min(xs.length, ys.length);
+  for (let i = 0; i < n; i++) {
+    if (elemLess(xs[i] as Variant, ys[i] as Variant)) return true;
+    if (elemLess(ys[i] as Variant, xs[i] as Variant)) return false;
+  }
+  return ys.length > xs.length;
+}
+
+/** `a` 严格小于 `b`：与 `<`、`bsearch`、`min` / `max` 共用 compare 这一个口径（`Array.sort()` 用的是另一条，见 `sortLess`）。 */
 export function isLess(a: Variant, b: Variant): boolean {
+  return compare(a, b) < 0;
+}
+
+/** `Array.sort()` 的比较器只认这两张表里的形（S357）：有方向的那一族同形才比值，比不出的一族两向都假。 */
+const SORT_ORDERED = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "RID", "Array"]);
+const SORT_UNORDERED = new Set(["Nil", "Dictionary", "Color", "NodePath", "PackedByteArray", "PackedInt32Array", "PackedStringArray", "Callable"]);
+
+/** `Array.sort()` 自己那条比较器 —— 与源里的装箱 `<`（`compare`）、也与 `sort_custom` 那位 Callable 都**不是同一条**（S357，
+ *  读数 `tmp/probe-argtype/{sortcmp,sortcmp2,sortcmp3}.txt`，尺 `{fold25,fold26,fold27}.mts`）：
+ *  **形不同只有 int 对 float 有方向**（按值，`[2.5, 1]` 换成 `[1, 2.5]`），bool 掺进数值里也不比（`[true, 0.5]` 与 `[0.5, true]` 两向都不动）；
+ *  **形相同才比值**：串按码点（`é` 排在 `z` 之后）、四个向量按分量字典序、RID 按**无符号**号（`RID(-1)` 最大）、数组走 ① 那条装箱序、bool 是 false 在前；
+ *  null / Dictionary / Color / NodePath / pack / Callable 同形也**一律比不出**（两向都不换位，引擎也不报错）；
+ *  StringName 走 intern 之后的指针序（`[&"b"] `排在 `[&"ab"]` 之前，文字序与反序都对不上）复现不了，没量过的形（用户对象、其余 pack）也响亮拒。 */
+export function sortLess(a: Variant, b: Variant): boolean {
+  const ka = valueTypeName(a);
+  const kb = valueTypeName(b);
+  if (ka !== kb) return (ka === "int" || ka === "float") && (kb === "int" || kb === "float") ? compare(a, b) < 0 : false;
+  if (SORT_UNORDERED.has(ka)) return false;
+  if (ka === "bool") return !(a.v as boolean) && (b.v as boolean);
+  if (ka === "StringName") {
+    throw new UnsupportedError("compare-string-name", `StringName 的 sort 序走 Godot 内部指针，实测 [&"ab"] 与 [&"b"] 的文字序、反序都对不上 —— 复现不了，响亮拒`);
+  }
+  if (!SORT_ORDERED.has(ka)) throw new UnsupportedError("array-sort-mixed", `Array.sort() 的比较器只量到 ${[...SORT_ORDERED, ...SORT_UNORDERED].join(" / ")} 这些形，${ka} 还没量`);
   return compare(a, b) < 0;
 }
 

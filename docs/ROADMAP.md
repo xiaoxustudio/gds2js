@@ -19,6 +19,7 @@
 | **D3** | `await` 语义 | **直接降级为 JS `async/await` + Promise**。实测证明 Godot 强制"协程必须被 await"（见 SEMANTICS §5），所谓 async 传染**就是 Godot 自己的规则**，不是偏差。 |
 | **D4** | 宿主深度 | **Tier 1：纯语言**。不实现 `Node` / `SceneTree` / 任何引擎 API，遇到就抛 `unsupported`。 |
 | **D5** | 版本 | 钉 **4.6.3**。已实测：4.6.3 与 4.7 在本项目覆盖的语义上输出逐字节一致。 |
+| **D6** | 七个值类型 | **不进 Tier 1**（2026-10-14 拍板）。`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` 的构造式、静态名、方法、打印、哈希与序列化**照 D4 继续抛 `unsupported`** —— 补它们要的是整族值表示 + 方法面 + 序列化，不是登记一笔的事（明细见 §1.131 与 §6 第 43 条⑪）。Tier 1 收尾因此只看「已实现面上的错值、过拦与解析期拒」。 |
 
 ### 2026-10-03 拍板（CLI 出货形态）
 
@@ -778,6 +779,195 @@
 - **语料看不见的部分另开一门**：normalize 滤掉整块 `ERROR:`，所以 `push_error` 的逐行文案改由 ops 的 12 格钉（英文原文靠 `--language en` 量的）；`print_stack` / `get_stack` / `push_warning` 三样真进了逐字节对账。
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
+
+### 1.186 取值记号按模块分主：两份文件同 `行:列` 的同名字不再互相抢记号（2026-10-14，§6 第 61 条结清）
+
+- **这不是新语义，是出货的错值**：三张记号表（全局函数取值 / 引擎类名取值 / 宿主方法名取值）是进程内累积的 `Set<string>`，`analyze` 从不清，键只有 `名@行:列`。跨文件工程是「每份先 analyze、再逐份发射」，于是 A 文件里 `quit@6:8` 的 Callable 记号，会被 B 文件同一行同一列那个叫 `quit` 的**形参**继承过去 —— 局部名发成了 Callable。引擎那边每份脚本各自编译，根本没有这种共享。
+- **撞它的正是上一轮的门**：两格源只差一个 setter 的形参名，行:列一字不差，前一刻记的号后一格直接取到。当时第一反应是把那一格错开，但那只是把证据藏起来。
+- **结法**：记号键加一位**归属**。`analyze(m, globals, owner?)` 给每份模块定主 —— `project.ts` 传 `resPath`、CLI 传 `absPath`、`tools/compile.ts` 传用例号，调用方没给就换一个进程内递增序号；归属写进 `m.markOwner`，发射器在 `emitModuleWithMap` 入口 `useMarkOwner(m.markOwner ?? "")` 对准当前模块再查表。**没有**改回对象身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090），这层限制原样留着。
+- **门**：`mark-owner-isolation.test.ts` 四格（宿主名一对、全局函数名一对，各自正序反序），`property-accessor-names.test.ts` 那一格恢复原形。
+- **不改变任何一份产物**：`test:compile` 250/359 一字未动、242 份 `main.gen.mts` 一份没改（`git status` 干净）、`test:diff` 242/242 逐字节、codegen-drift 绿、golden 未漂移 **369/369**（引擎侧与我们的记号无关）。`pnpm test` **13823**（106 文件）、typecheck **4/4**、`pkg-modes` + `export` 两门 ok 10 / 上游或环境记账 3 / FAIL 0。
+
+### 1.185 inline 读写器体从此真查：`get:` / `set(v):` 里不再是「不查名字的那两段」，只带 set 的属性也收下（2026-10-14，S368，语料 370）
+
+- **出货里的第二处真 bug**：1.184 把字段初值接住了，读写器那两段却还是同一个洞的另一半 —— `checkFunc` 只走查函数体，`var thing: int: get: return quit` 里的 `quit` 从没被记过，于是发成裸标识符，跑起来 `quit is not defined`（复现只需一行：读数 `tmp/pos/compare4.txt` 首行）。
+- **量法**：属性一律声明成 `Variant`，不然引擎的返回类型检查先抢答（第一轮 `fold57` 就是这样，`int` 属性返回 Callable 当场给 `Cannot return value of type "Callable" …`，名字那一层的问题整个被盖住）；`fold58` 十五格钉读写器体里的六种名字与三句拒，`fold59` 五格钉「只带 set / 只带 get / 成对」三种属性形状各自读出来给什么。一格一份 `.gd` 一次 spawn 这条老规矩不变。
+- **接法**：`checkFieldInits` 除了初值，也把 getter（允许 `self` 的作用域）与 setter（再多绑一个形参名）走查一遍；`checkConstAssign` 同样吃这两段，于是 setter 里 `quit = 5` 给的是引擎那句「常量」。`static var` 的两支引擎用的是**合成函数名** —— `@thing_getter()` / `@thing_setter()`，句子仍是 S367 那一句，出货照这两个名字发。
+- **顺带解掉一个过拦**：只带 `set` 的属性引擎是收下的（实测写它照跑体、读它是 typeof 0），出货 `lower.ts` 那句「还没实测过，先拒绝」撤掉；`PropAccessor.getter` 改成可空，发射器给空 getter 发 `return rt.V.nil()` —— 要的是真的 null 盒子，不是 JS 的 `undefined`，两者 `typeof` 一样、别处（打印、传参、`.is_valid()`）不一样。
+- **门**：`property-accessor-names.test.ts` 12 格（放行的钉发射式子、拒的钉原文）+ 语料 370 七行逐字节。两格源只差一个形参名、行:列撞车时互相抢记号那一节记在 §6 第 61 条，门里已把源错开并把原因写成注释。
+- **门读数**：`pnpm test` **13819**（105 文件）、typecheck **4/4**、`test:compile` **250/359**（sema 83、响亮拒 26，一例未动）、`test:diff` **242/242** 逐字节、golden 未漂移 **369/369**。
+- **还欠的**：具名委托那一形（探针写法被引擎判成 `Expected ":" or "(" after "get".`，出货是「未支持」，两句不同）—— 那一形怎么写合法要先量，见 §6 第 61 条④。
+
+### 1.184 字段初值与形参默认值那一层从此真查：模块级 `var f = quit` 不再发成裸标识符，静态语境三句按位置分文（2026-10-14，S367，语料 369）
+
+- **出货里的真 bug**：`analyze` 旧码 `recordInitValueReads` 走查字段初值只为补记「全局函数取值点」，整摞诊断丢进一张空表 —— 等于那一层不查名字。后果是模块级 `var f = quit` 编得过、发出来的是裸标识符，跑起来当场 `quit is not defined`；同一层里 `var f = nosuch` 也一路放行到运行期。
+- **量法**：解析期报错一句废整份脚本，所以一格一份 `.gd` 一次 spawn —— `fold55` 二十格钉「函数体之外的那些位置」，`fold56` 六格补 `static func` 里的**写**位与 `self` 在 `static var` / `const` 初值里的形状；两侧同表对照，读数 `tmp/pos/{compare.txt,compare2.txt}`。
+- **接法**：`checkFieldInits` 取代那张空表（模块与内部类的字段初值都真查，走的是允许 `self` 的作用域 —— 模块字段、内部类字段、实例方法形参默认值里的 `self` 实测都给 typeof 24），`checkFunc` 多走查一遍形参默认值，宿主名单仍只给根模块。静态语境三句分文：`static func`（读、写、默认值三种位置同一句、带那支函数名）、`static var` 初值、`const` 初值各一句，逐字照引擎。
+- **顺带修的一处静默错值**：`static var f = self` 引擎给 typeof 0（那处没有实例），出货此前一律发 `rt.V.object(this)`，而 JS 静态字段初始化里的 `this` 是那个类本身 → typeof 24。发射器在 `static var` 初值那一段改发 `rt.V.nil()`。
+- **门**：`host-name-positions.test.ts` 15 格（放行的六格钉发射式子、拒的六格钉原文、`self` 三格钉收/拒），`implicit-callable-value.test.ts` 那两支「静态方法没量过所以按未声明拒」的旧格子换成实测那句；语料 369 七行逐字节 —— 「内部类字段初值的 `self`」那一格引擎在退出时报 `ObjectDB instances leaked`，golden 里带上那两行就没法逐字节对账，所以请出语料、只留门与两侧读数。
+- **门读数**：`pnpm test` **13804**（104 文件）、typecheck **4/4**、`test:compile` **249/358**（sema 83、响亮拒 26，一例未动）、`test:diff` **241/241** 逐字节、golden 未漂移 **368/368**。
+- **还欠的三面**（§6 第 60 条）：内部类自己 `extends SceneTree` 那一形（引擎认、发射期先拒）、沿 `extends "res://…"` 文件链挂到 SceneTree 的脚本（本轮只量了引擎一侧）、lambda 形参的默认值（引擎给 25、出货响亮拒）。
+
+### 1.183 `_x` 虚方法名换回引擎那一句：`Identifier not found: _process`（末尾没有句号）（2026-10-14，S366 补）
+
+- **接着 1.182 的那 15 名**：它们不进宿主名单是对的（引擎取值也报错），但报错的句子与一般没声明的名字**不是一样** —— 引擎发 `SCRIPT ERROR: Compile Error: Identifier not found: _process`，而我们统一发 `Identifier "X" not declared in the current scope.`（那句在语料 golden 里有一批，是一般名字的正确原文）。
+- **改法**：`analyze` 里加一张实测的 15 名表（`_finalize` / `_get` / `_get_property_list` / `_init` / `_iter_get` / `_iter_init` / `_iter_next` / `_notification` / `_physics_process` / `_process` / `_property_can_revert` / `_property_get_revert` / `_set` / `_to_string` / `_validate_property`），同一取值位置改发 `Identifier not found: <名>`，`code` 仍是 `undeclared-identifier`，别处一字未动。
+- **门**：`host-value-method-names.test.ts` 那 15 名各钉「照旧拦 + 句子逐字」，另加一格钉一般名字仍是老句；`pnpm test` **13786**（103 文件）、typecheck **4/4**、`test:compile` **248/357**（sema 83、响亮拒 26，一例未动）、`test:diff` **240/240** 逐字节、golden 未漂移 **367/367**。
+- **还没穷尽的**：这 15 名在**调用位**（`_process()`）与**赋值位**给什么句子，没量过 —— 这一轮只换了实测过的那个取值位置。
+
+### 1.182 宿主裸方法名当值用的名单一次扫齐：15 名 → 97 名，另 15 支 `_x` 虚方法是第三种句子（2026-10-14，S366，语料 368）
+
+- **一次数完再逐名量**：`ClassDB.class_get_method_list("SceneTree")` 给 113 名（`Object` 那 62 名全在其中），一格一份脚本 spawn 量「裸名当值」—— 这一族混着编译期拒，packed probe 分不出是谁。读数 `tmp/hostnames/readings.txt`，尺 `fold45.mts`。
+- **97 名给 typeof 25 的 Callable**（打印 `SceneTree(<文件>)::<名>`），其中 82 名此前被解析期一句 `Identifier "…" not declared` 拦掉 —— 是「合法代码被过拦」那一类，S358 当时只逐支量了 15 名。
+- **另 15 名是虚方法那一族**（`_process` / `_init` / `_to_string` / `_get` / `_set` / `_notification` / `_iter_*`…），引擎给的是 `Compile Error: Identifier not found: _process` —— 与一般没声明名字那句 `Identifier "X" not declared in the current scope.` **不是一样**，出货照旧拦，差的只是句子形状。
+- **`_initialize` 是个陷阱**：探针里它确实是 Callable，只因探针脚本自己定义了它；宿主给不给没量到，所以不进名单，读数里那一格单独标出。
+- **运行时一字未动**：`get_method()` / `is_valid()` / `is_null()` 全按 Callable 盒子给（`methodCallable` 造的形状与 `Callable(self, "<名>")` 同一口径），所以新名单里那些调用起来还没实现的名字取值合法、`call()` 才响亮拒 —— 语料 368 因此只钉元数据。
+- **对过的两头的口径**：这 97 名与 `GLOBAL_VALUE_NAMES`、`ENGINE_CLASS_NAMES` 零冲突，解析顺序仍是局部 → 全局常量 → 全局函数名 → 引擎类名 → 宿主方法名（`host-collide.mts` 逐名核过）。
+- **门**：`host-value-method-names.test.ts` 97 名逐个钉「不出诊断 + 发出 `rt.methodCallable`」+ 一格钉 15 支虚方法照旧 `undeclared-identifier`；语料 368 三十六行逐字节；`pnpm test` **13785**（103 文件）、typecheck **4/4**、`test:compile` **248/357**（sema 83、响亮拒 26）、`test:diff` **240/240** 逐字节（用例 367、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **367/367**。
+
+### 1.181 全局函数的元数一次补全 61 名：「Godot 4 有默认实参」这一族假设被读数否掉（2026-10-14，S365）
+
+- **起点是 `screen-arity.mts` 的一次自查**：把「发射式子只取 `a[0]` / `a[1]`，又不在 `BUILTIN_ARITY` 上」的名字全筛出来 —— 六十多支。按公开签名，`ease(x, c, ease_style)`、`pingpong(time, length, pause)`、`is_equal_approx(a, b, tolerance)`、`type_exists(type, inherit)`、`var_to_str(var, pretty_print)`、`inst_to_dict(obj, props_only)` 都该带默认实参，那这就是「静默丢实参」的错值族。
+- **读数把假设打回**：`fold50` 给每名做「省掉这一位 / 给这一位」两格对照，`fold51` 再对每名量「少一元 / 多一元」两句 —— 4.6.3 的裁判对**多给一位**一律 `Too many arguments for "X()" call. Expected at most N but received M.`，一支都不收。所以真正的缺口是**闸门缺失**（多给实参编得过、按前两元发出去），不是丢位错值。
+- **零冲突复核**：`arity-diff.mts` 把读数与现有 51 行对照，**一格都不差**（顺带验了上一轮刚补的 `maxi` / `mini` / `maxf` / `minf`）；两名齐全的另一批 61 名进了表，表上从 51 → **112 名**。
+- **顺手修的一句**：`convert(1)` / `type_convert()` 旧发的是自写的 `Expected 2 but received 1.`，引擎同格是 `Expected at least 2 but received 1.` —— 两支现成的 throw 删掉改走闸门，`code` 仍是 `convert-arity`，`emit-guards` 那三格只换句子不改口径。
+- **没量的照旧不动**（§6 第 59 条）：`range` 上界走 `Invalid call to GDScript utility function "range()". Expected 3 argument(s).` 这条另一形状；返回 void 的九支被探针包法挡住，要换形状再量；类型构造式是第三种句子 `No constructor of "float" matches the signature …`。
+- **时机还差一层**：引擎两句都在解析期，出货在发射期发同文，`gds2js check` 看不见 —— 要接到 `analyze` 得先对两张区间表（S364 已经抓到 `max` / `min` 两边记法不同）。
+- **门**：`builtin-arity-sentences.test.ts` 208 格句子逐字钉 + `emit-guards` 的转换族 12 格；`pnpm test` **13684**（102 文件）、typecheck **4/4**、`test:compile` **247/356**（sema 83、响亮拒 26 —— 没有一例语料把这些名字用到区间外）、`test:diff` **239/239** 逐字节、golden 未漂移 **366/366**。
+
+### 1.180 全局 `max` / `min` 三元以上被截成两元：一条静默错值，顺带补齐四支定长名的元数闸门（2026-10-14，S364，语料 367）
+
+- **怎么露出来的**：发 S363 之后重跑「引擎收下的合法调用」那一侧普查，`max` / `min` 不在不合名单上（那批格子都是两元），但顺手用 `gds2js run` 试了三元的 `max(1, 2, 3)` —— 我们给 **2**、引擎给 **3**；`max(1, 5, 3, 9, 2)` 我们给 5、引擎给 9。发射式子是 `rt.gMax(${a[0]}, ${a[1]})`，第三元往后**当场丢掉**，`BUILTIN_ARITY` 又写着 `[2, +∞)`，于是解析期一声不出。
+- **折法是量出来的**：左折、赢家带自己的型（`max(1.0, 2, 3)` 给 int 3）、并列留先出现的那个（`max(2, 2.0, 2)` 给 int 2）、NaN 那六格两向（`max(NAN, 1, 2)` 给 nan 一路留到底、`max(1, NAN, 2)` 给 2 跨过中间的 nan）、20 元与 22 元都给值。尺 `fold46` / `fold47`（一格一份量句子 + 一次 spawn 量值）与 `fold48`（四支定长名的两句 + 31 格值），读数在 `tmp/maxmin/`。
+- **元数闸门补了四名**：`maxi` / `mini` / `maxf` / `minf` 引擎是**恰好两元**（少给 `at least 2`、多给 `at most 2`，`maxi(1, 2.5, 3)` 也报多给），出货表上原本没有这四支 → `maxf(1, 2, 3)` 编得过还静默给 `2.0`，同一类毛病。
+- **两元那一支一字未动**，只把「三位以后也照折」接上；`methods` 的动态那一面（`max.call(…)` 那条链）同步走 `gMax(ga(a,0), ga(a,1), ...a.slice(2))`。
+- **还剩两处口径差异**（§6 第 57 条改记）：Array / Dictionary 实参引擎是**运行期** `Invalid type in utility function "max()". Cannot convert argument N from Array to float.`，出货按解析期那一句发；`max.call(...)` 的 Callable 面区间还记 `[2, 2]`，三元给什么没量。
+- **门**：语料 367 三十行逐字节、`global-max-min-variadic.test.ts` 27 格、`emit-guards.test.ts` 新闸门 16 格；`pnpm test` **13476**（101 文件）、typecheck **4/4**、`test:compile` **247/356**（sema 83、响亮拒 26）、`test:diff` **239/239** 逐字节（用例 366、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **366/366**。
+
+### 1.179 `Color.from_ok_hsl` 发货：1437 格读数里 1367 格逐位合，alpha 也跟着夹（2026-10-14，S363，语料 366）
+
+- **出货口径**：`thirdparty/ok_color.h` 的 `okhsl_to_srgb` 那一支按**逐算子 float32** 移植（`r32` / `mul` / `div` / `add` / `sub` 一层一落地落），常数先折成 `...f` 字面量，Halley 只走一步、`FLT_MAX` 哨兵与分支顺序照原文；出货最后一道把 **四个通道一起夹进 0..1**。引擎侧的证据是 `core/math/color.cpp` 的 `Color::set_ok_hsl(float, float, float, float)` —— 它调 `ok_color::okhsl_to_srgb` 再 `Color(…).clamp()`，形参声明就是 float。
+- **clamp 的三件细节都是量出来的**：alpha 同样夹（`-0.2 → 0`、`2 → 1`、`INF → 1`）、`NAN` 原样留 nan、而 **`-0.0` 留号**（语料 366 各钉一行）—— 与 `x<0→0 / x>1→1 / 否则原值` 那一支三目一字一样。
+- **两条被读数否掉的替代口径**（省得下次再走）：同一支移植改成**全程 double** 只剩 40/792 合；把 `w0*x + w1*y + w2*z` 收成一条 FMA 只剩 217/792 合。s=0 那 396 格（只剩 `toe_inv` + 灰度 + `powf`）在逐算子 float32 下**全合**，`cbrt` 换成 `pow(x, 1/3)` 一格不变 —— 引擎确是逐算子 float32，且末位分歧不在 cube root。
+- **剩一条带**：70 格（全在 s 满格的 chroma 支路）两侧差 ≤1.1e-6，归到 `cosf` / `sinf` 的末位之差被消去放大，与 `Vector3.rotated` 的 libm 上限同源；门里这一组按 2e-6 带上界钉住（§6 第 58 条）。语料 366 挑的格全在逐位合的那一批。
+- **顺带结清的两笔旧账**：`Color` 实例形 `c.from_ok_hsl(…)` 是**静态调用**（给出新色、接收者不动，与 `from_hsv` 同形）；§6 第 36 条那份「名在表里、运行时报未实现」的清单因此只剩 `Vector3.rotated` / `Vector3.outer` 两名。
+- **门**：语料 366 四十一行逐字节、`packages/runtime/test/color-from-ok-hsl.test.ts` 1367 + 70 + 形状六格；`pnpm test` **13444**（100 文件）、typecheck **4/4**、`test:compile` **246/355**（sema 83、响亮拒 26）、`test:diff` **238/238** 逐字节（用例 365、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **365/365**；「引擎收下的合法调用」那一侧普查从 657 合 / 22 不合 变成 **673 合 / 6 不合**（那 16 格 `from_ok_hsl` 全翻合，剩下 6 格是 `Vector3.rotated` 四格与 `Vector3.outer` 两格）。
+
+### 1.178 `Color.from_ok_hsl` 的两块拦路石搬掉了：逐字式子进仓、第一参是「圈」不是「度」（2026-10-14，§6 第 53 条④，未动代码）
+
+- **原文到手**：`thirdparty/ok_color.h` = Björn Ottosson 的 MIT 原文，取自 `raw.githubusercontent.com/godotengine/godot/4.6.3-stable/thirdparty/misc/ok_color.h`（与裁判**同 tag**），sha256 `776f1de1…34281`，693 行一字未改；许可头留在文件里，它不进产物树（`tree-face` 不管根目录的 `thirdparty/`）。
+- **先量到的一条硬事实**：`Color.from_ok_hsl(h, …)` 的第一参是**圈（turn）不是度** —— `(0.25, 0.5, 0.5)` 与 `(1.25, …)`、`(-0.25, …)` 与 `(0.75, …)` 一字一样，而 `30 / 90 / 150 / 180 / 240 / 300 / 360` 这一整批「度」写法全落到同一个颜色（原文 `cosf(2 * pi * h)` 正是这个意思）。照 `Color.from_hsv` 的直觉接必错。
+- **对表数据已备**：128 格网格（两批 h × s ∈ {0, .25, .5, 1} × l ∈ {0, .5, .75, 1}，`tmp/probe-argtype/okhsl.txt`，尺 `fold40.mts`，一次 spawn 出全）—— 移植完先对这张表，再谈语料与 golden。
+- **还欠的**：把 `okhsl_to_srgb` 那一支按 float32 口径逐字移植（含 `find_cusp` / `compute_max_saturation` / `find_gamut_intersection` / `toe` / `toe_inv` / `get_ST_mid` / `get_Cs` 与两轮 32 次二分），以及 `Vector3.rotated`（libm 天花板）与 `Vector3.outer`（要 `Basis`，挂在 #15 那个范围拍板下）。
+
+### 1.177 bool 字面量进全局函数的数值位：101 位里引擎只拒三处，收的那 97 格此前一半在运行期崩（2026-10-14，S362，语料 365）
+
+- **量法**：把 `GLOBAL_ARG_TYPES` 里 64 个函数的 101 个 int / float 位**逐位塞 `false`**，一格一份脚本、一次 spawn（解析期报错整份作废）；「跟第一参走」那族的第三位与 bool 当第一参的样子由 `fold38` / `fold39` 补齐。
+- **拒的只有三处**（句子仍是 A 式、期望型照该位的型）：`max` / `min` 的每一位、`wrap` 的第一位、以及被跟的那几位（期望型 = 第一参的型：`clamp(1, false, 1)` 说 "int"、`clamp(1.5, false, 1.5)` 说 "float"、`wrap(1, 2, false)` 说第三位 "int"）。`clamp` 还反过来跟 bool 走：第一参是 bool 时 2 / 3 位期望 bool，int / float 反倒拒。
+- **收的那 97 格是崩溃点不是过拦**：`absf(false)` / `sqrt(false)` / `acos(false)` / `angle_difference` / `atan2` / `posmod` / `remap` / `move_toward` / `is_equal_approx` / `lerp` 的权重位引擎全给值，而 `builtins.num` 只认 INT / FLOAT —— 编译一声不出、一跑就 `[not-number] 需要数值，收到类型 1`。现在按 false=0 / true=1 折（真拒的那些位已被表拦在解析期，走不到这里）。
+- **bool 的 `clamp` 与数值不同序**：六格真值表只合「先并下界、再截上界」（`clamp(false, true, false)` 给 false，数值那一序会给下界 true），所以 `gClamp` 加了一支 bool 专用式 `(v || lo) && hi`，数值那序（`clamp(1, 2, 0)` 给 0、`clamp(NAN, 0, 1)` 给 nan）一字未动。
+- **顺带量到的新账**：`max` / `min` 是「至少两个」的变元族（`max(1, 2, 3)` 给 3、`max(1, 2, false)` 拒第三位），而 `GLOBAL_CALLABLES` 的 bounds 记成 `[2, 2]` —— 记进 §6 第 57 条。
+- **门**：语料 365 五行逐字节、`global-arg-bool.test.ts` 36 格（18 拒 + 15 收 + 3 允许集）；`pnpm test` **13433**（99 文件）、typecheck **4/4**、`test:compile` **245/354**（sema 83、响亮拒 26）、`test:diff` **237/237** 逐字节（用例 364、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **364/364**。
+
+### 1.176 bool 比较一族接完两层：装箱 `<` / `>` 合式、`<=` / `>=` 静态已知时解析期就拒（两句）（2026-10-14，S361，语料 364）
+
+- **量法**：这一族解析期拒与运行期拒混在一起，**一句废整份脚本** —— 所以 21 + 6 格全部「一格一份 `.gd`、一次 spawn」（`fold35` / `fold36`），packed probe 在这儿分不出是谁。
+- **运行期那一层**：`false < true` 给 true、`true > false` 给 true、同值给 false（严格 less）；`<=` / `>=` 才拒，句子各自命名（`Invalid operands 'bool' and 'bool' in operator '<='.` / `'>='`）；`null < true` 也拒（`'Nil' and 'bool'`）。消费方跟着这条走：`[false, true].bsearch(true)` 1、`.bsearch(false)` 0、`.bsearch(true, false)` 2、`[true, false].bsearch(true)` 2、`[false, true].min()` false、`[true, true, false].max()` true、`find` / `count` 各 1、`sort_custom(func(a, b): return a < b)` 排出 `[false, true]`。
+- **解析期那一层是两句话**：两支字面量 → `Invalid operands to operator <=, bool and bool.`；掺进一次「声明成 bool」的表达式（局部 / 模块级 / 形参）→ `Invalid operands "bool" and "bool" for "<=" operator.`。`false <= false` 一样拒。
+- **不当静态 bool 的三种形**：`var a = false` 推断来的局部、装箱 `Variant`、数组元素 —— 引擎到运行期才拒，所以分析层一声不出（那一句由运行期的 `compare` 发）。
+- **落点**：`ops.compare` 新增 bool-对-bool 一支；`analyze` 新增 `checkBoolOrdering` 一趟（只看 `binary` 的 `<=` / `>=`，两侧要么字面量要么**声明**为 bool）；S360 里 `extreme` 的 bool 特例删掉，口径统一回 `compare`；`Array.sort()` 那条（S357）一字未动，两边同向。
+- **顺带挖到**：全局 `min()` / `max()` 的数值位**不吃 bool**（引擎 `argument 1 should be "float" but is "bool".`，而 `clamp(false, true, false)` 给值），出货今天无诊断 —— 记进 §6 第 56 条②，接法走 #28 那套逐位句表，但要先扫全「数值位收 bool」的样子。
+- **门**：语料 364 七行逐字节、`bool-ordering.test.ts` 10 格钉解析期两句、`bool-compare-family.test.ts` 6 格钉运行期与消费方；`pnpm test` **13394**（98 文件）、typecheck **4/4**、`test:compile` **244/353**（sema 83、响亮拒 26）、`test:diff` **236/236** 逐字节（用例 363、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **363/363**。
+
+### 1.175 `Array.min()` / `max()` 是第四条比较口子：一比就废整串给 null，此前我们抛的是运行期拒（2026-10-14，S360，语料 363）
+
+- **发现路径**：给 `sort()` 量比较器那几把顺手把 `min()` / `max()` 摆上同一张形格 —— 63 格（`fold31` 36 + `fold32` 27）一次 spawn 量完，引擎**一行错误都没推**，而比不了的组合当场给 null；出货那边 `[1, "a"].min()` 抛的是 `Invalid operands 'int' and 'String' in operator '<'.`（S356 刚钉的那句）。合法代码跑出不同结果，属于最该先收的那一类。
+- **判据**：基准是**第一个元素**，后面逐个比；碰到比不了的组合**整串当场废**（`[1, "a", 0]` 给 null 而不是 0 —— 不是「跳过这一步继续比」，这条只有三元素以上的格子分得出）；给 null 的形是 null 掺在里面、Color / NodePath / 字典 / pack / Callable / **用户对象**同形，以及任何跨形组合；给值的形是 int / float 按值、bool false 在前、串按码点、向量按分量、RID 按无符号号、数组走 S355 那条装箱序。
+- **NaN 不是「比不出」**：float 对 float 是合式比较、只是结果为假，所以基准是谁就看谁在前头（`[nan, 1.5, 2]` → nan|nan，`[1.5, nan, 2]` → 1.5|2）—— 与 S355「容器里 NaN 最大」不是一条。
+- **顺带挖出 bool 的两层**：源里 `false < true` 是**解析期**拒（`Invalid operands to operator <=, bool and bool.`，我们没这一层），可装箱 bool 的 `<` / `>` 运行时**合式**（`a < true` 给 true），只有 `<=` / `>=` 是运行期拒。`min()` / `max()` 用 `<` / `>` ⇒ bool 比得出来。完整口径要连着 bsearch 的 bool 格与全局 `min` / `max` 一起重核，记进 §6 第 56 条 —— 所以今天只在 `GArray.extreme` 里就地按 false 在前判，`ops.compare` 一字未动。
+- **StringName 两头**：两支 StringName 引擎按指针序给值（`[&"b", &"a", &"c"]` 的 min 是 `c`）→ 照旧响亮拒；StringName 对 String 是比不出 → null。
+- **门**：语料 363 十五行逐字节、`array-minmax-face.test.ts` 63 格（61 值 + 2 拒）；`pnpm test` **13375**（96 文件）、typecheck **4/4**、`test:compile` **243/352**（sema 83、响亮拒 26）、`test:diff` **235/235** 逐字节（用例 362、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **362/362**。
+
+### 1.174 读得到的名字写不得：`abs = 5` / `Node = 5` / `quit = 5` 此前发出来的是非法 JS（2026-10-14，S359，语料 362）
+
+- **是一条产品级缺陷**：那三族「能当值用」的名字（全局函数名 / 引擎类名 / S358 刚接的宿主方法名）在**赋值目标位**上分析器一字不报，发射器把读的那支盒子原样发到目标位 —— `rt.globalCallable("abs") = rt.V.int(5);`、`rt.nativeClass("Node") = rt.V.int(5);`、`rt.methodCallable(rt.V.object(this), "quit") = rt.ops.add(…)`，产物连解析都过不了；引擎那边这些形全部解析期当场拒。
+- **句子是现成那句**：实测 `abs = 5` / `print = 5` / `typeof = 3` / `Node = 5` / `quit = 5` / `quit += 5` / `get_class = 5` 一律 `Cannot assign a new value to a constant.` —— 与写常量同句，所以并进既有 `checkConstAssign` 的谓词（`const-assign` 那道闸），不新加一支，发射器一字未动。
+- **另一对句子不在这儿**：21 支「类型名兼函数名」当目标时引擎给的是 `Builtin type cannot be used as a name on its own.` 加 `Identifier "Callable" not declared…`（`Callable = 5` / `Vector2 = 1` 实测），那两支名字不在三张表里，出货继续走未声明那一句，正对得上后一句。
+- **遮蔽边界不用新造**：`var quit: Variant = 1` 之后 `quit = 5` 引擎合法给 5、`var abs = 2` 之后给 7，而 `checkConstAssign` 第二道保守边界「本函数里被另绑过一次就整格放行」恰好就是这条。
+- **范围跟着 S358 走**：内部类与静态方法那两形的写位仍按未声明拒（读位就没量过）；`for quit in …`、lambda 形参同名、match 手臂绑定这些位置还没扫，记在 §6 第 55 条④。
+- **门**：语料 362 是预期报错用例（golden 记 Parse Error + `at:` + `Failed to load script`），编译门把它算进「语义分析拦下」83 支；`implicit-callable-value.test.ts` 加了 14 格、现在 35 格；`pnpm test` **13309**（95 文件）、typecheck **4/4**、`test:compile` **242/351**（sema 83、响亮拒 26）、`test:diff` **234/234** 逐字节（用例 361、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **361/361**。
+
+### 1.173 宿主基类的方法名可以裸当值用了：`var c = quit` 给的是真的 Callable，出货此前在解析期就拦死（2026-10-14，S358，语料 361）
+
+- **接的是 S356 顺带量到的那条过拦**：引擎收 `Callable(quit)` / `var c = quit`，出货的分析层报 `Identifier "quit" not declared in the current scope.`，合法代码编不过。
+- **量法换了**：这一族是**解析期**行为，一份脚本里错一格就整份作废、分不出是谁 —— 所以 23 + 18 + 5 格全部「一格一份 `.gd`、一次 spawn」（`fold29` / `fold30`），不再用 packed probe。
+- **判据**：链上挂着宿主时，SceneTree 的 `quit` / `create_timer` 加 Object 的十三支（`call` `call_deferred` `set` `get` `has_method` `get_class` `connect` `disconnect` `emit_signal` `notification` `set_meta` `get_meta` `free`）给 typeof 25 的 Callable，打印 `SceneTree(<文件>)::<名>`，与 `Callable(self, "<名>")` 同一个盒子；`.is_valid()` / `.get_method()` / `.call()` 全真，能进数组、当字典键、传 `Callable` 形参。链外的名字（`quit_and_ide_debug`、`queue_free`）与别人的属性（`process_mode`、`name`）实测仍 `not declared`，出货照旧拦。
+- **范围收到根类的实例方法体**：内部类里 `quit` 引擎也拒（内部类自己的方法名 `g` 却有值，给 `RefCounted::g`），不写 `extends` 的脚本也拒；静态方法与「沿 extends 链挂宿主」两形没量过，所以不认（§6 第 55 条③）。`root` / `paused` 是**属性读数**（引擎给窗口对象 / `false`），按 D4 不接，是今天与引擎仅剩的不同侧（§6 第 55 条①）。
+- **踩到一处记号的坑**：分析器的取值记号是 `名@行:列` 的跨模块表，这次门里真撞过一回 —— 两份同形同位的源，一份的局部 `quit` 被另一份的记号读成了 Callable（静默错值）。发射器因此新增 `FUNC_BINDS`（本函数形参 + 体内所有 `var` + lambda 形参 + `for` 循环变量 + match 手臂 `bind`）先认局部；读 / 写位置不分那道缝记进 §6 第 55 条④。
+- **门**：语料 361 五行逐字节（取值 + `typeof` + `get_method` + `is_valid` + `Callable` 形参 + `.call()` + 容器元素）、`implicit-callable-value.test.ts` 24 格；`pnpm test` **13295**（95 文件）、typecheck **4/4**、`test:compile` **242/350**（sema 82、响亮拒 26）、`test:diff` **234/234** 逐字节（用例 360、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **360/360**、codegen 未漂移。
+
+### 1.172 `Array.sort()` 自己那条比较器接完：跨形只有 int 对 float、六形同形比不出，置换改成引擎那一把（2026-10-14，S357，语料 360）
+
+- **接的是 §6 第 54 条③**：混合类型数组排序此前 `array-sort-mixed` 响亮拒（合法代码跑不动），而且 `sort()` 的**置换**走的是 JS 稳定 sort、比较口径还被当成 `isLess` 那条共用（`ops.ts` 里那句旧注释也这么写，已改）。
+- **129 格实测**（尺 `fold25` / `fold26` / `fold27`，每格包成一个小函数、一次 spawn 量一批）：跨形**只有 int 对 float 按值**有方向；**bool 掺进数值里不比**、**null 也不是「永远最小」**；同形才比值（串按码点、四个向量按分量、RID 按无符号号、数组走 S355 那条装箱序、同值不换）；null / Dictionary / Color / NodePath / pack / Callable **同形也一律比不出**（两向都 false、引擎不推错误）；NaN 在 sort 里谁都不小于（与 S355 容器里「NaN 最大」不是一条）。
+- **StringName 仍响亮拒**：`[&"b", &"a"]`、`[&"zzz", &"a"]` 都按文字序换位，可 `[&"ab", &"b"]` 换出来的是 `[&"b", &"ab"]` —— 与文字序矛盾，是指针序，复现不了；两支同现才拒，一支不碍事。
+- **置换必须是引擎那一把**：n>16 的输出不是稳定序也不是任何秩表 —— 21 元素「17 int + 8 串」把整块串搬到最前、24 元素向量混串给出另一副样子，`sort.ts` 那份 `sort_array.h` 转写三把都逐字节对过；`sort()` 与 `sort_custom()` 从此共用同一份置换。
+- **顺带解掉两处静默 / 过拦**：String 与 StringName 混排旧实现按 `allStr` 文字比（静默错值）；Color 数组 sort 旧实现抛错（引擎原地不动）—— 旧的 `colorCmp()` 助手连同那句「Parse Error」的旧说法一起删。
+- **不动别人口径**：源里 `<` / `bsearch` / `min` / `max` 仍走 `compare` / `isLess`，S355 的 240 格与 S353 的 246 格一字未变；`array-sort-face.test.ts` 126 格里 118 钉值、6 钉 StringName 的拒、2 钉 Callable 原地不动。
+- **门**：`pnpm test` **13268**（94 文件）、typecheck **4/4**、`test:compile` **241/349**（sema 82、响亮拒 26）、`test:diff` **233/233** 逐字节（用例 359、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **359/359**。
+
+### 1.171 装箱比较的运行期拒换成引擎同文：一句 `Invalid operands 'L' and 'R' in operator 'OP'.`，形名走 `Nil` / `PackedInt32Array` 那套拼法（2026-10-14，S356，语料 359）
+
+- **接的是 §6 第 54 条①**：改前抛中文「比较不支持 int 与 String」，形状对、句子不同。48 格一次 spawn 量完（尺 `tmp/probe-argtype/fold24.mts`：每格包进一个小函数，那句 SCRIPT ERROR 只打断那个函数，脚本照跑下一格），生成器 `mk-lessmsg-artifacts.mts` 把它摊成门 `compare-operands-sentence.test.ts` 47 格。
+- **句式只有一条**：四个运算符同文、只换引号里的运算符名，且**实参顺序就是式子里的左右顺序**（`1 < "a"` 与 `"a" < 1` 各钉一格）。**形名是唯一会被 `tagName` 答错的地方**：null 叫 `Nil`、pack 各叫本名（`PackedInt32Array` / `PackedStringArray` / `PackedByteArray`，不是 `Object`），新 `valueTypeName` 补这两条后 `+` / `-` / 整除那几条旧句子同口径。
+- **Color 单独一条错误码、同一个句子**：`Color < Color`、`Color < int`、`Color < NodePath` 三形都拒（与 S355 里「Color 在容器内两头都假、不报错」不是一条口子）。`int` 对 `bool` 也拒 —— 源里的 `<` 不折 bool，别拿标量那一族的经验套。给值那几格（`1 < 1`、`1.5 < 1`、`1 < 1.5`、`["a"] >= ["b"]`）一字没动。
+- **不动别人口径**：错误码 `compare-operands` / `color-cmp` 保留，S353 的 `lessOrFalse` 仍只吞这两支，`bsearch` 246 格与 `sort_custom` 全门未变；`&"b" < &"a"` 一形引擎给值而我们照旧拒（S355 ③ 的指针序复现不了），生成器把它明写在 drop 名单里。
+- **顺带量到一条新过拦**（还没修）：`var x: Variant = Callable(quit)` 引擎收下，出货分析层先报 `Identifier "quit" not declared in the current scope.` —— 裸方法名当 Callable 值那一形解析期就拦死了。
+- **门**：`pnpm test` **13139**（93 文件）、typecheck **4/4**、`test:compile` **240/348**（sema 82、响亮拒 26）、`test:diff` **232/232** 逐字节（用例 358、静默 / 崩溃 / 未实现 全 0）。
+
+### 1.170 数组对数组的 `<` 接上：形秩全序 + 同型比值 + 长度平手，Color / NodePath / 字典比不出（2026-10-14，S355，语料 358）
+
+- **接的是 §6 第 54 条②那条**：改前 `compare` 对「容器对容器」一律抛，而引擎给值 —— 语料 358 七行、门 `array-order.test.ts` 240 格，另有 S353 门里跳过的 12 格容器格补回（`array-bsearch-bound.test.ts` 现在 246 格）。
+- **判据**：先比**形的秩**（`null < bool < int < float < String < V2 < V2i < V3 < V3i < Color < StringName < NodePath < RID < Dict < Array`），**数值三个形之间也按秩不按值**（`[2.5] < [3]` 假、`[3] < [2.5]` 真、`[true] < [1]` 真 —— 标量那一族「bool 折成 0 / 1 再比值」的经验在这儿**不成立**）；同型才比值（NaN 最大、向量按分量、RID 按无符号号）；**Color / NodePath / 字典同型两头都假**（于是 `<=` `>=` 都真，四运算符实测钉过）；长度平手、嵌套递归。
+- **StringName 照旧响亮拒**：引擎在容器里也走 intern 之后的指针序，四对读数拼不出任何文字规则（`[&"aaa"] < [&"abc"]` 假、`[&"a"] < [&"zzz"]` 真），复现不了就拒，不猜。
+- **顺带把回放尺修对了一次**：头一版拿**元素**去比（引擎比的是数组本身），又把 ordcmp6 的表达式列当成了读数，一度报 117 格「不合」—— 改完 240 合 / 4 拒（StringName 那一形）/ 14 跳过（sort 一族，本条不管）。
+- **还没接的**：③ `Array.sort()` 自己那条秩（混合类型数组排序今天仍 `array-sort-mixed` 响亮拒）；字典与数组在 ③ 里的细判据；自引用容器（实测两支各自含自己的数组比较直接把引擎跑爆，退出码 3221225725 = 栈溢出；`a == b` 只推一句 `Max recursion reached` 给 true）。
+- **门**：`pnpm test` **13089**（92 文件）、typecheck **4/4**、`test:compile` **239/347**（sema 82、响亮拒 26）、`test:diff` **232/232** 逐字节（用例 357、golden 未漂移 357/357）；S351 那把尺重跑仍 **657 / 22**。
+
+### 1.169 两条装箱比较器各量成 105 对全表：数组对数组是一条全序，`Array.sort()` 是另一条（2026-10-14，§6 第 54 条，仍未动代码）
+
+- **做法**：15 种形两两一对，各量两个方向 —— 数组对数组的 `<`（`[X] < [Y]`）105 对 + `Array.sort()`（`[X, Y].sort()` 看谁在前）105 对，一次 spawn 30 格，420 格全印出来（`tmp/probe-argtype/ordcmp4.txt`，尺 `fold17.mts`，分析 `cmp-ord{,2,3}.mts`）。
+- **① 数组对数组那条是全序**：没有「两向都假」也没有「两向都真」的矛盾对，秩是 `null < bool < int < float < String < Vector2 < Vector2i < Vector3 < Vector3i < Color < StringName < NodePath < RID < Dictionary < Array`，同型才比值；字典自己**不参与**（`[{"x":1}]` 与 `[{"y":2}]` 两头都假）。
+- **② `Array.sort()` 是另一条**：`RID < Dictionary < Array < Color < Vector3i < Vector3 < Vector2i < Vector2 < NodePath < StringName < String < 数值按值穿插 < null`，与 ① 逐对核 **106 同 / 104 不同**（`[0] < [true]` 在 ① 假、在 ② sort 把 int 排在 bool 前；null 在 ① 最前、在 sort 最后）—— 一条 `compare` 喂不动两条，出货要拆口子。
+- **③ 顺带把尺子自己纠了一次**：头一版分析拿 GDScript 源文本去比 sort 的打印形（`null` vs `<null>`、`rid_from_int64(7)` vs `RID(7)`），一度报出 96 对「不一致」里全是假信号 —— **判据本该动而读数不动，先怀疑尺子**（同 §1.163 那条教训）。
+- **④ 还欠的**：字典在 sort 那条里确实被排了序（`{"y": 2}` 排到 `{"x": 1}` 前，输入序相反），判据没量；数组在 sort 里的细判据（长度 / 嵌套 / 混合）也没量；自引用容器要单独一档。
+- **门**：本轮无代码改动（文档 + 探针），与 S354 那一轮同读数（`pnpm test` **12834**、`test:diff` **231/231**）。
+
+### 1.168 `cubic_interpolate_in_time` 的退化跨度接上：引擎是 Barry-Goldman 三层割线，六处退化分支各钉一个常数（2026-10-14，S354，语料 357）
+
+- **清的是 §6 第 41 条那笔旧账**：旧实现写成「归一化切线的三次 Hermite」，`Δ` 里任一段为零或相消就要除零 → 响亮拒；引擎在那些形上给的全是有限值（S351 那把尺里剩 24 格就是这一族）。
+- **真正的形状**：`t = lerp(0, b_time, weight)` → `a1/a2/a3` → `b1/b2` → 收尾一格，六步 lerp 的权重各带一条「跨度退化就换钉死的常数」的判据（`pre_time==0 → 0`、`b_time==0 → 0.5`、`post_time-b_time==0 → 1`、`b_time-pre_time==0 → 0`、`post_time==0 → 1`、收尾 `b_time==0 → 0.5`），逐分量 float32。
+- **这些分支正好解释那些「怪值」**：`pre_time=0` 时 `w=0` 那一端落在 **pre**、`post_time=b_time` 时 `w=1` 那一端落在 **post**、`b_time=0` 时结果与 weight 完全无关恒为 `(self+b)/2`、三位全 0 恒为 `(pre+post)/2`。
+- **量的口径**：四个点互不相同（全等点上任何式子都给同一个值，判不出式子），九形 × 五 weight 的 V2 + 七形 × 三 weight 的 V3 = 66 格，再补旧门那 8 格 —— `check-cubtau.mts` 逐格对 **74 合 / 0 不合**；非退化那一支一字没动（`golden 未漂移 356/356`、S315 那六档 α 全在原位）。
+- **旧断言请回**：`cubic-in-time.test.ts` 里那六格「响亮拒」按实测改成值（与 S351 那四支同例）。
+- **门**：`pnpm test` **12834**（91 文件）、typecheck **4/4**、`test:compile` **238/346**（sema 82、响亮拒 26）、`test:diff` **231/231** 逐字节；S351 那把尺重跑 **合 657 / 不合 22** —— 剩下 22 格全是 `from_ok_hsl` 16 / `rotated` 4 / `outer` 2 那三份外部前提没到位的名单（第 5 项）。
+
+### 1.167 量出「装箱比较不是一条口子」：源里 `<`、`Array.sort()`、数组对数组各是一条（2026-10-14，§6 第 54 条，接不动先记账）
+
+- **触发点**：S353 那趟量到引擎**给数组排序**（`[[1], [2], [3]].bsearch([2])` 给 1），而出货的 `compare` 认「容器对容器」比不了 —— 要接就得先知道引擎那一条 comparator 长什么样。
+- **量出来的结论是「不是一条，是三条」**：① 源里 `Variant` 对 `Variant` 的 `<` 类型不合是**运行期 SCRIPT ERROR 且脚本当场停**（那一格 25 秒超时、`quit()` 跑不到）；② 数组对数组的 `<` 逐元素比、跨 kinds **不报错**（`[1] < ["a"]` 真、反向假；Dictionary 参与时两头都假）；③ `Array.sort()` 用的是另一条秩：`RID < Dictionary < Array < Color < Vector3i < Vector3 < Vector2i < Vector2 < NodePath < StringName < String < 数值按值穿插 < null`，与 ② 的逐对结果互相打架（null 在 ② 里排前、在 ③ 里排最后）。
+- **所以今天不动代码**：出货只有一条共用 `compare`，同时喂 `<` / `sort()` / `bsearch` / `min`；三条口子怎么拆要先拍板，而且 S353 刚钉死的「`bsearch` 比不了按 false」234 格不能被动。读数全在 `tmp/probe-argtype/{ordcmp,ordcmp2,ordcmp3}.txt`。
+- **顺带钉住的句子**：引擎在 `bsearch` 遇到比不了的组合时**一行错误都不推**（`fold11` 数过 stderr = 0），但在源里直接写 `i < s` 就是那条 SCRIPT ERROR —— 两条都记在 §6 第 54 条里，免得下次拿一条去套另一条。
+- **门**：本轮无代码改动（只有文档与探针），`pnpm test` / `test:diff` 与 S353 那一轮同读数（**12814** / **230/230**）。
+
+### 1.166 `Array.bsearch` 换回引擎那条界循环：`before` 换的是实参顺序，比不了的组合按 false 走（2026-10-13，S353，语料 356）
+
+- **两处不等价一起收**：旧实现**收了 `before` 却根本不读**（`[1, 2, 3].bsearch(1, false)` 引擎给 1、我们给 0 —— 静默错值），并且遇到比不了的组合直接抛（`[1, 2].bsearch("a")` 引擎照样走完二分给 0 —— 合法代码被挡）。
+- **判据**（162 + 72 格逐格对过）：`half = min + ((max - min) >> 1)`；`before` 真 → 比 `cmp(元素, 值)`，假 → 比 `!cmp(值, 元素)`；走到底返回 `min`，**找不到不回 -1**，给的就是插入位。
+- **「换顺序」不是「取反」的证据**：`a < b` 与 `a > b` 两支各量一整组，`gt` 那一支真形给 0、假形给 3，只有换实参顺序才解释得通。
+- **顺带钉住**：Color 与 NodePath 在装箱比较里**没有序**（`[Color(1,…), Color(2,…)].bsearch(Color(3,…))` 给 0）；引擎在这条路上**一行错误都不推**（stderr 计数 0），所以吞掉 `compare-operands` / `color-cmp` 两条 code 就够，其余照旧抛。
+- **新立一账**：引擎**给 Array 排序**（`[[1], [2], [3]].bsearch([2])` 给 1），出货认「容器对容器」比不了 —— Array / Dictionary 的序量清之前，门里先跳过那 12 格（§6 第 53 条⑥）。
+- **门**：`pnpm test` **12814**（90 文件）、typecheck **4/4**、`test:compile` **237/345**（sema 82、响亮拒 26）、`test:diff` **230/230** 逐字节（用例 355、golden 未漂移 355/355）；S351 那把尺重跑 **合 633 / 不合 46**。
 
 ### 1.165 `String.strip_edges(left, right)` 接上：那两位是真参数，判据还顺带钉出 `0 < 码点 <= 0x20`（2026-10-13，S352，语料 355）
 
@@ -1639,6 +1829,7 @@
 ## 3. 明确的非目标
 
 - 任何引擎 API（`Node` / `SceneTree` / `add_child` …）—— Tier 1 遇到就抛 `unsupported`
+- **七个值类型**（`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB`）—— 按 D6 不进这一层，构造式与成员照旧响亮拒
 - GDScript 3.x 兼容（`yield` / `setget`）
 - 编辑器 / LSP
 - 性能优化 —— 先要正确；benchmark 读数已出（§1.10），真要动优化走 5.5 那三重护栏（收益量化 + golden 逐字节不变 + 校验值一致）

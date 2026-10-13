@@ -7,6 +7,8 @@ import {
   ARG_TYPE_FOLLOWS_FIRST,
   DERIVED_ARG_TYPES,
   GLOBAL_ARG_AS,
+  GLOBAL_ARG_BOOL_REFUSED,
+  GLOBAL_ARG_FOLLOWS_BOOL,
   GLOBAL_ARG_SENTENCE,
   GLOBAL_ARG_SUPPRESS_OTHER,
   GLOBAL_ARG_SHOULD_BE,
@@ -82,7 +84,9 @@ function declNames(d: Decl): string[] {
   ];
 }
 
-export function analyze(m: Module, globals: Set<string> = new Set<string>()): Diagnostic[] {
+export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string): Diagnostic[] {
+  // 记号表是进程内累积的：每份模块归一个自己的主，两份文件同 `行:列` 的同名字就不会互相抢记号（§6 第 61 条）
+  markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];
@@ -109,14 +113,18 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
     null,
   );
 
-  for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
+  // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366）：只给根模块 —— 内部类里实测照样 `not declared`，`extends` 别的脚本那一形还没接（§6 第 60 条）
+  const hostFace = m.extends === "SceneTree" ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
+  for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
+  checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
   checkStaticAccess(m.funcs, m.vars, diags);
   checkClassFuncVisibility(m, diags);
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
-  checkConstAssign(m, diags);
+  checkConstAssign(m, diags, hostFace);
+  checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
@@ -124,25 +132,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
-  recordInitValueReads(m, moduleScope, coroutines);
 
   return diags;
-}
-
-/** 字段初值不在 `checkFunc` 的作用域走查里，这里只补记「全局函数取值点」，诊断一律丢进一张空表：多记无害，发射器那几支成员分支排在前面会先接住。 */
-function recordInitValueReads(m: Module, scope: Scope, coroutines: Set<string>): void {
-  const scratch: Diagnostic[] = [];
-  const walkVars = (list: VarDecl[]): void => {
-    for (const v of list) if (v.init !== null) walkExpr(v.init, scope, coroutines, scratch);
-  };
-  const walkClasses = (list: ClassDecl[]): void => {
-    for (const c of list) {
-      walkVars(c.vars);
-      walkClasses(c.innerClasses);
-    }
-  };
-  walkVars(m.vars);
-  walkClasses(m.innerClasses);
 }
 
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
@@ -683,8 +674,10 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) classes(c);
 }
 
-/** 给常量赋值是**解析期**拒，各种形状（局部 / 模块级 / 内部类 / 全局常量，含复合赋值）同一句 `Cannot assign a new value to a constant.`。两条保守边界：① 只判**简单标识符**目标；② 同一个函数体里那个名字被另绑过一次（形参、非 const 的 `var`、`for` 变量、pattern 绑定、lambda 形参）就整格放行 —— 局部可以合法遮蔽常量。 */
-function checkConstAssign(m: Module, diags: Diagnostic[]): void {
+/** 给常量赋值是**解析期**拒，各种形状（局部 / 模块级 / 内部类 / 全局常量，含复合赋值）同一句 `Cannot assign a new value to a constant.`。两条保守边界：① 只判**简单标识符**目标；② 同一个函数体里那个名字被另绑过一次（形参、非 const 的 `var`、`for` 变量、pattern 绑定、lambda 形参）就整格放行 —— 局部可以合法遮蔽常量。
+ *  同一句还盖住**能读不能写**的那三族名字（实测 `abs = 5` / `print = 5` / `Node = 5` / 宿主脚本里 `quit = 5` 与 `quit += 5` 全是它；
+ *  而 `var quit: Variant = 1` 之后 `quit = 5` 合法给 5，所以 ② 那道放行正合适）。 */
+function checkConstAssign(m: Module, diags: Diagnostic[], hostFace: Set<string>): void {
   const moduleConsts = new Set<string>(m.vars.filter((v) => v.isConst).map((v) => v.name));
 
   const bindings = (ss: Stmt[], rebound: Set<string>, localConsts: Set<string>): void => {
@@ -772,13 +765,13 @@ function checkConstAssign(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  const check = (ss: Stmt[], consts: Set<string>, rebound: Set<string>): void => {
+  const check = (ss: Stmt[], consts: Set<string>, rebound: Set<string>, names: Set<string>): void => {
     for (const s of ss) {
       switch (s.kind) {
         case "assign": {
           if (s.target.kind === "ident") {
             const nm = s.target.name;
-            if (!rebound.has(nm) && (consts.has(nm) || isGlobalConst(nm))) {
+            if (!rebound.has(nm) && (consts.has(nm) || isGlobalConst(nm) || GLOBAL_VALUE_NAMES.has(nm) || ENGINE_CLASS_NAMES.has(nm) || names.has(nm))) {
               diags.push({
                 code: "const-assign",
                 message: "Cannot assign a new value to a constant.",
@@ -786,26 +779,26 @@ function checkConstAssign(m: Module, diags: Diagnostic[]): void {
               });
             }
           }
-          check(s.value.kind === "lambda" ? s.value.body : [], consts, rebound);
+          check(s.value.kind === "lambda" ? s.value.body : [], consts, rebound, names);
           continue;
         }
         case "var":
-          if (s.init !== null && s.init.kind === "lambda") check(s.init.body, consts, rebound);
+          if (s.init !== null && s.init.kind === "lambda") check(s.init.body, consts, rebound, names);
           continue;
         case "if":
-          for (const b of s.branches) check(b.body, consts, rebound);
+          for (const b of s.branches) check(b.body, consts, rebound, names);
           continue;
         case "while":
-          check(s.body, consts, rebound);
+          check(s.body, consts, rebound, names);
           continue;
         case "for":
-          check(s.body, consts, rebound);
+          check(s.body, consts, rebound, names);
           continue;
         case "match":
-          for (const arm of s.arms) check(arm.body, consts, rebound);
+          for (const arm of s.arms) check(arm.body, consts, rebound, names);
           continue;
         case "expr":
-          if (s.expr.kind === "lambda") check(s.expr.body, consts, rebound);
+          if (s.expr.kind === "lambda") check(s.expr.body, consts, rebound, names);
           continue;
         default:
           continue;
@@ -813,22 +806,147 @@ function checkConstAssign(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  const one = (params: Param[], body: Stmt[], consts: Set<string>): void => {
+  const one = (params: Param[], body: Stmt[], consts: Set<string>, names: Set<string>): void => {
     const rebound = new Set<string>(params.map((p) => p.name));
     const localConsts = new Set<string>();
     bindings(body, rebound, localConsts);
     const all = new Set<string>([...consts, ...localConsts]);
-    check(body, all, rebound);
+    check(body, all, rebound, names);
+  };
+
+  const accessors = (list: VarDecl[], consts: Set<string>, face: Set<string>): void => {
+    for (const v of list) {
+      const acc = v.accessor;
+      // static var 的两支在这里不给名字表：那一形引擎发的是「静态函数」那一句，由 checkFieldInits 负责
+      if (acc === null || v.isStatic) continue;
+      if (acc.getter !== null && acc.getter.kind === "inline") one([], acc.getter.body, consts, face);
+      if (acc.setter !== null && acc.setter.kind === "inline") {
+        one([{ name: acc.setter.param, type: null, default: null }], acc.setter.body, consts, face);
+      }
+    }
   };
 
   const walkClass = (c: ClassDecl, inherited: Set<string>): void => {
     const consts = new Set<string>([...inherited, ...c.vars.filter((v) => v.isConst).map((v) => v.name)]);
-    for (const f of c.funcs) one(f.params, f.body, consts);
+    // 内部类看不见宿主那面（S358 实测）：不给名字表
+    for (const f of c.funcs) one(f.params, f.body, consts, NO_HOST_VALUE_METHODS);
+    accessors(c.vars, consts, NO_HOST_VALUE_METHODS);
     for (const inner of c.innerClasses) walkClass(inner, consts);
   };
 
-  for (const f of m.funcs) one(f.params, f.body, moduleConsts);
+  for (const f of m.funcs) one(f.params, f.body, moduleConsts, f.isStatic ? NO_HOST_VALUE_METHODS : hostFace);
+  accessors(m.vars, moduleConsts, hostFace);
   for (const c of m.innerClasses) walkClass(c, moduleConsts);
+}
+
+/** 静态已知的两支 bool 比 `<=` / `>=`：引擎在**解析期**就拒，而且是两句话（读数 `tmp/probe-argtype/boolfamily.txt` 与 `fold36.mts`）——
+ *  两支都是字面量时 `Invalid operands to operator <=, bool and bool.`，掺上一次「声明成 bool」的表达式时
+ *  `Invalid operands "bool" and "bool" for "<=" operator.`。`<` / `>` 不在这儿：那两支配符对 bool **合式**（false 在前）。
+ *  只认这两种形状：`var a = false` 那种**推断**来的局部引擎不当它是静态 bool（运行时才拒，走 `ops.compare` 那句标准句子）。 */
+function checkBoolOrdering(m: Module, diags: Diagnostic[]): void {
+  const isBoolDecl = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name === "bool";
+  const moduleBools = new Set<string>(m.vars.filter((v) => isBoolDecl(v.type)).map((v) => v.name));
+
+  const litBool = (e: Expr): boolean => e.kind === "lit" && typeof e.value === "boolean";
+
+  const scan = (ss: Stmt[], bools: Set<string>): void => {
+    const expr = (e: Expr): void => {
+      switch (e.kind) {
+        case "binary":
+          if ((e.op === "<=" || e.op === ">=") && boolSide(e.left) && boolSide(e.right)) {
+            diags.push({
+              code: "bool-ordering",
+              message:
+                litBool(e.left) && litBool(e.right)
+                  ? `Invalid operands to operator ${e.op}, bool and bool.`
+                  : `Invalid operands "bool" and "bool" for "${e.op}" operator.`,
+              loc: e.loc,
+            });
+          }
+          expr(e.left);
+          expr(e.right);
+          return;
+        case "unary":
+          expr(e.operand);
+          return;
+        case "call":
+          expr(e.callee);
+          e.args.forEach(expr);
+          return;
+        case "attribute":
+          expr(e.obj);
+          return;
+        case "index":
+          expr(e.obj);
+          expr(e.index);
+          return;
+        case "array":
+          e.items.forEach(expr);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key);
+            expr(en.value);
+          }
+          return;
+        case "lambda":
+          scan(e.body, new Set([...bools, ...e.params.filter((p) => isBoolDecl(p.type)).map((p) => p.name)]));
+          return;
+        case "await":
+          expr(e.operand);
+          return;
+        default:
+          return;
+      }
+    };
+    const boolSide = (e: Expr): boolean => litBool(e) || (e.kind === "ident" && bools.has(e.name));
+    for (const s of ss) {
+      switch (s.kind) {
+        case "var":
+          if (isBoolDecl(s.type)) bools.add(s.name);
+          if (s.init !== null) expr(s.init);
+          continue;
+        case "assign":
+          expr(s.target);
+          expr(s.value);
+          continue;
+        case "expr":
+          expr(s.expr);
+          continue;
+        case "return":
+          if (s.value !== null && s.value !== undefined) expr(s.value as Expr);
+          continue;
+        case "if":
+          for (const b of s.branches) {
+            if (b.cond !== null) expr(b.cond);
+            scan(b.body, bools);
+          }
+          continue;
+        case "while":
+          expr(s.cond);
+          scan(s.body, bools);
+          continue;
+        case "for":
+          expr(s.iter);
+          scan(s.body, bools);
+          continue;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) scan(arm.body, bools);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  for (const f of m.funcs) scan(f.body, new Set([...moduleBools, ...f.params.filter((p) => isBoolDecl(p.type)).map((p) => p.name)]));
+  const walkClass = (c: ClassDecl, inherited: Set<string>): void => {
+    const bools = new Set([...inherited, ...c.vars.filter((v) => isBoolDecl(v.type)).map((v) => v.name)]);
+    for (const f of c.funcs) scan(f.body, new Set([...bools, ...f.params.filter((p) => isBoolDecl(p.type)).map((p) => p.name)]));
+    for (const inner of c.innerClasses) walkClass(inner, bools);
+  };
+  for (const c of m.innerClasses) walkClass(c, moduleBools);
 }
 
 function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
@@ -1510,7 +1628,7 @@ function checkDictDuplicateKeys(m: Module, diags: Diagnostic[]): void {
       if (v.init !== null) expr(v.init);
       const acc = v.accessor;
       if (acc !== null) {
-        if (acc.getter.kind === "inline") stmts(acc.getter.body);
+        if (acc.getter !== null && acc.getter.kind === "inline") stmts(acc.getter.body);
         if (acc.setter !== null && acc.setter.kind === "inline") stmts(acc.setter.body);
       }
     }
@@ -2026,11 +2144,35 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 }
 
+/** 字段初值与读写器体那一层：引擎照样查名字（`var f = nosuch` 是解析期拒），`self` 在其中也合法（实测 typeof 24）；`static var` / `const` 初值里读到宿主名时引擎各换一句（S367 的读数），读写器体里是同一族句子、函数名是合成的 `@<字段>_getter()` / `@<字段>_setter()`（S368 的读数）。 */
+function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>, diags: Diagnostic[], face: Set<string>): void {
+  const selfScope = scope.child([], true);
+  for (const v of list) {
+    const prevFace = hostValueMethods;
+    const prevCtx = hostStaticCtx;
+    hostValueMethods = face;
+    hostStaticCtx = v.isConst ? { kind: "const", name: v.name } : v.isStatic ? { kind: "var" } : null;
+    if (v.init !== null) walkExpr(v.init, selfScope, coroutines, diags);
+    const acc = v.accessor;
+    if (acc !== null) {
+      hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_getter` } : null;
+      if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, selfScope, coroutines, diags, false);
+      hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_setter` } : null;
+      if (acc.setter !== null && acc.setter.kind === "inline") {
+        walkStmts(acc.setter.body, selfScope.child([acc.setter.param]), coroutines, diags, false);
+      }
+    }
+    hostValueMethods = prevFace;
+    hostStaticCtx = prevCtx;
+  }
+}
+
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[], classes: Map<string, ClassDecl>): void {
   const scope = base.child([c.name, ...declNames(c), ...inheritedNames(c, classes)]);
   const coroutines = new Set(c.funcs.filter((f) => f.coroutine).map((f) => f.name));
   checkStaticAccess(c.funcs, c.vars, diags);
   for (const f of c.funcs) checkFunc(f, scope, coroutines, diags);
+  checkFieldInits(c.vars, scope, coroutines, diags, NO_HOST_VALUE_METHODS);
   for (const inner of c.innerClasses) checkClass(inner, scope, diags, classes);
 }
 
@@ -2062,9 +2204,16 @@ function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[]
   return out;
 }
 
-function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[]): void {
+function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
   const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
+  const prevFace = hostValueMethods;
+  const prevCtx = hostStaticCtx;
+  hostValueMethods = hostFace;
+  hostStaticCtx = f.isStatic ? { kind: "func", name: f.name } : null;
+  for (const p of f.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
   walkStmts(f.body, scope, coroutines, diags, false);
+  hostValueMethods = prevFace;
+  hostStaticCtx = prevCtx;
 }
 
 function walkStmts(
@@ -2152,15 +2301,153 @@ function patternBindings(p: Pattern): string[] {
  * 分析器按真实作用域认过的「全局函数取值点」（`var f = abs` 那一格）：作用域归作用域管，
  * 发射器只认这个记号，不再自己猜局部名 —— 实测 `var len = 5` 之后同函数里的 `abs` 仍取全局、
  * lambda 形参 `abs` 只在形参体内盖住全局，两种都按这个记号发得对。
- * 记账用 `行:列:名字` 而不是节点身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090），
- * 而同一个模块重 lower 一遍的 loc 一模一样，所以这条式子两头都走得通。
+ * 记账用 `归属:行:列:名字` 而不是节点身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090）。
+ * 归属由 `analyze` 每份模块给一个（调用方传文件标识就用它，否则换一个进程内序号），所以两份文件撞同一
+ * `行:列` 也不会互相抢记号 —— 只按 `行:列:名字` 记的那版会（§6 第 61 条）。
  */
 const globalValueReads = new Set<string>();
 
 /** 同一套记号记的第二类：引擎类名当值用（`var k = Node`）—— 取值合法、等式按类，但那支打印带进程内的号，发射器据此响亮拒。 */
 const nativeClassReads = new Set<string>();
 
-const gvKey = (name: string, line: number, col: number): string => `${name}@${line}:${col}`;
+/** 宿主基类（`extends SceneTree`）那面**能裸当值用**的方法名（S366，读数 `tmp/hostnames/readings.txt`，尺 `fold45.mts`）：
+ *  `ClassDB.class_get_method_list("SceneTree")` 数出 113 名，逐名一格一份脚本 spawn 量过去 —— 97 名给 typeof 25 的 Callable，
+ *  打印 `SceneTree(<文件>)::<名>`，与 `Callable(self, "<名>")` 等价。`_process` / `_init` / `_to_string` 那 15 支虚方法是
+ *  `Compile Error: Identifier not found: _process`（与一般没声明的名字那句不是一样，先照旧拦），`_initialize` 量出来是 Callable
+ *  只因探针脚本自己定义了它，不是宿主给的，所以不进名单。`root` / `paused` 是**属性读数**（25 都不给），Tier 1 不接引擎 API，照旧拒。 */
+const HOST_VALUE_METHODS = new Set([
+  "add_user_signal",
+  "call",
+  "call_deferred",
+  "call_group",
+  "call_group_flags",
+  "callv",
+  "can_translate_messages",
+  "cancel_free",
+  "change_scene_to_file",
+  "change_scene_to_node",
+  "change_scene_to_packed",
+  "connect",
+  "create_timer",
+  "create_tween",
+  "disconnect",
+  "emit_signal",
+  "free",
+  "get",
+  "get_class",
+  "get_current_scene",
+  "get_edited_scene_root",
+  "get_first_node_in_group",
+  "get_frame",
+  "get_incoming_connections",
+  "get_indexed",
+  "get_instance_id",
+  "get_meta",
+  "get_meta_list",
+  "get_method_argument_count",
+  "get_method_list",
+  "get_multiplayer",
+  "get_node_count",
+  "get_node_count_in_group",
+  "get_nodes_in_group",
+  "get_processed_tweens",
+  "get_property_list",
+  "get_root",
+  "get_script",
+  "get_signal_connection_list",
+  "get_signal_list",
+  "get_translation_domain",
+  "has_connections",
+  "has_group",
+  "has_meta",
+  "has_method",
+  "has_signal",
+  "has_user_signal",
+  "is_accessibility_enabled",
+  "is_accessibility_supported",
+  "is_auto_accept_quit",
+  "is_blocking_signals",
+  "is_class",
+  "is_connected",
+  "is_debugging_collisions_hint",
+  "is_debugging_navigation_hint",
+  "is_debugging_paths_hint",
+  "is_multiplayer_poll_enabled",
+  "is_paused",
+  "is_physics_interpolation_enabled",
+  "is_queued_for_deletion",
+  "is_quit_on_go_back",
+  "notification",
+  "notify_group",
+  "notify_group_flags",
+  "notify_property_list_changed",
+  "property_can_revert",
+  "property_get_revert",
+  "queue_delete",
+  "quit",
+  "reload_current_scene",
+  "remove_meta",
+  "remove_user_signal",
+  "set",
+  "set_auto_accept_quit",
+  "set_block_signals",
+  "set_current_scene",
+  "set_debug_collisions_hint",
+  "set_debug_navigation_hint",
+  "set_debug_paths_hint",
+  "set_deferred",
+  "set_edited_scene_root",
+  "set_group",
+  "set_group_flags",
+  "set_indexed",
+  "set_message_translation",
+  "set_meta",
+  "set_multiplayer",
+  "set_multiplayer_poll_enabled",
+  "set_pause",
+  "set_physics_interpolation_enabled",
+  "set_quit_on_go_back",
+  "set_script",
+  "set_translation_domain",
+  "to_string",
+  "tr",
+  "tr_n",
+  "unload_current_scene",
+]);
+const NO_HOST_VALUE_METHODS = new Set<string>();
+/** 同一批读数里那 15 支 `_x` 虚方法名：取值合法地「不合法」，只是引擎那句换形（S366）。 */
+const VIRTUAL_HOST_NAMES = new Set([
+  "_finalize",
+  "_get",
+  "_get_property_list",
+  "_init",
+  "_iter_get",
+  "_iter_init",
+  "_iter_next",
+  "_notification",
+  "_physics_process",
+  "_process",
+  "_property_can_revert",
+  "_property_get_revert",
+  "_set",
+  "_to_string",
+  "_validate_property",
+]);
+/** 只在**根类**里认（实测内部类里 `quit` 照样 `not declared`）：`checkFunc` 逐函数开关，静态方法那一形认到就换引擎那句（S367）。 */
+let hostValueMethods: Set<string> = NO_HOST_VALUE_METHODS;
+/** 读宿主名所在的静态语境：`static func` 带函数名、`static var` 初值、`const` 初值 —— 引擎三处各一句（S367 的读数）。 */
+let hostStaticCtx: { kind: "func"; name: string } | { kind: "var" } | { kind: "const"; name: string } | null = null;
+const hostMethodReads = new Set<string>();
+
+const gvKey = (name: string, line: number, col: number): string => `${markOwner}#${name}@${line}:${col}`;
+/** 记号归属：`analyze` 每次调用写一次，发射器从同一份 Module 读回（`m.markOwner`）。 */
+let markOwner = "";
+let markSeq = 0;
+
+/** 发射器在按名字取记号之前先把归属对准当前模块（记号表进程内累积，见 §6 第 61 条）。 */
+export function useMarkOwner(owner: string): void {
+  markOwner = owner;
+}
 
 export function isGlobalValueRead(e: Expr): boolean {
   return e.kind === "ident" && globalValueReads.has(gvKey(e.name, e.loc.line, e.loc.col));
@@ -2168,6 +2455,11 @@ export function isGlobalValueRead(e: Expr): boolean {
 
 export function isNativeClassValueRead(e: Expr): boolean {
   return e.kind === "ident" && nativeClassReads.has(gvKey(e.name, e.loc.line, e.loc.col));
+}
+
+/** 宿主基类方法名的取值点（S358）：发射器据此发 `rt.methodCallable(rt.V.object(this), "<名>")`。 */
+export function isHostMethodValueRead(e: Expr): boolean {
+  return e.kind === "ident" && hostMethodReads.has(gvKey(e.name, e.loc.line, e.loc.col));
 }
 
 function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnostic[], awaited = false): void {
@@ -2178,7 +2470,14 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
     case "ident":
       if (e.name === "super") return;
       if (e.name === "self") {
-        if (!scope.allowsSelf()) {
+        // `const` 初值里引擎直接拒（`static var` 初值那一形给 typeof 0，由发射器发 null 盒子 —— 同一批读数，S367）
+        if (hostStaticCtx !== null && hostStaticCtx.kind === "const")
+          diags.push({
+            code: "const-not-constant",
+            message: `Assigned value for constant "${hostStaticCtx.name}" isn't a constant expression.`,
+            loc: e.loc,
+          });
+        else if (!scope.allowsSelf()) {
           diags.push({
             code: "self-in-static",
             message: 'Cannot use "self" inside a static function.',
@@ -2192,6 +2491,31 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         // 引擎类名当值用同样合法（typeof 24、等式按类），只是那支打印带进程内的号 —— 记下来交给发射器拒
         else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+        // 宿主基类的方法名当值用：合法且给 Callable（S358 / S366），记号交给发射器；静态语境与 const / static var 初值里引擎各换一句（S367）
+        else if (hostValueMethods.has(e.name)) {
+          if (hostStaticCtx === null) hostMethodReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+          else if (hostStaticCtx.kind === "func")
+            diags.push({
+              code: "host-read-in-static",
+              message: `Cannot access non-static variable "${e.name}" from the static function "${hostStaticCtx.name}()".`,
+              loc: e.loc,
+            });
+          else if (hostStaticCtx.kind === "var")
+            diags.push({
+              code: "host-read-in-static",
+              message: `Cannot access non-static variable "${e.name}" from a static variable initializer.`,
+              loc: e.loc,
+            });
+          else
+            diags.push({
+              code: "const-not-constant",
+              message: `Assigned value for constant "${hostStaticCtx.name}" isn't a constant expression.`,
+              loc: e.loc,
+            });
+        }
+        // 宿主链上那 15 支虚方法名取值时引擎换一句（S366：`Compile Error: Identifier not found: _process`，末尾没有句号）
+        else if (VIRTUAL_HOST_NAMES.has(e.name))
+          diags.push({ code: "undeclared-identifier", message: `Identifier not found: ${e.name}`, loc: e.loc });
         else
           diags.push({
             code: "undeclared-identifier",
@@ -2899,11 +3223,24 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
-      const wants: Array<[number, "int" | "float"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
+      const wants: Array<[number, "int" | "float" | "bool"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
+      // 「跟第一参走」那几位**连 bool 字面量也拒**（`clamp(1, false, 1)` 说该位期望 "int"、`lerp(1.5, false, 0.5)` 说 "float"、
+      // `wrap(1, 2, false)` 说第三位 "int"）；`clamp` 还会跟一支 bool 第一参走 —— 那时 2 / 3 位期望的是 bool，int / float 反倒拒
+      // （`clamp(true, 1, 2)` → argument 2 should be "bool" but is "int".，实测三位同形）。
+      const boolFollows = follows === undefined ? null : new Set<number>(follows);
       if (follows !== undefined) {
-        const first = e.args[0] === undefined ? null : numericLiteralKind(e.args[0]);
-        if (first !== null) for (const p of follows) wants.push([p, first]);
+        const first =
+          e.args[0] === undefined
+            ? null
+            : GLOBAL_ARG_FOLLOWS_BOOL[callee.name] === true
+              ? literalTypeName(e.args[0])
+              : numericLiteralKind(e.args[0]);
+        if (first === "int" || first === "float" || first === "bool") for (const p of follows) wants.push([p, first]);
       }
+      // 数值位上拒 bool 的那几张表（S362）：`max` / `min` 是每一位（含第三位往后），`wrap` 只有第一位
+      const boolAll = GLOBAL_ARG_BOOL_REFUSED[callee.name]?.includes(-1) === true;
+      const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
+      const refusesBool = (pos: number): boolean => boolAll || boolFixed.has(pos) || boolFollows?.has(pos) === true;
       for (const [pos, want] of wants) {
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
@@ -2912,9 +3249,26 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           const other = e.args.some((x, i) => i !== pos - 1 && suppress[1].includes(literalTypeName(x) ?? ""));
           if (other) continue;
         }
-        const got = nonNumericLiteral(a);
+        const lit = literalTypeName(a);
+        // 期望是 bool 的那位（`clamp` 跟 bool 第一参走）：只按量过的 int / float 字面量拒，其余形没量过就不发
+        const got =
+          want === "bool"
+            ? lit === "int" || lit === "float"
+              ? lit
+              : null
+            : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
         if (got === null || got === want) continue;
         put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+      }
+      // `max` / `min` 是变元个数的：三位往后引擎照样逐位拒 bool（`max(1, 2, false)` → argument 3 should be "float"），
+      // 而那些位不在任何表里，所以按实参个数补一遍
+      if (boolAll) {
+        for (let i = 0; i < e.args.length; i++) {
+          const pos = i + 1;
+          if (wants.some((w) => w[0] === pos) || shouldPos.has(pos)) continue;
+          if (literalTypeName(e.args[i]) !== "bool") continue;
+          put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "float" but is "bool".`);
+        }
       }
 
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。

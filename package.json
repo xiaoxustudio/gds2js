@@ -45,15 +45,15 @@
     "@gds2js/compiler": "workspace:*",
     "@gds2js/runtime": "workspace:*",
     "@gds2js/testkit": "workspace:*",
-    "@types/node": "^24.19.1",
+    "@types/node": "^24.19.2",
     "commander": "^15.0.0",
     "gds2js": "workspace:*",
-    "tree-sitter-cli": "^0.27.0",
+    "tree-sitter-cli": "^0.27.1",
     "tsdown": "^0.22.14",
     "tsx": "^4.23.15",
     "turbo": "^2.11.7",
     "typescript": "^7.0.2",
-    "vite": "^8.3.2",
-    "vitest": "^5.0.3"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
   }
 }

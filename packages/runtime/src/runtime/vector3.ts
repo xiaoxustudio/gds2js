@@ -332,36 +332,26 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(cubic(pre.x, v.x, b.x, post.x), cubic(pre.y, v.y, b.y, post.y), cubic(pre.z, v.z, b.z, post.z));
     }
     case "cubic_interpolate_in_time": {
-      // 与 `Vector2` 那一条同形（S315）：段 [0,1] 的三次 Hermite，两端切线 = 相邻两段割线按另一侧跨度加权。
-      // 跨度退化那一支同样响亮拒（引擎给有限值而这里要除零，式子没量出来）。
+      // 与 `Vector2` 那一条同形：Barry-Goldman 逐分量、每步 lerp 的权重在跨度退化时换成钉死的常数（读数 `tmp/probe-argtype/cubtau.txt`）。
       arity(args, 7, "cubic_interpolate_in_time");
       const b = vecArg(args, 0, "cubic_interpolate_in_time");
       const pre = vecArg(args, 1, "cubic_interpolate_in_time");
       const post = vecArg(args, 2, "cubic_interpolate_in_time");
       const w = scalar(args[3], "cubic_interpolate_in_time");
-      const g0 = sub(0, scalar(args[5], "cubic_interpolate_in_time"));
-      const g1 = scalar(args[4], "cubic_interpolate_in_time");
-      const g2 = sub(scalar(args[6], "cubic_interpolate_in_time"), g1);
-      if (g0 === 0 || g1 === 0 || g2 === 0 || add(g0, g1) === 0 || add(g1, g2) === 0) {
-        throw new UnsupportedError("vector3-method", "Vector3.cubic_interpolate_in_time() 的退化时间跨度（某段为零或相邻两段相消）没量出式子");
-      }
-      const t2 = mul(w, w);
-      const t3 = mul(w, t2);
-      const h00 = sub(sub(mul(2, t3), mul(3, t2)), -1);
-      const h10 = sub(sub(t3, mul(2, t2)), -w);
-      const h01 = add(mul(-2, t3), mul(3, t2));
-      const h11 = sub(t3, t2);
-      // 跨度按段长 g1 归一之后，切线才是「按 weight 那一段」的斜率（S315，与 Vector2 同一条）
-      const a = div(g0, g1);
-      const c = div(g2, g1);
-      const one = 1;
+      const toT = scalar(args[4], "cubic_interpolate_in_time");
+      const preT = scalar(args[5], "cubic_interpolate_in_time");
+      const postT = scalar(args[6], "cubic_interpolate_in_time");
+      const lerp32 = (x: number, y: number, k: number) => add(x, mul(sub(y, x), k));
+      const t = lerp32(0, toT, w);
+      const gapPost = sub(postT, toT);
+      const gapPre = sub(toT, preT);
       const it = (p0: number, p1: number, p2: number, p3: number) => {
-        const d0 = div(sub(p1, p0), a);
-        const d1 = sub(p2, p1);
-        const d2 = div(sub(p3, p2), c);
-        const m1 = div(add(mul(d0, one), mul(d1, a)), add(a, one));
-        const m2 = div(add(mul(d1, c), mul(d2, one)), add(one, c));
-        return add(add(add(mul(h00, p1), mul(h10, m1)), mul(h01, p2)), mul(h11, m2));
+        const a1 = lerp32(p0, p1, preT === 0 ? 0 : div(sub(t, preT), -preT));
+        const a2 = lerp32(p1, p2, toT === 0 ? 0.5 : div(t, toT));
+        const a3 = lerp32(p2, p3, gapPost === 0 ? 1 : div(sub(t, toT), gapPost));
+        const b1 = lerp32(a1, a2, gapPre === 0 ? 0 : div(sub(t, preT), gapPre));
+        const b2 = lerp32(a2, a3, postT === 0 ? 1 : div(t, postT));
+        return lerp32(b1, b2, toT === 0 ? 0.5 : div(t, toT));
       };
       return vector3(it(pre.x, v.x, b.x, post.x), it(pre.y, v.y, b.y, post.y), it(pre.z, v.z, b.z, post.z));
     }

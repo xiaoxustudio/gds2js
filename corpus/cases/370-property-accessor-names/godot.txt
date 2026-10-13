@@ -1,0 +1,7 @@
+getter 里的宿主名 → 25 | quit
+getter 里的全局函数名 → 25 | abs
+getter 里的 self → 24
+只带 set → 读 0 | 写过的值 7
+读写器成对 → 2 | 8
+只带 get 被写 → 2 | 3
+setter 形参盖住同名 → 2 | 11

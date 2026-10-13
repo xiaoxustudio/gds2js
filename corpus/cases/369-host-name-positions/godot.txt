@@ -1,0 +1,7 @@
+模块 var → 25 | quit | 有效 true
+带型模块 var → 25 | create_timer
+模块 self → 24
+形参默认值 → 25 | quit
+形参默认值 self → 24
+lambda 体里的宿主名 → 25
+同名遮蔽 → 2 | 1

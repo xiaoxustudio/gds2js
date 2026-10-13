@@ -1,0 +1,22 @@
+true
+末格给值
+SCRIPT ERROR: Invalid operands 'Nil' and 'int' in operator '<'.
+   at: w0 (<case>/main.gd:7)
+   GDScript backtrace (most recent call first):
+       [0] w0 (<case>/main.gd:7)
+       [1] _initialize (<case>/main.gd:31)
+SCRIPT ERROR: Invalid operands 'PackedStringArray' and 'int' in operator '<'.
+   at: w1 (<case>/main.gd:12)
+   GDScript backtrace (most recent call first):
+       [0] w1 (<case>/main.gd:12)
+       [1] _initialize (<case>/main.gd:32)
+SCRIPT ERROR: Invalid operands 'Dictionary' and 'int' in operator '>'.
+   at: w2 (<case>/main.gd:17)
+   GDScript backtrace (most recent call first):
+       [0] w2 (<case>/main.gd:17)
+       [1] _initialize (<case>/main.gd:33)
+SCRIPT ERROR: Invalid operands 'Color' and 'Color' in operator '<'.
+   at: w3 (<case>/main.gd:22)
+   GDScript backtrace (most recent call first):
+       [0] w3 (<case>/main.gd:22)
+       [1] _initialize (<case>/main.gd:34)

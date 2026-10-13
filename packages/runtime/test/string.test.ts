@@ -5,7 +5,7 @@ import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { lengthOf, toInt } from "@gds2js/runtime/runtime/builtins";
 import { index, method } from "@gds2js/runtime/runtime/methods";
-import { isLess, ops, strOps } from "@gds2js/runtime/runtime/ops";
+import { isLess, ops, sortLess, strOps } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBinToInt, strCase, strCaseStyle, strCapitalize, strCEscape, strCount, strEndsWith, strEraseAt, strFind, strFloat, strGetSlice, strInsertAt, strIsValidFilename, strGetSlicec, strPadZeros, strRepeat, strStartsWith, strStripEdges, strUriDecode, strUnicodeAt, strUriEncode, strFormat, strFormatV, strReplace, stringCtor, stringNameCtor, stringStatic, truthyOf, valueEq } from "@gds2js/runtime/runtime/values";
 import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
@@ -23,7 +23,7 @@ describe("runtime/values · String 方法族", () => {
     eq("061", "快路 前缀短者小", show(ops.lt(S("ab"), S("abc"))), "true");
     eq("061", "快路相等", show(ops.eq(S("abc"), S("abc"))), "true");
     const g = GArray.of([S(EMO), S("\uFFFF"), S("z"), S("apple")]);
-    g.sort();
+    g.sort(sortLess);
     eq(
       "061",
       "含 emoji 的字符串数组按码点排序",

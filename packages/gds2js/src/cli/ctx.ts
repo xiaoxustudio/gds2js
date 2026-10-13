@@ -182,7 +182,7 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
 }
 
 export function toDiags(absPath: string, ir: ReturnType<typeof lower>): Diag[] {
-  return analyze(ir).map((d) => ({ code: d.code, message: d.message, line: d.loc.line, col: d.loc.col, file: absPath }));
+  return analyze(ir, undefined, absPath).map((d) => ({ code: d.code, message: d.message, line: d.loc.line, col: d.loc.col, file: absPath }));
 }
 
 export function printDiags(diags: Diag[]): boolean {

@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isGlobalValueRead, isNativeClassValueRead } from "../lower/analyze";
+import { isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -96,20 +96,77 @@ function aritySentence(name: string, min: number, max: number, got: number): str
 /** 实测过的内置函数实参区间；表外的名字（`print` / `str` / `range` 这些变元与类型构造器）不拦 —— 没量过就不说。 */
 const BUILTIN_ARITY: Record<string, [number, number]> = {
   abs: [1, 1],
+  absf: [1, 1],
+  absi: [1, 1],
+  acos: [1, 1],
+  acosh: [1, 1],
   angle_difference: [2, 2],
+  asin: [1, 1],
+  asinh: [1, 1],
+  atan: [1, 1],
+  atan2: [2, 2],
+  atanh: [1, 1],
   bezier_derivative: [5, 5],
   bezier_interpolate: [5, 5],
+  bytes_to_var: [1, 1],
+  bytes_to_var_with_objects: [1, 1],
+  ceil: [1, 1],
+  ceilf: [1, 1],
+  ceili: [1, 1],
   char: [1, 1],
   clamp: [3, 3],
+  clampf: [3, 3],
   clampi: [3, 3],
+  convert: [2, 2],
+  cos: [1, 1],
+  cosh: [1, 1],
+  cubic_interpolate: [5, 5],
+  cubic_interpolate_angle: [5, 5],
   cubic_interpolate_in_time: [8, 8],
+  db_to_linear: [1, 1],
+  deg_to_rad: [1, 1],
+  dict_to_inst: [1, 1],
+  ease: [2, 2],
+  error_string: [1, 1],
+  exp: [1, 1],
+  floor: [1, 1],
+  floorf: [1, 1],
+  floori: [1, 1],
+  fmod: [2, 2],
+  fposmod: [2, 2],
+  get_stack: [0, 0],
+  hash: [1, 1],
+  inst_to_dict: [1, 1],
+  instance_from_id: [1, 1],
+  inverse_lerp: [3, 3],
+  is_equal_approx: [2, 2],
+  is_finite: [1, 1],
+  is_inf: [1, 1],
+  is_instance_id_valid: [1, 1],
+  is_instance_of: [2, 2],
+  is_instance_valid: [1, 1],
+  is_nan: [1, 1],
   is_same: [2, 2],
+  is_zero_approx: [1, 1],
+  len: [1, 1],
   lerp: [3, 3],
+  lerp_angle: [3, 3],
+  lerpf: [3, 3],
+  linear_to_db: [1, 1],
+  log: [1, 1],
   max: [2, Number.POSITIVE_INFINITY],
+  maxf: [2, 2],
+  maxi: [2, 2],
   min: [2, Number.POSITIVE_INFINITY],
+  minf: [2, 2],
+  mini: [2, 2],
   move_toward: [3, 3],
+  nearest_po2: [1, 1],
   pingpong: [2, 2],
   posmod: [2, 2],
+  pow: [2, 2],
+  print_stack: [0, 0],
+  rad_to_deg: [1, 1],
   rand_from_seed: [1, 1],
   randf: [0, 0],
   randf_range: [2, 2],
@@ -117,31 +174,39 @@ const BUILTIN_ARITY: Record<string, [number, number]> = {
   randi: [0, 0],
   randi_range: [2, 2],
   randomize: [0, 0],
-  seed: [1, 1],
   remap: [5, 5],
-  instance_from_id: [1, 1],
-  is_instance_id_valid: [1, 1],
-  is_instance_of: [2, 2],
-  is_instance_valid: [1, 1],
-  weakref: [1, 1],
-  rid_from_int64: [1, 1],
   rid_allocate_id: [0, 0],
-  inst_to_dict: [1, 1],
-  dict_to_inst: [1, 1],
-  var_to_bytes: [1, 1],
-  var_to_bytes_with_objects: [1, 1],
-  bytes_to_var: [1, 1],
-  bytes_to_var_with_objects: [1, 1],
-  get_stack: [0, 0],
-  print_stack: [0, 0],
+  rid_from_int64: [1, 1],
   rotate_toward: [3, 3],
+  round: [1, 1],
+  roundf: [1, 1],
+  roundi: [1, 1],
+  seed: [1, 1],
   sign: [1, 1],
+  signf: [1, 1],
+  signi: [1, 1],
+  sin: [1, 1],
+  sinh: [1, 1],
   smoothstep: [3, 3],
   snapped: [2, 2],
+  snappedf: [2, 2],
+  snappedi: [2, 2],
+  sqrt: [1, 1],
   step_decimals: [1, 1],
   str_to_var: [1, 1],
+  tan: [1, 1],
+  tanh: [1, 1],
+  type_convert: [2, 2],
+  type_exists: [1, 1],
+  type_string: [1, 1],
+  var_to_bytes: [1, 1],
+  var_to_bytes_with_objects: [1, 1],
   var_to_str: [1, 1],
+  weakref: [1, 1],
   wrap: [3, 3],
+  wrapf: [3, 3],
+  wrapi: [3, 3],
+  typeof: [1, 1],
 };
 
 /** 少给 / 多给在引擎是解析期拒；这里同样在发射期拒，措辞照原文，`code` 沿用已出货那三支的。 */
@@ -150,7 +215,8 @@ function checkBuiltinArity(name: string, got: number): void {
   if (ar === undefined) return;
   if (got >= ar[0] && got <= ar[1]) return;
   const code = name === "char" ? "char-arity" : name === "var_to_str" ? "var-to-str-arity"
-    : name === "str_to_var" ? "str-to-var-arity" : "builtin-arity";
+    : name === "str_to_var" ? "str-to-var-arity"
+      : name === "convert" || name === "type_convert" ? "convert-arity" : "builtin-arity";
   throw new UnsupportedError(code, aritySentence(name, ar[0], ar[1], got));
 }
 
@@ -169,18 +235,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   str_to_var: (a) => {
     return `rt.strToVar(${a[0]})`;
   },
-  convert: (a) => {
-    if (a.length !== 2) {
-      throw new UnsupportedError("convert-arity", `Too few arguments for "convert()" call. Expected 2 but received ${a.length}.`);
-    }
-    return `rt.variantConvert(${a[0]}, ${a[1]}, true)`;
-  },
-  type_convert: (a) => {
-    if (a.length !== 2) {
-      throw new UnsupportedError("convert-arity", `Too few arguments for "type_convert()" call. Expected 2 but received ${a.length}.`);
-    }
-    return `rt.variantConvert(${a[0]}, ${a[1]}, false)`;
-  },
+  convert: (a) => `rt.variantConvert(${a[0]}, ${a[1]}, true)`,
+  type_convert: (a) => `rt.variantConvert(${a[0]}, ${a[1]}, false)`,
   abs: (a) => `rt.abs(${a.join(", ")})`,
   char: (a) => {
     return `rt.stringChr(${a[0]})`;
@@ -287,8 +343,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   is_nan: (a) => `rt.gIsNan(${a[0]})`,
   is_inf: (a) => `rt.gIsInf(${a[0]})`,
   is_finite: (a) => `rt.gIsFinite(${a[0]})`,
-  min: (a) => `rt.gMin(${a[0]}, ${a[1]})`,
-  max: (a) => `rt.gMax(${a[0]}, ${a[1]})`,
+  min: (a) => `rt.gMin(${a.join(", ")})`,
+  max: (a) => `rt.gMax(${a.join(", ")})`,
   mini: (a) => `rt.gMinI(${a[0]}, ${a[1]})`,
   maxi: (a) => `rt.gMaxI(${a[0]}, ${a[1]})`,
   minf: (a) => `rt.gMinF(${a[0]}, ${a[1]})`,
@@ -381,6 +437,8 @@ let CURRENT_MEMBERS = new Set<string>();
 let STATIC_FUNCS = new Set<string>();
 /** 当前类作用域的 JS 类名：静态调用与静态取值都挂在这个名字上。 */
 let CURRENT_CLASS = "";
+/** 正在发的是 `static var` 初值：那一段里没有实例，`self` 发 null 盒子（实测 typeof 0，S367）。 */
+let selfInNilContext = false;
 /** 当前作用域可见的 `const` → 它所属的 JS 类名：常量是类级的，内部类也看得见外层脚本的常量，裸读一律按归属发成 `<类>.NAME`。 */
 let CLASS_VALUE_OWNERS = new Map<string, string>();
 /** 每个类拥有的类级值（常量 / 静态变量）：认 `Inner.IC`、`A.sv` 这种类名点类级值的写法，须在发射任何函数体之前建好。 */
@@ -389,6 +447,8 @@ let CLASS_VALUES = new Map<string, Set<string>>();
 let VAR_TYPES = new Map<string, TypeRef | null>();
 /** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
+/** 当前发射的函数自己绑住的名字（见 `collectBinds`），取值记号撞号时用它先认局部。 */
+let FUNC_BINDS = new Set<string>();
 /** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
 let CLASS_FUNCS = new Set<string>();
 
@@ -425,6 +485,7 @@ export function emitModule(m: Module, opts: EmitOptions): string {
 }
 
 export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
+  useMarkOwner(m.markOwner ?? "");
   MAP_ACTIVE = opts.sourcemap === true;
   LAMBDA_DEPTH = 0;
   LINE_MAPPINGS = [];
@@ -751,7 +812,10 @@ function emitAccessors(v: VarDecl): string[] {
   const out: string[] = [];
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
   out.push(`  get ${v.name}() {`);
-  if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
+  if (a.getter === null) {
+    out.push("    // 只带 set 的属性读出来是 null（实测 typeof 0，写它照样跑 setter）");
+    out.push("    return rt.V.nil();");
+  } else if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
   else out.push(`    return this.${a.getter.method}();`);
   out.push("  }");
   const pname = a.setter !== null && a.setter.kind === "inline" ? a.setter.param : "value";
@@ -988,12 +1052,31 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
 
 function emitFunc(f: FuncDecl, base = 0): string[] {
   const saved = LOCAL_TYPES;
+  const savedBinds = FUNC_BINDS;
   LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
+  FUNC_BINDS = collectBinds(f.body, new Set(f.params.map((p) => p.name)));
   try {
     return emitFuncInner(f, base);
   } finally {
     LOCAL_TYPES = saved;
+    FUNC_BINDS = savedBinds;
   }
+}
+
+/** 这个函数自己绑住的名字：形参、体内所有 `var`、lambda 形参、`for` 的循环变量与 match 手臂的 `bind`。
+ *  取值记号（analyze 的 `名@行:列`）是跨模块共用的表，两份同形同位的源会撞号 —— 撞上了先认局部，别把局部读成 Callable。 */
+function collectBinds(root: unknown, out: Set<string>): Set<string> {
+  if (Array.isArray(root)) {
+    for (const v of root) collectBinds(v, out);
+    return out;
+  }
+  if (root === null || typeof root !== "object") return out;
+  const o = root as Record<string, unknown>;
+  if ((o["kind"] === "var" || o["kind"] === "bind") && typeof o["name"] === "string") out.add(o["name"]);
+  if (o["kind"] === "for" && typeof o["var"] === "string") out.add(o["var"]);
+  if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") out.add(p.name);
+  for (const v of Object.values(o)) collectBinds(v, out);
+  return out;
 }
 
 /** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */
@@ -1359,7 +1442,7 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
       out.push(...emitAccessors(v));
       continue;
     }
-    const init = slotInit(v.type, v.init);
+    const init = slotInit(v.type, v.init, v.isStatic);
     if (v.isStatic) {
       out.push(`  static ${v.name} = ${init};`);
       continue;
@@ -1374,11 +1457,17 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
   return out;
 }
 
-/** 字段 / 静态变量的初始化：定型容器走 `stampDecl`，定目标量还要再过 `declaredCast`。 */
-function slotInit(t: TypeRef | null, init: Expr | null | undefined): string {
-  const raw = stampDecl(t, init, emitExpr);
-  const cast = declaredCast(t);
-  return cast === null ? raw : `${cast}(${raw})`;
+/** 字段 / 静态变量的初始化：定型容器走 `stampDecl`，定目标量还要再过 `declaredCast`。`selfIsNil` 那支是 `static var` 初值 —— 那处没有实例，实测 `self` 给 typeof 0（S367）。 */
+function slotInit(t: TypeRef | null, init: Expr | null | undefined, selfIsNil = false): string {
+  const prev = selfInNilContext;
+  selfInNilContext = selfIsNil;
+  try {
+    const raw = stampDecl(t, init, emitExpr);
+    const cast = declaredCast(t);
+    return cast === null ? raw : `${cast}(${raw})`;
+  } finally {
+    selfInNilContext = prev;
+  }
 }
 
 /** proto 形状的类要一份类型声明：字段都在 `__gd_fields__()` 里落地，类体里只发 `declare` —— 带初值的类字段会在 `super()` 之后再定义一次，把基类已写好的值冲掉。 */
@@ -1421,7 +1510,7 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }
-    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init)};`);
+    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
   }
   if (out.length > 0) out.push("");
   return out;
@@ -3067,7 +3156,7 @@ function emitExprVar(e: Expr): string {
       return emitLit(e.lit, e.value);
 
     case "ident":
-      if (e.name === "self") return `rt.V.object(this)`;
+      if (e.name === "self") return selfInNilContext ? "rt.V.nil()" : `rt.V.object(this)`;
       const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
       // 类名当接收者（`Inner.make()`、`Inner.f` 取值）时给的是类身份的盒子：类值本身装不进 Variant。
@@ -3080,6 +3169,8 @@ function emitExprVar(e: Expr): string {
       if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
       // 引擎类名的取值点：实测 typeof 24、等式按类，发一个身份盒子；打印与 `.new()` 那两支在运行时各自响亮拒
       if (isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
+      // 宿主基类方法名的取值点（S358）：实测给 `SceneTree(<文件>)::<名>` 的 Callable，与 `Callable(self, "<名>")` 同一个盒子
+      if (isHostMethodValueRead(e) && !FUNC_BINDS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":

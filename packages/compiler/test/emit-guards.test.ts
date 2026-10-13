@@ -551,8 +551,8 @@ describe("未知调用守卫", () => {
 });
 
 // ── ③ 转换族单实参口径 ─────────────────────────────────────────────
-/** `var_to_str()` 的缩进串：4.6.3 收第二个实参，但装字典的数组跟着换行、缩进按深度累加，
- *  式子没量出前只在发射期响亮拒。 */
+/** `var_to_str()` 的第二个实参（缩进串）在 4.6.3 **引擎解析期就拒**（`Too many arguments for "var_to_str()" call. Expected at most 1 but received 2.`，
+ *  读数 `tmp/aritymax/both-ends.txt`），出货同拒；`convert` / `type_convert` 同理是恰好两元。 */
 const CONVERT_ARITY_CELLS: Array<{
   name: string;
   call: string;
@@ -716,6 +716,47 @@ describe("值位置的全局函数名", () => {
     expect(stale, `GLOBAL_TODO_FUNCTIONS 里有名字不在实测的 123 支里：${stale.join(",")}`).toEqual([]);
     const loose = [...GLOBAL_VALUE_NAMES].filter((n) => GLOBAL_TODO_FUNCTIONS.has(n) && GLOBAL_CALLABLES[n]!.bounds !== null);
     expect(loose, `该拒的那支里有人领了区间闸门：${loose.join(",")}`).toEqual([]);
+  });
+});
+
+// ── 全局 max / min 一族的元数闸门：两支变元（≥2）+ 四支定长（恰好 2），两句都是逐格量的（S364，读数 tmp/maxmin/maxmin3.txt，尺 fold48.mts）──
+describe("max / min 一族的元数闸门", () => {
+  const textOf = async (src: string): Promise<string> => {
+    try {
+      await emitted(src);
+      return "居然编得过";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
+    }
+  };
+  const ARITY: Array<[string, string]> = [
+    ["maxi(1)", 'Too few arguments for "maxi()" call. Expected at least 2 but received 1.'],
+    ["maxi()", 'Too few arguments for "maxi()" call. Expected at least 2 but received 0.'],
+    ["mini(1)", 'Too few arguments for "mini()" call. Expected at least 2 but received 1.'],
+    ["minf()", 'Too few arguments for "minf()" call. Expected at least 2 but received 0.'],
+    ["maxf(1)", 'Too few arguments for "maxf()" call. Expected at least 2 but received 1.'],
+    ["maxi(1, 2, 3)", 'Too many arguments for "maxi()" call. Expected at most 2 but received 3.'],
+    ["mini(1, 2, 3)", 'Too many arguments for "mini()" call. Expected at most 2 but received 3.'],
+    ["maxf(1, 2, 3)", 'Too many arguments for "maxf()" call. Expected at most 2 but received 3.'],
+    ["minf(1, 2, 3)", 'Too many arguments for "minf()" call. Expected at most 2 but received 3.'],
+    ["maxi(1, 2, 3, 4)", 'Too many arguments for "maxi()" call. Expected at most 2 but received 4.'],
+    ["maxi(1, 2.5, 3)", 'Too many arguments for "maxi()" call. Expected at most 2 but received 3.'],
+    ["max(1)", 'Too few arguments for "max()" call. Expected at least 2 but received 1.'],
+    ["min()", 'Too few arguments for "min()" call. Expected at least 2 but received 0.'],
+  ];
+
+  it("四支定长名与两支变元的少给 / 多给都按引擎那句", async () => {
+    for (const [call, want] of ARITY) {
+      expect(await classify(PRINT(call), "ok"), `${call} 该拦在发射期`).toBe("builtin-arity");
+      expect(await textOf(PRINT(call)), `${call} 的文案`).toBe(want);
+    }
+  });
+
+  it("变元那两支把整串实参送进 gMax / gMin，不是只送前两个", async () => {
+    expect(await emitted(PRINT("max(1, 2, 3)"))).toContain("rt.gMax(rt.V.int(1), rt.V.int(2), rt.V.int(3))");
+    expect(await emitted(PRINT("min(1, 2, 3, 4)"))).toContain("rt.gMin(rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4))");
+    expect(await emitted(PRINT("max(1, 2)"))).toContain("rt.gMax(rt.V.int(1), rt.V.int(2))");
+    expect(await classify(PRINT("max(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)"), "ok"), "十二元该编得过").toBe("ok");
   });
 });
 
