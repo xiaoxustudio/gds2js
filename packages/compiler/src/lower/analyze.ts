@@ -1,5 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "./static-arg-types";
+import { FACE_ARG_AS, FACE_ARG_TYPES, FACE_SLOTS } from "./face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "./instance-arg-types";
 import { isGlobalConst } from "./globals";
 import {
@@ -2418,11 +2419,12 @@ function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags
     });
     return;
   }
+  const argKind = literalTypeName(e.args[0]);
   const t = staticType(e.args[0] as Expr);
-  const msg = t === null ? undefined : JOIN_BAD_ARG[t];
+  const msg = argKind !== null || t === null ? undefined : JOIN_BAD_ARG[t];
   if (msg !== undefined) diags.push({ code: "join-arg", message: msg, loc: e.loc });
+  // 实参是字面量的那十二形由 `FACE_ARG_*` 那两张实测表管（引擎在那里推两句，手抄的这张表只有一句）
 }
-
 function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "bool" || e.args.length === 0) return;
   const t = staticType(e.args[0] as Expr);
@@ -2767,6 +2769,38 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
+      const face = literalFaceType(callee.obj);
+      if (face !== null) {
+        // 字面量接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts`：元数由引擎自己的句子量出来，
+        // 形参逐位逐 kind 量；读数都建在「实参个数正好等于量过的那个上界」这一形上，别的元数没量过就不发）
+        const fkey = `${face}.${callee.name}`;
+        const slot = FACE_SLOTS[fkey];
+        if (slot !== undefined && e.args.length === slot) {
+          const byPos = new Map<number, Array<{ code: string; message: string }>>();
+          const put = (pos: number, code: string, message: string): void => {
+            const bucket = byPos.get(pos) ?? [];
+            bucket.push({ code, message });
+            byPos.set(pos, bucket);
+          };
+          for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
+            const bad = literalTypeName(e.args[pos - 1]);
+            if (bad === null || !refuse.includes(bad)) continue;
+            put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+            if (also.includes(bad)) {
+              put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+            }
+          }
+          for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
+            const bad = literalTypeName(e.args[pos - 1]);
+            if (bad === null || !refuse.includes(bad)) continue;
+            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          }
+          for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+            for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+          }
+        }
+        continue;
+      }
       const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : valueCtorType(callee.obj);
       if (recv === null) continue;
       const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
@@ -2774,6 +2808,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const got = e.args.length;
       if (got >= sig[0] && got <= sig[1]) {
         // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
+        // 读数全部是在**上界元数**下量的（`packed.mts` 每位都按 max 个实参建式子），别的元数没量过就不发
         const ikey = `${recv}.${callee.name}`;
         const byPos = new Map<number, Array<{ code: string; message: string }>>();
         const put = (pos: number, code: string, message: string): void => {
@@ -2781,7 +2816,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           bucket.push({ code, message });
           byPos.set(pos, bucket);
         };
-        for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
+        for (const [pos, refuse, want, also] of got === sig[1] || got === sig[0] ? INSTANCE_ARG_AS[ikey] ?? [] : []) {
           const lit = e.args[pos - 1];
           const bad = lit === undefined ? null : literalTypeName(lit);
           if (bad === null || !refuse.includes(bad)) continue;
@@ -2945,6 +2980,14 @@ function nonNumericLiteral(e: Expr): string | null {
 }
 
 /** 允许集那一族按「字面量自己的类型名」判，所以 int / float / bool 也要能报名（`abs(true)` 引擎是真拒的）。 */
+/** 字面量本身就能定下的接收者面（值类型那五支走 `valueCtorType`，这一支只补 String / Array / Dictionary）。 */
+function literalFaceType(e: Expr): string | null {
+  if (e.kind === "lit") return e.lit === "string" ? "String" : null;
+  if (e.kind === "array") return "Array";
+  if (e.kind === "dict") return "Dictionary";
+  return null;
+}
+
 function literalTypeName(e: Expr | undefined): string | null {
   if (e === undefined) return null;
   if (e.kind === "lit") {
