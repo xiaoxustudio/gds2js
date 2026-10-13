@@ -106,6 +106,7 @@ const DEFAULT_SET = [
   "342-step-decimals",
   "343-snapped-and-predicates",
   "344-zero-modulus",
+  "348-global-vector-args",
   "032-preload-load",
 ];
 

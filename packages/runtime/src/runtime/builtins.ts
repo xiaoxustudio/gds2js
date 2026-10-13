@@ -10,11 +10,11 @@ import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { GdRid, allocateRid, rid } from "./rid";
 import { GdNodePath, emptyNodePath, nodePathValue } from "./node-path";
-import { GVector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
-import { GVector3 } from "./vector3";
-import { GVector3i } from "./vector3i";
-import { GColor } from "./color";
+import { GVector2, vector2, vector2Method } from "./vector2";
+import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
+import { GVector3, vector3, vector3Method } from "./vector3";
+import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
+import { GColor, colorMethod } from "./color";
 import { typeOf } from "./patterns";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
@@ -244,6 +244,8 @@ export function abs(v: Variant): Variant {
     // `abs(INT64_MIN)` 回绕回 INT64_MIN（实测 e13），不是 +2^63。
     return V.int(x < 0n ? wrap64(-x) : x);
   }
+  const vec = vectorMath(v, "abs");
+  if (vec !== null) return vec;
   return V.float(Math.abs(num(v)) + 0);
 }
 
@@ -278,10 +280,24 @@ function one(x: number): number {
   return Number.isNaN(x) ? 0 : x > 0 ? 1 : x < 0 ? -1 : 0;
 }
 
+/** 这一族引擎的形参是 Variant + 向量允许集（`tmp/probe-argtype/matrix.txt` 的名单、`vals.txt` 的结果）：
+ *  向量实参逐分量走值类型那一族的同一条式子，int 向量的 floor / ceil / round 原样给回
+ *  （实测 `floor(Vector2i(-1, 2))` 给 `(-1, 2)`、`ceil(Vector3i(-1, 2, -3))` 给 `(-1, 2, -3)`）。 */
+function vectorMath(v: Variant, name: "abs" | "floor" | "ceil" | "round" | "sign"): Variant | null {
+  if (v.t !== Tag.OBJECT) return null;
+  const o = v.v;
+  if (o instanceof GVector2) return vector2Method(o, name, []);
+  if (o instanceof GVector3) return vector3Method(o, name, []);
+  if (o instanceof GVector2i) return name === "abs" || name === "sign" ? vector2iMethod(o, name, []) : vector2i(o.x, o.y);
+  if (o instanceof GVector3i) return name === "abs" || name === "sign" ? vector3iMethod(o, name, []) : vector3i(o.x, o.y, o.z);
+  return null;
+}
+
 export function gSign(v: Variant): Variant {
+  const vec = vectorMath(v, "sign");
+  if (vec !== null) return vec;
   if (isInt(v)) return vi(one(intToNum(v.v as IntPayload)));
-  const x = v.v as number;
-  return V.float(one(x) + 0);
+  return V.float(one(num(v)) + 0);
 }
 
 export function gSignI(v: Variant): Variant {
@@ -316,21 +332,33 @@ function intPassthrough(v: Variant, mode: RoundMode): Variant | null {
 export function gFloor(v: Variant, mode: RoundMode = "auto"): Variant {
   const pas = intPassthrough(v, mode);
   if (pas !== null) return pas;
-  return roundThree(v.v as number, Math.floor, mode);
+  if (mode === "auto") {
+    const vec = vectorMath(v, "floor");
+    if (vec !== null) return vec;
+  }
+  return roundThree(num(v), Math.floor, mode);
 }
 
 export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
   const pas = intPassthrough(v, mode);
   if (pas !== null) return pas;
-  return roundThree(v.v as number, Math.ceil, mode);
+  if (mode === "auto") {
+    const vec = vectorMath(v, "ceil");
+    if (vec !== null) return vec;
+  }
+  return roundThree(num(v), Math.ceil, mode);
 }
 
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   const pas = intPassthrough(v, mode);
   if (pas !== null) return pas;
+  if (mode === "auto") {
+    const vec = vectorMath(v, "round");
+    if (vec !== null) return vec;
+  }
   // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
   // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
-  return roundThree(v.v as number, (x: number): number => (x === 0 ? x : gdRound(x)), mode);
+  return roundThree(num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
@@ -384,8 +412,13 @@ export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Var
 }
 
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
-  const x = fl(a);
-  return V.float(x + (fl(b) - x) * fl(w) + 0);
+  const weight = floatWeight(w);
+  if (weight !== null && sameShape(a, b)) {
+    const vec = sameTypeVectorMath("lerp", a, [b, weight]);
+    if (vec !== null) return vec;
+  }
+  const x = num(a);
+  return V.float(x + (num(b) - x) * num(w) + 0);
 }
 
 export function gInverseLerp(a: Variant, b: Variant, v: Variant): Variant {
@@ -405,9 +438,39 @@ export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant
 }
 
 /** `snapped` 的结果类型跟步长那一侧，但**商按 float 算**：`snapped(7.5, 3)` = 9、`snappedi(7, 3)` = 6。折半的方向是 `floor(v / step + 0.5)`（往 +∞），不是 `round()` 的远离零 —— 实测 `snapped(-0.5, 1.0)` 给 `0.0`、`snapped(-7.5, 3.0)` 给 `-6.0`。 */
+/** `snapped` 与 `lerp` 的向量那一支：两支都只量过**两端同型**那一形（`vals.txt`：
+ *  `snapped(Vector2(-1.5, 2), Vector2(1, 1))` 给 `(-1.0, 2.0)`、`snapped(Vector3(-1.5, 2, -3), Vector3(1, 1, 1))` 给 `(-1.0, 2.0, -3.0)`、
+ *  `lerp(Vector2(-1, 0), Vector2(3, 8), 0.25)` 给 `(0.0, 2.0)`、`lerp(Color(0, 0, 0, 1), Color(1, 0.5, 0.25, 0.5), 0.5)` 给 `(0.5, 0.25, 0.125, 0.75)`）。
+ *  异型那一侧引擎是解析期「跟第一参走」那一句（§6 第 51 条①），运行期这一族没量全，所以不在此列的一律往下走、由数值那一支响亮拒。 */
+function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[]): Variant | null {
+  if (a.t !== Tag.OBJECT) return null;
+  const o = a.v;
+  if (o instanceof GVector2) return vector2Method(o, name, args);
+  if (o instanceof GVector3) return vector3Method(o, name, args);
+  if (o instanceof GColor) return colorMethod(o, name, args);
+  return null;
+}
+
+function floatWeight(w: Variant): Variant | null {
+  return w.t === Tag.FLOAT || w.t === Tag.INT ? w : null;
+}
+
+function sameShape(a: Variant, b: Variant): boolean {
+  if (a.t !== Tag.OBJECT || b.t !== Tag.OBJECT) return false;
+  const x = a.v;
+  const y = b.v;
+  return (
+    (x instanceof GVector2 && y instanceof GVector2) ||
+    (x instanceof GVector3 && y instanceof GVector3) ||
+    (x instanceof GColor && y instanceof GColor)
+  );
+}
+
 export function gSnapped(x: Variant, step: Variant): Variant {
-  const s = fl(step);
-  const a = fl(x);
+  const vec = sameTypeVectorMath("snapped", x, [step]);
+  if (vec !== null) return vec;
+  const s = num(step);
+  const a = num(x);
   if (isInt(step)) {
     if (s === 0) return vi(intOf(x));
     return vi(Math.trunc(Math.floor(a / s + 0.5) * s));

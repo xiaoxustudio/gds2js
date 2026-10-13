@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.152 允许集顺出来的静默错值：`floor(Vector2)` 给 NaN 那一族逐分量发出（2026-10-13，S339，语料 348）
+
+- **上一轮的表自己供了线索**：S338 量到 `abs` / `floor` / `ceil` / `round` / `sign` 的形参允许集带四种向量、`lerp` 还带 Color —— 引擎**收**这些形，而我们那几支的写法是 `roundThree(v.v as number, …)` / `one(v.v as number)` / `fl(…)`。实参是 `GVector2` 时就是拿对象当数：`floor(Vector2(-1.5, 2))` 出货给 **NaN**、`sign(Vector2(-1.5, 2))` 给 **0.0**，`snapped` 抛 JS `RangeError`、`lerp` 抛 `TypeError`。
+- **一格一脚本量 66 格**（`tmp/probe-argtype/vals.mts` → `vals.txt`）：20 格一元 × 四向量、`snapped` 同型两支、`lerp` 四支（含 `lerp(Color…, 0.5)` 与权重 2.5 那支——**权重不夹进 [0,1]**）、外加 32 格「Variant 装着串 / 数组 / 字典 / null」的运行期形状。
+- **式子就是值类型那一族**：按实参类型直接交给 `vector2Method` / `vector3Method` / `vector2iMethod` / `vector3iMethod` / `colorMethod` 已有的 `abs` / `floor` / `ceil` / `round` / `sign` / `snapped` / `lerp`；int 向量没有 `floor` / `ceil` / `round` 那三支方法，分量本来就是整数，实测原样给回。
+- **一形不采信**：`lerp(Vector2(0, 0), Vector2(4, 8), Vector2(0.5, 0.25))` 实测给 `(0.0, 0.0)`，既不是按轴插值也立不成「向量权重折成 0」那条规则（单格无第二判据），那一形继续不发。
+- **非数值实参按红线 1 改成响亮拒**：引擎运行期也拒（`Error calling utility function "abs()": Argument "x" must be …`），但逐支原句没取齐（`round` 缺、`lerp(1, X, .5)` 是另一式），所以出货先发我们自己的 `UnsupportedError`，不再静默给 NaN / 0；原句留 §6 第 51 条③。
+- **门**：语料 348 新钉 26 行逐字节 + `test:scriptc` 348 一格 1/1（41.2s）；`pnpm test` **2569**（77 文件）、typecheck **4/4**、`test:compile` **233/337**（sema 78 不变、emitter 不支持 0）、`test:diff` **226/226**（跳过 121，静默 / 崩溃 / 未实现 全 0，旧 225 例一字不变）。
+
 ### 1.151 形参拒剩下的三族接完：434 格矩阵，同一次调用引擎会连推两句（2026-10-13，S338，语料 347）
 
 - **把 §1.150 留下的 B / C / Object 一次做完**：尺子从「一位一探针」换成「**一位 × 一种字面量**」—— 31 个位 × 14 形 = 434 格，每格一条引擎读数（`tmp/probe-argtype/matrix.mts` → `matrix.txt`），表由 `gen-table2.mts` 生成，门 406 例（`global-arg-allow-list.test.ts`）逐格钉句子与「不许误拦」，语料 347 钉 54 次调用。
