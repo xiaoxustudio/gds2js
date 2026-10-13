@@ -134,3 +134,17 @@ export const GLOBAL_ARG_SHOULD_BE: Readonly<Record<string, ReadonlyArray<readonl
   type_convert: [[2, ["Array", "Dictionary"], "int", []]],
   type_string: [[1, ["Array", "Dictionary"], "int", []]],
 };
+
+/** 「跟第一参走」那一族的向量与 Color 那一支：`(第一参的形, 位, 引擎在那一位拒的 kind 名单)`，
+ *  句子 `argument N should be "<第一参那一形>" but is "U".`（`tmp/probe-argtype/derived2.mts` 逐格量：第一参钉死一形、其余位给同型合法值）。 */
+export const DERIVED_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [string, number, readonly string[]]>>> = {
+  clamp: [["Color", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]], ["Vector2", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2i", "Vector3", "Vector3i", "Color"]], ["Vector2", 3, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2i", "Vector3", "Vector3i", "Color"]], ["Vector3", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3i", "Color"]], ["Vector3", 3, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3i", "Color"]]],
+  lerp: [["Color", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i"]], ["Vector2", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2i", "Vector3", "Vector3i", "Color"]], ["Vector3", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3i", "Color"]]],
+  snapped: [["Vector2", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2i", "Vector3", "Vector3i", "Color"]], ["Vector3", 2, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3i", "Color"]]],
+};
+
+/** `(那一句归位的位, 其余位上出现这些 kind 时整条不推)`：`wrap(向量, [], 向量)` 引擎一句都不推（`derived2.txt`），
+ *  第一位那一句只在其余位都是标量时发。 */
+export const GLOBAL_ARG_SUPPRESS_OTHER: Readonly<Record<string, readonly [number, readonly string[]]>> = {
+  wrap: [1, ["Array", "Dictionary"]],
+};

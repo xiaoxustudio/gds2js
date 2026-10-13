@@ -2,8 +2,10 @@ import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
+  DERIVED_ARG_TYPES,
   GLOBAL_ARG_AS,
   GLOBAL_ARG_SENTENCE,
+  GLOBAL_ARG_SUPPRESS_OTHER,
   GLOBAL_ARG_SHOULD_BE,
   GLOBAL_ARG_TYPES,
 } from "./global-arg-types";
@@ -2786,6 +2788,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       // 同位上两种期望型并存的（`convert` 的第二参：Array / Dictionary 说 Variant.Type、别的说 int）整条交给逐 kind 的名单
       const shouldPos = new Set((shouldRows ?? []).map(([pos]) => pos));
+      const suppress = GLOBAL_ARG_SUPPRESS_OTHER[callee.name];
       const wants: Array<[number, "int" | "float"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
       if (follows !== undefined) {
         const first = e.args[0] === undefined ? null : numericLiteralKind(e.args[0]);
@@ -2794,6 +2797,11 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       for (const [pos, want] of wants) {
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
+        // `wrap(向量, [], 向量)` 那几格引擎一句都不推：其余位上是名单里那些形时，这一位的句子不发
+        if (suppress !== undefined && suppress[0] === pos) {
+          const other = e.args.some((x, i) => i !== pos - 1 && suppress[1].includes(literalTypeName(x) ?? ""));
+          if (other) continue;
+        }
         const got = nonNumericLiteral(a);
         if (got === null || got === want) continue;
         diags.push({
@@ -2835,6 +2843,17 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
         diags.push({
           code: "global-arg-type",
+          message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
+          loc: e.loc,
+        });
+      }
+      // 「跟第一参走」的向量与 Color 那一支：期望型就是第一参那一形，那一位拒哪些形是逐 kind 量出来的
+      for (const [want, pos, refuse] of DERIVED_ARG_TYPES[callee.name] ?? []) {
+        if (firstKind !== want) continue;
+        const got = literalTypeName(e.args[pos - 1]);
+        if (got === null || !refuse.includes(got)) continue;
+        diags.push({
+          code: "global-arg-derived",
           message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
           loc: e.loc,
         });
