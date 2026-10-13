@@ -2627,6 +2627,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
 
   for (const { f, base } of funcs) {
     const typed = new Map(base);
+    // 标了 `String` / `Array` / `Dictionary` 的名字：引擎在带标注的变量接收者上说的句子，与字面量接收者那一趟一字不差
+    //（`tmp/probe-argtype/packed3.mts` 的 1358 格与 `p2-t4.txt` 逐格比过），所以同一张表照用
+    const faceTyped = new Map<string, string>();
     for (const p of f.params) {
       const t = valueTypeAnnotation(p.type);
       if (t !== null) typed.set(p.name, t);
@@ -2733,6 +2736,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       // 标了别的类型（`Variant` 是实测到的那一形）就不许再拿初值猜：引擎那侧 `var v: Variant = Vector2(1, 2)` 解析期放过
       const t = valueTypeAnnotation(d.type) ?? (d.type === null ? valueCtorType(d.init) : null);
       if (t !== null) typed.set(d.name, t);
+      if (d.type !== null && d.type.kind === "named" && FACE_ANNOTATIONS.has(d.type.name)) faceTyped.set(d.name, d.type.name);
     }
 
     for (const e of calls) {
@@ -2769,7 +2773,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const face = literalFaceType(callee.obj);
+      const face = literalFaceType(callee.obj, faceTyped);
       if (face !== null) {
         // 字面量接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts`：元数由引擎自己的句子量出来，
         // 形参逐位逐 kind 量；读数都建在「实参个数正好等于量过的那个上界」这一形上，别的元数没量过就不发）
@@ -2981,10 +2985,12 @@ function nonNumericLiteral(e: Expr): string | null {
 
 /** 允许集那一族按「字面量自己的类型名」判，所以 int / float / bool 也要能报名（`abs(true)` 引擎是真拒的）。 */
 /** 字面量本身就能定下的接收者面（值类型那五支走 `valueCtorType`，这一支只补 String / Array / Dictionary）。 */
-function literalFaceType(e: Expr): string | null {
+const FACE_ANNOTATIONS = new Set(["String", "Array", "Dictionary"]);
+function literalFaceType(e: Expr, faceTyped: Map<string, string>): string | null {
   if (e.kind === "lit") return e.lit === "string" ? "String" : null;
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "ident") return faceTyped.get(e.name) ?? null;
   return null;
 }
 
