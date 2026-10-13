@@ -1,8 +1,14 @@
 import { staticMemberFn } from "./ir";
 import { isGlobalConst } from "./globals";
-import { ARG_TYPE_FOLLOWS_FIRST, GLOBAL_ARG_TYPES } from "./global-arg-types";
+import {
+  ARG_TYPE_FOLLOWS_FIRST,
+  GLOBAL_ARG_AS,
+  GLOBAL_ARG_SENTENCE,
+  GLOBAL_ARG_SHOULD_BE,
+  GLOBAL_ARG_TYPES,
+} from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
-import { GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
+import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
@@ -2760,14 +2766,26 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       });
     }
 
-    // 固定形参型那一族：`sqrt("a")` → `argument 1 should be "float" but is "String".`（103 位逐位实测）；
+    // 固定形参型那一族：`sqrt("a")` → `argument 1 should be "float" but is "String".`（102 位逐位实测）；
     // `clamp` / `lerp` / `wrap` 的指定位是「跟第一参走」，第一参是 int / float 字面量时才知道期望型。
+    // 另外三族（整句固定的允许集、声明类型那句 as、期望型不是 int / float 的 A 式位）按「引擎逐 kind 真拒的那张名单」拦，
+    // 同一位上引擎收过的形（`abs([])`、`bytes_to_var([])`、`inst_to_dict(null)`）一个都不拦。
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "ident") continue;
+      // 元数不对时引擎先说元数那一句（发射器已经按实测区间发），这一轮的类型判据一律不许抢在前面
+      const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
+      if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
       const spec = GLOBAL_ARG_TYPES[callee.name];
       const follows = ARG_TYPE_FOLLOWS_FIRST[callee.name];
-      if (spec === undefined && follows === undefined) continue;
+      const shouldRows = GLOBAL_ARG_SHOULD_BE[callee.name];
+      const sentenceRows = GLOBAL_ARG_SENTENCE[callee.name];
+      const asRows = GLOBAL_ARG_AS[callee.name];
+      if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
+        continue;
+      }
+      // 同位上两种期望型并存的（`convert` 的第二参：Array / Dictionary 说 Variant.Type、别的说 int）整条交给逐 kind 的名单
+      const shouldPos = new Set((shouldRows ?? []).map(([pos]) => pos));
       const wants: Array<[number, "int" | "float"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
       if (follows !== undefined) {
         const first = e.args[0] === undefined ? null : numericLiteralKind(e.args[0]);
@@ -2775,9 +2793,46 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       for (const [pos, want] of wants) {
         const a = e.args[pos - 1];
-        if (a === undefined) continue;
+        if (a === undefined || shouldPos.has(pos)) continue;
         const got = nonNumericLiteral(a);
         if (got === null || got === want) continue;
+        diags.push({
+          code: "global-arg-type",
+          message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
+          loc: e.loc,
+        });
+      }
+
+      // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
+      const firstKind = literalTypeName(e.args[0]);
+      for (const [pos, refuse, sentence, unlessFirst] of sentenceRows ?? []) {
+        const got = literalTypeName(e.args[pos - 1]);
+        if (got === null || !refuse.includes(got)) continue;
+        if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
+        diags.push({ code: "global-arg-sentence", message: sentence, loc: e.loc });
+      }
+      for (const [pos, refuse, want, unlessFirst, also] of asRows ?? []) {
+        const got = literalTypeName(e.args[pos - 1]);
+        if (got === null || !refuse.includes(got)) continue;
+        if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
+        diags.push({
+          code: "global-arg-pass",
+          message: `Cannot pass a value of type "${got}" as "${want}".`,
+          loc: e.loc,
+        });
+        // 声明类型那一位引擎连推两句，第二句是同一位的 A 式（`counts.txt` 逐格数过才这么发）
+        if ((also ?? []).includes(got)) {
+          diags.push({
+            code: "global-arg-type",
+            message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
+            loc: e.loc,
+          });
+        }
+      }
+      for (const [pos, refuse, want, unlessFirst] of shouldRows ?? []) {
+        const got = literalTypeName(e.args[pos - 1]);
+        if (got === null || !refuse.includes(got)) continue;
+        if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
         diags.push({
           code: "global-arg-type",
           message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,
@@ -2810,6 +2865,35 @@ function nonNumericLiteral(e: Expr): string | null {
     if (e.lit === "node_path") return "NodePath";
     if (e.lit === "null") return "null";
     return null;
+  }
+  if (e.kind === "array") return "Array";
+  if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "call" && e.callee.kind === "ident" && NUMERIC_VALUE_CTORS.has(e.callee.name)) return e.callee.name;
+  return null;
+}
+
+/** 允许集那一族按「字面量自己的类型名」判，所以 int / float / bool 也要能报名（`abs(true)` 引擎是真拒的）。 */
+function literalTypeName(e: Expr | undefined): string | null {
+  if (e === undefined) return null;
+  if (e.kind === "lit") {
+    switch (e.lit) {
+      case "int":
+        return "int";
+      case "float":
+        return "float";
+      case "bool":
+        return "bool";
+      case "null":
+        return "null";
+      case "string":
+        return "String";
+      case "string_name":
+        return "StringName";
+      case "node_path":
+        return "NodePath";
+      default:
+        return null;
+    }
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";

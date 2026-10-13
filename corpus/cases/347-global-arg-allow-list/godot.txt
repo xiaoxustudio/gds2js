@@ -1,0 +1,148 @@
+SCRIPT ERROR: Parse Error: Invalid argument for "abs()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "abs()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Invalid argument for "ceil()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "ceil()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "floor()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid argument for "floor()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Invalid argument for "round()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: Invalid argument for "round()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Invalid argument for "sign()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Invalid argument for "sign()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: Argument "step" must be "int" or "float".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Invalid argument for "snapped()" function: Argument "step" must be "int" or "float".
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: Argument "from" must be "int", "float", "Vector2", "Vector3", "Vector4", "Color", "Quaternion", "Basis", "Transform2D", or "Transform3D".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Invalid argument for "lerp()" function: Argument "from" must be "int", "float", "Vector2", "Vector3", "Vector4", "Color", "Quaternion", "Basis", "Transform2D", or "Transform3D".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "PackedByteArray".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Invalid argument for "bytes_to_var()" function: argument 1 should be "PackedByteArray" but is "String".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "bool" as "PackedByteArray".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: Invalid argument for "bytes_to_var()" function: argument 1 should be "PackedByteArray" but is "bool".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "PackedByteArray".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: Invalid argument for "bytes_to_var_with_objects()" function: argument 1 should be "PackedByteArray" but is "String".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "bool" as "PackedByteArray".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: Invalid argument for "bytes_to_var_with_objects()" function: argument 1 should be "PackedByteArray" but is "bool".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "Dictionary".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Invalid argument for "dict_to_inst()" function: argument 1 should be "Dictionary" but is "String".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "bool" as "Dictionary".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: Invalid argument for "dict_to_inst()" function: argument 1 should be "Dictionary" but is "bool".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Invalid argument for "error_string()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Invalid argument for "error_string()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:27)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: Invalid argument for "instance_from_id()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: Invalid argument for "instance_from_id()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:30)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_instance_id_valid()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:30)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_instance_id_valid()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:31)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:32)
+SCRIPT ERROR: Parse Error: Invalid argument for "rand_from_seed()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:32)
+SCRIPT ERROR: Parse Error: Invalid argument for "rand_from_seed()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:33)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:34)
+SCRIPT ERROR: Parse Error: Invalid argument for "randf_range()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:34)
+SCRIPT ERROR: Parse Error: Invalid argument for "randf_range()" function: argument 1 should be "float" but is "Array".
+   at: GDScript::reload (<case>/main.gd:35)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:36)
+SCRIPT ERROR: Parse Error: Invalid argument for "randf_range()" function: argument 2 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:36)
+SCRIPT ERROR: Parse Error: Invalid argument for "randf_range()" function: argument 2 should be "float" but is "Array".
+   at: GDScript::reload (<case>/main.gd:37)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:38)
+SCRIPT ERROR: Parse Error: Invalid argument for "randfn()" function: argument 1 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:38)
+SCRIPT ERROR: Parse Error: Invalid argument for "randfn()" function: argument 1 should be "float" but is "Array".
+   at: GDScript::reload (<case>/main.gd:39)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "float".
+   at: GDScript::reload (<case>/main.gd:40)
+SCRIPT ERROR: Parse Error: Invalid argument for "randfn()" function: argument 2 should be "float" but is "String".
+   at: GDScript::reload (<case>/main.gd:40)
+SCRIPT ERROR: Parse Error: Invalid argument for "randfn()" function: argument 2 should be "float" but is "Array".
+   at: GDScript::reload (<case>/main.gd:41)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:42)
+SCRIPT ERROR: Parse Error: Invalid argument for "randi_range()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:42)
+SCRIPT ERROR: Parse Error: Invalid argument for "randi_range()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:43)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:44)
+SCRIPT ERROR: Parse Error: Invalid argument for "randi_range()" function: argument 2 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:44)
+SCRIPT ERROR: Parse Error: Invalid argument for "randi_range()" function: argument 2 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:45)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:46)
+SCRIPT ERROR: Parse Error: Invalid argument for "rid_from_int64()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:46)
+SCRIPT ERROR: Parse Error: Invalid argument for "rid_from_int64()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:47)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:48)
+SCRIPT ERROR: Parse Error: Invalid argument for "type_convert()" function: argument 2 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:48)
+SCRIPT ERROR: Parse Error: Invalid argument for "type_convert()" function: argument 2 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:49)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:50)
+SCRIPT ERROR: Parse Error: Invalid argument for "type_string()" function: argument 1 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:50)
+SCRIPT ERROR: Parse Error: Invalid argument for "type_string()" function: argument 1 should be "int" but is "Array".
+   at: GDScript::reload (<case>/main.gd:51)
+SCRIPT ERROR: Parse Error: Invalid argument for "inst_to_dict()" function: argument 1 should be "Object" but is "String".
+   at: GDScript::reload (<case>/main.gd:52)
+SCRIPT ERROR: Parse Error: Invalid argument for "inst_to_dict()" function: argument 1 should be "Object" but is "bool".
+   at: GDScript::reload (<case>/main.gd:53)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), should be a TYPE_* constant, a class or a script.
+   at: GDScript::reload (<case>/main.gd:54)
+SCRIPT ERROR: Parse Error: Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), should be a TYPE_* constant, a class or a script.
+   at: GDScript::reload (<case>/main.gd:55)
+SCRIPT ERROR: Parse Error: Invalid argument for "convert()" function: argument 2 should be "int" but is "String".
+   at: GDScript::reload (<case>/main.gd:56)
+SCRIPT ERROR: Parse Error: Invalid argument for "convert()" function: argument 2 should be "Variant.Type" but is "Array".
+   at: GDScript::reload (<case>/main.gd:57)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

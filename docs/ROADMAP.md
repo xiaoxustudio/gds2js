@@ -779,6 +779,17 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.151 形参拒剩下的三族接完：434 格矩阵，同一次调用引擎会连推两句（2026-10-13，S338，语料 347）
+
+- **把 §1.150 留下的 B / C / Object 一次做完**：尺子从「一位一探针」换成「**一位 × 一种字面量**」—— 31 个位 × 14 形 = 434 格，每格一条引擎读数（`tmp/probe-argtype/matrix.mts` → `matrix.txt`），表由 `gen-table2.mts` 生成，门 406 例（`global-arg-allow-list.test.ts`）逐格钉句子与「不许误拦」，语料 347 钉 54 次调用。
+- **同位换 kind 就换句子，所以 refuse 名单必须逐 kind 存**：`bytes_to_var("a")` 说 `Cannot pass a value of type "String" as "PackedByteArray".`、`bytes_to_var({})` 说 `argument 1 should be "PackedByteArray" but is "Dictionary".`、`bytes_to_var([])` 收；`convert(1, "a")` 要 int 而 `convert(1, [])` 要 Variant.Type。上一轮那种「一位一个期望型」的写法在这里会漏句也会拦错。
+- **一次调用两句是数出来的不是猜的**：矩阵那一趟只记第一行，语料 347 第一版按它接完只对上半句 —— 于是把选中的 54 格逐格重跑、把每一次调用推的**全部** Parse Error 收齐（`counts.txt`）：C 族那 19 格是「先 as 句、再同位的 A 句」。出货照发两句后，引擎 73 句 / 我们 73 句、逐字不同 0 处。
+- **这一族对 bool / Color 的判法与 A 族相反**：A 族 102 位收 bool（`sqrt(false)` 算得出），B / C 族真拒；Color 字面量在 B 族也拒。反过来 `abs([])`、`floor({})`、`snapped([], 1)`、`lerp([], 1, 1)` 引擎全收 —— 一条都不许拦。
+- **两道门各逮到我们一侧的一条**：(a) `lerp` 第二参那句「跟第一参走」被当固定形照抄，合法的 `lerp(1, 2, 3)` 遭拦，`test/sema.test.ts` 236 那格（我们报错、Godot 通过）当场红 —— 表里因此加了「第一参是这些 kind 时整条让开」那一列；(b) 类型句抢在元数句前面，`test/emit-guards.test.ts` 里 `inst_to_dict(1, 2)` 退化成「居然编得过」—— 判据改成**实参个数不在 `GLOBAL_CALLABLES.bounds` 区间内时类型那一族一律不插手**。
+- **`convert` 的第一参不发**：`Invalid call for function "convert".` 说的是 (from, to) 那一对，`convert("42", TYPE_FLOAT)` 合法而 `convert("a", 1)` 被拒 —— 生成器里明确把它剔掉，欠在 §6 第 51 条④。
+- **三条欠都留了读数**：跟随第一参那一族的向量 / Color 支（11 格已在 `matrix.txt`，task #31）、C 族其余 kind 的双句（尺子 `matrix2.mts` 已备好，跑一次 434 格约 45 分钟）、B 族全局函数的**运行期**向量那一半（`floor(Vector2)` 出货现在给 NaN、`sign(Vector2)` 给 0.0，task #30，脚本 `vals.mts`）。
+- **门**：`pnpm test` **2530**（76 文件）、typecheck **4/4**、`test:compile` **232/336**（sema 拦下 77 → **78**、响亮拒 26、emitter 不支持 0）、`test:diff` **225/225**（跳过 120 → 121，静默 / 崩溃 / 未实现 全 0）、`test:golden` 347 新记后 `--check` 无漂移、既有 225 例一字不变。
+
 ### 1.150 全局函数「形参收到非数字字面量」：102 位逐位实测成表，另 5 位是「跟第一参走」（2026-10-12，S337，语料 346）
 
 - **一族句子先分成三类**：A `argument N should be "T" but is "U".`（形参是具体类型）、B `Argument "x" must be "int", "float", …`（Variant + 允许集，每支名单不同）、C 各自一句（`range` 是运行期 `Invalid type…`、`len` 自一句、没名字那句还带 `Did you mean to use "remap()"?`）。本轮只接 A 类里 T 是 int / float 的位。

@@ -1,9 +1,18 @@
 /**
- * 全局函数「固定形参型」那一张表：每一位都是 `tmp/probe-argtype/fixed.mts` 逐位塞 String 字面量量出来的 ——
- * 引擎在解析期给 `Invalid argument for "F()" function: argument N should be "T" but is "U".`。
- * 同一轮里 `clamp` / `lerp` / `wrap` 的那五位**不是**固定的（期望型跟第一参走），单独记在 `ARG_TYPE_FOLLOWS_FIRST`。
+ * 全局函数形参在解析期被拒的几张表，每一位 / 每一个 kind 都是 `tmp/probe-argtype/` 塞字面量量出来的：
+ * - `GLOBAL_ARG_TYPES`：固定形参型（`fixed.mts` 逐位塞 String 字面量），句子 `argument N should be "T" but is "U".`
+ * - `ARG_TYPE_FOLLOWS_FIRST`：期望型跟第一参走的五位（`clamp` / `lerp` / `wrap`）
+ * - `GLOBAL_ARG_SENTENCE`：**整句固定**那几族 —— Variant + 允许集的 `Argument "x" must be …`，
+ *   加上 `Invalid call for function "convert".` 与 `is_instance_of` 那句自带的，句子照原文存
+ * - `GLOBAL_ARG_AS`：形参声明是具体类型（`PackedByteArray` / `Dictionary` / `int` / `float`…）那一族，
+ *   句子 `Cannot pass a value of type "U" as "T".`，T 存第三位
+ * - `GLOBAL_ARG_SHOULD_BE`：A 式但期望型不是 int / float 的位（`inst_to_dict` 的 Object、`convert` 第二参的 Variant.Type），T 存第三位
+ * 这几张表的第二位都是**引擎真拒的字面量 kind 名单**：收的形一个都没写进去
+ * （`abs([])` / `abs({})` / `bytes_to_var([])` 引擎收，`sqrt(false)` 也收，`inst_to_dict(null)` 更收）。
+ * 同一位可能同时出现在两张表：`bytes_to_var` 的 Dictionary 说 A 式、其余说 as 式。
  */
-export const GLOBAL_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [number, "int" | "float"]>>> = {
+export type GlobalArgType = "int" | "float";
+export const GLOBAL_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [number, GlobalArgType]>>> = {
   absf: [[1, "float"]],
   absi: [[1, "int"]],
   acos: [[1, "float"]],
@@ -19,7 +28,6 @@ export const GLOBAL_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [n
   char: [[1, "int"]],
   clampf: [[1, "float"], [2, "float"], [3, "float"]],
   clampi: [[1, "int"], [2, "int"], [3, "int"]],
-  convert: [[2, "int"]],
   cos: [[1, "float"]],
   cosh: [[1, "float"]],
   db_to_linear: [[1, "float"]],
@@ -76,4 +84,53 @@ export const ARG_TYPE_FOLLOWS_FIRST: Readonly<Record<string, ReadonlyArray<numbe
   clamp: [2, 3],
   lerp: [2],
   wrap: [2, 3],
+};
+
+/** `(位, 引擎拒的 kind 名单, 整句原文, 第一参是这些 kind 时整条让开)`。 */
+export const GLOBAL_ARG_SENTENCE: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string, readonly string[]]>>> = {
+  abs: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"abs()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []]],
+  ceil: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"ceil()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []]],
+  floor: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"floor()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []]],
+  is_instance_of: [[2, ["float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "Invalid argument for \"is_instance_of()\" function: Invalid type argument for is_instance_of(), should be a TYPE_* constant, a class or a script.", []]],
+  lerp: [[1, ["bool", "String", "StringName", "NodePath", "null", "Vector2i", "Vector3i"], "Invalid argument for \"lerp()\" function: Argument \"from\" must be \"int\", \"float\", \"Vector2\", \"Vector3\", \"Vector4\", \"Color\", \"Quaternion\", \"Basis\", \"Transform2D\", or \"Transform3D\".", []]],
+  round: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"round()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []]],
+  sign: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"sign()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []]],
+  snapped: [[1, ["bool", "String", "StringName", "NodePath", "null", "Color"], "Invalid argument for \"snapped()\" function: Argument \"x\" must be \"int\", \"float\", \"Vector2\", \"Vector2i\", \"Vector3\", \"Vector3i\", \"Vector4\", or \"Vector4i\".", []], [2, ["bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "Invalid argument for \"snapped()\" function: Argument \"step\" must be \"int\" or \"float\".", ["Vector2", "Vector2i", "Vector3", "Vector3i"]]],
+};
+
+/** `(位, 引擎拒的 kind 名单, 目标型 T, 第一参是这些 kind 时整条让开, 引擎还追第二句的那些 kind)`，
+ *  第一句 `Cannot pass a value of type "U" as "T".`，第二句 `argument N should be "T" but is "U".`（`counts.txt` 逐格数出来的）。 */
+export const GLOBAL_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string, readonly string[], readonly string[]]>>> = {
+  bytes_to_var: [[1, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "PackedByteArray", [], ["String", "bool"]]],
+  bytes_to_var_with_objects: [[1, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "PackedByteArray", [], ["String", "bool"]]],
+  dict_to_inst: [[1, ["int", "float", "bool", "String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "Dictionary", [], ["String", "bool"]]],
+  error_string: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  instance_from_id: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  is_instance_id_valid: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  rand_from_seed: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  randf_range: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "float", [], ["String"]], [2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "float", [], ["String"]]],
+  randfn: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "float", [], ["String"]], [2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "float", [], ["String"]]],
+  randi_range: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]], [2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  rid_from_int64: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  type_convert: [[2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+  type_string: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["String"]]],
+};
+
+/** `(位, 引擎拒的 kind 名单, 期望型 T, 同上)`，句子与 `GLOBAL_ARG_TYPES` 同式。 */
+export const GLOBAL_ARG_SHOULD_BE: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string, readonly string[]]>>> = {
+  bytes_to_var: [[1, ["Dictionary"], "PackedByteArray", []]],
+  bytes_to_var_with_objects: [[1, ["Dictionary"], "PackedByteArray", []]],
+  convert: [[2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", []], [2, ["Array", "Dictionary"], "Variant.Type", []]],
+  dict_to_inst: [[1, ["Array"], "Dictionary", []]],
+  error_string: [[1, ["Array", "Dictionary"], "int", []]],
+  inst_to_dict: [[1, ["int", "float", "bool", "String", "StringName", "NodePath", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "Object", []]],
+  instance_from_id: [[1, ["Array", "Dictionary"], "int", []]],
+  is_instance_id_valid: [[1, ["Array", "Dictionary"], "int", []]],
+  rand_from_seed: [[1, ["Array", "Dictionary"], "int", []]],
+  randf_range: [[1, ["Array", "Dictionary"], "float", []], [2, ["Array", "Dictionary"], "float", []]],
+  randfn: [[1, ["Array", "Dictionary"], "float", []], [2, ["Array", "Dictionary"], "float", []]],
+  randi_range: [[1, ["Array", "Dictionary"], "int", []], [2, ["Array", "Dictionary"], "int", []]],
+  rid_from_int64: [[1, ["Array", "Dictionary"], "int", []]],
+  type_convert: [[2, ["Array", "Dictionary"], "int", []]],
+  type_string: [[1, ["Array", "Dictionary"], "int", []]],
 };
