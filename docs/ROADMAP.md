@@ -779,6 +779,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.153 静默 NaN 的根子是共用的取数口子：`fl()` / `intOf()` 一次性堵掉，数值一族 141 格全数响亮拒（2026-10-13，S340）
+
+- **S339 修的是 `floor` 一支，病在共用的两口子上**：`fl(v)` 的 `intToNum(v.v as IntPayload)` 与 `intOf(v)` 的 `Math.trunc(v.v as number)` 对装箱的 String / 向量 / 字典都不报错，往下算成 NaN —— 数值一族 47 支全靠这两口。
+- **改前改后各跑一遍同一把尺**（`tmp/probe-argtype/precheck.mts`，47 支 × {String, Vector2, Dictionary} = 141 格）：改前 **74 格发编出来的值**（`nan` 31、`false` 15、`0.0` 11、`1.0` 9、`0` 6、±1/inf 2）、13 格抛 JS 的 `RangeError` / `TypeError`、只有 54 格本来就是 `arg-float` 那一式；改后 **141 格一格值都不发**（`UnsupportedError` 96 + `GodotRuntimeError` 45）。
+- **引擎那一侧本来就是拒**：S339 ⑤ 那 32 格运行期读数（`Error calling utility function "abs()": Argument "x" must be …`）—— 原句逐支还没量齐（§6 第 51 条③），所以这一轮只发我们自己的响亮拒，不冒充引擎文本。
+- **bool 一字不动**：`mathNum` 里 BOOL 明确折 1 / 0（实测 a05 / k01），int / float 两支走原路 —— 新分支只在「既不是数也不是 bool」那一侧，合法程序一个都不经过（`test:diff` 226/226 一字不变）。
+- **门**：`pnpm test` **2710**（78 文件）、typecheck **4/4**、ops 自校验 2127 / 0。
+
 ### 1.152 允许集顺出来的静默错值：`floor(Vector2)` 给 NaN 那一族逐分量发出（2026-10-13，S339，语料 348）
 
 - **上一轮的表自己供了线索**：S338 量到 `abs` / `floor` / `ceil` / `round` / `sign` 的形参允许集带四种向量、`lerp` 还带 Color —— 引擎**收**这些形，而我们那几支的写法是 `roundThree(v.v as number, …)` / `one(v.v as number)` / `fl(…)`。实参是 `GVector2` 时就是拿对象当数：`floor(Vector2(-1.5, 2))` 出货给 **NaN**、`sign(Vector2(-1.5, 2))` 给 **0.0**，`snapped` 抛 JS `RangeError`、`lerp` 抛 `TypeError`。

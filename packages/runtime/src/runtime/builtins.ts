@@ -263,8 +263,17 @@ function isInt(v: Variant): boolean {
   return v.t === Tag.INT;
 }
 
+/** 数值一族只吃 int / float / bool（bool 折成 1 / 0 是实测 a05 / k01 那一形）：其余形引擎在调用边界上就拒（S339 ⑤ 同一口径），
+ *  而先前 `v.v as number` 那一步会拿对象或串算出 NaN —— 那是静默错值，不是拒。 */
+function mathNum(v: Variant): number {
+  if (v.t === Tag.FLOAT) return v.v as number;
+  if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
+  if (v.t === Tag.BOOL) return v.v ? 1 : 0;
+  throw new UnsupportedError("not-number", `需要 int / float / bool，收到类型 ${v.t}`);
+}
+
 function fl(v: Variant): number {
-  return v.t === Tag.FLOAT ? (v.v as number) : intToNum(v.v as IntPayload);
+  return mathNum(v);
 }
 
 /** 实测 `round` 是**远离零**（`round(2.5)`=3、`round(-2.5)`=-3、`round(-3.5)`=-4），JS 原生对负半数会差一格。 */
@@ -273,7 +282,7 @@ function gdRound(x: number): number {
 }
 
 function intOf(v: Variant): number {
-  return v.t === Tag.INT ? intToNum(v.v as IntPayload) : Math.trunc(v.v as number);
+  return Math.trunc(mathNum(v));
 }
 
 function one(x: number): number {
