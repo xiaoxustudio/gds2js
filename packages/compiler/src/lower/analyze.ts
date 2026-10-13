@@ -2852,6 +2852,11 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         if (firstKind !== want) continue;
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
+        // 同一条「其余位是容器就整句不发」的实测例外也管派生位（`clamp(Color, Color, [1])` 引擎收）
+        if (suppress !== undefined && suppress[0] === pos) {
+          const other = e.args.some((x, i) => i !== pos - 1 && suppress[1].includes(literalTypeName(x) ?? ""));
+          if (other) continue;
+        }
         diags.push({
           code: "global-arg-derived",
           message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`,

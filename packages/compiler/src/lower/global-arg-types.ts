@@ -146,5 +146,6 @@ export const DERIVED_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [
 /** `(那一句归位的位, 其余位上出现这些 kind 时整条不推)`：`wrap(向量, [], 向量)` 引擎一句都不推（`derived2.txt`），
  *  第一位那一句只在其余位都是标量时发。 */
 export const GLOBAL_ARG_SUPPRESS_OTHER: Readonly<Record<string, readonly [number, readonly string[]]>> = {
+  clamp: [2, ["Array", "Dictionary"]],
   wrap: [1, ["Array", "Dictionary"]],
 };
