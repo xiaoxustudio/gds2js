@@ -39,6 +39,17 @@ function numArg(v: Variant | undefined, who: string): number {
   throw new UnsupportedError("color-arg", `Color.${who} 需要数值实参，收到 ${tagName(v.t)}`);
 }
 
+function uppercaseSlot(v: Variant): boolean {
+  if (v.t === Tag.BOOL) return v.v as boolean;
+  if (v.t === Tag.INT) return intToBig(v.v as IntPayload) !== 0n;
+  if (v.t === Tag.FLOAT) {
+    const x = v.v as number;
+    if (!Number.isFinite(x)) throw new UnsupportedError("color-to-html", `Color.to_html() 的 uppercase 收到 ${String(x)}（非有限值没量过）`);
+    return x !== 0;
+  }
+  throw new UnsupportedError("color-to-html", `Color.to_html() 的 uppercase 只量过 bool / int / float（收到 ${tagName(v.t)}）`);
+}
+
 function strArg(v: Variant | undefined, who: string): string {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return v.v as string;
@@ -373,7 +384,9 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       // 非有限分量（nan / ±inf）一律 `00`（`Color(INF, -INF, 0.25, 1).to_html()` 给 `000040ff`，S311）
       const hex = (n: number) => hexByte(Number.isFinite(n) ? byteOf(n) : 0);
       const body = hex(c.r) + hex(c.g) + hex(c.b);
-      const withAlpha = args.length === 0 ? true : Boolean((args[0] as Variant).v);
+      // 那一位的声明是 `bool uppercase`：int / float 按 `≠ 0` 折（`0` / `0.0` / `-0.0` 给小写体、`1` / `2` / `0.5` 给带 alpha），
+      // 其余形引擎在解析期就拒（`tmp/probe-argtype/html.txt`），所以这里一律响亮抛、不按 JS 的真值编一个值出来。
+      const withAlpha = args.length === 0 ? true : uppercaseSlot(args[0]!);
       return V.str(withAlpha ? body + hex(c.a) : body);
     }
     case "html":
