@@ -1165,13 +1165,18 @@ export function strCapitalize(s: string): string {
   return out.join(" ");
 }
 
-/** 两端裁掉码点 ≤ 0x20 的空白（高位空白如 NBSP 不裁，实测 `" a "` 才裁）。 */
-export function strStripEdges(s: string): string {
+/** 两端裁掉 `0 < 码点 <= 0x20` 的空白（实测 `"\u0001abc"` 裁、`"\u0000abc"` 与 NBSP 不裁，读数 `tmp/probe-argtype/fold8.txt`）；
+ *  `left` / `right` 是那两位参数，各自关掉一端的扫描。 */
+export function strStripEdges(s: string, left = true, right = true): string {
   const cs = codepoints(s);
+  const spaceAt = (i: number): boolean => {
+    const cp = cs[i]!.codePointAt(0)!;
+    return cp > 0 && cp <= 0x20;
+  };
   let a = 0;
   let b = cs.length;
-  while (a < b && (cs[a] as string).codePointAt(0)! <= 0x20) a++;
-  while (b > a && (cs[b - 1] as string).codePointAt(0)! <= 0x20) b--;
+  while (left && a < b && spaceAt(a)) a++;
+  while (right && b > a && spaceAt(b - 1)) b--;
   return cs.slice(a, b).join("");
 }
 

@@ -1,0 +1,9 @@
+A|abc|abc|  abc|abc
+B|abc  |  abc|  abc  |abc  
+C|x  |  x|  x  |x|x
+D|x  |x|  x  
+E|a	b|	a	b|a	b	
+F|xabcx|xabcx|xabcx
+G|1|3|1
+H|3|6|5
+I|4|4|abc

@@ -918,10 +918,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "similarity":
           return V.float(strSimilarity(s, asString(one(args, "similarity"), "similarity")));
         case "strip_edges": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `strip_edges() 不接受参数（收到 ${args.length} 个）`);
+          if (args.length > 2) {
+            throw new GodotRuntimeError("arity", `Too many arguments for "strip_edges()" call. Expected at most 2 but received ${args.length}.`);
           }
-          return V.str(strStripEdges(s));
+          const left = args[0] === undefined ? true : boolArg(args, 0, "strip_edges");
+          const right = args[1] === undefined ? true : boolArg(args, 1, "strip_edges");
+          return V.str(strStripEdges(s, left, right));
         }
         case "unicode_at":
           return V.int(strUnicodeAt(s, intArg(args, 0, "unicode_at")));
