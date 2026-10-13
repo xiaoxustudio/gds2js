@@ -30,11 +30,11 @@ describe("runtime/values · 排序", () => {
     ties.sortCustom((x, y) => first(x) < first(y));
     eq("070", "sort_custom 同键保持插入序", show(V.array(ties)), '[[1, "a"], [1, "c"], [1, "e"], [2, "b"], [2, "d"]]');
     const sorted = GArray.of([I(1), I(3), I(5)]);
-    eq("070", "bsearch 命中给下标", sorted.bsearch(I(3), isLess), 1);
-    eq("070", "bsearch 未命中给插入位置", sorted.bsearch(I(4), isLess), 2);
+    eq("070", "bsearch 命中给下标", sorted.bsearch(I(3), true, isLess), 1);
+    eq("070", "bsearch 未命中给插入位置", sorted.bsearch(I(4), true, isLess), 2);
     const unsorted = GArray.of([I(3), I(1), I(2)]);
-    eq("070", "bsearch 不检查有序、照二分走法给值", unsorted.bsearch(I(2), isLess), 2);
-    eq("070", "bsearch 超出上界给 size", unsorted.bsearch(I(99), isLess), 3);
+    eq("070", "bsearch 不检查有序、照二分走法给值", unsorted.bsearch(I(2), true, isLess), 2);
+    eq("070", "bsearch 超出上界给 size", unsorted.bsearch(I(99), true, isLess), 3);
     eq("070", "find 用深度相等", GArray.of([pair(1, "a"), pair(3, "b")]).findSame(pair(3, "b")), 1);
     eq("070", "find 未命中给 -1", unsorted.findSame(I(9)), -1);
     eq("070", "count 数深度相等的个数", unsorted.count(I(3)), 1);

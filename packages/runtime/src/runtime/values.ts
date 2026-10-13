@@ -526,17 +526,18 @@ export class GArray {
     this.items = sortGodot(this.items, before);
   }
 
-  bsearch(value: Variant, less: (a: Variant, b: Variant) => boolean): number {
-    let lo = 0;
-    let hi = this.items.length;
-    while (lo < hi) {
-      const m = (hi + lo) >> 1;
-      const e = this.items[m] as Variant;
-      if (less(e, value)) lo = m + 1;
-      else if (!less(value, e)) return m;
-      else hi = m;
+  /** 引擎那一条二分界循环：`before` 真 = lower_bound（比较收 `(元素, 值)`），假 = upper_bound（同一支比较器换过来收 `(值, 元素)` 再取反）。
+   *  找不到不回 -1、也不提前收尾，走到底给的就是插入位；格子 `tmp/probe-argtype/{bsearch2,bsearch3}.txt` 共 198 格逐格对过。 */
+  bsearch(value: Variant, before: boolean, cmp: (a: Variant, b: Variant) => boolean): number {
+    let min = 0;
+    let max = this.items.length;
+    while (min < max) {
+      const half = min + ((max - min) >> 1);
+      const e = this.items[half] as Variant;
+      if (before ? cmp(e, value) : !cmp(value, e)) min = half + 1;
+      else max = half;
     }
-    return lo;
+    return min;
   }
 
   filterBy(p: (v: Variant) => Variant | null): GArray {

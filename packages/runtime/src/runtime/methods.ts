@@ -628,9 +628,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         }
         case "bsearch":
-          return V.int(a.bsearch(one(args, "bsearch"), isLess));
+          return V.int(a.bsearch(one(args, "bsearch"), boolArgOr(args, 1, true), lessOrFalse));
         case "bsearch_custom":
-          return V.int(a.bsearch(one(args, "bsearch_custom"), comparatorOf(args[1], "bsearch_custom")));
+          return V.int(a.bsearch(one(args, "bsearch_custom"), boolArgOr(args, 2, true), comparatorOf(args[1], "bsearch_custom")));
         case "find":
           return V.int(a.findSame(one(args, "find"), intArgOr(args, 1, 0)));
         case "rfind":
@@ -1220,6 +1220,21 @@ function comparatorOf(v: Variant | undefined, who: string): (a: Variant, b: Vari
     const r = call([x, y]);
     return r !== null && truthyOf(r);
   };
+}
+
+/** 装箱二分那一族的比较：遇到引擎「比不了」的组合时它不报错、按 false 继续走（`[1, 2].bsearch("a")` 与 `bsearch(^"a")` 实测都给 0、
+ *  `[Color(1, 0, 0, 1), Color(2, 0, 0, 1)].bsearch(Color(3, 0, 0, 1))` 也给 0 —— Color 与 NodePath 在装箱比较里**根本没有序**，
+ *  读数 `tmp/probe-argtype/bsearch2.txt` + `fold11` 的 stderr 计数 0）。
+ *  只认这两条 code（同一判据散在 `ops` 与 `color` 两处、句子不同），其余照旧往外抛。 */
+const NO_ORDER = new Set(["compare-operands", "color-cmp"]);
+
+function lessOrFalse(a: Variant, b: Variant): boolean {
+  try {
+    return isLess(a, b);
+  } catch (e) {
+    if (NO_ORDER.has((e as { code?: string }).code ?? "")) return false;
+    throw e;
+  }
 }
 
 function one(args: Variant[], who: string): Variant {
