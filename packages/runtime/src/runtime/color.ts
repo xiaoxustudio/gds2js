@@ -227,6 +227,17 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
           div(r32(Number(int64ParamBig(v, `Color.from_rgba8() 的第 ${i + 1} 个实参`))), 255);
         return color(ch(args[0], 0), ch(args[1], 1), ch(args[2], 2), args[3] === undefined ? 1 : ch(args[3], 3));
       }
+      case "from_rgbe9995": {
+        if (args.length !== 1) {
+          throw new UnsupportedError("color-arity", `Color.from_rgbe9995() 只收 1 个 int（收到 ${args.length} 个）`);
+        }
+        // 源是 `core/math/color.cpp` 的 `Color::from_rgbe9995(uint32_t)`：R/G/B 各取 9 位、最高 5 位是指数的原码，
+        // `m = Math::pow(2.0f, e - 15.0f - 9.0f)`。形参声明是 int，装箱值先折进 uint32 —— 实测 `4294967296` 给全零、
+        // `-1` 与 `0xFFFFFFFF` 同值、`2147483647`（e = 15）给 0.998（24 格读数在 `tmp/probe-argtype/rgbe.txt`）。
+        const p = Number(BigInt.asUintN(32, int64ParamBig(args[0], "Color.from_rgbe9995() 的实参")));
+        const m = r32(Math.pow(2, (p >>> 27) - 15 - 9));
+        return color(r32((p & 0x1ff) * m), r32(((p >>> 9) & 0x1ff) * m), r32(((p >>> 18) & 0x1ff) * m), 1);
+      }
       default:
         throw new UnsupportedError("color-static", `Color.${name}(...) 未实现`);
     }
