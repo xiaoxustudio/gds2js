@@ -1,5 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "./static-arg-types";
+import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "./instance-arg-types";
 import { isGlobalConst } from "./globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
@@ -2771,7 +2772,35 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
       if (sig === undefined) continue;
       const got = e.args.length;
-      if (got >= sig[0] && got <= sig[1]) continue;
+      if (got >= sig[0] && got <= sig[1]) {
+        // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
+        const ikey = `${recv}.${callee.name}`;
+        const byPos = new Map<number, Array<{ code: string; message: string }>>();
+        const put = (pos: number, code: string, message: string): void => {
+          const bucket = byPos.get(pos) ?? [];
+          bucket.push({ code, message });
+          byPos.set(pos, bucket);
+        };
+        for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
+          const lit = e.args[pos - 1];
+          const bad = lit === undefined ? null : literalTypeName(lit);
+          if (bad === null || !refuse.includes(bad)) continue;
+          put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          if (also.includes(bad)) {
+            put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          }
+        }
+        for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
+          const lit = e.args[pos - 1];
+          const bad = lit === undefined ? null : literalTypeName(lit);
+          if (bad === null || !refuse.includes(bad)) continue;
+          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        }
+        for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+          for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+        }
+        continue;
+      }
       diags.push({
         code: "value-arity",
         message:
