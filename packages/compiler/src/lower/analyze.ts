@@ -118,7 +118,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
-  checkConstAssign(m, diags);
+  checkConstAssign(m, diags, hostFace);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
@@ -685,8 +685,10 @@ function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) classes(c);
 }
 
-/** 给常量赋值是**解析期**拒，各种形状（局部 / 模块级 / 内部类 / 全局常量，含复合赋值）同一句 `Cannot assign a new value to a constant.`。两条保守边界：① 只判**简单标识符**目标；② 同一个函数体里那个名字被另绑过一次（形参、非 const 的 `var`、`for` 变量、pattern 绑定、lambda 形参）就整格放行 —— 局部可以合法遮蔽常量。 */
-function checkConstAssign(m: Module, diags: Diagnostic[]): void {
+/** 给常量赋值是**解析期**拒，各种形状（局部 / 模块级 / 内部类 / 全局常量，含复合赋值）同一句 `Cannot assign a new value to a constant.`。两条保守边界：① 只判**简单标识符**目标；② 同一个函数体里那个名字被另绑过一次（形参、非 const 的 `var`、`for` 变量、pattern 绑定、lambda 形参）就整格放行 —— 局部可以合法遮蔽常量。
+ *  同一句还盖住**能读不能写**的那三族名字（实测 `abs = 5` / `print = 5` / `Node = 5` / 宿主脚本里 `quit = 5` 与 `quit += 5` 全是它；
+ *  而 `var quit: Variant = 1` 之后 `quit = 5` 合法给 5，所以 ② 那道放行正合适）。 */
+function checkConstAssign(m: Module, diags: Diagnostic[], hostFace: Set<string>): void {
   const moduleConsts = new Set<string>(m.vars.filter((v) => v.isConst).map((v) => v.name));
 
   const bindings = (ss: Stmt[], rebound: Set<string>, localConsts: Set<string>): void => {
@@ -774,13 +776,13 @@ function checkConstAssign(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  const check = (ss: Stmt[], consts: Set<string>, rebound: Set<string>): void => {
+  const check = (ss: Stmt[], consts: Set<string>, rebound: Set<string>, names: Set<string>): void => {
     for (const s of ss) {
       switch (s.kind) {
         case "assign": {
           if (s.target.kind === "ident") {
             const nm = s.target.name;
-            if (!rebound.has(nm) && (consts.has(nm) || isGlobalConst(nm))) {
+            if (!rebound.has(nm) && (consts.has(nm) || isGlobalConst(nm) || GLOBAL_VALUE_NAMES.has(nm) || ENGINE_CLASS_NAMES.has(nm) || names.has(nm))) {
               diags.push({
                 code: "const-assign",
                 message: "Cannot assign a new value to a constant.",
@@ -788,26 +790,26 @@ function checkConstAssign(m: Module, diags: Diagnostic[]): void {
               });
             }
           }
-          check(s.value.kind === "lambda" ? s.value.body : [], consts, rebound);
+          check(s.value.kind === "lambda" ? s.value.body : [], consts, rebound, names);
           continue;
         }
         case "var":
-          if (s.init !== null && s.init.kind === "lambda") check(s.init.body, consts, rebound);
+          if (s.init !== null && s.init.kind === "lambda") check(s.init.body, consts, rebound, names);
           continue;
         case "if":
-          for (const b of s.branches) check(b.body, consts, rebound);
+          for (const b of s.branches) check(b.body, consts, rebound, names);
           continue;
         case "while":
-          check(s.body, consts, rebound);
+          check(s.body, consts, rebound, names);
           continue;
         case "for":
-          check(s.body, consts, rebound);
+          check(s.body, consts, rebound, names);
           continue;
         case "match":
-          for (const arm of s.arms) check(arm.body, consts, rebound);
+          for (const arm of s.arms) check(arm.body, consts, rebound, names);
           continue;
         case "expr":
-          if (s.expr.kind === "lambda") check(s.expr.body, consts, rebound);
+          if (s.expr.kind === "lambda") check(s.expr.body, consts, rebound, names);
           continue;
         default:
           continue;
@@ -815,21 +817,22 @@ function checkConstAssign(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  const one = (params: Param[], body: Stmt[], consts: Set<string>): void => {
+  const one = (params: Param[], body: Stmt[], consts: Set<string>, names: Set<string>): void => {
     const rebound = new Set<string>(params.map((p) => p.name));
     const localConsts = new Set<string>();
     bindings(body, rebound, localConsts);
     const all = new Set<string>([...consts, ...localConsts]);
-    check(body, all, rebound);
+    check(body, all, rebound, names);
   };
 
   const walkClass = (c: ClassDecl, inherited: Set<string>): void => {
     const consts = new Set<string>([...inherited, ...c.vars.filter((v) => v.isConst).map((v) => v.name)]);
-    for (const f of c.funcs) one(f.params, f.body, consts);
+    // 内部类看不见宿主那面（S358 实测），静态方法那一形没量过 —— 两支都不给名字表
+    for (const f of c.funcs) one(f.params, f.body, consts, NO_HOST_VALUE_METHODS);
     for (const inner of c.innerClasses) walkClass(inner, consts);
   };
 
-  for (const f of m.funcs) one(f.params, f.body, moduleConsts);
+  for (const f of m.funcs) one(f.params, f.body, moduleConsts, f.isStatic ? NO_HOST_VALUE_METHODS : hostFace);
   for (const c of m.innerClasses) walkClass(c, moduleConsts);
 }
 

@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.174 读得到的名字写不得：`abs = 5` / `Node = 5` / `quit = 5` 此前发出来的是非法 JS（2026-10-14，S359，语料 362）
+
+- **是一条产品级缺陷**：那三族「能当值用」的名字（全局函数名 / 引擎类名 / S358 刚接的宿主方法名）在**赋值目标位**上分析器一字不报，发射器把读的那支盒子原样发到目标位 —— `rt.globalCallable("abs") = rt.V.int(5);`、`rt.nativeClass("Node") = rt.V.int(5);`、`rt.methodCallable(rt.V.object(this), "quit") = rt.ops.add(…)`，产物连解析都过不了；引擎那边这些形全部解析期当场拒。
+- **句子是现成那句**：实测 `abs = 5` / `print = 5` / `typeof = 3` / `Node = 5` / `quit = 5` / `quit += 5` / `get_class = 5` 一律 `Cannot assign a new value to a constant.` —— 与写常量同句，所以并进既有 `checkConstAssign` 的谓词（`const-assign` 那道闸），不新加一支，发射器一字未动。
+- **另一对句子不在这儿**：21 支「类型名兼函数名」当目标时引擎给的是 `Builtin type cannot be used as a name on its own.` 加 `Identifier "Callable" not declared…`（`Callable = 5` / `Vector2 = 1` 实测），那两支名字不在三张表里，出货继续走未声明那一句，正对得上后一句。
+- **遮蔽边界不用新造**：`var quit: Variant = 1` 之后 `quit = 5` 引擎合法给 5、`var abs = 2` 之后给 7，而 `checkConstAssign` 第二道保守边界「本函数里被另绑过一次就整格放行」恰好就是这条。
+- **范围跟着 S358 走**：内部类与静态方法那两形的写位仍按未声明拒（读位就没量过）；`for quit in …`、lambda 形参同名、match 手臂绑定这些位置还没扫，记在 §6 第 55 条④。
+- **门**：语料 362 是预期报错用例（golden 记 Parse Error + `at:` + `Failed to load script`），编译门把它算进「语义分析拦下」83 支；`implicit-callable-value.test.ts` 加了 14 格、现在 35 格；`pnpm test` **13309**（95 文件）、typecheck **4/4**、`test:compile` **242/351**（sema 83、响亮拒 26）、`test:diff` **234/234** 逐字节（用例 361、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **361/361**。
+
 ### 1.173 宿主基类的方法名可以裸当值用了：`var c = quit` 给的是真的 Callable，出货此前在解析期就拦死（2026-10-14，S358，语料 361）
 
 - **接的是 S356 顺带量到的那条过拦**：引擎收 `Callable(quit)` / `var c = quit`，出货的分析层报 `Identifier "quit" not declared in the current scope.`，合法代码编不过。

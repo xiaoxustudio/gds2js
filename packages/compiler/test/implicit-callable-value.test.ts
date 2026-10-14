@@ -93,3 +93,39 @@ describe("compiler · 宿主基类方法名裸当值用", () => {
     eq("361", "同名脚本方法仍按本模块方法发", out.includes('rt.methodCallable(rt.V.object(this), "quit")'), true);
   });
 });
+
+/** 读得到、写不得：这三族名字（全局函数名 / 引擎类名 / 宿主方法名）在目标位上引擎给的是常量那句拒。
+ *  没接之前发出来的是 `rt.globalCallable("abs") = rt.V.int(5);` —— 产物直接是非法 JS。
+ *  读数 `tmp/probe-argtype/wr1.gd` / `wr2.gd` / `wr3.gd`（`abs = 5`、`print = 5`、`Node = 5`、`quit = 5`、`quit += 5` 同一句；
+ *  而 `var quit: Variant = 1` 之后 `quit = 5` 合法给 5，`var abs = 2` 之后同理）。 */
+describe("compiler · 能读不能写的那三族名字", () => {
+  const WRITE = (body: string): string => `extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tprint("A|ok")\n\tquit()\n`;
+
+  for (const body of ["abs = 5", "print = 5", "typeof = 3", "Node = 5", "quit = 5", "quit += 5", "get_class = 5"]) {
+    it(`${body} 解析期拒`, async () => {
+      eq("362", body, await compile(WRITE(body)), "diag:const-assign");
+    });
+  }
+
+  it("类型名兼函数名那 21 支不是常量位：走的是未声明那一句（引擎两句里的后一句）", async () => {
+    eq("362", "Callable = 5", await compile(WRITE("Callable = 5")), "diag:undeclared-identifier");
+    eq("362", "Vector2 = 1", await compile(WRITE("Vector2 = 1")), "diag:undeclared-identifier");
+  });
+
+  it("局部同名可以写（引擎给 5 / 7）", async () => {
+    const out = await compile(WRITE('var quit: Variant = 1\n\tquit = 5\n\tprint(quit)'));
+    eq("362", "var quit 之后再写合法", out.startsWith("diag:"), false);
+    const out2 = await compile(WRITE("var abs = 2\n\tabs = 7\n\tprint(abs)"));
+    eq("362", "var abs 之后再写合法", out2.startsWith("diag:"), false);
+  });
+
+  it("内部类里看不见宿主那面：那一形仍按未声明拒", async () => {
+    const src = "extends SceneTree\n\nclass Inner:\n\tfunc f():\n\t\tquit = 5\n\nfunc _initialize():\n\tquit()\n";
+    eq("362", "内部类里写 quit", await compile(src), "diag:undeclared-identifier");
+  });
+
+  it("静态方法里那一形没量过，所以仍按未声明拒", async () => {
+    const src = "extends SceneTree\n\nstatic func f():\n\tquit = 5\n\nfunc _initialize():\n\tquit()\n";
+    eq("362", "静态方法里写 quit", await compile(src), "diag:undeclared-identifier");
+  });
+});
