@@ -785,7 +785,7 @@
 - **撞它的正是上一轮的门**：两格源只差一个 setter 的形参名，行:列一字不差，前一刻记的号后一格直接取到。当时第一反应是把那一格错开，但那只是把证据藏起来。
 - **结法**：记号键加一位**归属**。`analyze(m, globals, owner?)` 给每份模块定主 —— `project.ts` 传 `resPath`、CLI 传 `absPath`、`tools/compile.ts` 传用例号，调用方没给就换一个进程内递增序号；归属写进 `m.markOwner`，发射器在 `emitModuleWithMap` 入口 `useMarkOwner(m.markOwner ?? "")` 对准当前模块再查表。**没有**改回对象身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090），这层限制原样留着。
 - **门**：`mark-owner-isolation.test.ts` 四格（宿主名一对、全局函数名一对，各自正序反序），`property-accessor-names.test.ts` 那一格恢复原形。
-- **不改变任何一份产物**：`test:compile` 250/359 一字未动、242 份 `main.gen.mts` 一份没改（`git status` 干净）、`test:diff` 242/242 逐字节、codegen-drift 绿。`pnpm test` **13823**（106 文件）、typecheck **4/4**；golden 侧本轮零改动 —— 引擎输出与我们的记号无关。
+- **不改变任何一份产物**：`test:compile` 250/359 一字未动、242 份 `main.gen.mts` 一份没改（`git status` 干净）、`test:diff` 242/242 逐字节、codegen-drift 绿、golden 未漂移 **369/369**（引擎侧与我们的记号无关）。`pnpm test` **13823**（106 文件）、typecheck **4/4**、`pkg-modes` + `export` 两门 ok 10 / 上游或环境记账 3 / FAIL 0。
 
 ### 1.185 inline 读写器体从此真查：`get:` / `set(v):` 里不再是「不查名字的那两段」，只带 set 的属性也收下（2026-10-14，S368，语料 370）
 
