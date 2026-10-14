@@ -44,7 +44,7 @@ for (const id of cases) {
   let diags: Array<{ code: string; message: string }> = [];
   try {
     ir = lower(await parseSource(src));
-    diags = analyze(ir);
+    diags = analyze(ir, undefined, id);
   } catch (e) {
     if (e instanceof UnsupportedError && !godotOk(readGolden(id))) {
       refused.push({ id, msg: e.message });

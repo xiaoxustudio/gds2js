@@ -141,4 +141,6 @@ export interface Module {
   usesPackCodec?: boolean;
   /** 用了 `get_stack` / `print_stack` / `push_error` / `push_warning` 之一 —— 发射器据此给本模块的函数体打帧点（S281 ⑤）。 */
   usesStack?: boolean;
+  /** 取值记号的归属标识：记号表是进程内累积的，跨文件同 `行:列` 会同名抢号（§6 第 61 条），所以每份模块先归一个主 —— `analyze` 写、发射器读回。 */
+  markOwner?: string;
 }

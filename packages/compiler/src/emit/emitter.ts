@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead } from "../lower/analyze";
+import { isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -485,6 +485,7 @@ export function emitModule(m: Module, opts: EmitOptions): string {
 }
 
 export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
+  useMarkOwner(m.markOwner ?? "");
   MAP_ACTIVE = opts.sourcemap === true;
   LAMBDA_DEPTH = 0;
   LINE_MAPPINGS = [];

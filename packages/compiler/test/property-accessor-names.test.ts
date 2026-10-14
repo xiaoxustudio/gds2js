@@ -58,9 +58,7 @@ describe("读写器体里引擎收下的一切", () => {
   });
 
   it("setter 形参与宿主名同名：取的是形参", async () => {
-    // 这一格的源故意与上面那格错开行:列 —— 记号是按 `名@行:列` 记的（scriptc 不让用对象身份），同位置的两格会互相抢记号
-    const src = `${H}var s = 0\n\nvar thing: Variant:\n\tset(quit):\n\t\ts = quit\n\nfunc _initialize():\n\tprint(s)\n\tquit()\n`;
-    const out = await compile(src);
+    const out = await compile(SET("quit", "s = quit"));
     eq("368", "形参盖住同名", out.includes("methodCallable"), false);
     eq("368", "发的就是那个形参", /set thing\(quit\) \{/.test(out), true);
   });

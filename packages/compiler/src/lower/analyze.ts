@@ -84,7 +84,9 @@ function declNames(d: Decl): string[] {
   ];
 }
 
-export function analyze(m: Module, globals: Set<string> = new Set<string>()): Diagnostic[] {
+export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string): Diagnostic[] {
+  // 记号表是进程内累积的：每份模块归一个自己的主，两份文件同 `行:列` 的同名字就不会互相抢记号（§6 第 61 条）
+  markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];
@@ -2299,8 +2301,9 @@ function patternBindings(p: Pattern): string[] {
  * 分析器按真实作用域认过的「全局函数取值点」（`var f = abs` 那一格）：作用域归作用域管，
  * 发射器只认这个记号，不再自己猜局部名 —— 实测 `var len = 5` 之后同函数里的 `abs` 仍取全局、
  * lambda 形参 `abs` 只在形参体内盖住全局，两种都按这个记号发得对。
- * 记账用 `行:列:名字` 而不是节点身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090），
- * 而同一个模块重 lower 一遍的 loc 一模一样，所以这条式子两头都走得通。
+ * 记账用 `归属:行:列:名字` 而不是节点身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090）。
+ * 归属由 `analyze` 每份模块给一个（调用方传文件标识就用它，否则换一个进程内序号），所以两份文件撞同一
+ * `行:列` 也不会互相抢记号 —— 只按 `行:列:名字` 记的那版会（§6 第 61 条）。
  */
 const globalValueReads = new Set<string>();
 
@@ -2436,7 +2439,15 @@ let hostValueMethods: Set<string> = NO_HOST_VALUE_METHODS;
 let hostStaticCtx: { kind: "func"; name: string } | { kind: "var" } | { kind: "const"; name: string } | null = null;
 const hostMethodReads = new Set<string>();
 
-const gvKey = (name: string, line: number, col: number): string => `${name}@${line}:${col}`;
+const gvKey = (name: string, line: number, col: number): string => `${markOwner}#${name}@${line}:${col}`;
+/** 记号归属：`analyze` 每次调用写一次，发射器从同一份 Module 读回（`m.markOwner`）。 */
+let markOwner = "";
+let markSeq = 0;
+
+/** 发射器在按名字取记号之前先把归属对准当前模块（记号表进程内累积，见 §6 第 61 条）。 */
+export function useMarkOwner(owner: string): void {
+  markOwner = owner;
+}
 
 export function isGlobalValueRead(e: Expr): boolean {
   return e.kind === "ident" && globalValueReads.has(gvKey(e.name, e.loc.line, e.loc.col));

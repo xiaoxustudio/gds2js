@@ -779,6 +779,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.186 取值记号按模块分主：两份文件同 `行:列` 的同名字不再互相抢记号（2026-10-14，§6 第 61 条结清）
+
+- **这不是新语义，是出货的错值**：三张记号表（全局函数取值 / 引擎类名取值 / 宿主方法名取值）是进程内累积的 `Set<string>`，`analyze` 从不清，键只有 `名@行:列`。跨文件工程是「每份先 analyze、再逐份发射」，于是 A 文件里 `quit@6:8` 的 Callable 记号，会被 B 文件同一行同一列那个叫 `quit` 的**形参**继承过去 —— 局部名发成了 Callable。引擎那边每份脚本各自编译，根本没有这种共享。
+- **撞它的正是上一轮的门**：两格源只差一个 setter 的形参名，行:列一字不差，前一刻记的号后一格直接取到。当时第一反应是把那一格错开，但那只是把证据藏起来。
+- **结法**：记号键加一位**归属**。`analyze(m, globals, owner?)` 给每份模块定主 —— `project.ts` 传 `resPath`、CLI 传 `absPath`、`tools/compile.ts` 传用例号，调用方没给就换一个进程内递增序号；归属写进 `m.markOwner`，发射器在 `emitModuleWithMap` 入口 `useMarkOwner(m.markOwner ?? "")` 对准当前模块再查表。**没有**改回对象身份：scriptc 那条原生通道不让把对象塞进 WeakSet（SC1090），这层限制原样留着。
+- **门**：`mark-owner-isolation.test.ts` 四格（宿主名一对、全局函数名一对，各自正序反序），`property-accessor-names.test.ts` 那一格恢复原形。
+- **不改变任何一份产物**：`test:compile` 250/359 一字未动、242 份 `main.gen.mts` 一份没改（`git status` 干净）、`test:diff` 242/242 逐字节、codegen-drift 绿。`pnpm test` **13823**（106 文件）、typecheck **4/4**；golden 侧本轮零改动 —— 引擎输出与我们的记号无关。
+
 ### 1.185 inline 读写器体从此真查：`get:` / `set(v):` 里不再是「不查名字的那两段」，只带 set 的属性也收下（2026-10-14，S368，语料 370）
 
 - **出货里的第二处真 bug**：1.184 把字段初值接住了，读写器那两段却还是同一个洞的另一半 —— `checkFunc` 只走查函数体，`var thing: int: get: return quit` 里的 `quit` 从没被记过，于是发成裸标识符，跑起来 `quit is not defined`（复现只需一行：读数 `tmp/pos/compare4.txt` 首行）。

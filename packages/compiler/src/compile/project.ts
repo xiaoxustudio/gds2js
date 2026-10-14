@@ -337,7 +337,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   for (const l of loaded.values()) {
     const inherited = inheritedMembers(l, loaded, classIndex);
     const globals = new Set<string>([...classIndex.keys(), ...inherited]);
-    const fileDiags = analyze(l.module, globals).map((d) => ({ resPath: l.resPath, diagnostic: d }));
+    const fileDiags = analyze(l.module, globals, l.resPath).map((d) => ({ resPath: l.resPath, diagnostic: d }));
     if (fileDiags.length > 0) {
       diags.push(...fileDiags);
       continue;
