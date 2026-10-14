@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.191 static 语境的准入面数齐：三处语境一套判据，出货此前只覆盖其中两格（2026-10-14，S372，门 13 格）
+
+- **上一轮量具名委托时顺带撞出来的两条欠账，一起数成一面**：静态语境其实有**三处**（静态函数体、静态变量初值、静态读写器体），越界有**两种**（`self`、非静态成员），六格里出货此前只对了两格 —— `static var x = p()` 要跑到运行期才炸 `this.p is not a function`，静态读写器体里的 `self` / 非静态成员一律放过（`return typeof(self)` 出货照发、读非静态字段发成读 `undefined`）。
+- **句子只有两个模板，尾巴按语境换**：`Cannot access non-static variable "X" from <语境>.` 与 `Cannot call non-static function "X()" from <语境>.`，`<语境>` 三种 —— 静态函数 `the static function "f()"`、静态变量初值 `a static variable initializer`（不带引号也不带字段名）、静态读写器体用 S368 那两个合成名 `the static function "@<字段>_getter()"` / `"@<字段>_setter()"`。`self` 只有一句 `Cannot use "self" inside a static function.`，四处语境同句。
+- **接法是把 `checkStaticAccess` 从「按函数循环」改成「按语境循环」**：走查器与判据一行没动，只是多喂两种语境（初值当单表达式走、读写器体当语句列表走，setter 的形参进局部名表所以遮蔽同名字段不误报）；`self` 那一句不在这里 —— 它由 `checkFieldInits` 的作用域管，静态读写器体换一个不许 `self` 的子作用域即可。
+- **一个必须留着的例外**：`static var` 的**初值**里写 `self`，引擎不拒、给 typeof 0（S367 那条读数本轮复测成立）—— 初值不是函数体。这一格两侧一直是对的，扩语境的时候没把它一起拦掉（门里专门一格钉「不拒」）。
+- **门**：`static-context-access.test.ts` 13 格（十二格量到的形状 + 一格遮蔽对照）。**读数**：`pnpm test` **13861**（108 文件）、typecheck **4/4**、`test:compile` **251/360**（一例未动 —— 既有语料没有踩这三句的形状）、`test:diff` **244/244** 逐字节；本轮不碰任何 `.gd`、不改任何产物，golden 零改动。
+- **顺带记一笔**：这一轮的尺落在自己的目录 `tmp/probe-static/`（上一轮 `tmp/probe-argtype/fold60-61` 与 `tmp/pos/{compare6,d*,e*}` 被并行轮同名覆盖过一次，读数靠逐格原文才没丢）。
+
 ### 1.190 具名委托的准入四句接进解析期：引擎拒编译的源码不再被出货照跑（2026-10-14，S371 ④，门 22 格）
 
 - **这一族此前一格准入都没有**：`get = 名` / `set = 名` 的名字与签名出货一律不看，直接发 `this.<名>()`。于是「Godot 拒绝编译、我们照跑」的掩盖型错一排四格 —— 委托到不存在的方法要跑到运行期才 `this._nope is not a function`，getter 带一个参数 / setter 带零个或两个参数**根本不响**（照调，实参对不上就是 undefined），委托到宿主裸名（`get = quit`）甚至真的把 `quit()` 调了。

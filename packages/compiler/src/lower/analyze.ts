@@ -1902,10 +1902,24 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
   const instanceFuncs = new Set(funcs.filter((f) => !f.isStatic).map((f) => f.name));
   if (instanceVars.size === 0 && instanceFuncs.size === 0) return;
 
+  // 静态语境共三种：静态函数体、静态变量初值、静态读写器体（后一支引擎用的是合成函数名 `@<字段>_getter()` / `@<字段>_setter()`）。
+  // 句子里「from …」那一截按语境换，判据与走查一模一样（读数 `tmp/pos/compare12.txt`）。
+  const contexts: Array<{ who: string; body: Stmt[]; init: Expr | null; params: string[] }> = [];
   for (const f of funcs) {
-    if (!f.isStatic) continue;
+    if (f.isStatic) contexts.push({ who: `the static function "${f.name}()"`, body: f.body, init: null, params: f.params.map((p) => p.name) });
+  }
+  for (const v of vars) {
+    if (!v.isStatic) continue;
+    contexts.push({ who: "a static variable initializer", body: [], init: v.init, params: [] });
+    const a = v.accessor;
+    if (a === null || a === undefined) continue;
+    if (a.getter !== null && a.getter.kind === "inline") contexts.push({ who: `the static function "@${v.name}_getter()"`, body: a.getter.body, init: null, params: [] });
+    if (a.setter !== null && a.setter.kind === "inline") contexts.push({ who: `the static function "@${v.name}_setter()"`, body: a.setter.body, init: null, params: [a.setter.param] });
+  }
+
+  for (const ctx of contexts) {
     const local = new Set<string>();
-    collectLocalNames(f.body, f.params.map((p) => p.name), local);
+    collectLocalNames(ctx.body, ctx.params, local);
 
     const expr = (e: Expr): void => {
       switch (e.kind) {
@@ -1913,7 +1927,7 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           if (!local.has(e.name) && instanceVars.has(e.name)) {
             diags.push({
               code: "static-access-var",
-              message: `Cannot access non-static variable "${e.name}" from the static function "${f.name}()".`,
+              message: `Cannot access non-static variable "${e.name}" from ${ctx.who}.`,
               loc: e.loc,
             });
           }
@@ -1922,7 +1936,7 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           if (e.callee.kind === "ident" && !local.has(e.callee.name) && instanceFuncs.has(e.callee.name)) {
             diags.push({
               code: "static-call-func",
-              message: `Cannot call non-static function "${e.callee.name}()" from the static function "${f.name}()".`,
+              message: `Cannot call non-static function "${e.callee.name}()" from ${ctx.who}.`,
               loc: e.loc,
             });
           }
@@ -2003,7 +2017,8 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           return;
       }
     };
-    f.body.forEach(stmt);
+    if (ctx.init !== null) expr(ctx.init);
+    ctx.body.forEach(stmt);
   }
 }
 
@@ -2156,11 +2171,13 @@ function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>,
     if (v.init !== null) walkExpr(v.init, selfScope, coroutines, diags);
     const acc = v.accessor;
     if (acc !== null) {
+      // 读写器体是**函数体**：static 那一维里 `self` 引擎直接拒（初值那一形才是给 typeof 0，S367 / S371）
+      const accScope = v.isStatic ? selfScope.child([], false) : selfScope;
       hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_getter` } : null;
-      if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, selfScope, coroutines, diags, false);
+      if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, accScope, coroutines, diags, false);
       hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_setter` } : null;
       if (acc.setter !== null && acc.setter.kind === "inline") {
-        walkStmts(acc.setter.body, selfScope.child([acc.setter.param]), coroutines, diags, false);
+        walkStmts(acc.setter.body, accScope.child([acc.setter.param]), coroutines, diags, false);
       }
     }
     hostValueMethods = prevFace;
