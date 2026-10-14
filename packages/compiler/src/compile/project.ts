@@ -337,6 +337,9 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   for (const l of loaded.values()) {
     const inherited = inheritedMembers(l, loaded, classIndex);
     const globals = new Set<string>([...classIndex.keys(), ...inherited]);
+    // 链上挂着宿主基类的那一份（含子脚本、孙脚本）里，宿主裸方法名当值用是合法的（S369 的读数）
+    const hostChain = opts.hostImport !== null && hostOnChain(l, loaded, classIndex, entryResSet);
+    l.module.hostChain = hostChain;
     const fileDiags = analyze(l.module, globals, l.resPath).map((d) => ({ resPath: l.resPath, diagnostic: d }));
     if (fileDiags.length > 0) {
       diags.push(...fileDiags);
@@ -393,7 +396,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       autoRun: opts.autoRun ?? isEntry,
       className: l.jsName,
       baseClass: base?.spec ?? (isEntry && opts.hostImport ? { kind: "host" } : { kind: "none" }),
-      hostBaseInChain: opts.hostImport !== null && hostOnChain(l, loaded, classIndex, entryResSet),
+      hostBaseInChain: hostChain,
       classRefs,
       resPath: l.resPath,
       preloads,

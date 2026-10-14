@@ -113,8 +113,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
     null,
   );
 
-  // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366）：只给根模块 —— 内部类里实测照样 `not declared`，`extends` 别的脚本那一形还没接（§6 第 60 条）
-  const hostFace = m.extends === "SceneTree" ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
+  // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366 / S368）：根模块与 `extends` 链顶端挂着宿主的那一份认（S369），其余照旧
+  const hostFace = m.extends === "SceneTree" || m.hostChain === true ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
   checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);

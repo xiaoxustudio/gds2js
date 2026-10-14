@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.187 `extends` 文件链上的子脚本也认宿主裸名：过拦的那道字面判断换成链判断（2026-10-14，S370，语料 372）
+
+- **这是一笔过拦**：`extends "res://base.gd"`（base 自己 `extends SceneTree`）里 `var f = quit` 引擎给 typeof 25 的 Callable，出货解析期就给 `Identifier "quit" not declared in the current scope.` —— 根因只是 `analyze` 里那一句 `m.extends === "SceneTree"` 的字面比较，链走不到。
+- **量法**：`fold60` 五格（子里字段初值、子里形参默认值、两跳链、两跳链的 static func、基类是 RefCounted 的对照），`fold61` 把这套做成一份自足的小工程（`tmp/chain`：project.godot + base / mid / deep）两侧各跑一遍 `run-project` —— 跨文件那一形单文件模式判不出来，必须走工程路。
+- **接法**：判定式子中现成的就有 —— `project.ts` 的 `hostOnChain` 一直在算「JS 原型链顶端挂不挂宿主」，发射器靠它发 `hostBaseInChain`。现在同一趟循环里先把它写进 `m.hostChain`，`analyze` 改看 `m.extends === "SceneTree" || m.hostChain === true`，发射器复用同一个布尔，两处不可能分岔。上一轮那套位置口径（字段初值、形参默认值、静态语境三句）在链上一格没变。
+- **两侧都读到但没进语料的一格**：子脚本的 `static func` 里读宿主名 —— 引擎与出货给的都是 `Cannot access non-static variable "quit" from the static function "s()".`，但解析期错一句就废整份脚本，语料要的取值那几格就印不出来了，所以只留读数（S370 ②）。
+- **没做的两支**：单文件模式（`gds2js run` 走 `tryLoadSingle`，没有整工程的 loaded 表）照旧判不出链；基类是 `RefCounted` 的那条链只读到 `load` 成功、`go()` 那一格没取到值，所以照旧拒（拒不是错值，量到再放）。
+- **门**：语料 372（四行逐字节：字段初值、带型字段、`self`、形参默认值，走的是 `main → mid → base` 两跳）。`pnpm test` **13826**（106 文件）、typecheck **4/4**、`test:compile` **250/359**、`test:diff` **243/243** 逐字节、codegen-drift 绿、golden 未漂移 **370/370**。
+
 ### 1.186 取值记号按模块分主：两份文件同 `行:列` 的同名字不再互相抢记号（2026-10-14，§6 第 61 条结清）
 
 - **这不是新语义，是出货的错值**：三张记号表（全局函数取值 / 引擎类名取值 / 宿主方法名取值）是进程内累积的 `Set<string>`，`analyze` 从不清，键只有 `名@行:列`。跨文件工程是「每份先 analyze、再逐份发射」，于是 A 文件里 `quit@6:8` 的 Callable 记号，会被 B 文件同一行同一列那个叫 `quit` 的**形参**继承过去 —— 局部名发成了 Callable。引擎那边每份脚本各自编译，根本没有这种共享。
