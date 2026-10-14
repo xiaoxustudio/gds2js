@@ -551,8 +551,8 @@ describe("未知调用守卫", () => {
 });
 
 // ── ③ 转换族单实参口径 ─────────────────────────────────────────────
-/** `var_to_str()` 的缩进串：4.6.3 收第二个实参，但装字典的数组跟着换行、缩进按深度累加，
- *  式子没量出前只在发射期响亮拒。 */
+/** `var_to_str()` 的第二个实参（缩进串）在 4.6.3 **引擎解析期就拒**（`Too many arguments for "var_to_str()" call. Expected at most 1 but received 2.`，
+ *  读数 `tmp/aritymax/both-ends.txt`），出货同拒；`convert` / `type_convert` 同理是恰好两元。 */
 const CONVERT_ARITY_CELLS: Array<{
   name: string;
   call: string;

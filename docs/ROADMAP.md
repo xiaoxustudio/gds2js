@@ -779,6 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.181 全局函数的元数一次补全 61 名：「Godot 4 有默认实参」这一族假设被读数否掉（2026-10-14，S365）
+
+- **起点是 `screen-arity.mts` 的一次自查**：把「发射式子只取 `a[0]` / `a[1]`，又不在 `BUILTIN_ARITY` 上」的名字全筛出来 —— 六十多支。按公开签名，`ease(x, c, ease_style)`、`pingpong(time, length, pause)`、`is_equal_approx(a, b, tolerance)`、`type_exists(type, inherit)`、`var_to_str(var, pretty_print)`、`inst_to_dict(obj, props_only)` 都该带默认实参，那这就是「静默丢实参」的错值族。
+- **读数把假设打回**：`fold50` 给每名做「省掉这一位 / 给这一位」两格对照，`fold51` 再对每名量「少一元 / 多一元」两句 —— 4.6.3 的裁判对**多给一位**一律 `Too many arguments for "X()" call. Expected at most N but received M.`，一支都不收。所以真正的缺口是**闸门缺失**（多给实参编得过、按前两元发出去），不是丢位错值。
+- **零冲突复核**：`arity-diff.mts` 把读数与现有 51 行对照，**一格都不差**（顺带验了上一轮刚补的 `maxi` / `mini` / `maxf` / `minf`）；两名齐全的另一批 61 名进了表，表上从 51 → **112 名**。
+- **顺手修的一句**：`convert(1)` / `type_convert()` 旧发的是自写的 `Expected 2 but received 1.`，引擎同格是 `Expected at least 2 but received 1.` —— 两支现成的 throw 删掉改走闸门，`code` 仍是 `convert-arity`，`emit-guards` 那三格只换句子不改口径。
+- **没量的照旧不动**（§6 第 59 条）：`range` 上界走 `Invalid call to GDScript utility function "range()". Expected 3 argument(s).` 这条另一形状；返回 void 的九支被探针包法挡住，要换形状再量；类型构造式是第三种句子 `No constructor of "float" matches the signature …`。
+- **时机还差一层**：引擎两句都在解析期，出货在发射期发同文，`gds2js check` 看不见 —— 要接到 `analyze` 得先对两张区间表（S364 已经抓到 `max` / `min` 两边记法不同）。
+- **门**：`builtin-arity-sentences.test.ts` 208 格句子逐字钉 + `emit-guards` 的转换族 12 格；`pnpm test` **13684**（102 文件）、typecheck **4/4**、`test:compile` **247/356**（sema 83、响亮拒 26 —— 没有一例语料把这些名字用到区间外）、`test:diff` **239/239** 逐字节、golden 未漂移 **366/366**。
+
 ### 1.180 全局 `max` / `min` 三元以上被截成两元：一条静默错值，顺带补齐四支定长名的元数闸门（2026-10-14，S364，语料 367）
 
 - **怎么露出来的**：发 S363 之后重跑「引擎收下的合法调用」那一侧普查，`max` / `min` 不在不合名单上（那批格子都是两元），但顺手用 `gds2js run` 试了三元的 `max(1, 2, 3)` —— 我们给 **2**、引擎给 **3**；`max(1, 5, 3, 9, 2)` 我们给 5、引擎给 9。发射式子是 `rt.gMax(${a[0]}, ${a[1]})`，第三元往后**当场丢掉**，`BUILTIN_ARITY` 又写着 `[2, +∞)`，于是解析期一声不出。
