@@ -181,9 +181,9 @@ export function toColor(v: Variant): Variant {
   throw new UnsupportedError("color-slot", `Color 槽只收 Color / int / String，收到 ${tagName(v.t)}`);
 }
 
-/** `Color.` 上的静态成员：常量名（`Color.RED`、`Color.TRANSPARENT`）与 `html` / `from_string` / `from_hsv` 三个静态函数，名单外响亮报缺。 */
+/** `Color.` 上的静态成员：常量名（`Color.RED`、`Color.TRANSPARENT`）与 `html` / `from_string` / `from_hsv` / `from_ok_hsl` 四个静态函数，名单外响亮报缺。 */
 export function colorStatic(name: string, args: Variant[] = []): Variant {
-  if (args.length > 0 || name === "html" || name === "from_string" || name === "from_hsv") {
+  if (args.length > 0 || name === "html" || name === "from_string" || name === "from_hsv" || name === "from_ok_hsl") {
     switch (name) {
       case "html": {
         if (args.length !== 1) {
@@ -217,6 +217,23 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
           numArg(args[2], "from_hsv"),
           args.length === 4 ? numArg(args[3], "from_hsv") : 1,
         );
+      }
+      case "from_ok_hsl": {
+        if (args.length !== 3 && args.length !== 4) {
+          throw new UnsupportedError(
+            "color-arity",
+            `Color.from_ok_hsl() 需要 3 或 4 个参数（收到 ${args.length} 个）`,
+          );
+        }
+        const [r, g, b] = okhslToSrgb(
+          numArg(args[0], "from_ok_hsl"),
+          numArg(args[1], "from_ok_hsl"),
+          numArg(args[2], "from_ok_hsl"),
+        );
+        // 原文不夹，引擎在最后一道把四个通道全夹进 0..1：463 格里 38 格（全是 s 满格）落在 ±1e-6 外、引擎一律给整 0 / 整 1，
+        // alpha 同样夹（实测 `-0.2 → 0`、`2 → 1`、`INF → 1`，而 `NAN` 原样留 nan —— 与 `x<0→0 / x>1→1` 的三目一致）
+        const ch = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+        return color(ch(r), ch(g), ch(b), ch(args.length === 4 ? numArg(args[3], "from_ok_hsl") : 1));
       }
       case "html_is_valid": {
         if (args.length !== 1) {
@@ -270,6 +287,229 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
   }
   const b = (i: number) => Number((BigInt(packed) >> BigInt(i * 8)) & 0xffn);
   return color(b(2) / 255, b(1) / 255, b(0) / 255, b(3) / 255);
+}
+
+/* ---------------- OKHSL → sRGB：`thirdparty/ok_color.h`（Björn Ottosson，MIT）里 `okhsl_to_srgb` 那一支的逐字移植 ----------------
+ * 每一步都按 float32 落一次（`r32` / `mul` / `div` / `add` / `sub`），常数先折成 `...f` 字面量的 float32，
+ * 多项式的括号层次、Halley 只走一步与 `FLT_MAX` 哨兵都照原文。判据是三张引擎读数表：
+ * 463 格全精度网格（`tmp/probe-argtype/okhsl-full.txt`，尺 `fold41.mts`）全合、199 格边界批（`okhsl-b2.json`，尺 `fold42.mts`）除满色相支路的
+ * 3 格外全合、792 格细扫掠（`okhsl-sweep.json`，尺 `fold43.mts`）里 s=0 的 396 格全合、s=1 的 396 格合 327 格（差值 ≤1.1e-6）。
+ * 两条试过的替代口径都被读数否掉：全程 double 只剩 40/792 合、把 `w0*x + w1*y + w2*z` 收成 FMA 只剩 217/792 合 —— 引擎确是逐算子 float32。 */
+
+const OK_PI = r32(3.1415926535897932384626433832795028841971693993751058209749445923078164062);
+const OK_FLT_MAX = 3.4028234663852886e38;
+
+function okMax(x: number, y: number): number {
+  return x < y ? y : x;
+}
+
+function okMin(x: number, y: number): number {
+  return x < y ? x : y;
+}
+
+/** 原文里出现三次的 `w0 * x + w1 * y + w2 * z`：按 C 的左结合逐层加。 */
+const W_R: readonly [number, number, number] = [r32(4.0767416621), r32(-3.3077115913), r32(0.2309699292)];
+const W_G: readonly [number, number, number] = [r32(-1.2684380046), r32(2.6097574011), r32(-0.3413193965)];
+const W_B: readonly [number, number, number] = [r32(-0.0041960863), r32(-0.7034186147), r32(1.707614701)];
+
+function dot3(w: readonly [number, number, number], x: number, y: number, z: number): number {
+  return add(add(mul(w[0], x), mul(w[1], y)), mul(w[2], z));
+}
+
+function srgbTransfer(a: number): number {
+  return r32(0.0031308) >= a ? mul(r32(12.92), a) : sub(mul(r32(1.055), r32(Math.pow(a, r32(0.4166666666666667)))), r32(0.055));
+}
+
+function oklabToLinearSrgb(L: number, a: number, b: number): [number, number, number] {
+  const l_ = add(add(L, mul(r32(0.3963377774), a)), mul(r32(0.2158037573), b));
+  const m_ = sub(sub(L, mul(r32(0.1055613458), a)), mul(r32(0.0638541728), b));
+  const s_ = sub(sub(L, mul(r32(0.0894841775), a)), mul(r32(1.291485548), b));
+  const l = mul(mul(l_, l_), l_);
+  const m = mul(mul(m_, m_), m_);
+  const s = mul(mul(s_, s_), s_);
+  return [dot3(W_R, l, m, s), dot3(W_G, l, m, s), dot3(W_B, l, m, s)];
+}
+
+function computeMaxSaturation(a: number, b: number): number {
+  let k0: number, k1: number, k2: number, k3: number, k4: number, wl: number, wm: number, ws: number;
+  if (add(mul(r32(-1.88170328), a), mul(r32(-0.80936493), b)) > 1) {
+    k0 = r32(1.19086277); k1 = r32(1.76576728); k2 = r32(0.59662641); k3 = r32(0.75515197); k4 = r32(0.56771245);
+    wl = r32(4.0767416621); wm = r32(-3.3077115913); ws = r32(0.2309699292);
+  } else if (sub(mul(r32(1.81444104), a), mul(r32(1.19445276), b)) > 1) {
+    k0 = r32(0.73956515); k1 = r32(-0.45954404); k2 = r32(0.08285427); k3 = r32(0.1254107); k4 = r32(0.14503204);
+    wl = r32(-1.2684380046); wm = r32(2.6097574011); ws = r32(-0.3413193965);
+  } else {
+    k0 = r32(1.35733652); k1 = r32(-0.00915799); k2 = r32(-1.1513021); k3 = r32(-0.50559606); k4 = r32(0.00692167);
+    wl = r32(-0.0041960863); wm = r32(-0.7034186147); ws = r32(1.707614701);
+  }
+
+  let S = add(add(add(add(k0, mul(k1, a)), mul(k2, b)), mul(mul(k3, a), a)), mul(mul(k4, a), b));
+
+  const k_l = add(mul(r32(0.3963377774), a), mul(r32(0.2158037573), b));
+  const k_m = sub(mul(r32(-0.1055613458), a), mul(r32(0.0638541728), b));
+  const k_s = sub(mul(r32(-0.0894841775), a), mul(r32(1.291485548), b));
+
+  const l_ = add(1, mul(S, k_l));
+  const m_ = add(1, mul(S, k_m));
+  const s_ = add(1, mul(S, k_s));
+
+  const l = mul(mul(l_, l_), l_);
+  const m = mul(mul(m_, m_), m_);
+  const s = mul(mul(s_, s_), s_);
+
+  const l_dS = mul(mul(mul(3, k_l), l_), l_);
+  const m_dS = mul(mul(mul(3, k_m), m_), m_);
+  const s_dS = mul(mul(mul(3, k_s), s_), s_);
+
+  const l_dS2 = mul(mul(mul(6, k_l), k_l), l_);
+  const m_dS2 = mul(mul(mul(6, k_m), k_m), m_);
+  const s_dS2 = mul(mul(mul(6, k_s), k_s), s_);
+
+  const f = add(add(mul(wl, l), mul(wm, m)), mul(ws, s));
+  const f1 = add(add(mul(wl, l_dS), mul(wm, m_dS)), mul(ws, s_dS));
+  const f2 = add(add(mul(wl, l_dS2), mul(wm, m_dS2)), mul(ws, s_dS2));
+
+  return sub(S, div(mul(f, f1), sub(mul(f1, f1), mul(mul(0.5, f), f2))));
+}
+
+function findCusp(a: number, b: number): [number, number] {
+  const S = computeMaxSaturation(a, b);
+  const [r, g, bl] = oklabToLinearSrgb(1, mul(S, a), mul(S, b));
+  const L = r32(Math.cbrt(div(1, okMax(r, okMax(g, bl)))));
+  return [L, mul(L, S)];
+}
+
+function findGamutIntersection(a: number, b: number, L1: number, C1: number, L0: number, cusp: [number, number]): number {
+  const cL = cusp[0];
+  const cC = cusp[1];
+  let t: number;
+  if (sub(mul(sub(L1, L0), cC), mul(sub(cL, L0), C1)) <= 0) {
+    t = div(mul(cC, L0), add(mul(C1, cL), mul(cC, sub(L0, L1))));
+  } else {
+    t = div(mul(cC, sub(L0, 1)), add(mul(C1, sub(cL, 1)), mul(cC, sub(L0, L1))));
+
+    const dL = sub(L1, L0);
+    const dC = C1;
+    const k_l = add(mul(r32(0.3963377774), a), mul(r32(0.2158037573), b));
+    const k_m = sub(mul(r32(-0.1055613458), a), mul(r32(0.0638541728), b));
+    const k_s = sub(mul(r32(-0.0894841775), a), mul(r32(1.291485548), b));
+
+    const l_dt = add(dL, mul(dC, k_l));
+    const m_dt = add(dL, mul(dC, k_m));
+    const s_dt = add(dL, mul(dC, k_s));
+
+    const L = add(mul(L0, sub(1, t)), mul(t, L1));
+    const C = mul(t, C1);
+    const l_ = add(L, mul(C, k_l));
+    const m_ = add(L, mul(C, k_m));
+    const s_ = add(L, mul(C, k_s));
+    const l = mul(mul(l_, l_), l_);
+    const m = mul(mul(m_, m_), m_);
+    const s = mul(mul(s_, s_), s_);
+
+    const ldt = mul(mul(mul(3, l_dt), l_), l_);
+    const mdt = mul(mul(mul(3, m_dt), m_), m_);
+    const sdt = mul(mul(mul(3, s_dt), s_), s_);
+    const ldt2 = mul(mul(mul(6, l_dt), l_dt), l_);
+    const mdt2 = mul(mul(mul(6, m_dt), m_dt), m_);
+    const sdt2 = mul(mul(mul(6, s_dt), s_dt), s_);
+
+    const rr = sub(dot3(W_R, l, m, s), 1);
+    const rr1 = dot3(W_R, ldt, mdt, sdt);
+    const rr2 = dot3(W_R, ldt2, mdt2, sdt2);
+    const u_r = div(rr1, sub(mul(rr1, rr1), mul(mul(0.5, rr), rr2)));
+    let t_r = mul(-rr, u_r);
+
+    const gg = sub(dot3(W_G, l, m, s), 1);
+    const gg1 = dot3(W_G, ldt, mdt, sdt);
+    const gg2 = dot3(W_G, ldt2, mdt2, sdt2);
+    const u_g = div(gg1, sub(mul(gg1, gg1), mul(mul(0.5, gg), gg2)));
+    let t_g = mul(-gg, u_g);
+
+    const bb = sub(dot3(W_B, l, m, s), 1);
+    const bb1 = dot3(W_B, ldt, mdt, sdt);
+    const bb2 = dot3(W_B, ldt2, mdt2, sdt2);
+    const u_b = div(bb1, sub(mul(bb1, bb1), mul(mul(0.5, bb), bb2)));
+    let t_b = mul(-bb, u_b);
+
+    t_r = u_r >= 0 ? t_r : OK_FLT_MAX;
+    t_g = u_g >= 0 ? t_g : OK_FLT_MAX;
+    t_b = u_b >= 0 ? t_b : OK_FLT_MAX;
+
+    t = add(t, okMin(t_r, okMin(t_g, t_b)));
+  }
+  return t;
+}
+
+function toeInv(x: number): number {
+  const k1 = r32(0.206);
+  const k2 = r32(0.03);
+  const k3 = div(add(1, k1), add(1, k2));
+  return div(add(mul(x, x), mul(k1, x)), mul(k3, add(x, k2)));
+}
+
+function getSTMid(a: number, b: number): [number, number] {
+  const sE1 = add(add(r32(-4.24894561), mul(r32(5.38770819), b)), mul(r32(4.69891013), a));
+  const sE2 = add(sub(r32(-2.13704948), mul(r32(10.02301043), b)), mul(a, sE1));
+  const sE3 = add(add(r32(-2.19557347), mul(r32(1.75198401), b)), mul(a, sE2));
+  const S = add(r32(0.11516993), div(1, add(add(r32(7.4477897), mul(r32(4.1590124), b)), mul(a, sE3))));
+
+  const tE1 = sub(add(r32(0.00299215), mul(r32(-0.45399568), b)), mul(r32(0.14661872), a));
+  const tE2 = add(add(r32(-0.27087943), mul(r32(0.6122399), b)), mul(a, tE1));
+  const tE3 = add(add(r32(0.40370612), mul(r32(0.90148123), b)), mul(a, tE2));
+  const T = add(r32(0.11239642), div(1, add(sub(r32(1.6132032), mul(r32(0.68124379), b)), mul(a, tE3))));
+
+  return [S, T];
+}
+
+function getCs(L: number, a: number, b: number): [number, number, number] {
+  const cusp = findCusp(a, b);
+  const cL = cusp[0];
+  const cC = cusp[1];
+  const C_max = findGamutIntersection(a, b, L, 1, L, cusp);
+  const S_max = div(cC, cL);
+  const T_max = div(cC, sub(1, cL));
+  const k = div(C_max, okMin(mul(L, S_max), mul(sub(1, L), T_max)));
+
+  const ST = getSTMid(a, b);
+  const C_a = mul(L, ST[0]);
+  const C_b = mul(sub(1, L), ST[1]);
+  const C_a4 = mul(mul(mul(C_a, C_a), C_a), C_a);
+  const C_b4 = mul(mul(mul(C_b, C_b), C_b), C_b);
+  const C_mid = mul(mul(r32(0.9), k), r32(Math.sqrt(r32(Math.sqrt(div(1, add(div(1, C_a4), div(1, C_b4))))))));
+
+  const D_a = mul(L, r32(0.4));
+  const D_b = mul(sub(1, L), r32(0.8));
+  const C_0 = r32(Math.sqrt(div(1, add(div(1, mul(D_a, D_a)), div(1, mul(D_b, D_b))))));
+
+  return [C_0, C_mid, C_max];
+}
+
+/** OKHSL → sRGB（不夹取、不管 alpha；`l == 1` / `l == 0` 两支先短路，与原文同）。 */
+function okhslToSrgb(h: number, s: number, l: number): [number, number, number] {
+  if (l === 1) return [1, 1, 1];
+  if (l === 0) return [0, 0, 0];
+  const a_ = r32(Math.cos(mul(mul(2, OK_PI), h)));
+  const b_ = r32(Math.sin(mul(mul(2, OK_PI), h)));
+  const L = toeInv(l);
+  const [C_0, C_mid, C_max] = getCs(L, a_, b_);
+  const mid = r32(0.8);
+  const mid_inv = r32(1.25);
+  let C: number, t: number, k_1: number, k_2: number;
+  if (s < mid) {
+    t = mul(mid_inv, s);
+    k_1 = mul(mid, C_0);
+    k_2 = sub(1, div(k_1, C_mid));
+    C = div(mul(t, k_1), sub(1, mul(k_2, t)));
+  } else {
+    t = div(sub(s, mid), sub(1, mid));
+    const k_0 = C_mid;
+    k_1 = div(mul(mul(mul(mul(sub(1, mid), C_mid), C_mid), mid_inv), mid_inv), C_0);
+    k_2 = sub(1, div(k_1, sub(C_max, C_mid)));
+    C = add(k_0, div(mul(t, k_1), sub(1, mul(k_2, t))));
+  }
+  const [lr, lg, lb] = oklabToLinearSrgb(L, mul(C, a_), mul(C, b_));
+  return [srgbTransfer(lr), srgbTransfer(lg), srgbTransfer(lb)];
 }
 
 /** RGB → HSV（Godot `Color::to_hsv`）：delta 在容差内给 h=s=0，saturation 除的是 max 不是 1。 */
@@ -415,6 +655,9 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       // 声明是 `from_hsv(h, s, v, alpha = 1.0)`，元数不对时运行期那句报 4（S305 ③）
       if (args.length < 3 || args.length > 4) arity(args, 4, "from_hsv");
       return colorStatic("from_hsv", args);
+    case "from_ok_hsl":
+      if (args.length < 3 || args.length > 4) arity(args, 4, "from_ok_hsl");
+      return colorStatic("from_ok_hsl", args);
     case "hex":
       arity(args, 1, "hex");
       return fromHex32(intBits(args[0], "hex", 32));

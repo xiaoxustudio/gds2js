@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.179 `Color.from_ok_hsl` 发货：1437 格读数里 1367 格逐位合，alpha 也跟着夹（2026-10-14，S363，语料 366）
+
+- **出货口径**：`thirdparty/ok_color.h` 的 `okhsl_to_srgb` 那一支按**逐算子 float32** 移植（`r32` / `mul` / `div` / `add` / `sub` 一层一落地落），常数先折成 `...f` 字面量，Halley 只走一步、`FLT_MAX` 哨兵与分支顺序照原文；出货最后一道把 **四个通道一起夹进 0..1**。引擎侧的证据是 `core/math/color.cpp` 的 `Color::set_ok_hsl(float, float, float, float)` —— 它调 `ok_color::okhsl_to_srgb` 再 `Color(…).clamp()`，形参声明就是 float。
+- **clamp 的三件细节都是量出来的**：alpha 同样夹（`-0.2 → 0`、`2 → 1`、`INF → 1`）、`NAN` 原样留 nan、而 **`-0.0` 留号**（语料 366 各钉一行）—— 与 `x<0→0 / x>1→1 / 否则原值` 那一支三目一字一样。
+- **两条被读数否掉的替代口径**（省得下次再走）：同一支移植改成**全程 double** 只剩 40/792 合；把 `w0*x + w1*y + w2*z` 收成一条 FMA 只剩 217/792 合。s=0 那 396 格（只剩 `toe_inv` + 灰度 + `powf`）在逐算子 float32 下**全合**，`cbrt` 换成 `pow(x, 1/3)` 一格不变 —— 引擎确是逐算子 float32，且末位分歧不在 cube root。
+- **剩一条带**：70 格（全在 s 满格的 chroma 支路）两侧差 ≤1.1e-6，归到 `cosf` / `sinf` 的末位之差被消去放大，与 `Vector3.rotated` 的 libm 上限同源；门里这一组按 2e-6 带上界钉住（§6 第 58 条）。语料 366 挑的格全在逐位合的那一批。
+- **顺带结清的两笔旧账**：`Color` 实例形 `c.from_ok_hsl(…)` 是**静态调用**（给出新色、接收者不动，与 `from_hsv` 同形）；§6 第 36 条那份「名在表里、运行时报未实现」的清单因此只剩 `Vector3.rotated` / `Vector3.outer` 两名。
+- **门**：语料 366 四十一行逐字节、`packages/runtime/test/color-from-ok-hsl.test.ts` 1367 + 70 + 形状六格；`pnpm test` **13444**（100 文件）、typecheck **4/4**、`test:compile` **246/355**（sema 83、响亮拒 26）、`test:diff` **238/238** 逐字节（用例 365、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **365/365**；「引擎收下的合法调用」那一侧普查从 657 合 / 22 不合 变成 **673 合 / 6 不合**（那 16 格 `from_ok_hsl` 全翻合，剩下 6 格是 `Vector3.rotated` 四格与 `Vector3.outer` 两格）。
+
 ### 1.178 `Color.from_ok_hsl` 的两块拦路石搬掉了：逐字式子进仓、第一参是「圈」不是「度」（2026-10-14，§6 第 53 条④，未动代码）
 
 - **原文到手**：`thirdparty/ok_color.h` = Björn Ottosson 的 MIT 原文，取自 `raw.githubusercontent.com/godotengine/godot/4.6.3-stable/thirdparty/misc/ok_color.h`（与裁判**同 tag**），sha256 `776f1de1…34281`，693 行一字未改；许可头留在文件里，它不进产物树（`tree-face` 不管根目录的 `thirdparty/`）。
