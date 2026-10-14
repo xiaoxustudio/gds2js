@@ -780,12 +780,20 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.190 具名委托的准入四句接进解析期：引擎拒编译的源码不再被出货照跑（2026-10-14，S371 ④，门 22 格）
+
+- **这一族此前一格准入都没有**：`get = 名` / `set = 名` 的名字与签名出货一律不看，直接发 `this.<名>()`。于是「Godot 拒绝编译、我们照跑」的掩盖型错一排四格 —— 委托到不存在的方法要跑到运行期才 `this._nope is not a function`，getter 带一个参数 / setter 带零个或两个参数**根本不响**（照调，实参对不上就是 undefined），委托到宿主裸名（`get = quit`）甚至真的把 `quit()` 调了。
+- **判据是量出来的两条**：① 名字必须在**本类声明的方法**里 —— 宿主裸名不算、模块 `var cb` 不算、内部类的方法不算，**继承来的也不算**（内部类 `C extends B` 委托 `B._g` 与 `extends "res://base.gd"` 委托基文件里的 `_g`，引擎两句都是 `Getter "_g" not found.`，`tmp/pos/compare11.txt`）；② 签名只看**元数与有没有默认值** —— getter 恰好 0 参、setter 恰好 1 参，`func _g(a = 1)` 与 `func _s(v, extra = 2)` 都不合格，而**参数类型不看**（`func _s(v: int)` 给 `Variant` 属性当 setter 引擎照收）。四句原文照抄，行号指属性声明那一行（与引擎同）。
+- **顺带接了第五句**：两段之间**少逗号**（`get = _g` 换行再 `set = _s`）引擎给 `Expected end of indented block for property.`，出货此前给的是「属性访问器里没见过的形态：ERROR "set = _s"」。带逗号换行是**合法**的 —— 语料 121 那一格 (`get = _getr,` / `set = _setr`) 一直是这个形状，别把它一起拦了。
+- **仍欠两句**：`get 名`（漏等号）与 `get = 5` 那两形 tree-sitter 把整条属性声明吐成一个 ERROR 节点，要复刻引擎的 `Expected ":" or "(" after "get".` / `Expected getter function name after "=".` 得在错恢复的文本上认形状，比前四句贵，记在 §6 第 62 条①。
+- **门**：`property-delegation.test.ts` 从 14 格长到 **22** 格（四句 + 少逗号一句各钉原文，另三格钉「定型形参 / static 目标 / 带逗号换行」不许拦）。**读数**：`pnpm test` **13848**（107 文件）、typecheck **4/4**、`test:compile` **251/360**（语料里只有 121 用这一形，一例未动）、`test:diff` **244/244** 逐字节、golden 零改动（本轮不碰任何 `.gd`）。
+
 ### 1.189 后备槽补上「没初值」那一半：定型的只写属性读出来是那一型的零值，不是 null（2026-10-14，S371 ③，语料 371 长到十五行）
 
 - **上一轮的槽只发给「有初值」的属性**，于是漏了一格：`var x: int: set = _s`（没有初值）引擎读出来是 `0`（typeof 2），出货读出来是 null —— 因为「只带 set 的属性读出来是 null」那句读数是从 `Variant` 那一形量的，被当成了整族的口径。槽装的其实是**声明类型的零值**，`Variant` / 不写型那一形才恰好是 null。
 - **接法只动一句判据**：`propSlot(v)` 从「有初值才发槽」改成「有初值**或**没有 getter 就发槽」，槽的初值仍走 `slotInit(v.type, v.init)` —— 空初值时它给的就是 `typeDefault(t)`，`int` 发 `rt.toInt(rt.V.int(0))`、`Variant` 发 `rt.V.nil()`，四种成员发射口与 `inst_to_dict` 的读数器一行没改就都跟上了。
 - **既有产物只有语料 370 动了**（两个只写属性各多一个装 nil 的槽、读数器从死写的 `rt.V.nil()` 改成读槽），输出一字未变 —— `test:diff` **244/244** 逐字节就是这条不变性的证据；那一轮的门 `property-accessor-names.test.ts` 里「发 null 盒子」那格跟着换成钉槽。
-- **门**：`property-delegation.test.ts` 15 格（多两格：`Variant` 那一形槽装 nil、`int` 那一形槽装零值）+ 语料 371 加两行（`定型属性只带 setter → 2 | 0`、写它之后仍是 `2 | 0`）。**读数**：`pnpm test` **13840**（107 文件）、typecheck **4/4**、`test:compile` **251/360**、`test:diff` **244/244**、golden 只重生成 371 一例。
+- **门**：`property-delegation.test.ts` 14 格（多一格：`Variant` 那一形槽装 nil、`int` 那一形槽装零值）+ 语料 371 加两行（`定型属性只带 setter → 2 | 0`、写它之后仍是 `2 | 0`）。**读数**：`pnpm test` **13840**（107 文件）、typecheck **4/4**、`test:compile` **251/360**、`test:diff` **244/244**、golden 只重生成 371 一例。
 - **同一轮量到、按判据没接的**：具名委托的准入四句（`Getter/Setter "X" not found.` 与两句 `cannot be used as … because of its signature.`）读数已在 `tmp/pos/compare10.txt` —— **继承来的方法不算找到**（内部类 `C extends B` 委托 `B._g` 引擎照样给 not found），签名只看元数与有没有默认值、**不看类型**（`func _s(v: int)` 给 `Variant` 属性当 setter 合法）。接的活是下一轮。
 
 ### 1.188 属性的具名委托与 static 那一维：三处静默错值连一块运行期 ERROR 一起接上（2026-10-14，S371，语料 371）

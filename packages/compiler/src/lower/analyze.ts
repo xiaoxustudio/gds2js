@@ -132,6 +132,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
+  checkPropertyDelegates(m, diags);
 
   return diags;
 }
@@ -2165,6 +2166,38 @@ function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>,
     hostValueMethods = prevFace;
     hostStaticCtx = prevCtx;
   }
+}
+
+/** 具名委托（`get = 名` / `set = 名`）的准入四句：目标必须是**本类**声明的方法 —— 继承来的（内部类 `C extends B` 与 `extends "res://base.gd"` 两条链都量了）、宿主裸名、模块 `var` 一律算没找到；
+ *  getter 恰好 0 参、setter 恰好 1 参，带默认值也算不合格，而**参数类型不看**（`func _s(v: int)` 给 `Variant` 属性当 setter 合法）。四句的行号都指属性声明那一行（S371 ④，读数 `tmp/pos/{compare10,compare11}.txt`）。 */
+function checkPropertyDelegates(m: Module, diags: Diagnostic[]): void {
+  const one = (vars: readonly VarDecl[], funcs: readonly FuncDecl[]): void => {
+    const own = new Map<string, FuncDecl>();
+    for (const f of funcs) if (!own.has(f.name)) own.set(f.name, f);
+    for (const v of vars) {
+      const a = v.accessor;
+      if (a === null || a === undefined) continue;
+      const judge = (word: "Getter" | "Setter", kind: "getter" | "setter", name: string): void => {
+        const f = own.get(name);
+        if (f === undefined) {
+          diags.push({ code: "property-delegate", message: `${word} "${name}" not found.`, loc: v.loc });
+          return;
+        }
+        const want = kind === "getter" ? 0 : 1;
+        if (f.params.length !== want || f.params.some((p) => p.default !== null)) {
+          diags.push({ code: "property-delegate", message: `Function "${name}" cannot be used as ${kind} because of its signature.`, loc: v.loc });
+        }
+      };
+      if (a.getter !== null && a.getter.kind === "method") judge("Getter", "getter", a.getter.method);
+      if (a.setter !== null && a.setter.kind === "method") judge("Setter", "setter", a.setter.method);
+    }
+  };
+  one(m.vars, m.funcs);
+  const walk = (c: ClassDecl): void => {
+    one(c.vars, c.funcs);
+    for (const inner of c.innerClasses) walk(inner);
+  };
+  for (const c of m.innerClasses) walk(c);
 }
 
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[], classes: Map<string, ClassDecl>): void {

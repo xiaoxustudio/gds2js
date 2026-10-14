@@ -10,11 +10,17 @@ import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 
 const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function compile(src: string, opts: typeof OPTS & { extendedByScript?: boolean } = OPTS): Promise<string> {
-  const ir = lower(await parseSource(src));
+  let ir: ReturnType<typeof lower>;
+  try {
+    ir = lower(await parseSource(src));
+  } catch (e) {
+    return e instanceof UnsupportedError ? e.message : `非拒答：${e instanceof Error ? e.message : String(e)}`;
+  }
   const diags = analyze(ir);
   if (diags.length > 0) return diags[0]!.message;
   return emitModule(ir, opts);
@@ -120,5 +126,53 @@ describe("带初值的属性留一个后备槽", () => {
     eq("371", "读数器", out.includes("return [s.__gd_store_thing];"), true);
     const bare = await compile(`${H}var thing: Variant:\n\tget:\n\t\treturn 3\n${TAIL}`);
     eq("371", "没槽时仍是 nil", bare.includes("return [rt.V.nil()];"), true);
+  });
+});
+
+describe("具名委托的准入拒（句子照引擎原文）", () => {
+  const DELEG = (seg: string, funcs = ""): string => `${H}${funcs}var thing: Variant:\n\t${seg}\n${TAIL}`;
+
+  it("名字不在本类里：两句各按 get / set 分", async () => {
+    eq("371", "getter 没找到", await compile(DELEG("get = _nope")), 'Getter "_nope" not found.');
+    eq("371", "setter 没找到", await compile(DELEG("set = _nope")), 'Setter "_nope" not found.');
+  });
+
+  it("宿主裸名与模块 var 都算没找到", async () => {
+    eq("371", "宿主名", await compile(DELEG("get = quit")), 'Getter "quit" not found.');
+    eq("371", "模块 var", await compile(DELEG("get = cb", "var cb = 1\n\n")), 'Getter "cb" not found.');
+  });
+
+  it("继承来的方法也不算找到（内部类链）", async () => {
+    const src = `${H}class B:\n\tfunc _g() -> Variant:\n\t\treturn 3\n\nclass C extends B:\n\tvar thing: Variant:\n\t\tget = _g\n${TAIL}`;
+    eq("371", "内部类链", await compile(src), 'Getter "_g" not found.');
+  });
+
+  it("签名不合格：getter 恰好 0 参、setter 恰好 1 参", async () => {
+    eq("371", "getter 一参", await compile(DELEG("get = _g", "func _g(a: Variant) -> Variant:\n\treturn a\n\n")), 'Function "_g" cannot be used as getter because of its signature.');
+    eq("371", "setter 零参", await compile(DELEG("set = _s", "func _s() -> void:\n\tpass\n\n")), 'Function "_s" cannot be used as setter because of its signature.');
+    eq("371", "setter 两参", await compile(DELEG("set = _s", "func _s(a: Variant, b: Variant) -> void:\n\tpass\n\n")), 'Function "_s" cannot be used as setter because of its signature.');
+  });
+
+  it("带默认值也不合格", async () => {
+    eq("371", "getter 带默认参", await compile(DELEG("get = _g", "func _g(a: Variant = 1) -> Variant:\n\treturn a\n\n")), 'Function "_g" cannot be used as getter because of its signature.');
+    eq("371", "setter 带第二个默认参", await compile(DELEG("set = _s", "func _s(v: Variant, extra: Variant = 2) -> void:\n\tpass\n\n")), 'Function "_s" cannot be used as setter because of its signature.');
+  });
+
+  it("参数类型不看：int 形参给 Variant 属性当 setter 合法", async () => {
+    const out = await compile(DELEG("set = _s", "func _s(v: int) -> void:\n\tpass\n\n"));
+    eq("371", "定型形参不拒", out.startsWith("Getter") || out.startsWith("Setter") || out.startsWith("Function"), false);
+  });
+
+  it("static 方法给实例属性当委托目标：合法", async () => {
+    const out = await compile(DELEG("get = _sg", "static func _sg() -> Variant:\n\treturn 7\n\n"));
+    eq("371", "static 目标不拒", out.startsWith("Getter") || out.startsWith("Function"), false);
+  });
+
+  it("两段之间少逗号：引擎那一句（带逗号换行合法，语料 121）", async () => {
+    const noComma = `${H}func _g() -> Variant:\n\treturn 3\n\nfunc _s(v: Variant) -> void:\n\tpass\n\nvar thing: Variant:\n\tget = _g\n\tset = _s\n${TAIL}`;
+    eq("371", "少逗号", await compile(noComma), "Expected end of indented block for property.");
+    const withComma = `${H}func _g() -> Variant:\n\treturn 3\n\nfunc _s(v: Variant) -> void:\n\tpass\n\nvar thing: Variant:\n\tget = _g,\n\tset = _s\n${TAIL}`;
+    const out = await compile(withComma);
+    eq("371", "带逗号换行不拒", out.includes("return this._g();") && out.includes("this._s(value);"), true);
   });
 });

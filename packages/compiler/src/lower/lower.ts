@@ -210,6 +210,8 @@ function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
       setter = { kind: "inline", param: pname, body: blockBody(c) };
     } else if (c.type === "getter") getter = { kind: "method", method: c.text };
     else if (c.type === "setter") setter = { kind: "method", method: c.text };
+    // 两段之间少了逗号（`get = _g` 换行再 `set = _s`）：引擎给的是这一句，带逗号换行则合法（语料 121 那一格）
+    else if (c.type === "ERROR" && /^(get|set)\s*=/.test(c.text)) throw new UnsupportedError("property-setget", "Expected end of indented block for property.");
     else if (c.isNamed) {
       throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
     }
