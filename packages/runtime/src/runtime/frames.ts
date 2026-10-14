@@ -76,6 +76,11 @@ export function gPushWarning(args: Variant[]): Variant {
   return pushBlock("WARNING", "push_warning (core/variant/variant_utility.cpp:1034)", args);
 }
 
+/** static 属性委托到实例方法：那一次调用不发生，引擎运行期打一块 ERROR，读给 null、写什么也不做（实测语料 371）。 */
+export function reportNonStaticCall(fn: string): Variant {
+  return pushBlock("ERROR", "callp (modules/gdscript/gdscript.cpp:940)", [V.str(`Can't call non-static function '${fn}' in script.`)]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {

@@ -27,7 +27,6 @@ export class Main extends SceneTree {
     // 只读属性：Godot 里写它是静默无操作，不是报错
   }
   get setter_only() {
-    // 只带 set 的属性读出来是 null（实测 typeof 0，写它照样跑 setter）
     return rt.V.nil();
   }
   set setter_only(v) {
@@ -46,7 +45,6 @@ export class Main extends SceneTree {
     // 只读属性：Godot 里写它是静默无操作，不是报错
   }
   get shadowed() {
-    // 只带 set 的属性读出来是 null（实测 typeof 0，写它照样跑 setter）
     return rt.V.nil();
   }
   set shadowed(quit) {

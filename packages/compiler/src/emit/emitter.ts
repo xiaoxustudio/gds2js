@@ -497,7 +497,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const resPath = opts.resPath;
   DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
   MODULE_RES_PATH = resPath ?? null;
-  FRAMES_ON = m.usesStack === true || opts.frames === true;
+  FRAMES_ON = m.usesStack === true || opts.frames === true || hasDeadStaticDelegate(m);
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -736,7 +736,14 @@ function dictIdentityLiteral(descVar: string, classPath: string, vars: readonly 
     accRows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base)}`);
   }
   const acc = accRows.length === 0 ? "{}" : `{${accRows.join(", ")}}`;
-  const reads = kept.map((v) => (v.accessor === null || v.accessor === undefined ? `s.${v.name}` : "rt.V.nil()")).join(", ");
+  const reads = kept
+    .map((v) => {
+      if (v.accessor === null || v.accessor === undefined) return `s.${v.name}`;
+      // 带读写器的属性进表的是后备槽（实测带初值的 setter 属性给那个初值，没初值的给 `<null>`，`tmp/pos/compare9.txt` 02/03）
+      const slot = propSlot(v);
+      return slot === null ? "rt.V.nil()" : `s.${slot}`;
+    })
+    .join(", ");
   return `rt.registerDictIdentity(${descVar}, ${res}, ${JSON.stringify(classPath)}, ${names}, ${acc}, (o) => { const s = o as ${className}; return [${reads}]; });`;
 }
 
@@ -805,24 +812,58 @@ function staticVarSlotsLiteral(className: string, vars: readonly VarDecl[]): str
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
 }
 
-/** 带读写器的属性：发成 JS 的 get/set，不发初值。 */
+/** static 属性委托到实例方法那一形要在运行期打引擎那块 ERROR（语料 371），要打就得先有帧栈。 */
+function hasDeadStaticDelegate(m: Module): boolean {
+  const dead = (vars: readonly VarDecl[], statics: Set<string>): boolean =>
+    vars.some((v) => {
+      const a = v.accessor;
+      if (!v.isStatic || a === null || a === undefined) return false;
+      const g = a.getter;
+      const s = a.setter;
+      return (g !== null && g.kind === "method" && !statics.has(g.method)) || (s !== null && s.kind === "method" && !statics.has(s.method));
+    });
+  const walk = (vars: readonly VarDecl[], funcs: readonly FuncDecl[], inner: readonly ClassDecl[]): boolean =>
+    dead(vars, new Set(funcs.filter((f) => f.isStatic).map((f) => f.name))) || inner.some((c) => walk(c.vars, c.funcs, c.innerClasses));
+  return walk(m.vars, m.funcs, m.innerClasses);
+}
+
+/** 带读写器的属性也留一个后备槽：初值照评（副作用与它在字段里的次序都是实测的，`tmp/pos/compare8.txt`），没有 getter 时读出来的就是它，写属性不动它。 */
+function propSlot(v: VarDecl): string | null {
+  return v.accessor !== null && v.accessor !== undefined && v.init !== null ? `__gd_store_${v.name}` : null;
+}
+
+function propSlotInit(v: VarDecl): string {
+  return `  ${v.isStatic ? "static " : ""}${propSlot(v)} = ${slotInit(v.type, v.init, v.isStatic)};`;
+}
+
+/** 带读写器的属性：发成 JS 的 get/set，`static var` 那一维发 static 访问器。 */
 function emitAccessors(v: VarDecl): string[] {
   const a = v.accessor;
   if (a === null || a === undefined) return [];
   const out: string[] = [];
+  const st = v.isStatic ? "static " : "";
+  const slot = propSlot(v);
+  const selfRef = v.isStatic ? `${CURRENT_CLASS}.` : "this.";
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
-  out.push(`  get ${v.name}() {`);
+  // static 属性委托到实例方法时那一次调用不发生：引擎运行期打一块 ERROR，读给 null、写什么也不做（实测 `tmp/pos/compare9.txt` 00/01，语料 371）
+  const dead = (method: string): string => `rt.reportNonStaticCall(${JSON.stringify(method)})`;
+  const unreachable = (method: string): boolean => v.isStatic && !STATIC_FUNCS.has(method);
+  // 委托目标是 static 方法时接收者是类：实例上没有那个槽（实测 static 方法能给实例属性当读写器）
+  const delegate = (method: string, arg: string): string =>
+    `${STATIC_FUNCS.has(method) ? `${CURRENT_CLASS}.` : "this."}${method}(${arg})`;
+  out.push(`  ${st}get ${v.name}() {`);
   if (a.getter === null) {
-    out.push("    // 只带 set 的属性读出来是 null（实测 typeof 0，写它照样跑 setter）");
-    out.push("    return rt.V.nil();");
+    out.push(slot === null ? "    return rt.V.nil();" : `    return ${selfRef}${slot};`);
   } else if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
-  else out.push(`    return this.${a.getter.method}();`);
+  else if (unreachable(a.getter.method)) out.push(`    return ${dead(a.getter.method)};`);
+  else out.push(`    return ${delegate(a.getter.method, "")};`);
   out.push("  }");
   const pname = a.setter !== null && a.setter.kind === "inline" ? a.setter.param : "value";
-  out.push(`  set ${v.name}(${pname}) {`);
+  out.push(`  ${st}set ${v.name}(${pname}) {`);
   if (a.setter === null) out.push(`    // 只读属性：Godot 里写它是静默无操作，不是报错`);
   else if (a.setter.kind === "inline") out.push(...lines(a.setter.body));
-  else out.push(`    this.${a.setter.method}(value);`);
+  else if (unreachable(a.setter.method)) out.push(`    ${dead(a.setter.method)};`);
+  else out.push(`    ${delegate(a.setter.method, "value")};`);
   out.push("  }");
   return out;
 }
@@ -1439,6 +1480,7 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
   for (const v of vars) {
     mark(lineBase + out.length, v.loc);
     if (v.accessor) {
+      if (propSlot(v) !== null) out.push(propSlotInit(v));
       out.push(...emitAccessors(v));
       continue;
     }
@@ -1475,7 +1517,10 @@ function emitFieldDeclarations(vars: VarDecl[], signals: SignalDecl[]): string[]
   const out: string[] = [];
   for (const s of signals) out.push(`  declare ${s.name}: rt.Signal;`);
   for (const v of vars) {
-    if (v.isStatic || v.accessor) continue;
+    if (v.isStatic) continue;
+    const slot = propSlot(v);
+    if (slot !== null) out.push(`  declare ${slot}: rt.Variant;`);
+    if (v.accessor) continue;
     out.push(`  declare ${v.name}: rt.Variant;`);
   }
   if (out.length > 0) out.push("");
@@ -1492,7 +1537,14 @@ function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: b
     out.push(`    this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
   }
   for (const v of vars) {
-    if (v.isStatic || v.accessor) continue;
+    if (v.isStatic) continue;
+    const slot = propSlot(v);
+    if (slot !== null) {
+      mark(lineBase + out.length, v.loc);
+      out.push(`    this.${slot} = ${slotInit(v.type, v.init)};`);
+      continue;
+    }
+    if (v.accessor) continue;
     mark(lineBase + out.length, v.loc);
     out.push(`    this.${v.name} = ${slotInit(v.type, v.init)};`);
   }
@@ -1507,6 +1559,7 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
   for (const v of vars) {
     mark(lineBase + out.length, v.loc);
     if (v.accessor) {
+      if (v.isStatic && propSlot(v) !== null) out.push(propSlotInit(v));
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }

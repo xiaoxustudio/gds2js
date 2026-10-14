@@ -1,0 +1,25 @@
+具名 getter → 2 | 0
+具名 getter 再读 → 3
+具名 setter → 读 0 | 存的 4
+一行并列 → 5 | 5
+带初值 + 具名 setter → 2 | 9
+写它之后 → 9 | 存的 6
+带初值 + inline setter → 2 | 8
+初值副作用与顺序 → t
+实例属性委托 static 方法 → 2 | 7
+static 属性 inline getter → 2 | 2
+static 属性具名成对 → 2 | 7 | 10
+static 属性委托实例 getter → 0 | <null>
+static 属性委托实例 setter → 读 0 | 存的 6
+ERROR: Can't call non-static function '_g' in script.
+   at: callp (modules/gdscript/gdscript.cpp:940)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:75)
+ERROR: Can't call non-static function '_g' in script.
+   at: callp (modules/gdscript/gdscript.cpp:940)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:75)
+ERROR: Can't call non-static function '_s' in script.
+   at: callp (modules/gdscript/gdscript.cpp:940)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:76)
