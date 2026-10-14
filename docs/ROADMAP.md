@@ -779,6 +779,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.183 `_x` 虚方法名换回引擎那一句：`Identifier not found: _process`（末尾没有句号）（2026-10-14，S366 补）
+
+- **接着 1.182 的那 15 名**：它们不进宿主名单是对的（引擎取值也报错），但报错的句子与一般没声明的名字**不是一样** —— 引擎发 `SCRIPT ERROR: Compile Error: Identifier not found: _process`，而我们统一发 `Identifier "X" not declared in the current scope.`（那句在语料 golden 里有一批，是一般名字的正确原文）。
+- **改法**：`analyze` 里加一张实测的 15 名表（`_finalize` / `_get` / `_get_property_list` / `_init` / `_iter_get` / `_iter_init` / `_iter_next` / `_notification` / `_physics_process` / `_process` / `_property_can_revert` / `_property_get_revert` / `_set` / `_to_string` / `_validate_property`），同一取值位置改发 `Identifier not found: <名>`，`code` 仍是 `undeclared-identifier`，别处一字未动。
+- **门**：`host-value-method-names.test.ts` 那 15 名各钉「照旧拦 + 句子逐字」，另加一格钉一般名字仍是老句；`pnpm test` **13786**（103 文件）、typecheck **4/4**、`test:compile` **248/357**（sema 83、响亮拒 26，一例未动）、`test:diff` **240/240** 逐字节、golden 未漂移 **367/367**。
+- **还没穷尽的**：这 15 名在**调用位**（`_process()`）与**赋值位**给什么句子，没量过 —— 这一轮只换了实测过的那个取值位置。
+
 ### 1.182 宿主裸方法名当值用的名单一次扫齐：15 名 → 97 名，另 15 支 `_x` 虚方法是第三种句子（2026-10-14，S366，语料 368）
 
 - **一次数完再逐名量**：`ClassDB.class_get_method_list("SceneTree")` 给 113 名（`Object` 那 62 名全在其中），一格一份脚本 spawn 量「裸名当值」—— 这一族混着编译期拒，packed probe 分不出是谁。读数 `tmp/hostnames/readings.txt`，尺 `fold45.mts`。

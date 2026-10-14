@@ -21,6 +21,11 @@ async function run(name: string): Promise<string> {
   return emitModule(ir, OPTS);
 }
 
+async function diag(name: string): Promise<string> {
+  const diags = analyze(lower(await parseSource(SRC(name))));
+  return diags.length === 0 ? "无诊断" : diags[0]!.message;
+}
+
 const HOST_NAMES = [
   "add_user_signal",
   "call",
@@ -148,9 +153,14 @@ describe("宿主裸方法名当值用", () => {
     });
   }
 
-  it("15 支 _x 虚方法照旧报未声明", async () => {
+  it("15 支 _x 虚方法照旧拦，但句子换成 Identifier not found", async () => {
     for (const name of VIRTUAL_REFUSED) {
       expect(await run(name), `${name} 该照旧拦`).toBe("diag:undeclared-identifier");
+      expect(await diag(name), `${name} 的句子`).toBe(`Identifier not found: ${name}`);
     }
+  });
+
+  it("一般没声明的名字仍是那一句", async () => {
+    expect(await diag("quit_and_ide_debug")).toBe("Identifier \"quit_and_ide_debug\" not declared in the current scope.");
   });
 });

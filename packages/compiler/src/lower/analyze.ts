@@ -2386,6 +2386,24 @@ const HOST_VALUE_METHODS = new Set([
   "unload_current_scene",
 ]);
 const NO_HOST_VALUE_METHODS = new Set<string>();
+/** 同一批读数里那 15 支 `_x` 虚方法名：取值合法地「不合法」，只是引擎那句换形（S366）。 */
+const VIRTUAL_HOST_NAMES = new Set([
+  "_finalize",
+  "_get",
+  "_get_property_list",
+  "_init",
+  "_iter_get",
+  "_iter_init",
+  "_iter_next",
+  "_notification",
+  "_physics_process",
+  "_process",
+  "_property_can_revert",
+  "_property_get_revert",
+  "_set",
+  "_to_string",
+  "_validate_property",
+]);
 /** 只在**根类**的实例方法体里认（实测内部类里 `quit` 照样 `not declared`，静态方法那一形没量过所以也不认）：`checkFunc` 逐函数开关。 */
 let hostValueMethods: Set<string> = NO_HOST_VALUE_METHODS;
 const hostMethodReads = new Set<string>();
@@ -2429,6 +2447,9 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         // 宿主基类的方法名当值用：合法且给 Callable（S358），记号交给发射器
         else if (hostValueMethods.has(e.name)) hostMethodReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+        // 宿主链上那 15 支虚方法名取值时引擎换一句（S366：`Compile Error: Identifier not found: _process`，末尾没有句号）
+        else if (VIRTUAL_HOST_NAMES.has(e.name))
+          diags.push({ code: "undeclared-identifier", message: `Identifier not found: ${e.name}`, loc: e.loc });
         else
           diags.push({
             code: "undeclared-identifier",
