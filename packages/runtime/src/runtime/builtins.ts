@@ -30,8 +30,11 @@ export function arrayFromVariant(v: Variant): Variant {
   return V.array(GArray.of(b.raw().map((x) => V.int(typeof x === "bigint" ? x : x as number))));
 }
 
-/** 把 Variant 取成裸 number（内置函数收数值参数时用） */
+/** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，
+ *  其中 97 格引擎照收 bool 并按 false=0 / true=1 参与运算（`absf(false)` 给 0.0、`lerp(1, 2, false)` 给 1.0、
+ *  `posmod(5, false)` 给 0），拒 bool 的位全部在解析期就被 `analyze` 那几张表拦下，走不到这里。 */
 export function num(v: Variant): number {
+  if (v.t === Tag.BOOL) return (v.v as boolean) ? 1 : 0;
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new UnsupportedError("not-number", `需要数值，收到类型 ${v.t}`);
   }
@@ -590,6 +593,11 @@ function need2(a: Variant, b: Variant, who: string): void {
 
 /** 实测口径：先看上界再看下界（`clamp(1, 2, 0)` 给 0、`clamp(NAN, 0, 1)` 给 nan），返回的那一侧带自己的类型；`clampf` 恒给 float、`clampi` 恒给 int。 */
 export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "auto"): Variant {
+  // 三支都是 bool 时不走数值那一序：六格真值表只合「先并下界、再截上界」（S362，读数 `tmp/probe-argtype/bool-slot.txt` 与 `fold39.mts`）——
+  // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
+  if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
+    return V.bool(((v.v as boolean) || (lo.v as boolean)) && (hi.v as boolean));
+  }
   need2(v, lo, "clamp");
   need2(v, hi, "clamp");
   const x = mode === "int" ? intOf(v) : fl(v);

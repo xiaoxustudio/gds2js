@@ -7,6 +7,8 @@ import {
   ARG_TYPE_FOLLOWS_FIRST,
   DERIVED_ARG_TYPES,
   GLOBAL_ARG_AS,
+  GLOBAL_ARG_BOOL_REFUSED,
+  GLOBAL_ARG_FOLLOWS_BOOL,
   GLOBAL_ARG_SENTENCE,
   GLOBAL_ARG_SUPPRESS_OTHER,
   GLOBAL_ARG_SHOULD_BE,
@@ -3051,11 +3053,24 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
-      const wants: Array<[number, "int" | "float"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
+      const wants: Array<[number, "int" | "float" | "bool"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
+      // 「跟第一参走」那几位**连 bool 字面量也拒**（`clamp(1, false, 1)` 说该位期望 "int"、`lerp(1.5, false, 0.5)` 说 "float"、
+      // `wrap(1, 2, false)` 说第三位 "int"）；`clamp` 还会跟一支 bool 第一参走 —— 那时 2 / 3 位期望的是 bool，int / float 反倒拒
+      // （`clamp(true, 1, 2)` → argument 2 should be "bool" but is "int".，实测三位同形）。
+      const boolFollows = follows === undefined ? null : new Set<number>(follows);
       if (follows !== undefined) {
-        const first = e.args[0] === undefined ? null : numericLiteralKind(e.args[0]);
-        if (first !== null) for (const p of follows) wants.push([p, first]);
+        const first =
+          e.args[0] === undefined
+            ? null
+            : GLOBAL_ARG_FOLLOWS_BOOL[callee.name] === true
+              ? literalTypeName(e.args[0])
+              : numericLiteralKind(e.args[0]);
+        if (first === "int" || first === "float" || first === "bool") for (const p of follows) wants.push([p, first]);
       }
+      // 数值位上拒 bool 的那几张表（S362）：`max` / `min` 是每一位（含第三位往后），`wrap` 只有第一位
+      const boolAll = GLOBAL_ARG_BOOL_REFUSED[callee.name]?.includes(-1) === true;
+      const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
+      const refusesBool = (pos: number): boolean => boolAll || boolFixed.has(pos) || boolFollows?.has(pos) === true;
       for (const [pos, want] of wants) {
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
@@ -3064,9 +3079,26 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           const other = e.args.some((x, i) => i !== pos - 1 && suppress[1].includes(literalTypeName(x) ?? ""));
           if (other) continue;
         }
-        const got = nonNumericLiteral(a);
+        const lit = literalTypeName(a);
+        // 期望是 bool 的那位（`clamp` 跟 bool 第一参走）：只按量过的 int / float 字面量拒，其余形没量过就不发
+        const got =
+          want === "bool"
+            ? lit === "int" || lit === "float"
+              ? lit
+              : null
+            : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
         if (got === null || got === want) continue;
         put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+      }
+      // `max` / `min` 是变元个数的：三位往后引擎照样逐位拒 bool（`max(1, 2, false)` → argument 3 should be "float"），
+      // 而那些位不在任何表里，所以按实参个数补一遍
+      if (boolAll) {
+        for (let i = 0; i < e.args.length; i++) {
+          const pos = i + 1;
+          if (wants.some((w) => w[0] === pos) || shouldPos.has(pos)) continue;
+          if (literalTypeName(e.args[i]) !== "bool") continue;
+          put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "float" but is "bool".`);
+        }
       }
 
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。

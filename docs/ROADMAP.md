@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.177 bool 字面量进全局函数的数值位：101 位里引擎只拒三处，收的那 97 格此前一半在运行期崩（2026-10-14，S362，语料 365）
+
+- **量法**：把 `GLOBAL_ARG_TYPES` 里 64 个函数的 101 个 int / float 位**逐位塞 `false`**，一格一份脚本、一次 spawn（解析期报错整份作废）；「跟第一参走」那族的第三位与 bool 当第一参的样子由 `fold38` / `fold39` 补齐。
+- **拒的只有三处**（句子仍是 A 式、期望型照该位的型）：`max` / `min` 的每一位、`wrap` 的第一位、以及被跟的那几位（期望型 = 第一参的型：`clamp(1, false, 1)` 说 "int"、`clamp(1.5, false, 1.5)` 说 "float"、`wrap(1, 2, false)` 说第三位 "int"）。`clamp` 还反过来跟 bool 走：第一参是 bool 时 2 / 3 位期望 bool，int / float 反倒拒。
+- **收的那 97 格是崩溃点不是过拦**：`absf(false)` / `sqrt(false)` / `acos(false)` / `angle_difference` / `atan2` / `posmod` / `remap` / `move_toward` / `is_equal_approx` / `lerp` 的权重位引擎全给值，而 `builtins.num` 只认 INT / FLOAT —— 编译一声不出、一跑就 `[not-number] 需要数值，收到类型 1`。现在按 false=0 / true=1 折（真拒的那些位已被表拦在解析期，走不到这里）。
+- **bool 的 `clamp` 与数值不同序**：六格真值表只合「先并下界、再截上界」（`clamp(false, true, false)` 给 false，数值那一序会给下界 true），所以 `gClamp` 加了一支 bool 专用式 `(v || lo) && hi`，数值那序（`clamp(1, 2, 0)` 给 0、`clamp(NAN, 0, 1)` 给 nan）一字未动。
+- **顺带量到的新账**：`max` / `min` 是「至少两个」的变元族（`max(1, 2, 3)` 给 3、`max(1, 2, false)` 拒第三位），而 `GLOBAL_CALLABLES` 的 bounds 记成 `[2, 2]` —— 记进 §6 第 57 条。
+- **门**：语料 365 五行逐字节、`global-arg-bool.test.ts` 36 格（18 拒 + 15 收 + 3 允许集）；`pnpm test` **13433**（99 文件）、typecheck **4/4**、`test:compile` **245/354**（sema 83、响亮拒 26）、`test:diff` **237/237** 逐字节（用例 364、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **364/364**。
+
 ### 1.176 bool 比较一族接完两层：装箱 `<` / `>` 合式、`<=` / `>=` 静态已知时解析期就拒（两句）（2026-10-14，S361，语料 364）
 
 - **量法**：这一族解析期拒与运行期拒混在一起，**一句废整份脚本** —— 所以 21 + 6 格全部「一格一份 `.gd`、一次 spawn」（`fold35` / `fold36`），packed probe 在这儿分不出是谁。
