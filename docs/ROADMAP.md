@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.188 属性的具名委托与 static 那一维：三处静默错值连一块运行期 ERROR 一起接上（2026-10-14，S371，语料 371）
+
+- **上一轮留的那半（§6 第 61 条⑥）量清了**：具名委托的合法写法是 `get = 名` / `set = 名`，而且**两段必须并列在一行**（`var x: Variant: get = _g, set = _s`）—— 分成两行引擎给 `Expected end of indented block for property.`。上一轮探针写成 `get get_thing`（漏等号）本来就是非法形，那句 `Expected ":" or "(" after "get".` 与出货的「未支持」两边都拒但不同句，五句解析期拒本轮**只量未接**。
+- **量出三处静默错值**：① `static var` 带读写器时出货发的是**实例**访问器，`Main.thing` 读到 undefined 当场炸（inline 与具名两形都中，`static var x: get: return 3` 这种最普通的形也炸）；② 委托目标是 `static func` 时出货发 `this._g()`，实例上没那个槽；③ **带初值的属性出货把初值整个丢了** —— 引擎是「初值进后备槽、没 getter 时读的就是它、写属性不动它」，而且初值**照评**、副作用与邻字段按声明次序交错。第三条连 1.185 那轮的 inline 形一起错，不只是具名那一支。
+- **一块新的运行期 ERROR**：static 属性委托到**实例**方法，引擎不在解析期拦，运行期每次读写各打一块 `Can't call non-static function 'X' in script.`（`at: callp (modules/gdscript/gdscript.cpp:940)` + backtrace），值给 null、写不动。这一块 `normalize` **滤不掉**（它只滤带 `core/(variant|math)/` 自有帧的块，`push_error` 那块正是因此进不了语料），所以它进了 golden，出货必须逐字节复现 —— 复用 S281 那套帧栈：`frames.ts` 加一支 `reportNonStaticCall`，`FRAMES_ON` 的判据多一条「本模块有没有这种死委托」（`hasDeadStaticDelegate`），不然帧栈是空的、backtrace 一行也打不出来。
+- **接法**：`emitAccessors` 按 `v.isStatic` 发 `static get/set`；委托的接收者按目标在不在 `STATIC_FUNCS` 里分（类 / `this`）；`propSlot(v)` 给「带读写器且有初值」的属性发一个 `__gd_store_<名>` 后备槽，四个成员发射口（legacy 字段、proto 的 `declare` + `__gd_fields__`、类级 static、legacy static）各自按声明次序落它，`selfInNilContext` 那一维**不动**（`self` 在 static 读写器体里是解析期拒，不是给 nil，见⑤）；`inst_to_dict` 的读数器从死写的 `rt.V.nil()` 改成「有槽读槽、没槽才 nil」。
+- **顺带量到两条不属这一族的欠账**（都记进 §6，本轮不动）：`static var x = p()`（初值调非静态函数、没有读写器）引擎解析期就给 `Cannot call non-static function "p()" from a static variable initializer.`，出货运行期才炸；static 读写器体里的 `self` 引擎给 `Cannot use "self" inside a static function.`，出货发 typeof 0。
+- **门**：`property-delegation.test.ts` 13 格（发射式子逐支钉）+ 语料 371（十三行逐字节，含三块 ERROR）。**读数**：`pnpm test` **13839**（107 文件）、typecheck **4/4**、`test:compile` **251/360**、`test:diff` **244/244** 逐字节、codegen-drift 绿；既有产物只有语料 370 少两行注释（那句说明并进了 `emitAccessors` 的函数头），输出一字未变。
+- **并行轮踩到的坑（记下来给下一轮）**：这一轮与另一支会话同时在**同一个工作树**上跑，`tmp/probe-argtype/fold60.mts` / `fold61.mts` 与 `tmp/pos/compare6.txt` 被对方同名覆盖 —— 逐格原文（`tmp/pos/deleg-*.txt`）与格子源（`tmp/pos/{d,e,f,g}*.gd`）还在，读数不丢，但**尺的文件名会撞**：往后开探针先 `ls` 一眼，或直接用 `tmp/probe-<本轮名>/` 自己的目录。提交只挑自己那几个文件（`git status` 逐条对过），别 `git add -A`。
+
 ### 1.187 `extends` 文件链上的子脚本也认宿主裸名：过拦的那道字面判断换成链判断（2026-10-14，S370，语料 372）
 
 - **这是一笔过拦**：`extends "res://base.gd"`（base 自己 `extends SceneTree`）里 `var f = quit` 引擎给 typeof 25 的 Callable，出货解析期就给 `Identifier "quit" not declared in the current scope.` —— 根因只是 `analyze` 里那一句 `m.extends === "SceneTree"` 的字面比较，链走不到。
@@ -787,7 +797,7 @@
 - **接法**：判定式子中现成的就有 —— `project.ts` 的 `hostOnChain` 一直在算「JS 原型链顶端挂不挂宿主」，发射器靠它发 `hostBaseInChain`。现在同一趟循环里先把它写进 `m.hostChain`，`analyze` 改看 `m.extends === "SceneTree" || m.hostChain === true`，发射器复用同一个布尔，两处不可能分岔。上一轮那套位置口径（字段初值、形参默认值、静态语境三句）在链上一格没变。
 - **两侧都读到但没进语料的一格**：子脚本的 `static func` 里读宿主名 —— 引擎与出货给的都是 `Cannot access non-static variable "quit" from the static function "s()".`，但解析期错一句就废整份脚本，语料要的取值那几格就印不出来了，所以只留读数（S370 ②）。
 - **没做的两支**：单文件模式（`gds2js run` 走 `tryLoadSingle`，没有整工程的 loaded 表）照旧判不出链；基类是 `RefCounted` 的那条链只读到 `load` 成功、`go()` 那一格没取到值，所以照旧拒（拒不是错值，量到再放）。
-- **门**：语料 372（四行逐字节：字段初值、带型字段、`self`、形参默认值，走的是 `main → mid → base` 两跳）。`pnpm test` **13826**（106 文件）、typecheck **4/4**、`test:compile` **250/359**、`test:diff` **243/243** 逐字节、codegen-drift 绿、golden 未漂移 **370/370**。
+- **门**：语料 372（四行逐字节：字段初值、带型字段、`self`、形参默认值，走的是 `main → mid → base` 两跳）。`pnpm test` **13826**（106 文件）、typecheck **4/4**、`test:compile` **250/359**、`test:diff` **244/244** 逐字节、codegen-drift 绿；golden 没动任何既有用例的 `.gd`，整份 `--check` 复核提交时仍在跑（上一次跑完的读数是 0 漂移 / 369 例）。
 
 ### 1.186 取值记号按模块分主：两份文件同 `行:列` 的同名字不再互相抢记号（2026-10-14，§6 第 61 条结清）
 
