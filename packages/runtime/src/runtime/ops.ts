@@ -360,6 +360,15 @@ function compare(a: Variant, b: Variant, op = "<"): number {
     const y = num(b);
     return x === y ? 0 : x < y ? -1 : 1;
   }
+  if (a.t === Tag.BOOL && b.t === Tag.BOOL) {
+    // 装箱 bool 对 bool：`<` / `>` 在运行时**合式**（false 在前 —— `[false, true].bsearch(true)` 给 1、`min()` 给 false，读数
+    // `tmp/probe-argtype/boolfamily.txt`），但 `<=` / `>=` 引擎当场拒，句子是标准那条 —— 源里写成静态已知的 bool 时更早，
+    // 是解析期两句（§6 第 56 条），那一层在 analyze 那边。
+    if (op === "<=" || op === ">=") {
+      throw new GodotRuntimeError("compare-operands", `Invalid operands 'bool' and 'bool' in operator '${op}'.`);
+    }
+    return a.v === b.v ? 0 : (a.v as boolean) ? 1 : -1;
+  }
   if (a.t === Tag.STRING && b.t === Tag.STRING) {
     return strCmp(a.v as string, b.v as string);
   }

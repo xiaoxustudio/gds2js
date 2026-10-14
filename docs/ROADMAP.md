@@ -779,6 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.176 bool 比较一族接完两层：装箱 `<` / `>` 合式、`<=` / `>=` 静态已知时解析期就拒（两句）（2026-10-14，S361，语料 364）
+
+- **量法**：这一族解析期拒与运行期拒混在一起，**一句废整份脚本** —— 所以 21 + 6 格全部「一格一份 `.gd`、一次 spawn」（`fold35` / `fold36`），packed probe 在这儿分不出是谁。
+- **运行期那一层**：`false < true` 给 true、`true > false` 给 true、同值给 false（严格 less）；`<=` / `>=` 才拒，句子各自命名（`Invalid operands 'bool' and 'bool' in operator '<='.` / `'>='`）；`null < true` 也拒（`'Nil' and 'bool'`）。消费方跟着这条走：`[false, true].bsearch(true)` 1、`.bsearch(false)` 0、`.bsearch(true, false)` 2、`[true, false].bsearch(true)` 2、`[false, true].min()` false、`[true, true, false].max()` true、`find` / `count` 各 1、`sort_custom(func(a, b): return a < b)` 排出 `[false, true]`。
+- **解析期那一层是两句话**：两支字面量 → `Invalid operands to operator <=, bool and bool.`；掺进一次「声明成 bool」的表达式（局部 / 模块级 / 形参）→ `Invalid operands "bool" and "bool" for "<=" operator.`。`false <= false` 一样拒。
+- **不当静态 bool 的三种形**：`var a = false` 推断来的局部、装箱 `Variant`、数组元素 —— 引擎到运行期才拒，所以分析层一声不出（那一句由运行期的 `compare` 发）。
+- **落点**：`ops.compare` 新增 bool-对-bool 一支；`analyze` 新增 `checkBoolOrdering` 一趟（只看 `binary` 的 `<=` / `>=`，两侧要么字面量要么**声明**为 bool）；S360 里 `extreme` 的 bool 特例删掉，口径统一回 `compare`；`Array.sort()` 那条（S357）一字未动，两边同向。
+- **顺带挖到**：全局 `min()` / `max()` 的数值位**不吃 bool**（引擎 `argument 1 should be "float" but is "bool".`，而 `clamp(false, true, false)` 给值），出货今天无诊断 —— 记进 §6 第 56 条②，接法走 #28 那套逐位句表，但要先扫全「数值位收 bool」的样子。
+- **门**：语料 364 七行逐字节、`bool-ordering.test.ts` 10 格钉解析期两句、`bool-compare-family.test.ts` 6 格钉运行期与消费方；`pnpm test` **13394**（98 文件）、typecheck **4/4**、`test:compile` **244/353**（sema 83、响亮拒 26）、`test:diff` **236/236** 逐字节（用例 363、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **363/363**。
+
 ### 1.175 `Array.min()` / `max()` 是第四条比较口子：一比就废整串给 null，此前我们抛的是运行期拒（2026-10-14，S360，语料 363）
 
 - **发现路径**：给 `sort()` 量比较器那几把顺手把 `min()` / `max()` 摆上同一张形格 —— 63 格（`fold31` 36 + `fold32` 27）一次 spawn 量完，引擎**一行错误都没推**，而比不了的组合当场给 null；出货那边 `[1, "a"].min()` 抛的是 `Invalid operands 'int' and 'String' in operator '<'.`（S356 刚钉的那句）。合法代码跑出不同结果，属于最该先收的那一类。

@@ -119,6 +119,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
   checkTypedIndexSlots(m, diags);
   checkVoidMethodValues(m, diags);
   checkConstAssign(m, diags, hostFace);
+  checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
@@ -834,6 +835,116 @@ function checkConstAssign(m: Module, diags: Diagnostic[], hostFace: Set<string>)
 
   for (const f of m.funcs) one(f.params, f.body, moduleConsts, f.isStatic ? NO_HOST_VALUE_METHODS : hostFace);
   for (const c of m.innerClasses) walkClass(c, moduleConsts);
+}
+
+/** 静态已知的两支 bool 比 `<=` / `>=`：引擎在**解析期**就拒，而且是两句话（读数 `tmp/probe-argtype/boolfamily.txt` 与 `fold36.mts`）——
+ *  两支都是字面量时 `Invalid operands to operator <=, bool and bool.`，掺上一次「声明成 bool」的表达式时
+ *  `Invalid operands "bool" and "bool" for "<=" operator.`。`<` / `>` 不在这儿：那两支配符对 bool **合式**（false 在前）。
+ *  只认这两种形状：`var a = false` 那种**推断**来的局部引擎不当它是静态 bool（运行时才拒，走 `ops.compare` 那句标准句子）。 */
+function checkBoolOrdering(m: Module, diags: Diagnostic[]): void {
+  const isBoolDecl = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name === "bool";
+  const moduleBools = new Set<string>(m.vars.filter((v) => isBoolDecl(v.type)).map((v) => v.name));
+
+  const litBool = (e: Expr): boolean => e.kind === "lit" && typeof e.value === "boolean";
+
+  const scan = (ss: Stmt[], bools: Set<string>): void => {
+    const expr = (e: Expr): void => {
+      switch (e.kind) {
+        case "binary":
+          if ((e.op === "<=" || e.op === ">=") && boolSide(e.left) && boolSide(e.right)) {
+            diags.push({
+              code: "bool-ordering",
+              message:
+                litBool(e.left) && litBool(e.right)
+                  ? `Invalid operands to operator ${e.op}, bool and bool.`
+                  : `Invalid operands "bool" and "bool" for "${e.op}" operator.`,
+              loc: e.loc,
+            });
+          }
+          expr(e.left);
+          expr(e.right);
+          return;
+        case "unary":
+          expr(e.operand);
+          return;
+        case "call":
+          expr(e.callee);
+          e.args.forEach(expr);
+          return;
+        case "attribute":
+          expr(e.obj);
+          return;
+        case "index":
+          expr(e.obj);
+          expr(e.index);
+          return;
+        case "array":
+          e.items.forEach(expr);
+          return;
+        case "dict":
+          for (const en of e.entries) {
+            expr(en.key);
+            expr(en.value);
+          }
+          return;
+        case "lambda":
+          scan(e.body, new Set([...bools, ...e.params.filter((p) => isBoolDecl(p.type)).map((p) => p.name)]));
+          return;
+        case "await":
+          expr(e.operand);
+          return;
+        default:
+          return;
+      }
+    };
+    const boolSide = (e: Expr): boolean => litBool(e) || (e.kind === "ident" && bools.has(e.name));
+    for (const s of ss) {
+      switch (s.kind) {
+        case "var":
+          if (isBoolDecl(s.type)) bools.add(s.name);
+          if (s.init !== null) expr(s.init);
+          continue;
+        case "assign":
+          expr(s.target);
+          expr(s.value);
+          continue;
+        case "expr":
+          expr(s.expr);
+          continue;
+        case "return":
+          if (s.value !== null && s.value !== undefined) expr(s.value as Expr);
+          continue;
+        case "if":
+          for (const b of s.branches) {
+            if (b.cond !== null) expr(b.cond);
+            scan(b.body, bools);
+          }
+          continue;
+        case "while":
+          expr(s.cond);
+          scan(s.body, bools);
+          continue;
+        case "for":
+          expr(s.iter);
+          scan(s.body, bools);
+          continue;
+        case "match":
+          expr(s.subject);
+          for (const arm of s.arms) scan(arm.body, bools);
+          continue;
+        default:
+          continue;
+      }
+    }
+  };
+
+  for (const f of m.funcs) scan(f.body, new Set([...moduleBools, ...f.params.filter((p) => isBoolDecl(p.type)).map((p) => p.name)]));
+  const walkClass = (c: ClassDecl, inherited: Set<string>): void => {
+    const bools = new Set([...inherited, ...c.vars.filter((v) => isBoolDecl(v.type)).map((v) => v.name)]);
+    for (const f of c.funcs) scan(f.body, new Set([...bools, ...f.params.filter((p) => isBoolDecl(p.type)).map((p) => p.name)]));
+    for (const inner of c.innerClasses) walkClass(inner, bools);
+  };
+  for (const c of m.innerClasses) walkClass(c, moduleBools);
 }
 
 function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {

@@ -589,17 +589,7 @@ export class GArray {
       }
       let before: boolean;
       try {
-        // bool 对 bool：源里 `false < true` 引擎是**解析期**拒（`Invalid operands to operator <=, bool and bool.`），
-        // 但运行时那条 `<` 是合式的 —— `min()` / `max()` 实测就比得出来（`[true, false]` 给 false|true，`minmax.txt` 第 5 行），
-        // 所以这一支在这儿按 false 在前判，不动源级 `compare` 的口径（那条改了会牵动 bsearch 的 246 格）。
-        before =
-          x.t === Tag.BOOL && best.t === Tag.BOOL
-            ? wantMin
-              ? !(x.v as boolean) && (best.v as boolean)
-              : !(best.v as boolean) && (x.v as boolean)
-            : wantMin
-              ? less(x, best)
-              : less(best, x);
+        before = wantMin ? less(x, best) : less(best, x);
       } catch (e) {
         const code = (e as { code?: string }).code ?? "";
         if (MINMAX_UNORDERABLE.has(code)) return null;
