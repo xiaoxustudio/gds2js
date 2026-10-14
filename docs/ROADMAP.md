@@ -19,6 +19,7 @@
 | **D3** | `await` 语义 | **直接降级为 JS `async/await` + Promise**。实测证明 Godot 强制"协程必须被 await"（见 SEMANTICS §5），所谓 async 传染**就是 Godot 自己的规则**，不是偏差。 |
 | **D4** | 宿主深度 | **Tier 1：纯语言**。不实现 `Node` / `SceneTree` / 任何引擎 API，遇到就抛 `unsupported`。 |
 | **D5** | 版本 | 钉 **4.6.3**。已实测：4.6.3 与 4.7 在本项目覆盖的语义上输出逐字节一致。 |
+| **D6** | 七个值类型 | **不进 Tier 1**（2026-10-14 拍板）。`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` 的构造式、静态名、方法、打印、哈希与序列化**照 D4 继续抛 `unsupported`** —— 补它们要的是整族值表示 + 方法面 + 序列化，不是登记一笔的事（明细见 §1.131 与 §6 第 43 条⑪）。Tier 1 收尾因此只看「已实现面上的错值、过拦与解析期拒」。 |
 
 ### 2026-10-03 拍板（CLI 出货形态）
 
@@ -1828,6 +1829,7 @@
 ## 3. 明确的非目标
 
 - 任何引擎 API（`Node` / `SceneTree` / `add_child` …）—— Tier 1 遇到就抛 `unsupported`
+- **七个值类型**（`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB`）—— 按 D6 不进这一层，构造式与成员照旧响亮拒
 - GDScript 3.x 兼容（`yield` / `setget`）
 - 编辑器 / LSP
 - 性能优化 —— 先要正确；benchmark 读数已出（§1.10），真要动优化走 5.5 那三重护栏（收益量化 + golden 逐字节不变 + 校验值一致）

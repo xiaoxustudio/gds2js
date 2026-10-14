@@ -57,7 +57,7 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GD
 
 ## 文档索引
 
-- `docs/ROADMAP.md` — 已拍板决策（D1–D5 等）/ 阶段计划 / 当前任务
+- `docs/ROADMAP.md` — 已拍板决策（D1–D6 等）/ 阶段计划 / 当前任务
 - `docs/SEMANTICS.md` — Godot 4.6.3 实测语义基线（S 编号，裁判版本 4.6.3.stable.official.7d41c59c4）
 - `docs/RUNTIME_API.md` — runtime ↔ emitter 契约（v1，签名冻结）
 - `README.md` — CLI 用法、运行时打包模式、测试分层详解
