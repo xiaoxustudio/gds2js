@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.175 `Array.min()` / `max()` 是第四条比较口子：一比就废整串给 null，此前我们抛的是运行期拒（2026-10-14，S360，语料 363）
+
+- **发现路径**：给 `sort()` 量比较器那几把顺手把 `min()` / `max()` 摆上同一张形格 —— 63 格（`fold31` 36 + `fold32` 27）一次 spawn 量完，引擎**一行错误都没推**，而比不了的组合当场给 null；出货那边 `[1, "a"].min()` 抛的是 `Invalid operands 'int' and 'String' in operator '<'.`（S356 刚钉的那句）。合法代码跑出不同结果，属于最该先收的那一类。
+- **判据**：基准是**第一个元素**，后面逐个比；碰到比不了的组合**整串当场废**（`[1, "a", 0]` 给 null 而不是 0 —— 不是「跳过这一步继续比」，这条只有三元素以上的格子分得出）；给 null 的形是 null 掺在里面、Color / NodePath / 字典 / pack / Callable / **用户对象**同形，以及任何跨形组合；给值的形是 int / float 按值、bool false 在前、串按码点、向量按分量、RID 按无符号号、数组走 S355 那条装箱序。
+- **NaN 不是「比不出」**：float 对 float 是合式比较、只是结果为假，所以基准是谁就看谁在前头（`[nan, 1.5, 2]` → nan|nan，`[1.5, nan, 2]` → 1.5|2）—— 与 S355「容器里 NaN 最大」不是一条。
+- **顺带挖出 bool 的两层**：源里 `false < true` 是**解析期**拒（`Invalid operands to operator <=, bool and bool.`，我们没这一层），可装箱 bool 的 `<` / `>` 运行时**合式**（`a < true` 给 true），只有 `<=` / `>=` 是运行期拒。`min()` / `max()` 用 `<` / `>` ⇒ bool 比得出来。完整口径要连着 bsearch 的 bool 格与全局 `min` / `max` 一起重核，记进 §6 第 56 条 —— 所以今天只在 `GArray.extreme` 里就地按 false 在前判，`ops.compare` 一字未动。
+- **StringName 两头**：两支 StringName 引擎按指针序给值（`[&"b", &"a", &"c"]` 的 min 是 `c`）→ 照旧响亮拒；StringName 对 String 是比不出 → null。
+- **门**：语料 363 十五行逐字节、`array-minmax-face.test.ts` 63 格（61 值 + 2 拒）；`pnpm test` **13375**（96 文件）、typecheck **4/4**、`test:compile` **243/352**（sema 83、响亮拒 26）、`test:diff` **235/235** 逐字节（用例 362、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **362/362**。
+
 ### 1.174 读得到的名字写不得：`abs = 5` / `Node = 5` / `quit = 5` 此前发出来的是非法 JS（2026-10-14，S359，语料 362）
 
 - **是一条产品级缺陷**：那三族「能当值用」的名字（全局函数名 / 引擎类名 / S358 刚接的宿主方法名）在**赋值目标位**上分析器一字不报，发射器把读的那支盒子原样发到目标位 —— `rt.globalCallable("abs") = rt.V.int(5);`、`rt.nativeClass("Node") = rt.V.int(5);`、`rt.methodCallable(rt.V.object(this), "quit") = rt.ops.add(…)`，产物连解析都过不了；引擎那边这些形全部解析期当场拒。

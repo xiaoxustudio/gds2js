@@ -245,6 +245,10 @@ function fromEnd(i: number, len: number): number | null {
   return k < 0 || k >= len ? null : k;
 }
 
+/** `min()` / `max()` 里「比不出就整串给 null」的那两支错误码：源级装箱 `<` 的运行期拒与 Color 那一支（S360）。
+ *  `compare-string-name` 不在里头 —— 那一支是我们的响亮拒，不是引擎的 null。 */
+const MINMAX_UNORDERABLE = new Set(["compare-operands", "color-cmp"]);
+
 export class GArray {
   private items: Variant[];
   elem: ElemKind | null = null;
@@ -568,7 +572,13 @@ export class GArray {
     return -1;
   }
 
-  extreme(    wantMin: boolean,
+  /** `min()` / `max()` 是**第四条**比较口子（S360）：折法还是「第一个元素当基准，后面的逐个比」，但**一比就废**——
+   *  碰到比不了的组合（null、Color、NodePath、字典、pack、Callable、对象，以及任何跨形）引擎**当场整串给 null**，一行错误都不推，
+   *  后面本来更小的元素也不再看（`[1, "a", 0]` 给 null 而不是 0；读数 `tmp/probe-argtype/{minmax,minmax2}.txt`，尺 `{fold31,fold32}.mts`，
+   *  对象那一形 `tmp/probe-argtype/v37.gd`）。float 对 NaN 是**合式**比较只是结果为假，所以 `[nan, 1.5, 2]` 给 nan、`[1.5, nan, 2]` 给 1.5 —— 不乱套。
+   *  StringName 那一形引擎按 intern 指针序给值，复现不了，照旧响亮拒（与 S355 / S357 同一条立场）。 */
+  extreme(
+    wantMin: boolean,
     less: (a: Variant, b: Variant) => boolean,
   ): Variant | null {
     let best: Variant | null = null;
@@ -577,7 +587,27 @@ export class GArray {
         best = x;
         continue;
       }
-      if (wantMin ? less(x, best) : less(best, x)) best = x;
+      let before: boolean;
+      try {
+        // bool 对 bool：源里 `false < true` 引擎是**解析期**拒（`Invalid operands to operator <=, bool and bool.`），
+        // 但运行时那条 `<` 是合式的 —— `min()` / `max()` 实测就比得出来（`[true, false]` 给 false|true，`minmax.txt` 第 5 行），
+        // 所以这一支在这儿按 false 在前判，不动源级 `compare` 的口径（那条改了会牵动 bsearch 的 246 格）。
+        before =
+          x.t === Tag.BOOL && best.t === Tag.BOOL
+            ? wantMin
+              ? !(x.v as boolean) && (best.v as boolean)
+              : !(best.v as boolean) && (x.v as boolean)
+            : wantMin
+              ? less(x, best)
+              : less(best, x);
+      } catch (e) {
+        const code = (e as { code?: string }).code ?? "";
+        if (MINMAX_UNORDERABLE.has(code)) return null;
+        // StringName 对 String 也是「比不出」，引擎给 null；两支都是 StringName 才是我们复现不了的那一形，照旧响亮拒
+        if (code === "compare-string-name" && !(x.t === Tag.STRING_NAME && best.t === Tag.STRING_NAME)) return null;
+        throw e;
+      }
+      if (before) best = x;
     }
     return best;
   }
