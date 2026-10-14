@@ -37,6 +37,9 @@ var inline_init: Variant = 8:
 	set(v):
 		store = v
 
+var typed_set: int:
+	set = _s
+
 var ordered: Variant = tag("t"):
 	get = _g
 
@@ -75,4 +78,7 @@ func _initialize():
 	print("static 属性委托实例 getter → ", typeof(sget_dead), " | ", sget_dead)
 	sset_dead = 11
 	print("static 属性委托实例 setter → 读 ", typeof(sset_dead), " | 存的 ", store)
+	print("定型属性只带 setter → ", typeof(typed_set), " | ", typed_set)
+	typed_set = 12
+	print("写它之后 → ", typeof(typed_set), " | ", typed_set, " | 存的 ", store)
 	quit()

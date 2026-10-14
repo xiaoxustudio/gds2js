@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.189 后备槽补上「没初值」那一半：定型的只写属性读出来是那一型的零值，不是 null（2026-10-14，S371 ③，语料 371 长到十五行）
+
+- **上一轮的槽只发给「有初值」的属性**，于是漏了一格：`var x: int: set = _s`（没有初值）引擎读出来是 `0`（typeof 2），出货读出来是 null —— 因为「只带 set 的属性读出来是 null」那句读数是从 `Variant` 那一形量的，被当成了整族的口径。槽装的其实是**声明类型的零值**，`Variant` / 不写型那一形才恰好是 null。
+- **接法只动一句判据**：`propSlot(v)` 从「有初值才发槽」改成「有初值**或**没有 getter 就发槽」，槽的初值仍走 `slotInit(v.type, v.init)` —— 空初值时它给的就是 `typeDefault(t)`，`int` 发 `rt.toInt(rt.V.int(0))`、`Variant` 发 `rt.V.nil()`，四种成员发射口与 `inst_to_dict` 的读数器一行没改就都跟上了。
+- **既有产物只有语料 370 动了**（两个只写属性各多一个装 nil 的槽、读数器从死写的 `rt.V.nil()` 改成读槽），输出一字未变 —— `test:diff` **244/244** 逐字节就是这条不变性的证据；那一轮的门 `property-accessor-names.test.ts` 里「发 null 盒子」那格跟着换成钉槽。
+- **门**：`property-delegation.test.ts` 15 格（多两格：`Variant` 那一形槽装 nil、`int` 那一形槽装零值）+ 语料 371 加两行（`定型属性只带 setter → 2 | 0`、写它之后仍是 `2 | 0`）。**读数**：`pnpm test` **13840**（107 文件）、typecheck **4/4**、`test:compile` **251/360**、`test:diff` **244/244**、golden 只重生成 371 一例。
+- **同一轮量到、按判据没接的**：具名委托的准入四句（`Getter/Setter "X" not found.` 与两句 `cannot be used as … because of its signature.`）读数已在 `tmp/pos/compare10.txt` —— **继承来的方法不算找到**（内部类 `C extends B` 委托 `B._g` 引擎照样给 not found），签名只看元数与有没有默认值、**不看类型**（`func _s(v: int)` 给 `Variant` 属性当 setter 合法）。接的活是下一轮。
+
 ### 1.188 属性的具名委托与 static 那一维：三处静默错值连一块运行期 ERROR 一起接上（2026-10-14，S371，语料 371）
 
 - **上一轮留的那半（§6 第 61 条⑥）量清了**：具名委托的合法写法是 `get = 名` / `set = 名`，而且**两段必须并列在一行**（`var x: Variant: get = _g, set = _s`）—— 分成两行引擎给 `Expected end of indented block for property.`。上一轮探针写成 `get get_thing`（漏等号）本来就是非法形，那句 `Expected ":" or "(" after "get".` 与出货的「未支持」两边都拒但不同句，五句解析期拒本轮**只量未接**。

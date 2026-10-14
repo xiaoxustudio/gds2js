@@ -26,8 +26,9 @@ export class Main extends SceneTree {
   set me(value) {
     // 只读属性：Godot 里写它是静默无操作，不是报错
   }
+  __gd_store_setter_only = rt.V.nil();
   get setter_only() {
-    return rt.V.nil();
+    return this.__gd_store_setter_only;
   }
   set setter_only(v) {
     this.s1 = v;
@@ -44,8 +45,9 @@ export class Main extends SceneTree {
   set readonly(value) {
     // 只读属性：Godot 里写它是静默无操作，不是报错
   }
+  __gd_store_shadowed = rt.V.nil();
   get shadowed() {
-    return rt.V.nil();
+    return this.__gd_store_shadowed;
   }
   set shadowed(quit) {
     this.s3 = quit;
@@ -79,7 +81,7 @@ export class Main extends SceneTree {
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
 rt.registerFieldTypes(__gd_d_Main, {"got": "accessor", "fn": "accessor", "me": "accessor", "setter_only": "accessor", "both": "accessor", "readonly": "accessor", "shadowed": "accessor"});
 rt.registerScriptProps(__gd_d_Main, ["host","s1","s2","s3","got","fn","me","setter_only","both","readonly","shadowed"], (o) => { const s = o as Main; return [s.host, s.s1, s.s2, s.s3, s.got, s.fn, s.me, s.setter_only, s.both, s.readonly, s.shadowed]; });
-rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", ["host","s1","s2","s3","got","fn","me","setter_only","both","readonly","shadowed"], {"got": "Variant", "fn": "Variant", "me": "Variant", "setter_only": "Variant", "both": "Variant", "readonly": "Variant", "shadowed": "Variant"}, (o) => { const s = o as Main; return [s.host, s.s1, s.s2, s.s3, rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil(), rt.V.nil()]; });
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", ["host","s1","s2","s3","got","fn","me","setter_only","both","readonly","shadowed"], {"got": "Variant", "fn": "Variant", "me": "Variant", "setter_only": "Variant", "both": "Variant", "readonly": "Variant", "shadowed": "Variant"}, (o) => { const s = o as Main; return [s.host, s.s1, s.s2, s.s3, rt.V.nil(), rt.V.nil(), rt.V.nil(), s.__gd_store_setter_only, rt.V.nil(), rt.V.nil(), s.__gd_store_shadowed]; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");

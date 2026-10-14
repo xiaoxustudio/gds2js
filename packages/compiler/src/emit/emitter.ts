@@ -827,9 +827,12 @@ function hasDeadStaticDelegate(m: Module): boolean {
   return walk(m.vars, m.funcs, m.innerClasses);
 }
 
-/** 带读写器的属性也留一个后备槽：初值照评（副作用与它在字段里的次序都是实测的，`tmp/pos/compare8.txt`），没有 getter 时读出来的就是它，写属性不动它。 */
+/** 带读写器的属性也留一个后备槽：初值照评（副作用与它在字段里的次序都是实测的，`tmp/pos/compare8.txt`），没有 getter 时读出来的就是它，写属性不动它。
+ *  没写初值也没 getter 时槽装的是**声明类型的零值** —— `var x: int: set = _s` 实测读 0（typeof 2），不是 null；`Variant` 那一形才给 null。 */
 function propSlot(v: VarDecl): string | null {
-  return v.accessor !== null && v.accessor !== undefined && v.init !== null ? `__gd_store_${v.name}` : null;
+  const a = v.accessor;
+  if (a === null || a === undefined) return null;
+  return v.init !== null || a.getter === null ? `__gd_store_${v.name}` : null;
 }
 
 function propSlotInit(v: VarDecl): string {

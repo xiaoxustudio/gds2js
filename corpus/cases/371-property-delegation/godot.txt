@@ -11,15 +11,17 @@ static 属性 inline getter → 2 | 2
 static 属性具名成对 → 2 | 7 | 10
 static 属性委托实例 getter → 0 | <null>
 static 属性委托实例 setter → 读 0 | 存的 6
+定型属性只带 setter → 2 | 0
+写它之后 → 2 | 0 | 存的 12
 ERROR: Can't call non-static function '_g' in script.
    at: callp (modules/gdscript/gdscript.cpp:940)
    GDScript backtrace (most recent call first):
-       [0] _initialize (<case>/main.gd:75)
+       [0] _initialize (<case>/main.gd:78)
 ERROR: Can't call non-static function '_g' in script.
    at: callp (modules/gdscript/gdscript.cpp:940)
    GDScript backtrace (most recent call first):
-       [0] _initialize (<case>/main.gd:75)
+       [0] _initialize (<case>/main.gd:78)
 ERROR: Can't call non-static function '_s' in script.
    at: callp (modules/gdscript/gdscript.cpp:940)
    GDScript backtrace (most recent call first):
-       [0] _initialize (<case>/main.gd:76)
+       [0] _initialize (<case>/main.gd:79)

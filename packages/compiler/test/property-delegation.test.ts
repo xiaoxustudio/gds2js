@@ -82,10 +82,16 @@ describe("带初值的属性留一个后备槽", () => {
     eq("371", "具名 setter 的槽", out.includes("return this.__gd_store_thing;"), true);
   });
 
-  it("没初值时读出来仍是 null 盒子", async () => {
+  it("没初值时槽装的是声明类型的零值：Variant 给 null 盒子", async () => {
     const out = await compile(`${H}var thing: Variant:\n\tset(v):\n\t\tpass\n${TAIL}`);
-    eq("371", "无初值", out.includes("return rt.V.nil();"), true);
-    eq("371", "无初值不发槽", out.includes("__gd_store_thing"), false);
+    eq("371", "槽装 nil", out.includes("__gd_store_thing = rt.V.nil();"), true);
+    eq("371", "读的是槽", out.includes("return this.__gd_store_thing;"), true);
+  });
+
+  it("定型属性只带 setter：槽装那一型的零值，不是 null", async () => {
+    const out = await compile(`${H}func _s(v: Variant) -> void:\n\tpass\n\nvar thing: int:\n\tset = _s\n${TAIL}`);
+    eq("371", "槽装 int 零值", out.includes("__gd_store_thing = rt.toInt(rt.V.int(0));"), true);
+    eq("371", "读的是槽", out.includes("return this.__gd_store_thing;"), true);
   });
 
   it("有 getter 时初值照评（副作用是实测的），槽按声明次序落在邻字段之间", async () => {
@@ -112,7 +118,7 @@ describe("带初值的属性留一个后备槽", () => {
   it("inst_to_dict 的读数器读槽，不再是死写的 nil", async () => {
     const out = await compile(`${H}var thing: Variant = 9:\n\tset(v):\n\t\tpass\n${TAIL}`);
     eq("371", "读数器", out.includes("return [s.__gd_store_thing];"), true);
-    const bare = await compile(`${H}var thing: Variant:\n\tset(v):\n\t\tpass\n${TAIL}`);
+    const bare = await compile(`${H}var thing: Variant:\n\tget:\n\t\treturn 3\n${TAIL}`);
     eq("371", "没槽时仍是 nil", bare.includes("return [rt.V.nil()];"), true);
   });
 });

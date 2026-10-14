@@ -49,7 +49,7 @@ describe("读写器体里引擎收下的一切", () => {
   it("只带 set 的属性合法（实测读出来是 typeof 0）", async () => {
     const out = await compile(SET("v", "s = v"));
     eq("368", "setter 单独存在", REFUSED(out), false);
-    eq("368", "读只带 set 的属性发 null 盒子", out.includes("return rt.V.nil();"), true);
+    eq("368", "读只带 set 的属性发 null 盒子", out.includes("__gd_store_thing = rt.V.nil();") && out.includes("return this.__gd_store_thing;"), true);
   });
 
   it("setter 体里宿主名给 Callable", async () => {
