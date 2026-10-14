@@ -97,7 +97,7 @@ export type PropGetter = { kind: "inline"; body: Stmt[] } | { kind: "method"; me
 export type PropSetter = { kind: "inline"; param: string; body: Stmt[] } | { kind: "method"; method: string };
 
 export interface PropAccessor {
-  getter: PropGetter;
+  getter: PropGetter | null;
   setter: PropSetter | null;
 }
 

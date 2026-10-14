@@ -812,14 +812,28 @@ function checkConstAssign(m: Module, diags: Diagnostic[], hostFace: Set<string>)
     check(body, all, rebound, names);
   };
 
+  const accessors = (list: VarDecl[], consts: Set<string>, face: Set<string>): void => {
+    for (const v of list) {
+      const acc = v.accessor;
+      // static var 的两支在这里不给名字表：那一形引擎发的是「静态函数」那一句，由 checkFieldInits 负责
+      if (acc === null || v.isStatic) continue;
+      if (acc.getter !== null && acc.getter.kind === "inline") one([], acc.getter.body, consts, face);
+      if (acc.setter !== null && acc.setter.kind === "inline") {
+        one([{ name: acc.setter.param, type: null, default: null }], acc.setter.body, consts, face);
+      }
+    }
+  };
+
   const walkClass = (c: ClassDecl, inherited: Set<string>): void => {
     const consts = new Set<string>([...inherited, ...c.vars.filter((v) => v.isConst).map((v) => v.name)]);
-    // 内部类看不见宿主那面（S358 实测），静态方法那一形没量过 —— 两支都不给名字表
+    // 内部类看不见宿主那面（S358 实测）：不给名字表
     for (const f of c.funcs) one(f.params, f.body, consts, NO_HOST_VALUE_METHODS);
+    accessors(c.vars, consts, NO_HOST_VALUE_METHODS);
     for (const inner of c.innerClasses) walkClass(inner, consts);
   };
 
   for (const f of m.funcs) one(f.params, f.body, moduleConsts, f.isStatic ? NO_HOST_VALUE_METHODS : hostFace);
+  accessors(m.vars, moduleConsts, hostFace);
   for (const c of m.innerClasses) walkClass(c, moduleConsts);
 }
 
@@ -1612,7 +1626,7 @@ function checkDictDuplicateKeys(m: Module, diags: Diagnostic[]): void {
       if (v.init !== null) expr(v.init);
       const acc = v.accessor;
       if (acc !== null) {
-        if (acc.getter.kind === "inline") stmts(acc.getter.body);
+        if (acc.getter !== null && acc.getter.kind === "inline") stmts(acc.getter.body);
         if (acc.setter !== null && acc.setter.kind === "inline") stmts(acc.setter.body);
       }
     }
@@ -2128,16 +2142,24 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 }
 
-/** 字段初值那一层：引擎照样查名字（`var f = nosuch` 是解析期拒），`self` 在其中也合法（实测 typeof 24）；`static var` / `const` 初值里读到宿主名时引擎各换一句（S367 的读数）。 */
+/** 字段初值与读写器体那一层：引擎照样查名字（`var f = nosuch` 是解析期拒），`self` 在其中也合法（实测 typeof 24）；`static var` / `const` 初值里读到宿主名时引擎各换一句（S367 的读数），读写器体里是同一族句子、函数名是合成的 `@<字段>_getter()` / `@<字段>_setter()`（S368 的读数）。 */
 function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>, diags: Diagnostic[], face: Set<string>): void {
   const selfScope = scope.child([], true);
   for (const v of list) {
-    if (v.init === null) continue;
     const prevFace = hostValueMethods;
     const prevCtx = hostStaticCtx;
     hostValueMethods = face;
     hostStaticCtx = v.isConst ? { kind: "const", name: v.name } : v.isStatic ? { kind: "var" } : null;
-    walkExpr(v.init, selfScope, coroutines, diags);
+    if (v.init !== null) walkExpr(v.init, selfScope, coroutines, diags);
+    const acc = v.accessor;
+    if (acc !== null) {
+      hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_getter` } : null;
+      if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, selfScope, coroutines, diags, false);
+      hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_setter` } : null;
+      if (acc.setter !== null && acc.setter.kind === "inline") {
+        walkStmts(acc.setter.body, selfScope.child([acc.setter.param]), coroutines, diags, false);
+      }
+    }
     hostValueMethods = prevFace;
     hostStaticCtx = prevCtx;
   }

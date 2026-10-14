@@ -811,7 +811,10 @@ function emitAccessors(v: VarDecl): string[] {
   const out: string[] = [];
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
   out.push(`  get ${v.name}() {`);
-  if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
+  if (a.getter === null) {
+    out.push("    // 只带 set 的属性读出来是 null（实测 typeof 0，写它照样跑 setter）");
+    out.push("    return rt.V.nil();");
+  } else if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
   else out.push(`    return this.${a.getter.method}();`);
   out.push("  }");
   const pname = a.setter !== null && a.setter.kind === "inline" ? a.setter.param : "value";

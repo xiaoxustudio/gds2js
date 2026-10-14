@@ -779,6 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.185 inline 读写器体从此真查：`get:` / `set(v):` 里不再是「不查名字的那两段」，只带 set 的属性也收下（2026-10-14，S368，语料 370）
+
+- **出货里的第二处真 bug**：1.184 把字段初值接住了，读写器那两段却还是同一个洞的另一半 —— `checkFunc` 只走查函数体，`var thing: int: get: return quit` 里的 `quit` 从没被记过，于是发成裸标识符，跑起来 `quit is not defined`（复现只需一行：读数 `tmp/pos/compare4.txt` 首行）。
+- **量法**：属性一律声明成 `Variant`，不然引擎的返回类型检查先抢答（第一轮 `fold57` 就是这样，`int` 属性返回 Callable 当场给 `Cannot return value of type "Callable" …`，名字那一层的问题整个被盖住）；`fold58` 十五格钉读写器体里的六种名字与三句拒，`fold59` 五格钉「只带 set / 只带 get / 成对」三种属性形状各自读出来给什么。一格一份 `.gd` 一次 spawn 这条老规矩不变。
+- **接法**：`checkFieldInits` 除了初值，也把 getter（允许 `self` 的作用域）与 setter（再多绑一个形参名）走查一遍；`checkConstAssign` 同样吃这两段，于是 setter 里 `quit = 5` 给的是引擎那句「常量」。`static var` 的两支引擎用的是**合成函数名** —— `@thing_getter()` / `@thing_setter()`，句子仍是 S367 那一句，出货照这两个名字发。
+- **顺带解掉一个过拦**：只带 `set` 的属性引擎是收下的（实测写它照跑体、读它是 typeof 0），出货 `lower.ts` 那句「还没实测过，先拒绝」撤掉；`PropAccessor.getter` 改成可空，发射器给空 getter 发 `return rt.V.nil()` —— 要的是真的 null 盒子，不是 JS 的 `undefined`，两者 `typeof` 一样、别处（打印、传参、`.is_valid()`）不一样。
+- **门**：`property-accessor-names.test.ts` 12 格（放行的钉发射式子、拒的钉原文）+ 语料 370 七行逐字节。两格源只差一个形参名、行:列撞车时互相抢记号那一节记在 §6 第 61 条，门里已把源错开并把原因写成注释。
+- **门读数**：`pnpm test` **13819**（105 文件）、typecheck **4/4**、`test:compile` **250/359**（sema 83、响亮拒 26，一例未动）、`test:diff` **242/242** 逐字节、golden 未漂移 **369/369**。
+- **还欠的**：具名委托那一形（探针写法被引擎判成 `Expected ":" or "(" after "get".`，出货是「未支持」，两句不同）—— 那一形怎么写合法要先量，见 §6 第 61 条④。
+
 ### 1.184 字段初值与形参默认值那一层从此真查：模块级 `var f = quit` 不再发成裸标识符，静态语境三句按位置分文（2026-10-14，S367，语料 369）
 
 - **出货里的真 bug**：`analyze` 旧码 `recordInitValueReads` 走查字段初值只为补记「全局函数取值点」，整摞诊断丢进一张空表 —— 等于那一层不查名字。后果是模块级 `var f = quit` 编得过、发出来的是裸标识符，跑起来当场 `quit is not defined`；同一层里 `var f = nosuch` 也一路放行到运行期。
