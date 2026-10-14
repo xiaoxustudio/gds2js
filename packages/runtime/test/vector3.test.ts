@@ -3,7 +3,7 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { ops } from "@gds2js/runtime/runtime/ops";
+import { ops, sortLess } from "@gds2js/runtime/runtime/ops";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, keyOf, show, elemDefault, valueEq } from "@gds2js/runtime/runtime/values";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
@@ -81,7 +81,7 @@ describe("runtime/vector3", () => {
     eq("091", "Vector3 键与 Vector2 键不同桶", keyOf(V3(1, 2, 3)) === keyOf(vector2(1, 2)), false);
     {
       const g = GArray.of([V3(3, 1, 0), V3(1, 2, 3), V3(2, 0, 0)]);
-      g.sort();
+      g.sort(sortLess);
       eq("091", "sort 走字典序", show(V.array(g)), "[(1.0, 2.0, 3.0), (2.0, 0.0, 0.0), (3.0, 1.0, 0.0)]");
       eq("091", "has / count 按分量身份", `${g.has(V3(3, 1, 0))}/${g.count(V3(1.0, 2.0, 3.0))}`, "true/1");
     }

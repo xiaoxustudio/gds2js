@@ -4,7 +4,7 @@
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { index, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/methods";
-import { ops } from "@gds2js/runtime/runtime/ops";
+import { ops, sortLess } from "@gds2js/runtime/runtime/ops";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, strColor, elemConvert, elemDefault, toStringNameSlot } from "@gds2js/runtime/runtime/values";
 import { asColor, color, colorMethod, colorNew, colorRead, colorStatic, colorWrite, GColor, toColor } from "@gds2js/runtime/runtime/color";
@@ -158,8 +158,8 @@ describe("runtime/color", () => {
     eq("096", "StringName 槽吃 String、不吃 int 与 Color", `${show(toStringNameSlot(V.str("zz")))}/${String(typeOf(toStringNameSlot(V.str("zz"))).v)}`, "zz/21");
     shouldThrow("096", "StringName 槽吃 int 响亮拒", () => toStringNameSlot(V.int(5)));
     shouldThrow("096", "Color 槽吃 StringName 响亮拒", () => toColor(V.stringName("abc")));
-    shouldThrow("096", "Color 数组不能 sort（没有顺序）", () => {
-      GArray.of([color(1, 0, 0, 1), color(0, 1, 0, 1)]).sort();
-    });
+    const cs = GArray.of([color(1, 0, 0, 1), color(0, 1, 0, 1)]);
+    cs.sort(sortLess);
+    eq("096", "Color 数组 sort 比不出：原地不动（引擎两向都钉过）", show(V.array(cs)), "[(1.0, 0.0, 0.0, 1.0), (0.0, 1.0, 0.0, 1.0)]");
   });
 });

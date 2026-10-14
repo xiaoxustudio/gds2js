@@ -7,7 +7,7 @@ import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
-import { asColor, color, colorCmp, GColor, tryColorSlot } from "./color";
+import { asColor, color, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode, toElem } from "./packed";
 import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
@@ -486,39 +486,10 @@ export class GArray {
     return this.items.every((x, i) => valueSame(x, other.items[i] as Variant, depth + 1));
   }
 
-  sort(): void {
-    if (this.items.length === 0) return;
-    const allNum = this.items.every((x) => x.t === Tag.INT || x.t === Tag.FLOAT);
-    const allStr = this.items.every((x) => x.t === Tag.STRING || x.t === Tag.STRING_NAME);
-    const allBool = this.items.every((x) => x.t === Tag.BOOL);
-    const allVec = this.items.every((x) => asVec2(x) !== null);
-    const allVec3 = this.items.every((x) => asVec3(x) !== null);
-    const allVec2i = this.items.every((x) => asVec2i(x) !== null);
-    if (!allNum && !allStr && !allBool && !allVec && !allVec3 && !allVec2i) {
-      throw new UnsupportedError("array-sort-mixed", "混合类型数组排序（未实现）");
-    }
-    const cmp = allNum
-      ? (a: Variant, b: Variant) =>
-          a.t === Tag.INT && b.t === Tag.INT
-            ? intToBig(a.v as IntPayload) < intToBig(b.v as IntPayload)
-              ? -1
-              : intToBig(a.v as IntPayload) > intToBig(b.v as IntPayload)
-                ? 1
-                : 0
-            : numVal(a) - numVal(b)
-      : allStr
-        ? (a: Variant, b: Variant) => strCmp(a.v as string, b.v as string)
-        : allBool
-          ? (a: Variant, b: Variant) => Number(a.v) - Number(b.v)
-          : allVec
-            ? (a: Variant, b: Variant) => vecCmp(asVec2(a) as GVector2, asVec2(b) as GVector2)
-            : allVec3
-              ? (a: Variant, b: Variant) => vec3Cmp(asVec3(a) as GVector3, asVec3(b) as GVector3)
-              : (a: Variant, b: Variant) => {
-                  if (asColor(a) !== null && asColor(b) !== null) colorCmp();
-                  return vec2iCmp(asVec2i(a) as GVector2i, asVec2i(b) as GVector2i);
-                };
-    this.items = [...this.items].sort(cmp);
+  /** `Array.sort()`：比较器是 `ops.sortLess` 那条（S357，与源里的装箱 `<` 和 `sort_custom` 的 Callable 都不是同一条），
+   *  置换走引擎那份 `sort_array.h`（`packages/runtime/src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
+  sort(before: (a: Variant, b: Variant) => boolean): void {
+    this.items = sortGodot(this.items, before);
   }
 
   /** 带比较器的排序：同键顺序走引擎那份置换（`packages/runtime/src/runtime/sort.ts`），不是 JS 的稳定 sort。 */

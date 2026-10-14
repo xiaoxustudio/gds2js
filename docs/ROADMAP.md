@@ -779,6 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.172 `Array.sort()` 自己那条比较器接完：跨形只有 int 对 float、六形同形比不出，置换改成引擎那一把（2026-10-14，S357，语料 360）
+
+- **接的是 §6 第 54 条③**：混合类型数组排序此前 `array-sort-mixed` 响亮拒（合法代码跑不动），而且 `sort()` 的**置换**走的是 JS 稳定 sort、比较口径还被当成 `isLess` 那条共用（`ops.ts` 里那句旧注释也这么写，已改）。
+- **129 格实测**（尺 `fold25` / `fold26` / `fold27`，每格包成一个小函数、一次 spawn 量一批）：跨形**只有 int 对 float 按值**有方向；**bool 掺进数值里不比**、**null 也不是「永远最小」**；同形才比值（串按码点、四个向量按分量、RID 按无符号号、数组走 S355 那条装箱序、同值不换）；null / Dictionary / Color / NodePath / pack / Callable **同形也一律比不出**（两向都 false、引擎不推错误）；NaN 在 sort 里谁都不小于（与 S355 容器里「NaN 最大」不是一条）。
+- **StringName 仍响亮拒**：`[&"b", &"a"]`、`[&"zzz", &"a"]` 都按文字序换位，可 `[&"ab", &"b"]` 换出来的是 `[&"b", &"ab"]` —— 与文字序矛盾，是指针序，复现不了；两支同现才拒，一支不碍事。
+- **置换必须是引擎那一把**：n>16 的输出不是稳定序也不是任何秩表 —— 21 元素「17 int + 8 串」把整块串搬到最前、24 元素向量混串给出另一副样子，`sort.ts` 那份 `sort_array.h` 转写三把都逐字节对过；`sort()` 与 `sort_custom()` 从此共用同一份置换。
+- **顺带解掉两处静默 / 过拦**：String 与 StringName 混排旧实现按 `allStr` 文字比（静默错值）；Color 数组 sort 旧实现抛错（引擎原地不动）—— 旧的 `colorCmp()` 助手连同那句「Parse Error」的旧说法一起删。
+- **不动别人口径**：源里 `<` / `bsearch` / `min` / `max` 仍走 `compare` / `isLess`，S355 的 240 格与 S353 的 246 格一字未变；`array-sort-face.test.ts` 126 格里 118 钉值、6 钉 StringName 的拒、2 钉 Callable 原地不动。
+- **门**：`pnpm test` **13268**（94 文件）、typecheck **4/4**、`test:compile` **241/349**（sema 82、响亮拒 26）、`test:diff` **233/233** 逐字节（用例 359、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **359/359**。
+
 ### 1.171 装箱比较的运行期拒换成引擎同文：一句 `Invalid operands 'L' and 'R' in operator 'OP'.`，形名走 `Nil` / `PackedInt32Array` 那套拼法（2026-10-14，S356，语料 359）
 
 - **接的是 §6 第 54 条①**：改前抛中文「比较不支持 int 与 String」，形状对、句子不同。48 格一次 spawn 量完（尺 `tmp/probe-argtype/fold24.mts`：每格包进一个小函数，那句 SCRIPT ERROR 只打断那个函数，脚本照跑下一格），生成器 `mk-lessmsg-artifacts.mts` 把它摊成门 `compare-operands-sentence.test.ts` 47 格。

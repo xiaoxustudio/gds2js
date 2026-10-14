@@ -3,7 +3,7 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { isLess } from "@gds2js/runtime/runtime/ops";
+import { isLess, sortLess } from "@gds2js/runtime/runtime/ops";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
 import { GVector2, vecCmp, vector2 } from "@gds2js/runtime/runtime/vector2";
@@ -13,16 +13,16 @@ import { F, I, S } from "./support/variants";
 describe("runtime/values · 排序", () => {
   it("070 · int/float 混排按数值、各自保留原类型", async () => {
     const nums = GArray.of([I(3), F(1.5), I(1)]);
-    nums.sort();
+    nums.sort(sortLess);
     eq("070", "int/float 混排按数值、各自保留原类型", show(V.array(nums)), "[1, 1.5, 3]");
     const bools = GArray.of([V.bool(true), V.bool(false), V.bool(true)]);
-    bools.sort();
+    bools.sort(sortLess);
     eq("070", "纯 bool 可排且 false 在前", show(V.array(bools)), "[false, true, true]");
     const vecs = GArray.of([vector2(1, 2), vector2(0, 3)]);
-    vecs.sort();
+    vecs.sort(sortLess);
     eq("070", "Vector2 数组按字典序排", show(V.array(vecs)), "[(0.0, 3.0), (1.0, 2.0)]");
     const big = GArray.of([I(9007199254740993n), I(9007199254740992n), I(1)]);
-    big.sort();
+    big.sort(sortLess);
     eq("070", ">2^53 的 int 排序不被折成同值", show(V.array(big)), "[1, 9007199254740992, 9007199254740993]");
     const pair = (k: number, tag: string) => V.array(GArray.of([I(k), S(tag)]));
     const first = (v: Variant) => ((v.v as GArray).raw()[0] as Variant).v as number;
@@ -40,7 +40,10 @@ describe("runtime/values · 排序", () => {
     eq("070", "count 数深度相等的个数", unsorted.count(I(3)), 1);
     eq("070", "min 走同一个比较口径", show(unsorted.extreme(true, isLess) as Variant), "1");
     eq("070", "空数组 extreme 给 null", GArray.of([]).extreme(true, isLess), null);
-    shouldThrow("070", "混合类型排序仍然响亮报缺", () => GArray.of([I(1), S("a")]).sort());
+    const cross = GArray.of([I(1), S("a")]);
+    cross.sort(sortLess);
+    eq("070", "跨形比不出：混排原地不动（引擎两向都钉过）", show(V.array(cross)), '[1, "a"]');
+    shouldThrow("070", "两支 StringName 的 sort 序是指针序，复现不了 → 响亮拒", () => GArray.of([V.stringName("b"), V.stringName("a")]).sort(sortLess));
     eq("070", "字典序比较不是逐分量", vecCmp(new GVector2(3, 4), new GVector2(2, 5)), 1);
   });
 

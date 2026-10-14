@@ -484,8 +484,31 @@ function arrayLess(x: Variant, y: Variant): boolean {
   return ys.length > xs.length;
 }
 
-/** `a` 严格小于 `b`：与 `<`、`Array.sort()`、`bsearch`、`min` / `max` 共用 compare 这一个口径。 */
+/** `a` 严格小于 `b`：与 `<`、`bsearch`、`min` / `max` 共用 compare 这一个口径（`Array.sort()` 用的是另一条，见 `sortLess`）。 */
 export function isLess(a: Variant, b: Variant): boolean {
+  return compare(a, b) < 0;
+}
+
+/** `Array.sort()` 的比较器只认这两张表里的形（S357）：有方向的那一族同形才比值，比不出的一族两向都假。 */
+const SORT_ORDERED = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "RID", "Array"]);
+const SORT_UNORDERED = new Set(["Nil", "Dictionary", "Color", "NodePath", "PackedByteArray", "PackedInt32Array", "PackedStringArray", "Callable"]);
+
+/** `Array.sort()` 自己那条比较器 —— 与源里的装箱 `<`（`compare`）、也与 `sort_custom` 那位 Callable 都**不是同一条**（S357，
+ *  读数 `tmp/probe-argtype/{sortcmp,sortcmp2,sortcmp3}.txt`，尺 `{fold25,fold26,fold27}.mts`）：
+ *  **形不同只有 int 对 float 有方向**（按值，`[2.5, 1]` 换成 `[1, 2.5]`），bool 掺进数值里也不比（`[true, 0.5]` 与 `[0.5, true]` 两向都不动）；
+ *  **形相同才比值**：串按码点（`é` 排在 `z` 之后）、四个向量按分量字典序、RID 按**无符号**号（`RID(-1)` 最大）、数组走 ① 那条装箱序、bool 是 false 在前；
+ *  null / Dictionary / Color / NodePath / pack / Callable 同形也**一律比不出**（两向都不换位，引擎也不报错）；
+ *  StringName 走 intern 之后的指针序（`[&"b"] `排在 `[&"ab"]` 之前，文字序与反序都对不上）复现不了，没量过的形（用户对象、其余 pack）也响亮拒。 */
+export function sortLess(a: Variant, b: Variant): boolean {
+  const ka = valueTypeName(a);
+  const kb = valueTypeName(b);
+  if (ka !== kb) return (ka === "int" || ka === "float") && (kb === "int" || kb === "float") ? compare(a, b) < 0 : false;
+  if (SORT_UNORDERED.has(ka)) return false;
+  if (ka === "bool") return !(a.v as boolean) && (b.v as boolean);
+  if (ka === "StringName") {
+    throw new UnsupportedError("compare-string-name", `StringName 的 sort 序走 Godot 内部指针，实测 [&"ab"] 与 [&"b"] 的文字序、反序都对不上 —— 复现不了，响亮拒`);
+  }
+  if (!SORT_ORDERED.has(ka)) throw new UnsupportedError("array-sort-mixed", `Array.sort() 的比较器只量到 ${[...SORT_ORDERED, ...SORT_UNORDERED].join(" / ")} 这些形，${ka} 还没量`);
   return compare(a, b) < 0;
 }
 

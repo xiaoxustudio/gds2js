@@ -531,11 +531,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   }
 }
 
-/** Color 没有大小顺序（`c1 < c2` 在 Godot 是 Parse Error），所以比较一律响亮报缺。 */
-export function colorCmp(): never {
-  throw new UnsupportedError("color-cmp", "Color 没有大小比较（实测 `<`/`>` 在 Godot 是 Parse Error）");
-}
-
 type ColorSlot = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
 const SLOTS: Record<string, ColorSlot> = {

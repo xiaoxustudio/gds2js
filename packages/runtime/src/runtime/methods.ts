@@ -28,7 +28,7 @@ import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strBuiltin, varToStr, strToVar, valueTypeName } from "./values";
-import { isLess } from "./ops";
+import { isLess, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
@@ -620,7 +620,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.int(n < 0 ? 31 : 0);
         }
         case "sort":
-          a.sort();
+          a.sort(sortLess);
           return V.nil();
         case "sort_custom": {
           const before = comparatorOf(args[0], "sort_custom");
