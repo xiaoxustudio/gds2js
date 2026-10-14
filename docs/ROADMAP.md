@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.180 全局 `max` / `min` 三元以上被截成两元：一条静默错值，顺带补齐四支定长名的元数闸门（2026-10-14，S364，语料 367）
+
+- **怎么露出来的**：发 S363 之后重跑「引擎收下的合法调用」那一侧普查，`max` / `min` 不在不合名单上（那批格子都是两元），但顺手用 `gds2js run` 试了三元的 `max(1, 2, 3)` —— 我们给 **2**、引擎给 **3**；`max(1, 5, 3, 9, 2)` 我们给 5、引擎给 9。发射式子是 `rt.gMax(${a[0]}, ${a[1]})`，第三元往后**当场丢掉**，`BUILTIN_ARITY` 又写着 `[2, +∞)`，于是解析期一声不出。
+- **折法是量出来的**：左折、赢家带自己的型（`max(1.0, 2, 3)` 给 int 3）、并列留先出现的那个（`max(2, 2.0, 2)` 给 int 2）、NaN 那六格两向（`max(NAN, 1, 2)` 给 nan 一路留到底、`max(1, NAN, 2)` 给 2 跨过中间的 nan）、20 元与 22 元都给值。尺 `fold46` / `fold47`（一格一份量句子 + 一次 spawn 量值）与 `fold48`（四支定长名的两句 + 31 格值），读数在 `tmp/maxmin/`。
+- **元数闸门补了四名**：`maxi` / `mini` / `maxf` / `minf` 引擎是**恰好两元**（少给 `at least 2`、多给 `at most 2`，`maxi(1, 2.5, 3)` 也报多给），出货表上原本没有这四支 → `maxf(1, 2, 3)` 编得过还静默给 `2.0`，同一类毛病。
+- **两元那一支一字未动**，只把「三位以后也照折」接上；`methods` 的动态那一面（`max.call(…)` 那条链）同步走 `gMax(ga(a,0), ga(a,1), ...a.slice(2))`。
+- **还剩两处口径差异**（§6 第 57 条改记）：Array / Dictionary 实参引擎是**运行期** `Invalid type in utility function "max()". Cannot convert argument N from Array to float.`，出货按解析期那一句发；`max.call(...)` 的 Callable 面区间还记 `[2, 2]`，三元给什么没量。
+- **门**：语料 367 三十行逐字节、`global-max-min-variadic.test.ts` 27 格、`emit-guards.test.ts` 新闸门 16 格；`pnpm test` **13476**（101 文件）、typecheck **4/4**、`test:compile` **247/356**（sema 83、响亮拒 26）、`test:diff` **239/239** 逐字节（用例 366、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **366/366**。
+
 ### 1.179 `Color.from_ok_hsl` 发货：1437 格读数里 1367 格逐位合，alpha 也跟着夹（2026-10-14，S363，语料 366）
 
 - **出货口径**：`thirdparty/ok_color.h` 的 `okhsl_to_srgb` 那一支按**逐算子 float32** 移植（`r32` / `mul` / `div` / `add` / `sub` 一层一落地落），常数先折成 `...f` 字面量，Halley 只走一步、`FLT_MAX` 哨兵与分支顺序照原文；出货最后一道把 **四个通道一起夹进 0..1**。引擎侧的证据是 `core/math/color.cpp` 的 `Color::set_ok_hsl(float, float, float, float)` —— 它调 `ok_color::okhsl_to_srgb` 再 `Color(…).clamp()`，形参声明就是 float。

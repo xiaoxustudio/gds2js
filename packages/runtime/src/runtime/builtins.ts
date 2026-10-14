@@ -554,15 +554,28 @@ export function gIsFinite(v: Variant): Variant {
   return V.bool(Number.isFinite(fl(v)));
 }
 
-/** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1.0)` 给 nan。 */
-export function gMin(a: Variant, b: Variant): Variant {
-  need2(a, b, "min");
-  return fl(a) > fl(b) ? b : a;
+/** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1.0)` 给 nan。
+ *  三元以上是**左折**：`max(1, NAN, 2)` 给 2、`max(1.0, 2, 3)` 给 int 3、`max(1, 2, NAN)` 给 2（读数 `tmp/maxmin/{maxmin,maxmin2}.txt`，尺 `fold46.mts` / `fold47.mts`）。 */
+export function gMin(...xs: Variant[]): Variant {
+  need2(xs[0]!, xs[1]!, "min");
+  let best = xs[0]!;
+  for (let i = 1; i < xs.length; i++) {
+    const x = xs[i]!;
+    need2(best, x, "min");
+    if (fl(best) > fl(x)) best = x;
+  }
+  return best;
 }
 
-export function gMax(a: Variant, b: Variant): Variant {
-  need2(a, b, "max");
-  return fl(a) < fl(b) ? b : a;
+export function gMax(...xs: Variant[]): Variant {
+  need2(xs[0]!, xs[1]!, "max");
+  let best = xs[0]!;
+  for (let i = 1; i < xs.length; i++) {
+    const x = xs[i]!;
+    need2(best, x, "max");
+    if (fl(best) < fl(x)) best = x;
+  }
+  return best;
 }
 
 export function gMinI(a: Variant, b: Variant): Variant {
