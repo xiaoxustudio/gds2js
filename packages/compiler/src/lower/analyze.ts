@@ -410,8 +410,8 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
 /** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值 —— 都不是 void，别顺手加进来。 */
 const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
 const VOID_DICT_METHODS = new Set(["clear"]);
-/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 返回 bool、`insert` / `resize` 返回 Error 状态码，都不是 void。 */
-const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set"]);
+/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。 */
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear"]);
 /** 只在零参时才是 void 的 pack 方法。 */
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
 /** 脚本对象接收者那一侧：只有 `set`，取值是解析期拒（与 pack 的 `set` 同一句）。`get` 返回 Variant、`call` / `callv` 都有返回值，`free()` 是运行期的事，都不在这张表里。 */
@@ -1274,8 +1274,8 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
-/** 元素槽是第几个实参（1 起），只列判得出的方法：`append` / `find` / `has` / `count` / `fill` 是第 1 参、`insert` / `set` 是第 2 参，文本都是同一套两句。 */
-const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
+/** 元素槽是第几个实参（1 起），只列判得出的方法：`append` / `push_back` / `find` / `has` / `count` / `fill` 是第 1 参、`insert` / `set` 是第 2 参，文本都是同一套两句。 */
+const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, push_back: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {

@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.194 Pack 其余六支的成员名表过完裁判：翻出一处名单污染 —— `push_back` 被我们登成「Godot 里没这名字」（2026-10-14，S375，门 16 格）
+
+- **§6 第 33 条最后一族**：int64 / float32 / float64 / vector2 / vector3 / color 六支各 52 名过裁判（312 格，一格一脚本一次 spawn），引擎有 132、无 180。**六支的「无」名单一字不差**（同 29 名），所以登一张共用表 `MISSING_ON_SIX` 就够，不必六份。名单里混着几个根本不是方法的串（`int32` / `vector2` / `arity` / `empty` 那一族 —— 扫描时从 `packed.ts` 自己的表里连出来的），引擎对它们同样给 Nonexistent，所以一并登：此前它们落到 switch 的兜底、发的是中文自述。
+- **翻案的两名才是这一轮的肉**：① `push_back` 一直登在 `NO_SUCH_METHOD`（「Godot 里**不存在**的那批方法名」）上，于是九支 pack 上调用它，出货发的都是引擎那句 `Invalid call. Nonexistent function 'push_back' in base 'PackedByteArray'.` —— **一句伪造的引擎原文**，而引擎九支全都有这个方法。这与 S300 那格 `Array.concat` 同族（名单是抄来的、没过裁判），只是方向反过来：那次是我们多实现了一个不存在的方法，这次是我们多**否认**了一个存在的方法。② `clear` 从来没登记，落到兜底发中文自述。
+- **两名的口径都量到九支**（`tmp/probe-pack/compare15.txt` 27 格）：`push_back` 与 `append` **完全同一支读数** —— 追加一个元素、返回 bool 而且实测值是 `false`（不是 true，与 Array 那侧的 void 也不同）；`clear` 是 **void**，取它的返回值是解析期那句 `Cannot get return value of call to "clear()" because it returns "void".`（进 `VOID_BYTES_METHODS`），当语句用则清空（`size()` 0、`is_empty()` true、打印 `[]`）。`push_back` 的实参照样过元素槽判据（`PackedStringArray` 上收 int 给 `Cannot pass a value of type "int" as "String".`，`PACK_ELEMENT_ARG` 补一名）。
+- **`NO_SUCH_METHOD` 其余十二名复测成立**（135 格）：`min` / `max` / `sum` / `pop_back` / `pop_front` / `subarray` / `to_string` / `decode_utf8` / `decode_ascii` / `hash` / `push_front` / `copy_on_write` / `join` 九支都说没这名字 —— 那张表只有 `push_back` 一名是脏的。
+- **白捡一批下一轮的靶子**：六支扫描每格都是**零实参**调用，于是每个要实参的方法都给的是**解析期**那一句（`Too few arguments for "append()" call. Expected at least 1 but received 0.`，`insert` / `set` 是 at least 2）。所以 pack 的元数与值类型那一族同类，而出货现在发的是运行期中文自述 `<名>() 需要 N 个参数（收到 M 个）` —— 属**错值**，「至少」那一半的读数已经在手，「至多」那一半还没量（§6 第 34 条①）。
+- **门**：`packed-member-names.test.ts` 10 格（六支 × 29 名逐名钉句子 + 三格钉「引擎有的名字不许被这张表拦掉」+ push_back / clear 九支的行为与元数）、`pack-push-back-clear.test.ts` 6 格（clear 的 void 句、append / push_back 取值合法、元素槽两句）。**读数**：`pnpm test` **13891**（111 文件）、typecheck **4/4**、`test:compile` **251/360**（一例未动）、`test:diff` **244/244** 逐字节、既有产物一份没改；golden 零改动（本轮不碰任何 `.gd`）。
+- **一处工序提醒**：改了 `packages/runtime/src` 之后**先 `pnpm build`** 再用 CLI 复核 —— CLI 的产物吃的是 dist，不重建会读到旧运行时（本轮 `push_back` 改完第一次复核就是这么假的，直接问运行时的 `tmp/probe-pack/direct.mts` 才是真的）。
+
 ### 1.193 读写器的记号级畸形形：六形量齐、四句接上，`get` 与 `set` 两侧不同文（2026-10-14，S374，门 27 格）
 
 - **§6 第 62 条①的尾巴**：上一轮只接了「名字 / 签名 / 少逗号」那五句，剩下的是记号级畸形形 —— `get 名`（漏等号）与 `get = 5`（等号后不是名字）。量下来是**六形六句**，而且 `set` 那一侧与 `get` **不同文**：`set 名` 给 `Expected "(" after "set".`（没有「或 `:`」，set 必须带形参），等号后不是名字那两句也各按 getter / setter 分文。

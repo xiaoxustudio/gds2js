@@ -435,21 +435,57 @@ const NO_SUCH_METHOD = new Set([
   "decode_utf8",
   "decode_ascii",
   "hash",
-  "push_back",
   "push_front",
   "copy_on_write",
   "join",
 ]);
 /** 存在但还没实现的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
 const NOT_YET = new Set(["to_hex_string", "search_sorted"]);
+/** int64 / float32 / float64 / vector2 / vector3 / color 六支上量到「引擎没这名字」的那一批 —— 六支读数一字不差
+ *  （`tmp/probe-pack/sweep.json`，312 格里引擎说无的 180 格）。名字里混着几个根本不是方法的串（`int32` / `vector2` 那一族，
+ *  是扫描时从本文件的表里连出来的），引擎对它们同样给 Nonexistent，所以一并登进来 —— 此前它们落到 switch 的兜底，发的是中文自述。 */
+const MISSING_ON_SIX = new Set([
+  "arity",
+  "bigint",
+  "bsearch_custom",
+  "color",
+  "compress",
+  "decode_string",
+  "decompress",
+  "empty",
+  "float32",
+  "float64",
+  "get_bytes",
+  "get_string_from_ascii",
+  "get_string_from_utf8",
+  "hex_encode",
+  "index_of",
+  "int32",
+  "int64",
+  "remove_at_copy",
+  "search_sorted",
+  "string",
+  "to_base64",
+  "to_float32_array",
+  "to_float64_array",
+  "to_hex_string",
+  "to_int32_array",
+  "to_int64_array",
+  "to_raw_string",
+  "vector2",
+  "vector3",
+]);
 /** 只在**某一种 pack** 上确认过「没有这个方法」的名字：只在确认的那一支给报错文本，其余仍走响亮拒。 */
 const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
   byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes", "remove_at_copy", "bsearch_custom"]),
   string: new Set(["index_of"]),
   int32: new Set(["to_float32_array", "to_int32_array", "remove_at_copy"]),
-  int64: new Set(["remove_at_copy"]),
-  float32: new Set(["remove_at_copy", "bsearch_custom"]),
-  vector2: new Set(["bsearch_custom"]),
+  int64: MISSING_ON_SIX,
+  float32: MISSING_ON_SIX,
+  float64: MISSING_ON_SIX,
+  vector2: MISSING_ON_SIX,
+  vector3: MISSING_ON_SIX,
+  color: MISSING_ON_SIX,
 };
 /** byte 那一支独有的方法（`to_*_array` 与压缩这一族）。 */
 const BYTE_ONLY = new Set([
@@ -581,6 +617,18 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       arity("append", args, 1);
       items.push(toElem(kind, args[0] as Variant));
       return V.bool(false);
+    }
+    // `push_back` 与 `append` 是同一支读数：九支都收下、元素照槽转、返回 bool 且实测值是 false（`tmp/probe-pack/compare15.txt`）。
+    // 它此前挂在 `NO_SUCH_METHOD` 那张表上，发的是「引擎没这名字」—— 名单污染，九支逐支过裁判后摘掉（`tmp/probe-pack/nosuch.json`）。
+    case "push_back": {
+      arity("push_back", args, 1);
+      items.push(toElem(kind, args[0] as Variant));
+      return V.bool(false);
+    }
+    case "clear": {
+      arity("clear", args, 0);
+      items.length = 0;
+      return V.nil();
     }
     case "append_array": {
       arity("append_array", args, 1);
