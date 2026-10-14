@@ -779,6 +779,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.178 `Color.from_ok_hsl` 的两块拦路石搬掉了：逐字式子进仓、第一参是「圈」不是「度」（2026-10-14，§6 第 53 条④，未动代码）
+
+- **原文到手**：`thirdparty/ok_color.h` = Björn Ottosson 的 MIT 原文，取自 `raw.githubusercontent.com/godotengine/godot/4.6.3-stable/thirdparty/misc/ok_color.h`（与裁判**同 tag**），sha256 `776f1de1…34281`，693 行一字未改；许可头留在文件里，它不进产物树（`tree-face` 不管根目录的 `thirdparty/`）。
+- **先量到的一条硬事实**：`Color.from_ok_hsl(h, …)` 的第一参是**圈（turn）不是度** —— `(0.25, 0.5, 0.5)` 与 `(1.25, …)`、`(-0.25, …)` 与 `(0.75, …)` 一字一样，而 `30 / 90 / 150 / 180 / 240 / 300 / 360` 这一整批「度」写法全落到同一个颜色（原文 `cosf(2 * pi * h)` 正是这个意思）。照 `Color.from_hsv` 的直觉接必错。
+- **对表数据已备**：128 格网格（两批 h × s ∈ {0, .25, .5, 1} × l ∈ {0, .5, .75, 1}，`tmp/probe-argtype/okhsl.txt`，尺 `fold40.mts`，一次 spawn 出全）—— 移植完先对这张表，再谈语料与 golden。
+- **还欠的**：把 `okhsl_to_srgb` 那一支按 float32 口径逐字移植（含 `find_cusp` / `compute_max_saturation` / `find_gamut_intersection` / `toe` / `toe_inv` / `get_ST_mid` / `get_Cs` 与两轮 32 次二分），以及 `Vector3.rotated`（libm 天花板）与 `Vector3.outer`（要 `Basis`，挂在 #15 那个范围拍板下）。
+
 ### 1.177 bool 字面量进全局函数的数值位：101 位里引擎只拒三处，收的那 97 格此前一半在运行期崩（2026-10-14，S362，语料 365）
 
 - **量法**：把 `GLOBAL_ARG_TYPES` 里 64 个函数的 101 个 int / float 位**逐位塞 `false`**，一格一份脚本、一次 spawn（解析期报错整份作废）；「跟第一参走」那族的第三位与 bool 当第一参的样子由 `fold38` / `fold39` 补齐。
