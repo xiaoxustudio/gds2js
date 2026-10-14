@@ -779,6 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.182 宿主裸方法名当值用的名单一次扫齐：15 名 → 97 名，另 15 支 `_x` 虚方法是第三种句子（2026-10-14，S366，语料 368）
+
+- **一次数完再逐名量**：`ClassDB.class_get_method_list("SceneTree")` 给 113 名（`Object` 那 62 名全在其中），一格一份脚本 spawn 量「裸名当值」—— 这一族混着编译期拒，packed probe 分不出是谁。读数 `tmp/hostnames/readings.txt`，尺 `fold45.mts`。
+- **97 名给 typeof 25 的 Callable**（打印 `SceneTree(<文件>)::<名>`），其中 82 名此前被解析期一句 `Identifier "…" not declared` 拦掉 —— 是「合法代码被过拦」那一类，S358 当时只逐支量了 15 名。
+- **另 15 名是虚方法那一族**（`_process` / `_init` / `_to_string` / `_get` / `_set` / `_notification` / `_iter_*`…），引擎给的是 `Compile Error: Identifier not found: _process` —— 与一般没声明名字那句 `Identifier "X" not declared in the current scope.` **不是一样**，出货照旧拦，差的只是句子形状。
+- **`_initialize` 是个陷阱**：探针里它确实是 Callable，只因探针脚本自己定义了它；宿主给不给没量到，所以不进名单，读数里那一格单独标出。
+- **运行时一字未动**：`get_method()` / `is_valid()` / `is_null()` 全按 Callable 盒子给（`methodCallable` 造的形状与 `Callable(self, "<名>")` 同一口径），所以新名单里那些调用起来还没实现的名字取值合法、`call()` 才响亮拒 —— 语料 368 因此只钉元数据。
+- **对过的两头的口径**：这 97 名与 `GLOBAL_VALUE_NAMES`、`ENGINE_CLASS_NAMES` 零冲突，解析顺序仍是局部 → 全局常量 → 全局函数名 → 引擎类名 → 宿主方法名（`host-collide.mts` 逐名核过）。
+- **门**：`host-value-method-names.test.ts` 97 名逐个钉「不出诊断 + 发出 `rt.methodCallable`」+ 一格钉 15 支虚方法照旧 `undeclared-identifier`；语料 368 三十六行逐字节；`pnpm test` **13785**（103 文件）、typecheck **4/4**、`test:compile` **248/357**（sema 83、响亮拒 26）、`test:diff` **240/240** 逐字节（用例 367、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **367/367**。
+
 ### 1.181 全局函数的元数一次补全 61 名：「Godot 4 有默认实参」这一族假设被读数否掉（2026-10-14，S365）
 
 - **起点是 `screen-arity.mts` 的一次自查**：把「发射式子只取 `a[0]` / `a[1]`，又不在 `BUILTIN_ARITY` 上」的名字全筛出来 —— 六十多支。按公开签名，`ease(x, c, ease_style)`、`pingpong(time, length, pause)`、`is_equal_approx(a, b, tolerance)`、`type_exists(type, inherit)`、`var_to_str(var, pretty_print)`、`inst_to_dict(obj, props_only)` 都该带默认实参，那这就是「静默丢实参」的错值族。
