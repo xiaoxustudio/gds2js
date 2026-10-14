@@ -24,17 +24,26 @@ const EMIT_OPTS_PROBE = { runtimeImport: "rt", hostImport: "host" };
 /** 三张表共用的分类器：编得过就给 okMarker，否则给 UnsupportedError 的 code。 */
 async function classify(src: string, okMarker: string): Promise<string> {
   try {
-    emitModule(lower(await parseSource(src)), EMIT_OPTS_PROBE);
+    const m = lower(await parseSource(src));
+    // S387：元数那两句出自 analyze，先按那两句查一遍再谈发射 —— 只认那两句，别的诊断不参与这张分类器
+    const hit = analyze(m).find((d) => /^Too (few|many) arguments for /.test(d.message));
+    if (hit !== undefined) return hit.code ?? "无码";
+    emitModule(m, EMIT_OPTS_PROBE);
     return okMarker;
   } catch (e) {
     return e instanceof UnsupportedError ? ((e as { code?: string }).code ?? "无码") : "非 UnsupportedError";
   }
 }
 
-const MOD = (body: string): string => `extends SceneTree\n\nfunc _initialize():\n\t${body}\n`;
-const IN = (body: string): string =>
+const MOD = (body: string): string => `extends SceneTree\n\nfunc _initialize():\n\t${body}\n`;const IN = (body: string): string =>
   `extends SceneTree\n\nclass Inner extends RefCounted:\n\tfunc f():\n\t\t${body}\n\nfunc _initialize():\n\tquit()\n`;
 const PRINT = (call: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint(${call})\n\tquit()\n`;
+
+const arityText = async (src: string): Promise<string> => {
+  const m = lower(await parseSource(src));
+  const hit = analyze(m).find((d) => /^Too (few|many) arguments for /.test(d.message));
+  return hit?.message ?? "居然编得过";
+};
 
 // ── ① 全局拒答清单 ─────────────────────────────────────────────────
 // 清单上残留的名字必须真的在发射期抛 emit-builtin —— 实现了却忘了从清单划走，就是清单在烂。
@@ -98,14 +107,7 @@ describe("打印一族的发射与拒答", () => {
 
 // ── ①i 调用栈那一族：四支都发得出，帧打点只进用到它们的模块（S281，语料 273）──
 describe("调用栈一族的发射与帧打点", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ROWS: Array<[string, string]> = [
     ["print_stack()", "rt.gPrintStack()"],
     ["get_stack()", "rt.gGetStack()"],
@@ -153,14 +155,7 @@ describe("调用栈一族的发射与帧打点", () => {
 
 // ── ①c 随机族：八支发成 rt.g*，元数闸门那八句是 4.6.3 一支一名量出来的（S261） ──────
 describe("随机族的发射与元数闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["randi(1)", 'Too many arguments for "randi()" call. Expected at most 0 but received 1.'],
     ["randf(2)", 'Too many arguments for "randf()" call. Expected at most 0 but received 1.'],
@@ -197,14 +192,7 @@ describe("身份族的发射与元数闸门", () => {
   const body = (stmts: string[]): string =>
     `extends SceneTree\n\nfunc _initialize():\n${stmts.map((s) => `\t${s}`).join("\n")}\n`;
   const DECL = ["var a = 1", "var i = 1"];
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["weakref()", 'Too few arguments for "weakref()" call. Expected at least 1 but received 0.'],
     ["weakref(a, a)", 'Too many arguments for "weakref()" call. Expected at most 1 but received 2.'],
@@ -235,14 +223,7 @@ describe("身份族的发射与元数闸门", () => {
 
 // ── ①e RID 族：两支发成 rt.g*，元数三句是 4.6.3 一支一名量出来的（S264，探头 tmp/probe-rid2/*.log、tmp/probe-rid3/tm.gd） ──
 describe("RID 族的发射与元数闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["rid_from_int64()", 'Too few arguments for "rid_from_int64()" call. Expected at least 1 but received 0.'],
     ["rid_from_int64(1, 2)", 'Too many arguments for "rid_from_int64()" call. Expected at most 1 but received 2.'],
@@ -354,14 +335,7 @@ describe("构造式手臂的发射闸门", () => {
 
 // ── ①j 二进制序列那两支：发成 rt.gVarToBytes / rt.gBytesToVar，元数一句照引擎，带对象表的仍拒（S282，语料 274）──
 describe("var_to_bytes 族的发射闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ROWS: Array<[string, string]> = [
     ["var_to_bytes(5)", "rt.gVarToBytes(rt.V.int(5))"],
     ["var_to_bytes_with_objects(5)", "rt.gVarToBytesWithObjects(rt.V.int(5))"],
@@ -391,14 +365,7 @@ describe("var_to_bytes 族的发射闸门", () => {
 
 // ── ①g `inst_to_dict`：发成 rt.gInstToDict、每个类都带一份 dict 身份，元数两句是一支一名量出来的（S269，探头 tmp/probe-inst/）──
 describe("inst_to_dict 的发射与元数闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["inst_to_dict()", 'Too few arguments for "inst_to_dict()" call. Expected at least 1 but received 0.'],
     ["inst_to_dict(1, 2)", 'Too many arguments for "inst_to_dict()" call. Expected at most 1 but received 2.'],
@@ -427,14 +394,7 @@ describe("inst_to_dict 的发射与元数闸门", () => {
 
 // ── ①h `dict_to_inst`：发成 rt.gDictToInst，元数两句与 inst_to_dict 同形（S272，探头 tmp/probe-inst/）──
 describe("dict_to_inst 的发射与元数闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["dict_to_inst()", 'Too few arguments for "dict_to_inst()" call. Expected at least 1 but received 0.'],
     ["dict_to_inst(1, 2)", 'Too many arguments for "dict_to_inst()" call. Expected at most 1 but received 2.'],
@@ -459,14 +419,7 @@ describe("dict_to_inst 的发射与元数闸门", () => {
 
 // ── ①i `is_instance_of`：发成 rt.gIsInstanceOf，元数两句是 `--language en` 量的原文（S274，探头 tmp/probe-is/）──
 describe("is_instance_of 的发射与元数闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["is_instance_of(self)", 'Too few arguments for "is_instance_of()" call. Expected at least 2 but received 1.'],
     ["is_instance_of(self, RefCounted, RefCounted)", 'Too many arguments for "is_instance_of()" call. Expected at most 2 but received 3.'],
@@ -626,15 +579,8 @@ describe("值位置的全局函数名", () => {
     expect(ok, `${name}：期望 ${want}，实得 ${got.slice(0, 90)}`).toBe(true);
   });
 
-  it("单实参那三支的 arity 文案按实测发（引擎是解析期拒，我们是发射期拒）", async () => {
-    const text = async (src: string): Promise<string> => {
-      try {
-        emitModule(lower(await parseSource(src)), EMIT_OPTS_PROBE);
-        return "居然编得过";
-      } catch (e) {
-        return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-      }
-    };
+  it("单实参那三支的 arity 文案按实测发（引擎解析期拒，出货 S387 起也是解析期拒）", async () => {
+    const text = arityText;
     const names: Array<[string, string]> = [["char", "char-arity"], ["var_to_str", "var-to-str-arity"], ["str_to_var", "str-to-var-arity"]];
     for (const [name, code] of names) {
       const call = name === "str_to_var" ? `"1"` : "1";
@@ -650,14 +596,7 @@ describe("值位置的全局函数名", () => {
   });
 
   it("内置函数的实参数按实测区间拦（引擎那两句原文）", async () => {
-    const text = async (src: string): Promise<string> => {
-      try {
-        await emitted(src);
-        return "居然编得过";
-      } catch (e) {
-        return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-      }
-    };
+    const text = arityText;
     // 读数来自 `tmp/probe-arity/arity.log`：一支名两形（少给 / 多给），全部一字不差
     const shapes: Array<[string, number, string]> = [
       ["clamp", 3, "1"], ["angle_difference", 2, "1.0"], ["pingpong", 2, "7.0"],
@@ -721,14 +660,7 @@ describe("值位置的全局函数名", () => {
 
 // ── 全局 max / min 一族的元数闸门：两支变元（≥2）+ 四支定长（恰好 2），两句都是逐格量的（S364，读数 tmp/maxmin/maxmin3.txt，尺 fold48.mts）──
 describe("max / min 一族的元数闸门", () => {
-  const textOf = async (src: string): Promise<string> => {
-    try {
-      await emitted(src);
-      return "居然编得过";
-    } catch (e) {
-      return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-    }
-  };
+  const textOf = arityText;
   const ARITY: Array<[string, string]> = [
     ["maxi(1)", 'Too few arguments for "maxi()" call. Expected at least 2 but received 1.'],
     ["maxi()", 'Too few arguments for "maxi()" call. Expected at least 2 but received 0.'],

@@ -143,4 +143,6 @@ export interface Module {
   usesStack?: boolean;
   /** 取值记号的归属标识：记号表是进程内累积的，跨文件同 `行:列` 会同名抢号（§6 第 61 条），所以每份模块先归一个主 —— `analyze` 写、发射器读回。 */
   markOwner?: string;
+  /** 这份脚本的 `extends` 链顶端挂的是不是宿主基类（跨文件工程才判得出）：判定式子与发射器那条 `hostBaseInChain` 同一条，分析器据此给不给宿主裸方法名那张表（S370 的读数）。 */
+  hostChain?: boolean;
 }

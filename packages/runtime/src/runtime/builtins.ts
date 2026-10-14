@@ -554,26 +554,44 @@ export function gIsFinite(v: Variant): Variant {
   return V.bool(Number.isFinite(fl(v)));
 }
 
-/** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1.0)` 给 nan。
- *  三元以上是**左折**：`max(1, NAN, 2)` 给 2、`max(1.0, 2, 3)` 给 int 3、`max(1, 2, NAN)` 给 2（读数 `tmp/maxmin/{maxmin,maxmin2}.txt`，尺 `fold46.mts` / `fold47.mts`）。 */
+/** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1)` 给 nan。
+ *  三元以上是**左折**：`max(1, NAN, 2)` 给 2、`max(1.0, 2, 3)` 给 int 3、`max(1, 2, NAN)` 给 2（读数 `tmp/maxmin/{maxmin,maxmin2}.txt`，尺 `fold46.mts` / `fold47.mts`）。
+ *  实参按**左到右逐位**转 float，只认 int 与 float：其余形（装箱的 bool / null / String / StringName / NodePath /
+ *  Array / Dictionary / pack / Callable / Color / Vector2 十四形各测两支）都在运行期打断脚本，
+ *  句里点名的是**第一个转不动的位**（`tmp/probe-maxrt/compare53.txt`，S393）。 */
+function maxMinFloat(xs: Variant[], i: number, who: string): number {
+  const v = xs[i] as Variant;
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
+    throw new GodotRuntimeError(
+      `${who}-arg`,
+      `Invalid type in utility function "${who}()". Cannot convert argument ${String(i + 1)} from ${utilityArgLabel(v)} to float.`,
+    );
+  }
+  return fl(v);
+}
+
 export function gMin(...xs: Variant[]): Variant {
-  need2(xs[0]!, xs[1]!, "min");
-  let best = xs[0]!;
+  let best = xs[0] as Variant;
+  let bestN = maxMinFloat(xs, 0, "min");
   for (let i = 1; i < xs.length; i++) {
-    const x = xs[i]!;
-    need2(best, x, "min");
-    if (fl(best) > fl(x)) best = x;
+    const x = maxMinFloat(xs, i, "min");
+    if (bestN > x) {
+      best = xs[i] as Variant;
+      bestN = x;
+    }
   }
   return best;
 }
 
 export function gMax(...xs: Variant[]): Variant {
-  need2(xs[0]!, xs[1]!, "max");
-  let best = xs[0]!;
+  let best = xs[0] as Variant;
+  let bestN = maxMinFloat(xs, 0, "max");
   for (let i = 1; i < xs.length; i++) {
-    const x = xs[i]!;
-    need2(best, x, "max");
-    if (fl(best) < fl(x)) best = x;
+    const x = maxMinFloat(xs, i, "max");
+    if (bestN < x) {
+      best = xs[i] as Variant;
+      bestN = x;
+    }
   }
   return best;
 }

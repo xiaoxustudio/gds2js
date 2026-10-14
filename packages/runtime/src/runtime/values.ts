@@ -2224,7 +2224,7 @@ const SIZE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
 
 /** `String.humanize_size(n)`：参数按 **uint64** 解释（所以负数变成一个巨大值）再转 double；`while (value > 1024)` 严格大于定档，小数位 <100 两位、<1024 一位、再大不留，尾数**截断不四舍五入**；B 档直接印整数本身。 */
 export function strHumanizeSize(v: Variant): Variant {
-  const signed = intArgBig(v, "String.humanize_size() 的参数");
+  const signed = int64ParamBig(v, "String.humanize_size() 的参数");
   const u = signed & ((1n << 64n) - 1n);
   if (u === 0n) return V.str("0 B");
   let value = Number(u);
@@ -2324,7 +2324,19 @@ function sigDigitCap(a: number): number {
   return 17 + z;
 }
 
-/** `String.num(number, decimals)`：`decimals < 0` → 14（`|x| > 10` 再减 `floor(log10|x|)`），超过 32 夹到 32，夹完还为负走 `%.lf` 那一支（默认 6 位）；`nan` / `inf` 先走前两条；结果削尾零。165 格逐字节对账在 `tmp/probe-num/fit3.mts`。 */
+/** 十进制形 `n / 10^k` 再按 `p` 位定点取（平局远离零 —— 平局那三格是 `2.5`→`3`、`0.125` 两位→`0.13`、`10.5` 零位→`11` 量出来的）。 */
+function renderAt(n: bigint, k: number, p: number): string {
+  const ten = 10n ** BigInt(k);
+  const q = 10n ** BigInt(p);
+  const v = n * q;
+  const mag = (v % ten) * 2n >= ten ? v / ten + 1n : v / ten;
+  const s = mag.toString().padStart(p + 1, "0");
+  return p === 0 ? s : `${s.slice(0, s.length - p)}.${s.slice(s.length - p)}`;
+}
+
+/** `String.num(number, decimals)`：`decimals < 0` → 14（`|x| > 10` 再减 `floor(log10|x|)`），超过 32 夹到 32，夹完还为负走 `%.lf` 那一支（默认 6 位）；`nan` / `inf` 先走前两条；结果削尾零。
+ *  关键是**两次取位**：先把这支 double 收敛到十七位有效数字，再从那个十进制值按请求的位数取位 —— 一次取位在边界上会差一格（`String.num(1.0 / 7.0, 16)` 引擎给 `0.1428571428571429`，一次取位给的是 `0.1428571428571428`）。
+ *  898 格逐字节对账在 `packages/runtime/test/string-num-decimals.test.ts`（尺 `tmp/probe-num/{round1,round2}.mts`）。 */
 export function strNumDecimals(x: number, decimals: number): string {
   if (Number.isNaN(x)) return "nan";
   if (!Number.isFinite(x)) return x < 0 ? "-inf" : "inf";
@@ -2337,14 +2349,28 @@ export function strNumDecimals(x: number, decimals: number): string {
   if (p > 32) p = 32;
   if (p < 0) p = 6;
   const a = Math.abs(x);
-  const effP = a === 0 ? p : Math.max(Math.min(p, sigDigitCap(a)), 0);
-  const q = scaledRound64(a, effP).toString().padStart(effP + 1, "0");
-  const ip = q.slice(0, q.length - effP) || "0";
-  const fp = q.slice(q.length - effP).padEnd(p, "0");
-  const body = p === 0 ? ip : `${ip}.${fp}`;
-  const out = stripTrailingZeros(body);
+  // 第一次取位：十七位有效数字（`sigDigitCap` 可能给负数 —— 那是整数部分本身就超过十七位，`DBL_MAX` 那一头）
+  const cap = a === 0 ? p : sigDigitCap(a);
+  let n: bigint;
+  let k: number;
+  if (cap >= 0) {
+    n = scaledRound64(a, cap);
+    k = cap;
+  } else {
+    const unit = 10n ** BigInt(-cap);
+    const q = scaledRound64(a, 0);
+    const t = (q % unit) * 2n >= unit ? q / unit + 1n : q / unit;
+    n = t * unit;
+    k = 0;
+  }
+  // 第二次取位之后再削零。削零**之前**的串长过 324 个字符，引擎给的是空串（`String.num(1.7976931348623157e308, 15)` 325 → 空、`…14)` 324 → 出；`1e300` 到 20 位 322 出、24 位 326 空，读数 `tmp/probe-num/compare30.txt`）。
+  // **负号占那一格**：同一支 `1e300` 正值到 22 位还出（不含号 324）、23 位空，负值 22 位就空（含号 325）——
+  // 二十二档两侧各量一遍，读数 `tmp/probe-numsign/compare45.txt`（S390），所以长度按「符号 + 数字串」判。
+  const body = renderAt(n, k, p);
   // 符号一律跟着实参走：一格一脚本实测 `String.num(-0.0, 2)` 给 `-0.0`、`(-0.0, 0)` 给 `-0`。
-  return `${x < 0 || Object.is(x, -0) ? "-" : ""}${out}`;
+  const sign = x < 0 || Object.is(x, -0) ? "-" : "";
+  if (body.length + sign.length > 324) return "";
+  return `${sign}${stripTrailingZeros(body)}`;
 }
 
 /** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
@@ -2353,12 +2379,12 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
     case "chr": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.chr() 缺少参数");
-      return stringChr(v);
+      return stringChr(V.int(Number(BigInt.asIntN(32, int64ParamBig(v, "String.chr() 的实参")))));
     }
     case "num": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.num() 缺少参数");
-      const d = args[1] === undefined ? -1 : Number(intArgBig(args[1], "String.num() 的 decimals"));
+      const d = args[1] === undefined ? -1 : Number(BigInt.asIntN(32, int64ParamBig(args[1], "String.num() 的 decimals")));
       if (v.t === Tag.FLOAT) return V.str(strNumDecimals(v.v as number, d));
       if (v.t === Tag.INT) return V.str(strNumDecimals(intToNum(v.v as IntPayload), d));
       if (v.t === Tag.BOOL) return V.str(strNumDecimals(v.v ? 1 : 0, d));

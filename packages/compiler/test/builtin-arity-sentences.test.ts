@@ -8,20 +8,15 @@
  * 多给实参今天编得过、按最远那几位发出去。
  */
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
-import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
-
-const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function sentence(call: string): Promise<string> {
-  try {
-    emitModule(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\tprint(${call})\n\tquit()\n`)), OPTS);
-    return "居然编得过";
-  } catch (e) {
-    return e instanceof UnsupportedError ? e.message : "非 UnsupportedError";
-  }
+  // S387 起这两句出自 analyze（引擎本来就是解析期拒）：探针跟着搬到那一段，句子文本一格没改。
+  const src = `extends SceneTree\n\nfunc _initialize():\n\tprint(${call})\n\tquit()\n`;
+  const hit = analyze(lower(await parseSource(src))).find((d) => /^Too (few|many) arguments for /.test(d.message));
+  return hit?.message ?? "居然编得过";
 }
 
 const SENTENCES: Array<[string, string]> = [

@@ -230,7 +230,10 @@ describe("runtime/values · String 方法族", () => {
     eq("076", "chr(-1) 被换成 U+FFFD", S(stringStatic("chr", [I(-1)])), FF);
     eq("076", "chr(0xD800) 代理区换 U+FFFD", S(stringStatic("chr", [I(0xd800)])), FF);
     eq("076", "chr(0x10FFFF) 还在上界内", S(stringStatic("chr", [I(0x10ffff)])), String.fromCodePoint(0x10ffff));
-    eq("076", "chr 的 bigint 载荷越界换 U+FFFD", S(stringStatic("chr", [I(9007199254740993n)])), FF);
+    eq("076", "chr 的 bigint 载荷按 int32 回绕（S392 量回：2^53+1 给 U+0001，不是 FFFD）", S(stringStatic("chr", [I(9007199254740993n)])), String.fromCodePoint(1));
+    eq("392", "chr(2^53) 绕回 0 才换 FFFD", S(stringStatic("chr", [I(9007199254740992n)])), FF);
+    eq("392", "chr(2^32+2) 绕回 2", S(stringStatic("chr", [I(4294967298)])), String.fromCodePoint(2));
+    eq("392", "chr(2^33) 绕回 0", S(stringStatic("chr", [I(8589934592)])), FF);
     eq("076", "chr(2.7) 向零截断", S(stringStatic("chr", [F(2.7)])), S(stringStatic("chr", [I(2)])));
     eq("076", "chr(true) 当 1", S(stringStatic("chr", [V.bool(true)])), S(stringStatic("chr", [I(1)])));
     eq("076", "num(42) 走浮点格式", S(stringStatic("num", [I(42)])), "42.0");

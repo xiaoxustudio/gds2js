@@ -89,6 +89,13 @@ describe("runtime/global-callable · 全局函数的 Callable 值", () => {
     eq("239", "callv 数量对得上就照调（含零实参 bind 的那支）", `${call("abs", "callv", arrOf(I(-4)))}|${call("max", "callv", arrOf(I(1), I(7)))}|${run(() => method(method(globalCallable("abs"), "bind", [I(-9)]), "callv", [arrOf()]))}`, "2|4|2|7|2|9");
   });
 
+  it("388 · max / min 的区间是 2..∞：三支四支照调，少给那一句不动", async () => {
+    eq("388", "call 三支与四支（引擎给 3 与 1）", `${call("max", "call", I(1), I(2), I(3))}|${call("min", "call", I(1), I(2), I(3), I(4))}`, "2|3|2|1");
+    eq("388", "callv 三支照调", call("max", "callv", arrOf(I(1), I(2), I(3))), "2|3");
+    eq("388", "少给那一句仍是必填数 2", call("max", "call", I(1)), "Invalid call to function '@GlobalScope::max (Callable)'. Expected 2 argument(s).");
+    eq("388", "必填数仍是 2（get_argument_count 那位没动）", run(() => method(globalCallable("max"), "get_argument_count", [])), "2|2");
+  });
+
   it("239 · 没实现的式子只拒调用，不拒取值", async () => {
     // 随机族那七支已入派发表（S261）、调用栈那一族四支也跟着 S281 入了，这里只剩打印族。
     const refused = ["prints", "printt", "print_rich", "print_verbose", "print"];

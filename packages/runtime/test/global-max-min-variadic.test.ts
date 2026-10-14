@@ -4,10 +4,11 @@
  * 26 格逐格钉引擎读数 —— 尺 `tmp/probe-argtype/fold48.mts`，读数 `tmp/maxmin/maxmin3.txt`；语料 367 另钉一遍端到端。
  */
 import { describe, expect, it } from "vitest";
+import { GodotRuntimeError } from "@gds2js/runtime/runtime/errors";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { gMax, gMin } from "@gds2js/runtime/runtime/builtins";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
-import { show } from "@gds2js/runtime/runtime/values";
+import { GArray, GDict, show } from "@gds2js/runtime/runtime/values";
 
 function arg(tok: string): Variant {
   if (tok === "NAN") return V.float(NaN);
@@ -57,5 +58,54 @@ describe("全局 max / min 的左折", () => {
     expect(show(gMax(V.int(1), V.int(2)))).toBe("2");
     expect(show(gMin(V.int(1), V.int(2)))).toBe("1");
     expect(show(gMax(V.float(NaN), V.float(1.0)))).toBe("nan");
+  });
+});
+
+/**
+ * 实参逐位转 float 那一半（S393）：只认 int 与 float，其余形在**运行期**打断脚本，
+ * 句里点名的是左起第一个转不动的位 —— 尺 `tmp/probe-maxrt/round1.mts`（十四形各装箱、两支各一格，
+ * 解析期证不出来才走到这里），读数 `tmp/probe-maxrt/compare53.txt`。
+ * 上一轮 S388 把容器两形在解析期用自写句拦下，本轮那条通道接进来，解析期因此不再拦容器。
+ */
+const BAD: Array<[string, Variant, string]> = [
+  ["bool", V.bool(true), "bool"],
+  ["null", V.nil(), "Nil"],
+  ["String", V.str("3"), "String"],
+  ["StringName", V.stringName("a"), "StringName"],
+  ["Array", V.array(new GArray([V.int(1)])), "Array"],
+  ["Dictionary", V.dict(new GDict()), "Dictionary"],
+];
+
+function msgOf(fn: (...xs: Variant[]) => Variant, args: Variant[]): string {
+  try {
+    fn(...args);
+    return "没抛";
+  } catch (e) {
+    return e instanceof Error ? e.message : `非 Error: ${String(e)}`;
+  }
+}
+
+describe("非数值实参走运行期那一句", () => {
+  for (const [label, box, name] of BAD) {
+    it(`${label} 作为第三支时那句原文（两支各一格）`, () => {
+      for (const [fn, f] of [["max", gMax], ["min", gMin]] as const) {
+        expect(msgOf(f, [V.int(1), V.int(2), box])).toBe(
+          `Invalid type in utility function "${fn}()". Cannot convert argument 3 from ${name} to float.`,
+        );
+      }
+    });
+  }
+
+  it("点名的是左起第一个转不动的位", () => {
+    expect(msgOf(gMax, [V.int(1), V.str("x"), V.array(new GArray())])).toBe(
+      'Invalid type in utility function "max()". Cannot convert argument 2 from String to float.',
+    );
+    expect(msgOf(gMin, [V.dict(new GDict()), V.str("x"), V.bool(true)])).toBe(
+      'Invalid type in utility function "min()". Cannot convert argument 1 from Dictionary to float.',
+    );
+  });
+
+  it("抛的是 GodotRuntimeError：脚本打断，不是解析期那句", () => {
+    expect(() => gMax(V.int(1), V.array(new GArray()))).toThrow(GodotRuntimeError);
   });
 });

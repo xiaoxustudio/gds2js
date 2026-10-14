@@ -65,9 +65,6 @@ const BINOP: Record<string, string> = {
 const ABI_KINDS: Array<"int" | "float" | "str"> = ["int", "float", "str"];
 
 function rangeArgList(a: Array<string | undefined>): string {
-  if (a.length > 3) {
-    throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
-  }
   const parts: string[] = [];
   for (const x of a) {
     if (x !== undefined) parts.push(x);
@@ -86,139 +83,6 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   );
 }
 
-/** 4.6.3 解析期那两句原文（探头 `tmp/probe-arity/arity.log`，20 支一名两形）：少给报 `at least`、多给报 `at most`。 */
-function aritySentence(name: string, min: number, max: number, got: number): string {
-  return got < min
-    ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(got)}.`
-    : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(got)}.`;
-}
-
-/** 实测过的内置函数实参区间；表外的名字（`print` / `str` / `range` 这些变元与类型构造器）不拦 —— 没量过就不说。 */
-const BUILTIN_ARITY: Record<string, [number, number]> = {
-  abs: [1, 1],
-  absf: [1, 1],
-  absi: [1, 1],
-  acos: [1, 1],
-  acosh: [1, 1],
-  angle_difference: [2, 2],
-  asin: [1, 1],
-  asinh: [1, 1],
-  atan: [1, 1],
-  atan2: [2, 2],
-  atanh: [1, 1],
-  bezier_derivative: [5, 5],
-  bezier_interpolate: [5, 5],
-  bytes_to_var: [1, 1],
-  bytes_to_var_with_objects: [1, 1],
-  ceil: [1, 1],
-  ceilf: [1, 1],
-  ceili: [1, 1],
-  char: [1, 1],
-  clamp: [3, 3],
-  clampf: [3, 3],
-  clampi: [3, 3],
-  convert: [2, 2],
-  cos: [1, 1],
-  cosh: [1, 1],
-  cubic_interpolate: [5, 5],
-  cubic_interpolate_angle: [5, 5],
-  cubic_interpolate_in_time: [8, 8],
-  db_to_linear: [1, 1],
-  deg_to_rad: [1, 1],
-  dict_to_inst: [1, 1],
-  ease: [2, 2],
-  error_string: [1, 1],
-  exp: [1, 1],
-  floor: [1, 1],
-  floorf: [1, 1],
-  floori: [1, 1],
-  fmod: [2, 2],
-  fposmod: [2, 2],
-  get_stack: [0, 0],
-  hash: [1, 1],
-  inst_to_dict: [1, 1],
-  instance_from_id: [1, 1],
-  inverse_lerp: [3, 3],
-  is_equal_approx: [2, 2],
-  is_finite: [1, 1],
-  is_inf: [1, 1],
-  is_instance_id_valid: [1, 1],
-  is_instance_of: [2, 2],
-  is_instance_valid: [1, 1],
-  is_nan: [1, 1],
-  is_same: [2, 2],
-  is_zero_approx: [1, 1],
-  len: [1, 1],
-  lerp: [3, 3],
-  lerp_angle: [3, 3],
-  lerpf: [3, 3],
-  linear_to_db: [1, 1],
-  log: [1, 1],
-  max: [2, Number.POSITIVE_INFINITY],
-  maxf: [2, 2],
-  maxi: [2, 2],
-  min: [2, Number.POSITIVE_INFINITY],
-  minf: [2, 2],
-  mini: [2, 2],
-  move_toward: [3, 3],
-  nearest_po2: [1, 1],
-  pingpong: [2, 2],
-  posmod: [2, 2],
-  pow: [2, 2],
-  print_stack: [0, 0],
-  rad_to_deg: [1, 1],
-  rand_from_seed: [1, 1],
-  randf: [0, 0],
-  randf_range: [2, 2],
-  randfn: [2, 2],
-  randi: [0, 0],
-  randi_range: [2, 2],
-  randomize: [0, 0],
-  remap: [5, 5],
-  rid_allocate_id: [0, 0],
-  rid_from_int64: [1, 1],
-  rotate_toward: [3, 3],
-  round: [1, 1],
-  roundf: [1, 1],
-  roundi: [1, 1],
-  seed: [1, 1],
-  sign: [1, 1],
-  signf: [1, 1],
-  signi: [1, 1],
-  sin: [1, 1],
-  sinh: [1, 1],
-  smoothstep: [3, 3],
-  snapped: [2, 2],
-  snappedf: [2, 2],
-  snappedi: [2, 2],
-  sqrt: [1, 1],
-  step_decimals: [1, 1],
-  str_to_var: [1, 1],
-  tan: [1, 1],
-  tanh: [1, 1],
-  type_convert: [2, 2],
-  type_exists: [1, 1],
-  type_string: [1, 1],
-  var_to_bytes: [1, 1],
-  var_to_bytes_with_objects: [1, 1],
-  var_to_str: [1, 1],
-  weakref: [1, 1],
-  wrap: [3, 3],
-  wrapf: [3, 3],
-  wrapi: [3, 3],
-  typeof: [1, 1],
-};
-
-/** 少给 / 多给在引擎是解析期拒；这里同样在发射期拒，措辞照原文，`code` 沿用已出货那三支的。 */
-function checkBuiltinArity(name: string, got: number): void {
-  const ar = BUILTIN_ARITY[name];
-  if (ar === undefined) return;
-  if (got >= ar[0] && got <= ar[1]) return;
-  const code = name === "char" ? "char-arity" : name === "var_to_str" ? "var-to-str-arity"
-    : name === "str_to_var" ? "str-to-var-arity"
-      : name === "convert" || name === "type_convert" ? "convert-arity" : "builtin-arity";
-  throw new UnsupportedError(code, aritySentence(name, ar[0], ar[1], got));
-}
 
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
@@ -497,7 +361,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const resPath = opts.resPath;
   DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
   MODULE_RES_PATH = resPath ?? null;
-  FRAMES_ON = m.usesStack === true || opts.frames === true;
+  FRAMES_ON = m.usesStack === true || opts.frames === true || hasDeadStaticDelegate(m);
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -736,7 +600,14 @@ function dictIdentityLiteral(descVar: string, classPath: string, vars: readonly 
     accRows.push(`${JSON.stringify(v.name)}: ${JSON.stringify(base)}`);
   }
   const acc = accRows.length === 0 ? "{}" : `{${accRows.join(", ")}}`;
-  const reads = kept.map((v) => (v.accessor === null || v.accessor === undefined ? `s.${v.name}` : "rt.V.nil()")).join(", ");
+  const reads = kept
+    .map((v) => {
+      if (v.accessor === null || v.accessor === undefined) return `s.${v.name}`;
+      // 带读写器的属性进表的是后备槽（实测带初值的 setter 属性给那个初值，没初值的给 `<null>`，`tmp/pos/compare9.txt` 02/03）
+      const slot = propSlot(v);
+      return slot === null ? "rt.V.nil()" : `s.${slot}`;
+    })
+    .join(", ");
   return `rt.registerDictIdentity(${descVar}, ${res}, ${JSON.stringify(classPath)}, ${names}, ${acc}, (o) => { const s = o as ${className}; return [${reads}]; });`;
 }
 
@@ -805,24 +676,61 @@ function staticVarSlotsLiteral(className: string, vars: readonly VarDecl[]): str
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
 }
 
-/** 带读写器的属性：发成 JS 的 get/set，不发初值。 */
+/** static 属性委托到实例方法那一形要在运行期打引擎那块 ERROR（语料 371），要打就得先有帧栈。 */
+function hasDeadStaticDelegate(m: Module): boolean {
+  const dead = (vars: readonly VarDecl[], statics: Set<string>): boolean =>
+    vars.some((v) => {
+      const a = v.accessor;
+      if (!v.isStatic || a === null || a === undefined) return false;
+      const g = a.getter;
+      const s = a.setter;
+      return (g !== null && g.kind === "method" && !statics.has(g.method)) || (s !== null && s.kind === "method" && !statics.has(s.method));
+    });
+  const walk = (vars: readonly VarDecl[], funcs: readonly FuncDecl[], inner: readonly ClassDecl[]): boolean =>
+    dead(vars, new Set(funcs.filter((f) => f.isStatic).map((f) => f.name))) || inner.some((c) => walk(c.vars, c.funcs, c.innerClasses));
+  return walk(m.vars, m.funcs, m.innerClasses);
+}
+
+/** 带读写器的属性也留一个后备槽：初值照评（副作用与它在字段里的次序都是实测的，`tmp/pos/compare8.txt`），没有 getter 时读出来的就是它，写属性不动它。
+ *  没写初值也没 getter 时槽装的是**声明类型的零值** —— `var x: int: set = _s` 实测读 0（typeof 2），不是 null；`Variant` 那一形才给 null。 */
+function propSlot(v: VarDecl): string | null {
+  const a = v.accessor;
+  if (a === null || a === undefined) return null;
+  return v.init !== null || a.getter === null ? `__gd_store_${v.name}` : null;
+}
+
+function propSlotInit(v: VarDecl): string {
+  return `  ${v.isStatic ? "static " : ""}${propSlot(v)} = ${slotInit(v.type, v.init, v.isStatic)};`;
+}
+
+/** 带读写器的属性：发成 JS 的 get/set，`static var` 那一维发 static 访问器。 */
 function emitAccessors(v: VarDecl): string[] {
   const a = v.accessor;
   if (a === null || a === undefined) return [];
   const out: string[] = [];
+  const st = v.isStatic ? "static " : "";
+  const slot = propSlot(v);
+  const selfRef = v.isStatic ? `${CURRENT_CLASS}.` : "this.";
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
-  out.push(`  get ${v.name}() {`);
+  // static 属性委托到实例方法时那一次调用不发生：引擎运行期打一块 ERROR，读给 null、写什么也不做（实测 `tmp/pos/compare9.txt` 00/01，语料 371）
+  const dead = (method: string): string => `rt.reportNonStaticCall(${JSON.stringify(method)})`;
+  const unreachable = (method: string): boolean => v.isStatic && !STATIC_FUNCS.has(method);
+  // 委托目标是 static 方法时接收者是类：实例上没有那个槽（实测 static 方法能给实例属性当读写器）
+  const delegate = (method: string, arg: string): string =>
+    `${STATIC_FUNCS.has(method) ? `${CURRENT_CLASS}.` : "this."}${method}(${arg})`;
+  out.push(`  ${st}get ${v.name}() {`);
   if (a.getter === null) {
-    out.push("    // 只带 set 的属性读出来是 null（实测 typeof 0，写它照样跑 setter）");
-    out.push("    return rt.V.nil();");
+    out.push(slot === null ? "    return rt.V.nil();" : `    return ${selfRef}${slot};`);
   } else if (a.getter.kind === "inline") out.push(...lines(a.getter.body));
-  else out.push(`    return this.${a.getter.method}();`);
+  else if (unreachable(a.getter.method)) out.push(`    return ${dead(a.getter.method)};`);
+  else out.push(`    return ${delegate(a.getter.method, "")};`);
   out.push("  }");
   const pname = a.setter !== null && a.setter.kind === "inline" ? a.setter.param : "value";
-  out.push(`  set ${v.name}(${pname}) {`);
+  out.push(`  ${st}set ${v.name}(${pname}) {`);
   if (a.setter === null) out.push(`    // 只读属性：Godot 里写它是静默无操作，不是报错`);
   else if (a.setter.kind === "inline") out.push(...lines(a.setter.body));
-  else out.push(`    this.${a.setter.method}(value);`);
+  else if (unreachable(a.setter.method)) out.push(`    ${dead(a.setter.method)};`);
+  else out.push(`    ${delegate(a.setter.method, "value")};`);
   out.push("  }");
   return out;
 }
@@ -1439,6 +1347,7 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
   for (const v of vars) {
     mark(lineBase + out.length, v.loc);
     if (v.accessor) {
+      if (propSlot(v) !== null) out.push(propSlotInit(v));
       out.push(...emitAccessors(v));
       continue;
     }
@@ -1475,7 +1384,10 @@ function emitFieldDeclarations(vars: VarDecl[], signals: SignalDecl[]): string[]
   const out: string[] = [];
   for (const s of signals) out.push(`  declare ${s.name}: rt.Signal;`);
   for (const v of vars) {
-    if (v.isStatic || v.accessor) continue;
+    if (v.isStatic) continue;
+    const slot = propSlot(v);
+    if (slot !== null) out.push(`  declare ${slot}: rt.Variant;`);
+    if (v.accessor) continue;
     out.push(`  declare ${v.name}: rt.Variant;`);
   }
   if (out.length > 0) out.push("");
@@ -1492,7 +1404,14 @@ function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: b
     out.push(`    this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
   }
   for (const v of vars) {
-    if (v.isStatic || v.accessor) continue;
+    if (v.isStatic) continue;
+    const slot = propSlot(v);
+    if (slot !== null) {
+      mark(lineBase + out.length, v.loc);
+      out.push(`    this.${slot} = ${slotInit(v.type, v.init)};`);
+      continue;
+    }
+    if (v.accessor) continue;
     mark(lineBase + out.length, v.loc);
     out.push(`    this.${v.name} = ${slotInit(v.type, v.init)};`);
   }
@@ -1507,6 +1426,7 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
   for (const v of vars) {
     mark(lineBase + out.length, v.loc);
     if (v.accessor) {
+      if (v.isStatic && propSlot(v) !== null) out.push(propSlotInit(v));
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }
@@ -3462,7 +3382,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
     const builtin = BUILTIN[name];
     if (builtin) {
-      checkBuiltinArity(name, e.args.length);
       return builtin(args);
     }
     if (name === "super") {

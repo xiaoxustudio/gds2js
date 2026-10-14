@@ -1,0 +1,19 @@
+merged 并新键 → { "a": 1, "b": 2 } | 接收者 { "a": 1 }
+merged 同键不覆盖 → { "a": 1 }
+merged 同键覆盖 → { "a": 2 }
+merged 的键序 → { "b": 1, "a": 2, "c": 3 }
+merged 不深挖 → { "k": { "y": 2 } }
+merged 给的是新字典 → { "x": 1 } | { "x": 1, "y": 2 }
+merged 的值是浅拷 → { "n": 9 }
+get_or_add 键已在 → 1 | { "k": 1 }
+get_or_add 键不在 → 9 | { "k": 1, "j": 9 }
+get_or_add 单实参落 null → <null> | { "k": 1, "j": 9, "z": <null> }
+get_or_add 键序 → ["k", "m", "j"]
+get_or_add 装的是同一份 → { "k": { "x": 1, "y": 2 } } | { "x": 1, "y": 2 }
+recursive_equal 相等 → true
+recursive_equal 计数不影响 → true | true
+recursive_equal 嵌套 → true
+recursive_equal 键序 → true
+recursive_equal 不等 → false
+recursive_equal 深层不等 → false
+recursive_equal 与 == 同口径 → true

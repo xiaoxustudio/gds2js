@@ -13,6 +13,7 @@ import {
   GLOBAL_ARG_SUPPRESS_OTHER,
   GLOBAL_ARG_SHOULD_BE,
   GLOBAL_ARG_TYPES,
+  GLOBAL_ARG_VARARG,
 } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
@@ -113,8 +114,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
     null,
   );
 
-  // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366）：只给根模块 —— 内部类里实测照样 `not declared`，`extends` 别的脚本那一形还没接（§6 第 60 条）
-  const hostFace = m.extends === "SceneTree" ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
+  // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366 / S368）：根模块与 `extends` 链顶端挂着宿主的那一份认（S369），其余照旧
+  const hostFace = m.extends === "SceneTree" || m.hostChain === true ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
   checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
@@ -127,11 +128,19 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
+  checkDictMethodArity(m, diags);
+  checkArrayMethodArity(m, diags);
+  checkCtorSignatures(m, diags);
+  checkStringMethodArity(m, diags);
+  checkNamedFace(m, STRINGNAME_FACE, diags);
+  checkNamedFace(m, NODE_PATH_FACE, diags);
+  checkOperandPairs(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
+  checkPropertyDelegates(m, diags);
 
   return diags;
 }
@@ -409,8 +418,8 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
 /** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值 —— 都不是 void，别顺手加进来。 */
 const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
 const VOID_DICT_METHODS = new Set(["clear"]);
-/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 返回 bool、`insert` / `resize` 返回 Error 状态码，都不是 void。 */
-const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set"]);
+/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。 */
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear"]);
 /** 只在零参时才是 void 的 pack 方法。 */
 const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
 /** 脚本对象接收者那一侧：只有 `set`，取值是解析期拒（与 pack 的 `set` 同一句）。`get` 返回 Variant、`call` / `callv` 都有返回值，`free()` 是运行期的事，都不在这张表里。 */
@@ -846,8 +855,11 @@ function checkConstAssign(m: Module, diags: Diagnostic[], hostFace: Set<string>)
 function checkBoolOrdering(m: Module, diags: Diagnostic[]): void {
   const isBoolDecl = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name === "bool";
   const moduleBools = new Set<string>(m.vars.filter((v) => isBoolDecl(v.type)).map((v) => v.name));
+  // `const` 左支与字面量同式（`tmp/probe-constrecv/compare60.txt` 的 bool|bool 两格都是第一式）
+  const constBools = new Set<string>(m.vars.filter((v) => v.isConst && isBoolDecl(v.type)).map((v) => v.name));
 
   const litBool = (e: Expr): boolean => e.kind === "lit" && typeof e.value === "boolean";
+  const foldableBool = (e: Expr): boolean => litBool(e) || (e.kind === "ident" && constBools.has(e.name));
 
   const scan = (ss: Stmt[], bools: Set<string>): void => {
     const expr = (e: Expr): void => {
@@ -857,7 +869,7 @@ function checkBoolOrdering(m: Module, diags: Diagnostic[]): void {
             diags.push({
               code: "bool-ordering",
               message:
-                litBool(e.left) && litBool(e.right)
+                foldableBool(e.left) && foldableBool(e.right)
                   ? `Invalid operands to operator ${e.op}, bool and bool.`
                   : `Invalid operands "bool" and "bool" for "${e.op}" operator.`,
               loc: e.loc,
@@ -1273,8 +1285,8 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
-/** 元素槽是第几个实参（1 起），只列判得出的方法：`append` / `find` / `has` / `count` / `fill` 是第 1 参、`insert` / `set` 是第 2 参，文本都是同一套两句。 */
-const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
+/** 元素槽是第几个实参（1 起），只列判得出的方法：`append` / `push_back` / `find` / `has` / `count` / `fill` 是第 1 参、`insert` / `set` 是第 2 参，文本都是同一套两句。 */
+const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, push_back: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
@@ -1304,42 +1316,177 @@ function packArgSource(e: Expr): string | null {
 /** 来源名就是标注名本身的那些（Godot 的文本里就是这么写） */
 const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Dictionary"]);
 
-function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+/** 容器方法那几道闸门共用的一趟走查：按函数体分组（模块级 + 内部类递归），每组是扁平的 IR 节点表。
+ *  lambda 体不进去（它另有一套作用域，见 `checkLambdaScope`），`loc` 不下潜（它只是位置，不是节点）。 */
+function flattenBody(body: Stmt[]): Record<string, unknown>[] {
+  const nodes: Record<string, unknown>[] = [];
+  const scan = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) scan(x);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (obj.kind === "lambda") return;
+    nodes.push(obj);
+    for (const key of Object.keys(obj)) {
+      if (key !== "loc") scan(obj[key]);
+    }
+  };
+  scan(body);
+  return nodes;
+}
+
+function flattenBodies(m: Module): Record<string, unknown>[][] {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
   const collect = (c: ClassDecl): void => {
     for (const f of c.funcs) bodies.push(f.body);
     for (const inner of c.innerClasses) collect(inner);
   };
   for (const c of m.innerClasses) collect(c);
+  return bodies.map(flattenBody);
+}
 
-  for (const body of bodies) {
-    const nodes: Record<string, unknown>[] = [];
-    const scan = (n: unknown): void => {
-      if (Array.isArray(n)) {
-        for (const x of n) scan(x);
-        return;
-      }
-      if (n === null || typeof n !== "object") return;
-      const obj = n as Record<string, unknown>;
-      if (obj.kind === "lambda") return;
-      nodes.push(obj);
-      for (const key of Object.keys(obj)) {
-        if (key !== "loc") scan(obj[key]);
-      }
-    };
-    scan(body);
+/** 同一函数体里被赋过值的名字：静态证明一律作废（证不出就当不知道，宁可漏拦不误拦）。 */
+function reassignedNames(nodes: Record<string, unknown>[]): Set<string> {
+  const out = new Set<string>();
+  for (const n of nodes) {
+    if (n.kind !== "assign") continue;
+    const target = n.target as Record<string, unknown> | undefined;
+    if (target !== undefined && target.kind === "ident" && typeof target.name === "string") out.add(target.name);
+  }
+  return out;
+}
 
+/** 元数两句（`Too few` / `Too many`）按表发，三族容器同一族句子（S305 值类型、S376 pack、S378 字典、S379 数组）。 */
+function arityDiag(
+  table: Record<string, [number, number]>,
+  code: string,
+  method: string,
+  got: number,
+  loc: Diagnostic["loc"],
+): Diagnostic | null {
+  const sig = table[method];
+  if (sig === undefined) return null;
+  if (got >= sig[0] && got <= sig[1]) return null;
+  return {
+    code,
+    message:
+      got < sig[0]
+        ? `Too few arguments for "${method}()" call. Expected at least ${sig[0]} but received ${got}.`
+        : `Too many arguments for "${method}()" call. Expected at most ${sig[1]} but received ${got}.`,
+    loc,
+  };
+}
+
+/** 一面的接收者证明集合 = 该函数体的局部 `var`，加上外面那三层能静态证出这一面的名字：
+ *  模块级 `var` / `const`、本函数的**形参标注**、内部类自己的**字段**（S389 量的模块那一形 + S391 量的后两形，
+ *  读数 `tmp/probe-modrecv/compare{44,47,48}.txt`）。三条重赋值口径都照读数：
+ *  带标注的（模块 var、形参、内部类字段）被重新赋值**仍算**，只有「初值推断」那两条 —— 模块级与内部类字段 ——
+ *  在名字被赋过值时丢掉（模块那条形实测不拦：`var s = "ab"` 后 `s = v` 再 `s.length(1)` 引擎给 `S|ok`）。 */
+function faceReceiverNames(
+  nodes: Record<string, unknown>[],
+  seeded: Map<string, "annot" | "inferred">,
+  assigned: Set<string>,
+  type: string,
+  isInit: (init: Expr) => boolean,
+): Set<string> {
+  const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
+  const out = new Set<string>();
+  for (const [name, how] of seeded) {
+    if (how === "annot") out.add(name);
+    else if (!assigned.has(name)) out.add(name);
+  }
+  const reassigned = reassignedNames(nodes);
+  for (const n of nodes) {
+    if (n.kind !== "var" || typeof n.name !== "string") continue;
+    if (reassigned.has(n.name)) {
+      out.delete(n.name);
+      continue;
+    }
+    if (named(n.type as TypeRef | null)) {
+      out.add(n.name);
+      continue;
+    }
+    const init = n.init as Expr | null;
+    if (init !== null && isInit(init)) out.add(n.name);
+    else out.delete(n.name);
+  }
+  return out;
+}
+
+/** 每个函数体一份「外面证得出的名字」：顶层函数拿模块级那批，内部类的方法拿自己类的字段 ——
+ *  内部类能否看见模块级名字没量过，照 `checkValueMethodArity` 的同一口径不给（宁可漏拦也不误拦）。 */
+function faceScopes(
+  m: Module,
+  type: string,
+  isInit: (init: Expr) => boolean,
+): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> {
+  const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
+  const moduleNames = new Map<string, "annot" | "inferred">();
+  for (const v of m.vars) {
+    if (named(v.type)) moduleNames.set(v.name, "annot");
+    else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
+  }
+
+  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> = [];
+  const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">): void => {
+    for (const f of funcs) {
+      const seeded = new Map(seededBase);
+      for (const p of f.params) if (named(p.type)) seeded.set(p.name, "annot");
+      out.push({ nodes: flattenBody(f.body), seeded });
+    }
+  };
+  collect(m.funcs, moduleNames);
+
+  const collectClass = (c: ClassDecl): void => {
+    const fields = new Map<string, "annot" | "inferred">();
+    for (const v of c.vars) {
+      if (named(v.type)) fields.set(v.name, "annot");
+      else if (v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
+    }
+    collect(c.funcs, fields);
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
+  return out;
+}
+
+/** 任何一处函数体里被赋过值的名字 —— 模块级「初值推断」那一形要按这张总表丢。 */
+function moduleAssignedNames(m: Module): Set<string> {
+  const out = new Set<string>();
+  for (const nodes of flattenBodies(m)) for (const n of reassignedNames(nodes)) out.add(n);
+  return out;
+}
+
+/** 容器方法调用的那一道形状检查：接收者只认「字面量直接当接收者」与「静态证明过的名字」两种，
+ *  字面量那一维由调用方给判据（`{…}` / `[…]` / `"…"` 三族的 IR 形状不同），名字集合是调用方按标注与初值算出来的。 */
+function containerCallArity(
+  n: Record<string, unknown>,
+  table: Record<string, [number, number]>,
+  code: string,
+  names: Set<string>,
+  isLiteral: (obj: Record<string, unknown>) => boolean,
+): Diagnostic | null {
+  if (n.kind !== "call") return null;
+  const callee = n.callee as Record<string, unknown> | undefined;
+  if (callee === undefined || callee.kind !== "attribute") return null;
+  const obj = callee.obj as Record<string, unknown> | undefined;
+  if (obj === undefined) return null;
+  const proven = isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
+  if (!proven) return null;
+  const method = callee.name;
+  if (typeof method !== "string") return null;
+  return arityDiag(table, code, method, ((n.args as Expr[]) ?? []).length, (n.loc as Diagnostic["loc"]) ?? null);
+}
+
+function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+  for (const nodes of flattenBodies(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
     /** 同函数体内 `var v: String` 这一类**带标注的局部 var**：第二种证明，只发一句 */
     const annot = new Map<string, string>();
-    const reassigned = new Set<string>();
-    for (const n of nodes) {
-      if (n.kind === "assign") {
-        const target = n.target as Record<string, unknown> | undefined;
-        if (target !== undefined && target.kind === "ident" && typeof target.name === "string") reassigned.add(target.name);
-      }
-    }
+    const reassigned = reassignedNames(nodes);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
       const type = n.type as TypeRef | null;
@@ -1384,6 +1531,217 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         code: "pack-arg-slot",
         message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${proven}".`,
         loc,
+      });
+    }
+  }
+}
+
+/** Dictionary 方法的元数（S378）：49 名过裁判，存在的 20 名两侧都量到（每名两格 —— 零实参读「至少」、三实参读「至多」，
+ *  `tmp/probe-dict/compare22.txt`）。与值类型五支（S305）、pack 九支（S376）同一族两句。`sort` 在字典上是**零参**（按键排），
+ *  与 Array 那支的 `sort()` 同名同元数但不同语义；`recursive_equal` 要两支（第二支是递归计数）。 */
+const DICT_METHOD_ARITY: Record<string, [number, number]> = {
+  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], erase: [1, 1], find_key: [1, 1],
+  get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
+  is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
+  merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
+};
+
+/** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
+ *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
+function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
+  const assigned = moduleAssignedNames(m);
+  for (const { nodes, seeded } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
+    const dicts = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict");
+    for (const n of nodes) {
+      const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+/** Array 方法的元数（S379）：51 名过裁判，存在的 49 名两侧都量到（每名两格 —— 零实参读「至少」、五实参读「至多」，
+ *  `tmp/probe-arr/{compare23,compare24}.txt`）。`find_custom` / `rfind_custom` 那两名 4.6.3 **仍在**（旧版文档里没有，靠实测量回来的）。 */
+const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
+  all: [1, 1], any: [1, 1], append: [1, 1], append_array: [1, 1], assign: [1, 1], back: [0, 0],
+  bsearch: [1, 2], bsearch_custom: [2, 3], clear: [0, 0], count: [1, 1], duplicate: [0, 1], erase: [1, 1],
+  fill: [1, 1], filter: [1, 1], find: [1, 2], find_custom: [1, 2], front: [0, 0], get: [1, 1],
+  get_typed_builtin: [0, 0], get_typed_class_name: [0, 0], get_typed_script: [0, 0], has: [1, 1],
+  hash: [0, 0], insert: [2, 2], is_empty: [0, 0], is_read_only: [0, 0], is_same_typed: [1, 1],
+  is_typed: [0, 0], make_read_only: [0, 0], map: [1, 1], max: [0, 0], min: [0, 0], pick_random: [0, 0],
+  pop_at: [1, 1], pop_back: [0, 0], pop_front: [0, 0], push_back: [1, 1], push_front: [1, 1], reduce: [1, 2],
+  remove_at: [1, 1], resize: [1, 1], reverse: [0, 0], rfind: [1, 2], rfind_custom: [1, 2], shuffle: [0, 0],
+  size: [0, 0], slice: [1, 4], sort: [0, 0], sort_custom: [1, 1],
+};
+
+/** Array 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Array`（带元素型的截掉那一段）与
+ *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
+function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
+  const assigned = moduleAssignedNames(m);
+  for (const { nodes, seeded } of faceScopes(m, "Array", (init) => init.kind === "array")) {
+    const arrays = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array");
+    for (const n of nodes) {
+      const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+/** String 方法的元数（S380）：109 名过裁判，存在的 108 名两侧都量到（每名两格 —— 零实参读「至少」、五实参读「至多」，
+ *  `tmp/probe-str/compare25.txt`）。三格与直觉不同、只能量回来：`split` / `rsplit` 的**下界是 0**（不填分隔符也收），
+ *  `count` 的上界是 **3**（`from` 与 `to` 都在内），`is_valid_int` / `is_valid_float` 反倒不收那支默认布尔。 */
+const STRING_METHOD_ARITY: Record<string, [number, number]> = {
+  begins_with: [1, 1], bigrams: [0, 0], bin_to_int: [0, 0], c_escape: [0, 0], c_unescape: [0, 0],
+  capitalize: [0, 0], casecmp_to: [1, 1], chr: [1, 1], contains: [1, 1], containsn: [1, 1], count: [1, 3],
+  countn: [1, 3], dedent: [0, 0], ends_with: [1, 1], erase: [1, 2], filecasecmp_to: [1, 1],
+  filenocasecmp_to: [1, 1], find: [1, 2], findn: [1, 2], format: [1, 2], get_base_dir: [0, 0],
+  get_basename: [0, 0], get_extension: [0, 0], get_file: [0, 0], get_slice: [2, 2], get_slice_count: [1, 1],
+  get_slicec: [2, 2], hash: [0, 0], hex_decode: [0, 0], hex_to_int: [0, 0], humanize_size: [1, 1],
+  indent: [1, 1], insert: [2, 2], is_absolute_path: [0, 0], is_empty: [0, 0], is_relative_path: [0, 0],
+  is_subsequence_of: [1, 1], is_subsequence_ofn: [1, 1], is_valid_filename: [0, 0], is_valid_float: [0, 0],
+  is_valid_hex_number: [0, 1], is_valid_html_color: [0, 0], is_valid_identifier: [0, 0], is_valid_int: [0, 0],
+  is_valid_ip_address: [0, 0], join: [1, 1], json_escape: [0, 0], left: [1, 1], length: [0, 0], lpad: [1, 2],
+  lstrip: [1, 1], match: [1, 1], matchn: [1, 1], md5_buffer: [0, 0], md5_text: [0, 0],
+  naturalcasecmp_to: [1, 1], naturalnocasecmp_to: [1, 1], nocasecmp_to: [1, 1], num: [1, 2],
+  num_int64: [1, 3], num_scientific: [1, 1], num_uint64: [1, 3], pad_decimals: [1, 1], pad_zeros: [1, 1],
+  path_join: [1, 1], repeat: [1, 1], replace: [2, 2], replacen: [2, 2], reverse: [0, 0], rfind: [1, 2],
+  rfindn: [1, 2], right: [1, 1], rpad: [1, 2], rsplit: [0, 3], rstrip: [1, 1], sha1_buffer: [0, 0],
+  sha1_text: [0, 0], sha256_buffer: [0, 0], sha256_text: [0, 0], similarity: [1, 1], simplify_path: [0, 0],
+  split: [0, 3], split_floats: [1, 2], strip_edges: [0, 2], strip_escapes: [0, 0], substr: [1, 2],
+  to_ascii_buffer: [0, 0], to_camel_case: [0, 0], to_float: [0, 0], to_int: [0, 0], to_kebab_case: [0, 0],
+  to_lower: [0, 0], to_pascal_case: [0, 0], to_snake_case: [0, 0], to_upper: [0, 0], to_utf16_buffer: [0, 0],
+  to_utf32_buffer: [0, 0], to_utf8_buffer: [0, 0], to_wchar_buffer: [0, 0], trim_prefix: [1, 1],
+  trim_suffix: [1, 1], unicode_at: [1, 1], uri_decode: [0, 0], uri_encode: [0, 0], validate_filename: [0, 0],
+  validate_node_name: [0, 0], xml_escape: [0, 1], xml_unescape: [0, 0],
+};
+
+/** String 方法的元数在解析期就拦。接收者认两种静态证明 —— 标注 `String` 与字符串字面量（含直接当接收者）；
+ *  `&"…"` 与 `"…"` 前加记号的那两面（StringName / NodePath）走下面那两道同形状的闸门，成员表各是各的（S389）。 */
+function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
+  const isStringLit = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === "string";
+  const assigned = moduleAssignedNames(m);
+  for (const { nodes, seeded } of faceScopes(m, "String", (init) => init.kind === "lit" && init.lit === "string")) {
+    const strs = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
+    for (const n of nodes) {
+      const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+/** StringName 那一面：102 名的 `[下界, 上界]` 与 String 那张表一字一样（0 处漂移），另六名引擎当场回「找不到成员」那两句 ——
+ *  两面各 102 + 6 格、NodePath 13 格，尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `tmp/probe-snfaces/compare{42,43}.txt`（S389）。 */
+const STRINGNAME_NO_METHOD = new Set(["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"]);
+
+/** NodePath 那一面只认这十名（`hash` 也在内，元数 [0,0]），元数照量来的两张界。 */
+const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
+  get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
+  get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
+  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
+};
+
+const NODE_PATH_NO_METHOD = new Set(["simplify", "is_same", "length"]);
+
+/** 那两面共用的形状：接收者认「`&"…"` / `^"…"` 字面量直接当接收者」与「标注或初值静态证得出的名字」两种，
+ *  名字被重新赋值过就丢掉 —— 与 String / 字典 / 数组那三道闸门同一条口径。 */
+interface NamedFace {
+  type: string;
+  lit: string;
+  arity: Record<string, [number, number]>;
+  ghosts: ReadonlySet<string>;
+  arityCode: string;
+  ghostCode: string;
+}
+
+function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
+  const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
+  const assigned = moduleAssignedNames(m);
+  for (const { nodes, seeded } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
+    const names = faceReceiverNames(nodes, seeded, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "attribute") continue;
+      const obj = callee.obj as Record<string, unknown> | undefined;
+      if (obj === undefined) continue;
+      const method = callee.name;
+      if (typeof method !== "string") continue;
+      const proven = isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
+      if (!proven) continue;
+      const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      if (face.ghosts.has(method)) {
+        diags.push({ code: face.ghostCode, message: `Cannot find member "${method}" in base "${face.type}".`, loc });
+        diags.push({ code: face.ghostCode, message: `Function "${method}()" not found in base ${face.type}.`, loc });
+        continue;
+      }
+      const d = arityDiag(face.arity, face.arityCode, method, ((n.args as Expr[]) ?? []).length, loc);
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+const STRINGNAME_FACE: NamedFace = {
+  type: "StringName",
+  lit: "string_name",
+  arity: STRING_METHOD_ARITY,
+  ghosts: STRINGNAME_NO_METHOD,
+  arityCode: "string-name-arity",
+  ghostCode: "string-name-member",
+};
+
+const NODE_PATH_FACE: NamedFace = {
+  type: "NodePath",
+  lit: "node_path",
+  arity: NODE_PATH_METHOD_ARITY,
+  ghosts: NODE_PATH_NO_METHOD,
+  arityCode: "node-path-arity",
+  ghostCode: "node-path-member",
+};
+
+/** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，
+ *  既不是 `Too few` 也不是 `Too many`。表里只有引擎当场回了这一句的那些签名（一名五形 × 20 名 = 100 格，
+ *  `tmp/probe-ctor/compare35.txt`）；没量过的类型组合照旧放过。`Color` 五形全收，所以整名不入表；
+ *  `bool` 的单支 Array / String / Dictionary 由既有那道 `checkCall` 发同一句，表里不重复登。 */
+const CTOR_REFUSED: Record<string, string[][]> = {
+  int: [["int", "int"], ["int", "int", "int"]],
+  float: [["int", "int"], ["int", "int", "int"]],
+  bool: [["int", "int"], ["int", "int", "int"]],
+  String: [["int"], ["int", "int"], ["int", "int", "int"]],
+  StringName: [["int"], ["int", "int"], ["int", "int", "int"]],
+  NodePath: [["int"], ["int", "int"], ["int", "int", "int"]],
+  Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Dictionary: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Vector2: [["int"], ["int", "int", "int"], ["String"]],
+  Vector2i: [["int"], ["int", "int", "int"], ["String"]],
+  Vector3: [["int"], ["int", "int"], ["String"]],
+  Vector3i: [["int"], ["int", "int"], ["String"]],
+  Callable: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Signal: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  RID: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedByteArray: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedInt32Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedFloat64Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedStringArray: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+};
+
+function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
+  const shadowed = new Set(m.funcs.map((f) => f.name));
+  for (const nodes of flattenBodies(m)) {
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "ident" || typeof callee.name !== "string") continue;
+      const name = callee.name;
+      if (shadowed.has(name)) continue;
+      const bad = CTOR_REFUSED[name];
+      if (bad === undefined) continue;
+      const kinds = ((n.args as Expr[]) ?? []).map((a) => literalTypeName(a));
+      if (kinds.some((k) => k === null)) continue;
+      const sig = kinds.join(", ");
+      if (!bad.some((t) => t.join(", ") === sig)) continue;
+      diags.push({
+        code: "ctor-signature",
+        message: `No constructor of "${name}" matches the signature "${name}(${sig})".`,
+        loc: (n.loc as Diagnostic["loc"]) ?? null,
       });
     }
   }
@@ -1901,10 +2259,24 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
   const instanceFuncs = new Set(funcs.filter((f) => !f.isStatic).map((f) => f.name));
   if (instanceVars.size === 0 && instanceFuncs.size === 0) return;
 
+  // 静态语境共三种：静态函数体、静态变量初值、静态读写器体（后一支引擎用的是合成函数名 `@<字段>_getter()` / `@<字段>_setter()`）。
+  // 句子里「from …」那一截按语境换，判据与走查一模一样（读数 `tmp/pos/compare12.txt`）。
+  const contexts: Array<{ who: string; body: Stmt[]; init: Expr | null; params: string[] }> = [];
   for (const f of funcs) {
-    if (!f.isStatic) continue;
+    if (f.isStatic) contexts.push({ who: `the static function "${f.name}()"`, body: f.body, init: null, params: f.params.map((p) => p.name) });
+  }
+  for (const v of vars) {
+    if (!v.isStatic) continue;
+    contexts.push({ who: "a static variable initializer", body: [], init: v.init, params: [] });
+    const a = v.accessor;
+    if (a === null || a === undefined) continue;
+    if (a.getter !== null && a.getter.kind === "inline") contexts.push({ who: `the static function "@${v.name}_getter()"`, body: a.getter.body, init: null, params: [] });
+    if (a.setter !== null && a.setter.kind === "inline") contexts.push({ who: `the static function "@${v.name}_setter()"`, body: a.setter.body, init: null, params: [a.setter.param] });
+  }
+
+  for (const ctx of contexts) {
     const local = new Set<string>();
-    collectLocalNames(f.body, f.params.map((p) => p.name), local);
+    collectLocalNames(ctx.body, ctx.params, local);
 
     const expr = (e: Expr): void => {
       switch (e.kind) {
@@ -1912,7 +2284,7 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           if (!local.has(e.name) && instanceVars.has(e.name)) {
             diags.push({
               code: "static-access-var",
-              message: `Cannot access non-static variable "${e.name}" from the static function "${f.name}()".`,
+              message: `Cannot access non-static variable "${e.name}" from ${ctx.who}.`,
               loc: e.loc,
             });
           }
@@ -1921,7 +2293,7 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           if (e.callee.kind === "ident" && !local.has(e.callee.name) && instanceFuncs.has(e.callee.name)) {
             diags.push({
               code: "static-call-func",
-              message: `Cannot call non-static function "${e.callee.name}()" from the static function "${f.name}()".`,
+              message: `Cannot call non-static function "${e.callee.name}()" from ${ctx.who}.`,
               loc: e.loc,
             });
           }
@@ -2002,7 +2374,8 @@ function checkStaticAccess(funcs: FuncDecl[], vars: VarDecl[], diags: Diagnostic
           return;
       }
     };
-    f.body.forEach(stmt);
+    if (ctx.init !== null) expr(ctx.init);
+    ctx.body.forEach(stmt);
   }
 }
 
@@ -2126,18 +2499,33 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
 
   const walkClass = (c: ClassDecl): void => {
     const own = new Set(c.funcs.map((f) => f.name));
+    const report = (local: Set<string>) => (name: string, loc: Loc): void => {
+      if (outerFuncs.has(name) && !own.has(name) && !local.has(name)) {
+        diags.push({
+          code: "class-outer-func",
+          message: `Function "${name}()" not found in base self.`,
+          loc,
+        });
+      }
+    };
     for (const f of c.funcs) {
       const local = new Set<string>();
       collectLocalNames(f.body, f.params.map((p) => p.name), local);
-      scanStmts(f.body, (name, loc) => {
-        if (outerFuncs.has(name) && !own.has(name) && !local.has(name)) {
-          diags.push({
-            code: "class-outer-func",
-            message: `Function "${name}()" not found in base self.`,
-            loc,
-          });
-        }
-      });
+      scanStmts(f.body, report(local));
+      // 形参默认值与函数体同一口径：引擎一样查（读数 `tmp/pos/compare13.txt` 10）
+      for (const p of f.params) if (p.default !== null) scanExpr(p.default, report(local));
+    }
+    // 字段初值与读写器体也在内部类那一面里：调外层方法同样是这一句（读数 `tmp/pos/compare13.txt` 09）
+    for (const v of c.vars) {
+      const local = new Set<string>();
+      if (v.init !== null) scanExpr(v.init, report(local));
+      const a = v.accessor;
+      if (a === null || a === undefined) continue;
+      if (a.getter !== null && a.getter.kind === "inline") scanStmts(a.getter.body, report(local));
+      if (a.setter !== null && a.setter.kind === "inline") {
+        local.add(a.setter.param);
+        scanStmts(a.setter.body, report(local));
+      }
     }
     for (const inner of c.innerClasses) walkClass(inner);
   };
@@ -2155,16 +2543,50 @@ function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>,
     if (v.init !== null) walkExpr(v.init, selfScope, coroutines, diags);
     const acc = v.accessor;
     if (acc !== null) {
+      // 读写器体是**函数体**：static 那一维里 `self` 引擎直接拒（初值那一形才是给 typeof 0，S367 / S371）
+      const accScope = v.isStatic ? selfScope.child([], false) : selfScope;
       hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_getter` } : null;
-      if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, selfScope, coroutines, diags, false);
+      if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, accScope, coroutines, diags, false);
       hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_setter` } : null;
       if (acc.setter !== null && acc.setter.kind === "inline") {
-        walkStmts(acc.setter.body, selfScope.child([acc.setter.param]), coroutines, diags, false);
+        walkStmts(acc.setter.body, accScope.child([acc.setter.param]), coroutines, diags, false);
       }
     }
     hostValueMethods = prevFace;
     hostStaticCtx = prevCtx;
   }
+}
+
+/** 具名委托（`get = 名` / `set = 名`）的准入四句：目标必须是**本类**声明的方法 —— 继承来的（内部类 `C extends B` 与 `extends "res://base.gd"` 两条链都量了）、宿主裸名、模块 `var` 一律算没找到；
+ *  getter 恰好 0 参、setter 恰好 1 参，带默认值也算不合格，而**参数类型不看**（`func _s(v: int)` 给 `Variant` 属性当 setter 合法）。四句的行号都指属性声明那一行（S371 ④，读数 `tmp/pos/{compare10,compare11}.txt`）。 */
+function checkPropertyDelegates(m: Module, diags: Diagnostic[]): void {
+  const one = (vars: readonly VarDecl[], funcs: readonly FuncDecl[]): void => {
+    const own = new Map<string, FuncDecl>();
+    for (const f of funcs) if (!own.has(f.name)) own.set(f.name, f);
+    for (const v of vars) {
+      const a = v.accessor;
+      if (a === null || a === undefined) continue;
+      const judge = (word: "Getter" | "Setter", kind: "getter" | "setter", name: string): void => {
+        const f = own.get(name);
+        if (f === undefined) {
+          diags.push({ code: "property-delegate", message: `${word} "${name}" not found.`, loc: v.loc });
+          return;
+        }
+        const want = kind === "getter" ? 0 : 1;
+        if (f.params.length !== want || f.params.some((p) => p.default !== null)) {
+          diags.push({ code: "property-delegate", message: `Function "${name}" cannot be used as ${kind} because of its signature.`, loc: v.loc });
+        }
+      };
+      if (a.getter !== null && a.getter.kind === "method") judge("Getter", "getter", a.getter.method);
+      if (a.setter !== null && a.setter.kind === "method") judge("Setter", "setter", a.setter.method);
+    }
+  };
+  one(m.vars, m.funcs);
+  const walk = (c: ClassDecl): void => {
+    one(c.vars, c.funcs);
+    for (const inner of c.innerClasses) walk(inner);
+  };
+  for (const c of m.innerClasses) walk(c);
 }
 
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[], classes: Map<string, ClassDecl>): void {
@@ -2551,7 +2973,7 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       return;
 
     case "attribute":
-      if (staticMemberFn(e.obj) === null) walkExpr(e.obj, scope, coroutines, diags);
+      if (staticMemberFn(e.obj) === null && !(e.obj.kind === "ident" && PACK_TYPE_NAMES.has(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
       return;
 
     case "array":
@@ -2567,6 +2989,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
 
     case "lambda": {
       const fnScope = scope.child(e.params.map((p) => p.name));
+      // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置
+      for (const p of e.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
       walkStmts(e.body, fnScope, coroutines, diags, false);
       return;
     }
@@ -2582,6 +3006,10 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
           });
         }
         checkCall(name, e, diags);
+        const arity = builtinArity(name, e.args.length) ?? utilityArity(name, e.args.length);
+        if (arity !== null) {
+          diags.push({ code: builtinArityCode(name), message: arity, loc: e.loc });
+        }
       } else {
         walkExpr(e.callee, scope, coroutines, diags);
         if (e.callee.kind === "attribute") checkMethodCall(e.callee.name, e, diags);
@@ -2647,12 +3075,228 @@ function isNegativeLiteral(e: Expr): boolean {
   return false;
 }
 
+/** 字面量 × 字面量的运算符组合：引擎在解析期拒的那些对（S394，尺 tmp/probe-opmatrix/round1.mts，读数 compare57.txt，468 格 = 六型 × 六型 × 十三符）。
+ *  两式句子各有各的表：两侧都是**字面量**且都是标量时是 _A（Invalid operands to operator X, A and B.），
+ *  掺进容器那一族时是 _B（Invalid operands "A" and "B" for "X" operator.）—— 第二式也出现在「操作数不是字面量」那些格，
+ *  但那一头只量了 bool 三支（compare55），所以闸门只按字面量那一半发。收的与走到运行期才拒的一个都不登。 */
+export const OP_PAIRS_REFUSED_A: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|float", "int|String", "float|bool", "float|int", "float|float", "float|String"],
+  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "<": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "==": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  ">": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "and": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "or": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+};
+
+export const OP_PAIRS_REFUSED_B: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
+  "%": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "*": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "+": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "-": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "/": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "==": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
+  ">": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "and": [],
+  "or": [],
+};
+
+/** 这一对只在**字面量操作数**那半边发：矩阵 468 格全用字面量量的；「操作数是声明过的变量」那一头只量过 bool 三格
+ *  （`tmp/probe-booleq/compare55.txt`，走的是第二式），所以那形状交给既有的 bool 闸门，其余不猜。 */
+function isLiteralOperand(e: Expr): boolean {
+  return e.kind === "lit" || e.kind === "array" || e.kind === "dict";
+}
+
+/** 左支是**静态型已知的非字面量**（标注过的 var / 形参 / 内部类字段）、右支是字面量时的那些对（S395，
+ *  尺 `tmp/probe-declrecv/round1.mts`，读数 `compare58.txt`，另三种写法的抽样 `compare59.txt`）：引擎这一路**一律第二式**，
+ *  与 `OP_PAIRS_REFUSED_A`/`_B`（两侧都是字面量、或左支是 `const`）那两张不是同一集 —— `and` / `or` 掺 String 的十四格
+ *  在字面量那一集里拒、在这一集里收，所以各记一张。'const' 左支属字面量那一集（抽样四格都对上）。 */
+export const OP_PAIRS_REFUSED_DECL: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
+  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|float", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|int", "float|float", "float|String", "float|Array", "float|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|String", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|String", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|String", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "==": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
+  ">": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+};
+
+/** 左支写成「静态型标明的名字」、右支是字面量那一形（S395）：468 格全过裁判，引擎这一路**一律第二式**，
+ *  而且拒的集合与「两侧字面量」那张不一样 —— `and` / `or` 掺 String 那十四格在字面量那一集里拒、在这里收。
+ *  量过的名字写法三种：模块级 `var a: T`、形参 `f(a: T)`、内部类字段（`tmp/probe-declrecv/compare59.txt` 各抽若干）；
+ *  `const` 左支走的是字面量那一集（同文件四格），所以这张表**不**收 const。函数体内推断来的 `var a = true` 没量过，不发。 */
+/** 左支是**模块级 `const`** 而右支是字面量那一形（S396，尺 `tmp/probe-constrecv/round1.mts`，读数 `compare60.txt`）：
+ *  468 格自成第三集 —— 238 格第一式、121 格第二式，收的也比字面量那一集少 16 格；容器左支在字面量那一集走第二式、
+ *  在这一集走第一式，所以两张表都得单列，不能借 `OP_PAIRS_REFUSED_A` / `_B`。 */
+export const OP_PAIRS_CONST_A: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|float", "int|String", "float|bool", "float|int", "float|float", "float|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "<": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "==": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  ">": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "and": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "or": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+};
+
+export const OP_PAIRS_CONST_B: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array"],
+  "%": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "*": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "+": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "-": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "/": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "==": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array"],
+  ">": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+};
+
+function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
+  const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary"]);
+  const named = (t: TypeRef | null): string | null => {
+    if (t === null || t.kind !== "named") return null;
+    const base = t.name.replace(/\[.*\]$/, "");
+    return ANNOT.has(base) ? base : null;
+  };
+  const moduleTypes = new Map<string, string>();
+  const moduleConsts = new Map<string, string>();
+  for (const v of m.vars) {
+    const t = named(v.type);
+    if (t === null) continue;
+    if (v.isConst) moduleConsts.set(v.name, t);
+    else moduleTypes.set(v.name, t);
+  }
+  const literalKind = (e: Expr): string | null => staticType(e);
+
+  const checkBody = (body: Stmt[], base: Map<string, string>, consts: Map<string, string>): void => {
+    const types = new Map(base);
+    const nodes = flattenBody(body);
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || n.isConst === true) continue;
+      const t = named(n.type as TypeRef | null);
+      if (t !== null) types.set(n.name, t);
+    }
+    for (const n of nodes) {
+      if (n.kind !== "binary") continue;
+      const e = n as unknown as Extract<Expr, { kind: "binary" }>;
+      if (e.left.kind !== "ident") continue;
+      const rt = literalKind(e.right);
+      if (rt === null) continue;
+      const name = (e.left as Extract<Expr, { kind: "ident" }>).name;
+      const isConst = consts.has(name);
+      const lt = isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null);
+      if (lt === null) continue;
+      const pair = `${lt}|${rt}`;
+      const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
+      const foldedB = isConst && OP_PAIRS_CONST_B[e.op]?.includes(pair) === true;
+      const declaredB = !isConst && OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true;
+      if (!foldedA && !foldedB && !declaredB) continue;
+      diags.push({
+        code: "op-pair",
+        message: foldedA
+          ? `Invalid operands to operator ${e.op}, ${lt} and ${rt}.`
+          : `Invalid operands "${lt}" and "${rt}" for "${e.op}" operator.`,
+        loc: e.loc,
+      });
+    }
+    // 反过来那一形（左支字面量、右支是标明类型的名字）与上面共用同一张表：468 格对照下来，
+    // 329 对与第二式一字不差（`tmp/probe-revrecv/compare61.txt`，S397），所以只镜像判据、不再另立表。
+    for (const n of nodes) {
+      if (n.kind !== "binary") continue;
+      const e = n as unknown as Extract<Expr, { kind: "binary" }>;
+      if (e.right.kind !== "ident") continue;
+      const lt2 = literalKind(e.left);
+      if (lt2 === null) continue;
+      const rt2 = types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null;
+      if (rt2 === null) continue;
+      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(`${lt2}|${rt2}`) !== true) continue;
+      diags.push({
+        code: "op-pair",
+        message: `Invalid operands "${lt2}" and "${rt2}" for "${e.op}" operator.`,
+        loc: e.loc,
+      });
+    }
+  };
+
+  const withParams = (f: FuncDecl): Map<string, string> => {
+    const types = new Map(moduleTypes);
+    for (const p of f.params) {
+      const t = named(p.type);
+      if (t !== null) types.set(p.name, t);
+    }
+    return types;
+  };
+  for (const f of m.funcs) checkBody(f.body, withParams(f), moduleConsts);
+  const collect = (c: ClassDecl): void => {
+    const fields = new Map<string, string>();
+    for (const v of c.vars) {
+      const t = named(v.type);
+      if (t !== null && !v.isConst) fields.set(v.name, t);
+    }
+    for (const f of c.funcs) {
+      const types = new Map(fields);
+      for (const p of f.params) {
+        const t = named(p.type);
+        if (t !== null) types.set(p.name, t);
+      }
+      checkBody(f.body, types, new Map<string, string>());
+    }
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+}
+
+/** 两侧都是字面量时的那两张表：`checkOperator` 里发（S394）。 */
 function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]): void {
   const l = staticType(e.left);
   const r = staticType(e.right);
 
+  // 两侧都是字面量的那一半：按 468 格那张表发（S394）。既有三道闸门已经发同样句子的组合不再重复发。
+  const pair = l !== null && r !== null ? `${l}|${r}` : null;
+  const scalar = (t: string | null): boolean => t === "bool" || t === "int" || t === "float";
+  const covered =
+    (e.op === "%" && (l === "float" || r === "float") && scalar(l) && scalar(r)) ||
+    ((e.op === "==" || e.op === "!=") &&
+      ((l === "String" && (r === "int" || r === "float")) || (r === "String" && (l === "int" || l === "float")))) ||
+    ((e.op === "<=" || e.op === ">=") && l === "bool" && r === "bool");
+  if (!covered && isLiteralOperand(e.left) && isLiteralOperand(e.right) && pair !== null && l !== null && r !== null) {
+    if (OP_PAIRS_REFUSED_A[e.op]?.includes(pair) === true) {
+      diags.push({
+        code: "op-pair",
+        message: `Invalid operands to operator ${e.op}, ${l} and ${r}.`,
+        loc: e.loc,
+      });
+    } else if (OP_PAIRS_REFUSED_B[e.op]?.includes(pair) === true) {
+      diags.push({
+        code: "op-pair",
+        message: `Invalid operands "${l}" and "${r}" for "${e.op}" operator.`,
+        loc: e.loc,
+      });
+    }
+  }
   const isModulo = l !== "String" && r !== "String";
-  if (e.op === "%" && isModulo && (l === "float" || r === "float")) {
+  if (e.op === "%" && isModulo && l !== null && r !== null && (l === "float" || r === "float")) {
     diags.push({
       code: "op-mod-float",
       message: `Invalid operands to operator %, ${l} and ${r}.`,
@@ -2749,6 +3393,163 @@ function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags
   if (msg !== undefined) diags.push({ code: "join-arg", message: msg, loc: e.loc });
   // 实参是字面量的那十二形由 `FACE_ARG_*` 那两张实测表管（引擎在那里推两句，手抄的这张表只有一句）
 }
+/** 全局函数的元数两句（S365 逐名量的那 208 格）：引擎这两句都在**解析期**，出货此前在**发射期**发同文（§6 第 59 条①）——
+ *  搬进 analyze 之后 `gds2js check` 才看得见它们。表与句子逐字沿用原发射期那一份，一处不改编排。 */
+const BUILTIN_ARITY: Record<string, [number, number]> = {
+  abs: [1, 1],
+  absf: [1, 1],
+  absi: [1, 1],
+  acos: [1, 1],
+  acosh: [1, 1],
+  angle_difference: [2, 2],
+  asin: [1, 1],
+  asinh: [1, 1],
+  atan: [1, 1],
+  atan2: [2, 2],
+  atanh: [1, 1],
+  bezier_derivative: [5, 5],
+  bezier_interpolate: [5, 5],
+  bytes_to_var: [1, 1],
+  bytes_to_var_with_objects: [1, 1],
+  ceil: [1, 1],
+  ceilf: [1, 1],
+  ceili: [1, 1],
+  char: [1, 1],
+  clamp: [3, 3],
+  clampf: [3, 3],
+  clampi: [3, 3],
+  convert: [2, 2],
+  cos: [1, 1],
+  cosh: [1, 1],
+  cubic_interpolate: [5, 5],
+  cubic_interpolate_angle: [5, 5],
+  cubic_interpolate_in_time: [8, 8],
+  db_to_linear: [1, 1],
+  deg_to_rad: [1, 1],
+  dict_to_inst: [1, 1],
+  ease: [2, 2],
+  error_string: [1, 1],
+  exp: [1, 1],
+  floor: [1, 1],
+  floorf: [1, 1],
+  floori: [1, 1],
+  fmod: [2, 2],
+  fposmod: [2, 2],
+  get_stack: [0, 0],
+  hash: [1, 1],
+  inst_to_dict: [1, 1],
+  instance_from_id: [1, 1],
+  inverse_lerp: [3, 3],
+  is_equal_approx: [2, 2],
+  is_finite: [1, 1],
+  is_inf: [1, 1],
+  is_instance_id_valid: [1, 1],
+  is_instance_of: [2, 2],
+  is_instance_valid: [1, 1],
+  is_nan: [1, 1],
+  is_same: [2, 2],
+  is_zero_approx: [1, 1],
+  len: [1, 1],
+  lerp: [3, 3],
+  lerp_angle: [3, 3],
+  lerpf: [3, 3],
+  linear_to_db: [1, 1],
+  log: [1, 1],
+  max: [2, Number.POSITIVE_INFINITY],
+  maxf: [2, 2],
+  maxi: [2, 2],
+  min: [2, Number.POSITIVE_INFINITY],
+  minf: [2, 2],
+  mini: [2, 2],
+  move_toward: [3, 3],
+  nearest_po2: [1, 1],
+  pingpong: [2, 2],
+  posmod: [2, 2],
+  pow: [2, 2],
+  print_stack: [0, 0],
+  rad_to_deg: [1, 1],
+  rand_from_seed: [1, 1],
+  randf: [0, 0],
+  randf_range: [2, 2],
+  randfn: [2, 2],
+  randi: [0, 0],
+  randi_range: [2, 2],
+  randomize: [0, 0],
+  remap: [5, 5],
+  rid_allocate_id: [0, 0],
+  rid_from_int64: [1, 1],
+  rotate_toward: [3, 3],
+  round: [1, 1],
+  roundf: [1, 1],
+  roundi: [1, 1],
+  seed: [1, 1],
+  sign: [1, 1],
+  signf: [1, 1],
+  signi: [1, 1],
+  sin: [1, 1],
+  sinh: [1, 1],
+  smoothstep: [3, 3],
+  snapped: [2, 2],
+  snappedf: [2, 2],
+  snappedi: [2, 2],
+  sqrt: [1, 1],
+  step_decimals: [1, 1],
+  str_to_var: [1, 1],
+  tan: [1, 1],
+  tanh: [1, 1],
+  type_convert: [2, 2],
+  type_exists: [1, 1],
+  type_string: [1, 1],
+  var_to_bytes: [1, 1],
+  var_to_bytes_with_objects: [1, 1],
+  var_to_str: [1, 1],
+  weakref: [1, 1],
+  wrap: [3, 3],
+  wrapf: [3, 3],
+  wrapi: [3, 3],
+  typeof: [1, 1],
+};
+
+/** 少给 / 多给在引擎是解析期拒；这里同在解析期发同文，措辞照原文，`code` 沿用已出货那三支的。 */
+
+function builtinArity(name: string, got: number): string | null {
+  const ar = BUILTIN_ARITY[name];
+  if (ar === undefined) return null;
+  if (got >= ar[0] && got <= ar[1]) return null;
+  return got < ar[0]
+    ? `Too few arguments for "${name}()" call. Expected at least ${String(ar[0])} but received ${String(got)}.`
+    : `Too many arguments for "${name}()" call. Expected at most ${String(ar[1])} but received ${String(got)}.`;
+}
+
+/** 类型构造式之外，`range` 与 `str` 的元数走的是**另一条句子通道**（S385 ②③）：既不是 `Too few` 也不是 `Too many`，
+ *  而是 `Invalid call to [GDScript ]utility function "X()". Expected N argument(s).` —— 少了报下界那一位、多了报上界那一位，
+ *  而且 `str` 的前缀比 `range` 少了 "GDScript"，两支各抄各的。上界写 `null` 是那一支没量过上界（`str` 八支实参照收）。
+ *  读数 `tmp/probe-void/{compare33,compare34}.txt`。同 S387 那批，从发射期搬来，`check` 才看得见。 */
+const UTILITY_ARITY: Record<string, [number, number | null, string]> = {
+  range: [1, 3, "GDScript utility function"],
+  str: [1, null, "utility function"],
+};
+
+function utilityArity(name: string, got: number): string | null {
+  const u = UTILITY_ARITY[name];
+  if (u === undefined) return null;
+  const min = u[0];
+  const max = u[1];
+  const kind = u[2];
+  if (got >= min && (max === null || got <= max)) return null;
+  return `Invalid call to ${kind} "${name}()". Expected ${String(max !== null && got > max ? max : min)} argument(s).`;
+}
+
+/** `code` 沿用已出货那几名自己的名字（发射期那道闸门就是这么分的，一行不改）。 */
+function builtinArityCode(name: string): string {
+  if (name === "char") return "char-arity";
+  if (name === "var_to_str") return "var-to-str-arity";
+  if (name === "str_to_var") return "str-to-var-arity";
+  if (name === "convert" || name === "type_convert") return "convert-arity";
+  if (name === "range" || name === "str") return `${name}-arity`;
+  return "builtin-arity";
+}
+
 function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "bool" || e.args.length === 0) return;
   const t = staticType(e.args[0] as Expr);
@@ -2763,6 +3564,32 @@ function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diag
 
 /** 值类型方法的元数表（S305）：154 名逐名过裁判（`tmp/probe-value-arity/{a,max,max6}.mts`），存 `[下界, 上界]` ——
  *  148 名是定元数，只有六支带默认实参（`limit_length` 0..1、`Color.clamp` 0..2、`from_hsv` / `from_ok_hsl` 3..4、`to_html` 0..1）。 */
+/** pack 九支共用的那 21 名元数，两侧都是九支逐支量过的：「至少」六支在 `tmp/probe-pack/sweep.json`、byte / int32 / string 在 `compare18.txt`；
+ *  「至多」int64 / byte / string 在 `compare16.txt` 与 `arity2.log`、其余五支在 `compare19.txt`（110 格，五支读数一字不差）。
+ *  `slice` 的上限是 **2** 不是 3 —— pack 那支没有 `Array.slice(begin, end, step)` 的 step。byte 独有的 `compress` / `decompress` 那一族只量到下限，不进表。 */
+const PACK_METHOD_ARITY: Record<string, [number, number]> = {
+  append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
+  duplicate: [0, 0], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
+  insert: [2, 2], is_empty: [0, 0], push_back: [1, 1], remove_at: [1, 1], resize: [1, 1],
+  reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
+};
+/** 八支（除 byte 自己）多一支 `to_byte_array`：byte 上引擎说没这名字（`tmp/probe-pack/arity2.log` 第 10 格）。 */
+const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
+
+/** pack 九支的类型名：它们不在 ClassDB 里（不是 `ENGINE_CLASS_NAMES` 那一族）、也没有静态成员（进不了 `STATIC_MEMBER_FNS`），
+ *  但当属性基出现时是合法的类型名 —— `PackedInt64Array.size()` 引擎给的是「不是静态方法」那一句，不是「没声明」（S376 ⑤，读数 `arity2.log` 07–09）。 */
+const PACK_TYPE_NAMES = new Set([
+  "PackedByteArray",
+  "PackedInt32Array",
+  "PackedInt64Array",
+  "PackedFloat32Array",
+  "PackedFloat64Array",
+  "PackedStringArray",
+  "PackedVector2Array",
+  "PackedVector3Array",
+  "PackedColorArray",
+]);
+
 const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
   Vector2: {
     abs: [0, 0], angle: [0, 0], angle_to: [1, 1], angle_to_point: [1, 1], aspect: [0, 0],
@@ -2807,9 +3634,18 @@ const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
     lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
     to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
   },
+  PackedByteArray: PACK_METHOD_ARITY,
+  PackedInt32Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedInt64Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedFloat32Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedFloat64Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedStringArray: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedVector2Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedVector3Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedColorArray: PACK_METHOD_ARITY_WITH_BYTES,
 };
 
-/** 只认「名字本身就是这五支之一」的标注与字面量构造式，别的（`Variant`、自定义类、引擎类）一概不猜。 */
+/** 只认「名字本身就是表里那几支之一」的标注与字面量构造式（值类型五支 + pack 九支），别的（`Variant`、自定义类、引擎类）一概不猜。 */
 function valueTypeAnnotation(t: TypeRef | null): string | null {
   return t !== null && t.kind === "named" && t.name in VALUE_METHOD_ARITY ? t.name : null;
 }
@@ -2884,12 +3720,13 @@ function staticFaceConstName(t: string, name: string): boolean {
 /** 「类名.成员」的调用式：常量当函数调 / 静态函数元数 / 实例方法在类名上直接调 / 表外名字两句。 */
 function staticCallDiags(t: string, name: string, got: number): Array<{ code: string; message: string }> {
   const face = STATIC_FACE[t];
-  if (face === undefined) return [];
-  if (staticFaceConstName(t, name)) {
+  // pack 九支没有静态面（`STATIC_FACE` 里没它们），但「类名直调实例方法」与「类名上没这成员」两句照发（S376 ⑤）
+  if (face === undefined && !PACK_TYPE_NAMES.has(t)) return [];
+  if (face !== undefined && staticFaceConstName(t, name)) {
     const shown = face.axis.includes(name) ? `${t}.Axis` : t;
     return [{ code: "static-const-call", message: `Name "${name}" called as a function but is a "${shown}".` }];
   }
-  const sig = face.statics[name];
+  const sig = face?.statics[name];
   if (sig !== undefined) {
     if (got >= sig[0] && got <= sig[1]) return [];
     return [
@@ -3072,7 +3909,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "attribute") continue;
-      if (callee.obj.kind === "ident" && callee.obj.name in STATIC_FACE) {
+      if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name))) {
         for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ ...d, loc: e.loc });
         // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
         const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];
@@ -3109,7 +3946,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         // 形参逐位逐 kind 量；读数都建在「实参个数正好等于量过的那个上界」这一形上，别的元数没量过就不发）
         const fkey = `${face}.${callee.name}`;
         const slot = FACE_SLOTS[fkey];
-        if (slot !== undefined && e.args.length === slot) {
+        const measured = typeof slot === "number" ? e.args.length === slot : slot !== undefined && slot.includes(e.args.length);
+        if (measured) {
           const byPos = new Map<number, Array<{ code: string; message: string }>>();
           const put = (pos: number, code: string, message: string): void => {
             const bucket = byPos.get(pos) ?? [];
@@ -3201,7 +4039,27 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "ident") continue;
-      // 元数不对时引擎先说元数那一句（发射器已经按实测区间发），这一轮的类型判据一律不许抢在前面
+      // `max` / `min` 的扫法与按位那几张表不同：每一位都判、第一位不对就停（表注释有读数）。
+      // 但这族**只要实参里出现一个容器（Array / Dictionary），整支调用就不在解析期发句** ——
+      // 引擎改走运行期那句 `Invalid type in utility function …`（四形混排读数 `tmp/probe-maxrt/compare54.txt`：
+      // 串在容器前面也一样推迟），那条通道由 `rt.gMax` / `rt.gMin` 发（S393）。
+      const vararg = GLOBAL_ARG_VARARG[callee.name];
+      if (vararg !== undefined) {
+        const ar = BUILTIN_ARITY[callee.name];
+        const kinds = e.args.map((a) => literalTypeName(a));
+        if (ar !== undefined && e.args.length >= ar[0] && e.args.length <= ar[1] && !kinds.includes("Array") && !kinds.includes("Dictionary")) {
+          const pos = kinds.findIndex((k) => k !== null && vararg.has(k));
+          if (pos >= 0) {
+            diags.push({
+              code: "global-arg-type",
+              message: `Invalid argument for "${callee.name}()" function: argument ${String(pos + 1)} should be "float" but is "${kinds[pos]}".`,
+              loc: e.loc,
+            });
+          }
+        }
+        continue;
+      }
+      // 元数不对时引擎先说元数那一句（本轮同一次 analyze 里那道闸门已经发了），这一轮的类型判据一律不许抢在前面
       const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
       if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
       const spec = GLOBAL_ARG_TYPES[callee.name];
@@ -3237,10 +4095,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
               : numericLiteralKind(e.args[0]);
         if (first === "int" || first === "float" || first === "bool") for (const p of follows) wants.push([p, first]);
       }
-      // 数值位上拒 bool 的那几张表（S362）：`max` / `min` 是每一位（含第三位往后），`wrap` 只有第一位
-      const boolAll = GLOBAL_ARG_BOOL_REFUSED[callee.name]?.includes(-1) === true;
+      // 数值位上拒 bool 的那几张表（S362）：`wrap` 只有第一位（变元的 `max` / `min` 在上面那支单独扫）
       const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
-      const refusesBool = (pos: number): boolean => boolAll || boolFixed.has(pos) || boolFollows?.has(pos) === true;
+      const refusesBool = (pos: number): boolean => boolFixed.has(pos) || boolFollows?.has(pos) === true;
       for (const [pos, want] of wants) {
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
@@ -3260,17 +4117,6 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         if (got === null || got === want) continue;
         put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
       }
-      // `max` / `min` 是变元个数的：三位往后引擎照样逐位拒 bool（`max(1, 2, false)` → argument 3 should be "float"），
-      // 而那些位不在任何表里，所以按实参个数补一遍
-      if (boolAll) {
-        for (let i = 0; i < e.args.length; i++) {
-          const pos = i + 1;
-          if (wants.some((w) => w[0] === pos) || shouldPos.has(pos)) continue;
-          if (literalTypeName(e.args[i]) !== "bool") continue;
-          put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "float" but is "bool".`);
-        }
-      }
-
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
       const firstKind = literalTypeName(e.args[0]);
       for (const [pos, refuse, sentence, unlessFirst] of sentenceRows ?? []) {
@@ -3378,6 +4224,7 @@ function literalTypeName(e: Expr | undefined): string | null {
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "lambda") return "Callable";
   if (e.kind === "call" && e.callee.kind === "ident" && NUMERIC_VALUE_CTORS.has(e.callee.name)) return e.callee.name;
   return null;
 }
