@@ -2142,18 +2142,33 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
 
   const walkClass = (c: ClassDecl): void => {
     const own = new Set(c.funcs.map((f) => f.name));
+    const report = (local: Set<string>) => (name: string, loc: Loc): void => {
+      if (outerFuncs.has(name) && !own.has(name) && !local.has(name)) {
+        diags.push({
+          code: "class-outer-func",
+          message: `Function "${name}()" not found in base self.`,
+          loc,
+        });
+      }
+    };
     for (const f of c.funcs) {
       const local = new Set<string>();
       collectLocalNames(f.body, f.params.map((p) => p.name), local);
-      scanStmts(f.body, (name, loc) => {
-        if (outerFuncs.has(name) && !own.has(name) && !local.has(name)) {
-          diags.push({
-            code: "class-outer-func",
-            message: `Function "${name}()" not found in base self.`,
-            loc,
-          });
-        }
-      });
+      scanStmts(f.body, report(local));
+      // 形参默认值与函数体同一口径：引擎一样查（读数 `tmp/pos/compare13.txt` 10）
+      for (const p of f.params) if (p.default !== null) scanExpr(p.default, report(local));
+    }
+    // 字段初值与读写器体也在内部类那一面里：调外层方法同样是这一句（读数 `tmp/pos/compare13.txt` 09）
+    for (const v of c.vars) {
+      const local = new Set<string>();
+      if (v.init !== null) scanExpr(v.init, report(local));
+      const a = v.accessor;
+      if (a === null || a === undefined) continue;
+      if (a.getter !== null && a.getter.kind === "inline") scanStmts(a.getter.body, report(local));
+      if (a.setter !== null && a.setter.kind === "inline") {
+        local.add(a.setter.param);
+        scanStmts(a.setter.body, report(local));
+      }
     }
     for (const inner of c.innerClasses) walkClass(inner);
   };
