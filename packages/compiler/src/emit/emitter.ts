@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isGlobalValueRead, isNativeClassValueRead } from "../lower/analyze";
+import { isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -389,6 +389,8 @@ let CLASS_VALUES = new Map<string, Set<string>>();
 let VAR_TYPES = new Map<string, TypeRef | null>();
 /** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
+/** 当前发射的函数自己绑住的名字（见 `collectBinds`），取值记号撞号时用它先认局部。 */
+let FUNC_BINDS = new Set<string>();
 /** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
 let CLASS_FUNCS = new Set<string>();
 
@@ -988,12 +990,31 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
 
 function emitFunc(f: FuncDecl, base = 0): string[] {
   const saved = LOCAL_TYPES;
+  const savedBinds = FUNC_BINDS;
   LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
+  FUNC_BINDS = collectBinds(f.body, new Set(f.params.map((p) => p.name)));
   try {
     return emitFuncInner(f, base);
   } finally {
     LOCAL_TYPES = saved;
+    FUNC_BINDS = savedBinds;
   }
+}
+
+/** 这个函数自己绑住的名字：形参、体内所有 `var`、lambda 形参、`for` 的循环变量与 match 手臂的 `bind`。
+ *  取值记号（analyze 的 `名@行:列`）是跨模块共用的表，两份同形同位的源会撞号 —— 撞上了先认局部，别把局部读成 Callable。 */
+function collectBinds(root: unknown, out: Set<string>): Set<string> {
+  if (Array.isArray(root)) {
+    for (const v of root) collectBinds(v, out);
+    return out;
+  }
+  if (root === null || typeof root !== "object") return out;
+  const o = root as Record<string, unknown>;
+  if ((o["kind"] === "var" || o["kind"] === "bind") && typeof o["name"] === "string") out.add(o["name"]);
+  if (o["kind"] === "for" && typeof o["var"] === "string") out.add(o["var"]);
+  if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") out.add(p.name);
+  for (const v of Object.values(o)) collectBinds(v, out);
+  return out;
 }
 
 /** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */
@@ -3080,6 +3101,8 @@ function emitExprVar(e: Expr): string {
       if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
       // 引擎类名的取值点：实测 typeof 24、等式按类，发一个身份盒子；打印与 `.new()` 那两支在运行时各自响亮拒
       if (isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
+      // 宿主基类方法名的取值点（S358）：实测给 `SceneTree(<文件>)::<名>` 的 Callable，与 `Callable(self, "<名>")` 同一个盒子
+      if (isHostMethodValueRead(e) && !FUNC_BINDS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":

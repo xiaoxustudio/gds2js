@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.173 宿主基类的方法名可以裸当值用了：`var c = quit` 给的是真的 Callable，出货此前在解析期就拦死（2026-10-14，S358，语料 361）
+
+- **接的是 S356 顺带量到的那条过拦**：引擎收 `Callable(quit)` / `var c = quit`，出货的分析层报 `Identifier "quit" not declared in the current scope.`，合法代码编不过。
+- **量法换了**：这一族是**解析期**行为，一份脚本里错一格就整份作废、分不出是谁 —— 所以 23 + 18 + 5 格全部「一格一份 `.gd`、一次 spawn」（`fold29` / `fold30`），不再用 packed probe。
+- **判据**：链上挂着宿主时，SceneTree 的 `quit` / `create_timer` 加 Object 的十三支（`call` `call_deferred` `set` `get` `has_method` `get_class` `connect` `disconnect` `emit_signal` `notification` `set_meta` `get_meta` `free`）给 typeof 25 的 Callable，打印 `SceneTree(<文件>)::<名>`，与 `Callable(self, "<名>")` 同一个盒子；`.is_valid()` / `.get_method()` / `.call()` 全真，能进数组、当字典键、传 `Callable` 形参。链外的名字（`quit_and_ide_debug`、`queue_free`）与别人的属性（`process_mode`、`name`）实测仍 `not declared`，出货照旧拦。
+- **范围收到根类的实例方法体**：内部类里 `quit` 引擎也拒（内部类自己的方法名 `g` 却有值，给 `RefCounted::g`），不写 `extends` 的脚本也拒；静态方法与「沿 extends 链挂宿主」两形没量过，所以不认（§6 第 55 条③）。`root` / `paused` 是**属性读数**（引擎给窗口对象 / `false`），按 D4 不接，是今天与引擎仅剩的不同侧（§6 第 55 条①）。
+- **踩到一处记号的坑**：分析器的取值记号是 `名@行:列` 的跨模块表，这次门里真撞过一回 —— 两份同形同位的源，一份的局部 `quit` 被另一份的记号读成了 Callable（静默错值）。发射器因此新增 `FUNC_BINDS`（本函数形参 + 体内所有 `var` + lambda 形参 + `for` 循环变量 + match 手臂 `bind`）先认局部；读 / 写位置不分那道缝记进 §6 第 55 条④。
+- **门**：语料 361 五行逐字节（取值 + `typeof` + `get_method` + `is_valid` + `Callable` 形参 + `.call()` + 容器元素）、`implicit-callable-value.test.ts` 24 格；`pnpm test` **13295**（95 文件）、typecheck **4/4**、`test:compile` **242/350**（sema 82、响亮拒 26）、`test:diff` **234/234** 逐字节（用例 360、静默 / 崩溃 / 未实现 全 0）、golden 未漂移 **360/360**、codegen 未漂移。
+
 ### 1.172 `Array.sort()` 自己那条比较器接完：跨形只有 int 对 float、六形同形比不出，置换改成引擎那一把（2026-10-14，S357，语料 360）
 
 - **接的是 §6 第 54 条③**：混合类型数组排序此前 `array-sort-mixed` 响亮拒（合法代码跑不动），而且 `sort()` 的**置换**走的是 JS 稳定 sort、比较口径还被当成 `isLess` 那条共用（`ops.ts` 里那句旧注释也这么写，已改）。

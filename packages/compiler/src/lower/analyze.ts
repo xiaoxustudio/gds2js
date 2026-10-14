@@ -109,7 +109,9 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
     null,
   );
 
-  for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags);
+  // 宿主基类方法名当值用只在根类的实例方法里认（S358）：内部类那支实测照样 `not declared`，`extends` 别的脚本那一形没量过，所以都不给这张表
+  const hostFace = m.extends === "SceneTree" ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
+  for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
   checkStaticAccess(m.funcs, m.vars, diags);
   checkClassFuncVisibility(m, diags);
@@ -2062,9 +2064,12 @@ function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[]
   return out;
 }
 
-function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[]): void {
+function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
   const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
+  // 静态方法里那形没量过，照旧不认（S358 只钉了实例方法体）
+  hostValueMethods = f.isStatic ? NO_HOST_VALUE_METHODS : hostFace;
   walkStmts(f.body, scope, coroutines, diags, false);
+  hostValueMethods = NO_HOST_VALUE_METHODS;
 }
 
 function walkStmts(
@@ -2160,6 +2165,32 @@ const globalValueReads = new Set<string>();
 /** 同一套记号记的第二类：引擎类名当值用（`var k = Node`）—— 取值合法、等式按类，但那支打印带进程内的号，发射器据此响亮拒。 */
 const nativeClassReads = new Set<string>();
 
+/** 宿主基类（`extends SceneTree`）那面**能裸当值用**的方法名（S358，读数 `tmp/probe-argtype/host-names.txt`：23 个名字逐个单独 spawn 量的）——
+ *  给的是 typeof 25 的 Callable，打印 `SceneTree(<文件>)::<名>`，与 `Callable(self, "<名>")` 等价。
+ *  同一次扫里 `quit_and_ide_debug` / `queue_free`（不在这条链上的方法）与 `process_mode` / `name`（别人的属性）都是 `Identifier "…" not declared`，
+ *  而 `root` / `paused` 是**属性读数**（25 都不给），Tier 1 不接引擎 API，那一支照旧拒。 */
+const HOST_VALUE_METHODS = new Set([
+  "quit",
+  "create_timer",
+  "call",
+  "call_deferred",
+  "set",
+  "get",
+  "has_method",
+  "get_class",
+  "connect",
+  "disconnect",
+  "emit_signal",
+  "notification",
+  "set_meta",
+  "get_meta",
+  "free",
+]);
+const NO_HOST_VALUE_METHODS = new Set<string>();
+/** 只在**根类**的实例方法体里认（实测内部类里 `quit` 照样 `not declared`，静态方法那一形没量过所以也不认）：`checkFunc` 逐函数开关。 */
+let hostValueMethods: Set<string> = NO_HOST_VALUE_METHODS;
+const hostMethodReads = new Set<string>();
+
 const gvKey = (name: string, line: number, col: number): string => `${name}@${line}:${col}`;
 
 export function isGlobalValueRead(e: Expr): boolean {
@@ -2168,6 +2199,11 @@ export function isGlobalValueRead(e: Expr): boolean {
 
 export function isNativeClassValueRead(e: Expr): boolean {
   return e.kind === "ident" && nativeClassReads.has(gvKey(e.name, e.loc.line, e.loc.col));
+}
+
+/** 宿主基类方法名的取值点（S358）：发射器据此发 `rt.methodCallable(rt.V.object(this), "<名>")`。 */
+export function isHostMethodValueRead(e: Expr): boolean {
+  return e.kind === "ident" && hostMethodReads.has(gvKey(e.name, e.loc.line, e.loc.col));
 }
 
 function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnostic[], awaited = false): void {
@@ -2192,6 +2228,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         // 引擎类名当值用同样合法（typeof 24、等式按类），只是那支打印带进程内的号 —— 记下来交给发射器拒
         else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+        // 宿主基类的方法名当值用：合法且给 Callable（S358），记号交给发射器
+        else if (hostValueMethods.has(e.name)) hostMethodReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         else
           diags.push({
             code: "undeclared-identifier",

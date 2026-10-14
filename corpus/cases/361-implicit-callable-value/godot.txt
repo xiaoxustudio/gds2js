@@ -1,0 +1,5 @@
+A|25|quit|true
+T|true|quit
+B|25|7
+C|25|SceneTree
+D|[SceneTree(main.gd)::quit, SceneTree(main.gd)::zz]|7
