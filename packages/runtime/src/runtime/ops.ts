@@ -4,7 +4,7 @@ import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
-import { asColor, color, colorCmp, GColor } from "./color";
+import { asColor, color, GColor } from "./color";
 import { bytesConcat, GBytes } from "./packed";
 import { INT64_MIN, TWO_63 } from "./numstr";
 import {
@@ -391,7 +391,10 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   const wa3 = asVec3(a);
   const wb3 = asVec3(b);
   if (wa3 && wb3) return vec3Cmp(wa3, wb3);
-  if (asColor(a) !== null || asColor(b) !== null) colorCmp();
+  // Color 两侧都是它、或与别的东西比，引擎都是同一句运行期拒（实测 `Color < Color`、`Color < int`、`Color < [1]` 三形同文）
+  if (asColor(a) !== null || asColor(b) !== null) {
+    throw new GodotRuntimeError("color-cmp", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+  }
   const ziCmp = asVec2i(a);
   const zjCmp = asVec2i(b);
   if (ziCmp && zjCmp) return vec2iCmp(ziCmp, zjCmp);
@@ -405,7 +408,7 @@ function compare(a: Variant, b: Variant, op = "<"): number {
     const y = arrayLess(b, a);
     return x && !y ? -1 : y && !x ? 1 : 0;
   }
-  throw new UnsupportedError("compare-operands", `比较不支持 ${tagName(a.t)} 与 ${tagName(b.t)}`);
+  throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
 }
 
 /** 容器元素的形秩：① 那条量成的全序，`null < bool < int < float < String < Vector2 < Vector2i < Vector3 < Vector3i < Color < StringName < NodePath < RID < Dictionary < Array`。

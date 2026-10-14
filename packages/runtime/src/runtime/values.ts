@@ -2577,8 +2577,12 @@ export function strJoin(sep: string, g: GArray): string {
   return out;
 }
 
-/** Variant 的 **Godot 类型名**：`tagName` 只到 Tag 粒度，值类型都在 OBJECT 里，而报错文本要说得出 `Vector2` / `Color` 这种名字。 */
+/** Variant 的 **Godot 类型名**：`tagName` 只到 Tag 粒度，值类型都在 OBJECT 里，而报错文本要说得出 `Vector2` / `Color` 这种名字。
+ *  形名走引擎的拼法：它管 null 叫 `Nil`（实测 `Invalid operands 'Nil' and 'int' in operator '<'.`），
+ *  九支 pack 也叫自己的名字（`PackedInt32Array` 那一族），内部标签 `nil` / `Object` 都不出现在引擎句子里。 */
 export function valueTypeName(x: Variant): string {
+  if (x.t === Tag.NIL) return "Nil";
+  if (x.t === Tag.OBJECT && x.v instanceof GBytes) return packTypeName(x.v.kind);
   if (asVec2(x) !== null) return "Vector2";
   if (asVec3(x) !== null) return "Vector3";
   if (asVec2i(x) !== null) return "Vector2i";

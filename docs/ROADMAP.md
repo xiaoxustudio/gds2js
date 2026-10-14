@@ -779,6 +779,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.171 装箱比较的运行期拒换成引擎同文：一句 `Invalid operands 'L' and 'R' in operator 'OP'.`，形名走 `Nil` / `PackedInt32Array` 那套拼法（2026-10-14，S356，语料 359）
+
+- **接的是 §6 第 54 条①**：改前抛中文「比较不支持 int 与 String」，形状对、句子不同。48 格一次 spawn 量完（尺 `tmp/probe-argtype/fold24.mts`：每格包进一个小函数，那句 SCRIPT ERROR 只打断那个函数，脚本照跑下一格），生成器 `mk-lessmsg-artifacts.mts` 把它摊成门 `compare-operands-sentence.test.ts` 47 格。
+- **句式只有一条**：四个运算符同文、只换引号里的运算符名，且**实参顺序就是式子里的左右顺序**（`1 < "a"` 与 `"a" < 1` 各钉一格）。**形名是唯一会被 `tagName` 答错的地方**：null 叫 `Nil`、pack 各叫本名（`PackedInt32Array` / `PackedStringArray` / `PackedByteArray`，不是 `Object`），新 `valueTypeName` 补这两条后 `+` / `-` / 整除那几条旧句子同口径。
+- **Color 单独一条错误码、同一个句子**：`Color < Color`、`Color < int`、`Color < NodePath` 三形都拒（与 S355 里「Color 在容器内两头都假、不报错」不是一条口子）。`int` 对 `bool` 也拒 —— 源里的 `<` 不折 bool，别拿标量那一族的经验套。给值那几格（`1 < 1`、`1.5 < 1`、`1 < 1.5`、`["a"] >= ["b"]`）一字没动。
+- **不动别人口径**：错误码 `compare-operands` / `color-cmp` 保留，S353 的 `lessOrFalse` 仍只吞这两支，`bsearch` 246 格与 `sort_custom` 全门未变；`&"b" < &"a"` 一形引擎给值而我们照旧拒（S355 ③ 的指针序复现不了），生成器把它明写在 drop 名单里。
+- **顺带量到一条新过拦**（还没修）：`var x: Variant = Callable(quit)` 引擎收下，出货分析层先报 `Identifier "quit" not declared in the current scope.` —— 裸方法名当 Callable 值那一形解析期就拦死了。
+- **门**：`pnpm test` **13139**（93 文件）、typecheck **4/4**、`test:compile` **240/348**（sema 82、响亮拒 26）、`test:diff` **232/232** 逐字节（用例 358、静默 / 崩溃 / 未实现 全 0）。
+
 ### 1.170 数组对数组的 `<` 接上：形秩全序 + 同型比值 + 长度平手，Color / NodePath / 字典比不出（2026-10-14，S355，语料 358）
 
 - **接的是 §6 第 54 条②那条**：改前 `compare` 对「容器对容器」一律抛，而引擎给值 —— 语料 358 七行、门 `array-order.test.ts` 240 格，另有 S353 门里跳过的 12 格容器格补回（`array-bsearch-bound.test.ts` 现在 246 格）。
