@@ -76,9 +76,9 @@ describe("compiler · 宿主基类方法名裸当值用", () => {
     eq("361", "非宿主脚本里的 quit", await compile(src), "diag:undeclared-identifier");
   });
 
-  it("静态方法里那一形没量过，所以不认", async () => {
+  it("静态方法里读到宿主名：引擎那句是「不能从静态函数访问非静态变量」", async () => {
     const src = "extends SceneTree\n\nstatic func f():\n\tvar c: Variant = quit\n\tprint(c)\n\nfunc _initialize():\n\tquit()\n";
-    eq("361", "静态方法里的 quit", await compile(src), "diag:undeclared-identifier");
+    eq("361", "静态方法里的 quit", await compile(src), "diag:host-read-in-static");
   });
 
   it("局部变量与形参盖住同名：取到的是变量而不是 Callable", async () => {
@@ -124,8 +124,8 @@ describe("compiler · 能读不能写的那三族名字", () => {
     eq("362", "内部类里写 quit", await compile(src), "diag:undeclared-identifier");
   });
 
-  it("静态方法里那一形没量过，所以仍按未声明拒", async () => {
+  it("静态方法里写宿主名：同一句，不是那句「常量」", async () => {
     const src = "extends SceneTree\n\nstatic func f():\n\tquit = 5\n\nfunc _initialize():\n\tquit()\n";
-    eq("362", "静态方法里写 quit", await compile(src), "diag:undeclared-identifier");
+    eq("362", "静态方法里写 quit", await compile(src), "diag:host-read-in-static");
   });
 });

@@ -111,9 +111,10 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
     null,
   );
 
-  // 宿主基类方法名当值用只在根类的实例方法里认（S358）：内部类那支实测照样 `not declared`，`extends` 别的脚本那一形没量过，所以都不给这张表
+  // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366）：只给根模块 —— 内部类里实测照样 `not declared`，`extends` 别的脚本那一形还没接（§6 第 60 条）
   const hostFace = m.extends === "SceneTree" ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
+  checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
   checkStaticAccess(m.funcs, m.vars, diags);
   checkClassFuncVisibility(m, diags);
@@ -129,25 +130,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>()): Di
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
-  recordInitValueReads(m, moduleScope, coroutines);
 
   return diags;
-}
-
-/** 字段初值不在 `checkFunc` 的作用域走查里，这里只补记「全局函数取值点」，诊断一律丢进一张空表：多记无害，发射器那几支成员分支排在前面会先接住。 */
-function recordInitValueReads(m: Module, scope: Scope, coroutines: Set<string>): void {
-  const scratch: Diagnostic[] = [];
-  const walkVars = (list: VarDecl[]): void => {
-    for (const v of list) if (v.init !== null) walkExpr(v.init, scope, coroutines, scratch);
-  };
-  const walkClasses = (list: ClassDecl[]): void => {
-    for (const c of list) {
-      walkVars(c.vars);
-      walkClasses(c.innerClasses);
-    }
-  };
-  walkVars(m.vars);
-  walkClasses(m.innerClasses);
 }
 
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
@@ -2144,11 +2128,27 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 }
 
+/** 字段初值那一层：引擎照样查名字（`var f = nosuch` 是解析期拒），`self` 在其中也合法（实测 typeof 24）；`static var` / `const` 初值里读到宿主名时引擎各换一句（S367 的读数）。 */
+function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>, diags: Diagnostic[], face: Set<string>): void {
+  const selfScope = scope.child([], true);
+  for (const v of list) {
+    if (v.init === null) continue;
+    const prevFace = hostValueMethods;
+    const prevCtx = hostStaticCtx;
+    hostValueMethods = face;
+    hostStaticCtx = v.isConst ? { kind: "const", name: v.name } : v.isStatic ? { kind: "var" } : null;
+    walkExpr(v.init, selfScope, coroutines, diags);
+    hostValueMethods = prevFace;
+    hostStaticCtx = prevCtx;
+  }
+}
+
 function checkClass(c: ClassDecl, base: Scope, diags: Diagnostic[], classes: Map<string, ClassDecl>): void {
   const scope = base.child([c.name, ...declNames(c), ...inheritedNames(c, classes)]);
   const coroutines = new Set(c.funcs.filter((f) => f.coroutine).map((f) => f.name));
   checkStaticAccess(c.funcs, c.vars, diags);
   for (const f of c.funcs) checkFunc(f, scope, coroutines, diags);
+  checkFieldInits(c.vars, scope, coroutines, diags, NO_HOST_VALUE_METHODS);
   for (const inner of c.innerClasses) checkClass(inner, scope, diags, classes);
 }
 
@@ -2182,10 +2182,14 @@ function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[]
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
   const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
-  // 静态方法里那形没量过，照旧不认（S358 只钉了实例方法体）
-  hostValueMethods = f.isStatic ? NO_HOST_VALUE_METHODS : hostFace;
+  const prevFace = hostValueMethods;
+  const prevCtx = hostStaticCtx;
+  hostValueMethods = hostFace;
+  hostStaticCtx = f.isStatic ? { kind: "func", name: f.name } : null;
+  for (const p of f.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
   walkStmts(f.body, scope, coroutines, diags, false);
-  hostValueMethods = NO_HOST_VALUE_METHODS;
+  hostValueMethods = prevFace;
+  hostStaticCtx = prevCtx;
 }
 
 function walkStmts(
@@ -2404,8 +2408,10 @@ const VIRTUAL_HOST_NAMES = new Set([
   "_to_string",
   "_validate_property",
 ]);
-/** 只在**根类**的实例方法体里认（实测内部类里 `quit` 照样 `not declared`，静态方法那一形没量过所以也不认）：`checkFunc` 逐函数开关。 */
+/** 只在**根类**里认（实测内部类里 `quit` 照样 `not declared`）：`checkFunc` 逐函数开关，静态方法那一形认到就换引擎那句（S367）。 */
 let hostValueMethods: Set<string> = NO_HOST_VALUE_METHODS;
+/** 读宿主名所在的静态语境：`static func` 带函数名、`static var` 初值、`const` 初值 —— 引擎三处各一句（S367 的读数）。 */
+let hostStaticCtx: { kind: "func"; name: string } | { kind: "var" } | { kind: "const"; name: string } | null = null;
 const hostMethodReads = new Set<string>();
 
 const gvKey = (name: string, line: number, col: number): string => `${name}@${line}:${col}`;
@@ -2431,7 +2437,14 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
     case "ident":
       if (e.name === "super") return;
       if (e.name === "self") {
-        if (!scope.allowsSelf()) {
+        // `const` 初值里引擎直接拒（`static var` 初值那一形给 typeof 0，由发射器发 null 盒子 —— 同一批读数，S367）
+        if (hostStaticCtx !== null && hostStaticCtx.kind === "const")
+          diags.push({
+            code: "const-not-constant",
+            message: `Assigned value for constant "${hostStaticCtx.name}" isn't a constant expression.`,
+            loc: e.loc,
+          });
+        else if (!scope.allowsSelf()) {
           diags.push({
             code: "self-in-static",
             message: 'Cannot use "self" inside a static function.',
@@ -2445,8 +2458,28 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         // 引擎类名当值用同样合法（typeof 24、等式按类），只是那支打印带进程内的号 —— 记下来交给发射器拒
         else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
-        // 宿主基类的方法名当值用：合法且给 Callable（S358），记号交给发射器
-        else if (hostValueMethods.has(e.name)) hostMethodReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+        // 宿主基类的方法名当值用：合法且给 Callable（S358 / S366），记号交给发射器；静态语境与 const / static var 初值里引擎各换一句（S367）
+        else if (hostValueMethods.has(e.name)) {
+          if (hostStaticCtx === null) hostMethodReads.add(gvKey(e.name, e.loc.line, e.loc.col));
+          else if (hostStaticCtx.kind === "func")
+            diags.push({
+              code: "host-read-in-static",
+              message: `Cannot access non-static variable "${e.name}" from the static function "${hostStaticCtx.name}()".`,
+              loc: e.loc,
+            });
+          else if (hostStaticCtx.kind === "var")
+            diags.push({
+              code: "host-read-in-static",
+              message: `Cannot access non-static variable "${e.name}" from a static variable initializer.`,
+              loc: e.loc,
+            });
+          else
+            diags.push({
+              code: "const-not-constant",
+              message: `Assigned value for constant "${hostStaticCtx.name}" isn't a constant expression.`,
+              loc: e.loc,
+            });
+        }
         // 宿主链上那 15 支虚方法名取值时引擎换一句（S366：`Compile Error: Identifier not found: _process`，末尾没有句号）
         else if (VIRTUAL_HOST_NAMES.has(e.name))
           diags.push({ code: "undeclared-identifier", message: `Identifier not found: ${e.name}`, loc: e.loc });

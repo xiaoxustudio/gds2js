@@ -437,6 +437,8 @@ let CURRENT_MEMBERS = new Set<string>();
 let STATIC_FUNCS = new Set<string>();
 /** 当前类作用域的 JS 类名：静态调用与静态取值都挂在这个名字上。 */
 let CURRENT_CLASS = "";
+/** 正在发的是 `static var` 初值：那一段里没有实例，`self` 发 null 盒子（实测 typeof 0，S367）。 */
+let selfInNilContext = false;
 /** 当前作用域可见的 `const` → 它所属的 JS 类名：常量是类级的，内部类也看得见外层脚本的常量，裸读一律按归属发成 `<类>.NAME`。 */
 let CLASS_VALUE_OWNERS = new Map<string, string>();
 /** 每个类拥有的类级值（常量 / 静态变量）：认 `Inner.IC`、`A.sv` 这种类名点类级值的写法，须在发射任何函数体之前建好。 */
@@ -1436,7 +1438,7 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
       out.push(...emitAccessors(v));
       continue;
     }
-    const init = slotInit(v.type, v.init);
+    const init = slotInit(v.type, v.init, v.isStatic);
     if (v.isStatic) {
       out.push(`  static ${v.name} = ${init};`);
       continue;
@@ -1451,11 +1453,17 @@ function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: num
   return out;
 }
 
-/** 字段 / 静态变量的初始化：定型容器走 `stampDecl`，定目标量还要再过 `declaredCast`。 */
-function slotInit(t: TypeRef | null, init: Expr | null | undefined): string {
-  const raw = stampDecl(t, init, emitExpr);
-  const cast = declaredCast(t);
-  return cast === null ? raw : `${cast}(${raw})`;
+/** 字段 / 静态变量的初始化：定型容器走 `stampDecl`，定目标量还要再过 `declaredCast`。`selfIsNil` 那支是 `static var` 初值 —— 那处没有实例，实测 `self` 给 typeof 0（S367）。 */
+function slotInit(t: TypeRef | null, init: Expr | null | undefined, selfIsNil = false): string {
+  const prev = selfInNilContext;
+  selfInNilContext = selfIsNil;
+  try {
+    const raw = stampDecl(t, init, emitExpr);
+    const cast = declaredCast(t);
+    return cast === null ? raw : `${cast}(${raw})`;
+  } finally {
+    selfInNilContext = prev;
+  }
 }
 
 /** proto 形状的类要一份类型声明：字段都在 `__gd_fields__()` 里落地，类体里只发 `declare` —— 带初值的类字段会在 `super()` 之后再定义一次，把基类已写好的值冲掉。 */
@@ -1498,7 +1506,7 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }
-    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init)};`);
+    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
   }
   if (out.length > 0) out.push("");
   return out;
@@ -3144,7 +3152,7 @@ function emitExprVar(e: Expr): string {
       return emitLit(e.lit, e.value);
 
     case "ident":
-      if (e.name === "self") return `rt.V.object(this)`;
+      if (e.name === "self") return selfInNilContext ? "rt.V.nil()" : `rt.V.object(this)`;
       const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
       // 类名当接收者（`Inner.make()`、`Inner.f` 取值）时给的是类身份的盒子：类值本身装不进 Variant。

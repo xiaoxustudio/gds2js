@@ -779,6 +779,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.184 字段初值与形参默认值那一层从此真查：模块级 `var f = quit` 不再发成裸标识符，静态语境三句按位置分文（2026-10-14，S367，语料 369）
+
+- **出货里的真 bug**：`analyze` 旧码 `recordInitValueReads` 走查字段初值只为补记「全局函数取值点」，整摞诊断丢进一张空表 —— 等于那一层不查名字。后果是模块级 `var f = quit` 编得过、发出来的是裸标识符，跑起来当场 `quit is not defined`；同一层里 `var f = nosuch` 也一路放行到运行期。
+- **量法**：解析期报错一句废整份脚本，所以一格一份 `.gd` 一次 spawn —— `fold55` 二十格钉「函数体之外的那些位置」，`fold56` 六格补 `static func` 里的**写**位与 `self` 在 `static var` / `const` 初值里的形状；两侧同表对照，读数 `tmp/pos/{compare.txt,compare2.txt}`。
+- **接法**：`checkFieldInits` 取代那张空表（模块与内部类的字段初值都真查，走的是允许 `self` 的作用域 —— 模块字段、内部类字段、实例方法形参默认值里的 `self` 实测都给 typeof 24），`checkFunc` 多走查一遍形参默认值，宿主名单仍只给根模块。静态语境三句分文：`static func`（读、写、默认值三种位置同一句、带那支函数名）、`static var` 初值、`const` 初值各一句，逐字照引擎。
+- **顺带修的一处静默错值**：`static var f = self` 引擎给 typeof 0（那处没有实例），出货此前一律发 `rt.V.object(this)`，而 JS 静态字段初始化里的 `this` 是那个类本身 → typeof 24。发射器在 `static var` 初值那一段改发 `rt.V.nil()`。
+- **门**：`host-name-positions.test.ts` 15 格（放行的六格钉发射式子、拒的六格钉原文、`self` 三格钉收/拒），`implicit-callable-value.test.ts` 那两支「静态方法没量过所以按未声明拒」的旧格子换成实测那句；语料 369 七行逐字节 —— 「内部类字段初值的 `self`」那一格引擎在退出时报 `ObjectDB instances leaked`，golden 里带上那两行就没法逐字节对账，所以请出语料、只留门与两侧读数。
+- **门读数**：`pnpm test` **13804**（104 文件）、typecheck **4/4**、`test:compile` **249/358**（sema 83、响亮拒 26，一例未动）、`test:diff` **241/241** 逐字节、golden 未漂移 **368/368**。
+- **还欠的三面**（§6 第 60 条）：内部类自己 `extends SceneTree` 那一形（引擎认、发射期先拒）、沿 `extends "res://…"` 文件链挂到 SceneTree 的脚本（本轮只量了引擎一侧）、lambda 形参的默认值（引擎给 25、出货响亮拒）。
+
 ### 1.183 `_x` 虚方法名换回引擎那一句：`Identifier not found: _process`（末尾没有句号）（2026-10-14，S366 补）
 
 - **接着 1.182 的那 15 名**：它们不进宿主名单是对的（引擎取值也报错），但报错的句子与一般没声明的名字**不是一样** —— 引擎发 `SCRIPT ERROR: Compile Error: Identifier not found: _process`，而我们统一发 `Identifier "X" not declared in the current scope.`（那句在语料 golden 里有一批，是一般名字的正确原文）。
