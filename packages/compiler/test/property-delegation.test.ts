@@ -176,3 +176,32 @@ describe("具名委托的准入拒（句子照引擎原文）", () => {
     eq("371", "带逗号换行不拒", out.includes("return this._g();") && out.includes("this._s(value);"), true);
   });
 });
+
+describe("读写器的记号级畸形形（句子照引擎原文）", () => {
+  const P = (seg: string): string => `${H}func _g() -> Variant:\n\treturn 3\n\nfunc _s(v: Variant) -> void:\n\tpass\n\nvar thing: Variant:\n\t${seg}\n${TAIL}`;
+
+  it("get 后面漏等号", async () => {
+    eq("374", "get 名", await compile(P("get _g")), 'Expected ":" or "(" after "get".');
+    eq("374", "get 名 名", await compile(P("get _g _s")), 'Expected ":" or "(" after "get".');
+  });
+
+  it("set 后面漏等号：与 get 那一侧不同文", async () => {
+    eq("374", "set 名", await compile(P("set _s")), 'Expected "(" after "set".');
+  });
+
+  it("等号后不是名字", async () => {
+    eq("374", "get = 字面量", await compile(P("get = 5")), 'Expected getter function name after "=".');
+    eq("374", "set = 字面量", await compile(P("set = 5")), 'Expected setter function name after "=".');
+  });
+
+  it("等号后空着", async () => {
+    eq("374", "get = 空", await compile(P("get =")), 'Expected getter function name after "=".');
+    eq("374", "set = 空", await compile(P("set =")), 'Expected setter function name after "=".');
+  });
+
+  it("合法的四形一句都不许响", async () => {
+    for (const seg of ["get:\n\t\treturn 3", "set(v):\n\t\tpass", "get = _g", "set = _s", "get = _g,\n\tset = _s"]) {
+      eq("374", `合法形 ${seg.slice(0, 6)}`, (await compile(P(seg))).startsWith("Expected"), false);
+    }
+  });
+});

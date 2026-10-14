@@ -99,6 +99,36 @@ function checkColonHere(n: SyntaxNode, sentence: string): void {
   if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence);
 }
 
+/** 读写器的两句记号级畸形形：`get 名`（漏等号，`set` 那侧句子不同文）与 `get = 5`（等号后不是名字）。
+ *  tree-sitter 把整条属性声明连后文一起吐成一个 ERROR 节点，句子只能在这个节点的记号序列上认；先见到 `var` 才认，
+ *  免得别的畸形形里恰好有 `get` / `set` 记号被误判（实测六形，读数 `tmp/pos/compare14.txt`）。 */
+function accessorTokenErr(n: SyntaxNode, needVar = true): string | null {
+  const toks: SyntaxNode[] = [];
+  const collect = (x: SyntaxNode): void => {
+    if (x.children.length === 0) toks.push(x);
+    else for (const c of x.children) collect(c);
+  };
+  collect(n);
+  let seenVar = !needVar;
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i]!;
+    if (t.isNamed) continue;
+    if (t.text === "var") seenVar = true;
+    if (!seenVar || (t.text !== "get" && t.text !== "set")) continue;
+    const nxt = toks[i + 1];
+    if (nxt === undefined || nxt.text === ":" || nxt.text === "(") continue;
+    if (nxt.text === "=") {
+      // 名字必须在**同一行**上：`get =` 之后空着时 tree-sitter 会把下一行的 `func` 当成 getter 名捡走
+      const after = toks[i + 2];
+      const isName = after !== undefined && (after.type === "identifier" || after.type === "getter" || after.type === "setter");
+      if (isName && after!.startPosition.row === t.startPosition.row) continue;
+      return `Expected ${t.text === "get" ? "getter" : "setter"} function name after "=".`;
+    }
+    return t.text === "get" ? 'Expected ":" or "(" after "get".' : 'Expected "(" after "set".';
+  }
+  return null;
+}
+
 function named(n: SyntaxNode): SyntaxNode[] {
   return n.namedChildren;
 }
@@ -169,8 +199,11 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "annotation":
       case "comment":
         break;
-      default:
+      default: {
+        const sentence = c.type === "ERROR" ? accessorTokenErr(c) : null;
+        if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
         throw new UnsupportedError("module-node", `顶层节点 ${c.type} 未支持`);
+      }
     }
   }
   return m;
@@ -210,9 +243,14 @@ function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
       setter = { kind: "inline", param: pname, body: blockBody(c) };
     } else if (c.type === "getter") getter = { kind: "method", method: c.text };
     else if (c.type === "setter") setter = { kind: "method", method: c.text };
-    // 两段之间少了逗号（`get = _g` 换行再 `set = _s`）：引擎给的是这一句，带逗号换行则合法（语料 121 那一格）
-    else if (c.type === "ERROR" && /^(get|set)\s*=/.test(c.text)) throw new UnsupportedError("property-setget", "Expected end of indented block for property.");
-    else if (c.isNamed) {
+    else if (c.type === "ERROR") {
+      // 等号后空着（`get =`）那一形：ERROR 落在 setget 里面，句子要在整段的记号序列上认
+      const sentence = accessorTokenErr(n, false);
+      if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
+      // 两段之间少了逗号（`get = _g` 换行再 `set = _s`）：引擎给的是这一句，带逗号换行则合法（语料 121 那一格）
+      if (/^(get|set)\s*=/.test(c.text)) throw new UnsupportedError("property-setget", "Expected end of indented block for property.");
+      throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
+    } else if (c.isNamed) {
       throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
     }
   }
@@ -293,8 +331,11 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "annotation":
         break;
-      default:
+      default: {
+        const sentence = c.type === "ERROR" ? accessorTokenErr(c) : null;
+        if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
         throw new UnsupportedError("class-node", `类内节点 ${c.type} 未支持`);
+      }
     }
   }
   return decl;
