@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.221 一元那三支量齐：`-` / `+` 只有 int 与 float 走得通，`not` 恒为 bool（2026-10-16，S400，§6 新增第 71 条）
+
+- **18 格一元两支 + 12 格 `not`**（`tmp/probe-unary/{round1,round2}.mts` → `compare{67,68}.txt`）：`-1` / `-1.5` / `+1` / `+1.5` 给值，bool / String / Array / Dictionary 四型两支都给 `Invalid operands 'X' and 'Nil' in operator 'unary-' / 'unary+'.` —— **第二格是 `Nil`、操作数名带 `unary` 前缀**，与二元那一句同式不同名。
+- **一条「Godot 能跑、我们当场拒」**：`+a` 此前在发射期抛 `[emit-unary] 一元运算符 + 还没实现`；新增 `ops.pos`（数值原样返回、六型之内发引擎原文、六型之外响亮拒）与 emitter 那一行。
+- **`ops.neg` 的自造话换掉**：`- 不支持 bool` 那句引擎从没有过；六型之内改发第三式原文，向量 / Color 那些探针之后落空的照旧响亮拒。
+- **`not` 是实现本来就对、补门的那一族**：六型真侧全 `false`、假侧全 `true`，`typeof(not …)` 给 1。
+- **门**：`packages/runtime/test/unary-operators.test.ts` 30 断言；出货端到端 18 格逐格对照（`tmp/probe-unary/ours.mts`）不合 0 格。
+- **仍欠**：`**` 与 `in` 两支的六型矩阵、`~`（bnot）与一元在六型之外的读数，以及第 69 条剩下的装箱 `Variant` 与链式两形。
+- **门读数**：`pnpm test` **14055**（130 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.220 运算符那一族第五张矩阵：左支换成初值推断的模块 var，引擎解析期一声不出、拒格全在运行期（2026-10-16，S399，§6 第 69 条的推断那一形结清）
 
 - **468 格**（`tmp/probe-inferrecv/round1.mts`，读数 `compare62.txt`）：**0 格解析期拒、133 格照发值、329 格拒在运行期、6 格属 `String %`** —— 拒的三元对与 `OP_PAIRS_REFUSED_DECL` 逐对相同（共同 329、两侧独有各 0），只是句式换成运行期第三式 `Invalid operands 'A' and 'B' in operator 'X'.`。

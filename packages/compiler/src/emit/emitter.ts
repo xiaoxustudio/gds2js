@@ -3096,6 +3096,7 @@ function emitExprVar(e: Expr): string {
     case "unary":
       if (e.op === "not") return `rt.V.bool(!rt.ops.truthy(${emitExpr(e.operand)}))`;
       if (e.op === "-") return `rt.ops.neg(${emitExpr(e.operand)})`;
+      if (e.op === "+") return `rt.ops.pos(${emitExpr(e.operand)})`;
       if (e.op === "~") return `rt.ops.bnot(${emitExpr(e.operand)})`;
       throw new UnsupportedError("emit-unary", `一元运算符 ${e.op} 还没实现`);
 

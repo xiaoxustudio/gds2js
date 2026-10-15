@@ -293,9 +293,21 @@ export const ops = {
     const caNeg = asColor(a);
     if (caNeg) return color(1 - caNeg.r, 1 - caNeg.g, 1 - caNeg.b, caNeg.a);
     if (!isNum(a)) {
+      if (MEASURED_SIX.has(a.t)) {
+        throw new GodotRuntimeError("neg-operands", `Invalid operands '${valueTypeName(a)}' and 'Nil' in operator 'unary-'.`);
+      }
       throw new UnsupportedError("neg-operands", `- 不支持 ${tagName(a.t)}`);
     }
     return a.t === Tag.INT ? V.int(-intToBig(a.v as IntPayload)) : V.float(-(a.v as number));
+  },
+
+  /** 一元 `+`：实测只有 int 与 float 走得通，其余六型给运行期那一句（第二格引擎写的是 `Nil`，S400）。 */
+  pos(a: Variant): Variant {
+    if (isNum(a)) return a;
+    if (MEASURED_SIX.has(a.t)) {
+      throw new GodotRuntimeError("pos-operands", `Invalid operands '${valueTypeName(a)}' and 'Nil' in operator 'unary+'.`);
+    }
+    throw new UnsupportedError("pos-operands", `+ 不支持 ${tagName(a.t)}`);
   },
 
   eq(a: Variant, b: Variant): Variant {
