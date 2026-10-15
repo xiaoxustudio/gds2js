@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.195 pack 的方法元数接进解析期：22 名 × 九支两侧量齐，`slice` 的上限是 2 不是 3（2026-10-14，S376，门 8 格）
+
+- **上一轮白捡的靶子打完了**：六支扫描每格都是零实参调用，于是「至少」那一半的读数已经在手；这一轮把「至多」那一半也量齐 —— int64 / byte / string 三支 69 格、其余五支 110 格，**五支读数一字不差**，所以九支共用一张表（八支多一支 `to_byte_array`，byte 自己那支引擎说没这名字）。
+- **一处只有量了才知道的形状**：`slice` 的上限是 **2**（`slice(0, 1, 1, 1)` 给 `Expected at most 2 but received 4`）—— pack 那支**没有** `Array.slice(begin, end, step)` 的 step。照 Array 那侧抄表就会把合法调用拦成错。
+- **接法是把九支塞进 `VALUE_METHOD_ARITY`**：那张表本来就喂着「标注接收者 / 推断接收者 / 构造式接收者」三条路，塞进去三形一起生效，`Too few` / `Too many` 两句与值类型五支同文。此前 pack 的元数一路放到运行期，发的是中文自述 `append() 需要 1 个参数（收到 0 个）` —— 属错值（引擎在解析期就拒，整份脚本都不跑）。
+- **顺带归位一名**：`sort_custom` 九支逐支量过都说没这名字（pack 只有 `sort`，`sort_custom` 是 Array 那侧的），此前落到 switch 的兜底发中文自述，现登进 `NO_SUCH_METHOD`。
+- **没接的一格，理由写清**：类名直调（`PackedInt64Array.size()`）引擎给的是与值类型五支同文的两句（读数在 `arity2.log` 第 07–09 格），出货给的是 `Identifier "PackedInt64Array" not declared in the current scope.`。接它要动 `STATIC_VALUE_TYPES`，而那张表还喂着 `staticType` 的构造调用折算、注释明写 pack 构造式一律 null —— 顺手塞进去会翻掉别的族，所以另开一处判据，记在 §6 第 34 条①。运行期那一侧（接收者静态判不出来）照旧发中文句，引擎在动态形上给哪一句没量，同处记账。
+- **门**：`pack-method-arity.test.ts` 7 格（少给 / 多给各形、三种接收者、`slice` 的上限、带默认实参那三名的第二参合法、`to_byte_array` 按支分、九支同表）+ `packed-member-names.test.ts` 补一格 `sort_custom` 九支。**读数**：`pnpm test` **13899**（112 文件）、typecheck **4/4**、`test:compile` **251/360**（一例未动）、`test:diff` **244/244** 逐字节、既有产物一份没改；golden 零改动（本轮不碰任何 `.gd`）。
+
 ### 1.194 Pack 其余六支的成员名表过完裁判：翻出一处名单污染 —— `push_back` 被我们登成「Godot 里没这名字」（2026-10-14，S375，门 16 格）
 
 - **§6 第 33 条最后一族**：int64 / float32 / float64 / vector2 / vector3 / color 六支各 52 名过裁判（312 格，一格一脚本一次 spawn），引擎有 132、无 180。**六支的「无」名单一字不差**（同 29 名），所以登一张共用表 `MISSING_ON_SIX` 就够，不必六份。名单里混着几个根本不是方法的串（`int32` / `vector2` / `arity` / `empty` 那一族 —— 扫描时从 `packed.ts` 自己的表里连出来的），引擎对它们同样给 Nonexistent，所以一并登：此前它们落到 switch 的兜底、发的是中文自述。

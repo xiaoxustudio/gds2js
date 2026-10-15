@@ -122,4 +122,11 @@ describe("runtime/packed · push_back 与 clear 九支都发货", () => {
     eq("375", "push_back 缺实参", /需要 1 个参数/.test(errOf(() => packMethod(recv, "push_back", []))), true);
     eq("375", "clear 多实参", /需要 0 个参数/.test(errOf(() => packMethod(recv, "clear", [V.int(1)]))), true);
   });
+
+  it("sort_custom 九支都没这名字：pack 只有 sort（逐支量过）", () => {
+    for (const [type, kind] of NINE) {
+      const recv = packBytes(packCtor(kind, []));
+      eq("376", `${type}.sort_custom()`, errOf(() => packMethod(recv, "sort_custom", [])), `Invalid call. Nonexistent function 'sort_custom' in base '${type}'.`);
+    }
+  });
 });

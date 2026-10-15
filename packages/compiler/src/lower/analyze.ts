@@ -2828,6 +2828,18 @@ function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diag
 
 /** 值类型方法的元数表（S305）：154 名逐名过裁判（`tmp/probe-value-arity/{a,max,max6}.mts`），存 `[下界, 上界]` ——
  *  148 名是定元数，只有六支带默认实参（`limit_length` 0..1、`Color.clamp` 0..2、`from_hsv` / `from_ok_hsl` 3..4、`to_html` 0..1）。 */
+/** pack 九支共用的那 21 名元数，两侧都是九支逐支量过的：「至少」六支在 `tmp/probe-pack/sweep.json`、byte / int32 / string 在 `compare18.txt`；
+ *  「至多」int64 / byte / string 在 `compare16.txt` 与 `arity2.log`、其余五支在 `compare19.txt`（110 格，五支读数一字不差）。
+ *  `slice` 的上限是 **2** 不是 3 —— pack 那支没有 `Array.slice(begin, end, step)` 的 step。byte 独有的 `compress` / `decompress` 那一族只量到下限，不进表。 */
+const PACK_METHOD_ARITY: Record<string, [number, number]> = {
+  append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
+  duplicate: [0, 0], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
+  insert: [2, 2], is_empty: [0, 0], push_back: [1, 1], remove_at: [1, 1], resize: [1, 1],
+  reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
+};
+/** 八支（除 byte 自己）多一支 `to_byte_array`：byte 上引擎说没这名字（`tmp/probe-pack/arity2.log` 第 10 格）。 */
+const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
+
 const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
   Vector2: {
     abs: [0, 0], angle: [0, 0], angle_to: [1, 1], angle_to_point: [1, 1], aspect: [0, 0],
@@ -2872,9 +2884,18 @@ const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
     lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
     to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
   },
+  PackedByteArray: PACK_METHOD_ARITY,
+  PackedInt32Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedInt64Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedFloat32Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedFloat64Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedStringArray: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedVector2Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedVector3Array: PACK_METHOD_ARITY_WITH_BYTES,
+  PackedColorArray: PACK_METHOD_ARITY_WITH_BYTES,
 };
 
-/** 只认「名字本身就是这五支之一」的标注与字面量构造式，别的（`Variant`、自定义类、引擎类）一概不猜。 */
+/** 只认「名字本身就是表里那几支之一」的标注与字面量构造式（值类型五支 + pack 九支），别的（`Variant`、自定义类、引擎类）一概不猜。 */
 function valueTypeAnnotation(t: TypeRef | null): string | null {
   return t !== null && t.kind === "named" && t.name in VALUE_METHOD_ARITY ? t.name : null;
 }

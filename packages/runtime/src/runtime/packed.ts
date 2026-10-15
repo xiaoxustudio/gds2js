@@ -438,6 +438,8 @@ const NO_SUCH_METHOD = new Set([
   "push_front",
   "copy_on_write",
   "join",
+  // 九支逐支量过都说没这名字（`tmp/probe-pack/arity2.log` 11/13/…/27 格）：pack 只有 `sort`，`sort_custom` 是 Array 那侧的
+  "sort_custom",
 ]);
 /** 存在但还没实现的形状 —— 响亮拒，不拿别的 pack 的结论凑。 */
 const NOT_YET = new Set(["to_hex_string", "search_sorted"]);
