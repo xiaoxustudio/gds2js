@@ -787,7 +787,7 @@
 - **两处只有量了才知道的**：字典上的 `sort()` 是**零参**（按键排，不收比较器），与 Array 那支同名同元数但不同语义，照文档写会把它当 `[1,1]`；`recursive_equal` 要**两支**（第二支是递归计数），与 S377 那一轮的读数对上。
 - **不存在的 29 支一并归位**：`all any append_array bsearch bsearch_custom count fill filter find find_custom insert is_same join map max min pop_at pop_back pop_front push_back push_front reduce remove_at resize reverse rfind rfind_custom slice sort_custom` —— 引擎一律 `Invalid call. Nonexistent function '<名>' in base 'Dictionary'.`，此前落到 switch 兜底发中文「未实现」。原来只有 `join` 一名单挂着，现在换成 `DICT_NO_METHOD` 一张表（§6 第 63 条④的 `is_same` 就在这 29 支里）。
 - **闸门只认证得出 Dictionary 的接收者**：`checkDictMethodArity` 与 `checkPackArgSlots` 同一口径 —— 标注 `Dictionary`（含 `Dictionary[K, V]`）与 `{…}` 字面量两种静态证明，字面量直接当接收者也认，被重新赋值过的名字丢掉，证不出就不报（宁可漏拦不误拦）。
-- **门**：`dict-method-arity.test.ts` 9 格（两句各钉原文 + 零参那一族合法）+ `dict-pure-methods.test.ts` 长到 14 格（幽灵名两格）；`pnpm test` **13929**（114 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动 —— 没有语料把字典方法用到区间外）、`test:diff` **245/245** 逐字节；golden 零改动（本轮不碰任何 `.gd`、不改任何产物）。
+- **门**：`dict-method-arity.test.ts` 9 格（两句各钉原文 + 零参那一族合法）+ `dict-pure-methods.test.ts` 长到 14 格（幽灵名两格）；`pnpm test` **13929**（114 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动 —— 没有语料把字典方法用到区间外）、`test:diff` **245/245** 逐字节；golden `--check` **372/372 零漂移**（本轮不碰任何 `.gd`、不改任何产物）。
 
 ### 1.197 Dictionary 的三支纯方法发货：`merged` / `get_or_add` / `recursive_equal`，其中一支的签名与直觉不同（2026-10-14，S377，语料 373）
 
