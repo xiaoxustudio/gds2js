@@ -780,6 +780,24 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.220 运算符那一族第五张矩阵：左支换成初值推断的模块 var，引擎解析期一声不出、拒格全在运行期（2026-10-16，S399，§6 第 69 条的推断那一形结清）
+
+- **468 格**（`tmp/probe-inferrecv/round1.mts`，读数 `compare62.txt`）：**0 格解析期拒、133 格照发值、329 格拒在运行期、6 格属 `String %`** —— 拒的三元对与 `OP_PAIRS_REFUSED_DECL` 逐对相同（共同 329、两侧独有各 0），只是句式换成运行期第三式 `Invalid operands 'A' and 'B' in operator 'X'.`。
+- **改的是运行期不是解析期**：`ops.add` / `sub` / `mul` / `div` 落到末尾那支时发的是 `[add-operands] + 不支持 bool + int` 这类自写文本，引擎讲的是第三式；`ops.eq` / `neq` 更糟 —— 异型给 `false` 而引擎当场抛。新增 `operandsRefused` / `eqSixRefused` 两道：**六型之内发引擎原文，六型之外照旧响亮拒**（没量过的型不猜）。
+- **`==` 那一族只挂运算符支**：`eqSixRefused` 只加在 `ops.eq` / `ops.neq` 上，容器内部比等（`has` / `index` / `match` 手臂）走的 `valueEq` 一行没动，S279 的「异型假而不抛」不受影响；六型里只有 int 与 float 互相能比。
+- **门**：`operator-pairs.test.ts` 第五半 468 格逐格期望「不拦」；新门 `operator-runtime-pairs.test.ts` 462 格逐格比对值与那句运行期原文（生成器 `tmp/probe-inferrecv/gen4.mts`）。
+- **一格噪声已重量**：`Dictionary|float|!=` 被引擎自己的 `editor_settings-4.6.tres` 那句 Parse Error 混掉，`fix422.mts` 重跑归位。
+- **仍欠**：装箱 `Variant`（形参不带标注）、链式 `x.y <= 1`、`String %` 的边界，与「内部类方法能否看见模块 const」。
+- **门读数**：`pnpm test` **14031**（129 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
+### 1.219 `and` / `or` 的值恒为 bool：出货此前是 Python 式把实参原样递出去（2026-10-16，S398，§6 新增第 70 条结清）
+
+- **27 格读数**（`tmp/probe-andor/round4.mts` → `compare65.txt`）：`1 and 2` 给 `true`、`0 and 3` 给 `false`、`3 or 0` 给 `true`、`[] or {}` 给 `false`，而 `typeof(1 and 2)` / `typeof(0 or 3)` / `typeof(true and 1)` 三格全给 **1（BOOL）**；装箱那一头（`Variant` 形参）同形 —— 与操作数的静态型无关。
+- **短路没变**：`0 and side()` 不跑、`1 and side()` 跑、`1 or side()` 不跑、`0 or side()` 跑，六格靠 `SIDE` 那一行打印定案。
+- **实现改两支**：`rt.and` / `rt.or` 恒发 `V.bool(...)`；发射器只有 `rt.and(l, () => r)` 一条路（emitter.ts:3323），没有第二处要跟着改。
+- **门为什么不响**：语料里 `and` / `or` 全用作条件（真值一致），没有一格把它的值当数打出来 —— 所以 golden 与 `test:diff` 逐字节不变是这一条的凭据，而不是「没改到东西」；`gds2js run` 端到端 27 格从 26 格不合改到不合 0 格。
+- **门读数**：`pnpm test` **14031**（129 文件，含新门 `logic-and-or.test.ts` 20 断言）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.218 运算符那一族第四张矩阵：右支换成标明类型的名字，集合与第三张逐对相同（2026-10-15，S397，§6 第 69 条③的第一形结清）
 
 - **468 格**（`tmp/probe-revrecv/round1.mts`，读数 `compare61.txt`）：左支字面量、右支是模块级 `var b: T` —— **329 格拒（全第二式）、133 格照发值、6 格属 `String %` 那条通道**，三类计数与「左支是名字」那一形一字不差。

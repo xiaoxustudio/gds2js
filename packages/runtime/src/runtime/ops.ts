@@ -71,8 +71,25 @@ function intPair(a: Variant, b: Variant, op: string): [IntPayload, IntPayload] {
   return [a.v as IntPayload, b.v as IntPayload];
 }
 
-/** 装箱轨的 int 二元算术：一律升到 bigint、按 int64 回绕，再由 V.int 归一化载荷。 */
-function i64(x: IntPayload, y: IntPayload, f: (a: bigint, b: bigint) => bigint): Variant {
+/** 量过的六型（S399 那张 468 格矩阵就摆这六型）：拒的那 329 对引擎讲的是运行期那一句，没量过的型仍走响亮拒。 */
+const MEASURED_SIX = new Set<number>([Tag.BOOL, Tag.INT, Tag.FLOAT, Tag.STRING, Tag.ARRAY, Tag.DICT]);
+
+function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {  if (MEASURED_SIX.has(a.t) && MEASURED_SIX.has(b.t)) {
+    throw new GodotRuntimeError(code, `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+  }
+  throw new UnsupportedError(code, `${op} 不支持 ${tagName(a.t)} ${op} ${tagName(b.t)}`);
+}
+
+/** `==` / `!=` 的两支型不同时引擎讲的是运行期那一句（S399 那 36 格里只有 int 与 float 互相能比，其余 28 对全拒）；六型之外照旧走原路。 */
+function eqSixRefused(a: Variant, b: Variant, op: "==" | "!="): void {
+  if (a.t === b.t) return;
+  if (!MEASURED_SIX.has(a.t) || !MEASURED_SIX.has(b.t)) return;
+  const num = (t: number): boolean => t === Tag.INT || t === Tag.FLOAT;
+  if (num(a.t) && num(b.t)) return;
+  throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
+}
+
+/** 装箱轨的 int 二元算术：一律升到 bigint、按 int64 回绕，再由 V.int 归一化载荷。 */function i64(x: IntPayload, y: IntPayload, f: (a: bigint, b: bigint) => bigint): Variant {
   return V.int(f(intToBig(x), intToBig(y)));
 }
 
@@ -112,7 +129,7 @@ export const ops = {
     if (asNodePath(a) !== null || asNodePath(b) !== null) {
       throw new GodotRuntimeError("add-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '+'.`);
     }
-    throw new UnsupportedError("add-operands", `+ 不支持 ${tagName(a.t)} + ${tagName(b.t)}`);
+    return operandsRefused(a, b, "+", "add-operands");
   },
 
   sub(a: Variant, b: Variant): Variant {
@@ -136,7 +153,7 @@ export const ops = {
       throw new GodotRuntimeError("sub-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '-'.`);
     }
     if (!isNum(a) || !isNum(b)) {
-      throw new UnsupportedError("sub-operands", `- 不支持 ${tagName(a.t)} - ${tagName(b.t)}`);
+      return operandsRefused(a, b, "-", "sub-operands");
     }
     return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x - y) : V.float(num(a) - num(b));
   },
@@ -179,7 +196,7 @@ export const ops = {
       return color(caMul.r * num(b), caMul.g * num(b), caMul.b * num(b), caMul.a * num(b));
     if (cbMul && isNum(a))
       return color(cbMul.r * num(a), cbMul.g * num(a), cbMul.b * num(a), cbMul.a * num(a));
-    throw new UnsupportedError("mul-operands", `* 不支持 ${tagName(a.t)} * ${tagName(b.t)}`);
+    return operandsRefused(a, b, "*", "mul-operands");
   },
 
   div(a: Variant, b: Variant): Variant {
@@ -215,7 +232,7 @@ export const ops = {
     if (caDiv && isNum(b)) return color(caDiv.r / num(b), caDiv.g / num(b), caDiv.b / num(b), caDiv.a / num(b));
     if (cbDiv && isNum(a)) return color(cbDiv.r / num(a), cbDiv.g / num(a), cbDiv.b / num(a), cbDiv.a / num(a));
     if (!isNum(a) || !isNum(b)) {
-      throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / ${tagName(b.t)}`);
+      return operandsRefused(a, b, "/", "div-operands");
     }
     if (bothInt(a, b)) {
       const [x, y] = intPair(a, b, "/");
@@ -282,9 +299,11 @@ export const ops = {
   },
 
   eq(a: Variant, b: Variant): Variant {
+    eqSixRefused(a, b, "==");
     return V.bool(valueEq(a, b));
   },
   neq(a: Variant, b: Variant): Variant {
+    eqSixRefused(a, b, "!=");
     return V.bool(!valueEq(a, b, 0, "!="));
   },
   lt(a: Variant, b: Variant): Variant {
