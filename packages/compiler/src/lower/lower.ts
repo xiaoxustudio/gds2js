@@ -209,9 +209,14 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
   return m;
 }
 
-function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
+function lowerVar(n: SyntaxNode, isConst: boolean, inClass = false): VarDecl {
   const typeNode = field(n, "type");
   const valueNode = field(n, "value");
+  // 内部类里 `var x:` 后跟一段 `get 名` / `set 名`（漏等号）那一形，引擎给的是读写器那两句；模块级同一形给的是 `Expected type after ":"`（两侧读数 `tmp/probe-inneracc/compare32.txt` 与 `m1.mts`）
+  if (inClass) {
+    const sentence = accessorTokenErr(n, false);
+    if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
+  }
   checkAfterToken(n, tokenOf(n, "="), valueNode, isConst ? 'Expected initializer expression for constant.' : 'Expected expression for variable initial value after "=".');
   checkAfterToken(n, tokenOf(n, ":"), typeNode, 'Expected type after ":"');
   return {
@@ -309,7 +314,7 @@ function lowerClass(n: SyntaxNode): ClassDecl {
 need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "variable_statement":
-        decl.vars.push(lowerVar(c, false));
+        decl.vars.push(lowerVar(c, false, true));
         break;
       case "const_statement":
         decl.vars.push(lowerVar(c, true));

@@ -199,6 +199,22 @@ describe("读写器的记号级畸形形（句子照引擎原文）", () => {
     eq("374", "set = 空", await compile(P("set =")), 'Expected setter function name after "=".');
   });
 
+  // 内部类里同一形给的是读写器那两句，而**模块级**同一形（`var x:` 不带型 + 换行一段 `get 名`）给的是 `Expected type after ":"` —— 两侧读数 `tmp/probe-inneracc/{compare32.txt,m1.mts}`
+  it("内部类里的六形与模块级同句，只多这一处上下文分岔", async () => {
+    const C = (seg: string): string =>
+      `${H}class Inner:\n\tfunc _g() -> Variant:\n\t\treturn 3\n\n\tfunc _s(v: Variant) -> void:\n\t\tpass\n\n\tvar thing:\n\t\t${seg}\n${TAIL}`;
+    eq("384", "类内 get 名", await compile(C("get _g")), 'Expected ":" or "(" after "get".');
+    eq("384", "类内 get 名 名", await compile(C("get _g _h")), 'Expected ":" or "(" after "get".');
+    eq("384", "类内 set 名", await compile(C("set _s")), 'Expected "(" after "set".');
+    eq("384", "类内 get = 字面量", await compile(C("get = 5")), 'Expected getter function name after "=".');
+    eq("384", "类内 get = 空", await compile(C("get =")), 'Expected getter function name after "=".');
+    eq("384", "类内 set = 字面量", await compile(C("set = 5")), 'Expected setter function name after "=".');
+    eq("384", "类内 set = 空", await compile(C("set =")), 'Expected setter function name after "=".');
+    eq("384", "类内两段少逗号", await compile(C("get = _g\n\t\tset = _s")), "Expected end of indented block for property.");
+    eq("384", "类内合法形不响", (await compile(C("get = _g, set = _s"))).startsWith("Expected"), false);
+    eq("384", "模块级不带型的那一形仍是类型句", await compile(`${H}var x:\n\tget _g\n${TAIL}`), 'Expected type after ":"');
+  });
+
   it("合法的四形一句都不许响", async () => {
     for (const seg of ["get:\n\t\treturn 3", "set(v):\n\t\tpass", "get = _g", "set = _s", "get = _g,\n\tset = _s"]) {
       eq("374", `合法形 ${seg.slice(0, 6)}`, (await compile(P(seg))).startsWith("Expected"), false);
