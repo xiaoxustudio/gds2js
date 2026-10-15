@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.208 全局函数的元数两句搬到解析期：`gds2js check` 从此看得见它们，顺带对出 `max` / `min` 那两位记错（2026-10-15，S387，§6 第 59 条①结清、新增第 66 条）
+
+- **搬的是位置，不是措辞**：发射器里 112 名的 `BUILTIN_ARITY` 与 `range` / `str` 的 `UTILITY_ARITY` 原样移进 `analyze.ts`，句子与 `code` 一字未改（`char-arity` / `var-to-str-arity` / `str-to-var-arity` / `convert-arity` / `range-arity` / `str-arity` / `builtin-arity`），发射期两道闸门删掉。
+- **看得见的差别**：搬完 `check` 给 `main.gd:4:8  error  builtin-arity: Too many arguments for "abs()" call. Expected at most 1 but received 2.`，`range()` / `range(1,2,3,4)` / `str()` 三条各带自己的行列；此前这三格在 `check` 里全是「静态检查通过」，只有 `build` / `run` 才发。
+- **搬闸门 = 把覆盖范围交给走查**，所以逐位置钉 27 格：函数体、`if` / `while` 块、`for` 的迭代式、`match` 手臂、lambda 体、lambda 形参默认值、形参默认值、`var` / `const` / `static var` 初值、内部类字段、读写器 `get` / `set` 体、具名委托方法体、数组元素、字典值、二元右支、`await` 操作数，加 utility 通道那两名各自的三个位置。
+- **钉这一步真抓到洞**：lambda 形参的默认值原来整条没走查 —— `var g = func(a = abs(1, 1)): return a` 编得过；补 `walkExpr(p.default, …)` 后与 `func` 形参默认值同口径（S386 那道构造式闸门同处同一个漏口，一并被这一补堵上）。
+- **顺带逐名对表**（`tmp/probe-timing/bounds-diff.mts`）：110/112 名与 `GLOBAL_CALLABLES` 的 `bounds` 一字一样，漂移的是 `max` / `min`。四格新读数定谁错：`max(1,2,3)` 收、`max(1,2,3,4)` 给 4、`min(1,2.5,3)` 给 1、`max(1)` → `Too few … at least 2 … received 1.`，而 `get_argument_count()` 两名都是 2 —— Callable 那一位是**声明形参数**，表里当成上界了；全局函数实参类型那一族开头的 bounds 判据（「元数不在区间内就只说元数句、别说类型句」）因此跳过三支以上，`max(1, 2, "a")` 该拦不拦、透传成 `rt.gMax(1, 2, "a")` 是静默错值。表在运行时侧，改它要先把变元尾巴的逐位类型量完 → 新条 §6 第 66 条。
+- **门**：`arity-gate-positions.test.ts` 3 格 · 30 断言（19 位置 + 3 合法 + utility 那两名各自 8 格）、`utility-arity.test.ts` 的 `refuse()` 从「两处都读」换成只读 analyze；`pnpm test` **13966**（122 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变；本轮不碰任何 `.gd`。
+
 ### 1.207 类型构造式越界的第三种句子接上：出货此前十三形全部静默收下（2026-10-15，S386，§6 第 59 条④结清）
 
 - **一句一式**：`No constructor of "X" matches the signature "X(类型, …)".` —— 句号在引号外，签名文本就是实参类型表机械拼出来的。既有那句只在 **match 手臂** 那条路上（`CTOR_ARMS` / `armSignature`），普通调用整族没接。

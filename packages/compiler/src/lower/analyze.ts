@@ -2865,6 +2865,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
 
     case "lambda": {
       const fnScope = scope.child(e.params.map((p) => p.name));
+      // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置
+      for (const p of e.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
       walkStmts(e.body, fnScope, coroutines, diags, false);
       return;
     }
@@ -2880,6 +2882,10 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
           });
         }
         checkCall(name, e, diags);
+        const arity = builtinArity(name, e.args.length) ?? utilityArity(name, e.args.length);
+        if (arity !== null) {
+          diags.push({ code: builtinArityCode(name), message: arity, loc: e.loc });
+        }
       } else {
         walkExpr(e.callee, scope, coroutines, diags);
         if (e.callee.kind === "attribute") checkMethodCall(e.callee.name, e, diags);
@@ -3047,6 +3053,163 @@ function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags
   if (msg !== undefined) diags.push({ code: "join-arg", message: msg, loc: e.loc });
   // 实参是字面量的那十二形由 `FACE_ARG_*` 那两张实测表管（引擎在那里推两句，手抄的这张表只有一句）
 }
+/** 全局函数的元数两句（S365 逐名量的那 208 格）：引擎这两句都在**解析期**，出货此前在**发射期**发同文（§6 第 59 条①）——
+ *  搬进 analyze 之后 `gds2js check` 才看得见它们。表与句子逐字沿用原发射期那一份，一处不改编排。 */
+const BUILTIN_ARITY: Record<string, [number, number]> = {
+  abs: [1, 1],
+  absf: [1, 1],
+  absi: [1, 1],
+  acos: [1, 1],
+  acosh: [1, 1],
+  angle_difference: [2, 2],
+  asin: [1, 1],
+  asinh: [1, 1],
+  atan: [1, 1],
+  atan2: [2, 2],
+  atanh: [1, 1],
+  bezier_derivative: [5, 5],
+  bezier_interpolate: [5, 5],
+  bytes_to_var: [1, 1],
+  bytes_to_var_with_objects: [1, 1],
+  ceil: [1, 1],
+  ceilf: [1, 1],
+  ceili: [1, 1],
+  char: [1, 1],
+  clamp: [3, 3],
+  clampf: [3, 3],
+  clampi: [3, 3],
+  convert: [2, 2],
+  cos: [1, 1],
+  cosh: [1, 1],
+  cubic_interpolate: [5, 5],
+  cubic_interpolate_angle: [5, 5],
+  cubic_interpolate_in_time: [8, 8],
+  db_to_linear: [1, 1],
+  deg_to_rad: [1, 1],
+  dict_to_inst: [1, 1],
+  ease: [2, 2],
+  error_string: [1, 1],
+  exp: [1, 1],
+  floor: [1, 1],
+  floorf: [1, 1],
+  floori: [1, 1],
+  fmod: [2, 2],
+  fposmod: [2, 2],
+  get_stack: [0, 0],
+  hash: [1, 1],
+  inst_to_dict: [1, 1],
+  instance_from_id: [1, 1],
+  inverse_lerp: [3, 3],
+  is_equal_approx: [2, 2],
+  is_finite: [1, 1],
+  is_inf: [1, 1],
+  is_instance_id_valid: [1, 1],
+  is_instance_of: [2, 2],
+  is_instance_valid: [1, 1],
+  is_nan: [1, 1],
+  is_same: [2, 2],
+  is_zero_approx: [1, 1],
+  len: [1, 1],
+  lerp: [3, 3],
+  lerp_angle: [3, 3],
+  lerpf: [3, 3],
+  linear_to_db: [1, 1],
+  log: [1, 1],
+  max: [2, Number.POSITIVE_INFINITY],
+  maxf: [2, 2],
+  maxi: [2, 2],
+  min: [2, Number.POSITIVE_INFINITY],
+  minf: [2, 2],
+  mini: [2, 2],
+  move_toward: [3, 3],
+  nearest_po2: [1, 1],
+  pingpong: [2, 2],
+  posmod: [2, 2],
+  pow: [2, 2],
+  print_stack: [0, 0],
+  rad_to_deg: [1, 1],
+  rand_from_seed: [1, 1],
+  randf: [0, 0],
+  randf_range: [2, 2],
+  randfn: [2, 2],
+  randi: [0, 0],
+  randi_range: [2, 2],
+  randomize: [0, 0],
+  remap: [5, 5],
+  rid_allocate_id: [0, 0],
+  rid_from_int64: [1, 1],
+  rotate_toward: [3, 3],
+  round: [1, 1],
+  roundf: [1, 1],
+  roundi: [1, 1],
+  seed: [1, 1],
+  sign: [1, 1],
+  signf: [1, 1],
+  signi: [1, 1],
+  sin: [1, 1],
+  sinh: [1, 1],
+  smoothstep: [3, 3],
+  snapped: [2, 2],
+  snappedf: [2, 2],
+  snappedi: [2, 2],
+  sqrt: [1, 1],
+  step_decimals: [1, 1],
+  str_to_var: [1, 1],
+  tan: [1, 1],
+  tanh: [1, 1],
+  type_convert: [2, 2],
+  type_exists: [1, 1],
+  type_string: [1, 1],
+  var_to_bytes: [1, 1],
+  var_to_bytes_with_objects: [1, 1],
+  var_to_str: [1, 1],
+  weakref: [1, 1],
+  wrap: [3, 3],
+  wrapf: [3, 3],
+  wrapi: [3, 3],
+  typeof: [1, 1],
+};
+
+/** 少给 / 多给在引擎是解析期拒；这里同在解析期发同文，措辞照原文，`code` 沿用已出货那三支的。 */
+
+function builtinArity(name: string, got: number): string | null {
+  const ar = BUILTIN_ARITY[name];
+  if (ar === undefined) return null;
+  if (got >= ar[0] && got <= ar[1]) return null;
+  return got < ar[0]
+    ? `Too few arguments for "${name}()" call. Expected at least ${String(ar[0])} but received ${String(got)}.`
+    : `Too many arguments for "${name}()" call. Expected at most ${String(ar[1])} but received ${String(got)}.`;
+}
+
+/** 类型构造式之外，`range` 与 `str` 的元数走的是**另一条句子通道**（S385 ②③）：既不是 `Too few` 也不是 `Too many`，
+ *  而是 `Invalid call to [GDScript ]utility function "X()". Expected N argument(s).` —— 少了报下界那一位、多了报上界那一位，
+ *  而且 `str` 的前缀比 `range` 少了 "GDScript"，两支各抄各的。上界写 `null` 是那一支没量过上界（`str` 八支实参照收）。
+ *  读数 `tmp/probe-void/{compare33,compare34}.txt`。同 S387 那批，从发射期搬来，`check` 才看得见。 */
+const UTILITY_ARITY: Record<string, [number, number | null, string]> = {
+  range: [1, 3, "GDScript utility function"],
+  str: [1, null, "utility function"],
+};
+
+function utilityArity(name: string, got: number): string | null {
+  const u = UTILITY_ARITY[name];
+  if (u === undefined) return null;
+  const min = u[0];
+  const max = u[1];
+  const kind = u[2];
+  if (got >= min && (max === null || got <= max)) return null;
+  return `Invalid call to ${kind} "${name}()". Expected ${String(max !== null && got > max ? max : min)} argument(s).`;
+}
+
+/** `code` 沿用已出货那几名自己的名字（发射期那道闸门就是这么分的，一行不改）。 */
+function builtinArityCode(name: string): string {
+  if (name === "char") return "char-arity";
+  if (name === "var_to_str") return "var-to-str-arity";
+  if (name === "str_to_var") return "str-to-var-arity";
+  if (name === "convert" || name === "type_convert") return "convert-arity";
+  if (name === "range" || name === "str") return `${name}-arity`;
+  return "builtin-arity";
+}
+
 function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "bool" || e.args.length === 0) return;
   const t = staticType(e.args[0] as Expr);

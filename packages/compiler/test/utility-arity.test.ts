@@ -6,22 +6,20 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
-import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 
 const H = "extends SceneTree\n\n";
 const TAIL = "\nfunc _initialize():\n\tquit()\n";
 
 async function refuse(call: string): Promise<string> {
-  try {
-    emitModule(lower(await parseSource(`${H}func f():\n\t${call}\n${TAIL}`)), { runtimeImport: "rt", hostImport: "host" });
-    return "收下了";
-  } catch (e) {
-    return e instanceof UnsupportedError ? e.message : `非 UnsupportedError: ${String(e)}`;
-  }
+  const src = `${H}func f():\n\t${call}\n${TAIL}`;
+  const hit = analyze(lower(await parseSource(src))).find((d) => ARITY.test(d.message));
+  return hit !== undefined ? hit.message : "收下了";
 }
+
+const ARITY = /^Too (few|many) arguments for |^Invalid call to (GDScript )?utility function /;
 
 describe("range 的两端", () => {
   it("零实参报下界那一元、四支以上报上界那三元", async () => {

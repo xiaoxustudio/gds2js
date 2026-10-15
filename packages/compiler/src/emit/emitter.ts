@@ -72,7 +72,8 @@ function rangeArgList(a: Array<string | undefined>): string {
   return `[${parts.join(", ")}]`;
 }
 
-/** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
+/** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */
+function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   return (
     e.kind === "call" &&
     e.callee.kind === "ident" &&
@@ -82,158 +83,6 @@ function rangeArgList(a: Array<string | undefined>): string {
   );
 }
 
-/** 4.6.3 解析期那两句原文（探头 `tmp/probe-arity/arity.log`，20 支一名两形）：少给报 `at least`、多给报 `at most`。 */
-function aritySentence(name: string, min: number, max: number, got: number): string {
-  return got < min
-    ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(got)}.`
-    : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(got)}.`;
-}
-
-/** 两名走的是**另一条通道**，句子形状也不同（读数 `tmp/probe-void/{compare33,compare34}.txt`）：
- *  少了报下界那一位、多了报上界那一位，都不说 `at least` / `at most`；而且 `range` 的前缀是
- *  `GDScript utility function`、`str` 的是 `utility function`（少了 "GDScript"）—— 一字不差照抄。
- *  上界写 `null` 是那一支变元、只量了下界（`str` 八支实参照收，`print` / `push_error` 同理不入表）。 */
-const UTILITY_ARITY: Record<string, [number, number | null, string]> = {
-  range: [1, 3, "GDScript utility function"],
-  str: [1, null, "utility function"],
-};
-
-function utilityArity(name: string, got: number): string | null {
-  const u = UTILITY_ARITY[name];
-  if (u === undefined) return null;
-  const min = u[0];
-  const max = u[1];
-  const kind = u[2];
-  if (got >= min && (max === null || got <= max)) return null;
-  return `Invalid call to ${kind} "${name}()". Expected ${String(max !== null && got > max ? max : min)} argument(s).`;
-}
-
-/** 实测过的内置函数实参区间；表外的名字（`print` / `str` / `range` 这些变元与类型构造器）不拦 —— 没量过就不说。 */
-const BUILTIN_ARITY: Record<string, [number, number]> = {
-  abs: [1, 1],
-  absf: [1, 1],
-  absi: [1, 1],
-  acos: [1, 1],
-  acosh: [1, 1],
-  angle_difference: [2, 2],
-  asin: [1, 1],
-  asinh: [1, 1],
-  atan: [1, 1],
-  atan2: [2, 2],
-  atanh: [1, 1],
-  bezier_derivative: [5, 5],
-  bezier_interpolate: [5, 5],
-  bytes_to_var: [1, 1],
-  bytes_to_var_with_objects: [1, 1],
-  ceil: [1, 1],
-  ceilf: [1, 1],
-  ceili: [1, 1],
-  char: [1, 1],
-  clamp: [3, 3],
-  clampf: [3, 3],
-  clampi: [3, 3],
-  convert: [2, 2],
-  cos: [1, 1],
-  cosh: [1, 1],
-  cubic_interpolate: [5, 5],
-  cubic_interpolate_angle: [5, 5],
-  cubic_interpolate_in_time: [8, 8],
-  db_to_linear: [1, 1],
-  deg_to_rad: [1, 1],
-  dict_to_inst: [1, 1],
-  ease: [2, 2],
-  error_string: [1, 1],
-  exp: [1, 1],
-  floor: [1, 1],
-  floorf: [1, 1],
-  floori: [1, 1],
-  fmod: [2, 2],
-  fposmod: [2, 2],
-  get_stack: [0, 0],
-  hash: [1, 1],
-  inst_to_dict: [1, 1],
-  instance_from_id: [1, 1],
-  inverse_lerp: [3, 3],
-  is_equal_approx: [2, 2],
-  is_finite: [1, 1],
-  is_inf: [1, 1],
-  is_instance_id_valid: [1, 1],
-  is_instance_of: [2, 2],
-  is_instance_valid: [1, 1],
-  is_nan: [1, 1],
-  is_same: [2, 2],
-  is_zero_approx: [1, 1],
-  len: [1, 1],
-  lerp: [3, 3],
-  lerp_angle: [3, 3],
-  lerpf: [3, 3],
-  linear_to_db: [1, 1],
-  log: [1, 1],
-  max: [2, Number.POSITIVE_INFINITY],
-  maxf: [2, 2],
-  maxi: [2, 2],
-  min: [2, Number.POSITIVE_INFINITY],
-  minf: [2, 2],
-  mini: [2, 2],
-  move_toward: [3, 3],
-  nearest_po2: [1, 1],
-  pingpong: [2, 2],
-  posmod: [2, 2],
-  pow: [2, 2],
-  print_stack: [0, 0],
-  rad_to_deg: [1, 1],
-  rand_from_seed: [1, 1],
-  randf: [0, 0],
-  randf_range: [2, 2],
-  randfn: [2, 2],
-  randi: [0, 0],
-  randi_range: [2, 2],
-  randomize: [0, 0],
-  remap: [5, 5],
-  rid_allocate_id: [0, 0],
-  rid_from_int64: [1, 1],
-  rotate_toward: [3, 3],
-  round: [1, 1],
-  roundf: [1, 1],
-  roundi: [1, 1],
-  seed: [1, 1],
-  sign: [1, 1],
-  signf: [1, 1],
-  signi: [1, 1],
-  sin: [1, 1],
-  sinh: [1, 1],
-  smoothstep: [3, 3],
-  snapped: [2, 2],
-  snappedf: [2, 2],
-  snappedi: [2, 2],
-  sqrt: [1, 1],
-  step_decimals: [1, 1],
-  str_to_var: [1, 1],
-  tan: [1, 1],
-  tanh: [1, 1],
-  type_convert: [2, 2],
-  type_exists: [1, 1],
-  type_string: [1, 1],
-  var_to_bytes: [1, 1],
-  var_to_bytes_with_objects: [1, 1],
-  var_to_str: [1, 1],
-  weakref: [1, 1],
-  wrap: [3, 3],
-  wrapf: [3, 3],
-  wrapi: [3, 3],
-  typeof: [1, 1],
-};
-
-/** 少给 / 多给在引擎是解析期拒；这里同样在发射期拒，措辞照原文，`code` 沿用已出货那三支的。 */
-function checkBuiltinArity(name: string, got: number): void {
-  const ar = BUILTIN_ARITY[name];
-  if (ar === undefined) return;
-  if (got >= ar[0] && got <= ar[1]) return;
-  const code = name === "char" ? "char-arity" : name === "var_to_str" ? "var-to-str-arity"
-    : name === "str_to_var" ? "str-to-var-arity"
-      : name === "convert" || name === "type_convert" ? "convert-arity" : "builtin-arity";
-  throw new UnsupportedError(code, aritySentence(name, ar[0], ar[1], got));
-}
 
 /** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
@@ -3533,9 +3382,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
     const builtin = BUILTIN[name];
     if (builtin) {
-      const utility = utilityArity(name, e.args.length);
-      if (utility !== null) throw new UnsupportedError(`${name}-arity`, utility);
-      checkBuiltinArity(name, e.args.length);
       return builtin(args);
     }
     if (name === "super") {
