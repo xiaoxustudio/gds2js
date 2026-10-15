@@ -2364,11 +2364,13 @@ export function strNumDecimals(x: number, decimals: number): string {
     k = 0;
   }
   // 第二次取位之后再削零。削零**之前**的串长过 324 个字符，引擎给的是空串（`String.num(1.7976931348623157e308, 15)` 325 → 空、`…14)` 324 → 出；`1e300` 到 20 位 322 出、24 位 326 空，读数 `tmp/probe-num/compare30.txt`）。
-  // 长度只按量过的正值那一支算：负号占不占那一格没量过，不猜。
+  // **负号占那一格**：同一支 `1e300` 正值到 22 位还出（不含号 324）、23 位空，负值 22 位就空（含号 325）——
+  // 二十二档两侧各量一遍，读数 `tmp/probe-numsign/compare45.txt`（S390），所以长度按「符号 + 数字串」判。
   const body = renderAt(n, k, p);
-  if (body.length > 324) return "";
   // 符号一律跟着实参走：一格一脚本实测 `String.num(-0.0, 2)` 给 `-0.0`、`(-0.0, 0)` 给 `-0`。
-  return `${x < 0 || Object.is(x, -0) ? "-" : ""}${stripTrailingZeros(body)}`;
+  const sign = x < 0 || Object.is(x, -0) ? "-" : "";
+  if (body.length + sign.length > 324) return "";
+  return `${sign}${stripTrailingZeros(body)}`;
 }
 
 /** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
