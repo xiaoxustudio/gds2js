@@ -2616,7 +2616,7 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       return;
 
     case "attribute":
-      if (staticMemberFn(e.obj) === null) walkExpr(e.obj, scope, coroutines, diags);
+      if (staticMemberFn(e.obj) === null && !(e.obj.kind === "ident" && PACK_TYPE_NAMES.has(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
       return;
 
     case "array":
@@ -2840,6 +2840,20 @@ const PACK_METHOD_ARITY: Record<string, [number, number]> = {
 /** 八支（除 byte 自己）多一支 `to_byte_array`：byte 上引擎说没这名字（`tmp/probe-pack/arity2.log` 第 10 格）。 */
 const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
 
+/** pack 九支的类型名：它们不在 ClassDB 里（不是 `ENGINE_CLASS_NAMES` 那一族）、也没有静态成员（进不了 `STATIC_MEMBER_FNS`），
+ *  但当属性基出现时是合法的类型名 —— `PackedInt64Array.size()` 引擎给的是「不是静态方法」那一句，不是「没声明」（S376 ⑤，读数 `arity2.log` 07–09）。 */
+const PACK_TYPE_NAMES = new Set([
+  "PackedByteArray",
+  "PackedInt32Array",
+  "PackedInt64Array",
+  "PackedFloat32Array",
+  "PackedFloat64Array",
+  "PackedStringArray",
+  "PackedVector2Array",
+  "PackedVector3Array",
+  "PackedColorArray",
+]);
+
 const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
   Vector2: {
     abs: [0, 0], angle: [0, 0], angle_to: [1, 1], angle_to_point: [1, 1], aspect: [0, 0],
@@ -2970,12 +2984,13 @@ function staticFaceConstName(t: string, name: string): boolean {
 /** 「类名.成员」的调用式：常量当函数调 / 静态函数元数 / 实例方法在类名上直接调 / 表外名字两句。 */
 function staticCallDiags(t: string, name: string, got: number): Array<{ code: string; message: string }> {
   const face = STATIC_FACE[t];
-  if (face === undefined) return [];
-  if (staticFaceConstName(t, name)) {
+  // pack 九支没有静态面（`STATIC_FACE` 里没它们），但「类名直调实例方法」与「类名上没这成员」两句照发（S376 ⑤）
+  if (face === undefined && !PACK_TYPE_NAMES.has(t)) return [];
+  if (face !== undefined && staticFaceConstName(t, name)) {
     const shown = face.axis.includes(name) ? `${t}.Axis` : t;
     return [{ code: "static-const-call", message: `Name "${name}" called as a function but is a "${shown}".` }];
   }
-  const sig = face.statics[name];
+  const sig = face?.statics[name];
   if (sig !== undefined) {
     if (got >= sig[0] && got <= sig[1]) return [];
     return [
@@ -3158,7 +3173,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "attribute") continue;
-      if (callee.obj.kind === "ident" && callee.obj.name in STATIC_FACE) {
+      if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name))) {
         for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ ...d, loc: e.loc });
         // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
         const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];

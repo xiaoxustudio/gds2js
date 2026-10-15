@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.196 类名直调 pack 的方法：另立一张类型名表，不去动那张喂着 `staticType` 的旧表（2026-10-14，S376 ⑤，门 4 格）
+
+- **上一轮记下的那条尾巴当轮就结了**：`PackedInt64Array.size()` 引擎给的是与值类型五支同文的两句（`Cannot call non-static function "size()" on the class "PackedInt64Array" directly. Make an instance instead.`；没这名字时 `Cannot find member "X" in base "T".` + `Function "X()" not found in base T.`），出货给的是 `Identifier "PackedInt64Array" not declared in the current scope.` —— 三格读数本来就在 `arity2.log` 第 07–09 格。
+- **不塞 `STATIC_VALUE_TYPES`**：那张表还喂着 `staticType` 的构造调用折算，注释明写「`PackedX(...)` 一律 null，判不出来就不报」，塞进去会翻掉槽矩阵与 `Array[Vector2]` 元素槽那两族的口径。改成另立 `PACK_TYPE_NAMES`（九支类型名），只在两处用：主走查的 `attribute` 臂（类型名当属性基时不当值走，于是不会再报「没声明」）与 `checkValueMethodArity` 的类名直调臂；`staticCallDiags` 的早退放宽成「没有静态面但确实是 pack 类型名」也照发。
+- **一处只有量了才知道的口径**：`PackedInt64Array.append(1)` 元数明明不对，引擎**只说**「不是静态方法」那一句、不提元数 —— 因为 `append` 不在 pack 的静态面里（pack 根本没有静态面），元数那一句轮不到。门里钉了这一格，免得下一轮顺手把元数句提前。
+- **门**：`pack-method-arity.test.ts` 从 7 格长到 **11** 格（两句各钉原文 + 元数不提那格 + 九支同表）。**读数**：`pnpm test` **13903**（112 文件）、typecheck **4/4**、`test:compile` **251/360**、`test:diff` **244/244** 逐字节、既有产物一份没改、golden 零改动。
+
 ### 1.195 pack 的方法元数接进解析期：22 名 × 九支两侧量齐，`slice` 的上限是 2 不是 3（2026-10-14，S376，门 8 格）
 
 - **上一轮白捡的靶子打完了**：六支扫描每格都是零实参调用，于是「至少」那一半的读数已经在手；这一轮把「至多」那一半也量齐 —— int64 / byte / string 三支 69 格、其余五支 110 格，**五支读数一字不差**，所以九支共用一张表（八支多一支 `to_byte_array`，byte 自己那支引擎说没这名字）。

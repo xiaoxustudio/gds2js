@@ -61,6 +61,24 @@ describe("pack 的元数两句照引擎原文", () => {
   });
 });
 
-// 类名直调 pack 的方法（`PackedInt64Array.size()`）引擎给的是与值类型五支同文的两句，读数在 `tmp/probe-pack/arity2.log` 第 07–09 格；
-// 出货现在给的是 `Identifier "PackedInt64Array" not declared in the current scope.`。接它要动 `STATIC_VALUE_TYPES`，
-// 而那张表还喂着 `staticType` 的构造调用折算（注释明写 pack 构造式一律 null），所以本轮不接，记在 §6 第 34 条①。
+describe("类名直调 pack 的方法：与值类型五支同两句", () => {
+  it("有这名字但不是静态的", async () => {
+    eq("376", "类名直调 size", (await diags(MOD("", "print(PackedInt64Array.size())")))[0] ?? "没拒", 'Cannot call non-static function "size()" on the class "PackedInt64Array" directly. Make an instance instead.');
+  });
+
+  it("元数也不对时仍是这一句（引擎没说元数）", async () => {
+    eq("376", "类名直调 append", (await diags(MOD("", "print(PackedInt64Array.append(1))")))[0] ?? "没拒", 'Cannot call non-static function "append()" on the class "PackedInt64Array" directly. Make an instance instead.');
+  });
+
+  it("没这名字：两句", async () => {
+    const d = await diags(MOD("", "print(PackedInt64Array.frobnicate())"));
+    eq("376", "第一句", d[0] ?? "没拒", 'Cannot find member "frobnicate" in base "PackedInt64Array".');
+    eq("376", "第二句", d[1] ?? "没拒", 'Function "frobnicate()" not found in base PackedInt64Array.');
+  });
+
+  it("九支都认这张类型名表", async () => {
+    for (const type of ["PackedByteArray", "PackedInt32Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"]) {
+      eq("376", `${type} 类名直调`, (await diags(MOD("", `print(${type}.size())`)))[0] ?? "没拒", `Cannot call non-static function "size()" on the class "${type}" directly. Make an instance instead.`);
+    }
+  });
+});
