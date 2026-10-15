@@ -855,8 +855,11 @@ function checkConstAssign(m: Module, diags: Diagnostic[], hostFace: Set<string>)
 function checkBoolOrdering(m: Module, diags: Diagnostic[]): void {
   const isBoolDecl = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name === "bool";
   const moduleBools = new Set<string>(m.vars.filter((v) => isBoolDecl(v.type)).map((v) => v.name));
+  // `const` 左支与字面量同式（`tmp/probe-constrecv/compare60.txt` 的 bool|bool 两格都是第一式）
+  const constBools = new Set<string>(m.vars.filter((v) => v.isConst && isBoolDecl(v.type)).map((v) => v.name));
 
   const litBool = (e: Expr): boolean => e.kind === "lit" && typeof e.value === "boolean";
+  const foldableBool = (e: Expr): boolean => litBool(e) || (e.kind === "ident" && constBools.has(e.name));
 
   const scan = (ss: Stmt[], bools: Set<string>): void => {
     const expr = (e: Expr): void => {
@@ -866,7 +869,7 @@ function checkBoolOrdering(m: Module, diags: Diagnostic[]): void {
             diags.push({
               code: "bool-ordering",
               message:
-                litBool(e.left) && litBool(e.right)
+                foldableBool(e.left) && foldableBool(e.right)
                   ? `Invalid operands to operator ${e.op}, bool and bool.`
                   : `Invalid operands "bool" and "bool" for "${e.op}" operator.`,
               loc: e.loc,
@@ -3136,6 +3139,39 @@ export const OP_PAIRS_REFUSED_DECL: Readonly<Record<string, ReadonlyArray<string
  *  而且拒的集合与「两侧字面量」那张不一样 —— `and` / `or` 掺 String 那十四格在字面量那一集里拒、在这里收。
  *  量过的名字写法三种：模块级 `var a: T`、形参 `f(a: T)`、内部类字段（`tmp/probe-declrecv/compare59.txt` 各抽若干）；
  *  `const` 左支走的是字面量那一集（同文件四格），所以这张表**不**收 const。函数体内推断来的 `var a = true` 没量过，不发。 */
+/** 左支是**模块级 `const`** 而右支是字面量那一形（S396，尺 `tmp/probe-constrecv/round1.mts`，读数 `compare60.txt`）：
+ *  468 格自成第三集 —— 238 格第一式、121 格第二式，收的也比字面量那一集少 16 格；容器左支在字面量那一集走第二式、
+ *  在这一集走第一式，所以两张表都得单列，不能借 `OP_PAIRS_REFUSED_A` / `_B`。 */
+export const OP_PAIRS_CONST_A: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|float", "int|String", "float|bool", "float|int", "float|float", "float|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "<": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "==": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  ">": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "and": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+  "or": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String", "Array|bool", "Array|int", "Array|float", "Array|String", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String"],
+};
+
+export const OP_PAIRS_CONST_B: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array"],
+  "%": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "*": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "+": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "-": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "/": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Array", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  "==": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array"],
+  ">": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+  ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
+};
+
 function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
   const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary"]);
   const named = (t: TypeRef | null): string | null => {
@@ -3144,31 +3180,43 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     return ANNOT.has(base) ? base : null;
   };
   const moduleTypes = new Map<string, string>();
+  const moduleConsts = new Map<string, string>();
   for (const v of m.vars) {
     const t = named(v.type);
-    if (t !== null && !v.isConst) moduleTypes.set(v.name, t);
+    if (t === null) continue;
+    if (v.isConst) moduleConsts.set(v.name, t);
+    else moduleTypes.set(v.name, t);
   }
   const literalKind = (e: Expr): string | null => staticType(e);
 
-  const checkBody = (body: Stmt[], base: Map<string, string>): void => {
+  const checkBody = (body: Stmt[], base: Map<string, string>, consts: Map<string, string>): void => {
     const types = new Map(base);
     const nodes = flattenBody(body);
     for (const n of nodes) {
-      if (n.kind !== "var" || typeof n.name !== "string") continue;
+      if (n.kind !== "var" || typeof n.name !== "string" || n.isConst === true) continue;
       const t = named(n.type as TypeRef | null);
       if (t !== null) types.set(n.name, t);
     }
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      const lt = e.left.kind === "ident" ? (types.get(e.left.name) ?? null) : null;
-      if (lt === null) continue;
+      if (e.left.kind !== "ident") continue;
       const rt = literalKind(e.right);
       if (rt === null) continue;
-      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(`${lt}|${rt}`) !== true) continue;
+      const name = (e.left as Extract<Expr, { kind: "ident" }>).name;
+      const isConst = consts.has(name);
+      const lt = isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null);
+      if (lt === null) continue;
+      const pair = `${lt}|${rt}`;
+      const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
+      const foldedB = isConst && OP_PAIRS_CONST_B[e.op]?.includes(pair) === true;
+      const declaredB = !isConst && OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true;
+      if (!foldedA && !foldedB && !declaredB) continue;
       diags.push({
         code: "op-pair",
-        message: `Invalid operands "${lt}" and "${rt}" for "${e.op}" operator.`,
+        message: foldedA
+          ? `Invalid operands to operator ${e.op}, ${lt} and ${rt}.`
+          : `Invalid operands "${lt}" and "${rt}" for "${e.op}" operator.`,
         loc: e.loc,
       });
     }
@@ -3182,7 +3230,7 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     }
     return types;
   };
-  for (const f of m.funcs) checkBody(f.body, withParams(f));
+  for (const f of m.funcs) checkBody(f.body, withParams(f), moduleConsts);
   const collect = (c: ClassDecl): void => {
     const fields = new Map<string, string>();
     for (const v of c.vars) {
@@ -3195,7 +3243,7 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
         const t = named(p.type);
         if (t !== null) types.set(p.name, t);
       }
-      checkBody(f.body, types);
+      checkBody(f.body, types, new Map<string, string>());
     }
     for (const inner of c.innerClasses) collect(inner);
   };
