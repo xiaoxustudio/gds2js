@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.209 `max` / `min` 的变元尾巴两处不对都改过来：解析期每一位都扫、容器那两形归运行期那一条通道（2026-10-15，S388，§6 第 66 条结清、新增第 67 条）
+
+- **漏拦那一处**：`max(1, 2, "a")`、`min(1, 2, false)` 三支以后整条不拦 —— S387 逐名对表抓到的 `bounds` 漂移让类型判据跳过三支，`analyze` 里那段专拦三位 bool 的 `boolAll` 是死码（它要拦的形全被挡在门外），一并删。
+- **扫法不是按位表那一套**：变元这两支**第一位不对就停** —— `max("a", 1, "b")` 引擎只推 argument 1，而 S365 那族（`randf_range([1], "a")`）是逐位推两句。所以另建 `GLOBAL_ARG_VARARG` / `GLOBAL_ARG_VARARG_DEFERRED` 两张表走一条到停为止的扫描，`GLOBAL_ARG_TYPES` 与 `GLOBAL_ARG_BOOL_REFUSED` 里那两行删掉；量过的形是 `String` / `StringName` / `NodePath` / `bool` / `null`，位号 1..4。
+- **容器是另一条通道**：`Array` / `Dictionary` 解析期**不发句**，走到运行期才打 `Invalid type in utility function "max()". Cannot convert argument N from Array to float.` + backtrace 并打断脚本；而且点名的是左起第一个转不动的位（`max(1, "x", [1])` 说的是第 2 位 from String）。出货此前用**引擎从不打印的那句**拦（`… but is "Array".`，句对不上通道），本轮换成自写的响亮拒并把引擎原文引在句里 —— 运行期那条通道没接，登 §6 第 67 条。
+- **上界与 Callable 面**：4..8 支全收；`max.call(1, 2, 3)` 与 `max.callv([1, 2, 3])` 引擎照调给 3，我们按 `[2, 2]` 响亮拒 —— `get_argument_count()` 那个 2 是**必填数**不是上界，表里改成 `[2, ∞]`（`push_error` / `push_warning` 早就是这么记的，消费处认 `∞`），少给那一句与 `get_argument_count()` 一律不动。
+- **门**：`maxmin-vararg.test.ts` 6 格 · 52 断言（9 句位号 + 3 停在前 + 5 容器 + 1 容器挡后面 + 8 放行 + 2 元数在先）、`global-callable.test.ts` 新增 4 断言（三支 / callv / 少给 / argument_count）；`pnpm test` **13973**（123 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变；本轮不碰任何 `.gd`。
+
 ### 1.208 全局函数的元数两句搬到解析期：`gds2js check` 从此看得见它们，顺带对出 `max` / `min` 那两位记错（2026-10-15，S387，§6 第 59 条①结清、新增第 66 条）
 
 - **搬的是位置，不是措辞**：发射器里 112 名的 `BUILTIN_ARITY` 与 `range` / `str` 的 `UTILITY_ARITY` 原样移进 `analyze.ts`，句子与 `code` 一字未改（`char-arity` / `var-to-str-arity` / `str-to-var-arity` / `convert-arity` / `range-arity` / `str-arity` / `builtin-arity`），发射期两道闸门删掉。

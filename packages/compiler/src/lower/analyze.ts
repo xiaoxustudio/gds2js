@@ -13,6 +13,8 @@ import {
   GLOBAL_ARG_SUPPRESS_OTHER,
   GLOBAL_ARG_SHOULD_BE,
   GLOBAL_ARG_TYPES,
+  GLOBAL_ARG_VARARG,
+  GLOBAL_ARG_VARARG_DEFERRED,
 } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
@@ -3699,7 +3701,39 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "ident") continue;
-      // 元数不对时引擎先说元数那一句（发射器已经按实测区间发），这一轮的类型判据一律不许抢在前面
+      // `max` / `min` 的扫法与按位那几张表不同：每一位都判、第一位不对就停、容器留给运行期那一句（表注释有读数）
+      const vararg = GLOBAL_ARG_VARARG[callee.name];
+      if (vararg !== undefined) {
+        const ar = BUILTIN_ARITY[callee.name];
+        if (ar !== undefined && e.args.length >= ar[0] && e.args.length <= ar[1]) {
+          for (let i = 0; i < e.args.length; i++) {
+            const got = literalTypeName(e.args[i]);
+            if (got === null) continue;
+            const pos = i + 1;
+            if (vararg.has(got)) {
+              diags.push({
+                code: "global-arg-type",
+                message: `Invalid argument for "${callee.name}()" function: argument ${String(pos)} should be "float" but is "${got}".`,
+                loc: e.loc,
+              });
+            } else if (GLOBAL_ARG_VARARG_DEFERRED.has(got)) {
+              diags.push({
+                code: "vararg-runtime-coerce",
+                message:
+                  `${callee.name}() 的第 ${String(pos)} 位是 ${got}：引擎不在解析期发句，走到运行期才打 ` +
+                  `Invalid type in utility function "${callee.name}()". Cannot convert argument ${String(pos)} from ${got} to float. ` +
+                  `并打断脚本 —— 那条运行期通道本轮没接，放手就是发射下去的静默错值，所以先在解析期响亮拒`,
+                loc: e.loc,
+              });
+            } else {
+              continue;
+            }
+            break;
+          }
+        }
+        continue;
+      }
+      // 元数不对时引擎先说元数那一句（本轮同一次 analyze 里那道闸门已经发了），这一轮的类型判据一律不许抢在前面
       const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
       if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
       const spec = GLOBAL_ARG_TYPES[callee.name];
@@ -3735,10 +3769,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
               : numericLiteralKind(e.args[0]);
         if (first === "int" || first === "float" || first === "bool") for (const p of follows) wants.push([p, first]);
       }
-      // 数值位上拒 bool 的那几张表（S362）：`max` / `min` 是每一位（含第三位往后），`wrap` 只有第一位
-      const boolAll = GLOBAL_ARG_BOOL_REFUSED[callee.name]?.includes(-1) === true;
+      // 数值位上拒 bool 的那几张表（S362）：`wrap` 只有第一位（变元的 `max` / `min` 在上面那支单独扫）
       const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
-      const refusesBool = (pos: number): boolean => boolAll || boolFixed.has(pos) || boolFollows?.has(pos) === true;
+      const refusesBool = (pos: number): boolean => boolFixed.has(pos) || boolFollows?.has(pos) === true;
       for (const [pos, want] of wants) {
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
@@ -3758,17 +3791,6 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         if (got === null || got === want) continue;
         put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
       }
-      // `max` / `min` 是变元个数的：三位往后引擎照样逐位拒 bool（`max(1, 2, false)` → argument 3 should be "float"），
-      // 而那些位不在任何表里，所以按实参个数补一遍
-      if (boolAll) {
-        for (let i = 0; i < e.args.length; i++) {
-          const pos = i + 1;
-          if (wants.some((w) => w[0] === pos) || shouldPos.has(pos)) continue;
-          if (literalTypeName(e.args[i]) !== "bool") continue;
-          put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "float" but is "bool".`);
-        }
-      }
-
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
       const firstKind = literalTypeName(e.args[0]);
       for (const [pos, refuse, sentence, unlessFirst] of sentenceRows ?? []) {
