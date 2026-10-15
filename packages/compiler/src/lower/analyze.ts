@@ -129,6 +129,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkPackArgSlots(m, diags);
   checkDictMethodArity(m, diags);
   checkArrayMethodArity(m, diags);
+  checkCtorSignatures(m, diags);
   checkStringMethodArity(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
@@ -1568,6 +1569,56 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
       if (d !== null) diags.push(d);
+    }
+  }
+}
+
+/** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，
+ *  既不是 `Too few` 也不是 `Too many`。表里只有引擎当场回了这一句的那些签名（一名五形 × 20 名 = 100 格，
+ *  `tmp/probe-ctor/compare35.txt`）；没量过的类型组合照旧放过。`Color` 五形全收，所以整名不入表；
+ *  `bool` 的单支 Array / String / Dictionary 由既有那道 `checkCall` 发同一句，表里不重复登。 */
+const CTOR_REFUSED: Record<string, string[][]> = {
+  int: [["int", "int"], ["int", "int", "int"]],
+  float: [["int", "int"], ["int", "int", "int"]],
+  bool: [["int", "int"], ["int", "int", "int"]],
+  String: [["int"], ["int", "int"], ["int", "int", "int"]],
+  StringName: [["int"], ["int", "int"], ["int", "int", "int"]],
+  NodePath: [["int"], ["int", "int"], ["int", "int", "int"]],
+  Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Dictionary: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Vector2: [["int"], ["int", "int", "int"], ["String"]],
+  Vector2i: [["int"], ["int", "int", "int"], ["String"]],
+  Vector3: [["int"], ["int", "int"], ["String"]],
+  Vector3i: [["int"], ["int", "int"], ["String"]],
+  Callable: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Signal: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  RID: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedByteArray: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedInt32Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedFloat64Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  PackedStringArray: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+};
+
+function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
+  const shadowed = new Set(m.funcs.map((f) => f.name));
+  for (const nodes of flattenBodies(m)) {
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "ident" || typeof callee.name !== "string") continue;
+      const name = callee.name;
+      if (shadowed.has(name)) continue;
+      const bad = CTOR_REFUSED[name];
+      if (bad === undefined) continue;
+      const kinds = ((n.args as Expr[]) ?? []).map((a) => literalTypeName(a));
+      if (kinds.some((k) => k === null)) continue;
+      const sig = kinds.join(", ");
+      if (!bad.some((t) => t.join(", ") === sig)) continue;
+      diags.push({
+        code: "ctor-signature",
+        message: `No constructor of "${name}" matches the signature "${name}(${sig})".`,
+        loc: (n.loc as Diagnostic["loc"]) ?? null,
+      });
     }
   }
 }

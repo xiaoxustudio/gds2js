@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.207 类型构造式越界的第三种句子接上：出货此前十三形全部静默收下（2026-10-15，S386，§6 第 59 条④结清）
+
+- **一句一式**：`No constructor of "X" matches the signature "X(类型, …)".` —— 句号在引号外，签名文本就是实参类型表机械拼出来的。既有那句只在 **match 手臂** 那条路上（`CTOR_ARMS` / `armSignature`），普通调用整族没接。
+- **随手一试就是十三形**：`float(1, 2)`、`String(1)`、`Array(1)`、`Dictionary(1)`、`Vector2(1)`、`Vector3(1, 2)`、`PackedInt32Array(1)`、`Callable(1)`、`RID(1)`…… 全部编得过，`float(1, 2)` 还照第一支头发出去 —— 不止漏拦，是静默错值。
+- **100 格的分布**（20 名 × 五形，尺 `tmp/probe-ctor/round1.mts`，读数 `compare35.txt`）：`int` / `float` 收 0、1 与一支字符串；`bool` 一支字符串**也拒**；`String` / `StringName` / `NodePath` / `Array` / `Dictionary` 连一支整数都拒（`String(1)` 不是 `str(1)`）；`Color` 五形全收；`Vector2(i)` 只收 0 与 2、`Vector3(i)` 只收 0 与 3；`Callable` / `Signal` / `RID` / 四支 `Packed*Array` 只收 0。
+- **只拒量到的组合**：表外一律放过 —— `float(1.5, 2)` 与 `Array([1])` 这一轮没量，闸门就不发，门里也把这两格钉住，防止后来人把「两支实参」外推到所有类型对（红线一的另一面：不猜就不误拦）。
+- **两处不重复建**：`bool` 的单支 Array / String / Dictionary 既有 `checkCall` 已在发同一句（`code` 不变），表里就不登；同名函数（`func int(a, b)`）不抢。
+- **门**：`ctor-signatures.test.ts` 4 格 · 105 断言（65 拒 + 35 放行 + 2 表外 + 1 遮蔽）；`pnpm test` **13963**（121 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0，一例未动）、`test:diff` **245/245** 逐字节；本轮不碰任何 `.gd`、不改任何产物。
+
 ### 1.206 `range` 与 `str` 的元数句换成引擎原文：utility 通道那一族是第三种句子（2026-10-15，S385，§6 第 59 条②③结清）
 
 - **上一轮量不到是因为探针自己挡住了自己**：那九支返回 void 的全局函数被包进 `print(...)`，引擎先给 `Cannot get return value of call to "seed()" because it returns "void".`，元数那两句根本没机会出。这轮换**语句形**（光一行 `seed(1)`），一格一脚本、五档实参（0 / 1 / 2 / 3 / 5）摆下去（尺 `tmp/probe-void/{round1,round2}.mts`，读数 `compare33.txt` / `compare34.txt`）。
