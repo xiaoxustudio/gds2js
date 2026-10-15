@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.210 StringName / NodePath 两面各有表了，顺带补上「模块 var / const 当接收者」这一形（2026-10-15，S389，§6 第 64 条结清、新增第 68 条）
+
+- **一名两格扫两面**（尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `compare{42,43}.txt`）：五实参那一格直接读上界、零实参那一格读下界，121 格 + 112 格过裁判。
+- **StringName 不是「借」String 的表**：108 名逐个量，102 名的 `[下界, 上界]` 与 `STRING_METHOD_ARITY` **一字一样（0 处漂移）**，另六名 `chr` / `humanize_size` / `num` / `num_int64` / `num_scientific` / `num_uint64` 引擎回「找不到成员」那两句（第二句的类名不带引号，与 Signal 同形）。S380 当年「不许借」的谨慎现在有了数据。
+- **NodePath 只认十名**：`get_name` / `get_subname` 各 `[1,1]`，其余八名 `[0,0]`（含 `hash`）；`simplify` / `is_same` / `length` 三名没有 —— 出货此前把 `np.simplify()` 放到运行期才给 `Invalid call. Nonexistent function 'simplify' in base 'NodePath'.`，引擎那两句在解析期。
+- **顺带抓到一族系统性漏拦**（`tmp/probe-modrecv/round1.mts`，12 格，`compare44.txt`）：模块 `var`（标注 / 初值推断）、模块 `const`、被重新赋值过的带标注模块 var、形参标注、内部类字段 —— 引擎全在解析期拦，字典 / 数组 / String 三道闸门此前只认函数体内的局部 var。本轮接了模块 `var` / `const` 那一形，并把五面（含新增两面）的收集合成一支 `faceReceiverNames`；标注那条连重赋值也保留，初值推断那条仍要在名字被赋过值时丢掉（后者没量过）。
+- **没接的两形登 §6 第 68 条**：形参标注与内部类字段（`tmp/probe-modrecv/dbg.mts` 四格实测全不报）—— 值类型那一族认形参标注，但内部类的方法连模块名都不预置，代码里写着「那一侧引擎怎么判没量过，宁可漏拦也不误拦」。
+- **口径翻转**：`string-method-arity.test.ts` 那两格「另两面不借 String 的表」改成「各自有表了」，同门另加长三格钉模块级那一形。
+- **门**：`string-name-node-path-faces.test.ts` 8 格 · 35 断言 + 上述 2 格 · 5 断言；`pnpm test` **13982**（124 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变；本轮不碰任何 `.gd`。
+
 ### 1.209 `max` / `min` 的变元尾巴两处不对都改过来：解析期每一位都扫、容器那两形归运行期那一条通道（2026-10-15，S388，§6 第 66 条结清、新增第 67 条）
 
 - **漏拦那一处**：`max(1, 2, "a")`、`min(1, 2, false)` 三支以后整条不拦 —— S387 逐名对表抓到的 `bounds` 漂移让类型判据跳过三支，`analyze` 里那段专拦三位 bool 的 `boolAll` 是死码（它要拦的形全被挡在门外），一并删。

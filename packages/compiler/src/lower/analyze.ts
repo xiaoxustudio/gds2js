@@ -133,6 +133,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkArrayMethodArity(m, diags);
   checkCtorSignatures(m, diags);
   checkStringMethodArity(m, diags);
+  checkNamedFace(m, STRINGNAME_FACE, diags);
+  checkNamedFace(m, NODE_PATH_FACE, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkDictDuplicateKeys(m, diags);
@@ -1373,6 +1375,48 @@ function arityDiag(
   };
 }
 
+/** 一面的接收者证明集合 = 模块级 `var` / `const` 加上这一函数体里的局部 `var`，判据都是
+ *  「标注正是这一面」或「初值静态证得出这一面」。模块级那一条是新量进来的形（S389，尺 `tmp/probe-modrecv/round1.mts`，
+ *  读数 `compare44.txt`）：标注、初值推断、`const` 三形引擎都在解析期拦，连「声明之后又被重新赋值」也照拦 ——
+ *  那一判只量了**带标注**的，所以初值推断那条仍要在名字被赋过值时丢掉；局部同名把模块那条挡掉时也不认。 */
+function faceReceiverNames(
+  m: Module,
+  nodes: Record<string, unknown>[],
+  assigned: Set<string>,
+  type: string,
+  isInit: (init: Expr) => boolean,
+): Set<string> {
+  const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
+  const out = new Set<string>();
+  for (const v of m.vars) {
+    if (named(v.type)) out.add(v.name);
+    else if (v.init !== null && isInit(v.init) && !assigned.has(v.name)) out.add(v.name);
+  }
+  const reassigned = reassignedNames(nodes);
+  for (const n of nodes) {
+    if (n.kind !== "var" || typeof n.name !== "string") continue;
+    if (reassigned.has(n.name)) {
+      out.delete(n.name);
+      continue;
+    }
+    if (named(n.type as TypeRef | null)) {
+      out.add(n.name);
+      continue;
+    }
+    const init = n.init as Expr | null;
+    if (init !== null && isInit(init)) out.add(n.name);
+    else out.delete(n.name);
+  }
+  return out;
+}
+
+/** 任何一处函数体里被赋过值的名字 —— 模块级「初值推断」那一形要按这张总表丢。 */
+function moduleAssignedNames(m: Module): Set<string> {
+  const out = new Set<string>();
+  for (const nodes of flattenBodies(m)) for (const n of reassignedNames(nodes)) out.add(n);
+  return out;
+}
+
 /** 容器方法调用的那一道形状检查：接收者只认「字面量直接当接收者」与「静态证明过的名字」两种，
  *  字面量那一维由调用方给判据（`{…}` / `[…]` / `"…"` 三族的 IR 形状不同），名字集合是调用方按标注与初值算出来的。 */
 function containerCallArity(
@@ -1463,20 +1507,9 @@ const DICT_METHOD_ARITY: Record<string, [number, number]> = {
 /** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
  *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
 function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
+  const assigned = moduleAssignedNames(m);
   for (const nodes of flattenBodies(m)) {
-    const dicts = new Set<string>();
-    const reassigned = reassignedNames(nodes);
-    for (const n of nodes) {
-      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
-      const type = n.type as TypeRef | null;
-      if (type !== null && type.kind === "named" && type.name.replace(/\[.*\]$/, "") === "Dictionary") {
-        dicts.add(n.name);
-        continue;
-      }
-      const init = n.init as Expr | null;
-      if (init !== null && init.kind === "dict") dicts.add(n.name);
-    }
-
+    const dicts = faceReceiverNames(m, nodes, assigned, "Dictionary", (init) => init.kind === "dict");
     for (const n of nodes) {
       const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
       if (d !== null) diags.push(d);
@@ -1501,20 +1534,9 @@ const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
 /** Array 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Array`（带元素型的截掉那一段）与
  *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
 function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
+  const assigned = moduleAssignedNames(m);
   for (const nodes of flattenBodies(m)) {
-    const arrays = new Set<string>();
-    const reassigned = reassignedNames(nodes);
-    for (const n of nodes) {
-      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
-      const type = n.type as TypeRef | null;
-      if (type !== null && type.kind === "named" && type.name.replace(/\[.*\]$/, "") === "Array") {
-        arrays.add(n.name);
-        continue;
-      }
-      const init = n.init as Expr | null;
-      if (init !== null && init.kind === "array") arrays.add(n.name);
-    }
-
+    const arrays = faceReceiverNames(m, nodes, assigned, "Array", (init) => init.kind === "array");
     for (const n of nodes) {
       const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
       if (d !== null) diags.push(d);
@@ -1551,29 +1573,87 @@ const STRING_METHOD_ARITY: Record<string, [number, number]> = {
 };
 
 /** String 方法的元数在解析期就拦。接收者认两种静态证明 —— 标注 `String` 与字符串字面量（含直接当接收者）；
- *  `&"…"` 与 `"…"` 前加记号的那两面（StringName / NodePath）不算，它们各有自己的成员表。 */
+ *  `&"…"` 与 `"…"` 前加记号的那两面（StringName / NodePath）走下面那两道同形状的闸门，成员表各是各的（S389）。 */
 function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
   const isStringLit = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === "string";
+  const assigned = moduleAssignedNames(m);
   for (const nodes of flattenBodies(m)) {
-    const strs = new Set<string>();
-    const reassigned = reassignedNames(nodes);
-    for (const n of nodes) {
-      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
-      const type = n.type as TypeRef | null;
-      if (type !== null && type.kind === "named" && type.name === "String") {
-        strs.add(n.name);
-        continue;
-      }
-      const init = n.init as Expr | null;
-      if (init !== null && init.kind === "lit" && init.lit === "string") strs.add(n.name);
-    }
-
+    const strs = faceReceiverNames(m, nodes, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
     for (const n of nodes) {
       const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
       if (d !== null) diags.push(d);
     }
   }
 }
+
+/** StringName 那一面：102 名的 `[下界, 上界]` 与 String 那张表一字一样（0 处漂移），另六名引擎当场回「找不到成员」那两句 ——
+ *  两面各 102 + 6 格、NodePath 13 格，尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `tmp/probe-snfaces/compare{42,43}.txt`（S389）。 */
+const STRINGNAME_NO_METHOD = new Set(["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"]);
+
+/** NodePath 那一面只认这十名（`hash` 也在内，元数 [0,0]），元数照量来的两张界。 */
+const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
+  get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
+  get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
+  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
+};
+
+const NODE_PATH_NO_METHOD = new Set(["simplify", "is_same", "length"]);
+
+/** 那两面共用的形状：接收者认「`&"…"` / `^"…"` 字面量直接当接收者」与「标注或初值静态证得出的名字」两种，
+ *  名字被重新赋值过就丢掉 —— 与 String / 字典 / 数组那三道闸门同一条口径。 */
+interface NamedFace {
+  type: string;
+  lit: string;
+  arity: Record<string, [number, number]>;
+  ghosts: ReadonlySet<string>;
+  arityCode: string;
+  ghostCode: string;
+}
+
+function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
+  const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
+  const assigned = moduleAssignedNames(m);
+  for (const nodes of flattenBodies(m)) {
+    const names = faceReceiverNames(m, nodes, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "attribute") continue;
+      const obj = callee.obj as Record<string, unknown> | undefined;
+      if (obj === undefined) continue;
+      const method = callee.name;
+      if (typeof method !== "string") continue;
+      const proven = isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
+      if (!proven) continue;
+      const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      if (face.ghosts.has(method)) {
+        diags.push({ code: face.ghostCode, message: `Cannot find member "${method}" in base "${face.type}".`, loc });
+        diags.push({ code: face.ghostCode, message: `Function "${method}()" not found in base ${face.type}.`, loc });
+        continue;
+      }
+      const d = arityDiag(face.arity, face.arityCode, method, ((n.args as Expr[]) ?? []).length, loc);
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+const STRINGNAME_FACE: NamedFace = {
+  type: "StringName",
+  lit: "string_name",
+  arity: STRING_METHOD_ARITY,
+  ghosts: STRINGNAME_NO_METHOD,
+  arityCode: "string-name-arity",
+  ghostCode: "string-name-member",
+};
+
+const NODE_PATH_FACE: NamedFace = {
+  type: "NodePath",
+  lit: "node_path",
+  arity: NODE_PATH_METHOD_ARITY,
+  ghosts: NODE_PATH_NO_METHOD,
+  arityCode: "node-path-arity",
+  ghostCode: "node-path-member",
+};
 
 /** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，
  *  既不是 `Too few` 也不是 `Too many`。表里只有引擎当场回了这一句的那些签名（一名五形 × 20 名 = 100 格，

@@ -164,9 +164,15 @@ describe("接收者的两种静态证明", () => {
     eq("380", "标注接收者", (await diags(`${H}func _initialize():\n\tvar s: String = "ab"\n\ts.length(1)\n\tquit()\n`))[0] ?? "没拒", MANY("length", 0, 1));
   });
 
-  it("另两面不借 String 的表（证不出就当不知道）", async () => {
-    eq("380", "StringName 标注", await diags(`${H}func _initialize():\n\tvar sn: StringName = &"ab"\n\tprint(sn.length(1))\n\tquit()\n`), []);
-    eq("380", "NodePath 标注", await diags(`${H}func _initialize():\n\tvar np: NodePath = ^"ab"\n\tprint(np.length(1))\n\tquit()\n`), []);
+  it("另两面各自有表了（S389 量完，不再借 String 那张）", async () => {
+    eq("389", "StringName 标注", (await diags(`${H}func _initialize():\n\tvar sn: StringName = &"ab"\n\tprint(sn.length(1))\n\tquit()\n`))[0] ?? "没拒", MANY("length", 0, 1));
+    eq("389", "NodePath 标注", (await diags(`${H}func _initialize():\n\tvar np: NodePath = ^"ab"\n\tprint(np.length(1))\n\tquit()\n`)).join(","), 'Cannot find member "length" in base "NodePath".,Function "length()" not found in base NodePath.');
+  });
+
+  it("模块级 var 与 const 也是解析期那一形（S389）", async () => {
+    eq("389", "模块标注 var", (await diags('var s: String = "ab"\n' + MOD("\tprint(s.length(1))")))[0] ?? "没拒", MANY("length", 0, 1));
+    eq("389", "模块初值推断", (await diags("var s = \"ab\"\n" + MOD("\tprint(s.length(1))")))[0] ?? "没拒", MANY("length", 0, 1));
+    eq("389", "模块 const", (await diags('const C: String = "ab"\n' + MOD("\tprint(C.length(1))")))[0] ?? "没拒", MANY("length", 0, 1));
   });
 
   it("证不出来就不报：重新赋值过的名字与推断不出类型的接收者", async () => {
