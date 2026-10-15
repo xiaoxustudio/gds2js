@@ -3220,6 +3220,23 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
         loc: e.loc,
       });
     }
+    // 反过来那一形（左支字面量、右支是标明类型的名字）与上面共用同一张表：468 格对照下来，
+    // 329 对与第二式一字不差（`tmp/probe-revrecv/compare61.txt`，S397），所以只镜像判据、不再另立表。
+    for (const n of nodes) {
+      if (n.kind !== "binary") continue;
+      const e = n as unknown as Extract<Expr, { kind: "binary" }>;
+      if (e.right.kind !== "ident") continue;
+      const lt2 = literalKind(e.left);
+      if (lt2 === null) continue;
+      const rt2 = types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null;
+      if (rt2 === null) continue;
+      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(`${lt2}|${rt2}`) !== true) continue;
+      diags.push({
+        code: "op-pair",
+        message: `Invalid operands "${lt2}" and "${rt2}" for "${e.op}" operator.`,
+        loc: e.loc,
+      });
+    }
   };
 
   const withParams = (f: FuncDecl): Map<string, string> => {
