@@ -4,34 +4,96 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   take_v3(v: rt.Variant): void {
-    v = rt.paramSlot(v, "Vector3", 1, "take_v3", this);
-    print(rt.showArgs([rt.V.str("v3 "), rt.typeOf(v), rt.V.str(" "), v]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "take_v3");
+    try {
+      v = rt.paramSlot(v, "Vector3", 1, "take_v3", this);
+      rt.frameLine(4);
+      print(rt.showArgs([rt.V.str("v3 "), rt.typeOf(v), rt.V.str(" "), v]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   take_v3i(v: rt.Variant): void {
-    v = rt.paramSlot(v, "Vector3i", 1, "take_v3i", this);
-    print(rt.showArgs([rt.V.str("v3i "), rt.typeOf(v), rt.V.str(" "), v]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "take_v3i");
+    try {
+      v = rt.paramSlot(v, "Vector3i", 1, "take_v3i", this);
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("v3i "), rt.typeOf(v), rt.V.str(" "), v]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   take_name(n: rt.Variant): void {
-    n = rt.paramSlot(n, "StringName", 1, "take_name", this);
-    print(rt.showArgs([rt.V.str("name "), rt.typeOf(n), rt.V.str(" "), n]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "take_name");
+    try {
+      n = rt.paramSlot(n, "StringName", 1, "take_name", this);
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("name "), rt.typeOf(n), rt.V.str(" "), n]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let a = rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
-    let b = rt.vector3New([rt.V.float(1.7), rt.V.float((-2.9)), rt.V.float(3.1)]);
-    let s = "nm";
-    this.take_v3(a);
-    this.take_v3(b);
-    this.take_v3i(b);
-    this.take_v3i(a);
-    this.take_name(rt.V.str(s));
-    this.take_name(rt.V.stringName("lit"));
-    print(rt.showArgs([rt.V.str("t "), rt.colorNew([rt.V.int(123456789)]), rt.V.str(" "), a, rt.V.str(" "), b, rt.V.str(" "), rt.typeOf(rt.V.stringName("x"))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(13);
+      let a = rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
+      rt.frameLine(14);
+      let b = rt.vector3New([rt.V.float(1.7), rt.V.float((-2.9)), rt.V.float(3.1)]);
+      rt.frameLine(15);
+      let s = "nm";
+      rt.frameLine(16);
+      this.take_v3(a);
+      rt.frameLine(17);
+      this.take_v3(b);
+      rt.frameLine(18);
+      this.take_v3i(b);
+      rt.frameLine(19);
+      this.take_v3i(a);
+      rt.frameLine(20);
+      this.take_name(rt.V.str(s));
+      rt.frameLine(21);
+      this.take_name(rt.V.stringName("lit"));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("t "), rt.colorNew([rt.V.int(123456789)]), rt.V.str(" "), a, rt.V.str(" "), b, rt.V.str(" "), rt.typeOf(rt.V.stringName("x"))]));
+      rt.frameLine(23);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

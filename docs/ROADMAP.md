@@ -780,6 +780,289 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.254 绑定 Callable 铺到值类型与 StringName / NodePath（2026-10-16，S427，语料 375）
+
+- **铺的面**：`Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` / `StringName` / `NodePath` —— 标注变量、构造位与 `&"…"` / `^"…"` 字面量都算静态接收者；读数 `tmp/probe-bincall/p1.gd` 十六面一字一样。
+- **护栏**：这些面的表外名属性读与写成员名**都没量过**，拒的两形不开口；`face-member-name.test.ts` 新增 7 格钉住。
+- **`hash(Callable)`**：boost 型 `hash_combine` 两序算出 2174785061 / 2934202107，引擎给 1741244043（`tmp/probe-bincall/s1.gd`）—— 拟合不出，继续响亮抛。
+- **新语料 375**：九格（含 `.call()` 与 `v.x` 真属性照旧），golden 与出货逐字节一致。
+- **门读数**：`pnpm test` **14330**（139 文件）、typecheck **4/4**、`test:compile` **254/363**、`test:diff` **247/247** 逐字节、`test:codegen` 全过、ops 6115、tree-face 17。
+
+### 1.253 内建类型面的成员名当值发绑定 Callable（2026-10-16，S426，语料 374，§6 第 83 条①接一面）
+
+- **读数**：`tmp/probe-bincall/` 五份（`compare{1,2,4,5,6}.txt` + `p1.gd` / `h3.gd`）—— 印法 `Array::append`、`typeof` 25、`get_object()` 是 typeof 24 的空引用、`get_argument_count()` 给必填数、元数句 `Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).`、等式按（实例, 名）、`var_to_str` 退化成品 `Callable()`；16 个面值类型同形（Dictionary 仍给 Invalid access）。
+- **接法**：`CallableBox` 添 `builtin` / `builtinBounds` 两格，analyze 的属性扫描记下「成员名当值 + 量过的元数」，发射器发 `rt.boundMethod(recv, "<面>", "<名>", min, max)`；`callableArityBounds` / `requiredArgCount` / `declaredArgCount` 先认这一格，`get_object()` 在这一族上给 `NULL_OBJECT`。
+- **新语料 374**：六格打印（含 `c.call(9)` 改数组、`s.to_upper.call()`、`p.size.call()`），golden 与出货逐字节一致。
+- **仍欠**：装箱接收者的成员名读值、值类型十几面的标注接收者、`hash(Callable)` 的式子（只量到同进程一致，跨实例随内容变，拟合不出就照 `[hash-callable] 响亮拒`）。
+- **门读数**：`pnpm test` **14320**（139 文件）、typecheck **4/4**、`test:compile` **253/362**、`test:diff` **246/246** 逐字节、`test:codegen` 全过、端到端 6 行一字一样。
+
+### 1.252 形参标注进属性面的静态接收者（2026-10-16，S425，§6 第 84 条那三面收齐）
+
+- **读数**：`tmp/probe-bincall/compare6.txt` 六格 —— 形参标注的 `a.nosuch` / `s.nosuch` / `p.keys` 与 var 标注一字一样（解析期那句报两遍），`a.append = 1` / `p.size = 1` 给 `Cannot assign a new value to a constant.`。
+- **钉住不扩**：形参标注的 Dictionary 读属性不在解析期开口（N5 是运行期那句）、成员名当值不开口（N6 印 `Array::append`）、没标注的形参放过。
+- **改法**：`checkPackFaceNames` 改走 `attrScopes`（函数体 + 形参表），只有属性那一支吃形参标注；调用那一支仍只认 S414 量过的 var 标注与构造位，不越读数范围。
+- **门读数**：`pnpm test` **14312**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
+### 1.251 String 与 Array 的属性读按名单分岔，缺格给引擎那句（2026-10-16，S424，§6 第 84 条②这两面接完）
+
+- **读数**：`tmp/probe-bincall/round5.mts` 把 189 个候选名在 `"abcd".<名>` 与 `[1, 2].<名>` 上逐名过裁判（`compare5.txt`）：String 面确认不存在 81 名、Array 面 139 名，与 S413 的存在数 108 / 50 互补；属性位与调用位不分岔。
+- **出货**：`methods.ts` 添 `STRING_ATTR_ABSENT` / `ARRAY_ATTR_ABSENT`，`attribute` 见 String / Array 先问名单 —— 命中就发 `Invalid access to property or key '<名>' on a base object of type '<面>'.`，成员名照旧响亮抛（Callable 那一族没接，不许冒充引擎那句）。
+- **没开的东西**：不新增 runtime 文件（产物树清单在 `tree-face.ts` 要一起对账），名单就地放在 `ARRAY_NO_METHOD` 旁边。
+- **仍欠**：值类型（`Vector2` 那一族）的属性读只量到一格（M6），各面名单没量，仍走兜底自述；绑定 Callable 整族仍是 §6 第 83 条①。
+- **门读数**：`pnpm test` **14304**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
+### 1.250 Array 与 String 的属性写给引擎那句：装箱形不必名单分岔（2026-10-16，S423，§6 第 84 条接一半）
+
+- **读数**：`tmp/probe-bincall/compare4.txt` 的 M4 / M5 / M8 —— `a.nosuch = 1`、`a.append = 1`、`s.nosuch = 1` 全给 `Invalid assignment of property or key '<名>' with value of type '<型>' on a base object of type 'Array'/'String'.`，成员名与表外名同句。
+- **出货**：`writeProp` 见 Array / String 直接发那句（此前挂 JS 属性，GDScript 侧什么都看不见 = 错值）。
+- **仍欠**：属性**读**那一形要分成员 / 表外（成员名引擎给 `Array::append` 这种 Callable），所以还等 §6 第 84 条②那张存在名单搬进 runtime。
+- **门读数**：`pnpm test` **14302**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
+### 1.249 字面量与构造位的 Array / String 属性面接进解析期（2026-10-16，S422，§6 第 83 条③那半形结清、第 84 条新登）
+
+- **读数**：`tmp/probe-bincall/round3.mts` 十格 —— `[1, 2].nosuch` / `Array([1, 2]).nosuch` / `"abcd".nosuch` / `String("abcd").nosuch` 都是 `Cannot find member "<名>" in base "<型>".` 同一句两遍；`[1, 2].append = 1` 与 `"abcd".to_upper = 1` 给 `Cannot assign a new value to a constant.`；`[1, 2].append` 与 `"abcd".to_upper` 给 Callable（`Array::append` / `String::to_upper`）。
+- **放过的那两形**：推断来的 `a.nosuch` 与字面量字典 `{1: 2}.nosuch` 引擎都不在解析期开口，运行期给 `Invalid access to property or key …` —— 字典那支 S421 已接对，Array 那支缺一张能分岔「成员 / 表外」的名单，登记 §6 第 84 条。
+- **门读数**：`pnpm test` **14300**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
+### 1.248 字典的属性两面：写折成 StringName 键、读按格给那句（2026-10-16，S421，§6 第 83 条②结清）
+
+- **引擎读数**：`tmp/probe-bincall/j1.gd` 八格 —— `d.foo = 5` 不报错、`print(d)` 是 `{ &"foo": 5 }`、`d.foo` / `d["foo"]` / `d[&"foo"]` 三读同为 5、`has` 两形都真；缺格时读给 `Invalid access to property or key '<名>' on a base object of type 'Dictionary'.`，成员名（`keys` / `size` / `has`）也一样。
+- **出货改的两处**：`writeProp` 见 Dictionary 就 `GDict.set(V.stringName(key), value)`（此前挂 JS 属性 = 错值）；`attribute` 见 Dictionary 先查那一格，查不到发上面那句。
+- **顺带钉住的一条**：Dictionary 面上「方法名当值」永远不是 Callable（S419 ②），写过同名键之后才被属性读认走 —— 两形现在都按实测发。
+- **门读数**：`pnpm test` **14293**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
+### 1.247 Array / String 的属性面照 pack 接进解析期（2026-10-16，S420，§6 第 83 条③结清）
+
+- **读数**：`tmp/probe-bincall/round2.mts` 的 H5 / H6 / H7 / H15 四格 —— 标注接收者读表外名与 pack 同形（`Cannot find member "<名>" in base "<型>".` 同一句报两遍），写成员名给 `Cannot assign a new value to a constant.`。
+- **反向的一形**：标注字典读属性解析期不开口、写属性不报错（S419 ③ 的 StringName 键），所以 Dictionary 面这一族不发解析期拒。
+- **没量的不放**：`[1, 2].nosuch` 那种字面量接收者本轮没有读数，照旧放过；pack 的构造位与标注位都量过（`tmp/probe-attr/compare3.txt`），照 S417 发。
+- **门读数**：`pnpm test` **14289**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
+### 1.246 内建类型方法名当值 = 绑定 Callable，Dictionary 是例外（2026-10-16，S419 读数轮 · §6 第 83 条新登）
+
+- **几面给 Callable**：`Array` / `String` / `Vector2` / `Color` / pack 都印 `<型>::<名>`，`typeof` 25、`is_valid()` 真、`get_method()` / `get_object()`（`<Object#null>`）/ `get_argument_count()` 齐、`.call()` 照调（void 回 `<null>`）、元数句 `Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).`、同法两次取值相等、跨面同名不相等、能当字典键、`var_to_str` 里退化成 `Callable()`、跟数字比在解析期就拒。
+- **Dictionary 两条形**：属性读（成员名也算）运行期给 `Invalid access to property or key '<名>' on a base object of type 'Dictionary'.`；属性写**不报错**，等于塞一格 StringName 键 —— `d.nosuch = 1` 后 `print(d)` 是 `{ 1: 2, &"nosuch": 1 }`。出货今天挂 JS 属性，是错值。
+- **Array / String 的属性面**与 pack 同形（表外名同一句两遍、写成员名给常量那句），S417 / S418 的扫描没铺过去。
+- **本轮不动出货**：三形登记为 §6 第 83 条；`hash(Callable)` 只量到同进程一致，接之前先量跨进程。
+
+### 1.245 属性写侧从 `size` 放开到整张成员表（2026-10-16，S418，§6 第 82 条②只剩 Callable 那一形）
+
+- **读数**：三型 × 22 名一趟量齐（尺 `tmp/probe-attr/round5.mts`，读数 `compare4.txt`）：写 16 个成员名一律 `Cannot assign a new value to a constant.`，写 `pick_random` / `shuffle` / `min` / `max` / `keys` / `values` 一律 S417 那句两遍。
+- **接法**：`checkPackFaceNames` 的属性那一支摘掉 `name === "size"` 的限制，改成「成员表里的名字被写就发常量那句」；推断来的名字与装箱位没量过，照旧不开口 / 响亮拒。
+- **门读数**：`pnpm test` **14282**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0（`test:golden-check` 本轮不涉我们的代码，未重跑）。
+
+### 1.244 pack 的属性两面接进解析期：表外名那一句引擎报两遍（2026-10-16，S417，§6 第 82 条②再接一半）
+
+- **读数**：九支 × 四形（读表外名 / 写表外名 / 读方法名当值 / 写 `size`）一次过裁判，尺 `tmp/probe-attr/round3.mts`，读数 `compare3.txt`。静态位的读与写都发 `Cannot find member "<名>" in base "<支>".` **同一句两遍**；写 `size` 发 `Cannot assign a new value to a constant.`；`print(q.size)` 引擎给 Callable（无错）。
+- **接法**：`checkPackFaceNames` 多一趟属性扫描（跳过调用位那一支，免得与两句那族重复），接收者仍是构造位字面量与标注变量两形，名字仍只认 S414 / S415 那份确认不存在名单；成员名的写只放行量过的 `size`。
+- **剩下的**：其余成员名的写没量过、内建类型的绑定 Callable 整族没接（§6 第 82 条②）。
+- **门读数**：`pnpm test` **14279**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+
+### 1.243 pack 的属性两面过裁判：装箱两形按引擎那句发（2026-10-16，S416，§6 第 82 条②接一半）
+
+- **读数**：三型（byte / int32 / string）× 15 形，尺 `tmp/probe-attr/{round1,round2}.mts`，读数 `compare{1,2}.txt`。静态位读写各只发一句 `Cannot find member "<名>" in base "<支>".`；装箱位读 `Invalid access to property or key '<名>' on a base object of type '<支>'.`、写 `Invalid assignment of property or key '<名>' with value of type '<型>' on a base object of type '<支>'.`；写成员名是 `Cannot assign a new value to a constant.`。
+- **接的两形**：`methods.ts` 的 `attribute` / `writeProp` 各加一支 pack 分支，只认 S414 / S415 那份确认不存在名单；成员名（`size`）在装箱位没量过，继续响亮抛，不冒充引擎。
+- **剩下的**：静态位那三句还在落运行期；`print(q.size)` 引擎给的是内建类型的绑定 Callable（印成 `PackedByteArray::size`），整族没接。
+- **门读数**：`pnpm test` **14270**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+
+### 1.242 pack 九支的运行期表外名换成引擎那句：名单两侧共用一份（2026-10-16，S415，§6 第 82 条①结清）
+
+- **接的是同一份读数**：`packMethod` 的 `default:` 此前对没实现的名字发中文自述 `<支>.<名>() 未实现`；现在先问 S414 那份确认不存在名单，命中就发 `Invalid call. Nonexistent function '<名>' in base '<支名>'.`，名单外的照旧响亮抛。
+- **替换点排在 switch 之后**，`MISSING_ON` / `BYTE_ONLY` / `NON_BYTE_MISSING` 三张逐支读数表照旧在前 —— 按支分岔的名字（`to_byte_array`、`compress` / `hex_encode` / `get_string_from_*` / `to_*_array`）不会因为换了兜底就在别的面上冒充引擎。
+- **单一来源**：`PACK_ABSENT_ALL` / `PACK_ABSENT_NOT_BYTE` / `PACK_ABSENT_BYTE_ONLY` 从 `analyze.ts` 搬到 `packages/runtime/src/runtime/packed.ts` 并导出，解析期直接 import（compiler → runtime 那一条老路，同 `ENGINE_CLASS_NAMES`），杜绝两侧各量一次。
+- **门读数**：`pnpm test` **14267**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+- **剩的债**：§6 第 82 条② —— pack 九支的属性面（`p.foo` 读与写）一句都没量过，`methods.ts` 的 `packed-attribute` 仍是中文自述。
+
+### 1.241 pack 九支的表外方法名接进解析期：名单要反着列（2026-10-16，S414，§6 第 81 条底下那半结清、第 82 条新登）
+
+- **量法换了方向**：180 名 × 九支在构造位逐名过裁判（`tmp/probe-slice/round8.mts`，读数 `compare110.txt`）。第一版按 S413 的「存在白名单」接，`PackedByteArray.compress` / `hex_encode` / `to_float32_array` 与语料 135 / 160 / 161 当场误报 —— 手列的候选宇宙里「没量到」推不出「不存在」。改成只列裁判**确认不存在**的名字：byte 147 名、其余八支各 157 名，两支差 11 名（byte 独有的 `compress` / `decompress` / `hex_encode` / `get_string_from_*` / `to_int32_array` / `to_int64_array` / `to_float32_array` / `to_float64_array`），反向只差 `to_byte_array`。
+- **静态只认两形**：构造位字面量与带标注的名字发那两句；`var p = PackedStringArray([...])` 这种初值推断的名字解析期不开口，留运行期那句（`tmp/probe-slice/r7c.gd`，语料 224 同份读数）。因此新检查 `checkPackFaceNames` 不看 `checkValueMethodArity` 那张含推断的 `typed` 表。
+- **顺手归位**：`join` 那支硬写两句的 pack 分支（`joinReceiverBase`）摘掉，pack 的名字拒只剩一家。
+- **门读数**：`pnpm test` **14264**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+- **剩的债**：§6 第 82 条两条 —— 运行期装箱那一形的 `packMethod` `default:` 中文自述，与属性面一句没量过的 `packed-attribute`。
+
+### 1.240 静态接收者的表外方法名：存在名单补上后三面接进出货（2026-10-16，S413，§6 第 80 条接一半、第 81 条结清）
+
+- **先把「存在 / 表外」一次量清**：158 个名字 × 四面（String / Array / Dictionary / PackedInt32Array）= 632 格，一份脚本一行一名、按引擎自己那句「not found」归类（尺 `tmp/probe-slice/round4.mts`，读数 `compare106.txt`）—— 存在的名字每个 108 / 50 / 23 / 22 个，其余全是表外。
+- **补的就是那五个「存在但没量元数」的名字**：`Array.set`、`Dictionary.set` / `is_typed` / `is_same_typed`、pack 的 `erase`；有了这张表，表外那两句才敢按「表键 ∪ 这几个」之外的名字发。
+- **接进三面**：字面量 / 标注变量 / 形参标注三种静态写法（`faceScopes` 的 `seeded` 分 annot 与 inferred，拒只认 annot 与字面量），`String` / `Array` 发两句，`Dictionary` 只发第二句 —— 16 格里 9 格一字一样对上，剩 7 格是 pack 那一面（2 格）与运行期动态那两形（5 格）。
+- **门**：新开 `packages/compiler/test/face-member-name.test.ts` 12 格（八格分面句子 + 四格「存在没量元数不许误拦」）。
+- **账**：`pnpm test` **14240→14252**（139 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn **0**。
+
+### 1.239 `String.slice` 不存在，欠账改名成「表外方法名那两句」（2026-10-16，读数轮 · §6 第 80 条改写）
+
+- **一格一次的 21 行探针跑出来是 21 格同一对句子**：`Cannot find member "slice" in base "String".` + `Function "slice()" not found in base String.` —— 4.6.3 的 `String` 面上没有 `slice`，不是我们的实现缺口。
+- **顺手把这一族量齐 16 格**（`tmp/probe-slice/round2.mts` 与 `round3.mts` 两侧对照）：静态三种写法（字面量 / 标注变量 / 形参标注）给解析期那两句（`Dictionary` 只给第二句），**初值推断与 `Variant` 装箱给运行期那句** `Invalid call. Nonexistent function 'X' in base 'T'.` —— 这一族里推断不算静态，跟 S349 的实参型那一族口径相反。
+- **出货侧的账**：三处中文自述（`String.X() 未实现` 那族）15/16 格文字不对、形参那一格一句都没发；接的时候要分清「表内名没实现」（仍响亮拒）与「表外名」（发引擎句），故运行期先得有一张各面名字表。
+- **本轮零实现变更**，只改台账；复跑的尺与读数都留在 `tmp/probe-slice/`。
+
+### 1.238 String / Array / Packed 那几支的元数上界按 4 / 5 参重量：一张表没改，另撞出一支没实现的（2026-10-16，§6 第 52 条⑧结清、新增第 80 条）
+
+- **一格一次的探针换成一行一格的 packed 形状**（`tmp/probe-strupper/round18.mts` 与 `round19.mts`，30 行一份脚本、两次 spawn 量完），读数 `compare{101,102}.txt`。
+- **对上的五条**：`String.split` `[0,3]`、`String.count` / `countn` `[1,3]`、`Array.slice` `[1,4]`、`Array.count` `[1,1]`、`PackedInt32Array.slice` `[1,2]` —— 出货的三张元数表逐条一致，**本轮不动实现**。
+- **撞出来的一支**：`String.slice` 今天抛 `[string-method] String.slice() 未实现`，而引擎 0..5 实参一路收（上界至少到 5，`slice(1,2,3,"a",4)` 也不报元数句）—— 登 §6 第 80 条，把 `from` / `to` / `step`、负数与越界、`step` 给 0 / 负、以及那多出来的两位到底吃什么量齐再接。
+- **踩过的两个坑**：一行一格时**每格要换一个变量名**（重名那句 `There is already a variable named "z"` 会把整份脚本吃掉）；填充实参要按签名位置给合式的型，否则先撞上实参类型那两句、元数句读不到。
+
+### 1.237 后一式的型名取自值自己：补量五格当场结清第 79 条（2026-10-16，S412 的续量 · 无实现变更）
+
+- **上一轮留的那格「已知不等价」其实是探头拿旧 dist 跑的**：重建后 `var b = a` 转手越界就印 `Array[int]` —— `rt.stampArray` 早把 `elem` 登记进装箱值，`GArray.get` 按它拼型名（S412 同一处改动）。
+- **补量 5 格全合**（`tmp/probe-typedlabel/round17.mts` → `compare100.txt`）：转手、`Variant` 标注、形参 `Variant` 三路给 `Array[int]` / `Array[String]`，混排推断与裸 `Array` 标注两路给 `Array`。
+- **动的是台账与门**：`dict-index-routing` 续两格（`Variant` 两路不路由），§6 第 79 条当场划掉，S412 ③ 与 §1.236 那条「不等价」的说法一并改正。
+- **账**：`pnpm test` **14238→14240**（138 文件）、typecheck **4/4**；`packages/*/src` 一行未动，语料、产物与 golden 因此不变。
+
+### 1.236 静态标注的位置型基读越界换那一式，String 的中文自述清掉（2026-10-16，S412，§6 第 78 条结清、新增第 79 条）
+
+- **两句的分工照字典那一族**：标注的基给 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`（无句点、负数原样），推断 / `Variant` / 转手过的给 `Invalid access of index '<k>' on a base object of type: '<型>'.`；写侧不受影响。
+- **接线四处**：`TypedSlot.ann`（只由标注填，`seedInto` 覆盖模块 var / 形参 / 内部类字段，`var` 语句的初值推断不算）→ `posReadLabels` → 发射器把基名当第三个实参给 `rt.index` 与快轨两个裸数组取值 → 运行期 `posOobSay` 一句分两式（`arrIdx` / `strAt` 收基名）。
+- **顺带清掉**：String 读越界今天发中文自述 `字符串索引越界: 5`，两句都不是它。
+- **后一式的型名取自值自己**（补量 5 格 `compare100.txt`）：转手、`Variant` 标注、形参 `Variant` 三路越界都印 `Array[int]` / `Array[String]`，混排的两路印 `Array` —— 定形字面量本来就走 `rt.stampArray` 登记 `elem`，`GArray.get` 据此拼型名，第 79 条因此当场结清。
+- **账**：门 `dict-index-routing` 新增 10 格，`pnpm test` 14228→**14238**（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 7 份、`test:golden-check` 372 例逐字节不变；出货 12 格 + 10 格对照不合 **0** 与 **1**。
+
+### 1.235 嵌套定型容器那句去掉自加的型名后缀，顺带量齐位置型基读越界的两句（2026-10-16，S411，§6 新增第 78 条）
+
+- **一句文本**：引擎发 `Nested typed collections are not supported.`，出货在同句后面多挂了 `（Array[Array[int]]）` —— 去掉后缀，语料 084 的 golden 早就是原文（churn 只有那一份注释）。
+- **顺带量的 21 格（`tmp/probe-typedlabel/compare{98,99}.txt`）**：**标注**的位置型基（`Array` / `Array[k]` / `String` / pack）读越界给 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`，**推断/转手**的同一份值给 `Invalid access of index '<k>' on a base object of type: '<型>'.` —— 与 S405 字典那族同一条「看标注不看值」；负下标原样印；写侧不受影响。
+- **出货今天的两处不合**：一律发后一式；String 那一支两句都不发，发的是中文自述 `字符串索引越界: 5`。接法照 `dictIndexInt` 那条通道，登记为 §6 第 78 条（并把第 72 条⑤那条「快轨基名不带元素型」并进来）。
+- **账**：`pnpm test` 14228（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过。
+
+### 1.234 内部类能看见模块级的哪些名字：15 格量齐，自己类的信号不再发裸标识符（2026-10-16，S410，§6 第 68 条①结清）
+
+- **看不见**：模块 `func`（`not found in base self.`，函数体 / `_init` 体 / 两层内部类同句）、模块 `var` / `signal` / `static var` 与裸写的枚举成员名（`not declared in the current scope.`）—— 出货的解析期本来就同句，这四处零改动。
+- **看得见**：模块 `const`、`enum` 名（`Col.RED`）、兄弟类（`Other.new()`）、全局类型名与全局函数、自己类的方法 / 常量 / 信号。
+- **修的一格在发射器**：内部类里裸写自己类的信号（`own_sig.emit()`）此前发成 `rt.method(own_sig, ...)`，运行时 JS 的 `own_sig is not defined` —— 连 S406 那层接住点都盖不住（不是引擎那一句）。现在 `CURRENT_MEMBERS` 把自己类的信号一起收进，取值走 `rt.wrapValue(this.own_sig)`，与模块级信号同一条装箱口径。
+- **不放宽的相邻两形**：内部类里裸调外层实例成员照 S373 那句；枚举成员名在内部类里裸写照旧拒。
+- **账**：门 `packages/compiler/test/inner-class-outer-func.test.ts` **5 格**（九张名字表 + 一格发射），`pnpm test` **14226→14228**（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn **0**；出货端到端 15 格对照不合 **0**。
+
+### 1.233 D6 那七型的默认值站点不再静默给 null：三站 21 格量齐后换成响亮拒（2026-10-16，S409，§6 第 77 条结清）
+
+- **引擎侧 21 格**（`tmp/probe-valuedefault/round13.mts` → `compare96.txt`）：七型 × 三站 —— 模块 `var r: T` 无初值、内嵌类字段无初值、`func T() -> X` 出错后 S406 那个接住点 —— 给的全是各型自己的默认值（`Transform2D` / `Basis` 是单位阵、`Quaternion` 是 `(0, 0, 0, 1)`、`Plane` 是零法线零距离、`Rect2` / `Rect2i` / `AABB` 是零位置零尺寸）。
+- **出货此前的样子**：`typeDefault` 认不出型名就兜底 null 盒子，三站都印 `<null>` —— 静默错值，与 D6「不进 Tier 1 就抛 `unsupported`」相反。
+- **改法两处**：`emitter.typeDefault` 在兜底之前拦 `D6_VALUE_TYPES` 七个名字，发 `rt.unsupportedValueDefault(名)`；`builtins.ts` 那一支抛 `UnsupportedError`（code `value-default`，消息点名哪一型）。因为不是引擎那一句，S406 的接住点原样再抛 —— 拒到脚本外。
+- **不变**：语料无一例用这七型标注（`test:diff` 245/245、产物 churn 0）；那七型的构造调用照旧在 lowering 抛引擎原文。
+- **账**：门 `packages/compiler/test/error-boundary.test.ts` **8 格**（七型接住点 + 两站声明），`pnpm test` **14218→14226**（138 文件）、typecheck **4/4**、`test:compile` **252/361**（emitter 缺口 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过。
+
+### 1.232 信号回调与延后调用同一条错误边界，宿主退出前排干当前这一轮（2026-10-16，S408，§6 第 75 条①②与第 76 条结清）
+
+- **回调那一族七格零代码**：S406 的函数边界本来就管到 `emit()` 里的回调 —— 调用方与后面的回调都照跑，lambda 连上去同形，回调里再调一支函数时外层继续（读数 `tmp/probe-signalerr/compare93.txt`，出货对照不合 **0 格**）。
+- **延后那一族十格改的是宿主**：`quit()` 之后排的延后照样跑、延后里再排的也跑、两支按 FIFO；已到期的计时器（0.0 秒与嵌套）在退出前发完，一秒与五秒的等不到（读数 `tmp/probe-drain/compare{94,95}.txt`，出货不合 **1 格** —— 那一格是虚拟时钟的墙钟，不是输出）。
+- **接线三处**：`callable.ts` 加延后在途计数与 `callDeferred`（`Callable.call_deferred()` 与 `Object.call_deferred(名)` 共用一条队列），`host.ts` 的 `run()` 在帧循环与 `initDone` 之后加 `#drain()`（每轮「发到期项 → 让出一轮宏任务」到队列空才 flush），`Timer.isDue()` 只看账面剩余。
+- **`connect(cb, CONNECT_DEFERRED)` 仍响亮拒**：那条「宿主还没有对象生命周期模型」的理由不变，排干队列不会把它变成静默多印。
+- **账**：门 `packages/runtime/test/host-run.test.ts` 五格，`pnpm test` **14217→14218**（138 文件）、typecheck **4/4**、`test:diff` **245/245**、`test:compile` **252/361**、`test:codegen` 全过、`pkg-modes` **25/25**、产物 churn **0**；golden-check 本轮未重跑（改的是宿主与运行时，语料与 `godot.txt` 都没动，出货侧已由 `test:diff` 逐字节对账）。
+
+### 1.231 协程调用那句只在取值位发：语句位丢弃返回值引擎不拦（2026-10-16，S407，§6 第 76 条新增）
+
+- **16 格逐位量过**（`tmp/probe-awaitcall/round8.mts` → `compare92.txt`）：`var r = f()` / `v = f()` / `print(f())` / `g(f())` / `[f()]` / `f() + 1` 六形发那句；`f()` 单独一句与 `if` / `for` / `while` / `match` / lambda 里的语句位、`await f()` 丢弃、协程里丢弃另一支协程、`-> int` 协程丢弃 —— 全放过。
+- **一处改动**：`walkStmt` 的 `case "expr"` 给语句位那一层根节点 `awaited = true`，往下的实参 / 元素 / 运算数 / 右值照旧是取值位 —— 出货此前一律拦，是一处**过拦**。
+- **顺带量到内部类那一格**：`class Thing` 的 `_init` 里裸调模块函数给 `Function "f()" not found in base self.`，出货同句同位置（第 69 条那族的新读数）。
+- **放过之后露出来的不等价登 §6 第 76 条**：丢弃的协程跨过 `quit()` 之后引擎仍跑完（`Q|外面` 再 `P|协程里`），出货退出时不跑 —— 宿主的收尾顺序，不在本轮接。
+- **账**：门 `packages/compiler/test/await-positions.test.ts` **5 格**，`pnpm test` **14212→14217**（138 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn **0**、`test:golden-check` 372 例逐字节不变；出货侧 16 格对照 `tmp/probe-awaitcall/ours.mts` 不合 **0**。
+
+### 1.230 运行期错误只作废当前那支函数：帧栈常开、每支函数一个接住点、按返回型给默认值（2026-10-16，S406，§6 第 74 条结清、新增第 75 条）
+
+- **接法落地**：`frameEnter` / `frameLine` 不再挑模块（`usesStack` 与 `frames` 那条旗标连同 `lower` 里的名表一起删掉），每支 GDScript 函数包一层 `try / catch(rt.gdFunctionError) / finally`；接住之后按**声明返回型**给默认值返回，`-> void` 与入口那两支不返回值，不是引擎那一句的（`UnsupportedError`）原样再抛。
+- **默认值那张表 18 型逐格对过引擎**（`compare{86,87}.txt`）：`<null>` / `0` / `0.0` / `false` / `""` / `&""` / `[]` / `{  }` / `(0.0, 0.0)` / `(0.0, 0.0, 0.0)` / `(0.0, 0.0, 0.0, 1.0)` —— 与变量默认值共用 `typeDefault` 一支，没有第二份表。
+- **三种边界同一规则**：`_init` 出错对象照样造出来、体照跑；字段初始化子那一格（引擎的 `@implicit_new`）出错只作废本类那一段，后面的初始化子不再跑、读出来 `<null>`，`_init` 与其余类的初始化子照旧；lambda 出错只作废那一支，`c.call()` 拿回 `<null>`。legacy 形状的字段初始化子为此从类字段挪进 `__gd_fields__`，与 proto 形状并成一条。
+- **顺带补的解析期管辖**（读数 `compare91.txt`）：下标型拒、定形字典键型拒、void 取值拒那三句在 **lambda 体、字段初始化子与模块 var 的初值**里引擎照发；数组字面量直接下标（`[1, 2]["a"]`）同句，字典字面量的 int 下标（`({1: 2})[0]`）走 `Out of bounds get index` 那一式。
+- **出货侧 51 格对照不合 3 格**，三条都有另外的条：协程不调 `await` 的准入差、对象 id 编号、`-> Rect2`（D6）。
+- **开销换正确性，本轮没取 `bench:ab` 配对读数**：帧打点从「只有用到那四支的模块才有」变成常开，每条语句多一次 `frameLine`、每支函数多一层 try/catch/finally —— S281 ⑤ 那条「其余模块零开销」因此作废（要数字另开一轮，A/B 得连 `ir.ts` / `lower.ts` 一起回到基线）。
+- **账**：门 `packages/compiler/test/error-boundary.test.ts` **28 格** + `emit-guards` 那两格改写，`pnpm test` **14184→14212**（137 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变；产物 churn 264 份（帧与 `__gd_fields__`）。
+
+### 1.229 运行期错误的传播量齐、本轮零代码：打断的是当前那支函数（2026-10-16，§6 第 74 条定案，读数轮 · 无实现变更）
+
+- **9 格**（`tmp/probe-errorflow/round1.mts` → `compare85.txt`）：错出在被调函数里时，**该函数剩余语句不跑、调用方接得上**（`E|b到了` / `Z|回来` 都打，更深的 `D|c到了` 不打）；错出在 `_initialize` 本体才停整支。
+- **调用方拿到的值**：无标注接收给 `<null>`；返回型标注 `int` 的函数给 **`0`**。错误是表达式一环时整条语句照跑（`print("L|=", f([1]))` 打出 `L|=<null>`，下一句 `M|后面` 也在）。
+- **同函数内的其它形状**：`for` 循环里出错 → 循环不继续、函数后面的语句也不跑；`match` 手臂里出错同理。
+- **接法**：每支 GDScript 函数的产物包一层「捕获自己抛出的运行期错误 → 在那一次打印 → 按返回型给默认值返回」；抛点和打印点必须分开（否则外层重复打印）。`await` 那一头与信号回调那一头还没量，动实现前先补。
+- **本轮零代码**：出货今天一律抛到脚本外（与①的后半不等价），已登 §6 第 74 条；语料里没有这种形状（`test:diff` 245 格与 golden 372 例都逐字节不变），所以这条不影响现有读数。
+
+### 1.228 字典缺键那两句发货：静态 int 键走 `Out of bounds get index`，其余走 `Invalid access to property or key`（2026-10-16，S405，§6 第 73 条结清、新增第 74 条）
+
+- **分工按静态形状**：基是标注过的 `Dictionary` / `Dictionary[K, V]`（模块 var、局部 var、形参、内部类字段、`self.f()` 的标注返回型五种作用域都量过）且键静态是 int → `Out of bounds get index '<k>' (on base: '<基名>')`（无句点）；其余一律 `Invalid access to property or key '<键>' on a base object of type '<基名>'.`，定形字典的基名带键值型。
+- **键的印法逐型量齐**：`0` / `-5` / `999999999999` / `2.0` / `x`（String 与 StringName 都不带引号）/ `a/b` / `true` / `(1.0, 2.0)` / `[1, 2]` / `{ "k": 1 }`。
+- **写不缺**：四种作用域的 `a[0] = 5` 都直接建键、一句不推（量过）。
+- **接线**：analyze 标 `dictIntReads`（种子扩到模块 var、类字段、形参与 `self.f()` 返回型）→ 发射器发 `rt.dictIndexInt` → 运行期只在键真是 int 时发 `Out of bounds` 那一句；裸字典快轨遇这一形让位给装箱路。
+- **门**：`dict-missing-key.test.ts` 16 断言 + `dict-index-routing.test.ts` 14 格；端到端 30 格对照 `tmp/probe-dictkey/ours4.mts` 27 格一字一样，三格不合都有账（两格见下条第 74 条，一格是探头没剥出货的 `[码] ` 前缀）。
+- **另登一账**（§6 第 74 条）：错出在被调函数里时引擎**从该函数返回、脚本继续跑**（`n2` / `b3` 先打完 `S|ok`），出在 `_initialize` 本体才打断（`b1` / `m1` / `e1`）；出货一律打断 —— 这一族要先量「返回给调用方的是什么值、多层嵌套怎么折」。
+
+### 1.227 位置型基的下标型拒接进解析期，容器 void 表补到 24 格，元数那句排到 void 之前（2026-10-16，S404，§6 第 72 条①②结清）
+
+- **60 + 12 + 10 + 6 格探头**（`tmp/probe-idxtype/{round1..4}.mts`、`tmp/probe-voidnames/round1.mts`，读数 `compare{74,80,81,82}.txt` 与 `compare79.txt`）：`Array`（裸标注 / 推断）/ `Array[k]` / `String`（标注 / 推断）/ 八支 `Packed*Array` 的下标只收 int 与 float，其余（含 `null`）给 `Invalid index type "<型>" for a base of type "<基名>".`，读写两形同句、基名按声明拼法、整份脚本加载失败。
+- **`Dictionary` 不在这一条里**：无标注与裸标注字典的任何键型都放过（16 格量过，全部落到运行期那一句），只有定形 `Dictionary[K, V]` 拒键型 —— 那一支早有，本轮把同一句式补到位置型基，`checkTypedIndexSlots` 加 `positionalSlot` 并给形参也铺槽位。
+- **void 两张表补全**：数组 `append_array` / `sort` / `sort_custom` / `reverse` / `shuffle` / `make_read_only`、字典 `sort` / `merge` / `assign` / `make_read_only`；不是 void 的十支一起钉在门里防误收。
+- **两句的先后是量出来的**：`print(d.assign())` 引擎先给元数那句，合法那一格才给 void 那句 —— `checkVoidMethodValues` 因此挪到 `checkDictMethodArity` / `checkArrayMethodArity` 之后，`dict-method-arity` 里 merge 的两格「合法」期望同步翻成 void 原文。
+- **一处读数误记已纠正**：`String` 下标写的第二句是 `Value of type "int" cannot be assigned to a variable of type "String".`（此前被截断记成 setter 那一句），出货本来就对。
+- **门**：`packages/compiler/test/index-type-and-void.test.ts` 64 断言；`pnpm test` **14154**（134 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0 —— 语料无一例撞上新拒）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
+### 1.226 字典缺键那两句的边界隔离完了、本轮零代码（2026-10-16，§6 第 73 条④⑤定案，读数轮 · 无实现变更）
+
+- **16 格**（`tmp/probe-dictkey/{round2,round3}.mts` → `compare{76,77}.txt`）：**基是「静态已知的 `Dictionary` 标注」而键是 int** 时引擎给数组那一式 `Out of bounds get index '0' (on base: 'Dictionary')`（句末没句点），键换 float / String / bool 回到 `Invalid access to property or key …`；`var b = a` 之后再 `b[0]` 也回到 `Invalid access …` —— 差别在标注不在值。
+- **写不缺**：标注字典 `a[0] = 5` 直接建键、不打断。
+- **定形字典的键型不符是解析期拒**：`Dictionary[String, int]` 用 int 下标给 `Invalid index type "int" for a base of type "Dictionary[String, int]".` 并整份脚本加载失败 —— 第 72 条②那族因此要连 `Dictionary[K, V]` 基一起接，无标注 `Dictionary` 一形都不拒这条边界也量过。
+- **接的时候的账**：运行期看不见「标注」这一条，得由发射器把静态基名带到 `rt.index` / `rt.setIndex`；出货今天两句都没发、只发中文自述 `字典键不存在: x`（打断这一行为是对的）。
+- **本轮零代码**：SEMANTICS 第 73 条④⑤定案；ROADMAP 记 §1.226。
+
+### 1.225 两族新读数量齐、本轮零代码：下标型的解析期拒 60 格与字典缺键那句 10 格（2026-10-16，§6 第 72 条②扩、新增第 73 条，读数轮 · 无实现变更）
+
+- **下标型矩阵 60 格**（`tmp/probe-idxtype/round1.mts` → `compare74.txt`）：基 `Array` / `Array[int]` / `String` / `PackedInt32Array` / `Dictionary` × 下标 `bool/int/float/String/Vector2/null` × 读写两形。四支基都只收 **int 与 float**（`s[1.5]` 收），其余四形给 `Invalid index type "<型>" for a base of type "<基名>".`，基名带定形拼法，且整份脚本加载失败；`Dictionary` 一形都不拒。
+- **顺带抓到 `String` 的下标写另有两句**：`Cannot assign a value of type "int" as "String".` + `Value of type "int" cannot be returned from a setter expected to have type "String"…`。
+- **字典缺键 10 格**（`tmp/probe-dictkey/round1.mts` → `compare75.txt`）：那句是 `Invalid access to property or key '<键>' on a base object of type '<基名>'.`，键按 `str()` 印（Array / Dictionary / StringName / NodePath 四种键都量了，StringName 去掉 `&`、NodePath 原样），定形字典基名 `Dictionary[String, int]`；写不缺、命中两支给值。
+- **一格反常留着**：`{1: 2}` 里 `a[0]` 给的是数组那一式 `Out of bounds get index '0' (on base: 'Dictionary')`，而同批 `-5` / `999999999999` 给 `Invalid access …` —— 那一格来自另一批探头，**下一轮先隔离再动实现**。
+- **出货现状**：三族都不拦 / 都发中文自述（`字典键不存在: x`），行为侧「打断」是对的、文本不对 —— 都登记进 §6 第 72 条②与第 73 条，代码一字未动。
+
+### 1.224 只读容器的写面三分句接进出货，数组下标越界那两句换成引擎原文（2026-10-16，S403，§6 第 65 条结清、新增第 72 条）
+
+- **两支面先发货**：`make_read_only` / `is_read_only` 此前只在元数表里、调到就抛中文响亮拒 —— 现在置位与谓词都在（浅的，重复置位不响）。
+- **写侧三种反应按读数落地**：(a) 下标写打断脚本，数组那句光秃秃、字典那句前面多一块 `ERROR: Dictionary is in read-only state.`；(b) 方法写只推一块 ERROR、不打断、内容不变，`at:` 行按每支自己的 C++ 文件与行号（21 支逐个量的，`append` 借 `push_back` 那一行）；(c) 三件意外 —— `assign` 两支面照样整个换掉、`get_or_add` 返回默认值但不写入、`Array.resize` / `insert` 返回 23（`ERR_READ_ONLY`）。
+- **顺带接的两句下标越界**：读 `Invalid access of index '5' on a base object of type: 'Array'.`、写 `Invalid assignment of index '2' (on base: 'Array') with value of type 'int'.` —— 两式不同、写入值的型要点名、负数按原样印、定形数组基名带元素型（`'Array[String]'`）；出货此前两支都发 `数组索引越界: 2`。
+- **门**：`readonly-containers.test.ts` 33 断言（含 21 支方法写的块原文与返回值）；端到端 11 格对照 `tmp/probe-readonly2/ours.mts` 不合 0 格；`test:diff` 245 格逐字节不变。
+- **新登记的欠**（§6 第 72 条）：`print(<void 方法>())` 的解析期拒 `Cannot get return value of call to "assign()" because it returns "void".`、非 int 下标的 `Invalid index type "String" for a base of type "Array".`（整份脚本加载失败），两族出货都不拦；快轨裸数组的基名不带元素型。
+- **门读数**：`pnpm test` **14090**（133 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
+### 1.223 移位两支与 `~` 的 78 格矩阵：只有三格给值，`~` 那句自造话换成引擎原文（2026-10-16，S402，§6 第 71 条④结清）
+
+- **78 格**（`tmp/probe-shift/round1.mts` → `compare70.txt`）：**解析期 0 拦**、75 格拒在运行期、3 格给值（`2 << 2` = 8、`2 >> 2` = 0、`~2` = -3）—— 两侧都必须是 int，`2 << 1.5` 与 `2 >> true` 全拒。
+- **`~` 的第二格是 `Nil`**：`Invalid operands 'float' and 'Nil' in operator '~'.`，与一元 `-` / `+` 同形但名字不带 `unary` 前缀；出货那句 `~ 需要 int，收到 float` 换掉了，六型之外照旧响亮拒。
+- **移位两支本来就对**：`ops.shl` / `shr` 走 `intPair`，发的早就是第三式原文 —— 这一族补的是门不是代码。
+- **门**：`packages/runtime/test/operator-shift-bnot.test.ts` 78 格逐格对值与原文（`tmp/probe-shift/gen6.mts` 生成）；端到端 78 格对照不合 0 格。
+- **门读数**：`pnpm test` **14057**（132 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过；`test:golden-check` 371 例逐字节不变，`095-vector2i-div-zero` 那格批跑撞的是门自己的超时（同格单跑绿），已在 S402 ⑤ 记着。
+
+### 1.222 `**` 与 `in` 两支的六型矩阵：解析期不拦、55 格拒在运行期，出货那两句自造话换成引擎原文（2026-10-16，S401，§6 第 71 条③结清）
+
+- **72 格**（`tmp/probe-powin/round1.mts` → `compare69.txt`，左支仍是初值推断的模块 var）：**解析期 0 拦**、17 格给值、55 格拒在运行期，句式仍是第三式 `Invalid operands 'A' and 'B' in operator '**' / 'in'.`。
+- **`**` 只收 int / float 两侧**：4 格给值（`2 ** 2` = 4、`2 ** 1.5` = 2.82842712474619、`1.5 ** 2` = 2.25、`1.5 ** 1.5` = 1.83711730708738），其余 32 格拒 —— **`true ** 2` 也拒**，bool 在 `**` 这一支既不能当底也不能当指数，与 `+ - * / %` 把 bool 当数那一族不同。
+- **`in` 的闸门在右支**：Array / Dictionary 全收（六型左支都给 `false`，只有 `"a" in "a"` 真）；右支是 String 时只收 String 左支（`[1] in "a"` 拒）；右支是 bool / int / float 时全拒。
+- **实现两处换句**：`ops.pow` / `ops.inOp` 落到末尾那支时不再发 `** 不支持 bool ** int` 这类自写文本，六型之内复用 S399 的 `operandsRefused` 发引擎原文，六型之外照旧响亮拒。
+- **门**：`packages/runtime/test/operator-pow-in.test.ts` 72 格逐格对值与那句原文（`tmp/probe-powin/gen5.mts` 从读数生成）；出货端到端 72 格对照 `tmp/probe-powin/ours.mts` 不合 0 格。
+- **门读数**：`pnpm test` **14056**（131 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
+### 1.221 一元那三支量齐：`-` / `+` 只有 int 与 float 走得通，`not` 恒为 bool（2026-10-16，S400，§6 新增第 71 条）
+
+- **18 格一元两支 + 12 格 `not`**（`tmp/probe-unary/{round1,round2}.mts` → `compare{67,68}.txt`）：`-1` / `-1.5` / `+1` / `+1.5` 给值，bool / String / Array / Dictionary 四型两支都给 `Invalid operands 'X' and 'Nil' in operator 'unary-' / 'unary+'.` —— **第二格是 `Nil`、操作数名带 `unary` 前缀**，与二元那一句同式不同名。
+- **一条「Godot 能跑、我们当场拒」**：`+a` 此前在发射期抛 `[emit-unary] 一元运算符 + 还没实现`；新增 `ops.pos`（数值原样返回、六型之内发引擎原文、六型之外响亮拒）与 emitter 那一行。
+- **`ops.neg` 的自造话换掉**：`- 不支持 bool` 那句引擎从没有过；六型之内改发第三式原文，向量 / Color 那些探针之后落空的照旧响亮拒。
+- **`not` 是实现本来就对、补门的那一族**：六型真侧全 `false`、假侧全 `true`，`typeof(not …)` 给 1。
+- **门**：`packages/runtime/test/unary-operators.test.ts` 30 断言；出货端到端 18 格逐格对照（`tmp/probe-unary/ours.mts`）不合 0 格。
+- **仍欠**：`**` 与 `in` 两支的六型矩阵、`~`（bnot）与一元在六型之外的读数，以及第 69 条剩下的装箱 `Variant` 与链式两形。
+- **门读数**：`pnpm test` **14055**（130 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
+### 1.220 运算符那一族第五张矩阵：左支换成初值推断的模块 var，引擎解析期一声不出、拒格全在运行期（2026-10-16，S399，§6 第 69 条的推断那一形结清）
+
+- **468 格**（`tmp/probe-inferrecv/round1.mts`，读数 `compare62.txt`）：**0 格解析期拒、133 格照发值、329 格拒在运行期、6 格属 `String %`** —— 拒的三元对与 `OP_PAIRS_REFUSED_DECL` 逐对相同（共同 329、两侧独有各 0），只是句式换成运行期第三式 `Invalid operands 'A' and 'B' in operator 'X'.`。
+- **改的是运行期不是解析期**：`ops.add` / `sub` / `mul` / `div` 落到末尾那支时发的是 `[add-operands] + 不支持 bool + int` 这类自写文本，引擎讲的是第三式；`ops.eq` / `neq` 更糟 —— 异型给 `false` 而引擎当场抛。新增 `operandsRefused` / `eqSixRefused` 两道：**六型之内发引擎原文，六型之外照旧响亮拒**（没量过的型不猜）。
+- **`==` 那一族只挂运算符支**：`eqSixRefused` 只加在 `ops.eq` / `ops.neq` 上，容器内部比等（`has` / `index` / `match` 手臂）走的 `valueEq` 一行没动，S279 的「异型假而不抛」不受影响；六型里只有 int 与 float 互相能比。
+- **门**：`operator-pairs.test.ts` 第五半 468 格逐格期望「不拦」；新门 `operator-runtime-pairs.test.ts` 462 格逐格比对值与那句运行期原文（生成器 `tmp/probe-inferrecv/gen4.mts`）。
+- **一格噪声已重量**：`Dictionary|float|!=` 被引擎自己的 `editor_settings-4.6.tres` 那句 Parse Error 混掉，`fix422.mts` 重跑归位。
+- **仍欠**：装箱 `Variant`（形参不带标注）、链式 `x.y <= 1`、`String %` 的边界，与「内部类方法能否看见模块 const」。
+- **门读数**：`pnpm test` **14031**（129 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
+### 1.219 `and` / `or` 的值恒为 bool：出货此前是 Python 式把实参原样递出去（2026-10-16，S398，§6 新增第 70 条结清）
+
+- **27 格读数**（`tmp/probe-andor/round4.mts` → `compare65.txt`）：`1 and 2` 给 `true`、`0 and 3` 给 `false`、`3 or 0` 给 `true`、`[] or {}` 给 `false`，而 `typeof(1 and 2)` / `typeof(0 or 3)` / `typeof(true and 1)` 三格全给 **1（BOOL）**；装箱那一头（`Variant` 形参）同形 —— 与操作数的静态型无关。
+- **短路没变**：`0 and side()` 不跑、`1 and side()` 跑、`1 or side()` 不跑、`0 or side()` 跑，六格靠 `SIDE` 那一行打印定案。
+- **实现改两支**：`rt.and` / `rt.or` 恒发 `V.bool(...)`；发射器只有 `rt.and(l, () => r)` 一条路（emitter.ts:3323），没有第二处要跟着改。
+- **门为什么不响**：语料里 `and` / `or` 全用作条件（真值一致），没有一格把它的值当数打出来 —— 所以 golden 与 `test:diff` 逐字节不变是这一条的凭据，而不是「没改到东西」；`gds2js run` 端到端 27 格从 26 格不合改到不合 0 格。
+- **门读数**：`pnpm test` **14031**（129 文件，含新门 `logic-and-or.test.ts` 20 断言）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.218 运算符那一族第四张矩阵：右支换成标明类型的名字，集合与第三张逐对相同（2026-10-15，S397，§6 第 69 条③的第一形结清）
 
 - **468 格**（`tmp/probe-revrecv/round1.mts`，读数 `compare61.txt`）：左支字面量、右支是模块级 `var b: T` —— **329 格拒（全第二式）、133 格照发值、6 格属 `String %` 那条通道**，三类计数与「左支是名字」那一形一字不差。

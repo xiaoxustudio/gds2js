@@ -4,25 +4,74 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  frames = rt.V.int(0);
+  declare frames: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(2);
+      this.frames = rt.V.int(0);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([(await rt.awaitValue(this.f()))]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(5);
+      print(rt.showArgs([(await rt.awaitValue(this.f()))]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   async f(): Promise<unknown> {
-    (await rt.awaitValue(rt.wrapValue(rt.attribute(this.create_timer(rt.V.float(0.02)), "timeout"))));
-    return rt.V.int(42);
+    const __gd_frame = rt.frameEnter("res://main.gd", "f");
+    try {
+      rt.frameLine(8);
+      (await rt.awaitValue(rt.wrapValue(rt.attribute(this.create_timer(rt.V.float(0.02)), "timeout"))));
+      rt.frameLine(9);
+      return rt.V.int(42);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _process(_d: number): Promise<unknown> { return this.__gd__process(rt.V.float(_d)); }
   async __gd__process(_d: rt.Variant): Promise<unknown> {
-    this.frames = rt.ops.add(this.frames, rt.V.int(1));
-    if (rt.ops.truthy(rt.ops.eq(this.frames, rt.V.int(30)))) {
-      this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_process");
+    try {
+      rt.frameLine(12);
+      this.frames = rt.ops.add(this.frames, rt.V.int(1));
+      rt.frameLine(13);
+      if (rt.ops.truthy(rt.ops.eq(this.frames, rt.V.int(30)))) {
+        rt.frameLine(14);
+        this.quit();
+      }
+      rt.frameLine(15);
+      return rt.V.bool(false);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.bool(false);
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    return rt.V.bool(false);
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

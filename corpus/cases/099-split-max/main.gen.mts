@@ -4,20 +4,56 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(0)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int((-1))])]));
-    print(rt.showArgs([rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)])]));
-    print(rt.showArgs([rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("a,b,,c,d"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("a,b,,c,d"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(3)])]));
-    print(rt.showArgs([rt.method(rt.V.str(",a,"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str(",a,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str(",a,,b,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)])]));
-    print(rt.showArgs([rt.method(rt.V.str(",a,,b,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("  a  "), "split", [rt.V.str(" "), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str(",,,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)])]));
-    print(rt.showArgs([rt.method(rt.V.str("aa"), "split", [rt.V.str("a"), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("aa"), "split", [rt.V.str("a"), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("aaa"), "split", [rt.V.str("aa"), rt.V.bool(true), rt.V.int(1)])]));
-    print(rt.showArgs([rt.method(rt.V.str("a,b,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a, ,b"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)])]));
-    print(rt.showArgs([rt.method(rt.V.str("abc"), "split", [rt.V.str(""), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("abc"), "split", [rt.V.str(""), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("abc"), "split", [rt.V.str(""), rt.V.bool(true), rt.V.int(2)])]));
-    print(rt.showArgs([rt.method(rt.V.str("ab,,cd"), "split", [rt.V.str(""), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("a::b::c"), "split", [rt.V.str("::"), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(5)])]));
-    print(rt.showArgs([rt.method(rt.V.str(""), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str(""), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("x"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)])]));
-    print(rt.showArgs([rt.method(rt.V.str("a,b,c,d"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("aXXbXXc"), "split", [rt.V.str("XX"), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,,,b"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(0)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int((-1))])]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)])]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(rt.V.str("a,,b"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("a,b,,c,d"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("a,b,,c,d"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(3)])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.method(rt.V.str(",a,"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str(",a,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str(",a,,b,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)])]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.method(rt.V.str(",a,,b,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("  a  "), "split", [rt.V.str(" "), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str(",,,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)])]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.method(rt.V.str("aa"), "split", [rt.V.str("a"), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("aa"), "split", [rt.V.str("a"), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("aaa"), "split", [rt.V.str("aa"), rt.V.bool(true), rt.V.int(1)])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.method(rt.V.str("a,b,"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a, ,b"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(2)])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.method(rt.V.str("abc"), "split", [rt.V.str(""), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("abc"), "split", [rt.V.str(""), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("abc"), "split", [rt.V.str(""), rt.V.bool(true), rt.V.int(2)])]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.method(rt.V.str("ab,,cd"), "split", [rt.V.str(""), rt.V.bool(false), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("a::b::c"), "split", [rt.V.str("::"), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,b,c"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(5)])]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.method(rt.V.str(""), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str(""), "split", [rt.V.str(","), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("x"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)])]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.method(rt.V.str("a,b,c,d"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.V.str("aXXbXXc"), "split", [rt.V.str("XX"), rt.V.bool(false), rt.V.int(1)]), rt.V.str(" "), rt.method(rt.V.str("a,,,b"), "split", [rt.V.str(","), rt.V.bool(true), rt.V.int(1)])]));
+      rt.frameLine(15);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

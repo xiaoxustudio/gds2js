@@ -230,11 +230,29 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   }
 }
 
-/** 数组下标的唯一口径：支持负数（从尾部数，读写同规则），越界响亮报 `array-index`。 */
-export function arrIdx(i: number, len: number): number {
+/** 位置型基读越界的两句：基带**静态标注**时引擎讲的是 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`（句末没有句点、负数原样印），
+ *  推断来的与转手过的同一份值讲的是 `Invalid access of index '<k>' on a base object of type: '<型>'.` —— 两句都量的，读数 `tmp/probe-typedlabel/compare{98,99}.txt`。 */
+export function posOobSay(key: string, base: string | undefined, valueType: string): string {
+  return base === undefined
+    ? `Invalid access of index '${key}' on a base object of type: '${valueType}'.`
+    : `Out of bounds get index '${key}' (on base: '${base}')`;
+}
+
+/** 数组下标的唯一读口径：支持负数（从尾部数），越界给引擎那一句（S403 量的；两式的分工见 `posOobSay`）。
+ *  后一式里的型名是**值自己**的拼法，定形数组带元素型（`var b = a` 那种转手过的一格量的，读数 `tmp/probe-typedlabel/compare99.txt` 的 u6）。 */
+export function arrIdx(i: number, len: number, base?: string, valueType = "Array"): number {
   const k = i < 0 ? i + len : i;
   if (k < 0 || k >= len) {
-    throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
+    throw new GodotRuntimeError("array-index", posOobSay(String(i), base, valueType));
+  }
+  return k;
+}
+
+/** 下标赋值那一侧的越界句：与读不同式，带上写入值的型（S403 量的，负数按原样印）。 */
+export function arrIdxWrite(i: number, len: number, vt: string, base = "Array"): number {
+  const k = i < 0 ? i + len : i;
+  if (k < 0 || k >= len) {
+    throw new GodotRuntimeError("array-index-write", `Invalid assignment of index '${String(i)}' (on base: '${base}') with value of type '${vt}'.`);
   }
   return k;
 }
@@ -252,6 +270,16 @@ const MINMAX_UNORDERABLE = new Set(["compare-operands", "color-cmp"]);
 export class GArray {
   private items: Variant[];
   elem: ElemKind | null = null;
+  private ro = false;
+
+  /** `make_read_only()` 置的那一面：浅的，只挡这个容器自己的写（S403 那一族的读数）。 */
+  markReadOnly(): void {
+    this.ro = true;
+  }
+
+  isReadOnly(): boolean {
+    return this.ro;
+  }
 
   constructor(items: Variant[] = []) {
     this.items = items;
@@ -293,14 +321,15 @@ export class GArray {
     return this.items;
   }
 
-  get(i: number): Variant {
-    return this.items[arrIdx(i, this.items.length)]!;
+  get(i: number, base?: string): Variant {
+    return this.items[arrIdx(i, this.items.length, base, this.elem === null ? "Array" : `Array[${this.elem}]`)]!;
   }
 
   set(i: number, v: Variant): void {
+    const at = arrIdxWrite(i, this.items.length, valueTypeName(v), this.elem === null ? "Array" : `Array[${this.elem}]`);
     const c = this.asElement(v);
     if (c === null) return;
-    this.items[arrIdx(i, this.items.length)] = c;
+    this.items[at] = c;
   }
 
   append(v: Variant): void {
@@ -611,6 +640,15 @@ export class GDict {
   private prev: number[] = [];
   keyKind: ElemKind | null = null;
   valKind: ElemKind | null = null;
+  private ro = false;
+
+  markReadOnly(): void {
+    this.ro = true;
+  }
+
+  isReadOnly(): boolean {
+    return this.ro;
+  }
 
   stampElem(k: ElemKind, val: ElemKind): void {
     this.keyKind = k;
@@ -674,11 +712,17 @@ export class GDict {
     return this.vs[i] ?? V.nil();
   }
 
+  /** 引擎报基名的那一拼法：定形字典带键值型，其余就是 `Dictionary`（S405 两句都用它）。 */
+  typeLabel(): string {
+    return this.keyKind === null || this.valKind === null ? "Dictionary" : `Dictionary[${this.keyKind}, ${this.valKind}]`;
+  }
+
+  /** 缺键那一句：`Invalid access to property or key '<键>' on a base object of type '<基名>'.`（键按打印那一条走）。 */
   getRequired(k: Variant): Variant {
     const q = this.asQuery(k);
     const i = q === null ? -1 : this.slot(keyOf(q), q);
     if (i < 0) {
-      throw new GodotRuntimeError("dict-key", `字典键不存在: ${show(k)}`);
+      throw new GodotRuntimeError("dict-key", `Invalid access to property or key '${show(k)}' on a base object of type '${this.typeLabel()}'.`);
     }
     return this.vs[i] as Variant;
   }
@@ -890,11 +934,11 @@ export function strLength(s: string): number {
   return codepoints(s).length;
 }
 
-export function strAt(s: string, i: number): string {
+export function strAt(s: string, i: number, base?: string): string {
   const chars = codepoints(s);
   const c = chars[i];
   if (c === undefined) {
-    throw new GodotRuntimeError("string-index", `字符串索引越界: ${i}`);
+    throw new GodotRuntimeError("string-index", posOobSay(String(i), base, "String"));
   }
   return c;
 }

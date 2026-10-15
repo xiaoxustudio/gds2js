@@ -5,7 +5,7 @@
   "private": true,
   "description": "将 .gds 转义为 js 运行",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=25"
   },
   "exports": {
     ".": "./dist/runtime.mjs",

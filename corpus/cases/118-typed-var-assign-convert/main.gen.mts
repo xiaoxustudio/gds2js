@@ -4,37 +4,94 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  mt = rt.toInt(rt.V.int(2));
-  mfl = rt.toFloat(rt.V.int(1));
-  mb = rt.toBool(rt.V.bool(false));
-  ms = rt.strOf(rt.V.str("a"));
-  mv = rt.toVec2(rt.vector2New([rt.V.int(0), rt.V.int(0)]));
+  declare mt: rt.Variant;
+  declare mfl: rt.Variant;
+  declare mb: rt.Variant;
+  declare ms: rt.Variant;
+  declare mv: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.mt = rt.toInt(rt.V.int(2));
+      rt.frameLine(4);
+      this.mfl = rt.toFloat(rt.V.int(1));
+      rt.frameLine(5);
+      this.mb = rt.toBool(rt.V.bool(false));
+      rt.frameLine(6);
+      this.ms = rt.strOf(rt.V.str("a"));
+      rt.frameLine(7);
+      this.mv = rt.toVec2(rt.vector2New([rt.V.int(0), rt.V.int(0)]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    this.mt = rt.toInt(rt.V.float(2.7));
-    print(rt.showArgs([rt.V.str("q1 "), this.mt]));
-    let u = 3.9;
-    this.mt = rt.toInt(rt.V.float(u));
-    print(rt.showArgs([rt.V.str("q2 "), this.mt]));
-    this.mt = rt.toInt(rt.V.bool(true));
-    print(rt.showArgs([rt.V.str("q3 "), this.mt]));
-    this.mv = rt.toVec2(rt.vector2iNew([rt.V.int(1), rt.V.int(2)]));
-    print(rt.showArgs([rt.V.str("q4 "), this.mv]));
-    this.mfl = rt.toFloat(rt.V.int(5));
-    print(rt.showArgs([rt.V.str("q5 "), this.mfl]));
-    this.mb = rt.toBool(rt.V.int(0));
-    print(rt.showArgs([rt.V.str("q6 "), this.mb]));
-    this.mb = rt.toBool(rt.V.int(3));
-    print(rt.showArgs([rt.V.str("q7 "), this.mb]));
-    this.ms = rt.strOf(rt.V.stringName("strname"));
-    print(rt.showArgs([rt.V.str("q8 "), this.ms, rt.V.str(" "), rt.typeOf(this.ms)]));
-    let li = rt.toInt(rt.V.int(0));
-    li = rt.toInt(rt.V.float(7.5));
-    print(rt.showArgs([rt.V.str("q9 "), li]));
-    li = rt.toInt(rt.ops.add(li, rt.V.float(0.5)));
-    print(rt.showArgs([rt.V.str("q10 "), li]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(10);
+      this.mt = rt.toInt(rt.V.float(2.7));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("q1 "), this.mt]));
+      rt.frameLine(12);
+      let u = 3.9;
+      rt.frameLine(13);
+      this.mt = rt.toInt(rt.V.float(u));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("q2 "), this.mt]));
+      rt.frameLine(15);
+      this.mt = rt.toInt(rt.V.bool(true));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("q3 "), this.mt]));
+      rt.frameLine(17);
+      this.mv = rt.toVec2(rt.vector2iNew([rt.V.int(1), rt.V.int(2)]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("q4 "), this.mv]));
+      rt.frameLine(19);
+      this.mfl = rt.toFloat(rt.V.int(5));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("q5 "), this.mfl]));
+      rt.frameLine(21);
+      this.mb = rt.toBool(rt.V.int(0));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("q6 "), this.mb]));
+      rt.frameLine(23);
+      this.mb = rt.toBool(rt.V.int(3));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("q7 "), this.mb]));
+      rt.frameLine(25);
+      this.ms = rt.strOf(rt.V.stringName("strname"));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str("q8 "), this.ms, rt.V.str(" "), rt.typeOf(this.ms)]));
+      rt.frameLine(27);
+      let li = rt.toInt(rt.V.int(0));
+      rt.frameLine(28);
+      li = rt.toInt(rt.V.float(7.5));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("q9 "), li]));
+      rt.frameLine(30);
+      li = rt.toInt(rt.ops.add(li, rt.V.float(0.5)));
+      rt.frameLine(31);
+      print(rt.showArgs([rt.V.str("q10 "), li]));
+      rt.frameLine(32);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

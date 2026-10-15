@@ -64,7 +64,7 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 
 ```bash
 node packages/gds2js/dist/cli.mjs build x.gd --runtime-mode single -o build/x.mts
-node build/x.mts          # Node >= 22.18（类型剥离默认开启，与 engines 同一条）
+node build/x.mts          # Node >= 25（类型剥离默认开启，与 engines 同一条）
 ```
 
 - 默认会在产物末尾发 `await new Main().run()`（入口即跑生命周期）。

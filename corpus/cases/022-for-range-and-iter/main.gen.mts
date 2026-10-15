@@ -4,24 +4,61 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let acc = rt.V.array(rt.GArray.of([]));
-    for (let i of rt.rangeSeq([rt.V.int(3)])) {
-      rt.method(acc, "append", [rt.V.int(i)]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(3);
+      let acc = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(4);
+      for (let i of rt.rangeSeq([rt.V.int(3)])) {
+        rt.frameLine(5);
+        rt.method(acc, "append", [rt.V.int(i)]);
+      }
+      rt.frameLine(6);
+      print(rt.showArgs([acc]));
+      rt.frameLine(7);
+      let ks = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(8);
+      for (let k of rt.iter(rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]))) {
+        rt.frameLine(9);
+        rt.method(ks, "append", [k]);
+      }
+      rt.frameLine(10);
+      print(rt.showArgs([ks]));
+      rt.frameLine(11);
+      let vs = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(12);
+      for (let x of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(10), rt.V.int(20)])))) {
+        rt.frameLine(13);
+        rt.method(vs, "append", [x]);
+      }
+      rt.frameLine(14);
+      print(rt.showArgs([vs]));
+      rt.frameLine(15);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([acc]));
-    let ks = rt.V.array(rt.GArray.of([]));
-    for (let k of rt.iter(rt.dictOf([[rt.V.str("a"), rt.V.int(1)], [rt.V.str("b"), rt.V.int(2)]]))) {
-      rt.method(ks, "append", [k]);
-    }
-    print(rt.showArgs([ks]));
-    let vs = rt.V.array(rt.GArray.of([]));
-    for (let x of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(10), rt.V.int(20)])))) {
-      rt.method(vs, "append", [x]);
-    }
-    print(rt.showArgs([vs]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

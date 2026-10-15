@@ -1,0 +1,9 @@
+V1|Vector2::length 5.0
+V2|3.0 (0.6, 0.8)
+V3|Vector2i::distance_to 3.60555127546399
+V4|Color::to_html ff8040ff
+V5|Vector3::length 3.0
+V6|Vector3i::length 3.0
+V7|StringName::hash 5863208
+V8|NodePath::get_name_count 2
+V9|Vector2::normalized

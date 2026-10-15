@@ -4,12 +4,40 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.str("r "), rt.strBuiltin([rt.V.str("a"), rt.V.str("-"), rt.V.str("b")]), rt.V.str(" | "), rt.strBuiltin([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.str(" | "), rt.strBuiltin([rt.V.str("x"), rt.V.nil(), rt.V.float(2.5)])]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.strBuiltin([rt.V.float(1.7)]), rt.V.str(" "), rt.strBuiltin([rt.V.float((-0))]), rt.V.str(" "), rt.strBuiltin([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str(" "), rt.strBuiltin([rt.vector2New([rt.V.float(1.5), rt.V.int(2)])])]));
-    print(rt.showArgs([rt.V.str("r3 "), rt.strBuiltin([rt.vector2New([rt.V.float(1.5), rt.V.int(2)]), rt.V.str("+"), rt.V.int(7)]), rt.V.str(" "), rt.stringCtor([rt.V.str("ok")])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.V.str("r "), rt.strBuiltin([rt.V.str("a"), rt.V.str("-"), rt.V.str("b")]), rt.V.str(" | "), rt.strBuiltin([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.str(" | "), rt.strBuiltin([rt.V.str("x"), rt.V.nil(), rt.V.float(2.5)])]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.V.str("r2 "), rt.strBuiltin([rt.V.float(1.7)]), rt.V.str(" "), rt.strBuiltin([rt.V.float((-0))]), rt.V.str(" "), rt.strBuiltin([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str(" "), rt.strBuiltin([rt.vector2New([rt.V.float(1.5), rt.V.int(2)])])]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("r3 "), rt.strBuiltin([rt.vector2New([rt.V.float(1.5), rt.V.int(2)]), rt.V.str("+"), rt.V.int(7)]), rt.V.str(" "), rt.stringCtor([rt.V.str("ok")])]));
+      rt.frameLine(7);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -9,18 +9,52 @@ const PI = rt.V.float(3.141592653589793);
 const TAU = rt.V.float(6.283185307179586);
 
 export class Main extends SceneTree {
-  TWO_PI = rt.ops.mul(PI, rt.V.float(2));
+  declare TWO_PI: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.TWO_PI = rt.ops.mul(PI, rt.V.float(2));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static TWO_PI = rt.ops.mul(PI, rt.V.float(2));
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let d = rt.dictOf([[PI, rt.V.int(1)], [INF, rt.V.int(2)], [NAN, rt.V.int(3)]]);
-    print(rt.showArgs([rt.V.str("r1 "), rt.method(d, "size", []), rt.V.str(" "), rt.wrapValue(rt.index(d, PI))]));
-    print(rt.showArgs([rt.V.str("r2 "), Main.TWO_PI, rt.V.str(" "), rt.typeOf(Main.TWO_PI)]));
-    let arr = rt.stampArray(rt.V.array(rt.GArray.of([PI, TAU])), "float", true);
-    print(rt.showArgs([rt.V.str("r3 "), arr, rt.V.str(" "), rt.method(arr, "size", [])]));
-    print(rt.showArgs([rt.V.str("r4 "), rt.ops.add(rt.V.str("pi="), rt.strBuiltin([PI])), rt.V.str(" "), rt.ops.lt(PI, rt.V.float(3.2))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(6);
+      let d = rt.dictOf([[PI, rt.V.int(1)], [INF, rt.V.int(2)], [NAN, rt.V.int(3)]]);
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("r1 "), rt.method(d, "size", []), rt.V.str(" "), rt.wrapValue(rt.index(d, PI))]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("r2 "), Main.TWO_PI, rt.V.str(" "), rt.typeOf(Main.TWO_PI)]));
+      rt.frameLine(9);
+      let arr = rt.stampArray(rt.V.array(rt.GArray.of([PI, TAU])), "float", true);
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("r3 "), arr, rt.V.str(" "), rt.method(arr, "size", [])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("r4 "), rt.ops.add(rt.V.str("pi="), rt.strBuiltin([PI])), rt.V.str(" "), rt.ops.lt(PI, rt.V.float(3.2))]));
+      rt.frameLine(12);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

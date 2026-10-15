@@ -5,6 +5,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
+import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
@@ -56,5 +57,39 @@ describe("不许跟着一起拦的三格", () => {
 
   it("模块级调自己那一层的方法（对照格）", async () => {
     eq("373", "模块级", await diags(`${H}${OUTER}${RUN('\tprint(p())')}`), []);
+  });
+});
+
+// 内部类那一只眼睛能看见模块级的哪些名字：15 格逐名量的（尺 `tmp/probe-innerscope/round14.mts`，读数 `compare97.txt`，
+// 出货端到端 15 格对照 `tmp/probe-innerscope/ours.mts` 不合 0）。看得见的是 const、enum 名、兄弟类、自己类的成员与信号；
+// 看不见的是模块 func / var / signal / static var 与裸写的枚举成员名。
+describe("内部类看得见的模块级名字：15 格逐名", () => {
+  const SEE = "class Thing:\n\tfunc g():\n";
+  const CALL = "\nfunc _initialize():\n\tvar t = Thing.new()\n\tt.g()\n\tquit()\n";
+
+  const ROWS: Array<[string, string, string[]]> = [
+    ["模块 var 看不见", `${H}var mod_v = 1\n\n${SEE}\t\tprint(mod_v)\n${CALL}`, ['Identifier "mod_v" not declared in the current scope.']],
+    ["模块 signal 看不见", `${H}signal mod_sig\n\n${SEE}\t\tmod_sig.emit()\n${CALL}`, ['Identifier "mod_sig" not declared in the current scope.']],
+    ["模块 static var 看不见", `${H}static var mod_s = 1\n\n${SEE}\t\tprint(mod_s)\n${CALL}`, ['Identifier "mod_s" not declared in the current scope.']],
+    ["裸枚举成员名看不见", `${H}enum Col { RED = 1 }\n\n${SEE}\t\tprint(RED)\n${CALL}`, ['Identifier "RED" not declared in the current scope.']],
+    ["模块 const 看得见", `${H}const MOD_C = 1\n\n${SEE}\t\tprint(MOD_C)\n${CALL}`, []],
+    ["枚举名看得见", `${H}enum Col { RED = 1 }\n\n${SEE}\t\tprint(Col.RED)\n${CALL}`, []],
+    ["兄弟类看得见", `${H}class Other:\n\tpass\n\n${SEE}\t\tprint(Other.new() != null)\n${CALL}`, []],
+    ["全局类型名与全局函数看得见", `${SEE}\t\tprint(Vector2(1, 2) == Vector2(1, 2) and abs(-1))\n${CALL}`, []],
+    ["自己类的信号看得见", `class Thing:\n\tsignal own_sig\n\tfunc g():\n\t\town_sig.emit()\n${CALL}`, []],
+  ];
+
+  it("九格按名对账", async () => {
+    for (const [label, src, want] of ROWS) {
+      eq("373", label, await diags(src), want);
+    }
+  });
+
+  it("自己类的信号取值发的是装箱过的 this 字段", async () => {
+    const ir = lower(await parseSource(`${H}class Thing:\n\tsignal own_sig\n\tfunc g():\n\t\town_sig.emit()\n${CALL}`));
+    const code = emitModule(ir, { runtimeImport: "rt", hostImport: "host" });
+    const thing = code.slice(code.indexOf("class Thing "), code.indexOf("const __gd_d_Thing"));
+    eq("373", "信号取值要装箱", thing.includes("rt.wrapValue(this.own_sig)"), true);
+    eq("373", "不再发裸标识符", thing.includes("rt.method(own_sig,"), false);
   });
 });

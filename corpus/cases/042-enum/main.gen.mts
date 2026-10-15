@@ -8,16 +8,48 @@ const ANON_A = rt.V.int(0);
 const ANON_B = rt.V.int(1);
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("HEARTS")))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("DIAMONDS")))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("CLUBS")))]));
-    print(rt.showArgs([rt.ops.add(rt.wrapValue(rt.index(Suit, rt.V.str("CLUBS"))), rt.V.int(1))]));
-    print(rt.showArgs([ANON_A, ANON_B]));
-    let c = rt.wrapValue(rt.index(Suit, rt.V.str("DIAMONDS")));
-    print(rt.showArgs([c]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(7);
+      print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("HEARTS")))]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("DIAMONDS")))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("CLUBS")))]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.ops.add(rt.wrapValue(rt.index(Suit, rt.V.str("CLUBS"))), rt.V.int(1))]));
+      rt.frameLine(11);
+      print(rt.showArgs([ANON_A, ANON_B]));
+      rt.frameLine(12);
+      let c = rt.wrapValue(rt.index(Suit, rt.V.str("DIAMONDS")));
+      rt.frameLine(13);
+      print(rt.showArgs([c]));
+      rt.frameLine(14);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

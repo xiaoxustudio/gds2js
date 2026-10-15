@@ -703,19 +703,24 @@ export function gSqrt(v: Variant): Variant {
 }
 
 
+/** D6 那七个值类型不进 Tier 1：它们各自的默认值发不出来，声明与接住点那两站要的是响亮拒，不是 null 盒子（21 格读数量的是各型自己的默认值，`tmp/probe-valuedefault/compare96.txt`）。 */
+export function unsupportedValueDefault(name: string): Variant {
+  throw new UnsupportedError("value-default", `${name} 的默认值发不出（D6：那七个值类型不进 Tier 1）`);
+}
+
 export function lengthOf(v: Variant): Variant {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());
   throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
 }
 
-/** and / or 是短路的，所以右值延迟求值 */
+/** and / or 是短路的，所以右值延迟求值；两支的值恒为 bool（S398：`1 and 2` 引擎给 `true`，`typeof` 那格给 1）。 */
 export function and(l: Variant, right: () => Variant): Variant {
-  return truthyOf(l) ? right() : l;
+  return truthyOf(l) ? V.bool(truthyOf(right())) : V.bool(false);
 }
 
 export function or(l: Variant, right: () => Variant): Variant {
-  return truthyOf(l) ? l : right();
+  return truthyOf(l) ? V.bool(true) : V.bool(truthyOf(right()));
 }
 
 /** `range()` 的实参归一 —— 它只吃 int：float 向零截断、bool 当 0/1，String / Vector2 等报运行错。 */

@@ -4,27 +4,70 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.method(rt.V.str("\n"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\t"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\r"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\u0007"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\b"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\f"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\u000b"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\\"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\""), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("'"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("ab\ncd"), "length", [])]));
-    print(rt.showArgs([rt.ops.eq(rt.V.str("A"), rt.V.str("A"))]));
-    print(rt.showArgs([rt.ops.eq(rt.V.str("it's"), rt.V.str("it's"))]));
-    print(rt.showArgs([rt.method(rt.V.str("it's"), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("a\rb"), "length", [])]));
-    print(rt.showArgs([rt.ops.eq(rt.V.str(("\\" + "\\")), rt.V.str("\\\\"))]));
-    print(rt.showArgs([rt.method(rt.V.str("é"), "length", [])]));
-    print(rt.showArgs([rt.ops.eq(rt.V.str("é"), rt.V.str("é"))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.method(rt.V.str("\n"), "length", [])]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.method(rt.V.str("\t"), "length", [])]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(rt.V.str("\r"), "length", [])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.method(rt.V.str("\u0007"), "length", [])]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.method(rt.V.str("\b"), "length", [])]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.method(rt.V.str("\f"), "length", [])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.method(rt.V.str("\u000b"), "length", [])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.method(rt.V.str("\\"), "length", [])]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.method(rt.V.str("\""), "length", [])]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.method(rt.V.str("'"), "length", [])]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.method(rt.V.str("ab\ncd"), "length", [])]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.ops.eq(rt.V.str("A"), rt.V.str("A"))]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.ops.eq(rt.V.str("it's"), rt.V.str("it's"))]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.method(rt.V.str("it's"), "length", [])]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.method(rt.V.str("a\rb"), "length", [])]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.ops.eq(rt.V.str(("\\" + "\\")), rt.V.str("\\\\"))]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.method(rt.V.str("é"), "length", [])]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.ops.eq(rt.V.str("é"), rt.V.str("é"))]));
+      rt.frameLine(22);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

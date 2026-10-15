@@ -1,6 +1,7 @@
 /* 原生 shim：把 libtree-sitter 的解析结果拍平成定长记录（前序 + depth + UTF-8 字节区间 + 名字池）交回 TS。
  * 对外只给「整数 + 两块字节」：FFI 边界上没有 pointer 这一类，所以 parser、tree 与两块缓冲都留在 C 侧。
- * 编译必须用 zig cc -target x86_64-windows-gnu：换工具链目标会在链接期找不到 libuuid.a。 */
+ * 编译用 zig cc，目标三元组由 tools/cli-native.mjs 按 host 推导，且必须 -std=gnu11：
+ * -std=c11 的严格 ANSI 会让 glibc 少 le16toh、musl 少 fdopen，libtree-sitter 编不过。 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

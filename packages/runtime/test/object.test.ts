@@ -6,7 +6,7 @@ import { eq, shouldThrow } from "@gds2js/testkit";
 import { registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject } from "@gds2js/runtime/runtime/object";
 import { attribute, method, writeProp } from "@gds2js/runtime/runtime/methods";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { show } from "@gds2js/runtime/runtime/values";
+import { GDict, show } from "@gds2js/runtime/runtime/values";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { vector2i } from "@gds2js/runtime/runtime/vector2i";
@@ -121,5 +121,108 @@ describe("runtime/object · 类、字段与元信息", () => {
     method(V.object(o), "remove_meta", [V.str("sn")]);
     eq("step66", "remove_meta 之后 has_meta 假", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
     shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
+  });
+});
+
+describe("runtime/methods · 字典的属性两面就是 StringName 键那一格（S421）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const dictBox = (pairs: Array<[Variant, Variant]>): Variant => {
+    const g = new GDict();
+    for (const [k, v] of pairs) g.set(k, v);
+    return V.dict(g);
+  };
+
+  it("写式把名字折成 StringName 键塞进字典，读式与打印都对上引擎", () => {
+    const d = dictBox([]);
+    writeProp(d, "foo", V.int(5));
+    eq("421", "属性读回 5", String((attribute(d, "foo") as Variant).v), "5");
+    eq("421", "打印是 { &\"foo\": 5 }", show(d), '{ &"foo": 5 }');
+    eq("421", "String 键的下标读也认这一格", show(method(d, "get", [V.str("foo")]), 1), "5");
+    eq("421", "has 两形都真", `${String((attribute(d, "foo") as Variant).t)}/${show(method(d, "has", [V.stringName("foo")]))}`, `${Tag.INT}/true`);
+  });
+
+  it("String 键先写，属性读也认这一格", () => {
+    const d = dictBox([[V.str("bar"), V.int(7)]]);
+    eq("421", "属性读 String 键", String((attribute(d, "bar") as Variant).v), "7");
+  });
+
+  it("没这一格时给 Invalid access 那句，成员名也一样", () => {
+    const d = dictBox([[V.int(1), V.int(2)]]);
+    const say = (n: string): string => "Invalid access to property or key '" + n + "' on a base object of type 'Dictionary'.";
+    for (const n of ["nosuch", "keys", "size", "has"]) {
+      eq("421", `读 ${n}`, errText(() => attribute(d, n)), say(n));
+    }
+    eq("421", "keys() 照旧是方法", show(method(d, "keys", []), 1), "[1]");
+  });
+
+  it("往成员名上写不报错，读完还是那一格", () => {
+    const d = dictBox([[V.int(1), V.int(2)]]);
+    writeProp(d, "keys", V.int(7));
+    eq("421", "属性读回 7", String((attribute(d, "keys") as Variant).v), "7");
+    eq("421", "keys() 给两把键", show(method(d, "keys", []), 1), '[1, &"keys"]');
+    eq("421", "整张字典的打印", show(d), '{ 1: 2, &"keys": 7 }');
+  });
+});
+
+describe("runtime/methods · Array 与 String 的属性写给同一句（S423）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const say = (base: string, key: string, ty: string): string =>
+    `Invalid assignment of property or key '${key}' with value of type '${ty}' on a base object of type '${base}'.`;
+
+  it("表外名与成员名同形，值的型名按实值", () => {
+    const a = V.array([V.int(1)]);
+    eq("423", "Array 写表外名", errText(() => writeProp(a, "nosuch", V.int(1))), say("Array", "nosuch", "int"));
+    eq("423", "Array 写成员名", errText(() => writeProp(a, "append", V.int(1))), say("Array", "append", "int"));
+    eq("423", "Array 写 float 值", errText(() => writeProp(a, "append", V.float(1.5))), say("Array", "append", "float"));
+  });
+
+  it("String 那一支照同一句，型名是 String", () => {
+    const s = V.str("abcd");
+    eq("423", "String 写表外名", errText(() => writeProp(s, "nosuch", V.int(1))), say("String", "nosuch", "int"));
+    eq("423", "String 写成员名", errText(() => writeProp(s, "to_upper", V.bool(true))), say("String", "to_upper", "bool"));
+  });
+});
+
+describe("runtime/methods · String 与 Array 的属性读按表外名单给那句（S424）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const say = (face: string, n: string): string => "Invalid access to property or key '" + n + "' on a base object of type '" + face + "'.";
+
+  it("名单里的名字逐名给引擎那句", () => {
+    const str = V.str("abcd");
+    for (const n of ["nosuch", "keys", "size", "append", "bsearch"]) {
+      eq("424", `String 读 ${n}`, errText(() => attribute(str, n)), say("String", n));
+    }
+    const arr = V.array([V.int(1)]);
+    for (const n of ["nosuch", "keys", "length", "to_upper", "join"]) {
+      eq("424", `Array 读 ${n}`, errText(() => attribute(arr, n)), say("Array", n));
+    }
+  });
+
+  it("成员名不许冒充那句：Callable 那一族还没接就响亮拒", () => {
+    eq("424", "String 读 to_upper", /Invalid access/.test(errText(() => attribute(V.str("abcd"), "to_upper"))), false);
+    eq("424", "String 读 length", /Invalid access/.test(errText(() => attribute(V.str("abcd"), "length"))), false);
+    eq("424", "Array 读 append", /Invalid access/.test(errText(() => attribute(V.array([V.int(1)]), "append"))), false);
+    eq("424", "Array 读 size", /Invalid access/.test(errText(() => attribute(V.array([V.int(1)]), "size"))), false);
   });
 });

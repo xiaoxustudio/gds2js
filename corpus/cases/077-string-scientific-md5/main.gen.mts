@@ -4,33 +4,82 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1e-7)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(0.00001)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(0.0001)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(0.1)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1.5)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.int(0)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.int(1)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1000)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1000000000000000)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(100000000000000000000)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(123456789012345.6)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float((1 / 0))])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float((0 / 0))])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.int(42)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float((-1.5))])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(9.9999999e-7)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1e-20)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(100000000000000)])]));
-    print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.bool(true)])]));
-    print(rt.showArgs([rt.method(rt.V.str(""), "md5_text", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("abc"), "md5_text", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("The quick brown fox"), "md5_text", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("中文"), "md5_text", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), "md5_text", [])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1e-7)])]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(0.00001)])]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(0.0001)])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(0.1)])]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1.5)])]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.int(0)])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.int(1)])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1000)])]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1000000000000000)])]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(100000000000000000000)])]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(123456789012345.6)])]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float((1 / 0))])]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float((0 / 0))])]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.int(42)])]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float((-1.5))])]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(9.9999999e-7)])]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(1e-20)])]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.float(100000000000000)])]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.stringStatic("num_scientific", [rt.V.bool(true)])]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.method(rt.V.str(""), "md5_text", [])]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.method(rt.V.str("abc"), "md5_text", [])]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.method(rt.V.str("The quick brown fox"), "md5_text", [])]));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.method(rt.V.str("中文"), "md5_text", [])]));
+      rt.frameLine(27);
+      print(rt.showArgs([rt.method(rt.V.str("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), "md5_text", [])]));
+      rt.frameLine(28);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -4,26 +4,78 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   zz(): rt.Variant {
-    return rt.V.int(7);
+    const __gd_frame = rt.frameEnter("res://main.gd", "zz");
+    try {
+      rt.frameLine(5);
+      return rt.V.int(7);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   take(f: rt.Variant): void {
-    print(rt.showArgs([rt.V.str("T|"), rt.method(f, "is_valid", []), rt.V.str("|"), rt.method(f, "get_method", [])]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "take");
+    try {
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("T|"), rt.method(f, "is_valid", []), rt.V.str("|"), rt.method(f, "get_method", [])]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let c = rt.methodCallable(rt.V.object(this), "quit");
-    print(rt.showArgs([rt.V.str("A|"), rt.typeOf(c), rt.V.str("|"), rt.method(c, "get_method", []), rt.V.str("|"), rt.method(c, "is_valid", [])]));
-    this.take(rt.methodCallable(rt.V.object(this), "quit"));
-    let z = rt.methodCallable(rt.V.object(this), "zz");
-    print(rt.showArgs([rt.V.str("B|"), rt.typeOf(z), rt.V.str("|"), rt.method(z, "call", [])]));
-    let g = rt.methodCallable(rt.V.object(this), "get_class");
-    print(rt.showArgs([rt.V.str("C|"), rt.typeOf(g), rt.V.str("|"), rt.method(g, "call", [])]));
-    let k = rt.V.array(rt.GArray.of([rt.methodCallable(rt.V.object(this), "quit"), rt.methodCallable(rt.V.object(this), "zz")]));
-    print(rt.showArgs([rt.V.str("D|"), k, rt.V.str("|"), rt.method(rt.wrapValue(rt.index(k, rt.V.int(1))), "call", [])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(11);
+      let c = rt.methodCallable(rt.V.object(this), "quit");
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.str("A|"), rt.typeOf(c), rt.V.str("|"), rt.method(c, "get_method", []), rt.V.str("|"), rt.method(c, "is_valid", [])]));
+      rt.frameLine(13);
+      this.take(rt.methodCallable(rt.V.object(this), "quit"));
+      rt.frameLine(14);
+      let z = rt.methodCallable(rt.V.object(this), "zz");
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("B|"), rt.typeOf(z), rt.V.str("|"), rt.method(z, "call", [])]));
+      rt.frameLine(16);
+      let g = rt.methodCallable(rt.V.object(this), "get_class");
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("C|"), rt.typeOf(g), rt.V.str("|"), rt.method(g, "call", [])]));
+      rt.frameLine(18);
+      let k = rt.V.array(rt.GArray.of([rt.methodCallable(rt.V.object(this), "quit"), rt.methodCallable(rt.V.object(this), "zz")]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.str("D|"), k, rt.V.str("|"), rt.method(rt.wrapValue(rt.index(k, rt.V.int(1))), "call", [])]));
+      rt.frameLine(20);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

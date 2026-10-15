@@ -4,28 +4,68 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let s = "a";
-    let i = 0;
-    while ((i < 3)) {
-      s = (s + "b");
-      i = rt.fast.iAddC(i, 1);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let s = "a";
+      rt.frameLine(5);
+      let i = 0;
+      rt.frameLine(6);
+      while ((i < 3)) {
+        rt.frameLine(7);
+        s = (s + "b");
+        rt.frameLine(8);
+        i = rt.fast.iAddC(i, 1);
+      }
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str(s)]));
+      rt.frameLine(10);
+      let empty = "";
+      rt.frameLine(11);
+      print(rt.showArgs([rt.ops.eq(rt.V.str(empty), rt.V.str(""))]));
+      rt.frameLine(12);
+      if (s !== "") {
+        rt.frameLine(13);
+        print(rt.showArgs([rt.V.str("truthy")]));
+      }
+      rt.frameLine(14);
+      if (empty !== "") {
+        rt.frameLine(15);
+        print(rt.showArgs([rt.V.str("nope")]));
+      } else {
+        rt.frameLine(17);
+        print(rt.showArgs([rt.V.str("empty-false")]));
+      }
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str((s + "!"))]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.ops.add(rt.strBuiltin([rt.V.int(1)]), rt.V.str("x"))]));
+      rt.frameLine(20);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([rt.V.str(s)]));
-    let empty = "";
-    print(rt.showArgs([rt.ops.eq(rt.V.str(empty), rt.V.str(""))]));
-    if (s !== "") {
-      print(rt.showArgs([rt.V.str("truthy")]));
-    }
-    if (empty !== "") {
-      print(rt.showArgs([rt.V.str("nope")]));
-    } else {
-      print(rt.showArgs([rt.V.str("empty-false")]));
-    }
-    print(rt.showArgs([rt.V.str((s + "!"))]));
-    print(rt.showArgs([rt.ops.add(rt.strBuiltin([rt.V.int(1)]), rt.V.str("x"))]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

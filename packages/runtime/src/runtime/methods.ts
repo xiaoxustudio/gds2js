@@ -16,25 +16,26 @@ import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
-import { isEncodedObjectIdBox, isWeakRefBox } from "./identity";
+import { boundBuiltinCallable, callDeferred } from "./callable";
+import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
+import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show } from "./values";
 import { isLess, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "./packed";
 
 function asArray(v: Variant, who: string): GArray {
   if (v.t !== Tag.ARRAY) throw new UnsupportedError("not-array", `${who} 需要 Array，收到 ${v.t}`);
@@ -237,9 +238,9 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       return callableCall(box, args);
     case "call_deferred": {
       if (empty) throw new UnsupportedError("callable-deferred-null", "空 Callable 上 call_deferred() 没量过");
-      setTimeout(() => {
+      callDeferred(() => {
         callCallableBox(box, args);
-      }, 0);
+      });
       return V.nil();
     }
     case "callv": {
@@ -270,6 +271,8 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 实测：方法 Callable 给接收者实例（`== o` 真、跨实例假），静态给那个类值（`== Inner` 真、`== 外层脚本` 假）；
       // lambda 给**定义它那个类的 GDScript 对象**（`== self` 假、`== get_script()` 真），空 Callable 与全局内置给
       // typeof 24 的 null Object（打 `<Object#null>`、`== null` 真）—— 后两形我们没有，响亮拒。
+      // 内建类型面绑定来的那一只：引擎给的是 typeof 24 的空对象引用，不是那台数组 / 字符串（读数 `tmp/probe-bincall/h3.gd` 的 Q6）
+      if (box.builtin !== null) return V.object(NULL_OBJECT);
       if (box.object === null) {
         throw new UnsupportedError(
           "callable-get-object",
@@ -298,6 +301,49 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
  *  `is_same` 是字典那侧的同名直觉 —— 数组上这一支叫 `is_same_typed`。 */
 const ARRAY_NO_METHOD = new Set(["join", "concat", "is_same"]);
 
+/** 属性读那一形的**确认不存在**名单（尺 `tmp/probe-bincall/round5.mts`：189 名逐名在字面量接收者上过裁判，
+ *  读数 `compare5.txt`；与 S413 的存在数 String 108 / Array 50 对得上）。方向与 `PACK_ABSENT_*` 一致：
+ *  只有裁判说「没这名字」的才发引擎那句，成员名要给内建类型的绑定 Callable（§6 第 83 条①还没接），照旧响亮拒。 */
+const STRING_ATTR_ABSENT = [
+  "all", "any", "append", "append_array", "assign", "at", "back", "binary_search", "bsearch",
+  "bsearch_custom", "clear", "compress", "copy_on_write", "decode_string", "decompress", "dedent2",
+  "duplicate", "each", "fill", "filter", "find_custom", "find_key", "front", "get", "get_bytes",
+  "get_index", "get_or_add", "get_pointer", "get_string_from_ascii", "get_typed_builtin",
+  "get_typed_class_name", "get_typed_script", "has", "has_all", "hex_encode", "insert_array",
+  "is_null", "is_read_only", "is_same_typed", "is_typed", "keys", "make_read_only", "map", "max",
+  "merge", "merged", "min", "nosuch", "pick_random", "pop_at", "pop_back", "pop_front", "push_back",
+  "push_front", "recursive_equal", "reduce", "remove_at", "remove_at_copy", "resize", "rfind_custom",
+  "same_type", "search_sorted", "set", "shuffle", "size", "slice", "sort", "sort_custom", "sort_flags",
+  "subarray", "sum", "to_base64", "to_byte_array", "to_float32_array", "to_float64_array",
+  "to_hex_string", "to_int32_array", "to_int64_array", "to_raw_string", "to_string", "values"
+];
+
+const ARRAY_ATTR_ABSENT = [
+  "at", "begins_with", "bigrams", "bin_to_int", "binary_search", "c_escape", "c_unescape",
+  "capitalize", "casecmp_to", "chr", "compress", "contains", "containsn", "copy_on_write", "countn",
+  "decode_string", "decompress", "dedent", "dedent2", "each", "ends_with", "filecasecmp_to",
+  "filenocasecmp_to", "find_key", "findn", "format", "get_base_dir", "get_basename", "get_bytes",
+  "get_extension", "get_file", "get_index", "get_or_add", "get_pointer", "get_slice",
+  "get_slice_count", "get_slicec", "get_string_from_ascii", "has_all", "hex_decode", "hex_encode",
+  "hex_to_int", "humanize_size", "indent", "insert_array", "is_absolute_path", "is_null",
+  "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_filename", "is_valid_float",
+  "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int",
+  "is_valid_ip_address", "join", "json_escape", "keys", "left", "length", "lpad", "lstrip", "match",
+  "matchn", "md5_buffer", "md5_text", "merge", "merged", "naturalcasecmp_to", "naturalnocasecmp_to",
+  "nocasecmp_to", "nosuch", "num", "num_int64", "num_scientific", "num_uint64", "pad_decimals",
+  "pad_zeros", "path_join", "recursive_equal", "remove_at_copy", "repeat", "replace", "replacen",
+  "rfindn", "right", "rpad", "rsplit", "rstrip", "same_type", "search_sorted", "sha1_buffer",
+  "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "sort_flags", "split",
+  "split_floats", "strip_edges", "strip_escapes", "subarray", "substr", "sum", "to_ascii_buffer",
+  "to_base64", "to_byte_array", "to_camel_case", "to_float", "to_float32_array", "to_float64_array",
+  "to_hex_string", "to_int", "to_int32_array", "to_int64_array", "to_kebab_case", "to_lower",
+  "to_pascal_case", "to_raw_string", "to_snake_case", "to_string", "to_upper", "to_utf16_buffer",
+  "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at",
+  "uri_decode", "uri_encode", "validate_filename", "validate_node_name", "values", "xml_escape",
+  "xml_unescape"
+];
+
+
 /** Dictionary 上实测**不存在**的成员名（49 名过裁判量出 29 支，`tmp/probe-dict/compare22.txt`，S378）：同一句。
  *  名单里大半是 Array 那侧的名字（`push_back` / `sort_custom` / `slice` 那一族）—— 此前它们落到 switch 的兜底、发的是中文自述。 */
 const DICT_NO_METHOD = new Set([
@@ -305,6 +351,44 @@ const DICT_NO_METHOD = new Set([
   "insert", "is_same", "join", "map", "max", "min", "pop_at", "pop_back", "pop_front", "push_back",
   "push_front", "reduce", "remove_at", "resize", "reverse", "rfind", "rfind_custom", "slice", "sort_custom",
 ]);
+
+/** 只读容器被写的那一面（S403 逐格量的）：名 → 引擎那块的 `at:` 标签（每支各有各的 C++ 文件与行号）。 */
+const ARRAY_RO_WRITE: Readonly<Record<string, string>> = {
+  append: "push_back (core/variant/array.cpp:283)",
+  push_back: "push_back (core/variant/array.cpp:283)",
+  push_front: "push_front (core/variant/array.cpp:775)",
+  insert: "insert (core/variant/array.cpp:326)",
+  erase: "erase (core/variant/array.cpp:348)",
+  remove_at: "remove_at (core/variant/array.cpp:505)",
+  pop_back: "pop_back (core/variant/array.cpp:782)",
+  pop_front: "pop_front (core/variant/array.cpp:793)",
+  pop_at: "pop_at (core/variant/array.cpp:803)",
+  clear: "clear (core/variant/array.cpp:125)",
+  resize: "resize (core/variant/array.cpp:307)",
+  sort: "sort (core/variant/array.cpp:734)",
+  sort_custom: "sort_custom (core/variant/array.cpp:739)",
+  reverse: "reverse (core/variant/array.cpp:770)",
+  shuffle: "shuffle (core/variant/array.cpp:744)",
+  fill: "fill (core/variant/array.cpp:341)",
+  append_array: "append_array (core/variant/array.cpp:290)",
+};
+
+/** 只读那一面挡下写之后，`resize` 与 `insert` 这两支返回 23（`ERR_READ_ONLY`），其余给 null。 */
+const ARRAY_RO_INT23 = new Set(["resize", "insert"]);
+
+const DICT_RO_WRITE: Readonly<Record<string, string>> = {
+  clear: "clear (core/variant/dictionary.cpp:315)",
+  erase: "erase (core/variant/dictionary.cpp:255)",
+  merge: "merge (core/variant/dictionary.cpp:337)",
+  sort: "sort (core/variant/dictionary.cpp:332)",
+  set: "set (core/variant/dictionary.cpp:207)",
+};
+
+/** 只读挡写：推一块 `ERROR: <面> is in read-only state.`，内容不变、脚本不打断（实测 `assign` 与 `get_or_add` 不在这一族里）。 */
+function readOnlyWrite(at: string, kind: "Array" | "Dictionary", name: string): Variant {
+  readOnlyError(at, kind);
+  return ARRAY_RO_INT23.has(name) ? V.int(23) : V.nil();
+}
 
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
@@ -522,9 +606,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       }
       // `call_deferred()` 的**返回值就是 null**，真正的调用排在后面
       const rest = args.slice(1) as Variant[];
-      setTimeout(() => {
+      callDeferred(() => {
         callSlot(inner, who, rest);
-      }, 0);
+      });
       return V.nil();
     }
     if (name === "set_meta" || name === "get_meta" || name === "has_meta" || name === "remove_meta") {
@@ -567,7 +651,14 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   switch (obj.t) {
     case Tag.ARRAY: {
       const a = obj.v as GArray;
+      const roAt = ARRAY_RO_WRITE[name];
+      if (roAt !== undefined && a.isReadOnly()) return readOnlyWrite(roAt, "Array", name);
       switch (name) {
+        case "make_read_only":
+          a.markReadOnly();
+          return V.nil();
+        case "is_read_only":
+          return V.bool(a.isReadOnly());
         case "append":
           a.append(one(args, "append"));
           return V.nil();
@@ -694,7 +785,14 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     case Tag.DICT: {
       const d = obj.v as GDict;
+      const roAt = DICT_RO_WRITE[name];
+      if (roAt !== undefined && d.isReadOnly()) return readOnlyWrite(roAt, "Dictionary", name);
       switch (name) {
+        case "make_read_only":
+          d.markReadOnly();
+          return V.nil();
+        case "is_read_only":
+          return V.bool(d.isReadOnly());
         case "size":
           return V.int(d.size());
         case "has":
@@ -730,6 +828,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           const key = one(args, "get_or_add");
           if (d.has(key)) return d.get(key);
           const added = args[1] ?? V.nil();
+          if (d.isReadOnly()) return added;
           d.set(key, added);
           return added;
         }
@@ -1028,11 +1127,18 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   }
 }
 
-export function index(raw: unknown, idx: Variant): Variant {
+export function index(raw: unknown, idx: Variant, base?: string): Variant {
   const obj = norm(raw);
-  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArgIdx(idx, "下标"));
+  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArgIdx(idx, "下标"), base);
   if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
-  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArgIdx(idx, "下标")));
+  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArgIdx(idx, "下标"), base));
+  // 八支 pack 的读那一格：基带静态标注时越界换 `Out of bounds get index …` 那一式，基名按声明的拼法（读数 compare99 的 u3）
+  if (base !== undefined && obj.t === Tag.OBJECT && obj.v instanceof GBytes) {
+    const len = (obj.v as GBytes).length;
+    const i = intArgIdx(idx, "下标");
+    const k = i < 0 ? i + len : i;
+    if (k < 0 || k >= len) throw new GodotRuntimeError("packed-index", posOobSay(String(i), base, base));
+  }
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
@@ -1040,6 +1146,19 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
   if (obj.t === Tag.OBJECT && obj.v instanceof GBytes) return bytesReadIndex(obj.v as GBytes, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
+}
+
+/** 静态标注的字典 + 静态 int 键的那一格：引擎讲的是数组那一式 `Out of bounds get index '<k>' (on base: '<基名>')`（句末没有句点，S405 量的）。其余形状退回通读那条。 */
+export function dictIndexInt(raw: unknown, idx: Variant): Variant {
+  const obj = norm(raw);
+  if (obj.t === Tag.DICT && idx.t === Tag.INT) {
+    const d = asDict(obj, "下标");
+    if (!d.has(idx)) {
+      throw new GodotRuntimeError("dict-index-oob", `Out of bounds get index '${show(idx)}' (on base: '${d.typeLabel()}')`);
+    }
+    return d.getRequired(idx);
+  }
+  return index(raw, idx);
 }
 
 /** 属性写的那条错：未知键、往 String 槽塞 int、写方法名**三条文本一模一样**，所以合成一个助手；基类那一段是 `RefCounted (内建类名)`，拿不到注册名就退成 Object。 */
@@ -1053,6 +1172,19 @@ function propAssignError(key: string, value: Variant, inner: unknown): GodotRunt
 /** 属性写 `base.key = value`：入口与 `method` / `attribute` 一样要**归一裸值**；基是值类型时只回报新值（写回目标是变量还是容器的一格，发射器才知道），返回 null 表示原地处理完。 */
 export function writeProp(raw: unknown, key: string, value: Variant): Variant | null {
   const base = norm(raw);
+  // 字典的属性写不报错，也不挂 JS 属性：引擎就是把这一格当 `d[&"<key>"] = value` 写进字典（读数 `tmp/probe-bincall/j1.gd` 的 R1–R7）
+  if (base.t === Tag.DICT) {
+    asDict(base, "属性").set(V.stringName(key), value);
+    return null;
+  }
+  // Array / String 的属性写没有「塞一格」这种出路：读数 `tmp/probe-bincall/compare4.txt` 的 M4 / M5 / M8 三格说明
+  // **成员名与表外名给的是同一句**，所以这一支不需要名单分岔
+  if (base.t === Tag.ARRAY || base.t === Tag.STRING) {
+    throw new GodotRuntimeError(
+      "container-prop-assign",
+      `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type '${tagName(base.t)}'.`,
+    );
+  }
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
@@ -1088,6 +1220,17 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
     }
     objInner[key] = intoSlot(kind, value, key, objInner);
     return null;
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GBytes) {
+    // 属性写的两形量过：表外名给 `Invalid assignment of property or key … with value of type …`（读数 `tmp/probe-attr/compare2.txt` 的推断位写那一格），
+    // 写方法名那一格静态位给的是 `Cannot assign a new value to a constant.`，装箱位没量过 —— 照旧响亮拒
+    if (packNameAbsent((base.v as GBytes).kind, key)) {
+      throw new GodotRuntimeError(
+        "packed-prop-assign",
+        `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type '${packTypeName((base.v as GBytes).kind)}'.`,
+      );
+    }
+    throw new UnsupportedError("packed-property", `pack 的属性写只量过表外名那一格：${packTypeName((base.v as GBytes).kind)}.${key} = … 没实测过`);
   }
   if (vec === null) {
     throw new GodotRuntimeError(
@@ -1131,11 +1274,21 @@ export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | 
 export function setIndex(raw: unknown, idx: Variant, val: Variant): void {
   const obj = norm(raw);
   if (obj.t === Tag.ARRAY) {
-    asArray(obj, "下标赋值").set(intArgIdx(idx, "下标赋值"), val);
+    const a = asArray(obj, "下标赋值");
+    if (a.isReadOnly()) {
+      throw new GodotRuntimeError("read-only-assign", "Invalid assignment on read-only value (on base: 'Array').");
+    }
+    const k = intArgIdx(idx, "下标赋值");
+    a.set(k, val);
     return;
   }
   if (obj.t === Tag.DICT) {
-    asDict(obj, "下标赋值").set(idx, val);
+    const d = asDict(obj, "下标赋值");
+    if (d.isReadOnly()) {
+      readOnlyError("set (core/variant/dictionary.cpp:207)", "Dictionary");
+      throw new GodotRuntimeError("read-only-assign", "Invalid assignment on read-only value (on base: 'Dictionary').");
+    }
+    d.set(idx, val);
     return;
   }
   throw new UnsupportedError("setindex-type", `类型 ${obj.t} 不支持下标赋值`);
@@ -1184,8 +1337,30 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
   return V.str(strFormat(asString(fmt, "格式化"), list));
 }
 
+/** 内建类型面的「方法名当值」：发射器只在**静态已知的接收者**且名字是那一面的成员时发这一支
+ *  （读数 `tmp/probe-bincall/p1.gd` 的 16 面与 `compare6.txt` 的 N6：印法 `<面>::<名>`、`typeof` 25、`is_valid()` 真、`get_object()` 空引用）。 */
+export function boundMethod(raw: unknown, face: string, name: string, min: number, max: number): Variant {
+  return boundBuiltinCallable(norm(raw), face, name, min, max);
+}
+
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);
+  // 字典的属性读就是查一格 StringName 键：键在就给值（`d.foo = 5` 之后 `d.foo` 是 5，读数 `tmp/probe-bincall/j1.gd` 的 R1），
+  // 不在就给那一句 —— 成员名（`d.keys`）也算「不在」，引擎在字典面上不发内建类型的绑定 Callable（S419 ②）
+  if (obj.t === Tag.DICT) {
+    const dict = asDict(obj, "属性");
+    const k = V.stringName(name);
+    if (dict.has(k)) return dict.getRequired(k);
+    throw new GodotRuntimeError("dict-attribute", `Invalid access to property or key '${name}' on a base object of type 'Dictionary'.`);
+  }
+  if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
+    const face = obj.t === Tag.STRING ? "String" : "Array";
+    const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
+    if (absent.includes(name)) {
+      throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
+    }
+    throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读只量过表外名那一格：成员名引擎给的是内建类型的绑定 Callable，那一族还没接`);
+  }
   if (obj.t === Tag.OBJECT) {
     // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本
     if (obj.v instanceof GdNativeClass) {
@@ -1202,6 +1377,11 @@ export function attribute(raw: unknown, name: string): unknown {
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     if (obj.v instanceof GBytes) {
+      // 属性面只量过三格（读数 `tmp/probe-attr/compare{1,2}.txt`）：表外名给 `Invalid access to property or key …`，
+      // 方法名当值引擎给的是 Callable（`PackedByteArray::size`）还没接，其余没量过的名字照旧响亮拒
+      if (packNameAbsent((obj.v as GBytes).kind, name)) {
+        throw new GodotRuntimeError("packed-attribute", `Invalid access to property or key '${name}' on a base object of type '${packTypeName((obj.v as GBytes).kind)}'.`);
+      }
       throw new UnsupportedError("packed-attribute", `PackedByteArray 没有 ${name} 这个成员（这一族的成员全是方法，属性面没实测过）`);
     }
     const inner = obj.v as Record<string, unknown>;
@@ -1219,6 +1399,10 @@ export function attribute(raw: unknown, name: string): unknown {
       const v = inner[name];
       if (typeof v === "function") return methodCallable(obj, name);
       return v;
+    }
+    // 声明过却没赋上值的属性（字段初始化子出错才留得下来，S406 的 n1 / n2 / q1 三格）：引擎读出来是 null。
+    for (let d = sd; d !== null; d = d.base) {
+      if (d.scriptProps !== null && d.scriptProps.includes(name)) return V.nil();
     }
   }
   if (obj.t === Tag.NIL) {

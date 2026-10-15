@@ -4,27 +4,61 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let d = rt.dictOf([]);
-    {
-      const _nv = rt.writeIdx(d, rt.V.int(1), rt.V.str("int"));
-      if (_nv !== null) d = _nv;
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(3);
+      let d = rt.dictOf([]);
+      rt.frameLine(4);
+      {
+        const _nv = rt.writeIdx(d, rt.V.int(1), rt.V.str("int"));
+        if (_nv !== null) d = _nv;
+      }
+      rt.frameLine(5);
+      {
+        const _nv = rt.writeIdx(d, rt.V.float(1), rt.V.str("float"));
+        if (_nv !== null) d = _nv;
+      }
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(d, "size", [])]));
+      rt.frameLine(7);
+      print(rt.showArgs([d]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.wrapValue(rt.index(d, rt.V.int(1)))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.wrapValue(rt.index(d, rt.V.float(1)))]));
+      rt.frameLine(10);
+      {
+        const _nv = rt.writeIdx(d, rt.V.str("1"), rt.V.str("str"));
+        if (_nv !== null) d = _nv;
+      }
+      rt.frameLine(11);
+      print(rt.showArgs([rt.method(d, "size", [])]));
+      rt.frameLine(12);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    {
-      const _nv = rt.writeIdx(d, rt.V.float(1), rt.V.str("float"));
-      if (_nv !== null) d = _nv;
-    }
-    print(rt.showArgs([rt.method(d, "size", [])]));
-    print(rt.showArgs([d]));
-    print(rt.showArgs([rt.wrapValue(rt.index(d, rt.V.int(1)))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(d, rt.V.float(1)))]));
-    {
-      const _nv = rt.writeIdx(d, rt.V.str("1"), rt.V.str("str"));
-      if (_nv !== null) d = _nv;
-    }
-    print(rt.showArgs([rt.method(d, "size", [])]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

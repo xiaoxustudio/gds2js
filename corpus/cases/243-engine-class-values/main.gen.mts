@@ -4,23 +4,62 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.str("n01|"), rt.typeOf(rt.nativeClass("Node")), rt.V.str("|"), rt.typeOf(rt.nativeClass("Label")), rt.V.str("|"), rt.typeOf(rt.nativeClass("Object"))]));
-    print(rt.showArgs([rt.V.str("n02|"), rt.ops.eq(rt.nativeClass("Node"), rt.nativeClass("Node")), rt.V.str("|"), rt.ops.eq(rt.nativeClass("Node"), rt.nativeClass("Label")), rt.V.str("|"), rt.ops.eq(rt.typeOf(rt.nativeClass("Node")), rt.V.int(24))]));
-    let k = rt.nativeClass("Node");
-    print(rt.showArgs([rt.V.str("n03|"), rt.ops.eq(k, rt.nativeClass("Node")), rt.V.str("|"), rt.ops.eq(k, rt.nativeClass("Label")), rt.V.str("|"), rt.typeOf(k)]));
-    let d = rt.dictOf([[rt.nativeClass("Node"), rt.V.int(1)], [rt.nativeClass("Label"), rt.V.int(2)]]);
-    print(rt.showArgs([rt.V.str("n04|"), rt.method(d, "size", []), rt.V.str("|"), rt.method(d, "has", [rt.nativeClass("Node")]), rt.V.str("|"), rt.wrapValue(rt.index(d, rt.nativeClass("Node"))), rt.V.str("|"), rt.wrapValue(rt.index(d, rt.nativeClass("Label")))]));
-    print(rt.showArgs([rt.V.str("n05|"), rt.method(d, "has", [k])]));
-    let arr = rt.V.array(rt.GArray.of([rt.nativeClass("Node"), rt.nativeClass("Label"), rt.nativeClass("Node")]));
-    print(rt.showArgs([rt.V.str("n06|"), rt.method(arr, "size", []), rt.V.str("|"), rt.method(arr, "has", [rt.nativeClass("Label")]), rt.V.str("|"), rt.method(arr, "count", [rt.nativeClass("Node")])]));
-    print(rt.showArgs([rt.V.str("n07|"), rt.ops.eq(rt.nativeClass("GDScript"), rt.nativeClass("Node")), rt.V.str("|"), rt.typeOf(rt.nativeClass("GDScript"))]));
-    print(rt.showArgs([rt.V.str("n08|"), rt.ops.eq(rt.method(rt.V.object(new Inner()), "v", []), rt.nativeClass("Node"))]));
-    let res = rt.nativeClass("Resource");
-    print(rt.showArgs([rt.V.str("n09|"), rt.ops.eq(res, rt.nativeClass("Resource")), rt.V.str("|"), rt.typeOf(res)]));
-    print(rt.showArgs([rt.V.str("n10|"), rt.ops.neq(rt.nativeClass("Node"), rt.nativeClass("Label")), rt.V.str("|"), rt.method(rt.V.array(rt.GArray.of([rt.nativeClass("Node")])), "size", [])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("n01|"), rt.typeOf(rt.nativeClass("Node")), rt.V.str("|"), rt.typeOf(rt.nativeClass("Label")), rt.V.str("|"), rt.typeOf(rt.nativeClass("Object"))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("n02|"), rt.ops.eq(rt.nativeClass("Node"), rt.nativeClass("Node")), rt.V.str("|"), rt.ops.eq(rt.nativeClass("Node"), rt.nativeClass("Label")), rt.V.str("|"), rt.ops.eq(rt.typeOf(rt.nativeClass("Node")), rt.V.int(24))]));
+      rt.frameLine(10);
+      let k = rt.nativeClass("Node");
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("n03|"), rt.ops.eq(k, rt.nativeClass("Node")), rt.V.str("|"), rt.ops.eq(k, rt.nativeClass("Label")), rt.V.str("|"), rt.typeOf(k)]));
+      rt.frameLine(12);
+      let d = rt.dictOf([[rt.nativeClass("Node"), rt.V.int(1)], [rt.nativeClass("Label"), rt.V.int(2)]]);
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("n04|"), rt.method(d, "size", []), rt.V.str("|"), rt.method(d, "has", [rt.nativeClass("Node")]), rt.V.str("|"), rt.wrapValue(rt.index(d, rt.nativeClass("Node"))), rt.V.str("|"), rt.wrapValue(rt.index(d, rt.nativeClass("Label")))]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("n05|"), rt.method(d, "has", [k])]));
+      rt.frameLine(15);
+      let arr = rt.V.array(rt.GArray.of([rt.nativeClass("Node"), rt.nativeClass("Label"), rt.nativeClass("Node")]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("n06|"), rt.method(arr, "size", []), rt.V.str("|"), rt.method(arr, "has", [rt.nativeClass("Label")]), rt.V.str("|"), rt.method(arr, "count", [rt.nativeClass("Node")])]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("n07|"), rt.ops.eq(rt.nativeClass("GDScript"), rt.nativeClass("Node")), rt.V.str("|"), rt.typeOf(rt.nativeClass("GDScript"))]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("n08|"), rt.ops.eq(rt.method(rt.V.object(new Inner()), "v", []), rt.nativeClass("Node"))]));
+      rt.frameLine(19);
+      let res = rt.nativeClass("Resource");
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("n09|"), rt.ops.eq(res, rt.nativeClass("Resource")), rt.V.str("|"), rt.typeOf(res)]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("n10|"), rt.ops.neq(rt.nativeClass("Node"), rt.nativeClass("Label")), rt.V.str("|"), rt.method(rt.V.array(rt.GArray.of([rt.nativeClass("Node")])), "size", [])]));
+      rt.frameLine(22);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -39,8 +78,33 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   v(): rt.Variant {
-    return rt.nativeClass("Node");
+    const __gd_frame = rt.frameEnter("res://main.gd", "v");
+    try {
+      rt.frameLine(5);
+      return rt.nativeClass("Node");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

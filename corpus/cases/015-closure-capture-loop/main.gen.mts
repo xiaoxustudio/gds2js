@@ -4,20 +4,61 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let fns = rt.V.array(rt.GArray.of([]));
-    for (let i of rt.rangeSeq([rt.V.int(3)])) {
-      rt.method(fns, "append", [rt.callable((__a: rt.Variant[]) => {
-      return rt.V.int(i);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(3);
+      let fns = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(4);
+      for (let i of rt.rangeSeq([rt.V.int(3)])) {
+        rt.frameLine(5);
+        rt.method(fns, "append", [rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          rt.frameLine(5);
+          return rt.V.int(i);
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
     }, 0)]);
+      }
+      rt.frameLine(6);
+      let out = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(7);
+      for (let f of rt.iter(fns)) {
+        rt.frameLine(8);
+        rt.method(out, "append", [rt.method(f, "call", [])]);
+      }
+      rt.frameLine(9);
+      print(rt.showArgs([out]));
+      rt.frameLine(10);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    let out = rt.V.array(rt.GArray.of([]));
-    for (let f of rt.iter(fns)) {
-      rt.method(out, "append", [rt.method(f, "call", [])]);
-    }
-    print(rt.showArgs([out]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

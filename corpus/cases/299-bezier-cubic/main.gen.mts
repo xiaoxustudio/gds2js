@@ -4,25 +4,62 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int((-3)), rt.V.float(0.5)]), rt.vector2New([rt.V.int(0), rt.V.int(0)])])))) {
-      print(rt.showArgs([rt.V.str("BZ2|"), v, rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.25)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.5)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(1)])]));
-      print(rt.showArgs([rt.V.str("CI2|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(1)])]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int((-3)), rt.V.float(0.5)]), rt.vector2New([rt.V.int(0), rt.V.int(0)])])))) {
+        rt.frameLine(5);
+        print(rt.showArgs([rt.V.str("BZ2|"), v, rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.25)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.5)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(1)])]));
+        rt.frameLine(6);
+        print(rt.showArgs([rt.V.str("CI2|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(1)])]));
+      }
+      rt.frameLine(7);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int((-3)), rt.V.float(0.5)])])))) {
+        rt.frameLine(8);
+        print(rt.showArgs([rt.V.str("BZ2T|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.13)])]));
+        rt.frameLine(9);
+        print(rt.showArgs([rt.V.str("CI2T|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.13)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.37)])]));
+      }
+      rt.frameLine(10);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int((-3)), rt.V.float(0.5), rt.V.int(7)]), rt.vector3New([rt.V.int(0), rt.V.int(0), rt.V.int(0)])])))) {
+        rt.frameLine(11);
+        print(rt.showArgs([rt.V.str("BZ3|"), v, rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.25)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.5)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(1)])]));
+      }
+      rt.frameLine(12);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int((-3)), rt.V.float(0.5), rt.V.int(7)])])))) {
+        rt.frameLine(13);
+        print(rt.showArgs([rt.V.str("BZ3T|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.13)])]));
+      }
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("CI3|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.5)])]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("CI3T|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.13)]), rt.V.str("|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.37)])]));
+      rt.frameLine(16);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int((-3)), rt.V.float(0.5)])])))) {
-      print(rt.showArgs([rt.V.str("BZ2T|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector2New([rt.V.int(1), rt.V.int(4)]), rt.vector2New([rt.V.int(5), rt.V.int(5)]), rt.vector2New([rt.V.int(6), rt.V.int((-2))]), rt.V.float(0.13)])]));
-      print(rt.showArgs([rt.V.str("CI2T|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.13)]), rt.V.str("|"), rt.method(v, "cubic_interpolate", [rt.vector2New([rt.V.int(2), rt.V.int(3)]), rt.vector2New([rt.V.int((-4)), rt.V.int(1)]), rt.vector2New([rt.V.int(9), rt.V.int((-2))]), rt.V.float(0.37)])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int((-3)), rt.V.float(0.5), rt.V.int(7)]), rt.vector3New([rt.V.int(0), rt.V.int(0), rt.V.int(0)])])))) {
-      print(rt.showArgs([rt.V.str("BZ3|"), v, rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.25)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.5)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(1)])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int((-3)), rt.V.float(0.5), rt.V.int(7)])])))) {
-      print(rt.showArgs([rt.V.str("BZ3T|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(v, "bezier_interpolate", [rt.vector3New([rt.V.int(1), rt.V.int(4), rt.V.float(0.5)]), rt.vector3New([rt.V.int(5), rt.V.int(5), rt.V.int((-2))]), rt.vector3New([rt.V.int(6), rt.V.int((-2)), rt.V.int(9)]), rt.V.float(0.13)])]));
-    }
-    print(rt.showArgs([rt.V.str("CI3|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.3)]), rt.V.str("|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.5)])]));
-    print(rt.showArgs([rt.V.str("CI3T|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.7)]), rt.V.str("|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.13)]), rt.V.str("|"), rt.method(rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), "cubic_interpolate", [rt.vector3New([rt.V.int(2), rt.V.int(3), rt.V.int(4)]), rt.vector3New([rt.V.int((-4)), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(9), rt.V.int((-2)), rt.V.int(5)]), rt.V.float(0.37)])]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

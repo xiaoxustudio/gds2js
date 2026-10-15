@@ -4,13 +4,42 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.method(rt.method(rt.V.array(rt.range([rt.V.int(10)])), "duplicate", []), "size", [])]));
-    let arr = rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(1), rt.V.int(2)]));
-    print(rt.showArgs([rt.method(rt.method(arr, "duplicate", []), "size", [])]));
-    print(rt.showArgs([rt.method(arr, "size", [])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.method(rt.method(rt.V.array(rt.range([rt.V.int(10)])), "duplicate", []), "size", [])]));
+      rt.frameLine(5);
+      let arr = rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(1), rt.V.int(2)]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(rt.method(arr, "duplicate", []), "size", [])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.method(arr, "size", [])]));
+      rt.frameLine(8);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

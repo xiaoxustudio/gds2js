@@ -48,6 +48,7 @@ export function callableOf(fn: Fn, arity: number | null = null): Variant {
 
 /** 声明的**必填**实参数：方法从方法表里拿、全局 Callable 从实测那张表拿、lambda 从盒子里拿，拿不到给 null。 */
 export function requiredArgCount(box: CallableBox): number | null {
+  if (box.builtinBounds !== null) return box.builtinBounds[0];
   if (box.name !== null) {
     if (box.object === null) return globalCallableRow(box.name)?.bounds?.[0] ?? null;
     const table = methodAritiesOf(box.object.v);
@@ -68,6 +69,7 @@ export function boundArgsOf(box: CallableBox): Variant[] {
 /** Callable 的声明形参数；表里没有、或那方法带默认值时给 null，由调用方响亮拒。 */
 export function declaredArgCount(box: CallableBox): number | null {
   if (isNullCallable(box)) return 0;
+  if (box.builtinBounds !== null) return box.builtinBounds[0];
   const name = box.name;
   if (name !== null) {
     // 全局 Callable 的 `get_argument_count()` 是实测读数，与 `.call()` 认的区间是两回事（`str` 声明 1 个、变元无上限）。
@@ -85,6 +87,7 @@ export function declaredArgCount(box: CallableBox): number | null {
 /** Callable 的 `[必填, 全部]` 形参数：少给按「必填数」报、多给按「全部数」报；方法与静态方法查方法表，lambda 两个数都取发射器给的形参数。空 Callable 给 null，由调用方走另一句报错。 */
 export function callableArityBounds(box: CallableBox): [number, number] | null {
   if (isNullCallable(box)) return null;
+  if (box.builtinBounds !== null) return box.builtinBounds;
   const name = box.name;
   if (name !== null) {
     if (box.object === null) {
@@ -462,6 +465,7 @@ export function scriptLabelOf(target: unknown): string | null {
 
 // Callable 标签里「挂在某个脚本类上的那两支」要知道类的身份，而本模块才是知道那一层的地方。
 registerCallableLabelHook((box) => {
+  if (box.builtin !== null && box.name !== null) return `${box.builtin}::${box.name}`;
   const inner = box.object?.v;
   const name = box.name;
   if (inner === undefined || name === null) return null;

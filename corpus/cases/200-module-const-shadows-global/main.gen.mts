@@ -6,15 +6,46 @@ import { print, printJoined, printRaw, printErr, printVerbose, printRich, printD
 const TAU = rt.V.float(6.283185307179586);
 
 export class Main extends SceneTree {
-  PI = rt.V.int(1);
+  declare PI: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.PI = rt.V.int(1);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static PI = rt.V.int(1);
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.str("r1 "), Main.PI, rt.V.str(" "), rt.typeOf(Main.PI)]));
-    print(rt.showArgs([rt.V.str("r2 "), Thing.PIISH, rt.V.str(" "), rt.method(rt.V.object(__gd_d_Thing), "sm", [])]));
-    print(rt.showArgs([rt.V.str("r3 "), TAU, rt.V.str(" "), rt.typeOf(TAU)]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.str("r1 "), Main.PI, rt.V.str(" "), rt.typeOf(Main.PI)]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("r2 "), Thing.PIISH, rt.V.str(" "), rt.method(rt.V.object(__gd_d_Thing), "sm", [])]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("r3 "), TAU, rt.V.str(" "), rt.typeOf(TAU)]));
+      rt.frameLine(15);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -34,11 +65,39 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Thing extends rt.GdScriptObject {
-  PIISH = Main.PI;
+  declare PIISH: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(6);
+      this.PIISH = Main.PI;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static PIISH = Main.PI;
 
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   static sm(): rt.Variant {
-    return TAU;
+    const __gd_frame = rt.frameEnter("res://main.gd", "sm");
+    try {
+      rt.frameLine(9);
+      return TAU;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

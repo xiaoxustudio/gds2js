@@ -4,13 +4,42 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let v = rt.toVec2(rt.vector2New([rt.V.int(3), rt.V.int(4)]));
-    let c = rt.toColor(rt.colorNew([rt.V.float(0.25), rt.V.float(0.5), rt.V.float(0.75), rt.V.int(1)]));
-    let a = rt.vector2iNew([rt.V.int(3), rt.V.int(4)]);
-    print(rt.showArgs([rt.V.str("AA|"), rt.method(v, "limit_length", []), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(2)]), rt.V.str("|"), rt.method(c, "to_html", []), rt.V.str("|"), rt.method(c, "to_html", [rt.V.bool(false)]), rt.V.str("|"), rt.colorStatic("from_hsv", [rt.V.float(0.5), rt.V.float(1), rt.V.float(1)]), rt.V.str("|"), rt.colorStatic("from_hsv", [rt.V.float(0.5), rt.V.float(1), rt.V.float(1), rt.V.float(0.5)]), rt.V.str("|"), rt.method(a, "snapped", [rt.vector2iNew([rt.V.int(1), rt.V.int(1)])]), rt.V.str("|"), rt.method(v, "rotated", [rt.V.float(1)])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let v = rt.toVec2(rt.vector2New([rt.V.int(3), rt.V.int(4)]));
+      rt.frameLine(5);
+      let c = rt.toColor(rt.colorNew([rt.V.float(0.25), rt.V.float(0.5), rt.V.float(0.75), rt.V.int(1)]));
+      rt.frameLine(6);
+      let a = rt.vector2iNew([rt.V.int(3), rt.V.int(4)]);
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("AA|"), rt.method(v, "limit_length", []), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(2)]), rt.V.str("|"), rt.method(c, "to_html", []), rt.V.str("|"), rt.method(c, "to_html", [rt.V.bool(false)]), rt.V.str("|"), rt.colorStatic("from_hsv", [rt.V.float(0.5), rt.V.float(1), rt.V.float(1)]), rt.V.str("|"), rt.colorStatic("from_hsv", [rt.V.float(0.5), rt.V.float(1), rt.V.float(1), rt.V.float(0.5)]), rt.V.str("|"), rt.method(a, "snapped", [rt.vector2iNew([rt.V.int(1), rt.V.int(1)])]), rt.V.str("|"), rt.method(v, "rotated", [rt.V.float(1)])]));
+      rt.frameLine(8);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -2,10 +2,12 @@
 /**
  * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 与 packages/ 到 scratch、把四份同名文件换成原生实现、
  * 用 zig 编 C、写 ffi manifest、跑 scriptc build。
- * C 必须用 zig cc -target x86_64-windows-gnu 编：换工具链目标会在链接期找不到 libuuid.a。
+ * C 用 zig cc 编，目标三元组按 host 推导（`CC_TARGET` 可覆盖），标准必须是 `-std=gnu11`：
+ * 严格 ANSI 下 glibc 不暴露 `le16toh`（`unicode.h`）、musl 不暴露 `fdopen`（`parser.c`），
+ * 实测 `-std=c11` 在 x86_64-linux-gnu 与 x86_64-linux-musl 上编不过，gnu11 五目标全绿。
  *
  * 用法：
- *   node tools/cli-native.mjs                    # 出货形态：--dynamic（岛），编出来在 tmp/cli-native/gds2js.exe
+ *   node tools/cli-native.mjs                    # 出货形态：岛（scriptc 0.3.2 起是默认），编出来在 tmp/cli-native/gds2js.exe
  *   node tools/cli-native.mjs --ts-only --keep   # 只重编 TS：沿用已有的 .o
  *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）
  *   TS_SRC=../libtree-sitter node tools/cli-native.mjs
@@ -22,12 +24,20 @@ const TS_SRC = process.env.TS_SRC ?? join(ROOT, "tmp", "libtree-sitter");
 const ZIG = process.env.ZIG_CC ?? "zig";
 const SCRIPTC = process.env.SCRIPTC_BIN ?? "scriptc";
 const GRAMMAR = join(ROOT, "tree-sitter-gdscript", "src");
+const CC_TARGET = process.env.CC_TARGET ?? defaultCcTarget(process.platform, process.arch);
 const coverageOnly = process.argv.includes("--coverage");
 const keep = process.argv.includes("--keep");
 
 function fail(msg) {
   console.error(msg);
   process.exit(1);
+}
+
+function defaultCcTarget(platform, arch) {
+  if (platform === "win32") return "x86_64-windows-gnu";
+  if (platform === "linux") return arch === "arm64" ? "aarch64-linux-gnu" : "x86_64-linux-gnu";
+  if (platform === "darwin") return arch === "arm64" ? "aarch64-macos" : "x86_64-macos";
+  fail(`没有 ${platform}/${arch} 的 zig 目标：用 CC_TARGET=<triple> 指一个`);
 }
 
 function listTs(dir, out = []) {
@@ -159,7 +169,7 @@ for (const u of units) {
     console.log(`沿用 ${u.obj}（--ts-only）`);
     continue;
   }
-  const args = ["cc", "-target", "x86_64-windows-gnu", "-O2", "-std=c11", ...INC, "-c", u.src, "-o", join(objDir, u.obj)];
+  const args = ["cc", "-target", CC_TARGET, "-O2", "-std=gnu11", ...INC, "-c", u.src, "-o", join(objDir, u.obj)];
   const r = spawnSync(ZIG, args, { encoding: "utf8", cwd: ROOT, timeout: 900_000 });
   if (r.status !== 0) fail(`${u.obj} 编译失败：\n${((r.stderr ?? "") + (r.stdout ?? "")).slice(0, 3000)}`);
   console.log(`编好 ${u.obj}`);
@@ -183,15 +193,17 @@ writeFileSync(ffiPath, JSON.stringify(manifest, null, 2), "utf8");
 
 const entry = join(SCRATCH, "packages", "gds2js", "src", "cli.ts");
 /* 岛是**必需**的，不再是可选形态：CLI 的参数解析用 commander，而 commander 不带岛就是 6 格 SC2013
- * （实测；岛里 0 错并真跑通）。原先 `--static` 那一支随 commander 一起没了。 */
+ * （实测；岛里 0 错并真跑通）。原先 `--static` 那一支随 commander 一起没了。
+ * scriptc 0.3.2 删了 `--dynamic`（选项表里已无此开关，岛是默认；`--npm-static` 反过来才是要静态吞包）——
+ * 这里不再传它。 */
 if (coverageOnly) {
-  const covArgs = ["coverage", entry, "--dynamic"];
+  const covArgs = ["coverage", entry];
   const r = spawnSync(SCRIPTC, covArgs, { encoding: "utf8", cwd: ROOT, timeout: 1_500_000 });
   process.stdout.write(`${r.stdout ?? ""}${r.stderr ?? ""}`);
   process.exit(r.status ?? 1);
 }
 const exe = join(SCRATCH, "gds2js.exe");
-const build = spawnSync(SCRIPTC, ["build", entry, "--ffi", ffiPath, "--dynamic", "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
+const build = spawnSync(SCRIPTC, ["build", entry, "--ffi", ffiPath, "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
 process.stdout.write(`${build.stdout ?? ""}${build.stderr ?? ""}`);
 if (build.status !== 0 || !existsSync(exe)) {
   console.error("\n还没编过去：SC 编号就是线索（对着报错站点的形状看），新增的围栏记得记一笔。");

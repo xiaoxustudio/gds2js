@@ -4,21 +4,63 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   add3(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, rt.V.str("-"), b, rt.V.str("-"), c]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "add3");
+    try {
+      rt.frameLine(5);
+      return rt.strBuiltin([a, rt.V.str("-"), b, rt.V.str("-"), c]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let cb = rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("x")]);
-    print(rt.showArgs([rt.V.str("r "), rt.method(cb, "call", [rt.V.str("y"), rt.V.str("z")])]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("x"), rt.V.str("y")]), "call", [rt.V.str("z")])]));
-    print(rt.showArgs([rt.V.str("r3 "), rt.method(rt.method(rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("m")]), "bind", [rt.V.str("n")]), "call", [rt.V.str("p")])]));
-    let full = rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("x"), rt.V.str("y"), rt.V.str("z")]);
-    print(rt.showArgs([rt.V.str("r4 "), rt.method(full, "call", []), rt.V.str(" "), rt.method(full, "get_bound_arguments", []), rt.V.str(" "), rt.method(full, "get_argument_count", []), rt.V.str(" "), rt.method(full, "get_method", [])]));
-    print(rt.showArgs([rt.V.str("r5 "), rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.str("y"), rt.V.str("z")]))])]));
-    print(rt.showArgs([rt.V.str("r6 "), rt.method(cb, "is_valid", []), rt.V.str(" "), rt.method(rt.method(cb, "get_bound_arguments", []), "size", [])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(8);
+      let cb = rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("x")]);
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("r "), rt.method(cb, "call", [rt.V.str("y"), rt.V.str("z")])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("r2 "), rt.method(rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("x"), rt.V.str("y")]), "call", [rt.V.str("z")])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("r3 "), rt.method(rt.method(rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("m")]), "bind", [rt.V.str("n")]), "call", [rt.V.str("p")])]));
+      rt.frameLine(12);
+      let full = rt.method(rt.methodCallable(rt.V.object(this), "add3"), "bind", [rt.V.str("x"), rt.V.str("y"), rt.V.str("z")]);
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("r4 "), rt.method(full, "call", []), rt.V.str(" "), rt.method(full, "get_bound_arguments", []), rt.V.str(" "), rt.method(full, "get_argument_count", []), rt.V.str(" "), rt.method(full, "get_method", [])]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("r5 "), rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.str("y"), rt.V.str("z")]))])]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("r6 "), rt.method(cb, "is_valid", []), rt.V.str(" "), rt.method(rt.method(cb, "get_bound_arguments", []), "size", [])]));
+      rt.frameLine(16);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

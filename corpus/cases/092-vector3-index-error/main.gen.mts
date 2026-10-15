@@ -4,13 +4,42 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let v = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
-    print(rt.showArgs([rt.wrapValue(rt.attribute(v, "x"))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(v, rt.V.int(2)))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(v, rt.V.int(3)))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let v = rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
+      rt.frameLine(5);
+      print(rt.showArgs([rt.wrapValue(rt.attribute(v, "x"))]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.wrapValue(rt.index(v, rt.V.int(2)))]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.wrapValue(rt.index(v, rt.V.int(3)))]));
+      rt.frameLine(8);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

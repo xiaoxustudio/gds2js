@@ -1,4 +1,5 @@
 import { Signal } from "./runtime/signal";
+import { deferredPendingCount } from "./runtime/callable";
 import { setStackPrintSink } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/object";
 import type { Variant } from "./runtime/tags";
@@ -71,6 +72,11 @@ class Timer {
     this.#left = sec;
   }
 
+  /** 到没到期只看账面上的剩余，不看墙上时间：退出那一轮只发已到期的，未到期的等不到。 */
+  isDue(): boolean {
+    return this.#left <= 0;
+  }
+
   advance(dt: number): boolean {
     this.#left -= dt;
     if (this.#left <= 0) {
@@ -101,6 +107,22 @@ export class SceneTree extends GdScriptObject {
     return t;
   }
 
+  /** 退出前把「当前这一轮」排干：延后队列跑到空、已到期的计时器发一遍，未到期的不等待（读数 `tmp/probe-drain/compare{94,95}.txt` —— `quit()` 之后排的延后照样跑，一秒与五秒的计时器等不到）。 */
+  async #drain(): Promise<void> {
+    for (;;) {
+      let fired = false;
+      this.#timers = this.#timers.filter((t) => {
+        if (!t.isDue()) return true;
+        t.advance(0);
+        fired = true;
+        return false;
+      });
+      if (!fired && deferredPendingCount() === 0 && !this.#timers.some((t) => t.isDue())) return;
+      // 让出一轮宏任务：被唤醒的协程与排到后面的延后都要抢在 flush 之前把输出落进缓冲区
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
   quit(): void {
     this.#quitted = true;
   }
@@ -121,6 +143,7 @@ export class SceneTree extends GdScriptObject {
         frames++;
       }
       await initDone;
+      await this.#drain();
     } finally {
       // 帧循环或 init 抛错也要先落盘再抛：缓冲输出属于「已经发生的事」。
       flush();

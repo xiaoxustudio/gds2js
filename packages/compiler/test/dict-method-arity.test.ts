@@ -38,10 +38,12 @@ describe("至少一参那一族：少给就拦", () => {
 describe("带默认实参那一族：区间两头都钉", () => {
   it("get / get_or_add / merge / merged 是 [1,2]", async () => {
     for (const n of ["get", "get_or_add", "merge", "merged"]) {
+      // `merge` 是 void：元数合法的那一格撞上的是取值那句（S404 量过），`get` / `get_or_add` / `merged` 有返回值、那一格才真空
+      const legal = n === "merge" ? ['Cannot get return value of call to "merge()" because it returns "void".'] : [];
       eq("378", `${n} 零参`, (await diags(MOD(`\tprint(d.${n}())`)))[0] ?? "没拒", FEW(n, 1, 0));
       eq("378", `${n} 三参`, (await diags(MOD(`\tprint(d.${n}({}, true, 1))`)))[0] ?? "没拒", MANY(n, 2, 3));
-      eq("378", `${n} 一参合法`, await diags(MOD(`\tprint(d.${n}({}))`)), []);
-      eq("378", `${n} 两参合法`, await diags(MOD(`\tprint(d.${n}({}, true))`)), []);
+      eq("378", `${n} 一参合法`, await diags(MOD(`\tprint(d.${n}({}))`)), legal);
+      eq("378", `${n} 两参合法`, await diags(MOD(`\tprint(d.${n}({}, true))`)), legal);
     }
   });
 

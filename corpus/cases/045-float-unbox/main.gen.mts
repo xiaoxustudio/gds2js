@@ -4,22 +4,59 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let acc = 0;
-    let i = 0;
-    while ((i < 5)) {
-      acc = (acc + (i * 2));
-      i = (i + 1);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let acc = 0;
+      rt.frameLine(5);
+      let i = 0;
+      rt.frameLine(6);
+      while ((i < 5)) {
+        rt.frameLine(7);
+        acc = (acc + (i * 2));
+        rt.frameLine(8);
+        i = (i + 1);
+      }
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.float(acc)]));
+      rt.frameLine(10);
+      let n = 3;
+      rt.frameLine(11);
+      let f = rt.toFloat(rt.V.int(n));
+      rt.frameLine(12);
+      print(rt.showArgs([f]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.int(rt.fast.iAddC(n, 1))]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.int(rt.fast.iAddC(2, rt.fast.iMulC(3, 4)))]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.bool((n < 4))]));
+      rt.frameLine(16);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([rt.V.float(acc)]));
-    let n = 3;
-    let f = rt.toFloat(rt.V.int(n));
-    print(rt.showArgs([f]));
-    print(rt.showArgs([rt.V.int(rt.fast.iAddC(n, 1))]));
-    print(rt.showArgs([rt.V.int(rt.fast.iAddC(2, rt.fast.iMulC(3, 4)))]));
-    print(rt.showArgs([rt.V.bool((n < 4))]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

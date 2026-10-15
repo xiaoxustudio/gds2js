@@ -9,6 +9,22 @@ const PI = rt.V.float(3.141592653589793);
 const TYPE_INT = rt.V.int(2);
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
     const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
@@ -123,6 +139,9 @@ export class Main extends SceneTree {
         try {
           rt.frameLine(63);
           return rt.V.int(1);
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
         } finally {
           rt.frameExit(__gd_frame);
         }
@@ -137,6 +156,9 @@ export class Main extends SceneTree {
         try {
           rt.frameLine(66);
           return rt.globalCallable("max");
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
         } finally {
           rt.frameExit(__gd_frame);
         }
@@ -158,6 +180,9 @@ export class Main extends SceneTree {
           const abs = __a[0] as rt.Variant;
           rt.frameLine(72);
           return rt.V.array(rt.GArray.of([abs, rt.typeOf(abs), rt.globalCallable("sign")]));
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
         } finally {
           rt.frameExit(__gd_frame);
         }
@@ -173,6 +198,9 @@ export class Main extends SceneTree {
       print(rt.showArgs([rt.V.str("afterfor|"), rt.globalCallable("sign"), rt.V.str("|"), rt.globalCallable("abs")]));
       rt.frameLine(77);
       this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -194,11 +222,30 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   v(): rt.Variant {
     const __gd_frame = rt.frameEnter("res://main.gd", "v");
     try {
       rt.frameLine(5);
       return rt.globalCallable("abs");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -209,6 +256,9 @@ class Inner extends rt.GdScriptObject {
     try {
       rt.frameLine(8);
       return rt.globalCallable("len");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }

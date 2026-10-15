@@ -4,12 +4,40 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Base());
-    let c = rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1)]);
-    print(rt.showArgs([rt.V.str("r "), rt.method(c, "call", [rt.V.int(2)])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(18);
+      let o = rt.V.object(new Base());
+      rt.frameLine(19);
+      let c = rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1)]);
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("r "), rt.method(c, "call", [rt.V.int(2)])]));
+      rt.frameLine(21);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -35,18 +63,53 @@ class Base extends rt.GdScriptObject {
   }
 
   __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   three(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, b, c]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "three");
+    try {
+      rt.frameLine(5);
+      return rt.strBuiltin([a, b, c]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   twice(x: rt.Variant, y: rt.Variant = rt.V.str("z")): rt.Variant {
-    return rt.strBuiltin([x, y]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "twice");
+    try {
+      rt.frameLine(8);
+      return rt.strBuiltin([x, y]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static stwo(a: rt.Variant, b: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, b]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "stwo");
+    try {
+      rt.frameLine(11);
+      return rt.strBuiltin([a, b]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -67,11 +130,28 @@ rt.registerNativeBase(__gd_d_Base, "RefCounted");
 
 class Derived extends Base {
   override __gd_fields__() {
-    super.__gd_fields__();
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      super.__gd_fields__();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   own(a: rt.Variant): rt.Variant {
-    return a;
+    const __gd_frame = rt.frameEnter("res://main.gd", "own");
+    try {
+      rt.frameLine(15);
+      return a;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

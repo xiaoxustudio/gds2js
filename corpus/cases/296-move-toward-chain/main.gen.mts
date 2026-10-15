@@ -4,14 +4,43 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    for (let a of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(0), rt.V.int(0)]), rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), rt.vector2New([rt.V.float(0.1), rt.V.float(0.2)]), rt.vector2New([rt.V.int(3), rt.V.int(4)]), rt.vector2New([rt.V.int(10000000), rt.V.int(20000000)])])))) {
-      print(rt.showArgs([rt.V.str("MT2|"), a, rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.int(10), rt.V.int(0)]), rt.V.float(3)]), rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(5)]), rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.float(7.7), rt.V.float((-3.3))]), rt.V.float(4.9)]), rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.float(7.7), rt.V.float((-3.3))]), rt.V.float(12)])]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      for (let a of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(0), rt.V.int(0)]), rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), rt.vector2New([rt.V.float(0.1), rt.V.float(0.2)]), rt.vector2New([rt.V.int(3), rt.V.int(4)]), rt.vector2New([rt.V.int(10000000), rt.V.int(20000000)])])))) {
+        rt.frameLine(5);
+        print(rt.showArgs([rt.V.str("MT2|"), a, rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.int(10), rt.V.int(0)]), rt.V.float(3)]), rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(5)]), rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.float(7.7), rt.V.float((-3.3))]), rt.V.float(4.9)]), rt.V.str("|"), rt.method(a, "move_toward", [rt.vector2New([rt.V.float(7.7), rt.V.float((-3.3))]), rt.V.float(12)])]));
+      }
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("MT2X|"), rt.method(rt.vector2New([rt.V.float(0.5), rt.V.float((-0.25))]), "move_toward", [rt.vector2New([rt.V.float((-7.25)), rt.V.float(6.125)]), rt.V.float(0.375)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.float(0.5), rt.V.float((-0.25))]), "move_toward", [rt.vector2New([rt.V.float((-7.25)), rt.V.float(6.125)]), rt.V.float(100)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.float(10000000), rt.V.float(20000000)]), "move_toward", [rt.vector2New([rt.ops.add(rt.V.float(10000000), rt.V.int(1)), rt.ops.add(rt.V.float(20000000), rt.V.int(1))]), rt.V.float(0.5)])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("MT2Y|"), rt.method(rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(2)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(8.6)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(8.602325)])]));
+      rt.frameLine(8);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([rt.V.str("MT2X|"), rt.method(rt.vector2New([rt.V.float(0.5), rt.V.float((-0.25))]), "move_toward", [rt.vector2New([rt.V.float((-7.25)), rt.V.float(6.125)]), rt.V.float(0.375)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.float(0.5), rt.V.float((-0.25))]), "move_toward", [rt.vector2New([rt.V.float((-7.25)), rt.V.float(6.125)]), rt.V.float(100)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.float(10000000), rt.V.float(20000000)]), "move_toward", [rt.vector2New([rt.ops.add(rt.V.float(10000000), rt.V.int(1)), rt.ops.add(rt.V.float(20000000), rt.V.int(1))]), rt.V.float(0.5)])]));
-    print(rt.showArgs([rt.V.str("MT2Y|"), rt.method(rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(2)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(8.6)]), rt.V.str("|"), rt.method(rt.vector2New([rt.V.int((-4)), rt.V.int(8)]), "move_toward", [rt.vector2New([rt.V.int(1), rt.V.int(1)]), rt.V.float(8.602325)])]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

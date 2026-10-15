@@ -6,53 +6,91 @@ import { print, printJoined, printRaw, printErr, printVerbose, printRich, printD
 const State = rt.dictOf([[rt.V.str("IDLE"), rt.V.int(0)], [rt.V.str("RUN"), rt.V.int(4)], [rt.V.str("JUMP"), rt.V.int(5)]]);
 
 export class Main extends SceneTree {
-  LIMIT = rt.V.int(3);
+  declare LIMIT: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.LIMIT = rt.V.int(3);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static LIMIT = rt.V.int(3);
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    do {
-      const __m0 = rt.matchPattern(rt.V.int(3), rt.patConst(Main.LIMIT));
-      if (__m0 !== null) {
-        print(rt.showArgs([rt.V.str("limit")]));
-        break;
-      }
-      const __m1 = rt.matchPattern(rt.V.int(3), rt.patWild());
-      if (__m1 !== null) {
-        print(rt.showArgs([rt.V.str("other")]));
-        break;
-      }
-    } while (false);
-    do {
-      const __m0 = rt.matchPattern(rt.V.int(4), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("RUN")))));
-      if (__m0 !== null) {
-        print(rt.showArgs([rt.V.str("run")]));
-        break;
-      }
-      const __m1 = rt.matchPattern(rt.V.int(4), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("IDLE")))));
-      if (__m1 !== null) {
-        print(rt.showArgs([rt.V.str("idle")]));
-        break;
-      }
-      const __m2 = rt.matchPattern(rt.V.int(4), rt.patWild());
-      if (__m2 !== null) {
-        print(rt.showArgs([rt.V.str("s-other")]));
-        break;
-      }
-    } while (false);
-    do {
-      const __m0 = rt.matchPattern(rt.wrapValue(rt.index(State, rt.V.str("JUMP"))), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("IDLE")))));
-      if (__m0 !== null) {
-        print(rt.showArgs([rt.V.str("wrong")]));
-        break;
-      }
-      const __m1 = rt.matchPattern(rt.wrapValue(rt.index(State, rt.V.str("JUMP"))), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("JUMP")))));
-      if (__m1 !== null) {
-        print(rt.showArgs([rt.V.str("jump")]));
-        break;
-      }
-    } while (false);
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(7);
+      do {
+        const __m0 = rt.matchPattern(rt.V.int(3), rt.patConst(Main.LIMIT));
+        if (__m0 !== null) {
+          rt.frameLine(9);
+          print(rt.showArgs([rt.V.str("limit")]));
+          break;
+        }
+        const __m1 = rt.matchPattern(rt.V.int(3), rt.patWild());
+        if (__m1 !== null) {
+          rt.frameLine(11);
+          print(rt.showArgs([rt.V.str("other")]));
+          break;
+        }
+      } while (false);
+      rt.frameLine(13);
+      do {
+        const __m0 = rt.matchPattern(rt.V.int(4), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("RUN")))));
+        if (__m0 !== null) {
+          rt.frameLine(15);
+          print(rt.showArgs([rt.V.str("run")]));
+          break;
+        }
+        const __m1 = rt.matchPattern(rt.V.int(4), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("IDLE")))));
+        if (__m1 !== null) {
+          rt.frameLine(17);
+          print(rt.showArgs([rt.V.str("idle")]));
+          break;
+        }
+        const __m2 = rt.matchPattern(rt.V.int(4), rt.patWild());
+        if (__m2 !== null) {
+          rt.frameLine(19);
+          print(rt.showArgs([rt.V.str("s-other")]));
+          break;
+        }
+      } while (false);
+      rt.frameLine(21);
+      do {
+        const __m0 = rt.matchPattern(rt.wrapValue(rt.index(State, rt.V.str("JUMP"))), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("IDLE")))));
+        if (__m0 !== null) {
+          rt.frameLine(23);
+          print(rt.showArgs([rt.V.str("wrong")]));
+          break;
+        }
+        const __m1 = rt.matchPattern(rt.wrapValue(rt.index(State, rt.V.str("JUMP"))), rt.patConst(rt.wrapValue(rt.index(State, rt.V.str("JUMP")))));
+        if (__m1 !== null) {
+          rt.frameLine(25);
+          print(rt.showArgs([rt.V.str("jump")]));
+          break;
+        }
+      } while (false);
+      rt.frameLine(26);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

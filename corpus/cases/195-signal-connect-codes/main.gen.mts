@@ -7,31 +7,88 @@ const CONNECT_ONE_SHOT = rt.V.int(4);
 const CONNECT_REFERENCE_COUNTED = rt.V.int(8);
 
 export class Main extends SceneTree {
-  fired = new rt.Signal("fired");
+  declare fired: rt.Signal;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.fired = new rt.Signal("fired");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   on_fired(v: rt.Variant): void {
-    print(rt.showArgs([rt.V.str("got "), v]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "on_fired");
+    try {
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("got "), v]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   on_other(v: rt.Variant): void {
-    print(rt.showArgs([rt.V.str("other "), v]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "on_other");
+    try {
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("other "), v]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let s = rt.wrapValue(this.fired);
-    print(rt.showArgs([rt.V.str("r1 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
-    rt.method(s, "emit", [rt.V.int(1)]);
-    rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
-    rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);
-    print(rt.showArgs([rt.V.str("r3 "), rt.typeOf(rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired"), CONNECT_ONE_SHOT]))]));
-    rt.method(s, "emit", [rt.V.int(2)]);
-    rt.method(s, "emit", [rt.V.int(3)]);
-    print(rt.showArgs([rt.V.str("r4 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_other"), CONNECT_REFERENCE_COUNTED])]));
-    print(rt.showArgs([rt.V.str("r5 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_other"), CONNECT_REFERENCE_COUNTED])]));
-    rt.method(s, "emit", [rt.V.int(4)]);
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(12);
+      let s = rt.wrapValue(this.fired);
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("r1 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
+      rt.frameLine(14);
+      rt.method(s, "emit", [rt.V.int(1)]);
+      rt.frameLine(15);
+      rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("r2 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired")])]));
+      rt.frameLine(17);
+      rt.method(s, "disconnect", [rt.methodCallable(rt.V.object(this), "on_fired")]);
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("r3 "), rt.typeOf(rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_fired"), CONNECT_ONE_SHOT]))]));
+      rt.frameLine(19);
+      rt.method(s, "emit", [rt.V.int(2)]);
+      rt.frameLine(20);
+      rt.method(s, "emit", [rt.V.int(3)]);
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("r4 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_other"), CONNECT_REFERENCE_COUNTED])]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("r5 "), rt.method(s, "connect", [rt.methodCallable(rt.V.object(this), "on_other"), CONNECT_REFERENCE_COUNTED])]));
+      rt.frameLine(23);
+      rt.method(s, "emit", [rt.V.int(4)]);
+      rt.frameLine(24);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -5,6 +5,24 @@ import { nextObjectId } from "./identity";
 /** Callable 盒子里的调用体：只收一个数组，不 rest、不 spread、不用可选形参。 */
 export type Fn = (args: Variant[]) => unknown;
 
+/** 延后队列的在途数：宿主退出前按它把「当前这一轮的延后」排干 —— 引擎连 quit() 之后排的延后都照跑，没到期的计时器则等不到（读数 `tmp/probe-drain/compare{94,95}.txt`）。 */
+let deferredPending = 0;
+
+export function deferredPendingCount(): number {
+  return deferredPending;
+}
+
+export function callDeferred(run: () => void): void {
+  deferredPending++;
+  setTimeout(() => {
+    try {
+      run();
+    } finally {
+      deferredPending--;
+    }
+  }, 0);
+}
+
 /** Callable 盒子：有形状的类，不是按符号键取值的记录；本模块是叶子，不 import `values.ts` / `object.ts`（会成环）。 */
 export class CallableBox {
   /** lambda 与「没有名字」的式子；**方法 / 静态方法 Callable 是 null**，靠 `(object, name)` 派发。 */
@@ -19,6 +37,11 @@ export class CallableBox {
   boundOnce: boolean;
   /** lambda 的等式是盒子身份，所以盒子得有自己的号。 */
   readonly gdObjectId: number = nextObjectId();
+  /** 内建类型面绑定来的那一只（`Array::append` 那一族）：存的是**面名**，null 表示不是这一族。
+   *  引擎在这一族上打印 `<面>::<名>`、`get_object()` 给 typeof 24 的空对象引用（读数 `tmp/probe-bincall/p1.gd` 16 面 + `compare6.txt` 的 N6）。 */
+  builtin: string | null;
+  /** 那一面这一名的元数上下界（发射器从量过的表里带过来）：`callableArityBounds` 与 `get_argument_count()` 都读它。 */
+  builtinBounds: [number, number] | null;
   constructor(
     fn: Fn | null = null,
     name: string | null = null,
@@ -26,6 +49,8 @@ export class CallableBox {
     bound: Variant[] = [],
     arity: number | null = null,
     boundOnce = false,
+    builtin: string | null = null,
+    builtinBounds: [number, number] | null = null,
   ) {
     this.fn = fn;
     this.name = name;
@@ -33,7 +58,14 @@ export class CallableBox {
     this.bound = bound;
     this.arity = arity;
     this.boundOnce = boundOnce;
+    this.builtin = builtin;
+    this.builtinBounds = builtinBounds;
   }
+}
+
+/** 内建类型面的「方法名当值」：引擎给的是绑定 Callable（`x.append` 印 `Array::append`），调用仍按 (接收者, 名) 派发。 */
+export function boundBuiltinCallable(recv: Variant, face: string, name: string, min: number, max: number): Variant {
+  return V.object(new CallableBox(null, name, recv, [], null, false, face, [min, max]));
 }
 
 /** 这个 OBJECT 载荷是一个 Callable 盒子吗？空 Callable（`Callable()`）也算。 */

@@ -501,6 +501,47 @@ const BYTE_ONLY = new Set([
 /** 非 byte 形状上给与 `Nonexistent function` 一致的那句的那批名字。 */
 const NON_BYTE_MISSING = new Set(["hex_encode", "compress", "decompress"]);
 
+/** S414 的读数：180 个候选名在九支的构造位逐名过裁判，引擎开口的就是这些（尺 `tmp/probe-slice/round8.mts`，读数 `compare110.txt`）。
+ *  方向是「裁判说没有的才发那句」—— 名单外的名字我们没量过，照旧响亮抛，不拿它冒充引擎的拒。 */
+export const PACK_ABSENT_ALL = [
+  "all", "any", "assign", "at", "back", "begins_with", "bigrams", "bin_to_int", "binary_search",
+  "bsearch_custom", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains",
+  "containsn", "countn", "dedent", "each", "ends_with", "filecasecmp_to", "filenocasecmp_to", "filter",
+  "find_custom", "find_key", "findn", "format", "front", "get_base_dir", "get_basename",
+  "get_extension", "get_file", "get_index", "get_or_add", "get_pointer", "get_slice",
+  "get_slice_count", "get_slicec", "get_typed_builtin", "get_typed_class_name", "get_typed_script",
+  "has_all", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert_array",
+  "is_absolute_path", "is_null", "is_read_only", "is_relative_path", "is_same_typed",
+  "is_subsequence_of", "is_subsequence_ofn", "is_typed", "is_valid_filename", "is_valid_float",
+  "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int",
+  "is_valid_ip_address", "join", "json_escape", "keys", "left", "length", "lpad", "lstrip",
+  "make_read_only", "map", "match", "matchn", "max", "md5_buffer", "md5_text", "merge", "merged",
+  "min", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64",
+  "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "pick_random", "pop_at",
+  "pop_back", "pop_front", "push_front", "recursive_equal", "reduce", "repeat", "replace", "replacen",
+  "rfind_custom", "rfindn", "right", "rpad", "rsplit", "rstrip", "same_type", "sha1_buffer",
+  "sha1_text", "sha256_buffer", "sha256_text", "shuffle", "similarity", "simplify_path", "sort_custom",
+  "sort_flags", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer",
+  "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_pascal_case",
+  "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer",
+  "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode",
+  "validate_filename", "validate_node_name", "values", "xml_escape", "xml_unescape",
+];
+
+/** byte 之外那八支还多开口这 11 名（byte 自己都有）。 */
+export const PACK_ABSENT_NOT_BYTE = [
+  "compress", "decompress", "get_string_from_ascii", "get_string_from_utf16", "get_string_from_utf8",
+  "get_string_from_wchar", "hex_encode", "to_float32_array", "to_float64_array", "to_int32_array",
+  "to_int64_array",
+];
+
+/** 反过来：`to_byte_array` 其余八支都有，唯独 byte 自己开口。 */
+export const PACK_ABSENT_BYTE_ONLY = ["to_byte_array"];
+
+export function packNameAbsent(kind: PackKind, name: string): boolean {
+  return PACK_ABSENT_ALL.includes(name) || (kind === "byte" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE).includes(name);
+}
+
 function arity(name: string, args: Variant[], n: number): void {
   if (args.length !== n) throw new GodotRuntimeError("arity", `${name}() 需要 ${n} 个参数（收到 ${args.length} 个）`);
 }
@@ -812,6 +853,9 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       return V.str(String.fromCharCode(...(items as number[])));
     }
     default:
+      if (packNameAbsent(kind, name)) {
+        throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
+      }
       throw new UnsupportedError("packed-method", `${PACK_TYPE_NAME[kind]}.${name}() 未实现`);
   }
 }

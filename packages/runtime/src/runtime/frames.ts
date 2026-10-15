@@ -1,4 +1,5 @@
 import { V, type Variant } from "./tags";
+import { GodotRuntimeError } from "./errors";
 import { GArray, GDict, showArgsSep } from "./values";
 
 /** 一帧：脚本路径、函数名（lambda 是 `<anonymous lambda>`）与这一帧当前执行到的行。 */
@@ -55,6 +56,17 @@ export function stackFrameLines(): string[] {
   return stackFrames().map((f, i) => `Frame ${String(i)} - ${f.source}:${String(f.line)} in function '${f.fn}'`);
 }
 
+/** 运行期错误作废的是**当前那支函数**：引擎先把这一块推到 stderr，再从该函数返回，调用方接着跑（S406，九格 + 十九格的返回型默认值量的）。不是引擎那一句的就原样再抛出去。 */
+export function gdFunctionError(err: unknown): void {
+  if (!(err instanceof GodotRuntimeError)) throw err;
+  const fs = stackFrames();
+  const top = fs[0];
+  const at = top === undefined ? "? (-1)" : `${top.fn} (${top.source}:${String(top.line)})`;
+  const lines = [`SCRIPT ERROR: ${err.message}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
+  for (const [i, f] of fs.entries()) lines.push(`       [${String(i)}] ${f.fn} (${f.source}:${String(f.line)})`);
+  process.stderr.write(lines.join("\n") + "\n");
+}
+
 /** `push_error` / `push_warning` 那一块：首行 + `at:` + backtrace 表头 + 每帧一行（实测原文，语料 273）。 */
 export function stackBlockLines(head: string, at: string, args: Variant[]): string[] {
   const out = [`${head}: ${showArgsSep(args, "")}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
@@ -74,6 +86,11 @@ export function gPushError(args: Variant[]): Variant {
 
 export function gPushWarning(args: Variant[]): Variant {
   return pushBlock("WARNING", "push_warning (core/variant/variant_utility.cpp:1034)", args);
+}
+
+/** 只读容器被写时引擎推的那一块（`at:` 那行按每个方法各自的 C++ 文件与行号，S403 逐格量的）。 */
+export function readOnlyError(at: string, kind: string): Variant {
+  return pushBlock("ERROR", at, [V.str(`${kind} is in read-only state.`)]);
 }
 
 /** static 属性委托到实例方法：那一次调用不发生，引擎运行期打一块 ERROR，读给 null、写什么也不做（实测语料 371）。 */
