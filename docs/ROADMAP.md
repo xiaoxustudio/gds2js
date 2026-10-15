@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.216 运算符那一族再扫一形：左支换成标明类型的名字，引擎一律走第二式（2026-10-15，S395，§6 第 69 条收窄）
+
+- **第二张 468 格矩阵**（尺 `tmp/probe-declrecv/round1.mts`，读数 `compare58.txt`）：左支改成模块级 `var a: T`、右支仍是字面量 —— 133 格照发值、329 格拒，**拒的 329 格全用第二式**（`Invalid operands "bool" and "int" for "<=" operator.`），没有一格用第一式。
+- **两集不能合并**：`and` / `or` 掺 String 那十四对在字面量集里拒、在名字集里收，所以另立一张 `OP_PAIRS_REFUSED_DECL`。
+- **写法又抽了三种**（`round2.mts`，`compare59.txt` 十二格）：形参标注、内部类字段与模块 var 同式；**`const` 反而与字面量同式**（第一式），但只四格不够定表，那一形本轮不拦（也不发错句）。
+- **修掉一句自造的话**：`op-mod-float` 在左支型证不出时把型名印成 `null`（`Invalid operands to operator %, null and float.` 引擎从不这么写），改成两侧都证得出才发，证不出的交给新表按第二式发 —— 五格被这条老 bug 挡着发错句。
+- **门**：`operator-pairs.test.ts` 由生成器（`tmp/probe-declrecv/gen2.mts`）扩成两半共 **924 格**逐格对引擎；`pnpm test` **14007**（127 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.215 运算符 × 操作数型对：468 格矩阵过一次裁判，字面量那一半接进解析期（2026-10-15，S394，§6 第 56 条③④⑤结清、新增第 69 条）
 
 - **六型 × 六型 × 十三符 = 468 格**（尺 `tmp/probe-opmatrix/round1.mts`，一格一脚本一次 spawn，读数 `compare57.txt`，折叠 `fold.mts`，门由 `gen-test.mts` 从读数生成）：**343 格引擎在解析期拒、119 格照发值、6 格属另一条通道**。
