@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.202 Array / String 两侧的实参类型两句逐名量齐：容器三族这一族从此没有缺口（2026-10-15，S382，§6 第 63 条结清）
+
+- **720 格一次摆齐**：38 个缺口名 × 每一位 × 15 个 kind，一句一行、一次 spawn 量一批（尺 `tmp/probe-faces2/round1.mts`，读数 `compare29.txt`）。表与门同出一份读数：`gen-test.mts` 同时生成三张表的行与门里的数据数组，谁也不手抄。
+- **覆盖从此 96 名全覆盖**：`FACE_ARG_AS` / `FACE_ARG_TYPES` / `FACE_SLOTS` 三张表长到 Array 22 / Dictionary 6 / String 57 名；Array 那 7 个「缺口」位（`append` / `count` / `erase` / `fill` / `has` / `push_back` / `push_front`）15 个 kind 全放行 —— 实参是 `Variant`，**不建条目**，「没有那一句」同样是量出来的。
+- **三处形参次序与文档相反**：`lpad` / `rpad` 是 `(int, String)`（不是「先填充字符再长度」那个方向）、`rsplit` 是 `(String, bool, int)`（第二支是 `allow_empty` 不是 `maxsplit`）、`indent` 的上界是 **1**。第三支是本轮踩的坑：手抄写成 2 位，引擎当场用 `Too many arguments …` 把整行挡住，那一轮的「全放行」是假的 —— 元数一律从 S379 / S380 的读数现取，不再手写。
+- **A 式那句不带位号**：`Cannot pass a value of type "X" as "Y".` 里没有 `argument N`，按位过滤时整条被丢 —— 第一版折表因此把 31 行 `FACE_ARG_AS` 全折成了 `FACE_ARG_TYPES`。归位规则改成「B 式紧跟其前的那条 A 式、且 kind 对得上」。
+- **合表用脚本**：新行按字母序插进既有行之间，既有行次序一字不动（93 行纯插入）；`};` 前那个空行必须留在末尾，第一版把新行挤成了 `…]],};`。
+- **补齐之后回头改了上一轮的两把门**：`array-method-arity` / `string-method-arity` 里「合法」那一格挑的实参撞上了新量到的期望型（4 格当场红），改成 `is_same_typed` 给 `[]`、`indent` 给串、`lpad` / `rpad` 给 `(1, "x")`、`rsplit` 给 `("x", true, 1)` —— 那两把门的读数各涨一格，改的都是实参类型、元数句子一格没动。
+- **门**：`face-arg-coverage.test.ts` 1 格 · 720 断言；`pnpm test` **13953**（118 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动）、`test:diff` **245/245** 逐字节；本轮不碰任何 `.gd`、不改任何产物。
+
 ### 1.201 字典侧的实参类型两句补齐：`merged` / `recursive_equal` 进表，Callable 那一格本来就能发（2026-10-15，S381，§6 第 63 条①的字典那一半收尾）
 
 - **量法换了才有这一轮**：元数那一族一句废整份脚本、只能一格一脚本；实参类型这一族引擎**一轮能报多行 Parse Error**，所以一格一行、一次 spawn 量 15 个 kind（尺 `tmp/probe-dictface/round1.mts`，读数 `tmp/probe-dictface/compare27.txt`）。行号归格踩过一次 —— `extends` / 空行 / `func` / `var d` 占四行，第一格在**第五行**，差一行就整表错位（第一版就是这么量的，句子里的 kind 全偏一格）。

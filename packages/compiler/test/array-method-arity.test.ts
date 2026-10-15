@@ -26,7 +26,7 @@ const P1 = "func(_x): return true";
 const P2 = "func(_x, _y): return 0";
 const LEGAL: Record<string, string[]> = {
   all: [P1], any: [P1], filter: [P1], map: [P1], reduce: [P1, "1"], find_custom: [P1, "1"], rfind_custom: [P1, "1"],
-  sort_custom: [P2], append_array: ["[]"], assign: ["[]"],
+  sort_custom: [P2], append_array: ["[]"], assign: ["[]"], is_same_typed: ["[]"],
 };
 const legs = (n: string, k: number): string => {
   const l = LEGAL[n];
