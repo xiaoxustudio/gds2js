@@ -129,6 +129,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkPackArgSlots(m, diags);
   checkDictMethodArity(m, diags);
   checkArrayMethodArity(m, diags);
+  checkStringMethodArity(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkDictDuplicateKeys(m, diags);
@@ -1370,21 +1371,20 @@ function arityDiag(
 }
 
 /** 容器方法调用的那一道形状检查：接收者只认「字面量直接当接收者」与「静态证明过的名字」两种，
- *  字面量的 IR kind 由调用方给（`dict` / `array`），名字集合是调用方按标注与初值算出来的。 */
+ *  字面量那一维由调用方给判据（`{…}` / `[…]` / `"…"` 三族的 IR 形状不同），名字集合是调用方按标注与初值算出来的。 */
 function containerCallArity(
   n: Record<string, unknown>,
   table: Record<string, [number, number]>,
   code: string,
   names: Set<string>,
-  literalKind: string,
+  isLiteral: (obj: Record<string, unknown>) => boolean,
 ): Diagnostic | null {
   if (n.kind !== "call") return null;
   const callee = n.callee as Record<string, unknown> | undefined;
   if (callee === undefined || callee.kind !== "attribute") return null;
   const obj = callee.obj as Record<string, unknown> | undefined;
   if (obj === undefined) return null;
-  const proven =
-    obj.kind === literalKind || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
+  const proven = isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
   if (!proven) return null;
   const method = callee.name;
   if (typeof method !== "string") return null;
@@ -1475,7 +1475,7 @@ function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
     }
 
     for (const n of nodes) {
-      const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, "dict");
+      const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
       if (d !== null) diags.push(d);
     }
   }
@@ -1513,7 +1513,60 @@ function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
     }
 
     for (const n of nodes) {
-      const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, "array");
+      const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+/** String 方法的元数（S380）：109 名过裁判，存在的 108 名两侧都量到（每名两格 —— 零实参读「至少」、五实参读「至多」，
+ *  `tmp/probe-str/compare25.txt`）。三格与直觉不同、只能量回来：`split` / `rsplit` 的**下界是 0**（不填分隔符也收），
+ *  `count` 的上界是 **3**（`from` 与 `to` 都在内），`is_valid_int` / `is_valid_float` 反倒不收那支默认布尔。 */
+const STRING_METHOD_ARITY: Record<string, [number, number]> = {
+  begins_with: [1, 1], bigrams: [0, 0], bin_to_int: [0, 0], c_escape: [0, 0], c_unescape: [0, 0],
+  capitalize: [0, 0], casecmp_to: [1, 1], chr: [1, 1], contains: [1, 1], containsn: [1, 1], count: [1, 3],
+  countn: [1, 3], dedent: [0, 0], ends_with: [1, 1], erase: [1, 2], filecasecmp_to: [1, 1],
+  filenocasecmp_to: [1, 1], find: [1, 2], findn: [1, 2], format: [1, 2], get_base_dir: [0, 0],
+  get_basename: [0, 0], get_extension: [0, 0], get_file: [0, 0], get_slice: [2, 2], get_slice_count: [1, 1],
+  get_slicec: [2, 2], hash: [0, 0], hex_decode: [0, 0], hex_to_int: [0, 0], humanize_size: [1, 1],
+  indent: [1, 1], insert: [2, 2], is_absolute_path: [0, 0], is_empty: [0, 0], is_relative_path: [0, 0],
+  is_subsequence_of: [1, 1], is_subsequence_ofn: [1, 1], is_valid_filename: [0, 0], is_valid_float: [0, 0],
+  is_valid_hex_number: [0, 1], is_valid_html_color: [0, 0], is_valid_identifier: [0, 0], is_valid_int: [0, 0],
+  is_valid_ip_address: [0, 0], join: [1, 1], json_escape: [0, 0], left: [1, 1], length: [0, 0], lpad: [1, 2],
+  lstrip: [1, 1], match: [1, 1], matchn: [1, 1], md5_buffer: [0, 0], md5_text: [0, 0],
+  naturalcasecmp_to: [1, 1], naturalnocasecmp_to: [1, 1], nocasecmp_to: [1, 1], num: [1, 2],
+  num_int64: [1, 3], num_scientific: [1, 1], num_uint64: [1, 3], pad_decimals: [1, 1], pad_zeros: [1, 1],
+  path_join: [1, 1], repeat: [1, 1], replace: [2, 2], replacen: [2, 2], reverse: [0, 0], rfind: [1, 2],
+  rfindn: [1, 2], right: [1, 1], rpad: [1, 2], rsplit: [0, 3], rstrip: [1, 1], sha1_buffer: [0, 0],
+  sha1_text: [0, 0], sha256_buffer: [0, 0], sha256_text: [0, 0], similarity: [1, 1], simplify_path: [0, 0],
+  split: [0, 3], split_floats: [1, 2], strip_edges: [0, 2], strip_escapes: [0, 0], substr: [1, 2],
+  to_ascii_buffer: [0, 0], to_camel_case: [0, 0], to_float: [0, 0], to_int: [0, 0], to_kebab_case: [0, 0],
+  to_lower: [0, 0], to_pascal_case: [0, 0], to_snake_case: [0, 0], to_upper: [0, 0], to_utf16_buffer: [0, 0],
+  to_utf32_buffer: [0, 0], to_utf8_buffer: [0, 0], to_wchar_buffer: [0, 0], trim_prefix: [1, 1],
+  trim_suffix: [1, 1], unicode_at: [1, 1], uri_decode: [0, 0], uri_encode: [0, 0], validate_filename: [0, 0],
+  validate_node_name: [0, 0], xml_escape: [0, 1], xml_unescape: [0, 0],
+};
+
+/** String 方法的元数在解析期就拦。接收者认两种静态证明 —— 标注 `String` 与字符串字面量（含直接当接收者）；
+ *  `&"…"` 与 `"…"` 前加记号的那两面（StringName / NodePath）不算，它们各有自己的成员表。 */
+function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
+  const isStringLit = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === "string";
+  for (const nodes of flattenBodies(m)) {
+    const strs = new Set<string>();
+    const reassigned = reassignedNames(nodes);
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named" && type.name === "String") {
+        strs.add(n.name);
+        continue;
+      }
+      const init = n.init as Expr | null;
+      if (init !== null && init.kind === "lit" && init.lit === "string") strs.add(n.name);
+    }
+
+    for (const n of nodes) {
+      const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
       if (d !== null) diags.push(d);
     }
   }

@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.200 String 的方法元数接进解析期：109 名过裁判，三格与文档相反（2026-10-15，S380，§6 第 63 条①的字符串那一半收尾）
+
+- **同一把尺第三次摆下去**：一格一份 `.gd` 一次 spawn，每名两格（零实参读「至少」、五实参读「至多」），语句形（尺 `tmp/probe-str/round1.mts`，读数 `tmp/probe-str/compare25.txt`）。108 名的表由读数**直接生成**（`tmp/probe-str/gen.mts`）—— 到这个体量手抄一定会错，门里的 `T` 与 `STRING_METHOD_ARITY` 都出自同一份文本。
+- **三格与文档相反**：`split` / `rsplit` 的下界是 **0**（不填分隔符也收）、`count` / `countn` 的上界是 **3**（`from` 与 `to` 都在内）、`is_valid_int` / `is_valid_float` **不收**那支默认布尔（4.x 文档明写 `is_valid_int(allow_leading_plus := true)`，裁判一支都不给 —— 与 S365 全局函数那一轮「文档里的默认实参一概不收」同一条规律，这次是在方法面上）。
+- **静态名在实例接收者上照样先查元数**：`s.chr()` 给 `Too few arguments for "chr()" call. Expected at least 1 but received 0.`。文档挂着 static 的五支（`chr` / `num` / `num_int64` / `num_uint64` / `join`）都这样，元数闸门先于「能不能这么调」。
+- **同族两名不同型**：`get_slice` 收 `(String, int)`、`get_slicec` 收 `(int, int)` —— 元数都是 `[2,2]`，只有实参类型那两句分得出，本门钉元数、类型那族照旧由既有的 `face-arg-*` 管。门里「合法」那一格因此要给类型也对得上的实参。
+- **另两面各量一格、都不接**：`StringName` 的 `sn.length(1)` 引擎给**同族那句**（说明这一面自己也有解析期闸门），`NodePath` 给的是**另两句**（`Cannot find member … in base "NodePath".` + `Function … not found in base NodePath.`）。一格定不了一张表，所以闸门只认 `String`，另两面证不出就不报 —— 新账记 §6 第 64 条。
+- **共用件长了一维**：`containerCallArity` 的「字面量直接当接收者」从写死 IR kind 换成调用方给的判据（`{…}` / `[…]` 是节点种类，`"…"` 要看到 `lit === "string"`），三族形状不同、判据各写各的。
+- **门**：`string-method-arity.test.ts` 6 格 · 430 断言（108 名逐名钉两句 + 两端元数合法）；`pnpm test` **13946**（116 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动）、`test:diff` **245/245** 逐字节；本轮不碰任何 `.gd`、不改任何产物。
+
 ### 1.199 Array 的方法元数接进解析期：51 名过裁判，顺手看清「实参类型那两句本来就有」（2026-10-15，S379，§6 第 63 条①的数组那一半）
 
 - **字典那一轮的同一把尺**：一格一份 `.gd` 一次 spawn，每名两格 —— 零实参读「至少」、**五**实参读「至多」（尺 `tmp/probe-arr/{round1,round2}.mts`，读数 `tmp/probe-arr/{compare23,compare24}.txt`）。五支是为了 `slice(begin, end, step, deep)`：三支量不到它的上界 4，字典那一轮的三支法在这儿会漏。
