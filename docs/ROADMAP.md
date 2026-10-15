@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.213 `String` 静态三支的 int 形参折法：`chr` 与 `num.decimals` 走 int32 回绕，`humanize_size` 留在 int64（2026-10-15，S392，§6 第 47 条⑧的尾巴结清）
+
+- **一条式子靠一组 2^32 的整圈定下来**（尺 `tmp/probe-int64params/{round1,round2,round3}.mts`，读数 `compare{49,50,51,52}.txt`）：`String.num(0.3333333333, 2^32+5)` → `0.33333`、`2^32+1` → `0.3`、`2^32-1` 与 `2^31+5` 折成负数走默认那支、`2^32+32` 与 `40` 都夹到 32；`String.chr(2^32+65)` → `A`、`chr(2^53+1)` → U+0001、`chr(2^53)` / `chr(2^33)` → 绕回 0 → U+FFFD。
+- **非有限那一头**：`num(1.5, INF / -INF / NAN / ±1e20)` 全给 `2`（`INT64_MIN` 的低 32 位是 0）；`chr` 的六支非有限/越界全给 U+FFFD；`humanize_size(INF / -INF / NAN / 1e20)` 全给 `8.00 EiB`、`-1` 与 `-1024` 给 `16.00 EiB`、`2^32` 仍是 `4.00 GiB` —— 这一支不截 int32。
+- **改的只有三处取数**：`strHumanizeSize` / `stringStatic` 的 `chr`、`num` 的 decimals 换成 `int64ParamBig`（后两支再套 `BigInt.asIntN(32, …)`）；**全局 `char()` 没动** —— 它的非有限实参没量过，照旧响亮抛。
+- **推翻一条旧外推**：`string.test.ts` 那格「`chr` 的 bigint 载荷越界换 U+FFFD」用的是 `2^53+1`，引擎其实给 U+0001（先回绕、再判 FFFD）；改成读数值并另补三格。
+- **还欠**：`num_int64` / `num_uint64` 的 `base` / `capitalize_hex` 没量过 int32 回绕（S324 只到 int32 范围内），不外推。
+- **门**：`string-int-params.test.ts` 6 格 · 40 断言 + `string.test.ts` 改正 1 格加补 3 格；出货与引擎**逐行对照 49 格一字一样**（`tmp/probe-int64params/ours-{a,b,c}.txt` vs `compare{49,50,51}.txt`）；`pnpm test` **13996**（126 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.212 接收者的静态证明补齐：形参标注与内部类字段也拦，「初值推断 + 重赋值」量回来是不拦（2026-10-15，S391，§6 第 68 条结清）
 
 - **十八格新读数**（尺 `tmp/probe-modrecv/{round2,round3}.mts`，读数 `compare{47,48}.txt`，一格一份脚本一次 spawn）：`func f(s: String)` / `(a: Array)` / `(d: Dictionary)` / `(sn: StringName)` / `(np: NodePath)` / 定形 `Array[int]`，加内部类自己字段（带标注与初值推断两形）—— 引擎全在解析期拦；无标注形参与合法元数那两格照旧放过。

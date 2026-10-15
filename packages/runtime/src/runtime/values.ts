@@ -2224,7 +2224,7 @@ const SIZE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
 
 /** `String.humanize_size(n)`：参数按 **uint64** 解释（所以负数变成一个巨大值）再转 double；`while (value > 1024)` 严格大于定档，小数位 <100 两位、<1024 一位、再大不留，尾数**截断不四舍五入**；B 档直接印整数本身。 */
 export function strHumanizeSize(v: Variant): Variant {
-  const signed = intArgBig(v, "String.humanize_size() 的参数");
+  const signed = int64ParamBig(v, "String.humanize_size() 的参数");
   const u = signed & ((1n << 64n) - 1n);
   if (u === 0n) return V.str("0 B");
   let value = Number(u);
@@ -2379,12 +2379,12 @@ export function stringStatic(name: string, args: Variant[] = []): Variant {
     case "chr": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.chr() 缺少参数");
-      return stringChr(v);
+      return stringChr(V.int(Number(BigInt.asIntN(32, int64ParamBig(v, "String.chr() 的实参")))));
     }
     case "num": {
       const v = args[0];
       if (v === undefined) throw new GodotRuntimeError("arity", "String.num() 缺少参数");
-      const d = args[1] === undefined ? -1 : Number(intArgBig(args[1], "String.num() 的 decimals"));
+      const d = args[1] === undefined ? -1 : Number(BigInt.asIntN(32, int64ParamBig(args[1], "String.num() 的 decimals")));
       if (v.t === Tag.FLOAT) return V.str(strNumDecimals(v.v as number, d));
       if (v.t === Tag.INT) return V.str(strNumDecimals(intToNum(v.v as IntPayload), d));
       if (v.t === Tag.BOOL) return V.str(strNumDecimals(v.v ? 1 : 0, d));
