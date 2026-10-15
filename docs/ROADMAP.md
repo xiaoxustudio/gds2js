@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.215 运算符 × 操作数型对：468 格矩阵过一次裁判，字面量那一半接进解析期（2026-10-15，S394，§6 第 56 条③④⑤结清、新增第 69 条）
+
+- **六型 × 六型 × 十三符 = 468 格**（尺 `tmp/probe-opmatrix/round1.mts`，一格一脚本一次 spawn，读数 `compare57.txt`，折叠 `fold.mts`，门由 `gen-test.mts` 从读数生成）：**343 格引擎在解析期拒、119 格照发值、6 格属另一条通道**。
+- **拒的句子有两式**：两侧都是标量字面量 → `Invalid operands to operator X, A and B.`；掺进容器那一族 → `Invalid operands "A" and "B" for "X" operator.`。两式各一张表，闸门只在两侧都是字面量时发 —— 因为`var a: bool` 之后 `a <= 1` 换成了第二式（`tmp/probe-booleq/compare55.txt` 三格），那一头没量全，欠的登第 69 条。
+- **新拦到的都是静默错值那一类**：`true <= 1`、`1 <= true`、`true == 1`、`true != 1`、`true + 1`、`"a" <= 1`、`true and [1]`、`[1] % 1.5`…… 出货此前一声不出直接把式子发出去。既有三道闸门发过的组合不重复发（`%` 皆标量带 float、`==`/`!=` 串对数、`bool <= bool`）。
+- **推翻一条旧格**：`bool-ordering` 里「混合 int 与 bool 的 `<=` 不归这条管」是当年没量的猜测，读数说引擎拒 —— 翻成拒并钉句子。
+- **顺手结的两处**：写权那一族四形（`for quit in …`、lambda 形参、match 手臂绑定、普通 var）引擎与出货**都放过**，四格当放行读数钉进门里；内部类标注 bool 的成员引擎照样拒，`checkBoolOrdering` 那条「猜的边界」正好合上。
+- **`String % 任何` 那六格不接**：引擎判的是格式串里有没有占位符（`"a" % 1` 拒、`"a%d" % 1` 收），与型对无关，属另一条通道。
+- **门**：`operator-pairs.test.ts` 462 格逐格对引擎（`pnpm test` **14006**、127 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0 —— 语料无一例撞新表）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.214 `max` / `min` 的运行期转换通道接上：容器一出现，整支调用就不在解析期发句（2026-10-15，S393，§6 第 67 条结清）
 
 - **十四形各装箱一格**（尺 `tmp/probe-maxrt/round1.mts`，读数 `compare53.txt`）：`bool` / `Nil` / `String` / `StringName` / `NodePath` / `Array` / `Dictionary` / `PackedInt32Array` / `Callable` / `Color` / `Vector2` 在运行期一律 `Invalid type in utility function "max()". Cannot convert argument 3 from <型> to float.` + `at:` + backtrace 并打断；**只认 int 与 float** —— 「`Variant::as_double` 认得起来数字串」那条猜测被读数打掉。

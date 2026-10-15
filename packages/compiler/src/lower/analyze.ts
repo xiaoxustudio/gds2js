@@ -3071,9 +3071,75 @@ function isNegativeLiteral(e: Expr): boolean {
   return false;
 }
 
+/** 字面量 × 字面量的运算符组合：引擎在解析期拒的那些对（S394，尺 tmp/probe-opmatrix/round1.mts，读数 compare57.txt，468 格 = 六型 × 六型 × 十三符）。
+ *  两式句子各有各的表：两侧都是**字面量**且都是标量时是 _A（Invalid operands to operator X, A and B.），
+ *  掺进容器那一族时是 _B（Invalid operands "A" and "B" for "X" operator.）—— 第二式也出现在「操作数不是字面量」那些格，
+ *  但那一头只量了 bool 三支（compare55），所以闸门只按字面量那一半发。收的与走到运行期才拒的一个都不登。 */
+export const OP_PAIRS_REFUSED_A: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|float", "int|String", "float|bool", "float|int", "float|float", "float|String"],
+  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "<": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "==": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  ">": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
+  "and": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "or": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+};
+
+export const OP_PAIRS_REFUSED_B: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
+  "%": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "*": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "+": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "-": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "/": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "<=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "==": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
+  ">": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "and": [],
+  "or": [],
+};
+
+/** 这一对只在**字面量操作数**那半边发：矩阵 468 格全用字面量量的；「操作数是声明过的变量」那一头只量过 bool 三格
+ *  （`tmp/probe-booleq/compare55.txt`，走的是第二式），所以那形状交给既有的 bool 闸门，其余不猜。 */
+function isLiteralOperand(e: Expr): boolean {
+  return e.kind === "lit" || e.kind === "array" || e.kind === "dict";
+}
+
 function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]): void {
   const l = staticType(e.left);
   const r = staticType(e.right);
+
+  // 两侧都是字面量的那一半：按 468 格那张表发（S394）。既有三道闸门已经发同样句子的组合不再重复发。
+  const pair = l !== null && r !== null ? `${l}|${r}` : null;
+  const scalar = (t: string | null): boolean => t === "bool" || t === "int" || t === "float";
+  const covered =
+    (e.op === "%" && (l === "float" || r === "float") && scalar(l) && scalar(r)) ||
+    ((e.op === "==" || e.op === "!=") &&
+      ((l === "String" && (r === "int" || r === "float")) || (r === "String" && (l === "int" || l === "float")))) ||
+    ((e.op === "<=" || e.op === ">=") && l === "bool" && r === "bool");
+  if (!covered && isLiteralOperand(e.left) && isLiteralOperand(e.right) && pair !== null && l !== null && r !== null) {
+    if (OP_PAIRS_REFUSED_A[e.op]?.includes(pair) === true) {
+      diags.push({
+        code: "op-pair",
+        message: `Invalid operands to operator ${e.op}, ${l} and ${r}.`,
+        loc: e.loc,
+      });
+    } else if (OP_PAIRS_REFUSED_B[e.op]?.includes(pair) === true) {
+      diags.push({
+        code: "op-pair",
+        message: `Invalid operands "${l}" and "${r}" for "${e.op}" operator.`,
+        loc: e.loc,
+      });
+    }
+  }
 
   const isModulo = l !== "String" && r !== "String";
   if (e.op === "%" && isModulo && (l === "float" || r === "float")) {
