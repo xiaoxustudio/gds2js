@@ -175,6 +175,14 @@ describe("接收者的两种静态证明", () => {
     eq("389", "模块 const", (await diags('const C: String = "ab"\n' + MOD("\tprint(C.length(1))")))[0] ?? "没拒", MANY("length", 0, 1));
   });
 
+  it("形参标注与内部类字段同样在解析期拦（S391，读数 compare44/47/48）", async () => {
+    eq("391", "形参标注 String", (await diags(`${H}func f(s: String):\n\tprint(s.length(1))\n`))[0] ?? "没拒", MANY("length", 0, 1));
+    eq("391", "形参标注后又被赋值", (await diags(`${H}func f(s: String):\n\ts = "cd"\n\tprint(s.length(1))\n`))[0] ?? "没拒", MANY("length", 0, 1));
+    eq("391", "形参未标注", await diags(`${H}func f(s):\n\tprint(s.length(1))\n`), []);
+    eq("391", "内部类字段", (await diags(`${H}class Inner:\n\tvar s: String = "ab"\n\tfunc g():\n\t\tprint(s.length(1))\n`))[0] ?? "没拒", MANY("length", 0, 1));
+    eq("391", "内部类字段初值推断", (await diags(`${H}class Inner:\n\tvar s = "ab"\n\tfunc g():\n\t\tprint(s.length(1))\n`))[0] ?? "没拒", MANY("length", 0, 1));
+  });
+
   it("证不出来就不报：重新赋值过的名字与推断不出类型的接收者", async () => {
     eq("380", "被重新赋值过", await diags(MOD('\tvar t = "ab"\n\tt = "cd"\n\tt.length(1)')), []);
     eq("380", "形参接收者", await diags(`${H}func f(s) -> void:\n\ts.length(1)\n\nfunc _initialize():\n\tf("ab")\n\tquit()\n`), []);

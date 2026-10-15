@@ -76,4 +76,11 @@ describe("接收者的两种静态证明", () => {
   it("表里没有的名字不猜元数", async () => {
     eq("378", "没量过的名字", await diags(MOD("\tprint(d.frobnicate(1, 2, 3))")), []);
   });
+
+  it("形参标注与内部类字段同样在解析期拦（S391，读数 compare47/48）", async () => {
+    eq("391", "形参标注 Dictionary", (await diags(`${H}func f(x: Dictionary):\n\tprint(x.size(1))\n`))[0] ?? "没拒", MANY("size", 0, 1));
+    eq("391", "内部类字段标注", (await diags(`${H}class Inner:\n\tvar x: Dictionary = {}\n\tfunc g():\n\t\tprint(x.size(1))\n`))[0] ?? "没拒", MANY("size", 0, 1));
+    eq("391", "内部类字段初值推断", (await diags(`${H}class Inner:\n\tvar x = {}\n\tfunc g():\n\t\tprint(x.size(1))\n`))[0] ?? "没拒", MANY("size", 0, 1));
+    eq("391", "形参未标注", await diags(`${H}func f(x):\n\tprint(x.size(1))\n`), []);
+  });
 });

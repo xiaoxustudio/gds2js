@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.212 接收者的静态证明补齐：形参标注与内部类字段也拦，「初值推断 + 重赋值」量回来是不拦（2026-10-15，S391，§6 第 68 条结清）
+
+- **十八格新读数**（尺 `tmp/probe-modrecv/{round2,round3}.mts`，读数 `compare{47,48}.txt`，一格一份脚本一次 spawn）：`func f(s: String)` / `(a: Array)` / `(d: Dictionary)` / `(sn: StringName)` / `(np: NodePath)` / 定形 `Array[int]`，加内部类自己字段（带标注与初值推断两形）—— 引擎全在解析期拦；无标注形参与合法元数那两格照旧放过。
+- **两条重赋值口径各有凭据**：带标注的名字被重新赋值**仍拦**（模块 var 与形参两侧都量过），**初值推断**的模块 var 被重赋值后引擎给 `S|ok` —— 出货对「annot」一律保留、对「inferred」一律丢弃，两边都与读数一致（`tmp/probe-modrecv/ours.mts` 三十格逐格对过，不合 0）。
+- **实现**：`flattenBodies` 拆出 `flattenBody`，新增 `faceScopes` —— 每个函数体带一份「外面证得出的名字」（顶层函数拿模块级、内部类的方法拿自己类的字段，再加本函数标注过的形参），`faceReceiverNames` 改吃这份种子表；字典 / 数组 / String / StringName / NodePath **五面一次改完**。
+- **仍欠的两笔**（登在 §6 第 68 条尾注）：内部类能否看见模块级名字没量过（照 `checkValueMethodArity` 的旧口径不给）；`&"ab".length(1)` 那一形 tree-sitter 仍解析成 ERROR，`^"a/b".get_name(1, 2)` 则走得通、本轮已拦。
+- **门**：四把闸门加长共 19 断言（`string-method-arity` 5、`array-method-arity` 4、`dict-method-arity` 4、`string-name-node-path-faces` 6，其中把 S389 那格「形参标注不算初值证明」翻成「未标注形参才不拦」）；`pnpm test` **13990**（125 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变；本轮不碰任何 `.gd`。
+
 ### 1.211 `String.num()` 的 324 那一格把负号算进去：一侧一档的差只有一条式子能解释（2026-10-15，S390，§6 第 47 条⑨结清）
 
 - **两侧各扫一遍**（尺 `tmp/probe-numsign/{round1,round2}.mts`，读数 `compare{45,46}.txt`）：`String.num(1e300, d)`，d 从 18 到 28 —— 正值 303 字一路出到 22 位、23 位起空；负值 304 字只出到 21 位、22 位就空。**负的一侧总是早一档**。

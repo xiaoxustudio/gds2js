@@ -99,9 +99,21 @@ describe("接收者的静态证明与两面互不串", () => {
     eq("389", "推断出的 NodePath", (await face(`${H}func f():\n\tvar v = ^"a/b"\n\tprint(v.is_empty(1))\n${TAIL}`))[0], 'Too many arguments for "is_empty()" call. Expected at most 0 but received 1.');
   });
 
+  it("形参标注与内部类字段也是解析期那一形（S391，读数 compare47/48）", async () => {
+    eq("391", "形参 StringName", (await face(`${H}func f(sn: StringName):\n\tprint(sn.length(1))\n${TAIL}`))[0], 'Too many arguments for "length()" call. Expected at most 0 but received 1.');
+    eq("391", "形参 NodePath", (await face(`${H}func f(np: NodePath):\n\tprint(np.get_name(1, 2))\n${TAIL}`))[0], 'Too many arguments for "get_name()" call. Expected at most 1 but received 2.');
+    eq("391", "形参标注的幽灵名", await face(`${H}func f(sn: StringName):\n\tprint(sn.num(3))\n${TAIL}`), [
+      'Cannot find member "num" in base "StringName".',
+      'Function "num()" not found in base StringName.',
+    ]);
+    eq("391", "内部类字段 StringName", (await face(`${H}class Inner:\n\tvar sn: StringName = &"ab"\n\tfunc g():\n\t\tprint(sn.length(1))\n`))[0], 'Too many arguments for "length()" call. Expected at most 0 but received 1.');
+    eq("391", "内部类字段 NodePath", (await face(`${H}class Inner:\n\tvar np: NodePath = ^"a/b"\n\tfunc g():\n\t\tprint(np.get_name(1, 2))\n`))[0], 'Too many arguments for "get_name()" call. Expected at most 1 but received 2.');
+    eq("391", "内部类字段初值推断", (await face(`${H}class Inner:\n\tvar sn = &"ab"\n\tfunc g():\n\t\tprint(sn.length(1))\n`))[0], 'Too many arguments for "length()" call. Expected at most 0 but received 1.');
+  });
+
   it("被重新赋值过的名字证不出，那一道都不许拦", async () => {
     eq("389", "改名以后再调", await face(`${H}func f(v: Variant):\n\tvar sn: StringName = &"ab"\n\tsn = v\n\tprint(sn.length(1))\n${TAIL}`), []);
-    eq("389", "形参标注不算初值证明", await face(`${H}func f(sn2: StringName):\n\tprint(sn2.length(1))\n${TAIL}`), []);
+    eq("391", "未标注的形参不证", await face(`${H}func f(sn2):\n\tprint(sn2.length(1))\n${TAIL}`), []);
   });
 
   it("String 那一面照旧收那六名（幽灵表不许串面）", async () => {

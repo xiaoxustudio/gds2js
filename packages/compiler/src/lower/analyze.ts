@@ -1315,6 +1315,25 @@ const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "
 
 /** 容器方法那几道闸门共用的一趟走查：按函数体分组（模块级 + 内部类递归），每组是扁平的 IR 节点表。
  *  lambda 体不进去（它另有一套作用域，见 `checkLambdaScope`），`loc` 不下潜（它只是位置，不是节点）。 */
+function flattenBody(body: Stmt[]): Record<string, unknown>[] {
+  const nodes: Record<string, unknown>[] = [];
+  const scan = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) scan(x);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (obj.kind === "lambda") return;
+    nodes.push(obj);
+    for (const key of Object.keys(obj)) {
+      if (key !== "loc") scan(obj[key]);
+    }
+  };
+  scan(body);
+  return nodes;
+}
+
 function flattenBodies(m: Module): Record<string, unknown>[][] {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
   const collect = (c: ClassDecl): void => {
@@ -1322,25 +1341,7 @@ function flattenBodies(m: Module): Record<string, unknown>[][] {
     for (const inner of c.innerClasses) collect(inner);
   };
   for (const c of m.innerClasses) collect(c);
-
-  return bodies.map((body) => {
-    const nodes: Record<string, unknown>[] = [];
-    const scan = (n: unknown): void => {
-      if (Array.isArray(n)) {
-        for (const x of n) scan(x);
-        return;
-      }
-      if (n === null || typeof n !== "object") return;
-      const obj = n as Record<string, unknown>;
-      if (obj.kind === "lambda") return;
-      nodes.push(obj);
-      for (const key of Object.keys(obj)) {
-        if (key !== "loc") scan(obj[key]);
-      }
-    };
-    scan(body);
-    return nodes;
-  });
+  return bodies.map(flattenBody);
 }
 
 /** 同一函数体里被赋过值的名字：静态证明一律作废（证不出就当不知道，宁可漏拦不误拦）。 */
@@ -1375,22 +1376,23 @@ function arityDiag(
   };
 }
 
-/** 一面的接收者证明集合 = 模块级 `var` / `const` 加上这一函数体里的局部 `var`，判据都是
- *  「标注正是这一面」或「初值静态证得出这一面」。模块级那一条是新量进来的形（S389，尺 `tmp/probe-modrecv/round1.mts`，
- *  读数 `compare44.txt`）：标注、初值推断、`const` 三形引擎都在解析期拦，连「声明之后又被重新赋值」也照拦 ——
- *  那一判只量了**带标注**的，所以初值推断那条仍要在名字被赋过值时丢掉；局部同名把模块那条挡掉时也不认。 */
+/** 一面的接收者证明集合 = 该函数体的局部 `var`，加上外面那三层能静态证出这一面的名字：
+ *  模块级 `var` / `const`、本函数的**形参标注**、内部类自己的**字段**（S389 量的模块那一形 + S391 量的后两形，
+ *  读数 `tmp/probe-modrecv/compare{44,47,48}.txt`）。三条重赋值口径都照读数：
+ *  带标注的（模块 var、形参、内部类字段）被重新赋值**仍算**，只有「初值推断」那两条 —— 模块级与内部类字段 ——
+ *  在名字被赋过值时丢掉（模块那条形实测不拦：`var s = "ab"` 后 `s = v` 再 `s.length(1)` 引擎给 `S|ok`）。 */
 function faceReceiverNames(
-  m: Module,
   nodes: Record<string, unknown>[],
+  seeded: Map<string, "annot" | "inferred">,
   assigned: Set<string>,
   type: string,
   isInit: (init: Expr) => boolean,
 ): Set<string> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
   const out = new Set<string>();
-  for (const v of m.vars) {
-    if (named(v.type)) out.add(v.name);
-    else if (v.init !== null && isInit(v.init) && !assigned.has(v.name)) out.add(v.name);
+  for (const [name, how] of seeded) {
+    if (how === "annot") out.add(name);
+    else if (!assigned.has(name)) out.add(name);
   }
   const reassigned = reassignedNames(nodes);
   for (const n of nodes) {
@@ -1407,6 +1409,43 @@ function faceReceiverNames(
     if (init !== null && isInit(init)) out.add(n.name);
     else out.delete(n.name);
   }
+  return out;
+}
+
+/** 每个函数体一份「外面证得出的名字」：顶层函数拿模块级那批，内部类的方法拿自己类的字段 ——
+ *  内部类能否看见模块级名字没量过，照 `checkValueMethodArity` 的同一口径不给（宁可漏拦也不误拦）。 */
+function faceScopes(
+  m: Module,
+  type: string,
+  isInit: (init: Expr) => boolean,
+): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> {
+  const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
+  const moduleNames = new Map<string, "annot" | "inferred">();
+  for (const v of m.vars) {
+    if (named(v.type)) moduleNames.set(v.name, "annot");
+    else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
+  }
+
+  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> = [];
+  const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">): void => {
+    for (const f of funcs) {
+      const seeded = new Map(seededBase);
+      for (const p of f.params) if (named(p.type)) seeded.set(p.name, "annot");
+      out.push({ nodes: flattenBody(f.body), seeded });
+    }
+  };
+  collect(m.funcs, moduleNames);
+
+  const collectClass = (c: ClassDecl): void => {
+    const fields = new Map<string, "annot" | "inferred">();
+    for (const v of c.vars) {
+      if (named(v.type)) fields.set(v.name, "annot");
+      else if (v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
+    }
+    collect(c.funcs, fields);
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
   return out;
 }
 
@@ -1508,8 +1547,8 @@ const DICT_METHOD_ARITY: Record<string, [number, number]> = {
  *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
 function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
-  for (const nodes of flattenBodies(m)) {
-    const dicts = faceReceiverNames(m, nodes, assigned, "Dictionary", (init) => init.kind === "dict");
+  for (const { nodes, seeded } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
+    const dicts = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict");
     for (const n of nodes) {
       const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
       if (d !== null) diags.push(d);
@@ -1535,8 +1574,8 @@ const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
  *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
 function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
-  for (const nodes of flattenBodies(m)) {
-    const arrays = faceReceiverNames(m, nodes, assigned, "Array", (init) => init.kind === "array");
+  for (const { nodes, seeded } of faceScopes(m, "Array", (init) => init.kind === "array")) {
+    const arrays = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array");
     for (const n of nodes) {
       const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
       if (d !== null) diags.push(d);
@@ -1577,8 +1616,8 @@ const STRING_METHOD_ARITY: Record<string, [number, number]> = {
 function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
   const isStringLit = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === "string";
   const assigned = moduleAssignedNames(m);
-  for (const nodes of flattenBodies(m)) {
-    const strs = faceReceiverNames(m, nodes, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
+  for (const { nodes, seeded } of faceScopes(m, "String", (init) => init.kind === "lit" && init.lit === "string")) {
+    const strs = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
     for (const n of nodes) {
       const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
       if (d !== null) diags.push(d);
@@ -1613,8 +1652,8 @@ interface NamedFace {
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
   const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
   const assigned = moduleAssignedNames(m);
-  for (const nodes of flattenBodies(m)) {
-    const names = faceReceiverNames(m, nodes, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+  for (const { nodes, seeded } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
+    const names = faceReceiverNames(nodes, seeded, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
     for (const n of nodes) {
       if (n.kind !== "call") continue;
       const callee = n.callee as Record<string, unknown> | undefined;
