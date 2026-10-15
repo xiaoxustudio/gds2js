@@ -65,9 +65,6 @@ const BINOP: Record<string, string> = {
 const ABI_KINDS: Array<"int" | "float" | "str"> = ["int", "float", "str"];
 
 function rangeArgList(a: Array<string | undefined>): string {
-  if (a.length > 3) {
-    throw new UnsupportedError("range-arity", `range 最多 3 个参数（收到 ${a.length} 个）`);
-  }
   const parts: string[] = [];
   for (const x of a) {
     if (x !== undefined) parts.push(x);
@@ -75,8 +72,7 @@ function rangeArgList(a: Array<string | undefined>): string {
   return `[${parts.join(", ")}]`;
 }
 
-/** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */
-function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
+/** 认 `range(...)` 调用（1~3 参）。emitCall 里 BUILTIN 先于本类方法命中，故 range 必是内置。 */function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   return (
     e.kind === "call" &&
     e.callee.kind === "ident" &&
@@ -91,6 +87,25 @@ function aritySentence(name: string, min: number, max: number, got: number): str
   return got < min
     ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(got)}.`
     : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(got)}.`;
+}
+
+/** 两名走的是**另一条通道**，句子形状也不同（读数 `tmp/probe-void/{compare33,compare34}.txt`）：
+ *  少了报下界那一位、多了报上界那一位，都不说 `at least` / `at most`；而且 `range` 的前缀是
+ *  `GDScript utility function`、`str` 的是 `utility function`（少了 "GDScript"）—— 一字不差照抄。
+ *  上界写 `null` 是那一支变元、只量了下界（`str` 八支实参照收，`print` / `push_error` 同理不入表）。 */
+const UTILITY_ARITY: Record<string, [number, number | null, string]> = {
+  range: [1, 3, "GDScript utility function"],
+  str: [1, null, "utility function"],
+};
+
+function utilityArity(name: string, got: number): string | null {
+  const u = UTILITY_ARITY[name];
+  if (u === undefined) return null;
+  const min = u[0];
+  const max = u[1];
+  const kind = u[2];
+  if (got >= min && (max === null || got <= max)) return null;
+  return `Invalid call to ${kind} "${name}()". Expected ${String(max !== null && got > max ? max : min)} argument(s).`;
 }
 
 /** 实测过的内置函数实参区间；表外的名字（`print` / `str` / `range` 这些变元与类型构造器）不拦 —— 没量过就不说。 */
@@ -3518,6 +3533,8 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
 
     const builtin = BUILTIN[name];
     if (builtin) {
+      const utility = utilityArity(name, e.args.length);
+      if (utility !== null) throw new UnsupportedError(`${name}-arity`, utility);
       checkBuiltinArity(name, e.args.length);
       return builtin(args);
     }

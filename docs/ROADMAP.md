@@ -780,6 +780,17 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.206 `range` 与 `str` 的元数句换成引擎原文：utility 通道那一族是第三种句子（2026-10-15，S385，§6 第 59 条②③结清）
+
+- **上一轮量不到是因为探针自己挡住了自己**：那九支返回 void 的全局函数被包进 `print(...)`，引擎先给 `Cannot get return value of call to "seed()" because it returns "void".`，元数那两句根本没机会出。这轮换**语句形**（光一行 `seed(1)`），一格一脚本、五档实参（0 / 1 / 2 / 3 / 5）摆下去（尺 `tmp/probe-void/{round1,round2}.mts`，读数 `compare33.txt` / `compare34.txt`）。
+- **`range` 不是 `Too few` / `Too many` 那一族**：`Invalid call to GDScript utility function "range()". Expected N argument(s).` —— 少给报下界那一元（`Expected 1`）、多给报上界那三元（四支、六支都是 `Expected 3`），不说 at most / at least。出货此前发的是自写中文 `range 最多 3 个参数（收到 4 个）`，本轮删自写、换原文。
+- **`str` 同通道、前缀却不同**：`Invalid call to utility function "str()". Expected 1 argument(s).` —— 少了 "GDScript" 四个字。两支各抄各的，不合并成一条模板。
+- **`str()` 是一格漏拦**：引擎解析期拒零支，出货编得过、发成空串；本轮接上。上界没量（八支照收），所以只拦下界那一头 —— 表里那一维写成 `null` 表示「这一支没量过上界」。
+- **变元三支确认不拦**：`print` 0 支起、`push_error` / `push_warning` **0 支也收**（八支也收），表里不建条目。
+- **void 七支的区间与既有表一字一样**（`seed` 恰一元、其余六支 `[0,0]`），S365 那条「九支没量到」记的是**那两句**没量到 —— 读数补齐后照旧是钉，不是改。`get_stack` 那格又撞见一次「文档写有默认实参、裁判不收」。
+- **仍未接**：① 时机那一层（发射期 → 解析期）—— 要先逐名对 `GLOBAL_CALLABLES` 与 `BUILTIN_ARITY` 两份区间；④ 类型构造式那第三句 `No constructor of "float" matches the signature "float(int, int)".`。
+- **门**：`utility-arity.test.ts` 4 格 · 28 断言；`pnpm test` **13959**（120 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0，一例未动）、`test:diff` **245/245** 逐字节；本轮不碰任何 `.gd`、不改任何产物。
+
 ### 1.205 只读容器那一族整面量齐、本轮零代码：三件意外把「只接两支谓词」这条路堵死（2026-10-15，§6 新增第 65 条、第 63 条⑤改账）
 
 - **尺**：`tmp/probe-readonly/round1.mts`（读的一侧一脚本批量、写的一侧一格一脚本 —— 引擎那句会把脚本打断），补量 `tmp/probe-readonly/assign.mts`；读数 `tmp/probe-readonly/compare31.txt` + 逐格原文 `tmp/probe-readonly/*.txt`。
