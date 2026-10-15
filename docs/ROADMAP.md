@@ -780,6 +780,17 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.199 Array 的方法元数接进解析期：51 名过裁判，顺手看清「实参类型那两句本来就有」（2026-10-15，S379，§6 第 63 条①的数组那一半）
+
+- **字典那一轮的同一把尺**：一格一份 `.gd` 一次 spawn，每名两格 —— 零实参读「至少」、**五**实参读「至多」（尺 `tmp/probe-arr/{round1,round2}.mts`，读数 `tmp/probe-arr/{compare23,compare24}.txt`）。五支是为了 `slice(begin, end, step, deep)`：三支量不到它的上界 4，字典那一轮的三支法在这儿会漏。
+- **一律用语句形**：Array 这一面 void 方法多（`clear` / `sort` / `shuffle` / `reverse` / `append_array` …），套进 `print` 会先撞上 `Cannot get return value …` 那一句、把元数盖住 —— 字典那一轮就在 `clear` 上撞过一回，这轮一次做对。
+- **存在的 49 名两侧都量到了**：`DICT_METHOD_ARITY` 的同族表长成 `ARRAY_METHOD_ARITY`，四支零参的读法名（`back` / `front` / `pick_random` / `max` / `min`）、`insert [2,2]`、`bsearch_custom [2,3]`、`duplicate [0,1]`、`slice [1,4]` 逐格钉在门上。
+- **`find_custom` / `rfind_custom` 是本轮最能说明「为什么必须量」的一格**：本机那份旧版 `Array.xml` 里根本没有这两名，探针的候选池因此漏了它们（出货 dispatch 里有）—— 靠 dispatch 与文档名单求差才发现，补量后 4.6.3 两支都收、区间 `[1,2]`。以后每一轮的候选池都要跟 dispatch 名单求一次差。
+- **本来就有的一半（账记正）**：实参**类型**那两句在数组侧早就走 `face-arg-pass` / `face-arg-type`（`a.all(1)` 两句齐全），§6 第 63 条一直把它记成「三侧都没量」—— 本轮才看清缺的只有元数。字典侧确实没有（`d.merged([1])` 一句不报）。
+- **一名幽灵归位**：`is_same` 在数组上不存在（这一支叫 `is_same_typed`），`ARRAY_NO_METHOD` 从两名长成三名。
+- **三道闸门合成一套共用件**：pack / 字典 / 数组原本各抄一份「按函数体扁平化节点表 + 收集重新赋值名」的走查，这轮抽成 `flattenBodies` / `reassignedNames` / `containerCallArity` / `arityDiag`；**接收者证明那张表仍各自留在自己那一支**（三族证法不同，共用只会把差异藏起来）。`code` 一族一名，实测一张调用不会同时落两条。
+- **门**：`array-method-arity.test.ts` 11 格（四个区间族逐名钉两句）+ `packed.test.ts` 一格幽灵名；`pnpm test` **13940**（115 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动）、`test:diff` **245/245** 逐字节；本轮不碰任何 `.gd`、不改任何产物，golden `--check` 复核另跑。
+
 ### 1.198 Dictionary 的方法元数接进解析期、29 支幽灵名归位：49 名一次过裁判（2026-10-15，S378，§6 第 63 条①的字典那一半与④）
 
 - **§6 第 63 条那笔账先动字典这一半**：S377 撞到「容器方法的解析期元数出货一概没有」，本轮把 49 名（引擎 `Dictionary` 的全部公开方法名 + Array 那侧常混进来的名字）一名一名过裁判 —— 每名两格，零实参读「至少」、三实参读「至多」（尺 `tmp/probe-dict/arity.mts`，读数 `tmp/probe-dict/compare22.txt`）。

@@ -128,6 +128,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
   checkDictMethodArity(m, diags);
+  checkArrayMethodArity(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkDictDuplicateKeys(m, diags);
@@ -1306,7 +1307,9 @@ function packArgSource(e: Expr): string | null {
 /** 来源名就是标注名本身的那些（Godot 的文本里就是这么写） */
 const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Dictionary"]);
 
-function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+/** 容器方法那几道闸门共用的一趟走查：按函数体分组（模块级 + 内部类递归），每组是扁平的 IR 节点表。
+ *  lambda 体不进去（它另有一套作用域，见 `checkLambdaScope`），`loc` 不下潜（它只是位置，不是节点）。 */
+function flattenBodies(m: Module): Record<string, unknown>[][] {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
   const collect = (c: ClassDecl): void => {
     for (const f of c.funcs) bodies.push(f.body);
@@ -1314,7 +1317,7 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
 
-  for (const body of bodies) {
+  return bodies.map((body) => {
     const nodes: Record<string, unknown>[] = [];
     const scan = (n: unknown): void => {
       if (Array.isArray(n)) {
@@ -1330,18 +1333,71 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       }
     };
     scan(body);
+    return nodes;
+  });
+}
 
+/** 同一函数体里被赋过值的名字：静态证明一律作废（证不出就当不知道，宁可漏拦不误拦）。 */
+function reassignedNames(nodes: Record<string, unknown>[]): Set<string> {
+  const out = new Set<string>();
+  for (const n of nodes) {
+    if (n.kind !== "assign") continue;
+    const target = n.target as Record<string, unknown> | undefined;
+    if (target !== undefined && target.kind === "ident" && typeof target.name === "string") out.add(target.name);
+  }
+  return out;
+}
+
+/** 元数两句（`Too few` / `Too many`）按表发，三族容器同一族句子（S305 值类型、S376 pack、S378 字典、S379 数组）。 */
+function arityDiag(
+  table: Record<string, [number, number]>,
+  code: string,
+  method: string,
+  got: number,
+  loc: Diagnostic["loc"],
+): Diagnostic | null {
+  const sig = table[method];
+  if (sig === undefined) return null;
+  if (got >= sig[0] && got <= sig[1]) return null;
+  return {
+    code,
+    message:
+      got < sig[0]
+        ? `Too few arguments for "${method}()" call. Expected at least ${sig[0]} but received ${got}.`
+        : `Too many arguments for "${method}()" call. Expected at most ${sig[1]} but received ${got}.`,
+    loc,
+  };
+}
+
+/** 容器方法调用的那一道形状检查：接收者只认「字面量直接当接收者」与「静态证明过的名字」两种，
+ *  字面量的 IR kind 由调用方给（`dict` / `array`），名字集合是调用方按标注与初值算出来的。 */
+function containerCallArity(
+  n: Record<string, unknown>,
+  table: Record<string, [number, number]>,
+  code: string,
+  names: Set<string>,
+  literalKind: string,
+): Diagnostic | null {
+  if (n.kind !== "call") return null;
+  const callee = n.callee as Record<string, unknown> | undefined;
+  if (callee === undefined || callee.kind !== "attribute") return null;
+  const obj = callee.obj as Record<string, unknown> | undefined;
+  if (obj === undefined) return null;
+  const proven =
+    obj.kind === literalKind || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
+  if (!proven) return null;
+  const method = callee.name;
+  if (typeof method !== "string") return null;
+  return arityDiag(table, code, method, ((n.args as Expr[]) ?? []).length, (n.loc as Diagnostic["loc"]) ?? null);
+}
+
+function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+  for (const nodes of flattenBodies(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
     /** 同函数体内 `var v: String` 这一类**带标注的局部 var**：第二种证明，只发一句 */
     const annot = new Map<string, string>();
-    const reassigned = new Set<string>();
-    for (const n of nodes) {
-      if (n.kind === "assign") {
-        const target = n.target as Record<string, unknown> | undefined;
-        if (target !== undefined && target.kind === "ident" && typeof target.name === "string") reassigned.add(target.name);
-      }
-    }
+    const reassigned = reassignedNames(nodes);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
       const type = n.type as TypeRef | null;
@@ -1404,38 +1460,9 @@ const DICT_METHOD_ARITY: Record<string, [number, number]> = {
 /** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
  *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
 function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
-  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
-  const collect = (c: ClassDecl): void => {
-    for (const f of c.funcs) bodies.push(f.body);
-    for (const inner of c.innerClasses) collect(inner);
-  };
-  for (const c of m.innerClasses) collect(c);
-
-  for (const body of bodies) {
-    const nodes: Record<string, unknown>[] = [];
-    const scan = (n: unknown): void => {
-      if (Array.isArray(n)) {
-        for (const x of n) scan(x);
-        return;
-      }
-      if (n === null || typeof n !== "object") return;
-      const obj = n as Record<string, unknown>;
-      if (obj.kind === "lambda") return;
-      nodes.push(obj);
-      for (const key of Object.keys(obj)) {
-        if (key !== "loc") scan(obj[key]);
-      }
-    };
-    scan(body);
-
+  for (const nodes of flattenBodies(m)) {
     const dicts = new Set<string>();
-    const reassigned = new Set<string>();
-    for (const n of nodes) {
-      if (n.kind === "assign") {
-        const target = n.target as Record<string, unknown> | undefined;
-        if (target !== undefined && target.kind === "ident" && typeof target.name === "string") reassigned.add(target.name);
-      }
-    }
+    const reassigned = reassignedNames(nodes);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
       const type = n.type as TypeRef | null;
@@ -1448,27 +1475,46 @@ function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
     }
 
     for (const n of nodes) {
-      if (n.kind !== "call") continue;
-      const callee = n.callee as Record<string, unknown> | undefined;
-      if (callee === undefined || callee.kind !== "attribute") continue;
-      const obj = callee.obj as Record<string, unknown> | undefined;
-      if (obj === undefined) continue;
-      const proven = obj.kind === "dict" || (obj.kind === "ident" && typeof obj.name === "string" && dicts.has(obj.name));
-      if (!proven) continue;
-      const method = callee.name;
-      if (typeof method !== "string") continue;
-      const sig = DICT_METHOD_ARITY[method];
-      if (sig === undefined) continue;
-      const got = ((n.args as Expr[]) ?? []).length;
-      if (got >= sig[0] && got <= sig[1]) continue;
-      diags.push({
-        code: "dict-arity",
-        message:
-          got < sig[0]
-            ? `Too few arguments for "${method}()" call. Expected at least ${sig[0]} but received ${got}.`
-            : `Too many arguments for "${method}()" call. Expected at most ${sig[1]} but received ${got}.`,
-        loc: (n.loc as Diagnostic["loc"]) ?? null,
-      });
+      const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, "dict");
+      if (d !== null) diags.push(d);
+    }
+  }
+}
+
+/** Array 方法的元数（S379）：51 名过裁判，存在的 49 名两侧都量到（每名两格 —— 零实参读「至少」、五实参读「至多」，
+ *  `tmp/probe-arr/{compare23,compare24}.txt`）。`find_custom` / `rfind_custom` 那两名 4.6.3 **仍在**（旧版文档里没有，靠实测量回来的）。 */
+const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
+  all: [1, 1], any: [1, 1], append: [1, 1], append_array: [1, 1], assign: [1, 1], back: [0, 0],
+  bsearch: [1, 2], bsearch_custom: [2, 3], clear: [0, 0], count: [1, 1], duplicate: [0, 1], erase: [1, 1],
+  fill: [1, 1], filter: [1, 1], find: [1, 2], find_custom: [1, 2], front: [0, 0], get: [1, 1],
+  get_typed_builtin: [0, 0], get_typed_class_name: [0, 0], get_typed_script: [0, 0], has: [1, 1],
+  hash: [0, 0], insert: [2, 2], is_empty: [0, 0], is_read_only: [0, 0], is_same_typed: [1, 1],
+  is_typed: [0, 0], make_read_only: [0, 0], map: [1, 1], max: [0, 0], min: [0, 0], pick_random: [0, 0],
+  pop_at: [1, 1], pop_back: [0, 0], pop_front: [0, 0], push_back: [1, 1], push_front: [1, 1], reduce: [1, 2],
+  remove_at: [1, 1], resize: [1, 1], reverse: [0, 0], rfind: [1, 2], rfind_custom: [1, 2], shuffle: [0, 0],
+  size: [0, 0], slice: [1, 4], sort: [0, 0], sort_custom: [1, 1],
+};
+
+/** Array 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Array`（带元素型的截掉那一段）与
+ *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
+function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
+  for (const nodes of flattenBodies(m)) {
+    const arrays = new Set<string>();
+    const reassigned = reassignedNames(nodes);
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named" && type.name.replace(/\[.*\]$/, "") === "Array") {
+        arrays.add(n.name);
+        continue;
+      }
+      const init = n.init as Expr | null;
+      if (init !== null && init.kind === "array") arrays.add(n.name);
+    }
+
+    for (const n of nodes) {
+      const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, "array");
+      if (d !== null) diags.push(d);
     }
   }
 }

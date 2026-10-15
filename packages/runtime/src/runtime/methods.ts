@@ -294,8 +294,9 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
 }
 
-/** Array 上实测**不存在**的成员名（4.6.3 一名一名过裁判，S300）：给的是运行期那句 `Nonexistent function`，不是「未实现」。 */
-const ARRAY_NO_METHOD = new Set(["join", "concat"]);
+/** Array 上实测**不存在**的成员名（4.6.3 一名一名过裁判，S300 两名、S379 补上 `is_same`）：给的是运行期那句 `Nonexistent function`，不是「未实现」。
+ *  `is_same` 是字典那侧的同名直觉 —— 数组上这一支叫 `is_same_typed`。 */
+const ARRAY_NO_METHOD = new Set(["join", "concat", "is_same"]);
 
 /** Dictionary 上实测**不存在**的成员名（49 名过裁判量出 29 支，`tmp/probe-dict/compare22.txt`，S378）：同一句。
  *  名单里大半是 Array 那侧的名字（`push_back` / `sort_custom` / `slice` 那一族）—— 此前它们落到 switch 的兜底、发的是中文自述。 */
