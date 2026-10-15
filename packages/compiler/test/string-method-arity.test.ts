@@ -132,13 +132,12 @@ const T: Array<[string, number, number]> = [
 
 // 实参**类型**那两句本门不管（既有那族 `face-arg-*` 管），所以「合法」那一格要给类型也对得上的实参；不在表里的名字一律按「收一支字符串」给
 const A: Record<string, string[]> = {
-  chr: ["1"], left: ["1"], right: ["1"], repeat: ["1"], indent: ["1"], unicode_at: ["1"], humanize_size: ["1"],
+  chr: ["1"], left: ["1"], right: ["1"], repeat: ["1"], indent: ['"x"'], unicode_at: ["1"], humanize_size: ["1"],
   lpad: ["1", '"x"'], rpad: ["1", '"x"'], pad_zeros: ["1"], pad_decimals: ["1"], insert: ["1", '"x"'], substr: ["1", "2"],
   erase: ["1", "2"], num: ["1.5"], num_scientific: ["1.5"], num_int64: ["1", "2", "true"], num_uint64: ["1", "2", "true"],
   format: ["[]"], join: ['PackedStringArray(["x"])'], count: ['"x"', "1", "2"], countn: ['"x"', "1", "2"],
   find: ['"x"', "1"], findn: ['"x"', "1"], rfind: ['"x"', "1"], rfindn: ['"x"', "1"],
   split: ['"x"', "1", "true"], rsplit: ['"x"', "true", "1"], split_floats: ['"x"', "1"],
-  indent: ['"x"'],
   strip_edges: ["true", "true"], is_valid_hex_number: ["true"], xml_escape: ["true"],
   replace: ['"x"', '"y"'], replacen: ['"x"', '"y"'], get_slice: ['"x"', "1"], get_slicec: ["1", "2"],
 };

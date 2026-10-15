@@ -82,7 +82,7 @@ const call = (face: string, name: string, pos: number, arity: number, kind: stri
   const args: string[] = [];
   for (let i = 1; i <= arity; i++) {
     if (i === pos) args.push(KIND_EXPR[kind] as string);
-    else args.push(FILL[WANT.get(`${face}.${name}|${String(i)}` as string) ?? "1"]);
+    else args.push((FILL[WANT.get(`${face}.${name}|${String(i)}`) ?? "int"] ?? "1") as string);
   }
   return `	${face === "Array" ? "a" : "s"}.${name}(${args.join(", ")})`;
 };
