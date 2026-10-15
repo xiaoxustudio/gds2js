@@ -27,7 +27,7 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq } from "./values";
 import { isLess, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -710,6 +710,28 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "merge":
           d.mergeWith(asDict(one(args, "merge"), "merge"), boolArgOr(args, 1, false));
           return V.nil();
+        // `merged` 是 `merge` 的不改接收者版：浅拷一份再并（实测改结果不动接收者，而嵌套的值两边共享 —— `tmp/probe-dict/compare21.txt` 07/08）
+        case "merged": {
+          const copy = d.duplicate(false);
+          copy.mergeWith(asDict(one(args, "merged"), "merged"), boolArgOr(args, 1, false));
+          return V.dict(copy);
+        }
+        // 键已在就给现值、一个字节也不写；不在才落默认值（单实参时落 null），给回的就是传进来那一份（实测字典默认值不拷）
+        case "get_or_add": {
+          const key = one(args, "get_or_add");
+          if (d.has(key)) return d.get(key);
+          const added = args[1] ?? V.nil();
+          d.set(key, added);
+          return added;
+        }
+        // 引擎那一支的签名是 `recursive_equal(字典, 递归计数)` —— 两支实参都必填（4.6.3 实测少一支给 `Expected at least 2`），
+        // 而它与 `==` 是同一段 C++：自引用时两边都打 `Max recursion reached` 再给 true（`tmp/probe-dict/cell2-*.txt`）；
+        // 计数在无环时不影响结果（0 / 1 / 2 / 99 / -1 五格同值），所以直接走 `valueEq`
+        case "recursive_equal": {
+          const other = one(args, "recursive_equal");
+          argAt(args, 1, "recursive_equal");
+          return V.bool(valueEq(V.dict(d), other, 0, "=="));
+        }
         case "has_all":
           return V.bool(d.hasAll(asArray(one(args, "has_all"), "has_all")));
         case "find_key":

@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.197 Dictionary 的三支纯方法发货：`merged` / `get_or_add` / `recursive_equal`，其中一支的签名与直觉不同（2026-10-14，S377，语料 373）
+
+- **覆盖面账上最小的一族先动**：`sweep.log` 末段那 5 名（引擎有、我们表里没登）里，`merged` / `get_or_add` / `recursive_equal` 是三支纯方法，`make_read_only` / `is_read_only` 要连带「写只读容器给哪一句」一起量，留给下一轮。三支此前一律发中文自述 `Dictionary.<名>() 未实现`。
+- **一支签名差点写错**：`recursive_equal` 要**两支**实参 —— `(字典, 递归计数)`，少一支引擎给 `Expected at least 2 but received 1`。第一轮探针照「一个实参」的直觉写，八格全被这句盖住；翻 4.3 的 XML 才看到 `recursion_count` 那一参。**教训写进 §6 第 63 条③：先量后接，文档与直觉都会骗人。**计数本身在无环时不影响结果（0 / 1 / 2 / 99 / -1 五格同值），所以实现直接走 `valueEq`。
+- **`recursive_equal` 与 `==` 是同一段 C++**：两支自引用字典互比时两边都先打 `ERROR: Max recursion reached`（`at: recursive_equal (core/variant/dictionary.cpp:278)`）再给 `true`；那块 ERROR 带 `core/variant/` 自有帧、被 `normalize` 滤掉，所以进不了语料，而出货的 `==` 本来也不发它 —— 口径一致，不用另做。
+- **`merged` 的三条口径都是量的**：给新字典（改结果不动接收者）、键序「接收者在前、对面的新键按对面次序」、**浅拷**（嵌套那一份两边共享，改 `b["k"]["n"]` 连原内层字典一起动），`overwrite=true` 时嵌套整个被顶掉、不深挖。`get_or_add` 的三条：键已在给现值且默认值一个字不写、不在才落且**落在末尾**、**单实参合法**（落 null），默认值是字典时装的是**同一份**不拷。
+- **撞到一笔更大的账（没接，记 §6 第 63 条）**：容器方法的**解析期元数与实参类型**两句出货一概没有 —— `merged()` 零参、`merged([1])` 非字典、`get_or_add("j", 9, 9)` 三参，引擎都在解析期拒，我们放到运行期发中文自述、而「多给」那一形照跑（掩盖型）。这一族与值类型五支（S305）、pack 九支（S376）同构，要的是一张「容器方法 → 上下界 + 每槽类型」表，量不小，另开。顺带一名幽灵：`Dictionary.is_same` 引擎说没这名字，我们发中文「未实现」，与 S300 那格 `Array.concat` 同类。
+- **门**：`dict-pure-methods.test.ts` 12 格（三支方法逐条口径）+ 语料 373（二十行逐字节，一次就对上）。**读数**：`pnpm test` **13918**（113 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、既有产物一份没改；golden 只新建 373 一例。
+
 ### 1.196 类名直调 pack 的方法：另立一张类型名表，不去动那张喂着 `staticType` 的旧表（2026-10-14，S376 ⑤，门 4 格）
 
 - **上一轮记下的那条尾巴当轮就结了**：`PackedInt64Array.size()` 引擎给的是与值类型五支同文的两句（`Cannot call non-static function "size()" on the class "PackedInt64Array" directly. Make an instance instead.`；没这名字时 `Cannot find member "X" in base "T".` + `Function "X()" not found in base T.`），出货给的是 `Identifier "PackedInt64Array" not declared in the current scope.` —— 三格读数本来就在 `arity2.log` 第 07–09 格。
