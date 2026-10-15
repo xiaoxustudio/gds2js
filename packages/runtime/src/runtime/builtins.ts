@@ -709,13 +709,13 @@ export function lengthOf(v: Variant): Variant {
   throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
 }
 
-/** and / or 是短路的，所以右值延迟求值 */
+/** and / or 是短路的，所以右值延迟求值；两支的值恒为 bool（S398：`1 and 2` 引擎给 `true`，`typeof` 那格给 1）。 */
 export function and(l: Variant, right: () => Variant): Variant {
-  return truthyOf(l) ? right() : l;
+  return truthyOf(l) ? V.bool(truthyOf(right())) : V.bool(false);
 }
 
 export function or(l: Variant, right: () => Variant): Variant {
-  return truthyOf(l) ? l : right();
+  return truthyOf(l) ? V.bool(true) : V.bool(truthyOf(right()));
 }
 
 /** `range()` 的实参归一 —— 它只吃 int：float 向零截断、bool 当 0/1，String / Vector2 等报运行错。 */
