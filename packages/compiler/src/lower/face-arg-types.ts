@@ -29,6 +29,8 @@ export const FACE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number
   "Dictionary.duplicate": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "bool", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "Dictionary.has_all": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "Array", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
   "Dictionary.merge": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "Dictionary", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "bool", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "Dictionary.merged": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "Dictionary", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "bool", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "Dictionary.recursive_equal": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "Dictionary", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "String.begins_with": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
   "String.casecmp_to": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
   "String.contains": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
@@ -81,9 +83,11 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "Array.slice": [[1, ["Array", "Dictionary"], "int"], [2, ["Array", "Dictionary"], "int"], [3, ["Array", "Dictionary"], "int"]],
   "Array.sort_custom": [[1, ["Array", "Dictionary"], "Callable"]],
   "Dictionary.assign": [[1, ["Array"], "Dictionary"]],
-  "Dictionary.duplicate": [[1, ["Array", "Dictionary"], "bool"]],
-  "Dictionary.has_all": [[1, ["Dictionary"], "Array"]],
-  "Dictionary.merge": [[1, ["Array"], "Dictionary"], [2, ["Array", "Dictionary"], "bool"]],
+  "Dictionary.duplicate": [[1, ["Array", "Dictionary", "Callable"], "bool"]],
+  "Dictionary.has_all": [[1, ["Dictionary", "Callable"], "Array"]],
+  "Dictionary.merge": [[1, ["Array"], "Dictionary"], [2, ["Array", "Dictionary", "Callable"], "bool"]],
+  "Dictionary.merged": [[1, ["Array", "Callable"], "Dictionary"], [2, ["Array", "Dictionary", "Callable"], "bool"]],
+  "Dictionary.recursive_equal": [[1, ["Array", "Callable"], "Dictionary"], [2, ["Array", "Dictionary", "Callable"], "int"]],
   "String.begins_with": [[1, ["Array", "Dictionary"], "String"]],
   "String.casecmp_to": [[1, ["Array", "Dictionary"], "String"]],
   "String.contains": [[1, ["Array", "Dictionary"], "String"]],
@@ -114,8 +118,9 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "String.unicode_at": [[1, ["Array", "Dictionary"], "int"]],
 };
 
-/** 探针那几格是在这一支的**上界**元数下量的：只有实参个数正好等于这个数时，上面两张表的判据才发（别的元数没量过）。 */
-export const FACE_SLOTS: Readonly<Record<string, number>> = {
+/** 探针那几格是在这一支的**上界**元数下量的：只有实参个数正好等于这个数时，上面两张表的判据才发（别的元数没量过）。
+ *  写成名单是「这一支的**几个**元数量过、句子一字不差」—— 目前只有 `Dictionary.merged`（一参与两参各量一遍）。 */
+export const FACE_SLOTS: Readonly<Record<string, number | readonly number[]>> = {
   "Array.all": 1,
   "Array.any": 1,
   "Array.append_array": 1,
@@ -140,6 +145,8 @@ export const FACE_SLOTS: Readonly<Record<string, number>> = {
   "Dictionary.duplicate": 1,
   "Dictionary.has_all": 1,
   "Dictionary.merge": 2,
+  "Dictionary.merged": [1, 2],
+  "Dictionary.recursive_equal": 2,
   "String.begins_with": 1,
   "String.casecmp_to": 1,
   "String.contains": 1,

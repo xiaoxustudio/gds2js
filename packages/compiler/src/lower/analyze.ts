@@ -3392,7 +3392,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         // 形参逐位逐 kind 量；读数都建在「实参个数正好等于量过的那个上界」这一形上，别的元数没量过就不发）
         const fkey = `${face}.${callee.name}`;
         const slot = FACE_SLOTS[fkey];
-        if (slot !== undefined && e.args.length === slot) {
+        const measured = typeof slot === "number" ? e.args.length === slot : slot !== undefined && slot.includes(e.args.length);
+        if (measured) {
           const byPos = new Map<number, Array<{ code: string; message: string }>>();
           const put = (pos: number, code: string, message: string): void => {
             const bucket = byPos.get(pos) ?? [];
@@ -3661,6 +3662,7 @@ function literalTypeName(e: Expr | undefined): string | null {
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
+  if (e.kind === "lambda") return "Callable";
   if (e.kind === "call" && e.callee.kind === "ident" && NUMERIC_VALUE_CTORS.has(e.callee.name)) return e.callee.name;
   return null;
 }

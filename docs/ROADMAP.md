@@ -780,6 +780,16 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.201 字典侧的实参类型两句补齐：`merged` / `recursive_equal` 进表，Callable 那一格本来就能发（2026-10-15，S381，§6 第 63 条①的字典那一半收尾）
+
+- **量法换了才有这一轮**：元数那一族一句废整份脚本、只能一格一脚本；实参类型这一族引擎**一轮能报多行 Parse Error**，所以一格一行、一次 spawn 量 15 个 kind（尺 `tmp/probe-dictface/round1.mts`，读数 `tmp/probe-dictface/compare27.txt`）。行号归格踩过一次 —— `extends` / 空行 / `func` / `var d` 占四行，第一格在**第五行**，差一行就整表错位（第一版就是这么量的，句子里的 kind 全偏一格）。
+- **两句不是一句**：引擎真拒的那批 kind 发 A + B 两句（`Cannot pass a value of type "Color" as "Dictionary".` + `Invalid argument for "merged()" function: argument 1 should be "Dictionary" but is "Color".`），Array / Dictionary / Callable 那三名只发 B 一句 —— 既有表就是按这两栏建的（`FACE_ARG_AS` 带 `also`、`FACE_ARG_TYPES` 只发 B），本轮照同一形状补。
+- **`merged` 的一参与两参各量一遍**：同一位、同一句（`compare28.txt`），所以 `FACE_SLOTS` 那一维从「一个上界」扩成「可写名单」—— 只有这一支用名单形，别的支没量过下界那一形，照旧不发（宁可漏拦不误拦）。
+- **五名的「不拒」也是量出来的**：`find_key` / `get_or_add` / `get` / `erase` / `has` 全 kind 过裁判，一格都不响（实参是 `Variant`），表里因此**不建条目**。`recursive_equal` 第二位放行的是 bool / float / int 三名，不是只有 int。
+- **一处只有读代码才看得见的哑火**：`literalTypeName` 不认识 lambda（返回 null → 整条判据跳过），所以引擎那句 `... but is "Callable".` 我们从来发不出 —— 本轮认 `kind === "lambda"` 为 `"Callable"`。改前把三张表全核过：`Callable` 只在「期望型」那一栏出现过、从没进任何拒名单，所以这一改不会让既有的格子新响（`test:compile` 252/361 一字未动就是那把尺）。
+- **上一轮记错的一条已改账**：S379 / S380 把实参类型那一族记成「String 侧只顺带对上两支」，读表数出来的其实是 **Array 20 名 / String 28 名 / Dictionary 4 名** —— 欠的是覆盖面（与元数表的 49 / 108 之间那一截），不是整族。§6 第 63 条①③按这个改了。
+- **门**：`dict-face-arg-types.test.ts` 6 格 · 90 断言；`pnpm test` **13952**（117 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动）、`test:diff` **245/245** 逐字节；本轮不碰任何 `.gd`、不改任何产物。
+
 ### 1.200 String 的方法元数接进解析期：109 名过裁判，三格与文档相反（2026-10-15，S380，§6 第 63 条①的字符串那一半收尾）
 
 - **同一把尺第三次摆下去**：一格一份 `.gd` 一次 spawn，每名两格（零实参读「至少」、五实参读「至多」），语句形（尺 `tmp/probe-str/round1.mts`，读数 `tmp/probe-str/compare25.txt`）。108 名的表由读数**直接生成**（`tmp/probe-str/gen.mts`）—— 到这个体量手抄一定会错，门里的 `T` 与 `STRING_METHOD_ARITY` 都出自同一份文本。
