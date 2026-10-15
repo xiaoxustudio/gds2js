@@ -297,6 +297,14 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
 /** Array 上实测**不存在**的成员名（4.6.3 一名一名过裁判，S300）：给的是运行期那句 `Nonexistent function`，不是「未实现」。 */
 const ARRAY_NO_METHOD = new Set(["join", "concat"]);
 
+/** Dictionary 上实测**不存在**的成员名（49 名过裁判量出 29 支，`tmp/probe-dict/compare22.txt`，S378）：同一句。
+ *  名单里大半是 Array 那侧的名字（`push_back` / `sort_custom` / `slice` 那一族）—— 此前它们落到 switch 的兜底、发的是中文自述。 */
+const DICT_NO_METHOD = new Set([
+  "all", "any", "append_array", "bsearch", "bsearch_custom", "count", "fill", "filter", "find", "find_custom",
+  "insert", "is_same", "join", "map", "max", "min", "pop_at", "pop_back", "pop_front", "push_back",
+  "push_front", "reduce", "remove_at", "resize", "reverse", "rfind", "rfind_custom", "slice", "sort_custom",
+]);
+
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
   if (obj.t === Tag.STRING_NAME) return method(V.str(obj.v as string), name, args);
@@ -744,8 +752,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "hash":
           return V.int(variantHashNumber(obj));
         default:
-          // 字典上同样没有 `join`
-          if (name === "join") throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function 'join' in base 'Dictionary'.`);
+          if (DICT_NO_METHOD.has(name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
       }
     }

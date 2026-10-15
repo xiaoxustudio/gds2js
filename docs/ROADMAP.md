@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.198 Dictionary 的方法元数接进解析期、29 支幽灵名归位：49 名一次过裁判（2026-10-15，S378，§6 第 63 条①的字典那一半与④）
+
+- **§6 第 63 条那笔账先动字典这一半**：S377 撞到「容器方法的解析期元数出货一概没有」，本轮把 49 名（引擎 `Dictionary` 的全部公开方法名 + Array 那侧常混进来的名字）一名一名过裁判 —— 每名两格，零实参读「至少」、三实参读「至多」（尺 `tmp/probe-dict/arity.mts`，读数 `tmp/probe-dict/compare22.txt`）。
+- **存在的 20 名两侧都量到了**：`assign [1,1]`、`clear [0,0]`、`duplicate [0,1]`、`erase [1,1]`、`find_key [1,1]`、`get [1,2]`、`get_or_add [1,2]`、`has [1,1]`、`has_all [1,1]`、`hash [0,0]`、`is_empty [0,0]`、`is_read_only [0,0]`、`keys [0,0]`、`make_read_only [0,0]`、`merge [1,2]`、`merged [1,2]`、`recursive_equal [2,2]`、`size [0,0]`、`sort [0,0]`、`values [0,0]` —— 落进 `DICT_METHOD_ARITY`，句子与值类型五支（S305）、pack 九支（S376）同族。
+- **两处只有量了才知道的**：字典上的 `sort()` 是**零参**（按键排，不收比较器），与 Array 那支同名同元数但不同语义，照文档写会把它当 `[1,1]`；`recursive_equal` 要**两支**（第二支是递归计数），与 S377 那一轮的读数对上。
+- **不存在的 29 支一并归位**：`all any append_array bsearch bsearch_custom count fill filter find find_custom insert is_same join map max min pop_at pop_back pop_front push_back push_front reduce remove_at resize reverse rfind rfind_custom slice sort_custom` —— 引擎一律 `Invalid call. Nonexistent function '<名>' in base 'Dictionary'.`，此前落到 switch 兜底发中文「未实现」。原来只有 `join` 一名单挂着，现在换成 `DICT_NO_METHOD` 一张表（§6 第 63 条④的 `is_same` 就在这 29 支里）。
+- **闸门只认证得出 Dictionary 的接收者**：`checkDictMethodArity` 与 `checkPackArgSlots` 同一口径 —— 标注 `Dictionary`（含 `Dictionary[K, V]`）与 `{…}` 字面量两种静态证明，字面量直接当接收者也认，被重新赋值过的名字丢掉，证不出就不报（宁可漏拦不误拦）。
+- **门**：`dict-method-arity.test.ts` 9 格（两句各钉原文 + 零参那一族合法）+ `dict-pure-methods.test.ts` 长到 14 格（幽灵名两格）；`pnpm test` **13929**（114 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26，一例未动 —— 没有语料把字典方法用到区间外）、`test:diff` **245/245** 逐字节；golden 零改动（本轮不碰任何 `.gd`、不改任何产物）。
+
 ### 1.197 Dictionary 的三支纯方法发货：`merged` / `get_or_add` / `recursive_equal`，其中一支的签名与直觉不同（2026-10-14，S377，语料 373）
 
 - **覆盖面账上最小的一族先动**：`sweep.log` 末段那 5 名（引擎有、我们表里没登）里，`merged` / `get_or_add` / `recursive_equal` 是三支纯方法，`make_read_only` / `is_read_only` 要连带「写只读容器给哪一句」一起量，留给下一轮。三支此前一律发中文自述 `Dictionary.<名>() 未实现`。

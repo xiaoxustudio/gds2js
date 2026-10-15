@@ -81,6 +81,36 @@ describe("Dictionary.get_or_add", () => {
   });
 });
 
+describe("Dictionary 上引擎没有那些名字（49 名过裁判量出 29 支）", () => {
+  const errOf = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return (e as { message?: string }).message ?? "?";
+    }
+  };
+  const GHOST = [
+    "all", "any", "append_array", "bsearch", "bsearch_custom", "count", "fill", "filter", "find", "find_custom",
+    "insert", "is_same", "join", "map", "max", "min", "pop_at", "pop_back", "pop_front", "push_back",
+    "push_front", "reduce", "remove_at", "resize", "reverse", "rfind", "rfind_custom", "slice", "sort_custom",
+  ];
+
+  it("逐名给 Nonexistent function 那句，不再是中文自述", () => {
+    const d = dict([[S("k"), I(1)]]);
+    for (const n of GHOST) {
+      eq("378", `Dictionary.${n}()`, errOf(() => method(d, n, [])), `Invalid call. Nonexistent function '${n}' in base 'Dictionary'.`);
+    }
+  });
+
+  it("存在的 20 名一个都不许被这张表拦掉", () => {
+    const d = dict([[S("k"), I(1)]]);
+    for (const n of ["size", "keys", "values", "is_empty", "hash", "clear", "sort", "has", "get", "duplicate"]) {
+      eq("378", `Dictionary.${n}() 不在幽灵表里`, errOf(() => method(d, n, [S("k")])).includes("Nonexistent"), false);
+    }
+  });
+});
+
 describe("Dictionary.recursive_equal", () => {
   it("两支实参都必填：第一支是字典、第二支是递归计数", () => {
     const a = dict([[S("a"), I(1)]]);

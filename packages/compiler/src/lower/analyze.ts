@@ -127,6 +127,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
+  checkDictMethodArity(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkDictDuplicateKeys(m, diags);
@@ -1385,6 +1386,88 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         code: "pack-arg-slot",
         message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${proven}".`,
         loc,
+      });
+    }
+  }
+}
+
+/** Dictionary 方法的元数（S378）：49 名过裁判，存在的 20 名两侧都量到（每名两格 —— 零实参读「至少」、三实参读「至多」，
+ *  `tmp/probe-dict/compare22.txt`）。与值类型五支（S305）、pack 九支（S376）同一族两句。`sort` 在字典上是**零参**（按键排），
+ *  与 Array 那支的 `sort()` 同名同元数但不同语义；`recursive_equal` 要两支（第二支是递归计数）。 */
+const DICT_METHOD_ARITY: Record<string, [number, number]> = {
+  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], erase: [1, 1], find_key: [1, 1],
+  get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
+  is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
+  merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
+};
+
+/** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
+ *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
+function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
+  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) bodies.push(f.body);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+
+  for (const body of bodies) {
+    const nodes: Record<string, unknown>[] = [];
+    const scan = (n: unknown): void => {
+      if (Array.isArray(n)) {
+        for (const x of n) scan(x);
+        return;
+      }
+      if (n === null || typeof n !== "object") return;
+      const obj = n as Record<string, unknown>;
+      if (obj.kind === "lambda") return;
+      nodes.push(obj);
+      for (const key of Object.keys(obj)) {
+        if (key !== "loc") scan(obj[key]);
+      }
+    };
+    scan(body);
+
+    const dicts = new Set<string>();
+    const reassigned = new Set<string>();
+    for (const n of nodes) {
+      if (n.kind === "assign") {
+        const target = n.target as Record<string, unknown> | undefined;
+        if (target !== undefined && target.kind === "ident" && typeof target.name === "string") reassigned.add(target.name);
+      }
+    }
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named" && type.name.replace(/\[.*\]$/, "") === "Dictionary") {
+        dicts.add(n.name);
+        continue;
+      }
+      const init = n.init as Expr | null;
+      if (init !== null && init.kind === "dict") dicts.add(n.name);
+    }
+
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "attribute") continue;
+      const obj = callee.obj as Record<string, unknown> | undefined;
+      if (obj === undefined) continue;
+      const proven = obj.kind === "dict" || (obj.kind === "ident" && typeof obj.name === "string" && dicts.has(obj.name));
+      if (!proven) continue;
+      const method = callee.name;
+      if (typeof method !== "string") continue;
+      const sig = DICT_METHOD_ARITY[method];
+      if (sig === undefined) continue;
+      const got = ((n.args as Expr[]) ?? []).length;
+      if (got >= sig[0] && got <= sig[1]) continue;
+      diags.push({
+        code: "dict-arity",
+        message:
+          got < sig[0]
+            ? `Too few arguments for "${method}()" call. Expected at least ${sig[0]} but received ${got}.`
+            : `Too many arguments for "${method}()" call. Expected at most ${sig[1]} but received ${got}.`,
+        loc: (n.loc as Diagnostic["loc"]) ?? null,
       });
     }
   }
