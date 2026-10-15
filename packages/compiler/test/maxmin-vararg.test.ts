@@ -16,7 +16,7 @@ const T = ")\n\tquit()\n";
 
 async function hits(call: string): Promise<Array<{ code: string; message: string }>> {
   const diags = analyze(lower(await parseSource(`${H}${call}${T}`)));
-  return diags.filter((d) => d.code === "global-arg-type" || d.code === "vararg-runtime-coerce" || /^Too (few|many) arguments for /.test(d.message));
+  return diags.filter((d) => d.code === "global-arg-type" || /^Too (few|many) arguments for /.test(d.message));
 }
 
 const text = (fn: string, pos: number, got: string): string =>
@@ -49,26 +49,24 @@ describe("变元每一位都判，第一位不对就停", () => {
   });
 });
 
-describe("容器那两形留给运行期那一句", () => {
-  const CELLS: Array<[string, string, string, string]> = [
-    ["max([1], 1)", "max", "1", "Array"],
-    ["max(1, [1])", "max", "2", "Array"],
-    ["max(1, 2, [1])", "max", "3", "Array"],
-    ["min(1, 2, {1: 1})", "min", "3", "Dictionary"],
-    ["max(1, 2, [1], 3)", "max", "3", "Array"],
+describe("容器一出现，整支调用就交给运行期那一句", () => {
+  const CELLS: string[] = [
+    "max([1], 1)",
+    "max(1, [1])",
+    "max(1, 2, [1])",
+    "min(1, 2, {1: 1})",
+    "max(1, 2, [1], 3)",
+    'max("a", 1, [1])',
+    'min([1], "x", true)',
+    'min(1, "x", [1])',
   ];
-  it("位号与 kind 对上引擎那句运行期读的数，句子换成自写的响亮拒", async () => {
-    for (const [call, fn, pos, kind] of CELLS) {
-      const got = await hits(call);
-      eq("388", `${call} 只一句`, got.length, 1);
-      eq("388", `${call} 的 code`, got[0]?.code, "vararg-runtime-coerce");
-      eq("388", `${call} 引用了引擎那句`, (got[0]?.message ?? "").includes(`Cannot convert argument ${pos} from ${kind} to float.`), true);
-      eq("388", `${call} 的名字与位号`, (got[0]?.message ?? "").startsWith(`${fn}() 的第 ${pos} 位是 ${kind}`), true);
-    }
+  it("解析期一句都不发（S393 把那条运行期通道接进了 rt.gMax / rt.gMin）", async () => {
+    for (const call of CELLS) eq("393", call, (await hits(call)).length, 0);
   });
 
-  it("第一位是容器时后面的坏形不再另发一句", async () => {
-    eq("388", 'min([1], "x", true)', (await hits('min([1], "x", true)')).map((d) => d.code), ["vararg-runtime-coerce"]);
+  it("没有容器时照旧发解析期那一句", async () => {
+    eq("388", 'max(1, 2, "a")', (await hits('max(1, 2, "a")'))[0]?.message, text("max", 3, "String"));
+    eq("388", 'min("a", 1)', (await hits('min("a", 1)'))[0]?.message, text("min", 1, "String"));
   });
 });
 

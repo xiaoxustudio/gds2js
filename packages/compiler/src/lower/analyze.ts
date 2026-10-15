@@ -14,7 +14,6 @@ import {
   GLOBAL_ARG_SHOULD_BE,
   GLOBAL_ARG_TYPES,
   GLOBAL_ARG_VARARG,
-  GLOBAL_ARG_VARARG_DEFERRED,
 } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
@@ -3820,34 +3819,22 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "ident") continue;
-      // `max` / `min` 的扫法与按位那几张表不同：每一位都判、第一位不对就停、容器留给运行期那一句（表注释有读数）
+      // `max` / `min` 的扫法与按位那几张表不同：每一位都判、第一位不对就停（表注释有读数）。
+      // 但这族**只要实参里出现一个容器（Array / Dictionary），整支调用就不在解析期发句** ——
+      // 引擎改走运行期那句 `Invalid type in utility function …`（四形混排读数 `tmp/probe-maxrt/compare54.txt`：
+      // 串在容器前面也一样推迟），那条通道由 `rt.gMax` / `rt.gMin` 发（S393）。
       const vararg = GLOBAL_ARG_VARARG[callee.name];
       if (vararg !== undefined) {
         const ar = BUILTIN_ARITY[callee.name];
-        if (ar !== undefined && e.args.length >= ar[0] && e.args.length <= ar[1]) {
-          for (let i = 0; i < e.args.length; i++) {
-            const got = literalTypeName(e.args[i]);
-            if (got === null) continue;
-            const pos = i + 1;
-            if (vararg.has(got)) {
-              diags.push({
-                code: "global-arg-type",
-                message: `Invalid argument for "${callee.name}()" function: argument ${String(pos)} should be "float" but is "${got}".`,
-                loc: e.loc,
-              });
-            } else if (GLOBAL_ARG_VARARG_DEFERRED.has(got)) {
-              diags.push({
-                code: "vararg-runtime-coerce",
-                message:
-                  `${callee.name}() 的第 ${String(pos)} 位是 ${got}：引擎不在解析期发句，走到运行期才打 ` +
-                  `Invalid type in utility function "${callee.name}()". Cannot convert argument ${String(pos)} from ${got} to float. ` +
-                  `并打断脚本 —— 那条运行期通道本轮没接，放手就是发射下去的静默错值，所以先在解析期响亮拒`,
-                loc: e.loc,
-              });
-            } else {
-              continue;
-            }
-            break;
+        const kinds = e.args.map((a) => literalTypeName(a));
+        if (ar !== undefined && e.args.length >= ar[0] && e.args.length <= ar[1] && !kinds.includes("Array") && !kinds.includes("Dictionary")) {
+          const pos = kinds.findIndex((k) => k !== null && vararg.has(k));
+          if (pos >= 0) {
+            diags.push({
+              code: "global-arg-type",
+              message: `Invalid argument for "${callee.name}()" function: argument ${String(pos + 1)} should be "float" but is "${kinds[pos]}".`,
+              loc: e.loc,
+            });
           }
         }
         continue;

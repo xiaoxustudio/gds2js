@@ -93,16 +93,14 @@ export const GLOBAL_ARG_BOOL_REFUSED: Readonly<Record<string, ReadonlyArray<numb
 
 /** 变元那两支（`max` / `min`）不走上面那几张按位表，走的是**另一套扫法**（S388，读数 `tmp/probe-maxmin/{compare38,compare39,compare40,compare41}.txt`）：
  *  每一位期望 `"float"`、句子仍是 A 式，但**第一位不对就停** —— `max("a", 1, "b")` 引擎只推 argument 1 那一句。
- *  `refused` 是解析期真发句的那五个 kind（量过 1 / 2 / 3 / 4 位），`deferred` 那两个不在解析期发句、
- *  而是走到运行期那句 `Invalid type in utility function "max()". Cannot convert argument N from Array to float.`（脚本当场打断）；
- *  运行期那一句本轮没接，所以 `deferred` 在解析期用自写句响亮拒 —— 放手就是 `rt.gMax` 的静默错值。 */
+ *  `refused` 这五个 kind 是解析期真发句的（量过 1 / 2 / 3 / 4 位）。容器那两形**不在这张表里**：引擎解析一声不出，
+ *  走到运行期才打 `Invalid type in utility function "max()". Cannot convert argument N from Array to float.` 并打断脚本 ——
+ *  那一条通道由 `rt.gMax` / `rt.gMin` 发（S393，装箱十四形的读数 `tmp/probe-maxrt/compare53.txt`），解析期因此不拦。 */
 export const GLOBAL_ARG_VARARG: Readonly<Record<string, ReadonlySet<string>>> = {
   max: new Set(["String", "StringName", "NodePath", "bool", "null"]),
   min: new Set(["String", "StringName", "NodePath", "bool", "null"]),
 };
 
-/** 同一支名上「引擎不在解析期发句、留给运行期」的那两个 kind。 */
-export const GLOBAL_ARG_VARARG_DEFERRED: ReadonlySet<string> = new Set(["Array", "Dictionary"]);
 
 /** 「跟第一参走」那一族里**第一参可以是 bool** 的函数：那时后续位期望的是 bool，int / float 字面量反倒拒
  *  （`clamp(true, 1, 2)` → argument 2 should be "bool" but is "int".）。`lerp` 的第一参走允许集、

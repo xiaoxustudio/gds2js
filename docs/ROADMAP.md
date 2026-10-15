@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.214 `max` / `min` 的运行期转换通道接上：容器一出现，整支调用就不在解析期发句（2026-10-15，S393，§6 第 67 条结清）
+
+- **十四形各装箱一格**（尺 `tmp/probe-maxrt/round1.mts`，读数 `compare53.txt`）：`bool` / `Nil` / `String` / `StringName` / `NodePath` / `Array` / `Dictionary` / `PackedInt32Array` / `Callable` / `Color` / `Vector2` 在运行期一律 `Invalid type in utility function "max()". Cannot convert argument 3 from <型> to float.` + `at:` + backtrace 并打断；**只认 int 与 float** —— 「`Variant::as_double` 认得起来数字串」那条猜测被读数打掉。
+- **解析期那条规则改硬**（`round2.mts`，`compare54.txt` 四形混排）：不是「容器那一位不发句、后面的位照判」，而是**这一支调用里只要有一个容器，整族的解析期类型句全不发** —— `max("a", 1, [1])` 引擎不给解析期那句，运行期点 argument 1 from String；`max(1, [1], "a")` 点 argument 2 from Array。S388 那张表因此换成两趟扫。
+- **两处改**：`rt.gMax` / `rt.gMin` 把 `need2`（自写 `[math-number]`）换成逐位 `maxMinFloat` 抛引擎原文，旧的「赢家带自己的型 / NaN 留先出现」26 格一字未动；analyze 里 `vararg-runtime-coerce` 那支自写句删掉。
+- **端到端**：28 格装箱读数 + 4 格混排读数用 `gds2js run` 与引擎逐格对，**不合 0 格**（四个 object 系标签都走同一支 `utilityArgLabel`，它从私有改成导出）。
+- **门**：`global-max-min-variadic.test.ts` 加长 9 格（七形两支 + 两位号 + 打断类型）、`maxmin-vararg.test.ts` 容器那一族翻成「解析期不拦」并补两格「没有容器照旧发句」；`pnpm test` **14004**（126 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245**、`test:golden-check` 372 例逐字节不变。
+
 ### 1.213 `String` 静态三支的 int 形参折法：`chr` 与 `num.decimals` 走 int32 回绕，`humanize_size` 留在 int64（2026-10-15，S392，§6 第 47 条⑧的尾巴结清）
 
 - **一条式子靠一组 2^32 的整圈定下来**（尺 `tmp/probe-int64params/{round1,round2,round3}.mts`，读数 `compare{49,50,51,52}.txt`）：`String.num(0.3333333333, 2^32+5)` → `0.33333`、`2^32+1` → `0.3`、`2^32-1` 与 `2^31+5` 折成负数走默认那支、`2^32+32` 与 `40` 都夹到 32；`String.chr(2^32+65)` → `A`、`chr(2^53+1)` → U+0001、`chr(2^53)` / `chr(2^33)` → 绕回 0 → U+FFFD。
