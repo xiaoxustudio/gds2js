@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.222 `**` 与 `in` 两支的六型矩阵：解析期不拦、55 格拒在运行期，出货那两句自造话换成引擎原文（2026-10-16，S401，§6 第 71 条③结清）
+
+- **72 格**（`tmp/probe-powin/round1.mts` → `compare69.txt`，左支仍是初值推断的模块 var）：**解析期 0 拦**、17 格给值、55 格拒在运行期，句式仍是第三式 `Invalid operands 'A' and 'B' in operator '**' / 'in'.`。
+- **`**` 只收 int / float 两侧**：4 格给值（`2 ** 2` = 4、`2 ** 1.5` = 2.82842712474619、`1.5 ** 2` = 2.25、`1.5 ** 1.5` = 1.83711730708738），其余 32 格拒 —— **`true ** 2` 也拒**，bool 在 `**` 这一支既不能当底也不能当指数，与 `+ - * / %` 把 bool 当数那一族不同。
+- **`in` 的闸门在右支**：Array / Dictionary 全收（六型左支都给 `false`，只有 `"a" in "a"` 真）；右支是 String 时只收 String 左支（`[1] in "a"` 拒）；右支是 bool / int / float 时全拒。
+- **实现两处换句**：`ops.pow` / `ops.inOp` 落到末尾那支时不再发 `** 不支持 bool ** int` 这类自写文本，六型之内复用 S399 的 `operandsRefused` 发引擎原文，六型之外照旧响亮拒。
+- **门**：`packages/runtime/test/operator-pow-in.test.ts` 72 格逐格对值与那句原文（`tmp/probe-powin/gen5.mts` 从读数生成）；出货端到端 72 格对照 `tmp/probe-powin/ours.mts` 不合 0 格。
+- **门读数**：`pnpm test` **14056**（131 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.221 一元那三支量齐：`-` / `+` 只有 int 与 float 走得通，`not` 恒为 bool（2026-10-16，S400，§6 新增第 71 条）
 
 - **18 格一元两支 + 12 格 `not`**（`tmp/probe-unary/{round1,round2}.mts` → `compare{67,68}.txt`）：`-1` / `-1.5` / `+1` / `+1.5` 给值，bool / String / Array / Dictionary 四型两支都给 `Invalid operands 'X' and 'Nil' in operator 'unary-' / 'unary+'.` —— **第二格是 `Nil`、操作数名带 `unary` 前缀**，与二元那一句同式不同名。

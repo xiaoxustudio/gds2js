@@ -265,7 +265,7 @@ export const ops = {
 
   pow(a: Variant, b: Variant): Variant {
     if (!isNum(a) || !isNum(b)) {
-      throw new UnsupportedError("pow-operands", `** 不支持 ${tagName(a.t)} ** ${tagName(b.t)}`);
+      return operandsRefused(a, b, "**", "pow-operands");
     }
     if (bothInt(a, b)) {
       const [x, y] = intPair(a, b, "**");
@@ -368,7 +368,7 @@ export const ops = {
     if (b.t === Tag.STRING && a.t === Tag.STRING) {
       return V.bool((b.v as string).includes(a.v as string));
     }
-    throw new UnsupportedError("in-operands", `in 不支持 ${tagName(a.t)} in ${tagName(b.t)}`);
+    return operandsRefused(a, b, "in", "in-operands");
   },
 
   str(a: Variant): Variant {
