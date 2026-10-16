@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.246 内建类型方法名当值 = 绑定 Callable，Dictionary 是例外（2026-10-16，S419 读数轮 · §6 第 83 条新登）
+
+- **几面给 Callable**：`Array` / `String` / `Vector2` / `Color` / pack 都印 `<型>::<名>`，`typeof` 25、`is_valid()` 真、`get_method()` / `get_object()`（`<Object#null>`）/ `get_argument_count()` 齐、`.call()` 照调（void 回 `<null>`）、元数句 `Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).`、同法两次取值相等、跨面同名不相等、能当字典键、`var_to_str` 里退化成 `Callable()`、跟数字比在解析期就拒。
+- **Dictionary 两条形**：属性读（成员名也算）运行期给 `Invalid access to property or key '<名>' on a base object of type 'Dictionary'.`；属性写**不报错**，等于塞一格 StringName 键 —— `d.nosuch = 1` 后 `print(d)` 是 `{ 1: 2, &"nosuch": 1 }`。出货今天挂 JS 属性，是错值。
+- **Array / String 的属性面**与 pack 同形（表外名同一句两遍、写成员名给常量那句），S417 / S418 的扫描没铺过去。
+- **本轮不动出货**：三形登记为 §6 第 83 条；`hash(Callable)` 只量到同进程一致，接之前先量跨进程。
+
 ### 1.245 属性写侧从 `size` 放开到整张成员表（2026-10-16，S418，§6 第 82 条②只剩 Callable 那一形）
 
 - **读数**：三型 × 22 名一趟量齐（尺 `tmp/probe-attr/round5.mts`，读数 `compare4.txt`）：写 16 个成员名一律 `Cannot assign a new value to a constant.`，写 `pick_random` / `shuffle` / `min` / `max` / `keys` / `values` 一律 S417 那句两遍。
