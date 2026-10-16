@@ -18,7 +18,7 @@ import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { isEncodedObjectIdBox, isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -306,6 +306,44 @@ const DICT_NO_METHOD = new Set([
   "push_front", "reduce", "remove_at", "resize", "reverse", "rfind", "rfind_custom", "slice", "sort_custom",
 ]);
 
+/** 只读容器被写的那一面（S403 逐格量的）：名 → 引擎那块的 `at:` 标签（每支各有各的 C++ 文件与行号）。 */
+const ARRAY_RO_WRITE: Readonly<Record<string, string>> = {
+  append: "push_back (core/variant/array.cpp:283)",
+  push_back: "push_back (core/variant/array.cpp:283)",
+  push_front: "push_front (core/variant/array.cpp:775)",
+  insert: "insert (core/variant/array.cpp:326)",
+  erase: "erase (core/variant/array.cpp:348)",
+  remove_at: "remove_at (core/variant/array.cpp:505)",
+  pop_back: "pop_back (core/variant/array.cpp:782)",
+  pop_front: "pop_front (core/variant/array.cpp:793)",
+  pop_at: "pop_at (core/variant/array.cpp:803)",
+  clear: "clear (core/variant/array.cpp:125)",
+  resize: "resize (core/variant/array.cpp:307)",
+  sort: "sort (core/variant/array.cpp:734)",
+  sort_custom: "sort_custom (core/variant/array.cpp:739)",
+  reverse: "reverse (core/variant/array.cpp:770)",
+  shuffle: "shuffle (core/variant/array.cpp:744)",
+  fill: "fill (core/variant/array.cpp:341)",
+  append_array: "append_array (core/variant/array.cpp:290)",
+};
+
+/** 只读那一面挡下写之后，`resize` 与 `insert` 这两支返回 23（`ERR_READ_ONLY`），其余给 null。 */
+const ARRAY_RO_INT23 = new Set(["resize", "insert"]);
+
+const DICT_RO_WRITE: Readonly<Record<string, string>> = {
+  clear: "clear (core/variant/dictionary.cpp:315)",
+  erase: "erase (core/variant/dictionary.cpp:255)",
+  merge: "merge (core/variant/dictionary.cpp:337)",
+  sort: "sort (core/variant/dictionary.cpp:332)",
+  set: "set (core/variant/dictionary.cpp:207)",
+};
+
+/** 只读挡写：推一块 `ERROR: <面> is in read-only state.`，内容不变、脚本不打断（实测 `assign` 与 `get_or_add` 不在这一族里）。 */
+function readOnlyWrite(at: string, kind: "Array" | "Dictionary", name: string): Variant {
+  readOnlyError(at, kind);
+  return ARRAY_RO_INT23.has(name) ? V.int(23) : V.nil();
+}
+
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
   if (obj.t === Tag.STRING_NAME) return method(V.str(obj.v as string), name, args);
@@ -567,7 +605,14 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   switch (obj.t) {
     case Tag.ARRAY: {
       const a = obj.v as GArray;
+      const roAt = ARRAY_RO_WRITE[name];
+      if (roAt !== undefined && a.isReadOnly()) return readOnlyWrite(roAt, "Array", name);
       switch (name) {
+        case "make_read_only":
+          a.markReadOnly();
+          return V.nil();
+        case "is_read_only":
+          return V.bool(a.isReadOnly());
         case "append":
           a.append(one(args, "append"));
           return V.nil();
@@ -694,7 +739,14 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     case Tag.DICT: {
       const d = obj.v as GDict;
+      const roAt = DICT_RO_WRITE[name];
+      if (roAt !== undefined && d.isReadOnly()) return readOnlyWrite(roAt, "Dictionary", name);
       switch (name) {
+        case "make_read_only":
+          d.markReadOnly();
+          return V.nil();
+        case "is_read_only":
+          return V.bool(d.isReadOnly());
         case "size":
           return V.int(d.size());
         case "has":
@@ -730,6 +782,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           const key = one(args, "get_or_add");
           if (d.has(key)) return d.get(key);
           const added = args[1] ?? V.nil();
+          if (d.isReadOnly()) return added;
           d.set(key, added);
           return added;
         }
@@ -1131,11 +1184,21 @@ export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | 
 export function setIndex(raw: unknown, idx: Variant, val: Variant): void {
   const obj = norm(raw);
   if (obj.t === Tag.ARRAY) {
-    asArray(obj, "下标赋值").set(intArgIdx(idx, "下标赋值"), val);
+    const a = asArray(obj, "下标赋值");
+    if (a.isReadOnly()) {
+      throw new GodotRuntimeError("read-only-assign", "Invalid assignment on read-only value (on base: 'Array').");
+    }
+    const k = intArgIdx(idx, "下标赋值");
+    a.set(k, val);
     return;
   }
   if (obj.t === Tag.DICT) {
-    asDict(obj, "下标赋值").set(idx, val);
+    const d = asDict(obj, "下标赋值");
+    if (d.isReadOnly()) {
+      readOnlyError("set (core/variant/dictionary.cpp:207)", "Dictionary");
+      throw new GodotRuntimeError("read-only-assign", "Invalid assignment on read-only value (on base: 'Dictionary').");
+    }
+    d.set(idx, val);
     return;
   }
   throw new UnsupportedError("setindex-type", `类型 ${obj.t} 不支持下标赋值`);

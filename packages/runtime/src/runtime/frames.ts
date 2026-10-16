@@ -76,6 +76,11 @@ export function gPushWarning(args: Variant[]): Variant {
   return pushBlock("WARNING", "push_warning (core/variant/variant_utility.cpp:1034)", args);
 }
 
+/** 只读容器被写时引擎推的那一块（`at:` 那行按每个方法各自的 C++ 文件与行号，S403 逐格量的）。 */
+export function readOnlyError(at: string, kind: string): Variant {
+  return pushBlock("ERROR", at, [V.str(`${kind} is in read-only state.`)]);
+}
+
 /** static 属性委托到实例方法：那一次调用不发生，引擎运行期打一块 ERROR，读给 null、写什么也不做（实测语料 371）。 */
 export function reportNonStaticCall(fn: string): Variant {
   return pushBlock("ERROR", "callp (modules/gdscript/gdscript.cpp:940)", [V.str(`Can't call non-static function '${fn}' in script.`)]);

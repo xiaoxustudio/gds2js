@@ -230,11 +230,20 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   }
 }
 
-/** 数组下标的唯一口径：支持负数（从尾部数，读写同规则），越界响亮报 `array-index`。 */
+/** 数组下标的唯一读口径：支持负数（从尾部数），越界给引擎那句 `Invalid access of index …`（S403 量的）。 */
 export function arrIdx(i: number, len: number): number {
   const k = i < 0 ? i + len : i;
   if (k < 0 || k >= len) {
-    throw new GodotRuntimeError("array-index", `数组索引越界: ${i}`);
+    throw new GodotRuntimeError("array-index", `Invalid access of index '${String(i)}' on a base object of type: 'Array'.`);
+  }
+  return k;
+}
+
+/** 下标赋值那一侧的越界句：与读不同式，带上写入值的型（S403 量的，负数按原样印）。 */
+export function arrIdxWrite(i: number, len: number, vt: string, base = "Array"): number {
+  const k = i < 0 ? i + len : i;
+  if (k < 0 || k >= len) {
+    throw new GodotRuntimeError("array-index-write", `Invalid assignment of index '${String(i)}' (on base: '${base}') with value of type '${vt}'.`);
   }
   return k;
 }
@@ -252,6 +261,16 @@ const MINMAX_UNORDERABLE = new Set(["compare-operands", "color-cmp"]);
 export class GArray {
   private items: Variant[];
   elem: ElemKind | null = null;
+  private ro = false;
+
+  /** `make_read_only()` 置的那一面：浅的，只挡这个容器自己的写（S403 那一族的读数）。 */
+  markReadOnly(): void {
+    this.ro = true;
+  }
+
+  isReadOnly(): boolean {
+    return this.ro;
+  }
 
   constructor(items: Variant[] = []) {
     this.items = items;
@@ -298,9 +317,10 @@ export class GArray {
   }
 
   set(i: number, v: Variant): void {
+    const at = arrIdxWrite(i, this.items.length, valueTypeName(v), this.elem === null ? "Array" : `Array[${this.elem}]`);
     const c = this.asElement(v);
     if (c === null) return;
-    this.items[arrIdx(i, this.items.length)] = c;
+    this.items[at] = c;
   }
 
   append(v: Variant): void {
@@ -611,6 +631,15 @@ export class GDict {
   private prev: number[] = [];
   keyKind: ElemKind | null = null;
   valKind: ElemKind | null = null;
+  private ro = false;
+
+  markReadOnly(): void {
+    this.ro = true;
+  }
+
+  isReadOnly(): boolean {
+    return this.ro;
+  }
 
   stampElem(k: ElemKind, val: ElemKind): void {
     this.keyKind = k;

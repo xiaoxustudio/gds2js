@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.224 只读容器的写面三分句接进出货，数组下标越界那两句换成引擎原文（2026-10-16，S403，§6 第 65 条结清、新增第 72 条）
+
+- **两支面先发货**：`make_read_only` / `is_read_only` 此前只在元数表里、调到就抛中文响亮拒 —— 现在置位与谓词都在（浅的，重复置位不响）。
+- **写侧三种反应按读数落地**：(a) 下标写打断脚本，数组那句光秃秃、字典那句前面多一块 `ERROR: Dictionary is in read-only state.`；(b) 方法写只推一块 ERROR、不打断、内容不变，`at:` 行按每支自己的 C++ 文件与行号（21 支逐个量的，`append` 借 `push_back` 那一行）；(c) 三件意外 —— `assign` 两支面照样整个换掉、`get_or_add` 返回默认值但不写入、`Array.resize` / `insert` 返回 23（`ERR_READ_ONLY`）。
+- **顺带接的两句下标越界**：读 `Invalid access of index '5' on a base object of type: 'Array'.`、写 `Invalid assignment of index '2' (on base: 'Array') with value of type 'int'.` —— 两式不同、写入值的型要点名、负数按原样印、定形数组基名带元素型（`'Array[String]'`）；出货此前两支都发 `数组索引越界: 2`。
+- **门**：`readonly-containers.test.ts` 33 断言（含 21 支方法写的块原文与返回值）；端到端 11 格对照 `tmp/probe-readonly2/ours.mts` 不合 0 格；`test:diff` 245 格逐字节不变。
+- **新登记的欠**（§6 第 72 条）：`print(<void 方法>())` 的解析期拒 `Cannot get return value of call to "assign()" because it returns "void".`、非 int 下标的 `Invalid index type "String" for a base of type "Array".`（整份脚本加载失败），两族出货都不拦；快轨裸数组的基名不带元素型。
+- **门读数**：`pnpm test` **14090**（133 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.223 移位两支与 `~` 的 78 格矩阵：只有三格给值，`~` 那句自造话换成引擎原文（2026-10-16，S402，§6 第 71 条④结清）
 
 - **78 格**（`tmp/probe-shift/round1.mts` → `compare70.txt`）：**解析期 0 拦**、75 格拒在运行期、3 格给值（`2 << 2` = 8、`2 >> 2` = 0、`~2` = -3）—— 两侧都必须是 int，`2 << 1.5` 与 `2 >> true` 全拒。
