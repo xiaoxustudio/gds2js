@@ -130,3 +130,29 @@ describe("解析期那三句也管到 lambda 与初始化子", () => {
     expect(code, "发的是那一式专用的读取").toContain("rt.dictIndexInt(");
   });
 });
+
+describe("D6 那七型的默认值站点响亮拒", () => {
+  const SEVEN = ["Rect2", "Rect2i", "Transform2D", "Plane", "Quaternion", "Basis", "AABB"];
+
+  it.each(SEVEN)("%s 的接住点发不出默认值（读数 tmp/probe-valuedefault/compare96.txt 的 B 站）", async (t) => {
+    expect(catchReturn(await emitted(initCell(` -> ${t}`)), "T("), `${t} 的接住返回`).toBe(`return rt.unsupportedValueDefault("${t}");`);
+  });
+
+  it("无初值的声明与类字段两站同一条拒（A 站与 C 站）", async () => {
+    const mod = await emitted(`${H}var r: Rect2
+
+func _initialize():
+	print(r)
+	quit()
+`);
+    expect(mod, "模块 var 那一站").toContain('r = rt.unsupportedValueDefault("Rect2")');
+    const thing = classBody(await emitted(`${H}class Thing:
+	var r: Rect2
+
+func _initialize():
+	Thing.new()
+	quit()
+`), "Thing");
+    expect(thing, "类字段那一站").toContain('this.r = rt.unsupportedValueDefault("Rect2");');
+  });
+});

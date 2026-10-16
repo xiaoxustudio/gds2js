@@ -3265,8 +3265,12 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "PackedVector2Array") return 'rt.packCtor("vector2", [])';
   if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
   if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
+  // D6 那七个值类型不进 Tier 1：它们的默认值发不出来 —— 那一站要响亮拒，不是静默的 null 盒子（读数 `tmp/probe-valuedefault/compare96.txt`）
+  if (D6_VALUE_TYPES.has(base)) return `rt.unsupportedValueDefault(${JSON.stringify(base)})`;
   return "rt.V.nil()";
 }
+
+const D6_VALUE_TYPES = new Set(["Rect2", "Rect2i", "Transform2D", "Plane", "Quaternion", "Basis", "AABB"]);
 
 function typeName(t: TypeRef): string {
   if (t.kind === "named") return t.name;

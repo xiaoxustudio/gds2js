@@ -703,6 +703,11 @@ export function gSqrt(v: Variant): Variant {
 }
 
 
+/** D6 那七个值类型不进 Tier 1：它们各自的默认值发不出来，声明与接住点那两站要的是响亮拒，不是 null 盒子（21 格读数量的是各型自己的默认值，`tmp/probe-valuedefault/compare96.txt`）。 */
+export function unsupportedValueDefault(name: string): Variant {
+  throw new UnsupportedError("value-default", `${name} 的默认值发不出（D6：那七个值类型不进 Tier 1）`);
+}
+
 export function lengthOf(v: Variant): Variant {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());

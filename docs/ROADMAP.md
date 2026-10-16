@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.233 D6 那七型的默认值站点不再静默给 null：三站 21 格量齐后换成响亮拒（2026-10-16，S409，§6 第 77 条结清）
+
+- **引擎侧 21 格**（`tmp/probe-valuedefault/round13.mts` → `compare96.txt`）：七型 × 三站 —— 模块 `var r: T` 无初值、内嵌类字段无初值、`func T() -> X` 出错后 S406 那个接住点 —— 给的全是各型自己的默认值（`Transform2D` / `Basis` 是单位阵、`Quaternion` 是 `(0, 0, 0, 1)`、`Plane` 是零法线零距离、`Rect2` / `Rect2i` / `AABB` 是零位置零尺寸）。
+- **出货此前的样子**：`typeDefault` 认不出型名就兜底 null 盒子，三站都印 `<null>` —— 静默错值，与 D6「不进 Tier 1 就抛 `unsupported`」相反。
+- **改法两处**：`emitter.typeDefault` 在兜底之前拦 `D6_VALUE_TYPES` 七个名字，发 `rt.unsupportedValueDefault(名)`；`builtins.ts` 那一支抛 `UnsupportedError`（code `value-default`，消息点名哪一型）。因为不是引擎那一句，S406 的接住点原样再抛 —— 拒到脚本外。
+- **不变**：语料无一例用这七型标注（`test:diff` 245/245、产物 churn 0）；那七型的构造调用照旧在 lowering 抛引擎原文。
+- **账**：门 `packages/compiler/test/error-boundary.test.ts` **8 格**（七型接住点 + 两站声明），`pnpm test` **14218→14226**（138 文件）、typecheck **4/4**、`test:compile` **252/361**（emitter 缺口 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过。
+
 ### 1.232 信号回调与延后调用同一条错误边界，宿主退出前排干当前这一轮（2026-10-16，S408，§6 第 75 条①②与第 76 条结清）
 
 - **回调那一族七格零代码**：S406 的函数边界本来就管到 `emit()` 里的回调 —— 调用方与后面的回调都照跑，lambda 连上去同形，回调里再调一支函数时外层继续（读数 `tmp/probe-signalerr/compare93.txt`，出货对照不合 **0 格**）。
