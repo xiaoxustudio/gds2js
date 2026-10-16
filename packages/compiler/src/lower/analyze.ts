@@ -250,6 +250,21 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
 
 type TypedSlot = { decl: string; kind: "Array" | "Dictionary"; elem?: string; key?: string; val?: string };
 
+const dictIntReads = new Set<string>();
+const diKey = (line: number, col: number): string => `${markOwner}#${String(line)}:${String(col)}`;
+
+/** 静态标注的 `Dictionary` / `Dictionary[K, V]` 配静态 int 键的那一格：引擎讲的是数组那一式（`Out of bounds get index …`，S405 量过），运行期得知道谁是这一形。 */
+export function isDictIntRead(e: Expr): boolean {
+  return e.kind === "index" && dictIntReads.has(diKey(e.loc.line, e.loc.col));
+}
+
+/** 标注里读出字典槽：裸 `Dictionary` 与定形 `Dictionary[K, V]` 都算，其余给 null。 */
+function dictSlotOf(name: string): TypedSlot | null {
+  const t = parseTyped(name);
+  if (t !== null && t.kind === "Dictionary") return t;
+  return name === "Dictionary" ? { decl: name, kind: "Dictionary" } : null;
+}
+
 /** 从标注里读出槽位。读不出来（不是容器、嵌套定型）就不管 —— 嵌套那条由 `typed-collection-nested` 报。 */
 function parseTyped(name: string): TypedSlot | null {
   const m = /^(Array|Dictionary)\[(.+)\]$/.exec(name);
@@ -263,11 +278,15 @@ function parseTyped(name: string): TypedSlot | null {
 }
 
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
-  const bodies: Array<{ stmts: Stmt[]; params: { name: string; type: TypeRef | null }[] }> = m.funcs.map((f) => ({ stmts: f.body, params: f.params }));
+  type Seed = { name: string; type: TypeRef | null };
+  const moduleSeeds: Seed[] = m.vars.map((v) => ({ name: v.name, type: v.type }));
+  const bodies: Array<{ stmts: Stmt[]; params: Seed[]; seeds: Seed[]; ret: TypeRef | null }> = m.funcs.map((f) => ({ stmts: f.body, params: f.params, seeds: moduleSeeds, ret: f.returnType }));
   const collect = (c: ClassDecl): void => {
-    for (const f of c.funcs) bodies.push({ stmts: f.body, params: f.params });
+    const fields: Seed[] = [...moduleSeeds, ...c.vars.map((v) => ({ name: v.name, type: v.type }))];
+    for (const f of c.funcs) bodies.push({ stmts: f.body, params: f.params, seeds: fields, ret: f.returnType });
     for (const inner of c.innerClasses) collect(inner);
   };
+  for (const c of m.innerClasses) collect(c);
   for (const c of m.innerClasses) collect(c);
 
   const stOf = (e: Expr, decls: Map<string, string>): NonNullable<StaticType> | null => {
@@ -275,7 +294,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
       const d = decls.get(e.name);
       return d === undefined ? null : (d as NonNullable<StaticType>);
     }
-    return slotSource(e);
+    return slotSource(e) ?? (callType(e) as NonNullable<StaticType> | null);
   };
 
   const badKey = (slot: TypedSlot, index: Expr, decls: Map<string, string>): void => {
@@ -320,7 +339,14 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
       case "index": {
         if (e.obj.kind === "ident") {
           const slot = typed.get(e.obj.name);
-          if (slot !== undefined) badKey(slot, e.index, decls);
+          if (slot !== undefined) {
+            badKey(slot, e.index, decls);
+            if (slot.kind === "Dictionary" && stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
+          }
+        } else {
+          // `self.f()` 那一形：返回型标注成字典时引擎认的是静态基名（`self.d()[0]` 给 `Out of bounds get index`，S405 量过）
+          const own = e.obj.kind === "call" ? dictSlotOf(callType(e.obj) ?? "") : null;
+          if (own !== null && own.kind === "Dictionary" && stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
         }
         walkExpr(e.obj, typed, decls);
         walkExpr(e.index, typed, decls);
@@ -388,6 +414,8 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
               if (scalar !== null) decls.set(s.name, scalar);
               const pos = positionalSlot(s.type.name, null);
               if (pos !== null) typed.set(s.name, pos);
+              const ds = dictSlotOf(s.type.name);
+              if (ds !== null) typed.set(s.name, ds);
             }
           } else if (s.type === null) {
             const pos = positionalSlot(null, s.init);
@@ -403,6 +431,8 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
             if (slot !== undefined) {
               handledTarget = true;
               badKey(slot, s.target.index, decls);
+              // 赋值那一侧引擎不挡（缺键就建键），所以这一格不登记成 int 键读
+              if (slot.kind === "Dictionary" && stOf(s.target.index, decls) === "int") dictIntReads.delete(diKey(s.target.loc.line, s.target.loc.col));
               const kind = slot.kind === "Array" ? slot.elem : slot.val;
               if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls);
             }
@@ -444,15 +474,31 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  for (const { stmts, params } of bodies) {
+  /** 一个表达式的静态型名：字面量与标注过的名字都认，函数调用按标注的返回型（`self.f()` 那一形，S405 量过）。 */
+  const callType = (e: Expr): string | null => {
+    if (e.kind !== "call" || e.callee.kind !== "attribute" || e.callee.obj.kind !== "ident") return null;
+    if (e.callee.obj.name !== "self") return null;
+    const called = e.callee.name;
+    const d = m.funcs.find((f) => f.name === called);
+    const t = d?.returnType;
+    return t !== null && t !== undefined && t.kind === "named" ? t.name : null;
+  };
+
+  for (const { stmts, params, seeds, ret } of bodies) {
     const typed = new Map<string, TypedSlot>();
     const decls = new Map<string, string>();
-    for (const p of params) {
+    const seed = (name: string, typeName: string): void => {
+      const scalar = scalarStaticName(typeName);
+      if (scalar !== null) decls.set(name, scalar);
+      const pos = positionalSlot(typeName, null);
+      if (pos !== null) typed.set(name, pos);
+      const ds = dictSlotOf(typeName);
+      if (ds !== null) typed.set(name, ds);
+    };
+    if (ret !== null && ret.kind === "named") seed("self", ret.name);
+    for (const p of [...seeds, ...params]) {
       if (p.type === null || p.type.kind !== "named") continue;
-      const scalar = scalarStaticName(p.type.name);
-      if (scalar !== null) decls.set(p.name, scalar);
-      const pos = positionalSlot(p.type.name, null);
-      if (pos !== null) typed.set(p.name, pos);
+      seed(p.name, p.type.name);
     }
     walkStmts(stmts, typed, decls);
   }

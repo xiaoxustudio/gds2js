@@ -27,7 +27,7 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show } from "./values";
 import { isLess, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -1093,6 +1093,19 @@ export function index(raw: unknown, idx: Variant): Variant {
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
   if (obj.t === Tag.OBJECT && obj.v instanceof GBytes) return bytesReadIndex(obj.v as GBytes, idx);
   throw new UnsupportedError("index-type", `类型 ${obj.t} 不支持下标`);
+}
+
+/** 静态标注的字典 + 静态 int 键的那一格：引擎讲的是数组那一式 `Out of bounds get index '<k>' (on base: '<基名>')`（句末没有句点，S405 量的）。其余形状退回通读那条。 */
+export function dictIndexInt(raw: unknown, idx: Variant): Variant {
+  const obj = norm(raw);
+  if (obj.t === Tag.DICT && idx.t === Tag.INT) {
+    const d = asDict(obj, "下标");
+    if (!d.has(idx)) {
+      throw new GodotRuntimeError("dict-index-oob", `Out of bounds get index '${show(idx)}' (on base: '${d.typeLabel()}')`);
+    }
+    return d.getRequired(idx);
+  }
+  return index(raw, idx);
 }
 
 /** 属性写的那条错：未知键、往 String 槽塞 int、写方法名**三条文本一模一样**，所以合成一个助手；基类那一段是 `RefCounted (内建类名)`，拿不到注册名就退成 Object。 */

@@ -118,7 +118,7 @@ export const fast = {
   rawDictGet(d: Map<unknown, number>, k: number | string): number {
     const v = d.get(k);
     if (v === undefined) {
-      throw new GodotRuntimeError("dict-key", `字典键不存在: ${String(k)}`);
+      throw new GodotRuntimeError("dict-key", `Invalid access to property or key '${String(k)}' on a base object of type 'Dictionary'.`);
     }
     return v;
   },

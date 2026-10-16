@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
+import { isDictIntRead, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -1883,7 +1883,7 @@ function emitExprR(e: Expr): R {
       return { code: `rt.fast.rawArrGet${fastSuffix(ek)}(${e.obj.name}, ${ir.code})`, rep: ek };
     }
     const dk = RAW_DICTS.get(e.obj.name);
-    if (dk) {
+    if (dk !== undefined && !isDictIntRead(e)) {
       const kr = emitExprR(e.index);
       if (kr.rep !== "int" && kr.rep !== "str") {
         throw new UnsupportedError("raw-dict-key", `内部不变量破坏：裸字典键期望 int/str，实得 ${kr.rep}`);
@@ -3115,6 +3115,8 @@ function emitExprVar(e: Expr): string {
     }
 
     case "index":
+      // 静态标注的字典 + 静态 int 键：引擎讲的是数组那一式，得让运行期知道这一格是谁（S405）。
+      if (isDictIntRead(e)) return `rt.wrapValue(rt.dictIndexInt(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
       return `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
 
     case "attribute":

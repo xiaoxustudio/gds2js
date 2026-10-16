@@ -703,11 +703,17 @@ export class GDict {
     return this.vs[i] ?? V.nil();
   }
 
+  /** 引擎报基名的那一拼法：定形字典带键值型，其余就是 `Dictionary`（S405 两句都用它）。 */
+  typeLabel(): string {
+    return this.keyKind === null || this.valKind === null ? "Dictionary" : `Dictionary[${this.keyKind}, ${this.valKind}]`;
+  }
+
+  /** 缺键那一句：`Invalid access to property or key '<键>' on a base object of type '<基名>'.`（键按打印那一条走）。 */
   getRequired(k: Variant): Variant {
     const q = this.asQuery(k);
     const i = q === null ? -1 : this.slot(keyOf(q), q);
     if (i < 0) {
-      throw new GodotRuntimeError("dict-key", `字典键不存在: ${show(k)}`);
+      throw new GodotRuntimeError("dict-key", `Invalid access to property or key '${show(k)}' on a base object of type '${this.typeLabel()}'.`);
     }
     return this.vs[i] as Variant;
   }

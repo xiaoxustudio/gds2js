@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.228 字典缺键那两句发货：静态 int 键走 `Out of bounds get index`，其余走 `Invalid access to property or key`（2026-10-16，S405，§6 第 73 条结清、新增第 74 条）
+
+- **分工按静态形状**：基是标注过的 `Dictionary` / `Dictionary[K, V]`（模块 var、局部 var、形参、内部类字段、`self.f()` 的标注返回型五种作用域都量过）且键静态是 int → `Out of bounds get index '<k>' (on base: '<基名>')`（无句点）；其余一律 `Invalid access to property or key '<键>' on a base object of type '<基名>'.`，定形字典的基名带键值型。
+- **键的印法逐型量齐**：`0` / `-5` / `999999999999` / `2.0` / `x`（String 与 StringName 都不带引号）/ `a/b` / `true` / `(1.0, 2.0)` / `[1, 2]` / `{ "k": 1 }`。
+- **写不缺**：四种作用域的 `a[0] = 5` 都直接建键、一句不推（量过）。
+- **接线**：analyze 标 `dictIntReads`（种子扩到模块 var、类字段、形参与 `self.f()` 返回型）→ 发射器发 `rt.dictIndexInt` → 运行期只在键真是 int 时发 `Out of bounds` 那一句；裸字典快轨遇这一形让位给装箱路。
+- **门**：`dict-missing-key.test.ts` 16 断言 + `dict-index-routing.test.ts` 14 格；端到端 30 格对照 `tmp/probe-dictkey/ours4.mts` 27 格一字一样，三格不合都有账（两格见下条第 74 条，一格是探头没剥出货的 `[码] ` 前缀）。
+- **另登一账**（§6 第 74 条）：错出在被调函数里时引擎**从该函数返回、脚本继续跑**（`n2` / `b3` 先打完 `S|ok`），出在 `_initialize` 本体才打断（`b1` / `m1` / `e1`）；出货一律打断 —— 这一族要先量「返回给调用方的是什么值、多层嵌套怎么折」。
+
 ### 1.227 位置型基的下标型拒接进解析期，容器 void 表补到 24 格，元数那句排到 void 之前（2026-10-16，S404，§6 第 72 条①②结清）
 
 - **60 + 12 + 10 + 6 格探头**（`tmp/probe-idxtype/{round1..4}.mts`、`tmp/probe-voidnames/round1.mts`，读数 `compare{74,80,81,82}.txt` 与 `compare79.txt`）：`Array`（裸标注 / 推断）/ `Array[k]` / `String`（标注 / 推断）/ 八支 `Packed*Array` 的下标只收 int 与 float，其余（含 `null`）给 `Invalid index type "<型>" for a base of type "<基名>".`，读写两形同句、基名按声明拼法、整份脚本加载失败。
