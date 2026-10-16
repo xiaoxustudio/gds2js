@@ -4,42 +4,115 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  TOP = rt.toInt(rt.V.int(42));
+  declare TOP: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.TOP = rt.toInt(rt.V.int(42));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static TOP = rt.toInt(rt.V.int(42));
 
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   static helper(): rt.Variant {
-    return rt.ops.add(Main.TOP, rt.V.int(1));
+    const __gd_frame = rt.frameEnter("res://main.gd", "helper");
+    try {
+      rt.frameLine(6);
+      return rt.ops.add(Main.TOP, rt.V.int(1));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static usehelper(): rt.Variant {
-    return Main.helper();
+    const __gd_frame = rt.frameEnter("res://main.gd", "usehelper");
+    try {
+      rt.frameLine(9);
+      return Main.helper();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   outerbare(): rt.Variant {
-    return Main.helper();
+    const __gd_frame = rt.frameEnter("res://main.gd", "outerbare");
+    try {
+      rt.frameLine(38);
+      return Main.helper();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let p = rt.V.object(new Inner());
-    print(rt.showArgs([rt.V.str("u1 "), rt.method(rt.V.object(__gd_d_Inner), "make", [])]));
-    print(rt.showArgs([rt.V.str("u2 "), rt.method(rt.V.object(__gd_d_Inner), "twice", [rt.V.int(21)])]));
-    print(rt.showArgs([rt.V.str("u3 "), rt.method(rt.V.object(__gd_d_Inner), "selfcall", [])]));
-    print(rt.showArgs([rt.V.str("u4 "), rt.method(rt.V.object(__gd_d_Inner), "readconst", [])]));
-    print(rt.showArgs([rt.V.str("u5 "), rt.method(rt.V.object(__gd_d_Inner), "rec", [rt.V.int(10)])]));
-    print(rt.showArgs([rt.V.str("u6 "), rt.method(p, "usestatic", [])]));
-    print(rt.showArgs([rt.V.str("u7 "), rt.method(p, "make", [])]));
-    print(rt.showArgs([rt.V.str("u8 "), rt.method(p, "twice", [rt.V.int(3)])]));
-    print(rt.showArgs([rt.V.str("u9 "), rt.typeOf(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "make")))]));
-    print(rt.showArgs([rt.V.str("u10 "), rt.method(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "make")), "call", [])]));
-    print(rt.showArgs([rt.V.str("u11 "), Main.helper()]));
-    print(rt.showArgs([rt.V.str("u12 "), Main.usehelper()]));
-    print(rt.showArgs([rt.V.str("u13 "), this.outerbare()]));
-    print(rt.showArgs([rt.V.str("u14 "), Main.helper()]));
-    let cb = rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "make"));
-    print(rt.showArgs([rt.V.str("u15 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "call", [])]));
-    print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.methodCallable(rt.V.object(__gd_d_Main), "usehelper"))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(42);
+      let p = rt.V.object(new Inner());
+      rt.frameLine(43);
+      print(rt.showArgs([rt.V.str("u1 "), rt.method(rt.V.object(__gd_d_Inner), "make", [])]));
+      rt.frameLine(44);
+      print(rt.showArgs([rt.V.str("u2 "), rt.method(rt.V.object(__gd_d_Inner), "twice", [rt.V.int(21)])]));
+      rt.frameLine(45);
+      print(rt.showArgs([rt.V.str("u3 "), rt.method(rt.V.object(__gd_d_Inner), "selfcall", [])]));
+      rt.frameLine(46);
+      print(rt.showArgs([rt.V.str("u4 "), rt.method(rt.V.object(__gd_d_Inner), "readconst", [])]));
+      rt.frameLine(47);
+      print(rt.showArgs([rt.V.str("u5 "), rt.method(rt.V.object(__gd_d_Inner), "rec", [rt.V.int(10)])]));
+      rt.frameLine(48);
+      print(rt.showArgs([rt.V.str("u6 "), rt.method(p, "usestatic", [])]));
+      rt.frameLine(49);
+      print(rt.showArgs([rt.V.str("u7 "), rt.method(p, "make", [])]));
+      rt.frameLine(50);
+      print(rt.showArgs([rt.V.str("u8 "), rt.method(p, "twice", [rt.V.int(3)])]));
+      rt.frameLine(51);
+      print(rt.showArgs([rt.V.str("u9 "), rt.typeOf(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "make")))]));
+      rt.frameLine(52);
+      print(rt.showArgs([rt.V.str("u10 "), rt.method(rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "make")), "call", [])]));
+      rt.frameLine(53);
+      print(rt.showArgs([rt.V.str("u11 "), Main.helper()]));
+      rt.frameLine(54);
+      print(rt.showArgs([rt.V.str("u12 "), Main.usehelper()]));
+      rt.frameLine(55);
+      print(rt.showArgs([rt.V.str("u13 "), this.outerbare()]));
+      rt.frameLine(56);
+      print(rt.showArgs([rt.V.str("u14 "), Main.helper()]));
+      rt.frameLine(57);
+      let cb = rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "make"));
+      rt.frameLine(58);
+      print(rt.showArgs([rt.V.str("u15 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "call", [])]));
+      rt.frameLine(59);
+      print(rt.showArgs([rt.V.str("u16 "), rt.typeOf(rt.methodCallable(rt.V.object(__gd_d_Main), "usehelper"))]));
+      rt.frameLine(60);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -62,35 +135,112 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
-  CV = rt.toInt(rt.V.int(99));
+  declare CV: rt.Variant;
+  declare mv: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(13);
+      this.CV = rt.toInt(rt.V.int(99));
+      rt.frameLine(14);
+      this.mv = rt.toInt(rt.V.int(7));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static CV = rt.toInt(rt.V.int(99));
-  mv = rt.toInt(rt.V.int(7));
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   static make(): rt.Variant {
-    return rt.V.str("made");
+    const __gd_frame = rt.frameEnter("res://main.gd", "make");
+    try {
+      rt.frameLine(17);
+      return rt.V.str("made");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static twice(x: rt.Variant): rt.Variant {
-    return rt.ops.mul(x, rt.V.int(2));
+    const __gd_frame = rt.frameEnter("res://main.gd", "twice");
+    try {
+      rt.frameLine(20);
+      return rt.ops.mul(x, rt.V.int(2));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static selfcall(): rt.Variant {
-    return Inner.twice(rt.V.int(21));
+    const __gd_frame = rt.frameEnter("res://main.gd", "selfcall");
+    try {
+      rt.frameLine(23);
+      return Inner.twice(rt.V.int(21));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static readconst(): rt.Variant {
-    return Inner.CV;
+    const __gd_frame = rt.frameEnter("res://main.gd", "readconst");
+    try {
+      rt.frameLine(26);
+      return Inner.CV;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static rec(n: rt.Variant): rt.Variant {
-    if (rt.ops.truthy(rt.ops.lte(n, rt.V.int(0)))) {
-      return rt.V.int(0);
+    const __gd_frame = rt.frameEnter("res://main.gd", "rec");
+    try {
+      rt.frameLine(29);
+      if (rt.ops.truthy(rt.ops.lte(n, rt.V.int(0)))) {
+        rt.frameLine(30);
+        return rt.V.int(0);
+      }
+      rt.frameLine(31);
+      return rt.ops.add(n, Inner.rec(rt.ops.sub(n, rt.V.int(1))));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    return rt.ops.add(n, Inner.rec(rt.ops.sub(n, rt.V.int(1))));
   }
   
   usestatic(): rt.Variant {
-    return Inner.make();
+    const __gd_frame = rt.frameEnter("res://main.gd", "usestatic");
+    try {
+      rt.frameLine(34);
+      return Inner.make();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

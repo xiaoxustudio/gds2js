@@ -4,29 +4,74 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.float(100000000000000)]));
-    print(rt.showArgs([rt.V.float(1000000000000000)]));
-    print(rt.showArgs([rt.V.float(10000000000000000)]));
-    print(rt.showArgs([rt.V.float(100000000000000000000)]));
-    print(rt.showArgs([rt.V.float(1e+21)]));
-    print(rt.showArgs([rt.V.float(1e+300)]));
-    print(rt.showArgs([rt.V.float(0.000001)]));
-    print(rt.showArgs([rt.V.float(1e-7)]));
-    print(rt.showArgs([rt.V.float(1e-20)]));
-    print(rt.showArgs([rt.V.float((0.1 + 0.2))]));
-    print(rt.showArgs([rt.V.float(123456789012345.6)]));
-    print(rt.showArgs([rt.V.float(1)]));
-    print(rt.showArgs([rt.V.float(2.5)]));
-    print(rt.showArgs([rt.V.float((-0))]));
-    print(rt.showArgs([rt.V.float((-3.14159))]));
-    print(rt.showArgs([rt.V.float((1e+308 * 10))]));
-    print(rt.showArgs([rt.strBuiltin([rt.V.float(100000000000000000000)])]));
-    print(rt.showArgs([rt.V.array(rt.GArray.of([rt.V.float(100000000000000000000), rt.V.float(0.5)]))]));
-    print(rt.showArgs([rt.V.float(1234567890123.45)]));
-    print(rt.showArgs([rt.V.float(0.5)]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.V.float(100000000000000)]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.V.float(1000000000000000)]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.float(10000000000000000)]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.float(100000000000000000000)]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.float(1e+21)]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.float(1e+300)]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.float(0.000001)]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.float(1e-7)]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.float(1e-20)]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.float((0.1 + 0.2))]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.float(123456789012345.6)]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.float(1)]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.float(2.5)]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.float((-0))]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.float((-3.14159))]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.float((1e+308 * 10))]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.strBuiltin([rt.V.float(100000000000000000000)])]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.array(rt.GArray.of([rt.V.float(100000000000000000000), rt.V.float(0.5)]))]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.float(1234567890123.45)]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.float(0.5)]));
+      rt.frameLine(24);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

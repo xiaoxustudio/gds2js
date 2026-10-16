@@ -4,62 +4,128 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.str("V|Vector2.AXIS_X||"), rt.vector2Const("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector2Const("AXIS_X"))]));
-    print(rt.showArgs([rt.V.str("V|Vector2.AXIS_Y||"), rt.vector2Const("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector2Const("AXIS_Y"))]));
-    print(rt.showArgs([rt.V.str("V|Vector2i.AXIS_X||"), rt.vector2iConst("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector2iConst("AXIS_X"))]));
-    print(rt.showArgs([rt.V.str("V|Vector2i.AXIS_Y||"), rt.vector2iConst("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector2iConst("AXIS_Y"))]));
-    print(rt.showArgs([rt.V.str("V|Vector3.AXIS_X||"), rt.vector3Const("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector3Const("AXIS_X"))]));
-    print(rt.showArgs([rt.V.str("V|Vector3.AXIS_Y||"), rt.vector3Const("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector3Const("AXIS_Y"))]));
-    print(rt.showArgs([rt.V.str("V|Vector3.AXIS_Z||"), rt.vector3Const("AXIS_Z"), rt.V.str(" | "), rt.typeOf(rt.vector3Const("AXIS_Z"))]));
-    print(rt.showArgs([rt.V.str("V|Vector3i.AXIS_X||"), rt.vector3iConst("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector3iConst("AXIS_X"))]));
-    print(rt.showArgs([rt.V.str("V|Vector3i.AXIS_Y||"), rt.vector3iConst("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector3iConst("AXIS_Y"))]));
-    print(rt.showArgs([rt.V.str("V|Vector3i.AXIS_Z||"), rt.vector3iConst("AXIS_Z"), rt.V.str(" | "), rt.typeOf(rt.vector3iConst("AXIS_Z"))]));
-    print(rt.showArgs([rt.V.str("M|算式||"), rt.ops.sub(rt.vector3Const("AXIS_X"), rt.V.int(1)), rt.V.str(" | "), rt.ops.mul(rt.vector3Const("AXIS_Z"), rt.V.int(2)), rt.V.str(" | "), rt.ops.eq(rt.vector2Const("AXIS_Y"), rt.V.int(1))]));
-    print(rt.showArgs([rt.V.str("M|数组||"), rt.V.array(rt.GArray.of([rt.vector3Const("AXIS_X"), rt.vector3Const("AXIS_Y"), rt.vector3Const("AXIS_Z")])), rt.V.str(" | "), rt.V.array(rt.GArray.of([rt.vector2iConst("AXIS_X"), rt.vector2iConst("AXIS_Y")]))]));
-    let i = rt.toInt(rt.vector3Const("AXIS_Y"));
-    print(rt.showArgs([rt.V.str("T|int 标注||"), i]));
-    let v = rt.vector2iConst("AXIS_X");
-    print(rt.showArgs([rt.V.str("T|推断||"), v, rt.V.str(" | "), rt.typeOf(v)]));
-    let vv = rt.vector3New([rt.V.int(10), rt.V.int(20), rt.V.int(30)]);
-    print(rt.showArgs([rt.V.str("T|v3 下标||"), rt.wrapValue(rt.index(vv, rt.vector3Const("AXIS_Y")))]));
-    let v2 = rt.vector2New([rt.V.float(7.5), rt.V.float(2.5)]);
-    print(rt.showArgs([rt.V.str("T|v2 下标||"), rt.wrapValue(rt.index(v2, rt.vector2Const("AXIS_X"))), rt.V.str(" | "), rt.wrapValue(rt.index(v2, rt.vector2Const("AXIS_Y")))]));
-    let v2i = rt.vector2iNew([rt.V.int((-3)), rt.V.int(5)]);
-    print(rt.showArgs([rt.V.str("T|v2i 下标||"), rt.wrapValue(rt.index(v2i, rt.vector2iConst("AXIS_Y")))]));
-    let v3i = rt.vector3iNew([rt.V.int(4), rt.V.int(5), rt.V.int(6)]);
-    print(rt.showArgs([rt.V.str("T|v3i 下标||"), rt.wrapValue(rt.index(v3i, rt.vector3iConst("AXIS_Z")))]));
-    print(rt.showArgs([rt.V.str("A|arm0||"), this.g(rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("A|arm1||"), this.g(rt.V.int(1))]));
-    print(rt.showArgs([rt.V.str("A|arm2||"), this.g(rt.V.int(2))]));
-    print(rt.showArgs([rt.V.str("A|arm3||"), this.g(rt.V.int(3))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.V.str("V|Vector2.AXIS_X||"), rt.vector2Const("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector2Const("AXIS_X"))]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.V.str("V|Vector2.AXIS_Y||"), rt.vector2Const("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector2Const("AXIS_Y"))]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("V|Vector2i.AXIS_X||"), rt.vector2iConst("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector2iConst("AXIS_X"))]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("V|Vector2i.AXIS_Y||"), rt.vector2iConst("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector2iConst("AXIS_Y"))]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("V|Vector3.AXIS_X||"), rt.vector3Const("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector3Const("AXIS_X"))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("V|Vector3.AXIS_Y||"), rt.vector3Const("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector3Const("AXIS_Y"))]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("V|Vector3.AXIS_Z||"), rt.vector3Const("AXIS_Z"), rt.V.str(" | "), rt.typeOf(rt.vector3Const("AXIS_Z"))]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("V|Vector3i.AXIS_X||"), rt.vector3iConst("AXIS_X"), rt.V.str(" | "), rt.typeOf(rt.vector3iConst("AXIS_X"))]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.str("V|Vector3i.AXIS_Y||"), rt.vector3iConst("AXIS_Y"), rt.V.str(" | "), rt.typeOf(rt.vector3iConst("AXIS_Y"))]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("V|Vector3i.AXIS_Z||"), rt.vector3iConst("AXIS_Z"), rt.V.str(" | "), rt.typeOf(rt.vector3iConst("AXIS_Z"))]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("M|算式||"), rt.ops.sub(rt.vector3Const("AXIS_X"), rt.V.int(1)), rt.V.str(" | "), rt.ops.mul(rt.vector3Const("AXIS_Z"), rt.V.int(2)), rt.V.str(" | "), rt.ops.eq(rt.vector2Const("AXIS_Y"), rt.V.int(1))]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("M|数组||"), rt.V.array(rt.GArray.of([rt.vector3Const("AXIS_X"), rt.vector3Const("AXIS_Y"), rt.vector3Const("AXIS_Z")])), rt.V.str(" | "), rt.V.array(rt.GArray.of([rt.vector2iConst("AXIS_X"), rt.vector2iConst("AXIS_Y")]))]));
+      rt.frameLine(16);
+      let i = rt.toInt(rt.vector3Const("AXIS_Y"));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("T|int 标注||"), i]));
+      rt.frameLine(18);
+      let v = rt.vector2iConst("AXIS_X");
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.str("T|推断||"), v, rt.V.str(" | "), rt.typeOf(v)]));
+      rt.frameLine(20);
+      let vv = rt.vector3New([rt.V.int(10), rt.V.int(20), rt.V.int(30)]);
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("T|v3 下标||"), rt.wrapValue(rt.index(vv, rt.vector3Const("AXIS_Y")))]));
+      rt.frameLine(22);
+      let v2 = rt.vector2New([rt.V.float(7.5), rt.V.float(2.5)]);
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("T|v2 下标||"), rt.wrapValue(rt.index(v2, rt.vector2Const("AXIS_X"))), rt.V.str(" | "), rt.wrapValue(rt.index(v2, rt.vector2Const("AXIS_Y")))]));
+      rt.frameLine(24);
+      let v2i = rt.vector2iNew([rt.V.int((-3)), rt.V.int(5)]);
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("T|v2i 下标||"), rt.wrapValue(rt.index(v2i, rt.vector2iConst("AXIS_Y")))]));
+      rt.frameLine(26);
+      let v3i = rt.vector3iNew([rt.V.int(4), rt.V.int(5), rt.V.int(6)]);
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("T|v3i 下标||"), rt.wrapValue(rt.index(v3i, rt.vector3iConst("AXIS_Z")))]));
+      rt.frameLine(28);
+      print(rt.showArgs([rt.V.str("A|arm0||"), this.g(rt.V.int(0))]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("A|arm1||"), this.g(rt.V.int(1))]));
+      rt.frameLine(30);
+      print(rt.showArgs([rt.V.str("A|arm2||"), this.g(rt.V.int(2))]));
+      rt.frameLine(31);
+      print(rt.showArgs([rt.V.str("A|arm3||"), this.g(rt.V.int(3))]));
+      rt.frameLine(32);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   g(q: rt.Variant): void {
-    do {
-      const __m0 = rt.matchPattern(q, rt.patConst(rt.vector3Const("AXIS_X")));
-      if (__m0 !== null) {
-        return rt.V.str("x");
-        break;
-      }
-      const __m1 = rt.matchPattern(q, rt.patConst(rt.vector3iConst("AXIS_Y")));
-      if (__m1 !== null) {
-        return rt.V.str("y");
-        break;
-      }
-      const __m2 = rt.matchPattern(q, rt.patConst(rt.vector3Const("AXIS_Z")));
-      if (__m2 !== null && rt.ops.truthy(rt.ops.eq(q, rt.V.int(2)))) {
-        return rt.V.str("z-guard");
-        break;
-      }
-      const __m3 = rt.matchPattern(q, rt.patWild());
-      if (__m3 !== null) {
-        return rt.V.str("none");
-        break;
-      }
-    } while (false);
+    const __gd_frame = rt.frameEnter("res://main.gd", "g");
+    try {
+      rt.frameLine(35);
+      do {
+        const __m0 = rt.matchPattern(q, rt.patConst(rt.vector3Const("AXIS_X")));
+        if (__m0 !== null) {
+          rt.frameLine(37);
+          return rt.V.str("x");
+          break;
+        }
+        const __m1 = rt.matchPattern(q, rt.patConst(rt.vector3iConst("AXIS_Y")));
+        if (__m1 !== null) {
+          rt.frameLine(39);
+          return rt.V.str("y");
+          break;
+        }
+        const __m2 = rt.matchPattern(q, rt.patConst(rt.vector3Const("AXIS_Z")));
+        if (__m2 !== null && rt.ops.truthy(rt.ops.eq(q, rt.V.int(2)))) {
+          rt.frameLine(41);
+          return rt.V.str("z-guard");
+          break;
+        }
+        const __m3 = rt.matchPattern(q, rt.patWild());
+        if (__m3 !== null) {
+          rt.frameLine(43);
+          return rt.V.str("none");
+          break;
+        }
+      } while (false);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -4,18 +4,52 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
-    let b = a;
-    rt.method(b, "append", [rt.V.int(3)]);
-    print(rt.showArgs([a]));
-    print(rt.showArgs([b]));
-    print(rt.showArgs([rt.ops.eq(a, b)]));
-    let c = rt.method(a, "duplicate", []);
-    rt.method(c, "append", [rt.V.int(9)]);
-    print(rt.showArgs([a]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(3);
+      let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
+      rt.frameLine(4);
+      let b = a;
+      rt.frameLine(5);
+      rt.method(b, "append", [rt.V.int(3)]);
+      rt.frameLine(6);
+      print(rt.showArgs([a]));
+      rt.frameLine(7);
+      print(rt.showArgs([b]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.ops.eq(a, b)]));
+      rt.frameLine(9);
+      let c = rt.method(a, "duplicate", []);
+      rt.frameLine(10);
+      rt.method(c, "append", [rt.V.int(9)]);
+      rt.frameLine(11);
+      print(rt.showArgs([a]));
+      rt.frameLine(12);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

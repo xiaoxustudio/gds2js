@@ -4,56 +4,111 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let d = new Map<unknown, number>([]);
-    let i = 0;
-    let s = 0;
-    while ((i < 3)) {
-      d.set(i, rt.fast.iMulC(i, 10));
-      i = rt.fast.iAddC(i, 1);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let d = new Map<unknown, number>([]);
+      rt.frameLine(5);
+      let i = 0;
+      rt.frameLine(6);
+      let s = 0;
+      rt.frameLine(7);
+      while ((i < 3)) {
+        rt.frameLine(8);
+        d.set(i, rt.fast.iMulC(i, 10));
+        rt.frameLine(9);
+        i = rt.fast.iAddC(i, 1);
+      }
+      rt.frameLine(10);
+      let j = 0;
+      rt.frameLine(11);
+      while ((j < d.size)) {
+        rt.frameLine(12);
+        s = rt.fast.iAddC(s, rt.fast.rawDictGet(d, j));
+        rt.frameLine(13);
+        j = rt.fast.iAddC(j, 1);
+      }
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.int(s)]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.int(d.size)]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.int(rt.fast.rawDictGet(d, 2))]));
+      rt.frameLine(17);
+      let e = new Map<unknown, number>([]);
+      rt.frameLine(18);
+      e.set("a", 1);
+      rt.frameLine(19);
+      e.set("b", 2);
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.int(e.size)]));
+      rt.frameLine(22);
+      let g = rt.dictOf([]);
+      rt.frameLine(23);
+      {
+        const _nv = rt.writeIdx(g, rt.V.float(1), rt.V.int(5));
+        if (_nv !== null) g = _nv;
+      }
+      rt.frameLine(24);
+      print(rt.showArgs([rt.wrapValue(rt.index(g, rt.V.float(1)))]));
+      rt.frameLine(25);
+      let m = rt.dictOf([]);
+      rt.frameLine(26);
+      {
+        const _nv = rt.writeIdx(m, rt.V.int(0), rt.V.int(1));
+        if (_nv !== null) m = _nv;
+      }
+      rt.frameLine(27);
+      {
+        const _nv = rt.writeIdx(m, rt.V.int(1), rt.V.float(2.5));
+        if (_nv !== null) m = _nv;
+      }
+      rt.frameLine(28);
+      print(rt.showArgs([rt.ops.add(rt.wrapValue(rt.index(m, rt.V.int(0))), rt.wrapValue(rt.index(m, rt.V.int(1))))]));
+      rt.frameLine(29);
+      let h = rt.dictOf([]);
+      rt.frameLine(30);
+      {
+        const _nv = rt.writeIdx(h, rt.V.int(0), rt.V.int(1));
+        if (_nv !== null) h = _nv;
+      }
+      rt.frameLine(31);
+      let k = h;
+      rt.frameLine(32);
+      {
+        const _nv = rt.writeIdx(k, rt.V.int(1), rt.V.int(2));
+        if (_nv !== null) k = _nv;
+      }
+      rt.frameLine(33);
+      print(rt.showArgs([rt.method(h, "size", [])]));
+      rt.frameLine(34);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    let j = 0;
-    while ((j < d.size)) {
-      s = rt.fast.iAddC(s, rt.fast.rawDictGet(d, j));
-      j = rt.fast.iAddC(j, 1);
-    }
-    print(rt.showArgs([rt.V.int(s)]));
-    print(rt.showArgs([rt.V.int(d.size)]));
-    print(rt.showArgs([rt.V.int(rt.fast.rawDictGet(d, 2))]));
-    let e = new Map<unknown, number>([]);
-    e.set("a", 1);
-    e.set("b", 2);
-    print(rt.showArgs([rt.V.int(rt.fast.iAddC(rt.fast.rawDictGet(e, "a"), rt.fast.rawDictGet(e, "b")))]));
-    print(rt.showArgs([rt.V.int(e.size)]));
-    let g = rt.dictOf([]);
-    {
-      const _nv = rt.writeIdx(g, rt.V.float(1), rt.V.int(5));
-      if (_nv !== null) g = _nv;
-    }
-    print(rt.showArgs([rt.wrapValue(rt.index(g, rt.V.float(1)))]));
-    let m = rt.dictOf([]);
-    {
-      const _nv = rt.writeIdx(m, rt.V.int(0), rt.V.int(1));
-      if (_nv !== null) m = _nv;
-    }
-    {
-      const _nv = rt.writeIdx(m, rt.V.int(1), rt.V.float(2.5));
-      if (_nv !== null) m = _nv;
-    }
-    print(rt.showArgs([rt.ops.add(rt.wrapValue(rt.index(m, rt.V.int(0))), rt.wrapValue(rt.index(m, rt.V.int(1))))]));
-    let h = rt.dictOf([]);
-    {
-      const _nv = rt.writeIdx(h, rt.V.int(0), rt.V.int(1));
-      if (_nv !== null) h = _nv;
-    }
-    let k = h;
-    {
-      const _nv = rt.writeIdx(k, rt.V.int(1), rt.V.int(2));
-      if (_nv !== null) k = _nv;
-    }
-    print(rt.showArgs([rt.method(h, "size", [])]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

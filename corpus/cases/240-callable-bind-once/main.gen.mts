@@ -4,33 +4,88 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Base());
-    let lam = rt.callable((__a: rt.Variant[]) => {
-      const x = __a[0] as rt.Variant;
-      return rt.ops.add(x, rt.V.int(1));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(11);
+      let o = rt.V.object(new Base());
+      rt.frameLine(12);
+      let lam = rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          const x = __a[0] as rt.Variant;
+          rt.frameLine(12);
+          return rt.ops.add(x, rt.V.int(1));
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
     }, 1);
-    print(rt.showArgs([rt.V.str("b01|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), rt.wrapValue(rt.attribute(o, "three"))), rt.V.str("|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []))]));
-    print(rt.showArgs([rt.V.str("b02|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1)]), rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(2)])), rt.V.str("|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1)]), rt.wrapValue(rt.attribute(o, "three")))]));
-    print(rt.showArgs([rt.V.str("b03|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "bind", []), rt.globalCallable("abs")), rt.V.str("|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "bind", []), rt.method(rt.globalCallable("abs"), "bind", []))]));
-    print(rt.showArgs([rt.V.str("b04|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "bind", []), rt.callableCtor([])), rt.V.str("|"), rt.ops.eq(rt.globalCallable("abs"), rt.callableCtor([]))]));
-    print(rt.showArgs([rt.V.str("b05|"), rt.ops.eq(rt.method(lam, "bind", []), lam), rt.V.str("|"), rt.ops.eq(lam, lam)]));
-    print(rt.showArgs([rt.V.str("b06|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_bound_arguments", []), rt.V.str("|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_bound_arguments_count", [])]));
-    print(rt.showArgs([rt.V.str("b07|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "is_null", []), rt.V.str("|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "is_valid", [])]));
-    print(rt.showArgs([rt.V.str("b08|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)])]));
-    print(rt.showArgs([rt.V.str("b09|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "stwo")), "bind", []), rt.wrapValue(rt.attribute(o, "stwo"))), rt.V.str("|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "stwo")), "bind", []), "call", [rt.V.int(1), rt.V.int(2)])]));
-    print(rt.showArgs([rt.V.str("b10|"), rt.method(rt.dictOf([[rt.wrapValue(rt.attribute(o, "three")), rt.V.int(1)]]), "has", [rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [])]), rt.V.str("|"), rt.method(rt.dictOf([[rt.wrapValue(rt.attribute(o, "three")), rt.V.int(1)]]), "has", [rt.wrapValue(rt.attribute(o, "three"))])]));
-    print(rt.showArgs([rt.V.str("b11|"), rt.method(rt.dictOf([[rt.globalCallable("abs"), rt.V.int(1)]]), "has", [rt.method(rt.globalCallable("abs"), "bind", [])]), rt.V.str("|"), rt.method(rt.dictOf([[rt.globalCallable("abs"), rt.V.int(1)]]), "has", [rt.method(rt.globalCallable("abs"), "bind", [rt.V.int(1)])])]));
-    print(rt.showArgs([rt.V.str("b12|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]), rt.V.str("|"), rt.method(rt.method(rt.globalCallable("abs"), "bind", []), "call", [rt.V.int((-7))])]));
-    print(rt.showArgs([rt.V.str("b13|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_method", []))]));
-    print(rt.showArgs([rt.V.str("b14|"), rt.method(rt.globalCallable("abs"), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.globalCallable("abs"), "get_method", [])), rt.V.str("|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "get_method", []), rt.V.stringName("abs"))]));
-    print(rt.showArgs([rt.V.str("b15|"), rt.method(lam, "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(lam, "get_method", []))]));
-    print(rt.showArgs([rt.V.str("b16|"), rt.method(rt.callableCtor([]), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.callableCtor([]), "get_method", [])), rt.V.str("|"), rt.ops.eq(rt.method(rt.callableCtor([]), "get_method", []), rt.V.str(""))]));
-    print(rt.showArgs([rt.V.str("b17|"), rt.method(rt.wrapValue(rt.attribute(o, "three")), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.wrapValue(rt.attribute(o, "three")), "get_method", []))]));
-    print(rt.showArgs([rt.V.str("b18|"), rt.method(rt.globalCallable("len"), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.globalCallable("len"), "get_method", []))]));
-    print(rt.showArgs([rt.V.str("b19|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_argument_count", []), rt.V.str("|"), rt.method(rt.globalCallable("abs"), "get_argument_count", []), rt.V.str("|"), rt.method(lam, "get_argument_count", [])]));
-    this.quit();
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("b01|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), rt.wrapValue(rt.attribute(o, "three"))), rt.V.str("|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []))]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("b02|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1)]), rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(2)])), rt.V.str("|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1)]), rt.wrapValue(rt.attribute(o, "three")))]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("b03|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "bind", []), rt.globalCallable("abs")), rt.V.str("|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "bind", []), rt.method(rt.globalCallable("abs"), "bind", []))]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("b04|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "bind", []), rt.callableCtor([])), rt.V.str("|"), rt.ops.eq(rt.globalCallable("abs"), rt.callableCtor([]))]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("b05|"), rt.ops.eq(rt.method(lam, "bind", []), lam), rt.V.str("|"), rt.ops.eq(lam, lam)]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("b06|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_bound_arguments", []), rt.V.str("|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_bound_arguments_count", [])]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.str("b07|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "is_null", []), rt.V.str("|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "is_valid", [])]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("b08|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)])]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("b09|"), rt.ops.eq(rt.method(rt.wrapValue(rt.attribute(o, "stwo")), "bind", []), rt.wrapValue(rt.attribute(o, "stwo"))), rt.V.str("|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "stwo")), "bind", []), "call", [rt.V.int(1), rt.V.int(2)])]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("b10|"), rt.method(rt.dictOf([[rt.wrapValue(rt.attribute(o, "three")), rt.V.int(1)]]), "has", [rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [])]), rt.V.str("|"), rt.method(rt.dictOf([[rt.wrapValue(rt.attribute(o, "three")), rt.V.int(1)]]), "has", [rt.wrapValue(rt.attribute(o, "three"))])]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("b11|"), rt.method(rt.dictOf([[rt.globalCallable("abs"), rt.V.int(1)]]), "has", [rt.method(rt.globalCallable("abs"), "bind", [])]), rt.V.str("|"), rt.method(rt.dictOf([[rt.globalCallable("abs"), rt.V.int(1)]]), "has", [rt.method(rt.globalCallable("abs"), "bind", [rt.V.int(1)])])]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("b12|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))]), rt.V.str("|"), rt.method(rt.method(rt.globalCallable("abs"), "bind", []), "call", [rt.V.int((-7))])]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("b13|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_method", []))]));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str("b14|"), rt.method(rt.globalCallable("abs"), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.globalCallable("abs"), "get_method", [])), rt.V.str("|"), rt.ops.eq(rt.method(rt.globalCallable("abs"), "get_method", []), rt.V.stringName("abs"))]));
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("b15|"), rt.method(lam, "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(lam, "get_method", []))]));
+      rt.frameLine(28);
+      print(rt.showArgs([rt.V.str("b16|"), rt.method(rt.callableCtor([]), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.callableCtor([]), "get_method", [])), rt.V.str("|"), rt.ops.eq(rt.method(rt.callableCtor([]), "get_method", []), rt.V.str(""))]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("b17|"), rt.method(rt.wrapValue(rt.attribute(o, "three")), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.wrapValue(rt.attribute(o, "three")), "get_method", []))]));
+      rt.frameLine(30);
+      print(rt.showArgs([rt.V.str("b18|"), rt.method(rt.globalCallable("len"), "get_method", []), rt.V.str("|"), rt.typeOf(rt.method(rt.globalCallable("len"), "get_method", []))]));
+      rt.frameLine(31);
+      print(rt.showArgs([rt.V.str("b19|"), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", []), "get_argument_count", []), rt.V.str("|"), rt.method(rt.globalCallable("abs"), "get_argument_count", []), rt.V.str("|"), rt.method(lam, "get_argument_count", [])]));
+      rt.frameLine(32);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -49,12 +104,46 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Base extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   three(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, b, c]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "three");
+    try {
+      rt.frameLine(5);
+      return rt.strBuiltin([a, b, c]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static stwo(a: rt.Variant, b: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, b]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "stwo");
+    try {
+      rt.frameLine(8);
+      return rt.strBuiltin([a, b]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

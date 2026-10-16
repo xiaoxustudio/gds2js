@@ -4,43 +4,84 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let p = rt.V.object(new Inner());
-    {
-      const _nv = rt.writeProp(p, "prop", rt.V.int(3));
-      if (_nv !== null) p = _nv;
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(30);
+      let p = rt.V.object(new Inner());
+      rt.frameLine(31);
+      {
+        const _nv = rt.writeProp(p, "prop", rt.V.int(3));
+        if (_nv !== null) p = _nv;
+      }
+      rt.frameLine(32);
+      print(rt.showArgs([rt.V.str("m1 "), rt.wrapValue(rt.attribute(p, "prop")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "raw"))]));
+      rt.frameLine(33);
+      {
+        const _nv = rt.writeProp(p, "prop", rt.ops.add(rt.wrapValue(rt.attribute(p, "prop")), rt.V.int(1)));
+        if (_nv !== null) p = _nv;
+      }
+      rt.frameLine(34);
+      print(rt.showArgs([rt.V.str("m2 "), rt.wrapValue(rt.attribute(p, "prop")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "raw"))]));
+      rt.frameLine(35);
+      print(rt.showArgs([rt.V.str("m3 "), rt.wrapValue(rt.attribute(p, "ro"))]));
+      rt.frameLine(36);
+      {
+        const _nv = rt.writeProp(p, "ro", rt.V.int(9));
+        if (_nv !== null) p = _nv;
+      }
+      rt.frameLine(37);
+      print(rt.showArgs([rt.V.str("m4 "), rt.wrapValue(rt.attribute(p, "ro"))]));
+      rt.frameLine(38);
+      print(rt.showArgs([rt.V.str("m5 "), rt.method(p, "setvia", [rt.V.float(2.7)]), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "raw"))]));
+      rt.frameLine(39);
+      {
+        const _nv = rt.writeProp(p, "ref", rt.V.int(4));
+        if (_nv !== null) p = _nv;
+      }
+      rt.frameLine(40);
+      print(rt.showArgs([rt.V.str("m6 "), rt.wrapValue(rt.attribute(p, "ref")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "rraw"))]));
+      rt.frameLine(41);
+      {
+        const _nv = rt.writeProp(p, "ref", rt.ops.add(rt.wrapValue(rt.attribute(p, "ref")), rt.V.int(1)));
+        if (_nv !== null) p = _nv;
+      }
+      rt.frameLine(42);
+      print(rt.showArgs([rt.V.str("m7 "), rt.wrapValue(rt.attribute(p, "ref")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "rraw"))]));
+      rt.frameLine(43);
+      let q = 8;
+      rt.frameLine(44);
+      {
+        const _nv = rt.writeProp(p, "ref", rt.V.int(q));
+        if (_nv !== null) p = _nv;
+      }
+      rt.frameLine(45);
+      print(rt.showArgs([rt.V.str("m8 "), rt.wrapValue(rt.attribute(p, "rraw"))]));
+      rt.frameLine(46);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([rt.V.str("m1 "), rt.wrapValue(rt.attribute(p, "prop")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "raw"))]));
-    {
-      const _nv = rt.writeProp(p, "prop", rt.ops.add(rt.wrapValue(rt.attribute(p, "prop")), rt.V.int(1)));
-      if (_nv !== null) p = _nv;
-    }
-    print(rt.showArgs([rt.V.str("m2 "), rt.wrapValue(rt.attribute(p, "prop")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "raw"))]));
-    print(rt.showArgs([rt.V.str("m3 "), rt.wrapValue(rt.attribute(p, "ro"))]));
-    {
-      const _nv = rt.writeProp(p, "ro", rt.V.int(9));
-      if (_nv !== null) p = _nv;
-    }
-    print(rt.showArgs([rt.V.str("m4 "), rt.wrapValue(rt.attribute(p, "ro"))]));
-    print(rt.showArgs([rt.V.str("m5 "), rt.method(p, "setvia", [rt.V.float(2.7)]), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "raw"))]));
-    {
-      const _nv = rt.writeProp(p, "ref", rt.V.int(4));
-      if (_nv !== null) p = _nv;
-    }
-    print(rt.showArgs([rt.V.str("m6 "), rt.wrapValue(rt.attribute(p, "ref")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "rraw"))]));
-    {
-      const _nv = rt.writeProp(p, "ref", rt.ops.add(rt.wrapValue(rt.attribute(p, "ref")), rt.V.int(1)));
-      if (_nv !== null) p = _nv;
-    }
-    print(rt.showArgs([rt.V.str("m7 "), rt.wrapValue(rt.attribute(p, "ref")), rt.V.str(" "), rt.wrapValue(rt.attribute(p, "rraw"))]));
-    let q = 8;
-    {
-      const _nv = rt.writeProp(p, "ref", rt.V.int(q));
-      if (_nv !== null) p = _nv;
-    }
-    print(rt.showArgs([rt.V.str("m8 "), rt.wrapValue(rt.attribute(p, "rraw"))]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -59,16 +100,38 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
-  raw = rt.V.int(0);
+  declare raw: rt.Variant;
+  declare rraw: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.raw = rt.V.int(0);
+      rt.frameLine(18);
+      this.rraw = rt.V.int(0);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   get prop() {
+    rt.frameLine(7);
     print(rt.showArgs([rt.V.str("g")]));
+    rt.frameLine(8);
     return this.raw;
   }
   set prop(value) {
+    rt.frameLine(10);
     print(rt.showArgs([rt.V.str("s "), rt.ops.mul(value, rt.V.int(2))]));
+    rt.frameLine(11);
     this.raw = rt.ops.mul(value, rt.V.int(2));
   }
   get ro() {
+    rt.frameLine(14);
     return rt.V.int(7);
   }
   set ro(value) {
@@ -80,21 +143,56 @@ class Inner extends rt.GdScriptObject {
   set ref(value) {
     this._setr(value);
   }
-  rraw = rt.V.int(0);
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   _getr(): rt.Variant {
-    print(rt.showArgs([rt.V.str("G")]));
-    return this.rraw;
+    const __gd_frame = rt.frameEnter("res://main.gd", "_getr");
+    try {
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("G")]));
+      rt.frameLine(21);
+      return this.rraw;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   _setr(v: rt.Variant): void {
-    print(rt.showArgs([rt.V.str("S "), v]));
-    this.rraw = v;
+    const __gd_frame = rt.frameEnter("res://main.gd", "_setr");
+    try {
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("S "), v]));
+      rt.frameLine(24);
+      this.rraw = v;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   setvia(v: rt.Variant): rt.Variant {
-    this.prop = rt.toInt(v);
-    return this.raw;
+    const __gd_frame = rt.frameEnter("res://main.gd", "setvia");
+    try {
+      rt.frameLine(26);
+      rt.frameLine(26);
+      this.prop = rt.toInt(v);
+      rt.frameLine(27);
+      return this.raw;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

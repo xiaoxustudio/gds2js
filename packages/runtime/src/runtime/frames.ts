@@ -1,4 +1,5 @@
 import { V, type Variant } from "./tags";
+import { GodotRuntimeError } from "./errors";
 import { GArray, GDict, showArgsSep } from "./values";
 
 /** 一帧：脚本路径、函数名（lambda 是 `<anonymous lambda>`）与这一帧当前执行到的行。 */
@@ -53,6 +54,17 @@ export function gPrintStack(): Variant {
 
 export function stackFrameLines(): string[] {
   return stackFrames().map((f, i) => `Frame ${String(i)} - ${f.source}:${String(f.line)} in function '${f.fn}'`);
+}
+
+/** 运行期错误作废的是**当前那支函数**：引擎先把这一块推到 stderr，再从该函数返回，调用方接着跑（S406，九格 + 十九格的返回型默认值量的）。不是引擎那一句的就原样再抛出去。 */
+export function gdFunctionError(err: unknown): void {
+  if (!(err instanceof GodotRuntimeError)) throw err;
+  const fs = stackFrames();
+  const top = fs[0];
+  const at = top === undefined ? "? (-1)" : `${top.fn} (${top.source}:${String(top.line)})`;
+  const lines = [`SCRIPT ERROR: ${err.message}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
+  for (const [i, f] of fs.entries()) lines.push(`       [${String(i)}] ${f.fn} (${f.source}:${String(f.line)})`);
+  process.stderr.write(lines.join("\n") + "\n");
 }
 
 /** `push_error` / `push_warning` 那一块：首行 + `at:` + backtrace 表头 + 每帧一行（实测原文，语料 273）。 */

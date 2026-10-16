@@ -288,6 +288,17 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
   for (const c of m.innerClasses) collect(c);
+  // 字段初始化子与模块 var 的初值也在解析期的管辖里：`var x = [1, 2]["a"]` 引擎给的是那一句下标型拒（读数 `tmp/probe-errorflow/compare91.txt` 的 r4 / r5）。
+  const inits: Array<{ expr: Expr; seeds: Seed[] }> = [];
+  const collectInits = (vars: VarDecl[], seeds: Seed[]): void => {
+    for (const v of vars) if (v.init !== null && v.init !== undefined) inits.push({ expr: v.init, seeds });
+  };
+  const collectInitClasses = (c: ClassDecl): void => {
+    collectInits(c.vars, [...moduleSeeds, ...c.vars.map((v) => ({ name: v.name, type: v.type }))]);
+    for (const inner of c.innerClasses) collectInitClasses(inner);
+  };
+  collectInits(m.vars, moduleSeeds);
+  for (const c of m.innerClasses) collectInitClasses(c);
 
   const stOf = (e: Expr, decls: Map<string, string>): NonNullable<StaticType> | null => {
     if (e.kind === "ident") {
@@ -343,6 +354,12 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
             badKey(slot, e.index, decls);
             if (slot.kind === "Dictionary" && stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
           }
+        } else if (e.obj.kind === "array") {
+          // 数组字面量直接下标：基名静态就是 `Array`，与推断的那一格同一句（读数 `tmp/probe-errorflow/compare91.txt` 的 r1 / r4 / r5）
+          badKey({ decl: "Array", kind: "Array" }, e.index, decls);
+        } else if (e.obj.kind === "dict") {
+          // 字典字面量直接下标：基名静态就是 `Dictionary`，int 键给的是数组那一式（S406 那三格 n1 / n2 / q1）
+          if (stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
         } else {
           // `self.f()` 那一形：返回型标注成字典时引擎认的是静态基名（`self.d()[0]` 给 `Out of bounds get index`，S405 量过）
           const own = e.obj.kind === "call" ? dictSlotOf(callType(e.obj) ?? "") : null;
@@ -378,6 +395,17 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
       case "await":
         walkExpr(e.operand, typed, decls);
         return;
+      case "lambda": {
+        // lambda 的体也在解析期管辖里：那三句（下标型拒、定形字典键型拒、void 取值拒）引擎在 lambda 里同样发（读数 `tmp/probe-errorflow/compare91.txt` 的 r1–r3）
+        const ltyped = new Map(typed);
+        const ldecls = new Map(decls);
+        for (const p of e.params) {
+          if (p.type === null || p.type.kind !== "named") continue;
+          seedInto(ltyped, ldecls, p.name, p.type.name);
+        }
+        walkStmts(e.body, ltyped, ldecls);
+        return;
+      }
       default:
         return;
     }
@@ -484,23 +512,31 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     return t !== null && t !== undefined && t.kind === "named" ? t.name : null;
   };
 
-  for (const { stmts, params, seeds, ret } of bodies) {
+  const seedInto = (typed: Map<string, TypedSlot>, decls: Map<string, string>, name: string, typeName: string): void => {
+    const scalar = scalarStaticName(typeName);
+    if (scalar !== null) decls.set(name, scalar);
+    const pos = positionalSlot(typeName, null);
+    if (pos !== null) typed.set(name, pos);
+    const ds = dictSlotOf(typeName);
+    if (ds !== null) typed.set(name, ds);
+  };
+  const scopeOf = (seeds: Seed[], params: Seed[], ret: TypeRef | null): [Map<string, TypedSlot>, Map<string, string>] => {
     const typed = new Map<string, TypedSlot>();
     const decls = new Map<string, string>();
-    const seed = (name: string, typeName: string): void => {
-      const scalar = scalarStaticName(typeName);
-      if (scalar !== null) decls.set(name, scalar);
-      const pos = positionalSlot(typeName, null);
-      if (pos !== null) typed.set(name, pos);
-      const ds = dictSlotOf(typeName);
-      if (ds !== null) typed.set(name, ds);
-    };
-    if (ret !== null && ret.kind === "named") seed("self", ret.name);
+    if (ret !== null && ret.kind === "named") seedInto(typed, decls, "self", ret.name);
     for (const p of [...seeds, ...params]) {
       if (p.type === null || p.type.kind !== "named") continue;
-      seed(p.name, p.type.name);
+      seedInto(typed, decls, p.name, p.type.name);
     }
+    return [typed, decls];
+  };
+  for (const { stmts, params, seeds, ret } of bodies) {
+    const [typed, decls] = scopeOf(seeds, params, ret);
     walkStmts(stmts, typed, decls);
+  }
+  for (const { expr, seeds } of inits) {
+    const [typed, decls] = scopeOf(seeds, [], null);
+    walkExpr(expr, typed, decls);
   }
 }
 
@@ -1185,6 +1221,17 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             expr(en.key, false);
             expr(en.value, false);
           }
+          return;
+        case "lambda":
+          // 引擎那句在 lambda 体里同样发（读数 `tmp/probe-errorflow/compare91.txt` 的 r3）
+          for (const p of e.params) {
+            if (p.type !== null && p.type.kind === "named") {
+              if (/^Array(\[|$)/.test(p.type.name)) shapes.set(p.name, "Array");
+              else if (/^Dictionary(\[|$)/.test(p.type.name)) shapes.set(p.name, "Dictionary");
+              else if (PACK_SHAPE_NAMES.has(p.type.name)) shapes.set(p.name, "Pack");
+            }
+          }
+          stmts(e.body);
           return;
         default:
           return;

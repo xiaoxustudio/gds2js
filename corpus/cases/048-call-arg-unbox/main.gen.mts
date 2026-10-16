@@ -4,41 +4,117 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   add2(a: number, b: number): number {
-    return rt.fast.iAddC(a, b);
+    const __gd_frame = rt.frameEnter("res://main.gd", "add2");
+    try {
+      rt.frameLine(4);
+      return rt.fast.iAddC(a, b);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   scale(x: number): number {
-    return (x * 2);
+    const __gd_frame = rt.frameEnter("res://main.gd", "scale");
+    try {
+      rt.frameLine(7);
+      return (x * 2);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   shout(s: string): string {
-    return (s + "!");
+    const __gd_frame = rt.frameEnter("res://main.gd", "shout");
+    try {
+      rt.frameLine(10);
+      return (s + "!");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   idn(x: rt.Variant): rt.Variant {
-    return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "idn");
+    try {
+      rt.frameLine(13);
+      return x;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let total = 0;
-    let i = 0;
-    while ((i < 3)) {
-      total = this.add2(total, i);
-      i = rt.fast.iAddC(i, 1);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(16);
+      let total = 0;
+      rt.frameLine(17);
+      let i = 0;
+      rt.frameLine(18);
+      while ((i < 3)) {
+        rt.frameLine(19);
+        total = this.add2(total, i);
+        rt.frameLine(20);
+        i = rt.fast.iAddC(i, 1);
+      }
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.int(total)]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.int(rt.fast.iAddC(this.add2(100, 200), 5))]));
+      rt.frameLine(23);
+      let arr = rt.V.array(rt.GArray.of([rt.V.int(this.add2(1, 2)), rt.V.int(this.add2(3, 4))]));
+      rt.frameLine(24);
+      print(rt.showArgs([arr]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.float(this.scale(3))]));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str(this.shout("hi"))]));
+      rt.frameLine(27);
+      print(rt.showArgs([this.idn(rt.V.int(7))]));
+      rt.frameLine(28);
+      print(rt.showArgs([this.idn(rt.V.str("s"))]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.int(this.add2(7, 2))]));
+      rt.frameLine(30);
+      print(rt.showArgs([this.idn(rt.V.int(2))]));
+      rt.frameLine(31);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([rt.V.int(total)]));
-    print(rt.showArgs([rt.V.int(rt.fast.iAddC(this.add2(100, 200), 5))]));
-    let arr = rt.V.array(rt.GArray.of([rt.V.int(this.add2(1, 2)), rt.V.int(this.add2(3, 4))]));
-    print(rt.showArgs([arr]));
-    print(rt.showArgs([rt.V.float(this.scale(3))]));
-    print(rt.showArgs([rt.V.str(this.shout("hi"))]));
-    print(rt.showArgs([this.idn(rt.V.int(7))]));
-    print(rt.showArgs([this.idn(rt.V.str("s"))]));
-    print(rt.showArgs([rt.V.int(this.add2(7, 2))]));
-    print(rt.showArgs([this.idn(rt.V.int(2))]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

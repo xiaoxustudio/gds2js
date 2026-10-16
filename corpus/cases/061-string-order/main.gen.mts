@@ -4,25 +4,66 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let a = "😀";
-    let b = "￿";
-    print(rt.showArgs([rt.method(rt.V.str(a), "length", [])]));
-    print(rt.showArgs([rt.method(rt.V.str(b), "length", [])]));
-    print(rt.showArgs([rt.ops.lt(rt.V.str(a), rt.V.str(b))]));
-    print(rt.showArgs([rt.ops.lt(rt.V.str(b), rt.V.str(a))]));
-    print(rt.showArgs([rt.ops.gt(rt.V.str(a), rt.V.str(b))]));
-    print(rt.showArgs([rt.ops.lt(rt.V.str("z"), rt.V.str(a))]));
-    print(rt.showArgs([rt.ops.lt(rt.V.str("z"), rt.V.str(b))]));
-    let arr = rt.V.array(rt.GArray.of([rt.V.str(a), rt.V.str(b), rt.V.str("z"), rt.V.str("apple")]));
-    rt.method(arr, "sort", []);
-    print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(0)))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(1)))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(2)))]));
-    print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(3)))]));
-    print(rt.showArgs([rt.ops.eq(rt.V.str(a), rt.V.str(b))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let a = "😀";
+      rt.frameLine(5);
+      let b = "￿";
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(rt.V.str(a), "length", [])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.method(rt.V.str(b), "length", [])]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.ops.lt(rt.V.str(a), rt.V.str(b))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.ops.lt(rt.V.str(b), rt.V.str(a))]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.ops.gt(rt.V.str(a), rt.V.str(b))]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.ops.lt(rt.V.str("z"), rt.V.str(a))]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.ops.lt(rt.V.str("z"), rt.V.str(b))]));
+      rt.frameLine(13);
+      let arr = rt.V.array(rt.GArray.of([rt.V.str(a), rt.V.str(b), rt.V.str("z"), rt.V.str("apple")]));
+      rt.frameLine(14);
+      rt.method(arr, "sort", []);
+      rt.frameLine(15);
+      print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(0)))]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(1)))]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(2)))]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.wrapValue(rt.index(arr, rt.V.int(3)))]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.ops.eq(rt.V.str(a), rt.V.str(b))]));
+      rt.frameLine(20);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

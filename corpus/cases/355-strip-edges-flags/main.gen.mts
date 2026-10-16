@@ -4,23 +4,62 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let s = rt.strOf(rt.V.str("  abc  "));
-    print(rt.showArgs([rt.V.str("A|"), rt.method(s, "strip_edges", []), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(true)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(false)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(true), rt.V.bool(true)])]));
-    print(rt.showArgs([rt.V.str("B|"), rt.method(s, "strip_edges", [rt.V.bool(true), rt.V.bool(false)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(false), rt.V.bool(false)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.int(1), rt.V.bool(false)])]));
-    let n = rt.V.str("  x  ");
-    print(rt.showArgs([rt.V.str("C|"), rt.method(n, "strip_edges", [rt.V.int(1), rt.V.int(0)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int(0), rt.V.int(1)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int(0), rt.V.int(0)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int(2), rt.V.int(2)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int((-1)), rt.V.int((-1))])]));
-    print(rt.showArgs([rt.V.str("D|"), rt.method(n, "strip_edges", [rt.V.float(0.5), rt.V.float(0)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.float(1.5), rt.V.float(1.5)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.float(0), rt.V.float(0)])]));
-    let t = rt.strOf(rt.V.str("\ta\tb\t"));
-    print(rt.showArgs([rt.V.str("E|"), rt.method(t, "strip_edges", []), rt.V.str("|"), rt.method(t, "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), rt.V.str("|"), rt.method(t, "strip_edges", [rt.V.bool(true), rt.V.bool(false)])]));
-    let u = rt.strOf(rt.V.str("xabcx"));
-    print(rt.showArgs([rt.V.str("F|"), rt.method(u, "strip_edges", [rt.V.bool(true), rt.V.int(1)]), rt.V.str("|"), rt.method(u, "strip_edges", [rt.V.bool(false), rt.V.bool(false)]), rt.V.str("|"), rt.method(u, "strip_edges", [])]));
-    print(rt.showArgs([rt.V.str("G|"), rt.method(rt.method(rt.V.str(" \u0001a "), "strip_edges", []), "length", []), rt.V.str("|"), rt.method(rt.method(rt.V.str(" \u0001a "), "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), "length", []), rt.V.str("|"), rt.method(rt.method(rt.V.str(" "), "strip_edges", [rt.V.bool(false), rt.V.bool(false)]), "length", [])]));
-    let y = rt.strOf(rt.ops.add(rt.stringChr(rt.V.int(1)), rt.V.str("  abc  ")));
-    print(rt.showArgs([rt.V.str("H|"), rt.method(rt.method(y, "strip_edges", []), "length", []), rt.V.str("|"), rt.method(rt.method(y, "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), "length", []), rt.V.str("|"), rt.method(rt.method(y, "strip_edges", [rt.V.bool(true), rt.V.bool(false)]), "length", [])]));
-    print(rt.showArgs([rt.V.str("I|"), rt.method(rt.method(rt.V.str(" abc"), "strip_edges", []), "length", []), rt.V.str("|"), rt.method(rt.method(rt.V.str(" abc "), "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), "length", []), rt.V.str("|"), rt.method(rt.V.str("abc"), "strip_edges", [rt.V.bool(true), rt.V.bool(false)])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let s = rt.strOf(rt.V.str("  abc  "));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.V.str("A|"), rt.method(s, "strip_edges", []), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(true)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(false)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(true), rt.V.bool(true)])]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("B|"), rt.method(s, "strip_edges", [rt.V.bool(true), rt.V.bool(false)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.bool(false), rt.V.bool(false)]), rt.V.str("|"), rt.method(s, "strip_edges", [rt.V.int(1), rt.V.bool(false)])]));
+      rt.frameLine(7);
+      let n = rt.V.str("  x  ");
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("C|"), rt.method(n, "strip_edges", [rt.V.int(1), rt.V.int(0)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int(0), rt.V.int(1)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int(0), rt.V.int(0)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int(2), rt.V.int(2)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.int((-1)), rt.V.int((-1))])]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("D|"), rt.method(n, "strip_edges", [rt.V.float(0.5), rt.V.float(0)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.float(1.5), rt.V.float(1.5)]), rt.V.str("|"), rt.method(n, "strip_edges", [rt.V.float(0), rt.V.float(0)])]));
+      rt.frameLine(10);
+      let t = rt.strOf(rt.V.str("\ta\tb\t"));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("E|"), rt.method(t, "strip_edges", []), rt.V.str("|"), rt.method(t, "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), rt.V.str("|"), rt.method(t, "strip_edges", [rt.V.bool(true), rt.V.bool(false)])]));
+      rt.frameLine(12);
+      let u = rt.strOf(rt.V.str("xabcx"));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("F|"), rt.method(u, "strip_edges", [rt.V.bool(true), rt.V.int(1)]), rt.V.str("|"), rt.method(u, "strip_edges", [rt.V.bool(false), rt.V.bool(false)]), rt.V.str("|"), rt.method(u, "strip_edges", [])]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("G|"), rt.method(rt.method(rt.V.str(" \u0001a "), "strip_edges", []), "length", []), rt.V.str("|"), rt.method(rt.method(rt.V.str(" \u0001a "), "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), "length", []), rt.V.str("|"), rt.method(rt.method(rt.V.str(" "), "strip_edges", [rt.V.bool(false), rt.V.bool(false)]), "length", [])]));
+      rt.frameLine(15);
+      let y = rt.strOf(rt.ops.add(rt.stringChr(rt.V.int(1)), rt.V.str("  abc  ")));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("H|"), rt.method(rt.method(y, "strip_edges", []), "length", []), rt.V.str("|"), rt.method(rt.method(y, "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), "length", []), rt.V.str("|"), rt.method(rt.method(y, "strip_edges", [rt.V.bool(true), rt.V.bool(false)]), "length", [])]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("I|"), rt.method(rt.method(rt.V.str(" abc"), "strip_edges", []), "length", []), rt.V.str("|"), rt.method(rt.method(rt.V.str(" abc "), "strip_edges", [rt.V.bool(false), rt.V.bool(true)]), "length", []), rt.V.str("|"), rt.method(rt.V.str("abc"), "strip_edges", [rt.V.bool(true), rt.V.bool(false)])]));
+      rt.frameLine(18);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

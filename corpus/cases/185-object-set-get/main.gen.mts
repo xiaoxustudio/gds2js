@@ -4,14 +4,44 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Thing());
-    rt.method(o, "set", [rt.V.str("a"), rt.V.int(5)]);
-    rt.method(o, "set", [rt.V.str("s"), rt.V.int(12)]);
-    print(rt.showArgs([rt.V.str("r "), rt.wrapValue(rt.attribute(o, "a")), rt.V.str(" "), rt.method(o, "get", [rt.V.str("a")]), rt.V.str(" "), rt.wrapValue(rt.attribute(o, "s")), rt.V.str(" "), rt.method(o, "get", [rt.V.str("zz")]), rt.V.str(" "), rt.typeOf(rt.method(o, "get", [rt.V.str("zz")]))]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.typeOf(rt.method(o, "get", [rt.V.str("hi")])), rt.V.str(" "), rt.method(o, "call", [rt.V.str("hi")])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(11);
+      let o = rt.V.object(new Thing());
+      rt.frameLine(12);
+      rt.method(o, "set", [rt.V.str("a"), rt.V.int(5)]);
+      rt.frameLine(13);
+      rt.method(o, "set", [rt.V.str("s"), rt.V.int(12)]);
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("r "), rt.wrapValue(rt.attribute(o, "a")), rt.V.str(" "), rt.method(o, "get", [rt.V.str("a")]), rt.V.str(" "), rt.wrapValue(rt.attribute(o, "s")), rt.V.str(" "), rt.method(o, "get", [rt.V.str("zz")]), rt.V.str(" "), rt.typeOf(rt.method(o, "get", [rt.V.str("zz")]))]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("r2 "), rt.typeOf(rt.method(o, "get", [rt.V.str("hi")])), rt.V.str(" "), rt.method(o, "call", [rt.V.str("hi")])]));
+      rt.frameLine(16);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -30,11 +60,40 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Thing extends rt.GdScriptObject {
-  a = rt.V.int(7);
-  s = rt.strOf(rt.V.str("x"));
+  declare a: rt.Variant;
+  declare s: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.a = rt.V.int(7);
+      rt.frameLine(5);
+      this.s = rt.strOf(rt.V.str("x"));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   hi(): rt.Variant {
-    return rt.V.int(1);
+    const __gd_frame = rt.frameEnter("res://main.gd", "hi");
+    try {
+      rt.frameLine(8);
+      return rt.V.int(1);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

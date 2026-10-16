@@ -4,12 +4,40 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let s = "12abc";
-    print(rt.showArgs([rt.V.str("t1 "), rt.method(rt.V.object(new A()), "p", [rt.V.str(s)])]));
-    print(rt.showArgs([rt.V.str("t2 不该到这里")]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(8);
+      let s = "12abc";
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("t1 "), rt.method(rt.V.object(new A()), "p", [rt.V.str(s)])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("t2 不该到这里")]));
+      rt.frameLine(11);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -28,9 +56,34 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class A extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   p(a: rt.Variant): rt.Variant {
-    a = rt.paramSlot(a, "int", 1, "p", this);
-    return rt.ops.add(rt.V.str("ok<-"), rt.strBuiltin([a]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "p");
+    try {
+      a = rt.paramSlot(a, "int", 1, "p", this);
+      rt.frameLine(5);
+      return rt.ops.add(rt.V.str("ok<-"), rt.strBuiltin([a]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.str("");
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -4,29 +4,78 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   row(tag: rt.Variant, x: rt.Variant): void {
-    tag = rt.paramSlot(tag, "String", 1, "row", this);
-    print(rt.showArgs([tag, rt.V.str("|"), rt.isType(x, "Object"), rt.V.str("|"), rt.isType(x, "RefCounted"), rt.V.str("|"), rt.isType(x, "Resource"), rt.V.str("|"), rt.isType(x, "GDScript"), rt.V.str("|"), rt.isType(x, "Callable"), rt.V.str("|"), rt.isType(x, "Vector2"), rt.V.str("|"), rt.isType(x, "Array"), rt.V.str("|"), rt.typeOf(x)]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "row");
+    try {
+      tag = rt.paramSlot(tag, "String", 1, "row", this);
+      rt.frameLine(10);
+      print(rt.showArgs([tag, rt.V.str("|"), rt.isType(x, "Object"), rt.V.str("|"), rt.isType(x, "RefCounted"), rt.V.str("|"), rt.isType(x, "Resource"), rt.V.str("|"), rt.isType(x, "GDScript"), rt.V.str("|"), rt.isType(x, "Callable"), rt.V.str("|"), rt.isType(x, "Vector2"), rt.V.str("|"), rt.isType(x, "Array"), rt.V.str("|"), rt.typeOf(x)]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Inner());
-    this.row(rt.V.str("y01"), o);
-    this.row(rt.V.str("y02"), rt.V.object(__gd_d_Inner));
-    this.row(rt.V.str("y03"), rt.vector2New([rt.V.int(1), rt.V.int(2)]));
-    this.row(rt.V.str("y04"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])));
-    this.row(rt.V.str("y05"), rt.dictOf([[rt.V.int(1), rt.V.int(2)]]));
-    this.row(rt.V.str("y06"), rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1)]))]));
-    this.row(rt.V.str("y07"), rt.V.str("x"));
-    this.row(rt.V.str("y08"), rt.V.int(1));
-    this.row(rt.V.str("y09"), rt.wrapValue(rt.attribute(o, "m")));
-    this.row(rt.V.str("y10"), rt.callableCtor([]));
-    this.row(rt.V.str("y11"), rt.V.nil());
-    this.row(rt.V.str("y12"), rt.V.object(this));
-    print(rt.showArgs([rt.V.str("y13|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "RefCounted"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Object"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Inner")]));
-    print(rt.showArgs([rt.V.str("y14|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Resource"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "GDScript"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Node")]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(13);
+      let o = rt.V.object(new Inner());
+      rt.frameLine(14);
+      this.row(rt.V.str("y01"), o);
+      rt.frameLine(15);
+      this.row(rt.V.str("y02"), rt.V.object(__gd_d_Inner));
+      rt.frameLine(16);
+      this.row(rt.V.str("y03"), rt.vector2New([rt.V.int(1), rt.V.int(2)]));
+      rt.frameLine(17);
+      this.row(rt.V.str("y04"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])));
+      rt.frameLine(18);
+      this.row(rt.V.str("y05"), rt.dictOf([[rt.V.int(1), rt.V.int(2)]]));
+      rt.frameLine(19);
+      this.row(rt.V.str("y06"), rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1)]))]));
+      rt.frameLine(20);
+      this.row(rt.V.str("y07"), rt.V.str("x"));
+      rt.frameLine(21);
+      this.row(rt.V.str("y08"), rt.V.int(1));
+      rt.frameLine(22);
+      this.row(rt.V.str("y09"), rt.wrapValue(rt.attribute(o, "m")));
+      rt.frameLine(23);
+      this.row(rt.V.str("y10"), rt.callableCtor([]));
+      rt.frameLine(24);
+      this.row(rt.V.str("y11"), rt.V.nil());
+      rt.frameLine(25);
+      this.row(rt.V.str("y12"), rt.V.object(this));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str("y13|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "RefCounted"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Object"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Inner")]));
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("y14|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Resource"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "GDScript"), rt.V.str("|"), rt.isType(rt.method(rt.wrapValue(rt.attribute(o, "m")), "get_object", []), "Node")]));
+      rt.frameLine(28);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -46,10 +95,37 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
-  v = rt.V.int(1);
+  declare v: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.v = rt.V.int(1);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   m(x: rt.Variant): rt.Variant {
-    return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "m");
+    try {
+      rt.frameLine(7);
+      return x;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

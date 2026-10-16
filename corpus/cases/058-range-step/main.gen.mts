@@ -4,20 +4,53 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    for (let i of rt.rangeSeq([rt.V.int(0), rt.V.int(10), rt.V.int(2)])) {
-      print(rt.showArgs([rt.V.int(i)]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      for (let i of rt.rangeSeq([rt.V.int(0), rt.V.int(10), rt.V.int(2)])) {
+        rt.frameLine(5);
+        print(rt.showArgs([rt.V.int(i)]));
+      }
+      rt.frameLine(6);
+      for (let j of rt.rangeSeq([rt.V.int(10), rt.V.int(0), rt.V.int((-2))])) {
+        rt.frameLine(7);
+        print(rt.showArgs([rt.V.int(j)]));
+      }
+      rt.frameLine(8);
+      print(rt.showArgs([rt.method(rt.V.array(rt.range([rt.V.int(0), rt.V.int(20), rt.V.int(5)])), "size", [])]));
+      rt.frameLine(9);
+      for (let x of rt.rangeSeq([rt.V.float(0), rt.V.float(3)])) {
+        rt.frameLine(10);
+        print(rt.showArgs([rt.V.int(x)]));
+      }
+      rt.frameLine(11);
+      print(rt.showArgs([rt.wrapValue(rt.index(rt.V.array(rt.range([rt.V.int(2), rt.V.int(8), rt.V.int(3)])), rt.V.int(1)))]));
+      rt.frameLine(12);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    for (let j of rt.rangeSeq([rt.V.int(10), rt.V.int(0), rt.V.int((-2))])) {
-      print(rt.showArgs([rt.V.int(j)]));
-    }
-    print(rt.showArgs([rt.method(rt.V.array(rt.range([rt.V.int(0), rt.V.int(20), rt.V.int(5)])), "size", [])]));
-    for (let x of rt.rangeSeq([rt.V.float(0), rt.V.float(3)])) {
-      print(rt.showArgs([rt.V.int(x)]));
-    }
-    print(rt.showArgs([rt.wrapValue(rt.index(rt.V.array(rt.range([rt.V.int(2), rt.V.int(8), rt.V.int(3)])), rt.V.int(1)))]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

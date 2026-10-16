@@ -4,6 +4,22 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   deep(tag: rt.Variant): void {
     const __gd_frame = rt.frameEnter("res://main.gd", "deep");
     try {
@@ -13,6 +29,9 @@ export class Main extends SceneTree {
       print(rt.showArgs([tag, rt.gGetStack()]));
       rt.frameLine(17);
       print(rt.showArgs([tag, rt.method(rt.gGetStack(), "size", [])]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -23,6 +42,9 @@ export class Main extends SceneTree {
     try {
       rt.frameLine(20);
       this.deep(rt.V.str("m|"));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -37,12 +59,18 @@ export class Main extends SceneTree {
         try {
           rt.frameLine(23);
           rt.gPrintStack();
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
         } finally {
           rt.frameExit(__gd_frame);
         }
     }, 0);
       rt.frameLine(24);
       rt.method(f, "call", []);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -60,6 +88,9 @@ export class Main extends SceneTree {
       }
       rt.frameLine(30);
       this.rec(rt.ops.sub(n, rt.V.int(1)));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -93,6 +124,9 @@ export class Main extends SceneTree {
       print(rt.showArgs([rt.V.str("z|done")]));
       rt.frameLine(44);
       this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -118,11 +152,30 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   meth(): void {
     const __gd_frame = rt.frameEnter("res://main.gd", "meth");
     try {
       rt.frameLine(5);
       rt.gPrintStack();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -133,6 +186,9 @@ class Inner extends rt.GdScriptObject {
     try {
       rt.frameLine(8);
       rt.gPrintStack();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -154,13 +210,28 @@ rt.registerStaticMethods(__gd_d_Inner, ["hi"], {"hi": (a: rt.Variant[]): rt.Vari
 rt.registerNativeBase(__gd_d_Inner, "RefCounted");
 
 class Boot extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   constructor() {
     super();
+    this.__gd_fields__();
     if (!rt.bareConstruction()) {
         const __gd_frame = rt.frameEnter("res://main.gd", "_init");
         try {
         rt.frameLine(12);
         rt.gPrintStack();
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return;
         } finally {
           rt.frameExit(__gd_frame);
         }

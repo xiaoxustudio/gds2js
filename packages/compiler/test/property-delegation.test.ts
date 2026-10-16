@@ -103,9 +103,9 @@ describe("带初值的属性留一个后备槽", () => {
   it("有 getter 时初值照评（副作用是实测的），槽按声明次序落在邻字段之间", async () => {
     const out = await compile(`${H}${G}var a = 1\n\nvar thing: Variant = 9:\n\tget = _g\n\nvar b = 2\n${TAIL}`);
     const at = (s: string): number => out.indexOf(s);
-    eq("371", "初值仍发进槽", at("__gd_store_thing = rt.V.int(9);") > 0, true);
-    eq("371", "槽在 a 之后", at("__gd_store_thing") > at("a = rt.V.int(1);"), true);
-    eq("371", "槽在 b 之前", at("__gd_store_thing") < at("b = rt.V.int(2);"), true);
+    eq("371", "初值仍发进槽", at("this.__gd_store_thing = rt.V.int(9);") > 0, true);
+    eq("371", "槽在 a 之后", at("this.__gd_store_thing = ") > at("this.a = rt.V.int(1);"), true);
+    eq("371", "槽在 b 之前", at("this.__gd_store_thing = ") < at("this.b = rt.V.int(2);"), true);
     eq("371", "getter 照发委托", out.includes("return this._g();"), true);
   });
 

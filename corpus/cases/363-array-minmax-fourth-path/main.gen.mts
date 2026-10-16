@@ -6,28 +6,77 @@ import { print, printJoined, printRaw, printErr, printVerbose, printRich, printD
 const NAN = rt.V.float(Number.NaN);
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   p(items: rt.Variant): void {
-    print(rt.showArgs([items, rt.V.str(" → "), rt.method(items, "min", []), rt.V.str(" | "), rt.method(items, "max", [])]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "p");
+    try {
+      rt.frameLine(5);
+      print(rt.showArgs([items, rt.V.str(" → "), rt.method(items, "min", []), rt.V.str(" | "), rt.method(items, "max", [])]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    this.p(rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(1), rt.V.int(2)])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(1.5)])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.bool(true), rt.V.bool(false)])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.str("b"), rt.V.str("a"), rt.V.str("c")])));
-    this.p(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int(0), rt.V.int(3)]), rt.vector2New([rt.V.int(5), rt.V.int(0)])])));
-    this.p(rt.V.array(rt.GArray.of([rt.gRidFromInt64(rt.V.int(8)), rt.gRidFromInt64(rt.V.int(7)), rt.gRidFromInt64(rt.V.int(9))])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(2)])), rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.array(rt.GArray.of([rt.V.int(3)]))])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.str("a"), rt.V.int(0)])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.nil(), rt.V.int(1)])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.int(2), rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]), rt.V.int(1)])));
-    this.p(rt.V.array(rt.GArray.of([rt.dictOf([[rt.V.str("b"), rt.V.int(1)]]), rt.dictOf([[rt.V.str("a"), rt.V.int(1)]])])));
-    this.p(rt.V.array(rt.GArray.of([rt.packCtor("int32", [rt.V.array(rt.GArray.of([rt.V.int(2)]))]), rt.V.int(1)])));
-    this.p(rt.V.array(rt.GArray.of([NAN, rt.V.float(1.5), rt.V.int(2)])));
-    this.p(rt.V.array(rt.GArray.of([rt.V.float(1.5), NAN, rt.V.int(2)])));
-    this.p(rt.V.array(rt.GArray.of([])));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(8);
+      this.p(rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(1), rt.V.int(2)])));
+      rt.frameLine(9);
+      this.p(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.float(1.5)])));
+      rt.frameLine(10);
+      this.p(rt.V.array(rt.GArray.of([rt.V.bool(true), rt.V.bool(false)])));
+      rt.frameLine(11);
+      this.p(rt.V.array(rt.GArray.of([rt.V.str("b"), rt.V.str("a"), rt.V.str("c")])));
+      rt.frameLine(12);
+      this.p(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(1), rt.V.int(2)]), rt.vector2New([rt.V.int(0), rt.V.int(3)]), rt.vector2New([rt.V.int(5), rt.V.int(0)])])));
+      rt.frameLine(13);
+      this.p(rt.V.array(rt.GArray.of([rt.gRidFromInt64(rt.V.int(8)), rt.gRidFromInt64(rt.V.int(7)), rt.gRidFromInt64(rt.V.int(9))])));
+      rt.frameLine(14);
+      this.p(rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(2)])), rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.array(rt.GArray.of([rt.V.int(3)]))])));
+      rt.frameLine(15);
+      this.p(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.str("a"), rt.V.int(0)])));
+      rt.frameLine(16);
+      this.p(rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.nil(), rt.V.int(1)])));
+      rt.frameLine(17);
+      this.p(rt.V.array(rt.GArray.of([rt.V.int(2), rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)]), rt.V.int(1)])));
+      rt.frameLine(18);
+      this.p(rt.V.array(rt.GArray.of([rt.dictOf([[rt.V.str("b"), rt.V.int(1)]]), rt.dictOf([[rt.V.str("a"), rt.V.int(1)]])])));
+      rt.frameLine(19);
+      this.p(rt.V.array(rt.GArray.of([rt.packCtor("int32", [rt.V.array(rt.GArray.of([rt.V.int(2)]))]), rt.V.int(1)])));
+      rt.frameLine(20);
+      this.p(rt.V.array(rt.GArray.of([NAN, rt.V.float(1.5), rt.V.int(2)])));
+      rt.frameLine(21);
+      this.p(rt.V.array(rt.GArray.of([rt.V.float(1.5), NAN, rt.V.int(2)])));
+      rt.frameLine(22);
+      this.p(rt.V.array(rt.GArray.of([])));
+      rt.frameLine(23);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

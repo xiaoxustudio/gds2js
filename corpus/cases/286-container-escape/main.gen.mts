@@ -4,14 +4,43 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let cs = rt.V.array(rt.GArray.of([rt.V.int(34), rt.V.int(92), rt.V.int(39), rt.V.int(10), rt.V.int(9), rt.V.int(13), rt.V.int(7), rt.V.int(11), rt.V.int(12), rt.V.int(27), rt.V.int(96), rt.V.int(32), rt.V.int(47), rt.V.int(233), rt.V.int(128512)]));
-    for (let c of rt.iter(cs)) {
-      let s = rt.ops.add(rt.ops.add(rt.V.str("a"), rt.stringChr(c)), rt.V.str("b"));
-      print(rt.showArgs([c, rt.V.str("|"), rt.V.array(rt.GArray.of([s])), rt.V.str("|"), rt.dictOf([[s, rt.V.int(1)]]), rt.V.str("|"), rt.V.str(rt.varToStr(s)), rt.V.str("|"), rt.strBuiltin([s]), rt.V.str("|"), rt.V.array(rt.GArray.of([rt.stringNameCtor([s])])), rt.V.str("|"), rt.V.array(rt.GArray.of([rt.nodePathCtor([s])])), rt.V.str("|"), rt.V.str(rt.varToStr(rt.V.array(rt.GArray.of([s])))), rt.V.str("|"), rt.strBuiltin([rt.V.array(rt.GArray.of([s]))]), rt.V.str("|"), rt.V.array(rt.GArray.of([s, rt.stringNameCtor([s])]))]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let cs = rt.V.array(rt.GArray.of([rt.V.int(34), rt.V.int(92), rt.V.int(39), rt.V.int(10), rt.V.int(9), rt.V.int(13), rt.V.int(7), rt.V.int(11), rt.V.int(12), rt.V.int(27), rt.V.int(96), rt.V.int(32), rt.V.int(47), rt.V.int(233), rt.V.int(128512)]));
+      rt.frameLine(5);
+      for (let c of rt.iter(cs)) {
+        rt.frameLine(6);
+        let s = rt.ops.add(rt.ops.add(rt.V.str("a"), rt.stringChr(c)), rt.V.str("b"));
+        rt.frameLine(7);
+        print(rt.showArgs([c, rt.V.str("|"), rt.V.array(rt.GArray.of([s])), rt.V.str("|"), rt.dictOf([[s, rt.V.int(1)]]), rt.V.str("|"), rt.V.str(rt.varToStr(s)), rt.V.str("|"), rt.strBuiltin([s]), rt.V.str("|"), rt.V.array(rt.GArray.of([rt.stringNameCtor([s])])), rt.V.str("|"), rt.V.array(rt.GArray.of([rt.nodePathCtor([s])])), rt.V.str("|"), rt.V.str(rt.varToStr(rt.V.array(rt.GArray.of([s])))), rt.V.str("|"), rt.strBuiltin([rt.V.array(rt.GArray.of([s]))]), rt.V.str("|"), rt.V.array(rt.GArray.of([s, rt.stringNameCtor([s])]))]));
+      }
+      rt.frameLine(8);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

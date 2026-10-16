@@ -6,19 +6,53 @@ import { print, printJoined, printRaw, printErr, printVerbose, printRich, printD
 const Suit = rt.dictOf([[rt.V.str("HEARTS"), rt.V.int(0)], [rt.V.str("DIAMONDS"), rt.V.int(5)], [rt.V.str("CLUBS"), rt.V.int(6)]]);
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.method(Suit, "size", [])]));
-    print(rt.showArgs([rt.method(Suit, "keys", [])]));
-    print(rt.showArgs([rt.method(Suit, "values", [])]));
-    print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("DIAMONDS")))]));
-    print(rt.showArgs([rt.method(Suit, "has", [rt.V.str("CLUBS")])]));
-    print(rt.showArgs([rt.method(Suit, "has", [rt.V.str("NOPE")])]));
-    for (let k of rt.iter(Suit)) {
-      print(rt.showArgs([k]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(Suit, "size", [])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.method(Suit, "keys", [])]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.method(Suit, "values", [])]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.wrapValue(rt.index(Suit, rt.V.str("DIAMONDS")))]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.method(Suit, "has", [rt.V.str("CLUBS")])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.method(Suit, "has", [rt.V.str("NOPE")])]));
+      rt.frameLine(12);
+      for (let k of rt.iter(Suit)) {
+        rt.frameLine(13);
+        print(rt.showArgs([k]));
+      }
+      rt.frameLine(14);
+      print(rt.showArgs([Suit]));
+      rt.frameLine(15);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([Suit]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

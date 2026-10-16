@@ -4,16 +4,48 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let p = rt.V.object(new Plain());
-    print(rt.showArgs([rt.V.str("p "), rt.ops.neq(p, rt.V.nil())]));
-    let m = rt.V.object(new Mid());
-    rt.method(m, "bare", []);
-    rt.method(m, "show", []);
-    rt.method(m, "bump", []);
-    print(rt.showArgs([rt.V.str("after "), rt.wrapValue(rt.attribute(m, "a")), rt.V.str(" "), rt.wrapValue(rt.attribute(m, "shadow")), rt.V.str(" "), rt.typeOf(m)]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(30);
+      let p = rt.V.object(new Plain());
+      rt.frameLine(31);
+      print(rt.showArgs([rt.V.str("p "), rt.ops.neq(p, rt.V.nil())]));
+      rt.frameLine(32);
+      let m = rt.V.object(new Mid());
+      rt.frameLine(33);
+      rt.method(m, "bare", []);
+      rt.frameLine(34);
+      rt.method(m, "show", []);
+      rt.frameLine(35);
+      rt.method(m, "bump", []);
+      rt.frameLine(36);
+      print(rt.showArgs([rt.V.str("after "), rt.wrapValue(rt.attribute(m, "a")), rt.V.str(" "), rt.wrapValue(rt.attribute(m, "shadow")), rt.V.str(" "), rt.typeOf(m)]));
+      rt.frameLine(37);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -43,15 +75,35 @@ class NoInit extends rt.GdScriptObject {
   declare CA: rt.Variant;
 
   __gd_fields__() {
-    this.a = rt.V.int(7);
-    this.shadow = rt.V.int(100);
-    this.CA = rt.V.int(99);
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.a = rt.V.int(7);
+      rt.frameLine(5);
+      this.shadow = rt.V.int(100);
+      rt.frameLine(9);
+      this.CA = rt.V.int(99);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   static CA = rt.V.int(99);
 
   get_a(): rt.Variant {
-    return this.a;
+    const __gd_frame = rt.frameEnter("res://main.gd", "get_a");
+    try {
+      rt.frameLine(7);
+      return this.a;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -71,16 +123,43 @@ rt.registerNativeBase(__gd_d_NoInit, "RefCounted");
 
 class Plain extends NoInit {
   override __gd_fields__() {
-    super.__gd_fields__();
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      super.__gd_fields__();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   _init(...__gd_init_args: rt.Variant[]): void {
-    print(rt.showArgs([rt.V.str("plain "), this.a, rt.V.str(" "), this.get_a(), rt.V.str(" "), this.CA]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_init");
+    try {
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("plain "), this.a, rt.V.str(" "), this.get_a(), rt.V.str(" "), this.CA]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   show(): void {
-    let a = 1;
-    print(rt.showArgs([rt.V.str("shadow "), rt.V.int(a), rt.V.str(" "), this.a, rt.V.str(" "), this.shadow]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "show");
+    try {
+      rt.frameLine(16);
+      let a = 1;
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("shadow "), rt.V.int(a), rt.V.str(" "), this.a, rt.V.str(" "), this.shadow]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -102,17 +181,45 @@ class Mid extends Plain {
   declare b: rt.Variant;
 
   override __gd_fields__() {
-    super.__gd_fields__();
-    this.b = rt.V.int(3);
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      super.__gd_fields__();
+      rt.frameLine(20);
+      this.b = rt.V.int(3);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   bare(): void {
-    print(rt.showArgs([rt.V.str("mid "), this.a, rt.V.str(" "), this.get_a(), rt.V.str(" "), this.CA, rt.V.str(" "), this.b]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "bare");
+    try {
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("mid "), this.a, rt.V.str(" "), this.get_a(), rt.V.str(" "), this.CA, rt.V.str(" "), this.b]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   bump(): void {
-    this.a = rt.ops.add(this.a, rt.V.int(1));
-    print(rt.showArgs([rt.V.str("bump "), this.a, rt.V.str(" "), this.get_a()]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "bump");
+    try {
+      rt.frameLine(26);
+      this.a = rt.ops.add(this.a, rt.V.int(1));
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("bump "), this.a, rt.V.str(" "), this.get_a()]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

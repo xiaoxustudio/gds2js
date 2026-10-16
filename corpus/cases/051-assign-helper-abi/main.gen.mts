@@ -4,44 +4,122 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   tri(x: number): number {
-    let y = rt.fast.iMulC(x, 3);
-    let z = rt.fast.iAddC(y, x);
-    return z;
+    const __gd_frame = rt.frameEnter("res://main.gd", "tri");
+    try {
+      rt.frameLine(4);
+      let y = rt.fast.iMulC(x, 3);
+      rt.frameLine(5);
+      let z = rt.fast.iAddC(y, x);
+      rt.frameLine(6);
+      return z;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   shout(s: string): string {
-    let t = (s + "!");
-    return t;
+    const __gd_frame = rt.frameEnter("res://main.gd", "shout");
+    try {
+      rt.frameLine(9);
+      let t = (s + "!");
+      rt.frameLine(10);
+      return t;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   mix(a: rt.Variant, b: rt.Variant): rt.Variant {
-    let t = rt.ops.add(a, b);
-    print(rt.showArgs([t]));
-    return t;
+    const __gd_frame = rt.frameEnter("res://main.gd", "mix");
+    try {
+      rt.frameLine(13);
+      let t = rt.ops.add(a, b);
+      rt.frameLine(14);
+      print(rt.showArgs([t]));
+      rt.frameLine(15);
+      return t;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   choose(x: rt.Variant): rt.Variant {
-    if (rt.ops.truthy(rt.ops.gt(x, rt.V.int(0)))) {
-      return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "choose");
+    try {
+      rt.frameLine(18);
+      if (rt.ops.truthy(rt.ops.gt(x, rt.V.int(0)))) {
+        rt.frameLine(19);
+        return x;
+      }
+      rt.frameLine(20);
+      return rt.V.int(0);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    return rt.V.int(0);
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let s = 0;
-    let i = 0;
-    while ((i < 3)) {
-      s = this.tri(i);
-      i = rt.fast.iAddC(i, 1);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(23);
+      let s = 0;
+      rt.frameLine(24);
+      let i = 0;
+      rt.frameLine(25);
+      while ((i < 3)) {
+        rt.frameLine(26);
+        s = this.tri(i);
+        rt.frameLine(27);
+        i = rt.fast.iAddC(i, 1);
+      }
+      rt.frameLine(28);
+      print(rt.showArgs([rt.V.int(s)]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.int(this.tri(10))]));
+      rt.frameLine(30);
+      print(rt.showArgs([rt.V.str(this.shout("hi"))]));
+      rt.frameLine(31);
+      print(rt.showArgs([this.mix(rt.V.int(2), rt.V.int(3))]));
+      rt.frameLine(32);
+      print(rt.showArgs([this.choose(rt.V.int(5))]));
+      rt.frameLine(33);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    print(rt.showArgs([rt.V.int(s)]));
-    print(rt.showArgs([rt.V.int(this.tri(10))]));
-    print(rt.showArgs([rt.V.str(this.shout("hi"))]));
-    print(rt.showArgs([this.mix(rt.V.int(2), rt.V.int(3))]));
-    print(rt.showArgs([this.choose(rt.V.int(5))]));
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

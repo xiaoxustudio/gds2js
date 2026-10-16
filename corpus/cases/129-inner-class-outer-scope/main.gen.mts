@@ -6,18 +6,52 @@ import { print, printJoined, printRaw, printErr, printVerbose, printRich, printD
 const Suit = rt.dictOf([[rt.V.str("HEARTS"), rt.V.int(0)], [rt.V.str("SPADES"), rt.V.int(1)]]);
 
 export class Main extends SceneTree {
-  TOP = rt.toInt(rt.V.int(42));
+  declare TOP: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.TOP = rt.toInt(rt.V.int(42));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static TOP = rt.toInt(rt.V.int(42));
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let i = rt.V.object(new Inner());
-    print(rt.showArgs([rt.V.str("t1 "), rt.method(i, "useconst", [])]));
-    print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "useenum", [])]));
-    print(rt.showArgs([rt.V.str("t3 "), rt.method(i, "useother", [])]));
-    print(rt.showArgs([rt.V.str("t4 "), rt.method(i, "ownconst", [])]));
-    print(rt.showArgs([rt.V.str("t5 "), Inner.IC]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(32);
+      let i = rt.V.object(new Inner());
+      rt.frameLine(33);
+      print(rt.showArgs([rt.V.str("t1 "), rt.method(i, "useconst", [])]));
+      rt.frameLine(34);
+      print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "useenum", [])]));
+      rt.frameLine(35);
+      print(rt.showArgs([rt.V.str("t3 "), rt.method(i, "useother", [])]));
+      rt.frameLine(36);
+      print(rt.showArgs([rt.V.str("t4 "), rt.method(i, "ownconst", [])]));
+      rt.frameLine(37);
+      print(rt.showArgs([rt.V.str("t5 "), Inner.IC]));
+      rt.frameLine(38);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -38,11 +72,39 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Other extends rt.GdScriptObject {
-  OC = rt.toInt(rt.V.int(5));
+  declare OC: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(9);
+      this.OC = rt.toInt(rt.V.int(5));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static OC = rt.toInt(rt.V.int(5));
 
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   getoc(): rt.Variant {
-    return Other.OC;
+    const __gd_frame = rt.frameEnter("res://main.gd", "getoc");
+    try {
+      rt.frameLine(12);
+      return Other.OC;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -62,23 +124,78 @@ rt.registerMethodArities(__gd_d_Other, { "getoc": [0, 0] });
 rt.registerNativeBase(__gd_d_Other, "RefCounted");
 
 class Inner extends rt.GdScriptObject {
-  IC = rt.toInt(rt.V.int(9));
+  declare IC: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(28);
+      this.IC = rt.toInt(rt.V.int(9));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static IC = rt.toInt(rt.V.int(9));
 
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   useconst(): rt.Variant {
-    return Main.TOP;
+    const __gd_frame = rt.frameEnter("res://main.gd", "useconst");
+    try {
+      rt.frameLine(17);
+      return Main.TOP;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   useenum(): rt.Variant {
-    return rt.wrapValue(rt.index(Suit, rt.V.str("HEARTS")));
+    const __gd_frame = rt.frameEnter("res://main.gd", "useenum");
+    try {
+      rt.frameLine(20);
+      return rt.wrapValue(rt.index(Suit, rt.V.str("HEARTS")));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   useother(): rt.Variant {
-    return rt.method(rt.V.object(new Other()), "getoc", []);
+    const __gd_frame = rt.frameEnter("res://main.gd", "useother");
+    try {
+      rt.frameLine(23);
+      return rt.method(rt.V.object(new Other()), "getoc", []);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   ownconst(): rt.Variant {
-    return Inner.IC;
+    const __gd_frame = rt.frameEnter("res://main.gd", "ownconst");
+    try {
+      rt.frameLine(26);
+      return Inner.IC;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

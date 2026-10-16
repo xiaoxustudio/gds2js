@@ -4,16 +4,48 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let v = rt.V.str("x");
-    v = rt.V.int(5);
-    let p = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]);
-    print(rt.showArgs([rt.V.str("r1 "), rt.method(p, "has", [v]), rt.V.str(" "), rt.method(p, "has", [rt.V.int(2)]), rt.V.str(" "), rt.method(p, "count", [rt.V.int(1)])]));
-    let q = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("a")]))]);
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(q, "has", [rt.V.str("a")]), rt.V.str(" "), rt.method(q, "count", [rt.V.str("a")]), rt.V.str(" "), rt.method(q, "find", [rt.V.str("a")])]));
-    print(rt.showArgs([rt.V.str("r3 "), rt.method(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), "size", []), rt.V.str(" "), rt.method(rt.V.str("|"), "join", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let v = rt.V.str("x");
+      rt.frameLine(5);
+      v = rt.V.int(5);
+      rt.frameLine(6);
+      let p = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]);
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("r1 "), rt.method(p, "has", [v]), rt.V.str(" "), rt.method(p, "has", [rt.V.int(2)]), rt.V.str(" "), rt.method(p, "count", [rt.V.int(1)])]));
+      rt.frameLine(8);
+      let q = rt.packCtor("string", [rt.V.array(rt.GArray.of([rt.V.str("a")]))]);
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("r2 "), rt.method(q, "has", [rt.V.str("a")]), rt.V.str(" "), rt.method(q, "count", [rt.V.str("a")]), rt.V.str(" "), rt.method(q, "find", [rt.V.str("a")])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("r3 "), rt.method(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])), "size", []), rt.V.str(" "), rt.method(rt.V.str("|"), "join", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]));
+      rt.frameLine(11);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

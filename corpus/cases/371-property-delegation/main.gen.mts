@@ -4,8 +4,39 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  store = rt.V.int(0);
-  side = rt.V.str("");
+  declare store: rt.Variant;
+  declare side: rt.Variant;
+  declare __gd_store_named_set: rt.Variant;
+  declare __gd_store_with_init: rt.Variant;
+  declare __gd_store_inline_init: rt.Variant;
+  declare __gd_store_typed_set: rt.Variant;
+  declare __gd_store_ordered: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.store = rt.V.int(0);
+      rt.frameLine(5);
+      this.side = rt.V.str("");
+      rt.frameLine(28);
+      this.__gd_store_named_set = rt.V.nil();
+      rt.frameLine(33);
+      this.__gd_store_with_init = rt.V.int(9);
+      rt.frameLine(36);
+      this.__gd_store_inline_init = rt.V.int(8);
+      rt.frameLine(40);
+      this.__gd_store_typed_set = rt.toInt(rt.V.int(0));
+      rt.frameLine(43);
+      this.__gd_store_ordered = this.tag(rt.V.str("t"));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static sstore = rt.V.int(2);
   get named_get() {
     return this._g();
@@ -13,7 +44,6 @@ export class Main extends SceneTree {
   set named_get(value) {
     // 只读属性：Godot 里写它是静默无操作，不是报错
   }
-  __gd_store_named_set = rt.V.nil();
   get named_set() {
     return this.__gd_store_named_set;
   }
@@ -26,14 +56,12 @@ export class Main extends SceneTree {
   set pair(value) {
     this._s(value);
   }
-  __gd_store_with_init = rt.V.int(9);
   get with_init() {
     return this.__gd_store_with_init;
   }
   set with_init(value) {
     this._s(value);
   }
-  __gd_store_inline_init = rt.V.int(8);
   get inline_init() {
     return this.__gd_store_inline_init;
   }
@@ -41,14 +69,12 @@ export class Main extends SceneTree {
     rt.frameLine(38);
     this.store = v;
   }
-  __gd_store_typed_set = rt.toInt(rt.V.int(0));
   get typed_set() {
     return this.__gd_store_typed_set;
   }
   set typed_set(value) {
     this._s(value);
   }
-  __gd_store_ordered = this.tag(rt.V.str("t"));
   get ordered() {
     return this._g();
   }
@@ -88,6 +114,11 @@ export class Main extends SceneTree {
     rt.reportNonStaticCall("_s");
   }
 
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   tag(t: rt.Variant): rt.Variant {
     const __gd_frame = rt.frameEnter("res://main.gd", "tag");
     try {
@@ -96,6 +127,9 @@ export class Main extends SceneTree {
       this.side = rt.ops.add(this.side, t);
       rt.frameLine(9);
       return rt.V.int(1);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -106,6 +140,9 @@ export class Main extends SceneTree {
     try {
       rt.frameLine(12);
       return this.store;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -116,6 +153,9 @@ export class Main extends SceneTree {
     try {
       rt.frameLine(15);
       this.store = v;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -126,6 +166,9 @@ export class Main extends SceneTree {
     try {
       rt.frameLine(18);
       return rt.V.int(7);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -136,6 +179,9 @@ export class Main extends SceneTree {
     try {
       rt.frameLine(21);
       Main.sstore = v;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -191,6 +237,9 @@ export class Main extends SceneTree {
       print(rt.showArgs([rt.V.str("写它之后 → "), rt.typeOf(this.typed_set), rt.V.str(" | "), this.typed_set, rt.V.str(" | 存的 "), this.store]));
       rt.frameLine(84);
       this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
     } finally {
       rt.frameExit(__gd_frame);
     }

@@ -4,19 +4,54 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let a = 7;
-    let b = 2;
-    print(rt.showArgs([rt.V.int(rt.fast.iDivC(a, b))]));
-    print(rt.showArgs([rt.V.int(rt.fast.iModC(a, b))]));
-    let n = 0;
-    n = rt.fast.iSubC(n, 7);
-    print(rt.showArgs([rt.V.int(rt.fast.iDivC(n, 2))]));
-    print(rt.showArgs([rt.V.int(rt.fast.iModC(n, 2))]));
-    print(rt.showArgs([rt.V.int(rt.fast.iModC(7, (-2)))]));
-    print(rt.showArgs([rt.ops.div(rt.V.int(7), rt.V.float(0.5))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let a = 7;
+      rt.frameLine(5);
+      let b = 2;
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.int(rt.fast.iDivC(a, b))]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.int(rt.fast.iModC(a, b))]));
+      rt.frameLine(8);
+      let n = 0;
+      rt.frameLine(9);
+      n = rt.fast.iSubC(n, 7);
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.int(rt.fast.iDivC(n, 2))]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.int(rt.fast.iModC(n, 2))]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.int(rt.fast.iModC(7, (-2)))]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.ops.div(rt.V.int(7), rt.V.float(0.5))]));
+      rt.frameLine(14);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

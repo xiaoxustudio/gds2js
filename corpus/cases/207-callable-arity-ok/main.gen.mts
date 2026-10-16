@@ -4,24 +4,69 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Base());
-    print(rt.showArgs([rt.V.str("r1 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)])]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1), rt.V.int(2)]), "call", [rt.V.int(3)])]));
-    print(rt.showArgs([rt.V.str("r3 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]));
-    print(rt.showArgs([rt.V.str("r4 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]))])]));
-    print(rt.showArgs([rt.V.str("r5 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))])]));
-    print(rt.showArgs([rt.V.str("r6 "), rt.method(rt.wrapValue(rt.attribute(o, "twice")), "call", [rt.V.int(1), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(o, "twice")), "call", [rt.V.int(5)])]));
-    let d = rt.V.object(new Derived());
-    print(rt.showArgs([rt.V.str("r7 "), rt.method(rt.wrapValue(rt.attribute(d, "own")), "call", [rt.V.int(7)]), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(d, "three")), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)])]));
-    let f = rt.callable((__a: rt.Variant[]) => {
-      const x = __a[0] as rt.Variant;
-      const y = __a[1] as rt.Variant;
-      return rt.ops.add(x, y);
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(18);
+      let o = rt.V.object(new Base());
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.str("r1 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)])]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("r2 "), rt.method(rt.method(rt.wrapValue(rt.attribute(o, "three")), "bind", [rt.V.int(1), rt.V.int(2)]), "call", [rt.V.int(3)])]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("r3 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("r4 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4)]))])]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("r5 "), rt.method(rt.wrapValue(rt.attribute(o, "three")), "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)]))])]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("r6 "), rt.method(rt.wrapValue(rt.attribute(o, "twice")), "call", [rt.V.int(1), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(o, "twice")), "call", [rt.V.int(5)])]));
+      rt.frameLine(25);
+      let d = rt.V.object(new Derived());
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str("r7 "), rt.method(rt.wrapValue(rt.attribute(d, "own")), "call", [rt.V.int(7)]), rt.V.str(" "), rt.method(rt.wrapValue(rt.attribute(d, "three")), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)])]));
+      rt.frameLine(27);
+      let f = rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          const x = __a[0] as rt.Variant;
+          const y = __a[1] as rt.Variant;
+          rt.frameLine(28);
+          return rt.ops.add(x, y);
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
     }, 2);
-    print(rt.showArgs([rt.V.str("r8 "), rt.method(f, "call", [rt.V.int(1), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.method(f, "bind", [rt.V.int(1)]), "call", [rt.V.int(2)])]));
-    this.quit();
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("r8 "), rt.method(f, "call", [rt.V.int(1), rt.V.int(2)]), rt.V.str(" "), rt.method(rt.method(f, "bind", [rt.V.int(1)]), "call", [rt.V.int(2)])]));
+      rt.frameLine(30);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -47,18 +92,53 @@ class Base extends rt.GdScriptObject {
   }
 
   __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   three(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, b, c]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "three");
+    try {
+      rt.frameLine(5);
+      return rt.strBuiltin([a, b, c]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   twice(x: rt.Variant, y: rt.Variant = rt.V.str("z")): rt.Variant {
-    return rt.strBuiltin([x, y]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "twice");
+    try {
+      rt.frameLine(8);
+      return rt.strBuiltin([x, y]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static stwo(a: rt.Variant, b: rt.Variant): rt.Variant {
-    return rt.strBuiltin([a, b]);
+    const __gd_frame = rt.frameEnter("res://main.gd", "stwo");
+    try {
+      rt.frameLine(11);
+      return rt.strBuiltin([a, b]);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -79,11 +159,28 @@ rt.registerNativeBase(__gd_d_Base, "RefCounted");
 
 class Derived extends Base {
   override __gd_fields__() {
-    super.__gd_fields__();
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      super.__gd_fields__();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   own(a: rt.Variant): rt.Variant {
-    return a;
+    const __gd_frame = rt.frameEnter("res://main.gd", "own");
+    try {
+      rt.frameLine(15);
+      return a;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

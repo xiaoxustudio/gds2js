@@ -4,23 +4,62 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  TOP = rt.toInt(rt.V.int(42));
+  declare TOP: rt.Variant;
+  declare NAME: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.TOP = rt.toInt(rt.V.int(42));
+      rt.frameLine(4);
+      this.NAME = rt.strOf(rt.V.str("outer-name"));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static TOP = rt.toInt(rt.V.int(42));
-  NAME = rt.strOf(rt.V.str("outer-name"));
   static NAME = rt.strOf(rt.V.str("outer-name"));
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let i = rt.V.object(new Inner());
-    print(rt.showArgs([rt.V.str("t1 "), Main.TOP]));
-    print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "read_outer", [])]));
-    print(rt.showArgs([rt.V.str("t3 "), rt.method(i, "read_shadow", [])]));
-    print(rt.showArgs([rt.V.str("t4 "), rt.method(rt.V.object(__gd_d_Inner), "read_static_outer", [])]));
-    print(rt.showArgs([rt.V.str("t5 "), rt.method(rt.V.object(__gd_d_Inner), "read_static_shadow", [])]));
-    print(rt.showArgs([rt.V.str("t6 "), rt.method(i, "via_self_dot", [])]));
-    print(rt.showArgs([rt.V.str("t7 "), Inner.TOP]));
-    print(rt.showArgs([rt.V.str("t8 "), rt.wrapValue(rt.attribute(i, "TOP"))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(27);
+      let i = rt.V.object(new Inner());
+      rt.frameLine(28);
+      print(rt.showArgs([rt.V.str("t1 "), Main.TOP]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("t2 "), rt.method(i, "read_outer", [])]));
+      rt.frameLine(30);
+      print(rt.showArgs([rt.V.str("t3 "), rt.method(i, "read_shadow", [])]));
+      rt.frameLine(31);
+      print(rt.showArgs([rt.V.str("t4 "), rt.method(rt.V.object(__gd_d_Inner), "read_static_outer", [])]));
+      rt.frameLine(32);
+      print(rt.showArgs([rt.V.str("t5 "), rt.method(rt.V.object(__gd_d_Inner), "read_static_shadow", [])]));
+      rt.frameLine(33);
+      print(rt.showArgs([rt.V.str("t6 "), rt.method(i, "via_self_dot", [])]));
+      rt.frameLine(34);
+      print(rt.showArgs([rt.V.str("t7 "), Inner.TOP]));
+      rt.frameLine(35);
+      print(rt.showArgs([rt.V.str("t8 "), rt.wrapValue(rt.attribute(i, "TOP"))]));
+      rt.frameLine(36);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -41,27 +80,91 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
-  TOP = rt.toInt(rt.V.int(7));
+  declare TOP: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(8);
+      this.TOP = rt.toInt(rt.V.int(7));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
   static TOP = rt.toInt(rt.V.int(7));
 
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   read_outer(): rt.Variant {
-    return Main.NAME;
+    const __gd_frame = rt.frameEnter("res://main.gd", "read_outer");
+    try {
+      rt.frameLine(11);
+      return Main.NAME;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   read_shadow(): rt.Variant {
-    return Inner.TOP;
+    const __gd_frame = rt.frameEnter("res://main.gd", "read_shadow");
+    try {
+      rt.frameLine(14);
+      return Inner.TOP;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static read_static_outer(): rt.Variant {
-    return Main.NAME;
+    const __gd_frame = rt.frameEnter("res://main.gd", "read_static_outer");
+    try {
+      rt.frameLine(17);
+      return Main.NAME;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static read_static_shadow(): rt.Variant {
-    return Inner.TOP;
+    const __gd_frame = rt.frameEnter("res://main.gd", "read_static_shadow");
+    try {
+      rt.frameLine(20);
+      return Inner.TOP;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   via_self_dot(): rt.Variant {
-    return Inner.TOP;
+    const __gd_frame = rt.frameEnter("res://main.gd", "via_self_dot");
+    try {
+      rt.frameLine(23);
+      return Inner.TOP;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

@@ -4,26 +4,73 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
-  fired = new rt.Signal("fired");
+  declare fired: rt.Signal;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(3);
+      this.fired = new rt.Signal("fired");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   ifn(): rt.Variant {
-    return rt.V.int(7);
+    const __gd_frame = rt.frameEnter("res://main.gd", "ifn");
+    try {
+      rt.frameLine(13);
+      return rt.V.int(7);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let b = rt.V.object(new Box());
-    let cb = rt.methodCallable(rt.V.object(this), "ifn");
-    let sig = rt.wrapValue(this.fired);
-    print(rt.showArgs([rt.V.str("u1 "), rt.typeOf(cb)]));
-    print(rt.showArgs([rt.V.str("u2 "), rt.typeOf(rt.methodCallable(rt.V.object(this), "ifn"))]));
-    print(rt.showArgs([rt.V.str("u3 "), rt.typeOf(sig)]));
-    print(rt.showArgs([rt.V.str("u4 "), rt.typeOf(rt.wrapValue(this.fired))]));
-    print(rt.showArgs([rt.V.str("u5 "), rt.typeOf(rt.wrapValue(rt.attribute(b, "boxed")))]));
-    print(rt.showArgs([rt.V.str("u6 "), rt.method(cb, "call", [])]));
-    print(rt.showArgs([rt.V.str("u7 "), rt.typeOf(rt.wrapValue(rt.attribute(b, "n")))]));
-    print(rt.showArgs([rt.V.str("u8 "), rt.typeOf(rt.wrapValue(rt.attribute(rt.V.object(new Box()), "boxed")))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(17);
+      let b = rt.V.object(new Box());
+      rt.frameLine(18);
+      let cb = rt.methodCallable(rt.V.object(this), "ifn");
+      rt.frameLine(19);
+      let sig = rt.wrapValue(this.fired);
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("u1 "), rt.typeOf(cb)]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("u2 "), rt.typeOf(rt.methodCallable(rt.V.object(this), "ifn"))]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("u3 "), rt.typeOf(sig)]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("u4 "), rt.typeOf(rt.wrapValue(this.fired))]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("u5 "), rt.typeOf(rt.wrapValue(rt.attribute(b, "boxed")))]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("u6 "), rt.method(cb, "call", [])]));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str("u7 "), rt.typeOf(rt.wrapValue(rt.attribute(b, "n")))]));
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("u8 "), rt.typeOf(rt.wrapValue(rt.attribute(rt.V.object(new Box()), "boxed")))]));
+      rt.frameLine(28);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -43,8 +90,28 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Box extends rt.GdScriptObject {
-  boxed = new rt.Signal("boxed");
-  n = rt.toInt(rt.V.int(1));
+  declare boxed: rt.Signal;
+  declare n: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(7);
+      this.boxed = new rt.Signal("boxed");
+      rt.frameLine(9);
+      this.n = rt.toInt(rt.V.int(1));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
     switch (name) {

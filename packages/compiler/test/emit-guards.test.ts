@@ -105,7 +105,7 @@ describe("打印一族的发射与拒答", () => {
   });
 });
 
-// ── ①i 调用栈那一族：四支都发得出，帧打点只进用到它们的模块（S281，语料 273）──
+// ── ①i 调用栈那一族：四支都发得出，帧栈常开（运行期错误要在每支函数边界接住，S281 + S406）──
 describe("调用栈一族的发射与帧打点", () => {
   const textOf = arityText;
   const ROWS: Array<[string, string]> = [
@@ -125,17 +125,19 @@ describe("调用栈一族的发射与帧打点", () => {
     }
   });
 
-  it("用到才打点：一进一出配 finally，语句各带自己的行号", async () => {
+  it("一进一出配 finally，语句各带自己的行号", async () => {
     const code = await emitted(FRAMED);
     expect(code, "帧按函数名进栈").toContain('rt.frameEnter("Main.gd", "deep")');
     expect(code, "栈顶那一帧报的是当前语句行").toContain("rt.frameLine(4);");
     expect(code, "退栈在 finally 里，提前 return 与抛错都不留帧").toContain("rt.frameExit(__gd_frame);");
   });
 
-  it("没用到这四支的产物一行打点都不加", async () => {
+  it("没用这四支的产物照样打点，并带那一个接住运行期错误的 catch", async () => {
     const code = await emitted(PLAIN);
-    expect(code, "其余模块零开销").not.toContain("rt.frameEnter");
-    expect(code, "连行号打点也没有").not.toContain("rt.frameLine");
+    expect(code, "帧栈常开：错误那一块的 at: 与 backtrace 靠它").toContain('rt.frameEnter("Main.gd", "deep")');
+    expect(code, "行号打点也常开").toContain("rt.frameLine(4);");
+    expect(code, "每支函数自己接住").toContain("rt.gdFunctionError(__gd_err);");
+    expect(code, "不返回值的函数接住后按原样返回").toContain("rt.gdFunctionError(__gd_err);\n      return;");
   });
 
   it("print_stack 与 get_stack 只收 0 支，push_* 却是 0..N", async () => {

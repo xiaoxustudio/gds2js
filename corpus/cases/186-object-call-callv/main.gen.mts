@@ -4,12 +4,40 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Thing());
-    print(rt.showArgs([rt.V.str("r "), rt.method(o, "call", [rt.V.str("hi"), rt.V.int(2), rt.V.int(3)]), rt.V.str(" "), rt.method(o, "callv", [rt.V.str("hi"), rt.V.array(rt.GArray.of([rt.V.int(4), rt.V.int(5)]))])]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(o, "call", [rt.V.str("twice")]), rt.V.str(" "), rt.method(o, "call", [rt.V.str("twice"), rt.V.str("q")]), rt.V.str(" "), rt.method(o, "has_method", [rt.V.str("hi")])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(11);
+      let o = rt.V.object(new Thing());
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.str("r "), rt.method(o, "call", [rt.V.str("hi"), rt.V.int(2), rt.V.int(3)]), rt.V.str(" "), rt.method(o, "callv", [rt.V.str("hi"), rt.V.array(rt.GArray.of([rt.V.int(4), rt.V.int(5)]))])]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("r2 "), rt.method(o, "call", [rt.V.str("twice")]), rt.V.str(" "), rt.method(o, "call", [rt.V.str("twice"), rt.V.str("q")]), rt.V.str(" "), rt.method(o, "has_method", [rt.V.str("hi")])]));
+      rt.frameLine(14);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -28,12 +56,46 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Thing extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   hi(x: rt.Variant, y: rt.Variant): rt.Variant {
-    return rt.ops.add(x, y);
+    const __gd_frame = rt.frameEnter("res://main.gd", "hi");
+    try {
+      rt.frameLine(5);
+      return rt.ops.add(x, y);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   twice(s: rt.Variant = rt.V.str("z")): rt.Variant {
-    return rt.ops.add(s, s);
+    const __gd_frame = rt.frameEnter("res://main.gd", "twice");
+    try {
+      rt.frameLine(8);
+      return rt.ops.add(s, s);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

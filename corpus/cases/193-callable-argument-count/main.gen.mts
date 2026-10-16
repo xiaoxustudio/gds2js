@@ -4,28 +4,76 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Thing());
-    let c0 = rt.wrapValue(rt.attribute(o, "add3"));
-    let c1 = rt.method(c0, "bind", [rt.V.int(1)]);
-    let c2 = rt.method(c0, "bind", [rt.V.int(1), rt.V.int(2)]);
-    let c3 = rt.method(c0, "bind", [rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
-    let ce = rt.method(c0, "bind", []);
-    print(rt.showArgs([rt.V.str("r1 "), rt.method(c0, "get_argument_count", []), rt.V.str(" "), rt.method(c1, "get_argument_count", []), rt.V.str(" "), rt.method(c2, "get_argument_count", []), rt.V.str(" "), rt.method(c3, "get_argument_count", []), rt.V.str(" "), rt.method(ce, "get_argument_count", [])]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.method(rt.method(c1, "get_bound_arguments", []), "size", []), rt.V.str(" "), rt.method(rt.method(c3, "get_bound_arguments", []), "size", []), rt.V.str(" "), rt.method(rt.method(ce, "get_bound_arguments", []), "size", [])]));
-    let st = rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Thing), "sadd3"));
-    print(rt.showArgs([rt.V.str("r3 "), rt.method(st, "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(st, "bind", [rt.V.int(1)]), "get_argument_count", [])]));
-    let f = rt.callable((__a: rt.Variant[]) => {
-      const x = __a[0] as rt.Variant;
-      const y = __a[1] as rt.Variant;
-      const z = __a[2] as rt.Variant;
-      return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(11);
+      let o = rt.V.object(new Thing());
+      rt.frameLine(12);
+      let c0 = rt.wrapValue(rt.attribute(o, "add3"));
+      rt.frameLine(13);
+      let c1 = rt.method(c0, "bind", [rt.V.int(1)]);
+      rt.frameLine(14);
+      let c2 = rt.method(c0, "bind", [rt.V.int(1), rt.V.int(2)]);
+      rt.frameLine(15);
+      let c3 = rt.method(c0, "bind", [rt.V.int(1), rt.V.int(2), rt.V.int(3)]);
+      rt.frameLine(16);
+      let ce = rt.method(c0, "bind", []);
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("r1 "), rt.method(c0, "get_argument_count", []), rt.V.str(" "), rt.method(c1, "get_argument_count", []), rt.V.str(" "), rt.method(c2, "get_argument_count", []), rt.V.str(" "), rt.method(c3, "get_argument_count", []), rt.V.str(" "), rt.method(ce, "get_argument_count", [])]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("r2 "), rt.method(rt.method(c1, "get_bound_arguments", []), "size", []), rt.V.str(" "), rt.method(rt.method(c3, "get_bound_arguments", []), "size", []), rt.V.str(" "), rt.method(rt.method(ce, "get_bound_arguments", []), "size", [])]));
+      rt.frameLine(19);
+      let st = rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Thing), "sadd3"));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("r3 "), rt.method(st, "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(st, "bind", [rt.V.int(1)]), "get_argument_count", [])]));
+      rt.frameLine(21);
+      let f = rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          const x = __a[0] as rt.Variant;
+          const y = __a[1] as rt.Variant;
+          const z = __a[2] as rt.Variant;
+          rt.frameLine(22);
+          return x;
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
     }, 3);
-    print(rt.showArgs([rt.V.str("r4 "), rt.method(f, "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(f, "bind", [rt.V.int(9)]), "get_argument_count", [])]));
-    print(rt.showArgs([rt.V.str("r5 "), rt.method(c0, "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.str(" "), rt.method(c0, "get_argument_count", [])]));
-    print(rt.showArgs([rt.V.str("r6 "), rt.method(c2, "call", [rt.V.int(3)])]));
-    this.quit();
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("r4 "), rt.method(f, "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(f, "bind", [rt.V.int(9)]), "get_argument_count", [])]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("r5 "), rt.method(c0, "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.V.str(" "), rt.method(c0, "get_argument_count", [])]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("r6 "), rt.method(c2, "call", [rt.V.int(3)])]));
+      rt.frameLine(26);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -44,12 +92,46 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Thing extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   add3(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
-    return rt.ops.add(rt.ops.add(a, b), c);
+    const __gd_frame = rt.frameEnter("res://main.gd", "add3");
+    try {
+      rt.frameLine(5);
+      return rt.ops.add(rt.ops.add(a, b), c);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static sadd3(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
-    return rt.ops.add(rt.ops.add(a, b), c);
+    const __gd_frame = rt.frameEnter("res://main.gd", "sadd3");
+    try {
+      rt.frameLine(8);
+      return rt.ops.add(rt.ops.add(a, b), c);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

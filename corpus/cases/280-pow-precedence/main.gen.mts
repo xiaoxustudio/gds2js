@@ -4,47 +4,115 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   show(tag: rt.Variant, v: rt.Variant): void {
-    print(rt.showArgs([tag, rt.V.str("|"), rt.typeOf(v), rt.V.str("|"), rt.V.str(rt.varToStr(v))]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "show");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([tag, rt.V.str("|"), rt.typeOf(v), rt.V.str("|"), rt.V.str(rt.varToStr(v))]));
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    this.show(rt.V.str("p01|"), rt.ops.mul(rt.V.float(3), rt.ops.pow(rt.V.float(2), rt.V.int(2))));
-    this.show(rt.V.str("p02|"), rt.ops.mul(rt.V.int(3), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p03|"), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
-    this.show(rt.V.str("p04|"), rt.ops.div(rt.V.int(6), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p05|"), rt.ops.div(rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)), rt.V.int(2)));
-    this.show(rt.V.str("p06|"), rt.ops.mod(rt.V.int(7), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p07|"), rt.ops.mod(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
-    this.show(rt.V.str("p08|"), rt.ops.add(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p09|"), rt.ops.sub(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p10|"), rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.V.int(2)));
-    this.show(rt.V.str("p11|"), rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
-    this.show(rt.V.str("p12|"), rt.ops.pow(rt.V.int((-2)), rt.V.int(2)));
-    this.show(rt.V.str("p13|"), rt.ops.pow(rt.V.float((-2)), rt.V.int(2)));
-    this.show(rt.V.str("p14|"), rt.ops.mul(rt.V.int(2), rt.ops.pow(rt.V.int((-3)), rt.V.int(2))));
-    this.show(rt.V.str("p15|"), rt.ops.pow(rt.V.int(rt.fast.iMulC(3, 2)), rt.V.int(2)));
-    this.show(rt.V.str("p16|"), rt.ops.add(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(rt.fast.iMulC(3, 2))));
-    this.show(rt.V.str("p17|"), rt.ops.shl(rt.V.int(2), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p18|"), rt.ops.mod(rt.V.int(rt.fast.iDivC(100, 5)), rt.ops.pow(rt.V.int(2), rt.V.int(3))));
-    this.show(rt.V.str("p19|"), rt.ops.mul(rt.V.float(1), rt.ops.pow(rt.V.float(2), rt.V.int(63))));
-    this.show(rt.V.str("p20|"), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p21|"), rt.ops.div(rt.V.int(rt.fast.iDivC(10, 2)), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
-    this.show(rt.V.str("p22|"), rt.ops.mul(rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)), rt.V.int(2)));
-    this.show(rt.V.str("p23|"), rt.ops.add(rt.V.int(1), rt.ops.mul(rt.V.int(2), rt.ops.pow(rt.V.int(3), rt.V.int(2)))));
-    this.show(rt.V.str("p24|"), rt.ops.mul(rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.V.int(2)), rt.V.int(2)));
-    this.show(rt.V.str("p25|"), rt.ops.mul(rt.ops.pow(rt.V.float(2), rt.V.int(3)), rt.V.int(2)));
-    this.show(rt.V.str("p26|"), rt.ops.mod(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(3))));
-    this.show(rt.V.str("p27|"), rt.ops.div(rt.ops.mul(rt.V.int(rt.fast.iMulC(2, 2)), rt.ops.pow(rt.V.int(2), rt.V.int(3))), rt.V.int(4)));
-    this.show(rt.V.str("p28|"), rt.ops.mod(rt.ops.pow(rt.V.int(rt.fast.iMulC(2, 3)), rt.V.int(2)), rt.V.int(5)));
-    this.show(rt.V.str("p29|"), rt.ops.pow(rt.V.int(2), rt.V.int(rt.fast.iMulC(3, 2))));
-    this.show(rt.V.str("p30|"), rt.ops.mul(rt.V.int((-2)), rt.ops.pow(rt.V.int(3), rt.V.int(2))));
-    this.show(rt.V.str("p31|"), rt.ops.sub(rt.V.int(1), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(2))));
-    this.show(rt.V.str("p32|"), rt.ops.mod(rt.V.int(100), rt.ops.pow(rt.V.int(7), rt.V.int(2))));
-    this.show(rt.V.str("p33|"), rt.ops.mod(rt.ops.div(rt.V.int(rt.fast.iMulC(3, 4)), rt.ops.pow(rt.V.int(2), rt.V.int(2))), rt.V.int(2)));
-    this.show(rt.V.str("p34|"), rt.ops.pow(rt.V.int(7), rt.V.int(0)));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(7);
+      this.show(rt.V.str("p01|"), rt.ops.mul(rt.V.float(3), rt.ops.pow(rt.V.float(2), rt.V.int(2))));
+      rt.frameLine(8);
+      this.show(rt.V.str("p02|"), rt.ops.mul(rt.V.int(3), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(9);
+      this.show(rt.V.str("p03|"), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
+      rt.frameLine(10);
+      this.show(rt.V.str("p04|"), rt.ops.div(rt.V.int(6), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(11);
+      this.show(rt.V.str("p05|"), rt.ops.div(rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)), rt.V.int(2)));
+      rt.frameLine(12);
+      this.show(rt.V.str("p06|"), rt.ops.mod(rt.V.int(7), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(13);
+      this.show(rt.V.str("p07|"), rt.ops.mod(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
+      rt.frameLine(14);
+      this.show(rt.V.str("p08|"), rt.ops.add(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(15);
+      this.show(rt.V.str("p09|"), rt.ops.sub(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(16);
+      this.show(rt.V.str("p10|"), rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.V.int(2)));
+      rt.frameLine(17);
+      this.show(rt.V.str("p11|"), rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
+      rt.frameLine(18);
+      this.show(rt.V.str("p12|"), rt.ops.pow(rt.V.int((-2)), rt.V.int(2)));
+      rt.frameLine(19);
+      this.show(rt.V.str("p13|"), rt.ops.pow(rt.V.float((-2)), rt.V.int(2)));
+      rt.frameLine(20);
+      this.show(rt.V.str("p14|"), rt.ops.mul(rt.V.int(2), rt.ops.pow(rt.V.int((-3)), rt.V.int(2))));
+      rt.frameLine(21);
+      this.show(rt.V.str("p15|"), rt.ops.pow(rt.V.int(rt.fast.iMulC(3, 2)), rt.V.int(2)));
+      rt.frameLine(22);
+      this.show(rt.V.str("p16|"), rt.ops.add(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(rt.fast.iMulC(3, 2))));
+      rt.frameLine(23);
+      this.show(rt.V.str("p17|"), rt.ops.shl(rt.V.int(2), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(24);
+      this.show(rt.V.str("p18|"), rt.ops.mod(rt.V.int(rt.fast.iDivC(100, 5)), rt.ops.pow(rt.V.int(2), rt.V.int(3))));
+      rt.frameLine(25);
+      this.show(rt.V.str("p19|"), rt.ops.mul(rt.V.float(1), rt.ops.pow(rt.V.float(2), rt.V.int(63))));
+      rt.frameLine(26);
+      this.show(rt.V.str("p20|"), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(27);
+      this.show(rt.V.str("p21|"), rt.ops.div(rt.V.int(rt.fast.iDivC(10, 2)), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      rt.frameLine(28);
+      this.show(rt.V.str("p22|"), rt.ops.mul(rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)), rt.V.int(2)));
+      rt.frameLine(29);
+      this.show(rt.V.str("p23|"), rt.ops.add(rt.V.int(1), rt.ops.mul(rt.V.int(2), rt.ops.pow(rt.V.int(3), rt.V.int(2)))));
+      rt.frameLine(30);
+      this.show(rt.V.str("p24|"), rt.ops.mul(rt.ops.pow(rt.ops.pow(rt.V.int(2), rt.V.int(3)), rt.V.int(2)), rt.V.int(2)));
+      rt.frameLine(31);
+      this.show(rt.V.str("p25|"), rt.ops.mul(rt.ops.pow(rt.V.float(2), rt.V.int(3)), rt.V.int(2)));
+      rt.frameLine(32);
+      this.show(rt.V.str("p26|"), rt.ops.mod(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(3))));
+      rt.frameLine(33);
+      this.show(rt.V.str("p27|"), rt.ops.div(rt.ops.mul(rt.V.int(rt.fast.iMulC(2, 2)), rt.ops.pow(rt.V.int(2), rt.V.int(3))), rt.V.int(4)));
+      rt.frameLine(34);
+      this.show(rt.V.str("p28|"), rt.ops.mod(rt.ops.pow(rt.V.int(rt.fast.iMulC(2, 3)), rt.V.int(2)), rt.V.int(5)));
+      rt.frameLine(35);
+      this.show(rt.V.str("p29|"), rt.ops.pow(rt.V.int(2), rt.V.int(rt.fast.iMulC(3, 2))));
+      rt.frameLine(36);
+      this.show(rt.V.str("p30|"), rt.ops.mul(rt.V.int((-2)), rt.ops.pow(rt.V.int(3), rt.V.int(2))));
+      rt.frameLine(37);
+      this.show(rt.V.str("p31|"), rt.ops.sub(rt.V.int(1), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(2))));
+      rt.frameLine(38);
+      this.show(rt.V.str("p32|"), rt.ops.mod(rt.V.int(100), rt.ops.pow(rt.V.int(7), rt.V.int(2))));
+      rt.frameLine(39);
+      this.show(rt.V.str("p33|"), rt.ops.mod(rt.ops.div(rt.V.int(rt.fast.iMulC(3, 4)), rt.ops.pow(rt.V.int(2), rt.V.int(2))), rt.V.int(2)));
+      rt.frameLine(40);
+      this.show(rt.V.str("p34|"), rt.ops.pow(rt.V.int(7), rt.V.int(0)));
+      rt.frameLine(41);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

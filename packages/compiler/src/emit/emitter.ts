@@ -34,8 +34,6 @@ export interface EmitOptions {
   rawAbiExternal?: string[];
   /** 本模块的类被工程里别的脚本类 extends：构造要走协议形状，由 project.ts 按 extends 边给出。 */
   extendedByScript?: boolean;
-  /** 工程里有别的脚本用了调用栈那一族（`get_stack` 等四支）：本模块也要打帧点，跨文件的帧链才不断（S281 ⑤）。 */
-  frames?: boolean;
   runtimeMode?: "import" | "local" | "single";
   standaloneRequirePath?: string;
   standaloneInline?: string;
@@ -281,8 +279,6 @@ let CURRENT_FUNC = "";
 let LAMBDA_DEPTH = 0;
 /** 本模块在 `At:` 那一行里印的路径：工程模式是 res 路径（与引擎同一串），单文件模式退到输入路径。 */
 let DEBUG_FILE = "";
-/** 这一份产物要不要帧打点（`rt.frameEnter` / `rt.frameLine`）：只有编进这四支之一的模块要，其余模块一行都不加（S281 ⑤）。 */
-let FRAMES_ON = false;
 /** `inst_to_dict` 的 `@path` 那一格只认 res 路径（S269 ②）：单文件模式没有它，发 null 让运行期响亮拒。 */
 let MODULE_RES_PATH: string | null = null;
 /** `_init` 发成协议形状的方法（true）还是 JS constructor（false）：只有链上有脚本继承边的类才需要协议形状。 */
@@ -361,7 +357,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   const resPath = opts.resPath;
   DEBUG_FILE = resPath ?? opts.sourceFile ?? `${className}.gd`;
   MODULE_RES_PATH = resPath ?? null;
-  FRAMES_ON = m.usesStack === true || opts.frames === true || hasDeadStaticDelegate(m);
   const preloads = opts.preloads ?? [];
   const sideEffectImports = opts.sideEffectImports ?? [];
   const baseClass: BaseSpec = opts.baseClass ?? (hostImport ? { kind: "host" } : { kind: "none" });
@@ -486,14 +481,11 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   // 现在每个脚本类都有 JS 基类（宿主 SceneTree 或根 GdScriptObject），显式构造器必须串 super()
   NEEDS_HOST_SUPER = !proto;
   out.push(`export class ${className}${heritage} {`);
-  if (proto) {
-    if (baseClass.kind !== "import") out.push(...emitRootConstructor(true));
-    out.push(...emitFieldDeclarations(m.vars, m.signals));
-    out.push(...emitFieldsMethod(m.vars, m.signals, baseClass.kind === "import", out.length));
-    out.push(...emitClassLevelVars(m.vars, out.length));
-  } else {
-    out.push(...emitLegacyMembers(m.vars, m.signals, out.length));
-  }
+  if (proto && baseClass.kind !== "import") out.push(...emitRootConstructor(true));
+  out.push(...emitFieldDeclarations(m.vars, m.signals));
+  out.push(...emitFieldsMethod(m.vars, m.signals, proto && baseClass.kind === "import", out.length));
+  out.push(...emitClassLevelVars(m.vars, out.length));
+  if (!proto && !m.funcs.some((f) => f.name === "_init" && !f.isStatic)) out.push(...emitFieldsOnlyConstructor());
   INHERITED_METHODS = new Set([
     ...(opts.inheritedMembers ?? []),
     ...(baseClass.kind === "host" ? HOST_MEMBERS : []),
@@ -824,14 +816,11 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   NEEDS_HOST_SUPER = !proto;
   const lines = [`class ${decl.name}${baseName !== null ? ` extends ${baseName}` : " extends rt.GdScriptObject"} {`];
   mark(base, decl.loc);
-  if (proto) {
-    if (baseName === null) lines.push(...emitRootConstructor(true));
-    lines.push(...emitFieldDeclarations(decl.vars, decl.signals));
-    lines.push(...emitFieldsMethod(decl.vars, decl.signals, baseName !== null, base + lines.length));
-    lines.push(...emitClassLevelVars(decl.vars, base + lines.length));
-  } else {
-    lines.push(...emitLegacyMembers(decl.vars, decl.signals, base + lines.length));
-  }
+  if (proto && baseName === null) lines.push(...emitRootConstructor(true));
+  lines.push(...emitFieldDeclarations(decl.vars, decl.signals));
+  lines.push(...emitFieldsMethod(decl.vars, decl.signals, baseName !== null, base + lines.length));
+  lines.push(...emitClassLevelVars(decl.vars, base + lines.length));
+  if (!proto && !decl.funcs.some((f) => f.name === "_init" && !f.isStatic)) lines.push(...emitFieldsOnlyConstructor());
   INHERITED_METHODS = new Set(innerInheritedMethodNames(decl));
   for (const f of decl.funcs) {
     const funcBase = base + lines.length;
@@ -1044,22 +1033,28 @@ function makeClosure(className: string, init: FuncDecl | undefined, protoShape: 
   return `(a) => new ${className}(${fwd})`;
 }
 
-/** 帧打点三件套（S281）：进栈一对 try/finally、每条语句一行当前行。只有编进 `get_stack` 那一族的模块才发，其余产物一行都不加。 */
+/** 帧打点三件套（S281）：进栈一对 try/finally、每条语句一行当前行。运行期错误要在每支函数边界上接住（S406），所以帧常开。 */
 function frameEnterLines(name: string): string[] {
-  if (!FRAMES_ON) return [];
   return [
     `  const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, ${JSON.stringify(name)});`,
     "  try {",
   ];
 }
 
-function frameExitLines(): string[] {
-  if (!FRAMES_ON) return [];
-  return ["  } finally {", "    rt.frameExit(__gd_frame);", "  }"];
+/** 出栈那一块：引擎的运行期错误作废的是当前这一支函数 —— 接住、按引擎那一块打印一次、按返回型给默认值返回（S406）。 */
+function frameExitLines(catchRet: string): string[] {
+  return [
+    "  } catch (__gd_err) {",
+    "    rt.gdFunctionError(__gd_err);",
+    `    ${catchRet}`,
+    "  } finally {",
+    "    rt.frameExit(__gd_frame);",
+    "  }",
+  ];
 }
 
 function frameStmtLines(loc: { line: number } | undefined): string[] {
-  if (!FRAMES_ON || loc === undefined) return [];
+  if (loc === undefined) return [];
   return [`rt.frameLine(${String(loc.line)});`];
 }
 
@@ -1104,18 +1099,18 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   const savedDicts = RAW_DICTS;
   const savedFunc = CURRENT_FUNC;
   CURRENT_FUNC = f.name;
+  const catchRet = ret === "void" || ret === "Promise<void>" ? "return;" : `return ${typeDefault(f.returnType)};`;
   CURRENT_RET = abi ? abi.ret : null;
   const layout = analyzeFuncLayout(f);
   UNBOXED = layout.unboxed;
   RAW_ARRAYS = layout.arrays;
   RAW_DICTS = layout.dicts;
-  const pad = FRAMES_ON ? "    " : "  ";
+  const pad = "    ";
   lines.push(...frameEnterLines(f.name));
   try {
     // 实例方法才发入口槽位（静态方法的 base 标签未定；裸 ABI 不收带类型的函数）。
     if (!f.isStatic) for (const line of emitParamSlots(f)) lines.push(`${pad}${line}`);
     for (const s of f.body) {
-
       mark(base + lines.length, s.loc);
       for (const line of emitStmt(s, f.name === "_initialize")) lines.push(`${pad}${line}`);
     }
@@ -1126,7 +1121,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     RAW_DICTS = savedDicts;
     CURRENT_FUNC = savedFunc;
   }
-  lines.push(...frameExitLines());
+  lines.push(...frameExitLines(catchRet));
   lines.push("}");
   lines.push("");
   return lines;
@@ -1136,7 +1131,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
 function emitInitMethod(f: FuncDecl, base: number): string[] {
   // 协议形状下所有 `_init` 都发同一个 rest 签名（静态编译目标拒换签名的覆写）；形参名与默认值在体首的绑定里还原。
   const lines = [`${INHERITED_METHODS.has("_init") ? "override " : ""}_init(...__gd_init_args: rt.Variant[]): void {`];
-  const pad = FRAMES_ON ? "    " : "  ";
+  const pad = "    ";
   lines.push(...frameEnterLines("_init"));
   f.params.forEach((p, i) => {
     const got = `__gd_init_args[${i}] as rt.Variant`;
@@ -1169,7 +1164,7 @@ function emitInitMethod(f: FuncDecl, base: number): string[] {
     UNBOXED = savedUnboxed;
     CURRENT_FUNC = savedFunc;
   }
-  lines.push(...frameExitLines());
+  lines.push(...frameExitLines("return;"));
   lines.push("}");
   lines.push("");
   return lines;
@@ -1188,9 +1183,10 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
     first.expr.callee.kind === "ident" &&
     first.expr.callee.name === "super";
   if (!explicitSuper && hostSuper) lines.push("  super();");
-  // `_init` 的体整个进守卫里：`dict_to_inst` 的裸构造只要字段初始化子（那是类的字段声明，不在这段里）与 super 链。
+  lines.push("  this.__gd_fields__();");
+  // `_init` 的体整个进守卫里：`dict_to_inst` 的裸构造只要字段初始化子（`__gd_fields__` 那一格）与 super 链。
   lines.push("  if (!rt.bareConstruction()) {");
-  const pad = FRAMES_ON ? "      " : "    ";
+  const pad = "      ";
   lines.push(...frameEnterLines("_init").map((l) => `    ${l}`));
   const savedUnboxed = UNBOXED;
   const savedFunc = CURRENT_FUNC;
@@ -1207,7 +1203,7 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
     UNBOXED = savedUnboxed;
     CURRENT_FUNC = savedFunc;
   }
-  lines.push(...frameExitLines().map((l) => `    ${l}`));
+  lines.push(...frameExitLines("return;").map((l) => `    ${l}`));
   lines.push("  }");
   lines.push("}");
   lines.push("");
@@ -1337,35 +1333,6 @@ function globalConstLines(m: Module, reservedExtra: Set<string>): string[] {
     });
 }
 
-/** 旧形状的类级成员：信号与实例字段发成 JS 类字段，静态与 const 的静态镜像照发，带读写器的发 get/set。 */
-function emitLegacyMembers(vars: VarDecl[], signals: SignalDecl[], lineBase: number): string[] {
-  const out: string[] = [];
-  for (const s of signals) {
-    mark(lineBase + out.length, s.loc);
-    out.push(`  ${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
-  }
-  for (const v of vars) {
-    mark(lineBase + out.length, v.loc);
-    if (v.accessor) {
-      if (propSlot(v) !== null) out.push(propSlotInit(v));
-      out.push(...emitAccessors(v));
-      continue;
-    }
-    const init = slotInit(v.type, v.init, v.isStatic);
-    if (v.isStatic) {
-      out.push(`  static ${v.name} = ${init};`);
-      continue;
-    }
-    out.push(`  ${v.name} = ${init};`);
-    if (v.isConst) {
-      mark(lineBase + out.length, v.loc);
-      out.push(`  static ${v.name} = ${init};`);
-    }
-  }
-  if (vars.length > 0 || signals.length > 0) out.push("");
-  return out;
-}
-
 /** 字段 / 静态变量的初始化：定型容器走 `stampDecl`，定目标量还要再过 `declaredCast`。`selfIsNil` 那支是 `static var` 初值 —— 那处没有实例，实测 `self` 给 typeof 0（S367）。 */
 function slotInit(t: TypeRef | null, init: Expr | null | undefined, selfIsNil = false): string {
   const prev = selfInNilContext;
@@ -1394,27 +1361,39 @@ function emitFieldDeclarations(vars: VarDecl[], signals: SignalDecl[]): string[]
   return out;
 }
 
-/** 字段与信号的初始化子集中到 `__gd_fields__`：根类的构造器调一次，派生类各自 `super.__gd_fields__()` 串起来，于是初始化子按「基类 → 子类」跑完。 */
+/** 字段与信号的初始化子集中到 `__gd_fields__`：根类的构造器调一次，派生类各自 `super.__gd_fields__()` 串起来，于是初始化子按「基类 → 子类」跑完。
+ *  引擎把这一格编成 `@implicit_new`：里面出错作废的是这一支自己的初始化子，后面的 `_init` 照跑、其余类的初始化子也照跑（S406 三格）。 */
 function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: boolean, lineBase: number): string[] {
   // 派生类覆写基类的这一格，`override` 修饰符不能省。
   const out: string[] = [chainToBase ? "  override __gd_fields__() {" : "  __gd_fields__() {"];
-  if (chainToBase) out.push("    super.__gd_fields__();");
+  out.push(`    const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "@implicit_new");`);
+  out.push("    try {");
+  if (chainToBase) out.push("      super.__gd_fields__();");
   for (const s of signals) {
     mark(lineBase + out.length, s.loc);
-    out.push(`    this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
+    out.push(`      rt.frameLine(${String(s.loc?.line ?? 0)});`);
+    out.push(`      this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
   }
   for (const v of vars) {
     if (v.isStatic) continue;
     const slot = propSlot(v);
     if (slot !== null) {
       mark(lineBase + out.length, v.loc);
-      out.push(`    this.${slot} = ${slotInit(v.type, v.init)};`);
+      out.push(`      rt.frameLine(${String(v.loc?.line ?? 0)});`);
+      out.push(`      this.${slot} = ${slotInit(v.type, v.init)};`);
       continue;
     }
     if (v.accessor) continue;
     mark(lineBase + out.length, v.loc);
-    out.push(`    this.${v.name} = ${slotInit(v.type, v.init)};`);
+    out.push(`      rt.frameLine(${String(v.loc?.line ?? 0)});`);
+    out.push(`      this.${v.name} = ${slotInit(v.type, v.init)};`);
   }
+  out.push("    } catch (__gd_err) {");
+  out.push("      rt.gdFunctionError(__gd_err);");
+  out.push("      return;");
+  out.push("    } finally {");
+  out.push("      rt.frameExit(__gd_frame);");
+  out.push("    }");
   out.push("  }");
   out.push("");
   return out;
@@ -1472,6 +1451,12 @@ function emitRootConstructor(hostSuper: boolean): string[] {
   out.push("    if (!rt.bareConstruction()) this.__gdDispatch(\"_init\", __gd_new_args);");
   out.push("  }");
   out.push("");
+  return out;
+}
+
+/** 非协议形状的类没有 `__gdDispatch("_init")` 可走，也没写 `_init` 时不发构造器：字段初始化子搬进 `__gd_fields__` 后要自己有一份调用它的构造器（S406）。 */
+function emitFieldsOnlyConstructor(): string[] {
+  const out = ["  constructor() {", "    super();", "    this.__gd_fields__();", "  }", "",];
   return out;
 }
 
@@ -1818,7 +1803,6 @@ interface RawAbi {
 }
 /** 当前模块内可走裸 ABI 的函数：名字 → 签名。由 computeRawAbis 逐模块算出。 */
 let RAW_ABIS = new Map<string, RawAbi>();
-/** 当前正在发射的函数若走裸 ABI，其返回裸类型；否则 null（返回值需装箱）。 */
 let CURRENT_RET: Kind | null = null;
 
 type ElemKind = "int" | "float" | "str" | "int[]" | "float[]" | "str[]";
@@ -3146,7 +3130,7 @@ function emitExprVar(e: Expr): string {
       if (e.params.some((p) => p.default !== null)) {
         throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
       }
-      const lpad = FRAMES_ON ? "        " : "      ";
+      const lpad = "        ";
       const body = e.body.flatMap((st) => {
         LAMBDA_DEPTH += 1;
         try {
@@ -3159,12 +3143,17 @@ function emitExprVar(e: Expr): string {
       const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant;`);
       return [
         `rt.callable((__a: rt.Variant[]) => {`,
-        ...(FRAMES_ON
-          ? [`        const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "<anonymous lambda>");`, "        try {"]
-          : []),
-        ...(FRAMES_ON ? bind.map((l) => `  ${l}`) : bind),
-        ...(FRAMES_ON ? body.map((l) => `  ${l}`) : body),
-        ...(FRAMES_ON ? ["        } finally {", "          rt.frameExit(__gd_frame);", "        }"] : []),
+        `        const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "<anonymous lambda>");`,
+        "        try {",
+        ...bind.map((l) => `  ${l}`),
+        ...body.map((l) => `  ${l}`),
+        // lambda 出错也只作废这一支自己：`.call()` 那格实测拿回 `<null>`，调用方接着跑（S406 三格）。
+        "        } catch (__gd_err) {",
+        "          rt.gdFunctionError(__gd_err);",
+        "          return rt.V.nil();",
+        "        } finally {",
+        "          rt.frameExit(__gd_frame);",
+        "        }",
         `    }, ${e.params.length})`,
       ].join("\n");
     }

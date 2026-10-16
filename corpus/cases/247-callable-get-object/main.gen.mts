@@ -4,28 +4,77 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   top(x: rt.Variant): rt.Variant {
-    return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "top");
+    try {
+      rt.frameLine(13);
+      return x;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Inner());
-    let cm = rt.wrapValue(rt.attribute(o, "m"));
-    print(rt.showArgs([rt.V.str("q01|"), rt.typeOf(rt.method(cm, "get_object", [])), rt.V.str("|"), rt.ops.eq(rt.method(cm, "get_object", []), o), rt.V.str("|"), rt.wrapValue(rt.attribute(rt.method(cm, "get_object", []), "v"))]));
-    let other = rt.V.object(new Inner());
-    print(rt.showArgs([rt.V.str("q02|"), rt.ops.eq(rt.method(cm, "get_object", []), other), rt.V.str("|"), rt.ops.eq(rt.method(cm, "get_object", []), o)]));
-    print(rt.showArgs([rt.V.str("q03|"), rt.ops.eq(rt.method(rt.method(cm, "get_object", []), "get_instance_id", []), rt.method(o, "get_instance_id", []))]));
-    let ct = rt.methodCallable(rt.V.object(this), "top");
-    print(rt.showArgs([rt.V.str("q04|"), rt.typeOf(rt.method(ct, "get_object", [])), rt.V.str("|"), rt.ops.eq(rt.method(ct, "get_object", []), rt.V.object(this))]));
-    let cs = rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sstat"));
-    print(rt.showArgs([rt.V.str("q05|"), rt.typeOf(rt.method(cs, "get_object", [])), rt.V.str("|"), rt.ops.eq(rt.method(cs, "get_object", []), rt.V.object(__gd_d_Inner)), rt.V.str("|"), rt.ops.eq(rt.method(cs, "get_object", []), o)]));
-    let b = rt.method(cm, "bind", [rt.V.int(1)]);
-    print(rt.showArgs([rt.V.str("q06|"), rt.ops.eq(rt.method(b, "get_object", []), o), rt.V.str("|"), rt.wrapValue(rt.attribute(rt.method(b, "get_object", []), "v"))]));
-    print(rt.showArgs([rt.V.str("q07|"), rt.strBuiltin([rt.method(rt.method(cm, "get_object", []), "get_class", [])]), rt.V.str("|"), rt.ops.eq(rt.method(cm, "get_object", []), rt.method(cm, "get_object", []))]));
-    print(rt.showArgs([rt.V.str("q08|"), rt.ops.eq(rt.method(cm, "get_object", []), rt.method(ct, "get_object", []))]));
-    print(rt.showArgs([rt.V.str("q09|"), rt.method(rt.method(cm, "get_object", []), "m", [rt.V.int(1)]), rt.V.str("|"), rt.method(rt.method(cs, "get_object", []), "sstat", [rt.V.int(2)])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(16);
+      let o = rt.V.object(new Inner());
+      rt.frameLine(17);
+      let cm = rt.wrapValue(rt.attribute(o, "m"));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("q01|"), rt.typeOf(rt.method(cm, "get_object", [])), rt.V.str("|"), rt.ops.eq(rt.method(cm, "get_object", []), o), rt.V.str("|"), rt.wrapValue(rt.attribute(rt.method(cm, "get_object", []), "v"))]));
+      rt.frameLine(19);
+      let other = rt.V.object(new Inner());
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("q02|"), rt.ops.eq(rt.method(cm, "get_object", []), other), rt.V.str("|"), rt.ops.eq(rt.method(cm, "get_object", []), o)]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("q03|"), rt.ops.eq(rt.method(rt.method(cm, "get_object", []), "get_instance_id", []), rt.method(o, "get_instance_id", []))]));
+      rt.frameLine(22);
+      let ct = rt.methodCallable(rt.V.object(this), "top");
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("q04|"), rt.typeOf(rt.method(ct, "get_object", [])), rt.V.str("|"), rt.ops.eq(rt.method(ct, "get_object", []), rt.V.object(this))]));
+      rt.frameLine(24);
+      let cs = rt.wrapValue(rt.attribute(rt.V.object(__gd_d_Inner), "sstat"));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("q05|"), rt.typeOf(rt.method(cs, "get_object", [])), rt.V.str("|"), rt.ops.eq(rt.method(cs, "get_object", []), rt.V.object(__gd_d_Inner)), rt.V.str("|"), rt.ops.eq(rt.method(cs, "get_object", []), o)]));
+      rt.frameLine(26);
+      let b = rt.method(cm, "bind", [rt.V.int(1)]);
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("q06|"), rt.ops.eq(rt.method(b, "get_object", []), o), rt.V.str("|"), rt.wrapValue(rt.attribute(rt.method(b, "get_object", []), "v"))]));
+      rt.frameLine(28);
+      print(rt.showArgs([rt.V.str("q07|"), rt.strBuiltin([rt.method(rt.method(cm, "get_object", []), "get_class", [])]), rt.V.str("|"), rt.ops.eq(rt.method(cm, "get_object", []), rt.method(cm, "get_object", []))]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("q08|"), rt.ops.eq(rt.method(cm, "get_object", []), rt.method(ct, "get_object", []))]));
+      rt.frameLine(30);
+      print(rt.showArgs([rt.V.str("q09|"), rt.method(rt.method(cm, "get_object", []), "m", [rt.V.int(1)]), rt.V.str("|"), rt.method(rt.method(cs, "get_object", []), "sstat", [rt.V.int(2)])]));
+      rt.frameLine(31);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -45,14 +94,50 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Inner extends rt.GdScriptObject {
-  v = rt.V.int(7);
+  declare v: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.v = rt.V.int(7);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   m(x: rt.Variant): rt.Variant {
-    return rt.ops.add(x, this.v);
+    const __gd_frame = rt.frameEnter("res://main.gd", "m");
+    try {
+      rt.frameLine(7);
+      return rt.ops.add(x, this.v);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   static sstat(x: rt.Variant): rt.Variant {
-    return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "sstat");
+    try {
+      rt.frameLine(10);
+      return x;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

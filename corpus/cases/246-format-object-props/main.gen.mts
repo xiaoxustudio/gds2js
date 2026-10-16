@@ -4,25 +4,66 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Thing());
-    print(rt.showArgs([rt.V.str("p01|"), rt.method(rt.V.str("{alpha}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p02|"), rt.method(rt.V.str("{alpha}{alpha}"), "format", [o]), rt.V.str("|"), rt.method(rt.V.str("{twice}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p03|"), rt.method(rt.V.str("{note} {beta}"), "format", [o]), rt.V.str("|"), rt.method(rt.V.str("{beta} {note}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p04|"), rt.method(rt.V.str("{Lower}|{lower}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p05|"), rt.method(rt.V.str("{deep}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p06|"), rt.ops.eq(rt.method(rt.V.str("{alpha}"), "format", [o]), rt.V.str("1"))]));
-    print(rt.showArgs([rt.V.str("p07|"), rt.method(rt.V.str("{f}|{s}|{alpha}"), "format", [o])]));
-    let k = rt.V.object(new Kid());
-    print(rt.showArgs([rt.V.str("p08|"), rt.method(rt.V.str("{holder}|{three}|{two}"), "format", [k])]));
-    print(rt.showArgs([rt.V.str("p09|"), rt.method(rt.V.str("{holder}{back}"), "format", [k]), rt.V.str("|"), rt.method(rt.V.str("{back}"), "format", [k])]));
-    print(rt.showArgs([rt.V.str("p10|"), rt.method(rt.V.str("{one}|{two}|{three}"), "format", [k])]));
-    print(rt.showArgs([rt.V.str("p11|"), rt.method(rt.V.str("{_}={_}"), "format", [k]), rt.V.str("|"), rt.method(rt.V.str("{}"), "format", [k])]));
-    print(rt.showArgs([rt.V.str("p12|"), rt.method(rt.V.str("{alpha}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str("|"), rt.method(rt.V.str("{0}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p13|"), rt.method(rt.V.str("{missing}|{alpha}"), "format", [o])]));
-    print(rt.showArgs([rt.V.str("p14|"), rt.method(rt.V.str("x{alpha}x"), "format", [o, rt.V.str("{0}")]), rt.V.str("|"), rt.method(rt.V.str("{alpha}"), "format", [o, rt.V.str("{}")])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(22);
+      let o = rt.V.object(new Thing());
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("p01|"), rt.method(rt.V.str("{alpha}"), "format", [o])]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("p02|"), rt.method(rt.V.str("{alpha}{alpha}"), "format", [o]), rt.V.str("|"), rt.method(rt.V.str("{twice}"), "format", [o])]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("p03|"), rt.method(rt.V.str("{note} {beta}"), "format", [o]), rt.V.str("|"), rt.method(rt.V.str("{beta} {note}"), "format", [o])]));
+      rt.frameLine(26);
+      print(rt.showArgs([rt.V.str("p04|"), rt.method(rt.V.str("{Lower}|{lower}"), "format", [o])]));
+      rt.frameLine(27);
+      print(rt.showArgs([rt.V.str("p05|"), rt.method(rt.V.str("{deep}"), "format", [o])]));
+      rt.frameLine(28);
+      print(rt.showArgs([rt.V.str("p06|"), rt.ops.eq(rt.method(rt.V.str("{alpha}"), "format", [o]), rt.V.str("1"))]));
+      rt.frameLine(29);
+      print(rt.showArgs([rt.V.str("p07|"), rt.method(rt.V.str("{f}|{s}|{alpha}"), "format", [o])]));
+      rt.frameLine(30);
+      let k = rt.V.object(new Kid());
+      rt.frameLine(31);
+      print(rt.showArgs([rt.V.str("p08|"), rt.method(rt.V.str("{holder}|{three}|{two}"), "format", [k])]));
+      rt.frameLine(32);
+      print(rt.showArgs([rt.V.str("p09|"), rt.method(rt.V.str("{holder}{back}"), "format", [k]), rt.V.str("|"), rt.method(rt.V.str("{back}"), "format", [k])]));
+      rt.frameLine(33);
+      print(rt.showArgs([rt.V.str("p10|"), rt.method(rt.V.str("{one}|{two}|{three}"), "format", [k])]));
+      rt.frameLine(34);
+      print(rt.showArgs([rt.V.str("p11|"), rt.method(rt.V.str("{_}={_}"), "format", [k]), rt.V.str("|"), rt.method(rt.V.str("{}"), "format", [k])]));
+      rt.frameLine(35);
+      print(rt.showArgs([rt.V.str("p12|"), rt.method(rt.V.str("{alpha}"), "format", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.str("|"), rt.method(rt.V.str("{0}"), "format", [o])]));
+      rt.frameLine(36);
+      print(rt.showArgs([rt.V.str("p13|"), rt.method(rt.V.str("{missing}|{alpha}"), "format", [o])]));
+      rt.frameLine(37);
+      print(rt.showArgs([rt.V.str("p14|"), rt.method(rt.V.str("x{alpha}x"), "format", [o, rt.V.str("{0}")]), rt.V.str("|"), rt.method(rt.V.str("{alpha}"), "format", [o, rt.V.str("{}")])]));
+      rt.frameLine(38);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -51,8 +92,18 @@ class Base extends rt.GdScriptObject {
   declare holder: rt.Variant;
 
   __gd_fields__() {
-    this.two = rt.V.int(2);
-    this.holder = rt.V.str("{three}");
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.two = rt.V.int(2);
+      rt.frameLine(5);
+      this.holder = rt.V.str("{three}");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -73,9 +124,19 @@ class Kid extends Base {
   declare back: rt.Variant;
 
   override __gd_fields__() {
-    super.__gd_fields__();
-    this.three = rt.V.int(3);
-    this.back = rt.V.str("{two}");
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      super.__gd_fields__();
+      rt.frameLine(8);
+      this.three = rt.V.int(3);
+      rt.frameLine(9);
+      this.back = rt.V.str("{two}");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
 
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -92,14 +153,46 @@ rt.registerScriptProps(__gd_d_Kid, ["three","back"], (o) => { const s = o as Kid
 rt.registerDictIdentity(__gd_d_Kid, "res://main.gd", "Kid", ["three","back"], {}, (o) => { const s = o as Kid; return [s.three, s.back]; });
 
 class Thing extends rt.GdScriptObject {
-  alpha = rt.V.int(1);
-  beta = rt.V.int(9);
-  note = rt.V.str("{beta}");
-  twice = rt.V.str("A{alpha}B{alpha}C");
-  lower = rt.V.int(5);
-  deep = rt.dictOf([[rt.V.str("k"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.dictOf([[rt.V.str("m"), rt.V.int(2)]])]))]]);
-  f = rt.V.float(2.5);
-  s = rt.V.str("a\nb");
+  declare alpha: rt.Variant;
+  declare beta: rt.Variant;
+  declare note: rt.Variant;
+  declare twice: rt.Variant;
+  declare lower: rt.Variant;
+  declare deep: rt.Variant;
+  declare f: rt.Variant;
+  declare s: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(12);
+      this.alpha = rt.V.int(1);
+      rt.frameLine(13);
+      this.beta = rt.V.int(9);
+      rt.frameLine(14);
+      this.note = rt.V.str("{beta}");
+      rt.frameLine(15);
+      this.twice = rt.V.str("A{alpha}B{alpha}C");
+      rt.frameLine(16);
+      this.lower = rt.V.int(5);
+      rt.frameLine(17);
+      this.deep = rt.dictOf([[rt.V.str("k"), rt.V.array(rt.GArray.of([rt.V.int(1), rt.dictOf([[rt.V.str("m"), rt.V.int(2)]])]))]]);
+      rt.frameLine(18);
+      this.f = rt.V.float(2.5);
+      rt.frameLine(19);
+      this.s = rt.V.str("a\nb");
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
     switch (name) {

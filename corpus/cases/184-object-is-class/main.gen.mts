@@ -4,11 +4,38 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let o = rt.V.object(new Thing());
-    print(rt.showArgs([rt.V.str("r "), rt.method(o, "get_class", []), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("RefCounted")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Object")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Thing")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Node")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Nope")])]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(7);
+      let o = rt.V.object(new Thing());
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("r "), rt.method(o, "get_class", []), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("RefCounted")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Object")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Thing")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Node")]), rt.V.str(" "), rt.method(o, "is_class", [rt.V.str("Nope")])]));
+      rt.frameLine(9);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -27,7 +54,25 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Thing extends rt.GdScriptObject {
-  a = rt.V.int(7);
+  declare a: rt.Variant;
+
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+      rt.frameLine(4);
+      this.a = rt.V.int(7);
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
 
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
     switch (name) {

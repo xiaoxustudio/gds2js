@@ -7,30 +7,69 @@ const INF = rt.V.float(Number.POSITIVE_INFINITY);
 const NAN = rt.V.float(Number.NaN);
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.float(1.5), rt.V.float(2.5)]), rt.vector2New([rt.V.float(2.5), rt.V.float(1.5)]), rt.vector2New([rt.V.int(2), rt.V.int(2)]), rt.vector2New([rt.V.int((-3)), rt.V.int(1)]), rt.vector2New([rt.V.int((-1)), rt.V.int((-3))]), rt.vector2New([rt.V.int(0), rt.V.int(0)]), rt.vector2New([INF, rt.V.int(2)]), rt.vector2New([NAN, rt.V.int(2)]), rt.vector2New([rt.V.int(2), NAN])])))) {
-      print(rt.showArgs([rt.V.str("V2|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", []), rt.V.str("|"), rt.typeOf(rt.method(v, "max_axis_index", []))]));
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.float(1.5), rt.V.float(2.5)]), rt.vector2New([rt.V.float(2.5), rt.V.float(1.5)]), rt.vector2New([rt.V.int(2), rt.V.int(2)]), rt.vector2New([rt.V.int((-3)), rt.V.int(1)]), rt.vector2New([rt.V.int((-1)), rt.V.int((-3))]), rt.vector2New([rt.V.int(0), rt.V.int(0)]), rt.vector2New([INF, rt.V.int(2)]), rt.vector2New([NAN, rt.V.int(2)]), rt.vector2New([rt.V.int(2), NAN])])))) {
+        rt.frameLine(5);
+        print(rt.showArgs([rt.V.str("V2|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", []), rt.V.str("|"), rt.typeOf(rt.method(v, "max_axis_index", []))]));
+      }
+      rt.frameLine(6);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2iNew([rt.V.int(3), rt.V.int(4)]), rt.vector2iNew([rt.V.int(4), rt.V.int(3)]), rt.vector2iNew([rt.V.int(2), rt.V.int(2)]), rt.vector2iNew([rt.V.int((-3)), rt.V.int(1)]), rt.vector2iNew([rt.V.int((-1)), rt.V.int((-3))]), rt.vector2iNew([rt.V.int(0), rt.V.int(0)])])))) {
+        rt.frameLine(7);
+        print(rt.showArgs([rt.V.str("V2I|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", [])]));
+      }
+      rt.frameLine(8);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(3), rt.V.int(2), rt.V.int(1)]), rt.vector3New([rt.V.int(2), rt.V.int(2), rt.V.int(2)]), rt.vector3New([rt.V.int(0), rt.V.int(0), rt.V.int(0)]), rt.vector3New([rt.V.int((-5)), rt.V.int(1), rt.V.int(2)]), rt.vector3New([INF, rt.V.int(0), rt.V.int(0)]), rt.vector3New([NAN, rt.V.int(0), rt.V.int(1)])])))) {
+        rt.frameLine(9);
+        print(rt.showArgs([rt.V.str("V3|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", []), rt.V.str("|"), rt.method(v, "inverse", [])]));
+      }
+      rt.frameLine(10);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3iNew([rt.V.int(3), rt.V.int(4), rt.V.int(5)]), rt.vector3iNew([rt.V.int(5), rt.V.int(4), rt.V.int(3)]), rt.vector3iNew([rt.V.int(4), rt.V.int(4), rt.V.int(4)]), rt.vector3iNew([rt.V.int((-1)), rt.V.int((-9)), rt.V.int((-5))]), rt.vector3iNew([rt.V.int(0), rt.V.int(0), rt.V.int(0)])])))) {
+        rt.frameLine(11);
+        print(rt.showArgs([rt.V.str("V3I|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", [])]));
+      }
+      rt.frameLine(12);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(3), rt.V.int(4)]), rt.vector2New([rt.V.float(0.5), rt.V.float(0.5)]), rt.vector2New([rt.V.int(0), rt.V.int(0)]), rt.vector2New([rt.V.int((-3)), rt.V.int((-4))])])))) {
+        rt.frameLine(13);
+        print(rt.showArgs([rt.V.str("LL2|"), rt.method(v, "limit_length", []), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(2)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(0)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float((-1))])]));
+      }
+      rt.frameLine(14);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(0), rt.V.int(0), rt.V.int(0)])])))) {
+        rt.frameLine(15);
+        print(rt.showArgs([rt.V.str("LL3|"), rt.method(v, "limit_length", []), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(2)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(0)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float((-1))])]));
+      }
+      rt.frameLine(16);
+      for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.float(0.000005), rt.V.float(0)]), rt.vector2New([rt.V.float(0.00002), rt.V.float(0)]), rt.vector3New([rt.V.float(0.000005), rt.V.float(0), rt.V.float(0)]), rt.vector3New([rt.V.float(0.00002), rt.V.float(0), rt.V.float(0)])])))) {
+        rt.frameLine(17);
+        print(rt.showArgs([rt.V.str("LLS|"), rt.method(v, "limit_length", [rt.V.float(0)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(1)])]));
+      }
+      rt.frameLine(18);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
     }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2iNew([rt.V.int(3), rt.V.int(4)]), rt.vector2iNew([rt.V.int(4), rt.V.int(3)]), rt.vector2iNew([rt.V.int(2), rt.V.int(2)]), rt.vector2iNew([rt.V.int((-3)), rt.V.int(1)]), rt.vector2iNew([rt.V.int((-1)), rt.V.int((-3))]), rt.vector2iNew([rt.V.int(0), rt.V.int(0)])])))) {
-      print(rt.showArgs([rt.V.str("V2I|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", [])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(3), rt.V.int(2), rt.V.int(1)]), rt.vector3New([rt.V.int(2), rt.V.int(2), rt.V.int(2)]), rt.vector3New([rt.V.int(0), rt.V.int(0), rt.V.int(0)]), rt.vector3New([rt.V.int((-5)), rt.V.int(1), rt.V.int(2)]), rt.vector3New([INF, rt.V.int(0), rt.V.int(0)]), rt.vector3New([NAN, rt.V.int(0), rt.V.int(1)])])))) {
-      print(rt.showArgs([rt.V.str("V3|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", []), rt.V.str("|"), rt.method(v, "inverse", [])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3iNew([rt.V.int(3), rt.V.int(4), rt.V.int(5)]), rt.vector3iNew([rt.V.int(5), rt.V.int(4), rt.V.int(3)]), rt.vector3iNew([rt.V.int(4), rt.V.int(4), rt.V.int(4)]), rt.vector3iNew([rt.V.int((-1)), rt.V.int((-9)), rt.V.int((-5))]), rt.vector3iNew([rt.V.int(0), rt.V.int(0), rt.V.int(0)])])))) {
-      print(rt.showArgs([rt.V.str("V3I|"), rt.method(v, "max_axis_index", []), rt.V.str("|"), rt.method(v, "min_axis_index", [])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.int(3), rt.V.int(4)]), rt.vector2New([rt.V.float(0.5), rt.V.float(0.5)]), rt.vector2New([rt.V.int(0), rt.V.int(0)]), rt.vector2New([rt.V.int((-3)), rt.V.int((-4))])])))) {
-      print(rt.showArgs([rt.V.str("LL2|"), rt.method(v, "limit_length", []), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(2)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(0)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float((-1))])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(0), rt.V.int(0), rt.V.int(0)])])))) {
-      print(rt.showArgs([rt.V.str("LL3|"), rt.method(v, "limit_length", []), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(2)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(0)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float((-1))])]));
-    }
-    for (let v of rt.iter(rt.V.array(rt.GArray.of([rt.vector2New([rt.V.float(0.000005), rt.V.float(0)]), rt.vector2New([rt.V.float(0.00002), rt.V.float(0)]), rt.vector3New([rt.V.float(0.000005), rt.V.float(0), rt.V.float(0)]), rt.vector3New([rt.V.float(0.00002), rt.V.float(0), rt.V.float(0)])])))) {
-      print(rt.showArgs([rt.V.str("LLS|"), rt.method(v, "limit_length", [rt.V.float(0)]), rt.V.str("|"), rt.method(v, "limit_length", [rt.V.float(1)])]));
-    }
-    this.quit();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

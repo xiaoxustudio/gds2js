@@ -4,17 +4,50 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let sn = rt.toStringNameSlot(rt.V.stringName("abc"));
-    print(rt.showArgs([rt.method(rt.V.str("abc"), "hash", []), rt.V.str(" "), rt.method(rt.V.str(""), "hash", []), rt.V.str(" "), rt.method(rt.V.str("a"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("Hello, World!"), "hash", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("你好"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("😀"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("😀😁"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("￿"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("𐀀"), "hash", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("abcdefghijklmnopqrstuvwxyz"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("the quick brown fox jumps over the lazy dog"), "hash", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("0123456789"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("A"), "hash", []), rt.V.str(" "), rt.method(rt.V.str(" "), "hash", []), rt.V.str(" "), rt.method(rt.V.str("abcabc"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("0"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("z"), "hash", [])]));
-    print(rt.showArgs([rt.method(rt.V.str("\t\n\\\""), "hash", []), rt.V.str(" "), rt.method(sn, "hash", []), rt.V.str(" "), rt.variantHash([rt.V.str("abc")]), rt.V.str(" "), rt.variantHash([sn]), rt.V.str(" "), rt.variantHash([rt.V.str("")]), rt.V.str(" "), rt.variantHash([rt.V.str("你好")])]));
-    print(rt.showArgs([rt.variantHash([rt.V.bool(true)]), rt.V.str(" "), rt.variantHash([rt.V.bool(false)]), rt.V.str(" "), rt.variantHash([rt.V.nil()])]));
-    print(rt.showArgs([rt.ops.eq(rt.method(rt.V.str("abc"), "hash", []), rt.method(rt.V.str("abc"), "hash", [])), rt.V.str(" "), rt.ops.lt(rt.method(rt.V.str("abc"), "hash", []), rt.method(rt.V.str("abd"), "hash", [])), rt.V.str(" "), rt.ops.eq(rt.method(rt.V.str("abc"), "hash", []), rt.method(rt.V.str("abd"), "hash", []))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      let sn = rt.toStringNameSlot(rt.V.stringName("abc"));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.method(rt.V.str("abc"), "hash", []), rt.V.str(" "), rt.method(rt.V.str(""), "hash", []), rt.V.str(" "), rt.method(rt.V.str("a"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("Hello, World!"), "hash", [])]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.method(rt.V.str("你好"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("😀"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("😀😁"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("￿"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("𐀀"), "hash", [])]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.method(rt.V.str("abcdefghijklmnopqrstuvwxyz"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("the quick brown fox jumps over the lazy dog"), "hash", [])]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.method(rt.V.str("0123456789"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("A"), "hash", []), rt.V.str(" "), rt.method(rt.V.str(" "), "hash", []), rt.V.str(" "), rt.method(rt.V.str("abcabc"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("0"), "hash", []), rt.V.str(" "), rt.method(rt.V.str("z"), "hash", [])]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.method(rt.V.str("\t\n\\\""), "hash", []), rt.V.str(" "), rt.method(sn, "hash", []), rt.V.str(" "), rt.variantHash([rt.V.str("abc")]), rt.V.str(" "), rt.variantHash([sn]), rt.V.str(" "), rt.variantHash([rt.V.str("")]), rt.V.str(" "), rt.variantHash([rt.V.str("你好")])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.variantHash([rt.V.bool(true)]), rt.V.str(" "), rt.variantHash([rt.V.bool(false)]), rt.V.str(" "), rt.variantHash([rt.V.nil()])]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.ops.eq(rt.method(rt.V.str("abc"), "hash", []), rt.method(rt.V.str("abc"), "hash", [])), rt.V.str(" "), rt.ops.lt(rt.method(rt.V.str("abc"), "hash", []), rt.method(rt.V.str("abd"), "hash", [])), rt.V.str(" "), rt.ops.eq(rt.method(rt.V.str("abc"), "hash", []), rt.method(rt.V.str("abd"), "hash", []))]));
+      rt.frameLine(13);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

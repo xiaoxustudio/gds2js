@@ -4,31 +4,78 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.str("P1|"), rt.gPosmod(rt.V.int(5), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("P2|"), rt.gPosmod(rt.V.int((-5)), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("P3|"), rt.gPosmod(rt.V.int(0), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("P4|"), rt.gPosmod(rt.V.int(2147483648), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("P5|"), rt.gPosmod(rt.V.int(9223372036854775807n), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("P6|"), rt.gPosmod(rt.V.int(7), rt.V.int(1))]));
-    print(rt.showArgs([rt.V.str("P7|"), rt.gPosmod(rt.V.int(7), rt.V.int((-1)))]));
-    print(rt.showArgs([rt.V.str("P8|"), rt.gPosmod(rt.V.int((-7)), rt.V.int((-1)))]));
-    print(rt.showArgs([rt.V.str("P9|"), rt.gPosmod(rt.V.int(10), rt.V.int(5))]));
-    print(rt.showArgs([rt.V.str("PA|"), rt.gPosmod(rt.V.int((-10)), rt.V.int(5))]));
-    print(rt.showArgs([rt.V.str("PB|"), rt.gPosmod(rt.V.int(10), rt.V.int((-5)))]));
-    print(rt.showArgs([rt.V.str("F1|"), rt.gFposmod(rt.V.float(5), rt.V.float(0))]));
-    print(rt.showArgs([rt.V.str("F2|"), rt.gFmod(rt.V.float(5), rt.V.float(0))]));
-    print(rt.showArgs([rt.V.str("F3|"), rt.gFposmod(rt.V.float((-5)), rt.V.float(0))]));
-    print(rt.showArgs([rt.V.str("W1|"), rt.gWrap(rt.V.int(5), rt.V.int(0), rt.V.int(0), true)]));
-    print(rt.showArgs([rt.V.str("W2|"), rt.gWrap(rt.V.int((-3)), rt.V.int(2), rt.V.int(2), true)]));
-    print(rt.showArgs([rt.V.str("S1|"), rt.gSnapped(rt.V.int(5), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("S2|"), rt.gSnapped(rt.V.int((-5)), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("S3|"), rt.gSnappedI(rt.V.int(5), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("S4|"), rt.gSnappedF(rt.V.float(5), rt.V.float(0))]));
-    print(rt.showArgs([rt.V.str("S5|"), rt.gSnapped(rt.V.float(2.5), rt.V.int(0))]));
-    print(rt.showArgs([rt.V.str("S6|"), rt.gSnappedI(rt.V.float(2.5), rt.V.int(0))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.V.str("P1|"), rt.gPosmod(rt.V.int(5), rt.V.int(0))]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.V.str("P2|"), rt.gPosmod(rt.V.int((-5)), rt.V.int(0))]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("P3|"), rt.gPosmod(rt.V.int(0), rt.V.int(0))]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("P4|"), rt.gPosmod(rt.V.int(2147483648), rt.V.int(0))]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("P5|"), rt.gPosmod(rt.V.int(9223372036854775807n), rt.V.int(0))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("P6|"), rt.gPosmod(rt.V.int(7), rt.V.int(1))]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("P7|"), rt.gPosmod(rt.V.int(7), rt.V.int((-1)))]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("P8|"), rt.gPosmod(rt.V.int((-7)), rt.V.int((-1)))]));
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.str("P9|"), rt.gPosmod(rt.V.int(10), rt.V.int(5))]));
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("PA|"), rt.gPosmod(rt.V.int((-10)), rt.V.int(5))]));
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("PB|"), rt.gPosmod(rt.V.int(10), rt.V.int((-5)))]));
+      rt.frameLine(15);
+      print(rt.showArgs([rt.V.str("F1|"), rt.gFposmod(rt.V.float(5), rt.V.float(0))]));
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("F2|"), rt.gFmod(rt.V.float(5), rt.V.float(0))]));
+      rt.frameLine(17);
+      print(rt.showArgs([rt.V.str("F3|"), rt.gFposmod(rt.V.float((-5)), rt.V.float(0))]));
+      rt.frameLine(18);
+      print(rt.showArgs([rt.V.str("W1|"), rt.gWrap(rt.V.int(5), rt.V.int(0), rt.V.int(0), true)]));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.str("W2|"), rt.gWrap(rt.V.int((-3)), rt.V.int(2), rt.V.int(2), true)]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("S1|"), rt.gSnapped(rt.V.int(5), rt.V.int(0))]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("S2|"), rt.gSnapped(rt.V.int((-5)), rt.V.int(0))]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("S3|"), rt.gSnappedI(rt.V.int(5), rt.V.int(0))]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("S4|"), rt.gSnappedF(rt.V.float(5), rt.V.float(0))]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("S5|"), rt.gSnapped(rt.V.float(2.5), rt.V.int(0))]));
+      rt.frameLine(25);
+      print(rt.showArgs([rt.V.str("S6|"), rt.gSnappedI(rt.V.float(2.5), rt.V.int(0))]));
+      rt.frameLine(26);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

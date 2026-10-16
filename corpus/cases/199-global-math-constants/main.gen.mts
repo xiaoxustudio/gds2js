@@ -9,20 +9,56 @@ const PI = rt.V.float(3.141592653589793);
 const TAU = rt.V.float(6.283185307179586);
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    print(rt.showArgs([rt.V.str("r1 "), rt.typeOf(PI), rt.V.str(" "), PI, rt.V.str(" "), TAU]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.typeOf(INF), rt.V.str(" "), INF, rt.V.str(" "), NAN]));
-    print(rt.showArgs([rt.V.str("r3 "), rt.ops.eq(PI, rt.V.float(3.141592653589793)), rt.V.str(" "), rt.ops.eq(PI, rt.V.float(3.14159265358979))]));
-    print(rt.showArgs([rt.V.str("r4 "), rt.ops.eq(TAU, rt.ops.mul(PI, rt.V.float(2))), rt.V.str(" "), rt.ops.gt(INF, rt.V.float(1e+308)), rt.V.str(" "), rt.ops.eq(NAN, NAN)]));
-    print(rt.showArgs([rt.V.str("r5 "), rt.V.array(rt.GArray.of([PI, TAU, INF, NAN]))]));
-    print(rt.showArgs([rt.V.str("r6 "), rt.ops.neg(PI), rt.V.str(" "), rt.ops.neg(INF), rt.V.str(" "), rt.ops.sub(INF, INF), rt.V.str(" "), rt.ops.div(rt.V.float(1), INF)]));
-    let a = rt.toInt(PI);
-    let b = rt.toInt(TAU);
-    print(rt.showArgs([rt.V.str("r7 "), a, rt.V.str(" "), b]));
-    let p = PI;
-    print(rt.showArgs([rt.V.str("r8 "), rt.typeOf(p), rt.V.str(" "), rt.ops.div(p, rt.V.float(2))]));
-    this.quit();
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(4);
+      print(rt.showArgs([rt.V.str("r1 "), rt.typeOf(PI), rt.V.str(" "), PI, rt.V.str(" "), TAU]));
+      rt.frameLine(5);
+      print(rt.showArgs([rt.V.str("r2 "), rt.typeOf(INF), rt.V.str(" "), INF, rt.V.str(" "), NAN]));
+      rt.frameLine(6);
+      print(rt.showArgs([rt.V.str("r3 "), rt.ops.eq(PI, rt.V.float(3.141592653589793)), rt.V.str(" "), rt.ops.eq(PI, rt.V.float(3.14159265358979))]));
+      rt.frameLine(7);
+      print(rt.showArgs([rt.V.str("r4 "), rt.ops.eq(TAU, rt.ops.mul(PI, rt.V.float(2))), rt.V.str(" "), rt.ops.gt(INF, rt.V.float(1e+308)), rt.V.str(" "), rt.ops.eq(NAN, NAN)]));
+      rt.frameLine(8);
+      print(rt.showArgs([rt.V.str("r5 "), rt.V.array(rt.GArray.of([PI, TAU, INF, NAN]))]));
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("r6 "), rt.ops.neg(PI), rt.V.str(" "), rt.ops.neg(INF), rt.V.str(" "), rt.ops.sub(INF, INF), rt.V.str(" "), rt.ops.div(rt.V.float(1), INF)]));
+      rt.frameLine(10);
+      let a = rt.toInt(PI);
+      rt.frameLine(11);
+      let b = rt.toInt(TAU);
+      rt.frameLine(12);
+      print(rt.showArgs([rt.V.str("r7 "), a, rt.V.str(" "), b]));
+      rt.frameLine(13);
+      let p = PI;
+      rt.frameLine(14);
+      print(rt.showArgs([rt.V.str("r8 "), rt.typeOf(p), rt.V.str(" "), rt.ops.div(p, rt.V.float(2))]));
+      rt.frameLine(15);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

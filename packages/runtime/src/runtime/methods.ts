@@ -1296,6 +1296,10 @@ export function attribute(raw: unknown, name: string): unknown {
       if (typeof v === "function") return methodCallable(obj, name);
       return v;
     }
+    // 声明过却没赋上值的属性（字段初始化子出错才留得下来，S406 的 n1 / n2 / q1 三格）：引擎读出来是 null。
+    for (let d = sd; d !== null; d = d.base) {
+      if (d.scriptProps !== null && d.scriptProps.includes(name)) return V.nil();
+    }
   }
   if (obj.t === Tag.NIL) {
     throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);

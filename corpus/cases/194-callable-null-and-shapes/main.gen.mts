@@ -4,24 +4,70 @@ import * as rt from "../../../packages/runtime/src/runtime/index";
 import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    let cb = rt.callableCtor([]);
-    print(rt.showArgs([rt.V.str("r1 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "is_null", []), rt.V.str(" "), rt.method(cb, "is_valid", [])]));
-    print(rt.showArgs([rt.V.str("r2 "), rt.ops.eq(rt.method(cb, "get_method", []), rt.V.str("")), rt.V.str(" "), rt.method(cb, "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(cb, "get_bound_arguments", []), "size", [])]));
-    print(rt.showArgs([rt.V.str("r3 "), rt.typeOf(rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])), rt.V.str(" "), rt.ops.eq(rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.nil())]));
-    let b = rt.method(cb, "bind", [rt.V.int(1)]);
-    print(rt.showArgs([rt.V.str("r4 "), rt.typeOf(b), rt.V.str(" "), rt.method(b, "is_null", [])]));
-    let f = rt.callable((__a: rt.Variant[]) => {
-      const x = __a[0] as rt.Variant;
-      return x;
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
+    try {
+      rt.frameLine(8);
+      let cb = rt.callableCtor([]);
+      rt.frameLine(9);
+      print(rt.showArgs([rt.V.str("r1 "), rt.typeOf(cb), rt.V.str(" "), rt.method(cb, "is_null", []), rt.V.str(" "), rt.method(cb, "is_valid", [])]));
+      rt.frameLine(10);
+      print(rt.showArgs([rt.V.str("r2 "), rt.ops.eq(rt.method(cb, "get_method", []), rt.V.str("")), rt.V.str(" "), rt.method(cb, "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(cb, "get_bound_arguments", []), "size", [])]));
+      rt.frameLine(11);
+      print(rt.showArgs([rt.V.str("r3 "), rt.typeOf(rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))])), rt.V.str(" "), rt.ops.eq(rt.method(cb, "callv", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.V.nil())]));
+      rt.frameLine(12);
+      let b = rt.method(cb, "bind", [rt.V.int(1)]);
+      rt.frameLine(13);
+      print(rt.showArgs([rt.V.str("r4 "), rt.typeOf(b), rt.V.str(" "), rt.method(b, "is_null", [])]));
+      rt.frameLine(14);
+      let f = rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          const x = __a[0] as rt.Variant;
+          rt.frameLine(15);
+          return x;
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
     }, 1);
-    print(rt.showArgs([rt.V.str("r5 "), rt.method(f, "is_null", []), rt.V.str(" "), rt.method(f, "is_valid", []), rt.V.str(" "), rt.method(f, "get_method", [])]));
-    let o = rt.V.object(new Thing());
-    let im = rt.wrapValue(rt.attribute(o, "hi"));
-    print(rt.showArgs([rt.V.str("r6 "), rt.method(im, "is_null", []), rt.V.str(" "), rt.method(im, "is_valid", []), rt.V.str(" "), rt.method(im, "get_method", []), rt.V.str(" "), rt.method(im, "call", [rt.V.int(7)])]));
-    print(rt.showArgs([rt.V.str("r7 "), rt.typeOf(rt.callableCtor([o, rt.V.str("hi")])), rt.V.str(" "), rt.method(rt.callableCtor([o, rt.V.str("hi")]), "get_method", []), rt.V.str(" "), rt.method(rt.callableCtor([o, rt.V.str("hi")]), "call", [rt.V.int(8)])]));
-    this.quit();
+      rt.frameLine(16);
+      print(rt.showArgs([rt.V.str("r5 "), rt.method(f, "is_null", []), rt.V.str(" "), rt.method(f, "is_valid", []), rt.V.str(" "), rt.method(f, "get_method", [])]));
+      rt.frameLine(17);
+      let o = rt.V.object(new Thing());
+      rt.frameLine(18);
+      let im = rt.wrapValue(rt.attribute(o, "hi"));
+      rt.frameLine(19);
+      print(rt.showArgs([rt.V.str("r6 "), rt.method(im, "is_null", []), rt.V.str(" "), rt.method(im, "is_valid", []), rt.V.str(" "), rt.method(im, "get_method", []), rt.V.str(" "), rt.method(im, "call", [rt.V.int(7)])]));
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("r7 "), rt.typeOf(rt.callableCtor([o, rt.V.str("hi")])), rt.V.str(" "), rt.method(rt.callableCtor([o, rt.V.str("hi")]), "get_method", []), rt.V.str(" "), rt.method(rt.callableCtor([o, rt.V.str("hi")]), "call", [rt.V.int(8)])]));
+      rt.frameLine(21);
+      this.quit();
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -40,8 +86,33 @@ rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
 class Thing extends rt.GdScriptObject {
+  __gd_fields__() {
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
+    try {
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return;
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
+  }
+
+  constructor() {
+    super();
+    this.__gd_fields__();
+  }
+
   hi(a: rt.Variant): rt.Variant {
-    return a;
+    const __gd_frame = rt.frameEnter("res://main.gd", "hi");
+    try {
+      rt.frameLine(5);
+      return a;
+    } catch (__gd_err) {
+      rt.gdFunctionError(__gd_err);
+      return rt.V.nil();
+    } finally {
+      rt.frameExit(__gd_frame);
+    }
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
