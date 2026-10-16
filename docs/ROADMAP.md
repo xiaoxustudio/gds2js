@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.258 值类型七面的属性读两面量齐（2026-10-16，S431 读数轮 · §6 第 84 条那份名单已可开写）
+
+- **构造位**：候选宇宙 175 名（拿别面的成员名当表外名试）× 七面逐名过裁判 —— 表外数 `Vector2` 168 / `Vector2i` 169 / `Vector3` 167 / `Vector3i` 168 / `Color` 169 / `StringName` 73 / `NodePath` 171，句都是 `Cannot find member "<名>" in base "<面>".` 同一句两遍，与 pack / Array / String 完全同形。
+- **装箱位**：七面逐面一格都给 `Invalid access to property or key 'nosuch' on a base object of type '<面>'.`（`tmp/probe-vattr/box.gd`），与 S416 / S424 同式。
+- **下一步就一件事**：把七份确认不存在名单写进 runtime（与 `PACK_ABSENT_*` 同一存放处）再接属性读；名单外的名字继续响亮拒，不猜。
+- **本轮不动出货**：读数在 `tmp/probe-vattr/compare1.txt`。
+
 ### 1.257 值类型面的装箱读发绑定 Callable，等式改成按接收者的值比（2026-10-16，S430，语料 378）
 
 - **读数**：`tmp/probe-bincall/m1.gd`（M1–M9：`Vector2::length`、`Color::to_html`、`Vector3i::length` 与真属性 `v.x` / `c.r` / `q.z` 并存）+ `e1.gd`（E1–E7：同值 pack / 同值数组 / 同值 Color 都等，值不同假，`hash` 随值同）。
