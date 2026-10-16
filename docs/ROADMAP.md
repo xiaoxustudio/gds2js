@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.247 Array / String 的属性面照 pack 接进解析期（2026-10-16，S420，§6 第 83 条③结清）
+
+- **读数**：`tmp/probe-bincall/round2.mts` 的 H5 / H6 / H7 / H15 四格 —— 标注接收者读表外名与 pack 同形（`Cannot find member "<名>" in base "<型>".` 同一句报两遍），写成员名给 `Cannot assign a new value to a constant.`。
+- **反向的一形**：标注字典读属性解析期不开口、写属性不报错（S419 ③ 的 StringName 键），所以 Dictionary 面这一族不发解析期拒。
+- **没量的不放**：`[1, 2].nosuch` 那种字面量接收者本轮没有读数，照旧放过；pack 的构造位与标注位都量过（`tmp/probe-attr/compare3.txt`），照 S417 发。
+- **门读数**：`pnpm test` **14289**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
 ### 1.246 内建类型方法名当值 = 绑定 Callable，Dictionary 是例外（2026-10-16，S419 读数轮 · §6 第 83 条新登）
 
 - **几面给 Callable**：`Array` / `String` / `Vector2` / `Color` / pack 都印 `<型>::<名>`，`typeof` 25、`is_valid()` 真、`get_method()` / `get_object()`（`<Object#null>`）/ `get_argument_count()` 齐、`.call()` 照调（void 回 `<null>`）、元数句 `Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).`、同法两次取值相等、跨面同名不相等、能当字典键、`var_to_str` 里退化成 `Callable()`、跟数字比在解析期就拒。
