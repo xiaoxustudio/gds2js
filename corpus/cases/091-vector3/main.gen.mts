@@ -183,7 +183,7 @@ export class Main extends SceneTree {
         if (_nv !== null) ta = _nv;
       }
       rt.frameLine(61);
-      print(rt.showArgs([ta, rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(ta, rt.V.int(0))), "z"))]));
+      print(rt.showArgs([ta, rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(ta, rt.V.int(0), "Array[Vector3]")), "z"))]));
       rt.frameLine(62);
       let sv = rt.V.array(rt.GArray.of([rt.vector3New([rt.V.int(3), rt.V.int(1), rt.V.int(0)]), rt.vector3New([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector3New([rt.V.int(2), rt.V.int(0), rt.V.int(0)])]));
       rt.frameLine(63);

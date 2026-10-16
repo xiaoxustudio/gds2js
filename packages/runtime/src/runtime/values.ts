@@ -230,11 +230,20 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   }
 }
 
-/** 数组下标的唯一读口径：支持负数（从尾部数），越界给引擎那句 `Invalid access of index …`（S403 量的）。 */
-export function arrIdx(i: number, len: number): number {
+/** 位置型基读越界的两句：基带**静态标注**时引擎讲的是 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`（句末没有句点、负数原样印），
+ *  推断来的与转手过的同一份值讲的是 `Invalid access of index '<k>' on a base object of type: '<型>'.` —— 两句都量的，读数 `tmp/probe-typedlabel/compare{98,99}.txt`。 */
+export function posOobSay(key: string, base: string | undefined, valueType: string): string {
+  return base === undefined
+    ? `Invalid access of index '${key}' on a base object of type: '${valueType}'.`
+    : `Out of bounds get index '${key}' (on base: '${base}')`;
+}
+
+/** 数组下标的唯一读口径：支持负数（从尾部数），越界给引擎那一句（S403 量的；两式的分工见 `posOobSay`）。
+ *  后一式里的型名是**值自己**的拼法，定形数组带元素型（`var b = a` 那种转手过的一格量的，读数 `tmp/probe-typedlabel/compare99.txt` 的 u6）。 */
+export function arrIdx(i: number, len: number, base?: string, valueType = "Array"): number {
   const k = i < 0 ? i + len : i;
   if (k < 0 || k >= len) {
-    throw new GodotRuntimeError("array-index", `Invalid access of index '${String(i)}' on a base object of type: 'Array'.`);
+    throw new GodotRuntimeError("array-index", posOobSay(String(i), base, valueType));
   }
   return k;
 }
@@ -312,8 +321,8 @@ export class GArray {
     return this.items;
   }
 
-  get(i: number): Variant {
-    return this.items[arrIdx(i, this.items.length)]!;
+  get(i: number, base?: string): Variant {
+    return this.items[arrIdx(i, this.items.length, base, this.elem === null ? "Array" : `Array[${this.elem}]`)]!;
   }
 
   set(i: number, v: Variant): void {
@@ -925,11 +934,11 @@ export function strLength(s: string): number {
   return codepoints(s).length;
 }
 
-export function strAt(s: string, i: number): string {
+export function strAt(s: string, i: number, base?: string): string {
   const chars = codepoints(s);
   const c = chars[i];
   if (c === undefined) {
-    throw new GodotRuntimeError("string-index", `字符串索引越界: ${i}`);
+    throw new GodotRuntimeError("string-index", posOobSay(String(i), base, "String"));
   }
   return c;
 }

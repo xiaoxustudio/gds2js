@@ -80,7 +80,7 @@ export class Main extends SceneTree {
       rt.frameLine(26);
       rt.method(arr, "append", [rt.vector3New([rt.V.float(4.7), rt.V.float(5.2), rt.V.float(6.9)])]);
       rt.frameLine(27);
-      print(rt.showArgs([rt.V.str("typed "), arr, rt.V.str(" "), rt.wrapValue(rt.index(arr, rt.V.int(1))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(arr, rt.V.int(0)))), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(arr, rt.V.int(0))), "z"))]));
+      print(rt.showArgs([rt.V.str("typed "), arr, rt.V.str(" "), rt.wrapValue(rt.index(arr, rt.V.int(1), "Array[Vector3i]")), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(arr, rt.V.int(0), "Array[Vector3i]"))), rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(arr, rt.V.int(0), "Array[Vector3i]")), "z"))]));
       rt.frameLine(28);
       let p = rt.packCtor("vector3", [rt.V.array(rt.GArray.of([rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), rt.vector2iNew([rt.V.int(4), rt.V.int(5)])]))]);
       rt.frameLine(29);

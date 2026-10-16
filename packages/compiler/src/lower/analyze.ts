@@ -248,10 +248,17 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
   }
 }
 
-type TypedSlot = { decl: string; kind: "Array" | "Dictionary"; elem?: string; key?: string; val?: string };
+type TypedSlot = { decl: string; kind: "Array" | "Dictionary"; elem?: string; key?: string; val?: string; ann?: string };
 
 const dictIntReads = new Set<string>();
 const diKey = (line: number, col: number): string => `${markOwner}#${String(line)}:${String(col)}`;
+
+/** 静态标注的位置型基（`Array` / `Array[k]` / `String` / 八支 pack）读的那一格：越界时引擎讲的是 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`，与推断来的那一式不同（读数 `tmp/probe-typedlabel/compare{98,99}.txt`），发射器据这张表把声明拼法带到运行期。 */
+const posReadLabels = new Map<string, string>();
+
+export function posReadLabel(e: Expr): string | null {
+  return e.kind === "index" ? posReadLabels.get(diKey(e.loc.line, e.loc.col)) ?? null : null;
+}
 
 /** 静态标注的 `Dictionary` / `Dictionary[K, V]` 配静态 int 键的那一格：引擎讲的是数组那一式（`Out of bounds get index …`，S405 量过），运行期得知道谁是这一形。 */
 export function isDictIntRead(e: Expr): boolean {
@@ -353,6 +360,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
           if (slot !== undefined) {
             badKey(slot, e.index, decls);
             if (slot.kind === "Dictionary" && stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
+            if (slot.kind === "Array" && slot.ann !== undefined) posReadLabels.set(diKey(e.loc.line, e.loc.col), slot.ann);
           }
         } else if (e.obj.kind === "array") {
           // 数组字面量直接下标：基名静态就是 `Array`，与推断的那一格同一句（读数 `tmp/probe-errorflow/compare91.txt` 的 r1 / r4 / r5）
@@ -436,14 +444,14 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
         case "var": {
           if (s.type !== null && s.type.kind === "named") {
             const slot = parseTyped(s.type.name);
-            if (slot !== null) typed.set(s.name, slot);
+            if (slot !== null) typed.set(s.name, { ...slot, ann: s.type.name });
             else {
               const scalar = scalarStaticName(s.type.name);
               if (scalar !== null) decls.set(s.name, scalar);
               const pos = positionalSlot(s.type.name, null);
-              if (pos !== null) typed.set(s.name, pos);
+              if (pos !== null) typed.set(s.name, { ...pos, ann: s.type.name });
               const ds = dictSlotOf(s.type.name);
-              if (ds !== null) typed.set(s.name, ds);
+              if (ds !== null) typed.set(s.name, { ...ds, ann: s.type.name });
             }
           } else if (s.type === null) {
             const pos = positionalSlot(null, s.init);
@@ -516,9 +524,9 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     const scalar = scalarStaticName(typeName);
     if (scalar !== null) decls.set(name, scalar);
     const pos = positionalSlot(typeName, null);
-    if (pos !== null) typed.set(name, pos);
+    if (pos !== null) typed.set(name, { ...pos, ann: typeName });
     const ds = dictSlotOf(typeName);
-    if (ds !== null) typed.set(name, ds);
+    if (ds !== null) typed.set(name, { ...ds, ann: typeName });
   };
   const scopeOf = (seeds: Seed[], params: Seed[], ret: TypeRef | null): [Map<string, TypedSlot>, Map<string, string>] => {
     const typed = new Map<string, TypedSlot>();

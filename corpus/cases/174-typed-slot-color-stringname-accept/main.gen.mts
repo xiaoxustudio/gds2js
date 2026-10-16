@@ -64,7 +64,7 @@ export class Main extends SceneTree {
         if (_nv !== null) a = _nv;
       }
       rt.frameLine(20);
-      print(rt.showArgs([rt.V.str("a "), a, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(a, rt.V.int(1))))]));
+      print(rt.showArgs([rt.V.str("a "), a, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(a, rt.V.int(1), "Array[Color]")))]));
       rt.frameLine(21);
       let d = rt.stampDict(rt.dictOf([[rt.V.str("k"), rt.V.int(5)]]), "StringName", "Color", true);
       rt.frameLine(22);
@@ -76,7 +76,7 @@ export class Main extends SceneTree {
       rt.frameLine(25);
       let arr = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.stringName("abc")])), "String", true);
       rt.frameLine(26);
-      print(rt.showArgs([rt.V.str("arr "), arr, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(arr, rt.V.int(0))))]));
+      print(rt.showArgs([rt.V.str("arr "), arr, rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(arr, rt.V.int(0), "Array[String]")))]));
       rt.frameLine(27);
       this.quit();
     } catch (__gd_err) {

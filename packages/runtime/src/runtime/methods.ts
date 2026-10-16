@@ -26,7 +26,7 @@ import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
+import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show } from "./values";
 import { isLess, sortLess } from "./ops";
@@ -1082,11 +1082,18 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   }
 }
 
-export function index(raw: unknown, idx: Variant): Variant {
+export function index(raw: unknown, idx: Variant, base?: string): Variant {
   const obj = norm(raw);
-  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArgIdx(idx, "下标"));
+  if (obj.t === Tag.ARRAY) return asArray(obj, "下标").get(intArgIdx(idx, "下标"), base);
   if (obj.t === Tag.DICT) return asDict(obj, "下标").getRequired(idx);
-  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArgIdx(idx, "下标")));
+  if (obj.t === Tag.STRING) return V.str(strAt(asString(obj, "下标"), intArgIdx(idx, "下标"), base));
+  // 八支 pack 的读那一格：基带静态标注时越界换 `Out of bounds get index …` 那一式，基名按声明的拼法（读数 compare99 的 u3）
+  if (base !== undefined && obj.t === Tag.OBJECT && obj.v instanceof GBytes) {
+    const len = (obj.v as GBytes).length;
+    const i = intArgIdx(idx, "下标");
+    const k = i < 0 ? i + len : i;
+    if (k < 0 || k >= len) throw new GodotRuntimeError("packed-index", posOobSay(String(i), base, base));
+  }
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);

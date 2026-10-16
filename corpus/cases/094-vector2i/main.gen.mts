@@ -191,7 +191,7 @@ export class Main extends SceneTree {
         if (_nv !== null) ta = _nv;
       }
       rt.frameLine(62);
-      print(rt.showArgs([ta, rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(ta, rt.V.int(0))), "y"))]));
+      print(rt.showArgs([ta, rt.V.str(" "), rt.wrapValue(rt.attribute(rt.wrapValue(rt.index(ta, rt.V.int(0), "Array[Vector2i]")), "y"))]));
       rt.frameLine(63);
       let tdi = rt.stampDict(rt.dictOf([]), "Vector2i", "int", true);
       rt.frameLine(64);

@@ -173,7 +173,7 @@ export class Main extends SceneTree {
       rt.frameLine(59);
       rt.method(ta, "resize", [rt.V.int(3)]);
       rt.frameLine(60);
-      print(rt.showArgs([ta, rt.V.str(" "), rt.ops.eq(rt.wrapValue(rt.index(ta, rt.V.int(0))), rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])), rt.V.str(" "), rt.method(ta, "has", [rt.colorNew([rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(1)])])]));
+      print(rt.showArgs([ta, rt.V.str(" "), rt.ops.eq(rt.wrapValue(rt.index(ta, rt.V.int(0), "Array[Color]")), rt.colorNew([rt.V.int(1), rt.V.int(0), rt.V.int(0), rt.V.int(1)])), rt.V.str(" "), rt.method(ta, "has", [rt.colorNew([rt.V.int(0), rt.V.int(0), rt.V.int(0), rt.V.int(1)])])]));
       rt.frameLine(61);
       {
       const _w0 = rt.V.int(0);

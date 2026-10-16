@@ -81,7 +81,7 @@ export class Main extends SceneTree {
         if (_nv !== null) t = _nv;
       }
       rt.frameLine(29);
-      print(rt.showArgs([rt.V.str("u14 "), t, rt.V.str(" "), rt.wrapValue(rt.index(t, rt.V.int((-1))))]));
+      print(rt.showArgs([rt.V.str("u14 "), t, rt.V.str(" "), rt.wrapValue(rt.index(t, rt.V.int((-1)), "PackedInt32Array"))]));
       rt.frameLine(30);
       print(rt.showArgs([rt.V.str("u15 "), rt.method(a, "append", [rt.V.int(9)]), rt.V.str(" "), rt.method(a, "size", [])]));
       rt.frameLine(31);

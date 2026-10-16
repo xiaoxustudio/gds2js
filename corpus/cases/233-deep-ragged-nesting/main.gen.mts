@@ -83,11 +83,11 @@ export class Main extends SceneTree {
       rt.frameLine(26);
       let t = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.int(3)]))])), "Array", true);
       rt.frameLine(27);
-      print(rt.showArgs([rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.V.str("typed-nested\t"), rt.strBuiltin([t])), rt.V.str(" ")), rt.strBuiltin([rt.method(t, "size", [])])), rt.V.str(" ")), rt.strBuiltin([rt.method(rt.wrapValue(rt.index(t, rt.V.int(1))), "size", [])]))]));
+      print(rt.showArgs([rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.V.str("typed-nested\t"), rt.strBuiltin([t])), rt.V.str(" ")), rt.strBuiltin([rt.method(t, "size", [])])), rt.V.str(" ")), rt.strBuiltin([rt.method(rt.wrapValue(rt.index(t, rt.V.int(1), "Array[Array]")), "size", [])]))]));
       rt.frameLine(28);
       let pack = rt.V.array(rt.GArray.of([rt.packCtor("int32", [rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))]), rt.packCtor("int32", [])]));
       rt.frameLine(29);
-      print(rt.showArgs([rt.ops.add(rt.ops.add(rt.ops.add(rt.V.str("typed-pack\t"), rt.strBuiltin([pack])), rt.V.str(" ")), rt.strBuiltin([rt.method(rt.wrapValue(rt.index(pack, rt.V.int(1))), "size", [])]))]));
+      print(rt.showArgs([rt.ops.add(rt.ops.add(rt.ops.add(rt.V.str("typed-pack\t"), rt.strBuiltin([pack])), rt.V.str(" ")), rt.strBuiltin([rt.method(rt.wrapValue(rt.index(pack, rt.V.int(1), "Array[PackedInt32Array]")), "size", [])]))]));
       rt.frameLine(30);
       this.quit();
     } catch (__gd_err) {

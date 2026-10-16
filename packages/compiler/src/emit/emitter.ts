@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isDictIntRead, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
+import { isDictIntRead, posReadLabel, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -1870,7 +1870,11 @@ function emitExprR(e: Expr): R {
     if (ek && !isGridElem(ek)) {
       const ir = emitExprR(e.index);
       if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
-      return { code: `rt.fast.rawArrGet${fastSuffix(ek)}(${e.obj.name}, ${ir.code})`, rep: ek };
+      const lbl = posReadLabel(e);
+      return {
+        code: `rt.fast.rawArrGet${fastSuffix(ek)}(${e.obj.name}, ${ir.code}${lbl === null ? "" : `, ${JSON.stringify(lbl)}`})`,
+        rep: ek,
+      };
     }
     const dk = RAW_DICTS.get(e.obj.name);
     if (dk !== undefined && !isDictIntRead(e)) {
@@ -3107,7 +3111,10 @@ function emitExprVar(e: Expr): string {
     case "index":
       // 静态标注的字典 + 静态 int 键：引擎讲的是数组那一式，得让运行期知道这一格是谁（S405）。
       if (isDictIntRead(e)) return `rt.wrapValue(rt.dictIndexInt(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
-      return `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
+      const pos = posReadLabel(e);
+      return pos === null
+        ? `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`
+        : `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}, ${JSON.stringify(pos)}))`;
 
     case "attribute":
       if (e.obj.kind === "ident" && e.obj.name === "super") {
