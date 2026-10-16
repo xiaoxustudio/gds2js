@@ -186,7 +186,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     if (inner.includes("[")) {
       diags.push({
         code: "typed-collection-nested",
-        message: `Nested typed collections are not supported.（${t.type.name}）`,
+        message: "Nested typed collections are not supported.",
         loc: t.loc,
       });
       continue;

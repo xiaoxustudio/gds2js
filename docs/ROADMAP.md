@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.235 嵌套定型容器那句去掉自加的型名后缀，顺带量齐位置型基读越界的两句（2026-10-16，S411，§6 新增第 78 条）
+
+- **一句文本**：引擎发 `Nested typed collections are not supported.`，出货在同句后面多挂了 `（Array[Array[int]]）` —— 去掉后缀，语料 084 的 golden 早就是原文（churn 只有那一份注释）。
+- **顺带量的 21 格（`tmp/probe-typedlabel/compare{98,99}.txt`）**：**标注**的位置型基（`Array` / `Array[k]` / `String` / pack）读越界给 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`，**推断/转手**的同一份值给 `Invalid access of index '<k>' on a base object of type: '<型>'.` —— 与 S405 字典那族同一条「看标注不看值」；负下标原样印；写侧不受影响。
+- **出货今天的两处不合**：一律发后一式；String 那一支两句都不发，发的是中文自述 `字符串索引越界: 5`。接法照 `dictIndexInt` 那条通道，登记为 §6 第 78 条（并把第 72 条⑤那条「快轨基名不带元素型」并进来）。
+- **账**：`pnpm test` 14228（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过。
+
 ### 1.234 内部类能看见模块级的哪些名字：15 格量齐，自己类的信号不再发裸标识符（2026-10-16，S410，§6 第 68 条①结清）
 
 - **看不见**：模块 `func`（`not found in base self.`，函数体 / `_init` 体 / 两层内部类同句）、模块 `var` / `signal` / `static var` 与裸写的枚举成员名（`not declared in the current scope.`）—— 出货的解析期本来就同句，这四处零改动。
