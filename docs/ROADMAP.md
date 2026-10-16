@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.241 pack 九支的表外方法名接进解析期：名单要反着列（2026-10-16，S414，§6 第 81 条底下那半结清、第 82 条新登）
+
+- **量法换了方向**：180 名 × 九支在构造位逐名过裁判（`tmp/probe-slice/round8.mts`，读数 `compare110.txt`）。第一版按 S413 的「存在白名单」接，`PackedByteArray.compress` / `hex_encode` / `to_float32_array` 与语料 135 / 160 / 161 当场误报 —— 手列的候选宇宙里「没量到」推不出「不存在」。改成只列裁判**确认不存在**的名字：byte 147 名、其余八支各 157 名，两支差 11 名（byte 独有的 `compress` / `decompress` / `hex_encode` / `get_string_from_*` / `to_int32_array` / `to_int64_array` / `to_float32_array` / `to_float64_array`），反向只差 `to_byte_array`。
+- **静态只认两形**：构造位字面量与带标注的名字发那两句；`var p = PackedStringArray([...])` 这种初值推断的名字解析期不开口，留运行期那句（`tmp/probe-slice/r7c.gd`，语料 224 同份读数）。因此新检查 `checkPackFaceNames` 不看 `checkValueMethodArity` 那张含推断的 `typed` 表。
+- **顺手归位**：`join` 那支硬写两句的 pack 分支（`joinReceiverBase`）摘掉，pack 的名字拒只剩一家。
+- **门读数**：`pnpm test` **14264**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+- **剩的债**：§6 第 82 条两条 —— 运行期装箱那一形的 `packMethod` `default:` 中文自述，与属性面一句没量过的 `packed-attribute`。
+
 ### 1.240 静态接收者的表外方法名：存在名单补上后三面接进出货（2026-10-16，S413，§6 第 80 条接一半、第 81 条结清）
 
 - **先把「存在 / 表外」一次量清**：158 个名字 × 四面（String / Array / Dictionary / PackedInt32Array）= 632 格，一份脚本一行一名、按引擎自己那句「not found」归类（尺 `tmp/probe-slice/round4.mts`，读数 `compare106.txt`）—— 存在的名字每个 108 / 50 / 23 / 22 个，其余全是表外。

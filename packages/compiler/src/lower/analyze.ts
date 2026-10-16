@@ -127,6 +127,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
+  checkPackFaceNames(m, diags);
   checkDictMethodArity(m, diags);
   checkArrayMethodArity(m, diags);
   // 元数那句排在取值 void 那句之前：`print(d.assign())` 引擎给的是 `Too few arguments for "assign()" call.`（S378 量过），
@@ -1650,12 +1651,7 @@ const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
   String: [],
   Array: ["set"],
   Dictionary: ["set", "is_typed", "is_same_typed"],
-  Packed: ["erase"],
 };
-
-function faceExistsBeyondArity(type: string): readonly string[] {
-  return PACK_TYPE_NAMES.has(type) ? (FACE_EXISTS_BEYOND_ARITY.Packed as string[]) : (FACE_EXISTS_BEYOND_ARITY[type] ?? []);
-}
 
 /** 接收者静态已知（字面量、标注变量、形参标注）而方法名在那一面的表外：引擎发的是解析期拒。
  *  `String` / `Array` / 八支 pack 是两句，`Dictionary` 只给第二句（16 格读数 `tmp/probe-slice/compare{104,105}.txt`）。
@@ -1676,7 +1672,7 @@ function faceGhostDiags(
   if (!(isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name)))) return [];
   const method = callee.name;
   if (typeof method !== "string" || method in table) return [];
-  if (faceExistsBeyondArity(type).includes(method)) return [];
+  if ((FACE_EXISTS_BEYOND_ARITY[type] ?? []).includes(method)) return [];
   const loc = (n.loc as Diagnostic["loc"]) ?? null;
   const out: Diagnostic[] = [];
   if (twoSentences) {
@@ -1738,6 +1734,80 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${proven}".`,
         loc,
       });
+    }
+  }
+}
+
+/** pack 九支的**确认不存在**名单（尺 `tmp/probe-slice/round8.mts`：180 个候选名在构造位逐名过裁判，读数 `compare110.txt`）。
+ *  方向是「量出来的表外名才发那句」，不是「名单外的都不存在」—— 候选宇宙之外的名字照旧放过，宁可漏拦不误拦。
+ *  `hash` / `length` / `pop_back` 这类别的面上合法的名字，引擎在 pack 九支一律开口；`sort_custom` 虽在这一列里，
+ *  但它在元数表那一侧，按「表内的先看」走元数那句。 */
+const PACK_ABSENT_ALL = [
+  "all", "any", "assign", "at", "back", "begins_with", "bigrams", "bin_to_int", "binary_search",
+  "bsearch_custom", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains",
+  "containsn", "countn", "dedent", "each", "ends_with", "filecasecmp_to", "filenocasecmp_to", "filter",
+  "find_custom", "find_key", "findn", "format", "front", "get_base_dir", "get_basename",
+  "get_extension", "get_file", "get_index", "get_or_add", "get_pointer", "get_slice",
+  "get_slice_count", "get_slicec", "get_typed_builtin", "get_typed_class_name", "get_typed_script",
+  "has_all", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert_array",
+  "is_absolute_path", "is_null", "is_read_only", "is_relative_path", "is_same_typed",
+  "is_subsequence_of", "is_subsequence_ofn", "is_typed", "is_valid_filename", "is_valid_float",
+  "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int",
+  "is_valid_ip_address", "join", "json_escape", "keys", "left", "length", "lpad", "lstrip",
+  "make_read_only", "map", "match", "matchn", "max", "md5_buffer", "md5_text", "merge", "merged",
+  "min", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64",
+  "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "pick_random", "pop_at",
+  "pop_back", "pop_front", "push_front", "recursive_equal", "reduce", "repeat", "replace", "replacen",
+  "rfind_custom", "rfindn", "right", "rpad", "rsplit", "rstrip", "same_type", "sha1_buffer",
+  "sha1_text", "sha256_buffer", "sha256_text", "shuffle", "similarity", "simplify_path", "sort_custom",
+  "sort_flags", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer",
+  "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_pascal_case",
+  "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer",
+  "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode",
+  "validate_filename", "validate_node_name", "values", "xml_escape", "xml_unescape",
+];
+
+/** 只有 `PackedByteArray` 有、其余八支引擎开口的 11 名（同一份读数）。 */
+const PACK_ABSENT_NOT_BYTE = [
+  "compress", "decompress", "get_string_from_ascii", "get_string_from_utf16", "get_string_from_utf8",
+  "get_string_from_wchar", "hex_encode", "to_float32_array", "to_float64_array", "to_int32_array",
+  "to_int64_array",
+];
+
+/** 反过来：`to_byte_array` 其余八支都有（在那张 `WITH_BYTES` 表里），唯独 byte 自己开口。 */
+const PACK_ABSENT_BYTE_ONLY = ["to_byte_array"];
+
+/** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
+ *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。 */
+function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
+  for (const nodes of flattenBodies(m)) {
+    const ann = new Map<string, string>();
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string") continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named" && PACK_TYPE_NAMES.has(type.name)) ann.set(n.name, type.name);
+    }
+    for (const n of nodes) {
+      if (n.kind !== "call") continue;
+      const callee = n.callee as Record<string, unknown> | undefined;
+      if (callee === undefined || callee.kind !== "attribute") continue;
+      const obj = callee.obj as Record<string, unknown> | undefined;
+      if (obj === undefined) continue;
+      let kind: string | null = null;
+      if (obj.kind === "ident" && typeof obj.name === "string") kind = ann.get(obj.name) ?? null;
+      else if (obj.kind === "call") {
+        const inner = obj.callee as Record<string, unknown> | undefined;
+        const cn = inner?.kind === "ident" ? inner.name : null;
+        if (typeof cn === "string" && PACK_TYPE_NAMES.has(cn)) kind = cn;
+      }
+      if (kind === null) continue;
+      const method = callee.name;
+      if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
+      const beyond = kind === "PackedByteArray" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE;
+      if (!PACK_ABSENT_ALL.includes(method) && !beyond.includes(method)) continue;
+      const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      diags.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${kind}".`, loc });
+      diags.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${kind}.`, loc });
     }
   }
 }
@@ -3566,9 +3636,6 @@ function joinReceiverBase(e: Expr): string | null {
   // 第二句文本里的类型名不带引号
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
-  if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
-    return e.callee.name;
-  }
   return null;
 }
 
