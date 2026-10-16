@@ -123,13 +123,15 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkClassFuncVisibility(m, diags);
   checkTypedCollections(m, diags);
   checkTypedIndexSlots(m, diags);
-  checkVoidMethodValues(m, diags);
   checkConstAssign(m, diags, hostFace);
   checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
   checkDictMethodArity(m, diags);
   checkArrayMethodArity(m, diags);
+  // 元数那句排在取值 void 那句之前：`print(d.assign())` 引擎给的是 `Too few arguments for "assign()" call.`（S378 量过），
+  // 而元数合法的那一格才轮到的 `Cannot get return value …`（S404 的 `tmp/probe-voidnames/compare79.txt`）。
+  checkVoidMethodValues(m, diags);
   checkCtorSignatures(m, diags);
   checkStringMethodArity(m, diags);
   checkNamedFace(m, STRINGNAME_FACE, diags);
@@ -261,9 +263,9 @@ function parseTyped(name: string): TypedSlot | null {
 }
 
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
-  const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
+  const bodies: Array<{ stmts: Stmt[]; params: { name: string; type: TypeRef | null }[] }> = m.funcs.map((f) => ({ stmts: f.body, params: f.params }));
   const collect = (c: ClassDecl): void => {
-    for (const f of c.funcs) bodies.push(f.body);
+    for (const f of c.funcs) bodies.push({ stmts: f.body, params: f.params });
     for (const inner of c.innerClasses) collect(inner);
   };
   for (const c of m.innerClasses) collect(c);
@@ -277,15 +279,40 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   };
 
   const badKey = (slot: TypedSlot, index: Expr, decls: Map<string, string>): void => {
-    if (slot.kind !== "Dictionary" || slot.key === undefined) return;
     const st = stOf(index, decls);
-    if (st === null || st === "null") return;
+    if (st === null) return;
+    if (slot.kind === "Array") {
+      // 位置型基（Array / Array[k] / String / 八支 pack）的下标只收 int 与 float：其余型是解析期那一句（S404，`null` 也拒）。
+      if (st === "int" || st === "float") return;
+      diags.push({
+        code: "typed-index-key",
+        message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
+        loc: index.loc,
+      });
+      return;
+    }
+    if (slot.key === undefined) return;
+    if (st === "null") return;
     if (canHold(slot.key, st)) return;
     diags.push({
       code: "typed-index-key",
       message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
       loc: index.loc,
     });
+  };
+
+  /** 位置型基的名字：标注的 `Array`（裸）/ `Array[k]` / `String` / 八支 pack，与初值推断出来的数组与串字面量。`Dictionary` 不在里头 —— 无标注字典的键型引擎不拒（量过）。 */
+  const positionalSlot = (decl: string | null, init: Expr | null): TypedSlot | null => {
+    if (decl !== null) {
+      const t = parseTyped(decl);
+      if (t !== null) return t.kind === "Array" ? t : null;
+      if (decl === "Array" || decl === "String" || PACK_SHAPE_NAMES.has(decl)) return { decl, kind: "Array" };
+      return null;
+    }
+    if (init === null) return null;
+    if (init.kind === "array") return { decl: "Array", kind: "Array" };
+    if (init.kind === "lit" && init.lit === "string") return { decl: "String", kind: "Array" };
+    return null;
   };
 
   const walkExpr = (e: Expr, typed: Map<string, TypedSlot>, decls: Map<string, string>): void => {
@@ -359,7 +386,12 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
             else {
               const scalar = scalarStaticName(s.type.name);
               if (scalar !== null) decls.set(s.name, scalar);
+              const pos = positionalSlot(s.type.name, null);
+              if (pos !== null) typed.set(s.name, pos);
             }
+          } else if (s.type === null) {
+            const pos = positionalSlot(null, s.init);
+            if (pos !== null) typed.set(s.name, pos);
           }
           if (s.init !== null) walkExpr(s.init, typed, decls);
           continue;
@@ -412,12 +444,37 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  for (const body of bodies) walkStmts(body, new Map(), new Map());
+  for (const { stmts, params } of bodies) {
+    const typed = new Map<string, TypedSlot>();
+    const decls = new Map<string, string>();
+    for (const p of params) {
+      if (p.type === null || p.type.kind !== "named") continue;
+      const scalar = scalarStaticName(p.type.name);
+      if (scalar !== null) decls.set(p.name, scalar);
+      const pos = positionalSlot(p.type.name, null);
+      if (pos !== null) typed.set(p.name, pos);
+    }
+    walkStmts(stmts, typed, decls);
+  }
 }
 
-/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值 —— 都不是 void，别顺手加进来。 */
-const VOID_ARRAY_METHODS = new Set(["append", "push_front", "push_back", "remove_at", "clear", "fill", "erase"]);
-const VOID_DICT_METHODS = new Set(["clear"]);
+/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。 */
+const VOID_ARRAY_METHODS = new Set([
+  "append",
+  "push_front",
+  "push_back",
+  "remove_at",
+  "clear",
+  "fill",
+  "erase",
+  "append_array",
+  "sort",
+  "sort_custom",
+  "reverse",
+  "shuffle",
+  "make_read_only",
+]);
+const VOID_DICT_METHODS = new Set(["clear", "sort", "merge", "assign", "make_read_only"]);
 /** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。 */
 const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear"]);
 /** 只在零参时才是 void 的 pack 方法。 */

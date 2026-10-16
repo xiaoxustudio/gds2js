@@ -780,6 +780,15 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.227 位置型基的下标型拒接进解析期，容器 void 表补到 24 格，元数那句排到 void 之前（2026-10-16，S404，§6 第 72 条①②结清）
+
+- **60 + 12 + 10 + 6 格探头**（`tmp/probe-idxtype/{round1..4}.mts`、`tmp/probe-voidnames/round1.mts`，读数 `compare{74,80,81,82}.txt` 与 `compare79.txt`）：`Array`（裸标注 / 推断）/ `Array[k]` / `String`（标注 / 推断）/ 八支 `Packed*Array` 的下标只收 int 与 float，其余（含 `null`）给 `Invalid index type "<型>" for a base of type "<基名>".`，读写两形同句、基名按声明拼法、整份脚本加载失败。
+- **`Dictionary` 不在这一条里**：无标注与裸标注字典的任何键型都放过（16 格量过，全部落到运行期那一句），只有定形 `Dictionary[K, V]` 拒键型 —— 那一支早有，本轮把同一句式补到位置型基，`checkTypedIndexSlots` 加 `positionalSlot` 并给形参也铺槽位。
+- **void 两张表补全**：数组 `append_array` / `sort` / `sort_custom` / `reverse` / `shuffle` / `make_read_only`、字典 `sort` / `merge` / `assign` / `make_read_only`；不是 void 的十支一起钉在门里防误收。
+- **两句的先后是量出来的**：`print(d.assign())` 引擎先给元数那句，合法那一格才给 void 那句 —— `checkVoidMethodValues` 因此挪到 `checkDictMethodArity` / `checkArrayMethodArity` 之后，`dict-method-arity` 里 merge 的两格「合法」期望同步翻成 void 原文。
+- **一处读数误记已纠正**：`String` 下标写的第二句是 `Value of type "int" cannot be assigned to a variable of type "String".`（此前被截断记成 setter 那一句），出货本来就对。
+- **门**：`packages/compiler/test/index-type-and-void.test.ts` 64 断言；`pnpm test` **14154**（134 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0 —— 语料无一例撞上新拒）、`test:diff` **245/245**、`test:codegen` 全过、`test:golden-check` 372 例逐字节不变。
+
 ### 1.226 字典缺键那两句的边界隔离完了、本轮零代码（2026-10-16，§6 第 73 条④⑤定案，读数轮 · 无实现变更）
 
 - **16 格**（`tmp/probe-dictkey/{round2,round3}.mts` → `compare{76,77}.txt`）：**基是「静态已知的 `Dictionary` 标注」而键是 int** 时引擎给数组那一式 `Out of bounds get index '0' (on base: 'Dictionary')`（句末没句点），键换 float / String / bool 回到 `Invalid access to property or key …`；`var b = a` 之后再 `b[0]` 也回到 `Invalid access …` —— 差别在标注不在值。
