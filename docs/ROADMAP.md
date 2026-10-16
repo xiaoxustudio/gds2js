@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.231 协程调用那句只在取值位发：语句位丢弃返回值引擎不拦（2026-10-16，S407，§6 第 76 条新增）
+
+- **16 格逐位量过**（`tmp/probe-awaitcall/round8.mts` → `compare92.txt`）：`var r = f()` / `v = f()` / `print(f())` / `g(f())` / `[f()]` / `f() + 1` 六形发那句；`f()` 单独一句与 `if` / `for` / `while` / `match` / lambda 里的语句位、`await f()` 丢弃、协程里丢弃另一支协程、`-> int` 协程丢弃 —— 全放过。
+- **一处改动**：`walkStmt` 的 `case "expr"` 给语句位那一层根节点 `awaited = true`，往下的实参 / 元素 / 运算数 / 右值照旧是取值位 —— 出货此前一律拦，是一处**过拦**。
+- **顺带量到内部类那一格**：`class Thing` 的 `_init` 里裸调模块函数给 `Function "f()" not found in base self.`，出货同句同位置（第 69 条那族的新读数）。
+- **放过之后露出来的不等价登 §6 第 76 条**：丢弃的协程跨过 `quit()` 之后引擎仍跑完（`Q|外面` 再 `P|协程里`），出货退出时不跑 —— 宿主的收尾顺序，不在本轮接。
+- **账**：门 `packages/compiler/test/await-positions.test.ts` **5 格**，`pnpm test` **14212→14217**（138 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn **0**、`test:golden-check` 372 例逐字节不变；出货侧 16 格对照 `tmp/probe-awaitcall/ours.mts` 不合 **0**。
+
 ### 1.230 运行期错误只作废当前那支函数：帧栈常开、每支函数一个接住点、按返回型给默认值（2026-10-16，S406，§6 第 74 条结清、新增第 75 条）
 
 - **接法落地**：`frameEnter` / `frameLine` 不再挑模块（`usesStack` 与 `frames` 那条旗标连同 `lower` 里的名表一起删掉），每支 GDScript 函数包一层 `try / catch(rt.gdFunctionError) / finally`；接住之后按**声明返回型**给默认值返回，`-> void` 与入口那两支不返回值，不是引擎那一句的（`UnsupportedError`）原样再抛。

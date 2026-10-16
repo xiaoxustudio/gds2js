@@ -2811,7 +2811,8 @@ function walkStmt(
       scope.declare(s.name);
       break;
     case "expr":
-      walkExpr(s.expr, scope, coroutines, diags);
+      // 语句位丢弃那一格的返回值不取值，引擎因此不要求 `await`；同一支协程进了取值位（实参、元素、运算数、右值）才发那一句（读数 `tmp/probe-awaitcall/compare92.txt` 十六格）
+      walkExpr(s.expr, scope, coroutines, diags, true);
       break;
     case "assign":
       walkExpr(s.target, scope, coroutines, diags);
