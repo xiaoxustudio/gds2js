@@ -170,3 +170,29 @@ describe("runtime/methods · 字典的属性两面就是 StringName 键那一格
     eq("421", "整张字典的打印", show(d), '{ 1: 2, &"keys": 7 }');
   });
 });
+
+describe("runtime/methods · Array 与 String 的属性写给同一句（S423）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const say = (base: string, key: string, ty: string): string =>
+    `Invalid assignment of property or key '${key}' with value of type '${ty}' on a base object of type '${base}'.`;
+
+  it("表外名与成员名同形，值的型名按实值", () => {
+    const a = V.array([V.int(1)]);
+    eq("423", "Array 写表外名", errText(() => writeProp(a, "nosuch", V.int(1))), say("Array", "nosuch", "int"));
+    eq("423", "Array 写成员名", errText(() => writeProp(a, "append", V.int(1))), say("Array", "append", "int"));
+    eq("423", "Array 写 float 值", errText(() => writeProp(a, "append", V.float(1.5))), say("Array", "append", "float"));
+  });
+
+  it("String 那一支照同一句，型名是 String", () => {
+    const s = V.str("abcd");
+    eq("423", "String 写表外名", errText(() => writeProp(s, "nosuch", V.int(1))), say("String", "nosuch", "int"));
+    eq("423", "String 写成员名", errText(() => writeProp(s, "to_upper", V.bool(true))), say("String", "to_upper", "bool"));
+  });
+});

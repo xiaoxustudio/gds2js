@@ -1132,6 +1132,14 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
     asDict(base, "属性").set(V.stringName(key), value);
     return null;
   }
+  // Array / String 的属性写没有「塞一格」这种出路：读数 `tmp/probe-bincall/compare4.txt` 的 M4 / M5 / M8 三格说明
+  // **成员名与表外名给的是同一句**，所以这一支不需要名单分岔
+  if (base.t === Tag.ARRAY || base.t === Tag.STRING) {
+    throw new GodotRuntimeError(
+      "container-prop-assign",
+      `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type '${tagName(base.t)}'.`,
+    );
+  }
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");

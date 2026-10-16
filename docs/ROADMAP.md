@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.250 Array 与 String 的属性写给引擎那句：装箱形不必名单分岔（2026-10-16，S423，§6 第 84 条接一半）
+
+- **读数**：`tmp/probe-bincall/compare4.txt` 的 M4 / M5 / M8 —— `a.nosuch = 1`、`a.append = 1`、`s.nosuch = 1` 全给 `Invalid assignment of property or key '<名>' with value of type '<型>' on a base object of type 'Array'/'String'.`，成员名与表外名同句。
+- **出货**：`writeProp` 见 Array / String 直接发那句（此前挂 JS 属性，GDScript 侧什么都看不见 = 错值）。
+- **仍欠**：属性**读**那一形要分成员 / 表外（成员名引擎给 `Array::append` 这种 Callable），所以还等 §6 第 84 条②那张存在名单搬进 runtime。
+- **门读数**：`pnpm test` **14302**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
 ### 1.249 字面量与构造位的 Array / String 属性面接进解析期（2026-10-16，S422，§6 第 83 条③那半形结清、第 84 条新登）
 
 - **读数**：`tmp/probe-bincall/round3.mts` 十格 —— `[1, 2].nosuch` / `Array([1, 2]).nosuch` / `"abcd".nosuch` / `String("abcd").nosuch` 都是 `Cannot find member "<名>" in base "<型>".` 同一句两遍；`[1, 2].append = 1` 与 `"abcd".to_upper = 1` 给 `Cannot assign a new value to a constant.`；`[1, 2].append` 与 `"abcd".to_upper` 给 Callable（`Array::append` / `String::to_upper`）。
