@@ -780,6 +780,12 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.245 属性写侧从 `size` 放开到整张成员表（2026-10-16，S418，§6 第 82 条②只剩 Callable 那一形）
+
+- **读数**：三型 × 22 名一趟量齐（尺 `tmp/probe-attr/round5.mts`，读数 `compare4.txt`）：写 16 个成员名一律 `Cannot assign a new value to a constant.`，写 `pick_random` / `shuffle` / `min` / `max` / `keys` / `values` 一律 S417 那句两遍。
+- **接法**：`checkPackFaceNames` 的属性那一支摘掉 `name === "size"` 的限制，改成「成员表里的名字被写就发常量那句」；推断来的名字与装箱位没量过，照旧不开口 / 响亮拒。
+- **门读数**：`pnpm test` **14282**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0（`test:golden-check` 本轮不涉我们的代码，未重跑）。
+
 ### 1.244 pack 的属性两面接进解析期：表外名那一句引擎报两遍（2026-10-16，S417，§6 第 82 条②再接一半）
 
 - **读数**：九支 × 四形（读表外名 / 写表外名 / 读方法名当值 / 写 `size`）一次过裁判，尺 `tmp/probe-attr/round3.mts`，读数 `compare3.txt`。静态位的读与写都发 `Cannot find member "<名>" in base "<支>".` **同一句两遍**；写 `size` 发 `Cannot assign a new value to a constant.`；`print(q.size)` 引擎给 Callable（无错）。

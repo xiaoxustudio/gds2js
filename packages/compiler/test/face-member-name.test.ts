@@ -51,6 +51,9 @@ describe("pack 的属性两面（读数 tmp/probe-attr/compare3.txt）", () => {
     ["推断位读表外名放过", "\tvar q = PackedByteArray([1])\n\tprint(q.keys)", []],
     ["方法名当值读放过", "\tprint(PackedByteArray([1]).size)", []],
     ["写成员名给常量那一句", "\tvar q: PackedColorArray = PackedColorArray([Color(1, 0, 0, 1)])\n\tq.size = 1", ["Cannot assign a new value to a constant."]],
+    ["写成员名换名照旧那一句", "\tvar q: PackedInt32Array = PackedInt32Array([1])\n\tq.remove_at = 1", ["Cannot assign a new value to a constant."]],
+    ["构造位写成员名", "\tPackedStringArray([\"a\"]).append = 1", ["Cannot assign a new value to a constant."]],
+    ["推断位写成员名放过", "\tvar q = PackedByteArray([1])\n\tq.duplicate = 1", []],
     ["读成员名不许发常量那句", "\tvar q: PackedColorArray = PackedColorArray([Color(1, 0, 0, 1)])\n\tprint(q.size)", []],
   ];
 

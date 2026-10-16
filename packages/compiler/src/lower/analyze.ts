@@ -1803,8 +1803,8 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
       if (name in (VALUE_METHOD_ARITY[kind] ?? {})) {
-        // 往成员名上写只有 `size` 那一格量过（九支一字一样），其余成员名没量过就不开口
-        if (writeTargets.has(n) && name === "size") diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
+        // 往成员名上写：16 名 × 三型量过、三型一字一样（读数 `tmp/probe-attr/compare4.txt`）
+        if (writeTargets.has(n)) diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
         continue;
       }
       if (!packNameMeasuredAbsent(kind, name)) continue;
