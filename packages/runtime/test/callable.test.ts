@@ -242,3 +242,29 @@ describe("runtime/callable · 内建类型面的绑定 Callable（S426）", () =
     eq("426", "var_to_str", varToStr(bound(arr(), "Array", "append", 1, 1)), "Callable()");
   });
 });
+
+describe("runtime/methods · 装箱接收者的成员名读也发绑定 Callable（S428）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+
+  it("Array / String 的属性读命中成员表就给 Callable", () => {
+    const a = V.array(new GArray([I(1), I(2)]));
+    eq("428", "Array 的成员名读", show(attribute(a, "append") as Variant), "Array::append");
+    eq("428", "String 的成员名读", show(attribute(V.str("abcd"), "to_upper") as Variant), "String::to_upper");
+    eq("428", "读出来就能调", show(method(attribute(a, "append") as Variant, "call", [I(9)])), "<null>");
+    eq("428", "get_argument_count 带得上", String(method(attribute(a, "append") as Variant, "get_argument_count", []).v), "1");
+  });
+
+  it("两份名单之外的那一名不许冒充引擎那句", () => {
+    const a = V.array(new GArray([I(1)]));
+    const msg = errText(() => attribute(a, "zzzquantum"));
+    eq("428", "不发 Invalid access", /Invalid access/.test(msg), false);
+    eq("428", "不发 Callable", /::/.test(msg), false);
+  });
+});

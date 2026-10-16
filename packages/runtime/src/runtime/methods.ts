@@ -17,6 +17,7 @@ import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
+import { faceArity } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
@@ -1359,7 +1360,9 @@ export function attribute(raw: unknown, name: string): unknown {
     if (absent.includes(name)) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
     }
-    throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读只量过表外名那一格：成员名引擎给的是内建类型的绑定 Callable，那一族还没接`);
+    const row = faceArity(face, name);
+    if (row !== null) return boundBuiltinCallable(obj, face, name, row[0], row[1]);
+    throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读落在两份名单之外：候选宇宙之外的名字没量过，不发引擎那句`);
   }
   if (obj.t === Tag.OBJECT) {
     // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本

@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.255 装箱接收者的成员名读发绑定 Callable：两张元数表搬进 runtime（2026-10-16，S428，语料 376，§6 第 84 条②结清、第 85 条新登）
+
+- **分岔的口径**：`attribute` 见 Array / String 先问两份名单 —— 确认不存在名单命中给 `Invalid access …`（S424），成员元数表命中给绑定 Callable，两边都落空继续响亮抛（候选宇宙之外不猜）。
+- **搬表**：`ARRAY_METHOD_ARITY` / `STRING_METHOD_ARITY` 挪进 `runtime/face-arity.ts` 并导出 `faceArity`，`analyze` 改成 import —— 与 `PACK_ABSENT_*` 同一条 compiler → runtime 单向，两侧共用一份读数。
+- **新量到的一格**：`var c = a.append` 之后 `c.call(9)`，`c == a.append` 转**假**（同格 `print(a)` 是 `[1, 2, 9]`），机制只有这一例反证 → 登 §6 第 85 条，出货不建模。
+- **新语料 376**：七格（印法、两次读值等式真、跨台假、`call` 改数组、`get_method` / `get_object` / `is_valid` / `is_null`、`get_argument_count`），golden 与出货逐字节一致。
+- **门读数**：`pnpm test` **14335**（139 文件）、typecheck **4/4**、`test:compile` **255/364**、`test:diff` **248/248** 逐字节、`test:codegen` 全过、ops 自校验 6121、tree-face 17 项对账。
+
 ### 1.254 绑定 Callable 铺到值类型与 StringName / NodePath（2026-10-16，S427，语料 375）
 
 - **铺的面**：`Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` / `StringName` / `NodePath` —— 标注变量、构造位与 `&"…"` / `^"…"` 字面量都算静态接收者；读数 `tmp/probe-bincall/p1.gd` 十六面一字一样。
