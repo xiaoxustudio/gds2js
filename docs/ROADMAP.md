@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.225 两族新读数量齐、本轮零代码：下标型的解析期拒 60 格与字典缺键那句 10 格（2026-10-16，§6 第 72 条②扩、新增第 73 条，读数轮 · 无实现变更）
+
+- **下标型矩阵 60 格**（`tmp/probe-idxtype/round1.mts` → `compare74.txt`）：基 `Array` / `Array[int]` / `String` / `PackedInt32Array` / `Dictionary` × 下标 `bool/int/float/String/Vector2/null` × 读写两形。四支基都只收 **int 与 float**（`s[1.5]` 收），其余四形给 `Invalid index type "<型>" for a base of type "<基名>".`，基名带定形拼法，且整份脚本加载失败；`Dictionary` 一形都不拒。
+- **顺带抓到 `String` 的下标写另有两句**：`Cannot assign a value of type "int" as "String".` + `Value of type "int" cannot be returned from a setter expected to have type "String"…`。
+- **字典缺键 10 格**（`tmp/probe-dictkey/round1.mts` → `compare75.txt`）：那句是 `Invalid access to property or key '<键>' on a base object of type '<基名>'.`，键按 `str()` 印（Array / Dictionary / StringName / NodePath 四种键都量了，StringName 去掉 `&`、NodePath 原样），定形字典基名 `Dictionary[String, int]`；写不缺、命中两支给值。
+- **一格反常留着**：`{1: 2}` 里 `a[0]` 给的是数组那一式 `Out of bounds get index '0' (on base: 'Dictionary')`，而同批 `-5` / `999999999999` 给 `Invalid access …` —— 那一格来自另一批探头，**下一轮先隔离再动实现**。
+- **出货现状**：三族都不拦 / 都发中文自述（`字典键不存在: x`），行为侧「打断」是对的、文本不对 —— 都登记进 §6 第 72 条②与第 73 条，代码一字未动。
+
 ### 1.224 只读容器的写面三分句接进出货，数组下标越界那两句换成引擎原文（2026-10-16，S403，§6 第 65 条结清、新增第 72 条）
 
 - **两支面先发货**：`make_read_only` / `is_read_only` 此前只在元数表里、调到就抛中文响亮拒 —— 现在置位与谓词都在（浅的，重复置位不响）。
