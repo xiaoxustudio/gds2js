@@ -786,7 +786,7 @@
 - **接线四处**：`TypedSlot.ann`（只由标注填，`seedInto` 覆盖模块 var / 形参 / 内部类字段，`var` 语句的初值推断不算）→ `posReadLabels` → 发射器把基名当第三个实参给 `rt.index` 与快轨两个裸数组取值 → 运行期 `posOobSay` 一句分两式（`arrIdx` / `strAt` 收基名）。
 - **顺带清掉**：String 读越界今天发中文自述 `字符串索引越界: 5`，两句都不是它。
 - **已知不等价一格登第 79 条**：`var b = a` 转手后越界，引擎在后一式印值自己的 `Array[int]`，出货印 `Array` —— 要给装箱值登记元素型会牵动混合数组那条转换族，单独量完再做。
-- **账**：门 `dict-index-routing` 新增 10 格，`pnpm test` 14228→**14238**（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 7 份；出货 12 格 + 10 格对照不合 **0** 与 **1**。
+- **账**：门 `dict-index-routing` 新增 10 格，`pnpm test` 14228→**14238**（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 7 份、`test:golden-check` 372 例逐字节不变；出货 12 格 + 10 格对照不合 **0** 与 **1**。
 
 ### 1.235 嵌套定型容器那句去掉自加的型名后缀，顺带量齐位置型基读越界的两句（2026-10-16，S411，§6 新增第 78 条）
 
