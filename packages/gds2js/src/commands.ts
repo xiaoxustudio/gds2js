@@ -76,7 +76,8 @@ export function buildProgram(spec: CliSpec): Command {
   program.description(spec.description);
   if (spec.version !== undefined) program.version(spec.version);
   for (const c of spec.commands) {
-    const sub = program.command(`${c.name} <${c.args.join(" <>")}>`).description(c.description);
+    const sub = program.command(`${c.name} <${c.args.join(" <>")}>`);
+    sub.description(c.description);
     for (const f of c.flags) {
       if (f.defaultTo === undefined) sub.option(optionText(f), f.help);
       else sub.option(optionText(f), f.help, f.defaultTo);
