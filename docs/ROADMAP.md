@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.254 绑定 Callable 铺到值类型与 StringName / NodePath（2026-10-16，S427，语料 375）
+
+- **铺的面**：`Vector2` / `Vector2i` / `Vector3` / `Vector3i` / `Color` / `StringName` / `NodePath` —— 标注变量、构造位与 `&"…"` / `^"…"` 字面量都算静态接收者；读数 `tmp/probe-bincall/p1.gd` 十六面一字一样。
+- **护栏**：这些面的表外名属性读与写成员名**都没量过**，拒的两形不开口；`face-member-name.test.ts` 新增 7 格钉住。
+- **`hash(Callable)`**：boost 型 `hash_combine` 两序算出 2174785061 / 2934202107，引擎给 1741244043（`tmp/probe-bincall/s1.gd`）—— 拟合不出，继续响亮抛。
+- **新语料 375**：九格（含 `.call()` 与 `v.x` 真属性照旧），golden 与出货逐字节一致。
+- **门读数**：`pnpm test` **14330**（139 文件）、typecheck **4/4**、`test:compile` **254/363**、`test:diff` **247/247** 逐字节、`test:codegen` 全过、ops 6115、tree-face 17。
+
 ### 1.253 内建类型面的成员名当值发绑定 Callable（2026-10-16，S426，语料 374，§6 第 83 条①接一面）
 
 - **读数**：`tmp/probe-bincall/` 五份（`compare{1,2,4,5,6}.txt` + `p1.gd` / `h3.gd`）—— 印法 `Array::append`、`typeof` 25、`get_object()` 是 typeof 24 的空引用、`get_argument_count()` 给必填数、元数句 `Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).`、等式按（实例, 名）、`var_to_str` 退化成品 `Callable()`；16 个面值类型同形（Dictionary 仍给 Invalid access）。

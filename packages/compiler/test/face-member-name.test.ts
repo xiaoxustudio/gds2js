@@ -96,6 +96,22 @@ describe("形参标注的属性面与 var 标注同一形（读数 tmp/probe-bin
   });
 });
 
+describe("值类型面只接成员名当值，两形不许顺手拦", () => {
+  const CASES: Array<[string, string, string[]]> = [
+    ["Vector2 成员名当值放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.length)", []],
+    ["构造位 Vector2 成员名当值放过", "\tprint(Vector2(1, 2).normalized)", []],
+    ["值类型面的表外名没读数就放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", []],
+    ["值类型面上写成员名没读数就放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tv.length = 1", []],
+    ["StringName 成员名当值放过", "\tvar s: StringName = StringName(\"ab\")\n\tprint(s.hash)", []],
+    ["NodePath 成员名当值放过", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.get_name_count)", []],
+    ["NodePath 字面量成员名当值放过", "\tprint(NodePath(\"a/b\").hash)", []],
+  ];
+
+  it.each(CASES)("%s", async (_label, body, want) => {
+    expect(await diags(body)).toEqual(want);
+  });
+});
+
 describe("存在但没量元数的名字不许误拦", () => {
   const OKAY: Array<[string, string]> = [
     ["字典 set", '\tvar d: Dictionary = {}\n\td.set(1, 2)'],

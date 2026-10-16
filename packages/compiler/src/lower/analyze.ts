@@ -1792,7 +1792,10 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   if (obj.kind === "call") {
     const inner = obj.callee as Record<string, unknown> | undefined;
     const cn = inner?.kind === "ident" ? inner.name : null;
-    if (typeof cn === "string" && (cn === "Array" || cn === "String")) return cn;
+    if (typeof cn === "string" && (cn === "Array" || cn === "String" || cn === "StringName" || cn === "NodePath" || cn in VALUE_METHOD_ARITY)) return cn;
+  }
+  if (obj.kind === "lit" && (obj.lit === "string_name" || obj.lit === "node_path")) {
+    return obj.lit === "string_name" ? "StringName" : "NodePath";
   }
   return packFaceRecv(obj, ann);
 }
@@ -1817,7 +1820,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, params } of attrScopes(m)) {
     const ann = new Map<string, string>();
     const faceName = (t: TypeRef | null): string | null =>
-      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String") ? t.name : null;
+      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String" || t.name === "StringName" || t.name === "NodePath" || t.name in VALUE_METHOD_ARITY) ? t.name : null;
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string") continue;
       const face = faceName(n.type as TypeRef | null);
@@ -1857,11 +1860,12 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const name = n.name;
       if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
+      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" || face === "StringName" ? STRING_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
+      const refused = PACK_TYPE_NAMES.has(face) || face === "Array" || face === "String";
       if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
         // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
         if (writeTargets.has(n)) {
-          diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
+          if (refused) diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
         } else {
           const l = n.loc as { line: number; col: number } | undefined;
           const bounds = table[name];
@@ -1869,6 +1873,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
+      if (!refused) continue;
       const absent = PACK_TYPE_NAMES.has(face) ? packNameMeasuredAbsent(face, name) : true;
       if (!absent) continue;
       const one = `Cannot find member "${name}" in base "${face}".`;

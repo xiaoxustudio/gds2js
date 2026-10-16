@@ -1,0 +1,20 @@
+extends SceneTree
+
+func _initialize():
+	var v: Vector2 = Vector2(3, 4)
+	print("V1|", v.length, " ", v.length.call())
+	print("V2|", v.x, " ", v.normalized.call())
+	var w: Vector2i = Vector2i(3, 4)
+	print("V3|", w.distance_to, " ", w.distance_to.call(Vector2i(1, 1)))
+	var c: Color = Color(1, 0.5, 0.25, 1)
+	print("V4|", c.to_html, " ", c.to_html.call())
+	var q: Vector3 = Vector3(1, 2, 2)
+	print("V5|", q.length, " ", q.length.call())
+	var r: Vector3i = Vector3i(1, 2, 2)
+	print("V6|", r.length, " ", r.length.call())
+	var s: StringName = StringName("ab")
+	print("V7|", s.hash, " ", s.hash.call())
+	var n: NodePath = NodePath("a/b")
+	print("V8|", n.get_name_count, " ", n.get_name_count.call())
+	print("V9|", Vector2(1, 2).normalized)
+	quit()
