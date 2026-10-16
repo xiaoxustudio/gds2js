@@ -1377,6 +1377,14 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
+    const vface = obj.v instanceof GVector2 ? "Vector2" : obj.v instanceof GVector2i ? "Vector2i"
+      : obj.v instanceof GVector3 ? "Vector3" : obj.v instanceof GVector3i ? "Vector3i"
+        : obj.v instanceof GColor ? "Color" : null;
+    if (vface !== null) {
+      // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8：`Vector2::length`、`Color::to_html`、`Vector3i::length`）
+      const row = faceArity(vface, name);
+      if (row !== null) return boundBuiltinCallable(obj, vface, name, row[0], row[1]);
+    }
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     if (obj.v instanceof GBytes) {

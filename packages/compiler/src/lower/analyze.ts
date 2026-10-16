@@ -18,7 +18,7 @@ import {
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
-import { ARRAY_METHOD_ARITY, PACK_METHOD_ARITY, PACK_METHOD_ARITY_WITH_BYTES, STRING_METHOD_ARITY } from "@gds2js/runtime/runtime/face-arity";
+import { ARRAY_METHOD_ARITY, PACK_METHOD_ARITY, PACK_METHOD_ARITY_WITH_BYTES, STRING_METHOD_ARITY, VALUE_METHOD_ARITY } from "@gds2js/runtime/runtime/face-arity";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
@@ -3898,60 +3898,6 @@ const PACK_TYPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
-  Vector2: {
-    abs: [0, 0], angle: [0, 0], angle_to: [1, 1], angle_to_point: [1, 1], aspect: [0, 0],
-    bezier_derivative: [4, 4], bezier_interpolate: [4, 4], bounce: [1, 1], ceil: [0, 0], clamp: [2, 2],
-    clampf: [2, 2], cross: [1, 1], cubic_interpolate: [4, 4], cubic_interpolate_in_time: [7, 7], direction_to: [1, 1],
-    distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1], floor: [0, 0], from_angle: [1, 1],
-    is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0], is_zero_approx: [0, 0], length: [0, 0],
-    length_squared: [0, 0], lerp: [2, 2], limit_length: [0, 1], max: [1, 1], max_axis_index: [0, 0],
-    maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0], minf: [1, 1], move_toward: [2, 2],
-    normalized: [0, 0], orthogonal: [0, 0], posmod: [1, 1], posmodv: [1, 1], project: [1, 1],
-    reflect: [1, 1], rotated: [1, 1], round: [0, 0], sign: [0, 0], slerp: [2, 2],
-    slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
-  },
-  Vector2i: {
-    abs: [0, 0], aspect: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1],
-    distance_to: [1, 1], length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0],
-    maxi: [1, 1], min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0],
-    snapped: [1, 1], snappedi: [1, 1],
-  },
-  Vector3: {
-    abs: [0, 0], angle_to: [1, 1], bezier_derivative: [4, 4], bezier_interpolate: [4, 4], bounce: [1, 1],
-    ceil: [0, 0], clamp: [2, 2], clampf: [2, 2], cross: [1, 1], cubic_interpolate: [4, 4],
-    cubic_interpolate_in_time: [7, 7], direction_to: [1, 1], distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1],
-    floor: [0, 0], inverse: [0, 0], is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0],
-    is_zero_approx: [0, 0], length: [0, 0], length_squared: [0, 0], lerp: [2, 2], limit_length: [0, 1],
-    max: [1, 1], max_axis_index: [0, 0], maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0],
-    minf: [1, 1], move_toward: [2, 2], normalized: [0, 0], octahedron_decode: [1, 1], octahedron_encode: [0, 0],
-    outer: [1, 1], posmod: [1, 1], posmodv: [1, 1], project: [1, 1], reflect: [1, 1],
-    rotated: [2, 2], round: [0, 0], sign: [0, 0], signed_angle_to: [2, 2], slerp: [2, 2],
-    slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
-  },
-  Vector3i: {
-    abs: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1], distance_to: [1, 1],
-    length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0], maxi: [1, 1],
-    min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0], snapped: [1, 1],
-    snappedi: [1, 1],
-  },
-  Color: {
-    blend: [1, 1], clamp: [0, 2], darkened: [1, 1], from_hsv: [3, 4], from_ok_hsl: [3, 4],
-    from_rgbe9995: [1, 1], from_string: [2, 2], get_luminance: [0, 0], hex: [1, 1], hex64: [1, 1],
-    html: [1, 1], html_is_valid: [1, 1], inverted: [0, 0], is_equal_approx: [1, 1], lerp: [2, 2],
-    lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
-    to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
-  },
-  PackedByteArray: PACK_METHOD_ARITY,
-  PackedInt32Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedInt64Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedFloat32Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedFloat64Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedStringArray: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedVector2Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedVector3Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedColorArray: PACK_METHOD_ARITY_WITH_BYTES,
-};
 
 /** 只认「名字本身就是表里那几支之一」的标注与字面量构造式（值类型五支 + pack 九支），别的（`Variant`、自定义类、引擎类）一概不猜。 */
 function valueTypeAnnotation(t: TypeRef | null): string | null {

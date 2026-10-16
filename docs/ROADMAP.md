@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.257 值类型面的装箱读发绑定 Callable，等式改成按接收者的值比（2026-10-16，S430，语料 378）
+
+- **读数**：`tmp/probe-bincall/m1.gd`（M1–M9：`Vector2::length`、`Color::to_html`、`Vector3i::length` 与真属性 `v.x` / `c.r` / `q.z` 并存）+ `e1.gd`（E1–E7：同值 pack / 同值数组 / 同值 Color 都等，值不同假，`hash` 随值同）。
+- **等式改法**：`callable.ts` 加 `registerRecvEqHook`（叶子不 import `ops`），`ops.ts` 注册 `ops.eq`；引擎不给比的型对（`Vector2` 与 `Vector2i`）在钩子里吞成 false，与 N7 第二格一致。
+- **搬表**：`VALUE_METHOD_ARITY` 进 `runtime/face-arity.ts`，`faceArity` 一处覆盖 Array / String / pack 九支 / 五面值类型。
+- **顺手更正第 85 条**：等式不是「按 JS 实例引用」而是「按绑定那一刻接收者的值」；剩下 `c.call(9)` 之后再比转 false 那一格仍没吃透（像是绑了副本而本体共享），继续只登账不实现。
+- **门读数**：`pnpm test` **14343**（139 文件）、typecheck **4/4**、`test:compile` **257/366**、`test:diff` **250/250** 逐字节、`test:codegen` 全过、ops 自校验 6130、tree-face 17。
+
 ### 1.256 装箱 pack 的成员名读也发绑定 Callable（2026-10-16，S429，语料 377，§6 第 83 条①再一面）
 
 - **读数**：`p.size` 印 `PackedStringArray::size`、`.call()` 给 2、`get_method` / `get_object`（空引用）/ `get_argument_count` 齐；`q.count.call(2)` 给 1；跨实例 `p.append == PackedStringArray(["a"]).append` 假。语料 377 五格逐字节。

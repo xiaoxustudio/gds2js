@@ -83,10 +83,20 @@ export function isNullCallable(box: CallableBox): boolean {
 }
 
 /** Callable 的等式：方法比 (接收者, 方法名)，绑定的实参不进等式，lambda 比 JS 引用，空 Callable 之间一律相等。 */
+/** 内建类型面的绑定 Callable 比的是**接收者的值**（读数 `tmp/probe-bincall/e1.gd`：两台内容相同的数组、两个同值的 `Color` 都等，值不同就等不上）。 */
+let recvEqHook: ((a: Variant, b: Variant) => boolean) | null = null;
+
+export function registerRecvEqHook(f: (a: Variant, b: Variant) => boolean): void {
+  recvEqHook = f;
+}
+
 export function callableSame(a: CallableBox, b: CallableBox): boolean {
   if (isNullCallable(a) || isNullCallable(b)) return isNullCallable(a) && isNullCallable(b);
   if (a.name !== null && b.name !== null) {
     if (a.name !== b.name) return false;
+    if (a.builtin !== null && b.builtin !== null && a.object !== null && b.object !== null && recvEqHook !== null) {
+      return recvEqHook(a.object, b.object);
+    }
     // 比**内层**而不是盒子本身：`o.add3` 读两次拿到的是两个新 Variant，包着同一个实例
     return (a.object?.v ?? null) === (b.object?.v ?? null);
   }

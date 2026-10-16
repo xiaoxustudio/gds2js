@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { registerRecvEqHook } from "./callable";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
@@ -606,3 +607,13 @@ export const strOps = {
   format: strFormat,
   float: strFloat,
 };
+
+// 内建类型面的绑定 Callable 的等式按接收者的值比（读数 `tmp/probe-bincall/e1.gd` 的 E1–E6 六格）
+registerRecvEqHook((a: Variant, b: Variant): boolean => {
+  // 两台接收者型对不上时引擎的 `==` 自己就不给比（`Invalid operands 'Vector2' and 'Vector2i'`），而跨面的 Callable 等式实测就是 false
+  try {
+    return ops.eq(a, b).v === true;
+  } catch {
+    return false;
+  }
+});

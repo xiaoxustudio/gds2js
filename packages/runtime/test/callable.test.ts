@@ -190,7 +190,7 @@ describe("runtime/object · Callable", () => {
   });
 });
 
-describe("runtime/callable · 内建类型面的绑定 Callable（S426）", () => {
+describe("runtime/callable · 内建类型面的绑定 Callable（S426 / S430：等式按接收者的值比，读数 tmp/probe-bincall/e1.gd）", () => {
   const arr = (): Variant => V.array(new GArray([I(1), I(2)]));
   const bound = (v: Variant, face: string, name: string, min: number, max: number): Variant => boundMethod(v, face, name, min, max);
   const errText = (f: () => unknown): string => {
@@ -235,7 +235,8 @@ describe("runtime/callable · 内建类型面的绑定 Callable（S426）", () =
     const a = arr();
     const boxOf = (v: Variant): unknown => (v.v as unknown);
     eq("426", "同实例同名真", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(a, "Array", "append", 1, 1)) as never)), "true");
-    eq("426", "换实例假", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(arr(), "Array", "append", 1, 1)) as never)), "false");
+    eq("426", "值相同就等（E1 / E2 两台同值）", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(arr(), "Array", "append", 1, 1)) as never)), "true");
+    eq("426", "值不同就不等（Q2 的两台不一样）", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(V.array(new GArray([I(9)])), "Array", "append", 1, 1)) as never)), "false");
     eq("426", "同实例换名假", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(a, "Array", "size", 0, 0)) as never)), "false");
   });
 
