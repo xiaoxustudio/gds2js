@@ -1,5 +1,5 @@
 import { basename, dirname, join, resolve } from "node:path";
-import { buildProgram, FLAGS, withCommon, type CliSpec } from "../commands";
+import { runCli, FLAGS, withCommon, type CliSpec } from "../commands";
 import { findNestedProjects, findResRoot, hostOf, isProjectCmd, modeOf, packOf, refuseNestedProjects, runtimeOf, strOf, type CmdName, type Ctx } from "./ctx";
 import { buildProject, buildSingle } from "./build";
 import { checkProject, checkSingle } from "./check";
@@ -177,5 +177,5 @@ const CLI: CliSpec = {
 };
 
 export function main(): void {
-  buildProgram(CLI).parse();
+  runCli(CLI);
 }
