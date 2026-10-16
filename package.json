@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@12.9.0",
+  "packageManager": "pnpm@12.13.0",
   "description": "将 .gds 转义为 js 运行（monorepo 根：只放工具链与门脚本，对外面在 packages/gds2js）",
   "engines": {
     "node": ">=25"
