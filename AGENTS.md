@@ -24,7 +24,7 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 ## 常用命令
 
 ```bash
-pnpm install            # pnpm@12.9.0；开发机 Node >= 24.18（产物最低 Node >= 22.18）
+pnpm install            # pnpm@12.13.0；开发机 Node >= 25（产物最低 Node >= 25）
 pnpm gen:ws             # tree-sitter-cli 编 gdscript.wasm（先拉 submodule）
 pnpm build              # turbo run build → packages/gds2js/dist/*
 pnpm dev                # tsx 跑 CLI 源码

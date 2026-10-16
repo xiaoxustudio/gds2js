@@ -43,7 +43,7 @@ for (const p of ["package.json", "packages/runtime/package.json", "packages/comp
 console.log(`release: 版本 ${version}（根/三包/version.ts 一致）`);
 
 /* 1b) Node 底线一致性：engines（根与对外包）与 exec.native.ts 里那句「产物要 node ≥ X」必须同一个数。
-       22.18 是实测边界（20.19.4 的 run 与 build-project 都炸、22.19.0 全过），SEA 那支另要 25.7、由运行期判。 */
+       25 是这一版对外声明的底线（engines 已提到 >=25），SEA 那支另要 25.7、由运行期判。 */
 const enginesOf = (p) => JSON.parse(readFileSync(join(ROOT, p), "utf8")).engines?.node ?? "";
 const rootEngines = enginesOf("package.json");
 const pkgEngines = enginesOf("packages/gds2js/package.json");

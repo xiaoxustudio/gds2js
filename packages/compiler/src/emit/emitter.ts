@@ -1872,7 +1872,7 @@ function emitExprR(e: Expr): R {
       if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
       const lbl = posReadLabel(e);
       return {
-        code: `rt.fast.rawArrGet${fastSuffix(ek)}(${e.obj.name}, ${ir.code}${lbl === null ? "" : `, ${JSON.stringify(lbl)}`})`,
+        code: `rt.fast.rawArrGet${fastSuffix(ek)}${lbl === null ? "" : "Base"}(${e.obj.name}, ${ir.code}${lbl === null ? "" : `, ${JSON.stringify(lbl)}`})`,
         rep: ek,
       };
     }

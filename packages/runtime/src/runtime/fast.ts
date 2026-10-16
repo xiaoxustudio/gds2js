@@ -19,11 +19,19 @@ export const fast = {
   },
 
   // 裸数组 / 裸字典的快路径按元素种类各发一个具体入口，不发泛型方法：泛型方法在静态编译目标上按接收者解析不过去。
-  rawArrGetNum(a: number[], i: number, base?: string): number {
+  rawArrGetNum(a: number[], i: number): number {
+    return a[arrIdx(i, a.length)] as number;
+  },
+
+  rawArrGetNumBase(a: number[], i: number, base: string): number {
     return a[arrIdx(i, a.length, base)] as number;
   },
 
-  rawArrGetStr(a: string[], i: number, base?: string): string {
+  rawArrGetStr(a: string[], i: number): string {
+    return a[arrIdx(i, a.length)] as string;
+  },
+
+  rawArrGetStrBase(a: string[], i: number, base: string): string {
     return a[arrIdx(i, a.length, base)] as string;
   },
 

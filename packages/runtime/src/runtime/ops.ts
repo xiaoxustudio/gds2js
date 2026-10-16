@@ -601,7 +601,7 @@ function checkShift(a: Variant, b: Variant, op: string): [IntPayload, IntPayload
 /** String 相关运算的转发。 */
 export const strOps = {
   length: strLength,
-  at: strAt,
+  at: (s: string, i: number): string => strAt(s, i),
   substr: (s: string, from: number, len: number): string => strSubstr(s, from, len),
   format: strFormat,
   float: strFloat,

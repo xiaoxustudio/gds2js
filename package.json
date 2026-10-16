@@ -45,7 +45,7 @@
     "@gds2js/compiler": "workspace:*",
     "@gds2js/runtime": "workspace:*",
     "@gds2js/testkit": "workspace:*",
-    "@types/node": "^24.19.2",
+    "@types/node": "^25.9.9",
     "commander": "^15.0.0",
     "gds2js": "workspace:*",
     "tree-sitter-cli": "^0.27.1",
