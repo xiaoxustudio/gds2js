@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.240 静态接收者的表外方法名：存在名单补上后三面接进出货（2026-10-16，S413，§6 第 80 条接一半、第 81 条结清）
+
+- **先把「存在 / 表外」一次量清**：158 个名字 × 四面（String / Array / Dictionary / PackedInt32Array）= 632 格，一份脚本一行一名、按引擎自己那句「not found」归类（尺 `tmp/probe-slice/round4.mts`，读数 `compare106.txt`）—— 存在的名字每个 108 / 50 / 23 / 22 个，其余全是表外。
+- **补的就是那五个「存在但没量元数」的名字**：`Array.set`、`Dictionary.set` / `is_typed` / `is_same_typed`、pack 的 `erase`；有了这张表，表外那两句才敢按「表键 ∪ 这几个」之外的名字发。
+- **接进三面**：字面量 / 标注变量 / 形参标注三种静态写法（`faceScopes` 的 `seeded` 分 annot 与 inferred，拒只认 annot 与字面量），`String` / `Array` 发两句，`Dictionary` 只发第二句 —— 16 格里 9 格一字一样对上，剩 7 格是 pack 那一面（2 格）与运行期动态那两形（5 格）。
+- **门**：新开 `packages/compiler/test/face-member-name.test.ts` 12 格（八格分面句子 + 四格「存在没量元数不许误拦」）。
+- **账**：`pnpm test` **14240→14252**（139 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn **0**。
+
 ### 1.239 `String.slice` 不存在，欠账改名成「表外方法名那两句」（2026-10-16，读数轮 · §6 第 80 条改写）
 
 - **一格一次的 21 行探针跑出来是 21 格同一对句子**：`Cannot find member "slice" in base "String".` + `Function "slice()" not found in base String.` —— 4.6.3 的 `String` 面上没有 `slice`，不是我们的实现缺口。

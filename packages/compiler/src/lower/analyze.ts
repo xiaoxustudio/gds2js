@@ -1548,12 +1548,13 @@ function faceReceiverNames(
   assigned: Set<string>,
   type: string,
   isInit: (init: Expr) => boolean,
+  annotOnly = false,
 ): Set<string> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
   const out = new Set<string>();
   for (const [name, how] of seeded) {
     if (how === "annot") out.add(name);
-    else if (!assigned.has(name)) out.add(name);
+    else if (!annotOnly && !assigned.has(name)) out.add(name);
   }
   const reassigned = reassignedNames(nodes);
   for (const n of nodes) {
@@ -1567,8 +1568,11 @@ function faceReceiverNames(
       continue;
     }
     const init = n.init as Expr | null;
-    if (init !== null && isInit(init)) out.add(n.name);
-    else out.delete(n.name);
+    if (!annotOnly && init !== null && isInit(init)) out.add(n.name);
+    else if (init === null || !isInit(init) || annotOnly) {
+      if (annotOnly && named(n.type as TypeRef | null)) continue;
+      out.delete(n.name);
+    }
   }
   return out;
 }
@@ -1636,6 +1640,50 @@ function containerCallArity(
   const method = callee.name;
   if (typeof method !== "string") return null;
   return arityDiag(table, code, method, ((n.args as Expr[]) ?? []).length, (n.loc as Diagnostic["loc"]) ?? null);
+}
+
+/** 632 格（158 个名字 × 四面）的裁判读数把「存在 / 表外」逐名判过一遍（尺 `tmp/probe-slice/round4.mts`，读数 `compare106.txt`）：
+ *  存在名单 = 各面元数表的键 ∪ 下面这些「存在但没量元数」的名字，其余一律按表外发那两句。
+ *  名单之外的成员名（我们没列进任何一面的表、也没量过的）会被误拦 —— 兜底的是那几张表本身就是**按引擎成员表逐名量出来的**
+ *  （S378 / S379 / S380 三面 49+51+109 名过裁判），加上 `face-arg-allow-list` 那 1246 格与 `p2-t4` 那 1358 格都在替这张名单站岗。 */
+const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
+  String: [],
+  Array: ["set"],
+  Dictionary: ["set", "is_typed", "is_same_typed"],
+  Packed: ["erase"],
+};
+
+function faceExistsBeyondArity(type: string): readonly string[] {
+  return PACK_TYPE_NAMES.has(type) ? (FACE_EXISTS_BEYOND_ARITY.Packed as string[]) : (FACE_EXISTS_BEYOND_ARITY[type] ?? []);
+}
+
+/** 接收者静态已知（字面量、标注变量、形参标注）而方法名在那一面的表外：引擎发的是解析期拒。
+ *  `String` / `Array` / 八支 pack 是两句，`Dictionary` 只给第二句（16 格读数 `tmp/probe-slice/compare{104,105}.txt`）。
+ *  推断来的名字与 `Variant` 装箱都不算静态 —— 那两形解析期放过、运行期才给 `Invalid call. Nonexistent function …`。 */
+function faceGhostDiags(
+  n: Record<string, unknown>,
+  table: Record<string, [number, number]>,
+  type: string,
+  twoSentences: boolean,
+  names: Set<string>,
+  isLiteral: (obj: Record<string, unknown>) => boolean,
+): Diagnostic[] {
+  if (n.kind !== "call") return [];
+  const callee = n.callee as Record<string, unknown> | undefined;
+  if (callee === undefined || callee.kind !== "attribute") return [];
+  const obj = callee.obj as Record<string, unknown> | undefined;
+  if (obj === undefined) return [];
+  if (!(isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name)))) return [];
+  const method = callee.name;
+  if (typeof method !== "string" || method in table) return [];
+  if (faceExistsBeyondArity(type).includes(method)) return [];
+  const loc = (n.loc as Diagnostic["loc"]) ?? null;
+  const out: Diagnostic[] = [];
+  if (twoSentences) {
+    out.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${type}".`, loc });
+  }
+  out.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${type}.`, loc });
+  return out;
 }
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
@@ -1710,9 +1758,11 @@ function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
   for (const { nodes, seeded } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
     const dicts = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict");
+    const dictAnn = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict", true);
     for (const n of nodes) {
       const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
       if (d !== null) diags.push(d);
+      for (const g of faceGhostDiags(n, DICT_METHOD_ARITY, "Dictionary", false, dictAnn, (obj) => obj.kind === "dict")) diags.push(g);
     }
   }
 }
@@ -1737,9 +1787,11 @@ function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
   for (const { nodes, seeded } of faceScopes(m, "Array", (init) => init.kind === "array")) {
     const arrays = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array");
+    const arrAnn = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array", true);
     for (const n of nodes) {
       const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
       if (d !== null) diags.push(d);
+      for (const g of faceGhostDiags(n, ARRAY_METHOD_ARITY, "Array", true, arrAnn, (obj) => obj.kind === "array")) diags.push(g);
     }
   }
 }
@@ -1779,9 +1831,11 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
   for (const { nodes, seeded } of faceScopes(m, "String", (init) => init.kind === "lit" && init.lit === "string")) {
     const strs = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
+    const strAnn = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string", true);
     for (const n of nodes) {
       const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
       if (d !== null) diags.push(d);
+      for (const g of faceGhostDiags(n, STRING_METHOD_ARITY, "String", true, strAnn, isStringLit)) diags.push(g);
     }
   }
 }
