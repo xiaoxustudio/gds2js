@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.242 pack 九支的运行期表外名换成引擎那句：名单两侧共用一份（2026-10-16，S415，§6 第 82 条①结清）
+
+- **接的是同一份读数**：`packMethod` 的 `default:` 此前对没实现的名字发中文自述 `<支>.<名>() 未实现`；现在先问 S414 那份确认不存在名单，命中就发 `Invalid call. Nonexistent function '<名>' in base '<支名>'.`，名单外的照旧响亮抛。
+- **替换点排在 switch 之后**，`MISSING_ON` / `BYTE_ONLY` / `NON_BYTE_MISSING` 三张逐支读数表照旧在前 —— 按支分岔的名字（`to_byte_array`、`compress` / `hex_encode` / `get_string_from_*` / `to_*_array`）不会因为换了兜底就在别的面上冒充引擎。
+- **单一来源**：`PACK_ABSENT_ALL` / `PACK_ABSENT_NOT_BYTE` / `PACK_ABSENT_BYTE_ONLY` 从 `analyze.ts` 搬到 `packages/runtime/src/runtime/packed.ts` 并导出，解析期直接 import（compiler → runtime 那一条老路，同 `ENGINE_CLASS_NAMES`），杜绝两侧各量一次。
+- **门读数**：`pnpm test` **14267**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+- **剩的债**：§6 第 82 条② —— pack 九支的属性面（`p.foo` 读与写）一句都没量过，`methods.ts` 的 `packed-attribute` 仍是中文自述。
+
 ### 1.241 pack 九支的表外方法名接进解析期：名单要反着列（2026-10-16，S414，§6 第 81 条底下那半结清、第 82 条新登）
 
 - **量法换了方向**：180 名 × 九支在构造位逐名过裁判（`tmp/probe-slice/round8.mts`，读数 `compare110.txt`）。第一版按 S413 的「存在白名单」接，`PackedByteArray.compress` / `hex_encode` / `to_float32_array` 与语料 135 / 160 / 161 当场误报 —— 手列的候选宇宙里「没量到」推不出「不存在」。改成只列裁判**确认不存在**的名字：byte 147 名、其余八支各 157 名，两支差 11 名（byte 独有的 `compress` / `decompress` / `hex_encode` / `get_string_from_*` / `to_int32_array` / `to_int64_array` / `to_float32_array` / `to_float64_array`），反向只差 `to_byte_array`。

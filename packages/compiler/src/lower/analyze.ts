@@ -17,6 +17,7 @@ import {
 } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
+import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
@@ -1738,44 +1739,11 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
   }
 }
 
-/** pack 九支的**确认不存在**名单（尺 `tmp/probe-slice/round8.mts`：180 个候选名在构造位逐名过裁判，读数 `compare110.txt`）。
- *  方向是「量出来的表外名才发那句」，不是「名单外的都不存在」—— 候选宇宙之外的名字照旧放过，宁可漏拦不误拦。
+/** pack 九支的**确认不存在**名单（尺 `tmp/probe-slice/round8.mts`：180 个候选名在构造位逐名过裁判，读数 `compare110.txt`）
+ *  与运行期共用一份，摆在 `@gds2js/runtime/runtime/packed` 那一侧 —— 装箱来的 pack 值走的是运行期那句。
+ *  方向是「量出来的表外名才发那句」，不是「名单外的都不存在」：候选宇宙之外的名字照旧放过，宁可漏拦不误拦。
  *  `hash` / `length` / `pop_back` 这类别的面上合法的名字，引擎在 pack 九支一律开口；`sort_custom` 虽在这一列里，
  *  但它在元数表那一侧，按「表内的先看」走元数那句。 */
-const PACK_ABSENT_ALL = [
-  "all", "any", "assign", "at", "back", "begins_with", "bigrams", "bin_to_int", "binary_search",
-  "bsearch_custom", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains",
-  "containsn", "countn", "dedent", "each", "ends_with", "filecasecmp_to", "filenocasecmp_to", "filter",
-  "find_custom", "find_key", "findn", "format", "front", "get_base_dir", "get_basename",
-  "get_extension", "get_file", "get_index", "get_or_add", "get_pointer", "get_slice",
-  "get_slice_count", "get_slicec", "get_typed_builtin", "get_typed_class_name", "get_typed_script",
-  "has_all", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert_array",
-  "is_absolute_path", "is_null", "is_read_only", "is_relative_path", "is_same_typed",
-  "is_subsequence_of", "is_subsequence_ofn", "is_typed", "is_valid_filename", "is_valid_float",
-  "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int",
-  "is_valid_ip_address", "join", "json_escape", "keys", "left", "length", "lpad", "lstrip",
-  "make_read_only", "map", "match", "matchn", "max", "md5_buffer", "md5_text", "merge", "merged",
-  "min", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64",
-  "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "pick_random", "pop_at",
-  "pop_back", "pop_front", "push_front", "recursive_equal", "reduce", "repeat", "replace", "replacen",
-  "rfind_custom", "rfindn", "right", "rpad", "rsplit", "rstrip", "same_type", "sha1_buffer",
-  "sha1_text", "sha256_buffer", "sha256_text", "shuffle", "similarity", "simplify_path", "sort_custom",
-  "sort_flags", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer",
-  "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_pascal_case",
-  "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer",
-  "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode",
-  "validate_filename", "validate_node_name", "values", "xml_escape", "xml_unescape",
-];
-
-/** 只有 `PackedByteArray` 有、其余八支引擎开口的 11 名（同一份读数）。 */
-const PACK_ABSENT_NOT_BYTE = [
-  "compress", "decompress", "get_string_from_ascii", "get_string_from_utf16", "get_string_from_utf8",
-  "get_string_from_wchar", "hex_encode", "to_float32_array", "to_float64_array", "to_int32_array",
-  "to_int64_array",
-];
-
-/** 反过来：`to_byte_array` 其余八支都有（在那张 `WITH_BYTES` 表里），唯独 byte 自己开口。 */
-const PACK_ABSENT_BYTE_ONLY = ["to_byte_array"];
 
 /** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
  *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。 */

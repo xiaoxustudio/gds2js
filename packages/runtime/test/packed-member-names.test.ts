@@ -6,7 +6,7 @@
 
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { packBytes, packCtor, packMethod, type PackKind } from "@gds2js/runtime/runtime/packed";
+import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE, packBytes, packCtor, packMethod, type PackKind } from "@gds2js/runtime/runtime/packed";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { vector3 } from "@gds2js/runtime/runtime/vector3";
@@ -128,5 +128,44 @@ describe("runtime/packed · push_back 与 clear 九支都发货", () => {
       const recv = packBytes(packCtor(kind, []));
       eq("376", `${type}.sort_custom()`, errOf(() => packMethod(recv, "sort_custom", [])), `Invalid call. Nonexistent function 'sort_custom' in base '${type}'.`);
     }
+  });
+});
+
+describe("runtime/packed · S414 那份确认不存在名单在运行期同样响", () => {
+  const NINE: Array<[string, PackKind]> = [
+    ["PackedByteArray", "byte"], ["PackedInt32Array", "int32"], ["PackedInt64Array", "int64"],
+    ["PackedFloat32Array", "float32"], ["PackedFloat64Array", "float64"], ["PackedStringArray", "string"],
+    ["PackedVector2Array", "vector2"], ["PackedVector3Array", "vector3"], ["PackedColorArray", "color"],
+  ];
+  const say = (type: string, n: string): string => `Invalid call. Nonexistent function '${n}' in base '${type}'.`;
+
+  it("九支逐个把名单里的名字换成引擎那句", () => {
+    for (const [type, kind] of NINE) {
+      const recv = packBytes(packCtor(kind, []));
+      for (const n of [...PACK_ABSENT_ALL, ...(kind === "byte" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE)]) {
+        eq("414", `${type}.${n}()`, errOf(() => packMethod(recv, n, [])), say(type, n));
+      }
+    }
+  });
+
+  it("byte 独有那 11 名在 byte 不许冒充那句、在其余八支照发", () => {
+    const byte = packBytes(packCtor("byte", []));
+    for (const n of PACK_ABSENT_NOT_BYTE) {
+      eq("414", `PackedByteArray.${n}() 不许发那句`, errOf(() => packMethod(byte, n, [])) !== say("PackedByteArray", n), true);
+    }
+    for (const [type, kind] of NINE) {
+      if (kind === "byte") continue;
+      const recv = packBytes(packCtor(kind, []));
+      for (const n of PACK_ABSENT_NOT_BYTE) {
+        eq("414", `${type}.${n}()`, errOf(() => packMethod(recv, n, [])), say(type, n));
+      }
+    }
+  });
+
+  it("byte 那八支之外的响亮拒表照旧排在名单前面：MISSING_ON 的读数不放行", () => {
+    const byte = packBytes(packCtor("byte", []));
+    eq("414", "byte 的 to_byte_array 引擎也开口", errOf(() => packMethod(byte, "to_byte_array", [])), say("PackedByteArray", "to_byte_array"));
+    const int32 = packBytes(packCtor("int32", []));
+    eq("414", "int32 的 to_byte_array 是引擎有的名字", /Nonexistent function/.test(errOf(() => packMethod(int32, "to_byte_array", []))), false);
   });
 });
