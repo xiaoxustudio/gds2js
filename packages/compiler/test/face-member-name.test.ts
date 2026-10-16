@@ -40,6 +40,25 @@ describe("静态接收者的表外方法名", () => {
   });
 });
 
+describe("pack 的属性两面（读数 tmp/probe-attr/compare3.txt）", () => {
+  const attrSay = (t: string, n: string): string => `Cannot find member "${n}" in base "${t}".`;
+  const CASES: Array<[string, string, string[]]> = [
+    ["构造位读表外名报两遍", "\tprint(PackedByteArray([1]).keys)", [attrSay("PackedByteArray", "keys"), attrSay("PackedByteArray", "keys")]],
+    ["构造位写表外名报两遍", "\tPackedStringArray([\"a\"]).keys = 1", [attrSay("PackedStringArray", "keys"), attrSay("PackedStringArray", "keys")]],
+    ["标注位读表外名", "\tvar q: PackedInt64Array = PackedInt64Array([1])\n\tprint(q.values)", [attrSay("PackedInt64Array", "values"), attrSay("PackedInt64Array", "values")]],
+    ["byte 独有的名在其余八支开口", "\tprint(PackedInt32Array([1]).hex_encode)", [attrSay("PackedInt32Array", "hex_encode"), attrSay("PackedInt32Array", "hex_encode")]],
+    ["byte 独有的名在 byte 放过", "\tprint(PackedByteArray([1]).hex_encode)", []],
+    ["推断位读表外名放过", "\tvar q = PackedByteArray([1])\n\tprint(q.keys)", []],
+    ["方法名当值读放过", "\tprint(PackedByteArray([1]).size)", []],
+    ["写成员名给常量那一句", "\tvar q: PackedColorArray = PackedColorArray([Color(1, 0, 0, 1)])\n\tq.size = 1", ["Cannot assign a new value to a constant."]],
+    ["读成员名不许发常量那句", "\tvar q: PackedColorArray = PackedColorArray([Color(1, 0, 0, 1)])\n\tprint(q.size)", []],
+  ];
+
+  it.each(CASES)("%s", async (_label, body, want) => {
+    expect(await diags(body)).toEqual(want);
+  });
+});
+
 describe("存在但没量元数的名字不许误拦", () => {
   const OKAY: Array<[string, string]> = [
     ["字典 set", '\tvar d: Dictionary = {}\n\td.set(1, 2)'],

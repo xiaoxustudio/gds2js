@@ -1745,8 +1745,26 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
  *  `hash` / `length` / `pop_back` 这类别的面上合法的名字，引擎在 pack 九支一律开口；`sort_custom` 虽在这一列里，
  *  但它在元数表那一侧，按「表内的先看」走元数那句。 */
 
+/** 属性的静态接收者两形：构造位字面量与带标注的名字；推断来的名字解析期不开口（同 `tmp/probe-slice/r7c.gd`）。 */
+function packFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>): string | null {
+  if (obj === undefined) return null;
+  if (obj.kind === "ident" && typeof obj.name === "string") return ann.get(obj.name) ?? null;
+  if (obj.kind === "call") {
+    const inner = obj.callee as Record<string, unknown> | undefined;
+    const cn = inner?.kind === "ident" ? inner.name : null;
+    if (typeof cn === "string" && PACK_TYPE_NAMES.has(cn)) return cn;
+  }
+  return null;
+}
+
+function packNameMeasuredAbsent(kind: string, name: string): boolean {
+  if (PACK_ABSENT_ALL.includes(name)) return true;
+  return (kind === "PackedByteArray" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE).includes(name);
+}
+
 /** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
- *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。 */
+ *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。
+ *  属性那一形（不调用）引擎把同一句报两遍，读数 `tmp/probe-attr/compare3.txt` 九支一字一样。 */
 function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   for (const nodes of flattenBodies(m)) {
     const ann = new Map<string, string>();
@@ -1755,27 +1773,44 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const type = n.type as TypeRef | null;
       if (type !== null && type.kind === "named" && PACK_TYPE_NAMES.has(type.name)) ann.set(n.name, type.name);
     }
+    const callCallees = new Set<unknown>();
+    const writeTargets = new Set<unknown>();
     for (const n of nodes) {
-      if (n.kind !== "call") continue;
-      const callee = n.callee as Record<string, unknown> | undefined;
-      if (callee === undefined || callee.kind !== "attribute") continue;
-      const obj = callee.obj as Record<string, unknown> | undefined;
-      if (obj === undefined) continue;
-      let kind: string | null = null;
-      if (obj.kind === "ident" && typeof obj.name === "string") kind = ann.get(obj.name) ?? null;
-      else if (obj.kind === "call") {
-        const inner = obj.callee as Record<string, unknown> | undefined;
-        const cn = inner?.kind === "ident" ? inner.name : null;
-        if (typeof cn === "string" && PACK_TYPE_NAMES.has(cn)) kind = cn;
+      if (n.kind === "call") callCallees.add(n.callee);
+      if (n.kind === "assign") {
+        const t = n.target as Record<string, unknown> | undefined;
+        if (t !== undefined && t.kind === "attribute") writeTargets.add(t);
       }
+    }
+    for (const n of nodes) {
+      if (n.kind === "call") {
+        const callee = n.callee as Record<string, unknown> | undefined;
+        if (callee === undefined || callee.kind !== "attribute") continue;
+        const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
+        if (kind === null) continue;
+        const method = callee.name;
+        if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
+        if (!packNameMeasuredAbsent(kind, method)) continue;
+        const loc = (n.loc as Diagnostic["loc"]) ?? null;
+        diags.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${kind}".`, loc });
+        diags.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${kind}.`, loc });
+        continue;
+      }
+      if (n.kind !== "attribute" || callCallees.has(n)) continue;
+      const kind = packFaceRecv(n.obj as Record<string, unknown>, ann);
       if (kind === null) continue;
-      const method = callee.name;
-      if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
-      const beyond = kind === "PackedByteArray" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE;
-      if (!PACK_ABSENT_ALL.includes(method) && !beyond.includes(method)) continue;
+      const name = n.name;
+      if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      diags.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${kind}".`, loc });
-      diags.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${kind}.`, loc });
+      if (name in (VALUE_METHOD_ARITY[kind] ?? {})) {
+        // 往成员名上写只有 `size` 那一格量过（九支一字一样），其余成员名没量过就不开口
+        if (writeTargets.has(n) && name === "size") diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
+        continue;
+      }
+      if (!packNameMeasuredAbsent(kind, name)) continue;
+      const one = `Cannot find member "${name}" in base "${kind}".`;
+      diags.push({ code: "face-attr-missing", message: one, loc });
+      diags.push({ code: "face-attr-missing", message: one, loc });
     }
   }
 }

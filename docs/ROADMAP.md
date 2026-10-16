@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.244 pack 的属性两面接进解析期：表外名那一句引擎报两遍（2026-10-16，S417，§6 第 82 条②再接一半）
+
+- **读数**：九支 × 四形（读表外名 / 写表外名 / 读方法名当值 / 写 `size`）一次过裁判，尺 `tmp/probe-attr/round3.mts`，读数 `compare3.txt`。静态位的读与写都发 `Cannot find member "<名>" in base "<支>".` **同一句两遍**；写 `size` 发 `Cannot assign a new value to a constant.`；`print(q.size)` 引擎给 Callable（无错）。
+- **接法**：`checkPackFaceNames` 多一趟属性扫描（跳过调用位那一支，免得与两句那族重复），接收者仍是构造位字面量与标注变量两形，名字仍只认 S414 / S415 那份确认不存在名单；成员名的写只放行量过的 `size`。
+- **剩下的**：其余成员名的写没量过、内建类型的绑定 Callable 整族没接（§6 第 82 条②）。
+- **门读数**：`pnpm test` **14279**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+
 ### 1.243 pack 的属性两面过裁判：装箱两形按引擎那句发（2026-10-16，S416，§6 第 82 条②接一半）
 
 - **读数**：三型（byte / int32 / string）× 15 形，尺 `tmp/probe-attr/{round1,round2}.mts`，读数 `compare{1,2}.txt`。静态位读写各只发一句 `Cannot find member "<名>" in base "<支>".`；装箱位读 `Invalid access to property or key '<名>' on a base object of type '<支>'.`、写 `Invalid assignment of property or key '<名>' with value of type '<型>' on a base object of type '<支>'.`；写成员名是 `Cannot assign a new value to a constant.`。
