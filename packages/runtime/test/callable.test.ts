@@ -5,6 +5,7 @@ import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { callableEq, callableSame, callableOf, CallableBox, methodCallable, nullCallable, registerClass, registerMethodArities, registerNativeBase, registerScriptLabel, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { attribute, boundMethod, method } from "@gds2js/runtime/runtime/methods";
+import { packBytes, packCtor } from "@gds2js/runtime/runtime/packed";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBuiltin, varToStr } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
@@ -189,7 +190,7 @@ describe("runtime/object · Callable", () => {
   });
 });
 
-describe("runtime/callable · 内建类型面的绑定 Callable（S426）", () => {
+describe("runtime/callable · 内建类型面的绑定 Callable（S426 / S430：等式按接收者的值比，读数 tmp/probe-bincall/e1.gd）", () => {
   const arr = (): Variant => V.array(new GArray([I(1), I(2)]));
   const bound = (v: Variant, face: string, name: string, min: number, max: number): Variant => boundMethod(v, face, name, min, max);
   const errText = (f: () => unknown): string => {
@@ -234,11 +235,99 @@ describe("runtime/callable · 内建类型面的绑定 Callable（S426）", () =
     const a = arr();
     const boxOf = (v: Variant): unknown => (v.v as unknown);
     eq("426", "同实例同名真", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(a, "Array", "append", 1, 1)) as never)), "true");
-    eq("426", "换实例假", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(arr(), "Array", "append", 1, 1)) as never)), "false");
+    eq("426", "值相同就等（E1 / E2 两台同值）", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(arr(), "Array", "append", 1, 1)) as never)), "true");
+    eq("426", "值不同就不等（Q2 的两台不一样）", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(V.array(new GArray([I(9)])), "Array", "append", 1, 1)) as never)), "false");
     eq("426", "同实例换名假", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(a, "Array", "size", 0, 0)) as never)), "false");
   });
 
   it("var_to_str 里退化成品 Callable()", () => {
     eq("426", "var_to_str", varToStr(bound(arr(), "Array", "append", 1, 1)), "Callable()");
+  });
+});
+
+describe("runtime/methods · 装箱接收者的成员名读也发绑定 Callable（S428）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+
+  it("Array / String 的属性读命中成员表就给 Callable", () => {
+    const a = V.array(new GArray([I(1), I(2)]));
+    eq("428", "Array 的成员名读", show(attribute(a, "append") as Variant), "Array::append");
+    eq("428", "String 的成员名读", show(attribute(V.str("abcd"), "to_upper") as Variant), "String::to_upper");
+    eq("428", "读出来就能调", show(method(attribute(a, "append") as Variant, "call", [I(9)])), "<null>");
+    eq("428", "get_argument_count 带得上", String(method(attribute(a, "append") as Variant, "get_argument_count", []).v), "1");
+  });
+
+  it("两份名单之外的那一名不许冒充引擎那句", () => {
+    const a = V.array(new GArray([I(1)]));
+    const msg = errText(() => attribute(a, "zzzquantum"));
+    eq("428", "不发 Invalid access", /Invalid access/.test(msg), false);
+    eq("428", "不发 Callable", /::/.test(msg), false);
+  });
+});
+
+describe("runtime/methods · 装箱 pack 的成员名读也发绑定 Callable（S429）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const ps = (): Variant => packCtor("string", [V.array(new GArray([V.str("a"), V.str("b")]))]);
+  const pb = (): Variant => packCtor("byte", [V.array(new GArray([I(1), I(2)]))]);
+
+  it("表里的名字给 Callable，读出来能调", () => {
+    const c = attribute(ps(), "size") as Variant;
+    eq("429", "印法", show(c), "PackedStringArray::size");
+    eq("429", "调出来的值", show(method(c, "call", [])), "2");
+    eq("429", "元数与名字", String(method(c, "get_argument_count", []).v) + "/" + show(method(c, "get_method", [])), "0/size");
+    eq("429", "空对象引用", show(method(c, "get_object", [])), "<Object#null>");
+    eq("429", "byte 那支的 count", show(attribute(pb(), "count") as Variant), "PackedByteArray::count");
+  });
+
+  it("byte 独有那 11 名的元数量齐后给 Callable，零元的照调", () => {
+    const c = attribute(pb(), "hex_encode") as Variant;
+    eq("429", "hex_encode 给 Callable", show(c), "PackedByteArray::hex_encode");
+    eq("429", "调出来是十六进制串", show(method(c, "call", [])), "0102");
+    eq("429", "元数上界读自裁判", String(method(c, "get_argument_count", []).v), "0");
+    eq("429", "compress 的元数也带上了", show(attribute(pb(), "compress") as Variant), "PackedByteArray::compress");
+    eq("429", "带默认值那两支给声明支数", String(method(attribute(pb(), "compress") as Variant, "get_argument_count", []).v) + "/" + String(method(attribute(pb(), "decompress") as Variant, "get_argument_count", []).v), "1/2");
+    eq("429", "其余八支的 to_byte_array 在表里", show(attribute(ps(), "to_byte_array") as Variant), "PackedStringArray::to_byte_array");
+  });
+});
+
+describe("S439 · 绑定 Callable 比的是读那一刻的接收者值", () => {
+  const boxOf = (v: Variant): CallableBox => v.v as CallableBox;
+
+  it("读之后原容器改了，等式就断，调用仍打在原容器上", () => {
+    const a = V.array(GArray.of([V.int(1), V.int(2)]));
+    const c = attribute(a, "append") as Variant;
+    eq("439", "没改之前两次读值等", String(callableEq(boxOf(c), boxOf(attribute(a, "append") as Variant))), "true");
+    method(a, "append", [V.int(3)]);
+    eq("439", "改了之后断", String(callableEq(boxOf(c), boxOf(attribute(a, "append") as Variant))), "false");
+    eq("439", "自己跟自己仍等", String(callableEq(boxOf(c), boxOf(c))), "true");
+    eq("439", "调用落在活的那一台", show(a), "[1, 2, 3]");
+  });
+
+  it("嵌套那一层也是拷出来的，内层改了同样断", () => {
+    const inner = V.array(GArray.of([V.int(1)]));
+    const w = V.array(GArray.of([inner]));
+    const t = attribute(w, "append") as Variant;
+    method(inner, "append", [V.int(2)]);
+    eq("439", "内层改了也断", String(callableEq(boxOf(t), boxOf(attribute(w, "append") as Variant))), "false");
+  });
+
+  it("pack 那一族同样按读那一刻比", () => {
+    const p = packCtor("int32", [V.array(GArray.of([V.int(1), V.int(2)]))]) as Variant;
+    const c = attribute(p, "append") as Variant;
+    method(p, "append", [V.int(3)]);
+    eq("439", "pack 改了之后断", String(callableEq(boxOf(c), boxOf(attribute(p, "append") as Variant))), "false");
   });
 });

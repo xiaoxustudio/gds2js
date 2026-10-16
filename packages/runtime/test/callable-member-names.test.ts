@@ -34,10 +34,11 @@ describe("runtime/callable · 成员名表", () => {
       eq("298", `${n} 是抄来的清单污染：4.6.3 没这名字`, [code(lam, n), code(nul, n)].join(" | "), `${NONESUCH(n)} | ${NONESUCH(n)}`);
     }
 
-    for (const n of ["bindv", "create", "hash", "is_custom", "is_standard", "rpc", "rpc_id", "get_object_id", "unbind"]) {
+    for (const n of ["bindv", "create", "hash", "is_custom", "is_standard", "rpc", "rpc_id", "get_object_id"]) {
       eq("298", `${n} 存在但我们没那个式子：仍给「未实现」`, code(lam, n), TODO(n));
     }
 
+    eq("440", "unbind 已发货：不再给「未实现」那句", code(lam, "unbind") === TODO("unbind"), false);
     eq("298", "表内已实现的不误伤（is_null 照发值）", String(((method(nul, "is_null", [])) as Variant).v), "true");
   });
 });

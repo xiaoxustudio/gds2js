@@ -29,7 +29,7 @@ export class Main extends SceneTree {
       rt.frameLine(4);
       for (let i of rt.rangeSeq([rt.V.int(3)])) {
         rt.frameLine(5);
-        rt.method(fns, "append", [rt.callable((__a: rt.Variant[]) => {
+        rt.method(fns, "append", [(((i) => rt.callable((__a: rt.Variant[]) => {
         const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
         try {
           rt.frameLine(5);
@@ -40,7 +40,7 @@ export class Main extends SceneTree {
         } finally {
           rt.frameExit(__gd_frame);
         }
-    }, 0)]);
+    }, 0)))(i)]);
       }
       rt.frameLine(6);
       let out = rt.V.array(rt.GArray.of([]));

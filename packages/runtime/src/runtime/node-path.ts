@@ -115,7 +115,7 @@ export function emptyNodePath(): Variant {
 }
 
 /** 零实参的六支名（元数句与返回值都在 4.6.3 一支一名量过，探头 `tmp/probe-nodepath/h-*.gd`）。 */
-const NP_ZERO_ARG = ["get_name_count", "get_subname_count", "is_absolute", "is_empty", "get_as_property_path"];
+const NP_ZERO_ARG = ["get_concatenated_names", "get_concatenated_subnames", "get_name_count", "get_subname_count", "is_absolute", "is_empty", "get_as_property_path"];
 
 /** 一支下标的两支（`get_name` / `get_subname`）：结果给 StringName，实测 typeof 21。 */
 const NP_ONE_ARG = ["get_name", "get_subname"];
@@ -128,7 +128,7 @@ function nodePathIndex(v: Variant, name: string): number {
   return intToNum(v.v as IntPayload);
 }
 
-/** NodePath 的方法面：七支发出，`hash()` 与越界那两形按 S267 ⑥ 拒，其余名给运行期那句 Nonexistent function。 */
+/** NodePath 的方法面：九支发出，`hash()` 与越界那两形按 S267 ⑥ 拒，其余名给运行期那句 Nonexistent function。 */
 export function nodePathMethod(p: GdNodePath, name: string, args: readonly Variant[]): Variant {
   if (name === "hash") {
     throw new UnsupportedError(
@@ -144,6 +144,9 @@ export function nodePathMethod(p: GdNodePath, name: string, args: readonly Varia
     if (name === "get_subname_count") return V.int(p.subnames.length);
     if (name === "is_absolute") return V.bool(p.absolute);
     if (name === "is_empty") return V.bool(p.empty);
+    // 两支持名拼接（读数 `tmp/probe-np/compare1.txt`：名段与子名段各按 "/" 拼、不做路径化简、给的是 StringName）
+    if (name === "get_concatenated_names") return V.stringName(p.names.join("/"));
+    if (name === "get_concatenated_subnames") return V.stringName(p.subnames.join("/"));
     return V.object(toPropertyPath(p));
   }
   if (NP_ONE_ARG.indexOf(name) >= 0) {

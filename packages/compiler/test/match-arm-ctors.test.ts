@@ -29,7 +29,7 @@ describe("手臂构造式 · 与语料 golden 同句", () => {
   const ids = cases.filter((id) => id.slice(4).startsWith("arm-"));
   expect(ids.length, "语料里的手臂构造格应当是四格").toBe(4);
   it.each(ids)("%s", async (id) => {
-    const engine = (readGolden(id) ?? "").match(/Parse Error: (.*)/)?.[1]?.trim() ?? "";
+    const engine = [...(readGolden(id) ?? "").matchAll(/Parse Error: (.*)/g)].map((m) => m[1]?.trim() ?? "").join(String.fromCharCode(10));
     expect(engine, `[${id}] golden 里没有 Parse Error 那句`).not.toBe("");
     expect(await verdict(readFileSync(caseScript(id), "utf8")), `[${id}] 句子与引擎不一致`).toBe(engine);
     goldenCells++;
@@ -69,21 +69,25 @@ describe("手臂构造式 · 构造子没接进表达式位置的七形仍拦", 
 });
 
 describe("手臂构造式 · 表外的那一批发引擎那句", () => {
-  const ARMS = [
-    ["Vector2(1)", 'No constructor of "Vector2" matches the signature "Vector2(int)".'],
-    ["Vector2(1, 2, 2.5)", 'No constructor of "Vector2" matches the signature "Vector2(int, int, float)".'],
-    ["Vector2(1, &\"a\")", 'No constructor of "Vector2" matches the signature "Vector2(int, StringName)".'],
-    ["Vector2(1, Vector2(2, 3))", 'No constructor of "Vector2" matches the signature "Vector2(int, Vector2)".'],
-    ["StringName(1)", 'No constructor of "StringName" matches the signature "StringName(int)".'],
-    ["NodePath(1)", 'No constructor of "NodePath" matches the signature "NodePath(int)".'],
-    ["Color(1.5)", 'No constructor of "Color" matches the signature "Color(float)".'],
-    ["Color(1.5, 1.5)", 'No constructor of "Color" matches the signature "Color(float, float)".'],
-    ["Color(Vector2(1, 2))", 'No constructor of "Color" matches the signature "Color(Vector2)".'],
-    ["Vector3(1, 2)", 'No constructor of "Vector3" matches the signature "Vector3(int, int)".'],
-    ["Array(1)", 'No constructor of "Array" matches the signature "Array(int)".'],
-    ["Dictionary(\"a\")", 'No constructor of "Dictionary" matches the signature "Dictionary(String)".'],
-    ["NoSuchType(1)", "模式 call 未支持"],
-    ["Vector2(q, 2)", "模式 call 未支持"],
+  const ARM2 = 'Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").';
+const TWO = (sig: string): string => sig + String.fromCharCode(10) + ARM2;
+const ARMS = [
+    ["Vector2(1)", TWO('No constructor of "Vector2" matches the signature "Vector2(int)".')],
+    ["Vector2(1, 2, 2.5)", TWO('No constructor of "Vector2" matches the signature "Vector2(int, int, float)".')],
+    ["Vector2(1, &\"a\")", TWO('No constructor of "Vector2" matches the signature "Vector2(int, StringName)".')],
+    ["Vector2(1, Vector2(2, 3))", TWO('No constructor of "Vector2" matches the signature "Vector2(int, Vector2)".')],
+    ["StringName(1)", TWO('No constructor of "StringName" matches the signature "StringName(int)".')],
+    ["NodePath(1)", TWO('No constructor of "NodePath" matches the signature "NodePath(int)".')],
+    ["Color(1.5)", TWO('No constructor of "Color" matches the signature "Color(float)".')],
+    ["Color(1.5, 1.5)", TWO('No constructor of "Color" matches the signature "Color(float, float)".')],
+    ["Color(Vector2(1, 2))", TWO('No constructor of "Color" matches the signature "Color(Vector2)".')],
+    ["Vector3(1, 2)", TWO('No constructor of "Vector3" matches the signature "Vector3(int, int)".')],
+    ["Array(1)", TWO('No constructor of "Array" matches the signature "Array(int)".')],
+    ["Dictionary(\"a\")", TWO('No constructor of "Dictionary" matches the signature "Dictionary(String)".')],
+    ["Rect2(1)", TWO('No constructor of "Rect2" matches the signature "Rect2(int)".')],
+    ["Vector2(Rect2(1))", 'No constructor of "Rect2" matches the signature "Rect2(int)".' + String.fromCharCode(10) + 'No constructor of "Vector2" matches the signature "Vector2(Rect2)".' + String.fromCharCode(10) + ARM2],
+    ["NoSuchType(1)", TWO('Function "NoSuchType()" not found in base self.')],
+    ["Vector2(q, 2)", ARM2],
   ] as Array<[string, string]>;
   it.each(ARMS)("%s", async (arm, sentence) => {
     expect(await verdict(MOD(arm)), `${arm} 的句子不对`).toBe(sentence);

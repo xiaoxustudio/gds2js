@@ -15,13 +15,14 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
+import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
-import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
+import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -143,7 +144,7 @@ export function callableCtor(args: Variant[]): Variant {
 /** 调一个 Callable 盒子：调用实参排在绑定实参**之前**；lambda 走盒子带的式子，方法 / 静态方法交 `method()` 按名派发。 */
 function callCallableBox(box: CallableBox, args: Variant[]): Variant {
   const all: Variant[] = [];
-  for (const a of args) all.push(a);
+  for (const a of keptCallArgs(box, args)) all.push(a);
   for (const b of box.bound) all.push(b);
   if (box.fn !== null) return wrapValue(box.fn(all));
   if (box.name !== null && box.object !== null) return method(box.object, box.name, all);
@@ -157,7 +158,7 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   }
   const bounds = callableArityBounds(box);
   if (bounds !== null) {
-    const given = args.length + boundArgsOf(box).length;
+    const given = keptCallArgs(box, args).length + boundArgsOf(box).length;
     if (given < bounds[0] || given > bounds[1]) {
       const n = given < bounds[0] ? bounds[0] : bounds[1];
       throw new GodotRuntimeError(
@@ -167,6 +168,30 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
     }
   }
   return callCallableBox(box, args);
+}
+
+/** `unbind(n)` 的实参：只量过 0 与正 int；负数、float、缺参与多参之外的那几形没读数，响亮拒。 */
+function unbindCountArg(args: readonly Variant[]): number {
+  if (args.length === 0) throw new GodotRuntimeError("arity", `Too few arguments for "unbind()" call. Expected at least 1 but received 0.`);
+  if (args.length > 1) throw new GodotRuntimeError("arity", `Too many arguments for "unbind()" call. Expected at most 1 but received ${String(args.length)}.`);
+  const v = args[0] as Variant;
+  if (v.t !== Tag.INT) throw new UnsupportedError("callable-unbind-arg", `Callable.unbind() 的实参只量过 int（收到 ${tagName(v.t)}）`);
+  const n = intToNum(v.v as IntPayload);
+  if (n < 0) throw new UnsupportedError("callable-unbind-neg", "Callable.unbind() 的负数那一形没量过，不发");
+  return n;
+}
+
+/** `unbind(n)` 的那一位怎么用：`n` 支实参必须由调用方给（少了是那句 `Callable unbinds …`），给了又在**尾部**削掉——
+ *  绑着的那串照旧接在削剩的后面（`tmp/probe-unbind/{v2,v3,w1,w2,w4,w5}.gd` 六格把这判据钉死：`bind(1,2).unbind(1).call(9)` 给的是 `f(1, 2)`）。 */
+function keptCallArgs(box: CallableBox, args: Variant[]): Variant[] {
+  if (box.unbindCount === 0) return args;
+  if (args.length < box.unbindCount) {
+    throw new GodotRuntimeError(
+      "callable-unbind-count",
+      `Callable unbinds ${String(box.unbindCount)} arguments, but called with ${String(args.length)}`,
+    );
+  }
+  return args.slice(0, args.length - box.unbindCount);
 }
 
 /** 那句报错里的**函数标签**，与打印用的是同一串（五种形状实测过：空、lambda、全局、静态、方法）。 */
@@ -208,11 +233,28 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   const empty = isNullCallable(box);
   switch (name) {
     case "bind": {
+      if (box.defaultCount > 0) {
+        throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
+      }
       // 绑定串排在**前面**；实参拼接不用 spread —— 静态编译目标上没有它的 lowering
       const next: Variant[] = [];
+      if (box.unbindCount > 0) {
+        // `bind()` 落在 unbind 腾出的那些位上：绑定串本身不动，`unbind` 的计数按绑的支数减（`tmp/probe-unbind/{y1,y2,y3,y5}.gd`）
+        for (const b of bound) next.push(b);
+        return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, null, null, 0, null, box.unbindCount - args.length < 0 ? 0 : box.unbindCount - args.length));
+      }
       for (const a of args) next.push(a);
       for (const b of bound) next.push(b);
       return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
+    }
+    case "unbind": {
+      // 计数是**累加**的：`u.unbind(1).unbind(1)` 等于 `u.unbind(2)`（`tmp/probe-unbind/x6.gd`）
+      const n = box.unbindCount + unbindCountArg(args);
+      const next: Variant[] = [];
+      for (const b of bound) next.push(b);
+      return V.object(new CallableBox(
+        box.fn, box.name, box.object, next, box.arity, true, box.builtin, box.builtinBounds, box.defaultCount, box.builtinSnap, n,
+      ));
     }
     case "get_bound_arguments":
       return V.array(GArray.of(bound.slice()));
@@ -228,7 +270,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
           "get_argument_count() 拿不到这个 Callable 的声明形参数（方法表里没有它，或它带默认值形参 —— 那一格没量）",
         );
       }
-      const left = declared - bound.length;
+      const left = declared - bound.length + box.unbindCount;
       // 实测（`tmp/probe-binds-c/disc.gd` 与语料 288）：**方法 / 静态与 lambda 都是 `声明 − 已绑`，绑过头就给负数**
       // （声明 1 支的方法绑 3 支给 −2、声明 1 支的 lambda 链式绑 2 支给 −1），只有**空 Callable 基**恒给 0
       // （`Callable()` 绑 1 支、2 支、链式、绑 3 支全是 0）。
@@ -1343,6 +1385,20 @@ export function boundMethod(raw: unknown, face: string, name: string, min: numbe
   return boundBuiltinCallable(norm(raw), face, name, min, max);
 }
 
+/** 可变那两面（Array 与 pack 九支）读那一刻拷一份；值类型本来就不可变，字典面不发绑定 Callable（S419 ②）。 */
+function boundSnapshot(v: Variant): Variant | null {
+  const inner = v.v;
+  if (inner instanceof GArray) {
+    const snap = inner.duplicate(true);
+    snap.elem = inner.elem;
+    return V.array(snap);
+  }
+  if (inner instanceof GBytes) return V.object(new GBytes(inner.raw().slice(), inner.kind));
+  return null;
+}
+
+registerBoundSnapshotHook(boundSnapshot);
+
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);
   // 字典的属性读就是查一格 StringName 键：键在就给值（`d.foo = 5` 之后 `d.foo` 是 5，读数 `tmp/probe-bincall/j1.gd` 的 R1），
@@ -1353,13 +1409,24 @@ export function attribute(raw: unknown, name: string): unknown {
     if (dict.has(k)) return dict.getRequired(k);
     throw new GodotRuntimeError("dict-attribute", `Invalid access to property or key '${name}' on a base object of type 'Dictionary'.`);
   }
+  if (obj.t === Tag.STRING_NAME) {
+    // StringName 那一面的成员表就是 String 那张（S389 一名一名量过），属性读同一条三分岔
+    if (valueAttrKind("StringName", name) === "absent") {
+      throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type 'StringName'.`);
+    }
+    const row = faceArity("StringName", name);
+    if (row !== null) return boundBuiltinCallable(obj, "StringName", name, row[0], row[1]);
+    throw new UnsupportedError("face-attribute", `StringName.${name} 的属性读落在两份名单之外：候选宇宙之外的名字没量过，不发引擎那句`);
+  }
   if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
     const face = obj.t === Tag.STRING ? "String" : "Array";
     const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
     if (absent.includes(name)) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
     }
-    throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读只量过表外名那一格：成员名引擎给的是内建类型的绑定 Callable，那一族还没接`);
+    const row = faceArity(face, name);
+    if (row !== null) return boundBuiltinCallable(obj, face, name, row[0], row[1]);
+    throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读落在两份名单之外：候选宇宙之外的名字没量过，不发引擎那句`);
   }
   if (obj.t === Tag.OBJECT) {
     // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本
@@ -1374,6 +1441,18 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
+    const vface = obj.v instanceof GVector2 ? "Vector2" : obj.v instanceof GVector2i ? "Vector2i"
+      : obj.v instanceof GVector3 ? "Vector3" : obj.v instanceof GVector3i ? "Vector3i"
+        : obj.v instanceof GColor ? "Color" : obj.v instanceof GdNodePath ? "NodePath" : null;
+    if (vface !== null) {
+      // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8），表外名给引擎那句（`tmp/probe-vattr/box.gd` 七格）
+      const kind = valueAttrKind(vface, name);
+      if (kind === "absent") {
+        throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${vface}'.`);
+      }
+      const row = faceArity(vface, name);
+      if (row !== null) return boundBuiltinCallable(obj, vface, name, row[0], row[1]);
+    }
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     if (obj.v instanceof GBytes) {
@@ -1382,7 +1461,9 @@ export function attribute(raw: unknown, name: string): unknown {
       if (packNameAbsent((obj.v as GBytes).kind, name)) {
         throw new GodotRuntimeError("packed-attribute", `Invalid access to property or key '${name}' on a base object of type '${packTypeName((obj.v as GBytes).kind)}'.`);
       }
-      throw new UnsupportedError("packed-attribute", `PackedByteArray 没有 ${name} 这个成员（这一族的成员全是方法，属性面没实测过）`);
+      const row = faceArity(packTypeName((obj.v as GBytes).kind), name);
+      if (row !== null) return boundBuiltinCallable(obj, packTypeName((obj.v as GBytes).kind), name, row[0], row[1]);
+      throw new UnsupportedError("packed-attribute", `pack 的属性读落在两份名单之外：${packTypeName((obj.v as GBytes).kind)}.${name} 的元数没量过，不发引擎那句`);
     }
     const inner = obj.v as Record<string, unknown>;
     const sd = descFor(inner);

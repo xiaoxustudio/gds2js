@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { cachedLower } from "./ir-cache";
 import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
 import type { RawSourceMap } from "../emit/sourcemap";
@@ -26,6 +26,8 @@ export interface ProjectOptions {
   entries: string[];
   resRoot: string;
   outDir: string;
+  /** 只种入口、不扫目录：依赖靠 `extends` / `preload` 拉进来（单文件模式读依赖走的就是这一条）。 */
+  closureOnly?: boolean;
   runtimeImport: string;
   hostImport: string | null;
   /** 静态打包（`--pack scriptc`）用：`runtime/` 与 `host.ts` 的源码只铺一份在这个目录下，每个模块的 import 按自己那一层的相对深度算（每层各放一份会编成多张 runtime 图、同一个类有多份身份）。 */
@@ -73,6 +75,13 @@ function resolveGdPath(fromRes: string, target: string): string {
 /** res:// 路径 → 文件系统绝对路径。 */
 function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
+}
+
+/** 相对路径里出现了 `..`：res:// 空间放不下它（规范化时会被吃掉），于是指向的其实是根内另一格。 */
+function climbsAboveRoot(target: string, fromAbs: string, resRoot: string): boolean {
+  if (target.startsWith(RES_PREFIX)) return false;
+  const rel = relative(resRoot, resolve(join(dirname(fromAbs), target)));
+  return rel === "" || rel.startsWith("..") || isAbsolute(rel);
 }
 
 function normalizeRes(resPath: string): string {
@@ -245,7 +254,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     }
   };
   for (const e of entries) seed(e);
-  for (const f of findGdFiles(resRoot)) seed(f);
+  if (!opts.closureOnly) for (const f of findGdFiles(resRoot)) seed(f);
   for (let i = 0; i < queue.length; i++) {
     const resPath = queue[i]!;
     const abs = resToAbs(resPath, resRoot);
@@ -254,6 +263,12 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     const collect = (candidate: string | null, from: string): string | null => {
       if (!candidate) return null;
       if (!candidate.endsWith(".gd")) return null;
+      if (opts.closureOnly && climbsAboveRoot(candidate, l.absPath, resRoot)) {
+        throw new UnsupportedError(
+          "closure-root",
+          `"${candidate}" 往上爬出了闭包根（默认是入口所在目录）：res:// 空间放不下 .. —— 用 --res-root 点名真正的根，或把父脚本挪进入口那一层`,
+        );
+      }
       const depRes = resolveGdPath(from, candidate);
       if (!l.depPaths.has(depRes)) {
         l.depPaths.add(depRes);

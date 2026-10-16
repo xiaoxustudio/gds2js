@@ -1,0 +1,6 @@
+P1|a/b
+P2|a/b cmp
+P3||a/b
+P4|one/two
+P5|a/../b
+P6|21 a/b/c

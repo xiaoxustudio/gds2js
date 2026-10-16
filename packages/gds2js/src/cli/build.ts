@@ -8,13 +8,17 @@ import { emitModule, emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
 import type { RawSourceMap } from "@gds2js/compiler/emit/sourcemap";
 import { selfFile } from "@gds2js/compiler/home";
 import { bundleModule, bundlingAvailable } from "../bundle";
-import { errOf, printDiags, projectDiags, STANDALONE_FILE, standalonePath, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
+import { closureResPath, closureRoot, compileClosure, errOf, printDiags, projectDiags, STANDALONE_FILE, standalonePath, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
 
 export async function buildSingle(ctx: Ctx): Promise<boolean> {
   const loaded = await tryLoadSingle(ctx.input);
   if ("error" in loaded) {
     console.error(loaded.error);
     return false;
+  }
+  if (loaded.deps) {
+    if (ctx.runtimeMode === "single") return buildClosureSingle(ctx);
+    return buildClosure(ctx);
   }
   if (!printDiags(loaded.diags)) return false;
 
@@ -41,6 +45,63 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
   if (map) writeFileSync(`${ctx.outPath}.map`, JSON.stringify(map), "utf8");
   console.error(`${ctx.outPath}: 已生成 (${code.split("\n").length} 行)${map ? " + .map" : ""}`);
   return true;
+}
+
+/** 单文件带依赖：把闭包小树写进 `-o` 所在目录，入口按要的名字落位（S455）。
+ *  入口落位时它自己那一层的相对深度跟着变，产物里指向兄弟模块与旁挂 standalone 的说明符要按新深度重算 ——
+ *  不改这一笔，入口在下层（`--res-root` 点名根）时改名就撞错地方（实测 node 当场 ENOENT）。 */
+async function buildClosure(ctx: Ctx): Promise<boolean> {
+  const root = closureRoot(ctx);
+  const outDir = dirname(ctx.outPath);
+  const modeOpts: { runtimeMode?: "import" | "local"; standaloneFile?: string } = { runtimeMode: "import" };
+  if (ctx.runtimeMode === "local") {
+    mkdirSync(outDir, { recursive: true });
+    const dest = join(outDir, STANDALONE_FILE);
+    copyFileSync(standalonePath(), dest);
+    modeOpts.runtimeMode = "local";
+    modeOpts.standaloneFile = dest;
+  }
+  let result: CompileResult;
+  try {
+    result = await compileClosure(ctx, outDir, ctx.run, modeOpts);
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    return false;
+  }
+  if (!printDiags(projectDiags(result, root))) return false;
+  let entryPath = "";
+  let lines = 0;
+  try {
+    for (const m of result.modules) {
+      mkdirSync(dirname(m.jsPath), { recursive: true });
+      writeFileSync(m.jsPath, m.code, "utf8");
+      lines += m.code.split("\n").length;
+      if (m.resPath === closureResPath(ctx)) entryPath = m.jsPath;
+    }
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    return false;
+  }
+  if (entryPath === "") {
+    console.error(`${ctx.input}: 闭包里没有入口模块`);
+    return false;
+  }
+  if (entryPath !== ctx.outPath) {
+    const code = relayoutSpecs(readFileSync(entryPath, "utf8"), dirname(entryPath), dirname(ctx.outPath));
+    writeFileSync(ctx.outPath, code, "utf8");
+    rmSync(entryPath, { force: true });
+  }
+  console.error(`${ctx.outPath}: 已生成 (${lines} 行，含 ${result.modules.length} 份脚本)`);
+  return true;
+}
+
+/** 入口从树里那一层搬到 `-o` 那一层：产物里每一个相对说明符（兄弟模块与旁挂的 standalone）按新目录重算。 */
+export function relayoutSpecs(code: string, oldDir: string, newDir: string): string {
+  if (resolve(oldDir) === resolve(newDir)) return code;
+  return code.replace(/(["'])(\.\.?\/[^"']+)\1/g, (_all: string, q: string, spec: string): string => {
+    const rel = relative(newDir, resolve(oldDir, spec)).split("\\").join("/");
+    return q + (rel.startsWith("..") ? rel : "./" + rel) + q;
+  });
 }
 
 /** `emitModule` 那三个模式共用的选项：刻意是一张声明过的记录，而不是 `Record<string, unknown>` —— 值类型为 `unknown` 的索引记录展开在静态目标上没有形状。 */
@@ -87,31 +148,33 @@ export function runtimeFileUrls(): { rt: string; host: string } {
   }
 }
 
-export async function selfContainedBundle(ctx: Ctx): Promise<string | null> {
+export async function selfContainedBundle(ctx: Ctx, closureOnly = false, outDir = ctx.outDir): Promise<string | null> {
   const emit = mkdtempSync(join(tmpdir(), "gds2js-emit-"));
+  const resRoot = closureOnly ? closureRoot(ctx) : ctx.resRoot;
   try {
     const { rt, host } = runtimeFileUrls();
     const result = await compileProject({
       entries: [ctx.input],
-      resRoot: ctx.resRoot,
+      resRoot,
       outDir: emit,
       runtimeImport: rt,
       hostImport: ctx.hostImport === null ? null : host,
       autoRun: ctx.run ? undefined : false,
+      closureOnly,
     });
-    if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+    if (!printDiags(projectDiags(result, resRoot))) return null;
     for (const m of result.modules) {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
     }
-    const wantRes = "res://" + relative(ctx.resRoot, ctx.input).split("\\").join("/");
+    const wantRes = "res://" + relative(resRoot, ctx.input).split("\\").join("/");
     const entry = result.modules.find((m) => m.resPath === wantRes) ?? result.modules[0];
     if (!entry) {
       console.error(`${ctx.input}: 无可打包模块`);
       return null;
     }
-    await bundleModule(entry.jsPath, ctx.outDir);
-    const bundlePath = join(ctx.outDir, basename(entry.jsPath).replace(/\.mts$/i, ".mjs"));
+    await bundleModule(entry.jsPath, outDir);
+    const bundlePath = join(outDir, basename(entry.jsPath).replace(/\.mts$/i, ".mjs"));
     console.error(`已编译并 bundle 成单文件 → ${bundlePath}`);
     return bundlePath;
   } catch (e) {
@@ -130,6 +193,27 @@ export async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
     return false;
   }
   return (await selfContainedBundle(ctx)) !== null;
+}
+
+/** 闭包 × single：小树压成一个文件再按 `-o` 的名字落位。压之前先过一遍暂存目录 —— tsdown 的 `clean` 会清掉整个输出目录，不能拿它对着用户的目录跑。 */
+async function buildClosureSingle(ctx: Ctx): Promise<boolean> {
+  if (!(await bundlingAvailable())) {
+    console.error(`${ctx.input}:  error  这个构建里没带可用的打包器（tsdown），--runtime-mode single 做不了。`);
+    console.error("  自包含 exe 用 export 出货：--pack node 或 --pack scriptc 都不需要 single；");
+    console.error("  要 single 请在装了 gds2js 的 node 环境里跑：gds2js build <entry> --runtime-mode single");
+    return false;
+  }
+  const stage = mkdtempSync(join(tmpdir(), "gds2js-single-"));
+  try {
+    const bundle = await selfContainedBundle(ctx, true, stage);
+    if (bundle === null) return false;
+    mkdirSync(dirname(ctx.outPath), { recursive: true });
+    copyFileSync(bundle, ctx.outPath);
+    console.error(`${ctx.outPath}: 已生成（单文件闭包）`);
+    return true;
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
 }
 
 

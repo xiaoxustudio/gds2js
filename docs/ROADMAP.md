@@ -26,9 +26,9 @@
 | 编号 | 决策 | 结论 |
 | --- | --- | --- |
 | A | `--watch` | 保留轮询（一份实现两个 tier 通用；回退面是 `startWatch` 一个函数）。 |
-| B | 出货形态 | 只出 `--dynamic`；`tools/cli-native.mjs` 的静态构建降级成 `--static` 后备（也编得过）。 |
+| B | 出货形态 | 只出 `--dynamic`；`tools/cli-native.mjs` 的静态构建降级成 `--static` 后备（也编得过）。**（2026-10-17 作废：scriptc 0.3 删了 `--dynamic` 与内嵌引擎，只剩原生轨，见 §1.259。）** |
 | C | SEA / `--pack node` | **先不删**，等 native CLI 出货并跑满一个门周期再议（任务 #27）。 |
-| D | 压缩（原 #24） | **已落地（2026-10-03）**：scriptc 支 mode 1/3 走 scriptc 内置 `node:zlib`，mode 2 走 vendored zstd-codec（跑在 `--dynamic` 岛上）；保真口径见 §1.2 的 P5。 |
+| D | 压缩（原 #24） | **已落地（2026-10-03）**：scriptc 支 mode 1/3 走 scriptc 内置 `node:zlib`，mode 2 走 vendored zstd-codec（跑在 `--dynamic` 岛上 —— **0.3 起内嵌引擎被删，`export` 却还在给那一格发 `--dynamic`（已是未知选项），mode 2 要另开一轮量，见 §1.259**）；保真口径见 §1.2 的 P5。 |
 | E | 未提交的 200 个文件 | 先打 checkpoint commit —— **已执行**（`aa91d20..9ea77d5` 一组）。 |
 | F | 仓库形态 | **monorepo（pnpm workspace + Turbo `^2.11.7`）**：`packages/{runtime,compiler,gds2js}` 三包，**各包 TS 源码都在包内 `src/`**（`vendor/`、tsdown 配置留在包根）；turbo 只编排包级 `build`/`typecheck`，门保持根脚本原样；pnpm 钉 `12.8.1`（`packageManager`）。对外的 `gds2js` 包名、`gds2js/runtime|host|standalone` 说明符、dist 产物名与 scriptc 产物树脸**一字不变**。 |
 | G | 架构整改（2026-10-03） | **全量 P0/P1/P2 主体**：seam 真源化、tree-face 清单+对账门、usesPackCodec IR 标志、exe 过期自动重建、emitter 删布局默认值、case-table 管线修复、host flush-on-error、paths 收敛、cli.ts 拆 10 模块、`lower/double`→`shared/double`（明细见 §1.3）。**生成物保持入库**：216 个 `main.gen.mts` 零字节变化；`case-table.ts` 接受生成器整文件重写（表体逐项一致，仅新增生成器头+逐条注释）。 |
@@ -779,6 +779,171 @@
 - **语料看不见的部分另开一门**：normalize 滤掉整块 `ERROR:`，所以 `push_error` 的逐行文案改由 ops 的 12 格钉（英文原文靠 `--language en` 量的）；`print_stack` / `get_stack` / `push_warning` 三样真进了逐字节对账。
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
+
+### 1.259 scriptc 0.3 没有岛：CLI 那一层换成自己写的 argv 解析（2026-10-17，工具链口径 · 第 12 条①作废）
+
+- **怎么撞上的**：`pnpm release` 升到 scriptc 0.3.x 之后第一次重编原生 CLI（`a80f358` 换了工具链，那之后这支 exe 没再重编过），于是把攒下的账一次翻出来 —— 先是分析层 8 格 `SC1090`（数组展开、对象展开、逻辑或接收者），清掉之后编得出 exe，但每条命令起手就抛。
+- **commander 编不过的三格**：`_registerCommand` 里 `knownBy` 那格 union 布局不唯一（SC2003）、`_parseCommand` 的 `` `command:${this.name()}` ``（`name()` 是 `string | Command`，带对象臂的转字符串，SC1090）、help 那一格（`Uncaught TypeError: expected boolean at $, got undefined`）。它们都不报编译错，而是编成「跑到就抛」的 deferred site。
+- **0.3 的口径**：文档 `dependencies#upgrading-from-scriptc-0-2` 写明 0.3 删了 `--dynamic` 与内嵌引擎，应用与包代码全上原生轨；实测 `scriptc build --dynamic` → `Unknown option`，coverage 的 `statementsDynamic` 恒 0。所以第 12 条③那句「落进 node_modules 会被收进岛」按 0.3.4 应读成「会被**静态吞包**」。
+- **不是我们的用法**：照文档那条 commander 示例（`argument` + `--upper` + `action`）单编一次，0.3.4 一样抛在 1608；`--npm-static` 只有「选进来」没有「踢出去」，空表和显式指名别的包都仍是 `commander static`；commander 12 / 13 / 14 更早抛在 `esm.mjs`（namespace 对象当值）。补丁也试过两处（按文档提示先窄化、把闭包提到模块级带 JSDoc）仍抛 —— 判上游缺口，绕开而不是修依赖。
+- **换法**：`packages/gds2js/src/commands.ts` 自己解析 argv、自己排 help。式子照抄 commander 的 `Help`：无颜色时 `displayWidth` 就是 `.length`、`padWidth` 取整页最长项、说明折到 `helpWidth - termWidth - 4`、不足 40 列不折、续行缩进 `termWidth + 4`；四类报错句连同一套 Damerau-Levenshtein 的 `Did you mean` 也同式。先后口径照它：`-V/--version` 在 `--` 之前扫到就当场打印（哪怕 `-h` 在它前面），verb 之后的 `-h` 归 verb，verb 之前 root 认不出的选项跟着 `operands.concat(unknown)` 一起交给 verb。
+- **验收**：`tmp/cli-all.mjs` + 基线 `tmp/cli-all.json` 那 97 格形状在 node 产物与原生 exe 两侧都逐字节相同，另 21 格拿 10-04 那支老 exe 对过零差异；门见下。**踩到的一次假失败**：`tools/cli-native.mjs` 收尾会自己删 scratch，想留 exe 复验得带 `--keep`。
+- **顺手两处**：commander 从两处 manifest 与 lock 摘掉（第 12 条①那条「根 devDeps 的 commander 是原生构建的解析锚点」的前置到此作废），自包含 exe 从 9.27 MB 降到 6.79 MB。
+- **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
+- **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
+
+### 1.275 Packed* 九面的形参拒补全：逐位声明槽与链式接收者（2026-10-17，S444，§6 第 52 条那一面结清）
+
+- **漏拦的规模**：九面 2160 格里 1590 格引擎在解析期拒、我们放过 —— 根因是原表只支持「一支方法一个元素位 + 实参数正好等于那位」。
+- **改法**：`PACK_ARG_POSITIONS` 按位给声明槽（`e` 元素型 / `i` int / `b` bool；`bsearch` 的 `before` 实测与 int 槽同集合），每位各判各的；接收者多认「就地构造的链式」一种证明。
+- **两侧对过**：链式与命名变量两种接收者各跑一遍 2160 格，句子与行号逐格相同（`tmp/probe-packargs/{cross,crossvar}.py`）；新语料 387 二十句与裁判逐行同文。
+- **门读数**：`pnpm test` **14409**（140 文件）、typecheck **4/4**、`test:compile` **264/375**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+
+### 1.274 单文件模式撞上父脚本 extends：把误导的两句换成一句准确的（2026-10-17，S443，§6 第 60 条② 收窄）
+
+- **实测**：`main.gd` 写 `extends "res://sub.gd"`、`sub.gd` 是 `extends SceneTree` 带 `helper()` —— 引擎工程模式给 `C1|25 7`；我们的单文件路径把 `var q = quit` 报成 `Identifier "quit" not declared in the current scope.`、把 `helper()` 报成 `Function "helper()" not found in base self.` —— 两句都在说「这东西不存在」，而真相是「单文件模式没读父脚本」。
+- **改法**：`cli/ctx.ts` 的 `tryLoadSingle` 在 lower 之后先看 `ir.extends` 的文本（剥引号后含斜杠 / 反斜杠、以 `.gd` 收尾、或带 `res://` `user://` `uid:` 前缀）——命中就返回 `[single-file-extends]` 一句并指去 `run-project` / `build-project`；标识符（类名、`SceneTree`）一律照旧，四道命令共用这一条路。
+- **2026-10-17 推进（S455）**：`tryLoadSingle` 不再拒，改成报 `deps`；`compileProject` 加 `closureOnly`（只种入口、不扫根目录），`check` / `run` / `build --runtime-mode import` 三面走闭包管线，继承面判定与工程模式同一份代码。夹具两侧同字（引擎 `C1|25 7`，出货 `run` 与 `build`+`node` 同）。常驻门：`test/e2e/cli-closure.test.ts`。
+- **工程模式没动**：`build-project` / `run-project` 读依赖表，`hostOnChain` 判得出链顶，这份文件出货与引擎逐字节同（`C1|25 7`）。
+- **账收窄了一笔**：#42 那条正账（让单文件也读依赖、把 `hostOnChain` 的输入补全）当时只把错诊断换成准确拒，没有假装支持；下一轮由 S455 / S456 结清。
+- **门读数**：`pnpm test` **14409**（140 文件）、typecheck **4/4**、`test:compile` **264/374**、`test:diff` **257/257** 逐字节、`test:codegen` 全过 —— 四格计数与上一轮一字不差。
+- **2026-10-17 推进（S455 收尾 / S456）**：闭包的**另三面**接完 —— `--runtime-mode local` 旁挂一份 standalone、`--runtime-mode single` 把小树压成一个文件（build 先压临时目录再按 `-o` 落位，run 压完直跑）、`export` 两支铺闭包树；`[closure-pack]` / `[closure-export]` 两句随之删除。依赖往上爬出闭包根那一形（`extends "../sub.gd"`）新增 `[closure-root]` 响亮拒 —— res 空间放不下 `..`，不拒就会静默绑到根内同名格。闭包 export 逼出静态那支的 `SC0001`：入口实体 `__gd__<名>` 在父脚本也定义过时是真覆写，`override` 不能省（S456，三格实测：同步覆写出货 `SYNC|2` 与引擎同字，async / 入口两形撞 scriptc 自己的 `SC1090` 墙，`scriptcWall` 那句改成分支点名）。常驻门 `test/e2e/cli-closure.test.ts` 现在是八格，另加 `packages/compiler/test/entry-override.test.ts` 五格钉发射形状。**#42 那条正账就此结清**。
+- **门读数（本轮）**：`pnpm test` **14555**（143 文件）、typecheck **4/4**、`test:compile` **265/383**、`test:diff` **258/258** 逐字节、`test:codegen` **2/2**、`test:golden` 内容变更 **0**、`test:e2e/cli-closure` **8/8**。
+- **2026-10-17 推进（S455 ⑦）**：`--res-root` 补到 `check` / `build` / `run` 三面（原先只有工程级命令与 `export` 收这一旗），闭包的根改按 `closureRoot(ctx)` 算 —— 入口在下层的 `extends "res://lib/base.gd"` 与往上爬出的 `extends "../sub.gd"` 两形从此有退路，实测 `RR|25` / `A|25` 与引擎一字同。`[closure-root]` 那句的退路口径跟着改。常驻门到**十三格**，`test:scriptc` 面探针 **52/52**、`test:cli-native` **20/20** 复跑绿。
+- **2026-10-17 推进（S455 ⑥ / #42 的最后一形）**：`load("….gd")` 那一形原来留在单文件支上撞自家的 `[load-unknown-script]` —— CLI 的读依赖判据只认 `extends` + `preload`，而 `compileProject` 的收集环认 `preload` + `load` 两个名字，差那一格是**过拦**（同一份源码工程模式出 `P2|41`）。判据补齐后 `preload` 常量 / `load` / `preload(…).new()` 三形与引擎逐字同（`P1|41` `P2|41` `P3|41`，夹具 `tmp/d6/pre-{const,load,var}/`），常驻门到**十格**。重门复跑：`test:cli-native` **20/20**（原生 exe 面在 S456 的发射改动后一字未改）。
+### 1.273 字典重复键补上 NodePath 那一族（2026-10-17，S442，语料 386，§2 第 20 条④结清)
+
+- **判据**：NodePath 字面量键折成独立一类（`np:`），同路径算重复、跨 String / StringName 各算各的；`NodePath("a")` 这种构造写法与 `^"a"` 同键（引擎实测那句拒在**首次出现**那一格）。
+- **不误拦**：`^"a"`/`"a"`、`^"a"`/`&"a"`、`^"a"`/`^"b"`、`^"a"`/`^"A"` 四形引擎收，门各钉一格。
+- **门读数**：`pnpm test` 14406、typecheck 4/4、`test:compile` 264/374、`test:diff` 257/257、`test:codegen` 全过。
+
+### 1.271 unbind 之后再 bind 与 unbind 进等式：两形解绑（2026-10-17，S441，语料 385 十二格逐字节，§6 第 90 条结清）
+
+- **一句机制**：`bind()` 落在 `unbind` 腾出的空位上 —— 绑定串一字不动（`get_bound_arguments()` 仍 `[1, 2, 3]`），只把 unbind 的计数按绑的支数减回去，所以计数从 2 到 1 到 0，`call()` 一直是 `f(1, 2, 3)`。
+- **累加**：`unbind(1).unbind(1)` == `unbind(2)`（X6），`unbind(0)` 不加不动。
+- **等式加一位**：`u1 == g` 假、`unbind(2) == unbind(1)` 假、同参数的两次 unbind 之间真 —— S298「绑定状态进等式」补上「**unbind 的位数也进**」，落在 `callableEq` 一处，`callableSame`（`connect()` 那条身份判定）不动。
+- **闸撤了一处**：`[callable-bind-unbind]` 不再发；仍响的是负数 / 非 int 的 n 与「带默认值形参的 lambda 再 bind」（S437 ⑥）。
+- **门读数**：`pnpm test` **14401**（140 文件）、typecheck **4/4**、`test:compile` **264/373**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+
+### 1.270 `Callable.unbind(n)` 的式子量清并发货（2026-10-17，S440，语料 385 七格逐字节，§2 第 20 条③ 那半笔结清）
+
+- **判据**：调用时先把 caller 实参的**尾部 n 支**削掉，再把绑定串接在后面 —— 所以 `bind(1,2).unbind(1).call(9)` 是 `f(1,2)` 的 102，而 `bind(1,2).unbind(1).call(8,9)`（三位声明）是 `f(8,1,2)` 的 80102；绑定串与 `get_bound_arguments()` 一律不变。
+- **两句各管各的**：caller 给得比 n 少 → `Callable unbinds N arguments, but called with M`（无句点，先判）；削完仍对不上声明数 → 老的 `Invalid call to function '…'. Expected N argument(s).`。
+- **计数**：`get_argument_count()` = 声明 − (已绑 − n)，把 S298 那条式子加回 n；`unbind(n)` 的 n 超过声明支数照收（W5 实测）。
+- **仍响的两形**：负数与非 int 的 n、以及 **unbind 过再 bind**（引擎的绑定串与计数两式对不上，登 §6 第 90 条）；同一格里 `u1 == g` 给 false 也与 S298 的等式口径不同向，一并记着没动 `callableEq`。
+- **门读数**：`pnpm test` **14401**（140 文件）、typecheck **4/4**、`test:compile` **264/373**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+
+### 1.269 绑定 Callable 存「读那一刻的接收者快照」：§6 第 85 条那格翻案结清（2026-10-17，S439，语料 384 十一格逐字节）
+
+- **一格定案**：`var c = a.append` 之后 `a.append(3)`，`c == a.append` 引擎给 false 而 `c == c` 给 true、`c.call(7)` 仍改活的那一台 —— 「按接收者的值比」那条口径补上后半句：**比的是读那一刻的值**，调用照旧走活对象。
+- **快照是深拷**：`var w = [[1]]` 读完后改内层 `w[0]` 也断等式（B11），浅拷元素挡不住这一格；pack 九支同形，值类型本来不可变所以是同一规则的另一种表现。
+- **接法**：`boundBuiltinCallable` 造盒子时挂快照（Array 深拷 / GBytes 拷缓冲），`callableSame` 内建那一段比快照；`callable.ts` 是叶子模块，拷贝式子由 `methods.ts` 装载时注册钩子递进去。字典面不发绑定 Callable（S419 ②），不参与。
+- **顺带对上旧账**：`hash` 跟着快照走（S430 那条「hash 随值同」补一句「随读那一刻的值」）；`bind()` 过的一支与 fresh 读值不等，仍归 S430 的「绑过就不等」。
+- **门读数**：`pnpm test` **14398**（140 文件）、typecheck **4/4**、`test:compile` **263/372**、`test:diff` **256/256** 逐字节、`test:codegen` 全过。
+
+### 1.268 捕获表补上子作用域的继承：循环体与嵌套 lambda 也进影子层（2026-10-17，S438 ⑧，语料 383 扩到十格）
+
+- **上一轮漏的一半**：`Scope.child` 建出来的子作用域没带上「函数那一段」的标记，于是循环体里、lambda 体里读到的外层局部全被判成非局部 —— P9 那格引擎 `[7, 9, 9]` 出货 `[9, 9, 9]`，P10 引擎 `[2, 3]` 出货 `[101, 102]`。
+- **改法**：`child()` 把 `isLocal` 往下传（`funcChild` 仍只用于函数那一层），捕获表自然覆盖嵌套 lambda 与循环体；容器仍只拷引用。
+- **门**：`lambda-param-defaults.test.ts` 加一格「循环体里建的 lambda 也带上影子层」（钉 `(((k, n) => rt.callable(` 与 `))(k, n);`），16 格全过；语料 383 从八格扩到十格，golden 由裁判重写。
+- **门读数**：`pnpm test` **14392**（140 文件）、typecheck **4/4**、`test:compile` **262/371**、`test:diff` **255/255** 逐字节、`test:codegen` 全过。
+
+### 1.267 lambda 按值捕获接进出货：影子箭头一层（2026-10-17，S438，语料 383 八格逐字节，§6 第 89 条结清）
+
+- **上一轮量到的唯一错值面**：函数级标量局部该在 lambda 创建那一刻冻住（引擎 5 / 出货 6；`s1` 那格 2 对 11），本轮按 §6 第 89 条⑤定好的接法落地。
+- **两侧各加一处**：分析器 `Scope` 分出「函数那一段」与类 / 模块那一段（`funcChild` + `hasLocal`），按 `归属:行:列` 记下每支 lambda 的自由局部名；发射器据此把 `rt.callable(...)` 包进 `((q) => ...)(q)` —— 不改名不动式子，体内读到的自然是影子参数。
+- **不参与捕获的**：模块变量与类成员（`declNames` 那一圈 + 内部类名，K5 实测活读到 2）、`self`（K6 typeof 24）、子树自己绑过的名字（形参 / `var` / `bind` 臂名）。
+- **与 S437 的交接**：默认值式子仍在调用那一刻评，但式子里的外层量已经冻住 —— `func(x = q)` 那格语料 382 不收（当时按引用闭包会漂移），现在由语料 383 的 P7 钉住。
+- **门读数**：`pnpm test` **14391**（140 文件）、typecheck **4/4**、`test:compile` **262/371**、`test:diff` **255/255** 逐字节、`test:codegen` 全过；捕获那一层只改到一份既有产物：语料 015（循环里建一批 lambda）加上 `(((i) => rt.callable(...))(i))`，出货输出与 golden 仍逐字节一样（`test:diff` 256/256）
+
+### 1.266 lambda 捕获这一族的读数轮：错值面量到只剩一格（2026-10-17，§6 第 89 条④⑤ · 只量不接）
+
+- **量清的**：`for` 每轮的循环变量两侧都给 `[1, 2, 3]`（出货靠 JS 每轮重绑撞对）；容器**只拷引用**（体内 `d["k"] = 9` 外面看得见）；**模块变量不捕获**（`var mv` 改了之后 lambda 读到新值，出货走 `this.mv` 天然一致）；`self` 在体内照旧 typeof 24。
+- **唯一错值面**：**函数级标量局部**在 lambda 创建那一刻该冻结 —— 引擎 `var outer = 5` 建 lambda 后 `outer = 6`，两层嵌套都还是 5；出货给出 6（`var s1 = 1` 那格同形，11 对 2）。
+- **接法定稿**：分析器那一层已经按真实作用域走 lambda，只缺「这一读是函数级局部还是类成员 / 模块变量」的分辨（类作用域种的成员名与 `self` 要打非局部标记）；把每个 lambda 的自由局部名清单记给发射器，发射器套一层只跑一次的影子箭头 `((q) => rt.callable(...))(q)` —— 拷的是盒子引用，所以容器共享那格不受影响。
+- **门读数**：与上一轮一字不差（`pnpm test` 14383 / 140 文件、typecheck 4/4、`test:compile` 261/370、`test:diff` 254/254、`test:codegen` 全过）—— 本轮不动实现。
+
+### 1.265 lambda 形参的默认值接进出货（2026-10-17，S437，语料 382 十格逐字节，§6 第 60 条③结清）
+
+- **发法**：尾部带默认值的那几位发成 `const p = __a[i] as rt.Variant ?? <式子>;` —— 默认值在**调用那一刻**评，所以后一位看得见前一位（`func(x = 1, y = x)` 读数 `[1, 1]`）；没有默认值的 lambda 仍不发第三个实参（闸门钉住 `}, 2);` 与 `}, 2, 0);` 的分别）。
+- **盒子多带一个数**：`rt.callable(fn, 声明数, 默认值形参数)`，`callableArityBounds` 因此给出 `[必填, 声明]` —— 少给报必填数、多给报声明数那两句在 `func(a, b = 2)` 上分别是 `Expected 1` / `Expected 2`，`get_argument_count()` 仍报声明数。
+- **解析期那一格**：分析器给默认值走查开的是「前面的形参 + 外层」那一层作用域，`func(a = b, b = 1)` 照引擎发 `Identifier "b" not declared in the current scope.`。
+- **三形仍拦**：默认值排在必填之前、默认值那一位直接放 lambda、带默认值的 lambda 再 `bind()` —— 三形没读数，按红线响亮拒。
+- **顺带撞出一族已知错值**：lambda 是**按值捕获**，出货按引用闭包（`var q = 7` → 建 lambda → `q = 9` → 引擎 7 / 出货 9），登 §6 第 89 条；语料 382 因此不收依赖捕获的格。
+- **门读数**：`pnpm test` **14383**（140 文件）、typecheck **4/4**、`test:compile` **261/370**、`test:diff` **254/254** 逐字节、`test:codegen` 全过。
+
+### 1.264 循环变量的绑定改成按区域计数：出了循环不再冒充局部名（2026-10-17，S436，§6 第 88 条结清）
+
+- **漏点**：`emit/emitter.ts` 的 `collectBinds` 把 `for` 的循环变量记在整支函数上，只给「宿主方法名取值点」那一格当护栏用；于是 `for quit in [1, 2]` 之后 `print(quit)` 被当成局部名、发成裸 `quit`，产物到运行期才抛 JS 自己的 `quit is not defined` —— 引擎那里是宿主的 Callable（`SceneTree(<文件>)::quit`、typeof 25）。
+- **改法**：那张表从 `Set<string>` 换成 `Map<string, number>` 的**区域计数**：进循环体 +1、出循环体 −1（嵌套里外同名各占一层），形参与 `var` 仍按整支函数算。分析器一侧的作用域本来就是对的（循环体开子作用域），所以 `for k` 之后 `print(k)` 一直是解析期那句 `Identifier "k" not declared in the current scope.`，这一格不动。
+- **不进语料的一格**：我们发的 `SceneTree::quit` 比引擎少括号里那个脚本名，属 S281 那支带进程内号码的打印形，复刻不了就不钉；改由门钉两支新格（体里认局部 / 体后认宿主，外加体后读普通循环名仍是解析期拒）。
+- **门读数**：`pnpm test` **14370**（139 文件）、typecheck **4/4**、`test:compile` **260/369**（sema 83 / 响亮拒 26 / emitter 0 三格一字不差）、`test:diff` **253/253** 逐字节、`test:codegen` 全过。
+
+### 1.263 撞出一处作用域泄漏：循环变量在循环体之后仍被当成局部名（2026-10-17，§6 第 88 条新登 · 只量不接）
+
+- **引擎脾气**：`for k in [1, 2]` 的 `k` 只活到循环体结束，循环之后 `print(k)` 是解析期那句 `Identifier "k" not declared in the current scope.`（整段编不过）；同名于全局/宿主方法（`for quit in …`）时循环体里照收，出了循环又回到宿主那支。
+- **我们侧**：产物在运行期抛 JS 自己的 `quit is not defined` —— 解析期该拦的没拦、抛出来的又不是裁判的话，属「该拦不拦 + 错句」两重，读数 `tmp/probe-forvar/{p1,p2}.gd` 钉在 §6 第 88 条。
+- **为什么这一轮不接**：`analyze` 的 `decls` 与发射器的局部名收集都没给循环体单独一层（`analyze.ts:515`），改之前要先把 `for` 里的 `var` / `const` / 嵌套循环 / `match` 臂变量各扫一遍，否则容易把「多拦」换成「漏拦」；按红线先登记不猜。（下一轮 1.264 接完了：漏点只在发射器那张「绑过的名字」表，分析器一侧的作用域本来就是对的。）
+
+### 1.262 match 手臂的拒句补齐第二句（2026-10-17，S435，§6 第 43 条①③④结清）
+
+- **两句同序**：手臂的构造式合不上表时，引擎在元数那句之后紧跟 `Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").`；lowering 的 `pattern-arm-signature` 现在带全两句，语料 330–333 的 golden 从「只比第一行」改成「比全部 Parse Error 行」，四格逐句对上。
+- **三种形状各发哪几句**（`tmp/probe-arm-arity/readings.txt`）：嵌套的从里往外（`Vector2(Rect2(1))` 三行，外层用内层类名拼签名）、类名整个不存在换成 `Function "X()" not found in base self.`、实参是运行期表达式（`Vector2(q, 2)`）只发 pattern 那一句 —— 三种各钉一格门（`match-arm-ctors.test.ts` 51 格）。
+- **准入没开**：`Rect2` 那七支仍不进合法表（构造调用连表达式位置都编不过，第 43 条⑩那条账没变），只是拒句从自述话换成引擎原文；`Color(1)` 那一形运行期 `packedRgba` 已经发得出值，但手臂命中那一格没量过，`Color(int, int)` 更走的是 `Color(String, float)` 重载并往 stderr 吐 `ERROR: Invalid color name: …`（带 C++ 文件行号，按 S269 ⑦ 不复刻）—— 两格都留在表外，实测读数登进第 43 条⑫。
+- **门读数**：`pnpm test` **14368**（139 文件）、typecheck **4/4**、`test:compile` **260/369**（sema 83 / 响亮拒 26 与上一轮一字不差）、`test:diff` **253/253**、`test:codegen` 全过。
+
+### 1.261 `PackedByteArray` 独有那 11 名的元数，与 `get_argument_count()` 读哪一个数（2026-10-17，S434，语料 381，§6 第 87 条结清）
+
+- **11 名的上下界量齐**（尺 `tmp/probe-bytearity/round2.mts`，读数 `compare1.txt` / `raw.txt`）：`compress` `[0,1]`、`decompress` `[1,2]`、其余九支 `[0,0]` —— 零实参不报错即「至少 0」，五实参那句 `Too many arguments for "<名>()" call. Expected at most N` 报的就是上界；表落成 `runtime/face-arity.ts` 的 `PACK_BYTE_EXTRA_ARITY`，byte 那一面单独合出 `PACK_BYTE_ARITY`，`faceArity` 的 byte 分支与 `VALUE_METHOD_ARITY.PackedByteArray` 同一处取。
+- **一次口径翻案**：绑定 Callable 的 `get_argument_count()` 给的是**声明支数**（= 元数上界），不是 S419 写的「必填数」。一把尺 329 名逐名对裁判（`tmp/probe-argc/gen.mts` → `compare1.txt`，13 面全表）—— 除 StringName 面上本就不存在的那 6 名，读数与表的第二值一字不差。旧口径之所以没露馅：撞出来的两格 `compress` 必填 1 / 读数 1 同数，`decompress` 必填 1 而读数 2 才把它驳掉（语料 381 的 Y7 `0 1 2`）。改在 `declaredArgCount` 一处，`requiredArgCount`（`Array.map` 那族按严格支数派发用的）仍取下界。
+- **不另立第三张表**：这一族的「`.call()` 认的上界」与「声明支数」量出来是同一个数，所以 `rt.boundMethod` 仍只带 `[min, max]` 那一对。
+- **顺手复核**：StringName 复用 String 表的 108 名里，只有 `chr` / `humanize_size` / `num` / `num_int64` / `num_scientific` / `num_uint64` 六名调不出 Callable —— 与 S431 那份存在名单缺的六名一字吻合（两份数据不会各漂一半）。
+- **门读数**：`pnpm test` **14366**（139 文件）、typecheck **4/4**、`test:compile` **260/369**、`test:diff` **253/253** 逐字节、`test:golden-check` **380/380**、`test:codegen` 全过、ops 自校验 6140、tree-face 17。
+
+### 1.260 `NodePath` 两支持名拼接实装（2026-10-17，S433，语料 380，§6 第 86 条①结清）
+
+- **读数**：`tmp/probe-np/compare1.txt` 十二格 + `t1.gd` —— 名段与子名段各按 `"/"` 拼、互不掺（`a/b:cmp` 两支分别 `a/b` / `cmp`）、不做路径化简（`a/../b` 照原样）、绝对位只给子名段（`:a/b` 名段空串）。
+- **返回型**：**StringName**（`typeof` 21）；拿它当 `String` 比会被引擎解析期直接拒，这一格是解析器自己报的，比打印更硬。
+- **不收的一格**：`NodePath("").get_concatenated_names()` 引擎额外吐一句带自己 C++ 位置的 `ERROR: Parameter "data" is null.` —— 复刻不了（同 S269 ⑦），语料 380 因此避开，登记在第 86 条①b。
+- **门读数**：`pnpm test` **14359**（139 文件）、typecheck **4/4**、`test:compile` **259/368**、`test:diff` **252/252** 逐字节、`test:codegen` 全过、ops 自校验 6137、tree-face 17。
+
+### 1.259 七面属性读三分岔接进出货（2026-10-17，S432，语料 379，§6 第 84 条②结清、第 86 条新登）
+
+- **三分岔**：`valueAttrKind(face, name)` 用 S431 的两份数据把属性读分成成员（给 `rt.boundMethod` 那只盒子）/ 真属性（`x` `y` `z` `r` `g` `b` `a`，走原路）/ 表外（给 `Invalid access …` 那句）；宇宙之外继续响亮拒，不猜。
+- **两侧同步**：解析期那两句也铺到七面，但**只铺读形**——写形的两格没读数（护栏格钉住 `v.keys = 1` 不发诊断、`v.nosuchzz` 宇宙外放过）。
+- **同一处存放**：`NODE_PATH_METHOD_ARITY` 搬进 `runtime/face-arity.ts`，StringName 复用 String 那张表（S389 量过）；`faceArity` 一处认全面。
+- **顺手量出旧账**：`NodePath` 的 `get_concatenated_names` / `get_concatenated_subnames` / `get_as_property_path` 三名没实装（引擎有真值），连同 S267 ⑥a 的 `hash(NodePath)` 式子一起登 §6 第 86 条。
+- **门读数**：`pnpm test` **14356**（139 文件）、typecheck **4/4**、`test:compile` **258/367**、`test:diff` **251/251** 逐字节、`test:codegen` 全过、ops 自校验 6137、tree-face 17。
+
+### 1.258 值类型七面的属性读两面量齐（2026-10-16，S431 读数轮 · §6 第 84 条那份名单已可开写）
+
+- **构造位**：候选宇宙 175 名（拿别面的成员名当表外名试）× 七面逐名过裁判 —— 表外数 `Vector2` 168 / `Vector2i` 169 / `Vector3` 167 / `Vector3i` 168 / `Color` 169 / `StringName` 73 / `NodePath` 171，句都是 `Cannot find member "<名>" in base "<面>".` 同一句两遍，与 pack / Array / String 完全同形。
+- **装箱位**：七面逐面一格都给 `Invalid access to property or key 'nosuch' on a base object of type '<面>'.`（`tmp/probe-vattr/box.gd`），与 S416 / S424 同式。
+- **下一步就一件事**：把七份确认不存在名单写进 runtime（与 `PACK_ABSENT_*` 同一存放处）再接属性读；名单外的名字继续响亮拒，不猜。
+- **本轮不动出货**：读数在 `tmp/probe-vattr/compare1.txt`。
+
+### 1.257 值类型面的装箱读发绑定 Callable，等式改成按接收者的值比（2026-10-16，S430，语料 378）
+
+- **读数**：`tmp/probe-bincall/m1.gd`（M1–M9：`Vector2::length`、`Color::to_html`、`Vector3i::length` 与真属性 `v.x` / `c.r` / `q.z` 并存）+ `e1.gd`（E1–E7：同值 pack / 同值数组 / 同值 Color 都等，值不同假，`hash` 随值同）。
+- **等式改法**：`callable.ts` 加 `registerRecvEqHook`（叶子不 import `ops`），`ops.ts` 注册 `ops.eq`；引擎不给比的型对（`Vector2` 与 `Vector2i`）在钩子里吞成 false，与 N7 第二格一致。
+- **搬表**：`VALUE_METHOD_ARITY` 进 `runtime/face-arity.ts`，`faceArity` 一处覆盖 Array / String / pack 九支 / 五面值类型。
+- **顺手更正第 85 条**：等式不是「按 JS 实例引用」而是「按绑定那一刻接收者的值」；剩下 `c.call(9)` 之后再比转 false 那一格仍没吃透（像是绑了副本而本体共享），继续只登账不实现。
+- **门读数**：`pnpm test` **14343**（139 文件）、typecheck **4/4**、`test:compile` **257/366**、`test:diff` **250/250** 逐字节、`test:codegen` 全过、ops 自校验 6130、tree-face 17。
+
+### 1.256 装箱 pack 的成员名读也发绑定 Callable（2026-10-16，S429，语料 377，§6 第 83 条①再一面）
+
+- **读数**：`p.size` 印 `PackedStringArray::size`、`.call()` 给 2、`get_method` / `get_object`（空引用）/ `get_argument_count` 齐；`q.count.call(2)` 给 1；跨实例 `p.append == PackedStringArray(["a"]).append` 假。语料 377 五格逐字节。
+- **搬表**：`PACK_METHOD_ARITY`（20 名）与 `PACK_METHOD_ARITY_WITH_BYTES` 进 `runtime/face-arity.ts`，`faceArity` 按面名分岔 —— byte 吃基表、其余八支吃带 `to_byte_array` 那张。
+- **不越界**：byte 独有那 11 名的**元数**没量过（`hex_encode` / `compress` / `get_string_from_*` / `to_*_array`），读值时既不冒充 Callable 也不发引擎那句，继续响亮抛。
+- **门读数**：`pnpm test` **14340**（139 文件）、typecheck **4/4**、`test:compile` **256/365**、`test:diff` **249/249** 逐字节、`test:codegen` 全过、ops 自校验 6129、tree-face 17。
+
+### 1.255 装箱接收者的成员名读发绑定 Callable：两张元数表搬进 runtime（2026-10-16，S428，语料 376，§6 第 84 条②结清、第 85 条新登）
+
+- **分岔的口径**：`attribute` 见 Array / String 先问两份名单 —— 确认不存在名单命中给 `Invalid access …`（S424），成员元数表命中给绑定 Callable，两边都落空继续响亮抛（候选宇宙之外不猜）。
+- **搬表**：`ARRAY_METHOD_ARITY` / `STRING_METHOD_ARITY` 挪进 `runtime/face-arity.ts` 并导出 `faceArity`，`analyze` 改成 import —— 与 `PACK_ABSENT_*` 同一条 compiler → runtime 单向，两侧共用一份读数。
+- **新量到的一格**：`var c = a.append` 之后 `c.call(9)`，`c == a.append` 转**假**（同格 `print(a)` 是 `[1, 2, 9]`），机制只有这一例反证 → 登 §6 第 85 条，出货不建模。
+- **新语料 376**：七格（印法、两次读值等式真、跨台假、`call` 改数组、`get_method` / `get_object` / `is_valid` / `is_null`、`get_argument_count`），golden 与出货逐字节一致。
+- **门读数**：`pnpm test` **14335**（139 文件）、typecheck **4/4**、`test:compile` **255/364**、`test:diff` **248/248** 逐字节、`test:codegen` 全过、ops 自校验 6121、tree-face 17 项对账。
 
 ### 1.254 绑定 Callable 铺到值类型与 StringName / NodePath（2026-10-16，S427，语料 375）
 
@@ -2359,10 +2524,12 @@
 11. 测试套件收窄（2026-10-03，拍板）：`test:run`（真 CLI run 层）、`test:facade`（wasm/FFI 解析树等价）、
     `test:escape`（转义边界手写断言）、`test:multi`（examples/multi 冒烟）四门连同工具与脚本已删除
     （README、package.json 同步）；这三层保障以后不再有专门门。
-12. monorepo 迁移后的三个坑位（2026-10-03）：① 原生构建的 scratch 靠向上查找解析 `commander` —— 它在根
-    devDeps 里是**解析锚点**，别随 `packages/gds2js` 的依赖清理顺手摘掉（摘掉就是 SC1010 + SC0001 两条）；
+12. monorepo 迁移后的三个坑位（2026-10-03）：① ~~原生构建的 scratch 靠向上查找解析 `commander` —— 它在根
+    devDeps 里是**解析锚点**，别随 `packages/gds2js` 的依赖清理顺手摘掉（摘掉就是 SC1010 + SC0001 两条）~~ ——
+    **随 §1.259 那条工具链账作废**：CLI 自己解析 argv，没人再 import commander，两处 manifest 与 lock 里的它已摘掉；
     ② tsdown 的 dts 程序面走根 tsconfig，根 `include` 里的 `packages` 不能删；③ cli-native 的 scratch 用
-    「`@gds2js/*` 逐文件相对化」而不是 node_modules（落进 node_modules 会被 scriptc 当包代码收进岛）。
+    「`@gds2js/*` 逐文件相对化」而不是 node_modules（落进 node_modules 会被 scriptc 当包代码 —— 0.3 起是**静态吞包**、
+    不是岛，编不过的点编成跑到就抛，见 §1.259）。
     生成物口径：248 份 `main.gen.mts`（2026-10-03 写这条时是 216 份，2026-10-07 数了一遍是 248 份 = 语料 248 例全部有产物，被分析拦下的那些是抛错的占位文件）的运行时说明符是 `../../../packages/runtime/src/runtime/index`
     （现由 `tools/compile.ts` 的 `GEN_EMIT_OPTS` 显式声明；emitter 已不带仓库布局默认值）；corpus 之外
     （examples/multi、bench/.out）仍走裸名 `gds2js/runtime`，由 workspace 链接解析。
@@ -2392,7 +2559,10 @@
 
 21. **成员名表这条线：十一批已过裁判（Callable S299、String / Array / Dictionary S300、Vector 四支与 Color S301、Pack 三支代表与 StringName / NodePath / RID S302），只剩 Pack 其余六支（§6 第 33 条）**。已定案的污染共五名：Callable 的 `from` / `get_object_instance_id` / `is_equal` / `unbind_many`（我们当「未实现」挂着，引擎根本没这名字）与 **`Array.concat`（我们连实现都有 —— JS 语义）**；后者严重一级，属「用户写错、Godot 拒绝编译、我们照跑」的**掩盖型**错误，而五批扫描证明它是个案（「给得出值」桶在每一批里都是空的）。句子这一层也一并收口：Vector 五族 59 名与 Pack 的 11 格此前发的是中文自述，现在都是引擎那句 `Invalid call. Nonexistent function '<名>' in base '<类型>'.`（门 `value-absent-method-names.test.ts` 77 格）。**手法上的三条坑**已写进 S300 ① / S301 ⑤ / S302 ④：批量通道（ClassDB、解析期）对内置类型都不通、判「我们的表有没有」要问运行时别 grep `case`、以及**先验证探头的接收者本身跑得通**（`RID(65)` 那一族整批判定就是这么变假的）。覆盖面账现在是有名单不是估计数：String 58 / Array 11 / Dictionary 5 / Vector+Color 53 / Pack+其余 若干（S300 ⑥、S301 ④、S302 ⑥）。三处已定案的污染要记住：Callable 的 `from` / `get_object_instance_id` / `is_equal` / `unbind_many` 在 4.6.3 **没这名字**（我们当「未实现」挂着）；`Array.concat` 更是**被实现了**（JS 语义）—— 后者属「用户写错、Godot 拒绝编译、我们照跑」的**掩盖型**错误，严重一级，而 S301 证明这类污染目前是**个案**（Vector 五族 59 名里「给得出值」那桶为空，只差句子）。覆盖面也从「不知道差多少」变成有名单：String 58 / Array 11 / Dictionary 5 / Vector+Color 53 名引擎有而我们没登。**手法上的两条坑**已写进 S300 ① 与 S301 ⑤：批量通道（ClassDB、解析期）对内置类型都不通，只能一格一跑；判「我们的表里有没有」要问运行时、别 grep `case`。
 
-22. **S304 / S305 两轮之后开着的（2026-10-10 记）**：① 元数表五族已接进解析期，**残两笔**记在 §6 第 34 条 —— Pack 九支的元数没量；链式接收者与定形 `Array[Vector2]` 元素那两形引擎解析期拦而我们放过，缺的是「方法返回类型表」。② 元数门一接上就暴露出「名字在表里、实现还没有」那一串（`Vector3.rotated` / `Color.blend` / `Vector2.cubic_interpolate_in_time` 起步），是 S301 ④ 覆盖面名单的新条目，按族发货。③ 停门要停干净 —— 已写进 §2 第 16 条（残留子进程能让三支门同时假红）。④ `.gitattributes` 那一问仍待拍板（§1.97 末）：工作树上 `280-pow-precedence` 三份的 EOL 假 M 还挂着。⑤ **S306 已把那张欠款名单动了 24 名，并顺手修掉两处静默错值**（值类型族的 `clamp` 是「先比下界再比上界」，与全局 `clamp()` 不同一条；`Vector2i` / `Vector3i` 的 `snapped` 饱和不回绕）—— 剩下的名单与 `move_toward` 那条式子记在 §6 第 35 / 36 条。
+22. **S304 / S305 两轮之后开着的（2026-10-10 记）**：① 元数表五族已接进解析期，**残两笔**记在 §6 第 34 条 —— Pack 九支的元数没量；链式接收者与定形 `Array[Vector2]` 元素那两形引擎解析期拦而我们放过，缺的是「方法返回类型表」。**2026-10-17 复证：这两笔还开着**，七格全 DIFF（尺 `tmp/d6/one2.py`、读数 `tmp/d6/n2.txt`，句子逐格登在 S457）—— 其中五格只缺「`index` 读定形容器时交出内型」，交出后运算符型对 / 成员名表 / 调用元数三条现成的路各自就接得住；剩两格要新表（方法返回类型），得逐族过裁判。**同轮基线对照把这笔账的病灶挪到更下一层**（尺 `tmp/d6/one3.py`、读数 `tmp/d6/n3.txt`、明细 S457 ④）：`var v: Vector2 = Vector2(1, 2)` 直接 `v + 1` 与 `v.zzz` 也是引擎拦、我们放过 —— 值型**标注本身**就没进那两支闸门（`checkOperandPairs` 的 `ANNOT` 只收 `bool / int / float / String / Array / Dictionary` 六个名字，成员名那支的接收者表同范围），不是只缺元素读；同一探针里 `s: String` 的 `s + 1` 与 `v.distance_to()` 的元数句都是对的。正账因此重排：**①' 先按运算 × 型对把九支值型在「标注」这一格逐格过裁判，再 widen 那两张接收者表**（现成的 `OP_PAIRS_REFUSED_DECL` 没测过这一族，不许顺手扩）；**②' 然后**才轮到 `index` 读交出内型（`a[0]`），它建在①'之上。**①' 随 `1b474d9` 发货、②' 随本轮发货（S459）**：元素读经 `rawOf` + 现成 `parseTyped` 交出内型，与标注那两张表**逐对相等**（844 格 missing 0 / extra 0）。只剩第三笔「方法返回类型表」与元素读的成员名 / 调用元数两形。**第三笔的一半随 `4655760` 发货（S460）**：元素读交出内型后，五支值型内型的短元数与 `Array[String]` 的缺席属性逐格与裁判同（尺 `tmp/d6/n5.py`，二十七格）。**剩下两格卡在「名字全集没量」**：把值型七面的表外属性名一律当缺席试过 —— n5 对上十一格，但 `pnpm test` 当场红 **1863** 格，`valueAttrKind` 的 `null` 是刻意静音，扩它等于把没测过的形状当已知，已收回（S460 ②）。要先量「七面 × 任意串」那张全集表，才轮到元素读的表外**方法名**两句与方法返回类型表。② 元数门一接上就暴露出「名字在表里、实现还没有」那一串（`Vector3.rotated` / `Color.blend` / `Vector2.cubic_interpolate_in_time` 起步），是 S301 ④ 覆盖面名单的新条目，按族发货。③ 停门要停干净 —— 已写进 §2 第 16 条（残留子进程能让三支门同时假红）。④ `.gitattributes` 那一问仍待拍板（§1.97 末）：工作树上 `280-pow-precedence` 三份的 EOL 假 M 还挂着。⑤ **S306 已把那张欠款名单动了 24 名，并顺手修掉两处静默错值**（值类型族的 `clamp` 是「先比下界再比上界」，与全局 `clamp()` 不同一条；`Vector2i` / `Vector3i` 的 `snapped` 饱和不回绕）—— 剩下的名单与 `move_toward` 那条式子记在 §6 第 35 / 36 条。  
+- **2026-10-17 结清这一条的①**：值型那面的「表外名」不再靠静音 —— 名单改从本机 `--dump-extension-api` 的内置类型 methods + members 取（S461，`BUILTIN_INSTANCE_MEMBERS`：Vector2 50 / Vector3 51 / Color 40 / String 116 / StringName 110 / NodePath 11，**类常量不算**：实测 `v.INF` 两句拒而 `v.abs` / `v.x` 全收）。属性读对所有认得的面接单，调用读只接 `e[0]` 元素读那一形（对所有接收者开会把 NodePath `length` 那种另一支已在报的两句报成四句）。`int` / `float` / `bool` 三面 dump 的实例方法集为空、正形没量过，故意留空。只剩**方法返回类型表**这一笔。
+- **2026-10-17 把这一条的①' 一路结到 S468**：上面那笔「方法返回类型表」已按同一份 dump 的 `methods[].return_type` 量齐（S457 最后一笔），链式接收者 / 元素读 / 属性名当值 / Callable 当值四形各自进了运算符型对、成员名、调用元数三条闸门。定形容器的「读」一次补全（S468）：`Dictionary[K, V]` 的值读交出 `V`，`Array[T]` 的下标不再要求字面量 int —— 尺 `tmp/d6/dictread.py` 四百二十格与裁判**零分歧**（引擎拒 302、发货前放过 251、过拦 0），四把旧尺（`props.py` 770 / `n5` 27 / `n7` 24 / S459 的 844）合起来一千六百多格也无一格多拦。`int` / `float` / `bool` 三面的表外名同轮按 `tmp/d6/n9.py` 四十三格量齐（每形两句，属性读与调用读各一），不再是留空。开着的：`%` 格式化碰上 Callable  operand 那一句、scriptc 静态面不能覆盖 async 成员（`SC1090`，只能响亮拒）。
+- **2026-10-17 再往下一层：`in` 那一式从零量齐（S469），Callable 补上缺的五对（S470）**。之前每一把尺的运算符都止于 `==` —— `in` 一格没测过，二百二十五格矩阵里引擎拒 161、我们放过 161；判据与 S394 / S395 同一条（两侧字面量第一式、掺名字第二式、右支是容器就一路收到运行期），只给三张表各加一个 `"in"` 键就接住了。Callable 那一头复尺四百三十二 + 二百二十四格，缺的是同一批五对（`int|Callable` / `Array|Callable` / `Callable|Array` / `Dictionary|Callable` / `Callable|Dictionary`）× 七式。**下一笔已量清待发**：构造式字面量 `Vector2(1, 2)` 参加运算时引擎把它**当字面量**（`tmp/d6/ctor.py` 二百八十八格：第一式 134 / 第二式 100 / 收 54，放过 160），要先把 `isLiteralOperand` 与两支循环的 `call` 回落接上，再把五支值型构造式逐对过裁判（现在只量了 `Vector2` 与 `Color`）—— 记 S471。
 
 ---
 

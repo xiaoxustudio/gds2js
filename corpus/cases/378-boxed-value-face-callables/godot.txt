@@ -1,0 +1,7 @@
+N1|Vector2::length 5.0
+N2|3.0 Vector2::normalized (0.6, 0.8)
+N3|Vector2i::distance_to 3.60555127546399 3
+N4|Color::to_html ff8040ff 1.0
+N5|Vector3::length 3.0 2.0
+N6|Vector3i::length 3.0 1
+N7|true false

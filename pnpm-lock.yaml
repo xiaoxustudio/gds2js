@@ -178,9 +178,6 @@ importers:
       '@types/node':
         specifier: ^25.9.9
         version: 25.9.9
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
       gds2js:
         specifier: workspace:*
         version: link:packages/gds2js
@@ -221,9 +218,6 @@ importers:
 
   packages/gds2js:
     dependencies:
-      commander:
-        specifier: ^15.0.0
-        version: 15.0.0
       web-tree-sitter:
         specifier: ^0.27.0
         version: 0.27.1
@@ -876,10 +870,6 @@ packages:
   chai@6.3.0:
     resolution: {integrity: sha512-XWAtwJ6OHO+tj0EKCs0Y2UamnyOxseZWltU4x2U2wh8g4AigdjwvtUjvLP2tqkA/avxHEtzxNaqGq/YGNwckKg==}
     engines: {node: '>=18'}
-
-  commander@15.0.0:
-    resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
-    engines: {node: '>=22.12.0'}
 
   defu@6.1.7:
     resolution: {integrity: sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==}
@@ -1584,8 +1574,6 @@ snapshots:
   cac@7.1.0: {}
 
   chai@6.3.0: {}
-
-  commander@15.0.0: {}
 
   defu@6.1.7: {}
 

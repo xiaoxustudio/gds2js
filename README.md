@@ -2,9 +2,7 @@
 
 GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
 
-语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`），不靠"看着对"。
-
-
+语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`）。
 
 ## 构建
 
@@ -13,13 +11,11 @@ pnpm gen:ws     # 用 tree-sitter-cli 生成 gdscript.wasm（语法）
 pnpm build      # turbo run build：产出 packages/gds2js/dist/cli.mjs + runtime.mjs + host.mjs + standalone.cjs + product.mjs（自包含运行时包）
 ```
 
-发布（形态 A：只发 `gds2js.exe`，scriptc 由用户自备——同目录 `scriptc/`、项目里 `npm i -D scriptc`、或 `SCRIPTC_BIN`）：
+发布（构建 cli `gds2js.exe`，scriptc 由用户自备——同目录 `scriptc/`、项目里 `npm i -D scriptc`、或 `SCRIPTC_BIN`）：
 
 ```bash
 pnpm release    # 版本一致性校验 → pnpm build → 原生 CLI 等价性门 → release/gds2js-<version>-win64.exe（+ .sha256）
 ```
-
-版本戳：`gds2js --version`（版本字面量在 `packages/gds2js/src/version.ts`，与四处 `package.json` 必须一字一致，`pnpm release` 会校验；原生 exe 里版本是静态编入的）。
 
 ## CLI
 
@@ -57,18 +53,6 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 2. js 可以直接跑在浏览器上，众所周知浏览器跨平台是天生的，这提供了很多优势。
 3. 目前 `js` 已经有工具支持编译为原生二进制IR和程序
 4. `nodejs`是目前最符合我们项目定位的环境，它帮助`js`帮其脱离浏览器环境，我们则帮`gdscript`脱离`godot`，使得`gds`开发者能够使用gds去开发各自应用脚本，减少为了游戏而去学习其他语言的困难。
-
-## 运行产物
-
-产物带可擦除的 TypeScript 标注（`: Promise<void>` 等），文件名后缀是 **`.mts`**，用 Node 原生类型擦除直接跑：
-
-```bash
-node packages/gds2js/dist/cli.mjs build x.gd --runtime-mode single -o build/x.mts
-node build/x.mts          # Node >= 25（类型剥离默认开启，与 engines 同一条）
-```
-
-- 默认会在产物末尾发 `await new Main().run()`（入口即跑生命周期）。
-- 产物要被别的模块 `import`（当库用、别自动跑）时加 **`--no-run`**。
 
 ## 测试
 
@@ -122,3 +106,14 @@ GDS2JS_SEMA_VERBOSE=1       # sema 逐例打印诊断码
 GODOT_BIN / TS_SRC / ZIG_CC / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落点（同旧版）
 ```
 
+## 关于
+
+作者：[徐然](https://github.com/xiaoxustudio)  
+
+联系方式：[xiaoxustudio@foxmail.com](mailto:xiaoxustudio@foxmail.com)
+
+欢迎提出您宝贵的 **issue**，我们将会处理。
+
+## LICENSE
+
+详情请参阅 [许可协议](LICENSE)

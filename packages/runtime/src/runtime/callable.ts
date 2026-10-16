@@ -42,6 +42,12 @@ export class CallableBox {
   builtin: string | null;
   /** 那一面这一名的元数上下界（发射器从量过的表里带过来）：`callableArityBounds` 与 `get_argument_count()` 都读它。 */
   builtinBounds: [number, number] | null;
+  /** 内建类型那一族的接收者**读那一刻的副本**：引擎的等式与 hash 比的是它，不是活着的那一台（`tmp/probe-bineq/{m1,m2}.gd`）。 */
+  builtinSnap: Variant | null;
+  /** `unbind(n)` 记下的那一位：调用时** caller 给的实参先削掉尾部 n 支**，绑着的那串照旧接在后面（读数 `tmp/probe-unbind/`，S440）。 */
+  unbindCount: number;
+  /** lambda 尾部带默认值的形参数（`tmp/probe-lamdef/a1.gd` 量到的元数那一族）：默认值本身在**调用那一刻**才评，所以盒子里只存个数。 */
+  defaultCount: number;
   constructor(
     fn: Fn | null = null,
     name: string | null = null,
@@ -51,6 +57,9 @@ export class CallableBox {
     boundOnce = false,
     builtin: string | null = null,
     builtinBounds: [number, number] | null = null,
+    defaultCount = 0,
+    builtinSnap: Variant | null = null,
+    unbindCount = 0,
   ) {
     this.fn = fn;
     this.name = name;
@@ -60,12 +69,22 @@ export class CallableBox {
     this.boundOnce = boundOnce;
     this.builtin = builtin;
     this.builtinBounds = builtinBounds;
+    this.defaultCount = defaultCount;
+    this.builtinSnap = builtinSnap;
+    this.unbindCount = unbindCount;
   }
 }
 
 /** 内建类型面的「方法名当值」：引擎给的是绑定 Callable（`x.append` 印 `Array::append`），调用仍按 (接收者, 名) 派发。 */
 export function boundBuiltinCallable(recv: Variant, face: string, name: string, min: number, max: number): Variant {
-  return V.object(new CallableBox(null, name, recv, [], null, false, face, [min, max]));
+  return V.object(new CallableBox(null, name, recv, [], null, false, face, [min, max], 0, boundSnapHook === null ? null : boundSnapHook(recv)));
+}
+
+/** 可变那两面要按「读那一刻的值」比等式，而拷贝的式子住在容器模块里（本模块是叶子，不能反向 import）—— 由 `methods.ts` 在装载时挂进来。 */
+let boundSnapHook: ((recv: Variant) => Variant | null) | null = null;
+
+export function registerBoundSnapshotHook(f: (recv: Variant) => Variant | null): void {
+  boundSnapHook = f;
 }
 
 /** 这个 OBJECT 载荷是一个 Callable 盒子吗？空 Callable（`Callable()`）也算。 */
@@ -83,10 +102,22 @@ export function isNullCallable(box: CallableBox): boolean {
 }
 
 /** Callable 的等式：方法比 (接收者, 方法名)，绑定的实参不进等式，lambda 比 JS 引用，空 Callable 之间一律相等。 */
+/** 内建类型面的绑定 Callable 比的是**接收者的值**（读数 `tmp/probe-bincall/e1.gd`：两台内容相同的数组、两个同值的 `Color` 都等，值不同就等不上）。 */
+let recvEqHook: ((a: Variant, b: Variant) => boolean) | null = null;
+
+export function registerRecvEqHook(f: (a: Variant, b: Variant) => boolean): void {
+  recvEqHook = f;
+}
+
 export function callableSame(a: CallableBox, b: CallableBox): boolean {
   if (isNullCallable(a) || isNullCallable(b)) return isNullCallable(a) && isNullCallable(b);
   if (a.name !== null && b.name !== null) {
     if (a.name !== b.name) return false;
+    if (a.builtin !== null && b.builtin !== null && recvEqHook !== null) {
+      const x = a.builtinSnap ?? a.object;
+      const y = b.builtinSnap ?? b.object;
+      if (x !== null && y !== null) return recvEqHook(x, y);
+    }
     // 比**内层**而不是盒子本身：`o.add3` 读两次拿到的是两个新 Variant，包着同一个实例
     return (a.object?.v ?? null) === (b.object?.v ?? null);
   }
@@ -101,7 +132,9 @@ export function callableSame(a: CallableBox, b: CallableBox): boolean {
  */
 export function callableEq(a: CallableBox, b: CallableBox): boolean {
   if (!callableSame(a, b)) return false;
-  return a.boundOnce === b.boundOnce;
+  if (a.boundOnce !== b.boundOnce) return false;
+  // unbind 的计数也进等式：`bind(1, 2).unbind(1) == bind(1, 2)` 假，`unbind(2)` 与 `unbind(1)` 之间也假（`tmp/probe-unbind/{x1,y4}.gd`）
+  return a.unbindCount === b.unbindCount;
 }
 
 /** `Callable()` 造出来的空 Callable：typeof 仍是 25。 */export function nullCallable(): Variant {

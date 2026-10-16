@@ -104,6 +104,7 @@ export interface PropAccessor {
 export interface SignalDecl {
   name: string;
   params: string[];
+  hasDefaults: boolean;
   loc: Loc;
 }
 

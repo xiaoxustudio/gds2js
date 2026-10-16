@@ -1,0 +1,7 @@
+C1|Array::append
+C2|true
+C3|false
+C4|[1, 2, 9]
+C5|String::to_upper ABCD
+C6|append <Object#null> true false
+C7|1 0

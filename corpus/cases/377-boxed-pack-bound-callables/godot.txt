@@ -1,0 +1,5 @@
+B1|PackedStringArray::size
+B2|2
+B3|size <Object#null> 0 true
+B4|PackedByteArray::count 1
+B5|PackedStringArray::append false

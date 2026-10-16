@@ -1,0 +1,20 @@
+SCRIPT ERROR: Parse Error: Cannot have an element of type "int" in an array of type "Array[Inner]".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot include a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot have an element of type "String" in an array of type "Array[int]".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot include a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Cannot have a value of type "String" in a dictionary of type "Dictionary[String, int]".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Cannot include a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Cannot have an element of type "String" in an array of type "Array[int]".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Cannot include a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: Cannot have an element of type "String" in an array of type "Array[int]".
+   at: GDScript::reload (<case>/main.gd:20)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

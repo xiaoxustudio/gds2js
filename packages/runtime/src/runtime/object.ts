@@ -5,7 +5,7 @@ import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
 
 // Callable 盒子的**形状**与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，不能反向 import 本模块），这里只把外需要的几样转出去。
-export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
+export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, registerBoundSnapshotHook, type Fn } from "./callable";
 
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {
@@ -31,9 +31,9 @@ export {
 } from "./identity";
 export type { GdIdentified } from "./identity";
 
-/** lambda 的 Callable 盒子（`rt.callable((a) => {...}, 形参数)`）。 */
-export function callable(fn: Fn, arity: number | null = null): Variant {
-  return V.object(new CallableBox(fn, null, null, [], arity));
+/** lambda 的 Callable 盒子（`rt.callable((a) => {...}, 形参数)`）：第三参是尾部带默认值的形参数，元数句要用必填数。 */
+export function callable(fn: Fn, arity: number | null = null, defaultCount = 0): Variant {
+  return V.object(new CallableBox(fn, null, null, [], arity, false, null, null, defaultCount));
 }
 
 /** 方法 / 静态方法 Callable 的盒子：只记「在哪个对象上、叫什么」，调用时按名派发；lambda 不走这里，它的 `get_method()` 是 `<anonymous lambda>`。 */
@@ -69,7 +69,9 @@ export function boundArgsOf(box: CallableBox): Variant[] {
 /** Callable 的声明形参数；表里没有、或那方法带默认值时给 null，由调用方响亮拒。 */
 export function declaredArgCount(box: CallableBox): number | null {
   if (isNullCallable(box)) return 0;
-  if (box.builtinBounds !== null) return box.builtinBounds[0];
+  // 内建那几面的元数上界就是**声明形参数**：329 名逐名对过裁判，`get_argument_count()` 与表的第二值一字不差
+  // （读数 `tmp/probe-argc/compare1.txt`；语料 381 的 Y7：hex_encode 0、compress 1、decompress 2）。
+  if (box.builtinBounds !== null) return box.builtinBounds[1];
   const name = box.name;
   if (name !== null) {
     // 全局 Callable 的 `get_argument_count()` 是实测读数，与 `.call()` 认的区间是两回事（`str` 声明 1 个、变元无上限）。
@@ -87,6 +89,8 @@ export function declaredArgCount(box: CallableBox): number | null {
 /** Callable 的 `[必填, 全部]` 形参数：少给按「必填数」报、多给按「全部数」报；方法与静态方法查方法表，lambda 两个数都取发射器给的形参数。空 Callable 给 null，由调用方走另一句报错。 */
 export function callableArityBounds(box: CallableBox): [number, number] | null {
   if (isNullCallable(box)) return null;
+  // lambda 的尾部形参带默认值：必填数是「声明数 − 默认值数」，多给那一句仍报声明数（`tmp/probe-lamdef/{e1,e2,b1,b2}.gd`）
+  if (box.defaultCount > 0 && box.arity !== null) return [box.arity - box.defaultCount, box.arity];
   if (box.builtinBounds !== null) return box.builtinBounds;
   const name = box.name;
   if (name !== null) {

@@ -102,7 +102,7 @@ describe("runtime/signal", () => {
     shouldThrow("194", "空 Callable 上 call_deferred 没量过 → 响亮拒（c9 只量到解析期那一格）", () => method(nullCallable(), "call_deferred", [V.int(1)]));
     shouldThrow("194", "is_valid 在「空 + 绑过实参」那一格没量 → 响亮拒，不拿 is_null 的反面推", () => method(method(nullCallable(), "bind", [V.int(1)]), "is_valid", []));
     shouldThrow("194", "Callable(字符串) 一参形：Godot 是解析期 No constructor，运行期先响亮拒（c10）", () => callableCtor([V.str("on_fired")]));
-    shouldThrow("194", "unbind() 量到存在但语义没读懂 → 继续响亮拒", () => method(c0, "unbind", [V.int(1)]));
+    eq("440", "unbind() 已发货：给得出盒子而不是响亮拒", (() => { try { method(c0, "unbind", [V.int(1)]); return true; } catch { return false; } })(), true);
 
     eq("192", "方法 Callable 的等式比 (接收者, 方法名)：两次读同一个小盒不同", `${valueEq(c0, attribute(inst, "add3") as Variant)} ${valueEq(c0, attribute(other, "add3") as Variant)}`, "true false");
     eq("192", "绑定的实参**不进**等式：bind(1) 与 bind(2) 相等", valueEq(boundWith(1), boundWith(2)), true);

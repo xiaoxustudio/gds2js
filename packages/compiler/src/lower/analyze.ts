@@ -18,9 +18,18 @@ import {
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
+import {
+  ARRAY_METHOD_ARITY,
+  NODE_PATH_METHOD_ARITY,
+  PACK_METHOD_ARITY,
+  PACK_METHOD_ARITY_WITH_BYTES,
+  STRING_METHOD_ARITY,
+  VALUE_METHOD_ARITY,
+  valueAttrKind,
+} from "@gds2js/runtime/runtime/face-arity";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, SignalDecl, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
   code: string;
@@ -40,10 +49,20 @@ class Scope {
     private vars: Set<string>,
     private parent: Scope | null,
     private selfOk?: boolean,
+    private isLocal = false,
   ) {}
 
   has(name: string): boolean {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name));
+  }
+
+  /** 只在**函数那一段**作用域里认名字：类成员与模块变量活在函数外面，lambda 不捕获它们（`tmp/probe-capture/c1.gd` 的 K5）。 */
+  hasLocal(name: string): boolean {
+    return this.isLocal && (this.vars.has(name) || (this.parent !== null && this.parent.hasLocal(name)));
+  }
+
+  funcChild(names: string[], selfOk?: boolean): Scope {
+    return new Scope(new Set(names), this, selfOk, true);
   }
 
   allowsSelf(): boolean {
@@ -51,7 +70,7 @@ class Scope {
   }
 
   child(names: string[], selfOk?: boolean): Scope {
-    return new Scope(new Set(names), this, selfOk);
+    return new Scope(new Set(names), this, selfOk, this.isLocal);
   }
 
   declare(name: string): void {
@@ -89,6 +108,7 @@ function declNames(d: Decl): string[] {
 export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string): Diagnostic[] {
   // 记号表是进程内累积的：每份模块归一个自己的主，两份文件同 `行:列` 的同名字就不会互相抢记号（§6 第 61 条）
   markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
+  seedOuterNames(m);
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];
@@ -128,6 +148,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
+  checkPercentFormat(m, diags);
   checkPackFaceNames(m, diags);
   checkDictMethodArity(m, diags);
   checkArrayMethodArity(m, diags);
@@ -141,6 +162,10 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkOperandPairs(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
+  checkParamDefaultAssign(m, diags);
+  checkVoidAnnotation(m, diags);
+  checkScriptClassSlots(m, diags);
+  checkSignalDefaults(m, diags);
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
@@ -166,16 +191,69 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     for (const inner of cls.innerClasses) collect(inner);
   };
   for (const c of m.innerClasses) collect(c);
-  const walkStmts = (stmts: Stmt[]): void => {
+  /** 这一份文件里的脚本类名（内部类）：做定形容器的内部型时，引擎只发第二句（`Array[Inner]` 那一形） */
+  const classNames = new Set<string>();
+  const collectClassNames = (c: ClassDecl): void => {
+    classNames.add(c.name);
+    for (const inner of c.innerClasses) collectClassNames(inner);
+  };
+  for (const c of m.innerClasses) collectClassNames(c);
+  /** 模块级带定形标注的 var：赋给它的字面量同格判（`q = ["s"]` 那一形） */
+  const typedVars = new Map<string, TypeRef>();
+  for (const v of m.vars) if (v.type !== null) typedVars.set(v.name, v.type);
+  /** 本工程函数的形参标注：实参位置同格判（`g(["s"])` 那一形） */
+  const fnParams = new Map<string, (TypeRef | null)[]>();
+  for (const f of m.funcs) fnParams.set(f.name, f.params.map((p) => p.type));
+  const walkStmts = (stmts: Stmt[], retType: TypeRef | null): void => {
     for (const s of stmts) {
       if (s.kind === "var") targets.push({ type: s.type, init: s.init, loc: s.loc });
-      else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body);
-      else if (s.kind === "for" || s.kind === "while") walkStmts(s.body);
+      else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body, retType);
+      else if (s.kind === "for" || s.kind === "while") walkStmts(s.body, retType);
+      else if (s.kind === "return" && retType !== null) targets.push({ type: retType, init: s.value, loc: s.loc });
+      else if (s.kind === "assign" && s.target.kind === "ident") {
+        const decl = typedVars.get(s.target.name);
+        if (decl !== undefined) targets.push({ type: decl, init: s.value, loc: s.loc });
+      } else walkExprs(s, retType);
     }
   };
-  for (const f of m.funcs) walkStmts(f.body);
+  /** 返回值（`return ["s"]`）与本工程函数的实参（`g(["s"])`）两位的定形容器字面量（S454，读数 `tmp/d6/n1.txt`） */
+  const walkExprs = (n: unknown, retType: TypeRef | null): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) walkExprs(x, retType);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const o = n as Record<string, unknown>;
+    if (o.kind === "var") {
+      const t = o.type as TypeRef | null;
+      if (t !== null) targets.push({ type: t, init: (o.init as Expr | null) ?? null, loc: o.loc as Loc });
+    }
+    if (o.kind === "return" && retType !== null) targets.push({ type: retType, init: (o.value as Expr | null) ?? null, loc: o.loc as Loc });
+    if (o.kind === "assign" && retType !== null && (o.target as Record<string, unknown> | undefined)?.kind === "ident") {
+      const name = (o.target as Record<string, unknown>).name;
+      const decl = typeof name === "string" ? typedVars.get(name) : undefined;
+      if (decl !== undefined) targets.push({ type: decl, init: o.value as Expr, loc: o.loc as Loc });
+    }
+    if (o.kind === "call" && Array.isArray(o.args)) {
+      const callee = o.callee as Record<string, unknown>;
+      if (callee.kind === "ident" && typeof callee.name === "string") {
+        const pt = fnParams.get(callee.name);
+        if (pt !== undefined) {
+          const args = o.args as Expr[];
+          for (let i = 0; i < args.length && i < pt.length; i++) {
+            const t = pt[i];
+            if (t !== undefined && t !== null) targets.push({ type: t, init: args[i] ?? null, loc: args[i]!.loc });
+          }
+        }
+      }
+    }
+    for (const key of Object.keys(o)) {
+      if (key !== "loc") walkExprs(o[key], retType);
+    }
+  };
+  for (const f of m.funcs) walkStmts(f.body, f.returnType);
   const walkClass = (c: ClassDecl): void => {
-    for (const f of c.funcs) walkStmts(f.body);
+    for (const f of c.funcs) walkStmts(f.body, f.returnType);
     for (const inner of c.innerClasses) walkClass(inner);
   };
   for (const c of m.innerClasses) walkClass(c);
@@ -194,28 +272,47 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       continue;
     }
     if (t.init === null) continue;
-    const slots: Array<{ exprs: Expr[]; kind: string }> = [];
+    /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格）。
+     *  内部型是脚本类名时只发第二句（`Array[Inner]` 那一格，读数 `tmp/d6/n1.txt`）。 */
+    const holds = (kind: string, st: NonNullable<StaticType>): boolean => (classNames.has(kind) ? st === kind : canHold(kind, st));
+    const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
+      if (!classNames.has(kind)) {
+        diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
+      }
+      diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
+    };
     if (m2[1] === "Array") {
-      if (t.init.kind === "array") slots.push({ exprs: t.init.items, kind: inner.trim() });
+      const kind = inner.trim();
+      if (t.init.kind === "array") {
+        let done = false;
+        for (const it of t.init.items) {
+          if (done) break;
+          const st = slotSource(it);
+          if (st === null || holds(kind, st)) continue;
+          done = true;
+          report(st, kind, `Cannot have an element of type "${st}" in an array of type "Array[${kind}]".`);
+        }
+      }
     } else {
       const parts = inner.split(",").map((p) => p.trim());
       const keyKind = parts[0] ?? "";
       const valKind = parts[1] ?? "";
       if (t.init.kind === "dict" && parts.length === 2) {
-        slots.push({ exprs: t.init.entries.map((e) => e.key), kind: keyKind });
-        slots.push({ exprs: t.init.entries.map((e) => e.value), kind: valKind });
-      }
-    }
-    for (const slot of slots) {
-      for (const it of slot.exprs) {
-        const st = slotSource(it);
-        if (st === null) continue;
-        if (!canHold(slot.kind, st)) {
-          diags.push({
-            code: "typed-collection-literal",
-            message: `Cannot include a value of type "${st}" as "${slot.kind}".`,
-            loc: it.loc,
-          });
+        const text = `Dictionary[${keyKind}, ${valKind}]`;
+        let done = false;
+        for (const en of t.init.entries) {
+          if (done) break;
+          const ks = slotSource(en.key);
+          if (ks !== null && !holds(keyKind, ks)) {
+            done = true;
+            report(ks, keyKind, `Cannot have a key of type "${ks}" in a dictionary of type "${text}".`);
+            break;
+          }
+          const vs = slotSource(en.value);
+          if (vs !== null && !holds(valKind, vs)) {
+            done = true;
+            report(vs, valKind, `Cannot have a value of type "${vs}" in a dictionary of type "${text}".`);
+          }
         }
       }
     }
@@ -296,6 +393,15 @@ function parseTyped(name: string): TypedSlot | null {
   const parts = inner.split(",").map((p) => p.trim());
   if (parts.length !== 2) return null;
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
+}
+
+const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String", "int", "float", "bool"]);
+
+/** `Array[T]` 的内型只在认得的那几面里交出去（S460 量的那一格是**字面量 int** 下标；其余形一律不判）。 */
+function elemFaceOf(decl: string): string | null {
+  const slot = parseTyped(decl);
+  if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
+  return ELEM_FACES.has(slot.elem) ? slot.elem : null;
 }
 
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
@@ -674,6 +780,190 @@ function instanceOfTypeArgMessage(e: Extract<Expr, { kind: "call" }>): string | 
   if (t === null) return null;
   if (t >= 0 && t <= INSTANCE_OF_TYPE_LAST) return null;
   return `Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.`;
+}
+
+/** 只收自己那一型的槽：容器、引用型与 D6 那七型（`Array = [1]`、`Dictionary = {…}`、`NodePath = ^"…"` 之外一律拒）。 */
+const PARAM_OWN_SLOTS = new Set(["Array", "Dictionary", "NodePath", "Callable", "Signal",
+  "Rect2", "Rect2i", "Transform2D", "Plane", "Quaternion", "Basis", "AABB"]);
+
+/** 这一格的收/拒表（读数 `tmp/d6/pd4.py` 二百二十格分片扫）：数槽收 {int,float,bool}，String 槽连 NodePath 一起收，
+ *  StringName 与 NodePath 两槽互收 String，容器 / 引用 / D6 那七型只收自己那一型，其余交回 `varSlotHolds`。 */
+function holdsParamDefault(slot: string, st: string): boolean {
+  if (slot === st) return true;
+  if (slot === "int" || slot === "float" || slot === "bool") return st === "int" || st === "float" || st === "bool";
+  if (slot === "String") return st === "String" || st === "StringName" || st === "NodePath";
+  if (slot === "StringName") return st === "String" || st === "StringName";
+  if (slot === "NodePath") return st === "String" || st === "NodePath";
+  if (PARAM_OWN_SLOTS.has(slot)) return false;
+  if (st === "Array" || st === "Dictionary" || st === "NodePath") return false;
+  return varSlotHolds(slot, st as NonNullable<StaticType>) === true;
+}
+/** 形参默认值那一格（S448，读数 `tmp/d6/pd2-table.txt` 与 `pd4.py` 分片二百二十格）：两句的模板与变量初值同源，
+ *  第二句换成 `parameter "<名>"`；容器来源只发第二句，`^"…"` 字面量在这里是证得出的源。 */
+function checkParamDefaultAssign(m: Module, diags: Diagnostic[]): void {
+  const slotOf = (t: TypeRef | null): string | null => {
+    if (t === null || t.kind !== "named") return null;
+    const base = t.name.replace(/\[.*\]$/, "");
+    if (base === "int" || base === "float" || base === "bool" || base === "String" || base === "StringName") return base;
+    if (PARAM_OWN_SLOTS.has(base)) return base;
+    return STATIC_VALUE_TYPES.has(base) ? base : null;
+  };
+  const sourceOf = (e: Expr): string | null => {
+    const st = slotSource(e);
+    if (st !== null) return st;
+    if (e.kind === "lit" && e.lit === "node_path") return "NodePath";
+    return null;
+  };
+  const checkParams = (params: readonly Param[]): void => {
+    for (const p of params) {
+      const slot = slotOf(p.type);
+      const def = p.default;
+      if (slot === null || def === null) continue;
+      const st = sourceOf(def);
+      if (st === null) continue;
+      if (holdsParamDefault(slot, st)) continue;
+      if (st !== "Array" && st !== "Dictionary") {
+        diags.push({ code: "param-default-value", message: `Cannot assign a value of type "${st}" as "${slot}".`, loc: def.loc });
+      }
+      diags.push({
+        code: "param-default-assign",
+        message: `Cannot assign a value of type ${st} to parameter "${p.name}" with specified type ${slot}.`,
+        loc: def.loc,
+      });
+    }
+  };
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) checkParams(f.params);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const f of m.funcs) checkParams(f.params);
+  for (const c of m.innerClasses) walkClass(c);
+  /** lambda 是另一层作用域，`flattenBody` 走到它就停，所以这里自己下钻把形参表收齐（S449）。 */
+  const lambdas = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) lambdas(x);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (obj.kind === "lambda") checkParams((obj.params as Param[]) ?? []);
+    for (const key of Object.keys(obj)) {
+      if (key !== "loc") lambdas(obj[key]);
+    }
+  };
+  lambdas(m);
+}
+
+/** `void` 只能当函数的返回型（S450，读数 `tmp/d6/l4-void-{param,var,arr,ret}.gd` 与语料 391）：形参、变量、定形容器的内部型里出现就给那一句。
+ *  一份文件里六处不合式，引擎也只出**第一句**就收口（391 的 golden 只有一行），所以这里按行序只发一条。 */
+function checkVoidAnnotation(m: Module, diags: Diagnostic[]): void {
+  const hasVoid = (t: TypeRef | null): boolean => {
+    if (t === null || t.kind !== "named") return false;
+    return t.name.split(/[\[\],]/).some((part) => part.trim() === "void");
+  };
+  const found: Diagnostic["loc"][] = [];
+  const checkParams = (params: readonly Param[], loc: Diagnostic["loc"]): void => {
+    for (const p of params) {
+      if (hasVoid(p.type)) found.push(loc);
+    }
+  };
+  const checkVar = (v: VarDecl): void => {
+    if (hasVoid(v.type)) found.push(v.loc);
+  };
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) checkParams(f.params, f.loc);
+    for (const v of c.vars) checkVar(v);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const f of m.funcs) checkParams(f.params, f.loc);
+  for (const v of m.vars) checkVar(v);
+  for (const c of m.innerClasses) walkClass(c);
+  const first = found.sort((a, b) => (a === null ? 1e9 : a.line) - (b === null ? 1e9 : b.line))[0];
+  if (first !== undefined) {
+    diags.push({ code: "void-annotation", message: `"void" is only allowed for a function return type.`, loc: first });
+  }
+}
+
+/** 标注是脚本类名（这一份文件里的内部类）那一格（S452，读数 `tmp/d6/l3-class-name*.gd` 与 `l4-cls-*.gd`）：
+ *  与内置型槽不同向 —— 引擎**只发第二句**，`= null` 与 `Inner.new()` 都收。 */
+function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
+  const names = new Set<string>();
+  const collect = (c: ClassDecl): void => {
+    names.add(c.name);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+  if (names.size === 0) return;
+  const slotOf = (t: TypeRef | null): string | null =>
+    t !== null && t.kind === "named" && names.has(t.name) ? t.name : null;
+  const refuse = (name: string, kind: string, slot: string, init: Expr | null, loc: Diagnostic["loc"]): void => {
+    if (init === null) return;
+    const st = slotSource(init);
+    if (st === null || st === "null") return;
+    diags.push({
+      code: "script-class-slot",
+      message: `Cannot assign a value of type ${st} to ${kind} "${name}" with specified type ${slot}.`,
+      loc,
+    });
+  };
+  const walkClass = (c: ClassDecl): void => {
+    for (const v of c.vars) {
+      const slot = slotOf(v.type);
+      if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+    }
+    for (const f of c.funcs) {
+      for (const p of f.params) {
+        const slot = slotOf(p.type);
+        if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
+      }
+      walkStmtVars(f.body);
+    }
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  const walkStmtVars = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) walkStmtVars(x);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (obj.kind === "var") {
+      const slot = slotOf(obj.type as TypeRef | null);
+      if (slot !== null && typeof obj.name === "string") {
+        refuse(obj.name, "variable", slot, (obj.init as Expr | null) ?? null, obj.loc as Diagnostic["loc"]);
+      }
+    }
+    for (const key of Object.keys(obj)) {
+      if (key !== "loc") walkStmtVars(obj[key]);
+    }
+  };
+  for (const v of m.vars) {
+    const slot = slotOf(v.type);
+    if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+  }
+  for (const f of m.funcs) {
+    for (const p of f.params) {
+      const slot = slotOf(p.type);
+      if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
+    }
+    walkStmtVars(f.body);
+  }
+  for (const c of m.innerClasses) walkClass(c);
+}
+
+/** signal 的形参不许带默认值（S453，读数 `tmp/d6/l3-sig-*.gd` 与语料 394）：一份文件里三支不合式也只发**第一句**就收口。 */
+function checkSignalDefaults(m: Module, diags: Diagnostic[]): void {
+  const found: SignalDecl[] = [];
+  const walkClass = (c: ClassDecl): void => {
+    for (const s of c.signals) if (s.hasDefaults) found.push(s);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const s of m.signals) if (s.hasDefaults) found.push(s);
+  for (const c of m.innerClasses) walkClass(c);
+  const first = found.sort((a, b) => a.loc.line - b.loc.line)[0];
+  if (first !== undefined) {
+    diags.push({ code: "signal-default-param", message: "Signal parameters cannot have a default value.", loc: first.loc });
+  }
 }
 
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
@@ -1461,8 +1751,15 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
-/** 元素槽是第几个实参（1 起），只列判得出的方法：`append` / `push_back` / `find` / `has` / `count` / `fill` 是第 1 参、`insert` / `set` 是第 2 参，文本都是同一套两句。 */
-const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, push_back: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
+/** 每支方法逐位的声明槽：`e` 是元素型、`i` 是 int（下标 / 计数 / 容量）、`b` 是 bool（`bsearch` 的 `before`）—— 九面 2160 格两侧对过（`tmp/probe-packargs/`）。 */
+const PACK_ARG_POSITIONS: Record<string, readonly string[]> = {
+  append: ["e"], push_back: ["e"], fill: ["e"], has: ["e"], count: ["e"], erase: ["e"],
+  get: ["i"], set: ["i", "e"], insert: ["i", "e"], find: ["e", "i"], rfind: ["e", "i"],
+  bsearch: ["e", "b"], resize: ["i"], slice: ["i", "i"], remove_at: ["i"],
+};
+/** int 槽与 bool 槽能进的来源：int 槽收 int / float / bool，bool 槽同样收三支（实测 `bsearch(1, 2)` 照收）；文本都是同一套两句。 */
+const PACK_INT_SLOT_OK = ["int", "float", "bool"];
+const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
@@ -1699,6 +1996,146 @@ function faceGhostDiags(
   return out;
 }
 
+/** `String % 值` 的解析期判据（S445，读数 `tmp/probe-pct/`：160 格矩阵 + 52 个转换符全扫 + 264 / 126 / 340 格三张语法面）：
+ *  引擎在**解析期**按槽位逐个判，第一个不合式那一格说话；实参是 Array / Dictionary / Packed* 构造时整族放过
+ *  （那是「一支参数表 / 一张映射」的写法，读数两侧都收），来源证不出（变量、`len()`、`(1 + 2)`）也放过 —— 只判得出才判。 */
+const PCT_NUMERIC = "dfoxX";
+const PCT_VECTORS = new Set(["Vector2", "Vector3", "Vector4", "Vector2i", "Vector3i", "Vector4i"]);
+const PCT_VALUE_CTORS = new Set(["Color", "Callable"]);
+
+const PCT_MSG = {
+  unsupported: "unsupported format character in operator %.",
+  incomplete: "incomplete format in operator %.",
+  number: "a number is required in operator %.",
+  char: "%c requires number or single-character string in operator %.",
+  negative: "unsigned integer is lower than minimum in operator %.",
+  vector: "%v requires a vector type (Vector2/3/4/2i/3i/4i) in operator %.",
+  star: "* wants number or vector in operator %.",
+  notAll: "not all arguments converted during string formatting in operator %.",
+  notEnough: "not enough arguments for format string in operator %.",
+};
+
+/** 右支证得出的静态类别：只有这四条线（数 / 负数 / 串文本 / 向量）参与判据，其余一律「非数」。 */
+interface PctArg {
+  num: boolean;
+  neg: boolean;
+  vec: boolean;
+  text: string | null;
+}
+
+function pctArg(e: Expr): PctArg | null {
+  if (e.kind === "lit") {
+    if (e.lit === "int" || e.lit === "float") {
+      const v = Number(e.value);
+      return { num: true, neg: v < 0, vec: false, text: null };
+    }
+    if (e.lit === "string") return { num: false, neg: false, vec: false, text: String(e.value) };
+    if (e.lit === "string_name" || e.lit === "node_path" || e.lit === "bool" || e.lit === "null") {
+      return { num: false, neg: false, vec: false, text: null };
+    }
+    return null;
+  }
+  if (e.kind === "unary" && e.op === "-") {
+    const inner = pctArg(e.operand);
+    return inner === null || !inner.num ? null : { ...inner, neg: !inner.neg };
+  }
+  if (e.kind === "call" && e.callee.kind === "ident") {
+    if (PCT_VECTORS.has(e.callee.name)) return { num: false, neg: false, vec: true, text: null };
+    if (PCT_VALUE_CTORS.has(e.callee.name)) return { num: false, neg: false, vec: false, text: null };
+  }
+  return null;
+}
+
+type PctSlot = { kind: "star" } | { kind: "conv"; ch: string } | { kind: "tail" };
+
+function pctSlots(fmt: string): PctSlot[] {
+  const slots: PctSlot[] = [];
+  const starDigits = (from: number): number => {
+    let i = from;
+    while (i < fmt.length && ((fmt[i] ?? "") === "*" || ((fmt[i] ?? "") >= "0" && (fmt[i] ?? "") <= "9"))) {
+      if ((fmt[i] ?? "") === "*") slots.push({ kind: "star" });
+      i++;
+    }
+    return i;
+  };
+  let i = 0;
+  while (i < fmt.length) {
+    if (fmt[i] !== "%") {
+      i++;
+      continue;
+    }
+    i++;
+    if (i >= fmt.length) {
+      slots.push({ kind: "tail" });
+      break;
+    }
+    while (i < fmt.length && ["-", "+", "0", "u"].includes(fmt[i] ?? "")) i++;
+    if (i < fmt.length && (fmt[i] ?? "") === "%") {
+      i++;
+      continue;
+    }
+    i = starDigits(i);
+    if (i < fmt.length && (fmt[i] ?? "") === ".") {
+      i = starDigits(i + 1);
+    }
+    if (i >= fmt.length) {
+      slots.push({ kind: "tail" });
+      break;
+    }
+    slots.push({ kind: "conv", ch: fmt[i] ?? "" });
+    i++;
+  }
+  return slots;
+}
+
+/** 一个槽对着实参的那一句；null 是这一槽合式。 */
+function pctSlotMessage(slot: PctSlot, arg: PctArg): string | null {
+  if (slot.kind === "tail") return PCT_MSG.incomplete;
+  if (slot.kind === "star") return arg.num || arg.vec ? null : PCT_MSG.star;
+  const ch = slot.ch;
+  if (ch === "s") return null;
+  if (ch === "c") {
+    if (arg.num) return arg.neg ? PCT_MSG.negative : null;
+    return arg.text !== null && arg.text.length === 1 ? null : PCT_MSG.char;
+  }
+  if (ch === "v") return arg.vec ? null : PCT_MSG.vector;
+  if (PCT_NUMERIC.indexOf(ch) >= 0) return arg.num ? null : PCT_MSG.number;
+  return PCT_MSG.unsupported;
+}
+
+function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
+  for (const nodes of flattenBodies(m)) {
+    for (const n of nodes) {
+      if (n.kind !== "binary" || n.op !== "%") continue;
+      const left = n.left as Expr;
+      const right = n.right as Expr;
+      if (left.kind !== "lit" || left.lit !== "string") continue;
+      if (right.kind === "array" || right.kind === "dict") continue;
+      const arg = pctArg(right);
+      if (arg === null) continue;
+      const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      const slots = pctSlots(String(left.value));
+      let message: string | null = null;
+      let used = 0;
+      for (const slot of slots) {
+        if (slot.kind !== "tail") {
+          if (used >= 1) {
+            message = PCT_MSG.notEnough;
+            break;
+          }
+          used++;
+          message = pctSlotMessage(slot, arg);
+        } else {
+          message = pctSlotMessage(slot, arg);
+        }
+        if (message !== null) break;
+      }
+      if (message === null && used === 0) message = PCT_MSG.notAll;
+      if (message !== null) diags.push({ code: "pct-format", message, loc });
+    }
+  }
+}
+
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
   for (const nodes of flattenBodies(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
@@ -1725,32 +2162,40 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       const callee = n.callee as Record<string, unknown> | undefined;
       if (callee === undefined || callee.kind !== "attribute") continue;
       const obj = callee.obj as Record<string, unknown> | undefined;
-      if (obj === undefined || obj.kind !== "ident" || typeof obj.name !== "string") continue;
-      const pack = packs.get(obj.name);
+      if (obj === undefined) continue;
+      // 两种证明：命名过的（上面那张表）与**就地构造的链式接收者** `Face([…]).append(x)` —— 引擎对这两种同判（`tmp/probe-packargs/` 九面 2160 格两侧对过）
+      const objCallee = obj.kind === "call" ? (obj.callee as Record<string, unknown> | undefined) : undefined;
+      const inline = objCallee !== undefined && objCallee["kind"] === "ident" && typeof objCallee["name"] === "string"
+        && String(objCallee["name"]) in PACK_ARG_SLOTS ? String(objCallee["name"]) : null;
+      const pack = obj.kind === "ident" && typeof obj.name === "string" ? packs.get(obj.name) : (inline ?? undefined);
       if (pack === undefined) continue;
       const method = callee.name;
       if (typeof method !== "string") continue;
-      const argAt = PACK_ELEMENT_ARG[method];
-      if (argAt === undefined) continue;
+      const slots = PACK_ARG_POSITIONS[method];
+      if (slots === undefined) continue;
       const args = (n.args as Expr[]) ?? [];
-      if (args.length !== argAt) continue;
-      const arg0 = args[argAt - 1] as Expr;
-      const src = packArgSource(arg0);
-      // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
-      const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
-      const proven = src ?? annotated;
-      if (proven === null) continue;
-      const { slot, ok } = PACK_ARG_SLOTS[pack] as { slot: string; ok: readonly string[] };
-      if (ok.includes(proven)) continue;
-      const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      if (src !== null && proven !== "Array" && proven !== "Dictionary") {
-        diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
+      const face = PACK_ARG_SLOTS[pack] as { slot: string; ok: readonly string[] };
+      for (let p = 0; p < Math.min(slots.length, args.length); p++) {
+        const arg0 = args[p] as Expr;
+        const src = packArgSource(arg0);
+        // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
+        const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
+        const proven = src ?? annotated;
+        if (proven === null) continue;
+        const kind = slots[p];
+        const slot = kind === "i" ? "int" : kind === "b" ? "bool" : face.slot;
+        const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
+        if (ok.includes(proven)) continue;
+        const loc = (n.loc as Diagnostic["loc"]) ?? null;
+        if (src !== null && proven !== "Array" && proven !== "Dictionary") {
+          diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
+        }
+        diags.push({
+          code: "pack-arg-slot",
+          message: `Invalid argument for "${method}()" function: argument ${String(p + 1)} should be "${slot}" but is "${proven}".`,
+          loc,
+        });
       }
-      diags.push({
-        code: "pack-arg-slot",
-        message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${proven}".`,
-        loc,
-      });
     }
   }
 }
@@ -1781,10 +2226,16 @@ function packNameMeasuredAbsent(kind: string, name: string): boolean {
 /** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
  *  `Array` / `String` 只认**标注**那一形（`tmp/probe-bincall/compare2.txt` 的 H5 / H6 / H7 / H15 四格就是标注读的），
  *  `Dictionary` 两形都不认 —— 引擎在标注字典上读属性连表外名都不在解析期开口（S419 ②）。 */
-function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>): string | null {
+function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>, elems: Map<string, string> = new Map(), mods: Map<string, string> = new Map()): string | null {
   if (obj === undefined) return null;
+  if (obj.kind === "index") {
+    const base = obj.obj as Record<string, unknown> | undefined;
+    if (base === undefined || base.kind !== "ident" || typeof base.name !== "string") return null;
+    if (staticType(obj.index as Expr) !== "int") return null;
+    return elemFaceOf(elems.get(base.name) ?? "");
+  }
   if (obj.kind === "ident" && typeof obj.name === "string") {
-    const face = ann.get(obj.name) ?? null;
+    const face = ann.get(obj.name) ?? mods.get(obj.name) ?? null;
     return face === "Dictionary" ? null : face;
   }
   if (obj.kind === "array") return "Array";
@@ -1793,6 +2244,16 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
     const inner = obj.callee as Record<string, unknown> | undefined;
     const cn = inner?.kind === "ident" ? inner.name : null;
     if (typeof cn === "string" && (cn === "Array" || cn === "String" || cn === "StringName" || cn === "NodePath" || cn in VALUE_METHOD_ARITY)) return cn;
+    // 链式那一形：`v.angle().zzz` 的基是方法的**返回型**那面 —— 引擎那句就写着 base "float"（S464，读数 `tmp/d6/n7.txt`）
+    if (inner !== undefined && inner.kind === "attribute") {
+      const owner = attrFaceRecv(inner.obj as Record<string, unknown>, ann, elems, mods);
+      const mname = inner.name;
+      if (owner !== null && typeof mname === "string") {
+        const by = BUILTIN_METHOD_RETURNS[owner];
+        const rt = by === undefined ? undefined : by[mname];
+        if (typeof rt === "string" && (instanceFaceManaged(rt) || rt === "String")) return rt;
+      }
+    }
   }
   if (obj.kind === "lit" && (obj.lit === "string_name" || obj.lit === "node_path")) {
     return obj.lit === "string_name" ? "StringName" : "NodePath";
@@ -1816,11 +2277,56 @@ function attrScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; params
 /** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
  *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。
  *  属性那一形（不调用）引擎把同一句报两遍，读数 `tmp/probe-attr/compare3.txt` 九支一字一样。 */
+/** 值类型那一面在**实例接收者**上认得的成员名（方法 + 属性，取自本机 4.6.3 的 `--dump-extension-api`，类常量不算：`v.INF` / `v.DOWN` 引擎两句 `Cannot find member`，`v.abs` / `v.x` 全收 —— 读数 `tmp/d6/ap.txt`）。 */
+export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "Vector2": ["abs", "angle", "angle_to", "angle_to_point", "aspect", "bezier_derivative", "bezier_interpolate", "bounce", "ceil", "clamp", "clampf", "cross", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "from_angle", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "limit_length", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "move_toward", "normalized", "orthogonal", "posmod", "posmodv", "project", "reflect", "rotated", "round", "sign", "slerp", "slide", "snapped", "snappedf", "x", "y"],
+  "Vector2i": ["abs", "aspect", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y"],
+  "Vector3": ["abs", "angle_to", "bezier_derivative", "bezier_interpolate", "bounce", "ceil", "clamp", "clampf", "cross", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "inverse", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "limit_length", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "move_toward", "normalized", "octahedron_decode", "octahedron_encode", "outer", "posmod", "posmodv", "project", "reflect", "rotated", "round", "sign", "signed_angle_to", "slerp", "slide", "snapped", "snappedf", "x", "y", "z"],
+  "Vector3i": ["abs", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y", "z"],
+  "Color": ["a", "a8", "b", "b8", "blend", "clamp", "darkened", "from_hsv", "from_ok_hsl", "from_rgba8", "from_rgbe9995", "from_string", "g", "g8", "get_luminance", "h", "hex", "hex64", "html", "html_is_valid", "inverted", "is_equal_approx", "lerp", "lightened", "linear_to_srgb", "ok_hsl_h", "ok_hsl_l", "ok_hsl_s", "r", "r8", "s", "srgb_to_linear", "to_abgr32", "to_abgr64", "to_argb32", "to_argb64", "to_html", "to_rgba32", "to_rgba64", "v"],
+  "String": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64", "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
+  "StringName": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
+  "NodePath": ["get_as_property_path", "get_concatenated_names", "get_concatenated_subnames", "get_name", "get_name_count", "get_subname", "get_subname_count", "hash", "is_absolute", "is_empty", "slice"],
+  "int": [],
+  "float": [],
+  "bool": [],
+};
+
+/** 调用那一形同判据：只在 `BUILTIN_INSTANCE_MEMBERS` 覆盖的那几面开口，名字不在实例成员全集里才是引擎那两句。 */
+/** 名单管的那几面：`Array` / `Dictionary` / pack 九支与 `StringName` / `NodePath` 由现成的两支在管（放开就重复报）。 */
+function instanceFaceManaged(face: string): boolean {
+  if (face === "Array" || face === "Dictionary" || face === "StringName" || face === "NodePath" || PACK_TYPE_NAMES.has(face)) return false;
+  return BUILTIN_INSTANCE_MEMBERS[face] !== undefined;
+}
+
+function instanceMemberAbsent(face: string, name: string): boolean {
+  if (!instanceFaceManaged(face) && face !== "String") return false;
+  const list = BUILTIN_INSTANCE_MEMBERS[face];
+  return list !== undefined && !list.includes(name);
+}
+
+/** 值型那几面的方法**返回型**：同一份 `--dump-extension-api` 里的 `return_type`，只留返回型落在认得的那批里的名字（链式那一族的读数 `tmp/d6/n7.txt` 二十七格，S462）。 */
+export const BUILTIN_METHOD_RETURNS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "Vector2": {"abs": "Vector2", "angle": "float", "angle_to": "float", "angle_to_point": "float", "aspect": "float", "bezier_derivative": "Vector2", "bezier_interpolate": "Vector2", "bounce": "Vector2", "ceil": "Vector2", "clamp": "Vector2", "clampf": "Vector2", "cross": "float", "cubic_interpolate": "Vector2", "cubic_interpolate_in_time": "Vector2", "direction_to": "Vector2", "distance_squared_to": "float", "distance_to": "float", "dot": "float", "floor": "Vector2", "from_angle": "Vector2", "is_equal_approx": "bool", "is_finite": "bool", "is_normalized": "bool", "is_zero_approx": "bool", "length": "float", "length_squared": "float", "lerp": "Vector2", "limit_length": "Vector2", "max": "Vector2", "max_axis_index": "int", "maxf": "Vector2", "min": "Vector2", "min_axis_index": "int", "minf": "Vector2", "move_toward": "Vector2", "normalized": "Vector2", "orthogonal": "Vector2", "posmod": "Vector2", "posmodv": "Vector2", "project": "Vector2", "reflect": "Vector2", "rotated": "Vector2", "round": "Vector2", "sign": "Vector2", "slerp": "Vector2", "slide": "Vector2", "snapped": "Vector2", "snappedf": "Vector2",},
+  "Vector2i": {"abs": "Vector2i", "aspect": "float", "clamp": "Vector2i", "clampi": "Vector2i", "distance_squared_to": "int", "distance_to": "float", "length": "float", "length_squared": "int", "max": "Vector2i", "max_axis_index": "int", "maxi": "Vector2i", "min": "Vector2i", "min_axis_index": "int", "mini": "Vector2i", "sign": "Vector2i", "snapped": "Vector2i", "snappedi": "Vector2i",},
+  "Vector3": {"abs": "Vector3", "angle_to": "float", "bezier_derivative": "Vector3", "bezier_interpolate": "Vector3", "bounce": "Vector3", "ceil": "Vector3", "clamp": "Vector3", "clampf": "Vector3", "cross": "Vector3", "cubic_interpolate": "Vector3", "cubic_interpolate_in_time": "Vector3", "direction_to": "Vector3", "distance_squared_to": "float", "distance_to": "float", "dot": "float", "floor": "Vector3", "inverse": "Vector3", "is_equal_approx": "bool", "is_finite": "bool", "is_normalized": "bool", "is_zero_approx": "bool", "length": "float", "length_squared": "float", "lerp": "Vector3", "limit_length": "Vector3", "max": "Vector3", "max_axis_index": "int", "maxf": "Vector3", "min": "Vector3", "min_axis_index": "int", "minf": "Vector3", "move_toward": "Vector3", "normalized": "Vector3", "octahedron_decode": "Vector3", "octahedron_encode": "Vector2", "posmod": "Vector3", "posmodv": "Vector3", "project": "Vector3", "reflect": "Vector3", "rotated": "Vector3", "round": "Vector3", "sign": "Vector3", "signed_angle_to": "float", "slerp": "Vector3", "slide": "Vector3", "snapped": "Vector3", "snappedf": "Vector3",},
+  "Vector3i": {"abs": "Vector3i", "clamp": "Vector3i", "clampi": "Vector3i", "distance_squared_to": "int", "distance_to": "float", "length": "float", "length_squared": "int", "max": "Vector3i", "max_axis_index": "int", "maxi": "Vector3i", "min": "Vector3i", "min_axis_index": "int", "mini": "Vector3i", "sign": "Vector3i", "snapped": "Vector3i", "snappedi": "Vector3i",},
+  "Color": {"blend": "Color", "clamp": "Color", "darkened": "Color", "from_hsv": "Color", "from_ok_hsl": "Color", "from_rgba8": "Color", "from_rgbe9995": "Color", "from_string": "Color", "get_luminance": "float", "hex": "Color", "hex64": "Color", "html": "Color", "html_is_valid": "bool", "inverted": "Color", "is_equal_approx": "bool", "lerp": "Color", "lightened": "Color", "linear_to_srgb": "Color", "srgb_to_linear": "Color", "to_abgr32": "int", "to_abgr64": "int", "to_argb32": "int", "to_argb64": "int", "to_html": "String", "to_rgba32": "int", "to_rgba64": "int",},
+  "StringName": {"begins_with": "bool", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "casecmp_to": "int", "contains": "bool", "containsn": "bool", "count": "int", "countn": "int", "dedent": "String", "ends_with": "bool", "erase": "String", "filecasecmp_to": "int", "filenocasecmp_to": "int", "find": "int", "findn": "int", "format": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "get_slice": "String", "get_slice_count": "int", "get_slicec": "String", "hash": "int", "hex_to_int": "int", "indent": "String", "insert": "String", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_subsequence_of": "bool", "is_subsequence_ofn": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "join": "String", "json_escape": "String", "left": "String", "length": "int", "lpad": "String", "lstrip": "String", "match": "bool", "matchn": "bool", "md5_text": "String", "naturalcasecmp_to": "int", "naturalnocasecmp_to": "int", "nocasecmp_to": "int", "pad_decimals": "String", "pad_zeros": "String", "path_join": "String", "remove_char": "String", "remove_chars": "String", "repeat": "String", "replace": "String", "replace_char": "String", "replace_chars": "String", "replacen": "String", "reverse": "String", "rfind": "int", "rfindn": "int", "right": "String", "rpad": "String", "rstrip": "String", "sha1_text": "String", "sha256_text": "String", "similarity": "float", "simplify_path": "String", "strip_edges": "String", "strip_escapes": "String", "substr": "String", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "trim_prefix": "String", "trim_suffix": "String", "unicode_at": "int", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
+  "NodePath": {"get_as_property_path": "NodePath", "get_concatenated_names": "StringName", "get_concatenated_subnames": "StringName", "get_name": "StringName", "get_name_count": "int", "get_subname": "StringName", "get_subname_count": "int", "hash": "int", "is_absolute": "bool", "is_empty": "bool", "slice": "NodePath",},
+};
+
+/** 只在表里有的那几面开口：名字不在实例成员集里就是引擎那两句（`valueAttrKind` 的 `null` 那一格由这张实测表接管）。 */
+function builtinInstanceAbsent(face: string, name: string): boolean {
+  const list = BUILTIN_INSTANCE_MEMBERS[face];
+  return list !== undefined && !list.includes(name);
+}
+
 function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, params } of attrScopes(m)) {
     const ann = new Map<string, string>();
     const faceName = (t: TypeRef | null): string | null =>
-      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String" || t.name === "StringName" || t.name === "NodePath" || t.name in VALUE_METHOD_ARITY) ? t.name : null;
+      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String" || t.name === "StringName" || t.name === "NodePath" || t.name === "int" || t.name === "float" || t.name === "bool" || t.name in VALUE_METHOD_ARITY) ? t.name : null;
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string") continue;
       const face = faceName(n.type as TypeRef | null);
@@ -1831,6 +2337,22 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const face = faceName(p.type);
       if (face !== null) attr.set(p.name, face);
     }
+    /** 定形数组的名字单独一张表：只给 `e[0].X` 那一形交内型，不动上面那两张既有判据的范围。 */
+    /** 模块顶上的标注名字：链式那一形（`v.angle().zzz`）的接收者在函数体外，得单独带进来。 */
+    const mods = new Map<string, string>();
+    for (const v of m.vars) {
+      const face = faceName(v.type);
+      if (face !== null) mods.set(v.name, face);
+    }
+    const elems = new Map<string, string>();
+    const noteElem = (name: string, t: TypeRef | null): void => {
+      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elems.set(name, t.name);
+    };
+    for (const v of m.vars) noteElem(v.name, v.type);
+    for (const n of nodes) {
+      if (n.kind === "var" && typeof n.name === "string") noteElem(n.name, n.type as TypeRef | null);
+    }
+    for (const prm of params) noteElem(prm.name, prm.type);
     const callCallees = new Set<unknown>();
     const writeTargets = new Set<unknown>();
     for (const n of nodes) {
@@ -1845,7 +2367,20 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         const callee = n.callee as Record<string, unknown> | undefined;
         if (callee === undefined || callee.kind !== "attribute") continue;
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
-        if (kind === null || !PACK_TYPE_NAMES.has(kind)) continue;
+        if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
+          const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems, mods);
+          if (vface === null || !instanceFaceManaged(vface)) continue;
+          // String 那一面只补元素读这一形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
+          if (vface === "String" && (callee.obj as Record<string, unknown>).kind !== "index") continue;
+          const vmethod = callee.name;
+          if (typeof vmethod !== "string") continue;
+          // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !instanceMemberAbsent(vface, vmethod)) continue;
+          const vloc = (n.loc as Diagnostic["loc"]) ?? null;
+          diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
+          diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
+          continue;
+        }
         const method = callee.name;
         if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
         if (!packNameMeasuredAbsent(kind, method)) continue;
@@ -1855,7 +2390,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       if (n.kind !== "attribute" || callCallees.has(n)) continue;
-      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr);
+      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr, elems, mods);
       if (face === null) continue;
       const name = n.name;
       if (typeof name !== "string") continue;
@@ -1873,9 +2408,14 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      if (!refused) continue;
-      const absent = PACK_TYPE_NAMES.has(face) ? packNameMeasuredAbsent(face, name) : true;
+      const absent = PACK_TYPE_NAMES.has(face)
+        ? packNameMeasuredAbsent(face, name)
+        : face === "Array" || face === "String"
+          ? true
+          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name);
       if (!absent) continue;
+      // 值类型那七面只量过**读**那一形（`tmp/probe-vattr/`），写形没读数就不开口
+      if (!refused && writeTargets.has(n)) continue;
       const one = `Cannot find member "${name}" in base "${face}".`;
       diags.push({ code: "face-attr-missing", message: one, loc });
       diags.push({ code: "face-attr-missing", message: one, loc });
@@ -1910,18 +2450,6 @@ function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
 
 /** Array 方法的元数（S379）：51 名过裁判，存在的 49 名两侧都量到（每名两格 —— 零实参读「至少」、五实参读「至多」，
  *  `tmp/probe-arr/{compare23,compare24}.txt`）。`find_custom` / `rfind_custom` 那两名 4.6.3 **仍在**（旧版文档里没有，靠实测量回来的）。 */
-const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
-  all: [1, 1], any: [1, 1], append: [1, 1], append_array: [1, 1], assign: [1, 1], back: [0, 0],
-  bsearch: [1, 2], bsearch_custom: [2, 3], clear: [0, 0], count: [1, 1], duplicate: [0, 1], erase: [1, 1],
-  fill: [1, 1], filter: [1, 1], find: [1, 2], find_custom: [1, 2], front: [0, 0], get: [1, 1],
-  get_typed_builtin: [0, 0], get_typed_class_name: [0, 0], get_typed_script: [0, 0], has: [1, 1],
-  hash: [0, 0], insert: [2, 2], is_empty: [0, 0], is_read_only: [0, 0], is_same_typed: [1, 1],
-  is_typed: [0, 0], make_read_only: [0, 0], map: [1, 1], max: [0, 0], min: [0, 0], pick_random: [0, 0],
-  pop_at: [1, 1], pop_back: [0, 0], pop_front: [0, 0], push_back: [1, 1], push_front: [1, 1], reduce: [1, 2],
-  remove_at: [1, 1], resize: [1, 1], reverse: [0, 0], rfind: [1, 2], rfind_custom: [1, 2], shuffle: [0, 0],
-  size: [0, 0], slice: [1, 4], sort: [0, 0], sort_custom: [1, 1],
-};
-
 /** Array 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Array`（带元素型的截掉那一段）与
  *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
 function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
@@ -1940,31 +2468,6 @@ function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
 /** String 方法的元数（S380）：109 名过裁判，存在的 108 名两侧都量到（每名两格 —— 零实参读「至少」、五实参读「至多」，
  *  `tmp/probe-str/compare25.txt`）。三格与直觉不同、只能量回来：`split` / `rsplit` 的**下界是 0**（不填分隔符也收），
  *  `count` 的上界是 **3**（`from` 与 `to` 都在内），`is_valid_int` / `is_valid_float` 反倒不收那支默认布尔。 */
-const STRING_METHOD_ARITY: Record<string, [number, number]> = {
-  begins_with: [1, 1], bigrams: [0, 0], bin_to_int: [0, 0], c_escape: [0, 0], c_unescape: [0, 0],
-  capitalize: [0, 0], casecmp_to: [1, 1], chr: [1, 1], contains: [1, 1], containsn: [1, 1], count: [1, 3],
-  countn: [1, 3], dedent: [0, 0], ends_with: [1, 1], erase: [1, 2], filecasecmp_to: [1, 1],
-  filenocasecmp_to: [1, 1], find: [1, 2], findn: [1, 2], format: [1, 2], get_base_dir: [0, 0],
-  get_basename: [0, 0], get_extension: [0, 0], get_file: [0, 0], get_slice: [2, 2], get_slice_count: [1, 1],
-  get_slicec: [2, 2], hash: [0, 0], hex_decode: [0, 0], hex_to_int: [0, 0], humanize_size: [1, 1],
-  indent: [1, 1], insert: [2, 2], is_absolute_path: [0, 0], is_empty: [0, 0], is_relative_path: [0, 0],
-  is_subsequence_of: [1, 1], is_subsequence_ofn: [1, 1], is_valid_filename: [0, 0], is_valid_float: [0, 0],
-  is_valid_hex_number: [0, 1], is_valid_html_color: [0, 0], is_valid_identifier: [0, 0], is_valid_int: [0, 0],
-  is_valid_ip_address: [0, 0], join: [1, 1], json_escape: [0, 0], left: [1, 1], length: [0, 0], lpad: [1, 2],
-  lstrip: [1, 1], match: [1, 1], matchn: [1, 1], md5_buffer: [0, 0], md5_text: [0, 0],
-  naturalcasecmp_to: [1, 1], naturalnocasecmp_to: [1, 1], nocasecmp_to: [1, 1], num: [1, 2],
-  num_int64: [1, 3], num_scientific: [1, 1], num_uint64: [1, 3], pad_decimals: [1, 1], pad_zeros: [1, 1],
-  path_join: [1, 1], repeat: [1, 1], replace: [2, 2], replacen: [2, 2], reverse: [0, 0], rfind: [1, 2],
-  rfindn: [1, 2], right: [1, 1], rpad: [1, 2], rsplit: [0, 3], rstrip: [1, 1], sha1_buffer: [0, 0],
-  sha1_text: [0, 0], sha256_buffer: [0, 0], sha256_text: [0, 0], similarity: [1, 1], simplify_path: [0, 0],
-  split: [0, 3], split_floats: [1, 2], strip_edges: [0, 2], strip_escapes: [0, 0], substr: [1, 2],
-  to_ascii_buffer: [0, 0], to_camel_case: [0, 0], to_float: [0, 0], to_int: [0, 0], to_kebab_case: [0, 0],
-  to_lower: [0, 0], to_pascal_case: [0, 0], to_snake_case: [0, 0], to_upper: [0, 0], to_utf16_buffer: [0, 0],
-  to_utf32_buffer: [0, 0], to_utf8_buffer: [0, 0], to_wchar_buffer: [0, 0], trim_prefix: [1, 1],
-  trim_suffix: [1, 1], unicode_at: [1, 1], uri_decode: [0, 0], uri_encode: [0, 0], validate_filename: [0, 0],
-  validate_node_name: [0, 0], xml_escape: [0, 1], xml_unescape: [0, 0],
-};
-
 /** String 方法的元数在解析期就拦。接收者认两种静态证明 —— 标注 `String` 与字符串字面量（含直接当接收者）；
  *  `&"…"` 与 `"…"` 前加记号的那两面（StringName / NodePath）走下面那两道同形状的闸门，成员表各是各的（S389）。 */
 function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
@@ -1986,11 +2489,6 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
 const STRINGNAME_NO_METHOD = new Set(["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"]);
 
 /** NodePath 那一面只认这十名（`hash` 也在内，元数 [0,0]），元数照量来的两张界。 */
-const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
-  get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
-  get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
-  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
-};
 
 const NODE_PATH_NO_METHOD = new Set(["simplify", "is_same", "length"]);
 
@@ -2363,7 +2861,8 @@ type DictKey =
   | { t: "str"; v: string }
   | { t: "bool"; v: boolean }
   | { t: "null" }
-  | { t: "vec"; name: "Vector2" | "Vector3"; xs: number[] };
+  | { t: "vec"; name: "Vector2" | "Vector3"; xs: number[] }
+  | { t: "np"; v: string };
 
 function foldDictKey(e: Expr): DictKey | null {
   if (e.kind === "lit") {
@@ -2375,6 +2874,8 @@ function foldDictKey(e: Expr): DictKey | null {
       case "string":
       case "string_name":
         return { t: "str", v: String(e.value) };
+      case "node_path":
+        return { t: "np", v: String(e.value) };
       case "bool":
         return { t: "bool", v: e.value === true };
       case "null":
@@ -2409,6 +2910,10 @@ function foldDictKey(e: Expr): DictKey | null {
       else return null;
     }
     return { t: "vec", name: e.callee.name, xs };
+  }
+  if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "NodePath" && e.args.length === 1) {
+    const one = foldDictKey(e.args[0] as Expr);
+    if (one !== null && one.t === "str") return { t: "np", v: one.v };
   }
   return null;
 }
@@ -2466,6 +2971,8 @@ function dictKeyToken(k: DictKey): string {
       return "n";
     case "vec":
       return `v:${k.name}:${k.xs.join(",")}`;
+    case "np":
+      return `p:${k.v}`;
   }
 }
 
@@ -2484,6 +2991,8 @@ function dictKeyText(k: DictKey): string {
       return "<null>";
     case "vec":
       return `(${k.xs.map(floatText).join(", ")})`;
+    case "np":
+      return k.v;
   }
 }
 
@@ -2980,7 +3489,7 @@ function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[]
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
-  const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
+  const scope = outer.funcChild(["self", ...f.params.map((p) => p.name)], !f.isStatic);
   const prevFace = hostValueMethods;
   const prevCtx = hostStaticCtx;
   hostValueMethods = hostFace;
@@ -3343,8 +3852,14 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
 
     case "lambda": {
       const fnScope = scope.child(e.params.map((p) => p.name));
-      // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置
-      for (const p of e.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
+      recordCaptures(e, scope);
+      // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置。
+      // 能看见**排在前面的**形参（`tmp/probe-lamdef/a1.gd` 的 `y = x` 收），往后看就不行（`e4.gd` 的 `a = b` 是解析期那句未声明）。
+      let defScope = scope;
+      for (const p of e.params) {
+        if (p.default !== null) walkExpr(p.default, defScope, coroutines, diags);
+        defScope = defScope.child([p.name]);
+      }
       walkStmts(e.body, fnScope, coroutines, diags, false);
       return;
     }
@@ -3446,6 +3961,7 @@ export const OP_PAIRS_REFUSED_A: Readonly<Record<string, ReadonlyArray<string>>>
   ">": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
   ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
   "and": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "in": ["int|int", "int|float", "int|bool", "int|String", "int|Vector2", "int|Color", "float|int", "float|float", "float|bool", "float|String", "float|Vector2", "float|Color", "bool|int", "bool|float", "bool|bool", "bool|String", "bool|Vector2", "bool|Color", "String|int", "String|float", "String|bool", "String|Vector2", "String|Color", "Vector2|int", "Vector2|float", "Vector2|bool", "Vector2|String", "Vector2|Vector2", "Vector2|Color", "Color|int", "Color|float", "Color|bool", "Color|String", "Color|Vector2", "Color|Color"],
   "or": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
 };
 
@@ -3462,6 +3978,7 @@ export const OP_PAIRS_REFUSED_B: Readonly<Record<string, ReadonlyArray<string>>>
   ">": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
   ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
   "and": [],
+  "in": ["Array|int", "Array|float", "Array|bool", "Array|String", "Array|Vector2", "Array|Color", "Dictionary|int", "Dictionary|float", "Dictionary|bool", "Dictionary|String", "Dictionary|Vector2", "Dictionary|Color"],
   "or": [],
 };
 
@@ -3487,6 +4004,31 @@ export const OP_PAIRS_REFUSED_DECL: Readonly<Record<string, ReadonlyArray<string
   "==": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
   ">": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
   ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "in": ["int|Vector2", "int|String", "int|Callable", "float|Vector2", "float|String", "float|Callable", "bool|Vector2", "bool|String", "bool|Callable", "String|Vector2", "String|Callable", "Vector2|Vector2", "Vector2|String", "Vector2|Callable", "Color|Vector2", "Color|String", "Color|Callable", "Array|Vector2", "Array|String", "Array|Callable", "Dictionary|Vector2", "Dictionary|String", "Dictionary|Callable", "Vector2|int", "Vector2|float", "Vector2|bool", "Vector2|Color", "String|int", "String|float", "String|bool", "String|Color", "Callable|int", "Callable|float", "Callable|bool", "Callable|String", "Callable|Vector2", "Callable|Color", "Callable|Callable", "Array|int", "Array|float", "Array|bool", "Array|Color", "Dictionary|int", "Dictionary|float", "Dictionary|bool", "Dictionary|Color", "float|int", "int|float", "float|float", "float|bool", "bool|float"],
+};
+
+/** 左支是标值型**标注变量**、右支是字面量的那些对（S457 第一笔，尺 `tmp/d6/annot.py`，读数 `tmp/d6/av-decl.txt` / `tmp/d6/av-mirror.txt`：210 格 × 两向逐格过裁判，两向**不是镜像**） */
+export const OP_PAIRS_REFUSED_DECL_VAL: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool", "int|float"],
+  "*": ["Color|String", "Color|Vector2", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|String", "int|bool"],
+  "+": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "-": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "/": ["Color|String", "Color|Vector2", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "==": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+
+};
+
+/** 反向那一形：左支是字面量、右支是标值型**标注变量**（同批实测，集与正向不等，故各记一张） */
+export const OP_PAIRS_REFUSED_DECL_VAL_REV: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|int", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "*": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|String", "int|String"],
+  "+": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "-": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "/": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "==": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+
 };
 
 /** 左支写成「静态型标明的名字」、右支是字面量那一形（S395）：468 格全过裁判，引擎这一路**一律第二式**，
@@ -3526,8 +4068,39 @@ export const OP_PAIRS_CONST_B: Readonly<Record<string, ReadonlyArray<string>>> =
   ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
 };
 
+/** 值型那几面的**属性名**（dump 的 `members`）：属性当值拿的是属性自己的型，不是 Callable（S465 ⑤ 那格误拦的根因）。 */
+export const BUILTIN_INSTANCE_PROPS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "Vector2": ["x", "y"],
+  "Vector2i": ["x", "y"],
+  "Vector3": ["x", "y", "z"],
+  "Vector3i": ["x", "y", "z"],
+  "Color": ["a", "a8", "b", "b8", "g", "g8", "h", "ok_hsl_h", "ok_hsl_l", "ok_hsl_s", "r", "r8", "s", "v"],
+};
+
+/** `Callable`（方法名当值）参加运算的那些对：全部走第二式，两向都量过（S465 ⑥ 复量：尺 `tmp/d6/callables2.py`，读数 `tmp/d6/cb.json`，153 格；先前按文本回切的分类器把构造位那几行切断，才误判成「式子按运算符分」）。 */
+export const OP_PAIRS_REFUSED_CALLABLE: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  "%": ["Array|Callable", "Callable|Array", "Callable|Callable", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "float|float", "float|int", "int|Callable"],
+  "*": ["Array|Callable", "Callable|Array", "Callable|Callable", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|bool", "int|Callable"],
+  "+": ["Array|Callable", "Callable|Array", "Callable|Callable", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "int|Callable"],
+  "-": ["Array|Callable", "Callable|Array", "Callable|Callable", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "int|Callable"],
+  "/": ["Array|Callable", "Callable|Array", "Callable|Callable", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "int|Callable"],
+  "<": ["Array|Callable", "Callable|Array", "Callable|Callable", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "int|Callable"],
+  "==": ["Array|Callable", "Callable|Array", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Dictionary|Callable", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "int|Callable"],
+  ">": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+};
+
+/** 值型那几面**属性名**自己的型（同一份 `--dump-extension-api` 的 `members[].type`）：属性名当值交的是这个型，不是 Callable（S466 ② 的那一分、S467 的输入）。 */
+export const BUILTIN_MEMBER_TYPES: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "Vector2": {"x": "float", "y": "float",},
+  "Vector2i": {"x": "int", "y": "int",},
+  "Vector3": {"x": "float", "y": "float", "z": "float",},
+  "Vector3i": {"x": "int", "y": "int", "z": "int",},
+  "Color": {"a": "float", "a8": "int", "b": "float", "b8": "int", "g": "float", "g8": "int", "h": "float", "ok_hsl_h": "float", "ok_hsl_l": "float", "ok_hsl_s": "float", "r": "float", "r8": "int", "s": "float", "v": "float",},
+};
+
 function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
-  const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary"]);
+  const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
   const named = (t: TypeRef | null): string | null => {
     if (t === null || t.kind !== "named") return null;
     const base = t.name.replace(/\[.*\]$/, "");
@@ -3535,7 +4108,12 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
   };
   const moduleTypes = new Map<string, string>();
   const moduleConsts = new Map<string, string>();
+  /** 定形容器要把**原文标注**才读得出内型（`named` 那一步把 `Array[Vector2]` 削成 `Array` 了）。 */
+  const moduleRaws = new Map<string, string>();
+  const rawOf = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" ? t.name : null);
   for (const v of m.vars) {
+    const rw = rawOf(v.type);
+    if (rw !== null) moduleRaws.set(v.name, rw);
     const t = named(v.type);
     if (t === null) continue;
     if (v.isConst) moduleConsts.set(v.name, t);
@@ -3545,26 +4123,76 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
 
   const checkBody = (body: Stmt[], base: Map<string, string>, consts: Map<string, string>): void => {
     const types = new Map(base);
+    const raws = new Map(moduleRaws);
     const nodes = flattenBody(body);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || n.isConst === true) continue;
+      const rw = rawOf(n.type as TypeRef | null);
+      if (rw !== null) raws.set(n.name, rw);
       const t = named(n.type as TypeRef | null);
       if (t !== null) types.set(n.name, t);
     }
+    /** 接收者那一格的静态型：标注名、定形数组的元素读、构造位字面量三形（与 S459/S461 同一批判据）。 */
+    const faceOf = (e: Expr): string | null =>
+      e.kind === "ident" ? (types.get(e.name) ?? null) : e.kind === "index" ? elemOf(e) : staticType(e);
+    /** 「方法名当值」是个 Callable；**属性名当值不是**（`.x` 拿的是属性自己的型 —— S465 ⑤ 那格误拦的根因）。 */
+    const callableOf = (e: Expr): string | null => {
+      if (e.kind !== "attribute") return null;
+      const face = faceOf(e.obj);
+      if (face === null) return null;
+      const nm = e.name;
+      if (typeof nm !== "string") return null;
+      const members = BUILTIN_INSTANCE_MEMBERS[face];
+      if (members === undefined || !members.includes(nm)) return null;
+      if ((BUILTIN_INSTANCE_PROPS[face] ?? []).includes(nm)) {
+        const by = BUILTIN_MEMBER_TYPES[face];
+        const t = by === undefined ? undefined : by[nm];
+        return typeof t === "string" && ANNOT.has(t) ? t : null;
+      }
+      return "Callable";
+    };
+    /** `v.floor() + "x"` 那一形：调用的是认得面上的认得方法，就把**返回型**交给现成的型对表（S462，读数 `tmp/d6/n7.txt`）。 */
+    const callRet = (e: Expr): string | null => {
+      if (e.kind !== "call" || e.callee.kind !== "attribute") return null;
+      const face = faceOf(e.callee.obj);
+      if (face === null) return null;
+      const by = BUILTIN_METHOD_RETURNS[face];
+      if (by === undefined) return null;
+      const name = e.callee.name;
+      return typeof name === "string" ? (by[name] ?? null) : null;
+    };
+    const operandKind = (e: Expr): string | null => literalKind(e) ?? callRet(e) ?? callableOf(e);
+    /** 定形容器那一读的静态型：数组交内型、字典交值型（S459 量的是字面量 int 下标，S468 补上非字面量下标与字典值读；键型不合式就不判，那一格由下标型闸门报）。 */
+    const elemOf = (e: Expr): string | null => {
+      if (e.kind !== "index" || e.obj.kind !== "ident") return null;
+      const slot = parseTyped(raws.get(e.obj.name) ?? "");
+      if (slot === null) return null;
+      const kt = staticType(e.index);
+      if (slot.kind === "Array") {
+        if (kt !== null && kt !== "int") return null;
+        return slot.elem !== undefined && ANNOT.has(slot.elem) ? slot.elem : null;
+      }
+      if (slot.key === undefined || slot.val === undefined || !ANNOT.has(slot.val)) return null;
+      if (kt !== null && !canHold(slot.key, kt)) return null;
+      return slot.val;
+    };
+    /** 两侧都是 Callable 那一形：引擎只报一句，两支循环各报一遍就成了两句重复（读数 `tmp/d6/cb.json`）。 */
+    const reported = new Set<Expr>();
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.left.kind !== "ident") continue;
-      const rt = literalKind(e.right);
+      if (e.left.kind !== "ident" && e.left.kind !== "index" && e.left.kind !== "call" && e.left.kind !== "attribute") continue;
+      const rt = operandKind(e.right);
       if (rt === null) continue;
-      const name = (e.left as Extract<Expr, { kind: "ident" }>).name;
-      const isConst = consts.has(name);
-      const lt = isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null);
+      const isIdent = e.left.kind === "ident";
+      const name = isIdent ? (e.left as Extract<Expr, { kind: "ident" }>).name : "";
+      const isConst = isIdent && consts.has(name);
+      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : e.left.kind === "index" ? elemOf(e.left) : e.left.kind === "call" ? callRet(e.left) : callableOf(e.left);
       if (lt === null) continue;
       const pair = `${lt}|${rt}`;
       const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
       const foldedB = isConst && OP_PAIRS_CONST_B[e.op]?.includes(pair) === true;
-      const declaredB = !isConst && OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true;
+      const declaredB = !isConst && (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true || OP_PAIRS_REFUSED_DECL_VAL[e.op]?.includes(pair) === true || OP_PAIRS_REFUSED_CALLABLE[e.op]?.includes(pair) === true);
       if (!foldedA && !foldedB && !declaredB) continue;
       diags.push({
         code: "op-pair",
@@ -3573,18 +4201,21 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
           : `Invalid operands "${lt}" and "${rt}" for "${e.op}" operator.`,
         loc: e.loc,
       });
+      reported.add(e);
     }
     // 反过来那一形（左支字面量、右支是标明类型的名字）与上面共用同一张表：468 格对照下来，
     // 329 对与第二式一字不差（`tmp/probe-revrecv/compare61.txt`，S397），所以只镜像判据、不再另立表。
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.right.kind !== "ident") continue;
-      const lt2 = literalKind(e.left);
+      if (reported.has(e as unknown as Extract<Expr, { kind: "binary" }>)) continue;
+      if (e.right.kind !== "ident" && e.right.kind !== "index" && e.right.kind !== "call" && e.right.kind !== "attribute") continue;
+      const lt2 = operandKind(e.left);
       if (lt2 === null) continue;
-      const rt2 = types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null;
+      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : e.right.kind === "index" ? elemOf(e.right) : e.right.kind === "call" ? callRet(e.right) : callableOf(e.right);
       if (rt2 === null) continue;
-      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(`${lt2}|${rt2}`) !== true) continue;
+      const pair2 = `${lt2}|${rt2}`;
+      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_CALLABLE[e.op]?.includes(pair2) !== true) continue;
       diags.push({
         code: "op-pair",
         message: `Invalid operands "${lt2}" and "${rt2}" for "${e.op}" operator.`,
@@ -3918,14 +4549,7 @@ function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diag
 /** pack 九支共用的那 21 名元数，两侧都是九支逐支量过的：「至少」六支在 `tmp/probe-pack/sweep.json`、byte / int32 / string 在 `compare18.txt`；
  *  「至多」int64 / byte / string 在 `compare16.txt` 与 `arity2.log`、其余五支在 `compare19.txt`（110 格，五支读数一字不差）。
  *  `slice` 的上限是 **2** 不是 3 —— pack 那支没有 `Array.slice(begin, end, step)` 的 step。byte 独有的 `compress` / `decompress` 那一族只量到下限，不进表。 */
-const PACK_METHOD_ARITY: Record<string, [number, number]> = {
-  append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
-  duplicate: [0, 0], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
-  insert: [2, 2], is_empty: [0, 0], push_back: [1, 1], remove_at: [1, 1], resize: [1, 1],
-  reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
-};
 /** 八支（除 byte 自己）多一支 `to_byte_array`：byte 上引擎说没这名字（`tmp/probe-pack/arity2.log` 第 10 格）。 */
-const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
 
 /** pack 九支的类型名：它们不在 ClassDB 里（不是 `ENGINE_CLASS_NAMES` 那一族）、也没有静态成员（进不了 `STATIC_MEMBER_FNS`），
  *  但当属性基出现时是合法的类型名 —— `PackedInt64Array.size()` 引擎给的是「不是静态方法」那一句，不是「没声明」（S376 ⑤，读数 `arity2.log` 07–09）。 */
@@ -3941,60 +4565,6 @@ const PACK_TYPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>> = {
-  Vector2: {
-    abs: [0, 0], angle: [0, 0], angle_to: [1, 1], angle_to_point: [1, 1], aspect: [0, 0],
-    bezier_derivative: [4, 4], bezier_interpolate: [4, 4], bounce: [1, 1], ceil: [0, 0], clamp: [2, 2],
-    clampf: [2, 2], cross: [1, 1], cubic_interpolate: [4, 4], cubic_interpolate_in_time: [7, 7], direction_to: [1, 1],
-    distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1], floor: [0, 0], from_angle: [1, 1],
-    is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0], is_zero_approx: [0, 0], length: [0, 0],
-    length_squared: [0, 0], lerp: [2, 2], limit_length: [0, 1], max: [1, 1], max_axis_index: [0, 0],
-    maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0], minf: [1, 1], move_toward: [2, 2],
-    normalized: [0, 0], orthogonal: [0, 0], posmod: [1, 1], posmodv: [1, 1], project: [1, 1],
-    reflect: [1, 1], rotated: [1, 1], round: [0, 0], sign: [0, 0], slerp: [2, 2],
-    slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
-  },
-  Vector2i: {
-    abs: [0, 0], aspect: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1],
-    distance_to: [1, 1], length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0],
-    maxi: [1, 1], min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0],
-    snapped: [1, 1], snappedi: [1, 1],
-  },
-  Vector3: {
-    abs: [0, 0], angle_to: [1, 1], bezier_derivative: [4, 4], bezier_interpolate: [4, 4], bounce: [1, 1],
-    ceil: [0, 0], clamp: [2, 2], clampf: [2, 2], cross: [1, 1], cubic_interpolate: [4, 4],
-    cubic_interpolate_in_time: [7, 7], direction_to: [1, 1], distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1],
-    floor: [0, 0], inverse: [0, 0], is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0],
-    is_zero_approx: [0, 0], length: [0, 0], length_squared: [0, 0], lerp: [2, 2], limit_length: [0, 1],
-    max: [1, 1], max_axis_index: [0, 0], maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0],
-    minf: [1, 1], move_toward: [2, 2], normalized: [0, 0], octahedron_decode: [1, 1], octahedron_encode: [0, 0],
-    outer: [1, 1], posmod: [1, 1], posmodv: [1, 1], project: [1, 1], reflect: [1, 1],
-    rotated: [2, 2], round: [0, 0], sign: [0, 0], signed_angle_to: [2, 2], slerp: [2, 2],
-    slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
-  },
-  Vector3i: {
-    abs: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1], distance_to: [1, 1],
-    length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0], maxi: [1, 1],
-    min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0], snapped: [1, 1],
-    snappedi: [1, 1],
-  },
-  Color: {
-    blend: [1, 1], clamp: [0, 2], darkened: [1, 1], from_hsv: [3, 4], from_ok_hsl: [3, 4],
-    from_rgbe9995: [1, 1], from_string: [2, 2], get_luminance: [0, 0], hex: [1, 1], hex64: [1, 1],
-    html: [1, 1], html_is_valid: [1, 1], inverted: [0, 0], is_equal_approx: [1, 1], lerp: [2, 2],
-    lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
-    to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
-  },
-  PackedByteArray: PACK_METHOD_ARITY,
-  PackedInt32Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedInt64Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedFloat32Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedFloat64Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedStringArray: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedVector2Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedVector3Array: PACK_METHOD_ARITY_WITH_BYTES,
-  PackedColorArray: PACK_METHOD_ARITY_WITH_BYTES,
-};
 
 /** 只认「名字本身就是表里那几支之一」的标注与字面量构造式（值类型五支 + pack 九支），别的（`Variant`、自定义类、引擎类）一概不猜。 */
 function valueTypeAnnotation(t: TypeRef | null): string | null {
@@ -4147,6 +4717,18 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (t !== null) typed.set(p.name, t);
       if (p.type !== null && p.type.kind === "named" && FACE_ANNOTATIONS.has(p.type.name)) faceTyped.set(p.name, p.type.name);
     }
+    const elemFaces = new Map<string, string>();
+    const noteElem = (name: string, t: TypeRef | null): void => {
+      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elemFaces.set(name, t.name);
+    };
+    for (const v of m.vars) noteElem(v.name, v.type);
+    for (const prm of f.params) noteElem(prm.name, prm.type);
+    /** `e[0].m(...)` 这一形的接收者：只认字面量 int 下标那一格（S460 量的就是它，其余形不判）。 */
+    const recvElem = (obj: Expr): string | null => {
+      if (obj.kind !== "index" || obj.obj.kind !== "ident") return null;
+      if (staticType(obj.index) !== "int") return null;
+      return elemFaceOf(elemFaces.get(obj.obj.name) ?? "");
+    };
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
     const staticCallees = new Set<Expr>();
@@ -4324,7 +4906,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : valueCtorType(callee.obj);
+      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
       if (recv === null) continue;
       const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
       if (sig === undefined) continue;
@@ -4586,4 +5168,53 @@ function numericLiteralKind(e: Expr): "int" | "float" | null {
   if (e.lit === "int") return "int";
   if (e.lit === "float") return "float";
   return null;
+}
+
+let outerNames = new Set<string>();
+
+/** 模块级与类级的名字（字段、方法、信号、内部类、常量）：那些在出货里是 `this.x` 或全局，按实测**不随 lambda 冻住**（`tmp/probe-capture/c1.gd` 的 K5）。 */
+function seedOuterNames(m: Module): void {
+  const out = new Set<string>(declNames(m));
+  const walk = (c: { vars: Array<{ name: string }>; funcs: Array<{ name: string }>; signals: Array<{ name: string }>; consts?: Array<{ name: string }>; innerClasses: unknown[] }): void => {
+    for (const v of c.vars) out.add(v.name);
+    for (const f of c.funcs) out.add(f.name);
+    for (const sg of c.signals) out.add(sg.name);
+    for (const k of c.consts ?? []) out.add(k.name);
+    for (const inner of c.innerClasses) walk(inner as Parameters<typeof walk>[0]);
+  };
+  for (const c of m.innerClasses) walk(c as Parameters<typeof walk>[0]);
+  outerNames = out;
+}
+
+const lambdaCaptures = new Map<string, string[]>();
+const capKey = (line: number, col: number): string => `${markOwner}@${String(line)}:${String(col)}`;
+
+/** 递归收 lambda 子树里的**读名**：`kind: "ident"` 都算，子树自己绑过的那些（形参、`var`、循环变量、`bind` 臂名）除外。 */
+function collectReads(node: unknown, bound: Set<string>, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const v of node) collectReads(v, bound, out);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+  const o = node as Record<string, unknown>;
+  if (o["kind"] === "ident" && typeof o["name"] === "string" && !bound.has(o["name"])) out.add(o["name"]);
+  for (const v of Object.values(o)) collectReads(v, bound, out);
+}
+
+/** 记下这一支 lambda 要影子化的名字：读得到、自己没绑、而且是**函数级局部**（引擎按值捕获，`tmp/probe-capture/c1.gd` K3 / K4 / K7）。 */
+function recordCaptures(e: Expr, scope: Scope): void {
+  if (e.kind !== "lambda" || e.loc === null) return;
+  const bound = new Set<string>();
+  collectLocalNames(e.body, e.params.map((p) => p.name), bound);
+  for (const p of e.params) bound.add(p.name);
+  const reads = new Set<string>();
+  collectReads(e, bound, reads);
+  const caps = [...reads].filter((n) => n !== "self" && !outerNames.has(n) && scope.hasLocal(n)).sort();
+  if (caps.length > 0) lambdaCaptures.set(capKey(e.loc.line, e.loc.col), caps);
+}
+
+/** 发射器读的那张表：这一支 lambda 创建时要按值影子化的局部名。 */
+export function lambdaCaptureNames(e: Expr): string[] {
+  if (e.kind !== "lambda" || e.loc === null) return [];
+  return lambdaCaptures.get(capKey(e.loc.line, e.loc.col)) ?? [];
 }

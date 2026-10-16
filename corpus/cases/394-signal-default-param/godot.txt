@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Signal parameters cannot have a default value.
+   at: GDScript::reload (<case>/main.gd:3)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

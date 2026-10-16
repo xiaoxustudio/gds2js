@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
+import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, lambdaCaptureNames, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -287,6 +287,8 @@ let MODULE_RES_PATH: string | null = null;
 let INIT_AS_METHOD = false;
 /** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
 let INHERITED_METHODS = new Set<string>();
+/** 其中**来自脚本祖先**的那一部分：入口的 async 实体发成 `__gd_<名>`，宿主基类身上没有这一格，只有父脚本定义过同名入口时才有 —— 那一形才要 `override`。 */
+let SCRIPT_INHERITED = new Set<string>();
 /** 宿主 SceneTree / GdScriptObject 身上产品脚本可能重名的成员。 */
 const HOST_MEMBERS = ["quit", "create_timer", "run", "_initialize", "_process", "__gdDispatch"];
 /** 旧形状下 JS 的直接基类是宿主 SceneTree：派生构造器必须自己调 super()，否则运行期当场炸。 */
@@ -310,7 +312,7 @@ let VAR_TYPES = new Map<string, TypeRef | null>();
 /** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
 /** 当前发射的函数自己绑住的名字（见 `collectBinds`），取值记号撞号时用它先认局部。 */
-let FUNC_BINDS = new Set<string>();
+let FUNC_BINDS = new Map<string, number>();
 /** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
 let CLASS_FUNCS = new Set<string>();
 
@@ -492,12 +494,14 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     ...(opts.inheritedMembers ?? []),
     ...(baseClass.kind === "host" ? HOST_MEMBERS : []),
   ]);
+  SCRIPT_INHERITED = new Set(opts.inheritedMembers ?? []);
   for (const f of m.funcs) {
     const base = out.length;
     const lines = emitFunc(f, base);
     for (const line of lines) out.push(`  ${line}`);
   }
   INHERITED_METHODS = new Set();
+  SCRIPT_INHERITED = new Set();
   out.push(...emitDispatch(m.funcs, proto));
   out.push("}");
   out.push("");
@@ -827,11 +831,13 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push(...emitClassLevelVars(decl.vars, base + lines.length));
   if (!proto && !decl.funcs.some((f) => f.name === "_init" && !f.isStatic)) lines.push(...emitFieldsOnlyConstructor());
   INHERITED_METHODS = new Set(innerInheritedMethodNames(decl));
+  SCRIPT_INHERITED = INHERITED_METHODS;
   for (const f of decl.funcs) {
     const funcBase = base + lines.length;
     for (const line of emitFunc(f, funcBase)) lines.push(`  ${line}`);
   }
   INHERITED_METHODS = new Set();
+  SCRIPT_INHERITED = new Set();
   lines.push(...emitDispatch(decl.funcs, proto));
   lines.push("}");
   lines.push(`const __gd_d_${decl.name} = rt.defineClass(${decl.name}, ${makeClosure(decl.name, decl.funcs.find((x) => x.name === "_init" && !x.isStatic), proto)}, (o) => o instanceof ${decl.name});`);
@@ -957,7 +963,7 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   const saved = LOCAL_TYPES;
   const savedBinds = FUNC_BINDS;
   LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
-  FUNC_BINDS = collectBinds(f.body, new Set(f.params.map((p) => p.name)));
+  FUNC_BINDS = collectBinds(f.body, seedParamBinds(f.params));
   try {
     return emitFuncInner(f, base);
   } finally {
@@ -968,18 +974,38 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
 
 /** 这个函数自己绑住的名字：形参、体内所有 `var`、lambda 形参、`for` 的循环变量与 match 手臂的 `bind`。
  *  取值记号（analyze 的 `名@行:列`）是跨模块共用的表，两份同形同位的源会撞号 —— 撞上了先认局部，别把局部读成 Callable。 */
-function collectBinds(root: unknown, out: Set<string>): Set<string> {
+function collectBinds(root: unknown, out: Map<string, number>): Map<string, number> {
   if (Array.isArray(root)) {
     for (const v of root) collectBinds(v, out);
     return out;
   }
   if (root === null || typeof root !== "object") return out;
   const o = root as Record<string, unknown>;
-  if ((o["kind"] === "var" || o["kind"] === "bind") && typeof o["name"] === "string") out.add(o["name"]);
-  if (o["kind"] === "for" && typeof o["var"] === "string") out.add(o["var"]);
-  if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") out.add(p.name);
+  if ((o["kind"] === "var" || o["kind"] === "bind") && typeof o["name"] === "string") addBind(out, o["name"]);
+  const loopVar = o["kind"] === "for" && typeof o["var"] === "string" ? o["var"] : null;
+  if (loopVar !== null) addBind(out, loopVar);
+  if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") addBind(out, p.name);
   for (const v of Object.values(o)) collectBinds(v, out);
+  // 循环变量只活到循环体结束（引擎在循环之后读它发的是解析期那句 `Identifier "k" not declared in the current scope.`，§6 第 88 条）
+  if (loopVar !== null) dropBind(out, loopVar);
   return out;
+}
+
+/** 形参在整支函数身上活着：先把它们计进这张表，再让 `collectBinds` 往下走。 */
+function seedParamBinds(params: Param[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const p of params) addBind(out, p.name);
+  return out;
+}
+
+function addBind(out: Map<string, number>, name: string): void {
+  out.set(name, (out.get(name) ?? 0) + 1);
+}
+
+function dropBind(out: Map<string, number>, name: string): void {
+  const left = (out.get(name) ?? 1) - 1;
+  if (left <= 0) out.delete(name);
+  else out.set(name, left);
 }
 
 /** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */
@@ -1096,7 +1122,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     // 宿主的两条 virtual 一定是覆写，`override` 修饰符不能省。
     lines.push(`  override ${f.name}(${wrapParams}): ${ret} { return this.${bodyName}(${wrapFwd}); }`);
   }
-  const overriding = !f.isStatic && !wrap && INHERITED_METHODS.has(f.name);
+  const overriding = !f.isStatic && (wrap ? SCRIPT_INHERITED.has(f.name) : INHERITED_METHODS.has(f.name));
   lines.push(`${f.isStatic ? "static " : ""}${overriding ? "override " : ""}${async}${bodyName}(${params}): ${ret} {`);
   mark(base, f.loc);
   const savedUnboxed = UNBOXED;
@@ -3143,9 +3169,14 @@ function emitExprVar(e: Expr): string {
       return `rt.wrapValue(rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)}))`;
 
     case "lambda": {
-      // lambda 形参的默认值未实现：只拒那一格，普通形参照常发。
-      if (e.params.some((p) => p.default !== null)) {
-        throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
+      // 默认值形参必须排在尾部：`func(a = 1, b)` 那一形引擎没收过，不发（读数 `tmp/probe-lamdef/`）
+      const firstDef = e.params.findIndex((p) => p.default !== null);
+      if (firstDef >= 0 && e.params.slice(firstDef).some((p) => p.default === null)) {
+        throw new UnsupportedError("lambda-param-default", "lambda 的默认值形参排在必填形参之前那一形没实测过，不发");
+      }
+      const defs = e.params.flatMap((p) => (p.default === null ? [] : [p.default]));
+      if (defs.some((d) => d.kind === "lambda")) {
+        throw new UnsupportedError("lambda-param-default", "默认值那一位直接放 lambda 的形况没实测过，不发");
       }
       const lpad = "        ";
       const body = e.body.flatMap((st) => {
@@ -3157,8 +3188,9 @@ function emitExprVar(e: Expr): string {
         }
       });
       // 盒子里的式子统一收一个数组，所以按位置把形参绑成同名 const，并把声明形参数一起交给盒子。
-      const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant;`);
-      return [
+      // 默认值排在同名 const 之后：`func(x = 1, y = x)` 那格的读数是 `[1, 1]` —— 后一位看得见前一位（`tmp/probe-lamdef/{a1,c1}.gd`）
+      const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant` + (p.default === null ? "" : " ?? " + emitExpr(p.default)) + ";");
+      const lines: string[] = [
         `rt.callable((__a: rt.Variant[]) => {`,
         `        const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "<anonymous lambda>");`,
         "        try {",
@@ -3171,8 +3203,13 @@ function emitExprVar(e: Expr): string {
         "        } finally {",
         "          rt.frameExit(__gd_frame);",
         "        }",
-        `    }, ${e.params.length})`,
-      ].join("\n");
+        `    }, ${e.params.length}${defs.length === 0 ? "" : ", " + String(defs.length)})`,
+      ];
+      const inner = lines.join(String.fromCharCode(10));
+      // 引擎的 lambda **按值捕获**函数级局部（`tmp/probe-capture/c1.gd` K3 / K4 / K7）：套一层只跑一次的影子箭头，把那几个名字冻在创建那一刻。
+      const caps = lambdaCaptureNames(e);
+      if (caps.length > 0) return "(((" + caps.join(", ") + ") => " + inner + "))(" + caps.join(", ") + ")";
+      return inner;
     }
 
     case "call":

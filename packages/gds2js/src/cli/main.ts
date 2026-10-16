@@ -1,5 +1,5 @@
 import { basename, dirname, join, resolve } from "node:path";
-import { buildProgram, FLAGS, withCommon, type CliSpec } from "../commands";
+import { runCli, FLAGS, withCommon, type CliSpec } from "../commands";
 import { findNestedProjects, findResRoot, hostOf, isProjectCmd, modeOf, packOf, refuseNestedProjects, runtimeOf, strOf, type CmdName, type Ctx } from "./ctx";
 import { buildProject, buildSingle } from "./build";
 import { checkProject, checkSingle } from "./check";
@@ -90,14 +90,14 @@ const CLI: CliSpec = {
       name: "check",
       args: ["file"],
       description: "静态检查（解析 / lowering / 语义分析）",
-      flags: withCommon([]),
+      flags: withCommon([FLAGS.resRootClosure]),
       run: (p, o) => dispatch(resolveCtx("check", p[0] as string, o)),
     },
     {
       name: "build",
       args: ["file"],
       description: "编译单个文件成 ESM 模块",
-      flags: withCommon([FLAGS.out("输出文件（默认与源同名 .mts）"), FLAGS.runtimeMode, FLAGS.noRun, FLAGS.sourcemap]),
+      flags: withCommon([FLAGS.out("输出文件（默认与源同名 .mts）"), FLAGS.runtimeMode, FLAGS.noRun, FLAGS.sourcemap, FLAGS.resRootClosure]),
       run: (p, o) => dispatch(resolveCtx("build", p[0] as string, o)),
     },
     {
@@ -132,6 +132,7 @@ const CLI: CliSpec = {
           help: "运行时打包模式：import(默认) | single(内联自包含)；local 会往源目录旁挂文件，run 不支持",
         },
         FLAGS.keep,
+        FLAGS.resRootClosure,
       ]),
       run: (p, o) => dispatch(resolveCtx("run", p[0] as string, o)),
     },
@@ -177,5 +178,5 @@ const CLI: CliSpec = {
 };
 
 export function main(): void {
-  buildProgram(CLI).parse();
+  runCli(CLI);
 }

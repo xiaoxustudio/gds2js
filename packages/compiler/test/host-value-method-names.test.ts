@@ -164,3 +164,25 @@ describe("宿主裸方法名当值用", () => {
     expect(await diag("quit_and_ide_debug")).toBe("Identifier \"quit_and_ide_debug\" not declared in the current scope.");
   });
 });
+
+/** 循环变量的作用域只到循环体结束（§6 第 88 条，读数 `tmp/probe-forvar/{p1,p2}.gd`）：循环之后读同名，引擎发的仍是宿主那一支，
+ *  出货不许把它当成那个早就出了作用域的局部名 —— 那一形在产物里是 JS 自己的 `ReferenceError`。 */
+describe("循环变量出了循环就不算局部名", () => {
+  const LOOP = "extends SceneTree\n\nfunc _initialize():\n\tfor quit in [1, 2]:\n\t\tprint(quit)\n\tprint(quit)\n\tquit()\n";
+  const AFTER = "extends SceneTree\n\nfunc _initialize():\n\tfor k in [1, 2]:\n\t\tprint(k)\n\tprint(k)\n\tquit()\n";
+
+  it("循环体里认局部、循环之后认宿主", async () => {
+    const ir = lower(await parseSource(LOOP));
+    expect(analyze(ir), "这一形引擎不收诊断").toEqual([]);
+    const code = emitModule(ir, OPTS);
+    const at = code.indexOf('rt.methodCallable(rt.V.object(this), "quit")');
+    expect(at, "循环之后那一读要发宿主的 Callable").toBeGreaterThan(-1);
+    expect(code.slice(0, at).includes("rt.methodCallable"), "循环体内的读值不许发成 Callable").toBe(false);
+    expect(code.split(String.fromCharCode(10)).filter((x) => x.includes("showArgs([quit])")).length, "只剩循环体里那一读是裸名").toBe(1);
+  });
+
+  it("循环之后读一个只有循环绑过的普通名字，仍是解析期那一句", async () => {
+    const diags = analyze(lower(await parseSource(AFTER)));
+    expect(diags.map((d) => d.message)).toContain('Identifier "k" not declared in the current scope.');
+  });
+});

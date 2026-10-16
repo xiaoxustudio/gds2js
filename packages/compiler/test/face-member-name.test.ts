@@ -28,11 +28,20 @@ describe("静态接收者的表外方法名", () => {
     ["字典推断变量放过", '\tvar d = {1: 2}\n\tprint(d.nosuch())', []],
     ["pack 构造位表外名", '\tprint(PackedStringArray(["a"]).join("-"))', BOTH("PackedStringArray", "join")],
     ["pack 标注变量表外名", '\tvar p: PackedStringArray = PackedStringArray(["a"])\n\tprint(p.join("-"))', BOTH("PackedStringArray", "join")],
+    ["链式 float 面读表外名报两遍（S464）", '\tvar v: Vector2 = Vector2(1, 2)\n\tprint(v.angle().zzz)', ['Cannot find member "zzz" in base "float".', 'Cannot find member "zzz" in base "float".']],
+    ["链式 int 面读表外名报两遍（S464）", '\tvar vi: Vector2i = Vector2i(1, 2)\n\tprint(vi.length_squared().zzz)', ['Cannot find member "zzz" in base "int".', 'Cannot find member "zzz" in base "int".']],
+    ["链式返回 float 配 int 放过", '\tvar v: Vector2 = Vector2(1, 2)\n\tprint(v.angle() + 1)', []],
+    ["元素读 int 面表外名报两遍（S464）", '\tvar ea: Array[int] = [1]\n\tprint(ea[0].zzz)', ['Cannot find member "zzz" in base "int".', 'Cannot find member "zzz" in base "int".']],
+    ["元素读 String 面真成员放过", '\tvar es: Array[String] = ["a"]\n\tprint(es[0].length())', []],
     ["pack 推断变量放过", '\tvar p = PackedStringArray(["a"])\n\tprint(p.join("-"))', []],
     ["byte 独有的名在其余八支开口", "\tprint(PackedInt32Array([1]).hex_encode())", BOTH("PackedInt32Array", "hex_encode")],
     ["byte 独有的名在 byte 放过", "\tprint(PackedByteArray([1]).hex_encode())", []],
     ["to_byte_array 只在 byte 开口", "\tprint(PackedByteArray([1]).to_byte_array())", BOTH("PackedByteArray", "to_byte_array")],
     ["to_byte_array 在其余八支放过", "\tprint(PackedInt32Array([1]).to_byte_array())", []],
+    ["byte 独有的名也吃元数两句（至多）", "\tprint(PackedByteArray([1]).hex_encode(1))", ['Too many arguments for "hex_encode()" call. Expected at most 0 but received 1.']],
+    ["compress 的上界一支", "\tprint(PackedByteArray([1]).compress(1, 2))", ['Too many arguments for "compress()" call. Expected at most 1 but received 2.']],
+    ["decompress 的下界一支", "\tvar b: PackedByteArray = PackedByteArray([1])\n\tprint(b.decompress())", ['Too few arguments for "decompress()" call. Expected at least 1 but received 0.']],
+    ["合法元数不许拦", "\tprint(PackedByteArray([1]).hex_encode())", []],
   ];
 
   it.each(CASES)("%s", async (_label, body, want) => {
@@ -100,11 +109,29 @@ describe("值类型面只接成员名当值，两形不许顺手拦", () => {
   const CASES: Array<[string, string, string[]]> = [
     ["Vector2 成员名当值放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.length)", []],
     ["构造位 Vector2 成员名当值放过", "\tprint(Vector2(1, 2).normalized)", []],
-    ["值类型面的表外名没读数就放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", []],
+    ["值类型面的表外名报两遍（S461：实例成员全集取自本机 `--dump-extension-api`）", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", ['Cannot find member "nosuchzz" in base "Vector2".', 'Cannot find member "nosuchzz" in base "Vector2".']],
     ["值类型面上写成员名没读数就放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tv.length = 1", []],
     ["StringName 成员名当值放过", "\tvar s: StringName = StringName(\"ab\")\n\tprint(s.hash)", []],
     ["NodePath 成员名当值放过", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.get_name_count)", []],
     ["NodePath 字面量成员名当值放过", "\tprint(NodePath(\"a/b\").hash)", []],
+  ];
+
+  it.each(CASES)("%s", async (_label, body, want) => {
+    expect(await diags(body)).toEqual(want);
+  });
+});
+
+describe("值类型与两支名字面的属性读按七面名单分岔（S432）", () => {
+  const say2 = (t: string, n: string): string => `Cannot find member "${n}" in base "${t}".`;
+  const CASES: Array<[string, string, string[]]> = [
+    ["Vector2 读宇宙内表外名报两遍", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.keys)", [say2("Vector2", "keys"), say2("Vector2", "keys")]],
+    ["Vector2 那一名宇宙外也报两遍（S461）", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", [say2("Vector2", "nosuchzz"), say2("Vector2", "nosuchzz")]],
+    ["值类型面的写形没读数不开口", "\tvar v: Vector2 = Vector2(3, 4)\n\tv.keys = 1", []],
+    ["Color 读成员名放过", "\tvar c: Color = Color(1, 0.5, 0.25, 1)\n\tprint(c.to_html)", []],
+    ["StringName 读表外名报两遍", "\tvar s: StringName = StringName(\"ab\")\n\tprint(s.size)", [say2("StringName", "size"), say2("StringName", "size")]],
+    ["NodePath 读表外名报两遍", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.keys)", [say2("NodePath", "keys"), say2("NodePath", "keys")]],
+    ["NodePath 读成员名放过", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.get_name_count)", []],
+    ["Vector3 读真属性放过", "\tvar q: Vector3 = Vector3(1, 2, 2)\n\tprint(q.z)", []],
   ];
 
   it.each(CASES)("%s", async (_label, body, want) => {
