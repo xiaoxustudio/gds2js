@@ -1762,6 +1762,18 @@ function packNameMeasuredAbsent(kind: string, name: string): boolean {
   return (kind === "PackedByteArray" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE).includes(name);
 }
 
+/** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
+ *  `Array` / `String` 只认**标注**那一形（`tmp/probe-bincall/compare2.txt` 的 H5 / H6 / H7 / H15 四格就是标注读的），
+ *  `Dictionary` 两形都不认 —— 引擎在标注字典上读属性连表外名都不在解析期开口（S419 ②）。 */
+function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>): string | null {
+  if (obj === undefined) return null;
+  if (obj.kind === "ident" && typeof obj.name === "string") {
+    const face = ann.get(obj.name) ?? null;
+    return face === "Dictionary" ? null : face;
+  }
+  return packFaceRecv(obj, ann);
+}
+
 /** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
  *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。
  *  属性那一形（不调用）引擎把同一句报两遍，读数 `tmp/probe-attr/compare3.txt` 九支一字一样。 */
@@ -1771,7 +1783,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string") continue;
       const type = n.type as TypeRef | null;
-      if (type !== null && type.kind === "named" && PACK_TYPE_NAMES.has(type.name)) ann.set(n.name, type.name);
+      if (type !== null && type.kind === "named" && (PACK_TYPE_NAMES.has(type.name) || type.name === "Array" || type.name === "String")) ann.set(n.name, type.name);
     }
     const callCallees = new Set<unknown>();
     const writeTargets = new Set<unknown>();
@@ -1787,7 +1799,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         const callee = n.callee as Record<string, unknown> | undefined;
         if (callee === undefined || callee.kind !== "attribute") continue;
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
-        if (kind === null) continue;
+        if (kind === null || !PACK_TYPE_NAMES.has(kind)) continue;
         const method = callee.name;
         if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
         if (!packNameMeasuredAbsent(kind, method)) continue;
@@ -1797,18 +1809,20 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       if (n.kind !== "attribute" || callCallees.has(n)) continue;
-      const kind = packFaceRecv(n.obj as Record<string, unknown>, ann);
-      if (kind === null) continue;
+      const face = attrFaceRecv(n.obj as Record<string, unknown>, ann);
+      if (face === null) continue;
       const name = n.name;
       if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      if (name in (VALUE_METHOD_ARITY[kind] ?? {})) {
-        // 往成员名上写：16 名 × 三型量过、三型一字一样（读数 `tmp/probe-attr/compare4.txt`）
+      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
+      if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
+        // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
         if (writeTargets.has(n)) diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
         continue;
       }
-      if (!packNameMeasuredAbsent(kind, name)) continue;
-      const one = `Cannot find member "${name}" in base "${kind}".`;
+      const absent = PACK_TYPE_NAMES.has(face) ? packNameMeasuredAbsent(face, name) : true;
+      if (!absent) continue;
+      const one = `Cannot find member "${name}" in base "${face}".`;
       diags.push({ code: "face-attr-missing", message: one, loc });
       diags.push({ code: "face-attr-missing", message: one, loc });
     }

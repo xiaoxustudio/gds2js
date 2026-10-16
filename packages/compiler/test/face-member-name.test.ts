@@ -55,6 +55,13 @@ describe("pack 的属性两面（读数 tmp/probe-attr/compare3.txt）", () => {
     ["构造位写成员名", "\tPackedStringArray([\"a\"]).append = 1", ["Cannot assign a new value to a constant."]],
     ["推断位写成员名放过", "\tvar q = PackedByteArray([1])\n\tq.duplicate = 1", []],
     ["读成员名不许发常量那句", "\tvar q: PackedColorArray = PackedColorArray([Color(1, 0, 0, 1)])\n\tprint(q.size)", []],
+    ["标注 Array 读表外名报两遍", '\tvar a: Array = [1, 2]\n\tprint(a.nosuch)', [attrSay("Array", "nosuch"), attrSay("Array", "nosuch")]],
+    ["标注 Array 写成员名给常量那一句", "\tvar a: Array = [1, 2]\n\ta.append = 1", ["Cannot assign a new value to a constant."]],
+    ["标注 String 读表外名报两遍", '\tvar s: String = "abcd"\n\tprint(s.nosuch)', [attrSay("String", "nosuch"), attrSay("String", "nosuch")]],
+    ["标注 String 写成员名给常量那一句", '\tvar s: String = "abcd"\n\ts.to_upper = 1', ["Cannot assign a new value to a constant."]],
+    ["标注 Dictionary 读属性不在解析期开口", '\tvar d: Dictionary = {1: 2}\n\tprint(d.nosuch)', []],
+    ["标注 Dictionary 写属性不在解析期开口", '\tvar d: Dictionary = {1: 2}\n\td.nosuch = 1', []],
+    ["字面量 Array 读表外名放过（那一形没量）", "\tprint([1, 2].nosuch)", []],
   ];
 
   it.each(CASES)("%s", async (_label, body, want) => {
