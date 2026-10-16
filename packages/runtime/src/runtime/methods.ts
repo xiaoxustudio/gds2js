@@ -35,7 +35,7 @@ import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "./packed";
 
 function asArray(v: Variant, who: string): GArray {
   if (v.t !== Tag.ARRAY) throw new UnsupportedError("not-array", `${who} 需要 Array，收到 ${v.t}`);
@@ -1163,6 +1163,17 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
     objInner[key] = intoSlot(kind, value, key, objInner);
     return null;
   }
+  if (base.t === Tag.OBJECT && base.v instanceof GBytes) {
+    // 属性写的两形量过：表外名给 `Invalid assignment of property or key … with value of type …`（读数 `tmp/probe-attr/compare2.txt` 的推断位写那一格），
+    // 写方法名那一格静态位给的是 `Cannot assign a new value to a constant.`，装箱位没量过 —— 照旧响亮拒
+    if (packNameAbsent((base.v as GBytes).kind, key)) {
+      throw new GodotRuntimeError(
+        "packed-prop-assign",
+        `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type '${packTypeName((base.v as GBytes).kind)}'.`,
+      );
+    }
+    throw new UnsupportedError("packed-property", `pack 的属性写只量过表外名那一格：${packTypeName((base.v as GBytes).kind)}.${key} = … 没实测过`);
+  }
   if (vec === null) {
     throw new GodotRuntimeError(
       "vector2-write",
@@ -1286,6 +1297,11 @@ export function attribute(raw: unknown, name: string): unknown {
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     if (obj.v instanceof GBytes) {
+      // 属性面只量过三格（读数 `tmp/probe-attr/compare{1,2}.txt`）：表外名给 `Invalid access to property or key …`，
+      // 方法名当值引擎给的是 Callable（`PackedByteArray::size`）还没接，其余没量过的名字照旧响亮拒
+      if (packNameAbsent((obj.v as GBytes).kind, name)) {
+        throw new GodotRuntimeError("packed-attribute", `Invalid access to property or key '${name}' on a base object of type '${packTypeName((obj.v as GBytes).kind)}'.`);
+      }
       throw new UnsupportedError("packed-attribute", `PackedByteArray 没有 ${name} 这个成员（这一族的成员全是方法，属性面没实测过）`);
     }
     const inner = obj.v as Record<string, unknown>;

@@ -8,6 +8,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE, packBytes, packCtor, packMethod, type PackKind } from "@gds2js/runtime/runtime/packed";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
+import { attribute, writeProp } from "@gds2js/runtime/runtime/methods";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { vector3 } from "@gds2js/runtime/runtime/vector3";
 import { colorNew } from "@gds2js/runtime/runtime/color";
@@ -167,5 +168,36 @@ describe("runtime/packed · S414 那份确认不存在名单在运行期同样�
     eq("414", "byte 的 to_byte_array 引擎也开口", errOf(() => packMethod(byte, "to_byte_array", [])), say("PackedByteArray", "to_byte_array"));
     const int32 = packBytes(packCtor("int32", []));
     eq("414", "int32 的 to_byte_array 是引擎有的名字", /Nonexistent function/.test(errOf(() => packMethod(int32, "to_byte_array", []))), false);
+  });
+});
+
+describe("runtime/methods · pack 的属性两面按读数发引擎那句（S416）", () => {
+  const THREE: Array<[string, PackKind]> = [["PackedByteArray", "byte"], ["PackedInt32Array", "int32"], ["PackedStringArray", "string"]];
+  const NAMES = ["keys", "values", "length", "join", "at", "map"];
+  const accessSay = (type: string, n: string): string => "Invalid access to property or key '" + n + "' on a base object of type '" + type + "'.";
+  const assignSay = (type: string, n: string): string => "Invalid assignment of property or key '" + n + "' with value of type 'int' on a base object of type '" + type + "'.";
+
+  it("读式三型逐个给 Invalid access 那句", () => {
+    for (const [type, kind] of THREE) {
+      const recv = packBytes(packCtor(kind, []));
+      for (const n of NAMES) {
+        eq("416", `读 ${type}.${n}`, errOf(() => attribute(recv, n)), accessSay(type, n));
+      }
+    }
+  });
+
+  it("写式三型逐个给 Invalid assignment 那句，值型按实值的型名", () => {
+    for (const [type, kind] of THREE) {
+      const recv = packBytes(packCtor(kind, []));
+      for (const n of NAMES) {
+        eq("416", `写 ${type}.${n}`, errOf(() => writeProp(recv, n, V.int(1))), assignSay(type, n));
+      }
+    }
+  });
+
+  it("成员名那两格没量过，照旧响亮拒", () => {
+    const recv = packBytes(packCtor("byte", []));
+    eq("416", "读 size 不冒充引擎那句", /Nonexistent|Invalid access/.test(errOf(() => attribute(recv, "size"))), false);
+    eq("416", "写 size 不冒充引擎那句", /Invalid assignment/.test(errOf(() => writeProp(recv, "size", V.int(1)))), false);
   });
 });

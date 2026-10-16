@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.243 pack 的属性两面过裁判：装箱两形按引擎那句发（2026-10-16，S416，§6 第 82 条②接一半）
+
+- **读数**：三型（byte / int32 / string）× 15 形，尺 `tmp/probe-attr/{round1,round2}.mts`，读数 `compare{1,2}.txt`。静态位读写各只发一句 `Cannot find member "<名>" in base "<支>".`；装箱位读 `Invalid access to property or key '<名>' on a base object of type '<支>'.`、写 `Invalid assignment of property or key '<名>' with value of type '<型>' on a base object of type '<支>'.`；写成员名是 `Cannot assign a new value to a constant.`。
+- **接的两形**：`methods.ts` 的 `attribute` / `writeProp` 各加一支 pack 分支，只认 S414 / S415 那份确认不存在名单；成员名（`size`）在装箱位没量过，继续响亮抛，不冒充引擎。
+- **剩下的**：静态位那三句还在落运行期；`print(q.size)` 引擎给的是内建类型的绑定 Callable（印成 `PackedByteArray::size`），整族没接。
+- **门读数**：`pnpm test` **14270**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、`test:golden-check` **372/372** 逐字节、产物 churn 0。
+
 ### 1.242 pack 九支的运行期表外名换成引擎那句：名单两侧共用一份（2026-10-16，S415，§6 第 82 条①结清）
 
 - **接的是同一份读数**：`packMethod` 的 `default:` 此前对没实现的名字发中文自述 `<支>.<名>() 未实现`；现在先问 S414 那份确认不存在名单，命中就发 `Invalid call. Nonexistent function '<名>' in base '<支名>'.`，名单外的照旧响亮抛。
