@@ -61,7 +61,14 @@ describe("pack 的属性两面（读数 tmp/probe-attr/compare3.txt）", () => {
     ["标注 String 写成员名给常量那一句", '\tvar s: String = "abcd"\n\ts.to_upper = 1', ["Cannot assign a new value to a constant."]],
     ["标注 Dictionary 读属性不在解析期开口", '\tvar d: Dictionary = {1: 2}\n\tprint(d.nosuch)', []],
     ["标注 Dictionary 写属性不在解析期开口", '\tvar d: Dictionary = {1: 2}\n\td.nosuch = 1', []],
-    ["字面量 Array 读表外名放过（那一形没量）", "\tprint([1, 2].nosuch)", []],
+    ["字面量 Array 读表外名报两遍", "\tprint([1, 2].nosuch)", [attrSay("Array", "nosuch"), attrSay("Array", "nosuch")]],
+    ["字面量 Array 写成员名给常量那一句", "\t[1, 2].append = 1", ["Cannot assign a new value to a constant."]],
+    ["构造位 Array 读表外名报两遍", "\tprint(Array([1, 2]).nosuch)", [attrSay("Array", "nosuch"), attrSay("Array", "nosuch")]],
+    ["字面量 String 读表外名报两遍", '\tprint("abcd".nosuch)', [attrSay("String", "nosuch"), attrSay("String", "nosuch")]],
+    ["字面量 String 写成员名给常量那一句", '\t"abcd".to_upper = 1', ["Cannot assign a new value to a constant."]],
+    ["构造位 String 读表外名报两遍", '\tprint(String("abcd").nosuch)', [attrSay("String", "nosuch"), attrSay("String", "nosuch")]],
+    ["推断来的 Array 读属性放过", "\tvar a = [1, 2]\n\tprint(a.nosuch)", []],
+    ["字面量字典读表外名放过", "\tprint({1: 2}.nosuch)", []],
   ];
 
   it.each(CASES)("%s", async (_label, body, want) => {

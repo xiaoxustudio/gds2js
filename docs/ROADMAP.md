@@ -780,6 +780,12 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.249 字面量与构造位的 Array / String 属性面接进解析期（2026-10-16，S422，§6 第 83 条③那半形结清、第 84 条新登）
+
+- **读数**：`tmp/probe-bincall/round3.mts` 十格 —— `[1, 2].nosuch` / `Array([1, 2]).nosuch` / `"abcd".nosuch` / `String("abcd").nosuch` 都是 `Cannot find member "<名>" in base "<型>".` 同一句两遍；`[1, 2].append = 1` 与 `"abcd".to_upper = 1` 给 `Cannot assign a new value to a constant.`；`[1, 2].append` 与 `"abcd".to_upper` 给 Callable（`Array::append` / `String::to_upper`）。
+- **放过的那两形**：推断来的 `a.nosuch` 与字面量字典 `{1: 2}.nosuch` 引擎都不在解析期开口，运行期给 `Invalid access to property or key …` —— 字典那支 S421 已接对，Array 那支缺一张能分岔「成员 / 表外」的名单，登记 §6 第 84 条。
+- **门读数**：`pnpm test` **14300**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
 ### 1.248 字典的属性两面：写折成 StringName 键、读按格给那句（2026-10-16，S421，§6 第 83 条②结清）
 
 - **引擎读数**：`tmp/probe-bincall/j1.gd` 八格 —— `d.foo = 5` 不报错、`print(d)` 是 `{ &"foo": 5 }`、`d.foo` / `d["foo"]` / `d[&"foo"]` 三读同为 5、`has` 两形都真；缺格时读给 `Invalid access to property or key '<名>' on a base object of type 'Dictionary'.`，成员名（`keys` / `size` / `has`）也一样。

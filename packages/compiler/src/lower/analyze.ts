@@ -534,7 +534,11 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     const typed = new Map<string, TypedSlot>();
     const decls = new Map<string, string>();
     if (ret !== null && ret.kind === "named") seedInto(typed, decls, "self", ret.name);
-    for (const p of [...seeds, ...params]) {
+    for (const p of seeds) {
+      if (p.type === null || p.type.kind !== "named") continue;
+      seedInto(typed, decls, p.name, p.type.name);
+    }
+    for (const p of params) {
       if (p.type === null || p.type.kind !== "named") continue;
       seedInto(typed, decls, p.name, p.type.name);
     }
@@ -1770,6 +1774,13 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   if (obj.kind === "ident" && typeof obj.name === "string") {
     const face = ann.get(obj.name) ?? null;
     return face === "Dictionary" ? null : face;
+  }
+  if (obj.kind === "array") return "Array";
+  if (obj.kind === "lit" && obj.lit === "string") return "String";
+  if (obj.kind === "call") {
+    const inner = obj.callee as Record<string, unknown> | undefined;
+    const cn = inner?.kind === "ident" ? inner.name : null;
+    if (typeof cn === "string" && (cn === "Array" || cn === "String")) return cn;
   }
   return packFaceRecv(obj, ann);
 }
@@ -4104,7 +4115,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         case "attribute":
           // 「类名.静态函数」当值引用不是一等成员（引擎那句报两遍）；调用位置那一支在下面按元数判
           if (!staticCallees.has(e) && e.obj.kind === "ident") {
-            for (const d of staticBareDiags(e.obj.name, e.name)) diags.push({ ...d, loc: e.loc });
+            for (const d of staticBareDiags(e.obj.name, e.name)) diags.push({ code: d.code, message: d.message, loc: e.loc });
           }
           walkExpr(e.obj);
           return;
@@ -4207,7 +4218,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const callee = e.callee;
       if (callee.kind !== "attribute") continue;
       if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name))) {
-        for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ ...d, loc: e.loc });
+        for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ code: d.code, message: d.message, loc: e.loc });
         // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
         const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];
         if (bounds !== undefined && e.args.length >= bounds[0] && e.args.length <= bounds[1]) {
@@ -4232,7 +4243,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
           }
           for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-            for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+            for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
           }
         }
         continue;
@@ -4265,7 +4276,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
           }
           for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-            for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+            for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
           }
         }
         continue;
@@ -4301,7 +4312,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
         }
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-          for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+          for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
         }
         continue;
       }
@@ -4368,7 +4379,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       // 同位上两种期望型并存的（`convert` 的第二参：Array / Dictionary 说 Variant.Type、别的说 int）整条交给逐 kind 的名单
-      const shouldPos = new Set((shouldRows ?? []).map(([pos]) => pos));
+      const shouldPos = new Set<number>();
+      for (const shouldRow of shouldRows ?? []) shouldPos.add(shouldRow[0]);
       const suppress = GLOBAL_ARG_SUPPRESS_OTHER[callee.name];
       // 引擎按**位升序**逐位推句（`randf_range([1], "a")` 实测：第 1 位 A 式在前、第 2 位 as 那一对在后），
       // 五族混在同一格时会互相错开，所以句子先按位归桶、再按位发。
@@ -4451,7 +4463,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         put(pos, "global-arg-derived", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-        for (const d of byPos.get(pos)!) diags.push({ ...d, loc: e.loc });
+        for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
       }
     }
   }
