@@ -1785,16 +1785,36 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   return packFaceRecv(obj, ann);
 }
 
+/** 属性那一形的静态接收者多一处**形参标注**（读数 `tmp/probe-bincall/compare6.txt` 的 N1 / N2 / N3 / N4 四格与 var 标注一字一样），
+ *  所以要带着每个函数体的形参表；调用那一支不扩，仍按 S414 量过的 var 标注 + 构造位。 */
+function attrScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; params: Array<{ name: string; type: TypeRef | null }> }> {
+  const out: Array<{ nodes: Record<string, unknown>[]; params: Array<{ name: string; type: TypeRef | null }> }> = [];
+  for (const f of m.funcs) out.push({ nodes: flattenBody(f.body), params: f.params });
+  const collect = (c: ClassDecl): void => {
+    for (const f of c.funcs) out.push({ nodes: flattenBody(f.body), params: f.params });
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+  return out;
+}
+
 /** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
  *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。
  *  属性那一形（不调用）引擎把同一句报两遍，读数 `tmp/probe-attr/compare3.txt` 九支一字一样。 */
 function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
-  for (const nodes of flattenBodies(m)) {
+  for (const { nodes, params } of attrScopes(m)) {
     const ann = new Map<string, string>();
+    const faceName = (t: TypeRef | null): string | null =>
+      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String") ? t.name : null;
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string") continue;
-      const type = n.type as TypeRef | null;
-      if (type !== null && type.kind === "named" && (PACK_TYPE_NAMES.has(type.name) || type.name === "Array" || type.name === "String")) ann.set(n.name, type.name);
+      const face = faceName(n.type as TypeRef | null);
+      if (face !== null) ann.set(n.name, face);
+    }
+    const attr = new Map(ann);
+    for (const p of params) {
+      const face = faceName(p.type);
+      if (face !== null) attr.set(p.name, face);
     }
     const callCallees = new Set<unknown>();
     const writeTargets = new Set<unknown>();
@@ -1820,7 +1840,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       if (n.kind !== "attribute" || callCallees.has(n)) continue;
-      const face = attrFaceRecv(n.obj as Record<string, unknown>, ann);
+      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr);
       if (face === null) continue;
       const name = n.name;
       if (typeof name !== "string") continue;

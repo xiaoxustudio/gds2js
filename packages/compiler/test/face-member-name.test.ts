@@ -76,6 +76,26 @@ describe("pack 的属性两面（读数 tmp/probe-attr/compare3.txt）", () => {
   });
 });
 
+describe("形参标注的属性面与 var 标注同一形（读数 tmp/probe-bincall/compare6.txt 的 N1–N4）", () => {
+  const say2 = (t: string, n: string): string => `Cannot find member "${n}" in base "${t}".`;
+  const src = (sig: string, body: string): string => `extends SceneTree\n\nfunc f(${sig}):\n${body}\n\nfunc _initialize():\n\tquit()\n`;
+  const CASES: Array<[string, string, string, string[]]> = [
+    ["形参 Array 读表外名", "a: Array", "\tprint(a.nosuch)", [say2("Array", "nosuch"), say2("Array", "nosuch")]],
+    ["形参 Array 写成员名", "a: Array", "\ta.append = 1", ["Cannot assign a new value to a constant."]],
+    ["形参 String 读表外名", "s: String", "\tprint(s.nosuch)", [say2("String", "nosuch"), say2("String", "nosuch")]],
+    ["形参 pack 读表外名", "p: PackedStringArray", "\tprint(p.keys)", [say2("PackedStringArray", "keys"), say2("PackedStringArray", "keys")]],
+    ["形参 pack 写成员名", "p: PackedStringArray", "\tp.size = 1", ["Cannot assign a new value to a constant."]],
+    ["形参 Dictionary 放过", "d: Dictionary", "\tprint(d.nosuch)", []],
+    ["形参 Array 读成员名放过", "a: Array", "\tprint(a.append)", []],
+    ["形参没标注放过", "a", "\tprint(a.nosuch)", []],
+  ];
+
+  it.each(CASES)("%s", async (_label, sig, body, want) => {
+    const diags = analyze(lower(await parseSource(src(sig, body)))).map((d) => d.message);
+    expect(diags).toEqual(want);
+  });
+});
+
 describe("存在但没量元数的名字不许误拦", () => {
   const OKAY: Array<[string, string]> = [
     ["字典 set", '\tvar d: Dictionary = {}\n\td.set(1, 2)'],
