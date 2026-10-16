@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.251 String 与 Array 的属性读按名单分岔，缺格给引擎那句（2026-10-16，S424，§6 第 84 条②这两面接完）
+
+- **读数**：`tmp/probe-bincall/round5.mts` 把 189 个候选名在 `"abcd".<名>` 与 `[1, 2].<名>` 上逐名过裁判（`compare5.txt`）：String 面确认不存在 81 名、Array 面 139 名，与 S413 的存在数 108 / 50 互补；属性位与调用位不分岔。
+- **出货**：`methods.ts` 添 `STRING_ATTR_ABSENT` / `ARRAY_ATTR_ABSENT`，`attribute` 见 String / Array 先问名单 —— 命中就发 `Invalid access to property or key '<名>' on a base object of type '<面>'.`，成员名照旧响亮抛（Callable 那一族没接，不许冒充引擎那句）。
+- **没开的东西**：不新增 runtime 文件（产物树清单在 `tree-face.ts` 要一起对账），名单就地放在 `ARRAY_NO_METHOD` 旁边。
+- **仍欠**：值类型（`Vector2` 那一族）的属性读只量到一格（M6），各面名单没量，仍走兜底自述；绑定 Callable 整族仍是 §6 第 83 条①。
+- **门读数**：`pnpm test` **14304**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
 ### 1.250 Array 与 String 的属性写给引擎那句：装箱形不必名单分岔（2026-10-16，S423，§6 第 84 条接一半）
 
 - **读数**：`tmp/probe-bincall/compare4.txt` 的 M4 / M5 / M8 —— `a.nosuch = 1`、`a.append = 1`、`s.nosuch = 1` 全给 `Invalid assignment of property or key '<名>' with value of type '<型>' on a base object of type 'Array'/'String'.`，成员名与表外名同句。

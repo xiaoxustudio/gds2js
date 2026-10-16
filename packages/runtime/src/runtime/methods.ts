@@ -299,6 +299,49 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
  *  `is_same` 是字典那侧的同名直觉 —— 数组上这一支叫 `is_same_typed`。 */
 const ARRAY_NO_METHOD = new Set(["join", "concat", "is_same"]);
 
+/** 属性读那一形的**确认不存在**名单（尺 `tmp/probe-bincall/round5.mts`：189 名逐名在字面量接收者上过裁判，
+ *  读数 `compare5.txt`；与 S413 的存在数 String 108 / Array 50 对得上）。方向与 `PACK_ABSENT_*` 一致：
+ *  只有裁判说「没这名字」的才发引擎那句，成员名要给内建类型的绑定 Callable（§6 第 83 条①还没接），照旧响亮拒。 */
+const STRING_ATTR_ABSENT = [
+  "all", "any", "append", "append_array", "assign", "at", "back", "binary_search", "bsearch",
+  "bsearch_custom", "clear", "compress", "copy_on_write", "decode_string", "decompress", "dedent2",
+  "duplicate", "each", "fill", "filter", "find_custom", "find_key", "front", "get", "get_bytes",
+  "get_index", "get_or_add", "get_pointer", "get_string_from_ascii", "get_typed_builtin",
+  "get_typed_class_name", "get_typed_script", "has", "has_all", "hex_encode", "insert_array",
+  "is_null", "is_read_only", "is_same_typed", "is_typed", "keys", "make_read_only", "map", "max",
+  "merge", "merged", "min", "nosuch", "pick_random", "pop_at", "pop_back", "pop_front", "push_back",
+  "push_front", "recursive_equal", "reduce", "remove_at", "remove_at_copy", "resize", "rfind_custom",
+  "same_type", "search_sorted", "set", "shuffle", "size", "slice", "sort", "sort_custom", "sort_flags",
+  "subarray", "sum", "to_base64", "to_byte_array", "to_float32_array", "to_float64_array",
+  "to_hex_string", "to_int32_array", "to_int64_array", "to_raw_string", "to_string", "values"
+];
+
+const ARRAY_ATTR_ABSENT = [
+  "at", "begins_with", "bigrams", "bin_to_int", "binary_search", "c_escape", "c_unescape",
+  "capitalize", "casecmp_to", "chr", "compress", "contains", "containsn", "copy_on_write", "countn",
+  "decode_string", "decompress", "dedent", "dedent2", "each", "ends_with", "filecasecmp_to",
+  "filenocasecmp_to", "find_key", "findn", "format", "get_base_dir", "get_basename", "get_bytes",
+  "get_extension", "get_file", "get_index", "get_or_add", "get_pointer", "get_slice",
+  "get_slice_count", "get_slicec", "get_string_from_ascii", "has_all", "hex_decode", "hex_encode",
+  "hex_to_int", "humanize_size", "indent", "insert_array", "is_absolute_path", "is_null",
+  "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_filename", "is_valid_float",
+  "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int",
+  "is_valid_ip_address", "join", "json_escape", "keys", "left", "length", "lpad", "lstrip", "match",
+  "matchn", "md5_buffer", "md5_text", "merge", "merged", "naturalcasecmp_to", "naturalnocasecmp_to",
+  "nocasecmp_to", "nosuch", "num", "num_int64", "num_scientific", "num_uint64", "pad_decimals",
+  "pad_zeros", "path_join", "recursive_equal", "remove_at_copy", "repeat", "replace", "replacen",
+  "rfindn", "right", "rpad", "rsplit", "rstrip", "same_type", "search_sorted", "sha1_buffer",
+  "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "sort_flags", "split",
+  "split_floats", "strip_edges", "strip_escapes", "subarray", "substr", "sum", "to_ascii_buffer",
+  "to_base64", "to_byte_array", "to_camel_case", "to_float", "to_float32_array", "to_float64_array",
+  "to_hex_string", "to_int", "to_int32_array", "to_int64_array", "to_kebab_case", "to_lower",
+  "to_pascal_case", "to_raw_string", "to_snake_case", "to_string", "to_upper", "to_utf16_buffer",
+  "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at",
+  "uri_decode", "uri_encode", "validate_filename", "validate_node_name", "values", "xml_escape",
+  "xml_unescape"
+];
+
+
 /** Dictionary 上实测**不存在**的成员名（49 名过裁判量出 29 支，`tmp/probe-dict/compare22.txt`，S378）：同一句。
  *  名单里大半是 Array 那侧的名字（`push_back` / `sort_custom` / `slice` 那一族）—— 此前它们落到 switch 的兜底、发的是中文自述。 */
 const DICT_NO_METHOD = new Set([
@@ -1301,6 +1344,14 @@ export function attribute(raw: unknown, name: string): unknown {
     const k = V.stringName(name);
     if (dict.has(k)) return dict.getRequired(k);
     throw new GodotRuntimeError("dict-attribute", `Invalid access to property or key '${name}' on a base object of type 'Dictionary'.`);
+  }
+  if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
+    const face = obj.t === Tag.STRING ? "String" : "Array";
+    const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
+    if (absent.includes(name)) {
+      throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
+    }
+    throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读只量过表外名那一格：成员名引擎给的是内建类型的绑定 Callable，那一族还没接`);
   }
   if (obj.t === Tag.OBJECT) {
     // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本

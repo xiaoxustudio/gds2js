@@ -196,3 +196,33 @@ describe("runtime/methods · Array 与 String 的属性写给同一句（S423）
     eq("423", "String 写成员名", errText(() => writeProp(s, "to_upper", V.bool(true))), say("String", "to_upper", "bool"));
   });
 });
+
+describe("runtime/methods · String 与 Array 的属性读按表外名单给那句（S424）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const say = (face: string, n: string): string => "Invalid access to property or key '" + n + "' on a base object of type '" + face + "'.";
+
+  it("名单里的名字逐名给引擎那句", () => {
+    const str = V.str("abcd");
+    for (const n of ["nosuch", "keys", "size", "append", "bsearch"]) {
+      eq("424", `String 读 ${n}`, errText(() => attribute(str, n)), say("String", n));
+    }
+    const arr = V.array([V.int(1)]);
+    for (const n of ["nosuch", "keys", "length", "to_upper", "join"]) {
+      eq("424", `Array 读 ${n}`, errText(() => attribute(arr, n)), say("Array", n));
+    }
+  });
+
+  it("成员名不许冒充那句：Callable 那一族还没接就响亮拒", () => {
+    eq("424", "String 读 to_upper", /Invalid access/.test(errText(() => attribute(V.str("abcd"), "to_upper"))), false);
+    eq("424", "String 读 length", /Invalid access/.test(errText(() => attribute(V.str("abcd"), "length"))), false);
+    eq("424", "Array 读 append", /Invalid access/.test(errText(() => attribute(V.array([V.int(1)]), "append"))), false);
+    eq("424", "Array 读 size", /Invalid access/.test(errText(() => attribute(V.array([V.int(1)]), "size"))), false);
+  });
+});
