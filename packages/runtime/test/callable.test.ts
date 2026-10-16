@@ -5,6 +5,7 @@ import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { callableEq, callableSame, callableOf, CallableBox, methodCallable, nullCallable, registerClass, registerMethodArities, registerNativeBase, registerScriptLabel, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
 import { attribute, boundMethod, method } from "@gds2js/runtime/runtime/methods";
+import { packBytes, packCtor } from "@gds2js/runtime/runtime/packed";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBuiltin, varToStr } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
@@ -266,5 +267,34 @@ describe("runtime/methods · 装箱接收者的成员名读也发绑定 Callable
     const msg = errText(() => attribute(a, "zzzquantum"));
     eq("428", "不发 Invalid access", /Invalid access/.test(msg), false);
     eq("428", "不发 Callable", /::/.test(msg), false);
+  });
+});
+
+describe("runtime/methods · 装箱 pack 的成员名读也发绑定 Callable（S429）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const ps = (): Variant => packCtor("string", [V.array(new GArray([V.str("a"), V.str("b")]))]);
+  const pb = (): Variant => packCtor("byte", [V.array(new GArray([I(1), I(2)]))]);
+
+  it("表里的名字给 Callable，读出来能调", () => {
+    const c = attribute(ps(), "size") as Variant;
+    eq("429", "印法", show(c), "PackedStringArray::size");
+    eq("429", "调出来的值", show(method(c, "call", [])), "2");
+    eq("429", "元数与名字", String(method(c, "get_argument_count", []).v) + "/" + show(method(c, "get_method", [])), "0/size");
+    eq("429", "空对象引用", show(method(c, "get_object", [])), "<Object#null>");
+    eq("429", "byte 那支的 count", show(attribute(pb(), "count") as Variant), "PackedByteArray::count");
+  });
+
+  it("byte 独有那一名元数没量过，响亮抛不冒充引擎", () => {
+    const msg = errText(() => attribute(pb(), "hex_encode"));
+    eq("429", "不发 Invalid access", /Invalid access/.test(msg), false);
+    eq("429", "不发 Callable", /::/.test(msg), false);
+    eq("429", "其余八支的 to_byte_array 在表里", show(attribute(ps(), "to_byte_array") as Variant), "PackedStringArray::to_byte_array");
   });
 });

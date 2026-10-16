@@ -1385,7 +1385,9 @@ export function attribute(raw: unknown, name: string): unknown {
       if (packNameAbsent((obj.v as GBytes).kind, name)) {
         throw new GodotRuntimeError("packed-attribute", `Invalid access to property or key '${name}' on a base object of type '${packTypeName((obj.v as GBytes).kind)}'.`);
       }
-      throw new UnsupportedError("packed-attribute", `PackedByteArray 没有 ${name} 这个成员（这一族的成员全是方法，属性面没实测过）`);
+      const row = faceArity(packTypeName((obj.v as GBytes).kind), name);
+      if (row !== null) return boundBuiltinCallable(obj, packTypeName((obj.v as GBytes).kind), name, row[0], row[1]);
+      throw new UnsupportedError("packed-attribute", `pack 的属性读落在两份名单之外：${packTypeName((obj.v as GBytes).kind)}.${name} 的元数没量过，不发引擎那句`);
     }
     const inner = obj.v as Record<string, unknown>;
     const sd = descFor(inner);

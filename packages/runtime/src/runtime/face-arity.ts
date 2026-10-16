@@ -39,9 +39,24 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
 };
 
 
-/** 按面名与成员名查那一对元数上下界；查不到给 null（表外名或没量过的名字）。 */
+export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
+  append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
+  duplicate: [0, 0], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
+  insert: [2, 2], is_empty: [0, 0], push_back: [1, 1], remove_at: [1, 1], resize: [1, 1],
+  reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
+};
+export const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
+
+const PACK_NINE: Record<string, boolean> = {
+  PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
+  PackedFloat64Array: true, PackedStringArray: true, PackedVector2Array: true, PackedVector3Array: true,
+  PackedColorArray: true,
+};
+
+/** 按面名与成员名查那一对元数上下界；查不到给 null（表外名、byte 独有的名字，或候选宇宙之外的名字）。 */
 export function faceArity(face: string, name: string): [number, number] | null {
-  const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : null;
+  const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY
+    : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_METHOD_ARITY : PACK_METHOD_ARITY_WITH_BYTES) : null;
   if (table === null) return null;
   const row = table[name];
   return row === undefined ? null : [row[0], row[1]];

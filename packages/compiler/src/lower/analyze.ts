@@ -18,7 +18,7 @@ import {
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
-import { ARRAY_METHOD_ARITY, STRING_METHOD_ARITY } from "@gds2js/runtime/runtime/face-arity";
+import { ARRAY_METHOD_ARITY, PACK_METHOD_ARITY, PACK_METHOD_ARITY_WITH_BYTES, STRING_METHOD_ARITY } from "@gds2js/runtime/runtime/face-arity";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
@@ -3882,14 +3882,7 @@ function checkCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diag
 /** pack 九支共用的那 21 名元数，两侧都是九支逐支量过的：「至少」六支在 `tmp/probe-pack/sweep.json`、byte / int32 / string 在 `compare18.txt`；
  *  「至多」int64 / byte / string 在 `compare16.txt` 与 `arity2.log`、其余五支在 `compare19.txt`（110 格，五支读数一字不差）。
  *  `slice` 的上限是 **2** 不是 3 —— pack 那支没有 `Array.slice(begin, end, step)` 的 step。byte 独有的 `compress` / `decompress` 那一族只量到下限，不进表。 */
-const PACK_METHOD_ARITY: Record<string, [number, number]> = {
-  append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
-  duplicate: [0, 0], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
-  insert: [2, 2], is_empty: [0, 0], push_back: [1, 1], remove_at: [1, 1], resize: [1, 1],
-  reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
-};
 /** 八支（除 byte 自己）多一支 `to_byte_array`：byte 上引擎说没这名字（`tmp/probe-pack/arity2.log` 第 10 格）。 */
-const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
 
 /** pack 九支的类型名：它们不在 ClassDB 里（不是 `ENGINE_CLASS_NAMES` 那一族）、也没有静态成员（进不了 `STATIC_MEMBER_FNS`），
  *  但当属性基出现时是合法的类型名 —— `PackedInt64Array.size()` 引擎给的是「不是静态方法」那一句，不是「没声明」（S376 ⑤，读数 `arity2.log` 07–09）。 */
