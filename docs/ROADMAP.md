@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.232 信号回调与延后调用同一条错误边界，宿主退出前排干当前这一轮（2026-10-16，S408，§6 第 75 条①②与第 76 条结清）
+
+- **回调那一族七格零代码**：S406 的函数边界本来就管到 `emit()` 里的回调 —— 调用方与后面的回调都照跑，lambda 连上去同形，回调里再调一支函数时外层继续（读数 `tmp/probe-signalerr/compare93.txt`，出货对照不合 **0 格**）。
+- **延后那一族十格改的是宿主**：`quit()` 之后排的延后照样跑、延后里再排的也跑、两支按 FIFO；已到期的计时器（0.0 秒与嵌套）在退出前发完，一秒与五秒的等不到（读数 `tmp/probe-drain/compare{94,95}.txt`，出货不合 **1 格** —— 那一格是虚拟时钟的墙钟，不是输出）。
+- **接线三处**：`callable.ts` 加延后在途计数与 `callDeferred`（`Callable.call_deferred()` 与 `Object.call_deferred(名)` 共用一条队列），`host.ts` 的 `run()` 在帧循环与 `initDone` 之后加 `#drain()`（每轮「发到期项 → 让出一轮宏任务」到队列空才 flush），`Timer.isDue()` 只看账面剩余。
+- **`connect(cb, CONNECT_DEFERRED)` 仍响亮拒**：那条「宿主还没有对象生命周期模型」的理由不变，排干队列不会把它变成静默多印。
+- **账**：门 `packages/runtime/test/host-run.test.ts` 五格，`pnpm test` **14217→14218**（138 文件）、typecheck **4/4**、`test:diff` **245/245**、`test:compile` **252/361**、`test:codegen` 全过、`pkg-modes` **25/25**、产物 churn **0**；golden-check 本轮未重跑（改的是宿主与运行时，语料与 `godot.txt` 都没动，出货侧已由 `test:diff` 逐字节对账）。
+
 ### 1.231 协程调用那句只在取值位发：语句位丢弃返回值引擎不拦（2026-10-16，S407，§6 第 76 条新增）
 
 - **16 格逐位量过**（`tmp/probe-awaitcall/round8.mts` → `compare92.txt`）：`var r = f()` / `v = f()` / `print(f())` / `g(f())` / `[f()]` / `f() + 1` 六形发那句；`f()` 单独一句与 `if` / `for` / `while` / `match` / lambda 里的语句位、`await f()` 丢弃、协程里丢弃另一支协程、`-> int` 协程丢弃 —— 全放过。

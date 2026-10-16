@@ -16,6 +16,7 @@ import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { callDeferred } from "./callable";
 import { isEncodedObjectIdBox, isWeakRefBox } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
@@ -237,9 +238,9 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       return callableCall(box, args);
     case "call_deferred": {
       if (empty) throw new UnsupportedError("callable-deferred-null", "空 Callable 上 call_deferred() 没量过");
-      setTimeout(() => {
+      callDeferred(() => {
         callCallableBox(box, args);
-      }, 0);
+      });
       return V.nil();
     }
     case "callv": {
@@ -560,9 +561,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       }
       // `call_deferred()` 的**返回值就是 null**，真正的调用排在后面
       const rest = args.slice(1) as Variant[];
-      setTimeout(() => {
+      callDeferred(() => {
         callSlot(inner, who, rest);
-      }, 0);
+      });
       return V.nil();
     }
     if (name === "set_meta" || name === "get_meta" || name === "has_meta" || name === "remove_meta") {
