@@ -1,0 +1,6 @@
+T1|Array::append
+T2|true
+T3|true append <Object#null>
+T4|[1, 2, 9]
+T5|String::to_upper ABCD
+T6|PackedByteArray::size 2

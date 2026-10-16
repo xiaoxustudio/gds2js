@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isDictIntRead, posReadLabel, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
+import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -3135,6 +3135,10 @@ function emitExprVar(e: Expr): string {
       }
       if (e.obj.kind === "ident" && CLASS_VALUES.get(e.obj.name)?.has(e.name) === true) {
         return `${e.obj.name}.${e.name}`;
+      }
+      const bound = boundFace(e);
+      if (bound !== null) {
+        return "rt.wrapValue(rt.boundMethod(" + emitExpr(e.obj) + ", " + JSON.stringify(bound.face) + ", " + JSON.stringify(e.name) + ", " + String(bound.min) + ", " + String(bound.max) + "))";
       }
       return `rt.wrapValue(rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)}))`;
 

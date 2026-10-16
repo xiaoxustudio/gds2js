@@ -16,8 +16,8 @@ import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
-import { callDeferred } from "./callable";
-import { isEncodedObjectIdBox, isWeakRefBox } from "./identity";
+import { boundBuiltinCallable, callDeferred } from "./callable";
+import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
@@ -271,6 +271,8 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 实测：方法 Callable 给接收者实例（`== o` 真、跨实例假），静态给那个类值（`== Inner` 真、`== 外层脚本` 假）；
       // lambda 给**定义它那个类的 GDScript 对象**（`== self` 假、`== get_script()` 真），空 Callable 与全局内置给
       // typeof 24 的 null Object（打 `<Object#null>`、`== null` 真）—— 后两形我们没有，响亮拒。
+      // 内建类型面绑定来的那一只：引擎给的是 typeof 24 的空对象引用，不是那台数组 / 字符串（读数 `tmp/probe-bincall/h3.gd` 的 Q6）
+      if (box.builtin !== null) return V.object(NULL_OBJECT);
       if (box.object === null) {
         throw new UnsupportedError(
           "callable-get-object",
@@ -1333,6 +1335,12 @@ export function dictOf(pairs: Array<[Variant, Variant]>): Variant {
 export function formatOf(fmt: Variant, args: Variant): Variant {
   const list = args.t === Tag.ARRAY ? (args.v as GArray).raw() : [args];
   return V.str(strFormat(asString(fmt, "格式化"), list));
+}
+
+/** 内建类型面的「方法名当值」：发射器只在**静态已知的接收者**且名字是那一面的成员时发这一支
+ *  （读数 `tmp/probe-bincall/p1.gd` 的 16 面与 `compare6.txt` 的 N6：印法 `<面>::<名>`、`typeof` 25、`is_valid()` 真、`get_object()` 空引用）。 */
+export function boundMethod(raw: unknown, face: string, name: string, min: number, max: number): Variant {
+  return boundBuiltinCallable(norm(raw), face, name, min, max);
 }
 
 export function attribute(raw: unknown, name: string): unknown {

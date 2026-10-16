@@ -37,6 +37,11 @@ export class CallableBox {
   boundOnce: boolean;
   /** lambda 的等式是盒子身份，所以盒子得有自己的号。 */
   readonly gdObjectId: number = nextObjectId();
+  /** 内建类型面绑定来的那一只（`Array::append` 那一族）：存的是**面名**，null 表示不是这一族。
+   *  引擎在这一族上打印 `<面>::<名>`、`get_object()` 给 typeof 24 的空对象引用（读数 `tmp/probe-bincall/p1.gd` 16 面 + `compare6.txt` 的 N6）。 */
+  builtin: string | null;
+  /** 那一面这一名的元数上下界（发射器从量过的表里带过来）：`callableArityBounds` 与 `get_argument_count()` 都读它。 */
+  builtinBounds: [number, number] | null;
   constructor(
     fn: Fn | null = null,
     name: string | null = null,
@@ -44,6 +49,8 @@ export class CallableBox {
     bound: Variant[] = [],
     arity: number | null = null,
     boundOnce = false,
+    builtin: string | null = null,
+    builtinBounds: [number, number] | null = null,
   ) {
     this.fn = fn;
     this.name = name;
@@ -51,7 +58,14 @@ export class CallableBox {
     this.bound = bound;
     this.arity = arity;
     this.boundOnce = boundOnce;
+    this.builtin = builtin;
+    this.builtinBounds = builtinBounds;
   }
+}
+
+/** 内建类型面的「方法名当值」：引擎给的是绑定 Callable（`x.append` 印 `Array::append`），调用仍按 (接收者, 名) 派发。 */
+export function boundBuiltinCallable(recv: Variant, face: string, name: string, min: number, max: number): Variant {
+  return V.object(new CallableBox(null, name, recv, [], null, false, face, [min, max]));
 }
 
 /** 这个 OBJECT 载荷是一个 Callable 盒子吗？空 Callable（`Callable()`）也算。 */

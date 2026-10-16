@@ -262,6 +262,18 @@ export function posReadLabel(e: Expr): string | null {
   return e.kind === "index" ? posReadLabels.get(diKey(e.loc.line, e.loc.col)) ?? null : null;
 }
 
+/** 内建类型面的「成员名当值」记号：值就是那一面的名字，发射器据此发 `rt.boundMethod(recv, "<面>", "<名>")` 而不是 `rt.attribute`。
+ *  读数 `tmp/probe-bincall/p1.gd` 的 16 面与 `compare6.txt` 的 N6 —— 引擎在那里给的是打印 `<面>::<名>` 的绑定 Callable。 */
+const boundFaces = new Map<string, string>();
+
+export function boundFace(e: Expr): { face: string; min: number; max: number } | null {
+  if (e.kind !== "attribute") return null;
+  const hit = boundFaces.get(diKey(e.loc.line, e.loc.col));
+  if (hit === undefined) return null;
+  const parts = hit.split(",");
+  return { face: String(parts[0]), min: Number(parts[1]), max: Number(parts[2]) };
+}
+
 /** 静态标注的 `Dictionary` / `Dictionary[K, V]` 配静态 int 键的那一格：引擎讲的是数组那一式（`Out of bounds get index …`，S405 量过），运行期得知道谁是这一形。 */
 export function isDictIntRead(e: Expr): boolean {
   return e.kind === "index" && dictIntReads.has(diKey(e.loc.line, e.loc.col));
@@ -1848,7 +1860,13 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
       if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
         // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
-        if (writeTargets.has(n)) diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
+        if (writeTargets.has(n)) {
+          diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
+        } else {
+          const l = n.loc as { line: number; col: number } | undefined;
+          const bounds = table[name];
+          if (l !== undefined && bounds !== undefined) boundFaces.set(diKey(l.line, l.col), face + "," + String(bounds[0]) + "," + String(bounds[1]));
+        }
         continue;
       }
       const absent = PACK_TYPE_NAMES.has(face) ? packNameMeasuredAbsent(face, name) : true;

@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.253 内建类型面的成员名当值发绑定 Callable（2026-10-16，S426，语料 374，§6 第 83 条①接一面）
+
+- **读数**：`tmp/probe-bincall/` 五份（`compare{1,2,4,5,6}.txt` + `p1.gd` / `h3.gd`）—— 印法 `Array::append`、`typeof` 25、`get_object()` 是 typeof 24 的空引用、`get_argument_count()` 给必填数、元数句 `Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).`、等式按（实例, 名）、`var_to_str` 退化成品 `Callable()`；16 个面值类型同形（Dictionary 仍给 Invalid access）。
+- **接法**：`CallableBox` 添 `builtin` / `builtinBounds` 两格，analyze 的属性扫描记下「成员名当值 + 量过的元数」，发射器发 `rt.boundMethod(recv, "<面>", "<名>", min, max)`；`callableArityBounds` / `requiredArgCount` / `declaredArgCount` 先认这一格，`get_object()` 在这一族上给 `NULL_OBJECT`。
+- **新语料 374**：六格打印（含 `c.call(9)` 改数组、`s.to_upper.call()`、`p.size.call()`），golden 与出货逐字节一致。
+- **仍欠**：装箱接收者的成员名读值、值类型十几面的标注接收者、`hash(Callable)` 的式子（只量到同进程一致，跨实例随内容变，拟合不出就照 `[hash-callable] 响亮拒`）。
+- **门读数**：`pnpm test` **14320**（139 文件）、typecheck **4/4**、`test:compile` **253/362**、`test:diff` **246/246** 逐字节、`test:codegen` 全过、端到端 6 行一字一样。
+
 ### 1.252 形参标注进属性面的静态接收者（2026-10-16，S425，§6 第 84 条那三面收齐）
 
 - **读数**：`tmp/probe-bincall/compare6.txt` 六格 —— 形参标注的 `a.nosuch` / `s.nosuch` / `p.keys` 与 var 标注一字一样（解析期那句报两遍），`a.append = 1` / `p.size = 1` 给 `Cannot assign a new value to a constant.`。

@@ -4,9 +4,10 @@
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { callableEq, callableSame, callableOf, CallableBox, methodCallable, nullCallable, registerClass, registerMethodArities, registerNativeBase, registerScriptLabel, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
-import { attribute, method } from "@gds2js/runtime/runtime/methods";
+import { attribute, boundMethod, method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBuiltin, varToStr } from "@gds2js/runtime/runtime/values";
+import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { gdDispatchByName } from "./support/gd-dispatch";
 import { I } from "./support/variants";
@@ -185,5 +186,59 @@ describe("runtime/object · Callable", () => {
         return `${String(g.size())}|${show(ka)}|${show(kb)}|${String(keyOf(ka) === keyOf(kb))}|${String(g.has(kb))}|${String(g.erase(ka))}|${String(g.size())}`;
       })(), "2|GDScript::sm|GDScript::sm|false|true|true|1");
     }
+  });
+});
+
+describe("runtime/callable · 内建类型面的绑定 Callable（S426）", () => {
+  const arr = (): Variant => V.array(new GArray([I(1), I(2)]));
+  const bound = (v: Variant, face: string, name: string, min: number, max: number): Variant => boundMethod(v, face, name, min, max);
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+
+  it("印法与 str 都是 <面>::<名>，typeof 25", () => {
+    const a = arr();
+    const c = bound(a, "Array", "append", 1, 1);
+    eq("426", "print 的形状", show(c), "Array::append");
+    eq("426", "str 的形状", show(strBuiltin([c])), "Array::append");
+    eq("426", "typeof", String(typeOf(c).v), "25");
+  });
+
+  it("is_valid 真、is_null 假、get_method 给名、get_object 给空引用", () => {
+    const c = bound(arr(), "Array", "append", 1, 1);
+    eq("426", "is_valid", String(method(c, "is_valid", []).v), "true");
+    eq("426", "is_null", String(method(c, "is_null", []).v), "false");
+    eq("426", "get_method", show(method(c, "get_method", [])), "append");
+    eq("426", "get_object 打空引用", show(method(c, "get_object", [])), "<Object#null>");
+    eq("426", "get_object 的 typeof", String(typeOf(method(c, "get_object", [])).v), "24");
+    eq("426", "get_argument_count", String(method(c, "get_argument_count", []).v), "1");
+    eq("426", "零元的 size 给 0", String(method(bound(arr(), "Array", "size", 0, 0), "get_argument_count", []).v), "0");
+  });
+
+  it("call 走接收者那台实例，元数不对给 <面>::<名> (Callable) 那句", () => {
+    const a = arr();
+    method(bound(a, "Array", "append", 1, 1), "call", [I(9)]);
+    eq("426", "call 之后数组长了", show(a), "[1, 2, 9]");
+    eq("426", "少实参那句", errText(() => method(bound(arr(), "Array", "append", 1, 1), "call", [])), "Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).");
+    eq("426", "多实参那句报上界", errText(() => method(bound(arr(), "Array", "append", 1, 1), "call", [I(1), I(2)])), "Invalid call to function 'Array::append (Callable)'. Expected 1 argument(s).");
+    eq("426", "callv 同一条路", show(method(bound(V.str("abcd"), "String", "to_upper", 0, 0), "callv", [V.array(new GArray([]))])), "ABCD");
+    eq("426", "void 那一支回 <null>", show(method(bound(arr(), "Array", "append", 1, 1), "call", [I(3)])), "<null>");
+  });
+
+  it("等式按（实例, 名）：同实例同名真、换实例假", () => {
+    const a = arr();
+    const boxOf = (v: Variant): unknown => (v.v as unknown);
+    eq("426", "同实例同名真", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(a, "Array", "append", 1, 1)) as never)), "true");
+    eq("426", "换实例假", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(arr(), "Array", "append", 1, 1)) as never)), "false");
+    eq("426", "同实例换名假", String(callableEq(boxOf(bound(a, "Array", "append", 1, 1)) as never, boxOf(bound(a, "Array", "size", 0, 0)) as never)), "false");
+  });
+
+  it("var_to_str 里退化成品 Callable()", () => {
+    eq("426", "var_to_str", varToStr(bound(arr(), "Array", "append", 1, 1)), "Callable()");
   });
 });
