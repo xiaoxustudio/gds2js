@@ -26,9 +26,9 @@
 | 编号 | 决策 | 结论 |
 | --- | --- | --- |
 | A | `--watch` | 保留轮询（一份实现两个 tier 通用；回退面是 `startWatch` 一个函数）。 |
-| B | 出货形态 | 只出 `--dynamic`；`tools/cli-native.mjs` 的静态构建降级成 `--static` 后备（也编得过）。 |
+| B | 出货形态 | 只出 `--dynamic`；`tools/cli-native.mjs` 的静态构建降级成 `--static` 后备（也编得过）。**（2026-10-17 作废：scriptc 0.3 删了 `--dynamic` 与内嵌引擎，只剩原生轨，见 §1.259。）** |
 | C | SEA / `--pack node` | **先不删**，等 native CLI 出货并跑满一个门周期再议（任务 #27）。 |
-| D | 压缩（原 #24） | **已落地（2026-10-03）**：scriptc 支 mode 1/3 走 scriptc 内置 `node:zlib`，mode 2 走 vendored zstd-codec（跑在 `--dynamic` 岛上）；保真口径见 §1.2 的 P5。 |
+| D | 压缩（原 #24） | **已落地（2026-10-03）**：scriptc 支 mode 1/3 走 scriptc 内置 `node:zlib`，mode 2 走 vendored zstd-codec（跑在 `--dynamic` 岛上 —— **0.3 起内嵌引擎被删，`export` 却还在给那一格发 `--dynamic`（已是未知选项），mode 2 要另开一轮量，见 §1.259**）；保真口径见 §1.2 的 P5。 |
 | E | 未提交的 200 个文件 | 先打 checkpoint commit —— **已执行**（`aa91d20..9ea77d5` 一组）。 |
 | F | 仓库形态 | **monorepo（pnpm workspace + Turbo `^2.11.7`）**：`packages/{runtime,compiler,gds2js}` 三包，**各包 TS 源码都在包内 `src/`**（`vendor/`、tsdown 配置留在包根）；turbo 只编排包级 `build`/`typecheck`，门保持根脚本原样；pnpm 钉 `12.8.1`（`packageManager`）。对外的 `gds2js` 包名、`gds2js/runtime|host|standalone` 说明符、dist 产物名与 scriptc 产物树脸**一字不变**。 |
 | G | 架构整改（2026-10-03） | **全量 P0/P1/P2 主体**：seam 真源化、tree-face 清单+对账门、usesPackCodec IR 标志、exe 过期自动重建、emitter 删布局默认值、case-table 管线修复、host flush-on-error、paths 收敛、cli.ts 拆 10 模块、`lower/double`→`shared/double`（明细见 §1.3）。**生成物保持入库**：216 个 `main.gen.mts` 零字节变化；`case-table.ts` 接受生成器整文件重写（表体逐项一致，仅新增生成器头+逐条注释）。 |
@@ -779,6 +779,18 @@
 - **语料看不见的部分另开一门**：normalize 滤掉整块 `ERROR:`，所以 `push_error` 的逐行文案改由 ops 的 12 格钉（英文原文靠 `--language en` 量的）；`print_stack` / `get_stack` / `push_warning` 三样真进了逐字节对账。
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
+
+### 1.259 scriptc 0.3 没有岛：CLI 那一层换成自己写的 argv 解析（2026-10-17，工具链口径 · 第 12 条①作废）
+
+- **怎么撞上的**：`pnpm release` 升到 scriptc 0.3.x 之后第一次重编原生 CLI（`a80f358` 换了工具链，那之后这支 exe 没再重编过），于是把攒下的账一次翻出来 —— 先是分析层 8 格 `SC1090`（数组展开、对象展开、逻辑或接收者），清掉之后编得出 exe，但每条命令起手就抛。
+- **commander 编不过的三格**：`_registerCommand` 里 `knownBy` 那格 union 布局不唯一（SC2003）、`_parseCommand` 的 `` `command:${this.name()}` ``（`name()` 是 `string | Command`，带对象臂的转字符串，SC1090）、help 那一格（`Uncaught TypeError: expected boolean at $, got undefined`）。它们都不报编译错，而是编成「跑到就抛」的 deferred site。
+- **0.3 的口径**：文档 `dependencies#upgrading-from-scriptc-0-2` 写明 0.3 删了 `--dynamic` 与内嵌引擎，应用与包代码全上原生轨；实测 `scriptc build --dynamic` → `Unknown option`，coverage 的 `statementsDynamic` 恒 0。所以第 12 条③那句「落进 node_modules 会被收进岛」按 0.3.4 应读成「会被**静态吞包**」。
+- **不是我们的用法**：照文档那条 commander 示例（`argument` + `--upper` + `action`）单编一次，0.3.4 一样抛在 1608；`--npm-static` 只有「选进来」没有「踢出去」，空表和显式指名别的包都仍是 `commander static`；commander 12 / 13 / 14 更早抛在 `esm.mjs`（namespace 对象当值）。补丁也试过两处（按文档提示先窄化、把闭包提到模块级带 JSDoc）仍抛 —— 判上游缺口，绕开而不是修依赖。
+- **换法**：`packages/gds2js/src/commands.ts` 自己解析 argv、自己排 help。式子照抄 commander 的 `Help`：无颜色时 `displayWidth` 就是 `.length`、`padWidth` 取整页最长项、说明折到 `helpWidth - termWidth - 4`、不足 40 列不折、续行缩进 `termWidth + 4`；四类报错句连同一套 Damerau-Levenshtein 的 `Did you mean` 也同式。先后口径照它：`-V/--version` 在 `--` 之前扫到就当场打印（哪怕 `-h` 在它前面），verb 之后的 `-h` 归 verb，verb 之前 root 认不出的选项跟着 `operands.concat(unknown)` 一起交给 verb。
+- **验收**：`tmp/cli-all.mjs` + 基线 `tmp/cli-all.json` 那 97 格形状在 node 产物与原生 exe 两侧都逐字节相同，另 21 格拿 10-04 那支老 exe 对过零差异；门见下。**踩到的一次假失败**：`tools/cli-native.mjs` 收尾会自己删 scratch，想留 exe 复验得带 `--keep`。
+- **顺手两处**：commander 从两处 manifest 与 lock 摘掉（第 12 条①那条「根 devDeps 的 commander 是原生构建的解析锚点」的前置到此作废），自包含 exe 从 9.27 MB 降到 6.79 MB。
+- **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
+- **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
 ### 1.258 值类型七面的属性读两面量齐（2026-10-16，S431 读数轮 · §6 第 84 条那份名单已可开写）
 
@@ -2389,10 +2401,12 @@
 11. 测试套件收窄（2026-10-03，拍板）：`test:run`（真 CLI run 层）、`test:facade`（wasm/FFI 解析树等价）、
     `test:escape`（转义边界手写断言）、`test:multi`（examples/multi 冒烟）四门连同工具与脚本已删除
     （README、package.json 同步）；这三层保障以后不再有专门门。
-12. monorepo 迁移后的三个坑位（2026-10-03）：① 原生构建的 scratch 靠向上查找解析 `commander` —— 它在根
-    devDeps 里是**解析锚点**，别随 `packages/gds2js` 的依赖清理顺手摘掉（摘掉就是 SC1010 + SC0001 两条）；
+12. monorepo 迁移后的三个坑位（2026-10-03）：① ~~原生构建的 scratch 靠向上查找解析 `commander` —— 它在根
+    devDeps 里是**解析锚点**，别随 `packages/gds2js` 的依赖清理顺手摘掉（摘掉就是 SC1010 + SC0001 两条）~~ ——
+    **随 §1.259 那条工具链账作废**：CLI 自己解析 argv，没人再 import commander，两处 manifest 与 lock 里的它已摘掉；
     ② tsdown 的 dts 程序面走根 tsconfig，根 `include` 里的 `packages` 不能删；③ cli-native 的 scratch 用
-    「`@gds2js/*` 逐文件相对化」而不是 node_modules（落进 node_modules 会被 scriptc 当包代码收进岛）。
+    「`@gds2js/*` 逐文件相对化」而不是 node_modules（落进 node_modules 会被 scriptc 当包代码 —— 0.3 起是**静态吞包**、
+    不是岛，编不过的点编成跑到就抛，见 §1.259）。
     生成物口径：248 份 `main.gen.mts`（2026-10-03 写这条时是 216 份，2026-10-07 数了一遍是 248 份 = 语料 248 例全部有产物，被分析拦下的那些是抛错的占位文件）的运行时说明符是 `../../../packages/runtime/src/runtime/index`
     （现由 `tools/compile.ts` 的 `GEN_EMIT_OPTS` 显式声明；emitter 已不带仓库布局默认值）；corpus 之外
     （examples/multi、bench/.out）仍走裸名 `gds2js/runtime`，由 workspace 链接解析。
