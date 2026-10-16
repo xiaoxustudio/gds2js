@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.226 字典缺键那两句的边界隔离完了、本轮零代码（2026-10-16，§6 第 73 条④⑤定案，读数轮 · 无实现变更）
+
+- **16 格**（`tmp/probe-dictkey/{round2,round3}.mts` → `compare{76,77}.txt`）：**基是「静态已知的 `Dictionary` 标注」而键是 int** 时引擎给数组那一式 `Out of bounds get index '0' (on base: 'Dictionary')`（句末没句点），键换 float / String / bool 回到 `Invalid access to property or key …`；`var b = a` 之后再 `b[0]` 也回到 `Invalid access …` —— 差别在标注不在值。
+- **写不缺**：标注字典 `a[0] = 5` 直接建键、不打断。
+- **定形字典的键型不符是解析期拒**：`Dictionary[String, int]` 用 int 下标给 `Invalid index type "int" for a base of type "Dictionary[String, int]".` 并整份脚本加载失败 —— 第 72 条②那族因此要连 `Dictionary[K, V]` 基一起接，无标注 `Dictionary` 一形都不拒这条边界也量过。
+- **接的时候的账**：运行期看不见「标注」这一条，得由发射器把静态基名带到 `rt.index` / `rt.setIndex`；出货今天两句都没发、只发中文自述 `字典键不存在: x`（打断这一行为是对的）。
+- **本轮零代码**：SEMANTICS 第 73 条④⑤定案；ROADMAP 记 §1.226。
+
 ### 1.225 两族新读数量齐、本轮零代码：下标型的解析期拒 60 格与字典缺键那句 10 格（2026-10-16，§6 第 72 条②扩、新增第 73 条，读数轮 · 无实现变更）
 
 - **下标型矩阵 60 格**（`tmp/probe-idxtype/round1.mts` → `compare74.txt`）：基 `Array` / `Array[int]` / `String` / `PackedInt32Array` / `Dictionary` × 下标 `bool/int/float/String/Vector2/null` × 读写两形。四支基都只收 **int 与 float**（`s[1.5]` 收），其余四形给 `Invalid index type "<型>" for a base of type "<基名>".`，基名带定形拼法，且整份脚本加载失败；`Dictionary` 一形都不拒。
