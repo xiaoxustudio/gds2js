@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.223 移位两支与 `~` 的 78 格矩阵：只有三格给值，`~` 那句自造话换成引擎原文（2026-10-16，S402，§6 第 71 条④结清）
+
+- **78 格**（`tmp/probe-shift/round1.mts` → `compare70.txt`）：**解析期 0 拦**、75 格拒在运行期、3 格给值（`2 << 2` = 8、`2 >> 2` = 0、`~2` = -3）—— 两侧都必须是 int，`2 << 1.5` 与 `2 >> true` 全拒。
+- **`~` 的第二格是 `Nil`**：`Invalid operands 'float' and 'Nil' in operator '~'.`，与一元 `-` / `+` 同形但名字不带 `unary` 前缀；出货那句 `~ 需要 int，收到 float` 换掉了，六型之外照旧响亮拒。
+- **移位两支本来就对**：`ops.shl` / `shr` 走 `intPair`，发的早就是第三式原文 —— 这一族补的是门不是代码。
+- **门**：`packages/runtime/test/operator-shift-bnot.test.ts` 78 格逐格对值与原文（`tmp/probe-shift/gen6.mts` 生成）；端到端 78 格对照不合 0 格。
+- **门读数**：`pnpm test` **14057**（132 文件）、typecheck **4/4**、`test:compile` **252/361**（sema 83、响亮拒 26、emitter 0）、`test:diff` **245/245** 逐字节、`test:codegen` 全过；`test:golden-check` 371 例逐字节不变，`095-vector2i-div-zero` 那格批跑撞的是门自己的超时（同格单跑绿），已在 S402 ⑤ 记着。
+
 ### 1.222 `**` 与 `in` 两支的六型矩阵：解析期不拦、55 格拒在运行期，出货那两句自造话换成引擎原文（2026-10-16，S401，§6 第 71 条③结清）
 
 - **72 格**（`tmp/probe-powin/round1.mts` → `compare69.txt`，左支仍是初值推断的模块 var）：**解析期 0 拦**、17 格给值、55 格拒在运行期，句式仍是第三式 `Invalid operands 'A' and 'B' in operator '**' / 'in'.`。

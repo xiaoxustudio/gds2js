@@ -349,6 +349,9 @@ export const ops = {
   },
   bnot(a: Variant): Variant {
     if (a.t !== Tag.INT) {
+      if (MEASURED_SIX.has(a.t)) {
+        throw new GodotRuntimeError("need-int", `Invalid operands '${valueTypeName(a)}' and 'Nil' in operator '~'.`);
+      }
       throw new UnsupportedError("need-int", `~ 需要 int，收到 ${tagName(a.t)}`);
     }
     return V.int(~intToBig(a.v as IntPayload));
