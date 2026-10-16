@@ -780,6 +780,14 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.234 内部类能看见模块级的哪些名字：15 格量齐，自己类的信号不再发裸标识符（2026-10-16，S410，§6 第 68 条①结清）
+
+- **看不见**：模块 `func`（`not found in base self.`，函数体 / `_init` 体 / 两层内部类同句）、模块 `var` / `signal` / `static var` 与裸写的枚举成员名（`not declared in the current scope.`）—— 出货的解析期本来就同句，这四处零改动。
+- **看得见**：模块 `const`、`enum` 名（`Col.RED`）、兄弟类（`Other.new()`）、全局类型名与全局函数、自己类的方法 / 常量 / 信号。
+- **修的一格在发射器**：内部类里裸写自己类的信号（`own_sig.emit()`）此前发成 `rt.method(own_sig, ...)`，运行时 JS 的 `own_sig is not defined` —— 连 S406 那层接住点都盖不住（不是引擎那一句）。现在 `CURRENT_MEMBERS` 把自己类的信号一起收进，取值走 `rt.wrapValue(this.own_sig)`，与模块级信号同一条装箱口径。
+- **不放宽的相邻两形**：内部类里裸调外层实例成员照 S373 那句；枚举成员名在内部类里裸写照旧拒。
+- **账**：门 `packages/compiler/test/inner-class-outer-func.test.ts` **5 格**（九张名字表 + 一格发射），`pnpm test` **14226→14228**（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn **0**；出货端到端 15 格对照不合 **0**。
+
 ### 1.233 D6 那七型的默认值站点不再静默给 null：三站 21 格量齐后换成响亮拒（2026-10-16，S409，§6 第 77 条结清）
 
 - **引擎侧 21 格**（`tmp/probe-valuedefault/round13.mts` → `compare96.txt`）：七型 × 三站 —— 模块 `var r: T` 无初值、内嵌类字段无初值、`func T() -> X` 出错后 S406 那个接住点 —— 给的全是各型自己的默认值（`Transform2D` / `Basis` 是单位阵、`Quaternion` 是 `(0, 0, 0, 1)`、`Plane` 是零法线零距离、`Rect2` / `Rect2i` / `AABB` 是零位置零尺寸）。

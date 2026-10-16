@@ -260,6 +260,8 @@ export const GLOBAL_IMPLEMENTED: Set<string> = new Set([
 /** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
 let MODULE_SIGNALS = new Set<string>();
+/** 当前内部类自己的信号名：与 `CURRENT_MEMBERS` 同起同落，取值要的是装箱过的 `this.<名>`（引擎在内部类里看得见自己类的信号，读数 `tmp/probe-innerscope/compare97.txt` 的 c15）。 */
+let CLASS_SIGNALS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
 let MODULE_CLASSES = new Set<string>();
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
@@ -798,10 +800,13 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   const savedAsMethod = INIT_AS_METHOD;
   const savedHostSuper = NEEDS_HOST_SUPER;
   const savedClassFuncs = CLASS_FUNCS;
+  const savedClassSignals = CLASS_SIGNALS;
   CURRENT_MEMBERS = new Set([
     ...decl.vars.filter((v) => !v.isStatic).map((v) => v.name),
+    ...decl.signals.map((g) => g.name),
     ...innerInheritedNames(decl),
   ]);
+  CLASS_SIGNALS = new Set(decl.signals.map((g) => g.name));
   VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
@@ -852,6 +857,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push("");
 
   CURRENT_MEMBERS = saved;
+  CLASS_SIGNALS = savedClassSignals;
   VAR_TYPES = savedTypes;
   STATIC_FUNCS = savedStatics;
   CURRENT_CLASS = savedClass;
@@ -3067,7 +3073,7 @@ function emitExprVar(e: Expr): string {
       if (INNER_CLASSES.has(e.name) || e.name === CURRENT_CLASS) return `rt.V.object(__gd_d_${e.name})`;
       if (STATIC_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(__gd_d_${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
-      if (CURRENT_MEMBERS.has(e.name)) return `this.${e.name}`;
+      if (CURRENT_MEMBERS.has(e.name)) return CLASS_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       // 全局函数的取值点：分析器按真实作用域记的号，实测一律给 `@GlobalScope::<名字>` 的 Callable（typeof 25）
       if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
