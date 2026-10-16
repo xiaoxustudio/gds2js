@@ -1127,6 +1127,11 @@ function propAssignError(key: string, value: Variant, inner: unknown): GodotRunt
 /** 属性写 `base.key = value`：入口与 `method` / `attribute` 一样要**归一裸值**；基是值类型时只回报新值（写回目标是变量还是容器的一格，发射器才知道），返回 null 表示原地处理完。 */
 export function writeProp(raw: unknown, key: string, value: Variant): Variant | null {
   const base = norm(raw);
+  // 字典的属性写不报错，也不挂 JS 属性：引擎就是把这一格当 `d[&"<key>"] = value` 写进字典（读数 `tmp/probe-bincall/j1.gd` 的 R1–R7）
+  if (base.t === Tag.DICT) {
+    asDict(base, "属性").set(V.stringName(key), value);
+    return null;
+  }
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
@@ -1281,6 +1286,14 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
 
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);
+  // 字典的属性读就是查一格 StringName 键：键在就给值（`d.foo = 5` 之后 `d.foo` 是 5，读数 `tmp/probe-bincall/j1.gd` 的 R1），
+  // 不在就给那一句 —— 成员名（`d.keys`）也算「不在」，引擎在字典面上不发内建类型的绑定 Callable（S419 ②）
+  if (obj.t === Tag.DICT) {
+    const dict = asDict(obj, "属性");
+    const k = V.stringName(name);
+    if (dict.has(k)) return dict.getRequired(k);
+    throw new GodotRuntimeError("dict-attribute", `Invalid access to property or key '${name}' on a base object of type 'Dictionary'.`);
+  }
   if (obj.t === Tag.OBJECT) {
     // 引擎类值（`Node` 当变量用）实测能取身份与比等式，属性面与 `.new()` 都没建模：照形状拒，不发半对文本
     if (obj.v instanceof GdNativeClass) {

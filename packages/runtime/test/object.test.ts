@@ -6,7 +6,7 @@ import { eq, shouldThrow } from "@gds2js/testkit";
 import { registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject } from "@gds2js/runtime/runtime/object";
 import { attribute, method, writeProp } from "@gds2js/runtime/runtime/methods";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { show } from "@gds2js/runtime/runtime/values";
+import { GDict, show } from "@gds2js/runtime/runtime/values";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { vector2i } from "@gds2js/runtime/runtime/vector2i";
@@ -121,5 +121,52 @@ describe("runtime/object · 类、字段与元信息", () => {
     method(V.object(o), "remove_meta", [V.str("sn")]);
     eq("step66", "remove_meta 之后 has_meta 假", `${method(V.object(o), "has_meta", [V.str("sn")]).v}`, "false");
     shouldThrow("step66", "meta 的键要 String / StringName，其余响亮拒", () => setMeta(o, I(1), I(2)));
+  });
+});
+
+describe("runtime/methods · 字典的属性两面就是 StringName 键那一格（S421）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const dictBox = (pairs: Array<[Variant, Variant]>): Variant => {
+    const g = new GDict();
+    for (const [k, v] of pairs) g.set(k, v);
+    return V.dict(g);
+  };
+
+  it("写式把名字折成 StringName 键塞进字典，读式与打印都对上引擎", () => {
+    const d = dictBox([]);
+    writeProp(d, "foo", V.int(5));
+    eq("421", "属性读回 5", String((attribute(d, "foo") as Variant).v), "5");
+    eq("421", "打印是 { &\"foo\": 5 }", show(d), '{ &"foo": 5 }');
+    eq("421", "String 键的下标读也认这一格", show(method(d, "get", [V.str("foo")]), 1), "5");
+    eq("421", "has 两形都真", `${String((attribute(d, "foo") as Variant).t)}/${show(method(d, "has", [V.stringName("foo")]))}`, `${Tag.INT}/true`);
+  });
+
+  it("String 键先写，属性读也认这一格", () => {
+    const d = dictBox([[V.str("bar"), V.int(7)]]);
+    eq("421", "属性读 String 键", String((attribute(d, "bar") as Variant).v), "7");
+  });
+
+  it("没这一格时给 Invalid access 那句，成员名也一样", () => {
+    const d = dictBox([[V.int(1), V.int(2)]]);
+    const say = (n: string): string => "Invalid access to property or key '" + n + "' on a base object of type 'Dictionary'.";
+    for (const n of ["nosuch", "keys", "size", "has"]) {
+      eq("421", `读 ${n}`, errText(() => attribute(d, n)), say(n));
+    }
+    eq("421", "keys() 照旧是方法", show(method(d, "keys", []), 1), "[1]");
+  });
+
+  it("往成员名上写不报错，读完还是那一格", () => {
+    const d = dictBox([[V.int(1), V.int(2)]]);
+    writeProp(d, "keys", V.int(7));
+    eq("421", "属性读回 7", String((attribute(d, "keys") as Variant).v), "7");
+    eq("421", "keys() 给两把键", show(method(d, "keys", []), 1), '[1, &"keys"]');
+    eq("421", "整张字典的打印", show(d), '{ 1: 2, &"keys": 7 }');
   });
 });

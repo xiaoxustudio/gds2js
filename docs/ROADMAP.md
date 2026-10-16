@@ -780,6 +780,13 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.248 字典的属性两面：写折成 StringName 键、读按格给那句（2026-10-16，S421，§6 第 83 条②结清）
+
+- **引擎读数**：`tmp/probe-bincall/j1.gd` 八格 —— `d.foo = 5` 不报错、`print(d)` 是 `{ &"foo": 5 }`、`d.foo` / `d["foo"]` / `d[&"foo"]` 三读同为 5、`has` 两形都真；缺格时读给 `Invalid access to property or key '<名>' on a base object of type 'Dictionary'.`，成员名（`keys` / `size` / `has`）也一样。
+- **出货改的两处**：`writeProp` 见 Dictionary 就 `GDict.set(V.stringName(key), value)`（此前挂 JS 属性 = 错值）；`attribute` 见 Dictionary 先查那一格，查不到发上面那句。
+- **顺带钉住的一条**：Dictionary 面上「方法名当值」永远不是 Callable（S419 ②），写过同名键之后才被属性读认走 —— 两形现在都按实测发。
+- **门读数**：`pnpm test` **14293**（139 文件）、typecheck **4/4**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 0。
+
 ### 1.247 Array / String 的属性面照 pack 接进解析期（2026-10-16，S420，§6 第 83 条③结清）
 
 - **读数**：`tmp/probe-bincall/round2.mts` 的 H5 / H6 / H7 / H15 四格 —— 标注接收者读表外名与 pack 同形（`Cannot find member "<名>" in base "<型>".` 同一句报两遍），写成员名给 `Cannot assign a new value to a constant.`。
