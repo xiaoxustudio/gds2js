@@ -780,12 +780,19 @@
 - **三条已知不等价全记在 S281 ⑧ 且都不在语料里**：await 信号后引擎的帧栈是从信号那里重开的（实测只剩一帧）、字段初始化子那一帧引擎叫 `@implicit_new`、两条协程同时活着时共享栈的顺序没量过。写清比装作没有强。
 - **账**：语料 273（22 行逐字节）、ops 1918→**1930**、`pnpm test` **1143**、`test:compile` **194/264**（emitter 缺口 0）、`test:diff` **186/186**、guards 仍 **190**（拒答那支 `it.each` 少 4 格、新四例抵平）、拒答清单 8→**4**、scriptc 代表集 **16**；其余读数见提交信息。
 
+### 1.237 后一式的型名取自值自己：补量五格当场结清第 79 条（2026-10-16，S412 的续量 · 无实现变更）
+
+- **上一轮留的那格「已知不等价」其实是探头拿旧 dist 跑的**：重建后 `var b = a` 转手越界就印 `Array[int]` —— `rt.stampArray` 早把 `elem` 登记进装箱值，`GArray.get` 按它拼型名（S412 同一处改动）。
+- **补量 5 格全合**（`tmp/probe-typedlabel/round17.mts` → `compare100.txt`）：转手、`Variant` 标注、形参 `Variant` 三路给 `Array[int]` / `Array[String]`，混排推断与裸 `Array` 标注两路给 `Array`。
+- **动的是台账与门**：`dict-index-routing` 续两格（`Variant` 两路不路由），§6 第 79 条当场划掉，S412 ③ 与 §1.236 那条「不等价」的说法一并改正。
+- **账**：`pnpm test` **14238→14240**（138 文件）、typecheck **4/4**；`packages/*/src` 一行未动，语料、产物与 golden 因此不变。
+
 ### 1.236 静态标注的位置型基读越界换那一式，String 的中文自述清掉（2026-10-16，S412，§6 第 78 条结清、新增第 79 条）
 
 - **两句的分工照字典那一族**：标注的基给 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`（无句点、负数原样），推断 / `Variant` / 转手过的给 `Invalid access of index '<k>' on a base object of type: '<型>'.`；写侧不受影响。
 - **接线四处**：`TypedSlot.ann`（只由标注填，`seedInto` 覆盖模块 var / 形参 / 内部类字段，`var` 语句的初值推断不算）→ `posReadLabels` → 发射器把基名当第三个实参给 `rt.index` 与快轨两个裸数组取值 → 运行期 `posOobSay` 一句分两式（`arrIdx` / `strAt` 收基名）。
 - **顺带清掉**：String 读越界今天发中文自述 `字符串索引越界: 5`，两句都不是它。
-- **已知不等价一格登第 79 条**：`var b = a` 转手后越界，引擎在后一式印值自己的 `Array[int]`，出货印 `Array` —— 要给装箱值登记元素型会牵动混合数组那条转换族，单独量完再做。
+- **后一式的型名取自值自己**（补量 5 格 `compare100.txt`）：转手、`Variant` 标注、形参 `Variant` 三路越界都印 `Array[int]` / `Array[String]`，混排的两路印 `Array` —— 定形字面量本来就走 `rt.stampArray` 登记 `elem`，`GArray.get` 据此拼型名，第 79 条因此当场结清。
 - **账**：门 `dict-index-routing` 新增 10 格，`pnpm test` 14228→**14238**（138 文件）、typecheck **4/4**、`test:compile` **252/361**、`test:diff` **245/245** 逐字节、`test:codegen` 全过、产物 churn 7 份、`test:golden-check` 372 例逐字节不变；出货 12 格 + 10 格对照不合 **0** 与 **1**。
 
 ### 1.235 嵌套定型容器那句去掉自加的型名后缀，顺带量齐位置型基读越界的两句（2026-10-16，S411，§6 新增第 78 条）

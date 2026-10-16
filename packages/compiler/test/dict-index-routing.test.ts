@@ -57,6 +57,8 @@ const POS: Array<[string, string, string | null]> = [
   ["模块级定形 Array", "extends SceneTree\n\nvar a: Array[int] = [1]\n\nfunc _initialize():\n\tprint(a[5])\n\tquit()\n", "Array[int]"],
   ["推断的数组不带", F("\tvar a = [1]\n\tprint(a[5])"), null],
   ["标注转手给未标注", "extends SceneTree\n\nvar a: Array[int] = [1]\nvar b = a\n\nfunc _initialize():\n\tprint(b[5])\n\tquit()\n", null],
+  ["Variant 标注收定形数组", "extends SceneTree\n\nvar a: Array[int] = [1]\nvar v: Variant = a\n\nfunc _initialize():\n\tprint(v[5])\n\tquit()\n", null],
+  ["形参 Variant 收定形数组", "extends SceneTree\n\nvar a: Array[int] = [1]\n\nfunc f(v: Variant):\n\tprint(v[5])\n\nfunc _initialize():\n\tf(a)\n\tquit()\n", null],
   ["下标写不路由（另一式已经对）", F("\tvar a: Array[int] = [1]\n\ta[5] = 2"), null],
 ];
 
