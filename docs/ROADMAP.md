@@ -797,7 +797,7 @@
 - **漏拦的规模**：九面 2160 格里 1590 格引擎在解析期拒、我们放过 —— 根因是原表只支持「一支方法一个元素位 + 实参数正好等于那位」。
 - **改法**：`PACK_ARG_POSITIONS` 按位给声明槽（`e` 元素型 / `i` int / `b` bool；`bsearch` 的 `before` 实测与 int 槽同集合），每位各判各的；接收者多认「就地构造的链式」一种证明。
 - **两侧对过**：链式与命名变量两种接收者各跑一遍 2160 格，句子与行号逐格相同（`tmp/probe-packargs/{cross,crossvar}.py`）；新语料 387 二十句与裁判逐行同文。
-- **门读数**：`pnpm test` **14406**（140 文件）、typecheck **4/4**、`test:compile` **264/375**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+- **门读数**：`pnpm test` **14409**（140 文件）、typecheck **4/4**、`test:compile` **264/375**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
 
 ### 1.274 单文件模式撞上父脚本 extends：把误导的两句换成一句准确的（2026-10-17，S443，§6 第 60 条② 收窄）
 
@@ -805,7 +805,7 @@
 - **改法**：`cli/ctx.ts` 的 `tryLoadSingle` 在 lower 之后先看 `ir.extends` 的文本（剥引号后含斜杠 / 反斜杠、以 `.gd` 收尾、或带 `res://` `user://` `uid:` 前缀）——命中就返回 `[single-file-extends]` 一句并指去 `run-project` / `build-project`；标识符（类名、`SceneTree`）一律照旧，四道命令共用这一条路。
 - **工程模式没动**：`build-project` / `run-project` 读依赖表，`hostOnChain` 判得出链顶，这份文件出货与引擎逐字节同（`C1|25 7`）。
 - **账收窄了一笔**：#42 那条正账（让单文件也读依赖、把 `hostOnChain` 的输入补全）仍开着，本轮只把错诊断换成准确拒，没有假装支持。
-- **门读数**：`pnpm test` **14406**（140 文件）、typecheck **4/4**、`test:compile` **264/374**、`test:diff` **257/257** 逐字节、`test:codegen` 全过 —— 四格计数与上一轮一字不差。
+- **门读数**：`pnpm test` **14409**（140 文件）、typecheck **4/4**、`test:compile` **264/374**、`test:diff` **257/257** 逐字节、`test:codegen` 全过 —— 四格计数与上一轮一字不差。
 
 ### 1.273 字典重复键补上 NodePath 那一族（2026-10-17，S442，语料 386，§2 第 20 条④结清)
 
