@@ -168,6 +168,14 @@ describe("存在但没量元数的名字不许误拦", () => {
     ["byte to_float32_array", "\tprint(PackedByteArray([1]).to_float32_array())"],
     ["byte to_int64_array", "\tprint(PackedByteArray([1]).to_int64_array())"],
     ["byte get_string_from_utf8", '\tprint(PackedByteArray([1]).get_string_from_utf8())'],
+    ["String is_valid_ascii_identifier", '\tvar s: String = "abcd"\n\tprint(s.is_valid_ascii_identifier())'],
+    ["String is_valid_unicode_identifier", '\tvar s: String = "abcd"\n\tprint(s.is_valid_unicode_identifier())'],
+    ["String uri_file_decode", '\tvar s: String = "abcd"\n\tprint(s.uri_file_decode())'],
+    ["String remove_char", '\tvar s: String = "abcd"\n\tprint(s.remove_char(97))'],
+    ["String remove_chars", '\tvar s: String = "abcd"\n\tprint(s.remove_chars(97))'],
+    ["String replace_char", '\tvar s: String = "abcd"\n\tprint(s.replace_char(97, 98))'],
+    ["String replace_chars", '\tvar s: String = "abcd"\n\tprint(s.replace_chars(97, 98))'],
+    ["String to_multibyte_char_buffer", '\tvar s: String = "abcd"\n\tprint(s.to_multibyte_char_buffer())'],
   ];
 
   it.each(OKAY)("%s", async (_label, body) => {

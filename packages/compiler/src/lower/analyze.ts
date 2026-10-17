@@ -1969,7 +1969,7 @@ function containerCallArity(
  *  名单之外的成员名（我们没列进任何一面的表、也没量过的）会被误拦 —— 兜底的是那几张表本身就是**按引擎成员表逐名量出来的**
  *  （S378 / S379 / S380 三面 49+51+109 名过裁判），加上 `face-arg-allow-list` 那 1246 格与 `p2-t4` 那 1358 格都在替这张名单站岗。 */
 const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
-  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
+  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode", "remove_char", "remove_chars", "replace_char", "replace_chars", "to_multibyte_char_buffer"],
   Array: ["set"],
   Dictionary: ["set", "is_typed", "is_same_typed"],
 };
