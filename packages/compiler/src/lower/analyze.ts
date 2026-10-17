@@ -395,6 +395,15 @@ function parseTyped(name: string): TypedSlot | null {
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
 
+const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String"]);
+
+/** `Array[T]` 的内型只在认得的那几面里交出去（S460 量的那一格是**字面量 int** 下标；其余形一律不判）。 */
+function elemFaceOf(decl: string): string | null {
+  const slot = parseTyped(decl);
+  if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
+  return ELEM_FACES.has(slot.elem) ? slot.elem : null;
+}
+
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   type Seed = { name: string; type: TypeRef | null };
   const moduleSeeds: Seed[] = m.vars.map((v) => ({ name: v.name, type: v.type }));
@@ -2217,8 +2226,14 @@ function packNameMeasuredAbsent(kind: string, name: string): boolean {
 /** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
  *  `Array` / `String` 只认**标注**那一形（`tmp/probe-bincall/compare2.txt` 的 H5 / H6 / H7 / H15 四格就是标注读的），
  *  `Dictionary` 两形都不认 —— 引擎在标注字典上读属性连表外名都不在解析期开口（S419 ②）。 */
-function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>): string | null {
+function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>, elems: Map<string, string> = new Map()): string | null {
   if (obj === undefined) return null;
+  if (obj.kind === "index") {
+    const base = obj.obj as Record<string, unknown> | undefined;
+    if (base === undefined || base.kind !== "ident" || typeof base.name !== "string") return null;
+    if (staticType(obj.index as Expr) !== "int") return null;
+    return elemFaceOf(elems.get(base.name) ?? "");
+  }
   if (obj.kind === "ident" && typeof obj.name === "string") {
     const face = ann.get(obj.name) ?? null;
     return face === "Dictionary" ? null : face;
@@ -2267,6 +2282,16 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const face = faceName(p.type);
       if (face !== null) attr.set(p.name, face);
     }
+    /** 定形数组的名字单独一张表：只给 `e[0].X` 那一形交内型，不动上面那两张既有判据的范围。 */
+    const elems = new Map<string, string>();
+    const noteElem = (name: string, t: TypeRef | null): void => {
+      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elems.set(name, t.name);
+    };
+    for (const v of m.vars) noteElem(v.name, v.type);
+    for (const n of nodes) {
+      if (n.kind === "var" && typeof n.name === "string") noteElem(n.name, n.type as TypeRef | null);
+    }
+    for (const prm of params) noteElem(prm.name, prm.type);
     const callCallees = new Set<unknown>();
     const writeTargets = new Set<unknown>();
     for (const n of nodes) {
@@ -2291,7 +2316,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       if (n.kind !== "attribute" || callCallees.has(n)) continue;
-      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr);
+      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr, elems);
       if (face === null) continue;
       const name = n.name;
       if (typeof name !== "string") continue;
@@ -4543,6 +4568,18 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (t !== null) typed.set(p.name, t);
       if (p.type !== null && p.type.kind === "named" && FACE_ANNOTATIONS.has(p.type.name)) faceTyped.set(p.name, p.type.name);
     }
+    const elemFaces = new Map<string, string>();
+    const noteElem = (name: string, t: TypeRef | null): void => {
+      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elemFaces.set(name, t.name);
+    };
+    for (const v of m.vars) noteElem(v.name, v.type);
+    for (const prm of f.params) noteElem(prm.name, prm.type);
+    /** `e[0].m(...)` 这一形的接收者：只认字面量 int 下标那一格（S460 量的就是它，其余形不判）。 */
+    const recvElem = (obj: Expr): string | null => {
+      if (obj.kind !== "index" || obj.obj.kind !== "ident") return null;
+      if (staticType(obj.index) !== "int") return null;
+      return elemFaceOf(elemFaces.get(obj.obj.name) ?? "");
+    };
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
     const staticCallees = new Set<Expr>();
@@ -4720,7 +4757,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : valueCtorType(callee.obj);
+      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
       if (recv === null) continue;
       const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
       if (sig === undefined) continue;
