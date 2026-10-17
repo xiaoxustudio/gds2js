@@ -2346,7 +2346,8 @@ type DictKey =
   | { t: "str"; v: string }
   | { t: "bool"; v: boolean }
   | { t: "null" }
-  | { t: "vec"; name: "Vector2" | "Vector3"; xs: number[] };
+  | { t: "vec"; name: "Vector2" | "Vector3"; xs: number[] }
+  | { t: "np"; v: string };
 
 function foldDictKey(e: Expr): DictKey | null {
   if (e.kind === "lit") {
@@ -2358,6 +2359,8 @@ function foldDictKey(e: Expr): DictKey | null {
       case "string":
       case "string_name":
         return { t: "str", v: String(e.value) };
+      case "node_path":
+        return { t: "np", v: String(e.value) };
       case "bool":
         return { t: "bool", v: e.value === true };
       case "null":
@@ -2392,6 +2395,10 @@ function foldDictKey(e: Expr): DictKey | null {
       else return null;
     }
     return { t: "vec", name: e.callee.name, xs };
+  }
+  if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "NodePath" && e.args.length === 1) {
+    const one = foldDictKey(e.args[0] as Expr);
+    if (one !== null && one.t === "str") return { t: "np", v: one.v };
   }
   return null;
 }
@@ -2449,6 +2456,8 @@ function dictKeyToken(k: DictKey): string {
       return "n";
     case "vec":
       return `v:${k.name}:${k.xs.join(",")}`;
+    case "np":
+      return `p:${k.v}`;
   }
 }
 
@@ -2467,6 +2476,8 @@ function dictKeyText(k: DictKey): string {
       return "<null>";
     case "vec":
       return `(${k.xs.map(floatText).join(", ")})`;
+    case "np":
+      return k.v;
   }
 }
 

@@ -66,3 +66,28 @@ describe("analyze · 字典字面量的重复键", () => {
     console.log(`\n重复键表：${String(CASES.length)} 形，引擎拒而我们拒 ${String(rejected)} 形，引擎收而我们也收 ${String(accepted)} 形`);
   });
 });
+
+/** NodePath 字面量键（S442，读数 `tmp/probe-dupnp/` 十四格）：同路径算重复，跨 String / StringName 各是各的键。 */
+describe("重复键 · NodePath 那一族", () => {
+  it("引擎拒的四形按同一句拒", async () => {
+    const dups = [
+      ['{^"a": 1, ^"a": 2}', "a"],
+      ['{^"a/b": 1, ^"a/b": 2}', "a/b"],
+      ['{^"": 1, ^"": 2}', ""],
+      ['{NodePath("a"): 1, ^"a": 2}', "a"],
+    ] as Array<[string, string]>;
+    for (const [src, key] of dups) {
+      const diags = analyze(lower(await parseSource(bodySrc("\tvar d = " + src)))).filter((d) => d.code === "dict-dup-key");
+      const got = diags.map((d) => `${d.message} (at line ${String((d.loc as { line: number }).line)})`);
+      expect(got, src).toEqual(['Key "' + key + '" was already used in this dictionary. (at line 4)']);
+    }
+  });
+
+  it("引擎收的四形不误拦", async () => {
+    const keeps = ['{^"a": 1, "a": 2}', '{^"a": 1, &"a": 2}', '{^"a": 1, ^"b": 2}', '{^"a": 1, ^"A": 2}'];
+    for (const src of keeps) {
+      const diags = analyze(lower(await parseSource(bodySrc("\tvar d = " + src))));
+      expect(diags.map((d) => d.message), src).toEqual([]);
+    }
+  });
+});

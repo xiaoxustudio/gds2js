@@ -792,6 +792,12 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.273 字典重复键补上 NodePath 那一族（2026-10-17，S442，语料 386，§2 第 20 条④结清)
+
+- **判据**：NodePath 字面量键折成独立一类（`np:`），同路径算重复、跨 String / StringName 各算各的；`NodePath("a")` 这种构造写法与 `^"a"` 同键（引擎实测那句拒在**首次出现**那一格）。
+- **不误拦**：`^"a"`/`"a"`、`^"a"`/`&"a"`、`^"a"`/`^"b"`、`^"a"`/`^"A"` 四形引擎收，门各钉一格。
+- **门读数**：`pnpm test` 14406、typecheck 4/4、`test:compile` 264/374、`test:diff` 257/257、`test:codegen` 全过。
+
 ### 1.271 unbind 之后再 bind 与 unbind 进等式：两形解绑（2026-10-17，S441，语料 385 十二格逐字节，§6 第 90 条结清）
 
 - **一句机制**：`bind()` 落在 `unbind` 腾出的空位上 —— 绑定串一字不动（`get_bound_arguments()` 仍 `[1, 2, 3]`），只把 unbind 的计数按绑的支数减回去，所以计数从 2 到 1 到 0，`call()` 一直是 `f(1, 2, 3)`。
