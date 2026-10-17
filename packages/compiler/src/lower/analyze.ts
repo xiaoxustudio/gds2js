@@ -4159,12 +4159,19 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       return typeof name === "string" ? (by[name] ?? null) : null;
     };
     const operandKind = (e: Expr): string | null => literalKind(e) ?? callRet(e) ?? callableOf(e);
-    /** `e[0]` 这一读的静态型 = 定形数组的内型（S459：只认**字面量 int** 下标，那是量过的那一格；内型不在认得的名字里就不判）。 */
+    /** 定形容器那一读的静态型：数组交内型、字典交值型（S459 量的是字面量 int 下标，S468 补上非字面量下标与字典值读；键型不合式就不判，那一格由下标型闸门报）。 */
     const elemOf = (e: Expr): string | null => {
-      if (e.kind !== "index" || e.obj.kind !== "ident" || staticType(e.index) !== "int") return null;
+      if (e.kind !== "index" || e.obj.kind !== "ident") return null;
       const slot = parseTyped(raws.get(e.obj.name) ?? "");
-      if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
-      return ANNOT.has(slot.elem) ? slot.elem : null;
+      if (slot === null) return null;
+      const kt = staticType(e.index);
+      if (slot.kind === "Array") {
+        if (kt !== null && kt !== "int") return null;
+        return slot.elem !== undefined && ANNOT.has(slot.elem) ? slot.elem : null;
+      }
+      if (slot.key === undefined || slot.val === undefined || !ANNOT.has(slot.val)) return null;
+      if (kt !== null && !canHold(slot.key, kt)) return null;
+      return slot.val;
     };
     /** 两侧都是 Callable 那一形：引擎只报一句，两支循环各报一遍就成了两句重复（读数 `tmp/d6/cb.json`）。 */
     const reported = new Set<Expr>();

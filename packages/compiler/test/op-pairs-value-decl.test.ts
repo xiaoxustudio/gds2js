@@ -9,7 +9,7 @@ import { analyze, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } fro
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
-const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar vi: Vector2i = Vector2i(1, 2)\nvar c: Color = Color(1, 2, 3, 4)\nvar s: String = "x"\nvar ea: Array[Vector2] = [Vector2(1, 2)]\nvar ei: Array[int] = [1]\n';
+const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar vi: Vector2i = Vector2i(1, 2)\nvar c: Color = Color(1, 2, 3, 4)\nvar s: String = "x"\nvar ea: Array[Vector2] = [Vector2(1, 2)]\nvar ei: Array[int] = [1]\nvar dv: Dictionary[String, Vector2] = {"a": Vector2(1, 2)}\nvar k: String = "a"\n';
 
 async function pairs(body: string): Promise<string[]> {
   const src = HEAD + body + "\nfunc _initialize():\n\tprint(\"ok\")\n\tquit()\n";
@@ -42,6 +42,14 @@ describe("标值型标注的运算符对", () => {
       expect(await pairs("func z():\n\t" + body + "\n")).toEqual([msg(a, b, op)]);
     });
   }
+
+  it("定形字典的值读与数组的非字面量下标读同样交出内型（S468）", async () => {
+    expect(await pairs('func z():\n\tprint(dv["a"] + "x")\n')).toEqual([msg("Vector2", "String", "+")]);
+    expect(await pairs("func z():\n\tprint(dv[k] + \"x\")\n")).toEqual([msg("Vector2", "String", "+")]);
+    expect(await pairs("func z():\n\tprint(1 + dv[\"a\"])\n")).toEqual([msg("int", "Vector2", "+")]);
+    expect(await pairs("func z():\n\tprint(dv[1] + \"x\")\n")).toEqual([]);
+    expect(await pairs("func z():\n\tprint(dv[\"a\"] + Vector2(3, 4))\n")).toEqual([]);
+  });
 
   it("同型那一格照收：`Vector2 + Vector2` 与 `Color + Color` 引擎不拦", async () => {
     expect(await pairs("func z():\n\tprint(v + Vector2(3, 4))\n")).toEqual([]);
