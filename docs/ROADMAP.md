@@ -803,6 +803,7 @@
 
 - **实测**：`main.gd` 写 `extends "res://sub.gd"`、`sub.gd` 是 `extends SceneTree` 带 `helper()` —— 引擎工程模式给 `C1|25 7`；我们的单文件路径把 `var q = quit` 报成 `Identifier "quit" not declared in the current scope.`、把 `helper()` 报成 `Function "helper()" not found in base self.` —— 两句都在说「这东西不存在」，而真相是「单文件模式没读父脚本」。
 - **改法**：`cli/ctx.ts` 的 `tryLoadSingle` 在 lower 之后先看 `ir.extends` 的文本（剥引号后含斜杠 / 反斜杠、以 `.gd` 收尾、或带 `res://` `user://` `uid:` 前缀）——命中就返回 `[single-file-extends]` 一句并指去 `run-project` / `build-project`；标识符（类名、`SceneTree`）一律照旧，四道命令共用这一条路。
+- **2026-10-17 推进（S455）**：`tryLoadSingle` 不再拒，改成报 `deps`；`compileProject` 加 `closureOnly`（只种入口、不扫根目录），`check` / `run` / `build --runtime-mode import` 三面走闭包管线，继承面判定与工程模式同一份代码。夹具两侧同字（引擎 `C1|25 7`，出货 `run` 与 `build`+`node` 同）。**仍拒的两面**：`--runtime-mode local|single` 与 export（`[closure-pack]` / `[closure-export]`），以及闭包路的常驻门还没进任何一道门（本轮手工对裁判）。
 - **工程模式没动**：`build-project` / `run-project` 读依赖表，`hostOnChain` 判得出链顶，这份文件出货与引擎逐字节同（`C1|25 7`）。
 - **账收窄了一笔**：#42 那条正账（让单文件也读依赖、把 `hostOnChain` 的输入补全）仍开着，本轮只把错诊断换成准确拒，没有假装支持。
 - **门读数**：`pnpm test` **14409**（140 文件）、typecheck **4/4**、`test:compile` **264/374**、`test:diff` **257/257** 逐字节、`test:codegen` 全过 —— 四格计数与上一轮一字不差。

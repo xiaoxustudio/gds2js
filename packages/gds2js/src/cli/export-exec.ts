@@ -58,6 +58,10 @@ export async function exportSingleTree(ctx: Ctx): Promise<ExportTree | null> {
     console.error(loaded.error);
     return null;
   }
+  if (loaded.deps) {
+    console.error(`${ctx.input}:  error  [closure-export] 入口引用了本地脚本（extends / preload），单文件 export 只铺一份产物 —— 请改走工程 export（入口在 project.godot 覆盖的目录里）`);
+    return null;
+  }
   if (!printDiags(loaded.diags)) return null;
   const entry = join(dir, basename(ctx.input).replace(/\.gd$/i, "") + ".mts");
   try {

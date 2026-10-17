@@ -26,6 +26,8 @@ export interface ProjectOptions {
   entries: string[];
   resRoot: string;
   outDir: string;
+  /** 只种入口、不扫目录：依赖靠 `extends` / `preload` 拉进来（单文件模式读依赖走的就是这一条）。 */
+  closureOnly?: boolean;
   runtimeImport: string;
   hostImport: string | null;
   /** 静态打包（`--pack scriptc`）用：`runtime/` 与 `host.ts` 的源码只铺一份在这个目录下，每个模块的 import 按自己那一层的相对深度算（每层各放一份会编成多张 runtime 图、同一个类有多份身份）。 */
@@ -245,7 +247,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     }
   };
   for (const e of entries) seed(e);
-  for (const f of findGdFiles(resRoot)) seed(f);
+  if (!opts.closureOnly) for (const f of findGdFiles(resRoot)) seed(f);
   for (let i = 0; i < queue.length; i++) {
     const resPath = queue[i]!;
     const abs = resToAbs(resPath, resRoot);

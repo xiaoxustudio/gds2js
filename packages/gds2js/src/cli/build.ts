@@ -8,13 +8,22 @@ import { emitModule, emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
 import type { RawSourceMap } from "@gds2js/compiler/emit/sourcemap";
 import { selfFile } from "@gds2js/compiler/home";
 import { bundleModule, bundlingAvailable } from "../bundle";
-import { errOf, printDiags, projectDiags, STANDALONE_FILE, standalonePath, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
+import { closureResPath, compileClosure, errOf, printDiags, projectDiags, STANDALONE_FILE, standalonePath, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
 
 export async function buildSingle(ctx: Ctx): Promise<boolean> {
   const loaded = await tryLoadSingle(ctx.input);
   if ("error" in loaded) {
     console.error(loaded.error);
     return false;
+  }
+  if (loaded.deps) {
+    if (ctx.runtimeMode !== "import") {
+      console.error(
+        `${ctx.input}:  error  [closure-pack] 入口引用了本地脚本（extends / preload），而 --runtime-mode ${ctx.runtimeMode} 要把依赖折进一份 standalone —— 这一组合还没做，请改走 build-project，或先用 --runtime-mode import 产出小树`,
+      );
+      return false;
+    }
+    return buildClosure(ctx);
   }
   if (!printDiags(loaded.diags)) return false;
 
@@ -40,6 +49,44 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
   writeFileSync(ctx.outPath, code, "utf8");
   if (map) writeFileSync(`${ctx.outPath}.map`, JSON.stringify(map), "utf8");
   console.error(`${ctx.outPath}: 已生成 (${code.split("\n").length} 行)${map ? " + .map" : ""}`);
+  return true;
+}
+
+/** 单文件带依赖：把闭包小树写进 `-o` 所在目录，入口按要的名字落位（S455）。 */
+async function buildClosure(ctx: Ctx): Promise<boolean> {
+  const root = dirname(ctx.input);
+  const outDir = dirname(ctx.outPath);
+  let result: CompileResult;
+  try {
+    result = await compileClosure(ctx, outDir, ctx.run);
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    return false;
+  }
+  if (!printDiags(projectDiags(result, root))) return false;
+  let entryPath = "";
+  let lines = 0;
+  try {
+    for (const m of result.modules) {
+      mkdirSync(dirname(m.jsPath), { recursive: true });
+      writeFileSync(m.jsPath, m.code, "utf8");
+      lines += m.code.split("\n").length;
+      if (m.resPath === closureResPath(ctx.input)) entryPath = m.jsPath;
+    }
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    return false;
+  }
+  if (entryPath === "") {
+    console.error(`${ctx.input}: 闭包里没有入口模块`);
+    return false;
+  }
+  if (entryPath !== ctx.outPath) {
+    const code = readFileSync(entryPath, "utf8");
+    writeFileSync(ctx.outPath, code, "utf8");
+    rmSync(entryPath, { force: true });
+  }
+  console.error(`${ctx.outPath}: 已生成 (${lines} 行，含 ${result.modules.length} 份脚本)`);
   return true;
 }
 

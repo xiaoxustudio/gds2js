@@ -1,11 +1,24 @@
+import { dirname } from "node:path";
 import { compileProject } from "@gds2js/compiler/compile/project";
-import { errOf, printDiags, projectDiags, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
+import { compileClosure, errOf, printDiags, projectDiags, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
 
 export async function checkSingle(ctx: Ctx): Promise<boolean> {
   const loaded = await tryLoadSingle(ctx.input);
   if ("error" in loaded) {
     console.error(loaded.error);
     return false;
+  }
+  if (loaded.deps) {
+    let result: CompileResult;
+    try {
+      result = await compileClosure(ctx, ctx.outDir, false);
+    } catch (e) {
+      console.error(`${ctx.input}:  error  ${errOf(e)}`);
+      return false;
+    }
+    if (!printDiags(projectDiags(result, dirname(ctx.input)))) return false;
+    console.error(`${ctx.input}: 静态检查通过（含 ${result.modules.length} 份依赖脚本）`);
+    return true;
   }
   if (!printDiags(loaded.diags)) return false;
   console.error(`${ctx.input}: 静态检查通过`);

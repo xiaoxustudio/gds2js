@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import { selfFile } from "@gds2js/compiler/home";
@@ -164,6 +164,8 @@ export function refuseNestedProjects(input: string, root: string, nested: string
 export interface Loaded {
   ir: ReturnType<typeof lower>;
   diags: Diag[];
+  /** 入口自己引用了本地脚本（`extends "<路径>"` / `preload("sub.gd")`）—— 这一形要读依赖，走闭包管线。 */
+  deps: boolean;
 }
 
 export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: string }> {
@@ -175,14 +177,31 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
   }
   try {
     const ir = lower(await parseSource(src));
-    const chain = singleFileExtends(ir.extends);
-    if (chain !== null) {
-      return { error: `${absPath}:1:1  error  [single-file-extends] extends "${chain}" 挂的是父脚本 —— 单文件模式不读依赖，继承来的方法、字段与宿主名一律判不出，请改走 run-project / build-project` };
-    }
-    return { ir, diags: toDiags(absPath, ir) };
+    return { ir, diags: toDiags(absPath, ir), deps: needsClosure(ir) };
   } catch (e) {
     return { error: `${absPath}:1:1  error  ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+/** `extends` 挂父脚本，或正文 `preload` / `load` 一个本地 `.gd` —— 两者都要把依赖读进来才判得出继承面。 */
+function needsClosure(ir: ReturnType<typeof lower>): boolean {
+  if (singleFileExtends(ir.extends) !== null) return true;
+  let hit = false;
+  const walk = (n: unknown): void => {
+    if (hit || n === null || typeof n !== "object") return;
+    if (Array.isArray(n)) {
+      for (const x of n) walk(x);
+      return;
+    }
+    const o = n as Record<string, unknown>;
+    if (o.kind === "call" && (o.callee as Record<string, unknown> | undefined)?.name === "preload") {
+      const a = (o.args as unknown[] | undefined)?.[0] as Record<string, unknown> | undefined;
+      if (a !== undefined && typeof a.value === "string" && /\.gd$/.test(a.value)) hit = true;
+    }
+    for (const k of Object.keys(o)) if (k !== "loc") walk(o[k]);
+  };
+  walk(ir);
+  return hit;
 }
 
 /** `extends` 挂的是父脚本（路径 / uid / `.gd`）而不是标识符时给那串文本，否则 null。 */
@@ -222,6 +241,25 @@ export function baseName(file: string): string {
 
 /** `compileProject` 的返回。刻意声明出来：隐式 any 的局部变量在静态目标上是个通配符槽，值过槽要逐格校验。 */
 export type CompileResult = Awaited<ReturnType<typeof compileProject>>;
+
+/** 单文件模式下的闭包编译：只种入口，依赖靠 `extends` / `preload` 拉进来；根取入口所在目录。
+ *  继承来的方法 / 字段与宿主名从此判得出，与 `check-project` / `run-project` 共用同一套判定（S455）。 */
+export async function compileClosure(ctx: Ctx, outDir: string, autoRun: boolean | undefined): Promise<CompileResult> {
+  return compileProject({
+    entries: [ctx.input],
+    resRoot: dirname(ctx.input),
+    outDir,
+    runtimeImport: ctx.runtimeImport,
+    hostImport: ctx.hostImport,
+    autoRun,
+    closureOnly: true,
+  });
+}
+
+/** 入口在闭包结果里的 `res://` 路径（根就是入口所在目录）。 */
+export function closureResPath(input: string): string {
+  return "res://" + basename(input);
+}
 
 export function projectDiags(result: CompileResult, resRoot: string): Diag[] {
   return result.diags.map((d) => ({

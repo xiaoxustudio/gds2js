@@ -4,7 +4,7 @@ import { compileProject } from "@gds2js/compiler/compile/project";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { bundleModule, bundlingAvailable } from "../bundle";
 import { runProduct } from "../exec";
-import { errOf, printDiags, projectDiags, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
+import { closureResPath, compileClosure, errOf, printDiags, projectDiags, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
 import { emitOptsFor } from "./build";
 
 /** 临时产物的名字前缀（跑完即删；留着是给 --keep 看生成代码用的）。 */
@@ -25,6 +25,7 @@ export async function runSingle(ctx: Ctx): Promise<boolean> {
     console.error(loaded.error);
     return false;
   }
+  if (loaded.deps) return runClosure(ctx);
   if (!printDiags(loaded.diags)) return false;
 
   const tmpPath = join(dirname(ctx.input), `${runTag()}.mts`);
@@ -46,6 +47,48 @@ export async function runSingle(ctx: Ctx): Promise<boolean> {
       rmSync(tmpPath, { force: true });
     } else {
       console.error(`${tmpPath}: 已生成并保留（--keep）`);
+    }
+  }
+}
+
+/** 单文件带依赖（`extends "<路径>"` / `preload("sub.gd")`）：只种入口编一张闭包树，跑入口那一份。
+ *  继承来的方法、字段与宿主名在这条路上判得出，与 `run-project` 共用同一套判定（S455）。 */
+async function runClosure(ctx: Ctx): Promise<boolean> {
+  const root = dirname(ctx.input);
+  const outDir = join(root, runTag());
+  let result: CompileResult;
+  try {
+    result = await compileClosure(ctx, outDir, undefined);
+  } catch (e) {
+    console.error(`${ctx.input}:  error  ${errOf(e)}`);
+    rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  if (!printDiags(projectDiags(result, root))) {
+    rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  for (const m of result.modules) {
+    mkdirSync(dirname(m.jsPath), { recursive: true });
+    writeFileSync(m.jsPath, m.code, "utf8");
+  }
+  const entry = result.modules.find((m) => m.resPath === closureResPath(ctx.input));
+  if (!entry) {
+    console.error(`${ctx.input}: 闭包里没有入口模块`);
+    rmSync(outDir, { recursive: true, force: true });
+    return false;
+  }
+  try {
+    await runProduct(entry.jsPath);
+    return true;
+  } catch (e) {
+    console.error(`${ctx.input}:  runtime error  ${errOf(e)}`);
+    return false;
+  } finally {
+    if (!ctx.keep) {
+      rmSync(outDir, { recursive: true, force: true });
+    } else {
+      console.error(`${outDir}: 已生成并保留（--keep）`);
     }
   }
 }
