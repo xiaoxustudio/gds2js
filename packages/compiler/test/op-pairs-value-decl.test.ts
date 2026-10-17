@@ -9,7 +9,7 @@ import { analyze, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } fro
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
-const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar vi: Vector2i = Vector2i(1, 2)\nvar c: Color = Color(1, 2, 3, 4)\nvar s: String = "x"\n';
+const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar vi: Vector2i = Vector2i(1, 2)\nvar c: Color = Color(1, 2, 3, 4)\nvar s: String = "x"\nvar ea: Array[Vector2] = [Vector2(1, 2)]\nvar ei: Array[int] = [1]\n';
 
 async function pairs(body: string): Promise<string[]> {
   const src = HEAD + body + "\nfunc _initialize():\n\tprint(\"ok\")\n\tquit()\n";
@@ -30,6 +30,10 @@ const REFUSED: Array<[string, string, string, string, string]> = [
   ["正向 · Vector2i 乘 Vector2", "print(vi * Vector2(1, 2))", "Vector2i", "Vector2", "*"],
   ["反向 · int 加 Vector2", "print(1 + v)", "int", "Vector2", "+"],
   ["反向 · String 除 Color", "print(\"x\" / c)", "String", "Color", "/"],
+  ["元素读 · `Array[Vector2]` 的 `e[0]` 加 int", "print(ea[0] + 1)", "Vector2", "int", "+"],
+  ["元素读 · 定形数组内型当左支取模", "print(ea[0] % 1)", "Vector2", "int", "%"],
+  ["元素读 · 反向 `1 + e[0]`", "print(1 + ea[0])", "int", "Vector2", "+"],
+  ["元素读 · `Array[int]` 的内型配 Color", "print(ei[0] + Color(1, 2, 3, 4))", "int", "Color", "+"],
 ];
 
 describe("标值型标注的运算符对", () => {
@@ -44,9 +48,9 @@ describe("标值型标注的运算符对", () => {
     expect(await pairs("func z():\n\tprint(c + Color(1, 1, 1, 1))\n")).toEqual([]);
   });
 
-  it("两张表各 177 / 184 对 —— 反向不是正向的镜像", () => {
-    expect(count(OP_PAIRS_REFUSED_DECL_VAL)).toBe(177);
-    expect(count(OP_PAIRS_REFUSED_DECL_VAL_REV)).toBe(184);
+  it("两张表按实测各 237 / 246 对 —— 反向不是正向的镜像", () => {
+    expect(count(OP_PAIRS_REFUSED_DECL_VAL)).toBe(237);
+    expect(count(OP_PAIRS_REFUSED_DECL_VAL_REV)).toBe(246);
   });
 
   it("标量的老集没被扩表带歪：`String + int` 仍旧一句", async () => {

@@ -3907,24 +3907,26 @@ export const OP_PAIRS_REFUSED_DECL: Readonly<Record<string, ReadonlyArray<string
 
 /** 左支是标值型**标注变量**、右支是字面量的那些对（S457 第一笔，尺 `tmp/d6/annot.py`，读数 `tmp/d6/av-decl.txt` / `tmp/d6/av-mirror.txt`：210 格 × 两向逐格过裁判，两向**不是镜像**） */
 export const OP_PAIRS_REFUSED_DECL_VAL: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
-  "*": ["Color|String", "Color|Vector2", "Color|bool", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool"],
-  "+": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
-  "-": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
-  "/": ["Color|String", "Color|Vector2", "Color|bool", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool"],
-  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
-  "==": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
+  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool", "int|float"],
+  "*": ["Color|String", "Color|Vector2", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|String", "int|bool"],
+  "+": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "-": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "/": ["Color|String", "Color|Vector2", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "==": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+
 };
 
 /** 反向那一形：左支是字面量、右支是标值型**标注变量**（同批实测，集与正向不等，故各记一张） */
 export const OP_PAIRS_REFUSED_DECL_VAL_REV: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "%": ["Color|Color", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Vector2|Color", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "*": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i"],
-  "+": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "-": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "/": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "<": ["Color|Color", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "==": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|int", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "*": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|String", "int|String"],
+  "+": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "-": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|int", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "/": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "==": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+
 };
 
 /** 左支写成「静态型标明的名字」、右支是字面量那一形（S395）：468 格全过裁判，引擎这一路**一律第二式**，
@@ -3973,7 +3975,12 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
   };
   const moduleTypes = new Map<string, string>();
   const moduleConsts = new Map<string, string>();
+  /** 定形容器要把**原文标注**才读得出内型（`named` 那一步把 `Array[Vector2]` 削成 `Array` 了）。 */
+  const moduleRaws = new Map<string, string>();
+  const rawOf = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" ? t.name : null);
   for (const v of m.vars) {
+    const rw = rawOf(v.type);
+    if (rw !== null) moduleRaws.set(v.name, rw);
     const t = named(v.type);
     if (t === null) continue;
     if (v.isConst) moduleConsts.set(v.name, t);
@@ -3983,21 +3990,32 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
 
   const checkBody = (body: Stmt[], base: Map<string, string>, consts: Map<string, string>): void => {
     const types = new Map(base);
+    const raws = new Map(moduleRaws);
     const nodes = flattenBody(body);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || n.isConst === true) continue;
+      const rw = rawOf(n.type as TypeRef | null);
+      if (rw !== null) raws.set(n.name, rw);
       const t = named(n.type as TypeRef | null);
       if (t !== null) types.set(n.name, t);
     }
+    /** `e[0]` 这一读的静态型 = 定形数组的内型（S459：只认**字面量 int** 下标，那是量过的那一格；内型不在认得的名字里就不判）。 */
+    const elemOf = (e: Expr): string | null => {
+      if (e.kind !== "index" || e.obj.kind !== "ident" || staticType(e.index) !== "int") return null;
+      const slot = parseTyped(raws.get(e.obj.name) ?? "");
+      if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
+      return ANNOT.has(slot.elem) ? slot.elem : null;
+    };
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.left.kind !== "ident") continue;
+      if (e.left.kind !== "ident" && e.left.kind !== "index") continue;
       const rt = literalKind(e.right);
       if (rt === null) continue;
-      const name = (e.left as Extract<Expr, { kind: "ident" }>).name;
-      const isConst = consts.has(name);
-      const lt = isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null);
+      const isIdent = e.left.kind === "ident";
+      const name = isIdent ? (e.left as Extract<Expr, { kind: "ident" }>).name : "";
+      const isConst = isIdent && consts.has(name);
+      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : elemOf(e.left);
       if (lt === null) continue;
       const pair = `${lt}|${rt}`;
       const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
@@ -4017,10 +4035,10 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.right.kind !== "ident") continue;
+      if (e.right.kind !== "ident" && e.right.kind !== "index") continue;
       const lt2 = literalKind(e.left);
       if (lt2 === null) continue;
-      const rt2 = types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null;
+      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : elemOf(e.right);
       if (rt2 === null) continue;
       const pair2 = `${lt2}|${rt2}`;
       if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true) continue;
