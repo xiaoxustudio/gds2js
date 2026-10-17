@@ -395,7 +395,7 @@ function parseTyped(name: string): TypedSlot | null {
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
 
-const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String"]);
+const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String", "int", "float", "bool"]);
 
 /** `Array[T]` 的内型只在认得的那几面里交出去（S460 量的那一格是**字面量 int** 下标；其余形一律不判）。 */
 function elemFaceOf(decl: string): string | null {
@@ -2226,7 +2226,7 @@ function packNameMeasuredAbsent(kind: string, name: string): boolean {
 /** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
  *  `Array` / `String` 只认**标注**那一形（`tmp/probe-bincall/compare2.txt` 的 H5 / H6 / H7 / H15 四格就是标注读的），
  *  `Dictionary` 两形都不认 —— 引擎在标注字典上读属性连表外名都不在解析期开口（S419 ②）。 */
-function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>, elems: Map<string, string> = new Map()): string | null {
+function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string, string>, elems: Map<string, string> = new Map(), mods: Map<string, string> = new Map()): string | null {
   if (obj === undefined) return null;
   if (obj.kind === "index") {
     const base = obj.obj as Record<string, unknown> | undefined;
@@ -2235,7 +2235,7 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
     return elemFaceOf(elems.get(base.name) ?? "");
   }
   if (obj.kind === "ident" && typeof obj.name === "string") {
-    const face = ann.get(obj.name) ?? null;
+    const face = ann.get(obj.name) ?? mods.get(obj.name) ?? null;
     return face === "Dictionary" ? null : face;
   }
   if (obj.kind === "array") return "Array";
@@ -2244,6 +2244,16 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
     const inner = obj.callee as Record<string, unknown> | undefined;
     const cn = inner?.kind === "ident" ? inner.name : null;
     if (typeof cn === "string" && (cn === "Array" || cn === "String" || cn === "StringName" || cn === "NodePath" || cn in VALUE_METHOD_ARITY)) return cn;
+    // 链式那一形：`v.angle().zzz` 的基是方法的**返回型**那面 —— 引擎那句就写着 base "float"（S464，读数 `tmp/d6/n7.txt`）
+    if (inner !== undefined && inner.kind === "attribute") {
+      const owner = attrFaceRecv(inner.obj as Record<string, unknown>, ann, elems, mods);
+      const mname = inner.name;
+      if (owner !== null && typeof mname === "string") {
+        const by = BUILTIN_METHOD_RETURNS[owner];
+        const rt = by === undefined ? undefined : by[mname];
+        if (typeof rt === "string" && (instanceFaceManaged(rt) || rt === "String")) return rt;
+      }
+    }
   }
   if (obj.kind === "lit" && (obj.lit === "string_name" || obj.lit === "node_path")) {
     return obj.lit === "string_name" ? "StringName" : "NodePath";
@@ -2283,9 +2293,14 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
 };
 
 /** 调用那一形同判据：只在 `BUILTIN_INSTANCE_MEMBERS` 覆盖的那几面开口，名字不在实例成员全集里才是引擎那两句。 */
+/** 名单管的那几面：`Array` / `Dictionary` / pack 九支与 `StringName` / `NodePath` 由现成的两支在管（放开就重复报）。 */
+function instanceFaceManaged(face: string): boolean {
+  if (face === "Array" || face === "Dictionary" || face === "StringName" || face === "NodePath" || PACK_TYPE_NAMES.has(face)) return false;
+  return BUILTIN_INSTANCE_MEMBERS[face] !== undefined;
+}
+
 function instanceMemberAbsent(face: string, name: string): boolean {
-  // 只接手上有另一支在管的那五面 + String：StringName / NodePath 的表外名早已由 staticCallDiags 那一路报过，放开就成四遍
-  if (face !== "Vector2" && face !== "Vector2i" && face !== "Vector3" && face !== "Vector3i" && face !== "Color" && face !== "String") return false;
+  if (!instanceFaceManaged(face) && face !== "String") return false;
   const list = BUILTIN_INSTANCE_MEMBERS[face];
   return list !== undefined && !list.includes(name);
 }
@@ -2311,7 +2326,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, params } of attrScopes(m)) {
     const ann = new Map<string, string>();
     const faceName = (t: TypeRef | null): string | null =>
-      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String" || t.name === "StringName" || t.name === "NodePath" || t.name in VALUE_METHOD_ARITY) ? t.name : null;
+      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String" || t.name === "StringName" || t.name === "NodePath" || t.name === "int" || t.name === "float" || t.name === "bool" || t.name in VALUE_METHOD_ARITY) ? t.name : null;
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string") continue;
       const face = faceName(n.type as TypeRef | null);
@@ -2323,6 +2338,12 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       if (face !== null) attr.set(p.name, face);
     }
     /** 定形数组的名字单独一张表：只给 `e[0].X` 那一形交内型，不动上面那两张既有判据的范围。 */
+    /** 模块顶上的标注名字：链式那一形（`v.angle().zzz`）的接收者在函数体外，得单独带进来。 */
+    const mods = new Map<string, string>();
+    for (const v of m.vars) {
+      const face = faceName(v.type);
+      if (face !== null) mods.set(v.name, face);
+    }
     const elems = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
       if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elems.set(name, t.name);
@@ -2347,14 +2368,14 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         if (callee === undefined || callee.kind !== "attribute") continue;
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
         if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
-          const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems);
-          if (vface === null || vface === "StringName" || vface === "NodePath") continue;
+          const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems, mods);
+          if (vface === null || !instanceFaceManaged(vface)) continue;
           // String 那一面只补元素读这一形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
           if (vface === "String" && (callee.obj as Record<string, unknown>).kind !== "index") continue;
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
-          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod)) continue;
-          if (!instanceMemberAbsent(vface, vmethod)) continue;
+          // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !instanceMemberAbsent(vface, vmethod)) continue;
           const vloc = (n.loc as Diagnostic["loc"]) ?? null;
           diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
           diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
@@ -2369,7 +2390,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       if (n.kind !== "attribute" || callCallees.has(n)) continue;
-      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr, elems);
+      const face = attrFaceRecv(n.obj as Record<string, unknown>, attr, elems, mods);
       if (face === null) continue;
       const name = n.name;
       if (typeof name !== "string") continue;
@@ -2391,7 +2412,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         ? packNameMeasuredAbsent(face, name)
         : face === "Array" || face === "String"
           ? true
-          : valueAttrKind(face, name) === "absent" || builtinInstanceAbsent(face, name);
+          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name);
       if (!absent) continue;
       // 值类型那七面只量过**读**那一形（`tmp/probe-vattr/`），写形没读数就不开口
       if (!refused && writeTargets.has(n)) continue;
