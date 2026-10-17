@@ -266,7 +266,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       if (opts.closureOnly && climbsAboveRoot(candidate, l.absPath, resRoot)) {
         throw new UnsupportedError(
           "closure-root",
-          `"${candidate}" 往上爬出了闭包根（入口所在目录）：res:// 空间放不下 .. ，这一形请给 --res-root 或走工程级命令`,
+          `"${candidate}" 往上爬出了闭包根（默认是入口所在目录）：res:// 空间放不下 .. —— 用 --res-root 点名真正的根，或把父脚本挪进入口那一层`,
         );
       }
       const depRes = resolveGdPath(from, candidate);

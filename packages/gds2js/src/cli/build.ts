@@ -8,7 +8,7 @@ import { emitModule, emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
 import type { RawSourceMap } from "@gds2js/compiler/emit/sourcemap";
 import { selfFile } from "@gds2js/compiler/home";
 import { bundleModule, bundlingAvailable } from "../bundle";
-import { closureResPath, compileClosure, errOf, printDiags, projectDiags, STANDALONE_FILE, standalonePath, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
+import { closureResPath, closureRoot, compileClosure, errOf, printDiags, projectDiags, STANDALONE_FILE, standalonePath, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";
 
 export async function buildSingle(ctx: Ctx): Promise<boolean> {
   const loaded = await tryLoadSingle(ctx.input);
@@ -49,7 +49,7 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
 
 /** 单文件带依赖：把闭包小树写进 `-o` 所在目录，入口按要的名字落位（S455）。 */
 async function buildClosure(ctx: Ctx): Promise<boolean> {
-  const root = dirname(ctx.input);
+  const root = closureRoot(ctx);
   const outDir = dirname(ctx.outPath);
   const modeOpts: { runtimeMode?: "import" | "local"; standaloneFile?: string } = { runtimeMode: "import" };
   if (ctx.runtimeMode === "local") {
@@ -74,7 +74,7 @@ async function buildClosure(ctx: Ctx): Promise<boolean> {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
       lines += m.code.split("\n").length;
-      if (m.resPath === closureResPath(ctx.input)) entryPath = m.jsPath;
+      if (m.resPath === closureResPath(ctx)) entryPath = m.jsPath;
     }
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
@@ -139,7 +139,7 @@ export function runtimeFileUrls(): { rt: string; host: string } {
 
 export async function selfContainedBundle(ctx: Ctx, closureOnly = false, outDir = ctx.outDir): Promise<string | null> {
   const emit = mkdtempSync(join(tmpdir(), "gds2js-emit-"));
-  const resRoot = closureOnly ? dirname(ctx.input) : ctx.resRoot;
+  const resRoot = closureOnly ? closureRoot(ctx) : ctx.resRoot;
   try {
     const { rt, host } = runtimeFileUrls();
     const result = await compileProject({

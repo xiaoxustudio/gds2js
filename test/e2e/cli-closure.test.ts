@@ -64,6 +64,10 @@ describe.skipIf(!hasDist)("单文件闭包门 · extends 父脚本", () => {
     writeFileSync(join(DIR, "lib.gd"), "class_name Lib\n\nfunc f() -> int:\n\treturn 41\n", "utf8");
     writeFileSync(join(DIR, "pre-const.gd"), 'extends SceneTree\n\nconst L = preload("res://lib.gd")\n\nfunc _initialize():\n\tprint("P1|", L.new().f())\n\tquit()\n', "utf8");
     writeFileSync(join(DIR, "pre-load.gd"), 'extends SceneTree\n\nfunc _initialize():\n\tvar L = load("res://lib.gd")\n\tprint("P2|", L.new().f())\n\tquit()\n', "utf8");
+    mkdirSync(join(DIR, "lib"), { recursive: true });
+    mkdirSync(join(DIR, "nest"), { recursive: true });
+    writeFileSync(join(DIR, "lib", "base.gd"), PARENT, "utf8");
+    writeFileSync(join(DIR, "nest", "main.gd"), ENTRY.replace("res://sub.gd", "res://lib/base.gd").replace("C1|", "RR|"), "utf8");
   });
 
   afterAll(() => {
@@ -151,5 +155,17 @@ describe.skipIf(!hasDist)("单文件闭包门 · extends 父脚本", () => {
     const r = cli(["run", join(DIR, "pre-load.gd")]);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("P2|41");
+  });
+
+  it("--res-root 点名根：入口在下层、父脚本按 res:// 挂在别层也接得住", () => {
+    const r = cli(["run", join(DIR, "nest", "main.gd"), "--res-root", DIR]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("RR|25 7");
+  });
+
+  it("--res-root 也是 [closure-root] 那一形的退路：往上爬出的父脚本点名根就判得出", () => {
+    const r = cli(["run", join(DIR, "above", "main.gd"), "--res-root", DIR]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("A|25");
   });
 });

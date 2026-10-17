@@ -5,7 +5,7 @@ import { compileProject } from "@gds2js/compiler/compile/project";
 import { selfHome } from "@gds2js/compiler/home";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { PRODUCT_RUNTIME_FILE, productRuntimePath, scriptcCandidates } from "../paths";
-import { errOf, printDiags, projectDiags, tryLoadSingle, type Ctx } from "./ctx";
+import { closureRoot, errOf, printDiags, projectDiags, tryLoadSingle, type Ctx } from "./ctx";
 import { exportTsTree } from "./export-ts-tree";
 import { exportVerdict, NO_DIRS, walkMjs, type ExportTree, type ExportVerdict } from "./export-common";
 
@@ -13,7 +13,7 @@ import { exportVerdict, NO_DIRS, walkMjs, type ExportTree, type ExportVerdict } 
 export async function exportTree(ctx: Ctx, closureOnly = false): Promise<ExportTree | null> {
   if (!ctx.project && !closureOnly) return exportSingleTree(ctx);
   const dir = ctx.outDir;
-  const resRoot = closureOnly ? dirname(ctx.input) : ctx.resRoot;
+  const resRoot = closureOnly ? closureRoot(ctx) : ctx.resRoot;
   const product = productRuntimePath();
   try {
     // 打平运行时只在树根放一份，每个模块的 import 按自己那一层的深度算（`runtimeRoot`）：每层各一份就是多张 runtime 图。

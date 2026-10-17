@@ -42,6 +42,7 @@ export type CliSpec = {
 
 const RUNTIME_MODE = "运行时打包模式：import(默认) | local(旁挂 standalone) | single(内联自包含)";
 const RES_ROOT = { key: "resRoot", long: "--res-root", metavar: "dir", help: "res:// 工程根（默认向上找 project.godot）" };
+const RES_ROOT_CLOSURE = { key: "resRoot", long: "--res-root", metavar: "dir", help: "读依赖时的 res:// 根（默认取入口所在目录；父脚本挂在入口之上时用这一旗点名真正的根）" };
 
 /** 每条命令都带的公共选项。 */
 export function commonFlags(): FlagSpec[] {
@@ -63,6 +64,7 @@ export function withCommon(extra: FlagSpec[]): FlagSpec[] {
 
 export const FLAGS = {
   resRoot: RES_ROOT,
+  resRootClosure: RES_ROOT_CLOSURE,
   runtimeMode: { key: "runtimeMode", long: "--runtime-mode", metavar: "mode", help: RUNTIME_MODE },
   out: (help: string): FlagSpec => ({ key: "out", short: "-o", long: "--out", metavar: "path", help }),
   noRun: { key: "run", long: "--no-run", help: "不在产物末尾驱动生命周期（出库/被 import 时用；默认会 run）" },

@@ -4,7 +4,7 @@ import { compileProject } from "@gds2js/compiler/compile/project";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { TREE_FACE } from "@gds2js/runtime/tree-face";
 import { runtimeTsDir } from "../paths";
-import { baseName, errOf, printDiags, projectDiags, tryLoadSingle, type Ctx } from "./ctx";
+import { baseName, closureRoot, errOf, printDiags, projectDiags, tryLoadSingle, type Ctx } from "./ctx";
 import { exportVerdict, NO_DIRS, walkMjs, type ExportTree } from "./export-common";
 
 /** `--pack scriptc` 的中间树：产物 + `runtime/` 与 `host.ts` 的 TS 源码，整棵树只铺一份源码（静态编的是源码图，不是打平的 `product.mjs`）。 */
@@ -74,7 +74,7 @@ export async function exportTsProjectTree(
   srcRoot: string,
   closureOnly = false,
 ): Promise<ExportTree | null> {
-  const resRoot = closureOnly ? dirname(ctx.input) : ctx.resRoot;
+  const resRoot = closureOnly ? closureRoot(ctx) : ctx.resRoot;
   try {
     const compile = (hostImport: string | null, hostFile: string) =>
       compileProject({

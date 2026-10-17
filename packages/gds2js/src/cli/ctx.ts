@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import type { Dirent } from "node:fs";
 import { createRequire } from "node:module";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import { selfFile } from "@gds2js/compiler/home";
@@ -249,6 +249,11 @@ export type CompileResult = Awaited<ReturnType<typeof compileProject>>;
 
 /** 单文件模式下的闭包编译：只种入口，依赖靠 `extends` / `preload` 拉进来；根取入口所在目录。
  *  继承来的方法 / 字段与宿主名从此判得出，与 `check-project` / `run-project` 共用同一套判定（S455）。 */
+/** 闭包的 res 根：命令给了 `--res-root` 就用它（`export` 那一支有这一旗），否则取入口所在目录。 */
+export function closureRoot(ctx: Ctx): string {
+  return ctx.resRoot === "" ? dirname(ctx.input) : ctx.resRoot;
+}
+
 export async function compileClosure(
   ctx: Ctx,
   outDir: string,
@@ -258,7 +263,7 @@ export async function compileClosure(
 ): Promise<CompileResult> {
   return compileProject({
     entries: [ctx.input],
-    resRoot: dirname(ctx.input),
+    resRoot: closureRoot(ctx),
     outDir,
     runtimeImport: ctx.runtimeImport,
     hostImport: ctx.hostImport,
@@ -268,9 +273,9 @@ export async function compileClosure(
   });
 }
 
-/** 入口在闭包结果里的 `res://` 路径（根就是入口所在目录）。 */
-export function closureResPath(input: string): string {
-  return "res://" + basename(input);
+/** 入口在闭包结果里的 `res://` 路径（按闭包根算，根可能是用户给的 `--res-root`）。 */
+export function closureResPath(ctx: Ctx): string {
+  return "res://" + relative(closureRoot(ctx), ctx.input).split(sep).join("/");
 }
 
 export function projectDiags(result: CompileResult, resRoot: string): Diag[] {
