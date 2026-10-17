@@ -47,7 +47,9 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
   return true;
 }
 
-/** 单文件带依赖：把闭包小树写进 `-o` 所在目录，入口按要的名字落位（S455）。 */
+/** 单文件带依赖：把闭包小树写进 `-o` 所在目录，入口按要的名字落位（S455）。
+ *  入口落位时它自己那一层的相对深度跟着变，产物里指向兄弟模块与旁挂 standalone 的说明符要按新深度重算 ——
+ *  不改这一笔，入口在下层（`--res-root` 点名根）时改名就撞错地方（实测 node 当场 ENOENT）。 */
 async function buildClosure(ctx: Ctx): Promise<boolean> {
   const root = closureRoot(ctx);
   const outDir = dirname(ctx.outPath);
@@ -85,12 +87,21 @@ async function buildClosure(ctx: Ctx): Promise<boolean> {
     return false;
   }
   if (entryPath !== ctx.outPath) {
-    const code = readFileSync(entryPath, "utf8");
+    const code = relayoutSpecs(readFileSync(entryPath, "utf8"), dirname(entryPath), dirname(ctx.outPath));
     writeFileSync(ctx.outPath, code, "utf8");
     rmSync(entryPath, { force: true });
   }
   console.error(`${ctx.outPath}: 已生成 (${lines} 行，含 ${result.modules.length} 份脚本)`);
   return true;
+}
+
+/** 入口从树里那一层搬到 `-o` 那一层：产物里每一个相对说明符（兄弟模块与旁挂的 standalone）按新目录重算。 */
+export function relayoutSpecs(code: string, oldDir: string, newDir: string): string {
+  if (resolve(oldDir) === resolve(newDir)) return code;
+  return code.replace(/(["'])(\.\.?\/[^"']+)\1/g, (_all: string, q: string, spec: string): string => {
+    const rel = relative(newDir, resolve(oldDir, spec)).split("\\").join("/");
+    return q + (rel.startsWith("..") ? rel : "./" + rel) + q;
+  });
 }
 
 /** `emitModule` 那三个模式共用的选项：刻意是一张声明过的记录，而不是 `Record<string, unknown>` —— 值类型为 `unknown` 的索引记录展开在静态目标上没有形状。 */

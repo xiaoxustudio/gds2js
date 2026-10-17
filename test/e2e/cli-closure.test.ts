@@ -168,4 +168,15 @@ describe.skipIf(!hasDist)("单文件闭包门 · extends 父脚本", () => {
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain("A|25");
   });
+
+  it("入口在下层又按 `-o` 改名：相对说明符跟着新深度重算，产物照跑", () => {
+    const out = join(DIR, "out-nest", "rr.mts");
+    const r = cli(["build", join(DIR, "nest", "main.gd"), "--res-root", DIR, "-o", out]);
+    expect(r.code, r.out).toBe(0);
+    expect(existsSync(join(DIR, "out-nest", "lib", "base.mts"))).toBe(true);
+    expect(readFileSync(out, "utf8")).toContain('from "./lib/base.mts"');
+    const run = node(out);
+    expect(run.code, run.out).toBe(0);
+    expect(run.out).toContain("RR|25 7");
+  });
 });
