@@ -792,6 +792,12 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.263 撞出一处作用域泄漏：循环变量在循环体之后仍被当成局部名（2026-10-17，§6 第 88 条新登 · 只量不接）
+
+- **引擎脾气**：`for k in [1, 2]` 的 `k` 只活到循环体结束，循环之后 `print(k)` 是解析期那句 `Identifier "k" not declared in the current scope.`（整段编不过）；同名于全局/宿主方法（`for quit in …`）时循环体里照收，出了循环又回到宿主那支。
+- **我们侧**：产物在运行期抛 JS 自己的 `quit is not defined` —— 解析期该拦的没拦、抛出来的又不是裁判的话，属「该拦不拦 + 错句」两重，读数 `tmp/probe-forvar/{p1,p2}.gd` 钉在 §6 第 88 条。
+- **为什么这一轮不接**：`analyze` 的 `decls` 与发射器的局部名收集都没给循环体单独一层（`analyze.ts:515`），改之前要先把 `for` 里的 `var` / `const` / 嵌套循环 / `match` 臂变量各扫一遍，否则容易把「多拦」换成「漏拦」；按红线先登记不猜。
+
 ### 1.262 match 手臂的拒句补齐第二句（2026-10-17，S435，§6 第 43 条①③④结清）
 
 - **两句同序**：手臂的构造式合不上表时，引擎在元数那句之后紧跟 `Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").`；lowering 的 `pattern-arm-signature` 现在带全两句，语料 330–333 的 golden 从「只比第一行」改成「比全部 Parse Error 行」，四格逐句对上。
