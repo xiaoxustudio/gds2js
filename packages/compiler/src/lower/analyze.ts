@@ -2261,6 +2261,16 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
       }
     }
   }
+  if (obj.kind === "attribute") {
+    const owner = attrFaceRecv(obj.obj as Record<string, unknown> | undefined, ann, elems, mods);
+    const nm = obj.name;
+    if (owner !== null && typeof nm === "string") {
+      const by = BUILTIN_MEMBER_TYPES[owner];
+      const t = by === undefined ? undefined : by[nm];
+      if (typeof t === "string" && (instanceFaceManaged(t) || t === "String")) return t;
+    }
+    return null;
+  }
   if (obj.kind === "lit" && (obj.lit === "string_name" || obj.lit === "node_path")) {
     return obj.lit === "string_name" ? "StringName" : "NodePath";
   }
