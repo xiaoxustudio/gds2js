@@ -20,5 +20,9 @@ SCRIPT ERROR: Parse Error: Cannot assign a value of type "NodePath" as "StringNa
    at: GDScript::reload (<case>/main.gd:18)
 SCRIPT ERROR: Parse Error: Cannot assign a value of type NodePath to parameter "v" with specified type StringName.
    at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type int to parameter "v" with specified type String.
+   at: GDScript::reload (<case>/main.gd:26)
 ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
    at: load (modules/gdscript)

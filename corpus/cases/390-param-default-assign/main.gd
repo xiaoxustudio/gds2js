@@ -22,6 +22,16 @@ class Inner:
 	func b1(v: int = 1.5e30):
 		pass
 
+func b2():
+	var lam = func(v: String = 1):
+		return 1
+	return lam
+
+func b3():
+	var ok = func(v: String = ^"a/b"):
+		return 1
+	return ok
+
 func _initialize():
 	print("ok")
 	quit()

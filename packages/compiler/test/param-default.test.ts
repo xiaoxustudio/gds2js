@@ -56,6 +56,21 @@ describe("形参默认值 · 两句", () => {
   it.each(OK)("%s 槽收 %s", async (slot, val) => {
     expect(await msgs(`func a(a: ${slot} = ${val}):`)).toEqual([]);
   });
+
+  it("lambda 形参同一判据（S449 的 72 格）", async () => {
+    const src = "extends SceneTree\n\nfunc k():\n\tvar lam = func(a: int = \"s\"):\n\t\treturn 1\n\treturn lam\n";
+    const got = analyze(lower(await parseSource(src)))
+      .filter((d) => d.code.startsWith("param-default"))
+      .map((d) => d.message);
+    expect(got).toEqual([
+      'Cannot assign a value of type "String" as "int".',
+      as("String", "int"),
+    ]);
+    const okSrc = "extends SceneTree\n\nfunc k():\n\tvar lam = func(a: String = ^\"a/b\"):\n\t\treturn 1\n\treturn lam\n";
+    expect(
+      analyze(lower(await parseSource(okSrc))).filter((d) => d.code.startsWith("param-default")),
+    ).toEqual([]);
+  });
 });
 
 function label(val: string): string {

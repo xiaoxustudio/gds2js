@@ -754,6 +754,20 @@ function checkParamDefaultAssign(m: Module, diags: Diagnostic[]): void {
   };
   for (const f of m.funcs) checkParams(f.params);
   for (const c of m.innerClasses) walkClass(c);
+  /** lambda 是另一层作用域，`flattenBody` 走到它就停，所以这里自己下钻把形参表收齐（S449）。 */
+  const lambdas = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) lambdas(x);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (obj.kind === "lambda") checkParams((obj.params as Param[]) ?? []);
+    for (const key of Object.keys(obj)) {
+      if (key !== "loc") lambdas(obj[key]);
+    }
+  };
+  lambdas(m);
 }
 
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
