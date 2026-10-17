@@ -4065,6 +4065,28 @@ export const OP_PAIRS_CONST_B: Readonly<Record<string, ReadonlyArray<string>>> =
   ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|Dictionary", "Dictionary|Array", "Dictionary|Dictionary"],
 };
 
+/** 值型那几面的**属性名**（dump 的 `members`）：属性当值拿的是属性自己的型，不是 Callable（S465 ⑤ 那格误拦的根因）。 */
+export const BUILTIN_INSTANCE_PROPS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "Vector2": ["x", "y"],
+  "Vector2i": ["x", "y"],
+  "Vector3": ["x", "y", "z"],
+  "Vector3i": ["x", "y", "z"],
+  "Color": ["a", "a8", "b", "b8", "g", "g8", "h", "ok_hsl_h", "ok_hsl_l", "ok_hsl_s", "r", "r8", "s", "v"],
+};
+
+/** `Callable`（方法名当值）参加运算的那些对：全部走第二式，两向都量过（S465 ⑥ 复量：尺 `tmp/d6/callables2.py`，读数 `tmp/d6/cb.json`，153 格；先前按文本回切的分类器把构造位那几行切断，才误判成「式子按运算符分」）。 */
+export const OP_PAIRS_REFUSED_CALLABLE: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "!=": ["Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  "%": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool", "float|float", "float|int"],
+  "*": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|bool"],
+  "+": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  "-": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  "/": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  "<": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  "==": ["Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+  ">": ["Callable|Callable", "Callable|String", "Callable|Vector2", "Callable|bool", "Callable|float", "Callable|int", "String|Callable", "Vector2|Callable", "bool|Callable", "float|Callable", "float|String", "float|Vector2", "float|bool"],
+};
+
 function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
   const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
   const named = (t: TypeRef | null): string | null => {
@@ -4101,6 +4123,17 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     /** 接收者那一格的静态型：标注名、定形数组的元素读、构造位字面量三形（与 S459/S461 同一批判据）。 */
     const faceOf = (e: Expr): string | null =>
       e.kind === "ident" ? (types.get(e.name) ?? null) : e.kind === "index" ? elemOf(e) : staticType(e);
+    /** 「方法名当值」是个 Callable；**属性名当值不是**（`.x` 拿的是属性自己的型 —— S465 ⑤ 那格误拦的根因）。 */
+    const callableOf = (e: Expr): string | null => {
+      if (e.kind !== "attribute") return null;
+      const face = faceOf(e.obj);
+      if (face === null) return null;
+      const nm = e.name;
+      if (typeof nm !== "string") return null;
+      const members = BUILTIN_INSTANCE_MEMBERS[face];
+      if (members === undefined || !members.includes(nm)) return null;
+      return (BUILTIN_INSTANCE_PROPS[face] ?? []).includes(nm) ? null : "Callable";
+    };
     /** `v.floor() + "x"` 那一形：调用的是认得面上的认得方法，就把**返回型**交给现成的型对表（S462，读数 `tmp/d6/n7.txt`）。 */
     const callRet = (e: Expr): string | null => {
       if (e.kind !== "call" || e.callee.kind !== "attribute") return null;
@@ -4111,7 +4144,7 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       const name = e.callee.name;
       return typeof name === "string" ? (by[name] ?? null) : null;
     };
-    const operandKind = (e: Expr): string | null => literalKind(e) ?? callRet(e);
+    const operandKind = (e: Expr): string | null => literalKind(e) ?? callRet(e) ?? callableOf(e);
     /** `e[0]` 这一读的静态型 = 定形数组的内型（S459：只认**字面量 int** 下标，那是量过的那一格；内型不在认得的名字里就不判）。 */
     const elemOf = (e: Expr): string | null => {
       if (e.kind !== "index" || e.obj.kind !== "ident" || staticType(e.index) !== "int") return null;
@@ -4119,21 +4152,23 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
       return ANNOT.has(slot.elem) ? slot.elem : null;
     };
+    /** 两侧都是 Callable 那一形：引擎只报一句，两支循环各报一遍就成了两句重复（读数 `tmp/d6/cb.json`）。 */
+    const reported = new Set<Expr>();
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.left.kind !== "ident" && e.left.kind !== "index" && e.left.kind !== "call") continue;
+      if (e.left.kind !== "ident" && e.left.kind !== "index" && e.left.kind !== "call" && e.left.kind !== "attribute") continue;
       const rt = operandKind(e.right);
       if (rt === null) continue;
       const isIdent = e.left.kind === "ident";
       const name = isIdent ? (e.left as Extract<Expr, { kind: "ident" }>).name : "";
       const isConst = isIdent && consts.has(name);
-      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : e.left.kind === "index" ? elemOf(e.left) : callRet(e.left);
+      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : e.left.kind === "index" ? elemOf(e.left) : e.left.kind === "call" ? callRet(e.left) : callableOf(e.left);
       if (lt === null) continue;
       const pair = `${lt}|${rt}`;
       const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
       const foldedB = isConst && OP_PAIRS_CONST_B[e.op]?.includes(pair) === true;
-      const declaredB = !isConst && (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true || OP_PAIRS_REFUSED_DECL_VAL[e.op]?.includes(pair) === true);
+      const declaredB = !isConst && (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true || OP_PAIRS_REFUSED_DECL_VAL[e.op]?.includes(pair) === true || OP_PAIRS_REFUSED_CALLABLE[e.op]?.includes(pair) === true);
       if (!foldedA && !foldedB && !declaredB) continue;
       diags.push({
         code: "op-pair",
@@ -4142,19 +4177,21 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
           : `Invalid operands "${lt}" and "${rt}" for "${e.op}" operator.`,
         loc: e.loc,
       });
+      reported.add(e);
     }
     // 反过来那一形（左支字面量、右支是标明类型的名字）与上面共用同一张表：468 格对照下来，
     // 329 对与第二式一字不差（`tmp/probe-revrecv/compare61.txt`，S397），所以只镜像判据、不再另立表。
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.right.kind !== "ident" && e.right.kind !== "index" && e.right.kind !== "call") continue;
+      if (reported.has(e as unknown as Extract<Expr, { kind: "binary" }>)) continue;
+      if (e.right.kind !== "ident" && e.right.kind !== "index" && e.right.kind !== "call" && e.right.kind !== "attribute") continue;
       const lt2 = operandKind(e.left);
       if (lt2 === null) continue;
-      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : e.right.kind === "index" ? elemOf(e.right) : callRet(e.right);
+      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : e.right.kind === "index" ? elemOf(e.right) : e.right.kind === "call" ? callRet(e.right) : callableOf(e.right);
       if (rt2 === null) continue;
       const pair2 = `${lt2}|${rt2}`;
-      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true) continue;
+      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_CALLABLE[e.op]?.includes(pair2) !== true) continue;
       diags.push({
         code: "op-pair",
         message: `Invalid operands "${lt2}" and "${rt2}" for "${e.op}" operator.`,
