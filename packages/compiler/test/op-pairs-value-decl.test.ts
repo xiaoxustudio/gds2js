@@ -48,9 +48,16 @@ describe("标值型标注的运算符对", () => {
     expect(await pairs("func z():\n\tprint(c + Color(1, 1, 1, 1))\n")).toEqual([]);
   });
 
-  it("两张表按实测各 237 / 246 对 —— 反向不是正向的镜像", () => {
+  it("两张表按实测各 237 / 425 对 —— 反向不是正向的镜像，且反向还含「值型字面量在左」那一批", () => {
     expect(count(OP_PAIRS_REFUSED_DECL_VAL)).toBe(237);
-    expect(count(OP_PAIRS_REFUSED_DECL_VAL_REV)).toBe(246);
+    expect(count(OP_PAIRS_REFUSED_DECL_VAL_REV)).toBe(425);
+  });
+
+  it("属性名当值拿的是属性自己的型（S467），方法名当值才是 Callable", async () => {
+    expect(await pairs("func z():\n\tprint(v.x + \"x\")\n")).toEqual([msg("float", "String", "+")]);
+    expect(await pairs("func z():\n\tprint(Vector2(1, 2) + v.x)\n")).toEqual([msg("Vector2", "float", "+")]);
+    expect(await pairs("func z():\n\tprint(Vector2(1, 2) * v.x)\n")).toEqual([]);
+    expect(await pairs("func z():\n\tprint(v.x + 1)\n")).toEqual([]);
   });
 
   it("标量的老集没被扩表带歪：`String + int` 仍旧一句", async () => {
