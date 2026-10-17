@@ -191,16 +191,69 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     for (const inner of cls.innerClasses) collect(inner);
   };
   for (const c of m.innerClasses) collect(c);
-  const walkStmts = (stmts: Stmt[]): void => {
+  /** 这一份文件里的脚本类名（内部类）：做定形容器的内部型时，引擎只发第二句（`Array[Inner]` 那一形） */
+  const classNames = new Set<string>();
+  const collectClassNames = (c: ClassDecl): void => {
+    classNames.add(c.name);
+    for (const inner of c.innerClasses) collectClassNames(inner);
+  };
+  for (const c of m.innerClasses) collectClassNames(c);
+  /** 模块级带定形标注的 var：赋给它的字面量同格判（`q = ["s"]` 那一形） */
+  const typedVars = new Map<string, TypeRef>();
+  for (const v of m.vars) if (v.type !== null) typedVars.set(v.name, v.type);
+  /** 本工程函数的形参标注：实参位置同格判（`g(["s"])` 那一形） */
+  const fnParams = new Map<string, (TypeRef | null)[]>();
+  for (const f of m.funcs) fnParams.set(f.name, f.params.map((p) => p.type));
+  const walkStmts = (stmts: Stmt[], retType: TypeRef | null): void => {
     for (const s of stmts) {
       if (s.kind === "var") targets.push({ type: s.type, init: s.init, loc: s.loc });
-      else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body);
-      else if (s.kind === "for" || s.kind === "while") walkStmts(s.body);
+      else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body, retType);
+      else if (s.kind === "for" || s.kind === "while") walkStmts(s.body, retType);
+      else if (s.kind === "return" && retType !== null) targets.push({ type: retType, init: s.value, loc: s.loc });
+      else if (s.kind === "assign" && s.target.kind === "ident") {
+        const decl = typedVars.get(s.target.name);
+        if (decl !== undefined) targets.push({ type: decl, init: s.value, loc: s.loc });
+      } else walkExprs(s, retType);
     }
   };
-  for (const f of m.funcs) walkStmts(f.body);
+  /** 返回值（`return ["s"]`）与本工程函数的实参（`g(["s"])`）两位的定形容器字面量（S454，读数 `tmp/d6/n1.txt`） */
+  const walkExprs = (n: unknown, retType: TypeRef | null): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) walkExprs(x, retType);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const o = n as Record<string, unknown>;
+    if (o.kind === "var") {
+      const t = o.type as TypeRef | null;
+      if (t !== null) targets.push({ type: t, init: (o.init as Expr | null) ?? null, loc: o.loc as Loc });
+    }
+    if (o.kind === "return" && retType !== null) targets.push({ type: retType, init: (o.value as Expr | null) ?? null, loc: o.loc as Loc });
+    if (o.kind === "assign" && retType !== null && (o.target as Record<string, unknown> | undefined)?.kind === "ident") {
+      const name = (o.target as Record<string, unknown>).name;
+      const decl = typeof name === "string" ? typedVars.get(name) : undefined;
+      if (decl !== undefined) targets.push({ type: decl, init: o.value as Expr, loc: o.loc as Loc });
+    }
+    if (o.kind === "call" && Array.isArray(o.args)) {
+      const callee = o.callee as Record<string, unknown>;
+      if (callee.kind === "ident" && typeof callee.name === "string") {
+        const pt = fnParams.get(callee.name);
+        if (pt !== undefined) {
+          const args = o.args as Expr[];
+          for (let i = 0; i < args.length && i < pt.length; i++) {
+            const t = pt[i];
+            if (t !== undefined && t !== null) targets.push({ type: t, init: args[i] ?? null, loc: args[i]!.loc });
+          }
+        }
+      }
+    }
+    for (const key of Object.keys(o)) {
+      if (key !== "loc") walkExprs(o[key], retType);
+    }
+  };
+  for (const f of m.funcs) walkStmts(f.body, f.returnType);
   const walkClass = (c: ClassDecl): void => {
-    for (const f of c.funcs) walkStmts(f.body);
+    for (const f of c.funcs) walkStmts(f.body, f.returnType);
     for (const inner of c.innerClasses) walkClass(inner);
   };
   for (const c of m.innerClasses) walkClass(c);
@@ -219,9 +272,13 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       continue;
     }
     if (t.init === null) continue;
-    /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格） */
+    /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格）。
+     *  内部型是脚本类名时只发第二句（`Array[Inner]` 那一格，读数 `tmp/d6/n1.txt`）。 */
+    const holds = (kind: string, st: NonNullable<StaticType>): boolean => (classNames.has(kind) ? st === kind : canHold(kind, st));
     const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
-      diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
+      if (!classNames.has(kind)) {
+        diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
+      }
       diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
     };
     if (m2[1] === "Array") {
@@ -231,7 +288,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         for (const it of t.init.items) {
           if (done) break;
           const st = slotSource(it);
-          if (st === null || canHold(kind, st)) continue;
+          if (st === null || holds(kind, st)) continue;
           done = true;
           report(st, kind, `Cannot have an element of type "${st}" in an array of type "Array[${kind}]".`);
         }
@@ -246,13 +303,13 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         for (const en of t.init.entries) {
           if (done) break;
           const ks = slotSource(en.key);
-          if (ks !== null && !canHold(keyKind, ks)) {
+          if (ks !== null && !holds(keyKind, ks)) {
             done = true;
             report(ks, keyKind, `Cannot have a key of type "${ks}" in a dictionary of type "${text}".`);
             break;
           }
           const vs = slotSource(en.value);
-          if (vs !== null && !canHold(valKind, vs)) {
+          if (vs !== null && !holds(valKind, vs)) {
             done = true;
             report(vs, valKind, `Cannot have a value of type "${vs}" in a dictionary of type "${text}".`);
           }
