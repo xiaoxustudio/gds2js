@@ -263,9 +263,11 @@ function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
 
 function lowerSignal(n: SyntaxNode): SignalDecl {
   const paramsNode = field(n, "parameters");
+  const ps = paramsNode ? named(paramsNode) : [];
   return {
     name: need(field(n, "name"), "信号名").text,
-    params: paramsNode ? named(paramsNode).map((p) => p.text) : [],
+    params: ps.map((p) => p.text),
+    hasDefaults: ps.some((p) => p.type.endsWith("default_parameter")),
     loc: loc(n),
   };
 }

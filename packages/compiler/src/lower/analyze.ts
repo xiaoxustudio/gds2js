@@ -29,7 +29,7 @@ import {
 } from "@gds2js/runtime/runtime/face-arity";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
-import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
+import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, SignalDecl, Stmt, TypeRef, VarDecl } from "./ir";
 
 export interface Diagnostic {
   code: string;
@@ -165,6 +165,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkParamDefaultAssign(m, diags);
   checkVoidAnnotation(m, diags);
   checkScriptClassSlots(m, diags);
+  checkSignalDefaults(m, diags);
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
@@ -863,6 +864,21 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
     }
   }
   for (const c of m.innerClasses) walkClass(c);
+}
+
+/** signal 的形参不许带默认值（S453，读数 `tmp/d6/l3-sig-*.gd` 与语料 394）：一份文件里三支不合式也只发**第一句**就收口。 */
+function checkSignalDefaults(m: Module, diags: Diagnostic[]): void {
+  const found: SignalDecl[] = [];
+  const walkClass = (c: ClassDecl): void => {
+    for (const s of c.signals) if (s.hasDefaults) found.push(s);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const s of m.signals) if (s.hasDefaults) found.push(s);
+  for (const c of m.innerClasses) walkClass(c);
+  const first = found.sort((a, b) => a.loc.line - b.loc.line)[0];
+  if (first !== undefined) {
+    diags.push({ code: "signal-default-param", message: "Signal parameters cannot have a default value.", loc: first.loc });
+  }
 }
 
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
