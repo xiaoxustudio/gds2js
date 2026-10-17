@@ -13,7 +13,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const H = "extends SceneTree\n\n";
 const TAIL = "\nfunc _initialize():\n\tquit()\n";
-const FACE = /^(string-name|node-path)-(arity|member)$/;
+const FACE = /^(string-name|node-path)-arity$|^face-member-(missing|not-found)$/;
 
 const snSrc = (call: string): string => `${H}var sn: StringName = &"ab"\n${TAIL}func f():\n\tprint(${call})\n`;
 const npSrc = (call: string): string => `${H}var np: NodePath = ^"a/b/c"\n${TAIL}func f():\n\tprint(${call})\n`;

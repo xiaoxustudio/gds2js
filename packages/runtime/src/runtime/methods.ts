@@ -30,7 +30,7 @@ import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show } from "./values";
-import { isLess, sortLess } from "./ops";
+import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
@@ -1373,10 +1373,9 @@ export function dictOf(pairs: Array<[Variant, Variant]>): Variant {
   return V.dict(d);
 }
 
-/** `"%d/%s" % [...]` —— 字符串格式化运算符 */
+/** `"%d/%s" % [...]` —— 字符串格式化运算符：与 `ops.mod` 那一路同一判据（失败推一块 ERROR、格式串原样回出去） */
 export function formatOf(fmt: Variant, args: Variant): Variant {
-  const list = args.t === Tag.ARRAY ? (args.v as GArray).raw() : [args];
-  return V.str(strFormat(asString(fmt, "格式化"), list));
+  return pctFormatOp(fmt, args);
 }
 
 /** 内建类型面的「方法名当值」：发射器只在**静态已知的接收者**且名字是那一面的成员时发这一支

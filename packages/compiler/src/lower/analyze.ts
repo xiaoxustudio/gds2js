@@ -1,6 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "./static-arg-types";
-import { FACE_ARG_AS, FACE_ARG_TYPES, FACE_SLOTS } from "./face-arg-types";
+import { FACE_ARG_AS, FACE_ARG_TYPES } from "./face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "./instance-arg-types";
 import { isGlobalConst } from "./globals";
 import {
@@ -17,7 +17,6 @@ import {
 } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
-import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
 import {
   ARRAY_METHOD_ARITY,
   NODE_PATH_METHOD_ARITY,
@@ -397,11 +396,18 @@ function parseTyped(name: string): TypedSlot | null {
 
 const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String", "int", "float", "bool"]);
 
-/** `Array[T]` 的内型只在认得的那几面里交出去（S460 量的那一格是**字面量 int** 下标；其余形一律不判）。 */
-function elemFaceOf(decl: string): string | null {
+/** 定形容器那一读的**面**：数组交内型、字典交值型；键的静态型判得出来又不合式就不交（那一格由下标型闸门去报）。
+ *  与运算符型对那支 `elemOf` 同一条判据（S468 量齐：`tmp/d6/dictread.py` 四百二十格零分歧）。 */
+function readFaceOf(decl: string, keyType: StaticType): string | null {
   const slot = parseTyped(decl);
-  if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
-  return ELEM_FACES.has(slot.elem) ? slot.elem : null;
+  if (slot === null) return null;
+  if (slot.kind === "Array") {
+    if (keyType !== null && keyType !== "int") return null;
+    return slot.elem !== undefined && ELEM_FACES.has(slot.elem) ? slot.elem : null;
+  }
+  if (slot.key === undefined || slot.val === undefined || !ELEM_FACES.has(slot.val)) return null;
+  if (keyType !== null && !canHold(slot.key, keyType)) return null;
+  return slot.val;
 }
 
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
@@ -672,7 +678,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   }
 }
 
-/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。 */
+/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。`Array.assign` 是后补的一格：`print(ga.assign(Color(1, 0, 0, 1)))` 引擎同格回 void 那句加形参那两句（`tmp/d6/s485.json`，S485）。 */
 const VOID_ARRAY_METHODS = new Set([
   "append",
   "push_front",
@@ -687,12 +693,12 @@ const VOID_ARRAY_METHODS = new Set([
   "reverse",
   "shuffle",
   "make_read_only",
+  "assign",
 ]);
 const VOID_DICT_METHODS = new Set(["clear", "sort", "merge", "assign", "make_read_only"]);
-/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。 */
-const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear"]);
-/** 只在零参时才是 void 的 pack 方法。 */
-const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
+/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。
+ *  `sort` / `reverse` 在**任意元数**下同判 —— 九支构造式 × 五形 + 标注名 + 链子共五十格量的（`tmp/d6/s483.txt`），零元数与非零元数引擎都给同一句，元数那一句照旧另发。 */
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear", "sort", "reverse"]);
 /** 脚本对象接收者那一侧：只有 `set`，取值是解析期拒（与 pack 的 `set` 同一句）。`get` 返回 Variant、`call` / `callv` 都有返回值，`free()` 是运行期的事，都不在这张表里。 */
 const VOID_OBJECT_METHODS = new Set(["set"]);
 /** Signal 接收者那一侧：`emit()` 与 `disconnect()` 都是 void，取值是解析期那一句；`connect()` **不是** void —— 它返回 Error 状态码 int。 */
@@ -1444,6 +1450,13 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   addSignalNames(m.innerClasses);
 
+  /** 模块级标注名：链子那一层的基（`var s: String` 之后的 `s.hex_decode().set(1, 2)`，S482）。 */
+  const modAnn = new Map<string, string>();
+  for (const v of m.vars) {
+    const f = knownFaceAnnotation(v.type);
+    if (f !== null) modAnn.set(v.name, f);
+  }
+
   const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
@@ -1465,16 +1478,43 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     return null;
   };
 
+  /** 模块级标注的那三张形状：`var a: Array = []` 之后的 `print(a.sort(1))` 与函数体里同判（S483，读数 `tmp/d6/s483.txt` 五十格）。 */
+  const seed = new Map<string, ContainerShape>();
+  for (const v of m.vars) {
+    if (v.type === null || v.type.kind !== "named") continue;
+    const sh: ContainerShape | null =
+      /^Array(\[|$)/.test(v.type.name) ? "Array" : /^Dictionary(\[|$)/.test(v.type.name) ? "Dictionary" : PACK_SHAPE_NAMES.has(v.type.name) ? "Pack" : null;
+    if (sh !== null) seed.set(v.name, sh);
+  }
+
   for (const body of bodies) {
-    const shapes = new Map<string, ContainerShape>();
+    const shapes = new Map(seed);
+    /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
+    const localAnn = new Map<string, string>();
+    for (const n of flattenBody(body)) {
+      if (n.kind === "var" && typeof n.name === "string") {
+        const f = knownFaceAnnotation(n.type as TypeRef | null);
+        if (f !== null) localAnn.set(n.name, f);
+      }
+    }
+    const ownerFace = (obj: Expr): string | null => {
+      if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
+      if (obj.kind === "ident" && typeof obj.name === "string") return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      if (obj.kind === "call" && obj.callee.kind === "ident" && PACK_TYPE_NAMES.has(obj.callee.name)) return obj.callee.name;
+      return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
+    };
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
-          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
+          if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call")) {
             const name = e.callee.name;
+            const chainPack = e.callee.obj.kind === "call" ? (PACK_TYPE_NAMES.has(ownerFace(e.callee.obj) ?? "") ? "Pack" : null) : null;
+            // 只补 pack 那两形（构造式与链子）：Signal / Array / Dictionary / 脚本对象的链子接收者没量过，照旧放过
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
-              shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null);
+              e.callee.obj.kind === "ident"
+                ? shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null)
+                : chainPack;
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
               diags.push({
@@ -1491,7 +1531,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (!discarded) {
               const isVoid =
                 shape === "Pack"
-                  ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
+                  ? VOID_BYTES_METHODS.has(name)
                   : shape === "Object"
                     ? VOID_OBJECT_METHODS.has(name)
                     : shape === "Signal"
@@ -1755,11 +1795,27 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
 const PACK_ARG_POSITIONS: Record<string, readonly string[]> = {
   append: ["e"], push_back: ["e"], fill: ["e"], has: ["e"], count: ["e"], erase: ["e"],
   get: ["i"], set: ["i", "e"], insert: ["i", "e"], find: ["e", "i"], rfind: ["e", "i"],
-  bsearch: ["e", "b"], resize: ["i"], slice: ["i", "i"], remove_at: ["i"],
+  bsearch: ["e", "b"], resize: ["i"], slice: ["i", "i"], remove_at: ["i"], append_array: ["a"],
 };
 /** int 槽与 bool 槽能进的来源：int 槽收 int / float / bool，bool 槽同样收三支（实测 `bsearch(1, 2)` 照收）；文本都是同一套两句。 */
 const PACK_INT_SLOT_OK = ["int", "float", "bool"];
 const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
+/** `a` 槽（`append_array`）那一位的槽型是**接收者自己那一型**，收的来源只有 `Array` 与同型那支 pack；
+ *  这十一型两句齐发，`Dictionary` 与其余八支 pack 只回第二句（S492，尺 `tmp/d6/s492.py` 三百九十六格 = 九面 × 廿二型 × 两形，
+ *  与 `tmp/d6/s487c.py` 一百六十八格那五种接收者证明的读数一字一样）。 */
+const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i"];
+/** `append_array` 那一位认得的**标注名**来源（S493，尺 `tmp/d6/s493.py` 五百九十四格：九面 × 廿二型 × 模块标注名 / 局部标注名 / 初值推断名）——
+ *  名字来的只回第二句，初值推断的那一形引擎句句收、所以不算来源；定形标注（`Array[int]` 那种）没量过，也不开口。 */
+const PACK_APPEND_NAMED = new Set([
+  "bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
+  "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+]);
+function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
+  if (typeof name !== "string") return null;
+  const t = ann.get(name);
+  return t !== undefined && PACK_APPEND_NAMED.has(t) ? t : null;
+}
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
@@ -1962,7 +2018,7 @@ function containerCallArity(
  *  名单之外的成员名（我们没列进任何一面的表、也没量过的）会被误拦 —— 兜底的是那几张表本身就是**按引擎成员表逐名量出来的**
  *  （S378 / S379 / S380 三面 49+51+109 名过裁判），加上 `face-arg-allow-list` 那 1246 格与 `p2-t4` 那 1358 格都在替这张名单站岗。 */
 const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
-  String: [],
+  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
   Array: ["set"],
   Dictionary: ["set", "is_typed", "is_same_typed"],
 };
@@ -2109,7 +2165,8 @@ function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
       if (n.kind !== "binary" || n.op !== "%") continue;
       const left = n.left as Expr;
       const right = n.right as Expr;
-      if (left.kind !== "lit" || left.lit !== "string") continue;
+      // `&"…" % X` 与同串的 `"…" % X` 引擎句子一字一样（S490，尺 `tmp/d6/s490c.py` 一百七十六格：可比 88 格、不同 0）
+      if (left.kind !== "lit" || (left.lit !== "string" && left.lit !== "string_name")) continue;
       if (right.kind === "array" || right.kind === "dict") continue;
       const arg = pctArg(right);
       if (arg === null) continue;
@@ -2137,6 +2194,10 @@ function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
 }
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+  const modAnn = new Map<string, string>();
+  for (const v of m.vars) {
+    if (v.type !== null && v.type.kind === "named") modAnn.set(v.name, v.type.name);
+  }
   for (const nodes of flattenBodies(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
@@ -2156,6 +2217,23 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, init.callee.name);
       }
     }
+    /** `append_array` 那一位认**标注名**（S493）：模块级与局部的都算，被重新赋值过的名字丢掉。 */
+    const annAll = new Map<string, string>(modAnn);
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named") annAll.set(n.name, type.name);
+    }
+    /** 模块级标注的 pack 名也是同一种静态证明（S486，读数 `tmp/d6/s486.json`：`var k0: PackedByteArray` 之后 `k0.append("a")` 两句照回，`k0.fill("a")` 连 void 一起回）。 */
+    for (const v of m.vars) {
+      if (v.type !== null && v.type.kind === "named" && v.type.name in PACK_ARG_SLOTS && !packs.has(v.name)) packs.set(v.name, v.type.name);
+    }
+    /** 链子那一形的基能不能静态证出（S482 的 `tmp/d6/s482.json`：`s.hex_decode().append("a")` 与 `PackedByteArray([1]).append("a")` 两句一字一样）。 */
+    const ownerFace = (obj: Expr): string | null => {
+      if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
+      if (obj.kind === "ident" && typeof obj.name === "string") return packs.get(obj.name) ?? annot.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
+    };
 
     for (const n of nodes) {
       if (n.kind !== "call") continue;
@@ -2167,7 +2245,10 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       const objCallee = obj.kind === "call" ? (obj.callee as Record<string, unknown> | undefined) : undefined;
       const inline = objCallee !== undefined && objCallee["kind"] === "ident" && typeof objCallee["name"] === "string"
         && String(objCallee["name"]) in PACK_ARG_SLOTS ? String(objCallee["name"]) : null;
-      const pack = obj.kind === "ident" && typeof obj.name === "string" ? packs.get(obj.name) : (inline ?? undefined);
+      const viaChain = obj.kind === "call" ? chainRecvFace(obj as Expr, ownerFace) : null;
+      const pack = obj.kind === "ident" && typeof obj.name === "string"
+        ? packs.get(obj.name)
+        : (inline ?? (viaChain !== null && PACK_TYPE_NAMES.has(viaChain) ? viaChain : undefined));
       if (pack === undefined) continue;
       const method = callee.name;
       if (typeof method !== "string") continue;
@@ -2181,8 +2262,29 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
         const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
         const proven = src ?? annotated;
-        if (proven === null) continue;
         const kind = slots[p];
+        if (kind === "a") {
+          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 的名字形）——
+          // 没量过的（`null` / Callable / 类名 / 定形标注）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
+          const litA = arg0.kind === "lit" && arg0.lit === "node_path" ? "NodePath"
+            : arg0.kind === "call" && arg0.callee.kind === "ident" && PACK_TYPE_NAMES.has(arg0.callee.name) ? arg0.callee.name : null;
+          const namedA = arg0.kind === "ident" ? namedAppendSource(arg0.name, annAll) : null;
+          const srcA = src ?? litA ?? namedA;
+          if (srcA === null || srcA === "Array" || srcA === pack) continue;
+          const two = PACK_APPEND_ARRAY_AS.includes(srcA);
+          if (!two && !(srcA === "Dictionary" || PACK_TYPE_NAMES.has(srcA))) continue;
+          const aloc = (n.loc as Diagnostic["loc"]) ?? null;
+          if (two && namedA === null) {
+            diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${srcA}" as "${pack}".`, loc: aloc });
+          }
+          diags.push({
+            code: "pack-arg-slot",
+            message: `Invalid argument for "${method}()" function: argument ${String(p + 1)} should be "${pack}" but is "${srcA}".`,
+            loc: aloc,
+          });
+          continue;
+        }
+        if (proven === null) continue;
         const slot = kind === "i" ? "int" : kind === "b" ? "bool" : face.slot;
         const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
         if (ok.includes(proven)) continue;
@@ -2218,9 +2320,45 @@ function packFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   return null;
 }
 
-function packNameMeasuredAbsent(kind: string, name: string): boolean {
-  if (PACK_ABSENT_ALL.includes(name)) return true;
-  return (kind === "PackedByteArray" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE).includes(name);
+/** pack 那一面的表外名：不在 dump 的方法全集里就是那两句（S480，尺 `tmp/d6/ppack.py` 八十一格 + `tmp/d6/ppack2.py` 二百五十三格）。 */
+function memberNameAbsent(face: string, name: string): boolean {
+  const list = BUILTIN_INSTANCE_MEMBERS[face];
+  return list !== undefined && !list.includes(name);
+}
+
+/** 链子交出来的那一面认不认得：值型五支与 pack 九支都在 `VALUE_METHOD_ARITY` 的键里，`String` / `StringName` / `NodePath` 另有三张表。 */
+function chainFaceKnown(rt: string): boolean {
+  return rt in VALUE_METHOD_ARITY || rt === "String" || rt === "StringName" || rt === "NodePath";
+}
+
+/** 标注写出来的名字面（链子那一层的基要用）：比 `typed` / `faceTyped` 两张既有表宽，只喂 `chainRecvFace`，别处不用。 */
+function knownFaceAnnotation(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  const base = t.name.replace(/\[.*\]$/, "");
+  return base === "String" || base === "StringName" || base === "NodePath" || base === "Array" || base === "Dictionary" ||
+    PACK_TYPE_NAMES.has(base) || base in VALUE_METHOD_ARITY ? base : null;
+}
+
+/** `X.m()` 当接收者那一形：引擎按方法自己的**返回型**判下一层，`s.hex_decode().size(1)` 与 `PackedByteArray([1]).size(1)`
+ *  两句一字一样（S482，尺 `tmp/d6/s482.py` 六百格 + `tmp/d6/s482c.py` 一百九十五格，读数 `tmp/d6/s482.json` / `tmp/d6/s482c.json`；过拦 0）。
+ *  `ownerOf` 由调用方给：每一支闸门能静态证出的接收者范围不同，链子那一层只在**上一层证得出**时才交返回型。 */
+function chainRecvFace(e: Expr, ownerOf: (x: Expr) => string | null): string | null {
+  if (e.kind !== "call" || e.callee.kind !== "attribute") return null;
+  const owner = ownerOf(e.callee.obj);
+  if (owner === null) return null;
+  const by = BUILTIN_METHOD_RETURNS[owner];
+  if (by === undefined) return null;
+  const name = e.callee.name;
+  if (typeof name !== "string") return null;
+  const rt = by[name];
+  return typeof rt === "string" && chainFaceKnown(rt) ? rt : null;
+}
+
+/** 链子那一形的元数表与那句的 code：三面名字面另有三张表，其余（值型五支 + pack 九支）共用 `VALUE_METHOD_ARITY`。 */
+function chainArityFace(face: string): { table: Record<string, [number, number]>; code: string } | null {
+  if (face === "String" || face === "StringName") return { table: STRING_METHOD_ARITY, code: face === "String" ? "string-arity" : "string-name-arity" };
+  if (face === "NodePath") return { table: NODE_PATH_METHOD_ARITY, code: "node-path-arity" };
+  return { table: VALUE_METHOD_ARITY[face] ?? {}, code: "value-arity" };
 }
 
 /** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
@@ -2231,8 +2369,7 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   if (obj.kind === "index") {
     const base = obj.obj as Record<string, unknown> | undefined;
     if (base === undefined || base.kind !== "ident" || typeof base.name !== "string") return null;
-    if (staticType(obj.index as Expr) !== "int") return null;
-    return elemFaceOf(elems.get(base.name) ?? "");
+    return readFaceOf(elems.get(base.name) ?? "", staticType(obj.index as Expr));
   }
   if (obj.kind === "ident" && typeof obj.name === "string") {
     const face = ann.get(obj.name) ?? mods.get(obj.name) ?? null;
@@ -2251,9 +2388,19 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
       if (owner !== null && typeof mname === "string") {
         const by = BUILTIN_METHOD_RETURNS[owner];
         const rt = by === undefined ? undefined : by[mname];
-        if (typeof rt === "string" && (instanceFaceManaged(rt) || rt === "String")) return rt;
+        if (typeof rt === "string" && (instanceFaceManaged(rt) || chainFaceKnown(rt))) return rt;
       }
     }
+  }
+  if (obj.kind === "attribute") {
+    const owner = attrFaceRecv(obj.obj as Record<string, unknown> | undefined, ann, elems, mods);
+    const nm = obj.name;
+    if (owner !== null && typeof nm === "string") {
+      const by = BUILTIN_MEMBER_TYPES[owner];
+      const t = by === undefined ? undefined : by[nm];
+      if (typeof t === "string" && (instanceFaceManaged(t) || t === "String")) return t;
+    }
+    return null;
   }
   if (obj.kind === "lit" && (obj.lit === "string_name" || obj.lit === "node_path")) {
     return obj.lit === "string_name" ? "StringName" : "NodePath";
@@ -2290,6 +2437,15 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
   "int": [],
   "float": [],
   "bool": [],
+  "PackedByteArray": ["append", "append_array", "bsearch", "bswap16", "bswap32", "bswap64", "clear", "compress", "count", "decode_double", "decode_float", "decode_half", "decode_s16", "decode_s32", "decode_s64", "decode_s8", "decode_u16", "decode_u32", "decode_u64", "decode_u8", "decode_var", "decode_var_size", "decompress", "decompress_dynamic", "duplicate", "encode_double", "encode_float", "encode_half", "encode_s16", "encode_s32", "encode_s64", "encode_s8", "encode_u16", "encode_u32", "encode_u64", "encode_u8", "encode_var", "erase", "fill", "find", "get", "get_string_from_ascii", "get_string_from_multibyte_char", "get_string_from_utf16", "get_string_from_utf32", "get_string_from_utf8", "get_string_from_wchar", "has", "has_encoded_var", "hex_encode", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_color_array", "to_float32_array", "to_float64_array", "to_int32_array", "to_int64_array", "to_vector2_array", "to_vector3_array", "to_vector4_array"],
+  "PackedInt32Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedInt64Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedFloat32Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedFloat64Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedStringArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedVector2Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedVector3Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedColorArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
 };
 
 /** 调用那一形同判据：只在 `BUILTIN_INSTANCE_MEMBERS` 覆盖的那几面开口，名字不在实例成员全集里才是引擎那两句。 */
@@ -2312,8 +2468,9 @@ export const BUILTIN_METHOD_RETURNS: Readonly<Record<string, Readonly<Record<str
   "Vector3": {"abs": "Vector3", "angle_to": "float", "bezier_derivative": "Vector3", "bezier_interpolate": "Vector3", "bounce": "Vector3", "ceil": "Vector3", "clamp": "Vector3", "clampf": "Vector3", "cross": "Vector3", "cubic_interpolate": "Vector3", "cubic_interpolate_in_time": "Vector3", "direction_to": "Vector3", "distance_squared_to": "float", "distance_to": "float", "dot": "float", "floor": "Vector3", "inverse": "Vector3", "is_equal_approx": "bool", "is_finite": "bool", "is_normalized": "bool", "is_zero_approx": "bool", "length": "float", "length_squared": "float", "lerp": "Vector3", "limit_length": "Vector3", "max": "Vector3", "max_axis_index": "int", "maxf": "Vector3", "min": "Vector3", "min_axis_index": "int", "minf": "Vector3", "move_toward": "Vector3", "normalized": "Vector3", "octahedron_decode": "Vector3", "octahedron_encode": "Vector2", "posmod": "Vector3", "posmodv": "Vector3", "project": "Vector3", "reflect": "Vector3", "rotated": "Vector3", "round": "Vector3", "sign": "Vector3", "signed_angle_to": "float", "slerp": "Vector3", "slide": "Vector3", "snapped": "Vector3", "snappedf": "Vector3",},
   "Vector3i": {"abs": "Vector3i", "clamp": "Vector3i", "clampi": "Vector3i", "distance_squared_to": "int", "distance_to": "float", "length": "float", "length_squared": "int", "max": "Vector3i", "max_axis_index": "int", "maxi": "Vector3i", "min": "Vector3i", "min_axis_index": "int", "mini": "Vector3i", "sign": "Vector3i", "snapped": "Vector3i", "snappedi": "Vector3i",},
   "Color": {"blend": "Color", "clamp": "Color", "darkened": "Color", "from_hsv": "Color", "from_ok_hsl": "Color", "from_rgba8": "Color", "from_rgbe9995": "Color", "from_string": "Color", "get_luminance": "float", "hex": "Color", "hex64": "Color", "html": "Color", "html_is_valid": "bool", "inverted": "Color", "is_equal_approx": "bool", "lerp": "Color", "lightened": "Color", "linear_to_srgb": "Color", "srgb_to_linear": "Color", "to_abgr32": "int", "to_abgr64": "int", "to_argb32": "int", "to_argb64": "int", "to_html": "String", "to_rgba32": "int", "to_rgba64": "int",},
-  "StringName": {"begins_with": "bool", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "casecmp_to": "int", "contains": "bool", "containsn": "bool", "count": "int", "countn": "int", "dedent": "String", "ends_with": "bool", "erase": "String", "filecasecmp_to": "int", "filenocasecmp_to": "int", "find": "int", "findn": "int", "format": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "get_slice": "String", "get_slice_count": "int", "get_slicec": "String", "hash": "int", "hex_to_int": "int", "indent": "String", "insert": "String", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_subsequence_of": "bool", "is_subsequence_ofn": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "join": "String", "json_escape": "String", "left": "String", "length": "int", "lpad": "String", "lstrip": "String", "match": "bool", "matchn": "bool", "md5_text": "String", "naturalcasecmp_to": "int", "naturalnocasecmp_to": "int", "nocasecmp_to": "int", "pad_decimals": "String", "pad_zeros": "String", "path_join": "String", "remove_char": "String", "remove_chars": "String", "repeat": "String", "replace": "String", "replace_char": "String", "replace_chars": "String", "replacen": "String", "reverse": "String", "rfind": "int", "rfindn": "int", "right": "String", "rpad": "String", "rstrip": "String", "sha1_text": "String", "sha256_text": "String", "similarity": "float", "simplify_path": "String", "strip_edges": "String", "strip_escapes": "String", "substr": "String", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "trim_prefix": "String", "trim_suffix": "String", "unicode_at": "int", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
+  "StringName": {"begins_with": "bool", "bigrams": "PackedStringArray", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "casecmp_to": "int", "contains": "bool", "containsn": "bool", "count": "int", "countn": "int", "dedent": "String", "ends_with": "bool", "erase": "String", "filecasecmp_to": "int", "filenocasecmp_to": "int", "find": "int", "findn": "int", "format": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "get_slice": "String", "get_slice_count": "int", "get_slicec": "String", "hash": "int", "hex_decode": "PackedByteArray", "hex_to_int": "int", "indent": "String", "insert": "String", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_subsequence_of": "bool", "is_subsequence_ofn": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "join": "String", "json_escape": "String", "left": "String", "length": "int", "lpad": "String", "lstrip": "String", "match": "bool", "matchn": "bool", "md5_buffer": "PackedByteArray", "md5_text": "String", "naturalcasecmp_to": "int", "naturalnocasecmp_to": "int", "nocasecmp_to": "int", "pad_decimals": "String", "pad_zeros": "String", "path_join": "String", "remove_char": "String", "remove_chars": "String", "repeat": "String", "replace": "String", "replace_char": "String", "replace_chars": "String", "replacen": "String", "reverse": "String", "rfind": "int", "rfindn": "int", "right": "String", "rpad": "String", "rsplit": "PackedStringArray", "rstrip": "String", "sha1_buffer": "PackedByteArray", "sha1_text": "String", "sha256_buffer": "PackedByteArray", "sha256_text": "String", "similarity": "float", "simplify_path": "String", "split": "PackedStringArray", "strip_edges": "String", "strip_escapes": "String", "substr": "String", "to_ascii_buffer": "PackedByteArray", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_multibyte_char_buffer": "PackedByteArray", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "to_utf16_buffer": "PackedByteArray", "to_utf32_buffer": "PackedByteArray", "to_utf8_buffer": "PackedByteArray", "to_wchar_buffer": "PackedByteArray", "trim_prefix": "String", "trim_suffix": "String", "unicode_at": "int", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
   "NodePath": {"get_as_property_path": "NodePath", "get_concatenated_names": "StringName", "get_concatenated_subnames": "StringName", "get_name": "StringName", "get_name_count": "int", "get_subname": "StringName", "get_subname_count": "int", "hash": "int", "is_absolute": "bool", "is_empty": "bool", "slice": "NodePath",},
+  "String": {"bigrams": "PackedStringArray", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "dedent": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "hash": "int", "hex_decode": "PackedByteArray", "hex_to_int": "int", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "json_escape": "String", "length": "int", "md5_buffer": "PackedByteArray", "md5_text": "String", "reverse": "String", "rsplit": "PackedStringArray", "sha1_buffer": "PackedByteArray", "sha1_text": "String", "sha256_buffer": "PackedByteArray", "sha256_text": "String", "simplify_path": "String", "split": "PackedStringArray", "strip_edges": "String", "strip_escapes": "String", "to_ascii_buffer": "PackedByteArray", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_multibyte_char_buffer": "PackedByteArray", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "to_utf16_buffer": "PackedByteArray", "to_utf32_buffer": "PackedByteArray", "to_utf8_buffer": "PackedByteArray", "to_wchar_buffer": "PackedByteArray", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
 };
 
 /** 只在表里有的那几面开口：名字不在实例成员集里就是引擎那两句（`valueAttrKind` 的 `null` 那一格由这张实测表接管）。 */
@@ -2346,7 +2503,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
     }
     const elems = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
-      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elems.set(name, t.name);
+      if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) elems.set(name, t.name);
     };
     for (const v of m.vars) noteElem(v.name, v.type);
     for (const n of nodes) {
@@ -2366,16 +2523,18 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       if (n.kind === "call") {
         const callee = n.callee as Record<string, unknown> | undefined;
         if (callee === undefined || callee.kind !== "attribute") continue;
-        const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
+        const kind = packFaceRecv(callee.obj as Record<string, unknown>, attr);
         if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
-          const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems, mods);
-          if (vface === null || !instanceFaceManaged(vface)) continue;
-          // String 那一面只补元素读这一形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
-          if (vface === "String" && (callee.obj as Record<string, unknown>).kind !== "index") continue;
+          const recvObj = callee.obj as Record<string, unknown>;
+          const chainRecv = recvObj.kind === "call" && (recvObj.callee as Record<string, unknown> | undefined)?.kind === "attribute";
+          const vface = attrFaceRecv(recvObj, attr, elems, mods);
+          if (vface === null || (!instanceFaceManaged(vface) && !PACK_TYPE_NAMES.has(vface) && vface !== "StringName" && vface !== "NodePath")) continue;
+          // String 那一面只补元素读与链子两形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
+          if (vface === "String" && recvObj.kind !== "index" && !chainRecv) continue;
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
           // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
-          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !instanceMemberAbsent(vface, vmethod)) continue;
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !memberNameAbsent(vface, vmethod)) continue;
           const vloc = (n.loc as Diagnostic["loc"]) ?? null;
           diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
           diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
@@ -2383,7 +2542,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         }
         const method = callee.name;
         if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
-        if (!packNameMeasuredAbsent(kind, method)) continue;
+        if (!memberNameAbsent(kind, method)) continue;
         const loc = (n.loc as Diagnostic["loc"]) ?? null;
         diags.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${kind}".`, loc });
         diags.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${kind}.`, loc });
@@ -2409,10 +2568,11 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       const absent = PACK_TYPE_NAMES.has(face)
-        ? packNameMeasuredAbsent(face, name)
+        ? memberNameAbsent(face, name)
         : face === "Array" || face === "String"
           ? true
-          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name);
+          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name) ||
+            ((face === "StringName" || face === "NodePath") && memberNameAbsent(face, name));
       if (!absent) continue;
       // 值类型那七面只量过**读**那一形（`tmp/probe-vattr/`），写形没读数就不开口
       if (!refused && writeTargets.has(n)) continue;
@@ -2476,8 +2636,23 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, seeded } of faceScopes(m, "String", (init) => init.kind === "lit" && init.lit === "string")) {
     const strs = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
     const strAnn = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string", true);
+    /** 定形容器里那一读也是静态的 `String`（`es[0].length(1)` / `ds["a"].length(1)`，S473，读数 `tmp/d6/n11.json`）—— 只喂元数那一道，成员名那两句由 `checkPackFaceNames` 那一支报，重复不得。 */
+    const reads = new Map<string, string>();
+    const noteRead = (name: string, t: TypeRef | null): void => {
+      if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) reads.set(name, t.name);
+    };
+    for (const v of m.vars) noteRead(v.name, v.type);
     for (const n of nodes) {
-      const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
+      if (n.kind === "var" && typeof n.name === "string") noteRead(n.name, n.type as TypeRef | null);
+    }
+    const isStringRead = (obj: Record<string, unknown>): boolean => {
+      if (obj.kind !== "index") return false;
+      const base = obj.obj as Record<string, unknown> | undefined;
+      if (base === undefined || base.kind !== "ident" || typeof base.name !== "string") return false;
+      return readFaceOf(reads.get(base.name) ?? "", staticType(obj.index as Expr)) === "String";
+    };
+    for (const n of nodes) {
+      const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, (obj) => isStringLit(obj) || isStringRead(obj));
       if (d !== null) diags.push(d);
       for (const g of faceGhostDiags(n, STRING_METHOD_ARITY, "String", true, strAnn, isStringLit)) diags.push(g);
     }
@@ -2485,12 +2660,8 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
 }
 
 /** StringName 那一面：102 名的 `[下界, 上界]` 与 String 那张表一字一样（0 处漂移），另六名引擎当场回「找不到成员」那两句 ——
- *  两面各 102 + 6 格、NodePath 13 格，尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `tmp/probe-snfaces/compare{42,43}.txt`（S389）。 */
-const STRINGNAME_NO_METHOD = new Set(["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"]);
-
-/** NodePath 那一面只认这十名（`hash` 也在内，元数 [0,0]），元数照量来的两张界。 */
-
-const NODE_PATH_NO_METHOD = new Set(["simplify", "is_same", "length"]);
+ *  两面各 102 + 6 格、NodePath 13 格，尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `tmp/probe-snfaces/compare{42,43}.txt`（S389）。
+ *  「找不到成员」那两句不再靠两张固定名单：`BUILTIN_INSTANCE_MEMBERS` 的 dump 全集在 `checkPackFaceNames` 那一支接管两面四种接收者（S484）。 */
 
 /** 那两面共用的形状：接收者认「`&"…"` / `^"…"` 字面量直接当接收者」与「标注或初值静态证得出的名字」两种，
  *  名字被重新赋值过就丢掉 —— 与 String / 字典 / 数组那三道闸门同一条口径。 */
@@ -2498,9 +2669,7 @@ interface NamedFace {
   type: string;
   lit: string;
   arity: Record<string, [number, number]>;
-  ghosts: ReadonlySet<string>;
   arityCode: string;
-  ghostCode: string;
 }
 
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
@@ -2519,13 +2688,32 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
       const proven = isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
       if (!proven) continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      if (face.ghosts.has(method)) {
-        diags.push({ code: face.ghostCode, message: `Cannot find member "${method}" in base "${face.type}".`, loc });
-        diags.push({ code: face.ghostCode, message: `Function "${method}()" not found in base ${face.type}.`, loc });
-        continue;
-      }
       const d = arityDiag(face.arity, face.arityCode, method, ((n.args as Expr[]) ?? []).length, loc);
       if (d !== null) diags.push(d);
+      const fkey = `${face.type}.${method}`;
+      const got = (n.args as Expr[]) ?? [];
+      const byPos = new Map<number, Array<{ code: string; message: string }>>();
+      const put = (pos: number, code: string, message: string): void => {
+        const bucket = byPos.get(pos) ?? [];
+        bucket.push({ code, message });
+        byPos.set(pos, bucket);
+      };
+      for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
+        const bad = literalTypeName(got[pos - 1]);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+        if (also.includes(bad)) {
+          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+        }
+      }
+      for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
+        const bad = literalTypeName(got[pos - 1]);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+      }
+      for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+        for (const g of byPos.get(pos)!) diags.push({ code: g.code, message: g.message, loc });
+      }
     }
   }
 }
@@ -2534,18 +2722,14 @@ const STRINGNAME_FACE: NamedFace = {
   type: "StringName",
   lit: "string_name",
   arity: STRING_METHOD_ARITY,
-  ghosts: STRINGNAME_NO_METHOD,
   arityCode: "string-name-arity",
-  ghostCode: "string-name-member",
 };
 
 const NODE_PATH_FACE: NamedFace = {
   type: "NodePath",
   lit: "node_path",
   arity: NODE_PATH_METHOD_ARITY,
-  ghosts: NODE_PATH_NO_METHOD,
   arityCode: "node-path-arity",
-  ghostCode: "node-path-member",
 };
 
 /** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，
@@ -3949,43 +4133,46 @@ function isNegativeLiteral(e: Expr): boolean {
  *  掺进容器那一族时是 _B（Invalid operands "A" and "B" for "X" operator.）—— 第二式也出现在「操作数不是字面量」那些格，
  *  但那一头只量了 bool 三支（compare55），所以闸门只按字面量那一半发。收的与走到运行期才拒的一个都不登。 */
 export const OP_PAIRS_REFUSED_A: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "!=": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|float", "int|String", "float|bool", "float|int", "float|float", "float|String"],
-  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
-  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
-  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float", "String|String"],
-  "<": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  "==": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  ">": ["bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "int|bool", "int|String", "float|bool", "float|String", "String|bool", "String|int", "String|float"],
-  "and": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
-  "in": ["int|int", "int|float", "int|bool", "int|String", "int|Vector2", "int|Color", "float|int", "float|float", "float|bool", "float|String", "float|Vector2", "float|Color", "bool|int", "bool|float", "bool|bool", "bool|String", "bool|Vector2", "bool|Color", "String|int", "String|float", "String|bool", "String|Vector2", "String|Color", "Vector2|int", "Vector2|float", "Vector2|bool", "Vector2|String", "Vector2|Vector2", "Vector2|Color", "Color|int", "Color|float", "Color|bool", "Color|String", "Color|Vector2", "Color|Color"],
-  "or": ["bool|String", "int|String", "float|String", "String|bool", "String|int", "String|float", "String|String"],
+  "!=": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|bool", "String|float", "String|int", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|String", "bool|StringName", "bool|float", "bool|int", "float|NodePath", "float|String", "float|StringName", "float|bool", "int|NodePath", "int|String", "int|StringName", "int|bool"],
+  "%": ["Color|Color", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|bool", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "float|float", "float|int", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool", "int|float"],
+  "*": ["Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|String", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|bool", "bool|float", "bool|int", "float|NodePath", "float|String", "float|StringName", "float|bool", "int|NodePath", "int|String", "int|StringName", "int|bool"],
+  "**": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|StringName", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
+  "+": ["Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|bool", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool"],
+  "-": ["Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|String", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|bool", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool"],
+  "/": ["Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|String", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|bool", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool"],
+  "<": ["Color|Color", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool"],
+  "<=": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|StringName", "String|bool", "String|float", "String|int", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|String", "bool|StringName", "bool|bool", "bool|float", "bool|int", "float|NodePath", "float|String", "float|StringName", "float|bool", "int|NodePath", "int|String", "int|StringName", "int|bool"],
+  "==": ["Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "NodePath|Color", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool"],
+  ">": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|StringName", "String|bool", "String|float", "String|int", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|String", "bool|StringName", "bool|float", "bool|int", "float|NodePath", "float|String", "float|StringName", "float|bool", "int|NodePath", "int|String", "int|StringName", "int|bool"],
+  ">=": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|StringName", "String|bool", "String|float", "String|int", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|String", "bool|StringName", "bool|bool", "bool|float", "bool|int", "float|NodePath", "float|String", "float|StringName", "float|bool", "int|NodePath", "int|String", "int|StringName", "int|bool"],
+  "and": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|String", "String|StringName", "String|bool", "String|float", "String|int", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|String", "bool|StringName", "float|NodePath", "float|String", "float|StringName", "int|NodePath", "int|String", "int|StringName"],
+  "in": ["Color|Color", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|NodePath", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector2i", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|Vector3i", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|bool", "bool|float", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|bool", "float|float", "float|int", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i", "int|bool", "int|float", "int|int"],
+  "or": ["Color|NodePath", "Color|StringName", "NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|NodePath", "String|String", "String|StringName", "String|bool", "String|float", "String|int", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|String", "bool|StringName", "float|NodePath", "float|String", "float|StringName", "int|NodePath", "int|String", "int|StringName"],
 };
 
 export const OP_PAIRS_REFUSED_B: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "!=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
-  "%": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "*": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "+": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "-": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "/": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "<": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "<=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "==": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
-  ">": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  ">=": ["bool|Array", "bool|Dictionary", "int|Array", "int|Dictionary", "float|Array", "float|Dictionary", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
+  "!=": ["Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "%": ["Array|Array", "Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "*": ["Array|Array", "Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "**": ["Array|NodePath", "Array|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary"],
+  "+": ["Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "-": ["Array|Array", "Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "/": ["Array|Array", "Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "<": ["Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "<=": ["Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  "==": ["Array|Color", "Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Color|Array", "Color|Dictionary", "Dictionary|Array", "Dictionary|Color", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "Vector2i|Array", "Vector2i|Dictionary", "Vector2|Array", "Vector2|Dictionary", "Vector3i|Array", "Vector3i|Dictionary", "Vector3|Array", "Vector3|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  ">": ["Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
+  ">=": ["Array|Dictionary", "Array|NodePath", "Array|String", "Array|StringName", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|Dictionary", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "NodePath|Array", "NodePath|Dictionary", "StringName|Array", "StringName|Dictionary", "String|Array", "String|Dictionary", "bool|Array", "bool|Dictionary", "float|Array", "float|Dictionary", "int|Array", "int|Dictionary"],
   "and": [],
-  "in": ["Array|int", "Array|float", "Array|bool", "Array|String", "Array|Vector2", "Array|Color", "Dictionary|int", "Dictionary|float", "Dictionary|bool", "Dictionary|String", "Dictionary|Vector2", "Dictionary|Color"],
+  "in": ["Array|Color", "Array|NodePath", "Array|String", "Array|StringName", "Array|Vector2", "Array|Vector2i", "Array|Vector3", "Array|Vector3i", "Array|bool", "Array|float", "Array|int", "Dictionary|Color", "Dictionary|NodePath", "Dictionary|String", "Dictionary|StringName", "Dictionary|Vector2", "Dictionary|Vector2i", "Dictionary|Vector3", "Dictionary|Vector3i", "Dictionary|bool", "Dictionary|float", "Dictionary|int"],
   "or": [],
 };
 
 /** 这一对只在**字面量操作数**那半边发：矩阵 468 格全用字面量量的；「操作数是声明过的变量」那一头只量过 bool 三格
- *  （`tmp/probe-booleq/compare55.txt`，走的是第二式），所以那形状交给既有的 bool 闸门，其余不猜。 */
+ *  （`tmp/probe-booleq/compare55.txt`，走的是第二式），所以那形状交给既有的 bool 闸门，其余不猜。
+ *  值型那几面的**构造式**在引擎眼里也是字面量：`Vector2(1, 2) in 1` 讲的是第一式（S471，尺 `tmp/d6/ctor2.py`）。 */
 function isLiteralOperand(e: Expr): boolean {
-  return e.kind === "lit" || e.kind === "array" || e.kind === "dict";
+  return e.kind === "lit" || e.kind === "array" || e.kind === "dict" || valueCtorType(e) !== null;
 }
 
 /** 左支是**静态型已知的非字面量**（标注过的 var / 形参 / 内部类字段）、右支是字面量时的那些对（S395，
@@ -3993,42 +4180,55 @@ function isLiteralOperand(e: Expr): boolean {
  *  与 `OP_PAIRS_REFUSED_A`/`_B`（两侧都是字面量、或左支是 `const`）那两张不是同一集 —— `and` / `or` 掺 String 的十四格
  *  在字面量那一集里拒、在这一集里收，所以各记一张。'const' 左支属字面量那一集（抽样四格都对上）。 */
 export const OP_PAIRS_REFUSED_DECL: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "!=": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
-  "%": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|float", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|int", "float|float", "float|String", "float|Array", "float|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "*": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|String", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "+": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "-": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|String", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "/": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|String", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Array", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "<": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "<=": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "==": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array"],
-  ">": ["bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
-  "in": ["int|Vector2", "int|String", "int|Callable", "float|Vector2", "float|String", "float|Callable", "bool|Vector2", "bool|String", "bool|Callable", "String|Vector2", "String|Callable", "Vector2|Vector2", "Vector2|String", "Vector2|Callable", "Color|Vector2", "Color|String", "Color|Callable", "Array|Vector2", "Array|String", "Array|Callable", "Dictionary|Vector2", "Dictionary|String", "Dictionary|Callable", "Vector2|int", "Vector2|float", "Vector2|bool", "Vector2|Color", "String|int", "String|float", "String|bool", "String|Color", "Callable|int", "Callable|float", "Callable|bool", "Callable|String", "Callable|Vector2", "Callable|Color", "Callable|Callable", "Array|int", "Array|float", "Array|bool", "Array|Color", "Dictionary|int", "Dictionary|float", "Dictionary|bool", "Dictionary|Color", "float|int", "int|float", "float|float", "float|bool", "bool|float"],
+  "!=": ["Array|Dictionary", "Array|String", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|String", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "String|Array", "String|Dictionary", "String|bool", "String|float", "String|int", "bool|Array", "bool|Dictionary", "bool|String", "bool|float", "bool|int", "float|Array", "float|Dictionary", "float|String", "float|bool", "int|Array", "int|Dictionary", "int|String", "int|bool"],
+  "%": ["Array|Array", "Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Callable", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|Dictionary", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedByteArray", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|PackedStringArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "float|float", "float|int", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|Vector2", "int|bool", "int|float"],
+  "*": ["Array|Array", "Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Callable", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|Dictionary", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedByteArray", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|PackedStringArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Array", "String|Callable", "String|Color", "String|Dictionary", "String|PackedByteArray", "String|PackedStringArray", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|bool", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|bool"],
+  "+": ["Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Callable", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|Dictionary", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Array", "String|Callable", "String|Color", "String|Dictionary", "String|PackedByteArray", "String|PackedStringArray", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|Vector2", "int|bool"],
+  "-": ["Array|Array", "Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Callable", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|Dictionary", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedByteArray", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|PackedStringArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Array", "String|Callable", "String|Color", "String|Dictionary", "String|PackedByteArray", "String|PackedStringArray", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|Vector2", "int|bool"],
+  "/": ["Array|Array", "Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Callable", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|Dictionary", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedByteArray", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|PackedStringArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Array", "String|Callable", "String|Color", "String|Dictionary", "String|PackedByteArray", "String|PackedStringArray", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|Vector2", "int|bool"],
+  "<": ["Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Callable", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|Dictionary", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedByteArray", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|PackedStringArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Array", "String|Callable", "String|Color", "String|Dictionary", "String|PackedByteArray", "String|PackedStringArray", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|Vector2", "int|bool"],
+  "<=": ["Array|Dictionary", "Array|String", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|Dictionary", "Dictionary|String", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "String|Array", "String|Dictionary", "String|bool", "String|float", "String|int", "bool|Array", "bool|Dictionary", "bool|String", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Dictionary", "float|String", "float|bool", "int|Array", "int|Dictionary", "int|String", "int|bool"],
+  "==": ["Array|Callable", "Array|Dictionary", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Array", "Callable|Color", "Callable|Dictionary", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Array", "Dictionary|Callable", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|Array", "PackedByteArray|Dictionary", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|Array", "PackedStringArray|Dictionary", "PackedStringArray|PackedByteArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Array", "String|Callable", "String|Color", "String|Dictionary", "String|PackedByteArray", "String|PackedStringArray", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Array", "Vector2|Callable", "Vector2|Color", "Vector2|Dictionary", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Array", "bool|Callable", "bool|Dictionary", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|float", "bool|int", "float|Array", "float|Callable", "float|Dictionary", "float|PackedByteArray", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "int|Array", "int|Callable", "int|Dictionary", "int|PackedByteArray", "int|PackedStringArray", "int|String", "int|Vector2", "int|bool"],
+  ">": ["Array|Dictionary", "Array|String", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|Dictionary", "Dictionary|String", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "String|Array", "String|Dictionary", "String|bool", "String|float", "String|int", "bool|Array", "bool|Dictionary", "bool|String", "bool|float", "bool|int", "float|Array", "float|Dictionary", "float|String", "float|bool", "int|Array", "int|Dictionary", "int|String", "int|bool"],
+  ">=": ["Array|Dictionary", "Array|String", "Array|bool", "Array|float", "Array|int", "Dictionary|Array", "Dictionary|Dictionary", "Dictionary|String", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "String|Array", "String|Dictionary", "String|bool", "String|float", "String|int", "bool|Array", "bool|Dictionary", "bool|String", "bool|bool", "bool|float", "bool|int", "float|Array", "float|Dictionary", "float|String", "float|bool", "int|Array", "int|Dictionary", "int|String", "int|bool"],
+  "in": ["Array|Callable", "Array|Color", "Array|PackedByteArray", "Array|PackedStringArray", "Array|String", "Array|Vector2", "Array|bool", "Array|float", "Array|int", "Callable|Callable", "Callable|Color", "Callable|String", "Callable|Vector2", "Callable|Vector2i", "Callable|Vector3", "Callable|Vector3i", "Callable|bool", "Callable|float", "Callable|int", "Color|Callable", "Color|String", "Color|Vector2", "Dictionary|Callable", "Dictionary|Color", "Dictionary|PackedByteArray", "Dictionary|PackedStringArray", "Dictionary|String", "Dictionary|Vector2", "Dictionary|bool", "Dictionary|float", "Dictionary|int", "PackedByteArray|PackedByteArray", "PackedByteArray|PackedStringArray", "PackedByteArray|String", "PackedByteArray|bool", "PackedByteArray|float", "PackedByteArray|int", "PackedStringArray|PackedByteArray", "PackedStringArray|PackedStringArray", "PackedStringArray|String", "PackedStringArray|bool", "PackedStringArray|float", "PackedStringArray|int", "String|Callable", "String|Color", "String|PackedByteArray", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|bool", "String|float", "String|int", "Vector2i|Callable", "Vector2i|String", "Vector2i|Vector2", "Vector2|Callable", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Callable", "Vector3i|String", "Vector3i|Vector2", "Vector3|Callable", "Vector3|String", "Vector3|Vector2", "bool|Callable", "bool|PackedByteArray", "bool|PackedStringArray", "bool|String", "bool|Vector2", "bool|float", "float|Callable", "float|PackedStringArray", "float|String", "float|Vector2", "float|bool", "float|float", "float|int", "int|Callable", "int|PackedStringArray", "int|String", "int|Vector2", "int|float"],
 };
 
-/** 左支是标值型**标注变量**、右支是字面量的那些对（S457 第一笔，尺 `tmp/d6/annot.py`，读数 `tmp/d6/av-decl.txt` / `tmp/d6/av-mirror.txt`：210 格 × 两向逐格过裁判，两向**不是镜像**） */
+/** 左支是标值型**标注变量**、右支是字面量的那些对（S457 第一笔，尺 `tmp/d6/annot.py`，读数 `tmp/d6/av-decl.txt` / `tmp/d6/av-mirror.txt`：210 格 × 两向逐格过裁判，两向**不是镜像**）。
+ *  S489 往这张表并进 `StringName` / `NodePath` 两面那 232 对（尺 `tmp/d6/s489c.py` 八百三十二格 + `tmp/d6/s489e.py` 五百二十格）：右支写成字面量还是标注名，
+ *  引擎拒的集一字一样（`tmp/d6/s489f.txt` 差额 0），所以两种写法共用这一张表。 */
 export const OP_PAIRS_REFUSED_DECL_VAL: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool", "int|float"],
-  "*": ["Color|String", "Color|Vector2", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|String", "int|bool"],
-  "+": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
-  "-": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
-  "/": ["Color|String", "Color|Vector2", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|Color", "int|String", "int|Vector2", "int|bool"],
-  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
-  "==": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
-
+  "!=": ["NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int"],
+  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool", "int|float"],
+  "*": ["Color|String", "Color|Vector2", "Color|bool", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|String", "int|bool"],
+  "**": ["NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int"],
+  "+": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "-": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "/": ["Color|String", "Color|Vector2", "Color|bool", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|StringName", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|String", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  "<=": ["NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int"],
+  "==": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int", "String|Color", "String|Vector2", "String|bool", "String|float", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int", "int|Color", "int|String", "int|Vector2", "int|bool"],
+  ">": ["NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int"],
+  ">=": ["NodePath|Array", "NodePath|Color", "NodePath|Dictionary", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Array", "StringName|Color", "StringName|Dictionary", "StringName|NodePath", "StringName|String", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int"],
+  "in": ["NodePath|Color", "NodePath|NodePath", "NodePath|String", "NodePath|StringName", "NodePath|Vector2", "NodePath|bool", "NodePath|float", "NodePath|int", "StringName|Color", "StringName|NodePath", "StringName|Vector2", "StringName|bool", "StringName|float", "StringName|int"],
 };
 
-/** 反向那一形：左支是字面量、右支是标值型**标注变量**（同批实测，集与正向不等，故各记一张） */
+/** 反向那一形：左支是字面量、右支是标值型**标注变量**（同批实测，集与正向不等，故各记一张）。
+ *  S489 并进这张表的 242 对里左支也可以写成标注名（`wi + sn` 那一路），与「左支是字面量」共用一张表的依据同上。 */
 export const OP_PAIRS_REFUSED_DECL_VAL_REV: Readonly<Record<string, ReadonlyArray<string>>> = {
-  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|int", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "*": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|String", "int|String"],
-  "+": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "-": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "/": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "String|Color", "String|String", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-  "==": ["Color|String", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|String", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|String", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|String", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
-
+  "!=": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|StringName", "StringName|NodePath", "String|NodePath", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
+  "%": ["Array|NodePath", "Array|StringName", "Color|Color", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "float|int", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "*": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "StringName|StringName", "String|Color", "String|NodePath", "String|String", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|NodePath", "float|String", "float|StringName", "int|NodePath", "int|String", "int|StringName"],
+  "**": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "StringName|StringName", "String|NodePath", "String|StringName", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
+  "+": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "String|Color", "String|NodePath", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "-": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "StringName|StringName", "String|Color", "String|NodePath", "String|String", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "/": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "StringName|StringName", "String|Color", "String|NodePath", "String|String", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "<": ["Array|NodePath", "Array|StringName", "Color|Color", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "String|Color", "String|NodePath", "String|StringName", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "<=": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "String|NodePath", "String|StringName", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
+  "==": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|String", "Color|StringName", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Color|bool", "Color|float", "Color|int", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|StringName", "StringName|NodePath", "String|Color", "String|NodePath", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "String|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|Vector3", "Vector2i|Vector3i", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|NodePath", "Vector2|String", "Vector2|StringName", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|Vector2i", "Vector3i|Vector3", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|Vector2i", "Vector3|Vector3i", "Vector3|bool", "Vector3|float", "Vector3|int", "bool|Color", "bool|NodePath", "bool|String", "bool|StringName", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "bool|int", "float|Color", "float|NodePath", "float|String", "float|StringName", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|NodePath", "int|String", "int|StringName", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  ">": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "String|NodePath", "String|StringName", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
+  ">=": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "String|NodePath", "String|StringName", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
+  "in": ["Array|NodePath", "Array|StringName", "Color|NodePath", "Color|StringName", "Dictionary|NodePath", "Dictionary|StringName", "NodePath|NodePath", "NodePath|StringName", "StringName|NodePath", "String|NodePath", "Vector2|NodePath", "Vector2|StringName", "bool|NodePath", "bool|StringName", "float|NodePath", "float|StringName", "int|NodePath", "int|StringName"],
 };
 
 /** 左支写成「静态型标明的名字」、右支是字面量那一形（S395）：468 格全过裁判，引擎这一路**一律第二式**，
@@ -4100,7 +4300,7 @@ export const BUILTIN_MEMBER_TYPES: Readonly<Record<string, Readonly<Record<strin
 };
 
 function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
-  const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+  const ANNOT = new Set(["bool", "int", "float", "String", "StringName", "NodePath", "PackedByteArray", "PackedStringArray", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
   const named = (t: TypeRef | null): string | null => {
     if (t === null || t.kind !== "named") return null;
     const base = t.name.replace(/\[.*\]$/, "");
@@ -4119,7 +4319,9 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     if (v.isConst) moduleConsts.set(v.name, t);
     else moduleTypes.set(v.name, t);
   }
-  const literalKind = (e: Expr): string | null => staticType(e);
+  /** 操作数那一格报的是**字面量自己的静态名**：`staticType` 把 `&"ab"` 折进 `String`、`^"a/b"` 干脆给 null，
+   *  两面参加运算的型对（S489，尺 `tmp/d6/s489c.py` 832 格）要的是引擎句里那两个名，所以先问 `literalTypeName`。 */
+  const literalKind = (e: Expr): string | null => literalTypeName(e) ?? staticType(e);
 
   const checkBody = (body: Stmt[], base: Map<string, string>, consts: Map<string, string>): void => {
     const types = new Map(base);
@@ -4161,7 +4363,18 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       const name = e.callee.name;
       return typeof name === "string" ? (by[name] ?? null) : null;
     };
-    const operandKind = (e: Expr): string | null => literalKind(e) ?? callRet(e) ?? callableOf(e);
+    /** pack 那一面的构造位：`staticType` 不认（它只认得那五面值型），但引擎照字面量判 —— S481 的 112 格读数。 */
+    const packCtorFace = (e: Expr): string | null =>
+      e.kind === "call" && e.callee.kind === "ident" && PACK_TYPE_NAMES.has(e.callee.name) ? e.callee.name : null;
+    const operandKind = (e: Expr): string | null => {
+      const lit = literalKind(e);
+      if (lit !== null) return lit;
+      if (e.kind === "ident") {
+        const nm = types.get(e.name) ?? consts.get(e.name) ?? null;
+        if (nm !== null) return nm;
+      }
+      return callRet(e) ?? packCtorFace(e) ?? callableOf(e) ?? elemOf(e);
+    };
     /** 定形容器那一读的静态型：数组交内型、字典交值型（S459 量的是字面量 int 下标，S468 补上非字面量下标与字典值读；键型不合式就不判，那一格由下标型闸门报）。 */
     const elemOf = (e: Expr): string | null => {
       if (e.kind !== "index" || e.obj.kind !== "ident") return null;
@@ -4176,18 +4389,21 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       if (kt !== null && !canHold(slot.key, kt)) return null;
       return slot.val;
     };
+    /** 判据用**基名**（表就按基名登），句子用**原文标注**：`ea in 1` 引擎写的是 `"Array[Vector2]"`（S472，读数 `tmp/d6/inop.json`）。 */
+    const dispOf = (e: Expr, base: string): string => (e.kind === "ident" ? (raws.get(e.name) ?? base) : base);
     /** 两侧都是 Callable 那一形：引擎只报一句，两支循环各报一遍就成了两句重复（读数 `tmp/d6/cb.json`）。 */
     const reported = new Set<Expr>();
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
+      if (isLiteralOperand(e.left) && isLiteralOperand(e.right)) continue;
       if (e.left.kind !== "ident" && e.left.kind !== "index" && e.left.kind !== "call" && e.left.kind !== "attribute") continue;
       const rt = operandKind(e.right);
       if (rt === null) continue;
       const isIdent = e.left.kind === "ident";
       const name = isIdent ? (e.left as Extract<Expr, { kind: "ident" }>).name : "";
       const isConst = isIdent && consts.has(name);
-      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : e.left.kind === "index" ? elemOf(e.left) : e.left.kind === "call" ? callRet(e.left) : callableOf(e.left);
+      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : e.left.kind === "index" ? elemOf(e.left) : e.left.kind === "call" ? callRet(e.left) ?? literalKind(e.left) ?? packCtorFace(e.left) : callableOf(e.left);
       if (lt === null) continue;
       const pair = `${lt}|${rt}`;
       const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
@@ -4198,7 +4414,7 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
         code: "op-pair",
         message: foldedA
           ? `Invalid operands to operator ${e.op}, ${lt} and ${rt}.`
-          : `Invalid operands "${lt}" and "${rt}" for "${e.op}" operator.`,
+          : `Invalid operands "${dispOf(e.left, lt)}" and "${dispOf(e.right, rt)}" for "${e.op}" operator.`,
         loc: e.loc,
       });
       reported.add(e);
@@ -4208,17 +4424,18 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (reported.has(e as unknown as Extract<Expr, { kind: "binary" }>)) continue;
+      if (reported.has(e)) continue;
+      if (isLiteralOperand(e.left) && isLiteralOperand(e.right)) continue;
       if (e.right.kind !== "ident" && e.right.kind !== "index" && e.right.kind !== "call" && e.right.kind !== "attribute") continue;
       const lt2 = operandKind(e.left);
       if (lt2 === null) continue;
-      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : e.right.kind === "index" ? elemOf(e.right) : e.right.kind === "call" ? callRet(e.right) : callableOf(e.right);
+      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : e.right.kind === "index" ? elemOf(e.right) : e.right.kind === "call" ? callRet(e.right) ?? literalKind(e.right) ?? packCtorFace(e.right) : callableOf(e.right);
       if (rt2 === null) continue;
       const pair2 = `${lt2}|${rt2}`;
       if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_CALLABLE[e.op]?.includes(pair2) !== true) continue;
       diags.push({
         code: "op-pair",
-        message: `Invalid operands "${lt2}" and "${rt2}" for "${e.op}" operator.`,
+        message: `Invalid operands "${dispOf(e.left, lt2)}" and "${dispOf(e.right, rt2)}" for "${e.op}" operator.`,
         loc: e.loc,
       });
     }
@@ -4252,10 +4469,12 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) collect(c);
 }
 
-/** 两侧都是字面量时的那两张表：`checkOperator` 里发（S394）。 */
+/** 两侧都是字面量时的那两张表：`checkOperator` 里发（S394）。
+ *  操作数名先问 `literalTypeName`：`staticType` 把 `&"ab"` 折进 `String`、`^"a/b"` 回 null，而引擎这一路句子里印的
+ *  是 `StringName` / `NodePath` 自己（S490，尺 `tmp/d6/s490.py` 五百四十格，读数 `tmp/d6/s490.json`）。 */
 function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]): void {
-  const l = staticType(e.left);
-  const r = staticType(e.right);
+  const l = literalTypeName(e.left) ?? staticType(e.left);
+  const r = literalTypeName(e.right) ?? staticType(e.right);
 
   // 两侧都是字面量的那一半：按 468 格那张表发（S394）。既有三道闸门已经发同样句子的组合不再重复发。
   const pair = l !== null && r !== null ? `${l}|${r}` : null;
@@ -4265,14 +4484,17 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
     ((e.op === "==" || e.op === "!=") &&
       ((l === "String" && (r === "int" || r === "float")) || (r === "String" && (l === "int" || l === "float")))) ||
     ((e.op === "<=" || e.op === ">=") && l === "bool" && r === "bool");
+  let paired = false;
   if (!covered && isLiteralOperand(e.left) && isLiteralOperand(e.right) && pair !== null && l !== null && r !== null) {
     if (OP_PAIRS_REFUSED_A[e.op]?.includes(pair) === true) {
+      paired = true;
       diags.push({
         code: "op-pair",
         message: `Invalid operands to operator ${e.op}, ${l} and ${r}.`,
         loc: e.loc,
       });
     } else if (OP_PAIRS_REFUSED_B[e.op]?.includes(pair) === true) {
+      paired = true;
       diags.push({
         code: "op-pair",
         message: `Invalid operands "${l}" and "${r}" for "${e.op}" operator.`,
@@ -4280,8 +4502,9 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
       });
     }
   }
-  const isModulo = l !== "String" && r !== "String";
-  if (e.op === "%" && isModulo && l !== null && r !== null && (l === "float" || r === "float")) {
+  const strLike = (t: string | null): boolean => t === "String" || t === "StringName";
+  const isModulo = !strLike(l) && !strLike(r);
+  if (!paired && e.op === "%" && isModulo && l !== null && r !== null && (l === "float" || r === "float")) {
     diags.push({
       code: "op-mod-float",
       message: `Invalid operands to operator %, ${l} and ${r}.`,
@@ -4712,6 +4935,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     // 标了 `String` / `Array` / `Dictionary` 的名字：引擎在带标注的变量接收者上说的句子，与字面量接收者那一趟一字不差
     //（`tmp/probe-argtype/packed3.mts` 的 1358 格与 `p2-t4.txt` 逐格比过），所以同一张表照用
     const faceTyped = new Map<string, string>();
+    for (const v of m.vars) {
+      if (v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name)) faceTyped.set(v.name, v.type.name);
+    }
     for (const p of f.params) {
       const t = valueTypeAnnotation(p.type);
       if (t !== null) typed.set(p.name, t);
@@ -4719,16 +4945,40 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     }
     const elemFaces = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
-      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elemFaces.set(name, t.name);
+      if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) elemFaces.set(name, t.name);
     };
     for (const v of m.vars) noteElem(v.name, v.type);
     for (const prm of f.params) noteElem(prm.name, prm.type);
-    /** `e[0].m(...)` 这一形的接收者：只认字面量 int 下标那一格（S460 量的就是它，其余形不判）。 */
+    for (const n of flattenBody(f.body)) {
+      if (n.kind === "var" && typeof n.name === "string") noteElem(n.name, n.type as TypeRef | null);
+    }
+    /** `e[0].m(...)` / `d["a"].m(...)` 这一形的接收者：交容器那一读的面（S473，读数 `tmp/d6/n10.json`）。 */
     const recvElem = (obj: Expr): string | null => {
       if (obj.kind !== "index" || obj.obj.kind !== "ident") return null;
-      if (staticType(obj.index) !== "int") return null;
-      return elemFaceOf(elemFaces.get(obj.obj.name) ?? "");
+      return readFaceOf(elemFaces.get(obj.obj.name) ?? "", staticType(obj.index));
     };
+    /** 链子那一层的基：标注写出来的面都算（`sn.split(" ").size(1)` 与 `s.hex_decode().size(1)` 同一判据，S482）；
+     *  只喂 `chainRecvFace`，直接收者那两形仍走 `typed` / `faceTyped` 两张原表，别处不开。 */
+    const nameFaces = new Map<string, string>();
+    const noteNameFace = (name: string, t: TypeRef | null): void => {
+      const f = knownFaceAnnotation(t);
+      if (f !== null) nameFaces.set(name, f);
+    };
+    for (const v of m.vars) noteNameFace(v.name, v.type);
+    for (const prm of f.params) noteNameFace(prm.name, prm.type);
+    for (const n of flattenBody(f.body)) {
+      if (n.kind === "var" && typeof n.name === "string") noteNameFace(n.name, n.type as TypeRef | null);
+    }
+    /** 链子当接收者那一形：`s.hex_decode().size(1)` 的基是方法自己的返回型（S482，读数 `tmp/d6/s482.json`）。
+     *  只喂这一支 —— 字面量与标注名那两形的元数与形参早由别处在管，这里再开就报成两遍。 */
+    const recvOwner = (obj: Expr): string | null => {
+      const viaLit = literalFaceType(obj, faceTyped);
+      if (viaLit !== null) return viaLit;
+      if (obj.kind === "ident") return typed.get(obj.name) ?? nameFaces.get(obj.name) ?? null;
+      if (obj.kind === "index") return recvElem(obj);
+      return obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null;
+    };
+    const recvChain = (obj: Expr): string | null => (obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null);
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
     const staticCallees = new Set<Expr>();
@@ -4873,76 +5123,77 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const face = literalFaceType(callee.obj, faceTyped);
+      const chainArgFace = recvChain(callee.obj);
+      const litFace = literalFaceType(callee.obj, faceTyped);
+      // 链子那一形只把三面名字面交给这一段（S486 的 `np.get_name(0).find(1)` 两句照回）；pack / 值型那几面的形参仍由下面那一段与 `checkPackArgSlots` 管，重复不得
+      const face = litFace ?? (chainArgFace === "String" || chainArgFace === "StringName" || chainArgFace === "NodePath" ? chainArgFace : null);
       if (face !== null) {
-        // 字面量接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts`：元数由引擎自己的句子量出来，
-        // 形参逐位逐 kind 量；读数都建在「实参个数正好等于量过的那个上界」这一形上，别的元数没量过就不发）
+        // 字面量与标注名接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts` 量的元数与形参逐位逐 kind）：
+        // 形参按**位**查 —— 那一位给了实参就查，元数在下界或越上界都照发（S485，尺 `tmp/d6/s485.py` 二百五十四格，读数 `tmp/d6/s485.json`）
         const fkey = `${face}.${callee.name}`;
-        const slot = FACE_SLOTS[fkey];
-        const measured = typeof slot === "number" ? e.args.length === slot : slot !== undefined && slot.includes(e.args.length);
-        if (measured) {
-          const byPos = new Map<number, Array<{ code: string; message: string }>>();
-          const put = (pos: number, code: string, message: string): void => {
-            const bucket = byPos.get(pos) ?? [];
-            bucket.push({ code, message });
-            byPos.set(pos, bucket);
-          };
-          for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
-            const bad = literalTypeName(e.args[pos - 1]);
-            if (bad === null || !refuse.includes(bad)) continue;
-            put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-            if (also.includes(bad)) {
-              put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
-            }
-          }
-          for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
-            const bad = literalTypeName(e.args[pos - 1]);
-            if (bad === null || !refuse.includes(bad)) continue;
-            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
-          }
-          for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-            for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
-          }
-        }
-        continue;
-      }
-      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
-      if (recv === null) continue;
-      const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
-      if (sig === undefined) continue;
-      const got = e.args.length;
-      if (got >= sig[0] && got <= sig[1]) {
-        // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
-        // 读数全部是在**上界元数**下量的（`packed.mts` 每位都按 max 个实参建式子），别的元数没量过就不发
-        const ikey = `${recv}.${callee.name}`;
         const byPos = new Map<number, Array<{ code: string; message: string }>>();
         const put = (pos: number, code: string, message: string): void => {
           const bucket = byPos.get(pos) ?? [];
           bucket.push({ code, message });
           byPos.set(pos, bucket);
         };
-        for (const [pos, refuse, want, also] of got === sig[1] || got === sig[0] ? INSTANCE_ARG_AS[ikey] ?? [] : []) {
-          const lit = e.args[pos - 1];
-          const bad = lit === undefined ? null : literalTypeName(lit);
+        for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
+          const bad = literalTypeName(e.args[pos - 1]);
           if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
           if (also.includes(bad)) {
-            put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
           }
         }
-        for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
-          const lit = e.args[pos - 1];
-          const bad = lit === undefined ? null : literalTypeName(lit);
+        for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
+          const bad = literalTypeName(e.args[pos - 1]);
           if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
         }
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
           for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
         }
-        continue;
+        // 字面量 / 标注名那一形到此为止（元数早由别处在管）；链子那一形要落到下面那一段去补元数那句
+        if (litFace !== null) continue;
       }
+      const direct = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
+      const recv = direct ?? recvChain(callee.obj);
+      if (recv === null) continue;
+      // 直接收者那三形仍走原表（`String` / `Array` / `Dictionary` 由别的闸门在管，这里再开就报成两遍）；只有链子才交那三张名字面的表
+      const arity = direct === null ? chainArityFace(recv) : { table: VALUE_METHOD_ARITY[recv] ?? {}, code: "value-arity" };
+      const sig = arity === null ? undefined : arity.table[callee.name];
+      if (sig === undefined || arity === null) continue;
+      const got = e.args.length;
+      // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
+      // 按**位**查：那一位给了实参就查，元数在界内、下界之外还是越上界都照发（S485 的二百五十四格 + `tmp/d6/s482b.txt`）
+      const ikey = `${recv}.${callee.name}`;
+      const byPos = new Map<number, Array<{ code: string; message: string }>>();
+      const put = (pos: number, code: string, message: string): void => {
+        const bucket = byPos.get(pos) ?? [];
+        bucket.push({ code, message });
+        byPos.set(pos, bucket);
+      };
+      for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
+        const lit = e.args[pos - 1];
+        const bad = lit === undefined ? null : literalTypeName(lit);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+        if (also.includes(bad)) {
+          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        }
+      }
+      for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
+        const lit = e.args[pos - 1];
+        const bad = lit === undefined ? null : literalTypeName(lit);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+      }
+      for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+        for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
+      }
+      if (got >= sig[0] && got <= sig[1]) continue;
       diags.push({
-        code: "value-arity",
+        code: arity.code,
         message:
           got < sig[0]
             ? `Too few arguments for "${callee.name}()" call. Expected at least ${sig[0]} but received ${got}.`
@@ -5159,7 +5410,7 @@ function literalTypeName(e: Expr | undefined): string | null {
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
   if (e.kind === "lambda") return "Callable";
-  if (e.kind === "call" && e.callee.kind === "ident" && NUMERIC_VALUE_CTORS.has(e.callee.name)) return e.callee.name;
+  if (e.kind === "call" && e.callee.kind === "ident" && (NUMERIC_VALUE_CTORS.has(e.callee.name) || PACK_TYPE_NAMES.has(e.callee.name))) return e.callee.name;
   return null;
 }
 
