@@ -792,6 +792,14 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.274 单文件模式撞上父脚本 extends：把误导的两句换成一句准确的（2026-10-17，S443，§6 第 60 条② 收窄）
+
+- **实测**：`main.gd` 写 `extends "res://sub.gd"`、`sub.gd` 是 `extends SceneTree` 带 `helper()` —— 引擎工程模式给 `C1|25 7`；我们的单文件路径把 `var q = quit` 报成 `Identifier "quit" not declared in the current scope.`、把 `helper()` 报成 `Function "helper()" not found in base self.` —— 两句都在说「这东西不存在」，而真相是「单文件模式没读父脚本」。
+- **改法**：`cli/ctx.ts` 的 `tryLoadSingle` 在 lower 之后先看 `ir.extends` 的文本（剥引号后含斜杠 / 反斜杠、以 `.gd` 收尾、或带 `res://` `user://` `uid:` 前缀）——命中就返回 `[single-file-extends]` 一句并指去 `run-project` / `build-project`；标识符（类名、`SceneTree`）一律照旧，四道命令共用这一条路。
+- **工程模式没动**：`build-project` / `run-project` 读依赖表，`hostOnChain` 判得出链顶，这份文件出货与引擎逐字节同（`C1|25 7`）。
+- **账收窄了一笔**：#42 那条正账（让单文件也读依赖、把 `hostOnChain` 的输入补全）仍开着，本轮只把错诊断换成准确拒，没有假装支持。
+- **门读数**：`pnpm test` **14406**（140 文件）、typecheck **4/4**、`test:compile` **264/374**、`test:diff` **257/257** 逐字节、`test:codegen` 全过 —— 四格计数与上一轮一字不差。
+
 ### 1.273 字典重复键补上 NodePath 那一族（2026-10-17，S442，语料 386，§2 第 20 条④结清)
 
 - **判据**：NodePath 字面量键折成独立一类（`np:`），同路径算重复、跨 String / StringName 各算各的；`NodePath("a")` 这种构造写法与 `^"a"` 同键（引擎实测那句拒在**首次出现**那一格）。

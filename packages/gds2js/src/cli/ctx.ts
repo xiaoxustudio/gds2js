@@ -175,10 +175,31 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
   }
   try {
     const ir = lower(await parseSource(src));
+    const chain = singleFileExtends(ir.extends);
+    if (chain !== null) {
+      return { error: `${absPath}:1:1  error  [single-file-extends] extends "${chain}" 挂的是父脚本 —— 单文件模式不读依赖，继承来的方法、字段与宿主名一律判不出，请改走 run-project / build-project` };
+    }
     return { ir, diags: toDiags(absPath, ir) };
   } catch (e) {
     return { error: `${absPath}:1:1  error  ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+/** `extends` 挂的是父脚本（路径 / uid / `.gd`）而不是标识符时给那串文本，否则 null。 */
+function singleFileExtends(raw: string | null): string | null {
+  if (raw === null) return null;
+  const dq = String.fromCharCode(34);
+  const sq = String.fromCharCode(39);
+  const sl = String.fromCharCode(47);
+  const bs = String.fromCharCode(92);
+  let t = raw.trim();
+  if (t.startsWith(dq) || t.startsWith(sq)) t = t.slice(1);
+  if (t.endsWith(dq) || t.endsWith(sq)) t = t.slice(0, -1);
+  if (t === "") return null;
+  if (t.startsWith("res:" + sl) || t.startsWith("user:" + sl) || t.startsWith("uid:")) return t;
+  if (t.includes(sl) || t.includes(bs)) return t;
+  if (t.endsWith(".gd")) return t;
+  return null;
 }
 
 export function toDiags(absPath: string, ir: ReturnType<typeof lower>): Diag[] {
