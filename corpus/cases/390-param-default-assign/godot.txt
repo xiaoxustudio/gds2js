@@ -1,0 +1,24 @@
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "String" as "int".
+   at: GDScript::reload (<case>/main.gd:3)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type String to parameter "v" with specified type int.
+   at: GDScript::reload (<case>/main.gd:3)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "int" as "String".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type int to parameter "v" with specified type String.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type Dictionary to parameter "v" with specified type Array.
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "null" as "Rect2".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type null to parameter "v" with specified type Rect2.
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "Color" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type Color to parameter "v" with specified type Vector2.
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type "NodePath" as "StringName".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type NodePath to parameter "v" with specified type StringName.
+   at: GDScript::reload (<case>/main.gd:18)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

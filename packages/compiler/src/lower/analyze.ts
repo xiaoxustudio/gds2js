@@ -162,6 +162,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkOperandPairs(m, diags);
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
+  checkParamDefaultAssign(m, diags);
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
@@ -695,6 +696,64 @@ function instanceOfTypeArgMessage(e: Extract<Expr, { kind: "call" }>): string | 
   if (t === null) return null;
   if (t >= 0 && t <= INSTANCE_OF_TYPE_LAST) return null;
   return `Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.`;
+}
+
+/** 只收自己那一型的槽：容器、引用型与 D6 那七型（`Array = [1]`、`Dictionary = {…}`、`NodePath = ^"…"` 之外一律拒）。 */
+const PARAM_OWN_SLOTS = new Set(["Array", "Dictionary", "NodePath", "Callable", "Signal",
+  "Rect2", "Rect2i", "Transform2D", "Plane", "Quaternion", "Basis", "AABB"]);
+
+/** 这一格的收/拒表（读数 `tmp/d6/pd4.py` 二百二十格分片扫）：数槽收 {int,float,bool}，String 槽连 NodePath 一起收，
+ *  StringName 与 NodePath 两槽互收 String，容器 / 引用 / D6 那七型只收自己那一型，其余交回 `varSlotHolds`。 */
+function holdsParamDefault(slot: string, st: string): boolean {
+  if (slot === st) return true;
+  if (slot === "int" || slot === "float" || slot === "bool") return st === "int" || st === "float" || st === "bool";
+  if (slot === "String") return st === "String" || st === "StringName" || st === "NodePath";
+  if (slot === "StringName") return st === "String" || st === "StringName";
+  if (slot === "NodePath") return st === "String" || st === "NodePath";
+  if (PARAM_OWN_SLOTS.has(slot)) return false;
+  if (st === "Array" || st === "Dictionary" || st === "NodePath") return false;
+  return varSlotHolds(slot, st as NonNullable<StaticType>) === true;
+}
+/** 形参默认值那一格（S448，读数 `tmp/d6/pd2-table.txt` 与 `pd4.py` 分片二百二十格）：两句的模板与变量初值同源，
+ *  第二句换成 `parameter "<名>"`；容器来源只发第二句，`^"…"` 字面量在这里是证得出的源。 */
+function checkParamDefaultAssign(m: Module, diags: Diagnostic[]): void {
+  const slotOf = (t: TypeRef | null): string | null => {
+    if (t === null || t.kind !== "named") return null;
+    const base = t.name.replace(/\[.*\]$/, "");
+    if (base === "int" || base === "float" || base === "bool" || base === "String" || base === "StringName") return base;
+    if (PARAM_OWN_SLOTS.has(base)) return base;
+    return STATIC_VALUE_TYPES.has(base) ? base : null;
+  };
+  const sourceOf = (e: Expr): string | null => {
+    const st = slotSource(e);
+    if (st !== null) return st;
+    if (e.kind === "lit" && e.lit === "node_path") return "NodePath";
+    return null;
+  };
+  const checkParams = (params: readonly Param[]): void => {
+    for (const p of params) {
+      const slot = slotOf(p.type);
+      const def = p.default;
+      if (slot === null || def === null) continue;
+      const st = sourceOf(def);
+      if (st === null) continue;
+      if (holdsParamDefault(slot, st)) continue;
+      if (st !== "Array" && st !== "Dictionary") {
+        diags.push({ code: "param-default-value", message: `Cannot assign a value of type "${st}" as "${slot}".`, loc: def.loc });
+      }
+      diags.push({
+        code: "param-default-assign",
+        message: `Cannot assign a value of type ${st} to parameter "${p.name}" with specified type ${slot}.`,
+        loc: def.loc,
+      });
+    }
+  };
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) checkParams(f.params);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const f of m.funcs) checkParams(f.params);
+  for (const c of m.innerClasses) walkClass(c);
 }
 
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
