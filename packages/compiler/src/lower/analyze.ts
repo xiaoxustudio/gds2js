@@ -1969,7 +1969,7 @@ function containerCallArity(
  *  名单之外的成员名（我们没列进任何一面的表、也没量过的）会被误拦 —— 兜底的是那几张表本身就是**按引擎成员表逐名量出来的**
  *  （S378 / S379 / S380 三面 49+51+109 名过裁判），加上 `face-arg-allow-list` 那 1246 格与 `p2-t4` 那 1358 格都在替这张名单站岗。 */
 const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
-  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode", "remove_char", "remove_chars", "replace_char", "replace_chars", "to_multibyte_char_buffer"],
+  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
   Array: ["set"],
   Dictionary: ["set", "is_typed", "is_same_typed"],
 };
@@ -4760,6 +4760,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     // 标了 `String` / `Array` / `Dictionary` 的名字：引擎在带标注的变量接收者上说的句子，与字面量接收者那一趟一字不差
     //（`tmp/probe-argtype/packed3.mts` 的 1358 格与 `p2-t4.txt` 逐格比过），所以同一张表照用
     const faceTyped = new Map<string, string>();
+    for (const v of m.vars) {
+      if (v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name)) faceTyped.set(v.name, v.type.name);
+    }
     for (const p of f.params) {
       const t = valueTypeAnnotation(p.type);
       if (t !== null) typed.set(p.name, t);

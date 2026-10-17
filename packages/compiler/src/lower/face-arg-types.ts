@@ -90,6 +90,11 @@ export const FACE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number
   "String.trim_suffix": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
   "String.unicode_at": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "String.xml_escape": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "bool", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "String.remove_char": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "String.remove_chars": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
+  "String.replace_char": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "String.replace_chars": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "String.to_multibyte_char_buffer": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
 };
 
 export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string]>>> = {
@@ -178,6 +183,11 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "String.trim_suffix": [[1, ["Array", "Dictionary", "Callable"], "String"]],
   "String.unicode_at": [[1, ["Array", "Dictionary"], "int"]],
   "String.xml_escape": [[1, ["Array", "Dictionary", "Callable"], "bool"]],
+  "String.remove_char": [[1, ["Array", "Callable", "Dictionary"], "int"]],
+  "String.remove_chars": [[1, ["Array", "Callable", "Dictionary"], "String"]],
+  "String.replace_char": [[1, ["Array", "Callable", "Dictionary"], "int"], [2, ["Array", "Callable", "Dictionary"], "int"]],
+  "String.replace_chars": [[1, ["Array", "Callable", "Dictionary"], "String"], [2, ["Array", "Callable", "Dictionary"], "int"]],
+  "String.to_multibyte_char_buffer": [[1, ["Array", "Callable", "Dictionary"], "String"]],
 };
 
 /** 探针那几格是在这一支的**上界**元数下量的：只有实参个数正好等于这个数时，上面两张表的判据才发（别的元数没量过）。
@@ -268,4 +278,9 @@ export const FACE_SLOTS: Readonly<Record<string, number | readonly number[]>> = 
   "String.trim_suffix": 1,
   "String.unicode_at": 1,
   "String.xml_escape": 1,
+  "String.remove_char": 1,
+  "String.remove_chars": 1,
+  "String.replace_char": 2,
+  "String.replace_chars": 2,
+  "String.to_multibyte_char_buffer": 1,
 };

@@ -36,6 +36,11 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
   to_utf32_buffer: [0, 0], to_utf8_buffer: [0, 0], to_wchar_buffer: [0, 0], trim_prefix: [1, 1],
   trim_suffix: [1, 1], unicode_at: [1, 1], uri_decode: [0, 0], uri_encode: [0, 0], validate_filename: [0, 0],
   validate_node_name: [0, 0], xml_escape: [0, 1], xml_unescape: [0, 0],
+  remove_char: [1, 1],
+  remove_chars: [1, 1],
+  replace_char: [2, 2],
+  replace_chars: [2, 2],
+  to_multibyte_char_buffer: [0, 1]
 };
 
 
