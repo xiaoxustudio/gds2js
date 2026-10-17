@@ -310,7 +310,7 @@ let VAR_TYPES = new Map<string, TypeRef | null>();
 /** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
 /** 当前发射的函数自己绑住的名字（见 `collectBinds`），取值记号撞号时用它先认局部。 */
-let FUNC_BINDS = new Set<string>();
+let FUNC_BINDS = new Map<string, number>();
 /** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
 let CLASS_FUNCS = new Set<string>();
 
@@ -957,7 +957,7 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   const saved = LOCAL_TYPES;
   const savedBinds = FUNC_BINDS;
   LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
-  FUNC_BINDS = collectBinds(f.body, new Set(f.params.map((p) => p.name)));
+  FUNC_BINDS = collectBinds(f.body, seedParamBinds(f.params));
   try {
     return emitFuncInner(f, base);
   } finally {
@@ -968,18 +968,38 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
 
 /** 这个函数自己绑住的名字：形参、体内所有 `var`、lambda 形参、`for` 的循环变量与 match 手臂的 `bind`。
  *  取值记号（analyze 的 `名@行:列`）是跨模块共用的表，两份同形同位的源会撞号 —— 撞上了先认局部，别把局部读成 Callable。 */
-function collectBinds(root: unknown, out: Set<string>): Set<string> {
+function collectBinds(root: unknown, out: Map<string, number>): Map<string, number> {
   if (Array.isArray(root)) {
     for (const v of root) collectBinds(v, out);
     return out;
   }
   if (root === null || typeof root !== "object") return out;
   const o = root as Record<string, unknown>;
-  if ((o["kind"] === "var" || o["kind"] === "bind") && typeof o["name"] === "string") out.add(o["name"]);
-  if (o["kind"] === "for" && typeof o["var"] === "string") out.add(o["var"]);
-  if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") out.add(p.name);
+  if ((o["kind"] === "var" || o["kind"] === "bind") && typeof o["name"] === "string") addBind(out, o["name"]);
+  const loopVar = o["kind"] === "for" && typeof o["var"] === "string" ? o["var"] : null;
+  if (loopVar !== null) addBind(out, loopVar);
+  if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") addBind(out, p.name);
   for (const v of Object.values(o)) collectBinds(v, out);
+  // 循环变量只活到循环体结束（引擎在循环之后读它发的是解析期那句 `Identifier "k" not declared in the current scope.`，§6 第 88 条）
+  if (loopVar !== null) dropBind(out, loopVar);
   return out;
+}
+
+/** 形参在整支函数身上活着：先把它们计进这张表，再让 `collectBinds` 往下走。 */
+function seedParamBinds(params: Param[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const p of params) addBind(out, p.name);
+  return out;
+}
+
+function addBind(out: Map<string, number>, name: string): void {
+  out.set(name, (out.get(name) ?? 0) + 1);
+}
+
+function dropBind(out: Map<string, number>, name: string): void {
+  const left = (out.get(name) ?? 1) - 1;
+  if (left <= 0) out.delete(name);
+  else out.set(name, left);
 }
 
 /** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */

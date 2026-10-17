@@ -792,11 +792,18 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.264 循环变量的绑定改成按区域计数：出了循环不再冒充局部名（2026-10-17，S436，§6 第 88 条结清）
+
+- **漏点**：`emit/emitter.ts` 的 `collectBinds` 把 `for` 的循环变量记在整支函数上，只给「宿主方法名取值点」那一格当护栏用；于是 `for quit in [1, 2]` 之后 `print(quit)` 被当成局部名、发成裸 `quit`，产物到运行期才抛 JS 自己的 `quit is not defined` —— 引擎那里是宿主的 Callable（`SceneTree(<文件>)::quit`、typeof 25）。
+- **改法**：那张表从 `Set<string>` 换成 `Map<string, number>` 的**区域计数**：进循环体 +1、出循环体 −1（嵌套里外同名各占一层），形参与 `var` 仍按整支函数算。分析器一侧的作用域本来就是对的（循环体开子作用域），所以 `for k` 之后 `print(k)` 一直是解析期那句 `Identifier "k" not declared in the current scope.`，这一格不动。
+- **不进语料的一格**：我们发的 `SceneTree::quit` 比引擎少括号里那个脚本名，属 S281 那支带进程内号码的打印形，复刻不了就不钉；改由门钉两支新格（体里认局部 / 体后认宿主，外加体后读普通循环名仍是解析期拒）。
+- **门读数**：`pnpm test` **14370**（139 文件）、typecheck **4/4**、`test:compile` **260/369**（sema 83 / 响亮拒 26 / emitter 0 三格一字不差）、`test:diff` **253/253** 逐字节、`test:codegen` 全过。
+
 ### 1.263 撞出一处作用域泄漏：循环变量在循环体之后仍被当成局部名（2026-10-17，§6 第 88 条新登 · 只量不接）
 
 - **引擎脾气**：`for k in [1, 2]` 的 `k` 只活到循环体结束，循环之后 `print(k)` 是解析期那句 `Identifier "k" not declared in the current scope.`（整段编不过）；同名于全局/宿主方法（`for quit in …`）时循环体里照收，出了循环又回到宿主那支。
 - **我们侧**：产物在运行期抛 JS 自己的 `quit is not defined` —— 解析期该拦的没拦、抛出来的又不是裁判的话，属「该拦不拦 + 错句」两重，读数 `tmp/probe-forvar/{p1,p2}.gd` 钉在 §6 第 88 条。
-- **为什么这一轮不接**：`analyze` 的 `decls` 与发射器的局部名收集都没给循环体单独一层（`analyze.ts:515`），改之前要先把 `for` 里的 `var` / `const` / 嵌套循环 / `match` 臂变量各扫一遍，否则容易把「多拦」换成「漏拦」；按红线先登记不猜。
+- **为什么这一轮不接**：`analyze` 的 `decls` 与发射器的局部名收集都没给循环体单独一层（`analyze.ts:515`），改之前要先把 `for` 里的 `var` / `const` / 嵌套循环 / `match` 臂变量各扫一遍，否则容易把「多拦」换成「漏拦」；按红线先登记不猜。（下一轮 1.264 接完了：漏点只在发射器那张「绑过的名字」表，分析器一侧的作用域本来就是对的。）
 
 ### 1.262 match 手臂的拒句补齐第二句（2026-10-17，S435，§6 第 43 条①③④结清）
 
