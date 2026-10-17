@@ -1,5 +1,6 @@
 import { parseGdDouble } from "@gds2js/runtime/shared/double";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { GLOBAL_CALLABLES } from "@gds2js/runtime/runtime/global-names";
 import type { CsNode as SyntaxNode, CsTree as Tree } from "../parse/cst";
 import type {
   ClassDecl,
@@ -574,7 +575,8 @@ function lowerPattern(n: SyntaxNode): Pattern {
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
       const sig = armSignature(n);
-      if (sig !== null) throw new UnsupportedError("pattern-arm-signature", sig);
+      if (sig !== null) throw new UnsupportedError("pattern-arm-signature", [...sig, ARM_PATTERN].join(String.fromCharCode(10)));
+      if (armCalleeKnown(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
     case "true":
@@ -837,6 +839,11 @@ function slotForK(kind: string | null, slot: string): boolean {
   return kind === slot;
 }
 
+/** 引擎认得、我们还没有那支构造的类名（§6 第 43 条⑩那七支）：手臂里 1..4 元引擎给的就是元数那句，签名文本照 `类名(类型, …)` 摊开。 */
+const ARM_NO_CTOR: Record<string, boolean> = {
+  Rect2: true, Rect2i: true, Transform2D: true, Plane: true, Quaternion: true, Basis: true, AABB: true, Signal: true,
+};
+
 /** 手臂里的构造式：类名与实参类型序列对上实测那张表才收（`tmp/probe-arm-arity/*`，语料 272 钉住命中）。 */
 function ctorArm(n: SyntaxNode): boolean {
   const callee = named(n)[0] ?? null;
@@ -844,17 +851,46 @@ function ctorArm(n: SyntaxNode): boolean {
   return ctorAccepts(callee.text, callArgs(n).map(armArgKind));
 }
 
+/** 手臂那句「必须是常量式」：引擎在手臂里报完元数那句紧跟这一句，实参是运行期表达式时只发这一句（`arm-runtime-expr`）。 */
+const ARM_PATTERN = 'Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").';
+
+/** 类名在那两张表上（合法表 + 没有构造子的七支）＝ 这一形是「实参认不出来」那一式，引擎只发 pattern 那一句。 */
+function armCalleeKnown(n: SyntaxNode): boolean {
+  const callee = named(n)[0] ?? null;
+  if (callee === null || callee.type !== "identifier") return false;
+  return CTOR_ARMS[callee.text] !== undefined || ARM_NO_CTOR[callee.text] === true;
+}
+
 /** 合不上表但每一格实参都认得出来时，发引擎那句原文：`No constructor of "X" matches the signature "X(类型, …)".`
- *  （`tmp/probe-arm-arity/sig-table*.txt` 与 `mix-table.txt` 里被拒的那几十格，签名文本就是这个机械式）。 */
-function armSignature(n: SyntaxNode): string | null {
+ *  （`tmp/probe-arm-arity/sig-table*.txt` 与 `mix-table.txt` 里被拒的那几十格，签名文本就是这个机械式）。
+ *  嵌套的从**里往外**报（`arm-nested-bad` 三行：先 `Rect2(int)` 再 `Vector2(Rect2)` 再 pattern 那句），
+ *  表外类名换一句 `Function "X()" not found in base self.`（`arm-unknown-class`），实参是运行期表达式时只剩 pattern 那一句（`arm-runtime-expr`）。 */
+function armSignature(n: SyntaxNode): string[] | null {
   const callee = named(n)[0] ?? null;
   if (callee === null || callee.type !== "identifier") return null;
-  if (CTOR_ARMS[callee.text] === undefined) return null;
   const args = callArgs(n);
+  const kinds: string[] = [];
+  const inner: string[] = [];
+  for (const a of args) {
+    const k = armArgKind(a);
+    if (k !== null) {
+      kinds.push(k);
+      continue;
+    }
+    const sub = a.type === "call" ? armSignature(a) : null;
+    if (sub === null) return null;
+    const nested = named(a)[0] ?? null;
+    if (nested === null || nested.type !== "identifier") return null;
+    inner.push(...sub);
+    kinds.push(nested.text);
+  }
+  if (ctorAccepts(callee.text, kinds)) return null;
   if (args.length === 0) return null;
-  const kinds = args.map(armArgKind);
-  if (kinds.some((k) => k === null)) return null;
-  return `No constructor of "${callee.text}" matches the signature "${callee.text}(${kinds.join(", ")})".`;
+  if (CTOR_ARMS[callee.text] === undefined && ARM_NO_CTOR[callee.text] !== true) {
+    // 类名都不存在（且不是全局函数名）时引擎换一句「self 上没这支函数」（`arm-unknown-class`）；全局函数名那一形没量过，交回调用方走自述句。
+    return GLOBAL_CALLABLES[callee.text] === undefined ? [`Function "${callee.text}()" not found in base self.`] : null;
+  }
+  return [...inner, "No constructor of " + String.fromCharCode(34) + callee.text + String.fromCharCode(34) + " matches the signature " + String.fromCharCode(34) + callee.text + "(" + kinds.join(", ") + ")" + String.fromCharCode(34) + "."];
 }
 
 /** 手臂只认量过的那一支构造：`NodePath("…")` 带一支字符串字面量实参（`tmp/probe-match-arm/arms.mts`）。 */

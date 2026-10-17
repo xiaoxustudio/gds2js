@@ -792,6 +792,13 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.262 match 手臂的拒句补齐第二句（2026-10-17，S435，§6 第 43 条①③④结清）
+
+- **两句同序**：手臂的构造式合不上表时，引擎在元数那句之后紧跟 `Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").`；lowering 的 `pattern-arm-signature` 现在带全两句，语料 330–333 的 golden 从「只比第一行」改成「比全部 Parse Error 行」，四格逐句对上。
+- **三种形状各发哪几句**（`tmp/probe-arm-arity/readings.txt`）：嵌套的从里往外（`Vector2(Rect2(1))` 三行，外层用内层类名拼签名）、类名整个不存在换成 `Function "X()" not found in base self.`、实参是运行期表达式（`Vector2(q, 2)`）只发 pattern 那一句 —— 三种各钉一格门（`match-arm-ctors.test.ts` 51 格）。
+- **准入没开**：`Rect2` 那七支仍不进合法表（构造调用连表达式位置都编不过，第 43 条⑩那条账没变），只是拒句从自述话换成引擎原文；`Color(1)` 那一形运行期 `packedRgba` 已经发得出值，但手臂命中那一格没量过，`Color(int, int)` 更走的是 `Color(String, float)` 重载并往 stderr 吐 `ERROR: Invalid color name: …`（带 C++ 文件行号，按 S269 ⑦ 不复刻）—— 两格都留在表外，实测读数登进第 43 条⑫。
+- **门读数**：`pnpm test` **14368**（139 文件）、typecheck **4/4**、`test:compile` **260/369**（sema 83 / 响亮拒 26 与上一轮一字不差）、`test:diff` **253/253**、`test:codegen` 全过。
+
 ### 1.261 `PackedByteArray` 独有那 11 名的元数，与 `get_argument_count()` 读哪一个数（2026-10-17，S434，语料 381，§6 第 87 条结清）
 
 - **11 名的上下界量齐**（尺 `tmp/probe-bytearity/round2.mts`，读数 `compare1.txt` / `raw.txt`）：`compress` `[0,1]`、`decompress` `[1,2]`、其余九支 `[0,0]` —— 零实参不报错即「至少 0」，五实参那句 `Too many arguments for "<名>()" call. Expected at most N` 报的就是上界；表落成 `runtime/face-arity.ts` 的 `PACK_BYTE_EXTRA_ARITY`，byte 那一面单独合出 `PACK_BYTE_ARITY`，`faceArity` 的 byte 分支与 `VALUE_METHOD_ARITY.PackedByteArray` 同一处取。
