@@ -1,0 +1,46 @@
+SCRIPT ERROR: Parse Error: not all arguments converted during string formatting in operator %.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: not all arguments converted during string formatting in operator %.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: a number is required in operator %.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: a number is required in operator %.
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: a number is required in operator %.
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: unsupported format character in operator %.
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: unsupported format character in operator %.
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: incomplete format in operator %.
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: incomplete format in operator %.
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: not enough arguments for format string in operator %.
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: incomplete format in operator %.
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: unsupported format character in operator %.
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: unsupported format character in operator %.
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: a number is required in operator %.
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: a number is required in operator %.
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: %c requires number or single-character string in operator %.
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: %c requires number or single-character string in operator %.
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: unsigned integer is lower than minimum in operator %.
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: %v requires a vector type (Vector2/3/4/2i/3i/4i) in operator %.
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: %v requires a vector type (Vector2/3/4/2i/3i/4i) in operator %.
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: * wants number or vector in operator %.
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: * wants number or vector in operator %.
+   at: GDScript::reload (<case>/main.gd:25)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

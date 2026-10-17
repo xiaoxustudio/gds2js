@@ -148,6 +148,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkBoolOrdering(m, diags);
   checkPackIsAs(m, diags);
   checkPackArgSlots(m, diags);
+  checkPercentFormat(m, diags);
   checkPackFaceNames(m, diags);
   checkDictMethodArity(m, diags);
   checkArrayMethodArity(m, diags);
@@ -1724,6 +1725,147 @@ function faceGhostDiags(
   }
   out.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${type}.`, loc });
   return out;
+}
+
+/** `String % 值` 的解析期判据（S445，读数 `tmp/probe-pct/`：160 格矩阵 + 52 个转换符全扫 + 264 / 126 / 340 格三张语法面）：
+ *  引擎在**解析期**按槽位逐个判，第一个不合式那一格说话；实参是 Array / Dictionary / Packed* 构造时整族放过
+ *  （那是「一支参数表 / 一张映射」的写法，读数两侧都收），来源证不出（变量、`len()`、`(1 + 2)`）也放过 —— 只判得出才判。 */
+const PCT_NUMERIC = "dfoxX";
+const PCT_VECTORS = new Set(["Vector2", "Vector3", "Vector4", "Vector2i", "Vector3i", "Vector4i"]);
+const PCT_VALUE_CTORS = new Set(["Color", "Callable"]);
+
+const PCT_MSG = {
+  unsupported: "unsupported format character in operator %.",
+  incomplete: "incomplete format in operator %.",
+  number: "a number is required in operator %.",
+  char: "%c requires number or single-character string in operator %.",
+  negative: "unsigned integer is lower than minimum in operator %.",
+  vector: "%v requires a vector type (Vector2/3/4/2i/3i/4i) in operator %.",
+  star: "* wants number or vector in operator %.",
+  notAll: "not all arguments converted during string formatting in operator %.",
+  notEnough: "not enough arguments for format string in operator %.",
+};
+
+/** 右支证得出的静态类别：只有这四条线（数 / 负数 / 串文本 / 向量）参与判据，其余一律「非数」。 */
+interface PctArg {
+  num: boolean;
+  neg: boolean;
+  vec: boolean;
+  text: string | null;
+}
+
+function pctArg(e: Expr): PctArg | null {
+  if (e.kind === "lit") {
+    if (e.lit === "int" || e.lit === "float") {
+      const v = Number(e.value);
+      return { num: true, neg: v < 0, vec: false, text: null };
+    }
+    if (e.lit === "string") return { num: false, neg: false, vec: false, text: String(e.value) };
+    if (e.lit === "string_name" || e.lit === "node_path" || e.lit === "bool" || e.lit === "null") {
+      return { num: false, neg: false, vec: false, text: null };
+    }
+    return null;
+  }
+  if (e.kind === "unary" && e.op === "-") {
+    const inner = pctArg(e.operand);
+    return inner === null || !inner.num ? null : { ...inner, neg: !inner.neg };
+  }
+  if (e.kind === "call" && e.callee.kind === "ident") {
+    if (PCT_VECTORS.has(e.callee.name)) return { num: false, neg: false, vec: true, text: null };
+    if (PCT_VALUE_CTORS.has(e.callee.name)) return { num: false, neg: false, vec: false, text: null };
+  }
+  return null;
+}
+
+type PctSlot = { kind: "star" } | { kind: "conv"; ch: string } | { kind: "tail" };
+
+function pctSlots(fmt: string): PctSlot[] {
+  const slots: PctSlot[] = [];
+  const starDigits = (from: number): number => {
+    let i = from;
+    while (i < fmt.length && ((fmt[i] ?? "") === "*" || ((fmt[i] ?? "") >= "0" && (fmt[i] ?? "") <= "9"))) {
+      if ((fmt[i] ?? "") === "*") slots.push({ kind: "star" });
+      i++;
+    }
+    return i;
+  };
+  let i = 0;
+  while (i < fmt.length) {
+    if (fmt[i] !== "%") {
+      i++;
+      continue;
+    }
+    i++;
+    if (i >= fmt.length) {
+      slots.push({ kind: "tail" });
+      break;
+    }
+    if ((fmt[i] ?? "") === "%") {
+      i++;
+      continue;
+    }
+    while (i < fmt.length && ["-", "+", "0"].includes(fmt[i] ?? "")) i++;
+    i = starDigits(i);
+    if (i < fmt.length && (fmt[i] ?? "") === ".") {
+      i = starDigits(i + 1);
+    }
+    if (i >= fmt.length) {
+      slots.push({ kind: "tail" });
+      break;
+    }
+    slots.push({ kind: "conv", ch: fmt[i] ?? "" });
+    i++;
+  }
+  return slots;
+}
+
+/** 一个槽对着实参的那一句；null 是这一槽合式。 */
+function pctSlotMessage(slot: PctSlot, arg: PctArg): string | null {
+  if (slot.kind === "tail") return PCT_MSG.incomplete;
+  if (slot.kind === "star") return arg.num || arg.vec ? null : PCT_MSG.star;
+  const ch = slot.ch;
+  if (ch === "s") return null;
+  if (ch === "u") return PCT_MSG.incomplete;
+  if (ch === "c") {
+    if (arg.num) return arg.neg ? PCT_MSG.negative : null;
+    return arg.text !== null && arg.text.length === 1 ? null : PCT_MSG.char;
+  }
+  if (ch === "v") return arg.vec ? null : PCT_MSG.vector;
+  if (PCT_NUMERIC.indexOf(ch) >= 0) return arg.num ? null : PCT_MSG.number;
+  return PCT_MSG.unsupported;
+}
+
+function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
+  for (const nodes of flattenBodies(m)) {
+    for (const n of nodes) {
+      if (n.kind !== "binary" || n.op !== "%") continue;
+      const left = n.left as Expr;
+      const right = n.right as Expr;
+      if (left.kind !== "lit" || left.lit !== "string") continue;
+      if (right.kind === "array" || right.kind === "dict") continue;
+      const arg = pctArg(right);
+      if (arg === null) continue;
+      const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      const slots = pctSlots(String(left.value));
+      let message: string | null = null;
+      let used = 0;
+      for (const slot of slots) {
+        if (slot.kind !== "tail") {
+          if (used >= 1) {
+            message = PCT_MSG.notEnough;
+            break;
+          }
+          used++;
+          message = pctSlotMessage(slot, arg);
+        } else {
+          message = pctSlotMessage(slot, arg);
+        }
+        if (message !== null) break;
+      }
+      if (message === null && used === 0) message = PCT_MSG.notAll;
+      if (message !== null) diags.push({ code: "pct-format", message, loc });
+    }
+  }
 }
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
