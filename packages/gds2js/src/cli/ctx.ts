@@ -183,6 +183,9 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
   }
 }
 
+/** `compileProject` 那条收集环认的两个名字 —— 判「要不要读依赖」必须跟它一格不差，否则 `load` 这一形会留在单文件支上撞 `[load-unknown-script]`。 */
+const CLOSURE_LOADERS = new Set(["preload", "load"]);
+
 /** `extends` 挂父脚本，或正文 `preload` / `load` 一个本地 `.gd` —— 两者都要把依赖读进来才判得出继承面。 */
 function needsClosure(ir: ReturnType<typeof lower>): boolean {
   if (singleFileExtends(ir.extends) !== null) return true;
@@ -194,7 +197,9 @@ function needsClosure(ir: ReturnType<typeof lower>): boolean {
       return;
     }
     const o = n as Record<string, unknown>;
-    if (o.kind === "call" && (o.callee as Record<string, unknown> | undefined)?.name === "preload") {
+    const callee = o.callee as Record<string, unknown> | undefined;
+    const name = typeof callee?.name === "string" ? callee.name : "";
+    if (o.kind === "call" && CLOSURE_LOADERS.has(name)) {
       const a = (o.args as unknown[] | undefined)?.[0] as Record<string, unknown> | undefined;
       if (a !== undefined && typeof a.value === "string" && /\.gd$/.test(a.value)) hit = true;
     }

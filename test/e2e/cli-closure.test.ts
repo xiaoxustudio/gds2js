@@ -61,6 +61,9 @@ describe.skipIf(!hasDist)("单文件闭包门 · extends 父脚本", () => {
     writeFileSync(MAIN, ENTRY, "utf8");
     mkdirSync(join(DIR, "above"), { recursive: true });
     writeFileSync(join(DIR, "above", "main.gd"), 'extends "../sub.gd"\n\nfunc _initialize():\n\tprint("A|", helper())\n\tquit()\n', "utf8");
+    writeFileSync(join(DIR, "lib.gd"), "class_name Lib\n\nfunc f() -> int:\n\treturn 41\n", "utf8");
+    writeFileSync(join(DIR, "pre-const.gd"), 'extends SceneTree\n\nconst L = preload("res://lib.gd")\n\nfunc _initialize():\n\tprint("P1|", L.new().f())\n\tquit()\n', "utf8");
+    writeFileSync(join(DIR, "pre-load.gd"), 'extends SceneTree\n\nfunc _initialize():\n\tvar L = load("res://lib.gd")\n\tprint("P2|", L.new().f())\n\tquit()\n', "utf8");
   });
 
   afterAll(() => {
@@ -136,5 +139,17 @@ describe.skipIf(!hasDist)("单文件闭包门 · extends 父脚本", () => {
     const r = cli(["run", join(DIR, "above", "main.gd")]);
     expect(r.code).not.toBe(0);
     expect(r.out).toContain("[closure-root]");
+  });
+
+  it("preload 的常量格走闭包：脚本类当值、.new() 出来的实例调继承侧方法", () => {
+    const r = cli(["run", join(DIR, "pre-const.gd")]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("P1|41");
+  });
+
+  it("load 的那一格同样走闭包（判据要与 compileProject 的收集环一格不差）", () => {
+    const r = cli(["run", join(DIR, "pre-load.gd")]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain("P2|41");
   });
 });
