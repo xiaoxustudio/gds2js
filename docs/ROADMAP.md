@@ -792,6 +792,13 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.275 Packed* 九面的形参拒补全：逐位声明槽与链式接收者（2026-10-17，S444，§6 第 52 条那一面结清）
+
+- **漏拦的规模**：九面 2160 格里 1590 格引擎在解析期拒、我们放过 —— 根因是原表只支持「一支方法一个元素位 + 实参数正好等于那位」。
+- **改法**：`PACK_ARG_POSITIONS` 按位给声明槽（`e` 元素型 / `i` int / `b` bool；`bsearch` 的 `before` 实测与 int 槽同集合），每位各判各的；接收者多认「就地构造的链式」一种证明。
+- **两侧对过**：链式与命名变量两种接收者各跑一遍 2160 格，句子与行号逐格相同（`tmp/probe-packargs/{cross,crossvar}.py`）；新语料 387 二十句与裁判逐行同文。
+- **门读数**：`pnpm test` **14406**（140 文件）、typecheck **4/4**、`test:compile` **265/375**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+
 ### 1.274 单文件模式撞上父脚本 extends：把误导的两句换成一句准确的（2026-10-17，S443，§6 第 60 条② 收窄）
 
 - **实测**：`main.gd` 写 `extends "res://sub.gd"`、`sub.gd` 是 `extends SceneTree` 带 `helper()` —— 引擎工程模式给 `C1|25 7`；我们的单文件路径把 `var q = quit` 报成 `Identifier "quit" not declared in the current scope.`、把 `helper()` 报成 `Function "helper()" not found in base self.` —— 两句都在说「这东西不存在」，而真相是「单文件模式没读父脚本」。

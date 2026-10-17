@@ -1481,8 +1481,15 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
-/** 元素槽是第几个实参（1 起），只列判得出的方法：`append` / `push_back` / `find` / `has` / `count` / `fill` 是第 1 参、`insert` / `set` 是第 2 参，文本都是同一套两句。 */
-const PACK_ELEMENT_ARG: Record<string, number> = { append: 1, push_back: 1, find: 1, insert: 2, set: 2, has: 1, count: 1, fill: 1 };
+/** 每支方法逐位的声明槽：`e` 是元素型、`i` 是 int（下标 / 计数 / 容量）、`b` 是 bool（`bsearch` 的 `before`）—— 九面 2160 格两侧对过（`tmp/probe-packargs/`）。 */
+const PACK_ARG_POSITIONS: Record<string, readonly string[]> = {
+  append: ["e"], push_back: ["e"], fill: ["e"], has: ["e"], count: ["e"], erase: ["e"],
+  get: ["i"], set: ["i", "e"], insert: ["i", "e"], find: ["e", "i"], rfind: ["e", "i"],
+  bsearch: ["e", "b"], resize: ["i"], slice: ["i", "i"], remove_at: ["i"],
+};
+/** int 槽与 bool 槽能进的来源：int 槽收 int / float / bool，bool 槽同样收三支（实测 `bsearch(1, 2)` 照收）；文本都是同一套两句。 */
+const PACK_INT_SLOT_OK = ["int", "float", "bool"];
+const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
@@ -1745,32 +1752,40 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       const callee = n.callee as Record<string, unknown> | undefined;
       if (callee === undefined || callee.kind !== "attribute") continue;
       const obj = callee.obj as Record<string, unknown> | undefined;
-      if (obj === undefined || obj.kind !== "ident" || typeof obj.name !== "string") continue;
-      const pack = packs.get(obj.name);
+      if (obj === undefined) continue;
+      // 两种证明：命名过的（上面那张表）与**就地构造的链式接收者** `Face([…]).append(x)` —— 引擎对这两种同判（`tmp/probe-packargs/` 九面 2160 格两侧对过）
+      const objCallee = obj.kind === "call" ? (obj.callee as Record<string, unknown> | undefined) : undefined;
+      const inline = objCallee !== undefined && objCallee["kind"] === "ident" && typeof objCallee["name"] === "string"
+        && String(objCallee["name"]) in PACK_ARG_SLOTS ? String(objCallee["name"]) : null;
+      const pack = obj.kind === "ident" && typeof obj.name === "string" ? packs.get(obj.name) : (inline ?? undefined);
       if (pack === undefined) continue;
       const method = callee.name;
       if (typeof method !== "string") continue;
-      const argAt = PACK_ELEMENT_ARG[method];
-      if (argAt === undefined) continue;
+      const slots = PACK_ARG_POSITIONS[method];
+      if (slots === undefined) continue;
       const args = (n.args as Expr[]) ?? [];
-      if (args.length !== argAt) continue;
-      const arg0 = args[argAt - 1] as Expr;
-      const src = packArgSource(arg0);
-      // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
-      const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
-      const proven = src ?? annotated;
-      if (proven === null) continue;
-      const { slot, ok } = PACK_ARG_SLOTS[pack] as { slot: string; ok: readonly string[] };
-      if (ok.includes(proven)) continue;
-      const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      if (src !== null && proven !== "Array" && proven !== "Dictionary") {
-        diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
+      const face = PACK_ARG_SLOTS[pack] as { slot: string; ok: readonly string[] };
+      for (let p = 0; p < Math.min(slots.length, args.length); p++) {
+        const arg0 = args[p] as Expr;
+        const src = packArgSource(arg0);
+        // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
+        const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
+        const proven = src ?? annotated;
+        if (proven === null) continue;
+        const kind = slots[p];
+        const slot = kind === "i" ? "int" : kind === "b" ? "bool" : face.slot;
+        const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
+        if (ok.includes(proven)) continue;
+        const loc = (n.loc as Diagnostic["loc"]) ?? null;
+        if (src !== null && proven !== "Array" && proven !== "Dictionary") {
+          diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
+        }
+        diags.push({
+          code: "pack-arg-slot",
+          message: `Invalid argument for "${method}()" function: argument ${String(p + 1)} should be "${slot}" but is "${proven}".`,
+          loc,
+        });
       }
-      diags.push({
-        code: "pack-arg-slot",
-        message: `Invalid argument for "${method}()" function: argument ${argAt} should be "${slot}" but is "${proven}".`,
-        loc,
-      });
     }
   }
 }
