@@ -10,16 +10,17 @@ import { exportTsTree } from "./export-ts-tree";
 import { exportVerdict, NO_DIRS, walkMjs, type ExportTree, type ExportVerdict } from "./export-common";
 
 
-export async function exportTree(ctx: Ctx): Promise<ExportTree | null> {
-  if (!ctx.project) return exportSingleTree(ctx);
+export async function exportTree(ctx: Ctx, closureOnly = false): Promise<ExportTree | null> {
+  if (!ctx.project && !closureOnly) return exportSingleTree(ctx);
   const dir = ctx.outDir;
+  const resRoot = closureOnly ? dirname(ctx.input) : ctx.resRoot;
   const product = productRuntimePath();
   try {
     // 打平运行时只在树根放一份，每个模块的 import 按自己那一层的深度算（`runtimeRoot`）：每层各一份就是多张 runtime 图。
     mkdirSync(dir, { recursive: true });
     const result = await compileProject({
       entries: [ctx.input],
-      resRoot: ctx.resRoot,
+      resRoot,
       outDir: dir,
       runtimeRoot: dir,
       runtimeFile: PRODUCT_RUNTIME_FILE,
@@ -27,13 +28,14 @@ export async function exportTree(ctx: Ctx): Promise<ExportTree | null> {
       runtimeImport: "./" + PRODUCT_RUNTIME_FILE,
       hostImport: ctx.hostImport === null ? null : "./" + PRODUCT_RUNTIME_FILE,
       autoRun: ctx.run ? undefined : false,
+      closureOnly,
     });
-    if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+    if (!printDiags(projectDiags(result, resRoot))) return null;
     for (const m of result.modules) {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
     }
-    const wantRes = "res://" + relative(ctx.resRoot, ctx.input).split("\\").join("/");
+    const wantRes = "res://" + relative(resRoot, ctx.input).split("\\").join("/");
     const entry = result.modules.find((m) => m.resPath === wantRes) ?? result.modules[0];
     if (!entry) {
       console.error(`${ctx.input}: 无可编译模块`);
@@ -58,10 +60,7 @@ export async function exportSingleTree(ctx: Ctx): Promise<ExportTree | null> {
     console.error(loaded.error);
     return null;
   }
-  if (loaded.deps) {
-    console.error(`${ctx.input}:  error  [closure-export] 入口引用了本地脚本（extends / preload），单文件 export 只铺一份产物 —— 请改走工程 export（入口在 project.godot 覆盖的目录里）`);
-    return null;
-  }
+  if (loaded.deps) return exportTree(ctx, true);
   if (!printDiags(loaded.diags)) return null;
   const entry = join(dir, basename(ctx.input).replace(/\.gd$/i, "") + ".mts");
   try {
@@ -170,6 +169,13 @@ export function scriptcWall(why: string): { v: ExportVerdict; advice: string } {
   const n = codes.length;
   const head = `scriptc 没能出货（${n === 0 ? "没有 SC 编号的失败" : `${n} 个错`}）`;
   if (codes.includes("SC9001")) return { v: "crash", advice: `  ${head}：scriptc 内部崩溃（SC9001），原文见上。` };
+  if (/overriding the async method/.test(why)) {
+    return {
+      v: "refused",
+      advice: `  ${head}：静态那支不能覆写父脚本的 async 成员（SC1090，scriptc 的 vtable 槽没有起纤程那套）。` +
+        `\n  这条继承链用 --pack node，或让子类不复写父类那个 async / 入口方法（复写同步方法不受限）。`,
+    };
+  }
   if (codes.some((c) => c === "SC2011" || c === "SC2012" || c === "SC2020")) {
     return { v: "no-lib", advice: `  ${head}：有形没有 lowering（SC2011/2012/2020）。改发射形状或登记缺的那格，别指望 --dynamic。` };
   }

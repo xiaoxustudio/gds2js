@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { cachedLower } from "./ir-cache";
 import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
 import type { RawSourceMap } from "../emit/sourcemap";
@@ -75,6 +75,13 @@ function resolveGdPath(fromRes: string, target: string): string {
 /** res:// 路径 → 文件系统绝对路径。 */
 function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
+}
+
+/** 相对路径里出现了 `..`：res:// 空间放不下它（规范化时会被吃掉），于是指向的其实是根内另一格。 */
+function climbsAboveRoot(target: string, fromAbs: string, resRoot: string): boolean {
+  if (target.startsWith(RES_PREFIX)) return false;
+  const rel = relative(resRoot, resolve(join(dirname(fromAbs), target)));
+  return rel === "" || rel.startsWith("..") || isAbsolute(rel);
 }
 
 function normalizeRes(resPath: string): string {
@@ -256,6 +263,12 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     const collect = (candidate: string | null, from: string): string | null => {
       if (!candidate) return null;
       if (!candidate.endsWith(".gd")) return null;
+      if (opts.closureOnly && climbsAboveRoot(candidate, l.absPath, resRoot)) {
+        throw new UnsupportedError(
+          "closure-root",
+          `"${candidate}" 往上爬出了闭包根（入口所在目录）：res:// 空间放不下 .. ，这一形请给 --res-root 或走工程级命令`,
+        );
+      }
       const depRes = resolveGdPath(from, candidate);
       if (!l.depPaths.has(depRes)) {
         l.depPaths.add(depRes);

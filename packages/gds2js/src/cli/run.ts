@@ -51,7 +51,8 @@ export async function runSingle(ctx: Ctx): Promise<boolean> {
   }
 }
 
-/** 单文件带依赖（`extends "<路径>"` / `preload("sub.gd")`）：只种入口编一张闭包树，跑入口那一份。
+/** 单文件带依赖（`extends "<路径>"` / `preload("sub.gd")`）：只种入口编一张闭包树，跑入口那一份；
+ *  `--runtime-mode single` 就把这棵小树压成一个文件再跑（每份各内联一份 standalone 会编出多张 runtime 图）。
  *  继承来的方法、字段与宿主名在这条路上判得出，与 `run-project` 共用同一套判定（S455）。 */
 async function runClosure(ctx: Ctx): Promise<boolean> {
   const root = dirname(ctx.input);
@@ -78,8 +79,26 @@ async function runClosure(ctx: Ctx): Promise<boolean> {
     rmSync(outDir, { recursive: true, force: true });
     return false;
   }
+  let product = entry.jsPath;
+  if (ctx.runtimeMode === "single") {
+    if (!(await bundlingAvailable())) {
+      console.error(`${ctx.input}:  error  这个构建里没带可用的打包器（tsdown），--runtime-mode single 做不了。`);
+      rmSync(outDir, { recursive: true, force: true });
+      return false;
+    }
+    try {
+      await bundleModule(entry.jsPath, join(outDir, "bundle"), true);
+      const single = join(outDir, "bundle", basename(entry.jsPath).replace(/\.mts$/, ".mjs"));
+      if (!existsSync(single)) throw new Error(`没产出单文件：${single}`);
+      product = single;
+    } catch (e) {
+      console.error(`${ctx.input}:  error  打包闭包单文件失败：${errOf(e)}`);
+      rmSync(outDir, { recursive: true, force: true });
+      return false;
+    }
+  }
   try {
-    await runProduct(entry.jsPath);
+    await runProduct(product);
     return true;
   } catch (e) {
     console.error(`${ctx.input}:  runtime error  ${errOf(e)}`);

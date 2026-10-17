@@ -156,7 +156,7 @@ export function refuseNestedProjects(input: string, root: string, nested: string
     "  工程级命令（check-project / build-project / run-project，以及入口确实在某个工程里的 export）会把根目录下的 .gd **递归全收**进同一次编译，\n" +
       "  而那些子工程脚本里的 res:// 路径是按外层根解析的 —— 所以报出来的缺文件跟给的入口看着毫无关系。\n" +
       `  改指那个工程里的脚本（例如 ${join(nested[0] ?? root, "main.gd")}），或用 --res-root 明确根目录；\n` +
-      "  只编译单个脚本请用 gds2js build / gds2js run（单文件路径不解析 res://）。",
+      "  只编译单个脚本请用 gds2js build / gds2js run（拿入口所在目录当 res 根，只收入口引用到的那几份脚本）。",
   );
   process.exit(1);
 }
@@ -244,7 +244,13 @@ export type CompileResult = Awaited<ReturnType<typeof compileProject>>;
 
 /** 单文件模式下的闭包编译：只种入口，依赖靠 `extends` / `preload` 拉进来；根取入口所在目录。
  *  继承来的方法 / 字段与宿主名从此判得出，与 `check-project` / `run-project` 共用同一套判定（S455）。 */
-export async function compileClosure(ctx: Ctx, outDir: string, autoRun: boolean | undefined): Promise<CompileResult> {
+export async function compileClosure(
+  ctx: Ctx,
+  outDir: string,
+  autoRun: boolean | undefined,
+  /** 旁挂 standalone 那一形：`local` 只把旁挂文件放在树根，逐模块的 require 路径由 `compileProject` 按各自深度算。 */
+  mode: { runtimeMode?: "import" | "local"; standaloneFile?: string } = {},
+): Promise<CompileResult> {
   return compileProject({
     entries: [ctx.input],
     resRoot: dirname(ctx.input),
@@ -253,6 +259,7 @@ export async function compileClosure(ctx: Ctx, outDir: string, autoRun: boolean 
     hostImport: ctx.hostImport,
     autoRun,
     closureOnly: true,
+    ...mode,
   });
 }
 

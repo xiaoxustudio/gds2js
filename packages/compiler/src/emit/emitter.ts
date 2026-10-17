@@ -287,6 +287,8 @@ let MODULE_RES_PATH: string | null = null;
 let INIT_AS_METHOD = false;
 /** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
 let INHERITED_METHODS = new Set<string>();
+/** 其中**来自脚本祖先**的那一部分：入口的 async 实体发成 `__gd_<名>`，宿主基类身上没有这一格，只有父脚本定义过同名入口时才有 —— 那一形才要 `override`。 */
+let SCRIPT_INHERITED = new Set<string>();
 /** 宿主 SceneTree / GdScriptObject 身上产品脚本可能重名的成员。 */
 const HOST_MEMBERS = ["quit", "create_timer", "run", "_initialize", "_process", "__gdDispatch"];
 /** 旧形状下 JS 的直接基类是宿主 SceneTree：派生构造器必须自己调 super()，否则运行期当场炸。 */
@@ -492,12 +494,14 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     ...(opts.inheritedMembers ?? []),
     ...(baseClass.kind === "host" ? HOST_MEMBERS : []),
   ]);
+  SCRIPT_INHERITED = new Set(opts.inheritedMembers ?? []);
   for (const f of m.funcs) {
     const base = out.length;
     const lines = emitFunc(f, base);
     for (const line of lines) out.push(`  ${line}`);
   }
   INHERITED_METHODS = new Set();
+  SCRIPT_INHERITED = new Set();
   out.push(...emitDispatch(m.funcs, proto));
   out.push("}");
   out.push("");
@@ -827,11 +831,13 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   lines.push(...emitClassLevelVars(decl.vars, base + lines.length));
   if (!proto && !decl.funcs.some((f) => f.name === "_init" && !f.isStatic)) lines.push(...emitFieldsOnlyConstructor());
   INHERITED_METHODS = new Set(innerInheritedMethodNames(decl));
+  SCRIPT_INHERITED = INHERITED_METHODS;
   for (const f of decl.funcs) {
     const funcBase = base + lines.length;
     for (const line of emitFunc(f, funcBase)) lines.push(`  ${line}`);
   }
   INHERITED_METHODS = new Set();
+  SCRIPT_INHERITED = new Set();
   lines.push(...emitDispatch(decl.funcs, proto));
   lines.push("}");
   lines.push(`const __gd_d_${decl.name} = rt.defineClass(${decl.name}, ${makeClosure(decl.name, decl.funcs.find((x) => x.name === "_init" && !x.isStatic), proto)}, (o) => o instanceof ${decl.name});`);
@@ -1116,7 +1122,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     // 宿主的两条 virtual 一定是覆写，`override` 修饰符不能省。
     lines.push(`  override ${f.name}(${wrapParams}): ${ret} { return this.${bodyName}(${wrapFwd}); }`);
   }
-  const overriding = !f.isStatic && !wrap && INHERITED_METHODS.has(f.name);
+  const overriding = !f.isStatic && (wrap ? SCRIPT_INHERITED.has(f.name) : INHERITED_METHODS.has(f.name));
   lines.push(`${f.isStatic ? "static " : ""}${overriding ? "override " : ""}${async}${bodyName}(${params}): ${ret} {`);
   mark(base, f.loc);
   const savedUnboxed = UNBOXED;

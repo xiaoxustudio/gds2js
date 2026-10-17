@@ -44,10 +44,7 @@ export async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
     console.error(loaded.error);
     return null;
   }
-  if (loaded.deps) {
-    console.error(`${ctx.input}:  error  [closure-export] 入口引用了本地脚本（extends / preload），单文件 export 只铺一份产物 —— 请改走工程 export（入口在 project.godot 覆盖的目录里）`);
-    return null;
-  }
+  if (loaded.deps) return exportTsProjectTree(ctx, dir, srcRoot, true);
   if (!printDiags(loaded.diags)) return null;
   const entry = join(dir, basename(ctx.input).replace(/\.gd$/i, "") + ".mts");
   const rtSpec = "./" + TREE_FACE.tree.runtimeDir + "/" + baseName(TREE_FACE.repo.runtimeIndex);
@@ -75,12 +72,14 @@ export async function exportTsProjectTree(
   ctx: Ctx,
   dir: string,
   srcRoot: string,
+  closureOnly = false,
 ): Promise<ExportTree | null> {
+  const resRoot = closureOnly ? dirname(ctx.input) : ctx.resRoot;
   try {
     const compile = (hostImport: string | null, hostFile: string) =>
       compileProject({
         entries: [ctx.input],
-        resRoot: ctx.resRoot,
+        resRoot,
         outDir: dir,
         runtimeRoot: dir,
         runtimeImport: "./" + TREE_FACE.tree.runtimeDir + "/" + baseName(TREE_FACE.repo.runtimeIndex),
@@ -88,21 +87,22 @@ export async function exportTsProjectTree(
         hostImport,
         hostFile,
         autoRun: ctx.run ? undefined : false,
+        closureOnly,
       });
     let result = await compile(ctx.hostImport === null ? null : "./" + baseName(TREE_FACE.tree.host), baseName(TREE_FACE.tree.host));
-    if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+    if (!printDiags(projectDiags(result, resRoot))) return null;
     // 判据是各模块透传的 IR 标志；用到就换带 zstd 的宿主重编一遍。--no-host 的树不注入宿主。
     const useZstd = ctx.hostImport !== null && result.modules.some((m) => m.usesPackCodec);
     if (useZstd) {
       result = await compile("./" + baseName(TREE_FACE.tree.zstdHost), baseName(TREE_FACE.tree.zstdHost));
-      if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+      if (!printDiags(projectDiags(result, resRoot))) return null;
       if (!copyZstdHost(dir, srcRoot)) return null;
     }
     for (const m of result.modules) {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
     }
-    const wantRes = "res://" + relative(ctx.resRoot, ctx.input).split("\\").join("/");
+    const wantRes = "res://" + relative(resRoot, ctx.input).split("\\").join("/");
     const entry = result.modules.find((m) => m.resPath === wantRes) ?? result.modules[0];
     if (!entry) {
       console.error(`${ctx.input}: 无可编译模块`);

@@ -803,11 +803,12 @@
 
 - **实测**：`main.gd` 写 `extends "res://sub.gd"`、`sub.gd` 是 `extends SceneTree` 带 `helper()` —— 引擎工程模式给 `C1|25 7`；我们的单文件路径把 `var q = quit` 报成 `Identifier "quit" not declared in the current scope.`、把 `helper()` 报成 `Function "helper()" not found in base self.` —— 两句都在说「这东西不存在」，而真相是「单文件模式没读父脚本」。
 - **改法**：`cli/ctx.ts` 的 `tryLoadSingle` 在 lower 之后先看 `ir.extends` 的文本（剥引号后含斜杠 / 反斜杠、以 `.gd` 收尾、或带 `res://` `user://` `uid:` 前缀）——命中就返回 `[single-file-extends]` 一句并指去 `run-project` / `build-project`；标识符（类名、`SceneTree`）一律照旧，四道命令共用这一条路。
-- **2026-10-17 推进（S455）**：`tryLoadSingle` 不再拒，改成报 `deps`；`compileProject` 加 `closureOnly`（只种入口、不扫根目录），`check` / `run` / `build --runtime-mode import` 三面走闭包管线，继承面判定与工程模式同一份代码。夹具两侧同字（引擎 `C1|25 7`，出货 `run` 与 `build`+`node` 同）。**仍拒的两面**：`--runtime-mode local|single` 与 export（`[closure-pack]` / `[closure-export]`）。常驻门：`test/e2e/cli-closure.test.ts` 四格（check / run / build / `[closure-pack]` 拒）。
+- **2026-10-17 推进（S455）**：`tryLoadSingle` 不再拒，改成报 `deps`；`compileProject` 加 `closureOnly`（只种入口、不扫根目录），`check` / `run` / `build --runtime-mode import` 三面走闭包管线，继承面判定与工程模式同一份代码。夹具两侧同字（引擎 `C1|25 7`，出货 `run` 与 `build`+`node` 同）。常驻门：`test/e2e/cli-closure.test.ts`。
 - **工程模式没动**：`build-project` / `run-project` 读依赖表，`hostOnChain` 判得出链顶，这份文件出货与引擎逐字节同（`C1|25 7`）。
-- **账收窄了一笔**：#42 那条正账（让单文件也读依赖、把 `hostOnChain` 的输入补全）仍开着，本轮只把错诊断换成准确拒，没有假装支持。
+- **账收窄了一笔**：#42 那条正账（让单文件也读依赖、把 `hostOnChain` 的输入补全）当时只把错诊断换成准确拒，没有假装支持；下一轮由 S455 / S456 结清。
 - **门读数**：`pnpm test` **14409**（140 文件）、typecheck **4/4**、`test:compile` **264/374**、`test:diff` **257/257** 逐字节、`test:codegen` 全过 —— 四格计数与上一轮一字不差。
-
+- **2026-10-17 推进（S455 收尾 / S456）**：闭包的**另三面**接完 —— `--runtime-mode local` 旁挂一份 standalone、`--runtime-mode single` 把小树压成一个文件（build 先压临时目录再按 `-o` 落位，run 压完直跑）、`export` 两支铺闭包树；`[closure-pack]` / `[closure-export]` 两句随之删除。依赖往上爬出闭包根那一形（`extends "../sub.gd"`）新增 `[closure-root]` 响亮拒 —— res 空间放不下 `..`，不拒就会静默绑到根内同名格。闭包 export 逼出静态那支的 `SC0001`：入口实体 `__gd__<名>` 在父脚本也定义过时是真覆写，`override` 不能省（S456，三格实测：同步覆写出货 `SYNC|2` 与引擎同字，async / 入口两形撞 scriptc 自己的 `SC1090` 墙，`scriptcWall` 那句改成分支点名）。常驻门 `test/e2e/cli-closure.test.ts` 现在是八格，另加 `packages/compiler/test/entry-override.test.ts` 五格钉发射形状。**#42 那条正账就此结清**。
+- **门读数（本轮）**：`pnpm test` **14555**（143 文件）、typecheck **4/4**、`test:compile` **265/383**、`test:diff` **258/258** 逐字节、`test:codegen` **2/2**、`test:golden` 内容变更 **0**、`test:e2e/cli-closure` **8/8**。
 ### 1.273 字典重复键补上 NodePath 那一族（2026-10-17，S442，语料 386，§2 第 20 条④结清)
 
 - **判据**：NodePath 字面量键折成独立一类（`np:`），同路径算重复、跨 String / StringName 各算各的；`NodePath("a")` 这种构造写法与 `^"a"` 同键（引擎实测那句拒在**首次出现**那一格）。

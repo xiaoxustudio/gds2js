@@ -17,12 +17,7 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
     return false;
   }
   if (loaded.deps) {
-    if (ctx.runtimeMode !== "import") {
-      console.error(
-        `${ctx.input}:  error  [closure-pack] 入口引用了本地脚本（extends / preload），而 --runtime-mode ${ctx.runtimeMode} 要把依赖折进一份 standalone —— 这一组合还没做，请改走 build-project，或先用 --runtime-mode import 产出小树`,
-      );
-      return false;
-    }
+    if (ctx.runtimeMode === "single") return buildClosureSingle(ctx);
     return buildClosure(ctx);
   }
   if (!printDiags(loaded.diags)) return false;
@@ -56,9 +51,17 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
 async function buildClosure(ctx: Ctx): Promise<boolean> {
   const root = dirname(ctx.input);
   const outDir = dirname(ctx.outPath);
+  const modeOpts: { runtimeMode?: "import" | "local"; standaloneFile?: string } = { runtimeMode: "import" };
+  if (ctx.runtimeMode === "local") {
+    mkdirSync(outDir, { recursive: true });
+    const dest = join(outDir, STANDALONE_FILE);
+    copyFileSync(standalonePath(), dest);
+    modeOpts.runtimeMode = "local";
+    modeOpts.standaloneFile = dest;
+  }
   let result: CompileResult;
   try {
-    result = await compileClosure(ctx, outDir, ctx.run);
+    result = await compileClosure(ctx, outDir, ctx.run, modeOpts);
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
     return false;
@@ -134,31 +137,33 @@ export function runtimeFileUrls(): { rt: string; host: string } {
   }
 }
 
-export async function selfContainedBundle(ctx: Ctx): Promise<string | null> {
+export async function selfContainedBundle(ctx: Ctx, closureOnly = false, outDir = ctx.outDir): Promise<string | null> {
   const emit = mkdtempSync(join(tmpdir(), "gds2js-emit-"));
+  const resRoot = closureOnly ? dirname(ctx.input) : ctx.resRoot;
   try {
     const { rt, host } = runtimeFileUrls();
     const result = await compileProject({
       entries: [ctx.input],
-      resRoot: ctx.resRoot,
+      resRoot,
       outDir: emit,
       runtimeImport: rt,
       hostImport: ctx.hostImport === null ? null : host,
       autoRun: ctx.run ? undefined : false,
+      closureOnly,
     });
-    if (!printDiags(projectDiags(result, ctx.resRoot))) return null;
+    if (!printDiags(projectDiags(result, resRoot))) return null;
     for (const m of result.modules) {
       mkdirSync(dirname(m.jsPath), { recursive: true });
       writeFileSync(m.jsPath, m.code, "utf8");
     }
-    const wantRes = "res://" + relative(ctx.resRoot, ctx.input).split("\\").join("/");
+    const wantRes = "res://" + relative(resRoot, ctx.input).split("\\").join("/");
     const entry = result.modules.find((m) => m.resPath === wantRes) ?? result.modules[0];
     if (!entry) {
       console.error(`${ctx.input}: 无可打包模块`);
       return null;
     }
-    await bundleModule(entry.jsPath, ctx.outDir);
-    const bundlePath = join(ctx.outDir, basename(entry.jsPath).replace(/\.mts$/i, ".mjs"));
+    await bundleModule(entry.jsPath, outDir);
+    const bundlePath = join(outDir, basename(entry.jsPath).replace(/\.mts$/i, ".mjs"));
     console.error(`已编译并 bundle 成单文件 → ${bundlePath}`);
     return bundlePath;
   } catch (e) {
@@ -177,6 +182,27 @@ export async function bundleProjectSingle(ctx: Ctx): Promise<boolean> {
     return false;
   }
   return (await selfContainedBundle(ctx)) !== null;
+}
+
+/** 闭包 × single：小树压成一个文件再按 `-o` 的名字落位。压之前先过一遍暂存目录 —— tsdown 的 `clean` 会清掉整个输出目录，不能拿它对着用户的目录跑。 */
+async function buildClosureSingle(ctx: Ctx): Promise<boolean> {
+  if (!(await bundlingAvailable())) {
+    console.error(`${ctx.input}:  error  这个构建里没带可用的打包器（tsdown），--runtime-mode single 做不了。`);
+    console.error("  自包含 exe 用 export 出货：--pack node 或 --pack scriptc 都不需要 single；");
+    console.error("  要 single 请在装了 gds2js 的 node 环境里跑：gds2js build <entry> --runtime-mode single");
+    return false;
+  }
+  const stage = mkdtempSync(join(tmpdir(), "gds2js-single-"));
+  try {
+    const bundle = await selfContainedBundle(ctx, true, stage);
+    if (bundle === null) return false;
+    mkdirSync(dirname(ctx.outPath), { recursive: true });
+    copyFileSync(bundle, ctx.outPath);
+    console.error(`${ctx.outPath}: 已生成（单文件闭包）`);
+    return true;
+  } finally {
+    rmSync(stage, { recursive: true, force: true });
+  }
 }
 
 
