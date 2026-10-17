@@ -15,4 +15,11 @@ func _initialize():
 	print("X5|", h.unbind(2).call(8, 9), " ", h.unbind(2).get_argument_count(), " ", h.unbind(1).call(8))
 	print("X6|", f3.bind(1, 2).unbind(1).call(8, 9), " ", f3.bind(1, 2).unbind(1).get_argument_count())
 	print("X7|", h.unbind(9).call(1, 2, 3, 4, 5, 6, 7, 8, 9))
+
+	var back = h.unbind(2).bind(8)
+	print("X8|", back.call(7), " ", back.get_bound_arguments(), " ", back.get_argument_count(), " ", back.get_bound_arguments_count())
+	print("X9|", h.unbind(2).bind(8).bind(9).call(), " ", h.unbind(2).bind(8).bind(9).get_argument_count())
+	print("X10|", g.unbind(1).bind(5).call(), " ", g.unbind(1).bind(5).get_argument_count(), " ", g.unbind(2).bind(7).call(8))
+	print("X11|", u1 == u1, " ", u1 == g.unbind(1), " ", u1 == g, " ", u1 == u2)
+	print("X12|", u1.unbind(1).call(4, 5), " ", u1.unbind(1).get_argument_count(), " ", u1.unbind(0).get_argument_count())
 	quit()

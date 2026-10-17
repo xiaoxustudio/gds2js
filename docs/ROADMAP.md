@@ -792,6 +792,14 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.271 unbind 之后再 bind 与 unbind 进等式：两形解绑（2026-10-17，S441，语料 385 十二格逐字节，§6 第 90 条结清）
+
+- **一句机制**：`bind()` 落在 `unbind` 腾出的空位上 —— 绑定串一字不动（`get_bound_arguments()` 仍 `[1, 2, 3]`），只把 unbind 的计数按绑的支数减回去，所以计数从 2 到 1 到 0，`call()` 一直是 `f(1, 2, 3)`。
+- **累加**：`unbind(1).unbind(1)` == `unbind(2)`（X6），`unbind(0)` 不加不动。
+- **等式加一位**：`u1 == g` 假、`unbind(2) == unbind(1)` 假、同参数的两次 unbind 之间真 —— S298「绑定状态进等式」补上「**unbind 的位数也进**」，落在 `callableEq` 一处，`callableSame`（`connect()` 那条身份判定）不动。
+- **闸撤了一处**：`[callable-bind-unbind]` 不再发；仍响的是负数 / 非 int 的 n 与「带默认值形参的 lambda 再 bind」（S437 ⑥）。
+- **门读数**：`pnpm test` **14401**（140 文件）、typecheck **4/4**、`test:compile` **264/373**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+
 ### 1.270 `Callable.unbind(n)` 的式子量清并发货（2026-10-17，S440，语料 385 七格逐字节，§2 第 20 条③ 那半笔结清）
 
 - **判据**：调用时先把 caller 实参的**尾部 n 支**削掉，再把绑定串接在后面 —— 所以 `bind(1,2).unbind(1).call(9)` 是 `f(1,2)` 的 102，而 `bind(1,2).unbind(1).call(8,9)`（三位声明）是 `f(8,1,2)` 的 80102；绑定串与 `get_bound_arguments()` 一律不变。

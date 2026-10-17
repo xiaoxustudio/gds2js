@@ -236,17 +236,20 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       if (box.defaultCount > 0) {
         throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
       }
-      if (box.unbindCount > 0) {
-        throw new UnsupportedError("callable-bind-unbind", "unbind 过的 Callable 再 `bind()` 那一形只读到「绑定串没变」这半句，式子没自洽，不发");
-      }
       // 绑定串排在**前面**；实参拼接不用 spread —— 静态编译目标上没有它的 lowering
       const next: Variant[] = [];
+      if (box.unbindCount > 0) {
+        // `bind()` 落在 unbind 腾出的那些位上：绑定串本身不动，`unbind` 的计数按绑的支数减（`tmp/probe-unbind/{y1,y2,y3,y5}.gd`）
+        for (const b of bound) next.push(b);
+        return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, null, null, 0, null, box.unbindCount - args.length < 0 ? 0 : box.unbindCount - args.length));
+      }
       for (const a of args) next.push(a);
       for (const b of bound) next.push(b);
       return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
     }
     case "unbind": {
-      const n = unbindCountArg(args);
+      // 计数是**累加**的：`u.unbind(1).unbind(1)` 等于 `u.unbind(2)`（`tmp/probe-unbind/x6.gd`）
+      const n = box.unbindCount + unbindCountArg(args);
       const next: Variant[] = [];
       for (const b of bound) next.push(b);
       return V.object(new CallableBox(

@@ -79,7 +79,19 @@ export class Main extends SceneTree {
       print(rt.showArgs([rt.V.str("X6|"), rt.method(rt.method(rt.method(f3, "bind", [rt.V.int(1), rt.V.int(2)]), "unbind", [rt.V.int(1)]), "call", [rt.V.int(8), rt.V.int(9)]), rt.V.str(" "), rt.method(rt.method(rt.method(f3, "bind", [rt.V.int(1), rt.V.int(2)]), "unbind", [rt.V.int(1)]), "get_argument_count", [])]));
       rt.frameLine(17);
       print(rt.showArgs([rt.V.str("X7|"), rt.method(rt.method(h, "unbind", [rt.V.int(9)]), "call", [rt.V.int(1), rt.V.int(2), rt.V.int(3), rt.V.int(4), rt.V.int(5), rt.V.int(6), rt.V.int(7), rt.V.int(8), rt.V.int(9)])]));
-      rt.frameLine(18);
+      rt.frameLine(19);
+      let back = rt.method(rt.method(h, "unbind", [rt.V.int(2)]), "bind", [rt.V.int(8)]);
+      rt.frameLine(20);
+      print(rt.showArgs([rt.V.str("X8|"), rt.method(back, "call", [rt.V.int(7)]), rt.V.str(" "), rt.method(back, "get_bound_arguments", []), rt.V.str(" "), rt.method(back, "get_argument_count", []), rt.V.str(" "), rt.method(back, "get_bound_arguments_count", [])]));
+      rt.frameLine(21);
+      print(rt.showArgs([rt.V.str("X9|"), rt.method(rt.method(rt.method(rt.method(h, "unbind", [rt.V.int(2)]), "bind", [rt.V.int(8)]), "bind", [rt.V.int(9)]), "call", []), rt.V.str(" "), rt.method(rt.method(rt.method(rt.method(h, "unbind", [rt.V.int(2)]), "bind", [rt.V.int(8)]), "bind", [rt.V.int(9)]), "get_argument_count", [])]));
+      rt.frameLine(22);
+      print(rt.showArgs([rt.V.str("X10|"), rt.method(rt.method(rt.method(g, "unbind", [rt.V.int(1)]), "bind", [rt.V.int(5)]), "call", []), rt.V.str(" "), rt.method(rt.method(rt.method(g, "unbind", [rt.V.int(1)]), "bind", [rt.V.int(5)]), "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(rt.method(g, "unbind", [rt.V.int(2)]), "bind", [rt.V.int(7)]), "call", [rt.V.int(8)])]));
+      rt.frameLine(23);
+      print(rt.showArgs([rt.V.str("X11|"), rt.ops.eq(u1, u1), rt.V.str(" "), rt.ops.eq(u1, rt.method(g, "unbind", [rt.V.int(1)])), rt.V.str(" "), rt.ops.eq(u1, g), rt.V.str(" "), rt.ops.eq(u1, u2)]));
+      rt.frameLine(24);
+      print(rt.showArgs([rt.V.str("X12|"), rt.method(rt.method(u1, "unbind", [rt.V.int(1)]), "call", [rt.V.int(4), rt.V.int(5)]), rt.V.str(" "), rt.method(rt.method(u1, "unbind", [rt.V.int(1)]), "get_argument_count", []), rt.V.str(" "), rt.method(rt.method(u1, "unbind", [rt.V.int(0)]), "get_argument_count", [])]));
+      rt.frameLine(25);
       this.quit();
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);

@@ -132,7 +132,9 @@ export function callableSame(a: CallableBox, b: CallableBox): boolean {
  */
 export function callableEq(a: CallableBox, b: CallableBox): boolean {
   if (!callableSame(a, b)) return false;
-  return a.boundOnce === b.boundOnce;
+  if (a.boundOnce !== b.boundOnce) return false;
+  // unbind 的计数也进等式：`bind(1, 2).unbind(1) == bind(1, 2)` 假，`unbind(2)` 与 `unbind(1)` 之间也假（`tmp/probe-unbind/{x1,y4}.gd`）
+  return a.unbindCount === b.unbindCount;
 }
 
 /** `Callable()` 造出来的空 Callable：typeof 仍是 25。 */export function nullCallable(): Variant {
