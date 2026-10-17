@@ -2289,6 +2289,17 @@ function instanceMemberAbsent(face: string, name: string): boolean {
   return list !== undefined && !list.includes(name);
 }
 
+/** 值型那几面的方法**返回型**：同一份 `--dump-extension-api` 里的 `return_type`，只留返回型落在认得的那批里的名字（链式那一族的读数 `tmp/d6/n7.txt` 二十七格，S462）。 */
+export const BUILTIN_METHOD_RETURNS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  "Vector2": {"abs": "Vector2", "angle": "float", "angle_to": "float", "angle_to_point": "float", "aspect": "float", "bezier_derivative": "Vector2", "bezier_interpolate": "Vector2", "bounce": "Vector2", "ceil": "Vector2", "clamp": "Vector2", "clampf": "Vector2", "cross": "float", "cubic_interpolate": "Vector2", "cubic_interpolate_in_time": "Vector2", "direction_to": "Vector2", "distance_squared_to": "float", "distance_to": "float", "dot": "float", "floor": "Vector2", "from_angle": "Vector2", "is_equal_approx": "bool", "is_finite": "bool", "is_normalized": "bool", "is_zero_approx": "bool", "length": "float", "length_squared": "float", "lerp": "Vector2", "limit_length": "Vector2", "max": "Vector2", "max_axis_index": "int", "maxf": "Vector2", "min": "Vector2", "min_axis_index": "int", "minf": "Vector2", "move_toward": "Vector2", "normalized": "Vector2", "orthogonal": "Vector2", "posmod": "Vector2", "posmodv": "Vector2", "project": "Vector2", "reflect": "Vector2", "rotated": "Vector2", "round": "Vector2", "sign": "Vector2", "slerp": "Vector2", "slide": "Vector2", "snapped": "Vector2", "snappedf": "Vector2",},
+  "Vector2i": {"abs": "Vector2i", "aspect": "float", "clamp": "Vector2i", "clampi": "Vector2i", "distance_squared_to": "int", "distance_to": "float", "length": "float", "length_squared": "int", "max": "Vector2i", "max_axis_index": "int", "maxi": "Vector2i", "min": "Vector2i", "min_axis_index": "int", "mini": "Vector2i", "sign": "Vector2i", "snapped": "Vector2i", "snappedi": "Vector2i",},
+  "Vector3": {"abs": "Vector3", "angle_to": "float", "bezier_derivative": "Vector3", "bezier_interpolate": "Vector3", "bounce": "Vector3", "ceil": "Vector3", "clamp": "Vector3", "clampf": "Vector3", "cross": "Vector3", "cubic_interpolate": "Vector3", "cubic_interpolate_in_time": "Vector3", "direction_to": "Vector3", "distance_squared_to": "float", "distance_to": "float", "dot": "float", "floor": "Vector3", "inverse": "Vector3", "is_equal_approx": "bool", "is_finite": "bool", "is_normalized": "bool", "is_zero_approx": "bool", "length": "float", "length_squared": "float", "lerp": "Vector3", "limit_length": "Vector3", "max": "Vector3", "max_axis_index": "int", "maxf": "Vector3", "min": "Vector3", "min_axis_index": "int", "minf": "Vector3", "move_toward": "Vector3", "normalized": "Vector3", "octahedron_decode": "Vector3", "octahedron_encode": "Vector2", "posmod": "Vector3", "posmodv": "Vector3", "project": "Vector3", "reflect": "Vector3", "rotated": "Vector3", "round": "Vector3", "sign": "Vector3", "signed_angle_to": "float", "slerp": "Vector3", "slide": "Vector3", "snapped": "Vector3", "snappedf": "Vector3",},
+  "Vector3i": {"abs": "Vector3i", "clamp": "Vector3i", "clampi": "Vector3i", "distance_squared_to": "int", "distance_to": "float", "length": "float", "length_squared": "int", "max": "Vector3i", "max_axis_index": "int", "maxi": "Vector3i", "min": "Vector3i", "min_axis_index": "int", "mini": "Vector3i", "sign": "Vector3i", "snapped": "Vector3i", "snappedi": "Vector3i",},
+  "Color": {"blend": "Color", "clamp": "Color", "darkened": "Color", "from_hsv": "Color", "from_ok_hsl": "Color", "from_rgba8": "Color", "from_rgbe9995": "Color", "from_string": "Color", "get_luminance": "float", "hex": "Color", "hex64": "Color", "html": "Color", "html_is_valid": "bool", "inverted": "Color", "is_equal_approx": "bool", "lerp": "Color", "lightened": "Color", "linear_to_srgb": "Color", "srgb_to_linear": "Color", "to_abgr32": "int", "to_abgr64": "int", "to_argb32": "int", "to_argb64": "int", "to_html": "String", "to_rgba32": "int", "to_rgba64": "int",},
+  "StringName": {"begins_with": "bool", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "casecmp_to": "int", "contains": "bool", "containsn": "bool", "count": "int", "countn": "int", "dedent": "String", "ends_with": "bool", "erase": "String", "filecasecmp_to": "int", "filenocasecmp_to": "int", "find": "int", "findn": "int", "format": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "get_slice": "String", "get_slice_count": "int", "get_slicec": "String", "hash": "int", "hex_to_int": "int", "indent": "String", "insert": "String", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_subsequence_of": "bool", "is_subsequence_ofn": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "join": "String", "json_escape": "String", "left": "String", "length": "int", "lpad": "String", "lstrip": "String", "match": "bool", "matchn": "bool", "md5_text": "String", "naturalcasecmp_to": "int", "naturalnocasecmp_to": "int", "nocasecmp_to": "int", "pad_decimals": "String", "pad_zeros": "String", "path_join": "String", "remove_char": "String", "remove_chars": "String", "repeat": "String", "replace": "String", "replace_char": "String", "replace_chars": "String", "replacen": "String", "reverse": "String", "rfind": "int", "rfindn": "int", "right": "String", "rpad": "String", "rstrip": "String", "sha1_text": "String", "sha256_text": "String", "similarity": "float", "simplify_path": "String", "strip_edges": "String", "strip_escapes": "String", "substr": "String", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "trim_prefix": "String", "trim_suffix": "String", "unicode_at": "int", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
+  "NodePath": {"get_as_property_path": "NodePath", "get_concatenated_names": "StringName", "get_concatenated_subnames": "StringName", "get_name": "StringName", "get_name_count": "int", "get_subname": "StringName", "get_subname_count": "int", "hash": "int", "is_absolute": "bool", "is_empty": "bool", "slice": "NodePath",},
+};
+
 /** 只在表里有的那几面开口：名字不在实例成员集里就是引擎那两句（`valueAttrKind` 的 `null` 那一格由这张实测表接管）。 */
 function builtinInstanceAbsent(face: string, name: string): boolean {
   const list = BUILTIN_INSTANCE_MEMBERS[face];
@@ -4064,6 +4075,20 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       const t = named(n.type as TypeRef | null);
       if (t !== null) types.set(n.name, t);
     }
+    /** 接收者那一格的静态型：标注名、定形数组的元素读、构造位字面量三形（与 S459/S461 同一批判据）。 */
+    const faceOf = (e: Expr): string | null =>
+      e.kind === "ident" ? (types.get(e.name) ?? null) : e.kind === "index" ? elemOf(e) : staticType(e);
+    /** `v.floor() + "x"` 那一形：调用的是认得面上的认得方法，就把**返回型**交给现成的型对表（S462，读数 `tmp/d6/n7.txt`）。 */
+    const callRet = (e: Expr): string | null => {
+      if (e.kind !== "call" || e.callee.kind !== "attribute") return null;
+      const face = faceOf(e.callee.obj);
+      if (face === null) return null;
+      const by = BUILTIN_METHOD_RETURNS[face];
+      if (by === undefined) return null;
+      const name = e.callee.name;
+      return typeof name === "string" ? (by[name] ?? null) : null;
+    };
+    const operandKind = (e: Expr): string | null => literalKind(e) ?? callRet(e);
     /** `e[0]` 这一读的静态型 = 定形数组的内型（S459：只认**字面量 int** 下标，那是量过的那一格；内型不在认得的名字里就不判）。 */
     const elemOf = (e: Expr): string | null => {
       if (e.kind !== "index" || e.obj.kind !== "ident" || staticType(e.index) !== "int") return null;
@@ -4074,13 +4099,13 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.left.kind !== "ident" && e.left.kind !== "index") continue;
-      const rt = literalKind(e.right);
+      if (e.left.kind !== "ident" && e.left.kind !== "index" && e.left.kind !== "call") continue;
+      const rt = operandKind(e.right);
       if (rt === null) continue;
       const isIdent = e.left.kind === "ident";
       const name = isIdent ? (e.left as Extract<Expr, { kind: "ident" }>).name : "";
       const isConst = isIdent && consts.has(name);
-      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : elemOf(e.left);
+      const lt = isIdent ? (isConst ? (consts.get(name) ?? null) : (types.get(name) ?? null)) : e.left.kind === "index" ? elemOf(e.left) : callRet(e.left);
       if (lt === null) continue;
       const pair = `${lt}|${rt}`;
       const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
@@ -4100,10 +4125,10 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (e.right.kind !== "ident" && e.right.kind !== "index") continue;
-      const lt2 = literalKind(e.left);
+      if (e.right.kind !== "ident" && e.right.kind !== "index" && e.right.kind !== "call") continue;
+      const lt2 = operandKind(e.left);
       if (lt2 === null) continue;
-      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : elemOf(e.right);
+      const rt2 = e.right.kind === "ident" ? (types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null) : e.right.kind === "index" ? elemOf(e.right) : callRet(e.right);
       if (rt2 === null) continue;
       const pair2 = `${lt2}|${rt2}`;
       if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true) continue;
