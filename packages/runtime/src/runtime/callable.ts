@@ -42,6 +42,8 @@ export class CallableBox {
   builtin: string | null;
   /** 那一面这一名的元数上下界（发射器从量过的表里带过来）：`callableArityBounds` 与 `get_argument_count()` 都读它。 */
   builtinBounds: [number, number] | null;
+  /** 内建类型那一族的接收者**读那一刻的副本**：引擎的等式与 hash 比的是它，不是活着的那一台（`tmp/probe-bineq/{m1,m2}.gd`）。 */
+  builtinSnap: Variant | null;
   /** lambda 尾部带默认值的形参数（`tmp/probe-lamdef/a1.gd` 量到的元数那一族）：默认值本身在**调用那一刻**才评，所以盒子里只存个数。 */
   defaultCount: number;
   constructor(
@@ -54,6 +56,7 @@ export class CallableBox {
     builtin: string | null = null,
     builtinBounds: [number, number] | null = null,
     defaultCount = 0,
+    builtinSnap: Variant | null = null,
   ) {
     this.fn = fn;
     this.name = name;
@@ -64,12 +67,20 @@ export class CallableBox {
     this.builtin = builtin;
     this.builtinBounds = builtinBounds;
     this.defaultCount = defaultCount;
+    this.builtinSnap = builtinSnap;
   }
 }
 
 /** 内建类型面的「方法名当值」：引擎给的是绑定 Callable（`x.append` 印 `Array::append`），调用仍按 (接收者, 名) 派发。 */
 export function boundBuiltinCallable(recv: Variant, face: string, name: string, min: number, max: number): Variant {
-  return V.object(new CallableBox(null, name, recv, [], null, false, face, [min, max]));
+  return V.object(new CallableBox(null, name, recv, [], null, false, face, [min, max], 0, boundSnapHook === null ? null : boundSnapHook(recv)));
+}
+
+/** 可变那两面要按「读那一刻的值」比等式，而拷贝的式子住在容器模块里（本模块是叶子，不能反向 import）—— 由 `methods.ts` 在装载时挂进来。 */
+let boundSnapHook: ((recv: Variant) => Variant | null) | null = null;
+
+export function registerBoundSnapshotHook(f: (recv: Variant) => Variant | null): void {
+  boundSnapHook = f;
 }
 
 /** 这个 OBJECT 载荷是一个 Callable 盒子吗？空 Callable（`Callable()`）也算。 */
@@ -98,8 +109,10 @@ export function callableSame(a: CallableBox, b: CallableBox): boolean {
   if (isNullCallable(a) || isNullCallable(b)) return isNullCallable(a) && isNullCallable(b);
   if (a.name !== null && b.name !== null) {
     if (a.name !== b.name) return false;
-    if (a.builtin !== null && b.builtin !== null && a.object !== null && b.object !== null && recvEqHook !== null) {
-      return recvEqHook(a.object, b.object);
+    if (a.builtin !== null && b.builtin !== null && recvEqHook !== null) {
+      const x = a.builtinSnap ?? a.object;
+      const y = b.builtinSnap ?? b.object;
+      if (x !== null && y !== null) return recvEqHook(x, y);
     }
     // 比**内层**而不是盒子本身：`o.add3` 读两次拿到的是两个新 Variant，包着同一个实例
     return (a.object?.v ?? null) === (b.object?.v ?? null);

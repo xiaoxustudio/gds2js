@@ -5,7 +5,7 @@ import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
 
 // Callable 盒子的**形状**与等式在叶子模块 `callable.ts` 里（`values.ts` 要用等式，不能反向 import 本模块），这里只把外需要的几样转出去。
-export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, type Fn } from "./callable";
+export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, registerBoundSnapshotHook, type Fn } from "./callable";
 
 /** 所有脚本类的根（宿主 `SceneTree` 也挂在它下面）：**运行时不能拿着 `unknown` 去按名字找方法**，「名字 → 方法」这张表由知道具体类的发射器生成成子类的 `__gdDispatch` 覆写。 */
 export class GdScriptObject {

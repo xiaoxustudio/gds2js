@@ -302,3 +302,32 @@ describe("runtime/methods · 装箱 pack 的成员名读也发绑定 Callable（
     eq("429", "其余八支的 to_byte_array 在表里", show(attribute(ps(), "to_byte_array") as Variant), "PackedStringArray::to_byte_array");
   });
 });
+
+describe("S439 · 绑定 Callable 比的是读那一刻的接收者值", () => {
+  const boxOf = (v: Variant): CallableBox => v.v as CallableBox;
+
+  it("读之后原容器改了，等式就断，调用仍打在原容器上", () => {
+    const a = V.array(GArray.of([V.int(1), V.int(2)]));
+    const c = attribute(a, "append") as Variant;
+    eq("439", "没改之前两次读值等", String(callableEq(boxOf(c), boxOf(attribute(a, "append") as Variant))), "true");
+    method(a, "append", [V.int(3)]);
+    eq("439", "改了之后断", String(callableEq(boxOf(c), boxOf(attribute(a, "append") as Variant))), "false");
+    eq("439", "自己跟自己仍等", String(callableEq(boxOf(c), boxOf(c))), "true");
+    eq("439", "调用落在活的那一台", show(a), "[1, 2, 3]");
+  });
+
+  it("嵌套那一层也是拷出来的，内层改了同样断", () => {
+    const inner = V.array(GArray.of([V.int(1)]));
+    const w = V.array(GArray.of([inner]));
+    const t = attribute(w, "append") as Variant;
+    method(inner, "append", [V.int(2)]);
+    eq("439", "内层改了也断", String(callableEq(boxOf(t), boxOf(attribute(w, "append") as Variant))), "false");
+  });
+
+  it("pack 那一族同样按读那一刻比", () => {
+    const p = packCtor("int32", [V.array(GArray.of([V.int(1), V.int(2)]))]) as Variant;
+    const c = attribute(p, "append") as Variant;
+    method(p, "append", [V.int(3)]);
+    eq("439", "pack 改了之后断", String(callableEq(boxOf(c), boxOf(attribute(p, "append") as Variant))), "false");
+  });
+});

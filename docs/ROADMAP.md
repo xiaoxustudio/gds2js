@@ -792,6 +792,14 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.269 绑定 Callable 存「读那一刻的接收者快照」：§6 第 85 条那格翻案结清（2026-10-17，S439，语料 384 十一格逐字节）
+
+- **一格定案**：`var c = a.append` 之后 `a.append(3)`，`c == a.append` 引擎给 false 而 `c == c` 给 true、`c.call(7)` 仍改活的那一台 —— 「按接收者的值比」那条口径补上后半句：**比的是读那一刻的值**，调用照旧走活对象。
+- **快照是深拷**：`var w = [[1]]` 读完后改内层 `w[0]` 也断等式（B11），浅拷元素挡不住这一格；pack 九支同形，值类型本来不可变所以是同一规则的另一种表现。
+- **接法**：`boundBuiltinCallable` 造盒子时挂快照（Array 深拷 / GBytes 拷缓冲），`callableSame` 内建那一段比快照；`callable.ts` 是叶子模块，拷贝式子由 `methods.ts` 装载时注册钩子递进去。字典面不发绑定 Callable（S419 ②），不参与。
+- **顺带对上旧账**：`hash` 跟着快照走（S430 那条「hash 随值同」补一句「随读那一刻的值」）；`bind()` 过的一支与 fresh 读值不等，仍归 S430 的「绑过就不等」。
+- **门读数**：`pnpm test` **14398**（140 文件）、typecheck **4/4**、`test:compile` **263/372**、`test:diff` **256/256** 逐字节、`test:codegen` 全过。
+
 ### 1.268 捕获表补上子作用域的继承：循环体与嵌套 lambda 也进影子层（2026-10-17，S438 ⑧，语料 383 扩到十格）
 
 - **上一轮漏的一半**：`Scope.child` 建出来的子作用域没带上「函数那一段」的标记，于是循环体里、lambda 体里读到的外层局部全被判成非局部 —— P9 那格引擎 `[7, 9, 9]` 出货 `[9, 9, 9]`，P10 引擎 `[2, 3]` 出货 `[101, 102]`。

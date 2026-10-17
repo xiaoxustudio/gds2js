@@ -15,7 +15,7 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
@@ -1346,6 +1346,20 @@ export function formatOf(fmt: Variant, args: Variant): Variant {
 export function boundMethod(raw: unknown, face: string, name: string, min: number, max: number): Variant {
   return boundBuiltinCallable(norm(raw), face, name, min, max);
 }
+
+/** 可变那两面（Array 与 pack 九支）读那一刻拷一份；值类型本来就不可变，字典面不发绑定 Callable（S419 ②）。 */
+function boundSnapshot(v: Variant): Variant | null {
+  const inner = v.v;
+  if (inner instanceof GArray) {
+    const snap = inner.duplicate(true);
+    snap.elem = inner.elem;
+    return V.array(snap);
+  }
+  if (inner instanceof GBytes) return V.object(new GBytes(inner.raw().slice(), inner.kind));
+  return null;
+}
+
+registerBoundSnapshotHook(boundSnapshot);
 
 export function attribute(raw: unknown, name: string): unknown {
   const obj = norm(raw);

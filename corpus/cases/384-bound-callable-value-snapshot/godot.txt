@@ -1,0 +1,11 @@
+B1|false [1, 2, 3]
+B2|true
+B3|true false [1, 2, 7]
+B4|false [1, 2, 8]
+B5|false <null> [1, 2, 9]
+B6|true
+B7|true
+B8|false [1, 2, 3]
+B9|false (3.0, 4.0)
+B10|true false
+B11|false [[1, 2]] [1, 2]
