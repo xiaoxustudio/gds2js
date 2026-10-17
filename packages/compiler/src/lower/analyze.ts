@@ -18,7 +18,15 @@ import {
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
-import { ARRAY_METHOD_ARITY, PACK_METHOD_ARITY, PACK_METHOD_ARITY_WITH_BYTES, STRING_METHOD_ARITY, VALUE_METHOD_ARITY } from "@gds2js/runtime/runtime/face-arity";
+import {
+  ARRAY_METHOD_ARITY,
+  NODE_PATH_METHOD_ARITY,
+  PACK_METHOD_ARITY,
+  PACK_METHOD_ARITY_WITH_BYTES,
+  STRING_METHOD_ARITY,
+  VALUE_METHOD_ARITY,
+  valueAttrKind,
+} from "@gds2js/runtime/runtime/face-arity";
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, Stmt, TypeRef, VarDecl } from "./ir";
@@ -1874,9 +1882,14 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      if (!refused) continue;
-      const absent = PACK_TYPE_NAMES.has(face) ? packNameMeasuredAbsent(face, name) : true;
+      const absent = PACK_TYPE_NAMES.has(face)
+        ? packNameMeasuredAbsent(face, name)
+        : face === "Array" || face === "String"
+          ? true
+          : valueAttrKind(face, name) === "absent";
       if (!absent) continue;
+      // 值类型那七面只量过**读**那一形（`tmp/probe-vattr/`），写形没读数就不开口
+      if (!refused && writeTargets.has(n)) continue;
       const one = `Cannot find member "${name}" in base "${face}".`;
       diags.push({ code: "face-attr-missing", message: one, loc });
       diags.push({ code: "face-attr-missing", message: one, loc });
@@ -1950,11 +1963,6 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
 const STRINGNAME_NO_METHOD = new Set(["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"]);
 
 /** NodePath 那一面只认这十名（`hash` 也在内，元数 [0,0]），元数照量来的两张界。 */
-const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
-  get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
-  get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
-  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
-};
 
 const NODE_PATH_NO_METHOD = new Set(["simplify", "is_same", "length"]);
 

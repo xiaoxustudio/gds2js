@@ -1,0 +1,7 @@
+W1|StringName::hash 5863208
+W2|AB false
+W3|NodePath::hash true
+W4|NodePath::get_name_count 2 false
+W5|Vector3i::length 3.0 2
+W6|ff8040ff 1.0 (0.5, 0.25, 0.125, 1.0)
+W7|ZZ

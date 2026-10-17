@@ -792,6 +792,14 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.259 七面属性读三分岔接进出货（2026-10-17，S432，语料 379，§6 第 84 条②结清、第 86 条新登）
+
+- **三分岔**：`valueAttrKind(face, name)` 用 S431 的两份数据把属性读分成成员（给 `rt.boundMethod` 那只盒子）/ 真属性（`x` `y` `z` `r` `g` `b` `a`，走原路）/ 表外（给 `Invalid access …` 那句）；宇宙之外继续响亮拒，不猜。
+- **两侧同步**：解析期那两句也铺到七面，但**只铺读形**——写形的两格没读数（护栏格钉住 `v.keys = 1` 不发诊断、`v.nosuchzz` 宇宙外放过）。
+- **同一处存放**：`NODE_PATH_METHOD_ARITY` 搬进 `runtime/face-arity.ts`，StringName 复用 String 那张表（S389 量过）；`faceArity` 一处认全面。
+- **顺手量出旧账**：`NodePath` 的 `get_concatenated_names` / `get_concatenated_subnames` / `get_as_property_path` 三名没实装（引擎有真值），连同 S267 ⑥a 的 `hash(NodePath)` 式子一起登 §6 第 86 条。
+- **门读数**：`pnpm test` **14356**（139 文件）、typecheck **4/4**、`test:compile` **258/367**、`test:diff` **251/251** 逐字节、`test:codegen` 全过、ops 自校验 6137、tree-face 17。
+
 ### 1.258 值类型七面的属性读两面量齐（2026-10-16，S431 读数轮 · §6 第 84 条那份名单已可开写）
 
 - **构造位**：候选宇宙 175 名（拿别面的成员名当表外名试）× 七面逐名过裁判 —— 表外数 `Vector2` 168 / `Vector2i` 169 / `Vector3` 167 / `Vector3i` 168 / `Color` 169 / `StringName` 73 / `NodePath` 171，句都是 `Cannot find member "<名>" in base "<面>".` 同一句两遍，与 pack / Array / String 完全同形。

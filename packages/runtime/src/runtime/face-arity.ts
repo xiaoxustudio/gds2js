@@ -47,6 +47,12 @@ export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
 };
 export const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
 
+export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
+  get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
+  get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
+  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
+};
+
 const PACK_NINE: Record<string, boolean> = {
   PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
   PackedFloat64Array: true, PackedStringArray: true, PackedVector2Array: true, PackedVector3Array: true,
@@ -108,9 +114,98 @@ export const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>
   PackedColorArray: PACK_METHOD_ARITY_WITH_BYTES,
 };
 
+// 属性读那一形两面过裁判的读数（S431）：宇宙 = 175 个候选名（`tmp/probe-vattr/` 拿别面的成员名当表外名试），
+// 每面的「存在集」= 宇宙里引擎**没**判为表外的那些，也就是该面的成员 ∪ 真属性；宇宙内又不在存在集的就是表外。
+// 构造位逐名读数 `tmp/probe-vattr/compare1.txt`；装箱位同式七格 `tmp/probe-vattr/box.gd`。
+
+export const VALUE_ATTR_UNIVERSE: readonly string[] = [
+  "a", "all", "any", "append", "append_array", "assign", "b", "back", "begins_with", "bigrams", "bin_to_int",
+  "bsearch", "bsearch_custom", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "clear", "contains",
+  "containsn", "count", "countn", "dedent", "distance_to", "duplicate", "ends_with", "erase", "filecasecmp_to",
+  "filenocasecmp_to", "fill", "filter", "find", "find_custom", "find_key", "findn", "format", "front", "g", "get",
+  "get_base_dir", "get_basename", "get_extension", "get_file", "get_name_count", "get_or_add", "get_slice",
+  "get_slice_count", "get_slicec", "get_typed_builtin", "get_typed_class_name", "get_typed_script", "has",
+  "has_all", "hash", "hex_decode", "hex_to_int", "humanize_size", "imag", "indent", "insert", "is_absolute_path",
+  "is_empty", "is_read_only", "is_relative_path", "is_same_typed", "is_subsequence_of", "is_subsequence_ofn",
+  "is_typed", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color",
+  "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "join", "json_escape", "keys", "left", "length",
+  "lpad", "lstrip", "make_read_only", "map", "match", "matchn", "max", "md5_buffer", "md5_text", "merge", "merged",
+  "min", "name", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "normalized", "nosuch", "num",
+  "num_int64", "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "pick_random", "pop_at",
+  "pop_back", "pop_front", "push_back", "push_front", "r", "real", "recursive_equal", "reduce", "remove_at",
+  "repeat", "replace", "replacen", "resize", "reverse", "rfind", "rfind_custom", "rfindn", "right", "rpad",
+  "rsplit", "rstrip", "set", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "shuffle", "similarity",
+  "simplify_path", "size", "slice", "sort", "sort_custom", "split", "split_floats", "strip_edges", "strip_escapes",
+  "substr", "to_abgr32", "to_ascii_buffer", "to_camel_case", "to_float", "to_html", "to_int", "to_kebab_case",
+  "to_lower", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer",
+  "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode",
+  "validate_filename", "validate_node_name", "value", "values", "x", "xml_escape", "xml_unescape", "y", "z"
+];
+
+export const VALUE_VEC2_EXISTS: readonly string[] = [
+  "distance_to", "length", "max", "min", "normalized", "x", "y"
+];
+
+export const VALUE_VEC2i_EXISTS: readonly string[] = [
+  "distance_to", "length", "max", "min", "x", "y"
+];
+
+export const VALUE_VEC3_EXISTS: readonly string[] = [
+  "distance_to", "length", "max", "min", "normalized", "x", "y", "z"
+];
+
+export const VALUE_VEC3i_EXISTS: readonly string[] = [
+  "distance_to", "length", "max", "min", "x", "y", "z"
+];
+
+export const VALUE_Color_EXISTS: readonly string[] = [
+  "a", "b", "g", "r", "to_abgr32", "to_html"
+];
+
+export const VALUE_StringName_EXISTS: readonly string[] = [
+  "begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "contains",
+  "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find",
+  "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count",
+  "get_slicec", "hash", "hex_decode", "hex_to_int", "indent", "insert", "is_absolute_path", "is_empty",
+  "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_filename", "is_valid_float",
+  "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address",
+  "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text",
+  "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "pad_decimals", "pad_zeros", "path_join", "repeat",
+  "replace", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer",
+  "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats",
+  "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int",
+  "to_kebab_case", "to_lower", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer",
+  "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode",
+  "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"
+];
+
+export const VALUE_NodePath_EXISTS: readonly string[] = [
+  "get_name_count", "hash", "is_empty", "slice"
+];
+
+const VALUE_EXIST: Record<string, readonly string[]> = {
+  "Vector2": VALUE_VEC2_EXISTS,
+  "Vector2i": VALUE_VEC2i_EXISTS,
+  "Vector3": VALUE_VEC3_EXISTS,
+  "Vector3i": VALUE_VEC3i_EXISTS,
+  "Color": VALUE_Color_EXISTS,
+  "StringName": VALUE_StringName_EXISTS,
+  "NodePath": VALUE_NodePath_EXISTS,
+};
+
+/** 值类型面与两支名字面的属性读三分类：`"member"` 给绑定 Callable、`"prop"` 走原路、`"absent"` 给引擎那句、null 是没量过。 */
+export function valueAttrKind(face: string, name: string): "member" | "prop" | "absent" | null {
+  const ex = VALUE_EXIST[face];
+  if (ex === undefined) return null;
+  if (!VALUE_ATTR_UNIVERSE.includes(name)) return null;
+  if (!ex.includes(name)) return "absent";
+  return faceArity(face, name) === null ? "prop" : "member";
+}
+
 /** 按面名与成员名查那一对元数上下界；查不到给 null（表外名、byte 独有的名字，或候选宇宙之外的名字）。 */
 export function faceArity(face: string, name: string): [number, number] | null {
-  const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY
+  const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" || face === "StringName" ? STRING_METHOD_ARITY
+    : face === "NodePath" ? NODE_PATH_METHOD_ARITY
     : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_METHOD_ARITY : PACK_METHOD_ARITY_WITH_BYTES)
       : VALUE_METHOD_ARITY[face];
   if (table === undefined || table === null) return null;

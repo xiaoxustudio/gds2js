@@ -17,12 +17,12 @@ import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
-import { faceArity } from "./face-arity";
+import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
-import { asNodePath, nodePathMethod, nodePathText } from "./node-path";
+import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -1354,6 +1354,15 @@ export function attribute(raw: unknown, name: string): unknown {
     if (dict.has(k)) return dict.getRequired(k);
     throw new GodotRuntimeError("dict-attribute", `Invalid access to property or key '${name}' on a base object of type 'Dictionary'.`);
   }
+  if (obj.t === Tag.STRING_NAME) {
+    // StringName 那一面的成员表就是 String 那张（S389 一名一名量过），属性读同一条三分岔
+    if (valueAttrKind("StringName", name) === "absent") {
+      throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type 'StringName'.`);
+    }
+    const row = faceArity("StringName", name);
+    if (row !== null) return boundBuiltinCallable(obj, "StringName", name, row[0], row[1]);
+    throw new UnsupportedError("face-attribute", `StringName.${name} 的属性读落在两份名单之外：候选宇宙之外的名字没量过，不发引擎那句`);
+  }
   if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
     const face = obj.t === Tag.STRING ? "String" : "Array";
     const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
@@ -1379,9 +1388,13 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
     const vface = obj.v instanceof GVector2 ? "Vector2" : obj.v instanceof GVector2i ? "Vector2i"
       : obj.v instanceof GVector3 ? "Vector3" : obj.v instanceof GVector3i ? "Vector3i"
-        : obj.v instanceof GColor ? "Color" : null;
+        : obj.v instanceof GColor ? "Color" : obj.v instanceof GdNodePath ? "NodePath" : null;
     if (vface !== null) {
-      // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8：`Vector2::length`、`Color::to_html`、`Vector3i::length`）
+      // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8），表外名给引擎那句（`tmp/probe-vattr/box.gd` 七格）
+      const kind = valueAttrKind(vface, name);
+      if (kind === "absent") {
+        throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${vface}'.`);
+      }
       const row = faceArity(vface, name);
       if (row !== null) return boundBuiltinCallable(obj, vface, name, row[0], row[1]);
     }

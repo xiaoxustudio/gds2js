@@ -112,6 +112,24 @@ describe("值类型面只接成员名当值，两形不许顺手拦", () => {
   });
 });
 
+describe("值类型与两支名字面的属性读按七面名单分岔（S432）", () => {
+  const say2 = (t: string, n: string): string => `Cannot find member "${n}" in base "${t}".`;
+  const CASES: Array<[string, string, string[]]> = [
+    ["Vector2 读宇宙内表外名报两遍", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.keys)", [say2("Vector2", "keys"), say2("Vector2", "keys")]],
+    ["Vector2 那一名宇宙外放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", []],
+    ["值类型面的写形没读数不开口", "\tvar v: Vector2 = Vector2(3, 4)\n\tv.keys = 1", []],
+    ["Color 读成员名放过", "\tvar c: Color = Color(1, 0.5, 0.25, 1)\n\tprint(c.to_html)", []],
+    ["StringName 读表外名报两遍", "\tvar s: StringName = StringName(\"ab\")\n\tprint(s.size)", [say2("StringName", "size"), say2("StringName", "size")]],
+    ["NodePath 读表外名报两遍", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.keys)", [say2("NodePath", "keys"), say2("NodePath", "keys")]],
+    ["NodePath 读成员名放过", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.get_name_count)", []],
+    ["Vector3 读真属性放过", "\tvar q: Vector3 = Vector3(1, 2, 2)\n\tprint(q.z)", []],
+  ];
+
+  it.each(CASES)("%s", async (_label, body, want) => {
+    expect(await diags(body)).toEqual(want);
+  });
+});
+
 describe("存在但没量元数的名字不许误拦", () => {
   const OKAY: Array<[string, string]> = [
     ["字典 set", '\tvar d: Dictionary = {}\n\td.set(1, 2)'],

@@ -226,3 +226,30 @@ describe("runtime/methods · String 与 Array 的属性读按表外名单给那�
     eq("424", "Array 读 size", /Invalid access/.test(errText(() => attribute(V.array([V.int(1)]), "size"))), false);
   });
 });
+
+describe("runtime/methods · 值类型与名字面的装箱属性读三分岔（S432）", () => {
+  const errText = (f: () => unknown): string => {
+    try {
+      f();
+      return "没抛";
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const say = (face: string, n: string): string => "Invalid access to property or key '" + n + "' on a base object of type '" + face + "'.";
+
+  it("宇宙内表外名给那句，成员名给 Callable，真属性照旧", () => {
+    const v = vector2(1, 2);
+    eq("432", "Vector2 表外名", errText(() => attribute(v, "keys")), say("Vector2", "keys"));
+    eq("432", "Vector2 成员名给 Callable", show(attribute(v, "length") as Variant), "Vector2::length");
+    eq("432", "Vector2 真属性照旧", show(attribute(v, "x") as Variant), "1.0");
+    const sn = V.stringName("ab");
+    eq("432", "StringName 表外名", errText(() => attribute(sn, "size")), say("StringName", "size"));
+    eq("432", "StringName 成员名给 Callable", show(attribute(sn, "hash") as Variant), "StringName::hash");
+  });
+
+  it("宇宙之外的那一名不许冒充引擎那句", () => {
+    eq("432", "Vector2 宇宙外", /Invalid access/.test(errText(() => attribute(vector2(1, 2), "nosuchzz"))), false);
+    eq("432", "StringName 宇宙外", /Invalid access/.test(errText(() => attribute(V.stringName("ab"), "nosuchzz"))), false);
+  });
+});
