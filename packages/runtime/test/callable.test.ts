@@ -292,10 +292,13 @@ describe("runtime/methods · 装箱 pack 的成员名读也发绑定 Callable（
     eq("429", "byte 那支的 count", show(attribute(pb(), "count") as Variant), "PackedByteArray::count");
   });
 
-  it("byte 独有那一名元数没量过，响亮抛不冒充引擎", () => {
-    const msg = errText(() => attribute(pb(), "hex_encode"));
-    eq("429", "不发 Invalid access", /Invalid access/.test(msg), false);
-    eq("429", "不发 Callable", /::/.test(msg), false);
+  it("byte 独有那 11 名的元数量齐后给 Callable，零元的照调", () => {
+    const c = attribute(pb(), "hex_encode") as Variant;
+    eq("429", "hex_encode 给 Callable", show(c), "PackedByteArray::hex_encode");
+    eq("429", "调出来是十六进制串", show(method(c, "call", [])), "0102");
+    eq("429", "元数上界读自裁判", String(method(c, "get_argument_count", []).v), "0");
+    eq("429", "compress 的元数也带上了", show(attribute(pb(), "compress") as Variant), "PackedByteArray::compress");
+    eq("429", "带默认值那两支给声明支数", String(method(attribute(pb(), "compress") as Variant, "get_argument_count", []).v) + "/" + String(method(attribute(pb(), "decompress") as Variant, "get_argument_count", []).v), "1/2");
     eq("429", "其余八支的 to_byte_array 在表里", show(attribute(ps(), "to_byte_array") as Variant), "PackedStringArray::to_byte_array");
   });
 });

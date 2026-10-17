@@ -792,6 +792,14 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.261 `PackedByteArray` 独有那 11 名的元数，与 `get_argument_count()` 读哪一个数（2026-10-17，S434，语料 381，§6 第 87 条结清）
+
+- **11 名的上下界量齐**（尺 `tmp/probe-bytearity/round2.mts`，读数 `compare1.txt` / `raw.txt`）：`compress` `[0,1]`、`decompress` `[1,2]`、其余九支 `[0,0]` —— 零实参不报错即「至少 0」，五实参那句 `Too many arguments for "<名>()" call. Expected at most N` 报的就是上界；表落成 `runtime/face-arity.ts` 的 `PACK_BYTE_EXTRA_ARITY`，byte 那一面单独合出 `PACK_BYTE_ARITY`，`faceArity` 的 byte 分支与 `VALUE_METHOD_ARITY.PackedByteArray` 同一处取。
+- **一次口径翻案**：绑定 Callable 的 `get_argument_count()` 给的是**声明支数**（= 元数上界），不是 S419 写的「必填数」。一把尺 329 名逐名对裁判（`tmp/probe-argc/gen.mts` → `compare1.txt`，13 面全表）—— 除 StringName 面上本就不存在的那 6 名，读数与表的第二值一字不差。旧口径之所以没露馅：撞出来的两格 `compress` 必填 1 / 读数 1 同数，`decompress` 必填 1 而读数 2 才把它驳掉（语料 381 的 Y7 `0 1 2`）。改在 `declaredArgCount` 一处，`requiredArgCount`（`Array.map` 那族按严格支数派发用的）仍取下界。
+- **不另立第三张表**：这一族的「`.call()` 认的上界」与「声明支数」量出来是同一个数，所以 `rt.boundMethod` 仍只带 `[min, max]` 那一对。
+- **顺手复核**：StringName 复用 String 表的 108 名里，只有 `chr` / `humanize_size` / `num` / `num_int64` / `num_scientific` / `num_uint64` 六名调不出 Callable —— 与 S431 那份存在名单缺的六名一字吻合（两份数据不会各漂一半）。
+- **门读数**：`pnpm test` **14366**（139 文件）、typecheck **4/4**、`test:compile` **260/369**、`test:diff` **253/253** 逐字节、`test:golden-check` **380/380**、`test:codegen` 全过、ops 自校验 6140、tree-face 17。
+
 ### 1.260 `NodePath` 两支持名拼接实装（2026-10-17，S433，语料 380，§6 第 86 条①结清）
 
 - **读数**：`tmp/probe-np/compare1.txt` 十二格 + `t1.gd` —— 名段与子名段各按 `"/"` 拼、互不掺（`a/b:cmp` 两支分别 `a/b` / `cmp`）、不做路径化简（`a/../b` 照原样）、绝对位只给子名段（`:a/b` 名段空串）。

@@ -69,7 +69,9 @@ export function boundArgsOf(box: CallableBox): Variant[] {
 /** Callable 的声明形参数；表里没有、或那方法带默认值时给 null，由调用方响亮拒。 */
 export function declaredArgCount(box: CallableBox): number | null {
   if (isNullCallable(box)) return 0;
-  if (box.builtinBounds !== null) return box.builtinBounds[0];
+  // 内建那几面的元数上界就是**声明形参数**：329 名逐名对过裁判，`get_argument_count()` 与表的第二值一字不差
+  // （读数 `tmp/probe-argc/compare1.txt`；语料 381 的 Y7：hex_encode 0、compress 1、decompress 2）。
+  if (box.builtinBounds !== null) return box.builtinBounds[1];
   const name = box.name;
   if (name !== null) {
     // 全局 Callable 的 `get_argument_count()` 是实测读数，与 `.call()` 认的区间是两回事（`str` 声明 1 个、变元无上限）。

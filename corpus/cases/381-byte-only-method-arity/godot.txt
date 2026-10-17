@@ -1,0 +1,7 @@
+Y1|PackedByteArray::hex_encode 68656c6c6f
+Y2|PackedByteArray::get_string_from_utf8 hello
+Y3|PackedByteArray::compress PackedByteArray::decompress PackedByteArray::get_string_from_utf16 PackedByteArray::get_string_from_wchar
+Y4|PackedByteArray::to_int32_array PackedByteArray::to_int64_array PackedByteArray::to_float32_array PackedByteArray::to_float64_array
+Y5|PackedByteArray::get_string_from_ascii hello
+Y6|[1]
+Y7|0 1 2

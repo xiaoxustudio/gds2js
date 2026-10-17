@@ -46,12 +46,22 @@ export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
   reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
 };
 export const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
+// `PackedByteArray` 独有的那 11 名：元数上下界逐名过裁判（尺 `tmp/probe-bytearity/round2.mts`，读数 `compare1.txt`
+// 与 `raw.txt`）—— 零实参不报错的那些就是「至少 0」，五实参报「至多 N」的就是上界；`decompress` 两界都直接从两句里读。
+export const PACK_BYTE_EXTRA_ARITY: Record<string, [number, number]> = {
+  compress: [0, 1], decompress: [1, 2], get_string_from_ascii: [0, 0], get_string_from_utf16: [0, 0],
+  get_string_from_utf8: [0, 0], get_string_from_wchar: [0, 0], hex_encode: [0, 0], to_float32_array: [0, 0],
+  to_float64_array: [0, 0], to_int32_array: [0, 0], to_int64_array: [0, 0],
+};
+
+const PACK_BYTE_ARITY: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, ...PACK_BYTE_EXTRA_ARITY };
 
 export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
   get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
   get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
   get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
 };
+
 
 const PACK_NINE: Record<string, boolean> = {
   PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
@@ -103,7 +113,7 @@ export const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>
     lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
     to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
   },
-  PackedByteArray: PACK_METHOD_ARITY,
+  PackedByteArray: PACK_BYTE_ARITY,
   PackedInt32Array: PACK_METHOD_ARITY_WITH_BYTES,
   PackedInt64Array: PACK_METHOD_ARITY_WITH_BYTES,
   PackedFloat32Array: PACK_METHOD_ARITY_WITH_BYTES,
@@ -206,7 +216,7 @@ export function valueAttrKind(face: string, name: string): "member" | "prop" | "
 export function faceArity(face: string, name: string): [number, number] | null {
   const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" || face === "StringName" ? STRING_METHOD_ARITY
     : face === "NodePath" ? NODE_PATH_METHOD_ARITY
-    : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_METHOD_ARITY : PACK_METHOD_ARITY_WITH_BYTES)
+    : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_BYTE_ARITY : PACK_METHOD_ARITY_WITH_BYTES)
       : VALUE_METHOD_ARITY[face];
   if (table === undefined || table === null) return null;
   const row = table[name];

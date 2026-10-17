@@ -33,6 +33,10 @@ describe("静态接收者的表外方法名", () => {
     ["byte 独有的名在 byte 放过", "\tprint(PackedByteArray([1]).hex_encode())", []],
     ["to_byte_array 只在 byte 开口", "\tprint(PackedByteArray([1]).to_byte_array())", BOTH("PackedByteArray", "to_byte_array")],
     ["to_byte_array 在其余八支放过", "\tprint(PackedInt32Array([1]).to_byte_array())", []],
+    ["byte 独有的名也吃元数两句（至多）", "\tprint(PackedByteArray([1]).hex_encode(1))", ['Too many arguments for "hex_encode()" call. Expected at most 0 but received 1.']],
+    ["compress 的上界一支", "\tprint(PackedByteArray([1]).compress(1, 2))", ['Too many arguments for "compress()" call. Expected at most 1 but received 2.']],
+    ["decompress 的下界一支", "\tvar b: PackedByteArray = PackedByteArray([1])\n\tprint(b.decompress())", ['Too few arguments for "decompress()" call. Expected at least 1 but received 0.']],
+    ["合法元数不许拦", "\tprint(PackedByteArray([1]).hex_encode())", []],
   ];
 
   it.each(CASES)("%s", async (_label, body, want) => {
