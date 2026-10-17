@@ -792,6 +792,15 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.265 lambda 形参的默认值接进出货（2026-10-17，S437，语料 382 十格逐字节，§6 第 60 条③结清）
+
+- **发法**：尾部带默认值的那几位发成 `const p = __a[i] as rt.Variant ?? <式子>;` —— 默认值在**调用那一刻**评，所以后一位看得见前一位（`func(x = 1, y = x)` 读数 `[1, 1]`）；没有默认值的 lambda 产物一字不变（闸门钉住 `}, 2);` 与 `}, 2, 0);` 的分别）。
+- **盒子多带一个数**：`rt.callable(fn, 声明数, 默认值形参数)`，`callableArityBounds` 因此给出 `[必填, 声明]` —— 少给报必填数、多给报声明数那两句在 `func(a, b = 2)` 上分别是 `Expected 1` / `Expected 2`，`get_argument_count()` 仍报声明数。
+- **解析期那一格**：分析器给默认值走查开的是「前面的形参 + 外层」那一层作用域，`func(a = b, b = 1)` 照引擎发 `Identifier "b" not declared in the current scope.`。
+- **三形仍拦**：默认值排在必填之前、默认值那一位直接放 lambda、带默认值的 lambda 再 `bind()` —— 三形没读数，按红线响亮拒。
+- **顺带撞出一族已知错值**：lambda 是**按值捕获**，出货按引用闭包（`var q = 7` → 建 lambda → `q = 9` → 引擎 7 / 出货 9），登 §6 第 89 条；语料 382 因此不收依赖捕获的格。
+- **门读数**：`pnpm test` **14383**（140 文件）、typecheck **4/4**、`test:compile` **261/370**、`test:diff` **254/254** 逐字节、`test:codegen` 全过。
+
 ### 1.264 循环变量的绑定改成按区域计数：出了循环不再冒充局部名（2026-10-17，S436，§6 第 88 条结清）
 
 - **漏点**：`emit/emitter.ts` 的 `collectBinds` 把 `for` 的循环变量记在整支函数上，只给「宿主方法名取值点」那一格当护栏用；于是 `for quit in [1, 2]` 之后 `print(quit)` 被当成局部名、发成裸 `quit`，产物到运行期才抛 JS 自己的 `quit is not defined` —— 引擎那里是宿主的 Callable（`SceneTree(<文件>)::quit`、typeof 25）。

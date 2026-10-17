@@ -42,6 +42,8 @@ export class CallableBox {
   builtin: string | null;
   /** 那一面这一名的元数上下界（发射器从量过的表里带过来）：`callableArityBounds` 与 `get_argument_count()` 都读它。 */
   builtinBounds: [number, number] | null;
+  /** lambda 尾部带默认值的形参数（`tmp/probe-lamdef/a1.gd` 量到的元数那一族）：默认值本身在**调用那一刻**才评，所以盒子里只存个数。 */
+  defaultCount: number;
   constructor(
     fn: Fn | null = null,
     name: string | null = null,
@@ -51,6 +53,7 @@ export class CallableBox {
     boundOnce = false,
     builtin: string | null = null,
     builtinBounds: [number, number] | null = null,
+    defaultCount = 0,
   ) {
     this.fn = fn;
     this.name = name;
@@ -60,6 +63,7 @@ export class CallableBox {
     this.boundOnce = boundOnce;
     this.builtin = builtin;
     this.builtinBounds = builtinBounds;
+    this.defaultCount = defaultCount;
   }
 }
 

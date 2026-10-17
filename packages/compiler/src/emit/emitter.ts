@@ -3163,9 +3163,14 @@ function emitExprVar(e: Expr): string {
       return `rt.wrapValue(rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)}))`;
 
     case "lambda": {
-      // lambda 形参的默认值未实现：只拒那一格，普通形参照常发。
-      if (e.params.some((p) => p.default !== null)) {
-        throw new UnsupportedError("lambda-param-default", "lambda 形参的默认值还没实测过，不发");
+      // 默认值形参必须排在尾部：`func(a = 1, b)` 那一形引擎没收过，不发（读数 `tmp/probe-lamdef/`）
+      const firstDef = e.params.findIndex((p) => p.default !== null);
+      if (firstDef >= 0 && e.params.slice(firstDef).some((p) => p.default === null)) {
+        throw new UnsupportedError("lambda-param-default", "lambda 的默认值形参排在必填形参之前那一形没实测过，不发");
+      }
+      const defs = e.params.flatMap((p) => (p.default === null ? [] : [p.default]));
+      if (defs.some((d) => d.kind === "lambda")) {
+        throw new UnsupportedError("lambda-param-default", "默认值那一位直接放 lambda 的形况没实测过，不发");
       }
       const lpad = "        ";
       const body = e.body.flatMap((st) => {
@@ -3177,8 +3182,9 @@ function emitExprVar(e: Expr): string {
         }
       });
       // 盒子里的式子统一收一个数组，所以按位置把形参绑成同名 const，并把声明形参数一起交给盒子。
-      const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant;`);
-      return [
+      // 默认值排在同名 const 之后：`func(x = 1, y = x)` 那格的读数是 `[1, 1]` —— 后一位看得见前一位（`tmp/probe-lamdef/{a1,c1}.gd`）
+      const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant` + (p.default === null ? "" : " ?? " + emitExpr(p.default)) + ";");
+      const lines: string[] = [
         `rt.callable((__a: rt.Variant[]) => {`,
         `        const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "<anonymous lambda>");`,
         "        try {",
@@ -3191,8 +3197,9 @@ function emitExprVar(e: Expr): string {
         "        } finally {",
         "          rt.frameExit(__gd_frame);",
         "        }",
-        `    }, ${e.params.length})`,
-      ].join("\n");
+        `    }, ${e.params.length}${defs.length === 0 ? "" : ", " + String(defs.length)})`,
+      ];
+      return lines.join(String.fromCharCode(10));
     }
 
     case "call":

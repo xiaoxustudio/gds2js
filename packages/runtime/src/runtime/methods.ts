@@ -209,6 +209,9 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   const empty = isNullCallable(box);
   switch (name) {
     case "bind": {
+      if (box.defaultCount > 0) {
+        throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
+      }
       // 绑定串排在**前面**；实参拼接不用 spread —— 静态编译目标上没有它的 lowering
       const next: Variant[] = [];
       for (const a of args) next.push(a);

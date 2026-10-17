@@ -3315,8 +3315,13 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
 
     case "lambda": {
       const fnScope = scope.child(e.params.map((p) => p.name));
-      // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置
-      for (const p of e.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
+      // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置。
+      // 能看见**排在前面的**形参（`tmp/probe-lamdef/a1.gd` 的 `y = x` 收），往后看就不行（`e4.gd` 的 `a = b` 是解析期那句未声明）。
+      let defScope = scope;
+      for (const p of e.params) {
+        if (p.default !== null) walkExpr(p.default, defScope, coroutines, diags);
+        defScope = defScope.child([p.name]);
+      }
       walkStmts(e.body, fnScope, coroutines, diags, false);
       return;
     }

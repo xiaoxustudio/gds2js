@@ -31,9 +31,9 @@ export {
 } from "./identity";
 export type { GdIdentified } from "./identity";
 
-/** lambda 的 Callable 盒子（`rt.callable((a) => {...}, 形参数)`）。 */
-export function callable(fn: Fn, arity: number | null = null): Variant {
-  return V.object(new CallableBox(fn, null, null, [], arity));
+/** lambda 的 Callable 盒子（`rt.callable((a) => {...}, 形参数)`）：第三参是尾部带默认值的形参数，元数句要用必填数。 */
+export function callable(fn: Fn, arity: number | null = null, defaultCount = 0): Variant {
+  return V.object(new CallableBox(fn, null, null, [], arity, false, null, null, defaultCount));
 }
 
 /** 方法 / 静态方法 Callable 的盒子：只记「在哪个对象上、叫什么」，调用时按名派发；lambda 不走这里，它的 `get_method()` 是 `<anonymous lambda>`。 */
@@ -89,6 +89,8 @@ export function declaredArgCount(box: CallableBox): number | null {
 /** Callable 的 `[必填, 全部]` 形参数：少给按「必填数」报、多给按「全部数」报；方法与静态方法查方法表，lambda 两个数都取发射器给的形参数。空 Callable 给 null，由调用方走另一句报错。 */
 export function callableArityBounds(box: CallableBox): [number, number] | null {
   if (isNullCallable(box)) return null;
+  // lambda 的尾部形参带默认值：必填数是「声明数 − 默认值数」，多给那一句仍报声明数（`tmp/probe-lamdef/{e1,e2,b1,b2}.gd`）
+  if (box.defaultCount > 0 && box.arity !== null) return [box.arity - box.defaultCount, box.arity];
   if (box.builtinBounds !== null) return box.builtinBounds;
   const name = box.name;
   if (name !== null) {
