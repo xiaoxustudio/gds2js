@@ -104,7 +104,7 @@ describe("值类型面只接成员名当值，两形不许顺手拦", () => {
   const CASES: Array<[string, string, string[]]> = [
     ["Vector2 成员名当值放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.length)", []],
     ["构造位 Vector2 成员名当值放过", "\tprint(Vector2(1, 2).normalized)", []],
-    ["值类型面的表外名没读数就放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", []],
+    ["值类型面的表外名报两遍（S461：实例成员全集取自本机 `--dump-extension-api`）", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", ['Cannot find member "nosuchzz" in base "Vector2".', 'Cannot find member "nosuchzz" in base "Vector2".']],
     ["值类型面上写成员名没读数就放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tv.length = 1", []],
     ["StringName 成员名当值放过", "\tvar s: StringName = StringName(\"ab\")\n\tprint(s.hash)", []],
     ["NodePath 成员名当值放过", "\tvar n: NodePath = NodePath(\"a/b\")\n\tprint(n.get_name_count)", []],
@@ -120,7 +120,7 @@ describe("值类型与两支名字面的属性读按七面名单分岔（S432）
   const say2 = (t: string, n: string): string => `Cannot find member "${n}" in base "${t}".`;
   const CASES: Array<[string, string, string[]]> = [
     ["Vector2 读宇宙内表外名报两遍", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.keys)", [say2("Vector2", "keys"), say2("Vector2", "keys")]],
-    ["Vector2 那一名宇宙外放过", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", []],
+    ["Vector2 那一名宇宙外也报两遍（S461）", "\tvar v: Vector2 = Vector2(3, 4)\n\tprint(v.nosuchzz)", [say2("Vector2", "nosuchzz"), say2("Vector2", "nosuchzz")]],
     ["值类型面的写形没读数不开口", "\tvar v: Vector2 = Vector2(3, 4)\n\tv.keys = 1", []],
     ["Color 读成员名放过", "\tvar c: Color = Color(1, 0.5, 0.25, 1)\n\tprint(c.to_html)", []],
     ["StringName 读表外名报两遍", "\tvar s: StringName = StringName(\"ab\")\n\tprint(s.size)", [say2("StringName", "size"), say2("StringName", "size")]],

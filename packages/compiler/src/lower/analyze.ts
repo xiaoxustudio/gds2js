@@ -2267,6 +2267,34 @@ function attrScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; params
 /** pack 九支的表外方法名只在这两种静态接收者上发那两句（`tmp/probe-slice/r7c.gd`：同一式子把接收者换成**推断来的**名字，
  *  引擎就不在解析期开口，改成运行期那句 `Invalid call. Nonexistent function …` —— 语料 224 就是这么一份读数）。
  *  属性那一形（不调用）引擎把同一句报两遍，读数 `tmp/probe-attr/compare3.txt` 九支一字一样。 */
+/** 值类型那一面在**实例接收者**上认得的成员名（方法 + 属性，取自本机 4.6.3 的 `--dump-extension-api`，类常量不算：`v.INF` / `v.DOWN` 引擎两句 `Cannot find member`，`v.abs` / `v.x` 全收 —— 读数 `tmp/d6/ap.txt`）。 */
+export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "Vector2": ["abs", "angle", "angle_to", "angle_to_point", "aspect", "bezier_derivative", "bezier_interpolate", "bounce", "ceil", "clamp", "clampf", "cross", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "from_angle", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "limit_length", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "move_toward", "normalized", "orthogonal", "posmod", "posmodv", "project", "reflect", "rotated", "round", "sign", "slerp", "slide", "snapped", "snappedf", "x", "y"],
+  "Vector2i": ["abs", "aspect", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y"],
+  "Vector3": ["abs", "angle_to", "bezier_derivative", "bezier_interpolate", "bounce", "ceil", "clamp", "clampf", "cross", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "inverse", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "limit_length", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "move_toward", "normalized", "octahedron_decode", "octahedron_encode", "outer", "posmod", "posmodv", "project", "reflect", "rotated", "round", "sign", "signed_angle_to", "slerp", "slide", "snapped", "snappedf", "x", "y", "z"],
+  "Vector3i": ["abs", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y", "z"],
+  "Color": ["a", "a8", "b", "b8", "blend", "clamp", "darkened", "from_hsv", "from_ok_hsl", "from_rgba8", "from_rgbe9995", "from_string", "g", "g8", "get_luminance", "h", "hex", "hex64", "html", "html_is_valid", "inverted", "is_equal_approx", "lerp", "lightened", "linear_to_srgb", "ok_hsl_h", "ok_hsl_l", "ok_hsl_s", "r", "r8", "s", "srgb_to_linear", "to_abgr32", "to_abgr64", "to_argb32", "to_argb64", "to_html", "to_rgba32", "to_rgba64", "v"],
+  "String": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64", "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
+  "StringName": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
+  "NodePath": ["get_as_property_path", "get_concatenated_names", "get_concatenated_subnames", "get_name", "get_name_count", "get_subname", "get_subname_count", "hash", "is_absolute", "is_empty", "slice"],
+  "int": [],
+  "float": [],
+  "bool": [],
+};
+
+/** 调用那一形同判据：只在 `BUILTIN_INSTANCE_MEMBERS` 覆盖的那几面开口，名字不在实例成员全集里才是引擎那两句。 */
+function instanceMemberAbsent(face: string, name: string): boolean {
+  if (face === "Array" || face === "Dictionary" || PACK_TYPE_NAMES.has(face)) return false;
+  const list = BUILTIN_INSTANCE_MEMBERS[face];
+  return list !== undefined && !list.includes(name);
+}
+
+/** 只在表里有的那几面开口：名字不在实例成员集里就是引擎那两句（`valueAttrKind` 的 `null` 那一格由这张实测表接管）。 */
+function builtinInstanceAbsent(face: string, name: string): boolean {
+  const list = BUILTIN_INSTANCE_MEMBERS[face];
+  return list !== undefined && !list.includes(name);
+}
+
 function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, params } of attrScopes(m)) {
     const ann = new Map<string, string>();
@@ -2306,7 +2334,19 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         const callee = n.callee as Record<string, unknown> | undefined;
         if (callee === undefined || callee.kind !== "attribute") continue;
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
-        if (kind === null || !PACK_TYPE_NAMES.has(kind)) continue;
+        if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
+          if (callee.obj === undefined || (callee.obj as Record<string, unknown>).kind !== "index") continue;
+          const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems);
+          if (vface === null) continue;
+          const vmethod = callee.name;
+          if (typeof vmethod !== "string") continue;
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod)) continue;
+          if (!instanceMemberAbsent(vface, vmethod)) continue;
+          const vloc = (n.loc as Diagnostic["loc"]) ?? null;
+          diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
+          diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
+          continue;
+        }
         const method = callee.name;
         if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
         if (!packNameMeasuredAbsent(kind, method)) continue;
@@ -2338,7 +2378,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         ? packNameMeasuredAbsent(face, name)
         : face === "Array" || face === "String"
           ? true
-          : valueAttrKind(face, name) === "absent";
+          : valueAttrKind(face, name) === "absent" || builtinInstanceAbsent(face, name);
       if (!absent) continue;
       // 值类型那七面只量过**读**那一形（`tmp/probe-vattr/`），写形没读数就不开口
       if (!refused && writeTargets.has(n)) continue;
