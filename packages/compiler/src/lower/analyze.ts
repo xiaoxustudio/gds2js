@@ -217,28 +217,43 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       continue;
     }
     if (t.init === null) continue;
-    const slots: Array<{ exprs: Expr[]; kind: string }> = [];
+    /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格） */
+    const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
+      diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
+      diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
+    };
     if (m2[1] === "Array") {
-      if (t.init.kind === "array") slots.push({ exprs: t.init.items, kind: inner.trim() });
+      const kind = inner.trim();
+      if (t.init.kind === "array") {
+        let done = false;
+        for (const it of t.init.items) {
+          if (done) break;
+          const st = slotSource(it);
+          if (st === null || canHold(kind, st)) continue;
+          done = true;
+          report(st, kind, `Cannot have an element of type "${st}" in an array of type "Array[${kind}]".`);
+        }
+      }
     } else {
       const parts = inner.split(",").map((p) => p.trim());
       const keyKind = parts[0] ?? "";
       const valKind = parts[1] ?? "";
       if (t.init.kind === "dict" && parts.length === 2) {
-        slots.push({ exprs: t.init.entries.map((e) => e.key), kind: keyKind });
-        slots.push({ exprs: t.init.entries.map((e) => e.value), kind: valKind });
-      }
-    }
-    for (const slot of slots) {
-      for (const it of slot.exprs) {
-        const st = slotSource(it);
-        if (st === null) continue;
-        if (!canHold(slot.kind, st)) {
-          diags.push({
-            code: "typed-collection-literal",
-            message: `Cannot include a value of type "${st}" as "${slot.kind}".`,
-            loc: it.loc,
-          });
+        const text = `Dictionary[${keyKind}, ${valKind}]`;
+        let done = false;
+        for (const en of t.init.entries) {
+          if (done) break;
+          const ks = slotSource(en.key);
+          if (ks !== null && !canHold(keyKind, ks)) {
+            done = true;
+            report(ks, keyKind, `Cannot have a key of type "${ks}" in a dictionary of type "${text}".`);
+            break;
+          }
+          const vs = slotSource(en.value);
+          if (vs !== null && !canHold(valKind, vs)) {
+            done = true;
+            report(vs, valKind, `Cannot have a value of type "${vs}" in a dictionary of type "${text}".`);
+          }
         }
       }
     }
