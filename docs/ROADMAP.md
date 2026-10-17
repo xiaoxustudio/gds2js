@@ -792,6 +792,13 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.268 捕获表补上子作用域的继承：循环体与嵌套 lambda 也进影子层（2026-10-17，S438 ⑧，语料 383 扩到十格）
+
+- **上一轮漏的一半**：`Scope.child` 建出来的子作用域没带上「函数那一段」的标记，于是循环体里、lambda 体里读到的外层局部全被判成非局部 —— P9 那格引擎 `[7, 9, 9]` 出货 `[9, 9, 9]`，P10 引擎 `[2, 3]` 出货 `[101, 102]`。
+- **改法**：`child()` 把 `isLocal` 往下传（`funcChild` 仍只用于函数那一层），捕获表自然覆盖嵌套 lambda 与循环体；容器仍只拷引用。
+- **门**：`lambda-param-defaults.test.ts` 加一格「循环体里建的 lambda 也带上影子层」（钉 `(((k, n) => rt.callable(` 与 `))(k, n);`），16 格全过；语料 383 从八格扩到十格，golden 由裁判重写。
+- **门读数**：`pnpm test` **14392**（140 文件）、typecheck **4/4**、`test:compile` **262/371**、`test:diff` **255/255** 逐字节、`test:codegen` 全过。
+
 ### 1.267 lambda 按值捕获接进出货：影子箭头一层（2026-10-17，S438，语料 383 八格逐字节，§6 第 89 条结清）
 
 - **上一轮量到的唯一错值面**：函数级标量局部该在 lambda 创建那一刻冻住（引擎 5 / 出货 6；`s1` 那格 2 对 11），本轮按 §6 第 89 条⑤定好的接法落地。

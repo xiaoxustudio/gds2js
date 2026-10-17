@@ -70,7 +70,7 @@ class Scope {
   }
 
   child(names: string[], selfOk?: boolean): Scope {
-    return new Scope(new Set(names), this, selfOk);
+    return new Scope(new Set(names), this, selfOk, this.isLocal);
   }
 
   declare(name: string): void {

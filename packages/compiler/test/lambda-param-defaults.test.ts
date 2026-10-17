@@ -132,6 +132,12 @@ describe("lambda 按值捕获函数级局部", () => {
     expect(code.includes("rt.callable((__a: rt.Variant[]) => {")).toBe(true);
   });
 
+  it("循环体里建的 lambda 也带上影子层", async () => {
+    const code = await emit("\tvar n = 1\n\tfor k in [1, 2]:\n\t\tvar f = func(): return k + n");
+    expect(code.includes("(((k, n) => rt.callable(")).toBe(true);
+    expect(code.includes("))(k, n);")).toBe(true);
+  });
+
   it("默认值里读到的外层局部一起进影子表", async () => {
     const code = await emit("\tvar q = 7\n\tvar f = func(x = q): return x");
     expect(code.includes("(((q) => rt.callable(")).toBe(true);

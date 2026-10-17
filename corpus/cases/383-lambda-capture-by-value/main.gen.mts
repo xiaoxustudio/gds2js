@@ -91,7 +91,7 @@ export class Main extends SceneTree {
       rt.frameLine(18);
       for (let i of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2), rt.V.int(3)])))) {
         rt.frameLine(19);
-        rt.method(coll, "append", [rt.callable((__a: rt.Variant[]) => {
+        rt.method(coll, "append", [(((i) => rt.callable((__a: rt.Variant[]) => {
         const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
         try {
           rt.frameLine(19);
@@ -102,7 +102,7 @@ export class Main extends SceneTree {
         } finally {
           rt.frameExit(__gd_frame);
         }
-    }, 0)]);
+    }, 0)))(i)]);
       }
       rt.frameLine(20);
       let outs = rt.V.array(rt.GArray.of([]));
@@ -120,7 +120,7 @@ export class Main extends SceneTree {
         const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
         try {
           rt.frameLine(25);
-          return rt.callable((__a: rt.Variant[]) => {
+          return (((outer) => rt.callable((__a: rt.Variant[]) => {
         const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
         try {
           rt.frameLine(25);
@@ -131,7 +131,7 @@ export class Main extends SceneTree {
         } finally {
           rt.frameExit(__gd_frame);
         }
-    }, 0);
+    }, 0)))(outer);
         } catch (__gd_err) {
           rt.gdFunctionError(__gd_err);
           return rt.V.nil();
@@ -194,6 +194,83 @@ export class Main extends SceneTree {
       rt.frameLine(35);
       print(rt.showArgs([rt.V.str("P8|"), rt.method(selfl, "call", [])]));
       rt.frameLine(36);
+      let inner = rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          rt.frameLine(37);
+          let w = rt.V.int(7);
+          rt.frameLine(38);
+          let g = (((w) => rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          rt.frameLine(38);
+          return w;
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
+    }, 0)))(w);
+          rt.frameLine(39);
+          w = rt.V.int(9);
+          rt.frameLine(40);
+          let h = (((w) => rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          const y = __a[0] as rt.Variant ?? w;
+          rt.frameLine(40);
+          return y;
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
+    }, 1, 1)))(w);
+          rt.frameLine(41);
+          return rt.V.array(rt.GArray.of([rt.method(g, "call", []), rt.method(h, "call", []), w]));
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
+    }, 0);
+      rt.frameLine(42);
+      print(rt.showArgs([rt.V.str("P9|"), rt.method(inner, "call", [])]));
+      rt.frameLine(43);
+      let acc = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(44);
+      let n = 1;
+      rt.frameLine(45);
+      for (let k of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])))) {
+        rt.frameLine(46);
+        rt.method(acc, "append", [(((k, n) => rt.callable((__a: rt.Variant[]) => {
+        const __gd_frame = rt.frameEnter("res://main.gd", "<anonymous lambda>");
+        try {
+          rt.frameLine(46);
+          return rt.ops.add(k, rt.V.int(n));
+        } catch (__gd_err) {
+          rt.gdFunctionError(__gd_err);
+          return rt.V.nil();
+        } finally {
+          rt.frameExit(__gd_frame);
+        }
+    }, 0)))(k, n)]);
+      }
+      rt.frameLine(47);
+      n = 100;
+      rt.frameLine(48);
+      let got = rt.V.array(rt.GArray.of([]));
+      rt.frameLine(49);
+      for (let m of rt.iter(acc)) {
+        rt.frameLine(50);
+        rt.method(got, "append", [rt.method(m, "call", [])]);
+      }
+      rt.frameLine(51);
+      print(rt.showArgs([rt.V.str("P10|"), got]));
+      rt.frameLine(52);
       this.quit();
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);

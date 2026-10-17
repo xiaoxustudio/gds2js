@@ -33,4 +33,20 @@ func _initialize():
 	print("P7|", deff.call())
 	var selfl = func(): return typeof(self)
 	print("P8|", selfl.call())
+	var inner = func():
+		var w = 7
+		var g = func(): return w
+		w = 9
+		var h = func(y = w): return y
+		return [g.call(), h.call(), w]
+	print("P9|", inner.call())
+	var acc = []
+	var n = 1
+	for k in [1, 2]:
+		acc.append(func(): return k + n)
+	n = 100
+	var got = []
+	for m in acc:
+		got.append(m.call())
+	print("P10|", got)
 	quit()
