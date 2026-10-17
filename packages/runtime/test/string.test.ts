@@ -9,6 +9,8 @@ import { isLess, ops, sortLess, strOps } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBinToInt, strCase, strCaseStyle, strCapitalize, strCEscape, strCount, strEndsWith, strEraseAt, strFind, strFloat, strGetSlice, strInsertAt, strIsValidFilename, strGetSlicec, strPadZeros, strRepeat, strStartsWith, strStripEdges, strUriDecode, strUnicodeAt, strUriEncode, strFormat, strFormatV, strReplace, stringCtor, stringNameCtor, stringStatic, truthyOf, valueEq } from "@gds2js/runtime/runtime/values";
 import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/vector3";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/values · String 方法族", () => {
@@ -46,9 +48,36 @@ describe("runtime/values · String 方法族", () => {
     shouldThrow("063", "# 标志不支持要抛", () => F("%#x", [V.int(1)]));
     shouldThrow("063", "%d 收字符串要抛", () => F("%d", [V.str("abc")]));
     shouldThrow("063", "%f 收字符串要抛", () => F("%f", [V.str("abc")]));
-    shouldThrow("063", "%x 收 float 未实测要抛", () => F("%x", [V.float(3.5)]));
+    eq("063", "%x 收 float 向零截断", F("%x", [V.float(3.5)]), "3");
     shouldThrow("063", "参数不足要抛", () => F("%d %d", [V.int(1)]));
-    eq("063", "实参多余则原样返回格式串", F("%d", [V.int(1), V.int(2)]), "%d");
+    shouldThrow("063", "实参多余要抛", () => F("%d", [V.int(1), V.int(2)]));
+  });
+
+  it("063b · % 的值通道按 146 格读数", async () => {
+    const F = (fmt: string, args: unknown[]) => strFormat(fmt, args as never);
+    eq("063b", "%c 收单字符串", F("%c", [V.str("z")]), "z");
+    eq("063b", "%c 截断 float", F("%c", [V.float(65.9)]), "A");
+    eq("063b", "%c 码点上界", F("%c", [V.int(1114111)]), String.fromCodePoint(1114111));
+    shouldThrow("063b", "%c 越上界那句", () => F("%c", [V.int(1114112)]));
+    shouldThrow("063b", "%c 负数那句", () => F("%c", [V.int(-1)]));
+    shouldThrow("063b", "%c 多字符串那句", () => F("%c", [V.str("ab")]));
+    shouldThrow("063b", "%c 收 bool 那句", () => F("%c", [V.bool(true)]));
+    eq("063b", "%v 两支", F("%v", [vector2(1, 2)]), "(1.000000, 2.000000)");
+    eq("063b", "%v 三支带负", F("%v", [vector3(1.5, -2.25, 3)]), "(1.500000, -2.250000, 3.000000)");
+    eq("063b", "%v 精度", F("%.2v", [vector2(1, 2)]), "(1.00, 2.00)");
+    eq("063b", "%v 的 inf 与 nan", F("%v", [vector2(Infinity, NaN)]), "(inf, nan)");
+    shouldThrow("063b", "%v 收 int 那句", () => F("%v", [V.int(1)]));
+    shouldThrow("063b", "%u 那句是断句不是型错", () => F("%u", [V.int(1)]));
+    shouldThrow("063b", "结尾裸 % 也是断句", () => F("a%", [V.int(1)]));
+    shouldThrow("063b", "%(k)s 运行期也拒", () => F("%(k)s", [V.dict(new Map())]));
+    eq("063b", "星号宽度", F("%*d", [V.int(3), V.int(7)]), "  7");
+    eq("063b", "星号宽度截断 float", F("%*d", [V.float(2.7), V.int(7)]), " 7");
+    eq("063b", "星号宽度负数不补", F("%*d", [V.int(-1), V.int(7)]), "7");
+    eq("063b", "星号宽度给向量不补", F("%*d", [vector2(1, 2), V.int(7)]), "7");
+    eq("063b", "星号精度", F("%*.*f", [V.int(2), V.int(3), V.float(1.5)]), "1.500");
+    shouldThrow("063b", "星号收串那句", () => F("%*d", [V.str("x"), V.int(7)]));
+    eq("063b", "数组实参展开", F("%d%s", [V.int(1), V.str("x")]), "1x");
+    shouldThrow("063b", "向量槽多用实参那句晚于型判", () => F("%v", [V.int(1), V.int(2)]));
   });
 
   it("064 · inf 渲染", async () => {

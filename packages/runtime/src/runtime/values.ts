@@ -1988,7 +1988,22 @@ export function strCaseStyle(s: string, style: "snake" | "kebab" | "camel"): str
   return joined.join(style === "snake" ? "_" : "-");
 }
 
-/** Godot 的 `%` 只认这几个转换符；`%i %u %e %g` 与 `#` 标志在 Godot 是 Parse Error。 */const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f"]);
+/** Godot 的 `%` 只认这七个转换符；其余 44 名（`%i %e %g %n %l` 与 `#` / 空格旗标）解析期与运行期都是 unsupported 那一句，`%u` 是 incomplete。 */
+const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f", "v"]);
+
+/** 运行期那九句（与解析期同文，只是运算符写成带引号的 `'%'`；读数 `tmp/probe-pct/round5-table.txt`、`round6b/c-table.txt`）。 */
+const FMT_ERR = {
+  unsupported: "unsupported format character in operator '%'.",
+  incomplete: "incomplete format in operator '%'.",
+  number: "a number is required in operator '%'.",
+  char: "%c requires number or single-character string in operator '%'.",
+  lower: "unsigned integer is lower than minimum in operator '%'.",
+  upper: "unsigned integer is greater than maximum in operator '%'.",
+  vector: "%v requires a vector type (Vector2/3/4/2i/3i/4i) in operator '%'.",
+  star: "* wants number or vector in operator '%'.",
+  notAll: "not all arguments converted during string formatting in operator '%'.",
+  notEnough: "not enough arguments for format string in operator '%'.",
+};
 
 interface FmtSpec {
   flags: string;
@@ -1996,6 +2011,8 @@ interface FmtSpec {
   prec: number | null;
   type: string;
   text: string;
+  widthStar: boolean;
+  precStar: boolean;
 }
 
 type FmtTok = { lit: string } | { spec: FmtSpec };
@@ -2013,19 +2030,38 @@ function padFmt(body: string, sign: string, sp: FmtSpec): string {
 function fmtNum(a: Variant, sp: FmtSpec): number {
   if (a.t === Tag.INT) return intToNum(a.v as IntPayload);
   if (a.t === Tag.FLOAT) return a.v as number;
-  throw new UnsupportedError(
-    "format-number",
-    `${sp.text} 需要数值，收到 ${tagName(a.t)}（Godot 此处是 Parse Error: a number is required in operator %）`,
-  );
+  throw new GodotRuntimeError("format-number", FMT_ERR.number);
 }
 
-/** x / X / o / c 的实参只收 int，收到别的响亮拒。 */
-function fmtIntOnly(a: Variant, sp: FmtSpec): bigint {
-  if (a.t === Tag.INT) return intToBig(a.v as IntPayload);
-  throw new UnsupportedError(
-    "format-int",
-    `${sp.text} 只对 int 实测过（收到 ${tagName(a.t)}）；Godot 对 float 的行为未探针确认，拒绝猜测`,
-  );
+/** `%d %x %X %o` 共用的截断：float 走 `(int64)trunc(v)`，越界给 -9223372036854775808 那一格（w04–w06）。 */
+function fmtTruncMag(a: Variant, sp: FmtSpec): { neg: boolean; mag: bigint } {
+  if (a.t === Tag.INT) {
+    const p = intToBig(a.v as IntPayload);
+    return { neg: p < 0n, mag: p < 0n ? -p : p };
+  }
+  const v = fmtNum(a, sp);
+  const t = Number.isFinite(v) ? Math.trunc(v) : Number.NaN;
+  const inRange = Number.isFinite(t) && t >= -TWO_63_B && t < TWO_63_B;
+  if (!inRange) return { neg: true, mag: 2n ** 63n };
+  const b = BigInt(t);
+  return { neg: b < 0n, mag: b < 0n ? -b : b };
+}
+
+/** `%v` 的接收者：六型向量里出货只有四型（Vector4 属 D6 那七型），其余一律引擎那句「要向量」。 */
+function fmtVecComps(a: Variant): number[] | null {
+  if (a.t !== Tag.OBJECT) return null;
+  const o = a.v as object;
+  if (o instanceof GVector2) return [o.x, o.y];
+  if (o instanceof GVector2i) return [o.x, o.y];
+  if (o instanceof GVector3) return [o.x, o.y, o.z];
+  if (o instanceof GVector3i) return [o.x, o.y, o.z];
+  return null;
+}
+
+/** 向量的每一支按 `%f` 的默认精度印（实测 `(1.000000, 2.000000)`，`%.2v` 给 `(1.00, 2.00)`，INF / NAN 给 `inf` / `nan`）。 */
+function fmtVecPart(v: number, prec: number | null): string {
+  if (!Number.isFinite(v)) return Number.isNaN(v) ? "nan" : v < 0 ? "-inf" : "inf";
+  return (Object.is(v, -0) || v < 0 ? "-" : "") + Math.abs(v).toFixed(prec ?? 6);
 }
 
 export function strFormat(fmt: string, args: Variant[]): string {
@@ -2049,42 +2085,43 @@ export function strFormat(fmt: string, args: Variant[]): string {
       k++;
     }
     let width = 0;
-    while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
-      width = width * 10 + (fmt[k]!.charCodeAt(0) - 48);
+    let widthStar = false;
+    if (fmt[k] === "*") {
+      widthStar = true;
       k++;
-    }
-    let prec: number | null = null;
-    if (fmt[k] === ".") {
-      k++;
-      prec = 0;
+    } else {
       while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
-        prec = prec * 10 + (fmt[k]!.charCodeAt(0) - 48);
+        width = width * 10 + (fmt[k]!.charCodeAt(0) - 48);
         k++;
       }
     }
-    const t = fmt[k];
-    if (t === undefined || !FMT_TYPES.has(t)) {
-      throw new UnsupportedError(
-        "format-spec",
-        `不支持的格式符 "${fmt.slice(i, k + 1)}"：Godot 只认 d o x X c s f` +
-          `（%i/%u/%e/%g 与 # 标志实测是 Parse Error: unsupported format character）`,
-      );
+    let prec: number | null = null;
+    let precStar = false;
+    if (fmt[k] === ".") {
+      k++;
+      if (fmt[k] === "*") {
+        precStar = true;
+        k++;
+      } else {
+        prec = 0;
+        while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
+          prec = prec * 10 + (fmt[k]!.charCodeAt(0) - 48);
+          k++;
+        }
+      }
     }
+    const t = fmt[k];
+    if (t === undefined || t === "u") throw new GodotRuntimeError("format-spec", FMT_ERR.incomplete);
+    if (!FMT_TYPES.has(t)) throw new GodotRuntimeError("format-spec", FMT_ERR.unsupported);
     toks.push({ lit });
     lit = "";
-    toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1) } });
-    specs++;
+    toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1), widthStar, precStar } });
+    specs += 1 + (widthStar ? 1 : 0) + (precStar ? 1 : 0);
     i = k;
   }
   toks.push({ lit });
 
-  if (args.length > specs) return fmt;
-  if (args.length < specs) {
-    throw new GodotRuntimeError(
-      "format-arity",
-      `格式化参数不足: ${fmt}（需 ${specs} 个，给了 ${args.length} 个；Godot 是 Parse Error: not enough arguments）`,
-    );
-  }
+  if (args.length < specs) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
 
   let ai = 0;
   let out = "";
@@ -2093,41 +2130,23 @@ export function strFormat(fmt: string, args: Variant[]): string {
       out += tk.lit;
       continue;
     }
-    const sp = tk.spec;
+    const spec = tk.spec;
+    let sp = spec;
+    if (spec.widthStar || spec.precStar) {
+      let width = spec.width;
+      let prec = spec.prec;
+      if (spec.widthStar) width = fmtStar(args[ai++]!);
+      if (spec.precStar) prec = fmtStar(args[ai++]!);
+      sp = { ...spec, width, prec };
+    }
     const a = args[ai++]!;
     switch (sp.type) {
       case "s":
         out += padFmt(show(a), "", sp);
         break;
       case "d": {
-        let neg: boolean;
-        let body: string;
-        if (a.t === Tag.INT) {
-          const p = a.v as IntPayload;
-          if (typeof p === "bigint") {
-            neg = p < 0n;
-            body = (neg ? -p : p).toString();
-          } else {
-            neg = p < 0;
-            body = Math.abs(p).toString();
-          }
-        } else {
-          // float 走 C 那句 `(int64)trunc(v)`：实测 1.5 → 1、-1.5 → -1，而 ±inf / nan / 1e30 这三种越界一律给
-          // -9223372036854775808（x64 的 integer-indeterminate 结果，w04–w06 三格同值）。
-          const v = fmtNum(a, sp);
-          const t = Number.isFinite(v) ? Math.trunc(v) : Number.NaN;
-          const inRange = Number.isFinite(t) && t >= -TWO_63_B && t < TWO_63_B;
-          if (!inRange) {
-            neg = true;
-            body = "9223372036854775808";
-          } else {
-            const b = BigInt(t);
-            neg = b < 0n;
-            body = (neg ? -b : b).toString();
-          }
-        }
-        const sign = neg ? "-" : sp.flags.includes("+") ? "+" : "";
-        out += padFmt(body, sign, sp);
+        const { neg, mag } = fmtTruncMag(a, sp);
+        out += padFmt(mag.toString(10), neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
         break;
       }
       case "f": {
@@ -2150,22 +2169,55 @@ export function strFormat(fmt: string, args: Variant[]): string {
       case "x":
       case "X":
       case "o": {
-        const p = fmtIntOnly(a, sp);
-        const neg = p < 0n;
-        const mag = neg ? -p : p;
+        const { neg, mag } = fmtTruncMag(a, sp);
         const base = sp.type === "o" ? 8 : 16;
         const body = sp.type === "X" ? mag.toString(base).toUpperCase() : mag.toString(base);
         out += padFmt(body, neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
         break;
       }
       case "c": {
-        const p = fmtIntOnly(a, sp);
-        out += padFmt(String.fromCodePoint(Number(p)), "", sp);
+        if (a.t === Tag.STRING) {
+          const s = a.v as string;
+          if (s.length !== 1) throw new GodotRuntimeError("format-char", FMT_ERR.char);
+          out += padFmt(s, "", sp);
+          break;
+        }
+        if (a.t !== Tag.INT && a.t !== Tag.FLOAT) throw new GodotRuntimeError("format-char", FMT_ERR.char);
+        const cp = a.t === Tag.INT ? intToBig(a.v as IntPayload) : fmtStarCodepoint(a.v as number);
+        if (cp < 0n) throw new GodotRuntimeError("format-char", FMT_ERR.lower);
+        if (cp > 1114111n) throw new GodotRuntimeError("format-char", FMT_ERR.upper);
+        out += padFmt(String.fromCodePoint(Number(cp)), "", sp);
+        break;
+      }
+      case "v": {
+        const comps = fmtVecComps(a);
+        if (comps === null) throw new GodotRuntimeError("format-vector", FMT_ERR.vector);
+        out += padFmt("(" + comps.map((c) => fmtVecPart(c, sp.prec)).join(", ") + ")", "", sp);
         break;
       }
     }
   }
+  // 多出来的实参要到**走完所有槽**才算数：`"%v" % [1, 2]` 引擎给的是「要向量」而不是参数多用那一句（round5 c16）
+  if (args.length > specs) throw new GodotRuntimeError("format-arity", FMT_ERR.notAll);
   return out;
+}
+
+/** `%c` 的 float 走截断：实测 1.5 → U+0001、-0.5 与 -0.0 → U+0000、1e30 越界落到 int64 那一头（负 → lower 那句）。 */
+function fmtStarCodepoint(v: number): bigint {
+  if (!Number.isFinite(v)) return -(2n ** 63n);
+  const t = Math.trunc(v);
+  return t >= -TWO_63_B && t < TWO_63_B ? BigInt(t) : -(2n ** 63n);
+}
+
+/** `*`（宽度与精度那一位）实测收数与向量：截断、负数与向量都不补，其余给引擎那句。
+ *  1e7 以上也不补 —— 引擎那一格给的就是 `7`（`999999999999`），而 2147483648 那一格把进程挂住、没有值可对。 */
+function fmtStar(a: Variant): number {
+  if (a.t === Tag.INT || a.t === Tag.FLOAT) {
+    const p = a.t === Tag.INT ? intToBig(a.v as IntPayload) : BigInt(fmtStarCodepoint(a.v as number));
+    return p > 0n && p <= 10000000n ? Number(p) : 0;
+  }
+  if (fmtVecComps(a) === null) throw new GodotRuntimeError("format-star", FMT_ERR.star);
+  return 0;
 }
 
 /** `n.toPrecision(17)` 的等价实现（bigint 手算）：口径是**约 17 位有效数字**，不是 double 的精确展开。 */

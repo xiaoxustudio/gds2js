@@ -246,6 +246,10 @@ export const ops = {
   },
 
   mod(a: Variant, b: Variant): Variant {
+    if (a.t === Tag.STRING) {
+      const list = b.t === Tag.ARRAY ? (b.v as GArray).raw() : [b];
+      return V.str(strFormat(a.v as string, list));
+    }
     const ziMod = asVec2i(a);
     const zjMod = asVec2i(b);
     if (ziMod && zjMod) return vector2i(mod32(ziMod.x, zjMod.x), mod32(ziMod.y, zjMod.y));
