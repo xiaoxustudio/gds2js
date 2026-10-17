@@ -17,7 +17,6 @@ import {
 } from "./global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
-import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE } from "@gds2js/runtime/runtime/packed";
 import {
   ARRAY_METHOD_ARITY,
   NODE_PATH_METHOD_ARITY,
@@ -2225,9 +2224,10 @@ function packFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   return null;
 }
 
-function packNameMeasuredAbsent(kind: string, name: string): boolean {
-  if (PACK_ABSENT_ALL.includes(name)) return true;
-  return (kind === "PackedByteArray" ? PACK_ABSENT_BYTE_ONLY : PACK_ABSENT_NOT_BYTE).includes(name);
+/** pack 那一面的表外名：不在 dump 的方法全集里就是那两句（S480，尺 `tmp/d6/ppack.py` 八十一格 + `tmp/d6/ppack2.py` 二百五十三格）。 */
+function memberNameAbsent(face: string, name: string): boolean {
+  const list = BUILTIN_INSTANCE_MEMBERS[face];
+  return list !== undefined && !list.includes(name);
 }
 
 /** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
@@ -2257,7 +2257,7 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
       if (owner !== null && typeof mname === "string") {
         const by = BUILTIN_METHOD_RETURNS[owner];
         const rt = by === undefined ? undefined : by[mname];
-        if (typeof rt === "string" && (instanceFaceManaged(rt) || rt === "String")) return rt;
+        if (typeof rt === "string" && (instanceFaceManaged(rt) || rt === "String" || PACK_TYPE_NAMES.has(rt))) return rt;
       }
     }
   }
@@ -2306,6 +2306,15 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
   "int": [],
   "float": [],
   "bool": [],
+  "PackedByteArray": ["append", "append_array", "bsearch", "bswap16", "bswap32", "bswap64", "clear", "compress", "count", "decode_double", "decode_float", "decode_half", "decode_s16", "decode_s32", "decode_s64", "decode_s8", "decode_u16", "decode_u32", "decode_u64", "decode_u8", "decode_var", "decode_var_size", "decompress", "decompress_dynamic", "duplicate", "encode_double", "encode_float", "encode_half", "encode_s16", "encode_s32", "encode_s64", "encode_s8", "encode_u16", "encode_u32", "encode_u64", "encode_u8", "encode_var", "erase", "fill", "find", "get", "get_string_from_ascii", "get_string_from_multibyte_char", "get_string_from_utf16", "get_string_from_utf32", "get_string_from_utf8", "get_string_from_wchar", "has", "has_encoded_var", "hex_encode", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_color_array", "to_float32_array", "to_float64_array", "to_int32_array", "to_int64_array", "to_vector2_array", "to_vector3_array", "to_vector4_array"],
+  "PackedInt32Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedInt64Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedFloat32Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedFloat64Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedStringArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedVector2Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedVector3Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedColorArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
 };
 
 /** 调用那一形同判据：只在 `BUILTIN_INSTANCE_MEMBERS` 覆盖的那几面开口，名字不在实例成员全集里才是引擎那两句。 */
@@ -2328,9 +2337,9 @@ export const BUILTIN_METHOD_RETURNS: Readonly<Record<string, Readonly<Record<str
   "Vector3": {"abs": "Vector3", "angle_to": "float", "bezier_derivative": "Vector3", "bezier_interpolate": "Vector3", "bounce": "Vector3", "ceil": "Vector3", "clamp": "Vector3", "clampf": "Vector3", "cross": "Vector3", "cubic_interpolate": "Vector3", "cubic_interpolate_in_time": "Vector3", "direction_to": "Vector3", "distance_squared_to": "float", "distance_to": "float", "dot": "float", "floor": "Vector3", "inverse": "Vector3", "is_equal_approx": "bool", "is_finite": "bool", "is_normalized": "bool", "is_zero_approx": "bool", "length": "float", "length_squared": "float", "lerp": "Vector3", "limit_length": "Vector3", "max": "Vector3", "max_axis_index": "int", "maxf": "Vector3", "min": "Vector3", "min_axis_index": "int", "minf": "Vector3", "move_toward": "Vector3", "normalized": "Vector3", "octahedron_decode": "Vector3", "octahedron_encode": "Vector2", "posmod": "Vector3", "posmodv": "Vector3", "project": "Vector3", "reflect": "Vector3", "rotated": "Vector3", "round": "Vector3", "sign": "Vector3", "signed_angle_to": "float", "slerp": "Vector3", "slide": "Vector3", "snapped": "Vector3", "snappedf": "Vector3",},
   "Vector3i": {"abs": "Vector3i", "clamp": "Vector3i", "clampi": "Vector3i", "distance_squared_to": "int", "distance_to": "float", "length": "float", "length_squared": "int", "max": "Vector3i", "max_axis_index": "int", "maxi": "Vector3i", "min": "Vector3i", "min_axis_index": "int", "mini": "Vector3i", "sign": "Vector3i", "snapped": "Vector3i", "snappedi": "Vector3i",},
   "Color": {"blend": "Color", "clamp": "Color", "darkened": "Color", "from_hsv": "Color", "from_ok_hsl": "Color", "from_rgba8": "Color", "from_rgbe9995": "Color", "from_string": "Color", "get_luminance": "float", "hex": "Color", "hex64": "Color", "html": "Color", "html_is_valid": "bool", "inverted": "Color", "is_equal_approx": "bool", "lerp": "Color", "lightened": "Color", "linear_to_srgb": "Color", "srgb_to_linear": "Color", "to_abgr32": "int", "to_abgr64": "int", "to_argb32": "int", "to_argb64": "int", "to_html": "String", "to_rgba32": "int", "to_rgba64": "int",},
-  "StringName": {"begins_with": "bool", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "casecmp_to": "int", "contains": "bool", "containsn": "bool", "count": "int", "countn": "int", "dedent": "String", "ends_with": "bool", "erase": "String", "filecasecmp_to": "int", "filenocasecmp_to": "int", "find": "int", "findn": "int", "format": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "get_slice": "String", "get_slice_count": "int", "get_slicec": "String", "hash": "int", "hex_to_int": "int", "indent": "String", "insert": "String", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_subsequence_of": "bool", "is_subsequence_ofn": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "join": "String", "json_escape": "String", "left": "String", "length": "int", "lpad": "String", "lstrip": "String", "match": "bool", "matchn": "bool", "md5_text": "String", "naturalcasecmp_to": "int", "naturalnocasecmp_to": "int", "nocasecmp_to": "int", "pad_decimals": "String", "pad_zeros": "String", "path_join": "String", "remove_char": "String", "remove_chars": "String", "repeat": "String", "replace": "String", "replace_char": "String", "replace_chars": "String", "replacen": "String", "reverse": "String", "rfind": "int", "rfindn": "int", "right": "String", "rpad": "String", "rstrip": "String", "sha1_text": "String", "sha256_text": "String", "similarity": "float", "simplify_path": "String", "strip_edges": "String", "strip_escapes": "String", "substr": "String", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "trim_prefix": "String", "trim_suffix": "String", "unicode_at": "int", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
+  "StringName": {"begins_with": "bool", "bigrams": "PackedStringArray", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "casecmp_to": "int", "contains": "bool", "containsn": "bool", "count": "int", "countn": "int", "dedent": "String", "ends_with": "bool", "erase": "String", "filecasecmp_to": "int", "filenocasecmp_to": "int", "find": "int", "findn": "int", "format": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "get_slice": "String", "get_slice_count": "int", "get_slicec": "String", "hash": "int", "hex_decode": "PackedByteArray", "hex_to_int": "int", "indent": "String", "insert": "String", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_subsequence_of": "bool", "is_subsequence_ofn": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "join": "String", "json_escape": "String", "left": "String", "length": "int", "lpad": "String", "lstrip": "String", "match": "bool", "matchn": "bool", "md5_buffer": "PackedByteArray", "md5_text": "String", "naturalcasecmp_to": "int", "naturalnocasecmp_to": "int", "nocasecmp_to": "int", "pad_decimals": "String", "pad_zeros": "String", "path_join": "String", "remove_char": "String", "remove_chars": "String", "repeat": "String", "replace": "String", "replace_char": "String", "replace_chars": "String", "replacen": "String", "reverse": "String", "rfind": "int", "rfindn": "int", "right": "String", "rpad": "String", "rsplit": "PackedStringArray", "rstrip": "String", "sha1_buffer": "PackedByteArray", "sha1_text": "String", "sha256_buffer": "PackedByteArray", "sha256_text": "String", "similarity": "float", "simplify_path": "String", "split": "PackedStringArray", "strip_edges": "String", "strip_escapes": "String", "substr": "String", "to_ascii_buffer": "PackedByteArray", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_multibyte_char_buffer": "PackedByteArray", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "to_utf16_buffer": "PackedByteArray", "to_utf32_buffer": "PackedByteArray", "to_utf8_buffer": "PackedByteArray", "to_wchar_buffer": "PackedByteArray", "trim_prefix": "String", "trim_suffix": "String", "unicode_at": "int", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
   "NodePath": {"get_as_property_path": "NodePath", "get_concatenated_names": "StringName", "get_concatenated_subnames": "StringName", "get_name": "StringName", "get_name_count": "int", "get_subname": "StringName", "get_subname_count": "int", "hash": "int", "is_absolute": "bool", "is_empty": "bool", "slice": "NodePath",},
-  "String": {"bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "dedent": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "hash": "int", "hex_to_int": "int", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "json_escape": "String", "length": "int", "md5_text": "String", "reverse": "String", "sha1_text": "String", "sha256_text": "String", "simplify_path": "String", "strip_edges": "String", "strip_escapes": "String", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
+  "String": {"bigrams": "PackedStringArray", "bin_to_int": "int", "c_escape": "String", "c_unescape": "String", "capitalize": "String", "dedent": "String", "get_base_dir": "String", "get_basename": "String", "get_extension": "String", "get_file": "String", "hash": "int", "hex_decode": "PackedByteArray", "hex_to_int": "int", "is_absolute_path": "bool", "is_empty": "bool", "is_relative_path": "bool", "is_valid_ascii_identifier": "bool", "is_valid_filename": "bool", "is_valid_float": "bool", "is_valid_hex_number": "bool", "is_valid_html_color": "bool", "is_valid_identifier": "bool", "is_valid_int": "bool", "is_valid_ip_address": "bool", "is_valid_unicode_identifier": "bool", "json_escape": "String", "length": "int", "md5_buffer": "PackedByteArray", "md5_text": "String", "reverse": "String", "rsplit": "PackedStringArray", "sha1_buffer": "PackedByteArray", "sha1_text": "String", "sha256_buffer": "PackedByteArray", "sha256_text": "String", "simplify_path": "String", "split": "PackedStringArray", "strip_edges": "String", "strip_escapes": "String", "to_ascii_buffer": "PackedByteArray", "to_camel_case": "String", "to_float": "float", "to_int": "int", "to_kebab_case": "String", "to_lower": "String", "to_multibyte_char_buffer": "PackedByteArray", "to_pascal_case": "String", "to_snake_case": "String", "to_upper": "String", "to_utf16_buffer": "PackedByteArray", "to_utf32_buffer": "PackedByteArray", "to_utf8_buffer": "PackedByteArray", "to_wchar_buffer": "PackedByteArray", "uri_decode": "String", "uri_encode": "String", "uri_file_decode": "String", "validate_filename": "String", "validate_node_name": "String", "xml_escape": "String", "xml_unescape": "String",},
 };
 
 /** 只在表里有的那几面开口：名字不在实例成员集里就是引擎那两句（`valueAttrKind` 的 `null` 那一格由这张实测表接管）。 */
@@ -2386,13 +2395,13 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
         if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
           const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems, mods);
-          if (vface === null || !instanceFaceManaged(vface)) continue;
+          if (vface === null || (!instanceFaceManaged(vface) && !PACK_TYPE_NAMES.has(vface))) continue;
           // String 那一面只补元素读这一形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
           if (vface === "String" && (callee.obj as Record<string, unknown>).kind !== "index") continue;
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
           // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
-          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !instanceMemberAbsent(vface, vmethod)) continue;
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !memberNameAbsent(vface, vmethod)) continue;
           const vloc = (n.loc as Diagnostic["loc"]) ?? null;
           diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
           diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
@@ -2400,7 +2409,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         }
         const method = callee.name;
         if (typeof method !== "string" || method in (VALUE_METHOD_ARITY[kind] ?? {})) continue;
-        if (!packNameMeasuredAbsent(kind, method)) continue;
+        if (!memberNameAbsent(kind, method)) continue;
         const loc = (n.loc as Diagnostic["loc"]) ?? null;
         diags.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${kind}".`, loc });
         diags.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${kind}.`, loc });
@@ -2426,7 +2435,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       const absent = PACK_TYPE_NAMES.has(face)
-        ? packNameMeasuredAbsent(face, name)
+        ? memberNameAbsent(face, name)
         : face === "Array" || face === "String"
           ? true
           : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name);
