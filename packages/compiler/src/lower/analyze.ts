@@ -3905,6 +3905,28 @@ export const OP_PAIRS_REFUSED_DECL: Readonly<Record<string, ReadonlyArray<string
   ">=": ["bool|bool", "bool|int", "bool|float", "bool|String", "bool|Array", "bool|Dictionary", "int|bool", "int|String", "int|Array", "int|Dictionary", "float|bool", "float|String", "float|Array", "float|Dictionary", "String|bool", "String|int", "String|float", "String|Array", "String|Dictionary", "Array|bool", "Array|int", "Array|float", "Array|String", "Array|Dictionary", "Dictionary|bool", "Dictionary|int", "Dictionary|float", "Dictionary|String", "Dictionary|Array", "Dictionary|Dictionary"],
 };
 
+/** 左支是标值型**标注变量**、右支是字面量的那些对（S457 第一笔，尺 `tmp/d6/annot.py`，读数 `tmp/d6/av-decl.txt` / `tmp/d6/av-mirror.txt`：210 格 × 两向逐格过裁判，两向**不是镜像**） */
+export const OP_PAIRS_REFUSED_DECL_VAL: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "%": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2|Color", "Vector2|String", "Vector2|Vector2", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
+  "*": ["Color|String", "Color|Vector2", "Color|bool", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool"],
+  "+": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
+  "-": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
+  "/": ["Color|String", "Color|Vector2", "Color|bool", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool"],
+  "<": ["Color|Color", "Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
+  "==": ["Color|String", "Color|Vector2", "Color|bool", "Color|float", "Color|int", "Vector2i|Color", "Vector2i|String", "Vector2i|Vector2", "Vector2i|bool", "Vector2i|float", "Vector2i|int", "Vector2|Color", "Vector2|String", "Vector2|bool", "Vector2|float", "Vector2|int", "Vector3i|Color", "Vector3i|String", "Vector3i|Vector2", "Vector3i|bool", "Vector3i|float", "Vector3i|int", "Vector3|Color", "Vector3|String", "Vector3|Vector2", "Vector3|bool", "Vector3|float", "Vector3|int"],
+};
+
+/** 反向那一形：左支是字面量、右支是标值型**标注变量**（同批实测，集与正向不等，故各记一张） */
+export const OP_PAIRS_REFUSED_DECL_VAL_REV: Readonly<Record<string, ReadonlyArray<string>>> = {
+  "%": ["Color|Color", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "Vector2|Color", "Vector2|Vector2", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "*": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i"],
+  "+": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "-": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "/": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "<": ["Color|Color", "Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+  "==": ["Color|Vector2", "Color|Vector2i", "Color|Vector3", "Color|Vector3i", "String|Color", "String|Vector2", "String|Vector2i", "String|Vector3", "String|Vector3i", "Vector2|Color", "Vector2|Vector2i", "Vector2|Vector3", "Vector2|Vector3i", "bool|Color", "bool|Vector2", "bool|Vector2i", "bool|Vector3", "bool|Vector3i", "float|Color", "float|Vector2", "float|Vector2i", "float|Vector3", "float|Vector3i", "int|Color", "int|Vector2", "int|Vector2i", "int|Vector3", "int|Vector3i"],
+};
+
 /** 左支写成「静态型标明的名字」、右支是字面量那一形（S395）：468 格全过裁判，引擎这一路**一律第二式**，
  *  而且拒的集合与「两侧字面量」那张不一样 —— `and` / `or` 掺 String 那十四格在字面量那一集里拒、在这里收。
  *  量过的名字写法三种：模块级 `var a: T`、形参 `f(a: T)`、内部类字段（`tmp/probe-declrecv/compare59.txt` 各抽若干）；
@@ -3943,7 +3965,7 @@ export const OP_PAIRS_CONST_B: Readonly<Record<string, ReadonlyArray<string>>> =
 };
 
 function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
-  const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary"]);
+  const ANNOT = new Set(["bool", "int", "float", "String", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
   const named = (t: TypeRef | null): string | null => {
     if (t === null || t.kind !== "named") return null;
     const base = t.name.replace(/\[.*\]$/, "");
@@ -3980,7 +4002,7 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       const pair = `${lt}|${rt}`;
       const foldedA = isConst && OP_PAIRS_CONST_A[e.op]?.includes(pair) === true;
       const foldedB = isConst && OP_PAIRS_CONST_B[e.op]?.includes(pair) === true;
-      const declaredB = !isConst && OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true;
+      const declaredB = !isConst && (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair) === true || OP_PAIRS_REFUSED_DECL_VAL[e.op]?.includes(pair) === true);
       if (!foldedA && !foldedB && !declaredB) continue;
       diags.push({
         code: "op-pair",
@@ -4000,7 +4022,8 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
       if (lt2 === null) continue;
       const rt2 = types.get((e.right as Extract<Expr, { kind: "ident" }>).name) ?? null;
       if (rt2 === null) continue;
-      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(`${lt2}|${rt2}`) !== true) continue;
+      const pair2 = `${lt2}|${rt2}`;
+      if (OP_PAIRS_REFUSED_DECL[e.op]?.includes(pair2) !== true && OP_PAIRS_REFUSED_DECL_VAL_REV[e.op]?.includes(pair2) !== true) continue;
       diags.push({
         code: "op-pair",
         message: `Invalid operands "${lt2}" and "${rt2}" for "${e.op}" operator.`,
