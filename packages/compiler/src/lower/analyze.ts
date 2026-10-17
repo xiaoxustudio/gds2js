@@ -2558,6 +2558,33 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
       }
       const d = arityDiag(face.arity, face.arityCode, method, ((n.args as Expr[]) ?? []).length, loc);
       if (d !== null) diags.push(d);
+      const fkey = `${face.type}.${method}`;
+      const slot = FACE_SLOTS[fkey];
+      const measured = typeof slot === "number" ? ((n.args as Expr[]) ?? []).length === slot : slot !== undefined && slot.includes(((n.args as Expr[]) ?? []).length);
+      if (!measured) continue;
+      const got = (n.args as Expr[]) ?? [];
+      const byPos = new Map<number, Array<{ code: string; message: string }>>();
+      const put = (pos: number, code: string, message: string): void => {
+        const bucket = byPos.get(pos) ?? [];
+        bucket.push({ code, message });
+        byPos.set(pos, bucket);
+      };
+      for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
+        const bad = literalTypeName(got[pos - 1]);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+        if (also.includes(bad)) {
+          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+        }
+      }
+      for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
+        const bad = literalTypeName(got[pos - 1]);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+      }
+      for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+        for (const g of byPos.get(pos)!) diags.push({ code: g.code, message: g.message, loc });
+      }
     }
   }
 }

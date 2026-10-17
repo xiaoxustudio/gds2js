@@ -95,6 +95,11 @@ export const FACE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number
   "String.replace_char": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "String.replace_chars": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "String.to_multibyte_char_buffer": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
+  "StringName.remove_char": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "StringName.remove_chars": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
+  "StringName.replace_char": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "StringName.replace_chars": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "StringName.to_multibyte_char_buffer": [[1, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
 };
 
 export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string]>>> = {
@@ -188,6 +193,11 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "String.replace_char": [[1, ["Array", "Callable", "Dictionary"], "int"], [2, ["Array", "Callable", "Dictionary"], "int"]],
   "String.replace_chars": [[1, ["Array", "Callable", "Dictionary"], "String"], [2, ["Array", "Callable", "Dictionary"], "int"]],
   "String.to_multibyte_char_buffer": [[1, ["Array", "Callable", "Dictionary"], "String"]],
+  "StringName.remove_char": [[1, ["Array", "Callable", "Dictionary"], "int"]],
+  "StringName.remove_chars": [[1, ["Array", "Callable", "Dictionary"], "String"]],
+  "StringName.replace_char": [[1, ["Array", "Callable", "Dictionary"], "int"], [2, ["Array", "Callable", "Dictionary"], "int"]],
+  "StringName.replace_chars": [[1, ["Array", "Callable", "Dictionary"], "String"], [2, ["Array", "Callable", "Dictionary"], "int"]],
+  "StringName.to_multibyte_char_buffer": [[1, ["Array", "Callable", "Dictionary"], "String"]],
 };
 
 /** 探针那几格是在这一支的**上界**元数下量的：只有实参个数正好等于这个数时，上面两张表的判据才发（别的元数没量过）。
@@ -283,4 +293,9 @@ export const FACE_SLOTS: Readonly<Record<string, number | readonly number[]>> = 
   "String.replace_char": 2,
   "String.replace_chars": 2,
   "String.to_multibyte_char_buffer": 1,
+  "StringName.remove_char": 1,
+  "StringName.remove_chars": 1,
+  "StringName.replace_char": 2,
+  "StringName.replace_chars": 2,
+  "StringName.to_multibyte_char_buffer": 1,
 };
