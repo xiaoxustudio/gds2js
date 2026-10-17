@@ -144,7 +144,7 @@ export function callableCtor(args: Variant[]): Variant {
 /** 调一个 Callable 盒子：调用实参排在绑定实参**之前**；lambda 走盒子带的式子，方法 / 静态方法交 `method()` 按名派发。 */
 function callCallableBox(box: CallableBox, args: Variant[]): Variant {
   const all: Variant[] = [];
-  for (const a of args) all.push(a);
+  for (const a of keptCallArgs(box, args)) all.push(a);
   for (const b of box.bound) all.push(b);
   if (box.fn !== null) return wrapValue(box.fn(all));
   if (box.name !== null && box.object !== null) return method(box.object, box.name, all);
@@ -158,7 +158,7 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   }
   const bounds = callableArityBounds(box);
   if (bounds !== null) {
-    const given = args.length + boundArgsOf(box).length;
+    const given = keptCallArgs(box, args).length + boundArgsOf(box).length;
     if (given < bounds[0] || given > bounds[1]) {
       const n = given < bounds[0] ? bounds[0] : bounds[1];
       throw new GodotRuntimeError(
@@ -168,6 +168,30 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
     }
   }
   return callCallableBox(box, args);
+}
+
+/** `unbind(n)` 的实参：只量过 0 与正 int；负数、float、缺参与多参之外的那几形没读数，响亮拒。 */
+function unbindCountArg(args: readonly Variant[]): number {
+  if (args.length === 0) throw new GodotRuntimeError("arity", `Too few arguments for "unbind()" call. Expected at least 1 but received 0.`);
+  if (args.length > 1) throw new GodotRuntimeError("arity", `Too many arguments for "unbind()" call. Expected at most 1 but received ${String(args.length)}.`);
+  const v = args[0] as Variant;
+  if (v.t !== Tag.INT) throw new UnsupportedError("callable-unbind-arg", `Callable.unbind() 的实参只量过 int（收到 ${tagName(v.t)}）`);
+  const n = intToNum(v.v as IntPayload);
+  if (n < 0) throw new UnsupportedError("callable-unbind-neg", "Callable.unbind() 的负数那一形没量过，不发");
+  return n;
+}
+
+/** `unbind(n)` 的那一位怎么用：`n` 支实参必须由调用方给（少了是那句 `Callable unbinds …`），给了又在**尾部**削掉——
+ *  绑着的那串照旧接在削剩的后面（`tmp/probe-unbind/{v2,v3,w1,w2,w4,w5}.gd` 六格把这判据钉死：`bind(1,2).unbind(1).call(9)` 给的是 `f(1, 2)`）。 */
+function keptCallArgs(box: CallableBox, args: Variant[]): Variant[] {
+  if (box.unbindCount === 0) return args;
+  if (args.length < box.unbindCount) {
+    throw new GodotRuntimeError(
+      "callable-unbind-count",
+      `Callable unbinds ${String(box.unbindCount)} arguments, but called with ${String(args.length)}`,
+    );
+  }
+  return args.slice(0, args.length - box.unbindCount);
 }
 
 /** 那句报错里的**函数标签**，与打印用的是同一串（五种形状实测过：空、lambda、全局、静态、方法）。 */
@@ -212,11 +236,22 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       if (box.defaultCount > 0) {
         throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
       }
+      if (box.unbindCount > 0) {
+        throw new UnsupportedError("callable-bind-unbind", "unbind 过的 Callable 再 `bind()` 那一形只读到「绑定串没变」这半句，式子没自洽，不发");
+      }
       // 绑定串排在**前面**；实参拼接不用 spread —— 静态编译目标上没有它的 lowering
       const next: Variant[] = [];
       for (const a of args) next.push(a);
       for (const b of bound) next.push(b);
       return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
+    }
+    case "unbind": {
+      const n = unbindCountArg(args);
+      const next: Variant[] = [];
+      for (const b of bound) next.push(b);
+      return V.object(new CallableBox(
+        box.fn, box.name, box.object, next, box.arity, true, box.builtin, box.builtinBounds, box.defaultCount, box.builtinSnap, n,
+      ));
     }
     case "get_bound_arguments":
       return V.array(GArray.of(bound.slice()));
@@ -232,7 +267,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
           "get_argument_count() 拿不到这个 Callable 的声明形参数（方法表里没有它，或它带默认值形参 —— 那一格没量）",
         );
       }
-      const left = declared - bound.length;
+      const left = declared - bound.length + box.unbindCount;
       // 实测（`tmp/probe-binds-c/disc.gd` 与语料 288）：**方法 / 静态与 lambda 都是 `声明 − 已绑`，绑过头就给负数**
       // （声明 1 支的方法绑 3 支给 −2、声明 1 支的 lambda 链式绑 2 支给 −1），只有**空 Callable 基**恒给 0
       // （`Callable()` 绑 1 支、2 支、链式、绑 3 支全是 0）。

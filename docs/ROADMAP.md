@@ -792,6 +792,14 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.270 `Callable.unbind(n)` 的式子量清并发货（2026-10-17，S440，语料 385 七格逐字节，§2 第 20 条③ 那半笔结清）
+
+- **判据**：调用时先把 caller 实参的**尾部 n 支**削掉，再把绑定串接在后面 —— 所以 `bind(1,2).unbind(1).call(9)` 是 `f(1,2)` 的 102，而 `bind(1,2).unbind(1).call(8,9)`（三位声明）是 `f(8,1,2)` 的 80102；绑定串与 `get_bound_arguments()` 一律不变。
+- **两句各管各的**：caller 给得比 n 少 → `Callable unbinds N arguments, but called with M`（无句点，先判）；削完仍对不上声明数 → 老的 `Invalid call to function '…'. Expected N argument(s).`。
+- **计数**：`get_argument_count()` = 声明 − (已绑 − n)，把 S298 那条式子加回 n；`unbind(n)` 的 n 超过声明支数照收（W5 实测）。
+- **仍响的两形**：负数与非 int 的 n、以及 **unbind 过再 bind**（引擎的绑定串与计数两式对不上，登 §6 第 90 条）；同一格里 `u1 == g` 给 false 也与 S298 的等式口径不同向，一并记着没动 `callableEq`。
+- **门读数**：`pnpm test` **14401**（140 文件）、typecheck **4/4**、`test:compile` **264/373**、`test:diff` **257/257** 逐字节、`test:codegen` 全过。
+
 ### 1.269 绑定 Callable 存「读那一刻的接收者快照」：§6 第 85 条那格翻案结清（2026-10-17，S439，语料 384 十一格逐字节）
 
 - **一格定案**：`var c = a.append` 之后 `a.append(3)`，`c == a.append` 引擎给 false 而 `c == c` 给 true、`c.call(7)` 仍改活的那一台 —— 「按接收者的值比」那条口径补上后半句：**比的是读那一刻的值**，调用照旧走活对象。

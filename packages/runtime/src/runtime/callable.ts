@@ -44,6 +44,8 @@ export class CallableBox {
   builtinBounds: [number, number] | null;
   /** 内建类型那一族的接收者**读那一刻的副本**：引擎的等式与 hash 比的是它，不是活着的那一台（`tmp/probe-bineq/{m1,m2}.gd`）。 */
   builtinSnap: Variant | null;
+  /** `unbind(n)` 记下的那一位：调用时** caller 给的实参先削掉尾部 n 支**，绑着的那串照旧接在后面（读数 `tmp/probe-unbind/`，S440）。 */
+  unbindCount: number;
   /** lambda 尾部带默认值的形参数（`tmp/probe-lamdef/a1.gd` 量到的元数那一族）：默认值本身在**调用那一刻**才评，所以盒子里只存个数。 */
   defaultCount: number;
   constructor(
@@ -57,6 +59,7 @@ export class CallableBox {
     builtinBounds: [number, number] | null = null,
     defaultCount = 0,
     builtinSnap: Variant | null = null,
+    unbindCount = 0,
   ) {
     this.fn = fn;
     this.name = name;
@@ -68,6 +71,7 @@ export class CallableBox {
     this.builtinBounds = builtinBounds;
     this.defaultCount = defaultCount;
     this.builtinSnap = builtinSnap;
+    this.unbindCount = unbindCount;
   }
 }
 
