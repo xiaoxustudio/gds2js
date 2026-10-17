@@ -1,16 +1,20 @@
 SCRIPT ERROR: Parse Error: Cannot assign a value of type int to variable "x1" with specified type Inner.
-   at: GDScript::reload (<case>/main.gd:6)
-SCRIPT ERROR: Parse Error: Cannot assign a value of type Array to variable "x3" with specified type Inner.
-   at: GDScript::reload (<case>/main.gd:8)
-SCRIPT ERROR: Parse Error: Cannot assign a value of type Vector2 to variable "x4" with specified type Inner.
-   at: GDScript::reload (<case>/main.gd:9)
-SCRIPT ERROR: Parse Error: Cannot assign a value of type int to parameter "a" with specified type Inner.
    at: GDScript::reload (<case>/main.gd:11)
-SCRIPT ERROR: Parse Error: Cannot assign a value of type String to parameter "a" with specified type Inner.
+SCRIPT ERROR: Parse Error: Cannot assign a value of type Array to variable "x3" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type Vector2 to variable "x4" with specified type Inner.
    at: GDScript::reload (<case>/main.gd:14)
-SCRIPT ERROR: Parse Error: Invalid argument for "f3()" function: argument 1 should be "Inner" but is "int".
-   at: GDScript::reload (<case>/main.gd:24)
-SCRIPT ERROR: Parse Error: Invalid argument for "f4()" function: argument 1 should be "Inner" but is "int".
-   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type int to parameter "a" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type String to parameter "a" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type int to variable "m2" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type int to variable "w1" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type String to variable "w2" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:31)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type int to variable "w3" with specified type Inner.
+   at: GDScript::reload (<case>/main.gd:9)
 ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
    at: load (modules/gdscript)

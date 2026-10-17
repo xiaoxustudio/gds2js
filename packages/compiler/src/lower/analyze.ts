@@ -850,8 +850,26 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
         const slot = slotOf(p.type);
         if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
       }
+      walkStmtVars(f.body);
     }
     for (const inner of c.innerClasses) walkClass(inner);
+  };
+  const walkStmtVars = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      for (const x of n) walkStmtVars(x);
+      return;
+    }
+    if (n === null || typeof n !== "object") return;
+    const obj = n as Record<string, unknown>;
+    if (obj.kind === "var") {
+      const slot = slotOf(obj.type as TypeRef | null);
+      if (slot !== null && typeof obj.name === "string") {
+        refuse(obj.name, "variable", slot, (obj.init as Expr | null) ?? null, obj.loc as Diagnostic["loc"]);
+      }
+    }
+    for (const key of Object.keys(obj)) {
+      if (key !== "loc") walkStmtVars(obj[key]);
+    }
   };
   for (const v of m.vars) {
     const slot = slotOf(v.type);
@@ -862,6 +880,7 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
       const slot = slotOf(p.type);
       if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
     }
+    walkStmtVars(f.body);
   }
   for (const c of m.innerClasses) walkClass(c);
 }
