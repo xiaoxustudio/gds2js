@@ -78,6 +78,13 @@ describe("runtime/values · String 方法族", () => {
     shouldThrow("063b", "星号收串那句", () => F("%*d", [V.str("x"), V.int(7)]));
     eq("063b", "数组实参展开", F("%d%s", [V.int(1), V.str("x")]), "1x");
     shouldThrow("063b", "向量槽多用实参那句晚于型判", () => F("%v", [V.int(1), V.int(2)]));
+    eq("063b", "u 是长度前缀不是转换符", F("%uc", [V.int(65)]), "A");
+    eq("063b", "u 之后接数槽", F("%ud", [V.float(7.9)]), "7");
+    eq("063b", "u 可以叠", F("%uuc", [V.str("z")]), "z");
+    shouldThrow("063b", "u 收尾是断句", () => F("%u", [V.int(1)]));
+    shouldThrow("063b", "u 之后的转义不占槽", () => F("%u%", [V.int(1)]));
+    eq("063b", "向量的宽度落到每一支", F("%30v", [vector2(1, 2)]), "(" + "1.000000".padStart(30) + ", " + "2.000000".padStart(30) + ")");
+    eq("063b", "两颗星都占一支参数、后一颗定宽", F("%**d", [V.int(2), V.int(3), V.int(7)]), "  7");
   });
 
   it("064 · inf 渲染", async () => {

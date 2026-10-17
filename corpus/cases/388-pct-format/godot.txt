@@ -42,5 +42,15 @@ SCRIPT ERROR: Parse Error: * wants number or vector in operator %.
    at: GDScript::reload (<case>/main.gd:24)
 SCRIPT ERROR: Parse Error: * wants number or vector in operator %.
    at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: %c requires number or single-character string in operator %.
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: incomplete format in operator %.
+   at: GDScript::reload (<case>/main.gd:27)
+SCRIPT ERROR: Parse Error: not all arguments converted during string formatting in operator %.
+   at: GDScript::reload (<case>/main.gd:28)
+SCRIPT ERROR: Parse Error: a number is required in operator %.
+   at: GDScript::reload (<case>/main.gd:29)
+SCRIPT ERROR: Parse Error: %v requires a vector type (Vector2/3/4/2i/3i/4i) in operator %.
+   at: GDScript::reload (<case>/main.gd:30)
 ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
    at: load (modules/gdscript)

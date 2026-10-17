@@ -1800,11 +1800,11 @@ function pctSlots(fmt: string): PctSlot[] {
       slots.push({ kind: "tail" });
       break;
     }
-    if ((fmt[i] ?? "") === "%") {
+    while (i < fmt.length && ["-", "+", "0", "u"].includes(fmt[i] ?? "")) i++;
+    if (i < fmt.length && (fmt[i] ?? "") === "%") {
       i++;
       continue;
     }
-    while (i < fmt.length && ["-", "+", "0"].includes(fmt[i] ?? "")) i++;
     i = starDigits(i);
     if (i < fmt.length && (fmt[i] ?? "") === ".") {
       i = starDigits(i + 1);
@@ -1825,7 +1825,6 @@ function pctSlotMessage(slot: PctSlot, arg: PctArg): string | null {
   if (slot.kind === "star") return arg.num || arg.vec ? null : PCT_MSG.star;
   const ch = slot.ch;
   if (ch === "s") return null;
-  if (ch === "u") return PCT_MSG.incomplete;
   if (ch === "c") {
     if (arg.num) return arg.neg ? PCT_MSG.negative : null;
     return arg.text !== null && arg.text.length === 1 ? null : PCT_MSG.char;

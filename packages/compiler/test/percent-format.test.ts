@@ -118,6 +118,15 @@ describe("String % 值 · 转换符的四个集合", () => {
     ["v 收到 Vector2", ["%v", "Vector2(1, 2)", []]],
     ["v 收到 Vector3", ["%v", "Vector3(1, 2, 3)", []]],
     ["v 那支 Color 拒", ["%v", "Color(1, 2, 3, 4)", [VEC]]],
+    ["u 是旗子不是转换符", ["%uc", "true", [CHR]]],
+    ["u 后面接数槽", ["%ud", '"b"', [NUM]]],
+    ["u 后面接向量槽", ["%uv", "1", [VEC]]],
+    ["u 可以叠", ["%uuc", '&"a"', [CHR]]],
+    ["u 收尾是断句", ["%u", "1", [INC]]],
+    ["u 之后是转义", ["%u%", "1", [NA]]],
+    ["u 之后仍有旗子", ["%u5d", '"b"', [NUM]]],
+    ["u 之后断在精度", ["%u.c", "true", [CHR]]],
+    ["空格旗子排在 u 后也不合", ["%u d", "1", [UC]]],
   ];
   it.each(CLS)("%s", async (_label, [fmt, arg, want]) => {
     expect(await pct("p" + fmt, arg)).toEqual(want);

@@ -2011,8 +2011,8 @@ interface FmtSpec {
   prec: number | null;
   type: string;
   text: string;
-  widthStar: boolean;
-  precStar: boolean;
+  widthStars: number;
+  precStars: number;
 }
 
 type FmtTok = { lit: string } | { spec: FmtSpec };
@@ -2073,22 +2073,26 @@ export function strFormat(fmt: string, args: Variant[]): string {
       lit += fmt[i];
       continue;
     }
-    if (fmt[i + 1] === "%") {
-      lit += "%";
-      i++;
-      continue;
-    }
     let k = i + 1;
     let flags = "";
-    while (k < fmt.length && (fmt[k] === "-" || fmt[k] === "+" || fmt[k] === "0")) {
+    while (k < fmt.length && (fmt[k] === "-" || fmt[k] === "+" || fmt[k] === "0" || fmt[k] === "u")) {
       flags += fmt[k];
       k++;
     }
+    if (fmt[k] === "%") {
+      lit += "%";
+      i = k;
+      continue;
+    }
     let width = 0;
-    let widthStar = false;
+    let widthStars = 0;
     if (fmt[k] === "*") {
-      widthStar = true;
+      widthStars = 1;
       k++;
+      while (fmt[k] === "*") {
+        widthStars++;
+        k++;
+      }
     } else {
       while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
         width = width * 10 + (fmt[k]!.charCodeAt(0) - 48);
@@ -2096,12 +2100,16 @@ export function strFormat(fmt: string, args: Variant[]): string {
       }
     }
     let prec: number | null = null;
-    let precStar = false;
+    let precStars = 0;
     if (fmt[k] === ".") {
       k++;
       if (fmt[k] === "*") {
-        precStar = true;
+        precStars = 1;
         k++;
+        while (fmt[k] === "*") {
+          precStars++;
+          k++;
+        }
       } else {
         prec = 0;
         while (k < fmt.length && fmt[k]! >= "0" && fmt[k]! <= "9") {
@@ -2111,12 +2119,12 @@ export function strFormat(fmt: string, args: Variant[]): string {
       }
     }
     const t = fmt[k];
-    if (t === undefined || t === "u") throw new GodotRuntimeError("format-spec", FMT_ERR.incomplete);
+    if (t === undefined) throw new GodotRuntimeError("format-spec", FMT_ERR.incomplete);
     if (!FMT_TYPES.has(t)) throw new GodotRuntimeError("format-spec", FMT_ERR.unsupported);
     toks.push({ lit });
     lit = "";
-    toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1), widthStar, precStar } });
-    specs += 1 + (widthStar ? 1 : 0) + (precStar ? 1 : 0);
+    toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1), widthStars, precStars } });
+    specs += 1 + widthStars + precStars;
     i = k;
   }
   toks.push({ lit });
@@ -2132,11 +2140,11 @@ export function strFormat(fmt: string, args: Variant[]): string {
     }
     const spec = tk.spec;
     let sp = spec;
-    if (spec.widthStar || spec.precStar) {
+    if (spec.widthStars + spec.precStars > 0) {
       let width = spec.width;
       let prec = spec.prec;
-      if (spec.widthStar) width = fmtStar(args[ai++]!);
-      if (spec.precStar) prec = fmtStar(args[ai++]!);
+      for (let s = 0; s < spec.widthStars; s++) width = fmtStar(args[ai++]!);
+      for (let s = 0; s < spec.precStars; s++) prec = fmtStar(args[ai++]!);
       sp = { ...spec, width, prec };
     }
     const a = args[ai++]!;
@@ -2192,7 +2200,9 @@ export function strFormat(fmt: string, args: Variant[]): string {
       case "v": {
         const comps = fmtVecComps(a);
         if (comps === null) throw new GodotRuntimeError("format-vector", FMT_ERR.vector);
-        out += padFmt("(" + comps.map((c) => fmtVecPart(c, sp.prec)).join(", ") + ")", "", sp);
+        // 宽度与精度都落到**每一支**上（实测 `%30v` 给两支各补到 30 的 `(...)`、`%.2v` 给 `(1.00, 2.00)`）
+        const body = comps.map((c) => padFmt(fmtVecPart(c, sp.prec), "", sp)).join(", ");
+        out += "(" + body + ")";
         break;
       }
     }

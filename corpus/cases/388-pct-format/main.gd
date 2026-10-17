@@ -23,5 +23,11 @@ func _initialize():
 	var r20 = "a%v" % "b"
 	var r21 = "a%*d" % "b"
 	var r22 = "a%*c" % &"b"
-	print(r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22)
+	var r23 = "a%uc" % true
+	var r24 = "a%u" % 1
+	var r25 = "a%u%" % 1
+	var r26 = "a%ud" % "b"
+	var r27 = "a%uv" % 1
+	var r28 = "a%30v" % Vector2(1, 2)
+	print(r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28)
 	quit()
