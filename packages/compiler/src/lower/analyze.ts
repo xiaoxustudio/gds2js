@@ -2284,7 +2284,8 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
 
 /** 调用那一形同判据：只在 `BUILTIN_INSTANCE_MEMBERS` 覆盖的那几面开口，名字不在实例成员全集里才是引擎那两句。 */
 function instanceMemberAbsent(face: string, name: string): boolean {
-  if (face === "Array" || face === "Dictionary" || PACK_TYPE_NAMES.has(face)) return false;
+  // 只接手上有另一支在管的那五面 + String：StringName / NodePath 的表外名早已由 staticCallDiags 那一路报过，放开就成四遍
+  if (face !== "Vector2" && face !== "Vector2i" && face !== "Vector3" && face !== "Vector3i" && face !== "Color" && face !== "String") return false;
   const list = BUILTIN_INSTANCE_MEMBERS[face];
   return list !== undefined && !list.includes(name);
 }
@@ -2346,9 +2347,10 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         if (callee === undefined || callee.kind !== "attribute") continue;
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
         if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
-          if (callee.obj === undefined || (callee.obj as Record<string, unknown>).kind !== "index") continue;
           const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems);
-          if (vface === null) continue;
+          if (vface === null || vface === "StringName" || vface === "NodePath") continue;
+          // String 那一面只补元素读这一形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
+          if (vface === "String" && (callee.obj as Record<string, unknown>).kind !== "index") continue;
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
           if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod)) continue;
