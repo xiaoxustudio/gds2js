@@ -1,6 +1,7 @@
 /**
- * lambda 形参的默认值（S437）：读数 `tmp/probe-lamdef/{a1,c1,b1,b2,e1,e2,e4,e5}.gd` 与语料 382 十格逐字节 ——
- * 默认值在**调用那一刻**评、看得见排在前面的形参；元数那一句少给报必填数、多给报声明数。
+ * lambda 形参的默认值（S437）与按值捕获（S438）：读数 `tmp/probe-lamdef/{a1,c1,b1,b2,e1,e2,e4,e5}.gd`、
+ * `tmp/probe-capture/c1.gd` 与语料 382 / 383 逐字节 —— 默认值在**调用那一刻**评、看得见排在前面的形参；
+ * 函数级局部在 lambda 创建那一刻冻住，模块变量与 `self` 不参与。
  */
 import { describe, expect, it } from "vitest";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
@@ -101,5 +102,40 @@ describe("带默认值的 lambda 盒子在运行期报的是必填数", () => {
       code = e instanceof UnsupportedError ? e.code : `other:${e instanceof Error ? e.message : String(e)}`;
     }
     expect(code).toBe("lambda-bind-default");
+  });
+});
+
+describe("lambda 按值捕获函数级局部", () => {
+  it("体内读到外层局部就套一层影子箭头", async () => {
+    const code = await emit("\tvar q = 7\n\tvar f = func(): return q");
+    expect(code.includes("(((q) => rt.callable(")).toBe(true);
+    expect(code.includes("))(q);")).toBe(true);
+  });
+
+  it("模块变量不参与捕获", async () => {
+    const src = ["extends SceneTree", "", "var mv = 1", "", "func _initialize():", "\tvar f = func(): return mv", "\tquit()", ""].join("\n");
+    const ir = lower(await parseSource(src));
+    expect(analyze(ir)).toEqual([]);
+    const mod = emitModule(ir, OPTS);
+    expect(mod.includes("(((mv)")).toBe(false);
+    expect(mod.includes("rt.callable((__a: rt.Variant[]) => {")).toBe(true);
+  });
+
+  it("self 不参与捕获", async () => {
+    const host = await emit("\tvar f = func(): return typeof(self)");
+    expect(host.includes("(((self)")).toBe(false);
+  });
+
+  it("子树自己绑过的名字不影子化", async () => {
+    const code = await emit("\tvar f = func(q): return q + 1");
+    expect(code.includes("(((q)")).toBe(false);
+    expect(code.includes("rt.callable((__a: rt.Variant[]) => {")).toBe(true);
+  });
+
+  it("默认值里读到的外层局部一起进影子表", async () => {
+    const code = await emit("\tvar q = 7\n\tvar f = func(x = q): return x");
+    expect(code.includes("(((q) => rt.callable(")).toBe(true);
+    expect(code.includes("rt.V.int(q)")).toBe(true);
+    expect(code.includes("))(q);")).toBe(true);
   });
 });

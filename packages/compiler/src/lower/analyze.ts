@@ -49,10 +49,20 @@ class Scope {
     private vars: Set<string>,
     private parent: Scope | null,
     private selfOk?: boolean,
+    private isLocal = false,
   ) {}
 
   has(name: string): boolean {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name));
+  }
+
+  /** 只在**函数那一段**作用域里认名字：类成员与模块变量活在函数外面，lambda 不捕获它们（`tmp/probe-capture/c1.gd` 的 K5）。 */
+  hasLocal(name: string): boolean {
+    return this.isLocal && (this.vars.has(name) || (this.parent !== null && this.parent.hasLocal(name)));
+  }
+
+  funcChild(names: string[], selfOk?: boolean): Scope {
+    return new Scope(new Set(names), this, selfOk, true);
   }
 
   allowsSelf(): boolean {
@@ -98,6 +108,7 @@ function declNames(d: Decl): string[] {
 export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string): Diagnostic[] {
   // 记号表是进程内累积的：每份模块归一个自己的主，两份文件同 `行:列` 的同名字就不会互相抢记号（§6 第 61 条）
   markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
+  seedOuterNames(m);
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];
@@ -2952,7 +2963,7 @@ function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[]
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
-  const scope = outer.child(["self", ...f.params.map((p) => p.name)], !f.isStatic);
+  const scope = outer.funcChild(["self", ...f.params.map((p) => p.name)], !f.isStatic);
   const prevFace = hostValueMethods;
   const prevCtx = hostStaticCtx;
   hostValueMethods = hostFace;
@@ -3315,6 +3326,7 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
 
     case "lambda": {
       const fnScope = scope.child(e.params.map((p) => p.name));
+      recordCaptures(e, scope);
       // 默认值在外层那一支里评（与普通函数那趟同口径），走查也别漏这一格：元数闸门要覆盖每个表达式位置。
       // 能看见**排在前面的**形参（`tmp/probe-lamdef/a1.gd` 的 `y = x` 收），往后看就不行（`e4.gd` 的 `a = b` 是解析期那句未声明）。
       let defScope = scope;
@@ -4502,4 +4514,53 @@ function numericLiteralKind(e: Expr): "int" | "float" | null {
   if (e.lit === "int") return "int";
   if (e.lit === "float") return "float";
   return null;
+}
+
+let outerNames = new Set<string>();
+
+/** 模块级与类级的名字（字段、方法、信号、内部类、常量）：那些在出货里是 `this.x` 或全局，按实测**不随 lambda 冻住**（`tmp/probe-capture/c1.gd` 的 K5）。 */
+function seedOuterNames(m: Module): void {
+  const out = new Set<string>(declNames(m));
+  const walk = (c: { vars: Array<{ name: string }>; funcs: Array<{ name: string }>; signals: Array<{ name: string }>; consts?: Array<{ name: string }>; innerClasses: unknown[] }): void => {
+    for (const v of c.vars) out.add(v.name);
+    for (const f of c.funcs) out.add(f.name);
+    for (const sg of c.signals) out.add(sg.name);
+    for (const k of c.consts ?? []) out.add(k.name);
+    for (const inner of c.innerClasses) walk(inner as Parameters<typeof walk>[0]);
+  };
+  for (const c of m.innerClasses) walk(c as Parameters<typeof walk>[0]);
+  outerNames = out;
+}
+
+const lambdaCaptures = new Map<string, string[]>();
+const capKey = (line: number, col: number): string => `${markOwner}@${String(line)}:${String(col)}`;
+
+/** 递归收 lambda 子树里的**读名**：`kind: "ident"` 都算，子树自己绑过的那些（形参、`var`、循环变量、`bind` 臂名）除外。 */
+function collectReads(node: unknown, bound: Set<string>, out: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const v of node) collectReads(v, bound, out);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+  const o = node as Record<string, unknown>;
+  if (o["kind"] === "ident" && typeof o["name"] === "string" && !bound.has(o["name"])) out.add(o["name"]);
+  for (const v of Object.values(o)) collectReads(v, bound, out);
+}
+
+/** 记下这一支 lambda 要影子化的名字：读得到、自己没绑、而且是**函数级局部**（引擎按值捕获，`tmp/probe-capture/c1.gd` K3 / K4 / K7）。 */
+function recordCaptures(e: Expr, scope: Scope): void {
+  if (e.kind !== "lambda" || e.loc === null) return;
+  const bound = new Set<string>();
+  collectLocalNames(e.body, e.params.map((p) => p.name), bound);
+  for (const p of e.params) bound.add(p.name);
+  const reads = new Set<string>();
+  collectReads(e, bound, reads);
+  const caps = [...reads].filter((n) => n !== "self" && !outerNames.has(n) && scope.hasLocal(n)).sort();
+  if (caps.length > 0) lambdaCaptures.set(capKey(e.loc.line, e.loc.col), caps);
+}
+
+/** 发射器读的那张表：这一支 lambda 创建时要按值影子化的局部名。 */
+export function lambdaCaptureNames(e: Expr): string[] {
+  if (e.kind !== "lambda" || e.loc === null) return [];
+  return lambdaCaptures.get(capKey(e.loc.line, e.loc.col)) ?? [];
 }

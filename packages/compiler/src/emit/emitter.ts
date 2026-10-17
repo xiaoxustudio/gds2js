@@ -3,7 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
-import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, useMarkOwner } from "../lower/analyze";
+import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, lambdaCaptureNames, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 
@@ -3199,7 +3199,11 @@ function emitExprVar(e: Expr): string {
         "        }",
         `    }, ${e.params.length}${defs.length === 0 ? "" : ", " + String(defs.length)})`,
       ];
-      return lines.join(String.fromCharCode(10));
+      const inner = lines.join(String.fromCharCode(10));
+      // 引擎的 lambda **按值捕获**函数级局部（`tmp/probe-capture/c1.gd` K3 / K4 / K7）：套一层只跑一次的影子箭头，把那几个名字冻在创建那一刻。
+      const caps = lambdaCaptureNames(e);
+      if (caps.length > 0) return "(((" + caps.join(", ") + ") => " + inner + "))(" + caps.join(", ") + ")";
+      return inner;
     }
 
     case "call":
