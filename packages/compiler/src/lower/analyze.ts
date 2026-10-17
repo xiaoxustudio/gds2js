@@ -164,6 +164,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkTypedVarAssign(m, diags);
   checkParamDefaultAssign(m, diags);
   checkVoidAnnotation(m, diags);
+  checkScriptClassSlots(m, diags);
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
@@ -814,6 +815,54 @@ function checkVoidAnnotation(m: Module, diags: Diagnostic[]): void {
   if (first !== undefined) {
     diags.push({ code: "void-annotation", message: `"void" is only allowed for a function return type.`, loc: first });
   }
+}
+
+/** 标注是脚本类名（这一份文件里的内部类）那一格（S452，读数 `tmp/d6/l3-class-name*.gd` 与 `l4-cls-*.gd`）：
+ *  与内置型槽不同向 —— 引擎**只发第二句**，`= null` 与 `Inner.new()` 都收。 */
+function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
+  const names = new Set<string>();
+  const collect = (c: ClassDecl): void => {
+    names.add(c.name);
+    for (const inner of c.innerClasses) collect(inner);
+  };
+  for (const c of m.innerClasses) collect(c);
+  if (names.size === 0) return;
+  const slotOf = (t: TypeRef | null): string | null =>
+    t !== null && t.kind === "named" && names.has(t.name) ? t.name : null;
+  const refuse = (name: string, kind: string, slot: string, init: Expr | null, loc: Diagnostic["loc"]): void => {
+    if (init === null) return;
+    const st = slotSource(init);
+    if (st === null || st === "null") return;
+    diags.push({
+      code: "script-class-slot",
+      message: `Cannot assign a value of type ${st} to ${kind} "${name}" with specified type ${slot}.`,
+      loc,
+    });
+  };
+  const walkClass = (c: ClassDecl): void => {
+    for (const v of c.vars) {
+      const slot = slotOf(v.type);
+      if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+    }
+    for (const f of c.funcs) {
+      for (const p of f.params) {
+        const slot = slotOf(p.type);
+        if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
+      }
+    }
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const v of m.vars) {
+    const slot = slotOf(v.type);
+    if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+  }
+  for (const f of m.funcs) {
+    for (const p of f.params) {
+      const slot = slotOf(p.type);
+      if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
+    }
+  }
+  for (const c of m.innerClasses) walkClass(c);
 }
 
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
