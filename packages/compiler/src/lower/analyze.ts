@@ -163,6 +163,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkFuncArgSlots(m, new Set(globals), diags);
   checkTypedVarAssign(m, diags);
   checkParamDefaultAssign(m, diags);
+  checkVoidAnnotation(m, diags);
   checkDictDuplicateKeys(m, diags);
   checkValueMethodArity(m, diags);
   checkInitContracts(m, new Set(globals), diags);
@@ -768,6 +769,36 @@ function checkParamDefaultAssign(m: Module, diags: Diagnostic[]): void {
     }
   };
   lambdas(m);
+}
+
+/** `void` 只能当函数的返回型（S450，读数 `tmp/d6/l4-void-{param,var,arr,ret}.gd` 与语料 391）：形参、变量、定形容器的内部型里出现就给那一句。
+ *  一份文件里六处不合式，引擎也只出**第一句**就收口（391 的 golden 只有一行），所以这里按行序只发一条。 */
+function checkVoidAnnotation(m: Module, diags: Diagnostic[]): void {
+  const hasVoid = (t: TypeRef | null): boolean => {
+    if (t === null || t.kind !== "named") return false;
+    return t.name.split(/[\[\],]/).some((part) => part.trim() === "void");
+  };
+  const found: Diagnostic["loc"][] = [];
+  const checkParams = (params: readonly Param[], loc: Diagnostic["loc"]): void => {
+    for (const p of params) {
+      if (hasVoid(p.type)) found.push(loc);
+    }
+  };
+  const checkVar = (v: VarDecl): void => {
+    if (hasVoid(v.type)) found.push(v.loc);
+  };
+  const walkClass = (c: ClassDecl): void => {
+    for (const f of c.funcs) checkParams(f.params, f.loc);
+    for (const v of c.vars) checkVar(v);
+    for (const inner of c.innerClasses) walkClass(inner);
+  };
+  for (const f of m.funcs) checkParams(f.params, f.loc);
+  for (const v of m.vars) checkVar(v);
+  for (const c of m.innerClasses) walkClass(c);
+  const first = found.sort((a, b) => (a === null ? 1e9 : a.line) - (b === null ? 1e9 : b.line))[0];
+  if (first !== undefined) {
+    diags.push({ code: "void-annotation", message: `"void" is only allowed for a function return type.`, loc: first });
+  }
 }
 
 function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
