@@ -3,7 +3,7 @@
  * （`Too few … Expected at least N but received M.` / `Too many … Expected at most N but received M.`），
  * 表本身是 154 名逐名过裁判量出来的（`tmp/probe-value-arity/{a,max,max6}.mts`）。
  * 接收者那侧的形状是 `tmp/probe-value-arity/recv.mts` 十二形的读数：五形解析期拦、两形放过成运行期那句，
- * 链式与定形数组元素解析期也拦但要另两张表 —— 这两形这里期望的是「不拒」，不是「引擎也放过」。
+ * 链式那一形这里期望的是「不拒」，不是「引擎也放过」；定形数组元素那一形已随 S473 接上（读数 `tmp/d6/q4.gd`）。
  * `@行号` 是测试自己加的（引擎把行号放在 `at: GDScript::reload (…:N)` 那一帧，句子文本里没有）。
  */
 import { afterAll, describe, expect, it } from "vitest";
@@ -38,7 +38,7 @@ const CASES: Array<[string, string, string[]]> = [
   ["未定形 Array 的元素：解析期放过（引擎也是运行期那句）", bodySrc("\tvar a = [Vector2(1, 2)]\n\tprint(a[0].angle_to())"), []],
   ["Variant 标注：解析期放过（同上）", bodySrc("\tvar v: Variant = Vector2(1, 2)\n\tprint(v.angle_to())"), []],
   ["链式：引擎解析期拦，这张表没有返回类型所以放过", bodySrc("\tprint(Vector2(1, 2).normalized().angle_to())"), []],
-  ["定形数组元素：同上，缺的是元素形那一列", bodySrc("\tvar a: Array[Vector2] = [Vector2(1, 2)]\n\tprint(a[0].angle_to())"), []],
+  ["定形数组元素：内型那张表接上后逐格对裁判（S473）", bodySrc("\tvar a: Array[Vector2] = [Vector2(1, 2)]\n\tprint(a[0].angle_to())"), [`${FEW("angle_to", 1, 0)} @5`]],
   ["推断的 var 被重新赋值后不再作证", bodySrc("\tvar v = Vector2(1, 2)\n\tv = 5\n\tprint(v.angle_to())"), []],
   ["表外的名字不猜（Vector2 没有 inverse）", bodySrc("\tvar v: Vector2 = Vector2(1, 2)\n\tprint(v.inverse(0))"), []],
   ["自定义类型的同名方法不猜", "extends SceneTree\n\nclass B:\n\tfunc angle_to():\n\t\treturn 1\n\nfunc _initialize():\n\tvar b = B.new()\n\tprint(b.angle_to())\n\tquit()\n", []],

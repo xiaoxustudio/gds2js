@@ -397,11 +397,18 @@ function parseTyped(name: string): TypedSlot | null {
 
 const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String", "int", "float", "bool"]);
 
-/** `Array[T]` 的内型只在认得的那几面里交出去（S460 量的那一格是**字面量 int** 下标；其余形一律不判）。 */
-function elemFaceOf(decl: string): string | null {
+/** 定形容器那一读的**面**：数组交内型、字典交值型；键的静态型判得出来又不合式就不交（那一格由下标型闸门去报）。
+ *  与运算符型对那支 `elemOf` 同一条判据（S468 量齐：`tmp/d6/dictread.py` 四百二十格零分歧）。 */
+function readFaceOf(decl: string, keyType: StaticType): string | null {
   const slot = parseTyped(decl);
-  if (slot === null || slot.kind !== "Array" || slot.elem === undefined) return null;
-  return ELEM_FACES.has(slot.elem) ? slot.elem : null;
+  if (slot === null) return null;
+  if (slot.kind === "Array") {
+    if (keyType !== null && keyType !== "int") return null;
+    return slot.elem !== undefined && ELEM_FACES.has(slot.elem) ? slot.elem : null;
+  }
+  if (slot.key === undefined || slot.val === undefined || !ELEM_FACES.has(slot.val)) return null;
+  if (keyType !== null && !canHold(slot.key, keyType)) return null;
+  return slot.val;
 }
 
 function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
@@ -2231,8 +2238,7 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
   if (obj.kind === "index") {
     const base = obj.obj as Record<string, unknown> | undefined;
     if (base === undefined || base.kind !== "ident" || typeof base.name !== "string") return null;
-    if (staticType(obj.index as Expr) !== "int") return null;
-    return elemFaceOf(elems.get(base.name) ?? "");
+    return readFaceOf(elems.get(base.name) ?? "", staticType(obj.index as Expr));
   }
   if (obj.kind === "ident" && typeof obj.name === "string") {
     const face = ann.get(obj.name) ?? mods.get(obj.name) ?? null;
@@ -2346,7 +2352,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
     }
     const elems = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
-      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elems.set(name, t.name);
+      if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) elems.set(name, t.name);
     };
     for (const v of m.vars) noteElem(v.name, v.type);
     for (const n of nodes) {
@@ -2476,8 +2482,23 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, seeded } of faceScopes(m, "String", (init) => init.kind === "lit" && init.lit === "string")) {
     const strs = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string");
     const strAnn = faceReceiverNames(nodes, seeded, assigned, "String", (init) => init.kind === "lit" && init.lit === "string", true);
+    /** 定形容器里那一读也是静态的 `String`（`es[0].length(1)` / `ds["a"].length(1)`，S473，读数 `tmp/d6/n11.json`）—— 只喂元数那一道，成员名那两句由 `checkPackFaceNames` 那一支报，重复不得。 */
+    const reads = new Map<string, string>();
+    const noteRead = (name: string, t: TypeRef | null): void => {
+      if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) reads.set(name, t.name);
+    };
+    for (const v of m.vars) noteRead(v.name, v.type);
     for (const n of nodes) {
-      const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, isStringLit);
+      if (n.kind === "var" && typeof n.name === "string") noteRead(n.name, n.type as TypeRef | null);
+    }
+    const isStringRead = (obj: Record<string, unknown>): boolean => {
+      if (obj.kind !== "index") return false;
+      const base = obj.obj as Record<string, unknown> | undefined;
+      if (base === undefined || base.kind !== "ident" || typeof base.name !== "string") return false;
+      return readFaceOf(reads.get(base.name) ?? "", staticType(obj.index as Expr)) === "String";
+    };
+    for (const n of nodes) {
+      const d = containerCallArity(n, STRING_METHOD_ARITY, "string-arity", strs, (obj) => isStringLit(obj) || isStringRead(obj));
       if (d !== null) diags.push(d);
       for (const g of faceGhostDiags(n, STRING_METHOD_ARITY, "String", true, strAnn, isStringLit)) diags.push(g);
     }
@@ -4735,15 +4756,17 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     }
     const elemFaces = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
-      if (t !== null && t.kind === "named" && elemFaceOf(t.name) !== null) elemFaces.set(name, t.name);
+      if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) elemFaces.set(name, t.name);
     };
     for (const v of m.vars) noteElem(v.name, v.type);
     for (const prm of f.params) noteElem(prm.name, prm.type);
-    /** `e[0].m(...)` 这一形的接收者：只认字面量 int 下标那一格（S460 量的就是它，其余形不判）。 */
+    for (const n of flattenBody(f.body)) {
+      if (n.kind === "var" && typeof n.name === "string") noteElem(n.name, n.type as TypeRef | null);
+    }
+    /** `e[0].m(...)` / `d["a"].m(...)` 这一形的接收者：交容器那一读的面（S473，读数 `tmp/d6/n10.json`）。 */
     const recvElem = (obj: Expr): string | null => {
       if (obj.kind !== "index" || obj.obj.kind !== "ident") return null;
-      if (staticType(obj.index) !== "int") return null;
-      return elemFaceOf(elemFaces.get(obj.obj.name) ?? "");
+      return readFaceOf(elemFaces.get(obj.obj.name) ?? "", staticType(obj.index));
     };
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
