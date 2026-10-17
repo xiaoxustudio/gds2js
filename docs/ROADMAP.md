@@ -792,6 +792,13 @@
 - **还没了的账**：`export --pack scriptc` 给带 zstd 的产物加的那句 `--dynamic`（`packages/gds2js/src/cli/export-exec.ts` 里 `tree.dynamic === true` 那一支）在 0.3.x 上已是未知选项，mode 2 那一格要另开一轮量；`main.ts` 的 `--pack` help 文案与 `tools/cli-native.mjs` 的「岛是默认」注释也还写着旧事。
 - **门读数**：`pnpm release` 全过 —— 版本与 engines 门、scriptc 面探针 1/1、`test:cli-native` **22 项 0 失败**、产物 `--version` 冒烟；`pnpm test` **14343**（139 文件）、typecheck **4/4**、ops 自校验 6130、tree-face **17/0**。
 
+### 1.260 `NodePath` 两支持名拼接实装（2026-10-17，S433，语料 380，§6 第 86 条①结清）
+
+- **读数**：`tmp/probe-np/compare1.txt` 十二格 + `t1.gd` —— 名段与子名段各按 `"/"` 拼、互不掺（`a/b:cmp` 两支分别 `a/b` / `cmp`）、不做路径化简（`a/../b` 照原样）、绝对位只给子名段（`:a/b` 名段空串）。
+- **返回型**：**StringName**（`typeof` 21）；拿它当 `String` 比会被引擎解析期直接拒，这一格是解析器自己报的，比打印更硬。
+- **不收的一格**：`NodePath("").get_concatenated_names()` 引擎额外吐一句带自己 C++ 位置的 `ERROR: Parameter "data" is null.` —— 复刻不了（同 S269 ⑦），语料 380 因此避开，登记在第 86 条①b。
+- **门读数**：`pnpm test` **14359**（139 文件）、typecheck **4/4**、`test:compile` **259/368**、`test:diff` **252/252** 逐字节、`test:codegen` 全过、ops 自校验 6137、tree-face 17。
+
 ### 1.259 七面属性读三分岔接进出货（2026-10-17，S432，语料 379，§6 第 84 条②结清、第 86 条新登）
 
 - **三分岔**：`valueAttrKind(face, name)` 用 S431 的两份数据把属性读分成成员（给 `rt.boundMethod` 那只盒子）/ 真属性（`x` `y` `z` `r` `g` `b` `a`，走原路）/ 表外（给 `Invalid access …` 那句）；宇宙之外继续响亮拒，不猜。
