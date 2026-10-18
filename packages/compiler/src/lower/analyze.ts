@@ -1,6 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "./static-arg-types";
-import { FACE_ARG_AS, FACE_ARG_TYPES, FACE_SLOTS } from "./face-arg-types";
+import { FACE_ARG_AS, FACE_ARG_TYPES } from "./face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "./instance-arg-types";
 import { isGlobalConst } from "./globals";
 import {
@@ -678,7 +678,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   }
 }
 
-/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。 */
+/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。`Array.assign` 是后补的一格：`print(ga.assign(Color(1, 0, 0, 1)))` 引擎同格回 void 那句加形参那两句（`tmp/d6/s485.json`，S485）。 */
 const VOID_ARRAY_METHODS = new Set([
   "append",
   "push_front",
@@ -693,6 +693,7 @@ const VOID_ARRAY_METHODS = new Set([
   "reverse",
   "shuffle",
   "make_read_only",
+  "assign",
 ]);
 const VOID_DICT_METHODS = new Set(["clear", "sort", "merge", "assign", "make_read_only"]);
 /** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。
@@ -2641,9 +2642,6 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
       const d = arityDiag(face.arity, face.arityCode, method, ((n.args as Expr[]) ?? []).length, loc);
       if (d !== null) diags.push(d);
       const fkey = `${face.type}.${method}`;
-      const slot = FACE_SLOTS[fkey];
-      const measured = typeof slot === "number" ? ((n.args as Expr[]) ?? []).length === slot : slot !== undefined && slot.includes(((n.args as Expr[]) ?? []).length);
-      if (!measured) continue;
       const got = (n.args as Expr[]) ?? [];
       const byPos = new Map<number, Array<{ code: string; message: string }>>();
       const put = (pos: number, code: string, message: string): void => {
@@ -5058,34 +5056,30 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       const face = literalFaceType(callee.obj, faceTyped);
       if (face !== null) {
-        // 字面量接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts`：元数由引擎自己的句子量出来，
-        // 形参逐位逐 kind 量；读数都建在「实参个数正好等于量过的那个上界」这一形上，别的元数没量过就不发）
+        // 字面量与标注名接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts` 量的元数与形参逐位逐 kind）：
+        // 形参按**位**查 —— 那一位给了实参就查，元数在下界或越上界都照发（S485，尺 `tmp/d6/s485.py` 二百五十四格，读数 `tmp/d6/s485.json`）
         const fkey = `${face}.${callee.name}`;
-        const slot = FACE_SLOTS[fkey];
-        const measured = typeof slot === "number" ? e.args.length === slot : slot !== undefined && slot.includes(e.args.length);
-        if (measured) {
-          const byPos = new Map<number, Array<{ code: string; message: string }>>();
-          const put = (pos: number, code: string, message: string): void => {
-            const bucket = byPos.get(pos) ?? [];
-            bucket.push({ code, message });
-            byPos.set(pos, bucket);
-          };
-          for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
-            const bad = literalTypeName(e.args[pos - 1]);
-            if (bad === null || !refuse.includes(bad)) continue;
-            put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-            if (also.includes(bad)) {
-              put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
-            }
-          }
-          for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
-            const bad = literalTypeName(e.args[pos - 1]);
-            if (bad === null || !refuse.includes(bad)) continue;
+        const byPos = new Map<number, Array<{ code: string; message: string }>>();
+        const put = (pos: number, code: string, message: string): void => {
+          const bucket = byPos.get(pos) ?? [];
+          bucket.push({ code, message });
+          byPos.set(pos, bucket);
+        };
+        for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
+          const bad = literalTypeName(e.args[pos - 1]);
+          if (bad === null || !refuse.includes(bad)) continue;
+          put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          if (also.includes(bad)) {
             put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
           }
-          for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-            for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
-          }
+        }
+        for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
+          const bad = literalTypeName(e.args[pos - 1]);
+          if (bad === null || !refuse.includes(bad)) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        }
+        for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+          for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
         }
         continue;
       }
@@ -5097,36 +5091,34 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const sig = arity === null ? undefined : arity.table[callee.name];
       if (sig === undefined || arity === null) continue;
       const got = e.args.length;
-      if (got >= sig[0] && got <= sig[1]) {
-        // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
-        // 读数全部是在**上界元数**下量的（`packed.mts` 每位都按 max 个实参建式子），别的元数没量过就不发
-        const ikey = `${recv}.${callee.name}`;
-        const byPos = new Map<number, Array<{ code: string; message: string }>>();
-        const put = (pos: number, code: string, message: string): void => {
-          const bucket = byPos.get(pos) ?? [];
-          bucket.push({ code, message });
-          byPos.set(pos, bucket);
-        };
-        for (const [pos, refuse, want, also] of got === sig[1] || got === sig[0] ? INSTANCE_ARG_AS[ikey] ?? [] : []) {
-          const lit = e.args[pos - 1];
-          const bad = lit === undefined ? null : literalTypeName(lit);
-          if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-          if (also.includes(bad)) {
-            put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
-          }
-        }
-        for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
-          const lit = e.args[pos - 1];
-          const bad = lit === undefined ? null : literalTypeName(lit);
-          if (bad === null || !refuse.includes(bad)) continue;
+      // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
+      // 按**位**查：那一位给了实参就查，元数在界内、下界之外还是越上界都照发（S485 的二百五十四格 + `tmp/d6/s482b.txt`）
+      const ikey = `${recv}.${callee.name}`;
+      const byPos = new Map<number, Array<{ code: string; message: string }>>();
+      const put = (pos: number, code: string, message: string): void => {
+        const bucket = byPos.get(pos) ?? [];
+        bucket.push({ code, message });
+        byPos.set(pos, bucket);
+      };
+      for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
+        const lit = e.args[pos - 1];
+        const bad = lit === undefined ? null : literalTypeName(lit);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+        if (also.includes(bad)) {
           put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
         }
-        for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
-          for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
-        }
-        continue;
       }
+      for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
+        const lit = e.args[pos - 1];
+        const bad = lit === undefined ? null : literalTypeName(lit);
+        if (bad === null || !refuse.includes(bad)) continue;
+        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+      }
+      for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+        for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
+      }
+      if (got >= sig[0] && got <= sig[1]) continue;
       diags.push({
         code: arity.code,
         message:
