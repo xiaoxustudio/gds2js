@@ -1430,6 +1430,30 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
 
+  /** 形参与内部类字段这两形的 pack 名字（S494b：`func f(p: PackedByteArray)` 与 `class Q: var p: PackedByteArray` 两种接收者，
+   *  void 那句与形参两句照回，读数 `tmp/d6/s494b.json`）—— 容器与值型那几面这两形没量过，所以只补 pack。 */
+  const packSeeds = new Map<Stmt[], Map<string, string>>();
+  const packAnn = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" && PACK_TYPE_NAMES.has(t.name) ? t.name : null);
+  const seedFunc = (f: FuncDecl, fields: Map<string, string>): void => {
+    const s = new Map(fields);
+    for (const p of f.params) {
+      const ty = packAnn(p.type);
+      if (ty !== null) s.set(p.name, ty);
+    }
+    packSeeds.set(f.body, s);
+  };
+  for (const f of m.funcs) seedFunc(f, new Map<string, string>());
+  const seedCls = (c: ClassDecl): void => {
+    const fields = new Map<string, string>();
+    for (const v of c.vars) {
+      const ty = packAnn(v.type);
+      if (ty !== null) fields.set(v.name, ty);
+    }
+    for (const f of c.funcs) seedFunc(f, fields);
+    for (const inner of c.innerClasses) seedCls(inner);
+  };
+  for (const c of m.innerClasses) seedCls(c);
+
   /** 能被 `X.new()` 造出来的类名：脚本自己的类 + 内部类（递归） */
   const classNames = new Set<string>(m.className ? [m.className] : []);
   const addClassNames = (cs: ClassDecl[]): void => {
@@ -1489,6 +1513,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
 
   for (const body of bodies) {
     const shapes = new Map(seed);
+    for (const [name, ty] of packSeeds.get(body) ?? []) shapes.set(name, "Pack");
     /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
     const localAnn = new Map<string, string>();
     for (const n of flattenBody(body)) {
@@ -1497,9 +1522,12 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
         if (f !== null) localAnn.set(n.name, f);
       }
     }
+    const scopePacks = packSeeds.get(body) ?? new Map<string, string>();
     const ownerFace = (obj: Expr): string | null => {
       if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
-      if (obj.kind === "ident" && typeof obj.name === "string") return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      if (obj.kind === "ident" && typeof obj.name === "string") {
+        return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? scopePacks.get(obj.name) ?? null;
+      }
       if (obj.kind === "call" && obj.callee.kind === "ident" && PACK_TYPE_NAMES.has(obj.callee.name)) return obj.callee.name;
       return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
     };
@@ -1876,6 +1904,40 @@ function flattenBodies(m: Module): Record<string, unknown>[][] {
   return bodies.map(flattenBody);
 }
 
+/** `checkPackArgSlots` 的作用域：每支函数体配一张「名字 → 标注型」的底表 —— 模块级标注打底、内部类字段盖在上面、形参再盖一层
+ *  （S494 量齐：pack 的形参拒这一族此前只认模块标注名与函数体内的标注 var，形参标注与内部类字段两形 396 格全放过）。 */
+function packArgScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; base: Map<string, string> }> {
+  const named = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" ? t.name : null);
+  const moduleNames = new Map<string, string>();
+  for (const v of m.vars) {
+    const t = named(v.type);
+    if (t !== null) moduleNames.set(v.name, t);
+  }
+  const out: Array<{ nodes: Record<string, unknown>[]; base: Map<string, string> }> = [];
+  const collectFuncs = (funcs: FuncDecl[], seed: Map<string, string>): void => {
+    for (const f of funcs) {
+      const base = new Map(seed);
+      for (const p of f.params) {
+        const t = named(p.type);
+        if (t !== null) base.set(p.name, t);
+      }
+      out.push({ nodes: flattenBody(f.body), base });
+    }
+  };
+  collectFuncs(m.funcs, moduleNames);
+  const collectClass = (c: ClassDecl): void => {
+    const fields = new Map(moduleNames);
+    for (const v of c.vars) {
+      const t = named(v.type);
+      if (t !== null) fields.set(v.name, t);
+    }
+    collectFuncs(c.funcs, fields);
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
+  return out;
+}
+
 /** 同一函数体里被赋过值的名字：静态证明一律作废（证不出就当不知道，宁可漏拦不误拦）。 */
 function reassignedNames(nodes: Record<string, unknown>[]): Set<string> {
   const out = new Set<string>();
@@ -2194,15 +2256,15 @@ function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
 }
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
-  const modAnn = new Map<string, string>();
-  for (const v of m.vars) {
-    if (v.type !== null && v.type.kind === "named") modAnn.set(v.name, v.type.name);
-  }
-  for (const nodes of flattenBodies(m)) {
+  for (const { nodes, base } of packArgScopes(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
-    /** 同函数体内 `var v: String` 这一类**带标注的局部 var**：第二种证明，只发一句 */
+    /** `var v: String` 这一类**带标注的名字**（模块级、内部类字段、形参与函数体内的都算）：第二种证明，只发一句 */
     const annot = new Map<string, string>();
+    for (const [name, ty] of base) {
+      if (ty in PACK_ARG_SLOTS) packs.set(name, ty);
+      else if (ANNOT_SOURCES.has(ty)) annot.set(name, ty);
+    }
     const reassigned = reassignedNames(nodes);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
@@ -2217,21 +2279,17 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, init.callee.name);
       }
     }
-    /** `append_array` 那一位认**标注名**（S493）：模块级与局部的都算，被重新赋值过的名字丢掉。 */
-    const annAll = new Map<string, string>(modAnn);
+    /** `append_array` 那一位认**标注名**（S493 的模块与局部两形、S494 的形参与内部类字段两形）：被重新赋值过的名字丢掉。 */
+    const annAll = new Map<string, string>(base);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
       const type = n.type as TypeRef | null;
       if (type !== null && type.kind === "named") annAll.set(n.name, type.name);
     }
-    /** 模块级标注的 pack 名也是同一种静态证明（S486，读数 `tmp/d6/s486.json`：`var k0: PackedByteArray` 之后 `k0.append("a")` 两句照回，`k0.fill("a")` 连 void 一起回）。 */
-    for (const v of m.vars) {
-      if (v.type !== null && v.type.kind === "named" && v.type.name in PACK_ARG_SLOTS && !packs.has(v.name)) packs.set(v.name, v.type.name);
-    }
     /** 链子那一形的基能不能静态证出（S482 的 `tmp/d6/s482.json`：`s.hex_decode().append("a")` 与 `PackedByteArray([1]).append("a")` 两句一字一样）。 */
     const ownerFace = (obj: Expr): string | null => {
       if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
-      if (obj.kind === "ident" && typeof obj.name === "string") return packs.get(obj.name) ?? annot.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      if (obj.kind === "ident" && typeof obj.name === "string") return packs.get(obj.name) ?? annot.get(obj.name) ?? base.get(obj.name) ?? null;
       return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
     };
 
