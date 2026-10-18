@@ -2200,6 +2200,10 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, init.callee.name);
       }
     }
+    /** 模块级标注的 pack 名也是同一种静态证明（S486，读数 `tmp/d6/s486.json`：`var k0: PackedByteArray` 之后 `k0.append("a")` 两句照回，`k0.fill("a")` 连 void 一起回）。 */
+    for (const v of m.vars) {
+      if (v.type !== null && v.type.kind === "named" && v.type.name in PACK_ARG_SLOTS && !packs.has(v.name)) packs.set(v.name, v.type.name);
+    }
     /** 链子那一形的基能不能静态证出（S482 的 `tmp/d6/s482.json`：`s.hex_decode().append("a")` 与 `PackedByteArray([1]).append("a")` 两句一字一样）。 */
     const ownerFace = (obj: Expr): string | null => {
       if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
@@ -5054,7 +5058,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const face = literalFaceType(callee.obj, faceTyped);
+      const chainArgFace = recvChain(callee.obj);
+      const litFace = literalFaceType(callee.obj, faceTyped);
+      // 链子那一形只把三面名字面交给这一段（S486 的 `np.get_name(0).find(1)` 两句照回）；pack / 值型那几面的形参仍由下面那一段与 `checkPackArgSlots` 管，重复不得
+      const face = litFace ?? (chainArgFace === "String" || chainArgFace === "StringName" || chainArgFace === "NodePath" ? chainArgFace : null);
       if (face !== null) {
         // 字面量与标注名接收者的 String / Array / Dictionary 那一面（`tmp/probe-argtype/packed2.mts` 量的元数与形参逐位逐 kind）：
         // 形参按**位**查 —— 那一位给了实参就查，元数在下界或越上界都照发（S485，尺 `tmp/d6/s485.py` 二百五十四格，读数 `tmp/d6/s485.json`）
@@ -5081,7 +5088,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
           for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
         }
-        continue;
+        // 字面量 / 标注名那一形到此为止（元数早由别处在管）；链子那一形要落到下面那一段去补元数那句
+        if (litFace !== null) continue;
       }
       const direct = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
       const recv = direct ?? recvChain(callee.obj);
