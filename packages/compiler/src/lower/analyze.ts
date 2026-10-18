@@ -695,10 +695,9 @@ const VOID_ARRAY_METHODS = new Set([
   "make_read_only",
 ]);
 const VOID_DICT_METHODS = new Set(["clear", "sort", "merge", "assign", "make_read_only"]);
-/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。 */
-const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear"]);
-/** 只在零参时才是 void 的 pack 方法。 */
-const VOID_BYTES_ZEROARG = new Set(["sort", "reverse"]);
+/** pack 那一侧的 void 集合，与 Array 那张**不是**同一张表：`append` 与 `push_back` 返回 bool（实测值还是 false）、`insert` / `resize` 返回 Error 状态码，都不是 void；`clear` 是（九支逐支量过，`tmp/probe-pack/nosuch.json`）。
+ *  `sort` / `reverse` 在**任意元数**下同判 —— 九支构造式 × 五形 + 标注名 + 链子共五十格量的（`tmp/d6/s483.txt`），零元数与非零元数引擎都给同一句，元数那一句照旧另发。 */
+const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", "clear", "sort", "reverse"]);
 /** 脚本对象接收者那一侧：只有 `set`，取值是解析期拒（与 pack 的 `set` 同一句）。`get` 返回 Variant、`call` / `callv` 都有返回值，`free()` 是运行期的事，都不在这张表里。 */
 const VOID_OBJECT_METHODS = new Set(["set"]);
 /** Signal 接收者那一侧：`emit()` 与 `disconnect()` 都是 void，取值是解析期那一句；`connect()` **不是** void —— 它返回 Error 状态码 int。 */
@@ -1478,8 +1477,17 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     return null;
   };
 
+  /** 模块级标注的那三张形状：`var a: Array = []` 之后的 `print(a.sort(1))` 与函数体里同判（S483，读数 `tmp/d6/s483.txt` 五十格）。 */
+  const seed = new Map<string, ContainerShape>();
+  for (const v of m.vars) {
+    if (v.type === null || v.type.kind !== "named") continue;
+    const sh: ContainerShape | null =
+      /^Array(\[|$)/.test(v.type.name) ? "Array" : /^Dictionary(\[|$)/.test(v.type.name) ? "Dictionary" : PACK_SHAPE_NAMES.has(v.type.name) ? "Pack" : null;
+    if (sh !== null) seed.set(v.name, sh);
+  }
+
   for (const body of bodies) {
-    const shapes = new Map<string, ContainerShape>();
+    const shapes = new Map(seed);
     /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
     const localAnn = new Map<string, string>();
     for (const n of flattenBody(body)) {
@@ -1491,6 +1499,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     const ownerFace = (obj: Expr): string | null => {
       if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
       if (obj.kind === "ident" && typeof obj.name === "string") return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      if (obj.kind === "call" && obj.callee.kind === "ident" && PACK_TYPE_NAMES.has(obj.callee.name)) return obj.callee.name;
       return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
     };
     const expr = (e: Expr, discarded: boolean): void => {
@@ -1499,7 +1508,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
           if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call")) {
             const name = e.callee.name;
             const chainPack = e.callee.obj.kind === "call" ? (PACK_TYPE_NAMES.has(ownerFace(e.callee.obj) ?? "") ? "Pack" : null) : null;
-            // 只补 pack 那一形：其余（Signal / Array / Dictionary / 对象）的链子接收者没量过，照旧放过
+            // 只补 pack 那两形（构造式与链子）：Signal / Array / Dictionary / 脚本对象的链子接收者没量过，照旧放过
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
               e.callee.obj.kind === "ident"
@@ -1521,7 +1530,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (!discarded) {
               const isVoid =
                 shape === "Pack"
-                  ? VOID_BYTES_METHODS.has(name) || (e.args.length === 0 && VOID_BYTES_ZEROARG.has(name))
+                  ? VOID_BYTES_METHODS.has(name)
                   : shape === "Object"
                     ? VOID_OBJECT_METHODS.has(name)
                     : shape === "Signal"

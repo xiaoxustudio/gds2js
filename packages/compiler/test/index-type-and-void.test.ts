@@ -112,3 +112,36 @@ describe("容器方法返回值那一族的 void 拒", () => {
     it(label, async () => eq("404", label, await first(src), want));
   }
 });
+
+const MOD = 'extends SceneTree\n\nvar b0: PackedByteArray = PackedByteArray()\nvar b1: PackedStringArray = PackedStringArray()\n' +
+  'var a: Array = [1]\nvar d: Dictionary = {"x": 1}\n\nfunc _initialize():\n';
+const VOID = (m: string): string => `Cannot get return value of call to "${m}()" because it returns "void".`;
+const MANY = (m: string, at: number, got: number): string => `Too many arguments for "${m}()" call. Expected at most ${at} but received ${got}.`;
+const FEW = (m: string, at: number, got: number): string => `Too few arguments for "${m}()" call. Expected at least ${at} but received ${got}.`;
+const all = async (src: string): Promise<string[]> => analyze(lower(await parseSource(src))).map((x) => x.message).sort();
+
+/** `sort` / `reverse` 在**任意元数**下都取不到返回值，元数那一句照旧另发（尺 `tmp/d6/s483.py` 五十九格，读数 `tmp/d6/s483.json`）。 */
+const NINE = ["PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"];
+const S483_CELLS: Array<[string, string, string[]]> = [];
+for (const f of NINE) {
+  S483_CELLS.push([`构造式 ${f}.sort(1)`, `${H}\n\tprint(${f}().sort(1))\n\tquit()\n`, [VOID("sort"), MANY("sort", 0, 1)]]);
+  S483_CELLS.push([`构造式 ${f}.reverse(1)`, `${H}\n\tprint(${f}().reverse(1))\n\tquit()\n`, [VOID("reverse"), MANY("reverse", 0, 1)]]);
+  S483_CELLS.push([`构造式 ${f}.sort()`, `${H}\n\tprint(${f}().sort())\n\tquit()\n`, [VOID("sort")]]);
+  S483_CELLS.push([`构造式 ${f}.reverse()`, `${H}\n\tprint(${f}().reverse())\n\tquit()\n`, [VOID("reverse")]]);
+  S483_CELLS.push([`构造式 ${f}.sort(1, 2)`, `${H}\n\tprint(${f}().sort(1, 2))\n\tquit()\n`, [VOID("sort"), MANY("sort", 0, 2)]]);
+}
+for (const v of ["b0", "b1"]) {
+  S483_CELLS.push([`模块标注 ${v}.sort(1)`, `${MOD}\n\tprint(${v}.sort(1))\n\tquit()\n`, [VOID("sort"), MANY("sort", 0, 1)]]);
+  S483_CELLS.push([`模块标注 ${v}.reverse(1)`, `${MOD}\n\tprint(${v}.reverse(1))\n\tquit()\n`, [VOID("reverse"), MANY("reverse", 0, 1)]]);
+}
+S483_CELLS.push(["模块标注 Array.sort(1)", `${MOD}\n\tprint(a.sort(1))\n\tquit()\n`, [VOID("sort"), MANY("sort", 0, 1)]]);
+S483_CELLS.push(["模块标注 Dictionary.sort(1)", `${MOD}\n\tprint(d.sort(1))\n\tquit()\n`, [VOID("sort"), MANY("sort", 0, 1)]]);
+S483_CELLS.push(["模块标注 Array.sort_custom()", `${MOD}\n\tprint(a.sort_custom())\n\tquit()\n`, [VOID("sort_custom"), FEW("sort_custom", 1, 0)]]);
+S483_CELLS.push(["丢值位只单元数那一句", `${MOD}\n\tb0.sort(1)\n\ta.sort(1)\n\tquit()\n`, [MANY("sort", 0, 1), MANY("sort", 0, 1)]]);
+
+describe("void 与元数两句同格并出：pack 九支的 sort / reverse", () => {
+  for (const [label, src, want] of S483_CELLS) {
+    it(label, async () => eq("483", label, await all(src), want));
+  }
+});
