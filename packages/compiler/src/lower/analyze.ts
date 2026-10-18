@@ -5345,7 +5345,7 @@ function literalTypeName(e: Expr | undefined): string | null {
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
   if (e.kind === "lambda") return "Callable";
-  if (e.kind === "call" && e.callee.kind === "ident" && NUMERIC_VALUE_CTORS.has(e.callee.name)) return e.callee.name;
+  if (e.kind === "call" && e.callee.kind === "ident" && (NUMERIC_VALUE_CTORS.has(e.callee.name) || PACK_TYPE_NAMES.has(e.callee.name))) return e.callee.name;
   return null;
 }
 
