@@ -5058,9 +5058,15 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     m.funcs.map((f) => ({ f, base: moduleVars, fields: new Map<string, string>() }));
   const collect = (c: ClassDecl): void => {
     // 内部类的方法不给它预置模块级名字：那一侧引擎怎么判没量过，宁可漏拦也不误拦
+    // 它**自己的字段**是量过的证明（S495 三面 + S496 值型面：`class Q: var v: Vector2 / var w: int` 之后 `v.distance_to(w)` 引擎照拦，只第二句）
     const fields = new Map<string, string>();
     for (const v of c.vars) {
-      if (v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name)) fields.set(v.name, v.type.name);
+      const ft = v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name) ? v.type.name : null;
+      if (ft !== null) fields.set(v.name, ft);
+      else {
+        const vt = valueTypeAnnotation(v.type);
+        if (vt !== null) fields.set(v.name, vt);
+      }
     }
     for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>(), fields });
     for (const x of c.innerClasses) collect(x);
@@ -5083,7 +5089,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (t !== null) typed.set(p.name, t);
       if (p.type !== null && p.type.kind === "named" && FACE_ANNOTATIONS.has(p.type.name)) faceTyped.set(p.name, p.type.name);
     }
-    for (const [name, t] of fields) faceTyped.set(name, t);
+    for (const [name, t] of fields) {
+      if (FACE_ANNOTATIONS.has(t)) faceTyped.set(name, t);
+      else typed.set(name, t);
+    }
     const elemFaces = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
       if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) elemFaces.set(name, t.name);
@@ -5330,20 +5339,36 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
+      // 实参写成量过的名字那一形：只回第二句（S496，尺 `tmp/d6/s496.py` 四百四十格），且只认**名字接收者**直接调值型方法那一形
+      const namedRecvArg = callee.obj.kind === "ident" && direct !== null
+        ? (arg: Expr | undefined): string | null => argNameType(arg, argAnn)
+        : (): string | null => null;
       for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-        if (also.includes(bad)) {
-          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        if (bad !== null) {
+          if (!refuse.includes(bad)) continue;
+          put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          if (also.includes(bad)) {
+            put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          }
+          continue;
         }
+        const named = namedRecvArg(lit);
+        if (named === null || !refuse.includes(named) || !also.includes(named)) continue;
+        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        if (bad !== null) {
+          if (!refuse.includes(bad)) continue;
+          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          continue;
+        }
+        const named = namedRecvArg(lit);
+        if (named === null || !refuse.includes(named)) continue;
+        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
         for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
