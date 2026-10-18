@@ -1938,6 +1938,63 @@ function packArgScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; bas
   return out;
 }
 
+/** 实参写成名字那一形认得的标注型（S495，尺 `tmp/d6/s495.py` 二百六十四格 = 三位位子 × 廿二型 × 四种名字，
+ *  `tmp/d6/s495c.py` 一百七十六格补 `StringName.find` 第 1 位与 `String.find` 第 2 位，
+ *  另两把尺 `tmp/d6/s495b.py` 八十八格 + `tmp/d6/s495d.py` 二十二格把同一批位子的字面量形重量一遍）——
+ *  没量过的来源（`Callable` / `Variant` / `null` / 定形标注）不开口。 */
+const ARG_NAME_TYPES = new Set([
+  "int", "float", "bool", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
+  "Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array",
+  "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+]);
+
+/** 每支函数体一份「名字 → 标注型」：模块级标注打底、内部类字段盖上去、形参再盖一层、函数体内的标注 var 最后盖 ——
+ *  四层都是 S495 量过的证明（初值推断的名字那一形没量过，照旧不算）。 */
+function argNameScopes(m: Module): Map<Stmt[], Map<string, string>> {
+  const plain = (t: TypeRef | null): string | null =>
+    (t !== null && t.kind === "named" && !t.name.includes("[") && ARG_NAME_TYPES.has(t.name) ? t.name : null);
+  const out = new Map<Stmt[], Map<string, string>>();
+  const collect = (funcs: FuncDecl[], fields: Map<string, string>): void => {
+    for (const f of funcs) {
+      const ann = new Map(fields);
+      for (const p of f.params) {
+        const t = plain(p.type);
+        if (t !== null) ann.set(p.name, t);
+      }
+      for (const n of flattenBody(f.body)) {
+        if (n.kind !== "var" || typeof n.name !== "string") continue;
+        const t = plain(n.type as TypeRef | null);
+        if (t !== null) ann.set(n.name, t);
+      }
+      out.set(f.body, ann);
+    }
+  };
+  const moduleNames = new Map<string, string>();
+  for (const v of m.vars) {
+    const t = plain(v.type);
+    if (t !== null) moduleNames.set(v.name, t);
+  }
+  collect(m.funcs, moduleNames);
+  const collectClass = (c: ClassDecl): void => {
+    // 内部类能不能看见模块级名字这一形没量过（同 `faceScopes` 的口径）：只给它自己的字段，宁可漏拦不误拦
+    const fields = new Map<string, string>();
+    for (const v of c.vars) {
+      const t = plain(v.type);
+      if (t !== null) fields.set(v.name, t);
+    }
+    collect(c.funcs, fields);
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
+  return out;
+}
+
+/** 实参是量过的名字时交出的静态型，否则 null（字面量那一形早由 `literalTypeName` 管，两形不叠句）。 */
+function argNameType(e: Expr | undefined, ann: Map<string, string>): string | null {
+  if (e === undefined || e.kind !== "ident" || typeof e.name !== "string") return null;
+  return ann.get(e.name) ?? null;
+}
+
 /** 同一函数体里被赋过值的名字：静态证明一律作废（证不出就当不知道，宁可漏拦不误拦）。 */
 function reassignedNames(nodes: Record<string, unknown>[]): Set<string> {
   const out = new Set<string>();
@@ -2016,7 +2073,7 @@ function faceScopes(
   m: Module,
   type: string,
   isInit: (init: Expr) => boolean,
-): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> {
+): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
   const moduleNames = new Map<string, "annot" | "inferred">();
   for (const v of m.vars) {
@@ -2024,12 +2081,12 @@ function faceScopes(
     else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
   }
 
-  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> = [];
+  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> = [];
   const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">): void => {
     for (const f of funcs) {
       const seeded = new Map(seededBase);
       for (const p of f.params) if (named(p.type)) seeded.set(p.name, "annot");
-      out.push({ nodes: flattenBody(f.body), seeded });
+      out.push({ nodes: flattenBody(f.body), seeded, body: f.body });
     }
   };
   collect(m.funcs, moduleNames);
@@ -2733,8 +2790,10 @@ interface NamedFace {
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
   const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
   const assigned = moduleAssignedNames(m);
-  for (const { nodes, seeded } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
+  const argAnnAll = argNameScopes(m);
+  for (const { nodes, seeded, body } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
     const names = faceReceiverNames(nodes, seeded, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+    const argAnn = argAnnAll.get(body) ?? new Map<string, string>();
     for (const n of nodes) {
       if (n.kind !== "call") continue;
       const callee = n.callee as Record<string, unknown> | undefined;
@@ -2757,17 +2816,32 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
         byPos.set(pos, bucket);
       };
       for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
-        const bad = literalTypeName(got[pos - 1]);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-        if (also.includes(bad)) {
-          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+        const lit = got[pos - 1];
+        const bad = literalTypeName(lit);
+        if (bad !== null) {
+          if (!refuse.includes(bad)) continue;
+          put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          if (also.includes(bad)) {
+            put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+          }
+          continue;
         }
+        // 名字那一形只回第二句（S495：`var w: int` 之后 `sn.find(w)` 引擎一句、`&"ab".find(1)` 两句）
+        const named = argNameType(lit, argAnn);
+        if (named === null || !refuse.includes(named) || !also.includes(named)) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
-        const bad = literalTypeName(got[pos - 1]);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+        const lit = got[pos - 1];
+        const bad = literalTypeName(lit);
+        if (bad !== null) {
+          if (!refuse.includes(bad)) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+          continue;
+        }
+        const named = argNameType(lit, argAnn);
+        if (named === null || !refuse.includes(named)) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
         for (const g of byPos.get(pos)!) diags.push({ code: g.code, message: g.message, loc });
@@ -4980,16 +5054,24 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     if (t !== null) moduleVars.set(v.name, t);
   }
 
-  const funcs: Array<{ f: FuncDecl; base: Map<string, string> }> = m.funcs.map((f) => ({ f, base: moduleVars }));
+  const funcs: Array<{ f: FuncDecl; base: Map<string, string>; fields: Map<string, string> }> =
+    m.funcs.map((f) => ({ f, base: moduleVars, fields: new Map<string, string>() }));
   const collect = (c: ClassDecl): void => {
     // 内部类的方法不给它预置模块级名字：那一侧引擎怎么判没量过，宁可漏拦也不误拦
-    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>() });
+    const fields = new Map<string, string>();
+    for (const v of c.vars) {
+      if (v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name)) fields.set(v.name, v.type.name);
+    }
+    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>(), fields });
     for (const x of c.innerClasses) collect(x);
   };
   for (const c of m.innerClasses) collect(c);
 
-  for (const { f, base } of funcs) {
+  const argAnnAll = argNameScopes(m);
+  for (const { f, base, fields } of funcs) {
     const typed = new Map(base);
+    /** 实参写成量过的名字那一形（S495）：只回第二句，`Cannot pass a value of type …` 那一句不跟名字走。 */
+    const argAnn = argAnnAll.get(f.body) ?? new Map<string, string>();
     // 标了 `String` / `Array` / `Dictionary` 的名字：引擎在带标注的变量接收者上说的句子，与字面量接收者那一趟一字不差
     //（`tmp/probe-argtype/packed3.mts` 的 1358 格与 `p2-t4.txt` 逐格比过），所以同一张表照用
     const faceTyped = new Map<string, string>();
@@ -5001,6 +5083,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (t !== null) typed.set(p.name, t);
       if (p.type !== null && p.type.kind === "named" && FACE_ANNOTATIONS.has(p.type.name)) faceTyped.set(p.name, p.type.name);
     }
+    for (const [name, t] of fields) faceTyped.set(name, t);
     const elemFaces = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
       if (t !== null && t.kind === "named" && readFaceOf(t.name, null) !== null) elemFaces.set(name, t.name);
@@ -5195,18 +5278,34 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           bucket.push({ code, message });
           byPos.set(pos, bucket);
         };
+        // 实参写成量过的名字那一形：只回第二句（S495，尺 `tmp/d6/s495.py` 二百六十四格），且只认字面量与标注名接收者（链子那一形没量）
+        const namedArg = (arg: Expr | undefined): string | null => (litFace === null ? null : argNameType(arg, argAnn));
         for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
-          const bad = literalTypeName(e.args[pos - 1]);
-          if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-          if (also.includes(bad)) {
-            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          const arg = e.args[pos - 1];
+          const bad = literalTypeName(arg);
+          if (bad !== null) {
+            if (!refuse.includes(bad)) continue;
+            put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+            if (also.includes(bad)) {
+              put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+            }
+            continue;
           }
+          const named = namedArg(arg);
+          if (named === null || !refuse.includes(named) || !also.includes(named)) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
-          const bad = literalTypeName(e.args[pos - 1]);
-          if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          const arg = e.args[pos - 1];
+          const bad = literalTypeName(arg);
+          if (bad !== null) {
+            if (!refuse.includes(bad)) continue;
+            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+            continue;
+          }
+          const named = namedArg(arg);
+          if (named === null || !refuse.includes(named)) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
           for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
