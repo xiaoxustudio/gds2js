@@ -1795,11 +1795,15 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
 const PACK_ARG_POSITIONS: Record<string, readonly string[]> = {
   append: ["e"], push_back: ["e"], fill: ["e"], has: ["e"], count: ["e"], erase: ["e"],
   get: ["i"], set: ["i", "e"], insert: ["i", "e"], find: ["e", "i"], rfind: ["e", "i"],
-  bsearch: ["e", "b"], resize: ["i"], slice: ["i", "i"], remove_at: ["i"],
+  bsearch: ["e", "b"], resize: ["i"], slice: ["i", "i"], remove_at: ["i"], append_array: ["a"],
 };
 /** int 槽与 bool 槽能进的来源：int 槽收 int / float / bool，bool 槽同样收三支（实测 `bsearch(1, 2)` 照收）；文本都是同一套两句。 */
 const PACK_INT_SLOT_OK = ["int", "float", "bool"];
 const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
+/** `a` 槽（`append_array`）那一位的槽型是**接收者自己那一型**，收的来源只有 `Array` 与同型那支 pack；
+ *  这十一型两句齐发，`Dictionary` 与其余八支 pack 只回第二句（S492，尺 `tmp/d6/s492.py` 三百九十六格 = 九面 × 廿二型 × 两形，
+ *  与 `tmp/d6/s487c.py` 一百六十八格那五种接收者证明的读数一字一样）。 */
+const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i"];
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
@@ -2239,8 +2243,26 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
         const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
         const proven = src ?? annotated;
-        if (proven === null) continue;
         const kind = slots[p];
+        if (kind === "a") {
+          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492）—— 没量过的（Callable / null / 类名）不开口
+          const srcA = proven ?? (arg0.kind === "lit" && arg0.lit === "node_path" ? "NodePath"
+            : arg0.kind === "call" && arg0.callee.kind === "ident" && PACK_TYPE_NAMES.has(arg0.callee.name) ? arg0.callee.name : null);
+          if (srcA === null || srcA === "Array" || srcA === pack) continue;
+          const two = PACK_APPEND_ARRAY_AS.includes(srcA);
+          if (!two && !(srcA === "Dictionary" || PACK_TYPE_NAMES.has(srcA))) continue;
+          const aloc = (n.loc as Diagnostic["loc"]) ?? null;
+          if (two && (src !== null || annotated === null)) {
+            diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${srcA}" as "${pack}".`, loc: aloc });
+          }
+          diags.push({
+            code: "pack-arg-slot",
+            message: `Invalid argument for "${method}()" function: argument ${String(p + 1)} should be "${pack}" but is "${srcA}".`,
+            loc: aloc,
+          });
+          continue;
+        }
+        if (proven === null) continue;
         const slot = kind === "i" ? "int" : kind === "b" ? "bool" : face.slot;
         const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
         if (ok.includes(proven)) continue;
