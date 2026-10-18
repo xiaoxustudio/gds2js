@@ -3,6 +3,8 @@
  * （尺 `tmp/d6/annot.py`，读数 `tmp/d6/av-decl.txt` / `tmp/d6/av-mirror.txt`，361 对零分歧）。
  * 从前这一族整族放过 —— `var v: Vector2` 摆在模块顶上，`v + 1` / `1 + v` 都出货。
  * 两向**不是镜像**（正向 177 对、反向 184 对），所以各记一张表，这里把两笔的张数也钉住。
+ * S489 往这两张表各并进 232 / 242 对（StringName / NodePath 两面，尺 `tmp/d6/s489c.py` + `tmp/d6/s489e.py`），
+ * 张数涨到 469 / 667；右支写成字面量还是标注名，引擎拒的集一字一样，所以两形共用一张表。
  */
 import { describe, expect, it } from "vitest";
 import { analyze, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "@gds2js/compiler/lower/analyze";
@@ -56,9 +58,9 @@ describe("标值型标注的运算符对", () => {
     expect(await pairs("func z():\n\tprint(c + Color(1, 1, 1, 1))\n")).toEqual([]);
   });
 
-  it("两张表按实测各 237 / 425 对 —— 反向不是正向的镜像，且反向还含「值型字面量在左」那一批", () => {
-    expect(count(OP_PAIRS_REFUSED_DECL_VAL)).toBe(237);
-    expect(count(OP_PAIRS_REFUSED_DECL_VAL_REV)).toBe(425);
+  it("两张表按实测各 469 / 667 对 —— 反向不是正向的镜像，且反向还含「值型字面量在左」那一批", () => {
+    expect(count(OP_PAIRS_REFUSED_DECL_VAL)).toBe(469);
+    expect(count(OP_PAIRS_REFUSED_DECL_VAL_REV)).toBe(667);
   });
 
   it("属性名当值拿的是属性自己的型（S467），方法名当值才是 Callable", async () => {
