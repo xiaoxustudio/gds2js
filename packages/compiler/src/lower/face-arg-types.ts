@@ -108,6 +108,8 @@ export const FACE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number
   "StringName.insert": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
   "StringName.erase": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "StringName.substr": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "NodePath.get_name": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"]]],
+  "NodePath.get_subname": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"]]],
 };
 
 export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string]>>> = {
@@ -128,7 +130,7 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "Array.pop_at": [[1, ["Array", "Dictionary", "PackedByteArray"], "int"]],
   "Array.reduce": [[1, ["Array", "Dictionary", "PackedByteArray"], "Callable"]],
   "Array.remove_at": [[1, ["Array", "Dictionary", "PackedByteArray"], "int"]],
-  "Array.resize": [[1, ["Array", "Dictionary", "PackedByteArray"], "int"]],
+  "Array.resize": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
   "Array.rfind": [[2, ["Array", "Dictionary", "PackedByteArray"], "int"]],
   "Array.rfind_custom": [[1, ["Array", "Dictionary", "PackedByteArray"], "Callable"]],
   "Array.slice": [[1, ["Array", "Dictionary", "PackedByteArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray"], "int"], [3, ["Array", "Dictionary", "PackedByteArray"], "int"]],
@@ -150,7 +152,7 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "String.erase": [[1, ["Array", "Dictionary", "PackedByteArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray"], "int"]],
   "String.filecasecmp_to": [[1, ["Array", "Dictionary", "Callable", "PackedByteArray"], "String"]],
   "String.filenocasecmp_to": [[1, ["Array", "Dictionary", "Callable", "PackedByteArray"], "String"]],
-  "String.find": [[1, ["Array", "Dictionary", "PackedByteArray"], "String"], [2, ["Array", "Dictionary", "PackedByteArray"], "int"]],
+  "String.find": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "String"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
   "String.findn": [[1, ["Array", "Dictionary", "PackedByteArray"], "String"], [2, ["Array", "Dictionary", "PackedByteArray"], "int"]],
   "String.format": [[2, ["Array", "Dictionary", "PackedByteArray"], "String"]],
   "String.get_slice": [[1, ["Array", "Dictionary", "PackedByteArray"], "String"], [2, ["Array", "Dictionary", "PackedByteArray"], "int"]],
@@ -206,7 +208,7 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "StringName.replace_char": [[1, ["Array", "Callable", "Dictionary", "PackedByteArray"], "int"], [2, ["Array", "Callable", "Dictionary", "PackedByteArray"], "int"]],
   "StringName.replace_chars": [[1, ["Array", "Callable", "Dictionary", "PackedByteArray"], "String"], [2, ["Array", "Callable", "Dictionary", "PackedByteArray"], "int"]],
   "StringName.to_multibyte_char_buffer": [[1, ["Array", "Callable", "Dictionary", "PackedByteArray"], "String"]],
-  "StringName.find": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "String"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"]],
+  "StringName.find": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "String"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"]],
   "StringName.count": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "String"]],
   "StringName.begins_with": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "String"]],
   "StringName.ends_with": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "String"]],
@@ -214,4 +216,6 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "StringName.insert": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "String"]],
   "StringName.erase": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"]],
   "StringName.substr": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"]],
+  "NodePath.get_name": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
+  "NodePath.get_subname": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
 };

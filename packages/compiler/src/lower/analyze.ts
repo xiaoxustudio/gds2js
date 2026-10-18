@@ -108,6 +108,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   // 记号表是进程内累积的：每份模块归一个自己的主，两份文件同 `行:列` 的同名字就不会互相抢记号（§6 第 61 条）
   markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
   seedOuterNames(m);
+  markClassFaceReceivers(m);
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];
@@ -1430,6 +1431,48 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   for (const c of m.innerClasses) collect(c);
 
+  /** 形参与内部类字段这两形的 pack 名字（S494b：`func f(p: PackedByteArray)` 与 `class Q: var p: PackedByteArray` 两种接收者，
+   *  void 那句与形参两句照回，读数 `tmp/d6/s494b.json`）—— 容器与值型那几面这两形没量过，所以只补 pack。 */
+  const packSeeds = new Map<Stmt[], Map<string, string>>();
+  const packAnn = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" && PACK_TYPE_NAMES.has(t.name) ? t.name : null);
+  const containerSeeds = new Map<Stmt[], Map<string, string>>();
+  const shapeAnn = (t: TypeRef | null): string | null =>
+    t === null || t.kind !== "named"
+      ? null
+      : /^Array(\[|$)/.test(t.name)
+        ? "Array"
+        : /^Dictionary(\[|$)/.test(t.name)
+          ? "Dictionary"
+          : PACK_TYPE_NAMES.has(t.name)
+            ? "Pack"
+            : null;
+  const seedFunc = (f: FuncDecl, fields: Map<string, string>, shapeFields: Map<string, string>): void => {
+    const s = new Map(fields);
+    const cs = new Map(shapeFields);
+    for (const p of f.params) {
+      const ty = packAnn(p.type);
+      if (ty !== null) s.set(p.name, ty);
+      const sh = shapeAnn(p.type);
+      if (sh !== null) cs.set(p.name, sh);
+    }
+    packSeeds.set(f.body, s);
+    containerSeeds.set(f.body, cs);
+  };
+  for (const f of m.funcs) seedFunc(f, new Map<string, string>(), new Map<string, string>());
+  const seedCls = (c: ClassDecl): void => {
+    const fields = new Map<string, string>();
+    const shapeFields = new Map<string, string>();
+    for (const v of c.vars) {
+      const ty = packAnn(v.type);
+      if (ty !== null) fields.set(v.name, ty);
+      const sh = shapeAnn(v.type);
+      if (sh !== null) shapeFields.set(v.name, sh);
+    }
+    for (const f of c.funcs) seedFunc(f, fields, shapeFields);
+    for (const inner of c.innerClasses) seedCls(inner);
+  };
+  for (const c of m.innerClasses) seedCls(c);
+
   /** 能被 `X.new()` 造出来的类名：脚本自己的类 + 内部类（递归） */
   const classNames = new Set<string>(m.className ? [m.className] : []);
   const addClassNames = (cs: ClassDecl[]): void => {
@@ -1489,6 +1532,8 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
 
   for (const body of bodies) {
     const shapes = new Map(seed);
+    for (const [name, ty] of packSeeds.get(body) ?? []) shapes.set(name, "Pack");
+    for (const [name, sh] of containerSeeds.get(body) ?? []) shapes.set(name, sh as ContainerShape);
     /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
     const localAnn = new Map<string, string>();
     for (const n of flattenBody(body)) {
@@ -1497,9 +1542,12 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
         if (f !== null) localAnn.set(n.name, f);
       }
     }
+    const scopePacks = packSeeds.get(body) ?? new Map<string, string>();
     const ownerFace = (obj: Expr): string | null => {
       if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
-      if (obj.kind === "ident" && typeof obj.name === "string") return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      if (obj.kind === "ident" && typeof obj.name === "string") {
+        return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? scopePacks.get(obj.name) ?? null;
+      }
       if (obj.kind === "call" && obj.callee.kind === "ident" && PACK_TYPE_NAMES.has(obj.callee.name)) return obj.callee.name;
       return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
     };
@@ -1513,7 +1561,10 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
               e.callee.obj.kind === "ident"
-                ? shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null)
+                ? shapes.get(e.callee.obj.name) ??
+                  (PACK_TYPE_NAMES.has(e.callee.obj.name) ? "Pack" : null) ??
+                  (e.callee.obj.name === "Array" || e.callee.obj.name === "Dictionary" ? e.callee.obj.name : null) ??
+                  (signalNames.has(e.callee.obj.name) ? "Signal" : null)
                 : chainPack;
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
@@ -1786,7 +1837,7 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedInt64Array: { slot: "int", ok: ["int", "float", "bool"] },
   PackedFloat32Array: { slot: "float", ok: ["int", "float", "bool"] },
   PackedFloat64Array: { slot: "float", ok: ["int", "float", "bool"] },
-  PackedStringArray: { slot: "String", ok: ["String", "StringName"] },
+  PackedStringArray: { slot: "String", ok: ["String", "StringName", "NodePath"] },
   PackedVector2Array: { slot: "Vector2", ok: ["Vector2", "Vector2i"] },
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
@@ -1803,18 +1854,30 @@ const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
 /** `a` 槽（`append_array`）那一位的槽型是**接收者自己那一型**，收的来源只有 `Array` 与同型那支 pack；
  *  这十一型两句齐发，`Dictionary` 与其余八支 pack 只回第二句（S492，尺 `tmp/d6/s492.py` 三百九十六格 = 九面 × 廿二型 × 两形，
  *  与 `tmp/d6/s487c.py` 一百六十八格那五种接收者证明的读数一字一样）。 */
-const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i"];
+const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "null", "Callable", "Object", "Node"];
 /** `append_array` 那一位认得的**标注名**来源（S493，尺 `tmp/d6/s493.py` 五百九十四格：九面 × 廿二型 × 模块标注名 / 局部标注名 / 初值推断名）——
  *  名字来的只回第二句，初值推断的那一形引擎句句收、所以不算来源；定形标注（`Array[int]` 那种）没量过，也不开口。 */
 const PACK_APPEND_NAMED = new Set([
   "bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
   "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "Callable", "Object", "Node",
 ]);
 function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
   if (typeof name !== "string") return null;
   const t = ann.get(name);
-  return t !== undefined && PACK_APPEND_NAMED.has(t) ? t : null;
+  if (t === undefined || !PACK_APPEND_NAMED.has(argFaceBase(t))) return null;
+  return t.includes("[") ? typedFaceText(t) : t;
+}
+
+/** `e` / `i` / `b` 三槽认得的**标注名**来源（S498，尺 `tmp/d6/s497c.py` 一百一十格 + `tmp/d6/s497d.py` 三百九十六格 +
+ *  `tmp/d6/s498b.py` 一百三十二格：`NodePath` 与九支 pack 的名字形只回第二句，字面量的 `NodePath` 两句齐发、pack 构造式只第二句；
+ *  S501 又量了定形容器标注那一形：也只回第二句，型名印标注规格化后的原文）。 */
+function namedSlotSource(e: Expr, ann: Map<string, string>): string | null {
+  if (e.kind !== "ident" || typeof e.name !== "string") return null;
+  const t = ann.get(e.name);
+  if (t === undefined || !ARG_NAME_TYPES.has(argFaceBase(t))) return null;
+  return t.includes("[") ? typedFaceText(t) : t;
 }
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
@@ -1824,7 +1887,7 @@ function packArgSource(e: Expr): string | null {
     return packArgSource(e.left) === "String" && packArgSource(e.right) === "String" ? "String" : null;
   }
   if (e.kind === "lit") {
-    return ({ int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName", null: "null" } as Record<string, string>)[e.lit] ?? null;
+    return ({ int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName", node_path: "NodePath", null: "null" } as Record<string, string>)[e.lit] ?? null;
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
@@ -1835,7 +1898,8 @@ function packArgSource(e: Expr): string | null {
       e.callee.name === "Vector3" ||
       e.callee.name === "Vector2i" ||
       e.callee.name === "Vector3i" ||
-      e.callee.name === "Color")
+      e.callee.name === "Color" ||
+      PACK_TYPE_NAMES.has(e.callee.name))
   ) {
     return e.callee.name;
   }
@@ -1874,6 +1938,187 @@ function flattenBodies(m: Module): Record<string, unknown>[][] {
   };
   for (const c of m.innerClasses) collect(c);
   return bodies.map(flattenBody);
+}
+
+/** 类名直调那五面的实例方法表（S506，尺 `tmp/d6/s506.py` 十八格 + `tmp/d6/s505.py` 八十一格）：
+ *  `Array.resize(1)` 之类引擎发的是「非静态那一句」，表外名发的是「找不到成员那两句」，**不是**「未声明的标识符」。 */
+function classFaceArity(t: string): Record<string, [number, number]> | undefined {
+  if (t === "Array") return ARRAY_METHOD_ARITY;
+  if (t === "String" || t === "StringName") return STRING_METHOD_ARITY;
+  if (t === "NodePath") return NODE_PATH_METHOD_ARITY;
+  if (t === "Dictionary") return DICT_METHOD_ARITY;
+  return undefined;
+}
+/** 这一份模块里「当作成员访问接收者用」的那几个类名节点：作用域那一闸据此放过它们，句子交给静态面那一段去发。 */
+const CLASS_FACE_RECEIVERS = new WeakSet<object>();
+function markClassFaceReceivers(m: Module): void {
+  for (const nodes of flattenBodies(m)) {
+    for (const n of nodes) {
+      if (n.kind !== "attribute") continue;
+      const obj = n.obj as Record<string, unknown> | undefined;
+      if (obj !== undefined && obj.kind === "ident" && typeof obj.name === "string" && classFaceArity(obj.name) !== undefined) {
+        CLASS_FACE_RECEIVERS.add(obj);
+      }
+    }
+  }
+}
+
+/** `checkPackArgSlots` 的作用域：每支函数体配一张「名字 → 标注型」的底表 —— 模块级标注打底、内部类字段盖在上面、形参再盖一层
+ *  （S494 量齐：pack 的形参拒这一族此前只认模块标注名与函数体内的标注 var，形参标注与内部类字段两形 396 格全放过）。 */
+function packArgScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; base: Map<string, string> }> {
+  const named = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" ? t.name : null);
+  const moduleNames = new Map<string, string>();
+  for (const v of m.vars) {
+    const t = named(v.type);
+    if (t !== null) moduleNames.set(v.name, t);
+  }
+  const out: Array<{ nodes: Record<string, unknown>[]; base: Map<string, string> }> = [];
+  const collectFuncs = (funcs: FuncDecl[], seed: Map<string, string>): void => {
+    for (const f of funcs) {
+      const base = new Map(seed);
+      for (const p of f.params) {
+        const t = named(p.type);
+        if (t !== null) base.set(p.name, t);
+      }
+      out.push({ nodes: flattenBody(f.body), base });
+    }
+  };
+  collectFuncs(m.funcs, moduleNames);
+  const collectClass = (c: ClassDecl): void => {
+    const fields = new Map(moduleNames);
+    for (const v of c.vars) {
+      const t = named(v.type);
+      if (t !== null) fields.set(v.name, t);
+    }
+    collectFuncs(c.funcs, fields);
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
+  return out;
+}
+
+/** 定形容器标注的型名：引擎把标注**规格化**再印 —— `Dictionary[ String ,  int ]` 给 `Dictionary[String, int]`、
+ *  `Array[ int ]` 给 `Array[int]`（S501，尺 `tmp/d6/s501b.gd` 四形对照）。 */
+function typedFaceText(name: string): string {
+  const open = name.indexOf("[");
+  const closed = name.trimEnd();
+  if (open < 0 || !closed.endsWith("]")) return name.trim();
+  const base = name.slice(0, open).trim();
+  const body = closed.slice(open + 1, closed.length - 1);
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of body) {
+    if (ch === "[") depth++;
+    else if (ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  parts.push(cur);
+  const mapped = parts.map((p) => typedFaceText(p.trim()));
+  // 元素全写 `Variant` 的那一形引擎报的是裸基型（`Array[Variant]` → `Array`、`Dictionary[Variant, Variant]` → `Dictionary`），
+  // 混着一个非 Variant 就照全名报（S502c，尺 `tmp/d6/s502c.py` 十八格）。
+  if (mapped.length > 0 && mapped.every((p) => p === "Variant")) return base;
+  return `${base}[${mapped.join(", ")}]`;
+}
+
+/** 标注型名去掉定形部分：`Array[int]` 的基是 `Array`（成员判定按基型，印出去的是标注原文）。 */
+function argFaceBase(t: string): string {
+  const open = t.indexOf("[");
+  return open < 0 ? t : t.slice(0, open);
+}
+
+/** 表里那一列认不认这个来源名：定形容器按基型查（S501，尺 `tmp/d6/s501a.py` 一百八十格） */
+function faceListHas(list: readonly string[], t: string): boolean {
+  return list.includes(t) || (t.includes("[") && list.includes(argFaceBase(t)));
+}
+
+/** 实参写成对象型名字那一形认得的标注（S503，尺 `tmp/d6/s503.py` 三十六格：`var w: Callable` / `Object` / `Node` 三种形，
+ *  量到的六位位子引擎句句拒、句句只回第二句；`var w: Variant` 与初值推断的 `var w = null` 那两形引擎句句收，照旧不算证明）。 */
+const OBJECT_ARG_NAMES = new Set(["Callable", "Object", "Node"]);
+/** **值型槽**那廿档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺 + S507 三把尺 + S508 二百廿五格 + S509 四十四格里量到的槽型；
+ *  `StringName` / `NodePath` 当槽型那一档没量过，照旧不开口）。 */
+const VALUE_ARG_WANTS = new Set([
+  "int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color",
+  "Array", "Dictionary",
+  "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+]);
+function nullRefusedByValueSlot(want: string): boolean {
+  return VALUE_ARG_WANTS.has(want);
+}
+function objectNameRefusedByValueSlot(src: string | null, want: string): boolean {
+  return src !== null && OBJECT_ARG_NAMES.has(src) && VALUE_ARG_WANTS.has(want);
+}
+
+/** 实参写成名字那一形认得的标注型（S495，尺 `tmp/d6/s495.py` 二百六十四格 = 三位位子 × 廿二型 × 四种名字，
+ *  `tmp/d6/s495c.py` 一百七十六格补 `StringName.find` 第 1 位与 `String.find` 第 2 位，
+ *  另两把尺 `tmp/d6/s495b.py` 八十八格 + `tmp/d6/s495d.py` 二十二格把同一批位子的字面量形重量一遍）——
+ *  没量过的来源（`Callable` / `Variant` / `null`）不开口；定形容器标注随 S501 认进来。 */
+const ARG_NAME_TYPES = new Set([
+  "int", "float", "bool", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
+  "Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array",
+  "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "Callable", "Object", "Node",
+]);
+
+/** 名字那一形交得出的标注：廿二型原样，定形容器标注交规格化后的原文（S501 量的是 `Array[int]` / `Array[String]` /
+ *  `Array[PackedByteArray]` / `Dictionary[String, int]` 四种）。 */
+function argNameOf(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  if (t.name.includes("[") && !t.name.includes("]")) return null;
+  const text = t.name.includes("[") ? typedFaceText(t.name) : t.name;
+  return ARG_NAME_TYPES.has(argFaceBase(text)) ? text : null;
+}
+
+/** 每支函数体一份「名字 → 标注型」：模块级标注打底、内部类字段盖上去、形参再盖一层、函数体内的标注 var 最后盖 ——
+ *  四层都是 S495 量过的证明（初值推断的名字那一形没量过，照旧不算）。 */
+function argNameScopes(m: Module): Map<Stmt[], Map<string, string>> {
+  const plain = argNameOf;
+  const out = new Map<Stmt[], Map<string, string>>();
+  const collect = (funcs: FuncDecl[], fields: Map<string, string>): void => {
+    for (const f of funcs) {
+      const ann = new Map(fields);
+      for (const p of f.params) {
+        const t = plain(p.type);
+        if (t !== null) ann.set(p.name, t);
+      }
+      for (const n of flattenBody(f.body)) {
+        if (n.kind !== "var" || typeof n.name !== "string") continue;
+        const t = plain(n.type as TypeRef | null);
+        if (t !== null) ann.set(n.name, t);
+      }
+      out.set(f.body, ann);
+    }
+  };
+  const moduleNames = new Map<string, string>();
+  for (const v of m.vars) {
+    const t = plain(v.type);
+    if (t !== null) moduleNames.set(v.name, t);
+  }
+  collect(m.funcs, moduleNames);
+  const collectClass = (c: ClassDecl): void => {
+    // 内部类能不能看见模块级名字这一形没量过（同 `faceScopes` 的口径）：只给它自己的字段，宁可漏拦不误拦
+    const fields = new Map<string, string>();
+    for (const v of c.vars) {
+      const t = plain(v.type);
+      if (t !== null) fields.set(v.name, t);
+    }
+    collect(c.funcs, fields);
+    for (const inner of c.innerClasses) collectClass(inner);
+  };
+  for (const c of m.innerClasses) collectClass(c);
+  return out;
+}
+
+/** 实参是量过的名字时交出的静态型，否则 null（字面量那一形早由 `literalTypeName` 管，两形不叠句）。 */
+function argNameType(e: Expr | undefined, ann: Map<string, string>): string | null {
+  if (e === undefined || e.kind !== "ident" || typeof e.name !== "string") return null;
+  return ann.get(e.name) ?? null;
 }
 
 /** 同一函数体里被赋过值的名字：静态证明一律作废（证不出就当不知道，宁可漏拦不误拦）。 */
@@ -1954,7 +2199,7 @@ function faceScopes(
   m: Module,
   type: string,
   isInit: (init: Expr) => boolean,
-): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> {
+): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
   const moduleNames = new Map<string, "annot" | "inferred">();
   for (const v of m.vars) {
@@ -1962,12 +2207,12 @@ function faceScopes(
     else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
   }
 
-  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred"> }> = [];
+  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> = [];
   const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">): void => {
     for (const f of funcs) {
       const seeded = new Map(seededBase);
       for (const p of f.params) if (named(p.type)) seeded.set(p.name, "annot");
-      out.push({ nodes: flattenBody(f.body), seeded });
+      out.push({ nodes: flattenBody(f.body), seeded, body: f.body });
     }
   };
   collect(m.funcs, moduleNames);
@@ -2194,15 +2439,15 @@ function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
 }
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
-  const modAnn = new Map<string, string>();
-  for (const v of m.vars) {
-    if (v.type !== null && v.type.kind === "named") modAnn.set(v.name, v.type.name);
-  }
-  for (const nodes of flattenBodies(m)) {
+  for (const { nodes, base } of packArgScopes(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
-    /** 同函数体内 `var v: String` 这一类**带标注的局部 var**：第二种证明，只发一句 */
+    /** `var v: String` 这一类**带标注的名字**（模块级、内部类字段、形参与函数体内的都算）：第二种证明，只发一句 */
     const annot = new Map<string, string>();
+    for (const [name, ty] of base) {
+      if (ty in PACK_ARG_SLOTS) packs.set(name, ty);
+      else if (ANNOT_SOURCES.has(ty)) annot.set(name, ty);
+    }
     const reassigned = reassignedNames(nodes);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
@@ -2217,21 +2462,17 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, init.callee.name);
       }
     }
-    /** `append_array` 那一位认**标注名**（S493）：模块级与局部的都算，被重新赋值过的名字丢掉。 */
-    const annAll = new Map<string, string>(modAnn);
+    /** `append_array` 那一位认**标注名**（S493 的模块与局部两形、S494 的形参与内部类字段两形）：被重新赋值过的名字丢掉。 */
+    const annAll = new Map<string, string>(base);
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
       const type = n.type as TypeRef | null;
       if (type !== null && type.kind === "named") annAll.set(n.name, type.name);
     }
-    /** 模块级标注的 pack 名也是同一种静态证明（S486，读数 `tmp/d6/s486.json`：`var k0: PackedByteArray` 之后 `k0.append("a")` 两句照回，`k0.fill("a")` 连 void 一起回）。 */
-    for (const v of m.vars) {
-      if (v.type !== null && v.type.kind === "named" && v.type.name in PACK_ARG_SLOTS && !packs.has(v.name)) packs.set(v.name, v.type.name);
-    }
     /** 链子那一形的基能不能静态证出（S482 的 `tmp/d6/s482.json`：`s.hex_decode().append("a")` 与 `PackedByteArray([1]).append("a")` 两句一字一样）。 */
     const ownerFace = (obj: Expr): string | null => {
       if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
-      if (obj.kind === "ident" && typeof obj.name === "string") return packs.get(obj.name) ?? annot.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      if (obj.kind === "ident" && typeof obj.name === "string") return packs.get(obj.name) ?? annot.get(obj.name) ?? base.get(obj.name) ?? null;
       return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
     };
 
@@ -2241,13 +2482,15 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       if (callee === undefined || callee.kind !== "attribute") continue;
       const obj = callee.obj as Record<string, unknown> | undefined;
       if (obj === undefined) continue;
-      // 两种证明：命名过的（上面那张表）与**就地构造的链式接收者** `Face([…]).append(x)` —— 引擎对这两种同判（`tmp/probe-packargs/` 九面 2160 格两侧对过）
+      // 三种证明：命名过的（上面那张表）、**就地构造的链式接收者** `Face([…]).append(x)`，以及**类名直调** `PackedByteArray.append(x)`
+      // —— 引擎对前两种同判（`tmp/probe-packargs/` 九面 2160 格两侧对过），类名直调那一种除了头一句「Make an instance instead」
+      // 之外形参拒与 void 那句照说（S504，尺 `tmp/d6/s504.py` 一百二十格）
       const objCallee = obj.kind === "call" ? (obj.callee as Record<string, unknown> | undefined) : undefined;
       const inline = objCallee !== undefined && objCallee["kind"] === "ident" && typeof objCallee["name"] === "string"
         && String(objCallee["name"]) in PACK_ARG_SLOTS ? String(objCallee["name"]) : null;
       const viaChain = obj.kind === "call" ? chainRecvFace(obj as Expr, ownerFace) : null;
       const pack = obj.kind === "ident" && typeof obj.name === "string"
-        ? packs.get(obj.name)
+        ? (packs.get(obj.name) ?? (obj.name in PACK_ARG_SLOTS ? obj.name : undefined))
         : (inline ?? (viaChain !== null && PACK_TYPE_NAMES.has(viaChain) ? viaChain : undefined));
       if (pack === undefined) continue;
       const method = callee.name;
@@ -2259,20 +2502,23 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       for (let p = 0; p < Math.min(slots.length, args.length); p++) {
         const arg0 = args[p] as Expr;
         const src = packArgSource(arg0);
-        // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
-        const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
+        // 第二种证明：标注过的名字静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；
+        // 没写标注的（初值推断）解析期放过、成运行期那句，这里不猜着发。
+        const annotated = src === null ? namedSlotSource(arg0, annAll) : null;
         const proven = src ?? annotated;
         const kind = slots[p];
         if (kind === "a") {
-          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 的名字形）——
-          // 没量过的（`null` / Callable / 类名 / 定形标注）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
-          const litA = arg0.kind === "lit" && arg0.lit === "node_path" ? "NodePath"
-            : arg0.kind === "call" && arg0.callee.kind === "ident" && PACK_TYPE_NAMES.has(arg0.callee.name) ? arg0.callee.name : null;
+          // `append_array` 那一位：槽型是接收者自己那一型，只量过这些来源（S492 的字面量形、S493 / S501 的名字形、S503 的 `null` 与对象型名字）——
+          // 没量过的那三面（`PackedInt64Array` / `PackedFloat64Array` / `PackedVector3Array`）的 `null` 与对象型名字不开口；
+          // **名字来的只回第二句**，字面量那一档按 S492 的三档
           const namedA = arg0.kind === "ident" ? namedAppendSource(arg0.name, annAll) : null;
-          const srcA = src ?? litA ?? namedA;
-          if (srcA === null || srcA === "Array" || srcA === pack) continue;
-          const two = PACK_APPEND_ARRAY_AS.includes(srcA);
-          if (!two && !(srcA === "Dictionary" || PACK_TYPE_NAMES.has(srcA))) continue;
+          const srcA = src ?? namedA;
+          if (srcA !== null && (srcA === "null" || OBJECT_ARG_NAMES.has(srcA)) && !VALUE_ARG_WANTS.has(pack)) continue;
+          // 定形容器标注按基型判（S501：`Array[int]` 与 `Array` 同档收，`Dictionary[String, int]` 与 `Dictionary` 同档只回第二句）
+          const baseA = srcA === null ? "" : argFaceBase(srcA);
+          if (srcA === null || baseA === "Array" || baseA === pack) continue;
+          const two = PACK_APPEND_ARRAY_AS.includes(baseA);
+          if (!two && !(baseA === "Dictionary" || PACK_TYPE_NAMES.has(baseA))) continue;
           const aloc = (n.loc as Diagnostic["loc"]) ?? null;
           if (two && namedA === null) {
             diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${srcA}" as "${pack}".`, loc: aloc });
@@ -2288,8 +2534,9 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         const slot = kind === "i" ? "int" : kind === "b" ? "bool" : face.slot;
         const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
         if (ok.includes(proven)) continue;
+        if (OBJECT_ARG_NAMES.has(proven) && !VALUE_ARG_WANTS.has(slot)) continue;
         const loc = (n.loc as Diagnostic["loc"]) ?? null;
-        if (src !== null && proven !== "Array" && proven !== "Dictionary") {
+        if (src !== null && proven !== "Array" && proven !== "Dictionary" && !PACK_TYPE_NAMES.has(proven)) {
           diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
         }
         diags.push({
@@ -2675,8 +2922,10 @@ interface NamedFace {
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
   const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
   const assigned = moduleAssignedNames(m);
-  for (const { nodes, seeded } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
+  const argAnnAll = argNameScopes(m);
+  for (const { nodes, seeded, body } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
     const names = faceReceiverNames(nodes, seeded, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+    const argAnn = argAnnAll.get(body) ?? new Map<string, string>();
     for (const n of nodes) {
       if (n.kind !== "call") continue;
       const callee = n.callee as Record<string, unknown> | undefined;
@@ -2695,21 +2944,40 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
       const byPos = new Map<number, Array<{ code: string; message: string }>>();
       const put = (pos: number, code: string, message: string): void => {
         const bucket = byPos.get(pos) ?? [];
+        if (bucket.some((d) => d.message === message)) return;
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
       for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
-        const bad = literalTypeName(got[pos - 1]);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-        if (also.includes(bad)) {
-          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+        const lit = got[pos - 1];
+        const bad = literalTypeName(lit);
+        if (bad !== null) {
+          const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+          if (!refuse.includes(bad) && !nullSlot) continue;
+          put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          if (nullSlot || also.includes(bad)) {
+            put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+          }
+          continue;
         }
+        // 名字那一形只回第二句（S495：`var w: int` 之后 `sn.find(w)` 引擎一句、`&"ab".find(1)` 两句）
+        const named = argNameType(lit, argAnn);
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && (!faceListHas(refuse, named) || !faceListHas(also, named))) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
-        const bad = literalTypeName(got[pos - 1]);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+        const lit = got[pos - 1];
+        const bad = literalTypeName(lit);
+        if (bad !== null) {
+          if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
+          continue;
+        }
+        const named = argNameType(lit, argAnn);
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && !faceListHas(refuse, named)) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
         for (const g of byPos.get(pos)!) diags.push({ code: g.code, message: g.message, loc });
@@ -3957,6 +4225,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       }
       // 实测「能当值用的全局函数名」（那 78 个）取值合法：一律 typeof 25、打印 `@GlobalScope::<名字>`，所以记下节点、不报「没声明」
       if (!scope.has(e.name) && !isGlobalConst(e.name)) {
+        // 类名当接收者用（`Array.resize(1)`）：那句由静态面那一段发，作用域这一闸不抢（S506）
+        if (CLASS_FACE_RECEIVERS.has(e)) return;
         if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         // 引擎类名当值用同样合法（typeof 24、等式按类），只是那支打印带进程内的号 —— 记下来交给发射器拒
         else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
@@ -4861,11 +5131,66 @@ function staticFaceConstName(t: string, name: string): boolean {
   return face.consts.includes(name) || face.axis.includes(name) || (t === "Color" && COLOR_NAMED[name.toLowerCase()] !== undefined);
 }
 
+/** 类名直调实例方法时的形参那几句：引擎在非静态那一句之后照说，句子与实例接收者同表（S507，尺 `tmp/d6/s507.py` 一百零五格 = 十面 × 廿一处位子 × 五种实参写法）。
+ *  按 `(面.方法, 位)` 查那四张形参表；名字形只回第二句，`null` 与对象型名字按量到的那十三档值型槽判；同一位子被两行命中时同文只发一遍。 */
+function classFaceArgDiags(e: Expr, face: string, method: string, argAnn: Map<string, string>): Array<{ code: string; message: string }> {
+  const key = `${face}.${method}`;
+  const byPos = new Map<number, Array<{ code: string; message: string }>>();
+  const put = (pos: number, code: string, message: string): void => {
+    const bucket = byPos.get(pos) ?? [];
+    if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
+    byPos.set(pos, bucket);
+  };
+  const named = (arg: Expr | undefined): string | null => argNameType(arg, argAnn);
+  const got = e.kind === "call" ? e.args : [];
+  for (const rows of [FACE_ARG_AS[key], INSTANCE_ARG_AS[key]]) {
+    for (const [pos, refuse, want, also] of rows ?? []) {
+      const arg = got[pos - 1];
+      const bad = literalTypeName(arg);
+      if (bad !== null) {
+        const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+        if (!refuse.includes(bad) && !nullSlot) continue;
+        put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+        if (nullSlot || also.includes(bad)) {
+          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        }
+        continue;
+      }
+      const nm = named(arg);
+      if (nm === null) continue;
+      if (!objectNameRefusedByValueSlot(nm, want) && (!faceListHas(refuse, nm) || !faceListHas(also, nm))) continue;
+      put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
+    }
+  }
+  for (const rows of [FACE_ARG_TYPES[key], INSTANCE_ARG_TYPES[key]]) {
+    for (const [pos, refuse, want] of rows ?? []) {
+      const arg = got[pos - 1];
+      const bad = literalTypeName(arg);
+      if (bad !== null) {
+        if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        continue;
+      }
+      const nm = named(arg);
+      if (nm === null) continue;
+      if (!objectNameRefusedByValueSlot(nm, want) && !faceListHas(refuse, nm)) continue;
+      put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
+    }
+  }
+  const out: Array<{ code: string; message: string }> = [];
+  for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+    for (const d of byPos.get(pos)!) out.push(d);
+  }
+  return out;
+}
+
 /** 「类名.成员」的调用式：常量当函数调 / 静态函数元数 / 实例方法在类名上直接调 / 表外名字两句。 */
 function staticCallDiags(t: string, name: string, got: number): Array<{ code: string; message: string }> {
   const face = STATIC_FACE[t];
-  // pack 九支没有静态面（`STATIC_FACE` 里没它们），但「类名直调实例方法」与「类名上没这成员」两句照发（S376 ⑤）
-  if (face === undefined && !PACK_TYPE_NAMES.has(t)) return [];
+  const extra = classFaceArity(t);
+  // pack 九支没有静态面（`STATIC_FACE` 里没它们），但「类名直调实例方法」与「类名上没这成员」两句照发（S376 ⑤）；
+  // `Array` / `Dictionary` / `String` / `StringName` / `NodePath` 这五面同理 —— 类名直调走的也是那两句（S506）
+  if (face === undefined && !PACK_TYPE_NAMES.has(t) && extra === undefined) return [];
   if (face !== undefined && staticFaceConstName(t, name)) {
     const shown = face.axis.includes(name) ? `${t}.Axis` : t;
     return [{ code: "static-const-call", message: `Name "${name}" called as a function but is a "${shown}".` }];
@@ -4883,7 +5208,7 @@ function staticCallDiags(t: string, name: string, got: number): Array<{ code: st
       },
     ];
   }
-  if (VALUE_METHOD_ARITY[t]?.[name] !== undefined) {
+  if (VALUE_METHOD_ARITY[t]?.[name] !== undefined || (extra !== undefined && name in extra)) {
     return [
       {
         code: "static-nonstatic-call",
@@ -4922,16 +5247,35 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     if (t !== null) moduleVars.set(v.name, t);
   }
 
-  const funcs: Array<{ f: FuncDecl; base: Map<string, string> }> = m.funcs.map((f) => ({ f, base: moduleVars }));
+  const funcs: Array<{ f: FuncDecl; base: Map<string, string>; fields: Map<string, string>; nameFields: Map<string, string> }> =
+    m.funcs.map((f) => ({ f, base: moduleVars, fields: new Map<string, string>(), nameFields: new Map<string, string>() }));
   const collect = (c: ClassDecl): void => {
     // 内部类的方法不给它预置模块级名字：那一侧引擎怎么判没量过，宁可漏拦也不误拦
-    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>() });
+    // 它**自己的字段**是量过的证明（S495 三面 + S496 值型面：`class Q: var v: Vector2 / var w: int` 之后 `v.distance_to(w)` 引擎照拦，只第二句）
+    const fields = new Map<string, string>();
+    const nameFields = new Map<string, string>();
+    for (const v of c.vars) {
+      const ft = v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name) ? v.type.name : null;
+      if (ft !== null) fields.set(v.name, ft);
+      else {
+        const vt = valueTypeAnnotation(v.type);
+        if (vt !== null) fields.set(v.name, vt);
+        else {
+          const nf = knownFaceAnnotation(v.type);
+          if (nf !== null && !(nf in PACK_ARG_SLOTS)) nameFields.set(v.name, nf);
+        }
+      }
+    }
+    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>(), fields, nameFields });
     for (const x of c.innerClasses) collect(x);
   };
   for (const c of m.innerClasses) collect(c);
 
-  for (const { f, base } of funcs) {
+  const argAnnAll = argNameScopes(m);
+  for (const { f, base, fields, nameFields } of funcs) {
     const typed = new Map(base);
+    /** 实参写成量过的名字那一形（S495）：只回第二句，`Cannot pass a value of type …` 那一句不跟名字走。 */
+    const argAnn = argAnnAll.get(f.body) ?? new Map<string, string>();
     // 标了 `String` / `Array` / `Dictionary` 的名字：引擎在带标注的变量接收者上说的句子，与字面量接收者那一趟一字不差
     //（`tmp/probe-argtype/packed3.mts` 的 1358 格与 `p2-t4.txt` 逐格比过），所以同一张表照用
     const faceTyped = new Map<string, string>();
@@ -4942,6 +5286,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const t = valueTypeAnnotation(p.type);
       if (t !== null) typed.set(p.name, t);
       if (p.type !== null && p.type.kind === "named" && FACE_ANNOTATIONS.has(p.type.name)) faceTyped.set(p.name, p.type.name);
+    }
+    for (const [name, t] of fields) {
+      if (FACE_ANNOTATIONS.has(t)) faceTyped.set(name, t);
+      else typed.set(name, t);
     }
     const elemFaces = new Map<string, string>();
     const noteElem = (name: string, t: TypeRef | null): void => {
@@ -4969,6 +5317,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const n of flattenBody(f.body)) {
       if (n.kind === "var" && typeof n.name === "string") noteNameFace(n.name, n.type as TypeRef | null);
     }
+    for (const [name, t] of nameFields) nameFaces.set(name, t);
     /** 链子当接收者那一形：`s.hex_decode().size(1)` 的基是方法自己的返回型（S482，读数 `tmp/d6/s482.json`）。
      *  只喂这一支 —— 字面量与标注名那两形的元数与形参早由别处在管，这里再开就报成两遍。 */
     const recvOwner = (obj: Expr): string | null => {
@@ -4976,7 +5325,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (viaLit !== null) return viaLit;
       if (obj.kind === "ident") return typed.get(obj.name) ?? nameFaces.get(obj.name) ?? null;
       if (obj.kind === "index") return recvElem(obj);
-      return obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null;
+      // 构造式打头（`Vector2(1, 2).normalized().distance_to(1)`）与名字打头同判（S498，尺 `tmp/d6/s498a.json` 九十三格逐格对上）
+      return obj.kind === "call" ? valueCtorType(obj) ?? chainRecvFace(obj, recvOwner) : null;
     };
     const recvChain = (obj: Expr): string | null => (obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null);
 
@@ -5092,8 +5442,27 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "attribute") continue;
-      if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name))) {
+      if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name) || classFaceArity(callee.obj.name) !== undefined)) {
         for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ code: d.code, message: d.message, loc: e.loc });
+        // 这一形是**实例方法在类名上直接调**（不是真静态函数）时，非静态那一句之后形参那几句照说（S507）
+        const clsTable = classFaceArity(callee.obj.name) ?? VALUE_METHOD_ARITY[callee.obj.name];
+        const clsSig = callee.name in (clsTable ?? {}) ? clsTable?.[callee.name] : undefined;
+        if (STATIC_FACE[callee.obj.name]?.statics[callee.name] === undefined && clsSig !== undefined) {
+          for (const d of classFaceArgDiags(e, callee.obj.name, callee.name, argAnn)) diags.push({ code: d.code, message: d.message, loc: e.loc });
+          if (e.args.length < clsSig[0]) {
+            diags.push({
+              code: "value-arity",
+              message: `Too few arguments for "${callee.name}()" call. Expected at least ${clsSig[0]} but received ${e.args.length}.`,
+              loc: e.loc,
+            });
+          } else if (e.args.length > clsSig[1]) {
+            diags.push({
+              code: "value-arity",
+              message: `Too many arguments for "${callee.name}()" call. Expected at most ${clsSig[1]} but received ${e.args.length}.`,
+              loc: e.loc,
+            });
+          }
+        }
         // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
         const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];
         if (bounds !== undefined && e.args.length >= bounds[0] && e.args.length <= bounds[1]) {
@@ -5134,21 +5503,40 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         const byPos = new Map<number, Array<{ code: string; message: string }>>();
         const put = (pos: number, code: string, message: string): void => {
           const bucket = byPos.get(pos) ?? [];
-          bucket.push({ code, message });
+          if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
           byPos.set(pos, bucket);
         };
+        // 实参写成量过的名字那一形：只回第二句（S495 的标注名接收者 + S497 的链子接收者，尺 `tmp/d6/s497.py` 四百四十格）
+        const namedArg = (arg: Expr | undefined): string | null => argNameType(arg, argAnn);
         for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
-          const bad = literalTypeName(e.args[pos - 1]);
-          if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-          if (also.includes(bad)) {
-            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          const arg = e.args[pos - 1];
+          const bad = literalTypeName(arg);
+          if (bad !== null) {
+            const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+            if (!refuse.includes(bad) && !nullSlot) continue;
+            put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+            if (nullSlot || also.includes(bad)) {
+              put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+            }
+            continue;
           }
+          const named = namedArg(arg);
+          if (named === null) continue;
+          if (!objectNameRefusedByValueSlot(named, want) && (!faceListHas(refuse, named) || !faceListHas(also, named))) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
-          const bad = literalTypeName(e.args[pos - 1]);
-          if (bad === null || !refuse.includes(bad)) continue;
-          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          const arg = e.args[pos - 1];
+          const bad = literalTypeName(arg);
+          if (bad !== null) {
+            if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
+            put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+            continue;
+          }
+          const named = namedArg(arg);
+          if (named === null) continue;
+          if (!objectNameRefusedByValueSlot(named, want) && !faceListHas(refuse, named)) continue;
+          put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
           for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
@@ -5170,23 +5558,43 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const byPos = new Map<number, Array<{ code: string; message: string }>>();
       const put = (pos: number, code: string, message: string): void => {
         const bucket = byPos.get(pos) ?? [];
-        bucket.push({ code, message });
+        if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
+      // 实参写成量过的名字那一形：只回第二句（S496 的名字接收者 + S497 的链子接收者，尺 `tmp/d6/s497.py` 四百四十格）；
+      // 定形容器元素当接收者那一形（recvElem）没量过名字实参，照旧不开口
+      const namedRecvArg = callee.obj.kind === "index"
+        ? (): string | null => null
+        : (arg: Expr | undefined): string | null => argNameType(arg, argAnn);
       for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-        if (also.includes(bad)) {
-          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        if (bad !== null) {
+          const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+          if (!refuse.includes(bad) && !nullSlot) continue;
+          put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+          if (nullSlot || also.includes(bad)) {
+            put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          }
+          continue;
         }
+        const named = namedRecvArg(lit);
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && (!faceListHas(refuse, named) || !faceListHas(also, named))) continue;
+        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
-        if (bad === null || !refuse.includes(bad)) continue;
-        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        if (bad !== null) {
+          if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
+          put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+          continue;
+        }
+        const named = namedRecvArg(lit);
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && !faceListHas(refuse, named)) continue;
+        put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
         for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
