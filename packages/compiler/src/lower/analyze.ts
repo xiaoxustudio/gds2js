@@ -1450,6 +1450,13 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   };
   addSignalNames(m.innerClasses);
 
+  /** 模块级标注名：链子那一层的基（`var s: String` 之后的 `s.hex_decode().set(1, 2)`，S482）。 */
+  const modAnn = new Map<string, string>();
+  for (const v of m.vars) {
+    const f = knownFaceAnnotation(v.type);
+    if (f !== null) modAnn.set(v.name, f);
+  }
+
   const shapeOf = (e: Expr): ContainerShape | null => {
     if (e.kind === "array") return "Array";
     if (e.kind === "dict") return "Dictionary";
@@ -1473,14 +1480,31 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
 
   for (const body of bodies) {
     const shapes = new Map<string, ContainerShape>();
+    /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
+    const localAnn = new Map<string, string>();
+    for (const n of flattenBody(body)) {
+      if (n.kind === "var" && typeof n.name === "string") {
+        const f = knownFaceAnnotation(n.type as TypeRef | null);
+        if (f !== null) localAnn.set(n.name, f);
+      }
+    }
+    const ownerFace = (obj: Expr): string | null => {
+      if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
+      if (obj.kind === "ident" && typeof obj.name === "string") return localAnn.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
+    };
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
-          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident") {
+          if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call")) {
             const name = e.callee.name;
+            const chainPack = e.callee.obj.kind === "call" ? (PACK_TYPE_NAMES.has(ownerFace(e.callee.obj) ?? "") ? "Pack" : null) : null;
+            // 只补 pack 那一形：其余（Signal / Array / Dictionary / 对象）的链子接收者没量过，照旧放过
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
-              shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null);
+              e.callee.obj.kind === "ident"
+                ? shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null)
+                : chainPack;
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
               diags.push({
@@ -2143,6 +2167,10 @@ function checkPercentFormat(m: Module, diags: Diagnostic[]): void {
 }
 
 function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
+  const modAnn = new Map<string, string>();
+  for (const v of m.vars) {
+    if (v.type !== null && v.type.kind === "named") modAnn.set(v.name, v.type.name);
+  }
   for (const nodes of flattenBodies(m)) {
     // 只认「标注」与「字面量构造」两种证明，且被重新赋值过的名字直接丢掉 —— 证不出就当不知道
     const packs = new Map<string, string>();
@@ -2162,6 +2190,12 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, init.callee.name);
       }
     }
+    /** 链子那一形的基能不能静态证出（S482 的 `tmp/d6/s482.json`：`s.hex_decode().append("a")` 与 `PackedByteArray([1]).append("a")` 两句一字一样）。 */
+    const ownerFace = (obj: Expr): string | null => {
+      if (obj.kind === "lit") return obj.lit === "string" ? "String" : null;
+      if (obj.kind === "ident" && typeof obj.name === "string") return packs.get(obj.name) ?? annot.get(obj.name) ?? modAnn.get(obj.name) ?? null;
+      return obj.kind === "call" ? chainRecvFace(obj, ownerFace) : null;
+    };
 
     for (const n of nodes) {
       if (n.kind !== "call") continue;
@@ -2173,7 +2207,10 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       const objCallee = obj.kind === "call" ? (obj.callee as Record<string, unknown> | undefined) : undefined;
       const inline = objCallee !== undefined && objCallee["kind"] === "ident" && typeof objCallee["name"] === "string"
         && String(objCallee["name"]) in PACK_ARG_SLOTS ? String(objCallee["name"]) : null;
-      const pack = obj.kind === "ident" && typeof obj.name === "string" ? packs.get(obj.name) : (inline ?? undefined);
+      const viaChain = obj.kind === "call" ? chainRecvFace(obj as Expr, ownerFace) : null;
+      const pack = obj.kind === "ident" && typeof obj.name === "string"
+        ? packs.get(obj.name)
+        : (inline ?? (viaChain !== null && PACK_TYPE_NAMES.has(viaChain) ? viaChain : undefined));
       if (pack === undefined) continue;
       const method = callee.name;
       if (typeof method !== "string") continue;
@@ -2230,6 +2267,41 @@ function memberNameAbsent(face: string, name: string): boolean {
   return list !== undefined && !list.includes(name);
 }
 
+/** 链子交出来的那一面认不认得：值型五支与 pack 九支都在 `VALUE_METHOD_ARITY` 的键里，`String` / `StringName` / `NodePath` 另有三张表。 */
+function chainFaceKnown(rt: string): boolean {
+  return rt in VALUE_METHOD_ARITY || rt === "String" || rt === "StringName" || rt === "NodePath";
+}
+
+/** 标注写出来的名字面（链子那一层的基要用）：比 `typed` / `faceTyped` 两张既有表宽，只喂 `chainRecvFace`，别处不用。 */
+function knownFaceAnnotation(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  const base = t.name.replace(/\[.*\]$/, "");
+  return base === "String" || base === "StringName" || base === "NodePath" || base === "Array" || base === "Dictionary" ||
+    PACK_TYPE_NAMES.has(base) || base in VALUE_METHOD_ARITY ? base : null;
+}
+
+/** `X.m()` 当接收者那一形：引擎按方法自己的**返回型**判下一层，`s.hex_decode().size(1)` 与 `PackedByteArray([1]).size(1)`
+ *  两句一字一样（S482，尺 `tmp/d6/s482.py` 六百格 + `tmp/d6/s482c.py` 一百九十五格，读数 `tmp/d6/s482.json` / `tmp/d6/s482c.json`；过拦 0）。
+ *  `ownerOf` 由调用方给：每一支闸门能静态证出的接收者范围不同，链子那一层只在**上一层证得出**时才交返回型。 */
+function chainRecvFace(e: Expr, ownerOf: (x: Expr) => string | null): string | null {
+  if (e.kind !== "call" || e.callee.kind !== "attribute") return null;
+  const owner = ownerOf(e.callee.obj);
+  if (owner === null) return null;
+  const by = BUILTIN_METHOD_RETURNS[owner];
+  if (by === undefined) return null;
+  const name = e.callee.name;
+  if (typeof name !== "string") return null;
+  const rt = by[name];
+  return typeof rt === "string" && chainFaceKnown(rt) ? rt : null;
+}
+
+/** 链子那一形的元数表与那句的 code：三面名字面另有三张表，其余（值型五支 + pack 九支）共用 `VALUE_METHOD_ARITY`。 */
+function chainArityFace(face: string): { table: Record<string, [number, number]>; code: string } | null {
+  if (face === "String" || face === "StringName") return { table: STRING_METHOD_ARITY, code: face === "String" ? "string-arity" : "string-name-arity" };
+  if (face === "NodePath") return { table: NODE_PATH_METHOD_ARITY, code: "node-path-arity" };
+  return { table: VALUE_METHOD_ARITY[face] ?? {}, code: "value-arity" };
+}
+
 /** 属性那一形的接收者：pack 认构造位字面量与标注两形（读数 `tmp/probe-attr/compare3.txt`），
  *  `Array` / `String` 只认**标注**那一形（`tmp/probe-bincall/compare2.txt` 的 H5 / H6 / H7 / H15 四格就是标注读的），
  *  `Dictionary` 两形都不认 —— 引擎在标注字典上读属性连表外名都不在解析期开口（S419 ②）。 */
@@ -2257,7 +2329,7 @@ function attrFaceRecv(obj: Record<string, unknown> | undefined, ann: Map<string,
       if (owner !== null && typeof mname === "string") {
         const by = BUILTIN_METHOD_RETURNS[owner];
         const rt = by === undefined ? undefined : by[mname];
-        if (typeof rt === "string" && (instanceFaceManaged(rt) || rt === "String" || PACK_TYPE_NAMES.has(rt))) return rt;
+        if (typeof rt === "string" && (instanceFaceManaged(rt) || chainFaceKnown(rt))) return rt;
       }
     }
   }
@@ -2394,10 +2466,14 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         if (callee === undefined || callee.kind !== "attribute") continue;
         const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
         if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
-          const vface = attrFaceRecv(callee.obj as Record<string, unknown>, ann, elems, mods);
-          if (vface === null || (!instanceFaceManaged(vface) && !PACK_TYPE_NAMES.has(vface))) continue;
-          // String 那一面只补元素读这一形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
-          if (vface === "String" && (callee.obj as Record<string, unknown>).kind !== "index") continue;
+          const recvObj = callee.obj as Record<string, unknown>;
+          const chainRecv = recvObj.kind === "call" && (recvObj.callee as Record<string, unknown> | undefined)?.kind === "attribute";
+          const vface = attrFaceRecv(recvObj, ann, elems, mods);
+          // StringName / NodePath 只补链子那一形：字面量与标注名那两形早由 `checkNamedFace` 的幽灵名在管，两支都开就报成四遍
+          const vfaceKept = vface !== null && (instanceFaceManaged(vface) || PACK_TYPE_NAMES.has(vface) || (chainRecv && (vface === "StringName" || vface === "NodePath")));
+          if (!vfaceKept) continue;
+          // String 那一面只补元素读与链子两形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
+          if (vface === "String" && recvObj.kind !== "index" && !chainRecv) continue;
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
           // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
@@ -4821,6 +4897,28 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (obj.kind !== "index" || obj.obj.kind !== "ident") return null;
       return readFaceOf(elemFaces.get(obj.obj.name) ?? "", staticType(obj.index));
     };
+    /** 链子那一层的基：标注写出来的面都算（`sn.split(" ").size(1)` 与 `s.hex_decode().size(1)` 同一判据，S482）；
+     *  只喂 `chainRecvFace`，直接收者那两形仍走 `typed` / `faceTyped` 两张原表，别处不开。 */
+    const nameFaces = new Map<string, string>();
+    const noteNameFace = (name: string, t: TypeRef | null): void => {
+      const f = knownFaceAnnotation(t);
+      if (f !== null) nameFaces.set(name, f);
+    };
+    for (const v of m.vars) noteNameFace(v.name, v.type);
+    for (const prm of f.params) noteNameFace(prm.name, prm.type);
+    for (const n of flattenBody(f.body)) {
+      if (n.kind === "var" && typeof n.name === "string") noteNameFace(n.name, n.type as TypeRef | null);
+    }
+    /** 链子当接收者那一形：`s.hex_decode().size(1)` 的基是方法自己的返回型（S482，读数 `tmp/d6/s482.json`）。
+     *  只喂这一支 —— 字面量与标注名那两形的元数与形参早由别处在管，这里再开就报成两遍。 */
+    const recvOwner = (obj: Expr): string | null => {
+      const viaLit = literalFaceType(obj, faceTyped);
+      if (viaLit !== null) return viaLit;
+      if (obj.kind === "ident") return typed.get(obj.name) ?? nameFaces.get(obj.name) ?? null;
+      if (obj.kind === "index") return recvElem(obj);
+      return obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null;
+    };
+    const recvChain = (obj: Expr): string | null => (obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null);
 
     const calls: Extract<Expr, { kind: "call" }>[] = [];
     const staticCallees = new Set<Expr>();
@@ -4998,10 +5096,13 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const recv = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
+      const direct = callee.obj.kind === "ident" ? (typed.get(callee.obj.name) ?? null) : callee.obj.kind === "index" ? recvElem(callee.obj) : valueCtorType(callee.obj);
+      const recv = direct ?? recvChain(callee.obj);
       if (recv === null) continue;
-      const sig = VALUE_METHOD_ARITY[recv]?.[callee.name];
-      if (sig === undefined) continue;
+      // 直接收者那三形仍走原表（`String` / `Array` / `Dictionary` 由别的闸门在管，这里再开就报成两遍）；只有链子才交那三张名字面的表
+      const arity = direct === null ? chainArityFace(recv) : { table: VALUE_METHOD_ARITY[recv] ?? {}, code: "value-arity" };
+      const sig = arity === null ? undefined : arity.table[callee.name];
+      if (sig === undefined || arity === null) continue;
       const got = e.args.length;
       if (got >= sig[0] && got <= sig[1]) {
         // 形参那一族与全局 / 静态名同构，句子同样按位升序发（`tmp/probe-argtype/check-inst.mts` 逐格对过）
@@ -5034,7 +5135,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       diags.push({
-        code: "value-arity",
+        code: arity.code,
         message:
           got < sig[0]
             ? `Too few arguments for "${callee.name}()" call. Expected at least ${sig[0]} but received ${got}.`
