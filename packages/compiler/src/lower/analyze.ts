@@ -1804,6 +1804,18 @@ const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
  *  这十一型两句齐发，`Dictionary` 与其余八支 pack 只回第二句（S492，尺 `tmp/d6/s492.py` 三百九十六格 = 九面 × 廿二型 × 两形，
  *  与 `tmp/d6/s487c.py` 一百六十八格那五种接收者证明的读数一字一样）。 */
 const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i"];
+/** `append_array` 那一位认得的**标注名**来源（S493，尺 `tmp/d6/s493.py` 五百九十四格：九面 × 廿二型 × 模块标注名 / 局部标注名 / 初值推断名）——
+ *  名字来的只回第二句，初值推断的那一形引擎句句收、所以不算来源；定形标注（`Array[int]` 那种）没量过，也不开口。 */
+const PACK_APPEND_NAMED = new Set([
+  "bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
+  "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+]);
+function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
+  if (typeof name !== "string") return null;
+  const t = ann.get(name);
+  return t !== undefined && PACK_APPEND_NAMED.has(t) ? t : null;
+}
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
@@ -2205,6 +2217,13 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         packs.set(n.name, init.callee.name);
       }
     }
+    /** `append_array` 那一位认**标注名**（S493）：模块级与局部的都算，被重新赋值过的名字丢掉。 */
+    const annAll = new Map<string, string>(modAnn);
+    for (const n of nodes) {
+      if (n.kind !== "var" || typeof n.name !== "string" || reassigned.has(n.name)) continue;
+      const type = n.type as TypeRef | null;
+      if (type !== null && type.kind === "named") annAll.set(n.name, type.name);
+    }
     /** 模块级标注的 pack 名也是同一种静态证明（S486，读数 `tmp/d6/s486.json`：`var k0: PackedByteArray` 之后 `k0.append("a")` 两句照回，`k0.fill("a")` 连 void 一起回）。 */
     for (const v of m.vars) {
       if (v.type !== null && v.type.kind === "named" && v.type.name in PACK_ARG_SLOTS && !packs.has(v.name)) packs.set(v.name, v.type.name);
@@ -2245,14 +2264,17 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         const proven = src ?? annotated;
         const kind = slots[p];
         if (kind === "a") {
-          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492）—— 没量过的（Callable / null / 类名）不开口
-          const srcA = proven ?? (arg0.kind === "lit" && arg0.lit === "node_path" ? "NodePath"
-            : arg0.kind === "call" && arg0.callee.kind === "ident" && PACK_TYPE_NAMES.has(arg0.callee.name) ? arg0.callee.name : null);
+          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 的名字形）——
+          // 没量过的（`null` / Callable / 类名 / 定形标注）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
+          const litA = arg0.kind === "lit" && arg0.lit === "node_path" ? "NodePath"
+            : arg0.kind === "call" && arg0.callee.kind === "ident" && PACK_TYPE_NAMES.has(arg0.callee.name) ? arg0.callee.name : null;
+          const namedA = arg0.kind === "ident" ? namedAppendSource(arg0.name, annAll) : null;
+          const srcA = src ?? litA ?? namedA;
           if (srcA === null || srcA === "Array" || srcA === pack) continue;
           const two = PACK_APPEND_ARRAY_AS.includes(srcA);
           if (!two && !(srcA === "Dictionary" || PACK_TYPE_NAMES.has(srcA))) continue;
           const aloc = (n.loc as Diagnostic["loc"]) ?? null;
-          if (two && (src !== null || annotated === null)) {
+          if (two && namedA === null) {
             diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${srcA}" as "${pack}".`, loc: aloc });
           }
           diags.push({

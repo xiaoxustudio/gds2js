@@ -418,7 +418,7 @@ const CELLS: Array<[string, string[]]> = [
 
 describe("pack 九支的 append_array 实参位", () => {
   for (const [label, want] of CELLS) {
-    const expr = label.split("  [")[0];
+    const expr = (label.split("  [")[0] ?? label);
     it(label, async () => eq("492", label, await msgs(expr), want));
   }
 });
