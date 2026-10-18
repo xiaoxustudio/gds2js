@@ -2068,6 +2068,7 @@ export function strFormat(fmt: string, args: Variant[]): string {
   const toks: FmtTok[] = [];
   let lit = "";
   let specs = 0;
+  let valueSpecs = 0;
   for (let i = 0; i < fmt.length; i++) {
     if (fmt[i] !== "%") {
       lit += fmt[i];
@@ -2125,11 +2126,13 @@ export function strFormat(fmt: string, args: Variant[]): string {
     lit = "";
     toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1), widthStars, precStars } });
     specs += 1 + widthStars + precStars;
+    valueSpecs += 1;
     i = k;
   }
   toks.push({ lit });
 
-  if (args.length < specs) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
+  // 头一道元数闸只数**值槽**：`"%*s" % "ab"` 引擎给的是「`*` 要数或向量」而不是参数少用那一句（实测 `tmp/d6/s491e.py`）
+  if (args.length < valueSpecs) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
 
   let ai = 0;
   let out = "";
@@ -2143,10 +2146,17 @@ export function strFormat(fmt: string, args: Variant[]): string {
     if (spec.widthStars + spec.precStars > 0) {
       let width = spec.width;
       let prec = spec.prec;
-      for (let s = 0; s < spec.widthStars; s++) width = fmtStar(args[ai++]!);
-      for (let s = 0; s < spec.precStars; s++) prec = fmtStar(args[ai++]!);
+      for (let s = 0; s < spec.widthStars; s++) {
+        if (ai >= args.length) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
+        width = fmtStar(args[ai++]!);
+      }
+      for (let s = 0; s < spec.precStars; s++) {
+        if (ai >= args.length) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
+        prec = fmtStar(args[ai++]!);
+      }
       sp = { ...spec, width, prec };
     }
+    if (ai >= args.length) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
     const a = args[ai++]!;
     switch (sp.type) {
       case "s":
@@ -2210,6 +2220,18 @@ export function strFormat(fmt: string, args: Variant[]): string {
   // 多出来的实参要到**走完所有槽**才算数：`"%v" % [1, 2]` 引擎给的是「要向量」而不是参数多用那一句（round5 c16）
   if (args.length > specs) throw new GodotRuntimeError("format-arity", FMT_ERR.notAll);
   return out;
+}
+
+/** `%` 那一路的格式化：运行期失败时引擎**不中断脚本** —— 推一块 ERROR，把格式串原样回出去
+ *  （实测 `tmp/d6/s491c.py` 二十格 + `tmp/d6/s491e.py` 十二格：`"%d" % "ab"` 回 `"%d"`、`"ab" % 1` 回 `"ab"`、
+ *  `"%s%s" % "ab"` 回 `"%s%s"`）。那句与解析期同文，只少了 ` in operator '%'.` 那截尾巴。 */
+export function strFormatSoft(fmt: string, args: Variant[]): { text: string; fail: string | null } {
+  try {
+    return { text: strFormat(fmt, args), fail: null };
+  } catch (err) {
+    if (!(err instanceof GodotRuntimeError) || !err.code.startsWith("format-")) throw err;
+    return { text: fmt, fail: err.message.replace(" in operator '%'.", ".") };
+  }
 }
 
 /** `%c` 的 float 走截断：实测 1.5 → U+0001、-0.5 与 -0.0 → U+0000、1e30 越界落到 int64 那一头（负 → lower 那句）。 */

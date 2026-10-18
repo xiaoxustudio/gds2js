@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { registerRecvEqHook } from "./callable";
+import { pctFormatError } from "./frames";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
@@ -43,6 +44,7 @@ import {
   strCmp,
   strFloat,
   strFormat,
+  strFormatSoft,
   strLength,
   strSubstr,
   truthyOf,
@@ -52,6 +54,17 @@ import {
 
 const isNum = (v: Variant): boolean => v.t === Tag.INT || v.t === Tag.FLOAT;
 const isStringish = (v: Variant): boolean => v.t === Tag.STRING || v.t === Tag.STRING_NAME;
+
+/** `%` 的格式化那一路：左支 `String` 与 `StringName` 都当格式串读，回值都是 `String`
+ *  （实测 `tmp/d6/s491.py`：`&"%d" % 1` 给 `1`、`typeof` 是 4，`&"%%"` 给 `%%`）；
+ *  失败时引擎只推一块 ERROR、把格式串**原样**回出去，脚本不打断（`tmp/d6/s491c.py` 二十格）。 */
+export function pctFormatOp(fmt: Variant, args: Variant): Variant {
+  const text = fmt.v as string;
+  const list = args.t === Tag.ARRAY ? (args.v as GArray).raw() : [args];
+  const r = strFormatSoft(text, list);
+  if (r.fail !== null) pctFormatError(r.fail);
+  return V.str(r.text);
+}
 
 function num(v: Variant): number {
   if (!isNum(v)) {
@@ -246,10 +259,7 @@ export const ops = {
   },
 
   mod(a: Variant, b: Variant): Variant {
-    if (a.t === Tag.STRING) {
-      const list = b.t === Tag.ARRAY ? (b.v as GArray).raw() : [b];
-      return V.str(strFormat(a.v as string, list));
-    }
+    if (isStringish(a)) return pctFormatOp(a, b);
     const ziMod = asVec2i(a);
     const zjMod = asVec2i(b);
     if (ziMod && zjMod) return vector2i(mod32(ziMod.x, zjMod.x), mod32(ziMod.y, zjMod.y));
