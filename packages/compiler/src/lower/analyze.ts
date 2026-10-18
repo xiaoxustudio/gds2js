@@ -2473,14 +2473,12 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       if (n.kind === "call") {
         const callee = n.callee as Record<string, unknown> | undefined;
         if (callee === undefined || callee.kind !== "attribute") continue;
-        const kind = packFaceRecv(callee.obj as Record<string, unknown>, ann);
+        const kind = packFaceRecv(callee.obj as Record<string, unknown>, attr);
         if (kind === null || !PACK_TYPE_NAMES.has(kind)) {
           const recvObj = callee.obj as Record<string, unknown>;
           const chainRecv = recvObj.kind === "call" && (recvObj.callee as Record<string, unknown> | undefined)?.kind === "attribute";
-          const vface = attrFaceRecv(recvObj, ann, elems, mods);
-          // StringName / NodePath 只补链子那一形：字面量与标注名那两形早由 `checkNamedFace` 的幽灵名在管，两支都开就报成四遍
-          const vfaceKept = vface !== null && (instanceFaceManaged(vface) || PACK_TYPE_NAMES.has(vface) || (chainRecv && (vface === "StringName" || vface === "NodePath")));
-          if (!vfaceKept) continue;
+          const vface = attrFaceRecv(recvObj, attr, elems, mods);
+          if (vface === null || (!instanceFaceManaged(vface) && !PACK_TYPE_NAMES.has(vface) && vface !== "StringName" && vface !== "NodePath")) continue;
           // String 那一面只补元素读与链子两形：标注与构造位的接收者早由另一支在管，两支都开就报成四遍
           if (vface === "String" && recvObj.kind !== "index" && !chainRecv) continue;
           const vmethod = callee.name;
@@ -2523,7 +2521,8 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         ? memberNameAbsent(face, name)
         : face === "Array" || face === "String"
           ? true
-          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name);
+          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name) ||
+            ((face === "StringName" || face === "NodePath") && memberNameAbsent(face, name));
       if (!absent) continue;
       // 值类型那七面只量过**读**那一形（`tmp/probe-vattr/`），写形没读数就不开口
       if (!refused && writeTargets.has(n)) continue;
@@ -2611,12 +2610,8 @@ function checkStringMethodArity(m: Module, diags: Diagnostic[]): void {
 }
 
 /** StringName 那一面：102 名的 `[下界, 上界]` 与 String 那张表一字一样（0 处漂移），另六名引擎当场回「找不到成员」那两句 ——
- *  两面各 102 + 6 格、NodePath 13 格，尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `tmp/probe-snfaces/compare{42,43}.txt`（S389）。 */
-const STRINGNAME_NO_METHOD = new Set(["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"]);
-
-/** NodePath 那一面只认这十名（`hash` 也在内，元数 [0,0]），元数照量来的两张界。 */
-
-const NODE_PATH_NO_METHOD = new Set(["simplify", "is_same", "length"]);
+ *  两面各 102 + 6 格、NodePath 13 格，尺 `tmp/probe-snfaces/{round1,round2}.mts`，读数 `tmp/probe-snfaces/compare{42,43}.txt`（S389）。
+ *  「找不到成员」那两句不再靠两张固定名单：`BUILTIN_INSTANCE_MEMBERS` 的 dump 全集在 `checkPackFaceNames` 那一支接管两面四种接收者（S484）。 */
 
 /** 那两面共用的形状：接收者认「`&"…"` / `^"…"` 字面量直接当接收者」与「标注或初值静态证得出的名字」两种，
  *  名字被重新赋值过就丢掉 —— 与 String / 字典 / 数组那三道闸门同一条口径。 */
@@ -2624,9 +2619,7 @@ interface NamedFace {
   type: string;
   lit: string;
   arity: Record<string, [number, number]>;
-  ghosts: ReadonlySet<string>;
   arityCode: string;
-  ghostCode: string;
 }
 
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
@@ -2645,11 +2638,6 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
       const proven = isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name));
       if (!proven) continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      if (face.ghosts.has(method)) {
-        diags.push({ code: face.ghostCode, message: `Cannot find member "${method}" in base "${face.type}".`, loc });
-        diags.push({ code: face.ghostCode, message: `Function "${method}()" not found in base ${face.type}.`, loc });
-        continue;
-      }
       const d = arityDiag(face.arity, face.arityCode, method, ((n.args as Expr[]) ?? []).length, loc);
       if (d !== null) diags.push(d);
       const fkey = `${face.type}.${method}`;
@@ -2687,18 +2675,14 @@ const STRINGNAME_FACE: NamedFace = {
   type: "StringName",
   lit: "string_name",
   arity: STRING_METHOD_ARITY,
-  ghosts: STRINGNAME_NO_METHOD,
   arityCode: "string-name-arity",
-  ghostCode: "string-name-member",
 };
 
 const NODE_PATH_FACE: NamedFace = {
   type: "NodePath",
   lit: "node_path",
   arity: NODE_PATH_METHOD_ARITY,
-  ghosts: NODE_PATH_NO_METHOD,
   arityCode: "node-path-arity",
-  ghostCode: "node-path-member",
 };
 
 /** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，
