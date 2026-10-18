@@ -4424,7 +4424,7 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
     for (const n of nodes) {
       if (n.kind !== "binary") continue;
       const e = n as unknown as Extract<Expr, { kind: "binary" }>;
-      if (reported.has(e as unknown as Extract<Expr, { kind: "binary" }>)) continue;
+      if (reported.has(e)) continue;
       if (isLiteralOperand(e.left) && isLiteralOperand(e.right)) continue;
       if (e.right.kind !== "ident" && e.right.kind !== "index" && e.right.kind !== "call" && e.right.kind !== "attribute") continue;
       const lt2 = operandKind(e.left);
