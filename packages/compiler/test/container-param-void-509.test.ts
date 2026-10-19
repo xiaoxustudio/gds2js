@@ -10,7 +10,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(body: string): Promise<string[]> {
-  const src = "extends SceneTree\n\n" + body;
+  const src = "extends SceneTree" + "\n\n" + body;
   return analyze(lower(await parseSource(src))).map((d) => d.message).sort();
 }
 
@@ -43,6 +43,10 @@ const CELLS: Array<[string, string, string[]]> = [
   ["Dictionary.merged(Callable名)", "func f(dic: Dictionary, w: Callable):\n\tprint(dic.merged(w))\n", ["Invalid argument for \"merged()\" function: argument 1 should be \"Dictionary\" but is \"Callable\"."]],
   ["Dictionary.merged(int名)", "func f(dic: Dictionary, w: int):\n\tprint(dic.merged(w))\n", ["Invalid argument for \"merged()\" function: argument 1 should be \"Dictionary\" but is \"int\"."]],
   ["Dictionary.merged(Array[int]名)", "func f(dic: Dictionary, w: Array[int]):\n\tprint(dic.merged(w))\n", ["Invalid argument for \"merged()\" function: argument 1 should be \"Dictionary\" but is \"Array[int]\"."]],
+  ["Dictionary.recursive_equal(null)", "func f(dic: Dictionary):\n\tprint(dic.recursive_equal(null))\n", ["Cannot pass a value of type \"null\" as \"Dictionary\".", "Invalid argument for \"recursive_equal()\" function: argument 1 should be \"Dictionary\" but is \"null\".", "Too few arguments for \"recursive_equal()\" call. Expected at least 2 but received 1."]],
+  ["Dictionary.recursive_equal(Callable名)", "func f(dic: Dictionary, w: Callable):\n\tprint(dic.recursive_equal(w))\n", ["Invalid argument for \"recursive_equal()\" function: argument 1 should be \"Dictionary\" but is \"Callable\".", "Too few arguments for \"recursive_equal()\" call. Expected at least 2 but received 1."]],
+  ["Dictionary.recursive_equal(int名)", "func f(dic: Dictionary, w: int):\n\tprint(dic.recursive_equal(w))\n", ["Invalid argument for \"recursive_equal()\" function: argument 1 should be \"Dictionary\" but is \"int\".", "Too few arguments for \"recursive_equal()\" call. Expected at least 2 but received 1."]],
+  ["Dictionary.recursive_equal(Array[int]名)", "func f(dic: Dictionary, w: Array[int]):\n\tprint(dic.recursive_equal(w))\n", ["Invalid argument for \"recursive_equal()\" function: argument 1 should be \"Dictionary\" but is \"Array[int]\".", "Too few arguments for \"recursive_equal()\" call. Expected at least 2 but received 1."]],
   ["PackedInt64Array.bsearch(null)", "func f(bb: PackedInt64Array):\n\tprint(bb.bsearch(1, null))\n", ["Cannot pass a value of type \"null\" as \"bool\".", "Invalid argument for \"bsearch()\" function: argument 2 should be \"bool\" but is \"null\"."]],
   ["PackedInt64Array.bsearch(Callable名)", "func f(bb: PackedInt64Array, w: Callable):\n\tprint(bb.bsearch(1, w))\n", ["Invalid argument for \"bsearch()\" function: argument 2 should be \"bool\" but is \"Callable\"."]],
   ["PackedInt64Array.bsearch(int名)", "func f(bb: PackedInt64Array, w: int):\n\tprint(bb.bsearch(1, w))\n", []],
