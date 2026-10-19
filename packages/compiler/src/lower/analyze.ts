@@ -1814,7 +1814,7 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedInt64Array: { slot: "int", ok: ["int", "float", "bool"] },
   PackedFloat32Array: { slot: "float", ok: ["int", "float", "bool"] },
   PackedFloat64Array: { slot: "float", ok: ["int", "float", "bool"] },
-  PackedStringArray: { slot: "String", ok: ["String", "StringName"] },
+  PackedStringArray: { slot: "String", ok: ["String", "StringName", "NodePath"] },
   PackedVector2Array: { slot: "Vector2", ok: ["Vector2", "Vector2i"] },
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
@@ -1845,6 +1845,14 @@ function namedAppendSource(name: unknown, ann: Map<string, string>): string | nu
   return t !== undefined && PACK_APPEND_NAMED.has(t) ? t : null;
 }
 
+/** `e` / `i` / `b` 三槽认得的**标注名**来源（S498，尺 `tmp/d6/s497c.py` 一百一十格 + `tmp/d6/s497d.py` 三百九十六格 +
+ *  `tmp/d6/s498b.py` 一百三十二格：`NodePath` 与九支 pack 的名字形只回第二句，字面量的 `NodePath` 两句齐发、pack 构造式只第二句）。 */
+function namedSlotSource(e: Expr, ann: Map<string, string>): string | null {
+  if (e.kind !== "ident" || typeof e.name !== "string") return null;
+  const t = ann.get(e.name);
+  return t !== undefined && ARG_NAME_TYPES.has(t) ? t : null;
+}
+
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
 function packArgSource(e: Expr): string | null {
   // `p.has("a" + "b")` 与字面量同形 —— 常量折叠出来的 String 在解析期就是已知的，两句都发。只折「字符串 + 字符串」，别的组合不判（宁可漏报）。
@@ -1852,7 +1860,7 @@ function packArgSource(e: Expr): string | null {
     return packArgSource(e.left) === "String" && packArgSource(e.right) === "String" ? "String" : null;
   }
   if (e.kind === "lit") {
-    return ({ int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName", null: "null" } as Record<string, string>)[e.lit] ?? null;
+    return ({ int: "int", float: "float", bool: "bool", string: "String", string_name: "StringName", node_path: "NodePath", null: "null" } as Record<string, string>)[e.lit] ?? null;
   }
   if (e.kind === "array") return "Array";
   if (e.kind === "dict") return "Dictionary";
@@ -1863,7 +1871,8 @@ function packArgSource(e: Expr): string | null {
       e.callee.name === "Vector3" ||
       e.callee.name === "Vector2i" ||
       e.callee.name === "Vector3i" ||
-      e.callee.name === "Color")
+      e.callee.name === "Color" ||
+      PACK_TYPE_NAMES.has(e.callee.name))
   ) {
     return e.callee.name;
   }
@@ -2374,17 +2383,16 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       for (let p = 0; p < Math.min(slots.length, args.length); p++) {
         const arg0 = args[p] as Expr;
         const src = packArgSource(arg0);
-        // 第二种证明：带标注的局部 var 静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；推断出来的与跨函数的来源（形参、别的函数的返回值）解析期放过、成运行期那句，这里不猜着发。
-        const annotated = src === null && arg0.kind === "ident" ? (annot.get(arg0.name) ?? null) : null;
+        // 第二种证明：标注过的名字静态就知道来源类型，但**只发第二句**（少了前面那句 `Cannot pass a value of type …`）；
+        // 没写标注的（初值推断）解析期放过、成运行期那句，这里不猜着发。
+        const annotated = src === null ? namedSlotSource(arg0, annAll) : null;
         const proven = src ?? annotated;
         const kind = slots[p];
         if (kind === "a") {
           // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 的名字形）——
           // 没量过的（`null` / Callable / 类名 / 定形标注）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
-          const litA = arg0.kind === "lit" && arg0.lit === "node_path" ? "NodePath"
-            : arg0.kind === "call" && arg0.callee.kind === "ident" && PACK_TYPE_NAMES.has(arg0.callee.name) ? arg0.callee.name : null;
           const namedA = arg0.kind === "ident" ? namedAppendSource(arg0.name, annAll) : null;
-          const srcA = src ?? litA ?? namedA;
+          const srcA = src ?? namedA;
           if (srcA === null || srcA === "Array" || srcA === pack) continue;
           const two = PACK_APPEND_ARRAY_AS.includes(srcA);
           if (!two && !(srcA === "Dictionary" || PACK_TYPE_NAMES.has(srcA))) continue;
@@ -2404,7 +2412,7 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
         if (ok.includes(proven)) continue;
         const loc = (n.loc as Diagnostic["loc"]) ?? null;
-        if (src !== null && proven !== "Array" && proven !== "Dictionary") {
+        if (src !== null && proven !== "Array" && proven !== "Dictionary" && !PACK_TYPE_NAMES.has(proven)) {
           diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
         }
         diags.push({
@@ -5132,7 +5140,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (viaLit !== null) return viaLit;
       if (obj.kind === "ident") return typed.get(obj.name) ?? nameFaces.get(obj.name) ?? null;
       if (obj.kind === "index") return recvElem(obj);
-      return obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null;
+      // 构造式打头（`Vector2(1, 2).normalized().distance_to(1)`）与名字打头同判（S498，尺 `tmp/d6/s498a.json` 九十三格逐格对上）
+      return obj.kind === "call" ? valueCtorType(obj) ?? chainRecvFace(obj, recvOwner) : null;
     };
     const recvChain = (obj: Expr): string | null => (obj.kind === "call" ? chainRecvFace(obj, recvOwner) : null);
 
