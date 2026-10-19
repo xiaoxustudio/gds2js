@@ -1435,13 +1435,28 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
    *  void 那句与形参两句照回，读数 `tmp/d6/s494b.json`）—— 容器与值型那几面这两形没量过，所以只补 pack。 */
   const packSeeds = new Map<Stmt[], Map<string, string>>();
   const packAnn = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" && PACK_TYPE_NAMES.has(t.name) ? t.name : null);
+  const containerSeeds = new Map<Stmt[], Map<string, string>>();
+  const shapeAnn = (t: TypeRef | null): string | null =>
+    t === null || t.kind !== "named"
+      ? null
+      : /^Array(\[|$)/.test(t.name)
+        ? "Array"
+        : /^Dictionary(\[|$)/.test(t.name)
+          ? "Dictionary"
+          : PACK_TYPE_NAMES.has(t.name)
+            ? "Pack"
+            : null;
   const seedFunc = (f: FuncDecl, fields: Map<string, string>): void => {
     const s = new Map(fields);
+    const cs = new Map<string, string>();
     for (const p of f.params) {
       const ty = packAnn(p.type);
       if (ty !== null) s.set(p.name, ty);
+      const sh = shapeAnn(p.type);
+      if (sh !== null) cs.set(p.name, sh);
     }
     packSeeds.set(f.body, s);
+    containerSeeds.set(f.body, cs);
   };
   for (const f of m.funcs) seedFunc(f, new Map<string, string>());
   const seedCls = (c: ClassDecl): void => {
@@ -1515,6 +1530,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
   for (const body of bodies) {
     const shapes = new Map(seed);
     for (const [name, ty] of packSeeds.get(body) ?? []) shapes.set(name, "Pack");
+    for (const [name, sh] of containerSeeds.get(body) ?? []) shapes.set(name, sh as ContainerShape);
     /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
     const localAnn = new Map<string, string>();
     for (const n of flattenBody(body)) {
@@ -2021,10 +2037,11 @@ function faceListHas(list: readonly string[], t: string): boolean {
 /** 实参写成对象型名字那一形认得的标注（S503，尺 `tmp/d6/s503.py` 三十六格：`var w: Callable` / `Object` / `Node` 三种形，
  *  量到的六位位子引擎句句拒、句句只回第二句；`var w: Variant` 与初值推断的 `var w = null` 那两形引擎句句收，照旧不算证明）。 */
 const OBJECT_ARG_NAMES = new Set(["Callable", "Object", "Node"]);
-/** **值型槽**那十八档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺 + S507 三把尺 + S508 二百廿五格里量到的槽型；
- *  `Array` / `Dictionary` / `StringName` / `NodePath` 当槽型那一档没量过，照旧不开口）。 */
+/** **值型槽**那廿档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺 + S507 三把尺 + S508 二百廿五格 + S509 四十四格里量到的槽型；
+ *  `StringName` / `NodePath` 当槽型那一档没量过，照旧不开口）。 */
 const VALUE_ARG_WANTS = new Set([
   "int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color",
+  "Array", "Dictionary",
   "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
   "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
 ]);
