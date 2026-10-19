@@ -1831,13 +1831,14 @@ const PACK_BOOL_SLOT_OK = ["bool", "int", "float"];
 /** `a` 槽（`append_array`）那一位的槽型是**接收者自己那一型**，收的来源只有 `Array` 与同型那支 pack；
  *  这十一型两句齐发，`Dictionary` 与其余八支 pack 只回第二句（S492，尺 `tmp/d6/s492.py` 三百九十六格 = 九面 × 廿二型 × 两形，
  *  与 `tmp/d6/s487c.py` 一百六十八格那五种接收者证明的读数一字一样）。 */
-const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i"];
+const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "null", "Callable", "Object", "Node"];
 /** `append_array` 那一位认得的**标注名**来源（S493，尺 `tmp/d6/s493.py` 五百九十四格：九面 × 廿二型 × 模块标注名 / 局部标注名 / 初值推断名）——
  *  名字来的只回第二句，初值推断的那一形引擎句句收、所以不算来源；定形标注（`Array[int]` 那种）没量过，也不开口。 */
 const PACK_APPEND_NAMED = new Set([
   "bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
   "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "Callable", "Object", "Node",
 ]);
 function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
   if (typeof name !== "string") return null;
@@ -1990,6 +1991,23 @@ function faceListHas(list: readonly string[], t: string): boolean {
   return list.includes(t) || (t.includes("[") && list.includes(argFaceBase(t)));
 }
 
+/** 实参写成对象型名字那一形认得的标注（S503，尺 `tmp/d6/s503.py` 三十六格：`var w: Callable` / `Object` / `Node` 三种形，
+ *  量到的六位位子引擎句句拒、句句只回第二句；`var w: Variant` 与初值推断的 `var w = null` 那两形引擎句句收，照旧不算证明）。 */
+const OBJECT_ARG_NAMES = new Set(["Callable", "Object", "Node"]);
+/** **值型槽**那十三档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺一百六十八格里量到的槽型；
+ *  `Array` / `Dictionary` / `StringName` / `NodePath` / `Vector3` / `Vector3i` 当槽型那一档没量过，照旧不开口）。 */
+const VALUE_ARG_WANTS = new Set([
+  "int", "float", "bool", "String", "Vector2", "Vector2i", "Color",
+  "PackedByteArray", "PackedInt32Array", "PackedFloat32Array", "PackedStringArray",
+  "PackedVector2Array", "PackedColorArray",
+]);
+function nullRefusedByValueSlot(want: string): boolean {
+  return VALUE_ARG_WANTS.has(want);
+}
+function objectNameRefusedByValueSlot(src: string | null, want: string): boolean {
+  return src !== null && OBJECT_ARG_NAMES.has(src) && VALUE_ARG_WANTS.has(want);
+}
+
 /** 实参写成名字那一形认得的标注型（S495，尺 `tmp/d6/s495.py` 二百六十四格 = 三位位子 × 廿二型 × 四种名字，
  *  `tmp/d6/s495c.py` 一百七十六格补 `StringName.find` 第 1 位与 `String.find` 第 2 位，
  *  另两把尺 `tmp/d6/s495b.py` 八十八格 + `tmp/d6/s495d.py` 二十二格把同一批位子的字面量形重量一遍）——
@@ -1998,6 +2016,7 @@ const ARG_NAME_TYPES = new Set([
   "int", "float", "bool", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array",
   "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "Callable", "Object", "Node",
 ]);
 
 /** 名字那一形交得出的标注：廿二型原样，定形容器标注交规格化后的原文（S501 量的是 `Array[int]` / `Array[String]` /
@@ -2440,10 +2459,12 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         const proven = src ?? annotated;
         const kind = slots[p];
         if (kind === "a") {
-          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 / S501 的名字形）——
-          // 没量过的（`null` / Callable / 类名）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
+          // `append_array` 那一位：槽型是接收者自己那一型，只量过这些来源（S492 的字面量形、S493 / S501 的名字形、S503 的 `null` 与对象型名字）——
+          // 没量过的那三面（`PackedInt64Array` / `PackedFloat64Array` / `PackedVector3Array`）的 `null` 与对象型名字不开口；
+          // **名字来的只回第二句**，字面量那一档按 S492 的三档
           const namedA = arg0.kind === "ident" ? namedAppendSource(arg0.name, annAll) : null;
           const srcA = src ?? namedA;
+          if (srcA !== null && (srcA === "null" || OBJECT_ARG_NAMES.has(srcA)) && !VALUE_ARG_WANTS.has(pack)) continue;
           // 定形容器标注按基型判（S501：`Array[int]` 与 `Array` 同档收，`Dictionary[String, int]` 与 `Dictionary` 同档只回第二句）
           const baseA = srcA === null ? "" : argFaceBase(srcA);
           if (srcA === null || baseA === "Array" || baseA === pack) continue;
@@ -2464,6 +2485,7 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         const slot = kind === "i" ? "int" : kind === "b" ? "bool" : face.slot;
         const ok = kind === "i" ? PACK_INT_SLOT_OK : kind === "b" ? PACK_BOOL_SLOT_OK : face.ok;
         if (ok.includes(proven)) continue;
+        if (OBJECT_ARG_NAMES.has(proven) && !VALUE_ARG_WANTS.has(slot)) continue;
         const loc = (n.loc as Diagnostic["loc"]) ?? null;
         if (src !== null && proven !== "Array" && proven !== "Dictionary" && !PACK_TYPE_NAMES.has(proven)) {
           diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${proven}" as "${slot}".`, loc });
@@ -2873,6 +2895,7 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
       const byPos = new Map<number, Array<{ code: string; message: string }>>();
       const put = (pos: number, code: string, message: string): void => {
         const bucket = byPos.get(pos) ?? [];
+        if (bucket.some((d) => d.message === message)) return;
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
@@ -2880,28 +2903,31 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
         const lit = got[pos - 1];
         const bad = literalTypeName(lit);
         if (bad !== null) {
-          if (!refuse.includes(bad)) continue;
+          const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+          if (!refuse.includes(bad) && !nullSlot) continue;
           put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-          if (also.includes(bad)) {
+          if (nullSlot || also.includes(bad)) {
             put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
           }
           continue;
         }
         // 名字那一形只回第二句（S495：`var w: int` 之后 `sn.find(w)` 引擎一句、`&"ab".find(1)` 两句）
         const named = argNameType(lit, argAnn);
-        if (named === null || !faceListHas(refuse, named) || !faceListHas(also, named)) continue;
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && (!faceListHas(refuse, named) || !faceListHas(also, named))) continue;
         put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
         const lit = got[pos - 1];
         const bad = literalTypeName(lit);
         if (bad !== null) {
-          if (!refuse.includes(bad)) continue;
+          if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
           put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`);
           continue;
         }
         const named = argNameType(lit, argAnn);
-        if (named === null || !faceListHas(refuse, named)) continue;
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && !faceListHas(refuse, named)) continue;
         put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
@@ -5352,7 +5378,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         const byPos = new Map<number, Array<{ code: string; message: string }>>();
         const put = (pos: number, code: string, message: string): void => {
           const bucket = byPos.get(pos) ?? [];
-          bucket.push({ code, message });
+          if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
           byPos.set(pos, bucket);
         };
         // 实参写成量过的名字那一形：只回第二句（S495 的标注名接收者 + S497 的链子接收者，尺 `tmp/d6/s497.py` 四百四十格）
@@ -5361,27 +5387,30 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           const arg = e.args[pos - 1];
           const bad = literalTypeName(arg);
           if (bad !== null) {
-            if (!refuse.includes(bad)) continue;
+            const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+            if (!refuse.includes(bad) && !nullSlot) continue;
             put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-            if (also.includes(bad)) {
+            if (nullSlot || also.includes(bad)) {
               put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
             }
             continue;
           }
           const named = namedArg(arg);
-          if (named === null || !faceListHas(refuse, named) || !faceListHas(also, named)) continue;
+          if (named === null) continue;
+          if (!objectNameRefusedByValueSlot(named, want) && (!faceListHas(refuse, named) || !faceListHas(also, named))) continue;
           put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
           const arg = e.args[pos - 1];
           const bad = literalTypeName(arg);
           if (bad !== null) {
-            if (!refuse.includes(bad)) continue;
+            if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
             put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
             continue;
           }
           const named = namedArg(arg);
-          if (named === null || !faceListHas(refuse, named)) continue;
+          if (named === null) continue;
+          if (!objectNameRefusedByValueSlot(named, want) && !faceListHas(refuse, named)) continue;
           put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
@@ -5404,7 +5433,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const byPos = new Map<number, Array<{ code: string; message: string }>>();
       const put = (pos: number, code: string, message: string): void => {
         const bucket = byPos.get(pos) ?? [];
-        bucket.push({ code, message });
+        if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
       // 实参写成量过的名字那一形：只回第二句（S496 的名字接收者 + S497 的链子接收者，尺 `tmp/d6/s497.py` 四百四十格）；
@@ -5416,27 +5445,30 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
         if (bad !== null) {
-          if (!refuse.includes(bad)) continue;
+          const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+          if (!refuse.includes(bad) && !nullSlot) continue;
           put(pos, "instance-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
-          if (also.includes(bad)) {
+          if (nullSlot || also.includes(bad)) {
             put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
           }
           continue;
         }
         const named = namedRecvArg(lit);
-        if (named === null || !faceListHas(refuse, named) || !faceListHas(also, named)) continue;
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && (!faceListHas(refuse, named) || !faceListHas(also, named))) continue;
         put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
         if (bad !== null) {
-          if (!refuse.includes(bad)) continue;
+          if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
           put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
           continue;
         }
         const named = namedRecvArg(lit);
-        if (named === null || !faceListHas(refuse, named)) continue;
+        if (named === null) continue;
+        if (!objectNameRefusedByValueSlot(named, want) && !faceListHas(refuse, named)) continue;
         put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
