@@ -108,6 +108,8 @@ export const FACE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number
   "StringName.insert": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"], "String", ["Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "int", "null"]]],
   "StringName.erase": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "StringName.substr": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  "NodePath.get_name": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"]]],
+  "NodePath.get_subname": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"]]],
 };
 
 export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string]>>> = {
@@ -214,4 +216,6 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "StringName.insert": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "String"]],
   "StringName.erase": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"]],
   "StringName.substr": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedStringArray"], "int"]],
+  "NodePath.get_name": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
+  "NodePath.get_subname": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
 };
