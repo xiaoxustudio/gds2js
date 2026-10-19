@@ -2021,12 +2021,12 @@ function faceListHas(list: readonly string[], t: string): boolean {
 /** 实参写成对象型名字那一形认得的标注（S503，尺 `tmp/d6/s503.py` 三十六格：`var w: Callable` / `Object` / `Node` 三种形，
  *  量到的六位位子引擎句句拒、句句只回第二句；`var w: Variant` 与初值推断的 `var w = null` 那两形引擎句句收，照旧不算证明）。 */
 const OBJECT_ARG_NAMES = new Set(["Callable", "Object", "Node"]);
-/** **值型槽**那十三档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺一百六十八格里量到的槽型；
- *  `Array` / `Dictionary` / `StringName` / `NodePath` / `Vector3` / `Vector3i` 当槽型那一档没量过，照旧不开口）。 */
+/** **值型槽**那十八档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺 + S507 三把尺 + S508 二百廿五格里量到的槽型；
+ *  `Array` / `Dictionary` / `StringName` / `NodePath` 当槽型那一档没量过，照旧不开口）。 */
 const VALUE_ARG_WANTS = new Set([
   "int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color",
-  "PackedByteArray", "PackedInt32Array", "PackedFloat32Array", "PackedStringArray",
-  "PackedVector2Array", "PackedColorArray",
+  "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
 ]);
 function nullRefusedByValueSlot(want: string): boolean {
   return VALUE_ARG_WANTS.has(want);
