@@ -5054,27 +5054,32 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     if (t !== null) moduleVars.set(v.name, t);
   }
 
-  const funcs: Array<{ f: FuncDecl; base: Map<string, string>; fields: Map<string, string> }> =
-    m.funcs.map((f) => ({ f, base: moduleVars, fields: new Map<string, string>() }));
+  const funcs: Array<{ f: FuncDecl; base: Map<string, string>; fields: Map<string, string>; nameFields: Map<string, string> }> =
+    m.funcs.map((f) => ({ f, base: moduleVars, fields: new Map<string, string>(), nameFields: new Map<string, string>() }));
   const collect = (c: ClassDecl): void => {
     // 内部类的方法不给它预置模块级名字：那一侧引擎怎么判没量过，宁可漏拦也不误拦
     // 它**自己的字段**是量过的证明（S495 三面 + S496 值型面：`class Q: var v: Vector2 / var w: int` 之后 `v.distance_to(w)` 引擎照拦，只第二句）
     const fields = new Map<string, string>();
+    const nameFields = new Map<string, string>();
     for (const v of c.vars) {
       const ft = v.type !== null && v.type.kind === "named" && FACE_ANNOTATIONS.has(v.type.name) ? v.type.name : null;
       if (ft !== null) fields.set(v.name, ft);
       else {
         const vt = valueTypeAnnotation(v.type);
         if (vt !== null) fields.set(v.name, vt);
+        else {
+          const nf = knownFaceAnnotation(v.type);
+          if (nf !== null && !(nf in PACK_ARG_SLOTS)) nameFields.set(v.name, nf);
+        }
       }
     }
-    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>(), fields });
+    for (const f of c.funcs) funcs.push({ f, base: new Map<string, string>(), fields, nameFields });
     for (const x of c.innerClasses) collect(x);
   };
   for (const c of m.innerClasses) collect(c);
 
   const argAnnAll = argNameScopes(m);
-  for (const { f, base, fields } of funcs) {
+  for (const { f, base, fields, nameFields } of funcs) {
     const typed = new Map(base);
     /** 实参写成量过的名字那一形（S495）：只回第二句，`Cannot pass a value of type …` 那一句不跟名字走。 */
     const argAnn = argAnnAll.get(f.body) ?? new Map<string, string>();
@@ -5119,6 +5124,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const n of flattenBody(f.body)) {
       if (n.kind === "var" && typeof n.name === "string") noteNameFace(n.name, n.type as TypeRef | null);
     }
+    for (const [name, t] of nameFields) nameFaces.set(name, t);
     /** 链子当接收者那一形：`s.hex_decode().size(1)` 的基是方法自己的返回型（S482，读数 `tmp/d6/s482.json`）。
      *  只喂这一支 —— 字面量与标注名那两形的元数与形参早由别处在管，这里再开就报成两遍。 */
     const recvOwner = (obj: Expr): string | null => {
@@ -5287,8 +5293,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           bucket.push({ code, message });
           byPos.set(pos, bucket);
         };
-        // 实参写成量过的名字那一形：只回第二句（S495，尺 `tmp/d6/s495.py` 二百六十四格），且只认字面量与标注名接收者（链子那一形没量）
-        const namedArg = (arg: Expr | undefined): string | null => (litFace === null ? null : argNameType(arg, argAnn));
+        // 实参写成量过的名字那一形：只回第二句（S495 的标注名接收者 + S497 的链子接收者，尺 `tmp/d6/s497.py` 四百四十格）
+        const namedArg = (arg: Expr | undefined): string | null => argNameType(arg, argAnn);
         for (const [pos, refuse, want, also] of FACE_ARG_AS[fkey] ?? []) {
           const arg = e.args[pos - 1];
           const bad = literalTypeName(arg);
@@ -5339,10 +5345,11 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
-      // 实参写成量过的名字那一形：只回第二句（S496，尺 `tmp/d6/s496.py` 四百四十格），且只认**名字接收者**直接调值型方法那一形
-      const namedRecvArg = callee.obj.kind === "ident" && direct !== null
-        ? (arg: Expr | undefined): string | null => argNameType(arg, argAnn)
-        : (): string | null => null;
+      // 实参写成量过的名字那一形：只回第二句（S496 的名字接收者 + S497 的链子接收者，尺 `tmp/d6/s497.py` 四百四十格）；
+      // 定形容器元素当接收者那一形（recvElem）没量过名字实参，照旧不开口
+      const namedRecvArg = callee.obj.kind === "index"
+        ? (): string | null => null
+        : (arg: Expr | undefined): string | null => argNameType(arg, argAnn);
       for (const [pos, refuse, want, also] of INSTANCE_ARG_AS[ikey] ?? []) {
         const lit = e.args[pos - 1];
         const bad = lit === undefined ? null : literalTypeName(lit);
