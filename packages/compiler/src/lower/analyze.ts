@@ -5470,21 +5470,39 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           const byPos = new Map<number, Array<{ code: string; message: string }>>();
           const put = (pos: number, code: string, message: string): void => {
             const bucket = byPos.get(pos) ?? [];
-            bucket.push({ code, message });
+            if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
             byPos.set(pos, bucket);
+          };
+          const wantAt = new Map<number, string>();
+          const refuseAt = new Map<number, string[]>();
+          const addRefuse = (pos: number, want: string, kinds: readonly string[]): void => {
+            wantAt.set(pos, want);
+            refuseAt.set(pos, [...(refuseAt.get(pos) ?? []), ...kinds]);
           };
           for (const [pos, refuse, want, also] of STATIC_ARG_AS[skey] ?? []) {
             const got = literalTypeName(e.args[pos - 1]);
-            if (got === null || !refuse.includes(got)) continue;
-            put(pos, "static-arg-pass", `Cannot pass a value of type "${got}" as "${want}".`);
-            if (also.includes(got)) {
-              put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            if (got !== null && refuse.includes(got)) {
+              put(pos, "static-arg-pass", `Cannot pass a value of type "${got}" as "${want}".`);
+              if (also.includes(got)) {
+                put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+              }
             }
+            addRefuse(pos, want, refuse);
           }
           for (const [pos, refuse, want] of STATIC_ARG_TYPES[skey] ?? []) {
             const got = literalTypeName(e.args[pos - 1]);
-            if (got === null || !refuse.includes(got)) continue;
-            put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            if (got !== null && refuse.includes(got)) {
+              put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            }
+            addRefuse(pos, want, refuse);
+          }
+          // 名字实参那一形（S517）：literalTypeName 交不出型，改问 `argAnn`；落在本位 AS∪TYPES 并集里就只补第二句（`Cannot pass…` 那一句不跟名字走，与 S495 一路同口径）。
+          for (const [pos, want] of wantAt) {
+            const arg = e.args[pos - 1];
+            if (arg === undefined || literalTypeName(arg) !== null) continue;
+            const nm = argNameType(arg, argAnn);
+            if (nm === null || !(refuseAt.get(pos) ?? []).includes(nm)) continue;
+            put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
           }
           for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
             for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
