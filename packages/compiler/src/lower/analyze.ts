@@ -108,6 +108,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   // 记号表是进程内累积的：每份模块归一个自己的主，两份文件同 `行:列` 的同名字就不会互相抢记号（§6 第 61 条）
   markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
   seedOuterNames(m);
+  markClassFaceReceivers(m);
   const diags: Diagnostic[] = [];
 
   const enumNames: string[] = [];
@@ -1917,6 +1918,29 @@ function flattenBodies(m: Module): Record<string, unknown>[][] {
   };
   for (const c of m.innerClasses) collect(c);
   return bodies.map(flattenBody);
+}
+
+/** 类名直调那五面的实例方法表（S506，尺 `tmp/d6/s506.py` 十八格 + `tmp/d6/s505.py` 八十一格）：
+ *  `Array.resize(1)` 之类引擎发的是「非静态那一句」，表外名发的是「找不到成员那两句」，**不是**「未声明的标识符」。 */
+function classFaceArity(t: string): Record<string, [number, number]> | undefined {
+  if (t === "Array") return ARRAY_METHOD_ARITY;
+  if (t === "String" || t === "StringName") return STRING_METHOD_ARITY;
+  if (t === "NodePath") return NODE_PATH_METHOD_ARITY;
+  if (t === "Dictionary") return DICT_METHOD_ARITY;
+  return undefined;
+}
+/** 这一份模块里「当作成员访问接收者用」的那几个类名节点：作用域那一闸据此放过它们，句子交给静态面那一段去发。 */
+const CLASS_FACE_RECEIVERS = new WeakSet<object>();
+function markClassFaceReceivers(m: Module): void {
+  for (const nodes of flattenBodies(m)) {
+    for (const n of nodes) {
+      if (n.kind !== "attribute") continue;
+      const obj = n.obj as Record<string, unknown> | undefined;
+      if (obj !== undefined && obj.kind === "ident" && typeof obj.name === "string" && classFaceArity(obj.name) !== undefined) {
+        CLASS_FACE_RECEIVERS.add(obj);
+      }
+    }
+  }
 }
 
 /** `checkPackArgSlots` 的作用域：每支函数体配一张「名字 → 标注型」的底表 —— 模块级标注打底、内部类字段盖在上面、形参再盖一层
@@ -4180,6 +4204,8 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       }
       // 实测「能当值用的全局函数名」（那 78 个）取值合法：一律 typeof 25、打印 `@GlobalScope::<名字>`，所以记下节点、不报「没声明」
       if (!scope.has(e.name) && !isGlobalConst(e.name)) {
+        // 类名当接收者用（`Array.resize(1)`）：那句由静态面那一段发，作用域这一闸不抢（S506）
+        if (CLASS_FACE_RECEIVERS.has(e)) return;
         if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
         // 引擎类名当值用同样合法（typeof 24、等式按类），只是那支打印带进程内的号 —— 记下来交给发射器拒
         else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
@@ -5087,8 +5113,10 @@ function staticFaceConstName(t: string, name: string): boolean {
 /** 「类名.成员」的调用式：常量当函数调 / 静态函数元数 / 实例方法在类名上直接调 / 表外名字两句。 */
 function staticCallDiags(t: string, name: string, got: number): Array<{ code: string; message: string }> {
   const face = STATIC_FACE[t];
-  // pack 九支没有静态面（`STATIC_FACE` 里没它们），但「类名直调实例方法」与「类名上没这成员」两句照发（S376 ⑤）
-  if (face === undefined && !PACK_TYPE_NAMES.has(t)) return [];
+  const extra = classFaceArity(t);
+  // pack 九支没有静态面（`STATIC_FACE` 里没它们），但「类名直调实例方法」与「类名上没这成员」两句照发（S376 ⑤）；
+  // `Array` / `Dictionary` / `String` / `StringName` / `NodePath` 这五面同理 —— 类名直调走的也是那两句（S506）
+  if (face === undefined && !PACK_TYPE_NAMES.has(t) && extra === undefined) return [];
   if (face !== undefined && staticFaceConstName(t, name)) {
     const shown = face.axis.includes(name) ? `${t}.Axis` : t;
     return [{ code: "static-const-call", message: `Name "${name}" called as a function but is a "${shown}".` }];
@@ -5106,7 +5134,7 @@ function staticCallDiags(t: string, name: string, got: number): Array<{ code: st
       },
     ];
   }
-  if (VALUE_METHOD_ARITY[t]?.[name] !== undefined) {
+  if (VALUE_METHOD_ARITY[t]?.[name] !== undefined || (extra !== undefined && name in extra)) {
     return [
       {
         code: "static-nonstatic-call",
@@ -5340,7 +5368,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
     for (const e of calls) {
       const callee = e.callee;
       if (callee.kind !== "attribute") continue;
-      if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name))) {
+      if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name) || classFaceArity(callee.obj.name) !== undefined)) {
         for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ code: d.code, message: d.message, loc: e.loc });
         // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
         const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];
