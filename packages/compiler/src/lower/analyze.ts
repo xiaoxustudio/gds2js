@@ -1842,15 +1842,17 @@ const PACK_APPEND_NAMED = new Set([
 function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
   if (typeof name !== "string") return null;
   const t = ann.get(name);
-  return t !== undefined && PACK_APPEND_NAMED.has(t) ? t : null;
+  if (t === undefined || !PACK_APPEND_NAMED.has(argFaceBase(t))) return null;
+  return t.includes("[") ? typedFaceText(t) : t;
 }
 
 /** `e` / `i` / `b` 三槽认得的**标注名**来源（S498，尺 `tmp/d6/s497c.py` 一百一十格 + `tmp/d6/s497d.py` 三百九十六格 +
- *  `tmp/d6/s498b.py` 一百三十二格：`NodePath` 与九支 pack 的名字形只回第二句，字面量的 `NodePath` 两句齐发、pack 构造式只第二句）。 */
+ *  `tmp/d6/s498b.py` 一百三十二格：`NodePath` 与九支 pack 的名字形只回第二句，字面量的 `NodePath` 两句齐发、pack 构造式只第二句；
+ *  S501 又量了定形容器标注那一形：也只回第二句，型名印标注规格化后的原文）。 */
 function namedSlotSource(e: Expr, ann: Map<string, string>): string | null {
   if (e.kind !== "ident" || typeof e.name !== "string") return null;
   const t = ann.get(e.name);
-  return t !== undefined && ARG_NAME_TYPES.has(t) ? t : null;
+  return t !== undefined && ARG_NAME_TYPES.has(argFaceBase(t)) ? t : null;
 }
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
@@ -1947,21 +1949,65 @@ function packArgScopes(m: Module): Array<{ nodes: Record<string, unknown>[]; bas
   return out;
 }
 
+/** 定形容器标注的型名：引擎把标注**规格化**再印 —— `Dictionary[ String ,  int ]` 给 `Dictionary[String, int]`、
+ *  `Array[ int ]` 给 `Array[int]`（S501，尺 `tmp/d6/s501b.gd` 四形对照）。 */
+function typedFaceText(name: string): string {
+  const open = name.indexOf("[");
+  const closed = name.trimEnd();
+  if (open < 0 || !closed.endsWith("]")) return name.trim();
+  const base = name.slice(0, open).trim();
+  const body = closed.slice(open + 1, closed.length - 1);
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of body) {
+    if (ch === "[") depth++;
+    else if (ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      parts.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  parts.push(cur);
+  return `${base}[${parts.map((p) => typedFaceText(p.trim())).join(", ")}]`;
+}
+
+/** 标注型名去掉定形部分：`Array[int]` 的基是 `Array`（成员判定按基型，印出去的是标注原文）。 */
+function argFaceBase(t: string): string {
+  const open = t.indexOf("[");
+  return open < 0 ? t : t.slice(0, open);
+}
+
+/** 表里那一列认不认这个来源名：定形容器按基型查（S501，尺 `tmp/d6/s501a.py` 一百八十格） */
+function faceListHas(list: readonly string[], t: string): boolean {
+  return list.includes(t) || (t.includes("[") && list.includes(argFaceBase(t)));
+}
+
 /** 实参写成名字那一形认得的标注型（S495，尺 `tmp/d6/s495.py` 二百六十四格 = 三位位子 × 廿二型 × 四种名字，
  *  `tmp/d6/s495c.py` 一百七十六格补 `StringName.find` 第 1 位与 `String.find` 第 2 位，
  *  另两把尺 `tmp/d6/s495b.py` 八十八格 + `tmp/d6/s495d.py` 二十二格把同一批位子的字面量形重量一遍）——
- *  没量过的来源（`Callable` / `Variant` / `null` / 定形标注）不开口。 */
+ *  没量过的来源（`Callable` / `Variant` / `null`）不开口；定形容器标注随 S501 认进来。 */
 const ARG_NAME_TYPES = new Set([
   "int", "float", "bool", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array",
   "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
 ]);
 
+/** 名字那一形交得出的标注：廿二型原样，定形容器标注交规格化后的原文（S501 量的是 `Array[int]` / `Array[String]` /
+ *  `Array[PackedByteArray]` / `Dictionary[String, int]` 四种）。 */
+function argNameOf(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  if (t.name.includes("[") && !t.name.includes("]")) return null;
+  const text = t.name.includes("[") ? typedFaceText(t.name) : t.name;
+  return ARG_NAME_TYPES.has(argFaceBase(text)) ? text : null;
+}
+
 /** 每支函数体一份「名字 → 标注型」：模块级标注打底、内部类字段盖上去、形参再盖一层、函数体内的标注 var 最后盖 ——
  *  四层都是 S495 量过的证明（初值推断的名字那一形没量过，照旧不算）。 */
 function argNameScopes(m: Module): Map<Stmt[], Map<string, string>> {
-  const plain = (t: TypeRef | null): string | null =>
-    (t !== null && t.kind === "named" && !t.name.includes("[") && ARG_NAME_TYPES.has(t.name) ? t.name : null);
+  const plain = argNameOf;
   const out = new Map<Stmt[], Map<string, string>>();
   const collect = (funcs: FuncDecl[], fields: Map<string, string>): void => {
     for (const f of funcs) {
@@ -2389,13 +2435,15 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
         const proven = src ?? annotated;
         const kind = slots[p];
         if (kind === "a") {
-          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 的名字形）——
-          // 没量过的（`null` / Callable / 类名 / 定形标注）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
+          // `append_array` 那一位：槽型是接收者自己那一型，只量过这廿二型来源（S492 的字面量形与 S493 / S501 的名字形）——
+          // 没量过的（`null` / Callable / 类名）不开口；**名字来的只回第二句**，字面量那廿二型按 S492 的三档
           const namedA = arg0.kind === "ident" ? namedAppendSource(arg0.name, annAll) : null;
           const srcA = src ?? namedA;
-          if (srcA === null || srcA === "Array" || srcA === pack) continue;
-          const two = PACK_APPEND_ARRAY_AS.includes(srcA);
-          if (!two && !(srcA === "Dictionary" || PACK_TYPE_NAMES.has(srcA))) continue;
+          // 定形容器标注按基型判（S501：`Array[int]` 与 `Array` 同档收，`Dictionary[String, int]` 与 `Dictionary` 同档只回第二句）
+          const baseA = srcA === null ? "" : argFaceBase(srcA);
+          if (srcA === null || baseA === "Array" || baseA === pack) continue;
+          const two = PACK_APPEND_ARRAY_AS.includes(baseA);
+          if (!two && !(baseA === "Dictionary" || PACK_TYPE_NAMES.has(baseA))) continue;
           const aloc = (n.loc as Diagnostic["loc"]) ?? null;
           if (two && namedA === null) {
             diags.push({ code: "pack-arg-slot", message: `Cannot pass a value of type "${srcA}" as "${pack}".`, loc: aloc });
@@ -2836,7 +2884,7 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
         }
         // 名字那一形只回第二句（S495：`var w: int` 之后 `sn.find(w)` 引擎一句、`&"ab".find(1)` 两句）
         const named = argNameType(lit, argAnn);
-        if (named === null || !refuse.includes(named) || !also.includes(named)) continue;
+        if (named === null || !faceListHas(refuse, named) || !faceListHas(also, named)) continue;
         put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
@@ -2848,7 +2896,7 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
           continue;
         }
         const named = argNameType(lit, argAnn);
-        if (named === null || !refuse.includes(named)) continue;
+        if (named === null || !faceListHas(refuse, named)) continue;
         put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${String(pos)} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
@@ -5316,7 +5364,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             continue;
           }
           const named = namedArg(arg);
-          if (named === null || !refuse.includes(named) || !also.includes(named)) continue;
+          if (named === null || !faceListHas(refuse, named) || !faceListHas(also, named)) continue;
           put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const [pos, refuse, want] of FACE_ARG_TYPES[fkey] ?? []) {
@@ -5328,7 +5376,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             continue;
           }
           const named = namedArg(arg);
-          if (named === null || !refuse.includes(named)) continue;
+          if (named === null || !faceListHas(refuse, named)) continue;
           put(pos, "face-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
         }
         for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
@@ -5371,7 +5419,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           continue;
         }
         const named = namedRecvArg(lit);
-        if (named === null || !refuse.includes(named) || !also.includes(named)) continue;
+        if (named === null || !faceListHas(refuse, named) || !faceListHas(also, named)) continue;
         put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const [pos, refuse, want] of INSTANCE_ARG_TYPES[ikey] ?? []) {
@@ -5383,7 +5431,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           continue;
         }
         const named = namedRecvArg(lit);
-        if (named === null || !refuse.includes(named)) continue;
+        if (named === null || !faceListHas(refuse, named)) continue;
         put(pos, "instance-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${named}".`);
       }
       for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
