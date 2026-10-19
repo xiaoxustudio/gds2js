@@ -1544,6 +1544,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
               e.callee.obj.kind === "ident"
                 ? shapes.get(e.callee.obj.name) ??
                   (PACK_TYPE_NAMES.has(e.callee.obj.name) ? "Pack" : null) ??
+                  (e.callee.obj.name === "Array" || e.callee.obj.name === "Dictionary" ? e.callee.obj.name : null) ??
                   (signalNames.has(e.callee.obj.name) ? "Signal" : null)
                 : chainPack;
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
@@ -2023,7 +2024,7 @@ const OBJECT_ARG_NAMES = new Set(["Callable", "Object", "Node"]);
 /** **值型槽**那十三档：`null` 字面量在这一档两句齐发，对象型名字在这一档只回第二句（S503 两把尺一百六十八格里量到的槽型；
  *  `Array` / `Dictionary` / `StringName` / `NodePath` / `Vector3` / `Vector3i` 当槽型那一档没量过，照旧不开口）。 */
 const VALUE_ARG_WANTS = new Set([
-  "int", "float", "bool", "String", "Vector2", "Vector2i", "Color",
+  "int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color",
   "PackedByteArray", "PackedInt32Array", "PackedFloat32Array", "PackedStringArray",
   "PackedVector2Array", "PackedColorArray",
 ]);
@@ -5110,6 +5111,59 @@ function staticFaceConstName(t: string, name: string): boolean {
   return face.consts.includes(name) || face.axis.includes(name) || (t === "Color" && COLOR_NAMED[name.toLowerCase()] !== undefined);
 }
 
+/** 类名直调实例方法时的形参那几句：引擎在非静态那一句之后照说，句子与实例接收者同表（S507，尺 `tmp/d6/s507.py` 一百零五格 = 十面 × 廿一处位子 × 五种实参写法）。
+ *  按 `(面.方法, 位)` 查那四张形参表；名字形只回第二句，`null` 与对象型名字按量到的那十三档值型槽判；同一位子被两行命中时同文只发一遍。 */
+function classFaceArgDiags(e: Expr, face: string, method: string, argAnn: Map<string, string>): Array<{ code: string; message: string }> {
+  const key = `${face}.${method}`;
+  const byPos = new Map<number, Array<{ code: string; message: string }>>();
+  const put = (pos: number, code: string, message: string): void => {
+    const bucket = byPos.get(pos) ?? [];
+    if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
+    byPos.set(pos, bucket);
+  };
+  const named = (arg: Expr | undefined): string | null => argNameType(arg, argAnn);
+  const got = e.kind === "call" ? e.args : [];
+  for (const rows of [FACE_ARG_AS[key], INSTANCE_ARG_AS[key]]) {
+    for (const [pos, refuse, want, also] of rows ?? []) {
+      const arg = got[pos - 1];
+      const bad = literalTypeName(arg);
+      if (bad !== null) {
+        const nullSlot = bad === "null" && nullRefusedByValueSlot(want);
+        if (!refuse.includes(bad) && !nullSlot) continue;
+        put(pos, "face-arg-pass", `Cannot pass a value of type "${bad}" as "${want}".`);
+        if (nullSlot || also.includes(bad)) {
+          put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        }
+        continue;
+      }
+      const nm = named(arg);
+      if (nm === null) continue;
+      if (!objectNameRefusedByValueSlot(nm, want) && (!faceListHas(refuse, nm) || !faceListHas(also, nm))) continue;
+      put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
+    }
+  }
+  for (const rows of [FACE_ARG_TYPES[key], INSTANCE_ARG_TYPES[key]]) {
+    for (const [pos, refuse, want] of rows ?? []) {
+      const arg = got[pos - 1];
+      const bad = literalTypeName(arg);
+      if (bad !== null) {
+        if (!refuse.includes(bad) && !(bad === "null" && nullRefusedByValueSlot(want))) continue;
+        put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${bad}".`);
+        continue;
+      }
+      const nm = named(arg);
+      if (nm === null) continue;
+      if (!objectNameRefusedByValueSlot(nm, want) && !faceListHas(refuse, nm)) continue;
+      put(pos, "face-arg-type", `Invalid argument for "${method}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
+    }
+  }
+  const out: Array<{ code: string; message: string }> = [];
+  for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
+    for (const d of byPos.get(pos)!) out.push(d);
+  }
+  return out;
+}
+
 /** 「类名.成员」的调用式：常量当函数调 / 静态函数元数 / 实例方法在类名上直接调 / 表外名字两句。 */
 function staticCallDiags(t: string, name: string, got: number): Array<{ code: string; message: string }> {
   const face = STATIC_FACE[t];
@@ -5370,6 +5424,25 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       if (callee.kind !== "attribute") continue;
       if (callee.obj.kind === "ident" && (callee.obj.name in STATIC_FACE || PACK_TYPE_NAMES.has(callee.obj.name) || classFaceArity(callee.obj.name) !== undefined)) {
         for (const d of staticCallDiags(callee.obj.name, callee.name, e.args.length)) diags.push({ code: d.code, message: d.message, loc: e.loc });
+        // 这一形是**实例方法在类名上直接调**（不是真静态函数）时，非静态那一句之后形参那几句照说（S507）
+        const clsTable = classFaceArity(callee.obj.name) ?? VALUE_METHOD_ARITY[callee.obj.name];
+        const clsSig = callee.name in (clsTable ?? {}) ? clsTable?.[callee.name] : undefined;
+        if (STATIC_FACE[callee.obj.name]?.statics[callee.name] === undefined && clsSig !== undefined) {
+          for (const d of classFaceArgDiags(e, callee.obj.name, callee.name, argAnn)) diags.push({ code: d.code, message: d.message, loc: e.loc });
+          if (e.args.length < clsSig[0]) {
+            diags.push({
+              code: "value-arity",
+              message: `Too few arguments for "${callee.name}()" call. Expected at least ${clsSig[0]} but received ${e.args.length}.`,
+              loc: e.loc,
+            });
+          } else if (e.args.length > clsSig[1]) {
+            diags.push({
+              code: "value-arity",
+              message: `Too many arguments for "${callee.name}()" call. Expected at most ${clsSig[1]} but received ${e.args.length}.`,
+              loc: e.loc,
+            });
+          }
+        }
         // 形参那一族与全局函数同构；元数不对时先让元数那一句说（与 `GLOBAL_ARG_*` 那一段同一口径）
         const bounds = STATIC_FACE[callee.obj.name]?.statics[callee.name];
         if (bounds !== undefined && e.args.length >= bounds[0] && e.args.length <= bounds[1]) {
