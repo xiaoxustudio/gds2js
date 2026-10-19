@@ -1541,7 +1541,9 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
               e.callee.obj.kind === "ident"
-                ? shapes.get(e.callee.obj.name) ?? (signalNames.has(e.callee.obj.name) ? "Signal" : null)
+                ? shapes.get(e.callee.obj.name) ??
+                  (PACK_TYPE_NAMES.has(e.callee.obj.name) ? "Pack" : null) ??
+                  (signalNames.has(e.callee.obj.name) ? "Signal" : null)
                 : chainPack;
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
@@ -2435,13 +2437,15 @@ function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
       if (callee === undefined || callee.kind !== "attribute") continue;
       const obj = callee.obj as Record<string, unknown> | undefined;
       if (obj === undefined) continue;
-      // 两种证明：命名过的（上面那张表）与**就地构造的链式接收者** `Face([…]).append(x)` —— 引擎对这两种同判（`tmp/probe-packargs/` 九面 2160 格两侧对过）
+      // 三种证明：命名过的（上面那张表）、**就地构造的链式接收者** `Face([…]).append(x)`，以及**类名直调** `PackedByteArray.append(x)`
+      // —— 引擎对前两种同判（`tmp/probe-packargs/` 九面 2160 格两侧对过），类名直调那一种除了头一句「Make an instance instead」
+      // 之外形参拒与 void 那句照说（S504，尺 `tmp/d6/s504.py` 一百二十格）
       const objCallee = obj.kind === "call" ? (obj.callee as Record<string, unknown> | undefined) : undefined;
       const inline = objCallee !== undefined && objCallee["kind"] === "ident" && typeof objCallee["name"] === "string"
         && String(objCallee["name"]) in PACK_ARG_SLOTS ? String(objCallee["name"]) : null;
       const viaChain = obj.kind === "call" ? chainRecvFace(obj as Expr, ownerFace) : null;
       const pack = obj.kind === "ident" && typeof obj.name === "string"
-        ? packs.get(obj.name)
+        ? (packs.get(obj.name) ?? (obj.name in PACK_ARG_SLOTS ? obj.name : undefined))
         : (inline ?? (viaChain !== null && PACK_TYPE_NAMES.has(viaChain) ? viaChain : undefined));
       if (pack === undefined) continue;
       const method = callee.name;
