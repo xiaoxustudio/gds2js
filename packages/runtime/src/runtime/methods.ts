@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -1153,7 +1153,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `Too many arguments for "format()" call. Expected at most 2 but received ${args.length}.`);
           }
           const ph = args.length >= 2 ? asString(args[1] as Variant, "format") : "{_}";
-          return V.str(strFormatV(s, args[0] as Variant, ph));
+          const vals = args[0] as Variant;
+          // 引擎只认 Array / Dictionary / 真对象；其余 Variant 档位（标量、值型、Callable…）打一块非致命 ERROR、脚本照跑、格式串原样回吐（实测 `tmp/d6/s511fmt.gd`，S511）。
+          if (!(vals.t === Tag.ARRAY || vals.t === Tag.DICT || (vals.t === Tag.OBJECT && vals.v instanceof GdScriptObject))) {
+            stringFormatInvalidType();
+          }
+          return V.str(strFormatV(s, vals, ph));
         }
         case "md5_text":
           if (args.length !== 0) {

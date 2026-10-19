@@ -103,6 +103,11 @@ export function pctFormatError(detail: string): Variant {
   return pushBlock("ERROR", "validated_evaluate (core/variant/variant_op.h:829)", [V.str(`String formatting error: ${detail}`)]);
 }
 
+/** `String.format()` 的 `values` 不是 Array / Dictionary / Object：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s511fmt.gd`，`at:` 是 `format (core/string/ustring.cpp:3598)`）。 */
+export function stringFormatInvalidType(): Variant {
+  return pushBlock("ERROR", "format (core/string/ustring.cpp:3598)", [V.str("Invalid type: use Array, Dictionary or Object.")]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {
