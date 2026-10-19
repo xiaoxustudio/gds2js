@@ -1446,9 +1446,9 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
           : PACK_TYPE_NAMES.has(t.name)
             ? "Pack"
             : null;
-  const seedFunc = (f: FuncDecl, fields: Map<string, string>): void => {
+  const seedFunc = (f: FuncDecl, fields: Map<string, string>, shapeFields: Map<string, string>): void => {
     const s = new Map(fields);
-    const cs = new Map<string, string>();
+    const cs = new Map(shapeFields);
     for (const p of f.params) {
       const ty = packAnn(p.type);
       if (ty !== null) s.set(p.name, ty);
@@ -1458,14 +1458,17 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     packSeeds.set(f.body, s);
     containerSeeds.set(f.body, cs);
   };
-  for (const f of m.funcs) seedFunc(f, new Map<string, string>());
+  for (const f of m.funcs) seedFunc(f, new Map<string, string>(), new Map<string, string>());
   const seedCls = (c: ClassDecl): void => {
     const fields = new Map<string, string>();
+    const shapeFields = new Map<string, string>();
     for (const v of c.vars) {
       const ty = packAnn(v.type);
       if (ty !== null) fields.set(v.name, ty);
+      const sh = shapeAnn(v.type);
+      if (sh !== null) shapeFields.set(v.name, sh);
     }
-    for (const f of c.funcs) seedFunc(f, fields);
+    for (const f of c.funcs) seedFunc(f, fields, shapeFields);
     for (const inner of c.innerClasses) seedCls(inner);
   };
   for (const c of m.innerClasses) seedCls(c);
