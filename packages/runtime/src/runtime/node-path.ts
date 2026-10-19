@@ -128,13 +128,20 @@ function nodePathIndex(v: Variant, name: string): number {
   return intToNum(v.v as IntPayload);
 }
 
-/** NodePath 的方法面：九支发出，`hash()` 与越界那两形按 S267 ⑥ 拒，其余名给运行期那句 Nonexistent function。 */
+/** `hash()` 的式子在本模块看不到（要 builtins 的 String / uint64 哈希助手），由 builtins.ts 注入。 */
+let nodePathHashHook: ((p: GdNodePath) => number) | null = null;
+
+export function registerNodePathHashHook(f: (p: GdNodePath) => number): void {
+  nodePathHashHook = f;
+}
+
+/** NodePath 的方法面：十支发出，越界那两形按 S267 ⑥ 拒，其余名给运行期那句 Nonexistent function。 */
 export function nodePathMethod(p: GdNodePath, name: string, args: readonly Variant[]): Variant {
   if (name === "hash") {
-    throw new UnsupportedError(
-      "node-path-hash",
-      "NodePath 的哈希式子没逆出来（实测 hash(NodePath(\"a\")) = 3608900604、hash(NodePath(\"a/b\")) = 1780534522，4.3 那支「绝对位起手 1 再逐名异或」不成立，S267 ⑥a），不发",
-    );
+    if (nodePathHashHook === null) {
+      throw new UnsupportedError("node-path-hash", "NodePath.hash() 的式子没登记（builtins.ts 未加载）");
+    }
+    return V.int(nodePathHashHook(p));
   }
   if (NP_ZERO_ARG.indexOf(name) >= 0) {
     if (args.length > 0) {

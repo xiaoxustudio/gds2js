@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import * as rt from "@gds2js/runtime/runtime/index";
-import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { GodotRuntimeError, UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { vector3 } from "@gds2js/runtime/runtime/vector3";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
@@ -53,12 +53,14 @@ describe("Variant 形参那几支全局函数的向量与 Color 实参", () => {
   });
 });
 
-const REFUSED: Array<[string, () => Variant]> = [
+const REFUSED_MIGRATED: Array<[string, () => Variant]> = [
   ["rt.abs(V.str(\"a\"))", () => rt.abs(V.str("a"))],
   ["rt.gFloor(V.str(\"a\"))", () => rt.gFloor(V.str("a"))],
   ["rt.gCeil(V.str(\"a\"))", () => rt.gCeil(V.str("a"))],
   ["rt.gRound(V.str(\"a\"))", () => rt.gRound(V.str("a"))],
   ["rt.gSign(V.str(\"a\"))", () => rt.gSign(V.str("a"))],
+];
+const REFUSED: Array<[string, () => Variant]> = [
   ["rt.gSnapped(V.str(\"a\"), I(1))", () => rt.gSnapped(V.str("a"), I(1))],
   ["rt.gSnapped(I(1), V.str(\"a\"))", () => rt.gSnapped(I(1), V.str("a"))],
   ["rt.gLerp(V.str(\"a\"), I(1), F(0.5))", () => rt.gLerp(V.str("a"), I(1), F(0.5))],
@@ -67,6 +69,10 @@ const REFUSED: Array<[string, () => Variant]> = [
 ];
 
 describe("同一族收到非数值、非同型向量的实参时响亮拒", () => {
+  it.each(REFUSED_MIGRATED)("%s（S524：引擎原文）", (_label, run) => {
+    expect(run).toThrowError(GodotRuntimeError);
+    expect(run).toThrowError(/Error calling utility function/);
+  });
   it.each(REFUSED)("%s", (_label, run) => {
     expect(run).toThrowError(UnsupportedError);
   });

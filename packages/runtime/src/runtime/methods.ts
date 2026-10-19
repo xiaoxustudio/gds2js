@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -29,7 +29,7 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -57,6 +57,222 @@ function asString(v: Variant, who: string): string {
     if (np !== null) return nodePathText(np);
   }
   throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
+}
+
+/** `PackedByteArray.bswap16/32/64(offset=0, count=-1)`（S549）：原地换字节序；两道 ERR_FAIL 打块且字节一个不动。 */
+function bytesBswap(p: GBytes, kind: 16 | 32 | 64, args: Variant[]): Variant {
+  if (p.kind !== "byte") {
+    throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function 'bswap${String(kind)}' in base '${packTypeName(p.kind)}'.`);
+  }
+  if (args.length > 2) throw new GodotRuntimeError("arity", `bswap${String(kind)}() 需要 0 到 2 个参数（收到 ${args.length} 个）`);
+  const width = kind / 8;
+  const intOf = (v: Variant | undefined, i: number): number => {
+    if (v === undefined) return i === 0 ? 0 : -1;
+    if (v.t !== Tag.INT) {
+      throw new UnsupportedError("packed-bswap-arg", `bswap${String(kind)}() 的第 ${i + 1} 个参数只量过 int 来源`);
+    }
+    const n = intToNum(v.v as IntPayload);
+    return typeof n === "bigint" ? Number(n) : n;
+  };
+  const offset = intOf(args[0], 0);
+  let count = intOf(args[1], 1);
+  const sz = p.length;
+  if (sz === 0 || count === 0) return V.nil();
+  const chunks = (from: number): number => Math.floor((sz - from) / width);
+  if (offset < 0 || offset > sz - width) {
+    packBswapGuard(kind, "offset");
+    return V.nil();
+  }
+  if (count < 0) count = chunks(offset);
+  if (count > chunks(offset)) {
+    packBswapGuard(kind, "count");
+    return V.nil();
+  }
+  const raw = p.raw() as number[];
+  for (let i = 0; i < count; i++) {
+    const at = offset + i * width;
+    for (let j = 0; j < width / 2; j++) {
+      const t = raw[at + j] as number;
+      raw[at + j] = raw[at + width - 1 - j] as number;
+      raw[at + width - 1 - j] = t;
+    }
+  }
+  return V.nil();
+}
+
+const TWO64 = 1n << 64n;
+const TWO63 = 1n << 63n;
+
+/** `decode_*` 的宽度 / 守卫行号 / 是否有符号（S550；u64 与 s64 都按 int64 回绕）。 */
+const DECODE_INFO: Record<string, readonly [number, number, boolean]> = {
+  decode_u8: [1, 859, false], decode_s8: [1, 865, true],
+  decode_u16: [2, 871, false], decode_s16: [2, 877, true],
+  decode_u32: [4, 883, false], decode_s32: [4, 889, true],
+  decode_u64: [8, 895, true], decode_s64: [8, 901, true],
+};
+const ENCODE_INFO: Record<string, readonly [number, number]> = {
+  encode_u8: [1, 1073], encode_s8: [1, 1079],
+  encode_u16: [2, 1086], encode_s16: [2, 1092],
+  encode_u32: [4, 1099], encode_s32: [4, 1105],
+  encode_u64: [8, 1112], encode_s64: [8, 1118],
+};
+/** 半精度/单精度/双精度那三对（S551）：宽度与守卫行号。 */
+const FLOAT_DECODE_INFO: Record<string, readonly [number, number]> = {
+  decode_half: [2, 907], decode_float: [4, 913], decode_double: [8, 920],
+};
+const FLOAT_ENCODE_INFO: Record<string, readonly [number, number]> = {
+  encode_half: [2, 1125], encode_float: [4, 1131], encode_double: [8, 1137],
+};
+const F32BIN = new DataView(new ArrayBuffer(4));
+const F64BIN = new DataView(new ArrayBuffer(8));
+
+/** 引擎 `Math::make_half_float`（S551）：**截断**尾数、不四舍五入；denormal 直接归零、NaN 折成全 1 尾数、-0 丢符号。 */
+function makeHalfFloat(value: number): number {
+  F32BIN.setFloat32(0, value, true);
+  const x = F32BIN.getUint32(0, true);
+  const sign = x >>> 31;
+  let mantissa = x & ((1 << 23) - 1);
+  const exponent = x & (0xff << 23);
+  if (exponent >= 0x47800000) {
+    mantissa = mantissa !== 0 && exponent === 0xff << 23 ? (1 << 23) - 1 : 0;
+    return ((sign << 15) | (0x1f << 10) | (mantissa >>> 13)) >>> 0;
+  }
+  if (exponent <= 0x38000000) return 0;
+  return ((sign << 15) | ((exponent - 0x38000000) >>> 13) | (mantissa >>> 13)) >>> 0;
+}
+
+/** 引擎 `Math::half_to_float`（S551）：按位还原（子正规数逐个左移）。 */
+function halfToFloat(h: number): number {
+  const hExp = h & 0x7c00;
+  const fSgn = ((h & 0x8000) << 16) >>> 0;
+  let bits: number;
+  if (hExp === 0) {
+    let sig = h & 0x03ff;
+    if (sig === 0) bits = fSgn;
+    else {
+      sig <<= 1;
+      let e = 0;
+      while ((sig & 0x0400) === 0) {
+        sig <<= 1;
+        e++;
+      }
+      bits = (fSgn + (((127 - 15 - e) << 23) >>> 0) + ((sig & 0x03ff) << 13)) >>> 0;
+    }
+  } else if (hExp === 0x7c00) {
+    bits = (fSgn + 0x7f800000 + ((h & 0x03ff) << 13)) >>> 0;
+  } else {
+    bits = (fSgn + (((h & 0x7fff) + 0x1c000) << 13)) >>> 0;
+  }
+  F32BIN.setUint32(0, bits, true);
+  return F32BIN.getFloat32(0, true);
+}
+
+function packDecodeFloat(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = FLOAT_DECODE_INFO[name] as readonly [number, number];
+  const width = info[0];
+  if (args.length !== 1) throw new GodotRuntimeError("arity", `${name}() 需要 1 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packDecodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.float(0);
+  }
+  const at = Number(off);
+  const raw = p.raw() as number[];
+  if (width === 2) return V.float(halfToFloat(((raw[at] as number) | ((raw[at + 1] as number) << 8)) & 0xffff));
+  if (width === 4) {
+    F32BIN.setUint8(0, raw[at] as number);
+    F32BIN.setUint8(1, raw[at + 1] as number);
+    F32BIN.setUint8(2, raw[at + 2] as number);
+    F32BIN.setUint8(3, raw[at + 3] as number);
+    return V.float(F32BIN.getFloat32(0, true));
+  }
+  for (let i = 0; i < 8; i++) F64BIN.setUint8(i, raw[at + i] as number);
+  return V.float(F64BIN.getFloat64(0, true));
+}
+
+function packEncodeFloat(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = FLOAT_ENCODE_INFO[name] as readonly [number, number];
+  const width = info[0];
+  if (args.length !== 2) throw new GodotRuntimeError("arity", `${name}() 需要 2 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  const v = args[1] as Variant;
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
+    throw new UnsupportedError("packed-bin-arg", `${name}() 只量过 int / float 来源（收到 ${tagName(v.t)}）`);
+  }
+  const value = v.t === Tag.INT ? Number(intToNum(v.v as IntPayload)) : (Math.fround(v.v as number));
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packEncodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.nil();
+  }
+  const at = Number(off);
+  const raw = p.raw() as number[];
+  if (width === 2) {
+    const h = makeHalfFloat(value);
+    raw[at] = h & 0xff;
+    raw[at + 1] = (h >>> 8) & 0xff;
+  } else if (width === 4) {
+    F32BIN.setFloat32(0, value, true);
+    for (let i = 0; i < 4; i++) raw[at + i] = F32BIN.getUint8(i);
+  } else {
+    F64BIN.setFloat64(0, value, true);
+    for (let i = 0; i < 8; i++) raw[at + i] = F64BIN.getUint8(i);
+  }
+  return V.nil();
+}
+
+function int64Arg(v: Variant | undefined, who: string): bigint {
+  if (v === undefined) throw new GodotRuntimeError("arity", `${who}() 缺少参数`);
+  if (v.t !== Tag.INT) throw new UnsupportedError("packed-bin-arg", `${who}() 只量过 int 来源（收到 ${tagName(v.t)}）`);
+  const p = v.v as IntPayload;
+  return typeof p === "bigint" ? p : BigInt(Math.trunc(p));
+}
+
+/** `PackedByteArray.decode_*`（S550）：小端读；越界那块带 ` Returning: 0` 且回 0。 */
+function packDecode(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = DECODE_INFO[name] as readonly [number, number, boolean];
+  const width = info[0];
+  if (args.length !== 1) throw new GodotRuntimeError("arity", `${name}() 需要 1 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packDecodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.int(0);
+  }
+  const at = Number(off);
+  const raw = p.raw() as number[];
+  let bits = 0n;
+  for (let i = width - 1; i >= 0; i--) bits = (bits << 8n) | BigInt(raw[at + i] as number);
+  if (width === 8) return V.int(bits >= TWO63 ? bits - TWO64 : bits);
+  let n = Number(bits);
+  if (info[2]) {
+    const lim = 2 ** (width * 8 - 1);
+    if (n >= lim) n -= 2 ** (width * 8);
+  }
+  return V.int(n);
+}
+
+/** `PackedByteArray.encode_*`（S550）：小端写、值按宽度回绕；越界那块不带 ` Returning`、字节不动。 */
+function packEncode(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = ENCODE_INFO[name] as readonly [number, number];
+  const width = info[0];
+  if (args.length !== 2) throw new GodotRuntimeError("arity", `${name}() 需要 2 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  const value = int64Arg(args[1], name);
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packEncodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.nil();
+  }
+  const at = Number(off);
+  const bits = ((value % TWO64) + TWO64) % TWO64;
+  const raw = p.raw() as number[];
+  for (let i = 0; i < width; i++) raw[at + i] = Number((bits >> BigInt(i * 8)) & 0xffn);
+  return V.nil();
+}
+
+/** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
+function charReplacement(n: number, who: string): number {  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
+    throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 超出 Unicode 标量范围，那一形没实测过`);
+  }
+  return n;
 }
 
 /** 入口可能是裸 JS 值（lambda、引擎对象），先归一成 Variant */
@@ -215,6 +431,7 @@ const CALLABLE_METHOD_NAMES = new Set([
   "get_argument_count",
   "get_bound_arguments",
   "get_bound_arguments_count",
+  "get_unbound_arguments_count",
   "get_method",
   "get_object",
   "get_object_id",
@@ -261,6 +478,9 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
     case "get_bound_arguments_count":
       // 实测读数就是 `get_bound_arguments()` 那支数组的长度（全局 Callable 的两格：0 与 2）
       return V.int(bound.length);
+    case "get_unbound_arguments_count":
+      // 实测七格（tmp/d6/s545.gd）：就是 unbind 计数；先 unbind 再 bind 会填掉一格（unbind(2).bind(1) → 1）
+      return V.int(box.unbindCount);
     case "get_argument_count": {
       // 语义是「**还要几个实参**」= 声明形参数 − 绑定数，不是「只要 bind 过就给 0」
       const declared = declaredArgCount(box);
@@ -447,7 +667,20 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
-    if (inner instanceof GBytes) return bytesMethod(inner, name, args);
+    if (inner instanceof GBytes) {
+      if (name === "bswap16") return bytesBswap(inner, 16, args);
+      if (name === "bswap32") return bytesBswap(inner, 32, args);
+      if (name === "bswap64") return bytesBswap(inner, 64, args);
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined) {
+        if (inner.kind !== "byte") {
+          throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
+        }
+        if (DECODE_INFO[name] !== undefined) return packDecode(inner, name, args);
+        if (ENCODE_INFO[name] !== undefined) return packEncode(inner, name, args);
+        return FLOAT_DECODE_INFO[name] !== undefined ? packDecodeFloat(inner, name, args) : packEncodeFloat(inner, name, args);
+      }
+      return bytesMethod(inner, name, args);
+    }
 
     if (inner instanceof Signal) {
       if (name === "emit") {
@@ -473,9 +706,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 8）`);
         }
         const box = cb.v as CallableBox;
-        return V.int(inner.connectTo(box, (a: Variant[]) => {
+        if (isNullCallable(box)) {
+          signalNullCallable(inner.sigName);
+          return V.int(31);
+        }
+        const rc = inner.connectTo(box, (a: Variant[]) => {
           callCallableBox(box, a);
-        }, n));
+        }, n);
+        if (rc === 31) {
+          // 标签复刻不了（宿主类路径没登记）时只少一块 stderr，返回值仍是实测的 31
+          const label = callableLabel(box);
+          if (label !== null) signalDuplicateConnect(inner.sigName, label);
+        }
+        return V.int(rc);
       }
       if (name === "disconnect") {
         const cb = args[0];
@@ -486,7 +729,35 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         return V.nil();
       }
       if (name === "get_name") return V.str(inner.sigName);
-      if (name === "is_null") return V.bool(false);
+      if (name === "is_null") return V.bool(inner.sigName === "");
+      if (name === "get_object") {
+        if (inner.sigName !== "") throw new UnsupportedError("signal-object", "带名 Signal 的 get_object() 要宿主对象，没量过");
+        return V.object(NULL_OBJECT);
+      }
+      if (name === "get_object_id") {
+        if (inner.sigName !== "") throw new UnsupportedError("signal-object", "带名 Signal 的 get_object_id() 折的是宿主实例号，没量过");
+        return V.int(0);
+      }
+      if (name === "is_connected") {
+        const cb = args[0];
+        if (cb === undefined || !isCallableBox(cb.v)) {
+          throw new UnsupportedError("signal-is-connected", "is_connected() 的 Callable 实参这一格没量过（非 Callable 来源）");
+        }
+        return V.bool(inner.isConnected(cb.v as CallableBox));
+      }
+      if (name === "has_connections") return V.bool(inner.hasConnections());
+      if (name === "get_connections") {
+        const rows = inner.connections();
+        const out: Variant[] = [];
+        for (const row of rows) {
+          const d = new GDict();
+          d.set(V.str("signal"), V.object(inner));
+          d.set(V.str("callable"), V.object(row.box));
+          d.set(V.str("flags"), V.int(row.flags));
+          out.push(V.dict(d));
+        }
+        return V.array(GArray.of(out));
+      }
       // 这三个名字在 Signal 上**不存在**，而且是**运行期**那句 `Invalid call. Nonexistent function 'X' in base 'Signal'.`（`is_valid` 那一格是解析期拦的，不同）
       if (name === "has_method" || name === "get_method_list" || name === "is_connected_to") {
         throw new GodotRuntimeError("signal-method", `Invalid call. Nonexistent function '${name}' in base 'Signal'.`);
@@ -706,6 +977,13 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "duplicate":
           return V.array(a.duplicate(boolArgOr(args, 0, false)));
+        case "duplicate_deep": {
+          // 实测（S548）：纯容器里模式 0 / 1 / 2 / 3 / -1 都是**整棵深拷**，嵌套改一边不动另一边；模式只对 Resource 子资源有意义（Tier 1 不出）
+          if (args.length > 0 && (args[0] as Variant).t !== Tag.INT) {
+            throw new UnsupportedError("duplicate-deep-arg", "Array.duplicate_deep() 的模式参数只量过 int 来源");
+          }
+          return V.array(a.duplicate(true));
+        }
         case "size":
           return V.int(a.size());
         case "is_empty":
@@ -891,6 +1169,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "duplicate":
           return V.dict(d.duplicate(boolArgOr(args, 0, false)));
+        case "duplicate_deep": {
+          if (args.length > 0 && (args[0] as Variant).t !== Tag.INT) {
+            throw new UnsupportedError("duplicate-deep-arg", "Dictionary.duplicate_deep() 的模式参数只量过 int 来源");
+          }
+          return V.dict(d.duplicate(true));
+        }
         case "hash":
           return V.int(variantHashNumber(obj));
         default:
@@ -941,6 +1225,40 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           const needle = asString(args[0] as Variant, name);
           const from = args.length === 2 ? intArg(args, 1, name) : name.startsWith("r") ? -1 : 0;
           return V.int(strFind(s, needle, from, name.startsWith("r"), insensitive));
+        }
+        case "replace_char": {
+          const key = intArg(args, 0, "replace_char");
+          const withCp = intArg(args, 1, "replace_char");
+          if (withCp === 0) {
+            stringReplaceCharNul();
+            return V.str(s);
+          }
+          return V.str(strReplaceChar(s, key, charReplacement(withCp, "replace_char")));
+        }
+        case "replace_chars": {
+          const keys = asString(one(args, "replace_chars"), "replace_chars");
+          const withCp = intArg(args, 1, "replace_chars");
+          if (withCp === 0) {
+            stringReplaceCharsNul();
+            return V.str(s);
+          }
+          return V.str(strReplaceChars(s, keys, charReplacement(withCp, "replace_chars")));
+        }
+        case "remove_char":
+          return V.str(strRemoveChar(s, intArg(args, 0, "remove_char")));
+        case "remove_chars":
+          return V.str(strRemoveChars(s, asString(one(args, "remove_chars"), "remove_chars")));
+        case "uri_file_decode": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `uri_file_decode() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strUriDecode(s, false));
+        }
+        case "is_valid_ascii_identifier": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_ascii_identifier() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(strIsValidAsciiIdentifier(s));
         }
         case "split": {
           if (args.length > 3) {

@@ -93,7 +93,7 @@ describe("runtime/signal", () => {
     eq("193", "bind() 的空列表等于没绑（那格给的是声明形参数）", method(boundWith(0), "get_argument_count", []).v, 3);
     eq("193", "静态方法 Callable 同一式：1 形参给 1（那一形）", `${method(attribute(Holder, "sm") as Variant, "get_argument_count", []).v}`, "1");
     eq("193", "lambda（没有名字的 Callable）按声明形参数", method(callableOf(() => V.nil(), 3), "get_argument_count", []).v, 3);
-    shouldThrow("193", "带默认值形参的方法问 get_argument_count → 响亮拒（那一格没量，不拿 fn.length 猜）", () => method(attribute(inst, "twice") as Variant, "get_argument_count", []));
+    eq("193", "带默认值形参的方法 get_argument_count 取全部声明数（S525 实测 h(a,b=1)→2、k(a,b=1,c=2)→3）", method(attribute(inst, "twice") as Variant, "get_argument_count", []).v, 2);
 
     eq("194", "空 Callable：is_null 真 / is_valid 假 / get_method 空串 / get_argument_count 0（c1 c2 c4）", `${method(nullCallable(), "is_null", []).v} ${method(nullCallable(), "is_valid", []).v} "${method(nullCallable(), "get_method", []).v}" ${method(nullCallable(), "get_argument_count", []).v}`, 'true false "" 0');
     eq("194", "空 Callable 的 get_bound_arguments 是空 Array、callv 给 null 且不报错（c11 / c8）", `${show(method(nullCallable(), "get_bound_arguments", []))} ${show(method(nullCallable(), "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))}`, "[] <null>");

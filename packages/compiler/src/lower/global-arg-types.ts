@@ -23,6 +23,7 @@ export const GLOBAL_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [n
   atan: [[1, "float"]],
   atan2: [[1, "float"], [2, "float"]],
   atanh: [[1, "float"]],
+  remap: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
   ceilf: [[1, "float"]],
   ceili: [[1, "float"]],
   char: [[1, "int"]],
@@ -137,25 +138,29 @@ export const GLOBAL_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [numb
   rid_from_int64: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   type_convert: [[2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   type_string: [[1, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", [], ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
+  seed: [[1, ["String", "StringName", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "NodePath", "null"], "int", [], ["String", "StringName", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i", "NodePath", "null"]]],
+
 };
 
 /** `(位, 引擎拒的 kind 名单, 期望型 T, 同上)`，句子与 `GLOBAL_ARG_TYPES` 同式。 */
 export const GLOBAL_ARG_SHOULD_BE: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string, readonly string[]]>>> = {
-  bytes_to_var: [[1, ["Dictionary"], "PackedByteArray", []]],
-  bytes_to_var_with_objects: [[1, ["Dictionary"], "PackedByteArray", []]],
-  convert: [[2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", []], [2, ["Array", "Dictionary"], "Variant.Type", []]],
-  dict_to_inst: [[1, ["Array"], "Dictionary", []]],
-  error_string: [[1, ["Array", "Dictionary"], "int", []]],
-  inst_to_dict: [[1, ["int", "float", "bool", "String", "StringName", "NodePath", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "Object", []]],
-  instance_from_id: [[1, ["Array", "Dictionary"], "int", []]],
-  is_instance_id_valid: [[1, ["Array", "Dictionary"], "int", []]],
-  rand_from_seed: [[1, ["Array", "Dictionary"], "int", []]],
-  randf_range: [[1, ["Array", "Dictionary"], "float", []], [2, ["Array", "Dictionary"], "float", []]],
-  randfn: [[1, ["Array", "Dictionary"], "float", []], [2, ["Array", "Dictionary"], "float", []]],
-  randi_range: [[1, ["Array", "Dictionary"], "int", []], [2, ["Array", "Dictionary"], "int", []]],
-  rid_from_int64: [[1, ["Array", "Dictionary"], "int", []]],
-  type_convert: [[2, ["Array", "Dictionary"], "int", []]],
-  type_string: [[1, ["Array", "Dictionary"], "int", []]],
+  bytes_to_var: [[1, ["Dictionary", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "PackedByteArray", []]],
+  bytes_to_var_with_objects: [[1, ["Dictionary", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "PackedByteArray", []]],
+  convert: [[2, ["String", "StringName", "NodePath", "null", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color"], "int", []], [2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "Variant.Type", []]],
+  dict_to_inst: [[1, ["Array", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "Dictionary", []]],
+  error_string: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  inst_to_dict: [[1, ["int", "float", "bool", "String", "StringName", "NodePath", "Array", "Dictionary", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "Object", []]],
+  instance_from_id: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  is_instance_id_valid: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  rand_from_seed: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  randf_range: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "float", []], [2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "float", []]],
+  randfn: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "float", []], [2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "float", []]],
+  randi_range: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []], [2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  rid_from_int64: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  type_convert: [[2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  type_string: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+  seed: [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int", []]],
+
 };
 
 /** 「跟第一参走」那一族的向量与 Color 那一支：`(第一参的形, 位, 引擎在那一位拒的 kind 名单)`，

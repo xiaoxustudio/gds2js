@@ -3,7 +3,7 @@
 // Array 49 名、String 108 名都逐名过裁判（S379 / S380，读数 `tmp/probe-array/compare22.txt` 与 `tmp/probe-slice/compare{104,105}.txt`）。
 export const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
   all: [1, 1], any: [1, 1], append: [1, 1], append_array: [1, 1], assign: [1, 1], back: [0, 0],
-  bsearch: [1, 2], bsearch_custom: [2, 3], clear: [0, 0], count: [1, 1], duplicate: [0, 1], erase: [1, 1],
+  bsearch: [1, 2], bsearch_custom: [2, 3], clear: [0, 0], count: [1, 1], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1],
   fill: [1, 1], filter: [1, 1], find: [1, 2], find_custom: [1, 2], front: [0, 0], get: [1, 1],
   get_typed_builtin: [0, 0], get_typed_class_name: [0, 0], get_typed_script: [0, 0], has: [1, 1],
   hash: [0, 0], insert: [2, 2], is_empty: [0, 0], is_read_only: [0, 0], is_same_typed: [1, 1],

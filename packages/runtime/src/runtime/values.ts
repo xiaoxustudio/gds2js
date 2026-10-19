@@ -1118,6 +1118,61 @@ export function strReplace(hay: string, what: string, by: string, insensitive = 
   return out.join("");
 }
 
+/** `replace_char(key, with)`（S544）：0 作 key 或 with 都原样返回（with 那侧引擎会打一块 ERROR，调用方先发）。 */
+export function strReplaceChar(s: string, key: number, withCp: number): string {
+  if (key === 0 || withCp === 0) return s;
+  const by = String.fromCodePoint(withCp);
+  let out = "";
+  for (const ch of s) out += (ch.codePointAt(0) as number) === key ? by : ch;
+  return out;
+}
+
+/** `replace_chars(keys, with)`（S544）：keys 按码点成集合；with 为 0 时调用方先发 ERROR 再原样返回。 */
+export function strReplaceChars(s: string, keys: string, withCp: number): string {
+  if (withCp === 0) return s;
+  const set = codepointSet(keys);
+  if (set.size === 0) return s;
+  const by = String.fromCodePoint(withCp);
+  let out = "";
+  for (const ch of s) out += set.has(ch.codePointAt(0) as number) ? by : ch;
+  return out;
+}
+
+/** `remove_char(what)`（S544）：0 与未命中都原样返回。 */
+export function strRemoveChar(s: string, what: number): string {
+  if (what === 0) return s;
+  let out = "";
+  for (const ch of s) if ((ch.codePointAt(0) as number) !== what) out += ch;
+  return out;
+}
+
+/** `remove_chars(chars)`（S544）：空串与全部未命中都原样返回。 */
+export function strRemoveChars(s: string, chars: string): string {
+  const set = codepointSet(chars);
+  if (set.size === 0) return s;
+  let out = "";
+  for (const ch of s) if (!set.has(ch.codePointAt(0) as number)) out += ch;
+  return out;
+}
+
+function codepointSet(s: string): Set<number> {
+  const set = new Set<number>();
+  for (const ch of s) set.add(ch.codePointAt(0) as number);
+  return set;
+}
+
+/** `is_valid_ascii_identifier()`（S544）：首字符非数字，其余只收 ASCII 字母 / 数字 / 下划线。 */
+export function strIsValidAsciiIdentifier(s: string): boolean {
+  const chars = [...s];
+  if (chars.length === 0) return false;
+  for (let i = 0; i < chars.length; i++) {
+    const c = (chars[i] as string).codePointAt(0) as number;
+    const ok = (c >= 0x61 && c <= 0x7a) || (c >= 0x41 && c <= 0x5a) || c === 0x5f || (i > 0 && c >= 0x30 && c <= 0x39);
+    if (!ok) return false;
+  }
+  return true;
+}
+
 /**
  * `find`/`findn`/`rfind`/`rfindn` 的落点口径（码点下标，没命中 -1）。
  * 空 needle 一律 -1；`from` 为负时按「可落点数」折回 —— `B = len - m + 1 + from`，
@@ -1366,6 +1421,13 @@ export function registerObjectLabelHook(f: (inner: object) => string | null): vo
   objectLabelHook = f;
 }
 
+/** 值类型（Vector2/2i/3/3i、Color）的 `var_to_str()` 构造式文本：本模块 import 不到那些类（反向会成环），由 builtins.ts 注入。 */
+let varToStrValueHook: ((inner: object) => string | null) | null = null;
+
+export function registerVarToStrValueHook(f: (inner: object) => string | null): void {
+  varToStrValueHook = f;
+}
+
 /**
  * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
  * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
@@ -1457,7 +1519,7 @@ export function strUriEncode(s: string): string {
  * ③ `strtol` 是**部分**解析：`"%G1"` 折成 `0x00`、`"%4Z"` 折成 `0x04`，而重组按 strlen 取长度 —— **撞到 0 就截断**，故 `"%G1"` 是空串。
  * `+` 一律换空格；非法字节序列由 UTF-8 状态机给一个 U+FFFD（引擎那边还会往 stderr 打一句 ERROR，那行不属于产物）。
  */
-export function strUriDecode(s: string): string {
+export function strUriDecode(s: string, plusToSpace = true): string {
   const src = Array.from(new TextEncoder().encode(s));
   const res: number[] = [];
   for (let i = 0; i < src.length; i++) {
@@ -1475,7 +1537,7 @@ export function strUriDecode(s: string): string {
           i += 2;
         }
       }
-    } else if (b === 0x2b) {
+    } else if (b === 0x2b && plusToSpace) {
       res.push(0x20);
     } else {
       res.push(b);
@@ -1608,6 +1670,8 @@ export function varToStr(v: Variant): string {
       if (ridV !== null) return ridText(ridV);
       // Callable 五支实测都印成 `Callable()`（方法、静态、lambda、空 Callable、全局的、绑过实参的都一样）
       if (isCallable(v)) return "Callable()";
+      const valueText = varToStrValueHook === null ? null : varToStrValueHook(inner as object);
+      if (valueText !== null) return valueText;
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
     }
     default:

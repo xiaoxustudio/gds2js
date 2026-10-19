@@ -5240,6 +5240,41 @@ function staticBareDiags(t: string, name: string): Array<{ code: string; message
  * 成运行期那句（`tmp/probe-value-arity/rt.mts`）。链式（`normalized().angle_to()`）与定形 `Array[Vector2]` 的元素也是解析期拦，
  * 但那要另两张表（方法返回类型 / 定形数组的元素形）—— 没量的不猜，那两形落进运行期那句，差的只是时机。
  */
+/** 具体型全局函数的名字实参（S526/S527，`tmp/d6/s526.py`/`s527.py` 逐型逐位量过）：`[位, 期望型, 收的 kind 集]`。
+ *  `load`/`str_to_var` 收 String 族、`bytes_to_var*` 收 {Array,PackedByteArray}、`inst_to_dict` 收空集（Object）、
+ *  int 族收 {bool,float,int}、float 族同、`dict_to_inst` 收 {Dictionary}、`convert` 第二位收 {int}（期望 Variant.Type）。 */
+const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, ReadonlyArray<readonly [number, string, readonly string[]]>>> = {
+  load: [[1, "String", ["NodePath", "String", "StringName"]]],
+  str_to_var: [[1, "String", ["NodePath", "String", "StringName"]]],
+  bytes_to_var: [[1, "PackedByteArray", ["Array", "PackedByteArray"]]],
+  bytes_to_var_with_objects: [[1, "PackedByteArray", ["Array", "PackedByteArray"]]],
+  inst_to_dict: [[1, "Object", []]],
+  dict_to_inst: [[1, "Dictionary", ["Dictionary"]]],
+  error_string: [[1, "int", ["bool", "float", "int"]]],
+  instance_from_id: [[1, "int", ["bool", "float", "int"]]],
+  is_instance_id_valid: [[1, "int", ["bool", "float", "int"]]],
+  rand_from_seed: [[1, "int", ["bool", "float", "int"]]],
+  rid_from_int64: [[1, "int", ["bool", "float", "int"]]],
+  type_string: [[1, "int", ["bool", "float", "int"]]],
+  randi_range: [[1, "int", ["bool", "float", "int"]], [2, "int", ["bool", "float", "int"]]],
+  randf_range: [[1, "float", ["bool", "float", "int"]], [2, "float", ["bool", "float", "int"]]],
+  randfn: [[1, "float", ["bool", "float", "int"]], [2, "float", ["bool", "float", "int"]]],
+  type_convert: [[2, "int", ["bool", "float", "int"]]],
+  convert: [[2, "Variant.Type", ["int"]]],
+  ord: [[1, "String", ["NodePath", "String", "StringName"]]],
+  type_exists: [[1, "StringName", ["String", "StringName"]]],
+  seed: [[1, "int", ["bool", "float", "int"]]],
+};
+
+/** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
+const GLOBAL_NUM_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "sin", "cos", "tan", "deg_to_rad", "rad_to_deg",
+  "wrapf", "move_toward", "smoothstep", "is_equal_approx", "remap",
+  "acos", "asin", "atan", "atanh", "sinh", "cosh", "tanh", "ceilf", "floorf", "roundf", "signf",
+  "atan2", "pow", "maxf", "minf", "angle_difference",
+  "absf", "acosh", "asinh", "clampf", "db_to_linear", "ease", "fmod", "fposmod", "inverse_lerp",
+  "is_finite", "is_inf", "is_nan", "is_zero_approx", "lerp_angle", "lerpf", "linear_to_db", "pingpong", "rotate_toward",
+  "ceili", "floori", "roundi", "snappedi", "absi", "char", "clampi", "maxi", "mini", "nearest_po2", "posmod", "signi", "wrapi", "step_decimals"]);
+
 function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
   const moduleVars = new Map<string, string>();
   for (const v of m.vars) {
@@ -5470,21 +5505,39 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           const byPos = new Map<number, Array<{ code: string; message: string }>>();
           const put = (pos: number, code: string, message: string): void => {
             const bucket = byPos.get(pos) ?? [];
-            bucket.push({ code, message });
+            if (!bucket.some((d) => d.message === message)) bucket.push({ code, message });
             byPos.set(pos, bucket);
+          };
+          const wantAt = new Map<number, string>();
+          const refuseAt = new Map<number, string[]>();
+          const addRefuse = (pos: number, want: string, kinds: readonly string[]): void => {
+            wantAt.set(pos, want);
+            refuseAt.set(pos, [...(refuseAt.get(pos) ?? []), ...kinds]);
           };
           for (const [pos, refuse, want, also] of STATIC_ARG_AS[skey] ?? []) {
             const got = literalTypeName(e.args[pos - 1]);
-            if (got === null || !refuse.includes(got)) continue;
-            put(pos, "static-arg-pass", `Cannot pass a value of type "${got}" as "${want}".`);
-            if (also.includes(got)) {
-              put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            if (got !== null && refuse.includes(got)) {
+              put(pos, "static-arg-pass", `Cannot pass a value of type "${got}" as "${want}".`);
+              if (also.includes(got)) {
+                put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+              }
             }
+            addRefuse(pos, want, refuse);
           }
           for (const [pos, refuse, want] of STATIC_ARG_TYPES[skey] ?? []) {
             const got = literalTypeName(e.args[pos - 1]);
-            if (got === null || !refuse.includes(got)) continue;
-            put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            if (got !== null && refuse.includes(got)) {
+              put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+            }
+            addRefuse(pos, want, refuse);
+          }
+          // 名字实参那一形（S517）：literalTypeName 交不出型，改问 `argAnn`；落在本位 AS∪TYPES 并集里就只补第二句（`Cannot pass…` 那一句不跟名字走，与 S495 一路同口径）。
+          for (const [pos, want] of wantAt) {
+            const arg = e.args[pos - 1];
+            if (arg === undefined || literalTypeName(arg) !== null) continue;
+            const nm = argNameType(arg, argAnn);
+            if (nm === null || !(refuseAt.get(pos) ?? []).includes(nm)) continue;
+            put(pos, "static-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
           }
           for (const pos of [...byPos.keys()].sort((x, y) => x - y)) {
             for (const d of byPos.get(pos)!) diags.push({ code: d.code, message: d.message, loc: e.loc });
@@ -5652,13 +5705,31 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       // 元数不对时引擎先说元数那一句（本轮同一次 analyze 里那道闸门已经发了），这一轮的类型判据一律不许抢在前面
-      const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
-      if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
+      // S526–S528/S533：具体型全局函数 —— 引擎按声明型解析期发第二句。放在 `bounds` 判定之前（`ord` 连 `GLOBAL_CALLABLES` 都没进）；
+      // 名字实参一律查；**字面量**只在「这家没有任何字面量表」时在这里查（有表的函数字面量交回原表，避免重复发）。
       const spec = GLOBAL_ARG_TYPES[callee.name];
       const follows = ARG_TYPE_FOLLOWS_FIRST[callee.name];
       const shouldRows = GLOBAL_ARG_SHOULD_BE[callee.name];
       const sentenceRows = GLOBAL_ARG_SENTENCE[callee.name];
       const asRows = GLOBAL_ARG_AS[callee.name];
+      const hasLiteralTable = spec !== undefined || follows !== undefined || shouldRows !== undefined || sentenceRows !== undefined || asRows !== undefined;
+      const typedName = GLOBAL_TYPED_NAME_ARGS[callee.name];
+      if (typedName !== undefined) {
+        const tb = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
+        if (tb === null || (e.args.length >= tb[0] && e.args.length <= tb[1])) {
+          for (const [pos, want, accept] of typedName) {
+            const arg = e.args[pos - 1];
+            if (arg === undefined) continue;
+            const lit = literalTypeName(arg);
+            if (lit !== null && hasLiteralTable) continue;
+            const nm = lit ?? argNameType(arg, argAnn);
+            if (nm === null || accept.includes(nm)) continue;
+            diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`, loc: e.loc });
+          }
+        }
+      }
+      const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
+      if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
         continue;
       }
@@ -5674,6 +5745,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
+      // S532：`clamp` / `lerp` / `wrap` 的槽是 Variant 型（跟第一参走）——任一实参是 Array / Dictionary 字面量时引擎整体
+      // defer 到运行期（`clamp(1,[],2)` / `wrap(1,[],2)` / `lerp(1,[],0.5)` 都是运行期句、解析期一句不发），解析期整族让开。
+      const followContainer = (callee.name === "clamp" || callee.name === "lerp" || callee.name === "wrap") &&
+        e.args.some((a) => { const k = literalTypeName(a); return k === "Array" || k === "Dictionary"; });
       const wants: Array<[number, "int" | "float" | "bool"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
       // 「跟第一参走」那几位**连 bool 字面量也拒**（`clamp(1, false, 1)` 说该位期望 "int"、`lerp(1.5, false, 0.5)` 说 "float"、
       // `wrap(1, 2, false)` 说第三位 "int"）；`clamp` 还会跟一支 bool 第一参走 —— 那时 2 / 3 位期望的是 bool，int / float 反倒拒
@@ -5692,6 +5767,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
       const refusesBool = (pos: number): boolean => boolFixed.has(pos) || boolFollows?.has(pos) === true;
       for (const [pos, want] of wants) {
+        if (followContainer) continue;
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
         // `wrap(向量, [], 向量)` 那几格引擎一句都不推：其余位上是名单里那些形时，这一位的句子不发
@@ -5710,9 +5786,30 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         if (got === null || got === want) continue;
         put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
       }
+      // S518–S523：数值（int / float）参数学全局函数（逐型逐位量过：收 {bool,int,float}、其余形引擎解析期发
+      // `argument N should be "<want>" but is "<K>"`）的名字实参 —— literalTypeName 交不出型，改问 argAnn。
+      // 字面量已由上面 wants 循环发过，这里只补 ident 名实参、且只在 want 是 int/float 的 spec 位；clamp / lerp /
+      // wrap 那几族（「跟第一参走」「一切接受」）没量过名字形、不在这张 allowlist，照红线不动。
+      if (spec !== undefined && GLOBAL_NUM_ARITH.has(callee.name)) {
+        for (const [pos, want] of spec) {
+          if (want !== "float" && want !== "int") continue;
+          const arg = e.args[pos - 1];
+          if (arg === undefined || literalTypeName(arg) !== null) continue;
+          const nm = argNameType(arg, argAnn);
+          if (nm === null || nm === "bool" || nm === "int" || nm === "float") continue;
+          put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`);
+        }
+      }
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
       const firstKind = literalTypeName(e.args[0]);
+      // S530：`snapped` 的 step 期望型跟着 value 走 —— value 本身就非法时引擎只发 `x` 那一句、step 不再查（实测 `snapped(true,true)` / `snapped(true,Vector2(1,2))`）；
+      // 任一位是 Array / Dictionary 字面量时引擎整体 defer 到运行期（`snapped(true,[1])` / `snapped([1],1)` 都是 SCRIPT ERROR），解析期一句都不发。
+      const snappedValueBad = callee.name === "snapped" && firstKind !== null &&
+        (sentenceRows ?? []).some(([p, r]) => p === 1 && r.includes(firstKind));
+      const snappedContainer = callee.name === "snapped" &&
+        e.args.some((a) => { const k = literalTypeName(a); return k === "Array" || k === "Dictionary"; });
       for (const [pos, refuse, sentence, unlessFirst] of sentenceRows ?? []) {
+        if (snappedContainer || (snappedValueBad && pos > 1)) continue;
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
@@ -5736,7 +5833,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       // 「跟第一参走」的向量与 Color 那一支：期望型就是第一参那一形，那一位拒哪些形是逐 kind 量出来的
       for (const [want, pos, refuse] of DERIVED_ARG_TYPES[callee.name] ?? []) {
-        if (firstKind !== want) continue;
+        if (followContainer || firstKind !== want) continue;
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         // 同一条「其余位是容器就整句不发」的实测例外也管派生位（`clamp(Color, Color, [1])` 引擎收）

@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
+import { GArray, GDict, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
 import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
@@ -9,13 +9,14 @@ import { ClassDesc, GdScriptObject, dictShapeOf, dictWrittenOf } from "./object"
 import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { GdRid, allocateRid, rid } from "./rid";
-import { GdNodePath, emptyNodePath, nodePathValue } from "./node-path";
+import { GdNodePath, emptyNodePath, nodePathValue, registerNodePathHashHook } from "./node-path";
 import { GVector2, vector2, vector2Method } from "./vector2";
 import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
 import { GVector3, vector3, vector3Method } from "./vector3";
 import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
 import { GColor, colorMethod } from "./color";
 import { typeOf } from "./patterns";
+import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
@@ -39,6 +40,16 @@ export function num(v: Variant): number {
     throw new UnsupportedError("not-number", `需要数值，收到类型 ${v.t}`);
   }
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
+}
+
+/** `abs` / `sign` / `floor` / `ceil` / `round` 的坏型实参（向量分支已让开时）：引擎走运行期
+ *  `Error calling utility function "<fn>()": Argument "x" must be "int", "float", …, or "Vector4i".`
+ *  （S524，`tmp/d6/s520.py` 五支逐字同句；bool 照收、折 0/1，与 S362 一致）。 */
+export function numOrVectorArg(v: Variant, fn: string): number {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-arg", `Error calling utility function "${fn}()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".`);
+  }
+  return num(v);
 }
 
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */
@@ -119,6 +130,27 @@ const MURMUR_SEED = 0x7f07c65;
 const MASK64 = (1n << 64n) - 1n;
 // 双精度的两个 32 位字：bigint 的 BigUint64Array 在 scriptc 没有 lowering，DataView 有（与 ops.ts 同一套路）。
 const F64_VIEW = new DataView(new ArrayBuffer(8));
+const F32_VIEW = new DataView(new ArrayBuffer(4));
+const I64_VIEW = new DataView(new ArrayBuffer(8));
+
+/** 引擎 `hash_murmur3_one_float`：float32 位型入 murmur，−0 归一成 +0、NaN 换成规范静默 NaN 位型（S542）。纯函数。 */
+function hashFloat32(x: number, seed: number): number {
+  if (Number.isNaN(x)) return murmurOne32(0x7fc00000, seed);
+  F32_VIEW.setFloat32(0, x, true);
+  let bits = F32_VIEW.getUint32(0, true);
+  if (bits === 0x80000000) bits = 0;
+  return murmurOne32(bits, seed);
+}
+
+/** 值类型的 `var_to_str()` 构造式：浮点分量走 `rtos_fix`（整数不带 `.0`），整型分量原样。 */
+registerVarToStrValueHook((o) => {
+  if (o instanceof GVector2) return `Vector2(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)})`;
+  if (o instanceof GVector2i) return `Vector2i(${o.x}, ${o.y})`;
+  if (o instanceof GVector3) return `Vector3(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)})`;
+  if (o instanceof GVector3i) return `Vector3i(${o.x}, ${o.y}, ${o.z})`;
+  if (o instanceof GColor) return `Color(${rtosFix(o.r, true)}, ${rtosFix(o.g, true)}, ${rtosFix(o.b, true)}, ${rtosFix(o.a, true)})`;
+  return null;
+});
 
 /** murmur3 x86_32 的一轮（引擎 `hash_murmur3_one_32`，默认种子 0x7f07c65）。纯函数。 */
 function murmurOne32(pIn: number, pSeed: number): number {
@@ -156,13 +188,122 @@ function murmurOne64Words(lo: number, hi: number, seed: number): number {
   return murmurOne32(hi >>> 0, murmurOne32(lo >>> 0, seed));
 }
 
+/** `hash_murmur3_one_double`。纯函数。 */
+function hashDoubleInto(d: number, seed: number): number {
+  if (Number.isNaN(d)) return murmurOne64Words(0, 0x7ff80000, seed);
+  F64_VIEW.setFloat64(0, d === 0 ? 0 : d, true);
+  return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), seed);
+}
+
 /** `hash_murmur3_one_double`：先把 ±0 归一，再按 IEEE754 的两个字折叠。 */
 function hashDouble(d: number): number {
-  if (Number.isNaN(d)) {
-    throw new UnsupportedError("hash-nan", "hash() 收到 NaN：引擎把它换成 C++ 的 NAN 常量的位型，那一位型没实测过");
+  return hashDoubleInto(d, MURMUR_SEED);
+}
+
+/** 引擎 `hash_murmur3_buffer`：小端 4 字节块逐轮、尾巴不足一块按字节补进 k1、长度混进收尾。纯函数。 */
+function hashBuffer(bytes: readonly number[]): number {
+  const len = bytes.length;
+  const nblocks = len >> 2;
+  let h = MURMUR_SEED;
+  const round = (k1: number): void => {
+    let k = Math.imul(k1 >>> 0, 0xcc9e2d51) >>> 0;
+    k = ((k << 15) | (k >>> 17)) >>> 0;
+    k = Math.imul(k, 0x1b873593) >>> 0;
+    h = (h ^ k) >>> 0;
+    h = ((h << 13) | (h >>> 19)) >>> 0;
+    h = (Math.imul(h, 5) + 0xe6546b64) >>> 0;
+  };
+  for (let i = 0; i < nblocks; i++) {
+    const o = i * 4;
+    round((bytes[o] as number) | ((bytes[o + 1] as number) << 8) | ((bytes[o + 2] as number) << 16) | ((bytes[o + 3] as number) << 24));
   }
-  F64_VIEW.setFloat64(0, d === 0 ? 0 : d, true);
-  return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), MURMUR_SEED);
+  const tail = nblocks * 4;
+  const rem = len & 3;
+  if (rem !== 0) {
+    let k1 = 0;
+    if (rem >= 3) k1 ^= (bytes[tail + 2] as number) << 16;
+    if (rem >= 2) k1 ^= (bytes[tail + 1] as number) << 8;
+    k1 ^= bytes[tail] as number;
+    let k = Math.imul(k1 >>> 0, 0xcc9e2d51) >>> 0;
+    k = ((k << 15) | (k >>> 17)) >>> 0;
+    k = Math.imul(k, 0x1b873593) >>> 0;
+    h = (h ^ k) >>> 0;
+  }
+  return fmix32((h ^ len) >>> 0);
+}
+
+/** NodePath 的哈希（S541）：路径与子路径各折 StringName 哈希，拼成 64 位再过 `hash_one_uint64`；相对路径取反。 */
+function nodePathHash(p: GdNodePath): number {
+  if (p.empty) return 0;
+  const h1 = hashDjb2(p.names.join("/"));
+  const h2 = hashDjb2(p.subnames.join(":"));
+  const h = hashOneUint64((BigInt(h1) << 32n) | BigInt(h2));
+  return p.absolute ? h : ~h >>> 0;
+}
+registerNodePathHashHook(nodePathHash);
+
+/** pack 九支的哈希（S540）：byte/int32/int64 折小端字节缓冲；float/string/值类型 pack 折元素，收尾与空 pack 各按引擎那一支。 */
+function packHash(p: GBytes): number {
+  const raw = p.raw();
+  const n = raw.length;
+  const kind = p.kind;
+  if (kind === "byte" || kind === "int32" || kind === "int64") {
+    if (n === 0) return murmurOne64Words(0, 0, MURMUR_SEED);
+    const bytes: number[] = [];
+    if (kind === "byte") {
+      for (const e of raw) bytes.push((e as number) & 0xff);
+    } else if (kind === "int32") {
+      for (const e of raw) {
+        const v = e as number;
+        bytes.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff);
+      }
+    } else {
+      for (const e of raw) {
+        I64_VIEW.setBigInt64(0, e as bigint, true);
+        for (let i = 0; i < 8; i++) bytes.push(I64_VIEW.getUint8(i));
+      }
+    }
+    return hashBuffer(bytes);
+  }
+  if (kind === "float32") {
+    if (n === 0) return hashFloat32(0, MURMUR_SEED);
+    let h = MURMUR_SEED;
+    for (const e of raw) h = hashFloat32(e as number, h);
+    return fmix32(h);
+  }
+  if (kind === "float64") {
+    if (n === 0) return hashDoubleInto(0, MURMUR_SEED);
+    let h = MURMUR_SEED;
+    for (const e of raw) h = hashDoubleInto(e as number, h);
+    return fmix32(h);
+  }
+  if (n === 0) return MURMUR_SEED;
+  let h = MURMUR_SEED;
+  if (kind === "string") {
+    for (const e of raw) h = murmurOne32(hashDjb2(e as string), h);
+  } else if (kind === "vector2") {
+    for (const e of raw) {
+      const v = e as GVector2;
+      h = hashFloat32(v.x, h);
+      h = hashFloat32(v.y, h);
+    }
+  } else if (kind === "vector3") {
+    for (const e of raw) {
+      const v = e as GVector3;
+      h = hashFloat32(v.x, h);
+      h = hashFloat32(v.y, h);
+      h = hashFloat32(v.z, h);
+    }
+  } else {
+    for (const e of raw) {
+      const c = e as GColor;
+      h = hashFloat32(c.r, h);
+      h = hashFloat32(c.g, h);
+      h = hashFloat32(c.b, h);
+      h = hashFloat32(c.a, h);
+    }
+  }
+  return fmix32(h);
 }
 
 /** 引擎的 `MAX_RECURSION`（100）截住容器哈希：实测数到第 102 层那一支给 0，`ERR_PRINT` 只进 stderr、不进 stdout。 */
@@ -203,10 +344,21 @@ export function variantHashNumber(v: Variant, depth = 0): number {
     case Tag.OBJECT: {
       // 引擎那支是 hash_one_uint64(RID::get_id())（core/variant/variant.cpp 的 RID 分支）；实测 0 / 1 / 5 / -1 / 13241 五格全中
       if (v.v instanceof GdRid) return hashOneUint64(intToBig((v.v as GdRid).id));
-      // NodePath 的式子没逆出来：实测 hash(NodePath("a")) = 3608900604、hash(NodePath("a/b")) = 1780534522、hash(NodePath("")) = 0，
-      // 4.3 那支「绝对位起手 1、再把各名 StringName 哈希异或」六格全不中（S267 ⑥a）—— `NodePath.hash()` 走同一条式子，也拒。
-      if (v.v instanceof GdNodePath) {
-        throw new UnsupportedError("hash-node-path", "NodePath 的哈希式子没逆出来（4.3 的异或式子实测不成立，S267 ⑥a），不发");
+      // NodePath 的式子 S541 解出：path / subpath 各折 StringName 哈希 → 64 位 → hash_one_uint64，相对路径取反；空路径给 0
+      if (v.v instanceof GdNodePath) return nodePathHash(v.v as GdNodePath);
+      // 值类型：引擎按分量逐个折 murmur3 再 fmix32 —— 浮点分量折 float32 位型（−0 归一），整型分量折 int32 位型（S539）
+      if (v.v instanceof GVector2) return fmix32(hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)));
+      if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
+      if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
+      if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
+      if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
+      if (v.v instanceof GBytes) return packHash(v.v as GBytes);
+      // 空 Signal 的对象号是 0，名字空串 → one_64(0, seed=hash(""))（S547）；带名 Signal 折的是宿主实例号，合成号对不上
+      if (v.v instanceof Signal) {
+        if ((v.v as Signal).sigName !== "") {
+          throw new UnsupportedError("hash-signal", "带对象的 Signal 哈希折的是宿主实例号，那一路复现不了（S547）");
+        }
+        return murmurOne64Words(0, 0, hashDjb2(""));
       }
       if (!isCallableBox(v.v)) {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
@@ -249,7 +401,7 @@ export function abs(v: Variant): Variant {
   }
   const vec = vectorMath(v, "abs");
   if (vec !== null) return vec;
-  return V.float(Math.abs(num(v)) + 0);
+  return V.float(Math.abs(numOrVectorArg(v, "abs")) + 0);
 }
 
 /** 全局数学函数一族：每一条都由 4.6.3 实测边界定住（式子与类型规则见 SEMANTICS）。 */
@@ -309,7 +461,7 @@ export function gSign(v: Variant): Variant {
   const vec = vectorMath(v, "sign");
   if (vec !== null) return vec;
   if (isInt(v)) return vi(one(intToNum(v.v as IntPayload)));
-  return V.float(one(num(v)) + 0);
+  return V.float(one(numOrVectorArg(v, "sign")) + 0);
 }
 
 export function gSignI(v: Variant): Variant {
@@ -348,7 +500,7 @@ export function gFloor(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "floor");
     if (vec !== null) return vec;
   }
-  return roundThree(num(v), Math.floor, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "floor") : num(v), Math.floor, mode);
 }
 
 export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -358,7 +510,7 @@ export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "ceil");
     if (vec !== null) return vec;
   }
-  return roundThree(num(v), Math.ceil, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "ceil") : num(v), Math.ceil, mode);
 }
 
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -370,7 +522,7 @@ export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   }
   // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
   // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
-  return roundThree(num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
@@ -454,11 +606,23 @@ export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant
  *  `snapped(Vector2(-1.5, 2), Vector2(1, 1))` 给 `(-1.0, 2.0)`、`snapped(Vector3(-1.5, 2, -3), Vector3(1, 1, 1))` 给 `(-1.0, 2.0, -3.0)`、
  *  `lerp(Vector2(-1, 0), Vector2(3, 8), 0.25)` 给 `(0.0, 2.0)`、`lerp(Color(0, 0, 0, 1), Color(1, 0.5, 0.25, 0.5), 0.5)` 给 `(0.5, 0.25, 0.125, 0.75)`）。
  *  异型那一侧引擎是解析期「跟第一参走」那一句（§6 第 51 条①），运行期这一族没量全，所以不在此列的一律往下走、由数值那一支响亮拒。 */
+/** 同型向量的分量数组（`clamp` 的字典序比较用）：V2 / V2i 取 2 个、V3 / V3i 取 3 个，其余给 null。 */
+function vecComponents3(o: object): number[] | null {
+  if (o instanceof GVector2) return [o.x, o.y];
+  if (o instanceof GVector3) return [o.x, o.y, o.z];
+  if (o instanceof GVector2i) return [o.x, o.y];
+  if (o instanceof GVector3i) return [o.x, o.y, o.z];
+  return null;
+}
+
 function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[]): Variant | null {
   if (a.t !== Tag.OBJECT) return null;
   const o = a.v;
   if (o instanceof GVector2) return vector2Method(o, name, args);
   if (o instanceof GVector3) return vector3Method(o, name, args);
+  // S536：`snapped` 的 x 还收 `Vector2i` / `Vector3i`（引擎 x 列表里有）；`lerp` 不收（解析期那句的 from 列表没有它们）。
+  if (name === "snapped" && o instanceof GVector2i) return vector2iMethod(o, "snapped", args);
+  if (name === "snapped" && o instanceof GVector3i) return vector3iMethod(o, "snapped", args);
   if (o instanceof GColor) return colorMethod(o, name, args);
   return null;
 }
@@ -628,6 +792,30 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
   // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
   if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
     return V.bool(((v.v as boolean) || (lo.v as boolean)) && (hi.v as boolean));
+  }
+  // S537：向量 clamp 走引擎的**字典序**比较（先 x、再 y、再 z），整支返回 v / lo / hi（`CLAMP` 用 Variant `<`/`>`，
+  // Vector 的这两个运算符是字典序）——实测 `clamp(Vector2(1,-5),(0,0),(2,2))` 给 `(1.0,-5.0)` 原样、
+  // `(0,-5)` 给 min、`(2,5)` 给 max；Vector3 / Vector2i / Vector3i 同一条（18 格读数）。
+  if (mode === "auto" && v.t === Tag.OBJECT && lo.t === Tag.OBJECT && hi.t === Tag.OBJECT) {
+    const a = v.v as object;
+    const b = lo.v as object;
+    const c = hi.v as object;
+    const av = vecComponents3(a);
+    const bv = vecComponents3(b);
+    const cv = vecComponents3(c);
+    if (av !== null && bv !== null && cv !== null &&
+        Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && Object.getPrototypeOf(a) === Object.getPrototypeOf(c)) {
+      const cmp = (x: readonly number[], y: readonly number[]): number => {
+        for (let i = 0; i < x.length; i++) {
+          const d = x[i]! - y[i]!;
+          if (d !== 0) return d;
+        }
+        return 0;
+      };
+      if (cmp(av, bv) < 0) return lo;
+      if (cmp(av, cv) > 0) return hi;
+      return v;
+    }
   }
   need2(v, lo, "clamp");
   need2(v, hi, "clamp");

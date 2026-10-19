@@ -108,6 +108,46 @@ export function stringFormatInvalidType(): Variant {
   return pushBlock("ERROR", "format (core/string/ustring.cpp:3598)", [V.str("Invalid type: use Array, Dictionary or Object.")]);
 }
 
+/** `String.replace_char(key, 0)`：引擎打一块非致命 ERROR、回原串（S544，`core/string/ustring.cpp:3803`）。 */
+export function stringReplaceCharNul(): Variant {
+  return pushBlock("ERROR", "replace_char (core/string/ustring.cpp:3803)", [V.str("`with` must not be the NUL character.")]);
+}
+
+/** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
+export function stringReplaceCharsNul(): Variant {
+  return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);
+}
+
+/** `Signal.connect()` 重复连同一个 Callable：引擎打一块非致命 ERROR、返回 31（S546，`core/object/object.cpp:1682`）。 */
+export function signalDuplicateConnect(sigName: string, label: string): Variant {
+  return pushBlock("ERROR", "connect (core/object/object.cpp:1682)", [V.str(`Signal '${sigName}' is already connected to given callable '${label}' in that object.`)]);
+}
+
+/** `Signal.connect(Callable())`：空 Callable 一律打这一句并返回 31（S546，`core/object/object.cpp:1639`）。 */
+export function signalNullCallable(sigName: string): Variant {
+  return pushBlock("ERROR", "connect (core/object/object.cpp:1639)", [V.str(`Cannot connect to '${sigName}': the provided callable is null.`)]);
+}
+
+/** `PackedByteArray.bswap16/32/64` 的两道 ERR_FAIL（S549）：非致命、块走 stderr、字节一个不动。 */
+export function packBswapGuard(kind: 16 | 32 | 64, which: "offset" | "count"): Variant {
+  const width = kind / 8;
+  const line = which === "offset" ? (kind === 16 ? 702 : kind === 32 ? 719 : 736) : (kind === 16 ? 706 : kind === 32 ? 722 : 739);
+  const cond = which === "offset" ? `p_offset < 0 || p_offset > int64_t(sz) - ${String(width)}` : `p_count > floor((sz - p_offset) / ${String(width)})`;
+  return pushBlock("ERROR", `func_PackedByteArray_bswap${String(kind)} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
+}
+
+/** `PackedByteArray.decode_*` 的越界 ERR_FAIL_COND_V（S550）：读侧那块带 ` Returning: 0`。 */
+export function packDecodeGuard(fn: string, line: number, width: number): Variant {
+  const cond = width === 1 ? "p_offset < 0 || p_offset > int64_t(size) - 1" : `p_offset < 0 || p_offset > (int64_t(size) - ${String(width)})`;
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true. Returning: 0`)]);
+}
+
+/** `PackedByteArray.encode_*` 的越界 ERR_FAIL_COND（S550）：写侧**没有括号**、也没有 ` Returning`。 */
+export function packEncodeGuard(fn: string, line: number, width: number): Variant {
+  const cond = `p_offset < 0 || p_offset > int64_t(size) - ${String(width)}`;
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {
