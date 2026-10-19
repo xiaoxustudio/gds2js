@@ -1852,7 +1852,8 @@ function namedAppendSource(name: unknown, ann: Map<string, string>): string | nu
 function namedSlotSource(e: Expr, ann: Map<string, string>): string | null {
   if (e.kind !== "ident" || typeof e.name !== "string") return null;
   const t = ann.get(e.name);
-  return t !== undefined && ARG_NAME_TYPES.has(argFaceBase(t)) ? t : null;
+  if (t === undefined || !ARG_NAME_TYPES.has(argFaceBase(t))) return null;
+  return t.includes("[") ? typedFaceText(t) : t;
 }
 
 /** 实参的静态来源名，按 Godot 文本里的写法给（`string_name` 那一格是 StringName，不并给 String）。 */
@@ -1971,7 +1972,11 @@ function typedFaceText(name: string): string {
     cur += ch;
   }
   parts.push(cur);
-  return `${base}[${parts.map((p) => typedFaceText(p.trim())).join(", ")}]`;
+  const mapped = parts.map((p) => typedFaceText(p.trim()));
+  // 元素全写 `Variant` 的那一形引擎报的是裸基型（`Array[Variant]` → `Array`、`Dictionary[Variant, Variant]` → `Dictionary`），
+  // 混着一个非 Variant 就照全名报（S502c，尺 `tmp/d6/s502c.py` 十八格）。
+  if (mapped.length > 0 && mapped.every((p) => p === "Variant")) return base;
+  return `${base}[${mapped.join(", ")}]`;
 }
 
 /** 标注型名去掉定形部分：`Array[int]` 的基是 `Array`（成员判定按基型，印出去的是标注原文）。 */
