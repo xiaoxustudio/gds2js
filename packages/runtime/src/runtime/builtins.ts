@@ -41,6 +41,16 @@ export function num(v: Variant): number {
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
+/** `abs` / `sign` / `floor` / `ceil` / `round` 的坏型实参（向量分支已让开时）：引擎走运行期
+ *  `Error calling utility function "<fn>()": Argument "x" must be "int", "float", …, or "Vector4i".`
+ *  （S524，`tmp/d6/s520.py` 五支逐字同句；bool 照收、折 0/1，与 S362 一致）。 */
+export function numOrVectorArg(v: Variant, fn: string): number {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-arg", `Error calling utility function "${fn}()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".`);
+  }
+  return num(v);
+}
+
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */
 export function strOf(v: Variant): Variant {
   return V.str(show(v));
@@ -249,7 +259,7 @@ export function abs(v: Variant): Variant {
   }
   const vec = vectorMath(v, "abs");
   if (vec !== null) return vec;
-  return V.float(Math.abs(num(v)) + 0);
+  return V.float(Math.abs(numOrVectorArg(v, "abs")) + 0);
 }
 
 /** 全局数学函数一族：每一条都由 4.6.3 实测边界定住（式子与类型规则见 SEMANTICS）。 */
@@ -309,7 +319,7 @@ export function gSign(v: Variant): Variant {
   const vec = vectorMath(v, "sign");
   if (vec !== null) return vec;
   if (isInt(v)) return vi(one(intToNum(v.v as IntPayload)));
-  return V.float(one(num(v)) + 0);
+  return V.float(one(numOrVectorArg(v, "sign")) + 0);
 }
 
 export function gSignI(v: Variant): Variant {
@@ -348,7 +358,7 @@ export function gFloor(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "floor");
     if (vec !== null) return vec;
   }
-  return roundThree(num(v), Math.floor, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "floor") : num(v), Math.floor, mode);
 }
 
 export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -358,7 +368,7 @@ export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "ceil");
     if (vec !== null) return vec;
   }
-  return roundThree(num(v), Math.ceil, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "ceil") : num(v), Math.ceil, mode);
 }
 
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -370,7 +380,7 @@ export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   }
   // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
   // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
-  return roundThree(num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
