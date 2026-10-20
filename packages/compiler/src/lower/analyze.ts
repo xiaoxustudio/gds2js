@@ -5240,13 +5240,27 @@ function staticBareDiags(t: string, name: string): Array<{ code: string; message
  * 成运行期那句（`tmp/probe-value-arity/rt.mts`）。链式（`normalized().angle_to()`）与定形 `Array[Vector2]` 的元素也是解析期拦，
  * 但那要另两张表（方法返回类型 / 定形数组的元素形）—— 没量的不猜，那两形落进运行期那句，差的只是时机。
  */
-/** 具体型全局函数的名字实参（S526，`tmp/d6/s526.py` 逐型量过）：`load`/`str_to_var` 收 {NodePath,String,StringName}（期望 String）、
- *  `bytes_to_var` 收 {Array,PackedByteArray}（期望 PackedByteArray）、`inst_to_dict` 收空集（期望 Object）。 */
-const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, readonly [string, readonly string[]]>> = {
-  load: ["String", ["NodePath", "String", "StringName"]],
-  str_to_var: ["String", ["NodePath", "String", "StringName"]],
-  bytes_to_var: ["PackedByteArray", ["Array", "PackedByteArray"]],
-  inst_to_dict: ["Object", []],
+/** 具体型全局函数的名字实参（S526/S527，`tmp/d6/s526.py`/`s527.py` 逐型逐位量过）：`[位, 期望型, 收的 kind 集]`。
+ *  `load`/`str_to_var` 收 String 族、`bytes_to_var*` 收 {Array,PackedByteArray}、`inst_to_dict` 收空集（Object）、
+ *  int 族收 {bool,float,int}、float 族同、`dict_to_inst` 收 {Dictionary}、`convert` 第二位收 {int}（期望 Variant.Type）。 */
+const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, ReadonlyArray<readonly [number, string, readonly string[]]>>> = {
+  load: [[1, "String", ["NodePath", "String", "StringName"]]],
+  str_to_var: [[1, "String", ["NodePath", "String", "StringName"]]],
+  bytes_to_var: [[1, "PackedByteArray", ["Array", "PackedByteArray"]]],
+  bytes_to_var_with_objects: [[1, "PackedByteArray", ["Array", "PackedByteArray"]]],
+  inst_to_dict: [[1, "Object", []]],
+  dict_to_inst: [[1, "Dictionary", ["Dictionary"]]],
+  error_string: [[1, "int", ["bool", "float", "int"]]],
+  instance_from_id: [[1, "int", ["bool", "float", "int"]]],
+  is_instance_id_valid: [[1, "int", ["bool", "float", "int"]]],
+  rand_from_seed: [[1, "int", ["bool", "float", "int"]]],
+  rid_from_int64: [[1, "int", ["bool", "float", "int"]]],
+  type_string: [[1, "int", ["bool", "float", "int"]]],
+  randi_range: [[1, "int", ["bool", "float", "int"]], [2, "int", ["bool", "float", "int"]]],
+  randf_range: [[1, "float", ["bool", "float", "int"]], [2, "float", ["bool", "float", "int"]]],
+  randfn: [[1, "float", ["bool", "float", "int"]], [2, "float", ["bool", "float", "int"]]],
+  type_convert: [[2, "int", ["bool", "float", "int"]]],
+  convert: [[2, "Variant.Type", ["int"]]],
 };
 
 /** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
@@ -5699,13 +5713,12 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       // 这些函数不一定在 GLOBAL_ARG_TYPES 里（load / str_to_var 连表都没进），所以放在那几族判定之前单独处理，只补 ident。
       const typedName = GLOBAL_TYPED_NAME_ARGS[callee.name];
       if (typedName !== undefined) {
-        const [want, accept] = typedName;
-        const arg = e.args[0];
-        if (arg !== undefined && literalTypeName(arg) === null) {
+        for (const [pos, want, accept] of typedName) {
+          const arg = e.args[pos - 1];
+          if (arg === undefined || literalTypeName(arg) !== null) continue;
           const nm = argNameType(arg, argAnn);
-          if (nm !== null && !accept.includes(nm)) {
-            diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument 1 should be "${want}" but is "${nm}".`, loc: e.loc });
-          }
+          if (nm === null || accept.includes(nm)) continue;
+          diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`, loc: e.loc });
         }
       }
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
