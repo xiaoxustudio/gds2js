@@ -18,8 +18,11 @@ async function msgs(body: string): Promise<string[]> {
 }
 
 const REFUSE = ["Color", "String", "Vector2", "Array", "Dictionary", "PackedInt32Array"];
-// (fn, 位数)
-const FNS: Array<[string, number]> = [["wrapf", 3], ["move_toward", 3], ["smoothstep", 3], ["is_equal_approx", 2], ["remap", 5]];
+// (fn, 位数) —— 1 位与 2 位的纯 float 参数学全局函数（S521 逐位量过、无 interplay）
+const FNS: Array<[string, number]> = [["wrapf", 3], ["move_toward", 3], ["smoothstep", 3], ["is_equal_approx", 2], ["remap", 5],
+  ["atan2", 2], ["pow", 2], ["maxf", 2], ["minf", 2], ["angle_difference", 2],
+  ["acos", 1], ["asin", 1], ["atan", 1], ["atanh", 1], ["sinh", 1], ["cosh", 1], ["tanh", 1],
+  ["ceilf", 1], ["floorf", 1], ["roundf", 1], ["signf", 1]];
 
 function callWith(fn: string, n: number, pos: number, argExpr: string): string {
   const args = Array.from({ length: n }, (_, i) => (i + 1 === pos ? argExpr : "1.0"));
