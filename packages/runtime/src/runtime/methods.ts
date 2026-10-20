@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -310,6 +310,49 @@ function packVarCodec(p: GBytes, name: string, args: Variant[]): Variant {
   if (name === "has_encoded_var") return V.bool(true);
   if (name === "decode_var_size") return V.int(r.size);
   return r.value;
+}
+
+/** `to_vector2_array` / `to_vector3_array` / `to_color_array`（S553）：宽度、那句 ERROR、守卫行号、目标 pack。 */
+const CONVERT_INFO: Record<string, readonly [number, string, number, "vector2" | "vector3" | "color"]> = {
+  to_vector2_array: [8, "PackedByteArray size must be a multiple of 8 (size of Vector2) to convert to PackedVector2Array.", 1021, "vector2"],
+  to_vector3_array: [12, "PackedByteArray size must be a multiple of 12 (size of Vector3) to convert to PackedVector3Array.", 1035, "vector3"],
+  to_color_array: [16, "PackedByteArray size must be a multiple of 16 (size of Color variant) to convert to PackedColorArray.", 1063, "color"],
+};
+
+function packConvert(p: GBytes, name: string): Variant {
+  const info = CONVERT_INFO[name] as readonly [number, string, number, "vector2" | "vector3" | "color"];
+  const width = info[0];
+  const kind = info[3];
+  if (p.length !== 0 && p.length % width !== 0) {
+    packSizeMultiple(`func_PackedByteArray_decode_${kind}_array`, info[2], info[1]);
+    return V.object(new GBytes([], kind));
+  }
+  const raw = p.raw() as number[];
+  const f32 = (at: number): number => {
+    for (let k = 0; k < 4; k++) F32BIN.setUint8(k, raw[at + k] as number);
+    return F32BIN.getFloat32(0, true);
+  };
+  const items: object[] = [];
+  for (let at = 0; at + width <= raw.length; at += width) {
+    items.push(kind === "vector2" ? new GVector2(f32(at), f32(at + 4)) : kind === "vector3" ? new GVector3(f32(at), f32(at + 4), f32(at + 8)) : new GColor(f32(at), f32(at + 4), f32(at + 8), f32(at + 12)));
+  }
+  return V.object(new GBytes(items as never[], kind));
+}
+
+/** `get_string_from_utf32()`（S553）：小端 32 位码点、尾巴不足 4 字节静默丢；非标量码点没量过，响亮拒。 */
+function bytesUtf32(p: GBytes): Variant {
+  const raw = p.raw() as number[];
+  const n = Math.floor(raw.length / 4);
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    const cp = (((raw[o] as number) | ((raw[o + 1] as number) << 8) | ((raw[o + 2] as number) << 16) | ((raw[o + 3] as number) << 24)) >>> 0);
+    if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+      throw new UnsupportedError("packed-utf32", `get_string_from_utf32() 里出现非 Unicode 标量码点 ${String(cp)}，那一形没实测过`);
+    }
+    out += String.fromCodePoint(cp);
+  }
+  return V.str(out);
 }
 
 /** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
@@ -715,10 +758,18 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
-      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined) {
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined || CONVERT_INFO[name] !== undefined || name === "get_string_from_utf32" || name === "to_vector4_array" || name === "get_string_from_multibyte_char") {
         if (inner.kind !== "byte") {
           throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
         }
+        if (name === "to_vector4_array") {
+          throw new UnsupportedError("packed-vector4", "to_vector4_array() 要 Vector4，运行时还没这一型，不发");
+        }
+        if (name === "get_string_from_multibyte_char") {
+          throw new UnsupportedError("packed-multibyte", "get_string_from_multibyte_char() 折的是宿主代码页，没实测过");
+        }
+        if (name === "get_string_from_utf32") return bytesUtf32(inner);
+        if (CONVERT_INFO[name] !== undefined) return packConvert(inner, name);
         if (VAR_CODEC_GUARD[name] !== undefined) return packVarCodec(inner, name, args);
         if (DECODE_INFO[name] !== undefined) return packDecode(inner, name, args);
         if (ENCODE_INFO[name] !== undefined) return packEncode(inner, name, args);

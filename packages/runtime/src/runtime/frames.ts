@@ -158,6 +158,11 @@ export function packVarShort(): Variant {
   return pushBlock("ERROR", "decode_variant (core/io/marshalls.cpp:190)", [V.str('Condition "len < 4" is true. Returning: ERR_INVALID_DATA')]);
 }
 
+/** `to_vector2_array` / `to_vector3_array` / `to_color_array` 的长度不是整组（S553）：打一块 ERROR、回空 pack。 */
+export function packSizeMultiple(fn: string, line: number, message: string): Variant {
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(message)]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {
