@@ -40,7 +40,7 @@ function forms(s: Slot, kind: string): Array<[string, string]> {
 }
 
 const second = (meth: string, pos: number, want: string, kind: string): string[] => {
-  const m = meth.split(".")[1].split("(")[0];
+  const m = (meth.split(".")[1] ?? "").split("(")[0];
   return [`Invalid argument for "${m}()" function: argument ${pos} should be "${want}" but is "${kind}".`];
 };
 const methName = (s: Slot): string => s.call.slice(0, s.call.indexOf("("));

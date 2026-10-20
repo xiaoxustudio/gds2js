@@ -5240,6 +5240,9 @@ function staticBareDiags(t: string, name: string): Array<{ code: string; message
  * 成运行期那句（`tmp/probe-value-arity/rt.mts`）。链式（`normalized().angle_to()`）与定形 `Array[Vector2]` 的元素也是解析期拦，
  * 但那要另两张表（方法返回类型 / 定形数组的元素形）—— 没量的不猜，那两形落进运行期那句，差的只是时机。
  */
+/** 单参 float 数学全局函数（S518，`tmp/d6/s518b.py` 逐型量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument 1 should be "float"`。 */
+const GLOBAL_FLOAT_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "sin", "cos", "tan", "deg_to_rad", "rad_to_deg"]);
+
 function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
   const moduleVars = new Map<string, string>();
   for (const v of m.vars) {
@@ -5727,6 +5730,15 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
         if (got === null || got === want) continue;
         put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+      }
+      // S518：单参 float 数学全局函数（已逐型量过：收 {bool,int,float}、其余 19 形引擎解析期发
+      // `argument 1 should be "float" but is "<K>"`）的名字实参 —— literalTypeName 交不出型，改问 argAnn。
+      // 多参 / 「跟第一参走」/ suppress / vararg 那几族（clamp / lerp / wrap / remap …）没量过名字形，照红线不动。
+      if (spec !== undefined && GLOBAL_FLOAT_ARITH.has(callee.name) && e.args.length === 1) {
+        const nm = argNameType(e.args[0], argAnn);
+        if (nm !== null && nm !== "bool" && nm !== "int" && nm !== "float") {
+          put(1, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument 1 should be "float" but is "${nm}".`);
+        }
       }
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
       const firstKind = literalTypeName(e.args[0]);
