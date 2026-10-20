@@ -22,7 +22,10 @@ const REFUSE = ["Color", "String", "Vector2", "Array", "Dictionary", "PackedInt3
 const FNS: Array<[string, number]> = [["wrapf", 3], ["move_toward", 3], ["smoothstep", 3], ["is_equal_approx", 2], ["remap", 5],
   ["atan2", 2], ["pow", 2], ["maxf", 2], ["minf", 2], ["angle_difference", 2],
   ["acos", 1], ["asin", 1], ["atan", 1], ["atanh", 1], ["sinh", 1], ["cosh", 1], ["tanh", 1],
-  ["ceilf", 1], ["floorf", 1], ["roundf", 1], ["signf", 1]];
+  ["ceilf", 1], ["floorf", 1], ["roundf", 1], ["signf", 1],
+  ["absf", 1], ["acosh", 1], ["asinh", 1], ["clampf", 3], ["db_to_linear", 1], ["ease", 2], ["fmod", 2],
+  ["fposmod", 2], ["inverse_lerp", 3], ["is_finite", 1], ["is_inf", 1], ["is_nan", 1], ["is_zero_approx", 1],
+  ["lerp_angle", 3], ["lerpf", 3], ["linear_to_db", 1], ["pingpong", 2], ["rotate_toward", 3]];
 
 function callWith(fn: string, n: number, pos: number, argExpr: string): string {
   const args = Array.from({ length: n }, (_, i) => (i + 1 === pos ? argExpr : "1.0"));

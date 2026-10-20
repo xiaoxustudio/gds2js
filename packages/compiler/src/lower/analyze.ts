@@ -5240,11 +5240,13 @@ function staticBareDiags(t: string, name: string): Array<{ code: string; message
  * 成运行期那句（`tmp/probe-value-arity/rt.mts`）。链式（`normalized().angle_to()`）与定形 `Array[Vector2]` 的元素也是解析期拦，
  * 但那要另两张表（方法返回类型 / 定形数组的元素形）—— 没量的不猜，那两形落进运行期那句，差的只是时机。
  */
-/** float 参数学全局函数（S518/S519/S521，`tmp/d6/s518b.py`/`s519.py`/`s521.py` 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "float"`。全是纯 float 参、无 follows / suppress / vararg 交织。 */
+/** float 参数学全局函数（S518/S519/S521/S522 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "float"`。全是纯 float 参、无 follows / suppress 交织（wrap/clamp/lerp 那种「跟第一参走」与「一切接受」的不进）。 */
 const GLOBAL_FLOAT_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "sin", "cos", "tan", "deg_to_rad", "rad_to_deg",
   "wrapf", "move_toward", "smoothstep", "is_equal_approx", "remap",
   "acos", "asin", "atan", "atanh", "sinh", "cosh", "tanh", "ceilf", "floorf", "roundf", "signf",
-  "atan2", "pow", "maxf", "minf", "angle_difference"]);
+  "atan2", "pow", "maxf", "minf", "angle_difference",
+  "absf", "acosh", "asinh", "clampf", "db_to_linear", "ease", "fmod", "fposmod", "inverse_lerp",
+  "is_finite", "is_inf", "is_nan", "is_zero_approx", "lerp_angle", "lerpf", "linear_to_db", "pingpong", "rotate_toward"]);
 
 function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
   const moduleVars = new Map<string, string>();
