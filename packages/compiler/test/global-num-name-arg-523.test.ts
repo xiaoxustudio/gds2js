@@ -21,7 +21,7 @@ const FNS: Array<[string, number, number[], number[]]> = [
   ["absi", 1, [1], []], ["char", 1, [1], []], ["signi", 1, [1], []], ["nearest_po2", 1, [1], []],
   ["clampi", 3, [1, 2, 3], []], ["maxi", 2, [1, 2], []], ["mini", 2, [1, 2], []],
   ["posmod", 2, [1, 2], []], ["wrapi", 3, [1, 2, 3], []], ["snappedi", 2, [2], [1]],
-  ["ceili", 1, [], [1]], ["floori", 1, [], [1]], ["roundi", 1, [], [1]],
+  ["ceili", 1, [], [1]], ["floori", 1, [], [1]], ["roundi", 1, [], [1]], ["step_decimals", 1, [], [1]],
 ];
 
 function call(fn: string, n: number, pos: number, expr: string): string {

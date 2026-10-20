@@ -5247,7 +5247,7 @@ const GLOBAL_NUM_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "si
   "atan2", "pow", "maxf", "minf", "angle_difference",
   "absf", "acosh", "asinh", "clampf", "db_to_linear", "ease", "fmod", "fposmod", "inverse_lerp",
   "is_finite", "is_inf", "is_nan", "is_zero_approx", "lerp_angle", "lerpf", "linear_to_db", "pingpong", "rotate_toward",
-  "ceili", "floori", "roundi", "snappedi", "absi", "char", "clampi", "maxi", "mini", "nearest_po2", "posmod", "signi", "wrapi"]);
+  "ceili", "floori", "roundi", "snappedi", "absi", "char", "clampi", "maxi", "mini", "nearest_po2", "posmod", "signi", "wrapi", "step_decimals"]);
 
 function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
   const moduleVars = new Map<string, string>();
