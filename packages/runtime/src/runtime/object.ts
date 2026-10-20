@@ -66,7 +66,7 @@ export function boundArgsOf(box: CallableBox): Variant[] {
   return box.bound;
 }
 
-/** Callable 的声明形参数；表里没有、或那方法带默认值时给 null，由调用方响亮拒。 */
+/** Callable 的声明形参数；表里没有给 null，由调用方响亮拒。带默认值形参时取**全部**声明数（S525 实测：`quit(exit_code=0)`→1、`h(a,b=1)`→2、`k(a,b=1,c=2)`→3、`h.bind(5)`→1）。 */
 export function declaredArgCount(box: CallableBox): number | null {
   if (isNullCallable(box)) return 0;
   // 内建那几面的元数上界就是**声明形参数**：329 名逐名对过裁判，`get_argument_count()` 与表的第二值一字不差
@@ -78,9 +78,7 @@ export function declaredArgCount(box: CallableBox): number | null {
     if (box.object === null) return globalCallableRow(name)?.argc ?? null;
     const table = methodAritiesOf(box.object.v);
     const row = table?.[name];
-    // `[必填, 全部]` 两值不等说明有默认值形参 —— Godot 在那一形上给什么没有可靠口径，不猜。
-    if (row === undefined || row[0] !== row[1]) return null;
-    return row[1];
+    return row === undefined ? null : row[1];
   }
   // lambda：形参默认值在发射期就被拒，声明形参数由发射器直接写进盒子。
   return box.arity;
