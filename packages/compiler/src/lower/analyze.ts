@@ -5793,7 +5793,14 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       // 第一参是向量那一形时引擎改说「跟第一参走」那一句、同名类型在这形反而是收的，所以那几位整条让开。
       const firstKind = literalTypeName(e.args[0]);
+      // S530：`snapped` 的 step 期望型跟着 value 走 —— value 本身就非法时引擎只发 `x` 那一句、step 不再查（实测 `snapped(true,true)` / `snapped(true,Vector2(1,2))`）；
+      // 任一位是 Array / Dictionary 字面量时引擎整体 defer 到运行期（`snapped(true,[1])` / `snapped([1],1)` 都是 SCRIPT ERROR），解析期一句都不发。
+      const snappedValueBad = callee.name === "snapped" && firstKind !== null &&
+        (sentenceRows ?? []).some(([p, r]) => p === 1 && r.includes(firstKind));
+      const snappedContainer = callee.name === "snapped" &&
+        e.args.some((a) => { const k = literalTypeName(a); return k === "Array" || k === "Dictionary"; });
       for (const [pos, refuse, sentence, unlessFirst] of sentenceRows ?? []) {
+        if (snappedContainer || (snappedValueBad && pos > 1)) continue;
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         if (pos > 1 && firstKind !== null && (unlessFirst ?? []).includes(firstKind)) continue;
