@@ -469,6 +469,9 @@ function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[
   const o = a.v;
   if (o instanceof GVector2) return vector2Method(o, name, args);
   if (o instanceof GVector3) return vector3Method(o, name, args);
+  // S536：`snapped` 的 x 还收 `Vector2i` / `Vector3i`（引擎 x 列表里有）；`lerp` 不收（解析期那句的 from 列表没有它们）。
+  if (name === "snapped" && o instanceof GVector2i) return vector2iMethod(o, "snapped", args);
+  if (name === "snapped" && o instanceof GVector3i) return vector3iMethod(o, "snapped", args);
   if (o instanceof GColor) return colorMethod(o, name, args);
   return null;
 }
