@@ -5240,6 +5240,15 @@ function staticBareDiags(t: string, name: string): Array<{ code: string; message
  * 成运行期那句（`tmp/probe-value-arity/rt.mts`）。链式（`normalized().angle_to()`）与定形 `Array[Vector2]` 的元素也是解析期拦，
  * 但那要另两张表（方法返回类型 / 定形数组的元素形）—— 没量的不猜，那两形落进运行期那句，差的只是时机。
  */
+/** 具体型全局函数的名字实参（S526，`tmp/d6/s526.py` 逐型量过）：`load`/`str_to_var` 收 {NodePath,String,StringName}（期望 String）、
+ *  `bytes_to_var` 收 {Array,PackedByteArray}（期望 PackedByteArray）、`inst_to_dict` 收空集（期望 Object）。 */
+const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, readonly [string, readonly string[]]>> = {
+  load: ["String", ["NodePath", "String", "StringName"]],
+  str_to_var: ["String", ["NodePath", "String", "StringName"]],
+  bytes_to_var: ["PackedByteArray", ["Array", "PackedByteArray"]],
+  inst_to_dict: ["Object", []],
+};
+
 /** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
 const GLOBAL_NUM_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "sin", "cos", "tan", "deg_to_rad", "rad_to_deg",
   "wrapf", "move_toward", "smoothstep", "is_equal_approx", "remap",
@@ -5686,6 +5695,19 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const shouldRows = GLOBAL_ARG_SHOULD_BE[callee.name];
       const sentenceRows = GLOBAL_ARG_SENTENCE[callee.name];
       const asRows = GLOBAL_ARG_AS[callee.name];
+      // S526：具体型全局函数（load / str_to_var / bytes_to_var / inst_to_dict）的名字实参 —— 引擎按声明型解析期发第二句；
+      // 这些函数不一定在 GLOBAL_ARG_TYPES 里（load / str_to_var 连表都没进），所以放在那几族判定之前单独处理，只补 ident。
+      const typedName = GLOBAL_TYPED_NAME_ARGS[callee.name];
+      if (typedName !== undefined) {
+        const [want, accept] = typedName;
+        const arg = e.args[0];
+        if (arg !== undefined && literalTypeName(arg) === null) {
+          const nm = argNameType(arg, argAnn);
+          if (nm !== null && !accept.includes(nm)) {
+            diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument 1 should be "${want}" but is "${nm}".`, loc: e.loc });
+          }
+        }
+      }
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
         continue;
       }
