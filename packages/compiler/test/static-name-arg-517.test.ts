@@ -27,6 +27,9 @@ const SLOTS: Slot[] = [
   { call: "Color.from_string(\"a\", w)", pos: 2, want: "Color", accept: ["Color"], refuse: ["StringName", "Vector3", "PackedInt64Array"] },
   { call: "Vector3.octahedron_decode(w)", pos: 1, want: "Vector2", accept: ["Vector2", "Vector2i"], refuse: ["Color", "PackedByteArray", "bool"] },
   { call: "String.num_int64(1, 2, w)", pos: 3, want: "bool", accept: ["bool", "int"], refuse: ["String", "PackedInt32Array", "Dictionary"] },
+  // 多位静态名字实参（S520 逐位量过：from_rgba8 pos2 int、from_hsv pos4 float）
+  { call: "Color.from_rgba8(1, w, 1, 1)", pos: 2, want: "int", accept: ["int"], refuse: ["Color", "Array", "PackedInt32Array", "String"] },
+  { call: "Color.from_hsv(0.5, 0.5, 0.5, w)", pos: 4, want: "float", accept: ["float"], refuse: ["Color", "Dictionary", "PackedColorArray", "Vector2"] },
 ];
 
 /** 四种名字实参写法（同 S513 / S514 / S515 口径）。 */
