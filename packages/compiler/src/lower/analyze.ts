@@ -5741,6 +5741,10 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         bucket.push({ code, message });
         byPos.set(pos, bucket);
       };
+      // S532：`clamp` / `lerp` / `wrap` 的槽是 Variant 型（跟第一参走）——任一实参是 Array / Dictionary 字面量时引擎整体
+      // defer 到运行期（`clamp(1,[],2)` / `wrap(1,[],2)` / `lerp(1,[],0.5)` 都是运行期句、解析期一句不发），解析期整族让开。
+      const followContainer = (callee.name === "clamp" || callee.name === "lerp" || callee.name === "wrap") &&
+        e.args.some((a) => { const k = literalTypeName(a); return k === "Array" || k === "Dictionary"; });
       const wants: Array<[number, "int" | "float" | "bool"]> = spec ? spec.map(([p, t]) => [p, t] as [number, "int" | "float"]) : [];
       // 「跟第一参走」那几位**连 bool 字面量也拒**（`clamp(1, false, 1)` 说该位期望 "int"、`lerp(1.5, false, 0.5)` 说 "float"、
       // `wrap(1, 2, false)` 说第三位 "int"）；`clamp` 还会跟一支 bool 第一参走 —— 那时 2 / 3 位期望的是 bool，int / float 反倒拒
@@ -5759,6 +5763,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
       const refusesBool = (pos: number): boolean => boolFixed.has(pos) || boolFollows?.has(pos) === true;
       for (const [pos, want] of wants) {
+        if (followContainer) continue;
         const a = e.args[pos - 1];
         if (a === undefined || shouldPos.has(pos)) continue;
         // `wrap(向量, [], 向量)` 那几格引擎一句都不推：其余位上是名单里那些形时，这一位的句子不发
@@ -5824,7 +5829,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       // 「跟第一参走」的向量与 Color 那一支：期望型就是第一参那一形，那一位拒哪些形是逐 kind 量出来的
       for (const [want, pos, refuse] of DERIVED_ARG_TYPES[callee.name] ?? []) {
-        if (firstKind !== want) continue;
+        if (followContainer || firstKind !== want) continue;
         const got = literalTypeName(e.args[pos - 1]);
         if (got === null || !refuse.includes(got)) continue;
         // 同一条「其余位是容器就整句不发」的实测例外也管派生位（`clamp(Color, Color, [1])` 引擎收）
