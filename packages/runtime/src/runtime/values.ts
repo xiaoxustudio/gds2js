@@ -12,6 +12,7 @@ import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8
 import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
 import { floatConstructText, rtosFix } from "./grisu2";
+import { isUnicodeIdContinue, isUnicodeIdStart } from "./unicode-identifier";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import { GdNativeClass } from "./native-class";
@@ -1159,6 +1160,17 @@ function codepointSet(s: string): Set<number> {
   const set = new Set<number>();
   for (const ch of s) set.add(ch.codePointAt(0) as number);
   return set;
+}
+
+/** `is_valid_unicode_identifier()`（S555）：首码点查引擎实测的 start 表、其余查 continue 表。 */
+export function strIsValidUnicodeIdentifier(s: string): boolean {
+  const chars = [...s];
+  if (chars.length === 0) return false;
+  for (let i = 0; i < chars.length; i++) {
+    const cp = (chars[i] as string).codePointAt(0) as number;
+    if (i === 0 ? !isUnicodeIdStart(cp) : !isUnicodeIdContinue(cp)) return false;
+  }
+  return true;
 }
 
 /** `is_valid_ascii_identifier()`（S544）：首字符非数字，其余只收 ASCII 字母 / 数字 / 下划线。 */

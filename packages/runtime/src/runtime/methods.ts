@@ -29,7 +29,7 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -1410,6 +1410,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `is_valid_ascii_identifier() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.bool(strIsValidAsciiIdentifier(s));
+        }
+        case "is_valid_unicode_identifier": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_unicode_identifier() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(strIsValidUnicodeIdentifier(s));
         }
         case "split": {
           if (args.length > 3) {
