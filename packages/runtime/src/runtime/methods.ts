@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
+import { bytesToHex, sha1Bytes, sha256Bytes } from "./hashes";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -8,7 +9,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gTypeString, gErrorString, gTypeExists,
   gWeakref, gInstanceFromId, gIsInstanceValid, gIsInstanceIdValid, gRidFromInt64, gRidAllocateId, gInstToDict,
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
-  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
+  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
@@ -20,8 +21,8 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard } from "./frames";
-import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
+import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
@@ -29,14 +30,47 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier } from "./values";
+  strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath,
+  strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix,
+  strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch,
+  strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf,
+  strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress,
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
+import { GVector4, vec4ReadIndex, vec4Write, vector4Method } from "./vector4";
+import { GVector4i, vec4iReadIndex, vec4iWrite, vector4iMethod } from "./vector4i";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packDynamicUnpack, packItems, packNameAbsent, packTypeName, registerPackErrorSink, utf8EncodeWtf } from "./packed";
+
+registerPackErrorSink({
+  bufferZero: packDecompressBufferZero,
+  srcZero: packDecompressSrcZero,
+  inflateErr: packDecompressInflateErr,
+});
+
+/** `Signal()` / `Signal(Object, name)`（S556）：两参形在对象上按名取**同一个**信号实例；名字不在就造一个只带名字的（引擎实测 is_null 假、get_name 给该名）。 */
+export function signalCtor(args: Variant[]): Variant {
+  if (args.length === 0) return V.object(new Signal());
+  if (args.length !== 2) {
+    throw new UnsupportedError("signal-ctor", `Signal(...) 只量过 0 参与 (Object, name) 两形（收到 ${args.length} 个实参）`);
+  }
+  const obj = args[0] as Variant;
+  const nm = args[1] as Variant;
+  if (nm.t !== Tag.STRING && nm.t !== Tag.STRING_NAME) {
+    throw new UnsupportedError("signal-ctor", "Signal(Object, name) 的 name 只量过 String / StringName 来源");
+  }
+  const inner = obj.t === Tag.OBJECT ? obj.v : null;
+  if (inner === null || typeof inner !== "object") {
+    throw new UnsupportedError("signal-ctor", "Signal(Object, name) 的 Object 实参只量过对象来源");
+  }
+  const name = nm.v as string;
+  const prop = (inner as Record<string, unknown>)[name];
+  return V.object(prop instanceof Signal ? prop : new Signal(name));
+}
 
 function asArray(v: Variant, who: string): GArray {
   if (v.t !== Tag.ARRAY) throw new UnsupportedError("not-array", `${who} 需要 Array，收到 ${v.t}`);
@@ -57,6 +91,17 @@ function asString(v: Variant, who: string): string {
     if (np !== null) return nodePathText(np);
   }
   throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
+}
+
+/** 定型容器那几支查询（S554）：`ElemKind` 折回引擎 `Variant.Type` 码；未定型给 0。 */
+export const ELEM_TYPE_CODE: Record<string, number> = {
+  Object: 24,
+  bool: 1, int: 2, float: 3, String: 4, Vector2: 5, Vector2i: 6, Vector3: 9, Vector3i: 10, Vector4: 12, Vector4i: 13,
+  Color: 20, StringName: 21, Dictionary: 27, Array: 28,
+};
+
+function elemCode(kind: string | null): number {
+  return kind === null ? 0 : ELEM_TYPE_CODE[kind] as number;
 }
 
 /** `PackedByteArray.bswap16/32/64(offset=0, count=-1)`（S549）：原地换字节序；两道 ERR_FAIL 打块且字节一个不动。 */
@@ -268,6 +313,235 @@ function packEncode(p: GBytes, name: string, args: Variant[]): Variant {
   return V.nil();
 }
 
+/** `decode_var` 一族的负偏移文案与守卫行号（S552）。 */
+const VAR_CODEC_GUARD: Record<string, readonly [string, number]> = {
+  has_encoded_var: ["false", 927], decode_var: ["Variant()", 936], decode_var_size: ["0", 948], encode_var: ["-1", 1143],
+};
+
+/** `PackedByteArray` 的 var 编解码四支（S552）：整段编解码走 `var-bytes.ts` 那条引擎格式。 */
+function packVarCodec(p: GBytes, name: string, args: Variant[]): Variant {
+  const guard = VAR_CODEC_GUARD[name] as readonly [string, number];
+  const negative = (): Variant => {
+    packVarOffsetNegative(`func_PackedByteArray_${name}`, guard[1], guard[0]);
+    if (name === "has_encoded_var") return V.bool(false);
+    if (name === "decode_var_size") return V.int(0);
+    if (name === "encode_var") return V.int(-1);
+    return V.nil();
+  };
+  if (name === "encode_var") {
+    if (args.length < 2 || args.length > 3) throw new GodotRuntimeError("arity", `encode_var() 需要 2 或 3 个参数（收到 ${args.length} 个）`);
+    const off = int64Arg(args[0], name);
+    if (off < 0n) return negative();
+    const allow = boolArgOr(args, 2, false);
+    const encVar = allow ? gVarToBytesWithObjects(args[1] as Variant) : gVarToBytes(args[1] as Variant);
+    const enc = (encVar.v as GBytes).raw() as number[];
+    if (off + BigInt(enc.length) > BigInt(p.length)) return V.int(-1);
+    const at = Number(off);
+    const raw = p.raw() as number[];
+    for (let i = 0; i < enc.length; i++) raw[at + i] = Number(enc[i]) & 0xff;
+    return V.int(enc.length);
+  }
+  if (args.length < 1 || args.length > 2) throw new GodotRuntimeError("arity", `${name}() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  if (off < 0n) return negative();
+  const allow = boolArgOr(args, 1, false);
+  const r = gVarDecodeAt(V.object(p), Number(off), allow);
+  if (r === null || "short" in r) {
+    if (r !== null) packVarShort();
+    if (name === "has_encoded_var") return V.bool(false);
+    if (name === "decode_var_size") return V.int(0);
+    return V.nil();
+  }
+  if (name === "has_encoded_var") return V.bool(true);
+  if (name === "decode_var_size") return V.int(r.size);
+  return r.value;
+}
+
+/** `to_vector2_array` / `to_vector3_array` / `to_color_array`（S553）：宽度、那句 ERROR、守卫行号、目标 pack。 */
+const CONVERT_INFO: Record<string, readonly [number, string, number, "vector2" | "vector3" | "vector4" | "color"]> = {
+  to_vector2_array: [8, "PackedByteArray size must be a multiple of 8 (size of Vector2) to convert to PackedVector2Array.", 1021, "vector2"],
+  to_vector3_array: [12, "PackedByteArray size must be a multiple of 12 (size of Vector3) to convert to PackedVector3Array.", 1035, "vector3"],
+  to_vector4_array: [16, "PackedByteArray size must be a multiple of 16 (size of Vector4) to convert to PackedVector4Array.", 1049, "vector4"],
+  to_color_array: [16, "PackedByteArray size must be a multiple of 16 (size of Color variant) to convert to PackedColorArray.", 1063, "color"],
+};
+
+function packConvert(p: GBytes, name: string): Variant {
+  const info = CONVERT_INFO[name] as readonly [number, string, number, "vector2" | "vector3" | "vector4" | "color"];
+  const width = info[0];
+  const kind = info[3];
+  if (p.length !== 0 && p.length % width !== 0) {
+    packSizeMultiple(`func_PackedByteArray_decode_${kind}_array`, info[2], info[1]);
+    return V.object(new GBytes([], kind));
+  }
+  const raw = p.raw() as number[];
+  const f32 = (at: number): number => {
+    for (let k = 0; k < 4; k++) F32BIN.setUint8(k, raw[at + k] as number);
+    return F32BIN.getFloat32(0, true);
+  };
+  const items: object[] = [];
+  for (let at = 0; at + width <= raw.length; at += width) {
+    items.push(
+      kind === "vector2" ? new GVector2(f32(at), f32(at + 4))
+      : kind === "vector3" ? new GVector3(f32(at), f32(at + 4), f32(at + 8))
+      : kind === "vector4" ? new GVector4(f32(at), f32(at + 4), f32(at + 8), f32(at + 12))
+      : new GColor(f32(at), f32(at + 4), f32(at + 8), f32(at + 12)),
+    );
+  }
+  return V.object(new GBytes(items as never[], kind));
+}
+
+/** `get_string_from_utf32()`（S553）：小端 32 位码点、尾巴不足 4 字节静默丢；非法码点换 U+FFFD 并打引擎那行诊断（S579）。 */
+function bytesUtf32(p: GBytes): Variant {
+  const raw = p.raw() as number[];
+  const n = Math.floor(raw.length / 4);
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    const o = i * 4;
+    const cp = (((raw[o] as number) | ((raw[o + 1] as number) << 8) | ((raw[o + 2] as number) << 16) | ((raw[o + 3] as number) << 24)) >>> 0);
+    if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+      stringUnicodeReplaceError(cp >= 0xd800 && cp <= 0xdfff ? `Unpaired surrogate (${cp.toString(16)})` : `Invalid unicode codepoint (${cp.toString(16)})`);
+      out += "\ufffd";
+      continue;
+    }
+    out += String.fromCodePoint(cp);
+  }
+  return V.str(out);
+}
+
+/** Windows-1252 的 0x80–0x9F 特殊格（S593，标准 CP1252 表；未定义位映射到同名 C1 控制码）。 */
+const CP1252_HIGH: readonly number[] = [
+  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021,
+  0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f,
+  0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
+];
+
+function cp1252EncodeBytes(s: string): number[] {
+  const rev: Record<number, number> = {};
+  for (let i = 0; i < CP1252_HIGH.length; i++) rev[CP1252_HIGH[i] as number] = 0x80 + i;
+  const out: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const cu = s.charCodeAt(i);
+    const special = rev[cu];
+    if (special !== undefined) out.push(special);
+    else if (cu <= 0x7f || (cu >= 0xa0 && cu <= 0xff) || cu === 0x8d || cu === 0x8f || cu === 0x90 || cu === 0x9d) out.push(cu);
+    else out.push(0x3f);
+  }
+  return out;
+}
+
+function cp1252DecodeBytes(xs: number[]): string {
+  let out = "";
+  for (const b of xs) out += String.fromCodePoint(b >= 0x80 && b <= 0x9f ? (CP1252_HIGH[b - 0x80] as number) : b);
+  return out;
+}
+
+/** `get_string_from_multibyte_char(encoding)`（S570）：只接 UTF-8 / ISO-8859-1 / WINDOWS-1252；多字节解码按 Windows `MultiByteToWideChar` 的替换形（坏序列给 U+FFFD）。 */
+function bytesMultibyte(p: GBytes, args: Variant[]): Variant {
+  if (args.length > 1) throw new GodotRuntimeError("arity", `get_string_from_multibyte_char() 最多 1 个参数（收到 ${args.length} 个）`);
+  const enc = args.length === 0 ? "" : asString(args[0] as Variant, "get_string_from_multibyte_char");
+  const upper = enc.toUpperCase();
+  if (upper === "") {
+    throw new UnsupportedError("packed-multibyte-acp", "get_string_from_multibyte_char() 的空编码走宿主 ANSI 代码页（实测这台是 CP936），跨宿主不可复现，不发");
+  }
+  if (upper !== "UTF-8" && upper !== "ISO-8859-1" && upper !== "WINDOWS-1252") {
+    throw new UnsupportedError("packed-multibyte-encoding", `get_string_from_multibyte_char() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1 / WINDOWS-1252；引擎代码页表里其余名字没量）`);
+  }
+  if (p.length === 0) return V.str("");
+  const raw = p.raw() as number[];
+  const nul = raw.indexOf(0);
+  const end = nul < 0 ? raw.length : nul;
+  if (upper === "ISO-8859-1") {
+    let out = "";
+    for (let i = 0; i < end; i++) out += String.fromCharCode(raw[i] as number);
+    return V.str(out);
+  }
+  if (upper === "WINDOWS-1252") return V.str(cp1252DecodeBytes(raw.slice(0, end)));
+  return V.str(windowsUtf8Decode(raw, end));
+}
+
+function windowsUtf8Decode(raw: number[], end: number): string {
+  let out = "";
+  let i = 0;
+  while (i < end) {
+    const b0 = raw[i] as number;
+    if (b0 < 0x80) {
+      out += String.fromCharCode(b0);
+      i += 1;
+      continue;
+    }
+    let need: number;
+    let cp: number;
+    if (b0 >= 0xc2 && b0 <= 0xdf) {
+      need = 1;
+      cp = b0 & 0x1f;
+    } else if (b0 >= 0xe0 && b0 <= 0xef) {
+      need = 2;
+      cp = b0 & 0x0f;
+    } else if (b0 >= 0xf0 && b0 <= 0xf4) {
+      need = 3;
+      cp = b0 & 0x07;
+    } else {
+      out += "\ufffd";
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    let ok = true;
+    for (let k = 0; k < need; k++, j++) {
+      const b = raw[j];
+      if (b === undefined || (b & 0xc0) !== 0x80) {
+        ok = false;
+        break;
+      }
+      cp = (cp << 6) | (b & 0x3f);
+    }
+    const bad = need === 2 ? cp < 0x800 || (cp >= 0xd800 && cp <= 0xdfff) : need === 3 ? cp < 0x10000 || cp > 0x10ffff : false;
+    if (!ok || bad) {
+      out += "\ufffd";
+      i += 1;
+      continue;
+    }
+    out += String.fromCodePoint(cp);
+    i = j;
+  }
+  return out;
+}
+
+/** `decompress_dynamic(buffer_size, mode=0)`（S557）：宿主编解码器解出后按上限判；失败/超限/空输入都打块回空。 */
+function bytesDecompressDynamic(p: GBytes, args: Variant[]): Variant {
+  if (args.length < 1 || args.length > 2) {
+    throw new GodotRuntimeError("arity", `decompress_dynamic() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+  }
+  const want = int64Arg(args[0], "decompress_dynamic");
+  const mode = args[1] === undefined ? 0 : Number(int64Arg(args[1], "decompress_dynamic"));
+  const emptyPack = (): Variant => V.object(new GBytes([], "byte"));
+  const raw = p.raw() as number[];
+  if (raw.length === 0) {
+    packDynamicSrcEmpty();
+    packDynamicFailed();
+    return emptyPack();
+  }
+  if (mode !== 1 && mode !== 3) {
+    // 引擎的 decompress_dynamic 只走 zlib 那两支；FastLZ / zstd / 越界模式都是 295 + 844 两块再回空
+    packDynamicBadMode();
+    packDynamicFailed();
+    return emptyPack();
+  }
+  const r = packDynamicUnpack(raw, mode);
+  if (r === "n/a") {
+    throw new UnsupportedError("packed-compress-mode", `decompress_dynamic() 的 mode ${mode} 没有宿主编解码器（同 compress / decompress），不发近似值`);
+  }
+  if (r === "empty") return emptyPack();
+  if (r === "failed" || want <= 0n || BigInt(r.length) > want) {
+    packDynamicFailed();
+    return emptyPack();
+  }
+  const out: number[] = [];
+  for (let i = 0; i < r.length; i++) out.push(r[i] as number);
+  return V.object(new GBytes(out, "byte"));
+}
+
 /** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
 function charReplacement(n: number, who: string): number {  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
     throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 超出 Unicode 标量范围，那一形没实测过`);
@@ -349,7 +623,20 @@ export function callableCtor(args: Variant[]): Variant {
     if (name === undefined || (name.t !== Tag.STRING && name.t !== Tag.STRING_NAME)) {
       throw new UnsupportedError("callable-ctor", "Callable(对象, 名字) 的第二个实参量过的是方法名字符串");
     }
-    return attribute(obj, String(name.v)) as Variant;
+    if (obj.t === Tag.NIL) {
+      return V.object(new CallableBox(null, String(name.v), null, [], null, false, null, null, 0, null, 0, "null"));
+    }
+    if (obj.t === Tag.INT) {
+      return V.object(new CallableBox(null, String(name.v), null, [], null, false, null, null, 0, null, 0, "int"));
+    }
+    let hit: Variant | null = null;
+    try {
+      hit = attribute(obj, String(name.v)) as Variant;
+    } catch {
+      hit = null;
+    }
+    if (hit !== null && isCallableBox(hit.v)) return hit;
+    return V.object(new CallableBox(null, String(name.v), obj, [], null, false, null, null, 0, null, 0, null, true));
   }
   throw new UnsupportedError(
     "callable-ctor",
@@ -357,8 +644,29 @@ export function callableCtor(args: Variant[]): Variant {
   );
 }
 
+/** `Callable.create(obj, method)`（S578）：与 `Callable(obj, method)` 同一支（实测 `==` 真、调用同）；其余静态成员没有。 */
+export function callableStatic(name: string, args: Variant[] = []): Variant {
+  if (name === "create") {
+    if (args.length !== 2) {
+      throw new UnsupportedError("callable-create-arity", "Callable.create() 的元数没量过（只量过 2 个实参）");
+    }
+    const a0 = args[0] as Variant;
+    if (a0.t !== Tag.OBJECT && a0.t !== Tag.NIL && a0.t !== Tag.INT) {
+      throw new UnsupportedError("callable-create-obj", "Callable.create() 的第一个实参只量过对象 / null / int 来源");
+    }
+    return callableCtor(args);
+  }
+  throw new UnsupportedError("callable-static", `Callable.${name} 未实现`);
+}
+
 /** 调一个 Callable 盒子：调用实参排在绑定实参**之前**；lambda 走盒子带的式子，方法 / 静态方法交 `method()` 按名派发。 */
 function callCallableBox(box: CallableBox, args: Variant[]): Variant {
+  if (box.invalidMethod) {
+    throw new GodotRuntimeError("callable-invalid-method-call", `Invalid call. Nonexistent function '${callableCallLabel(box)} (Callable)'.`);
+  }
+  if (box.detachedOwner !== null) {
+    throw new GodotRuntimeError("callable-detached-call", `Attempt to call function '${box.detachedOwner}::${String(box.name)} (Callable)' on a null instance.`);
+  }
   const all: Variant[] = [];
   for (const a of keptCallArgs(box, args)) all.push(a);
   for (const b of box.bound) all.push(b);
@@ -450,6 +758,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   const empty = isNullCallable(box);
   switch (name) {
     case "bind": {
+      if (box.detachedOwner !== null || box.invalidMethod) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bind() 那一形没量过");
       if (box.defaultCount > 0) {
         throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
       }
@@ -464,7 +773,61 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       for (const b of bound) next.push(b);
       return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
     }
+    case "bindv": {
+      if (box.detachedOwner !== null || box.invalidMethod) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bindv() 那一形没量过");
+      // S571：bindv 与 bind 同一支（新绑的实参排在旧绑定串之前，get_bound_arguments 实测 `max.bind(1).bindv([2])` 给 [2, 1]）；空数组原样回同一只
+      if (args.length !== 1) {
+        throw new UnsupportedError("callable-bindv-arity", "bindv() 的元数没量过（只量过恰好 1 个 Array 实参）");
+      }
+      const arr = args[0] as Variant;
+      if (!(arr.v instanceof GArray)) {
+        throw new GodotRuntimeError(
+          "callable-bindv-arg",
+          `Invalid type in function 'bindv' in base 'Callable'. Cannot convert argument 1 from ${valueTypeName(arr)} to Array.`,
+        );
+      }
+      const list = (arr.v as GArray).raw();
+      if (list.length === 0) return V.object(box);
+      if (box.defaultCount > 0) {
+        throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
+      }
+      const nextv: Variant[] = [];
+      if (box.unbindCount > 0) {
+        for (const b of bound) nextv.push(b);
+        return V.object(new CallableBox(box.fn, box.name, box.object, nextv, box.arity, true, null, null, 0, null, box.unbindCount - list.length < 0 ? 0 : box.unbindCount - list.length));
+      }
+      for (const a of list) nextv.push(a);
+      for (const b of bound) nextv.push(b);
+      return V.object(new CallableBox(box.fn, box.name, box.object, nextv, box.arity, true));
+    }
+    case "is_custom": {
+      // 实测四形：全局 abs 真、lambda 真、方法假、空 Callable 假；方法 `bind` / `bindv` 之后转真；内建类型面绑定来的那一只也真
+      if (empty) return V.bool(false);
+      return V.bool(box.builtin !== null || box.object === null || bound.length > 0 || box.unbindCount > 0);
+    }
+    case "is_standard": {
+      if (empty) return V.bool(false);
+      return V.bool(box.builtin === null && box.object !== null && bound.length === 0 && box.unbindCount === 0);
+    }
+    case "get_object_id": {
+      if (empty || box.builtin !== null) return V.int(0);
+      if (box.object === null) {
+        if (box.name === null) {
+          throw new UnsupportedError("callable-object-id-lambda", "lambda 的 get_object_id() 给的是定义它的脚本对象号，宿主不可复现");
+        }
+        return V.int(0);
+      }
+      const oid = box.object;
+      if (oid.t !== Tag.OBJECT) throw new UnsupportedError("callable-object-id", "get_object_id() 的接收者不是对象盒子");
+      const id = (oid.v as GdIdentified).gdObjectId;
+      if (!(id > 0)) throw new UnsupportedError("instance-id", "这一类对象还没发身份号");
+      return V.int(id);
+    }
+    case "hash":
+      // 全局 / 空 / 绑过的全局与 `hash(c)` 同值（实测 boundglobal 193485979 == raw）；方法 / lambda / 内建的面折宿主标识，variantHashNumber 会响亮拒
+      return V.int(variantHashNumber(V.object(box)));
     case "unbind": {
+      if (box.detachedOwner !== null || box.invalidMethod) throw new UnsupportedError("callable-detached-unbind", "空对象方法 Callable 再 unbind() 那一形没量过");
       // 计数是**累加**的：`u.unbind(1).unbind(1)` 等于 `u.unbind(2)`（`tmp/probe-unbind/x6.gd`）
       const n = box.unbindCount + unbindCountArg(args);
       const next: Variant[] = [];
@@ -482,6 +845,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 实测七格（tmp/d6/s545.gd）：就是 unbind 计数；先 unbind 再 bind 会填掉一格（unbind(2).bind(1) → 1）
       return V.int(box.unbindCount);
     case "get_argument_count": {
+      if (box.detachedOwner !== null || box.invalidMethod) return V.int(0);
       // 语义是「**还要几个实参**」= 声明形参数 − 绑定数，不是「只要 bind 过就给 0」
       const declared = declaredArgCount(box);
       if (declared === null) {
@@ -535,6 +899,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // typeof 24 的 null Object（打 `<Object#null>`、`== null` 真）—— 后两形我们没有，响亮拒。
       // 内建类型面绑定来的那一只：引擎给的是 typeof 24 的空对象引用，不是那台数组 / 字符串（读数 `tmp/probe-bincall/h3.gd` 的 Q6）
       if (box.builtin !== null) return V.object(NULL_OBJECT);
+      if (box.detachedOwner !== null || box.invalidMethod) return V.object(NULL_OBJECT);
       if (box.object === null) {
         throw new UnsupportedError(
           "callable-get-object",
@@ -547,6 +912,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 四种形状里只有空 Callable 为真；绑过实参就不再是空的
       return V.bool(empty && bound.length === 0);
     case "is_valid":
+      if (box.detachedOwner !== null || box.invalidMethod) return V.bool(false);
       if (empty && bound.length > 0) {
         throw new UnsupportedError("callable-is-valid-bound-null", "绑过实参的空 Callable 上 is_valid() 没量过");
       }
@@ -664,6 +1030,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
+    if (inner instanceof GVector4) return vector4Method(inner, name, args);
+    if (inner instanceof GVector4i) return vector4iMethod(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
@@ -671,10 +1039,15 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
-      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined) {
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined || CONVERT_INFO[name] !== undefined || name === "get_string_from_utf32" || name === "to_vector4_array" || name === "get_string_from_multibyte_char" || name === "decompress_dynamic") {
         if (inner.kind !== "byte") {
           throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
         }
+        if (name === "get_string_from_multibyte_char") return bytesMultibyte(inner, args);
+        if (name === "decompress_dynamic") return bytesDecompressDynamic(inner, args);
+        if (name === "get_string_from_utf32") return bytesUtf32(inner);
+        if (CONVERT_INFO[name] !== undefined) return packConvert(inner, name);
+        if (VAR_CODEC_GUARD[name] !== undefined) return packVarCodec(inner, name, args);
         if (DECODE_INFO[name] !== undefined) return packDecode(inner, name, args);
         if (ENCODE_INFO[name] !== undefined) return packEncode(inner, name, args);
         return FLOAT_DECODE_INFO[name] !== undefined ? packDecodeFloat(inner, name, args) : packEncodeFloat(inner, name, args);
@@ -975,8 +1348,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "append":
           a.append(one(args, "append"));
           return V.nil();
-        case "duplicate":
-          return V.array(a.duplicate(boolArgOr(args, 0, false)));
+        case "duplicate": {
+          const copy = a.duplicate(boolArgOr(args, 0, false));
+          copy.className = a.classNamed();
+          return V.array(copy);
+        }
         case "duplicate_deep": {
           // 实测（S548）：纯容器里模式 0 / 1 / 2 / 3 / -1 都是**整棵深拷**，嵌套改一边不动另一边；模式只对 Resource 子资源有意义（Tier 1 不出）
           if (args.length > 0 && (args[0] as Variant).t !== Tag.INT) {
@@ -984,12 +1360,79 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.array(a.duplicate(true));
         }
+        case "is_typed":
+          return V.bool(a.typedAny());
+        case "is_same_typed": {
+          const other = one(args, "is_same_typed");
+          if (!(other.t === Tag.ARRAY)) throw new UnsupportedError("typed-query-arg", "Array.is_same_typed() 只量过 Array 实参");
+          const oa = other.v as GArray;
+          return V.bool(a.elemKind() === oa.elemKind() && a.classNamed() === oa.classNamed());
+        }
+        case "get_typed_builtin":
+          return V.int(a.classNamed() !== "" ? 24 : elemCode(a.elemKind()));
+        case "get_typed_class_name":
+          return V.stringName(a.classNamed());
+        case "get_typed_script":
+          return V.object(NULL_OBJECT);
         case "size":
           return V.int(a.size());
         case "is_empty":
           return V.bool(a.size() === 0);
         case "has":
           return V.bool(a.has(one(args, "has")));
+        case "get": {
+          const i = arrayIndexArg(args[0], "get");
+          if (i < 0 || i >= a.size()) {
+            arrayIndexOob("get", i, a.size());
+            return V.nil();
+          }
+          return a.get(i);
+        }
+        case "set": {
+          if (args.length < 2) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "set()" call. Expected at least 2 but received ${String(args.length)}.`);
+          }
+          const i = arrayIndexArg(args[0], "set");
+          const val = args[1] as Variant;
+          if (i < 0 || i >= a.size()) {
+            arrayIndexOob("set", i, a.size());
+            return V.nil();
+          }
+          if (a.isReadOnly()) {
+            throw new UnsupportedError("array-ro-set", "只读 Array 上的 set() 没量过（引擎那句块文案没读数）");
+          }
+          a.set(i, val);
+          return V.nil();
+        }
+        case "front":
+          if (a.size() === 0) {
+            arrayEmptyBlock("front", 355);
+            return V.nil();
+          }
+          return a.get(0);
+        case "back":
+          if (a.size() === 0) {
+            arrayEmptyBlock("back", 360);
+            return V.nil();
+          }
+          return a.get(a.size() - 1);
+        case "pick_random":
+          if (a.size() === 0) {
+            arrayEmptyBlock("pick_random", 365);
+            return V.nil();
+          }
+          return a.get(randNextUint32() % a.size());
+        case "shuffle": {
+          const items = a.raw();
+          const n = items.length;
+          for (let i = n - 1; i >= 1; i--) {
+            const j = randNextUint32() % (i + 1);
+            const t = items[i] as Variant;
+            items[i] = items[j] as Variant;
+            items[j] = t;
+          }
+          return V.nil();
+        }
         case "insert":
           return V.int(a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert")) ? 0 : 31);
         case "erase":
@@ -1175,8 +1618,46 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.dict(d.duplicate(true));
         }
+        case "is_typed":
+          return V.bool(d.keyKind !== null || d.valKind !== null);
+        case "is_typed_key":
+          return V.bool(d.keyKind !== null);
+        case "is_typed_value":
+          return V.bool(d.valKind !== null);
+        case "is_same_typed": {
+          const other = one(args, "is_same_typed");
+          if (!(other.t === Tag.DICT)) throw new UnsupportedError("typed-query-arg", "Dictionary.is_same_typed() 只量过 Dictionary 实参");
+          const o = other.v as GDict;
+          return V.bool(d.keyKind === o.keyKind && d.valKind === o.valKind);
+        }
+        case "is_same_typed_key": {
+          const other = one(args, "is_same_typed_key");
+          if (!(other.t === Tag.DICT)) throw new UnsupportedError("typed-query-arg", "Dictionary.is_same_typed_key() 只量过 Dictionary 实参");
+          return V.bool(d.keyKind === (other.v as GDict).keyKind);
+        }
+        case "is_same_typed_value": {
+          const other = one(args, "is_same_typed_value");
+          if (!(other.t === Tag.DICT)) throw new UnsupportedError("typed-query-arg", "Dictionary.is_same_typed_value() 只量过 Dictionary 实参");
+          return V.bool(d.valKind === (other.v as GDict).valKind);
+        }
+        case "get_typed_key_builtin":
+          return V.int(elemCode(d.keyKind));
+        case "get_typed_value_builtin":
+          return V.int(elemCode(d.valKind));
+        case "get_typed_key_class_name":
+        case "get_typed_value_class_name":
+          return V.stringName("");
+        case "get_typed_key_script":
+        case "get_typed_value_script":
+          return V.object(NULL_OBJECT);
         case "hash":
           return V.int(variantHashNumber(obj));
+        case "sort":
+          if (d.isReadOnly()) {
+            throw new UnsupportedError("dict-ro-sort", "只读 Dictionary 上的 sort() 没量过（引擎那句块文案没读数）");
+          }
+          d.sortKeys(sortLess);
+          return V.nil();
         default:
           if (DICT_NO_METHOD.has(name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
@@ -1260,6 +1741,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.bool(strIsValidAsciiIdentifier(s));
         }
+        case "is_valid_unicode_identifier": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_unicode_identifier() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(strIsValidUnicodeIdentifier(s));
+        }
         case "split": {
           if (args.length > 3) {
             throw new GodotRuntimeError("arity", `split() 最多 3 个参数（收到 ${args.length} 个）`);
@@ -1288,14 +1775,69 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCapitalize(s));
         case "to_utf8_buffer": {
           if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf8_buffer() 不接受参数（收到 ${args.length} 个）`);
-          return V.object(new GBytes(Array.from(new TextEncoder().encode(s))));
+          return V.object(new GBytes(utf8EncodeWtf(s)));
+        }
+        case "to_utf16_buffer":
+        case "to_wchar_buffer": {
+          // S569：Windows 的 wchar 与 UTF-16 同一支（引擎 ustring.cpp 的 WINDOWS_ENABLED 分支），代理对按 UTF-16 码元原样；空串给空
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_${name === "to_wchar_buffer" ? "wchar" : "utf16"}_buffer() 不接受参数（收到 ${args.length} 个）`);
+          const units: number[] = [];
+          for (let i = 0; i < s.length; i++) {
+            const cu = s.charCodeAt(i);
+            units.push(cu & 0xff, (cu >>> 8) & 0xff);
+          }
+          return V.object(new GBytes(units));
+        }
+        case "to_utf32_buffer": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf32_buffer() 不接受参数（收到 ${args.length} 个）`);
+          const cps: number[] = [];
+          for (const ch of s) {
+            const cp = ch.codePointAt(0) as number;
+            cps.push(cp & 0xff, (cp >>> 8) & 0xff, (cp >>> 16) & 0xff, (cp >>> 24) & 0xff);
+          }
+          return V.object(new GBytes(cps));
+        }
+        case "to_multibyte_char_buffer": {
+          if (args.length > 1) throw new GodotRuntimeError("arity", `to_multibyte_char_buffer() 最多 1 个参数（收到 ${args.length} 个）`);
+          const enc = args.length === 0 ? "" : asString(args[0] as Variant, "to_multibyte_char_buffer");
+          const upper = enc.toUpperCase();
+          if (upper === "") {
+            throw new UnsupportedError("string-multibyte-acp", "to_multibyte_char_buffer() 的空编码走宿主 ANSI 代码页（实测这台是 CP936：é→A8A6、汉→BABA），跨宿主不可复现，不发");
+          }
+          if (upper !== "UTF-8" && upper !== "ISO-8859-1" && upper !== "WINDOWS-1252") {
+            throw new UnsupportedError("string-multibyte-encoding", `to_multibyte_char_buffer() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1 / WINDOWS-1252；引擎代码页表里其余名字没量）`);
+          }
+          if (s.length === 0) {
+            throw new UnsupportedError("string-multibyte-empty", "to_multibyte_char_buffer() 对空串走 WideCharToMultiByte 的 Error 87 块，文案是宿主 OS 的本地化串，复现不了");
+          }
+          const mb: number[] = upper === "UTF-8" ? Array.from(new TextEncoder().encode(s)) : [];
+          if (upper === "WINDOWS-1252") {
+            const bytes = cp1252EncodeBytes(s);
+            bytes.push(0);
+            return V.object(new GBytes(bytes));
+          }
+          if (upper === "ISO-8859-1") {
+            for (let i = 0; i < s.length; i++) {
+              const cu = s.charCodeAt(i);
+              mb.push(cu <= 0xff ? cu : 0x3f);
+            }
+          }
+          mb.push(0);
+          return V.object(new GBytes(mb));
         }
         case "to_ascii_buffer": {
           if (args.length !== 0) throw new GodotRuntimeError("arity", `to_ascii_buffer() 不接受参数（收到 ${args.length} 个）`);
-          if (Array.from(s).some((ch) => (ch.codePointAt(0) as number) > 127)) {
-            throw new UnsupportedError("string-ascii-buffer", "to_ascii_buffer() 只实测过纯 ASCII 字符串");
+          const bytes: number[] = [];
+          for (const ch of s) {
+            const cp = ch.codePointAt(0) as number;
+            if (cp > 0x7f) {
+              stringUnicodeAsciiError(cp);
+              bytes.push(0x20);
+            } else {
+              bytes.push(cp);
+            }
           }
-          return V.object(new GBytes(Array.from(s, (ch) => ch.codePointAt(0) as number)));
+          return V.object(new GBytes(bytes));
         }
         case "to_float":
           if (args.length !== 0) {
@@ -1348,6 +1890,162 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `bin_to_int() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(strBinToInt(s));
+        case "md5_text":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `md5_text() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(md5Hex(s));
+        case "md5_buffer":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `md5_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(hexPairsToBytes(md5Hex(s))));
+        case "sha1_text":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha1_text() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(bytesToHex(sha1Bytes(s)));
+        case "sha1_buffer":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha1_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(sha1Bytes(s)));
+        case "sha256_text":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha256_text() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(bytesToHex(sha256Bytes(s)));
+        case "sha256_buffer":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha256_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(sha256Bytes(s)));
+        case "hex_decode": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `hex_decode() 不接受参数（收到 ${args.length} 个）`);
+          const cs = Array.from(s);
+          if (cs.length % 2 !== 0) {
+            stringHexUnevenBlock();
+            return V.object(new GBytes([]));
+          }
+          const bytes: number[] = [];
+          for (let i = 0; i < cs.length; i += 2) {
+            const hi = hexDigit(cs[i] as string);
+            const lo = hexDigit(cs[i + 1] as string);
+            if (hi < 0 || lo < 0) {
+              throw new UnsupportedError("string-hex-decode", "hex_decode() 的非法十六进制字符：引擎那两行带 U+FFFD 的怪块没复刻，响亮拒");
+            }
+            bytes.push(hi * 16 + lo);
+          }
+          return V.object(new GBytes(bytes));
+        }
+        case "xml_unescape":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `xml_unescape() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strXmlUnescape(s));
+        case "is_valid_html_color":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_html_color() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsValidHtmlColor(s));
+        case "is_valid_ip_address":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_ip_address() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsValidIpAddress(s));
+        case "get_extension":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_extension() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetExtension(s));
+        case "get_basename":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_basename() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetBasename(s));
+        case "get_base_dir":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_base_dir() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetBaseDir(s));
+        case "get_file":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_file() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetFile(s));
+        case "path_join":
+          return V.str(strPathJoin(s, asString(one(args, "path_join"), "path_join")));
+        case "simplify_path":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `simplify_path() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strSimplifyPath(s));
+        case "is_absolute_path":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_absolute_path() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsAbsolutePath(s));
+        case "is_relative_path":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_relative_path() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsRelativePath(s));
+        case "reverse":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `reverse() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strReverse(s));
+        case "bigrams":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `bigrams() 不接受参数（收到 ${args.length} 个）`);
+          return V.array(GArray.of(strBigramsList(s).map((x) => V.str(x))));
+        case "get_slice_count":
+          return V.int(strSliceCount(s, asString(one(args, "get_slice_count"), "get_slice_count")));
+        case "rsplit": {
+          const delim = args.length === 0 ? "" : asString(args[0] as Variant, "rsplit");
+          const allow = boolArgOr(args, 1, true);
+          const max = intArgOr(args, 2, 0);
+          return V.array(GArray.of(strRsplit(s, delim, allow, max).map((x) => V.str(x))));
+        }
+        case "split_floats": {
+          const delim = asString(one(args, "split_floats"), "split_floats");
+          const allow = boolArgOr(args, 1, true);
+          return V.array(GArray.of(strSplitFloats(s, delim, allow).map((x) => V.float(x))));
+        }
+        case "lpad": {
+          const n = intArg(args, 0, "lpad");
+          const ch = args[1] === undefined ? " " : asString(args[1] as Variant, "lpad");
+          return V.str(strLpad(s, n, ch));
+        }
+        case "rpad": {
+          const n = intArg(args, 0, "rpad");
+          const ch = args[1] === undefined ? " " : asString(args[1] as Variant, "rpad");
+          return V.str(strRpad(s, n, ch));
+        }
+        case "pad_decimals":
+          return V.str(strPadDecimals(s, intArg(args, 0, "pad_decimals")));
+        case "trim_prefix":
+          return V.str(strTrimPrefix(s, asString(one(args, "trim_prefix"), "trim_prefix")));
+        case "trim_suffix":
+          return V.str(strTrimSuffix(s, asString(one(args, "trim_suffix"), "trim_suffix")));
+        case "strip_escapes":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `strip_escapes() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strStripEscapes(s));
+        case "c_unescape":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `c_unescape() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strCUnescape(s));
+        case "json_escape":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `json_escape() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strJsonEscape(s));
+        case "xml_escape":
+          if (args.length > 1) throw new GodotRuntimeError("arity", `xml_escape() 最多 1 个参数（收到 ${args.length} 个）`);
+          return V.str(strXmlEscape(s, args.length === 1 ? boolArg(args, 0, "xml_escape") : false));
+        case "indent":
+          return V.str(strIndent(s, asString(one(args, "indent"), "indent")));
+        case "dedent":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `dedent() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strDedent(s));
+        case "validate_filename":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `validate_filename() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strValidateFilename(s));
+        case "validate_node_name":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `validate_node_name() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strValidateNodeName(s));
+        case "match":
+          return V.bool(strWildcardMatch(s, asString(one(args, "match"), "match")));
+        case "is_valid_identifier":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_identifier() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsValidAsciiIdentifier(s));
+        case "nocasecmp_to":
+          return V.int(strNoCaseCmp(s, asString(one(args, "nocasecmp_to"), "nocasecmp_to")));
+        case "naturalcasecmp_to":
+          return V.int(strNaturalCaseCmp(s, asString(one(args, "naturalcasecmp_to"), "naturalcasecmp_to")));
+        case "naturalnocasecmp_to":
+          return V.int(strNaturalNoCaseCmp(s, asString(one(args, "naturalnocasecmp_to"), "naturalnocasecmp_to")));
+        case "filecasecmp_to":
+          return V.int(strFileCaseCmp(s, asString(one(args, "filecasecmp_to"), "filecasecmp_to")));
+        case "filenocasecmp_to":
+          return V.int(strFileNoCaseCmp(s, asString(one(args, "filenocasecmp_to"), "filenocasecmp_to")));
+        case "containsn":
+          return V.bool(strContainsN(s, asString(one(args, "containsn"), "containsn")));
+        case "matchn":
+          return V.bool(strWildcardMatchN(s, asString(one(args, "matchn"), "matchn")));
+        case "is_subsequence_of":
+          return V.bool(strIsSubsequenceOf(s, asString(one(args, "is_subsequence_of"), "is_subsequence_of"), false));
+        case "is_subsequence_ofn":
+          return V.bool(strIsSubsequenceOf(s, asString(one(args, "is_subsequence_ofn"), "is_subsequence_ofn"), true));
+        case "lstrip":
+          return V.str(strLstrip(s, asString(one(args, "lstrip"), "lstrip")));
+        case "rstrip":
+          return V.str(strRstrip(s, asString(one(args, "rstrip"), "rstrip")));
+        case "to_pascal_case":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_pascal_case() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strPascalCase(s));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);
@@ -1506,6 +2204,8 @@ export function index(raw: unknown, idx: Variant, base?: string): Variant {
   }
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector4) return vec4ReadIndex(obj.v as GVector4, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector4i) return vec4iReadIndex(obj.v as GVector4i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3i) return vec3iReadIndex(obj.v as GVector3i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
@@ -1553,6 +2253,10 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
+  const vec4 = base.t === Tag.OBJECT && base.v instanceof GVector4 ? (base.v as GVector4) : null;
+  if (vec4 !== null) return vec4Write(vec4, V.str(key), value, "prop");
+  const vec4i = base.t === Tag.OBJECT && base.v instanceof GVector4i ? (base.v as GVector4i) : null;
+  if (vec4i !== null) return vec4iWrite(vec4i, V.str(key), value, "prop");
   const vec2i = base.t === Tag.OBJECT && base.v instanceof GVector2i ? (base.v as GVector2i) : null;
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
   const vec3i = asVec3i(base);
@@ -1575,7 +2279,7 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const objInner = base.t === Tag.OBJECT
     && base.v !== null
     && typeof base.v === "object"
-    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GVector3i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
+    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector4 || base.v instanceof GVector4i || base.v instanceof GVector2i || base.v instanceof GVector3i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
     ? (base.v as Record<string, unknown>)
     : null;
   if (objInner !== null) {
@@ -1619,6 +2323,12 @@ export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | 
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector3) {
     return vec3Write(base.v as GVector3, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector4) {
+    return vec4Write(base.v as GVector4, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector4i) {
+    return vec4iWrite(base.v as GVector4i, idx, value, "index");
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector2i) {
     return vec2iWrite(base.v as GVector2i, idx, value, "index");
@@ -1759,12 +2469,17 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
     const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
     if (vec3 && (name === "x" || name === "y" || name === "z")) return V.float(vec3[name]);
+    const vec4 = obj.v instanceof GVector4 ? (obj.v as GVector4) : null;
+    if (vec4 && (name === "x" || name === "y" || name === "z" || name === "w")) return V.float(vec4[name]);
+    const vec4i = obj.v instanceof GVector4i ? (obj.v as GVector4i) : null;
+    if (vec4i && (name === "x" || name === "y" || name === "z" || name === "w")) return V.int(vec4i[name]);
     const vec2i = obj.v instanceof GVector2i ? (obj.v as GVector2i) : null;
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
     const vface = obj.v instanceof GVector2 ? "Vector2" : obj.v instanceof GVector2i ? "Vector2i"
       : obj.v instanceof GVector3 ? "Vector3" : obj.v instanceof GVector3i ? "Vector3i"
+        : obj.v instanceof GVector4 ? "Vector4" : obj.v instanceof GVector4i ? "Vector4i"
         : obj.v instanceof GColor ? "Color" : obj.v instanceof GdNodePath ? "NodePath" : null;
     if (vface !== null) {
       // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8），表外名给引擎那句（`tmp/probe-vattr/box.gd` 七格）
@@ -1899,6 +2614,32 @@ function intArg(args: Variant[], i: number, who: string): number {
 /** 下标那三处（读、字符串取字符、写）只有一个 int 参：直接收 Variant，别为它现造一个参数数组。报错文本与 intArg 一致。 */
 function intArgIdx(a: Variant, who: string): number {
   return foldInt(a, `${who} 的第 0 个参数需要 int`);
+}
+
+function hexDigit(ch: string): number {
+  const c = ch.codePointAt(0) as number;
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x61 && c <= 0x66) return 10 + c - 0x61;
+  if (c >= 0x41 && c <= 0x46) return 10 + c - 0x41;
+  return -1;
+}
+
+function hexPairsToBytes(hex: string): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) out.push(parseInt(hex.slice(i, i + 2), 16));
+  return out;
+}
+
+/** `Array.get` / `Array.set` 的下标位（S572）：int / float / bool 照折，其余发引擎方法句；负下标**不**回绕。 */
+function arrayIndexArg(v: Variant | undefined, who: string): number {
+  if (v === undefined) {
+    throw new GodotRuntimeError("arity", `Too few arguments for "${who}()" call. Expected at least 1 but received 0.`);
+  }
+  if (v.t === Tag.INT || v.t === Tag.FLOAT || v.t === Tag.BOOL) return foldInt(v, "");
+  throw new GodotRuntimeError(
+    "array-index-arg",
+    `Invalid type in function '${who}' in base 'Array'. Cannot convert argument 1 from ${valueTypeName(v)} to int.`,
+  );
 }
 
 /** 可选 int 参：省略时取 Godot 的默认值。 */

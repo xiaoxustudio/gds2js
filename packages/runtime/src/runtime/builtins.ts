@@ -1,8 +1,9 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
-import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
+import { GArray, GDict, elemConvert, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName, type ElemKind } from "./values";
+import { ELEM_TYPE_CODE } from "./methods";
+import { GBytes, isBytes, packBytes, packCtor, packItems, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
 import { ClassDesc, GdScriptObject, dictShapeOf, dictWrittenOf } from "./object";
@@ -14,21 +15,109 @@ import { GVector2, vector2, vector2Method } from "./vector2";
 import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
 import { GVector3, vector3, vector3Method } from "./vector3";
 import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
+import { GVector4, vector4, vector4Method, vec4Cmp } from "./vector4";
+import { GVector4i, vector4i, vector4iMethod } from "./vector4i";
 import { GColor, colorMethod } from "./color";
 import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
-/** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
+/** `Array(x)`：源形是 Array 时**就是那支数组本身**（引擎实测：`var r = Array(a)` 之后 `r[0] = 7` 把 `a` 也改了，S601）；
+ * pack 逐元素装箱成新的不 typed 数组（S597）；Dictionary / String / int / null / Vector2 五格发引擎原句；其余没量过的形响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
-  if (!isBytes(v)) {
-    throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
+  if (v.t === Tag.ARRAY) {
+    return v;
   }
-  const b = packBytes(v);
-  if (b.kind !== "byte") {
-    throw new UnsupportedError("array-ctor-from-kind", `Array(...) 只实测过 PackedByteArray 实参（收到 ${packTypeName(b.kind)}）`);
+  if (isBytes(v)) {
+    return V.array(GArray.of(packItems(packBytes(v))));
   }
-  return V.array(GArray.of(b.raw().map((x) => V.int(typeof x === "bigint" ? x : x as number))));
+  if (v.t === Tag.DICT || v.t === Tag.STRING || v.t === Tag.INT || v.t === Tag.NIL ||
+    (v.t === Tag.OBJECT && v.v instanceof GVector2)) {
+    throw new GodotRuntimeError("array-ctor", "Invalid call. Nonexistent 'Array' constructor.");
+  }
+  throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 pack、Array 与那五种坏源形（收到 ${tagName(v.t)}）`);
+}
+
+/** 型码 → 元素标注名：现取 `ELEM_TYPE_CODE` 的反向，免得第二张表漂。 */
+function kindByCode(code: number): ElemKind | null {
+  for (const [name, c] of Object.entries(ELEM_TYPE_CODE)) {
+    if (c === code) return name as ElemKind;
+  }
+  return null;
+}
+
+/** `Array(base, type, class_name, script)`（S605）：**新建**一支数组并按型逐格转换 —— 单参形是别名，这一形不是。
+ * 第一参是 pack 时引擎给 `Invalid type in 'Array' constructor. Cannot convert argument 1 from <pack名> to Array.`；
+ * 任一格转不过就交回**空的定型数组**（引擎那侧另推一条 `ERROR: Unable to convert array index N from "K" to "T".`，
+ * 那一块由语料的 normalize 整段滤掉，所以值对齐即逐字节一致）；非 OBJECT 型带类名时类名被丢掉（`TYPE_NIL` 给不 typed）。 */
+export function arrayFromArgs(args: Variant[]): Variant {
+  if (args.length === 0) return V.array(GArray.of([]));
+  if (args.length === 1) return arrayFromVariant(args[0] as Variant);
+  if (args.length !== 4) {
+    throw new UnsupportedError("array-ctor-arity", `Array(...) 只实测过 0 / 1 / 4 参三形（收到 ${String(args.length)} 参）`);
+  }
+  const [base, typeArg, classArg, scriptArg] = args as [Variant, Variant, Variant, Variant];
+  if (scriptArg.t !== Tag.NIL) {
+    throw new UnsupportedError("array-ctor-script", `Array(...) 的第四参只实测过 null（收到 ${tagName(scriptArg.t)}）`);
+  }
+  if (base.t !== Tag.ARRAY) {
+    if (isBytes(base)) {
+      throw new GodotRuntimeError("array-ctor-base", `Invalid type in 'Array' constructor. Cannot convert argument 1 from ${packTypeName(packBytes(base).kind)} to Array.`);
+    }
+    throw new UnsupportedError("array-ctor-base", `Array(...) 四参形的第一参只实测过 Array（收到 ${tagName(base.t)}）`);
+  }
+  if (typeArg.t !== Tag.INT) {
+    throw new UnsupportedError("array-ctor-type-arg", `Array(...) 的第二参只实测过 int 型码（收到 ${tagName(typeArg.t)}）`);
+  }
+  const codeRaw = intToNum(typeArg.v as IntPayload);
+  if (typeof codeRaw === "bigint") {
+    throw new UnsupportedError("array-ctor-type-arg", `Array(...) 的型码越出 int 范围（收到 ${String(codeRaw)}）`);
+  }
+  const items = (base.v as GArray).raw();
+  if (codeRaw === 0) {
+    return V.array(GArray.of([...items]));
+  }
+  const kind = kindByCode(codeRaw);
+  if (kind === null) {
+    throw new UnsupportedError("array-ctor-kind", `Array(...) 的定型形只实测过容器标注的那批型名；型码 ${String(codeRaw)} 没量过（类名位收到 ${tagName(classArg.t)}）`);
+  }
+  const cls = ctorClassName(classArg);
+  const convertAll = (): Variant[] | null => {
+    const out: Variant[] = [];
+    for (const x of items) {
+      const converted = elemConvert(kind, x);
+      if (converted === null) return null;
+      out.push(converted);
+    }
+    return out;
+  };
+  if (cls !== null && kind !== "Object") {
+    // 类名只配 TYPE_OBJECT：其余型带上类名时引擎推「Class names can only be set for type OBJECT」，并把整支**降成不 typed**
+    // —— 元素照转（读数 tmp/d6/s623.gd：Array([1, 2], TYPE_INT, &"Foo", null) 给 is_typed 假、get_typed_builtin 0，值仍是 [1, 2]）
+    const converted = convertAll();
+    return V.array(GArray.of(converted ?? []));
+  }
+  const built = (list: Variant[]): Variant => {
+    const g = GArray.of(list);
+    if (kind === "Object" && cls !== null) {
+      g.stampElem(kind);
+      g.className = cls;
+    }
+    else g.stampElem(kind);
+    return V.array(g);
+  };
+  const converted = convertAll();
+  // 任一格转不过 → 空的定型数组，类名照挂（S613 的 m1：Array([1], TYPE_OBJECT, &"RefCounted", null) 给 [] | is_typed 真 | RefCounted | 24）
+  return built(converted ?? []);
+}
+
+/** 第三参（类名位）：StringName 与 String 都收（`tmp/d6/s623.gd` 的 m3 用 String 变量给的名字照样读回来），空串按「没有类名」算。 */
+function ctorClassName(v: Variant): string | null {
+  if (v.t === Tag.STRING_NAME || v.t === Tag.STRING) {
+    const text = v.v as string;
+    return text === "" ? null : text;
+  }
+  throw new UnsupportedError("array-ctor-class", `Array(...) 的第三参只实测过 StringName 与 String（收到 ${tagName(v.t)}）`);
 }
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，
@@ -42,14 +131,37 @@ export function num(v: Variant): number {
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
+/** 单个数位实参的引擎转换句（S564）：接受 int / float / bool，其余按源型与目标型发原文。 */
+function utilFloatArg(v: Variant, fn: string, n: number): number {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${n} from ${valueTypeName(v)} to float.`);
+  }
+  return num(v);
+}
+
+function utilIntArg(v: Variant, fn: string, n: number): number {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${n} from ${valueTypeName(v)} to int.`);
+  }
+  return Math.trunc(num(v));
+}
+
 /** `abs` / `sign` / `floor` / `ceil` / `round` 的坏型实参（向量分支已让开时）：引擎走运行期
  *  `Error calling utility function "<fn>()": Argument "x" must be "int", "float", …, or "Vector4i".`
  *  （S524，`tmp/d6/s520.py` 五支逐字同句；bool 照收、折 0/1，与 S362 一致）。 */
 export function numOrVectorArg(v: Variant, fn: string): number {
+  vec4UtilityGuard(v, fn);
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
     throw new GodotRuntimeError("utility-arg", `Error calling utility function "${fn}()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".`);
   }
   return num(v);
+}
+
+/** Vector4 / Vector4i 的全局函数语义（abs / sign / lerp / snapped / clamp / min / max…）还没量过：响亮拒，不冒发引擎句子。 */
+function vec4UtilityGuard(v: Variant, fn: string): void {
+  if (v.t === Tag.OBJECT && (v.v instanceof GVector4 || v.v instanceof GVector4i)) {
+    throw new UnsupportedError("utility-vector4", `${fn}() 在 Vector4 / Vector4i 上的语义没实测过（S580 只到核心值类型）`);
+  }
 }
 
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */
@@ -148,7 +260,10 @@ registerVarToStrValueHook((o) => {
   if (o instanceof GVector2i) return `Vector2i(${o.x}, ${o.y})`;
   if (o instanceof GVector3) return `Vector3(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)})`;
   if (o instanceof GVector3i) return `Vector3i(${o.x}, ${o.y}, ${o.z})`;
+  if (o instanceof GVector4) return `Vector4(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)}, ${rtosFix(o.w, true)})`;
+  if (o instanceof GVector4i) return `Vector4i(${o.x}, ${o.y}, ${o.z}, ${o.w})`;
   if (o instanceof GColor) return `Color(${rtosFix(o.r, true)}, ${rtosFix(o.g, true)}, ${rtosFix(o.b, true)}, ${rtosFix(o.a, true)})`;
+  if (o instanceof Signal) return "Signal()";
   return null;
 });
 
@@ -294,6 +409,14 @@ function packHash(p: GBytes): number {
       h = hashFloat32(v.y, h);
       h = hashFloat32(v.z, h);
     }
+  } else if (kind === "vector4") {
+    for (const e of raw) {
+      const v = e as GVector4;
+      h = hashFloat32(v.x, h);
+      h = hashFloat32(v.y, h);
+      h = hashFloat32(v.z, h);
+      h = hashFloat32(v.w, h);
+    }
   } else {
     for (const e of raw) {
       const c = e as GColor;
@@ -351,6 +474,8 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
       if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
       if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
+      if (v.v instanceof GVector4) return fmix32(hashFloat32(v.v.w, hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)))));
+      if (v.v instanceof GVector4i) return fmix32(murmurOne32(v.v.w >>> 0, murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)))));
       if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
       if (v.v instanceof GBytes) return packHash(v.v as GBytes);
       // 空 Signal 的对象号是 0，名字空串 → one_64(0, seed=hash(""))（S547）；带名 Signal 折的是宿主实例号，合成号对不上
@@ -367,6 +492,12 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       // 实测两条：全局内置那一族折出来就是名字那支 String 哈希（十六支一名一名对上，`tmp/probe-hash-callable/`）；
       // 空 Callable 走引擎非 custom 那条 —— 名字空串 + 对象 0，再 fmix32。
       if (isNullCallable(box)) return fmix32(murmurOne64Words(0, 0, hashDjb2("")));
+      if (box.invalidMethod) {
+        throw new UnsupportedError("hash-callable-invalid-method", "Callable.create(obj, 不存在的方法) 的哈希没拟合出来，不发");
+      }
+      if (box.detachedOwner !== null) {
+        throw new UnsupportedError("hash-callable-detached", `Callable.create(${box.detachedOwner}, name) 的哈希没拟合出来（引擎给 1862405700，名字哈希不中），不发`);
+      }
       if (box.object === null && box.name !== null) return hashDjb2(box.name);
       throw new UnsupportedError(
         "hash-callable",
@@ -390,7 +521,7 @@ export function variantHash(args: Variant[]): Variant {
 }
 
 export function sqrt(v: Variant): Variant {
-  return V.float(Math.sqrt(num(v)));
+  return V.float(Math.sqrt(utilFloatArg(v, "sqrt", 1)));
 }
 
 export function abs(v: Variant): Variant {
@@ -452,6 +583,8 @@ function vectorMath(v: Variant, name: "abs" | "floor" | "ceil" | "round" | "sign
   const o = v.v;
   if (o instanceof GVector2) return vector2Method(o, name, []);
   if (o instanceof GVector3) return vector3Method(o, name, []);
+  if (o instanceof GVector4) return vector4Method(o, name, []);
+  if (o instanceof GVector4i) return name === "abs" || name === "sign" ? vector4iMethod(o, name, []) : vector4i(o.x, o.y, o.z, o.w);
   if (o instanceof GVector2i) return name === "abs" || name === "sign" ? vector2iMethod(o, name, []) : vector2i(o.x, o.y);
   if (o instanceof GVector3i) return name === "abs" || name === "sign" ? vector3iMethod(o, name, []) : vector3i(o.x, o.y, o.z);
   return null;
@@ -465,11 +598,12 @@ export function gSign(v: Variant): Variant {
 }
 
 export function gSignI(v: Variant): Variant {
+  utilIntArg(v, "signi", 1);
   return vi(one(intOf(v)));
 }
 
 export function gSignF(v: Variant): Variant {
-  return V.float(one(fl(v)) + 0);
+  return V.float(one(utilFloatArg(v, "signf", 1)) + 0);
 }
 
 /** 实参是 int 时 `floor`/`ceil`/`round` 原样给回 int（实测 `floor(3)` 的 typeof 是 2），而 `floorf` 一族恒给 float、`floori` 一族恒给 int 且 NaN/INF 折成 INT64_MIN。 */
@@ -500,7 +634,7 @@ export function gFloor(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "floor");
     if (vec !== null) return vec;
   }
-  return roundThree(mode === "auto" ? numOrVectorArg(v, "floor") : num(v), Math.floor, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "floor") : utilFloatArg(v, mode === "float" ? "floorf" : "floori", 1), Math.floor, mode);
 }
 
 export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -510,7 +644,7 @@ export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "ceil");
     if (vec !== null) return vec;
   }
-  return roundThree(mode === "auto" ? numOrVectorArg(v, "ceil") : num(v), Math.ceil, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "ceil") : utilFloatArg(v, mode === "float" ? "ceilf" : "ceili", 1), Math.ceil, mode);
 }
 
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -522,7 +656,7 @@ export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   }
   // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
   // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
-  return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : utilFloatArg(v, mode === "float" ? "roundf" : "roundi", 1), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
@@ -530,6 +664,8 @@ function floorDiv(a: number, b: number): number {
 }
 
 export function gPosmod(x: Variant, y: Variant): Variant {
+  utilIntArg(x, "posmod", 1);
+  utilIntArg(y, "posmod", 2);
   const a = intOf(x);
   const b = intOf(y);
   // 模数为 0 那一支引擎不报错也不夹：推一条 `Division by zero in posmod is undefined. Returning 0 as fallback.`
@@ -539,8 +675,8 @@ export function gPosmod(x: Variant, y: Variant): Variant {
 }
 
 export function gFposmod(x: Variant, y: Variant): Variant {
-  const a = fl(x);
-  const b = fl(y);
+  const a = utilFloatArg(x, "fposmod", 1);
+  const b = utilFloatArg(y, "fposmod", 2);
   // 源是 `fmod` 再把结果按号折回，不是 `a - b*floor(a/b)`：两者的最后一两位 double 会分岔（普查 8/30）。
   let v = a % b;
   if ((v < 0 && b > 0) || (v > 0 && b < 0)) v += b;
@@ -549,16 +685,21 @@ export function gFposmod(x: Variant, y: Variant): Variant {
 
 /** `fmod(-0.0, 1.0)` 实测留号（C 的 `fmod` 就是把被除数的号带下来），所以不 `+ 0`。 */
 export function gFmod(x: Variant, y: Variant): Variant {
-  return V.float(fl(x) % fl(y));
+  return V.float(utilFloatArg(x, "fmod", 1) % utilFloatArg(y, "fmod", 2));
 }
 
 export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Variant {
+  if (asInt) {
+    utilIntArg(v, "wrapi", 1);
+    utilIntArg(lo, "wrapi", 2);
+    utilIntArg(hi, "wrapi", 3);
+  }
   if (!asInt) {
     // 引擎的 wrapf **不排序两端**：`range = max - min`，`is_zero_approx(range)` 就回 min；
     // `result = value - range * floor((value - min) / range)`，最后 `is_equal_approx(result, max)` 再回 min。
-    const mn = fl(lo);
-    const mx = fl(hi);
-    const x = fl(v);
+    const mn = utilFloatArg(lo, "wrapf", 2);
+    const mx = utilFloatArg(hi, "wrapf", 3);
+    const x = utilFloatArg(v, "wrapf", 1);
     const range = mx - mn;
     if (Math.abs(range) < CMP_EPSILON) return V.float(mn + 0);
     const result = x - range * Math.floor((x - mn) / range);
@@ -575,26 +716,80 @@ export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Var
   return vi(mn + r);
 }
 
+const LERP_FROM_LIST = 'Error calling utility function "lerp()": Argument "from" must be "int", "float", "Vector2", "Vector3", "Vector4", "Color", "Quaternion", "Basis", "Transform2D", or "Transform3D".';
+const SNAPPED_X_LIST = 'Error calling utility function "snapped()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".';
+const SNAPPED_STEP_MUST = 'Error calling utility function "snapped()": Argument "step" must be "int" or "float".';
+
+/** 值类型的引擎型名（`snapped` / `lerp` 的「跟第一参走」句要用）。 */
+function vecClassName(o: object): string | null {
+  if (o instanceof GVector2) return "Vector2";
+  if (o instanceof GVector3) return "Vector3";
+  if (o instanceof GVector2i) return "Vector2i";
+  if (o instanceof GVector3i) return "Vector3i";
+  if (o instanceof GVector4) return "Vector4";
+  if (o instanceof GVector4i) return "Vector4i";
+  if (o instanceof GColor) return "Color";
+  return null;
+}
+
+function utilConvertError(fn: string, src: Variant, target: string, argNo: number): GodotRuntimeError {
+  return new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${argNo} from ${valueTypeName(src)} to ${target}.`);
+}
+
+/** `lerp` 的权重按 Variant→float 折（实测 int/float/bool/String 照值，Array / null / Vector2 都折 0）。 */
+function weightToFloat(w: Variant): number {
+  if (w.t === Tag.INT) {
+    const n = intToNum(w.v as IntPayload);
+    return typeof n === "bigint" ? Number(n) : n;
+  }
+  if (w.t === Tag.FLOAT) return w.v as number;
+  if (w.t === Tag.BOOL) return w.v ? 1 : 0;
+  if (w.t === Tag.STRING) return strToFloat(w.v as string);
+  return 0;
+}
+
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
-  const weight = floatWeight(w);
-  if (weight !== null && sameShape(a, b)) {
-    const vec = sameTypeVectorMath("lerp", a, [b, weight]);
+  const va4 = a.t === Tag.OBJECT && a.v instanceof GVector4 ? (a.v as GVector4) : null;
+  const vb4 = b.t === Tag.OBJECT && b.v instanceof GVector4 ? (b.v as GVector4) : null;
+  if (va4 !== null && vb4 !== null) {
+    const t = weightToFloat(w);
+    const mix = (x: number, y: number) => Math.fround(x + Math.fround((y - x) * Math.fround(t)));
+    return V.object(new GVector4(mix(va4.x, vb4.x), mix(va4.y, vb4.y), mix(va4.z, vb4.z), mix(va4.w, vb4.w)));
+  }
+  if (a.t === Tag.OBJECT && a.v instanceof GVector4i) throw new GodotRuntimeError("utility-arg", LERP_FROM_LIST);
+  const weight = weightToFloat(w);
+  if (sameShape(a, b)) {
+    const vec = sameTypeVectorMath("lerp", a, [b, V.float(weight)]);
     if (vec !== null) return vec;
   }
-  const x = num(a);
-  return V.float(x + (num(b) - x) * num(w) + 0);
+  const listName = a.t === Tag.OBJECT ? vecClassName(a.v as object) : null;
+  const aName =
+    a.t === Tag.OBJECT
+      ? listName === "Vector2" || listName === "Vector3" || listName === "Vector4" || listName === "Color" ? listName : null
+      : a.t === Tag.INT ? "int" : a.t === Tag.FLOAT ? "float" : a.t === Tag.BOOL ? "float" : null;
+  if (aName === null) throw new GodotRuntimeError("utility-arg", LERP_FROM_LIST);
+  if (a.t === Tag.INT || a.t === Tag.FLOAT || a.t === Tag.BOOL) {
+    if (b.t !== Tag.INT && b.t !== Tag.FLOAT && b.t !== Tag.BOOL) throw utilConvertError("lerp", b, aName, 2);
+    const x = num(a);
+    return V.float(x + (num(b) - x) * weight + 0);
+  }
+  // 向量 / Color 当 from 时 to 必须同型；不同型引擎按「跟第一参走」那句报转换失败
+  throw utilConvertError("lerp", b, aName, 2);
 }
 
 export function gInverseLerp(a: Variant, b: Variant, v: Variant): Variant {
-  const den = fl(b) - fl(a);
-  if (den === 0) return V.float((fl(v) - fl(a)) / den);
-  return V.float((fl(v) - fl(a)) / den + 0);
+  const aa = utilFloatArg(a, "inverse_lerp", 1);
+  const bb = utilFloatArg(b, "inverse_lerp", 2);
+  const vv = utilFloatArg(v, "inverse_lerp", 3);
+  const den = bb - aa;
+  if (den === 0) return V.float((vv - aa) / den);
+  return V.float((vv - aa) / den + 0);
 }
 
 export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant {
-  const a = fl(from);
-  const b = fl(to);
-  const d = fl(delta);
+  const a = utilFloatArg(from, "move_toward", 1);
+  const b = utilFloatArg(to, "move_toward", 2);
+  const d = utilFloatArg(delta, "move_toward", 3);
   // 引擎那句是 `abs(to - from) <= delta ? to : from + SIGN(to - from) * delta`：上界比的是**带号的 delta**，
   // 所以 delta 为负时永远走后半支，也就是往 `to` 的反方向走（30 格普查里 22 格的分岔全在这条上）。
   if (Math.abs(b - a) <= d) return V.float(b + 0);
@@ -627,10 +822,6 @@ function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[
   return null;
 }
 
-function floatWeight(w: Variant): Variant | null {
-  return w.t === Tag.FLOAT || w.t === Tag.INT ? w : null;
-}
-
 function sameShape(a: Variant, b: Variant): boolean {
   if (a.t !== Tag.OBJECT || b.t !== Tag.OBJECT) return false;
   const x = a.v;
@@ -643,8 +834,26 @@ function sameShape(a: Variant, b: Variant): boolean {
 }
 
 export function gSnapped(x: Variant, step: Variant): Variant {
-  const vec = sameTypeVectorMath("snapped", x, [step]);
-  if (vec !== null) return vec;
+  const sx4 = x.t === Tag.OBJECT && x.v instanceof GVector4 ? (x.v as GVector4) : null;
+  const st4 = step.t === Tag.OBJECT && step.v instanceof GVector4 ? (step.v as GVector4) : null;
+  if (sx4 !== null && st4 !== null) return vector4Method(sx4, "snapped", [step]);
+  const sx4i = x.t === Tag.OBJECT && x.v instanceof GVector4i ? (x.v as GVector4i) : null;
+  const st4i = step.t === Tag.OBJECT && step.v instanceof GVector4i ? (step.v as GVector4i) : null;
+  if (sx4i !== null && st4i !== null) return vector4iMethod(sx4i, "snapped", [step]);
+  if (sx4 !== null) throw utilConvertError("snapped", step, "Vector4", 2);
+  if (sx4i !== null) throw utilConvertError("snapped", step, "Vector4i", 2);
+  vec4UtilityGuard(x, "snapped");
+  vec4UtilityGuard(step, "snapped");
+  const xName = x.t === Tag.OBJECT ? vecClassName(x.v as object) : null;
+  if (xName !== null && xName !== "Color") {
+    if (step.t === Tag.OBJECT && vecClassName(step.v as object) === xName) {
+      const vec = sameTypeVectorMath("snapped", x, [step]);
+      if (vec !== null) return vec;
+    }
+    throw utilConvertError("snapped", step, xName, 2);
+  }
+  if (!(x.t === Tag.INT || x.t === Tag.FLOAT || x.t === Tag.BOOL)) throw new GodotRuntimeError("utility-arg", SNAPPED_X_LIST);
+  if (!(step.t === Tag.INT || step.t === Tag.FLOAT || step.t === Tag.BOOL)) throw new GodotRuntimeError("utility-arg", SNAPPED_STEP_MUST);
   const s = num(step);
   const a = num(x);
   if (isInt(step)) {
@@ -675,16 +884,16 @@ const TAU_D = 2 * PI_D;
 
 /** `deg_to_rad(-0.0)` 与 `rad_to_deg(-0.0)` 实测都留号（乘法在 IEEE 里就把号带过去），所以不 `+ 0`。 */
 export function gDegToRad(v: Variant): Variant {
-  return V.float(fl(v) * (PI_D / 180));
+  return V.float(utilFloatArg(v, "deg_to_rad", 1) * (PI_D / 180));
 }
 
 export function gRadToDeg(v: Variant): Variant {
-  return V.float(fl(v) * (180 / PI_D));
+  return V.float(utilFloatArg(v, "rad_to_deg", 1) * (180 / PI_D));
 }
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
 export function gAngleDifference(from: Variant, to: Variant): Variant {
-  return V.float(angleDiff(fl(from), fl(to)));
+  return V.float(angleDiff(utilFloatArg(from, "angle_difference", 1), utilFloatArg(to, "angle_difference", 2)));
 }
 
 function approxEq(a: number, b: number): boolean {
@@ -695,27 +904,27 @@ function approxEq(a: number, b: number): boolean {
 }
 
 export function gIsEqualApprox(a: Variant, b: Variant): Variant {
-  const x = fl(a);
-  const y = fl(b);
+  const x = utilFloatArg(a, "is_equal_approx", 1);
+  const y = utilFloatArg(b, "is_equal_approx", 2);
   return V.bool(approxEq(x, y));
 }
 
 export function gIsZeroApprox(v: Variant): Variant {
-  const x = fl(v);
+  const x = utilFloatArg(v, "is_zero_approx", 1);
   return V.bool(Number.isFinite(x) && Math.abs(x) < 1e-5);
 }
 
 export function gIsNan(v: Variant): Variant {
-  return V.bool(Number.isNaN(fl(v)));
+  return V.bool(Number.isNaN(utilFloatArg(v, "is_nan", 1)));
 }
 
 export function gIsInf(v: Variant): Variant {
-  const x = fl(v);
+  const x = utilFloatArg(v, "is_inf", 1);
   return V.bool(x === Infinity || x === -Infinity);
 }
 
 export function gIsFinite(v: Variant): Variant {
-  return V.bool(Number.isFinite(fl(v)));
+  return V.bool(Number.isFinite(utilFloatArg(v, "is_finite", 1)));
 }
 
 /** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1)` 给 nan。
@@ -761,23 +970,27 @@ export function gMax(...xs: Variant[]): Variant {
 }
 
 export function gMinI(a: Variant, b: Variant): Variant {
+  utilIntArg(a, "mini", 1);
+  utilIntArg(b, "mini", 2);
   const x = intOf(a);
   const y = intOf(b);
   return vi(x > y ? y : x);
 }
 
 export function gMaxI(a: Variant, b: Variant): Variant {
+  utilIntArg(a, "maxi", 1);
+  utilIntArg(b, "maxi", 2);
   const x = intOf(a);
   const y = intOf(b);
   return vi(x < y ? y : x);
 }
 
 export function gMinF(a: Variant, b: Variant): Variant {
-  return V.float(Math.min(fl(a), fl(b)) + 0);
+  return V.float(Math.min(utilFloatArg(a, "minf", 1), utilFloatArg(b, "minf", 2)) + 0);
 }
 
 export function gMaxF(a: Variant, b: Variant): Variant {
-  return V.float(Math.max(fl(a), fl(b)) + 0);
+  return V.float(Math.max(utilFloatArg(a, "maxf", 1), utilFloatArg(b, "maxf", 2)) + 0);
 }
 
 function need2(a: Variant, b: Variant, who: string): void {
@@ -787,11 +1000,63 @@ function need2(a: Variant, b: Variant, who: string): void {
 }
 
 /** 实测口径：先看上界再看下界（`clamp(1, 2, 0)` 给 0、`clamp(NAN, 0, 1)` 给 nan），返回的那一侧带自己的类型；`clampf` 恒给 float、`clampi` 恒给 int。 */
+/** `clamp`（auto）的目标型跟第一参走（S567）：lo/hi 先往 x 的型转，第一位失败的按 argument 2/3 报。 */
+function clampTargetName(x: Variant): string {
+  if (x.t === Tag.INT) return "int";
+  if (x.t === Tag.FLOAT) return "float";
+  if (x.t === Tag.BOOL) return "bool";
+  if (x.t === Tag.STRING) return "String";
+  if (x.t === Tag.STRING_NAME) return "StringName";
+  if (x.t === Tag.ARRAY) return "Array";
+  if (x.t === Tag.DICT) return "Dictionary";
+  if (x.t === Tag.OBJECT) {
+    const n = vecClassName(x.v as object);
+    if (n !== null) return n;
+    if (x.v instanceof GBytes) return packTypeName((x.v as GBytes).kind);
+  }
+  return valueTypeName(x);
+}
+
+function clampAccepts(target: string, y: Variant): boolean {
+  if (target === "int" || target === "float") return y.t === Tag.INT || y.t === Tag.FLOAT;
+  if (target === "Vector2") return y.t === Tag.OBJECT && y.v instanceof GVector2;
+  if (target === "Vector2i") return y.t === Tag.OBJECT && y.v instanceof GVector2i;
+  if (target === "Vector3") return y.t === Tag.OBJECT && y.v instanceof GVector3;
+  if (target === "Vector3i") return y.t === Tag.OBJECT && y.v instanceof GVector3i;
+  if (target === "Color") return y.t === Tag.OBJECT && y.v instanceof GColor;
+  if (target === "bool") return y.t === Tag.BOOL;
+  if (target === "String") return y.t === Tag.STRING;
+  if (target === "StringName") return y.t === Tag.STRING_NAME;
+  if (target === "Array") return y.t === Tag.ARRAY;
+  if (target === "Dictionary") return y.t === Tag.DICT;
+  return valueTypeName(y) === target;
+}
+
 export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "auto"): Variant {
+  if (mode === "auto") {
+    const target = clampTargetName(v);
+    if (!clampAccepts(target, lo)) throw utilConvertError("clamp", lo, target, 2);
+    if (!clampAccepts(target, hi)) throw utilConvertError("clamp", hi, target, 3);
+  }
   // 三支都是 bool 时不走数值那一序：六格真值表只合「先并下界、再截上界」（S362，读数 `tmp/probe-argtype/bool-slot.txt` 与 `fold39.mts`）——
   // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
   if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
     return V.bool(((v.v as boolean) || (lo.v as boolean)) && (hi.v as boolean));
+  }
+  if (mode === "auto" && v.t === Tag.OBJECT && lo.t === Tag.OBJECT && hi.t === Tag.OBJECT) {
+    const g4 = v.v;
+    const l4 = lo.v;
+    const h4 = hi.v;
+    if (g4 instanceof GVector4 && l4 instanceof GVector4 && h4 instanceof GVector4) {
+      if (vec4Cmp(g4, l4) < 0) return lo;
+      if (vec4Cmp(g4, h4) > 0) return hi;
+      return v;
+    }
+    if (g4 instanceof GVector4i && l4 instanceof GVector4i && h4 instanceof GVector4i) {
+      if (vec4Cmp(g4, l4) < 0) return lo;
+      if (vec4Cmp(g4, h4) > 0) return hi;
+      return v;
+    }
   }
   // S537：向量 clamp 走引擎的**字典序**比较（先 x、再 y、再 z），整支返回 v / lo / hi（`CLAMP` 用 Variant `<`/`>`，
   // Vector 的这两个运算符是字典序）——实测 `clamp(Vector2(1,-5),(0,0),(2,2))` 给 `(1.0,-5.0)` 原样、
@@ -817,6 +1082,16 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
       return v;
     }
   }
+  // clampf / clampi 的坏型位（S566）：逐位发引擎转换句
+  if (mode === "float") {
+    utilFloatArg(v, "clampf", 1);
+    utilFloatArg(lo, "clampf", 2);
+    utilFloatArg(hi, "clampf", 3);
+  } else if (mode === "int") {
+    utilIntArg(v, "clampi", 1);
+    utilIntArg(lo, "clampi", 2);
+    utilIntArg(hi, "clampi", 3);
+  }
   need2(v, lo, "clamp");
   need2(v, hi, "clamp");
   const x = mode === "int" ? intOf(v) : fl(v);
@@ -831,9 +1106,9 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
 }
 
 export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
-  const a = fl(from);
-  const b = fl(to);
-  const x = fl(s);
+  const a = utilFloatArg(from, "smoothstep", 1);
+  const b = utilFloatArg(to, "smoothstep", 2);
+  const x = utilFloatArg(s, "smoothstep", 3);
   if (approxEq(a, b)) return V.float((a <= b ? (x <= a ? 0.0 : 1.0) : x <= b ? 1.0 : 0.0) + 0);
   // 降序那一侧没有早退支：源里只有 `s = CLAMP((p_s - p_from) / (p_to - p_from), 0, 1)` 再走 `s*s*(3-2s)`，
   // 原来那两条 `x <= a / x >= b` 早退在 a > b 时把 0 与 1 交错了（普查 30 格里 9 格分岔）。
@@ -843,8 +1118,8 @@ export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
 
 /** 绑定签名是 `ease(float x, float curve)`：两个实参先在调用边界折回 float32，式子本身走 `Math::ease` 的 double 那一支（168 格读数含负曲线）。 */
 export function gEase(delta: Variant, curve: Variant): Variant {
-  const c = Math.fround(fl(curve));
-  let x = Math.fround(fl(delta));
+  const c = Math.fround(utilFloatArg(curve, "ease", 2));
+  let x = Math.fround(utilFloatArg(delta, "ease", 1));
   if (x < 0) x = 0;
   else if (x > 1.0) x = 1.0;
   if (c > 0) {
@@ -860,34 +1135,38 @@ export function gEase(delta: Variant, curve: Variant): Variant {
 
 /** 实参顺序是 `(from, to, pre, after, weight)`：`cubic_interpolate(0,1,2,3,0.5)` 给 0.25、`(1,2,3,4,0.5)` 给 1.25。 */
 export function gCubic(from: Variant, to: Variant, pre: Variant, after: Variant, w: Variant): Variant {
-  const p0 = fl(from);
-  const p1 = fl(to);
-  const p2 = fl(pre);
-  const p3 = fl(after);
-  const t = fl(w);
+  const p0 = utilFloatArg(from, "cubic_interpolate", 1);
+  const p1 = utilFloatArg(to, "cubic_interpolate", 2);
+  const p2 = utilFloatArg(pre, "cubic_interpolate", 3);
+  const p3 = utilFloatArg(after, "cubic_interpolate", 4);
+  const t = utilFloatArg(w, "cubic_interpolate", 5);
   return V.float(cubicNum(p0, p1, p2, p3, t) + 0);
 }
 
 export function gRemap(v: Variant, fl0: Variant, fh: Variant, tl: Variant, th: Variant): Variant {
+  utilFloatArg(v, "remap", 1);
+  utilFloatArg(fl0, "remap", 2);
+  utilFloatArg(fh, "remap", 3);
+  const a = utilFloatArg(tl, "remap", 4);
+  const b = utilFloatArg(th, "remap", 5);
   const t = gInverseLerp(fl0, fh, v).v as number;
-  const a = fl(tl);
-  return V.float(a + (fl(th) - a) * t + 0);
+  return V.float(a + (b - a) * t + 0);
 }
 
 export function gExp(v: Variant): Variant {
-  return V.float(Math.exp(fl(v)) + 0);
+  return V.float(Math.exp(utilFloatArg(v, "exp", 1)) + 0);
 }
 
 export function gLog(v: Variant): Variant {
-  return V.float(Math.log(fl(v)) + 0);
+  return V.float(Math.log(utilFloatArg(v, "log", 1)) + 0);
 }
 
 export function gPow(a: Variant, b: Variant): Variant {
-  return V.float(Math.pow(fl(a), fl(b)) + 0);
+  return V.float(Math.pow(utilFloatArg(a, "pow", 1), utilFloatArg(b, "pow", 2)) + 0);
 }
 
 export function gSqrt(v: Variant): Variant {
-  return V.float(Math.sqrt(fl(v)) + 0);
+  return V.float(Math.sqrt(utilFloatArg(v, "sqrt", 1)));
 }
 
 
@@ -899,7 +1178,10 @@ export function unsupportedValueDefault(name: string): Variant {
 export function lengthOf(v: Variant): Variant {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());
-  throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
+  if (v.t === Tag.DICT) return V.int((v.v as GDict).size());
+  if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int((v.v as GBytes).length);
+  const tn = v.t === Tag.OBJECT && v.v instanceof Signal ? "Signal" : valueTypeName(v);
+  throw new GodotRuntimeError("len", `Error calling GDScript utility function "len()": Value of type '${tn}' can't provide a length.`);
 }
 
 /** and / or 是短路的，所以右值延迟求值；两支的值恒为 bool（S398：`1 and 2` 引擎给 `true`，`typeof` 那格给 1）。 */
@@ -942,10 +1224,11 @@ export function range(args: Variant[]): GArray {
 
 /** `absf` / `absi`：实测只吃 INT / FLOAT / BOOL（String、StringName、Nil、Array、Vector2 那一格引擎报 Invalid type 并掐掉本次调用，实测 f01–f12）。 */
 export function gAbsF(v: Variant): Variant {
-  return V.float(Math.abs(numArg(v, "absf() 的参数")) + 0);
+  return V.float(Math.abs(utilFloatArg(v, "absf", 1)) + 0);
 }
 
 export function gAbsI(v: Variant): Variant {
+  utilIntArg(v, "absi", 1);
   const x = intArgBig(v, "absi() 的参数");
   return V.int(x < 0n ? wrap64(-x) : x);
 }
@@ -969,7 +1252,7 @@ const COS_LIMIT = 1e5;
 const HALF_PI = Math.PI / 2;
 
 function trig(name: string, v: Variant, f: (x: number) => number, limit: number | null): Variant {
-  const x = numArg(v, `${name}() 的参数`);
+  const x = utilFloatArg(v, name, 1);
   if (limit !== null && Number.isFinite(x) && Math.abs(x) > limit) {
     throw new UnsupportedError("trig-large-arg", `${name}() 收到 ${show(V.float(x))}：|x| 超过实测的 ${String(limit)}，引擎那侧的归约从这一档开始丢有效位（没量过的不发）`);
   }
@@ -987,34 +1270,34 @@ export const gAsinh = (v: Variant): Variant => trig("asinh", v, Math.asinh, null
 
 /** `asin` / `acos` / `acosh` / `atanh` 引擎都先夹再算（`core/math/math_funcs.h` 那四行「Always does clamping」+ 实测 k04–k08 / j.log / e.log），夹出来的是常量。 */
 export function gAsin(v: Variant): Variant {
-  const x = numArg(v, "asin() 的参数");
+  const x = utilFloatArg(v, "asin", 1);
   if (x < -1) return V.float(-HALF_PI);
   if (x > 1) return V.float(HALF_PI);
   return V.float(Math.asin(x));
 }
 
 export function gAcos(v: Variant): Variant {
-  const x = numArg(v, "acos() 的参数");
+  const x = utilFloatArg(v, "acos", 1);
   if (x < -1) return V.float(Math.PI);
   if (x > 1) return V.float(0);
   return V.float(Math.acos(x));
 }
 
 export function gAcosh(v: Variant): Variant {
-  const x = numArg(v, "acosh() 的参数");
+  const x = utilFloatArg(v, "acosh", 1);
   if (x < 1) return V.float(0);
   return V.float(Math.acosh(x));
 }
 
 export function gAtanh(v: Variant): Variant {
-  const x = numArg(v, "atanh() 的参数");
+  const x = utilFloatArg(v, "atanh", 1);
   if (x <= -1) return V.float(-Infinity);
   if (x >= 1) return V.float(Infinity);
   return V.float(Math.atanh(x));
 }
 
 export function gAtan2(y: Variant, x: Variant): Variant {
-  return V.float(Math.atan2(numArg(y, "atan2() 的第一参"), numArg(x, "atan2() 的第二参")));
+  return V.float(Math.atan2(utilFloatArg(y, "atan2", 1), utilFloatArg(x, "atan2", 2)));
 }
 
 /** 引擎的两个 dB 常数（4.3 树 `core/math/math_funcs.h`：`ln(10)/20` 与 `20/ln(10)`）。 */
@@ -1022,17 +1305,17 @@ const DB_TO_LINEAR_K = 0.11512925464970228420089957273422;
 const LINEAR_TO_DB_K = 8.6858896380650365530225783783321;
 
 export function gDbToLinear(v: Variant): Variant {
-  return V.float(Math.exp(numArg(v, "db_to_linear() 的参数") * DB_TO_LINEAR_K) + 0);
+  return V.float(Math.exp(utilFloatArg(v, "db_to_linear", 1) * DB_TO_LINEAR_K) + 0);
 }
 
 export function gLinearToDb(v: Variant): Variant {
-  return V.float(Math.log(numArg(v, "linear_to_db() 的参数")) * LINEAR_TO_DB_K);
+  return V.float(Math.log(utilFloatArg(v, "linear_to_db", 1)) * LINEAR_TO_DB_K);
 }
 
 /** `pingpong(值, 周期)`：`length == 0` 那格实测给 0.0（n.log pp|1.5,0.0），式子是引擎那句 `abs(fract((v-l)/(2l))*2l - l)`。 */
 export function gPingpong(v: Variant, length: Variant): Variant {
-  const value = numArg(v, "pingpong() 的值");
-  const l = numArg(length, "pingpong() 的周期");
+  const value = utilFloatArg(v, "pingpong", 1);
+  const l = utilFloatArg(length, "pingpong", 2);
   if (l === 0) return V.float(0);
   const x = (value - l) / (l * 2);
   return V.float(Math.abs((x - Math.floor(x)) * l * 2 - l) + 0);
@@ -1044,7 +1327,7 @@ const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000
 export function gStepDecimals(v: Variant): Variant {
   // 绑定签名是 `step_decimals(float step)`：实参先在调用边界折回 float32，再进这张 double 门槛表
   // （`0.9999` 折成 float32 是 `0.99989998…`，掉到门槛下面，实测 `step_decimals(0.9999)` 给 1）。
-  const x = Math.abs(Math.fround(numArg(v, "step_decimals() 的参数")));
+  const x = Math.abs(Math.fround(utilFloatArg(v, "step_decimals", 1)));
   const decs = x - Math.trunc(x);
   let i = 0;
   for (const t of STEP_THRESHOLDS) {
@@ -1056,6 +1339,9 @@ export function gStepDecimals(v: Variant): Variant {
 
 /** `nearest_po2()`：无符号那侧「进一位再抹平」的式子（`typedefs.h` 的 `nearest_power_of_2_templated`），回绕都按 64 位走 —— 实测 `0 → 0`、`-3 → 0`、`3 → 4`、`5 → 8`。 */
 export function gNearestPo2(v: Variant): Variant {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "nearest_po2()". Cannot convert argument 1 from ${valueTypeName(v)} to int.`);
+  }
   let u = intArgBig(v, "nearest_po2() 的参数") & MASK64;
   u = (u - 1n) & MASK64;
   for (const s of [1, 2, 4, 8, 16, 32]) u = (u | (u >> BigInt(s))) & MASK64;
@@ -1069,25 +1355,25 @@ function angleDiff(from: number, to: number): number {
 }
 
 export function gLerpAngle(from: Variant, to: Variant, w: Variant): Variant {
-  const a = numArg(from, "lerp_angle() 的起点");
-  return V.float(a + angleDiff(a, numArg(to, "lerp_angle() 的终点")) * numArg(w, "lerp_angle() 的权重") + 0);
+  const a = utilFloatArg(from, "lerp_angle", 1);
+  return V.float(a + angleDiff(a, utilFloatArg(to, "lerp_angle", 2)) * utilFloatArg(w, "lerp_angle", 3) + 0);
 }
 
 /** `rotate_toward`：实参先夹进 `|差| - π … |差|` 再按弧的符号走（负 delta 那格没量过，照式子给，语料里不钉）。 */
 export function gRotateToward(from: Variant, to: Variant, delta: Variant): Variant {
-  const a = numArg(from, "rotate_toward() 的起点");
-  const diff = angleDiff(a, numArg(to, "rotate_toward() 的终点"));
+  const a = utilFloatArg(from, "rotate_toward", 1);
+  const diff = angleDiff(a, utilFloatArg(to, "rotate_toward", 2));
   const absDiff = Math.abs(diff);
-  const d = Math.min(Math.max(numArg(delta, "rotate_toward() 的步长"), absDiff - PI_D), absDiff);
+  const d = Math.min(Math.max(utilFloatArg(delta, "rotate_toward", 3), absDiff - PI_D), absDiff);
   return V.float(a + d * (diff >= 0 ? 1 : -1) + 0);
 }
 
 export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
-  const p = numArg(s1, "bezier_interpolate() 的起点");
-  const a = numArg(c1, "bezier_interpolate() 的第一控制点");
-  const b = numArg(c2, "bezier_interpolate() 的第二控制点");
-  const q = numArg(e, "bezier_interpolate() 的终点");
-  const w = numArg(t, "bezier_interpolate() 的 t");
+  const p = utilFloatArg(s1, "bezier_interpolate", 1);
+  const a = utilFloatArg(c1, "bezier_interpolate", 2);
+  const b = utilFloatArg(c2, "bezier_interpolate", 3);
+  const q = utilFloatArg(e, "bezier_interpolate", 4);
+  const w = utilFloatArg(t, "bezier_interpolate", 5);
   const omt = 1 - w;
   const omt2 = omt * omt;
   const omt3 = omt2 * omt;
@@ -1097,11 +1383,11 @@ export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Var
 }
 
 export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
-  const p = numArg(s1, "bezier_derivative() 的起点");
-  const a = numArg(c1, "bezier_derivative() 的第一控制点");
-  const b = numArg(c2, "bezier_derivative() 的第二控制点");
-  const q = numArg(e, "bezier_derivative() 的终点");
-  const w = numArg(t, "bezier_derivative() 的 t");
+  const p = utilFloatArg(s1, "bezier_derivative", 1);
+  const a = utilFloatArg(c1, "bezier_derivative", 2);
+  const b = utilFloatArg(c2, "bezier_derivative", 3);
+  const q = utilFloatArg(e, "bezier_derivative", 4);
+  const w = utilFloatArg(t, "bezier_derivative", 5);
   const omt = 1 - w;
   const omt2 = omt * omt;
   const t2 = w * w;
@@ -1140,29 +1426,32 @@ function cubicInTimeNum(from: number, to: number, pre: number, post: number, w: 
 }
 
 export function gCubicAngle(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant): Variant {
-  const a = numArg(from, "cubic_interpolate_angle() 的起点");
-  const r = angleRots(a, numArg(to, "cubic_interpolate_angle() 的终点"), numArg(pre, "cubic_interpolate_angle() 的前一控制点"), numArg(post, "cubic_interpolate_angle() 的后一控制点"));
-  return V.float(cubicNum(r[0], r[1], r[2], r[3], numArg(w, "cubic_interpolate_angle() 的权重")) + 0);
+  const a = utilFloatArg(from, "cubic_interpolate_angle", 1);
+  const r = angleRots(a, utilFloatArg(to, "cubic_interpolate_angle", 2), utilFloatArg(pre, "cubic_interpolate_angle", 3), utilFloatArg(post, "cubic_interpolate_angle", 4));
+  return V.float(cubicNum(r[0], r[1], r[2], r[3], utilFloatArg(w, "cubic_interpolate_angle", 5)) + 0);
 }
 
 export function gCubicInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
   return V.float(cubicInTimeNum(
-    numArg(from, "cubic_interpolate_in_time() 的起点"), numArg(to, "cubic_interpolate_in_time() 的终点"),
-    numArg(pre, "cubic_interpolate_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_in_time() 的后一控制点"),
-    numArg(w, "cubic_interpolate_in_time() 的权重"), numArg(toT, "cubic_interpolate_in_time() 的 to_t"),
-    numArg(preT, "cubic_interpolate_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_in_time() 的 post_t")) + 0);
+    utilFloatArg(from, "cubic_interpolate_in_time", 1), utilFloatArg(to, "cubic_interpolate_in_time", 2),
+    utilFloatArg(pre, "cubic_interpolate_in_time", 3), utilFloatArg(post, "cubic_interpolate_in_time", 4),
+    utilFloatArg(w, "cubic_interpolate_in_time", 5), utilFloatArg(toT, "cubic_interpolate_in_time", 6),
+    utilFloatArg(preT, "cubic_interpolate_in_time", 7), utilFloatArg(postT, "cubic_interpolate_in_time", 8)) + 0);
 }
 
 export function gCubicAngleInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
-  const a = numArg(from, "cubic_interpolate_angle_in_time() 的起点");
-  const r = angleRots(a, numArg(to, "cubic_interpolate_angle_in_time() 的终点"), numArg(pre, "cubic_interpolate_angle_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_angle_in_time() 的后一控制点"));
+  const a = utilFloatArg(from, "cubic_interpolate_angle_in_time", 1);
+  const r = angleRots(a, utilFloatArg(to, "cubic_interpolate_angle_in_time", 2), utilFloatArg(pre, "cubic_interpolate_angle_in_time", 3), utilFloatArg(post, "cubic_interpolate_angle_in_time", 4));
   return V.float(cubicInTimeNum(r[0], r[1], r[2], r[3],
-    numArg(w, "cubic_interpolate_angle_in_time() 的权重"), numArg(toT, "cubic_interpolate_angle_in_time() 的 to_t"),
-    numArg(preT, "cubic_interpolate_angle_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_angle_in_time() 的 post_t")) + 0);
+    utilFloatArg(w, "cubic_interpolate_angle_in_time", 5), utilFloatArg(toT, "cubic_interpolate_angle_in_time", 6),
+    utilFloatArg(preT, "cubic_interpolate_angle_in_time", 7), utilFloatArg(postT, "cubic_interpolate_angle_in_time", 8)) + 0);
 }
 
 /** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */
 export function gWrapAny(v: Variant, lo: Variant, hi: Variant): Variant {
+  utilFloatArg(v, "wrap", 1);
+  utilIntArg(lo, "wrap", 2);
+  utilIntArg(hi, "wrap", 3);
   return gWrap(v, lo, hi, v.t === Tag.INT && lo.t === Tag.INT && hi.t === Tag.INT);
 }
 
@@ -1318,12 +1607,20 @@ export function gRandi(): Variant {
   return V.int(BigInt(pcgNext(DEFAULT_RAND)));
 }
 
+/** `Math::rand()` 的原样 32 位输出：`Array.pick_random()` / `shuffle()` 的取模源（S572）。 */
+export function randNextUint32(): number {
+  bootRand();
+  return pcgNext(DEFAULT_RAND);
+}
+
 export function gRandf(): Variant {
   bootRand();
   return V.float(Math.fround(pcgNext(DEFAULT_RAND) / 4294967296));
 }
 
 export function gRandiRange(from: Variant, to: Variant): Variant {
+  utilIntArg(from, "randi_range", 1);
+  utilIntArg(to, "randi_range", 2);
   bootRand();
   const a = Number(BigInt.asIntN(32, intArgBig(from, "randi_range() 的第一参")));
   const b = Number(BigInt.asIntN(32, intArgBig(to, "randi_range() 的第二参")));
@@ -1334,15 +1631,15 @@ export function gRandiRange(from: Variant, to: Variant): Variant {
 
 export function gRandfRange(from: Variant, to: Variant): Variant {
   bootRand();
-  const a = numArg(from, "randf_range() 的第一参");
-  const b = numArg(to, "randf_range() 的第二参");
+  const a = utilFloatArg(from, "randf_range", 1);
+  const b = utilFloatArg(to, "randf_range", 2);
   return V.float(pcgRandd(DEFAULT_RAND) * (b - a) + a);
 }
 
 export function gRandfn(mean: Variant, dev: Variant): Variant {
   bootRand();
-  const m = numArg(mean, "randfn() 的均值");
-  const d = numArg(dev, "randfn() 的标准差");
+  const m = utilFloatArg(mean, "randfn", 1);
+  const d = utilFloatArg(dev, "randfn", 2);
   let temp = pcgRandd(DEFAULT_RAND);
   if (temp < CMP_EPSILON) temp += CMP_EPSILON;
   return V.float(m + d * (Math.cos(MATH_TAU * pcgRandd(DEFAULT_RAND)) * Math.sqrt(-2.0 * Math.log(temp))));
@@ -1434,6 +1731,10 @@ function dictTypeDefault(t: string | null): Variant {
       return V.object(new GVector3(0, 0, 0));
     case "Vector3i":
       return V.object(new GVector3i(0, 0, 0));
+    case "Vector4":
+      return V.object(new GVector4(0, 0, 0, 0));
+    case "Vector4i":
+      return V.object(new GVector4i(0, 0, 0, 0));
     case "Color":
       return V.object(new GColor(0, 0, 0, 1));
     case "NodePath":
@@ -1446,6 +1747,8 @@ function dictTypeDefault(t: string | null): Variant {
       return V.object(new GBytes([], "byte"));
     case "PackedStringArray":
       return V.object(new GBytes([], "string"));
+    case "PackedVector4Array":
+      return V.object(new GBytes([], "vector4"));
     default:
       throw new UnsupportedError(
         "inst-to-dict-acc-type",

@@ -113,6 +113,33 @@ export function stringReplaceCharNul(): Variant {
   return pushBlock("ERROR", "replace_char (core/string/ustring.cpp:3803)", [V.str("`with` must not be the NUL character.")]);
 }
 
+/** `String.to_ascii_buffer()` 遇到非 ASCII 码点：引擎 `print_unicode_error` 只打这一行（无 `ERROR:` 前缀、无 `at:`），换成 0x20（S569）。 */
+export function stringUnicodeAsciiError(cp: number): void {
+  process.stderr.write(`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1\n`);
+}
+
+/** `Array.get` / `Array.set` 的下标越界块（S572）：两处 `at:` 行号同为 variant_call.cpp:681。 */
+export function arrayIndexOob(who: "get" | "set", index: number, size: number): Variant {
+  return pushBlock("ERROR", `func_Array_${who} (core/variant/variant_call.cpp:681)`, [
+    V.str(`Index p_index = ${String(index)} is out of bounds (p_instance->size() = ${String(size)}).`),
+  ]);
+}
+
+/** `front` / `back` / `pick_random` 的空数组块（S572）：`at:` 分别落在 array.cpp 的 355 / 360 / 365。 */
+export function arrayEmptyBlock(who: "front" | "back" | "pick_random", line: number): Variant {
+  return pushBlock("ERROR", `${who} (core/variant/array.cpp:${String(line)})`, [V.str("Can't take value from empty array.")]);
+}
+
+/** `String.hex_decode()` 的奇数长度块（S577，ustring.cpp:1658）。 */
+export function stringHexUnevenBlock(): Variant {
+  return pushBlock("ERROR", "hex_decode (core/string/ustring.cpp:1658)", [V.str("Hexadecimal string of uneven length.")]);
+}
+
+/** UTF-32 / UTF-16 解码里非法码点的替换诊断（S579）：引擎 `print_unicode_error` 那行（含 U+FFFD 字面）。 */
+export function stringUnicodeReplaceError(message: string): void {
+  process.stderr.write(`Unicode parsing error, some characters were replaced with \ufffd (U+FFFD): ${message}\n`);
+}
+
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
 export function stringReplaceCharsNul(): Variant {
   return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);
@@ -146,6 +173,49 @@ export function packDecodeGuard(fn: string, line: number, width: number): Varian
 export function packEncodeGuard(fn: string, line: number, width: number): Variant {
   const cond = `p_offset < 0 || p_offset > int64_t(size) - ${String(width)}`;
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
+}
+
+/** `PackedByteArray.decode_var` 一族的负偏移（S552）：四支各回 -1 / `Variant()` / 0 / false。 */
+export function packVarOffsetNegative(fn: string, line: number, ret: string): Variant {
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "p_offset < 0" is true. Returning: ${ret}`)]);
+}
+
+/** 解码器剩余不足 4 字节（S552）：引擎在 marshalls 打一块 `len < 4`，三支解码随后给 null / 0 / false。 */
+export function packVarShort(): Variant {
+  return pushBlock("ERROR", "decode_variant (core/io/marshalls.cpp:190)", [V.str('Condition "len < 4" is true. Returning: ERR_INVALID_DATA')]);
+}
+
+/** `PackedByteArray.decompress()` 的三块失败文案（S559）：buffer ≤ 0 / 空压缩源 / zlib 解不开。 */
+export function packDecompressBufferZero(): void {
+  pushBlock("ERROR", "func_PackedByteArray_decompress (core/variant/variant_call.cpp:818)", [V.str("Decompression buffer size must be greater than zero.")]);
+}
+
+export function packDecompressSrcZero(): void {
+  pushBlock("ERROR", "func_PackedByteArray_decompress (core/variant/variant_call.cpp:821)", [V.str("Compressed buffer size must be greater than zero.")]);
+}
+
+export function packDecompressInflateErr(): void {
+  pushBlock("ERROR", "decompress (core/io/compression.cpp:197)", [V.str('Condition "err != 1" is true. Returning: -1')]);
+}
+
+/** `decompress_dynamic()` 的空输入（S557）：compression 那层先打 `p_src_size <= 0`，再打外层 `Decompression failed.`。 */
+export function packDynamicSrcEmpty(): Variant {
+  return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:233)", [V.str('Condition "p_src_size <= 0" is true. Returning: (-3)')]);
+}
+
+/** `decompress_dynamic()` 只收 DEFLATE / GZIP（S560）：其它模式先打 compression 295 那句，再打外层 844。 */
+export function packDynamicBadMode(): Variant {
+  return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:295)", [V.str('Condition "p_mode != MODE_DEFLATE && p_mode != MODE_GZIP" is true. Returning: (-1)')]);
+}
+
+/** `decompress_dynamic()` 失败（S557）：外层统一一句 `Decompression failed.`，回空 pack。 */
+export function packDynamicFailed(): Variant {
+  return pushBlock("ERROR", "func_PackedByteArray_decompress_dynamic (core/variant/variant_call.cpp:844)", [V.str("Decompression failed.")]);
+}
+
+/** `to_vector2_array` / `to_vector3_array` / `to_color_array` 的长度不是整组（S553）：打一块 ERROR、回空 pack。 */
+export function packSizeMultiple(fn: string, line: number, message: string): Variant {
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(message)]);
 }
 
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */

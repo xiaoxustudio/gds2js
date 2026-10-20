@@ -117,7 +117,7 @@ export class Main extends SceneTree {
       rt.frameLine(43);
       print(rt.showArgs([rt.V.str("u18 "), rt.method(rt.V.str("abc"), "to_ascii_buffer", []), rt.V.str(" "), rt.method(rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(104), rt.V.int(105)]))]), "get_string_from_ascii", [])]));
       rt.frameLine(44);
-      print(rt.showArgs([rt.V.str("u19 "), rt.arrayFromVariant(f), rt.V.str(" "), rt.wrapValue(rt.index(rt.arrayFromVariant(f), rt.V.int(0))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(rt.arrayFromVariant(f), rt.V.int(0))))]));
+      print(rt.showArgs([rt.V.str("u19 "), rt.arrayFromArgs([f]), rt.V.str(" "), rt.wrapValue(rt.index(rt.arrayFromArgs([f]), rt.V.int(0))), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(rt.arrayFromArgs([f]), rt.V.int(0))))]));
       rt.frameLine(45);
       let k = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(1)]))]);
       rt.frameLine(46);

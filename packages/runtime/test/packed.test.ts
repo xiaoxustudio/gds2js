@@ -57,9 +57,9 @@ describe("runtime/packed · 打包数组与 zstd", () => {
       `${method(pack([104, 195, 169, 108, 108, 111]), "get_string_from_utf8", []).v}`, "héllo");
     eq("step67", "文本 → 字节（to_utf8_buffer）", `${show(method(S("héllo"), "to_utf8_buffer", []))}`,
       "[104, 195, 169, 108, 108, 111]");
-    eq("step67", "get_string_from_ascii 只实测过纯 ASCII，带高位字节响着拒",
-      err(() => method(pack([104, 200]), "get_string_from_ascii", [])),
-      "get_string_from_ascii() 只实测过纯 ASCII 的字节");
+    eq("step67", "get_string_from_ascii 按 Latin-1 逐字节折（S569 实测）",
+      `${method(pack([104, 200]), "get_string_from_ascii", []).v}`,
+      "hÈ");
     eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（用例 135）",
       `${err(() => method(b, "min", []))}|${err(() => method(b, "to_byte_array", []))}`,
       "Invalid call. Nonexistent function 'min' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.");
@@ -68,7 +68,7 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     const viaArray = arrayFromVariant(b);
     eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
       `${show(viaArray)} ${typeOf(index(viaArray, I(0))).v}`, "[3, 1, 2] 2");
-    shouldThrow("step67", "Array(x) 只实测过 PackedByteArray 实参", () => arrayFromVariant(S("abc")));
+    shouldThrow("step67", "Array(x) 的非 pack 实参响亮拒", () => arrayFromVariant(S("abc")));
     shouldThrow("step67", "读 pack 的「属性」一律响（属性面没实测过，成员全是方法）", () => attribute(b, "length"));
     shouldThrow("step67", "写 pack 的内部键不许落进存储", () => writeProp(b, "items", I(1)));
     const mut = (ns: number[]): Variant => V.object(GBytes.of(ns));
@@ -153,7 +153,8 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     eq("step68", "越界写的那句也照类型名变", perr(() => writeIdx(i32g, I(5), I(1))),
       "Invalid assignment of index '5' (on base: 'PackedInt32Array') with value of type 'int'.");
     shouldThrow("step68", "跨 pack 拼接没量过 → 响", () => ops.add(i32g, V.object(GBytes.of([1], "byte"))));
-    shouldThrow("step68", "Array(int pack) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(i32g));
+    eq("step68", "Array(int pack) 把元素原样搬进不 typed 的 Array，元素仍是 int（S597）",
+      `${show(arrayFromVariant(i32g))} ${typeOf(index(arrayFromVariant(i32g), I(0))).v}`, "[1, 2, 3] 2");
     eq("step80", "String 元素走**前导数解析**（与 to_int() 同一条式子：\"12abc\" → 12、\"-7xyz\" → -7、\"x\" → 0）",
       `${show(packCtor("int32", [V.array(GArray.of([S("12abc")]))]))} ${show(packCtor("int32", [V.array(GArray.of([S("-7xyz")]))]))} ${show(packCtor("byte", [V.array(GArray.of([S("x")]))]))}`,
       "[12] [-7] [0]");
@@ -233,7 +234,8 @@ describe("runtime/packed · 打包数组与 zstd", () => {
       'true ["a", "b"]');
     shouldThrow("step71", "跨形状拼接（string + byte）没量过 → 响", () =>
       ops.add(strs([S("a")]), V.object(GBytes.of([1], "byte"))));
-    shouldThrow("step71", "Array(PackedStringArray) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(sb));
+    eq("step71", "Array(PackedStringArray) → 元素是 String 的 Array（S597）",
+      `${show(arrayFromVariant(sb))} ${typeOf(index(arrayFromVariant(sb), I(0))).v}`, '["a", "b"] 4');
     const serr = (fn: () => unknown): string => {
       try {
         fn();
@@ -476,11 +478,9 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     eq("step82", "垃圾数据解不出来给空 pack（三种模式一致，Godot 另打一句引擎 stderr）",
       `${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(1)]))} ${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(3)]))}`,
       "[] []");
-    shouldThrow("step82", "compress(0)（不写模式时的默认值）没对上任何 node 编解码器 → 响亮拒，不发近似字节", () =>
-      method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]));
-    shouldThrow("step82", "compress() 零参同样是 mode 0 → 同一句响（量到它给 17 字节的「头部 + 原字节 + 补零」）", () =>
-      method(bb([1]), "compress", []));
-    shouldThrow("step82", "decompress 不写模式 = mode 0 → 也响", () => method(bb([1, 2, 3]), "decompress", [I(6)]));
+    eq("step82", "compress(0) 是 FastLZ（<16 先补零到 16）：字节与引擎逐字节相同、decompress 回到补零后的 16 字节", `${hex(method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]))} ${hex(method(method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]), "decompress", [I(16), I(0)]))}`, "0f01020301020300000000000000000000 01020301020300000000000000000000");
+    eq("step82", "compress() 零参同样是 mode 0", hex(method(bb([1]), "compress", [])), "0f01000000000000000000000000000000");
+    shouldThrow("step82", "decompress 垃圾数据且 buffer_size<16：引擎拷未初始化临时缓冲（不可复现）→ 响亮拒", () => method(bb([1, 2, 3]), "decompress", [I(6)]));
     eq("step82", "模式实参只量过 int：给 float 响亮拒（不拿「int 槽会截断」那条推）",
       perr(() => method(bb([1, 2, 3]), "compress", [F(1.5)])), "compress() / decompress() 的模式只实测过 int（收到 float）");
     shouldThrow("step82", "compress / decompress 只在 PackedByteArray 上量过，别的形状仍响亮拒", () =>

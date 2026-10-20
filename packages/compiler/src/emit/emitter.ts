@@ -109,6 +109,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
   Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
   Vector3i: (a) => `rt.vector3iNew([${a.join(", ")}])`,
+  Vector4: (a) => `rt.vector4New([${a.join(", ")}])`,
+  Vector4i: (a) => `rt.vector4iNew([${a.join(", ")}])`,
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
@@ -121,13 +123,11 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedStringArray: (a) => `rt.packCtor("string", [${a.join(", ")}])`,
   PackedVector2Array: (a) => `rt.packCtor("vector2", [${a.join(", ")}])`,
   PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
+  PackedVector4Array: (a) => `rt.packCtor("vector4", [${a.join(", ")}])`,
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
-  Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
+  Array: (a) => `rt.arrayFromArgs([${a.join(", ")}])`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
-  Signal: (a) => {
-    if (a.length === 0) return "rt.V.object(new rt.Signal())";
-    throw new UnsupportedError("signal-ctor", "Signal(Object, name) 的构造式要在对象上按名做信号身份查找，没实测过，不发");
-  },
+  Signal: (a) => `rt.signalCtor([${a.join(", ")}])`,
   is_instance_of: (a) => `rt.gIsInstanceOf(${a[0]}, ${a[1]})`,
   is_instance_valid: (a) => `rt.gIsInstanceValid(${a[0]})`,
   is_instance_id_valid: (a) => `rt.gIsInstanceIdValid(${a[0]})`,
@@ -1013,6 +1013,8 @@ function dropBind(out: Map<string, number>, name: string): void {
 }
 
 /** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */
+const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
+
 const MEASURED_SLOTS = new Set([
   "int",
   "float",
@@ -1023,6 +1025,8 @@ const MEASURED_SLOTS = new Set([
   "Vector2i",
   "Vector3",
   "Vector3i",
+  "Vector4",
+  "Vector4i",
   "Color",
 ]);
 function slotTypeName(t: TypeRef | null): string | null {
@@ -3248,6 +3252,7 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   const fromLiteral = init === null || init === undefined || init.kind === "array" || init.kind === "dict";
   if (m[1] === "Array") {
     const kind = inner.trim();
+    if (NATIVE_CLASS_SLOTS.has(kind)) return `rt.stampClassArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
     if (!isElemKind(kind)) return raw;
     return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
   }
@@ -3288,6 +3293,8 @@ function declaredCast(t: TypeRef | null): string | null {
   // 值类型槽之间的互转（Vector3 ↔ Vector3i 等）：没有这两条转换时槽里存的是原形状，打印与 `typeof` 一起错。
   if (base === "Vector3") return "rt.toVec3";
   if (base === "Vector3i") return "rt.toVec3i";
+  if (base === "Vector4") return "rt.toVec4";
+  if (base === "Vector4i") return "rt.toVec4i";
   if (base === "Vector2i") return "rt.toVec2i";
   // Color 槽吃 int（packed RGBA）与 String（色名 / hex），StringName 槽吃 String；四路赋值同形。
   if (base === "Color") return "rt.toColor";
@@ -3313,6 +3320,8 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Vector3") return "rt.vector3(0, 0, 0)";
   if (base === "Vector2i") return "rt.vector2i(0, 0)";
   if (base === "Vector3i") return "rt.vector3i(0, 0, 0)";
+  if (base === "Vector4") return "rt.vector4(0, 0, 0, 0)";
+  if (base === "Vector4i") return "rt.vector4i(0, 0, 0, 0)";
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';
@@ -3322,6 +3331,7 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "PackedStringArray") return 'rt.packCtor("string", [])';
   if (base === "PackedVector2Array") return 'rt.packCtor("vector2", [])';
   if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
+  if (base === "PackedVector4Array") return 'rt.packCtor("vector4", [])';
   if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
   // D6 那七个值类型不进 Tier 1：它们的默认值发不出来 —— 那一站要响亮拒，不是静默的 null 盒子（读数 `tmp/probe-valuedefault/compare96.txt`）
   if (D6_VALUE_TYPES.has(base)) return `rt.unsupportedValueDefault(${JSON.stringify(base)})`;

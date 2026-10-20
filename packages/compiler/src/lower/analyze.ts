@@ -90,6 +90,8 @@ type StaticType =
   | "Vector2i"
   | "Vector3"
   | "Vector3i"
+  | "Vector4"
+  | "Vector4i"
   | "Color"
   /** `&"…"` 字面量在槽位文本里就叫这个名字：`staticType` 把它并进 `String`，只有槽位这一族经 `slotSource` 看得见它 */
   | "StringName"
@@ -274,9 +276,14 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     if (t.init === null) continue;
     /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格）。
      *  内部型是脚本类名时只发第二句（`Array[Inner]` 那一格，读数 `tmp/d6/n1.txt`）。 */
-    const holds = (kind: string, st: NonNullable<StaticType>): boolean => (classNames.has(kind) ? st === kind : canHold(kind, st));
+    const holds = (kind: string, st: NonNullable<StaticType>): boolean =>
+      classNames.has(kind)
+        ? st === kind
+        : NATIVE_CLASS_SLOTS.has(kind)
+          ? st === "null" || st === kind
+          : canHold(kind, st);
     const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
-      if (!classNames.has(kind)) {
+      if (!classNames.has(kind) && !NATIVE_CLASS_SLOTS.has(kind)) {
         diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
       }
       diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
@@ -395,7 +402,10 @@ function parseTyped(name: string): TypedSlot | null {
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
 
-const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String", "int", "float", "bool"]);
+/** 量过的宿主类名元素槽（S615：`Array[RefCounted]` / `Array[Object]` / `Array[Node]` 三形，其余类名没量、维持现状）。 */
+export const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
+
+const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "String", "int", "float", "bool"]);
 
 /** 定形容器那一读的**面**：数组交内型、字典交值型；键的静态型判得出来又不合式就不交（那一格由下标型闸门去报）。
  *  与运算符型对那支 `elemOf` 同一条判据（S468 量齐：`tmp/d6/dictread.py` 四百二十格零分歧）。 */
@@ -457,6 +467,15 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
     if (slot.key === undefined) return;
     if (st === "null") return;
+    // 字典键不做 Vector4 ↔ Vector4i 的槽转换：字面量键那一形引擎解析期拒（S586，`Dictionary[Vector4, …]` 配 `Vector4i` 字面量键）
+    if ((slot.key === "Vector4" && st === "Vector4i") || (slot.key === "Vector4i" && st === "Vector4")) {
+      diags.push({
+        code: "typed-index-key",
+        message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
+        loc: index.loc,
+      });
+      return;
+    }
     if (canHold(slot.key, st)) return;
     diags.push({
       code: "typed-index-key",
@@ -583,6 +602,10 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
           } else if (s.type === null) {
             const pos = positionalSlot(null, s.init);
             if (pos !== null) typed.set(s.name, pos);
+            // 构造式初值的 Vector4 / Vector4i 局部量要能进字典键闸门（引擎对 `var k = Vector4i(...); d[k]` 是解析期拒，S586）
+            if (s.init !== null && s.init.kind === "call" && s.init.callee.kind === "ident" && (s.init.callee.name === "Vector4" || s.init.callee.name === "Vector4i")) {
+              decls.set(s.name, s.init.callee.name);
+            }
           }
           if (s.init !== null) walkExpr(s.init, typed, decls);
           continue;
@@ -718,6 +741,7 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
+  "PackedVector4Array",
   "PackedColorArray",
 ]);
 
@@ -762,6 +786,8 @@ function valueSlotHolds(slot: string, st: NonNullable<StaticType>): boolean {
     Vector2i: ["Vector2i", "Vector2"],
     Vector3: ["Vector3", "Vector3i"],
     Vector3i: ["Vector3i", "Vector3"],
+    Vector4: ["Vector4", "Vector4i"],
+    Vector4i: ["Vector4i", "Vector4"],
     Color: ["Color", "int", "String"],
     StringName: ["StringName", "String"],
   };
@@ -913,19 +939,28 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
       loc,
     });
   };
-  const walkClass = (c: ClassDecl): void => {
-    for (const v of c.vars) {
-      const slot = slotOf(v.type);
-      if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+  /** 引擎这一族是按**分组**发的，不是按源码行序（两形实测：`tmp/probe569/s619.gd` 两支内部类 + 语料 393）：
+   *  ① 外层 var 的默认值 → ② 外层函数形参的默认值 → ③ 各内部类的成员 var（按类声明序）→ ④ 外层函数体里的 var → ⑤ 内部类的函数。 */
+  const varSlot = (v: VarDecl): void => {
+    const slot = slotOf(v.type);
+    if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+  };
+  const paramSlots = (f: { params: Param[]; loc: Diagnostic["loc"] }): void => {
+    for (const p of f.params) {
+      const slot = slotOf(p.type);
+      if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
     }
+  };
+  const classVars = (c: ClassDecl): void => {
+    for (const v of c.vars) varSlot(v);
+    for (const inner of c.innerClasses) classVars(inner);
+  };
+  const classFuncs = (c: ClassDecl): void => {
     for (const f of c.funcs) {
-      for (const p of f.params) {
-        const slot = slotOf(p.type);
-        if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
-      }
+      paramSlots(f);
       walkStmtVars(f.body);
     }
-    for (const inner of c.innerClasses) walkClass(inner);
+    for (const inner of c.innerClasses) classFuncs(inner);
   };
   const walkStmtVars = (n: unknown): void => {
     if (Array.isArray(n)) {
@@ -944,18 +979,11 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
       if (key !== "loc") walkStmtVars(obj[key]);
     }
   };
-  for (const v of m.vars) {
-    const slot = slotOf(v.type);
-    if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
-  }
-  for (const f of m.funcs) {
-    for (const p of f.params) {
-      const slot = slotOf(p.type);
-      if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
-    }
-    walkStmtVars(f.body);
-  }
-  for (const c of m.innerClasses) walkClass(c);
+  for (const v of m.vars) varSlot(v);
+  for (const f of m.funcs) paramSlots(f);
+  for (const c of m.innerClasses) classVars(c);
+  for (const f of m.funcs) walkStmtVars(f.body);
+  for (const c of m.innerClasses) classFuncs(c);
 }
 
 /** signal 的形参不许带默认值（S453，读数 `tmp/d6/l3-sig-*.gd` 与语料 394）：一份文件里三支不合式也只发**第一句**就收口。 */
@@ -1739,10 +1767,11 @@ const PACK_IS_AS_NAMES = new Set([
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
+  "PackedVector4Array",
   "PackedColorArray",
 ]);
 /** 能静态判出来的操作数类型（`null` 那格的文本没判过，故意不列）。 */
-const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Vector3i", "Color"]);
+const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Vector3i", "Vector4", "Vector4i", "Color"]);
 
 /** 一个函数体里**标注为 `StringName`** 的局部变量名。只认 `var` 的标注，形参不算；Godot 的标注不松口（同一变量后来不可能装别的类型），所以「这个名字是 StringName」在整个函数体里都成立，不必管作用域嵌套。 */
 function stringNameVars(node: unknown, out: Set<string>): void {
@@ -1840,6 +1869,7 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedStringArray: { slot: "String", ok: ["String", "StringName", "NodePath"] },
   PackedVector2Array: { slot: "Vector2", ok: ["Vector2", "Vector2i"] },
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
+  PackedVector4Array: { slot: "Vector4", ok: ["Vector4", "Vector4i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
 /** 每支方法逐位的声明槽：`e` 是元素型、`i` 是 int（下标 / 计数 / 容量）、`b` 是 bool（`bsearch` 的 `before`）—— 九面 2160 格两侧对过（`tmp/probe-packargs/`）。 */
@@ -1860,7 +1890,7 @@ const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "N
 const PACK_APPEND_NAMED = new Set([
   "bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
-  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedVector4Array", "PackedColorArray",
   "Callable", "Object", "Node",
 ]);
 function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
@@ -1907,7 +1937,7 @@ function packArgSource(e: Expr): string | null {
 }
 
 /** 来源名就是标注名本身的那些（Godot 的文本里就是这么写） */
-const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Dictionary"]);
+const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "Array", "Dictionary"]);
 
 /** 容器方法那几道闸门共用的一趟走查：按函数体分组（模块级 + 内部类递归），每组是扁平的 IR 节点表。
  *  lambda 体不进去（它另有一套作用域，见 `checkLambdaScope`），`loc` 不下潜（它只是位置，不是节点）。 */
@@ -2046,7 +2076,7 @@ const VALUE_ARG_WANTS = new Set([
   "int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color",
   "Array", "Dictionary",
   "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
-  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedVector4Array", "PackedColorArray",
 ]);
 function nullRefusedByValueSlot(want: string): boolean {
   return VALUE_ARG_WANTS.has(want);
@@ -2062,7 +2092,7 @@ function objectNameRefusedByValueSlot(src: string | null, want: string): boolean
 const ARG_NAME_TYPES = new Set([
   "int", "float", "bool", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array",
-  "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedVector4Array", "PackedColorArray",
   "Callable", "Object", "Node",
 ]);
 
@@ -2677,6 +2707,8 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
   "Vector2i": ["abs", "aspect", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y"],
   "Vector3": ["abs", "angle_to", "bezier_derivative", "bezier_interpolate", "bounce", "ceil", "clamp", "clampf", "cross", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "inverse", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "limit_length", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "move_toward", "normalized", "octahedron_decode", "octahedron_encode", "outer", "posmod", "posmodv", "project", "reflect", "rotated", "round", "sign", "signed_angle_to", "slerp", "slide", "snapped", "snappedf", "x", "y", "z"],
   "Vector3i": ["abs", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y", "z"],
+  "Vector4": ["abs", "ceil", "clamp", "clampf", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "inverse", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "normalized", "posmod", "posmodv", "round", "sign", "snapped", "snappedf", "w", "x", "y", "z"],
+  "Vector4i": ["abs", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "w", "x", "y", "z"],
   "Color": ["a", "a8", "b", "b8", "blend", "clamp", "darkened", "from_hsv", "from_ok_hsl", "from_rgba8", "from_rgbe9995", "from_string", "g", "g8", "get_luminance", "h", "hex", "hex64", "html", "html_is_valid", "inverted", "is_equal_approx", "lerp", "lightened", "linear_to_srgb", "ok_hsl_h", "ok_hsl_l", "ok_hsl_s", "r", "r8", "s", "srgb_to_linear", "to_abgr32", "to_abgr64", "to_argb32", "to_argb64", "to_html", "to_rgba32", "to_rgba64", "v"],
   "String": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64", "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
   "StringName": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
@@ -2692,6 +2724,7 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
   "PackedStringArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
   "PackedVector2Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
   "PackedVector3Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedVector4Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
   "PackedColorArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
 };
 
@@ -2834,10 +2867,15 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
  *  `tmp/probe-dict/compare22.txt`）。与值类型五支（S305）、pack 九支（S376）同一族两句。`sort` 在字典上是**零参**（按键排），
  *  与 Array 那支的 `sort()` 同名同元数但不同语义；`recursive_equal` 要两支（第二支是递归计数）。 */
 const DICT_METHOD_ARITY: Record<string, [number, number]> = {
-  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], erase: [1, 1], find_key: [1, 1],
+  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
   get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
   is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
   merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
+  is_typed: [0, 0], is_typed_key: [0, 0], is_typed_value: [0, 0],
+  is_same_typed: [1, 1], is_same_typed_key: [1, 1], is_same_typed_value: [1, 1],
+  get_typed_key_builtin: [0, 0], get_typed_value_builtin: [0, 0],
+  get_typed_key_class_name: [0, 0], get_typed_value_class_name: [0, 0],
+  get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
 };
 
 /** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
@@ -3011,12 +3049,27 @@ const CTOR_REFUSED: Record<string, string[][]> = {
   String: [["int"], ["int", "int"], ["int", "int", "int"]],
   StringName: [["int"], ["int", "int"], ["int", "int", "int"]],
   NodePath: [["int"], ["int", "int"], ["int", "int", "int"]],
-  Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Array: [
+    ["int"], ["int", "int"], ["int", "int", "int"], ["String"],
+    // S606：`extension_api` 的 Array 构造式只有零参 / `Array from` / 四参定形 / 十支 pack from 那 13 形，
+    // 下面每一行都是一脚本一形量到的引擎原文（读数 `tmp/d6/s606.gd` / `s610p` / `s611p` 批次）
+    ["Dictionary"], ["null"], ["float"], ["bool"], ["StringName"], ["Vector2"], ["Color"],
+    ["Array", "int"], ["Array", "Variant.Type"], ["Dictionary", "Variant.Type"],
+    ["float", "Variant.Type"], ["bool", "Variant.Type"], ["Vector2", "Variant.Type"],
+    ["StringName", "Variant.Type"], ["PackedStringArray", "Variant.Type"], ["PackedByteArray", "Variant.Type"],
+    ["null", "Variant.Type", "StringName", "null"], ["String", "Variant.Type", "StringName", "null"],
+    ["int", "Variant.Type", "StringName", "null"], ["Array", "Variant.Type", "Variant.Type", "bool"],
+    ["Array", "Variant.Type", "StringName", "null", "int"],
+    ["Array", "Variant.Type", "StringName", "null", "int", "int"],
+  ],
   Dictionary: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   Vector2: [["int"], ["int", "int", "int"], ["String"]],
   Vector2i: [["int"], ["int", "int", "int"], ["String"]],
   Vector3: [["int"], ["int", "int"], ["String"]],
   Vector3i: [["int"], ["int", "int"], ["String"]],
+  Vector4: [["int"], ["int", "int"], ["int", "int", "int"]],
+  Vector4i: [["int"], ["int", "int"], ["int", "int", "int"]],
+  PackedVector4Array: [["Vector4"]],
   Callable: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   Signal: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   RID: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
@@ -3025,6 +3078,18 @@ const CTOR_REFUSED: Record<string, string[][]> = {
   PackedFloat64Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   PackedStringArray: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
 };
+
+/** 构造式那一句里实参的型名：字面量交 `literalTypeName`，`TYPE_*` 那 39 支全局常量交 `Variant.Type`
+ *  （S606 实测 `Array([1], TYPE_INT)` 引擎写的是 `Array(Array, Variant.Type)`），其余认不出就返回 null 让整条判据让开。 */
+function ctorArgName(a: Expr): string | null {
+  const lit = literalTypeName(a);
+  if (lit !== null) return lit;
+  if (a.kind === "ident") {
+    const nm = (a as unknown as Record<string, unknown>).name;
+    if (typeof nm === "string" && nm.startsWith("TYPE_") && isGlobalConst(nm)) return "Variant.Type";
+  }
+  return null;
+}
 
 function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
   const shadowed = new Set(m.funcs.map((f) => f.name));
@@ -3037,7 +3102,7 @@ function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
       if (shadowed.has(name)) continue;
       const bad = CTOR_REFUSED[name];
       if (bad === undefined) continue;
-      const kinds = ((n.args as Expr[]) ?? []).map((a) => literalTypeName(a));
+      const kinds = ((n.args as Expr[]) ?? []).map((a) => ctorArgName(a));
       if (kinds.some((k) => k === null)) continue;
       const sig = kinds.join(", ");
       if (!bad.some((t) => t.join(", ") === sig)) continue;
@@ -3061,6 +3126,8 @@ const FUNC_ARG_SLOTS: Record<string, readonly string[]> = {
   Vector2i: ["Vector2i", "Vector2"],
   Vector3: ["Vector3", "Vector3i"],
   Vector3i: ["Vector3i", "Vector3"],
+  Vector4: ["Vector4", "Vector4i"],
+  Vector4i: ["Vector4i", "Vector4"],
   Color: ["Color", "String", "int"],
   Rect2: [],
 };
@@ -3230,7 +3297,7 @@ function checkDictDuplicateKeys(m: Module, diags: Diagnostic[]): void {
           const token = dictKeyToken(key);
           const first = seen.get(token);
           if (first === undefined) seen.set(token, en.key.loc);
-          else diags.push({ code: "dict-dup-key", message: `Key "${dictKeyText(key)}" was already used in this dictionary.`, loc: first });
+          else diags.push({ code: "dict-dup-key", message: `Key "${dictKeyText(key)}" was already used in this dictionary (at line ${String(first?.line ?? 0)}).`, loc: en.key.loc });
         }
         return;
       }
@@ -4003,7 +4070,21 @@ function walkStmt(
       break;
     case "match": {
       walkExpr(s.subject, scope, coroutines, diags);
+      // 图案里的**值模式**表达式（`[a, b]` 里那两个名字）引擎按每一次出现都报一句，而且排在 guard 那句之前
+      // （读数 `tmp/probe569/s618.gd`：`[a, b] when a > b` 四句、`[a, b] when 1 > 0` 两句、`[_, _] when q > 1` 一句、
+      // `[a] when a > 1` 外面已有 `var a` 时零句、`[k, v] when k > 1 and v > 2 and k > 3` 五句）。
+      const patternNames = (p: Pattern): void => {
+        if (p.kind === "const") walkExpr(p.expr, scope, coroutines, diags);
+        else if (p.kind === "array") for (const it of p.items) patternNames(it);
+        else if (p.kind === "dict") {
+          for (const en of p.entries) {
+            walkExpr(en.key, scope, coroutines, diags);
+            patternNames(en.pattern);
+          }
+        }
+      };
       for (const arm of s.arms) {
+        patternNames(arm.pattern);
         const armScope = scope.child(patternBindings(arm.pattern));
         if (arm.guard) walkExpr(arm.guard, armScope, coroutines, diags);
         walkStmts(arm.body, armScope, coroutines, diags, inLoop);
@@ -4332,6 +4413,17 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         const arity = builtinArity(name, e.args.length) ?? utilityArity(name, e.args.length);
         if (arity !== null) {
           diags.push({ code: builtinArityCode(name), message: arity, loc: e.loc });
+          // 元数那句之后，引擎紧接着为**声明位上的 Array 字面量**补一条（S607 读数；发在这里才与它逐语句交错的次序一致）
+          for (const [pos, want] of GLOBAL_ARG_TYPES[name] ?? []) {
+            if (literalTypeName((e.args as Expr[])[pos - 1]) === "Array") {
+              diags.push({
+                code: "global-arg-type",
+                message: `Invalid argument for "${name}()" function: argument ${String(pos)} should be "${want}" but is "Array".`,
+                loc: e.loc,
+              });
+              break;
+            }
+          }
         }
       } else {
         walkExpr(e.callee, scope, coroutines, diags);
@@ -4826,24 +4918,14 @@ const JOIN_BAD_ARG: Record<string, string> = {
 };
 
 
-/** 接收者能不能**静态证成** Array / Dictionary / 某种 pack：只认字面量与 `PackedXArray(...)` 构造式。变量名不在这里解析 —— 推断来源不证（宁可漏报，也不把运行期那句提前）。 */
-function joinReceiverBase(e: Expr): string | null {
-  // 第二句文本里的类型名不带引号
-  if (e.kind === "array") return "Array";
-  if (e.kind === "dict") return "Dictionary";
-  return null;
-}
-
 function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "join") return;
   // `join` 是 **String** 的方法，接收者分三段：① 字符串字面量才走下面那套「实参形状」判据；② 能静态证出来的 Array / Dictionary / pack 给解析期两句「找不到成员」；③ 其余（推断出来的接收者）解析期放过、运行期才给 `Invalid call. Nonexistent function 'join' in base 'Array'.`，这里什么都不报。
   const recv = e.callee.kind === "attribute" ? e.callee.obj : null;
   if (recv !== null && !(recv.kind === "lit" && recv.lit === "string")) {
-    const base = joinReceiverBase(recv);
-    if (base !== null) {
-      diags.push({ code: "join-not-member", message: `Cannot find member "join" in base "${base}".`, loc: e.loc });
-      diags.push({ code: "join-not-found", message: `Function "join()" not found in base ${base}.`, loc: e.loc });
-    }
+    // 接收者不是字符串字面量那一整段归 `face-member-*` 那条通用判据管：它按面查名，Array 两句、Dictionary 只一句，
+    // 与引擎逐条一致（`[1, 2].join(5)` / `{"a": 1}.join(5)` / `PackedByteArray([1]).join(5)` 的读数 `tmp/probe569/s616.gd`）。
+    // 这里再发一对就把句子发重了，Dictionary 那形还多发一句引擎没有的「Cannot find member」。
     return;
   }
   if (e.args.length === 0) {
@@ -5055,6 +5137,7 @@ const PACK_TYPE_NAMES = new Set([
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
+  "PackedVector4Array",
   "PackedColorArray",
 ]);
 
@@ -5111,6 +5194,16 @@ const STATIC_FACE: Record<string, { consts: readonly string[]; axis: readonly st
       hex64: [1, 1],
     },
   },
+  Vector4: {
+    consts: ["ZERO", "ONE", "INF"],
+    axis: [],
+    statics: {},
+  },
+  Vector4i: {
+    consts: ["ZERO", "ONE", "MIN", "MAX"],
+    axis: [],
+    statics: {},
+  },
   String: {
     consts: [],
     axis: [],
@@ -5122,6 +5215,11 @@ const STATIC_FACE: Record<string, { consts: readonly string[]; axis: readonly st
       num_scientific: [1, 1],
       humanize_size: [1, 1],
     },
+  },
+  Callable: {
+    consts: [],
+    axis: [],
+    statics: { create: [2, 2] },
   },
 };
 
@@ -5729,6 +5827,7 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
       }
       const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
+      // 元数越界那一形由**发元数那句那一站**负责补声明位的句子（只认 Array 字面量，S607 / S612），这一轮整条让开
       if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
         continue;
@@ -5766,6 +5865,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       // 数值位上拒 bool 的那几张表（S362）：`wrap` 只有第一位（变元的 `max` / `min` 在上面那支单独扫）
       const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
       const refusesBool = (pos: number): boolean => boolFixed.has(pos) || boolFollows?.has(pos) === true;
+      // 单一变体那一族的字面量位：引擎只在**第一个坏位**推句就停（`clampi("x","y","z")` 与 `maxf(V4i,V4i)` 各只吐 argument 1，
+      // `tmp/d6/s603.gd` / `s601.gd`），多位混排的 `randf_range` 走下面 asRows / shouldRows 那两条（实测三条）。
+      let firstLiteralHit: { pos: number; got: string } | null = null;
       for (const [pos, want] of wants) {
         if (followContainer) continue;
         const a = e.args[pos - 1];
@@ -5784,7 +5886,11 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
               : null
             : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
         if (got === null || got === want) continue;
-        put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+        if (firstLiteralHit === null || pos < firstLiteralHit.pos) firstLiteralHit = { pos, got };
+      }
+      if (firstLiteralHit !== null) {
+        const wantOf = wants.find(([p]) => p === firstLiteralHit.pos) as [number, "int" | "float" | "bool"];
+        put(firstLiteralHit.pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${firstLiteralHit.pos} should be "${wantOf[1]}" but is "${firstLiteralHit.got}".`);
       }
       // S518–S523：数值（int / float）参数学全局函数（逐型逐位量过：收 {bool,int,float}、其余形引擎解析期发
       // `argument N should be "<want>" but is "<K>"`）的名字实参 —— literalTypeName 交不出型，改问 argAnn。
@@ -5863,7 +5969,7 @@ function literalIntArg(e: Expr): bigint | null {
 }
 
 /** 引擎这一族点名的都是「拿不出数字」的字面量形；int / float / bool 它都收（`sqrt(1)`、`sqrt(1.5)`、`sqrt(false)` 实测全过）。 */
-const NUMERIC_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+const NUMERIC_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color"]);
 
 function nonNumericLiteral(e: Expr): string | null {
   if (e.kind === "lit") {

@@ -1,17 +1,20 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { hexUpper, strToInt } from "./numstr";
+import { hexUpper, strToFloat, strToInt } from "./numstr";
 import { Tag, tagName, V, intToBig, intToNum, int64ParamBig, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
 import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
+import { GVector4, asVec4, vec4Cmp, vector4 } from "./vector4";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
+import { asVec4i, GVector4i, vector4i } from "./vector4i";
 import { asColor, color, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode, toElem } from "./packed";
 import type { PackElem, PackKind } from "./packed";
 import { parseGdDouble } from "../shared/double";
 import { floatConstructText, rtosFix } from "./grisu2";
+import { isUnicodeIdContinue, isUnicodeIdStart } from "./unicode-identifier";
 import { sortGodot } from "./sort";
 import { callableEq, callableLabel, callableSame, isCallable, isNullCallable, type CallableBox } from "./callable";
 import { GdNativeClass } from "./native-class";
@@ -19,6 +22,7 @@ import { isEncodedObjectIdBox, isNullRefValue, isWeakRefBox, NULL_OBJECT } from 
 import type { GdIdentified } from "./identity";
 import { asRid, ridText } from "./rid";
 import { asNodePath, emptyNodePath, nodePathText, nodePathValue, sameNodePath } from "./node-path";
+import { findLower, findUpper } from "./ucaps";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -94,6 +98,10 @@ function keyOfIn(v: Variant, depth: number): string {
       if (vec2i) return `x:${String(vec2i.x)},${String(vec2i.y)}`;
       const vec3i = asVec3i(v);
       if (vec3i) return `u:${String(vec3i.x)},${String(vec3i.y)},${String(vec3i.z)}`;
+      const vec4 = asVec4(v);
+      if (vec4) return `4:${String(vec4.x)},${String(vec4.y)},${String(vec4.z)},${String(vec4.w)}`;
+      const vec4i = asVec4i(v);
+      if (vec4i) return `5:${String(vec4i.x)},${String(vec4i.y)},${String(vec4i.z)},${String(vec4i.w)}`;
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
@@ -124,9 +132,12 @@ export type ElemKind =
   | "Vector3"
   | "Vector2i"
   | "Vector3i"
+  | "Vector4"
+  | "Vector4i"
   | "Color"
   | "Array"
-  | "Dictionary";
+  | "Dictionary"
+  | "Object";
 
 /** Godot 认识、且我们能在运行时校验的容器标注类型名 */
 export function isElemKind(name: string): name is ElemKind {
@@ -135,6 +146,8 @@ export function isElemKind(name: string): name is ElemKind {
     name === "StringName" ||
     name === "Vector2" ||
     name === "Vector3" ||
+    name === "Vector4" ||
+    name === "Vector4i" ||
     name === "Vector2i" ||
     name === "Vector3i" ||
     name === "Color" ||
@@ -146,6 +159,8 @@ export function isElemKind(name: string): name is ElemKind {
 /** `resize` 扩张时按元素类型填进新格子的默认值。 */
 export function elemDefault(kind: ElemKind): Variant {
   switch (kind) {
+    case "Object":
+      throw new UnsupportedError("typed-object-default", "Array[Object] 与类定型数组的 resize / fill 填什么没量过（S613 只量了构造、append、duplicate、assign），响亮拒");
     case "int":
       return V.int(0);
     case "float":
@@ -164,6 +179,10 @@ export function elemDefault(kind: ElemKind): Variant {
       return vector2i(0, 0);
     case "Vector3i":
       return vector3i(0, 0, 0);
+    case "Vector4":
+      return vector4(0, 0, 0, 0);
+    case "Vector4i":
+      return vector4i(0, 0, 0, 0);
     case "Color":
       return color(0, 0, 0, 1);
     case "Array":
@@ -176,6 +195,9 @@ export function elemDefault(kind: ElemKind): Variant {
 /** 元素折算矩阵：能转就转，转不了交 null —— 调用方把整次容器操作静默作废，不报错。 */
 export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
+    // `Array[Object]` 只收 null（S613：`Array([null], TYPE_OBJECT, &"RefCounted", null)` 给 `[<null>]`，`Array([1], …)` 转不过）
+    case "Object":
+      return v.t === Tag.NIL ? v : null;
     case "int":
       if (v.t === Tag.INT) return v;
       if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
@@ -219,6 +241,16 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
     case "Vector3i": {
       if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return v;
       if (v.t === Tag.OBJECT && v.v instanceof GVector3) return vector3i(v.v.x, v.v.y, v.v.z);
+      return null;
+    }
+    case "Vector4": {
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4) return v;
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4i) return vector4(v.v.x, v.v.y, v.v.z, v.v.w);
+      return null;
+    }
+    case "Vector4i": {
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4i) return v;
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4) return vector4i(v.v.x, v.v.y, v.v.z, v.v.w);
       return null;
     }
     case "Color":
@@ -270,6 +302,8 @@ const MINMAX_UNORDERABLE = new Set(["compare-operands", "color-cmp"]);
 export class GArray {
   private items: Variant[];
   elem: ElemKind | null = null;
+  /** `Array(base, TYPE_OBJECT, &"类名", null)` 那一族的类名（S613）；空串就是纯 `Array[Object]`。 */
+  className = "";
   private ro = false;
 
   /** `make_read_only()` 置的那一面：浅的，只挡这个容器自己的写（S403 那一族的读数）。 */
@@ -296,6 +330,15 @@ export class GArray {
 
   elemKind(): ElemKind | null {
     return this.elem;
+  }
+
+  classNamed(): string {
+    return this.className;
+  }
+
+  /** `is_typed()` 的判据：元素型与类名两形都算（S613 的 m1 / m2 读数）。 */
+  typedAny(): boolean {
+    return this.elem !== null || this.className !== "";
   }
 
   private asElement(v: Variant): Variant | null {
@@ -528,9 +571,7 @@ export class GArray {
   /** 带比较器的排序：同键顺序走引擎那份置换（`packages/runtime/src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
     this.items = sortGodot(this.items, before);
-  }
-
-  /** 引擎那一条二分界循环：`before` 真 = lower_bound（比较收 `(元素, 值)`），假 = upper_bound（同一支比较器换过来收 `(值, 元素)` 再取反）。
+  }  /** 引擎那一条二分界循环：`before` 真 = lower_bound（比较收 `(元素, 值)`），假 = upper_bound（同一支比较器换过来收 `(值, 元素)` 再取反）。
    *  找不到不回 -1、也不提前收尾，走到底给的就是插入位；格子 `tmp/probe-argtype/{bsearch2,bsearch3}.txt` 共 198 格逐格对过。 */
   bsearch(value: Variant, before: boolean, cmp: (a: Variant, b: Variant) => boolean): number {
     let min = 0;
@@ -681,6 +722,21 @@ export class GDict {
 
   values(): Variant[] {
     return [...this.vs];
+  }
+
+  /** `Dictionary.sort()`（S572）：按键那侧的比较器重排，值跟着键走；重排后重建哈希索引。 */
+  sortKeys(before: (a: Variant, b: Variant) => boolean): void {
+    const ks = this.ks;
+    const vs = this.vs;
+    const order = sortGodot(ks.map((_, i) => i), (x, y) => before(ks[x] as Variant, ks[y] as Variant));
+    const nk = order.map((i) => ks[i] as Variant);
+    const nv = order.map((i) => vs[i] as Variant);
+    this.ks = [];
+    this.vs = [];
+    this.index = new Map();
+    this.bkt = [];
+    this.prev = [];
+    for (let i = 0; i < nk.length; i++) this.set(nk[i] as Variant, nv[i] as Variant);
   }
 
   private asQuery(k: Variant): Variant | null {
@@ -896,6 +952,13 @@ function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
 }
 
 /** 声明处给容器值盖上元素类型：类型记在**值**上、章只盖一次；非字面量赋给本来未定型的容器是运行时报错。 */
+/** `Array[类名]` 标注那一族（S615 量了 `Array[RefCounted]` / `Array[Object]` / `Array[Node]`）：元素按 Object 收，类名照标注挂。 */
+export function stampClassArray(v: Variant, cls: string, fromLiteral: boolean): Variant {
+  const stamped = stampArray(v, "Object", fromLiteral);
+  (stamped.v as GArray).className = cls;
+  return stamped;
+}
+
 export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean): Variant {
   const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
   if (g === null) throw new UnsupportedError("typed-assign", `Array[${kind}] 的初值不是数组`);
@@ -1084,7 +1147,7 @@ export function strCase(s: string, dir: "upper" | "lower"): string {
 
 /** 单码点的 Godot 简单降档，供不区分大小写的比较用（Godot 的大小写表永不撑开）。 */
 function lowerOne(ch: string): string {
-  return strCase(ch, "lower");
+  return String.fromCodePoint(findLower(ch.codePointAt(0) as number));
 }
 
 function matchAt(chars: string[], at: number, needle: string[], insensitive: boolean): boolean {
@@ -1155,10 +1218,696 @@ export function strRemoveChars(s: string, chars: string): string {
   return out;
 }
 
+/** `String.reverse()`（S574）：按码点反转（`"aé😀"`→`😀éa`）。 */
+export function strReverse(s: string): string {
+  const cs = Array.from(s);
+  cs.reverse();
+  return cs.join("");
+}
+
+/** `String.bigrams()`（S574）：按码点取相邻两格，长度 <2 给空。 */
+export function strBigramsList(s: string): string[] {
+  const cs = Array.from(s);
+  const out: string[] = [];
+  for (let i = 0; i + 1 < cs.length; i++) out.push((cs[i] as string) + (cs[i + 1] as string));
+  return out;
+}
+
+/** `String.get_slice_count(delimiter)`（S574）：空串或空分隔符给 0；否则 1 + 不重叠命中数。 */
+export function strSliceCount(s: string, delim: string): number {
+  if (s.length === 0 || delim.length === 0) return 0;
+  let pos = 0;
+  let n = 1;
+  for (;;) {
+    const at = s.indexOf(delim, pos);
+    if (at < 0) return n;
+    n += 1;
+    pos = at + delim.length;
+  }
+}
+
+/** `String.rsplit(delimiter="", allow_empty=true, maxsplit=0)`（S574）：照引擎的从右往左切与最后的 reverse。 */
+export function strRsplit(s: string, delim: string, allowEmpty: boolean, maxsplit: number): string[] {
+  const out: string[] = [];
+  const chars = delim.length === 0 ? Array.from(s) : null;
+  if (chars !== null) {
+    let remaining = chars.length;
+    for (;;) {
+      if (maxsplit > 0 && maxsplit === out.length) {
+        if (allowEmpty || remaining > 0) out.push(chars.slice(0, remaining).join(""));
+        break;
+      }
+      let left = remaining - 1;
+      if (left === 0) left -= 1;
+      if (left < 0) {
+        out.push(chars.slice(0, remaining).join(""));
+        break;
+      }
+      const start = left;
+      if (allowEmpty || start < remaining) out.push(chars.slice(start, remaining).join(""));
+      remaining = left;
+    }
+    out.reverse();
+    return out;
+  }
+  let remaining = s.length;
+  for (;;) {
+    if (remaining < delim.length || (maxsplit > 0 && maxsplit === out.length)) {
+      if (allowEmpty || remaining > 0) out.push(s.slice(0, remaining));
+      break;
+    }
+    const left = s.lastIndexOf(delim, remaining - delim.length);
+    if (left < 0) {
+      out.push(s.slice(0, remaining));
+      break;
+    }
+    const start = left + delim.length;
+    if (allowEmpty || start < remaining) out.push(s.slice(start, remaining));
+    remaining = left;
+  }
+  out.reverse();
+  return out;
+}
+
+/** `String.split_floats(delimiter, allow_empty=true)`（S574）：每段走 `to_float` 的前导解析，空段按 allow_empty 取舍。 */
+export function strSplitFloats(s: string, delim: string, allowEmpty: boolean): number[] {
+  const out: number[] = [];
+  if (s.length === 0) return out;
+  if (delim.length === 0) {
+    out.push(strToFloat(s));
+    return out;
+  }
+  let from = 0;
+  for (;;) {
+    let end = s.indexOf(delim, from);
+    if (end < 0) end = s.length;
+    if (allowEmpty || end > from) out.push(strToFloat(s.slice(from, end)));
+    if (end === s.length) break;
+    from = end + delim.length;
+  }
+  return out;
+}
+
+export function strLpad(s: string, minLength: number, character: string): string {
+  const pad = minLength - strLength(s);
+  return pad > 0 ? repeatCp(character, pad) + s : s;
+}
+
+export function strRpad(s: string, minLength: number, character: string): string {
+  const pad = minLength - strLength(s);
+  return pad > 0 ? s + repeatCp(character, pad) : s;
+}
+
+function repeatCp(s: string, n: number): string {
+  const cs = Array.from(s);
+  let out = "";
+  for (let i = 0; i < n; i++) for (const c of cs) out += c;
+  return out;
+}
+
+/** `String.pad_decimals(digits)`（S574）：无小数点先补一个，再按位数截断或补零。 */
+export function strPadDecimals(s: string, digits: number): string {
+  let t = s;
+  let c = t.indexOf(".");
+  if (c === -1) {
+    if (digits <= 0) return t;
+    t += ".";
+    c = t.length - 1;
+  } else if (digits <= 0) {
+    return t.slice(0, c);
+  }
+  if (t.length - (c + 1) > digits) return t.slice(0, c + digits + 1);
+  return t + "0".repeat(digits - t.length + (c + 1));
+}
+
+export function strTrimPrefix(s: string, prefix: string): string {
+  return s.startsWith(prefix) ? s.slice(prefix.length) : s;
+}
+
+export function strTrimSuffix(s: string, suffix: string): string {
+  return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : s;
+}
+
+/** `String.strip_escapes()`（S575）：删掉所有码点 < 32 的字符（含 `\n` / `\t`）。 */
+export function strStripEscapes(s: string): string {
+  let out = "";
+  for (const ch of s) if ((ch.codePointAt(0) as number) >= 32) out += ch;
+  return out;
+}
+
+/** `String.c_unescape()`（S575）：按引擎的顺序逐对替换（`\n` 先于 `\\`，所以 `\\n` 会留下反斜杠 + 换行）。 */
+export function strCUnescape(s: string): string {
+  const pairs: [string, string][] = [["\\a", "\u0007"], ["\\b", "\b"], ["\\f", "\f"], ["\\n", "\n"], ["\\r", "\r"], ["\\t", "\t"], ["\\v", "\v"], ["\\'", "'"], ["\\\"", "\""], ["\\\\", "\\"]];
+  let out = s;
+  for (const [from, to] of pairs) out = out.split(from).join(to);
+  return out;
+}
+
+/** `String.json_escape()`（S575）：反斜杠、五个控制转义、`\v`、双引号；其余控制字符原样。 */
+export function strJsonEscape(s: string): string {
+  let out = s.split("\\").join("\\\\");
+  const pairs: [string, string][] = [["\b", "\\b"], ["\f", "\\f"], ["\n", "\\n"], ["\r", "\\r"], ["\t", "\\t"], ["\v", "\\v"]];
+  for (const [from, to] of pairs) out = out.split(from).join(to);
+  return out.split("\"").join("\\\"");
+}
+
+/** `String.xml_escape(escape_quotes=false)`（S575）：`&` `<` `>` 恒转；引号只在参数为真时转。 */
+export function strXmlEscape(s: string, quotes: boolean): string {
+  let out = s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+  if (quotes) out = out.split("'").join("&apos;").split("\"").join("&quot;");
+  return out;
+}
+
+/** `String.indent(prefix)`（S575）：非空行加前缀，空行保持空，末尾无换行的那一段也加。 */
+export function strIndent(s: string, prefix: string): string {
+  const cs = Array.from(s);
+  let out = "";
+  let lineStart = 0;
+  for (let i = 0; i < cs.length; i++) {
+    if (cs[i] === "\n") {
+      if (i === lineStart) out += "\n";
+      else out += prefix + cs.slice(lineStart, i + 1).join("");
+      lineStart = i + 1;
+    }
+  }
+  if (lineStart !== cs.length) out += prefix + cs.slice(lineStart).join("");
+  return out;
+}
+
+/** `String.dedent()`（S575）：以第一段有文本的行的缩进为基准逐行扣除，基准不匹配处开始保留。 */
+export function strDedent(s: string): string {
+  const cs = Array.from(s);
+  let out = "";
+  let indent = "";
+  let hasIndent = false;
+  let hasText = false;
+  let lineStart = 0;
+  let indentStop = -1;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i] as string;
+    if (c === "\n") {
+      if (hasText) out += cs.slice(indentStop, i).join("");
+      out += "\n";
+      hasText = false;
+      lineStart = i + 1;
+      indentStop = -1;
+    } else if (!hasText) {
+      if ((c.codePointAt(0) as number) > 32) {
+        hasText = true;
+        if (!hasIndent) {
+          hasIndent = true;
+          indent = cs.slice(lineStart, i).join("");
+          indentStop = i;
+        }
+      }
+      if (hasIndent && indentStop < 0) {
+        const j = i - lineStart;
+        if (j >= indent.length || c !== indent[j]) indentStop = i;
+      }
+    }
+  }
+  if (hasText) out += cs.slice(indentStop).join("");
+  return out;
+}
+
+const INVALID_FILENAME_CHARS = [":", "/", "\\", "?", "*", "\"", "|", "%", "<", ">"];
+const INVALID_NODE_NAME_CHARS = [".", ":", "@", "/", "\""];
+
+/** `String.validate_filename()`（S575）：先 strip_edges，再把十个非法字符逐个换成 `_`。 */
+export function strValidateFilename(s: string): string {
+  let out = strStripEdges(s);
+  for (const ch of INVALID_FILENAME_CHARS) out = out.split(ch).join("_");
+  return out;
+}
+
+/** `String.validate_node_name()`（S575）：只换 `.` `:` `@` `/` `"` 五个，前后空白不动。 */
+export function strValidateNodeName(s: string): string {
+  let out = s;
+  for (const ch of INVALID_NODE_NAME_CHARS) out = out.split(ch).join("_");
+  return out;
+}
+
+/** `String.match(wildcard)`（S575）：`*` / `?` 通配，`?` 不吃 `.`；任一为空串给 false。 */
+export function strWildcardMatch(s: string, wildcard: string): boolean {
+  if (wildcard.length === 0 || s.length === 0) return false;
+  const p = Array.from(wildcard);
+  const t = Array.from(s);
+  const walk = (pi: number, ti: number): boolean => {
+    const pc = p[pi];
+    if (pc === undefined) return ti === t.length;
+    if (pc === "*") return walk(pi + 1, ti) || (ti < t.length && walk(pi, ti + 1));
+    if (pc === "?") return ti < t.length && t[ti] !== "." && walk(pi + 1, ti + 1);
+    return ti < t.length && t[ti] === pc && walk(pi + 1, ti + 1);
+  };
+  return walk(0, 0);
+}
+
+/** `String.nocasecmp_to()`（S576）：逐码点比 `_find_upper` 后的值，前缀短者小。 */
+export function strNoCaseCmp(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const n = Math.min(x.length, y.length);
+  for (let i = 0; i < n; i++) {
+    const ca = findUpper((x[i] as string).codePointAt(0) as number);
+    const cb = findUpper((y[i] as string).codePointAt(0) as number);
+    if (ca < cb) return -1;
+    if (ca > cb) return 1;
+  }
+  return x.length === y.length ? 0 : x.length < y.length ? -1 : 1;
+}
+
+function isDigitCp(ch: string): boolean {
+  const c = ch.codePointAt(0) as number;
+  return c >= 0x30 && c <= 0x39;
+}
+
+function naturalCmpBase(x: string[], y: string[], i0: number, j0: number, insensitive: boolean): number {
+  let i = i0;
+  let j = j0;
+  while (x[i] === "." || y[j] === ".") {
+    const xc = x[i];
+    i += 1;
+    if (xc !== ".") return 1;
+    const yc = y[j];
+    j += 1;
+    if (yc !== ".") return -1;
+    if (y[j] === undefined) return 1;
+    if (x[i] === undefined) return -1;
+  }
+  while (i < x.length) {
+    if (j >= y.length) return 1;
+    const cx = x[i] as string;
+    const cy = y[j] as string;
+    if (isDigitCp(cx)) {
+      if (!isDigitCp(cy)) return -1;
+      let xi = i;
+      let yj = j;
+      while (xi < x.length && isDigitCp(x[xi] as string)) xi++;
+      while (yj < y.length && isDigitCp(y[yj] as string)) yj++;
+      let xa = i;
+      let yb = j;
+      while (x[xa] === "0") xa++;
+      while (y[yb] === "0") yb++;
+      const lx = xi - xa;
+      const ly = yj - yb;
+      if (lx < ly) return -1;
+      if (lx > ly) return 1;
+      while (xa < xi && yb < yj) {
+        const dx = (x[xa] as string).codePointAt(0) as number;
+        const dy = (y[yb] as string).codePointAt(0) as number;
+        if (dx < dy) return -1;
+        if (dx > dy) return 1;
+        xa++;
+        yb++;
+      }
+      i = xi;
+      j = yj;
+    } else if (isDigitCp(cy)) {
+      return 1;
+    } else {
+      const ux = insensitive ? findUpper(cx.codePointAt(0) as number) : (cx.codePointAt(0) as number);
+      const uy = insensitive ? findUpper(cy.codePointAt(0) as number) : (cy.codePointAt(0) as number);
+      if (ux < uy) return -1;
+      if (ux > uy) return 1;
+      i++;
+      j++;
+    }
+  }
+  return j < y.length ? -1 : 0;
+}
+
+export function strNaturalCaseCmp(a: string, b: string): number {
+  return naturalCmpBase(Array.from(a), Array.from(b), 0, 0, false);
+}
+
+export function strNaturalNoCaseCmp(a: string, b: string): number {
+  return naturalCmpBase(Array.from(a), Array.from(b), 0, 0, true);
+}
+
+function fileCmpCommon(x: string[], y: string[]): [number, number, number] {
+  let i = 0;
+  let j = 0;
+  while ((x[i] === "_" && y[j] !== undefined) || (x[i] !== undefined && y[j] === "_")) {
+    if (x[i] !== "_") return [x[i] === "." ? -1 : 1, i, j];
+    if (y[j] !== "_") return [y[j] === "." ? 1 : -1, i, j];
+    i++;
+    j++;
+  }
+  return [0, i, j];
+}
+
+export function strFileCaseCmp(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const [r, i, j] = fileCmpCommon(x, y);
+  return r !== 0 ? r : naturalCmpBase(x, y, i, j, false);
+}
+
+export function strFileNoCaseCmp(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const [r, i, j] = fileCmpCommon(x, y);
+  return r !== 0 ? r : naturalCmpBase(x, y, i, j, true);
+}
+
+/** `String.containsn()`（S576）：`findn` 的布尔形（大小写不敏感，按 `_find_lower` 比）。 */
+export function strContainsN(s: string, needle: string): boolean {
+  return strFind(s, needle, 0, false, true) !== -1;
+}
+
+/** `String.matchn(wildcard)`（S576）：通配比较走 `_find_upper`，其余同 `match`。 */
+export function strWildcardMatchN(s: string, wildcard: string): boolean {
+  if (wildcard.length === 0 || s.length === 0) return false;
+  const p = Array.from(wildcard);
+  const t = Array.from(s);
+  const walk = (pi: number, ti: number): boolean => {
+    const pc = p[pi];
+    if (pc === undefined) return ti === t.length;
+    if (pc === "*") return walk(pi + 1, ti) || (ti < t.length && walk(pi, ti + 1));
+    if (pc === "?") return ti < t.length && t[ti] !== "." && walk(pi + 1, ti + 1);
+    return ti < t.length && findUpper((t[ti] as string).codePointAt(0) as number) === findUpper(pc.codePointAt(0) as number) && walk(pi + 1, ti + 1);
+  };
+  return walk(0, 0);
+}
+
+/** `String.is_subsequence_of()` / `…ofn()`（S576）：目标串按下标扫，能按序吃下源串即为真。 */
+export function strIsSubsequenceOf(s: string, target: string, insensitive: boolean): boolean {
+  const src = Array.from(s);
+  if (src.length === 0) return true;
+  const tgt = Array.from(target);
+  if (src.length > tgt.length) return false;
+  let i = 0;
+  for (let j = 0; j < tgt.length && i < src.length; j++) {
+    const a = (src[i] as string).codePointAt(0) as number;
+    const b = (tgt[j] as string).codePointAt(0) as number;
+    if (insensitive ? findLower(a) === findLower(b) : a === b) i++;
+  }
+  return i === src.length;
+}
+
+/** `String.lstrip(chars)` / `rstrip(chars)`（S576）：从一侧删掉出现在 chars 里的码点。 */
+export function strLstrip(s: string, chars: string): string {
+  const cs = Array.from(s);
+  let i = 0;
+  while (i < cs.length && chars.includes(cs[i] as string)) i++;
+  return cs.slice(i).join("");
+}
+
+export function strRstrip(s: string, chars: string): string {
+  const cs = Array.from(s);
+  let i = cs.length - 1;
+  while (i >= 0 && chars.includes(cs[i] as string)) i--;
+  return cs.slice(0, i + 1).join("");
+}
+
+/** `String.to_pascal_case()`（S576）：拆词后每段首码点走 `_find_upper`。 */
+export function strPascalCase(s: string): string {
+  const words = strStripEdges(separateCompoundWords(s));
+  const parts = words.split(" ");
+  let out = "";
+  for (const part of parts) {
+    if (part.length === 0) continue;
+    const cs = Array.from(part);
+    out += String.fromCodePoint(findUpper((cs[0] as string).codePointAt(0) as number)) + cs.slice(1).join("");
+  }
+  return out;
+}
+
+/** `String.xml_unescape()`（S577）：五个命名实体 + `&#十进制;` / `&#x小写x十六进制;`；其余原样（含 `&#X43;`、`&#0;`、缺分号）。 */
+export function strXmlUnescape(s: string): string {
+  const named: [string, string][] = [["&amp;", "&"], ["&lt;", "<"], ["&gt;", ">"], ["&quot;", "\""], ["&apos;", "'"]];
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] !== "&") {
+      out += s[i];
+      i += 1;
+      continue;
+    }
+    let hit = false;
+    for (const [from, to] of named) {
+      if (s.startsWith(from, i)) {
+        out += to;
+        i += from.length;
+        hit = true;
+        break;
+      }
+    }
+    if (hit) continue;
+    const rest = s.slice(i);
+    const dec = /^&#([0-9]+);/.exec(rest);
+    const hex = dec === null ? /^&#x([0-9a-fA-F]+);/.exec(rest) : null;
+    if (dec !== null || hex !== null) {
+      const cp = dec !== null ? Number(dec[1]) : parseInt(hex?.[1] as string, 16);
+      const len = (dec ?? hex)?.[0].length as number;
+      if (cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff)) {
+        out += String.fromCodePoint(cp);
+        i += len;
+        continue;
+      }
+    }
+    out += "&";
+    i += 1;
+  }
+  return out;
+}
+
+/** `String.is_valid_html_color()`（S577）：可选 `#`，后面 3 / 4 / 6 / 8 个十六进制位（没有颜色名那条路）。 */
+export function strIsValidHtmlColor(s: string): boolean {
+  if (s.length === 0) return false;
+  const start = s[0] === "#" ? 1 : 0;
+  const n = s.length - start;
+  if (!(n === 3 || n === 4 || n === 6 || n === 8)) return false;
+  for (let i = start; i < s.length; i++) {
+    const c = (s[i] as string).codePointAt(0) as number;
+    const ok = (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+    if (!ok) return false;
+  }
+  return true;
+}
+
+function parseIpv4(s: string, start: number): boolean {
+  let cur = 0;
+  let next = 0;
+  let parsed = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i] as string;
+    if (c === ".") {
+      if (!parsed) return false;
+      parsed = false;
+      next = 0;
+      cur++;
+      if (cur > 3) return false;
+    } else if (c >= "0" && c <= "9") {
+      parsed = true;
+      next = next * 10 + (c.charCodeAt(0) - 48);
+      if (next > 255) return false;
+    } else {
+      return false;
+    }
+  }
+  return parsed && cur === 3;
+}
+
+function bswap16(x: number): number {
+  return ((x & 0xff) << 8) | (x >> 8);
+}
+
+function parseIpv6(s: string): boolean {
+  const len = s.length;
+  const buf = Array.from(s);
+  const field = new Uint16Array(8);
+  let cur = 0;
+  let shift = -1;
+  for (let i = 0; i < len; i++) {
+    for (let j = i; j < len; j++) {
+      const c = buf[j] as string;
+      if (c === ":") {
+        if (j + 1 === len) return false;
+        if (buf[j + 1] === ":") {
+          if (shift > -1) return false;
+          if (j === 0) shift = cur;
+          else shift = cur + 1;
+          j++;
+        } else if (i === j) {
+          return false;
+        }
+        i = j;
+        break;
+      }
+      if (j - i > 3) return false;
+      if (c >= "0" && c <= "9") field[cur] = ((field[cur] as number) << 4) | (c.charCodeAt(0) - 48);
+      else if (c >= "a" && c <= "f") field[cur] = ((field[cur] as number) << 4) | (10 + c.charCodeAt(0) - 97);
+      else if (c >= "A" && c <= "F") field[cur] = ((field[cur] as number) << 4) | (10 + c.charCodeAt(0) - 65);
+      else if (c === ".") {
+        if (cur < 1 || field[cur - 1] !== 0xffff) return false;
+        if (shift < 0 && cur !== 6) return false;
+        field[cur] = 0;
+        field[cur - 1] = 0;
+        while (cur > 0) {
+          cur--;
+          if (field[cur] !== 0) return false;
+        }
+        field[5] = 0xffff;
+        return parseIpv4(s.slice(i), 0);
+      } else {
+        return false;
+      }
+      if (j + 1 === len) i = j;
+    }
+    field[cur] = bswap16(field[cur] as number);
+    cur++;
+    if (cur > 8 || (cur === 8 && i + 1 !== len)) return false;
+  }
+  if (shift < 0) return cur === 8;
+  if (shift > 7) return false;
+  return true;
+}
+
+/** `String.is_valid_ip_address()`（S577）：长度门槛 16 / 40，带 `:` 走 IPv6（含嵌入 IPv4），否则走点分 IPv4。 */
+export function strIsValidIpAddress(s: string): boolean {
+  if (s.length < 40 && s.includes(":")) return parseIpv6(s);
+  if (s.length < 16) return parseIpv4(s, 0);
+  return false;
+}
+
+/** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
+export function strIsAbsolutePath(s: string): boolean {
+  if (s.length > 1) return s[0] === "/" || s[0] === "\\" || s.includes(":/") || s.includes(":\\");
+  if (s.length === 1) return s[0] === "/" || s[0] === "\\";
+  return false;
+}
+
+export function strIsRelativePath(s: string): boolean {
+  return !strIsAbsolutePath(s);
+}
+
+function lastSep(s: string): number {
+  return Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+}
+
+export function strGetFile(s: string): string {
+  const sep = lastSep(s);
+  return sep === -1 ? s : s.slice(sep + 1);
+}
+
+export function strGetExtension(s: string): string {
+  const pos = s.lastIndexOf(".");
+  if (pos < 0 || pos < lastSep(s)) return "";
+  return s.slice(pos + 1);
+}
+
+export function strGetBasename(s: string): string {
+  const pos = s.lastIndexOf(".");
+  if (pos < 0 || pos < lastSep(s)) return s;
+  return s.slice(0, pos);
+}
+
+export function strPathJoin(s: string, file: string): string {
+  if (s.length === 0) return file;
+  if (s[s.length - 1] === "/" || (file.length > 0 && file[0] === "/")) return s + file;
+  return s + "/" + file;
+}
+
+/** `String.get_base_dir()`（S573）：先摘 `://` / `C:/` / UNC / 根 `/` 作 base，再对余下部分砍最后一个分隔符。 */
+export function strGetBaseDir(s: string): string {
+  let end = 0;
+  const scheme = s.indexOf("://");
+  if (scheme !== -1) end = scheme + 3;
+  if (end === 0) {
+    const drivePos = s.indexOf(":/") !== -1 ? s.indexOf(":/") : s.indexOf(":\\");
+    if (drivePos !== -1) end = drivePos + 2;
+  }
+  if (end === 0 && (s.startsWith("//") || s.startsWith("\\\\"))) {
+    let basepos = s.indexOf("/", 2);
+    if (basepos === -1) basepos = s.indexOf("\\", 2);
+    let servpos = s.indexOf("/", basepos + 1);
+    if (servpos === -1) servpos = s.indexOf("\\", basepos + 1);
+    if (servpos !== -1) end = servpos + 1;
+  }
+  if (end === 0 && s.startsWith("/")) end = 1;
+  const rs = end !== 0 ? s.slice(end) : s;
+  const base = end !== 0 ? s.slice(0, end) : "";
+  const sep = lastSep(rs);
+  if (sep === -1) return base;
+  return base + rs.slice(0, sep);
+}
+
+/** `String.simplify_path()`（S573）：驱动前缀单独摘出，反斜杠归一，`.` / `..` 逐段折叠，`res://` 不吃「上跳」。 */
+export function strSimplifyPath(input: string): string {
+  let s = input;
+  let drive = "";
+  let found = false;
+  const p = s.indexOf("://");
+  if (p > 0) {
+    let only = true;
+    for (let i = 0; i < p; i++) {
+      const c = (s[i] as string).codePointAt(0) as number;
+      if (!((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a))) {
+        only = false;
+        break;
+      }
+    }
+    if (only) {
+      found = true;
+      drive = s.slice(0, p + 3);
+      s = s.slice(p + 3);
+    }
+  }
+  if (!found) {
+    if (s.startsWith("//") || s.startsWith("\\\\")) {
+      drive = s.slice(0, 2);
+      s = s.slice(2);
+    } else if (s.startsWith("/") || s.startsWith("\\")) {
+      drive = s.slice(0, 1);
+      s = s.slice(1);
+    } else {
+      let q = s.indexOf(":/");
+      if (q === -1) q = s.indexOf(":\\");
+      if (q !== -1 && q < s.indexOf("/")) {
+        drive = s.slice(0, q + 2);
+        s = s.slice(q + 2);
+      }
+    }
+  }
+  s = s.split("\\").join("/");
+  while (s.includes("//")) s = s.split("//").join("/");
+  const dirs = s.split("/").filter((d) => d !== "");
+  const absolute = strIsAbsolutePath(input) && !input.startsWith("res://");
+  for (let i = 0; i < dirs.length; i++) {
+    const d = dirs[i] as string;
+    if (d === ".") {
+      dirs.splice(i, 1);
+      i -= 1;
+    } else if (d === "..") {
+      if (i !== 0 && dirs[i - 1] !== "..") {
+        dirs.splice(i, 1);
+        dirs.splice(i - 1, 1);
+        i -= 2;
+      } else if (absolute && i === 0) {
+        dirs.splice(i, 1);
+        i -= 1;
+      }
+    }
+  }
+  return drive + dirs.join("/");
+}
+
 function codepointSet(s: string): Set<number> {
   const set = new Set<number>();
   for (const ch of s) set.add(ch.codePointAt(0) as number);
   return set;
+}
+
+/** `is_valid_unicode_identifier()`（S555）：首码点查引擎实测的 start 表、其余查 continue 表。 */
+export function strIsValidUnicodeIdentifier(s: string): boolean {
+  const chars = [...s];
+  if (chars.length === 0) return false;
+  for (let i = 0; i < chars.length; i++) {
+    const cp = (chars[i] as string).codePointAt(0) as number;
+    if (i === 0 ? !isUnicodeIdStart(cp) : !isUnicodeIdContinue(cp)) return false;
+  }
+  return true;
 }
 
 /** `is_valid_ascii_identifier()`（S544）：首字符非数字，其余只收 ASCII 字母 / 数字 / 下划线。 */
@@ -1656,6 +2405,11 @@ export function varToStr(v: Variant): string {
         const items = packItems(inner as GBytes);
         const flat: string[] = [];
         for (const item of items) {
+          if (item.t === Tag.OBJECT && item.v instanceof GVector4) {
+            const g = item.v as GVector4;
+            flat.push(rtosFix(g.x, true), rtosFix(g.y, true), rtosFix(g.z, true), rtosFix(g.w, true));
+            continue;
+          }
           if (item.t === Tag.OBJECT) {
             throw new UnsupportedError("var-to-str-pack", `var_to_str() 的 ${packTypeName(inner.kind)} 里有对象元素，那一形还没量出`);
           }
@@ -1679,7 +2433,7 @@ export function varToStr(v: Variant): string {
   }
 }
 
-const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color"]);
 /** `PackedXArray(...)` 那七支：名字 → pack 形状，实测的 arity 与元素形状一支一张。 */
 const SV_PACK_CTORS: Record<string, PackKind> = {
   PackedByteArray: "byte",
@@ -1941,6 +2695,8 @@ export function strToVar(v: Variant): Variant {
     if (word === "Vector3") return args.length === 3 ? vector3(n(0), n(1), n(2)) : null;
     if (word === "Vector2i") return args.length === 2 ? vector2i(Math.trunc(n(0)), Math.trunc(n(1))) : null;
     if (word === "Vector3i") return args.length === 3 ? vector3i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2))) : null;
+    if (word === "Vector4") return args.length === 4 ? vector4(n(0), n(1), n(2), n(3)) : null;
+    if (word === "Vector4i") return args.length === 4 ? vector4i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2)), Math.trunc(n(3))) : null;
     if (word === "Color") return args.length === 4 ? color(n(0), n(1), n(2), n(3)) : null;
     const pack = SV_PACK_CTORS[word] as PackKind;
     if (pack === "vector2") {
@@ -2119,6 +2875,8 @@ function fmtVecComps(a: Variant): number[] | null {
   if (o instanceof GVector2i) return [o.x, o.y];
   if (o instanceof GVector3) return [o.x, o.y, o.z];
   if (o instanceof GVector3i) return [o.x, o.y, o.z];
+  if (o instanceof GVector4) return [o.x, o.y, o.z, o.w];
+  if (o instanceof GVector4i) return [o.x, o.y, o.z, o.w];
   return null;
 }
 
@@ -2435,6 +3193,9 @@ export function strHumanizeSize(v: Variant): Variant {
 
 /** 码点 → 一位字符串：实测 `char(0)` 与 `String.chr(0)` 是同一支 —— 0、负数、代理区、> U+10FFFF 一律换成 U+FFFD（引擎在建串那一刻就换，并往 stderr 打一句 Unicode parsing error）。 */
 export function stringChr(cp: Variant): Variant {
+  if (cp.t !== Tag.INT && cp.t !== Tag.FLOAT && cp.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in GDScript utility function "char()". Cannot convert argument 1 from ${valueTypeName(cp)} to int.`);
+  }
   const n = intArgBig(cp, "char() 的参数");
   const bad = n <= 0n || n > 0x10ffffn || (n >= 0xd800n && n <= 0xdfff);
   return V.str(String.fromCodePoint(bad ? 0xfffd : Number(n)));
@@ -2729,11 +3490,17 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GVector3) {
         return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)})`;
       }
+      if (inner instanceof GVector4) {
+        return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)}, ${strVec2(inner.w)})`;
+      }
       if (inner instanceof GVector2i) {
         return `(${String(inner.x)}, ${String(inner.y)})`;
       }
       if (inner instanceof GVector3i) {
         return `(${String(inner.x)}, ${String(inner.y)}, ${String(inner.z)})`;
+      }
+      if (inner instanceof GVector4i) {
+        return `(${String(inner.x)}, ${String(inner.y)}, ${String(inner.z)}, ${String(inner.w)})`;
       }
       if (inner instanceof GColor) {
         return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
@@ -2794,8 +3561,10 @@ export function valueTypeName(x: Variant): string {
   if (x.t === Tag.OBJECT && x.v instanceof GBytes) return packTypeName(x.v.kind);
   if (asVec2(x) !== null) return "Vector2";
   if (asVec3(x) !== null) return "Vector3";
+  if (asVec4(x) !== null) return "Vector4";
   if (asVec2i(x) !== null) return "Vector2i";
   if (asVec3i(x) !== null) return "Vector3i";
+  if (asVec4i(x) !== null) return "Vector4i";
   if (asColor(x) !== null) return "Color";
   if (asRid(x) !== null) return "RID";
   if (asNodePath(x) !== null) return "NodePath";
@@ -2814,6 +3583,10 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const bi = asVec2i(b);
   const ai3 = asVec3i(a);
   const bi3 = asVec3i(b);
+  const a4 = asVec4(a);
+  const b4 = asVec4(b);
+  const ai4 = asVec4i(a);
+  const bi4 = asVec4i(b);
   const ac = asColor(a);
   const bc = asColor(b);
   const ar = asRid(a);
@@ -2837,17 +3610,23 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
     bi !== null ||
     ai3 !== null ||
     bi3 !== null ||
+    a4 !== null ||
+    b4 !== null ||
+    ai4 !== null ||
+    bi4 !== null ||
     ac !== null ||
     bc !== null
   ) {
     if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
     if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
+    if (a4 !== null && b4 !== null) return a4.x === b4.x && a4.y === b4.y && a4.z === b4.z && a4.w === b4.w;
     if (ai !== null && bi !== null) return ai.x === bi.x && ai.y === bi.y;
     if (ai3 !== null && bi3 !== null) return ai3.x === bi3.x && ai3.y === bi3.y && ai3.z === bi3.z;
+    if (ai4 !== null && bi4 !== null) return ai4.x === bi4.x && ai4.y === bi4.y && ai4.z === bi4.z && ai4.w === bi4.w;
     if (ac !== null && bc !== null)
       return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
     const other: Variant =
-      a2 !== null || a3 !== null || ai !== null || ai3 !== null || ac !== null ? b : a;
+      a2 !== null || a3 !== null || a4 !== null || ai !== null || ai3 !== null || ai4 !== null || ac !== null ? b : a;
     if (other.t === Tag.NIL) return false;
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
   }
@@ -2929,11 +3708,17 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GVector3 && b.v instanceof GVector3) {
         return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
       }
+      if (a.v instanceof GVector4 && b.v instanceof GVector4) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z && a.v.w === b.v.w;
+      }
       if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
       }
       if (a.v instanceof GVector3i && b.v instanceof GVector3i) {
         return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
+      }
+      if (a.v instanceof GVector4i && b.v instanceof GVector4i) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z && a.v.w === b.v.w;
       }
       if (a.v instanceof GColor && b.v instanceof GColor) {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;

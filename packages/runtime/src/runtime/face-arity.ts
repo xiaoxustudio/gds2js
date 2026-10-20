@@ -70,7 +70,7 @@ export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
 
 const PACK_NINE: Record<string, boolean> = {
   PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
-  PackedFloat64Array: true, PackedStringArray: true, PackedVector2Array: true, PackedVector3Array: true,
+  PackedFloat64Array: true, PackedStringArray: true, PackedVector2Array: true, PackedVector3Array: true, PackedVector4Array: true,
   PackedColorArray: true,
 };
 
@@ -104,6 +104,20 @@ export const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>
     outer: [1, 1], posmod: [1, 1], posmodv: [1, 1], project: [1, 1], reflect: [1, 1],
     rotated: [2, 2], round: [0, 0], sign: [0, 0], signed_angle_to: [2, 2], slerp: [2, 2],
     slide: [1, 1], snapped: [1, 1], snappedf: [1, 1],
+  },
+  Vector4: {
+    abs: [0, 0], ceil: [0, 0], clamp: [2, 2], clampf: [2, 2], cubic_interpolate: [4, 4],
+    cubic_interpolate_in_time: [7, 7], direction_to: [1, 1], distance_squared_to: [1, 1], distance_to: [1, 1], dot: [1, 1],
+    floor: [0, 0], inverse: [0, 0], is_equal_approx: [1, 1], is_finite: [0, 0], is_normalized: [0, 0],
+    is_zero_approx: [0, 0], length: [0, 0], length_squared: [0, 0], lerp: [2, 2], max: [1, 1],
+    max_axis_index: [0, 0], maxf: [1, 1], min: [1, 1], min_axis_index: [0, 0], minf: [1, 1],
+    normalized: [0, 0], posmod: [1, 1], posmodv: [1, 1], round: [0, 0], sign: [0, 0],
+    snapped: [1, 1], snappedf: [1, 1],
+  },
+  Vector4i: {
+    abs: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1], distance_to: [1, 1],
+    length: [0, 0], length_squared: [0, 0], max: [1, 1], max_axis_index: [0, 0], maxi: [1, 1],
+    min: [1, 1], min_axis_index: [0, 0], mini: [1, 1], sign: [0, 0], snapped: [1, 1], snappedi: [1, 1],
   },
   Vector3i: {
     abs: [0, 0], clamp: [2, 2], clampi: [2, 2], distance_squared_to: [1, 1], distance_to: [1, 1],
@@ -173,6 +187,14 @@ export const VALUE_VEC3i_EXISTS: readonly string[] = [
   "distance_to", "length", "max", "min", "x", "y", "z"
 ];
 
+export const VALUE_VEC4_EXISTS: readonly string[] = [
+  "min_axis_index", "max_axis_index", "length", "length_squared", "abs", "sign", "floor", "ceil", "round", "lerp", "cubic_interpolate", "cubic_interpolate_in_time", "posmod", "posmodv", "snapped", "snappedf", "clamp", "clampf", "normalized", "is_normalized", "direction_to", "distance_to", "distance_squared_to", "dot", "inverse", "is_equal_approx", "is_zero_approx", "is_finite", "min", "minf", "max", "maxf", "w", "x", "y", "z"
+];
+
+export const VALUE_VEC4i_EXISTS: readonly string[] = [
+  "min_axis_index", "max_axis_index", "length", "length_squared", "sign", "abs", "clamp", "clampi", "snapped", "snappedi", "min", "mini", "max", "maxi", "distance_to", "distance_squared_to", "w", "x", "y", "z"
+];
+
 export const VALUE_Color_EXISTS: readonly string[] = [
   "a", "b", "g", "r", "to_abgr32", "to_html"
 ];
@@ -203,6 +225,8 @@ const VALUE_EXIST: Record<string, readonly string[]> = {
   "Vector2i": VALUE_VEC2i_EXISTS,
   "Vector3": VALUE_VEC3_EXISTS,
   "Vector3i": VALUE_VEC3i_EXISTS,
+  "Vector4": VALUE_VEC4_EXISTS,
+  "Vector4i": VALUE_VEC4i_EXISTS,
   "Color": VALUE_Color_EXISTS,
   "StringName": VALUE_StringName_EXISTS,
   "NodePath": VALUE_NodePath_EXISTS,

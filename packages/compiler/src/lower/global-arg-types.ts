@@ -23,6 +23,12 @@ export const GLOBAL_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [n
   atan: [[1, "float"]],
   atan2: [[1, "float"], [2, "float"]],
   atanh: [[1, "float"]],
+  bezier_derivative: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
+  bezier_interpolate: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
+  cubic_interpolate: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
+  cubic_interpolate_angle: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
+  cubic_interpolate_angle_in_time: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"], [6, "float"], [7, "float"], [8, "float"]],
+  cubic_interpolate_in_time: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"], [6, "float"], [7, "float"], [8, "float"]],
   remap: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
   ceilf: [[1, "float"]],
   ceili: [[1, "float"]],
@@ -98,8 +104,8 @@ export const GLOBAL_ARG_BOOL_REFUSED: Readonly<Record<string, ReadonlyArray<numb
  *  走到运行期才打 `Invalid type in utility function "max()". Cannot convert argument N from Array to float.` 并打断脚本 ——
  *  那一条通道由 `rt.gMax` / `rt.gMin` 发（S393，装箱十四形的读数 `tmp/probe-maxrt/compare53.txt`），解析期因此不拦。 */
 export const GLOBAL_ARG_VARARG: Readonly<Record<string, ReadonlySet<string>>> = {
-  max: new Set(["String", "StringName", "NodePath", "bool", "null"]),
-  min: new Set(["String", "StringName", "NodePath", "bool", "null"]),
+  max: new Set(["String", "StringName", "NodePath", "bool", "null", "Vector4", "Vector4i"]),
+  min: new Set(["String", "StringName", "NodePath", "bool", "null", "Vector4", "Vector4i"]),
 };
 
 

@@ -64,8 +64,11 @@ const STATIC_MEMBER_FNS: Record<string, string> = {
   Vector3: "vector3Const",
   Vector2i: "vector2iConst",
   Vector3i: "vector3iConst",
+  Vector4: "vector4Const",
+  Vector4i: "vector4iConst",
   Color: "colorStatic",
   String: "stringStatic",
+  Callable: "callableStatic",
 };
 
 /** 属性基是「带静态成员的内建类型名」时给出运行时函数名，否则 null。 */

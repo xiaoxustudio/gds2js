@@ -1,0 +1,50 @@
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(int)".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(String)".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Dictionary)".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(null)".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(float)".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(bool)".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(StringName)".
+   at: GDScript::reload (<case>/main.gd:10)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Vector2)".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Color)".
+   at: GDScript::reload (<case>/main.gd:12)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Array, int)".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Array, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:14)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Dictionary, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:15)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(float, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:16)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(bool, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:17)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Vector2, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:18)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(StringName, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:19)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(PackedStringArray, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:20)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(PackedByteArray, Variant.Type)".
+   at: GDScript::reload (<case>/main.gd:21)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(null, Variant.Type, StringName, null)".
+   at: GDScript::reload (<case>/main.gd:22)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(String, Variant.Type, StringName, null)".
+   at: GDScript::reload (<case>/main.gd:23)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(int, Variant.Type, StringName, null)".
+   at: GDScript::reload (<case>/main.gd:24)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Array, Variant.Type, Variant.Type, bool)".
+   at: GDScript::reload (<case>/main.gd:25)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Array, Variant.Type, StringName, null, int)".
+   at: GDScript::reload (<case>/main.gd:26)
+SCRIPT ERROR: Parse Error: No constructor of "Array" matches the signature "Array(Array, Variant.Type, StringName, null, int, int)".
+   at: GDScript::reload (<case>/main.gd:27)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

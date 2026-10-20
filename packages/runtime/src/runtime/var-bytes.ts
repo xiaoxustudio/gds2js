@@ -4,6 +4,8 @@ import { GArray, GDict, type ElemKind } from "./values";
 import { GBytes, type PackElem, type PackKind } from "./packed";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
+import { GVector4 } from "./vector4";
+import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
@@ -39,8 +41,11 @@ const T_PACKED_F32 = 32;
 const T_PACKED_STR = 34;
 const T_PACKED_V2 = 35;
 const T_PACKED_V3 = 36;
+const T_PACKED_V4 = 38;
 const T_PACKED_COLOR = 37;
 const T_VECTOR3I = 10;
+const T_VECTOR4 = 12;
+const T_VECTOR4I = 13;
 const T_OBJECT = 24;
 
 /** 编码侧的信号：路径拿不出来时引擎回的是**一个空 PackedByteArray**（并打一句 `Failed to encode a path to a custom script`），不是错。 */
@@ -57,6 +62,7 @@ const PACK_TYPE_CODE: Record<PackKind, number> = {
   string: T_PACKED_STR,
   vector2: T_PACKED_V2,
   vector3: T_PACKED_V3,
+  vector4: T_PACKED_V4,
   color: T_PACKED_COLOR,
 };
 
@@ -73,10 +79,13 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   Vector2i: 6,
   Vector3: 9,
   Vector3i: 10,
+  Vector4: 12,
+  Vector4i: 13,
   Color: 20,
   StringName: 21,
   Dictionary: 27,
   Array: 28,
+  Object: 24,
 };
 
 const TYPE_ELEM: Record<number, ElemKind> = {};
@@ -184,6 +193,8 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GVector3 ||
     o instanceof GVector2i ||
     o instanceof GVector3i ||
+    o instanceof GVector4 ||
+    o instanceof GVector4i ||
     o instanceof GColor ||
     o instanceof GBytes ||
     o instanceof GdNodePath ||
@@ -270,6 +281,12 @@ class Writer {
         this.f32((e as GVector3).y);
         this.f32((e as GVector3).z);
         return;
+      case "vector4":
+        this.f32((e as GVector4).x);
+        this.f32((e as GVector4).y);
+        this.f32((e as GVector4).z);
+        this.f32((e as GVector4).w);
+        return;
       case "color":
         this.f32((e as GColor).r);
         this.f32((e as GColor).g);
@@ -345,6 +362,15 @@ class Writer {
         const items = a.raw();
         const kind = a.elemKind();
         // 实测：定型数组头部挂宽位，再跟一枚「元素类型码」字（Array[int] 给 2、Array[String] 给 4、Array[Array] 给 28）
+        if (a.classNamed() !== "") {
+          // 类定型（S614 拆完的形）：头部 flags=2，之后**不写元素型码**，只写一枚固定的串名位 —— 引擎写的
+          // 是 "EncodedObjectAsID"，与我们给的类名无关，回读后类名也就变成它（读数 tmp/d6/s624.gd）
+          this.u32(T_ARRAY | (2 << 16));
+          this.str("EncodedObjectAsID");
+          this.u32(items.length);
+          for (const e of items) this.variant(e);
+          return;
+        }
         this.header(T_ARRAY, kind !== null);
         if (kind !== null) this.u32(elemCode(kind));
         this.u32(items.length);
@@ -395,6 +421,22 @@ class Writer {
           this.u32(o.x);
           this.u32(o.y);
           this.u32(o.z);
+          return;
+        }
+        if (o instanceof GVector4) {
+          this.header(T_VECTOR4);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.z);
+          this.f32(o.w);
+          return;
+        }
+        if (o instanceof GVector4i) {
+          this.header(T_VECTOR4I);
+          this.u32(o.x);
+          this.u32(o.y);
+          this.u32(o.z);
+          this.u32(o.w);
           return;
         }
         if (o instanceof GColor) {
@@ -546,6 +588,13 @@ class Reader {
         const z = this.f32();
         return new GVector3(x, y, z);
       }
+      case "vector4": {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        const w = this.f32();
+        return new GVector4(x, y, z, w);
+      }
       case "color": {
         const r = this.f32();
         const g = this.f32();
@@ -612,6 +661,20 @@ class Reader {
         const z = this.f32();
         return V.object(new GVector3(x, y, z));
       }
+      case T_VECTOR4: {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        const w = this.f32();
+        return V.object(new GVector4(x, y, z, w));
+      }
+      case T_VECTOR4I: {
+        const x = this.i32();
+        const y = this.i32();
+        const z = this.i32();
+        const w = this.i32();
+        return V.object(new GVector4i(x, y, z, w));
+      }
       case T_COLOR: {
         const r = this.f32();
         const g = this.f32();
@@ -620,6 +683,17 @@ class Reader {
         return V.object(new GColor(r, g, b, a));
       }
       case T_ARRAY: {
+        if ((flags & 2) !== 0) {
+          // 类定型：读那枚串名位（引擎恒为 "EncodedObjectAsID"），元素型不写码 —— 定型性按 Object 接（S614）
+          const cls = this.str();
+          const cn = this.u32();
+          const citems: Variant[] = [];
+          for (let k = 0; k < cn; k++) citems.push(this.variant());
+          const carr = GArray.of(citems);
+          carr.stampElem("Object");
+          carr.className = cls;
+          return V.array(carr);
+        }
         const kind = (flags & FLAG_WIDE) !== 0 ? elemKindOf(this.u32()) : null;
         const n = this.u32();
         const items: Variant[] = [];
@@ -723,4 +797,22 @@ export function gBytesToVar(v: Variant): Variant {
 /** `bytes_to_var_with_objects(字节)`：同一条解码器，只是开了对象表那一支（S284 ②）。 */
 export function gBytesToVarWithObjects(v: Variant): Variant {
   return readBytes(v, true, LOUD_WITH_OBJECTS);
+}
+
+/** `PackedByteArray.decode_var` 那一族（S552）：从 offset 起解一个 Variant，交值与消费字节数；
+ *  剩余不足 4 字节那一形给 `{ short: true }`（引擎在 marshalls 打一块 len<4），其余读不通给 null。 */
+export function gVarDecodeAt(v: Variant, offset: number, allowObjects: boolean): { value: Variant; size: number } | { short: true } | null {
+  if (v.t !== Tag.OBJECT || !(v.v instanceof GBytes)) {
+    throw new UnsupportedError("bytes-to-var-arg", `decode_var() 的接收者要的是 PackedByteArray（收到的是别的东西），这一形没量过`);
+  }
+  const all = (v.v as GBytes).raw().map((x) => Number(x) & 0xff);
+  if (offset > all.length - 4) return { short: true };
+  const r = new Reader(all.slice(offset), allowObjects);
+  try {
+    const value = r.variant();
+    return { value, size: r.i };
+  } catch (e) {
+    if (e instanceof UnsupportedError && (allowObjects ? LOUD_WITH_OBJECTS : LOUD_NONE).has(e.code)) throw e;
+    return null;
+  }
 }

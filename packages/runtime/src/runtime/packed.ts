@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { fastlzCompress, fastlzDecompress } from "./fastlz";
 import { Tag, V, intToNum, tagName, type Variant } from "./tags";
 import { INT64_MIN, TWO_63, hexLower, padZero2, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
@@ -6,11 +7,13 @@ import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GVector3 } from "./vector3";
+import { GVector4 } from "./vector4";
+import { GVector4i } from "./vector4i";
 import type { GArray } from "./values";
 
-export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "color";
+export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "vector4" | "color";
 
-export type PackElem = number | bigint | string | GVector2 | GVector3 | GColor;
+export type PackElem = number | bigint | string | GVector2 | GVector3 | GVector4 | GColor;
 
 const PACK_TYPE_NAME: Record<PackKind, string> = {
   byte: "PackedByteArray",
@@ -21,6 +24,7 @@ const PACK_TYPE_NAME: Record<PackKind, string> = {
   string: "PackedStringArray",
   vector2: "PackedVector2Array",
   vector3: "PackedVector3Array",
+  vector4: "PackedVector4Array",
   color: "PackedColorArray",
 };
 const PACK_TYPEOF: Record<PackKind, number> = {
@@ -32,6 +36,7 @@ const PACK_TYPEOF: Record<PackKind, number> = {
   string: 34,
   vector2: 35,
   vector3: 36,
+  vector4: 38,
   color: 37,
 };
 
@@ -72,6 +77,8 @@ export function defaultElem(kind: PackKind): PackElem {
       return new GVector2(0, 0);
     case "vector3":
       return new GVector3(0, 0, 0);
+    case "vector4":
+      return new GVector4(0, 0, 0, 0);
     case "color":
       return new GColor(0, 0, 0, 1);
     default:
@@ -108,7 +115,7 @@ function foldInt32(n: number | bigint): number {
 
 /** 元素折算：int / float（截断或饱和）/ bool / String（前导数解析）/ 与形状对应的值类型，其余来源响亮拒。 */
 export function toElem(kind: PackKind, v: Variant): PackElem {
-  if (kind === "vector2" || kind === "vector3" || kind === "color") {
+  if (kind === "vector2" || kind === "vector3" || kind === "vector4" || kind === "color") {
     const inner = v.t === Tag.OBJECT ? (v.v as object) : null;
     if (kind === "vector2") {
       if (inner instanceof GVector2) return new GVector2(inner.x, inner.y);
@@ -116,6 +123,11 @@ export function toElem(kind: PackKind, v: Variant): PackElem {
       // Vector3 → Vector2 是**丢掉 z**，不是折成默认元素。
       if (inner instanceof GVector3) return new GVector2(inner.x, inner.y);
       if (inner instanceof GVector3i) return new GVector2(inner.x, inner.y);
+      return defaultElem(kind);
+    }
+    if (kind === "vector4") {
+      if (inner instanceof GVector4) return new GVector4(inner.x, inner.y, inner.z, inner.w);
+      if (inner instanceof GVector4i) return new GVector4(inner.x, inner.y, inner.z, inner.w);
       return defaultElem(kind);
     }
     if (kind === "vector3") {
@@ -200,7 +212,7 @@ export function toByte(v: Variant): number {
 
 function elemVariant(kind: PackKind, e: PackElem): Variant {
   if (kind === "string") return V.str(e as string);
-  if (kind === "vector2" || kind === "vector3" || kind === "color") return V.object(e as object);
+  if (kind === "vector2" || kind === "vector3" || kind === "vector4" || kind === "color") return V.object(e as object);
   if (kind === "float32" || kind === "float64") return V.float(e as number);
   return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e as number)) : V.int(e as number | bigint);
 }
@@ -273,6 +285,19 @@ function bigCmp(x: bigint, y: bigint): number {
   if (yHi !== xHi) return xHi < yHi ? -1 : 1;
   const yLo = dv.getUint32(4);
   return xLo === yLo ? 0 : xLo < yLo ? -1 : 1;
+}
+
+/** UTF-8 编码（S579）：逐码点写，**孤立代理按码点原样编成 3 字节**（U+D800 → ED A0 80），与引擎一致；不用 TextEncoder 的 U+FFFD 替换。 */
+export function utf8EncodeWtf(s: string): number[] {
+  const out: number[] = [];
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) as number;
+    if (cp < 0x80) out.push(cp);
+    else if (cp < 0x800) out.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f));
+    else if (cp < 0x10000) out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+    else out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+  }
+  return out;
 }
 
 /** UTF-8 解码（`get_string_from_utf8()`）：`new TextDecoder(标签, 选项)` 在静态编译目标上没有 lowering，照 WHATWG 的 utf-8 状态机自己走 —— 非法序列给**一个** U+FFFD 并从下一个字节重扫。 */
@@ -358,6 +383,11 @@ function cmpElem(kind: PackKind, a: PackElem, b: PackElem): number {
     const y = b as GVector3;
     return cmpNums([x.x, x.y, x.z], [y.x, y.y, y.z]);
   }
+  if (kind === "vector4") {
+    const x = a as GVector4;
+    const y = b as GVector4;
+    return cmpNums([x.x, x.y, x.z, x.w], [y.x, y.y, y.z, y.w]);
+  }
   if (kind === "string") return cmpStrings(a as string, b as string);
   if (kind === "int64") return bigCmp(bigElem(a), bigElem(b));
   const x = a as number;
@@ -370,6 +400,8 @@ function elemSame(kind: PackKind, a: PackElem, b: PackElem): boolean {
   if (kind === "vector2") return (a as GVector2).x === (b as GVector2).x && (a as GVector2).y === (b as GVector2).y;
   if (kind === "vector3")
     return (a as GVector3).x === (b as GVector3).x && (a as GVector3).y === (b as GVector3).y && (a as GVector3).z === (b as GVector3).z;
+  if (kind === "vector4")
+    return (a as GVector4).x === (b as GVector4).x && (a as GVector4).y === (b as GVector4).y && (a as GVector4).z === (b as GVector4).z && (a as GVector4).w === (b as GVector4).w;
   if (kind === "color")
     return (
       (a as GColor).r === (b as GColor).r &&
@@ -488,11 +520,14 @@ const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
   vector2: MISSING_ON_SIX,
   vector3: MISSING_ON_SIX,
   color: MISSING_ON_SIX,
+  vector4: MISSING_ON_SIX,
 };
 /** byte 那一支独有的方法（`to_*_array` 与压缩这一族）。 */
 const BYTE_ONLY = new Set([
   "get_string_from_utf8",
   "get_string_from_ascii",
+  "get_string_from_utf16",
+  "get_string_from_wchar",
   "to_int32_array",
   "to_int64_array",
   "to_float32_array",
@@ -553,6 +588,14 @@ let zip1: Codec | null = null;
 let zip2: Codec | null = null;
 let zip3: Codec | null = null;
 
+/** `decompress()` 的三块失败文案：packed 不能 import frames（frames → values → packed 会成环），由 methods.ts 注入。 */
+type PackErrSink = { bufferZero: () => void; srcZero: () => void; inflateErr: () => void };
+let packErrSink: PackErrSink | null = null;
+
+export function registerPackErrorSink(s: PackErrSink): void {
+  packErrSink = s;
+}
+
 /** 宿主把某个模式的编解码器挂进来（`mode` 只认 1 / 2 / 3）。 */
 export function registerZipCodec(mode: number, codec: Codec): void {
   if (mode === 1) zip1 = codec;
@@ -576,6 +619,18 @@ function modeOf(v: Variant): number {
   }
   const n = intToNum(v.v as number | bigint);
   return typeof n === "bigint" ? Number(n) : n;
+}
+
+/** `decompress_dynamic()` 的宿主编解码槽（S557）：只分派并吞解压异常；ERROR 块与返回值由调用方（methods.ts）发。 */
+export function packDynamicUnpack(bytes: number[], mode: number): Uint8Array | "empty" | "n/a" | "failed" {
+  const codec = codecFor(mode);
+  if (codec === "empty") return "empty";
+  if (codec === null) return "n/a";
+  try {
+    return codec.unpack(byteBuf(bytes as PackElem[]));
+  } catch {
+    return "failed";
+  }
 }
 
 /** pack 的格子 → 字节缓冲（byte pack 的元素在 `toElem` 那侧已经折到 0..255）。 */
@@ -625,6 +680,7 @@ function packToBytes(kind: PackKind, items: PackElem[]): number[] {
       const vs =
         kind === "vector2" ? [(e as GVector2).x, (e as GVector2).y]
         : kind === "vector3" ? [(e as GVector3).x, (e as GVector3).y, (e as GVector3).z]
+        : kind === "vector4" ? [(e as GVector4).x, (e as GVector4).y, (e as GVector4).z, (e as GVector4).w]
         : [(e as GColor).r, (e as GColor).g, (e as GColor).b, (e as GColor).a];
       one(vs.length * 4, (dv) => vs.forEach((v, i) => dv.setFloat32(i * 4, v, true)));
     }
@@ -635,6 +691,17 @@ function packToBytes(kind: PackKind, items: PackElem[]): number[] {
 export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
   const items = p.raw();
   const kind = p.kind;
+  if (kind === "vector4" && (name === "push_back" || name === "append" || name === "insert" || name === "fill" || name === "set")) {
+    const idx = name === "insert" || name === "set" ? 1 : 0;
+    const v = args[idx];
+    const ok = v !== undefined && v.t === Tag.OBJECT && typeof v.v === "object" && (v.v instanceof GVector4 || v.v instanceof GVector4i);
+    if (!ok) {
+      throw new GodotRuntimeError(
+        "packed-vector4-element",
+        `Invalid type in function '${name}' in base 'PackedVector4Array'. Cannot convert argument ${String(idx + 1)} from ${tagName(v === undefined ? Tag.NIL : v.t)} to Vector4.`,
+      );
+    }
+  }
   if (NON_BYTE_MISSING.has(name) && kind !== "byte") {
     throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
   }
@@ -696,6 +763,18 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       items.splice(pos, 0, toElem(kind, args[1] as Variant));
       return V.int(0);
     }
+    // `erase(value)`（S562）：把实参按元素槽折算后删**第一处**命中，返回是否删了；向量/颜色按分量比
+    case "erase": {
+      arity("erase", args, 1);
+      const want = toElem(kind, args[0] as Variant);
+      for (let i = 0; i < items.length; i++) {
+        if (elemSame(kind, items[i] as PackElem, want)) {
+          items.splice(i, 1);
+          return V.bool(true);
+        }
+      }
+      return V.bool(false);
+    }
     case "remove_at": {
       arity("remove_at", args, 1);
       const at = intToNum((args[0] as Variant).v as number | bigint);
@@ -731,7 +810,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (name === "count") return V.int(items.filter(same).length);
       if (name === "find") return V.int(items.findIndex(same));
       // rfind 只在 byte 那一支支持，其余形状响亮拒，不照 find 推
-      if (kind !== "byte") throw new UnsupportedError("packed-rfind", `${kind} 的 rfind() 没实测过，只在 PackedByteArray 上量过`);
+      if (kind !== "byte" && kind !== "vector4") throw new UnsupportedError("packed-rfind", `${kind} 的 rfind() 没实测过，只在 PackedByteArray 上量过`);
       for (let i = items.length - 1; i >= 0; i--) if (same(items[i] as PackElem)) return V.int(i);
       return V.int(-1);
     }
@@ -812,6 +891,14 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("arity", `compress() 最多 1 个参数（收到 ${args.length} 个）`);
       }
       const mode = args.length === 0 ? 0 : modeOf(args[0] as Variant);
+      if (mode === 0) {
+        // FastLZ（S558）：引擎对 <16 字节的输入先补零到 16 再压（解回来是 16 字节），空输入在 PackedByteArray 层就短路成空
+        const bytes = byteBuf(items);
+        if (bytes.length === 0) return V.object(new GBytes([], "byte"));
+        const src = bytes.length < 16 ? new Uint8Array(16) : bytes;
+        if (bytes.length < 16) src.set(bytes);
+        return V.object(new GBytes(bytesOf(fastlzCompress(src)), "byte"));
+      }
       const codec = codecFor(mode);
       // 越界模式给空 pack；空 pack 压任何模式也还是空 pack（node 的 deflateSync 反倒给 8 字节，这一格必须照 Godot）
       if (codec === "empty" || items.length === 0) return V.object(new GBytes([], "byte"));
@@ -825,6 +912,22 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("arity", `decompress() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
       }
       const mode = args.length === 2 ? modeOf(args[1] as Variant) : 0;
+      if (mode === 0) {
+        // FastLZ（S558）：buffer_size ≥ 16 当输出上限；< 16 时引擎只解到 16 字节临时缓冲再拷前 buffer_size 字节
+        const sv0 = intToNum((args[0] as Variant).v as number | bigint);
+        const want0 = typeof sv0 === "bigint" ? Number(sv0) : sv0;
+        if (!(want0 > 0) || items.length === 0) return V.object(new GBytes([], "byte"));
+        const plain0 = fastlzDecompress(byteBuf(items), want0 < 16 ? 16 : want0);
+        if (want0 < 16) {
+          // <16 时引擎把 16 字节临时缓冲原样拷出来；只有「正好解出 16 字节」（压缩端补零那条合法路）可复刻
+          if (plain0 === null || plain0.length !== 16) {
+            throw new UnsupportedError("fastlz-short-fail", "FastLZ 解压在 buffer_size<16 下没解出整 16 字节：引擎拷的是未初始化的临时缓冲（实测每次不同），这一形不发");
+          }
+          return V.object(new GBytes(bytesOf(plain0.slice(0, want0)), "byte"));
+        }
+        if (plain0 === null) return V.object(new GBytes([], "byte"));
+        return V.object(new GBytes(bytesOf(plain0), "byte"));
+      }
       const codec = codecFor(mode);
       if (codec === "empty") return V.object(new GBytes([], "byte"));
       if (codec === null) {
@@ -833,24 +936,76 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       const sv = intToNum((args[0] as Variant).v as number | bigint);
       const want = typeof sv === "bigint" ? Number(sv) : sv;
       // `expected` ≤ 0 或比真身小都给空 pack（不是截断）；比真身大也不补零，给的就是真身。
-      if (!(want > 0) || items.length === 0) return V.object(new GBytes([], "byte"));
+      if (!(want > 0)) {
+        if (packErrSink !== null) packErrSink.bufferZero();
+        return V.object(new GBytes([], "byte"));
+      }
+      if (items.length === 0) {
+        if (packErrSink !== null) packErrSink.srcZero();
+        return V.object(new GBytes([], "byte"));
+      }
       let plain: Uint8Array;
       try {
         plain = codec.unpack(byteBuf(items));
       } catch {
-        return V.object(new GBytes([], "byte")); // 垃圾数据给空 pack
+        // zlib 的两支解不开时引擎在 compression 层打 `err != 1`；zstd 那支不打块
+        if ((mode === 1 || mode === 3) && packErrSink !== null) packErrSink.inflateErr();
+        return V.object(new GBytes([], "byte"));
       }
-      if (plain.length > want) return V.object(new GBytes([], "byte"));
+      if (plain.length > want) {
+        if ((mode === 1 || mode === 3) && packErrSink !== null) packErrSink.inflateErr();
+        return V.object(new GBytes([], "byte"));
+      }
       return V.object(new GBytes(bytesOf(plain), "byte"));
+    }
+    case "get_string_from_utf16":
+    case "get_string_from_wchar": {
+      // S561：Windows 那侧 wchar 就是 UTF-16；带 BOM 时跟 BOM 走字节序（FF FE 小端 / FE FF 大端），BOM 不进食
+      const bytes = items as number[];
+      let le = true;
+      let start = 0;
+      if (bytes.length >= 2) {
+        if ((bytes[0] as number) === 0xff && (bytes[1] as number) === 0xfe) start = 2;
+        else if ((bytes[0] as number) === 0xfe && (bytes[1] as number) === 0xff) {
+          le = false;
+          start = 2;
+        }
+      }
+      const units: number[] = [];
+      for (let i = start; i + 1 < bytes.length; i += 2) {
+        units.push(le ? ((bytes[i] as number) | ((bytes[i + 1] as number) << 8)) : (((bytes[i] as number) << 8) | (bytes[i + 1] as number)));
+      }
+      let text = "";
+      for (let i = 0; i < units.length; i++) {
+        const u = units[i] as number;
+        if (u >= 0xd800 && u <= 0xdbff) {
+          const next = units[i + 1];
+          if (next === undefined) {
+            text += String.fromCharCode(u);
+            continue;
+          }
+          if (next >= 0xdc00 && next <= 0xdfff) {
+            text += String.fromCharCode(u, next);
+            i++;
+            continue;
+          }
+          throw new UnsupportedError("packed-utf16", "get_string_from_utf16() 里高位代理后跟的不是低位代理：引擎那形给的是 [65, 0] 这类怪值，没逆出来，不发");
+        }
+        text += String.fromCharCode(u);
+      }
+      return V.str(text);
     }
     case "get_string_from_utf8": {
       return V.str(utf8Decode(items as number[]));
     }
     case "get_string_from_ascii": {
-      if (items.some((x) => (x as number) > 127)) {
-        throw new UnsupportedError("packed-ascii", "get_string_from_ascii() 只实测过纯 ASCII 的字节");
-      }
-      return V.str(String.fromCharCode(...(items as number[])));
+      // S569：引擎把 CharString 当 C 串（首个 0x00 截断）逐个字节直接折码点，实测是 Latin-1 而非 UTF-8（C3 A9 → Ã©）
+      const xs = items as number[];
+      const nul = xs.indexOf(0);
+      const end = nul < 0 ? xs.length : nul;
+      let text = "";
+      for (let i = 0; i < end; i++) text += String.fromCharCode(xs[i] as number);
+      return V.str(text);
     }
     default:
       if (packNameAbsent(kind, name)) {
@@ -905,6 +1060,7 @@ const PACK_WRITE_EXACT: Record<PackKind, ((v: object) => boolean) | null> = {
   color: null,
   vector2: (v) => v instanceof GVector2,
   vector3: (v) => v instanceof GVector3,
+  vector4: (v) => v instanceof GVector4,
 };
 
 /** 报错文本里的类型名：值类型要说得出 `Vector3i`，`tagName` 只会给 `Object`。 */

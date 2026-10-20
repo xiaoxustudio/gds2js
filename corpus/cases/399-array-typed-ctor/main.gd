@@ -1,0 +1,30 @@
+extends SceneTree
+
+func _initialize():
+	var a = Array([1, 2], TYPE_INT, &"", null)
+	print("u1 ", a, " ", a.is_typed(), " ", a.get_typed_builtin(), " ", typeof(a[0]), " ", typeof(a))
+	print("u2 ", Array([1.7], TYPE_INT, &"", null))
+	print("u3 ", Array([1], TYPE_FLOAT, &"", null))
+	print("u4 ", Array([1], TYPE_BOOL, &"", null))
+	print("u5 ", Array([Vector2(1.7, 2)], TYPE_VECTOR2I, &"", null))
+	var f = Array([null], TYPE_INT, &"", null)
+	print("u6 ", f, " ", f.is_typed(), " ", f.size(), " ", f.get_typed_builtin())
+	var g = Array([1], TYPE_NIL, &"", null)
+	print("u7 ", g, " ", g.is_typed())
+	var src = [1]
+	var h = Array(src, TYPE_INT, &"", null)
+	h[0] = 5
+	print("u8 ", src, " ", h)
+	var i = Array([1], TYPE_INT, &"", null)
+	i.append(2.7)
+	print("u9 ", i)
+	var j = Array(["1"], TYPE_INT, &"", null)
+	print("u10 ", j, " ", j.is_typed(), " ", j.size())
+	var k = Array([1, 2], TYPE_INT, &"", null)
+	var l = Array([3], TYPE_INT, &"", null)
+	print("u11 ", k.is_same_typed(l), " ", k == l)
+	print("u12 ", Array([1], TYPE_INT, &"Foo", null))
+	print("u13 ", Array([1], TYPE_STRING, &"", null))
+	var b = PackedByteArray([1, 2])
+	print("u14 ", Array(b), " ", Array())
+	quit()
