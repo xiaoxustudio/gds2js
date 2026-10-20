@@ -5704,16 +5704,24 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       // 元数不对时引擎先说元数那一句（本轮同一次 analyze 里那道闸门已经发了），这一轮的类型判据一律不许抢在前面
-      // S526/S527/S528：具体型全局函数的名字实参 —— 引擎按声明型解析期发第二句。放在 `bounds` 判定之前（`ord`
-      // 连 `GLOBAL_CALLABLES` 都没进）；arity 可证时只在区间内查、否则只要求该位实参存在。
+      // S526–S528/S533：具体型全局函数 —— 引擎按声明型解析期发第二句。放在 `bounds` 判定之前（`ord` 连 `GLOBAL_CALLABLES` 都没进）；
+      // 名字实参一律查；**字面量**只在「这家没有任何字面量表」时在这里查（有表的函数字面量交回原表，避免重复发）。
+      const spec = GLOBAL_ARG_TYPES[callee.name];
+      const follows = ARG_TYPE_FOLLOWS_FIRST[callee.name];
+      const shouldRows = GLOBAL_ARG_SHOULD_BE[callee.name];
+      const sentenceRows = GLOBAL_ARG_SENTENCE[callee.name];
+      const asRows = GLOBAL_ARG_AS[callee.name];
+      const hasLiteralTable = spec !== undefined || follows !== undefined || shouldRows !== undefined || sentenceRows !== undefined || asRows !== undefined;
       const typedName = GLOBAL_TYPED_NAME_ARGS[callee.name];
       if (typedName !== undefined) {
         const tb = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
         if (tb === null || (e.args.length >= tb[0] && e.args.length <= tb[1])) {
           for (const [pos, want, accept] of typedName) {
             const arg = e.args[pos - 1];
-            if (arg === undefined || literalTypeName(arg) !== null) continue;
-            const nm = argNameType(arg, argAnn);
+            if (arg === undefined) continue;
+            const lit = literalTypeName(arg);
+            if (lit !== null && hasLiteralTable) continue;
+            const nm = lit ?? argNameType(arg, argAnn);
             if (nm === null || accept.includes(nm)) continue;
             diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`, loc: e.loc });
           }
@@ -5721,11 +5729,6 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       }
       const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
       if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
-      const spec = GLOBAL_ARG_TYPES[callee.name];
-      const follows = ARG_TYPE_FOLLOWS_FIRST[callee.name];
-      const shouldRows = GLOBAL_ARG_SHOULD_BE[callee.name];
-      const sentenceRows = GLOBAL_ARG_SENTENCE[callee.name];
-      const asRows = GLOBAL_ARG_AS[callee.name];
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
         continue;
       }
