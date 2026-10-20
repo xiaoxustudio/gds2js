@@ -131,6 +131,7 @@ const MASK64 = (1n << 64n) - 1n;
 // 双精度的两个 32 位字：bigint 的 BigUint64Array 在 scriptc 没有 lowering，DataView 有（与 ops.ts 同一套路）。
 const F64_VIEW = new DataView(new ArrayBuffer(8));
 const F32_VIEW = new DataView(new ArrayBuffer(4));
+const I64_VIEW = new DataView(new ArrayBuffer(8));
 
 /** 引擎 `hash_murmur3_one_float`：float32 位型入 murmur，−0 归一成 +0。纯函数。 */
 function hashFloat32(x: number, seed: number): number {
@@ -186,13 +187,114 @@ function murmurOne64Words(lo: number, hi: number, seed: number): number {
   return murmurOne32(hi >>> 0, murmurOne32(lo >>> 0, seed));
 }
 
-/** `hash_murmur3_one_double`：先把 ±0 归一，再按 IEEE754 的两个字折叠。 */
-function hashDouble(d: number): number {
+/** `hash_murmur3_one_double`。纯函数。 */
+function hashDoubleInto(d: number, seed: number): number {
   if (Number.isNaN(d)) {
     throw new UnsupportedError("hash-nan", "hash() 收到 NaN：引擎把它换成 C++ 的 NAN 常量的位型，那一位型没实测过");
   }
   F64_VIEW.setFloat64(0, d === 0 ? 0 : d, true);
-  return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), MURMUR_SEED);
+  return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), seed);
+}
+
+/** `hash_murmur3_one_double`：先把 ±0 归一，再按 IEEE754 的两个字折叠。 */
+function hashDouble(d: number): number {
+  return hashDoubleInto(d, MURMUR_SEED);
+}
+
+/** 引擎 `hash_murmur3_buffer`：小端 4 字节块逐轮、尾巴不足一块按字节补进 k1、长度混进收尾。纯函数。 */
+function hashBuffer(bytes: readonly number[]): number {
+  const len = bytes.length;
+  const nblocks = len >> 2;
+  let h = MURMUR_SEED;
+  const round = (k1: number): void => {
+    let k = Math.imul(k1 >>> 0, 0xcc9e2d51) >>> 0;
+    k = ((k << 15) | (k >>> 17)) >>> 0;
+    k = Math.imul(k, 0x1b873593) >>> 0;
+    h = (h ^ k) >>> 0;
+    h = ((h << 13) | (h >>> 19)) >>> 0;
+    h = (Math.imul(h, 5) + 0xe6546b64) >>> 0;
+  };
+  for (let i = 0; i < nblocks; i++) {
+    const o = i * 4;
+    round((bytes[o] as number) | ((bytes[o + 1] as number) << 8) | ((bytes[o + 2] as number) << 16) | ((bytes[o + 3] as number) << 24));
+  }
+  const tail = nblocks * 4;
+  const rem = len & 3;
+  if (rem !== 0) {
+    let k1 = 0;
+    if (rem >= 3) k1 ^= (bytes[tail + 2] as number) << 16;
+    if (rem >= 2) k1 ^= (bytes[tail + 1] as number) << 8;
+    k1 ^= bytes[tail] as number;
+    let k = Math.imul(k1 >>> 0, 0xcc9e2d51) >>> 0;
+    k = ((k << 15) | (k >>> 17)) >>> 0;
+    k = Math.imul(k, 0x1b873593) >>> 0;
+    h = (h ^ k) >>> 0;
+  }
+  return fmix32((h ^ len) >>> 0);
+}
+
+/** pack 九支的哈希（S540）：byte/int32/int64 折小端字节缓冲；float/string/值类型 pack 折元素，收尾与空 pack 各按引擎那一支。 */
+function packHash(p: GBytes): number {
+  const raw = p.raw();
+  const n = raw.length;
+  const kind = p.kind;
+  if (kind === "byte" || kind === "int32" || kind === "int64") {
+    if (n === 0) return murmurOne64Words(0, 0, MURMUR_SEED);
+    const bytes: number[] = [];
+    if (kind === "byte") {
+      for (const e of raw) bytes.push((e as number) & 0xff);
+    } else if (kind === "int32") {
+      for (const e of raw) {
+        const v = e as number;
+        bytes.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff);
+      }
+    } else {
+      for (const e of raw) {
+        I64_VIEW.setBigInt64(0, e as bigint, true);
+        for (let i = 0; i < 8; i++) bytes.push(I64_VIEW.getUint8(i));
+      }
+    }
+    return hashBuffer(bytes);
+  }
+  if (kind === "float32") {
+    if (n === 0) return hashFloat32(0, MURMUR_SEED);
+    let h = MURMUR_SEED;
+    for (const e of raw) h = hashFloat32(e as number, h);
+    return fmix32(h);
+  }
+  if (kind === "float64") {
+    if (n === 0) return hashDoubleInto(0, MURMUR_SEED);
+    let h = MURMUR_SEED;
+    for (const e of raw) h = hashDoubleInto(e as number, h);
+    return fmix32(h);
+  }
+  if (n === 0) return MURMUR_SEED;
+  let h = MURMUR_SEED;
+  if (kind === "string") {
+    for (const e of raw) h = murmurOne32(hashDjb2(e as string), h);
+  } else if (kind === "vector2") {
+    for (const e of raw) {
+      const v = e as GVector2;
+      h = hashFloat32(v.x, h);
+      h = hashFloat32(v.y, h);
+    }
+  } else if (kind === "vector3") {
+    for (const e of raw) {
+      const v = e as GVector3;
+      h = hashFloat32(v.x, h);
+      h = hashFloat32(v.y, h);
+      h = hashFloat32(v.z, h);
+    }
+  } else {
+    for (const e of raw) {
+      const c = e as GColor;
+      h = hashFloat32(c.r, h);
+      h = hashFloat32(c.g, h);
+      h = hashFloat32(c.b, h);
+      h = hashFloat32(c.a, h);
+    }
+  }
+  return fmix32(h);
 }
 
 /** 引擎的 `MAX_RECURSION`（100）截住容器哈希：实测数到第 102 层那一支给 0，`ERR_PRINT` 只进 stderr、不进 stdout。 */
@@ -244,6 +346,7 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
       if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
       if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
+      if (v.v instanceof GBytes) return packHash(v.v as GBytes);
       if (!isCallableBox(v.v)) {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
       }
