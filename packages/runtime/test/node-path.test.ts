@@ -111,10 +111,29 @@ describe("runtime · NodePath 一族", () => {
       code(() => method(np("a"), "get_name", [I(-1)])),
     ].join(" | "), "[node-path-index] NodePath.get_name(3) 越界 | [node-path-index] NodePath.get_name(-1) 越界");
     eq("264", "下标只量过 int 来源", code(() => method(p, "get_name", [S("0")])), "[node-path-arg] NodePath.get_name() 的下标实参只量过 int（收到 String）");
-    eq("264", "hash() 两支都拒：式子没逆出来（S267 ⑥a）", [
-      code(() => method(p, "hash", [])).split(" ")[0],
-      code(() => variantHashNumber(p)).split(" ")[0],
-    ].join(" | "), "[node-path-hash] | [hash-node-path]");
+    eq("541", "hash() 与全局 hash 同值（S541 解出式子）", [
+      show(method(p, "hash", [])),
+      String(variantHashNumber(p)),
+    ].join(" | "), "311100680 | 311100680");
+    const HASHES: Array<[string, string]> = [
+      ["", "0"],
+      ["a", "3608900604"],
+      ["a/b", "1780534522"],
+      ["/a", "686066691"],
+      ["a:b", "1732909862"],
+      ["a:b:c", "2319611842"],
+      ["x:y", "2828350315"],
+      ["/a/b:c/d", "2286972979"],
+      [".", "2937937738"],
+      ["/", "1537813453"],
+      ["a b/c", "2818862689"],
+      ["a/b:1", "311100680"],
+      ["/a/b:1", "3983866615"],
+      ["a/b:1:2", "1176488632"],
+    ];
+    for (const [text, want] of HASHES) {
+      eq("541", `NodePath("${text}")`, `${show(method(np(text), "hash", []))}|${String(variantHashNumber(np(text)))}`, `${want}|${want}`);
+    }
     eq("264", "别的名给运行期那句 Nonexistent function（实测 dyn）", code(() => method(p, "bogus", [])), "[node-path-method] Invalid call. Nonexistent function 'bogus' in base 'NodePath'.");
   });
 

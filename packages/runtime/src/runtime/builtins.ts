@@ -9,7 +9,7 @@ import { ClassDesc, GdScriptObject, dictShapeOf, dictWrittenOf } from "./object"
 import { GdNativeClass } from "./native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
 import { GdRid, allocateRid, rid } from "./rid";
-import { GdNodePath, emptyNodePath, nodePathValue } from "./node-path";
+import { GdNodePath, emptyNodePath, nodePathValue, registerNodePathHashHook } from "./node-path";
 import { GVector2, vector2, vector2Method } from "./vector2";
 import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
 import { GVector3, vector3, vector3Method } from "./vector3";
@@ -233,6 +233,16 @@ function hashBuffer(bytes: readonly number[]): number {
   return fmix32((h ^ len) >>> 0);
 }
 
+/** NodePath 的哈希（S541）：路径与子路径各折 StringName 哈希，拼成 64 位再过 `hash_one_uint64`；相对路径取反。 */
+function nodePathHash(p: GdNodePath): number {
+  if (p.empty) return 0;
+  const h1 = hashDjb2(p.names.join("/"));
+  const h2 = hashDjb2(p.subnames.join(":"));
+  const h = hashOneUint64((BigInt(h1) << 32n) | BigInt(h2));
+  return p.absolute ? h : ~h >>> 0;
+}
+registerNodePathHashHook(nodePathHash);
+
 /** pack 九支的哈希（S540）：byte/int32/int64 折小端字节缓冲；float/string/值类型 pack 折元素，收尾与空 pack 各按引擎那一支。 */
 function packHash(p: GBytes): number {
   const raw = p.raw();
@@ -335,11 +345,8 @@ export function variantHashNumber(v: Variant, depth = 0): number {
     case Tag.OBJECT: {
       // 引擎那支是 hash_one_uint64(RID::get_id())（core/variant/variant.cpp 的 RID 分支）；实测 0 / 1 / 5 / -1 / 13241 五格全中
       if (v.v instanceof GdRid) return hashOneUint64(intToBig((v.v as GdRid).id));
-      // NodePath 的式子没逆出来：实测 hash(NodePath("a")) = 3608900604、hash(NodePath("a/b")) = 1780534522、hash(NodePath("")) = 0，
-      // 4.3 那支「绝对位起手 1、再把各名 StringName 哈希异或」六格全不中（S267 ⑥a）—— `NodePath.hash()` 走同一条式子，也拒。
-      if (v.v instanceof GdNodePath) {
-        throw new UnsupportedError("hash-node-path", "NodePath 的哈希式子没逆出来（4.3 的异或式子实测不成立，S267 ⑥a），不发");
-      }
+      // NodePath 的式子 S541 解出：path / subpath 各折 StringName 哈希 → 64 位 → hash_one_uint64，相对路径取反；空路径给 0
+      if (v.v instanceof GdNodePath) return nodePathHash(v.v as GdNodePath);
       // 值类型：引擎按分量逐个折 murmur3 再 fmix32 —— 浮点分量折 float32 位型（−0 归一），整型分量折 int32 位型（S539）
       if (v.v instanceof GVector2) return fmix32(hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)));
       if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
