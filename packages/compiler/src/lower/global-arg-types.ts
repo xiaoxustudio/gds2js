@@ -23,6 +23,7 @@ export const GLOBAL_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [n
   atan: [[1, "float"]],
   atan2: [[1, "float"], [2, "float"]],
   atanh: [[1, "float"]],
+  remap: [[1, "float"], [2, "float"], [3, "float"], [4, "float"], [5, "float"]],
   ceilf: [[1, "float"]],
   ceili: [[1, "float"]],
   char: [[1, "int"]],
