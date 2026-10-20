@@ -270,6 +270,43 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const w = scalar(args[1], "lerp");
       return vector3(add(v.x, mul(sub(o.x, v.x), w)), add(v.y, mul(sub(o.y, v.y), w)), add(v.z, mul(sub(o.z, v.z), w)));
     }
+    case "rotated": {
+      arity(args, 2, "rotated");
+      const axis = vecArg(args, 0, "rotated");
+      if (!isUnit(axis)) {
+        throw new UnsupportedError(
+          "vector3-rotated-axis",
+          "Vector3.rotated() 的轴不是单位向量：引擎往 stderr 打 ERROR + 回原向量（core/math/basis.cpp:843 带 GDScript backtrace），那一形不复刻",
+        );
+      }
+      const a = scalar(args[1], "rotated");
+      const c = r(Math.cos(a));
+      const s = r(Math.sin(a));
+      const t = r(1 - c);
+      const ax2 = mul(axis.x, axis.x);
+      const ay2 = mul(axis.y, axis.y);
+      const az2 = mul(axis.z, axis.z);
+      const r00 = add(ax2, mul(c, sub(1, ax2)));
+      const r11 = add(ay2, mul(c, sub(1, ay2)));
+      const r22 = add(az2, mul(c, sub(1, az2)));
+      const xyzt = mul(mul(axis.x, axis.y), t);
+      const zyxs = mul(axis.z, s);
+      const r01 = sub(xyzt, zyxs);
+      const r10 = add(xyzt, zyxs);
+      const xzyt = mul(mul(axis.x, axis.z), t);
+      const yzxs = mul(axis.y, s);
+      const r02 = add(xzyt, yzxs);
+      const r20 = sub(xzyt, yzxs);
+      const yzzt = mul(mul(axis.y, axis.z), t);
+      const xzys = mul(axis.x, s);
+      const r12 = sub(yzzt, xzys);
+      const r21 = add(yzzt, xzys);
+      return vector3(
+        add(add(mul(r00, v.x), mul(r01, v.y)), mul(r02, v.z)),
+        add(add(mul(r10, v.x), mul(r11, v.y)), mul(r12, v.z)),
+        add(add(mul(r20, v.x), mul(r21, v.y)), mul(r22, v.z)),
+      );
+    }
     case "move_toward": {
       // 与 `Vector2` 那一条同形：`v + ((o - v) / len) * delta`，`len` 为零或不超过 `delta` 时直接落到目标（S313 的第 46 格：
       // 19 支 MT3 全合，之前那两格「差 1～3 ULP」是旧打印口径固定 6 位小数造成的假分岔 —— `|x| ≈ 14` 引擎只印 5 位）
