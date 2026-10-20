@@ -5263,6 +5263,7 @@ const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, ReadonlyArray<readonly [nu
   convert: [[2, "Variant.Type", ["int"]]],
   ord: [[1, "String", ["NodePath", "String", "StringName"]]],
   type_exists: [[1, "StringName", ["String", "StringName"]]],
+  seed: [[1, "int", ["bool", "float", "int"]]],
 };
 
 /** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
