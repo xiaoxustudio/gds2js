@@ -756,6 +756,13 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "duplicate":
           return V.array(a.duplicate(boolArgOr(args, 0, false)));
+        case "duplicate_deep": {
+          // 实测（S548）：纯容器里模式 0 / 1 / 2 / 3 / -1 都是**整棵深拷**，嵌套改一边不动另一边；模式只对 Resource 子资源有意义（Tier 1 不出）
+          if (args.length > 0 && (args[0] as Variant).t !== Tag.INT) {
+            throw new UnsupportedError("duplicate-deep-arg", "Array.duplicate_deep() 的模式参数只量过 int 来源");
+          }
+          return V.array(a.duplicate(true));
+        }
         case "size":
           return V.int(a.size());
         case "is_empty":
@@ -941,6 +948,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.nil();
         case "duplicate":
           return V.dict(d.duplicate(boolArgOr(args, 0, false)));
+        case "duplicate_deep": {
+          if (args.length > 0 && (args[0] as Variant).t !== Tag.INT) {
+            throw new UnsupportedError("duplicate-deep-arg", "Dictionary.duplicate_deep() 的模式参数只量过 int 来源");
+          }
+          return V.dict(d.duplicate(true));
+        }
         case "hash":
           return V.int(variantHashNumber(obj));
         default:
