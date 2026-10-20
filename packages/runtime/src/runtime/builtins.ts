@@ -133,8 +133,9 @@ const F64_VIEW = new DataView(new ArrayBuffer(8));
 const F32_VIEW = new DataView(new ArrayBuffer(4));
 const I64_VIEW = new DataView(new ArrayBuffer(8));
 
-/** 引擎 `hash_murmur3_one_float`：float32 位型入 murmur，−0 归一成 +0。纯函数。 */
+/** 引擎 `hash_murmur3_one_float`：float32 位型入 murmur，−0 归一成 +0、NaN 换成规范静默 NaN 位型（S542）。纯函数。 */
 function hashFloat32(x: number, seed: number): number {
+  if (Number.isNaN(x)) return murmurOne32(0x7fc00000, seed);
   F32_VIEW.setFloat32(0, x, true);
   let bits = F32_VIEW.getUint32(0, true);
   if (bits === 0x80000000) bits = 0;
@@ -189,9 +190,7 @@ function murmurOne64Words(lo: number, hi: number, seed: number): number {
 
 /** `hash_murmur3_one_double`。纯函数。 */
 function hashDoubleInto(d: number, seed: number): number {
-  if (Number.isNaN(d)) {
-    throw new UnsupportedError("hash-nan", "hash() 收到 NaN：引擎把它换成 C++ 的 NAN 常量的位型，那一位型没实测过");
-  }
+  if (Number.isNaN(d)) return murmurOne64Words(0, 0x7ff80000, seed);
   F64_VIEW.setFloat64(0, d === 0 ? 0 : d, true);
   return murmurOne64Words(F64_VIEW.getUint32(0, true), F64_VIEW.getUint32(4, true), seed);
 }

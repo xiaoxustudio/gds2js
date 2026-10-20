@@ -57,7 +57,7 @@ describe("runtime/builtins · range 与哈希", () => {
     eq("098", "hash(float) 走 murmur3 one_double", vh(V.float(2.5)), "2779676868");
     eq("098", "±0 先归一：hash(-0.0) 与 hash(0.0) 同值", `${vh(V.float(-0))}/${vh(V.float(0))}`, "546098158/546098158");
     eq("098", "hash(INF)", vh(V.float(Infinity)), "3550758535");
-    shouldThrow("098", "hash(NaN) 仍报缺：C++ NAN 常量的位型没实测", () => vh(V.float(NaN)));
+    eq("098", "hash(NaN) 换成规范静默 NaN 位型（S542）", `${vh(V.float(NaN))}/${vh(V.float(-NaN))}`, "971070090/971070090");
     eq("098", "数组按内容（类型标签起手、逐个元素折叠、fmix32 收尾）", vh(V.array(GArray.of([V.int(1)]))), "1008395022");
     eq("098", "hash(Vector2) 走分量 murmur（S539）", vh(vector2(1, 2)), "4195279070");
     eq("098", "hash(Color) 走分量 murmur（S539）", vh(color(1, 0, 0, 1)), "3403565064");
