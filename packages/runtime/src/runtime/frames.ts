@@ -108,6 +108,16 @@ export function stringFormatInvalidType(): Variant {
   return pushBlock("ERROR", "format (core/string/ustring.cpp:3598)", [V.str("Invalid type: use Array, Dictionary or Object.")]);
 }
 
+/** `String.replace_char(key, 0)`：引擎打一块非致命 ERROR、回原串（S544，`core/string/ustring.cpp:3803`）。 */
+export function stringReplaceCharNul(): Variant {
+  return pushBlock("ERROR", "replace_char (core/string/ustring.cpp:3803)", [V.str("`with` must not be the NUL character.")]);
+}
+
+/** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
+export function stringReplaceCharsNul(): Variant {
+  return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {

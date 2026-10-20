@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -29,7 +29,7 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show } from "./values";
+  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
@@ -57,6 +57,14 @@ function asString(v: Variant, who: string): string {
     if (np !== null) return nodePathText(np);
   }
   throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
+}
+
+/** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
+function charReplacement(n: number, who: string): number {
+  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
+    throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 超出 Unicode 标量范围，那一形没实测过`);
+  }
+  return n;
 }
 
 /** 入口可能是裸 JS 值（lambda、引擎对象），先归一成 Variant */
@@ -941,6 +949,40 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           const needle = asString(args[0] as Variant, name);
           const from = args.length === 2 ? intArg(args, 1, name) : name.startsWith("r") ? -1 : 0;
           return V.int(strFind(s, needle, from, name.startsWith("r"), insensitive));
+        }
+        case "replace_char": {
+          const key = intArg(args, 0, "replace_char");
+          const withCp = intArg(args, 1, "replace_char");
+          if (withCp === 0) {
+            stringReplaceCharNul();
+            return V.str(s);
+          }
+          return V.str(strReplaceChar(s, key, charReplacement(withCp, "replace_char")));
+        }
+        case "replace_chars": {
+          const keys = asString(one(args, "replace_chars"), "replace_chars");
+          const withCp = intArg(args, 1, "replace_chars");
+          if (withCp === 0) {
+            stringReplaceCharsNul();
+            return V.str(s);
+          }
+          return V.str(strReplaceChars(s, keys, charReplacement(withCp, "replace_chars")));
+        }
+        case "remove_char":
+          return V.str(strRemoveChar(s, intArg(args, 0, "remove_char")));
+        case "remove_chars":
+          return V.str(strRemoveChars(s, asString(one(args, "remove_chars"), "remove_chars")));
+        case "uri_file_decode": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `uri_file_decode() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.str(strUriDecode(s, false));
+        }
+        case "is_valid_ascii_identifier": {
+          if (args.length !== 0) {
+            throw new GodotRuntimeError("arity", `is_valid_ascii_identifier() 不接受参数（收到 ${args.length} 个）`);
+          }
+          return V.bool(strIsValidAsciiIdentifier(s));
         }
         case "split": {
           if (args.length > 3) {
