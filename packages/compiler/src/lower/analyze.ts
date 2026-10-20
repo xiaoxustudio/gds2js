@@ -5261,6 +5261,8 @@ const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, ReadonlyArray<readonly [nu
   randfn: [[1, "float", ["bool", "float", "int"]], [2, "float", ["bool", "float", "int"]]],
   type_convert: [[2, "int", ["bool", "float", "int"]]],
   convert: [[2, "Variant.Type", ["int"]]],
+  ord: [[1, "String", ["NodePath", "String", "StringName"]]],
+  type_exists: [[1, "StringName", ["String", "StringName"]]],
 };
 
 /** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
@@ -5702,6 +5704,21 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       // 元数不对时引擎先说元数那一句（本轮同一次 analyze 里那道闸门已经发了），这一轮的类型判据一律不许抢在前面
+      // S526/S527/S528：具体型全局函数的名字实参 —— 引擎按声明型解析期发第二句。放在 `bounds` 判定之前（`ord`
+      // 连 `GLOBAL_CALLABLES` 都没进）；arity 可证时只在区间内查、否则只要求该位实参存在。
+      const typedName = GLOBAL_TYPED_NAME_ARGS[callee.name];
+      if (typedName !== undefined) {
+        const tb = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
+        if (tb === null || (e.args.length >= tb[0] && e.args.length <= tb[1])) {
+          for (const [pos, want, accept] of typedName) {
+            const arg = e.args[pos - 1];
+            if (arg === undefined || literalTypeName(arg) !== null) continue;
+            const nm = argNameType(arg, argAnn);
+            if (nm === null || accept.includes(nm)) continue;
+            diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`, loc: e.loc });
+          }
+        }
+      }
       const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
       if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
       const spec = GLOBAL_ARG_TYPES[callee.name];
@@ -5709,18 +5726,6 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const shouldRows = GLOBAL_ARG_SHOULD_BE[callee.name];
       const sentenceRows = GLOBAL_ARG_SENTENCE[callee.name];
       const asRows = GLOBAL_ARG_AS[callee.name];
-      // S526：具体型全局函数（load / str_to_var / bytes_to_var / inst_to_dict）的名字实参 —— 引擎按声明型解析期发第二句；
-      // 这些函数不一定在 GLOBAL_ARG_TYPES 里（load / str_to_var 连表都没进），所以放在那几族判定之前单独处理，只补 ident。
-      const typedName = GLOBAL_TYPED_NAME_ARGS[callee.name];
-      if (typedName !== undefined) {
-        for (const [pos, want, accept] of typedName) {
-          const arg = e.args[pos - 1];
-          if (arg === undefined || literalTypeName(arg) !== null) continue;
-          const nm = argNameType(arg, argAnn);
-          if (nm === null || accept.includes(nm)) continue;
-          diags.push({ code: "global-arg-type", message: `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${nm}".`, loc: e.loc });
-        }
-      }
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
         continue;
       }

@@ -31,6 +31,8 @@ const SLOTS: Array<[string, Array<[number, string, string[]]>]> = [
   ["dict_to_inst", [[1, "Dictionary", ["Dictionary"]]]],
   ["bytes_to_var_with_objects", [[1, "PackedByteArray", ["Array", "PackedByteArray"]]]],
   ["convert", [[2, "Variant.Type", ["int"]]]],
+  ["ord", [[1, "String", ["NodePath", "String", "StringName"]]]],
+  ["type_exists", [[1, "StringName", ["String", "StringName"]]]],
 ];
 const BAD = ["Color", "String", "Array", "Dictionary", "PackedInt32Array"];
 
