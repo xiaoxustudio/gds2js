@@ -724,3 +724,21 @@ export function gBytesToVar(v: Variant): Variant {
 export function gBytesToVarWithObjects(v: Variant): Variant {
   return readBytes(v, true, LOUD_WITH_OBJECTS);
 }
+
+/** `PackedByteArray.decode_var` 那一族（S552）：从 offset 起解一个 Variant，交值与消费字节数；
+ *  剩余不足 4 字节那一形给 `{ short: true }`（引擎在 marshalls 打一块 len<4），其余读不通给 null。 */
+export function gVarDecodeAt(v: Variant, offset: number, allowObjects: boolean): { value: Variant; size: number } | { short: true } | null {
+  if (v.t !== Tag.OBJECT || !(v.v instanceof GBytes)) {
+    throw new UnsupportedError("bytes-to-var-arg", `decode_var() 的接收者要的是 PackedByteArray（收到的是别的东西），这一形没量过`);
+  }
+  const all = (v.v as GBytes).raw().map((x) => Number(x) & 0xff);
+  if (offset > all.length - 4) return { short: true };
+  const r = new Reader(all.slice(offset), allowObjects);
+  try {
+    const value = r.variant();
+    return { value, size: r.i };
+  } catch (e) {
+    if (e instanceof UnsupportedError && (allowObjects ? LOUD_WITH_OBJECTS : LOUD_NONE).has(e.code)) throw e;
+    return null;
+  }
+}

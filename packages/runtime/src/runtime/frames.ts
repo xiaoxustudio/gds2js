@@ -148,6 +148,16 @@ export function packEncodeGuard(fn: string, line: number, width: number): Varian
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
 }
 
+/** `PackedByteArray.decode_var` 一族的负偏移（S552）：四支各回 -1 / `Variant()` / 0 / false。 */
+export function packVarOffsetNegative(fn: string, line: number, ret: string): Variant {
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "p_offset < 0" is true. Returning: ${ret}`)]);
+}
+
+/** 解码器剩余不足 4 字节（S552）：引擎在 marshalls 打一块 `len < 4`，三支解码随后给 null / 0 / false。 */
+export function packVarShort(): Variant {
+  return pushBlock("ERROR", "decode_variant (core/io/marshalls.cpp:190)", [V.str('Condition "len < 4" is true. Returning: ERR_INVALID_DATA')]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {

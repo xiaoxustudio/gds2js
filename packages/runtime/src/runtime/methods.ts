@@ -20,8 +20,8 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard } from "./frames";
-import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort } from "./frames";
+import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
@@ -266,6 +266,50 @@ function packEncode(p: GBytes, name: string, args: Variant[]): Variant {
   const raw = p.raw() as number[];
   for (let i = 0; i < width; i++) raw[at + i] = Number((bits >> BigInt(i * 8)) & 0xffn);
   return V.nil();
+}
+
+/** `decode_var` 一族的负偏移文案与守卫行号（S552）。 */
+const VAR_CODEC_GUARD: Record<string, readonly [string, number]> = {
+  has_encoded_var: ["false", 927], decode_var: ["Variant()", 936], decode_var_size: ["0", 948], encode_var: ["-1", 1143],
+};
+
+/** `PackedByteArray` 的 var 编解码四支（S552）：整段编解码走 `var-bytes.ts` 那条引擎格式。 */
+function packVarCodec(p: GBytes, name: string, args: Variant[]): Variant {
+  const guard = VAR_CODEC_GUARD[name] as readonly [string, number];
+  const negative = (): Variant => {
+    packVarOffsetNegative(`func_PackedByteArray_${name}`, guard[1], guard[0]);
+    if (name === "has_encoded_var") return V.bool(false);
+    if (name === "decode_var_size") return V.int(0);
+    if (name === "encode_var") return V.int(-1);
+    return V.nil();
+  };
+  if (name === "encode_var") {
+    if (args.length < 2 || args.length > 3) throw new GodotRuntimeError("arity", `encode_var() 需要 2 或 3 个参数（收到 ${args.length} 个）`);
+    const off = int64Arg(args[0], name);
+    if (off < 0n) return negative();
+    const allow = boolArgOr(args, 2, false);
+    const encVar = allow ? gVarToBytesWithObjects(args[1] as Variant) : gVarToBytes(args[1] as Variant);
+    const enc = (encVar.v as GBytes).raw() as number[];
+    if (off + BigInt(enc.length) > BigInt(p.length)) return V.int(-1);
+    const at = Number(off);
+    const raw = p.raw() as number[];
+    for (let i = 0; i < enc.length; i++) raw[at + i] = Number(enc[i]) & 0xff;
+    return V.int(enc.length);
+  }
+  if (args.length < 1 || args.length > 2) throw new GodotRuntimeError("arity", `${name}() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  if (off < 0n) return negative();
+  const allow = boolArgOr(args, 1, false);
+  const r = gVarDecodeAt(V.object(p), Number(off), allow);
+  if (r === null || "short" in r) {
+    if (r !== null) packVarShort();
+    if (name === "has_encoded_var") return V.bool(false);
+    if (name === "decode_var_size") return V.int(0);
+    return V.nil();
+  }
+  if (name === "has_encoded_var") return V.bool(true);
+  if (name === "decode_var_size") return V.int(r.size);
+  return r.value;
 }
 
 /** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
@@ -671,10 +715,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
-      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined) {
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined) {
         if (inner.kind !== "byte") {
           throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
         }
+        if (VAR_CODEC_GUARD[name] !== undefined) return packVarCodec(inner, name, args);
         if (DECODE_INFO[name] !== undefined) return packDecode(inner, name, args);
         if (ENCODE_INFO[name] !== undefined) return packEncode(inner, name, args);
         return FLOAT_DECODE_INFO[name] !== undefined ? packDecodeFloat(inner, name, args) : packEncodeFloat(inner, name, args);
