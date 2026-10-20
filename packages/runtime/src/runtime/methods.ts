@@ -223,6 +223,7 @@ const CALLABLE_METHOD_NAMES = new Set([
   "get_argument_count",
   "get_bound_arguments",
   "get_bound_arguments_count",
+  "get_unbound_arguments_count",
   "get_method",
   "get_object",
   "get_object_id",
@@ -269,6 +270,9 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
     case "get_bound_arguments_count":
       // 实测读数就是 `get_bound_arguments()` 那支数组的长度（全局 Callable 的两格：0 与 2）
       return V.int(bound.length);
+    case "get_unbound_arguments_count":
+      // 实测七格（tmp/d6/s545.gd）：就是 unbind 计数；先 unbind 再 bind 会填掉一格（unbind(2).bind(1) → 1）
+      return V.int(box.unbindCount);
     case "get_argument_count": {
       // 语义是「**还要几个实参**」= 声明形参数 − 绑定数，不是「只要 bind 过就给 0」
       const declared = declaredArgCount(box);
@@ -495,6 +499,26 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       }
       if (name === "get_name") return V.str(inner.sigName);
       if (name === "is_null") return V.bool(false);
+      if (name === "is_connected") {
+        const cb = args[0];
+        if (cb === undefined || !isCallableBox(cb.v)) {
+          throw new UnsupportedError("signal-is-connected", "is_connected() 的 Callable 实参这一格没量过（非 Callable 来源）");
+        }
+        return V.bool(inner.isConnected(cb.v as CallableBox));
+      }
+      if (name === "has_connections") return V.bool(inner.hasConnections());
+      if (name === "get_connections") {
+        const rows = inner.connections();
+        const out: Variant[] = [];
+        for (const row of rows) {
+          const d = new GDict();
+          d.set(V.str("signal"), V.object(inner));
+          d.set(V.str("callable"), V.object(row.box));
+          d.set(V.str("flags"), V.int(row.flags));
+          out.push(V.dict(d));
+        }
+        return V.array(GArray.of(out));
+      }
       // 这三个名字在 Signal 上**不存在**，而且是**运行期**那句 `Invalid call. Nonexistent function 'X' in base 'Signal'.`（`is_valid` 那一格是解析期拦的，不同）
       if (name === "has_method" || name === "get_method_list" || name === "is_connected_to") {
         throw new GodotRuntimeError("signal-method", `Invalid call. Nonexistent function '${name}' in base 'Signal'.`);

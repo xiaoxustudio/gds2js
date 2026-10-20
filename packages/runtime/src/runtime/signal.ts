@@ -5,7 +5,7 @@ export const CONNECT_OK = 0;
 export const CONNECT_ALREADY_CONNECTED = 31;
 
 /** 一条连接：盒子用于**身份比较**，fn 是真正要跑的式子。形参类型写死成 `Variant`：`(...args: unknown[]) => void` 这种「unknown 的 rest 数组」在静态编译目标上没有表示形式。 */
-type Listener = { box: object; fn: (args: Variant[]) => void; oneShot: boolean };
+type Listener = { box: object; fn: (args: Variant[]) => void; oneShot: boolean; flags: number };
 
 export class Signal {
   #listeners: Listener[] = [];
@@ -22,8 +22,25 @@ export class Signal {
       if (!sameBox(l.box, box)) continue;
       return flags === 8 ? CONNECT_OK : CONNECT_ALREADY_CONNECTED;
     }
-    this.#listeners.push({ box, fn, oneShot: flags === 4 });
+    this.#listeners.push({ box, fn, oneShot: flags === 4, flags });
     return CONNECT_OK;
+  }
+
+  /** `is_connected(callable)`（S545）：身份按 Callable 等式比，**绑定串不算**（实测 `bind(1)` 那支仍真）。 */
+  isConnected(box: object): boolean {
+    for (const l of this.#listeners) if (sameBox(l.box, box)) return true;
+    return false;
+  }
+
+  hasConnections(): boolean {
+    return this.#listeners.length > 0;
+  }
+
+  /** `get_connections()` 的三格：signal 本体、连进来的 Callable、原样存下的 flags（实测 0 / 4 / 8）。 */
+  connections(): Array<{ box: object; flags: number }> {
+    const out: Array<{ box: object; flags: number }> = [];
+    for (const l of this.#listeners) out.push({ box: l.box, flags: l.flags });
+    return out;
   }
 
   /** `disconnect(callable)` 是 **void**（取值在 Godot 解析期就拒）；没连过的键静默无操作。 */
