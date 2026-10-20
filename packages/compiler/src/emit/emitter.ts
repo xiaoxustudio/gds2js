@@ -124,6 +124,10 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
+  Signal: (a) => {
+    if (a.length === 0) return "rt.V.object(new rt.Signal())";
+    throw new UnsupportedError("signal-ctor", "Signal(Object, name) 的构造式要在对象上按名做信号身份查找，没实测过，不发");
+  },
   is_instance_of: (a) => `rt.gIsInstanceOf(${a[0]}, ${a[1]})`,
   is_instance_valid: (a) => `rt.gIsInstanceValid(${a[0]})`,
   is_instance_id_valid: (a) => `rt.gIsInstanceIdValid(${a[0]})`,

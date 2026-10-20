@@ -508,7 +508,15 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         return V.nil();
       }
       if (name === "get_name") return V.str(inner.sigName);
-      if (name === "is_null") return V.bool(false);
+      if (name === "is_null") return V.bool(inner.sigName === "");
+      if (name === "get_object") {
+        if (inner.sigName !== "") throw new UnsupportedError("signal-object", "带名 Signal 的 get_object() 要宿主对象，没量过");
+        return V.object(NULL_OBJECT);
+      }
+      if (name === "get_object_id") {
+        if (inner.sigName !== "") throw new UnsupportedError("signal-object", "带名 Signal 的 get_object_id() 折的是宿主实例号，没量过");
+        return V.int(0);
+      }
       if (name === "is_connected") {
         const cb = args[0];
         if (cb === undefined || !isCallableBox(cb.v)) {

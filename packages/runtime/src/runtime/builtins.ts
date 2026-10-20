@@ -353,6 +353,13 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
       if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
       if (v.v instanceof GBytes) return packHash(v.v as GBytes);
+      // 空 Signal 的对象号是 0，名字空串 → one_64(0, seed=hash(""))（S547）；带名 Signal 折的是宿主实例号，合成号对不上
+      if (v.v instanceof Signal) {
+        if ((v.v as Signal).sigName !== "") {
+          throw new UnsupportedError("hash-signal", "带对象的 Signal 哈希折的是宿主实例号，那一路复现不了（S547）");
+        }
+        return murmurOne64Words(0, 0, hashDjb2(""));
+      }
       if (!isCallableBox(v.v)) {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
       }
