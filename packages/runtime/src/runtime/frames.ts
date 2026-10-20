@@ -128,6 +128,14 @@ export function signalNullCallable(sigName: string): Variant {
   return pushBlock("ERROR", "connect (core/object/object.cpp:1639)", [V.str(`Cannot connect to '${sigName}': the provided callable is null.`)]);
 }
 
+/** `PackedByteArray.bswap16/32/64` 的两道 ERR_FAIL（S549）：非致命、块走 stderr、字节一个不动。 */
+export function packBswapGuard(kind: 16 | 32 | 64, which: "offset" | "count"): Variant {
+  const width = kind / 8;
+  const line = which === "offset" ? (kind === 16 ? 702 : kind === 32 ? 719 : 736) : (kind === 16 ? 706 : kind === 32 ? 722 : 739);
+  const cond = which === "offset" ? `p_offset < 0 || p_offset > int64_t(sz) - ${String(width)}` : `p_count > floor((sz - p_offset) / ${String(width)})`;
+  return pushBlock("ERROR", `func_PackedByteArray_bswap${String(kind)} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {

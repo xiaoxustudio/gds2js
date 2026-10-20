@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -59,9 +59,49 @@ function asString(v: Variant, who: string): string {
   throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
 }
 
+/** `PackedByteArray.bswap16/32/64(offset=0, count=-1)`（S549）：原地换字节序；两道 ERR_FAIL 打块且字节一个不动。 */
+function bytesBswap(p: GBytes, kind: 16 | 32 | 64, args: Variant[]): Variant {
+  if (p.kind !== "byte") {
+    throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function 'bswap${String(kind)}' in base '${packTypeName(p.kind)}'.`);
+  }
+  if (args.length > 2) throw new GodotRuntimeError("arity", `bswap${String(kind)}() 需要 0 到 2 个参数（收到 ${args.length} 个）`);
+  const width = kind / 8;
+  const intOf = (v: Variant | undefined, i: number): number => {
+    if (v === undefined) return i === 0 ? 0 : -1;
+    if (v.t !== Tag.INT) {
+      throw new UnsupportedError("packed-bswap-arg", `bswap${String(kind)}() 的第 ${i + 1} 个参数只量过 int 来源`);
+    }
+    const n = intToNum(v.v as IntPayload);
+    return typeof n === "bigint" ? Number(n) : n;
+  };
+  const offset = intOf(args[0], 0);
+  let count = intOf(args[1], 1);
+  const sz = p.length;
+  if (sz === 0 || count === 0) return V.nil();
+  const chunks = (from: number): number => Math.floor((sz - from) / width);
+  if (offset < 0 || offset > sz - width) {
+    packBswapGuard(kind, "offset");
+    return V.nil();
+  }
+  if (count < 0) count = chunks(offset);
+  if (count > chunks(offset)) {
+    packBswapGuard(kind, "count");
+    return V.nil();
+  }
+  const raw = p.raw() as number[];
+  for (let i = 0; i < count; i++) {
+    const at = offset + i * width;
+    for (let j = 0; j < width / 2; j++) {
+      const t = raw[at + j] as number;
+      raw[at + j] = raw[at + width - 1 - j] as number;
+      raw[at + width - 1 - j] = t;
+    }
+  }
+  return V.nil();
+}
+
 /** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
-function charReplacement(n: number, who: string): number {
-  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
+function charReplacement(n: number, who: string): number {  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
     throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 超出 Unicode 标量范围，那一形没实测过`);
   }
   return n;
@@ -459,7 +499,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
-    if (inner instanceof GBytes) return bytesMethod(inner, name, args);
+    if (inner instanceof GBytes) {
+      if (name === "bswap16") return bytesBswap(inner, 16, args);
+      if (name === "bswap32") return bytesBswap(inner, 32, args);
+      if (name === "bswap64") return bytesBswap(inner, 64, args);
+      return bytesMethod(inner, name, args);
+    }
 
     if (inner instanceof Signal) {
       if (name === "emit") {
