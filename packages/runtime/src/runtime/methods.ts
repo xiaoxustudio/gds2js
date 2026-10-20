@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -97,6 +97,71 @@ function bytesBswap(p: GBytes, kind: 16 | 32 | 64, args: Variant[]): Variant {
       raw[at + width - 1 - j] = t;
     }
   }
+  return V.nil();
+}
+
+const TWO64 = 1n << 64n;
+const TWO63 = 1n << 63n;
+
+/** `decode_*` 的宽度 / 守卫行号 / 是否有符号（S550；u64 与 s64 都按 int64 回绕）。 */
+const DECODE_INFO: Record<string, readonly [number, number, boolean]> = {
+  decode_u8: [1, 859, false], decode_s8: [1, 865, true],
+  decode_u16: [2, 871, false], decode_s16: [2, 877, true],
+  decode_u32: [4, 883, false], decode_s32: [4, 889, true],
+  decode_u64: [8, 895, true], decode_s64: [8, 901, true],
+};
+const ENCODE_INFO: Record<string, readonly [number, number]> = {
+  encode_u8: [1, 1073], encode_s8: [1, 1079],
+  encode_u16: [2, 1086], encode_s16: [2, 1092],
+  encode_u32: [4, 1099], encode_s32: [4, 1105],
+  encode_u64: [8, 1112], encode_s64: [8, 1118],
+};
+
+function int64Arg(v: Variant | undefined, who: string): bigint {
+  if (v === undefined) throw new GodotRuntimeError("arity", `${who}() 缺少参数`);
+  if (v.t !== Tag.INT) throw new UnsupportedError("packed-bin-arg", `${who}() 只量过 int 来源（收到 ${tagName(v.t)}）`);
+  const p = v.v as IntPayload;
+  return typeof p === "bigint" ? p : BigInt(Math.trunc(p));
+}
+
+/** `PackedByteArray.decode_*`（S550）：小端读；越界那块带 ` Returning: 0` 且回 0。 */
+function packDecode(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = DECODE_INFO[name] as readonly [number, number, boolean];
+  const width = info[0];
+  if (args.length !== 1) throw new GodotRuntimeError("arity", `${name}() 需要 1 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packDecodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.int(0);
+  }
+  const at = Number(off);
+  const raw = p.raw() as number[];
+  let bits = 0n;
+  for (let i = width - 1; i >= 0; i--) bits = (bits << 8n) | BigInt(raw[at + i] as number);
+  if (width === 8) return V.int(bits >= TWO63 ? bits - TWO64 : bits);
+  let n = Number(bits);
+  if (info[2]) {
+    const lim = 2 ** (width * 8 - 1);
+    if (n >= lim) n -= 2 ** (width * 8);
+  }
+  return V.int(n);
+}
+
+/** `PackedByteArray.encode_*`（S550）：小端写、值按宽度回绕；越界那块不带 ` Returning`、字节不动。 */
+function packEncode(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = ENCODE_INFO[name] as readonly [number, number];
+  const width = info[0];
+  if (args.length !== 2) throw new GodotRuntimeError("arity", `${name}() 需要 2 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  const value = int64Arg(args[1], name);
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packEncodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.nil();
+  }
+  const at = Number(off);
+  const bits = ((value % TWO64) + TWO64) % TWO64;
+  const raw = p.raw() as number[];
+  for (let i = 0; i < width; i++) raw[at + i] = Number((bits >> BigInt(i * 8)) & 0xffn);
   return V.nil();
 }
 
@@ -503,6 +568,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined) {
+        if (inner.kind !== "byte") {
+          throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
+        }
+        return DECODE_INFO[name] !== undefined ? packDecode(inner, name, args) : packEncode(inner, name, args);
+      }
       return bytesMethod(inner, name, args);
     }
 

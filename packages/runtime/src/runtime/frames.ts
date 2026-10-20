@@ -136,6 +136,18 @@ export function packBswapGuard(kind: 16 | 32 | 64, which: "offset" | "count"): V
   return pushBlock("ERROR", `func_PackedByteArray_bswap${String(kind)} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
 }
 
+/** `PackedByteArray.decode_*` 的越界 ERR_FAIL_COND_V（S550）：读侧那块带 ` Returning: 0`。 */
+export function packDecodeGuard(fn: string, line: number, width: number): Variant {
+  const cond = width === 1 ? "p_offset < 0 || p_offset > int64_t(size) - 1" : `p_offset < 0 || p_offset > (int64_t(size) - ${String(width)})`;
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true. Returning: 0`)]);
+}
+
+/** `PackedByteArray.encode_*` 的越界 ERR_FAIL_COND（S550）：写侧那块没有 ` Returning`。 */
+export function packEncodeGuard(fn: string, line: number, width: number): Variant {
+  const cond = width === 1 ? "p_offset < 0 || p_offset > int64_t(size) - 1" : `p_offset < 0 || p_offset > (int64_t(size) - ${String(width)})`;
+  return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {
