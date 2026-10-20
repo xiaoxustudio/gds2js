@@ -116,6 +116,109 @@ const ENCODE_INFO: Record<string, readonly [number, number]> = {
   encode_u32: [4, 1099], encode_s32: [4, 1105],
   encode_u64: [8, 1112], encode_s64: [8, 1118],
 };
+/** 半精度/单精度/双精度那三对（S551）：宽度与守卫行号。 */
+const FLOAT_DECODE_INFO: Record<string, readonly [number, number]> = {
+  decode_half: [2, 907], decode_float: [4, 913], decode_double: [8, 920],
+};
+const FLOAT_ENCODE_INFO: Record<string, readonly [number, number]> = {
+  encode_half: [2, 1125], encode_float: [4, 1131], encode_double: [8, 1137],
+};
+const F32BIN = new DataView(new ArrayBuffer(4));
+const F64BIN = new DataView(new ArrayBuffer(8));
+
+/** 引擎 `Math::make_half_float`（S551）：**截断**尾数、不四舍五入；denormal 直接归零、NaN 折成全 1 尾数、-0 丢符号。 */
+function makeHalfFloat(value: number): number {
+  F32BIN.setFloat32(0, value, true);
+  const x = F32BIN.getUint32(0, true);
+  const sign = x >>> 31;
+  let mantissa = x & ((1 << 23) - 1);
+  const exponent = x & (0xff << 23);
+  if (exponent >= 0x47800000) {
+    mantissa = mantissa !== 0 && exponent === 0xff << 23 ? (1 << 23) - 1 : 0;
+    return ((sign << 15) | (0x1f << 10) | (mantissa >>> 13)) >>> 0;
+  }
+  if (exponent <= 0x38000000) return 0;
+  return ((sign << 15) | ((exponent - 0x38000000) >>> 13) | (mantissa >>> 13)) >>> 0;
+}
+
+/** 引擎 `Math::half_to_float`（S551）：按位还原（子正规数逐个左移）。 */
+function halfToFloat(h: number): number {
+  const hExp = h & 0x7c00;
+  const fSgn = ((h & 0x8000) << 16) >>> 0;
+  let bits: number;
+  if (hExp === 0) {
+    let sig = h & 0x03ff;
+    if (sig === 0) bits = fSgn;
+    else {
+      sig <<= 1;
+      let e = 0;
+      while ((sig & 0x0400) === 0) {
+        sig <<= 1;
+        e++;
+      }
+      bits = (fSgn + (((127 - 15 - e) << 23) >>> 0) + ((sig & 0x03ff) << 13)) >>> 0;
+    }
+  } else if (hExp === 0x7c00) {
+    bits = (fSgn + 0x7f800000 + ((h & 0x03ff) << 13)) >>> 0;
+  } else {
+    bits = (fSgn + (((h & 0x7fff) + 0x1c000) << 13)) >>> 0;
+  }
+  F32BIN.setUint32(0, bits, true);
+  return F32BIN.getFloat32(0, true);
+}
+
+function packDecodeFloat(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = FLOAT_DECODE_INFO[name] as readonly [number, number];
+  const width = info[0];
+  if (args.length !== 1) throw new GodotRuntimeError("arity", `${name}() 需要 1 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packDecodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.float(0);
+  }
+  const at = Number(off);
+  const raw = p.raw() as number[];
+  if (width === 2) return V.float(halfToFloat(((raw[at] as number) | ((raw[at + 1] as number) << 8)) & 0xffff));
+  if (width === 4) {
+    F32BIN.setUint8(0, raw[at] as number);
+    F32BIN.setUint8(1, raw[at + 1] as number);
+    F32BIN.setUint8(2, raw[at + 2] as number);
+    F32BIN.setUint8(3, raw[at + 3] as number);
+    return V.float(F32BIN.getFloat32(0, true));
+  }
+  for (let i = 0; i < 8; i++) F64BIN.setUint8(i, raw[at + i] as number);
+  return V.float(F64BIN.getFloat64(0, true));
+}
+
+function packEncodeFloat(p: GBytes, name: string, args: Variant[]): Variant {
+  const info = FLOAT_ENCODE_INFO[name] as readonly [number, number];
+  const width = info[0];
+  if (args.length !== 2) throw new GodotRuntimeError("arity", `${name}() 需要 2 个参数（收到 ${args.length} 个）`);
+  const off = int64Arg(args[0], name);
+  const v = args[1] as Variant;
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
+    throw new UnsupportedError("packed-bin-arg", `${name}() 只量过 int / float 来源（收到 ${tagName(v.t)}）`);
+  }
+  const value = v.t === Tag.INT ? Number(intToNum(v.v as IntPayload)) : (Math.fround(v.v as number));
+  if (off < 0n || off > BigInt(p.length - width)) {
+    packEncodeGuard(`func_PackedByteArray_${name}`, info[1], width);
+    return V.nil();
+  }
+  const at = Number(off);
+  const raw = p.raw() as number[];
+  if (width === 2) {
+    const h = makeHalfFloat(value);
+    raw[at] = h & 0xff;
+    raw[at + 1] = (h >>> 8) & 0xff;
+  } else if (width === 4) {
+    F32BIN.setFloat32(0, value, true);
+    for (let i = 0; i < 4; i++) raw[at + i] = F32BIN.getUint8(i);
+  } else {
+    F64BIN.setFloat64(0, value, true);
+    for (let i = 0; i < 8; i++) raw[at + i] = F64BIN.getUint8(i);
+  }
+  return V.nil();
+}
 
 function int64Arg(v: Variant | undefined, who: string): bigint {
   if (v === undefined) throw new GodotRuntimeError("arity", `${who}() 缺少参数`);
@@ -568,11 +671,13 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
-      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined) {
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined) {
         if (inner.kind !== "byte") {
           throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
         }
-        return DECODE_INFO[name] !== undefined ? packDecode(inner, name, args) : packEncode(inner, name, args);
+        if (DECODE_INFO[name] !== undefined) return packDecode(inner, name, args);
+        if (ENCODE_INFO[name] !== undefined) return packEncode(inner, name, args);
+        return FLOAT_DECODE_INFO[name] !== undefined ? packDecodeFloat(inner, name, args) : packEncodeFloat(inner, name, args);
       }
       return bytesMethod(inner, name, args);
     }

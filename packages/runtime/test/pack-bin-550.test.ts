@@ -69,7 +69,7 @@ describe("PackedByteArray.encode_*（S550）", () => {
     const u = pb([9, 9]);
     const a = capture(() => method(u, "encode_u8", [I(5), I(1)]));
     const b = capture(() => method(u, "encode_u64", [I(0), I(1)]));
-    eq("550", "两处越界", `${show(u)}|${a.text.split("§")[0]}|${b.text.split("§")[0]}`, `[9, 9]|ERROR: Condition "p_offset < 0 || p_offset > int64_t(size) - 1" is true.|ERROR: Condition "p_offset < 0 || p_offset > (int64_t(size) - 8)" is true.`);
+    eq("550", "两处越界", `${show(u)}|${a.text.split("§")[0]}|${b.text.split("§")[0]}`, `[9, 9]|ERROR: Condition "p_offset < 0 || p_offset > int64_t(size) - 1" is true.|ERROR: Condition "p_offset < 0 || p_offset > int64_t(size) - 8" is true.`);
   });
   it("非 byte pack 上是 Nonexistent function", () => {
     let msg = "";

@@ -142,9 +142,9 @@ export function packDecodeGuard(fn: string, line: number, width: number): Varian
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true. Returning: 0`)]);
 }
 
-/** `PackedByteArray.encode_*` 的越界 ERR_FAIL_COND（S550）：写侧那块没有 ` Returning`。 */
+/** `PackedByteArray.encode_*` 的越界 ERR_FAIL_COND（S550）：写侧**没有括号**、也没有 ` Returning`。 */
 export function packEncodeGuard(fn: string, line: number, width: number): Variant {
-  const cond = width === 1 ? "p_offset < 0 || p_offset > int64_t(size) - 1" : `p_offset < 0 || p_offset > (int64_t(size) - ${String(width)})`;
+  const cond = `p_offset < 0 || p_offset > int64_t(size) - ${String(width)}`;
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
 }
 
