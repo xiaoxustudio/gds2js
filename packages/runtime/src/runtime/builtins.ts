@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
+import { GArray, GDict, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
 import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
@@ -16,6 +16,7 @@ import { GVector3, vector3, vector3Method } from "./vector3";
 import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
 import { GColor, colorMethod } from "./color";
 import { typeOf } from "./patterns";
+import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 /** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
@@ -129,6 +130,25 @@ const MURMUR_SEED = 0x7f07c65;
 const MASK64 = (1n << 64n) - 1n;
 // 双精度的两个 32 位字：bigint 的 BigUint64Array 在 scriptc 没有 lowering，DataView 有（与 ops.ts 同一套路）。
 const F64_VIEW = new DataView(new ArrayBuffer(8));
+const F32_VIEW = new DataView(new ArrayBuffer(4));
+
+/** 引擎 `hash_murmur3_one_float`：float32 位型入 murmur，−0 归一成 +0。纯函数。 */
+function hashFloat32(x: number, seed: number): number {
+  F32_VIEW.setFloat32(0, x, true);
+  let bits = F32_VIEW.getUint32(0, true);
+  if (bits === 0x80000000) bits = 0;
+  return murmurOne32(bits, seed);
+}
+
+/** 值类型的 `var_to_str()` 构造式：浮点分量走 `rtos_fix`（整数不带 `.0`），整型分量原样。 */
+registerVarToStrValueHook((o) => {
+  if (o instanceof GVector2) return `Vector2(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)})`;
+  if (o instanceof GVector2i) return `Vector2i(${o.x}, ${o.y})`;
+  if (o instanceof GVector3) return `Vector3(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)})`;
+  if (o instanceof GVector3i) return `Vector3i(${o.x}, ${o.y}, ${o.z})`;
+  if (o instanceof GColor) return `Color(${rtosFix(o.r, true)}, ${rtosFix(o.g, true)}, ${rtosFix(o.b, true)}, ${rtosFix(o.a, true)})`;
+  return null;
+});
 
 /** murmur3 x86_32 的一轮（引擎 `hash_murmur3_one_32`，默认种子 0x7f07c65）。纯函数。 */
 function murmurOne32(pIn: number, pSeed: number): number {
@@ -218,6 +238,12 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GdNodePath) {
         throw new UnsupportedError("hash-node-path", "NodePath 的哈希式子没逆出来（4.3 的异或式子实测不成立，S267 ⑥a），不发");
       }
+      // 值类型：引擎按分量逐个折 murmur3 再 fmix32 —— 浮点分量折 float32 位型（−0 归一），整型分量折 int32 位型（S539）
+      if (v.v instanceof GVector2) return fmix32(hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)));
+      if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
+      if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
+      if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
+      if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
       if (!isCallableBox(v.v)) {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
       }

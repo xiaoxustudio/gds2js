@@ -47,7 +47,7 @@ describe("runtime/hash · Callable 的数与 Callable(x) 那一参", () => {
     eq("249", "静态 Callable 同一条", num(methodCallable(recv, "sstat")), "[hash-callable]");
     eq("249", "lambda 连跑两次就换数，更不能发", num(callable(() => V.nil(), 1)), "[hash-callable]");
     eq("249", "绑过实参不改哈希这一格仍然只能拒", num(methodCallable(recv, "m")), "[hash-callable]");
-    eq("249", "对象、向量、pack 这些照旧走 hash-type", [num(recv), num(vector2(1, 2)), num(V.object(new GBytes([1], "byte")))].join("|"), "[hash-type]|[hash-type]|[hash-type]");
+    eq("249", "对象、pack 这些照旧走 hash-type；向量那支 S539 已解出", [num(recv), num(vector2(1, 2)), num(V.object(new GBytes([1], "byte")))].join("|"), "[hash-type]|4195279070|[hash-type]");
   });
 
   it("249 · `Callable(x)` 那一参实测是原样返回", async () => {

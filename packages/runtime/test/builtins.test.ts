@@ -59,8 +59,8 @@ describe("runtime/builtins · range 与哈希", () => {
     eq("098", "hash(INF)", vh(V.float(Infinity)), "3550758535");
     shouldThrow("098", "hash(NaN) 仍报缺：C++ NAN 常量的位型没实测", () => vh(V.float(NaN)));
     eq("098", "数组按内容（类型标签起手、逐个元素折叠、fmix32 收尾）", vh(V.array(GArray.of([V.int(1)]))), "1008395022");
-    shouldThrow("098", "hash(Vector2) 报缺", () => vh(vector2(1, 2)));
-    shouldThrow("098", "hash(Color) 报缺", () => vh(color(1, 0, 0, 1)));
+    eq("098", "hash(Vector2) 走分量 murmur（S539）", vh(vector2(1, 2)), "4195279070");
+    eq("098", "hash(Color) 走分量 murmur（S539）", vh(color(1, 0, 0, 1)), "3403565064");
     shouldThrow("098", "hash() 的实参个数必须是 1", () => variantHash([]));
     shouldThrow("098", "String.hash() 不收实参", () => method(V.str("abc"), "hash", [V.int(1)]));
   });

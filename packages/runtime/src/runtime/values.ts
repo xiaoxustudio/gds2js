@@ -1366,6 +1366,13 @@ export function registerObjectLabelHook(f: (inner: object) => string | null): vo
   objectLabelHook = f;
 }
 
+/** 值类型（Vector2/2i/3/3i、Color）的 `var_to_str()` 构造式文本：本模块 import 不到那些类（反向会成环），由 builtins.ts 注入。 */
+let varToStrValueHook: ((inner: object) => string | null) | null = null;
+
+export function registerVarToStrValueHook(f: (inner: object) => string | null): void {
+  varToStrValueHook = f;
+}
+
 /**
  * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
  * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
@@ -1608,6 +1615,8 @@ export function varToStr(v: Variant): string {
       if (ridV !== null) return ridText(ridV);
       // Callable 五支实测都印成 `Callable()`（方法、静态、lambda、空 Callable、全局的、绑过实参的都一样）
       if (isCallable(v)) return "Callable()";
+      const valueText = varToStrValueHook === null ? null : varToStrValueHook(inner as object);
+      if (valueText !== null) return valueText;
       throw new UnsupportedError("var-to-str-type", `var_to_str() 遇到没实测过的对象类型 ${valueTypeName(v)}`);
     }
     default:
