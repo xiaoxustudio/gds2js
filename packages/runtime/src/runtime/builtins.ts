@@ -464,6 +464,15 @@ export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant
  *  `snapped(Vector2(-1.5, 2), Vector2(1, 1))` 给 `(-1.0, 2.0)`、`snapped(Vector3(-1.5, 2, -3), Vector3(1, 1, 1))` 给 `(-1.0, 2.0, -3.0)`、
  *  `lerp(Vector2(-1, 0), Vector2(3, 8), 0.25)` 给 `(0.0, 2.0)`、`lerp(Color(0, 0, 0, 1), Color(1, 0.5, 0.25, 0.5), 0.5)` 给 `(0.5, 0.25, 0.125, 0.75)`）。
  *  异型那一侧引擎是解析期「跟第一参走」那一句（§6 第 51 条①），运行期这一族没量全，所以不在此列的一律往下走、由数值那一支响亮拒。 */
+/** 同型向量的分量数组（`clamp` 的字典序比较用）：V2 / V2i 取 2 个、V3 / V3i 取 3 个，其余给 null。 */
+function vecComponents3(o: object): number[] | null {
+  if (o instanceof GVector2) return [o.x, o.y];
+  if (o instanceof GVector3) return [o.x, o.y, o.z];
+  if (o instanceof GVector2i) return [o.x, o.y];
+  if (o instanceof GVector3i) return [o.x, o.y, o.z];
+  return null;
+}
+
 function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[]): Variant | null {
   if (a.t !== Tag.OBJECT) return null;
   const o = a.v;
@@ -641,6 +650,30 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
   // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
   if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
     return V.bool(((v.v as boolean) || (lo.v as boolean)) && (hi.v as boolean));
+  }
+  // S537：向量 clamp 走引擎的**字典序**比较（先 x、再 y、再 z），整支返回 v / lo / hi（`CLAMP` 用 Variant `<`/`>`，
+  // Vector 的这两个运算符是字典序）——实测 `clamp(Vector2(1,-5),(0,0),(2,2))` 给 `(1.0,-5.0)` 原样、
+  // `(0,-5)` 给 min、`(2,5)` 给 max；Vector3 / Vector2i / Vector3i 同一条（18 格读数）。
+  if (mode === "auto" && v.t === Tag.OBJECT && lo.t === Tag.OBJECT && hi.t === Tag.OBJECT) {
+    const a = v.v as object;
+    const b = lo.v as object;
+    const c = hi.v as object;
+    const av = vecComponents3(a);
+    const bv = vecComponents3(b);
+    const cv = vecComponents3(c);
+    if (av !== null && bv !== null && cv !== null &&
+        Object.getPrototypeOf(a) === Object.getPrototypeOf(b) && Object.getPrototypeOf(a) === Object.getPrototypeOf(c)) {
+      const cmp = (x: readonly number[], y: readonly number[]): number => {
+        for (let i = 0; i < x.length; i++) {
+          const d = x[i]! - y[i]!;
+          if (d !== 0) return d;
+        }
+        return 0;
+      };
+      if (cmp(av, bv) < 0) return lo;
+      if (cmp(av, cv) > 0) return hi;
+      return v;
+    }
   }
   need2(v, lo, "clamp");
   need2(v, hi, "clamp");
