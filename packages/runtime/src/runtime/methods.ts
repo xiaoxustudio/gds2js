@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -485,9 +485,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 8）`);
         }
         const box = cb.v as CallableBox;
-        return V.int(inner.connectTo(box, (a: Variant[]) => {
+        if (isNullCallable(box)) {
+          signalNullCallable(inner.sigName);
+          return V.int(31);
+        }
+        const rc = inner.connectTo(box, (a: Variant[]) => {
           callCallableBox(box, a);
-        }, n));
+        }, n);
+        if (rc === 31) {
+          // 标签复刻不了（宿主类路径没登记）时只少一块 stderr，返回值仍是实测的 31
+          const label = callableLabel(box);
+          if (label !== null) signalDuplicateConnect(inner.sigName, label);
+        }
+        return V.int(rc);
       }
       if (name === "disconnect") {
         const cb = args[0];

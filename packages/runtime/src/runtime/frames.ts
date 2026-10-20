@@ -118,6 +118,16 @@ export function stringReplaceCharsNul(): Variant {
   return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);
 }
 
+/** `Signal.connect()` 重复连同一个 Callable：引擎打一块非致命 ERROR、返回 31（S546，`core/object/object.cpp:1682`）。 */
+export function signalDuplicateConnect(sigName: string, label: string): Variant {
+  return pushBlock("ERROR", "connect (core/object/object.cpp:1682)", [V.str(`Signal '${sigName}' is already connected to given callable '${label}' in that object.`)]);
+}
+
+/** `Signal.connect(Callable())`：空 Callable 一律打这一句并返回 31（S546，`core/object/object.cpp:1639`）。 */
+export function signalNullCallable(sigName: string): Variant {
+  return pushBlock("ERROR", "connect (core/object/object.cpp:1639)", [V.str(`Cannot connect to '${sigName}': the provided callable is null.`)]);
+}
+
 /** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {
