@@ -2834,10 +2834,15 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
  *  `tmp/probe-dict/compare22.txt`）。与值类型五支（S305）、pack 九支（S376）同一族两句。`sort` 在字典上是**零参**（按键排），
  *  与 Array 那支的 `sort()` 同名同元数但不同语义；`recursive_equal` 要两支（第二支是递归计数）。 */
 const DICT_METHOD_ARITY: Record<string, [number, number]> = {
-  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], erase: [1, 1], find_key: [1, 1],
+  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
   get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
   is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
   merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
+  is_typed: [0, 0], is_typed_key: [0, 0], is_typed_value: [0, 0],
+  is_same_typed: [1, 1], is_same_typed_key: [1, 1], is_same_typed_value: [1, 1],
+  get_typed_key_builtin: [0, 0], get_typed_value_builtin: [0, 0],
+  get_typed_key_class_name: [0, 0], get_typed_value_class_name: [0, 0],
+  get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
 };
 
 /** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），

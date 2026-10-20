@@ -59,6 +59,16 @@ function asString(v: Variant, who: string): string {
   throw new UnsupportedError("not-string", `${who} 需要 String，收到 ${v.t}`);
 }
 
+/** 定型容器那几支查询（S554）：`ElemKind` 折回引擎 `Variant.Type` 码；未定型给 0。 */
+const ELEM_TYPE_CODE: Record<string, number> = {
+  bool: 1, int: 2, float: 3, String: 4, Vector2: 5, Vector2i: 6, Vector3: 9, Vector3i: 10,
+  Color: 20, StringName: 21, Dictionary: 27, Array: 28,
+};
+
+function elemCode(kind: string | null): number {
+  return kind === null ? 0 : ELEM_TYPE_CODE[kind] as number;
+}
+
 /** `PackedByteArray.bswap16/32/64(offset=0, count=-1)`（S549）：原地换字节序；两道 ERR_FAIL 打块且字节一个不动。 */
 function bytesBswap(p: GBytes, kind: 16 | 32 | 64, args: Variant[]): Variant {
   if (p.kind !== "byte") {
@@ -1080,6 +1090,19 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.array(a.duplicate(true));
         }
+        case "is_typed":
+          return V.bool(a.elemKind() !== null);
+        case "is_same_typed": {
+          const other = one(args, "is_same_typed");
+          if (!(other.t === Tag.ARRAY)) throw new UnsupportedError("typed-query-arg", "Array.is_same_typed() 只量过 Array 实参");
+          return V.bool(a.elemKind() === (other.v as GArray).elemKind());
+        }
+        case "get_typed_builtin":
+          return V.int(elemCode(a.elemKind()));
+        case "get_typed_class_name":
+          return V.stringName("");
+        case "get_typed_script":
+          return V.object(NULL_OBJECT);
         case "size":
           return V.int(a.size());
         case "is_empty":
@@ -1271,6 +1294,38 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.dict(d.duplicate(true));
         }
+        case "is_typed":
+          return V.bool(d.keyKind !== null || d.valKind !== null);
+        case "is_typed_key":
+          return V.bool(d.keyKind !== null);
+        case "is_typed_value":
+          return V.bool(d.valKind !== null);
+        case "is_same_typed": {
+          const other = one(args, "is_same_typed");
+          if (!(other.t === Tag.DICT)) throw new UnsupportedError("typed-query-arg", "Dictionary.is_same_typed() 只量过 Dictionary 实参");
+          const o = other.v as GDict;
+          return V.bool(d.keyKind === o.keyKind && d.valKind === o.valKind);
+        }
+        case "is_same_typed_key": {
+          const other = one(args, "is_same_typed_key");
+          if (!(other.t === Tag.DICT)) throw new UnsupportedError("typed-query-arg", "Dictionary.is_same_typed_key() 只量过 Dictionary 实参");
+          return V.bool(d.keyKind === (other.v as GDict).keyKind);
+        }
+        case "is_same_typed_value": {
+          const other = one(args, "is_same_typed_value");
+          if (!(other.t === Tag.DICT)) throw new UnsupportedError("typed-query-arg", "Dictionary.is_same_typed_value() 只量过 Dictionary 实参");
+          return V.bool(d.valKind === (other.v as GDict).valKind);
+        }
+        case "get_typed_key_builtin":
+          return V.int(elemCode(d.keyKind));
+        case "get_typed_value_builtin":
+          return V.int(elemCode(d.valKind));
+        case "get_typed_key_class_name":
+        case "get_typed_value_class_name":
+          return V.stringName("");
+        case "get_typed_key_script":
+        case "get_typed_value_script":
+          return V.object(NULL_OBJECT);
         case "hash":
           return V.int(variantHashNumber(obj));
         default:
