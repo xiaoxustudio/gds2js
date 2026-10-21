@@ -113,6 +113,11 @@ export function stringReplaceCharNul(): Variant {
   return pushBlock("ERROR", "replace_char (core/string/ustring.cpp:3803)", [V.str("`with` must not be the NUL character.")]);
 }
 
+/** `String.to_ascii_buffer()` 遇到非 ASCII 码点：引擎 `print_unicode_error` 只打这一行（无 `ERROR:` 前缀、无 `at:`），换成 0x20（S569）。 */
+export function stringUnicodeAsciiError(cp: number): void {
+  process.stderr.write(`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1\n`);
+}
+
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
 export function stringReplaceCharsNul(): Variant {
   return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);

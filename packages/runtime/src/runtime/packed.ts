@@ -955,10 +955,13 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       return V.str(utf8Decode(items as number[]));
     }
     case "get_string_from_ascii": {
-      if (items.some((x) => (x as number) > 127)) {
-        throw new UnsupportedError("packed-ascii", "get_string_from_ascii() 只实测过纯 ASCII 的字节");
-      }
-      return V.str(String.fromCharCode(...(items as number[])));
+      // S569：引擎把 CharString 当 C 串（首个 0x00 截断）逐个字节直接折码点，实测是 Latin-1 而非 UTF-8（C3 A9 → Ã©）
+      const xs = items as number[];
+      const nul = xs.indexOf(0);
+      const end = nul < 0 ? xs.length : nul;
+      let text = "";
+      for (let i = 0; i < end; i++) text += String.fromCharCode(xs[i] as number);
+      return V.str(text);
     }
     default:
       if (packNameAbsent(kind, name)) {

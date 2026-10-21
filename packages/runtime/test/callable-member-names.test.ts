@@ -34,9 +34,13 @@ describe("runtime/callable · 成员名表", () => {
       eq("298", `${n} 是抄来的清单污染：4.6.3 没这名字`, [code(lam, n), code(nul, n)].join(" | "), `${NONESUCH(n)} | ${NONESUCH(n)}`);
     }
 
-    for (const n of ["bindv", "create", "hash", "is_custom", "is_standard", "rpc", "rpc_id", "get_object_id"]) {
+    for (const n of ["create", "rpc", "rpc_id"]) {
       eq("298", `${n} 存在但我们没那个式子：仍给「未实现」`, code(lam, n), TODO(n));
     }
+    eq("571", "bindv 缺实参给元数拒", code(lam, "bindv").startsWith("[callable-bindv-arity]"), true);
+    eq("571", "hash 对 lambda 拒（宿主标识）", code(lam, "hash").startsWith("[hash-callable]"), true);
+    eq("571", "get_object_id 对 lambda 拒（宿主脚本对象号）", code(lam, "get_object_id").startsWith("[callable-object-id-lambda]"), true);
+    eq("571", "is_custom / is_standard 已发值", `${String(((method(lam, "is_custom", [])) as Variant).v)}/${String(((method(lam, "is_standard", [])) as Variant).v)}`, "true/false");
 
     eq("440", "unbind 已发货：不再给「未实现」那句", code(lam, "unbind") === TODO("unbind"), false);
     eq("298", "表内已实现的不误伤（is_null 照发值）", String(((method(nul, "is_null", [])) as Variant).v), "true");

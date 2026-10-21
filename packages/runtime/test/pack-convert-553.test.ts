@@ -56,7 +56,7 @@ describe("PackedByteArray 的向量/颜色转换（S553）", () => {
     } catch (e) {
       c2 = (e as { code?: string }).code ?? "?";
     }
-    eq("553", "两处拒", `${c1}/${c2}`, "packed-vector4/packed-multibyte");
+    eq("553", "两处拒", `${c1}/${c2}`, "packed-vector4/packed-multibyte-acp");
   });
 });
 

@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -391,6 +391,77 @@ function bytesUtf32(p: GBytes): Variant {
   return V.str(out);
 }
 
+/** `get_string_from_multibyte_char(encoding)`（S570）：只接 UTF-8 / ISO-8859-1；多字节解码按 Windows `MultiByteToWideChar` 的替换形（坏序列给 U+FFFD）。 */
+function bytesMultibyte(p: GBytes, args: Variant[]): Variant {
+  if (args.length > 1) throw new GodotRuntimeError("arity", `get_string_from_multibyte_char() 最多 1 个参数（收到 ${args.length} 个）`);
+  const enc = args.length === 0 ? "" : asString(args[0] as Variant, "get_string_from_multibyte_char");
+  const upper = enc.toUpperCase();
+  if (upper === "") {
+    throw new UnsupportedError("packed-multibyte-acp", "get_string_from_multibyte_char() 的空编码走宿主 ANSI 代码页（实测这台是 CP936），跨宿主不可复现，不发");
+  }
+  if (upper !== "UTF-8" && upper !== "ISO-8859-1") {
+    throw new UnsupportedError("packed-multibyte-encoding", `get_string_from_multibyte_char() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1；引擎代码页表里其余名字没量）`);
+  }
+  if (p.length === 0) return V.str("");
+  const raw = p.raw() as number[];
+  const nul = raw.indexOf(0);
+  const end = nul < 0 ? raw.length : nul;
+  if (upper === "ISO-8859-1") {
+    let out = "";
+    for (let i = 0; i < end; i++) out += String.fromCharCode(raw[i] as number);
+    return V.str(out);
+  }
+  return V.str(windowsUtf8Decode(raw, end));
+}
+
+function windowsUtf8Decode(raw: number[], end: number): string {
+  let out = "";
+  let i = 0;
+  while (i < end) {
+    const b0 = raw[i] as number;
+    if (b0 < 0x80) {
+      out += String.fromCharCode(b0);
+      i += 1;
+      continue;
+    }
+    let need: number;
+    let cp: number;
+    if (b0 >= 0xc2 && b0 <= 0xdf) {
+      need = 1;
+      cp = b0 & 0x1f;
+    } else if (b0 >= 0xe0 && b0 <= 0xef) {
+      need = 2;
+      cp = b0 & 0x0f;
+    } else if (b0 >= 0xf0 && b0 <= 0xf4) {
+      need = 3;
+      cp = b0 & 0x07;
+    } else {
+      out += "\ufffd";
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    let ok = true;
+    for (let k = 0; k < need; k++, j++) {
+      const b = raw[j];
+      if (b === undefined || (b & 0xc0) !== 0x80) {
+        ok = false;
+        break;
+      }
+      cp = (cp << 6) | (b & 0x3f);
+    }
+    const bad = need === 2 ? cp < 0x800 || (cp >= 0xd800 && cp <= 0xdfff) : need === 3 ? cp < 0x10000 || cp > 0x10ffff : false;
+    if (!ok || bad) {
+      out += "\ufffd";
+      i += 1;
+      continue;
+    }
+    out += String.fromCodePoint(cp);
+    i = j;
+  }
+  return out;
+}
+
 /** `decompress_dynamic(buffer_size, mode=0)`（S557）：宿主编解码器解出后按上限判；失败/超限/空输入都打块回空。 */
 function bytesDecompressDynamic(p: GBytes, args: Variant[]): Variant {
   if (args.length < 1 || args.length > 2) {
@@ -621,6 +692,58 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       for (const b of bound) next.push(b);
       return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
     }
+    case "bindv": {
+      // S571：bindv 与 bind 同一支（新绑的实参排在旧绑定串之前，get_bound_arguments 实测 `max.bind(1).bindv([2])` 给 [2, 1]）；空数组原样回同一只
+      if (args.length !== 1) {
+        throw new UnsupportedError("callable-bindv-arity", "bindv() 的元数没量过（只量过恰好 1 个 Array 实参）");
+      }
+      const arr = args[0] as Variant;
+      if (!(arr.v instanceof GArray)) {
+        throw new GodotRuntimeError(
+          "callable-bindv-arg",
+          `Invalid type in function 'bindv' in base 'Callable'. Cannot convert argument 1 from ${valueTypeName(arr)} to Array.`,
+        );
+      }
+      const list = (arr.v as GArray).raw();
+      if (list.length === 0) return V.object(box);
+      if (box.defaultCount > 0) {
+        throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
+      }
+      const nextv: Variant[] = [];
+      if (box.unbindCount > 0) {
+        for (const b of bound) nextv.push(b);
+        return V.object(new CallableBox(box.fn, box.name, box.object, nextv, box.arity, true, null, null, 0, null, box.unbindCount - list.length < 0 ? 0 : box.unbindCount - list.length));
+      }
+      for (const a of list) nextv.push(a);
+      for (const b of bound) nextv.push(b);
+      return V.object(new CallableBox(box.fn, box.name, box.object, nextv, box.arity, true));
+    }
+    case "is_custom": {
+      // 实测四形：全局 abs 真、lambda 真、方法假、空 Callable 假；方法 `bind` / `bindv` 之后转真；内建类型面绑定来的那一只也真
+      if (empty) return V.bool(false);
+      return V.bool(box.builtin !== null || box.object === null || bound.length > 0 || box.unbindCount > 0);
+    }
+    case "is_standard": {
+      if (empty) return V.bool(false);
+      return V.bool(box.builtin === null && box.object !== null && bound.length === 0 && box.unbindCount === 0);
+    }
+    case "get_object_id": {
+      if (empty || box.builtin !== null) return V.int(0);
+      if (box.object === null) {
+        if (box.name === null) {
+          throw new UnsupportedError("callable-object-id-lambda", "lambda 的 get_object_id() 给的是定义它的脚本对象号，宿主不可复现");
+        }
+        return V.int(0);
+      }
+      const oid = box.object;
+      if (oid.t !== Tag.OBJECT) throw new UnsupportedError("callable-object-id", "get_object_id() 的接收者不是对象盒子");
+      const id = (oid.v as GdIdentified).gdObjectId;
+      if (!(id > 0)) throw new UnsupportedError("instance-id", "这一类对象还没发身份号");
+      return V.int(id);
+    }
+    case "hash":
+      // 全局 / 空 / 绑过的全局与 `hash(c)` 同值（实测 boundglobal 193485979 == raw）；方法 / lambda / 内建的面折宿主标识，variantHashNumber 会响亮拒
+      return V.int(variantHashNumber(V.object(box)));
     case "unbind": {
       // 计数是**累加**的：`u.unbind(1).unbind(1)` 等于 `u.unbind(2)`（`tmp/probe-unbind/x6.gd`）
       const n = box.unbindCount + unbindCountArg(args);
@@ -835,9 +958,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         if (name === "to_vector4_array") {
           throw new UnsupportedError("packed-vector4", "to_vector4_array() 要 Vector4，运行时还没这一型，不发");
         }
-        if (name === "get_string_from_multibyte_char") {
-          throw new UnsupportedError("packed-multibyte", "get_string_from_multibyte_char() 折的是宿主代码页，没实测过");
-        }
+        if (name === "get_string_from_multibyte_char") return bytesMultibyte(inner, args);
         if (name === "decompress_dynamic") return bytesDecompressDynamic(inner, args);
         if (name === "get_string_from_utf32") return bytesUtf32(inner);
         if (CONVERT_INFO[name] !== undefined) return packConvert(inner, name);
@@ -1508,12 +1629,62 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf8_buffer() 不接受参数（收到 ${args.length} 个）`);
           return V.object(new GBytes(Array.from(new TextEncoder().encode(s))));
         }
+        case "to_utf16_buffer":
+        case "to_wchar_buffer": {
+          // S569：Windows 的 wchar 与 UTF-16 同一支（引擎 ustring.cpp 的 WINDOWS_ENABLED 分支），代理对按 UTF-16 码元原样；空串给空
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_${name === "to_wchar_buffer" ? "wchar" : "utf16"}_buffer() 不接受参数（收到 ${args.length} 个）`);
+          const units: number[] = [];
+          for (let i = 0; i < s.length; i++) {
+            const cu = s.charCodeAt(i);
+            units.push(cu & 0xff, (cu >>> 8) & 0xff);
+          }
+          return V.object(new GBytes(units));
+        }
+        case "to_utf32_buffer": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf32_buffer() 不接受参数（收到 ${args.length} 个）`);
+          const cps: number[] = [];
+          for (const ch of s) {
+            const cp = ch.codePointAt(0) as number;
+            cps.push(cp & 0xff, (cp >>> 8) & 0xff, (cp >>> 16) & 0xff, (cp >>> 24) & 0xff);
+          }
+          return V.object(new GBytes(cps));
+        }
+        case "to_multibyte_char_buffer": {
+          if (args.length > 1) throw new GodotRuntimeError("arity", `to_multibyte_char_buffer() 最多 1 个参数（收到 ${args.length} 个）`);
+          const enc = args.length === 0 ? "" : asString(args[0] as Variant, "to_multibyte_char_buffer");
+          const upper = enc.toUpperCase();
+          if (upper === "") {
+            throw new UnsupportedError("string-multibyte-acp", "to_multibyte_char_buffer() 的空编码走宿主 ANSI 代码页（实测这台是 CP936：é→A8A6、汉→BABA），跨宿主不可复现，不发");
+          }
+          if (upper !== "UTF-8" && upper !== "ISO-8859-1") {
+            throw new UnsupportedError("string-multibyte-encoding", `to_multibyte_char_buffer() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1；引擎代码页表里其余名字没量）`);
+          }
+          if (s.length === 0) {
+            throw new UnsupportedError("string-multibyte-empty", "to_multibyte_char_buffer() 对空串走 WideCharToMultiByte 的 Error 87 块，文案是宿主 OS 的本地化串，复现不了");
+          }
+          const mb: number[] = upper === "UTF-8" ? Array.from(new TextEncoder().encode(s)) : [];
+          if (upper === "ISO-8859-1") {
+            for (let i = 0; i < s.length; i++) {
+              const cu = s.charCodeAt(i);
+              mb.push(cu <= 0xff ? cu : 0x3f);
+            }
+          }
+          mb.push(0);
+          return V.object(new GBytes(mb));
+        }
         case "to_ascii_buffer": {
           if (args.length !== 0) throw new GodotRuntimeError("arity", `to_ascii_buffer() 不接受参数（收到 ${args.length} 个）`);
-          if (Array.from(s).some((ch) => (ch.codePointAt(0) as number) > 127)) {
-            throw new UnsupportedError("string-ascii-buffer", "to_ascii_buffer() 只实测过纯 ASCII 字符串");
+          const bytes: number[] = [];
+          for (const ch of s) {
+            const cp = ch.codePointAt(0) as number;
+            if (cp > 0x7f) {
+              stringUnicodeAsciiError(cp);
+              bytes.push(0x20);
+            } else {
+              bytes.push(cp);
+            }
           }
-          return V.object(new GBytes(Array.from(s, (ch) => ch.codePointAt(0) as number)));
+          return V.object(new GBytes(bytes));
         }
         case "to_float":
           if (args.length !== 0) {

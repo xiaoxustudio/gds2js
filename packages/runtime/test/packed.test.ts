@@ -57,9 +57,9 @@ describe("runtime/packed · 打包数组与 zstd", () => {
       `${method(pack([104, 195, 169, 108, 108, 111]), "get_string_from_utf8", []).v}`, "héllo");
     eq("step67", "文本 → 字节（to_utf8_buffer）", `${show(method(S("héllo"), "to_utf8_buffer", []))}`,
       "[104, 195, 169, 108, 108, 111]");
-    eq("step67", "get_string_from_ascii 只实测过纯 ASCII，带高位字节响着拒",
-      err(() => method(pack([104, 200]), "get_string_from_ascii", [])),
-      "get_string_from_ascii() 只实测过纯 ASCII 的字节");
+    eq("step67", "get_string_from_ascii 按 Latin-1 逐字节折（S569 实测）",
+      `${method(pack([104, 200]), "get_string_from_ascii", []).v}`,
+      "hÈ");
     eq("step67", "不存在的 min / to_byte_array 给运行期 Nonexistent 文本（用例 135）",
       `${err(() => method(b, "min", []))}|${err(() => method(b, "to_byte_array", []))}`,
       "Invalid call. Nonexistent function 'min' in base 'PackedByteArray'.|Invalid call. Nonexistent function 'to_byte_array' in base 'PackedByteArray'.");
