@@ -267,7 +267,13 @@ let MODULE_SIGNALS = new Set<string>();
 /** 当前内部类自己的信号名：与 `CURRENT_MEMBERS` 同起同落，取值要的是装箱过的 `this.<名>`（引擎在内部类里看得见自己类的信号，读数 `tmp/probe-innerscope/compare97.txt` 的 c15）。 */
 let CLASS_SIGNALS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
+/** 认得到的 callee 的形参表（S619 实参位那两句要用）。 */
+let PARAM_TYPES = new Map<string, Param[]>();
 let MODULE_CLASSES = new Set<string>();
+/** 脚本类名 → 原生基类名：`Array[Inner]` 的标注名进句子里，`get_typed_class_name()` 印基类（读数 tmp/probe621/q7）。 */
+let SCRIPT_BASE = new Map<string, string>();
+/** 宿主基类那一档（s4：`class N extends Node` 的 `Array[N]` 给 `Node`）。 */
+const SCRIPT_HOST_BASES = new Set(["RefCounted", "Node", "Object"]);
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
 let INNER_CLASSES = new Map<string, ClassDecl>();
 /** 被同模块内部类当基类的那些类名：它们的构造要走协议形状。 */
@@ -348,6 +354,12 @@ function standaloneInlineHeader(body: string): string {
   ].join("\n");
 }
 
+/** 引擎在报错文本里只写文件那一名：`res://a/b.gd` 与 Windows 的分岔都在这儿收平。 */
+function basenameOfGd(path: string | undefined): string | null {
+  if (path === undefined || path === "") return null;
+  return path.split(/[\/\\]/).pop() ?? null;
+}
+
 export function emitModule(m: Module, opts: EmitOptions): string {
   return emitModuleWithMap(m, opts).code;
 }
@@ -377,6 +389,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   /** 信号字段落的是裸 `rt.Signal`，当值用（比较、当字典键、进数组、`typeof`）必须先装箱成 Variant —— 直接递出去会在运行期变成没有类型的裸对象。 */
   MODULE_SIGNALS = new Set(m.signals.map((s) => s.name));
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+  PARAM_TYPES = new Map(m.funcs.map((f) => [f.name, f.params]));
   // 字段初始化式发在 INHERITED_METHODS 建起来之前，而那里裸调本类方法、继承来的方法与宿主基类的方法都合法，守卫认这张表。
   CLASS_FUNCS = new Set([
     ...m.funcs.map((f) => f.name),
@@ -399,6 +412,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   };
   for (const c of m.innerClasses) collectInner(c);
   VAR_TYPES = new Map(m.vars.map((v) => [v.name, v.type]));
+  SCRIPT_BASE = new Map();
+  for (const c of m.innerClasses) collectScriptBase(c, SCRIPT_BASE);
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
     ...(m.className ? [m.className] : []),
@@ -527,13 +542,15 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
   const moduleArities = methodAritiesLiteral(m.funcs);
   if (moduleArities !== null) out.push(`rt.registerMethodArities(__gd_d_${className}, ${moduleArities});`);
+  const moduleParams = methodParamsLiteral(m.funcs);
+  if (moduleParams !== null) out.push(`rt.registerMethodParams(__gd_d_${className}, ${moduleParams});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(__gd_d_${className}, ${JSON.stringify(moduleStatics)}, ${staticsTableLiteral(className, m.funcs)});`);
   if (baseClass.kind !== "import") {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
   // Callable 标签里那截括号实测是 `class_name`，没有就用文件名（`RefCounted(Util)::hi` / `SceneTree(main.gd)::top`）。
-  const scriptLabel = m.className ?? (resPath ? resPath.split("/").pop() ?? null : null);
+  const scriptLabel = m.className ?? basenameOfGd(resPath ?? opts.sourceFile) ?? className + ".gd";
   if (scriptLabel !== null && scriptLabel !== undefined) {
     out.push(`rt.registerScriptLabel(__gd_d_${className}, ${JSON.stringify(scriptLabel)});`);
   }
@@ -860,6 +877,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);
   const declArities = methodAritiesLiteral(decl.funcs);
   if (declArities !== null) lines.push(`rt.registerMethodArities(__gd_d_${decl.name}, ${declArities});`);
+  const declParams = methodParamsLiteral(decl.funcs);
+  if (declParams !== null) lines.push(`rt.registerMethodParams(__gd_d_${decl.name}, ${declParams});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(__gd_d_${decl.name}, ${JSON.stringify(declStatics)}, ${staticsTableLiteral(decl.name, decl.funcs)});`);
   // 原生基类只在没有脚本基类时登记，有的话运行时沿 `base` 链往上找。
@@ -961,6 +980,13 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
   };
   body.forEach(stmt);
   return out;
+}
+
+/** 只认没写 `extends` 的内部类：`Array[脚本类名]` 的标注名与原生基类名两格都从这儿来（其余形没量）。 */
+function collectScriptBase(c: ClassDecl, out: Map<string, string>): void {
+  const base = c.extends === null || c.extends === "" ? "RefCounted" : c.extends;
+  if (base === "RefCounted" || out.get(base) !== undefined || SCRIPT_HOST_BASES.has(base)) out.set(c.name, out.get(base) ?? base);
+  for (const inner of c.innerClasses) collectScriptBase(inner, out);
 }
 
 function emitFunc(f: FuncDecl, base = 0): string[] {
@@ -1141,6 +1167,8 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   CURRENT_FUNC = f.name;
   const catchRet = ret === "void" || ret === "Promise<void>" ? "return;" : `return ${typeDefault(f.returnType)};`;
   CURRENT_RET = abi ? abi.ret : null;
+  const savedRetAnn = CURRENT_RET_ANN;
+  CURRENT_RET_ANN = f.returnType;
   const layout = analyzeFuncLayout(f);
   UNBOXED = layout.unboxed;
   RAW_ARRAYS = layout.arrays;
@@ -1157,6 +1185,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   } finally {
     UNBOXED = savedUnboxed;
     CURRENT_RET = savedRet;
+    CURRENT_RET_ANN = savedRetAnn;
     RAW_ARRAYS = savedArrays;
     RAW_DICTS = savedDicts;
     CURRENT_FUNC = savedFunc;
@@ -1622,7 +1651,7 @@ function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
         const vw = emitValueWrite(s.target, s.value);
         if (vw) return vw;
       }
-      return [emitAssign(s.target, emitExpr(s.value))];
+      return [emitAssign(s.target, emitExpr(s.value), s.value)];
     }
 
     case "return":
@@ -1637,7 +1666,10 @@ function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
         }
         return [`return ${rr.code};`];
       }
-      return voidReturn ? [`return void (${emitExpr(s.value)});`] : [`return ${emitExpr(s.value)};`];
+      const code = emitExpr(s.value);
+      const text = LAMBDA_DEPTH > 0 ? null : containerAnnText(CURRENT_RET_ANN);
+      const wrapped = containerSlot(code, s.value, text, "returnContainer");
+      return voidReturn ? [`return void (${wrapped});`] : [`return ${wrapped};`];
 
     case "if": {
       const lines: string[] = [];
@@ -1804,10 +1836,12 @@ function unwrapSelfMember(t: Expr): Expr | null {
   return { kind: "ident", name: t.name, loc: t.loc };
 }
 
-function emitAssign(target: Expr, value: string): string {
+function emitAssign(target: Expr, value: string, valueExpr?: Expr): string {
   if (target.kind === "ident") {
-    const cast = declaredCast(LOCAL_TYPES.get(target.name) ?? null);
-    return `${emitExpr(target)} = ${cast ? `${cast}(${value})` : value};`;
+    const ann = LOCAL_TYPES.get(target.name) ?? null;
+    const cast = declaredCast(ann);
+    const v = valueExpr === undefined ? value : containerSlot(value, valueExpr, containerAnnText(ann), "assignContainer");
+    return `${emitExpr(target)} = ${cast ? `${cast}(${v})` : v};`;
   }
   if (target.kind === "index") {
     if (target.obj.kind === "ident" && RAW_ARRAYS.has(target.obj.name)) {
@@ -1844,6 +1878,8 @@ interface RawAbi {
 /** 当前模块内可走裸 ABI 的函数：名字 → 签名。由 computeRawAbis 逐模块算出。 */
 let RAW_ABIS = new Map<string, RawAbi>();
 let CURRENT_RET: Kind | null = null;
+/** 当前函数的返回标注（S618 返回位那一族）；lambda 体里不发，lambda 的返回槽没实测过。 */
+let CURRENT_RET_ANN: TypeRef | null = null;
 
 type ElemKind = "int" | "float" | "str" | "int[]" | "float[]" | "str[]";
 const isGridElem = (k: ElemKind): k is "int[]" | "float[]" | "str[]" => k === "int[]" || k === "float[]" || k === "str[]";
@@ -3253,16 +3289,71 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   if (m[1] === "Array") {
     const kind = inner.trim();
     if (NATIVE_CLASS_SLOTS.has(kind)) return `rt.stampClassArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
+    const scriptBase = SCRIPT_BASE.get(kind);
+    if (scriptBase !== undefined) return `rt.stampScriptArray(${raw}, ${JSON.stringify(kind)}, ${JSON.stringify(scriptBase)}, ${String(fromLiteral)})`;
     if (!isElemKind(kind)) return raw;
     return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
   }
   const parts = inner.split(",").map((p) => p.trim());
-  const keyKind = parts[0] ?? "";
-  const valKind = parts[1] ?? "";
-  if (parts.length !== 2 || !isElemKind(keyKind) || !isElemKind(valKind)) return raw;
+  const keyKind = slotElemKindName(parts[0] ?? "");
+  const valKind = slotElemKindName(parts[1] ?? "");
+  if (parts.length !== 2 || keyKind === null || valKind === null) return raw;
   return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
 }
 
+/** 槽位标注的类型文本（S618）：只认实测过的那几种元素型 / 键值型，其余返回 null 原样透传。 */
+function containerAnnText(ann: TypeRef | null): string | null {
+  if (ann === null || ann.kind !== "named") return null;
+  const m = /^(Array|Dictionary)\[(.+)\]$/.exec(ann.name);
+  if (m === null) return null;
+  const inner = m[2] ?? "";
+  if (inner.includes("[")) return null;
+  const parts = inner.split(",").map((x) => x.trim());
+  if (m[1] === "Array") {
+    const one = parts[0] ?? "";
+    return parts.length === 1 && (isElemKind(one) || NATIVE_CLASS_SLOTS.has(one) || SCRIPT_BASE.has(one)) ? `Array[${one}]` : null;
+  }
+  return parts.length === 2 && isElemKind(parts[0] ?? "") && isElemKind(parts[1] ?? "")
+    ? `Dictionary[${parts[0]}, ${parts[1]}]` : null;
+}
+
+/** 认得 callee 的调用点：字面量实参照引擎那样在编译期折算成定形容器，其余实参发运行期那一句（S619）。 */
+function packTypedArgs(fnName: string, argExprs: Expr[], emitted: string[], recv: string): string[] {
+  const ps = PARAM_TYPES.get(fnName);
+  if (ps === undefined) return emitted;
+  return emitted.map((a, i) => {
+    const p = ps[i];
+    const e = argExprs[i];
+    if (p === undefined || e === undefined) return a;
+    const text = containerAnnText(p.type);
+    if (text === null) return a;
+    if (e.kind === "array" || e.kind === "dict") {
+      const parts = text.replace(/^(Array|Dictionary)\[|\]$/g, "").split(",").map((x) => x.trim());
+      const one = parts[0] ?? "";
+      if (text.startsWith("Array[")) {
+        const scriptBase = SCRIPT_BASE.get(one);
+        if (scriptBase !== undefined) return `rt.stampScriptArray(${a}, ${JSON.stringify(one)}, ${JSON.stringify(scriptBase)}, true)`;
+        return NATIVE_CLASS_SLOTS.has(one)
+          ? `rt.stampClassArray(${a}, ${JSON.stringify(one)}, true)`
+          : `rt.stampArray(${a}, ${JSON.stringify(one)}, true)`;
+      }
+      return `rt.stampDict(${a}, ${JSON.stringify(one)}, ${JSON.stringify(parts[1] ?? "")}, true)`;
+    }
+    return `rt.paramContainer(${a}, ${JSON.stringify(text)}, ${String(i + 1)}, ${JSON.stringify(fnName)}, ${recv})`;
+  });
+}
+
+/** 字典的键值位可以盖章的那些名字：八档元素型照原样，脚本类名按 `Object` 收（v11 量的是这一形；宿主类名作键值没量，仍不盖章）。 */
+function slotElemKindName(name: string): string | null {
+  if (isElemKind(name)) return name;
+  return SCRIPT_BASE.has(name) ? "Object" : null;
+}
+
+/** 非字面量源进定形容器的槽：赋值位与返回位各一句；字面量源引擎在编译期折算、不发句。 */
+function containerSlot(code: string, value: Expr, text: string | null, say: "assignContainer" | "returnContainer"): string {
+  if (text === null || value.kind === "array" || value.kind === "dict") return code;
+  return `rt.${say}(${code}, ${JSON.stringify(text)})`;
+}
 /** `Object.call` / `callv` 的 arity 表：`[必填数, 全部形参数]`，必填数取第一个带默认值的形参之前的个数。 */
 function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
@@ -3277,6 +3368,19 @@ function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
       }
     }
     rows.push(`${JSON.stringify(f.name)}: [${required}, ${f.params.length}]`);
+  }
+  return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
+}
+
+/** 形参型名表（S648）：被调方入口那句 `Invalid type in function ... Cannot convert argument N from X to Y.`
+ *  要按声明型判断，而运行期看不到源码。只登记**有标注位**的方法，其余形状不发，产物树一字不动。 */
+function methodParamsLiteral(funcs: readonly FuncDecl[]): string | null {
+  const rows: string[] = [];
+  for (const f of funcs) {
+    if (f.name === "_init" || f.params.length === 0) continue;
+    const slots = f.params.map((pt) => (pt.type === null || pt.type.kind !== "named" ? null : JSON.stringify(pt.type.name)));
+    if (slots.every((pt) => pt === null)) continue;
+    rows.push(`${JSON.stringify(f.name)}: [${slots.join(", ")}]`);
   }
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
 }
@@ -3470,7 +3574,7 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     if (!callableInScope(name)) {
       throw new UnsupportedError("call-unknown", `Function "${name}()" not found in base self.`);
     }
-    return `this.${name}(${args.join(", ")})`;
+    return `this.${name}(${packTypedArgs(name, e.args, args, "this").join(", ")})`;
   }
 
   if (e.callee.kind === "attribute") {
@@ -3481,7 +3585,7 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       const own = e.callee.name;
       if (STATIC_FUNCS.has(own)) return `${CURRENT_CLASS}.${own}(${args.join(", ")})`;
       if (MODULE_FUNCS.has(own) || CURRENT_MEMBERS.has(own) || MODULE_VARS.has(own)) {
-        return `this.${own}(${args.join(", ")})`;
+        return `this.${own}(${packTypedArgs(own, e.args, args, "this").join(", ")})`;
       }
       return `rt.method(rt.V.object(this), ${JSON.stringify(own)}, [${args.join(", ")}])`;
     }

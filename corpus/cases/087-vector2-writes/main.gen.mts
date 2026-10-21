@@ -270,6 +270,7 @@ rt.registerFieldTypes(__gd_d_Main, {"m": "Vector2"});
 rt.registerScriptProps(__gd_d_Main, ["m"], (o) => { const s = o as Main; return [s.m]; });
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", ["m"], {}, (o) => { const s = o as Main; return [s.m]; });
 rt.registerMethodArities(__gd_d_Main, { "bump": [1, 1], "make": [0, 0], "_initialize": [0, 0] });
+rt.registerMethodParams(__gd_d_Main, { "bump": ["Vector2"] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);

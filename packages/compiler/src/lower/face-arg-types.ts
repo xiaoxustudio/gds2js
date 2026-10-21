@@ -219,6 +219,9 @@ export const FACE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number
   "StringName.substr": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
 
   "NodePath.get_name": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"]]],
+  // `slice` 两位同一判据、两名一形一形量过（尺 `tmp/probe644/st_*.gd` 与 `q_p2*.gd`）：字面量给两句、标注名给第二句、
+  // 推断名与 `Variant` 名一句不发（交回运行期那句）；`null` 在两位都是两句，与 `get_name` 那一行不同。
+  "NodePath.slice": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]], [2, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "null"]]],
   "NodePath.get_subname": [[1, ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"], "int", ["Color", "NodePath", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i"]]],
 };
 
@@ -433,6 +436,8 @@ export const FACE_ARG_TYPES: Readonly<Record<string, ReadonlyArray<readonly [num
   "StringName.substr": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"], [2, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
 
   "NodePath.get_name": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
+  // `slice` 的 Array 形只量过那两格（`x.slice([1])` 与 `x.slice(0, [1])`，都只发第二句），其余容器源形不许从 `get_name` 那行类推
+  "NodePath.slice": [[1, ["Array"], "int"], [2, ["Array"], "int"]],
   "NodePath.get_subname": [[1, ["Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray"], "int"]],
 };
 

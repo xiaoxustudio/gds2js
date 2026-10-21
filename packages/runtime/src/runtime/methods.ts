@@ -16,14 +16,17 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, methodParamsOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
-import { faceArity, valueAttrKind } from "./face-arity";
+import { faceArity, faceMemberKnown, nativeAritySay, valueAttrKind } from "./face-arity";
+
+/** 六支 vector 面：属性名只有 x / y / z / w，且在派发里先回，所以「非成员即表外」这一判对它们安全。 */
+const VECTOR_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i"]);
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
-import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
+import { asNodePath, GdNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -94,7 +97,7 @@ function asString(v: Variant, who: string): string {
 }
 
 /** 定型容器那几支查询（S554）：`ElemKind` 折回引擎 `Variant.Type` 码；未定型给 0。 */
-export const ELEM_TYPE_CODE: Record<string, number> = {
+export const ELEM_TYPE_CODE: Record<string, number> = {
   Object: 24,
   bool: 1, int: 2, float: 3, String: 4, Vector2: 5, Vector2i: 6, Vector3: 9, Vector3i: 10, Vector4: 12, Vector4i: 13,
   Color: 20, StringName: 21, Dictionary: 27, Array: 28,
@@ -603,6 +606,77 @@ function callSlot(recv: unknown, name: string, args: Variant[]): Variant | null 
   return recv instanceof GdScriptObject ? recv.__gdDispatch(name, args) : null;
 }
 
+/** 被调方入口那一步的接受集（尺 `tmp/probe648/params648.txt` 廿四形）：`int` 收 int / bool / float（截断）、
+ *  `float` 收 int / bool / float、`bool` 收 int / bool / float、`String` 收 String / StringName、
+ *  `StringName` 收 String / StringName、`Vector2` 只收 Vector2。表外的 want（脚本类名、Array、Dictionary 那几档）
+ *  与表内没量过的源形一律不动 —— 不许拿这六档的判据去猜别的面。 */
+const PARAM_REFUSED: Record<string, readonly string[]> = {
+  int: ["String", "StringName", "Nil", "Array", "Dictionary", "Vector2", "Callable", "NodePath"],
+  float: ["String", "Nil", "Vector2"],
+  bool: ["Nil", "String"],
+  String: ["int", "float", "Array", "Nil", "Vector2"],
+  StringName: ["int"],
+  Vector2: ["int", "Array"],
+};
+
+/** 收下的那几形折成目标型：引擎在入口这一步就折，方法体拿到的已经是目标型（`tf(1)` 给 `1.0`、`ts(&"a")` 给 `a`）。 */
+function paramFold(want: string, v: Variant): Variant {
+  if (want === "int" && v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
+  // 只在安全整数范围内折：越出 2^53 的那一形交回既有的转换路径（语料 156 的 `1e30` 本来就过得去，别在这里撞闸）
+  if (want === "int" && v.t === Tag.FLOAT) {
+    const n = Math.trunc(v.v as number);
+    return Number.isSafeInteger(n) ? V.int(n) : v;
+  }
+  if (want === "float" && v.t === Tag.INT) return typeof v.v === "number" ? V.float(v.v) : v;
+  if (want === "float" && v.t === Tag.BOOL) return V.float(v.v ? 1 : 0);
+  if (want === "bool" && (v.t === Tag.INT || v.t === Tag.FLOAT)) return V.bool(intToNum(v.v as IntPayload) !== 0 || (v.t === Tag.FLOAT && (v.v as number) !== 0));
+  if (want === "String" && v.t === Tag.STRING_NAME) return V.str(v.v as string);
+  if (want === "StringName" && v.t === Tag.STRING) return V.stringName(v.v as string);
+  return v;
+}
+
+function scriptParamArgs(recv: unknown, name: string, args: Variant[]): Variant[] {
+  const want = methodParamsOf(recv)?.[name];
+  if (want === undefined) return args;
+  const out = args.slice();
+  for (let i = 0; i < want.length && i < out.length; i++) {
+    const declared = want[i];
+    if (declared === undefined || declared === null) continue;
+    const slot = declared.replace(/\[.*\]$/, "");
+    const refused = PARAM_REFUSED[slot];
+    if (refused === undefined) continue;
+    const v = out[i] as Variant;
+    const got = valueTypeName(v);
+    if (refused.includes(got)) {
+      const cls = classNameOf(recv);
+      const base = nativeBaseOf(recv);
+      if (cls === null || base === null) {
+        throw new UnsupportedError("script-method-label", `${name}() 的实参位要发引擎那句转换错，但这台实例的类名或原生基类还没登记`);
+      }
+      throw new GodotRuntimeError("script-param-type", `Invalid type in function '${name}' in base '${base} (${cls})'. Cannot convert argument ${String(i + 1)} from ${got} to ${slot}.`);
+    }
+    out[i] = paramFold(slot, v);
+  }
+  return out;
+}
+
+/** 脚本对象**直调**那一形的元数句（尺 `tmp/probe644/sc645.gd` g32..g37 与 `so645{c,d}.gd`）：少给报**必填数**、
+ *  多给报**全部数**（`top(a, b = 1, c = 2)` 的 `top()` 报 Expected 1、`top(1,2,3,4)` 报 Expected 3），
+ *  base 写「`<原生基类> (<动态类名>)`」—— `class Kid extends One` 也给 `RefCounted (Kid)`。
+ *  判据只认发射器登记过的方法表：表外的名不能证「不存在」（原生那一档还没铺完），照旧走响亮拒。 */
+function scriptMethodSay(recv: unknown, name: string, args: Variant[]): string | null {
+  if (!(recv instanceof GdScriptObject)) return null;
+  const bounds = methodAritiesOf(recv)?.[name];
+  if (bounds === undefined) return null;
+  if (args.length >= bounds[0] && args.length <= bounds[1]) return null;
+  const cls = classNameOf(recv);
+  const base = nativeBaseOf(recv);
+  if (cls === null || base === null) {
+    throw new UnsupportedError("script-method-label", `${name}() 越元数，但这台实例的类名或原生基类还没登记，发不出引擎那句 base 标签`);
+  }
+  return `Invalid call to function '${name}' in base '${base} (${cls})'. Expected ${String(args.length < bounds[0] ? bounds[0] : bounds[1])} argument(s).`;
+}
+
 /** 接收者（实例、类值、或「脚本值」那一格）→ 它的 desc；不是脚本类给 null。 */
 function descFor(inner: unknown): ClassDesc | null {
   return descOf(inner);
@@ -675,7 +749,9 @@ function callCallableBox(box: CallableBox, args: Variant[]): Variant {
   throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
 }
 
-/** `Callable.call()` 的实参数量：**给的 + 绑的** 对不上声明数就是运行期那句 `Invalid call to function '<标签> (Callable)'. Expected <N> argument(s).`，少给报必填数、多给报全部数。 */
+/** `Callable.call()` 的实参数量：**给的 + 绑的** 对不上声明数就是运行期那句 `Invalid call to function '<标签> (Callable)'. Expected <N> argument(s).`
+ *  脚本方法少给报必填数、多给报全部数；内建类型面那两岔都报**全部数**（`tmp/probe636/cb636b.gd`：`String::count` 给 0 支报 3、
+ *  `PackedInt32Array::slice` 给 0 支报 2、`Array::duplicate` 给 2 支报 1，与 `cb636c.gd` 的脚本方法 `top(a, b = 1, c = 2)` 给 0 支报 1 对照）。 */
 function callableCall(box: CallableBox, args: Variant[]): Variant {
   if (isNullCallable(box)) {
     throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
@@ -684,7 +760,7 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   if (bounds !== null) {
     const given = keptCallArgs(box, args).length + boundArgsOf(box).length;
     if (given < bounds[0] || given > bounds[1]) {
-      const n = given < bounds[0] ? bounds[0] : bounds[1];
+      const n = box.builtin !== null || given > bounds[1] ? bounds[1] : bounds[0];
       throw new GodotRuntimeError(
         "callable-arity",
         `Invalid call to function '${callableCallLabel(box)} (Callable)'. Expected ${n} argument(s).`,
@@ -694,10 +770,9 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   return callCallableBox(box, args);
 }
 
-/** `unbind(n)` 的实参：只量过 0 与正 int；负数、float、缺参与多参之外的那几形没读数，响亮拒。 */
+/** `unbind(n)` 的实参：元数由 `callableMethod` 入口那句守住（只可能是一支），这里只管值 ——
+ *  只量过 0 与正 int；负数、float、缺参与多参之外的那几形没读数，响亮拒。 */
 function unbindCountArg(args: readonly Variant[]): number {
-  if (args.length === 0) throw new GodotRuntimeError("arity", `Too few arguments for "unbind()" call. Expected at least 1 but received 0.`);
-  if (args.length > 1) throw new GodotRuntimeError("arity", `Too many arguments for "unbind()" call. Expected at most 1 but received ${String(args.length)}.`);
   const v = args[0] as Variant;
   if (v.t !== Tag.INT) throw new UnsupportedError("callable-unbind-arg", `Callable.unbind() 的实参只量过 int（收到 ${tagName(v.t)}）`);
   const n = intToNum(v.v as IntPayload);
@@ -754,6 +829,8 @@ const CALLABLE_METHOD_NAMES = new Set([
 ]);
 
 function callableMethod(box: CallableBox, name: string, args: Variant[]): Variant {
+  const cbSay = nativeAritySay("Callable", name, args.length);
+  if (cbSay !== null) throw new GodotRuntimeError("callable-arity", cbSay);
   const bound = boundArgsOf(box);
   const empty = isNullCallable(box);
   switch (name) {
@@ -767,18 +844,17 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       if (box.unbindCount > 0) {
         // `bind()` 落在 unbind 腾出的那些位上：绑定串本身不动，`unbind` 的计数按绑的支数减（`tmp/probe-unbind/{y1,y2,y3,y5}.gd`）
         for (const b of bound) next.push(b);
-        return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, null, null, 0, null, box.unbindCount - args.length < 0 ? 0 : box.unbindCount - args.length));
+        return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, box.builtin, box.builtinBounds, 0, box.builtinSnap, box.unbindCount - args.length < 0 ? 0 : box.unbindCount - args.length));
       }
       for (const a of args) next.push(a);
       for (const b of bound) next.push(b);
-      return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
+      // 内建类型面那三样要跟着带过去：绑完之后印的还是 `String::count`，`get_argument_count()` 给「声明数 − 已绑」（3 支绑 1 给 2），
+      // 越元数仍发那句（`tmp/probe637/{args,bind,bindcall}.gd`：`count.bind(1,2,3).call("a")` 报 Expected 3、`to_vector2_array.bind(1).call()` 报 Expected 0）
+      return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, box.builtin, box.builtinBounds, 0, box.builtinSnap));
     }
     case "bindv": {
       if (box.detachedOwner !== null || box.invalidMethod) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bindv() 那一形没量过");
       // S571：bindv 与 bind 同一支（新绑的实参排在旧绑定串之前，get_bound_arguments 实测 `max.bind(1).bindv([2])` 给 [2, 1]）；空数组原样回同一只
-      if (args.length !== 1) {
-        throw new UnsupportedError("callable-bindv-arity", "bindv() 的元数没量过（只量过恰好 1 个 Array 实参）");
-      }
       const arr = args[0] as Variant;
       if (!(arr.v instanceof GArray)) {
         throw new GodotRuntimeError(
@@ -1020,7 +1096,24 @@ function readOnlyWrite(at: string, kind: "Array" | "Dictionary", name: string): 
 
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
-  if (obj.t === Tag.STRING_NAME) return method(V.str(obj.v as string), name, args);
+  if (obj.t === Tag.STRING_NAME) {
+    // 重装箱成 String 去派发，但「方法不存在」那一句的 base 要印 `StringName`（u11 的读数）。
+    // 名册先过一遍：String 有的六名 `chr / humanize_size / num / num_int64 / num_scientific / num_uint64` 在 StringName 面上引擎说无
+    // （读数 `tmp/probe639/call.gd` 三格一字一样），不先拦就会拿 String 的派发去算值或发中文自述。
+    if (!faceMemberKnown("StringName", name)) {
+      throw new GodotRuntimeError("stringname-no-method", `Invalid call. Nonexistent function '${name}' in base 'StringName'.`);
+    }
+    const snSay = nativeAritySay("StringName", name, args.length);
+    if (snSay !== null) throw new GodotRuntimeError("stringname-arity", snSay);
+    try {
+      return method(V.str(obj.v as string), name, args);
+    } catch (e) {
+      if (e instanceof GodotRuntimeError && e.code === "string-no-method") {
+        throw new GodotRuntimeError("stringname-no-method", `Invalid call. Nonexistent function '${name}' in base 'StringName'.`);
+      }
+      throw e;
+    }
+  }
 
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
@@ -1028,14 +1121,31 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GdNativeClass) {
       throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（实测 Node.new() 造得出实例、我们不发）`);
     }
+    const vecFace =
+      inner instanceof GVector2 ? "Vector2" :
+      inner instanceof GVector3 ? "Vector3" :
+      inner instanceof GVector4 ? "Vector4" :
+      inner instanceof GVector4i ? "Vector4i" :
+      inner instanceof GVector2i ? "Vector2i" :
+      inner instanceof GVector3i ? "Vector3i" : "";
+    if (vecFace !== "") {
+      const vecSay = nativeAritySay(vecFace, name, args.length);
+      if (vecSay !== null) throw new GodotRuntimeError("vector-arity", vecSay);
+    }
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector4) return vector4Method(inner, name, args);
     if (inner instanceof GVector4i) return vector4iMethod(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
-    if (inner instanceof GColor) return colorMethod(inner, name, args);
+    if (inner instanceof GColor) {
+      const colSay = nativeAritySay("Color", name, args.length);
+      if (colSay !== null) throw new GodotRuntimeError("color-arity", colSay);
+      return colorMethod(inner, name, args);
+    }
     if (inner instanceof GBytes) {
+      const packSay = nativeAritySay(packTypeName(inner.kind), name, args.length);
+      if (packSay !== null) throw new GodotRuntimeError("packed-arity", packSay);
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
@@ -1056,6 +1166,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
 
     if (inner instanceof Signal) {
+      const sgSay = nativeAritySay("Signal", name, args.length);
+      if (sgSay !== null) throw new GodotRuntimeError("signal-arity", sgSay);
       if (name === "emit") {
         inner.emitList(args);
         return V.nil();
@@ -1151,7 +1263,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
 
     const npv = asNodePath(obj);
-    if (npv !== null) return nodePathMethod(npv, name, args);
+    if (npv !== null) {
+      const npSay = nativeAritySay("NodePath", name, args.length);
+      if (npSay !== null) throw new GodotRuntimeError("node-path-arity", npSay);
+      if (name === "slice") {
+        const begin = nodePathSliceArg(args, 0);
+        const end = args.length > 1 ? nodePathSliceArg(args, 1) : NODE_PATH_SLICE_END_DEFAULT;
+        return V.object(nodePathSlice(npv, begin, end));
+      }
+      return nodePathMethod(npv, name, args);
+    }
 
     if (isWeakRefBox(inner)) {
       if (name !== "get_ref") {
@@ -1317,7 +1438,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       return getMeta(obj, args[0] as Variant, args[1]);
     }
 
-    const direct = callSlot(inner, name, args);
+    const smSay = scriptMethodSay(inner, name, args);
+    if (smSay !== null) throw new GodotRuntimeError("script-method-arity", smSay);
+    const direct = callSlot(inner, name, scriptParamArgs(inner, name, args));
     if (direct !== null) return direct;
 
     const sd = descFor(inner);
@@ -1337,6 +1460,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   switch (obj.t) {
     case Tag.ARRAY: {
       const a = obj.v as GArray;
+      const arrSay = nativeAritySay("Array", name, args.length);
+      if (arrSay !== null) throw new GodotRuntimeError("array-arity", arrSay);
       const roAt = ARRAY_RO_WRITE[name];
       if (roAt !== undefined && a.isReadOnly()) return readOnlyWrite(roAt, "Array", name);
       switch (name) {
@@ -1540,7 +1665,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         default:
           // 这两个名在 Array 上**根本没有**：`join` 是 String 的方法（S171 量过），`concat` 是 JS 的 API —— S300 把 String / Array / Dictionary
           // 三族 180 个成员名一名一名过了裁判，只有 `concat` 是「我们表里有、引擎没这名字」那一格。接收者是推断出来的 var 时解析期放过，运行期给下面那句。
-          if (ARRAY_NO_METHOD.has(name)) {
+          if (!faceMemberKnown("Array", name)) {
             throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function '${name}' in base 'Array'.`);
           }
           throw new UnsupportedError("array-method", `Array.${name}() 未实现`);
@@ -1548,6 +1673,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     case Tag.DICT: {
       const d = obj.v as GDict;
+      const dictSay = nativeAritySay("Dictionary", name, args.length);
+      if (dictSay !== null) throw new GodotRuntimeError("dict-arity", dictSay);
       const roAt = DICT_RO_WRITE[name];
       if (roAt !== undefined && d.isReadOnly()) return readOnlyWrite(roAt, "Dictionary", name);
       switch (name) {
@@ -1659,12 +1786,14 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           d.sortKeys(sortLess);
           return V.nil();
         default:
-          if (DICT_NO_METHOD.has(name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
+          if (!faceMemberKnown("Dictionary", name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
       }
     }
     case Tag.STRING: {
       const s = obj.v as string;
+      const strSay = nativeAritySay("String", name, args.length);
+      if (strSay !== null) throw new GodotRuntimeError("string-arity", strSay);
       switch (name) {
         case "length":
           return V.int(strLength(s));
@@ -2182,6 +2311,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.str(md5Hex(s));
         default:
+          if (!faceMemberKnown("String", name)) {
+            throw new GodotRuntimeError("string-no-method", `Invalid call. Nonexistent function '${name}' in base 'String'.`);
+          }
           throw new UnsupportedError("string-method", `String.${name}() 未实现`);
       }
     }
@@ -2443,7 +2575,7 @@ export function attribute(raw: unknown, name: string): unknown {
   }
   if (obj.t === Tag.STRING_NAME) {
     // StringName 那一面的成员表就是 String 那张（S389 一名一名量过），属性读同一条三分岔
-    if (valueAttrKind("StringName", name) === "absent") {
+    if (valueAttrKind("StringName", name) === "absent" || !faceMemberKnown("StringName", name)) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type 'StringName'.`);
     }
     const row = faceArity("StringName", name);
@@ -2453,7 +2585,7 @@ export function attribute(raw: unknown, name: string): unknown {
   if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
     const face = obj.t === Tag.STRING ? "String" : "Array";
     const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
-    if (absent.includes(name)) {
+    if (absent.includes(name) || !faceMemberKnown(face, name)) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
     }
     const row = faceArity(face, name);
@@ -2482,20 +2614,20 @@ export function attribute(raw: unknown, name: string): unknown {
         : obj.v instanceof GVector4 ? "Vector4" : obj.v instanceof GVector4i ? "Vector4i"
         : obj.v instanceof GColor ? "Color" : obj.v instanceof GdNodePath ? "NodePath" : null;
     if (vface !== null) {
-      // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8），表外名给引擎那句（`tmp/probe-vattr/box.gd` 七格）
+      // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8），表外名给引擎那句
+      // （`tmp/probe-vattr/box.gd` 七格 + `tmp/probe628/w2`：六支 vector 面的属性名在上面就先回了，这一判只落到非成员名）
       const kind = valueAttrKind(vface, name);
-      if (kind === "absent") {
+      if (kind === "absent" || ((VECTOR_FACES.has(vface) || vface === "NodePath") && !faceMemberKnown(vface, name))) {
         throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${vface}'.`);
       }
       const row = faceArity(vface, name);
       if (row !== null) return boundBuiltinCallable(obj, vface, name, row[0], row[1]);
     }
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
-    if (col !== null) return colorRead(col, V.str(name), "prop");
+    if (col !== null) return colorRead(col, V.str(name), "read");
     if (obj.v instanceof GBytes) {
-      // 属性面只量过三格（读数 `tmp/probe-attr/compare{1,2}.txt`）：表外名给 `Invalid access to property or key …`，
-      // 方法名当值引擎给的是 Callable（`PackedByteArray::size`）还没接，其余没量过的名字照旧响亮拒
-      if (packNameAbsent((obj.v as GBytes).kind, name)) {
+      // 属性面：表外名给 `Invalid access to property or key …`（w3 量过 PackedInt32Array 那一格），方法名当值给内建类型的绑定 Callable
+      if (packNameAbsent((obj.v as GBytes).kind, name) || !faceMemberKnown(packTypeName((obj.v as GBytes).kind), name)) {
         throw new GodotRuntimeError("packed-attribute", `Invalid access to property or key '${name}' on a base object of type '${packTypeName((obj.v as GBytes).kind)}'.`);
       }
       const row = faceArity(packTypeName((obj.v as GBytes).kind), name);
@@ -2593,6 +2725,21 @@ function foldInt(v: Variant, fail: string): number {
     return Math.trunc(n);
   }
   throw new UnsupportedError("need-int-arg", fail);
+}
+
+/** `slice` 的两界量过八源：int / bool / float 收下（float 截断、bool 折 1/0），String / StringName / Nil /
+ *  Vector2i / NodePath 给运行期那一句，位号取**第一个坏位**（`("a", "b")` 只报 1、`(1, "b")` 报 2）。
+ *  读数 `tmp/probe644/np2boxed.gd` 的 m2..m11。 */
+const NP_SLICE_ARG_SAY: Record<string, boolean> = { String: true, StringName: true, Nil: true, Vector2i: true, NodePath: true };
+
+function nodePathSliceArg(args: readonly Variant[], i: number): number {
+  const a = args[i] as Variant;
+  if (a.t === Tag.INT || a.t === Tag.BOOL || a.t === Tag.FLOAT) return foldInt(a, "");
+  const src = valueTypeName(a);
+  if (NP_SLICE_ARG_SAY[src] === true) {
+    throw new GodotRuntimeError("node-path-slice-arg", `Invalid type in function 'slice' in base 'NodePath'. Cannot convert argument ${String(i + 1)} from ${src} to int.`);
+  }
+  throw new UnsupportedError("node-path-slice-arg", `NodePath.slice() 的第 ${String(i + 1)} 位收到 ${src}，这一源的形状没量过`);
 }
 
 /** bool 位上的实参：int / float 按「不等于 0」折，NaN 也算不等 0（`"abc".split("a", NAN, 1)` 走的是 allow_empty 真那一支）。 */

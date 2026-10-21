@@ -1,0 +1,6 @@
+A|1|1|0|1.0|1.0|1.5
+B|true|false|true|false|a|a
+C|1.0|7|7|3|2|7
+D|1|1.0|true|a|a|3.0
+E|2 3 1 4 21
+F|3|-1|-2.0|true|true

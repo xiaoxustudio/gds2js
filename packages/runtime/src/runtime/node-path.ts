@@ -117,6 +117,41 @@ export function emptyNodePath(): Variant {
 /** 零实参的六支名（元数句与返回值都在 4.6.3 一支一名量过，探头 `tmp/probe-nodepath/h-*.gd`）。 */
 const NP_ZERO_ARG = ["get_concatenated_names", "get_concatenated_subnames", "get_name_count", "get_subname_count", "is_absolute", "is_empty", "get_as_property_path"];
 
+/** `slice(begin, end)` 的 `end` 缺省值：`extension_api` 给的是 `2147483647` 而不是 `-1`，所以「省略」与「显式
+ *  给 -1」是两形（实测 `a/b:1/2` 的 `slice(0)` 给 `a/b:1/2`、`slice(0, -1)` 给 `a/b`，读数 `tmp/probe644/`）。 */
+export const NODE_PATH_SLICE_END_DEFAULT = 2147483647;
+
+/** 一界折成 `[0, total]` 内的下标：先夹到 `[-total, total]`，负数再加 `total`（引擎的 `CLAMP` + `+= total_count`）。 */
+function sliceBound(raw: number, total: number): number {
+  const c = Math.min(Math.max(raw, -total), total);
+  return c < 0 ? c + total : c;
+}
+
+/** `Vector<StringName>::slice` 在引擎侧的形状：两界夹到本表长度，`begin > end` 给空表（引擎那一句带它自己的
+ *  `core/templates/vector.h` 文件行号，按既有口径不复刻）。 */
+function vecSlice(list: readonly string[], begin: number, end: number): string[] {
+  const size = list.length;
+  const b = Math.min(Math.max(begin, 0), size);
+  const e = Math.min(Math.max(end, 0), size);
+  if (b > e) return [];
+  return list.slice(b, e);
+}
+
+/** `slice()` 的整条算法（两趟共 342 形读数 `tmp/probe644/{npval,np2boxed}.raw.txt`，式子与 4.6.3 的 `NodePath::slice` 逐句对过）：
+ *  名字段与子名段共用一条 `[-total, total]` 的下标轴，`sub_begin = max(begin - name_count, 0)` 断子名那截，
+ *  **绝对位只在 `begin === 0` 时保留**（于是 `/a/b/c` 的 `slice(1)` 是 `b/c`、`slice(0, 0)` 是 `/`），
+ *  而空名字表 + 绝对位就是 `/`（`is_empty()` 假）。 */
+export function nodePathSlice(p: GdNodePath, beginRaw: number, endRaw: number): GdNodePath {
+  const nameCount = p.names.length;
+  const total = nameCount + p.subnames.length;
+  const begin = sliceBound(beginRaw, total);
+  const end = sliceBound(endRaw, total);
+  const names = vecSlice(p.names, begin, end);
+  const subnames = vecSlice(p.subnames, Math.max(begin - nameCount, 0), Math.max(end - nameCount, 0));
+  const absolute = p.absolute && begin === 0;
+  return new GdNodePath(absolute, names, subnames, isEmptyPath(absolute, names, subnames));
+}
+
 /** 一支下标的两支（`get_name` / `get_subname`）：结果给 StringName，实测 typeof 21。 */
 const NP_ONE_ARG = ["get_name", "get_subname"];
 
@@ -135,7 +170,8 @@ export function registerNodePathHashHook(f: (p: GdNodePath) => number): void {
   nodePathHashHook = f;
 }
 
-/** NodePath 的方法面：十支发出，越界那两形按 S267 ⑥ 拒，其余名给运行期那句 Nonexistent function。 */
+/** NodePath 的方法面：十支发出（`slice` 在 methods.ts 那侧先接，见 `nodePathSlice`），越界那两形按 S267 ⑥ 拒，
+ *  其余名给运行期那句 Nonexistent function。 */
 export function nodePathMethod(p: GdNodePath, name: string, args: readonly Variant[]): Variant {
   if (name === "hash") {
     if (nodePathHashHook === null) {

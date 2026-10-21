@@ -22,6 +22,17 @@ const code = (c: Variant, name: string): string => {
 const NONESUCH = (n: string): string => `[callable-method] Invalid call. Nonexistent function '${n}' in base 'Callable'.`;
 const TODO = (n: string): string => `[callable-method] Callable.${n}() 未实现`;
 
+/** 同一句式的取数版：元数守卫要读实参数，所以得有能带 args 的取句口。 */
+const codeWith = (c: Variant, name: string, args: Variant[]): string => {
+  try {
+    method(c, name, args);
+    return "没抛";
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    return `[${err.code ?? "?"}] ${err.message ?? ""}`;
+  }
+};
+
 describe("runtime/callable · 成员名表", () => {
   it("298 · 表外名给那句 Nonexistent（两种基同句），表内未实现的仍给「未实现」", async () => {
     const lam = callableOf((args: Variant[]): Variant => args[0] as Variant, 1);
@@ -34,10 +45,17 @@ describe("runtime/callable · 成员名表", () => {
       eq("298", `${n} 是抄来的清单污染：4.6.3 没这名字`, [code(lam, n), code(nul, n)].join(" | "), `${NONESUCH(n)} | ${NONESUCH(n)}`);
     }
 
-    for (const n of ["create", "rpc", "rpc_id"]) {
+    for (const n of ["rpc", "rpc_id"]) {
       eq("298", `${n} 存在但我们没那个式子：仍给「未实现」`, code(lam, n), TODO(n));
     }
-    eq("571", "bindv 缺实参给元数拒", code(lam, "bindv").startsWith("[callable-bindv-arity]"), true);
+    // `create` 的界是 [2,2]（引擎两支都要，S645 读数 f0 / f1 两向都报 Expected 2）：越界发那句元数，界内才轮到「未实现」
+    eq("298", "create 界内仍给「未实现」", codeWith(lam, "create", [nul, nul]), TODO("create"));
+    eq("645", "create 越界给引擎的元数句", code(lam, "create"), "[callable-arity] Invalid call to function 'create' in base 'Callable'. Expected 2 argument(s).");
+    eq("645", "bindv 缺实参给同一句元数", code(lam, "bindv"), "[callable-arity] Invalid call to function 'bindv' in base 'Callable'. Expected 1 argument(s).");
+    eq("645", "unbind 越界两向同一句、数取声明的全部", [code(lam, "unbind"), codeWith(lam, "unbind", [nul, nul, nul])].join(" | "),
+      "[callable-arity] Invalid call to function 'unbind' in base 'Callable'. Expected 1 argument(s). | [callable-arity] Invalid call to function 'unbind' in base 'Callable'. Expected 1 argument(s).");
+    eq("645", "is_null 给 1 支报 0", codeWith(lam, "is_null", [nul]), "[callable-arity] Invalid call to function 'is_null' in base 'Callable'. Expected 0 argument(s).");
+    eq("645", "bind 是变参：零支原样收下", code(lam, "bind"), "没抛");
     eq("571", "hash 对 lambda 拒（宿主标识）", code(lam, "hash").startsWith("[hash-callable]"), true);
     eq("571", "get_object_id 对 lambda 拒（宿主脚本对象号）", code(lam, "get_object_id").startsWith("[callable-object-id-lambda]"), true);
     eq("571", "is_custom / is_standard 已发值", `${String(((method(lam, "is_custom", [])) as Variant).v)}/${String(((method(lam, "is_standard", [])) as Variant).v)}`, "true/false");

@@ -263,11 +263,10 @@ describe("runtime/methods · 装箱接收者的成员名读也发绑定 Callable
     eq("428", "get_argument_count 带得上", String(method(attribute(a, "append") as Variant, "get_argument_count", []).v), "1");
   });
 
-  it("两份名单之外的那一名不许冒充引擎那句", () => {
+  it("两份名单之外的那一名也发引擎那句（S631 量过）", () => {
     const a = V.array(new GArray([I(1)]));
-    const msg = errText(() => attribute(a, "zzzquantum"));
-    eq("428", "不发 Invalid access", /Invalid access/.test(msg), false);
-    eq("428", "不发 Callable", /::/.test(msg), false);
+    eq("631", "Array 面怪名字", errText(() => attribute(a, "zzzquantum")),
+      "Invalid access to property or key 'zzzquantum' on a base object of type 'Array'.");
   });
 });
 

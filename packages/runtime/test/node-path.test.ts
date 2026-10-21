@@ -91,7 +91,7 @@ describe("runtime · NodePath 一族", () => {
       show(method(np("/"), "get_as_property_path", [])),
       show(method(np("a" + "\\" + ":b"), "get_as_property_path", [])),
     ].join("|"), ":a/b|:a/b:1|:x|/|:a\\:b");
-    eq("264", "六支的元数句一支一名（实测 m1–m6 与 P2–P4）", [
+    eq("264", "六支的元数句一支一名（装箱直调那一族，读数 `tmp/probe636/np642.gd`；旧钉抄的是解析期句，S642 改正）", [
       code(() => method(p, "get_name_count", [I(1)])),
       code(() => method(p, "get_name", [])),
       code(() => method(p, "get_name", [I(0), I(1)])),
@@ -99,13 +99,13 @@ describe("runtime · NodePath 一族", () => {
       code(() => method(p, "is_absolute", [I(1)])),
       code(() => method(p, "get_as_property_path", [I(1)])),
     ].join(" | "), [
-      'Too many arguments for "get_name_count()" call. Expected at most 0 but received 1.',
-      'Too few arguments for "get_name()" call. Expected at least 1 but received 0.',
-      'Too many arguments for "get_name()" call. Expected at most 1 but received 2.',
-      'Too few arguments for "get_subname()" call. Expected at least 1 but received 0.',
-      'Too many arguments for "is_absolute()" call. Expected at most 0 but received 1.',
-      'Too many arguments for "get_as_property_path()" call. Expected at most 0 but received 1.',
-    ].map((s) => `[arity] ${s}`).join(" | "));
+      "[node-path-arity] Invalid call to function 'get_name_count' in base 'NodePath'. Expected 0 argument(s).",
+      "[node-path-arity] Invalid call to function 'get_name' in base 'NodePath'. Expected 1 argument(s).",
+      "[node-path-arity] Invalid call to function 'get_name' in base 'NodePath'. Expected 1 argument(s).",
+      "[node-path-arity] Invalid call to function 'get_subname' in base 'NodePath'. Expected 1 argument(s).",
+      "[node-path-arity] Invalid call to function 'is_absolute' in base 'NodePath'. Expected 0 argument(s).",
+      "[node-path-arity] Invalid call to function 'get_as_property_path' in base 'NodePath'. Expected 0 argument(s).",
+    ].join(" | "));
     eq("264", "越界拒（实测 P6 / dynidx：引擎打的是带 core/string/ 行号的 ERROR）", [
       code(() => method(np("a"), "get_name", [I(3)])),
       code(() => method(np("a"), "get_name", [I(-1)])),

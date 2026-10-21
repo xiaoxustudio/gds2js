@@ -19,10 +19,13 @@ import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import {
   ARRAY_METHOD_ARITY,
+  DICT_METHOD_ARITY,
+  FACE_EXISTS_BEYOND_ARITY,
   NODE_PATH_METHOD_ARITY,
   PACK_METHOD_ARITY,
   PACK_METHOD_ARITY_WITH_BYTES,
   STRING_METHOD_ARITY,
+  STRING_NAME_METHOD_ARITY,
   VALUE_METHOD_ARITY,
   valueAttrKind,
 } from "@gds2js/runtime/runtime/face-arity";
@@ -176,8 +179,42 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   return diags;
 }
 
+/** 赋值目标的变量名：`x = …` 与 `self.x = …` 同一格（S618 读数 e1 / e2）。 */
+function assignTargetName(t: unknown): string | null {
+  const o = t as Record<string, unknown> | null;
+  if (o === null || typeof o !== "object") return null;
+  if (o.kind === "ident" && typeof o.name === "string") return o.name;
+  const obj = o.obj as Record<string, unknown> | undefined;
+  if (o.kind === "attribute" && typeof o.name === "string" && obj?.name === "self") return o.name;
+  return null;
+}
+
+/** 字面量容器自己的文本：非空的那一形按首个元素 / 首格的键值推（q4 给 `Array[int]`），空的那一形没量、留基名。 */
+function literalFaceText(e: Expr, kind: string): string {
+  if (e.kind === "array") {
+    for (const it of e.items) if (slotSource(it) !== "int") return kind;
+    return "Array[int]";
+  }
+  if (e.kind === "dict") {
+    for (const en of e.entries) if (slotSource(en.key) !== "int") return kind;
+    return "Dictionary[int, Variant]";
+  }
+  return kind;
+}
+
+/** 只认没量的那一族之外的源名：容器、`Variant` 与脚本类名各自走自己那一支（r1..r7 量的是标量与 `null`）。 */
+function scalarSourceName(st: string, classNames: Set<string>): boolean {
+  return !isCollText(st) && st !== "Variant" && st !== "Array" && st !== "Dictionary" && !classNames.has(st);
+}
+
+
+/** 标注文本是不是定形容器（嵌套那一形引擎另有句子，不进这一支） */
+function isCollText(name: string): boolean {
+  return /^(Array|Dictionary)\[[^\[]+\]$/.test(name);
+}
+
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
-  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc }> = [
+  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc; varName?: string; srcAnn?: TypeRef | null; fnName?: string; fnPos?: number; assignStmt?: boolean }> = [
     ...m.vars.map((v) => ({ type: v.type, init: v.init, loc: v.loc })),
     ...m.funcs.flatMap((f) => [
       ...f.params.map((p) => ({ type: p.type, init: p.default, loc: f.loc })),
@@ -207,14 +244,20 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   const fnParams = new Map<string, (TypeRef | null)[]>();
   for (const f of m.funcs) fnParams.set(f.name, f.params.map((p) => p.type));
   const walkStmts = (stmts: Stmt[], retType: TypeRef | null): void => {
+    if (retType === null) locals.clear();
     for (const s of stmts) {
-      if (s.kind === "var") targets.push({ type: s.type, init: s.init, loc: s.loc });
+      if (s.kind === "var") {
+        const srcAnn = s.init !== null && s.init.kind === "ident" ? locals.get(s.name === undefined ? "" : (s.init as Record<string, unknown>).name as string) ?? null : null;
+        targets.push({ type: s.type, init: s.init, loc: s.loc, varName: s.name, srcAnn });
+        if (s.name !== undefined && s.type !== null && !locals.has(s.name)) locals.set(s.name, s.type);
+      }
       else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body, retType);
       else if (s.kind === "for" || s.kind === "while") walkStmts(s.body, retType);
       else if (s.kind === "return" && retType !== null) targets.push({ type: retType, init: s.value, loc: s.loc });
-      else if (s.kind === "assign" && s.target.kind === "ident") {
-        const decl = typedVars.get(s.target.name);
-        if (decl !== undefined) targets.push({ type: decl, init: s.value, loc: s.loc });
+      else if (s.kind === "assign" && assignTargetName(s.target) !== null) {
+        const name = assignTargetName(s.target) as string;
+        const decl = typedVars.get(name) ?? locals.get(name);
+        if (decl !== undefined) targets.push({ type: decl, init: s.value, loc: s.loc, srcAnn: srcAnnOf(s.value), assignStmt: true });
       } else walkExprs(s, retType);
     }
   };
@@ -228,13 +271,13 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     const o = n as Record<string, unknown>;
     if (o.kind === "var") {
       const t = o.type as TypeRef | null;
-      if (t !== null) targets.push({ type: t, init: (o.init as Expr | null) ?? null, loc: o.loc as Loc });
+      if (typeof o.name === "string" && t !== null && !locals.has(o.name)) locals.set(o.name, t);
     }
     if (o.kind === "return" && retType !== null) targets.push({ type: retType, init: (o.value as Expr | null) ?? null, loc: o.loc as Loc });
-    if (o.kind === "assign" && retType !== null && (o.target as Record<string, unknown> | undefined)?.kind === "ident") {
-      const name = (o.target as Record<string, unknown>).name;
-      const decl = typeof name === "string" ? typedVars.get(name) : undefined;
-      if (decl !== undefined) targets.push({ type: decl, init: o.value as Expr, loc: o.loc as Loc });
+    if (o.kind === "assign" && retType !== null) {
+      const name = assignTargetName(o.target);
+      const decl = name === null ? undefined : typedVars.get(name) ?? locals.get(name);
+      if (decl !== undefined) targets.push({ type: decl, init: o.value as Expr, loc: o.loc as Loc, srcAnn: srcAnnOf(o.value as Expr), assignStmt: true });
     }
     if (o.kind === "call" && Array.isArray(o.args)) {
       const callee = o.callee as Record<string, unknown>;
@@ -244,7 +287,9 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
           const args = o.args as Expr[];
           for (let i = 0; i < args.length && i < pt.length; i++) {
             const t = pt[i];
-            if (t !== undefined && t !== null) targets.push({ type: t, init: args[i] ?? null, loc: args[i]!.loc });
+            const arg0 = args[i] ?? null;
+            const argAnn: TypeRef | null = arg0 !== null && arg0.kind === "ident" ? locals.get((arg0 as unknown as Record<string, unknown>).name as string) ?? null : null;
+            targets.push({ type: t ?? null, init: arg0, loc: args[i]!.loc, srcAnn: argAnn, fnName: callee.name, fnPos: i + 1 });
           }
         }
       }
@@ -253,6 +298,11 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       if (key !== "loc") walkExprs(o[key], retType);
     }
   };
+  /** 函数内已声明变量的标注文本（S616：定形容器之间赋值要按标注文本比对） */
+  /** 函数内已声明变量的标注文本（S616：定形容器之间赋值要按标注文本比对） */
+  const locals = new Map<string, TypeRef>();
+  /** 源的标注：标识符查函数内那张声明表，字面量与调用没有标注可查 */
+  const srcAnnOf = (e: Expr | null): TypeRef | null => (e !== null && e.kind === "ident" ? locals.get(e.name) ?? null : null);
   for (const f of m.funcs) walkStmts(f.body, f.returnType);
   const walkClass = (c: ClassDecl): void => {
     for (const f of c.funcs) walkStmts(f.body, f.returnType);
@@ -261,6 +311,76 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 
   for (const t of targets) {
+    // 实参位上的定形容器不合式：引擎发 `Invalid argument for "f()" function: argument N should be "<槽标注>" but is "<源标注>".`
+    //（读数 tmp/probe569/h3 / h4；`Array[int]` 装进 `Array[String]` 形也拒，容器之间不放宽）
+    const slotAnn = t.type !== null && t.type.kind === "named" ? t.type.name : null;
+    if (t.fnName !== undefined && t.fnPos !== undefined && slotAnn !== null && t.srcAnn !== undefined && t.srcAnn !== null &&
+        t.srcAnn.kind === "named" && (t.srcAnn.name.startsWith("Array[") || t.srcAnn.name.startsWith("Dictionary[")) &&
+        (slotAnn.startsWith("Array[") || slotAnn.startsWith("Dictionary[")) && t.srcAnn.name !== slotAnn) {
+      diags.push({
+        code: "typed-collection-param",
+        message: `Invalid argument for "${t.fnName}()" function: argument ${String(t.fnPos)} should be "${slotAnn}" but is "${t.srcAnn.name}".`,
+        loc: t.loc,
+      });
+      continue;
+    }
+    // 定形容器 → 另一个定形容器的赋值：引擎按**标注文本**比对，不同就在解析期拒（读数 tmp/probe569/g1 / g2 / g5 / g6，同标注收下见 g9）
+    const targetAnn = t.type !== null && t.type.kind === "named" ? t.type.name : null;
+    // 已声明的定形容器变量再赋值：定形源不合式是解析期另一句（读数 tmp/probe618/e1..e3），不定型源才留到运行期
+    if (t.assignStmt === true && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null &&
+      t.srcAnn.kind === "named" && isCollText(t.srcAnn.name) && t.srcAnn.name !== targetAnn) {
+      diags.push({
+        code: "typed-collection-assign-value",
+        message: `Value of type "${t.srcAnn.name}" cannot be assigned to a variable of type "${targetAnn}".`,
+        loc: t.loc,
+      });
+      continue;
+    }
+    if (t.varName !== undefined && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null && t.srcAnn.kind === "named" &&
+      (t.srcAnn.name.startsWith("Array[") || t.srcAnn.name.startsWith("Dictionary[")) && t.srcAnn.name !== targetAnn) {
+      diags.push({
+        code: "typed-collection-assign",
+        message: `Cannot assign a value of type ${t.srcAnn.name} to variable "${t.varName}" with specified type ${targetAnn}.`,
+        loc: t.loc,
+      });
+      continue;
+    }
+    // 标量源与交叉容器源进定形槽：声明位两句（q2 / q3），字面量交叉只发第二句（q4），再赋值位一句（q5）
+    if (t.varName !== undefined && targetAnn !== null && isCollText(targetAnn) && t.init !== null) {
+      const srcKind = t.init.kind === "array" ? "Array" : t.init.kind === "dict" ? "Dictionary" : null;
+      const wantKind = targetAnn.startsWith("Array") ? "Array" : "Dictionary";
+      if (srcKind !== null && srcKind !== wantKind) {
+        diags.push({
+          code: "typed-collection-assign",
+          message: `Cannot assign a value of type ${literalFaceText(t.init, srcKind)} to variable "${t.varName}" with specified type ${targetAnn}.`,
+          loc: t.loc,
+        });
+        continue;
+      }
+      const st = srcKind === null ? slotSource(t.init) : null;
+      if (st !== null && scalarSourceName(st, classNames)) {
+        diags.push({
+          code: "typed-collection-assign-as",
+          message: `Cannot assign a value of type "${st}" as "${targetAnn}".`,
+          loc: t.loc,
+        });
+        diags.push({
+          code: "typed-collection-assign",
+          message: `Cannot assign a value of type ${st} to variable "${t.varName}" with specified type ${targetAnn}.`,
+          loc: t.loc,
+        });
+        continue;
+      }
+    }
+    if (t.assignStmt === true && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null &&
+      t.srcAnn.kind === "named" && scalarSourceName(t.srcAnn.name, classNames)) {
+      diags.push({
+        code: "typed-collection-assign-value",
+        message: `Value of type "${t.srcAnn.name}" cannot be assigned to a variable of type "${targetAnn}".`,
+        loc: t.loc,
+      });
+      continue;
+    }
     if (t.type === null || t.type.kind !== "named") continue;
     const m2 = /^(Array|Dictionary)\[(.+)\]$/.exec(t.type.name);
     if (m2 === null) continue;
@@ -276,14 +396,43 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     if (t.init === null) continue;
     /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格）。
      *  内部型是脚本类名时只发第二句（`Array[Inner]` 那一格，读数 `tmp/d6/n1.txt`）。 */
-    const holds = (kind: string, st: NonNullable<StaticType>): boolean =>
-      classNames.has(kind)
-        ? st === kind
-        : NATIVE_CLASS_SLOTS.has(kind)
-          ? st === "null" || st === kind
-          : canHold(kind, st);
+    /** `<类名>.new()` 的静态型就是那个类名（s5 的 `Two.new()` 进 `Array[One]` 要报元素那一句）。 */
+    const slotOf = (e: Expr): NonNullable<StaticType> | null => {
+      if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.name === "new" && e.callee.obj.kind === "ident" && classNames.has(e.callee.obj.name)) return e.callee.obj.name as NonNullable<StaticType>;
+      return slotSource(e);
+    };
+    /** 类名槽按**亲缘**放行：w2 子进父、w3 父进子都收，s5 两支无关系的类照拒。 */
+    const parentOf = new Map<string, string>();
+    const collectParents = (c: ClassDecl): void => {
+      if (c.extends !== null && c.extends !== "") parentOf.set(c.name, c.extends);
+      for (const inner of c.innerClasses) collectParents(inner);
+    };
+    for (const c of m.innerClasses) collectParents(c);
+    const related = (a: string, b: string): boolean => {
+      for (let x: string | undefined = a; x !== undefined; x = parentOf.get(x)) if (x === b) return true;
+      for (let x: string | undefined = b; x !== undefined; x = parentOf.get(x)) if (x === a) return true;
+      return false;
+    };
+    /** 脚本类的**原生根基类**：没写 `extends` 的内部类是 `RefCounted`（q7 / v15 量过），写了宿主基类的照那一名。 */
+    const nativeRoot = (x: string): string => {
+      let cur: string | undefined = x;
+      for (let guard = 0; guard < 16 && cur !== undefined; guard++) {
+        const p = parentOf.get(cur);
+        if (p === undefined) return classNames.has(cur) ? "RefCounted" : cur;
+        if (!classNames.has(p)) return p;
+        cur = p;
+      }
+      return "RefCounted";
+    };
+    const isObjectFace = (x: string): boolean => classNames.has(x) || NATIVE_CLASS_SLOTS.has(x);
+    const holds = (kind: string, st: NonNullable<StaticType>): boolean => {
+      if (st === "null") return true;
+      if (NATIVE_CLASS_SLOTS.has(kind)) return kind === "Object" ? isObjectFace(st) : isObjectFace(st) && nativeRoot(st) === kind;
+      if (classNames.has(kind)) return classNames.has(st) && related(kind, st);
+      return canHold(kind, st);
+    };
     const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
-      if (!classNames.has(kind) && !NATIVE_CLASS_SLOTS.has(kind)) {
+      if (!isObjectFace(kind) && !isObjectFace(st)) {
         diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
       }
       diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
@@ -294,7 +443,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         let done = false;
         for (const it of t.init.items) {
           if (done) break;
-          const st = slotSource(it);
+          const st = slotOf(it);
           if (st === null || holds(kind, st)) continue;
           done = true;
           report(st, kind, `Cannot have an element of type "${st}" in an array of type "Array[${kind}]".`);
@@ -309,13 +458,13 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         let done = false;
         for (const en of t.init.entries) {
           if (done) break;
-          const ks = slotSource(en.key);
+          const ks = slotOf(en.key);
           if (ks !== null && !holds(keyKind, ks)) {
             done = true;
             report(ks, keyKind, `Cannot have a key of type "${ks}" in a dictionary of type "${text}".`);
             break;
           }
-          const vs = slotSource(en.value);
+          const vs = slotOf(en.value);
           if (vs !== null && !holds(valKind, vs)) {
             done = true;
             report(vs, valKind, `Cannot have a value of type "${vs}" in a dictionary of type "${text}".`);
@@ -444,12 +593,34 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   collectInits(m.vars, moduleSeeds);
   for (const c of m.innerClasses) collectInitClasses(c);
 
+  /** 本文件的脚本类名与它的 `extends` 名（`""` 是没写）：字典槽的类名判据要沿这条链（S625 的 y1..y5）。 */
+  const scriptNames = new Map<string, string>();
+  const collectNames = (c: ClassDecl): void => {
+    scriptNames.set(c.name, c.extends ?? "");
+    for (const inner of c.innerClasses) collectNames(inner);
+  };
+  for (const c of m.innerClasses) collectNames(c);
+  const subOf = (x: string, base: string): boolean => {
+    let cur: string | undefined = x;
+    for (let guard = 0; guard < 16 && cur !== undefined; guard++) {
+      if (cur === base) return true;
+      const p = scriptNames.get(cur);
+      if (p === undefined || p === "") return false;
+      cur = p;
+    }
+    return false;
+  };
+  const ctorClass = (e: Expr): string | null => {
+    if (e.kind !== "call" || e.callee.kind !== "attribute" || e.callee.name !== "new" || e.callee.obj.kind !== "ident") return null;
+    return scriptNames.has(e.callee.obj.name) ? e.callee.obj.name : null;
+  };
+
   const stOf = (e: Expr, decls: Map<string, string>): NonNullable<StaticType> | null => {
     if (e.kind === "ident") {
       const d = decls.get(e.name);
       return d === undefined ? null : (d as NonNullable<StaticType>);
     }
-    return slotSource(e) ?? (callType(e) as NonNullable<StaticType> | null);
+    return (ctorClass(e) as NonNullable<StaticType> | null) ?? slotSource(e) ?? (callType(e) as NonNullable<StaticType> | null);
   };
 
   const badKey = (slot: TypedSlot, index: Expr, decls: Map<string, string>): void => {
@@ -467,6 +638,16 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
     if (slot.key === undefined) return;
     if (st === "null") return;
+    // 字典的键位只收**同名**脚本类：子类（y1）、父类（y5）、异类（y2 / v13）引擎全拒
+    if (scriptNames.has(slot.key)) {
+      if (st === slot.key) return;
+      diags.push({
+        code: "typed-index-key",
+        message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
+        loc: index.loc,
+      });
+      return;
+    }
     // 字典键不做 Vector4 ↔ Vector4i 的槽转换：字面量键那一形引擎解析期拒（S586，`Dictionary[Vector4, …]` 配 `Vector4i` 字面量键）
     if ((slot.key === "Vector4" && st === "Vector4i") || (slot.key === "Vector4i" && st === "Vector4")) {
       diags.push({
@@ -565,9 +746,19 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  const valueMsg = (slotKind: string, value: Expr, index: Expr, decls: Map<string, string>): void => {
+  const valueMsg = (slotKind: string, value: Expr, index: Expr, decls: Map<string, string>, dictSlot = false): void => {
     const st = stOf(value, decls);
     if (st === null || st === "null") return;
+    // 字典的值位按**类族**判：子类实例收（y3），异类只发第二句（y4）—— 数组那一形没量，不走这支。
+    if (dictSlot && scriptNames.has(slotKind)) {
+      if (st === slotKind || (scriptNames.has(st) && subOf(st, slotKind))) return;
+      diags.push({
+        code: "typed-index-assign",
+        message: `Value of type "${st}" cannot be assigned to a variable of type "${slotKind}".`,
+        loc: value.loc,
+      });
+      return;
+    }
     if (canHold(slotKind, st)) return;
     const literalIndex = index.kind === "lit";
     if (literalIndex) {
@@ -620,7 +811,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
               // 赋值那一侧引擎不挡（缺键就建键），所以这一格不登记成 int 键读
               if (slot.kind === "Dictionary" && stOf(s.target.index, decls) === "int") dictIntReads.delete(diKey(s.target.loc.line, s.target.loc.col));
               const kind = slot.kind === "Array" ? slot.elem : slot.val;
-              if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls);
+              if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls, slot.kind === "Dictionary");
             }
           }
           if (!handledTarget) walkExpr(s.target, typed, decls);
@@ -1974,7 +2165,8 @@ function flattenBodies(m: Module): Record<string, unknown>[][] {
  *  `Array.resize(1)` 之类引擎发的是「非静态那一句」，表外名发的是「找不到成员那两句」，**不是**「未声明的标识符」。 */
 function classFaceArity(t: string): Record<string, [number, number]> | undefined {
   if (t === "Array") return ARRAY_METHOD_ARITY;
-  if (t === "String" || t === "StringName") return STRING_METHOD_ARITY;
+  if (t === "String") return STRING_METHOD_ARITY;
+  if (t === "StringName") return STRING_NAME_METHOD_ARITY;
   if (t === "NodePath") return NODE_PATH_METHOD_ARITY;
   if (t === "Dictionary") return DICT_METHOD_ARITY;
   return undefined;
@@ -2195,6 +2387,7 @@ function faceReceiverNames(
   type: string,
   isInit: (init: Expr) => boolean,
   annotOnly = false,
+  texts?: Map<string, string>,
 ): Set<string> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
   const out = new Set<string>();
@@ -2211,10 +2404,16 @@ function faceReceiverNames(
     }
     if (named(n.type as TypeRef | null)) {
       out.add(n.name);
+      if (texts !== undefined) {
+        const t = n.type as TypeRef | null;
+        if (t !== null && t.kind === "named") texts.set(n.name, t.name);
+      }
       continue;
     }
     const init = n.init as Expr | null;
-    if (!annotOnly && init !== null && isInit(init)) out.add(n.name);
+    // 初值只在**没写标注**那一形才证得出面：显式标注 `Variant` 的接收者引擎不在解析期开口，元数与成员名都留到
+    // 运行期那两句（读数 `tmp/probe644/ps645.compare.txt` 六面 × 四形）；不标注的推断形引擎就在解析期发句，照旧证面。
+    if (!annotOnly && n.type === null && init !== null && isInit(init)) out.add(n.name);
     else if (init === null || !isInit(init) || annotOnly) {
       if (annotOnly && named(n.type as TypeRef | null)) continue;
       out.delete(n.name);
@@ -2229,31 +2428,47 @@ function faceScopes(
   m: Module,
   type: string,
   isInit: (init: Expr) => boolean,
-): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> {
+): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[]; texts: Map<string, string> }> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
+  const annText = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" ? t.name : null);
   const moduleNames = new Map<string, "annot" | "inferred">();
+  const moduleTexts = new Map<string, string>();
   for (const v of m.vars) {
-    if (named(v.type)) moduleNames.set(v.name, "annot");
-    else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
+    if (named(v.type)) {
+      moduleNames.set(v.name, "annot");
+      const txt = annText(v.type);
+      if (txt !== null) moduleTexts.set(v.name, txt);
+    } else if (v.type === null && v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
   }
 
-  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> = [];
-  const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">): void => {
+  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[]; texts: Map<string, string> }> = [];
+  const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">, textsBase: Map<string, string>): void => {
     for (const f of funcs) {
       const seeded = new Map(seededBase);
-      for (const p of f.params) if (named(p.type)) seeded.set(p.name, "annot");
-      out.push({ nodes: flattenBody(f.body), seeded, body: f.body });
+      const texts = new Map(textsBase);
+      for (const p of f.params) {
+        if (named(p.type)) {
+          seeded.set(p.name, "annot");
+          const txt = annText(p.type);
+          if (txt !== null) texts.set(p.name, txt);
+        }
+      }
+      out.push({ nodes: flattenBody(f.body), seeded, body: f.body, texts });
     }
   };
-  collect(m.funcs, moduleNames);
+  collect(m.funcs, moduleNames, moduleTexts);
 
   const collectClass = (c: ClassDecl): void => {
     const fields = new Map<string, "annot" | "inferred">();
+    const fieldTexts = new Map<string, string>();
     for (const v of c.vars) {
-      if (named(v.type)) fields.set(v.name, "annot");
-      else if (v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
+      if (named(v.type)) {
+        fields.set(v.name, "annot");
+        const txt = annText(v.type);
+        if (txt !== null) fieldTexts.set(v.name, txt);
+      } else if (v.type === null && v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
     }
-    collect(c.funcs, fields);
+    collect(c.funcs, fields, fieldTexts);
     for (const inner of c.innerClasses) collectClass(inner);
   };
   for (const c of m.innerClasses) collectClass(c);
@@ -2288,16 +2503,6 @@ function containerCallArity(
   return arityDiag(table, code, method, ((n.args as Expr[]) ?? []).length, (n.loc as Diagnostic["loc"]) ?? null);
 }
 
-/** 632 格（158 个名字 × 四面）的裁判读数把「存在 / 表外」逐名判过一遍（尺 `tmp/probe-slice/round4.mts`，读数 `compare106.txt`）：
- *  存在名单 = 各面元数表的键 ∪ 下面这些「存在但没量元数」的名字，其余一律按表外发那两句。
- *  名单之外的成员名（我们没列进任何一面的表、也没量过的）会被误拦 —— 兜底的是那几张表本身就是**按引擎成员表逐名量出来的**
- *  （S378 / S379 / S380 三面 49+51+109 名过裁判），加上 `face-arg-allow-list` 那 1246 格与 `p2-t4` 那 1358 格都在替这张名单站岗。 */
-const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
-  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
-  Array: ["set"],
-  Dictionary: ["set", "is_typed", "is_same_typed"],
-};
-
 /** 接收者静态已知（字面量、标注变量、形参标注）而方法名在那一面的表外：引擎发的是解析期拒。
  *  `String` / `Array` / 八支 pack 是两句，`Dictionary` 只给第二句（16 格读数 `tmp/probe-slice/compare{104,105}.txt`）。
  *  推断来的名字与 `Variant` 装箱都不算静态 —— 那两形解析期放过、运行期才给 `Invalid call. Nonexistent function …`。 */
@@ -2308,6 +2513,7 @@ function faceGhostDiags(
   twoSentences: boolean,
   names: Set<string>,
   isLiteral: (obj: Record<string, unknown>) => boolean,
+  texts?: Map<string, string>,
 ): Diagnostic[] {
   if (n.kind !== "call") return [];
   const callee = n.callee as Record<string, unknown> | undefined;
@@ -2319,11 +2525,13 @@ function faceGhostDiags(
   if (typeof method !== "string" || method in table) return [];
   if ((FACE_EXISTS_BEYOND_ARITY[type] ?? []).includes(method)) return [];
   const loc = (n.loc as Diagnostic["loc"]) ?? null;
+  // 引擎那两句里的 base 印的是**标注全文**（S626 的 z1..z7：`Array[int]` / `Dictionary[One, int]`），判据仍用基名那一面。
+  const shown = obj.kind === "ident" && typeof obj.name === "string" ? texts?.get(obj.name) ?? type : type;
   const out: Diagnostic[] = [];
   if (twoSentences) {
-    out.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${type}".`, loc });
+    out.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${shown}".`, loc });
   }
-  out.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${type}.`, loc });
+  out.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${shown}.`, loc });
   return out;
 }
 
@@ -2633,7 +2841,7 @@ function chainRecvFace(e: Expr, ownerOf: (x: Expr) => string | null): string | n
 
 /** 链子那一形的元数表与那句的 code：三面名字面另有三张表，其余（值型五支 + pack 九支）共用 `VALUE_METHOD_ARITY`。 */
 function chainArityFace(face: string): { table: Record<string, [number, number]>; code: string } | null {
-  if (face === "String" || face === "StringName") return { table: STRING_METHOD_ARITY, code: face === "String" ? "string-arity" : "string-name-arity" };
+  if (face === "String" || face === "StringName") return { table: face === "String" ? STRING_METHOD_ARITY : STRING_NAME_METHOD_ARITY, code: face === "String" ? "string-arity" : "string-name-arity" };
   if (face === "NodePath") return { table: NODE_PATH_METHOD_ARITY, code: "node-path-arity" };
   return { table: VALUE_METHOD_ARITY[face] ?? {}, code: "value-arity" };
 }
@@ -2834,7 +3042,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const name = n.name;
       if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" || face === "StringName" ? STRING_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
+      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : face === "StringName" ? STRING_NAME_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
       const refused = PACK_TYPE_NAMES.has(face) || face === "Array" || face === "String";
       if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
         // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
@@ -2863,32 +3071,18 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   }
 }
 
-/** Dictionary 方法的元数（S378）：49 名过裁判，存在的 20 名两侧都量到（每名两格 —— 零实参读「至少」、三实参读「至多」，
- *  `tmp/probe-dict/compare22.txt`）。与值类型五支（S305）、pack 九支（S376）同一族两句。`sort` 在字典上是**零参**（按键排），
- *  与 Array 那支的 `sort()` 同名同元数但不同语义；`recursive_equal` 要两支（第二支是递归计数）。 */
-const DICT_METHOD_ARITY: Record<string, [number, number]> = {
-  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
-  get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
-  is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
-  merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
-  is_typed: [0, 0], is_typed_key: [0, 0], is_typed_value: [0, 0],
-  is_same_typed: [1, 1], is_same_typed_key: [1, 1], is_same_typed_value: [1, 1],
-  get_typed_key_builtin: [0, 0], get_typed_value_builtin: [0, 0],
-  get_typed_key_class_name: [0, 0], get_typed_value_class_name: [0, 0],
-  get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
-};
-
 /** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
  *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
 function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
-  for (const { nodes, seeded } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
+  for (const { nodes, seeded, texts: scopeTexts } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
+    const texts = new Map(scopeTexts);
     const dicts = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict");
-    const dictAnn = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict", true);
+    const dictAnn = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict", true, texts);
     for (const n of nodes) {
       const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
       if (d !== null) diags.push(d);
-      for (const g of faceGhostDiags(n, DICT_METHOD_ARITY, "Dictionary", false, dictAnn, (obj) => obj.kind === "dict")) diags.push(g);
+      for (const g of faceGhostDiags(n, DICT_METHOD_ARITY, "Dictionary", false, dictAnn, (obj) => obj.kind === "dict", texts)) diags.push(g);
     }
   }
 }
@@ -2899,13 +3093,14 @@ function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
  *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
 function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
-  for (const { nodes, seeded } of faceScopes(m, "Array", (init) => init.kind === "array")) {
+  for (const { nodes, seeded, texts: scopeTexts } of faceScopes(m, "Array", (init) => init.kind === "array")) {
+    const texts = new Map(scopeTexts);
     const arrays = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array");
-    const arrAnn = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array", true);
+    const arrAnn = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array", true, texts);
     for (const n of nodes) {
       const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
       if (d !== null) diags.push(d);
-      for (const g of faceGhostDiags(n, ARRAY_METHOD_ARITY, "Array", true, arrAnn, (obj) => obj.kind === "array")) diags.push(g);
+      for (const g of faceGhostDiags(n, ARRAY_METHOD_ARITY, "Array", true, arrAnn, (obj) => obj.kind === "array", texts)) diags.push(g);
     }
   }
 }
@@ -2955,14 +3150,32 @@ interface NamedFace {
   lit: string;
   arity: Record<string, [number, number]>;
   arityCode: string;
+  /** 这一面的**构造式调用**（`NodePath("a/b")`）也算静态证得出的接收者与 var 初值。 */
+  ctorRecv?: boolean;
+}
+
+/** `NodePath("a/b")` 那一形：引擎按这一面在解析期开口（尺 `tmp/probe644/st_lit0.gd` 的 `Too few arguments for
+ *  "slice()" call…`、`st_lit3.gd` 的 `Too many…at most 2 but received 3.`、`st_litstr.gd` 的两句形参拒，
+ *  初值那形是 `st_infer0.gd` / `st_inferstr.gd` 同句）。只认「一支实参且是字符串字面量」这一形：
+ *  `StringName("a")` 的同形状没量过，所以 `ctorRecv` 只给 NodePath 开。 */
+function ctorRecvFace(e: Record<string, unknown>, face: NamedFace): boolean {
+  if (face.ctorRecv !== true || e.kind !== "call") return false;
+  const callee = e.callee as Record<string, unknown> | undefined;
+  if (callee === undefined || callee.kind !== "ident" || callee.name !== face.type) return false;
+  const args = e.args as Record<string, unknown>[] | undefined;
+  const first = args?.[0] as Record<string, unknown> | undefined;
+  return args?.length === 1 && first !== undefined && first.kind === "lit" && first.lit === "string";
 }
 
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
-  const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
+  const isLiteral = (obj: Record<string, unknown>): boolean =>
+    (obj.kind === "lit" && obj.lit === face.lit) || ctorRecvFace(obj, face);
+  const isRecvInit = (init: Expr): boolean =>
+    (init.kind === "lit" && init.lit === face.lit) || ctorRecvFace(init as unknown as Record<string, unknown>, face);
   const assigned = moduleAssignedNames(m);
   const argAnnAll = argNameScopes(m);
-  for (const { nodes, seeded, body } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
-    const names = faceReceiverNames(nodes, seeded, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+  for (const { nodes, seeded, body } of faceScopes(m, face.type, isRecvInit)) {
+    const names = faceReceiverNames(nodes, seeded, assigned, face.type, isRecvInit);
     const argAnn = argAnnAll.get(body) ?? new Map<string, string>();
     for (const n of nodes) {
       if (n.kind !== "call") continue;
@@ -3027,7 +3240,7 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
 const STRINGNAME_FACE: NamedFace = {
   type: "StringName",
   lit: "string_name",
-  arity: STRING_METHOD_ARITY,
+  arity: STRING_NAME_METHOD_ARITY,
   arityCode: "string-name-arity",
 };
 
@@ -3036,6 +3249,7 @@ const NODE_PATH_FACE: NamedFace = {
   lit: "node_path",
   arity: NODE_PATH_METHOD_ARITY,
   arityCode: "node-path-arity",
+  ctorRecv: true,
 };
 
 /** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，

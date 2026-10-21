@@ -160,7 +160,7 @@ export function isElemKind(name: string): name is ElemKind {
 export function elemDefault(kind: ElemKind): Variant {
   switch (kind) {
     case "Object":
-      throw new UnsupportedError("typed-object-default", "Array[Object] 与类定型数组的 resize / fill 填什么没量过（S613 只量了构造、append、duplicate、assign），响亮拒");
+      return V.nil();
     case "int":
       return V.int(0);
     case "float":
@@ -193,11 +193,21 @@ export function elemDefault(kind: ElemKind): Variant {
 }
 
 /** 元素折算矩阵：能转就转，转不了交 null —— 调用方把整次容器操作静默作废，不报错。 */
+/** 脚本类名槽的收法（S622 的 s1 / s2）：只有那个类与其子类的实例才收，异类丢掉继续跑。 */
+let classFaceCheck: ((cls: string, v: Variant) => boolean) | null = null;
+export function registerClassFaceCheck(fn: (cls: string, v: Variant) => boolean): void {
+  classFaceCheck = fn;
+}
+function classFaceMatches(cls: string, v: Variant): Variant | null {
+  if (classFaceCheck === null) return v;
+  return classFaceCheck(cls, v) ? v : null;
+}
+
 export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
     // `Array[Object]` 只收 null（S613：`Array([null], TYPE_OBJECT, &"RefCounted", null)` 给 `[<null>]`，`Array([1], …)` 转不过）
     case "Object":
-      return v.t === Tag.NIL ? v : null;
+      return v.t === Tag.NIL || v.t === Tag.OBJECT ? v : null;
     case "int":
       if (v.t === Tag.INT) return v;
       if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
@@ -304,6 +314,8 @@ export class GArray {
   elem: ElemKind | null = null;
   /** `Array(base, TYPE_OBJECT, &"类名", null)` 那一族的类名（S613）；空串就是纯 `Array[Object]`。 */
   className = "";
+  /** `Array[脚本类名]` 标注里的那个类名（S621 的 q6..q12）：句子与面比对用它，`get_typed_class_name()` 用上面那格。 */
+  scriptName = "";
   private ro = false;
 
   /** `make_read_only()` 置的那一面：浅的，只挡这个容器自己的写（S403 那一族的读数）。 */
@@ -342,7 +354,9 @@ export class GArray {
   }
 
   private asElement(v: Variant): Variant | null {
-    return this.elem === null ? v : elemConvert(this.elem, v);
+    if (this.elem === null) return v;
+    if (this.elem === "Object" && this.scriptName !== "") return classFaceMatches(this.scriptName, v);
+    return elemConvert(this.elem, v);
   }
 
   private asElements(vs: Variant[]): Variant[] | null {
@@ -954,33 +968,64 @@ function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
 /** 声明处给容器值盖上元素类型：类型记在**值**上、章只盖一次；非字面量赋给本来未定型的容器是运行时报错。 */
 /** `Array[类名]` 标注那一族（S615 量了 `Array[RefCounted]` / `Array[Object]` / `Array[Node]`）：元素按 Object 收，类名照标注挂。 */
 export function stampClassArray(v: Variant, cls: string, fromLiteral: boolean): Variant {
-  const stamped = stampArray(v, "Object", fromLiteral);
-  (stamped.v as GArray).className = cls;
-  return stamped;
+  return stampArray(v, "Object", fromLiteral, cls);
 }
 
-export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean): Variant {
+/** `Array[脚本类名]` 那一族（S621 的 q7 / q12）：元素按 Object 收，标注名进 `scriptName`，`get_typed_class_name()` 印原生基类。 */
+export function stampScriptArray(v: Variant, name: string, nativeBase: string, fromLiteral: boolean): Variant {
+  const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
+  if (g === null) throw new UnsupportedError("typed-assign", `Array[${name}] 的初值不是数组`);
+  if (!fromLiteral) return assignContainer(v, `Array[${name}]`);
+  g.stampElem("Object");
+  g.className = nativeBase;
+  g.scriptName = name;
+  return v;
+}
+
+/** 容器值自己的类型文本（S618 那四句都用它）：未定型给基名，定型给带元素型 / 类名 / 键值型的拼法。 */
+export function arrayTypeLabel(g: GArray): string {
+  if (g.elem === null) return "Array";
+  const name = g.scriptName !== "" ? g.scriptName : g.className;
+  return `Array[${name === "" ? g.elem : name}]`;
+}
+
+/** `word` 是不带冠词的引擎拼法（S619 实参位那两句要用）。 */
+export function containerFace(v: Variant): { word: string; label: string } | null {
+  if (v.t === Tag.ARRAY) return { word: "array", label: arrayTypeLabel(v.v as GArray) };
+  if (v.t === Tag.DICT) return { word: "dictionary", label: (v.v as GDict).typeLabel() };
+  return null;
+}
+
+/** 运行期才看清的那一族：源的类型文本与槽的标注必须一字不差，差一个就发引擎那两句之一。 */
+function needSameFace(v: Variant, target: string, say: (word: string, src: string) => string): Variant {
+  const c = containerFace(v);
+  if (c === null) throw new UnsupportedError("typed-assign", `定形容器的槽位只实测过 Array 与 Dictionary 源（收到 ${tagName(v.t)}）`);
+  if (c.label === target) return v;
+  throw new GodotRuntimeError("typed-assign", say(c.word === "array" ? "an array" : "a dictionary", c.label));
+}
+
+export function assignContainer(v: Variant, target: string): Variant {
+  return needSameFace(v, target, (word, src) => `Trying to assign ${word} of type "${src}" to a variable of type "${target}".`);
+}
+
+export function returnContainer(v: Variant, target: string): Variant {
+  return needSameFace(v, target, (word, src) => `Trying to return ${word} of type "${src}" where expected return type is "${target}".`);
+}
+
+export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean, cls = ""): Variant {
   const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
   if (g === null) throw new UnsupportedError("typed-assign", `Array[${kind}] 的初值不是数组`);
-  if (!fromLiteral && g.elemKind() === null) {
-    throw new GodotRuntimeError(
-      "typed-assign",
-      `Trying to assign an array of type "Array" to a variable of type "Array[${kind}]"`,
-    );
-  }
+  const target = `Array[${cls === "" ? kind : cls}]`;
+  if (!fromLiteral) return assignContainer(v, target);
   g.stampElem(kind);
+  g.className = cls;
   return v;
 }
 
 export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: boolean): Variant {
   const d = v.t === Tag.DICT ? (v.v as GDict) : null;
   if (d === null) throw new UnsupportedError("typed-assign", `Dictionary[${k}, ${val}] 的初值不是字典`);
-  if (!fromLiteral && d.keyKind === null) {
-    throw new GodotRuntimeError(
-      "typed-assign",
-      `Trying to assign a dictionary of type "Dictionary" to a variable of type "Dictionary[${k}, ${val}]"`,
-    );
-  }
+  if (!fromLiteral) return assignContainer(v, `Dictionary[${k}, ${val}]`);
   d.stampElem(k, val);
   return v;
 }
