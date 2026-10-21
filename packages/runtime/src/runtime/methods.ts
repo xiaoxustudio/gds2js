@@ -31,6 +31,7 @@ import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitali
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath,
   strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix,
+  strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -1856,6 +1857,34 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strTrimPrefix(s, asString(one(args, "trim_prefix"), "trim_prefix")));
         case "trim_suffix":
           return V.str(strTrimSuffix(s, asString(one(args, "trim_suffix"), "trim_suffix")));
+        case "strip_escapes":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `strip_escapes() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strStripEscapes(s));
+        case "c_unescape":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `c_unescape() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strCUnescape(s));
+        case "json_escape":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `json_escape() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strJsonEscape(s));
+        case "xml_escape":
+          if (args.length > 1) throw new GodotRuntimeError("arity", `xml_escape() 最多 1 个参数（收到 ${args.length} 个）`);
+          return V.str(strXmlEscape(s, args.length === 1 ? boolArg(args, 0, "xml_escape") : false));
+        case "indent":
+          return V.str(strIndent(s, asString(one(args, "indent"), "indent")));
+        case "dedent":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `dedent() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strDedent(s));
+        case "validate_filename":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `validate_filename() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strValidateFilename(s));
+        case "validate_node_name":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `validate_node_name() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strValidateNodeName(s));
+        case "match":
+          return V.bool(strWildcardMatch(s, asString(one(args, "match"), "match")));
+        case "is_valid_identifier":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_identifier() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsValidAsciiIdentifier(s));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);

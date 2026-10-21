@@ -1299,6 +1299,120 @@ export function strTrimSuffix(s: string, suffix: string): string {
   return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : s;
 }
 
+/** `String.strip_escapes()`（S575）：删掉所有码点 < 32 的字符（含 `\n` / `\t`）。 */
+export function strStripEscapes(s: string): string {
+  let out = "";
+  for (const ch of s) if ((ch.codePointAt(0) as number) >= 32) out += ch;
+  return out;
+}
+
+/** `String.c_unescape()`（S575）：按引擎的顺序逐对替换（`\n` 先于 `\\`，所以 `\\n` 会留下反斜杠 + 换行）。 */
+export function strCUnescape(s: string): string {
+  const pairs: [string, string][] = [["\\a", "\u0007"], ["\\b", "\b"], ["\\f", "\f"], ["\\n", "\n"], ["\\r", "\r"], ["\\t", "\t"], ["\\v", "\v"], ["\\'", "'"], ["\\\"", "\""], ["\\\\", "\\"]];
+  let out = s;
+  for (const [from, to] of pairs) out = out.split(from).join(to);
+  return out;
+}
+
+/** `String.json_escape()`（S575）：反斜杠、五个控制转义、`\v`、双引号；其余控制字符原样。 */
+export function strJsonEscape(s: string): string {
+  let out = s.split("\\").join("\\\\");
+  const pairs: [string, string][] = [["\b", "\\b"], ["\f", "\\f"], ["\n", "\\n"], ["\r", "\\r"], ["\t", "\\t"], ["\v", "\\v"]];
+  for (const [from, to] of pairs) out = out.split(from).join(to);
+  return out.split("\"").join("\\\"");
+}
+
+/** `String.xml_escape(escape_quotes=false)`（S575）：`&` `<` `>` 恒转；引号只在参数为真时转。 */
+export function strXmlEscape(s: string, quotes: boolean): string {
+  let out = s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+  if (quotes) out = out.split("'").join("&apos;").split("\"").join("&quot;");
+  return out;
+}
+
+/** `String.indent(prefix)`（S575）：非空行加前缀，空行保持空，末尾无换行的那一段也加。 */
+export function strIndent(s: string, prefix: string): string {
+  const cs = Array.from(s);
+  let out = "";
+  let lineStart = 0;
+  for (let i = 0; i < cs.length; i++) {
+    if (cs[i] === "\n") {
+      if (i === lineStart) out += "\n";
+      else out += prefix + cs.slice(lineStart, i + 1).join("");
+      lineStart = i + 1;
+    }
+  }
+  if (lineStart !== cs.length) out += prefix + cs.slice(lineStart).join("");
+  return out;
+}
+
+/** `String.dedent()`（S575）：以第一段有文本的行的缩进为基准逐行扣除，基准不匹配处开始保留。 */
+export function strDedent(s: string): string {
+  const cs = Array.from(s);
+  let out = "";
+  let indent = "";
+  let hasIndent = false;
+  let hasText = false;
+  let lineStart = 0;
+  let indentStop = -1;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i] as string;
+    if (c === "\n") {
+      if (hasText) out += cs.slice(indentStop, i).join("");
+      out += "\n";
+      hasText = false;
+      lineStart = i + 1;
+      indentStop = -1;
+    } else if (!hasText) {
+      if ((c.codePointAt(0) as number) > 32) {
+        hasText = true;
+        if (!hasIndent) {
+          hasIndent = true;
+          indent = cs.slice(lineStart, i).join("");
+          indentStop = i;
+        }
+      }
+      if (hasIndent && indentStop < 0) {
+        const j = i - lineStart;
+        if (j >= indent.length || c !== indent[j]) indentStop = i;
+      }
+    }
+  }
+  if (hasText) out += cs.slice(indentStop).join("");
+  return out;
+}
+
+const INVALID_FILENAME_CHARS = [":", "/", "\\", "?", "*", "\"", "|", "%", "<", ">"];
+const INVALID_NODE_NAME_CHARS = [".", ":", "@", "/", "\""];
+
+/** `String.validate_filename()`（S575）：先 strip_edges，再把十个非法字符逐个换成 `_`。 */
+export function strValidateFilename(s: string): string {
+  let out = strStripEdges(s);
+  for (const ch of INVALID_FILENAME_CHARS) out = out.split(ch).join("_");
+  return out;
+}
+
+/** `String.validate_node_name()`（S575）：只换 `.` `:` `@` `/` `"` 五个，前后空白不动。 */
+export function strValidateNodeName(s: string): string {
+  let out = s;
+  for (const ch of INVALID_NODE_NAME_CHARS) out = out.split(ch).join("_");
+  return out;
+}
+
+/** `String.match(wildcard)`（S575）：`*` / `?` 通配，`?` 不吃 `.`；任一为空串给 false。 */
+export function strWildcardMatch(s: string, wildcard: string): boolean {
+  if (wildcard.length === 0 || s.length === 0) return false;
+  const p = Array.from(wildcard);
+  const t = Array.from(s);
+  const walk = (pi: number, ti: number): boolean => {
+    const pc = p[pi];
+    if (pc === undefined) return ti === t.length;
+    if (pc === "*") return walk(pi + 1, ti) || (ti < t.length && walk(pi, ti + 1));
+    if (pc === "?") return ti < t.length && t[ti] !== "." && walk(pi + 1, ti + 1);
+    return ti < t.length && t[ti] === pc && walk(pi + 1, ti + 1);
+  };
+  return walk(0, 0);
+}
+
 /** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
 export function strIsAbsolutePath(s: string): boolean {
   if (s.length > 1) return s[0] === "/" || s[0] === "\\" || s.includes(":/") || s.includes(":\\");
