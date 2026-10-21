@@ -135,6 +135,11 @@ export function stringHexUnevenBlock(): Variant {
   return pushBlock("ERROR", "hex_decode (core/string/ustring.cpp:1658)", [V.str("Hexadecimal string of uneven length.")]);
 }
 
+/** UTF-32 / UTF-16 解码里非法码点的替换诊断（S579）：引擎 `print_unicode_error` 那行（含 U+FFFD 字面）。 */
+export function stringUnicodeReplaceError(message: string): void {
+  process.stderr.write(`Unicode parsing error, some characters were replaced with \ufffd (U+FFFD): ${message}\n`);
+}
+
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
 export function stringReplaceCharsNul(): Variant {
   return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);

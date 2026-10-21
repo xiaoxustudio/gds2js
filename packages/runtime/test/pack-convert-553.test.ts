@@ -68,14 +68,20 @@ describe("PackedByteArray.get_string_from_utf32（S553）", () => {
     eq("553", "尾巴丢", String(method(r, "get_string_from_utf32", []).v), "A");
     eq("553", "空", `[${String(method(pb([]), "get_string_from_utf32", []).v)}]`, "[]");
   });
-  it("非标量码点响亮拒", () => {
+  it("非标量码点换 U+FFFD（S579 实测）", () => {
     const bad = pb([0x00, 0x00, 0x11, 0x00]);
-    let code = "";
+    const orig = process.stderr.write;
+    const writes: string[] = [];
+    process.stderr.write = ((chunk: string) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    let got = "";
     try {
-      method(bad, "get_string_from_utf32", []);
-    } catch (e) {
-      code = (e as { code?: string }).code ?? "?";
+      got = String(method(bad, "get_string_from_utf32", []).v);
+    } finally {
+      process.stderr.write = orig;
     }
-    eq("553", "0x100000", code, "packed-utf32");
+    eq("553", "0x110000", `${got}|${writes.join("").includes("Invalid unicode codepoint (110000)")}`, "\ufffd|true");
   });
 });

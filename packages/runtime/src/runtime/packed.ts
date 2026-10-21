@@ -276,6 +276,19 @@ function bigCmp(x: bigint, y: bigint): number {
   return xLo === yLo ? 0 : xLo < yLo ? -1 : 1;
 }
 
+/** UTF-8 编码（S579）：逐码点写，**孤立代理按码点原样编成 3 字节**（U+D800 → ED A0 80），与引擎一致；不用 TextEncoder 的 U+FFFD 替换。 */
+export function utf8EncodeWtf(s: string): number[] {
+  const out: number[] = [];
+  for (const ch of s) {
+    const cp = ch.codePointAt(0) as number;
+    if (cp < 0x80) out.push(cp);
+    else if (cp < 0x800) out.push(0xc0 | (cp >> 6), 0x80 | (cp & 0x3f));
+    else if (cp < 0x10000) out.push(0xe0 | (cp >> 12), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+    else out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+  }
+  return out;
+}
+
 /** UTF-8 解码（`get_string_from_utf8()`）：`new TextDecoder(标签, 选项)` 在静态编译目标上没有 lowering，照 WHATWG 的 utf-8 状态机自己走 —— 非法序列给**一个** U+FFFD 并从下一个字节重扫。 */
 export function utf8Decode(items: number[]): string {
   const out: string[] = [];

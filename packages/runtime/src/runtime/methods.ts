@@ -21,7 +21,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -42,7 +42,7 @@ import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packDynamicUnpack, packItems, packNameAbsent, packTypeName, registerPackErrorSink } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packDynamicUnpack, packItems, packNameAbsent, packTypeName, registerPackErrorSink, utf8EncodeWtf } from "./packed";
 
 registerPackErrorSink({
   bufferZero: packDecompressBufferZero,
@@ -381,7 +381,7 @@ function packConvert(p: GBytes, name: string): Variant {
   return V.object(new GBytes(items as never[], kind));
 }
 
-/** `get_string_from_utf32()`（S553）：小端 32 位码点、尾巴不足 4 字节静默丢；非标量码点没量过，响亮拒。 */
+/** `get_string_from_utf32()`（S553）：小端 32 位码点、尾巴不足 4 字节静默丢；非法码点换 U+FFFD 并打引擎那行诊断（S579）。 */
 function bytesUtf32(p: GBytes): Variant {
   const raw = p.raw() as number[];
   const n = Math.floor(raw.length / 4);
@@ -390,7 +390,9 @@ function bytesUtf32(p: GBytes): Variant {
     const o = i * 4;
     const cp = (((raw[o] as number) | ((raw[o + 1] as number) << 8) | ((raw[o + 2] as number) << 16) | ((raw[o + 3] as number) << 24)) >>> 0);
     if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
-      throw new UnsupportedError("packed-utf32", `get_string_from_utf32() 里出现非 Unicode 标量码点 ${String(cp)}，那一形没实测过`);
+      stringUnicodeReplaceError(cp >= 0xd800 && cp <= 0xdfff ? `Unpaired surrogate (${cp.toString(16)})` : `Invalid unicode codepoint (${cp.toString(16)})`);
+      out += "\ufffd";
+      continue;
     }
     out += String.fromCodePoint(cp);
   }
@@ -1706,7 +1708,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strCapitalize(s));
         case "to_utf8_buffer": {
           if (args.length !== 0) throw new GodotRuntimeError("arity", `to_utf8_buffer() 不接受参数（收到 ${args.length} 个）`);
-          return V.object(new GBytes(Array.from(new TextEncoder().encode(s))));
+          return V.object(new GBytes(utf8EncodeWtf(s)));
         }
         case "to_utf16_buffer":
         case "to_wchar_buffer": {
