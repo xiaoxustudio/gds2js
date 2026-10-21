@@ -21,11 +21,11 @@ import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
-/** `Array(x)`：pack 逐元素装箱、Array 是**浅拷**（内层同一个引用，顶层写不动源），两形都给不 typed 的新数组（S597 / S601）。
- * 源形引擎认不出的五格（Dictionary / String / int / null / Vector2）发 `Nonexistent 'Array' constructor.`；其余没量过的形响亮拒。 */
+/** `Array(x)`：源形是 Array 时**就是那支数组本身**（引擎实测：`var r = Array(a)` 之后 `r[0] = 7` 把 `a` 也改了，S601）；
+ * pack 逐元素装箱成新的不 typed 数组（S597）；Dictionary / String / int / null / Vector2 五格发引擎原句；其余没量过的形响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
   if (v.t === Tag.ARRAY) {
-    return V.array(GArray.of([...(v.v as GArray).raw()]));
+    return v;
   }
   if (isBytes(v)) {
     return V.array(GArray.of(packItems(packBytes(v))));
