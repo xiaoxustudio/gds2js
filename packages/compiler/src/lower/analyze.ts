@@ -176,8 +176,23 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   return diags;
 }
 
+/** 赋值目标的变量名：`x = …` 与 `self.x = …` 同一格（S618 读数 e1 / e2）。 */
+function assignTargetName(t: unknown): string | null {
+  const o = t as Record<string, unknown> | null;
+  if (o === null || typeof o !== "object") return null;
+  if (o.kind === "ident" && typeof o.name === "string") return o.name;
+  const obj = o.obj as Record<string, unknown> | undefined;
+  if (o.kind === "attribute" && typeof o.name === "string" && obj?.name === "self") return o.name;
+  return null;
+}
+
+/** 标注文本是不是定形容器（嵌套那一形引擎另有句子，不进这一支） */
+function isCollText(name: string): boolean {
+  return /^(Array|Dictionary)\[[^\[]+\]$/.test(name);
+}
+
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
-  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc; varName?: string; srcAnn?: TypeRef | null; fnName?: string; fnPos?: number }> = [
+  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc; varName?: string; srcAnn?: TypeRef | null; fnName?: string; fnPos?: number; assignStmt?: boolean }> = [
     ...m.vars.map((v) => ({ type: v.type, init: v.init, loc: v.loc })),
     ...m.funcs.flatMap((f) => [
       ...f.params.map((p) => ({ type: p.type, init: p.default, loc: f.loc })),
@@ -217,9 +232,10 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body, retType);
       else if (s.kind === "for" || s.kind === "while") walkStmts(s.body, retType);
       else if (s.kind === "return" && retType !== null) targets.push({ type: retType, init: s.value, loc: s.loc });
-      else if (s.kind === "assign" && s.target.kind === "ident") {
-        const decl = typedVars.get(s.target.name);
-        if (decl !== undefined) targets.push({ type: decl, init: s.value, loc: s.loc });
+      else if (s.kind === "assign" && assignTargetName(s.target) !== null) {
+        const name = assignTargetName(s.target) as string;
+        const decl = typedVars.get(name) ?? locals.get(name);
+        if (decl !== undefined) targets.push({ type: decl, init: s.value, loc: s.loc, srcAnn: srcAnnOf(s.value), assignStmt: true });
       } else walkExprs(s, retType);
     }
   };
@@ -236,10 +252,10 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       if (typeof o.name === "string" && t !== null && !locals.has(o.name)) locals.set(o.name, t);
     }
     if (o.kind === "return" && retType !== null) targets.push({ type: retType, init: (o.value as Expr | null) ?? null, loc: o.loc as Loc });
-    if (o.kind === "assign" && retType !== null && (o.target as Record<string, unknown> | undefined)?.kind === "ident") {
-      const name = (o.target as Record<string, unknown>).name;
-      const decl = typeof name === "string" ? typedVars.get(name) : undefined;
-      if (decl !== undefined) targets.push({ type: decl, init: o.value as Expr, loc: o.loc as Loc });
+    if (o.kind === "assign" && retType !== null) {
+      const name = assignTargetName(o.target);
+      const decl = name === null ? undefined : typedVars.get(name) ?? locals.get(name);
+      if (decl !== undefined) targets.push({ type: decl, init: o.value as Expr, loc: o.loc as Loc, srcAnn: srcAnnOf(o.value as Expr), assignStmt: true });
     }
     if (o.kind === "call" && Array.isArray(o.args)) {
       const callee = o.callee as Record<string, unknown>;
@@ -263,6 +279,8 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   /** 函数内已声明变量的标注文本（S616：定形容器之间赋值要按标注文本比对） */
   /** 函数内已声明变量的标注文本（S616：定形容器之间赋值要按标注文本比对） */
   const locals = new Map<string, TypeRef>();
+  /** 源的标注：标识符查函数内那张声明表，字面量与调用没有标注可查 */
+  const srcAnnOf = (e: Expr | null): TypeRef | null => (e !== null && e.kind === "ident" ? locals.get(e.name) ?? null : null);
   for (const f of m.funcs) walkStmts(f.body, f.returnType);
   const walkClass = (c: ClassDecl): void => {
     for (const f of c.funcs) walkStmts(f.body, f.returnType);
@@ -286,7 +304,17 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     }
     // 定形容器 → 另一个定形容器的赋值：引擎按**标注文本**比对，不同就在解析期拒（读数 tmp/probe569/g1 / g2 / g5 / g6，同标注收下见 g9）
     const targetAnn = t.type !== null && t.type.kind === "named" ? t.type.name : null;
-    if (t.varName !== undefined && targetAnn !== null && t.srcAnn !== undefined && t.srcAnn !== null && t.srcAnn.kind === "named" &&
+    // 已声明的定形容器变量再赋值：定形源不合式是解析期另一句（读数 tmp/probe618/e1..e3），不定型源才留到运行期
+    if (t.assignStmt === true && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null &&
+      t.srcAnn.kind === "named" && isCollText(t.srcAnn.name) && t.srcAnn.name !== targetAnn) {
+      diags.push({
+        code: "typed-collection-assign-value",
+        message: `Value of type "${t.srcAnn.name}" cannot be assigned to a variable of type "${targetAnn}".`,
+        loc: t.loc,
+      });
+      continue;
+    }
+    if (t.varName !== undefined && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null && t.srcAnn.kind === "named" &&
       (t.srcAnn.name.startsWith("Array[") || t.srcAnn.name.startsWith("Dictionary[")) && t.srcAnn.name !== targetAnn) {
       diags.push({
         code: "typed-collection-assign",

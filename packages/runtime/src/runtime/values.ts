@@ -954,33 +954,51 @@ function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
 /** 声明处给容器值盖上元素类型：类型记在**值**上、章只盖一次；非字面量赋给本来未定型的容器是运行时报错。 */
 /** `Array[类名]` 标注那一族（S615 量了 `Array[RefCounted]` / `Array[Object]` / `Array[Node]`）：元素按 Object 收，类名照标注挂。 */
 export function stampClassArray(v: Variant, cls: string, fromLiteral: boolean): Variant {
-  const stamped = stampArray(v, "Object", fromLiteral);
-  (stamped.v as GArray).className = cls;
-  return stamped;
+  return stampArray(v, "Object", fromLiteral, cls);
 }
 
-export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean): Variant {
+/** 容器值自己的类型文本（S618 那四句都用它）：未定型给基名，定型给带元素型 / 类名 / 键值型的拼法。 */
+export function arrayTypeLabel(g: GArray): string {
+  return g.elem === null ? "Array" : `Array[${g.className !== "" ? g.className : g.elem}]`;
+}
+
+/** `word` 是不带冠词的引擎拼法（S619 实参位那两句要用）。 */
+function containerFace(v: Variant): { word: string; label: string } | null {
+  if (v.t === Tag.ARRAY) return { word: "array", label: arrayTypeLabel(v.v as GArray) };
+  if (v.t === Tag.DICT) return { word: "dictionary", label: (v.v as GDict).typeLabel() };
+  return null;
+}
+
+/** 运行期才看清的那一族：源的类型文本与槽的标注必须一字不差，差一个就发引擎那两句之一。 */
+function needSameFace(v: Variant, target: string, say: (word: string, src: string) => string): Variant {
+  const c = containerFace(v);
+  if (c === null) throw new UnsupportedError("typed-assign", `定形容器的槽位只实测过 Array 与 Dictionary 源（收到 ${tagName(v.t)}）`);
+  if (c.label === target) return v;
+  throw new GodotRuntimeError("typed-assign", say(c.word === "array" ? "an array" : "a dictionary", c.label));
+}
+
+export function assignContainer(v: Variant, target: string): Variant {
+  return needSameFace(v, target, (word, src) => `Trying to assign ${word} of type "${src}" to a variable of type "${target}".`);
+}
+
+export function returnContainer(v: Variant, target: string): Variant {
+  return needSameFace(v, target, (word, src) => `Trying to return ${word} of type "${src}" where expected return type is "${target}".`);
+}
+
+export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean, cls = ""): Variant {
   const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
   if (g === null) throw new UnsupportedError("typed-assign", `Array[${kind}] 的初值不是数组`);
-  if (!fromLiteral && g.elemKind() === null) {
-    throw new GodotRuntimeError(
-      "typed-assign",
-      `Trying to assign an array of type "Array" to a variable of type "Array[${kind}]"`,
-    );
-  }
+  const target = `Array[${cls === "" ? kind : cls}]`;
+  if (!fromLiteral) return assignContainer(v, target);
   g.stampElem(kind);
+  g.className = cls;
   return v;
 }
 
 export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: boolean): Variant {
   const d = v.t === Tag.DICT ? (v.v as GDict) : null;
   if (d === null) throw new UnsupportedError("typed-assign", `Dictionary[${k}, ${val}] 的初值不是字典`);
-  if (!fromLiteral && d.keyKind === null) {
-    throw new GodotRuntimeError(
-      "typed-assign",
-      `Trying to assign a dictionary of type "Dictionary" to a variable of type "Dictionary[${k}, ${val}]"`,
-    );
-  }
+  if (!fromLiteral) return assignContainer(v, `Dictionary[${k}, ${val}]`);
   d.stampElem(k, val);
   return v;
 }

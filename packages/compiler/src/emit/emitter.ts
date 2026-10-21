@@ -1141,6 +1141,8 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   CURRENT_FUNC = f.name;
   const catchRet = ret === "void" || ret === "Promise<void>" ? "return;" : `return ${typeDefault(f.returnType)};`;
   CURRENT_RET = abi ? abi.ret : null;
+  const savedRetAnn = CURRENT_RET_ANN;
+  CURRENT_RET_ANN = f.returnType;
   const layout = analyzeFuncLayout(f);
   UNBOXED = layout.unboxed;
   RAW_ARRAYS = layout.arrays;
@@ -1157,6 +1159,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   } finally {
     UNBOXED = savedUnboxed;
     CURRENT_RET = savedRet;
+    CURRENT_RET_ANN = savedRetAnn;
     RAW_ARRAYS = savedArrays;
     RAW_DICTS = savedDicts;
     CURRENT_FUNC = savedFunc;
@@ -1622,7 +1625,7 @@ function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
         const vw = emitValueWrite(s.target, s.value);
         if (vw) return vw;
       }
-      return [emitAssign(s.target, emitExpr(s.value))];
+      return [emitAssign(s.target, emitExpr(s.value), s.value)];
     }
 
     case "return":
@@ -1637,7 +1640,10 @@ function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
         }
         return [`return ${rr.code};`];
       }
-      return voidReturn ? [`return void (${emitExpr(s.value)});`] : [`return ${emitExpr(s.value)};`];
+      const code = emitExpr(s.value);
+      const text = LAMBDA_DEPTH > 0 ? null : containerAnnText(CURRENT_RET_ANN);
+      const wrapped = containerSlot(code, s.value, text, "returnContainer");
+      return voidReturn ? [`return void (${wrapped});`] : [`return ${wrapped};`];
 
     case "if": {
       const lines: string[] = [];
@@ -1804,10 +1810,12 @@ function unwrapSelfMember(t: Expr): Expr | null {
   return { kind: "ident", name: t.name, loc: t.loc };
 }
 
-function emitAssign(target: Expr, value: string): string {
+function emitAssign(target: Expr, value: string, valueExpr?: Expr): string {
   if (target.kind === "ident") {
-    const cast = declaredCast(LOCAL_TYPES.get(target.name) ?? null);
-    return `${emitExpr(target)} = ${cast ? `${cast}(${value})` : value};`;
+    const ann = LOCAL_TYPES.get(target.name) ?? null;
+    const cast = declaredCast(ann);
+    const v = valueExpr === undefined ? value : containerSlot(value, valueExpr, containerAnnText(ann), "assignContainer");
+    return `${emitExpr(target)} = ${cast ? `${cast}(${v})` : v};`;
   }
   if (target.kind === "index") {
     if (target.obj.kind === "ident" && RAW_ARRAYS.has(target.obj.name)) {
@@ -1844,6 +1852,8 @@ interface RawAbi {
 /** 当前模块内可走裸 ABI 的函数：名字 → 签名。由 computeRawAbis 逐模块算出。 */
 let RAW_ABIS = new Map<string, RawAbi>();
 let CURRENT_RET: Kind | null = null;
+/** 当前函数的返回标注（S618 返回位那一族）；lambda 体里不发，lambda 的返回槽没实测过。 */
+let CURRENT_RET_ANN: TypeRef | null = null;
 
 type ElemKind = "int" | "float" | "str" | "int[]" | "float[]" | "str[]";
 const isGridElem = (k: ElemKind): k is "int[]" | "float[]" | "str[]" => k === "int[]" || k === "float[]" || k === "str[]";
@@ -3263,6 +3273,27 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
 }
 
+/** 槽位标注的类型文本（S618）：只认实测过的那几种元素型 / 键值型，其余返回 null 原样透传。 */
+function containerAnnText(ann: TypeRef | null): string | null {
+  if (ann === null || ann.kind !== "named") return null;
+  const m = /^(Array|Dictionary)\[(.+)\]$/.exec(ann.name);
+  if (m === null) return null;
+  const inner = m[2] ?? "";
+  if (inner.includes("[")) return null;
+  const parts = inner.split(",").map((x) => x.trim());
+  if (m[1] === "Array") {
+    const one = parts[0] ?? "";
+    return parts.length === 1 && (isElemKind(one) || NATIVE_CLASS_SLOTS.has(one)) ? `Array[${one}]` : null;
+  }
+  return parts.length === 2 && isElemKind(parts[0] ?? "") && isElemKind(parts[1] ?? "")
+    ? `Dictionary[${parts[0]}, ${parts[1]}]` : null;
+}
+
+/** 非字面量源进定形容器的槽：赋值位与返回位各一句；字面量源引擎在编译期折算、不发句。 */
+function containerSlot(code: string, value: Expr, text: string | null, say: "assignContainer" | "returnContainer"): string {
+  if (text === null || value.kind === "array" || value.kind === "dict") return code;
+  return `rt.${say}(${code}, ${JSON.stringify(text)})`;
+}
 /** `Object.call` / `callv` 的 arity 表：`[必填数, 全部形参数]`，必填数取第一个带默认值的形参之前的个数。 */
 function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
