@@ -476,11 +476,9 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     eq("step82", "垃圾数据解不出来给空 pack（三种模式一致，Godot 另打一句引擎 stderr）",
       `${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(1)]))} ${show(method(bb([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]), "decompress", [I(17), I(3)]))}`,
       "[] []");
-    shouldThrow("step82", "compress(0)（不写模式时的默认值）没对上任何 node 编解码器 → 响亮拒，不发近似字节", () =>
-      method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]));
-    shouldThrow("step82", "compress() 零参同样是 mode 0 → 同一句响（量到它给 17 字节的「头部 + 原字节 + 补零」）", () =>
-      method(bb([1]), "compress", []));
-    shouldThrow("step82", "decompress 不写模式 = mode 0 → 也响", () => method(bb([1, 2, 3]), "decompress", [I(6)]));
+    eq("step82", "compress(0) 是 FastLZ（<16 先补零到 16）：字节与引擎逐字节相同、decompress 回到补零后的 16 字节", `${hex(method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]))} ${hex(method(method(bb([1, 2, 3, 1, 2, 3]), "compress", [I(0)]), "decompress", [I(16), I(0)]))}`, "0f01020301020300000000000000000000 01020301020300000000000000000000");
+    eq("step82", "compress() 零参同样是 mode 0", hex(method(bb([1]), "compress", [])), "0f01000000000000000000000000000000");
+    shouldThrow("step82", "decompress 垃圾数据且 buffer_size<16：引擎拷未初始化临时缓冲（不可复现）→ 响亮拒", () => method(bb([1, 2, 3]), "decompress", [I(6)]));
     eq("step82", "模式实参只量过 int：给 float 响亮拒（不拿「int 槽会截断」那条推）",
       perr(() => method(bb([1, 2, 3]), "compress", [F(1.5)])), "compress() / decompress() 的模式只实测过 int（收到 float）");
     shouldThrow("step82", "compress / decompress 只在 PackedByteArray 上量过，别的形状仍响亮拒", () =>

@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { fastlzCompress, fastlzDecompress } from "./fastlz";
 import { Tag, V, intToNum, tagName, type Variant } from "./tags";
 import { INT64_MIN, TWO_63, hexLower, padZero2, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
@@ -824,6 +825,14 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("arity", `compress() 最多 1 个参数（收到 ${args.length} 个）`);
       }
       const mode = args.length === 0 ? 0 : modeOf(args[0] as Variant);
+      if (mode === 0) {
+        // FastLZ（S558）：引擎对 <16 字节的输入先补零到 16 再压（解回来是 16 字节），空输入在 PackedByteArray 层就短路成空
+        const bytes = byteBuf(items);
+        if (bytes.length === 0) return V.object(new GBytes([], "byte"));
+        const src = bytes.length < 16 ? new Uint8Array(16) : bytes;
+        if (bytes.length < 16) src.set(bytes);
+        return V.object(new GBytes(bytesOf(fastlzCompress(src)), "byte"));
+      }
       const codec = codecFor(mode);
       // 越界模式给空 pack；空 pack 压任何模式也还是空 pack（node 的 deflateSync 反倒给 8 字节，这一格必须照 Godot）
       if (codec === "empty" || items.length === 0) return V.object(new GBytes([], "byte"));
@@ -837,6 +846,22 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
         throw new GodotRuntimeError("arity", `decompress() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
       }
       const mode = args.length === 2 ? modeOf(args[1] as Variant) : 0;
+      if (mode === 0) {
+        // FastLZ（S558）：buffer_size ≥ 16 当输出上限；< 16 时引擎只解到 16 字节临时缓冲再拷前 buffer_size 字节
+        const sv0 = intToNum((args[0] as Variant).v as number | bigint);
+        const want0 = typeof sv0 === "bigint" ? Number(sv0) : sv0;
+        if (!(want0 > 0) || items.length === 0) return V.object(new GBytes([], "byte"));
+        const plain0 = fastlzDecompress(byteBuf(items), want0 < 16 ? 16 : want0);
+        if (want0 < 16) {
+          // <16 时引擎把 16 字节临时缓冲原样拷出来；只有「正好解出 16 字节」（压缩端补零那条合法路）可复刻
+          if (plain0 === null || plain0.length !== 16) {
+            throw new UnsupportedError("fastlz-short-fail", "FastLZ 解压在 buffer_size<16 下没解出整 16 字节：引擎拷的是未初始化的临时缓冲（实测每次不同），这一形不发");
+          }
+          return V.object(new GBytes(bytesOf(plain0.slice(0, want0)), "byte"));
+        }
+        if (plain0 === null) return V.object(new GBytes([], "byte"));
+        return V.object(new GBytes(bytesOf(plain0), "byte"));
+      }
       const codec = codecFor(mode);
       if (codec === "empty") return V.object(new GBytes([], "byte"));
       if (codec === null) {
