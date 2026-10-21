@@ -7,6 +7,10 @@ import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { show, valueEq } from "@gds2js/runtime/runtime/values";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { S, I } from "./support/variants";
+import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+
+class Fake extends GdScriptObject {}
+
 
 const call = (c: Variant, n: string, args: Variant[] = []): Variant => method(c, n, args) as Variant;
 const code = (f: () => unknown): string => {
@@ -39,6 +43,14 @@ describe("Callable.create(null|int, name)（S590）", () => {
     eq("590", "调用句", msg, "Attempt to call function 'null::ping (Callable)' on a null instance.");
     const ic = callableStatic("create", [I(1), S("x")]) as Variant;
     eq("590", "int owner", `${show(ic)}|${call(ic, "is_valid").v}`, "int::x|false");
+  });
+  it("obj 上不存在的方法：无效 Callable 的形状（S592）", () => {
+    const o = wrapValue(new Fake());
+    const c = callableStatic("create", [o, S("nope")]) as Variant;
+    eq("592", "谓词与方法名", `${call(c, "is_null").v}/${call(c, "is_valid").v}/${call(c, "get_method").v}`, "false/false/nope");
+    eq("592", "空对象与零元数", `${typeOf(call(c, "get_object")).v}/${call(c, "get_argument_count").v}`, "24/0");
+    eq("592", "等式", valueEq(c, callableStatic("create", [o, S("nope")]) as Variant), true);
+    eq("592", "hash 拒", code(() => variantHashNumber(c)), "hash-callable-invalid-method");
   });
   it("hash 与 bind 的未拟合形响亮拒", () => {
     const c = callableStatic("create", [V.nil(), S("ping")]) as Variant;

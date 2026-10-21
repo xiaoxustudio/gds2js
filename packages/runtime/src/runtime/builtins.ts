@@ -405,6 +405,9 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       // 实测两条：全局内置那一族折出来就是名字那支 String 哈希（十六支一名一名对上，`tmp/probe-hash-callable/`）；
       // 空 Callable 走引擎非 custom 那条 —— 名字空串 + 对象 0，再 fmix32。
       if (isNullCallable(box)) return fmix32(murmurOne64Words(0, 0, hashDjb2("")));
+      if (box.invalidMethod) {
+        throw new UnsupportedError("hash-callable-invalid-method", "Callable.create(obj, 不存在的方法) 的哈希没拟合出来，不发");
+      }
       if (box.detachedOwner !== null) {
         throw new UnsupportedError("hash-callable-detached", `Callable.create(${box.detachedOwner}, name) 的哈希没拟合出来（引擎给 1862405700，名字哈希不中），不发`);
       }
