@@ -2466,6 +2466,13 @@
 
 **缺口 / 覆盖面**
 
+0a. **S616 的读数已量齐（七形，一脚本一形；探针 `tmp/probe569/g1..g9.gd`，生成器 `tmp/d6/gen616.mjs`）** —— 定形容器之间的赋值引擎全在解析期拒，我们一句都不发：
+    - `var h: Array[String] = ["a"]` 之后 `var i: Array[RefCounted] = h` → `Cannot assign a value of type Array[String] to variable "i" with specified type Array[RefCounted].`
+    - 反向（`Array[RefCounted]` → `Array[String]`）同式一句（g2）；`Array[int]` → `Array[float]`（g5）与 `Array[int]` → `Array[String]`（g6）**也照拒** —— 定形容器之间**没有任何放宽**，int→float 那一条标量式的转换在这里不成立。
+    - 源是**不定型** `Array` 时引擎不在解析期发句，而是**运行期**一句：`Trying to assign an array of type "Array" to a variable of type "Array[RefCounted]".`（g3 推断的 `var u = []` 与 g4 标注 `var u2: Array` 同句，位置在赋值那一行）
+    - 同型赋值 `var b: Array[int] = a` 收（g9 印 `[1]`）—— 判据是**标注文本相等**就不拒。
+    实现落点：`analyze.ts` 里走定形容器声明那一趟（`for (const t of targets)`，已知目标标注 `Array[X]` 与 `t.init`），要补的是**标识符源**的解析 —— 把函数内已声明变量的标注文本攒成一张表（模块级的 `typedVars` 已有，局部要自己收），源标注与目标标注都是定形容器且文本不同 → 发 `Cannot assign a value of type <src> to variable "<name>" with specified type <slot>.`；源是 `Array` / `Dictionary`（无方括号）时**不在解析期发**，改由赋值路径发运行期那句。两侧都要过 `sema-wording-parity`（新增语料会是预期报错那批）。
+
 0. **下一轮开工清单（2026-10-21 收笔时留的靶单，全部已量好或半量好，按性价比排序）**：
    ① **`Array(...)` 的签名矩阵**（S601 ⑤）：2 参与 4 参两形的解析期原文已量到 —— `No constructor of "Array" matches the signature "Array(PackedByteArray, Variant.Type)".` 与 `"Array(Array, Variant.Type, Variant.Type, bool)".`（读数 `tmp/d6/s606.gd`），
    但「源形 × 参数个数」整张矩阵没量，`Array(2.5)` / `Array(true)` / `Array(StringName)` 三格的接受性也没量 —— 这一笔要的是一趟脚本量齐矩阵，再决定接进静态层还是运行期句。
