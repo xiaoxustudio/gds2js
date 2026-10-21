@@ -48,6 +48,8 @@ export class CallableBox {
   unbindCount: number;
   /** lambda 尾部带默认值的形参数（`tmp/probe-lamdef/a1.gd` 量到的元数那一族）：默认值本身在**调用那一刻**才评，所以盒子里只存个数。 */
   defaultCount: number;
+  /** `Callable.create(null|int, name)` 的脱离形（S590）：owner 是类型名（`null` / `int`），打印 `<owner>::name`、`is_null` 假、`is_valid` 假。 */
+  detachedOwner: string | null;
   constructor(
     fn: Fn | null = null,
     name: string | null = null,
@@ -60,6 +62,7 @@ export class CallableBox {
     defaultCount = 0,
     builtinSnap: Variant | null = null,
     unbindCount = 0,
+    detachedOwner: string | null = null,
   ) {
     this.fn = fn;
     this.name = name;
@@ -72,6 +75,7 @@ export class CallableBox {
     this.defaultCount = defaultCount;
     this.builtinSnap = builtinSnap;
     this.unbindCount = unbindCount;
+    this.detachedOwner = detachedOwner;
   }
 }
 
@@ -111,6 +115,9 @@ export function registerRecvEqHook(f: (a: Variant, b: Variant) => boolean): void
 
 export function callableSame(a: CallableBox, b: CallableBox): boolean {
   if (isNullCallable(a) || isNullCallable(b)) return isNullCallable(a) && isNullCallable(b);
+  if (a.detachedOwner !== null || b.detachedOwner !== null) {
+    return a.detachedOwner !== null && b.detachedOwner !== null && a.detachedOwner === b.detachedOwner && a.name === b.name;
+  }
   if (a.name !== null && b.name !== null) {
     if (a.name !== b.name) return false;
     if (a.builtin !== null && b.builtin !== null && recvEqHook !== null) {
@@ -155,6 +162,7 @@ export function registerCallableLabelHook(f: (box: CallableBox) => string | null
 
 export function callableLabel(box: CallableBox): string | null {
   if (isNullCallable(box)) return "null::null";
+  if (box.detachedOwner !== null) return `${box.detachedOwner}::${String(box.name)}`;
   if (box.name === null) return "<anonymous lambda>(lambda)";
   if (box.object === null) return globalCallableLabel(box.name);
   return labelHook === null ? null : labelHook(box);

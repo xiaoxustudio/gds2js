@@ -593,6 +593,12 @@ export function callableCtor(args: Variant[]): Variant {
     if (name === undefined || (name.t !== Tag.STRING && name.t !== Tag.STRING_NAME)) {
       throw new UnsupportedError("callable-ctor", "Callable(对象, 名字) 的第二个实参量过的是方法名字符串");
     }
+    if (obj.t === Tag.NIL) {
+      return V.object(new CallableBox(null, String(name.v), null, [], null, false, null, null, 0, null, 0, "null"));
+    }
+    if (obj.t === Tag.INT) {
+      return V.object(new CallableBox(null, String(name.v), null, [], null, false, null, null, 0, null, 0, "int"));
+    }
     return attribute(obj, String(name.v)) as Variant;
   }
   throw new UnsupportedError(
@@ -607,8 +613,9 @@ export function callableStatic(name: string, args: Variant[] = []): Variant {
     if (args.length !== 2) {
       throw new UnsupportedError("callable-create-arity", "Callable.create() 的元数没量过（只量过 2 个实参）");
     }
-    if ((args[0] as Variant).t !== Tag.OBJECT) {
-      throw new UnsupportedError("callable-create-obj", "Callable.create() 的第一个实参只量过对象来源");
+    const a0 = args[0] as Variant;
+    if (a0.t !== Tag.OBJECT && a0.t !== Tag.NIL && a0.t !== Tag.INT) {
+      throw new UnsupportedError("callable-create-obj", "Callable.create() 的第一个实参只量过对象 / null / int 来源");
     }
     return callableCtor(args);
   }
@@ -617,6 +624,9 @@ export function callableStatic(name: string, args: Variant[] = []): Variant {
 
 /** 调一个 Callable 盒子：调用实参排在绑定实参**之前**；lambda 走盒子带的式子，方法 / 静态方法交 `method()` 按名派发。 */
 function callCallableBox(box: CallableBox, args: Variant[]): Variant {
+  if (box.detachedOwner !== null) {
+    throw new GodotRuntimeError("callable-detached-call", `Attempt to call function '${box.detachedOwner}::${String(box.name)} (Callable)' on a null instance.`);
+  }
   const all: Variant[] = [];
   for (const a of keptCallArgs(box, args)) all.push(a);
   for (const b of box.bound) all.push(b);
@@ -708,6 +718,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   const empty = isNullCallable(box);
   switch (name) {
     case "bind": {
+      if (box.detachedOwner !== null) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bind() 那一形没量过");
       if (box.defaultCount > 0) {
         throw new UnsupportedError("lambda-bind-default", "带默认值形参的 lambda 再 `bind()` 那一形没实测过，不发");
       }
@@ -723,6 +734,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
     }
     case "bindv": {
+      if (box.detachedOwner !== null) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bindv() 那一形没量过");
       // S571：bindv 与 bind 同一支（新绑的实参排在旧绑定串之前，get_bound_arguments 实测 `max.bind(1).bindv([2])` 给 [2, 1]）；空数组原样回同一只
       if (args.length !== 1) {
         throw new UnsupportedError("callable-bindv-arity", "bindv() 的元数没量过（只量过恰好 1 个 Array 实参）");
@@ -775,6 +787,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 全局 / 空 / 绑过的全局与 `hash(c)` 同值（实测 boundglobal 193485979 == raw）；方法 / lambda / 内建的面折宿主标识，variantHashNumber 会响亮拒
       return V.int(variantHashNumber(V.object(box)));
     case "unbind": {
+      if (box.detachedOwner !== null) throw new UnsupportedError("callable-detached-unbind", "空对象方法 Callable 再 unbind() 那一形没量过");
       // 计数是**累加**的：`u.unbind(1).unbind(1)` 等于 `u.unbind(2)`（`tmp/probe-unbind/x6.gd`）
       const n = box.unbindCount + unbindCountArg(args);
       const next: Variant[] = [];
@@ -792,6 +805,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 实测七格（tmp/d6/s545.gd）：就是 unbind 计数；先 unbind 再 bind 会填掉一格（unbind(2).bind(1) → 1）
       return V.int(box.unbindCount);
     case "get_argument_count": {
+      if (box.detachedOwner !== null) return V.int(0);
       // 语义是「**还要几个实参**」= 声明形参数 − 绑定数，不是「只要 bind 过就给 0」
       const declared = declaredArgCount(box);
       if (declared === null) {
@@ -845,6 +859,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // typeof 24 的 null Object（打 `<Object#null>`、`== null` 真）—— 后两形我们没有，响亮拒。
       // 内建类型面绑定来的那一只：引擎给的是 typeof 24 的空对象引用，不是那台数组 / 字符串（读数 `tmp/probe-bincall/h3.gd` 的 Q6）
       if (box.builtin !== null) return V.object(NULL_OBJECT);
+      if (box.detachedOwner !== null) return V.object(NULL_OBJECT);
       if (box.object === null) {
         throw new UnsupportedError(
           "callable-get-object",
@@ -857,6 +872,7 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       // 四种形状里只有空 Callable 为真；绑过实参就不再是空的
       return V.bool(empty && bound.length === 0);
     case "is_valid":
+      if (box.detachedOwner !== null) return V.bool(false);
       if (empty && bound.length > 0) {
         throw new UnsupportedError("callable-is-valid-bound-null", "绑过实参的空 Callable 上 is_valid() 没量过");
       }

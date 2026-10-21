@@ -4,7 +4,7 @@ import { eq } from "@gds2js/testkit";
 import { callableStatic, method } from "@gds2js/runtime/runtime/methods";
 import { GdScriptObject, methodCallable, wrapValue } from "@gds2js/runtime/runtime/object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { valueEq } from "@gds2js/runtime/runtime/values";
+import { show, valueEq } from "@gds2js/runtime/runtime/values";
 import { I, S } from "./support/variants";
 
 class Fake extends GdScriptObject {
@@ -33,8 +33,8 @@ describe("Callable.create（S578）", () => {
     const sn = callableStatic("create", [o, V.stringName("ping")]) as Variant;
     eq("578", "StringName 形同", valueEq(sn, direct), true);
   });
-  it("非对象与元数响亮拒；未知静态名拒", () => {
-    eq("578", "int 首参", err(() => callableStatic("create", [I(1), S("x")])), "callable-create-obj");
+  it("int 首参给 int::x（S590 实测）；元数与未知静态名拒", () => {
+    eq("578", "int 首参", show(callableStatic("create", [I(1), S("x")]) as Variant), "int::x");
     eq("578", "元数", err(() => callableStatic("create", [wrapValue(new Fake())])), "callable-create-arity");
     eq("578", "未知名", err(() => callableStatic("nope", [])), "callable-static");
   });
