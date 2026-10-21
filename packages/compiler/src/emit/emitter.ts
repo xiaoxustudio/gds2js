@@ -267,6 +267,8 @@ let MODULE_SIGNALS = new Set<string>();
 /** 当前内部类自己的信号名：与 `CURRENT_MEMBERS` 同起同落，取值要的是装箱过的 `this.<名>`（引擎在内部类里看得见自己类的信号，读数 `tmp/probe-innerscope/compare97.txt` 的 c15）。 */
 let CLASS_SIGNALS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
+/** 认得到的 callee 的形参表（S619 实参位那两句要用）。 */
+let PARAM_TYPES = new Map<string, Param[]>();
 let MODULE_CLASSES = new Set<string>();
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
 let INNER_CLASSES = new Map<string, ClassDecl>();
@@ -377,6 +379,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   /** 信号字段落的是裸 `rt.Signal`，当值用（比较、当字典键、进数组、`typeof`）必须先装箱成 Variant —— 直接递出去会在运行期变成没有类型的裸对象。 */
   MODULE_SIGNALS = new Set(m.signals.map((s) => s.name));
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
+  PARAM_TYPES = new Map(m.funcs.map((f) => [f.name, f.params]));
   // 字段初始化式发在 INHERITED_METHODS 建起来之前，而那里裸调本类方法、继承来的方法与宿主基类的方法都合法，守卫认这张表。
   CLASS_FUNCS = new Set([
     ...m.funcs.map((f) => f.name),
@@ -533,7 +536,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
   // Callable 标签里那截括号实测是 `class_name`，没有就用文件名（`RefCounted(Util)::hi` / `SceneTree(main.gd)::top`）。
-  const scriptLabel = m.className ?? (resPath ? resPath.split("/").pop() ?? null : null);
+  const scriptLabel = m.className ?? (resPath ?? opts.sourceFile)?.split("/").pop() ?? className + ".gd";
   if (scriptLabel !== null && scriptLabel !== undefined) {
     out.push(`rt.registerScriptLabel(__gd_d_${className}, ${JSON.stringify(scriptLabel)});`);
   }
@@ -3289,6 +3292,30 @@ function containerAnnText(ann: TypeRef | null): string | null {
     ? `Dictionary[${parts[0]}, ${parts[1]}]` : null;
 }
 
+/** 认得 callee 的调用点：字面量实参照引擎那样在编译期折算成定形容器，其余实参发运行期那一句（S619）。 */
+function packTypedArgs(fnName: string, argExprs: Expr[], emitted: string[], recv: string): string[] {
+  const ps = PARAM_TYPES.get(fnName);
+  if (ps === undefined) return emitted;
+  return emitted.map((a, i) => {
+    const p = ps[i];
+    const e = argExprs[i];
+    if (p === undefined || e === undefined) return a;
+    const text = containerAnnText(p.type);
+    if (text === null) return a;
+    if (e.kind === "array" || e.kind === "dict") {
+      const parts = text.replace(/^(Array|Dictionary)\[|\]$/g, "").split(",").map((x) => x.trim());
+      const one = parts[0] ?? "";
+      if (text.startsWith("Array[")) {
+        return NATIVE_CLASS_SLOTS.has(one)
+          ? `rt.stampClassArray(${a}, ${JSON.stringify(one)}, true)`
+          : `rt.stampArray(${a}, ${JSON.stringify(one)}, true)`;
+      }
+      return `rt.stampDict(${a}, ${JSON.stringify(one)}, ${JSON.stringify(parts[1] ?? "")}, true)`;
+    }
+    return `rt.paramContainer(${a}, ${JSON.stringify(text)}, ${String(i + 1)}, ${JSON.stringify(fnName)}, ${recv})`;
+  });
+}
+
 /** 非字面量源进定形容器的槽：赋值位与返回位各一句；字面量源引擎在编译期折算、不发句。 */
 function containerSlot(code: string, value: Expr, text: string | null, say: "assignContainer" | "returnContainer"): string {
   if (text === null || value.kind === "array" || value.kind === "dict") return code;
@@ -3501,7 +3528,7 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     if (!callableInScope(name)) {
       throw new UnsupportedError("call-unknown", `Function "${name}()" not found in base self.`);
     }
-    return `this.${name}(${args.join(", ")})`;
+    return `this.${name}(${packTypedArgs(name, e.args, args, "this").join(", ")})`;
   }
 
   if (e.callee.kind === "attribute") {
@@ -3512,7 +3539,7 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       const own = e.callee.name;
       if (STATIC_FUNCS.has(own)) return `${CURRENT_CLASS}.${own}(${args.join(", ")})`;
       if (MODULE_FUNCS.has(own) || CURRENT_MEMBERS.has(own) || MODULE_VARS.has(own)) {
-        return `this.${own}(${args.join(", ")})`;
+        return `this.${own}(${packTypedArgs(own, e.args, args, "this").join(", ")})`;
       }
       return `rt.method(rt.V.object(this), ${JSON.stringify(own)}, [${args.join(", ")}])`;
     }

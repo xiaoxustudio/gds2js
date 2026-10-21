@@ -963,7 +963,7 @@ export function arrayTypeLabel(g: GArray): string {
 }
 
 /** `word` 是不带冠词的引擎拼法（S619 实参位那两句要用）。 */
-function containerFace(v: Variant): { word: string; label: string } | null {
+export function containerFace(v: Variant): { word: string; label: string } | null {
   if (v.t === Tag.ARRAY) return { word: "array", label: arrayTypeLabel(v.v as GArray) };
   if (v.t === Tag.DICT) return { word: "dictionary", label: (v.v as GDict).typeLabel() };
   return null;
