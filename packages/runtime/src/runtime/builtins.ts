@@ -863,7 +863,44 @@ function need2(a: Variant, b: Variant, who: string): void {
 }
 
 /** 实测口径：先看上界再看下界（`clamp(1, 2, 0)` 给 0、`clamp(NAN, 0, 1)` 给 nan），返回的那一侧带自己的类型；`clampf` 恒给 float、`clampi` 恒给 int。 */
+/** `clamp`（auto）的目标型跟第一参走（S567）：lo/hi 先往 x 的型转，第一位失败的按 argument 2/3 报。 */
+function clampTargetName(x: Variant): string {
+  if (x.t === Tag.INT) return "int";
+  if (x.t === Tag.FLOAT) return "float";
+  if (x.t === Tag.BOOL) return "bool";
+  if (x.t === Tag.STRING) return "String";
+  if (x.t === Tag.STRING_NAME) return "StringName";
+  if (x.t === Tag.ARRAY) return "Array";
+  if (x.t === Tag.DICT) return "Dictionary";
+  if (x.t === Tag.OBJECT) {
+    const n = vecClassName(x.v as object);
+    if (n !== null) return n;
+    if (x.v instanceof GBytes) return packTypeName((x.v as GBytes).kind);
+  }
+  return valueTypeName(x);
+}
+
+function clampAccepts(target: string, y: Variant): boolean {
+  if (target === "int" || target === "float") return y.t === Tag.INT || y.t === Tag.FLOAT;
+  if (target === "Vector2") return y.t === Tag.OBJECT && y.v instanceof GVector2;
+  if (target === "Vector2i") return y.t === Tag.OBJECT && y.v instanceof GVector2i;
+  if (target === "Vector3") return y.t === Tag.OBJECT && y.v instanceof GVector3;
+  if (target === "Vector3i") return y.t === Tag.OBJECT && y.v instanceof GVector3i;
+  if (target === "Color") return y.t === Tag.OBJECT && y.v instanceof GColor;
+  if (target === "bool") return y.t === Tag.BOOL;
+  if (target === "String") return y.t === Tag.STRING;
+  if (target === "StringName") return y.t === Tag.STRING_NAME;
+  if (target === "Array") return y.t === Tag.ARRAY;
+  if (target === "Dictionary") return y.t === Tag.DICT;
+  return valueTypeName(y) === target;
+}
+
 export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "auto"): Variant {
+  if (mode === "auto") {
+    const target = clampTargetName(v);
+    if (!clampAccepts(target, lo)) throw utilConvertError("clamp", lo, target, 2);
+    if (!clampAccepts(target, hi)) throw utilConvertError("clamp", hi, target, 3);
+  }
   // 三支都是 bool 时不走数值那一序：六格真值表只合「先并下界、再截上界」（S362，读数 `tmp/probe-argtype/bool-slot.txt` 与 `fold39.mts`）——
   // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
   if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
