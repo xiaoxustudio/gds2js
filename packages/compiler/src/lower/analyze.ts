@@ -594,6 +594,10 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
           } else if (s.type === null) {
             const pos = positionalSlot(null, s.init);
             if (pos !== null) typed.set(s.name, pos);
+            // 构造式初值的 Vector4 / Vector4i 局部量要能进字典键闸门（引擎对 `var k = Vector4i(...); d[k]` 是解析期拒，S586）
+            if (s.init !== null && s.init.kind === "call" && s.init.callee.kind === "ident" && (s.init.callee.name === "Vector4" || s.init.callee.name === "Vector4i")) {
+              decls.set(s.name, s.init.callee.name);
+            }
           }
           if (s.init !== null) walkExpr(s.init, typed, decls);
           continue;

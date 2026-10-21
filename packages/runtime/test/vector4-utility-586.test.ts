@@ -34,6 +34,20 @@ describe("Vector4 的 var_to_bytes（S586）", () => {
     eq("586", "dict bytes", (db.v as GBytes).raw().map((x) => (x as number).toString(16).padStart(2, "0")).join(""), "1b000000010000000c0000000000803f0000004000004040000080400200000001000000");
     eq("586", "dict roundtrip", show(gBytesToVar(db)), "{ (1.0, 2.0, 3.0, 4.0): 1 }");
   });
+  it("Vector4i 值 / 字典键 / 定形数组 / pack 的 hex 与引擎一致（S587）", () => {
+    const hex = (v: Variant): string => (gVarToBytes(v).v as GBytes).raw().map((x) => (x as number).toString(16).padStart(2, "0")).join("");
+    const a = i4(1, -2, 3, -4);
+    eq("587", "V4i 值", hex(a), "0d00000001000000feffffff03000000fcffffff");
+    eq("587", "V4i 回读", show(gBytesToVar(gVarToBytes(a))), "(1, -2, 3, -4)");
+    const d = new GDict();
+    d.set(i4(1, 2, 3, 4), I(1));
+    eq("587", "V4i 键", hex(V.dict(d)), "1b000000010000000d000000010000000200000003000000040000000200000001000000");
+    const arr = GArray.of([i4(1, 2, 3, 4)]);
+    arr.stampElem("Vector4i");
+    eq("587", "定形数组", hex(V.array(arr)), "1c0001000d000000010000000d00000001000000020000000300000004000000");
+    const p = packCtor("vector4", [V.array(GArray.of([v4(1, 2, 3, 4)]))]);
+    eq("587", "pack", hex(p), "26000000010000000000803f000000400000404000008040");
+  });
   it("动态 Vector4i 键进 Dictionary[Vector4, …] 会转换（解析期只拒字面量）", () => {
     const d = new GDict();
     d.stampElem("Vector4", "Vector4i");
