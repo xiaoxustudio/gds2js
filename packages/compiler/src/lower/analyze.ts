@@ -3287,7 +3287,7 @@ function checkDictDuplicateKeys(m: Module, diags: Diagnostic[]): void {
           const token = dictKeyToken(key);
           const first = seen.get(token);
           if (first === undefined) seen.set(token, en.key.loc);
-          else diags.push({ code: "dict-dup-key", message: `Key "${dictKeyText(key)}" was already used in this dictionary.`, loc: first });
+          else diags.push({ code: "dict-dup-key", message: `Key "${dictKeyText(key)}" was already used in this dictionary (at line ${String(first?.line ?? 0)}).`, loc: en.key.loc });
         }
         return;
       }
