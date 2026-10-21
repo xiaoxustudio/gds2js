@@ -719,6 +719,18 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       items.splice(pos, 0, toElem(kind, args[1] as Variant));
       return V.int(0);
     }
+    // `erase(value)`（S562）：把实参按元素槽折算后删**第一处**命中，返回是否删了；向量/颜色按分量比
+    case "erase": {
+      arity("erase", args, 1);
+      const want = toElem(kind, args[0] as Variant);
+      for (let i = 0; i < items.length; i++) {
+        if (elemSame(kind, items[i] as PackElem, want)) {
+          items.splice(i, 1);
+          return V.bool(true);
+        }
+      }
+      return V.bool(false);
+    }
     case "remove_at": {
       arity("remove_at", args, 1);
       const at = intToNum((args[0] as Variant).v as number | bigint);
