@@ -5802,7 +5802,28 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
         }
       }
       const bounds = GLOBAL_CALLABLES[callee.name]?.bounds ?? null;
-      if (bounds === null || e.args.length < bounds[0] || e.args.length > bounds[1]) continue;
+      // 元数越界那一形：引擎**先**发元数那一句（上面那道闸门），**再**照声明位补一条类型句 —— 但读数里只有
+      // **Array 字面量**会补（`sqrt([1], 2)` / `bezier_derivative(1.0, 2.0, 3.0, [1])`），
+      // String 源不补（`pingpong("a", 1.0, 2.0)` / `wrapi(1, "x")` 都只有元数那一句），
+      // 越出声明位的 Array（`wrapf(1.0, 2.0, 3.0, [1])`）也不补。其余形没量过，所以这一支只走 spec 表、只认 Array，别条通道一概不碰。
+      if (bounds !== null && (e.args.length < bounds[0] || e.args.length > bounds[1])) {
+        let arityHit: { pos: number; want: string } | null = null;
+        for (const [pos, want] of spec ?? []) {
+          if (literalTypeName(e.args[pos - 1]) === "Array") {
+            arityHit = { pos, want };
+            break;
+          }
+        }
+        if (arityHit !== null) {
+          diags.push({
+            code: "global-arg-type",
+            message: `Invalid argument for "${callee.name}()" function: argument ${String(arityHit.pos)} should be "${arityHit.want}" but is "Array".`,
+            loc: e.loc,
+          });
+        }
+        continue;
+      }
+      if (bounds === null) continue;
       if (spec === undefined && follows === undefined && shouldRows === undefined && sentenceRows === undefined && asRows === undefined) {
         continue;
       }
