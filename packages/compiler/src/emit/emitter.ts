@@ -125,7 +125,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
   PackedVector4Array: (a) => `rt.packCtor("vector4", [${a.join(", ")}])`,
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
-  Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
+  Array: (a) => (a.length === 0 ? "rt.V.array(rt.GArray.of([]))" : `rt.arrayFromVariant(${a[0]})`),
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
   Signal: (a) => `rt.signalCtor([${a.join(", ")}])`,
   is_instance_of: (a) => `rt.gIsInstanceOf(${a[0]}, ${a[1]})`,

@@ -21,12 +21,20 @@ import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
-/** `Array(x)`：实参是 pack 时逐元素搬进一支不 typed 的 Array（九支 + PackedVector4Array，S597），其余形状响亮拒。 */
+/** `Array(x)`：pack 逐元素装箱、Array 是**浅拷**（内层同一个引用，顶层写不动源），两形都给不 typed 的新数组（S597 / S601）。
+ * 源形引擎认不出的五格（Dictionary / String / int / null / Vector2）发 `Nonexistent 'Array' constructor.`；其余没量过的形响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
-  if (!isBytes(v)) {
-    throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过九支 pack 实参（收到 ${tagName(v.t)}）`);
+  if (v.t === Tag.ARRAY) {
+    return V.array(GArray.of([...(v.v as GArray).raw()]));
   }
-  return V.array(GArray.of(packItems(packBytes(v))));
+  if (isBytes(v)) {
+    return V.array(GArray.of(packItems(packBytes(v))));
+  }
+  if (v.t === Tag.DICT || v.t === Tag.STRING || v.t === Tag.INT || v.t === Tag.NIL ||
+    (v.t === Tag.OBJECT && v.v instanceof GVector2)) {
+    throw new GodotRuntimeError("array-ctor", "Invalid call. Nonexistent 'Array' constructor.");
+  }
+  throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 pack、Array 与那五种坏源形（收到 ${tagName(v.t)}）`);
 }
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，
