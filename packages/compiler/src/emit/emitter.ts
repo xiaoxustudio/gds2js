@@ -350,6 +350,12 @@ function standaloneInlineHeader(body: string): string {
   ].join("\n");
 }
 
+/** 引擎在报错文本里只写文件那一名：`res://a/b.gd` 与 Windows 的分岔都在这儿收平。 */
+function basenameOfGd(path: string | undefined): string | null {
+  if (path === undefined || path === "") return null;
+  return path.split(/[\/\\]/).pop() ?? null;
+}
+
 export function emitModule(m: Module, opts: EmitOptions): string {
   return emitModuleWithMap(m, opts).code;
 }
@@ -536,7 +542,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
   // Callable 标签里那截括号实测是 `class_name`，没有就用文件名（`RefCounted(Util)::hi` / `SceneTree(main.gd)::top`）。
-  const scriptLabel = m.className ?? (resPath ?? opts.sourceFile)?.split("/").pop() ?? className + ".gd";
+  const scriptLabel = m.className ?? basenameOfGd(resPath ?? opts.sourceFile) ?? className + ".gd";
   if (scriptLabel !== null && scriptLabel !== undefined) {
     out.push(`rt.registerScriptLabel(__gd_d_${className}, ${JSON.stringify(scriptLabel)});`);
   }
