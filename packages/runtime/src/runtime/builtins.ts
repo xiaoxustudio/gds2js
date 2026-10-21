@@ -14,8 +14,8 @@ import { GVector2, vector2, vector2Method } from "./vector2";
 import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
 import { GVector3, vector3, vector3Method } from "./vector3";
 import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
-import { GVector4, vector4 } from "./vector4";
-import { GVector4i, vector4i } from "./vector4i";
+import { GVector4, vector4, vector4Method, vec4Cmp } from "./vector4";
+import { GVector4i, vector4i, vector4iMethod } from "./vector4i";
 import { GColor, colorMethod } from "./color";
 import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
@@ -490,6 +490,8 @@ function vectorMath(v: Variant, name: "abs" | "floor" | "ceil" | "round" | "sign
   const o = v.v;
   if (o instanceof GVector2) return vector2Method(o, name, []);
   if (o instanceof GVector3) return vector3Method(o, name, []);
+  if (o instanceof GVector4) return vector4Method(o, name, []);
+  if (o instanceof GVector4i) return name === "abs" || name === "sign" ? vector4iMethod(o, name, []) : vector4i(o.x, o.y, o.z, o.w);
   if (o instanceof GVector2i) return name === "abs" || name === "sign" ? vector2iMethod(o, name, []) : vector2i(o.x, o.y);
   if (o instanceof GVector3i) return name === "abs" || name === "sign" ? vector3iMethod(o, name, []) : vector3i(o.x, o.y, o.z);
   return null;
@@ -652,6 +654,13 @@ function weightToFloat(w: Variant): number {
 }
 
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
+  const va4 = a.t === Tag.OBJECT && a.v instanceof GVector4 ? (a.v as GVector4) : null;
+  const vb4 = b.t === Tag.OBJECT && b.v instanceof GVector4 ? (b.v as GVector4) : null;
+  if (va4 !== null && vb4 !== null) {
+    const t = weightToFloat(w);
+    const mix = (x: number, y: number) => Math.fround(x + Math.fround((y - x) * Math.fround(t)));
+    return V.object(new GVector4(mix(va4.x, vb4.x), mix(va4.y, vb4.y), mix(va4.z, vb4.z), mix(va4.w, vb4.w)));
+  }
   vec4UtilityGuard(a, "lerp");
   vec4UtilityGuard(b, "lerp");
   const weight = weightToFloat(w);
@@ -731,6 +740,12 @@ function sameShape(a: Variant, b: Variant): boolean {
 }
 
 export function gSnapped(x: Variant, step: Variant): Variant {
+  const sx4 = x.t === Tag.OBJECT && x.v instanceof GVector4 ? (x.v as GVector4) : null;
+  const st4 = step.t === Tag.OBJECT && step.v instanceof GVector4 ? (step.v as GVector4) : null;
+  if (sx4 !== null && st4 !== null) return vector4Method(sx4, "snapped", [step]);
+  const sx4i = x.t === Tag.OBJECT && x.v instanceof GVector4i ? (x.v as GVector4i) : null;
+  const st4i = step.t === Tag.OBJECT && step.v instanceof GVector4i ? (step.v as GVector4i) : null;
+  if (sx4i !== null && st4i !== null) return vector4iMethod(sx4i, "snapped", [step]);
   vec4UtilityGuard(x, "snapped");
   vec4UtilityGuard(step, "snapped");
   const xName = x.t === Tag.OBJECT ? vecClassName(x.v as object) : null;
@@ -926,9 +941,6 @@ function clampAccepts(target: string, y: Variant): boolean {
 }
 
 export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "auto"): Variant {
-  vec4UtilityGuard(v, "clamp");
-  vec4UtilityGuard(lo, "clamp");
-  vec4UtilityGuard(hi, "clamp");
   if (mode === "auto") {
     const target = clampTargetName(v);
     if (!clampAccepts(target, lo)) throw utilConvertError("clamp", lo, target, 2);
@@ -938,6 +950,21 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
   // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
   if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
     return V.bool(((v.v as boolean) || (lo.v as boolean)) && (hi.v as boolean));
+  }
+  if (mode === "auto" && v.t === Tag.OBJECT && lo.t === Tag.OBJECT && hi.t === Tag.OBJECT) {
+    const g4 = v.v;
+    const l4 = lo.v;
+    const h4 = hi.v;
+    if (g4 instanceof GVector4 && l4 instanceof GVector4 && h4 instanceof GVector4) {
+      if (vec4Cmp(g4, l4) < 0) return lo;
+      if (vec4Cmp(g4, h4) > 0) return hi;
+      return v;
+    }
+    if (g4 instanceof GVector4i && l4 instanceof GVector4i && h4 instanceof GVector4i) {
+      if (vec4Cmp(g4, l4) < 0) return lo;
+      if (vec4Cmp(g4, h4) > 0) return hi;
+      return v;
+    }
   }
   // S537：向量 clamp 走引擎的**字典序**比较（先 x、再 y、再 z），整支返回 v / lo / hi（`CLAMP` 用 Variant `<`/`>`，
   // Vector 的这两个运算符是字典序）——实测 `clamp(Vector2(1,-5),(0,0),(2,2))` 给 `(1.0,-5.0)` 原样、

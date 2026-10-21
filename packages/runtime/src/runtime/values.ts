@@ -2827,6 +2827,8 @@ function fmtVecComps(a: Variant): number[] | null {
   if (o instanceof GVector2i) return [o.x, o.y];
   if (o instanceof GVector3) return [o.x, o.y, o.z];
   if (o instanceof GVector3i) return [o.x, o.y, o.z];
+  if (o instanceof GVector4) return [o.x, o.y, o.z, o.w];
+  if (o instanceof GVector4i) return [o.x, o.y, o.z, o.w];
   return null;
 }
 
@@ -2980,9 +2982,6 @@ export function strFormat(fmt: string, args: Variant[]): string {
         break;
       }
       case "v": {
-        if (a.t === Tag.OBJECT && (a.v instanceof GVector4 || a.v instanceof GVector4i)) {
-          throw new UnsupportedError("format-vector4", "%v 在 Vector4 / Vector4i 上的逐支印法没实测过（S580 只到核心值类型），不发");
-        }
         const comps = fmtVecComps(a);
         if (comps === null) throw new GodotRuntimeError("format-vector", FMT_ERR.vector);
         // 宽度与精度都落到**每一支**上（实测 `%30v` 给两支各补到 30 的 `(...)`、`%.2v` 给 `(1.00, 2.00)`）
