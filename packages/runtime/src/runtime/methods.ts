@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -36,7 +36,13 @@ import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packDynamicUnpack, packItems, packNameAbsent, packTypeName } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packDynamicUnpack, packItems, packNameAbsent, packTypeName, registerPackErrorSink } from "./packed";
+
+registerPackErrorSink({
+  bufferZero: packDecompressBufferZero,
+  srcZero: packDecompressSrcZero,
+  inflateErr: packDecompressInflateErr,
+});
 
 /** `Signal()` / `Signal(Object, name)`（S556）：两参形在对象上按名取**同一个**信号实例；名字不在就造一个只带名字的（引擎实测 is_null 假、get_name 给该名）。 */
 export function signalCtor(args: Variant[]): Variant {

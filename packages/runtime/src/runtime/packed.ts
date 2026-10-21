@@ -554,6 +554,14 @@ let zip1: Codec | null = null;
 let zip2: Codec | null = null;
 let zip3: Codec | null = null;
 
+/** `decompress()` 的三块失败文案：packed 不能 import frames（frames → values → packed 会成环），由 methods.ts 注入。 */
+type PackErrSink = { bufferZero: () => void; srcZero: () => void; inflateErr: () => void };
+let packErrSink: PackErrSink | null = null;
+
+export function registerPackErrorSink(s: PackErrSink): void {
+  packErrSink = s;
+}
+
 /** 宿主把某个模式的编解码器挂进来（`mode` 只认 1 / 2 / 3）。 */
 export function registerZipCodec(mode: number, codec: Codec): void {
   if (mode === 1) zip1 = codec;
@@ -870,14 +878,26 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       const sv = intToNum((args[0] as Variant).v as number | bigint);
       const want = typeof sv === "bigint" ? Number(sv) : sv;
       // `expected` ≤ 0 或比真身小都给空 pack（不是截断）；比真身大也不补零，给的就是真身。
-      if (!(want > 0) || items.length === 0) return V.object(new GBytes([], "byte"));
+      if (!(want > 0)) {
+        if (packErrSink !== null) packErrSink.bufferZero();
+        return V.object(new GBytes([], "byte"));
+      }
+      if (items.length === 0) {
+        if (packErrSink !== null) packErrSink.srcZero();
+        return V.object(new GBytes([], "byte"));
+      }
       let plain: Uint8Array;
       try {
         plain = codec.unpack(byteBuf(items));
       } catch {
-        return V.object(new GBytes([], "byte")); // 垃圾数据给空 pack
+        // zlib 的两支解不开时引擎在 compression 层打 `err != 1`；zstd 那支不打块
+        if ((mode === 1 || mode === 3) && packErrSink !== null) packErrSink.inflateErr();
+        return V.object(new GBytes([], "byte"));
       }
-      if (plain.length > want) return V.object(new GBytes([], "byte"));
+      if (plain.length > want) {
+        if ((mode === 1 || mode === 3) && packErrSink !== null) packErrSink.inflateErr();
+        return V.object(new GBytes([], "byte"));
+      }
       return V.object(new GBytes(bytesOf(plain), "byte"));
     }
     case "get_string_from_utf8": {

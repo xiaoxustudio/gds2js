@@ -158,6 +158,19 @@ export function packVarShort(): Variant {
   return pushBlock("ERROR", "decode_variant (core/io/marshalls.cpp:190)", [V.str('Condition "len < 4" is true. Returning: ERR_INVALID_DATA')]);
 }
 
+/** `PackedByteArray.decompress()` 的三块失败文案（S559）：buffer ≤ 0 / 空压缩源 / zlib 解不开。 */
+export function packDecompressBufferZero(): void {
+  pushBlock("ERROR", "func_PackedByteArray_decompress (core/variant/variant_call.cpp:818)", [V.str("Decompression buffer size must be greater than zero.")]);
+}
+
+export function packDecompressSrcZero(): void {
+  pushBlock("ERROR", "func_PackedByteArray_decompress (core/variant/variant_call.cpp:821)", [V.str("Compressed buffer size must be greater than zero.")]);
+}
+
+export function packDecompressInflateErr(): void {
+  pushBlock("ERROR", "decompress (core/io/compression.cpp:197)", [V.str('Condition "err != 1" is true. Returning: -1')]);
+}
+
 /** `decompress_dynamic()` 的空输入（S557）：compression 那层先打 `p_src_size <= 0`，再打外层 `Decompression failed.`。 */
 export function packDynamicSrcEmpty(): Variant {
   return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:233)", [V.str('Condition "p_src_size <= 0" is true. Returning: (-3)')]);
