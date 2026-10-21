@@ -362,8 +362,16 @@ class Writer {
         const items = a.raw();
         const kind = a.elemKind();
         // 实测：定型数组头部挂宽位，再跟一枚「元素类型码」字（Array[int] 给 2、Array[String] 给 4、Array[Array] 给 28）
+        if (a.classNamed() !== "") {
+          // 类定型（S614 拆完的形）：头部 flags=2，之后**不写元素型码**，只写一枚固定的串名位 —— 引擎写的
+          // 是 "EncodedObjectAsID"，与我们给的类名无关，回读后类名也就变成它（读数 tmp/d6/s624.gd）
+          this.u32(T_ARRAY | (2 << 16));
+          this.str("EncodedObjectAsID");
+          this.u32(items.length);
+          for (const e of items) this.variant(e);
+          return;
+        }
         this.header(T_ARRAY, kind !== null);
-        if (a.classNamed() !== "") throw new UnsupportedError("var-to-bytes-class-typed", "var_to_bytes() 的类定型数组（头部 flags=2 + EncodedObjectAsID 那一族）字节形还没拆完，响亮拒");
         if (kind !== null) this.u32(elemCode(kind));
         this.u32(items.length);
         for (const e of items) this.variant(e);
@@ -675,6 +683,17 @@ class Reader {
         return V.object(new GColor(r, g, b, a));
       }
       case T_ARRAY: {
+        if ((flags & 2) !== 0) {
+          // 类定型：读那枚串名位（引擎恒为 "EncodedObjectAsID"），元素型不写码 —— 定型性按 Object 接（S614）
+          const cls = this.str();
+          const cn = this.u32();
+          const citems: Variant[] = [];
+          for (let k = 0; k < cn; k++) citems.push(this.variant());
+          const carr = GArray.of(citems);
+          carr.stampElem("Object");
+          carr.className = cls;
+          return V.array(carr);
+        }
         const kind = (flags & FLAG_WIDE) !== 0 ? elemKindOf(this.u32()) : null;
         const n = this.u32();
         const items: Variant[] = [];
