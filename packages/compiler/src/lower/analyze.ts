@@ -931,19 +931,28 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
       loc,
     });
   };
-  const walkClass = (c: ClassDecl): void => {
-    for (const v of c.vars) {
-      const slot = slotOf(v.type);
-      if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+  /** 引擎这一族是按**分组**发的，不是按源码行序（两形实测：`tmp/probe569/s619.gd` 两支内部类 + 语料 393）：
+   *  ① 外层 var 的默认值 → ② 外层函数形参的默认值 → ③ 各内部类的成员 var（按类声明序）→ ④ 外层函数体里的 var → ⑤ 内部类的函数。 */
+  const varSlot = (v: VarDecl): void => {
+    const slot = slotOf(v.type);
+    if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
+  };
+  const paramSlots = (f: { params: Param[]; loc: Diagnostic["loc"] }): void => {
+    for (const p of f.params) {
+      const slot = slotOf(p.type);
+      if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
     }
+  };
+  const classVars = (c: ClassDecl): void => {
+    for (const v of c.vars) varSlot(v);
+    for (const inner of c.innerClasses) classVars(inner);
+  };
+  const classFuncs = (c: ClassDecl): void => {
     for (const f of c.funcs) {
-      for (const p of f.params) {
-        const slot = slotOf(p.type);
-        if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
-      }
+      paramSlots(f);
       walkStmtVars(f.body);
     }
-    for (const inner of c.innerClasses) walkClass(inner);
+    for (const inner of c.innerClasses) classFuncs(inner);
   };
   const walkStmtVars = (n: unknown): void => {
     if (Array.isArray(n)) {
@@ -962,18 +971,11 @@ function checkScriptClassSlots(m: Module, diags: Diagnostic[]): void {
       if (key !== "loc") walkStmtVars(obj[key]);
     }
   };
-  for (const v of m.vars) {
-    const slot = slotOf(v.type);
-    if (slot !== null) refuse(v.name, "variable", slot, v.init, v.loc);
-  }
-  for (const f of m.funcs) {
-    for (const p of f.params) {
-      const slot = slotOf(p.type);
-      if (slot !== null) refuse(p.name, "parameter", slot, p.default, f.loc);
-    }
-    walkStmtVars(f.body);
-  }
-  for (const c of m.innerClasses) walkClass(c);
+  for (const v of m.vars) varSlot(v);
+  for (const f of m.funcs) paramSlots(f);
+  for (const c of m.innerClasses) classVars(c);
+  for (const f of m.funcs) walkStmtVars(f.body);
+  for (const c of m.innerClasses) classFuncs(c);
 }
 
 /** signal 的形参不许带默认值（S453，读数 `tmp/d6/l3-sig-*.gd` 与语料 394）：一份文件里三支不合式也只发**第一句**就收口。 */
