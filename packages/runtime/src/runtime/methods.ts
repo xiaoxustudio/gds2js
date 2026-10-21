@@ -1,5 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { md5Hex } from "./md5";
+import { bytesToHex, sha1Bytes, sha256Bytes } from "./hashes";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -20,7 +21,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, arrayIndexOob, arrayEmptyBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -33,7 +34,7 @@ import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitali
   strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix,
   strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch,
   strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf,
-  strLstrip, strRstrip, strPascalCase,
+  strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -1801,6 +1802,51 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `bin_to_int() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(strBinToInt(s));
+        case "md5_text":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `md5_text() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(md5Hex(s));
+        case "md5_buffer":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `md5_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(hexPairsToBytes(md5Hex(s))));
+        case "sha1_text":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha1_text() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(bytesToHex(sha1Bytes(s)));
+        case "sha1_buffer":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha1_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(sha1Bytes(s)));
+        case "sha256_text":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha256_text() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(bytesToHex(sha256Bytes(s)));
+        case "sha256_buffer":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `sha256_buffer() 不接受参数（收到 ${args.length} 个）`);
+          return V.object(new GBytes(sha256Bytes(s)));
+        case "hex_decode": {
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `hex_decode() 不接受参数（收到 ${args.length} 个）`);
+          const cs = Array.from(s);
+          if (cs.length % 2 !== 0) {
+            stringHexUnevenBlock();
+            return V.object(new GBytes([]));
+          }
+          const bytes: number[] = [];
+          for (let i = 0; i < cs.length; i += 2) {
+            const hi = hexDigit(cs[i] as string);
+            const lo = hexDigit(cs[i + 1] as string);
+            if (hi < 0 || lo < 0) {
+              throw new UnsupportedError("string-hex-decode", "hex_decode() 的非法十六进制字符：引擎那两行带 U+FFFD 的怪块没复刻，响亮拒");
+            }
+            bytes.push(hi * 16 + lo);
+          }
+          return V.object(new GBytes(bytes));
+        }
+        case "xml_unescape":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `xml_unescape() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strXmlUnescape(s));
+        case "is_valid_html_color":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_html_color() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsValidHtmlColor(s));
+        case "is_valid_ip_address":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_ip_address() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsValidIpAddress(s));
         case "get_extension":
           if (args.length !== 0) throw new GodotRuntimeError("arity", `get_extension() 不接受参数（收到 ${args.length} 个）`);
           return V.str(strGetExtension(s));
@@ -2465,8 +2511,21 @@ function intArgIdx(a: Variant, who: string): number {
   return foldInt(a, `${who} 的第 0 个参数需要 int`);
 }
 
-/** `Array.get` / `Array.set` 的下标位（S572）：int / float / bool 照折，其余发引擎方法句；负下标**不**回绕。 */
-function arrayIndexArg(v: Variant | undefined, who: string): number {
+function hexDigit(ch: string): number {
+  const c = ch.codePointAt(0) as number;
+  if (c >= 0x30 && c <= 0x39) return c - 0x30;
+  if (c >= 0x61 && c <= 0x66) return 10 + c - 0x61;
+  if (c >= 0x41 && c <= 0x46) return 10 + c - 0x41;
+  return -1;
+}
+
+function hexPairsToBytes(hex: string): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) out.push(parseInt(hex.slice(i, i + 2), 16));
+  return out;
+}
+
+/** `Array.get` / `Array.set` 的下标位（S572）：int / float / bool 照折，其余发引擎方法句；负下标**不**回绕。 */function arrayIndexArg(v: Variant | undefined, who: string): number {
   if (v === undefined) {
     throw new GodotRuntimeError("arity", `Too few arguments for "${who}()" call. Expected at least 1 but received 0.`);
   }

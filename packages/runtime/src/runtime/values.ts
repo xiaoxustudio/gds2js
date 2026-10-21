@@ -1585,6 +1585,144 @@ export function strPascalCase(s: string): string {
   return out;
 }
 
+/** `String.xml_unescape()`（S577）：五个命名实体 + `&#十进制;` / `&#x小写x十六进制;`；其余原样（含 `&#X43;`、`&#0;`、缺分号）。 */
+export function strXmlUnescape(s: string): string {
+  const named: [string, string][] = [["&amp;", "&"], ["&lt;", "<"], ["&gt;", ">"], ["&quot;", "\""], ["&apos;", "'"]];
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    if (s[i] !== "&") {
+      out += s[i];
+      i += 1;
+      continue;
+    }
+    let hit = false;
+    for (const [from, to] of named) {
+      if (s.startsWith(from, i)) {
+        out += to;
+        i += from.length;
+        hit = true;
+        break;
+      }
+    }
+    if (hit) continue;
+    const rest = s.slice(i);
+    const dec = /^&#([0-9]+);/.exec(rest);
+    const hex = dec === null ? /^&#x([0-9a-fA-F]+);/.exec(rest) : null;
+    if (dec !== null || hex !== null) {
+      const cp = dec !== null ? Number(dec[1]) : parseInt(hex?.[1] as string, 16);
+      const len = (dec ?? hex)?.[0].length as number;
+      if (cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff)) {
+        out += String.fromCodePoint(cp);
+        i += len;
+        continue;
+      }
+    }
+    out += "&";
+    i += 1;
+  }
+  return out;
+}
+
+/** `String.is_valid_html_color()`（S577）：可选 `#`，后面 3 / 4 / 6 / 8 个十六进制位（没有颜色名那条路）。 */
+export function strIsValidHtmlColor(s: string): boolean {
+  if (s.length === 0) return false;
+  const start = s[0] === "#" ? 1 : 0;
+  const n = s.length - start;
+  if (!(n === 3 || n === 4 || n === 6 || n === 8)) return false;
+  for (let i = start; i < s.length; i++) {
+    const c = (s[i] as string).codePointAt(0) as number;
+    const ok = (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x46) || (c >= 0x61 && c <= 0x66);
+    if (!ok) return false;
+  }
+  return true;
+}
+
+function parseIpv4(s: string, start: number): boolean {
+  let cur = 0;
+  let next = 0;
+  let parsed = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i] as string;
+    if (c === ".") {
+      if (!parsed) return false;
+      parsed = false;
+      next = 0;
+      cur++;
+      if (cur > 3) return false;
+    } else if (c >= "0" && c <= "9") {
+      parsed = true;
+      next = next * 10 + (c.charCodeAt(0) - 48);
+      if (next > 255) return false;
+    } else {
+      return false;
+    }
+  }
+  return parsed && cur === 3;
+}
+
+function bswap16(x: number): number {
+  return ((x & 0xff) << 8) | (x >> 8);
+}
+
+function parseIpv6(s: string): boolean {
+  const len = s.length;
+  const buf = Array.from(s);
+  const field = new Uint16Array(8);
+  let cur = 0;
+  let shift = -1;
+  for (let i = 0; i < len; i++) {
+    for (let j = i; j < len; j++) {
+      const c = buf[j] as string;
+      if (c === ":") {
+        if (j + 1 === len) return false;
+        if (buf[j + 1] === ":") {
+          if (shift > -1) return false;
+          if (j === 0) shift = cur;
+          else shift = cur + 1;
+          j++;
+        } else if (i === j) {
+          return false;
+        }
+        i = j;
+        break;
+      }
+      if (j - i > 3) return false;
+      if (c >= "0" && c <= "9") field[cur] = ((field[cur] as number) << 4) | (c.charCodeAt(0) - 48);
+      else if (c >= "a" && c <= "f") field[cur] = ((field[cur] as number) << 4) | (10 + c.charCodeAt(0) - 97);
+      else if (c >= "A" && c <= "F") field[cur] = ((field[cur] as number) << 4) | (10 + c.charCodeAt(0) - 65);
+      else if (c === ".") {
+        if (cur < 1 || field[cur - 1] !== 0xffff) return false;
+        if (shift < 0 && cur !== 6) return false;
+        field[cur] = 0;
+        field[cur - 1] = 0;
+        while (cur > 0) {
+          cur--;
+          if (field[cur] !== 0) return false;
+        }
+        field[5] = 0xffff;
+        return parseIpv4(s.slice(i), 0);
+      } else {
+        return false;
+      }
+      if (j + 1 === len) i = j;
+    }
+    field[cur] = bswap16(field[cur] as number);
+    cur++;
+    if (cur > 8 || (cur === 8 && i + 1 !== len)) return false;
+  }
+  if (shift < 0) return cur === 8;
+  if (shift > 7) return false;
+  return true;
+}
+
+/** `String.is_valid_ip_address()`（S577）：长度门槛 16 / 40，带 `:` 走 IPv6（含嵌入 IPv4），否则走点分 IPv4。 */
+export function strIsValidIpAddress(s: string): boolean {
+  if (s.length < 40 && s.includes(":")) return parseIpv6(s);
+  if (s.length < 16) return parseIpv4(s, 0);
+  return false;
+}
+
 /** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
 export function strIsAbsolutePath(s: string): boolean {
   if (s.length > 1) return s[0] === "/" || s[0] === "\\" || s.includes(":/") || s.includes(":\\");

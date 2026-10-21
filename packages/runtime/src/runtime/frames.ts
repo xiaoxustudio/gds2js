@@ -130,6 +130,11 @@ export function arrayEmptyBlock(who: "front" | "back" | "pick_random", line: num
   return pushBlock("ERROR", `${who} (core/variant/array.cpp:${String(line)})`, [V.str("Can't take value from empty array.")]);
 }
 
+/** `String.hex_decode()` 的奇数长度块（S577，ustring.cpp:1658）。 */
+export function stringHexUnevenBlock(): Variant {
+  return pushBlock("ERROR", "hex_decode (core/string/ustring.cpp:1658)", [V.str("Hexadecimal string of uneven length.")]);
+}
+
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
 export function stringReplaceCharsNul(): Variant {
   return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);
