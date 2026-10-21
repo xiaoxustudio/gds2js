@@ -30,6 +30,7 @@ import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
   strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath,
+  strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -1820,6 +1821,41 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "is_relative_path":
           if (args.length !== 0) throw new GodotRuntimeError("arity", `is_relative_path() 不接受参数（收到 ${args.length} 个）`);
           return V.bool(strIsRelativePath(s));
+        case "reverse":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `reverse() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strReverse(s));
+        case "bigrams":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `bigrams() 不接受参数（收到 ${args.length} 个）`);
+          return V.array(GArray.of(strBigramsList(s).map((x) => V.str(x))));
+        case "get_slice_count":
+          return V.int(strSliceCount(s, asString(one(args, "get_slice_count"), "get_slice_count")));
+        case "rsplit": {
+          const delim = args.length === 0 ? "" : asString(args[0] as Variant, "rsplit");
+          const allow = boolArgOr(args, 1, true);
+          const max = intArgOr(args, 2, 0);
+          return V.array(GArray.of(strRsplit(s, delim, allow, max).map((x) => V.str(x))));
+        }
+        case "split_floats": {
+          const delim = asString(one(args, "split_floats"), "split_floats");
+          const allow = boolArgOr(args, 1, true);
+          return V.array(GArray.of(strSplitFloats(s, delim, allow).map((x) => V.float(x))));
+        }
+        case "lpad": {
+          const n = intArg(args, 0, "lpad");
+          const ch = args[1] === undefined ? " " : asString(args[1] as Variant, "lpad");
+          return V.str(strLpad(s, n, ch));
+        }
+        case "rpad": {
+          const n = intArg(args, 0, "rpad");
+          const ch = args[1] === undefined ? " " : asString(args[1] as Variant, "rpad");
+          return V.str(strRpad(s, n, ch));
+        }
+        case "pad_decimals":
+          return V.str(strPadDecimals(s, intArg(args, 0, "pad_decimals")));
+        case "trim_prefix":
+          return V.str(strTrimPrefix(s, asString(one(args, "trim_prefix"), "trim_prefix")));
+        case "trim_suffix":
+          return V.str(strTrimSuffix(s, asString(one(args, "trim_suffix"), "trim_suffix")));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);

@@ -1,5 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { hexUpper, strToInt } from "./numstr";
+import { hexUpper, strToFloat, strToInt } from "./numstr";
 import { Tag, tagName, V, intToBig, intToNum, int64ParamBig, type IntPayload, type Variant } from "./tags";
 import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
@@ -1167,6 +1167,136 @@ export function strRemoveChars(s: string, chars: string): string {
   let out = "";
   for (const ch of s) if (!set.has(ch.codePointAt(0) as number)) out += ch;
   return out;
+}
+
+/** `String.reverse()`（S574）：按码点反转（`"aé😀"`→`😀éa`）。 */
+export function strReverse(s: string): string {
+  const cs = Array.from(s);
+  cs.reverse();
+  return cs.join("");
+}
+
+/** `String.bigrams()`（S574）：按码点取相邻两格，长度 <2 给空。 */
+export function strBigramsList(s: string): string[] {
+  const cs = Array.from(s);
+  const out: string[] = [];
+  for (let i = 0; i + 1 < cs.length; i++) out.push((cs[i] as string) + (cs[i + 1] as string));
+  return out;
+}
+
+/** `String.get_slice_count(delimiter)`（S574）：空串或空分隔符给 0；否则 1 + 不重叠命中数。 */
+export function strSliceCount(s: string, delim: string): number {
+  if (s.length === 0 || delim.length === 0) return 0;
+  let pos = 0;
+  let n = 1;
+  for (;;) {
+    const at = s.indexOf(delim, pos);
+    if (at < 0) return n;
+    n += 1;
+    pos = at + delim.length;
+  }
+}
+
+/** `String.rsplit(delimiter="", allow_empty=true, maxsplit=0)`（S574）：照引擎的从右往左切与最后的 reverse。 */
+export function strRsplit(s: string, delim: string, allowEmpty: boolean, maxsplit: number): string[] {
+  const out: string[] = [];
+  const chars = delim.length === 0 ? Array.from(s) : null;
+  if (chars !== null) {
+    let remaining = chars.length;
+    for (;;) {
+      if (maxsplit > 0 && maxsplit === out.length) {
+        if (allowEmpty || remaining > 0) out.push(chars.slice(0, remaining).join(""));
+        break;
+      }
+      let left = remaining - 1;
+      if (left === 0) left -= 1;
+      if (left < 0) {
+        out.push(chars.slice(0, remaining).join(""));
+        break;
+      }
+      const start = left;
+      if (allowEmpty || start < remaining) out.push(chars.slice(start, remaining).join(""));
+      remaining = left;
+    }
+    out.reverse();
+    return out;
+  }
+  let remaining = s.length;
+  for (;;) {
+    if (remaining < delim.length || (maxsplit > 0 && maxsplit === out.length)) {
+      if (allowEmpty || remaining > 0) out.push(s.slice(0, remaining));
+      break;
+    }
+    const left = s.lastIndexOf(delim, remaining - delim.length);
+    if (left < 0) {
+      out.push(s.slice(0, remaining));
+      break;
+    }
+    const start = left + delim.length;
+    if (allowEmpty || start < remaining) out.push(s.slice(start, remaining));
+    remaining = left;
+  }
+  out.reverse();
+  return out;
+}
+
+/** `String.split_floats(delimiter, allow_empty=true)`（S574）：每段走 `to_float` 的前导解析，空段按 allow_empty 取舍。 */
+export function strSplitFloats(s: string, delim: string, allowEmpty: boolean): number[] {
+  const out: number[] = [];
+  if (s.length === 0) return out;
+  if (delim.length === 0) {
+    out.push(strToFloat(s));
+    return out;
+  }
+  let from = 0;
+  for (;;) {
+    let end = s.indexOf(delim, from);
+    if (end < 0) end = s.length;
+    if (allowEmpty || end > from) out.push(strToFloat(s.slice(from, end)));
+    if (end === s.length) break;
+    from = end + delim.length;
+  }
+  return out;
+}
+
+export function strLpad(s: string, minLength: number, character: string): string {
+  const pad = minLength - strLength(s);
+  return pad > 0 ? repeatCp(character, pad) + s : s;
+}
+
+export function strRpad(s: string, minLength: number, character: string): string {
+  const pad = minLength - strLength(s);
+  return pad > 0 ? s + repeatCp(character, pad) : s;
+}
+
+function repeatCp(s: string, n: number): string {
+  const cs = Array.from(s);
+  let out = "";
+  for (let i = 0; i < n; i++) for (const c of cs) out += c;
+  return out;
+}
+
+/** `String.pad_decimals(digits)`（S574）：无小数点先补一个，再按位数截断或补零。 */
+export function strPadDecimals(s: string, digits: number): string {
+  let t = s;
+  let c = t.indexOf(".");
+  if (c === -1) {
+    if (digits <= 0) return t;
+    t += ".";
+    c = t.length - 1;
+  } else if (digits <= 0) {
+    return t.slice(0, c);
+  }
+  if (t.length - (c + 1) > digits) return t.slice(0, c + digits + 1);
+  return t + "0".repeat(digits - t.length + (c + 1));
+}
+
+export function strTrimPrefix(s: string, prefix: string): string {
+  return s.startsWith(prefix) ? s.slice(prefix.length) : s;
+}
+
+export function strTrimSuffix(s: string, suffix: string): string {
+  return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : s;
 }
 
 /** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
