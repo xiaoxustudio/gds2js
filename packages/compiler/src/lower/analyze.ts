@@ -5815,6 +5815,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       // 数值位上拒 bool 的那几张表（S362）：`wrap` 只有第一位（变元的 `max` / `min` 在上面那支单独扫）
       const boolFixed = new Set(GLOBAL_ARG_BOOL_REFUSED[callee.name] ?? []);
       const refusesBool = (pos: number): boolean => boolFixed.has(pos) || boolFollows?.has(pos) === true;
+      // 单一变体那一族的字面量位：引擎只在**第一个坏位**推句就停（`clampi("x","y","z")` 与 `maxf(V4i,V4i)` 各只吐 argument 1，
+      // `tmp/d6/s603.gd` / `s601.gd`），多位混排的 `randf_range` 走下面 asRows / shouldRows 那两条（实测三条）。
+      let firstLiteralHit: { pos: number; got: string } | null = null;
       for (const [pos, want] of wants) {
         if (followContainer) continue;
         const a = e.args[pos - 1];
@@ -5833,7 +5836,11 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
               : null
             : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
         if (got === null || got === want) continue;
-        put(pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${pos} should be "${want}" but is "${got}".`);
+        if (firstLiteralHit === null || pos < firstLiteralHit.pos) firstLiteralHit = { pos, got };
+      }
+      if (firstLiteralHit !== null) {
+        const wantOf = wants.find(([p]) => p === firstLiteralHit.pos) as [number, "int" | "float" | "bool"];
+        put(firstLiteralHit.pos, "global-arg-type", `Invalid argument for "${callee.name}()" function: argument ${firstLiteralHit.pos} should be "${wantOf[1]}" but is "${firstLiteralHit.got}".`);
       }
       // S518–S523：数值（int / float）参数学全局函数（逐型逐位量过：收 {bool,int,float}、其余形引擎解析期发
       // `argument N should be "<want>" but is "<K>"`）的名字实参 —— literalTypeName 交不出型，改问 argAnn。

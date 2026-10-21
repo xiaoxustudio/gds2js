@@ -15,7 +15,7 @@ const want = (fn: string, target: string, src: string) =>
   `Invalid argument for "${fn}()" function: argument 1 should be "${target}" but is "${src}".`;
 
 describe("max / min 族的 Vector4 解析期位（S598）", () => {
-  // 引擎那一趟只打 argument 1 就 `Failed to load script`；分析层把同一支调用的坏位逐位列全，所以钉的是**首条**与引擎逐字。
+  // 单一变体那一族引擎只推**第一个坏位**（S599 把分析层对齐），多变体那一族（`randf_range`）逐位推 —— 两种形状都在下面钉住。
   it("max / min / maxf / minf 的首句目标是 float", async () => {
     for (const fn of ["max", "min", "maxf", "minf"]) {
       expect((await diags(`${fn}(${V4}, ${V4})`))[0], fn).toBe(want(fn, "float", "Vector4"));
@@ -32,5 +32,15 @@ describe("max / min 族的 Vector4 解析期位（S598）", () => {
     expect(await diags(`max(1, 2.5)`)).toEqual([]);
     expect(await diags(`maxf(1.5, 2)`)).toEqual([]);
     expect(await diags(`maxi(1, 2)`)).toEqual([]);
+  });
+  it("单一变体那族只推第一个坏位，多变体那族仍然逐位推（S599）", async () => {
+    expect(await diags(`maxf(${V4I}, ${V4I})`)).toEqual([want("maxf", "float", "Vector4i")]);
+    expect(await diags(`clampi("x", "y", "z")`)).toEqual([
+      `Invalid argument for "clampi()" function: argument 1 should be "int" but is "String".`,
+    ]);
+    const rr = await diags(`randf_range([1], "a")`);
+    expect(rr).toContain(`Invalid argument for "randf_range()" function: argument 1 should be "float" but is "Array".`);
+    expect(rr).toContain(`Cannot pass a value of type "String" as "float".`);
+    expect(rr).toContain(`Invalid argument for "randf_range()" function: argument 2 should be "float" but is "String".`);
   });
 });
