@@ -4883,24 +4883,14 @@ const JOIN_BAD_ARG: Record<string, string> = {
 };
 
 
-/** 接收者能不能**静态证成** Array / Dictionary / 某种 pack：只认字面量与 `PackedXArray(...)` 构造式。变量名不在这里解析 —— 推断来源不证（宁可漏报，也不把运行期那句提前）。 */
-function joinReceiverBase(e: Expr): string | null {
-  // 第二句文本里的类型名不带引号
-  if (e.kind === "array") return "Array";
-  if (e.kind === "dict") return "Dictionary";
-  return null;
-}
-
 function checkMethodCall(name: string, e: Extract<Expr, { kind: "call" }>, diags: Diagnostic[]): void {
   if (name !== "join") return;
   // `join` 是 **String** 的方法，接收者分三段：① 字符串字面量才走下面那套「实参形状」判据；② 能静态证出来的 Array / Dictionary / pack 给解析期两句「找不到成员」；③ 其余（推断出来的接收者）解析期放过、运行期才给 `Invalid call. Nonexistent function 'join' in base 'Array'.`，这里什么都不报。
   const recv = e.callee.kind === "attribute" ? e.callee.obj : null;
   if (recv !== null && !(recv.kind === "lit" && recv.lit === "string")) {
-    const base = joinReceiverBase(recv);
-    if (base !== null) {
-      diags.push({ code: "join-not-member", message: `Cannot find member "join" in base "${base}".`, loc: e.loc });
-      diags.push({ code: "join-not-found", message: `Function "join()" not found in base ${base}.`, loc: e.loc });
-    }
+    // 接收者不是字符串字面量那一整段归 `face-member-*` 那条通用判据管：它按面查名，Array 两句、Dictionary 只一句，
+    // 与引擎逐条一致（`[1, 2].join(5)` / `{"a": 1}.join(5)` / `PackedByteArray([1]).join(5)` 的读数 `tmp/probe569/s616.gd`）。
+    // 这里再发一对就把句子发重了，Dictionary 那形还多发一句引擎没有的「Cannot find member」。
     return;
   }
   if (e.args.length === 0) {
