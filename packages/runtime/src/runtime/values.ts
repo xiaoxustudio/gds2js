@@ -2447,6 +2447,9 @@ export function strHumanizeSize(v: Variant): Variant {
 
 /** 码点 → 一位字符串：实测 `char(0)` 与 `String.chr(0)` 是同一支 —— 0、负数、代理区、> U+10FFFF 一律换成 U+FFFD（引擎在建串那一刻就换，并往 stderr 打一句 Unicode parsing error）。 */
 export function stringChr(cp: Variant): Variant {
+  if (cp.t !== Tag.INT && cp.t !== Tag.FLOAT && cp.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in GDScript utility function "char()". Cannot convert argument 1 from ${valueTypeName(cp)} to int.`);
+  }
   const n = intArgBig(cp, "char() 的参数");
   const bad = n <= 0n || n > 0x10ffffn || (n >= 0xd800n && n <= 0xdfff);
   return V.str(String.fromCodePoint(bad ? 0xfffd : Number(n)));

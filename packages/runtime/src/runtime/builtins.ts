@@ -767,27 +767,27 @@ function approxEq(a: number, b: number): boolean {
 }
 
 export function gIsEqualApprox(a: Variant, b: Variant): Variant {
-  const x = fl(a);
-  const y = fl(b);
+  const x = utilFloatArg(a, "is_equal_approx", 1);
+  const y = utilFloatArg(b, "is_equal_approx", 2);
   return V.bool(approxEq(x, y));
 }
 
 export function gIsZeroApprox(v: Variant): Variant {
-  const x = fl(v);
+  const x = utilFloatArg(v, "is_zero_approx", 1);
   return V.bool(Number.isFinite(x) && Math.abs(x) < 1e-5);
 }
 
 export function gIsNan(v: Variant): Variant {
-  return V.bool(Number.isNaN(fl(v)));
+  return V.bool(Number.isNaN(utilFloatArg(v, "is_nan", 1)));
 }
 
 export function gIsInf(v: Variant): Variant {
-  const x = fl(v);
+  const x = utilFloatArg(v, "is_inf", 1);
   return V.bool(x === Infinity || x === -Infinity);
 }
 
 export function gIsFinite(v: Variant): Variant {
-  return V.bool(Number.isFinite(fl(v)));
+  return V.bool(Number.isFinite(utilFloatArg(v, "is_finite", 1)));
 }
 
 /** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1)` 给 nan。
@@ -1026,7 +1026,10 @@ export function unsupportedValueDefault(name: string): Variant {
 export function lengthOf(v: Variant): Variant {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());
-  throw new UnsupportedError("len", `len() 不支持类型 ${v.t}`);
+  if (v.t === Tag.DICT) return V.int((v.v as GDict).size());
+  if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int((v.v as GBytes).length);
+  const tn = v.t === Tag.OBJECT && v.v instanceof Signal ? "Signal" : valueTypeName(v);
+  throw new GodotRuntimeError("len", `Error calling GDScript utility function "len()": Value of type '${tn}' can't provide a length.`);
 }
 
 /** and / or 是短路的，所以右值延迟求值；两支的值恒为 bool（S398：`1 and 2` 引擎给 `true`，`typeof` 那格给 1）。 */
