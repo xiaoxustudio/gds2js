@@ -177,7 +177,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
 }
 
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
-  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc }> = [
+  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc; varName?: string; srcAnn?: TypeRef | null }> = [
     ...m.vars.map((v) => ({ type: v.type, init: v.init, loc: v.loc })),
     ...m.funcs.flatMap((f) => [
       ...f.params.map((p) => ({ type: p.type, init: p.default, loc: f.loc })),
@@ -207,8 +207,13 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   const fnParams = new Map<string, (TypeRef | null)[]>();
   for (const f of m.funcs) fnParams.set(f.name, f.params.map((p) => p.type));
   const walkStmts = (stmts: Stmt[], retType: TypeRef | null): void => {
+    if (retType === null) locals.clear();
     for (const s of stmts) {
-      if (s.kind === "var") targets.push({ type: s.type, init: s.init, loc: s.loc });
+      if (s.kind === "var") {
+        const srcAnn = s.init !== null && s.init.kind === "ident" ? locals.get(s.name === undefined ? "" : (s.init as Record<string, unknown>).name as string) ?? null : null;
+        targets.push({ type: s.type, init: s.init, loc: s.loc, varName: s.name, srcAnn });
+        if (s.name !== undefined && s.type !== null && !locals.has(s.name)) locals.set(s.name, s.type);
+      }
       else if (s.kind === "if") for (const b of s.branches) walkStmts(b.body, retType);
       else if (s.kind === "for" || s.kind === "while") walkStmts(s.body, retType);
       else if (s.kind === "return" && retType !== null) targets.push({ type: retType, init: s.value, loc: s.loc });
@@ -228,7 +233,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     const o = n as Record<string, unknown>;
     if (o.kind === "var") {
       const t = o.type as TypeRef | null;
-      if (t !== null) targets.push({ type: t, init: (o.init as Expr | null) ?? null, loc: o.loc as Loc });
+      if (typeof o.name === "string" && t !== null && !locals.has(o.name)) locals.set(o.name, t);
     }
     if (o.kind === "return" && retType !== null) targets.push({ type: retType, init: (o.value as Expr | null) ?? null, loc: o.loc as Loc });
     if (o.kind === "assign" && retType !== null && (o.target as Record<string, unknown> | undefined)?.kind === "ident") {
@@ -253,6 +258,9 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       if (key !== "loc") walkExprs(o[key], retType);
     }
   };
+  /** 函数内已声明变量的标注文本（S616：定形容器之间赋值要按标注文本比对） */
+  /** 函数内已声明变量的标注文本（S616：定形容器之间赋值要按标注文本比对） */
+  const locals = new Map<string, TypeRef>();
   for (const f of m.funcs) walkStmts(f.body, f.returnType);
   const walkClass = (c: ClassDecl): void => {
     for (const f of c.funcs) walkStmts(f.body, f.returnType);
@@ -261,6 +269,17 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 
   for (const t of targets) {
+    // 定形容器 → 另一个定形容器的赋值：引擎按**标注文本**比对，不同就在解析期拒（读数 tmp/probe569/g1 / g2 / g5 / g6，同标注收下见 g9）
+    const targetAnn = t.type !== null && t.type.kind === "named" ? t.type.name : null;
+    if (t.varName !== undefined && targetAnn !== null && t.srcAnn !== undefined && t.srcAnn !== null && t.srcAnn.kind === "named" &&
+      (t.srcAnn.name.startsWith("Array[") || t.srcAnn.name.startsWith("Dictionary[")) && t.srcAnn.name !== targetAnn) {
+      diags.push({
+        code: "typed-collection-assign",
+        message: `Cannot assign a value of type ${t.srcAnn.name} to variable "${t.varName}" with specified type ${targetAnn}.`,
+        loc: t.loc,
+      });
+      continue;
+    }
     if (t.type === null || t.type.kind !== "named") continue;
     const m2 = /^(Array|Dictionary)\[(.+)\]$/.exec(t.type.name);
     if (m2 === null) continue;
