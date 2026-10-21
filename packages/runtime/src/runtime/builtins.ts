@@ -1455,6 +1455,12 @@ export function gRandi(): Variant {
   return V.int(BigInt(pcgNext(DEFAULT_RAND)));
 }
 
+/** `Math::rand()` 的原样 32 位输出：`Array.pick_random()` / `shuffle()` 的取模源（S572）。 */
+export function randNextUint32(): number {
+  bootRand();
+  return pcgNext(DEFAULT_RAND);
+}
+
 export function gRandf(): Variant {
   bootRand();
   return V.float(Math.fround(pcgNext(DEFAULT_RAND) / 4294967296));

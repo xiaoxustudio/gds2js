@@ -8,7 +8,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gTypeString, gErrorString, gTypeExists,
   gWeakref, gInstanceFromId, gIsInstanceValid, gIsInstanceIdValid, gRidFromInt64, gRidAllocateId, gInstToDict,
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
-  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh,
+  gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
 import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, arrayIndexOob, arrayEmptyBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -29,6 +29,7 @@ import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
   strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
+  strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -1291,6 +1292,59 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.bool(a.size() === 0);
         case "has":
           return V.bool(a.has(one(args, "has")));
+        case "get": {
+          const i = arrayIndexArg(args[0], "get");
+          if (i < 0 || i >= a.size()) {
+            arrayIndexOob("get", i, a.size());
+            return V.nil();
+          }
+          return a.get(i);
+        }
+        case "set": {
+          if (args.length < 2) {
+            throw new GodotRuntimeError("arity", `Too few arguments for "set()" call. Expected at least 2 but received ${String(args.length)}.`);
+          }
+          const i = arrayIndexArg(args[0], "set");
+          const val = args[1] as Variant;
+          if (i < 0 || i >= a.size()) {
+            arrayIndexOob("set", i, a.size());
+            return V.nil();
+          }
+          if (a.isReadOnly()) {
+            throw new UnsupportedError("array-ro-set", "只读 Array 上的 set() 没量过（引擎那句块文案没读数）");
+          }
+          a.set(i, val);
+          return V.nil();
+        }
+        case "front":
+          if (a.size() === 0) {
+            arrayEmptyBlock("front", 355);
+            return V.nil();
+          }
+          return a.get(0);
+        case "back":
+          if (a.size() === 0) {
+            arrayEmptyBlock("back", 360);
+            return V.nil();
+          }
+          return a.get(a.size() - 1);
+        case "pick_random":
+          if (a.size() === 0) {
+            arrayEmptyBlock("pick_random", 365);
+            return V.nil();
+          }
+          return a.get(randNextUint32() % a.size());
+        case "shuffle": {
+          const items = a.raw();
+          const n = items.length;
+          for (let i = n - 1; i >= 1; i--) {
+            const j = randNextUint32() % (i + 1);
+            const t = items[i] as Variant;
+            items[i] = items[j] as Variant;
+            items[j] = t;
+          }
+          return V.nil();
+        }
         case "insert":
           return V.int(a.insertAt(intArg(args, 0, "insert"), argAt(args, 1, "insert")) ? 0 : 31);
         case "erase":
@@ -1510,6 +1564,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.object(NULL_OBJECT);
         case "hash":
           return V.int(variantHashNumber(obj));
+        case "sort":
+          if (d.isReadOnly()) {
+            throw new UnsupportedError("dict-ro-sort", "只读 Dictionary 上的 sort() 没量过（引擎那句块文案没读数）");
+          }
+          d.sortKeys(sortLess);
+          return V.nil();
         default:
           if (DICT_NO_METHOD.has(name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
@@ -1737,6 +1797,29 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
             throw new GodotRuntimeError("arity", `bin_to_int() 不接受参数（收到 ${args.length} 个）`);
           }
           return V.int(strBinToInt(s));
+        case "get_extension":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_extension() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetExtension(s));
+        case "get_basename":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_basename() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetBasename(s));
+        case "get_base_dir":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_base_dir() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetBaseDir(s));
+        case "get_file":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `get_file() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strGetFile(s));
+        case "path_join":
+          return V.str(strPathJoin(s, asString(one(args, "path_join"), "path_join")));
+        case "simplify_path":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `simplify_path() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strSimplifyPath(s));
+        case "is_absolute_path":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_absolute_path() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsAbsolutePath(s));
+        case "is_relative_path":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `is_relative_path() 不接受参数（收到 ${args.length} 个）`);
+          return V.bool(strIsRelativePath(s));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);
@@ -2288,6 +2371,18 @@ function intArg(args: Variant[], i: number, who: string): number {
 /** 下标那三处（读、字符串取字符、写）只有一个 int 参：直接收 Variant，别为它现造一个参数数组。报错文本与 intArg 一致。 */
 function intArgIdx(a: Variant, who: string): number {
   return foldInt(a, `${who} 的第 0 个参数需要 int`);
+}
+
+/** `Array.get` / `Array.set` 的下标位（S572）：int / float / bool 照折，其余发引擎方法句；负下标**不**回绕。 */
+function arrayIndexArg(v: Variant | undefined, who: string): number {
+  if (v === undefined) {
+    throw new GodotRuntimeError("arity", `Too few arguments for "${who}()" call. Expected at least 1 but received 0.`);
+  }
+  if (v.t === Tag.INT || v.t === Tag.FLOAT || v.t === Tag.BOOL) return foldInt(v, "");
+  throw new GodotRuntimeError(
+    "array-index-arg",
+    `Invalid type in function '${who}' in base 'Array'. Cannot convert argument 1 from ${valueTypeName(v)} to int.`,
+  );
 }
 
 /** 可选 int 参：省略时取 Godot 的默认值。 */

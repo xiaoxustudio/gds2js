@@ -529,9 +529,7 @@ export class GArray {
   /** 带比较器的排序：同键顺序走引擎那份置换（`packages/runtime/src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
     this.items = sortGodot(this.items, before);
-  }
-
-  /** 引擎那一条二分界循环：`before` 真 = lower_bound（比较收 `(元素, 值)`），假 = upper_bound（同一支比较器换过来收 `(值, 元素)` 再取反）。
+  }  /** 引擎那一条二分界循环：`before` 真 = lower_bound（比较收 `(元素, 值)`），假 = upper_bound（同一支比较器换过来收 `(值, 元素)` 再取反）。
    *  找不到不回 -1、也不提前收尾，走到底给的就是插入位；格子 `tmp/probe-argtype/{bsearch2,bsearch3}.txt` 共 198 格逐格对过。 */
   bsearch(value: Variant, before: boolean, cmp: (a: Variant, b: Variant) => boolean): number {
     let min = 0;
@@ -682,6 +680,21 @@ export class GDict {
 
   values(): Variant[] {
     return [...this.vs];
+  }
+
+  /** `Dictionary.sort()`（S572）：按键那侧的比较器重排，值跟着键走；重排后重建哈希索引。 */
+  sortKeys(before: (a: Variant, b: Variant) => boolean): void {
+    const ks = this.ks;
+    const vs = this.vs;
+    const order = sortGodot(ks.map((_, i) => i), (x, y) => before(ks[x] as Variant, ks[y] as Variant));
+    const nk = order.map((i) => ks[i] as Variant);
+    const nv = order.map((i) => vs[i] as Variant);
+    this.ks = [];
+    this.vs = [];
+    this.index = new Map();
+    this.bkt = [];
+    this.prev = [];
+    for (let i = 0; i < nk.length; i++) this.set(nk[i] as Variant, nv[i] as Variant);
   }
 
   private asQuery(k: Variant): Variant | null {
@@ -1154,6 +1167,128 @@ export function strRemoveChars(s: string, chars: string): string {
   let out = "";
   for (const ch of s) if (!set.has(ch.codePointAt(0) as number)) out += ch;
   return out;
+}
+
+/** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
+export function strIsAbsolutePath(s: string): boolean {
+  if (s.length > 1) return s[0] === "/" || s[0] === "\\" || s.includes(":/") || s.includes(":\\");
+  if (s.length === 1) return s[0] === "/" || s[0] === "\\";
+  return false;
+}
+
+export function strIsRelativePath(s: string): boolean {
+  return !strIsAbsolutePath(s);
+}
+
+function lastSep(s: string): number {
+  return Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+}
+
+export function strGetFile(s: string): string {
+  const sep = lastSep(s);
+  return sep === -1 ? s : s.slice(sep + 1);
+}
+
+export function strGetExtension(s: string): string {
+  const pos = s.lastIndexOf(".");
+  if (pos < 0 || pos < lastSep(s)) return "";
+  return s.slice(pos + 1);
+}
+
+export function strGetBasename(s: string): string {
+  const pos = s.lastIndexOf(".");
+  if (pos < 0 || pos < lastSep(s)) return s;
+  return s.slice(0, pos);
+}
+
+export function strPathJoin(s: string, file: string): string {
+  if (s.length === 0) return file;
+  if (s[s.length - 1] === "/" || (file.length > 0 && file[0] === "/")) return s + file;
+  return s + "/" + file;
+}
+
+/** `String.get_base_dir()`（S573）：先摘 `://` / `C:/` / UNC / 根 `/` 作 base，再对余下部分砍最后一个分隔符。 */
+export function strGetBaseDir(s: string): string {
+  let end = 0;
+  const scheme = s.indexOf("://");
+  if (scheme !== -1) end = scheme + 3;
+  if (end === 0) {
+    const drivePos = s.indexOf(":/") !== -1 ? s.indexOf(":/") : s.indexOf(":\\");
+    if (drivePos !== -1) end = drivePos + 2;
+  }
+  if (end === 0 && (s.startsWith("//") || s.startsWith("\\\\"))) {
+    let basepos = s.indexOf("/", 2);
+    if (basepos === -1) basepos = s.indexOf("\\", 2);
+    let servpos = s.indexOf("/", basepos + 1);
+    if (servpos === -1) servpos = s.indexOf("\\", basepos + 1);
+    if (servpos !== -1) end = servpos + 1;
+  }
+  if (end === 0 && s.startsWith("/")) end = 1;
+  const rs = end !== 0 ? s.slice(end) : s;
+  const base = end !== 0 ? s.slice(0, end) : "";
+  const sep = lastSep(rs);
+  if (sep === -1) return base;
+  return base + rs.slice(0, sep);
+}
+
+/** `String.simplify_path()`（S573）：驱动前缀单独摘出，反斜杠归一，`.` / `..` 逐段折叠，`res://` 不吃「上跳」。 */
+export function strSimplifyPath(input: string): string {
+  let s = input;
+  let drive = "";
+  let found = false;
+  const p = s.indexOf("://");
+  if (p > 0) {
+    let only = true;
+    for (let i = 0; i < p; i++) {
+      const c = (s[i] as string).codePointAt(0) as number;
+      if (!((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a))) {
+        only = false;
+        break;
+      }
+    }
+    if (only) {
+      found = true;
+      drive = s.slice(0, p + 3);
+      s = s.slice(p + 3);
+    }
+  }
+  if (!found) {
+    if (s.startsWith("//") || s.startsWith("\\\\")) {
+      drive = s.slice(0, 2);
+      s = s.slice(2);
+    } else if (s.startsWith("/") || s.startsWith("\\")) {
+      drive = s.slice(0, 1);
+      s = s.slice(1);
+    } else {
+      let q = s.indexOf(":/");
+      if (q === -1) q = s.indexOf(":\\");
+      if (q !== -1 && q < s.indexOf("/")) {
+        drive = s.slice(0, q + 2);
+        s = s.slice(q + 2);
+      }
+    }
+  }
+  s = s.split("\\").join("/");
+  while (s.includes("//")) s = s.split("//").join("/");
+  const dirs = s.split("/").filter((d) => d !== "");
+  const absolute = strIsAbsolutePath(input) && !input.startsWith("res://");
+  for (let i = 0; i < dirs.length; i++) {
+    const d = dirs[i] as string;
+    if (d === ".") {
+      dirs.splice(i, 1);
+      i -= 1;
+    } else if (d === "..") {
+      if (i !== 0 && dirs[i - 1] !== "..") {
+        dirs.splice(i, 1);
+        dirs.splice(i - 1, 1);
+        i -= 2;
+      } else if (absolute && i === 0) {
+        dirs.splice(i, 1);
+        i -= 1;
+      }
+    }
+  }
+  return drive + dirs.join("/");
 }
 
 function codepointSet(s: string): Set<number> {

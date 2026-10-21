@@ -118,6 +118,18 @@ export function stringUnicodeAsciiError(cp: number): void {
   process.stderr.write(`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1\n`);
 }
 
+/** `Array.get` / `Array.set` 的下标越界块（S572）：两处 `at:` 行号同为 variant_call.cpp:681。 */
+export function arrayIndexOob(who: "get" | "set", index: number, size: number): Variant {
+  return pushBlock("ERROR", `func_Array_${who} (core/variant/variant_call.cpp:681)`, [
+    V.str(`Index p_index = ${String(index)} is out of bounds (p_instance->size() = ${String(size)}).`),
+  ]);
+}
+
+/** `front` / `back` / `pick_random` 的空数组块（S572）：`at:` 分别落在 array.cpp 的 355 / 360 / 365。 */
+export function arrayEmptyBlock(who: "front" | "back" | "pick_random", line: number): Variant {
+  return pushBlock("ERROR", `${who} (core/variant/array.cpp:${String(line)})`, [V.str("Can't take value from empty array.")]);
+}
+
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
 export function stringReplaceCharsNul(): Variant {
   return pushBlock("ERROR", "_replace_chars_common (core/string/ustring.cpp:3853)", [V.str("`with` must not be the NUL character.")]);
