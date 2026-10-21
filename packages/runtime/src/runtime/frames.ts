@@ -176,6 +176,11 @@ export function packDynamicSrcEmpty(): Variant {
   return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:233)", [V.str('Condition "p_src_size <= 0" is true. Returning: (-3)')]);
 }
 
+/** `decompress_dynamic()` 只收 DEFLATE / GZIP（S560）：其它模式先打 compression 295 那句，再打外层 844。 */
+export function packDynamicBadMode(): Variant {
+  return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:295)", [V.str('Condition "p_mode != MODE_DEFLATE && p_mode != MODE_GZIP" is true. Returning: (-1)')]);
+}
+
 /** `decompress_dynamic()` 失败（S557）：外层统一一句 `Decompression failed.`，回空 pack。 */
 export function packDynamicFailed(): Variant {
   return pushBlock("ERROR", "func_PackedByteArray_decompress_dynamic (core/variant/variant_call.cpp:844)", [V.str("Decompression failed.")]);

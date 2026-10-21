@@ -51,13 +51,10 @@ describe("PackedByteArray.decompress_dynamic（S557）", () => {
     const e = capture(() => method(pb([]), "decompress_dynamic", [I(10), I(1)]));
     eq("557", "空输入两块", `${show(e.value as ReturnType<typeof V.array>)}|${e.lines[0]}|${e.lines[1]}|${e.lines[3]}`, `[]|ERROR: Condition "p_src_size <= 0" is true. Returning: (-3)|   at: decompress_dynamic (core/io/compression.cpp:233)|ERROR: Decompression failed.`);
   });
-  it("mode 0 没有宿主 codec：响亮拒", () => {
-    let code = "";
-    try {
-      method(c, "decompress_dynamic", [I(100)]);
-    } catch (e) {
-      code = (e as { code?: string }).code ?? "?";
-    }
-    eq("557", "mode 0", code, "packed-compress-mode");
+  it("mode 0 / 2：295 + 844 两块后回空（S560）", () => {
+    const z = capture(() => method(c, "decompress_dynamic", [I(100)]));
+    eq("560", "mode 0", `${show(z.value as ReturnType<typeof V.array>)}|${z.lines[0]}|${z.lines[1]}`, `[]|ERROR: Condition "p_mode != MODE_DEFLATE && p_mode != MODE_GZIP" is true. Returning: (-1)|   at: decompress_dynamic (core/io/compression.cpp:295)`);
+    const t = capture(() => method(c, "decompress_dynamic", [I(100), I(2)]));
+    eq("560", "mode 2", `${show(t.value as ReturnType<typeof V.array>)}|${t.lines[0]}`, `[]|ERROR: Condition "p_mode != MODE_DEFLATE && p_mode != MODE_GZIP" is true. Returning: (-1)`);
   });
 });
