@@ -3039,7 +3039,19 @@ const CTOR_REFUSED: Record<string, string[][]> = {
   String: [["int"], ["int", "int"], ["int", "int", "int"]],
   StringName: [["int"], ["int", "int"], ["int", "int", "int"]],
   NodePath: [["int"], ["int", "int"], ["int", "int", "int"]],
-  Array: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
+  Array: [
+    ["int"], ["int", "int"], ["int", "int", "int"], ["String"],
+    // S606：`extension_api` 的 Array 构造式只有零参 / `Array from` / 四参定形 / 十支 pack from 那 13 形，
+    // 下面每一行都是一脚本一形量到的引擎原文（读数 `tmp/d6/s606.gd` / `s610p` / `s611p` 批次）
+    ["Dictionary"], ["null"], ["float"], ["bool"], ["StringName"], ["Vector2"], ["Color"],
+    ["Array", "int"], ["Array", "Variant.Type"], ["Dictionary", "Variant.Type"],
+    ["float", "Variant.Type"], ["bool", "Variant.Type"], ["Vector2", "Variant.Type"],
+    ["StringName", "Variant.Type"], ["PackedStringArray", "Variant.Type"], ["PackedByteArray", "Variant.Type"],
+    ["null", "Variant.Type", "StringName", "null"], ["String", "Variant.Type", "StringName", "null"],
+    ["int", "Variant.Type", "StringName", "null"], ["Array", "Variant.Type", "Variant.Type", "bool"],
+    ["Array", "Variant.Type", "StringName", "null", "int"],
+    ["Array", "Variant.Type", "StringName", "null", "int", "int"],
+  ],
   Dictionary: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   Vector2: [["int"], ["int", "int", "int"], ["String"]],
   Vector2i: [["int"], ["int", "int", "int"], ["String"]],
@@ -3057,6 +3069,18 @@ const CTOR_REFUSED: Record<string, string[][]> = {
   PackedStringArray: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
 };
 
+/** 构造式那一句里实参的型名：字面量交 `literalTypeName`，`TYPE_*` 那 39 支全局常量交 `Variant.Type`
+ *  （S606 实测 `Array([1], TYPE_INT)` 引擎写的是 `Array(Array, Variant.Type)`），其余认不出就返回 null 让整条判据让开。 */
+function ctorArgName(a: Expr): string | null {
+  const lit = literalTypeName(a);
+  if (lit !== null) return lit;
+  if (a.kind === "ident") {
+    const nm = (a as unknown as Record<string, unknown>).name;
+    if (typeof nm === "string" && nm.startsWith("TYPE_") && isGlobalConst(nm)) return "Variant.Type";
+  }
+  return null;
+}
+
 function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
   const shadowed = new Set(m.funcs.map((f) => f.name));
   for (const nodes of flattenBodies(m)) {
@@ -3068,7 +3092,7 @@ function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
       if (shadowed.has(name)) continue;
       const bad = CTOR_REFUSED[name];
       if (bad === undefined) continue;
-      const kinds = ((n.args as Expr[]) ?? []).map((a) => literalTypeName(a));
+      const kinds = ((n.args as Expr[]) ?? []).map((a) => ctorArgName(a));
       if (kinds.some((k) => k === null)) continue;
       const sig = kinds.join(", ");
       if (!bad.some((t) => t.join(", ") === sig)) continue;
