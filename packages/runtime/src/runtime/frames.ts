@@ -158,6 +158,16 @@ export function packVarShort(): Variant {
   return pushBlock("ERROR", "decode_variant (core/io/marshalls.cpp:190)", [V.str('Condition "len < 4" is true. Returning: ERR_INVALID_DATA')]);
 }
 
+/** `decompress_dynamic()` 的空输入（S557）：compression 那层先打 `p_src_size <= 0`，再打外层 `Decompression failed.`。 */
+export function packDynamicSrcEmpty(): Variant {
+  return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:233)", [V.str('Condition "p_src_size <= 0" is true. Returning: (-3)')]);
+}
+
+/** `decompress_dynamic()` 失败（S557）：外层统一一句 `Decompression failed.`，回空 pack。 */
+export function packDynamicFailed(): Variant {
+  return pushBlock("ERROR", "func_PackedByteArray_decompress_dynamic (core/variant/variant_call.cpp:844)", [V.str("Decompression failed.")]);
+}
+
 /** `to_vector2_array` / `to_vector3_array` / `to_color_array` 的长度不是整组（S553）：打一块 ERROR、回空 pack。 */
 export function packSizeMultiple(fn: string, line: number, message: string): Variant {
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(message)]);

@@ -20,7 +20,7 @@ import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -36,7 +36,7 @@ import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "./packed";
+import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packDynamicUnpack, packItems, packNameAbsent, packTypeName } from "./packed";
 
 /** `Signal()` / `Signal(Object, name)`（S556）：两参形在对象上按名取**同一个**信号实例；名字不在就造一个只带名字的（引擎实测 is_null 假、get_name 给该名）。 */
 export function signalCtor(args: Variant[]): Variant {
@@ -383,6 +383,34 @@ function bytesUtf32(p: GBytes): Variant {
     out += String.fromCodePoint(cp);
   }
   return V.str(out);
+}
+
+/** `decompress_dynamic(buffer_size, mode=0)`（S557）：宿主编解码器解出后按上限判；失败/超限/空输入都打块回空。 */
+function bytesDecompressDynamic(p: GBytes, args: Variant[]): Variant {
+  if (args.length < 1 || args.length > 2) {
+    throw new GodotRuntimeError("arity", `decompress_dynamic() 需要 1 或 2 个参数（收到 ${args.length} 个）`);
+  }
+  const want = int64Arg(args[0], "decompress_dynamic");
+  const mode = args[1] === undefined ? 0 : Number(int64Arg(args[1], "decompress_dynamic"));
+  const emptyPack = (): Variant => V.object(new GBytes([], "byte"));
+  const raw = p.raw() as number[];
+  if (raw.length === 0) {
+    packDynamicSrcEmpty();
+    packDynamicFailed();
+    return emptyPack();
+  }
+  const r = packDynamicUnpack(raw, mode);
+  if (r === "n/a") {
+    throw new UnsupportedError("packed-compress-mode", `decompress_dynamic() 的 mode ${mode} 没有宿主编解码器（同 compress / decompress），不发近似值`);
+  }
+  if (r === "empty") return emptyPack();
+  if (r === "failed" || want <= 0n || BigInt(r.length) > want) {
+    packDynamicFailed();
+    return emptyPack();
+  }
+  const out: number[] = [];
+  for (let i = 0; i < r.length; i++) out.push(r[i] as number);
+  return V.object(new GBytes(out, "byte"));
 }
 
 /** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
@@ -788,7 +816,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
-      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined || CONVERT_INFO[name] !== undefined || name === "get_string_from_utf32" || name === "to_vector4_array" || name === "get_string_from_multibyte_char") {
+      if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined || CONVERT_INFO[name] !== undefined || name === "get_string_from_utf32" || name === "to_vector4_array" || name === "get_string_from_multibyte_char" || name === "decompress_dynamic") {
         if (inner.kind !== "byte") {
           throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
         }
@@ -798,6 +826,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         if (name === "get_string_from_multibyte_char") {
           throw new UnsupportedError("packed-multibyte", "get_string_from_multibyte_char() 折的是宿主代码页，没实测过");
         }
+        if (name === "decompress_dynamic") return bytesDecompressDynamic(inner, args);
         if (name === "get_string_from_utf32") return bytesUtf32(inner);
         if (CONVERT_INFO[name] !== undefined) return packConvert(inner, name);
         if (VAR_CODEC_GUARD[name] !== undefined) return packVarCodec(inner, name, args);

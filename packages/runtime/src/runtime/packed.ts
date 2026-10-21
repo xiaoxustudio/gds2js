@@ -578,6 +578,18 @@ function modeOf(v: Variant): number {
   return typeof n === "bigint" ? Number(n) : n;
 }
 
+/** `decompress_dynamic()` 的宿主编解码槽（S557）：只分派并吞解压异常；ERROR 块与返回值由调用方（methods.ts）发。 */
+export function packDynamicUnpack(bytes: number[], mode: number): Uint8Array | "empty" | "n/a" | "failed" {
+  const codec = codecFor(mode);
+  if (codec === "empty") return "empty";
+  if (codec === null) return "n/a";
+  try {
+    return codec.unpack(byteBuf(bytes as PackElem[]));
+  } catch {
+    return "failed";
+  }
+}
+
 /** pack 的格子 → 字节缓冲（byte pack 的元素在 `toElem` 那侧已经折到 0..255）。 */
 function byteBuf(items: PackElem[]): Uint8Array {
   const buf = new Uint8Array(items.length);
