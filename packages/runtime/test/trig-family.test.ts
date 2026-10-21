@@ -57,8 +57,8 @@ describe("runtime/trig-family · 三角与双曲", () => {
 
   it("252 · 实参类型那一眼与 absf 同一条道", async () => {
     eq("252", "sin(true) 收 bool（k01）", one(gSin, V.bool(true)), "3|0.8414709848079");
-    eq("252", "sin(String) 与 sin(Nil) 拒（k02 / k03）", `${one(gSin, S("3"))}|${one(gSin, V.nil())}`, "[arg-float]|[arg-float]");
-    eq("252", ".call() 那侧同一条闸门（少的是一支实参先撞 arity）", `${call("cos", S("3"))}|${call("atan2", I(1))}|${call("atan2", I(1), S("x"))}`, "[arg-float]|[callable-arity]|[arg-float]");
+    eq("252", "sin(String) 与 sin(Nil) 拒（k02 / k03）", `${one(gSin, S("3"))}|${one(gSin, V.nil())}`, "[utility-convert]|[utility-convert]");
+    eq("252", ".call() 那侧同一条闸门（少的是一支实参先撞 arity）", `${call("cos", S("3"))}|${call("atan2", I(1))}|${call("atan2", I(1), S("x"))}`, "[utility-convert]|[callable-arity]|[utility-convert]");
   });
 
   it("252 · 三支新行的形状", async () => {

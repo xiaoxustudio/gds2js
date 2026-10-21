@@ -42,6 +42,21 @@ export function num(v: Variant): number {
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
+/** 单个数位实参的引擎转换句（S564）：接受 int / float / bool，其余按源型与目标型发原文。 */
+function utilFloatArg(v: Variant, fn: string, n: number): number {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${n} from ${valueTypeName(v)} to float.`);
+  }
+  return num(v);
+}
+
+function utilIntArg(v: Variant, fn: string, n: number): number {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${n} from ${valueTypeName(v)} to int.`);
+  }
+  return Math.trunc(num(v));
+}
+
 /** `abs` / `sign` / `floor` / `ceil` / `round` 的坏型实参（向量分支已让开时）：引擎走运行期
  *  `Error calling utility function "<fn>()": Argument "x" must be "int", "float", …, or "Vector4i".`
  *  （S524，`tmp/d6/s520.py` 五支逐字同句；bool 照收、折 0/1，与 S362 一致）。 */
@@ -391,7 +406,7 @@ export function variantHash(args: Variant[]): Variant {
 }
 
 export function sqrt(v: Variant): Variant {
-  return V.float(Math.sqrt(num(v)));
+  return V.float(Math.sqrt(utilFloatArg(v, "sqrt", 1)));
 }
 
 export function abs(v: Variant): Variant {
@@ -470,7 +485,7 @@ export function gSignI(v: Variant): Variant {
 }
 
 export function gSignF(v: Variant): Variant {
-  return V.float(one(fl(v)) + 0);
+  return V.float(one(utilFloatArg(v, "signf", 1)) + 0);
 }
 
 /** 实参是 int 时 `floor`/`ceil`/`round` 原样给回 int（实测 `floor(3)` 的 typeof 是 2），而 `floorf` 一族恒给 float、`floori` 一族恒给 int 且 NaN/INF 折成 INT64_MIN。 */
@@ -501,7 +516,7 @@ export function gFloor(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "floor");
     if (vec !== null) return vec;
   }
-  return roundThree(mode === "auto" ? numOrVectorArg(v, "floor") : num(v), Math.floor, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "floor") : utilFloatArg(v, mode === "float" ? "floorf" : "floori", 1), Math.floor, mode);
 }
 
 export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -511,7 +526,7 @@ export function gCeil(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "ceil");
     if (vec !== null) return vec;
   }
-  return roundThree(mode === "auto" ? numOrVectorArg(v, "ceil") : num(v), Math.ceil, mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "ceil") : utilFloatArg(v, mode === "float" ? "ceilf" : "ceili", 1), Math.ceil, mode);
 }
 
 export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
@@ -523,7 +538,7 @@ export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
   }
   // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
   // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
-  return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : num(v), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
+  return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : utilFloatArg(v, mode === "float" ? "roundf" : "roundi", 1), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
 function floorDiv(a: number, b: number): number {
@@ -540,8 +555,8 @@ export function gPosmod(x: Variant, y: Variant): Variant {
 }
 
 export function gFposmod(x: Variant, y: Variant): Variant {
-  const a = fl(x);
-  const b = fl(y);
+  const a = utilFloatArg(x, "fposmod", 1);
+  const b = utilFloatArg(y, "fposmod", 2);
   // 源是 `fmod` 再把结果按号折回，不是 `a - b*floor(a/b)`：两者的最后一两位 double 会分岔（普查 8/30）。
   let v = a % b;
   if ((v < 0 && b > 0) || (v > 0 && b < 0)) v += b;
@@ -550,7 +565,7 @@ export function gFposmod(x: Variant, y: Variant): Variant {
 
 /** `fmod(-0.0, 1.0)` 实测留号（C 的 `fmod` 就是把被除数的号带下来），所以不 `+ 0`。 */
 export function gFmod(x: Variant, y: Variant): Variant {
-  return V.float(fl(x) % fl(y));
+  return V.float(utilFloatArg(x, "fmod", 1) % utilFloatArg(y, "fmod", 2));
 }
 
 export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Variant {
@@ -721,11 +736,11 @@ const TAU_D = 2 * PI_D;
 
 /** `deg_to_rad(-0.0)` 与 `rad_to_deg(-0.0)` 实测都留号（乘法在 IEEE 里就把号带过去），所以不 `+ 0`。 */
 export function gDegToRad(v: Variant): Variant {
-  return V.float(fl(v) * (PI_D / 180));
+  return V.float(utilFloatArg(v, "deg_to_rad", 1) * (PI_D / 180));
 }
 
 export function gRadToDeg(v: Variant): Variant {
-  return V.float(fl(v) * (180 / PI_D));
+  return V.float(utilFloatArg(v, "rad_to_deg", 1) * (180 / PI_D));
 }
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
@@ -921,19 +936,19 @@ export function gRemap(v: Variant, fl0: Variant, fh: Variant, tl: Variant, th: V
 }
 
 export function gExp(v: Variant): Variant {
-  return V.float(Math.exp(fl(v)) + 0);
+  return V.float(Math.exp(utilFloatArg(v, "exp", 1)) + 0);
 }
 
 export function gLog(v: Variant): Variant {
-  return V.float(Math.log(fl(v)) + 0);
+  return V.float(Math.log(utilFloatArg(v, "log", 1)) + 0);
 }
 
 export function gPow(a: Variant, b: Variant): Variant {
-  return V.float(Math.pow(fl(a), fl(b)) + 0);
+  return V.float(Math.pow(utilFloatArg(a, "pow", 1), utilFloatArg(b, "pow", 2)) + 0);
 }
 
 export function gSqrt(v: Variant): Variant {
-  return V.float(Math.sqrt(fl(v)) + 0);
+  return V.float(Math.sqrt(utilFloatArg(v, "sqrt", 1)));
 }
 
 
@@ -988,7 +1003,7 @@ export function range(args: Variant[]): GArray {
 
 /** `absf` / `absi`：实测只吃 INT / FLOAT / BOOL（String、StringName、Nil、Array、Vector2 那一格引擎报 Invalid type 并掐掉本次调用，实测 f01–f12）。 */
 export function gAbsF(v: Variant): Variant {
-  return V.float(Math.abs(numArg(v, "absf() 的参数")) + 0);
+  return V.float(Math.abs(utilFloatArg(v, "absf", 1)) + 0);
 }
 
 export function gAbsI(v: Variant): Variant {
@@ -1015,7 +1030,7 @@ const COS_LIMIT = 1e5;
 const HALF_PI = Math.PI / 2;
 
 function trig(name: string, v: Variant, f: (x: number) => number, limit: number | null): Variant {
-  const x = numArg(v, `${name}() 的参数`);
+  const x = utilFloatArg(v, name, 1);
   if (limit !== null && Number.isFinite(x) && Math.abs(x) > limit) {
     throw new UnsupportedError("trig-large-arg", `${name}() 收到 ${show(V.float(x))}：|x| 超过实测的 ${String(limit)}，引擎那侧的归约从这一档开始丢有效位（没量过的不发）`);
   }
@@ -1033,34 +1048,34 @@ export const gAsinh = (v: Variant): Variant => trig("asinh", v, Math.asinh, null
 
 /** `asin` / `acos` / `acosh` / `atanh` 引擎都先夹再算（`core/math/math_funcs.h` 那四行「Always does clamping」+ 实测 k04–k08 / j.log / e.log），夹出来的是常量。 */
 export function gAsin(v: Variant): Variant {
-  const x = numArg(v, "asin() 的参数");
+  const x = utilFloatArg(v, "asin", 1);
   if (x < -1) return V.float(-HALF_PI);
   if (x > 1) return V.float(HALF_PI);
   return V.float(Math.asin(x));
 }
 
 export function gAcos(v: Variant): Variant {
-  const x = numArg(v, "acos() 的参数");
+  const x = utilFloatArg(v, "acos", 1);
   if (x < -1) return V.float(Math.PI);
   if (x > 1) return V.float(0);
   return V.float(Math.acos(x));
 }
 
 export function gAcosh(v: Variant): Variant {
-  const x = numArg(v, "acosh() 的参数");
+  const x = utilFloatArg(v, "acosh", 1);
   if (x < 1) return V.float(0);
   return V.float(Math.acosh(x));
 }
 
 export function gAtanh(v: Variant): Variant {
-  const x = numArg(v, "atanh() 的参数");
+  const x = utilFloatArg(v, "atanh", 1);
   if (x <= -1) return V.float(-Infinity);
   if (x >= 1) return V.float(Infinity);
   return V.float(Math.atanh(x));
 }
 
 export function gAtan2(y: Variant, x: Variant): Variant {
-  return V.float(Math.atan2(numArg(y, "atan2() 的第一参"), numArg(x, "atan2() 的第二参")));
+  return V.float(Math.atan2(utilFloatArg(y, "atan2", 1), utilFloatArg(x, "atan2", 2)));
 }
 
 /** 引擎的两个 dB 常数（4.3 树 `core/math/math_funcs.h`：`ln(10)/20` 与 `20/ln(10)`）。 */
@@ -1102,6 +1117,9 @@ export function gStepDecimals(v: Variant): Variant {
 
 /** `nearest_po2()`：无符号那侧「进一位再抹平」的式子（`typedefs.h` 的 `nearest_power_of_2_templated`），回绕都按 64 位走 —— 实测 `0 → 0`、`-3 → 0`、`3 → 4`、`5 → 8`。 */
 export function gNearestPo2(v: Variant): Variant {
+  if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
+    throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "nearest_po2()". Cannot convert argument 1 from ${valueTypeName(v)} to int.`);
+  }
   let u = intArgBig(v, "nearest_po2() 的参数") & MASK64;
   u = (u - 1n) & MASK64;
   for (const s of [1, 2, 4, 8, 16, 32]) u = (u | (u >> BigInt(s))) & MASK64;

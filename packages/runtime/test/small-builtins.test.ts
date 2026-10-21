@@ -41,10 +41,10 @@ describe("runtime/small-builtins · absf / absi / wrap / is_same", () => {
   });
 
   it("251 · 实参类型不合式：引擎报 Invalid type 并掐掉这次调用，我们同样响亮", async () => {
-    eq("251", "absf(String)（f01/f11）", call("absf", S("3")), "[arg-float]");
-    eq("251", "absf(Nil)（f03）", call("absf", V.nil()), "[arg-float]");
-    eq("251", "absf(Array)（f05）", call("absf", arrOf(I(1))), "[arg-float]");
-    eq("251", "absf(StringName)（f09）", call("absf", V.stringName("-3")), "[arg-float]");
+    eq("251", "absf(String)（f01/f11）", call("absf", S("3")), "[utility-convert]");
+    eq("251", "absf(Nil)（f03）", call("absf", V.nil()), "[utility-convert]");
+    eq("251", "absf(Array)（f05）", call("absf", arrOf(I(1))), "[utility-convert]");
+    eq("251", "absf(StringName)（f09）", call("absf", V.stringName("-3")), "[utility-convert]");
     eq("251", "absi(String)（f02/f12）", call("absi", S("3")), "[arg-int]");
     eq("251", "absi(Nil)（f04）", call("absi", V.nil()), "[arg-int]");
     eq("251", "absi(Array)（f06；f08 的 Vector2 同一句口径）", call("absi", arrOf(I(1))), "[arg-int]");
