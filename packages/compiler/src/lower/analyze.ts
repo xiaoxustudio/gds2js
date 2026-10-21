@@ -90,6 +90,8 @@ type StaticType =
   | "Vector2i"
   | "Vector3"
   | "Vector3i"
+  | "Vector4"
+  | "Vector4i"
   | "Color"
   /** `&"…"` 字面量在槽位文本里就叫这个名字：`staticType` 把它并进 `String`，只有槽位这一族经 `slotSource` 看得见它 */
   | "StringName"
@@ -762,6 +764,8 @@ function valueSlotHolds(slot: string, st: NonNullable<StaticType>): boolean {
     Vector2i: ["Vector2i", "Vector2"],
     Vector3: ["Vector3", "Vector3i"],
     Vector3i: ["Vector3i", "Vector3"],
+    Vector4: ["Vector4", "Vector4i"],
+    Vector4i: ["Vector4i", "Vector4"],
     Color: ["Color", "int", "String"],
     StringName: ["StringName", "String"],
   };
@@ -1742,7 +1746,7 @@ const PACK_IS_AS_NAMES = new Set([
   "PackedColorArray",
 ]);
 /** 能静态判出来的操作数类型（`null` 那格的文本没判过，故意不列）。 */
-const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Vector3i", "Color"]);
+const STATIC_VALUE_TYPES = new Set(["Vector2", "Vector3", "Vector2i", "Vector3i", "Vector4", "Vector4i", "Color"]);
 
 /** 一个函数体里**标注为 `StringName`** 的局部变量名。只认 `var` 的标注，形参不算；Godot 的标注不松口（同一变量后来不可能装别的类型），所以「这个名字是 StringName」在整个函数体里都成立，不必管作用域嵌套。 */
 function stringNameVars(node: unknown, out: Set<string>): void {
@@ -1907,7 +1911,7 @@ function packArgSource(e: Expr): string | null {
 }
 
 /** 来源名就是标注名本身的那些（Godot 的文本里就是这么写） */
-const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "Array", "Dictionary"]);
+const ANNOT_SOURCES = new Set(["int", "float", "bool", "String", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "Array", "Dictionary"]);
 
 /** 容器方法那几道闸门共用的一趟走查：按函数体分组（模块级 + 内部类递归），每组是扁平的 IR 节点表。
  *  lambda 体不进去（它另有一套作用域，见 `checkLambdaScope`），`loc` 不下潜（它只是位置，不是节点）。 */
@@ -2677,6 +2681,8 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
   "Vector2i": ["abs", "aspect", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y"],
   "Vector3": ["abs", "angle_to", "bezier_derivative", "bezier_interpolate", "bounce", "ceil", "clamp", "clampf", "cross", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "inverse", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "limit_length", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "move_toward", "normalized", "octahedron_decode", "octahedron_encode", "outer", "posmod", "posmodv", "project", "reflect", "rotated", "round", "sign", "signed_angle_to", "slerp", "slide", "snapped", "snappedf", "x", "y", "z"],
   "Vector3i": ["abs", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "x", "y", "z"],
+  "Vector4": ["abs", "ceil", "clamp", "clampf", "cubic_interpolate", "cubic_interpolate_in_time", "direction_to", "distance_squared_to", "distance_to", "dot", "floor", "inverse", "is_equal_approx", "is_finite", "is_normalized", "is_zero_approx", "length", "length_squared", "lerp", "max", "max_axis_index", "maxf", "min", "min_axis_index", "minf", "normalized", "posmod", "posmodv", "round", "sign", "snapped", "snappedf", "w", "x", "y", "z"],
+  "Vector4i": ["abs", "clamp", "clampi", "distance_squared_to", "distance_to", "length", "length_squared", "max", "max_axis_index", "maxi", "min", "min_axis_index", "mini", "sign", "snapped", "snappedi", "w", "x", "y", "z"],
   "Color": ["a", "a8", "b", "b8", "blend", "clamp", "darkened", "from_hsv", "from_ok_hsl", "from_rgba8", "from_rgbe9995", "from_string", "g", "g8", "get_luminance", "h", "hex", "hex64", "html", "html_is_valid", "inverted", "is_equal_approx", "lerp", "lightened", "linear_to_srgb", "ok_hsl_h", "ok_hsl_l", "ok_hsl_s", "r", "r8", "s", "srgb_to_linear", "to_abgr32", "to_abgr64", "to_argb32", "to_argb64", "to_html", "to_rgba32", "to_rgba64", "v"],
   "String": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "chr", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "humanize_size", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "num", "num_int64", "num_scientific", "num_uint64", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
   "StringName": ["begins_with", "bigrams", "bin_to_int", "c_escape", "c_unescape", "capitalize", "casecmp_to", "contains", "containsn", "count", "countn", "dedent", "ends_with", "erase", "filecasecmp_to", "filenocasecmp_to", "find", "findn", "format", "get_base_dir", "get_basename", "get_extension", "get_file", "get_slice", "get_slice_count", "get_slicec", "hash", "hex_decode", "hex_to_int", "indent", "insert", "is_absolute_path", "is_empty", "is_relative_path", "is_subsequence_of", "is_subsequence_ofn", "is_valid_ascii_identifier", "is_valid_filename", "is_valid_float", "is_valid_hex_number", "is_valid_html_color", "is_valid_identifier", "is_valid_int", "is_valid_ip_address", "is_valid_unicode_identifier", "join", "json_escape", "left", "length", "lpad", "lstrip", "match", "matchn", "md5_buffer", "md5_text", "naturalcasecmp_to", "naturalnocasecmp_to", "nocasecmp_to", "pad_decimals", "pad_zeros", "path_join", "remove_char", "remove_chars", "repeat", "replace", "replace_char", "replace_chars", "replacen", "reverse", "rfind", "rfindn", "right", "rpad", "rsplit", "rstrip", "sha1_buffer", "sha1_text", "sha256_buffer", "sha256_text", "similarity", "simplify_path", "split", "split_floats", "strip_edges", "strip_escapes", "substr", "to_ascii_buffer", "to_camel_case", "to_float", "to_int", "to_kebab_case", "to_lower", "to_multibyte_char_buffer", "to_pascal_case", "to_snake_case", "to_upper", "to_utf16_buffer", "to_utf32_buffer", "to_utf8_buffer", "to_wchar_buffer", "trim_prefix", "trim_suffix", "unicode_at", "uri_decode", "uri_encode", "uri_file_decode", "validate_filename", "validate_node_name", "xml_escape", "xml_unescape"],
@@ -3022,6 +3028,8 @@ const CTOR_REFUSED: Record<string, string[][]> = {
   Vector2i: [["int"], ["int", "int", "int"], ["String"]],
   Vector3: [["int"], ["int", "int"], ["String"]],
   Vector3i: [["int"], ["int", "int"], ["String"]],
+  Vector4: [["int"], ["int", "int"], ["int", "int", "int"]],
+  Vector4i: [["int"], ["int", "int"], ["int", "int", "int"]],
   Callable: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   Signal: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   RID: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
@@ -3066,6 +3074,8 @@ const FUNC_ARG_SLOTS: Record<string, readonly string[]> = {
   Vector2i: ["Vector2i", "Vector2"],
   Vector3: ["Vector3", "Vector3i"],
   Vector3i: ["Vector3i", "Vector3"],
+  Vector4: ["Vector4", "Vector4i"],
+  Vector4i: ["Vector4i", "Vector4"],
   Color: ["Color", "String", "int"],
   Rect2: [],
 };
@@ -5115,6 +5125,16 @@ const STATIC_FACE: Record<string, { consts: readonly string[]; axis: readonly st
       hex: [1, 1],
       hex64: [1, 1],
     },
+  },
+  Vector4: {
+    consts: ["ZERO", "ONE", "INF"],
+    axis: [],
+    statics: {},
+  },
+  Vector4i: {
+    consts: ["ZERO", "ONE", "MIN", "MAX"],
+    axis: [],
+    statics: {},
   },
   String: {
     consts: [],

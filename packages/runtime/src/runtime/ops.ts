@@ -6,6 +6,8 @@ import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
 import { asVec2, GVector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vec3Cmp } from "./vector3";
+import { asVec4, GVector4, vec4Cmp } from "./vector4";
+import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./vector4i";
 import { asColor, color, GColor } from "./color";
 import { bytesConcat, GBytes } from "./packed";
 import { INT64_MIN, TWO_63 } from "./numstr";
@@ -129,6 +131,12 @@ export const ops = {
     const wa3 = asVec3(a);
     const wb3 = asVec3(b);
     if (wa3 && wb3) return V.object(new GVector3(wa3.x + wb3.x, wa3.y + wb3.y, wa3.z + wb3.z));
+    const wa4 = asVec4(a);
+    const wb4 = asVec4(b);
+    if (wa4 && wb4) return V.object(new GVector4(wa4.x + wb4.x, wa4.y + wb4.y, wa4.z + wb4.z, wa4.w + wb4.w));
+    const za4 = asVec4i(a);
+    const zb4 = asVec4i(b);
+    if (za4 && zb4) return v4iAdd(za4, zb4);
     const ziAdd = asVec2i(a);
     const zjAdd = asVec2i(b);
     if (ziAdd && zjAdd) return vector2i(add32(ziAdd.x, zjAdd.x), add32(ziAdd.y, zjAdd.y));
@@ -153,6 +161,12 @@ export const ops = {
     const wa3 = asVec3(a);
     const wb3 = asVec3(b);
     if (wa3 && wb3) return V.object(new GVector3(wa3.x - wb3.x, wa3.y - wb3.y, wa3.z - wb3.z));
+    const wa4 = asVec4(a);
+    const wb4 = asVec4(b);
+    if (wa4 && wb4) return V.object(new GVector4(wa4.x - wb4.x, wa4.y - wb4.y, wa4.z - wb4.z, wa4.w - wb4.w));
+    const za4 = asVec4i(a);
+    const zb4 = asVec4i(b);
+    if (za4 && zb4) return v4iSub(za4, zb4);
     const ziSub = asVec2i(a);
     const zjSub = asVec2i(b);
     if (ziSub && zjSub) return vector2i(sub32(ziSub.x, zjSub.x), sub32(ziSub.y, zjSub.y));
@@ -187,6 +201,17 @@ export const ops = {
     if (wa3 && wb3) return V.object(new GVector3(wa3.x * wb3.x, wa3.y * wb3.y, wa3.z * wb3.z));
     if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x * num(b), wa3.y * num(b), wa3.z * num(b)));
     if (wb3 && isNum(a)) return V.object(new GVector3(wb3.x * num(a), wb3.y * num(a), wb3.z * num(a)));
+    const wa4 = asVec4(a);
+    const wb4 = asVec4(b);
+    if (wa4 && wb4) return V.object(new GVector4(wa4.x * wb4.x, wa4.y * wb4.y, wa4.z * wb4.z, wa4.w * wb4.w));
+    if (wa4 && isNum(b)) return V.object(new GVector4(wa4.x * num(b), wa4.y * num(b), wa4.z * num(b), wa4.w * num(b)));
+    if (wb4 && isNum(a)) return V.object(new GVector4(wb4.x * num(a), wb4.y * num(a), wb4.z * num(a), wb4.w * num(a)));
+    const zi4Mul = asVec4i(a);
+    const zj4Mul = asVec4i(b);
+    if (zi4Mul && zj4Mul) return v4iMul(zi4Mul, zj4Mul);
+    if (zi4Mul && b.t === Tag.FLOAT) return vec4iToFloat(zi4Mul, num(b), "mul");
+    if (zi4Mul && b.t === Tag.INT) return v4iMulK(zi4Mul, intToNum(b.v as IntPayload));
+    if (zj4Mul && a.t === Tag.INT) return v4iMulK(zj4Mul, intToNum(a.v as IntPayload));
     const ziMul = asVec2i(a);
     const zjMul = asVec2i(b);
     if (ziMul && zjMul) return vector2i(mul32(ziMul.x, zjMul.x), mul32(ziMul.y, zjMul.y));
@@ -222,6 +247,18 @@ export const ops = {
     const wb3 = asVec3(b);
     if (wa3 && wb3) return V.object(new GVector3(wa3.x / wb3.x, wa3.y / wb3.y, wa3.z / wb3.z));
     if (wa3 && isNum(b)) return V.object(new GVector3(wa3.x / num(b), wa3.y / num(b), wa3.z / num(b)));
+    const wa4 = asVec4(a);
+    const wb4 = asVec4(b);
+    if (wa4 && wb4) return V.object(new GVector4(wa4.x / wb4.x, wa4.y / wb4.y, wa4.z / wb4.z, wa4.w / wb4.w));
+    if (wa4 && isNum(b)) return V.object(new GVector4(wa4.x / num(b), wa4.y / num(b), wa4.z / num(b), wa4.w / num(b)));
+    const zi4Div = asVec4i(a);
+    const zj4Div = asVec4i(b);
+    if (zi4Div && zj4Div) return v4iDiv(zi4Div, zj4Div);
+    if (zi4Div && b.t === Tag.FLOAT) return vec4iToFloat(zi4Div, num(b), "div");
+    if (zi4Div && b.t === Tag.INT) return v4iDivK(zi4Div, intToNum(b.v as IntPayload));
+    if (zj4Div) {
+      throw new UnsupportedError("div-operands", `/ 不支持 ${tagName(a.t)} / Vector4i（左边放标量实测是解析期拒）`);
+    }
     const ziDiv = asVec2i(a);
     const zjDiv = asVec2i(b);
     if (ziDiv && zjDiv) return vector2i(div32(ziDiv.x, zjDiv.x), div32(ziDiv.y, zjDiv.y));
@@ -301,6 +338,10 @@ export const ops = {
     if (va) return V.object(new GVector2(-va.x, -va.y));
     const wa3 = asVec3(a);
     if (wa3) return V.object(new GVector3(-wa3.x, -wa3.y, -wa3.z));
+    const wa4 = asVec4(a);
+    if (wa4) return V.object(new GVector4(-wa4.x, -wa4.y, -wa4.z, -wa4.w));
+    const za4 = asVec4i(a);
+    if (za4) return v4iNeg(za4);
     const ziNeg = asVec2i(a);
     if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
     const zi3Neg = asVec3i(a);
@@ -449,6 +490,12 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   const wa3 = asVec3(a);
   const wb3 = asVec3(b);
   if (wa3 && wb3) return vec3Cmp(wa3, wb3);
+  const wa4 = asVec4(a);
+  const wb4 = asVec4(b);
+  if (wa4 && wb4) return vec4Cmp(wa4, wb4);
+  const za4 = asVec4i(a);
+  const zb4 = asVec4i(b);
+  if (za4 && zb4) return vec4iCmp(za4, zb4);
   // Color 两侧都是它、或与别的东西比，引擎都是同一句运行期拒（实测 `Color < Color`、`Color < int`、`Color < [1]` 三形同文）
   if (asColor(a) !== null || asColor(b) !== null) {
     throw new GodotRuntimeError("color-cmp", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);

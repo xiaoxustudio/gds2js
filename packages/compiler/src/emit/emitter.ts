@@ -109,6 +109,8 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   Vector3: (a) => `rt.vector3New([${a.join(", ")}])`,
   Vector2i: (a) => `rt.vector2iNew([${a.join(", ")}])`,
   Vector3i: (a) => `rt.vector3iNew([${a.join(", ")}])`,
+  Vector4: (a) => `rt.vector4New([${a.join(", ")}])`,
+  Vector4i: (a) => `rt.vector4iNew([${a.join(", ")}])`,
   Color: (a) => `rt.colorNew([${a.join(", ")}])`,
   String: (a) => `rt.stringCtor([${a.join(", ")}])`,
   StringName: (a) => `rt.stringNameCtor([${a.join(", ")}])`,
@@ -1020,6 +1022,8 @@ const MEASURED_SLOTS = new Set([
   "Vector2i",
   "Vector3",
   "Vector3i",
+  "Vector4",
+  "Vector4i",
   "Color",
 ]);
 function slotTypeName(t: TypeRef | null): string | null {
@@ -3285,6 +3289,8 @@ function declaredCast(t: TypeRef | null): string | null {
   // 值类型槽之间的互转（Vector3 ↔ Vector3i 等）：没有这两条转换时槽里存的是原形状，打印与 `typeof` 一起错。
   if (base === "Vector3") return "rt.toVec3";
   if (base === "Vector3i") return "rt.toVec3i";
+  if (base === "Vector4") return "rt.toVec4";
+  if (base === "Vector4i") return "rt.toVec4i";
   if (base === "Vector2i") return "rt.toVec2i";
   // Color 槽吃 int（packed RGBA）与 String（色名 / hex），StringName 槽吃 String；四路赋值同形。
   if (base === "Color") return "rt.toColor";
@@ -3310,6 +3316,8 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "Vector3") return "rt.vector3(0, 0, 0)";
   if (base === "Vector2i") return "rt.vector2i(0, 0)";
   if (base === "Vector3i") return "rt.vector3i(0, 0, 0)";
+  if (base === "Vector4") return "rt.vector4(0, 0, 0, 0)";
+  if (base === "Vector4i") return "rt.vector4i(0, 0, 0, 0)";
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';

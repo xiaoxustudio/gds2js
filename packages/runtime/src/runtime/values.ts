@@ -5,8 +5,10 @@ import { CASE_LOWER_FIX, CASE_UPPER_FIX } from "./case-table";
 import { gdIsDigit, gdIsLower, gdIsSep, gdIsUpper } from "./case-flags";
 import { GVector2, asVec2, vecCmp, vector2 } from "./vector2";
 import { GVector3, asVec3, vec3Cmp, vector3 } from "./vector3";
+import { GVector4, asVec4, vec4Cmp, vector4 } from "./vector4";
 import { asVec2i, GVector2i, vec2iCmp, vector2i } from "./vector2i";
 import { asVec3i, GVector3i, vector3i } from "./vector3i";
+import { asVec4i, GVector4i, vector4i } from "./vector4i";
 import { asColor, color, GColor, tryColorSlot } from "./color";
 import { bytesEq, GBytes, packItems, packTypeName, registerPackStringifier, utf8Decode, toElem } from "./packed";
 import type { PackElem, PackKind } from "./packed";
@@ -2973,6 +2975,9 @@ export function strFormat(fmt: string, args: Variant[]): string {
         break;
       }
       case "v": {
+        if (a.t === Tag.OBJECT && (a.v instanceof GVector4 || a.v instanceof GVector4i)) {
+          throw new UnsupportedError("format-vector4", "%v 在 Vector4 / Vector4i 上的逐支印法没实测过（S580 只到核心值类型），不发");
+        }
         const comps = fmtVecComps(a);
         if (comps === null) throw new GodotRuntimeError("format-vector", FMT_ERR.vector);
         // 宽度与精度都落到**每一支**上（实测 `%30v` 给两支各补到 30 的 `(...)`、`%.2v` 给 `(1.00, 2.00)`）
@@ -3433,11 +3438,17 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GVector3) {
         return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)})`;
       }
+      if (inner instanceof GVector4) {
+        return `(${strVec2(inner.x)}, ${strVec2(inner.y)}, ${strVec2(inner.z)}, ${strVec2(inner.w)})`;
+      }
       if (inner instanceof GVector2i) {
         return `(${String(inner.x)}, ${String(inner.y)})`;
       }
       if (inner instanceof GVector3i) {
         return `(${String(inner.x)}, ${String(inner.y)}, ${String(inner.z)})`;
+      }
+      if (inner instanceof GVector4i) {
+        return `(${String(inner.x)}, ${String(inner.y)}, ${String(inner.z)}, ${String(inner.w)})`;
       }
       if (inner instanceof GColor) {
         return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
@@ -3498,8 +3509,10 @@ export function valueTypeName(x: Variant): string {
   if (x.t === Tag.OBJECT && x.v instanceof GBytes) return packTypeName(x.v.kind);
   if (asVec2(x) !== null) return "Vector2";
   if (asVec3(x) !== null) return "Vector3";
+  if (asVec4(x) !== null) return "Vector4";
   if (asVec2i(x) !== null) return "Vector2i";
   if (asVec3i(x) !== null) return "Vector3i";
+  if (asVec4i(x) !== null) return "Vector4i";
   if (asColor(x) !== null) return "Color";
   if (asRid(x) !== null) return "RID";
   if (asNodePath(x) !== null) return "NodePath";
@@ -3518,6 +3531,10 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const bi = asVec2i(b);
   const ai3 = asVec3i(a);
   const bi3 = asVec3i(b);
+  const a4 = asVec4(a);
+  const b4 = asVec4(b);
+  const ai4 = asVec4i(a);
+  const bi4 = asVec4i(b);
   const ac = asColor(a);
   const bc = asColor(b);
   const ar = asRid(a);
@@ -3541,17 +3558,23 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
     bi !== null ||
     ai3 !== null ||
     bi3 !== null ||
+    a4 !== null ||
+    b4 !== null ||
+    ai4 !== null ||
+    bi4 !== null ||
     ac !== null ||
     bc !== null
   ) {
     if (a2 !== null && b2 !== null) return a2.x === b2.x && a2.y === b2.y;
     if (a3 !== null && b3 !== null) return a3.x === b3.x && a3.y === b3.y && a3.z === b3.z;
+    if (a4 !== null && b4 !== null) return a4.x === b4.x && a4.y === b4.y && a4.z === b4.z && a4.w === b4.w;
     if (ai !== null && bi !== null) return ai.x === bi.x && ai.y === bi.y;
     if (ai3 !== null && bi3 !== null) return ai3.x === bi3.x && ai3.y === bi3.y && ai3.z === bi3.z;
+    if (ai4 !== null && bi4 !== null) return ai4.x === bi4.x && ai4.y === bi4.y && ai4.z === bi4.z && ai4.w === bi4.w;
     if (ac !== null && bc !== null)
       return ac.r === bc.r && ac.g === bc.g && ac.b === bc.b && ac.a === bc.a;
     const other: Variant =
-      a2 !== null || a3 !== null || ai !== null || ai3 !== null || ac !== null ? b : a;
+      a2 !== null || a3 !== null || a4 !== null || ai !== null || ai3 !== null || ai4 !== null || ac !== null ? b : a;
     if (other.t === Tag.NIL) return false;
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
   }
@@ -3633,11 +3656,17 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GVector3 && b.v instanceof GVector3) {
         return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
       }
+      if (a.v instanceof GVector4 && b.v instanceof GVector4) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z && a.v.w === b.v.w;
+      }
       if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
       }
       if (a.v instanceof GVector3i && b.v instanceof GVector3i) {
         return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;
+      }
+      if (a.v instanceof GVector4i && b.v instanceof GVector4i) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z && a.v.w === b.v.w;
       }
       if (a.v instanceof GColor && b.v instanceof GColor) {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;

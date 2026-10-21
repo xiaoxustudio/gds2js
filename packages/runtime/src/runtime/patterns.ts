@@ -7,6 +7,8 @@ import { Tag, V, intToNum, type IntPayload, type TagValue, type Variant } from "
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
+import { GVector4 } from "./vector4";
+import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
@@ -110,6 +112,8 @@ function builtinTag(name: string): TagValue | undefined {
 const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Vector2: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2,
   Vector3: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3,
+  Vector4: (v) => v.t === Tag.OBJECT && v.v instanceof GVector4,
+  Vector4i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector4i,
   Vector2i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2i,
   Vector3i: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3i,
   Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
@@ -258,6 +262,8 @@ export function typeOf(raw: unknown): Variant {
   const v = isVariant(raw) ? raw : wrapValue(raw);
   if (v.t === Tag.OBJECT && v.v instanceof GVector2) return V.int(5);
   if (v.t === Tag.OBJECT && v.v instanceof GVector3) return V.int(9);
+  if (v.t === Tag.OBJECT && v.v instanceof GVector4) return V.int(12);
+  if (v.t === Tag.OBJECT && v.v instanceof GVector4i) return V.int(13);
   if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
   if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return V.int(10);
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);

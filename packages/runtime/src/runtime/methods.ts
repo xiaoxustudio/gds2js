@@ -39,6 +39,8 @@ import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitali
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";
+import { GVector4, vec4ReadIndex, vec4Write, vector4Method } from "./vector4";
+import { GVector4i, vec4iReadIndex, vec4iWrite, vector4iMethod } from "./vector4i";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite, vector2iMethod } from "./vector2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector3iMethod } from "./vector3i";
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
@@ -966,6 +968,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
+    if (inner instanceof GVector4) return vector4Method(inner, name, args);
+    if (inner instanceof GVector4i) return vector4iMethod(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
     if (inner instanceof GColor) return colorMethod(inner, name, args);
@@ -2132,6 +2136,8 @@ export function index(raw: unknown, idx: Variant, base?: string): Variant {
   }
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2) return vecReadIndex(obj.v as GVector2, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3) return vec3ReadIndex(obj.v as GVector3, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector4) return vec4ReadIndex(obj.v as GVector4, idx);
+  if (obj.t === Tag.OBJECT && obj.v instanceof GVector4i) return vec4iReadIndex(obj.v as GVector4i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector2i) return vec2iReadIndex(obj.v as GVector2i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GVector3i) return vec3iReadIndex(obj.v as GVector3i, idx);
   if (obj.t === Tag.OBJECT && obj.v instanceof GColor) return colorRead(obj.v as GColor, idx, "read");
@@ -2179,6 +2185,10 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
   if (vec3 !== null) return vec3Write(vec3, V.str(key), value, "prop");
+  const vec4 = base.t === Tag.OBJECT && base.v instanceof GVector4 ? (base.v as GVector4) : null;
+  if (vec4 !== null) return vec4Write(vec4, V.str(key), value, "prop");
+  const vec4i = base.t === Tag.OBJECT && base.v instanceof GVector4i ? (base.v as GVector4i) : null;
+  if (vec4i !== null) return vec4iWrite(vec4i, V.str(key), value, "prop");
   const vec2i = base.t === Tag.OBJECT && base.v instanceof GVector2i ? (base.v as GVector2i) : null;
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
   const vec3i = asVec3i(base);
@@ -2201,7 +2211,7 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const objInner = base.t === Tag.OBJECT
     && base.v !== null
     && typeof base.v === "object"
-    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector2i || base.v instanceof GVector3i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
+    && !(base.v instanceof GVector2 || base.v instanceof GVector3 || base.v instanceof GVector4 || base.v instanceof GVector4i || base.v instanceof GVector2i || base.v instanceof GVector3i || base.v instanceof GColor || base.v instanceof GBytes || base.v instanceof Signal)
     ? (base.v as Record<string, unknown>)
     : null;
   if (objInner !== null) {
@@ -2245,6 +2255,12 @@ export function writeIdx(raw: unknown, idx: Variant, value: Variant): Variant | 
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector3) {
     return vec3Write(base.v as GVector3, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector4) {
+    return vec4Write(base.v as GVector4, idx, value, "index");
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GVector4i) {
+    return vec4iWrite(base.v as GVector4i, idx, value, "index");
   }
   if (base.t === Tag.OBJECT && base.v instanceof GVector2i) {
     return vec2iWrite(base.v as GVector2i, idx, value, "index");
@@ -2385,6 +2401,10 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec && (name === "x" || name === "y")) return V.float(vec[name]);
     const vec3 = obj.v instanceof GVector3 ? (obj.v as GVector3) : null;
     if (vec3 && (name === "x" || name === "y" || name === "z")) return V.float(vec3[name]);
+    const vec4 = obj.v instanceof GVector4 ? (obj.v as GVector4) : null;
+    if (vec4 && (name === "x" || name === "y" || name === "z" || name === "w")) return V.float(vec4[name]);
+    const vec4i = obj.v instanceof GVector4i ? (obj.v as GVector4i) : null;
+    if (vec4i && (name === "x" || name === "y" || name === "z" || name === "w")) return V.int(vec4i[name]);
     const vec2i = obj.v instanceof GVector2i ? (obj.v as GVector2i) : null;
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;

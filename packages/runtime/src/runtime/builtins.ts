@@ -14,6 +14,8 @@ import { GVector2, vector2, vector2Method } from "./vector2";
 import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
 import { GVector3, vector3, vector3Method } from "./vector3";
 import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
+import { GVector4, vector4 } from "./vector4";
+import { GVector4i, vector4i } from "./vector4i";
 import { GColor, colorMethod } from "./color";
 import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
@@ -61,10 +63,18 @@ function utilIntArg(v: Variant, fn: string, n: number): number {
  *  `Error calling utility function "<fn>()": Argument "x" must be "int", "float", …, or "Vector4i".`
  *  （S524，`tmp/d6/s520.py` 五支逐字同句；bool 照收、折 0/1，与 S362 一致）。 */
 export function numOrVectorArg(v: Variant, fn: string): number {
+  vec4UtilityGuard(v, fn);
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
     throw new GodotRuntimeError("utility-arg", `Error calling utility function "${fn}()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".`);
   }
   return num(v);
+}
+
+/** Vector4 / Vector4i 的全局函数语义（abs / sign / lerp / snapped / clamp / min / max…）还没量过：响亮拒，不冒发引擎句子。 */
+function vec4UtilityGuard(v: Variant, fn: string): void {
+  if (v.t === Tag.OBJECT && (v.v instanceof GVector4 || v.v instanceof GVector4i)) {
+    throw new UnsupportedError("utility-vector4", `${fn}() 在 Vector4 / Vector4i 上的语义没实测过（S580 只到核心值类型）`);
+  }
 }
 
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */
@@ -163,6 +173,8 @@ registerVarToStrValueHook((o) => {
   if (o instanceof GVector2i) return `Vector2i(${o.x}, ${o.y})`;
   if (o instanceof GVector3) return `Vector3(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)})`;
   if (o instanceof GVector3i) return `Vector3i(${o.x}, ${o.y}, ${o.z})`;
+  if (o instanceof GVector4) return `Vector4(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)}, ${rtosFix(o.w, true)})`;
+  if (o instanceof GVector4i) return `Vector4i(${o.x}, ${o.y}, ${o.z}, ${o.w})`;
   if (o instanceof GColor) return `Color(${rtosFix(o.r, true)}, ${rtosFix(o.g, true)}, ${rtosFix(o.b, true)}, ${rtosFix(o.a, true)})`;
   if (o instanceof Signal) return "Signal()";
   return null;
@@ -367,6 +379,8 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
       if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
       if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
+      if (v.v instanceof GVector4) return fmix32(hashFloat32(v.v.w, hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)))));
+      if (v.v instanceof GVector4i) return fmix32(murmurOne32(v.v.w >>> 0, murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)))));
       if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
       if (v.v instanceof GBytes) return packHash(v.v as GBytes);
       // 空 Signal 的对象号是 0，名字空串 → one_64(0, seed=hash(""))（S547）；带名 Signal 折的是宿主实例号，合成号对不上
@@ -630,6 +644,8 @@ function weightToFloat(w: Variant): number {
 }
 
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
+  vec4UtilityGuard(a, "lerp");
+  vec4UtilityGuard(b, "lerp");
   const weight = weightToFloat(w);
   if (sameShape(a, b)) {
     const vec = sameTypeVectorMath("lerp", a, [b, V.float(weight)]);
@@ -707,6 +723,8 @@ function sameShape(a: Variant, b: Variant): boolean {
 }
 
 export function gSnapped(x: Variant, step: Variant): Variant {
+  vec4UtilityGuard(x, "snapped");
+  vec4UtilityGuard(step, "snapped");
   const xName = x.t === Tag.OBJECT ? vecClassName(x.v as object) : null;
   if (xName !== null && xName !== "Color") {
     if (step.t === Tag.OBJECT && vecClassName(step.v as object) === xName) {
@@ -767,12 +785,15 @@ function approxEq(a: number, b: number): boolean {
 }
 
 export function gIsEqualApprox(a: Variant, b: Variant): Variant {
+  vec4UtilityGuard(a, "is_equal_approx");
+  vec4UtilityGuard(b, "is_equal_approx");
   const x = utilFloatArg(a, "is_equal_approx", 1);
   const y = utilFloatArg(b, "is_equal_approx", 2);
   return V.bool(approxEq(x, y));
 }
 
 export function gIsZeroApprox(v: Variant): Variant {
+  vec4UtilityGuard(v, "is_zero_approx");
   const x = utilFloatArg(v, "is_zero_approx", 1);
   return V.bool(Number.isFinite(x) && Math.abs(x) < 1e-5);
 }
@@ -797,6 +818,7 @@ export function gIsFinite(v: Variant): Variant {
  *  句里点名的是**第一个转不动的位**（`tmp/probe-maxrt/compare53.txt`，S393）。 */
 function maxMinFloat(xs: Variant[], i: number, who: string): number {
   const v = xs[i] as Variant;
+  vec4UtilityGuard(v, who);
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new GodotRuntimeError(
       `${who}-arg`,
@@ -896,6 +918,9 @@ function clampAccepts(target: string, y: Variant): boolean {
 }
 
 export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "auto"): Variant {
+  vec4UtilityGuard(v, "clamp");
+  vec4UtilityGuard(lo, "clamp");
+  vec4UtilityGuard(hi, "clamp");
   if (mode === "auto") {
     const target = clampTargetName(v);
     if (!clampAccepts(target, lo)) throw utilConvertError("clamp", lo, target, 2);
@@ -1579,6 +1604,10 @@ function dictTypeDefault(t: string | null): Variant {
       return V.object(new GVector3(0, 0, 0));
     case "Vector3i":
       return V.object(new GVector3i(0, 0, 0));
+    case "Vector4":
+      return V.object(new GVector4(0, 0, 0, 0));
+    case "Vector4i":
+      return V.object(new GVector4i(0, 0, 0, 0));
     case "Color":
       return V.object(new GColor(0, 0, 0, 1));
     case "NodePath":
