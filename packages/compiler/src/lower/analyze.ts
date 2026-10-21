@@ -459,6 +459,15 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
     if (slot.key === undefined) return;
     if (st === "null") return;
+    // 字典键不做 Vector4 ↔ Vector4i 的槽转换：字面量键那一形引擎解析期拒（S586，`Dictionary[Vector4, …]` 配 `Vector4i` 字面量键）
+    if ((slot.key === "Vector4" && st === "Vector4i") || (slot.key === "Vector4i" && st === "Vector4")) {
+      diags.push({
+        code: "typed-index-key",
+        message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
+        loc: index.loc,
+      });
+      return;
+    }
     if (canHold(slot.key, st)) return;
     diags.push({
       code: "typed-index-key",

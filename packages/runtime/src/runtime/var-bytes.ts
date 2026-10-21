@@ -5,6 +5,7 @@ import { GBytes, type PackElem, type PackKind } from "./packed";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
+import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
@@ -43,6 +44,8 @@ const T_PACKED_V3 = 36;
 const T_PACKED_V4 = 38;
 const T_PACKED_COLOR = 37;
 const T_VECTOR3I = 10;
+const T_VECTOR4 = 12;
+const T_VECTOR4I = 13;
 const T_OBJECT = 24;
 
 /** 编码侧的信号：路径拿不出来时引擎回的是**一个空 PackedByteArray**（并打一句 `Failed to encode a path to a custom script`），不是错。 */
@@ -189,6 +192,8 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GVector3 ||
     o instanceof GVector2i ||
     o instanceof GVector3i ||
+    o instanceof GVector4 ||
+    o instanceof GVector4i ||
     o instanceof GColor ||
     o instanceof GBytes ||
     o instanceof GdNodePath ||
@@ -406,6 +411,22 @@ class Writer {
           this.u32(o.x);
           this.u32(o.y);
           this.u32(o.z);
+          return;
+        }
+        if (o instanceof GVector4) {
+          this.header(T_VECTOR4);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.z);
+          this.f32(o.w);
+          return;
+        }
+        if (o instanceof GVector4i) {
+          this.header(T_VECTOR4I);
+          this.u32(o.x);
+          this.u32(o.y);
+          this.u32(o.z);
+          this.u32(o.w);
           return;
         }
         if (o instanceof GColor) {
@@ -629,6 +650,20 @@ class Reader {
         const y = this.f32();
         const z = this.f32();
         return V.object(new GVector3(x, y, z));
+      }
+      case T_VECTOR4: {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        const w = this.f32();
+        return V.object(new GVector4(x, y, z, w));
+      }
+      case T_VECTOR4I: {
+        const x = this.i32();
+        const y = this.i32();
+        const z = this.i32();
+        const w = this.i32();
+        return V.object(new GVector4i(x, y, z, w));
       }
       case T_COLOR: {
         const r = this.f32();

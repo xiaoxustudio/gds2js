@@ -808,15 +808,12 @@ function approxEq(a: number, b: number): boolean {
 }
 
 export function gIsEqualApprox(a: Variant, b: Variant): Variant {
-  vec4UtilityGuard(a, "is_equal_approx");
-  vec4UtilityGuard(b, "is_equal_approx");
   const x = utilFloatArg(a, "is_equal_approx", 1);
   const y = utilFloatArg(b, "is_equal_approx", 2);
   return V.bool(approxEq(x, y));
 }
 
 export function gIsZeroApprox(v: Variant): Variant {
-  vec4UtilityGuard(v, "is_zero_approx");
   const x = utilFloatArg(v, "is_zero_approx", 1);
   return V.bool(Number.isFinite(x) && Math.abs(x) < 1e-5);
 }
@@ -841,7 +838,6 @@ export function gIsFinite(v: Variant): Variant {
  *  句里点名的是**第一个转不动的位**（`tmp/probe-maxrt/compare53.txt`，S393）。 */
 function maxMinFloat(xs: Variant[], i: number, who: string): number {
   const v = xs[i] as Variant;
-  vec4UtilityGuard(v, who);
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
     throw new GodotRuntimeError(
       `${who}-arg`,
