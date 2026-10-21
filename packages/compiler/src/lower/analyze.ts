@@ -4060,7 +4060,21 @@ function walkStmt(
       break;
     case "match": {
       walkExpr(s.subject, scope, coroutines, diags);
+      // 图案里的**值模式**表达式（`[a, b]` 里那两个名字）引擎按每一次出现都报一句，而且排在 guard 那句之前
+      // （读数 `tmp/probe569/s618.gd`：`[a, b] when a > b` 四句、`[a, b] when 1 > 0` 两句、`[_, _] when q > 1` 一句、
+      // `[a] when a > 1` 外面已有 `var a` 时零句、`[k, v] when k > 1 and v > 2 and k > 3` 五句）。
+      const patternNames = (p: Pattern): void => {
+        if (p.kind === "const") walkExpr(p.expr, scope, coroutines, diags);
+        else if (p.kind === "array") for (const it of p.items) patternNames(it);
+        else if (p.kind === "dict") {
+          for (const en of p.entries) {
+            walkExpr(en.key, scope, coroutines, diags);
+            patternNames(en.pattern);
+          }
+        }
+      };
       for (const arm of s.arms) {
+        patternNames(arm.pattern);
         const armScope = scope.child(patternBindings(arm.pattern));
         if (arm.guard) walkExpr(arm.guard, armScope, coroutines, diags);
         walkStmts(arm.body, armScope, coroutines, diags, inLoop);
