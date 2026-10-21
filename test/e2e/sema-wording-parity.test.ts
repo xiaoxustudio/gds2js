@@ -23,7 +23,7 @@ function engineLines(gold: string): Array<{ line: string; text: string }> {
     const m = /^SCRIPT ERROR: Parse Error: (.*)$/.exec(rows[i] ?? "");
     if (m === null) continue;
     const at = /\.gd:(\d+)/.exec(rows[i + 1] ?? "");
-    out.push({ line: at?.[1] ?? "?", text: m[1] });
+    out.push({ line: at?.[1] ?? "?", text: m[1] ?? "" });
   }
   return out;
 }
