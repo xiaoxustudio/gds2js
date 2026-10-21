@@ -576,14 +576,55 @@ export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Var
   return vi(mn + r);
 }
 
+const LERP_FROM_LIST = 'Error calling utility function "lerp()": Argument "from" must be "int", "float", "Vector2", "Vector3", "Vector4", "Color", "Quaternion", "Basis", "Transform2D", or "Transform3D".';
+const SNAPPED_X_LIST = 'Error calling utility function "snapped()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".';
+const SNAPPED_STEP_MUST = 'Error calling utility function "snapped()": Argument "step" must be "int" or "float".';
+
+/** 值类型的引擎型名（`snapped` / `lerp` 的「跟第一参走」句要用）。 */
+function vecClassName(o: object): string | null {
+  if (o instanceof GVector2) return "Vector2";
+  if (o instanceof GVector3) return "Vector3";
+  if (o instanceof GVector2i) return "Vector2i";
+  if (o instanceof GVector3i) return "Vector3i";
+  if (o instanceof GColor) return "Color";
+  return null;
+}
+
+function utilConvertError(fn: string, src: Variant, target: string, argNo: number): GodotRuntimeError {
+  return new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${argNo} from ${valueTypeName(src)} to ${target}.`);
+}
+
+/** `lerp` 的权重按 Variant→float 折（实测 int/float/bool/String 照值，Array / null / Vector2 都折 0）。 */
+function weightToFloat(w: Variant): number {
+  if (w.t === Tag.INT) {
+    const n = intToNum(w.v as IntPayload);
+    return typeof n === "bigint" ? Number(n) : n;
+  }
+  if (w.t === Tag.FLOAT) return w.v as number;
+  if (w.t === Tag.BOOL) return w.v ? 1 : 0;
+  if (w.t === Tag.STRING) return strToFloat(w.v as string);
+  return 0;
+}
+
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
-  const weight = floatWeight(w);
-  if (weight !== null && sameShape(a, b)) {
-    const vec = sameTypeVectorMath("lerp", a, [b, weight]);
+  const weight = weightToFloat(w);
+  if (sameShape(a, b)) {
+    const vec = sameTypeVectorMath("lerp", a, [b, V.float(weight)]);
     if (vec !== null) return vec;
   }
-  const x = num(a);
-  return V.float(x + (num(b) - x) * num(w) + 0);
+  const listName = a.t === Tag.OBJECT ? vecClassName(a.v as object) : null;
+  const aName =
+    a.t === Tag.OBJECT
+      ? listName === "Vector2" || listName === "Vector3" || listName === "Color" ? listName : null
+      : a.t === Tag.INT ? "int" : a.t === Tag.FLOAT ? "float" : a.t === Tag.BOOL ? "float" : null;
+  if (aName === null) throw new GodotRuntimeError("utility-arg", LERP_FROM_LIST);
+  if (a.t === Tag.INT || a.t === Tag.FLOAT || a.t === Tag.BOOL) {
+    if (b.t !== Tag.INT && b.t !== Tag.FLOAT && b.t !== Tag.BOOL) throw utilConvertError("lerp", b, aName, 2);
+    const x = num(a);
+    return V.float(x + (num(b) - x) * weight + 0);
+  }
+  // 向量 / Color 当 from 时 to 必须同型；不同型引擎按「跟第一参走」那句报转换失败
+  throw utilConvertError("lerp", b, aName, 2);
 }
 
 export function gInverseLerp(a: Variant, b: Variant, v: Variant): Variant {
@@ -628,10 +669,6 @@ function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[
   return null;
 }
 
-function floatWeight(w: Variant): Variant | null {
-  return w.t === Tag.FLOAT || w.t === Tag.INT ? w : null;
-}
-
 function sameShape(a: Variant, b: Variant): boolean {
   if (a.t !== Tag.OBJECT || b.t !== Tag.OBJECT) return false;
   const x = a.v;
@@ -644,8 +681,16 @@ function sameShape(a: Variant, b: Variant): boolean {
 }
 
 export function gSnapped(x: Variant, step: Variant): Variant {
-  const vec = sameTypeVectorMath("snapped", x, [step]);
-  if (vec !== null) return vec;
+  const xName = x.t === Tag.OBJECT ? vecClassName(x.v as object) : null;
+  if (xName !== null && xName !== "Color") {
+    if (step.t === Tag.OBJECT && vecClassName(step.v as object) === xName) {
+      const vec = sameTypeVectorMath("snapped", x, [step]);
+      if (vec !== null) return vec;
+    }
+    throw utilConvertError("snapped", step, xName, 2);
+  }
+  if (!(x.t === Tag.INT || x.t === Tag.FLOAT || x.t === Tag.BOOL)) throw new GodotRuntimeError("utility-arg", SNAPPED_X_LIST);
+  if (!(step.t === Tag.INT || step.t === Tag.FLOAT || step.t === Tag.BOOL)) throw new GodotRuntimeError("utility-arg", SNAPPED_STEP_MUST);
   const s = num(step);
   const a = num(x);
   if (isInt(step)) {

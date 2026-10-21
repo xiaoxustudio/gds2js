@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import * as rt from "@gds2js/runtime/runtime/index";
-import { GodotRuntimeError, UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { GodotRuntimeError } from "@gds2js/runtime/runtime/errors";
 import { vector2 } from "@gds2js/runtime/runtime/vector2";
 import { vector3 } from "@gds2js/runtime/runtime/vector3";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
@@ -60,20 +60,24 @@ const REFUSED_MIGRATED: Array<[string, () => Variant]> = [
   ["rt.gRound(V.str(\"a\"))", () => rt.gRound(V.str("a"))],
   ["rt.gSign(V.str(\"a\"))", () => rt.gSign(V.str("a"))],
 ];
-const REFUSED: Array<[string, () => Variant]> = [
-  ["rt.gSnapped(V.str(\"a\"), I(1))", () => rt.gSnapped(V.str("a"), I(1))],
-  ["rt.gSnapped(I(1), V.str(\"a\"))", () => rt.gSnapped(I(1), V.str("a"))],
-  ["rt.gLerp(V.str(\"a\"), I(1), F(0.5))", () => rt.gLerp(V.str("a"), I(1), F(0.5))],
-  ["rt.gLerp(I(1), V.str(\"a\"), F(0.5))", () => rt.gLerp(I(1), V.str("a"), F(0.5))],
-  ["rt.gLerp(I(1), I(3), V.str(\"a\"))", () => rt.gLerp(I(1), I(3), V.str("a"))],
-];
-
 describe("同一族收到非数值、非同型向量的实参时响亮拒", () => {
-  it.each(REFUSED_MIGRATED)("%s（S524：引擎原文）", (_label, run) => {
+  it.each(REFUSED_MIGRATED)("%s（S524/S563：引擎原文）", (_label, run) => {
     expect(run).toThrowError(GodotRuntimeError);
     expect(run).toThrowError(/Error calling utility function/);
   });
-  it.each(REFUSED)("%s", (_label, run) => {
-    expect(run).toThrowError(UnsupportedError);
+  it.each([
+    ["rt.gLerp(V.str(\"a\"), I(1), F(0.5))", () => rt.gLerp(V.str("a"), I(1), F(0.5))],
+    ["rt.gSnapped(V.str(\"a\"), I(1))", () => rt.gSnapped(V.str("a"), I(1))],
+    ["rt.gSnapped(I(1), V.str(\"a\"))", () => rt.gSnapped(I(1), V.str("a"))],
+  ] as Array<[string, () => Variant]>)("%s（S563：引擎原文）", (_label, run) => {
+    expect(run).toThrowError(GodotRuntimeError);
+    expect(run).toThrowError(/Error calling utility function/);
+  });
+  it("rt.gLerp(I(1), V.str(\"a\"), F(0.5))（S563：to 的转换句）", () => {
+    expect(() => rt.gLerp(I(1), V.str("a"), F(0.5))).toThrowError(GodotRuntimeError);
+    expect(() => rt.gLerp(I(1), V.str("a"), F(0.5))).toThrowError(/Invalid type in utility function/);
+  });
+  it("rt.gLerp(I(1), I(3), V.str(\"a\"))（S563：权重 String 按 0 折，不再拒）", () => {
+    expect(rt.gLerp(I(1), I(3), V.str("a")).v).toBe(1);
   });
 });
