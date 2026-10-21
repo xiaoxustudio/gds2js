@@ -28,6 +28,11 @@ describe("max / min 族的 Vector4 解析期位（S598）", () => {
     }
     expect((await diags(`maxf(${V4I}, ${V4I})`))[0]).toBe(want("maxf", "float", "Vector4i"));
   });
+  // S604：两支的 Vector4i 字面量位补量完（读数 `tmp/d6/s604.out`），两侧同句。
+  it("min / minf 收 Vector4i 字面量", async () => {
+    expect(await diags(`min(${V4I}, ${V4I})`)).toEqual([want("min", "float", "Vector4i")]);
+    expect(await diags(`minf(${V4I}, ${V4I})`)).toEqual([want("minf", "float", "Vector4i")]);
+  });
   it("同族里 float 与 int 的合法位不误拦", async () => {
     expect(await diags(`max(1, 2.5)`)).toEqual([]);
     expect(await diags(`maxf(1.5, 2)`)).toEqual([]);
