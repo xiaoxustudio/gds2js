@@ -2409,7 +2409,7 @@ export function varToStr(v: Variant): string {
   }
 }
 
-const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color"]);
 /** `PackedXArray(...)` 那七支：名字 → pack 形状，实测的 arity 与元素形状一支一张。 */
 const SV_PACK_CTORS: Record<string, PackKind> = {
   PackedByteArray: "byte",
@@ -2671,6 +2671,8 @@ export function strToVar(v: Variant): Variant {
     if (word === "Vector3") return args.length === 3 ? vector3(n(0), n(1), n(2)) : null;
     if (word === "Vector2i") return args.length === 2 ? vector2i(Math.trunc(n(0)), Math.trunc(n(1))) : null;
     if (word === "Vector3i") return args.length === 3 ? vector3i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2))) : null;
+    if (word === "Vector4") return args.length === 4 ? vector4(n(0), n(1), n(2), n(3)) : null;
+    if (word === "Vector4i") return args.length === 4 ? vector4i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2)), Math.trunc(n(3))) : null;
     if (word === "Color") return args.length === 4 ? color(n(0), n(1), n(2), n(3)) : null;
     const pack = SV_PACK_CTORS[word] as PackKind;
     if (pack === "vector2") {
