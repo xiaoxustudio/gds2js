@@ -177,7 +177,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
 }
 
 function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
-  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc; varName?: string; srcAnn?: TypeRef | null }> = [
+  const targets: Array<{ type: TypeRef | null; init: Expr | null; loc: Loc; varName?: string; srcAnn?: TypeRef | null; fnName?: string; fnPos?: number }> = [
     ...m.vars.map((v) => ({ type: v.type, init: v.init, loc: v.loc })),
     ...m.funcs.flatMap((f) => [
       ...f.params.map((p) => ({ type: p.type, init: p.default, loc: f.loc })),
@@ -249,7 +249,9 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
           const args = o.args as Expr[];
           for (let i = 0; i < args.length && i < pt.length; i++) {
             const t = pt[i];
-            if (t !== undefined && t !== null) targets.push({ type: t, init: args[i] ?? null, loc: args[i]!.loc });
+            const arg0 = args[i] ?? null;
+            const argAnn: TypeRef | null = arg0 !== null && arg0.kind === "ident" ? locals.get((arg0 as unknown as Record<string, unknown>).name as string) ?? null : null;
+            targets.push({ type: t ?? null, init: arg0, loc: args[i]!.loc, srcAnn: argAnn, fnName: callee.name, fnPos: i + 1 });
           }
         }
       }
@@ -269,6 +271,19 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
   for (const c of m.innerClasses) walkClass(c);
 
   for (const t of targets) {
+    // 实参位上的定形容器不合式：引擎发 `Invalid argument for "f()" function: argument N should be "<槽标注>" but is "<源标注>".`
+    //（读数 tmp/probe569/h3 / h4；`Array[int]` 装进 `Array[String]` 形也拒，容器之间不放宽）
+    const slotAnn = t.type !== null && t.type.kind === "named" ? t.type.name : null;
+    if (t.fnName !== undefined && t.fnPos !== undefined && slotAnn !== null && t.srcAnn !== undefined && t.srcAnn !== null &&
+        t.srcAnn.kind === "named" && (t.srcAnn.name.startsWith("Array[") || t.srcAnn.name.startsWith("Dictionary[")) &&
+        (slotAnn.startsWith("Array[") || slotAnn.startsWith("Dictionary[")) && t.srcAnn.name !== slotAnn) {
+      diags.push({
+        code: "typed-collection-param",
+        message: `Invalid argument for "${t.fnName}()" function: argument ${String(t.fnPos)} should be "${slotAnn}" but is "${t.srcAnn.name}".`,
+        loc: t.loc,
+      });
+      continue;
+    }
     // 定形容器 → 另一个定形容器的赋值：引擎按**标注文本**比对，不同就在解析期拒（读数 tmp/probe569/g1 / g2 / g5 / g6，同标注收下见 g9）
     const targetAnn = t.type !== null && t.type.kind === "named" ? t.type.name : null;
     if (t.varName !== undefined && targetAnn !== null && t.srcAnn !== undefined && t.srcAnn !== null && t.srcAnn.kind === "named" &&

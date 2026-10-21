@@ -1,0 +1,8 @@
+SCRIPT ERROR: Parse Error: Invalid argument for "takes3()" function: argument 1 should be "Array[RefCounted]" but is "Array[String]".
+   at: GDScript::reload (<case>/main.gd:11)
+SCRIPT ERROR: Parse Error: Invalid argument for "takes4()" function: argument 1 should be "Array[String]" but is "Array[int]".
+   at: GDScript::reload (<case>/main.gd:13)
+SCRIPT ERROR: Parse Error: Cannot assign a value of type Dictionary[int, String] to variable "d2" with specified type Dictionary[String, int].
+   at: GDScript::reload (<case>/main.gd:15)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
