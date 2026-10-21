@@ -149,6 +149,7 @@ registerVarToStrValueHook((o) => {
   if (o instanceof GVector3) return `Vector3(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)})`;
   if (o instanceof GVector3i) return `Vector3i(${o.x}, ${o.y}, ${o.z})`;
   if (o instanceof GColor) return `Color(${rtosFix(o.r, true)}, ${rtosFix(o.g, true)}, ${rtosFix(o.b, true)}, ${rtosFix(o.a, true)})`;
+  if (o instanceof Signal) return "Signal()";
   return null;
 });
 

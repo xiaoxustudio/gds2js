@@ -38,6 +38,26 @@ import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite, vector
 import { colorMethod, colorRead, colorWrite, GColor, toColor } from "./color";
 import { bytesReadIndex, bytesMethod, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "./packed";
 
+/** `Signal()` / `Signal(Object, name)`（S556）：两参形在对象上按名取**同一个**信号实例；名字不在就造一个只带名字的（引擎实测 is_null 假、get_name 给该名）。 */
+export function signalCtor(args: Variant[]): Variant {
+  if (args.length === 0) return V.object(new Signal());
+  if (args.length !== 2) {
+    throw new UnsupportedError("signal-ctor", `Signal(...) 只量过 0 参与 (Object, name) 两形（收到 ${args.length} 个实参）`);
+  }
+  const obj = args[0] as Variant;
+  const nm = args[1] as Variant;
+  if (nm.t !== Tag.STRING && nm.t !== Tag.STRING_NAME) {
+    throw new UnsupportedError("signal-ctor", "Signal(Object, name) 的 name 只量过 String / StringName 来源");
+  }
+  const inner = obj.t === Tag.OBJECT ? obj.v : null;
+  if (inner === null || typeof inner !== "object") {
+    throw new UnsupportedError("signal-ctor", "Signal(Object, name) 的 Object 实参只量过对象来源");
+  }
+  const name = nm.v as string;
+  const prop = (inner as Record<string, unknown>)[name];
+  return V.object(prop instanceof Signal ? prop : new Signal(name));
+}
+
 function asArray(v: Variant, who: string): GArray {
   if (v.t !== Tag.ARRAY) throw new UnsupportedError("not-array", `${who} 需要 Array，收到 ${v.t}`);
   return v.v as GArray;
