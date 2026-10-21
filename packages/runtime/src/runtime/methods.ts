@@ -407,7 +407,35 @@ function bytesUtf32(p: GBytes): Variant {
   return V.str(out);
 }
 
-/** `get_string_from_multibyte_char(encoding)`（S570）：只接 UTF-8 / ISO-8859-1；多字节解码按 Windows `MultiByteToWideChar` 的替换形（坏序列给 U+FFFD）。 */
+/** Windows-1252 的 0x80–0x9F 特殊格（S593，标准 CP1252 表；未定义位映射到同名 C1 控制码）。 */
+const CP1252_HIGH: readonly number[] = [
+  0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021,
+  0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f,
+  0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+  0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
+];
+
+function cp1252EncodeBytes(s: string): number[] {
+  const rev: Record<number, number> = {};
+  for (let i = 0; i < CP1252_HIGH.length; i++) rev[CP1252_HIGH[i] as number] = 0x80 + i;
+  const out: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const cu = s.charCodeAt(i);
+    const special = rev[cu];
+    if (special !== undefined) out.push(special);
+    else if (cu <= 0x7f || (cu >= 0xa0 && cu <= 0xff) || cu === 0x8d || cu === 0x8f || cu === 0x90 || cu === 0x9d) out.push(cu);
+    else out.push(0x3f);
+  }
+  return out;
+}
+
+function cp1252DecodeBytes(xs: number[]): string {
+  let out = "";
+  for (const b of xs) out += String.fromCodePoint(b >= 0x80 && b <= 0x9f ? (CP1252_HIGH[b - 0x80] as number) : b);
+  return out;
+}
+
+/** `get_string_from_multibyte_char(encoding)`（S570）：只接 UTF-8 / ISO-8859-1 / WINDOWS-1252；多字节解码按 Windows `MultiByteToWideChar` 的替换形（坏序列给 U+FFFD）。 */
 function bytesMultibyte(p: GBytes, args: Variant[]): Variant {
   if (args.length > 1) throw new GodotRuntimeError("arity", `get_string_from_multibyte_char() 最多 1 个参数（收到 ${args.length} 个）`);
   const enc = args.length === 0 ? "" : asString(args[0] as Variant, "get_string_from_multibyte_char");
@@ -415,8 +443,8 @@ function bytesMultibyte(p: GBytes, args: Variant[]): Variant {
   if (upper === "") {
     throw new UnsupportedError("packed-multibyte-acp", "get_string_from_multibyte_char() 的空编码走宿主 ANSI 代码页（实测这台是 CP936），跨宿主不可复现，不发");
   }
-  if (upper !== "UTF-8" && upper !== "ISO-8859-1") {
-    throw new UnsupportedError("packed-multibyte-encoding", `get_string_from_multibyte_char() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1；引擎代码页表里其余名字没量）`);
+  if (upper !== "UTF-8" && upper !== "ISO-8859-1" && upper !== "WINDOWS-1252") {
+    throw new UnsupportedError("packed-multibyte-encoding", `get_string_from_multibyte_char() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1 / WINDOWS-1252；引擎代码页表里其余名字没量）`);
   }
   if (p.length === 0) return V.str("");
   const raw = p.raw() as number[];
@@ -427,6 +455,7 @@ function bytesMultibyte(p: GBytes, args: Variant[]): Variant {
     for (let i = 0; i < end; i++) out += String.fromCharCode(raw[i] as number);
     return V.str(out);
   }
+  if (upper === "WINDOWS-1252") return V.str(cp1252DecodeBytes(raw.slice(0, end)));
   return V.str(windowsUtf8Decode(raw, end));
 }
 
@@ -1770,13 +1799,18 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           if (upper === "") {
             throw new UnsupportedError("string-multibyte-acp", "to_multibyte_char_buffer() 的空编码走宿主 ANSI 代码页（实测这台是 CP936：é→A8A6、汉→BABA），跨宿主不可复现，不发");
           }
-          if (upper !== "UTF-8" && upper !== "ISO-8859-1") {
-            throw new UnsupportedError("string-multibyte-encoding", `to_multibyte_char_buffer() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1；引擎代码页表里其余名字没量）`);
+          if (upper !== "UTF-8" && upper !== "ISO-8859-1" && upper !== "WINDOWS-1252") {
+            throw new UnsupportedError("string-multibyte-encoding", `to_multibyte_char_buffer() 的编码 "${enc}" 没接（只量过 UTF-8 / ISO-8859-1 / WINDOWS-1252；引擎代码页表里其余名字没量）`);
           }
           if (s.length === 0) {
             throw new UnsupportedError("string-multibyte-empty", "to_multibyte_char_buffer() 对空串走 WideCharToMultiByte 的 Error 87 块，文案是宿主 OS 的本地化串，复现不了");
           }
           const mb: number[] = upper === "UTF-8" ? Array.from(new TextEncoder().encode(s)) : [];
+          if (upper === "WINDOWS-1252") {
+            const bytes = cp1252EncodeBytes(s);
+            bytes.push(0);
+            return V.object(new GBytes(bytes));
+          }
           if (upper === "ISO-8859-1") {
             for (let i = 0; i < s.length; i++) {
               const cu = s.charCodeAt(i);
