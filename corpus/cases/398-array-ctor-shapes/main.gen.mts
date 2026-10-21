@@ -25,7 +25,7 @@ export class Main extends SceneTree {
     const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
     try {
       rt.frameLine(4);
-      let e = rt.V.array(rt.GArray.of([]));
+      let e = rt.arrayFromArgs([]);
       rt.frameLine(5);
       print(rt.showArgs([rt.V.str("u1 "), e, rt.V.str(" "), rt.method(e, "is_typed", []), rt.V.str(" "), rt.method(e, "size", [])]));
       rt.frameLine(6);
@@ -35,7 +35,7 @@ export class Main extends SceneTree {
       rt.frameLine(8);
       let a = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]));
       rt.frameLine(9);
-      let r = rt.arrayFromVariant(a);
+      let r = rt.arrayFromArgs([a]);
       rt.frameLine(10);
       print(rt.showArgs([rt.V.str("u3 "), r, rt.V.str(" "), rt.method(r, "is_typed", []), rt.V.str(" "), rt.typeOf(rt.wrapValue(rt.index(r, rt.V.int(0)))), rt.V.str(" "), rt.method(r, "size", [])]));
       rt.frameLine(11);
@@ -48,7 +48,7 @@ export class Main extends SceneTree {
       rt.frameLine(13);
       let b = rt.V.array(rt.GArray.of([rt.V.array(rt.GArray.of([rt.V.int(1)])), rt.V.array(rt.GArray.of([rt.V.int(2)]))]));
       rt.frameLine(14);
-      let c = rt.arrayFromVariant(b);
+      let c = rt.arrayFromArgs([b]);
       rt.frameLine(15);
       {
       const _w0 = rt.V.int(0);
@@ -60,7 +60,7 @@ export class Main extends SceneTree {
       rt.frameLine(17);
       let p = rt.bytesCtor([rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(1)]))]);
       rt.frameLine(18);
-      let q = rt.arrayFromVariant(p);
+      let q = rt.arrayFromArgs([p]);
       rt.frameLine(19);
       rt.method(q, "append", [rt.V.int(9)]);
       rt.frameLine(20);

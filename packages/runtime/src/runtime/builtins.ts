@@ -1,7 +1,8 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
+import { GArray, GDict, elemConvert, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName, type ElemKind } from "./values";
+import { ELEM_TYPE_CODE } from "./methods";
 import { GBytes, isBytes, packBytes, packCtor, packItems, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
@@ -35,6 +36,64 @@ export function arrayFromVariant(v: Variant): Variant {
     throw new GodotRuntimeError("array-ctor", "Invalid call. Nonexistent 'Array' constructor.");
   }
   throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 pack、Array 与那五种坏源形（收到 ${tagName(v.t)}）`);
+}
+
+/** 型码 → 元素标注名：现取 `ELEM_TYPE_CODE` 的反向，免得第二张表漂。 */
+function kindByCode(code: number): ElemKind | null {
+  for (const [name, c] of Object.entries(ELEM_TYPE_CODE)) {
+    if (c === code) return name as ElemKind;
+  }
+  return null;
+}
+
+/** `Array(base, type, class_name, script)`（S605）：**新建**一支数组并按型逐格转换 —— 单参形是别名，这一形不是。
+ * 第一参是 pack 时引擎给 `Invalid type in 'Array' constructor. Cannot convert argument 1 from <pack名> to Array.`；
+ * 任一格转不过就交回**空的定型数组**（引擎那侧另推一条 `ERROR: Unable to convert array index N from "K" to "T".`，
+ * 那一块由语料的 normalize 整段滤掉，所以值对齐即逐字节一致）；非 OBJECT 型带类名时类名被丢掉（`TYPE_NIL` 给不 typed）。 */
+export function arrayFromArgs(args: Variant[]): Variant {
+  if (args.length === 0) return V.array(GArray.of([]));
+  if (args.length === 1) return arrayFromVariant(args[0] as Variant);
+  if (args.length !== 4) {
+    throw new UnsupportedError("array-ctor-arity", `Array(...) 只实测过 0 / 1 / 4 参三形（收到 ${String(args.length)} 参）`);
+  }
+  const [base, typeArg, classArg, scriptArg] = args as [Variant, Variant, Variant, Variant];
+  if (scriptArg.t !== Tag.NIL) {
+    throw new UnsupportedError("array-ctor-script", `Array(...) 的第四参只实测过 null（收到 ${tagName(scriptArg.t)}）`);
+  }
+  if (base.t !== Tag.ARRAY) {
+    if (isBytes(base)) {
+      throw new GodotRuntimeError("array-ctor-base", `Invalid type in 'Array' constructor. Cannot convert argument 1 from ${packTypeName(packBytes(base).kind)} to Array.`);
+    }
+    throw new UnsupportedError("array-ctor-base", `Array(...) 四参形的第一参只实测过 Array（收到 ${tagName(base.t)}）`);
+  }
+  if (typeArg.t !== Tag.INT) {
+    throw new UnsupportedError("array-ctor-type-arg", `Array(...) 的第二参只实测过 int 型码（收到 ${tagName(typeArg.t)}）`);
+  }
+  const codeRaw = intToNum(typeArg.v as IntPayload);
+  if (typeof codeRaw === "bigint") {
+    throw new UnsupportedError("array-ctor-type-arg", `Array(...) 的型码越出 int 范围（收到 ${String(codeRaw)}）`);
+  }
+  const items = (base.v as GArray).raw();
+  if (codeRaw === 0) {
+    return V.array(GArray.of([...items]));
+  }
+  const kind = kindByCode(codeRaw);
+  if (kind === null) {
+    throw new UnsupportedError("array-ctor-kind", `Array(...) 的定型形只实测过容器标注的那批型名；型码 ${String(codeRaw)} 没量过（类名位收到 ${tagName(classArg.t)}）`);
+  }
+  const out: Variant[] = [];
+  for (const x of items) {
+    const converted = elemConvert(kind, x);
+    if (converted === null) {
+      const failed = GArray.of([]);
+      failed.stampElem(kind);
+      return V.array(failed);
+    }
+    out.push(converted);
+  }
+  const g = GArray.of(out);
+  g.stampElem(kind);
+  return V.array(g);
 }
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，

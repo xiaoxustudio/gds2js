@@ -94,7 +94,7 @@ function asString(v: Variant, who: string): string {
 }
 
 /** 定型容器那几支查询（S554）：`ElemKind` 折回引擎 `Variant.Type` 码；未定型给 0。 */
-const ELEM_TYPE_CODE: Record<string, number> = {
+export const ELEM_TYPE_CODE: Record<string, number> = {
   bool: 1, int: 2, float: 3, String: 4, Vector2: 5, Vector2i: 6, Vector3: 9, Vector3i: 10, Vector4: 12, Vector4i: 13,
   Color: 20, StringName: 21, Dictionary: 27, Array: 28,
 };
