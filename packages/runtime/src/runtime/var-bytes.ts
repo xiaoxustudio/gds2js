@@ -76,6 +76,8 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   Vector2i: 6,
   Vector3: 9,
   Vector3i: 10,
+  Vector4: 12,
+  Vector4i: 13,
   Color: 20,
   StringName: 21,
   Dictionary: 27,

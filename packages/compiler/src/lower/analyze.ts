@@ -397,7 +397,7 @@ function parseTyped(name: string): TypedSlot | null {
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
 
-const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color", "String", "int", "float", "bool"]);
+const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "String", "int", "float", "bool"]);
 
 /** 定形容器那一读的**面**：数组交内型、字典交值型；键的静态型判得出来又不合式就不交（那一格由下标型闸门去报）。
  *  与运算符型对那支 `elemOf` 同一条判据（S468 量齐：`tmp/d6/dictread.py` 四百二十格零分歧）。 */

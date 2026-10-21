@@ -98,6 +98,10 @@ function keyOfIn(v: Variant, depth: number): string {
       if (vec2i) return `x:${String(vec2i.x)},${String(vec2i.y)}`;
       const vec3i = asVec3i(v);
       if (vec3i) return `u:${String(vec3i.x)},${String(vec3i.y)},${String(vec3i.z)}`;
+      const vec4 = asVec4(v);
+      if (vec4) return `4:${String(vec4.x)},${String(vec4.y)},${String(vec4.z)},${String(vec4.w)}`;
+      const vec4i = asVec4i(v);
+      if (vec4i) return `5:${String(vec4i.x)},${String(vec4i.y)},${String(vec4i.z)},${String(vec4i.w)}`;
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
@@ -128,6 +132,8 @@ export type ElemKind =
   | "Vector3"
   | "Vector2i"
   | "Vector3i"
+  | "Vector4"
+  | "Vector4i"
   | "Color"
   | "Array"
   | "Dictionary";
@@ -139,6 +145,8 @@ export function isElemKind(name: string): name is ElemKind {
     name === "StringName" ||
     name === "Vector2" ||
     name === "Vector3" ||
+    name === "Vector4" ||
+    name === "Vector4i" ||
     name === "Vector2i" ||
     name === "Vector3i" ||
     name === "Color" ||
@@ -168,6 +176,10 @@ export function elemDefault(kind: ElemKind): Variant {
       return vector2i(0, 0);
     case "Vector3i":
       return vector3i(0, 0, 0);
+    case "Vector4":
+      return vector4(0, 0, 0, 0);
+    case "Vector4i":
+      return vector4i(0, 0, 0, 0);
     case "Color":
       return color(0, 0, 0, 1);
     case "Array":
@@ -223,6 +235,16 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
     case "Vector3i": {
       if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return v;
       if (v.t === Tag.OBJECT && v.v instanceof GVector3) return vector3i(v.v.x, v.v.y, v.v.z);
+      return null;
+    }
+    case "Vector4": {
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4) return v;
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4i) return vector4(v.v.x, v.v.y, v.v.z, v.v.w);
+      return null;
+    }
+    case "Vector4i": {
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4i) return v;
+      if (v.t === Tag.OBJECT && v.v instanceof GVector4) return vector4i(v.v.x, v.v.y, v.v.z, v.v.w);
       return null;
     }
     case "Color":
