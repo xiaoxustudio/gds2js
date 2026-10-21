@@ -595,7 +595,7 @@ export function isLess(a: Variant, b: Variant): boolean {
 }
 
 /** `Array.sort()` 的比较器只认这两张表里的形（S357）：有方向的那一族同形才比值，比不出的一族两向都假。 */
-const SORT_ORDERED = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "RID", "Array"]);
+const SORT_ORDERED = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "RID", "Array"]);
 const SORT_UNORDERED = new Set(["Nil", "Dictionary", "Color", "NodePath", "PackedByteArray", "PackedInt32Array", "PackedStringArray", "Callable"]);
 
 /** `Array.sort()` 自己那条比较器 —— 与源里的装箱 `<`（`compare`）、也与 `sort_custom` 那位 Callable 都**不是同一条**（S357，
