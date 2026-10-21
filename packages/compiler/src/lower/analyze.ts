@@ -3047,6 +3047,7 @@ const CTOR_REFUSED: Record<string, string[][]> = {
   Vector3i: [["int"], ["int", "int"], ["String"]],
   Vector4: [["int"], ["int", "int"], ["int", "int", "int"]],
   Vector4i: [["int"], ["int", "int"], ["int", "int", "int"]],
+  PackedVector4Array: [["Vector4"]],
   Callable: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   Signal: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   RID: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
