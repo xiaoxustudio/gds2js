@@ -639,6 +639,8 @@ function vecClassName(o: object): string | null {
   if (o instanceof GVector3) return "Vector3";
   if (o instanceof GVector2i) return "Vector2i";
   if (o instanceof GVector3i) return "Vector3i";
+  if (o instanceof GVector4) return "Vector4";
+  if (o instanceof GVector4i) return "Vector4i";
   if (o instanceof GColor) return "Color";
   return null;
 }
@@ -667,8 +669,7 @@ export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
     const mix = (x: number, y: number) => Math.fround(x + Math.fround((y - x) * Math.fround(t)));
     return V.object(new GVector4(mix(va4.x, vb4.x), mix(va4.y, vb4.y), mix(va4.z, vb4.z), mix(va4.w, vb4.w)));
   }
-  vec4UtilityGuard(a, "lerp");
-  vec4UtilityGuard(b, "lerp");
+  if (a.t === Tag.OBJECT && a.v instanceof GVector4i) throw new GodotRuntimeError("utility-arg", LERP_FROM_LIST);
   const weight = weightToFloat(w);
   if (sameShape(a, b)) {
     const vec = sameTypeVectorMath("lerp", a, [b, V.float(weight)]);
@@ -677,7 +678,7 @@ export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
   const listName = a.t === Tag.OBJECT ? vecClassName(a.v as object) : null;
   const aName =
     a.t === Tag.OBJECT
-      ? listName === "Vector2" || listName === "Vector3" || listName === "Color" ? listName : null
+      ? listName === "Vector2" || listName === "Vector3" || listName === "Vector4" || listName === "Color" ? listName : null
       : a.t === Tag.INT ? "int" : a.t === Tag.FLOAT ? "float" : a.t === Tag.BOOL ? "float" : null;
   if (aName === null) throw new GodotRuntimeError("utility-arg", LERP_FROM_LIST);
   if (a.t === Tag.INT || a.t === Tag.FLOAT || a.t === Tag.BOOL) {
@@ -752,6 +753,8 @@ export function gSnapped(x: Variant, step: Variant): Variant {
   const sx4i = x.t === Tag.OBJECT && x.v instanceof GVector4i ? (x.v as GVector4i) : null;
   const st4i = step.t === Tag.OBJECT && step.v instanceof GVector4i ? (step.v as GVector4i) : null;
   if (sx4i !== null && st4i !== null) return vector4iMethod(sx4i, "snapped", [step]);
+  if (sx4 !== null) throw utilConvertError("snapped", step, "Vector4", 2);
+  if (sx4i !== null) throw utilConvertError("snapped", step, "Vector4i", 2);
   vec4UtilityGuard(x, "snapped");
   vec4UtilityGuard(step, "snapped");
   const xName = x.t === Tag.OBJECT ? vecClassName(x.v as object) : null;

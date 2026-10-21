@@ -1,7 +1,7 @@
 /** Vector4 的全局工具运行期句子与 max/min 解析期闸门（S586），读数 `tmp/d6/s587.gd` / `s586.gd`。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { gIsEqualApprox, gIsZeroApprox, gIsFinite, gMax, gMin } from "@gds2js/runtime/runtime/builtins";
+import { gClamp, gIsEqualApprox, gIsZeroApprox, gIsFinite, gLerp, gMax, gMin, gSnapped } from "@gds2js/runtime/runtime/builtins";
 import { vector4New } from "@gds2js/runtime/runtime/vector4";
 import { vector4iNew } from "@gds2js/runtime/runtime/vector4i";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
@@ -63,5 +63,12 @@ describe("Vector4 全局工具的运行期句子（S586）", () => {
     eq("586", "is_finite", err(() => gIsFinite(v4(1, 2, 3, 4))), conv("is_finite", 1, "Vector4"));
     eq("586", "max", err(() => gMax(v4(1, 2, 3, 4), v4(1, 2, 3, 4))), conv("max", 1, "Vector4"));
     eq("586", "min V4i", err(() => gMin(i4(1, 2, 3, 4), i4(1, 2, 3, 4))), conv("min", 1, "Vector4i"));
+  });
+  it("snapped / clamp / lerp 的跨型句（S596）", () => {
+    eq("596", "snapped 标量 step", err(() => gSnapped(v4(1, 2, 3, 4), V.float(1.5))), 'Invalid type in utility function "snapped()". Cannot convert argument 2 from float to Vector4.');
+    eq("596", "clamp 低", err(() => gClamp(v4(1, 2, 3, 4), i4(0, 0, 0, 0), v4(3, 3, 3, 3))), 'Invalid type in utility function "clamp()". Cannot convert argument 2 from Vector4i to Vector4.');
+    eq("596", "clamp 高", err(() => gClamp(v4(1, 2, 3, 4), v4(0, 0, 0, 0), i4(3, 3, 3, 3))), 'Invalid type in utility function "clamp()". Cannot convert argument 3 from Vector4i to Vector4.');
+    eq("596", "lerp to", err(() => gLerp(v4(1, 2, 3, 4), i4(1, 2, 3, 4), V.float(0.5))), 'Invalid type in utility function "lerp()". Cannot convert argument 2 from Vector4i to Vector4.');
+    eq("596", "lerp from V4i", err(() => gLerp(i4(1, 2, 3, 4), v4(1, 2, 3, 4), V.float(0.5))), 'Error calling utility function "lerp()": Argument "from" must be "int", "float", "Vector2", "Vector3", "Vector4", "Color", "Quaternion", "Basis", "Transform2D", or "Transform3D".');
   });
 });
