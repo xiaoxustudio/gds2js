@@ -494,6 +494,8 @@ const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
 const BYTE_ONLY = new Set([
   "get_string_from_utf8",
   "get_string_from_ascii",
+  "get_string_from_utf16",
+  "get_string_from_wchar",
   "to_int32_array",
   "to_int64_array",
   "to_float32_array",
@@ -899,6 +901,43 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
         return V.object(new GBytes([], "byte"));
       }
       return V.object(new GBytes(bytesOf(plain), "byte"));
+    }
+    case "get_string_from_utf16":
+    case "get_string_from_wchar": {
+      // S561：Windows 那侧 wchar 就是 UTF-16；带 BOM 时跟 BOM 走字节序（FF FE 小端 / FE FF 大端），BOM 不进食
+      const bytes = items as number[];
+      let le = true;
+      let start = 0;
+      if (bytes.length >= 2) {
+        if ((bytes[0] as number) === 0xff && (bytes[1] as number) === 0xfe) start = 2;
+        else if ((bytes[0] as number) === 0xfe && (bytes[1] as number) === 0xff) {
+          le = false;
+          start = 2;
+        }
+      }
+      const units: number[] = [];
+      for (let i = start; i + 1 < bytes.length; i += 2) {
+        units.push(le ? ((bytes[i] as number) | ((bytes[i + 1] as number) << 8)) : (((bytes[i] as number) << 8) | (bytes[i + 1] as number)));
+      }
+      let text = "";
+      for (let i = 0; i < units.length; i++) {
+        const u = units[i] as number;
+        if (u >= 0xd800 && u <= 0xdbff) {
+          const next = units[i + 1];
+          if (next === undefined) {
+            text += String.fromCharCode(u);
+            continue;
+          }
+          if (next >= 0xdc00 && next <= 0xdfff) {
+            text += String.fromCharCode(u, next);
+            i++;
+            continue;
+          }
+          throw new UnsupportedError("packed-utf16", "get_string_from_utf16() 里高位代理后跟的不是低位代理：引擎那形给的是 [65, 0] 这类怪值，没逆出来，不发");
+        }
+        text += String.fromCharCode(u);
+      }
+      return V.str(text);
     }
     case "get_string_from_utf8": {
       return V.str(utf8Decode(items as number[]));
