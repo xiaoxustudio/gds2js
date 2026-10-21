@@ -43,20 +43,24 @@ describe("PackedByteArray 的向量/颜色转换（S553）", () => {
     eq("553", "13 字节 to_vector3", capture(() => method(pb(new Array(13).fill(0)), "to_vector3_array", [])).text.split("§")[0], "ERROR: PackedByteArray size must be a multiple of 12 (size of Vector3) to convert to PackedVector3Array.");
     eq("553", "18 字节 to_color", capture(() => method(pb(new Array(18).fill(0)), "to_color_array", [])).text.split("§")[0], "ERROR: PackedByteArray size must be a multiple of 16 (size of Color variant) to convert to PackedColorArray.");
   });
-  it("to_vector4_array 与 multibyte 响亮拒", () => {
-    let c1 = "";
+  it("to_vector4_array 已接（坏长度打 1049 块给空）；multibyte 仍响亮拒", () => {
+    const orig = process.stderr.write;
+    const writes: string[] = [];
+    process.stderr.write = ((chunk: string) => {
+      writes.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+    let r4 = "";
     let c2 = "";
     try {
-      method(pb([1]), "to_vector4_array", []);
-    } catch (e) {
-      c1 = (e as { code?: string }).code ?? "?";
-    }
-    try {
+      r4 = show(method(pb([1]), "to_vector4_array", []));
       method(pb([1]), "get_string_from_multibyte_char", []);
     } catch (e) {
       c2 = (e as { code?: string }).code ?? "?";
+    } finally {
+      process.stderr.write = orig;
     }
-    eq("553", "两处拒", `${c1}/${c2}`, "packed-vector4/packed-multibyte-acp");
+    eq("553", "一接一拒", `${r4}|${c2}|${writes.join("").includes("multiple of 16 (size of Vector4)")}`, "[]|packed-multibyte-acp|true");
   });
 });
 

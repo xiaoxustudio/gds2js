@@ -357,14 +357,15 @@ function packVarCodec(p: GBytes, name: string, args: Variant[]): Variant {
 }
 
 /** `to_vector2_array` / `to_vector3_array` / `to_color_array`（S553）：宽度、那句 ERROR、守卫行号、目标 pack。 */
-const CONVERT_INFO: Record<string, readonly [number, string, number, "vector2" | "vector3" | "color"]> = {
+const CONVERT_INFO: Record<string, readonly [number, string, number, "vector2" | "vector3" | "vector4" | "color"]> = {
   to_vector2_array: [8, "PackedByteArray size must be a multiple of 8 (size of Vector2) to convert to PackedVector2Array.", 1021, "vector2"],
   to_vector3_array: [12, "PackedByteArray size must be a multiple of 12 (size of Vector3) to convert to PackedVector3Array.", 1035, "vector3"],
+  to_vector4_array: [16, "PackedByteArray size must be a multiple of 16 (size of Vector4) to convert to PackedVector4Array.", 1049, "vector4"],
   to_color_array: [16, "PackedByteArray size must be a multiple of 16 (size of Color variant) to convert to PackedColorArray.", 1063, "color"],
 };
 
 function packConvert(p: GBytes, name: string): Variant {
-  const info = CONVERT_INFO[name] as readonly [number, string, number, "vector2" | "vector3" | "color"];
+  const info = CONVERT_INFO[name] as readonly [number, string, number, "vector2" | "vector3" | "vector4" | "color"];
   const width = info[0];
   const kind = info[3];
   if (p.length !== 0 && p.length % width !== 0) {
@@ -378,7 +379,12 @@ function packConvert(p: GBytes, name: string): Variant {
   };
   const items: object[] = [];
   for (let at = 0; at + width <= raw.length; at += width) {
-    items.push(kind === "vector2" ? new GVector2(f32(at), f32(at + 4)) : kind === "vector3" ? new GVector3(f32(at), f32(at + 4), f32(at + 8)) : new GColor(f32(at), f32(at + 4), f32(at + 8), f32(at + 12)));
+    items.push(
+      kind === "vector2" ? new GVector2(f32(at), f32(at + 4))
+      : kind === "vector3" ? new GVector3(f32(at), f32(at + 4), f32(at + 8))
+      : kind === "vector4" ? new GVector4(f32(at), f32(at + 4), f32(at + 8), f32(at + 12))
+      : new GColor(f32(at), f32(at + 4), f32(at + 8), f32(at + 12)),
+    );
   }
   return V.object(new GBytes(items as never[], kind));
 }
@@ -980,9 +986,6 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       if (DECODE_INFO[name] !== undefined || ENCODE_INFO[name] !== undefined || FLOAT_DECODE_INFO[name] !== undefined || FLOAT_ENCODE_INFO[name] !== undefined || VAR_CODEC_GUARD[name] !== undefined || CONVERT_INFO[name] !== undefined || name === "get_string_from_utf32" || name === "to_vector4_array" || name === "get_string_from_multibyte_char" || name === "decompress_dynamic") {
         if (inner.kind !== "byte") {
           throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${packTypeName(inner.kind)}'.`);
-        }
-        if (name === "to_vector4_array") {
-          throw new UnsupportedError("packed-vector4", "to_vector4_array() 要 Vector4，运行时还没这一型，不发");
         }
         if (name === "get_string_from_multibyte_char") return bytesMultibyte(inner, args);
         if (name === "decompress_dynamic") return bytesDecompressDynamic(inner, args);

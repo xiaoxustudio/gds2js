@@ -720,6 +720,7 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
+  "PackedVector4Array",
   "PackedColorArray",
 ]);
 
@@ -1743,6 +1744,7 @@ const PACK_IS_AS_NAMES = new Set([
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
+  "PackedVector4Array",
   "PackedColorArray",
 ]);
 /** 能静态判出来的操作数类型（`null` 那格的文本没判过，故意不列）。 */
@@ -1844,6 +1846,7 @@ const PACK_ARG_SLOTS: Record<string, { slot: string; ok: readonly string[] }> = 
   PackedStringArray: { slot: "String", ok: ["String", "StringName", "NodePath"] },
   PackedVector2Array: { slot: "Vector2", ok: ["Vector2", "Vector2i"] },
   PackedVector3Array: { slot: "Vector3", ok: ["Vector3", "Vector3i"] },
+  PackedVector4Array: { slot: "Vector4", ok: ["Vector4", "Vector4i"] },
   PackedColorArray: { slot: "Color", ok: ["Color", "int", "String"] },
 };
 /** 每支方法逐位的声明槽：`e` 是元素型、`i` 是 int（下标 / 计数 / 容量）、`b` 是 bool（`bsearch` 的 `before`）—— 九面 2160 格两侧对过（`tmp/probe-packargs/`）。 */
@@ -1864,7 +1867,7 @@ const PACK_APPEND_ARRAY_AS = ["bool", "float", "int", "String", "StringName", "N
 const PACK_APPEND_NAMED = new Set([
   "bool", "float", "int", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
-  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedVector4Array", "PackedColorArray",
   "Callable", "Object", "Node",
 ]);
 function namedAppendSource(name: unknown, ann: Map<string, string>): string | null {
@@ -2050,7 +2053,7 @@ const VALUE_ARG_WANTS = new Set([
   "int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Color",
   "Array", "Dictionary",
   "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
-  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedVector4Array", "PackedColorArray",
 ]);
 function nullRefusedByValueSlot(want: string): boolean {
   return VALUE_ARG_WANTS.has(want);
@@ -2066,7 +2069,7 @@ function objectNameRefusedByValueSlot(src: string | null, want: string): boolean
 const ARG_NAME_TYPES = new Set([
   "int", "float", "bool", "String", "StringName", "NodePath", "Color", "Vector2", "Vector2i", "Vector3", "Vector3i",
   "Array", "Dictionary", "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array",
-  "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+  "PackedFloat64Array", "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedVector4Array", "PackedColorArray",
   "Callable", "Object", "Node",
 ]);
 
@@ -2698,6 +2701,7 @@ export const BUILTIN_INSTANCE_MEMBERS: Readonly<Record<string, ReadonlyArray<str
   "PackedStringArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
   "PackedVector2Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
   "PackedVector3Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
+  "PackedVector4Array": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
   "PackedColorArray": ["append", "append_array", "bsearch", "clear", "count", "duplicate", "erase", "fill", "find", "get", "has", "insert", "is_empty", "push_back", "remove_at", "resize", "reverse", "rfind", "set", "size", "slice", "sort", "to_byte_array"],
 };
 
@@ -5070,6 +5074,7 @@ const PACK_TYPE_NAMES = new Set([
   "PackedStringArray",
   "PackedVector2Array",
   "PackedVector3Array",
+  "PackedVector4Array",
   "PackedColorArray",
 ]);
 

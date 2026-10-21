@@ -70,7 +70,7 @@ export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
 
 const PACK_NINE: Record<string, boolean> = {
   PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
-  PackedFloat64Array: true, PackedStringArray: true, PackedVector2Array: true, PackedVector3Array: true,
+  PackedFloat64Array: true, PackedStringArray: true, PackedVector2Array: true, PackedVector3Array: true, PackedVector4Array: true,
   PackedColorArray: true,
 };
 

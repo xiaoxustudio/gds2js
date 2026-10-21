@@ -2359,6 +2359,11 @@ export function varToStr(v: Variant): string {
         const items = packItems(inner as GBytes);
         const flat: string[] = [];
         for (const item of items) {
+          if (item.t === Tag.OBJECT && item.v instanceof GVector4) {
+            const g = item.v as GVector4;
+            flat.push(rtosFix(g.x, true), rtosFix(g.y, true), rtosFix(g.z, true), rtosFix(g.w, true));
+            continue;
+          }
           if (item.t === Tag.OBJECT) {
             throw new UnsupportedError("var-to-str-pack", `var_to_str() 的 ${packTypeName(inner.kind)} 里有对象元素，那一形还没量出`);
           }

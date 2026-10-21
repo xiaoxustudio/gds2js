@@ -123,6 +123,7 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   PackedStringArray: (a) => `rt.packCtor("string", [${a.join(", ")}])`,
   PackedVector2Array: (a) => `rt.packCtor("vector2", [${a.join(", ")}])`,
   PackedVector3Array: (a) => `rt.packCtor("vector3", [${a.join(", ")}])`,
+  PackedVector4Array: (a) => `rt.packCtor("vector4", [${a.join(", ")}])`,
   PackedColorArray: (a) => `rt.packCtor("color", [${a.join(", ")}])`,
   Array: (a) => `rt.arrayFromVariant(${a[0] ?? "rt.V.nil()"})`,
   Callable: (a) => `rt.callableCtor([${a.join(", ")}])`,
@@ -3327,6 +3328,7 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "PackedStringArray") return 'rt.packCtor("string", [])';
   if (base === "PackedVector2Array") return 'rt.packCtor("vector2", [])';
   if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
+  if (base === "PackedVector4Array") return 'rt.packCtor("vector4", [])';
   if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
   // D6 那七个值类型不进 Tier 1：它们的默认值发不出来 —— 那一站要响亮拒，不是静默的 null 盒子（读数 `tmp/probe-valuedefault/compare96.txt`）
   if (D6_VALUE_TYPES.has(base)) return `rt.unsupportedValueDefault(${JSON.stringify(base)})`;

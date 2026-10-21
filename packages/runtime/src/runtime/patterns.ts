@@ -129,6 +129,7 @@ const PACK_TYPES: Record<string, PackKind> = {
   PackedStringArray: "string",
   PackedVector2Array: "vector2",
   PackedVector3Array: "vector3",
+  PackedVector4Array: "vector4",
   PackedColorArray: "color",
 };
 

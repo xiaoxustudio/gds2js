@@ -7,11 +7,13 @@ import { GVector2 } from "./vector2";
 import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GVector3 } from "./vector3";
+import { GVector4 } from "./vector4";
+import { GVector4i } from "./vector4i";
 import type { GArray } from "./values";
 
-export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "color";
+export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "vector4" | "color";
 
-export type PackElem = number | bigint | string | GVector2 | GVector3 | GColor;
+export type PackElem = number | bigint | string | GVector2 | GVector3 | GVector4 | GColor;
 
 const PACK_TYPE_NAME: Record<PackKind, string> = {
   byte: "PackedByteArray",
@@ -22,6 +24,7 @@ const PACK_TYPE_NAME: Record<PackKind, string> = {
   string: "PackedStringArray",
   vector2: "PackedVector2Array",
   vector3: "PackedVector3Array",
+  vector4: "PackedVector4Array",
   color: "PackedColorArray",
 };
 const PACK_TYPEOF: Record<PackKind, number> = {
@@ -33,6 +36,7 @@ const PACK_TYPEOF: Record<PackKind, number> = {
   string: 34,
   vector2: 35,
   vector3: 36,
+  vector4: 38,
   color: 37,
 };
 
@@ -73,6 +77,8 @@ export function defaultElem(kind: PackKind): PackElem {
       return new GVector2(0, 0);
     case "vector3":
       return new GVector3(0, 0, 0);
+    case "vector4":
+      return new GVector4(0, 0, 0, 0);
     case "color":
       return new GColor(0, 0, 0, 1);
     default:
@@ -109,7 +115,7 @@ function foldInt32(n: number | bigint): number {
 
 /** 元素折算：int / float（截断或饱和）/ bool / String（前导数解析）/ 与形状对应的值类型，其余来源响亮拒。 */
 export function toElem(kind: PackKind, v: Variant): PackElem {
-  if (kind === "vector2" || kind === "vector3" || kind === "color") {
+  if (kind === "vector2" || kind === "vector3" || kind === "vector4" || kind === "color") {
     const inner = v.t === Tag.OBJECT ? (v.v as object) : null;
     if (kind === "vector2") {
       if (inner instanceof GVector2) return new GVector2(inner.x, inner.y);
@@ -117,6 +123,11 @@ export function toElem(kind: PackKind, v: Variant): PackElem {
       // Vector3 → Vector2 是**丢掉 z**，不是折成默认元素。
       if (inner instanceof GVector3) return new GVector2(inner.x, inner.y);
       if (inner instanceof GVector3i) return new GVector2(inner.x, inner.y);
+      return defaultElem(kind);
+    }
+    if (kind === "vector4") {
+      if (inner instanceof GVector4) return new GVector4(inner.x, inner.y, inner.z, inner.w);
+      if (inner instanceof GVector4i) return new GVector4(inner.x, inner.y, inner.z, inner.w);
       return defaultElem(kind);
     }
     if (kind === "vector3") {
@@ -201,7 +212,7 @@ export function toByte(v: Variant): number {
 
 function elemVariant(kind: PackKind, e: PackElem): Variant {
   if (kind === "string") return V.str(e as string);
-  if (kind === "vector2" || kind === "vector3" || kind === "color") return V.object(e as object);
+  if (kind === "vector2" || kind === "vector3" || kind === "vector4" || kind === "color") return V.object(e as object);
   if (kind === "float32" || kind === "float64") return V.float(e as number);
   return kind === "int64" ? V.int(typeof e === "bigint" ? e : BigInt(e as number)) : V.int(e as number | bigint);
 }
@@ -372,6 +383,11 @@ function cmpElem(kind: PackKind, a: PackElem, b: PackElem): number {
     const y = b as GVector3;
     return cmpNums([x.x, x.y, x.z], [y.x, y.y, y.z]);
   }
+  if (kind === "vector4") {
+    const x = a as GVector4;
+    const y = b as GVector4;
+    return cmpNums([x.x, x.y, x.z, x.w], [y.x, y.y, y.z, y.w]);
+  }
   if (kind === "string") return cmpStrings(a as string, b as string);
   if (kind === "int64") return bigCmp(bigElem(a), bigElem(b));
   const x = a as number;
@@ -384,6 +400,8 @@ function elemSame(kind: PackKind, a: PackElem, b: PackElem): boolean {
   if (kind === "vector2") return (a as GVector2).x === (b as GVector2).x && (a as GVector2).y === (b as GVector2).y;
   if (kind === "vector3")
     return (a as GVector3).x === (b as GVector3).x && (a as GVector3).y === (b as GVector3).y && (a as GVector3).z === (b as GVector3).z;
+  if (kind === "vector4")
+    return (a as GVector4).x === (b as GVector4).x && (a as GVector4).y === (b as GVector4).y && (a as GVector4).z === (b as GVector4).z && (a as GVector4).w === (b as GVector4).w;
   if (kind === "color")
     return (
       (a as GColor).r === (b as GColor).r &&
@@ -502,6 +520,7 @@ const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
   vector2: MISSING_ON_SIX,
   vector3: MISSING_ON_SIX,
   color: MISSING_ON_SIX,
+  vector4: MISSING_ON_SIX,
 };
 /** byte 那一支独有的方法（`to_*_array` 与压缩这一族）。 */
 const BYTE_ONLY = new Set([
@@ -661,6 +680,7 @@ function packToBytes(kind: PackKind, items: PackElem[]): number[] {
       const vs =
         kind === "vector2" ? [(e as GVector2).x, (e as GVector2).y]
         : kind === "vector3" ? [(e as GVector3).x, (e as GVector3).y, (e as GVector3).z]
+        : kind === "vector4" ? [(e as GVector4).x, (e as GVector4).y, (e as GVector4).z, (e as GVector4).w]
         : [(e as GColor).r, (e as GColor).g, (e as GColor).b, (e as GColor).a];
       one(vs.length * 4, (dv) => vs.forEach((v, i) => dv.setFloat32(i * 4, v, true)));
     }
@@ -671,6 +691,17 @@ function packToBytes(kind: PackKind, items: PackElem[]): number[] {
 export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
   const items = p.raw();
   const kind = p.kind;
+  if (kind === "vector4" && (name === "push_back" || name === "append" || name === "insert" || name === "fill" || name === "set")) {
+    const idx = name === "insert" || name === "set" ? 1 : 0;
+    const v = args[idx];
+    const ok = v !== undefined && v.t === Tag.OBJECT && typeof v.v === "object" && (v.v instanceof GVector4 || v.v instanceof GVector4i);
+    if (!ok) {
+      throw new GodotRuntimeError(
+        "packed-vector4-element",
+        `Invalid type in function '${name}' in base 'PackedVector4Array'. Cannot convert argument ${String(idx + 1)} from ${tagName(v === undefined ? Tag.NIL : v.t)} to Vector4.`,
+      );
+    }
+  }
   if (NON_BYTE_MISSING.has(name) && kind !== "byte") {
     throw new GodotRuntimeError("packed-no-method", `Invalid call. Nonexistent function '${name}' in base '${PACK_TYPE_NAME[kind]}'.`);
   }
@@ -779,7 +810,7 @@ export function packMethod(p: GBytes, name: string, args: Variant[]): Variant {
       if (name === "count") return V.int(items.filter(same).length);
       if (name === "find") return V.int(items.findIndex(same));
       // rfind 只在 byte 那一支支持，其余形状响亮拒，不照 find 推
-      if (kind !== "byte") throw new UnsupportedError("packed-rfind", `${kind} 的 rfind() 没实测过，只在 PackedByteArray 上量过`);
+      if (kind !== "byte" && kind !== "vector4") throw new UnsupportedError("packed-rfind", `${kind} 的 rfind() 没实测过，只在 PackedByteArray 上量过`);
       for (let i = items.length - 1; i >= 0; i--) if (same(items[i] as PackElem)) return V.int(i);
       return V.int(-1);
     }
@@ -1029,6 +1060,7 @@ const PACK_WRITE_EXACT: Record<PackKind, ((v: object) => boolean) | null> = {
   color: null,
   vector2: (v) => v instanceof GVector2,
   vector3: (v) => v instanceof GVector3,
+  vector4: (v) => v instanceof GVector4,
 };
 
 /** 报错文本里的类型名：值类型要说得出 `Vector3i`，`tagName` 只会给 `Object`。 */

@@ -4,6 +4,7 @@ import { GArray, GDict, type ElemKind } from "./values";
 import { GBytes, type PackElem, type PackKind } from "./packed";
 import { GVector2 } from "./vector2";
 import { GVector3 } from "./vector3";
+import { GVector4 } from "./vector4";
 import { GVector2i } from "./vector2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
@@ -39,6 +40,7 @@ const T_PACKED_F32 = 32;
 const T_PACKED_STR = 34;
 const T_PACKED_V2 = 35;
 const T_PACKED_V3 = 36;
+const T_PACKED_V4 = 38;
 const T_PACKED_COLOR = 37;
 const T_VECTOR3I = 10;
 const T_OBJECT = 24;
@@ -57,6 +59,7 @@ const PACK_TYPE_CODE: Record<PackKind, number> = {
   string: T_PACKED_STR,
   vector2: T_PACKED_V2,
   vector3: T_PACKED_V3,
+  vector4: T_PACKED_V4,
   color: T_PACKED_COLOR,
 };
 
@@ -269,6 +272,12 @@ class Writer {
         this.f32((e as GVector3).x);
         this.f32((e as GVector3).y);
         this.f32((e as GVector3).z);
+        return;
+      case "vector4":
+        this.f32((e as GVector4).x);
+        this.f32((e as GVector4).y);
+        this.f32((e as GVector4).z);
+        this.f32((e as GVector4).w);
         return;
       case "color":
         this.f32((e as GColor).r);
@@ -545,6 +554,13 @@ class Reader {
         const y = this.f32();
         const z = this.f32();
         return new GVector3(x, y, z);
+      }
+      case "vector4": {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        const w = this.f32();
+        return new GVector4(x, y, z, w);
       }
       case "color": {
         const r = this.f32();

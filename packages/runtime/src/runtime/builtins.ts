@@ -322,6 +322,14 @@ function packHash(p: GBytes): number {
       h = hashFloat32(v.y, h);
       h = hashFloat32(v.z, h);
     }
+  } else if (kind === "vector4") {
+    for (const e of raw) {
+      const v = e as GVector4;
+      h = hashFloat32(v.x, h);
+      h = hashFloat32(v.y, h);
+      h = hashFloat32(v.z, h);
+      h = hashFloat32(v.w, h);
+    }
   } else {
     for (const e of raw) {
       const c = e as GColor;
@@ -1620,6 +1628,8 @@ function dictTypeDefault(t: string | null): Variant {
       return V.object(new GBytes([], "byte"));
     case "PackedStringArray":
       return V.object(new GBytes([], "string"));
+    case "PackedVector4Array":
+      return V.object(new GBytes([], "vector4"));
     default:
       throw new UnsupportedError(
         "inst-to-dict-acc-type",
