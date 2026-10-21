@@ -5128,6 +5128,11 @@ const STATIC_FACE: Record<string, { consts: readonly string[]; axis: readonly st
       humanize_size: [1, 1],
     },
   },
+  Callable: {
+    consts: [],
+    axis: [],
+    statics: { create: [2, 2] },
+  },
 };
 
 function staticFaceConstName(t: string, name: string): boolean {

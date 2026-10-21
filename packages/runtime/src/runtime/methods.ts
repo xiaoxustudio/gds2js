@@ -591,6 +591,20 @@ export function callableCtor(args: Variant[]): Variant {
   );
 }
 
+/** `Callable.create(obj, method)`（S578）：与 `Callable(obj, method)` 同一支（实测 `==` 真、调用同）；其余静态成员没有。 */
+export function callableStatic(name: string, args: Variant[] = []): Variant {
+  if (name === "create") {
+    if (args.length !== 2) {
+      throw new UnsupportedError("callable-create-arity", "Callable.create() 的元数没量过（只量过 2 个实参）");
+    }
+    if ((args[0] as Variant).t !== Tag.OBJECT) {
+      throw new UnsupportedError("callable-create-obj", "Callable.create() 的第一个实参只量过对象来源");
+    }
+    return callableCtor(args);
+  }
+  throw new UnsupportedError("callable-static", `Callable.${name} 未实现`);
+}
+
 /** 调一个 Callable 盒子：调用实参排在绑定实参**之前**；lambda 走盒子带的式子，方法 / 静态方法交 `method()` 按名派发。 */
 function callCallableBox(box: CallableBox, args: Variant[]): Variant {
   const all: Variant[] = [];
@@ -2525,7 +2539,8 @@ function hexPairsToBytes(hex: string): number[] {
   return out;
 }
 
-/** `Array.get` / `Array.set` 的下标位（S572）：int / float / bool 照折，其余发引擎方法句；负下标**不**回绕。 */function arrayIndexArg(v: Variant | undefined, who: string): number {
+/** `Array.get` / `Array.set` 的下标位（S572）：int / float / bool 照折，其余发引擎方法句；负下标**不**回绕。 */
+function arrayIndexArg(v: Variant | undefined, who: string): number {
   if (v === undefined) {
     throw new GodotRuntimeError("arity", `Too few arguments for "${who}()" call. Expected at least 1 but received 0.`);
   }
