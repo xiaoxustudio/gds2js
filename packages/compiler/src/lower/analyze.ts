@@ -5898,7 +5898,7 @@ function literalIntArg(e: Expr): bigint | null {
 }
 
 /** 引擎这一族点名的都是「拿不出数字」的字面量形；int / float / bool 它都收（`sqrt(1)`、`sqrt(1.5)`、`sqrt(false)` 实测全过）。 */
-const NUMERIC_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Color"]);
+const NUMERIC_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color"]);
 
 function nonNumericLiteral(e: Expr): string | null {
   if (e.kind === "lit") {
