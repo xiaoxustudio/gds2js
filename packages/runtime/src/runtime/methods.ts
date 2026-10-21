@@ -32,6 +32,8 @@ import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitali
   strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath,
   strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix,
   strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch,
+  strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf,
+  strLstrip, strRstrip, strPascalCase,
   strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
@@ -1885,6 +1887,31 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "is_valid_identifier":
           if (args.length !== 0) throw new GodotRuntimeError("arity", `is_valid_identifier() 不接受参数（收到 ${args.length} 个）`);
           return V.bool(strIsValidAsciiIdentifier(s));
+        case "nocasecmp_to":
+          return V.int(strNoCaseCmp(s, asString(one(args, "nocasecmp_to"), "nocasecmp_to")));
+        case "naturalcasecmp_to":
+          return V.int(strNaturalCaseCmp(s, asString(one(args, "naturalcasecmp_to"), "naturalcasecmp_to")));
+        case "naturalnocasecmp_to":
+          return V.int(strNaturalNoCaseCmp(s, asString(one(args, "naturalnocasecmp_to"), "naturalnocasecmp_to")));
+        case "filecasecmp_to":
+          return V.int(strFileCaseCmp(s, asString(one(args, "filecasecmp_to"), "filecasecmp_to")));
+        case "filenocasecmp_to":
+          return V.int(strFileNoCaseCmp(s, asString(one(args, "filenocasecmp_to"), "filenocasecmp_to")));
+        case "containsn":
+          return V.bool(strContainsN(s, asString(one(args, "containsn"), "containsn")));
+        case "matchn":
+          return V.bool(strWildcardMatchN(s, asString(one(args, "matchn"), "matchn")));
+        case "is_subsequence_of":
+          return V.bool(strIsSubsequenceOf(s, asString(one(args, "is_subsequence_of"), "is_subsequence_of"), false));
+        case "is_subsequence_ofn":
+          return V.bool(strIsSubsequenceOf(s, asString(one(args, "is_subsequence_ofn"), "is_subsequence_ofn"), true));
+        case "lstrip":
+          return V.str(strLstrip(s, asString(one(args, "lstrip"), "lstrip")));
+        case "rstrip":
+          return V.str(strRstrip(s, asString(one(args, "rstrip"), "rstrip")));
+        case "to_pascal_case":
+          if (args.length !== 0) throw new GodotRuntimeError("arity", `to_pascal_case() 不接受参数（收到 ${args.length} 个）`);
+          return V.str(strPascalCase(s));
         case "is_valid_hex_number": {
           if (args.length > 1) {
             throw new GodotRuntimeError("arity", `is_valid_hex_number() 最多 1 个参数（收到 ${args.length} 个）`);

@@ -20,6 +20,7 @@ import { isEncodedObjectIdBox, isNullRefValue, isWeakRefBox, NULL_OBJECT } from 
 import type { GdIdentified } from "./identity";
 import { asRid, ridText } from "./rid";
 import { asNodePath, emptyNodePath, nodePathText, nodePathValue, sameNodePath } from "./node-path";
+import { findLower, findUpper } from "./ucaps";
 
 /** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
@@ -1098,7 +1099,7 @@ export function strCase(s: string, dir: "upper" | "lower"): string {
 
 /** 单码点的 Godot 简单降档，供不区分大小写的比较用（Godot 的大小写表永不撑开）。 */
 function lowerOne(ch: string): string {
-  return strCase(ch, "lower");
+  return String.fromCodePoint(findLower(ch.codePointAt(0) as number));
 }
 
 function matchAt(chars: string[], at: number, needle: string[], insensitive: boolean): boolean {
@@ -1411,6 +1412,177 @@ export function strWildcardMatch(s: string, wildcard: string): boolean {
     return ti < t.length && t[ti] === pc && walk(pi + 1, ti + 1);
   };
   return walk(0, 0);
+}
+
+/** `String.nocasecmp_to()`（S576）：逐码点比 `_find_upper` 后的值，前缀短者小。 */
+export function strNoCaseCmp(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const n = Math.min(x.length, y.length);
+  for (let i = 0; i < n; i++) {
+    const ca = findUpper((x[i] as string).codePointAt(0) as number);
+    const cb = findUpper((y[i] as string).codePointAt(0) as number);
+    if (ca < cb) return -1;
+    if (ca > cb) return 1;
+  }
+  return x.length === y.length ? 0 : x.length < y.length ? -1 : 1;
+}
+
+function isDigitCp(ch: string): boolean {
+  const c = ch.codePointAt(0) as number;
+  return c >= 0x30 && c <= 0x39;
+}
+
+function naturalCmpBase(x: string[], y: string[], i0: number, j0: number, insensitive: boolean): number {
+  let i = i0;
+  let j = j0;
+  while (x[i] === "." || y[j] === ".") {
+    const xc = x[i];
+    i += 1;
+    if (xc !== ".") return 1;
+    const yc = y[j];
+    j += 1;
+    if (yc !== ".") return -1;
+    if (y[j] === undefined) return 1;
+    if (x[i] === undefined) return -1;
+  }
+  while (i < x.length) {
+    if (j >= y.length) return 1;
+    const cx = x[i] as string;
+    const cy = y[j] as string;
+    if (isDigitCp(cx)) {
+      if (!isDigitCp(cy)) return -1;
+      let xi = i;
+      let yj = j;
+      while (xi < x.length && isDigitCp(x[xi] as string)) xi++;
+      while (yj < y.length && isDigitCp(y[yj] as string)) yj++;
+      let xa = i;
+      let yb = j;
+      while (x[xa] === "0") xa++;
+      while (y[yb] === "0") yb++;
+      const lx = xi - xa;
+      const ly = yj - yb;
+      if (lx < ly) return -1;
+      if (lx > ly) return 1;
+      while (xa < xi && yb < yj) {
+        const dx = (x[xa] as string).codePointAt(0) as number;
+        const dy = (y[yb] as string).codePointAt(0) as number;
+        if (dx < dy) return -1;
+        if (dx > dy) return 1;
+        xa++;
+        yb++;
+      }
+      i = xi;
+      j = yj;
+    } else if (isDigitCp(cy)) {
+      return 1;
+    } else {
+      const ux = insensitive ? findUpper(cx.codePointAt(0) as number) : (cx.codePointAt(0) as number);
+      const uy = insensitive ? findUpper(cy.codePointAt(0) as number) : (cy.codePointAt(0) as number);
+      if (ux < uy) return -1;
+      if (ux > uy) return 1;
+      i++;
+      j++;
+    }
+  }
+  return j < y.length ? -1 : 0;
+}
+
+export function strNaturalCaseCmp(a: string, b: string): number {
+  return naturalCmpBase(Array.from(a), Array.from(b), 0, 0, false);
+}
+
+export function strNaturalNoCaseCmp(a: string, b: string): number {
+  return naturalCmpBase(Array.from(a), Array.from(b), 0, 0, true);
+}
+
+function fileCmpCommon(x: string[], y: string[]): [number, number, number] {
+  let i = 0;
+  let j = 0;
+  while ((x[i] === "_" && y[j] !== undefined) || (x[i] !== undefined && y[j] === "_")) {
+    if (x[i] !== "_") return [x[i] === "." ? -1 : 1, i, j];
+    if (y[j] !== "_") return [y[j] === "." ? 1 : -1, i, j];
+    i++;
+    j++;
+  }
+  return [0, i, j];
+}
+
+export function strFileCaseCmp(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const [r, i, j] = fileCmpCommon(x, y);
+  return r !== 0 ? r : naturalCmpBase(x, y, i, j, false);
+}
+
+export function strFileNoCaseCmp(a: string, b: string): number {
+  const x = Array.from(a);
+  const y = Array.from(b);
+  const [r, i, j] = fileCmpCommon(x, y);
+  return r !== 0 ? r : naturalCmpBase(x, y, i, j, true);
+}
+
+/** `String.containsn()`（S576）：`findn` 的布尔形（大小写不敏感，按 `_find_lower` 比）。 */
+export function strContainsN(s: string, needle: string): boolean {
+  return strFind(s, needle, 0, false, true) !== -1;
+}
+
+/** `String.matchn(wildcard)`（S576）：通配比较走 `_find_upper`，其余同 `match`。 */
+export function strWildcardMatchN(s: string, wildcard: string): boolean {
+  if (wildcard.length === 0 || s.length === 0) return false;
+  const p = Array.from(wildcard);
+  const t = Array.from(s);
+  const walk = (pi: number, ti: number): boolean => {
+    const pc = p[pi];
+    if (pc === undefined) return ti === t.length;
+    if (pc === "*") return walk(pi + 1, ti) || (ti < t.length && walk(pi, ti + 1));
+    if (pc === "?") return ti < t.length && t[ti] !== "." && walk(pi + 1, ti + 1);
+    return ti < t.length && findUpper((t[ti] as string).codePointAt(0) as number) === findUpper(pc.codePointAt(0) as number) && walk(pi + 1, ti + 1);
+  };
+  return walk(0, 0);
+}
+
+/** `String.is_subsequence_of()` / `…ofn()`（S576）：目标串按下标扫，能按序吃下源串即为真。 */
+export function strIsSubsequenceOf(s: string, target: string, insensitive: boolean): boolean {
+  const src = Array.from(s);
+  if (src.length === 0) return true;
+  const tgt = Array.from(target);
+  if (src.length > tgt.length) return false;
+  let i = 0;
+  for (let j = 0; j < tgt.length && i < src.length; j++) {
+    const a = (src[i] as string).codePointAt(0) as number;
+    const b = (tgt[j] as string).codePointAt(0) as number;
+    if (insensitive ? findLower(a) === findLower(b) : a === b) i++;
+  }
+  return i === src.length;
+}
+
+/** `String.lstrip(chars)` / `rstrip(chars)`（S576）：从一侧删掉出现在 chars 里的码点。 */
+export function strLstrip(s: string, chars: string): string {
+  const cs = Array.from(s);
+  let i = 0;
+  while (i < cs.length && chars.includes(cs[i] as string)) i++;
+  return cs.slice(i).join("");
+}
+
+export function strRstrip(s: string, chars: string): string {
+  const cs = Array.from(s);
+  let i = cs.length - 1;
+  while (i >= 0 && chars.includes(cs[i] as string)) i--;
+  return cs.slice(0, i + 1).join("");
+}
+
+/** `String.to_pascal_case()`（S576）：拆词后每段首码点走 `_find_upper`。 */
+export function strPascalCase(s: string): string {
+  const words = strStripEdges(separateCompoundWords(s));
+  const parts = words.split(" ");
+  let out = "";
+  for (const part of parts) {
+    if (part.length === 0) continue;
+    const cs = Array.from(part);
+    out += String.fromCodePoint(findUpper((cs[0] as string).codePointAt(0) as number)) + cs.slice(1).join("");
+  }
+  return out;
 }
 
 /** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
