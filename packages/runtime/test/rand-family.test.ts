@@ -90,7 +90,7 @@ describe("runtime · 随机族", () => {
     })(), "2|true");
   });
 
-  it("实参类型不对就响亮拒（引擎那几句是转换期的，这一族没量过，不冒充）", () => {
+  it("实参类型不对就响亮拒（S565 已量：引擎原文的 utility-convert）", () => {
     const code = (f: () => Variant): string => {
       try {
         f();
@@ -99,7 +99,7 @@ describe("runtime · 随机族", () => {
         return `[${(e as { code?: string }).code ?? "?"}]`;
       }
     };
-    eq("259", "seed / rand_from_seed / randi_range 的整数实参位（float 按 int 槽那条老规矩截断，不拒）", `${code(() => gSeed(V.str("x")))}|${code(() => gRandFromSeed(V.str("x")))}|${code(() => gRandiRange(V.str("a"), I(6)))}|${code(() => gRandiRange(I(1), V.nil()))}`, "[arg-int]|[arg-int]|[arg-int]|[arg-int]");
-    eq("259", "randf_range / randfn 的浮点实参位", `${code(() => gRandfRange(V.str("a"), F(1)))}|${code(() => gRandfn(F(0), V.str("b")))}`, "[arg-float]|[arg-float]");
+    eq("259", "seed / rand_from_seed / randi_range 的整数实参位（float 按 int 槽那条老规矩截断，不拒）", `${code(() => gSeed(V.str("x")))}|${code(() => gRandFromSeed(V.str("x")))}|${code(() => gRandiRange(V.str("a"), I(6)))}|${code(() => gRandiRange(I(1), V.nil()))}`, "[arg-int]|[arg-int]|[utility-convert]|[utility-convert]");
+    eq("259", "randf_range / randfn 的浮点实参位", `${code(() => gRandfRange(V.str("a"), F(1)))}|${code(() => gRandfn(F(0), V.str("b")))}`, "[utility-convert]|[utility-convert]");
   });
 });

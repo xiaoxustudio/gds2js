@@ -572,9 +572,9 @@ export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Var
   if (!asInt) {
     // 引擎的 wrapf **不排序两端**：`range = max - min`，`is_zero_approx(range)` 就回 min；
     // `result = value - range * floor((value - min) / range)`，最后 `is_equal_approx(result, max)` 再回 min。
-    const mn = fl(lo);
-    const mx = fl(hi);
-    const x = fl(v);
+    const mn = utilFloatArg(lo, "wrapf", 2);
+    const mx = utilFloatArg(hi, "wrapf", 3);
+    const x = utilFloatArg(v, "wrapf", 1);
     const range = mx - mn;
     if (Math.abs(range) < CMP_EPSILON) return V.float(mn + 0);
     const result = x - range * Math.floor((x - mn) / range);
@@ -643,15 +643,18 @@ export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
 }
 
 export function gInverseLerp(a: Variant, b: Variant, v: Variant): Variant {
-  const den = fl(b) - fl(a);
-  if (den === 0) return V.float((fl(v) - fl(a)) / den);
-  return V.float((fl(v) - fl(a)) / den + 0);
+  const aa = utilFloatArg(a, "inverse_lerp", 1);
+  const bb = utilFloatArg(b, "inverse_lerp", 2);
+  const vv = utilFloatArg(v, "inverse_lerp", 3);
+  const den = bb - aa;
+  if (den === 0) return V.float((vv - aa) / den);
+  return V.float((vv - aa) / den + 0);
 }
 
 export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant {
-  const a = fl(from);
-  const b = fl(to);
-  const d = fl(delta);
+  const a = utilFloatArg(from, "move_toward", 1);
+  const b = utilFloatArg(to, "move_toward", 2);
+  const d = utilFloatArg(delta, "move_toward", 3);
   // 引擎那句是 `abs(to - from) <= delta ? to : from + SIGN(to - from) * delta`：上界比的是**带号的 delta**，
   // 所以 delta 为负时永远走后半支，也就是往 `to` 的反方向走（30 格普查里 22 格的分岔全在这条上）。
   if (Math.abs(b - a) <= d) return V.float(b + 0);
@@ -892,9 +895,9 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
 }
 
 export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
-  const a = fl(from);
-  const b = fl(to);
-  const x = fl(s);
+  const a = utilFloatArg(from, "smoothstep", 1);
+  const b = utilFloatArg(to, "smoothstep", 2);
+  const x = utilFloatArg(s, "smoothstep", 3);
   if (approxEq(a, b)) return V.float((a <= b ? (x <= a ? 0.0 : 1.0) : x <= b ? 1.0 : 0.0) + 0);
   // 降序那一侧没有早退支：源里只有 `s = CLAMP((p_s - p_from) / (p_to - p_from), 0, 1)` 再走 `s*s*(3-2s)`，
   // 原来那两条 `x <= a / x >= b` 早退在 a > b 时把 0 与 1 交错了（普查 30 格里 9 格分岔）。
@@ -930,9 +933,13 @@ export function gCubic(from: Variant, to: Variant, pre: Variant, after: Variant,
 }
 
 export function gRemap(v: Variant, fl0: Variant, fh: Variant, tl: Variant, th: Variant): Variant {
+  utilFloatArg(v, "remap", 1);
+  utilFloatArg(fl0, "remap", 2);
+  utilFloatArg(fh, "remap", 3);
+  const a = utilFloatArg(tl, "remap", 4);
+  const b = utilFloatArg(th, "remap", 5);
   const t = gInverseLerp(fl0, fh, v).v as number;
-  const a = fl(tl);
-  return V.float(a + (fl(th) - a) * t + 0);
+  return V.float(a + (b - a) * t + 0);
 }
 
 export function gExp(v: Variant): Variant {
@@ -1083,17 +1090,17 @@ const DB_TO_LINEAR_K = 0.11512925464970228420089957273422;
 const LINEAR_TO_DB_K = 8.6858896380650365530225783783321;
 
 export function gDbToLinear(v: Variant): Variant {
-  return V.float(Math.exp(numArg(v, "db_to_linear() 的参数") * DB_TO_LINEAR_K) + 0);
+  return V.float(Math.exp(utilFloatArg(v, "db_to_linear", 1) * DB_TO_LINEAR_K) + 0);
 }
 
 export function gLinearToDb(v: Variant): Variant {
-  return V.float(Math.log(numArg(v, "linear_to_db() 的参数")) * LINEAR_TO_DB_K);
+  return V.float(Math.log(utilFloatArg(v, "linear_to_db", 1)) * LINEAR_TO_DB_K);
 }
 
 /** `pingpong(值, 周期)`：`length == 0` 那格实测给 0.0（n.log pp|1.5,0.0），式子是引擎那句 `abs(fract((v-l)/(2l))*2l - l)`。 */
 export function gPingpong(v: Variant, length: Variant): Variant {
-  const value = numArg(v, "pingpong() 的值");
-  const l = numArg(length, "pingpong() 的周期");
+  const value = utilFloatArg(v, "pingpong", 1);
+  const l = utilFloatArg(length, "pingpong", 2);
   if (l === 0) return V.float(0);
   const x = (value - l) / (l * 2);
   return V.float(Math.abs((x - Math.floor(x)) * l * 2 - l) + 0);
@@ -1105,7 +1112,7 @@ const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000
 export function gStepDecimals(v: Variant): Variant {
   // 绑定签名是 `step_decimals(float step)`：实参先在调用边界折回 float32，再进这张 double 门槛表
   // （`0.9999` 折成 float32 是 `0.99989998…`，掉到门槛下面，实测 `step_decimals(0.9999)` 给 1）。
-  const x = Math.abs(Math.fround(numArg(v, "step_decimals() 的参数")));
+  const x = Math.abs(Math.fround(utilFloatArg(v, "step_decimals", 1)));
   const decs = x - Math.trunc(x);
   let i = 0;
   for (const t of STEP_THRESHOLDS) {
@@ -1133,16 +1140,16 @@ function angleDiff(from: number, to: number): number {
 }
 
 export function gLerpAngle(from: Variant, to: Variant, w: Variant): Variant {
-  const a = numArg(from, "lerp_angle() 的起点");
-  return V.float(a + angleDiff(a, numArg(to, "lerp_angle() 的终点")) * numArg(w, "lerp_angle() 的权重") + 0);
+  const a = utilFloatArg(from, "lerp_angle", 1);
+  return V.float(a + angleDiff(a, utilFloatArg(to, "lerp_angle", 2)) * utilFloatArg(w, "lerp_angle", 3) + 0);
 }
 
 /** `rotate_toward`：实参先夹进 `|差| - π … |差|` 再按弧的符号走（负 delta 那格没量过，照式子给，语料里不钉）。 */
 export function gRotateToward(from: Variant, to: Variant, delta: Variant): Variant {
-  const a = numArg(from, "rotate_toward() 的起点");
-  const diff = angleDiff(a, numArg(to, "rotate_toward() 的终点"));
+  const a = utilFloatArg(from, "rotate_toward", 1);
+  const diff = angleDiff(a, utilFloatArg(to, "rotate_toward", 2));
   const absDiff = Math.abs(diff);
-  const d = Math.min(Math.max(numArg(delta, "rotate_toward() 的步长"), absDiff - PI_D), absDiff);
+  const d = Math.min(Math.max(utilFloatArg(delta, "rotate_toward", 3), absDiff - PI_D), absDiff);
   return V.float(a + d * (diff >= 0 ? 1 : -1) + 0);
 }
 
@@ -1388,6 +1395,8 @@ export function gRandf(): Variant {
 }
 
 export function gRandiRange(from: Variant, to: Variant): Variant {
+  utilIntArg(from, "randi_range", 1);
+  utilIntArg(to, "randi_range", 2);
   bootRand();
   const a = Number(BigInt.asIntN(32, intArgBig(from, "randi_range() 的第一参")));
   const b = Number(BigInt.asIntN(32, intArgBig(to, "randi_range() 的第二参")));
@@ -1398,15 +1407,15 @@ export function gRandiRange(from: Variant, to: Variant): Variant {
 
 export function gRandfRange(from: Variant, to: Variant): Variant {
   bootRand();
-  const a = numArg(from, "randf_range() 的第一参");
-  const b = numArg(to, "randf_range() 的第二参");
+  const a = utilFloatArg(from, "randf_range", 1);
+  const b = utilFloatArg(to, "randf_range", 2);
   return V.float(pcgRandd(DEFAULT_RAND) * (b - a) + a);
 }
 
 export function gRandfn(mean: Variant, dev: Variant): Variant {
   bootRand();
-  const m = numArg(mean, "randfn() 的均值");
-  const d = numArg(dev, "randfn() 的标准差");
+  const m = utilFloatArg(mean, "randfn", 1);
+  const d = utilFloatArg(dev, "randfn", 2);
   let temp = pcgRandd(DEFAULT_RAND);
   if (temp < CMP_EPSILON) temp += CMP_EPSILON;
   return V.float(m + d * (Math.cos(MATH_TAU * pcgRandd(DEFAULT_RAND)) * Math.sqrt(-2.0 * Math.log(temp))));

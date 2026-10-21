@@ -45,7 +45,7 @@ describe("runtime/angle-helpers · rotate_toward / pingpong / nearest_po2 一族
   it("253 · 拒的形状", async () => {
     eq("253", "nearest_po2(inf) 拒：引擎那边是 cvttsd2si 的 UB 读数（po2|inf 给 INT64_MIN），这条式子没量清", one(gNearestPo2, F(Infinity)), "[arg-int]");
     eq("253", "nearest_po2(NaN) 同一条拒", one(gNearestPo2, F(NaN)), "[arg-int]");
-    eq("253", "nearest_po2(String) 与 db_to_linear(String) 各走自己那侧的闸", `${one(gNearestPo2, S("3"))}|${call("db_to_linear", S("3"))}`, "[utility-convert]|[arg-float]");
+    eq("253", "nearest_po2(String) 与 db_to_linear(String) 各走自己那侧的闸", `${one(gNearestPo2, S("3"))}|${call("db_to_linear", S("3"))}`, "[utility-convert]|[utility-convert]");
     eq("253", "step_decimals 的 int 结果：inf / nan 那两格是门槛表走完给 0（z46 / z47）", `${one(gStepDecimals, F(Infinity))}|${one(gStepDecimals, F(NaN))}`, "2|0|2|0");
     eq("253", "rotate_toward 少一支实参先撞 arity", call("rotate_toward", F(1), F(2)), "[callable-arity]");
     eq("253", "pingpong 的第三支实参在引擎的 .call 那侧进不去（Expected 2 argument(s)）", call("pingpong", F(7), F(5), I(1)), "[callable-arity]");
