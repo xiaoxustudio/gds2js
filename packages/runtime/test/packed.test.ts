@@ -68,7 +68,7 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     const viaArray = arrayFromVariant(b);
     eq("step67", "Array(pack) 是 int 元素的 Array（用例 135 u19）",
       `${show(viaArray)} ${typeOf(index(viaArray, I(0))).v}`, "[3, 1, 2] 2");
-    shouldThrow("step67", "Array(x) 只实测过 PackedByteArray 实参", () => arrayFromVariant(S("abc")));
+    shouldThrow("step67", "Array(x) 的非 pack 实参响亮拒", () => arrayFromVariant(S("abc")));
     shouldThrow("step67", "读 pack 的「属性」一律响（属性面没实测过，成员全是方法）", () => attribute(b, "length"));
     shouldThrow("step67", "写 pack 的内部键不许落进存储", () => writeProp(b, "items", I(1)));
     const mut = (ns: number[]): Variant => V.object(GBytes.of(ns));
@@ -153,7 +153,8 @@ describe("runtime/packed · 打包数组与 zstd", () => {
     eq("step68", "越界写的那句也照类型名变", perr(() => writeIdx(i32g, I(5), I(1))),
       "Invalid assignment of index '5' (on base: 'PackedInt32Array') with value of type 'int'.");
     shouldThrow("step68", "跨 pack 拼接没量过 → 响", () => ops.add(i32g, V.object(GBytes.of([1], "byte"))));
-    shouldThrow("step68", "Array(int pack) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(i32g));
+    eq("step68", "Array(int pack) 把元素原样搬进不 typed 的 Array，元素仍是 int（S597）",
+      `${show(arrayFromVariant(i32g))} ${typeOf(index(arrayFromVariant(i32g), I(0))).v}`, "[1, 2, 3] 2");
     eq("step80", "String 元素走**前导数解析**（与 to_int() 同一条式子：\"12abc\" → 12、\"-7xyz\" → -7、\"x\" → 0）",
       `${show(packCtor("int32", [V.array(GArray.of([S("12abc")]))]))} ${show(packCtor("int32", [V.array(GArray.of([S("-7xyz")]))]))} ${show(packCtor("byte", [V.array(GArray.of([S("x")]))]))}`,
       "[12] [-7] [0]");
@@ -233,7 +234,8 @@ describe("runtime/packed · 打包数组与 zstd", () => {
       'true ["a", "b"]');
     shouldThrow("step71", "跨形状拼接（string + byte）没量过 → 响", () =>
       ops.add(strs([S("a")]), V.object(GBytes.of([1], "byte"))));
-    shouldThrow("step71", "Array(PackedStringArray) 只量过 Array(PackedByteArray) → 响", () => arrayFromVariant(sb));
+    eq("step71", "Array(PackedStringArray) → 元素是 String 的 Array（S597）",
+      `${show(arrayFromVariant(sb))} ${typeOf(index(arrayFromVariant(sb), I(0))).v}`, '["a", "b"] 4');
     const serr = (fn: () => unknown): string => {
       try {
         fn();

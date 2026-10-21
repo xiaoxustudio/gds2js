@@ -2,7 +2,7 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, GDict, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName } from "./values";
-import { GBytes, isBytes, packBytes, packCtor, packTypeName } from "./packed";
+import { GBytes, isBytes, packBytes, packCtor, packItems, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";
 import { ClassDesc, GdScriptObject, dictShapeOf, dictWrittenOf } from "./object";
@@ -21,16 +21,12 @@ import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
-/** `Array(x)`：只支持从 PackedByteArray 转（元素是 int），其余形状响亮拒。 */
+/** `Array(x)`：实参是 pack 时逐元素搬进一支不 typed 的 Array（九支 + PackedVector4Array，S597），其余形状响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
   if (!isBytes(v)) {
-    throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过 PackedByteArray 实参（收到 ${tagName(v.t)}）`);
+    throw new UnsupportedError("array-ctor-from", `Array(...) 只实测过九支 pack 实参（收到 ${tagName(v.t)}）`);
   }
-  const b = packBytes(v);
-  if (b.kind !== "byte") {
-    throw new UnsupportedError("array-ctor-from-kind", `Array(...) 只实测过 PackedByteArray 实参（收到 ${packTypeName(b.kind)}）`);
-  }
-  return V.array(GArray.of(b.raw().map((x) => V.int(typeof x === "bigint" ? x : x as number))));
+  return V.array(GArray.of(packItems(packBytes(v))));
 }
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，
