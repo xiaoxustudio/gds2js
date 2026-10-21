@@ -25,4 +25,13 @@ describe("Vector4 方法名当值（S588）", () => {
     const ilen = attribute(i4(1, 2, 3, 4), "length") as Variant;
     eq("588", "V4i", `${show(ilen)}|${show(call(ilen, "call"))}`, "Vector4i::length|5.47722557505166");
   });
+  it("全表方法名当值（dot / snapped / clamp / snappedi）", () => {
+    const a = v4(1, 2, 3, 4);
+    const dot = attribute(a, "dot") as Variant;
+    eq("588", "dot", `${show(dot)}|${show(call(dot, "call", [v4(1, 1, 1, 1)]))}`, "Vector4::dot|10.0");
+    eq("588", "snapped", show(attribute(a, "snapped") as Variant), "Vector4::snapped");
+    const cl = attribute(a, "clamp") as Variant;
+    eq("588", "clamp", show(call(cl, "call", [v4(0, 0, 0, 0), v4(3, 3, 3, 3)])), "(1.0, 2.0, 3.0, 3.0)");
+    eq("588", "V4i snappedi", show(attribute(i4(1, 2, 3, 4), "snappedi") as Variant), "Vector4i::snappedi");
+  });
 });

@@ -188,11 +188,11 @@ export const VALUE_VEC3i_EXISTS: readonly string[] = [
 ];
 
 export const VALUE_VEC4_EXISTS: readonly string[] = [
-  "distance_to", "length", "max", "min", "normalized", "w", "x", "y", "z"
+  "min_axis_index", "max_axis_index", "length", "length_squared", "abs", "sign", "floor", "ceil", "round", "lerp", "cubic_interpolate", "cubic_interpolate_in_time", "posmod", "posmodv", "snapped", "snappedf", "clamp", "clampf", "normalized", "is_normalized", "direction_to", "distance_to", "distance_squared_to", "dot", "inverse", "is_equal_approx", "is_zero_approx", "is_finite", "min", "minf", "max", "maxf", "w", "x", "y", "z"
 ];
 
 export const VALUE_VEC4i_EXISTS: readonly string[] = [
-  "distance_to", "length", "max", "min", "w", "x", "y", "z"
+  "min_axis_index", "max_axis_index", "length", "length_squared", "sign", "abs", "clamp", "clampi", "snapped", "snappedi", "min", "mini", "max", "maxi", "distance_to", "distance_squared_to", "w", "x", "y", "z"
 ];
 
 export const VALUE_Color_EXISTS: readonly string[] = [
