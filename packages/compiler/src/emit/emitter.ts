@@ -1013,6 +1013,8 @@ function dropBind(out: Map<string, number>, name: string): void {
 }
 
 /** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */
+const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
+
 const MEASURED_SLOTS = new Set([
   "int",
   "float",
@@ -3250,6 +3252,7 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   const fromLiteral = init === null || init === undefined || init.kind === "array" || init.kind === "dict";
   if (m[1] === "Array") {
     const kind = inner.trim();
+    if (NATIVE_CLASS_SLOTS.has(kind)) return `rt.stampClassArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
     if (!isElemKind(kind)) return raw;
     return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
   }

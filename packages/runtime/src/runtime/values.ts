@@ -952,6 +952,13 @@ function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
 }
 
 /** 声明处给容器值盖上元素类型：类型记在**值**上、章只盖一次；非字面量赋给本来未定型的容器是运行时报错。 */
+/** `Array[类名]` 标注那一族（S615 量了 `Array[RefCounted]` / `Array[Object]` / `Array[Node]`）：元素按 Object 收，类名照标注挂。 */
+export function stampClassArray(v: Variant, cls: string, fromLiteral: boolean): Variant {
+  const stamped = stampArray(v, "Object", fromLiteral);
+  (stamped.v as GArray).className = cls;
+  return stamped;
+}
+
 export function stampArray(v: Variant, kind: ElemKind, fromLiteral: boolean): Variant {
   const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
   if (g === null) throw new UnsupportedError("typed-assign", `Array[${kind}] 的初值不是数组`);

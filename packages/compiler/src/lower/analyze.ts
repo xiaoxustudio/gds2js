@@ -276,9 +276,14 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     if (t.init === null) continue;
     /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格）。
      *  内部型是脚本类名时只发第二句（`Array[Inner]` 那一格，读数 `tmp/d6/n1.txt`）。 */
-    const holds = (kind: string, st: NonNullable<StaticType>): boolean => (classNames.has(kind) ? st === kind : canHold(kind, st));
+    const holds = (kind: string, st: NonNullable<StaticType>): boolean =>
+      classNames.has(kind)
+        ? st === kind
+        : NATIVE_CLASS_SLOTS.has(kind)
+          ? st === "null" || st === kind
+          : canHold(kind, st);
     const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
-      if (!classNames.has(kind)) {
+      if (!classNames.has(kind) && !NATIVE_CLASS_SLOTS.has(kind)) {
         diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
       }
       diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
@@ -396,6 +401,9 @@ function parseTyped(name: string): TypedSlot | null {
   if (parts.length !== 2) return null;
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
+
+/** 量过的宿主类名元素槽（S615：`Array[RefCounted]` / `Array[Object]` / `Array[Node]` 三形，其余类名没量、维持现状）。 */
+export const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
 
 const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "String", "int", "float", "bool"]);
 
