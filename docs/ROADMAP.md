@@ -2466,6 +2466,16 @@
 
 **缺口 / 覆盖面**
 
+0. **下一轮开工清单（2026-10-21 收笔时留的靶单，全部已量好或半量好，按性价比排序）**：
+   ① **`Array(...)` 的签名矩阵**（S601 ⑤）：2 参与 4 参两形的解析期原文已量到 —— `No constructor of "Array" matches the signature "Array(PackedByteArray, Variant.Type)".` 与 `"Array(Array, Variant.Type, Variant.Type, bool)".`（读数 `tmp/d6/s606.gd`），
+   但「源形 × 参数个数」整张矩阵没量，`Array(2.5)` / `Array(true)` / `Array(StringName)` 三格的接受性也没量 —— 这一笔要的是一趟脚本量齐矩阵，再决定接进静态层还是运行期句。
+   ② **`min` / `minf` 的 Vector4i 字面量位**（S598 ⑥）：只量了 `maxf`，补两支脚本就齐。
+   ③ **cubic / bezier 六支的名字实参形**（S600 ⑤）：走 `GLOBAL_NUM_ARITH` 那条通道，`cubic_interpolate(v, …)` 里 `v` 是带标注变量时引擎发哪一句没量。
+   ④ **其余单变体全局函数的「容器要不要推迟」**（S600 ①）：`clamp` / `lerp` / `wrap` / `snapped` / `max` / `min` 见容器推迟、cubic/bezier 六支不推迟，剩下的族逐族扫一遍（一趟可以扫十几支）。
+   ⑤ **`hash(Callable)`**（§2 第 1 条那笔旧账）：合成号对不上引擎，仍欠。
+   六支的读数量法是现成的：一脚本一位一形（解析期句会让整个脚本停住，所以**一脚本一形**），运行期句用内部类一格一调用（`_init` 照样跑到 `quit()`）。
+   本轮（S597–S601）的门数：`pnpm test` **26583**（247 文件）、ops **7257**、typecheck 4/4、compile **268/386**、diff **261/261**（静默错 / 崩溃 / 未实现全 0）、golden **397/397 零漂移**。
+
 4. ~~静态宿主没有 node 侧那层 try/catch~~ —— **已闭合（2026-10-03，S200）**：发射器的 autoRun 尾巴包成 `try/catch` + `rt.reportRunFailure(e)`，
    直接跑产物（`node dist/x.mts`、`--pack scriptc` 出的 exe）撞未实现时给的是 `  runtime error  [code] message` + 退出码 1，不再是一条 Uncaught 栈。
    **「谁在报」由外层声明**（通道 `GDS2JS_RUN_OWNER`：同进程 `in-process` → 产物原样再抛、隔进程 `child` → 只置退出码），
