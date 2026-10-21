@@ -1,7 +1,7 @@
 /** Vector4 的全局工具运行期句子与 max/min 解析期闸门（S586），读数 `tmp/d6/s587.gd` / `s586.gd`。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { gClamp, gIsEqualApprox, gIsZeroApprox, gIsFinite, gLerp, gMax, gMin, gSnapped } from "@gds2js/runtime/runtime/builtins";
+import { gClamp, gIsEqualApprox, gIsZeroApprox, gIsFinite, gLerp, gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gSnapped } from "@gds2js/runtime/runtime/builtins";
 import { vector4New } from "@gds2js/runtime/runtime/vector4";
 import { vector4iNew } from "@gds2js/runtime/runtime/vector4i";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
@@ -63,6 +63,19 @@ describe("Vector4 全局工具的运行期句子（S586）", () => {
     eq("586", "is_finite", err(() => gIsFinite(v4(1, 2, 3, 4))), conv("is_finite", 1, "Vector4"));
     eq("586", "max", err(() => gMax(v4(1, 2, 3, 4), v4(1, 2, 3, 4))), conv("max", 1, "Vector4"));
     eq("586", "min V4i", err(() => gMin(i4(1, 2, 3, 4), i4(1, 2, 3, 4))), conv("min", 1, "Vector4i"));
+  });
+  it("max / min / maxf / minf / maxi / mini 的十格逐位句（S598）", () => {
+    const convI = (fn: string, n: number, src: string) => `Invalid type in utility function "${fn}()". Cannot convert argument ${n} from ${src} to int.`;
+    eq("598", "max V4/V4", err(() => gMax(v4(1, 2, 3, 4), v4(5, 6, 7, 8))), conv("max", 1, "Vector4"));
+    eq("598", "min V4/V4i", err(() => gMin(v4(1, 2, 3, 4), i4(5, 6, 7, 8))), conv("min", 1, "Vector4"));
+    eq("598", "maxf", err(() => gMaxF(v4(1, 2, 3, 4), v4(5, 6, 7, 8))), conv("maxf", 1, "Vector4"));
+    eq("598", "minf V4i", err(() => gMinF(i4(1, 2, 3, 4), i4(5, 6, 7, 8))), conv("minf", 1, "Vector4i"));
+    eq("598", "maxi V4i", err(() => gMaxI(i4(1, 2, 3, 4), i4(5, 6, 7, 8))), convI("maxi", 1, "Vector4i"));
+    eq("598", "mini V4", err(() => gMinI(v4(1, 2, 3, 4), v4(5, 6, 7, 8))), convI("mini", 1, "Vector4"));
+    eq("598", "变参第三位", err(() => gMax(I(1), I(2), v4(1, 2, 3, 4))), conv("max", 3, "Vector4"));
+    eq("598", "float 在前", err(() => gMax(V.float(2.5), v4(1, 2, 3, 4))), conv("max", 2, "Vector4"));
+    eq("598", "min 的 int 在前", err(() => gMin(I(3), i4(1, 2, 3, 4))), conv("min", 2, "Vector4i"));
+    eq("598", "max 四元 V4 在首", err(() => gMax(v4(1, 2, 3, 4), v4(5, 6, 7, 8), V.float(1.5), I(2))), conv("max", 1, "Vector4"));
   });
   it("snapped / clamp / lerp 的跨型句（S596）", () => {
     eq("596", "snapped 标量 step", err(() => gSnapped(v4(1, 2, 3, 4), V.float(1.5))), 'Invalid type in utility function "snapped()". Cannot convert argument 2 from float to Vector4.');
