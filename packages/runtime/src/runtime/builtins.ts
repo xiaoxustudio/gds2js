@@ -481,6 +481,7 @@ export function gSign(v: Variant): Variant {
 }
 
 export function gSignI(v: Variant): Variant {
+  utilIntArg(v, "signi", 1);
   return vi(one(intOf(v)));
 }
 
@@ -546,6 +547,8 @@ function floorDiv(a: number, b: number): number {
 }
 
 export function gPosmod(x: Variant, y: Variant): Variant {
+  utilIntArg(x, "posmod", 1);
+  utilIntArg(y, "posmod", 2);
   const a = intOf(x);
   const b = intOf(y);
   // 模数为 0 那一支引擎不报错也不夹：推一条 `Division by zero in posmod is undefined. Returning 0 as fallback.`
@@ -569,6 +572,11 @@ export function gFmod(x: Variant, y: Variant): Variant {
 }
 
 export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Variant {
+  if (asInt) {
+    utilIntArg(v, "wrapi", 1);
+    utilIntArg(lo, "wrapi", 2);
+    utilIntArg(hi, "wrapi", 3);
+  }
   if (!asInt) {
     // 引擎的 wrapf **不排序两端**：`range = max - min`，`is_zero_approx(range)` 就回 min；
     // `result = value - range * floor((value - min) / range)`，最后 `is_equal_approx(result, max)` 再回 min。
@@ -748,7 +756,7 @@ export function gRadToDeg(v: Variant): Variant {
 
 /** 式子是「取差 → 对 TAU 取余 → 折进 [-π, π]」：`angle_difference(6.0, 0.1)` = +0.38318530717959，反过来给负数。 */
 export function gAngleDifference(from: Variant, to: Variant): Variant {
-  return V.float(angleDiff(fl(from), fl(to)));
+  return V.float(angleDiff(utilFloatArg(from, "angle_difference", 1), utilFloatArg(to, "angle_difference", 2)));
 }
 
 function approxEq(a: number, b: number): boolean {
@@ -825,23 +833,27 @@ export function gMax(...xs: Variant[]): Variant {
 }
 
 export function gMinI(a: Variant, b: Variant): Variant {
+  utilIntArg(a, "mini", 1);
+  utilIntArg(b, "mini", 2);
   const x = intOf(a);
   const y = intOf(b);
   return vi(x > y ? y : x);
 }
 
 export function gMaxI(a: Variant, b: Variant): Variant {
+  utilIntArg(a, "maxi", 1);
+  utilIntArg(b, "maxi", 2);
   const x = intOf(a);
   const y = intOf(b);
   return vi(x < y ? y : x);
 }
 
 export function gMinF(a: Variant, b: Variant): Variant {
-  return V.float(Math.min(fl(a), fl(b)) + 0);
+  return V.float(Math.min(utilFloatArg(a, "minf", 1), utilFloatArg(b, "minf", 2)) + 0);
 }
 
 export function gMaxF(a: Variant, b: Variant): Variant {
-  return V.float(Math.max(fl(a), fl(b)) + 0);
+  return V.float(Math.max(utilFloatArg(a, "maxf", 1), utilFloatArg(b, "maxf", 2)) + 0);
 }
 
 function need2(a: Variant, b: Variant, who: string): void {
@@ -881,6 +893,16 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
       return v;
     }
   }
+  // clampf / clampi 的坏型位（S566）：逐位发引擎转换句
+  if (mode === "float") {
+    utilFloatArg(v, "clampf", 1);
+    utilFloatArg(lo, "clampf", 2);
+    utilFloatArg(hi, "clampf", 3);
+  } else if (mode === "int") {
+    utilIntArg(v, "clampi", 1);
+    utilIntArg(lo, "clampi", 2);
+    utilIntArg(hi, "clampi", 3);
+  }
   need2(v, lo, "clamp");
   need2(v, hi, "clamp");
   const x = mode === "int" ? intOf(v) : fl(v);
@@ -907,8 +929,8 @@ export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
 
 /** 绑定签名是 `ease(float x, float curve)`：两个实参先在调用边界折回 float32，式子本身走 `Math::ease` 的 double 那一支（168 格读数含负曲线）。 */
 export function gEase(delta: Variant, curve: Variant): Variant {
-  const c = Math.fround(fl(curve));
-  let x = Math.fround(fl(delta));
+  const c = Math.fround(utilFloatArg(curve, "ease", 2));
+  let x = Math.fround(utilFloatArg(delta, "ease", 1));
   if (x < 0) x = 0;
   else if (x > 1.0) x = 1.0;
   if (c > 0) {
@@ -924,11 +946,11 @@ export function gEase(delta: Variant, curve: Variant): Variant {
 
 /** 实参顺序是 `(from, to, pre, after, weight)`：`cubic_interpolate(0,1,2,3,0.5)` 给 0.25、`(1,2,3,4,0.5)` 给 1.25。 */
 export function gCubic(from: Variant, to: Variant, pre: Variant, after: Variant, w: Variant): Variant {
-  const p0 = fl(from);
-  const p1 = fl(to);
-  const p2 = fl(pre);
-  const p3 = fl(after);
-  const t = fl(w);
+  const p0 = utilFloatArg(from, "cubic_interpolate", 1);
+  const p1 = utilFloatArg(to, "cubic_interpolate", 2);
+  const p2 = utilFloatArg(pre, "cubic_interpolate", 3);
+  const p3 = utilFloatArg(after, "cubic_interpolate", 4);
+  const t = utilFloatArg(w, "cubic_interpolate", 5);
   return V.float(cubicNum(p0, p1, p2, p3, t) + 0);
 }
 
@@ -1014,6 +1036,7 @@ export function gAbsF(v: Variant): Variant {
 }
 
 export function gAbsI(v: Variant): Variant {
+  utilIntArg(v, "absi", 1);
   const x = intArgBig(v, "absi() 的参数");
   return V.int(x < 0n ? wrap64(-x) : x);
 }
@@ -1154,11 +1177,11 @@ export function gRotateToward(from: Variant, to: Variant, delta: Variant): Varia
 }
 
 export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
-  const p = numArg(s1, "bezier_interpolate() 的起点");
-  const a = numArg(c1, "bezier_interpolate() 的第一控制点");
-  const b = numArg(c2, "bezier_interpolate() 的第二控制点");
-  const q = numArg(e, "bezier_interpolate() 的终点");
-  const w = numArg(t, "bezier_interpolate() 的 t");
+  const p = utilFloatArg(s1, "bezier_interpolate", 1);
+  const a = utilFloatArg(c1, "bezier_interpolate", 2);
+  const b = utilFloatArg(c2, "bezier_interpolate", 3);
+  const q = utilFloatArg(e, "bezier_interpolate", 4);
+  const w = utilFloatArg(t, "bezier_interpolate", 5);
   const omt = 1 - w;
   const omt2 = omt * omt;
   const omt3 = omt2 * omt;
@@ -1168,11 +1191,11 @@ export function gBezierInterpolate(s1: Variant, c1: Variant, c2: Variant, e: Var
 }
 
 export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Variant, t: Variant): Variant {
-  const p = numArg(s1, "bezier_derivative() 的起点");
-  const a = numArg(c1, "bezier_derivative() 的第一控制点");
-  const b = numArg(c2, "bezier_derivative() 的第二控制点");
-  const q = numArg(e, "bezier_derivative() 的终点");
-  const w = numArg(t, "bezier_derivative() 的 t");
+  const p = utilFloatArg(s1, "bezier_derivative", 1);
+  const a = utilFloatArg(c1, "bezier_derivative", 2);
+  const b = utilFloatArg(c2, "bezier_derivative", 3);
+  const q = utilFloatArg(e, "bezier_derivative", 4);
+  const w = utilFloatArg(t, "bezier_derivative", 5);
   const omt = 1 - w;
   const omt2 = omt * omt;
   const t2 = w * w;
@@ -1211,29 +1234,32 @@ function cubicInTimeNum(from: number, to: number, pre: number, post: number, w: 
 }
 
 export function gCubicAngle(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant): Variant {
-  const a = numArg(from, "cubic_interpolate_angle() 的起点");
-  const r = angleRots(a, numArg(to, "cubic_interpolate_angle() 的终点"), numArg(pre, "cubic_interpolate_angle() 的前一控制点"), numArg(post, "cubic_interpolate_angle() 的后一控制点"));
-  return V.float(cubicNum(r[0], r[1], r[2], r[3], numArg(w, "cubic_interpolate_angle() 的权重")) + 0);
+  const a = utilFloatArg(from, "cubic_interpolate_angle", 1);
+  const r = angleRots(a, utilFloatArg(to, "cubic_interpolate_angle", 2), utilFloatArg(pre, "cubic_interpolate_angle", 3), utilFloatArg(post, "cubic_interpolate_angle", 4));
+  return V.float(cubicNum(r[0], r[1], r[2], r[3], utilFloatArg(w, "cubic_interpolate_angle", 5)) + 0);
 }
 
 export function gCubicInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
   return V.float(cubicInTimeNum(
-    numArg(from, "cubic_interpolate_in_time() 的起点"), numArg(to, "cubic_interpolate_in_time() 的终点"),
-    numArg(pre, "cubic_interpolate_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_in_time() 的后一控制点"),
-    numArg(w, "cubic_interpolate_in_time() 的权重"), numArg(toT, "cubic_interpolate_in_time() 的 to_t"),
-    numArg(preT, "cubic_interpolate_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_in_time() 的 post_t")) + 0);
+    utilFloatArg(from, "cubic_interpolate_in_time", 1), utilFloatArg(to, "cubic_interpolate_in_time", 2),
+    utilFloatArg(pre, "cubic_interpolate_in_time", 3), utilFloatArg(post, "cubic_interpolate_in_time", 4),
+    utilFloatArg(w, "cubic_interpolate_in_time", 5), utilFloatArg(toT, "cubic_interpolate_in_time", 6),
+    utilFloatArg(preT, "cubic_interpolate_in_time", 7), utilFloatArg(postT, "cubic_interpolate_in_time", 8)) + 0);
 }
 
 export function gCubicAngleInTime(from: Variant, to: Variant, pre: Variant, post: Variant, w: Variant, toT: Variant, preT: Variant, postT: Variant): Variant {
-  const a = numArg(from, "cubic_interpolate_angle_in_time() 的起点");
-  const r = angleRots(a, numArg(to, "cubic_interpolate_angle_in_time() 的终点"), numArg(pre, "cubic_interpolate_angle_in_time() 的前一控制点"), numArg(post, "cubic_interpolate_angle_in_time() 的后一控制点"));
+  const a = utilFloatArg(from, "cubic_interpolate_angle_in_time", 1);
+  const r = angleRots(a, utilFloatArg(to, "cubic_interpolate_angle_in_time", 2), utilFloatArg(pre, "cubic_interpolate_angle_in_time", 3), utilFloatArg(post, "cubic_interpolate_angle_in_time", 4));
   return V.float(cubicInTimeNum(r[0], r[1], r[2], r[3],
-    numArg(w, "cubic_interpolate_angle_in_time() 的权重"), numArg(toT, "cubic_interpolate_angle_in_time() 的 to_t"),
-    numArg(preT, "cubic_interpolate_angle_in_time() 的 pre_t"), numArg(postT, "cubic_interpolate_angle_in_time() 的 post_t")) + 0);
+    utilFloatArg(w, "cubic_interpolate_angle_in_time", 5), utilFloatArg(toT, "cubic_interpolate_angle_in_time", 6),
+    utilFloatArg(preT, "cubic_interpolate_angle_in_time", 7), utilFloatArg(postT, "cubic_interpolate_angle_in_time", 8)) + 0);
 }
 
 /** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */
 export function gWrapAny(v: Variant, lo: Variant, hi: Variant): Variant {
+  utilFloatArg(v, "wrap", 1);
+  utilIntArg(lo, "wrap", 2);
+  utilIntArg(hi, "wrap", 3);
   return gWrap(v, lo, hi, v.t === Tag.INT && lo.t === Tag.INT && hi.t === Tag.INT);
 }
 

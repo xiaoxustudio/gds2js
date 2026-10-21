@@ -45,9 +45,9 @@ describe("runtime/small-builtins · absf / absi / wrap / is_same", () => {
     eq("251", "absf(Nil)（f03）", call("absf", V.nil()), "[utility-convert]");
     eq("251", "absf(Array)（f05）", call("absf", arrOf(I(1))), "[utility-convert]");
     eq("251", "absf(StringName)（f09）", call("absf", V.stringName("-3")), "[utility-convert]");
-    eq("251", "absi(String)（f02/f12）", call("absi", S("3")), "[arg-int]");
-    eq("251", "absi(Nil)（f04）", call("absi", V.nil()), "[arg-int]");
-    eq("251", "absi(Array)（f06；f08 的 Vector2 同一句口径）", call("absi", arrOf(I(1))), "[arg-int]");
+    eq("251", "absi(String)（f02/f12）", call("absi", S("3")), "[utility-convert]");
+    eq("251", "absi(Nil)（f04）", call("absi", V.nil()), "[utility-convert]");
+    eq("251", "absi(Array)（f06；f08 的 Vector2 同一句口径）", call("absi", arrOf(I(1))), "[utility-convert]");
   });
 
   it("251 · wrap 的类型按实参那一眼", async () => {
