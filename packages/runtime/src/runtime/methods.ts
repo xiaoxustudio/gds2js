@@ -94,7 +94,8 @@ function asString(v: Variant, who: string): string {
 }
 
 /** 定型容器那几支查询（S554）：`ElemKind` 折回引擎 `Variant.Type` 码；未定型给 0。 */
-export const ELEM_TYPE_CODE: Record<string, number> = {
+export const ELEM_TYPE_CODE: Record<string, number> = {
+  Object: 24,
   bool: 1, int: 2, float: 3, String: 4, Vector2: 5, Vector2i: 6, Vector3: 9, Vector3i: 10, Vector4: 12, Vector4i: 13,
   Color: 20, StringName: 21, Dictionary: 27, Array: 28,
 };
@@ -1347,8 +1348,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         case "append":
           a.append(one(args, "append"));
           return V.nil();
-        case "duplicate":
-          return V.array(a.duplicate(boolArgOr(args, 0, false)));
+        case "duplicate": {
+          const copy = a.duplicate(boolArgOr(args, 0, false));
+          copy.className = a.classNamed();
+          return V.array(copy);
+        }
         case "duplicate_deep": {
           // 实测（S548）：纯容器里模式 0 / 1 / 2 / 3 / -1 都是**整棵深拷**，嵌套改一边不动另一边；模式只对 Resource 子资源有意义（Tier 1 不出）
           if (args.length > 0 && (args[0] as Variant).t !== Tag.INT) {
@@ -1357,16 +1361,17 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.array(a.duplicate(true));
         }
         case "is_typed":
-          return V.bool(a.elemKind() !== null);
+          return V.bool(a.typedAny());
         case "is_same_typed": {
           const other = one(args, "is_same_typed");
           if (!(other.t === Tag.ARRAY)) throw new UnsupportedError("typed-query-arg", "Array.is_same_typed() 只量过 Array 实参");
-          return V.bool(a.elemKind() === (other.v as GArray).elemKind());
+          const oa = other.v as GArray;
+          return V.bool(a.elemKind() === oa.elemKind() && a.classNamed() === oa.classNamed());
         }
         case "get_typed_builtin":
-          return V.int(elemCode(a.elemKind()));
+          return V.int(a.classNamed() !== "" ? 24 : elemCode(a.elemKind()));
         case "get_typed_class_name":
-          return V.stringName("");
+          return V.stringName(a.classNamed());
         case "get_typed_script":
           return V.object(NULL_OBJECT);
         case "size":

@@ -81,19 +81,43 @@ export function arrayFromArgs(args: Variant[]): Variant {
   if (kind === null) {
     throw new UnsupportedError("array-ctor-kind", `Array(...) 的定型形只实测过容器标注的那批型名；型码 ${String(codeRaw)} 没量过（类名位收到 ${tagName(classArg.t)}）`);
   }
-  const out: Variant[] = [];
-  for (const x of items) {
-    const converted = elemConvert(kind, x);
-    if (converted === null) {
-      const failed = GArray.of([]);
-      failed.stampElem(kind);
-      return V.array(failed);
+  const cls = ctorClassName(classArg);
+  const convertAll = (): Variant[] | null => {
+    const out: Variant[] = [];
+    for (const x of items) {
+      const converted = elemConvert(kind, x);
+      if (converted === null) return null;
+      out.push(converted);
     }
-    out.push(converted);
+    return out;
+  };
+  if (cls !== null && kind !== "Object") {
+    // 类名只配 TYPE_OBJECT：其余型带上类名时引擎推「Class names can only be set for type OBJECT」，并把整支**降成不 typed**
+    // —— 元素照转（读数 tmp/d6/s623.gd：Array([1, 2], TYPE_INT, &"Foo", null) 给 is_typed 假、get_typed_builtin 0，值仍是 [1, 2]）
+    const converted = convertAll();
+    return V.array(GArray.of(converted ?? []));
   }
-  const g = GArray.of(out);
-  g.stampElem(kind);
-  return V.array(g);
+  const built = (list: Variant[]): Variant => {
+    const g = GArray.of(list);
+    if (kind === "Object" && cls !== null) {
+      g.stampElem(kind);
+      g.className = cls;
+    }
+    else g.stampElem(kind);
+    return V.array(g);
+  };
+  const converted = convertAll();
+  // 任一格转不过 → 空的定型数组，类名照挂（S613 的 m1：Array([1], TYPE_OBJECT, &"RefCounted", null) 给 [] | is_typed 真 | RefCounted | 24）
+  return built(converted ?? []);
+}
+
+/** 第三参（类名位）：StringName 与 String 都收（`tmp/d6/s623.gd` 的 m3 用 String 变量给的名字照样读回来），空串按「没有类名」算。 */
+function ctorClassName(v: Variant): string | null {
+  if (v.t === Tag.STRING_NAME || v.t === Tag.STRING) {
+    const text = v.v as string;
+    return text === "" ? null : text;
+  }
+  throw new UnsupportedError("array-ctor-class", `Array(...) 的第三参只实测过 StringName 与 String（收到 ${tagName(v.t)}）`);
 }
 
 /** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，

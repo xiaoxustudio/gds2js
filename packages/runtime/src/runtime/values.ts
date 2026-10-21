@@ -136,7 +136,8 @@ export type ElemKind =
   | "Vector4i"
   | "Color"
   | "Array"
-  | "Dictionary";
+  | "Dictionary"
+  | "Object";
 
 /** Godot 认识、且我们能在运行时校验的容器标注类型名 */
 export function isElemKind(name: string): name is ElemKind {
@@ -158,6 +159,8 @@ export function isElemKind(name: string): name is ElemKind {
 /** `resize` 扩张时按元素类型填进新格子的默认值。 */
 export function elemDefault(kind: ElemKind): Variant {
   switch (kind) {
+    case "Object":
+      throw new UnsupportedError("typed-object-default", "Array[Object] 与类定型数组的 resize / fill 填什么没量过（S613 只量了构造、append、duplicate、assign），响亮拒");
     case "int":
       return V.int(0);
     case "float":
@@ -192,6 +195,9 @@ export function elemDefault(kind: ElemKind): Variant {
 /** 元素折算矩阵：能转就转，转不了交 null —— 调用方把整次容器操作静默作废，不报错。 */
 export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
+    // `Array[Object]` 只收 null（S613：`Array([null], TYPE_OBJECT, &"RefCounted", null)` 给 `[<null>]`，`Array([1], …)` 转不过）
+    case "Object":
+      return v.t === Tag.NIL ? v : null;
     case "int":
       if (v.t === Tag.INT) return v;
       if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
@@ -296,6 +302,8 @@ const MINMAX_UNORDERABLE = new Set(["compare-operands", "color-cmp"]);
 export class GArray {
   private items: Variant[];
   elem: ElemKind | null = null;
+  /** `Array(base, TYPE_OBJECT, &"类名", null)` 那一族的类名（S613）；空串就是纯 `Array[Object]`。 */
+  className = "";
   private ro = false;
 
   /** `make_read_only()` 置的那一面：浅的，只挡这个容器自己的写（S403 那一族的读数）。 */
@@ -322,6 +330,15 @@ export class GArray {
 
   elemKind(): ElemKind | null {
     return this.elem;
+  }
+
+  classNamed(): string {
+    return this.className;
+  }
+
+  /** `is_typed()` 的判据：元素型与类名两形都算（S613 的 m1 / m2 读数）。 */
+  typedAny(): boolean {
+    return this.elem !== null || this.className !== "";
   }
 
   private asElement(v: Variant): Variant | null {

@@ -85,6 +85,7 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   StringName: 21,
   Dictionary: 27,
   Array: 28,
+  Object: 24,
 };
 
 const TYPE_ELEM: Record<number, ElemKind> = {};
@@ -362,6 +363,7 @@ class Writer {
         const kind = a.elemKind();
         // 实测：定型数组头部挂宽位，再跟一枚「元素类型码」字（Array[int] 给 2、Array[String] 给 4、Array[Array] 给 28）
         this.header(T_ARRAY, kind !== null);
+        if (a.classNamed() !== "") throw new UnsupportedError("var-to-bytes-class-typed", "var_to_bytes() 的类定型数组（头部 flags=2 + EncodedObjectAsID 那一族）字节形还没拆完，响亮拒");
         if (kind !== null) this.u32(elemCode(kind));
         this.u32(items.length);
         for (const e of items) this.variant(e);
