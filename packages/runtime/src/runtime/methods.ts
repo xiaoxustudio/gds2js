@@ -678,7 +678,9 @@ function callCallableBox(box: CallableBox, args: Variant[]): Variant {
   throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
 }
 
-/** `Callable.call()` 的实参数量：**给的 + 绑的** 对不上声明数就是运行期那句 `Invalid call to function '<标签> (Callable)'. Expected <N> argument(s).`，少给报必填数、多给报全部数。 */
+/** `Callable.call()` 的实参数量：**给的 + 绑的** 对不上声明数就是运行期那句 `Invalid call to function '<标签> (Callable)'. Expected <N> argument(s).`
+ *  脚本方法少给报必填数、多给报全部数；内建类型面那两岔都报**全部数**（`tmp/probe636/cb636b.gd`：`String::count` 给 0 支报 3、
+ *  `PackedInt32Array::slice` 给 0 支报 2、`Array::duplicate` 给 2 支报 1，与 `cb636c.gd` 的脚本方法 `top(a, b = 1, c = 2)` 给 0 支报 1 对照）。 */
 function callableCall(box: CallableBox, args: Variant[]): Variant {
   if (isNullCallable(box)) {
     throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
@@ -687,7 +689,7 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   if (bounds !== null) {
     const given = keptCallArgs(box, args).length + boundArgsOf(box).length;
     if (given < bounds[0] || given > bounds[1]) {
-      const n = given < bounds[0] ? bounds[0] : bounds[1];
+      const n = box.builtin !== null || given > bounds[1] ? bounds[1] : bounds[0];
       throw new GodotRuntimeError(
         "callable-arity",
         `Invalid call to function '${callableCallLabel(box)} (Callable)'. Expected ${n} argument(s).`,
