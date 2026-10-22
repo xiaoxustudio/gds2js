@@ -2501,14 +2501,14 @@ export function attribute(raw: unknown, name: string): unknown {
       // 装箱位读成员名也是绑定 Callable（读数 `tmp/probe-bincall/m1.gd` 的 M1–M8），表外名给引擎那句
       // （`tmp/probe-vattr/box.gd` 七格 + `tmp/probe628/w2`：六支 vector 面的属性名在上面就先回了，这一判只落到非成员名）
       const kind = valueAttrKind(vface, name);
-      if (kind === "absent" || (VECTOR_FACES.has(vface) && !faceMemberKnown(vface, name))) {
+      if (kind === "absent" || ((VECTOR_FACES.has(vface) || vface === "NodePath") && !faceMemberKnown(vface, name))) {
         throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${vface}'.`);
       }
       const row = faceArity(vface, name);
       if (row !== null) return boundBuiltinCallable(obj, vface, name, row[0], row[1]);
     }
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
-    if (col !== null) return colorRead(col, V.str(name), "prop");
+    if (col !== null) return colorRead(col, V.str(name), "read");
     if (obj.v instanceof GBytes) {
       // 属性面：表外名给 `Invalid access to property or key …`（w3 量过 PackedInt32Array 那一格），方法名当值给内建类型的绑定 Callable
       if (packNameAbsent((obj.v as GBytes).kind, name) || !faceMemberKnown(packTypeName((obj.v as GBytes).kind), name)) {
