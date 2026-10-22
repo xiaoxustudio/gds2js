@@ -1052,6 +1052,17 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GdNativeClass) {
       throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（实测 Node.new() 造得出实例、我们不发）`);
     }
+    const vecFace =
+      inner instanceof GVector2 ? "Vector2" :
+      inner instanceof GVector3 ? "Vector3" :
+      inner instanceof GVector4 ? "Vector4" :
+      inner instanceof GVector4i ? "Vector4i" :
+      inner instanceof GVector2i ? "Vector2i" :
+      inner instanceof GVector3i ? "Vector3i" : "";
+    if (vecFace !== "") {
+      const vecSay = nativeAritySay(vecFace, name, args.length);
+      if (vecSay !== null) throw new GodotRuntimeError("vector-arity", vecSay);
+    }
     if (inner instanceof GVector2) return vector2Method(inner, name, args);
     if (inner instanceof GVector3) return vector3Method(inner, name, args);
     if (inner instanceof GVector4) return vector4Method(inner, name, args);
@@ -1184,6 +1195,18 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (npv !== null) {
       const npSay = nativeAritySay("NodePath", name, args.length);
       if (npSay !== null) throw new GodotRuntimeError("node-path-arity", npSay);
+      if (faceMemberKnown("NodePath", name)) {
+        // 名册里有、元数也对，但那一名还没实现：引擎这时是**算出值**（`slice.call(0)` 实测给 `a/b[1]`），
+        // 所以不能拿「Nonexistent function」冒充引擎 —— 响亮拒不猜
+        try {
+          return nodePathMethod(npv, name, args);
+        } catch (e) {
+          if (e instanceof GodotRuntimeError && e.code === "node-path-method") {
+            throw new UnsupportedError("node-path-unimplemented", `NodePath.${name}() 还没实现，不发引擎那句`);
+          }
+          throw e;
+        }
+      }
       return nodePathMethod(npv, name, args);
     }
 
@@ -1584,6 +1607,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     case Tag.DICT: {
       const d = obj.v as GDict;
+      const dictSay = nativeAritySay("Dictionary", name, args.length);
+      if (dictSay !== null) throw new GodotRuntimeError("dict-arity", dictSay);
       const roAt = DICT_RO_WRITE[name];
       if (roAt !== undefined && d.isReadOnly()) return readOnlyWrite(roAt, "Dictionary", name);
       switch (name) {
