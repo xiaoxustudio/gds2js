@@ -9,7 +9,7 @@ export const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
   hash: [0, 0], insert: [2, 2], is_empty: [0, 0], is_read_only: [0, 0], is_same_typed: [1, 1],
   is_typed: [0, 0], make_read_only: [0, 0], map: [1, 1], max: [0, 0], min: [0, 0], pick_random: [0, 0],
   pop_at: [1, 1], pop_back: [0, 0], pop_front: [0, 0], push_back: [1, 1], push_front: [1, 1], reduce: [1, 2],
-  remove_at: [1, 1], resize: [1, 1], reverse: [0, 0], rfind: [1, 2], rfind_custom: [1, 2], shuffle: [0, 0],
+  remove_at: [1, 1], resize: [1, 1], reverse: [0, 0], rfind: [1, 2], rfind_custom: [1, 2], set: [2, 2], shuffle: [0, 0],
   size: [0, 0], slice: [1, 4], sort: [0, 0], sort_custom: [1, 1],
 };
 
@@ -34,7 +34,8 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
   to_ascii_buffer: [0, 0], to_camel_case: [0, 0], to_float: [0, 0], to_int: [0, 0], to_kebab_case: [0, 0],
   to_lower: [0, 0], to_pascal_case: [0, 0], to_snake_case: [0, 0], to_upper: [0, 0], to_utf16_buffer: [0, 0],
   to_utf32_buffer: [0, 0], to_utf8_buffer: [0, 0], to_wchar_buffer: [0, 0], trim_prefix: [1, 1],
-  trim_suffix: [1, 1], unicode_at: [1, 1], uri_decode: [0, 0], uri_encode: [0, 0], validate_filename: [0, 0],
+  trim_suffix: [1, 1], unicode_at: [1, 1], uri_decode: [0, 0], uri_encode: [0, 0], uri_file_decode: [0, 0],
+  is_valid_ascii_identifier: [0, 0], is_valid_unicode_identifier: [0, 0], validate_filename: [0, 0],
   validate_node_name: [0, 0], xml_escape: [0, 1], xml_unescape: [0, 0],
   remove_char: [1, 1],
   remove_chars: [1, 1],
@@ -44,15 +45,14 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
 };
 
 
-// StringName 与 String 的名册只差这九名（尺 `tmp/probe639/gen639.mjs`，读数 `names.gd` 二十一格，并与本机 4.6.3 的
+// StringName 与 String 的名册只差那六名（尺 `tmp/probe639/gen639.mjs`，读数 `names.gd` 二十一格，并与本机 4.6.3 的
 // `--dump-extension-api` 导出逐名对账，尺 `tmp/probe639/diff639.mts`）：六名 `chr / humanize_size / num / num_int64 /
 // num_scientific / num_uint64` 在 StringName 面上是表外名（`Invalid access to property or key 'X' on a base object of type 'StringName'.`），
-// 三名 `uri_file_decode / is_valid_ascii_identifier / is_valid_unicode_identifier` 存在且零元（读出来是 `StringName::X` 的绑定 Callable）。
+// 三名 `uri_file_decode / is_valid_ascii_identifier / is_valid_unicode_identifier` 两面都存在且零元（S639 读的是属性读，
+// 两面都回 `StringName::X` / `String::X` 的绑定 Callable；元数两界随 S668 一起登进 String 那张表，两面共用）。
 const STRING_NAME_ABSENT = ["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"];
-export const STRING_NAME_METHOD_ARITY: Record<string, [number, number]> = {
-  ...Object.fromEntries(Object.entries(STRING_METHOD_ARITY).filter(([n]) => !STRING_NAME_ABSENT.includes(n))),
-  uri_file_decode: [0, 0], is_valid_ascii_identifier: [0, 0], is_valid_unicode_identifier: [0, 0],
-};
+export const STRING_NAME_METHOD_ARITY: Record<string, [number, number]> =
+  Object.fromEntries(Object.entries(STRING_METHOD_ARITY).filter(([n]) => !STRING_NAME_ABSENT.includes(n)));
 
 export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
   append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
@@ -287,19 +287,12 @@ export const DICT_METHOD_ARITY: Record<string, [number, number]> = {
   assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
   get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
   is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
-  merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
+  merged: [1, 2], recursive_equal: [2, 2], set: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
   is_typed: [0, 0], is_typed_key: [0, 0], is_typed_value: [0, 0],
   is_same_typed: [1, 1], is_same_typed_key: [1, 1], is_same_typed_value: [1, 1],
   get_typed_key_builtin: [0, 0], get_typed_value_builtin: [0, 0],
   get_typed_key_class_name: [0, 0], get_typed_value_class_name: [0, 0],
   get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
-};
-
-/** 各面「存在但没量元数」的名字：判表外名时要把它们算作存在。 */
-export const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
-  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
-  Array: ["set"],
-  Dictionary: ["set", "is_typed", "is_same_typed"],
 };
 
 /** 装箱直调越元数那一句（尺 `tmp/probe639/{names,call}.mjs` 与 `tmp/probe636/np642.gd`）：九格九面一字一样 ——
@@ -312,10 +305,9 @@ export function nativeAritySay(face: string, name: string, given: number): strin
   return `Invalid call to function '${name}' in base '${face}'. Expected ${String(b[1])} argument(s).`;
 }
 
-/** 这个名字在这一面上存不存在：元数表里的、或表外但量过存在的都算存在（S627 的 u1 / u4 / u6 / u7 / u10）。 */
+/** 这个名字在这一面上存不存在：元数表里有没有它就是全部判据（S627 的 u1 / u4 / u6 / u7 / u10 与 S668 的五名都已登进表）。 */
 export function faceMemberKnown(face: string, name: string): boolean {
-  if (faceArity(face, name) !== null) return true;
-  return (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name);
+  return faceArity(face, name) !== null;
 }
 
 /** 按面名与成员名查那一对元数上下界；查不到给 null（表外名、byte 独有的名字，或候选宇宙之外的名字）。 */

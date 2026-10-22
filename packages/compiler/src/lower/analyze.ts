@@ -20,7 +20,6 @@ import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/gl
 import {
   ARRAY_METHOD_ARITY,
   DICT_METHOD_ARITY,
-  FACE_EXISTS_BEYOND_ARITY,
   NODE_PATH_METHOD_ARITY,
   PACK_METHOD_ARITY,
   PACK_METHOD_ARITY_WITH_BYTES,
@@ -893,7 +892,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   }
 }
 
-/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。`Array.assign` 是后补的一格：`print(ga.assign(Color(1, 0, 0, 1)))` 引擎同格回 void 那句加形参那两句（`tmp/d6/s485.json`，S485）。 */
+/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。`Array.assign` 是后补的一格：`print(ga.assign(Color(1, 0, 0, 1)))` 引擎同格回 void 那句加形参那两句（`tmp/d6/s485.json`，S485）。`Array.set` 随 S668 补上（尺 `tmp/probe670` 廿七格：`print(a.set(0))` 这类形引擎在元数那句之外**再发**一句 void，标注 / 推断 / 字面量三形接收者一字一样）。 */
 const VOID_ARRAY_METHODS = new Set([
   "append",
   "push_front",
@@ -908,6 +907,7 @@ const VOID_ARRAY_METHODS = new Set([
   "reverse",
   "shuffle",
   "make_read_only",
+  "set",
   "assign",
 ]);
 const VOID_DICT_METHODS = new Set(["clear", "sort", "merge", "assign", "make_read_only"]);
@@ -918,10 +918,37 @@ const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", 
 const VOID_OBJECT_METHODS = new Set(["set"]);
 /** Signal 接收者那一侧：`emit()` 与 `disconnect()` 都是 void，取值是解析期那一句；`connect()` **不是** void —— 它返回 Error 状态码 int。 */
 const VOID_SIGNAL_METHODS = new Set(["emit", "disconnect"]);
-/** Callable 值位置上的 void 方法：`var v = c.call_deferred(1)` 这一格。 */
-const VOID_CALLABLE_METHODS = new Set(["call_deferred"]);
+/** Callable 值位置上的 void 方法：`var v = c.call_deferred(1)` 这一格；`rpc` / `rpc_id` 同判据（S655 的 `Z_rpc` 与 `C_*_rpc0` 三形读数都是这句）。 */
+const VOID_CALLABLE_METHODS = new Set(["call_deferred", "rpc", "rpc_id"]);
 /** Signal 上**没有**这个名字，而且是解析期两句：`Cannot find member "is_valid" in base "Signal".` + `Function "is_valid()" not found in base Signal.`（第二句的 `Signal` 不带引号）。`has_method` / `get_method_list` / `is_connected_to` 那几格不同形：解析期放过、运行期才给 `Invalid call. Nonexistent function …`。 */
 const SIGNAL_PARSE_MISSING = new Set(["is_valid"]);
+/** Signal 面裸信号名接收者的解析期元数**上界**（十二格读数 `tmp/probe653/P_*.gd` 一名一名过裁判）：越界只发 `Too many` 那一句，
+ *  `connect` 报的是声明的全部数 2（`flags` 带默认值，一支实参照连）。少给那一向引擎**照跑** ——
+ *  `sig.connect()` / `sig.disconnect()` / `sig.is_connected()` 零实参三格都给了 `done`，所以这一族没有下界。
+ *  `emit` 不在表里：它是 vararg，0–3 支实测都过。 */
+const SIGNAL_PARSE_ARITY_MAX: Record<string, number> = {
+  connect: 2, disconnect: 1, is_connected: 1,
+  get_connections: 0, get_name: 0, get_object: 0, get_object_id: 0, has_connections: 0, is_null: 0,
+};
+/** Callable 面的解析期元数**两界**（S655，读数 `tmp/probe655/{C_ann,C_ctor,C_infer,Z_*}.gd` 三十六格：三种接收者形状各十二名 + 八支零实参名）：
+ *  与 Signal 那一族正相反，这一面**两向都开口**（`bindv()` 给 `Too few`、`bindv([1], 2)` 给 `Too many`），句形与 `arityDiag` 同一把尺。
+ *  `bind` / `call` / `call_deferred` / `rpc` 是 vararg（`bind(1)` 给值、`call_deferred(1)` 只发取值 void 那句），`rpc_id` 只有下界 1。
+ *  三形接收者（标注 `var c: Callable`、`var c = Callable(...)` 推断、`Callable(...)` 直接当接收者）读数一字一样，所以一条判据铺满三形。 */
+const CALLABLE_PARSE_ARITY: Record<string, [number, number]> = {
+  bindv: [1, 1], callv: [1, 1], unbind: [1, 1], create: [2, 2], rpc_id: [1, Number.MAX_SAFE_INTEGER],
+  get_argument_count: [0, 0], get_bound_arguments: [0, 0], get_bound_arguments_count: [0, 0],
+  get_unbound_arguments_count: [0, 0], get_method: [0, 0], get_object: [0, 0], get_object_id: [0, 0],
+  hash: [0, 0], is_custom: [0, 0], is_null: [0, 0], is_standard: [0, 0], is_valid: [0, 0],
+};
+/** Callable 面的**形参型**两句（S657，读数 `tmp/probe657/r657.mts` 二十六格：标注与构造式推断两形 × 十三调用）。
+ *  元数那句在前、这两句在后；只认**字面量实参**：命名实参（`var w: int` 之后 `c.unbind(w)`）引擎发哪一句没量过，不收。
+ *  接受的那几形同样量过：`create("a", "b")` 与 `create(1, &"m")` 都不开口（String 折成 StringName、第一槽是 Variant 全收）。 */
+const CALLABLE_PARSE_ARGS: Record<string, Array<[number, string[], string]>> = {
+  create: [[2, ["int", "bool", "Vector2i"], "StringName"]],
+  bindv: [[1, ["int"], "Array"]],
+  callv: [[1, ["StringName"], "Array"]],
+  unbind: [[1, ["StringName"], "int"]],
+};
 /** 九种 Packed*Array 的名字：接收者是它们之一时按 pack 那一侧的判据走，九种的表口径一致。 */
 const PACK_SHAPE_NAMES = new Set([
   "PackedByteArray",
@@ -936,7 +963,10 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object" | "Signal" | "Callable";
+/** `SignalDyn` 是**由初值证出**的那一面（`var g = sig` / `var g = Signal(sig)`）：元数与取值 void 两句照发，
+ *  但「找不到成员」那两句不发 —— 读数 `tmp/probe656/W_inf_valid.gd`（运行期才给 `Invalid call. Nonexistent function 'is_valid' in base 'Signal'.`）
+ *  对 `W_ann_valid.gd` / `W_bare_valid.gd`（解析期两句）。 */
+type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object" | "Signal" | "SignalDyn" | "Callable";
 
 /** 给定型变量赋值的静态判定：不合式的组合在 Godot 是解析期错，形体与定型容器那族一模一样 —— 实参是字面量报两条（先槽位后赋值），实参是变量只报赋值那条。判不出来的组合返回 null 不报 —— 误拦合法工程比漏报更糟。 */
 function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null {
@@ -1724,6 +1754,10 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     if (e.kind === "dict") return "Dictionary";
     // Callable 只认构造式与显式标注：`var c = Callable()` 静态推得出类型，从 `o.hi` 读出来的那一格推不出（那是运行期才判）。
     if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "Callable") return "Callable";
+    // Signal 同一条判据（S656，读数 `tmp/probe656/S_inf_*.gd` 与 `S_varinit_*.gd` 二十格）：裸信号名初值与 `Signal(...)` 构造式
+    // 都让引擎在解析期认出这一面 —— `var g = sig` 之后的 `g.get_name(1)` 与标注形 `var g: Signal` 同一句、同一行。
+    if (e.kind === "ident" && signalNames.has(e.name)) return "SignalDyn";
+    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "Signal") return "SignalDyn";
     if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
       return "Pack";
     }
@@ -1773,9 +1807,12 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
-          if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call")) {
+          if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call" || e.callee.obj.kind === "array" || e.callee.obj.kind === "dict")) {
             const name = e.callee.name;
             const chainPack = e.callee.obj.kind === "call" ? (PACK_TYPE_NAMES.has(ownerFace(e.callee.obj) ?? "") ? "Pack" : null) : null;
+            // `Callable(...)` 直接当接收者（`C_ctor` 十二格实测与标注形同句）：构造式那一名就是 Callable
+            const ctorCall =
+              e.callee.obj.kind === "call" && e.callee.obj.callee.kind === "ident" && e.callee.obj.callee.name === "Callable";
             // 只补 pack 那两形（构造式与链子）：Signal / Array / Dictionary / 脚本对象的链子接收者没量过，照旧放过
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
@@ -1784,7 +1821,11 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
                   (PACK_TYPE_NAMES.has(e.callee.obj.name) ? "Pack" : null) ??
                   (e.callee.obj.name === "Array" || e.callee.obj.name === "Dictionary" ? e.callee.obj.name : null) ??
                   (signalNames.has(e.callee.obj.name) ? "Signal" : null)
-                : chainPack;
+                : e.callee.obj.kind === "array"
+                  ? "Array"
+                  : e.callee.obj.kind === "dict"
+                    ? "Dictionary"
+                    : chainPack ?? (ctorCall ? "Callable" : null);
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
               diags.push({
@@ -1798,13 +1839,40 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
                 loc: e.loc,
               });
             }
+            // 元数那句排在取值 void 那句之前（S378 的口径）
+            const sigMax = shape === "Signal" || shape === "SignalDyn" ? SIGNAL_PARSE_ARITY_MAX[name] : undefined;
+            if (sigMax !== undefined && e.args.length > sigMax) {
+              diags.push({
+                code: "signal-arity",
+                message: `Too many arguments for "${name}()" call. Expected at most ${String(sigMax)} but received ${String(e.args.length)}.`,
+                loc: e.loc,
+              });
+            }
+            if (shape === "Callable") {
+              const d = arityDiag(CALLABLE_PARSE_ARITY, "callable-arity", name, e.args.length, e.loc);
+              if (d !== null) diags.push(d);
+              for (const [pos, refuse, want] of CALLABLE_PARSE_ARGS[name] ?? []) {
+                const bad = literalTypeName(e.args[pos - 1]);
+                if (bad === null || !refuse.includes(bad)) continue;
+                diags.push({
+                  code: "callable-arg-pass",
+                  message: `Cannot pass a value of type "${bad}" as "${want}".`,
+                  loc: e.loc,
+                });
+                diags.push({
+                  code: "callable-arg-type",
+                  message: `Invalid argument for "${name}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`,
+                  loc: e.loc,
+                });
+              }
+            }
             if (!discarded) {
               const isVoid =
                 shape === "Pack"
                   ? VOID_BYTES_METHODS.has(name)
                   : shape === "Object"
                     ? VOID_OBJECT_METHODS.has(name)
-                    : shape === "Signal"
+                    : shape === "Signal" || shape === "SignalDyn"
                       ? VOID_SIGNAL_METHODS.has(name)
                       : shape === "Callable"
                         ? VOID_CALLABLE_METHODS.has(name)
@@ -2523,7 +2591,6 @@ function faceGhostDiags(
   if (!(isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name)))) return [];
   const method = callee.name;
   if (typeof method !== "string" || method in table) return [];
-  if ((FACE_EXISTS_BEYOND_ARITY[type] ?? []).includes(method)) return [];
   const loc = (n.loc as Diagnostic["loc"]) ?? null;
   // 引擎那两句里的 base 印的是**标注全文**（S626 的 z1..z7：`Array[int]` / `Dictionary[One, int]`），判据仍用基名那一面。
   const shown = obj.kind === "ident" && typeof obj.name === "string" ? texts?.get(obj.name) ?? type : type;
@@ -3022,7 +3089,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
           // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
-          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !memberNameAbsent(vface, vmethod)) continue;
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || !memberNameAbsent(vface, vmethod)) continue;
           const vloc = (n.loc as Diagnostic["loc"]) ?? null;
           diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
           diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
@@ -3044,7 +3111,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
       const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : face === "StringName" ? STRING_NAME_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
       const refused = PACK_TYPE_NAMES.has(face) || face === "Array" || face === "String";
-      if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
+      if (name in table) {
         // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
         if (writeTargets.has(n)) {
           if (refused) diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });
@@ -3275,6 +3342,17 @@ const CTOR_REFUSED: Record<string, string[][]> = {
     ["int", "Variant.Type", "StringName", "null"], ["Array", "Variant.Type", "Variant.Type", "bool"],
     ["Array", "Variant.Type", "StringName", "null", "int"],
     ["Array", "Variant.Type", "StringName", "null", "int", "int"],
+    // S664：`tmp/probe665` 十七格里被我们拖到运行期自发言的那几形 —— 引擎当场就在解析期拒（每一行是一条读数）
+    ["int", "Variant.Type"], ["String", "Variant.Type"],
+    ["int", "Variant.Type", "int"], ["Array", "Variant.Type", "StringName"],
+    ["Array", "Variant.Type", "String"], ["int", "Variant.Type", "StringName"],
+    ["Array", "Variant.Type", "Variant.Type", "StringName"],
+    ["Array", "Variant.Type", "int", "null"], ["Array", "Variant.Type", "int", "String"],
+    ["Array", "Variant.Type", "int", "bool"],
+    ["int", "Variant.Type", "StringName", "bool"], ["Dictionary", "Variant.Type", "StringName", "bool"],
+    ["int", "String", "String", "bool"],
+    ["int", "Variant.Type", "int", "String", "int"],
+    ["Array", "Variant.Type", "StringName", "bool", "bool"],
   ],
   Dictionary: [["int"], ["int", "int"], ["int", "int", "int"], ["String"]],
   Vector2: [["int"], ["int", "int", "int"], ["String"]],
@@ -3295,12 +3373,16 @@ const CTOR_REFUSED: Record<string, string[][]> = {
 
 /** 构造式那一句里实参的型名：字面量交 `literalTypeName`，`TYPE_*` 那 39 支全局常量交 `Variant.Type`
  *  （S606 实测 `Array([1], TYPE_INT)` 引擎写的是 `Array(Array, Variant.Type)`），其余认不出就返回 null 让整条判据让开。 */
-function ctorArgName(a: Expr): string | null {
+function ctorArgName(a: Expr, argTypes: Map<string, string>): string | null {
   const lit = literalTypeName(a);
   if (lit !== null) return lit;
   if (a.kind === "ident") {
     const nm = (a as unknown as Record<string, unknown>).name;
-    if (typeof nm === "string" && nm.startsWith("TYPE_") && isGlobalConst(nm)) return "Variant.Type";
+    if (typeof nm !== "string") return null;
+    if (nm.startsWith("TYPE_") && isGlobalConst(nm)) return "Variant.Type";
+    // 标注过的局部变量按**静态型**渲染（S665：`var x: int = 5` 之后 `Array(x)` 引擎报的是 `Array(int)`）。
+    // 只有已经登进签名表的型名会真开口，没量过的型对不上任何一行 —— 照旧落到运行期那一站，不猜。
+    return argTypes.get(nm) ?? null;
   }
   return null;
 }
@@ -3308,6 +3390,13 @@ function ctorArgName(a: Expr): string | null {
 function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
   const shadowed = new Set(m.funcs.map((f) => f.name));
   for (const nodes of flattenBodies(m)) {
+    const argTypes = new Map<string, string>();
+    for (const n of nodes) {
+      if (n.kind !== "var") continue;
+      const t = n.type as Record<string, unknown> | null | undefined;
+      const nm = n.name;
+      if (t !== undefined && t !== null && t.kind === "named" && typeof t.name === "string" && typeof nm === "string") argTypes.set(nm, t.name);
+    }
     for (const n of nodes) {
       if (n.kind !== "call") continue;
       const callee = n.callee as Record<string, unknown> | undefined;
@@ -3316,7 +3405,7 @@ function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
       if (shadowed.has(name)) continue;
       const bad = CTOR_REFUSED[name];
       if (bad === undefined) continue;
-      const kinds = ((n.args as Expr[]) ?? []).map((a) => ctorArgName(a));
+      const kinds = ((n.args as Expr[]) ?? []).map((a) => ctorArgName(a, argTypes));
       if (kinds.some((k) => k === null)) continue;
       const sig = kinds.join(", ");
       if (!bad.some((t) => t.join(", ") === sig)) continue;
@@ -5048,9 +5137,25 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
 /** 两侧都是字面量时的那两张表：`checkOperator` 里发（S394）。
  *  操作数名先问 `literalTypeName`：`staticType` 把 `&"ab"` 折进 `String`、`^"a/b"` 回 null，而引擎这一路句子里印的
  *  是 `StringName` / `NodePath` 自己（S490，尺 `tmp/d6/s490.py` 五百四十格，读数 `tmp/d6/s490.json`）。 */
+/** **一支字符串字面量**的那两支构造式：引擎在这一路把它们的型当字面量一侧认（S660，读数
+ *  `tmp/probe660/O_np_plus_str.gd` 等四格与 `O_sn_ctor.gd` 给的都是第一式 `Invalid operands to operator +, NodePath and String.` /
+ *  `…, StringName and int.`），与 `var p: NodePath = …` 那一头的第二式不同形。其余构造式（`Color` 那一支由
+ *  `literalTypeName` 早就认了，`Vector2("…")` 之类没有这一形）不在这儿认。 */
+const FACE_CTOR_LITERAL: Readonly<Record<string, string>> = { NodePath: "NodePath", StringName: "StringName" };
+
+function faceCtorLiteral(e: Expr): string | null {
+  if (e.kind !== "call" || e.callee.kind !== "ident") return null;
+  const face = FACE_CTOR_LITERAL[e.callee.name];
+  if (face === undefined) return null;
+  const args = e.args ?? [];
+  if (args.length !== 1) return null;
+  const a = args[0] as Expr;
+  return a.kind === "lit" && a.lit === "string" ? face : null;
+}
+
 function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]): void {
-  const l = literalTypeName(e.left) ?? staticType(e.left);
-  const r = literalTypeName(e.right) ?? staticType(e.right);
+  const l = literalTypeName(e.left) ?? faceCtorLiteral(e.left) ?? staticType(e.left);
+  const r = literalTypeName(e.right) ?? faceCtorLiteral(e.right) ?? staticType(e.right);
 
   // 两侧都是字面量的那一半：按 468 格那张表发（S394）。既有三道闸门已经发同样句子的组合不再重复发。
   const pair = l !== null && r !== null ? `${l}|${r}` : null;
@@ -5061,7 +5166,7 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
       ((l === "String" && (r === "int" || r === "float")) || (r === "String" && (l === "int" || l === "float")))) ||
     ((e.op === "<=" || e.op === ">=") && l === "bool" && r === "bool");
   let paired = false;
-  if (!covered && isLiteralOperand(e.left) && isLiteralOperand(e.right) && pair !== null && l !== null && r !== null) {
+  if (!covered && (isLiteralOperand(e.left) || faceCtorLiteral(e.left) !== null) && (isLiteralOperand(e.right) || faceCtorLiteral(e.right) !== null) && pair !== null && l !== null && r !== null) {
     if (OP_PAIRS_REFUSED_A[e.op]?.includes(pair) === true) {
       paired = true;
       diags.push({
@@ -5579,6 +5684,17 @@ const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, ReadonlyArray<readonly [nu
 };
 
 /** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
+/** cubic / bezier 那四支（S662）：名字实参参与「第一处命中」的扫描，读数 `tmp/probe664` —— 首位放 `var s: String`
+ *  时引擎只推 `argument 1`，`bezier_interpolate` / `bezier_derivative` / `cubic_interpolate_in_time` 同形。 */
+const CUBIC_NAME_ARG_FUNCS = new Set(["cubic_interpolate", "cubic_interpolate_in_time", "bezier_interpolate", "bezier_derivative"]);
+
+/** 名字实参在这一位上真正不合式的那个型名：数值型（int / float / bool）与期望型同名的都算收（`cubic_interpolate(a: int, …)` 实测给值）。 */
+function nameArgBad(a: Expr, argAnn: Map<string, string>, want: string): string | null {
+  const nm = argNameType(a, argAnn);
+  if (nm === null || nm === "int" || nm === "float" || nm === "bool" || nm === want) return null;
+  return nm;
+}
+
 const GLOBAL_NUM_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "sin", "cos", "tan", "deg_to_rad", "rad_to_deg",
   "wrapf", "move_toward", "smoothstep", "is_equal_approx", "remap",
   "acos", "asin", "atan", "atanh", "sinh", "cosh", "tanh", "ceilf", "floorf", "roundf", "signf",
@@ -6098,7 +6214,12 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             ? lit === "int" || lit === "float"
               ? lit
               : null
-            : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
+            : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null) ??
+              // cubic / bezier 那四支（S662，读数 `tmp/probe664`）：**名字实参也是命中源** —— `var s: String` 放进首位时
+              // 引擎发的是 `argument 1 should be "float" but is "String"`（原先这一位 literalTypeName 交不出型就整条跳过，
+              // 于是报成了下一支字面量的 argument 2、或在 bezier 那几支一句不发拖到运行期）。引擎按槽位升序只推第一处，
+              // 上面那句 `if (firstLiteralHit === null || pos < firstLiteralHit.pos)` 已经是这个口径，不用另加闸门。
+              (CUBIC_NAME_ARG_FUNCS.has(callee.name) && lit === null ? nameArgBad(a, argAnn, want) : null);
         if (got === null || got === want) continue;
         if (firstLiteralHit === null || pos < firstLiteralHit.pos) firstLiteralHit = { pos, got };
       }

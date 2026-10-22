@@ -179,7 +179,9 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
     const ir = lower(await parseSource(src));
     return { ir, diags: toDiags(absPath, ir), deps: needsClosure(ir) };
   } catch (e) {
-    return { error: `${absPath}:1:1  error  ${e instanceof Error ? e.message : String(e)}` };
+    // 下降函数在抛出处挂的行号（S649 那层）这里用得上：引擎的解析期报错报的就是构造自己那一行，别再写死 1:1
+    const line = (e as { line?: number }).line;
+    return { error: `${absPath}:${String(line ?? 1)}:1  error  ${e instanceof Error ? e.message : String(e)}` };
   }
 }
 

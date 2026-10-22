@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Too few arguments for "set()" call. Expected at least 2 but received 1.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot get return value of call to "set()" because it returns "void".
+   at: GDScript::reload (<case>/main.gd:5)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

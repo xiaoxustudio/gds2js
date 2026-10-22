@@ -545,9 +545,10 @@ function bytesDecompressDynamic(p: GBytes, args: Variant[]): Variant {
   return V.object(new GBytes(out, "byte"));
 }
 
-/** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
-function charReplacement(n: number, who: string): number {  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
-    throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 超出 Unicode 标量范围，那一形没实测过`);
+/** 替换码点越界那一形量过了（S653）：引擎按 uint32 回绕当 char32_t 存着，宿主的 UTF-16 串装不下 `>= 0x110000` 那一段 —— 响亮拒，不发近似。 */
+function charReplacement(n: number, who: string): number {
+  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
+    throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 引擎按 uint32 回绕存成 char32（实测 unicode_at 给 4294967295、length 照旧），宿主的 UTF-16 串装不下，不发近似值`);
   }
   return n;
 }
@@ -997,6 +998,17 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   }
   if (!CALLABLE_METHOD_NAMES.has(name)) {
     throw new GodotRuntimeError("callable-method", `Invalid call. Nonexistent function '${name}' in base 'Callable'.`);
+  }
+  // `rpc()` / `rpc_id()` 两支名在册（`tmp/probe639/extension_api.json` 的 Callable 十七名）但 4.6.3 一调就报错，句形看**基**：
+  // lambda 与全局内建给 `Nonexistent function`（`tmp/probe653/{L1,L3,L5}.gd`），方法 / 静态 / 空 Callable 给
+  // `on a null instance`（`R0` / `R3` / `I3` / `L2` / `L4`，带不带实参都一样）；内建类型面绑来的那一只没量过，仍走「未实现」。
+  if (name === "rpc" || name === "rpc_id") {
+    if (box.fn !== null) {
+      throw new GodotRuntimeError("callable-method", `Invalid call. Nonexistent function '${name}' in base 'Callable'.`);
+    }
+    if (box.builtin === null && (box.object !== null || empty)) {
+      throw new GodotRuntimeError("callable-null-instance", `Attempt to call function '${name}' in base 'Callable' on a null instance.`);
+    }
   }
   throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
 }
@@ -1514,9 +1526,6 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return a.get(i);
         }
         case "set": {
-          if (args.length < 2) {
-            throw new GodotRuntimeError("arity", `Too few arguments for "set()" call. Expected at least 2 but received ${String(args.length)}.`);
-          }
           const i = arrayIndexArg(args[0], "set");
           const val = args[1] as Variant;
           if (i < 0 || i >= a.size()) {
@@ -1858,24 +1867,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strRemoveChar(s, intArg(args, 0, "remove_char")));
         case "remove_chars":
           return V.str(strRemoveChars(s, asString(one(args, "remove_chars"), "remove_chars")));
-        case "uri_file_decode": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `uri_file_decode() 不接受参数（收到 ${args.length} 个）`);
-          }
+        case "uri_file_decode":
           return V.str(strUriDecode(s, false));
-        }
-        case "is_valid_ascii_identifier": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `is_valid_ascii_identifier() 不接受参数（收到 ${args.length} 个）`);
-          }
+        case "is_valid_ascii_identifier":
           return V.bool(strIsValidAsciiIdentifier(s));
-        }
-        case "is_valid_unicode_identifier": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `is_valid_unicode_identifier() 不接受参数（收到 ${args.length} 个）`);
-          }
+        case "is_valid_unicode_identifier":
           return V.bool(strIsValidUnicodeIdentifier(s));
-        }
         case "split": {
           if (args.length > 3) {
             throw new GodotRuntimeError("arity", `split() 最多 3 个参数（收到 ${args.length} 个）`);
@@ -2645,6 +2642,12 @@ export function attribute(raw: unknown, name: string): unknown {
       const hit = varSlotOf(sd, name);
       if (hit !== null) return hit.get();
     }
+    if (inner instanceof ClassDesc && name === "new") {
+      // `H.new` **当值**（S673，尺 `tmp/probe674/n_*.gd` 五格）：引擎给的是那支构造器的绑定 Callable，
+      // 印 `GDScript::new`、`typeof` 25、两次取出来 `==` 给 true。拿它再调用那一形（`f.call()` 之类）没量过，
+      // 落到下面既有的按名派发那一站响亮拒；`f()` 直接调两侧同句（引擎也是解析期那句）。
+      return methodCallable(obj, "new");
+    }
     if (!(inner instanceof ClassDesc) && name in inner) {
       const v = inner[name];
       if (typeof v === "function") return methodCallable(obj, name);
@@ -2655,8 +2658,10 @@ export function attribute(raw: unknown, name: string): unknown {
       if (d.scriptProps !== null && d.scriptProps.includes(name)) return V.nil();
     }
   }
-  if (obj.t === Tag.NIL) {
-    throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);
+  if (obj.t === Tag.NIL || obj.t === Tag.INT || obj.t === Tag.FLOAT || obj.t === Tag.BOOL) {
+    // 这四型基的表外名属性读一句同款（S669，尺 `tmp/probe672/unknown.mts` 十一格：String / StringName / NodePath /
+    // Vector2 / Color / Array / Dictionary 七型早就同句，这四型此前发的是自述；其余基（对象 / Callable / RID）没量过，照旧响亮拒）。
+    throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${valueTypeName(obj)}'.`);
   }
   throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做完）`);
 }

@@ -71,12 +71,15 @@ function tokenOf(n: SyntaxNode, text: string): SyntaxNode | null {
 }
 
 /** 换行落在这些位置时，引擎在解析期就拒；句子照抄实测那十句（`tmp/probe-eol/`，语料 304–313 各钉一句）。 */
-function continuationErr(sentence: string): never {
-  throw new UnsupportedError("line-continuation", sentence);
+function continuationErr(sentence: string, at?: SyntaxNode): never {
+  const e = new UnsupportedError("line-continuation", sentence) as LineCarrying;
+  // 引擎指的是**断掉那一处**的行（值落在哪行、冒号前那个 token 在哪行），不是整条语句的头一行
+  if (at !== undefined) e.line = at.startPosition.row + 1;
+  throw e;
 }
 
 function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxNode | null, sentence: string): void {
-  if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence);
+  if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence, token);
 }
 
 /** 复合赋值那一支：引擎对 11 种运算符换行给的都是 `=` 那一句（`tmp/probe-eol/readings5.txt`）。 */
@@ -97,7 +100,7 @@ function checkColonHere(n: SyntaxNode, sentence: string): void {
   const at = kids.findIndex((c) => !c.isNamed && c.text === ":");
   const colon = at < 1 ? undefined : kids[at];
   const prev = at < 1 ? undefined : kids[at - 1];
-  if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence);
+  if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence, prev);
 }
 
 /** 读写器的两句记号级畸形形：`get 名`（漏等号，`set` 那侧句子不同文）与 `get = 5`（等号后不是名字）。
@@ -142,15 +145,67 @@ function lowerType(n: SyntaxNode): TypeRef {
 /** `lower()` 一次调用内累计：这一份模块有没有 compress()/decompress() 调用。 */
 let packCodecUse = false;
 
+/** 本脚本**顶层**声明的函数名（S676，尺 `tmp/probe675/c_selfmethod.gd`：手臂里的 `me(1)` 引擎只发「必须是常量式」那一句，我们多发一句 `Function "me()" not found in base self.`）。内部类里的方法名不进这张表 —— 那一形没量过。 */
+let scriptFuncNames = new Set<string>();
+
+/** 内部类里**非静态**的方法名（S680，尺 `tmp/probe694/i_inner_method.gd`：手臂里写 `Inner.m(1)` 时引擎先来一句
+ *  「不能在类上直接调非静态函数」再补常量式那句）。静态那一形与嵌套两层的类都没量过，不进这张表。 */
+let scriptInstanceMethods = new Map<string, Set<string>>();
+
+/** 走 IR 之前那一路抛出的响亮拒原先不知道自己在源码哪一行（诊断的 `loc` 是 IR 才有的东西），
+ *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。这一串把当前节点压成栈，
+ *  `lower()` 出口把栈顶那一层的源码行挂到错误上 —— 引擎的解析期句正是指着**最深**那个未支持的构造。 */
+/** 走 IR 之前那一路抛出的响亮拒原先不知道自己在源码哪一行（诊断的 `loc` 是 IR 才有的东西），
+ *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。引擎的解析期句指着未支持构造
+ *  自己那一行，所以行号在**抛出的那一层**挂上 —— 栈在 unwind 时已经空了，出口拿不到。 */
+
+/** 挂行号用的小类型：`UnsupportedError` 与产物共用、签名冻在 `docs/RUNTIME_API.md`，不在它上面加字段。 */
+type LineCarrying = UnsupportedError & { line?: number };
+
+function atNode<T>(n: SyntaxNode, f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    // 最深那一层的 catch 先跑，所以挂上去的行号就是未支持构造自己那一行
+    if (e instanceof UnsupportedError) {
+      const withLine = e as LineCarrying;
+      if (withLine.line === undefined) withLine.line = n.startPosition.row + 1;
+    }
+    throw e;
+  }
+}
+
 export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
-  const m = lowerModule(tree.rootNode);
-  if (packCodecUse) m.usesPackCodec = true;
-  return m;
+  markLiteralCalls(tree.rootNode);
+  try {
+    const m = lowerModule(tree.rootNode);
+    if (packCodecUse) m.usesPackCodec = true;
+    return m;
+  } finally {
+    }
 }
 
-function lowerModule(root: SyntaxNode): Module {
+function lowerModule(n: SyntaxNode): Module {
+  return atNode(n, () => lowerModuleInner(n));
+}
+
+function lowerModuleInner(root: SyntaxNode): Module {
+  scriptFuncNames = new Set<string>(named(root).map((n) => (n.type === "function_definition" ? field(n, "name")?.text ?? "" : "")));
+  scriptInstanceMethods = new Map<string, Set<string>>();
+  for (const cls of named(root).filter((n) => n.type === "class_definition")) {
+    const cname = named(cls)[0]?.text ?? "";
+    const body = named(cls).find((n) => n.type === "class_body") ?? null;
+    if (cname === "" || body === null) continue;
+    const set = new Set<string>();
+    for (const fn of named(body).filter((n) => n.type === "function_definition")) {
+      if (fn.children.some((c) => c.type === "static_keyword")) continue;
+      const fname = named(fn)[0]?.text ?? "";
+      if (fname !== "") set.add(fname);
+    }
+    if (set.size > 0) scriptInstanceMethods.set(cname, set);
+  }
   const m: Module = {
     className: null,
     extends: null,
@@ -288,6 +343,10 @@ function lowerEnum(n: SyntaxNode): EnumDecl {
 }
 
 function lowerClass(n: SyntaxNode): ClassDecl {
+  return atNode(n, () => lowerClassInner(n));
+}
+
+function lowerClassInner(n: SyntaxNode): ClassDecl {
   checkColonHere(n, 'Expected ":" after class declaration.');
   const body = need(field(n, "body"), "类体");
   const decl: ClassDecl = {
@@ -410,6 +469,10 @@ function varStmt(v: VarDecl, c: Loc): Stmt {
 }
 
 function lowerStmt(n: SyntaxNode): Stmt {
+  return atNode(n, () => lowerStmtInner(n));
+}
+
+function lowerStmtInner(n: SyntaxNode): Stmt {
   const c = loc(n);
   switch (n.type) {
     case "variable_statement":
@@ -551,6 +614,10 @@ function lowerMatch(n: SyntaxNode): Stmt {
 }
 
 function lowerPattern(n: SyntaxNode): Pattern {
+  return atNode(n, () => lowerPatternInner(n));
+}
+
+function lowerPatternInner(n: SyntaxNode): Pattern {
   switch (n.type) {
     case "pattern_binding": {
       const id = named(n)[0];
@@ -560,6 +627,21 @@ function lowerPattern(n: SyntaxNode): Pattern {
       if (n.text === "_") return { kind: "wildcard" };
       return { kind: "const", expr: lowerExpr(n) };
     case "attribute":
+      if (armSelfBase(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      // 手臂里在**类名上**调非静态方法（S680，尺 `tmp/probe694/i_inner_method.gd`）：CST 这一形是 `attribute`
+      // （identifier + attribute_call），引擎两句 —— 先「不能在类上直接调非静态函数」，再补常量式那句。
+      {
+        const aparts = named(n);
+        const head = aparts[0];
+        const tail = aparts[1];
+        const mname = aparts.length === 2 && tail !== undefined && tail.type === "attribute_call" ? named(tail)[0]?.text ?? "" : "";
+        if (mname !== "" && head !== undefined && head.type === "identifier" && scriptInstanceMethods.get(head.text)?.has(mname) === true) {
+          throw new UnsupportedError("pattern-arm-instance-method", [
+            `Cannot call non-static function "${mname}()" on the class "${head.text}" directly. Make an instance instead.`,
+            ARM_PATTERN,
+          ].join(String.fromCharCode(10)));
+        }
+      }
       return { kind: "const", expr: lowerExpr(n) };
     case "integer":
       return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
@@ -576,11 +658,31 @@ function lowerPattern(n: SyntaxNode): Pattern {
       const np = nodePathArm(n);
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
+      const gnameEarly = named(n)[0]?.text;
+      if (gnameEarly !== undefined && ARM_FOLD_GLOBALS.has(gnameEarly) && armFoldArityFits(gnameEarly, callArgs(n)) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
+      const gnameSelf = named(n)[0]?.text;
+      if (gnameSelf !== undefined && scriptFuncNames.has(gnameSelf)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       const sig = armSignature(n);
       if (sig !== null) throw new UnsupportedError("pattern-arm-signature", [...sig, ARM_PATTERN].join(String.fromCharCode(10)));
+      // 调用手臂的三分类（S675，尺 `tmp/probe675/c_*.gd` 六格）：`int` / `len` 引擎**折叠并参与匹配**（`match 1: int("1")` 命中、
+      // `match 1: len("ab")` 走默认支）；在册但不折叠的（`str(1)` / `hash(1)`）引擎只发「必须是常量式」那一句；
+      // 不在册的名字（`type_name(1)`）仍是上面那两句。没量的名字一律不类推 —— 名单只收量过的那两名。
+      const gname = named(n)[0]?.text;
+      if (gname !== undefined && ARM_FOLD_GLOBALS.has(gname) && armFoldArityFits(gname, callArgs(n)) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
+      if (gname !== undefined && GLOBAL_CALLABLES[gname] !== undefined) {
+        const gb = GLOBAL_CALLABLES[gname].bounds;
+        const given = callArgs(n).length;
+        if (gb !== null && (given < gb[0] || given > gb[1])) {
+          throw new UnsupportedError("pattern-arm-arity", [armAritySay(gb[0], gb[1], given, gname), ARM_PATTERN].join(String.fromCharCode(10)));
+        }
+        throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      }
       if (armCalleeKnown(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
+    case "subscript":
+      // 下标当手臂撞的是**解析器**那一句（S672，尺 `tmp/probe674/m_subscript.gd` 的 `[1, 2][0]:`），不是「常量式」那一句，也不是自述。
+      throw new UnsupportedError("pattern-arm-parse", `Expected ":" or "when" after "match" patterns.`);
     case "true":
       return { kind: "lit", lit: "bool", value: true };
     case "false":
@@ -597,12 +699,64 @@ function lowerPattern(n: SyntaxNode): Pattern {
           pattern: lowerPattern(need(field(pair, "value") ?? named(pair)[1] ?? null, "字典值模式")),
         })),
       };
+    // 操作数**全是字面量**的式子当手臂：引擎折叠后参与匹配（`tmp/probe668` 十一形实测 —— `1 + 1` 匹 subject 2、
+    // `2 * 3` 匹 6、`1.5 + 1` 匹 2.5、`3 - 2` 匹 1、`4 / 2` 匹 2、`7 % 3` 匹 1、`2 ** 1` 匹 2、`-1` 匹 -1、
+    // `"a" + "b"` 匹 "ab"、`not true` 匹 false、`true and false` / `true or false` 各按折出的值）。
+    // 走的是合式构造臂那条现成的 `const` 发射；掺非常量片（`self.x + 1`）与三元、下标那几形没量过，照旧拒。
+    case "binary_operator":
+    case "unary_operator":
+    case "parenthesized_expression":
+    // 三元手臂（S678，尺 `tmp/probe675/t_*.gd` 四格）：引擎按**取走的那一支**折叠后参与匹配 ——
+    // `match 1: 1 if true else 2` 命中、`match 2` 与 `match 5` 走默认支，括号形同判（第二百十四笔①更正了「收下但永不匹配」的旧读数）。
+    case "conditional_expression": {
+      if (armAllLiterals(n)) return { kind: "const", expr: lowerExpr(n) };
+      // 叶子掺属性读那一形（`1 + self.x`）引擎发的是「必须是常量式」那句，不是我们的自述（`tmp/probe668` 实测）
+      if (armHasAttributeLeaf(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
+    }
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
 }
 
+/** 手臂式子里每一片都是字面量（嵌套的二元 / 一元 / 括号都算，只要叶子全是字面量）。 */
+function armAllLiterals(n: SyntaxNode): boolean {
+  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression" || n.type === "conditional_expression") {
+    const kids = named(n);
+    return kids.length > 0 && kids.every(armAllLiterals);
+  }
+  return ARM_LITERAL_NODES.has(n.type);
+}
+
+/** 手臂的属性读是不是 `self.<名>` 这一形（S667，尺 `tmp/probe669/{t_self,t_selfprop}.gd` 与 `tmp/probe671/b_varattr.gd`：
+ *  有这个名字的、没有的、方法是方法，引擎三格都在解析期发「必须是常量式」那句，位置是手臂那一行）。
+ *  基是变量的那一形量过是**放行**（`tmp/probe671/{a_dictvar,a_strvar,a_intvar}.gd` 三格引擎到运行期才开口），所以只拦 `self`。 */
+function armSelfBase(n: SyntaxNode): boolean {
+  const base = named(n)[0];
+  return base !== undefined && base.type === "identifier" && base.text === "self";
+}
+
+/** 式子里有没有属性读那片（`self.x`、`A.B`）—— 有的话引擎那一形走「常量式」那句拒。 */
+function armHasAttributeLeaf(n: SyntaxNode): boolean {
+  if (n.type === "attribute") return true;
+  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression" || n.type === "conditional_expression") {
+    return named(n).some(armHasAttributeLeaf);
+  }
+  return false;
+}
+
+const ARM_LITERAL_NODES = new Set([
+  "integer", "float", "string", "string_name", "node_path", "true", "false", "null",
+]);
+
+/** 手臂里量过**会折叠**的两个全局函数名（S675；`str` / `hash` 同尺量过是不折叠，其余在册名字没量过，都不进这张表）。 */
+const ARM_FOLD_GLOBALS = new Set(["int", "len"]);
+
 function lowerExpr(n: SyntaxNode): Expr {
+  return atNode(n, () => lowerExprInner(n));
+}
+
+function lowerExprInner(n: SyntaxNode): Expr {
   const c = loc(n);
   switch (n.type) {
     case "integer":
@@ -631,6 +785,11 @@ function lowerExpr(n: SyntaxNode): Expr {
         checkAfterToken(n, n.children.find((k) => !k.isNamed) ?? null, operand, `Expected expression after "${operatorOf(n)}" operator.`);
       }
       return { kind: "unary", op: operatorOf(n), operand: lowerExpr(need(named(n)[0], "一元操作数")), loc: c };
+    }
+    case "conditional_expression": {
+      const kids = named(n);
+      if (kids.length !== 3) throw new UnsupportedError("ternary", `三目的形状没量过（命名子节点 ${String(kids.length)} 片）`);
+      return { kind: "ternary", cond: lowerExpr(need(kids[1], "三目条件")), thenE: lowerExpr(need(kids[0], "三目真值支")), elseE: lowerExpr(need(kids[2], "三目假值支")), loc: c };
     }
     case "await_expression":
       return { kind: "await", operand: lowerExpr(need(named(n)[0], "await 操作数")), loc: c };
@@ -697,11 +856,15 @@ function lowerExpr(n: SyntaxNode): Expr {
     case "call": {
       const kids = named(n);
       const callee = lowerExpr(need(kids[0] ?? null, "被调用者"));
-      const argsNode = field(n, "arguments");
-      return { kind: "call", callee, args: argsNode ? named(argsNode).map(lowerExpr) : [], loc: c };
+      return { kind: "call", callee, args: callArgs(n).map(lowerExpr), loc: c };
     }
     case "binary_operator":
       return lowerBinary(n, c);
+    case "ERROR": {
+      const recovered = recoverLiteralCall(n);
+      if (recovered !== null) return recovered;
+      throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
+    }
     default:
       throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
   }
@@ -718,7 +881,7 @@ function lowerBinary(n: SyntaxNode, c: Loc): Expr {
     checkAfterToken(n, tok, field(n, "right"), `Expected expression after "${op}" operator.`);
   }
   if (MUL_LEVEL[op] === undefined) {
-    const left = lowerExpr(need(field(n, "left"), "左操作数"));
+    const left = lowerOperand(need(field(n, "left"), "左操作数"));
     const right = need(field(n, "right"), "右操作数");
     if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
     if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
@@ -729,7 +892,7 @@ function lowerBinary(n: SyntaxNode, c: Loc): Expr {
   collectMulChain(n, operands, ops);
   let at = 0;
   const climb = (min: number): Expr => {
-    let left = lowerExpr(operands[at++]!);
+    let left = lowerOperand(operands[at++]!);
     while (at - 1 < ops.length && MUL_LEVEL[ops[at - 1]!.op]! >= min) {
       const step = ops[at - 1]!;
       const right = climb(MUL_LEVEL[step.op]! + 1);
@@ -817,9 +980,105 @@ function armArgKind(n: SyntaxNode): string | null {
   }
 }
 
+/** `CsNode` 这一层不暴露 `nextNamedSibling`，兄弟关系从 `indexParents` 存的父节点上找。 */
+function nextNamedSib(n: SyntaxNode): SyntaxNode | undefined {
+  const parent = CST_PARENTS.get(n);
+  if (parent === undefined) return undefined;
+  const kids = named(parent);
+  const i = kids.indexOf(n);
+  return i < 0 ? undefined : kids[i + 1];
+}
+
+/** 预扫描：先把「字面量 ERROR + 后面那一串 `base_call` 兄弟」整段标掉。参数迭代发生在下降**之前**，
+ *  所以标记必须先行，不能等 `recoverLiteralCall` 边降边标。 */
+function markLiteralCalls(n: SyntaxNode): void {
+  if (n.type === "ERROR") {
+    const lit = named(n)[0];
+    if (lit !== undefined && (lit.type === "string_name" || lit.type === "node_path")) {
+      let sib = nextNamedSib(n);
+      while (sib !== undefined && sib.type === "base_call") {
+        CONSUMED.add(sib);
+        sib = nextNamedSib(sib);
+      }
+      if (sib !== undefined && sib.type === "binary_operator") CONSUMED.add(sib);
+    }
+  }
+  for (const c of n.children) markLiteralCalls(c);
+}
+
+/** 被 `recoverLiteralCall` 拼进上一格的兄弟节点：参数迭代要把它们滤掉，否则会再下一次重复的调用。 */
+const CONSUMED = new WeakSet<SyntaxNode>();
+
+/** `ERROR(字面量) base_call… binary_operator(base_call, 运算符, 右)` 那一形里，运算符节点的 left 槽就是折好的那条链，
+ *  CST 改不了，所以按节点存一份折好的 Expr 给 `lowerOperand` 取用。 */
+const LEFT_RECOVER = new WeakMap<SyntaxNode, Expr>();
+
+function lowerOperand(n: SyntaxNode): Expr {
+  return LEFT_RECOVER.get(n) ?? lowerExpr(n);
+}
+
 function callArgs(n: SyntaxNode): SyntaxNode[] {
   const argsNode = field(n, "arguments");
-  return argsNode === null ? [] : named(argsNode);
+  return argsNode === null ? [] : named(argsNode).filter((c) => !CONSUMED.has(c));
+}
+
+/** vendored 的 tree-sitter 语法把「`&"…"` / `^"…"` 字面量直接点方法」的**接收者**吞进 ERROR 节点，
+ *  后面那段调用仍是独立的 `base_call` 兄弟（实测 CST：`ERROR(string_name)` + `base_call("." identifier arguments)`）。
+ *  引擎那边这一形解析得下来（`tmp/probe650/654.engine.txt` 里 StringName 面 218 形都有读数），所以在下行里
+ *  把两块拼回一次属性调用，链式的每一段继续折；紧跟的是运算符节点时（S659）链挂在它的 left 槽里，也接。
+ *  形状不对（字面量以外、下一兄弟既不是 `base_call` 也不是 `binary_operator`、left 槽不是 `base_call`）一律 null，
+ *  交回原来那句「表达式 ERROR 未支持」—— 不猜别的形状。 */
+function recoverLiteralCall(err: SyntaxNode): Expr | null {
+  const lit = named(err)[0];
+  if (lit === undefined || (lit.type !== "string_name" && lit.type !== "node_path")) return null;
+  let sib = nextNamedSib(err);
+  if (sib === undefined) return null;
+  let out = lowerExpr(lit);
+  // 字面量后面紧跟运算符那一形（`&"ab".length() + "z"`）：链就挂在运算符节点的 left 槽里
+  if (sib.type === "binary_operator") {
+    const leftNode = field(sib, "left");
+    if (leftNode === null || leftNode.type !== "base_call") return null;
+    const stepped = baseCallStep(out, named(leftNode), field(leftNode, "arguments"), leftNode);
+    if (stepped === null) return null;
+    LEFT_RECOVER.set(leftNode, stepped);
+    CONSUMED.add(sib);
+    return lowerOperand(sib);
+  }
+  if (sib.type !== "base_call") return null;
+  while (sib !== undefined && sib.type === "base_call") {
+    const kids = named(sib);
+    const argsNode = field(sib, "arguments");
+    const folded = baseCallStep(out, kids, argsNode, sib);
+    if (folded === null) return null;
+    CONSUMED.add(sib);
+    out = folded;
+    sib = nextNamedSib(sib);
+  }
+  // 量过的下一形：运算符节点（`==` / `<` / `and` 三形同构，读数 tmp/probe658/cstop2.mts）——
+  // 只认它的 left 槽正是刚折完的那段 base_call 链，别的一律放弃，交回原来那句「表达式 ERROR 未支持」
+  if (sib !== undefined && sib.type === "binary_operator") {
+    const leftNode = field(sib, "left");
+    if (leftNode === null || leftNode.type !== "base_call") return null;
+    LEFT_RECOVER.set(leftNode, out);
+    CONSUMED.add(sib);
+    return lowerOperand(sib);
+  }
+  return out;
+}
+
+/** 一段 `.名字(实参)` 或 `.名字`：方法名只认 `identifier`；别的形状（下标、属性读）没量过就折不出来，
+ *  由 `recoverLiteralCall` 整体放弃，交回原来那句「表达式 ERROR 未支持」—— 不回半截结果。 */
+function baseCallStep(obj: Expr, kids: SyntaxNode[], argsNode: SyntaxNode | null, at: SyntaxNode): Expr | null {
+  const c = loc(at);
+  const head = kids[0];
+  if (head === undefined) return null;
+  if (head.type === "identifier") {
+    const name = head.text;
+    if (argsNode === null) return { kind: "attribute", obj, name, loc: c };
+    const args = named(argsNode).filter((x) => !CONSUMED.has(x)).map(lowerExpr);
+    return { kind: "call", callee: { kind: "attribute", obj, name, loc: c }, args, loc: c };
+  }
+  return null;
 }
 
 function ctorAccepts(name: string, kinds: Array<string | null>): boolean {
@@ -854,6 +1113,22 @@ function ctorArm(n: SyntaxNode): boolean {
 }
 
 /** 手臂那句「必须是常量式」：引擎在手臂里报完元数那句紧跟这一句，实参是运行期表达式时只发这一句（`arm-runtime-expr`）。 */
+/** 手臂里的全局调用越元数那一句（S679，尺 `tmp/probe689/armarity.mts` 十二格：七名越界两向 + 三名合式对照）。
+ *  引擎在常量式那句**之前**先发元数那句，数取声明的全部数（与 `arityDiag` 同一模板）。 */
+function armAritySay(min: number, max: number, given: number, name: string): string {
+  return given < min
+    ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(given)}.`
+    : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(given)}.`;
+}
+
+/** 折叠名册里的名字先看元数：`len("a", "b")` 这类越界形引擎发的是元数那句 + 常量式那句（S679），
+ *  不能因为名字在册就折成常量臂。界内才走折叠。 */
+function armFoldArityFits(name: string, args: readonly unknown[]): boolean {
+  const row = GLOBAL_CALLABLES[name];
+  if (row === undefined || row.bounds === null) return true;
+  return args.length >= row.bounds[0] && args.length <= row.bounds[1];
+}
+
 const ARM_PATTERN = 'Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").';
 
 /** 类名在那两张表上（合法表 + 没有构造子的七支）＝ 这一形是「实参认不出来」那一式，引擎只发 pattern 那一句。 */

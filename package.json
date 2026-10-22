@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@12.13.0",
-  "description": "将 .gds 转义为 js 运行（monorepo 根：只放工具链与门脚本，对外面在 packages/gds2js）",
+  "description": "将 gdscript 转义为 js 运行",
   "engines": {
     "node": ">=25"
   },
@@ -50,9 +50,9 @@
     "tree-sitter-cli": "^0.27.1",
     "tsdown": "^0.22.14",
     "tsx": "^4.23.15",
-    "turbo": "^2.11.8",
+    "turbo": "^2.11.10",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4",
-    "vitest": "^5.0.4"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   }
 }

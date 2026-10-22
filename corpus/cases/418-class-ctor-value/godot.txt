@@ -1,0 +1,5 @@
+GDScript::new
+25
+true
+GDScript::new
+<RefCounted#号>
