@@ -394,6 +394,11 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     if (t.init === null) continue;
     /** 定形容器的元素/键/值不合式：引擎只报**第一个**，而且两句都在声明那一行（读数 `tmp/d6/l5.txt` 六格）。
      *  内部型是脚本类名时只发第二句（`Array[Inner]` 那一格，读数 `tmp/d6/n1.txt`）。 */
+    /** `<类名>.new()` 的静态型就是那个类名（s5 的 `Two.new()` 进 `Array[One]` 要报元素那一句）。 */
+    const slotOf = (e: Expr): NonNullable<StaticType> | null => {
+      if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.name === "new" && e.callee.obj.kind === "ident" && classNames.has(e.callee.obj.name)) return e.callee.obj.name as NonNullable<StaticType>;
+      return slotSource(e);
+    };
     const holds = (kind: string, st: NonNullable<StaticType>): boolean =>
       classNames.has(kind)
         ? st === kind
@@ -412,7 +417,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         let done = false;
         for (const it of t.init.items) {
           if (done) break;
-          const st = slotSource(it);
+          const st = slotOf(it);
           if (st === null || holds(kind, st)) continue;
           done = true;
           report(st, kind, `Cannot have an element of type "${st}" in an array of type "Array[${kind}]".`);
@@ -427,13 +432,13 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         let done = false;
         for (const en of t.init.entries) {
           if (done) break;
-          const ks = slotSource(en.key);
+          const ks = slotOf(en.key);
           if (ks !== null && !holds(keyKind, ks)) {
             done = true;
             report(ks, keyKind, `Cannot have a key of type "${ks}" in a dictionary of type "${text}".`);
             break;
           }
-          const vs = slotSource(en.value);
+          const vs = slotOf(en.value);
           if (vs !== null && !holds(valKind, vs)) {
             done = true;
             report(vs, valKind, `Cannot have a value of type "${vs}" in a dictionary of type "${text}".`);
