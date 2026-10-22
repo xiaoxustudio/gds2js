@@ -88,6 +88,26 @@ export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
   get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0], slice: [1, 2],
 };
 
+/** `Callable` 面装箱直调的上下界（尺 `tmp/probe644/sc645.gd` 廿一格）：越界两向都报**声明的全部数**，
+ *  所以每一非变参名的两界同数；`bind` 是变参、零支收下（实测 `Callable().bind()` 原样回同一只），
+ *  上界用最大安全整数占位（越不出界，那句里的数永远读不到它）。
+ *  没量过的名不进表：`call` / `call_deferred` / `rpc` / `rpc_id`（变参的界没单独量）、
+ *  `emit` / `disconnect`（引擎在取返回值那一步先给 `Trying to get a return value of a method that returns "void"`）。 */
+export const CALLABLE_METHOD_ARITY: Record<string, [number, number]> = {
+  bind: [0, Number.MAX_SAFE_INTEGER], bindv: [1, 1], callv: [1, 1], create: [2, 2],
+  get_argument_count: [0, 0], get_bound_arguments: [0, 0], get_bound_arguments_count: [0, 0],
+  get_method: [0, 0], get_object: [0, 0], get_object_id: [0, 0], get_unbound_arguments_count: [0, 0],
+  hash: [0, 0], is_custom: [0, 0], is_null: [0, 0], is_standard: [0, 0], is_valid: [0, 0], unbind: [1, 1],
+};
+
+/** `Signal` 面同一把尺（同支探头八名 × 越界两向）：`connect` 报 2、`is_connected` 报 1、其余六名报 0。
+ *  `connect` 的两界是 `[1, 2]` 而不是 `[2, 2]` —— `flags` 有默认值，一支实参引擎照样连上
+ *  （S546 那批重复连/空 Callable 的读数都是一支形），只是越界那句报的是声明的全部数 2。 */
+export const SIGNAL_METHOD_ARITY: Record<string, [number, number]> = {
+  connect: [1, 2], get_connections: [0, 0], get_name: [0, 0], get_object: [0, 0],
+  get_object_id: [0, 0], has_connections: [0, 0], is_connected: [1, 1], is_null: [0, 0],
+};
+
 
 const PACK_NINE: Record<string, boolean> = {
   PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
@@ -304,6 +324,7 @@ export function faceArity(face: string, name: string): [number, number] | null {
     : face === "String" ? STRING_METHOD_ARITY
       : face === "StringName" ? STRING_NAME_METHOD_ARITY
     : face === "NodePath" ? NODE_PATH_METHOD_ARITY
+    : face === "Callable" ? CALLABLE_METHOD_ARITY : face === "Signal" ? SIGNAL_METHOD_ARITY
     : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_BYTE_ARITY : PACK_METHOD_ARITY_WITH_BYTES)
       : VALUE_METHOD_ARITY[face];
   if (table === undefined || table === null) return null;

@@ -606,6 +606,23 @@ function callSlot(recv: unknown, name: string, args: Variant[]): Variant | null 
   return recv instanceof GdScriptObject ? recv.__gdDispatch(name, args) : null;
 }
 
+/** 脚本对象**直调**那一形的元数句（尺 `tmp/probe644/sc645.gd` g32..g37 与 `so645{c,d}.gd`）：少给报**必填数**、
+ *  多给报**全部数**（`top(a, b = 1, c = 2)` 的 `top()` 报 Expected 1、`top(1,2,3,4)` 报 Expected 3），
+ *  base 写「`<原生基类> (<动态类名>)`」—— `class Kid extends One` 也给 `RefCounted (Kid)`。
+ *  判据只认发射器登记过的方法表：表外的名不能证「不存在」（原生那一档还没铺完），照旧走响亮拒。 */
+function scriptMethodSay(recv: unknown, name: string, args: Variant[]): string | null {
+  if (!(recv instanceof GdScriptObject)) return null;
+  const bounds = methodAritiesOf(recv)?.[name];
+  if (bounds === undefined) return null;
+  if (args.length >= bounds[0] && args.length <= bounds[1]) return null;
+  const cls = classNameOf(recv);
+  const base = nativeBaseOf(recv);
+  if (cls === null || base === null) {
+    throw new UnsupportedError("script-method-label", `${name}() 越元数，但这台实例的类名或原生基类还没登记，发不出引擎那句 base 标签`);
+  }
+  return `Invalid call to function '${name}' in base '${base} (${cls})'. Expected ${String(args.length < bounds[0] ? bounds[0] : bounds[1])} argument(s).`;
+}
+
 /** 接收者（实例、类值、或「脚本值」那一格）→ 它的 desc；不是脚本类给 null。 */
 function descFor(inner: unknown): ClassDesc | null {
   return descOf(inner);
@@ -699,10 +716,9 @@ function callableCall(box: CallableBox, args: Variant[]): Variant {
   return callCallableBox(box, args);
 }
 
-/** `unbind(n)` 的实参：只量过 0 与正 int；负数、float、缺参与多参之外的那几形没读数，响亮拒。 */
+/** `unbind(n)` 的实参：元数由 `callableMethod` 入口那句守住（只可能是一支），这里只管值 ——
+ *  只量过 0 与正 int；负数、float、缺参与多参之外的那几形没读数，响亮拒。 */
 function unbindCountArg(args: readonly Variant[]): number {
-  if (args.length === 0) throw new GodotRuntimeError("arity", `Too few arguments for "unbind()" call. Expected at least 1 but received 0.`);
-  if (args.length > 1) throw new GodotRuntimeError("arity", `Too many arguments for "unbind()" call. Expected at most 1 but received ${String(args.length)}.`);
   const v = args[0] as Variant;
   if (v.t !== Tag.INT) throw new UnsupportedError("callable-unbind-arg", `Callable.unbind() 的实参只量过 int（收到 ${tagName(v.t)}）`);
   const n = intToNum(v.v as IntPayload);
@@ -759,6 +775,8 @@ const CALLABLE_METHOD_NAMES = new Set([
 ]);
 
 function callableMethod(box: CallableBox, name: string, args: Variant[]): Variant {
+  const cbSay = nativeAritySay("Callable", name, args.length);
+  if (cbSay !== null) throw new GodotRuntimeError("callable-arity", cbSay);
   const bound = boundArgsOf(box);
   const empty = isNullCallable(box);
   switch (name) {
@@ -783,9 +801,6 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
     case "bindv": {
       if (box.detachedOwner !== null || box.invalidMethod) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bindv() 那一形没量过");
       // S571：bindv 与 bind 同一支（新绑的实参排在旧绑定串之前，get_bound_arguments 实测 `max.bind(1).bindv([2])` 给 [2, 1]）；空数组原样回同一只
-      if (args.length !== 1) {
-        throw new UnsupportedError("callable-bindv-arity", "bindv() 的元数没量过（只量过恰好 1 个 Array 实参）");
-      }
       const arr = args[0] as Variant;
       if (!(arr.v instanceof GArray)) {
         throw new GodotRuntimeError(
@@ -1097,6 +1112,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
 
     if (inner instanceof Signal) {
+      const sgSay = nativeAritySay("Signal", name, args.length);
+      if (sgSay !== null) throw new GodotRuntimeError("signal-arity", sgSay);
       if (name === "emit") {
         inner.emitList(args);
         return V.nil();
@@ -1367,6 +1384,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       return getMeta(obj, args[0] as Variant, args[1]);
     }
 
+    const smSay = scriptMethodSay(inner, name, args);
+    if (smSay !== null) throw new GodotRuntimeError("script-method-arity", smSay);
     const direct = callSlot(inner, name, args);
     if (direct !== null) return direct;
 
