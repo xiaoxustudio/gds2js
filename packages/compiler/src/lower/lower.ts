@@ -71,12 +71,15 @@ function tokenOf(n: SyntaxNode, text: string): SyntaxNode | null {
 }
 
 /** 换行落在这些位置时，引擎在解析期就拒；句子照抄实测那十句（`tmp/probe-eol/`，语料 304–313 各钉一句）。 */
-function continuationErr(sentence: string): never {
-  throw new UnsupportedError("line-continuation", sentence);
+function continuationErr(sentence: string, at?: SyntaxNode): never {
+  const e = new UnsupportedError("line-continuation", sentence) as LineCarrying;
+  // 引擎指的是**断掉那一处**的行（值落在哪行、冒号前那个 token 在哪行），不是整条语句的头一行
+  if (at !== undefined) e.line = at.startPosition.row + 1;
+  throw e;
 }
 
 function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxNode | null, sentence: string): void {
-  if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence);
+  if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence, token);
 }
 
 /** 复合赋值那一支：引擎对 11 种运算符换行给的都是 `=` 那一句（`tmp/probe-eol/readings5.txt`）。 */
@@ -97,7 +100,7 @@ function checkColonHere(n: SyntaxNode, sentence: string): void {
   const at = kids.findIndex((c) => !c.isNamed && c.text === ":");
   const colon = at < 1 ? undefined : kids[at];
   const prev = at < 1 ? undefined : kids[at - 1];
-  if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence);
+  if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence, prev);
 }
 
 /** 读写器的两句记号级畸形形：`get 名`（漏等号，`set` 那侧句子不同文）与 `get = 5`（等号后不是名字）。
@@ -142,15 +145,45 @@ function lowerType(n: SyntaxNode): TypeRef {
 /** `lower()` 一次调用内累计：这一份模块有没有 compress()/decompress() 调用。 */
 let packCodecUse = false;
 
+/** 走 IR 之前那一路抛出的响亮拒原先不知道自己在源码哪一行（诊断的 `loc` 是 IR 才有的东西），
+ *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。这一串把当前节点压成栈，
+ *  `lower()` 出口把栈顶那一层的源码行挂到错误上 —— 引擎的解析期句正是指着**最深**那个未支持的构造。 */
+/** 走 IR 之前那一路抛出的响亮拒原先不知道自己在源码哪一行（诊断的 `loc` 是 IR 才有的东西），
+ *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。引擎的解析期句指着未支持构造
+ *  自己那一行，所以行号在**抛出的那一层**挂上 —— 栈在 unwind 时已经空了，出口拿不到。 */
+
+/** 挂行号用的小类型：`UnsupportedError` 与产物共用、签名冻在 `docs/RUNTIME_API.md`，不在它上面加字段。 */
+type LineCarrying = UnsupportedError & { line?: number };
+
+function atNode<T>(n: SyntaxNode, f: () => T): T {
+  try {
+    return f();
+  } catch (e) {
+    // 最深那一层的 catch 先跑，所以挂上去的行号就是未支持构造自己那一行
+    if (e instanceof UnsupportedError) {
+      const withLine = e as LineCarrying;
+      if (withLine.line === undefined) withLine.line = n.startPosition.row + 1;
+    }
+    throw e;
+  }
+}
+
 export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
-  const m = lowerModule(tree.rootNode);
-  if (packCodecUse) m.usesPackCodec = true;
-  return m;
+  try {
+    const m = lowerModule(tree.rootNode);
+    if (packCodecUse) m.usesPackCodec = true;
+    return m;
+  } finally {
+    }
 }
 
-function lowerModule(root: SyntaxNode): Module {
+function lowerModule(n: SyntaxNode): Module {
+  return atNode(n, () => lowerModuleInner(n));
+}
+
+function lowerModuleInner(root: SyntaxNode): Module {
   const m: Module = {
     className: null,
     extends: null,
@@ -288,6 +321,10 @@ function lowerEnum(n: SyntaxNode): EnumDecl {
 }
 
 function lowerClass(n: SyntaxNode): ClassDecl {
+  return atNode(n, () => lowerClassInner(n));
+}
+
+function lowerClassInner(n: SyntaxNode): ClassDecl {
   checkColonHere(n, 'Expected ":" after class declaration.');
   const body = need(field(n, "body"), "类体");
   const decl: ClassDecl = {
@@ -410,6 +447,10 @@ function varStmt(v: VarDecl, c: Loc): Stmt {
 }
 
 function lowerStmt(n: SyntaxNode): Stmt {
+  return atNode(n, () => lowerStmtInner(n));
+}
+
+function lowerStmtInner(n: SyntaxNode): Stmt {
   const c = loc(n);
   switch (n.type) {
     case "variable_statement":
@@ -551,6 +592,10 @@ function lowerMatch(n: SyntaxNode): Stmt {
 }
 
 function lowerPattern(n: SyntaxNode): Pattern {
+  return atNode(n, () => lowerPatternInner(n));
+}
+
+function lowerPatternInner(n: SyntaxNode): Pattern {
   switch (n.type) {
     case "pattern_binding": {
       const id = named(n)[0];
@@ -603,6 +648,10 @@ function lowerPattern(n: SyntaxNode): Pattern {
 }
 
 function lowerExpr(n: SyntaxNode): Expr {
+  return atNode(n, () => lowerExprInner(n));
+}
+
+function lowerExprInner(n: SyntaxNode): Expr {
   const c = loc(n);
   switch (n.type) {
     case "integer":
