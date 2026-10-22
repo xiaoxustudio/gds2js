@@ -398,10 +398,25 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.name === "new" && e.callee.obj.kind === "ident" && classNames.has(e.callee.obj.name)) return e.callee.obj.name as NonNullable<StaticType>;
       return slotSource(e);
     };
-    /** 槽与源两格的「对象形」判据：脚本类名与 `Object` / `RefCounted` / `Node` 都算（w2 / w3 / w5 量到父类与子类实例一律收）。 */
+    /** 类名槽按**亲缘**放行：w2 子进父、w3 父进子都收，s5 两支无关系的类照拒。 */
+    const parentOf = new Map<string, string>();
+    const collectParents = (c: ClassDecl): void => {
+      if (c.extends !== null && c.extends !== "") parentOf.set(c.name, c.extends);
+      for (const inner of c.innerClasses) collectParents(inner);
+    };
+    for (const c of m.innerClasses) collectParents(c);
+    const related = (a: string, b: string): boolean => {
+      for (let x: string | undefined = a; x !== undefined; x = parentOf.get(x)) if (x === b) return true;
+      for (let x: string | undefined = b; x !== undefined; x = parentOf.get(x)) if (x === a) return true;
+      return false;
+    };
     const isObjectFace = (x: string): boolean => classNames.has(x) || NATIVE_CLASS_SLOTS.has(x);
-    const holds = (kind: string, st: NonNullable<StaticType>): boolean =>
-      isObjectFace(kind) ? st === "null" || isObjectFace(st) : canHold(kind, st);
+    const holds = (kind: string, st: NonNullable<StaticType>): boolean => {
+      if (st === "null") return true;
+      if (NATIVE_CLASS_SLOTS.has(kind)) return isObjectFace(st);
+      if (classNames.has(kind)) return classNames.has(st) && related(kind, st);
+      return canHold(kind, st);
+    };
     const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
       if (!isObjectFace(kind) && !isObjectFace(st)) {
         diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
