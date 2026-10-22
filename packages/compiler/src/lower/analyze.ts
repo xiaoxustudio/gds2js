@@ -25,6 +25,7 @@ import {
   PACK_METHOD_ARITY,
   PACK_METHOD_ARITY_WITH_BYTES,
   STRING_METHOD_ARITY,
+  STRING_NAME_METHOD_ARITY,
   VALUE_METHOD_ARITY,
   valueAttrKind,
 } from "@gds2js/runtime/runtime/face-arity";
@@ -2164,7 +2165,8 @@ function flattenBodies(m: Module): Record<string, unknown>[][] {
  *  `Array.resize(1)` 之类引擎发的是「非静态那一句」，表外名发的是「找不到成员那两句」，**不是**「未声明的标识符」。 */
 function classFaceArity(t: string): Record<string, [number, number]> | undefined {
   if (t === "Array") return ARRAY_METHOD_ARITY;
-  if (t === "String" || t === "StringName") return STRING_METHOD_ARITY;
+  if (t === "String") return STRING_METHOD_ARITY;
+  if (t === "StringName") return STRING_NAME_METHOD_ARITY;
   if (t === "NodePath") return NODE_PATH_METHOD_ARITY;
   if (t === "Dictionary") return DICT_METHOD_ARITY;
   return undefined;
@@ -2837,7 +2839,7 @@ function chainRecvFace(e: Expr, ownerOf: (x: Expr) => string | null): string | n
 
 /** 链子那一形的元数表与那句的 code：三面名字面另有三张表，其余（值型五支 + pack 九支）共用 `VALUE_METHOD_ARITY`。 */
 function chainArityFace(face: string): { table: Record<string, [number, number]>; code: string } | null {
-  if (face === "String" || face === "StringName") return { table: STRING_METHOD_ARITY, code: face === "String" ? "string-arity" : "string-name-arity" };
+  if (face === "String" || face === "StringName") return { table: face === "String" ? STRING_METHOD_ARITY : STRING_NAME_METHOD_ARITY, code: face === "String" ? "string-arity" : "string-name-arity" };
   if (face === "NodePath") return { table: NODE_PATH_METHOD_ARITY, code: "node-path-arity" };
   return { table: VALUE_METHOD_ARITY[face] ?? {}, code: "value-arity" };
 }
@@ -3038,7 +3040,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const name = n.name;
       if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
-      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" || face === "StringName" ? STRING_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
+      const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : face === "StringName" ? STRING_NAME_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
       const refused = PACK_TYPE_NAMES.has(face) || face === "Array" || face === "String";
       if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
         // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
@@ -3218,7 +3220,7 @@ function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
 const STRINGNAME_FACE: NamedFace = {
   type: "StringName",
   lit: "string_name",
-  arity: STRING_METHOD_ARITY,
+  arity: STRING_NAME_METHOD_ARITY,
   arityCode: "string-name-arity",
 };
 
