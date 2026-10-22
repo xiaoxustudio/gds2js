@@ -304,6 +304,8 @@ export class GArray {
   elem: ElemKind | null = null;
   /** `Array(base, TYPE_OBJECT, &"类名", null)` 那一族的类名（S613）；空串就是纯 `Array[Object]`。 */
   className = "";
+  /** `Array[脚本类名]` 标注里的那个类名（S621 的 q6..q12）：句子与面比对用它，`get_typed_class_name()` 用上面那格。 */
+  scriptName = "";
   private ro = false;
 
   /** `make_read_only()` 置的那一面：浅的，只挡这个容器自己的写（S403 那一族的读数）。 */
@@ -957,9 +959,22 @@ export function stampClassArray(v: Variant, cls: string, fromLiteral: boolean): 
   return stampArray(v, "Object", fromLiteral, cls);
 }
 
+/** `Array[脚本类名]` 那一族（S621 的 q7 / q12）：元素按 Object 收，标注名进 `scriptName`，`get_typed_class_name()` 印原生基类。 */
+export function stampScriptArray(v: Variant, name: string, nativeBase: string, fromLiteral: boolean): Variant {
+  const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
+  if (g === null) throw new UnsupportedError("typed-assign", `Array[${name}] 的初值不是数组`);
+  if (!fromLiteral) return assignContainer(v, `Array[${name}]`);
+  g.stampElem("Object");
+  g.className = nativeBase;
+  g.scriptName = name;
+  return v;
+}
+
 /** 容器值自己的类型文本（S618 那四句都用它）：未定型给基名，定型给带元素型 / 类名 / 键值型的拼法。 */
 export function arrayTypeLabel(g: GArray): string {
-  return g.elem === null ? "Array" : `Array[${g.className !== "" ? g.className : g.elem}]`;
+  if (g.elem === null) return "Array";
+  const name = g.scriptName !== "" ? g.scriptName : g.className;
+  return `Array[${name === "" ? g.elem : name}]`;
 }
 
 /** `word` 是不带冠词的引擎拼法（S619 实参位那两句要用）。 */

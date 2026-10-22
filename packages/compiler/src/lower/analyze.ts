@@ -186,6 +186,23 @@ function assignTargetName(t: unknown): string | null {
   return null;
 }
 
+/** 只量过的标量源名（q2 / q3 / q5）：其余源形没读数，照旧留运行期。 */
+/** 字面量容器自己的文本：非空的那一形按首个元素 / 首格的键值推（q4 给 `Array[int]`），空的那一形没量、留基名。 */
+function literalFaceText(e: Expr, kind: string): string {
+  if (e.kind === "array") {
+    const first = e.items.length > 0 ? slotSource(e.items[0]!) : null;
+    return first === null ? kind : `${kind}[${first}]`;
+  }
+  if (e.kind === "dict" && e.entries.length > 0) {
+    const k = slotSource(e.entries[0]!.key);
+    const v = slotSource(e.entries[0]!.value);
+    return k === null || v === null ? kind : `${kind}[${k}, ${v}]`;
+  }
+  return kind;
+}
+
+const MEASURED_SCALAR_SOURCES = new Set(["int", "String"]);
+
 /** 标注文本是不是定形容器（嵌套那一形引擎另有句子，不进这一支） */
 function isCollText(name: string): boolean {
   return /^(Array|Dictionary)\[[^\[]+\]$/.test(name);
@@ -319,6 +336,42 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       diags.push({
         code: "typed-collection-assign",
         message: `Cannot assign a value of type ${t.srcAnn.name} to variable "${t.varName}" with specified type ${targetAnn}.`,
+        loc: t.loc,
+      });
+      continue;
+    }
+    // 标量源与交叉容器源进定形槽：声明位两句（q2 / q3），字面量交叉只发第二句（q4），再赋值位一句（q5）
+    if (t.varName !== undefined && targetAnn !== null && isCollText(targetAnn) && t.init !== null) {
+      const srcKind = t.init.kind === "array" ? "Array" : t.init.kind === "dict" ? "Dictionary" : null;
+      const wantKind = targetAnn.startsWith("Array") ? "Array" : "Dictionary";
+      if (srcKind !== null && srcKind !== wantKind) {
+        diags.push({
+          code: "typed-collection-assign",
+          message: `Cannot assign a value of type ${literalFaceText(t.init, srcKind)} to variable "${t.varName}" with specified type ${targetAnn}.`,
+          loc: t.loc,
+        });
+        continue;
+      }
+      const st = srcKind === null ? slotSource(t.init) : null;
+      if (st !== null && MEASURED_SCALAR_SOURCES.has(st)) {
+        diags.push({
+          code: "typed-collection-assign-as",
+          message: `Cannot assign a value of type "${st}" as "${targetAnn}".`,
+          loc: t.loc,
+        });
+        diags.push({
+          code: "typed-collection-assign",
+          message: `Cannot assign a value of type ${st} to variable "${t.varName}" with specified type ${targetAnn}.`,
+          loc: t.loc,
+        });
+        continue;
+      }
+    }
+    if (t.assignStmt === true && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null &&
+      t.srcAnn.kind === "named" && !isCollText(t.srcAnn.name) && MEASURED_SCALAR_SOURCES.has(t.srcAnn.name)) {
+      diags.push({
+        code: "typed-collection-assign-value",
+        message: `Value of type "${t.srcAnn.name}" cannot be assigned to a variable of type "${targetAnn}".`,
         loc: t.loc,
       });
       continue;

@@ -270,6 +270,8 @@ let MODULE_FUNCS = new Set<string>();
 /** 认得到的 callee 的形参表（S619 实参位那两句要用）。 */
 let PARAM_TYPES = new Map<string, Param[]>();
 let MODULE_CLASSES = new Set<string>();
+/** 脚本类名 → 原生基类名：`Array[Inner]` 的标注名进句子里，`get_typed_class_name()` 印基类（读数 tmp/probe621/q7）。 */
+let SCRIPT_BASE = new Map<string, string>();
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
 let INNER_CLASSES = new Map<string, ClassDecl>();
 /** 被同模块内部类当基类的那些类名：它们的构造要走协议形状。 */
@@ -408,6 +410,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   };
   for (const c of m.innerClasses) collectInner(c);
   VAR_TYPES = new Map(m.vars.map((v) => [v.name, v.type]));
+  SCRIPT_BASE = new Map();
+  for (const c of m.innerClasses) collectScriptBase(c, SCRIPT_BASE);
   MODULE_CLASSES = new Set([
     ...m.innerClasses.map((c) => c.name),
     ...(m.className ? [m.className] : []),
@@ -970,6 +974,12 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
   };
   body.forEach(stmt);
   return out;
+}
+
+/** 只认没写 `extends` 的内部类：`Array[脚本类名]` 的标注名与原生基类名两格都从这儿来（其余形没量）。 */
+function collectScriptBase(c: ClassDecl, out: Map<string, string>): void {
+  if (c.extends === null) out.set(c.name, "RefCounted");
+  for (const inner of c.innerClasses) collectScriptBase(inner, out);
 }
 
 function emitFunc(f: FuncDecl, base = 0): string[] {
@@ -3272,6 +3282,8 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   if (m[1] === "Array") {
     const kind = inner.trim();
     if (NATIVE_CLASS_SLOTS.has(kind)) return `rt.stampClassArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
+    const scriptBase = SCRIPT_BASE.get(kind);
+    if (scriptBase !== undefined) return `rt.stampScriptArray(${raw}, ${JSON.stringify(kind)}, ${JSON.stringify(scriptBase)}, ${String(fromLiteral)})`;
     if (!isElemKind(kind)) return raw;
     return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
   }
@@ -3292,7 +3304,7 @@ function containerAnnText(ann: TypeRef | null): string | null {
   const parts = inner.split(",").map((x) => x.trim());
   if (m[1] === "Array") {
     const one = parts[0] ?? "";
-    return parts.length === 1 && (isElemKind(one) || NATIVE_CLASS_SLOTS.has(one)) ? `Array[${one}]` : null;
+    return parts.length === 1 && (isElemKind(one) || NATIVE_CLASS_SLOTS.has(one) || SCRIPT_BASE.has(one)) ? `Array[${one}]` : null;
   }
   return parts.length === 2 && isElemKind(parts[0] ?? "") && isElemKind(parts[1] ?? "")
     ? `Dictionary[${parts[0]}, ${parts[1]}]` : null;
@@ -3312,6 +3324,8 @@ function packTypedArgs(fnName: string, argExprs: Expr[], emitted: string[], recv
       const parts = text.replace(/^(Array|Dictionary)\[|\]$/g, "").split(",").map((x) => x.trim());
       const one = parts[0] ?? "";
       if (text.startsWith("Array[")) {
+        const scriptBase = SCRIPT_BASE.get(one);
+        if (scriptBase !== undefined) return `rt.stampScriptArray(${a}, ${JSON.stringify(one)}, ${JSON.stringify(scriptBase)}, true)`;
         return NATIVE_CLASS_SLOTS.has(one)
           ? `rt.stampClassArray(${a}, ${JSON.stringify(one)}, true)`
           : `rt.stampArray(${a}, ${JSON.stringify(one)}, true)`;
