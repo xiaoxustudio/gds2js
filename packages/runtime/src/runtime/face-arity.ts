@@ -282,6 +282,16 @@ export const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
   Dictionary: ["set", "is_typed", "is_same_typed"],
 };
 
+/** 装箱直调越元数那一句（尺 `tmp/probe639/{names,call}.mjs` 与 `tmp/probe636/np642.gd`）：九格九面一字一样 ——
+ *  `get_name_count` 给 1 支报 0、`get_name` 给 0 支与 2 支都报 1、`size` / `length` / `get_luminance` 给 1 支报 0、
+ *  `append` 给 2 支报 1、`lerp` 给 4 支报 2、`slice` 给 0 支与 4 支都报 2。数恒取**声明的全部数**（与 S637 同一条），
+ *  名字不在表里或实参在界内返回 null，由调用方发自己那一句。 */
+export function nativeAritySay(face: string, name: string, given: number): string | null {
+  const b = faceArity(face, name);
+  if (b === null || (given >= b[0] && given <= b[1])) return null;
+  return `Invalid call to function '${name}' in base '${face}'. Expected ${String(b[1])} argument(s).`;
+}
+
 /** 这个名字在这一面上存不存在：元数表里的、或表外但量过存在的都算存在（S627 的 u1 / u4 / u6 / u7 / u10）。 */
 export function faceMemberKnown(face: string, name: string): boolean {
   if (faceArity(face, name) !== null) return true;

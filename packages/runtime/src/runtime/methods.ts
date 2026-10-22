@@ -18,7 +18,7 @@ import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
-import { faceArity, faceMemberKnown, valueAttrKind } from "./face-arity";
+import { faceArity, faceMemberKnown, nativeAritySay, valueAttrKind } from "./face-arity";
 
 /** 六支 vector 面：属性名只有 x / y / z / w，且在派发里先回，所以「非成员即表外」这一判对它们安全。 */
 const VECTOR_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i"]);
@@ -1034,6 +1034,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (!faceMemberKnown("StringName", name)) {
       throw new GodotRuntimeError("stringname-no-method", `Invalid call. Nonexistent function '${name}' in base 'StringName'.`);
     }
+    const snSay = nativeAritySay("StringName", name, args.length);
+    if (snSay !== null) throw new GodotRuntimeError("stringname-arity", snSay);
     try {
       return method(V.str(obj.v as string), name, args);
     } catch (e) {
@@ -1056,8 +1058,14 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (inner instanceof GVector4i) return vector4iMethod(inner, name, args);
     if (inner instanceof GVector2i) return vector2iMethod(inner, name, args);
     if (inner instanceof GVector3i) return vector3iMethod(inner, name, args);
-    if (inner instanceof GColor) return colorMethod(inner, name, args);
+    if (inner instanceof GColor) {
+      const colSay = nativeAritySay("Color", name, args.length);
+      if (colSay !== null) throw new GodotRuntimeError("color-arity", colSay);
+      return colorMethod(inner, name, args);
+    }
     if (inner instanceof GBytes) {
+      const packSay = nativeAritySay(packTypeName(inner.kind), name, args.length);
+      if (packSay !== null) throw new GodotRuntimeError("packed-arity", packSay);
       if (name === "bswap16") return bytesBswap(inner, 16, args);
       if (name === "bswap32") return bytesBswap(inner, 32, args);
       if (name === "bswap64") return bytesBswap(inner, 64, args);
@@ -1173,7 +1181,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
 
     const npv = asNodePath(obj);
-    if (npv !== null) return nodePathMethod(npv, name, args);
+    if (npv !== null) {
+      const npSay = nativeAritySay("NodePath", name, args.length);
+      if (npSay !== null) throw new GodotRuntimeError("node-path-arity", npSay);
+      return nodePathMethod(npv, name, args);
+    }
 
     if (isWeakRefBox(inner)) {
       if (name !== "get_ref") {
@@ -1359,6 +1371,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   switch (obj.t) {
     case Tag.ARRAY: {
       const a = obj.v as GArray;
+      const arrSay = nativeAritySay("Array", name, args.length);
+      if (arrSay !== null) throw new GodotRuntimeError("array-arity", arrSay);
       const roAt = ARRAY_RO_WRITE[name];
       if (roAt !== undefined && a.isReadOnly()) return readOnlyWrite(roAt, "Array", name);
       switch (name) {
@@ -1687,6 +1701,8 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     }
     case Tag.STRING: {
       const s = obj.v as string;
+      const strSay = nativeAritySay("String", name, args.length);
+      if (strSay !== null) throw new GodotRuntimeError("string-arity", strSay);
       switch (name) {
         case "length":
           return V.int(strLength(s));
