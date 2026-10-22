@@ -1,5 +1,5 @@
 import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
-import { GArray, GDict, registerObjectLabelHook, registerScriptPropsHook } from "./values";
+import { GArray, GDict, registerClassFaceCheck, registerObjectLabelHook, registerScriptPropsHook } from "./values";
 import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
 import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
@@ -466,6 +466,12 @@ export function scriptLabelOf(target: unknown): string | null {
 }
 
 // Callable 标签里「挂在某个脚本类上的那两支」要知道类的身份，而本模块才是知道那一层的地方。
+registerClassFaceCheck((cls, v) => {
+  if (v.t !== Tag.OBJECT) return false;
+  for (let d = descOf(v.v); d !== null; d = d.base) if (d.name === cls) return true;
+  return false;
+});
+
 registerCallableLabelHook((box) => {
   if (box.builtin !== null && box.name !== null) return `${box.builtin}::${box.name}`;
   const inner = box.object?.v;

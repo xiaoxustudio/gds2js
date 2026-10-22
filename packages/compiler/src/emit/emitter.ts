@@ -272,6 +272,8 @@ let PARAM_TYPES = new Map<string, Param[]>();
 let MODULE_CLASSES = new Set<string>();
 /** 脚本类名 → 原生基类名：`Array[Inner]` 的标注名进句子里，`get_typed_class_name()` 印基类（读数 tmp/probe621/q7）。 */
 let SCRIPT_BASE = new Map<string, string>();
+/** 宿主基类那一档（s4：`class N extends Node` 的 `Array[N]` 给 `Node`）。 */
+const SCRIPT_HOST_BASES = new Set(["RefCounted", "Node", "Object"]);
 /** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
 let INNER_CLASSES = new Map<string, ClassDecl>();
 /** 被同模块内部类当基类的那些类名：它们的构造要走协议形状。 */
@@ -979,7 +981,7 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
 /** 只认没写 `extends` 的内部类：`Array[脚本类名]` 的标注名与原生基类名两格都从这儿来（其余形没量）。 */
 function collectScriptBase(c: ClassDecl, out: Map<string, string>): void {
   const base = c.extends === null || c.extends === "" ? "RefCounted" : c.extends;
-  if (base === "RefCounted" || out.get(base) === "RefCounted") out.set(c.name, "RefCounted");
+  if (base === "RefCounted" || out.get(base) !== undefined || SCRIPT_HOST_BASES.has(base)) out.set(c.name, out.get(base) ?? base);
   for (const inner of c.innerClasses) collectScriptBase(inner, out);
 }
 

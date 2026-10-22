@@ -193,6 +193,16 @@ export function elemDefault(kind: ElemKind): Variant {
 }
 
 /** 元素折算矩阵：能转就转，转不了交 null —— 调用方把整次容器操作静默作废，不报错。 */
+/** 脚本类名槽的收法（S622 的 s1 / s2）：只有那个类与其子类的实例才收，异类丢掉继续跑。 */
+let classFaceCheck: ((cls: string, v: Variant) => boolean) | null = null;
+export function registerClassFaceCheck(fn: (cls: string, v: Variant) => boolean): void {
+  classFaceCheck = fn;
+}
+function classFaceMatches(cls: string, v: Variant): Variant | null {
+  if (classFaceCheck === null) return v;
+  return classFaceCheck(cls, v) ? v : null;
+}
+
 export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
     // `Array[Object]` 只收 null（S613：`Array([null], TYPE_OBJECT, &"RefCounted", null)` 给 `[<null>]`，`Array([1], …)` 转不过）
@@ -344,7 +354,9 @@ export class GArray {
   }
 
   private asElement(v: Variant): Variant | null {
-    return this.elem === null ? v : elemConvert(this.elem, v);
+    if (this.elem === null) return v;
+    if (this.elem === "Object" && this.scriptName !== "") return classFaceMatches(this.scriptName, v);
+    return elemConvert(this.elem, v);
   }
 
   private asElements(vs: Variant[]): Variant[] | null {

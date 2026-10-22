@@ -2,7 +2,8 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, Tag } from "@gds2js/runtime/runtime/tags";
-import { GArray, elemConvert, stampScriptArray } from "@gds2js/runtime/runtime/values";
+import { GArray, elemConvert, stampArray, stampScriptArray } from "@gds2js/runtime/runtime/values";
+import { registerClass } from "@gds2js/runtime/runtime/object";
 import { I, S } from "./support/variants";
 
 const say = (kind: string, v: Parameters<typeof elemConvert>[1]): string => {
@@ -18,14 +19,22 @@ describe("runtime/元素槽 · 类名槽（S621）", () => {
     eq("621", "int 丢（b12 / d5）", say("Object", I(1)), "丢");
     eq("621", "String 丢", say("Object", S("a")), "丢");
   });
-  it("盖章后 append 看得见，且别名同支", () => {
-    const a = stampScriptArray(V.array(GArray.of([])), "Inner", "RefCounted", true);
+  it("本类收下、异类丢掉，同名源是同一支（s1 / s2 / q10）", () => {
+    class Inner622 {}
+    class Other622 {}
+    registerClass("Inner622", Inner622, () => new Inner622(), (o) => o instanceof Inner622);
+    registerClass("Other622", Other622, () => new Other622(), (o) => o instanceof Other622);
+    const a = stampScriptArray(V.array(GArray.of([])), "Inner622", "RefCounted", true);
     const g = a.v as GArray;
     g.append(V.object(new (class {})()));
-    const alias = stampScriptArray(a, "Inner", "RefCounted", false);
-    eq("621", "章挂上", String(g.typedAny()) + String(g.get(0).t), "true7");
-    eq("621", "同名收下并同一支", String((alias.v as GArray) === g), "true");
+    eq("622", "没登记的异类丢掉", String(g.size()), "0");
+    g.append(V.object(new Inner622()));
+    eq("622", "本类收下", String(g.size() === 1 && g.get(0).t === Tag.OBJECT), "true");
     g.append(V.int(1));
-    eq("621", "标量那一位照旧不收", String(g.size()), "1");
+    eq("622", "标量丢掉（b12 / d5）", String(g.size()), "1");
+    eq("622", "同名源收下并且同一支", String((stampScriptArray(a, "Inner622", "RefCounted", false).v as GArray) === g), "true");
+    const any = stampArray(V.array(GArray.of([])), "Object", true);
+    (any.v as GArray).append(V.object(new Inner622()));
+    eq("622", "Array[Object] 收脚本实例（s3）", String((any.v as GArray).size()), "1");
   });
 });
