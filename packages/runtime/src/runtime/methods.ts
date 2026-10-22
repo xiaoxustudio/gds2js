@@ -2456,7 +2456,7 @@ export function attribute(raw: unknown, name: string): unknown {
   }
   if (obj.t === Tag.STRING_NAME) {
     // StringName 那一面的成员表就是 String 那张（S389 一名一名量过），属性读同一条三分岔
-    if (valueAttrKind("StringName", name) === "absent") {
+    if (valueAttrKind("StringName", name) === "absent" || !faceMemberKnown("StringName", name)) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type 'StringName'.`);
     }
     const row = faceArity("StringName", name);
@@ -2466,7 +2466,7 @@ export function attribute(raw: unknown, name: string): unknown {
   if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
     const face = obj.t === Tag.STRING ? "String" : "Array";
     const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
-    if (absent.includes(name)) {
+    if (absent.includes(name) || (face === "String" && !faceMemberKnown("String", name))) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
     }
     const row = faceArity(face, name);
