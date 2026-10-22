@@ -2473,7 +2473,15 @@
     - 同型赋值 `var b: Array[int] = a` 收（g9 印 `[1]`）—— 判据是**标注文本相等**就不拒。
     实现落点：`analyze.ts` 里走定形容器声明那一趟（`for (const t of targets)`，已知目标标注 `Array[X]` 与 `t.init`），要补的是**标识符源**的解析 —— 把函数内已声明变量的标注文本攒成一张表（模块级的 `typedVars` 已有，局部要自己收），源标注与目标标注都是定形容器且文本不同 → 发 `Cannot assign a value of type <src> to variable "<name>" with specified type <slot>.`；源是 `Array` / `Dictionary`（无方括号）时**不在解析期发**，改由赋值路径发运行期那句。两侧都要过 `sema-wording-parity`（新增语料会是预期报错那批）。
 
-0. **下一轮开工清单（2026-10-21 收笔时留的靶单，全部已量好或半量好，按性价比排序）**：
+0. **下一轮开工清单（2026-10-22 收笔时留，全部已量好或已定判据，按性价比排序）**：
+   ① **异类字面量元素进类名槽**（S622 ⑩，读数 `tmp/probe623/s5.gd`）：引擎发 `Cannot have an element of type "Two" in an array of type "Array[One]".`，我们照收 —— 差的是 `slotSource` 认不出 `<类名>.new()` 的静态型，一格判据就够。
+   ② **字面量容器的推断文本**（S622 ⑪，s6 / s7）：空数组字面量引擎印 `Array[int]`、`{1: "a"}` 印 `Dictionary[int, Variant]`，与 `literalFaceText` 的首元素推法不同，要多量几形再定表。
+   ③ **`class N extends Node` 那一形**（s4 引擎给 `Node`）：发射器更早就有 `[class-extends]` 闸门拦着，`SCRIPT_HOST_BASES` 已备好，开禁那笔一并接。
+   ④ **动态接收者的实参位**（S620 ⑧）：`o.top(w)` 引擎拒、我们不发检查，要的是被调方入口检查 + 调用点折算字面量的另一套认法。
+   ⑤ 旧账两件：#12（lowering 抛错带行号，让正文门比 26 支 throw 族的行号）、`hash(Callable)`（三支式子拟合不出，跨进程数没量）。
+   本轮（S618–S622）的门：typecheck 4/4、`pnpm test` **26655**（256 文件）、ops 7308、compile 273/395、diff **266/266**（静默 / 崩溃 / 未实现全 0）、正文门 122/122；`test:golden-check` 最近一次整跑是 S618 落地后的 405/405 零漂移，**S621 / S622 之后没再整跑**（新语料 407 已在 diff 门里逐字节过），下一轮先补这一把。
+
+0b. **旧靶单（2026-10-21 收笔时留，①–④ 已随 S602–S604 结清，留文备查）**：
    ① **`Array(...)` 的签名矩阵**（S601 ⑤）：2 参与 4 参两形的解析期原文已量到 —— `No constructor of "Array" matches the signature "Array(PackedByteArray, Variant.Type)".` 与 `"Array(Array, Variant.Type, Variant.Type, bool)".`（读数 `tmp/d6/s606.gd`），
    但「源形 × 参数个数」整张矩阵没量，`Array(2.5)` / `Array(true)` / `Array(StringName)` 三格的接受性也没量 —— 这一笔要的是一趟脚本量齐矩阵，再决定接进静态层还是运行期句。
    ② **`min` / `minf` 的 Vector4i 字面量位**（S598 ⑥）：只量了 `maxf`，补两支脚本就齐。
