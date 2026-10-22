@@ -398,14 +398,12 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       if (e.kind === "call" && e.callee.kind === "attribute" && e.callee.name === "new" && e.callee.obj.kind === "ident" && classNames.has(e.callee.obj.name)) return e.callee.obj.name as NonNullable<StaticType>;
       return slotSource(e);
     };
+    /** 槽与源两格的「对象形」判据：脚本类名与 `Object` / `RefCounted` / `Node` 都算（w2 / w3 / w5 量到父类与子类实例一律收）。 */
+    const isObjectFace = (x: string): boolean => classNames.has(x) || NATIVE_CLASS_SLOTS.has(x);
     const holds = (kind: string, st: NonNullable<StaticType>): boolean =>
-      classNames.has(kind)
-        ? st === kind
-        : NATIVE_CLASS_SLOTS.has(kind)
-          ? st === "null" || st === kind
-          : canHold(kind, st);
+      isObjectFace(kind) ? st === "null" || isObjectFace(st) : canHold(kind, st);
     const report = (st: NonNullable<StaticType>, kind: string, second: string): void => {
-      if (!classNames.has(kind) && !NATIVE_CLASS_SLOTS.has(kind)) {
+      if (!isObjectFace(kind) && !isObjectFace(st)) {
         diags.push({ code: "typed-collection-literal", message: `Cannot include a value of type "${st}" as "${kind}".`, loc: t.loc });
       }
       diags.push({ code: "typed-collection-element", message: second, loc: t.loc });
