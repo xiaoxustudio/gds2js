@@ -3291,9 +3291,9 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
     return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
   }
   const parts = inner.split(",").map((p) => p.trim());
-  const keyKind = parts[0] ?? "";
-  const valKind = parts[1] ?? "";
-  if (parts.length !== 2 || !isElemKind(keyKind) || !isElemKind(valKind)) return raw;
+  const keyKind = slotElemKindName(parts[0] ?? "");
+  const valKind = slotElemKindName(parts[1] ?? "");
+  if (parts.length !== 2 || keyKind === null || valKind === null) return raw;
   return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
 }
 
@@ -3337,6 +3337,12 @@ function packTypedArgs(fnName: string, argExprs: Expr[], emitted: string[], recv
     }
     return `rt.paramContainer(${a}, ${JSON.stringify(text)}, ${String(i + 1)}, ${JSON.stringify(fnName)}, ${recv})`;
   });
+}
+
+/** 字典的键值位可以盖章的那些名字：八档元素型照原样，脚本类名按 `Object` 收（v11 量的是这一形；宿主类名作键值没量，仍不盖章）。 */
+function slotElemKindName(name: string): string | null {
+  if (isElemKind(name)) return name;
+  return SCRIPT_BASE.has(name) ? "Object" : null;
 }
 
 /** 非字面量源进定形容器的槽：赋值位与返回位各一句；字面量源引擎在编译期折算、不发句。 */
