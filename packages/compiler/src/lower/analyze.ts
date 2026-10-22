@@ -2383,6 +2383,7 @@ function faceReceiverNames(
   type: string,
   isInit: (init: Expr) => boolean,
   annotOnly = false,
+  texts?: Map<string, string>,
 ): Set<string> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
   const out = new Set<string>();
@@ -2399,6 +2400,10 @@ function faceReceiverNames(
     }
     if (named(n.type as TypeRef | null)) {
       out.add(n.name);
+      if (texts !== undefined) {
+        const t = n.type as TypeRef | null;
+        if (t !== null && t.kind === "named") texts.set(n.name, t.name);
+      }
       continue;
     }
     const init = n.init as Expr | null;
@@ -2417,31 +2422,47 @@ function faceScopes(
   m: Module,
   type: string,
   isInit: (init: Expr) => boolean,
-): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> {
+): Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[]; texts: Map<string, string> }> {
   const named = (t: TypeRef | null): boolean => t !== null && t.kind === "named" && t.name.replace(/\[.*\]$/, "") === type;
+  const annText = (t: TypeRef | null): string | null => (t !== null && t.kind === "named" ? t.name : null);
   const moduleNames = new Map<string, "annot" | "inferred">();
+  const moduleTexts = new Map<string, string>();
   for (const v of m.vars) {
-    if (named(v.type)) moduleNames.set(v.name, "annot");
-    else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
+    if (named(v.type)) {
+      moduleNames.set(v.name, "annot");
+      const txt = annText(v.type);
+      if (txt !== null) moduleTexts.set(v.name, txt);
+    } else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
   }
 
-  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[] }> = [];
-  const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">): void => {
+  const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[]; texts: Map<string, string> }> = [];
+  const collect = (funcs: FuncDecl[], seededBase: Map<string, "annot" | "inferred">, textsBase: Map<string, string>): void => {
     for (const f of funcs) {
       const seeded = new Map(seededBase);
-      for (const p of f.params) if (named(p.type)) seeded.set(p.name, "annot");
-      out.push({ nodes: flattenBody(f.body), seeded, body: f.body });
+      const texts = new Map(textsBase);
+      for (const p of f.params) {
+        if (named(p.type)) {
+          seeded.set(p.name, "annot");
+          const txt = annText(p.type);
+          if (txt !== null) texts.set(p.name, txt);
+        }
+      }
+      out.push({ nodes: flattenBody(f.body), seeded, body: f.body, texts });
     }
   };
-  collect(m.funcs, moduleNames);
+  collect(m.funcs, moduleNames, moduleTexts);
 
   const collectClass = (c: ClassDecl): void => {
     const fields = new Map<string, "annot" | "inferred">();
+    const fieldTexts = new Map<string, string>();
     for (const v of c.vars) {
-      if (named(v.type)) fields.set(v.name, "annot");
-      else if (v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
+      if (named(v.type)) {
+        fields.set(v.name, "annot");
+        const txt = annText(v.type);
+        if (txt !== null) fieldTexts.set(v.name, txt);
+      } else if (v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
     }
-    collect(c.funcs, fields);
+    collect(c.funcs, fields, fieldTexts);
     for (const inner of c.innerClasses) collectClass(inner);
   };
   for (const c of m.innerClasses) collectClass(c);
@@ -2496,6 +2517,7 @@ function faceGhostDiags(
   twoSentences: boolean,
   names: Set<string>,
   isLiteral: (obj: Record<string, unknown>) => boolean,
+  texts?: Map<string, string>,
 ): Diagnostic[] {
   if (n.kind !== "call") return [];
   const callee = n.callee as Record<string, unknown> | undefined;
@@ -2507,11 +2529,13 @@ function faceGhostDiags(
   if (typeof method !== "string" || method in table) return [];
   if ((FACE_EXISTS_BEYOND_ARITY[type] ?? []).includes(method)) return [];
   const loc = (n.loc as Diagnostic["loc"]) ?? null;
+  // 引擎那两句里的 base 印的是**标注全文**（S626 的 z1..z7：`Array[int]` / `Dictionary[One, int]`），判据仍用基名那一面。
+  const shown = obj.kind === "ident" && typeof obj.name === "string" ? texts?.get(obj.name) ?? type : type;
   const out: Diagnostic[] = [];
   if (twoSentences) {
-    out.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${type}".`, loc });
+    out.push({ code: "face-member-missing", message: `Cannot find member "${method}" in base "${shown}".`, loc });
   }
-  out.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${type}.`, loc });
+  out.push({ code: "face-member-not-found", message: `Function "${method}()" not found in base ${shown}.`, loc });
   return out;
 }
 
@@ -3070,13 +3094,14 @@ const DICT_METHOD_ARITY: Record<string, [number, number]> = {
  *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */
 function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
-  for (const { nodes, seeded } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
+  for (const { nodes, seeded, texts: scopeTexts } of faceScopes(m, "Dictionary", (init) => init.kind === "dict")) {
+    const texts = new Map(scopeTexts);
     const dicts = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict");
-    const dictAnn = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict", true);
+    const dictAnn = faceReceiverNames(nodes, seeded, assigned, "Dictionary", (init) => init.kind === "dict", true, texts);
     for (const n of nodes) {
       const d = containerCallArity(n, DICT_METHOD_ARITY, "dict-arity", dicts, (obj) => obj.kind === "dict");
       if (d !== null) diags.push(d);
-      for (const g of faceGhostDiags(n, DICT_METHOD_ARITY, "Dictionary", false, dictAnn, (obj) => obj.kind === "dict")) diags.push(g);
+      for (const g of faceGhostDiags(n, DICT_METHOD_ARITY, "Dictionary", false, dictAnn, (obj) => obj.kind === "dict", texts)) diags.push(g);
     }
   }
 }
@@ -3087,13 +3112,14 @@ function checkDictMethodArity(m: Module, diags: Diagnostic[]): void {
  *  `[…]` 字面量（含直接当接收者的字面量）；被重新赋值过的名字丢掉。 */
 function checkArrayMethodArity(m: Module, diags: Diagnostic[]): void {
   const assigned = moduleAssignedNames(m);
-  for (const { nodes, seeded } of faceScopes(m, "Array", (init) => init.kind === "array")) {
+  for (const { nodes, seeded, texts: scopeTexts } of faceScopes(m, "Array", (init) => init.kind === "array")) {
+    const texts = new Map(scopeTexts);
     const arrays = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array");
-    const arrAnn = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array", true);
+    const arrAnn = faceReceiverNames(nodes, seeded, assigned, "Array", (init) => init.kind === "array", true, texts);
     for (const n of nodes) {
       const d = containerCallArity(n, ARRAY_METHOD_ARITY, "array-arity", arrays, (obj) => obj.kind === "array");
       if (d !== null) diags.push(d);
-      for (const g of faceGhostDiags(n, ARRAY_METHOD_ARITY, "Array", true, arrAnn, (obj) => obj.kind === "array")) diags.push(g);
+      for (const g of faceGhostDiags(n, ARRAY_METHOD_ARITY, "Array", true, arrAnn, (obj) => obj.kind === "array", texts)) diags.push(g);
     }
   }
 }
