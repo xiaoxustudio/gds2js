@@ -197,7 +197,7 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
     // `Array[Object]` 只收 null（S613：`Array([null], TYPE_OBJECT, &"RefCounted", null)` 给 `[<null>]`，`Array([1], …)` 转不过）
     case "Object":
-      return v.t === Tag.NIL ? v : null;
+      return v.t === Tag.NIL || v.t === Tag.OBJECT ? v : null;
     case "int":
       if (v.t === Tag.INT) return v;
       if (v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
