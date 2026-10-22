@@ -186,7 +186,6 @@ function assignTargetName(t: unknown): string | null {
   return null;
 }
 
-/** 只量过的标量源名（q2 / q3 / q5）：其余源形没读数，照旧留运行期。 */
 /** 字面量容器自己的文本：非空的那一形按首个元素 / 首格的键值推（q4 给 `Array[int]`），空的那一形没量、留基名。 */
 function literalFaceText(e: Expr, kind: string): string {
   if (e.kind === "array") {
@@ -201,7 +200,11 @@ function literalFaceText(e: Expr, kind: string): string {
   return kind;
 }
 
-const MEASURED_SCALAR_SOURCES = new Set(["int", "String"]);
+/** 只认没量的那一族之外的源名：容器、`Variant` 与脚本类名各自走自己那一支（r1..r7 量的是标量与 `null`）。 */
+function scalarSourceName(st: string, classNames: Set<string>): boolean {
+  return !isCollText(st) && st !== "Variant" && st !== "Array" && st !== "Dictionary" && !classNames.has(st);
+}
+
 
 /** 标注文本是不是定形容器（嵌套那一形引擎另有句子，不进这一支） */
 function isCollText(name: string): boolean {
@@ -353,7 +356,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
         continue;
       }
       const st = srcKind === null ? slotSource(t.init) : null;
-      if (st !== null && MEASURED_SCALAR_SOURCES.has(st)) {
+      if (st !== null && scalarSourceName(st, classNames)) {
         diags.push({
           code: "typed-collection-assign-as",
           message: `Cannot assign a value of type "${st}" as "${targetAnn}".`,
@@ -368,7 +371,7 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       }
     }
     if (t.assignStmt === true && targetAnn !== null && isCollText(targetAnn) && t.srcAnn !== undefined && t.srcAnn !== null &&
-      t.srcAnn.kind === "named" && !isCollText(t.srcAnn.name) && MEASURED_SCALAR_SOURCES.has(t.srcAnn.name)) {
+      t.srcAnn.kind === "named" && scalarSourceName(t.srcAnn.name, classNames)) {
       diags.push({
         code: "typed-collection-assign-value",
         message: `Value of type "${t.srcAnn.name}" cannot be assigned to a variable of type "${targetAnn}".`,

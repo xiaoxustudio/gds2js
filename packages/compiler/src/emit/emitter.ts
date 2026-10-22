@@ -978,7 +978,8 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
 
 /** 只认没写 `extends` 的内部类：`Array[脚本类名]` 的标注名与原生基类名两格都从这儿来（其余形没量）。 */
 function collectScriptBase(c: ClassDecl, out: Map<string, string>): void {
-  if (c.extends === null) out.set(c.name, "RefCounted");
+  const base = c.extends === null || c.extends === "" ? "RefCounted" : c.extends;
+  if (base === "RefCounted" || out.get(base) === "RefCounted") out.set(c.name, "RefCounted");
   for (const inner of c.innerClasses) collectScriptBase(inner, out);
 }
 
