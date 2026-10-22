@@ -410,10 +410,21 @@ function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       for (let x: string | undefined = b; x !== undefined; x = parentOf.get(x)) if (x === a) return true;
       return false;
     };
+    /** 脚本类的**原生根基类**：没写 `extends` 的内部类是 `RefCounted`（q7 / v15 量过），写了宿主基类的照那一名。 */
+    const nativeRoot = (x: string): string => {
+      let cur: string | undefined = x;
+      for (let guard = 0; guard < 16 && cur !== undefined; guard++) {
+        const p = parentOf.get(cur);
+        if (p === undefined) return classNames.has(cur) ? "RefCounted" : cur;
+        if (!classNames.has(p)) return p;
+        cur = p;
+      }
+      return "RefCounted";
+    };
     const isObjectFace = (x: string): boolean => classNames.has(x) || NATIVE_CLASS_SLOTS.has(x);
     const holds = (kind: string, st: NonNullable<StaticType>): boolean => {
       if (st === "null") return true;
-      if (NATIVE_CLASS_SLOTS.has(kind)) return isObjectFace(st);
+      if (NATIVE_CLASS_SLOTS.has(kind)) return kind === "Object" ? isObjectFace(st) : isObjectFace(st) && nativeRoot(st) === kind;
       if (classNames.has(kind)) return classNames.has(st) && related(kind, st);
       return canHold(kind, st);
     };

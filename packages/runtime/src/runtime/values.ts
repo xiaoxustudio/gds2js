@@ -160,7 +160,7 @@ export function isElemKind(name: string): name is ElemKind {
 export function elemDefault(kind: ElemKind): Variant {
   switch (kind) {
     case "Object":
-      throw new UnsupportedError("typed-object-default", "Array[Object] 与类定型数组的 resize / fill 填什么没量过（S613 只量了构造、append、duplicate、assign），响亮拒");
+      return V.nil();
     case "int":
       return V.int(0);
     case "float":
