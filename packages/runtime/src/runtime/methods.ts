@@ -1020,7 +1020,17 @@ function readOnlyWrite(at: string, kind: "Array" | "Dictionary", name: string): 
 
 export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
-  if (obj.t === Tag.STRING_NAME) return method(V.str(obj.v as string), name, args);
+  if (obj.t === Tag.STRING_NAME) {
+    // 重装箱成 String 去派发，但「方法不存在」那一句的 base 要印 `StringName`（u11 的读数）。
+    try {
+      return method(V.str(obj.v as string), name, args);
+    } catch (e) {
+      if (e instanceof GodotRuntimeError && e.code === "string-no-method") {
+        throw new GodotRuntimeError("stringname-no-method", `Invalid call. Nonexistent function '${name}' in base 'StringName'.`);
+      }
+      throw e;
+    }
+  }
 
   if (obj.t === Tag.OBJECT) {
     const inner = obj.v;
