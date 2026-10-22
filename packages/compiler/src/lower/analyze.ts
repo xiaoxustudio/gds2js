@@ -2411,7 +2411,9 @@ function faceReceiverNames(
       continue;
     }
     const init = n.init as Expr | null;
-    if (!annotOnly && init !== null && isInit(init)) out.add(n.name);
+    // 初值只在**没写标注**那一形才证得出面：显式标注 `Variant` 的接收者引擎不在解析期开口，元数与成员名都留到
+    // 运行期那两句（读数 `tmp/probe644/ps645.compare.txt` 六面 × 四形）；不标注的推断形引擎就在解析期发句，照旧证面。
+    if (!annotOnly && n.type === null && init !== null && isInit(init)) out.add(n.name);
     else if (init === null || !isInit(init) || annotOnly) {
       if (annotOnly && named(n.type as TypeRef | null)) continue;
       out.delete(n.name);
@@ -2436,7 +2438,7 @@ function faceScopes(
       moduleNames.set(v.name, "annot");
       const txt = annText(v.type);
       if (txt !== null) moduleTexts.set(v.name, txt);
-    } else if (v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
+    } else if (v.type === null && v.init !== null && isInit(v.init)) moduleNames.set(v.name, "inferred");
   }
 
   const out: Array<{ nodes: Record<string, unknown>[]; seeded: Map<string, "annot" | "inferred">; body: Stmt[]; texts: Map<string, string> }> = [];
@@ -2464,7 +2466,7 @@ function faceScopes(
         fields.set(v.name, "annot");
         const txt = annText(v.type);
         if (txt !== null) fieldTexts.set(v.name, txt);
-      } else if (v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
+      } else if (v.type === null && v.init !== null && isInit(v.init)) fields.set(v.name, "inferred");
     }
     collect(c.funcs, fields, fieldTexts);
     for (const inner of c.innerClasses) collectClass(inner);
@@ -3148,14 +3150,32 @@ interface NamedFace {
   lit: string;
   arity: Record<string, [number, number]>;
   arityCode: string;
+  /** 这一面的**构造式调用**（`NodePath("a/b")`）也算静态证得出的接收者与 var 初值。 */
+  ctorRecv?: boolean;
+}
+
+/** `NodePath("a/b")` 那一形：引擎按这一面在解析期开口（尺 `tmp/probe644/st_lit0.gd` 的 `Too few arguments for
+ *  "slice()" call…`、`st_lit3.gd` 的 `Too many…at most 2 but received 3.`、`st_litstr.gd` 的两句形参拒，
+ *  初值那形是 `st_infer0.gd` / `st_inferstr.gd` 同句）。只认「一支实参且是字符串字面量」这一形：
+ *  `StringName("a")` 的同形状没量过，所以 `ctorRecv` 只给 NodePath 开。 */
+function ctorRecvFace(e: Record<string, unknown>, face: NamedFace): boolean {
+  if (face.ctorRecv !== true || e.kind !== "call") return false;
+  const callee = e.callee as Record<string, unknown> | undefined;
+  if (callee === undefined || callee.kind !== "ident" || callee.name !== face.type) return false;
+  const args = e.args as Record<string, unknown>[] | undefined;
+  const first = args?.[0] as Record<string, unknown> | undefined;
+  return args?.length === 1 && first !== undefined && first.kind === "lit" && first.lit === "string";
 }
 
 function checkNamedFace(m: Module, face: NamedFace, diags: Diagnostic[]): void {
-  const isLiteral = (obj: Record<string, unknown>): boolean => obj.kind === "lit" && obj.lit === face.lit;
+  const isLiteral = (obj: Record<string, unknown>): boolean =>
+    (obj.kind === "lit" && obj.lit === face.lit) || ctorRecvFace(obj, face);
+  const isRecvInit = (init: Expr): boolean =>
+    (init.kind === "lit" && init.lit === face.lit) || ctorRecvFace(init as unknown as Record<string, unknown>, face);
   const assigned = moduleAssignedNames(m);
   const argAnnAll = argNameScopes(m);
-  for (const { nodes, seeded, body } of faceScopes(m, face.type, (init) => init.kind === "lit" && init.lit === face.lit)) {
-    const names = faceReceiverNames(nodes, seeded, assigned, face.type, (init) => init.kind === "lit" && init.lit === face.lit);
+  for (const { nodes, seeded, body } of faceScopes(m, face.type, isRecvInit)) {
+    const names = faceReceiverNames(nodes, seeded, assigned, face.type, isRecvInit);
     const argAnn = argAnnAll.get(body) ?? new Map<string, string>();
     for (const n of nodes) {
       if (n.kind !== "call") continue;
@@ -3229,6 +3249,7 @@ const NODE_PATH_FACE: NamedFace = {
   lit: "node_path",
   arity: NODE_PATH_METHOD_ARITY,
   arityCode: "node-path-arity",
+  ctorRecv: true,
 };
 
 /** 类型构造式越界走的是**第三种句子**（S386）：`No constructor of "X" matches the signature "X(类型, …)".`，
