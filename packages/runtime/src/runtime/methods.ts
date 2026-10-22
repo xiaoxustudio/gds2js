@@ -26,7 +26,7 @@ import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
-import { asNodePath, GdNodePath, nodePathMethod, nodePathText } from "./node-path";
+import { asNodePath, GdNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
@@ -1195,17 +1195,10 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
     if (npv !== null) {
       const npSay = nativeAritySay("NodePath", name, args.length);
       if (npSay !== null) throw new GodotRuntimeError("node-path-arity", npSay);
-      if (faceMemberKnown("NodePath", name)) {
-        // 名册里有、元数也对，但那一名还没实现：引擎这时是**算出值**（`slice.call(0)` 实测给 `a/b[1]`），
-        // 所以不能拿「Nonexistent function」冒充引擎 —— 响亮拒不猜
-        try {
-          return nodePathMethod(npv, name, args);
-        } catch (e) {
-          if (e instanceof GodotRuntimeError && e.code === "node-path-method") {
-            throw new UnsupportedError("node-path-unimplemented", `NodePath.${name}() 还没实现，不发引擎那句`);
-          }
-          throw e;
-        }
+      if (name === "slice") {
+        const begin = nodePathSliceArg(args, 0);
+        const end = args.length > 1 ? nodePathSliceArg(args, 1) : NODE_PATH_SLICE_END_DEFAULT;
+        return V.object(nodePathSlice(npv, begin, end));
       }
       return nodePathMethod(npv, name, args);
     }
@@ -2659,6 +2652,21 @@ function foldInt(v: Variant, fail: string): number {
     return Math.trunc(n);
   }
   throw new UnsupportedError("need-int-arg", fail);
+}
+
+/** `slice` 的两界量过八源：int / bool / float 收下（float 截断、bool 折 1/0），String / StringName / Nil /
+ *  Vector2i / NodePath 给运行期那一句，位号取**第一个坏位**（`("a", "b")` 只报 1、`(1, "b")` 报 2）。
+ *  读数 `tmp/probe644/np2boxed.gd` 的 m2..m11。 */
+const NP_SLICE_ARG_SAY: Record<string, boolean> = { String: true, StringName: true, Nil: true, Vector2i: true, NodePath: true };
+
+function nodePathSliceArg(args: readonly Variant[], i: number): number {
+  const a = args[i] as Variant;
+  if (a.t === Tag.INT || a.t === Tag.BOOL || a.t === Tag.FLOAT) return foldInt(a, "");
+  const src = valueTypeName(a);
+  if (NP_SLICE_ARG_SAY[src] === true) {
+    throw new GodotRuntimeError("node-path-slice-arg", `Invalid type in function 'slice' in base 'NodePath'. Cannot convert argument ${String(i + 1)} from ${src} to int.`);
+  }
+  throw new UnsupportedError("node-path-slice-arg", `NodePath.slice() 的第 ${String(i + 1)} 位收到 ${src}，这一源的形状没量过`);
 }
 
 /** bool 位上的实参：int / float 按「不等于 0」折，NaN 也算不等 0（`"abc".split("a", NAN, 1)` 走的是 allow_empty 真那一支）。 */

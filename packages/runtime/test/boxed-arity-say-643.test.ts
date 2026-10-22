@@ -39,11 +39,10 @@ describe("runtime/methods · 装箱直调元数句铺满值型面（S643）", ()
     eq("643", "Vector4.length 给 1 支", say(V.object(new GVector4(1, 2, 3, 4)), "length", [I(1)]), "[vector-arity] Invalid call to function 'length' in base 'Vector4'. Expected 0 argument(s).");
     eq("643", "Vector4i.abs 给 1 支", say(V.object(new GVector4i(1, 2, 3, 4)), "abs", [I(1)]), "[vector-arity] Invalid call to function 'abs' in base 'Vector4i'. Expected 0 argument(s).");
   });
-  it("界内照旧走完原路；名册里有但没实现的那一名响亮拒", () => {
+  it("界内照旧走完原路；表外名仍给引擎那句", () => {
     eq("643", "Vector2.length 零支收下", say(V.object(new GVector2(3, 4)), "length", []), "没抛");
     eq("643", "Vector2.distance_to 一支收下", say(V.object(new GVector2(3, 4)), "distance_to", [V.object(new GVector2(0, 0))]), "没抛");
-    eq("643", "np.slice 界内但没实现", say(nodePathValue("a/b[1]"), "slice", [I(0)]),
-      "[node-path-unimplemented] NodePath.slice() 还没实现，不发引擎那句");
+    eq("643", "np.slice 界内算得出值（S644 发货）", say(nodePathValue("a/b[1]"), "slice", [I(0)]), "没抛");
     eq("643", "表外名仍给引擎 Nonexistent", say(nodePathValue("a/b[1]"), "nope", []),
       "[node-path-method] Invalid call. Nonexistent function 'nope' in base 'NodePath'.");
   });
