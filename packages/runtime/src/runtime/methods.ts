@@ -2466,7 +2466,7 @@ export function attribute(raw: unknown, name: string): unknown {
   if (obj.t === Tag.STRING || obj.t === Tag.ARRAY) {
     const face = obj.t === Tag.STRING ? "String" : "Array";
     const absent = face === "String" ? STRING_ATTR_ABSENT : ARRAY_ATTR_ABSENT;
-    if (absent.includes(name) || (face === "String" && !faceMemberKnown("String", name))) {
+    if (absent.includes(name) || !faceMemberKnown(face, name)) {
       throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${face}'.`);
     }
     const row = faceArity(face, name);
@@ -2506,9 +2506,8 @@ export function attribute(raw: unknown, name: string): unknown {
     const col = obj.v instanceof GColor ? (obj.v as GColor) : null;
     if (col !== null) return colorRead(col, V.str(name), "prop");
     if (obj.v instanceof GBytes) {
-      // 属性面只量过三格（读数 `tmp/probe-attr/compare{1,2}.txt`）：表外名给 `Invalid access to property or key …`，
-      // 方法名当值引擎给的是 Callable（`PackedByteArray::size`）还没接，其余没量过的名字照旧响亮拒
-      if (packNameAbsent((obj.v as GBytes).kind, name)) {
+      // 属性面：表外名给 `Invalid access to property or key …`（w3 量过 PackedInt32Array 那一格），方法名当值给内建类型的绑定 Callable
+      if (packNameAbsent((obj.v as GBytes).kind, name) || !faceMemberKnown(packTypeName((obj.v as GBytes).kind), name)) {
         throw new GodotRuntimeError("packed-attribute", `Invalid access to property or key '${name}' on a base object of type '${packTypeName((obj.v as GBytes).kind)}'.`);
       }
       const row = faceArity(packTypeName((obj.v as GBytes).kind), name);
