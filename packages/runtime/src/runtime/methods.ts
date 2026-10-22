@@ -772,11 +772,13 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       if (box.unbindCount > 0) {
         // `bind()` 落在 unbind 腾出的那些位上：绑定串本身不动，`unbind` 的计数按绑的支数减（`tmp/probe-unbind/{y1,y2,y3,y5}.gd`）
         for (const b of bound) next.push(b);
-        return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, null, null, 0, null, box.unbindCount - args.length < 0 ? 0 : box.unbindCount - args.length));
+        return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, box.builtin, box.builtinBounds, 0, box.builtinSnap, box.unbindCount - args.length < 0 ? 0 : box.unbindCount - args.length));
       }
       for (const a of args) next.push(a);
       for (const b of bound) next.push(b);
-      return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true));
+      // 内建类型面那三样要跟着带过去：绑完之后印的还是 `String::count`，`get_argument_count()` 给「声明数 − 已绑」（3 支绑 1 给 2），
+      // 越元数仍发那句（`tmp/probe637/{args,bind,bindcall}.gd`：`count.bind(1,2,3).call("a")` 报 Expected 3、`to_vector2_array.bind(1).call()` 报 Expected 0）
+      return V.object(new CallableBox(box.fn, box.name, box.object, next, box.arity, true, box.builtin, box.builtinBounds, 0, box.builtinSnap));
     }
     case "bindv": {
       if (box.detachedOwner !== null || box.invalidMethod) throw new UnsupportedError("callable-detached-bind", "空对象方法 Callable 再 bindv() 那一形没量过");
