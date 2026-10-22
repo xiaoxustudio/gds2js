@@ -1029,6 +1029,11 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
   const obj = norm(raw);
   if (obj.t === Tag.STRING_NAME) {
     // 重装箱成 String 去派发，但「方法不存在」那一句的 base 要印 `StringName`（u11 的读数）。
+    // 名册先过一遍：String 有的六名 `chr / humanize_size / num / num_int64 / num_scientific / num_uint64` 在 StringName 面上引擎说无
+    // （读数 `tmp/probe639/call.gd` 三格一字一样），不先拦就会拿 String 的派发去算值或发中文自述。
+    if (!faceMemberKnown("StringName", name)) {
+      throw new GodotRuntimeError("stringname-no-method", `Invalid call. Nonexistent function '${name}' in base 'StringName'.`);
+    }
     try {
       return method(V.str(obj.v as string), name, args);
     } catch (e) {

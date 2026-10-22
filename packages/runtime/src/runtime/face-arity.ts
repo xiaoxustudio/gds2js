@@ -44,6 +44,16 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
 };
 
 
+// StringName 与 String 的名册只差这九名（尺 `tmp/probe639/gen639.mjs`，读数 `names.gd` 二十一格，并与本机 4.6.3 的
+// `--dump-extension-api` 导出逐名对账，尺 `tmp/probe639/diff639.mts`）：六名 `chr / humanize_size / num / num_int64 /
+// num_scientific / num_uint64` 在 StringName 面上是表外名（`Invalid access to property or key 'X' on a base object of type 'StringName'.`），
+// 三名 `uri_file_decode / is_valid_ascii_identifier / is_valid_unicode_identifier` 存在且零元（读出来是 `StringName::X` 的绑定 Callable）。
+const STRING_NAME_ABSENT = ["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"];
+export const STRING_NAME_METHOD_ARITY: Record<string, [number, number]> = {
+  ...Object.fromEntries(Object.entries(STRING_METHOD_ARITY).filter(([n]) => !STRING_NAME_ABSENT.includes(n))),
+  uri_file_decode: [0, 0], is_valid_ascii_identifier: [0, 0], is_valid_unicode_identifier: [0, 0],
+};
+
 export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
   append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
   duplicate: [0, 0], erase: [1, 1], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
@@ -75,7 +85,7 @@ const PACK_BYTE_ARITY: Record<string, [number, number]> = { ...PACK_METHOD_ARITY
 export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
   get_as_property_path: [0, 0], get_concatenated_names: [0, 0], get_concatenated_subnames: [0, 0],
   get_name: [1, 1], get_name_count: [0, 0], get_subname: [1, 1],
-  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0],
+  get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0], slice: [1, 2],
 };
 
 
@@ -138,7 +148,7 @@ export const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>
   },
   Color: {
     blend: [1, 1], clamp: [0, 2], darkened: [1, 1], from_hsv: [3, 4], from_ok_hsl: [3, 4],
-    from_rgbe9995: [1, 1], from_string: [2, 2], get_luminance: [0, 0], hex: [1, 1], hex64: [1, 1],
+    from_rgba8: [3, 4], from_rgbe9995: [1, 1], from_string: [2, 2], get_luminance: [0, 0], hex: [1, 1], hex64: [1, 1],
     html: [1, 1], html_is_valid: [1, 1], inverted: [0, 0], is_equal_approx: [1, 1], lerp: [2, 2],
     lightened: [1, 1], linear_to_srgb: [0, 0], srgb_to_linear: [0, 0], to_abgr32: [0, 0], to_abgr64: [0, 0],
     to_argb32: [0, 0], to_argb64: [0, 0], to_html: [0, 1], to_rgba32: [0, 0], to_rgba64: [0, 0],
@@ -281,7 +291,8 @@ export function faceMemberKnown(face: string, name: string): boolean {
 /** 按面名与成员名查那一对元数上下界；查不到给 null（表外名、byte 独有的名字，或候选宇宙之外的名字）。 */
 export function faceArity(face: string, name: string): [number, number] | null {
   const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "Dictionary" ? DICT_METHOD_ARITY
-    : face === "String" || face === "StringName" ? STRING_METHOD_ARITY
+    : face === "String" ? STRING_METHOD_ARITY
+      : face === "StringName" ? STRING_NAME_METHOD_ARITY
     : face === "NodePath" ? NODE_PATH_METHOD_ARITY
     : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_BYTE_ARITY : PACK_METHOD_ARITY_WITH_BYTES)
       : VALUE_METHOD_ARITY[face];
