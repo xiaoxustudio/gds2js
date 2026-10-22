@@ -2479,7 +2479,7 @@
    ③ **`class N extends Node` 那一形**（s4 引擎给 `Node`）：发射器更早就有 `[class-extends]` 闸门拦着，`SCRIPT_HOST_BASES` 已备好，开禁那笔一并接。
    ④ **动态接收者的实参位**（S620 ⑧）：`o.top(w)` 引擎拒、我们不发检查，要的是被调方入口检查 + 调用点折算字面量的另一套认法。
    ⑤ 旧账两件：#12（lowering 抛错带行号，让正文门比 26 支 throw 族的行号）、`hash(Callable)`（三支式子拟合不出，跨进程数没量）。
-   本轮（S618–S622）的门：typecheck 4/4、`pnpm test` **26655**（256 文件）、ops 7308、compile 273/395、diff **266/266**（静默 / 崩溃 / 未实现全 0）、正文门 122/122；`test:golden-check` 最近一次整跑是 S618 落地后的 405/405 零漂移，**S621 / S622 之后没再整跑**（新语料 407 已在 diff 门里逐字节过），下一轮先补这一把。
+   本轮（S618–S622）的门：typecheck 4/4、`pnpm test` **26655**（256 文件）、ops 7308、compile 273/395、diff **266/266**（静默 / 崩溃 / 未实现全 0）、正文门 122/122；`test:golden-check` 已在 S622 之后整跑过：**406/406 零漂移**（OK 266 / 报错 123 / 超时 17 / 漂移 0，日志 `tmp/d6/gc622.log`；更早一次同样整跑撞成 exit 1、重跑即绿，记为 Godot 侧争用）。下一轮不必再补这一把。
 
 0b. **旧靶单（2026-10-21 收笔时留，①–④ 已随 S602–S604 结清，留文备查）**：
    ① **`Array(...)` 的签名矩阵**（S601 ⑤）：2 参与 4 参两形的解析期原文已量到 —— `No constructor of "Array" matches the signature "Array(PackedByteArray, Variant.Type)".` 与 `"Array(Array, Variant.Type, Variant.Type, bool)".`（读数 `tmp/d6/s606.gd`），
