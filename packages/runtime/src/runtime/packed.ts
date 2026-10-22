@@ -511,9 +511,9 @@ const MISSING_ON_SIX = new Set([
 ]);
 /** 只在**某一种 pack** 上确认过「没有这个方法」的名字：只在确认的那一支给报错文本，其余仍走响亮拒。 */
 const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
-  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes", "remove_at_copy", "bsearch_custom"]),
+  byte: new Set(["to_hex_string", "search_sorted", "to_base64", "decode_string", "to_byte_array", "to_raw_string", "get_bytes", "remove_at_copy", "bsearch_custom", "index_of"]),
   string: new Set(["index_of"]),
-  int32: new Set(["to_float32_array", "to_int32_array", "remove_at_copy"]),
+  int32: new Set(["to_float32_array", "to_int32_array", "remove_at_copy", "index_of"]),
   int64: MISSING_ON_SIX,
   float32: MISSING_ON_SIX,
   float64: MISSING_ON_SIX,
