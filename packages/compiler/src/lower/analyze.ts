@@ -19,6 +19,8 @@ import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import {
   ARRAY_METHOD_ARITY,
+  DICT_METHOD_ARITY,
+  FACE_EXISTS_BEYOND_ARITY,
   NODE_PATH_METHOD_ARITY,
   PACK_METHOD_ARITY,
   PACK_METHOD_ARITY_WITH_BYTES,
@@ -2497,16 +2499,6 @@ function containerCallArity(
   return arityDiag(table, code, method, ((n.args as Expr[]) ?? []).length, (n.loc as Diagnostic["loc"]) ?? null);
 }
 
-/** 632 格（158 个名字 × 四面）的裁判读数把「存在 / 表外」逐名判过一遍（尺 `tmp/probe-slice/round4.mts`，读数 `compare106.txt`）：
- *  存在名单 = 各面元数表的键 ∪ 下面这些「存在但没量元数」的名字，其余一律按表外发那两句。
- *  名单之外的成员名（我们没列进任何一面的表、也没量过的）会被误拦 —— 兜底的是那几张表本身就是**按引擎成员表逐名量出来的**
- *  （S378 / S379 / S380 三面 49+51+109 名过裁判），加上 `face-arg-allow-list` 那 1246 格与 `p2-t4` 那 1358 格都在替这张名单站岗。 */
-const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
-  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
-  Array: ["set"],
-  Dictionary: ["set", "is_typed", "is_same_typed"],
-};
-
 /** 接收者静态已知（字面量、标注变量、形参标注）而方法名在那一面的表外：引擎发的是解析期拒。
  *  `String` / `Array` / 八支 pack 是两句，`Dictionary` 只给第二句（16 格读数 `tmp/probe-slice/compare{104,105}.txt`）。
  *  推断来的名字与 `Variant` 装箱都不算静态 —— 那两形解析期放过、运行期才给 `Invalid call. Nonexistent function …`。 */
@@ -3074,21 +3066,6 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
     }
   }
 }
-
-/** Dictionary 方法的元数（S378）：49 名过裁判，存在的 20 名两侧都量到（每名两格 —— 零实参读「至少」、三实参读「至多」，
- *  `tmp/probe-dict/compare22.txt`）。与值类型五支（S305）、pack 九支（S376）同一族两句。`sort` 在字典上是**零参**（按键排），
- *  与 Array 那支的 `sort()` 同名同元数但不同语义；`recursive_equal` 要两支（第二支是递归计数）。 */
-const DICT_METHOD_ARITY: Record<string, [number, number]> = {
-  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
-  get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
-  is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
-  merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
-  is_typed: [0, 0], is_typed_key: [0, 0], is_typed_value: [0, 0],
-  is_same_typed: [1, 1], is_same_typed_key: [1, 1], is_same_typed_value: [1, 1],
-  get_typed_key_builtin: [0, 0], get_typed_value_builtin: [0, 0],
-  get_typed_key_class_name: [0, 0], get_typed_value_class_name: [0, 0],
-  get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
-};
 
 /** Dictionary 方法的元数在解析期就拦。接收者只认两种静态证明 —— 标注 `Dictionary` 与 `{…}` 字面量（含直接当接收者的字面量），
  *  被重新赋值过的名字丢掉；证不出就不报（宁可漏拦不误拦，与 `checkPackArgSlots` 同一口径）。 */

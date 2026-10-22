@@ -241,9 +241,36 @@ export function valueAttrKind(face: string, name: string): "member" | "prop" | "
   return faceArity(face, name) === null ? "prop" : "member";
 }
 
+/** Dictionary 方法的元数（S378）：解析期与运行期共用一份，运行期靠它认表外名（S627）。 */
+export const DICT_METHOD_ARITY: Record<string, [number, number]> = {
+  assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
+  get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
+  is_empty: [0, 0], is_read_only: [0, 0], keys: [0, 0], make_read_only: [0, 0], merge: [1, 2],
+  merged: [1, 2], recursive_equal: [2, 2], size: [0, 0], sort: [0, 0], values: [0, 0],
+  is_typed: [0, 0], is_typed_key: [0, 0], is_typed_value: [0, 0],
+  is_same_typed: [1, 1], is_same_typed_key: [1, 1], is_same_typed_value: [1, 1],
+  get_typed_key_builtin: [0, 0], get_typed_value_builtin: [0, 0],
+  get_typed_key_class_name: [0, 0], get_typed_value_class_name: [0, 0],
+  get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
+};
+
+/** 各面「存在但没量元数」的名字：判表外名时要把它们算作存在。 */
+export const FACE_EXISTS_BEYOND_ARITY: Record<string, readonly string[]> = {
+  String: ["is_valid_ascii_identifier", "is_valid_unicode_identifier", "uri_file_decode"],
+  Array: ["set"],
+  Dictionary: ["set", "is_typed", "is_same_typed"],
+};
+
+/** 这个名字在这一面上存不存在：元数表里的、或表外但量过存在的都算存在（S627 的 u1 / u4 / u6 / u7 / u10）。 */
+export function faceMemberKnown(face: string, name: string): boolean {
+  if (faceArity(face, name) !== null) return true;
+  return (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name);
+}
+
 /** 按面名与成员名查那一对元数上下界；查不到给 null（表外名、byte 独有的名字，或候选宇宙之外的名字）。 */
 export function faceArity(face: string, name: string): [number, number] | null {
-  const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" || face === "StringName" ? STRING_METHOD_ARITY
+  const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "Dictionary" ? DICT_METHOD_ARITY
+    : face === "String" || face === "StringName" ? STRING_METHOD_ARITY
     : face === "NodePath" ? NODE_PATH_METHOD_ARITY
     : PACK_NINE[face] === true ? (face === "PackedByteArray" ? PACK_BYTE_ARITY : PACK_METHOD_ARITY_WITH_BYTES)
       : VALUE_METHOD_ARITY[face];

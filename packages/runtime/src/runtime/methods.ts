@@ -18,7 +18,7 @@ import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
 import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
-import { faceArity, valueAttrKind } from "./face-arity";
+import { faceArity, faceMemberKnown, valueAttrKind } from "./face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
 import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
@@ -94,7 +94,7 @@ function asString(v: Variant, who: string): string {
 }
 
 /** 定型容器那几支查询（S554）：`ElemKind` 折回引擎 `Variant.Type` 码；未定型给 0。 */
-export const ELEM_TYPE_CODE: Record<string, number> = {
+export const ELEM_TYPE_CODE: Record<string, number> = {
   Object: 24,
   bool: 1, int: 2, float: 3, String: 4, Vector2: 5, Vector2i: 6, Vector3: 9, Vector3i: 10, Vector4: 12, Vector4i: 13,
   Color: 20, StringName: 21, Dictionary: 27, Array: 28,
@@ -1540,7 +1540,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
         default:
           // 这两个名在 Array 上**根本没有**：`join` 是 String 的方法（S171 量过），`concat` 是 JS 的 API —— S300 把 String / Array / Dictionary
           // 三族 180 个成员名一名一名过了裁判，只有 `concat` 是「我们表里有、引擎没这名字」那一格。接收者是推断出来的 var 时解析期放过，运行期给下面那句。
-          if (ARRAY_NO_METHOD.has(name)) {
+          if (!faceMemberKnown("Array", name)) {
             throw new GodotRuntimeError("array-no-method", `Invalid call. Nonexistent function '${name}' in base 'Array'.`);
           }
           throw new UnsupportedError("array-method", `Array.${name}() 未实现`);
@@ -1659,7 +1659,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           d.sortKeys(sortLess);
           return V.nil();
         default:
-          if (DICT_NO_METHOD.has(name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
+          if (!faceMemberKnown("Dictionary", name)) throw new GodotRuntimeError("dict-no-method", `Invalid call. Nonexistent function '${name}' in base 'Dictionary'.`);
           throw new UnsupportedError("dict-method", `Dictionary.${name}() 未实现`);
       }
     }
@@ -2182,6 +2182,9 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           }
           return V.str(md5Hex(s));
         default:
+          if (!faceMemberKnown("String", name)) {
+            throw new GodotRuntimeError("string-no-method", `Invalid call. Nonexistent function '${name}' in base 'String'.`);
+          }
           throw new UnsupportedError("string-method", `String.${name}() 未实现`);
       }
     }
