@@ -542,6 +542,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
   const moduleArities = methodAritiesLiteral(m.funcs);
   if (moduleArities !== null) out.push(`rt.registerMethodArities(__gd_d_${className}, ${moduleArities});`);
+  const moduleParams = methodParamsLiteral(m.funcs);
+  if (moduleParams !== null) out.push(`rt.registerMethodParams(__gd_d_${className}, ${moduleParams});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(__gd_d_${className}, ${JSON.stringify(moduleStatics)}, ${staticsTableLiteral(className, m.funcs)});`);
   if (baseClass.kind !== "import") {
@@ -875,6 +877,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);
   const declArities = methodAritiesLiteral(decl.funcs);
   if (declArities !== null) lines.push(`rt.registerMethodArities(__gd_d_${decl.name}, ${declArities});`);
+  const declParams = methodParamsLiteral(decl.funcs);
+  if (declParams !== null) lines.push(`rt.registerMethodParams(__gd_d_${decl.name}, ${declParams});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(__gd_d_${decl.name}, ${JSON.stringify(declStatics)}, ${staticsTableLiteral(decl.name, decl.funcs)});`);
   // 原生基类只在没有脚本基类时登记，有的话运行时沿 `base` 链往上找。
@@ -3364,6 +3368,19 @@ function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
       }
     }
     rows.push(`${JSON.stringify(f.name)}: [${required}, ${f.params.length}]`);
+  }
+  return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
+}
+
+/** 形参型名表（S648）：被调方入口那句 `Invalid type in function ... Cannot convert argument N from X to Y.`
+ *  要按声明型判断，而运行期看不到源码。只登记**有标注位**的方法，其余形状不发，产物树一字不动。 */
+function methodParamsLiteral(funcs: readonly FuncDecl[]): string | null {
+  const rows: string[] = [];
+  for (const f of funcs) {
+    if (f.name === "_init" || f.params.length === 0) continue;
+    const slots = f.params.map((pt) => (pt.type === null || pt.type.kind !== "named" ? null : JSON.stringify(pt.type.name)));
+    if (slots.every((pt) => pt === null)) continue;
+    rows.push(`${JSON.stringify(f.name)}: [${slots.join(", ")}]`);
   }
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
 }

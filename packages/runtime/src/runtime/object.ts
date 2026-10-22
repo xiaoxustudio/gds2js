@@ -145,6 +145,8 @@ export class ClassDesc {
   /** 与 `scriptProps` 同序的取值闭包，由发射器静态拼；手写的测试替身可以没有。 */
   scriptValues: ((o: object) => Variant[]) | null;
   methodArities: Record<string, [number, number]> | null;
+  /** 每位形参的声明型名（没标注给 null）：被调方入口那句转换错的判据（S648）。 */
+  methodParams: Record<string, (string | null)[]> | null;
   staticVars: Record<string, string> | null;
   /** `inst_to_dict` 的四段身份：所属模块的 res 路径、自己的类路径（模块根类是空串）、进门名单的变量名、带 get/set 的属性名 → 声明类型。 */
   dictResPath: string | null;
@@ -168,6 +170,7 @@ export class ClassDesc {
     this.scriptValues = null;
     this.scriptValues = null;
     this.methodArities = null;
+    this.methodParams = null;
     this.staticVars = null;
     this.dictResPath = null;
     this.dictClassPath = null;
@@ -350,6 +353,24 @@ export function writeDictWritten(target: object, name: string, value: Variant): 
 /** 方法名的 `[必填实参数, 全部实参数]` 表：arity 检查要用**两个**数，少给与多给 Godot 两边都管。 */
 export function registerMethodArities(desc: ClassDesc, table: Record<string, [number, number]>): void {
   desc.methodArities = table;
+}
+
+/** 形参型名表：发射器按 `func f(a: int, s)` 登记 `[["int", null]]`，运行期入口按它发那句转换错（S648）。 */
+export function registerMethodParams(desc: ClassDesc, table: Record<string, (string | null)[]>): void {
+  desc.methodParams = table;
+}
+
+/** 沿显式 `base` 链并表，派生类盖过基类（与 `fieldTypesOf` 同一口径）。 */
+export function methodParamsOf(target: unknown): Record<string, (string | null)[]> | null {
+  const chain: ClassDesc[] = [];
+  for (let d = descOf(target); d !== null; d = d.base) chain.push(d);
+  let out: Record<string, (string | null)[]> | null = null;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const t = chain[i]?.methodParams;
+    if (t === null || t === undefined) continue;
+    out = { ...(out ?? {}), ...t };
+  }
+  return out;
 }
 
 /** 沿显式 `base` 链并表，派生类盖过基类（与 `fieldTypesOf` 同一口径）。 */

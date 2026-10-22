@@ -98,6 +98,7 @@ const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
 rt.nameClass(__gd_d_A, "A");
 rt.registerDictIdentity(__gd_d_A, "res://main.gd", "A", [], {}, (o) => { const s = o as A; return []; });
 rt.registerMethodArities(__gd_d_A, { "p": [1, 1] });
+rt.registerMethodParams(__gd_d_A, { "p": ["int"] });
 rt.registerNativeBase(__gd_d_A, "RefCounted");
 
 const __gd_entry = new Main();

@@ -16,7 +16,7 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, methodParamsOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, faceMemberKnown, nativeAritySay, valueAttrKind } from "./face-arity";
 
@@ -604,6 +604,60 @@ function callStatic(desc: ClassDesc, name: string, args: Variant[]): Variant {
 function callSlot(recv: unknown, name: string, args: Variant[]): Variant | null {
   // 一次 `instanceof` 收窄，真正的「按名字找方法」在**子类生成的 `__gdDispatch`** 里 —— 运行时全程不 cast 动态值。
   return recv instanceof GdScriptObject ? recv.__gdDispatch(name, args) : null;
+}
+
+/** 被调方入口那一步的接受集（尺 `tmp/probe648/params648.txt` 廿四形）：`int` 收 int / bool / float（截断）、
+ *  `float` 收 int / bool / float、`bool` 收 int / bool / float、`String` 收 String / StringName、
+ *  `StringName` 收 String / StringName、`Vector2` 只收 Vector2。表外的 want（脚本类名、Array、Dictionary 那几档）
+ *  与表内没量过的源形一律不动 —— 不许拿这六档的判据去猜别的面。 */
+const PARAM_REFUSED: Record<string, readonly string[]> = {
+  int: ["String", "StringName", "Nil", "Array", "Dictionary", "Vector2", "Callable", "NodePath"],
+  float: ["String", "Nil", "Vector2"],
+  bool: ["Nil", "String"],
+  String: ["int", "float", "Array", "Nil", "Vector2"],
+  StringName: ["int"],
+  Vector2: ["int", "Array"],
+};
+
+/** 收下的那几形折成目标型：引擎在入口这一步就折，方法体拿到的已经是目标型（`tf(1)` 给 `1.0`、`ts(&"a")` 给 `a`）。 */
+function paramFold(want: string, v: Variant): Variant {
+  if (want === "int" && v.t === Tag.BOOL) return V.int(v.v ? 1 : 0);
+  // 只在安全整数范围内折：越出 2^53 的那一形交回既有的转换路径（语料 156 的 `1e30` 本来就过得去，别在这里撞闸）
+  if (want === "int" && v.t === Tag.FLOAT) {
+    const n = Math.trunc(v.v as number);
+    return Number.isSafeInteger(n) ? V.int(n) : v;
+  }
+  if (want === "float" && v.t === Tag.INT) return typeof v.v === "number" ? V.float(v.v) : v;
+  if (want === "float" && v.t === Tag.BOOL) return V.float(v.v ? 1 : 0);
+  if (want === "bool" && (v.t === Tag.INT || v.t === Tag.FLOAT)) return V.bool(intToNum(v.v as IntPayload) !== 0 || (v.t === Tag.FLOAT && (v.v as number) !== 0));
+  if (want === "String" && v.t === Tag.STRING_NAME) return V.str(v.v as string);
+  if (want === "StringName" && v.t === Tag.STRING) return V.stringName(v.v as string);
+  return v;
+}
+
+function scriptParamArgs(recv: unknown, name: string, args: Variant[]): Variant[] {
+  const want = methodParamsOf(recv)?.[name];
+  if (want === undefined) return args;
+  const out = args.slice();
+  for (let i = 0; i < want.length && i < out.length; i++) {
+    const declared = want[i];
+    if (declared === undefined || declared === null) continue;
+    const slot = declared.replace(/\[.*\]$/, "");
+    const refused = PARAM_REFUSED[slot];
+    if (refused === undefined) continue;
+    const v = out[i] as Variant;
+    const got = valueTypeName(v);
+    if (refused.includes(got)) {
+      const cls = classNameOf(recv);
+      const base = nativeBaseOf(recv);
+      if (cls === null || base === null) {
+        throw new UnsupportedError("script-method-label", `${name}() 的实参位要发引擎那句转换错，但这台实例的类名或原生基类还没登记`);
+      }
+      throw new GodotRuntimeError("script-param-type", `Invalid type in function '${name}' in base '${base} (${cls})'. Cannot convert argument ${String(i + 1)} from ${got} to ${slot}.`);
+    }
+    out[i] = paramFold(slot, v);
+  }
+  return out;
 }
 
 /** 脚本对象**直调**那一形的元数句（尺 `tmp/probe644/sc645.gd` g32..g37 与 `so645{c,d}.gd`）：少给报**必填数**、
@@ -1386,7 +1440,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 
     const smSay = scriptMethodSay(inner, name, args);
     if (smSay !== null) throw new GodotRuntimeError("script-method-arity", smSay);
-    const direct = callSlot(inner, name, args);
+    const direct = callSlot(inner, name, scriptParamArgs(inner, name, args));
     if (direct !== null) return direct;
 
     const sd = descFor(inner);

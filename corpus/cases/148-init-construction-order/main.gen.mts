@@ -169,6 +169,7 @@ rt.registerFieldTypes(__gd_d_Base, {"bx": "int"});
 rt.registerScriptProps(__gd_d_Base, ["bx"], (o) => { const s = o as Base; return [s.bx]; });
 rt.registerDictIdentity(__gd_d_Base, "res://main.gd", "Base", ["bx"], {}, (o) => { const s = o as Base; return [s.bx]; });
 rt.registerMethodArities(__gd_d_Base, { "_mk": [1, 1], "tag": [0, 0] });
+rt.registerMethodParams(__gd_d_Base, { "_mk": ["String"] });
 rt.registerNativeBase(__gd_d_Base, "RefCounted");
 
 class NoInit extends Base {

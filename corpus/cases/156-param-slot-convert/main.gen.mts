@@ -227,6 +227,7 @@ const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
 rt.nameClass(__gd_d_A, "A");
 rt.registerDictIdentity(__gd_d_A, "res://main.gd", "A", [], {}, (o) => { const s = o as A; return []; });
 rt.registerMethodArities(__gd_d_A, { "p_int": [1, 1], "p_float": [1, 1], "p_bool": [1, 1], "p_str": [1, 1], "p_vec2": [1, 1], "p_vec2i": [1, 1], "p_color": [1, 1], "math": [1, 1] });
+rt.registerMethodParams(__gd_d_A, { "p_int": ["int"], "p_float": ["float"], "p_bool": ["bool"], "p_str": ["String"], "p_vec2": ["Vector2"], "p_vec2i": ["Vector2i"], "p_color": ["Color"], "math": ["int"] });
 rt.registerNativeBase(__gd_d_A, "RefCounted");
 
 const __gd_entry = new Main();
