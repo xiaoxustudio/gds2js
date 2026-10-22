@@ -46,17 +46,28 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
 
 export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
   append: [1, 1], append_array: [1, 1], bsearch: [1, 2], clear: [0, 0], count: [1, 1],
-  duplicate: [0, 0], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
+  duplicate: [0, 0], erase: [1, 1], fill: [1, 1], find: [1, 2], get: [1, 1], has: [1, 1],
   insert: [2, 2], is_empty: [0, 0], push_back: [1, 1], remove_at: [1, 1], resize: [1, 1],
   reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
 };
 export const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
-// `PackedByteArray` 独有的那 11 名：元数上下界逐名过裁判（尺 `tmp/probe-bytearity/round2.mts`，读数 `compare1.txt`
-// 与 `raw.txt`）—— 零实参不报错的那些就是「至少 0」，五实参报「至多 N」的就是上界；`decompress` 两界都直接从两句里读。
+// `PackedByteArray` 独有那一批名字一名一名过了裁判：前 11 名的元数上下界见尺 `tmp/probe-bytearity/round2.mts`（读数 `compare1.txt`
+// 与 `raw.txt`），后 36 名与上下界见尺 `tmp/probe636/arity636.mjs`（读数 `arity636.compare.txt`）—— 零实参不报错的那些就是「至少 0」，
+// 五实参报「至多 N」的就是上界；`decompress` 两界都直接从两句里读。名册完整性另有一把尺 `tmp/probe636/gen636.mjs`（读数 `attr.out`）：
+// 94 个候选名 × 十支的属性读，落进存在集的 69 / 23 名与本机 4.6.3 的实例成员表一字不差。
 export const PACK_BYTE_EXTRA_ARITY: Record<string, [number, number]> = {
   compress: [0, 1], decompress: [1, 2], get_string_from_ascii: [0, 0], get_string_from_utf16: [0, 0],
   get_string_from_utf8: [0, 0], get_string_from_wchar: [0, 0], hex_encode: [0, 0], to_float32_array: [0, 0],
   to_float64_array: [0, 0], to_int32_array: [0, 0], to_int64_array: [0, 0],
+  bswap16: [0, 2], bswap32: [0, 2], bswap64: [0, 2], decompress_dynamic: [1, 2], has_encoded_var: [1, 2],
+  decode_u8: [1, 1], decode_s8: [1, 1], decode_u16: [1, 1], decode_s16: [1, 1], decode_u32: [1, 1],
+  decode_s32: [1, 1], decode_u64: [1, 1], decode_s64: [1, 1], decode_half: [1, 1], decode_float: [1, 1],
+  decode_double: [1, 1], decode_var: [1, 2], decode_var_size: [1, 2],
+  encode_u8: [2, 2], encode_s8: [2, 2], encode_u16: [2, 2], encode_s16: [2, 2], encode_u32: [2, 2],
+  encode_s32: [2, 2], encode_u64: [2, 2], encode_s64: [2, 2], encode_half: [2, 2], encode_float: [2, 2],
+  encode_double: [2, 2], encode_var: [2, 3],
+  get_string_from_multibyte_char: [0, 1], get_string_from_utf32: [0, 0],
+  to_vector2_array: [0, 0], to_vector3_array: [0, 0], to_vector4_array: [0, 0], to_color_array: [0, 0],
 };
 
 const PACK_BYTE_ARITY: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, ...PACK_BYTE_EXTRA_ARITY };

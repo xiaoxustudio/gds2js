@@ -522,7 +522,8 @@ const MISSING_ON: Partial<Record<PackKind, Set<string>>> = {
   color: MISSING_ON_SIX,
   vector4: MISSING_ON_SIX,
 };
-/** byte 那一支独有的方法（`to_*_array` 与压缩这一族）。 */
+/** byte 那一支独有的方法（`to_*_array` 与压缩这一族）：名册与属性读同一把尺量的（`tmp/probe636/attr.out`），
+ *  这九支上的调用句逐面过裁判（尺 `tmp/probe636/call636b.mjs`，读数 `call636b.final.txt`，324 格一字一样都是 Nonexistent）。 */
 const BYTE_ONLY = new Set([
   "get_string_from_utf8",
   "get_string_from_ascii",
@@ -532,6 +533,42 @@ const BYTE_ONLY = new Set([
   "to_int64_array",
   "to_float32_array",
   "to_float64_array",
+  "bswap16",
+  "bswap32",
+  "bswap64",
+  "decompress_dynamic",
+  "has_encoded_var",
+  "decode_u8",
+  "decode_s8",
+  "decode_u16",
+  "decode_s16",
+  "decode_u32",
+  "decode_s32",
+  "decode_u64",
+  "decode_s64",
+  "decode_half",
+  "decode_float",
+  "decode_double",
+  "decode_var",
+  "decode_var_size",
+  "encode_u8",
+  "encode_s8",
+  "encode_u16",
+  "encode_s16",
+  "encode_u32",
+  "encode_s32",
+  "encode_u64",
+  "encode_s64",
+  "encode_half",
+  "encode_float",
+  "encode_double",
+  "encode_var",
+  "get_string_from_multibyte_char",
+  "get_string_from_utf32",
+  "to_vector2_array",
+  "to_vector3_array",
+  "to_vector4_array",
+  "to_color_array",
 ]);
 /** 非 byte 形状上给与 `Nonexistent function` 一致的那句的那批名字。 */
 const NON_BYTE_MISSING = new Set(["hex_encode", "compress", "decompress"]);
