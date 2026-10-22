@@ -189,13 +189,12 @@ function assignTargetName(t: unknown): string | null {
 /** 字面量容器自己的文本：非空的那一形按首个元素 / 首格的键值推（q4 给 `Array[int]`），空的那一形没量、留基名。 */
 function literalFaceText(e: Expr, kind: string): string {
   if (e.kind === "array") {
-    const first = e.items.length > 0 ? slotSource(e.items[0]!) : null;
-    return first === null ? kind : `${kind}[${first}]`;
+    for (const it of e.items) if (slotSource(it) !== "int") return kind;
+    return "Array[int]";
   }
-  if (e.kind === "dict" && e.entries.length > 0) {
-    const k = slotSource(e.entries[0]!.key);
-    const v = slotSource(e.entries[0]!.value);
-    return k === null || v === null ? kind : `${kind}[${k}, ${v}]`;
+  if (e.kind === "dict") {
+    for (const en of e.entries) if (slotSource(en.key) !== "int") return kind;
+    return "Dictionary[int, Variant]";
   }
   return kind;
 }
