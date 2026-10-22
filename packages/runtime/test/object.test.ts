@@ -248,8 +248,9 @@ describe("runtime/methods · 值类型与名字面的装箱属性读三分岔（
     eq("432", "StringName 成员名给 Callable", show(attribute(sn, "hash") as Variant), "StringName::hash");
   });
 
-  it("宇宙之外的那一名：Vector2 仍响亮拒，String 两面发引擎那句（S630）", () => {
-    eq("432", "Vector2 宇宙外", /Invalid access/.test(errText(() => attribute(vector2(1, 2), "nosuchzz"))), false);
+  it("宇宙之外的那一名：vector 六面与 String 两面发引擎那句（S630 / S632）", () => {
+    eq("632", "Vector2 宇宙外发引擎那句（w2）", errText(() => attribute(vector2(1, 2), "nosuchzz")),
+      "Invalid access to property or key 'nosuchzz' on a base object of type 'Vector2'.");
     // S630 量过：String 与 StringName 两面的宇宙外名引擎发的就是那一句（`tmp/probe628/t2 / t4 / t11`）
     eq("630", "StringName 宇宙外", errText(() => attribute(V.stringName("ab"), "nosuchzz")), "Invalid access to property or key 'nosuchzz' on a base object of type 'StringName'.");
     eq("630", "String 宇宙外", errText(() => attribute(V.str("ab"), "nosuchzz")), "Invalid access to property or key 'nosuchzz' on a base object of type 'String'.");
