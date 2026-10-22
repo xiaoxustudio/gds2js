@@ -590,12 +590,34 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   collectInits(m.vars, moduleSeeds);
   for (const c of m.innerClasses) collectInitClasses(c);
 
+  /** 本文件的脚本类名与它的 `extends` 名（`""` 是没写）：字典槽的类名判据要沿这条链（S625 的 y1..y5）。 */
+  const scriptNames = new Map<string, string>();
+  const collectNames = (c: ClassDecl): void => {
+    scriptNames.set(c.name, c.extends ?? "");
+    for (const inner of c.innerClasses) collectNames(inner);
+  };
+  for (const c of m.innerClasses) collectNames(c);
+  const subOf = (x: string, base: string): boolean => {
+    let cur: string | undefined = x;
+    for (let guard = 0; guard < 16 && cur !== undefined; guard++) {
+      if (cur === base) return true;
+      const p = scriptNames.get(cur);
+      if (p === undefined || p === "") return false;
+      cur = p;
+    }
+    return false;
+  };
+  const ctorClass = (e: Expr): string | null => {
+    if (e.kind !== "call" || e.callee.kind !== "attribute" || e.callee.name !== "new" || e.callee.obj.kind !== "ident") return null;
+    return scriptNames.has(e.callee.obj.name) ? e.callee.obj.name : null;
+  };
+
   const stOf = (e: Expr, decls: Map<string, string>): NonNullable<StaticType> | null => {
     if (e.kind === "ident") {
       const d = decls.get(e.name);
       return d === undefined ? null : (d as NonNullable<StaticType>);
     }
-    return slotSource(e) ?? (callType(e) as NonNullable<StaticType> | null);
+    return (ctorClass(e) as NonNullable<StaticType> | null) ?? slotSource(e) ?? (callType(e) as NonNullable<StaticType> | null);
   };
 
   const badKey = (slot: TypedSlot, index: Expr, decls: Map<string, string>): void => {
@@ -613,6 +635,16 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
     if (slot.key === undefined) return;
     if (st === "null") return;
+    // 字典的键位只收**同名**脚本类：子类（y1）、父类（y5）、异类（y2 / v13）引擎全拒
+    if (scriptNames.has(slot.key)) {
+      if (st === slot.key) return;
+      diags.push({
+        code: "typed-index-key",
+        message: `Invalid index type "${st}" for a base of type "${slot.decl}".`,
+        loc: index.loc,
+      });
+      return;
+    }
     // 字典键不做 Vector4 ↔ Vector4i 的槽转换：字面量键那一形引擎解析期拒（S586，`Dictionary[Vector4, …]` 配 `Vector4i` 字面量键）
     if ((slot.key === "Vector4" && st === "Vector4i") || (slot.key === "Vector4i" && st === "Vector4")) {
       diags.push({
@@ -711,9 +743,19 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
     }
   };
 
-  const valueMsg = (slotKind: string, value: Expr, index: Expr, decls: Map<string, string>): void => {
+  const valueMsg = (slotKind: string, value: Expr, index: Expr, decls: Map<string, string>, dictSlot = false): void => {
     const st = stOf(value, decls);
     if (st === null || st === "null") return;
+    // 字典的值位按**类族**判：子类实例收（y3），异类只发第二句（y4）—— 数组那一形没量，不走这支。
+    if (dictSlot && scriptNames.has(slotKind)) {
+      if (st === slotKind || (scriptNames.has(st) && subOf(st, slotKind))) return;
+      diags.push({
+        code: "typed-index-assign",
+        message: `Value of type "${st}" cannot be assigned to a variable of type "${slotKind}".`,
+        loc: value.loc,
+      });
+      return;
+    }
     if (canHold(slotKind, st)) return;
     const literalIndex = index.kind === "lit";
     if (literalIndex) {
@@ -766,7 +808,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
               // 赋值那一侧引擎不挡（缺键就建键），所以这一格不登记成 int 键读
               if (slot.kind === "Dictionary" && stOf(s.target.index, decls) === "int") dictIntReads.delete(diKey(s.target.loc.line, s.target.loc.col));
               const kind = slot.kind === "Array" ? slot.elem : slot.val;
-              if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls);
+              if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls, slot.kind === "Dictionary");
             }
           }
           if (!handledTarget) walkExpr(s.target, typed, decls);
