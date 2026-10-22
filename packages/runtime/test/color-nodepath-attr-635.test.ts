@@ -1,7 +1,7 @@
 /** Color 与 NodePath 的属性读：表外名发引擎的访问句（S635，读数 `tmp/probe633/col.gd`、`npath.gd`、`c1 / c2`），真属性照旧取值。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { V, Tag } from "@gds2js/runtime/runtime/tags";
+import { V, Tag, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GColor } from "@gds2js/runtime/runtime/color";
 import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
 import { attribute } from "@gds2js/runtime/runtime/methods";
@@ -30,8 +30,8 @@ describe("runtime/属性读 · Color 与 NodePath 的表外名（S635）", () =>
       "Invalid access to property or key 'subnames' on a base object of type 'NodePath'.");
   });
   it("真属性与成员名不回归", () => {
-    eq("635", "c.r 仍是 float", String(attribute(col(), "r").t), String(Tag.FLOAT));
-    eq("635", "c.a8 仍是 int", String(attribute(col(), "a8").t), String(Tag.INT));
-    eq("635", "np.get_name 仍是绑定 Callable", /::/.test(errText(() => attribute(np(), "get_name"))) || true, true);
+    eq("635", "c.r 仍是 float", String((attribute(col(), "r") as Variant).t), String(Tag.FLOAT));
+    eq("635", "c.a8 仍是 int", String((attribute(col(), "a8") as Variant).t), String(Tag.INT));
+    eq("635", "np.get_name 仍不拒（成员名照旧给绑定 Callable）", errText(() => attribute(np(), "get_name")), "没抛");
   });
 });
