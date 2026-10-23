@@ -148,6 +148,10 @@ let packCodecUse = false;
 /** 本脚本**顶层**声明的函数名（S676，尺 `tmp/probe675/c_selfmethod.gd`：手臂里的 `me(1)` 引擎只发「必须是常量式」那一句，我们多发一句 `Function "me()" not found in base self.`）。内部类里的方法名不进这张表 —— 那一形没量过。 */
 let scriptFuncNames = new Set<string>();
 
+/** 内部类里**非静态**的方法名（S680，尺 `tmp/probe694/i_inner_method.gd`：手臂里写 `Inner.m(1)` 时引擎先来一句
+ *  「不能在类上直接调非静态函数」再补常量式那句）。静态那一形与嵌套两层的类都没量过，不进这张表。 */
+let scriptInstanceMethods = new Map<string, Set<string>>();
+
 /** 走 IR 之前那一路抛出的响亮拒原先不知道自己在源码哪一行（诊断的 `loc` 是 IR 才有的东西），
  *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。这一串把当前节点压成栈，
  *  `lower()` 出口把栈顶那一层的源码行挂到错误上 —— 引擎的解析期句正是指着**最深**那个未支持的构造。 */
@@ -189,6 +193,19 @@ function lowerModule(n: SyntaxNode): Module {
 
 function lowerModuleInner(root: SyntaxNode): Module {
   scriptFuncNames = new Set<string>(named(root).map((n) => (n.type === "function_definition" ? field(n, "name")?.text ?? "" : "")));
+  scriptInstanceMethods = new Map<string, Set<string>>();
+  for (const cls of named(root).filter((n) => n.type === "class_definition")) {
+    const cname = named(cls)[0]?.text ?? "";
+    const body = named(cls).find((n) => n.type === "class_body") ?? null;
+    if (cname === "" || body === null) continue;
+    const set = new Set<string>();
+    for (const fn of named(body).filter((n) => n.type === "function_definition")) {
+      if (fn.children.some((c) => c.type === "static_keyword")) continue;
+      const fname = named(fn)[0]?.text ?? "";
+      if (fname !== "") set.add(fname);
+    }
+    if (set.size > 0) scriptInstanceMethods.set(cname, set);
+  }
   const m: Module = {
     className: null,
     extends: null,
@@ -611,6 +628,20 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       return { kind: "const", expr: lowerExpr(n) };
     case "attribute":
       if (armSelfBase(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      // 手臂里在**类名上**调非静态方法（S680，尺 `tmp/probe694/i_inner_method.gd`）：CST 这一形是 `attribute`
+      // （identifier + attribute_call），引擎两句 —— 先「不能在类上直接调非静态函数」，再补常量式那句。
+      {
+        const aparts = named(n);
+        const head = aparts[0];
+        const tail = aparts[1];
+        const mname = aparts.length === 2 && tail !== undefined && tail.type === "attribute_call" ? named(tail)[0]?.text ?? "" : "";
+        if (mname !== "" && head !== undefined && head.type === "identifier" && scriptInstanceMethods.get(head.text)?.has(mname) === true) {
+          throw new UnsupportedError("pattern-arm-instance-method", [
+            `Cannot call non-static function "${mname}()" on the class "${head.text}" directly. Make an instance instead.`,
+            ARM_PATTERN,
+          ].join(String.fromCharCode(10)));
+        }
+      }
       return { kind: "const", expr: lowerExpr(n) };
     case "integer":
       return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
