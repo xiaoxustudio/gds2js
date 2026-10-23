@@ -628,6 +628,9 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       if (armCalleeKnown(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
+    case "subscript":
+      // 下标当手臂撞的是**解析器**那一句（S672，尺 `tmp/probe674/m_subscript.gd` 的 `[1, 2][0]:`），不是「常量式」那一句，也不是自述。
+      throw new UnsupportedError("pattern-arm-parse", `Expected ":" or "when" after "match" patterns.`);
     case "true":
       return { kind: "lit", lit: "bool", value: true };
     case "false":

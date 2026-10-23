@@ -43,7 +43,7 @@ describe("lower · 手臂里的常量式折叠", () => {
   it("下标手臂与调用叶子的二元式也没量过，照旧响亮拒", async () => {
     const idx = await parseSource(src("[1, 2][0]"));
     const call = await parseSource(src("str(1) + 1"));
-    expect(() => lower(idx)).toThrow(/模式 subscript 未支持/);
+    expect(() => lower(idx)).toThrow(/Expected ":" or "when" after "match" patterns\./);
     expect(() => lower(call)).toThrow(/模式 binary_operator 未支持/);
   });
 });
