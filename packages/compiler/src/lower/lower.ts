@@ -628,7 +628,7 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
       const gnameEarly = named(n)[0]?.text;
-      if (gnameEarly !== undefined && ARM_FOLD_GLOBALS.has(gnameEarly) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
+      if (gnameEarly !== undefined && ARM_FOLD_GLOBALS.has(gnameEarly) && armFoldArityFits(gnameEarly, callArgs(n)) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
       const gnameSelf = named(n)[0]?.text;
       if (gnameSelf !== undefined && scriptFuncNames.has(gnameSelf)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       const sig = armSignature(n);
@@ -637,8 +637,15 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       // `match 1: len("ab")` 走默认支）；在册但不折叠的（`str(1)` / `hash(1)`）引擎只发「必须是常量式」那一句；
       // 不在册的名字（`type_name(1)`）仍是上面那两句。没量的名字一律不类推 —— 名单只收量过的那两名。
       const gname = named(n)[0]?.text;
-      if (gname !== undefined && ARM_FOLD_GLOBALS.has(gname) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
-      if (gname !== undefined && GLOBAL_CALLABLES[gname] !== undefined) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      if (gname !== undefined && ARM_FOLD_GLOBALS.has(gname) && armFoldArityFits(gname, callArgs(n)) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
+      if (gname !== undefined && GLOBAL_CALLABLES[gname] !== undefined) {
+        const gb = GLOBAL_CALLABLES[gname].bounds;
+        const given = callArgs(n).length;
+        if (gb !== null && (given < gb[0] || given > gb[1])) {
+          throw new UnsupportedError("pattern-arm-arity", [armAritySay(gb[0], gb[1], given, gname), ARM_PATTERN].join(String.fromCharCode(10)));
+        }
+        throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      }
       if (armCalleeKnown(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
@@ -1075,6 +1082,22 @@ function ctorArm(n: SyntaxNode): boolean {
 }
 
 /** 手臂那句「必须是常量式」：引擎在手臂里报完元数那句紧跟这一句，实参是运行期表达式时只发这一句（`arm-runtime-expr`）。 */
+/** 手臂里的全局调用越元数那一句（S679，尺 `tmp/probe689/armarity.mts` 十二格：七名越界两向 + 三名合式对照）。
+ *  引擎在常量式那句**之前**先发元数那句，数取声明的全部数（与 `arityDiag` 同一模板）。 */
+function armAritySay(min: number, max: number, given: number, name: string): string {
+  return given < min
+    ? `Too few arguments for "${name}()" call. Expected at least ${String(min)} but received ${String(given)}.`
+    : `Too many arguments for "${name}()" call. Expected at most ${String(max)} but received ${String(given)}.`;
+}
+
+/** 折叠名册里的名字先看元数：`len("a", "b")` 这类越界形引擎发的是元数那句 + 常量式那句（S679），
+ *  不能因为名字在册就折成常量臂。界内才走折叠。 */
+function armFoldArityFits(name: string, args: readonly unknown[]): boolean {
+  const row = GLOBAL_CALLABLES[name];
+  if (row === undefined || row.bounds === null) return true;
+  return args.length >= row.bounds[0] && args.length <= row.bounds[1];
+}
+
 const ARM_PATTERN = 'Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").';
 
 /** 类名在那两张表上（合法表 + 没有构造子的七支）＝ 这一形是「实参认不出来」那一式，引擎只发 pattern 那一句。 */
