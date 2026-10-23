@@ -2745,6 +2745,7 @@
 ② **第八处站点是裸值通道**：新建语料把十四形串成一页时，`print(d if true else 9)`（字典当分支）在我们这侧炸 `[show-type] print 不支持 undefined`，而**同一形在单文件探针里过** —— 差别在 `computeUnboxed` / `kindOfExpr` 那一族的型推断： ternary 没进那张表，函数里语句一多就被判成可裸值，发射时把盒子当裸值喂给 print。所以清单要写成**八处**：五处遍历 switch + `emitExprR` + `emitExprVar` + **型推断/裸值那一族**（`kindOfExpr` 与其调用面）。
 ③ 另两处待发：`var v: int = 1 if true else 2.5` 这类**标注侧**的转换判据（探针里过，语料里未单独钉），以及分支为容器时的**裸值通道**判据。这轮不发：判据不齐就发，撞的是静默错值那条红线。
 ④ 做法留在 #17：把第八处补上再建语料（语料一页只放**已经逐格对过**的形），产物里搜 `rt.tern(` 是第一步，逐字节对 golden 是第二步。
+⑤ **S675 / S676 的漂移复验**：`test:golden-check` 整跑 **416/416 零漂移**（500s，日志 `tmp/d6/gc676.log`）—— 这两笔改的是手臂的解析期文案与名册，golden 一侧一字没变。
 - **2026-10-23 第二百十九笔（试做续，代码零改动：改动整份收回，门与盘面一字不变）**：三目本体按第二百十八笔的七处 switch **全部补齐并跑通 11/14 格** —— 产物里确实是 `rt.tern(rt.V.bool(true), () => rt.V.int(1), () => rt.V.int(2))`，
 ① 已过：`a_basic` / `a_types` / `a_short`（短路只算取走的一支，`log` 给 `[1]` 与 `[2]`）/ `a_cond`（真值判据同 `if`）/ `a_nan` / `a_big`（int64 不降双精度）/ `a_chain`（右结合）/ `a_dict` / `a_annot` / `a_infer` / `a_null` 十一格与引擎一字一样。
 ② **还差三格**，全是同一个崩口：分支里带**变量**（`a_zero` 的 `nz if true else 1`）、条件是**二元式**（`a_cmp` 的 `5 > 3`）、三元嵌在**二元里**（`a_prec` 的 `1 + (…)`）三形报 `Cannot read properties of undefined (reading 'kind')` —— 是**再一处按形状取子的地方没认 ternary**（不是那七处 switch，而是读 `left`/`right`/`operand` 的那一类推断点，`kindOfExpr` 一族或分析器里的同类）；下一步先把这个取子点找出来（`grep -n "\.left\.kind\|\.operand\.kind\|\.obj\.kind" packages/compiler/src`），补一张「按 Expr 形状取子节点」的总表最稳。
