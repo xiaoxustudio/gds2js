@@ -89,8 +89,16 @@ function intPair(a: Variant, b: Variant, op: string): [IntPayload, IntPayload] {
 
 /** 量过的六型（S399 那张 468 格矩阵就摆这六型）：拒的那 329 对引擎讲的是运行期那一句，没量过的型仍走响亮拒。 */
 const MEASURED_SIX = new Set<number>([Tag.BOOL, Tag.INT, Tag.FLOAT, Tag.STRING, Tag.ARRAY, Tag.DICT]);
+/** 六型之外、运行期那一句**一格一格量过**的那几对（S661：`var v: Variant = &"ab"` 之后 `v + 1` 给
+ *  `Invalid operands 'StringName' and 'int' in operator '+'.`，读数 `tmp/probe661/D_sn_variant.gd`）。
+ *  同一面的其余对（`StringName` 与 float / Array 之类）没在运行期量过，照旧不进这一集。 */
+const RUNTIME_REFUSED_PAIRS = new Set<string>(["StringName|int"]);
 
-function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {  if (MEASURED_SIX.has(a.t) && MEASURED_SIX.has(b.t)) {
+function pairKey(a: Variant, b: Variant): string {
+  return `${valueTypeName(a)}|${valueTypeName(b)}`;
+}
+
+function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {  if ((MEASURED_SIX.has(a.t) && MEASURED_SIX.has(b.t)) || RUNTIME_REFUSED_PAIRS.has(pairKey(a, b))) {
     throw new GodotRuntimeError(code, `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   throw new UnsupportedError(code, `${op} 不支持 ${tagName(a.t)} ${op} ${tagName(b.t)}`);
