@@ -667,7 +667,10 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
     // 走的是合式构造臂那条现成的 `const` 发射；掺非常量片（`self.x + 1`）与三元、下标那几形没量过，照旧拒。
     case "binary_operator":
     case "unary_operator":
-    case "parenthesized_expression": {
+    case "parenthesized_expression":
+    // 三元手臂（S678，尺 `tmp/probe675/t_*.gd` 四格）：引擎按**取走的那一支**折叠后参与匹配 ——
+    // `match 1: 1 if true else 2` 命中、`match 2` 与 `match 5` 走默认支，括号形同判（第二百十四笔①更正了「收下但永不匹配」的旧读数）。
+    case "conditional_expression": {
       if (armAllLiterals(n)) return { kind: "const", expr: lowerExpr(n) };
       // 叶子掺属性读那一形（`1 + self.x`）引擎发的是「必须是常量式」那句，不是我们的自述（`tmp/probe668` 实测）
       if (armHasAttributeLeaf(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
@@ -680,7 +683,7 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
 
 /** 手臂式子里每一片都是字面量（嵌套的二元 / 一元 / 括号都算，只要叶子全是字面量）。 */
 function armAllLiterals(n: SyntaxNode): boolean {
-  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression") {
+  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression" || n.type === "conditional_expression") {
     const kids = named(n);
     return kids.length > 0 && kids.every(armAllLiterals);
   }
@@ -698,7 +701,7 @@ function armSelfBase(n: SyntaxNode): boolean {
 /** 式子里有没有属性读那片（`self.x`、`A.B`）—— 有的话引擎那一形走「常量式」那句拒。 */
 function armHasAttributeLeaf(n: SyntaxNode): boolean {
   if (n.type === "attribute") return true;
-  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression") {
+  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression" || n.type === "conditional_expression") {
     return named(n).some(armHasAttributeLeaf);
   }
   return false;

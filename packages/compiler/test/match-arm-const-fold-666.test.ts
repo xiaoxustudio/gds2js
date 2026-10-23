@@ -35,9 +35,11 @@ describe("lower · 手臂里的常量式折叠", () => {
     expect([code, message]).toEqual(["pattern-arm-runtime", ARM_PATTERN]);
   });
 
-  it("三元手臂的匹配判据没量过，照旧响亮拒", async () => {
-    const tree = await parseSource(src("1 if true else 2"));
-    expect(() => lower(tree)).toThrow(/模式 conditional_expression 未支持/);
+  it("三元手臂已随 S677 / S678 接上：折成取走的那一支", async () => {
+    const m = lower(await parseSource(src("1 if true else 2")));
+    const dump = JSON.stringify(m.funcs[0]?.body ?? []);
+    expect(dump.includes('"kind":"const"'), dump).toBe(true);
+    expect(dump.includes('"kind":"ternary"'), dump).toBe(true);
   });
 
   it("下标手臂与调用叶子的二元式也没量过，照旧响亮拒", async () => {
