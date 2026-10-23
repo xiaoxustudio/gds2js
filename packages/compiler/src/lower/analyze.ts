@@ -954,7 +954,10 @@ const PACK_SHAPE_NAMES = new Set([
   "PackedColorArray",
 ]);
 
-type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object" | "Signal" | "Callable";
+/** `SignalDyn` 是**由初值证出**的那一面（`var g = sig` / `var g = Signal(sig)`）：元数与取值 void 两句照发，
+ *  但「找不到成员」那两句不发 —— 读数 `tmp/probe656/W_inf_valid.gd`（运行期才给 `Invalid call. Nonexistent function 'is_valid' in base 'Signal'.`）
+ *  对 `W_ann_valid.gd` / `W_bare_valid.gd`（解析期两句）。 */
+type ContainerShape = "Array" | "Dictionary" | "Pack" | "Object" | "Signal" | "SignalDyn" | "Callable";
 
 /** 给定型变量赋值的静态判定：不合式的组合在 Godot 是解析期错，形体与定型容器那族一模一样 —— 实参是字面量报两条（先槽位后赋值），实参是变量只报赋值那条。判不出来的组合返回 null 不报 —— 误拦合法工程比漏报更糟。 */
 function varSlotHolds(slot: string, st: NonNullable<StaticType>): boolean | null {
@@ -1742,6 +1745,10 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     if (e.kind === "dict") return "Dictionary";
     // Callable 只认构造式与显式标注：`var c = Callable()` 静态推得出类型，从 `o.hi` 读出来的那一格推不出（那是运行期才判）。
     if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "Callable") return "Callable";
+    // Signal 同一条判据（S656，读数 `tmp/probe656/S_inf_*.gd` 与 `S_varinit_*.gd` 二十格）：裸信号名初值与 `Signal(...)` 构造式
+    // 都让引擎在解析期认出这一面 —— `var g = sig` 之后的 `g.get_name(1)` 与标注形 `var g: Signal` 同一句、同一行。
+    if (e.kind === "ident" && signalNames.has(e.name)) return "SignalDyn";
+    if (e.kind === "call" && e.callee.kind === "ident" && e.callee.name === "Signal") return "SignalDyn";
     if (e.kind === "call" && e.callee.kind === "ident" && PACK_SHAPE_NAMES.has(e.callee.name)) {
       return "Pack";
     }
@@ -1820,7 +1827,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
               });
             }
             // 元数那句排在取值 void 那句之前（S378 的口径）
-            const sigMax = shape === "Signal" ? SIGNAL_PARSE_ARITY_MAX[name] : undefined;
+            const sigMax = shape === "Signal" || shape === "SignalDyn" ? SIGNAL_PARSE_ARITY_MAX[name] : undefined;
             if (sigMax !== undefined && e.args.length > sigMax) {
               diags.push({
                 code: "signal-arity",
@@ -1838,7 +1845,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
                   ? VOID_BYTES_METHODS.has(name)
                   : shape === "Object"
                     ? VOID_OBJECT_METHODS.has(name)
-                    : shape === "Signal"
+                    : shape === "Signal" || shape === "SignalDyn"
                       ? VOID_SIGNAL_METHODS.has(name)
                       : shape === "Callable"
                         ? VOID_CALLABLE_METHODS.has(name)
