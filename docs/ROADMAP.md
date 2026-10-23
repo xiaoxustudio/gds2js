@@ -2473,6 +2473,8 @@
     - 同型赋值 `var b: Array[int] = a` 收（g9 印 `[1]`）—— 判据是**标注文本相等**就不拒。
     实现落点：`analyze.ts` 里走定形容器声明那一趟（`for (const t of targets)`，已知目标标注 `Array[X]` 与 `t.init`），要补的是**标识符源**的解析 —— 把函数内已声明变量的标注文本攒成一张表（模块级的 `typedVars` 已有，局部要自己收），源标注与目标标注都是定形容器且文本不同 → 发 `Cannot assign a value of type <src> to variable "<name>" with specified type <slot>.`；源是 `Array` / `Dictionary`（无方括号）时**不在解析期发**，改由赋值路径发运行期那句。两侧都要过 `sema-wording-parity`（新增语料会是预期报错那批）。
 
+    **复验结清（第一百八十七笔，尺 `tmp/probe662/s662.mts` 九格两侧对读）**：上面那套「标识符源」的判据**早已落地** —— `Array[String]`→`Array[RefCounted]`、反向、`Array[int]`→`Array[float]`、`Array[int]`→`Array[String]`、`Dictionary[int,String]`→`Dictionary[String,int]` 五格解析期同句同行；源是不定型的两格（`var u = []` 与 `var u2: Array`）两侧都在**运行期**给 `Trying to assign an array of type "Array" to a variable of type "Array[RefCounted]".`（我们那句一字一样）；同标注那格收下（`V|[1]`），字面量源那格仍是原来的两句式（`Cannot include a value of type "int" as "String".` + `Cannot have an element …`）。九格全对，无代码改动 —— 这一条待办与 ②‴ / ⑤ 同批属过期账。
+
 0. **下一轮开工清单（2026-10-22 收笔时留，全部已量好或已定判据，按性价比排序）**：
    ①② **已结清**：异类字面量元素进类名槽与字面量容器的推断文本随 S622 落地；pack 十支的**名册完整性**（S629 ⑤ / S635 ⑥ 剩的那一格）随 S636 落地 —— 属性读 94 名 × 十支、元数两界逐名、九支调用句 324 格都过了裁判。
    ②′ **已随 S639 结清**：名册尺不再猜宇宙，改用同版本 `--dump-extension-api` 与运行期表逐名对账 —— 差出 StringName 九名、`NodePath.slice`、`Color.from_rgba8` 四处并接上。
