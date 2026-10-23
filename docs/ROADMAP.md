@@ -2489,7 +2489,7 @@
 0b. **旧靶单（2026-10-21 收笔时留，①–④ 已随 S602–S604 结清，留文备查）**：
    ① **`Array(...)` 的签名矩阵**（S601 ⑤）：2 参与 4 参两形的解析期原文已量到 —— `No constructor of "Array" matches the signature "Array(PackedByteArray, Variant.Type)".` 与 `"Array(Array, Variant.Type, Variant.Type, bool)".`（读数 `tmp/d6/s606.gd`），
    但「源形 × 参数个数」整张矩阵没量，`Array(2.5)` / `Array(true)` / `Array(StringName)` 三格的接受性也没量 —— 这一笔要的是一趟脚本量齐矩阵，再决定接进静态层还是运行期句。
-   ② **`min` / `minf` 的 Vector4i 字面量位**（S598 ⑥）：只量了 `maxf`，补两支脚本就齐。
+   ② **`min` / `minf` 的 Vector4i 字面量位**（S598 ⑥）：**已结清（复验，`tmp/probe663` 七格两侧对读，代码零改动）** —— `min/minf/max/maxf(Vector4i(…), Vector4i(…))` 四支引擎全在解析期发 `Invalid argument for "X()" function: argument 1 should be "float" but is "Vector4i".`，我们同句同位（`4:14`）；`min(Vector4i, 2)` 混型那一格同句；对照两支 `clamp(Vector4i, Vector4i, Vector4i)` 给 `(1, 2, 3, 4)`、`wrapi(1.5, 0, 2)` 给 `1` 也都一致。
    ③ **cubic / bezier 六支的名字实参形**（S600 ⑤）：走 `GLOBAL_NUM_ARITH` 那条通道，`cubic_interpolate(v, …)` 里 `v` 是带标注变量时引擎发哪一句没量。
    ④ **其余单变体全局函数的「容器要不要推迟」**（S600 ①）：`clamp` / `lerp` / `wrap` / `snapped` / `max` / `min` 见容器推迟、cubic/bezier 六支不推迟，剩下的族逐族扫一遍（一趟可以扫十几支）。
    ⑤ **`hash(Callable)`**（§2 第 1 条那笔旧账）：**定案长期拒** —— `tmp/probe661/fit3.mts` 量到 `get_instance_id()` 是高位为 1 的指针派 int64（`-9223372010866866769`，同批第二个实例差 1.6e10），方法/静态/lambda 三支的 Callable 哈希都随实例与名字变，是**对不上也不可能对上**的一族；lambda 那支引擎自己每进程换数。详见 S661 与其补正。
