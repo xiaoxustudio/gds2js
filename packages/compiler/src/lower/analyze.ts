@@ -5659,6 +5659,17 @@ const GLOBAL_TYPED_NAME_ARGS: Readonly<Record<string, ReadonlyArray<readonly [nu
 };
 
 /** 数值（int / float）参数学全局函数（S518–S523 逐型逐位量过）：名字实参非 {bool,int,float} 时引擎解析期发 `argument N should be "<want>"`。全是纯数值参、无 follows / suppress 交织（`clamp` / `lerp` / `wrap` 那种「跟第一参走」「一切接受」的不进）。 */
+/** cubic / bezier 那四支（S662）：名字实参参与「第一处命中」的扫描，读数 `tmp/probe664` —— 首位放 `var s: String`
+ *  时引擎只推 `argument 1`，`bezier_interpolate` / `bezier_derivative` / `cubic_interpolate_in_time` 同形。 */
+const CUBIC_NAME_ARG_FUNCS = new Set(["cubic_interpolate", "cubic_interpolate_in_time", "bezier_interpolate", "bezier_derivative"]);
+
+/** 名字实参在这一位上真正不合式的那个型名：数值型（int / float / bool）与期望型同名的都算收（`cubic_interpolate(a: int, …)` 实测给值）。 */
+function nameArgBad(a: Expr, argAnn: Map<string, string>, want: string): string | null {
+  const nm = argNameType(a, argAnn);
+  if (nm === null || nm === "int" || nm === "float" || nm === "bool" || nm === want) return null;
+  return nm;
+}
+
 const GLOBAL_NUM_ARITH: ReadonlySet<string> = new Set(["sqrt", "exp", "log", "sin", "cos", "tan", "deg_to_rad", "rad_to_deg",
   "wrapf", "move_toward", "smoothstep", "is_equal_approx", "remap",
   "acos", "asin", "atan", "atanh", "sinh", "cosh", "tanh", "ceilf", "floorf", "roundf", "signf",
@@ -6178,7 +6189,12 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
             ? lit === "int" || lit === "float"
               ? lit
               : null
-            : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null);
+            : nonNumericLiteral(a) ?? (refusesBool(pos) && lit === "bool" ? "bool" : null) ??
+              // cubic / bezier 那四支（S662，读数 `tmp/probe664`）：**名字实参也是命中源** —— `var s: String` 放进首位时
+              // 引擎发的是 `argument 1 should be "float" but is "String"`（原先这一位 literalTypeName 交不出型就整条跳过，
+              // 于是报成了下一支字面量的 argument 2、或在 bezier 那几支一句不发拖到运行期）。引擎按槽位升序只推第一处，
+              // 上面那句 `if (firstLiteralHit === null || pos < firstLiteralHit.pos)` 已经是这个口径，不用另加闸门。
+              (CUBIC_NAME_ARG_FUNCS.has(callee.name) && lit === null ? nameArgBad(a, argAnn, want) : null);
         if (got === null || got === want) continue;
         if (firstLiteralHit === null || pos < firstLiteralHit.pos) firstLiteralHit = { pos, got };
       }
