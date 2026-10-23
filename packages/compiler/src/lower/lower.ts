@@ -709,14 +709,29 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
     // 三元手臂（S678，尺 `tmp/probe675/t_*.gd` 四格）：引擎按**取走的那一支**折叠后参与匹配 ——
     // `match 1: 1 if true else 2` 命中、`match 2` 与 `match 5` 走默认支，括号形同判（第二百十四笔①更正了「收下但永不匹配」的旧读数）。
     case "conditional_expression": {
+      if (n.type === "parenthesized_expression" && armMissingParen(n)) {
+        throw new UnsupportedError("pattern-arm-parse", `Expected closing ")" after grouping expression.`);
+      }
       if (armAllLiterals(n)) return { kind: "const", expr: lowerExpr(n) };
       // 叶子掺属性读那一形（`1 + self.x`）引擎发的是「必须是常量式」那句，不是我们的自述（`tmp/probe668` 实测）
       if (armHasAttributeLeaf(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
+    case "ERROR": {
+      const first = n.children[0]?.text ?? "";
+      if (first === ",") throw new UnsupportedError("pattern-arm-parse", `Expected expression for match pattern.`);
+      if (first === "else") throw new UnsupportedError("pattern-arm-parse", `Expected ":" after "match" pattern guard.`);
+      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
+    }
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
+}
+
+/** 括号的收口那个 `)` 是塌掉的 ERROR（`(1:` 未闭合那一形，S685 尺 `tmp/probe706/shapes.mts`）：
+ *  vendored 语法造出一个空文本的 `)` 节点补位，我们若照旧折就**恢复出一棵能跑的树并匹中手臂**，引擎在解析期就拒。 */
+function armMissingParen(n: SyntaxNode): boolean {
+  return n.children.some((c) => c.type === ")" && (c.hasError || c.text === ""));
 }
 
 /** 手臂式子里每一片都是字面量（嵌套的二元 / 一元 / 括号都算，只要叶子全是字面量）。 */
