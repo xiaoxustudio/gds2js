@@ -606,6 +606,7 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       if (n.text === "_") return { kind: "wildcard" };
       return { kind: "const", expr: lowerExpr(n) };
     case "attribute":
+      if (armSelfBase(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       return { kind: "const", expr: lowerExpr(n) };
     case "integer":
       return { kind: "lit", lit: "int", value: lowerIntLit(n.text) };
@@ -667,6 +668,14 @@ function armAllLiterals(n: SyntaxNode): boolean {
     return kids.length > 0 && kids.every(armAllLiterals);
   }
   return ARM_LITERAL_NODES.has(n.type);
+}
+
+/** 手臂的属性读是不是 `self.<名>` 这一形（S667，尺 `tmp/probe669/{t_self,t_selfprop}.gd` 与 `tmp/probe671/b_varattr.gd`：
+ *  有这个名字的、没有的、方法是方法，引擎三格都在解析期发「必须是常量式」那句，位置是手臂那一行）。
+ *  基是变量的那一形量过是**放行**（`tmp/probe671/{a_dictvar,a_strvar,a_intvar}.gd` 三格引擎到运行期才开口），所以只拦 `self`。 */
+function armSelfBase(n: SyntaxNode): boolean {
+  const base = named(n)[0];
+  return base !== undefined && base.type === "identifier" && base.text === "self";
 }
 
 /** 式子里有没有属性读那片（`self.x`、`A.B`）—— 有的话引擎那一形走「常量式」那句拒。 */
@@ -950,7 +959,8 @@ function callArgs(n: SyntaxNode): SyntaxNode[] {
 /** vendored 的 tree-sitter 语法把「`&"…"` / `^"…"` 字面量直接点方法」的**接收者**吞进 ERROR 节点，
  *  后面那段调用仍是独立的 `base_call` 兄弟（实测 CST：`ERROR(string_name)` + `base_call("." identifier arguments)`）。
  *  引擎那边这一形解析得下来（`tmp/probe650/654.engine.txt` 里 StringName 面 218 形都有读数），所以在下行里
- *  把两块拼回一次属性调用，链式的每一段继续折。形状不对（字面量以外、下一兄弟不是 `base_call`）一律 null，
+ *  把两块拼回一次属性调用，链式的每一段继续折；紧跟的是运算符节点时（S659）链挂在它的 left 槽里，也接。
+ *  形状不对（字面量以外、下一兄弟既不是 `base_call` 也不是 `binary_operator`、left 槽不是 `base_call`）一律 null，
  *  交回原来那句「表达式 ERROR 未支持」—— 不猜别的形状。 */
 function recoverLiteralCall(err: SyntaxNode): Expr | null {
   const lit = named(err)[0];
