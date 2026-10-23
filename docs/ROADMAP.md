@@ -2745,6 +2745,7 @@
 ② **第八处站点是裸值通道**：新建语料把十四形串成一页时，`print(d if true else 9)`（字典当分支）在我们这侧炸 `[show-type] print 不支持 undefined`，而**同一形在单文件探针里过** —— 差别在 `computeUnboxed` / `kindOfExpr` 那一族的型推断： ternary 没进那张表，函数里语句一多就被判成可裸值，发射时把盒子当裸值喂给 print。所以清单要写成**八处**：五处遍历 switch + `emitExprR` + `emitExprVar` + **型推断/裸值那一族**（`kindOfExpr` 与其调用面）。
 ③ 另两处待发：`var v: int = 1 if true else 2.5` 这类**标注侧**的转换判据（探针里过，语料里未单独钉），以及分支为容器时的**裸值通道**判据。这轮不发：判据不齐就发，撞的是静默错值那条红线。
 ④ 做法留在 #17：把第八处补上再建语料（语料一页只放**已经逐格对过**的形），产物里搜 `rt.tern(` 是第一步，逐字节对 golden 是第二步。
+⑤ **第八处站点这一轮定位到行了**：补完七处后 `cli build` 出的产物是 `print(rt.showArgs([rt.tern(rt.V.bool(true), () => d, () => rt.V.int(9))]))` —— 分支里的 `d` 是**裸值通道的字典变量**，被原样递进 `rt.tern`，而 `showArgs` 要的是 Variant；同页另一行 `print((d if true else 9)[1])` 走的是 `rt.wrapValue(rt.index(...))` 那条包装路，所以只在裸值那一支漏。修法候选（下一轮按这个做，别再从零摸）：`emitExprR` 的 ternary 那三支别用 `boxR`，对「裸值变量」要按 `rt.wrapValue(...)` 那一式出（现成参照是同一函数里 `index` 那一段），或者让 ternary 整体退出裸值通道（`computeUnboxed` 的取子表里把 ternary 当不可裸）—— 两种都要按 `tmp/probe676` 十四格 + 语料一页逐字节验。
 ⑤ **S675 / S676 的漂移复验**：`test:golden-check` 整跑 **416/416 零漂移**（500s，日志 `tmp/d6/gc676.log`）—— 这两笔改的是手臂的解析期文案与名册，golden 一侧一字没变。
 - **2026-10-23 第二百十九笔（试做续，代码零改动：改动整份收回，门与盘面一字不变）**：三目本体按第二百十八笔的七处 switch **全部补齐并跑通 11/14 格** —— 产物里确实是 `rt.tern(rt.V.bool(true), () => rt.V.int(1), () => rt.V.int(2))`，
 ① 已过：`a_basic` / `a_types` / `a_short`（短路只算取走的一支，`log` 给 `[1]` 与 `[2]`）/ `a_cond`（真值判据同 `if`）/ `a_nan` / `a_big`（int64 不降双精度）/ `a_chain`（右结合）/ `a_dict` / `a_annot` / `a_infer` / `a_null` 十一格与引擎一字一样。
