@@ -1,0 +1,9 @@
+abs|arm
+mini|arm
+max|arm
+sign|arm
+sqrt|arm
+deg|arm
+snapped|arm
+int|arm
+len|default
