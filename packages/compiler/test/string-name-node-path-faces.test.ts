@@ -77,21 +77,16 @@ describe("NodePath 只认十名", () => {
 });
 
 describe("接收者的静态证明与两面互不串", () => {
-  it("^ 字面量直接当接收者同样拦；& 那一形仍撞 tree-sitter（§6 第 64 条⑤，本轮不接）", async () => {
+  it("两种字面量直接当接收者都同样拦（& 那一形的收形见 S651）", async () => {
     eq("389", '^"a/b".get_name(1, 2)', (await face(`${H}func f():\n\tprint(^"a/b".get_name(1, 2))\n${TAIL}`))[0], 'Too many arguments for "get_name()" call. Expected at most 1 but received 2.');
     eq("389", '^"a/b".length(1)', await face(`${H}func f():\n\tprint(^"a/b".length(1))\n${TAIL}`), [
       'Cannot find member "length" in base "NodePath".',
       'Function "length()" not found in base NodePath.',
     ]);
-    const bad = async (expr: string): Promise<string> => {
-      try {
-        lower(await parseSource(`${H}func f():\n\tprint(${expr})\n${TAIL}`));
-        return "编得过";
-      } catch (e) {
-        return e instanceof Error ? e.message : "非 Error";
-      }
-    };
-    eq("389", '&"ab".to_upper(1)', await bad('&"ab".to_upper(1)'), "表达式 ERROR 未支持");
+
+    eq("389", '&"ab".to_upper(1)', (await face(`${H}func f():
+	print(&"ab".to_upper(1))
+${TAIL}`))[0], 'Too many arguments for "to_upper()" call. Expected at most 0 but received 1.');
   });
 
   it("初值是字面量、没写标注的名字也认", async () => {

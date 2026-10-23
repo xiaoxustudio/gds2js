@@ -171,6 +171,7 @@ function atNode<T>(n: SyntaxNode, f: () => T): T {
 export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
+  markLiteralCalls(tree.rootNode);
   try {
     const m = lowerModule(tree.rootNode);
     if (packCodecUse) m.usesPackCodec = true;
@@ -746,11 +747,15 @@ function lowerExprInner(n: SyntaxNode): Expr {
     case "call": {
       const kids = named(n);
       const callee = lowerExpr(need(kids[0] ?? null, "被调用者"));
-      const argsNode = field(n, "arguments");
-      return { kind: "call", callee, args: argsNode ? named(argsNode).map(lowerExpr) : [], loc: c };
+      return { kind: "call", callee, args: callArgs(n).map(lowerExpr), loc: c };
     }
     case "binary_operator":
       return lowerBinary(n, c);
+    case "ERROR": {
+      const recovered = recoverLiteralCall(n);
+      if (recovered !== null) return recovered;
+      throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
+    }
     default:
       throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
   }
@@ -866,9 +871,74 @@ function armArgKind(n: SyntaxNode): string | null {
   }
 }
 
+/** `CsNode` 这一层不暴露 `nextNamedSibling`，兄弟关系从 `indexParents` 存的父节点上找。 */
+function nextNamedSib(n: SyntaxNode): SyntaxNode | undefined {
+  const parent = CST_PARENTS.get(n);
+  if (parent === undefined) return undefined;
+  const kids = named(parent);
+  const i = kids.indexOf(n);
+  return i < 0 ? undefined : kids[i + 1];
+}
+
+/** 预扫描：先把「字面量 ERROR + 后面那一串 `base_call` 兄弟」整段标掉。参数迭代发生在下降**之前**，
+ *  所以标记必须先行，不能等 `recoverLiteralCall` 边降边标。 */
+function markLiteralCalls(n: SyntaxNode): void {
+  if (n.type === "ERROR") {
+    const lit = named(n)[0];
+    if (lit !== undefined && (lit.type === "string_name" || lit.type === "node_path")) {
+      let sib = nextNamedSib(n);
+      while (sib !== undefined && sib.type === "base_call") {
+        CONSUMED.add(sib);
+        sib = nextNamedSib(sib);
+      }
+    }
+  }
+  for (const c of n.children) markLiteralCalls(c);
+}
+
+/** 被 `recoverLiteralCall` 拼进上一格的兄弟节点：参数迭代要把它们滤掉，否则会再下一次重复的调用。 */
+const CONSUMED = new WeakSet<SyntaxNode>();
+
 function callArgs(n: SyntaxNode): SyntaxNode[] {
   const argsNode = field(n, "arguments");
-  return argsNode === null ? [] : named(argsNode);
+  return argsNode === null ? [] : named(argsNode).filter((c) => !CONSUMED.has(c));
+}
+
+/** vendored 的 tree-sitter 语法把「`&"…"` / `^"…"` 字面量直接点方法」的**接收者**吞进 ERROR 节点，
+ *  后面那段调用仍是独立的 `base_call` 兄弟（实测 CST：`ERROR(string_name)` + `base_call("." identifier arguments)`）。
+ *  引擎那边这一形解析得下来（`tmp/probe650/654.engine.txt` 里 StringName 面 218 形都有读数），所以在下行里
+ *  把两块拼回一次属性调用，链式的每一段继续折。形状不对（字面量以外、下一兄弟不是 `base_call`）一律 null，
+ *  交回原来那句「表达式 ERROR 未支持」—— 不猜别的形状。 */
+function recoverLiteralCall(err: SyntaxNode): Expr | null {
+  const lit = named(err)[0];
+  if (lit === undefined || (lit.type !== "string_name" && lit.type !== "node_path")) return null;
+  let sib = nextNamedSib(err);
+  if (sib === undefined || sib.type !== "base_call") return null;
+  let out = lowerExpr(lit);
+  while (sib !== undefined && sib.type === "base_call") {
+    const kids = named(sib);
+    const argsNode = field(sib, "arguments");
+    const folded = baseCallStep(out, kids, argsNode, sib);
+    if (folded === null) break;
+    CONSUMED.add(sib);
+    out = folded;
+    sib = nextNamedSib(sib);
+  }
+  return out;
+}
+
+/** 一段 `.名字(实参)` 或 `.名字`：属性名认 `identifier`，链上的属性读认 `attribute`，下标不认（没量过）。 */
+function baseCallStep(obj: Expr, kids: SyntaxNode[], argsNode: SyntaxNode | null, at: SyntaxNode): Expr | null {
+  const c = loc(at);
+  const head = kids[0];
+  if (head === undefined) return null;
+  if (head.type === "identifier") {
+    const name = head.text;
+    if (argsNode === null) return { kind: "attribute", obj, name, loc: c };
+    const args = named(argsNode).filter((x) => !CONSUMED.has(x)).map(lowerExpr);
+    return { kind: "call", callee: { kind: "attribute", obj, name, loc: c }, args, loc: c };
+  }
+  return null;
 }
 
 function ctorAccepts(name: string, kinds: Array<string | null>): boolean {
