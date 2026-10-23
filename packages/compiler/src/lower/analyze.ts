@@ -1807,7 +1807,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
     const expr = (e: Expr, discarded: boolean): void => {
       switch (e.kind) {
         case "call": {
-          if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call")) {
+          if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call" || e.callee.obj.kind === "array" || e.callee.obj.kind === "dict")) {
             const name = e.callee.name;
             const chainPack = e.callee.obj.kind === "call" ? (PACK_TYPE_NAMES.has(ownerFace(e.callee.obj) ?? "") ? "Pack" : null) : null;
             // `Callable(...)` 直接当接收者（`C_ctor` 十二格实测与标注形同句）：构造式那一名就是 Callable
@@ -1821,7 +1821,11 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
                   (PACK_TYPE_NAMES.has(e.callee.obj.name) ? "Pack" : null) ??
                   (e.callee.obj.name === "Array" || e.callee.obj.name === "Dictionary" ? e.callee.obj.name : null) ??
                   (signalNames.has(e.callee.obj.name) ? "Signal" : null)
-                : chainPack ?? (ctorCall ? "Callable" : null);
+                : e.callee.obj.kind === "array"
+                  ? "Array"
+                  : e.callee.obj.kind === "dict"
+                    ? "Dictionary"
+                    : chainPack ?? (ctorCall ? "Callable" : null);
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
               diags.push({
