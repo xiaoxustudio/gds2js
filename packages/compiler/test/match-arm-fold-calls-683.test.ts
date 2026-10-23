@@ -59,12 +59,10 @@ describe("lower · 手臂折叠名册的第三批", () => {
     expect(await verdict(subj, arm), arm).toBe("(折叠收)");
   });
 
-  it("解析期拒与真静默两族都落在名册之外，发常量式那句", async () => {
+  it("解析期拒那一族落在名册之外，发常量式那句", async () => {
     for (const arm of ["str(1)", "hash(1)", "range(3)", "is_same(1.0, 1.0)", "typeof(1)", "weakref(self)", "var_to_str(1)"]) {
       expect(await verdict("1", arm), arm).toBe(ARM_PATTERN);
     }
-    expect(await verdict("1.5", "cubic_interpolate(0.0, 1.0, 2.0, 3.0, 0.5)")).toBe(ARM_PATTERN);
-    expect(await verdict("135.0", "cubic_interpolate_angle(0.0, 90.0, 180.0, 270.0, 0.5)")).toBe(ARM_PATTERN);
   });
 
   it("在册名字的越元数形仍先发元数句（扩名册没把它冲掉）", async () => {

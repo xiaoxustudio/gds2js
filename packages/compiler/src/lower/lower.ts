@@ -757,7 +757,8 @@ const ARM_FOLD_GLOBALS = new Set([
   "atan", "atan2", "rad_to_deg", "floor", "ceil", "round", "roundf", "fposmod",
   "lerp", "min", "maxi", "lerp_angle", "smoothstep", "snappedf", "snappedi",
   "wrap", "wrapi", "wrapf", "is_equal_approx", "is_finite", "is_nan",
-  "inverse_lerp", "db_to_linear",
+  "inverse_lerp", "db_to_linear", "linear_to_db", "ease", "bezier_interpolate",
+  "cubic_interpolate", "cubic_interpolate_angle", "float", "fmod", "ceilf", "floori", "ceili",
 ]);
 
 function lowerExpr(n: SyntaxNode): Expr {
