@@ -1,0 +1,11 @@
+V01|A-sum
+V02|A-sub
+V03|A-float
+V04|A-not
+V05|A-or
+V06|A-str
+V07|A-neg
+V08|A-paren
+V09|A-none
+V10|A-none
+V11|A-none

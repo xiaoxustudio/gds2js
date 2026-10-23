@@ -643,10 +643,44 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
           pattern: lowerPattern(need(field(pair, "value") ?? named(pair)[1] ?? null, "字典值模式")),
         })),
       };
+    // 操作数**全是字面量**的式子当手臂：引擎折叠后参与匹配（`tmp/probe668` 十一形实测 —— `1 + 1` 匹 subject 2、
+    // `2 * 3` 匹 6、`1.5 + 1` 匹 2.5、`3 - 2` 匹 1、`4 / 2` 匹 2、`7 % 3` 匹 1、`2 ** 1` 匹 2、`-1` 匹 -1、
+    // `"a" + "b"` 匹 "ab"、`not true` 匹 false、`true and false` / `true or false` 各按折出的值）。
+    // 走的是合式构造臂那条现成的 `const` 发射；掺非常量片（`self.x + 1`）与三元、下标那几形没量过，照旧拒。
+    case "binary_operator":
+    case "unary_operator":
+    case "parenthesized_expression": {
+      if (armAllLiterals(n)) return { kind: "const", expr: lowerExpr(n) };
+      // 叶子掺属性读那一形（`1 + self.x`）引擎发的是「必须是常量式」那句，不是我们的自述（`tmp/probe668` 实测）
+      if (armHasAttributeLeaf(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
+      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
+    }
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
 }
+
+/** 手臂式子里每一片都是字面量（嵌套的二元 / 一元 / 括号都算，只要叶子全是字面量）。 */
+function armAllLiterals(n: SyntaxNode): boolean {
+  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression") {
+    const kids = named(n);
+    return kids.length > 0 && kids.every(armAllLiterals);
+  }
+  return ARM_LITERAL_NODES.has(n.type);
+}
+
+/** 式子里有没有属性读那片（`self.x`、`A.B`）—— 有的话引擎那一形走「常量式」那句拒。 */
+function armHasAttributeLeaf(n: SyntaxNode): boolean {
+  if (n.type === "attribute") return true;
+  if (n.type === "binary_operator" || n.type === "unary_operator" || n.type === "parenthesized_expression") {
+    return named(n).some(armHasAttributeLeaf);
+  }
+  return false;
+}
+
+const ARM_LITERAL_NODES = new Set([
+  "integer", "float", "string", "string_name", "node_path", "true", "false", "null",
+]);
 
 function lowerExpr(n: SyntaxNode): Expr {
   return atNode(n, () => lowerExprInner(n));
