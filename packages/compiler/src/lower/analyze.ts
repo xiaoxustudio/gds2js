@@ -940,6 +940,15 @@ const CALLABLE_PARSE_ARITY: Record<string, [number, number]> = {
   get_unbound_arguments_count: [0, 0], get_method: [0, 0], get_object: [0, 0], get_object_id: [0, 0],
   hash: [0, 0], is_custom: [0, 0], is_null: [0, 0], is_standard: [0, 0], is_valid: [0, 0],
 };
+/** Callable 面的**形参型**两句（S657，读数 `tmp/probe657/r657.mts` 二十六格：标注与构造式推断两形 × 十三调用）。
+ *  元数那句在前、这两句在后；只认**字面量实参**：命名实参（`var w: int` 之后 `c.unbind(w)`）引擎发哪一句没量过，不收。
+ *  接受的那几形同样量过：`create("a", "b")` 与 `create(1, &"m")` 都不开口（String 折成 StringName、第一槽是 Variant 全收）。 */
+const CALLABLE_PARSE_ARGS: Record<string, Array<[number, string[], string]>> = {
+  create: [[2, ["int", "bool", "Vector2i"], "StringName"]],
+  bindv: [[1, ["int"], "Array"]],
+  callv: [[1, ["StringName"], "Array"]],
+  unbind: [[1, ["StringName"], "int"]],
+};
 /** 九种 Packed*Array 的名字：接收者是它们之一时按 pack 那一侧的判据走，九种的表口径一致。 */
 const PACK_SHAPE_NAMES = new Set([
   "PackedByteArray",
@@ -1838,6 +1847,20 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
             if (shape === "Callable") {
               const d = arityDiag(CALLABLE_PARSE_ARITY, "callable-arity", name, e.args.length, e.loc);
               if (d !== null) diags.push(d);
+              for (const [pos, refuse, want] of CALLABLE_PARSE_ARGS[name] ?? []) {
+                const bad = literalTypeName(e.args[pos - 1]);
+                if (bad === null || !refuse.includes(bad)) continue;
+                diags.push({
+                  code: "callable-arg-pass",
+                  message: `Cannot pass a value of type "${bad}" as "${want}".`,
+                  loc: e.loc,
+                });
+                diags.push({
+                  code: "callable-arg-type",
+                  message: `Invalid argument for "${name}()" function: argument ${String(pos)} should be "${want}" but is "${bad}".`,
+                  loc: e.loc,
+                });
+              }
             }
             if (!discarded) {
               const isVoid =
