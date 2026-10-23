@@ -772,7 +772,7 @@ function lowerBinary(n: SyntaxNode, c: Loc): Expr {
     checkAfterToken(n, tok, field(n, "right"), `Expected expression after "${op}" operator.`);
   }
   if (MUL_LEVEL[op] === undefined) {
-    const left = lowerExpr(need(field(n, "left"), "左操作数"));
+    const left = lowerOperand(need(field(n, "left"), "左操作数"));
     const right = need(field(n, "right"), "右操作数");
     if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
     if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
@@ -783,7 +783,7 @@ function lowerBinary(n: SyntaxNode, c: Loc): Expr {
   collectMulChain(n, operands, ops);
   let at = 0;
   const climb = (min: number): Expr => {
-    let left = lowerExpr(operands[at++]!);
+    let left = lowerOperand(operands[at++]!);
     while (at - 1 < ops.length && MUL_LEVEL[ops[at - 1]!.op]! >= min) {
       const step = ops[at - 1]!;
       const right = climb(MUL_LEVEL[step.op]! + 1);
@@ -891,6 +891,7 @@ function markLiteralCalls(n: SyntaxNode): void {
         CONSUMED.add(sib);
         sib = nextNamedSib(sib);
       }
+      if (sib !== undefined && sib.type === "binary_operator") CONSUMED.add(sib);
     }
   }
   for (const c of n.children) markLiteralCalls(c);
@@ -898,6 +899,14 @@ function markLiteralCalls(n: SyntaxNode): void {
 
 /** 被 `recoverLiteralCall` 拼进上一格的兄弟节点：参数迭代要把它们滤掉，否则会再下一次重复的调用。 */
 const CONSUMED = new WeakSet<SyntaxNode>();
+
+/** `ERROR(字面量) base_call… binary_operator(base_call, 运算符, 右)` 那一形里，运算符节点的 left 槽就是折好的那条链，
+ *  CST 改不了，所以按节点存一份折好的 Expr 给 `lowerOperand` 取用。 */
+const LEFT_RECOVER = new WeakMap<SyntaxNode, Expr>();
+
+function lowerOperand(n: SyntaxNode): Expr {
+  return LEFT_RECOVER.get(n) ?? lowerExpr(n);
+}
 
 function callArgs(n: SyntaxNode): SyntaxNode[] {
   const argsNode = field(n, "arguments");
@@ -913,8 +922,19 @@ function recoverLiteralCall(err: SyntaxNode): Expr | null {
   const lit = named(err)[0];
   if (lit === undefined || (lit.type !== "string_name" && lit.type !== "node_path")) return null;
   let sib = nextNamedSib(err);
-  if (sib === undefined || sib.type !== "base_call") return null;
+  if (sib === undefined) return null;
   let out = lowerExpr(lit);
+  // 字面量后面紧跟运算符那一形（`&"ab".length() + "z"`）：链就挂在运算符节点的 left 槽里
+  if (sib.type === "binary_operator") {
+    const leftNode = field(sib, "left");
+    if (leftNode === null || leftNode.type !== "base_call") return null;
+    const stepped = baseCallStep(out, named(leftNode), field(leftNode, "arguments"), leftNode);
+    if (stepped === null) return null;
+    LEFT_RECOVER.set(leftNode, stepped);
+    CONSUMED.add(sib);
+    return lowerOperand(sib);
+  }
+  if (sib.type !== "base_call") return null;
   while (sib !== undefined && sib.type === "base_call") {
     const kids = named(sib);
     const argsNode = field(sib, "arguments");
@@ -923,6 +943,15 @@ function recoverLiteralCall(err: SyntaxNode): Expr | null {
     CONSUMED.add(sib);
     out = folded;
     sib = nextNamedSib(sib);
+  }
+  // 量过的下一形：运算符节点（`==` / `<` / `and` 三形同构，读数 tmp/probe658/cstop2.mts）——
+  // 只认它的 left 槽正是刚折完的那段 base_call 链，别的一律放弃，交回原来那句「表达式 ERROR 未支持」
+  if (sib !== undefined && sib.type === "binary_operator") {
+    const leftNode = field(sib, "left");
+    if (leftNode === null || leftNode.type !== "base_call") return null;
+    LEFT_RECOVER.set(leftNode, out);
+    CONSUMED.add(sib);
+    return lowerOperand(sib);
   }
   return out;
 }
