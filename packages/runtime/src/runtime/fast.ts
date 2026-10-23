@@ -146,27 +146,27 @@ export const fast = {
     return r;
   },
   iDivC(a: number, b: number): number {
-    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
+    if (b === 0) throw new GodotRuntimeError("int-div-zero", "Division by zero error in operator '/'.");
     const r = Math.trunc(a / b);
     if (!Number.isSafeInteger(r)) throw int64(r);
     return r;
   },
   iModC(a: number, b: number): number {
-    if (b === 0) throw new GodotRuntimeError("int-mod-zero", "整数取模零");
+    if (b === 0) throw new GodotRuntimeError("int-mod-zero", "Modulo by zero error in operator '%'.");
     const r = a % b;
     if (!Number.isSafeInteger(r)) throw int64(r);
     return r;
   },
 
   iDiv(a: number, b: number): number {
-    if (b === 0) throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
+    if (b === 0) throw new GodotRuntimeError("int-div-zero", "Division by zero error in operator '/'.");
     return Math.trunc(a / b);
   },
   fDiv(a: number, b: number): number {
     return a / b;
   },
   iMod(a: number, b: number): number {
-    if (b === 0) throw new GodotRuntimeError("int-mod-zero", "整数取模零");
+    if (b === 0) throw new GodotRuntimeError("int-mod-zero", "Modulo by zero error in operator '%'.");
     return a % b;
   },
   iPow(a: number, b: number): number {

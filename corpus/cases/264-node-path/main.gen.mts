@@ -39,7 +39,7 @@ export class Main extends SceneTree {
       rt.frameLine(8);
       print(rt.showArgs([rt.V.str("n04|"), rt.V.str(rt.varToStr(p))]));
       rt.frameLine(9);
-      print(rt.showArgs([rt.V.str("n05|"), rt.formatOf(rt.V.str("%s"), p)]));
+      print(rt.showArgs([rt.V.str("n05|"), rt.formatOf(rt.V.str("%s"), p, false)]));
       rt.frameLine(10);
       print(rt.showArgs([rt.V.str("n06|"), rt.nodePathCtor([rt.V.str("")])]));
       rt.frameLine(11);
@@ -233,7 +233,7 @@ export class Main extends SceneTree {
       rt.frameLine(102);
       print(rt.showArgs([rt.V.str("n95|"), rt.typeOf(rt.asType(p, "NodePath"))]));
       rt.frameLine(103);
-      print(rt.showArgs([rt.V.str("n96|"), rt.formatOf(rt.V.str("%6s|"), p)]));
+      print(rt.showArgs([rt.V.str("n96|"), rt.formatOf(rt.V.str("%6s|"), p, false)]));
       rt.frameLine(104);
       print(rt.showArgs([rt.V.str("n97|"), rt.ops.add(rt.ops.add(rt.strBuiltin([rt.method(rt.nodePathCtor([rt.V.str("a")]), "get_name", [rt.V.int(0)])]), rt.V.str("|")), rt.strBuiltin([rt.method(rt.nodePathCtor([rt.V.str(":a")]), "get_subname", [rt.V.int(0)])]))]));
       rt.frameLine(105);

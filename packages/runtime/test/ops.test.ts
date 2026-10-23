@@ -23,10 +23,10 @@ describe("runtime/ops · 算术、比较、位运算", () => {
     eq("002", "float赋给int变量(3.9)", fast.intCast(3.9), 3);
     eq("002", "float(7)/2", show(ops.div(F(7), I(2))), "3.5");
 
-    eq("003", "-7%3", show(ops.mod(I(-7), I(3))), "-1");
-    eq("003", "7%-3", show(ops.mod(I(7), I(-3))), "1");
-    eq("003", "7%3", show(ops.mod(I(7), I(3))), "1");
-    shouldThrow("003", "7.5%3（float 取模，Godot 编译期就拒）", () => ops.mod(F(7.5), I(3)));
+    eq("003", "-7%3", show(ops.mod(I(-7), I(3), true)), "-1");
+    eq("003", "7%-3", show(ops.mod(I(7), I(-3), true)), "1");
+    eq("003", "7%3", show(ops.mod(I(7), I(3), true)), "1");
+    shouldThrow("003", "7.5%3（float 取模，Godot 编译期就拒）", () => ops.mod(F(7.5), I(3), true));
 
     eq("004", "2**3**2", show(ops.pow(ops.pow(I(2), I(3)), I(2))), "64");
     eq("004", "2**3", show(ops.pow(I(2), I(3))), "8");

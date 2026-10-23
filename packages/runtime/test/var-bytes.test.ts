@@ -46,16 +46,15 @@ describe("runtime/var-bytes · 坏字节与没量过的形状", () => {
 
   it("没量过的编码形状一支都不发（按红线响亮拒）", () => {
     const refused: Array<[string, Variant]> = [
-      ["RID", V.object(new GdRid(5n))],
       ["Signal", V.object(new Signal())],
-      ["空 Callable", nullCallable()],
     ];
     eq(
       "282",
-      "三支各归各的拒答码（NodePath、九种 pack、Vector3i 都按 275 的读数出货了）",
+      "S687 之后只剩 Signal 那一支（RID 与 Callable 照 tmp/probe709 的读数出货了）",
       refused.map(([n, v]) => `${n}:${code(() => gVarToBytes(v))}`).join("|"),
-      "RID:[var-to-bytes-object]|Signal:[var-to-bytes-object]|空 Callable:[var-to-bytes-object]",
+      "Signal:[var-to-bytes-object]",
     );
+    eq("287", "RID 写 23 加号、Callable 只写裸头部", `${vb(V.object(new GdRid(5n)))}|${vb(nullCallable())}`, "[23, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0]|[25, 0, 0, 0]");
     eq("282", "bytes_to_var 的第一参要 PackedByteArray（给了 int）", code(() => gBytesToVar(V.int(5))), "[bytes-to-var-arg]");
   });
 

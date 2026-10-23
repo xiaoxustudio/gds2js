@@ -113,7 +113,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "sf");
     try {
       rt.frameLine(7);
-      return rt.formatOf(rt.V.str("sf=%d/%d"), rt.V.array(rt.GArray.of([a, b])));
+      return rt.formatOf(rt.V.str("sf=%d/%d"), rt.V.array(rt.GArray.of([a, b])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -128,7 +128,7 @@ class A extends rt.GdScriptObject {
       a = rt.paramSlot(a, "int", 1, "one", this);
       b = rt.paramSlot(b, "int", 2, "one", this);
       rt.frameLine(10);
-      return rt.formatOf(rt.V.str("one=%d/%d"), rt.V.array(rt.GArray.of([a, b])));
+      return rt.formatOf(rt.V.str("one=%d/%d"), rt.V.array(rt.GArray.of([a, b])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -141,7 +141,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "expr_default");
     try {
       rt.frameLine(13);
-      return rt.formatOf(rt.V.str("e=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
+      return rt.formatOf(rt.V.str("e=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -156,7 +156,7 @@ class A extends rt.GdScriptObject {
       rt.frameLine(16);
       rt.method(a, "append", [rt.V.int(99)]);
       rt.frameLine(17);
-      return rt.formatOf(rt.V.str("arr=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
+      return rt.formatOf(rt.V.str("arr=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -169,7 +169,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "vec_default");
     try {
       rt.frameLine(20);
-      return rt.formatOf(rt.V.str("v=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([v])])));
+      return rt.formatOf(rt.V.str("v=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([v])])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -182,7 +182,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "null_default");
     try {
       rt.frameLine(23);
-      return rt.formatOf(rt.V.str("n=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])));
+      return rt.formatOf(rt.V.str("n=%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a])])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -196,7 +196,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "refs_earlier", this);
       rt.frameLine(26);
-      return rt.formatOf(rt.V.str("r=%d/%d"), rt.V.array(rt.GArray.of([a, b])));
+      return rt.formatOf(rt.V.str("r=%d/%d"), rt.V.array(rt.GArray.of([a, b])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -209,7 +209,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "const_default");
     try {
       rt.frameLine(29);
-      return rt.formatOf(rt.V.str("c=%d"), rt.V.array(rt.GArray.of([a])));
+      return rt.formatOf(rt.V.str("c=%d"), rt.V.array(rt.GArray.of([a])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -222,7 +222,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "method_default");
     try {
       rt.frameLine(32);
-      return rt.formatOf(rt.V.str("d=%d/%d"), rt.V.array(rt.GArray.of([a, this.helper()])));
+      return rt.formatOf(rt.V.str("d=%d/%d"), rt.V.array(rt.GArray.of([a, this.helper()])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -263,7 +263,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "float_into_int_slot", this);
       rt.frameLine(41);
-      return rt.formatOf(rt.V.str("m=%d"), a);
+      return rt.formatOf(rt.V.str("m=%d"), a, true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -277,7 +277,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "float_into_int_math", this);
       rt.frameLine(44);
-      return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.add(a, rt.V.float(0.5))])])));
+      return rt.formatOf(rt.V.str("mm=%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.add(a, rt.V.float(0.5))])])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -290,7 +290,7 @@ class A extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "call_it");
     try {
       rt.frameLine(47);
-      return rt.formatOf(rt.V.str("%s|%s"), rt.V.array(rt.GArray.of([this.expr_default(), this.method_default()])));
+      return rt.formatOf(rt.V.str("%s|%s"), rt.V.array(rt.GArray.of([this.expr_default(), this.method_default()])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -353,7 +353,7 @@ class Needs extends rt.GdScriptObject {
         rt.frameLine(53);
         this.a = rt.toInt(p_a);
         rt.frameLine(54);
-        print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a)]));
+        print(rt.showArgs([rt.formatOf(rt.V.str("n=%d"), p_a, true)]));
         } catch (__gd_err) {
           rt.gdFunctionError(__gd_err);
           return;

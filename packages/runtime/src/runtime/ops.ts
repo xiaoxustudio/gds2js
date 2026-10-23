@@ -59,12 +59,15 @@ const isStringish = (v: Variant): boolean => v.t === Tag.STRING || v.t === Tag.S
 
 /** `%` 的格式化那一路：左支 `String` 与 `StringName` 都当格式串读，回值都是 `String`
  *  （实测 `tmp/d6/s491.py`：`&"%d" % 1` 给 `1`、`typeof` 是 4，`&"%%"` 给 `%%`）；
- *  失败时引擎只推一块 ERROR、把格式串**原样**回出去，脚本不打断（`tmp/d6/s491c.py` 二十格）。 */
-export function pctFormatOp(fmt: Variant, args: Variant): Variant {
+ *  失败那一格的**形状看两侧的静态型**（S696，尺 `tmp/probe720/{x,y,z2}.gd` 二十三格）：两侧都是静态已知的非 Variant 型时
+ *  引擎推一块非致命 ERROR、脚本照跑、把格式串**原样**回出去（`soft`）；任一侧是 Variant 时发的是 SCRIPT ERROR 那一句，
+ *  作废当前那支函数、调用点拿到 Nil（非 `soft`，走 `strFormat` 那一式）。 */
+export function pctFormatOp(fmt: Variant, args: Variant, soft: boolean): Variant {
   const text = fmt.v as string;
   const list = args.t === Tag.ARRAY ? (args.v as GArray).raw() : [args];
+  if (!soft) return V.str(strFormat(text, list));
   const r = strFormatSoft(text, list);
-  if (r.fail !== null) pctFormatError(r.fail);
+  if (r.fail !== null) pctFormatError(r.fail, args.t);
   return V.str(r.text);
 }
 
@@ -94,11 +97,18 @@ const MEASURED_SIX = new Set<number>([Tag.BOOL, Tag.INT, Tag.FLOAT, Tag.STRING, 
  *  同一面的其余对（`StringName` 与 float / Array 之类）没在运行期量过，照旧不进这一集。 */
 const RUNTIME_REFUSED_PAIRS = new Set<string>(["StringName|int"]);
 
+/** Nil 参与的这些对（含 Nil 对 Nil）讲的是运行期那一句（S695：体里作废的无标注函数返回的就是 Nil，
+ *  18 个运算符 × 13 对 = 234 格逐格量过，读数 `tmp/probe718/z.gd`）。所以是 S399 那六型**再加 Nil**，
+ *  直接从 `MEASURED_SIX` 派生，两张表不漂。`==` / `!=` 不吃这一集（照实给 false / true，归 `eqSixRefused` 判），
+ *  `%` 的 String 左操作数走格式化那一路，也不在这一集。 */
+const NIL_SENTENCED = new Set<number>([...MEASURED_SIX, Tag.NIL]);
+
 function pairKey(a: Variant, b: Variant): string {
   return `${valueTypeName(a)}|${valueTypeName(b)}`;
 }
 
-function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {  if ((MEASURED_SIX.has(a.t) && MEASURED_SIX.has(b.t)) || RUNTIME_REFUSED_PAIRS.has(pairKey(a, b))) {
+function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {
+  if ((NIL_SENTENCED.has(a.t) && NIL_SENTENCED.has(b.t)) || RUNTIME_REFUSED_PAIRS.has(pairKey(a, b))) {
     throw new GodotRuntimeError(code, `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   throw new UnsupportedError(code, `${op} 不支持 ${tagName(a.t)} ${op} ${tagName(b.t)}`);
@@ -296,15 +306,15 @@ export const ops = {
     if (bothInt(a, b)) {
       const [x, y] = intPair(a, b, "/");
       if (intToBig(y) === 0n) {
-        throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
+        throw new GodotRuntimeError("int-div-zero", "Division by zero error in operator '/'.");
       }
       return i64(x, y, (p, q) => p / q);
     }
     return V.float(num(a) / num(b));
   },
 
-  mod(a: Variant, b: Variant): Variant {
-    if (isStringish(a)) return pctFormatOp(a, b);
+  mod(a: Variant, b: Variant, soft: boolean): Variant {
+    if (isStringish(a)) return pctFormatOp(a, b, soft);
     const ziMod = asVec2i(a);
     const zjMod = asVec2i(b);
     if (ziMod && zjMod) return vector2i(mod32(ziMod.x, zjMod.x), mod32(ziMod.y, zjMod.y));
@@ -318,7 +328,7 @@ export const ops = {
     if (zi3Mod && b.t === Tag.INT) return v3iModK(zi3Mod, intToNum(b.v as IntPayload));
     const [x, y] = intPair(a, b, "%");
     if (intToBig(y) === 0n) {
-      throw new GodotRuntimeError("int-mod-zero", "整数取模零");
+      throw new GodotRuntimeError("int-mod-zero", "Modulo by zero error in operator '%'.");
     }
     return i64(x, y, (p, q) => p % q);
   },

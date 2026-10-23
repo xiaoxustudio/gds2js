@@ -30,10 +30,10 @@ describe("runtime/vector2i", () => {
     eq("094", "int64 载荷也要回绕", zs(vec2iWrite(asVec2i(Z(1, 2)) as GVector2i, S("x"), I(9007199254740993n), "prop")), "(1, 2)");
 
     eq("094", "加减乘逐分量且回绕 int32", `${zs(ops.add(Z(2147483647, 0), Z(1, 0)))}/${zs(ops.sub(Z(-2147483648, 5), Z(1, 0)))}/${zs(ops.mul(Z(2147483647, 0), I(2)))}/${zs(ops.neg(Z(-2147483648, 0)))}`, "(-2147483648, 0)/(2147483647, 5)/(-2, 0)/(-2147483648, 0)");
-    eq("094", "除与模向零截断、符号跟被除数", `${zs(ops.div(Z(7, -7), Z(2, 2)))}/${zs(ops.mod(Z(-7, 7), Z(2, -2)))}/${zs(ops.div(Z(1, 2), Z(2, 2)))}/${zs(ops.mod(Z(7, 7), I(2)))}`, "(3, -3)/(-1, 1)/(0, 1)/(1, 1)");
+    eq("094", "除与模向零截断、符号跟被除数", `${zs(ops.div(Z(7, -7), Z(2, 2)))}/${zs(ops.mod(Z(-7, 7), Z(2, -2), true))}/${zs(ops.div(Z(1, 2), Z(2, 2)))}/${zs(ops.mod(Z(7, 7), I(2), true))}`, "(3, -3)/(-1, 1)/(0, 1)/(1, 1)");
     eq("094", "掺 float 标量升级成 Vector2", `${zs(ops.mul(Z(6, 6), F(0.5)))}/${zs(ops.div(Z(6, 6), F(4.0)))}/${show(ops.mul(Z(6, 6), F(0.5)))}`, "(3.0, 3.0)/(1.5, 1.5)/(3.0, 3.0)");
     shouldThrow("095", "Vector2i / 0 要响", () => ops.div(Z(7, 7), I(0)));
-    shouldThrow("095", "Vector2i % 0 要响", () => ops.mod(Z(7, 7), I(0)));
+    shouldThrow("095", "Vector2i % 0 要响", () => ops.mod(Z(7, 7), I(0), true));
     shouldThrow("094", "Vector2i + 标量不接（实测解析期报错）", () => ops.add(Z(1, 2), I(1)));
     shouldThrow("094", "Vector2i + Vector2 不接（实测解析期报错）", () => ops.add(Z(1, 2), vector2(1, 1)));
     eq("094", "比较是字典序", `${ops.lt(Z(1, 2), Z(1, 3)).v}/${ops.lt(Z(1, 2), Z(0, 9)).v}/${ops.gt(Z(1, 2), Z(0, 9)).v}/${ops.lte(Z(1, 2), Z(1, 2)).v}`, "true/false/true/true");

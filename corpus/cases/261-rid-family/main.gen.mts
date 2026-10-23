@@ -39,7 +39,7 @@ export class Main extends SceneTree {
       rt.frameLine(10);
       print(rt.showArgs([rt.V.str("r05|"), rt.V.str(rt.varToStr(a))]));
       rt.frameLine(11);
-      print(rt.showArgs([rt.V.str("r06|"), rt.formatOf(rt.V.str("%s"), a)]));
+      print(rt.showArgs([rt.V.str("r06|"), rt.formatOf(rt.V.str("%s"), a, false)]));
       rt.frameLine(12);
       print(rt.showArgs([rt.V.str("r07|"), rt.gRidFromInt64(rt.V.int((-1)))]));
       rt.frameLine(13);

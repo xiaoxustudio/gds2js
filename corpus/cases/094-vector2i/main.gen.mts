@@ -62,7 +62,7 @@ export class Main extends SceneTree {
       rt.frameLine(16);
       print(rt.showArgs([rt.ops.add(w, rt.vector2iNew([rt.V.int(3), rt.V.int((-4))])), rt.V.str(" | "), rt.ops.sub(w, rt.vector2iNew([rt.V.int(1), rt.V.int(1)])), rt.V.str(" | "), rt.ops.mul(w, rt.vector2iNew([rt.V.int(4), rt.V.int(5)])), rt.V.str(" | "), rt.ops.mul(w, rt.V.int(2)), rt.V.str(" | "), rt.ops.div(w, rt.vector2iNew([rt.V.int(2), rt.V.int(2)])), rt.V.str(" | "), rt.ops.neg(w)]));
       rt.frameLine(17);
-      print(rt.showArgs([rt.ops.div(rt.vector2iNew([rt.V.int(7), rt.V.int((-7))]), rt.vector2iNew([rt.V.int(2), rt.V.int(2)])), rt.V.str(" | "), rt.ops.mod(rt.vector2iNew([rt.V.int((-7)), rt.V.int(7)]), rt.vector2iNew([rt.V.int(2), rt.V.int((-2))])), rt.V.str(" | "), rt.ops.mul(rt.vector2iNew([rt.V.int(6), rt.V.int(6)]), rt.V.float(0.5)), rt.V.str(" | "), rt.ops.div(rt.vector2iNew([rt.V.int(6), rt.V.int(6)]), rt.V.float(4))]));
+      print(rt.showArgs([rt.ops.div(rt.vector2iNew([rt.V.int(7), rt.V.int((-7))]), rt.vector2iNew([rt.V.int(2), rt.V.int(2)])), rt.V.str(" | "), rt.ops.mod(rt.vector2iNew([rt.V.int((-7)), rt.V.int(7)]), rt.vector2iNew([rt.V.int(2), rt.V.int((-2))]), true), rt.V.str(" | "), rt.ops.mul(rt.vector2iNew([rt.V.int(6), rt.V.int(6)]), rt.V.float(0.5)), rt.V.str(" | "), rt.ops.div(rt.vector2iNew([rt.V.int(6), rt.V.int(6)]), rt.V.float(4))]));
       rt.frameLine(18);
       print(rt.showArgs([rt.ops.add(rt.vector2iNew([rt.V.int(2147483647), rt.V.int(0)]), rt.vector2iNew([rt.V.int(1), rt.V.int(0)])), rt.V.str(" | "), rt.ops.sub(rt.vector2iNew([rt.V.int((-2147483648)), rt.V.int(5)]), rt.vector2iNew([rt.V.int(1), rt.V.int(0)])), rt.V.str(" | "), rt.ops.mul(rt.vector2iNew([rt.V.int(2147483647), rt.V.int(0)]), rt.V.int(2))]));
       rt.frameLine(19);

@@ -1,0 +1,43 @@
+A <null>
+B <null>
+C 0
+D []
+E <null>
+F 0
+G 28
+SCRIPT ERROR: Division by zero error in operator '/'.
+   at: d (<case>/main.gd:5)
+   GDScript backtrace (most recent call first):
+       [0] d (<case>/main.gd:5)
+       [1] _initialize (<case>/main.gd:28)
+SCRIPT ERROR: Modulo by zero error in operator '%'.
+   at: m (<case>/main.gd:9)
+   GDScript backtrace (most recent call first):
+       [0] m (<case>/main.gd:9)
+       [1] _initialize (<case>/main.gd:29)
+SCRIPT ERROR: Division by zero error in operator '/'.
+   at: i (<case>/main.gd:13)
+   GDScript backtrace (most recent call first):
+       [0] i (<case>/main.gd:13)
+       [1] _initialize (<case>/main.gd:30)
+SCRIPT ERROR: Division by zero error in operator '/'.
+   at: s (<case>/main.gd:17)
+   GDScript backtrace (most recent call first):
+       [0] s (<case>/main.gd:17)
+       [1] _initialize (<case>/main.gd:31)
+SCRIPT ERROR: Division by zero error in operator '/'.
+   at: d (<case>/main.gd:5)
+   GDScript backtrace (most recent call first):
+       [0] d (<case>/main.gd:5)
+       [1] cascade (<case>/main.gd:20)
+       [2] _initialize (<case>/main.gd:32)
+SCRIPT ERROR: Invalid operands 'Nil' and 'int' in operator '+'.
+   at: cascade (<case>/main.gd:21)
+   GDScript backtrace (most recent call first):
+       [0] cascade (<case>/main.gd:21)
+       [1] _initialize (<case>/main.gd:32)
+SCRIPT ERROR: Division by zero error in operator '/'.
+   at: d (<case>/main.gd:5)
+   GDScript backtrace (most recent call first):
+       [0] d (<case>/main.gd:5)
+       [1] _initialize (<case>/main.gd:33)

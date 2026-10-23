@@ -33,9 +33,9 @@ export class Main extends SceneTree {
       rt.frameLine(7);
       print(rt.showArgs([rt.V.str("from "), rt.vector3iNew([rt.vector3New([rt.V.float(1.7), rt.V.float((-2.2)), rt.V.float(3.5)])]), rt.V.str(" "), rt.vector3New([b]), rt.V.str(" "), rt.typeOf(rt.vector3New([b]))]));
       rt.frameLine(8);
-      print(rt.showArgs([rt.V.str("arith "), rt.ops.add(a, b), rt.V.str(" "), rt.ops.sub(a, b), rt.V.str(" "), rt.ops.mul(a, b), rt.V.str(" "), rt.ops.div(a, b), rt.V.str(" "), rt.ops.mod(a, b), rt.V.str(" "), rt.ops.neg(a)]));
+      print(rt.showArgs([rt.V.str("arith "), rt.ops.add(a, b), rt.V.str(" "), rt.ops.sub(a, b), rt.V.str(" "), rt.ops.mul(a, b), rt.V.str(" "), rt.ops.div(a, b), rt.V.str(" "), rt.ops.mod(a, b, false), rt.V.str(" "), rt.ops.neg(a)]));
       rt.frameLine(9);
-      print(rt.showArgs([rt.V.str("scalar "), rt.ops.mul(a, rt.V.int(2)), rt.V.str(" "), rt.ops.mul(rt.V.int(2), a), rt.V.str(" "), rt.ops.div(a, rt.V.int((-2))), rt.V.str(" "), rt.ops.mod(a, rt.V.int((-2))), rt.V.str(" "), rt.ops.div(a, rt.V.float(4)), rt.V.str(" "), rt.ops.mul(a, rt.V.float(0.5))]));
+      print(rt.showArgs([rt.V.str("scalar "), rt.ops.mul(a, rt.V.int(2)), rt.V.str(" "), rt.ops.mul(rt.V.int(2), a), rt.V.str(" "), rt.ops.div(a, rt.V.int((-2))), rt.V.str(" "), rt.ops.mod(a, rt.V.int((-2)), false), rt.V.str(" "), rt.ops.div(a, rt.V.float(4)), rt.V.str(" "), rt.ops.mul(a, rt.V.float(0.5))]));
       rt.frameLine(10);
       print(rt.showArgs([rt.V.str("wrap "), rt.ops.add(rt.vector3iNew([rt.V.int(2147483647), rt.V.int(0), rt.V.int(0)]), rt.vector3iNew([rt.V.int(1), rt.V.int(0), rt.V.int(0)])), rt.V.str(" "), rt.ops.sub(rt.vector3iNew([rt.V.int((-2147483648)), rt.V.int(0), rt.V.int(0)]), rt.vector3iNew([rt.V.int(1), rt.V.int(0), rt.V.int(0)]))]));
       rt.frameLine(11);

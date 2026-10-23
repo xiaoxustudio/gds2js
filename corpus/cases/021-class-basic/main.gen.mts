@@ -82,7 +82,7 @@ class Base extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "tag");
     try {
       rt.frameLine(11);
-      return rt.formatOf(rt.V.str("base-%d"), this.hp);
+      return rt.formatOf(rt.V.str("base-%d"), this.hp, true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.nil();

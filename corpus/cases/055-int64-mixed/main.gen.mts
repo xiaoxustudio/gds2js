@@ -27,9 +27,9 @@ export class Main extends SceneTree {
       rt.frameLine(4);
       print(rt.showArgs([rt.ops.div(rt.V.int(9223372036854775807n), rt.V.int(2))]));
       rt.frameLine(5);
-      print(rt.showArgs([rt.ops.mod(rt.V.int(9223372036854775807n), rt.V.int(1000))]));
+      print(rt.showArgs([rt.ops.mod(rt.V.int(9223372036854775807n), rt.V.int(1000), true)]));
       rt.frameLine(6);
-      print(rt.showArgs([rt.ops.mod(rt.ops.neg(rt.V.int(9223372036854775807n)), rt.V.int(1000))]));
+      print(rt.showArgs([rt.ops.mod(rt.ops.neg(rt.V.int(9223372036854775807n)), rt.V.int(1000), true)]));
       rt.frameLine(7);
       print(rt.showArgs([rt.ops.mul(rt.V.int(4000000000), rt.V.int(4000000000))]));
       rt.frameLine(8);

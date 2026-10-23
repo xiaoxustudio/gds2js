@@ -62,7 +62,7 @@ export class Main extends SceneTree {
       rt.frameLine(18);
       print(rt.showArgs([rt.V.str("B11|"), this.fmt(rt.ops.div(rt.method(rt.V.stringName("ab"), "length", []), rt.V.int(2)))]));
       rt.frameLine(19);
-      print(rt.showArgs([rt.V.str("B12|"), this.fmt(rt.ops.mod(rt.method(rt.V.stringName("ab"), "length", []), rt.V.int(2)))]));
+      print(rt.showArgs([rt.V.str("B12|"), this.fmt(rt.ops.mod(rt.method(rt.V.stringName("ab"), "length", []), rt.V.int(2), true))]));
       rt.frameLine(20);
       print(rt.showArgs([rt.V.str("B13|"), this.fmt(rt.and(rt.method(rt.V.stringName("ab"), "length", []), () => rt.V.bool(true)))]));
       rt.frameLine(21);

@@ -78,7 +78,7 @@ export class Main extends SceneTree {
       rt.frameLine(31);
       print(rt.showArgs([rt.V.str("q11|"), rt.strBuiltin([rt.V.array(rt.GArray.of([t, lam, rt.callableCtor([])]))])]));
       rt.frameLine(32);
-      print(rt.showArgs([rt.V.str("q12|"), rt.formatOf(rt.V.str("%s"), rt.wrapValue(rt.attribute(o, "three")))]));
+      print(rt.showArgs([rt.V.str("q12|"), rt.formatOf(rt.V.str("%s"), rt.wrapValue(rt.attribute(o, "three")), true)]));
       rt.frameLine(33);
       print(rt.showArgs([rt.V.str("q14|"), rt.globalCallable("abs")]));
       rt.frameLine(34);

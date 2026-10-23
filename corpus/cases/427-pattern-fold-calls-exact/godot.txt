@@ -1,0 +1,10 @@
+l2db|arm
+ease|arm
+bezier|arm
+cubic|arm
+cubica|arm
+float|arm
+fmod|arm
+ceilf|arm
+floori|arm
+ceili|arm

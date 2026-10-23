@@ -1,17 +1,19 @@
 /**
  * 运行期 `%` 的格式化那一族（S491）：左支 `String` 与 `StringName` 同一条通道，失败时引擎**不打断脚本** ——
- * 推一块 `ERROR: String formatting error: <细节>.`（`at:` 是 `validated_evaluate (core/variant/variant_op.h:829)`），
+ * 推一块 `ERROR: String formatting error: <细节>.`（`at:` 那行按实参的形给 742 / 770 / 829 三档，见下面的 `atOf`），
  * 回值是**格式串原样**。尺 `tmp/d6/s491c.py` 二十格 + `tmp/d6/s491d.py` 十六格 + `tmp/d6/s491e.py` 十二格，
  * 读数同名 `.json` / `.txt`；值那一头另由语料 396-pct-runtime 逐字节钉住（Godot 侧的 ERROR 块被 normalize 滤掉，所以这块文本只能在这里钉）。
  */
 import { describe, it, vi } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { ops } from "@gds2js/runtime/runtime/ops";
-import { V, type Variant } from "@gds2js/runtime/runtime/tags";
+import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
 
 const arr = (xs: Variant[]): Variant => V.array(GArray.of(xs));
-const AT = "   at: validated_evaluate (core/variant/variant_op.h:829)";
+/** 那一块 `at:` 的行号只看**实参那一格的形**：Array 给 770、Nil 给 742、其余给 829（S696 复量：`tmp/probe721/b.gd` 六格两侧同文，左支换成 StringName 不改档）。 */
+const atOf = (arg: Variant): string =>
+  `   at: validated_evaluate (core/variant/variant_op.h:${String(arg.t === Tag.ARRAY ? 770 : arg.t === Tag.NIL ? 742 : 829)})`;
 
 /** [说明, 左支面, 格式串, 实参, 回值, 引擎那块的头两行（不收就 null）] */
 const CASES: Array<[string, "str" | "sn", string, Variant, string, string | null]> = [
@@ -50,11 +52,11 @@ describe("运行期 `%`：失败推一块 ERROR、格式串原样回出去", () 
         chunks.push(String(c));
         return true;
       });
-      const got = ops.mod(side === "sn" ? V.stringName(fmt) : V.str(fmt), arg);
+      const got = ops.mod(side === "sn" ? V.stringName(fmt) : V.str(fmt), arg, true);
       spy.mockRestore();
       eq("491", `${label} 的回值`, show(got), want);
       const lines = chunks.join("").replace(/\r/g, "").split("\n").filter(Boolean);
-      eq("491", `${label} 的块`, head === null ? [] : [lines[0] ?? "", lines[1] ?? ""], head === null ? [] : [head, AT]);
+      eq("491", `${label} 的块`, head === null ? [] : [lines[0] ?? "", lines[1] ?? ""], head === null ? [] : [head, atOf(arg)]);
     });
   }
 });

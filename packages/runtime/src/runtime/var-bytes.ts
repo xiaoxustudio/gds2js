@@ -12,6 +12,8 @@ import { GColor } from "./color";
 import { GdNodePath } from "./node-path";
 import { beginBareConstruction, descOf, dictDescOf, endBareConstruction, GdScriptObject, nativeBaseOf } from "./object";
 import { encodedObjectIdBox, NULL_OBJECT } from "./identity";
+import { CallableBox, nullCallable } from "./callable";
+import { GdRid, rid } from "./rid";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 /** 引擎 `VariantWriter::encode` 的头部标志：实测到的只有 `1 << 16`（int64 / double / 定型数组都挂它）。 */
@@ -47,6 +49,8 @@ const T_VECTOR3I = 10;
 const T_VECTOR4 = 12;
 const T_VECTOR4I = 13;
 const T_OBJECT = 24;
+const T_RID = 23;
+const T_CALLABLE = 25;
 
 /** 编码侧的信号：路径拿不出来时引擎回的是**一个空 PackedByteArray**（并打一句 `Failed to encode a path to a custom script`），不是错。 */
 const CODE_NO_SCRIPT_PATH = "var-to-bytes-no-script-path";
@@ -198,12 +202,14 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GColor ||
     o instanceof GBytes ||
     o instanceof GdNodePath ||
-    o instanceof GdScriptObject
+    o instanceof GdScriptObject ||
+    o instanceof CallableBox ||
+    o instanceof GdRid
   ) {
     return;
   }
   const name = typeof o === "object" && o !== null ? (o as object).constructor.name : String(o);
-  throw new UnsupportedError("var-to-bytes-object", `var_to_bytes() 的这一支还没量过（收到 ${name}）：RID、Callable 与 Signal 的编码都没实测，按红线响亮拒`);
+  throw new UnsupportedError("var-to-bytes-object", `var_to_bytes() 收到 ${name}：Signal 那一支量过了（尺 tmp/probe709/bytes.mts），编码里带对象的实例号，合成号对不上引擎那句，按红线响亮拒`);
 }
 
 class Writer {
@@ -466,6 +472,16 @@ class Writer {
           for (const n of o.subnames) this.str(n);
           return;
         }
+        if (o instanceof CallableBox) {
+          // 内建、脚本方法、静态方法、lambda、`Callable(h, "m")` 五形只写一枚裸头部，两支函数一字一样（尺 `tmp/probe709/bytes.mts`）
+          this.header(T_CALLABLE);
+          return;
+        }
+        if (o instanceof GdRid) {
+          this.header(T_RID);
+          this.u64(typeof o.id === "bigint" ? o.id : BigInt(o.id as number));
+          return;
+        }
         if (o instanceof GdScriptObject) {
           if (this.allowObjects) {
             this.objectEntry(o);
@@ -720,6 +736,12 @@ class Reader {
         if (!this.allowObjects) throw new UnsupportedError("bytes-to-var-object", "对象表那一支要的是 bytes_to_var_with_objects()");
         return this.objectEntry();
       }
+      case T_RID:
+        // 读回来还是那一枚号（`RID()` 那格量的是 0：`typeof` 23、`get_id()` 0，尺 `tmp/probe709/decode.mts`）
+        return rid(this.u64());
+      case T_CALLABLE:
+        // 编码不落脚本与方法名：解回的是失效 Callable（印 `null::null`、`is_valid()` false、`typeof` 25）
+        return nullCallable();
       case T_NODE_PATH: {
         const names = (this.u32() >>> 0) & 0x7fffffff;
         const subs = this.u32();

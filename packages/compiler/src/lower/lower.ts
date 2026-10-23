@@ -82,6 +82,57 @@ function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxN
   if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence, token);
 }
 
+/** 手臂缺冒号那一族六形同发这一句（S689，尺 `tmp/probe710/{malformed,cst}.mts`：int / str / `self.x` / `_` / `int(1)` 与第二条手臂）。 */
+const MATCH_PATTERN_COLON = 'Expected ":" or "when" after "match" patterns.';
+const MATCH_GUARD_EMPTY = 'Expected expression for pattern guard after "when".';
+const MATCH_SUBJECT_COLON = 'Expected ":" after "match" expression.';
+const MATCH_EMPTY_BLOCK = 'Expected an indented block after "match" statement.';
+
+/** 那一族在 CST 里的形状：语法把分支体**粘**到手臂后面，成一个 `call` 节点里「手臂表达式 + 一枚认得出是名字的 `ERROR` + `arguments`」三条并排。 */
+function gluedArm(x: SyntaxNode): SyntaxNode | null {
+  const kids = x.children;
+  if (!kids.some((k) => k.type === "ERROR" && /^[A-Za-z_]/.test(k.text))) return null;
+  return kids.find((k) => k.isNamed && k.type !== "ERROR" && k.type !== "arguments") ?? null;
+}
+
+/** `match` 那一族的畸形形整棵树只有一个落点可用：语法塌法按缩进与手臂位置分岔（顶层 ERROR / `body` 里的 ERROR / `match_body` 的直接 ERROR），
+ *  所以只要树里带 ERROR 就按记号级证据扫一遍（尺 `tmp/probe710` 十三形，句与行都按引擎原文量的），取最靠前的那一处。
+ *  三条判据都要求树上真有 `match` 记号，且各认各的形状：守卫把身体粘走、主题后面直接贴上下一条手臂、手臂后面没冒号。 */
+function matchMalformedScan(root: SyntaxNode): { sentence: string; at: SyntaxNode } | null {
+  const hits: Array<{ sentence: string; at: SyntaxNode; row: number }> = [];
+  let sawMatch = false;
+  const walk = (x: SyntaxNode): void => {
+    if (x.type === "match") sawMatch = true;
+    {
+      // `match 1:` 后面什么都没有（空块）：塌到 ERROR 时记号序列在冒号处**断掉**，冒号后再没有具名子节点（S691，引擎指 `match` 那一行）
+      const head = x.children.findIndex((k) => k.type === "match");
+      const colon = x.children.findIndex((k, i) => i > head && !k.isNamed && k.text === ":");
+      if (head >= 0 && colon > head && x.children.slice(head + 1, colon).filter((k) => k.isNamed).length >= 2) {
+        const tok = x.children[head];
+        if (tok !== undefined) hits.push({ sentence: MATCH_SUBJECT_COLON, at: tok, row: tok.startPosition.row });
+      }
+      if (head >= 0 && colon > head && !x.children.slice(colon + 1).some((k) => k.isNamed)) {
+        const tok = x.children[head];
+        if (tok !== undefined) hits.push({ sentence: MATCH_EMPTY_BLOCK, at: tok, row: tok.startPosition.row });
+      }
+    }
+    if (x.type === "pattern_guard") {
+      const cond = x.children.find((k) => k.isNamed);
+      if (cond !== undefined && gluedArm(cond) !== null) hits.push({ sentence: MATCH_GUARD_EMPTY, at: x, row: x.startPosition.row });
+    }
+    if (x.type === "call") {
+      const arm = gluedArm(x);
+      if (arm !== null) hits.push({ sentence: MATCH_PATTERN_COLON, at: arm, row: arm.startPosition.row });
+    }
+    for (const k of x.children) walk(k);
+  };
+  walk(root);
+  if (!sawMatch) return null;
+  hits.sort((a, b) => a.row - b.row);
+  const first = hits[0];
+  return first === undefined ? null : { sentence: first.sentence, at: first.at };
+}
+
 /** 复合赋值那一支：引擎对 11 种运算符换行给的都是 `=` 那一句（`tmp/probe-eol/readings5.txt`）。 */
 function operatorToken(n: SyntaxNode): SyntaxNode | null {
   return n.children.find((c) => !c.isNamed) ?? null;
@@ -179,6 +230,10 @@ export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
   markLiteralCalls(tree.rootNode);
+  if (tree.rootNode.hasError) {
+    const hit = matchMalformedScan(tree.rootNode);
+    if (hit !== null) continuationErr(hit.sentence, hit.at);
+  }
   try {
     const m = lowerModule(tree.rootNode);
     if (packCodecUse) m.usesPackCodec = true;
@@ -588,6 +643,8 @@ function lowerIf(n: SyntaxNode): Stmt {
 
 function lowerMatch(n: SyntaxNode): Stmt {
   const subjectNode = field(n, "value");
+  // `match:`（没有被试式）：语法造一枚**空文本**的占位节点，`checkAfterToken` 那把尺只量换行那一形，这一形要从文本认（S688，尺 `tmp/probe710/{malformed,cst}.mts`）
+  if (subjectNode !== null && subjectNode.text === "") continuationErr('Expected expression to test after "match".', tokenOf(n, "match") ?? undefined);
   checkAfterToken(n, tokenOf(n, "match"), subjectNode, 'Expected expression to test after "match".');
   checkColonHere(n, 'Expected ":" after "match" expression.');
   const subject = lowerExpr(need(subjectNode, "match 主题"));
@@ -595,6 +652,8 @@ function lowerMatch(n: SyntaxNode): Stmt {
   const arms: MatchArm[] = [];
   for (const section of named(body)) {
     if (section.type !== "pattern_section") {
+      // `match_body` 里直接挂一枚 ERROR：手臂那行没以冒号收尾（S689 的另一处落点，尺 `tmp/probe710/cst.mts` 的 m6）
+      if (section.type === "ERROR") continuationErr(MATCH_PATTERN_COLON, section);
       throw new UnsupportedError("match-node", `match 内节点 ${section.type} 未支持`);
     }
     const sectionBody = lowerBody(need(field(section, "body"), "match 分支体"));
@@ -709,14 +768,29 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
     // 三元手臂（S678，尺 `tmp/probe675/t_*.gd` 四格）：引擎按**取走的那一支**折叠后参与匹配 ——
     // `match 1: 1 if true else 2` 命中、`match 2` 与 `match 5` 走默认支，括号形同判（第二百十四笔①更正了「收下但永不匹配」的旧读数）。
     case "conditional_expression": {
+      if (n.type === "parenthesized_expression" && armMissingParen(n)) {
+        throw new UnsupportedError("pattern-arm-parse", `Expected closing ")" after grouping expression.`);
+      }
       if (armAllLiterals(n)) return { kind: "const", expr: lowerExpr(n) };
       // 叶子掺属性读那一形（`1 + self.x`）引擎发的是「必须是常量式」那句，不是我们的自述（`tmp/probe668` 实测）
       if (armHasAttributeLeaf(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
+    case "ERROR": {
+      const first = n.children[0]?.text ?? "";
+      if (first === ",") throw new UnsupportedError("pattern-arm-parse", `Expected expression for match pattern.`);
+      if (first === "else") throw new UnsupportedError("pattern-arm-parse", `Expected ":" after "match" pattern guard.`);
+      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
+    }
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
+}
+
+/** 括号的收口那个 `)` 是塌掉的 ERROR（`(1:` 未闭合那一形，S685 尺 `tmp/probe706/shapes.mts`）：
+ *  vendored 语法造出一个空文本的 `)` 节点补位，我们若照旧折就**恢复出一棵能跑的树并匹中手臂**，引擎在解析期就拒。 */
+function armMissingParen(n: SyntaxNode): boolean {
+  return n.children.some((c) => c.type === ")" && (c.hasError || c.text === ""));
 }
 
 /** 手臂式子里每一片都是字面量（嵌套的二元 / 一元 / 括号都算，只要叶子全是字面量）。 */
@@ -750,7 +824,19 @@ const ARM_LITERAL_NODES = new Set([
 ]);
 
 /** 手臂里量过**会折叠**的两个全局函数名（S675；`str` / `hash` 同尺量过是不折叠，其余在册名字没量过，都不进这张表）。 */
-const ARM_FOLD_GLOBALS = new Set(["int", "len"]);
+const ARM_FOLD_GLOBALS = new Set([
+  "int", "len", "abs", "mini", "max", "sign", "sqrt", "deg_to_rad", "snapped",
+  "absf", "lerpf", "posmod", "move_toward", "maxf", "minf", "clampi", "signi",
+  "pow", "exp", "log", "sin", "cos", "tan", "sinh", "cosh", "tanh", "asin", "acos",
+  "atan", "atan2", "rad_to_deg", "floor", "ceil", "round", "roundf", "fposmod",
+  "lerp", "min", "maxi", "lerp_angle", "smoothstep", "snappedf", "snappedi",
+  "wrap", "wrapi", "wrapf", "is_equal_approx", "is_finite", "is_nan",
+  "inverse_lerp", "db_to_linear", "linear_to_db", "ease", "bezier_interpolate",
+  "cubic_interpolate", "cubic_interpolate_angle", "float", "fmod", "ceilf", "floori", "ceili",
+  "acosh", "asinh", "atanh", "remap", "floorf", "roundi", "absi", "signf", "is_inf",
+  "is_zero_approx", "step_decimals", "cubic_interpolate_in_time", "cubic_interpolate_angle_in_time",
+  "bezier_derivative", "angle_difference", "rotate_toward", "clamp", "clampf", "nearest_po2", "pingpong",
+]);
 
 function lowerExpr(n: SyntaxNode): Expr {
   return atNode(n, () => lowerExprInner(n));

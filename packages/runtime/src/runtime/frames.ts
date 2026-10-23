@@ -1,4 +1,4 @@
-import { V, type Variant } from "./tags";
+import { Tag, V, type Variant } from "./tags";
 import { GodotRuntimeError } from "./errors";
 import { GArray, GDict, showArgsSep } from "./values";
 
@@ -37,6 +37,19 @@ function stackFrames(): Frame[] {
 /** `print_stack()` 的每帧一行实测走 stdout，要与其余 print 同序 —— 宿主装载时把自己的行缓冲登记进来。 */
 let printSink: ((line: string) => void) | null = null;
 
+/** 引擎往 stderr 推的那些块是**插在 stdout 之间**的，宿主得先把自己缓冲的行落盘再写这一块（`tmp/probe713` 的延后块）。 */
+let orderedStderr: ((text: string) => void) | null = null;
+
+export function setOrderedStderrSink(fn: (text: string) => void): void {
+  orderedStderr = fn;
+}
+
+export function writeOrderedStderr(lines: string[]): void {
+  const text = lines.join(String.fromCharCode(10)) + String.fromCharCode(10);
+  if (orderedStderr !== null) orderedStderr(text);
+  else process.stderr.write(text);
+}
+
 export function setStackPrintSink(fn: (line: string) => void): void {
   printSink = fn;
 }
@@ -64,7 +77,7 @@ export function gdFunctionError(err: unknown): void {
   const at = top === undefined ? "? (-1)" : `${top.fn} (${top.source}:${String(top.line)})`;
   const lines = [`SCRIPT ERROR: ${err.message}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
   for (const [i, f] of fs.entries()) lines.push(`       [${String(i)}] ${f.fn} (${f.source}:${String(f.line)})`);
-  process.stderr.write(lines.join("\n") + "\n");
+  writeOrderedStderr(lines);
 }
 
 /** `push_error` / `push_warning` 那一块：首行 + `at:` + backtrace 表头 + 每帧一行（实测原文，语料 273）。 */
@@ -74,9 +87,11 @@ export function stackBlockLines(head: string, at: string, args: Variant[]): stri
   return out;
 }
 
-/** 两支 push 整块走 stderr，且都不中断脚本（实测 `push_error` 前后的 print 照打，空实参照打 `ERROR: `）。 */
+/** 两支 push 整块走 stderr，且都不中断脚本（实测 `push_error` 前后的 print 照打，空实参照打 `ERROR: `）。
+ *  一律经 `writeOrderedStderr`：宿主的 print 有行缓冲，先落盘才不会在**进程被杀掉**的那种收尾里丢掉已经打出去的值
+ *  （超时件语料那 5 页就是这么照出来的，读数 `tmp/probe722/hung`）。 */
 function pushBlock(head: string, at: string, args: Variant[]): Variant {
-  process.stderr.write(stackBlockLines(head, at, args).join("\n") + "\n");
+  writeOrderedStderr(stackBlockLines(head, at, args));
   return V.nil();
 }
 
@@ -98,9 +113,12 @@ export function reportNonStaticCall(fn: string): Variant {
   return pushBlock("ERROR", "callp (modules/gdscript/gdscript.cpp:940)", [V.str(`Can't call non-static function '${fn}' in script.`)]);
 }
 
-/** `%` 的格式化在运行期失败：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s491c.py` 二十格）。 */
-export function pctFormatError(detail: string): Variant {
-  return pushBlock("ERROR", "validated_evaluate (core/variant/variant_op.h:829)", [V.str(`String formatting error: ${detail}`)]);
+/** `%` 的格式化在**两侧都是静态型**那一形失败：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s491c.py` 二十格）。
+ *  `at:` 那一行的行号按**实参那一格的形**分三档：Nil 给 742、Array 给 770、其余给 829（读数 `tmp/probe720/{x,y,z2}.gd` 二十三格）。
+ *  任一侧是 Variant 时不走这一支 —— 那是 SCRIPT ERROR 并作废当前那支函数（`ops.pctFormatOp` 的 soft=false）。 */
+export function pctFormatError(detail: string, argsTag: number): Variant {
+  const line = argsTag === Tag.NIL ? 742 : argsTag === Tag.ARRAY ? 770 : 829;
+  return pushBlock("ERROR", `validated_evaluate (core/variant/variant_op.h:${String(line)})`, [V.str(`String formatting error: ${detail}`)]);
 }
 
 /** `String.format()` 的 `values` 不是 Array / Dictionary / Object：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s511fmt.gd`，`at:` 是 `format (core/string/ustring.cpp:3598)`）。 */
@@ -115,7 +133,7 @@ export function stringReplaceCharNul(): Variant {
 
 /** `String.to_ascii_buffer()` 遇到非 ASCII 码点：引擎 `print_unicode_error` 只打这一行（无 `ERROR:` 前缀、无 `at:`），换成 0x20（S569）。 */
 export function stringUnicodeAsciiError(cp: number): void {
-  process.stderr.write(`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1\n`);
+  writeOrderedStderr([`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1`]);
 }
 
 /** `Array.get` / `Array.set` 的下标越界块（S572）：两处 `at:` 行号同为 variant_call.cpp:681。 */
@@ -137,7 +155,7 @@ export function stringHexUnevenBlock(): Variant {
 
 /** UTF-32 / UTF-16 解码里非法码点的替换诊断（S579）：引擎 `print_unicode_error` 那行（含 U+FFFD 字面）。 */
 export function stringUnicodeReplaceError(message: string): void {
-  process.stderr.write(`Unicode parsing error, some characters were replaced with \ufffd (U+FFFD): ${message}\n`);
+  writeOrderedStderr([`Unicode parsing error, some characters were replaced with \ufffd (U+FFFD): ${message}`]);
 }
 
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */
