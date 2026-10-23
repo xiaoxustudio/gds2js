@@ -56,10 +56,10 @@ export function arrayFromArgs(args: Variant[]): Variant {
   if (args.length !== 4) {
     throw new UnsupportedError("array-ctor-arity", `Array(...) 只实测过 0 / 1 / 4 参三形（收到 ${String(args.length)} 参）`);
   }
-  const [base, typeArg, classArg, scriptArg] = args as [Variant, Variant, Variant, Variant];
-  if (scriptArg.t !== Tag.NIL) {
-    throw new UnsupportedError("array-ctor-script", `Array(...) 的第四参只实测过 null（收到 ${tagName(scriptArg.t)}）`);
-  }
+  const [base, typeArg, classArg] = args as [Variant, Variant, Variant, Variant];
+  // 第四参在这一形**收任何型并整个丢掉**：11 种来源实测给的都是同一份转换结果（`tmp/probe665` 的
+  // null / bool / int / float / String / StringName / Array / Dictionary / Vector2 / PackedByteArray / Color，
+  // `Array([1], TYPE_INT, &"", <那十一形>) == [1]` 全真），所以这里不再设闸（S663）。
   if (base.t !== Tag.ARRAY) {
     if (isBytes(base)) {
       throw new GodotRuntimeError("array-ctor-base", `Invalid type in 'Array' constructor. Cannot convert argument 1 from ${packTypeName(packBytes(base).kind)} to Array.`);

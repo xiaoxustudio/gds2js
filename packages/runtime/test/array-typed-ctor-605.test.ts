@@ -44,7 +44,8 @@ describe("Array(base, type, class_name, script)（S605）", () => {
     eq("605", "pack 当底", err(() => arrayFromArgs([V.object(GBytes.of([1, 2])), I(2), EMPTY_NAME, NIL])),
       "Invalid type in 'Array' constructor. Cannot convert argument 1 from PackedByteArray to Array.");
     eq("605", "二参没接", err(() => arrayFromArgs([arr([I(1)]), I(2)])).startsWith("Array(...) 只实测过 0 / 1 / 4 参三形") ? "拒" : "没拒", "拒");
-    eq("605", "第四参非 null 拒", err(() => arrayFromArgs([arr([I(1)]), I(2), EMPTY_NAME, I(3)])).includes("只实测过 null") ? "拒" : "没拒", "拒");
+    // S663 重钉：第四参**收任何型并整个丢掉**（`tmp/probe665` 十一形实测同值），原先那道只放 null 过的闸门撤了
+    eq("663", "第四参是 int 也收下并丢掉", show(arrayFromArgs([arr([I(1)]), I(2), EMPTY_NAME, I(3)])), "[1]");
     eq("605", "第二参非 int 拒", err(() => arrayFromArgs([arr([I(1)]), V.str("x"), EMPTY_NAME, NIL])).includes("只实测过 int 型码") ? "拒" : "没拒", "拒");
   });
 });
