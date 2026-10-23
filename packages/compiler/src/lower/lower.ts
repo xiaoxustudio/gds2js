@@ -145,6 +145,9 @@ function lowerType(n: SyntaxNode): TypeRef {
 /** `lower()` 一次调用内累计：这一份模块有没有 compress()/decompress() 调用。 */
 let packCodecUse = false;
 
+/** 本脚本**顶层**声明的函数名（S676，尺 `tmp/probe675/c_selfmethod.gd`：手臂里的 `me(1)` 引擎只发「必须是常量式」那一句，我们多发一句 `Function "me()" not found in base self.`）。内部类里的方法名不进这张表 —— 那一形没量过。 */
+let scriptFuncNames = new Set<string>();
+
 /** 走 IR 之前那一路抛出的响亮拒原先不知道自己在源码哪一行（诊断的 `loc` 是 IR 才有的东西），
  *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。这一串把当前节点压成栈，
  *  `lower()` 出口把栈顶那一层的源码行挂到错误上 —— 引擎的解析期句正是指着**最深**那个未支持的构造。 */
@@ -185,6 +188,7 @@ function lowerModule(n: SyntaxNode): Module {
 }
 
 function lowerModuleInner(root: SyntaxNode): Module {
+  scriptFuncNames = new Set<string>(named(root).map((n) => (n.type === "function_definition" ? field(n, "name")?.text ?? "" : "")));
   const m: Module = {
     className: null,
     extends: null,
@@ -625,6 +629,8 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
       const gnameEarly = named(n)[0]?.text;
       if (gnameEarly !== undefined && ARM_FOLD_GLOBALS.has(gnameEarly) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
+      const gnameSelf = named(n)[0]?.text;
+      if (gnameSelf !== undefined && scriptFuncNames.has(gnameSelf)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       const sig = armSignature(n);
       if (sig !== null) throw new UnsupportedError("pattern-arm-signature", [...sig, ARM_PATTERN].join(String.fromCharCode(10)));
       // 调用手臂的三分类（S675，尺 `tmp/probe675/c_*.gd` 六格）：`int` / `len` 引擎**折叠并参与匹配**（`match 1: int("1")` 命中、
