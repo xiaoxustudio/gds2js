@@ -919,7 +919,7 @@ function recoverLiteralCall(err: SyntaxNode): Expr | null {
     const kids = named(sib);
     const argsNode = field(sib, "arguments");
     const folded = baseCallStep(out, kids, argsNode, sib);
-    if (folded === null) break;
+    if (folded === null) return null;
     CONSUMED.add(sib);
     out = folded;
     sib = nextNamedSib(sib);
@@ -927,7 +927,8 @@ function recoverLiteralCall(err: SyntaxNode): Expr | null {
   return out;
 }
 
-/** 一段 `.名字(实参)` 或 `.名字`：属性名认 `identifier`，链上的属性读认 `attribute`，下标不认（没量过）。 */
+/** 一段 `.名字(实参)` 或 `.名字`：方法名只认 `identifier`；别的形状（下标、属性读）没量过就折不出来，
+ *  由 `recoverLiteralCall` 整体放弃，交回原来那句「表达式 ERROR 未支持」—— 不回半截结果。 */
 function baseCallStep(obj: Expr, kids: SyntaxNode[], argsNode: SyntaxNode | null, at: SyntaxNode): Expr | null {
   const c = loc(at);
   const head = kids[0];

@@ -545,9 +545,10 @@ function bytesDecompressDynamic(p: GBytes, args: Variant[]): Variant {
   return V.object(new GBytes(out, "byte"));
 }
 
-/** 替换码点：引擎收 int 后直接当 char32_t 用；超出 Unicode 标量范围的那一形没量过，响亮拒。 */
-function charReplacement(n: number, who: string): number {  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
-    throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 超出 Unicode 标量范围，那一形没实测过`);
+/** 替换码点越界那一形量过了（S653）：引擎按 uint32 回绕当 char32_t 存着，宿主的 UTF-16 串装不下 `>= 0x110000` 那一段 —— 响亮拒，不发近似。 */
+function charReplacement(n: number, who: string): number {
+  if (n < 0 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) {
+    throw new UnsupportedError("string-char-invalid", `${who}() 的替换码点 ${String(n)} 引擎按 uint32 回绕存成 char32（实测 unicode_at 给 4294967295、length 照旧），宿主的 UTF-16 串装不下，不发近似值`);
   }
   return n;
 }
@@ -997,6 +998,17 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
   }
   if (!CALLABLE_METHOD_NAMES.has(name)) {
     throw new GodotRuntimeError("callable-method", `Invalid call. Nonexistent function '${name}' in base 'Callable'.`);
+  }
+  // `rpc()` / `rpc_id()` 两支名在册（`tmp/probe639/extension_api.json` 的 Callable 十七名）但 4.6.3 一调就报错，句形看**基**：
+  // lambda 与全局内建给 `Nonexistent function`（`tmp/probe653/{L1,L3,L5}.gd`），方法 / 静态 / 空 Callable 给
+  // `on a null instance`（`R0` / `R3` / `I3` / `L2` / `L4`，带不带实参都一样）；内建类型面绑来的那一只没量过，仍走「未实现」。
+  if (name === "rpc" || name === "rpc_id") {
+    if (box.fn !== null) {
+      throw new GodotRuntimeError("callable-method", `Invalid call. Nonexistent function '${name}' in base 'Callable'.`);
+    }
+    if (box.builtin === null && (box.object !== null || empty)) {
+      throw new GodotRuntimeError("callable-null-instance", `Attempt to call function '${name}' in base 'Callable' on a null instance.`);
+    }
   }
   throw new UnsupportedError("callable-method", `Callable.${name}() 未实现`);
 }

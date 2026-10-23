@@ -922,6 +922,14 @@ const VOID_SIGNAL_METHODS = new Set(["emit", "disconnect"]);
 const VOID_CALLABLE_METHODS = new Set(["call_deferred"]);
 /** Signal 上**没有**这个名字，而且是解析期两句：`Cannot find member "is_valid" in base "Signal".` + `Function "is_valid()" not found in base Signal.`（第二句的 `Signal` 不带引号）。`has_method` / `get_method_list` / `is_connected_to` 那几格不同形：解析期放过、运行期才给 `Invalid call. Nonexistent function …`。 */
 const SIGNAL_PARSE_MISSING = new Set(["is_valid"]);
+/** Signal 面裸信号名接收者的解析期元数**上界**（十二格读数 `tmp/probe653/P_*.gd` 一名一名过裁判）：越界只发 `Too many` 那一句，
+ *  `connect` 报的是声明的全部数 2（`flags` 带默认值，一支实参照连）。少给那一向引擎**照跑** ——
+ *  `sig.connect()` / `sig.disconnect()` / `sig.is_connected()` 零实参三格都给了 `done`，所以这一族没有下界。
+ *  `emit` 不在表里：它是 vararg，0–3 支实测都过。 */
+const SIGNAL_PARSE_ARITY_MAX: Record<string, number> = {
+  connect: 2, disconnect: 1, is_connected: 1,
+  get_connections: 0, get_name: 0, get_object: 0, get_object_id: 0, has_connections: 0, is_null: 0,
+};
 /** 九种 Packed*Array 的名字：接收者是它们之一时按 pack 那一侧的判据走，九种的表口径一致。 */
 const PACK_SHAPE_NAMES = new Set([
   "PackedByteArray",
@@ -1795,6 +1803,15 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
               diags.push({
                 code: "signal-member-not-found",
                 message: `Function "${name}()" not found in base Signal.`,
+                loc: e.loc,
+              });
+            }
+            // 元数那句排在取值 void 那句之前（S378 的口径）
+            const sigMax = shape === "Signal" ? SIGNAL_PARSE_ARITY_MAX[name] : undefined;
+            if (sigMax !== undefined && e.args.length > sigMax) {
+              diags.push({
+                code: "signal-arity",
+                message: `Too many arguments for "${name}()" call. Expected at most ${String(sigMax)} but received ${String(e.args.length)}.`,
                 loc: e.loc,
               });
             }

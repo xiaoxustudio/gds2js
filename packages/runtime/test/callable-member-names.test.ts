@@ -46,7 +46,7 @@ describe("runtime/callable · 成员名表", () => {
     }
 
     for (const n of ["rpc", "rpc_id"]) {
-      eq("298", `${n} 存在但我们没那个式子：仍给「未实现」`, code(lam, n), TODO(n));
+      eq("652", `${n} 在 lambda 基上给引擎那句 Nonexistent（不是「未实现」）`, code(lam, n), NONESUCH(n));
     }
     // `create` 的界是 [2,2]（引擎两支都要，S645 读数 f0 / f1 两向都报 Expected 2）：越界发那句元数，界内才轮到「未实现」
     eq("298", "create 界内仍给「未实现」", codeWith(lam, "create", [nul, nul]), TODO("create"));
