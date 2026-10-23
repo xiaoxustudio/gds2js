@@ -1,0 +1,8 @@
+absf|arm
+lerpf|arm
+posmod|arm
+move|arm
+maxf|arm
+minf|arm
+clampi|arm
+signi|arm

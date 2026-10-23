@@ -750,7 +750,10 @@ const ARM_LITERAL_NODES = new Set([
 ]);
 
 /** 手臂里量过**会折叠**的两个全局函数名（S675；`str` / `hash` 同尺量过是不折叠，其余在册名字没量过，都不进这张表）。 */
-const ARM_FOLD_GLOBALS = new Set(["int", "len", "abs", "mini", "max", "sign", "sqrt", "deg_to_rad", "snapped"]);
+const ARM_FOLD_GLOBALS = new Set([
+  "int", "len", "abs", "mini", "max", "sign", "sqrt", "deg_to_rad", "snapped",
+  "absf", "lerpf", "posmod", "move_toward", "maxf", "minf", "clampi", "signi",
+]);
 
 function lowerExpr(n: SyntaxNode): Expr {
   return atNode(n, () => lowerExprInner(n));
