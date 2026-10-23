@@ -1,6 +1,6 @@
 # gds2js
 
-GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
+GDScript 4.x → JavaScript 的 AOT 编译器。管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`）。
 
@@ -53,8 +53,8 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 - js 的语法很松散，你可以直接写在一行，也可以换行，不像C++ 那样严格，也不像Python那样需要计算缩进。
 - js 可以直接跑在浏览器上，众所周知浏览器跨平台是天生的，这提供了很多优势。
 - 目前 `js` 已经有工具支持编译为原生二进制IR和程序
-- `nodejs`是目前最符合我们项目定位的对标项目，它帮助`js`帮其脱离浏览器环境，我们则帮`gdscript`脱离`godot`，使得`gds`开发者能够使用gds去开发各自应用脚本，减少为了游戏而去学习其他语言的困难。
-- 我后续也不会考虑接入godot引擎，因为项目的初衷就是脱离godot来运行`gdscript`语言
+- `nodejs`是目前最符合我们项目定位的对标项目，它帮助`js`脱离浏览器环境，我们则帮`gdscript`脱离`godot`引擎，使得`godot`开发者能够使用`gdscript`去开发各种应用脚本，减少为了游戏而去学习其他语言的困难。
+- 我后续也不会考虑接入godot引擎，因为项目的初衷就是脱离`godot`来运行`gdscript`语言
 
 ## 测试
 
