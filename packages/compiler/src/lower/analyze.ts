@@ -918,8 +918,8 @@ const VOID_BYTES_METHODS = new Set(["append_array", "remove_at", "fill", "set", 
 const VOID_OBJECT_METHODS = new Set(["set"]);
 /** Signal 接收者那一侧：`emit()` 与 `disconnect()` 都是 void，取值是解析期那一句；`connect()` **不是** void —— 它返回 Error 状态码 int。 */
 const VOID_SIGNAL_METHODS = new Set(["emit", "disconnect"]);
-/** Callable 值位置上的 void 方法：`var v = c.call_deferred(1)` 这一格。 */
-const VOID_CALLABLE_METHODS = new Set(["call_deferred"]);
+/** Callable 值位置上的 void 方法：`var v = c.call_deferred(1)` 这一格；`rpc` / `rpc_id` 同判据（S655 的 `Z_rpc` 与 `C_*_rpc0` 三形读数都是这句）。 */
+const VOID_CALLABLE_METHODS = new Set(["call_deferred", "rpc", "rpc_id"]);
 /** Signal 上**没有**这个名字，而且是解析期两句：`Cannot find member "is_valid" in base "Signal".` + `Function "is_valid()" not found in base Signal.`（第二句的 `Signal` 不带引号）。`has_method` / `get_method_list` / `is_connected_to` 那几格不同形：解析期放过、运行期才给 `Invalid call. Nonexistent function …`。 */
 const SIGNAL_PARSE_MISSING = new Set(["is_valid"]);
 /** Signal 面裸信号名接收者的解析期元数**上界**（十二格读数 `tmp/probe653/P_*.gd` 一名一名过裁判）：越界只发 `Too many` 那一句，
@@ -929,6 +929,16 @@ const SIGNAL_PARSE_MISSING = new Set(["is_valid"]);
 const SIGNAL_PARSE_ARITY_MAX: Record<string, number> = {
   connect: 2, disconnect: 1, is_connected: 1,
   get_connections: 0, get_name: 0, get_object: 0, get_object_id: 0, has_connections: 0, is_null: 0,
+};
+/** Callable 面的解析期元数**两界**（S655，读数 `tmp/probe655/{C_ann,C_ctor,C_infer,Z_*}.gd` 三十六格：三种接收者形状各十二名 + 八支零实参名）：
+ *  与 Signal 那一族正相反，这一面**两向都开口**（`bindv()` 给 `Too few`、`bindv([1], 2)` 给 `Too many`），句形与 `arityDiag` 同一把尺。
+ *  `bind` / `call` / `call_deferred` / `rpc` 是 vararg（`bind(1)` 给值、`call_deferred(1)` 只发取值 void 那句），`rpc_id` 只有下界 1。
+ *  三形接收者（标注 `var c: Callable`、`var c = Callable(...)` 推断、`Callable(...)` 直接当接收者）读数一字一样，所以一条判据铺满三形。 */
+const CALLABLE_PARSE_ARITY: Record<string, [number, number]> = {
+  bindv: [1, 1], callv: [1, 1], unbind: [1, 1], create: [2, 2], rpc_id: [1, Number.MAX_SAFE_INTEGER],
+  get_argument_count: [0, 0], get_bound_arguments: [0, 0], get_bound_arguments_count: [0, 0],
+  get_unbound_arguments_count: [0, 0], get_method: [0, 0], get_object: [0, 0], get_object_id: [0, 0],
+  hash: [0, 0], is_custom: [0, 0], is_null: [0, 0], is_standard: [0, 0], is_valid: [0, 0],
 };
 /** 九种 Packed*Array 的名字：接收者是它们之一时按 pack 那一侧的判据走，九种的表口径一致。 */
 const PACK_SHAPE_NAMES = new Set([
@@ -1784,6 +1794,9 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
           if (e.callee.kind === "attribute" && (e.callee.obj.kind === "ident" || e.callee.obj.kind === "call")) {
             const name = e.callee.name;
             const chainPack = e.callee.obj.kind === "call" ? (PACK_TYPE_NAMES.has(ownerFace(e.callee.obj) ?? "") ? "Pack" : null) : null;
+            // `Callable(...)` 直接当接收者（`C_ctor` 十二格实测与标注形同句）：构造式那一名就是 Callable
+            const ctorCall =
+              e.callee.obj.kind === "call" && e.callee.obj.callee.kind === "ident" && e.callee.obj.callee.name === "Callable";
             // 只补 pack 那两形（构造式与链子）：Signal / Array / Dictionary / 脚本对象的链子接收者没量过，照旧放过
             // 只认裸信号名（`fired.emit(1)`）：`var s = fired` 之后 `s.emit(1)` 是运行期才判，这条链不发解析期拒；局部变量遮住同名信号时也以 `shapes` 为准。
             const shape =
@@ -1792,7 +1805,7 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
                   (PACK_TYPE_NAMES.has(e.callee.obj.name) ? "Pack" : null) ??
                   (e.callee.obj.name === "Array" || e.callee.obj.name === "Dictionary" ? e.callee.obj.name : null) ??
                   (signalNames.has(e.callee.obj.name) ? "Signal" : null)
-                : chainPack;
+                : chainPack ?? (ctorCall ? "Callable" : null);
             // Signal 上没有这个名字：解析期两句，**取值与丢值都一样**（它不是 void 那一族，是找不到成员）
             if (shape === "Signal" && SIGNAL_PARSE_MISSING.has(name)) {
               diags.push({
@@ -1814,6 +1827,10 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
                 message: `Too many arguments for "${name}()" call. Expected at most ${String(sigMax)} but received ${String(e.args.length)}.`,
                 loc: e.loc,
               });
+            }
+            if (shape === "Callable") {
+              const d = arityDiag(CALLABLE_PARSE_ARITY, "callable-arity", name, e.args.length, e.loc);
+              if (d !== null) diags.push(d);
             }
             if (!discarded) {
               const isVoid =
