@@ -2652,8 +2652,10 @@ export function attribute(raw: unknown, name: string): unknown {
       if (d.scriptProps !== null && d.scriptProps.includes(name)) return V.nil();
     }
   }
-  if (obj.t === Tag.NIL) {
-    throw new GodotRuntimeError("nil-attribute", `对 null 取属性 ${name}`);
+  if (obj.t === Tag.NIL || obj.t === Tag.INT || obj.t === Tag.FLOAT || obj.t === Tag.BOOL) {
+    // 这四型基的表外名属性读一句同款（S669，尺 `tmp/probe672/unknown.mts` 十一格：String / StringName / NodePath /
+    // Vector2 / Color / Array / Dictionary 七型早就同句，这四型此前发的是自述；其余基（对象 / Callable / RID）没量过，照旧响亮拒）。
+    throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${valueTypeName(obj)}'.`);
   }
   throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做完）`);
 }
