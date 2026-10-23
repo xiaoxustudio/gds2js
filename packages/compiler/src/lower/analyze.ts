@@ -5112,9 +5112,25 @@ function checkOperandPairs(m: Module, diags: Diagnostic[]): void {
 /** 两侧都是字面量时的那两张表：`checkOperator` 里发（S394）。
  *  操作数名先问 `literalTypeName`：`staticType` 把 `&"ab"` 折进 `String`、`^"a/b"` 回 null，而引擎这一路句子里印的
  *  是 `StringName` / `NodePath` 自己（S490，尺 `tmp/d6/s490.py` 五百四十格，读数 `tmp/d6/s490.json`）。 */
+/** **一支字符串字面量**的那两支构造式：引擎在这一路把它们的型当字面量一侧认（S660，读数
+ *  `tmp/probe660/O_np_plus_str.gd` 等四格与 `O_sn_ctor.gd` 给的都是第一式 `Invalid operands to operator +, NodePath and String.` /
+ *  `…, StringName and int.`），与 `var p: NodePath = …` 那一头的第二式不同形。其余构造式（`Color` 那一支由
+ *  `literalTypeName` 早就认了，`Vector2("…")` 之类没有这一形）不在这儿认。 */
+const FACE_CTOR_LITERAL: Readonly<Record<string, string>> = { NodePath: "NodePath", StringName: "StringName" };
+
+function faceCtorLiteral(e: Expr): string | null {
+  if (e.kind !== "call" || e.callee.kind !== "ident") return null;
+  const face = FACE_CTOR_LITERAL[e.callee.name];
+  if (face === undefined) return null;
+  const args = e.args ?? [];
+  if (args.length !== 1) return null;
+  const a = args[0] as Expr;
+  return a.kind === "lit" && a.lit === "string" ? face : null;
+}
+
 function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]): void {
-  const l = literalTypeName(e.left) ?? staticType(e.left);
-  const r = literalTypeName(e.right) ?? staticType(e.right);
+  const l = literalTypeName(e.left) ?? faceCtorLiteral(e.left) ?? staticType(e.left);
+  const r = literalTypeName(e.right) ?? faceCtorLiteral(e.right) ?? staticType(e.right);
 
   // 两侧都是字面量的那一半：按 468 格那张表发（S394）。既有三道闸门已经发同样句子的组合不再重复发。
   const pair = l !== null && r !== null ? `${l}|${r}` : null;
@@ -5125,7 +5141,7 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
       ((l === "String" && (r === "int" || r === "float")) || (r === "String" && (l === "int" || l === "float")))) ||
     ((e.op === "<=" || e.op === ">=") && l === "bool" && r === "bool");
   let paired = false;
-  if (!covered && isLiteralOperand(e.left) && isLiteralOperand(e.right) && pair !== null && l !== null && r !== null) {
+  if (!covered && (isLiteralOperand(e.left) || faceCtorLiteral(e.left) !== null) && (isLiteralOperand(e.right) || faceCtorLiteral(e.right) !== null) && pair !== null && l !== null && r !== null) {
     if (OP_PAIRS_REFUSED_A[e.op]?.includes(pair) === true) {
       paired = true;
       diags.push({
