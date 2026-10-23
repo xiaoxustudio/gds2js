@@ -623,8 +623,16 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
       const np = nodePathArm(n);
       if (np !== null) return { kind: "lit", lit: "node_path", value: np };
       if (ctorArm(n)) return { kind: "const", expr: lowerExpr(n) };
+      const gnameEarly = named(n)[0]?.text;
+      if (gnameEarly !== undefined && ARM_FOLD_GLOBALS.has(gnameEarly) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
       const sig = armSignature(n);
       if (sig !== null) throw new UnsupportedError("pattern-arm-signature", [...sig, ARM_PATTERN].join(String.fromCharCode(10)));
+      // 调用手臂的三分类（S675，尺 `tmp/probe675/c_*.gd` 六格）：`int` / `len` 引擎**折叠并参与匹配**（`match 1: int("1")` 命中、
+      // `match 1: len("ab")` 走默认支）；在册但不折叠的（`str(1)` / `hash(1)`）引擎只发「必须是常量式」那一句；
+      // 不在册的名字（`type_name(1)`）仍是上面那两句。没量的名字一律不类推 —— 名单只收量过的那两名。
+      const gname = named(n)[0]?.text;
+      if (gname !== undefined && ARM_FOLD_GLOBALS.has(gname) && callArgs(n).every(armAllLiterals)) return { kind: "const", expr: lowerExpr(n) };
+      if (gname !== undefined && GLOBAL_CALLABLES[gname] !== undefined) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       if (armCalleeKnown(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
@@ -693,6 +701,9 @@ function armHasAttributeLeaf(n: SyntaxNode): boolean {
 const ARM_LITERAL_NODES = new Set([
   "integer", "float", "string", "string_name", "node_path", "true", "false", "null",
 ]);
+
+/** 手臂里量过**会折叠**的两个全局函数名（S675；`str` / `hash` 同尺量过是不折叠，其余在册名字没量过，都不进这张表）。 */
+const ARM_FOLD_GLOBALS = new Set(["int", "len"]);
 
 function lowerExpr(n: SyntaxNode): Expr {
   return atNode(n, () => lowerExprInner(n));
