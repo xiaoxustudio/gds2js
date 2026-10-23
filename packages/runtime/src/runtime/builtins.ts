@@ -1189,6 +1189,10 @@ export function and(l: Variant, right: () => Variant): Variant {
   return truthyOf(l) ? V.bool(truthyOf(right())) : V.bool(false);
 }
 
+export function tern(cond: Variant, thenE: () => Variant, elseE: () => Variant): Variant {
+  return truthyOf(cond) ? thenE() : elseE();
+}
+
 export function or(l: Variant, right: () => Variant): Variant {
   return truthyOf(l) ? V.bool(true) : V.bool(truthyOf(right()));
 }

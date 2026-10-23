@@ -951,6 +951,10 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<
       case "binary":
         exprTypes(e.left);
         exprTypes(e.right);
+        return;      case "ternary":
+        exprTypes(e.cond);
+        exprTypes(e.thenE);
+        exprTypes(e.elseE);
         return;
       case "unary":
       case "await":
@@ -1305,6 +1309,10 @@ function globalConstLines(m: Module, reservedExtra: Set<string>): string[] {
       case "binary":
         expr(e.left);
         expr(e.right);
+        return;      case "ternary":
+        expr(e.cond);
+        expr(e.thenE);
+        expr(e.elseE);
         return;
       case "unary":
       case "await":
@@ -1911,6 +1919,12 @@ function emitExpr(e: Expr): string {
 }
 
 function emitExprR(e: Expr): R {
+  if (e.kind === "ternary") {
+    const cr = emitExprR(e.cond);
+    const tr = emitExprR(e.thenE);
+    const fr = emitExprR(e.elseE);
+    return { code: `rt.tern(${boxR(cr)}, () => ${boxR(tr)}, () => ${boxR(fr)})`, rep: "var" };
+  }
   if (e.kind === "lit" && e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) {
     return { code: String(e.value), rep: "int" };
   }
@@ -2091,6 +2105,10 @@ function computeUnboxed(
       case "binary":
         walkExpr(e.left, inLambda);
         walkExpr(e.right, inLambda);
+        break;      case "ternary":
+        walkExpr(e.cond, inLambda);
+        walkExpr(e.thenE, inLambda);
+        walkExpr(e.elseE, inLambda);
         break;
       case "unary":
       case "await":
@@ -2398,6 +2416,10 @@ function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>
       case "binary":
         expr(e.left, owner, allowSite);
         expr(e.right, owner, allowSite);
+        return;      case "ternary":
+        expr(e.cond, owner, allowSite);
+        expr(e.thenE, owner, allowSite);
+        expr(e.elseE, owner, allowSite);
         return;
       case "unary":
       case "await":
@@ -2736,6 +2758,13 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
       case "binary":
         visitExpr(e.left, inL);
         visitExpr(e.right, inL);
+        return;      case "ternary":
+        for (const br of [e.thenE, e.elseE]) {
+          const cn = isCandObj(br);
+          if (cn !== null) markEscape(cn);
+          visitExpr(br, inL);
+        }
+        visitExpr(e.cond, inL);
         return;
       case "unary":
       case "await":
@@ -3028,6 +3057,15 @@ function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
         visitExpr(e.left, inL);
         visitExpr(e.right, inL);
         return;
+      case "ternary":
+        // 三目的两支都是**整值读**：候选容器当分支读就退出裸值通道（否则发出去的是 raw Map，装箱位拿到 undefined）。
+        for (const br of [e.thenE, e.elseE]) {
+          const cn = candObj(br);
+          if (cn !== null) markEscape(cn);
+          visitExpr(br, inL);
+        }
+        visitExpr(e.cond, inL);
+        return;
       case "unary":
       case "await":
       case "is":
@@ -3166,6 +3204,9 @@ function emitExprVar(e: Expr): string {
 
     case "await":
       return `(await rt.awaitValue(${emitExpr(e.operand)}))`;
+
+    case "ternary":
+      return `rt.tern(${emitExpr(e.cond)}, () => ${emitExpr(e.thenE)}, () => ${emitExpr(e.elseE)})`;
 
     case "binary":
       return emitBinary(e);

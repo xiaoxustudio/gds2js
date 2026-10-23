@@ -18,7 +18,8 @@ export type Expr =
   | { kind: "lambda"; params: Param[]; body: Stmt[]; loc: Loc }
   | { kind: "await"; operand: Expr; loc: Loc }
   | { kind: "is"; operand: Expr; type: TypeRef; loc: Loc }
-  | { kind: "as"; operand: Expr; type: TypeRef; loc: Loc };
+  | { kind: "as"; operand: Expr; type: TypeRef; loc: Loc }
+  | { kind: "ternary"; cond: Expr; thenE: Expr; elseE: Expr; loc: Loc };
 
 export type Stmt =
   | { kind: "expr"; expr: Expr; loc: Loc }

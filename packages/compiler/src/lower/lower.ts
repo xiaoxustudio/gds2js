@@ -745,6 +745,11 @@ function lowerExprInner(n: SyntaxNode): Expr {
       }
       return { kind: "unary", op: operatorOf(n), operand: lowerExpr(need(named(n)[0], "一元操作数")), loc: c };
     }
+    case "conditional_expression": {
+      const kids = named(n);
+      if (kids.length !== 3) throw new UnsupportedError("ternary", `三目的形状没量过（命名子节点 ${String(kids.length)} 片）`);
+      return { kind: "ternary", cond: lowerExpr(need(kids[1], "三目条件")), thenE: lowerExpr(need(kids[0], "三目真值支")), elseE: lowerExpr(need(kids[2], "三目假值支")), loc: c };
+    }
     case "await_expression":
       return { kind: "await", operand: lowerExpr(need(named(n)[0], "await 操作数")), loc: c };
     case "lambda": {
