@@ -3370,12 +3370,16 @@ const CTOR_REFUSED: Record<string, string[][]> = {
 
 /** 构造式那一句里实参的型名：字面量交 `literalTypeName`，`TYPE_*` 那 39 支全局常量交 `Variant.Type`
  *  （S606 实测 `Array([1], TYPE_INT)` 引擎写的是 `Array(Array, Variant.Type)`），其余认不出就返回 null 让整条判据让开。 */
-function ctorArgName(a: Expr): string | null {
+function ctorArgName(a: Expr, argTypes: Map<string, string>): string | null {
   const lit = literalTypeName(a);
   if (lit !== null) return lit;
   if (a.kind === "ident") {
     const nm = (a as unknown as Record<string, unknown>).name;
-    if (typeof nm === "string" && nm.startsWith("TYPE_") && isGlobalConst(nm)) return "Variant.Type";
+    if (typeof nm !== "string") return null;
+    if (nm.startsWith("TYPE_") && isGlobalConst(nm)) return "Variant.Type";
+    // 标注过的局部变量按**静态型**渲染（S665：`var x: int = 5` 之后 `Array(x)` 引擎报的是 `Array(int)`）。
+    // 只有已经登进签名表的型名会真开口，没量过的型对不上任何一行 —— 照旧落到运行期那一站，不猜。
+    return argTypes.get(nm) ?? null;
   }
   return null;
 }
@@ -3383,6 +3387,13 @@ function ctorArgName(a: Expr): string | null {
 function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
   const shadowed = new Set(m.funcs.map((f) => f.name));
   for (const nodes of flattenBodies(m)) {
+    const argTypes = new Map<string, string>();
+    for (const n of nodes) {
+      if (n.kind !== "var") continue;
+      const t = n.type as Record<string, unknown> | null | undefined;
+      const nm = n.name;
+      if (t !== undefined && t !== null && t.kind === "named" && typeof t.name === "string" && typeof nm === "string") argTypes.set(nm, t.name);
+    }
     for (const n of nodes) {
       if (n.kind !== "call") continue;
       const callee = n.callee as Record<string, unknown> | undefined;
@@ -3391,7 +3402,7 @@ function checkCtorSignatures(m: Module, diags: Diagnostic[]): void {
       if (shadowed.has(name)) continue;
       const bad = CTOR_REFUSED[name];
       if (bad === undefined) continue;
-      const kinds = ((n.args as Expr[]) ?? []).map((a) => ctorArgName(a));
+      const kinds = ((n.args as Expr[]) ?? []).map((a) => ctorArgName(a, argTypes));
       if (kinds.some((k) => k === null)) continue;
       const sig = kinds.join(", ");
       if (!bad.some((t) => t.join(", ") === sig)) continue;
