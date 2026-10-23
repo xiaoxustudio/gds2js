@@ -498,6 +498,7 @@ registerCallableLabelHook((box) => {
   const inner = box.object?.v;
   const name = box.name;
   if (inner === undefined || name === null) return null;
+  if (inner instanceof ClassDesc && name === "new") return "GDScript::new";
   if (hasStaticName(inner, name)) return `GDScript::${name}`;
   const base = nativeBaseOf(inner);
   if (base === null) return null;

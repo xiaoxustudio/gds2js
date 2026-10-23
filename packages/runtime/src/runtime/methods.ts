@@ -2642,6 +2642,12 @@ export function attribute(raw: unknown, name: string): unknown {
       const hit = varSlotOf(sd, name);
       if (hit !== null) return hit.get();
     }
+    if (inner instanceof ClassDesc && name === "new") {
+      // `H.new` **当值**（S673，尺 `tmp/probe674/n_*.gd` 五格）：引擎给的是那支构造器的绑定 Callable，
+      // 印 `GDScript::new`、`typeof` 25、两次取出来 `==` 给 true。拿它再调用那一形（`f.call()` 之类）没量过，
+      // 落到下面既有的按名派发那一站响亮拒；`f()` 直接调两侧同句（引擎也是解析期那句）。
+      return methodCallable(obj, "new");
+    }
     if (!(inner instanceof ClassDesc) && name in inner) {
       const v = inner[name];
       if (typeof v === "function") return methodCallable(obj, name);
