@@ -1526,9 +1526,6 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return a.get(i);
         }
         case "set": {
-          if (args.length < 2) {
-            throw new GodotRuntimeError("arity", `Too few arguments for "set()" call. Expected at least 2 but received ${String(args.length)}.`);
-          }
           const i = arrayIndexArg(args[0], "set");
           const val = args[1] as Variant;
           if (i < 0 || i >= a.size()) {
@@ -1870,24 +1867,12 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
           return V.str(strRemoveChar(s, intArg(args, 0, "remove_char")));
         case "remove_chars":
           return V.str(strRemoveChars(s, asString(one(args, "remove_chars"), "remove_chars")));
-        case "uri_file_decode": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `uri_file_decode() 不接受参数（收到 ${args.length} 个）`);
-          }
+        case "uri_file_decode":
           return V.str(strUriDecode(s, false));
-        }
-        case "is_valid_ascii_identifier": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `is_valid_ascii_identifier() 不接受参数（收到 ${args.length} 个）`);
-          }
+        case "is_valid_ascii_identifier":
           return V.bool(strIsValidAsciiIdentifier(s));
-        }
-        case "is_valid_unicode_identifier": {
-          if (args.length !== 0) {
-            throw new GodotRuntimeError("arity", `is_valid_unicode_identifier() 不接受参数（收到 ${args.length} 个）`);
-          }
+        case "is_valid_unicode_identifier":
           return V.bool(strIsValidUnicodeIdentifier(s));
-        }
         case "split": {
           if (args.length > 3) {
             throw new GodotRuntimeError("arity", `split() 最多 3 个参数（收到 ${args.length} 个）`);

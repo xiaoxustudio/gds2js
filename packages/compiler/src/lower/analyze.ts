@@ -20,7 +20,6 @@ import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/gl
 import {
   ARRAY_METHOD_ARITY,
   DICT_METHOD_ARITY,
-  FACE_EXISTS_BEYOND_ARITY,
   NODE_PATH_METHOD_ARITY,
   PACK_METHOD_ARITY,
   PACK_METHOD_ARITY_WITH_BYTES,
@@ -893,7 +892,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
   }
 }
 
-/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。`Array.assign` 是后补的一格：`print(ga.assign(Color(1, 0, 0, 1)))` 引擎同格回 void 那句加形参那两句（`tmp/d6/s485.json`，S485）。 */
+/** Array / Dictionary 上返回 void 的方法：取它们的返回值时 Godot 在解析期报 `Cannot get return value of call to "append()" because it returns "void".`。`insert` 与 `resize` 给状态码 int、`pop_back`/`pop_front`/`pop_at` 给元素、`Dictionary.erase` 给 bool、`Dictionary.get` 给值、`Dictionary.set` 给旧值、`Dictionary.merged` 与新键的默认值都不是 void —— 别顺手加进来（24 格逐格量的，`tmp/probe-voidnames/compare79.txt`）。`Array.assign` 是后补的一格：`print(ga.assign(Color(1, 0, 0, 1)))` 引擎同格回 void 那句加形参那两句（`tmp/d6/s485.json`，S485）。`Array.set` 随 S668 补上（尺 `tmp/probe670` 廿七格：`print(a.set(0))` 这类形引擎在元数那句之外**再发**一句 void，标注 / 推断 / 字面量三形接收者一字一样）。 */
 const VOID_ARRAY_METHODS = new Set([
   "append",
   "push_front",
@@ -908,6 +907,7 @@ const VOID_ARRAY_METHODS = new Set([
   "reverse",
   "shuffle",
   "make_read_only",
+  "set",
   "assign",
 ]);
 const VOID_DICT_METHODS = new Set(["clear", "sort", "merge", "assign", "make_read_only"]);
@@ -2587,7 +2587,6 @@ function faceGhostDiags(
   if (!(isLiteral(obj) || (obj.kind === "ident" && typeof obj.name === "string" && names.has(obj.name)))) return [];
   const method = callee.name;
   if (typeof method !== "string" || method in table) return [];
-  if ((FACE_EXISTS_BEYOND_ARITY[type] ?? []).includes(method)) return [];
   const loc = (n.loc as Diagnostic["loc"]) ?? null;
   // 引擎那两句里的 base 印的是**标注全文**（S626 的 z1..z7：`Array[int]` / `Dictionary[One, int]`），判据仍用基名那一面。
   const shown = obj.kind === "ident" && typeof obj.name === "string" ? texts?.get(obj.name) ?? type : type;
@@ -3086,7 +3085,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
           const vmethod = callee.name;
           if (typeof vmethod !== "string") continue;
           // 两边都不认才开口：只在一边认得就不拦（实测 `e[0].length()` 引擎收，我们抢拦就是过拦）
-          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || (FACE_EXISTS_BEYOND_ARITY[vface] ?? []).includes(vmethod) || !memberNameAbsent(vface, vmethod)) continue;
+          if (vmethod in (VALUE_METHOD_ARITY[vface] ?? {}) || !memberNameAbsent(vface, vmethod)) continue;
           const vloc = (n.loc as Diagnostic["loc"]) ?? null;
           diags.push({ code: "face-member-missing", message: `Cannot find member "${vmethod}" in base "${vface}".`, loc: vloc });
           diags.push({ code: "face-member-not-found", message: `Function "${vmethod}()" not found in base ${vface}.`, loc: vloc });
@@ -3108,7 +3107,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
       const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : face === "StringName" ? STRING_NAME_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
       const refused = PACK_TYPE_NAMES.has(face) || face === "Array" || face === "String";
-      if (name in table || (FACE_EXISTS_BEYOND_ARITY[face] ?? []).includes(name)) {
+      if (name in table) {
         // 往成员名上写：pack 是 16 名 × 三型、Array / String 各一名量过，读数一句都是 `Cannot assign a new value to a constant.`
         if (writeTargets.has(n)) {
           if (refused) diags.push({ code: "face-attr-constant", message: "Cannot assign a new value to a constant.", loc });

@@ -1,0 +1,12 @@
+SCRIPT ERROR: Parse Error: Too few arguments for "set()" call. Expected at least 2 but received 1.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Too many arguments for "set()" call. Expected at most 2 but received 3.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Too many arguments for "uri_file_decode()" call. Expected at most 0 but received 1.
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Too many arguments for "is_valid_ascii_identifier()" call. Expected at most 0 but received 1.
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Too many arguments for "is_valid_unicode_identifier()" call. Expected at most 0 but received 1.
+   at: GDScript::reload (<case>/main.gd:10)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
