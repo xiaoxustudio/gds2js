@@ -32,13 +32,9 @@ describe("lower · 手臂折叠名册的第二批八名", () => {
     expect(await verdict(subj, arm), arm).toBe("(折叠收)");
   });
 
-  it.each([
-    ["2", "ceil(1.2)"],
-    ["1", "floor(1.2)"],
-    ["2", "round(1.5)"],
-  ])("%s -> %s 静默那一族的读数没对账，仍响亮拒", async (subj, arm) => {
-    expect(await verdict(subj, arm)).toBe(
-      'Expression in match pattern must be a constant expression, an identifier, or an attribute access ("A.B").',
-    );
+  it("S683 复核：这三名的读数陷阱是 subject 用了 int（折出的是 float）", async () => {
+    expect(await verdict("2.0", "ceil(1.2)")).toBe("(折叠收)");
+    expect(await verdict("1.0", "floor(1.2)")).toBe("(折叠收)");
+    expect(await verdict("2.0", "round(1.5)")).toBe("(折叠收)");
   });
 });

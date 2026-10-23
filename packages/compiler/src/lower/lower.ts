@@ -753,6 +753,11 @@ const ARM_LITERAL_NODES = new Set([
 const ARM_FOLD_GLOBALS = new Set([
   "int", "len", "abs", "mini", "max", "sign", "sqrt", "deg_to_rad", "snapped",
   "absf", "lerpf", "posmod", "move_toward", "maxf", "minf", "clampi", "signi",
+  "pow", "exp", "log", "sin", "cos", "tan", "sinh", "cosh", "tanh", "asin", "acos",
+  "atan", "atan2", "rad_to_deg", "floor", "ceil", "round", "roundf", "fposmod",
+  "lerp", "min", "maxi", "lerp_angle", "smoothstep", "snappedf", "snappedi",
+  "wrap", "wrapi", "wrapf", "is_equal_approx", "is_finite", "is_nan",
+  "inverse_lerp", "db_to_linear",
 ]);
 
 function lowerExpr(n: SyntaxNode): Expr {

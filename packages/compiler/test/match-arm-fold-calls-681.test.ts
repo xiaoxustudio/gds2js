@@ -2,7 +2,8 @@
 // `abs(-3)` / `mini(1, 2)` / `max(1, 2)` / `sign(0)` / `sqrt(4)` / `deg_to_rad(0)` / `snapped(2.5, 1)` / `int("1")` 都折叠并参与匹配
 // （`sqrt` 与 `deg_to_rad` 折出 float，所以 subject 要写 `2.0` / `0.0` 才命中；`snapped(2.5, 1)` 折出的 3 能匹中 int 3）；
 // `len("ab")` 也折叠但值不等（走默认支）。在册而**不折叠**的两类各有读数：`str(1)` / `hash(1)` 发常量式那句；
-// `pow(2, 3)` / `wrapi(5, 1, 3)` / `wrapf(5.5, 1, 3)` 是「静默收下、同值也不匹配」—— 判据未明，本笔照旧响亮拒。
+// 本笔记为「静默收下」的 `pow` / `wrapi` / `wrapf` 到 S683 复核是**读数陷阱**（折出 float 却拿 int 当 subject）；
+// 真正静默那一族按 `tmp/probe704/roster.mts` 只剩 `cubic_interpolate` / `cubic_interpolate_angle`。
 import { describe, expect, it } from "vitest";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
@@ -40,9 +41,8 @@ describe("lower · 手臂里的全局调用折叠名册", () => {
     expect(await verdict("1", "hash(1)")).toBe(ARM_PATTERN);
   });
 
-  it("静默收下那一族（pow / wrapi / wrapf）判据未明，照旧响亮拒", async () => {
-    expect(await verdict("8", "pow(2, 3)")).toBe(ARM_PATTERN);
-    expect(await verdict("3", "wrapi(5, 1, 3)")).toBe(ARM_PATTERN);
-    expect(await verdict("3.0", "wrapf(5.5, 1, 3)")).toBe(ARM_PATTERN);
+  it("在册不折叠但引擎静默收下的那一族仍响亮拒（判据未明，#24）", async () => {
+    expect(await verdict("1.5", "cubic_interpolate(0.0, 1.0, 2.0, 3.0, 0.5)")).toBe(ARM_PATTERN);
+    expect(await verdict("135.0", "cubic_interpolate_angle(0.0, 90.0, 180.0, 270.0, 0.5)")).toBe(ARM_PATTERN);
   });
 });
