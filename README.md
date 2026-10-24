@@ -77,9 +77,9 @@ pnpm test:treeface     # tree-face 对账：清单 ↔ 盘面 ↔ 三处消费�
                        #    两条互锁不变量（原先内嵌在 test:compile 里，只有记得跑才生效）
 
 # ── E2E 层：串行、缺料自动 skip（分钟级）──────────────────────────────
-pnpm test:e2e          # 六支全跑
+pnpm test:e2e          # E2E 门全跑（门数随覆盖加长会漂，落点看 test/e2e/）
 pnpm test:diff         # Godot golden vs 编译产物，逐字节 + 分桶看板（要 main.gen.mts，即先跑 test:compile）
-pnpm test:golden-check # 拿真 Godot 重跑 238 例查 golden 漂移（要 GODOT_BIN；只读不写盘）
+pnpm test:golden-check # 拿真 Godot 重跑全部语料页查 golden 漂移（要 GODOT_BIN；只读不写盘）
 pnpm test:codegen      # 查生成源码漂移：case-table.ts / case-flags.ts 是否等于重跑 regen 该产出的
                        #   （探头用例 gitignored，没跑过 regen:* 的机器上整支 skip；比对前归一行尾，
                        #    仓库已用 .gitattributes 锁 eol=lf，归一那步给老 clone 兜底）
@@ -97,7 +97,7 @@ pnpm test:all          # 两层全跑
 ### E2E 层的开关（旧命令行参数改成环境变量）
 
 ```bash
-GDS2JS_SCRIPTC_ALL=1        # scriptc 全量（≈150 例），并发 4
+GDS2JS_SCRIPTC_ALL=1        # scriptc 全量（282 例 = 271 单文件 + 11 项目树），并发 4
 GDS2JS_SCRIPTC_PROJECT=1    # scriptc 只跑 9 个项目树用例
 GDS2JS_SCRIPTC_FILTER=064   # scriptc 按 case-id 子串挑（跑全部匹配，不只代表集）
 GDS2JS_SCRIPTC_KEEP=1       # scriptc 收尾不删替身树
@@ -107,6 +107,11 @@ GDS2JS_CLI_NATIVE_NO_REBUILD=1  # exe 过期时拒绝验旧货、直接红
 GDS2JS_SEMA_VERBOSE=1       # sema 逐例打印诊断码
 GODOT_BIN / TS_SRC / ZIG_CC / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落点（同旧版）
 ```
+
+`export` 门里 `node/版本门禁` 那一格判的是「runner 的 node 不够新时 CLI 该响亮拒并给出重跑命令」，
+所以这一格要真跑就得拿**低于 25.7** 的 node 当 runner；同时把 SEA 那几格也真打出来，就再给
+`GDS2JS_NODE_BIN` 指一颗 **≥25.7** 的：`D:/nvm/v24.8.0/node.exe node_modules/vitest/vitest.mjs run --project e2e export.test.ts`
+配 `GDS2JS_NODE_BIN=<26.x>`（本机实测 ok 18 / 记账 0 / FAIL 0；runner 自己就够新时这一格按口径只记环境账，不硬凑 pass）。
 
 ## 关于
 
