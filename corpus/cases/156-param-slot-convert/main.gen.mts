@@ -108,6 +108,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   p_float(a: rt.Variant): rt.Variant {
@@ -122,6 +123,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   p_bool(a: rt.Variant): rt.Variant {
@@ -136,6 +138,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   p_str(a: rt.Variant): rt.Variant {
@@ -150,6 +153,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   p_vec2(a: rt.Variant): rt.Variant {
@@ -164,6 +168,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   p_vec2i(a: rt.Variant): rt.Variant {
@@ -178,6 +183,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   p_color(a: rt.Variant): rt.Variant {
@@ -192,6 +198,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   math(a: rt.Variant): rt.Variant {
@@ -206,6 +213,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

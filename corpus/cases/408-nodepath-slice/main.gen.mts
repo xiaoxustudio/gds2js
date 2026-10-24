@@ -31,6 +31,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }

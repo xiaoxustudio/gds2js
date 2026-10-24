@@ -72,9 +72,10 @@ function tokenOf(n: SyntaxNode, text: string): SyntaxNode | null {
 
 /** 换行落在这些位置时，引擎在解析期就拒；句子照抄实测那十句（`tmp/probe-eol/`，语料 304–313 各钉一句）。 */
 function continuationErr(sentence: string, at?: SyntaxNode): never {
-  const e = new UnsupportedError("line-continuation", sentence) as LineCarrying;
+  const e = new UnsupportedError("line-continuation", sentence);
+  const carry = e as LineCarrying;
   // 引擎指的是**断掉那一处**的行（值落在哪行、冒号前那个 token 在哪行），不是整条语句的头一行
-  if (at !== undefined) e.line = at.startPosition.row + 1;
+  if (at !== undefined) carry.line = at.startPosition.row + 1;
   throw e;
 }
 
@@ -210,8 +211,9 @@ let scriptInstanceMethods = new Map<string, Set<string>>();
  *  所以预期报错正文的门只能比句子、不能比行号（§2 第 12 条那一格）。引擎的解析期句指着未支持构造
  *  自己那一行，所以行号在**抛出的那一层**挂上 —— 栈在 unwind 时已经空了，出口拿不到。 */
 
-/** 挂行号用的小类型：`UnsupportedError` 与产物共用、签名冻在 `docs/RUNTIME_API.md`，不在它上面加字段。 */
-type LineCarrying = UnsupportedError & { line?: number };
+/** 挂行号用的小类型：`UnsupportedError` 与产物共用、签名冻在 `docs/RUNTIME_API.md`，不在它上面加字段。
+ *  静态目标上「类与记录的交叉」交不出运行时形状（SC2008），所以只当纯记录用。 */
+type LineCarrying = { line?: number };
 
 function atNode<T>(n: SyntaxNode, f: () => T): T {
   try {

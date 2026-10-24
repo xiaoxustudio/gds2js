@@ -80,10 +80,14 @@ function checkExe(cell: string, exe: string, want: string | null, work = WORK): 
   if (!existsSync(exe)) return record(cell, "FAIL", `退出码 0 但没有 ${exe}`);
   const run = spawnSync(exe, [], { encoding: "utf8", windowsHide: true, timeout: 120_000 });
   if (want === null) {
-    // boom 工程：运行期就该抛，退了 0 说明错误上报丢了；退了非 0 但 stderr 空也说明丢了。
-    if (run.status === 0) return record(cell, "FAIL", "运行期抛错却退了 0（错误上报丢了）");
-    if ((run.stderr || "").trim() === "") return record(cell, "FAIL", `退了 ${run.status} 但 stderr 没任何报错`);
-    return record(cell, "ok", `退出码 ${run.status}`);
+    // boom 工程守的是「运行期那一块有没有上报到 stderr」：`print(100 / z)` 自 S694 起按引擎口径走
+    // —— 除零作废当前那支函数、SCRIPT ERROR 那块照打，宿主主循环自己收尾退 0（引擎那侧 `quit()` 走不到、
+    // 永不退出，退出形状那条差记在 ROADMAP）。所以这一格不再拿退出码当判据。
+    const err = run.stderr || "";
+    if (!/^SCRIPT ERROR: Division by zero error in operator '\/'\.$/m.test(err)) {
+      return record(cell, "FAIL", `退了 ${run.status}，但 stderr 里没有除零那块：${JSON.stringify(err.slice(0, 160))}`);
+    }
+    return record(cell, "ok", `退出码 ${run.status}、除零那块在 stderr`);
   }
   if (run.stdout !== want) {
     return record(

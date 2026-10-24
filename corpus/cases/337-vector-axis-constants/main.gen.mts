@@ -90,7 +90,7 @@ export class Main extends SceneTree {
     }
   }
   
-  g(q: rt.Variant): void {
+  g(q: rt.Variant): rt.Variant {
     const __gd_frame = rt.frameEnter("res://main.gd", "g");
     try {
       rt.frameLine(35);
@@ -122,10 +122,11 @@ export class Main extends SceneTree {
       } while (false);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
-      return;
+      return rt.V.str("");
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

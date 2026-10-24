@@ -12,6 +12,23 @@ const VOID = (n: string): string => `Cannot get return value of call to "${n}()"
 const src = (body: string): string => `extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`;
 const msgs = async (body: string): Promise<string[]> => analyze(lower(await parseSource(src(body)))).map((d) => d.message);
 
+// 尺 `tmp/probe723/{b4,b5,b6,b7}.gd`：括号形与裸形、取值与丢弃四格两侧复量（#33 结清）——
+// `print(([1, 2]).set(0))` 引擎两句（先元数后 void）、`([1, 2]).set(0)` 只元数那一句、
+// `[1, 2].append(3)` 单独一句一句不发、`print([1, 2].append(3))` 只 void 那一句。
+const ARITY = (n: string): string => `Too few arguments for "${n}()" call. Expected at least 2 but received 1.`;
+
+describe("analyze · 括号字面量接收者的句数（元数与 void 的配对）", () => {
+  it("取值那一格两句、序先元数后 void", async () => {
+    expect(await msgs("\tprint(([1, 2]).set(0))")).toEqual([ARITY("set"), VOID("set")]);
+    expect(await msgs("\tprint([1, 2].set(0))")).toEqual([ARITY("set"), VOID("set")]);
+  });
+
+  it("丢值那一格只发元数那一句", async () => {
+    expect(await msgs("\t([1, 2]).set(0)")).toEqual([ARITY("set")]);
+    expect(await msgs("\t[1, 2].append(3)")).toEqual([]);
+  });
+});
+
 describe("analyze · 字面量容器接收者的 void 那一句", () => {
   it.each([
     ["Array 裸字面量", "\tprint([1, 2].append(3))", "append"],

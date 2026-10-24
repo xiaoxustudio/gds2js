@@ -138,6 +138,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   tag(): rt.Variant {
@@ -151,6 +152,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -352,6 +354,7 @@ rt.nameClass(__gd_d_Needs, "Needs");
 rt.registerFieldTypes(__gd_d_Needs, {"n": "int"});
 rt.registerScriptProps(__gd_d_Needs, ["n"], (o) => { const s = o as Needs; return [s.n]; });
 rt.registerDictIdentity(__gd_d_Needs, "res://main.gd", "Needs", ["n"], {}, (o) => { const s = o as Needs; return [s.n]; });
+rt.registerCtorArities(__gd_d_Needs, [1, 1]);
 rt.registerNativeBase(__gd_d_Needs, "RefCounted");
 
 class SkipParent extends Needs {
@@ -448,6 +451,7 @@ class SuperOther extends Base {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

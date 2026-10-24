@@ -183,6 +183,7 @@ rt.nameClass(__gd_d_NeedsArg, "NeedsArg");
 rt.registerFieldTypes(__gd_d_NeedsArg, {"n": "int"});
 rt.registerScriptProps(__gd_d_NeedsArg, ["n"], (o) => { const s = o as NeedsArg; return [s.n]; });
 rt.registerDictIdentity(__gd_d_NeedsArg, "res://main.gd", "NeedsArg", ["n"], {}, (o) => { const s = o as NeedsArg; return [s.n]; });
+rt.registerCtorArities(__gd_d_NeedsArg, [1, 1]);
 rt.registerNativeBase(__gd_d_NeedsArg, "RefCounted");
 
 class Forward extends NeedsArg {
@@ -257,6 +258,7 @@ const __gd_d_Right = rt.defineClass(Right, (a) => new Right(...a), (o) => o inst
 rt.nameClass(__gd_d_Right, "Right");
 rt.setClassBase(__gd_d_Right, rt.lookupClass("NeedsArg") ?? null);
 rt.registerDictIdentity(__gd_d_Right, "res://main.gd", "Right", [], {}, (o) => { const s = o as Right; return []; });
+rt.registerCtorArities(__gd_d_Right, [1, 1]);
 
 const __gd_entry = new Main();
 try {

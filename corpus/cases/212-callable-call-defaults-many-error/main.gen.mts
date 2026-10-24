@@ -82,6 +82,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   twice(x: rt.Variant, y: rt.Variant = rt.V.str("z")): rt.Variant {
@@ -95,6 +96,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static stwo(a: rt.Variant, b: rt.Variant): rt.Variant {
@@ -108,6 +110,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -150,6 +153,7 @@ class Derived extends Base {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

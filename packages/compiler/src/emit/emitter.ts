@@ -547,6 +547,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
   const moduleArities = methodAritiesLiteral(m.funcs);
   if (moduleArities !== null) out.push(`rt.registerMethodArities(__gd_d_${className}, ${moduleArities});`);
+  const moduleCtor = ctorAritiesLiteral(m.funcs);
+  if (moduleCtor !== null) out.push(`rt.registerCtorArities(__gd_d_${className}, ${moduleCtor});`);
   const moduleParams = methodParamsLiteral(m.funcs);
   if (moduleParams !== null) out.push(`rt.registerMethodParams(__gd_d_${className}, ${moduleParams});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
@@ -886,6 +888,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);
   const declArities = methodAritiesLiteral(decl.funcs);
   if (declArities !== null) lines.push(`rt.registerMethodArities(__gd_d_${decl.name}, ${declArities});`);
+  const declCtor = ctorAritiesLiteral(decl.funcs);
+  if (declCtor !== null) lines.push(`rt.registerCtorArities(__gd_d_${decl.name}, ${declCtor});`);
   const declParams = methodParamsLiteral(decl.funcs);
   if (declParams !== null) lines.push(`rt.registerMethodParams(__gd_d_${decl.name}, ${declParams});`);
   const declStatics = staticNamesLiteral(decl.funcs);
@@ -1216,6 +1220,10 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     CURRENT_FUNC = savedFunc;
   }
   lines.push(...frameExitLines(catchRet));
+  // 装箱轨的回值函数要有个收尾 return：静态目标按流分析判「少了结尾 return」（SC0001）。
+  // 标了返回型那一半在解析期就被 `return-path` 拦掉了（引擎同句同行，S699），所以这句只对
+  // **没标返回型**的函数可达 —— 那正是实测的掉尾交 Nil（`m_untyped` 给 `<null>`）。
+  if (ret === "rt.Variant") lines.push(`${pad}return rt.V.nil();`);
   lines.push("}");
   lines.push("");
   return lines;
@@ -1566,6 +1574,9 @@ function hasValueReturn(stmts: Stmt[]): boolean {
     }
     if (s.kind === "for" || s.kind === "while") {
       if (hasValueReturn(s.body)) return true;
+    }
+    if (s.kind === "match") {
+      for (const arm of s.arms) if (hasValueReturn(arm.body)) return true;
     }
   }
   return false;
@@ -3461,14 +3472,29 @@ function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
 }
 
+/** 构造子元数：`_init` 刻意不在 `methodArities` 里，`H.new` 当值那支 Callable 的 `get_argument_count()` 要这一行。
+ *  没声明 `_init`、或 `_init` 不带形参的类一概不发 —— 产物树一字不动。 */
+function ctorAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
+  const ctor = funcs.find((f) => f.name === "_init");
+  if (ctor === undefined || ctor.params.length === 0) return null;
+  let required = ctor.params.length;
+  for (let i = 0; i < ctor.params.length; i++) {
+    if (ctor.params[i]?.default !== null && ctor.params[i]?.default !== undefined) {
+      required = i;
+      break;
+    }
+  }
+  return `[${required}, ${ctor.params.length}]`;
+}
+
 /** 形参型名表（S648）：被调方入口那句 `Invalid type in function ... Cannot convert argument N from X to Y.`
  *  要按声明型判断，而运行期看不到源码。只登记**有标注位**的方法，其余形状不发，产物树一字不动。 */
 function methodParamsLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
   for (const f of funcs) {
     if (f.name === "_init" || f.params.length === 0) continue;
-    const slots = f.params.map((pt) => (pt.type === null || pt.type.kind !== "named" ? null : JSON.stringify(pt.type.name)));
-    if (slots.every((pt) => pt === null)) continue;
+    const slots = f.params.map((pt) => (pt.type === null || pt.type.kind !== "named" ? "null" : JSON.stringify(pt.type.name)));
+    if (slots.every((pt) => pt === "null")) continue;
     rows.push(`${JSON.stringify(f.name)}: [${slots.join(", ")}]`);
   }
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;

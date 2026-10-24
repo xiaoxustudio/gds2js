@@ -17,6 +17,7 @@
 | 范围 | **Tier 1 纯语言**。引擎 API（`Node` / `SceneTree` …）不在本契约内 |
 | 错误处理 | 不支持一律抛 `UnsupportedError`，**绝不静默降级**（D4 + 项目红线） |
 | 产物 import 形式 | `import * as rt from "gds2js/runtime"` |
+| 覆盖面 | 本契约**只登记需要跨层冻结形状的那一层**（`ops.*` / `fast.*` / 容器 / String / 对象类 / 信号）；发射器实际用到的全量面以 `rt` 的导出表为准，由 `test/repo/emit-surface.test.ts` 逐名对账 —— 产物里每个 `rt.<名>(` 与 `rt.ops.<名>(` / `rt.fast.<名>(` / `rt.V.<名>(` 都必须在导出表上，名字对不上就是门红 |
 
 ---
 
@@ -223,6 +224,13 @@ strCapitalize(s: string): string
 
 浮点的 `nan` / `inf` / `-inf` 输出也走这一层（`017`）。
 
+`%` 那一族的另一颗入口（`packages/runtime/src/runtime/methods.ts`）：左支是 **String 字面量**时发射器不走 `ops.mod`，直发这一颗。
+
+```ts
+// soft 与 ops.mod 第三个参数同一个旗标：发射器按两侧静态型定（true = 非致命那块，false = SCRIPT ERROR 并作废旧那支）。
+formatOf(fmt: Variant, args: Variant, soft: boolean): Variant   // S696 / S491 / S697
+```
+
 ---
 
 ## 7. 对象与类
@@ -296,3 +304,5 @@ emitter 规则：
 | 版本 | 日期 | 变更 |
 | --- | --- | --- |
 | v1 | 2026-09-23 | 首版。基于 Godot 4.6.3 实测语义，D1/D2/D3/D4 已拍板 |
+| v1（补记） | 2026-10-25 | §3 的 `ops.mod` 第三位 `soft` 旗标与 §6 的 `formatOf` 补登记 —— 两颗都是 S696 / S697 那两笔已经在用的发射面，这里只是把契约文字对齐实现，签名集合没缩也没涨 |
+| v1（补记 2） | 2026-10-25 | §0 补「覆盖面」一行，把口径写死：本契约只覆盖跨层冻结的形状，全量发射面以 `rt` 的导出表为准，并由 `test/repo/emit-surface.test.ts` 逐名自动对账。契约文字变宽，签名集合没动 |

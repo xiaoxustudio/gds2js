@@ -132,6 +132,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   two(a: rt.Variant, b: rt.Variant): rt.Variant {
@@ -145,6 +146,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   three(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
@@ -158,6 +160,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

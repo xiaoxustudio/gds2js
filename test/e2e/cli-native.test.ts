@@ -325,11 +325,11 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     // 原生那支是起子进程跑产物的，产物的正文得从子进程 stderr 接回来才算报全。
     const dir = join(WD, "refuse");
     const gd = join(dir, "uns.gd");
-    // 这一族的式样是「还没实现」，不是「随便一句错」：`split_floats` 在 String 的 switch 里没有分支，
-    // 走 `[string-method]` 那句响亮拒。（早先用的 `pad_zeros` 已经发出去了，产物不再报错，退出码变 0。）
+    // 这一族的式样是「还没实现」，不是「随便一句错」：`to_multibyte_char_buffer` 是 String 面最后一支
+    // 未发货的名字，走 `[string-multibyte-acp]` 那句响亮拒。（用过的 `pad_zeros` / `split_floats` 都已发出去了，产物不再报错，退出码变 0。）
     writeFileSync(
       gd,
-      'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".split_floats(","))\n\tquit()\n',
+      'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".to_multibyte_char_buffer())\n\tquit()\n',
       "utf8",
     );
     const nRun = cliNode(["run", gd], ROOT);
@@ -347,7 +347,7 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
       cell(false, `exe 把理由退化成了退出码：${xRun.out.slice(0, 200)}`);
       return;
     }
-    if (!/\[string-method\]/.test(nRun.out) || !/\[string-method\]/.test(xRun.out)) {
+    if (!/\[string-multibyte-acp\]/.test(nRun.out) || !/\[string-multibyte-acp\]/.test(xRun.out)) {
       cell(false, `两支都没给出 [code] 正文：node=${nRun.out.slice(0, 160)} exe=${xRun.out.slice(0, 160)}`);
       return;
     }

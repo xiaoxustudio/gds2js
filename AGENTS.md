@@ -19,7 +19,7 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |
 | `corpus/cases/` | 语料用例 001–373，逐例 golden 对账 |
-| `test/` | `repo/`（仓库不变量）+ `e2e/`（六支门）+ `support/` |
+| `test/` | `repo/`（仓库不变量）+ `e2e/`（出货与语义门，逐支落点看目录）+ `support/` |
 
 ## 常用命令
 
@@ -30,7 +30,7 @@ pnpm build              # turbo run build → packages/gds2js/dist/*
 pnpm dev                # tsx 跑 CLI 源码
 pnpm test               # 快层四 project（testkit+runtime+compiler+repo），零外部依赖
 pnpm test:unit          # 只 runtime+compiler
-pnpm test:e2e           # E2E 六支，缺外部工具自动 skip 并说明缺什么
+pnpm test:e2e           # E2E 门全跑，缺外部工具自动 skip 并说明缺什么
 pnpm test:all           # 两层全跑
 pnpm typecheck          # turbo run typecheck + tsc -p tsconfig.test.json
 pnpm test:golden        # 重跑/重生成 golden（要 GODOT_BIN）
