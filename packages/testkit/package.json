@@ -1,6 +1,6 @@
 {
   "name": "@gds2js/testkit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "门脚本共用的断言口径：String() 逐字保留旧 tools/*-check.ts 的 eq/shouldThrow 语义。只依赖 vitest、不依赖任何 @gds2js/* 包 —— 否则与 runtime 的 devDependency 成环，turbo 的 ^typecheck 图会拒。",
