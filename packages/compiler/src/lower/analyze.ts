@@ -1785,8 +1785,14 @@ function checkVoidMethodValues(m: Module, diags: Diagnostic[]): void {
 
   for (const body of bodies) {
     const shapes = new Map(seed);
-    for (const [name, ty] of packSeeds.get(body) ?? []) shapes.set(name, "Pack");
-    for (const [name, sh] of containerSeeds.get(body) ?? []) shapes.set(name, sh as ContainerShape);
+    const packSeed = packSeeds.get(body);
+    if (packSeed !== undefined) {
+      for (const [name] of packSeed) shapes.set(name, "Pack");
+    }
+    const containerSeed = containerSeeds.get(body);
+    if (containerSeed !== undefined) {
+      for (const [name, sh] of containerSeed) shapes.set(name, sh as ContainerShape);
+    }
     /** 链子那一层的基（S482 的 `s.hex_decode().set(1, 2)`）：只认标注写出来的面，认不出就不当 pack。 */
     const localAnn = new Map<string, string>();
     for (const n of flattenBody(body)) {
@@ -6252,8 +6258,9 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
       const firstKind = literalTypeName(e.args[0]);
       // S530：`snapped` 的 step 期望型跟着 value 走 —— value 本身就非法时引擎只发 `x` 那一句、step 不再查（实测 `snapped(true,true)` / `snapped(true,Vector2(1,2))`）；
       // 任一位是 Array / Dictionary 字面量时引擎整体 defer 到运行期（`snapped(true,[1])` / `snapped([1],1)` 都是 SCRIPT ERROR），解析期一句都不发。
+      const sentenceRowsList = sentenceRows;
       const snappedValueBad = callee.name === "snapped" && firstKind !== null &&
-        (sentenceRows ?? []).some(([p, r]) => p === 1 && r.includes(firstKind));
+        sentenceRowsList !== undefined && sentenceRowsList.some(([p, r]) => p === 1 && r.includes(firstKind));
       const snappedContainer = callee.name === "snapped" &&
         e.args.some((a) => { const k = literalTypeName(a); return k === "Array" || k === "Dictionary"; });
       for (const [pos, refuse, sentence, unlessFirst] of sentenceRows ?? []) {
