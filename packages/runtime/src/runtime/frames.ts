@@ -1,4 +1,4 @@
-import { V, type Variant } from "./tags";
+import { Tag, V, type Variant } from "./tags";
 import { GodotRuntimeError } from "./errors";
 import { GArray, GDict, showArgsSep } from "./values";
 
@@ -111,9 +111,12 @@ export function reportNonStaticCall(fn: string): Variant {
   return pushBlock("ERROR", "callp (modules/gdscript/gdscript.cpp:940)", [V.str(`Can't call non-static function '${fn}' in script.`)]);
 }
 
-/** `%` 的格式化在运行期失败：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s491c.py` 二十格）。 */
-export function pctFormatError(detail: string): Variant {
-  return pushBlock("ERROR", "validated_evaluate (core/variant/variant_op.h:829)", [V.str(`String formatting error: ${detail}`)]);
+/** `%` 的格式化在**两侧都是静态型**那一形失败：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s491c.py` 二十格）。
+ *  `at:` 那一行的行号按**实参那一格的形**分三档：Nil 给 742、Array 给 770、其余给 829（读数 `tmp/probe720/{x,y,z2}.gd` 二十三格）。
+ *  任一侧是 Variant 时不走这一支 —— 那是 SCRIPT ERROR 并作废当前那支函数（`ops.pctFormatOp` 的 soft=false）。 */
+export function pctFormatError(detail: string, argsTag: number): Variant {
+  const line = argsTag === Tag.NIL ? 742 : argsTag === Tag.ARRAY ? 770 : 829;
+  return pushBlock("ERROR", `validated_evaluate (core/variant/variant_op.h:${String(line)})`, [V.str(`String formatting error: ${detail}`)]);
 }
 
 /** `String.format()` 的 `values` 不是 Array / Dictionary / Object：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s511fmt.gd`，`at:` 是 `format (core/string/ustring.cpp:3598)`）。 */

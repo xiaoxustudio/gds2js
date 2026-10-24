@@ -59,12 +59,15 @@ const isStringish = (v: Variant): boolean => v.t === Tag.STRING || v.t === Tag.S
 
 /** `%` 的格式化那一路：左支 `String` 与 `StringName` 都当格式串读，回值都是 `String`
  *  （实测 `tmp/d6/s491.py`：`&"%d" % 1` 给 `1`、`typeof` 是 4，`&"%%"` 给 `%%`）；
- *  失败时引擎只推一块 ERROR、把格式串**原样**回出去，脚本不打断（`tmp/d6/s491c.py` 二十格）。 */
-export function pctFormatOp(fmt: Variant, args: Variant): Variant {
+ *  失败那一格的**形状看两侧的静态型**（S696，尺 `tmp/probe720/{x,y,z2}.gd` 二十三格）：两侧都是静态已知的非 Variant 型时
+ *  引擎推一块非致命 ERROR、脚本照跑、把格式串**原样**回出去（`soft`）；任一侧是 Variant 时发的是 SCRIPT ERROR 那一句，
+ *  作废当前那支函数、调用点拿到 Nil（非 `soft`，走 `strFormat` 那一式）。 */
+export function pctFormatOp(fmt: Variant, args: Variant, soft: boolean): Variant {
   const text = fmt.v as string;
   const list = args.t === Tag.ARRAY ? (args.v as GArray).raw() : [args];
+  if (!soft) return V.str(strFormat(text, list));
   const r = strFormatSoft(text, list);
-  if (r.fail !== null) pctFormatError(r.fail);
+  if (r.fail !== null) pctFormatError(r.fail, args.t);
   return V.str(r.text);
 }
 
@@ -310,8 +313,8 @@ export const ops = {
     return V.float(num(a) / num(b));
   },
 
-  mod(a: Variant, b: Variant): Variant {
-    if (isStringish(a)) return pctFormatOp(a, b);
+  mod(a: Variant, b: Variant, soft: boolean): Variant {
+    if (isStringish(a)) return pctFormatOp(a, b, soft);
     const ziMod = asVec2i(a);
     const zjMod = asVec2i(b);
     if (ziMod && zjMod) return vector2i(mod32(ziMod.x, zjMod.x), mod32(ziMod.y, zjMod.y));

@@ -28,7 +28,7 @@ export class Main extends SceneTree {
       rt.frameLine(5);
       for (let i of rt.rangeSeq([n])) {
         rt.frameLine(6);
-        rt.method(a, "append", [rt.vector2iNew([rt.ops.mod(rt.V.int(i), mod), rt.V.int(i)])]);
+        rt.method(a, "append", [rt.vector2iNew([rt.ops.mod(rt.V.int(i), mod, false), rt.V.int(i)])]);
       }
       rt.frameLine(7);
       return a;

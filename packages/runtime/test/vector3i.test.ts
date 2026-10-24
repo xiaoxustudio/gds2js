@@ -49,10 +49,10 @@ describe("runtime/vector3i", () => {
       vector3iNew([vector2(1, 2)]));
 
     eq("step85", "逐分量整数算式（六行 + 语料 165 的 arith / scalar / wrap 三行）",
-      `${z3(ops.add(A3, B3))} ${z3(ops.sub(A3, B3))} ${z3(ops.mul(A3, B3))} ${z3(ops.div(A3, B3))} ${z3(ops.mod(A3, B3))} ${z3(ops.neg(A3))}`,
+      `${z3(ops.add(A3, B3))} ${z3(ops.sub(A3, B3))} ${z3(ops.mul(A3, B3))} ${z3(ops.div(A3, B3))} ${z3(ops.mod(A3, B3, true))} ${z3(ops.neg(A3))}`,
       "(4, -2, 15) (2, -6, 9) (3, -8, 36) (3, -2, 4) (0, 0, 0) (-3, 4, -12)");
     eq("step85", "标量在左在右同式，除法向零、模的符号跟被除数（ u / n 两行）",
-      `${z3(ops.mul(A3, V.int(2)))} ${z3(ops.mul(V.int(2), A3))} ${z3(ops.div(A3, V.int(-2)))} ${z3(ops.mod(A3, V.int(-2)))}`,
+      `${z3(ops.mul(A3, V.int(2)))} ${z3(ops.mul(V.int(2), A3))} ${z3(ops.div(A3, V.int(-2)))} ${z3(ops.mod(A3, V.int(-2), true))}`,
       "(6, -8, 24) (6, -8, 24) (-1, 2, -6) (1, 0, 0)");
     eq("step85", "加减越界回绕 int32",
       `${z3(ops.add(Z3(2147483647, 0, 0), Z3(1, 0, 0)))} ${z3(ops.sub(Z3(-2147483648, 0, 0), Z3(1, 0, 0)))}`,
@@ -65,7 +65,7 @@ describe("runtime/vector3i", () => {
     shouldThrow("step85", "向量与向量混算（Vector3i + Vector3）实测解析期拒", () =>
       ops.add(A3, vector3(1, 1, 1)));
     perr("step85", "逐分量除零的文本与 int 那一族同一句", () => ops.div(A3, Z3(0, 2, 2)), "Division by zero error in operator '/'.");
-    perr("step85", "逐分量取模零", () => ops.mod(A3, Z3(0, 2, 2)), "Modulo by zero error in operator '%'.");
+    perr("step85", "逐分量取模零", () => ops.mod(A3, Z3(0, 2, 2), true), "Modulo by zero error in operator '%'.");
 
     eq("step85", "比较按字典序 x→y→z（ cmp 行：a<b 假、a<=a 真、a>b 真）",
       `${isLess(A3, B3)} ${!isLess(A3, Z3(3, -4, 12))} ${isLess(B3, A3)}`,

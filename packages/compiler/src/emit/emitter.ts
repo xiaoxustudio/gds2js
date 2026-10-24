@@ -323,6 +323,10 @@ let VAR_TYPES = new Map<string, TypeRef | null>();
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
 /** 当前发射的函数自己绑住的名字（见 `collectBinds`），取值记号撞号时用它先认局部。 */
 let FUNC_BINDS = new Map<string, number>();
+/** 本脚本函数的返回标注（`%` 那一族的形状判据，S696）：无标注与 `-> Variant` 都算动态那一形。 */
+let FUNC_RETURNS = new Map<string, TypeRef | null>();
+/** 当前函数里**没有标注**（或标注写的就是 `Variant`）的名字：`%` 的实参落在它们身上就是动态那一形（S696）。 */
+let UNTYPED_NAMES = new Set<string>();
 /** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
 let CLASS_FUNCS = new Set<string>();
 
@@ -390,6 +394,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   MODULE_SIGNALS = new Set(m.signals.map((s) => s.name));
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
   PARAM_TYPES = new Map(m.funcs.map((f) => [f.name, f.params]));
+  FUNC_RETURNS = new Map(m.funcs.map((f) => [f.name, f.returnType]));
   // 字段初始化式发在 INHERITED_METHODS 建起来之前，而那里裸调本类方法、继承来的方法与宿主基类的方法都合法，守卫认这张表。
   CLASS_FUNCS = new Set([
     ...m.funcs.map((f) => f.name),
@@ -589,6 +594,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   VAR_TYPES = new Map();
   LOCAL_TYPES = new Map();
   CLASS_FUNCS = new Set();
+  FUNC_RETURNS = new Map();
+  UNTYPED_NAMES = new Set();
   return { code, map };
 }
 
@@ -825,6 +832,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   const savedAsMethod = INIT_AS_METHOD;
   const savedHostSuper = NEEDS_HOST_SUPER;
   const savedClassFuncs = CLASS_FUNCS;
+  const savedReturns = FUNC_RETURNS;
   const savedClassSignals = CLASS_SIGNALS;
   CURRENT_MEMBERS = new Set([
     ...decl.vars.filter((v) => !v.isStatic).map((v) => v.name),
@@ -836,6 +844,7 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   CURRENT_CLASS = decl.name;
   STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
   CLASS_FUNCS = new Set([...decl.funcs.map((f) => f.name), ...innerInheritedMethodNames(decl)]);
+  FUNC_RETURNS = new Map<string, TypeRef | null>([...savedReturns, ...decl.funcs.map((f): [string, TypeRef | null] => [f.name, f.returnType])]);
   CLASS_VALUE_OWNERS = new Map(savedConsts);
   for (const v of decl.vars) if (v.isConst || v.isStatic) CLASS_VALUE_OWNERS.set(v.name, decl.name);
 
@@ -895,14 +904,16 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   INIT_AS_METHOD = savedAsMethod;
   NEEDS_HOST_SUPER = savedHostSuper;
   CLASS_FUNCS = savedClassFuncs;
+  FUNC_RETURNS = savedReturns;
   return lines;
 }
 
-function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>): Map<string, TypeRef | null> {
+function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>, untyped: string[]): Map<string, TypeRef | null> {
   const stmt = (s: Stmt): void => {
     switch (s.kind) {
       case "var":
         if (s.type !== null) out.set(s.name, s.type);
+        else untyped.push(s.name);
         return;
       case "if":
         for (const br of s.branches) {
@@ -996,13 +1007,18 @@ function collectScriptBase(c: ClassDecl, out: Map<string, string>): void {
 function emitFunc(f: FuncDecl, base = 0): string[] {
   const saved = LOCAL_TYPES;
   const savedBinds = FUNC_BINDS;
-  LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES));
+  const savedUntyped = UNTYPED_NAMES;
+  const untyped: string[] = [];
+  LOCAL_TYPES = collectLocalTypes(f.body, new Map(VAR_TYPES), untyped);
   FUNC_BINDS = collectBinds(f.body, seedParamBinds(f.params));
+  for (const p of f.params) if (p.type === null || (p.type.kind === "named" && p.type.name === "Variant")) untyped.push(p.name);
+  UNTYPED_NAMES = new Set(untyped);
   try {
     return emitFuncInner(f, base);
   } finally {
     LOCAL_TYPES = saved;
     FUNC_BINDS = savedBinds;
+    UNTYPED_NAMES = savedUntyped;
   }
 }
 
@@ -3553,12 +3569,49 @@ function patternNames(p: Pattern): string[] {
   }
 }
 
+/** `%` 格式化那一族的形状（S696，尺 `tmp/probe720/{x,y,z2}.gd` 二十三格 + `tmp/probe719/{p,q,t,s}.gd`）：
+ *  两侧都是**静态已知的非 Variant 型**时引擎打的是非致命那块（脚本照跑、回原格式串），
+ *  任一侧是 Variant 时发的是 SCRIPT ERROR 那一句并作废当前那支函数。
+ *  认不出来的形态一律回答「照旧的静态形」—— 没量过的不翻。 */
+function pctStaticSide(e: Expr): boolean {
+  switch (e.kind) {
+    case "ident": {
+      if (UNTYPED_NAMES.has(e.name)) return false;
+      const table = LOCAL_TYPES.has(e.name) ? LOCAL_TYPES : VAR_TYPES.has(e.name) ? VAR_TYPES : null;
+      if (table === null) return true;
+      const t = table.get(e.name);
+      if (t === undefined) return true;
+      if (t === null) return false;
+      return !(t.kind === "named" && t.name === "Variant");
+    }
+    case "call": {
+      if (e.callee.kind !== "ident") return true;
+      const t = FUNC_RETURNS.get(e.callee.name);
+      if (t === undefined) return true;
+      if (t === null) return false;
+      return !(t.kind === "named" && t.name === "Variant");
+    }
+    case "index": {
+      // 只量过「读的是标了 `Array` / `Dictionary`（不带内型）的那一格」：`la[0]`、`dsc["k"]` 都算动态那一形；
+      // 定形容器 `Array[String]` 的那一格是静态（Z5），其余没量过，照旧。
+      if (e.obj.kind !== "ident") return true;
+      const table = LOCAL_TYPES.has(e.obj.name) ? LOCAL_TYPES : VAR_TYPES.has(e.obj.name) ? VAR_TYPES : null;
+      const t = table === null ? undefined : table.get(e.obj.name);
+      return !(t !== null && t !== undefined && t.kind === "named" && (t.name === "Array" || t.name === "Dictionary"));
+    }
+    default:
+      return true;
+  }
+}
+
 function emitBinary(e: Extract<Expr, { kind: "binary" }>): string {
   const l = emitExpr(e.left);
   const r = emitExpr(e.right);
 
-  if (e.op === "%" && e.left.kind === "lit" && e.left.lit === "string") {
-    return `rt.formatOf(${l}, ${r})`;
+  if (e.op === "%") {
+    const soft = pctStaticSide(e.left) && pctStaticSide(e.right) ? "true" : "false";
+    if (e.left.kind === "lit" && e.left.lit === "string") return `rt.formatOf(${l}, ${r}, ${soft})`;
+    return `rt.ops.mod(${l}, ${r}, ${soft})`;
   }
   if (e.op === "in") return `rt.ops.inOp(${l}, ${r})`;
   if (e.op === "and") return `rt.and(${l}, () => ${r})`;

@@ -67,7 +67,7 @@ export class Main extends SceneTree {
       rt.frameLine(24);
       print(rt.showArgs([rt.method(rt.V.str("Σ"), "to_lower", [])]));
       rt.frameLine(25);
-      print(rt.showArgs([rt.formatOf(rt.V.str("%s|%s"), rt.V.array(rt.GArray.of([rt.wrapValue(rt.index(rt.V.str(e), rt.V.int(2))), rt.wrapValue(rt.index(rt.V.str(j), rt.V.int(0)))])))]));
+      print(rt.showArgs([rt.formatOf(rt.V.str("%s|%s"), rt.V.array(rt.GArray.of([rt.wrapValue(rt.index(rt.V.str(e), rt.V.int(2))), rt.wrapValue(rt.index(rt.V.str(j), rt.V.int(0)))])), true)]));
       rt.frameLine(26);
       this.quit();
     } catch (__gd_err) {

@@ -2575,9 +2575,9 @@ export function dictOf(pairs: Array<[Variant, Variant]>): Variant {
   return V.dict(d);
 }
 
-/** `"%d/%s" % [...]` —— 字符串格式化运算符：与 `ops.mod` 那一路同一判据（失败推一块 ERROR、格式串原样回出去） */
-export function formatOf(fmt: Variant, args: Variant): Variant {
-  return pctFormatOp(fmt, args);
+/** `"%d/%s" % [...]` —— 字符串格式化运算符：与 `ops.mod` 那一路同一判据，`soft` 是发射器按**两侧的静态型**定的形状旗标（S696：两侧静态 → 推一块 ERROR 回原格式串；任一侧 Variant → SCRIPT ERROR 作废那支函数） */
+export function formatOf(fmt: Variant, args: Variant, soft: boolean): Variant {
+  return pctFormatOp(fmt, args, soft);
 }
 
 /** 内建类型面的「方法名当值」：发射器只在**静态已知的接收者**且名字是那一面的成员时发这一支

@@ -60,7 +60,7 @@ export class Main extends SceneTree {
       rt.frameLine(25);
       print(rt.showArgs([rt.V.str("var_to_str => "), rt.typeOf(rt.globalCallable("var_to_str")), rt.V.str("|"), rt.globalCallable("var_to_str")]));
       rt.frameLine(26);
-      print(rt.showArgs([rt.V.str("fmt|"), rt.formatOf(rt.V.str("%s"), rt.globalCallable("abs"))]));
+      print(rt.showArgs([rt.V.str("fmt|"), rt.formatOf(rt.V.str("%s"), rt.globalCallable("abs"), true)]));
       rt.frameLine(27);
       print(rt.showArgs([rt.V.str("eq|"), rt.ops.eq(rt.globalCallable("abs"), rt.globalCallable("abs")), rt.V.str("|"), rt.ops.eq(rt.globalCallable("abs"), rt.globalCallable("sign")), rt.V.str("|"), rt.ops.eq(rt.globalCallable("str_to_var"), rt.globalCallable("str_to_var")), rt.V.str("|"), rt.ops.eq(rt.globalCallable("abs"), rt.callableCtor([])), rt.V.str("|"), rt.ops.eq(rt.globalCallable("len"), rt.globalCallable("load"))]));
       rt.frameLine(28);

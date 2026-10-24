@@ -48,9 +48,9 @@ export class Main extends SceneTree {
       rt.frameLine(11);
       this.show(rt.V.str("p05|"), rt.ops.div(rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)), rt.V.int(2)));
       rt.frameLine(12);
-      this.show(rt.V.str("p06|"), rt.ops.mod(rt.V.int(7), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
+      this.show(rt.V.str("p06|"), rt.ops.mod(rt.V.int(7), rt.ops.pow(rt.V.int(2), rt.V.int(2)), true));
       rt.frameLine(13);
-      this.show(rt.V.str("p07|"), rt.ops.mod(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3)));
+      this.show(rt.V.str("p07|"), rt.ops.mod(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(3), true));
       rt.frameLine(14);
       this.show(rt.V.str("p08|"), rt.ops.add(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
       rt.frameLine(15);
@@ -72,7 +72,7 @@ export class Main extends SceneTree {
       rt.frameLine(23);
       this.show(rt.V.str("p17|"), rt.ops.shl(rt.V.int(2), rt.ops.pow(rt.V.int(2), rt.V.int(2))));
       rt.frameLine(24);
-      this.show(rt.V.str("p18|"), rt.ops.mod(rt.V.int(rt.fast.iDivC(100, 5)), rt.ops.pow(rt.V.int(2), rt.V.int(3))));
+      this.show(rt.V.str("p18|"), rt.ops.mod(rt.V.int(rt.fast.iDivC(100, 5)), rt.ops.pow(rt.V.int(2), rt.V.int(3)), true));
       rt.frameLine(25);
       this.show(rt.V.str("p19|"), rt.ops.mul(rt.V.float(1), rt.ops.pow(rt.V.float(2), rt.V.int(63))));
       rt.frameLine(26);
@@ -88,11 +88,11 @@ export class Main extends SceneTree {
       rt.frameLine(31);
       this.show(rt.V.str("p25|"), rt.ops.mul(rt.ops.pow(rt.V.float(2), rt.V.int(3)), rt.V.int(2)));
       rt.frameLine(32);
-      this.show(rt.V.str("p26|"), rt.ops.mod(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(3))));
+      this.show(rt.V.str("p26|"), rt.ops.mod(rt.V.int(1), rt.ops.pow(rt.V.int(2), rt.V.int(3)), true));
       rt.frameLine(33);
       this.show(rt.V.str("p27|"), rt.ops.div(rt.ops.mul(rt.V.int(rt.fast.iMulC(2, 2)), rt.ops.pow(rt.V.int(2), rt.V.int(3))), rt.V.int(4)));
       rt.frameLine(34);
-      this.show(rt.V.str("p28|"), rt.ops.mod(rt.ops.pow(rt.V.int(rt.fast.iMulC(2, 3)), rt.V.int(2)), rt.V.int(5)));
+      this.show(rt.V.str("p28|"), rt.ops.mod(rt.ops.pow(rt.V.int(rt.fast.iMulC(2, 3)), rt.V.int(2)), rt.V.int(5), true));
       rt.frameLine(35);
       this.show(rt.V.str("p29|"), rt.ops.pow(rt.V.int(2), rt.V.int(rt.fast.iMulC(3, 2))));
       rt.frameLine(36);
@@ -100,9 +100,9 @@ export class Main extends SceneTree {
       rt.frameLine(37);
       this.show(rt.V.str("p31|"), rt.ops.sub(rt.V.int(1), rt.ops.mul(rt.ops.pow(rt.V.int(2), rt.V.int(2)), rt.V.int(2))));
       rt.frameLine(38);
-      this.show(rt.V.str("p32|"), rt.ops.mod(rt.V.int(100), rt.ops.pow(rt.V.int(7), rt.V.int(2))));
+      this.show(rt.V.str("p32|"), rt.ops.mod(rt.V.int(100), rt.ops.pow(rt.V.int(7), rt.V.int(2)), true));
       rt.frameLine(39);
-      this.show(rt.V.str("p33|"), rt.ops.mod(rt.ops.div(rt.V.int(rt.fast.iMulC(3, 4)), rt.ops.pow(rt.V.int(2), rt.V.int(2))), rt.V.int(2)));
+      this.show(rt.V.str("p33|"), rt.ops.mod(rt.ops.div(rt.V.int(rt.fast.iMulC(3, 4)), rt.ops.pow(rt.V.int(2), rt.V.int(2))), rt.V.int(2), true));
       rt.frameLine(40);
       this.show(rt.V.str("p34|"), rt.ops.pow(rt.V.int(7), rt.V.int(0)));
       rt.frameLine(41);

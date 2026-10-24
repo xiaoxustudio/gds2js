@@ -39,7 +39,7 @@ describe("ops · Nil 参与运算时引擎那一句（S695）", () => {
   it("取模与元运算四支只吃 int，Nil 进来还是那一句", () => {
     const want = (op: string): string =>
       `Invalid operands 'Nil' and 'int' in operator '${op}'.|Invalid operands 'int' and 'Nil' in operator '${op}'.`;
-    eq("695", "%", sayPair(ops.mod), want("%"));
+    eq("695", "%", sayPair((a, b) => ops.mod(a, b, true)), want("%"));
     eq("695", "&", sayPair(ops.band), want("&"));
     eq("695", "|", sayPair(ops.bor), want("|"));
     eq("695", "^", sayPair(ops.bxor), want("^"));

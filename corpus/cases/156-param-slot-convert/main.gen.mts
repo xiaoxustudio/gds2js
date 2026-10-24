@@ -101,7 +101,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "p_int", this);
       rt.frameLine(5);
-      return rt.formatOf(rt.V.str("int<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("int<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -115,7 +115,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "float", 1, "p_float", this);
       rt.frameLine(8);
-      return rt.formatOf(rt.V.str("float<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("float<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -129,7 +129,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "bool", 1, "p_bool", this);
       rt.frameLine(11);
-      return rt.formatOf(rt.V.str("bool<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("bool<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -143,7 +143,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "String", 1, "p_str", this);
       rt.frameLine(14);
-      return rt.formatOf(rt.V.str("str<-%s(%s)"), rt.V.array(rt.GArray.of([a, rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("str<-%s(%s)"), rt.V.array(rt.GArray.of([a, rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -157,7 +157,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "Vector2", 1, "p_vec2", this);
       rt.frameLine(17);
-      return rt.formatOf(rt.V.str("vec2<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("vec2<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -171,7 +171,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "Vector2i", 1, "p_vec2i", this);
       rt.frameLine(20);
-      return rt.formatOf(rt.V.str("vec2i<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("vec2i<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -185,7 +185,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "Color", 1, "p_color", this);
       rt.frameLine(23);
-      return rt.formatOf(rt.V.str("color<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])));
+      return rt.formatOf(rt.V.str("color<-%s(%s)"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.typeOf(a)])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -199,7 +199,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "math", this);
       rt.frameLine(26);
-      return rt.formatOf(rt.V.str("math<-%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.mul(a, rt.V.int(2))])])));
+      return rt.formatOf(rt.V.str("math<-%s|%s"), rt.V.array(rt.GArray.of([rt.strBuiltin([a]), rt.strBuiltin([rt.ops.mul(a, rt.V.int(2))])])), true);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");

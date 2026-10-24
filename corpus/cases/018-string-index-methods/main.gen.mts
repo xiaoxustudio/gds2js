@@ -35,7 +35,7 @@ export class Main extends SceneTree {
       rt.frameLine(7);
       print(rt.showArgs([rt.method(rt.V.str(s), "to_upper", [])]));
       rt.frameLine(8);
-      print(rt.showArgs([rt.formatOf(rt.V.str("%d/%s"), rt.V.array(rt.GArray.of([rt.V.int(5), rt.V.str("x")])))]));
+      print(rt.showArgs([rt.formatOf(rt.V.str("%d/%s"), rt.V.array(rt.GArray.of([rt.V.int(5), rt.V.str("x")])), true)]));
       rt.frameLine(9);
       this.quit();
     } catch (__gd_err) {

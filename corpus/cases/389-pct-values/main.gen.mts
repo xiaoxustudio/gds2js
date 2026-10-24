@@ -25,23 +25,23 @@ export class Main extends SceneTree {
     const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
     try {
       rt.frameLine(4);
-      print(rt.showArgs([rt.V.str("A|"), rt.formatOf(rt.V.str("%d %x %X %o"), rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(255), rt.V.int(255), rt.V.int(8)])))]));
+      print(rt.showArgs([rt.V.str("A|"), rt.formatOf(rt.V.str("%d %x %X %o"), rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(255), rt.V.int(255), rt.V.int(8)])), true)]));
       rt.frameLine(5);
-      print(rt.showArgs([rt.V.str("B|"), rt.formatOf(rt.V.str("a%c"), rt.V.int(65)), rt.V.str("|"), rt.formatOf(rt.V.str("a%c"), rt.V.str("z")), rt.V.str("|"), rt.formatOf(rt.V.str("a%c"), rt.V.float(65.9)), rt.V.str("|"), rt.formatOf(rt.V.str("a%c"), rt.V.int(1114111))]));
+      print(rt.showArgs([rt.V.str("B|"), rt.formatOf(rt.V.str("a%c"), rt.V.int(65), true), rt.V.str("|"), rt.formatOf(rt.V.str("a%c"), rt.V.str("z"), true), rt.V.str("|"), rt.formatOf(rt.V.str("a%c"), rt.V.float(65.9), true), rt.V.str("|"), rt.formatOf(rt.V.str("a%c"), rt.V.int(1114111), true)]));
       rt.frameLine(6);
-      print(rt.showArgs([rt.V.str("C|"), rt.formatOf(rt.V.str("%5d|%-5d|%05d|"), rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(7), rt.V.int((-7))])))]));
+      print(rt.showArgs([rt.V.str("C|"), rt.formatOf(rt.V.str("%5d|%-5d|%05d|"), rt.V.array(rt.GArray.of([rt.V.int(7), rt.V.int(7), rt.V.int((-7))])), true)]));
       rt.frameLine(7);
-      print(rt.showArgs([rt.V.str("D|"), rt.formatOf(rt.V.str("%*d|"), rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(7)]))), rt.formatOf(rt.V.str("%*.*f|"), rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.int(3), rt.V.float(1.5)]))), rt.formatOf(rt.V.str("%*d|"), rt.V.array(rt.GArray.of([rt.V.int((-1)), rt.V.int(7)])))]));
+      print(rt.showArgs([rt.V.str("D|"), rt.formatOf(rt.V.str("%*d|"), rt.V.array(rt.GArray.of([rt.V.int(3), rt.V.int(7)])), true), rt.formatOf(rt.V.str("%*.*f|"), rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.int(3), rt.V.float(1.5)])), true), rt.formatOf(rt.V.str("%*d|"), rt.V.array(rt.GArray.of([rt.V.int((-1)), rt.V.int(7)])), true)]));
       rt.frameLine(8);
-      print(rt.showArgs([rt.V.str("E|"), rt.formatOf(rt.V.str("%v"), rt.vector2New([rt.V.int(1), rt.V.int(2)])), rt.V.str("|"), rt.formatOf(rt.V.str("%v"), rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)])), rt.V.str("|"), rt.formatOf(rt.V.str("%.2v"), rt.vector2New([rt.V.int(1), rt.V.int(2)]))]));
+      print(rt.showArgs([rt.V.str("E|"), rt.formatOf(rt.V.str("%v"), rt.vector2New([rt.V.int(1), rt.V.int(2)]), true), rt.V.str("|"), rt.formatOf(rt.V.str("%v"), rt.vector3iNew([rt.V.int(1), rt.V.int(2), rt.V.int(3)]), true), rt.V.str("|"), rt.formatOf(rt.V.str("%.2v"), rt.vector2New([rt.V.int(1), rt.V.int(2)]), true)]));
       rt.frameLine(9);
-      print(rt.showArgs([rt.V.str("F|"), rt.formatOf(rt.V.str("%s"), rt.dictOf([[rt.V.str("k"), rt.V.int(1)]])), rt.V.str("|"), rt.formatOf(rt.V.str("%s"), rt.V.array(rt.GArray.of([rt.V.int(1)]))), rt.V.str("|"), rt.formatOf(rt.V.str("%s"), rt.V.stringName("a")), rt.V.str("|"), rt.formatOf(rt.V.str("%s"), rt.nodePathCtor([rt.V.str("a/b")]))]));
+      print(rt.showArgs([rt.V.str("F|"), rt.formatOf(rt.V.str("%s"), rt.dictOf([[rt.V.str("k"), rt.V.int(1)]]), true), rt.V.str("|"), rt.formatOf(rt.V.str("%s"), rt.V.array(rt.GArray.of([rt.V.int(1)])), true), rt.V.str("|"), rt.formatOf(rt.V.str("%s"), rt.V.stringName("a"), true), rt.V.str("|"), rt.formatOf(rt.V.str("%s"), rt.nodePathCtor([rt.V.str("a/b")]), true)]));
       rt.frameLine(10);
       let f = "%d";
       rt.frameLine(11);
-      print(rt.showArgs([rt.V.str("G|"), rt.ops.mod(rt.V.str(f), rt.V.int(42)), rt.V.str("|"), rt.ops.mod(rt.V.str(f), rt.V.float((-7.9))), rt.V.str("|"), rt.ops.mod(rt.V.str(f), rt.V.float(1e+30))]));
+      print(rt.showArgs([rt.V.str("G|"), rt.ops.mod(rt.V.str(f), rt.V.int(42), false), rt.V.str("|"), rt.ops.mod(rt.V.str(f), rt.V.float((-7.9)), false), rt.V.str("|"), rt.ops.mod(rt.V.str(f), rt.V.float(1e+30), false)]));
       rt.frameLine(12);
-      print(rt.showArgs([rt.V.str("H|"), rt.formatOf(rt.V.str("100%%"), rt.V.array(rt.GArray.of([]))), rt.V.str("|"), rt.formatOf(rt.V.str("%d%%"), rt.V.int(50))]));
+      print(rt.showArgs([rt.V.str("H|"), rt.formatOf(rt.V.str("100%%"), rt.V.array(rt.GArray.of([])), true), rt.V.str("|"), rt.formatOf(rt.V.str("%d%%"), rt.V.int(50), true)]));
       rt.frameLine(13);
       this.quit();
     } catch (__gd_err) {

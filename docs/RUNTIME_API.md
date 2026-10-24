@@ -91,7 +91,7 @@ export function reportRunFailure(e: unknown): void        // in-process → 再�
 | `ops.sub(a, b): Variant` | 同 add 的数值规则 | |
 | `ops.mul(a, b): Variant` | 同上 | |
 | `ops.div(a, b): Variant` | **两个操作数都是 INT 才走整数除法（向零截断）**，否则浮点除法 | S1 / S2 |
-| `ops.mod(a, b): Variant` | 仅 int 合法；符号跟**被除数**。float 参与 → 编译期就该拦下 | S3 |
+| `ops.mod(a, b, soft): Variant` | 数值取模看两侧型；左支是 `String` / `StringName` 时是格式化那一族，`soft` 是发射器按**两侧静态型**定的形状旗标（true = 失败推一块非致命 ERROR 回原格式串，false = 失败抛 SCRIPT ERROR 作废当前那支函数，S696） | S3 / S491 / S696 |
 | `ops.pow(a, b): Variant` | **左结合**（`2**3**2 == 64`），由 emitter 加括号保证 | S4 |
 | `ops.neg(a): Variant` | 数值取负 | |
 

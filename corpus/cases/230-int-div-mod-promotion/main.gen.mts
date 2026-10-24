@@ -37,7 +37,7 @@ export class Main extends SceneTree {
     const __gd_frame = rt.frameEnter("res://main.gd", "m");
     try {
       rt.frameLine(7);
-      return rt.ops.add(rt.ops.add(rt.strBuiltin([rt.ops.mod(a, b)]), rt.V.str(":")), rt.strBuiltin([rt.typeOf(rt.ops.mod(a, b))]));
+      return rt.ops.add(rt.ops.add(rt.strBuiltin([rt.ops.mod(a, b, false)]), rt.V.str(":")), rt.strBuiltin([rt.typeOf(rt.ops.mod(a, b, false))]));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.nil();
