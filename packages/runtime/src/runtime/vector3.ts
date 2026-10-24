@@ -168,6 +168,14 @@ const fposmod = (a: number, b: number): number => (b === 0 || !Number.isFinite(a
 /** `is_normalized()` 那一条判据，与 Vector2 同一口径（epsilon 两侧实测过）。 */
 const isUnit = (v: GVector3) => r(Math.abs(sub(lengthSq(v), 1))) < NORMALIZED_EPS;
 
+/** 轴没归一时引擎推的那一块 ERROR（`tmp/probe708/axis.mts` 七格：原向量照回、脚本不打断）。
+ *  本模块是叶子，拿不到 show 与帧表，所以由宿主把这一块登记进来 —— 与 `setStackPrintSink` 同一条通道。 */
+let rotatedAxisBlock: ((axis: GVector3) => void) | null = null;
+
+export function setRotatedAxisBlockSink(fn: (axis: GVector3) => void): void {
+  rotatedAxisBlock = fn;
+}
+
 /** Vector3 的方法面：未知成员响亮报缺。 */
 export function vector3Method(v: GVector3, name: string, args: Variant[]): Variant {
   switch (name) {
@@ -274,10 +282,11 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       arity(args, 2, "rotated");
       const axis = vecArg(args, 0, "rotated");
       if (!isUnit(axis)) {
-        throw new UnsupportedError(
-          "vector3-rotated-axis",
-          "Vector3.rotated() 的轴不是单位向量：引擎往 stderr 打 ERROR + 回原向量（core/math/basis.cpp:843 带 GDScript backtrace），那一形不复刻",
-        );
+        if (rotatedAxisBlock === null) {
+          throw new UnsupportedError("vector3-rotated-axis", "Vector3.rotated() 的轴没归一，但宿主没登记 ERROR 块通道");
+        }
+        rotatedAxisBlock(axis);
+        return vector3(v.x, v.y, v.z);
       }
       const a = scalar(args[1], "rotated");
       const c = r(Math.cos(a));
