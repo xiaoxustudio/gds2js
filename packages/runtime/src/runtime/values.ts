@@ -2935,7 +2935,6 @@ export function strFormat(fmt: string, args: Variant[]): string {
   const toks: FmtTok[] = [];
   let lit = "";
   let specs = 0;
-  let valueSpecs = 0;
   for (let i = 0; i < fmt.length; i++) {
     if (fmt[i] !== "%") {
       lit += fmt[i];
@@ -2993,14 +2992,13 @@ export function strFormat(fmt: string, args: Variant[]): string {
     lit = "";
     toks.push({ spec: { flags, width, prec, type: t, text: fmt.slice(i, k + 1), widthStars, precStars } });
     specs += 1 + widthStars + precStars;
-    valueSpecs += 1;
     i = k;
   }
   toks.push({ lit });
 
-  // 头一道元数闸只数**值槽**：`"%*s" % "ab"` 引擎给的是「`*` 要数或向量」而不是参数少用那一句（实测 `tmp/d6/s491e.py`）
-  if (args.length < valueSpecs) throw new GodotRuntimeError("format-arity", FMT_ERR.notEnough);
-
+  // 元数不够那一句要到**某一位真要取实参而取不到**那一刻才发（S697，尺 `tmp/probe722/a.gd` 十七格）：
+  // 引擎按槽序走，先撞上的可能是这一槽的值型那句 —— `"%d %d" % "ab"` 给 `a number is required`，
+  // `"%s %s" % "ab"`（`%s` 什么都收）才给 `not enough arguments for format string`。
   let ai = 0;
   let out = "";
   for (const tk of toks) {
