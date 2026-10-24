@@ -833,6 +833,9 @@ const ARM_FOLD_GLOBALS = new Set([
   "wrap", "wrapi", "wrapf", "is_equal_approx", "is_finite", "is_nan",
   "inverse_lerp", "db_to_linear", "linear_to_db", "ease", "bezier_interpolate",
   "cubic_interpolate", "cubic_interpolate_angle", "float", "fmod", "ceilf", "floori", "ceili",
+  "acosh", "asinh", "atanh", "remap", "floorf", "roundi", "absi", "signf", "is_inf",
+  "is_zero_approx", "step_decimals", "cubic_interpolate_in_time", "cubic_interpolate_angle_in_time",
+  "bezier_derivative", "angle_difference", "rotate_toward", "clamp", "clampf", "nearest_po2", "pingpong",
 ]);
 
 function lowerExpr(n: SyntaxNode): Expr {
