@@ -1,0 +1,17 @@
+R <null>
+Z 
+SCRIPT ERROR: Invalid access to property or key 'nope' on a base object of type 'RefCounted (Holder)'.
+   at: read_nope (<case>/main.gd:10)
+   GDScript backtrace (most recent call first):
+       [0] read_nope (<case>/main.gd:10)
+       [1] _initialize (<case>/main.gd:20)
+SCRIPT ERROR: Invalid call to function 'disconnect' in base 'Signal'. Expected 1 argument(s).
+   at: disc0 (<case>/main.gd:13)
+   GDScript backtrace (most recent call first):
+       [0] disc0 (<case>/main.gd:13)
+       [1] _initialize (<case>/main.gd:23)
+SCRIPT ERROR: Invalid call to function 'disconnect' in base 'Signal'. Expected 1 argument(s).
+   at: disc2 (<case>/main.gd:16)
+   GDScript backtrace (most recent call first):
+       [0] disc2 (<case>/main.gd:16)
+       [1] _initialize (<case>/main.gd:24)

@@ -16,15 +16,32 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, methodParamsOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, ClassDesc, type Fn } from "./object";
+import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, methodParamsOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, scriptLabelOf, ClassDesc, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, faceMemberKnown, nativeAritySay, valueAttrKind } from "./face-arity";
+
+
+/** 延后调用在泵上发现元数不合（S693，尺 `tmp/probe713/{selfbad,ab}.mts`）：引擎发的是一条**非致命** ERROR ——
+ *  标签 `<宿主基类>(<脚本名>)::<方法>`，数取必填数与实给数，`at:` 是 `message_queue.cpp:222`。
+ *  延后**里面**的运行时错仍是 SCRIPT ERROR 那一块（同尺 `self_runtime_err` 一格已一字一样）；零件缺位的形状照旧响亮抛。 */
+const NL = String.fromCharCode(10);
+
+function deferredArityBlock(base: string, file: string, method: string, want: number, given: number): void {
+  writeOrderedStderr([
+    `ERROR: Error calling deferred method: '${base}(${file})::${method}': Method expected ${String(want)} argument(s), but called with ${String(given)}.`,
+    "   at: _call_function (core/object/message_queue.cpp:222)",
+  ]);
+}
+
+function isAritySay(e: unknown): boolean {
+  return e instanceof GodotRuntimeError && e.code === "script-method-arity";
+}
 
 /** 六支 vector 面：属性名只有 x / y / z / w，且在派发里先回，所以「非成员即表外」这一判对它们安全。 */
 const VECTOR_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i"]);
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
 import { asRid } from "./rid";
-import { gGetStack, gPrintStack, gPushError, gPushWarning, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
+import { gGetStack, gPrintStack, gPushError, gPushWarning, stackBlockLines, writeOrderedStderr, readOnlyError, stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringUnicodeReplaceError, arrayIndexOob, arrayEmptyBlock, stringHexUnevenBlock, signalDuplicateConnect, signalNullCallable, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr, packDynamicBadMode } from "./frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
 import { asNodePath, GdNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice, nodePathText } from "./node-path";
 import type { GdIdentified } from "./identity";
@@ -942,7 +959,16 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
     case "call_deferred": {
       if (empty) throw new UnsupportedError("callable-deferred-null", "空 Callable 上 call_deferred() 没量过");
       callDeferred(() => {
-        callCallableBox(box, args);
+        try {
+          callCallableBox(box, args);
+        } catch (e) {
+          if (!isAritySay(e) || box.builtin !== null || boundArgsOf(box).length > 0 || box.object === null || box.name === null) throw e;
+          const base = nativeBaseOf(box.object.v);
+          const file = scriptLabelOf(box.object.v);
+          const want = methodAritiesOf(box.object.v)?.[box.name]?.[0];
+          if (base === null || file === null || want === undefined) throw e;
+          deferredArityBlock(base, file, box.name, want, args.length);
+        }
       });
       return V.nil();
     }
@@ -1007,6 +1033,11 @@ function callableMethod(box: CallableBox, name: string, args: Variant[]): Varian
       throw new GodotRuntimeError("callable-method", `Invalid call. Nonexistent function '${name}' in base 'Callable'.`);
     }
     if (box.builtin === null && (box.object !== null || empty)) {
+      // 脚本方法那一支基少给实参时引擎先报元数（S693，尺 `tmp/probe712/arity2.mts` 的 cal_rpc_id_0），S652 那三格的宿主基仍是 null instance
+      const ob = box.object;
+      if (name === "rpc_id" && args.length === 0 && ob !== null && descOf(ob.v) !== null) {
+        throw new GodotRuntimeError("callable-arity", "Invalid call to function 'rpc_id' in base 'Callable'. Expected 1 argument(s).");
+      }
       throw new GodotRuntimeError("callable-null-instance", `Attempt to call function '${name}' in base 'Callable' on a null instance.`);
     }
   }
@@ -1426,7 +1457,16 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
       // `call_deferred()` 的**返回值就是 null**，真正的调用排在后面
       const rest = args.slice(1) as Variant[];
       callDeferred(() => {
-        callSlot(inner, who, rest);
+        try {
+          callSlot(inner, who, rest);
+        } catch (e) {
+          if (!isAritySay(e)) throw e;
+          const base = nativeBaseOf(inner);
+          const file = scriptLabelOf(inner);
+          const want = methodAritiesOf(inner)?.[who]?.[0];
+          if (base === null || file === null || want === undefined) throw e;
+          deferredArityBlock(base, file, who, want, rest.length);
+        }
       });
       return V.nil();
     }
@@ -2662,6 +2702,16 @@ export function attribute(raw: unknown, name: string): unknown {
     // 这四型基的表外名属性读一句同款（S669，尺 `tmp/probe672/unknown.mts` 十一格：String / StringName / NodePath /
     // Vector2 / Color / Array / Dictionary 七型早就同句，这四型此前发的是自述；其余基（对象 / Callable / RID）没量过，照旧响亮拒）。
     throw new GodotRuntimeError("face-attribute", `Invalid access to property or key '${name}' on a base object of type '${valueTypeName(obj)}'.`);
+  }
+  if (obj.t === Tag.OBJECT) {
+    const innerObj = obj.v as Record<string, unknown>;
+    if (descFor(innerObj) !== null) {
+      // 脚本实例上读没登记的键（S693，尺 `tmp/probe712/arity2.mts` 两格）：引擎那句与写侧同式，作废的是当前那支函数
+      throw new GodotRuntimeError(
+        "face-attribute",
+        `Invalid access to property or key '${name}' on a base object of type 'RefCounted (${classNameOf(innerObj) ?? "Object"})'.`,
+      );
+    }
   }
   throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做完）`);
 }

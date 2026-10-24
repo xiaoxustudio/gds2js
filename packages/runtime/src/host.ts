@@ -1,6 +1,6 @@
 import { Signal } from "./runtime/signal";
 import { deferredPendingCount } from "./runtime/callable";
-import { setStackPrintSink, stackBlockLines } from "./runtime/frames";
+import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/object";
 import { V, type Variant } from "./runtime/tags";
 import { setRotatedAxisBlockSink } from "./runtime/vector3";
@@ -19,6 +19,11 @@ function addLine(text: string): void {
 setStackPrintSink(addLine);
 
 // `Vector3.rotated` 的轴没归一：引擎推一块非致命 ERROR（`at:` 是 `set_axis_angle` 那一行）再回原向量，读数 `tmp/probe708/axis.mts`。
+setOrderedStderrSink((text) => {
+  flush();
+  process.stderr.write(text);
+});
+
 export function installRotatedAxisBlockSink(): void {
   setRotatedAxisBlockSink((axis) => {
     process.stderr.write(

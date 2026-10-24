@@ -37,6 +37,19 @@ function stackFrames(): Frame[] {
 /** `print_stack()` 的每帧一行实测走 stdout，要与其余 print 同序 —— 宿主装载时把自己的行缓冲登记进来。 */
 let printSink: ((line: string) => void) | null = null;
 
+/** 引擎往 stderr 推的那些块是**插在 stdout 之间**的，宿主得先把自己缓冲的行落盘再写这一块（`tmp/probe713` 的延后块）。 */
+let orderedStderr: ((text: string) => void) | null = null;
+
+export function setOrderedStderrSink(fn: (text: string) => void): void {
+  orderedStderr = fn;
+}
+
+export function writeOrderedStderr(lines: string[]): void {
+  const text = lines.join(String.fromCharCode(10)) + String.fromCharCode(10);
+  if (orderedStderr !== null) orderedStderr(text);
+  else process.stderr.write(text);
+}
+
 export function setStackPrintSink(fn: (line: string) => void): void {
   printSink = fn;
 }

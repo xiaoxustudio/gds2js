@@ -1,0 +1,5 @@
+A
+ERROR: Error calling deferred method: 'SceneTree(main.gd)::notify': Method expected 1 argument(s), but called with 0.
+   at: _call_function (core/object/message_queue.cpp:222)
+ERROR: Error calling deferred method: 'SceneTree(main.gd)::notify': Method expected 1 argument(s), but called with 2.
+   at: _call_function (core/object/message_queue.cpp:222)

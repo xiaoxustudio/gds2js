@@ -104,7 +104,8 @@ export const CALLABLE_METHOD_ARITY: Record<string, [number, number]> = {
  *  `connect` 的两界是 `[1, 2]` 而不是 `[2, 2]` —— `flags` 有默认值，一支实参引擎照样连上
  *  （S546 那批重复连/空 Callable 的读数都是一支形），只是越界那句报的是声明的全部数 2。 */
 export const SIGNAL_METHOD_ARITY: Record<string, [number, number]> = {
-  connect: [1, 2], get_connections: [0, 0], get_name: [0, 0], get_object: [0, 0],
+  connect: [1, 2], disconnect: [1, 1], emit: [0, Number.MAX_SAFE_INTEGER],
+  get_connections: [0, 0], get_name: [0, 0], get_object: [0, 0],
   get_object_id: [0, 0], has_connections: [0, 0], is_connected: [1, 1], is_null: [0, 0],
 };
 
@@ -302,7 +303,9 @@ export const DICT_METHOD_ARITY: Record<string, [number, number]> = {
 export function nativeAritySay(face: string, name: string, given: number): string | null {
   const b = faceArity(face, name);
   if (b === null || (given >= b[0] && given <= b[1])) return null;
-  return `Invalid call to function '${name}' in base '${face}'. Expected ${String(b[1])} argument(s).`;
+  // 变长那一侧报的是**必填写数**（`rpc_id()` 一句是 Expected 1，不是 Expected 天文数字；尺 `tmp/probe712/arity3.mts`）
+  const want = b[1] === Number.MAX_SAFE_INTEGER ? b[0] : b[1];
+  return `Invalid call to function '${name}' in base '${face}'. Expected ${String(want)} argument(s).`;
 }
 
 /** 这个名字在这一面上存不存在：元数表里有没有它就是全部判据（S627 的 u1 / u4 / u6 / u7 / u10 与 S668 的五名都已登进表）。 */
