@@ -86,6 +86,7 @@ function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxN
 const MATCH_PATTERN_COLON = 'Expected ":" or "when" after "match" patterns.';
 const MATCH_GUARD_EMPTY = 'Expected expression for pattern guard after "when".';
 const MATCH_SUBJECT_COLON = 'Expected ":" after "match" expression.';
+const MATCH_EMPTY_BLOCK = 'Expected an indented block after "match" statement.';
 
 /** 那一族在 CST 里的形状：语法把分支体**粘**到手臂后面，成一个 `call` 节点里「手臂表达式 + 一枚认得出是名字的 `ERROR` + `arguments`」三条并排。 */
 function gluedArm(x: SyntaxNode): SyntaxNode | null {
@@ -103,12 +104,16 @@ function matchMalformedScan(root: SyntaxNode): { sentence: string; at: SyntaxNod
   const walk = (x: SyntaxNode): void => {
     if (x.type === "match") sawMatch = true;
     {
-      // 主题后没冒号那一形（`match 1` 直接贴上下一条手臂）：塌进 ERROR 时 `match` 只是片叶子，判据要落在**它的父亲**那串记号上
+      // `match 1:` 后面什么都没有（空块）：塌到 ERROR 时记号序列在冒号处**断掉**，冒号后再没有具名子节点（S691，引擎指 `match` 那一行）
       const head = x.children.findIndex((k) => k.type === "match");
       const colon = x.children.findIndex((k, i) => i > head && !k.isNamed && k.text === ":");
       if (head >= 0 && colon > head && x.children.slice(head + 1, colon).filter((k) => k.isNamed).length >= 2) {
         const tok = x.children[head];
         if (tok !== undefined) hits.push({ sentence: MATCH_SUBJECT_COLON, at: tok, row: tok.startPosition.row });
+      }
+      if (head >= 0 && colon > head && !x.children.slice(colon + 1).some((k) => k.isNamed)) {
+        const tok = x.children[head];
+        if (tok !== undefined) hits.push({ sentence: MATCH_EMPTY_BLOCK, at: tok, row: tok.startPosition.row });
       }
     }
     if (x.type === "pattern_guard") {

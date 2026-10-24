@@ -26,6 +26,20 @@ describe("lower · match 畸形形的整树扫", () => {
     expect(await verdict('\tmatch 1\n\t\t1:\n\t\t\tprint("a")\n')).toEqual(['Expected ":" after "match" expression.', 4]);
   });
 
+  it("match 后面空着（塌到冒号就断）：引擎那句、指 match 那一行", async () => {
+    const body = ["extends SceneTree", "", "func _init():", "\tmatch 1:", "\t\t", ""].join("\n");
+    let msg = "(照编译)";
+    let line = 0;
+    try {
+      await lower(await parseSource(body));
+    } catch (e) {
+      const err = e as { message?: string; line?: number };
+      msg = String(err.message ?? "").split(String.fromCharCode(10))[0] ?? "";
+      line = err.line ?? 0;
+    }
+    expect([msg, line]).toEqual(['Expected an indented block after "match" statement.', 4]);
+  });
+
   it("合式的 match 与合式的守卫都不受这条影响", async () => {
     expect(await verdict('\tmatch 1:\n\t\t1:\n\t\t\tprint("a")\n')).toEqual(["(照编译)", 0]);
     expect(await verdict('\tmatch 1:\n\t\t2 when true:\n\t\t\tprint("a")\n')).toEqual(["(照编译)", 0]);
