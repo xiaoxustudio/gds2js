@@ -77,7 +77,7 @@ export function gdFunctionError(err: unknown): void {
   const at = top === undefined ? "? (-1)" : `${top.fn} (${top.source}:${String(top.line)})`;
   const lines = [`SCRIPT ERROR: ${err.message}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
   for (const [i, f] of fs.entries()) lines.push(`       [${String(i)}] ${f.fn} (${f.source}:${String(f.line)})`);
-  process.stderr.write(lines.join("\n") + "\n");
+  writeOrderedStderr(lines);
 }
 
 /** `push_error` / `push_warning` 那一块：首行 + `at:` + backtrace 表头 + 每帧一行（实测原文，语料 273）。 */
@@ -87,9 +87,11 @@ export function stackBlockLines(head: string, at: string, args: Variant[]): stri
   return out;
 }
 
-/** 两支 push 整块走 stderr，且都不中断脚本（实测 `push_error` 前后的 print 照打，空实参照打 `ERROR: `）。 */
+/** 两支 push 整块走 stderr，且都不中断脚本（实测 `push_error` 前后的 print 照打，空实参照打 `ERROR: `）。
+ *  一律经 `writeOrderedStderr`：宿主的 print 有行缓冲，先落盘才不会在**进程被杀掉**的那种收尾里丢掉已经打出去的值
+ *  （超时件语料那 5 页就是这么照出来的，读数 `tmp/probe722/hung`）。 */
 function pushBlock(head: string, at: string, args: Variant[]): Variant {
-  process.stderr.write(stackBlockLines(head, at, args).join("\n") + "\n");
+  writeOrderedStderr(stackBlockLines(head, at, args));
   return V.nil();
 }
 
@@ -131,7 +133,7 @@ export function stringReplaceCharNul(): Variant {
 
 /** `String.to_ascii_buffer()` 遇到非 ASCII 码点：引擎 `print_unicode_error` 只打这一行（无 `ERROR:` 前缀、无 `at:`），换成 0x20（S569）。 */
 export function stringUnicodeAsciiError(cp: number): void {
-  process.stderr.write(`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1\n`);
+  writeOrderedStderr([`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1`]);
 }
 
 /** `Array.get` / `Array.set` 的下标越界块（S572）：两处 `at:` 行号同为 variant_call.cpp:681。 */
@@ -153,7 +155,7 @@ export function stringHexUnevenBlock(): Variant {
 
 /** UTF-32 / UTF-16 解码里非法码点的替换诊断（S579）：引擎 `print_unicode_error` 那行（含 U+FFFD 字面）。 */
 export function stringUnicodeReplaceError(message: string): void {
-  process.stderr.write(`Unicode parsing error, some characters were replaced with \ufffd (U+FFFD): ${message}\n`);
+  writeOrderedStderr([`Unicode parsing error, some characters were replaced with \ufffd (U+FFFD): ${message}`]);
 }
 
 /** `String.replace_chars(keys, 0)`：同一句，`at:` 落在公共那支（S544，`core/string/ustring.cpp:3853`）。 */

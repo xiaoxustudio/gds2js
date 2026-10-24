@@ -26,6 +26,7 @@ setOrderedStderrSink((text) => {
 
 export function installRotatedAxisBlockSink(): void {
   setRotatedAxisBlockSink((axis) => {
+    flush();
     process.stderr.write(
       stackBlockLines("ERROR", "set_axis_angle (core/math/basis.cpp:843)", [
         V.str(`The axis Vector3 ${showArgsSep([V.object(axis)], "")} must be normalized.`),
@@ -51,6 +52,8 @@ export function printRaw(args: Variant[]): void {
 }
 
 export function printErr(args: Variant[]): void {
+  // 与 `push_error` 同一形：宿主的 print 是行缓冲的，stderr 那条要先把缓冲落盘（进程被杀才不丢值）。
+  flush();
   process.stderr.write(showArgsSep(args, "") + "\n");
 }
 

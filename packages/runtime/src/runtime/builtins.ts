@@ -1210,7 +1210,9 @@ export function rangeSeq(args: Variant[]): number[] {
   const start = args.length >= 2 ? rangeInt(args[0], 1) : 0;
   const step = args.length >= 3 ? rangeInt(args[2], 3) : 1;
   if (step === 0) {
-    throw new GodotRuntimeError("range-step-zero", "range 的步长参数为零");
+    // 引擎那句带实用函数名的包装前缀与全角叹号（S698，尺 `tmp/probe723/v.gd` 十五格 + 语料 074）：
+    // `range()` 是量过的唯一一支会**作废当前那支函数**的全局函数，其余除零形的全局函数都给非致命那块或干脆给值。
+    throw new GodotRuntimeError("range-step-zero", `Error calling GDScript utility function "range()": 步长参数为零！`);
   }
   const items: number[] = [];
   if (step > 0) {
