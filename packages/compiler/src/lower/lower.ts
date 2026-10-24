@@ -82,6 +82,29 @@ function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxN
   if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence, token);
 }
 
+/** 手臂缺冒号那一族六形同发这一句（S689，尺 `tmp/probe710/{malformed,cst}.mts`：int / str / `self.x` / `_` / `int(1)` 与第二条手臂）。 */
+const MATCH_PATTERN_COLON = 'Expected ":" or "when" after "match" patterns.';
+
+/** 那一族在 CST 里的形状：语法把分支体**粘**到手臂后面，成一个 `call` 节点里「手臂表达式 + 一枚认得出是名字的 `ERROR` + `arguments`」三条并排。
+ *  只在**顶层 ERROR 且其中确实有 `match` 记号**时来认这一形（别的畸形形不套这条），交回粘住的那支手臂节点指行。 */
+function matchPatternColonErr(n: SyntaxNode): SyntaxNode | null {
+  let sawMatch = false;
+  let hit: SyntaxNode | null = null;
+  const scan = (x: SyntaxNode): void => {
+    if (x.type === "match") sawMatch = true;
+    if (hit === null && x.type === "call") {
+      const kids = x.children;
+      if (kids.some((k) => k.type === "ERROR" && /^[A-Za-z_]/.test(k.text))) {
+        const first = kids.find((k) => k.isNamed && k.type !== "ERROR" && k.type !== "arguments");
+        if (first !== undefined) hit = first;
+      }
+    }
+    for (const k of x.children) scan(k);
+  };
+  scan(n);
+  return sawMatch ? hit : null;
+}
+
 /** 复合赋值那一支：引擎对 11 种运算符换行给的都是 `=` 那一句（`tmp/probe-eol/readings5.txt`）。 */
 function operatorToken(n: SyntaxNode): SyntaxNode | null {
   return n.children.find((c) => !c.isNamed) ?? null;
@@ -253,6 +276,8 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       default: {
         const sentence = c.type === "ERROR" ? accessorTokenErr(c) : null;
         if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
+        const glued = c.type === "ERROR" ? matchPatternColonErr(c) : null;
+        if (glued !== null) continuationErr(MATCH_PATTERN_COLON, glued);
         throw new UnsupportedError("module-node", `顶层节点 ${c.type} 未支持`);
       }
     }
@@ -597,6 +622,8 @@ function lowerMatch(n: SyntaxNode): Stmt {
   const arms: MatchArm[] = [];
   for (const section of named(body)) {
     if (section.type !== "pattern_section") {
+      // `match_body` 里直接挂一枚 ERROR：手臂那行没以冒号收尾（S689 的另一处落点，尺 `tmp/probe710/cst.mts` 的 m6）
+      if (section.type === "ERROR") continuationErr(MATCH_PATTERN_COLON, section);
       throw new UnsupportedError("match-node", `match 内节点 ${section.type} 未支持`);
     }
     const sectionBody = lowerBody(need(field(section, "body"), "match 分支体"));
