@@ -19,7 +19,9 @@ function emittedNames(): Map<string, string> {
     const file = join(CASES, id, "main.gen.mts");
     if (!existsSync(file)) continue;
     for (const m of readFileSync(file, "utf8").matchAll(/rt\.([A-Za-z_]\w*)\(/g)) {
-      if (!found.has(m[1])) found.set(m[1], `${id}/main.gen.mts`);
+      const name = m[1];
+      if (name === undefined) continue;
+      if (!found.has(name)) found.set(name, `${id}/main.gen.mts`);
     }
   }
   return found;
