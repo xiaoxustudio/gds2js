@@ -5,6 +5,7 @@ import { V } from "@gds2js/runtime/runtime/tags";
 import { varToStr } from "@gds2js/runtime/runtime/values";
 import "@gds2js/runtime/runtime/builtins";
 import { GVector3, setRotatedAxisBlockSink } from "@gds2js/runtime/runtime/vector3";
+import { installRotatedAxisBlockSink } from "@gds2js/runtime/host";
 import { vector3Method } from "@gds2js/runtime/runtime/vector3";
 
 const v3 = (x: number, y: number, z: number) => V.object(new GVector3(x, y, z));
@@ -37,7 +38,7 @@ describe("Vector3.rotated：单位轴走 Basis 轴角矩阵（S543）", () => {
         hits.push(a);
       });
       const got = varToStr(vector3Method(new GVector3(v[0] as number, v[1] as number, v[2] as number), "rotated", [v3(axis[0] as number, axis[1] as number, axis[2] as number), V.float(ang)]));
-      setRotatedAxisBlockSink(() => {});
+      installRotatedAxisBlockSink();
       eq("543", `${label} 回原向量`, got, `Vector3(${String(v[0])}, ${String(v[1])}, ${String(v[2])})`);
       eq("543", `${label} 推了一次`, String(hits.length), "1");
     });

@@ -19,13 +19,17 @@ function addLine(text: string): void {
 setStackPrintSink(addLine);
 
 // `Vector3.rotated` 的轴没归一：引擎推一块非致命 ERROR（`at:` 是 `set_axis_angle` 那一行）再回原向量，读数 `tmp/probe708/axis.mts`。
-setRotatedAxisBlockSink((axis) => {
-  process.stderr.write(
-    stackBlockLines("ERROR", "set_axis_angle (core/math/basis.cpp:843)", [
-      V.str(`The axis Vector3 ${showArgsSep([V.object(axis)], "")} must be normalized.`),
-    ]).join("\n") + "\n",
-  );
-});
+export function installRotatedAxisBlockSink(): void {
+  setRotatedAxisBlockSink((axis) => {
+    process.stderr.write(
+      stackBlockLines("ERROR", "set_axis_angle (core/math/basis.cpp:843)", [
+        V.str(`The axis Vector3 ${showArgsSep([V.object(axis)], "")} must be normalized.`),
+      ]).join("\n") + "\n",
+    );
+  });
+}
+
+installRotatedAxisBlockSink();
 
 /** 记录一次 print 的输出。签名收 `string[]` 而不是 `unknown[]`：后者在静态编译目标上没有表示形式。 */
 export function print(...args: string[]): void {

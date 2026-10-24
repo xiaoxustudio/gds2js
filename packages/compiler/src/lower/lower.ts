@@ -588,6 +588,8 @@ function lowerIf(n: SyntaxNode): Stmt {
 
 function lowerMatch(n: SyntaxNode): Stmt {
   const subjectNode = field(n, "value");
+  // `match:`（没有被试式）：语法造一枚**空文本**的占位节点，`checkAfterToken` 那把尺只量换行那一形，这一形要从文本认（S688，尺 `tmp/probe710/{malformed,cst}.mts`）
+  if (subjectNode !== null && subjectNode.text === "") continuationErr('Expected expression to test after "match".', tokenOf(n, "match") ?? undefined);
   checkAfterToken(n, tokenOf(n, "match"), subjectNode, 'Expected expression to test after "match".');
   checkColonHere(n, 'Expected ":" after "match" expression.');
   const subject = lowerExpr(need(subjectNode, "match 主题"));

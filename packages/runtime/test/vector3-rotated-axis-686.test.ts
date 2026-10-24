@@ -2,7 +2,7 @@
 // 引擎四行 —— `ERROR: The axis Vector3 (1.0, 1.0, 1.0) must be normalized.` / `   at: set_axis_angle (core/math/basis.cpp:843)` /
 // backtrace 表头 / `[0] 帧`，且**先于** print 那一行（stdout 与 stderr 合流的真实次序，`tmp/probe708/r05.gd` 两侧对读）。
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import "@gds2js/runtime/host";
+import { installRotatedAxisBlockSink } from "@gds2js/runtime/host";
 import "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { varToStr } from "@gds2js/runtime/runtime/values";
@@ -13,6 +13,7 @@ const written: string[] = [];
 let real: typeof process.stderr.write | null = null;
 
 beforeAll(() => {
+  installRotatedAxisBlockSink();
   real = process.stderr.write.bind(process.stderr);
   process.stderr.write = ((chunk: string): boolean => {
     written.push(String(chunk));
