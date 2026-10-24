@@ -84,25 +84,48 @@ function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxN
 
 /** 手臂缺冒号那一族六形同发这一句（S689，尺 `tmp/probe710/{malformed,cst}.mts`：int / str / `self.x` / `_` / `int(1)` 与第二条手臂）。 */
 const MATCH_PATTERN_COLON = 'Expected ":" or "when" after "match" patterns.';
+const MATCH_GUARD_EMPTY = 'Expected expression for pattern guard after "when".';
+const MATCH_SUBJECT_COLON = 'Expected ":" after "match" expression.';
 
-/** 那一族在 CST 里的形状：语法把分支体**粘**到手臂后面，成一个 `call` 节点里「手臂表达式 + 一枚认得出是名字的 `ERROR` + `arguments`」三条并排。
- *  只在**顶层 ERROR 且其中确实有 `match` 记号**时来认这一形（别的畸形形不套这条），交回粘住的那支手臂节点指行。 */
-function matchPatternColonErr(n: SyntaxNode): SyntaxNode | null {
+/** 那一族在 CST 里的形状：语法把分支体**粘**到手臂后面，成一个 `call` 节点里「手臂表达式 + 一枚认得出是名字的 `ERROR` + `arguments`」三条并排。 */
+function gluedArm(x: SyntaxNode): SyntaxNode | null {
+  const kids = x.children;
+  if (!kids.some((k) => k.type === "ERROR" && /^[A-Za-z_]/.test(k.text))) return null;
+  return kids.find((k) => k.isNamed && k.type !== "ERROR" && k.type !== "arguments") ?? null;
+}
+
+/** `match` 那一族的畸形形整棵树只有一个落点可用：语法塌法按缩进与手臂位置分岔（顶层 ERROR / `body` 里的 ERROR / `match_body` 的直接 ERROR），
+ *  所以只要树里带 ERROR 就按记号级证据扫一遍（尺 `tmp/probe710` 十三形，句与行都按引擎原文量的），取最靠前的那一处。
+ *  三条判据都要求树上真有 `match` 记号，且各认各的形状：守卫把身体粘走、主题后面直接贴上下一条手臂、手臂后面没冒号。 */
+function matchMalformedScan(root: SyntaxNode): { sentence: string; at: SyntaxNode } | null {
+  const hits: Array<{ sentence: string; at: SyntaxNode; row: number }> = [];
   let sawMatch = false;
-  let hit: SyntaxNode | null = null;
-  const scan = (x: SyntaxNode): void => {
+  const walk = (x: SyntaxNode): void => {
     if (x.type === "match") sawMatch = true;
-    if (hit === null && x.type === "call") {
-      const kids = x.children;
-      if (kids.some((k) => k.type === "ERROR" && /^[A-Za-z_]/.test(k.text))) {
-        const first = kids.find((k) => k.isNamed && k.type !== "ERROR" && k.type !== "arguments");
-        if (first !== undefined) hit = first;
+    {
+      // 主题后没冒号那一形（`match 1` 直接贴上下一条手臂）：塌进 ERROR 时 `match` 只是片叶子，判据要落在**它的父亲**那串记号上
+      const head = x.children.findIndex((k) => k.type === "match");
+      const colon = x.children.findIndex((k, i) => i > head && !k.isNamed && k.text === ":");
+      if (head >= 0 && colon > head && x.children.slice(head + 1, colon).filter((k) => k.isNamed).length >= 2) {
+        const tok = x.children[head];
+        if (tok !== undefined) hits.push({ sentence: MATCH_SUBJECT_COLON, at: tok, row: tok.startPosition.row });
       }
     }
-    for (const k of x.children) scan(k);
+    if (x.type === "pattern_guard") {
+      const cond = x.children.find((k) => k.isNamed);
+      if (cond !== undefined && gluedArm(cond) !== null) hits.push({ sentence: MATCH_GUARD_EMPTY, at: x, row: x.startPosition.row });
+    }
+    if (x.type === "call") {
+      const arm = gluedArm(x);
+      if (arm !== null) hits.push({ sentence: MATCH_PATTERN_COLON, at: arm, row: arm.startPosition.row });
+    }
+    for (const k of x.children) walk(k);
   };
-  scan(n);
-  return sawMatch ? hit : null;
+  walk(root);
+  if (!sawMatch) return null;
+  hits.sort((a, b) => a.row - b.row);
+  const first = hits[0];
+  return first === undefined ? null : { sentence: first.sentence, at: first.at };
 }
 
 /** 复合赋值那一支：引擎对 11 种运算符换行给的都是 `=` 那一句（`tmp/probe-eol/readings5.txt`）。 */
@@ -202,6 +225,10 @@ export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
   markLiteralCalls(tree.rootNode);
+  if (tree.rootNode.hasError) {
+    const hit = matchMalformedScan(tree.rootNode);
+    if (hit !== null) continuationErr(hit.sentence, hit.at);
+  }
   try {
     const m = lowerModule(tree.rootNode);
     if (packCodecUse) m.usesPackCodec = true;
@@ -276,8 +303,6 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       default: {
         const sentence = c.type === "ERROR" ? accessorTokenErr(c) : null;
         if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
-        const glued = c.type === "ERROR" ? matchPatternColonErr(c) : null;
-        if (glued !== null) continuationErr(MATCH_PATTERN_COLON, glued);
         throw new UnsupportedError("module-node", `顶层节点 ${c.type} 未支持`);
       }
     }
