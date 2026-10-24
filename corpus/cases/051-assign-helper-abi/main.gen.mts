@@ -29,9 +29,6 @@ export class Main extends SceneTree {
       let z = rt.fast.iAddC(y, x);
       rt.frameLine(6);
       return z;
-    } catch (__gd_err) {
-      rt.gdFunctionError(__gd_err);
-      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }
@@ -44,9 +41,6 @@ export class Main extends SceneTree {
       let t = (s + "!");
       rt.frameLine(10);
       return t;
-    } catch (__gd_err) {
-      rt.gdFunctionError(__gd_err);
-      return rt.V.nil();
     } finally {
       rt.frameExit(__gd_frame);
     }

@@ -94,11 +94,18 @@ const MEASURED_SIX = new Set<number>([Tag.BOOL, Tag.INT, Tag.FLOAT, Tag.STRING, 
  *  同一面的其余对（`StringName` 与 float / Array 之类）没在运行期量过，照旧不进这一集。 */
 const RUNTIME_REFUSED_PAIRS = new Set<string>(["StringName|int"]);
 
+/** Nil 参与的这些对（含 Nil 对 Nil）讲的是运行期那一句（S695：体里作废的无标注函数返回的就是 Nil，
+ *  18 个运算符 × 13 对 = 234 格逐格量过，读数 `tmp/probe718/z.gd`）。所以是 S399 那六型**再加 Nil**，
+ *  直接从 `MEASURED_SIX` 派生，两张表不漂。`==` / `!=` 不吃这一集（照实给 false / true，归 `eqSixRefused` 判），
+ *  `%` 的 String 左操作数走格式化那一路，也不在这一集。 */
+const NIL_SENTENCED = new Set<number>([...MEASURED_SIX, Tag.NIL]);
+
 function pairKey(a: Variant, b: Variant): string {
   return `${valueTypeName(a)}|${valueTypeName(b)}`;
 }
 
-function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {  if ((MEASURED_SIX.has(a.t) && MEASURED_SIX.has(b.t)) || RUNTIME_REFUSED_PAIRS.has(pairKey(a, b))) {
+function operandsRefused(a: Variant, b: Variant, op: string, code: string): Variant {
+  if ((NIL_SENTENCED.has(a.t) && NIL_SENTENCED.has(b.t)) || RUNTIME_REFUSED_PAIRS.has(pairKey(a, b))) {
     throw new GodotRuntimeError(code, `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   throw new UnsupportedError(code, `${op} 不支持 ${tagName(a.t)} ${op} ${tagName(b.t)}`);

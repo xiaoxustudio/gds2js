@@ -1111,8 +1111,13 @@ function frameEnterLines(name: string): string[] {
   ];
 }
 
-/** 出栈那一块：引擎的运行期错误作废的是当前这一支函数 —— 接住、按引擎那一块打印一次、按返回型给默认值返回（S406）。 */
-function frameExitLines(catchRet: string): string[] {
+/** 出栈那一块：引擎的运行期错误作废的是当前这一支函数 —— 接住、按引擎那一块打印一次、按返回型给默认值返回（S406）。
+ *  `catchRet` 给 null 时不发接住点：裸轨那支的签名装不下作废值（S695），它只剩「int64 越界」这一条未实现的响亮拒，
+ *  让它原样上抛到最近的装箱边界，比就地咽下再给一个装不进 `number` 的盒子诚实。 */
+function frameExitLines(catchRet: string | null): string[] {
+  if (catchRet === null) {
+    return ["  } finally {", "    rt.frameExit(__gd_frame);", "  }"];
+  }
   return [
     "  } catch (__gd_err) {",
     "    rt.gdFunctionError(__gd_err);",
@@ -1169,7 +1174,7 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   const savedDicts = RAW_DICTS;
   const savedFunc = CURRENT_FUNC;
   CURRENT_FUNC = f.name;
-  const catchRet = ret === "void" || ret === "Promise<void>" ? "return;" : `return ${typeDefault(f.returnType)};`;
+  const catchRet = abi !== undefined ? null : ret === "void" || ret === "Promise<void>" ? "return;" : `return ${typeDefault(f.returnType)};`;
   CURRENT_RET = abi ? abi.ret : null;
   const savedRetAnn = CURRENT_RET_ANN;
   CURRENT_RET_ANN = f.returnType;
@@ -2501,6 +2506,30 @@ function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>
   return { escapes, sitesByF };
 }
 
+/** 裸轨作废的唯一来源（S695）：int 的 `/`、`%` 除数是运行期值时引擎在调用点开口，无标注的那一支函数作废返回 null；
+ *  裸签名（number / string）装不下 null，所以这种函数整个退出裸轨，由装箱轨的边界按返回型给默认值。
+ *  除数是「非零 int 字面量」时不可能作废（`0` 字面量那形由解析期拦下，S694）。 */
+function intDivMayAbort(e: Expr, ik: (n: string) => Kind | null): boolean {
+  switch (e.kind) {
+    case "binary":
+      if (
+        (e.op === "/" || e.op === "%") &&
+        kindOfExpr(e.left, ik) === "int" &&
+        !(e.right.kind === "lit" && e.right.lit === "int" && Number(e.right.value) !== 0)
+      )
+        return true;
+      return intDivMayAbort(e.left, ik) || intDivMayAbort(e.right, ik);
+    case "unary":
+      return intDivMayAbort(e.operand, ik);
+    case "index":
+      return intDivMayAbort(e.obj, ik) || intDivMayAbort(e.index, ik);
+    case "call":
+      return intDivMayAbort(e.callee, ik) || e.args.some((a) => intDivMayAbort(a, ik));
+    default:
+      return false;
+  }
+}
+
 function sigValid(
   f: FuncDecl,
   K: Kind,
@@ -2514,12 +2543,15 @@ function sigValid(
   for (const st of f.body) {
     if (st.kind === "var") {
       if (!st.init || kindOfExpr(st.init, ik) !== K) return false;
+      if (intDivMayAbort(st.init, ik)) return false;
       env.set(st.name, K);
     } else if (st.kind === "assign") {
       if (st.target.kind !== "ident" || !env.has(st.target.name)) return false;
       if (kindOfExpr(st.value, ik) !== K) return false;
+      if (intDivMayAbort(st.value, ik)) return false;
     } else if (st.kind === "return") {
       if (!st.value || kindOfExpr(st.value, ik) !== K) return false;
+      if (intDivMayAbort(st.value, ik)) return false;
       sawReturn = true;
     } else {
       return false;
