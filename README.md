@@ -82,7 +82,7 @@ pnpm test:diff         # Godot golden vs 编译产物，逐字节 + 分桶看板
 pnpm test:golden-check # 拿真 Godot 重跑 238 例查 golden 漂移（要 GODOT_BIN；只读不写盘）
 pnpm test:codegen      # 查生成源码漂移：case-table.ts / case-flags.ts 是否等于重跑 regen 该产出的
                        #   （探头用例 gitignored，没跑过 regen:* 的机器上整支 skip；比对前归一行尾，
-                       #    因为 autocrlf=true 的机器上 git checkout 会把工作树变成 CRLF）
+                       #    仓库已用 .gitattributes 锁 eol=lf，归一那步给老 clone 兜底）
 pnpm test:pkgmodes     # single/local 两模式逐用例对齐 golden + 子目录 local + single sourcemap 解码（要 pnpm build）
 pnpm test:scriptc      # scriptc 真编 exe 真跑、逐字节对 Godot golden（要 scriptc）
 pnpm test:export       # export 的 node(SEA) / scriptc 两支各真打一个 exe（要 Windows + pnpm build；SEA 那几格另要 Node ≥ 25.7）
