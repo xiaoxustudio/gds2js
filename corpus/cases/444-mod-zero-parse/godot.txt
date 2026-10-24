@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Modulo by zero error in operator %.
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

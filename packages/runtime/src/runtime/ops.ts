@@ -296,7 +296,7 @@ export const ops = {
     if (bothInt(a, b)) {
       const [x, y] = intPair(a, b, "/");
       if (intToBig(y) === 0n) {
-        throw new GodotRuntimeError("int-div-zero", "整数除零（Godot 会直接崩进程）");
+        throw new GodotRuntimeError("int-div-zero", "Division by zero error in operator '/'.");
       }
       return i64(x, y, (p, q) => p / q);
     }
@@ -318,7 +318,7 @@ export const ops = {
     if (zi3Mod && b.t === Tag.INT) return v3iModK(zi3Mod, intToNum(b.v as IntPayload));
     const [x, y] = intPair(a, b, "%");
     if (intToBig(y) === 0n) {
-      throw new GodotRuntimeError("int-mod-zero", "整数取模零");
+      throw new GodotRuntimeError("int-mod-zero", "Modulo by zero error in operator '%'.");
     }
     return i64(x, y, (p, q) => p % q);
   },

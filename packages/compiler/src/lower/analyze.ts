@@ -5215,14 +5215,21 @@ function checkOperator(e: Extract<Expr, { kind: "binary" }>, diags: Diagnostic[]
   }
 
   if (
-    e.op === "/" &&
+    (e.op === "/" || e.op === "%") &&
     e.left.kind === "lit" &&
     (e.left.lit === "int" || e.left.lit === "float") &&
     e.right.kind === "lit" &&
     e.right.lit === "int" &&
     Number(e.right.value) === 0
   ) {
-    diags.push({ code: "div-by-zero", message: "Division by zero error in operator /.", loc: e.loc });
+    // 解析期那一句**不带引号**（`operator/.`），运行期那一句才带（`operator '/'.`，`tmp/probe715` 两侧对照量的）；
+    // `%` 只在两侧都是 int 时走这一句 —— `1.0 % 0.0` 是 `op-mod-float` 那一条
+    if (e.op === "%" && e.left.lit !== "int") return;
+    diags.push({
+      code: e.op === "/" ? "div-by-zero" : "mod-by-zero",
+      message: e.op === "/" ? "Division by zero error in operator /." : "Modulo by zero error in operator %.",
+      loc: e.loc,
+    });
   }
 }
 
