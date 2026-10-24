@@ -223,6 +223,13 @@ strCapitalize(s: string): string
 
 浮点的 `nan` / `inf` / `-inf` 输出也走这一层（`017`）。
 
+`%` 那一族的另一颗入口（`packages/runtime/src/runtime/methods.ts`）：左支是 **String 字面量**时发射器不走 `ops.mod`，直发这一颗。
+
+```ts
+// soft 与 ops.mod 第三个参数同一个旗标：发射器按两侧静态型定（true = 非致命那块，false = SCRIPT ERROR 并作废旧那支）。
+formatOf(fmt: Variant, args: Variant, soft: boolean): Variant   // S696 / S491 / S697
+```
+
 ---
 
 ## 7. 对象与类
@@ -296,3 +303,4 @@ emitter 规则：
 | 版本 | 日期 | 变更 |
 | --- | --- | --- |
 | v1 | 2026-09-23 | 首版。基于 Godot 4.6.3 实测语义，D1/D2/D3/D4 已拍板 |
+| v1（补记） | 2026-10-25 | §3 的 `ops.mod` 第三位 `soft` 旗标与 §6 的 `formatOf` 补登记 —— 两颗都是 S696 / S697 那两笔已经在用的发射面，这里只是把契约文字对齐实现，签名集合没缩也没涨 |
