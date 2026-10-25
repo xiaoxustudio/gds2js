@@ -212,8 +212,11 @@ function prepare(id: string): { dir: string; file: string; zstd: boolean } {
 async function scBuild(file: string, dynamic: boolean): Promise<{ code: number; out: string }> {
   const a = ["build", file, "--strip"];
   if (dynamic) a.push("--dynamic");
-  const r = await sp("scriptc", a, { cwd: ROOT, timeout: 600000 });
-  return { code: r.status, out: r.out };
+  let last = await sp("scriptc", a, { cwd: ROOT, timeout: 600000 });
+  for (let retry = 0; retry < 2 && (last.status === null || last.status < 0); retry++) {
+    last = await sp("scriptc", a, { cwd: ROOT, timeout: 600000 });
+  }
+  return { code: last.status ?? -1, out: last.out };
 }
 
 function exePath(dir: string): string | null {
