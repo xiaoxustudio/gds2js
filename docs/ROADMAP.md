@@ -3299,6 +3299,536 @@ odejsExgds2js
 [2m      Tests [22m [1m[32m443 passed[39m[22m[90m (443)[39m
 [2m   Start at [22m 01:40:08
 [2m   Duration [22m 705.29s[2m (tests 100%)[22m **443/443 零漂移**（01:38 rc=0）， /  /  三把同 rc=0 ——  那两处构造器 Callable 的语义改动到此验收齐。④ **Tier 1 还剩的只有第二百六十笔 ④ 新登记的两族**：(a) 原生类名  当值、(b)  /  /  面的解析期两句 —— 两侧读数都已在 ，按红线一形一形量齐其余面才接，本层照旧响亮拒。
+- **2026-10-26 第二百六十二笔（⑦ 零红收单、⑨ 出 0.1.1，红线5 的 golden 零漂移照过）**：① **⑦**：全量 scriptc 门 01:24 收单 —— **出货 280/282 编过、280/282 跑通、逐字节一致 280/282，工具链记账 2/282**（ 岛档 +  静态访问器，两条都按「缺料就记账、绝不假绿」登记），红格 **0**，；这一把跨 **16123 秒（≈4.5 小时）**，比 §1.9 记的 85 分钟慢三倍多，往后按今天这把的节奏估时间。② **⑨**：同一条链零红后自动 
+> gds2js-monorepo@0.1.1 release F:ex
+odejsExgds2js
+> node tools/release.mjs
+
+release: 版本 0.1.1（根/三包/version.ts 一致）
+release: engines.node >=25（根/gds2js/exec.native.ts 一致）
+release: pnpm build …
+
+> gds2js-monorepo@0.1.1 build F:ex
+odejsExgds2js
+> turbo run build
+
+
+   • turbo 2.11.10
+   • Packages in scope: @gds2js/compiler, @gds2js/runtime, @gds2js/testkit, gds2js
+   • Running build in 4 packages
+   • Remote caching disabled
+
+gds2js:build: cache hit, replaying logs 07b11947c61ceb26
+gds2js:build: 
+gds2js:build: > gds2js@0.1.1 build F:ex
+odejsExgds2jspackagesgds2js
+gds2js:build: > tsdown && tsdown --config tsdown.standalone.config.ts && tsdown --config tsdown.product.config.ts && node -e "require('node:fs').copyFileSync('../../gdscript.wasm','dist/gdscript.wasm')"
+gds2js:build: 
+gds2js:build: ℹ tsdown v0.22.14 powered by rolldown v1.2.15
+gds2js:build: ℹ config file: F:ex
+odejsExgds2jspackagesgds2js	sdown.config.ts 
+gds2js:build: ℹ entry: src/cli.ts, ../runtime/src/runtime/index.ts, ../runtime/src/host-node.ts
+gds2js:build: ℹ target: node25.0.0
+gds2js:build: ℹ tsconfig: ....	sconfig.json
+gds2js:build: ℹ Build start
+gds2js:build: ℹ Cleaning 14 files
+gds2js:build: 
+gds2js:build:  WARN  TypeScript 7.0 does not yet have a stable API and is experimental. Some options will be unavailable.
+gds2js:build: 
+gds2js:build: ℹ Emit types with typescript@7.0.2
+gds2js:build: ℹ Granting execute permission to distcli.mjs
+gds2js:build: ℹ distcli.mjs                  878.26 kB │ gzip: 169.26 kB
+gds2js:build: ℹ distuntime.mjs              290.15 kB │ gzip:  83.57 kB
+gds2js:build: ℹ disthost.mjs                   9.39 kB │ gzip:   3.76 kB
+gds2js:build: ℹ distalues-_V791Af8.mjs      445.57 kB │ gzip: 134.45 kB
+gds2js:build: ℹ distace-arity-DUo8aHof.mjs   46.71 kB │ gzip:  12.25 kB
+gds2js:build: ℹ distsignal-DR6siJeq.mjs       42.05 kB │ gzip:  15.09 kB
+gds2js:build: ℹ distuntime.d.mts            103.52 kB │ gzip:  36.59 kB
+gds2js:build: ℹ disthost.d.mts                 1.74 kB │ gzip:   0.93 kB
+gds2js:build: ℹ distcli.d.mts                  0.01 kB │ gzip:   0.03 kB
+gds2js:build: ℹ distobject-JzqtIlNG.d.mts     24.04 kB │ gzip:   9.13 kB
+gds2js:build: ℹ 10 files, total: 1.84 MB
+gds2js:build: [33m[PLUGIN_TIMINGS] [0mJavaScript callbacks ran for 3.4s of this 3.6s build (94%).
+gds2js:build: The slowest callbacks, timed inside each callback (the wait before a callback starts is excluded, the time it awaits is included):
+gds2js:build:   - plugin rolldown-plugin-dts:generate buildStart (63%, 2.3s, 1 call)
+gds2js:build: Additional callback time came from the callbacks below and from callbacks under 1s.
+gds2js:build: 4 callbacks are listed without a time. Their calls overlapped, so the time inside one call includes work from other calls. To find their cost, profile the build with `node --cpu-prof`:
+gds2js:build:   - plugin tsdown:deps resolveId (150 calls)
+gds2js:build:   - plugin rolldown-plugin-dts:resolver resolveId (182 calls)
+gds2js:build:   - plugin rolldown-plugin-dts:generate load (31 calls)
+gds2js:build:   … and 1 more
+gds2js:build: See https://rolldown.rs/reference/InputOptions.checks#bundlertimings for more details.
+gds2js:build: 
+gds2js:build: ✔ Build complete in 3843ms
+gds2js:build: ℹ tsdown v0.22.14 powered by rolldown v1.2.15
+gds2js:build: ℹ config file: F:ex
+odejsExgds2jspackagesgds2js	sdown.standalone.config.ts 
+gds2js:build: ℹ entry: ../runtime/src/standalone.ts
+gds2js:build: ℹ target: node22
+gds2js:build: ℹ tsconfig: tsconfig.json
+gds2js:build: ℹ Build start
+gds2js:build: ℹ diststandalone.cjs  828.11 kB │ gzip: 241.75 kB
+gds2js:build: ℹ 1 files, total: 828.11 kB
+gds2js:build: ✔ Build complete in 378ms
+gds2js:build: ℹ tsdown v0.22.14 powered by rolldown v1.2.15
+gds2js:build: ℹ config file: F:ex
+odejsExgds2jspackagesgds2js	sdown.product.config.ts 
+gds2js:build: ℹ entry: ../runtime/src/product.ts
+gds2js:build: ℹ target: node25
+gds2js:build: ℹ tsconfig: tsconfig.json
+gds2js:build: ℹ Build start
+gds2js:build: ℹ distproduct.mjs  815.64 kB │ gzip: 239.61 kB
+gds2js:build: ℹ 1 files, total: 815.64 kB
+gds2js:build: ✔ Build complete in 274ms
+
+ Tasks:    1 successful, 1 total
+Cached:    1 cached, 1 total
+  Time:    60ms >>> FULL TURBO
+
+release: scriptc 面探针（234-string-methods-batch）…
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mF:/ex/nodejsEx/gds2js[39m
+
+[90mstdout[2m | test/e2e/scriptc.test.ts[2m > [22m[2mscriptc 出货门 · 1 个用例（筛选 234-string-methods-batch，并发 1）
+[22m[39m(代表集里有 51 个用例这次没进：001-int-division, 064-float-render, 082-array-callable, 124-static-func, 128-static-var, 133-callable-signal-methods, 155-param-defaults, 200-module-const-shadows-global, 246-format-object-props, 266-dict-to-inst, 267-is-instance-of, 268-node-path-literal, 272-ctor-match-arms, 273-stack-frames, 274-var-to-bytes, 275-wire-format-shapes, 276-object-identity-bytes, 277-object-table-shapes, 278-var-to-str-float, 279-decimal-reader, 280-pow-precedence, 281-int-pow-negative, 282-vector-slide-bounce, 285-sign-zero-ops, 286-container-escape, 287-negative-ctor-arms, 288-bound-argument-count, 289-axis-index-inverse-limit, 290-value-arity-calls, 295-value-methods-batch, 296-move-toward-chain, 297-angle-and-64bit, 298-color-hex-blend, 299-bezier-cubic, 300-value-edge-cells, 301-float32-print-band, 302-real-param-band, 303-cubic-in-time, 314-eol-in-brackets, 334-vector3-octahedron-decode, 335-vector2-from-angle, 336-string-num-family, 339-bezier-derivative, 340-global-math-shapes, 341-global-ease, 342-step-decimals, 343-snapped-and-predicates, 344-zero-modulus, 348-global-vector-args, 350-color-from-rgbe9995, 032-preload-load)
+
+[90mstdout[2m | test/e2e/scriptc.test.ts[2m > [22m[2mscriptc 出货门 · 1 个用例（筛选 234-string-methods-batch，并发 1）
+[22m[39m
+出货 1/1 编过、1/1 跑通、逐字节一致 1/1
+
+ [32m✓[39m [30m[45m e2e [49m[39m test/e2e/scriptc.test.ts [2m([22m[2m1 test[22m[2m)[22m[33m 1756[2mms[22m[39m
+   [32m✓[39m scriptc 出货门 · 1 个用例（筛选 234-string-methods-batch，并发 1） [2m(1)[22m
+     [33m[2m✓[22m[39m 234-string-methods-batch[33m 1731[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 01:41:55
+[2m   Duration [22m 2.08s[2m (tests 93%, import 6%, transform 1%)[22m
+
+release: 原生 CLI 等价性门…
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mF:/ex/nodejsEx/gds2js[39m
+
+[90mstdout[2m | test/e2e/cli-native.test.ts[2m > [22m[2m原生 CLI 等价性门
+[22m[39m
+原生 CLI 等价性门：通过 22 项，失败 0 项
+
+ [32m✓[39m [30m[45m e2e [49m[39m test/e2e/cli-native.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 49444[2mms[22m[39m
+   [32m✓[39m 原生 CLI 等价性门 [2m(20)[22m
+     [33m[2m✓[22m[39m ① 001-int-division：build 产物逐字节[33m 1635[2mms[22m[39m
+     [33m[2m✓[22m[39m ② 001-int-division：run 输出逐字[33m 1739[2mms[22m[39m
+     [33m[2m✓[22m[39m ① 021-class-basic：build 产物逐字节[33m 1570[2mms[22m[39m
+     [33m[2m✓[22m[39m ② 021-class-basic：run 输出逐字[33m 1751[2mms[22m[39m
+     [33m[2m✓[22m[39m ① 062-string-escapes：build 产物逐字节[33m 1491[2mms[22m[39m
+     [33m[2m✓[22m[39m ② 062-string-escapes：run 输出逐字[33m 1766[2mms[22m[39m
+     [33m[2m✓[22m[39m ① 060-string-utf32：build 产物逐字节[33m 1236[2mms[22m[39m
+     [33m[2m✓[22m[39m ② 060-string-utf32：run 输出逐字[33m 1782[2mms[22m[39m
+     [33m[2m✓[22m[39m ③ 默认运行时说明符 = 家目录里的 file URL[33m 2101[2mms[22m[39m
+     [33m[2m✓[22m[39m ③′ local 模式：旁挂内嵌的 standalone，产物在仓库外也能跑[33m 2304[2mms[22m[39m
+     [33m[2m✓[22m[39m ④ 工程 export --pack scriptc：032-preload-load[33m 8468[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑤ run 撞未实现：两支同一行 runtime error，理由没被退出码吃掉、也没重复报[33m 2024[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑥ --pack node：出货就跑一遍，没够新的 node 就报版本门槛[33m 1364[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑦ check-project 与 node 侧逐字一致[33m 2033[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑧ --sourcemap：map 落盘、指回 .gd，两侧 map 逐字节[33m 1971[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑨ check --watch：改 .gd 要真的重跑[33m 5538[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑨b run --watch：改 .gd 要真的再执行一次脚本[33m 5855[2mms[22m[39m
+     [33m[2m✓[22m[39m ⑨c run-project 大工程：打包装载与逐文件装载输出逐字相等[33m 4612[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m20 passed[39m[22m[90m (20)[39m
+[2m   Start at [22m 01:41:58
+[2m   Duration [22m 49.82s[2m (tests 100%)[22m
+
+release: F:ex
+odejsExgds2jseleasegds2js-0.1.1-win64.exe
+release: sha256 1ae43f45fb4d91ab171ab8437a21cbcf4398696071b8a3d8d74613a9b1cd987e
+release: 完成（形态 A：只发 exe；scriptc 由用户自备——同目录 scriptc/、npm i -D scriptc 或 SCRIPTC_BIN） 出 **release/gds2js-0.1.1-win64.exe** + （，CertUtil: -dump ����ɹ���ɡ� 复算一致），产物  冒烟给 **0.1.1**，10-18 那支 0.1.0 已按  口径换掉。③ **红线5**：
+> gds2js-monorepo@0.1.1 test:golden-check F:ex
+odejsExgds2js
+> vitest run --project e2e golden-drift.test.ts
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mF:/ex/nodejsEx/gds2js[39m
+
+[90mstdout[2m | test/e2e/golden-drift.test.ts
+[22m[39m裁判引擎: F:/godot/Godot_v4.6.3-stable_win64_console.exe
+用例数量: 443  (check 模式，不写盘)
+
+合计: OK 282 / 编译或运行报错 143 / 超时 18 / 漂移或缺 golden 0
+
+ [32m✓[39m [30m[45m e2e [49m[39m test/e2e/golden-drift.test.ts [2m([22m[2m443 tests[22m[2m)[22m[33m 687157[2mms[22m[39m
+   [32m✓[39m golden 漂移检测 [2m(443)[22m
+     [33m[2m✓[22m[39m 001-int-division[33m 1488[2mms[22m[39m
+     [33m[2m✓[22m[39m 002-int-float-str[33m 1178[2mms[22m[39m
+     [33m[2m✓[22m[39m 003-modulo-int[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 004-power-associativity[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 005-int64-range[33m 1168[2mms[22m[39m
+     [33m[2m✓[22m[39m 006-int64-overflow[33m 1369[2mms[22m[39m
+     [33m[2m✓[22m[39m 007-array-reference[33m 1368[2mms[22m[39m
+     [33m[2m✓[22m[39m 008-dict-reference[33m 1181[2mms[22m[39m
+     [33m[2m✓[22m[39m 009-equality-deep[33m 1064[2mms[22m[39m
+     [33m[2m✓[22m[39m 010-truthiness[33m 1066[2mms[22m[39m
+     [33m[2m✓[22m[39m 011-add-operator-types[33m 1070[2mms[22m[39m
+     [33m[2m✓[22m[39m 012-dict-key-int-float[33m 1269[2mms[22m[39m
+     [33m[2m✓[22m[39m 015-closure-capture-loop[33m 1179[2mms[22m[39m
+     [33m[2m✓[22m[39m 016-bitwise-ops[33m 1057[2mms[22m[39m
+     [33m[2m✓[22m[39m 017-float-special-values[33m 1054[2mms[22m[39m
+     [33m[2m✓[22m[39m 018-string-index-methods[33m 972[2mms[22m[39m
+     [33m[2m✓[22m[39m 019-in-operator[33m 1460[2mms[22m[39m
+     [33m[2m✓[22m[39m 020-match-array-pattern[33m 1585[2mms[22m[39m
+     [33m[2m✓[22m[39m 021-class-basic[33m 1491[2mms[22m[39m
+     [33m[2m✓[22m[39m 022-for-range-and-iter[33m 1505[2mms[22m[39m
+     [33m[2m✓[22m[39m 023-await-return-value[33m 1764[2mms[22m[39m
+     [33m[2m✓[22m[39m 024-await-signal-args[33m 1766[2mms[22m[39m
+     [33m[2m✓[22m[39m 025-await-plain-value[33m 1691[2mms[22m[39m
+     [33m[2m✓[22m[39m 029-static-bool-ctor[33m 332[2mms[22m[39m
+     [33m[2m✓[22m[39m 030-static-negative-shift[33m 344[2mms[22m[39m
+     [33m[2m✓[22m[39m 031-cross-file-class[33m 8053[2mms[22m[39m
+     [33m[2m✓[22m[39m 032-preload-load[33m 7890[2mms[22m[39m
+     [33m[2m✓[22m[39m 033-chain-methods[33m 1503[2mms[22m[39m
+     [33m[2m✓[22m[39m 034-extends-res-path[33m 7023[2mms[22m[39m
+     [33m[2m✓[22m[39m 035-chain-as-override[33m 6203[2mms[22m[39m
+     [33m[2m✓[22m[39m 036-cross-file-signal[33m 6333[2mms[22m[39m
+     [33m[2m✓[22m[39m 037-super-method[33m 6536[2mms[22m[39m
+     [33m[2m✓[22m[39m 038-init-constructor[33m 6363[2mms[22m[39m
+     [33m[2m✓[22m[39m 039-cross-file-ref[33m 10690[2mms[22m[39m
+     [33m[2m✓[22m[39m 040-cross-file-dict[33m 8459[2mms[22m[39m
+     [33m[2m✓[22m[39m 041-match-dict-pattern[33m 1575[2mms[22m[39m
+     [33m[2m✓[22m[39m 042-enum[33m 1485[2mms[22m[39m
+     [33m[2m✓[22m[39m 043-enum-dict[33m 1505[2mms[22m[39m
+     [33m[2m✓[22m[39m 044-match-const-pattern[33m 1590[2mms[22m[39m
+     [33m[2m✓[22m[39m 045-float-unbox[33m 1493[2mms[22m[39m
+     [33m[2m✓[22m[39m 046-int-div-mod[33m 1579[2mms[22m[39m
+     [33m[2m✓[22m[39m 047-string-unbox[33m 1487[2mms[22m[39m
+     [33m[2m✓[22m[39m 048-call-arg-unbox[33m 1479[2mms[22m[39m
+     [33m[2m✓[22m[39m 049-array-unbox[33m 1386[2mms[22m[39m
+     [33m[2m✓[22m[39m 050-dict-unbox[33m 1564[2mms[22m[39m
+     [33m[2m✓[22m[39m 051-assign-helper-abi[33m 1381[2mms[22m[39m
+     [33m[2m✓[22m[39m 052-nested-array[33m 1393[2mms[22m[39m
+     [33m[2m✓[22m[39m 053-rolling-cycle[33m 1382[2mms[22m[39m
+     [33m[2m✓[22m[39m 054-comments[33m 1372[2mms[22m[39m
+     [33m[2m✓[22m[39m 055-int64-mixed[33m 1368[2mms[22m[39m
+     [33m[2m✓[22m[39m 056-index-write[33m 1288[2mms[22m[39m
+     [33m[2m✓[22m[39m 057-raw-index-write[33m 1287[2mms[22m[39m
+     [33m[2m✓[22m[39m 058-range-step[33m 1397[2mms[22m[39m
+     [33m[2m✓[22m[39m 059-loopvar-assign[33m 1682[2mms[22m[39m
+     [33m[2m✓[22m[39m 060-string-utf32[33m 1406[2mms[22m[39m
+     [33m[2m✓[22m[39m 061-string-order[33m 1169[2mms[22m[39m
+     [33m[2m✓[22m[39m 062-string-escapes[33m 1175[2mms[22m[39m
+     [33m[2m✓[22m[39m 063-format-specs[33m 1061[2mms[22m[39m
+     [33m[2m✓[22m[39m 064-float-render[33m 1054[2mms[22m[39m
+     [33m[2m✓[22m[39m 065-int-float-conv[33m 957[2mms[22m[39m
+     [33m[2m✓[22m[39m 066-vector2-float32[33m 1256[2mms[22m[39m
+     [33m[2m✓[22m[39m 067-negative-zero[33m 1066[2mms[22m[39m
+     [33m[2m✓[22m[39m 068-vector2-members[33m 1065[2mms[22m[39m
+     [33m[2m✓[22m[39m 069-typed-var-defaults[33m 1167[2mms[22m[39m
+     [33m[2m✓[22m[39m 070-array-ordering[33m 1462[2mms[22m[39m
+     [33m[2m✓[22m[39m 071-dict-key-types[33m 1382[2mms[22m[39m
+     [33m[2m✓[22m[39m 072-case-mapping[33m 1362[2mms[22m[39m
+     [33m[2m✓[22m[39m 073-range-coercion[33m 1381[2mms[22m[39m
+     [33m[2m✓[22m[39m 074-range-zero-step[33m 5013[2mms[22m[39m
+     [33m[2m✓[22m[39m 075-escape-unicode[33m 1466[2mms[22m[39m
+     [33m[2m✓[22m[39m 076-string-statics[33m 1372[2mms[22m[39m
+     [33m[2m✓[22m[39m 077-string-scientific-md5[33m 1369[2mms[22m[39m
+     [33m[2m✓[22m[39m 078-string-humanize-size[33m 1477[2mms[22m[39m
+     [33m[2m✓[22m[39m 079-string-name[33m 1380[2mms[22m[39m
+     [33m[2m✓[22m[39m 080-array-structural[33m 1365[2mms[22m[39m
+     [33m[2m✓[22m[39m 081-dictionary-methods[33m 1264[2mms[22m[39m
+     [33m[2m✓[22m[39m 082-array-callable[33m 1276[2mms[22m[39m
+     [33m[2m✓[22m[39m 083-typed-containers[33m 1381[2mms[22m[39m
+     [33m[2m✓[22m[39m 086-typed-assign-error[33m 5008[2mms[22m[39m
+     [33m[2m✓[22m[39m 087-vector2-writes[33m 962[2mms[22m[39m
+     [33m[2m✓[22m[39m 088-vector2-write-error[33m 5013[2mms[22m[39m
+     [33m[2m✓[22m[39m 089-vector2-eq-error[33m 5012[2mms[22m[39m
+     [33m[2m✓[22m[39m 090-container-keys[33m 1253[2mms[22m[39m
+     [33m[2m✓[22m[39m 091-vector3[33m 1377[2mms[22m[39m
+     [33m[2m✓[22m[39m 092-vector3-index-error[33m 5007[2mms[22m[39m
+     [33m[2m✓[22m[39m 093-vector-tolerances[33m 1371[2mms[22m[39m
+     [33m[2m✓[22m[39m 094-vector2i[33m 1485[2mms[22m[39m
+     [33m[2m✓[22m[39m 095-vector2i-div-zero[33m 5019[2mms[22m[39m
+     [33m[2m✓[22m[39m 096-color[33m 1376[2mms[22m[39m
+     [33m[2m✓[22m[39m 097-color-index-error[33m 5009[2mms[22m[39m
+     [33m[2m✓[22m[39m 098-string-hash[33m 1577[2mms[22m[39m
+     [33m[2m✓[22m[39m 099-split-max[33m 1892[2mms[22m[39m
+     [33m[2m✓[22m[39m 100-cyclic-containers[33m 4609[2mms[22m[39m
+     [33m[2m✓[22m[39m 101-cyclic-keys[33m 4170[2mms[22m[39m
+     [33m[2m✓[22m[39m 102-float-literals[33m 3115[2mms[22m[39m
+     [33m[2m✓[22m[39m 103-string-to-float[33m 2997[2mms[22m[39m
+     [33m[2m✓[22m[39m 104-string-to-int[33m 3108[2mms[22m[39m
+     [33m[2m✓[22m[39m 105-sort-tie-order[33m 3246[2mms[22m[39m
+     [33m[2m✓[22m[39m 106-string-join[33m 3999[2mms[22m[39m
+     [33m[2m✓[22m[39m 107-string-join-arg-error[33m 1049[2mms[22m[39m
+     [33m[2m✓[22m[39m 108-typed-index-assign-error[33m 1182[2mms[22m[39m
+     [33m[2m✓[22m[39m 109-typed-index-key-error[33m 463[2mms[22m[39m
+     [33m[2m✓[22m[39m 110-typed-index-read-error[33m 436[2mms[22m[39m
+     [33m[2m✓[22m[39m 111-typed-index-var-assign-error[33m 614[2mms[22m[39m
+     [33m[2m✓[22m[39m 112-typed-dict-value-assign-error[33m 1042[2mms[22m[39m
+     [33m[2m✓[22m[39m 113-array-void-return-error[33m 885[2mms[22m[39m
+     [33m[2m✓[22m[39m 114-array-mutation-status[33m 3032[2mms[22m[39m
+     [33m[2m✓[22m[39m 115-raw-mutation-paths[33m 2427[2mms[22m[39m
+     [33m[2m✓[22m[39m 116-self-keyword[33m 2329[2mms[22m[39m
+     [33m[2m✓[22m[39m 117-self-in-static-error[33m 424[2mms[22m[39m
+     [33m[2m✓[22m[39m 118-typed-var-assign-convert[33m 2321[2mms[22m[39m
+     [33m[2m✓[22m[39m 119-typed-var-assign-error[33m 414[2mms[22m[39m
+     [33m[2m✓[22m[39m 120-attribute-assign[33m 2238[2mms[22m[39m
+     [33m[2m✓[22m[39m 121-property-accessors[33m 2333[2mms[22m[39m
+     [33m[2m✓[22m[39m 122-write-through-field[33m 2466[2mms[22m[39m
+     [33m[2m✓[22m[39m 123-callable-signal-typeof[33m 3078[2mms[22m[39m
+     [33m[2m✓[22m[39m 124-static-func[33m 2669[2mms[22m[39m
+     [33m[2m✓[22m[39m 125-static-access-var-error[33m 473[2mms[22m[39m
+     [33m[2m✓[22m[39m 126-static-call-instance-func-error[33m 474[2mms[22m[39m
+     [33m[2m✓[22m[39m 127-const-scope-visibility[33m 2775[2mms[22m[39m
+     [33m[2m✓[22m[39m 128-static-var[33m 2753[2mms[22m[39m
+     [33m[2m✓[22m[39m 129-inner-class-outer-scope[33m 2758[2mms[22m[39m
+     [33m[2m✓[22m[39m 130-inner-class-outer-var-error[33m 652[2mms[22m[39m
+     [33m[2m✓[22m[39m 131-inner-class-outer-signal-error[33m 619[2mms[22m[39m
+     [33m[2m✓[22m[39m 132-inner-class-outer-func-error[33m 586[2mms[22m[39m
+     [33m[2m✓[22m[39m 133-callable-signal-methods[33m 2965[2mms[22m[39m
+     [33m[2m✓[22m[39m 134-object-methods[33m 2465[2mms[22m[39m
+     [33m[2m✓[22m[39m 135-packed-byte-array[33m 1932[2mms[22m[39m
+     [33m[2m✓[22m[39m 136-packed-void-value[33m 388[2mms[22m[39m
+     [33m[2m✓[22m[39m 137-packed-not-found-in-self[33m 359[2mms[22m[39m
+     [33m[2m✓[22m[39m 138-packed-int-arrays[33m 1487[2mms[22m[39m
+     [33m[2m✓[22m[39m 139-packed-float-arrays[33m 1578[2mms[22m[39m
+     [33m[2m✓[22m[39m 140-print-arg-order[33m 1384[2mms[22m[39m
+     [33m[2m✓[22m[39m 141-packed-string-array[33m 1373[2mms[22m[39m
+     [33m[2m✓[22m[39m 142-pack-is-as[33m 2168[2mms[22m[39m
+     [33m[2m✓[22m[39m 143-pack-as-static-error[33m 617[2mms[22m[39m
+     [33m[2m✓[22m[39m 144-pack-is-static-error[33m 454[2mms[22m[39m
+     [33m[2m✓[22m[39m 145-packed-vector-color[33m 2550[2mms[22m[39m
+     [33m[2m✓[22m[39m 146-stringname-is-string-static-error[33m 468[2mms[22m[39m
+     [33m[2m✓[22m[39m 147-raw-string-array[33m 2427[2mms[22m[39m
+     [33m[2m✓[22m[39m 148-init-construction-order[33m 1698[2mms[22m[39m
+     [33m[2m✓[22m[39m 149-init-returns-value-error[33m 374[2mms[22m[39m
+     [33m[2m✓[22m[39m 150-super-init-missing-error[33m 351[2mms[22m[39m
+     [33m[2m✓[22m[39m 153-new-many-args-error[33m 330[2mms[22m[39m
+     [33m[2m✓[22m[39m 154-init-legal-shapes[33m 1484[2mms[22m[39m
+     [33m[2m✓[22m[39m 155-param-defaults[33m 1404[2mms[22m[39m
+     [33m[2m✓[22m[39m 156-param-slot-convert[33m 1480[2mms[22m[39m
+     [33m[2m✓[22m[39m 157-param-slot-string-int-error[33m 5005[2mms[22m[39m
+     [33m[2m✓[22m[39m 158-pack-search-sort[33m 1587[2mms[22m[39m
+     [33m[2m✓[22m[39m 160-pack-bsearch-bytes[33m 1761[2mms[22m[39m
+     [33m[2m✓[22m[39m 161-pack-compress[33m 4777[2mms[22m[39m
+     [33m[2m✓[22m[39m 162-pack-arg-string-to-int[33m 1256[2mms[22m[39m
+     [33m[2m✓[22m[39m 163-pack-arg-array-to-append[33m 1020[2mms[22m[39m
+     [33m[2m✓[22m[39m 164-pack-arg-int-to-string-set[33m 830[2mms[22m[39m
+     [33m[2m✓[22m[39m 165-vector3i-value-type[33m 2697[2mms[22m[39m
+     [33m[2m✓[22m[39m 166-inner-class-inherited-bare-identifier[33m 3190[2mms[22m[39m
+     [33m[2m✓[22m[39m 167-typed-slot-color-from-vector3-field[33m 693[2mms[22m[39m
+     [33m[2m✓[22m[39m 168-typed-slot-color-from-vector3-local[33m 689[2mms[22m[39m
+     [33m[2m✓[22m[39m 169-typed-slot-vector3-from-vector2-local[33m 644[2mms[22m[39m
+     [33m[2m✓[22m[39m 170-typed-slot-vector3-assign-vector2[33m 494[2mms[22m[39m
+     [33m[2m✓[22m[39m 171-typed-slot-string-from-int-local[33m 402[2mms[22m[39m
+     [33m[2m✓[22m[39m 172-typed-slot-color-from-int[33m 1812[2mms[22m[39m
+     [33m[2m✓[22m[39m 173-typed-slot-vector3-stringname-family[33m 2902[2mms[22m[39m
+     [33m[2m✓[22m[39m 174-typed-slot-color-stringname-accept[33m 3872[2mms[22m[39m
+     [33m[2m✓[22m[39m 175-typed-slot-stringname-from-int[33m 880[2mms[22m[39m
+     [33m[2m✓[22m[39m 176-typed-slot-color-from-stringname[33m 467[2mms[22m[39m
+     [33m[2m✓[22m[39m 177-typed-array-color-from-stringname[33m 463[2mms[22m[39m
+     [33m[2m✓[22m[39m 178-typed-slot-int-from-stringname[33m 461[2mms[22m[39m
+     [33m[2m✓[22m[39m 179-func-arg-vector2-into-vector3[33m 623[2mms[22m[39m
+     [33m[2m✓[22m[39m 180-func-arg-array-into-int[33m 623[2mms[22m[39m
+     [33m[2m✓[22m[39m 181-func-arg-string-into-rect2[33m 547[2mms[22m[39m
+     [33m[2m✓[22m[39m 182-func-arg-int-into-class-slot[33m 638[2mms[22m[39m
+     [33m[2m✓[22m[39m 183-func-arg-string-into-class-slot[33m 539[2mms[22m[39m
+     [33m[2m✓[22m[39m 184-object-is-class[33m 3478[2mms[22m[39m
+     [33m[2m✓[22m[39m 185-object-set-get[33m 1952[2mms[22m[39m
+     [33m[2m✓[22m[39m 186-object-call-callv[33m 1900[2mms[22m[39m
+     [33m[2m✓[22m[39m 187-callable-bind[33m 3634[2mms[22m[39m
+     [33m[2m✓[22m[39m 188-str-multi-args[33m 3014[2mms[22m[39m
+     [33m[2m✓[22m[39m 189-sort-custom-large-n[33m 2170[2mms[22m[39m
+     [33m[2m✓[22m[39m 190-object-call-deferred[33m 2538[2mms[22m[39m
+     [33m[2m✓[22m[39m 191-object-set-void-value[33m 463[2mms[22m[39m
+     [33m[2m✓[22m[39m 192-callable-identity[33m 2297[2mms[22m[39m
+     [33m[2m✓[22m[39m 193-callable-argument-count[33m 1829[2mms[22m[39m
+     [33m[2m✓[22m[39m 194-callable-null-and-shapes[33m 2086[2mms[22m[39m
+     [33m[2m✓[22m[39m 195-signal-connect-codes[33m 2668[2mms[22m[39m
+     [33m[2m✓[22m[39m 196-signal-is-valid-static-error[33m 440[2mms[22m[39m
+     [33m[2m✓[22m[39m 197-signal-emit-void-static-error[33m 466[2mms[22m[39m
+     [33m[2m✓[22m[39m 198-call-deferred-void-static-error[33m 390[2mms[22m[39m
+     [33m[2m✓[22m[39m 199-global-math-constants[33m 2547[2mms[22m[39m
+     [33m[2m✓[22m[39m 200-module-const-shadows-global[33m 2657[2mms[22m[39m
+     [33m[2m✓[22m[39m 201-local-var-shadows-global[33m 2516[2mms[22m[39m
+     [33m[2m✓[22m[39m 202-global-const-expr-shapes[33m 3631[2mms[22m[39m
+     [33m[2m✓[22m[39m 203-const-assign-static-error[33m 1157[2mms[22m[39m
+     [33m[2m✓[22m[39m 204-module-const-assign-static-error[33m 564[2mms[22m[39m
+     [33m[2m✓[22m[39m 205-global-const-assign-static-error[33m 547[2mms[22m[39m
+     [33m[2m✓[22m[39m 206-inner-class-const-assign-static-error[33m 511[2mms[22m[39m
+     [33m[2m✓[22m[39m 207-callable-arity-ok[33m 2829[2mms[22m[39m
+     [33m[2m✓[22m[39m 208-callable-call-few-args-error[33m 5013[2mms[22m[39m
+     [33m[2m✓[22m[39m 209-callable-call-many-args-error[33m 5015[2mms[22m[39m
+     [33m[2m✓[22m[39m 210-callable-call-bound-count-error[33m 5020[2mms[22m[39m
+     [33m[2m✓[22m[39m 211-callable-call-defaults-few-error[33m 5009[2mms[22m[39m
+     [33m[2m✓[22m[39m 212-callable-call-defaults-many-error[33m 5016[2mms[22m[39m
+     [33m[2m✓[22m[39m 213-callable-call-lambda-arity-error[33m 5019[2mms[22m[39m
+     [33m[2m✓[22m[39m 214-callable-call-static-arity-error[33m 5022[2mms[22m[39m
+     [33m[2m✓[22m[39m 218-pack-index-float-position[33m 1401[2mms[22m[39m
+     [33m[2m✓[22m[39m 219-pack-annotated-var-slot-error[33m 357[2mms[22m[39m
+     [33m[2m✓[22m[39m 220-pack-concat-expression-error[33m 353[2mms[22m[39m
+     [33m[2m✓[22m[39m 223-join-array-var-error[33m 5015[2mms[22m[39m
+     [33m[2m✓[22m[39m 224-join-pack-var-error[33m 5007[2mms[22m[39m
+     [33m[2m✓[22m[39m 225-pack-slot-guards[33m 2272[2mms[22m[39m
+     [33m[2m✓[22m[39m 226-string-replace-find-capitalize[33m 2640[2mms[22m[39m
+     [33m[2m✓[22m[39m 227-match-when-guard[33m 2716[2mms[22m[39m
+     [33m[2m✓[22m[39m 228-match-guard-bound-var-error[33m 447[2mms[22m[39m
+     [33m[2m✓[22m[39m 229-for-in-count-iteration[33m 2632[2mms[22m[39m
+     [33m[2m✓[22m[39m 230-int-div-mod-promotion[33m 2553[2mms[22m[39m
+     [33m[2m✓[22m[39m 231-mod-float-operands-error[33m 441[2mms[22m[39m
+     [33m[2m✓[22m[39m 232-super-init-arity-error[33m 453[2mms[22m[39m
+     [33m[2m✓[22m[39m 233-deep-ragged-nesting[33m 2369[2mms[22m[39m
+     [33m[2m✓[22m[39m 234-string-methods-batch[33m 2418[2mms[22m[39m
+     [33m[2m✓[22m[39m 235-object-identity-keys[33m 2307[2mms[22m[39m
+     [33m[2m✓[22m[39m 236-global-math-family[33m 2080[2mms[22m[39m
+     [33m[2m✓[22m[39m 237-hash-chain[33m 1805[2mms[22m[39m
+     [33m[2m✓[22m[39m 238-hash-recursion-limit[33m 1799[2mms[22m[39m
+     [33m[2m✓[22m[39m 239-global-callable-values[33m 2201[2mms[22m[39m
+     [33m[2m✓[22m[39m 240-callable-bind-once[33m 2420[2mms[22m[39m
+     [33m[2m✓[22m[39m 241-callable-print-shapes[33m 2325[2mms[22m[39m
+     [33m[2m✓[22m[39m 242-string-color-channels[33m 2351[2mms[22m[39m
+     [33m[2m✓[22m[39m 243-engine-class-values[33m 2799[2mms[22m[39m
+     [33m[2m✓[22m[39m 244-char-codepoints[33m 2516[2mms[22m[39m
+     [33m[2m✓[22m[39m 245-str-to-var-upper-u[33m 2128[2mms[22m[39m
+     [33m[2m✓[22m[39m 246-format-object-props[33m 2225[2mms[22m[39m
+     [33m[2m✓[22m[39m 247-callable-get-object[33m 2198[2mms[22m[39m
+     [33m[2m✓[22m[39m 248-is-engine-class-names[33m 1909[2mms[22m[39m
+     [33m[2m✓[22m[39m 249-hash-callable-values[33m 1700[2mms[22m[39m
+     [33m[2m✓[22m[39m 250-global-name-sweep-additions[33m 1911[2mms[22m[39m
+     [33m[2m✓[22m[39m 251-small-builtins[33m 2017[2mms[22m[39m
+     [33m[2m✓[22m[39m 252-trig-family[33m 2212[2mms[22m[39m
+     [33m[2m✓[22m[39m 253-angle-helpers[33m 2365[2mms[22m[39m
+     [33m[2m✓[22m[39m 254-name-tables[33m 1917[2mms[22m[39m
+     [33m[2m✓[22m[39m 255-type-exists[33m 2416[2mms[22m[39m
+     [33m[2m✓[22m[39m 256-print-family[33m 2520[2mms[22m[39m
+     [33m[2m✓[22m[39m 257-print-rich[33m 2311[2mms[22m[39m
+     [33m[2m✓[22m[39m 258-is-unprobed-classes[33m 2227[2mms[22m[39m
+     [33m[2m✓[22m[39m 259-rand-family[33m 2567[2mms[22m[39m
+     [33m[2m✓[22m[39m 260-object-identity[33m 2470[2mms[22m[39m
+     [33m[2m✓[22m[39m 261-rid-family[33m 1905[2mms[22m[39m
+     [33m[2m✓[22m[39m 262-negative-zero[33m 2107[2mms[22m[39m
+     [33m[2m✓[22m[39m 263-print-debug[33m 2005[2mms[22m[39m
+     [33m[2m✓[22m[39m 264-node-path[33m 1889[2mms[22m[39m
+     [33m[2m✓[22m[39m 265-inst-to-dict[33m 1690[2mms[22m[39m
+     [33m[2m✓[22m[39m 266-dict-to-inst[33m 1587[2mms[22m[39m
+     [33m[2m✓[22m[39m 267-is-instance-of[33m 1981[2mms[22m[39m
+     [33m[2m✓[22m[39m 268-node-path-literal[33m 2106[2mms[22m[39m
+     [33m[2m✓[22m[39m 269-is-instance-of-literal-typearg[33m 395[2mms[22m[39m
+     [33m[2m✓[22m[39m 270-node-path-match-arm[33m 2330[2mms[22m[39m
+     [33m[2m✓[22m[39m 271-match-arm-type-strict[33m 2247[2mms[22m[39m
+     [33m[2m✓[22m[39m 272-ctor-match-arms[33m 2222[2mms[22m[39m
+     [33m[2m✓[22m[39m 273-stack-frames[33m 2225[2mms[22m[39m
+     [33m[2m✓[22m[39m 274-var-to-bytes[33m 2686[2mms[22m[39m
+     [33m[2m✓[22m[39m 275-wire-format-shapes[33m 2641[2mms[22m[39m
+     [33m[2m✓[22m[39m 276-object-identity-bytes[33m 3043[2mms[22m[39m
+     [33m[2m✓[22m[39m 277-object-table-shapes[33m 10855[2mms[22m[39m
+     [33m[2m✓[22m[39m 278-var-to-str-float[33m 1291[2mms[22m[39m
+     [33m[2m✓[22m[39m 279-decimal-reader[33m 1594[2mms[22m[39m
+     [33m[2m✓[22m[39m 280-pow-precedence[33m 1411[2mms[22m[39m
+     [33m[2m✓[22m[39m 281-int-pow-negative[33m 1714[2mms[22m[39m
+     [33m[2m✓[22m[39m 282-vector-slide-bounce[33m 1621[2mms[22m[39m
+     [33m[2m✓[22m[39m 283-dict-dup-key[33m 340[2mms[22m[39m
+     [33m[2m✓[22m[39m 284-dict-key-buckets[33m 1385[2mms[22m[39m
+     [33m[2m✓[22m[39m 285-sign-zero-ops[33m 1476[2mms[22m[39m
+     [33m[2m✓[22m[39m 286-container-escape[33m 1177[2mms[22m[39m
+     [33m[2m✓[22m[39m 287-negative-ctor-arms[33m 1248[2mms[22m[39m
+     [33m[2m✓[22m[39m 288-bound-argument-count[33m 1165[2mms[22m[39m
+     [33m[2m✓[22m[39m 289-axis-index-inverse-limit[33m 1071[2mms[22m[39m
+     [33m[2m✓[22m[39m 290-value-arity-calls[33m 1065[2mms[22m[39m
+     [33m[2m✓[22m[39m 295-value-methods-batch[33m 1062[2mms[22m[39m
+     [33m[2m✓[22m[39m 296-move-toward-chain[33m 1059[2mms[22m[39m
+     [33m[2m✓[22m[39m 297-angle-and-64bit[33m 1159[2mms[22m[39m
+     [33m[2m✓[22m[39m 298-color-hex-blend[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 299-bezier-cubic[33m 1071[2mms[22m[39m
+     [33m[2m✓[22m[39m 300-value-edge-cells[33m 1076[2mms[22m[39m
+     [33m[2m✓[22m[39m 301-float32-print-band[33m 1059[2mms[22m[39m
+     [33m[2m✓[22m[39m 302-real-param-band[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 303-cubic-in-time[33m 1065[2mms[22m[39m
+     [33m[2m✓[22m[39m 311-eol-after-elif[33m 325[2mms[22m[39m
+     [33m[2m✓[22m[39m 313-eol-after-for[33m 341[2mms[22m[39m
+     [33m[2m✓[22m[39m 314-eol-in-brackets[33m 1482[2mms[22m[39m
+     [33m[2m✓[22m[39m 315-print-extremes-band[33m 1389[2mms[22m[39m
+     [33m[2m✓[22m[39m 316-eol-after-augmented-assign[33m 341[2mms[22m[39m
+     [33m[2m✓[22m[39m 318-eol-after-when[33m 370[2mms[22m[39m
+     [33m[2m✓[22m[39m 323-eol-before-match-colon[33m 334[2mms[22m[39m
+     [33m[2m✓[22m[39m 325-eol-before-elif-colon[33m 331[2mms[22m[39m
+     [33m[2m✓[22m[39m 328-vector3-octahedron[33m 1082[2mms[22m[39m
+     [33m[2m✓[22m[39m 329-match-arm-ctors[33m 1069[2mms[22m[39m
+     [33m[2m✓[22m[39m 334-vector3-octahedron-decode[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 335-vector2-from-angle[33m 1600[2mms[22m[39m
+     [33m[2m✓[22m[39m 336-string-num-family[33m 1999[2mms[22m[39m
+     [33m[2m✓[22m[39m 337-vector-axis-constants[33m 1315[2mms[22m[39m
+     [33m[2m✓[22m[39m 339-bezier-derivative[33m 1068[2mms[22m[39m
+     [33m[2m✓[22m[39m 340-global-math-shapes[33m 1074[2mms[22m[39m
+     [33m[2m✓[22m[39m 341-global-ease[33m 1167[2mms[22m[39m
+     [33m[2m✓[22m[39m 342-step-decimals[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 343-snapped-and-predicates[33m 1065[2mms[22m[39m
+     [33m[2m✓[22m[39m 344-zero-modulus[33m 1077[2mms[22m[39m
+     [33m[2m✓[22m[39m 348-global-vector-args[33m 1062[2mms[22m[39m
+     [33m[2m✓[22m[39m 350-color-from-rgbe9995[33m 1066[2mms[22m[39m
+     [33m[2m✓[22m[39m 354-slot-coercion-folds[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 355-strip-edges-flags[33m 1070[2mms[22m[39m
+     [33m[2m✓[22m[39m 356-bsearch-bound[33m 1067[2mms[22m[39m
+     [33m[2m✓[22m[39m 357-cubic-in-time-degenerate[33m 1064[2mms[22m[39m
+     [33m[2m✓[22m[39m 358-array-order[33m 963[2mms[22m[39m
+     [33m[2m✓[22m[39m 359-compare-operand-sentence[33m 1067[2mms[22m[39m
+     [33m[2m✓[22m[39m 360-array-sort-comparator[33m 1067[2mms[22m[39m
+     [33m[2m✓[22m[39m 361-implicit-callable-value[33m 1055[2mms[22m[39m
+     [33m[2m✓[22m[39m 363-array-minmax-fourth-path[33m 1062[2mms[22m[39m
+     [33m[2m✓[22m[39m 364-bool-ordering[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 365-global-arg-bool[33m 1060[2mms[22m[39m
+     [33m[2m✓[22m[39m 366-color-from-ok-hsl[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 367-global-max-min-variadic[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 368-host-callable-names[33m 974[2mms[22m[39m
+     [33m[2m✓[22m[39m 369-host-name-positions[33m 1069[2mms[22m[39m
+     [33m[2m✓[22m[39m 370-property-accessor-names[33m 1065[2mms[22m[39m
+     [33m[2m✓[22m[39m 371-property-delegation[33m 1070[2mms[22m[39m
+     [33m[2m✓[22m[39m 372-extends-chain-host-names[33m 4652[2mms[22m[39m
+     [33m[2m✓[22m[39m 373-dict-pure-methods[33m 960[2mms[22m[39m
+     [33m[2m✓[22m[39m 374-builtin-bound-callables[33m 1068[2mms[22m[39m
+     [33m[2m✓[22m[39m 375-value-face-bound-callables[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 376-boxed-bound-callables[33m 1061[2mms[22m[39m
+     [33m[2m✓[22m[39m 377-boxed-pack-bound-callables[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 378-boxed-value-face-callables[33m 1072[2mms[22m[39m
+     [33m[2m✓[22m[39m 379-name-face-attribute-reads[33m 1067[2mms[22m[39m
+     [33m[2m✓[22m[39m 380-node-path-concat-getters[33m 1059[2mms[22m[39m
+     [33m[2m✓[22m[39m 381-byte-only-method-arity[33m 1059[2mms[22m[39m
+     [33m[2m✓[22m[39m 382-lambda-param-defaults[33m 1072[2mms[22m[39m
+     [33m[2m✓[22m[39m 383-lambda-capture-by-value[33m 1369[2mms[22m[39m
+     [33m[2m✓[22m[39m 384-bound-callable-value-snapshot[33m 1381[2mms[22m[39m
+     [33m[2m✓[22m[39m 385-callable-unbind[33m 1396[2mms[22m[39m
+     [33m[2m✓[22m[39m 387-pack-arg-slots[33m 353[2mms[22m[39m
+     [33m[2m✓[22m[39m 389-pct-values[33m 1295[2mms[22m[39m
+     [33m[2m✓[22m[39m 396-pct-runtime[33m 1070[2mms[22m[39m
+     [33m[2m✓[22m[39m 397-array-from-pack[33m 1066[2mms[22m[39m
+     [33m[2m✓[22m[39m 398-array-ctor-shapes[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 399-array-typed-ctor[33m 1057[2mms[22m[39m
+     [33m[2m✓[22m[39m 402-class-typed-bytes[33m 1161[2mms[22m[39m
+     [33m[2m✓[22m[39m 403-array-class-annot[33m 1070[2mms[22m[39m
+     [33m[2m✓[22m[39m 406-typed-container-slots[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 407-array-script-class-slots[33m 1071[2mms[22m[39m
+     [33m[2m✓[22m[39m 408-nodepath-slice[33m 1064[2mms[22m[39m
+     [33m[2m✓[22m[39m 409-script-param-fold[33m 1081[2mms[22m[39m
+     [33m[2m✓[22m[39m 410-stringname-literal-binary[33m 1168[2mms[22m[39m
+     [33m[2m✓[22m[39m 411-const-arm-fold[33m 1057[2mms[22m[39m
+     [33m[2m✓[22m[39m 416-attr-unknown-int[33m 5016[2mms[22m[39m
+     [33m[2m✓[22m[39m 418-class-ctor-value[33m 851[2mms[22m[39m
+     [33m[2m✓[22m[39m 420-ternary-op[33m 861[2mms[22m[39m
+     [33m[2m✓[22m[39m 421-pattern-ternary-fold[33m 853[2mms[22m[39m
+     [33m[2m✓[22m[39m 424-pattern-fold-calls[33m 855[2mms[22m[39m
+     [33m[2m✓[22m[39m 425-pattern-fold-calls-more[33m 959[2mms[22m[39m
+     [33m[2m✓[22m[39m 426-pattern-fold-calls-math[33m 1058[2mms[22m[39m
+     [33m[2m✓[22m[39m 427-pattern-fold-calls-exact[33m 1069[2mms[22m[39m
+     [33m[2m✓[22m[39m 431-vector3-rotated-axis[33m 1062[2mms[22m[39m
+     [33m[2m✓[22m[39m 432-var-bytes-callable-rid[33m 1063[2mms[22m[39m
+     [33m[2m✓[22m[39m 440-pattern-fold-calls-utility[33m 1075[2mms[22m[39m
+     [33m[2m✓[22m[39m 441-deferred-arity-error[33m 1061[2mms[22m[39m
+     [33m[2m✓[22m[39m 442-face-arity-attr-sentence[33m 1069[2mms[22m[39m
+     [33m[2m✓[22m[39m 445-abort-return-nil[33m 1095[2mms[22m[39m
+     [33m[2m✓[22m[39m 446-pct-static-soft[33m 1073[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m443 passed[39m[22m[90m (443)[39m
+[2m   Start at [22m 01:42:50
+[2m   Duration [22m 687.58s[2m (tests 100%)[22m **443/443 零漂移**（01:38 rc=0）， /  /  三把同 rc=0 ——  那两处构造器 Callable 的语义改动验收齐。④ **Tier 1 还剩的只有第二百六十笔 ④ 那两族**：(a) 原生类名  当值（引擎 、 25、 造得出实例、 也是 0）、(b)  /  /  面  的解析期两句 ；两侧读数都在 ，其余面一形没量，按红线照旧响亮拒。
 - **2026-10-25 第二百六十一笔（⑦⑨ 交接：门在跑、货扣着，恢复时照这段取数）**：① **⑦ 正在跑**：`GDS2JS_SCRIPTC_ALL=1 pnpm test:scriptc`（282 例 = 271 单文件 + 11 项目树，四并发）20:55 起挂在本机会话之外，日志 `tmp/probe727/scriptc-all4.log`；这台机器今天约 **1 例/分**（22:25 才到 098，比 §1.9 那把 85 分全跑的 3.3 例/分慢三倍，读数按今天这把算，别拿旧基线判超时）。**验收**：`出货 N/282` 三个数齐平，且**工具链记账 = 2**（`161-pack-compress` 岛档 + `371-property-delegation` 静态访问器，两条都是按「缺料就记账、绝不假绿」登记的，见第二百五十八笔与第二百五十六笔）。② **⑨ 的自动接法**：`tmp/probe727/release-guard.sh` 等门落盘后数红格，**零红且 `release/gds2js-0.1.1-win64.exe` 不在**才跑 `pnpm release`（结论 `tmp/probe727/release-guard.log`）；`reaper.sh` 发现门中途断掉（scriptc 进程空了又没出汇总）就原样重跑一把并覆盖回同一份日志。**已知坑两条**：`finish.sh` 的 `reds=$(grep -acE … || echo 9)` 在零红时捕成「0\n9」两行，它自己那条分支**必定走 skip**，别看它的 `release skipped` 就以为货出不了；`post.sh` 只等 `finish.sh` 结束，可能与 release 里的 scriptc 门并跑，它汇总的 `golden-check` 数要按 §2 备忘 14 单格复跑定性。③ **红线5 的欠账**：`25c6469` 是语义改动（构造器 Callable 的 `get_argument_count()` 与少给实参那句），`corpus-diff` 已 285/285 逐字节，**`pnpm test:golden-check` 的 443/443 零漂移还没跑**（引擎门不能与 ⑦ 并跑，只能在收单后）——这一把过了才算第二百六十笔那两处改动的验收。④ **新账两族按红线照旧响亮拒，等门后开工**：(a) `RefCounted.new` 当值（引擎印 `GDScriptNativeClass::new`、`typeof` 25、`.call()` 造得出实例、`get_argument_count()` 也是 0）；(b) `.new` 在 `Vector2` / `Array` / `String` 面是解析期两句 `Cannot find member "new" in base "X".`（属性读那形发两遍，同 pack 的 S415 形状），其余面一形没量、不许类推。
 - **2026-10-25 第二百五十八笔（#41 按路线② 记账 + ⑦(c) 复验结清）**：① **#41 走的是「缺料就记账、绝不假绿」那条**，与 #42（161 岛档）和 zstd 一族同口径：`test/e2e/scriptc.test.ts` 新增 `staticAccessorGone`（认 `static accessors and initializer-less` 那一句 SC1090），命中即把该页记成 **booked** 并说清「出货这一族走 `--pack node`」，不再算红。**记账的范围由一道新门钉住**：`test/repo/static-accessor-pages.test.ts` 按产物面重数「发得出 `static get` / `static set` 的页」（432 份 `main.gen.mts` 里恰好 **1** 页 = `371-property-delegation`），与名册一字一样才算过 —— 多出一页就红，逼着要么登记要么真改发射形状，不让这一族悄悄摊大。**路线①**（静态访问器改发「静态私有槽 + 取/存函数」+ 读写两处调用点 + 运行期按名索引转调表，另牵 `Callable` 取静态访问器与 `inst_to_dict` 两形没量过的）留作发射器专门开工，不在门铃压力下顺手改。② **§2 0⑦(c) 那格行号是过期账**：拿当年那把尺（`tmp/probe671/linetest.gd`）复跑 `gds2js check` 给的是 `linetest.gd:8:1`，正是手臂 `1 + self.x:` 那一行 —— S649 那层 `atNode` 早就把 `lowerPattern` 包进去了（`lower.ts:678`），「我们报 1:1」是改码前的读数；**代码零改动**。⑦ 至此只剩 (b) `H.new` 当值一格（要引擎一形一形量，下一笔）。③ **门读数（本笔）**：typecheck 4/4 + `tsc -p tsconfig.test.json` 干净、新记账门 1 格过；第二百五十七笔末那把挂在全量扫描之外的 `GDS2JS_SCRIPTC_ALL=1`（282 例 / 四并发 / `tmp/probe726/scriptc-all3.log`）本笔提交时仍在跑，它的收单读数由下一笔记（那把吃的是改码前的门，371 仍会读成红）。
 - **2026-10-25 第二百五十七笔（#44 与 #40 结清：解析期拒 + 两处发射形状，六红收到一红）**：接着第二百五十六笔把 ⑦ 的六红做掉五格。① **#44 那条句落地**（`analyze.ts` 新 `guaranteedReturn` / `checkReturnPaths`，`code: "return-path"`，句 `Not all code paths return a value.` 挂函数自己那一行，判据按七形实测取**句法**读法：`pass` 掉尾 / `if` 无 else / `while true` 里回值 / `for` 里条件回值 / 无兜底臂的 `match` 五形拒，`if/else` 双回与 `_` 兜底两形收，无标注函数不拒、掉尾交 Nil；尺 `tmp/probe725/{p1,p2}.gd` + `tmp/probe726/*`，门 `packages/compiler/test/return-path-699.test.ts` 八格）。② **#40 三格转绿**：`hasValueReturn` 现在递归 `match` 手臂（单条 match 的函数不再发成 `: void`）；装箱回值函数在 `frameExitLines` 之后补 `return rt.V.nil();`（静态目标按流分析要这个收尾，而它只对**没标返回型**的函数可达 —— 标了的那半已被 #44 在解析期拒掉，Nil 正是 `m_untyped` 实测的掉尾值）；227 那一格另是一处真 bug：`methodParamsLiteral` 把无标注形参用 JS `null` 去 `join`，产物成了稀疏数组 `[, "String"]`，与运行期声明的 `(string | null)[]` 不匹配，改发字面量 `null` 即好。三格现在都是 `编过 1/1、跑通 1/1、逐字节一致 1/1`（`337` / `411` / `227`，提交 `167cdd8` + `212655a`）。③ **门账与卫生**：`#43`（408）确认为四并发争用并给 `scBuild` 加了「只重试被杀那一形」；`#42`（161）按工具链能力记成 booked（`--dynamic` 被 0.4.4 拿掉，`--npm-static` 与 `--external-types` 两条官方路都实测再撞 SC1090，看板新增「工具链记账」一行）。④ **零语义漂移**：这两笔共漂 **72 份 `main.gen.mts`**（一行级），`corpus-diff` **285/285 逐字节**、正文门 **140/140**、`golden 未漂移 443/443`、`pnpm test` **317 文件 / 27314 格**、ops 7641、tree-face 17、typecheck 4/4 + `tsconfig.test.json` 干净；compile 三桶仍是 292 / 101 / 39。⑤ **⑦ 的复跑正在路上**：全量 282 例已在 16:55 重跑（`tmp/probe726/scriptc-all3.log`，截至 18:12 已起 83 例、约 1.1 例/分，预计 21:15 前后收单，预期 **280 绿 + 1 记账 + 1 红**；这一把是 `nohup` 挂在会话之外的，进度随时 `tail -f tmp/probe726/scriptc-all3.log` 看，收单后末尾会多一行 `rc=`，要中止就杀掉还在跑的 vitest 与 `scriptc` / `zig` 进程即可（替身树都在 `tmp/sc-gate/` 下，不脏仓库）），剩那一红是 `371-property-delegation` —— scriptc 0.4.4 没有静态访问器，要修的是「静态访问器改发静态取/存函数 + 静态属性读写调用点全改写 + 运行期按名索引补一张转调表」，还牵到几处没量过的形（`Callable` 取静态访问器、`inst_to_dict` 对静态属性），按 #41 挂着等专门开工或按 161 的先例记账，**这条要用户点头**；⑨ 仍扣在门后面（`release/` 还是 0.1.0）。
