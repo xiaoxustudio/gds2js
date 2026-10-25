@@ -337,7 +337,7 @@ const __gd_d_A = rt.defineClass(A, () => new A(), (o) => o instanceof A);
 rt.nameClass(__gd_d_A, "A");
 rt.registerDictIdentity(__gd_d_A, "res://main.gd", "A", [], {}, (o) => { const s = o as A; return []; });
 rt.registerMethodArities(__gd_d_A, { "sf": [1, 2], "one": [1, 2], "expr_default": [0, 1], "arr_default": [0, 1], "vec_default": [0, 1], "null_default": [0, 1], "refs_earlier": [1, 2], "const_default": [0, 1], "method_default": [0, 1], "helper": [0, 0], "str_slot": [0, 1], "float_into_int_slot": [0, 1], "float_into_int_math": [0, 1], "call_it": [0, 0] });
-rt.registerMethodParams(__gd_d_A, { "sf": ["int", "int"], "one": ["int", "int"], "refs_earlier": ["int", ], "str_slot": ["String"], "float_into_int_slot": ["int"], "float_into_int_math": ["int"] });
+rt.registerMethodParams(__gd_d_A, { "sf": ["int", "int"], "one": ["int", "int"], "refs_earlier": ["int", null], "str_slot": ["String"], "float_into_int_slot": ["int"], "float_into_int_math": ["int"] });
 rt.registerStaticMethods(__gd_d_A, ["sf"], {"sf": (a: rt.Variant[]): rt.Variant => rt.wrapValue(A.sf(a[0] as rt.Variant, a.length > 1 ? (a[1] as rt.Variant) : undefined))});
 rt.registerNativeBase(__gd_d_A, "RefCounted");
 

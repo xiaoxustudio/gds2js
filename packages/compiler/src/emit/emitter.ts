@@ -3474,8 +3474,8 @@ function methodParamsLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
   for (const f of funcs) {
     if (f.name === "_init" || f.params.length === 0) continue;
-    const slots = f.params.map((pt) => (pt.type === null || pt.type.kind !== "named" ? null : JSON.stringify(pt.type.name)));
-    if (slots.every((pt) => pt === null)) continue;
+    const slots = f.params.map((pt) => (pt.type === null || pt.type.kind !== "named" ? "null" : JSON.stringify(pt.type.name)));
+    if (slots.every((pt) => pt === "null")) continue;
     rows.push(`${JSON.stringify(f.name)}: [${slots.join(", ")}]`);
   }
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;

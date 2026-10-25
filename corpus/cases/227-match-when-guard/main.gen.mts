@@ -392,7 +392,7 @@ const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof M
 rt.registerScriptProps(__gd_d_Main, ["LIMIT"], (o) => { const s = o as Main; return [s.LIMIT]; });
 rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "g": [2, 2], "pick": [2, 2], "comma": [2, 2], "only_guards": [2, 2], "guard_and": [2, 2], "outer_locals": [2, 2], "container_guards": [2, 2], "guard_sees_outer_bind": [2, 2], "_initialize": [0, 0] });
-rt.registerMethodParams(__gd_d_Main, { "g": ["String", "bool"], "pick": [, "String"], "comma": [, "String"], "only_guards": [, "String"], "guard_and": [, "String"], "outer_locals": [, "String"], "container_guards": [, "String"], "guard_sees_outer_bind": [, "String"] });
+rt.registerMethodParams(__gd_d_Main, { "g": ["String", "bool"], "pick": [null, "String"], "comma": [null, "String"], "only_guards": [null, "String"], "guard_and": [null, "String"], "outer_locals": [null, "String"], "container_guards": [null, "String"], "guard_sees_outer_bind": [null, "String"] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
 rt.registerScriptLabel(__gd_d_Main, "main.gd");
 rt.registerScript("res://main.gd", __gd_d_Main);
