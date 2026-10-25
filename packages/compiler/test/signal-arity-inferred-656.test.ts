@@ -2,7 +2,7 @@
  *  引擎对这三形发**同样的元数与取值 void 两句**（同一行），但「找不到成员」那两句只在**裸信号名与标注形**发：
  *  推断形的 `g.is_valid()` 是运行期那句 `Invalid call. Nonexistent function 'is_valid' in base 'Signal'.` —— 所以认面要分档，不能一刀切。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -16,7 +16,7 @@ const SEEDS: Array<[string, string]> = [
 
 const msgs = async (seed: string, call: string): Promise<string[]> => {
   const source = `${HEAD}${seed}\tprint("V|", ${call})\n\tquit()\n`;
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 };
 
 const many = (n: string, max: number, got: number): string =>
@@ -64,7 +64,7 @@ describe("analyze · 由初值证出的 Signal 面", () => {
   it("行号与引擎同格（初值那一格）", async () => {
     const source = `${HEAD}\tvar g = sig\n\tg.has_connections(1)\n\tquit()\n`;
     const at = source.split("\n").indexOf("\tg.has_connections(1)") + 1;
-    const got = analyze(lower(await parseSource(source)));
+    const got = analyze(lower(await parseSource(source))).diagnostics;
     expect(got.map((d) => `${String(d.loc?.line)}|${d.message}`)).toEqual([`${String(at)}|${many("has_connections", 0, 1)}`]);
   });
 });

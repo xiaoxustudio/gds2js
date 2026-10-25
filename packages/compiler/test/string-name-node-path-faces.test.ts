@@ -7,7 +7,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -20,7 +20,7 @@ const npSrc = (call: string): string => `${H}var np: NodePath = ^"a/b/c"\n${TAIL
 
 async function face(src: string): Promise<string[]> {
   const m = lower(await parseSource(src));
-  return analyze(m).filter((d) => FACE.test(d.code)).map((d) => d.message);
+  return analyze(m).diagnostics.filter((d) => FACE.test(d.code)).map((d) => d.message);
 }
 
 describe("StringName 的元数与 String 同表", () => {

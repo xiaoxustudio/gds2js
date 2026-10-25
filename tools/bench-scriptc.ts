@@ -1,12 +1,3 @@
-// 5.5 的第三把尺子：同一张 kernel 表（tools/bench-kernels.ts）编成 scriptc 原生 exe，量每次调用的墙钟。
-//
-// 计时口径（写死在这里，免得读数被误读）：
-//   * exe 内部把 kernel 连跑 reps+1 次（第一次当预热），所以「进程墙钟 − 空转基线」≈ (reps+1) × 单次；
-//   * 空投基线 = 同一套导出流程编出来的、_initialize 里只 quit() 的 exe，同法取最小；
-//   * 每个 exe 跑 RUNS 次取最小值 —— 这台机器单次能飘 ±25%，均值一律不用（见 ROADMAP §1.12）。
-//
-//   pnpm bench:scriptc            # 全 14 格（要 zig + scriptc；导出四路并发，几分钟）
-//   pnpm bench:scriptc array-     # 只跑名字含 "array-" 的
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
@@ -28,7 +19,6 @@ function exePath(name: string): string {
   return join(WORK, name, "case.exe");
 }
 
-/** 一个 kernel 编成一份自跑工程：_initialize 里连跑 reps+1 次再 quit()。 */
 function projectSources(name: string, body: string, helpers: string | undefined, calls: number): string {
   const dir = join(WORK, name);
   rmSync(dir, { recursive: true, force: true });
@@ -73,7 +63,6 @@ if (chosen.length === 0) {
 }
 mkdirSync(WORK, { recursive: true });
 
-// 空转基线：同样的导出流程、同样的 quit()，只是不调 bench()
 const baseDir = projectSources("__baseline__", "\n\treturn 0\n", undefined, 0);
 const baseExe = exePath("__baseline__");
 const baseBuild = exportExe(baseDir, baseExe);
@@ -111,10 +100,8 @@ async function worker(): Promise<void> {
 
 await Promise.all(Array.from({ length: Math.min(JOBS, chosen.length) }, worker));
 
-// 基线首尾各量一次取小：只在开头量过一次时，机器飘了会让最便宜的格子算出负数（实测 string-concat −1.7 ms）
 baseline = Math.min(baselineStart, await timedMin(baseExe));
 console.log(`基线复量：首 ${baselineStart.toFixed(0)} ms → 扣掉取小后的 ${baseline.toFixed(0)} ms`);
-
 
 let js: { name: string; ms: number }[] = [];
 try {

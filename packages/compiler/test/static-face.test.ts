@@ -3,13 +3,13 @@
  * 句子与形状来自一格一脚本的读数 `tmp/probe-static-face/readings.txt`（六型 44 形），名单见 §6 第 46 条。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (src: string): Promise<string[]> => {
   const body = src.startsWith("var ") ? src : `print("X||", ${src})`;
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tquit()\n`))).diagnostics.map((d) => d.message);
 };
 
 const CALLS: Array<[string, string]> = [

@@ -7,7 +7,8 @@
  * 张数涨到 469 / 667；右支写成字面量还是标注名，引擎拒的集一字一样，所以两形共用一张表。
  */
 import { describe, expect, it } from "vitest";
-import { analyze, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
+import { OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "@gds2js/compiler/semantics/op-pairs";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -15,7 +16,7 @@ const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar vi: Vecto
 
 async function pairs(body: string): Promise<string[]> {
   const src = HEAD + body + "\nfunc _initialize():\n\tprint(\"ok\")\n\tquit()\n";
-  return analyze(lower(await parseSource(src)))
+  return analyze(lower(await parseSource(src))).diagnostics
     .filter((d) => d.code === "op-pair")
     .map((d) => d.message);
 }

@@ -5,7 +5,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -14,7 +14,7 @@ const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar s: String
 
 async function firstLine(expr: string): Promise<string | null> {
   const src = HEAD + "func c():\n\tprint(" + expr + ")\n";
-  const diags = analyze(lower(await parseSource(src)));
+  const diags = analyze(lower(await parseSource(src))).diagnostics;
   const d = diags.find((x) => x.code === "op-pair");
   return d === undefined ? null : d.message;
 }

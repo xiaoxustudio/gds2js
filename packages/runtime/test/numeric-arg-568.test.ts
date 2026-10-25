@@ -9,7 +9,8 @@ import { Signal } from "@gds2js/runtime/runtime/signal";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
 import { GVector2 } from "@gds2js/runtime/runtime/vector2";
-import { GDict, nodePathCtor, show, stringChr } from "@gds2js/runtime/runtime/values";
+import { GDict, nodePathCtor, show} from "@gds2js/runtime/runtime/values";
+import { stringChr } from "@gds2js/runtime/runtime/string-ops";
 import { I, S } from "./support/variants";
 
 const F = (n: number) => V.float(n);

@@ -5,7 +5,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { strNumDecimals } from "@gds2js/runtime/runtime/values";
+import { strNumDecimals } from "@gds2js/runtime/runtime/numfmt";
 
 type Cell = [number, number, number, string];
 const POS: Cell[] = [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28].map((d): Cell => [

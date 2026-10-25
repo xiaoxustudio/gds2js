@@ -1,12 +1,12 @@
 /** `join()` 的接收者那一面（S609）：句子由通用的 `face-member-*` 判据发，Dictionary 只有一句。读数 `tmp/probe569/s616.gd`。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const msgs = async (body: string): Promise<string[]> => {
   const src = `extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`;
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 };
 const MISSING = (base: string) => `Cannot find member "join" in base "${base}".`;
 const NOT_FOUND = (base: string) => `Function "join()" not found in base ${base}.`;

@@ -2,12 +2,10 @@ import { Tag, V, type Variant } from "./tags";
 import { GodotRuntimeError } from "./errors";
 import { GArray, GDict, showArgsSep } from "./values";
 
-/** 一帧：脚本路径、函数名（lambda 是 `<anonymous lambda>`）与这一帧当前执行到的行。 */
 type Frame = { source: string; fn: string; line: number };
 
 const STACK: Frame[] = [];
 
-/** 进一支函数：把进栈前的深度交给调用方，退出时按它复位 —— 协程交错时才不会把别人的帧摘走。 */
 export function frameEnter(source: string, fn: string): number {
   const depth = STACK.length;
   STACK.push({ source, fn, line: 0 });
@@ -18,13 +16,11 @@ export function frameExit(depth: number): void {
   if (depth <= STACK.length) STACK.length = depth;
 }
 
-/** 本帧当前走到 `.gd` 的哪一行：栈顶那帧报的就是这一格，父帧报的是调用点那一行。 */
 export function frameLine(line: number): void {
   const top = STACK[STACK.length - 1];
   if (top !== undefined) top.line = line;
 }
 
-/** 帧序列，最近的在前（`print_stack` / `get_stack` / `push_error` 三块共用）。 */
 function stackFrames(): Frame[] {
   const out: Frame[] = [];
   for (let i = STACK.length - 1; i >= 0; i--) {
@@ -34,10 +30,8 @@ function stackFrames(): Frame[] {
   return out;
 }
 
-/** `print_stack()` 的每帧一行实测走 stdout，要与其余 print 同序 —— 宿主装载时把自己的行缓冲登记进来。 */
 let printSink: ((line: string) => void) | null = null;
 
-/** 引擎往 stderr 推的那些块是**插在 stdout 之间**的，宿主得先把自己缓冲的行落盘再写这一块（`tmp/probe713` 的延后块）。 */
 let orderedStderr: ((text: string) => void) | null = null;
 
 export function setOrderedStderrSink(fn: (text: string) => void): void {
@@ -69,7 +63,6 @@ export function stackFrameLines(): string[] {
   return stackFrames().map((f, i) => `Frame ${String(i)} - ${f.source}:${String(f.line)} in function '${f.fn}'`);
 }
 
-/** 运行期错误作废的是**当前那支函数**：引擎先把这一块推到 stderr，再从该函数返回，调用方接着跑（S406，九格 + 十九格的返回型默认值量的）。不是引擎那一句的就原样再抛出去。 */
 export function gdFunctionError(err: unknown): void {
   if (!(err instanceof GodotRuntimeError)) throw err;
   const fs = stackFrames();
@@ -80,7 +73,6 @@ export function gdFunctionError(err: unknown): void {
   writeOrderedStderr(lines);
 }
 
-/** `push_error` / `push_warning` 那一块：首行 + `at:` + backtrace 表头 + 每帧一行（实测原文，语料 273）。 */
 export function stackBlockLines(head: string, at: string, args: Variant[]): string[] {
   const out = [`${head}: ${showArgsSep(args, "")}`, `   at: ${at}`, "   GDScript backtrace (most recent call first):"];
   for (const [i, f] of stackFrames().entries()) out.push(`       [${String(i)}] ${f.fn} (${f.source}:${String(f.line)})`);
@@ -113,9 +105,6 @@ export function reportNonStaticCall(fn: string): Variant {
   return pushBlock("ERROR", "callp (modules/gdscript/gdscript.cpp:940)", [V.str(`Can't call non-static function '${fn}' in script.`)]);
 }
 
-/** `%` 的格式化在**两侧都是静态型**那一形失败：引擎打一块非致命 ERROR、脚本照跑，回值是**格式串原样**（实测 `tmp/d6/s491c.py` 二十格）。
- *  `at:` 那一行的行号按**实参那一格的形**分三档：Nil 给 742、Array 给 770、其余给 829（读数 `tmp/probe720/{x,y,z2}.gd` 二十三格）。
- *  任一侧是 Variant 时不走这一支 —— 那是 SCRIPT ERROR 并作废当前那支函数（`ops.pctFormatOp` 的 soft=false）。 */
 export function pctFormatError(detail: string, argsTag: number): Variant {
   const line = argsTag === Tag.NIL ? 742 : argsTag === Tag.ARRAY ? 770 : 829;
   return pushBlock("ERROR", `validated_evaluate (core/variant/variant_op.h:${String(line)})`, [V.str(`String formatting error: ${detail}`)]);
@@ -136,7 +125,6 @@ export function stringUnicodeAsciiError(cp: number): void {
   writeOrderedStderr([`Unicode parsing error: Invalid unicode codepoint (${cp.toString(16)}), cannot represent as ASCII/Latin-1`]);
 }
 
-/** `Array.get` / `Array.set` 的下标越界块（S572）：两处 `at:` 行号同为 variant_call.cpp:681。 */
 export function arrayIndexOob(who: "get" | "set", index: number, size: number): Variant {
   return pushBlock("ERROR", `func_Array_${who} (core/variant/variant_call.cpp:681)`, [
     V.str(`Index p_index = ${String(index)} is out of bounds (p_instance->size() = ${String(size)}).`),
@@ -173,7 +161,6 @@ export function signalNullCallable(sigName: string): Variant {
   return pushBlock("ERROR", "connect (core/object/object.cpp:1639)", [V.str(`Cannot connect to '${sigName}': the provided callable is null.`)]);
 }
 
-/** `PackedByteArray.bswap16/32/64` 的两道 ERR_FAIL（S549）：非致命、块走 stderr、字节一个不动。 */
 export function packBswapGuard(kind: 16 | 32 | 64, which: "offset" | "count"): Variant {
   const width = kind / 8;
   const line = which === "offset" ? (kind === 16 ? 702 : kind === 32 ? 719 : 736) : (kind === 16 ? 706 : kind === 32 ? 722 : 739);
@@ -181,7 +168,6 @@ export function packBswapGuard(kind: 16 | 32 | 64, which: "offset" | "count"): V
   return pushBlock("ERROR", `func_PackedByteArray_bswap${String(kind)} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true.`)]);
 }
 
-/** `PackedByteArray.decode_*` 的越界 ERR_FAIL_COND_V（S550）：读侧那块带 ` Returning: 0`。 */
 export function packDecodeGuard(fn: string, line: number, width: number): Variant {
   const cond = width === 1 ? "p_offset < 0 || p_offset > int64_t(size) - 1" : `p_offset < 0 || p_offset > (int64_t(size) - ${String(width)})`;
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(`Condition "${cond}" is true. Returning: 0`)]);
@@ -216,12 +202,10 @@ export function packDecompressInflateErr(): void {
   pushBlock("ERROR", "decompress (core/io/compression.cpp:197)", [V.str('Condition "err != 1" is true. Returning: -1')]);
 }
 
-/** `decompress_dynamic()` 的空输入（S557）：compression 那层先打 `p_src_size <= 0`，再打外层 `Decompression failed.`。 */
 export function packDynamicSrcEmpty(): Variant {
   return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:233)", [V.str('Condition "p_src_size <= 0" is true. Returning: (-3)')]);
 }
 
-/** `decompress_dynamic()` 只收 DEFLATE / GZIP（S560）：其它模式先打 compression 295 那句，再打外层 844。 */
 export function packDynamicBadMode(): Variant {
   return pushBlock("ERROR", "decompress_dynamic (core/io/compression.cpp:295)", [V.str('Condition "p_mode != MODE_DEFLATE && p_mode != MODE_GZIP" is true. Returning: (-1)')]);
 }
@@ -236,7 +220,6 @@ export function packSizeMultiple(fn: string, line: number, message: string): Var
   return pushBlock("ERROR", `${fn} (core/variant/variant_call.cpp:${String(line)})`, [V.str(message)]);
 }
 
-/** `get_stack()`：Array，每帧一支 Dictionary，键序固定 source / function / line，键实测是 String。 */
 export function gGetStack(): Variant {
   const rows = stackFrames().map((f) => {
     const d = new GDict();

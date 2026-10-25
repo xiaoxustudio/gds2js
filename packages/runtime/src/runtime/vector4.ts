@@ -29,7 +29,6 @@ export function asVec4(v: Variant): GVector4 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector4 ? (v.v as GVector4) : null;
 }
 
-/** `Vector4(...)`（S580）：0 参零向量、4 个分量、或单参收 Vector4 / Vector4i。 */
 export function vector4New(args: Variant[]): Variant {
   if (args.length === 0) return vector4(0, 0, 0, 0);
   if (args.length === 1) {
@@ -89,7 +88,6 @@ function vec4Slot(key: Variant): 0 | 1 | 2 | 3 | null {
   return null;
 }
 
-/** 下标读（S580）：`v[-1]` 引擎给 `Out of bounds get index '-1' (on base: 'Vector4')`，不回绕。 */
 export function vec4ReadIndex(vec: GVector4, key: Variant): Variant {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -115,7 +113,6 @@ export function vec4Write(vec: GVector4, key: Variant, value: Variant, via: "pro
   return vector4(slot === 0 ? n : vec.x, slot === 1 ? n : vec.y, slot === 2 ? n : vec.z, slot === 3 ? n : vec.w);
 }
 
-/** 值类型转换：Vector4 槽收 Vector4i（逐分量升 float）；Vector4i 槽收 Vector4（向零截断 + int32 回绕）。 */
 export function toVec4(v: Variant): Variant {
   const a = asVec4(v);
   if (a !== null) return v;

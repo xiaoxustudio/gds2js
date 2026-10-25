@@ -8,7 +8,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -16,7 +16,7 @@ const HEAD = 'extends SceneTree\n\n';
 
 async function msgs(expr: string): Promise<string[]> {
   const src = HEAD + "func c():\n\tprint(" + expr + ")\n";
-  return analyze(lower(await parseSource(src))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message).sort();
 }
 
 const PAIRS: Array<[string, string[]]> = [

@@ -1,5 +1,3 @@
-/** CSS3 内建颜色名 → 0xAARRGGBB 整数（分量 = byte/255，构造时统一落 float32）：`Color.ALICE_BLUE` 常量与 `Color.from_string()` 共用这张表，键是小写下划线形式，查名时大小写不敏感、空格与 - _ ' . 四种分隔符都可省。
- *  146 支是一支一名量出来的：4.6.3 的 `Color("<名>")` 逐名与 4.3 源码 `core/math/color_names.inc` 对过（读数在 tmp/probe-color-names/names.log），两边零出入。补上的 8 支：dark_khaki、light_goldenrod、medium_orchid、transparent、web_gray、web_green、web_maroon、web_purple。 */
 export const COLOR_NAMED: Record<string, number> = {
   alice_blue: 0xfff0f8ff,
   antique_white: 0xfffaebd7,

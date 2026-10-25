@@ -5,7 +5,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -13,7 +13,7 @@ const SRC = 'extends SceneTree\n\nvar sn: StringName = &"ab"\nvar np: NodePath =
 
 async function face(expr: string): Promise<string[]> {
   const src = SRC.replace("__EXPR__", expr);
-  return analyze(lower(await parseSource(src))).filter((d) => /^face-(member-(missing|not-found)|attr-missing)$/.test(d.code)).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(src))).diagnostics.filter((d) => /^face-(member-(missing|not-found)|attr-missing)$/.test(d.code)).map((d) => d.message).sort();
 }
 
 const CELLS: Array<[string, string[]]> = [

@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
+import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { KERNELS, tableHeader, tableRow, type BenchRow, type Kernel } from "./bench-kernels";
@@ -17,7 +18,7 @@ async function compileKernel(k: Kernel): Promise<string> {
     hostImport: null,
     autoRun: false,
     className: "K",
-  });
+  }, NO_ANALYSIS);
   const file = join(OUT, `${k.name}.mts`);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, code, "utf8");
@@ -33,7 +34,6 @@ async function main(): Promise<void> {
     const inst = new mod.K();
     inst.bench();
     let checksum: unknown = null;
-    // 单次读数在这台机器上能飘 ±30%，所以一轮里再跑 R 遍取最小值（GDS2JS_BENCH_ROUNDS）。
     let best = Number.POSITIVE_INFINITY;
     for (let q = 0; q < ROUNDS; q++) {
       const t0 = performance.now();

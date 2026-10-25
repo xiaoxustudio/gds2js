@@ -1,4 +1,3 @@
-/** 字符串→数值的解析：`int()` / `float()` / `String.to_int()` / `to_float()` 与 pack 的元素折算共用这两条式子。 */
 import { wrap64 } from "./tags";
 import { decimalToDouble } from "../shared/double";
 
@@ -9,7 +8,6 @@ export const TWO_63 = 2 ** 63;
 const HEX_LOWER = "0123456789abcdef";
 const HEX_UPPER = "0123456789ABCDEF";
 
-/** 整数的十六进制幅值：整数的 `toString(radix)` 在静态编译目标上没有 lowering。 */
 function hexAbs(v: number, digits: string): string {
   if (v === 0) return "0";
   let out = "";
@@ -31,21 +29,12 @@ export function hexUpper(v: number): string {
   return v < 0 ? `-${hexAbs(-v, HEX_UPPER)}` : hexAbs(v, HEX_UPPER);
 }
 
-/** `.padStart(2, "0")` 的等价（三个用点都在 0–255 这一档，长的原样返回）。 */
 export function padZero2(s: string): string {
   return s.length >= 2 ? s : `0${s}`;
 }
 
-/** 十进制累加的饱和闸门，口径见 {@link strToInt}。 */
 const DEC_SATURATE_AT = 10n ** 18n;
 
-/**
- * `to_int()` / `int(字符串)` 的算式：单趟扫描，数字累加并按 int64 回绕；`-` 只在还没见过任何数字时翻符号
- * （可反复翻：`"a--5"`→5、`"5-3"`→53）；`.` 立刻停止；其余字符一律跳过且不断扫描。
- * 溢出是两段式的：19 位以内回绕，但乘 10 之前 `|acc|` 已达 `10^18` 就饱和到 INT64_MAX / INT64_MIN，
- * 且闸门看的是回绕之后的绝对值 —— 跟 `INT64_MAX/10` 那个「防溢出」常数不是一个数，别拿它当判据。
- * 符号是先攒无符号累加值、最后再取负，取负同样回绕。
- */
 export function strToInt(s: string): bigint {
   let acc = 0n;
   let neg = false;

@@ -1,9 +1,3 @@
-/**
- * 「实例方法」的形参拒：`Vector2(1, 2).dot(1)`、`"abc".repeat("a")` 这些引擎在解析期就拒的形，
- * 每一位的每一个 kind 都是 `tmp/probe-argtype/packed*.mts` 量出来的（一行一格的 packed 探针，一次 spawn 量一批，句子按行号归格，
- * 其余位填的是该位被引擎放行过的那些形）。
- * 键是 `"类型.方法"`，行是 `(位, 引擎真拒的 kind 名单, 期望型 T[, 引擎还追 A 式那一句的 kind 名单])` —— 与全局 / 静态名那两张表同构。
- */
 export const INSTANCE_ARG_AS: Readonly<Record<string, ReadonlyArray<readonly [number, readonly string[], string, readonly string[]]>>> = {
   "Color.blend": [[1, ["NodePath", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "null"], "Color", ["NodePath", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "null"]]],
   "Color.clamp": [[1, ["NodePath", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "null"], "Color", ["NodePath", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "null"]], [2, ["NodePath", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "null"], "Color", ["NodePath", "StringName", "Vector2", "Vector2i", "Vector3", "Vector3i", "bool", "float", "null"]]],

@@ -3,13 +3,10 @@ import type { Dirent } from "node:fs";
 import { dirname, join } from "node:path";
 import { hhmmss, type CmdName, type Ctx, type Runner } from "./ctx";
 
-/** `--watch` 的轮询间隔：静态目标上没有 `fs.watch` 的 lowering，只能靠摘要轮询。 */
 export const WATCH_POLL_MS = 250;
 
-/** 工程模式下不往下走的目录名：里面的 .gd 不是用户正在写的代码。 */
 export const WATCH_SKIP = /^(\.git|\.godot|node_modules)$/;
 
-/** 范围内每个 .gd 的「路径:修改时间:大小」摘要，排序后拼成一个串（拿不到 watcher 的 filename，只能自己比对）。 */
 export function gdSignature(dir: string, deep: boolean): string {
   const parts: string[] = [];
   const stack = [dir];
@@ -38,7 +35,6 @@ export function gdSignature(dir: string, deep: boolean): string {
   return parts.sort().join("|");
 }
 
-/** `--watch`：轮询 `gdSignature`，摘要变了就重跑一次命令（错误不中断）。 */
 export function startWatch(ctx: Ctx, runners: Record<CmdName, Runner>): void {
   const isProject = ctx.cmd === "check-project" || ctx.cmd === "build-project";
   const watchDir = isProject ? ctx.resRoot : dirname(ctx.input);
@@ -68,8 +64,6 @@ export function startWatch(ctx: Ctx, runners: Record<CmdName, Runner>): void {
   let last = "";
   const poll = (): void => {
     const sig = gdSignature(watchDir, isProject);
-    // 空摘要既可能是「目录里没有 .gd」也可能是「这一刻读不到目录」，不能拿来当「第一次采样」的记号 ——
-    // 用记号的话，首拍读空就永远不再比对，改文件也不会重跑。
     if (primed && sig !== last) onChange();
     last = sig;
     primed = true;

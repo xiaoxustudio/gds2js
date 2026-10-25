@@ -1,6 +1,3 @@
-/** 构建期由 tools/cli-native.mjs 同名换实现（复制本文件为 parser.ts）：同一个 `parseSource`，
- * 树从 libtree-sitter（`--ffi`）来，不再碰 web-tree-sitter。
- * CST 形状是 `./cst` 的普通记录 —— 类实例喂不进记录形参（SC2002），两侧都交记录。 */
 import { buildCsTree, type NodeTable } from "./native";
 import type { CsTree } from "./cst";
 

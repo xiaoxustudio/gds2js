@@ -4,13 +4,13 @@
  * 收的那一侧（`Vector2(1, 2).dot(Vector2(3, 4))`、`Color(1, 0, 0, 1).to_html(128)` 这类）是「不许误拦」。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (src: string): Promise<string[]> => {
   const tree = await parseSource(`extends SceneTree\n\nfunc _initialize():\n\tvar v = ${src}\n\tprint("X||", v)\n\tquit()\n`);
-  return analyze(lower(tree)).map((d) => d.message);
+  return analyze(lower(tree)).diagnostics.map((d) => d.message);
 };
 
 const REFUSE: Array<[string, string]> = [

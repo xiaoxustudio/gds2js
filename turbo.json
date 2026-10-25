@@ -2,18 +2,23 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "dependsOn": [
+        "^typecheck"
+      ],
+      "inputs": [
+        "src/**",
+        "tsdown*.config.ts",
+        "package.json"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
     },
     "typecheck": {
-      "dependsOn": ["^typecheck"],
+      "dependsOn": [
+        "^typecheck"
+      ],
       "outputs": []
-    },
-    "test": {
-      "dependsOn": ["^typecheck"],
-      "outputs": [],
-      "inputs": ["src/**/*.ts", "test/**/*.ts", "package.json", "tsconfig.json"],
-      "cache": false
     }
   }
 }

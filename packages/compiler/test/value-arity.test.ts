@@ -7,7 +7,7 @@
  * `@行号` 是测试自己加的（引擎把行号放在 `at: GDScript::reload (…:N)` 那一帧，句子文本里没有）。
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -52,7 +52,7 @@ let accepted = 0;
 
 describe("analyze · 值类型方法的实参数", () => {
   it.each(CASES)("%s", async (_name, src, expected) => {
-    const diags = analyze(lower(await parseSource(src))).filter((d) => d.code === "value-arity");
+    const diags = analyze(lower(await parseSource(src))).diagnostics.filter((d) => d.code === "value-arity");
     const got = diags.map((d) => `${d.message} @${String((d.loc as { line: number }).line)}`);
     expect(got, `源：\n${src}`).toEqual(expected);
     if (expected.length === 0) accepted++;

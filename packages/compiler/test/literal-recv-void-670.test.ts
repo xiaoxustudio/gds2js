@@ -4,13 +4,13 @@
 // 括号与不带括号同形；此前那道判据只走 `ident`（标注 / 推断出来的名字）与 `call`（构造式）两支，字面量接收者一句不发。
 // 反面对照也在这把尺上：`print(([1, 2]).size())` 与 `print((" ab ").lstrip(" "))` 两侧都无句（不是 void，也不越元数）。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const VOID = (n: string): string => `Cannot get return value of call to "${n}()" because it returns "void".`;
 const src = (body: string): string => `extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`;
-const msgs = async (body: string): Promise<string[]> => analyze(lower(await parseSource(src(body)))).map((d) => d.message);
+const msgs = async (body: string): Promise<string[]> => analyze(lower(await parseSource(src(body)))).diagnostics.map((d) => d.message);
 
 // 尺 `tmp/probe723/{b4,b5,b6,b7}.gd`：括号形与裸形、取值与丢弃四格两侧复量（#33 结清）——
 // `print(([1, 2]).set(0))` 引擎两句（先元数后 void）、`([1, 2]).set(0)` 只元数那一句、

@@ -1,7 +1,3 @@
-/**
- * gds2js 与 Godot 两份 benchmark 共用这 14 个 kernel：同一份源定义，两边读数才可直接对撞。
- * 每条带 reps（计时重复次数，前面另有一次不计时预热）与可选 helpers（模块级函数，用来量调用/赋值开销）。
- */
 export interface Kernel {
   name: string;
   body: string;
@@ -236,14 +232,12 @@ export const KERNELS: Kernel[] = [
   },
 ];
 
-/** 一次 kernel 计时的结果；两份 bench 共用这个形状，才能并排印与算倍率。 */
 export interface BenchRow {
   name: string;
   ms: number;
   checksum: string;
 }
 
-/** 表格列宽与表头：两份 bench 用同一个，终端里上下对齐才好看得出差多少。 */
 export function tableHeader(title: string): string[] {
   return [
     title,
@@ -256,7 +250,6 @@ export function tableRow(r: BenchRow): string {
   return `${r.name.padEnd(22)} ${r.ms.toFixed(2).padStart(8)}    ${r.checksum}`;
 }
 
-/** 两边同一 kernel 的倍率（Godot / gds2js，>1 = Godot 更慢）；校验值只列出来，不判等。 */
 export function compareRows(js: BenchRow[], godot: BenchRow[]): string[] {
   const jmap = new Map(js.map((r) => [r.name, r]));
   const out = ["kernel                 gds2js(ms)   Godot(ms)   倍率    校验值是否同字面", "----------------------  ---------   ---------  ------   --------------"];  let jsSum = 0, gdSum = 0;

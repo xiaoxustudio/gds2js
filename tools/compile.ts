@@ -1,7 +1,8 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { emitModule } from "@gds2js/compiler/emit";
+import { analyze } from "@gds2js/compiler/analyze";
+import { NO_ANALYSIS, type AnalysisResult } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import type { Module } from "@gds2js/compiler/lower/ir";
 import { parseSource } from "@gds2js/compiler/parse/parser";
@@ -11,8 +12,6 @@ import { caseDir, caseScript, godotOk, listSingleCases, readGolden } from "./lib
 const filter = process.argv.slice(2).find((a) => !a.startsWith("--")) || "";
 const cases = listSingleCases(filter);
 
-/** 生成物落在 corpus/cases/<id>/：runtime 与测试宿主都按仓库原位（三级回溯）—— 这两个值以前是 emitter 的默认值，现在由调用方声明。
- *  resPath 与 compileProject 给用例算出来的一致（res://main.gd），Callable 标签那截括号名要用它。 */
 const GEN_EMIT_OPTS = {
   runtimeImport: "../../../packages/runtime/src/runtime/index",
   hostImport: "../../../tools/harness/scene-tree",
@@ -24,11 +23,6 @@ const rejected: string[] = [];
 const unsupported: Array<{ id: string; msg: string }> = [];
 const refused: Array<{ id: string; msg: string }> = [];
 
-/**
- * 不用 rmSync 删旧产物 —— 沙箱里 rmSync 会走回收站且可能超时。
- * 改成直接**覆写**：失败用例留一个抛错的占位文件，
- * js-runner 跑到它时会把明确原因记进「崩溃」桶，而不是跑到上一轮的陈旧代码。
- */
 const writeStub = (id: string, reason: string): void => {
   writeFileSync(
     join(caseDir(id), "main.gen.mts"),
@@ -42,9 +36,11 @@ for (const id of cases) {
 
   let ir: Module | null = null;
   let diags: Array<{ code: string; message: string }> = [];
+  let analysis: AnalysisResult = NO_ANALYSIS;
   try {
     ir = lower(await parseSource(src));
-    diags = analyze(ir, undefined, id);
+    analysis = analyze(ir, undefined, id);
+    diags = analysis.diagnostics;
   } catch (e) {
     if (e instanceof UnsupportedError && !godotOk(readGolden(id))) {
       refused.push({ id, msg: e.message });
@@ -62,8 +58,7 @@ for (const id of cases) {
   }
 
   try {
-    // 发的是分析器走过的那一份 IR：取值点按 loc 记号对得上，但重新 lower 一遍只是白花一次时间
-    const gen = emitModule(ir!, GEN_EMIT_OPTS);
+    const gen = emitModule(ir!, GEN_EMIT_OPTS, analysis);
     writeFileSync(join(caseDir(id), "main.gen.mts"), gen, "utf8");
     compiled++;
   } catch (e) {
@@ -73,9 +68,6 @@ for (const id of cases) {
   }
 }
 
-// 本脚本自此只是 codegen：写 main.gen.mts、报三行统计，不设 exitCode。
-// 原先内嵌在此处的两条互锁判据（pack codec 口径一致、autoRun 尾巴必须自兜底）已迁到
-// packages/compiler/test/emit-invariants.test.ts，随快层 pnpm test 每次都跑。
 console.log(`编译成功 ${compiled}/${cases.length}`);
 console.log(`  语义分析拦下（预期报错用例） ${rejected.length}`);
 console.log(`  lowering 响亮拒（引擎解析期同拒） ${refused.length}`);

@@ -10,6 +10,7 @@ export default defineConfig({
 		// 源码铺进产物目录，里面一格 node 查找都没有。
 		host: "../runtime/src/host-node.ts",
 	},
+	target: "node25",
 	dts: true,
 	// dts 生成要看整棵入口图：条目散在 packages/*，统一用根 tsconfig 当程序面。
 	tsconfig: "../../tsconfig.json",

@@ -16,7 +16,6 @@ registerVec2iParts((o: object): [number, number] | null => (o instanceof GVector
 const U32 = 4294967296n;
 const S32 = 2147483648n;
 
-/** 先向零截断（float 实参），再按 int64 精确取模回绕到 int32。 */
 export function wrap32(v: number | bigint): number {
   const b = typeof v === "bigint" ? v : BigInt(Math.trunc(v));
   const m = ((b % U32) + U32) % U32;
@@ -29,7 +28,6 @@ const isub = (a: number, b: number) => wrap32(BigInt(a) - BigInt(b));
 const imul = (a: number, b: number) => wrap32(BigInt(a) * BigInt(b));
 const idiv = (a: number, b: number) => wrap32(BigInt(a) / BigInt(b));
 const imod = (a: number, b: number) => wrap32(BigInt(a) % BigInt(b));
-/** `snapped` 那一族给的是**饱和**而不是回绕：`Vector2i(2147483647, -2147483648).snapped(Vector2i(5, 5))` 的第二支引擎留 `INT32_MIN`，回绕写法会给 `2147483646`（S306 的 SNAP 行）。 */
 export function sat32(v: number | bigint): number {
   const b = typeof v === "bigint" ? v : BigInt(Math.trunc(v));
   if (b > 2147483647n) return 2147483647;
@@ -37,7 +35,6 @@ export function sat32(v: number | bigint): number {
   return Number(b);
 }
 
-/** 不回绕的那一条：`length_squared` 给的是精确 int64。 */
 const sq64 = (a: number, b: number) => BigInt(a) * BigInt(a) + BigInt(b) * BigInt(b);
 
 export function vector2i(x: number | bigint, y: number | bigint): Variant {
@@ -48,11 +45,9 @@ export function asVec2i(v: Variant): GVector2i | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector2i ? (v.v as GVector2i) : null;
 }
 
-/** 实参收成 int64：int 原样、float 向零截断，其余（包括 bool）响亮报错。 */
 function intArg(v: Variant | undefined, who: string): number | bigint {
   if (v === undefined) throw new UnsupportedError("vector2i-arity", `Vector2i.${who} 缺少实参`);
   if (v.t === Tag.INT) return intToBig(v.v as IntPayload);
-  // bool 在整数位上折 0 / 1（`Vector2i(1, 2).clampi(true, 1)` 实测照算，与 `Vector3i` 那一支同一条）
   if (v.t === Tag.BOOL) return BigInt(v.v ? 1 : 0);
   if (v.t === Tag.FLOAT) {
     const n = v.v as number;
@@ -64,7 +59,6 @@ function intArg(v: Variant | undefined, who: string): number | bigint {
   throw new UnsupportedError("vector2i-arg", `Vector2i.${who} 需要整数族实参，收到 ${tagName(v.t)}`);
 }
 
-/** `Vector2i()` → (0, 0)；一个实参收 Vector2 / Vector2i（逐分量截断）；两个实参是数值。 */
 export function vector2iNew(args: Variant[]): Variant {
   if (args.length === 0) return vector2i(0, 0);
   if (args.length === 1) {
@@ -86,7 +80,6 @@ export function toVec2i(v: Variant): Variant {
   return vector2iNew([v]);
 }
 
-/** 常量表：有 ONE/ZERO/LEFT/RIGHT/UP/DOWN/MAX/MIN，**没有 INF**；`UP` 是 (0, -1)，与 Vector2 同向（2D 的 y 轴朝下）。 */
 const VEC2I_CONST: Record<string, [number, number]> = {
   ZERO: [0, 0],
   ONE: [1, 1],
@@ -98,7 +91,6 @@ const VEC2I_CONST: Record<string, [number, number]> = {
   MIN: [-2147483648, -2147483648],
 };
 
-/** 轴常量：与 `Vector2` 同一组（实测 `AXIS_X` = 0、`AXIS_Y` = 1，`AXIS_Z` 解析期就拒），值也是 int。 */
 const VEC2I_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1 };
 
 export function vector2iConst(name: string): Variant {
@@ -116,7 +108,6 @@ function vecArg(args: Variant[], i: number, who: string): GVector2i {
   const a = args[i];
   const v = a === undefined ? null : asVec2i(a);
   if (v) return v;
-  // Vector2 交在 Vector2i 位上引擎逐分量折整数（`Vector2i(1, 2).max(Vector2(1, 2))` 实测 `(1, 2)`），与 `Vector2i(Vector2)` 构造式同一折法
   if (a !== undefined && a.t === Tag.OBJECT && a.v instanceof GVector2) {
     return new GVector2i(Math.trunc(a.v.x), Math.trunc(a.v.y));
   }
@@ -129,7 +120,6 @@ function arity(args: Variant[], n: number, who: string): void {
   }
 }
 
-/** Vector2i 的方法面：Godot 里没有的成员（下面那一串 case）一律响亮报缺，别按 Vector2 的表照抄。 */
 export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Variant {
   switch (name) {
     case "abs":
@@ -192,7 +182,6 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       return V.int(sq64(v.x, v.y));
     case "aspect":
       arity(args, 0, "aspect");
-      // 除法要折回 float32（`Vector2i(2147483647, -2147483648).aspect()` 引擎给 `-1.0`，double 那条给 `-0.99999999953434`；S311）
       return V.float(Math.fround(v.x / v.y));
     case "distance_to": {
       arity(args, 1, "distance_to");
@@ -209,7 +198,6 @@ export function vector2iMethod(v: GVector2i, name: string, args: Variant[]): Var
       return V.int(BigInt(dx) * BigInt(dx) + BigInt(dy) * BigInt(dy));
     }
     case "min_axis_index":
-      // 引擎是 `x < y ? 0 : 1`：并列给**后面**那个下标（(2,2) 给 1），`<=` 的写法会给 0 —— S304
       arity(args, 0, "min_axis_index");
       return V.int(v.x < v.y ? 0 : 1);
     case "max_axis_index":
@@ -242,7 +230,6 @@ export function vec2iCmp(a: GVector2i, b: GVector2i): number {
   return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
 }
 
-/** 键 → 槽位：0/1 与 `"x"`/`"y"` 都认。 */
 function vec2iSlot(key: Variant): 0 | 1 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -255,14 +242,12 @@ function vec2iSlot(key: Variant): 0 | 1 | null {
   return null;
 }
 
-/** 下标读：越界与负下标都报 `Invalid access of index …`。 */
 export function vec2iReadIndex(vec: GVector2i, key: Variant): Variant {
   const slot = vec2iSlot(key);
   if (slot === null) vecFailKey(key, "read", "Vector2i");
   return V.int(slot === 0 ? vec.x : vec.y);
 }
 
-/** 写分量：实参必须是整数族（bool 报错），float **向零截断**，超出 int32 回绕。 */
 export function vec2iWrite(vec: GVector2i, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vec2iSlot(key);
   if (slot === null) vecFailKey(key, via, "Vector2i", value);
@@ -272,7 +257,6 @@ export function vec2iWrite(vec: GVector2i, key: Variant, value: Variant, via: "p
   return vector2i(vec.x, n);
 }
 
-/** 逐分量的整数除（向零截断、符号跟被除数、回绕 int32），除零报运行错。 */
 export function div32(x: number, y: number): number {
   if (y === 0) throw new GodotRuntimeError("vector2i-div-zero", "Division by zero error in operator '/'.");
   return idiv(x, y);
@@ -283,12 +267,10 @@ export function mod32(x: number, y: number): number {
   return imod(x, y);
 }
 
-/** 加减乘的逐分量回绕版本（ops 用）。 */
 export const add32 = iadd;
 export const sub32 = isub;
 export const mul32 = imul;
 
-/** 掺 float 标量会升级成 Vector2。 */
 export function vec2iToFloat(a: GVector2i, k: number, op: "mul" | "div"): Variant {
   return op === "mul" ? vector2(a.x * k, a.y * k) : vector2(a.x / k, a.y / k);
 }

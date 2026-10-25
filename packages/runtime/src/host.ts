@@ -15,10 +15,8 @@ function addLine(text: string): void {
   pending = "";
 }
 
-// `print_stack()` 的每一行都要与其余 print 同序，所以宿主把自己的行缓冲交给 runtime 那一侧。
 setStackPrintSink(addLine);
 
-// `Vector3.rotated` 的轴没归一：引擎推一块非致命 ERROR（`at:` 是 `set_axis_angle` 那一行）再回原向量，读数 `tmp/probe708/axis.mts`。
 setOrderedStderrSink((text) => {
   flush();
   process.stderr.write(text);
@@ -52,7 +50,6 @@ export function printRaw(args: Variant[]): void {
 }
 
 export function printErr(args: Variant[]): void {
-  // 与 `push_error` 同一形：宿主的 print 是行缓冲的，stderr 那条要先把缓冲落盘（进程被杀才不丢值）。
   flush();
   process.stderr.write(showArgsSep(args, "") + "\n");
 }
@@ -80,7 +77,6 @@ export function captured(): string {
   return out.join("\n") + (out.length > 0 ? "\n" : "") + pending;
 }
 
-/** 用例之间必须清干净：上一个用例若中途抛错，没 flush 的输出会串到下一个 */
 export function resetOut(): void {
   out = [];
   pending = "";
@@ -94,7 +90,6 @@ class Timer {
     this.#left = sec;
   }
 
-  /** 到没到期只看账面上的剩余，不看墙上时间：退出那一轮只发已到期的，未到期的等不到。 */
   isDue(): boolean {
     return this.#left <= 0;
   }
@@ -129,7 +124,6 @@ export class SceneTree extends GdScriptObject {
     return t;
   }
 
-  /** 退出前把「当前这一轮」排干：延后队列跑到空、已到期的计时器发一遍，未到期的不等待（读数 `tmp/probe-drain/compare{94,95}.txt` —— `quit()` 之后排的延后照样跑，一秒与五秒的计时器等不到）。 */
   async #drain(): Promise<void> {
     for (;;) {
       let fired = false;
@@ -140,7 +134,6 @@ export class SceneTree extends GdScriptObject {
         return false;
       });
       if (!fired && deferredPendingCount() === 0 && !this.#timers.some((t) => t.isDue())) return;
-      // 让出一轮宏任务：被唤醒的协程与排到后面的延后都要抢在 flush 之前把输出落进缓冲区
       await new Promise((r) => setTimeout(r, 0));
     }
   }
@@ -167,14 +160,12 @@ export class SceneTree extends GdScriptObject {
       await initDone;
       await this.#drain();
     } finally {
-      // 帧循环或 init 抛错也要先落盘再抛：缓冲输出属于「已经发生的事」。
       flush();
     }
     if (initError !== null) throw initError;
   }
 }
 
-/** _process 的返回值可能是裸 boolean，也可能是 Variant 装箱 */
 function isTruthyResult(r: unknown): boolean {
   if (r === true) return true;
   if (typeof r === "object" && r !== null && "t" in r) return truthyOf(r as Variant);

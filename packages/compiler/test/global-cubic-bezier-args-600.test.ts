@@ -1,12 +1,12 @@
 /** `cubic_interpolate` 四支与 `bezier_interpolate` / `bezier_derivative` 的解析期实参位（S600），读数 `tmp/probe569/{cubic,bezier}_{p2str,b1,a1,laststr}.gd`。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (call: string): Promise<string[]> => {
   const tree = await parseSource(`extends SceneTree\n\nfunc _initialize():\n\tvar v = ${call}\n\tquit()\n`);
-  return analyze(lower(tree)).map((d) => d.message);
+  return analyze(lower(tree)).diagnostics.map((d) => d.message);
 };
 
 const arg = (n: number): string => Array.from({ length: n }, (_, i) => "1.5").join(", ");

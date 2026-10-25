@@ -6,12 +6,12 @@
  *
  * 判据只有「抛不抛 + code」，产物文本不参与断言，所以这里用的是探测用的
  * EMIT_OPTS_PROBE 而不是 compile.ts 里那个冻结的 GEN_EMIT_OPTS —— emitModule
- * （emitter.ts:264-265）只把两个 specifier 当字符串嵌进产物、不做任何校验，
+ * （emit/index.ts 的 EmitOptions）只把两个 specifier 当字符串嵌进产物、不做任何校验，
  * 换成短占位值是惰性的，也免得把冻结字面量抄成第二份、将来改一处漏一处。
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { emitModule } from "@gds2js/compiler/emit";
+import { analyze } from "@gds2js/compiler/analyze";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_TODO_FUNCTIONS } from "@gds2js/compiler/lower/globals";
 import { lower } from "@gds2js/compiler/lower/lower";
@@ -26,9 +26,10 @@ async function classify(src: string, okMarker: string): Promise<string> {
   try {
     const m = lower(await parseSource(src));
     // S387：元数那两句出自 analyze，先按那两句查一遍再谈发射 —— 只认那两句，别的诊断不参与这张分类器
-    const hit = analyze(m).find((d) => /^Too (few|many) arguments for /.test(d.message));
+    const analysis = analyze(m);
+    const hit = analysis.diagnostics.find((d) => /^Too (few|many) arguments for /.test(d.message));
     if (hit !== undefined) return hit.code ?? "无码";
-    emitModule(m, EMIT_OPTS_PROBE);
+    emitModule(m, EMIT_OPTS_PROBE, analysis);
     return okMarker;
   } catch (e) {
     return e instanceof UnsupportedError ? ((e as { code?: string }).code ?? "无码") : "非 UnsupportedError";
@@ -41,7 +42,7 @@ const PRINT = (call: string): string => `extends SceneTree\n\nfunc _initialize()
 
 const arityText = async (src: string): Promise<string> => {
   const m = lower(await parseSource(src));
-  const hit = analyze(m).find((d) => /^Too (few|many) arguments for /.test(d.message));
+  const hit = analyze(m).diagnostics.find((d) => /^Too (few|many) arguments for /.test(d.message));
   return hit?.message ?? "居然编得过";
 };
 
@@ -540,9 +541,10 @@ describe("转换族单实参口径", () => {
  *  取值点是 analyze 记的号，所以这一族每格都先 analyze 再 emit —— 跳过 analyze 就退化成裸 JS 标识符。 */
 async function emitted(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return `diag:${diags[0]!.code}`;
-  return emitModule(ir, EMIT_OPTS_PROBE);
+  return emitModule(ir, EMIT_OPTS_PROBE, analysis);
 }
 /** 多行函数体：MOD 只给一行，遮蔽那几格得两行式子才试得出来。 */
 const BODY = (lines: string[]): string =>

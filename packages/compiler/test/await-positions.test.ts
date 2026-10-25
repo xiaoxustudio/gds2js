@@ -4,7 +4,7 @@
  * 读数 `compare92.txt`，出货端到端 16 格对照 `tmp/probe-awaitcall/ours.mts` 不合 0）。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -12,7 +12,7 @@ const AWAIT = 'Function "f()" is a coroutine, so it must be called with "await".
 const F = "func f():\n\tawait create_timer(0.01).timeout\n\treturn 1\n\nfunc g(v):\n\tprint(v)\n\nvar v\n\n";
 
 async function first(src: string): Promise<string> {
-  return analyze(lower(await parseSource(src)))[0]?.message ?? "不拦";
+  return analyze(lower(await parseSource(src))).diagnostics[0]?.message ?? "不拦";
 }
 const at = (call: string): string => `extends SceneTree\n\n${F}func _initialize():\n\t${call}\n\tquit()\n`;
 

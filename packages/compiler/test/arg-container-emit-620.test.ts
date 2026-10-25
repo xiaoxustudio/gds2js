@@ -1,7 +1,7 @@
 /** 认得到 callee 的调用点：字面量实参折算、其余实参发运行期那一句（S620），读数 `tmp/probe619/`。 */
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { emitModule } from "@gds2js/compiler/emit";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -9,8 +9,8 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function code(src: string): Promise<string> {
   const m = lower(await parseSource(src));
-  analyze(m);
-  return emitModule(m, OPTS);
+  const analysis = analyze(m);
+  return emitModule(m, OPTS, analysis);
 }
 
 const HEAD = "func top(v: Array[int]) -> void:\n\tpass\n\nfunc tops(v: Array[String]) -> void:\n\tpass\n\nfunc topd(v: Dictionary[int, String]) -> void:\n\tpass\n\n";

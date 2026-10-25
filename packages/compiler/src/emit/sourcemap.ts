@@ -15,7 +15,6 @@ export interface RawSourceMap {
 
 const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-/** 有符号整数 → VLQ base64 串。 */
 function vlq(value: number): string {
   let v = value < 0 ? ((-value) << 1) | 1 : value << 1;
   let out = "";
@@ -28,7 +27,6 @@ function vlq(value: number): string {
   return out;
 }
 
-/** 把行粒度映射编成 v3 的 `mappings` 串：每行至多一段（生成列恒 0），按 genLine 建槽位；输入按 genLine 升序，同 genLine 只留第一条。 */
 export function encodeMappings(sorted: LineMapping[]): string {
   const byGen = dedupeByGenLine([...sorted].sort((a, b) => a.genLine - b.genLine));
   const maxLine = byGen.reduce((n, m) => Math.max(n, m.genLine), -1);

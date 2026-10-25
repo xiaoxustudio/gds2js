@@ -1,0 +1,14 @@
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "StringName".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "StringName".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Dictionary".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Dictionary".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "PackedByteArray".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "PackedByteArray".
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

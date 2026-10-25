@@ -77,7 +77,6 @@ const FGCOLOR: readonly Rule[] = [
   ["[/fgcolor]", ESC + "[39;49m"],
 ];
 
-/** 全局替换：扫的是原文，匹配一处就跳过整个 needle。 */
 function replaceAll(text: string, needle: string, value: string): string {
   if (needle === "") return text;
   let out = "";
@@ -100,7 +99,6 @@ function applyAll(text: string, rules: readonly Rule[]): string {
   return s;
 }
 
-/** 色值文本 → `r;g;b` 十进制串：通道按截断取字节（不是四舍五入）。 */
 function rgbOf(value: string): string {
   const c = asColor(colorFromText(value));
   const ch = (n: number): string => String(Math.floor(n * 255));
@@ -110,7 +108,6 @@ function rgbOf(value: string): string {
   return ch(r) + ";" + ch(g) + ";" + ch(b);
 }
 
-/** 把 `*color=` 那几支换成转义序列：值取到下一个 `]`，`kind` 决定前景、背景还是两者。 */
 function applyColorFallback(text: string, kind: string): string {
   const needle = kind === "bg" ? "[bgcolor=" : kind === "fg" ? "[fgcolor=" : "[color=";
   let out = "";
@@ -129,7 +126,6 @@ function applyColorFallback(text: string, kind: string): string {
   return out + text.slice(from);
 }
 
-/** bbcode → ANSI：文本进、带转义序列的文本出，表外标签原样出，末尾补一个复位。 */
 export function richAnsi(text: string): string {
   let s = applyAll(text, BASE);
   s = applyAll(s, COLOR);

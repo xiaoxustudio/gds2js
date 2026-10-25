@@ -3,7 +3,7 @@
  *  所以下界一句都不发 —— 把 `Too few` 补上就是把引擎没说的话说成引擎说的。
  *  病灶：`sig.disconnect(cb, 1)` 此前一路放行到运行期安静给 nil（引擎是解析期拦死、整脚本不跑）。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -11,7 +11,7 @@ const HEAD = 'extends SceneTree\n\nsignal sig(a, b)\n\nclass H:\n\textends RefCo
 
 const msgs = async (body: string): Promise<string[]> => {
   const source = `${HEAD}${body}\n\tquit()\n`;
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 };
 
 const say = (name: string, max: number, got: number): string =>
@@ -67,7 +67,7 @@ describe("analyze · Signal 面的解析期元数上界", () => {
   it("行号与引擎同格", async () => {
     const source = `${HEAD}\tsig.has_connections(1)\n\tquit()\n`;
     const at = source.split("\n").indexOf("\tsig.has_connections(1)") + 1;
-    const got = analyze(lower(await parseSource(source))).map((d) => `${String(d.loc?.line)}|${d.message}`);
+    const got = analyze(lower(await parseSource(source))).diagnostics.map((d) => `${String(d.loc?.line)}|${d.message}`);
     expect(got).toEqual([`${String(at)}|${say("has_connections", 0, 1)}`]);
   });
 });

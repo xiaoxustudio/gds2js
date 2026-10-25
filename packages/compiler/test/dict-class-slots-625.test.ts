@@ -4,7 +4,7 @@
  * 引擎收的必须收（子类键与父类槽那一档差别的判据是量出来的，不是推的）。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -28,7 +28,7 @@ const CASES: Array<[string, string, Array<[string, string]>]> = [
 
 describe("analyze · 定形字典的类名槽", () => {
   it.each(CASES)("%s", async (_name, source, expected) => {
-    const got = analyze(lower(await parseSource(source)))
+    const got = analyze(lower(await parseSource(source))).diagnostics
       .filter((d) => d.code === KEY || d.code === VAL || d.code === "typed-index-value")
       .map((d) => [d.code, d.message] as [string, string]);
     expect(got, `源：\n${source}`).toEqual(expected);

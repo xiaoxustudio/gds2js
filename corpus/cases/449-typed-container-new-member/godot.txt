@@ -1,0 +1,12 @@
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Array[int]".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Array[int]".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Dictionary[int, String]".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Vector2".
+   at: GDScript::reload (<case>/main.gd:9)
+SCRIPT ERROR: Parse Error: Cannot find member "new" in base "Vector2".
+   at: GDScript::reload (<case>/main.gd:9)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

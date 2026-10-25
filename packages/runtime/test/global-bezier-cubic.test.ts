@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { gBezierDerivative, gBezierInterpolate, gCubic, gCubicInTime, gCubicAngle, gCubicAngleInTime } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
-import { strNumDecimals } from "@gds2js/runtime/runtime/values";
+import { strNumDecimals } from "@gds2js/runtime/runtime/numfmt";
 
 const arg = (a: number[], i: number): never => V.float(a[i]!) as never;
 const CALLS: Record<string, (a: number[]) => number> = {

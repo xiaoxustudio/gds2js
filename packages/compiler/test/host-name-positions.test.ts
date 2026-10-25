@@ -5,8 +5,8 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { emitModule } from "@gds2js/compiler/emit";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -14,9 +14,10 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function compile(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return diags[0]!.message;
-  return emitModule(ir, OPTS);
+  return emitModule(ir, OPTS, analysis);
 }
 
 const H = "extends SceneTree\n\n";

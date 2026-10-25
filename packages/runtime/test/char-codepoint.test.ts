@@ -5,7 +5,8 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GArray, show, stringChr, valueEq, varToStr } from "@gds2js/runtime/runtime/values";
+import { GArray, show, valueEq, varToStr} from "@gds2js/runtime/runtime/values";
+import { stringChr } from "@gds2js/runtime/runtime/string-ops";
 import { globalCallable, method } from "@gds2js/runtime/runtime/methods";
 import { I } from "./support/variants";
 

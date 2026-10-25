@@ -6,7 +6,7 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -15,7 +15,7 @@ const TAIL = "\nfunc _initialize():\n\tquit()\n";
 
 async function refuse(call: string): Promise<string> {
   const src = `${H}func f():\n\t${call}\n${TAIL}`;
-  const hit = analyze(lower(await parseSource(src))).find((d) => ARITY.test(d.message));
+  const hit = analyze(lower(await parseSource(src))).diagnostics.find((d) => ARITY.test(d.message));
   return hit !== undefined ? hit.message : "收下了";
 }
 

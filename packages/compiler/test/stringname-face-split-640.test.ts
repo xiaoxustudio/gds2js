@@ -1,12 +1,12 @@
 /** 解析期的 StringName 分岔（S640）：六名表外、三名零元，两句找不到成员与元数两句都按静态接收者发；推断接收者放过。
  *  读数 `tmp/probe639/sn639.compare.txt`（十二形，一脚本一形）。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function diags(body: string): Promise<string[]> {
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`))).diagnostics.map((d) => d.message);
 }
 
 const TWO = (n: string): string[] => [`Cannot find member "${n}" in base "StringName".`, `Function "${n}()" not found in base StringName.`];

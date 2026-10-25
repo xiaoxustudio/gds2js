@@ -1,7 +1,14 @@
 /**
- * 生成物，不要手改 —— 数据来自 Godot 4.6.3 `core/string/ucaps.h`（`misc/scripts/ucaps_fetch.py` 的产物）。
- * `findUpper` / `findLower` 逐句照 UCAPS 的二分，找不到原样返回（S576）。
+ * Godot 简单大小写映射表 —— 生成物，别手改，改请重跑生成流程（pnpm regen:ucaps）。
+ *
+ *   node tools/ucaps-probe.mjs
+ *   node tools/ucaps.mjs write
+ *
+ * 数据是 0x0040…0x10FFFF 全部码点在 Godot 4.6.3 下走 to_upper() / to_lower() 的实测结果：
+ * 只收「映射到另一个单一码点」的那些，故 U+1F80 一族（Godot 给单码点、JS 给多功能字符映射）在表里，
+ * 而 ß（两支都回原码点）不在。升序存放，findUpper / findLower 二分。
  */
+
 const CAPS_TABLE: readonly (readonly [number, number])[] = [
   [0x61, 0x41],
   [0x62, 0x42],
@@ -2970,3 +2977,4 @@ export function findLower(ch: number): number {
   }
   return ch;
 }
+

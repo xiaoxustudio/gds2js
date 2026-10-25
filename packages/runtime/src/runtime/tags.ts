@@ -1,9 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 
-/**
- * 值标签。用普通对象而不是 `const enum`：const enum 是 TS 专属语法，
- * node 的类型剥离跑不了。
- */
 export const Tag = {
   NIL: 0,
   BOOL: 1,
@@ -46,21 +42,18 @@ const TWO_64 = 1n << 64n;
 const MAX_SAFE_B = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_B = -MAX_SAFE_B;
 
-/** Godot 的 int 是 64 位有符号、溢出**回绕**（006 实测 int64max+1 → int64min），这里实现同一件事。 */
 export function wrap64(x: bigint): bigint {
   let v = x % TWO_64;
   if (v < 0n) v = v + TWO_64;
   return v >= TWO_63 ? v - TWO_64 : v;
 }
 
-/** 先回绕到 [-2^63, 2^63)，再把能安全用 number 表达的值收回 number。 */
 export function normInt(x: bigint): number | bigint {
   const v = wrap64(x);
   return v >= MIN_SAFE_B && v <= MAX_SAFE_B ? Number(v) : v;
 }
 
 export const intToBig = (v: IntPayload): bigint => (typeof v === "bigint" ? v : BigInt(v));
-/** 交给只能吃 number 的场合（浮点混合、数组下标、strAt 等）。精度损失与 Godot 的 float 一致。 */
 export const intToNum = (v: IntPayload): number => (typeof v === "bigint" ? Number(v) : v);
 
 /** 裸 number 越界仍响亮抛错（解箱快路径的边界，D1 有意保留）；bigint 则按 int64 回绕归一化。 */
@@ -118,7 +111,6 @@ export function box(v: unknown, staticType: "int" | "float" | "bool" | "string")
   }
 }
 
-/** 内建函数 **int64 形参** 上的 float→int64 折法：四条 API 一格一脚本实测同一口径（`String.num_int64` / `num_uint64` / `Color.from_rgba8` / 全局 `int()`，读数 `tmp/probe-int64-arg/readings.txt`）—— 范围内向零截断，**越界与非有限一律给 `INT64_MIN`**（x86 `cvttsd2si` 的整数不定值），既不报错也不夹到边界。放这儿是因为 `values` 与 `color` 互引，谁都不能 import 谁。 */
 export function int64ParamBig(v: Variant | undefined, who: string): bigint {
   if (v === undefined) throw new GodotRuntimeError("arg-int", `${who} 缺少实参`);
   switch (v.t) {

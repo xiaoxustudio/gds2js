@@ -1,8 +1,3 @@
-/** 引擎的十进制读数：`String::to_double()` / `to_float()` 在 4.6 里不调 C 的 `strtod`，走的是
- *  `core/string/ustring.cpp` 里那份 `built_in_strtod`（尾数最多收 18 位，多出来的直接丢；指数按
- *  「10^2^i」这张表一位一位拼出来；指数位不成形就连小数位的位移一起作废）。本文件是它的直译。
- *  读数：1302 格「文本 → 引擎真正存的 double」零分岔（`tmp/probe-varstr/strtod.mts` 汇总五批），
- *  换掉的那条「小数截 17 位」只对上 853 格；语料 279 钉了两侧同形的 20 格。 */
 const POW10 = [10, 100, 1e4, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256];
 const MAX_EXPONENT = 511;
 
@@ -26,7 +21,6 @@ function digitOf(c: number): number {
   return c >= ZERO && c <= ZERO + 9 ? c - ZERO : -1;
 }
 
-/** 前导空白与符号之后：尾数按两个整数各收 9 位，指数那一段不成形就整段作废。 */
 export function decimalToDouble(s: string): number {
   let i = 0;
   let c = codeAt(s, i);
@@ -91,7 +85,6 @@ export function decimalToDouble(s: string): number {
       ec = codeAt(s, ++k);
     }
     if (digitOf(ec) < 0) {
-      // 引擎这里是 goto done：尾数原样返回，前面小数位的位移也不算进去。
       return sign ? -fraction : fraction;
     }
     while (digitOf(ec) >= 0) {

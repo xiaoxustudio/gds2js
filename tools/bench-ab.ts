@@ -1,8 +1,3 @@
-// 配对 A/B：同一台机器上，把「基线」和「候选」交替测量，抵消跨窗口的漂移。
-// 单次 `pnpm bench` 的读数在这台机器上能飘 ±25%（12 轮自对照：+23.5% / +2.2% / −1.1% / +14.9%），
-// 所以「改了什么、快了多少」必须走这里，不能靠两次独立运行对比。
-//
-//   pnpm bench:ab --rounds 6 packages/runtime/src/runtime/tags.ts=tmp/candidate.ts
 import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -18,8 +13,6 @@ const pairs = argv.filter((a) => !a.startsWith("--")).map((a) => {
 });
 if (pairs.length === 0) throw new Error("至少给一对：<仓内文件>=<候选文件>");
 
-// 工作树里那些文件在测量期间是被覆盖的：原始字节全部留在内存里，恢复也从内存里写 ——
-// 走文件的备份曾经把两个目标串成一个（pairs 多于一条时共用同一个 orig 路径），那等于毁掉一个源文件。
 const original = new Map<string, string>();
 const absTargets = pairs.map((p) => {
   const abs = join(ROOT, p.target);

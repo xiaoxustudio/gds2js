@@ -1,0 +1,14 @@
+SCRIPT ERROR: Parse Error: Builtin type cannot be used as a name on its own.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Identifier "Dictionary" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Builtin type cannot be used as a name on its own.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Identifier "int" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Builtin type cannot be used as a name on its own.
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Identifier "PackedByteArray" not declared in the current scope.
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

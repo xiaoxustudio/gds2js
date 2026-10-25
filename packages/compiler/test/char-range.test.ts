@@ -3,13 +3,13 @@
  * 句子与两侧形状来自一格一脚本的读数 `tmp/probe-char/readings.txt`（float / bool 字面量引擎是放过的，`char(1.5)` 实测给 U+0001）。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (src: string): Promise<string[]> => {
   const body = src.startsWith("var ") ? src : `print("X||", ${src})`;
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tquit()\n`))).diagnostics.map((d) => d.message);
 };
 
 const SENT = 'Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.';

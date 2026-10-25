@@ -4,7 +4,6 @@ import { clamp, vecFailKey } from "./vector2";
 import { add32, div32, mod32, mul32, sat32, sub32, wrap32 } from "./vector2i";
 import { GVector3, registerVec3iParts, vector3 } from "./vector3";
 
-/** Vector3i：第三个 int32 值类型，三个分量都向零截断 + 回绕到 int32。 */
 export class GVector3i {
   x: number;
   y: number;
@@ -26,22 +25,18 @@ export function asVec3i(v: Variant): GVector3i | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector3i ? (v.v as GVector3i) : null;
 }
 
-/** 实参收成 int64：int 原样、bool 当 1/0、float 向零截断（nan / ±inf 折成 0），其余响亮报错。 */
 function intArg(v: Variant | undefined, who: string): bigint {
   if (v === undefined) throw new UnsupportedError("vector3i-arity", `Vector3i.${who} 缺少实参`);
   if (v.t === Tag.INT) return intToBig(v.v as IntPayload);
-  // bool 也收；Vector2i 的同一格没验证过，别把这条搬过去。
   if (v.t === Tag.BOOL) return BigInt(v.v ? 1 : 0);
   if (v.t === Tag.FLOAT) {
     const n = v.v as number;
-    // nan / ±inf 折成 **0**；分量写入复用同一条 intArg。
     if (!Number.isFinite(n)) return 0n;
     return BigInt(Math.trunc(n));
   }
   throw new UnsupportedError("vector3i-arg", `Vector3i.${who} 需要整数族实参，收到 ${tagName(v.t)}`);
 }
 
-/** `Vector3i(...)`：0 参给零向量；1 参只收 Vector3（逐分量截断）与 Vector3i（拷贝）；3 参是数值（float 向零截断）。「一个数」与两参、四参那几形 Godot 在解析期就拒。 */
 export function vector3iNew(args: Variant[]): Variant {
   if (args.length === 0) return vector3i(0, 0, 0);
   if (args.length === 1) {
@@ -57,7 +52,6 @@ export function vector3iNew(args: Variant[]): Variant {
   return vector3i(intArg(args[0], "Vector3i"), intArg(args[1], "Vector3i"), intArg(args[2], "Vector3i"));
 }
 
-/** 声明成 `Vector3` 的槽收到 Vector3i：升成 float；不是向量族则响亮报缺。 */
 export function toVec3(v: Variant): Variant {
   const inner = v.t === Tag.OBJECT ? (v.v as object) : null;
   if (inner instanceof GVector3) return V.object(new GVector3(inner.x, inner.y, inner.z));
@@ -65,7 +59,6 @@ export function toVec3(v: Variant): Variant {
   throw new UnsupportedError("vector3-slot", `Vector3 槽只量过收 Vector3 / Vector3i，收到 ${tagName(v.t)}`);
 }
 
-/** 声明成 `Vector3i` 的槽：收 Vector3（逐分量向零截断）与 Vector3i。 */
 export function toVec3i(v: Variant): Variant {
   const g = asVec3i(v);
   if (g !== null) return vector3i(g.x, g.y, g.z);
@@ -74,7 +67,6 @@ export function toVec3i(v: Variant): Variant {
   throw new UnsupportedError("vector3i-slot", `Vector3i 槽只量过收 Vector3 / Vector3i，收到 ${tagName(v.t)}`);
 }
 
-/** 静态常量表：**没有 `INF`**（Vector3 有，别照抄），`AXIS_X` / `AXIS_Y` / `AXIS_Z` 是**整数 0 / 1 / 2** 而不是向量，`UP` 是 (0, 1, 0)。 */
 const VEC3I_CONST_VEC: Record<string, [number, number, number]> = {
   ZERO: [0, 0, 0],
   ONE: [1, 1, 1],
@@ -100,14 +92,12 @@ export function vector3iConst(name: string): Variant {
   );
 }
 
-/** 字典序（x → y → z），与 Vector2 / Vector3 / Vector2i 同一口径。 */
 export function vec3iCmp(a: GVector3i, b: GVector3i): number {
   if (a.x !== b.x) return a.x < b.x ? -1 : 1;
   if (a.y !== b.y) return a.y < b.y ? -1 : 1;
   return a.z === b.z ? 0 : a.z < b.z ? -1 : 1;
 }
 
-/** 键 → 槽位：0/1/2 与 "x"/"y"/"z"。 */
 function vec3iSlot(key: Variant): 0 | 1 | 2 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -120,14 +110,12 @@ function vec3iSlot(key: Variant): 0 | 1 | 2 | null {
   return null;
 }
 
-/** 下标读：越界与负下标都报错，文案与 Vector2i 同一口径。 */
 export function vec3iReadIndex(vec: GVector3i, key: Variant): Variant {
   const slot = vec3iSlot(key);
   if (slot === null) vecFailKey(key, "read", "Vector3i");
   return V.int(slot === 0 ? vec.x : slot === 1 ? vec.y : vec.z);
 }
 
-/** 写分量：整数族实参，float 向零截断、超出 int32 回绕。 */
 export function vec3iWrite(vec: GVector3i, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vec3iSlot(key);
   if (slot === null) vecFailKey(key, via, "Vector3i", value);
@@ -149,24 +137,20 @@ export const v3iDiv = (a: GVector3i, b: GVector3i): Variant =>
   vector3i(div32(a.x, b.x), div32(a.y, b.y), div32(a.z, b.z));
 export const v3iMod = (a: GVector3i, b: GVector3i): Variant =>
   vector3i(mod32(a.x, b.x), mod32(a.y, b.y), mod32(a.z, b.z));
-/** 标量那一侧：逐分量同式。 */
 export const v3iMulK = (a: GVector3i, k: number): Variant => vector3i(mul32(a.x, k), mul32(a.y, k), mul32(a.z, k));
 export const v3iDivK = (a: GVector3i, k: number): Variant => vector3i(div32(a.x, k), div32(a.y, k), div32(a.z, k));
 export const v3iModK = (a: GVector3i, k: number): Variant => vector3i(mod32(a.x, k), mod32(a.y, k), mod32(a.z, k));
 /** 取负走「0 减」，于是 `MIN` 取负按同一规则回绕。 */
 export const v3iNeg = (a: GVector3i): Variant => vector3i(sub32(0, a.x), sub32(0, a.y), sub32(0, a.z));
 
-/** 掺 float 标量升级成 Vector3（只在右边：`float / Vector3i` 那一形 Godot 解析期就拒）。 */
 export function vec3iToFloat(a: GVector3i, k: number, op: "mul" | "div"): Variant {
   return op === "mul" ? vector3(a.x * k, a.y * k, a.z * k) : vector3(a.x / k, a.y / k, a.z / k);
 }
 
-/** Vector3i 的方法面：Godot 里没有的成员（下面那一长串 case，含 Vector2i 独有的 `axis_get` / `axis_set`）一律响亮报缺，别按 Vector2i / Vector3 的表照抄。 */
 export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Variant {
   switch (name) {
     case "abs": {
       arity(args, 0, "abs");
-      // MIN 那一格的 abs 会回绕：照样走 wrap32，不静默给正数。
       const a = (n: number) => wrap32(Math.abs(n));
       return vector3i(a(v.x), a(v.y), a(v.z));
     }
@@ -202,7 +186,6 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
       arity(args, 0, "length_squared");
       return V.int(sq64v3(v));
     case "min_axis_index":
-      // 式子照 4.6.3 的**严格** `<`：并列时 min 给后面的下标（(4,4,4) 引擎给 2，`<=` 的写法会给 0）—— S304
       arity(args, 0, "min_axis_index");
       return V.int(v.x < v.y ? (v.x < v.z ? 0 : 2) : v.y < v.z ? 1 : 2);
     case "max_axis_index":
@@ -221,7 +204,6 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
     case "snapped": {
       arity(args, 1, "snapped");
       const o = vecArg(args, 0, "snapped");
-      // 步长为 0 的那一维原样不动；式子与 Vector2i 的 snapped 同一条（饱和不回绕，S306 的 SNAP 行）。
       const snap = (n: number, s: number) => (s === 0 ? n : sat32(s * Math.floor(n / s + 0.5)));
       return vector3i(snap(v.x, o.x), snap(v.y, o.y), snap(v.z, o.z));
     }
@@ -287,7 +269,6 @@ export function vector3iMethod(v: GVector3i, name: string, args: Variant[]): Var
   }
 }
 
-/** 实参个数：对不上响亮报缺。 */
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
     throw new GodotRuntimeError("vector3i-arity", `Invalid call to function '${who}' in base 'Vector3i'. Expected ${n} argument(s).`);
@@ -298,18 +279,14 @@ function vecArg(args: Variant[], i: number, who: string): GVector3i {
   const a = args[i];
   const v = a === undefined ? null : asVec3i(a);
   if (v) return v;
-  // Vector3 交在 Vector3i 位上引擎逐分量折整数（`Vector3i(1, 2, 3).snapped(Vector3(1, 2, 3))` 一类，与 `Vector2i` 那支同一条）
   if (a !== undefined && a.t === Tag.OBJECT && a.v instanceof GVector3) {
     return new GVector3i(Math.trunc(a.v.x), Math.trunc(a.v.y), Math.trunc(a.v.z));
   }
   throw new UnsupportedError("vector3i-arg", `Vector3i.${who} 的第 ${i + 1} 个实参需要 Vector3i`);
 }
 
-/** 精确 int64 的平方和：`length_squared` / `distance_squared_to` 都不回绕。 */
 const sq64v3 = (v: GVector3i) => BigInt(v.x) * BigInt(v.x) + BigInt(v.y) * BigInt(v.y) + BigInt(v.z) * BigInt(v.z);
 const sq64d3 = (a: GVector3i, b: GVector3i) => {
-  // 差值先按 **int32 回绕**（与 `Vector2i` 那两支同一条；实测 `Vector3i(2147483647, -2147483648, 1).distance_to(Vector3i(7, 9, 11))`
-  // 走的是回绕后的差值，不回绕会多出 1.2e-8 的相对偏差；S311）
   const dx = sub32(b.x, a.x);
   const dy = sub32(b.y, a.y);
   const dz = sub32(b.z, a.z);

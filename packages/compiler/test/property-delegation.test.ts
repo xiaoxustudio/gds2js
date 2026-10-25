@@ -6,8 +6,8 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { emitModule } from "@gds2js/compiler/emit";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
@@ -21,9 +21,10 @@ async function compile(src: string, opts: typeof OPTS & { extendedByScript?: boo
   } catch (e) {
     return e instanceof UnsupportedError ? e.message : `非拒答：${e instanceof Error ? e.message : String(e)}`;
   }
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return diags[0]!.message;
-  return emitModule(ir, opts);
+  return emitModule(ir, opts, analysis);
 }
 
 const H = "extends SceneTree\n\n";

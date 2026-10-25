@@ -1,8 +1,4 @@
-/** `var_to_str()` / `.save()` 那侧的浮点十进制生成器：引擎用的就是 Grisu2（`String::num_scientific()` →
- *  `grisu2::to_chars()`，`thirdparty/grisu2/grisu2.h`），本文件是它的直译。
- *  读数：`tmp/probe-varstr/verify.log` 4059 格任意位型 + `tmp/probe-varstr/grisu.mts` 257 格旧读数，两份都零分岔（S289）。 */
 
-/** 无符号 64 位用 {hi, lo} 两个 32 位表示：静态编译目标不认 BigInt 比较，也不认超 32 位的位运算。 */
 type U64 = { hi: number; lo: number };
 
 const B32 = 4294967296;
@@ -12,7 +8,6 @@ function fromNum(n: number): U64 {
   return { hi: Math.floor(n / B32), lo: n % B32 };
 }
 
-/** 2^s（0 ≤ s ≤ 63）。 */
 function oneShift(s: number): U64 {
   return s >= 32 ? { hi: 2 ** (s - 32), lo: 0 } : { hi: 0, lo: 2 ** s };
 }
@@ -34,7 +29,6 @@ function subU(a: U64, b: U64): U64 {
   return { hi: (a.hi - b.hi - (lo < 0 ? 1 : 0) + B32) % B32, lo: (lo + B32) % B32 };
 }
 
-/** ×2：位运算在静态编译目标上只到 32 位，这里全走算术。 */
 function dblU(a: U64): U64 {
   return { hi: (a.hi * 2 + (a.lo >= 2147483648 ? 1 : 0)) % B32, lo: (a.lo * 2) % B32 };
 }
@@ -65,7 +59,6 @@ function mul10U(a: U64): U64 {
   return { hi: (a.hi * 10 + Math.floor(lo / B32)) % B32, lo: lo % B32 };
 }
 
-/** 32×32 → 64，按 16 位分块乘：每块乘积与进位都不超 2^53，所以全程精确。 */
 function mul32(a: number, b: number): U64 {
   const al = a % 65536;
   const ah = Math.floor(a / 65536);
@@ -79,7 +72,6 @@ function mul32(a: number, b: number): U64 {
   return { hi: p3 + Math.floor(p1 / 65536) + Math.floor(p2 / 65536) + Math.floor(mid / 65536), lo: (p0 % 65536) + (mid % 65536) * 65536 };
 }
 
-/** diyfp 的乘法：只取 128 位积的高 64 位，末位逢进就舍。 */
 function mulHigh(x: U64, y: U64): U64 {
   const p0 = mul32(x.lo, y.lo);
   const p1 = mul32(x.lo, y.hi);
@@ -115,7 +107,6 @@ function mul(x: Diy, y: Diy): Diy {
   return { f: mulHigh(x.f, y.f), e: x.e + y.e + 64 };
 }
 
-/** 引擎 kCachedPowers 的逐字抄件：[尾数高 32 位, 尾数低 32 位, 二进制指数, 十进制指数]。 */
 const CACHED: Array<[number, number, number, number]> = [
   [0xab70fe17, 0xc79ac6ca, -1060, -300],
   [0xff77b1fc, 0xbebcdc4f, -1034, -292],
@@ -220,7 +211,6 @@ function boundaries(bits: U64, eRaw: number, precision: number): { w: Diy; minus
   return { w: normalize(v), minus: normalizeTo(mMinus, wPlus.e), plus: wPlus };
 }
 
-/** n 的位数与最高位的权；n=0 给 (1, 1)。 */
 function largestPow10(n: number): [number, number] {
   const table: Array<[number, number]> = [
     [1000000000, 10],
@@ -238,7 +228,6 @@ function largestPow10(n: number): [number, number] {
   return [1, 1];
 }
 
-/** 末位往 w 靠：只要还更近就一位一位往下减，这里把减的次数攒起来，末位在外面一次改定。 */
 function roundSteps(dist: U64, delta: U64, restIn: U64, tenK: U64): number {
   let rest = restIn;
   let dec = 0;
@@ -296,7 +285,6 @@ function digitGen(mMinus: Diy, w: Diy, mPlus: Diy): { digits: string; decimalExp
   return { digits: digitsWithRound(out, roundSteps(dist, delta, p2, oneF)), decimalExponent };
 }
 
-/** 定点 / 科学计数的分道：小数点位置 n 落在 -4 < n ≤ 15 用定点，指数至少两位。 */
 function formatBuffer(digits: string, decimalExponent: number): string {
   const len = digits.length;
   const n = len + decimalExponent;
@@ -311,7 +299,6 @@ function isNegative(x: number): boolean {
   return x < 0 || Object.is(x, -0);
 }
 
-/** `String::num_scientific()`：有限值走 Grisu2，±0 直接给 "0"。 */
 function numScientific(value: number, isFloat: boolean): string {
   let head = "";
   let v = value;
@@ -344,7 +331,6 @@ function numScientific(value: number, isFloat: boolean): string {
   return `${head}${formatBuffer(gen.digits, -cp.k + gen.decimalExponent)}`;
 }
 
-/** 引擎的 `rtos_fix()`：±0 收成 0，装得下 float32 的值按 float 生成尾数，compat 那侧才有 `inf_neg`。 */
 export function rtosFix(value: number, compat: boolean): string {
   if (Number.isNaN(value)) return "nan";
   if (value === Number.POSITIVE_INFINITY) return "inf";
@@ -354,7 +340,6 @@ export function rtosFix(value: number, compat: boolean): string {
   return numScientific(value, Number.isFinite(f32) && f32 === value);
 }
 
-/** `var_to_str()` 的 FLOAT 支：rtos_fix 之后再补 `.0`（`VariantWriter` 那句「保证读回来还是浮点」）。 */
 export function floatConstructText(value: number): string {
   const s = rtosFix(value, true);
   if (s === "inf" || s === "-inf" || s === "nan" || s.includes(".") || s.includes("e") || s.includes("E")) return s;

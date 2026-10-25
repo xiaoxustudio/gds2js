@@ -5,12 +5,12 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function diags(src: string): Promise<string[]> {
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 }
 
 const H = "extends SceneTree\n\n";

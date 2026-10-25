@@ -1,20 +1,3 @@
-/**
- * 原生 CLI 等价性门：不带 node 的 gds2js.exe 与 node 侧 CLI 出货必须一致。
- * 读数 `原生 CLI 等价性门：通过 N 项，失败 M 项` 由 afterAll 原样打印。
- *
- * 前置：`pnpm build`（原生 exe 把 dist 与 runtime 源码嵌进自己）、libtree-sitter（TS_SRC）、
- * zig、scriptc。缺任何一样整支 skip 并说出缺什么，而不是把「环境没料」混进「真的坏了」的红。
- *
- * 开关改成环境变量：
- *   GDS2JS_CLI_NATIVE_QUICK=1      跳过 ④⑥ 两格 scriptc/SEA 出货（只比 build/run/拒绝语）
- *   GDS2JS_CLI_NATIVE_REBUILD=1    强制重编原生 exe
- *   GDS2JS_CLI_NATIVE_NO_REBUILD=1 exe 过期时拒绝验旧货、直接红
- *
- * newestInputMtime() 递归 walk `packages/` 时**必须排除 `test`**：测试文件不是 exe 的输入，
- * 照抄旧版（它 walk 时还没有 packages/*\/test/）会导致「改一个测试文件 → exe 判过期 →
- * 每次重建（zig 编 C + scriptc 出货，几分钟）」。`node_modules` 也一并显式排除。
- * exe 的真实输入集没变：packages/*\/src、native/、dist/、构建脚本。
- */
 import { spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
@@ -52,7 +35,6 @@ const SKIP_WHY = ready ? "" : `（跳过：${missing(...LACK)}）`;
 let okCount = 0;
 const badList: string[] = [];
 
-/** 一格判定：成了记 ok，不成记一笔红。 */
 function cell(cond: boolean, failMsg: string): void {
   if (cond) {
     okCount++;
@@ -62,9 +44,6 @@ function cell(cond: boolean, failMsg: string): void {
   expect(cond, `✗ ${failMsg}`).toBe(true);
 }
 
-/** npm/pnpm 包装层噪声（例：pnpm 把 store-dir 注入子进程 env 后 npx 的告警，或本机 `~/.npmrc` 里
- *  多一个 `home` 键让 npm 每次吐一句 `Unknown user config`）不是两侧的行为差异，
- *  比前必须剔掉 —— 不剔就会假红：exe 那支不经过 npx，node 那支经过，输出只差这一行。 */
 function cleanNoise(s: string): string {
   return s
     .split("\n")
@@ -83,7 +62,6 @@ const cliNode = (args: string[], cwd: string): { status: number | null; out: str
 const cliExe = (args: string[], cwd: string): { status: number | null; out: string } => run(EXE, args, cwd);
 const read = (p: string): string => readFileSync(p, "utf8");
 
-/** 轮询到条件成立为止（`--watch` 那两格用它等子进程的输出）。 */
 async function until(pred: () => boolean, ms: number): Promise<boolean> {
   const stopAt = Date.now() + ms;
   while (Date.now() < stopAt) {
@@ -116,7 +94,6 @@ function listFiles(dir: string): string[] {
   return out;
 }
 
-/** 两棵树逐文件比字节。返回第一处不一致（或 null）。 */
 function diffTrees(a: string, b: string): string | null {
   const all = [...new Set([...listFiles(a), ...listFiles(b)])].sort();
   for (const rel of all) {
@@ -128,8 +105,6 @@ function diffTrees(a: string, b: string): string | null {
   return null;
 }
 
-/** exe 的输入集 = 包源码 / C 源 / 构建脚本。任何一样比 exe 新就算过期（拒绝验旧货）。
- *  排除 test 与 node_modules 的理由见文件头。 */
 function newestInputMtime(): number {
   let newest = 0;
   const SKIP_DIRS = new Set(["test", "node_modules"]);
@@ -154,7 +129,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
   beforeAll(() => {
     const exeStale = existsSync(EXE) && newestInputMtime() > statSync(EXE).mtimeMs;
     if (exeStale && process.env.GDS2JS_CLI_NATIVE_NO_REBUILD === "1") {
-      // 抛而不是 process.exit(1)：让 Vitest 把它记成 beforeAll 失败，而不是整轮静默退出。
       throw new Error("原生 exe 过期（packages/ 或 native/ 比它新），且设了 GDS2JS_CLI_NATIVE_NO_REBUILD=1 —— 拒绝验旧货。");
     }
     if (exeStale) console.log("原生 exe 过期（packages/ 或 native/ 比它新），自动重建…");
@@ -170,7 +144,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
         throw new Error("原生 CLI 没编出来 —— 这一门没有意义。");
       }
     }
-    // 开工先清 WD：两个并发实例会互毁，所以 e2e project 钉死了单 worker 串行。
     rmSync(WD, { recursive: true, force: true });
     mkdirSync(WD, { recursive: true });
   });
@@ -180,7 +153,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     for (const b of badList) console.log(`  红：${b}`);
   });
 
-  // ── ① 单文件 build：逐字节（把运行时的说明符钉成同一个，比的是**编译器**而不是默认路径）──
   for (const id of SINGLE) {
     it(`① ${id}：build 产物逐字节`, () => {
       const dir = join(WD, id);
@@ -196,7 +168,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
       cell(read(join(dir, "node.mts")) === read(join(dir, "exe.mts")), `${id}: build 产物不是逐字节`);
     });
 
-    // ── ② run：输出逐字（原生那支是起外部 node 子进程跑的）──
     it(`② ${id}：run 输出逐字`, () => {
       const dir = join(WD, id);
       const n = cliNode(["run", join(dir, "main.gd")], ROOT);
@@ -212,7 +183,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     });
   }
 
-  // ── ③ 自带家目录：默认说明符要指进 exe 里那份打平运行时 ──
   it("③ 默认运行时说明符 = 家目录里的 file URL", () => {
     const dir = join(WD, "home-spec");
     mkdirSync(dir, { recursive: true });
@@ -233,7 +203,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     cell(same, "默认家目录运行时跑出来的输出与 node 侧不同");
   });
 
-  // ── ③′ local 模式：旁挂包来自 exe 内嵌的 dist/standalone.cjs（第三种运行时模式）──
   it("③′ local 模式：旁挂内嵌的 standalone，产物在仓库外也能跑", () => {
     const dir = join(WD, "local-mode");
     mkdirSync(dir, { recursive: true });
@@ -264,7 +233,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     }
   });
 
-  // ── ④ 工程出货：exe 自己编一个 scriptc exe，产物树与 node 侧逐字节、跑起来输出逐字 ──
   it.skipIf(QUICK)(`④ 工程 export --pack scriptc：${PROJECT_CASE}`, () => {
     const src = join(ROOT, "corpus", "cases", PROJECT_CASE);
     const side = { node: join(WD, "proj-node"), exe: join(WD, "proj-exe") };
@@ -282,7 +250,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     }
     const d = diffTrees(join(side.node, ".gds2js-export"), join(side.exe, ".gds2js-export"));
     cell(d === null, `模块树不一致：${d ?? ""}`);
-    // 参照：node 侧 CLI 跑同一个工程（run-project 只支持 import 模式）
     const nodeRun = cliNode(["run-project", join(side.node, "main.gd"), "--res-root", side.node], ROOT);
     const exeRun = cliExe(["run-project", join(side.exe, "main.gd"), "--res-root", side.exe], ROOT);
     if (exeRun.status !== 0) cell(false, `exe 的 run-project 退出码 ${exeRun.status}：${exeRun.out.slice(0, 200)}`);
@@ -303,7 +270,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     }
   });
 
-  // ── ⑤ 原生构建做不了的事：响亮拒，不许静默或者崩 ──
   it("⑤ single 模式拒到位（没带打包器）", () => {
     const dir = join(WD, "refuse");
     mkdirSync(dir, { recursive: true });
@@ -322,11 +288,8 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
   });
 
   it("⑤ run 撞未实现：两支同一行 runtime error，理由没被退出码吃掉、也没重复报", () => {
-    // 原生那支是起子进程跑产物的，产物的正文得从子进程 stderr 接回来才算报全。
     const dir = join(WD, "refuse");
     const gd = join(dir, "uns.gd");
-    // 这一族的式样是「还没实现」，不是「随便一句错」：`to_multibyte_char_buffer` 是 String 面最后一支
-    // 未发货的名字，走 `[string-multibyte-acp]` 那句响亮拒。（用过的 `pad_zeros` / `split_floats` 都已发出去了，产物不再报错，退出码变 0。）
     writeFileSync(
       gd,
       'extends SceneTree\n\nfunc _initialize():\n\tprint("before-crash")\n\tprint("5".to_multibyte_char_buffer())\n\tquit()\n',
@@ -364,7 +327,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     );
   });
 
-  // ── ⑥ --pack node：exe 里没有 node，要么找到外部 node（≥25.7）出货，要么把版本门槛说清楚 ──
   it.skipIf(QUICK)("⑥ --pack node：出货就跑一遍，没够新的 node 就报版本门槛", () => {
     const dir = join(WD, "sea");
     mkdirSync(dir, { recursive: true });
@@ -383,11 +345,9 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
       );
       return;
     }
-    // 外部 node 不够新 → 报的是版本门槛那三行，**这算 ok 不算失败**。
     cell(/Node >=/.test(r.out), `--pack node 既没出货也没报门槛：${r.out.slice(0, 200)}`);
   });
 
-  // ── ⑦ check-project：跨文件静态检查，exe 与 node 侧逐字 ──
   it("⑦ check-project 与 node 侧逐字一致", () => {
     const dir = join(WD, "checkproj");
     copyTree(join(ROOT, "corpus", "cases", "032-preload-load"), dir);
@@ -404,7 +364,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     );
   });
 
-  // ── ⑧ --sourcemap：同一份输入、两个目录里的同名输出 → 产物与 map 都应当逐字节相同 ──
   it("⑧ --sourcemap：map 落盘、指回 .gd，两侧 map 逐字节", () => {
     const src = join(WD, "smap");
     mkdirSync(src, { recursive: true });
@@ -412,7 +371,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     copyFileSync(join(ROOT, "corpus", "cases", "001-int-division", "main.gd"), gd);
     const dirN = join(src, "node");
     const dirE = join(src, "exe");
-    // 钉住运行时说明符：exe 的默认值指内嵌家目录（那是 ③ 那一格管的事），这里比的是 sourcemap 那条路
     const spec = ["--runtime", "gds2js/runtime", "--host", "gds2js/host"];
     const n = cliNode(["build", gd, "-o", join(dirN, "out.mts"), "--sourcemap", ...spec], ROOT);
     const e = cliExe(["build", gd, "-o", join(dirE, "out.mts"), "--sourcemap", ...spec], ROOT);
@@ -448,7 +406,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     cell(tail.includes("sourceMappingURL=out.mts.map"), `产物尾巴没有 sourceMappingURL 那句：${JSON.stringify(tail)}`);
   });
 
-  // ── ⑨ --watch：验的是 exe 里那份轮询摘要实现（fs.watch 的 recursive 与 listener 形状都没有 lowering）──
   it("⑨ check --watch：改 .gd 要真的重跑", async () => {
     const dir = join(WD, "watch");
     mkdirSync(dir, { recursive: true });
@@ -474,8 +431,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     }
   });
 
-  // ── ⑨b run --watch：光看「重新运行」那行不够 —— 重跑若写同名临时产物，Node 按 URL 缓存
-  //      ES 模块，命令重跑了但脚本不会再执行（这个洞真出现过）。要的是程序自己的第二次、不同输出的。──
   it("⑨b run --watch：改 .gd 要真的再执行一次脚本", async () => {
     const dir = join(WD, "watch-run");
     rmSync(dir, { recursive: true, force: true });
@@ -492,13 +447,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
       buf += String(c);
     });
     try {
-      // 两处形状都要钉住：① 写盘必须等到「监听」那一句出来之后（priming 那次采样就在打印这句的同一个同步段里，
-      //    而脚本的 stdout 比它早到 —— 实测原生 exe 冷启 `watch-a` +320ms、`监听` +345ms，抢在那 25ms 里改文件，
-      //    首拍采到的就是改后的摘要）；② 两次保存**等长**，摘要 `路径:mtime:大小` 里只有 mtime 那一维动 ——
-      //    2026-10-08 复测（`tmp/probe-watch/`）：scriptc 的 `statSync` 每拍都报真实的 mtimeMs / ctimeMs / size，与
-      //    node 逐格相同，「mtime 变了、字节数没变」在原生目标上四格全重跑，§2 第 15 条当年那句「原生看不见同尺寸
-      //    保存」不再成立，所以门正当就建在等长保存上。这一格真正要钉的洞（重跑写同名产物 → 第二次执行被
-      //    ES 模块缓存吃掉）与文件长度无关。
       const sawArmed = await until(() => buf.includes("监听") && buf.includes("watch-a"), 30000);
       if (sawArmed) writeFileSync(gd, script("watch-b"), "utf8");
       const sawSecond = sawArmed && (await until(() => buf.includes("watch-b"), 30000));
@@ -515,7 +463,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     }
   });
 
-  // ── ⑨c run-project 过交叉点改走「打成单文件再装载」：装载方式不该改变语义 ──
   it("⑨c run-project 大工程：打包装载与逐文件装载输出逐字相等", () => {
     const dir = join(WD, "wide-project");
     rmSync(dir, { recursive: true, force: true });
@@ -535,7 +482,6 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
     writeFileSync(join(dir, "main.gd"), main, "utf8");
     const args = ["run-project", join(dir, "main.gd"), "--res-root", dir];
     const bundled = cliNode(args, ROOT);
-    // process.env 是进程级全局：e2e project 钉死单 worker 串行，且这里用 try/finally 兜住还原。
     let perFile: { status: number | null; out: string };
     process.env.GDS2JS_RUN_BUNDLE = "0";
     try {

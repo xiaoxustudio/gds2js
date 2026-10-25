@@ -1,17 +1,10 @@
-/**
- * E2E 各支门共用的三态映射：
- *   ok → pass · FAIL / crash → fail · refused / no-lib → skip（带原因）
- *
- * crash 算红而不是算记账，依据是旧门脚本自己的注释「崩溃和「没做」必须分开算：
- * 前者是 bug，后者是排期」。迁移前实测 crash 为 0，所以不会让当天凭空变红。
- */
 import { expect, type TestContext } from "vitest";
 
 export type Verdict = "ok" | "refused" | "no-lib" | "crash" | "FAIL";
 
 export interface Tally {
   ok: number;
-  booked: number; // refused + no-lib + crash：旧文案叫「上游或环境记账」
+  booked: number;
   fail: number;
 }
 
@@ -19,11 +12,6 @@ export function newTally(): Tally {
   return { ok: 0, booked: 0, fail: 0 };
 }
 
-/**
- * 落一格判定。`ctx.skip(true, note)` 会**中断当前 it() 的剩余部分**（Vitest 5 的 skip 是
- * 抛异常实现的），所以调用方必须一格一个 it()，不能在一个 it() 里循环 settle 多格 ——
- * 否则第一个 refused 会把后面所有格一起跳掉。
- */
 export function settle(cell: string, v: Verdict, note: string, ctx: TestContext, tally: Tally): void {
   if (v === "ok") {
     tally.ok++;

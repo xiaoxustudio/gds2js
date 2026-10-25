@@ -1,6 +1,3 @@
-/** RID 这个结构体值：`typeof` 23、印 `RID(<id>)`、`get_id()` 回那个 int64。
- *  值只能从 `rid_from_int64()` / `rid_allocate_id()` 来（实测 `RID(int)` 那句是解析期拒：
- *  `No constructor of "RID" matches the signature "RID(int)"`），所以这里不发构造函数。 */
 import { Tag, V, normInt, type IntPayload, type Variant } from "./tags";
 
 export class GdRid {
@@ -18,8 +15,6 @@ export function asRid(v: Variant): GdRid | null {
   return v.t === Tag.OBJECT && v.v instanceof GdRid ? (v.v as GdRid) : null;
 }
 
-/** 实测 `rid_allocate_id()` 在新进程里从 13241 起、每调一次加一（三格连读 13241 / 13242 / 13243，另一份脚本首格同为 13241）。
- *  计数走 number：bigint 的 `+=` 在静态目标上报 SC1043（非数值、非字符串的比较式没有 lowering），而这段号远在 2^53 之内。 */
 let nextRid = 13241;
 
 export function allocateRid(): bigint {

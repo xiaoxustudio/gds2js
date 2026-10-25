@@ -1,15 +1,6 @@
-/**
- * 预期报错用例的**正文对账门**（S612）：语料里那些 golden 带 `Parse Error` 的用例，
- * 把编译期诊断逐条（**行号 + 句子 + 发序**）与引擎原文对。
- *
- * 这道门此前不存在 —— `corpus-diff` 只把预期报错用例归桶跳过，各笔 S 编号靠 tmp 探头人工对账，
- * 于是「文案漂了 / 多发一条 / 少发一条 / 次序不同」全都静默过关（S608–S612 一路就是这么挖出来的）。
- * lowering 抛出的那一批（26 支）从 S649 起也**比行号**：`lower` 的下降函数把抛出处挂成 `err.line`，
- *  这 26 支的每条引擎解析期句都落在挂出来的那一行上（一条消息带两句的 330–333 两句同行；尺 `tmp/probe648/line12.mjs` 26/26）。
- */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { CORPUS } from "../support/lib-bridge";
@@ -44,7 +35,7 @@ describe.each(CASES)("预期报错正文 $id（$eng 条）", ({ id, eng }) => {
     let diags: Array<{ loc: Loc; message: string }> | null = null;
     let thrown: unknown = null;
     try {
-      diags = analyze(lower(await parseSource(src)), undefined, id) as Array<{ loc: Loc; message: string }>;
+      diags = analyze(lower(await parseSource(src)), undefined, id).diagnostics as Array<{ loc: Loc; message: string }>;
     } catch (e) {
       thrown = e;
     }

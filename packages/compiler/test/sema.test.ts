@@ -11,7 +11,7 @@
  */
 import { readFileSync } from "node:fs";
 import { afterAll, describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
@@ -43,7 +43,7 @@ describe("analyze · 静态拒答口径与 Godot 对齐", () => {
     let diags: Array<{ code: string; message: string }> = [];
     let crashed = false;
     try {
-      diags = analyze(lower(await parseSource(readFileSync(caseScript(id), "utf8"))));
+      diags = analyze(lower(await parseSource(readFileSync(caseScript(id), "utf8")))).diagnostics;
     } catch (e) {
       // lowering 期的 UnsupportedError 与 analyze 的报错同格（都是响亮拒），不进「崩溃」桶。
       if (e instanceof UnsupportedError) diags = [{ code: e.code, message: e.message }];

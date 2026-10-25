@@ -1,6 +1,8 @@
 export * from "./errors";
 export * from "./tags";
 export * from "./values";
+export * from "./numfmt";
+export * from "./string-ops";
 export { ops, strOps } from "./ops";
 export { fast } from "./fast";
 export * from "./signal";

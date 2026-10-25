@@ -4,7 +4,7 @@
  * 逐格抄自 `tmp/probe618/`（e1..e3、d1..d3、e10..e13）的引擎读数。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
@@ -36,7 +36,7 @@ const ACCEPT: Array<[string, string]> = [
 
 describe("analyze · 定形容器变量的再赋值", () => {
   it.each(REJECT)("拒：%s", async (_name, source, head, line) => {
-    const diags = analyze(lower(await parseSource(source))).filter((d) => d.code === "typed-collection-assign-value");
+    const diags = analyze(lower(await parseSource(source))).diagnostics.filter((d) => d.code === "typed-collection-assign-value");
     expect(diags.length, `源：\n${source}`).toBeGreaterThan(0);
     expect(diags[0]?.message.startsWith(head), `源：\n${source}`).toBe(true);
     expect(diags[0]?.message.endsWith("."), `源：\n${source}`).toBe(true);
@@ -44,7 +44,7 @@ describe("analyze · 定形容器变量的再赋值", () => {
   });
 
   it.each(ACCEPT)("收：%s", async (_name, source) => {
-    const diags = analyze(lower(await parseSource(source)));
+    const diags = analyze(lower(await parseSource(source))).diagnostics;
     expect(diags.map((d) => d.message), `源：\n${source}`).toEqual([]);
   });
 });

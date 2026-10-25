@@ -1,12 +1,12 @@
 /** 元数越界时引擎补的那一条声明位句子（S607）：只认 Array 字面量、只认声明位。读数 `tmp/d6/s608c.gd`（九形）与 `tmp/d6/s607survey.out`（34 形）。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (call: string): Promise<string[]> => {
   const tree = await parseSource(`extends SceneTree\n\nfunc _initialize():\n\tvar v = ${call}\n\tquit()\n`);
-  return analyze(lower(tree)).map((d) => d.message);
+  return analyze(lower(tree)).diagnostics.map((d) => d.message);
 };
 const arity = (fn: string, kind: "few" | "many", want: number, got: number) =>
   kind === "few"

@@ -1,6 +1,6 @@
 {
   "name": "@gds2js/compiler",
-  "version": "0.1.1",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "gds2js 编译器（parse / lower / emit / compile + home）；源码以 .ts 出货。",
@@ -9,7 +9,18 @@
     "test": "vitest run --config ../../vitest.config.ts --project compiler"
   },
   "exports": {
-    "./*": "./src/*.ts",
+    "./analyze/analysis-result": "./src/analyze/analysis-result.ts",
+    "./compile/project": "./src/compile/project.ts",
+    "./emit": "./src/emit/index.ts",
+    "./emit/sourcemap": "./src/emit/sourcemap.ts",
+    "./home": "./src/home.ts",
+    "./analyze": "./src/analyze/index.ts",
+    "./lower/globals": "./src/lower/globals.ts",
+    "./lower/ir": "./src/lower/ir.ts",
+    "./lower/lower": "./src/lower/lower.ts",
+    "./parse/parser": "./src/parse/parser.ts",
+    "./semantics/op-pairs": "./src/semantics/op-pairs.ts",
+    "./tree-face": "./src/tree-face.ts",
     "./package.json": "./package.json"
   },
   "dependencies": {

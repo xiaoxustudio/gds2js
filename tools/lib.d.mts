@@ -1,4 +1,3 @@
-/** tools/lib.mjs 的类型声明，让 tools 下的 .ts 也能被 tsc 检查。 */
 export declare const ROOT: string;
 export declare const CORPUS: string;
 export declare const GODOT_BIN: string;
