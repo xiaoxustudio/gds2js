@@ -133,6 +133,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   _g(): rt.Variant {
@@ -146,6 +147,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   _s(v: rt.Variant): void {
@@ -172,6 +174,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static _ss(v: rt.Variant): void {

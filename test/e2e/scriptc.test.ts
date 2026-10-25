@@ -264,7 +264,7 @@ const rows: Row[] = [];
  *  与 `--npm-static` + 补 `.d.ts` 两条改写分别撞 SC1090「method calls like …」与「a binding form with no lowering」
  *  （三处读数见 ROADMAP 第二百五十六笔）。mode 2 的 zstd 保真路只有 `--pack node`，所以带 zstd 岛的那一页按工具链能力记账。 */
 const islandGone = (text: string): boolean =>
-  /Unknown option '--dynamic'|SC2013|binding form with no lowering|method calls like 'Zstd\./.test(text);
+  /Unknown option '--dynamic'|SC2013|binding form with no lowering|method calls like/.test(text);
 
 async function gateOne(id: string): Promise<Row> {
   const row: Row = { id, built: false, ran: false, exact: false, note: "", booked: null };
@@ -274,7 +274,6 @@ async function gateOne(id: string): Promise<Row> {
     row.built = g.built;
     exe = g.exe;
     if (!g.built) row.note = scNote(g.out, `export 退出 ${String(g.code)}`);
-    if (!g.built && islandGone(g.out)) row.booked = "静态目标没有岛档：mode 2 的 zstd 只走 --pack node";
   } else {
     const { dir, file, zstd } = prepare(id);
     const build = await scBuild(file);
@@ -282,7 +281,7 @@ async function gateOne(id: string): Promise<Row> {
     row.built = build.code === 0 && exe !== null;
     if (!row.built) row.note = scNote(build.out, `build 退出 ${String(build.code)}`);
     if (!row.built && zstd && islandGone(build.out)) {
-      row.booked = "静态目标没有岛档：这页用 mode 2（zstd-codec 的 asm 绑定），出货走 --pack node";
+      row.booked = "静态目标没有岛档：这页用 mode 2（vendored 那份 asm zstd 绑定），出货走 --pack node";
       return row;
     }
   }

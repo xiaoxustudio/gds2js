@@ -37,6 +37,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static usehelper(): rt.Variant {
@@ -50,6 +51,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   outerbare(): rt.Variant {
@@ -63,6 +65,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
@@ -171,6 +174,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static twice(x: rt.Variant): rt.Variant {
@@ -184,6 +188,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static selfcall(): rt.Variant {
@@ -197,6 +202,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static readconst(): rt.Variant {
@@ -210,6 +216,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static rec(n: rt.Variant): rt.Variant {
@@ -228,6 +235,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   usestatic(): rt.Variant {
@@ -241,6 +249,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

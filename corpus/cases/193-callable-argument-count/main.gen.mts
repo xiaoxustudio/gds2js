@@ -119,6 +119,7 @@ class Thing extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static sadd3(a: rt.Variant, b: rt.Variant, c: rt.Variant): rt.Variant {
@@ -132,6 +133,7 @@ class Thing extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

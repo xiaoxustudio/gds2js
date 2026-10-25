@@ -138,6 +138,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   tag(): rt.Variant {
@@ -151,6 +152,7 @@ class Base extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {
@@ -448,6 +450,7 @@ class SuperOther extends Base {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

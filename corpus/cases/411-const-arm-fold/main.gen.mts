@@ -24,7 +24,7 @@ export class Main extends SceneTree {
     this.__gd_fields__();
   }
 
-  hit(s: rt.Variant): void {
+  hit(s: rt.Variant): rt.Variant {
     const __gd_frame = rt.frameEnter("res://main.gd", "hit");
     try {
       rt.frameLine(4);
@@ -110,10 +110,11 @@ export class Main extends SceneTree {
       } while (false);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
-      return;
+      return rt.V.str("");
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }

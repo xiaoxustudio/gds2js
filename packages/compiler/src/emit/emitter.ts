@@ -1216,6 +1216,10 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     CURRENT_FUNC = savedFunc;
   }
   lines.push(...frameExitLines(catchRet));
+  // 装箱轨的回值函数要有个收尾 return：静态目标按流分析判「少了结尾 return」（SC0001）。
+  // 标了返回型那一半在解析期就被 `return-path` 拦掉了（引擎同句同行，S699），所以这句只对
+  // **没标返回型**的函数可达 —— 那正是实测的掉尾交 Nil（`m_untyped` 给 `<null>`）。
+  if (ret === "rt.Variant") lines.push(`${pad}return rt.V.nil();`);
   lines.push("}");
   lines.push("");
   return lines;
@@ -1566,6 +1570,9 @@ function hasValueReturn(stmts: Stmt[]): boolean {
     }
     if (s.kind === "for" || s.kind === "while") {
       if (hasValueReturn(s.body)) return true;
+    }
+    if (s.kind === "match") {
+      for (const arm of s.arms) if (hasValueReturn(arm.body)) return true;
     }
   }
   return false;

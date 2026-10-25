@@ -92,6 +92,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   retThrough(): rt.Variant {
@@ -109,6 +110,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

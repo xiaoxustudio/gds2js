@@ -60,6 +60,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   counted_float(n: rt.Variant): rt.Variant {
@@ -81,6 +82,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   nested(): rt.Variant {
@@ -104,6 +106,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   typed_loop_var(): rt.Variant {
@@ -124,6 +127,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   _collect(n: rt.Variant): rt.Variant {
@@ -144,6 +148,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
     override _initialize(): Promise<void> { return this.__gd__initialize(); }

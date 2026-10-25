@@ -38,6 +38,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   hello(): void {
@@ -149,6 +150,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   readself(): rt.Variant {
@@ -162,6 +164,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   bump(): rt.Variant {
@@ -178,6 +181,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   setn(v: rt.Variant): rt.Variant {
@@ -194,6 +198,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   me(): rt.Variant {
@@ -207,6 +212,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   sameother(o: rt.Variant): rt.Variant {
@@ -220,6 +226,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   ty(): rt.Variant {
@@ -233,6 +240,7 @@ class Box extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

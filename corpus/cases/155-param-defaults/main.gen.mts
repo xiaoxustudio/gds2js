@@ -120,6 +120,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   one(a: rt.Variant, b: rt.Variant = rt.toInt(rt.V.int(5))): rt.Variant {
@@ -135,6 +136,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   expr_default(a: rt.Variant = rt.V.int(rt.fast.iAddC(1, 2))): rt.Variant {
@@ -148,6 +150,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   arr_default(a: rt.Variant = rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))): rt.Variant {
@@ -163,6 +166,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   vec_default(v: rt.Variant = rt.vector2New([rt.V.int(1), rt.V.int(2)])): rt.Variant {
@@ -176,6 +180,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   null_default(a: rt.Variant = rt.V.nil()): rt.Variant {
@@ -189,6 +194,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   refs_earlier(a: rt.Variant, b: rt.Variant = a): rt.Variant {
@@ -203,6 +209,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   const_default(a: rt.Variant = Main.K): rt.Variant {
@@ -216,6 +223,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   method_default(a: rt.Variant = rt.V.int(2)): rt.Variant {
@@ -229,6 +237,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   helper(): rt.Variant {
@@ -242,6 +251,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   str_slot(a: rt.Variant = rt.strOf(rt.V.str("hi"))): rt.Variant {
@@ -256,6 +266,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   float_into_int_slot(a: rt.Variant = rt.toInt(rt.V.float(2.7))): rt.Variant {
@@ -270,6 +281,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   float_into_int_math(a: rt.Variant = rt.toInt(rt.V.float(2.7))): rt.Variant {
@@ -284,6 +296,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   call_it(): rt.Variant {
@@ -297,6 +310,7 @@ class A extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

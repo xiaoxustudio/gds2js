@@ -142,6 +142,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   // 宿主基类（`extends SceneTree`）那面的裸方法名当值用（S358 / S366 / S368）：根模块与 `extends` 链顶端挂着宿主的那一份认（S369），其余照旧
   const hostFace = m.extends === "SceneTree" || m.hostChain === true ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
+  checkReturnPaths(m.funcs, diags);
   checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
   checkStaticAccess(m.funcs, m.vars, diags);
@@ -4314,6 +4315,35 @@ function inheritedNames(c: ClassDecl, classes: Map<string, ClassDecl>): string[]
     next = parent.extends;
   }
   return out;
+}
+
+/** 引擎那句 `Not all code paths return a value.` 是**句法**判的，不是流分析：`while true:` 里回值照样算没回
+ *  （实测 `tmp/probe726/{m_if,m_while,m_for,p1,p2}.gd` 五形都拒在函数自己那一行，`m_ifelse` 两支都回才收，
+ *  `_:` 兜底臂算收）；没标返回型的函数掉尾交 Nil，引擎不拒（`m_untyped` 给 `E|<null>`）。 */
+function guaranteedReturn(stmts: Stmt[]): boolean {
+  const last = stmts[stmts.length - 1];
+  if (last === undefined) return false;
+  switch (last.kind) {
+    case "return":
+      return last.value !== null;
+    case "if": {
+      const tail = last.branches[last.branches.length - 1];
+      return tail !== undefined && tail.cond === null && last.branches.every((b) => guaranteedReturn(b.body));
+    }
+    case "match":
+      return last.arms.some((a) => a.pattern.kind === "wildcard" && guaranteedReturn(a.body));
+    default:
+      return false;
+  }
+}
+
+function checkReturnPaths(funcs: FuncDecl[], diags: Diagnostic[]): void {
+  for (const f of funcs) {
+    if (f.returnType === null) continue;
+    if (f.returnType.kind === "named" && f.returnType.name === "void") continue;
+    if (guaranteedReturn(f.body)) continue;
+    diags.push({ code: "return-path", message: "Not all code paths return a value.", loc: f.loc });
+  }
 }
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {

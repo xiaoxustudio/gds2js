@@ -113,6 +113,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   read_shadow(): rt.Variant {
@@ -126,6 +127,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static read_static_outer(): rt.Variant {
@@ -139,6 +141,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   static read_static_shadow(): rt.Variant {
@@ -152,6 +155,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   via_self_dot(): rt.Variant {
@@ -165,6 +169,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

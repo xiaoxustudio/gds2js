@@ -94,6 +94,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   tf(a: rt.Variant): rt.Variant {
@@ -108,6 +109,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   tb(a: rt.Variant): rt.Variant {
@@ -122,6 +124,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   ts(a: rt.Variant): rt.Variant {
@@ -136,6 +139,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   tsn(a: rt.Variant): rt.Variant {
@@ -150,6 +154,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   tv(a: rt.Variant): rt.Variant {
@@ -164,6 +169,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   freec(a: rt.Variant): rt.Variant {
@@ -177,6 +183,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   dflt(a: rt.Variant = rt.toInt(rt.V.int(3))): rt.Variant {
@@ -191,6 +198,7 @@ class Inner extends rt.GdScriptObject {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {

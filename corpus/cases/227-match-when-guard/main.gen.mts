@@ -41,6 +41,7 @@ export class Main extends SceneTree {
     } finally {
       rt.frameExit(__gd_frame);
     }
+      return rt.V.nil();
   }
   
   pick(v: rt.Variant, label: rt.Variant): void {
