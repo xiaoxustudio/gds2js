@@ -73,6 +73,12 @@ export function declaredArgCount(box: CallableBox): number | null {
   // （读数 `tmp/probe-argc/compare1.txt`；语料 381 的 Y7：hex_encode 0、compress 1、decompress 2）。
   if (box.builtinBounds !== null) return box.builtinBounds[1];
   const name = box.name;
+  // `H.new` 当值那支构造器 Callable 的元数：`tmp/probe727/` 廿四形实测，脚本类与带默认值的构造子都给 **0**
+  // （`bind(1)` 之后是 `-1`，即 `0 − 已绑`），实参检查发生在构造实例那一步而不是这里。
+  if (name === "new") {
+    const ctor = box.object === null ? null : ctorAritiesOf(box.object.v);
+    if (ctor !== null) return 0;
+  }
   if (name !== null) {
     // 全局 Callable 的 `get_argument_count()` 是实测读数，与 `.call()` 认的区间是两回事（`str` 声明 1 个、变元无上限）。
     if (box.object === null) return globalCallableRow(name)?.argc ?? null;
@@ -145,6 +151,8 @@ export class ClassDesc {
   /** 与 `scriptProps` 同序的取值闭包，由发射器静态拼；手写的测试替身可以没有。 */
   scriptValues: ((o: object) => Variant[]) | null;
   methodArities: Record<string, [number, number]> | null;
+  /** 构造子 `_init` 的 `[必填数, 全部数]`：`H.new` 当值那支 Callable 的元数走这一格，不在 `methodArities` 里（S673 只量了取值/打印/等式，元数与经值调用的判据由 `tmp/probe727/` 量）。 */
+  ctorArities: [number, number] | null;
   /** 每位形参的声明型名（没标注给 null）：被调方入口那句转换错的判据（S648）。 */
   methodParams: Record<string, (string | null)[]> | null;
   staticVars: Record<string, string> | null;
@@ -170,6 +178,7 @@ export class ClassDesc {
     this.scriptValues = null;
     this.scriptValues = null;
     this.methodArities = null;
+    this.ctorArities = null;
     this.methodParams = null;
     this.staticVars = null;
     this.dictResPath = null;
@@ -358,6 +367,18 @@ export function registerMethodArities(desc: ClassDesc, table: Record<string, [nu
 /** 形参型名表：发射器按 `func f(a: int, s)` 登记 `[["int", null]]`，运行期入口按它发那句转换错（S648）。 */
 export function registerMethodParams(desc: ClassDesc, table: Record<string, (string | null)[]>): void {
   desc.methodParams = table;
+}
+
+/** 构造子元数：发射器只给声明了 `_init` 且带形参的类登记，子类不登记时沿基类链拿父类那一行。 */
+export function registerCtorArities(desc: ClassDesc, row: [number, number]): void {
+  desc.ctorArities = row;
+}
+
+export function ctorAritiesOf(target: unknown): [number, number] | null {
+  for (let d = descOf(target); d !== null; d = d.base) {
+    if (d.ctorArities !== null) return d.ctorArities;
+  }
+  return null;
 }
 
 /** 沿显式 `base` 链并表，派生类盖过基类（与 `fieldTypesOf` 同一口径）。 */

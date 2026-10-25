@@ -266,6 +266,11 @@ const rows: Row[] = [];
 const islandGone = (text: string): boolean =>
   /Unknown option '--dynamic'|SC2013|binding form with no lowering|method calls like/.test(text);
 
+/** scriptc 0.4.4 不认**静态访问器**（`static get` / `static set`，读的那一句被截成 `… have no l`）：
+ *  `static var` 配读写器的那一页在静态目标上编不过，node 侧照旧逐字节过。这一族的出货路是 `--pack node`，
+ *  页数按 `test/repo/static-accessor-pages.test.ts` 对账 —— 多了页就是门红，不会把这族悄悄摊大。 */
+const staticAccessorGone = (text: string): boolean => /static accessors and initializer-less/.test(text);
+
 async function gateOne(id: string): Promise<Row> {
   const row: Row = { id, built: false, ran: false, exact: false, note: "", booked: null };
   let exe: string | null = null;
@@ -282,6 +287,10 @@ async function gateOne(id: string): Promise<Row> {
     if (!row.built) row.note = scNote(build.out, `build 退出 ${String(build.code)}`);
     if (!row.built && zstd && islandGone(build.out)) {
       row.booked = "静态目标没有岛档：这页用 mode 2（vendored 那份 asm zstd 绑定），出货走 --pack node";
+      return row;
+    }
+    if (!row.built && staticAccessorGone(build.out)) {
+      row.booked = "静态目标没有静态访问器：这页有 static var 配读写器，出货走 --pack node";
       return row;
     }
   }

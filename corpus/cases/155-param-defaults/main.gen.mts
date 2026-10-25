@@ -389,6 +389,7 @@ rt.nameClass(__gd_d_Needs, "Needs");
 rt.registerFieldTypes(__gd_d_Needs, {"a": "int"});
 rt.registerScriptProps(__gd_d_Needs, ["a"], (o) => { const s = o as Needs; return [s.a]; });
 rt.registerDictIdentity(__gd_d_Needs, "res://main.gd", "Needs", ["a"], {}, (o) => { const s = o as Needs; return [s.a]; });
+rt.registerCtorArities(__gd_d_Needs, [0, 1]);
 rt.registerNativeBase(__gd_d_Needs, "RefCounted");
 
 const __gd_entry = new Main();

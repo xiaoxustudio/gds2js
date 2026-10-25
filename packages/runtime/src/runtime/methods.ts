@@ -16,7 +16,7 @@ import { GLOBAL_CALLABLES, globalCallableLabel } from "./global-names";
 import { variantConvert } from "./convert";
 import { typeOf, gIsInstanceOf } from "./patterns";
 import { strToInt, strToFloat } from "./numstr";
-import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, methodParamsOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, scriptLabelOf, ClassDesc, type Fn } from "./object";
+import { registerBoundSnapshotHook, CallableBox, boundArgsOf, callableArityBounds, callableLabel, classNameOf, declaredArgCount, descOf, dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, fieldTypesOf, methodParamsOf, getMeta, hasMeta, isCallableBox, isNullCallable, isVariant, methodAritiesOf, nativeBaseOf, nullCallable, requiredArgCount, removeMeta, setMeta, staticCall, hasStaticName, staticNamesOf, varSlotOf, staticVarsOf, wrapValue, GdScriptObject, methodCallable, loadScript, scriptLabelOf, ClassDesc, ctorAritiesOf, type Fn } from "./object";
 import { boundBuiltinCallable, callDeferred } from "./callable";
 import { faceArity, faceMemberKnown, nativeAritySay, valueAttrKind } from "./face-arity";
 
@@ -773,6 +773,17 @@ function callCallableBox(box: CallableBox, args: Variant[]): Variant {
 function callableCall(box: CallableBox, args: Variant[]): Variant {
   if (isNullCallable(box)) {
     throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
+  }
+  // 构造器 Callable 少给实参（`tmp/probe727/unbound-call.gd` 实测）：引擎在构造实例那一步拒，句里报的是 `_init` 的**必填数**。
+  // 多给那一形没量过，所以只开下界这一侧，上界照旧不管。
+  if (box.name === "new" && box.object !== null) {
+    const ctor = ctorAritiesOf(box.object.v);
+    if (ctor !== null && keptCallArgs(box, args).length + boundArgsOf(box).length < ctor[0]) {
+      throw new GodotRuntimeError(
+        "callable-arity",
+        `Invalid call to function '${callableCallLabel(box)} (Callable)'. Expected ${ctor[0]} argument(s).`,
+      );
+    }
   }
   const bounds = callableArityBounds(box);
   if (bounds !== null) {

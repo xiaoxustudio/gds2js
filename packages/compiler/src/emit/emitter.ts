@@ -547,6 +547,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (moduleStaticVars !== null && moduleStaticSlots !== null) out.push(`rt.registerStaticVars(__gd_d_${className}, ${moduleStaticVars}, ${moduleStaticSlots});`);
   const moduleArities = methodAritiesLiteral(m.funcs);
   if (moduleArities !== null) out.push(`rt.registerMethodArities(__gd_d_${className}, ${moduleArities});`);
+  const moduleCtor = ctorAritiesLiteral(m.funcs);
+  if (moduleCtor !== null) out.push(`rt.registerCtorArities(__gd_d_${className}, ${moduleCtor});`);
   const moduleParams = methodParamsLiteral(m.funcs);
   if (moduleParams !== null) out.push(`rt.registerMethodParams(__gd_d_${className}, ${moduleParams});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
@@ -886,6 +888,8 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declStaticVars !== null && declStaticSlots !== null) lines.push(`rt.registerStaticVars(__gd_d_${decl.name}, ${declStaticVars}, ${declStaticSlots});`);
   const declArities = methodAritiesLiteral(decl.funcs);
   if (declArities !== null) lines.push(`rt.registerMethodArities(__gd_d_${decl.name}, ${declArities});`);
+  const declCtor = ctorAritiesLiteral(decl.funcs);
+  if (declCtor !== null) lines.push(`rt.registerCtorArities(__gd_d_${decl.name}, ${declCtor});`);
   const declParams = methodParamsLiteral(decl.funcs);
   if (declParams !== null) lines.push(`rt.registerMethodParams(__gd_d_${decl.name}, ${declParams});`);
   const declStatics = staticNamesLiteral(decl.funcs);
@@ -3466,6 +3470,21 @@ function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
     rows.push(`${JSON.stringify(f.name)}: [${required}, ${f.params.length}]`);
   }
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
+}
+
+/** 构造子元数：`_init` 刻意不在 `methodArities` 里，`H.new` 当值那支 Callable 的 `get_argument_count()` 要这一行。
+ *  没声明 `_init`、或 `_init` 不带形参的类一概不发 —— 产物树一字不动。 */
+function ctorAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
+  const ctor = funcs.find((f) => f.name === "_init");
+  if (ctor === undefined || ctor.params.length === 0) return null;
+  let required = ctor.params.length;
+  for (let i = 0; i < ctor.params.length; i++) {
+    if (ctor.params[i]?.default !== null && ctor.params[i]?.default !== undefined) {
+      required = i;
+      break;
+    }
+  }
+  return `[${required}, ${ctor.params.length}]`;
 }
 
 /** 形参型名表（S648）：被调方入口那句 `Invalid type in function ... Cannot convert argument N from X to Y.`
