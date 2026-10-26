@@ -1,7 +1,7 @@
 {
   "name": "gds2js-monorepo",
   "type": "module",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "packageManager": "pnpm@12.13.0",
   "description": "将 gdscript 转义为 js 运行",

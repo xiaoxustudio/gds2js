@@ -1,6 +1,6 @@
 {
   "name": "@gds2js/compiler",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "gds2js 编译器（parse / lower / emit / compile + home）；源码以 .ts 出货。",
