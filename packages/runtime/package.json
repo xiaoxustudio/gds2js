@@ -1,6 +1,6 @@
 {
   "name": "@gds2js/runtime",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "gds2js 运行时（含 host 系与 zstd 出货面）；源码以 .ts 出货，供产物树与 workspace 内消费。",
