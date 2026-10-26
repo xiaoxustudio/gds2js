@@ -49,7 +49,7 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GD
 
 ## 纪律（红线）
 
-1. 语义只认 Godot 4.6.3 实测（`docs/SEMANTICS.md` 的 S 编号 + corpus golden）；**没测过的不许写进实现**——一律抛 `UnsupportedError`，绝不静默降级、不猜。
+1. 语义只认 Godot 4.6.3 实测（**corpus golden 逐字节** + `tools/golden.mjs` 对账；历史 S 编号台账已归档到 git 历史的 `docs/SEMANTICS.md`）；**没测过的不许写进实现**——一律抛 `UnsupportedError`，绝不静默降级、不猜。
 2. **禁止自行添加语言特性、长短注释及说明注释等，除非我特意说明，否则直接禁止添加。**
 3. 测试文件只放 `packages/<pkg>/test/` 或根 `test/`，**绝不放进 `packages/*/src/`**（会被 `copyTreeTs` 扫进出货产物树）。
 4. 版本戳：`packages/gds2js/src/version.ts` 与四处 `package.json` 必须一字一致（`pnpm release` 校验）。
@@ -57,7 +57,7 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GD
 
 ## 文档索引
 
-- `docs/ROADMAP.md` — 已拍板决策（D1–D6 等）/ 阶段计划 / 当前任务
-- `docs/SEMANTICS.md` — Godot 4.6.3 实测语义基线（S 编号，裁判版本 4.6.3.stable.official.7d41c59c4）
-- `docs/RUNTIME_API.md` — runtime ↔ emitter 契约（v1，签名冻结）
+- `docs/ROADMAP.md` — 已拍板决策（D1–D7、A–I）/ 阶段判据 / Tier 1 收口状态与剩余大任务
+- `docs/RUNTIME_API.md` — runtime ↔ emitter 契约（v1，签名冻结；覆盖面口径见 §0）
 - `README.md` — CLI 用法、运行时打包模式、测试分层详解
+- 历史逐笔台账与 S 编号语义基线（原 `docs/SEMANTICS.md` / ROADMAP §1.3 起流水）已归档，需要时 `git log -- docs/` 取回

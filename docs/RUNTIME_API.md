@@ -3,7 +3,7 @@
 > 本文件是 **runtime 与 emitter 之间唯一的契约**。
 > **签名冻结**：改这里等于 emitter 全量重写。要改就升版本并在顶部记变更。
 >
-> 每条语义都标注 `docs/SEMANTICS.md` 里的依据编号（均为 Godot 4.6.3 实测）。
+> 每条语义都带一个 Godot 4.6.3 实测的依据编号（`S###`）；编号台账原文在 `docs/SEMANTICS.md`，2026-10-26 已归档到 git 历史（`git show fa46a87:docs/SEMANTICS.md`），判定以 `corpus/` 的 golden 逐字节为准。
 > 没依据的行为一律不准写进实现 —— 抛 `UnsupportedError`。
 
 ---
@@ -67,7 +67,7 @@ export class GodotRuntimeError extends Error {
 - `UnsupportedError` —— 我们不支持。缺功能，用户看得见。
 - `GodotRuntimeError` —— Godot 也会在运行时炸的情况（如整数除零，S27）。
 
-产物顶层的收口（发射器的 autoRun 尾巴调，口径见 SEMANTICS S200）：
+产物顶层的收口（发射器的 autoRun 尾巴调，口径见归档台账 S200）：
 
 ```ts
 export function errOf(e: unknown): string                 // `[code] message` / `message`
@@ -211,7 +211,7 @@ export class GString {
 }
 ```
 
-字符串上另外三条纯函数（`packages/runtime/src/runtime/values.ts`，口径全部实测于 4.6.3，见 SEMANTICS S199）：
+字符串上另外三条纯函数（`packages/runtime/src/runtime/values.ts`，口径全部实测于 4.6.3，见归档台账 S199）：
 
 ```ts
 // 左起、不重叠；what 为空串整串原样返回。insensitive 对应 Godot 的 replacen。
@@ -247,7 +247,7 @@ export class GObject {
 
 - 类注册表由 emitter 生成的模块级代码填充
 - `is` 走继承链（`021`）
-- 属性 setter/getter 按测清语义（SEMANTICS S152 / S156）：读只走 get、写只走 set、只有 getter 时写是静默无操作
+- 属性 setter/getter 按测清语义（归档台账 S152 / S156）：读只走 get、写只走 set、只有 getter 时写是静默无操作
 
 ---
 
@@ -284,7 +284,7 @@ emitter 规则：
 
 ---
 
-## 9. 未决项（实现前必须先补测，见 SEMANTICS §6）
+## 9. 未决项（实现前必须先补测；历史 §6 台账见 git 归档）
 
 1. setter/getter 触发时机
 2. `super()` 与构造顺序
