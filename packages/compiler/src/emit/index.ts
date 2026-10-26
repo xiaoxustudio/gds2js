@@ -273,3 +273,5 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   ctx.UNTYPED_NAMES = new Set();
   return { code, map };
 }
+
+export { FAST_NAMES, OPS_NAMES, RT_NAMES, V_NAMES } from "./surface";

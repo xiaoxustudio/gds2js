@@ -7,12 +7,15 @@ import { ROOT } from "../../tools/lib.mjs";
 const compilerSrc = join(ROOT, "packages", "compiler", "src");
 const ir = readFileSync(join(compilerSrc, "lower", "ir.ts"), "utf8");
 
-const filesIn = (dir: string): string[] => readdirSync(join(compilerSrc, dir)).filter((n) => n.endsWith(".ts")).map((n) => [n, readFileSync(join(compilerSrc, dir, n), "utf8")] as [string, string]);
+const filesIn = (dir: string): Array<{ name: string; text: string }> =>
+  readdirSync(join(compilerSrc, dir))
+    .filter((n) => n.endsWith(".ts"))
+    .map((n) => ({ name: n, text: readFileSync(join(compilerSrc, dir, n), "utf8") }));
 
 describe("阶段边界门（parse → lower → analyze → emit 只经显式契约）", () => {
   it("① emit 的每个模块只依赖 analyze 的契约", () => {
     let hits = 0;
-    for (const [name, text] of filesIn("emit")) {
+    for (const { name, text } of filesIn("emit")) {
       text.split("\n").forEach((line, i) => {
         if (/^import .*from "\.\.\/analyze\/(?!analysis-result)/.test(line) || /^import .*from "\.\.\/lower\/analyze/.test(line)) {
           bad(`emit/${name}:${String(i + 1)} 又从 analyze 的实现里取内部函数`);
@@ -33,7 +36,7 @@ describe("阶段边界门（parse → lower → analyze → emit 只经显式契
 
   it("③ analyze 不再把状态借模块级可变全局交给 emit", () => {
     let hits = 0;
-    for (const [name, text] of filesIn("analyze")) {
+    for (const { name, text } of filesIn("analyze")) {
       text.split("\n").forEach((line, i) => {
         if (/^let markOwner\b|export function useMarkOwner/.test(line)) {
           bad(`analyze/${name}:${String(i + 1)} 跨阶段全局又回来了`);
@@ -47,9 +50,9 @@ describe("阶段边界门（parse → lower → analyze → emit 只经显式契
   it("④ 每阶段一目录，且没有单文件吞掉整个阶段", () => {
     const oversize: string[] = [];
     for (const dir of ["analyze", "emit", "lower"]) {
-      const list = filesIn(dir);
+      const list: Array<{ name: string; text: string }> = filesIn(dir);
       if (dir === "lower" && list.length <= 4) continue;
-      for (const [name, text] of list) {
+      for (const { name, text } of list) {
         const n = text.split("\n").length;
         if (n > 1500) oversize.push(`${dir}/${name} 有 ${String(n)} 行`);
       }

@@ -23,6 +23,8 @@
 
 | **D7** | 延后队列的对象生命周期 | **不进 Tier 1**（2026-10-24 拍板，用户选的口径）。引擎把 `Callable.call_deferred` 排在**局部作用域的 RefCounted 实例**上那一支，在泵之前就随引用计数归零丢掉（读数 `tmp/probe714/lifetime.mts` 四格：挂脚本字段的照跑、只活在局部的永不跑）；复刻它要给脚本类实例做**确定性引用计数**，牵连释放后的打印、`is_instance_valid`、容器键、Callable 的等式与 hash 五处 —— 与 D6 同性质，是范围决定不是对账活。Tier 1 期间这一族**照跑不拦**，差异记在第二百四十笔；Tier 2 接宿主时一并处理。 |
 
+| **D8** | 架构整改（2026-10-26） | **分阶段渐进，不动出货模型**。三包 `noEmit` + `exports` 指 `.ts` 的「源码即出货」保持原样（seam 覆盖、`copyTreeTs`、scriptc 铺树、HOME 内嵌全建在这条不变量上），**不新增第五个包**（`cli-native.mjs` 的复制清单与相对化正则硬编码 runtime/compiler/gds2js，新包会静默炸原生轨）。落地八项：仓库不变量进门（`test/repo`：src 无测试、五处版本戳、seam 数、文档读数、IR 缓存戳）；`exports` 通配收成实测白名单；`tree-face` 归位 compiler；Godot 实测表从 `analyze.ts` 抽到 `src/semantics/`；`analyze()` 的 7 张进程级黑板 + 5 个模块级 `let` 封成只读 `AnalysisResult`，拔掉 `useMarkOwner` 与 IR 的 `markOwner`/`hostChain` 侧信道；`analyze.ts` 6011 行按判断维度拆 `src/analyze/`；emitter 的 41 个顶层 `let` 收进 per-module `EmitContext` 并拆 `emit/` 11 模块；发射面 204+22+22+8 个 `rt.*` 名字用 `satisfies readonly RtName[]` 钉在 runtime 真实导出面上（拼错即 typecheck 红），双向门 `emit-contract` 同时管源侧与产物侧。**measured 后否掉的一条**：runtime barrel 拆「公共面 / 内部面」—— 22 个模块只有 `vector4i`/`node-path`/`global-names` 三个对产物零贡献（收益 <6%），而 `product.ts`/`standalone.ts` 整体再导出该 barrel、产物又在**类型位置**经它取 `rt.Variant` 一类名字，按符号显式收窄会削掉类型面；判为高扰动低收益，维持整 barrel。 |
+
 ### 2026-10-03 拍板（CLI 出货形态）
 
 | 编号 | 决策 | 结论 |
@@ -101,7 +103,7 @@
 2. **长门在跑时别动 `corpus/cases/*`、别改源码** —— 门读的是盘面产物，改了就是拿两份不同的东西比对（假红）；停门要停干净，残留的 godot / node / scriptc 子进程能让三支门同时红。
 3. **改 runtime 的发射形状或函数形状** —— 先 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc`（57 秒面探针），`pnpm release` 的第 2b 步就是它。
 4. **新增 runtime 的导出名** —— 先 `pnpm build`：工程形状用例的产物 import 的是 `packages/gds2js/dist/runtime.mjs` 那份打包副本，不重建会报 `xxx is not a function`。
-5. **改产物树 / 内嵌 HOME 布局** —— 先跑 `pnpm test:treeface`；四个消费者共用 `packages/runtime/src/tree-face.ts` 那一张清单。
+5. **改产物树 / 内嵌 HOME 布局** —— 先跑 `pnpm test:treeface`；三个消费者共用 `packages/compiler/src/tree-face.ts` 那一张清单。
 6. **语义改动的验收** —— `corpus-diff` 逐字节 + `test:golden-check` 零漂移 + 三桶（静默错 / 崩溃 / 未实现）全 0；性能改动没有 `bench:ab` 配对读数就不动热路。
 7. **出货** —— `pnpm release` 前先确认全量 scriptc 门零红（`GDS2JS_SCRIPTC_ALL=1 pnpm test:scriptc`，本机 85 分钟～4.5 小时，四并发）；版本戳六处一字一致由 release 自己校验，漂了就红。
 ## 3. 明确的非目标
