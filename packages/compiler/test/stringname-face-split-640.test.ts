@@ -1,7 +1,7 @@
 /** 解析期的 StringName 分岔（S640）：六名表外、三名零元，两句找不到成员与元数两句都按静态接收者发；推断接收者放过。
  *  读数 `tmp/probe639/sn639.compare.txt`（十二形，一脚本一形）。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

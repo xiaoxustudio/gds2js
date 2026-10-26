@@ -14,7 +14,7 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 | 位置 | 内容 |
 | --- | --- |
 | `packages/runtime` | 运行时内核：值表示 / `ops.*` 动态路径 / `fast.*` 快路径、容器、UTF-32 String、Vector/Color、hash；host 宿主入口 |
-| `packages/compiler` | parse（tree-sitter WASM→CST）→ lower(IR) → analyze → emit；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
+| `packages/compiler` | parse（tree-sitter WASM→CST）→ lower(IR) → analyze → emit；`analyze/` 按判断维度分模块、入口是 `analyze/index.ts`；`semantics/` 装 Godot 实测静态表；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |

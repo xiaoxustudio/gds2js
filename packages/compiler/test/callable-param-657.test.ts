@@ -2,7 +2,7 @@
  *  排序照引擎：元数那句在前，`Cannot pass a value of type` 与 `Invalid argument for` 两句在后。
  *  只认字面量实参：命名实参（`var w: int` 之后 `c.unbind(w)`）引擎发哪一句没量过，不收。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

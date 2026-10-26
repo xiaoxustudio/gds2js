@@ -3,7 +3,7 @@
  * 每一位都是往那一个位上塞 String 字面量、其余位给 1 量出来的）；合法那一侧钉的是引擎收过的形（int / float / bool 与 Variant 那几支）。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

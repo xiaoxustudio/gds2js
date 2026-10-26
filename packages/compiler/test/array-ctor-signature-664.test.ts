@@ -2,7 +2,7 @@
 // 拒的那一形引擎在解析期发 `No constructor of "Array" matches the signature "Array(<型名表>)".`，
 // 我们此前把十三格拖到运行期自发话。型名渲染：TYPE_* → `Variant.Type`、`Packed*Array(…)` → 本名、`null` → `null`。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

@@ -2,7 +2,7 @@
  *  同一把尺也钉住反面：不标注的推断形、标注那面本身、字面量直接当接收者 —— 引擎三形都在解析期发句，我们照发。
  *  病灶是「由初值证面」那三处原先不看显式标注，于是 `var s: Variant = "ab"` 被当 String 面拦在解析期。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

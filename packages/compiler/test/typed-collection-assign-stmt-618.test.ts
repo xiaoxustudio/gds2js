@@ -4,7 +4,7 @@
  * 逐格抄自 `tmp/probe618/`（e1..e3、d1..d3、e10..e13）的引擎读数。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

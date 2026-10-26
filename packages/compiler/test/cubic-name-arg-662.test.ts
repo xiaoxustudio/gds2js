@@ -2,7 +2,7 @@
 // 引擎在这一族按槽位升序只推第一处：`var s: String` 放首位就报 argument 1（后面三支同为 String 也不再推），
 // 而此前这一位 literalTypeName 交不出型就整条跳过 —— 于是报成下一支字面量的 argument 2，或在另外三支一句不发拖到运行期。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

@@ -1,6 +1,6 @@
 /** match 图案里的值模式标识符：引擎按**每次出现**报一句，且排在 guard 之前（S610，读数 `tmp/probe569/s618.gd` 七形）。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

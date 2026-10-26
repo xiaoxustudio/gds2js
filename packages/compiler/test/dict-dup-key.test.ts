@@ -4,7 +4,7 @@
  * 引擎拒的这里必须拒：句子自带 `(at line 首次那一格)`，而报错位置是**重复那一格**（S608 重新量过 `tmp/d6/s615.gd`：跨行字典那句写 `(at line 6)`、`at:` 在 7）；引擎收的这里必须收（误拦合法工程比漏一格贵）。
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

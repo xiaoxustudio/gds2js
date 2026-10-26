@@ -1,7 +1,7 @@
 // 声明了返回型的函数必须每条路径都回值（S699，尺 `tmp/probe725/{p1,p2}.gd` + `tmp/probe726/{m_if,m_while,m_ifelse,m_for,m_untyped}.gd`）：
 // 引擎判得是**句法**的 —— `while true:` 里回值照样算没回；没标返回型的函数掉尾交 Nil，引擎不拒。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

@@ -1,7 +1,7 @@
 /** pack 名册补齐在解析期那两族句子（S636）：新入表的 38 名按量过的上下界发元数两句，byte 之外九支对 byte 独有名发既有两句表外名。
  *  读数 `tmp/probe636/arity636.compare.txt`（0 / 5 实参各一句）与 `a.gd` / `b.gd`（静态接收者两形）。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

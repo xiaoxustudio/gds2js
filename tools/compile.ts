@@ -1,7 +1,7 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { NO_ANALYSIS, type AnalysisResult } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import type { Module } from "@gds2js/compiler/lower/ir";

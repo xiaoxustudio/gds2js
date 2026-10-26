@@ -2,7 +2,7 @@
 // `var x: int = 5` 之后 `Array(x)` 引擎按静态型渲染成 `Array(int)` 并在解析期拒；
 // 没登进签名表的型（`var w = [1, 2]` 这种推断形）照旧开口不了，留给运行期那一站。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

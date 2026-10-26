@@ -7,7 +7,7 @@
  * `@行号` 是测试自己加的（引擎把行号放在 `at: GDScript::reload (…:N)` 那一帧，句子文本里没有）。
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

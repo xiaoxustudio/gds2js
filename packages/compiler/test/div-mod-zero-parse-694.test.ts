@@ -2,7 +2,7 @@
 // 两侧都是字面量时引擎在解析期就开口，正文**不带引号**（`operator/.` 与 `operator%.`），与运行期那两句（带引号，见 `div-mod-zero-say-694`）不同文；
 // `%` 这一支我们此前**完全没有**解析期规则（只在运行期发自述），`1.0 % 0.0` 则另发 `op-mod-float` 那一条，所以 `%` 只认 int 左操作数。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

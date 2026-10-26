@@ -3,7 +3,7 @@
  * 这里钉句子模板与「只收自己那一型」的那批槽 —— 容器来源只发第二句，`^"…"` 在这一格是证得出的源。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

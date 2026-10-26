@@ -4,7 +4,7 @@ import { cachedLower } from "./ir-cache";
 import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
 import type { RawSourceMap } from "../emit/sourcemap";
 import type { Diagnostic } from "../analyze/analysis-result";
-import { analyze } from "../lower/analyze";
+import { analyze } from "../analyze/index";
 import type { ClassDecl, Expr, Module, Stmt, TypeRef } from "../lower/ir";
 import { lower } from "../lower/lower";
 import { parseSource } from "../parse/parser";

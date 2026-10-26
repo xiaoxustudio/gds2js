@@ -4,7 +4,7 @@
  * 读数 `compare92.txt`，出货端到端 16 格对照 `tmp/probe-awaitcall/ours.mts` 不合 0）。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

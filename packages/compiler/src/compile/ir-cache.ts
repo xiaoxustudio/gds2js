@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Module } from "../lower/ir";
 
-const STAMP_SOURCES = ["../lower/lower.ts", "../lower/ir.ts", "../lower/analyze.ts", "../lower/globals.ts", "../parse/parser.ts", "../parse/cst.ts", "../parse/wasm-cst.ts"];
+const STAMP_SOURCES = ["../lower/lower.ts", "../lower/ir.ts", "../analyze/index.ts", "../lower/globals.ts", "../parse/parser.ts", "../parse/cst.ts", "../parse/wasm-cst.ts"];
 
 function compilerStamp(): string {
   const h = createHash("sha256");

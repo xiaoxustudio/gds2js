@@ -5,7 +5,7 @@
  * pack 那一面「标注变量发、推断变量不发」是 `tmp/probe-slice/r7c.gd` 一行一行对出来的。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

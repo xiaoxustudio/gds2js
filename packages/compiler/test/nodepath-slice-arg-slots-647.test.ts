@@ -2,7 +2,7 @@
  *  `nm_named{str,vec,arr,null,int}annot.gd` 与 `q_{p2str,p2vec,p2null,p2arr,l1arr}.gd`：字面量给两句（Array 只给第二句）、
  *  **标注**名只给第二句、推断名与 `Variant` 名一句不发（交回运行期那句），float / bool 两位都收。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

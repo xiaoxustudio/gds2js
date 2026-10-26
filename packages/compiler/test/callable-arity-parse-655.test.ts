@@ -2,7 +2,7 @@
  *  与 Signal 那一族正相反：**这一面两向都开口**（`bindv()` 给 `Too few`、`bindv([1], 2)` 给 `Too many`），三形读数一字一样。
  *  病灶：此前三种接收者我们一句都不发，`c.bindv()` 这类要到运行期才撞上 —— 引擎是解析期拦死、整脚本不跑。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

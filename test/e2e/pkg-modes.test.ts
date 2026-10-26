@@ -10,7 +10,7 @@ import { build } from "tsdown";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import { emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
 import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { hasStandalone, missing } from "../support/env";

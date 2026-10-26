@@ -4,7 +4,7 @@
  * 引擎只在**左支是字符串字面量、右支来源证得出**时把关，实参是 Array / Dictionary / Packed* 构造整族放过。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

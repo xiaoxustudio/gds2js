@@ -1,6 +1,6 @@
 /** `max` / `min` 六支的 Vector4 / Vector4i 字面量位：解析期句逐字钉（S598），读数 `tmp/d6/s600.gd` 与 `tmp/probe569/lit*.gd`。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

@@ -1,6 +1,6 @@
 /** `join()` 的接收者那一面（S609）：句子由通用的 `face-member-*` 判据发，Dictionary 只有一句。读数 `tmp/probe569/s616.gd`。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

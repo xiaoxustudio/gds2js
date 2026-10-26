@@ -4,7 +4,7 @@
  * 句子逐字钉、按位升序排；收的那一侧（`"abc".repeat(1.5)`、`[1, 2].count([])` 这类）是「不许误拦」。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

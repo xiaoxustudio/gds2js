@@ -14,7 +14,7 @@
     "./emit/emitter": "./src/emit/emitter.ts",
     "./emit/sourcemap": "./src/emit/sourcemap.ts",
     "./home": "./src/home.ts",
-    "./lower/analyze": "./src/lower/analyze.ts",
+    "./analyze": "./src/analyze/index.ts",
     "./lower/globals": "./src/lower/globals.ts",
     "./lower/ir": "./src/lower/ir.ts",
     "./lower/lower": "./src/lower/lower.ts",

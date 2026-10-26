@@ -4,7 +4,7 @@
 // 括号与不带括号同形；此前那道判据只走 `ident`（标注 / 推断出来的名字）与 `call`（构造式）两支，字面量接收者一句不发。
 // 反面对照也在这把尺上：`print(([1, 2]).size())` 与 `print((" ab ").lstrip(" "))` 两侧都无句（不是 void，也不越元数）。
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

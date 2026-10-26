@@ -6,7 +6,7 @@
  *  仍开着的一格：`([1, 2]).set(0)` 这种**括号字面量**当 Array 接收者时元数那句照发、void 那句不发（同尺 `v_arr_lit_*` 三格），
  *  量过的 `append` / `sort` 同形同缺 —— 那是接收者形状那一族的账（`shapeOf` 不认括号字面量），不在这一笔里猜。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

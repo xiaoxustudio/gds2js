@@ -3,7 +3,7 @@
  * 面文本都不许剥成基名。逐字抄自 `tmp/probe624/` 的引擎读数。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

@@ -1,6 +1,6 @@
 /** `cubic_interpolate` 四支与 `bezier_interpolate` / `bezier_derivative` 的解析期实参位（S600），读数 `tmp/probe569/{cubic,bezier}_{p2str,b1,a1,laststr}.gd`。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

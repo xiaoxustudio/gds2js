@@ -3,7 +3,7 @@
  * 句子与形状来自一格一脚本的读数 `tmp/probe-static-face/readings.txt`（六型 44 形），名单见 §6 第 46 条。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

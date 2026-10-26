@@ -4,7 +4,7 @@
  *  `Invalid operands "NodePath" and "String" for "+" operator.`（`var p: NodePath` 那一格）。
  *  此前四格 NodePath 形我们一句不发、拖到运行期才用第三种文案拒 —— 时机与句式两头都差。 */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

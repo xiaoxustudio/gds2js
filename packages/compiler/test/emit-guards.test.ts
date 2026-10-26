@@ -11,7 +11,7 @@
  */
 import { afterAll, describe, expect, it } from "vitest";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_TODO_FUNCTIONS } from "@gds2js/compiler/lower/globals";
 import { lower } from "@gds2js/compiler/lower/lower";

@@ -3,7 +3,7 @@
  * 句子与两侧形状来自一格一脚本的读数 `tmp/probe-char/readings.txt`（float / bool 字面量引擎是放过的，`char(1.5)` 实测给 U+0001）。
  */
 import { describe, expect, it } from "vitest";
-import { analyze } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
