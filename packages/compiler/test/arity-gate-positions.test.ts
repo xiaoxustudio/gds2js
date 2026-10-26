@@ -13,7 +13,7 @@ const WANT = 'Too many arguments for "abs()" call. Expected at most 1 but receiv
 const ARITY = /^Too (few|many) arguments for |^Invalid call to (GDScript )?utility function /;
 
 async function first(src: string): Promise<string> {
-  const hit = analyze(lower(await parseSource(src))).find((d) => ARITY.test(d.message));
+  const hit = analyze(lower(await parseSource(src))).diagnostics.find((d) => ARITY.test(d.message));
   return hit?.message ?? "没拦";
 }
 

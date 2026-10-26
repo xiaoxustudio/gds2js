@@ -30,7 +30,7 @@ const CASES: Array<[string, string, string[]]> = [
 
 describe("analyze · NodePath.slice 的两位形参拒", () => {
   it.each(CASES)("%s", async (_name, source, expected) => {
-    const got = analyze(lower(await parseSource(source))).map((d) => d.message);
+    const got = analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
     expect(got, `源：\n${source}`).toEqual(expected);
   });
 });

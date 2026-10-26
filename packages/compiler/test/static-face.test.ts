@@ -9,7 +9,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (src: string): Promise<string[]> => {
   const body = src.startsWith("var ") ? src : `print("X||", ${src})`;
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n\t${body}\n\tquit()\n`))).diagnostics.map((d) => d.message);
 };
 
 const CALLS: Array<[string, string]> = [

@@ -18,7 +18,7 @@ const TAIL_ = "\n\tquit()\n";
 
 const refuse = async (src: string): Promise<string | null> => {
   try {
-    analyze(lower(await parseSource(src)));
+    analyze(lower(await parseSource(src))).diagnostics;
     return null;
   } catch (e) {
     return e instanceof UnsupportedError ? e.message : `非拒答：${e instanceof Error ? e.message : String(e)}`;

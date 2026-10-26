@@ -140,7 +140,5 @@ export interface Module {
   enums: EnumDecl[];
   funcs: FuncDecl[];
   innerClasses: ClassDecl[];
-  usesPackCodec?: boolean;
-  markOwner?: string;
-  hostChain?: boolean;
+  usesPackCodec: boolean;
 }

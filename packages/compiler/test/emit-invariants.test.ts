@@ -17,6 +17,7 @@
 import { readFileSync } from "node:fs";
 import { afterAll, describe, expect, it } from "vitest";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
@@ -45,7 +46,7 @@ describe("发射器输出的互锁不变量", () => {
     }
     let gen: string;
     try {
-      gen = emitModule(ir, EMIT_OPTS_PROBE);
+      gen = emitModule(ir, EMIT_OPTS_PROBE, NO_ANALYSIS);
     } catch (e) {
       if (e instanceof UnsupportedError) return; // emitter 缺口那 69 例走占位文件，同样没有产物
       throw e;

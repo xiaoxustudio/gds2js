@@ -14,7 +14,7 @@ const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar s: String
 
 async function firstLine(expr: string): Promise<string | null> {
   const src = HEAD + "func c():\n\tprint(" + expr + ")\n";
-  const diags = analyze(lower(await parseSource(src)));
+  const diags = analyze(lower(await parseSource(src))).diagnostics;
   const d = diags.find((x) => x.code === "op-pair");
   return d === undefined ? null : d.message;
 }

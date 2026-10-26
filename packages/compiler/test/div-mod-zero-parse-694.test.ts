@@ -8,7 +8,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const codes = async (body: string): Promise<string[]> => {
   const m = await lower(await parseSource("extends SceneTree\n\n" + body));
-  return analyze(m).map((d) => d.code);
+  return analyze(m).diagnostics.map((d) => d.code);
 };
 
 describe("analyze · 除零族解析期两句（S694）", () => {

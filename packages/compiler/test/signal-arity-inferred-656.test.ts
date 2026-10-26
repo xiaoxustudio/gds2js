@@ -16,7 +16,7 @@ const SEEDS: Array<[string, string]> = [
 
 const msgs = async (seed: string, call: string): Promise<string[]> => {
   const source = `${HEAD}${seed}\tprint("V|", ${call})\n\tquit()\n`;
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 };
 
 const many = (n: string, max: number, got: number): string =>
@@ -64,7 +64,7 @@ describe("analyze · 由初值证出的 Signal 面", () => {
   it("行号与引擎同格（初值那一格）", async () => {
     const source = `${HEAD}\tvar g = sig\n\tg.has_connections(1)\n\tquit()\n`;
     const at = source.split("\n").indexOf("\tg.has_connections(1)") + 1;
-    const got = analyze(lower(await parseSource(source)));
+    const got = analyze(lower(await parseSource(source))).diagnostics;
     expect(got.map((d) => `${String(d.loc?.line)}|${d.message}`)).toEqual([`${String(at)}|${many("has_connections", 0, 1)}`]);
   });
 });

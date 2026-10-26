@@ -14,7 +14,7 @@ const MOD = (arm: string): string => `extends SceneTree\n\nfunc g(p):\n\tmatch p
 
 const verdict = async (src: string): Promise<string> => {
   try {
-    analyze(lower(await parseSource(src)));
+    analyze(lower(await parseSource(src))).diagnostics;
     return "放过";
   } catch (e) {
     return e instanceof UnsupportedError ? e.message : `非拒答：${e instanceof Error ? e.message : String(e)}`;

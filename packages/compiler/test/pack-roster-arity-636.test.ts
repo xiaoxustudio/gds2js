@@ -6,7 +6,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function diags(body: string): Promise<string[]> {
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`))).diagnostics.map((d) => d.message);
 }
 
 describe("解析期 · pack 新入表名字的两句", () => {

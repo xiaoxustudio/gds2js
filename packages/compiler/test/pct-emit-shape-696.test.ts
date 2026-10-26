@@ -13,9 +13,10 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function emitted(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) throw new Error(`语义拦下：${diags[0]!.message}`);
-  return emitModule(ir, OPTS);
+  return emitModule(ir, OPTS, analysis);
 }
 
 const flagOf = (code: string): string => {

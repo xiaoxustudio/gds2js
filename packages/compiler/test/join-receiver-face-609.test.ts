@@ -6,7 +6,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const msgs = async (body: string): Promise<string[]> => {
   const src = `extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`;
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 };
 const MISSING = (base: string) => `Cannot find member "join" in base "${base}".`;
 const NOT_FOUND = (base: string) => `Function "join()" not found in base ${base}.`;

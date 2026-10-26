@@ -9,7 +9,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 const src = (decl: string, call: string): string =>
   `extends SceneTree\n\nfunc _initialize():\n\t${decl}\n\tprint("V|", ${call})\n\tquit()\n`;
 const msgs = async (decl: string, call: string): Promise<string[]> =>
-  analyze(lower(await parseSource(src(decl, call)))).map((d) => d.message);
+  analyze(lower(await parseSource(src(decl, call)))).diagnostics.map((d) => d.message);
 const noCtor = (sig: string): string => `No constructor of "Array" matches the signature "Array(${sig})".`;
 
 describe("analyze · Array 签名判据认标注变量", () => {

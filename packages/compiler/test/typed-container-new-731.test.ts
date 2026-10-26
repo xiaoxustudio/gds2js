@@ -11,7 +11,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(body: string): Promise<string[]> {
   const src = "extends SceneTree\n\nfunc _init():\n\t" + body + "\n";
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 }
 
 const TWO = (face: string): string[] => [`Cannot find member "new" in base "${face}".`, `Cannot find member "new" in base "${face}".`];

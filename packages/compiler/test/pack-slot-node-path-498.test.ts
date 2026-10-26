@@ -13,7 +13,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(body: string): Promise<string[]> {
   const src = "extends SceneTree\n\n" + body;
-  return analyze(lower(await parseSource(src))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message).sort();
 }
 
 const RECEIVER_GRID: Array<[string, string, string[]]> = [

@@ -12,7 +12,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(expr: string): Promise<string[]> {
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc c():\n\tvar r = ${expr}\n`))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc c():\n\tvar r = ${expr}\n`))).diagnostics.map((d) => d.message).sort();
 }
 
 const SHOULD = (fn: string, pos: number, want: string, kind: string): string =>

@@ -15,7 +15,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 async function sentence(call: string): Promise<string> {
   // S387 起这两句出自 analyze（引擎本来就是解析期拒）：探针跟着搬到那一段，句子文本一格没改。
   const src = `extends SceneTree\n\nfunc _initialize():\n\tprint(${call})\n\tquit()\n`;
-  const hit = analyze(lower(await parseSource(src))).find((d) => /^Too (few|many) arguments for /.test(d.message));
+  const hit = analyze(lower(await parseSource(src))).diagnostics.find((d) => /^Too (few|many) arguments for /.test(d.message));
   return hit?.message ?? "居然编得过";
 }
 

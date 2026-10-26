@@ -9,7 +9,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(decl: string): Promise<string[]> {
   const src = "extends SceneTree\n\n" + decl + "\n\treturn 1\n";
-  return analyze(lower(await parseSource(src)))
+  return analyze(lower(await parseSource(src))).diagnostics
     .filter((d) => d.code === "param-default-value" || d.code === "param-default-assign")
     .map((d) => d.message);
 }
@@ -59,7 +59,7 @@ describe("形参默认值 · 两句", () => {
 
   it("lambda 形参同一判据（S449 的 72 格）", async () => {
     const src = "extends SceneTree\n\nfunc k():\n\tvar lam = func(a: int = \"s\"):\n\t\treturn 1\n\treturn lam\n";
-    const got = analyze(lower(await parseSource(src)))
+    const got = analyze(lower(await parseSource(src))).diagnostics
       .filter((d) => d.code.startsWith("param-default"))
       .map((d) => d.message);
     expect(got).toEqual([
@@ -68,7 +68,7 @@ describe("形参默认值 · 两句", () => {
     ]);
     const okSrc = "extends SceneTree\n\nfunc k():\n\tvar lam = func(a: String = ^\"a/b\"):\n\t\treturn 1\n\treturn lam\n";
     expect(
-      analyze(lower(await parseSource(okSrc))).filter((d) => d.code.startsWith("param-default")),
+      analyze(lower(await parseSource(okSrc))).diagnostics.filter((d) => d.code.startsWith("param-default")),
     ).toEqual([]);
   });
 });

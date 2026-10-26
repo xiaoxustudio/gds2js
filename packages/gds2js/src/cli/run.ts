@@ -27,7 +27,7 @@ export async function runSingle(ctx: Ctx): Promise<boolean> {
 
   const tmpPath = join(dirname(ctx.input), `${runTag()}.mts`);
   try {
-    writeFileSync(tmpPath, emitModule(loaded.ir, { ...emitOptsFor({ ...ctx, run: true }, tmpPath), sourceFile: ctx.input }), "utf8");
+    writeFileSync(tmpPath, emitModule(loaded.ir, { ...emitOptsFor({ ...ctx, run: true }, tmpPath), sourceFile: ctx.input }, loaded.analysis), "utf8");
   } catch (e) {
     console.error(`${ctx.input}:  error  ${errOf(e)}`);
     rmSync(tmpPath, { force: true });

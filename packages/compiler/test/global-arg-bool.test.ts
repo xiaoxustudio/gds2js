@@ -13,7 +13,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function firstDiag(call: string): Promise<string> {
   const src = `extends SceneTree\n\nfunc _initialize():\n\tprint("A|", ${call})\n\tquit()\n`;
-  const diags = analyze(lower(await parseSource(src)));
+  const diags = analyze(lower(await parseSource(src))).diagnostics;
   return diags.length === 0 ? "无诊断" : diags[0]!.message;
 }
 

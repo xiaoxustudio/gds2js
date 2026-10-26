@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import { selfFile } from "@gds2js/compiler/home";
 import { analyze } from "@gds2js/compiler/lower/analyze";
+import type { AnalysisResult } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { PRODUCT_RUNTIME_FILE } from "../paths";
@@ -157,6 +158,7 @@ export interface Loaded {
   ir: ReturnType<typeof lower>;
   diags: Diag[];
   deps: boolean;
+  analysis: AnalysisResult;
 }
 
 export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: string }> {
@@ -168,7 +170,8 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
   }
   try {
     const ir = lower(await parseSource(src));
-    return { ir, diags: toDiags(absPath, ir), deps: needsClosure(ir) };
+    const analysis = analyze(ir, undefined, absPath);
+    return { ir, diags: toDiags(absPath, analysis), deps: needsClosure(ir), analysis };
   } catch (e) {
     const line = (e as { line?: number }).line;
     return { error: `${absPath}:${String(line ?? 1)}:1  error  ${e instanceof Error ? e.message : String(e)}` };
@@ -215,8 +218,8 @@ function singleFileExtends(raw: string | null): string | null {
   return null;
 }
 
-export function toDiags(absPath: string, ir: ReturnType<typeof lower>): Diag[] {
-  return analyze(ir, undefined, absPath).map((d) => ({ code: d.code, message: d.message, line: d.loc.line, col: d.loc.col, file: absPath }));
+export function toDiags(absPath: string, analysis: AnalysisResult): Diag[] {
+  return analysis.diagnostics.map((d) => ({ code: d.code, message: d.message, line: d.loc.line, col: d.loc.col, file: absPath }));
 }
 
 export function printDiags(diags: Diag[]): boolean {

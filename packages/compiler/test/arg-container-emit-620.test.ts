@@ -9,8 +9,8 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function code(src: string): Promise<string> {
   const m = lower(await parseSource(src));
-  analyze(m);
-  return emitModule(m, OPTS);
+  const analysis = analyze(m);
+  return emitModule(m, OPTS, analysis);
 }
 
 const HEAD = "func top(v: Array[int]) -> void:\n\tpass\n\nfunc tops(v: Array[String]) -> void:\n\tpass\n\nfunc topd(v: Dictionary[int, String]) -> void:\n\tpass\n\n";

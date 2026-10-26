@@ -17,7 +17,7 @@ const RECV: Record<string, string> = {
 
 const msgs = async (call: string, shape: string): Promise<string[]> => {
   const source = `${HEAD}${RECV[shape]?.replace("%C%", call) ?? call}\tquit()\n`;
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 };
 
 const few = (n: string, min: number, got: number): string => `Too few arguments for "${n}()" call. Expected at least ${String(min)} but received ${String(got)}.`;
@@ -72,12 +72,12 @@ describe("analyze · Callable 面的解析期元数两句", () => {
   it("丢值位置（语句形）同句", async () => {
     const source = `${HEAD}\tvar c: Callable = ${CB}\n\tc.bindv()\n\tquit()\n`;
     const at = source.split("\n").indexOf("\tc.bindv()") + 1;
-    const got = analyze(lower(await parseSource(source)));
+    const got = analyze(lower(await parseSource(source))).diagnostics;
     expect(got.map((d) => `${String(d.loc?.line)}|${d.message}`)).toEqual([`${String(at)}|${few("bindv", 1, 0)}`]);
   });
 
   it("标注 Variant 的 Callable 接收者仍从解析期放行（S646 的口径不动）", async () => {
     const source = `${HEAD}\tvar c: Variant = Callable()\n\tc.bindv()\n\tquit()\n`;
-    expect(analyze(lower(await parseSource(source))).map((d) => d.message)).toEqual([]);
+    expect(analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message)).toEqual([]);
   });
 });

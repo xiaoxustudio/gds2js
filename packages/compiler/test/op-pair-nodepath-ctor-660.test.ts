@@ -11,7 +11,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 const src = (expr: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint("V|", ${expr})\n\tquit()\n`;
 
 const msgs = async (expr: string): Promise<string[]> =>
-  analyze(lower(await parseSource(src(expr)))).map((d) => d.message);
+  analyze(lower(await parseSource(src(expr)))).diagnostics.map((d) => d.message);
 
 const A = (op: string, l: string, r: string): string => `Invalid operands to operator ${op}, ${l} and ${r}.`;
 
@@ -35,7 +35,7 @@ describe("analyze · NodePath 构造式参与运算的解析期型拒", () => {
 
   it("标注侧那一格走第二式（既有通道，不动）", async () => {
     const source = 'extends SceneTree\n\nfunc _initialize():\n\tvar p: NodePath = NodePath("a/b")\n\tprint("V|", p + "z")\n\tquit()\n';
-    expect(analyze(lower(await parseSource(source))).map((d) => d.message)).toEqual([
+    expect(analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message)).toEqual([
       'Invalid operands "NodePath" and "String" for "+" operator.',
     ]);
   });
@@ -48,7 +48,7 @@ describe("analyze · NodePath 构造式参与运算的解析期型拒", () => {
   it("行号与引擎同格", async () => {
     const source = src('NodePath("a/b") + "z"');
     const at = source.split("\n").indexOf('\tprint("V|", NodePath("a/b") + "z")') + 1;
-    const got = analyze(lower(await parseSource(source)));
+    const got = analyze(lower(await parseSource(source))).diagnostics;
     expect(got.map((d) => `${String(d.loc?.line)}|${d.message}`)).toEqual([`${String(at)}|${A("+", "NodePath", "String")}`]);
   });
 

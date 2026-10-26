@@ -4,7 +4,7 @@ import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccess
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
 import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
-import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, lambdaCaptureNames, useMarkOwner } from "../lower/analyze";
+import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 export type BaseSpec =
@@ -318,12 +318,14 @@ function basenameOfGd(path: string | undefined): string | null {
   return path.split(/[\/\\]/).pop() ?? null;
 }
 
-export function emitModule(m: Module, opts: EmitOptions): string {
-  return emitModuleWithMap(m, opts).code;
+let analysis: AnalysisResult = NO_ANALYSIS;
+
+export function emitModule(m: Module, opts: EmitOptions, analysisResult: AnalysisResult): string {
+  return emitModuleWithMap(m, opts, analysisResult).code;
 }
 
-export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
-  useMarkOwner(m.markOwner ?? "");
+export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: AnalysisResult): EmitResult {
+  analysis = analysisResult;
   MAP_ACTIVE = opts.sourcemap === true;
   LAMBDA_DEPTH = 0;
   LINE_MAPPINGS = [];
@@ -1858,14 +1860,14 @@ function emitExprR(e: Expr): R {
     if (ek && !isGridElem(ek)) {
       const ir = emitExprR(e.index);
       if (ir.rep !== "int") throw new UnsupportedError("raw-array", `内部不变量破坏：裸数组下标期望 int，实得 ${ir.rep}`);
-      const lbl = posReadLabel(e);
+      const lbl = analysis.posReadLabel(e);
       return {
         code: `rt.fast.rawArrGet${fastSuffix(ek)}${lbl === null ? "" : "Base"}(${e.obj.name}, ${ir.code}${lbl === null ? "" : `, ${JSON.stringify(lbl)}`})`,
         rep: ek,
       };
     }
     const dk = RAW_DICTS.get(e.obj.name);
-    if (dk !== undefined && !isDictIntRead(e)) {
+    if (dk !== undefined && !analysis.isDictIntRead(e)) {
       const kr = emitExprR(e.index);
       if (kr.rep !== "int" && kr.rep !== "str") {
         throw new UnsupportedError("raw-dict-key", `内部不变量破坏：裸字典键期望 int/str，实得 ${kr.rep}`);
@@ -1999,7 +2001,7 @@ function computeUnboxed(
   const walkExpr = (e: Expr, inLambda: boolean): void => {
     switch (e.kind) {
       case "ident":
-        if (isGlobalValueRead(e)) excluded.add(e.name);
+        if (analysis.isGlobalValueRead(e)) excluded.add(e.name);
         break;
       case "lambda":
         e.body.forEach((s) => walkStmt(s, true));
@@ -3097,9 +3099,9 @@ function emitExprVar(e: Expr): string {
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       if (CURRENT_MEMBERS.has(e.name)) return CLASS_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
-      if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
-      if (isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
-      if (isHostMethodValueRead(e) && !FUNC_BINDS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
+      if (analysis.isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
+      if (analysis.isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
+      if (analysis.isHostMethodValueRead(e) && !FUNC_BINDS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       return e.name;
 
     case "unary":
@@ -3127,8 +3129,8 @@ function emitExprVar(e: Expr): string {
     }
 
     case "index":
-      if (isDictIntRead(e)) return `rt.wrapValue(rt.dictIndexInt(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
-      const pos = posReadLabel(e);
+      if (analysis.isDictIntRead(e)) return `rt.wrapValue(rt.dictIndexInt(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
+      const pos = analysis.posReadLabel(e);
       return pos === null
         ? `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`
         : `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}, ${JSON.stringify(pos)}))`;
@@ -3153,7 +3155,7 @@ function emitExprVar(e: Expr): string {
       if (e.obj.kind === "ident" && CLASS_VALUES.get(e.obj.name)?.has(e.name) === true) {
         return `${e.obj.name}.${e.name}`;
       }
-      const bound = boundFace(e);
+      const bound = analysis.boundFace(e);
       if (bound !== null) {
         return "rt.wrapValue(rt.boundMethod(" + emitExpr(e.obj) + ", " + JSON.stringify(bound.face) + ", " + JSON.stringify(e.name) + ", " + String(bound.min) + ", " + String(bound.max) + "))";
       }
@@ -3193,7 +3195,7 @@ function emitExprVar(e: Expr): string {
         `    }, ${e.params.length}${defs.length === 0 ? "" : ", " + String(defs.length)})`,
       ];
       const inner = lines.join(String.fromCharCode(10));
-      const caps = lambdaCaptureNames(e);
+      const caps = analysis.lambdaCaptureNames(e);
       if (caps.length > 0) return "(((" + caps.join(", ") + ") => " + inner + "))(" + caps.join(", ") + ")";
       return inner;
     }

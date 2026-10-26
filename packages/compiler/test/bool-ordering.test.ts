@@ -16,7 +16,8 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function firstDiag(src: string): Promise<string> {
-  const diags = analyze(lower(await parseSource(src)));
+  const analysis = analyze(lower(await parseSource(src)));
+  const diags = analysis.diagnostics;
   return diags.length === 0 ? "无诊断" : `${diags[0]!.code}: ${diags[0]!.message}`;
 }
 
@@ -78,8 +79,9 @@ describe("compiler · 静态 bool 的 <= 与 >=", () => {
 
   it("拒掉的格子不发产物（编译门按预期报错记账）", async () => {
     const ir = lower(await parseSource(BODY(["print(false <= true)"])));
-    eq("364", "分析层有诊断", analyze(ir).length > 0, true);
-    eq("364", "照样能发（拒的是分析层，不是发射层）", typeof emitModule(ir, OPTS), "string");
+    const analysis = analyze(ir);
+    eq("364", "分析层有诊断", analysis.diagnostics.length > 0, true);
+    eq("364", "照样能发（拒的是分析层，不是发射层）", typeof emitModule(ir, OPTS, analysis), "string");
   });
 
   it("名字踩全局那一族四形：引擎与出货都放过（S394，读数 compare55）", async () => {

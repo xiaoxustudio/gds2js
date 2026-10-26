@@ -20,7 +20,7 @@ const RECV: Record<string, string> = {
 
 const msgs = async (recv: string, rest: string, call: string): Promise<string[]> => {
   const body = (RECV[recv] ?? "").replace("%R%", rest).replace("%C%", call);
-  return analyze(lower(await parseSource(`${HEAD}${body}\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`${HEAD}${body}\tquit()\n`))).diagnostics.map((d) => d.message);
 };
 
 const few = (n: string, min: number, got: number): string => `Too few arguments for "${n}()" call. Expected at least ${String(min)} but received ${String(got)}.`;

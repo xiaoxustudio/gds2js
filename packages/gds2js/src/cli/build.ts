@@ -32,8 +32,8 @@ export async function buildSingle(ctx: Ctx): Promise<boolean> {
           sourcemap: true,
           sourceFile: ctx.input,
           jsFile: basename(ctx.outPath),
-        })
-      : { code: emitModule(loaded.ir, emitOpts), map: null };
+        }, loaded.analysis)
+      : { code: emitModule(loaded.ir, emitOpts, loaded.analysis), map: null };
     code = result.code;
     map = result.map;
   } catch (e) {

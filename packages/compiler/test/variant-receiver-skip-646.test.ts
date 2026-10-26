@@ -28,14 +28,14 @@ const CASES: Array<[string, string, string[]]> = [
 
 describe("analyze · 显式 Variant 的接收者从解析期放行", () => {
   it.each(CASES)("%s", async (_name, source, expected) => {
-    const got = analyze(lower(await parseSource(source))).map((d) => d.message);
+    const got = analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
     expect(got, `源：\n${source}`).toEqual(expected);
   });
 
   it("模块级 var 与类字段同判据", async () => {
     const mod = await parseSource('extends SceneTree\n\nvar ms: Variant = "ab"\nvar is = "cd"\n\nfunc _initialize():\n\tms.strip_edges(1, 2, 3)\n\tis.strip_edges(1, 2, 3)\n\tquit()\n');
-    expect(analyze(lower(mod)).map((d) => d.message), "模块级：标注 Variant 放过、推断形照拦").toEqual([TOOMANY]);
+    expect(analyze(lower(mod)).diagnostics.map((d) => d.message), "模块级：标注 Variant 放过、推断形照拦").toEqual([TOOMANY]);
     const cls = await parseSource('extends SceneTree\n\nclass One:\n\tvar fs: Variant = "ab"\n\tvar gi = "cd"\n\n\tfunc f():\n\t\tfs.strip_edges(1, 2, 3)\n\t\tgi.strip_edges(1, 2, 3)\n');
-    expect(analyze(lower(cls)).map((d) => d.message), "类字段同一条").toEqual([TOOMANY]);
+    expect(analyze(lower(cls)).diagnostics.map((d) => d.message), "类字段同一条").toEqual([TOOMANY]);
   });
 });

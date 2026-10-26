@@ -35,7 +35,7 @@ describe.each(CASES)("预期报错正文 $id（$eng 条）", ({ id, eng }) => {
     let diags: Array<{ loc: Loc; message: string }> | null = null;
     let thrown: unknown = null;
     try {
-      diags = analyze(lower(await parseSource(src)), undefined, id) as Array<{ loc: Loc; message: string }>;
+      diags = analyze(lower(await parseSource(src)), undefined, id).diagnostics as Array<{ loc: Loc; message: string }>;
     } catch (e) {
       thrown = e;
     }

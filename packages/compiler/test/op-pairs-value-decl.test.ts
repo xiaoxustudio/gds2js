@@ -15,7 +15,7 @@ const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar vi: Vecto
 
 async function pairs(body: string): Promise<string[]> {
   const src = HEAD + body + "\nfunc _initialize():\n\tprint(\"ok\")\n\tquit()\n";
-  return analyze(lower(await parseSource(src)))
+  return analyze(lower(await parseSource(src))).diagnostics
     .filter((d) => d.code === "op-pair")
     .map((d) => d.message);
 }

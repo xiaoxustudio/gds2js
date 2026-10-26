@@ -13,7 +13,7 @@ const say = (name: string, pos: number, want: string, got: string): string =>
 
 const msgs = async (decl: string, call: string): Promise<string[]> => {
   const source = `${head}${decl}\tprint("V|", ${call})\n\tquit()\n`;
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 };
 
 const SDECL = "\tvar s: String = \"a\"\n";

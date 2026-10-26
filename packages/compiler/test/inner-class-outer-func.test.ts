@@ -6,12 +6,13 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function diags(src: string): Promise<string[]> {
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 }
 
 const H = "extends SceneTree\n\n";
@@ -87,7 +88,7 @@ describe("内部类看得见的模块级名字：15 格逐名", () => {
 
   it("自己类的信号取值发的是装箱过的 this 字段", async () => {
     const ir = lower(await parseSource(`${H}class Thing:\n\tsignal own_sig\n\tfunc g():\n\t\town_sig.emit()\n${CALL}`));
-    const code = emitModule(ir, { runtimeImport: "rt", hostImport: "host" });
+    const code = emitModule(ir, { runtimeImport: "rt", hostImport: "host" }, NO_ANALYSIS);
     const thing = code.slice(code.indexOf("class Thing "), code.indexOf("const __gd_d_Thing"));
     eq("373", "信号取值要装箱", thing.includes("rt.wrapValue(this.own_sig)"), true);
     eq("373", "不再发裸标识符", thing.includes("rt.method(own_sig,"), false);

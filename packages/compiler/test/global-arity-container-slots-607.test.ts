@@ -6,7 +6,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (call: string): Promise<string[]> => {
   const tree = await parseSource(`extends SceneTree\n\nfunc _initialize():\n\tvar v = ${call}\n\tquit()\n`);
-  return analyze(lower(tree)).map((d) => d.message);
+  return analyze(lower(tree)).diagnostics.map((d) => d.message);
 };
 const arity = (fn: string, kind: "few" | "many", want: number, got: number) =>
   kind === "few"

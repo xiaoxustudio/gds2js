@@ -6,7 +6,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const shots = async (body: string): Promise<string[]> => {
   const src = `extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`;
-  return analyze(lower(await parseSource(src)))
+  return analyze(lower(await parseSource(src))).diagnostics
     .filter((d) => d.code === "undeclared-identifier")
     .map((d) => `${String((d.loc as { line: number }).line)}|${d.message}`);
 };

@@ -1,5 +1,6 @@
 import { staticMemberFn } from "./ir";
 import { ELEM_FACES, NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
+import type { AnalysisResult, Diagnostic } from "../analyze/analysis-result";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../semantics/arg-types/static-arg-types";
 import { FACE_ARG_AS, FACE_ARG_TYPES } from "../semantics/arg-types/face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "../semantics/arg-types/instance-arg-types";
@@ -32,12 +33,6 @@ import {
 import { strFloat } from "@gds2js/runtime/runtime/values";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, SignalDecl, Stmt, TypeRef, VarDecl } from "./ir";
-
-export interface Diagnostic {
-  code: string;
-  message: string;
-  loc: Loc;
-}
 
 interface Decl {
   vars: Array<{ name: string }>;
@@ -106,8 +101,9 @@ function declNames(d: Decl): string[] {
   ];
 }
 
-export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string): Diagnostic[] {
-  markOwner = m.markOwner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
+export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string, hostChain = false): AnalysisResult {
+  run = newRun();
+  run.owner = owner !== undefined && owner !== "" ? owner : `#${++markSeq}`;
   seedOuterNames(m);
   markClassFaceReceivers(m);
   const diags: Diagnostic[] = [];
@@ -136,7 +132,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
     null,
   );
 
-  const hostFace = m.extends === "SceneTree" || m.hostChain === true ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
+  const hostFace = m.extends === "SceneTree" || hostChain ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
   checkReturnPaths(m.funcs, diags);
   checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
@@ -170,7 +166,26 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   checkInitContracts(m, new Set(globals), diags);
   checkPropertyDelegates(m, diags);
 
-  return diags;
+  const r = run;
+  return {
+    owner: r.owner,
+    diagnostics: diags,
+    posReadLabel: (e: Expr): string | null => e.kind === "index" ? r.posReadLabels.get(diKey(r, e.loc.line, e.loc.col)) ?? null : null,
+    boundFace: (e: Expr): { face: string; min: number; max: number } | null => {
+      if (e.kind !== "attribute") return null;
+      const hit = r.boundFaces.get(diKey(r, e.loc.line, e.loc.col));
+      if (hit === undefined) return null;
+      const parts = hit.split(",");
+      return { face: String(parts[0]), min: Number(parts[1]), max: Number(parts[2]) };
+    },
+    /** 静态标注的 `Dictionary` / `Dictionary[K, V]` 配静态 int 键的那一格：引擎讲的是数组那一式（`Out of bounds get index …`，S405 量过），运行期得知道谁是这一形。 */
+    isDictIntRead: (e: Expr): boolean => e.kind === "index" && r.dictIntReads.has(diKey(r, e.loc.line, e.loc.col)),
+    isGlobalValueRead: (e: Expr): boolean => e.kind === "ident" && r.globalValueReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
+    isNativeClassValueRead: (e: Expr): boolean => e.kind === "ident" && r.nativeClassReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
+    isHostMethodValueRead: (e: Expr): boolean => e.kind === "ident" && r.hostMethodReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
+    /** 这一支 lambda 创建时要按值影子化的局部名。 */
+    lambdaCaptureNames: (e: Expr): string[] => e.kind !== "lambda" || e.loc === null ? [] : r.lambdaCaptures.get(capKey(r, e.loc.line, e.loc.col)) ?? [],
+  };
 }
 
 function assignTargetName(t: unknown): string | null {
@@ -478,29 +493,44 @@ function canHold(kind: string, st: NonNullable<StaticType>): boolean {
 
 type TypedSlot = { decl: string; kind: "Array" | "Dictionary"; elem?: string; key?: string; val?: string; ann?: string };
 
-const dictIntReads = new Set<string>();
-const diKey = (line: number, col: number): string => `${markOwner}#${String(line)}:${String(col)}`;
+type HostStaticCtx = { kind: "func"; name: string } | { kind: "var" } | { kind: "const"; name: string } | null;
 
-const posReadLabels = new Map<string, string>();
-
-export function posReadLabel(e: Expr): string | null {
-  return e.kind === "index" ? posReadLabels.get(diKey(e.loc.line, e.loc.col)) ?? null : null;
+interface Run {
+  owner: string;
+  dictIntReads: Set<string>;
+  posReadLabels: Map<string, string>;
+  boundFaces: Map<string, string>;
+  globalValueReads: Set<string>;
+  nativeClassReads: Set<string>;
+  hostMethodReads: Set<string>;
+  lambdaCaptures: Map<string, string[]>;
+  outerNames: Set<string>;
+  hostValueMethods: Set<string>;
+  hostStaticCtx: HostStaticCtx;
 }
 
-const boundFaces = new Map<string, string>();
-
-export function boundFace(e: Expr): { face: string; min: number; max: number } | null {
-  if (e.kind !== "attribute") return null;
-  const hit = boundFaces.get(diKey(e.loc.line, e.loc.col));
-  if (hit === undefined) return null;
-  const parts = hit.split(",");
-  return { face: String(parts[0]), min: Number(parts[1]), max: Number(parts[2]) };
+function newRun(): Run {
+  return {
+    owner: "",
+    dictIntReads: new Set<string>(),
+    posReadLabels: new Map<string, string>(),
+    boundFaces: new Map<string, string>(),
+    globalValueReads: new Set<string>(),
+    nativeClassReads: new Set<string>(),
+    hostMethodReads: new Set<string>(),
+    lambdaCaptures: new Map<string, string[]>(),
+    outerNames: new Set<string>(),
+    hostValueMethods: new Set<string>(),
+    hostStaticCtx: null,
+  };
 }
 
-/** 静态标注的 `Dictionary` / `Dictionary[K, V]` 配静态 int 键的那一格：引擎讲的是数组那一式（`Out of bounds get index …`，S405 量过），运行期得知道谁是这一形。 */
-export function isDictIntRead(e: Expr): boolean {
-  return e.kind === "index" && dictIntReads.has(diKey(e.loc.line, e.loc.col));
-}
+let run: Run = newRun();
+let markSeq = 0;
+
+const diKey = (r: Run, line: number, col: number): string => `${r.owner}#${String(line)}:${String(col)}`;
+const gvKey = (r: Run, name: string, line: number, col: number): string => `${r.owner}#${name}@${line}:${col}`;
+const capKey = (r: Run, line: number, col: number): string => `${r.owner}@${String(line)}:${String(col)}`;
 
 function dictSlotOf(name: string): TypedSlot | null {
   const t = parseTyped(name);
@@ -641,16 +671,16 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
           const slot = typed.get(e.obj.name);
           if (slot !== undefined) {
             badKey(slot, e.index, decls);
-            if (slot.kind === "Dictionary" && stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
-            if (slot.kind === "Array" && slot.ann !== undefined) posReadLabels.set(diKey(e.loc.line, e.loc.col), slot.ann);
+            if (slot.kind === "Dictionary" && stOf(e.index, decls) === "int") run.dictIntReads.add(diKey(run, e.loc.line, e.loc.col));
+            if (slot.kind === "Array" && slot.ann !== undefined) run.posReadLabels.set(diKey(run, e.loc.line, e.loc.col), slot.ann);
           }
         } else if (e.obj.kind === "array") {
           badKey({ decl: "Array", kind: "Array" }, e.index, decls);
         } else if (e.obj.kind === "dict") {
-          if (stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
+          if (stOf(e.index, decls) === "int") run.dictIntReads.add(diKey(run, e.loc.line, e.loc.col));
         } else {
           const own = e.obj.kind === "call" ? dictSlotOf(callType(e.obj) ?? "") : null;
-          if (own !== null && own.kind === "Dictionary" && stOf(e.index, decls) === "int") dictIntReads.add(diKey(e.loc.line, e.loc.col));
+          if (own !== null && own.kind === "Dictionary" && stOf(e.index, decls) === "int") run.dictIntReads.add(diKey(run, e.loc.line, e.loc.col));
         }
         walkExpr(e.obj, typed, decls);
         walkExpr(e.index, typed, decls);
@@ -757,7 +787,7 @@ function checkTypedIndexSlots(m: Module, diags: Diagnostic[]): void {
             if (slot !== undefined) {
               handledTarget = true;
               badKey(slot, s.target.index, decls);
-              if (slot.kind === "Dictionary" && stOf(s.target.index, decls) === "int") dictIntReads.delete(diKey(s.target.loc.line, s.target.loc.col));
+              if (slot.kind === "Dictionary" && stOf(s.target.index, decls) === "int") run.dictIntReads.delete(diKey(run, s.target.loc.line, s.target.loc.col));
               const kind = slot.kind === "Array" ? slot.elem : slot.val;
               if (kind !== undefined) valueMsg(kind, s.value, s.target.index, decls, slot.kind === "Dictionary");
             }
@@ -2911,7 +2941,7 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         } else {
           const l = n.loc as { line: number; col: number } | undefined;
           const bounds = table[name];
-          if (l !== undefined && bounds !== undefined) boundFaces.set(diKey(l.line, l.col), face + "," + String(bounds[0]) + "," + String(bounds[1]));
+          if (l !== undefined && bounds !== undefined) run.boundFaces.set(diKey(run, l.line, l.col), face + "," + String(bounds[0]) + "," + String(bounds[1]));
         }
         continue;
       }
@@ -3950,23 +3980,23 @@ function checkClassFuncVisibility(m: Module, diags: Diagnostic[]): void {
 function checkFieldInits(list: VarDecl[], scope: Scope, coroutines: Set<string>, diags: Diagnostic[], face: Set<string>): void {
   const selfScope = scope.child([], true);
   for (const v of list) {
-    const prevFace = hostValueMethods;
-    const prevCtx = hostStaticCtx;
-    hostValueMethods = face;
-    hostStaticCtx = v.isConst ? { kind: "const", name: v.name } : v.isStatic ? { kind: "var" } : null;
+    const prevFace = run.hostValueMethods;
+    const prevCtx = run.hostStaticCtx;
+    run.hostValueMethods = face;
+    run.hostStaticCtx = v.isConst ? { kind: "const", name: v.name } : v.isStatic ? { kind: "var" } : null;
     if (v.init !== null) walkExpr(v.init, selfScope, coroutines, diags);
     const acc = v.accessor;
     if (acc !== null) {
       const accScope = v.isStatic ? selfScope.child([], false) : selfScope;
-      hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_getter` } : null;
+      run.hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_getter` } : null;
       if (acc.getter !== null && acc.getter.kind === "inline") walkStmts(acc.getter.body, accScope, coroutines, diags, false);
-      hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_setter` } : null;
+      run.hostStaticCtx = v.isStatic ? { kind: "func", name: `@${v.name}_setter` } : null;
       if (acc.setter !== null && acc.setter.kind === "inline") {
         walkStmts(acc.setter.body, accScope.child([acc.setter.param]), coroutines, diags, false);
       }
     }
-    hostValueMethods = prevFace;
-    hostStaticCtx = prevCtx;
+    run.hostValueMethods = prevFace;
+    run.hostStaticCtx = prevCtx;
   }
 }
 
@@ -4063,14 +4093,14 @@ function checkReturnPaths(funcs: FuncDecl[], diags: Diagnostic[]): void {
 
 function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
   const scope = outer.funcChild(["self", ...f.params.map((p) => p.name)], !f.isStatic);
-  const prevFace = hostValueMethods;
-  const prevCtx = hostStaticCtx;
-  hostValueMethods = hostFace;
-  hostStaticCtx = f.isStatic ? { kind: "func", name: f.name } : null;
+  const prevFace = run.hostValueMethods;
+  const prevCtx = run.hostStaticCtx;
+  run.hostValueMethods = hostFace;
+  run.hostStaticCtx = f.isStatic ? { kind: "func", name: f.name } : null;
   for (const p of f.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
   walkStmts(f.body, scope, coroutines, diags, false);
-  hostValueMethods = prevFace;
-  hostStaticCtx = prevCtx;
+  run.hostValueMethods = prevFace;
+  run.hostStaticCtx = prevCtx;
 }
 
 function walkStmts(
@@ -4164,10 +4194,6 @@ function patternBindings(p: Pattern): string[] {
       return [];
   }
 }
-
-const globalValueReads = new Set<string>();
-
-const nativeClassReads = new Set<string>();
 
 const HOST_VALUE_METHODS = new Set([
   "add_user_signal",
@@ -4286,31 +4312,6 @@ const VIRTUAL_HOST_NAMES = new Set([
   "_to_string",
   "_validate_property",
 ]);
-let hostValueMethods: Set<string> = NO_HOST_VALUE_METHODS;
-let hostStaticCtx: { kind: "func"; name: string } | { kind: "var" } | { kind: "const"; name: string } | null = null;
-const hostMethodReads = new Set<string>();
-
-const gvKey = (name: string, line: number, col: number): string => `${markOwner}#${name}@${line}:${col}`;
-let markOwner = "";
-let markSeq = 0;
-
-/** 发射器在按名字取记号之前先把归属对准当前模块（记号表进程内累积，见 §6 第 61 条）。 */
-export function useMarkOwner(owner: string): void {
-  markOwner = owner;
-}
-
-export function isGlobalValueRead(e: Expr): boolean {
-  return e.kind === "ident" && globalValueReads.has(gvKey(e.name, e.loc.line, e.loc.col));
-}
-
-export function isNativeClassValueRead(e: Expr): boolean {
-  return e.kind === "ident" && nativeClassReads.has(gvKey(e.name, e.loc.line, e.loc.col));
-}
-
-export function isHostMethodValueRead(e: Expr): boolean {
-  return e.kind === "ident" && hostMethodReads.has(gvKey(e.name, e.loc.line, e.loc.col));
-}
-
 function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnostic[], awaited = false): void {
   switch (e.kind) {
     case "lit":
@@ -4318,11 +4319,12 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
 
     case "ident":
       if (e.name === "super") return;
+      const staticCtx = run.hostStaticCtx;
       if (e.name === "self") {
-        if (hostStaticCtx !== null && hostStaticCtx.kind === "const")
+        if (staticCtx !== null && staticCtx.kind === "const")
           diags.push({
             code: "const-not-constant",
-            message: `Assigned value for constant "${hostStaticCtx.name}" isn't a constant expression.`,
+            message: `Assigned value for constant "${staticCtx.name}" isn't a constant expression.`,
             loc: e.loc,
           });
         else if (!scope.allowsSelf()) {
@@ -4336,17 +4338,17 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
       }
       if (!scope.has(e.name) && !isGlobalConst(e.name)) {
         if (CLASS_FACE_RECEIVERS.has(e)) return;
-        if (GLOBAL_VALUE_NAMES.has(e.name)) globalValueReads.add(gvKey(e.name, e.loc.line, e.loc.col));
-        else if (ENGINE_CLASS_NAMES.has(e.name)) nativeClassReads.add(gvKey(e.name, e.loc.line, e.loc.col));
-        else if (hostValueMethods.has(e.name)) {
-          if (hostStaticCtx === null) hostMethodReads.add(gvKey(e.name, e.loc.line, e.loc.col));
-          else if (hostStaticCtx.kind === "func")
+        if (GLOBAL_VALUE_NAMES.has(e.name)) run.globalValueReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
+        else if (ENGINE_CLASS_NAMES.has(e.name)) run.nativeClassReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
+        else if (run.hostValueMethods.has(e.name)) {
+          if (staticCtx === null) run.hostMethodReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
+          else if (staticCtx.kind === "func")
             diags.push({
               code: "host-read-in-static",
-              message: `Cannot access non-static variable "${e.name}" from the static function "${hostStaticCtx.name}()".`,
+              message: `Cannot access non-static variable "${e.name}" from the static function "${staticCtx.name}()".`,
               loc: e.loc,
             });
-          else if (hostStaticCtx.kind === "var")
+          else if (staticCtx.kind === "var")
             diags.push({
               code: "host-read-in-static",
               message: `Cannot access non-static variable "${e.name}" from a static variable initializer.`,
@@ -4355,7 +4357,7 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
           else
             diags.push({
               code: "const-not-constant",
-              message: `Assigned value for constant "${hostStaticCtx.name}" isn't a constant expression.`,
+              message: `Assigned value for constant "${staticCtx.name}" isn't a constant expression.`,
               loc: e.loc,
             });
         }
@@ -5961,8 +5963,6 @@ function numericLiteralKind(e: Expr): "int" | "float" | null {
   return null;
 }
 
-let outerNames = new Set<string>();
-
 function seedOuterNames(m: Module): void {
   const out = new Set<string>(declNames(m));
   const walk = (c: { vars: Array<{ name: string }>; funcs: Array<{ name: string }>; signals: Array<{ name: string }>; consts?: Array<{ name: string }>; innerClasses: unknown[] }): void => {
@@ -5973,11 +5973,8 @@ function seedOuterNames(m: Module): void {
     for (const inner of c.innerClasses) walk(inner as Parameters<typeof walk>[0]);
   };
   for (const c of m.innerClasses) walk(c as Parameters<typeof walk>[0]);
-  outerNames = out;
+  run.outerNames = out;
 }
-
-const lambdaCaptures = new Map<string, string[]>();
-const capKey = (line: number, col: number): string => `${markOwner}@${String(line)}:${String(col)}`;
 
 function collectReads(node: unknown, bound: Set<string>, out: Set<string>): void {
   if (Array.isArray(node)) {
@@ -5997,12 +5994,12 @@ function recordCaptures(e: Expr, scope: Scope): void {
   for (const p of e.params) bound.add(p.name);
   const reads = new Set<string>();
   collectReads(e, bound, reads);
-  const caps = [...reads].filter((n) => n !== "self" && !outerNames.has(n) && scope.hasLocal(n)).sort();
-  if (caps.length > 0) lambdaCaptures.set(capKey(e.loc.line, e.loc.col), caps);
+  const caps = [...reads].filter((n) => n !== "self" && !run.outerNames.has(n) && scope.hasLocal(n)).sort();
+  if (caps.length > 0) run.lambdaCaptures.set(capKey(run, e.loc.line, e.loc.col), caps);
 }
 
 /** 发射器读的那张表：这一支 lambda 创建时要按值影子化的局部名。 */
 export function lambdaCaptureNames(e: Expr): string[] {
   if (e.kind !== "lambda" || e.loc === null) return [];
-  return lambdaCaptures.get(capKey(e.loc.line, e.loc.col)) ?? [];
+  return run.lambdaCaptures.get(capKey(run, e.loc.line, e.loc.col)) ?? [];
 }

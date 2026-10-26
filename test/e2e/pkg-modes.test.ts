@@ -9,6 +9,7 @@ import { bad as tkBad } from "@gds2js/testkit";
 import { build } from "tsdown";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import { emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
+import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
 import { analyze } from "@gds2js/compiler/lower/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
@@ -60,7 +61,8 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
   it.each(MODE_CELLS)("① $mode $c 逐字节匹配 golden", async ({ mode, c }) => {
     const src = readFileSync(join(ROOT, "corpus/cases", c, "main.gd"), "utf8");
     const ir = lower(await parseSource(src));
-    const diags = analyze(ir);
+    const analysis = analyze(ir);
+    const diags = analysis.diagnostics;
     if (diags.length > 0) {
       bad(`${mode} ${c}: 不该被 sema 拦（${diags[0]!.code}）`);
       expect(diags.length, `${mode} ${c} 不该被 sema 拦`).toBe(0);
@@ -77,7 +79,7 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
       ...(mode === "single"
         ? { standaloneInline: STANDALONE_SRC }
         : { standaloneRequirePath: "./gds2js-standalone.cjs" }),
-    });
+    }, analysis);
     const file = join(dir, "m.mts");
     writeFileSync(file, code, "utf8");
     const { out } = runNode(dir, "m.mts");
@@ -234,7 +236,7 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
       standaloneInline: STANDALONE_SRC,
       sourceFile: "main.gd",
       jsFile: "m.mts",
-    });
+    }, NO_ANALYSIS);
     smap.totalGenLines = code.split("\n").length;
     smap.hasMap = map !== undefined && map !== null;
     if (smap.hasMap) {

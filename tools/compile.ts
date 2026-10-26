@@ -2,6 +2,7 @@ import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
 import { analyze } from "@gds2js/compiler/lower/analyze";
+import { NO_ANALYSIS, type AnalysisResult } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import type { Module } from "@gds2js/compiler/lower/ir";
 import { parseSource } from "@gds2js/compiler/parse/parser";
@@ -35,9 +36,11 @@ for (const id of cases) {
 
   let ir: Module | null = null;
   let diags: Array<{ code: string; message: string }> = [];
+  let analysis: AnalysisResult = NO_ANALYSIS;
   try {
     ir = lower(await parseSource(src));
-    diags = analyze(ir, undefined, id);
+    analysis = analyze(ir, undefined, id);
+    diags = analysis.diagnostics;
   } catch (e) {
     if (e instanceof UnsupportedError && !godotOk(readGolden(id))) {
       refused.push({ id, msg: e.message });
@@ -55,7 +58,7 @@ for (const id of cases) {
   }
 
   try {
-    const gen = emitModule(ir!, GEN_EMIT_OPTS);
+    const gen = emitModule(ir!, GEN_EMIT_OPTS, analysis);
     writeFileSync(join(caseDir(id), "main.gen.mts"), gen, "utf8");
     compiled++;
   } catch (e) {

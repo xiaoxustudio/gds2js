@@ -12,7 +12,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 const H = "extends SceneTree\n\n";
 
 async function diags(source: string): Promise<string[]> {
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 }
 
 /** `[面, 名, 位, 量过的那一元数, 期望型, 两句都发的 kind, 只发 B 式的 kind, 引擎放行的 kind]` */

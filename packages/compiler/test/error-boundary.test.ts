@@ -14,9 +14,10 @@ const H = "extends SceneTree\n\n";
 
 async function emitted(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return `diag:${diags[0]!.message}`;
-  return emitModule(ir, OPTS);
+  return emitModule(ir, OPTS, analysis);
 }
 
 /** 从 `from` 那一处往后找第一个接住点，返回它后面紧跟的那一句返回。 */

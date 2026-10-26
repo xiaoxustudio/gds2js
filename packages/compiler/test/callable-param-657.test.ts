@@ -16,7 +16,7 @@ const ANN_TPL = SEEDS[0] === undefined ? "" : SEEDS[0][1];
 
 const msgs = async (tpl: string, call: string): Promise<string[]> => {
   const source = HEAD + tpl.replace("%C%", call) + "\tquit()\n";
-  return analyze(lower(await parseSource(source))).map((d) => d.message);
+  return analyze(lower(await parseSource(source))).diagnostics.map((d) => d.message);
 };
 
 const pass = (src: string, want: string): string => `Cannot pass a value of type "${src}" as "${want}".`;

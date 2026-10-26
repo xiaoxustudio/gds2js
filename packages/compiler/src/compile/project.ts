@@ -3,7 +3,7 @@ import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } 
 import { cachedLower } from "./ir-cache";
 import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
 import type { RawSourceMap } from "../emit/sourcemap";
-import type { Diagnostic } from "../lower/analyze";
+import type { Diagnostic } from "../analyze/analysis-result";
 import { analyze } from "../lower/analyze";
 import type { ClassDecl, Expr, Module, Stmt, TypeRef } from "../lower/ir";
 import { lower } from "../lower/lower";
@@ -336,8 +336,8 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     const inherited = inheritedMembers(l, loaded, classIndex);
     const globals = new Set<string>([...classIndex.keys(), ...inherited]);
     const hostChain = opts.hostImport !== null && hostOnChain(l, loaded, classIndex, entryResSet);
-    l.module.hostChain = hostChain;
-    const fileDiags = analyze(l.module, globals, l.resPath).map((d) => ({ resPath: l.resPath, diagnostic: d }));
+    const analysisResult = analyze(l.module, globals, l.resPath, hostChain);
+    const fileDiags = analysisResult.diagnostics.map((d) => ({ resPath: l.resPath, diagnostic: d }));
     if (fileDiags.length > 0) {
       diags.push(...fileDiags);
       continue;
@@ -414,14 +414,14 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       jsFile: basename(jsPath),
       sourceFile: relative(dirname(jsPath), join(resRoot, l.resPath.slice(RES_PREFIX.length))).split(sep).join("/"),
     };
-    const { code, map } = opts.sourcemap ? emitModuleWithMap(l.module, emitOpts) : { code: emitModule(l.module, emitOpts), map: null };
+    const { code, map } = opts.sourcemap ? emitModuleWithMap(l.module, emitOpts, analysisResult) : { code: emitModule(l.module, emitOpts, analysisResult), map: null };
 
     modules.push({
       resPath: l.resPath,
       jsPath,
       className: l.jsName,
       code,
-      usesPackCodec: l.module.usesPackCodec === true,
+      usesPackCodec: l.module.usesPackCodec,
       map: map ?? undefined,
     });
   }

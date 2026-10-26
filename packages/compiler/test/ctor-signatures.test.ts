@@ -13,7 +13,7 @@ const H = "extends SceneTree\n\n";
 
 async function diags(call: string): Promise<string[]> {
   const src = `${H}func _initialize():\n\tprint(${call})\n\tquit()\n`;
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 }
 
 const LIT: Record<string, string> = { int: "1", String: '"a"' };
@@ -86,5 +86,5 @@ describe("表外的类型组合不猜", () => {
 });
 
 async function diagsAt(src: string): Promise<string[]> {
-  return analyze(lower(await parseSource(src))).map((d) => d.message);
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message);
 }

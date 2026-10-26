@@ -49,11 +49,11 @@ export async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
   const hostSpec = "./" + baseName(TREE_FACE.tree.host);
   const zstdHostSpec = "./" + baseName(TREE_FACE.tree.zstdHost);
   try {
-    let code = emitModule(loaded.ir, { runtimeImport: rtSpec, hostImport: hostSpec, autoRun: ctx.run });
-    const useZstd = loaded.ir.usesPackCodec === true;
+    let code = emitModule(loaded.ir, { runtimeImport: rtSpec, hostImport: hostSpec, autoRun: ctx.run }, loaded.analysis);
+    const useZstd = loaded.ir.usesPackCodec;
     if (useZstd) {
       if (!copyZstdHost(dir, srcRoot)) return null;
-      code = emitModule(loaded.ir, { runtimeImport: rtSpec, hostImport: zstdHostSpec, autoRun: ctx.run });
+      code = emitModule(loaded.ir, { runtimeImport: rtSpec, hostImport: zstdHostSpec, autoRun: ctx.run }, loaded.analysis);
     }
     writeFileSync(entry, code, "utf8");
     if (ctx.verbose) console.error(`已编译成单文件 + runtime TS 源码（${rt}）→ ${dir}`);

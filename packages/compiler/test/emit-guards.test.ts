@@ -26,9 +26,10 @@ async function classify(src: string, okMarker: string): Promise<string> {
   try {
     const m = lower(await parseSource(src));
     // S387：元数那两句出自 analyze，先按那两句查一遍再谈发射 —— 只认那两句，别的诊断不参与这张分类器
-    const hit = analyze(m).find((d) => /^Too (few|many) arguments for /.test(d.message));
+    const analysis = analyze(m);
+    const hit = analysis.diagnostics.find((d) => /^Too (few|many) arguments for /.test(d.message));
     if (hit !== undefined) return hit.code ?? "无码";
-    emitModule(m, EMIT_OPTS_PROBE);
+    emitModule(m, EMIT_OPTS_PROBE, analysis);
     return okMarker;
   } catch (e) {
     return e instanceof UnsupportedError ? ((e as { code?: string }).code ?? "无码") : "非 UnsupportedError";
@@ -41,7 +42,7 @@ const PRINT = (call: string): string => `extends SceneTree\n\nfunc _initialize()
 
 const arityText = async (src: string): Promise<string> => {
   const m = lower(await parseSource(src));
-  const hit = analyze(m).find((d) => /^Too (few|many) arguments for /.test(d.message));
+  const hit = analyze(m).diagnostics.find((d) => /^Too (few|many) arguments for /.test(d.message));
   return hit?.message ?? "居然编得过";
 };
 
@@ -540,9 +541,10 @@ describe("转换族单实参口径", () => {
  *  取值点是 analyze 记的号，所以这一族每格都先 analyze 再 emit —— 跳过 analyze 就退化成裸 JS 标识符。 */
 async function emitted(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return `diag:${diags[0]!.code}`;
-  return emitModule(ir, EMIT_OPTS_PROBE);
+  return emitModule(ir, EMIT_OPTS_PROBE, analysis);
 }
 /** 多行函数体：MOD 只给一行，遮蔽那几格得两行式子才试得出来。 */
 const BODY = (lines: string[]): string =>

@@ -12,10 +12,10 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(stmt: string): Promise<string[]> {
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc c():\n\t${stmt}\n`))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc c():\n\t${stmt}\n`))).diagnostics.map((d) => d.message).sort();
 }
 async function msgsModule(body: string): Promise<string[]> {
-  return analyze(lower(await parseSource(`extends SceneTree\n\n${body}\n`))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(`extends SceneTree\n\n${body}\n`))).diagnostics.map((d) => d.message).sort();
 }
 
 const SEED_CANNOT = (k: string): string => `Cannot pass a value of type "${k}" as "int".`;

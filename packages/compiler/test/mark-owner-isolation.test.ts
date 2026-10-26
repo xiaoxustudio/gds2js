@@ -15,8 +15,8 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function compile(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  analyze(ir);
-  return emitModule(ir, OPTS);
+  const analysis = analyze(ir);
+  return emitModule(ir, OPTS, analysis);
 }
 
 // 宿主裸名那一对：两行的 `quit` 都在 6:8，一份是取值、一份是 setter 的形参

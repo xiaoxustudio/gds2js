@@ -15,7 +15,7 @@ const HEAD = 'extends SceneTree\n\nvar v: Vector2 = Vector2(1, 2)\nvar s: String
 
 async function firstLine(expr: string): Promise<string | null> {
   const src = HEAD + "func c():\n\tprint(" + expr + ")\n";
-  const diags = analyze(lower(await parseSource(src)));
+  const diags = analyze(lower(await parseSource(src))).diagnostics;
   const ms = diags.map((x) => x.message).sort();
   return ms.length === 0 ? null : ms[0] ?? null;
 }

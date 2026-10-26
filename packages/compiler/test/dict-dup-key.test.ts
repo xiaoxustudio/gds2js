@@ -55,7 +55,7 @@ let accepted = 0;
 
 describe("analyze · 字典字面量的重复键", () => {
   it.each(CASES)("%s", async (_name, src, expected) => {
-    const diags = analyze(lower(await parseSource(src))).filter((d) => d.code === "dict-dup-key");
+    const diags = analyze(lower(await parseSource(src))).diagnostics.filter((d) => d.code === "dict-dup-key");
     const got = diags.map((d) => `${d.message} (at line ${String((d.loc as { line: number }).line)})`);
     expect(got, `源：\n${src}`).toEqual(expected);
     if (expected.length === 0) accepted++;
@@ -77,7 +77,7 @@ describe("重复键 · NodePath 那一族", () => {
       ['{NodePath("a"): 1, ^"a": 2}', "a"],
     ] as Array<[string, string]>;
     for (const [src, key] of dups) {
-      const diags = analyze(lower(await parseSource(bodySrc("\tvar d = " + src)))).filter((d) => d.code === "dict-dup-key");
+      const diags = analyze(lower(await parseSource(bodySrc("\tvar d = " + src)))).diagnostics.filter((d) => d.code === "dict-dup-key");
       const got = diags.map((d) => `${d.message} (at line ${String((d.loc as { line: number }).line)})`);
       expect(got, src).toEqual(['Key "' + key + '" was already used in this dictionary (at line 4). (at line 4)']);
     }
@@ -86,7 +86,7 @@ describe("重复键 · NodePath 那一族", () => {
   it("引擎收的四形不误拦", async () => {
     const keeps = ['{^"a": 1, "a": 2}', '{^"a": 1, &"a": 2}', '{^"a": 1, ^"b": 2}', '{^"a": 1, ^"A": 2}'];
     for (const src of keeps) {
-      const diags = analyze(lower(await parseSource(bodySrc("\tvar d = " + src))));
+      const diags = analyze(lower(await parseSource(bodySrc("\tvar d = " + src)))).diagnostics;
       expect(diags.map((d) => d.message), src).toEqual([]);
     }
   });

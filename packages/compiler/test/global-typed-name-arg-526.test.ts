@@ -11,7 +11,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(body: string): Promise<string[]> {
-  return analyze(lower(await parseSource("extends SceneTree\n\n" + body))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource("extends SceneTree\n\n" + body))).diagnostics.map((d) => d.message).sort();
 }
 
 const REFUSE = ["int", "Color", "Vector2", "Dictionary", "PackedInt32Array"];

@@ -31,7 +31,7 @@ function srcOf(expr: string): string {
 }
 
 async function first(expr: string): Promise<string> {
-  const diags = analyze(lower(await parseSource(srcOf(expr))));
+  const diags = analyze(lower(await parseSource(srcOf(expr)))).diagnostics;
   const d = diags.find((x) => OPS_CODE.test(x.code));
   return d?.message ?? "不拦";
 }

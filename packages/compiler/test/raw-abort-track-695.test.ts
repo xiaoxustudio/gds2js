@@ -17,9 +17,10 @@ async function emitted(body: string, call: string): Promise<string> {
   const pad = (l: string): string => `\t${l}`;
   const src = `${H}${body}\nfunc _initialize():\n${call.split("\n").map(pad).join("\n")}\n\tquit()\n`;
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) throw new Error(`语义拦下：${diags[0]!.message}`);
-  return emitModule(ir, OPTS);
+  return emitModule(ir, OPTS, analysis);
 }
 
 /** 那一支从签名到收尾的整截产物。 */

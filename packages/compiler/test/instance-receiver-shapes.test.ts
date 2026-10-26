@@ -10,7 +10,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const diags = async (src: string): Promise<string[]> => {
   const tree = await parseSource(src);
-  return analyze(lower(tree)).map((d) => d.message);
+  return analyze(lower(tree)).diagnostics.map((d) => d.message);
 };
 
 const CELLS: Array<[string, string, string]> = [

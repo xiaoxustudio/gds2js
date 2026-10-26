@@ -16,13 +16,15 @@ const SRC = (name: string): string =>
 
 async function run(name: string): Promise<string> {
   const ir = lower(await parseSource(SRC(name)));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return `diag:${diags[0]!.code}`;
-  return emitModule(ir, OPTS);
+  return emitModule(ir, OPTS, analysis);
 }
 
 async function diag(name: string): Promise<string> {
-  const diags = analyze(lower(await parseSource(SRC(name))));
+  const analysis = analyze(lower(await parseSource(SRC(name))));
+  const diags = analysis.diagnostics;
   return diags.length === 0 ? "无诊断" : diags[0]!.message;
 }
 
@@ -173,8 +175,9 @@ describe("循环变量出了循环就不算局部名", () => {
 
   it("循环体里认局部、循环之后认宿主", async () => {
     const ir = lower(await parseSource(LOOP));
-    expect(analyze(ir), "这一形引擎不收诊断").toEqual([]);
-    const code = emitModule(ir, OPTS);
+    const analysis = analyze(ir);
+    expect(analysis.diagnostics, "这一形引擎不收诊断").toEqual([]);
+    const code = emitModule(ir, OPTS, analysis);
     const at = code.indexOf('rt.methodCallable(rt.V.object(this), "quit")');
     expect(at, "循环之后那一读要发宿主的 Callable").toBeGreaterThan(-1);
     expect(code.slice(0, at).includes("rt.methodCallable"), "循环体内的读值不许发成 Callable").toBe(false);
@@ -182,7 +185,8 @@ describe("循环变量出了循环就不算局部名", () => {
   });
 
   it("循环之后读一个只有循环绑过的普通名字，仍是解析期那一句", async () => {
-    const diags = analyze(lower(await parseSource(AFTER)));
+    const analysis = analyze(lower(await parseSource(AFTER)));
+    const diags = analysis.diagnostics;
     expect(diags.map((d) => d.message)).toContain('Identifier "k" not declared in the current scope.');
   });
 });

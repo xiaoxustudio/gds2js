@@ -28,7 +28,7 @@ const CASES: Array<[string, string, Array<[string, string]>]> = [
 
 describe("analyze · 定形字典的类名槽", () => {
   it.each(CASES)("%s", async (_name, source, expected) => {
-    const got = analyze(lower(await parseSource(source)))
+    const got = analyze(lower(await parseSource(source))).diagnostics
       .filter((d) => d.code === KEY || d.code === VAL || d.code === "typed-index-value")
       .map((d) => [d.code, d.message] as [string, string]);
     expect(got, `源：\n${source}`).toEqual(expected);

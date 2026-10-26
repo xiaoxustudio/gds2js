@@ -35,7 +35,7 @@ const CASES: Array<[string, string, string]> = [
 
 describe("analyze · 类名槽与字面量推断文本", () => {
   it.each(CASES)("%s", async (_name, src, expected) => {
-    const diags = analyze(lower(await parseSource(src)));
+    const diags = analyze(lower(await parseSource(src))).diagnostics;
     const got = diags
       .filter((d) => d.code === "typed-collection-assign" || d.code === "typed-collection-element")
       .map((d) => d.message)

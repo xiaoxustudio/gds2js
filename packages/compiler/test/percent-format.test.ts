@@ -13,7 +13,7 @@ const MOD = (body: string): string => `extends SceneTree\n\nfunc _initialize():\
 async function pct(fmt: string, arg: string): Promise<string[]> {
   const src = MOD("\tvar s = " + JSON.stringify(fmt) + " % " + arg);
   const ir = lower(await parseSource(src));
-  return analyze(ir).filter((d) => d.code === "pct-format").map((d) => d.message);
+  return analyze(ir).diagnostics.filter((d) => d.code === "pct-format").map((d) => d.message);
 }
 
 const NA = "not all arguments converted during string formatting in operator %.";
@@ -73,12 +73,12 @@ describe("String % 值 · 放过的形", () => {
 
   it("右支是变量证不出来源，一句不发", async () => {
     const src = MOD("\tvar q = 1\n\tvar s = " + JSON.stringify("a") + " % q");
-    expect(analyze(await lower(await parseSource(src))).filter((d) => d.code === "pct-format")).toEqual([]);
+    expect(analyze(await lower(await parseSource(src))).diagnostics.filter((d) => d.code === "pct-format")).toEqual([]);
   });
 
   it("左支不是字面量就不判", async () => {
     const src = MOD('\tvar f = "a"\n\tvar s = f % 1');
-    expect(analyze(await lower(await parseSource(src))).filter((d) => d.code === "pct-format")).toEqual([]);
+    expect(analyze(await lower(await parseSource(src))).diagnostics.filter((d) => d.code === "pct-format")).toEqual([]);
   });
 
   it("字符串里带百分号的合式写法不误拦", async () => {

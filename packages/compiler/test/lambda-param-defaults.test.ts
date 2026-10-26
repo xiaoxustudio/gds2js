@@ -19,9 +19,10 @@ const MOD = (body: string): string => `extends SceneTree\n\nfunc _initialize():\
 async function verdict(src: string): Promise<string> {
   try {
     const ir = lower(await parseSource(src));
-    const diags = analyze(ir);
+    const analysis = analyze(ir);
+    const diags = analysis.diagnostics;
     if (diags.length > 0) return `diag:${diags[0]!.message}`;
-    return emitModule(ir, OPTS);
+    return emitModule(ir, OPTS, analysis);
   } catch (e) {
     return e instanceof UnsupportedError ? `refuse:${e.code}` : `other:${e instanceof Error ? e.message : String(e)}`;
   }
@@ -115,8 +116,9 @@ describe("lambda 按值捕获函数级局部", () => {
   it("模块变量不参与捕获", async () => {
     const src = ["extends SceneTree", "", "var mv = 1", "", "func _initialize():", "\tvar f = func(): return mv", "\tquit()", ""].join("\n");
     const ir = lower(await parseSource(src));
-    expect(analyze(ir)).toEqual([]);
-    const mod = emitModule(ir, OPTS);
+    const analysis = analyze(ir);
+    expect(analysis.diagnostics).toEqual([]);
+    const mod = emitModule(ir, OPTS, analysis);
     expect(mod.includes("(((mv)")).toBe(false);
     expect(mod.includes("rt.callable((__a: rt.Variant[]) => {")).toBe(true);
   });

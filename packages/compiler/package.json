@@ -9,6 +9,7 @@
     "test": "vitest run --config ../../vitest.config.ts --project compiler"
   },
   "exports": {
+    "./analyze/analysis-result": "./src/analyze/analysis-result.ts",
     "./compile/project": "./src/compile/project.ts",
     "./emit/emitter": "./src/emit/emitter.ts",
     "./emit/sourcemap": "./src/emit/sourcemap.ts",

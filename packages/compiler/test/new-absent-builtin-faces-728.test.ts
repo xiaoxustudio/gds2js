@@ -22,7 +22,7 @@ const NATIVE_CLASSES = ["RefCounted", "Object", "Node", "Resource", "FileAccess"
 
 async function msgs(expr: string): Promise<string[]> {
   const src = "extends SceneTree\n\nfunc c():\n\tprint(" + expr + ")\n";
-  return analyze(lower(await parseSource(src))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message).sort();
 }
 
 const CELLS: Array<[string, string[]]> = [

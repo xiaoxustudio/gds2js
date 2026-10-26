@@ -21,7 +21,7 @@ const CASES: Array<[string, string, string[]]> = [
 
 describe("analyze · 定形接收者的面文本", () => {
   it.each(CASES)("%s", async (_name, source, expected) => {
-    const got = analyze(lower(await parseSource(source)))
+    const got = analyze(lower(await parseSource(source))).diagnostics
       .filter((d) => d.code === "face-member-missing" || d.code === "face-member-not-found")
       .map((d) => d.message);
     expect(got, `源：\n${source}`).toEqual(expected);

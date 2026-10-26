@@ -208,7 +208,7 @@ export function lower(tree: Tree): Module {
   }
   try {
     const m = lowerModule(tree.rootNode);
-    if (packCodecUse) m.usesPackCodec = true;
+    m.usesPackCodec = packCodecUse;
     return m;
   } finally {
     }
@@ -242,6 +242,7 @@ function lowerModuleInner(root: SyntaxNode): Module {
     enums: [],
     funcs: [],
     innerClasses: [],
+    usesPackCodec: false,
   };
 
   for (const c of named(root)) {

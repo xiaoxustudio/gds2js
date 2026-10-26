@@ -15,7 +15,7 @@ const TAIL = "\nfunc _initialize():\n\tquit()\n";
 
 async function refuse(call: string): Promise<string> {
   const src = `${H}func f():\n\t${call}\n${TAIL}`;
-  const hit = analyze(lower(await parseSource(src))).find((d) => ARITY.test(d.message));
+  const hit = analyze(lower(await parseSource(src))).diagnostics.find((d) => ARITY.test(d.message));
   return hit !== undefined ? hit.message : "收下了";
 }
 

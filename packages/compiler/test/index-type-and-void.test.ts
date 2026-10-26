@@ -13,7 +13,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 const H = "extends SceneTree\n\nfunc _initialize():\n";
 
 async function first(src: string): Promise<string> {
-  const hit = analyze(lower(await parseSource(src)))[0];
+  const hit = analyze(lower(await parseSource(src))).diagnostics[0];
   return hit?.message ?? "不拦";
 }
 
@@ -118,7 +118,7 @@ const MOD = 'extends SceneTree\n\nvar b0: PackedByteArray = PackedByteArray()\nv
 const VOID = (m: string): string => `Cannot get return value of call to "${m}()" because it returns "void".`;
 const MANY = (m: string, at: number, got: number): string => `Too many arguments for "${m}()" call. Expected at most ${at} but received ${got}.`;
 const FEW = (m: string, at: number, got: number): string => `Too few arguments for "${m}()" call. Expected at least ${at} but received ${got}.`;
-const all = async (src: string): Promise<string[]> => analyze(lower(await parseSource(src))).map((x) => x.message).sort();
+const all = async (src: string): Promise<string[]> => analyze(lower(await parseSource(src))).diagnostics.map((x) => x.message).sort();
 
 /** `sort` / `reverse` 在**任意元数**下都取不到返回值，元数那一句照旧另发（尺 `tmp/d6/s483.py` 五十九格，读数 `tmp/d6/s483.json`）。 */
 const NINE = ["PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",

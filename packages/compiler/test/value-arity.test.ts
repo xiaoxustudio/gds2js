@@ -52,7 +52,7 @@ let accepted = 0;
 
 describe("analyze · 值类型方法的实参数", () => {
   it.each(CASES)("%s", async (_name, src, expected) => {
-    const diags = analyze(lower(await parseSource(src))).filter((d) => d.code === "value-arity");
+    const diags = analyze(lower(await parseSource(src))).diagnostics.filter((d) => d.code === "value-arity");
     const got = diags.map((d) => `${d.message} @${String((d.loc as { line: number }).line)}`);
     expect(got, `源：\n${src}`).toEqual(expected);
     if (expected.length === 0) accepted++;

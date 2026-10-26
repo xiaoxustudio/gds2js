@@ -66,7 +66,7 @@ export async function exportSingleTree(ctx: Ctx): Promise<ExportTree | null> {
       runtimeImport: "./" + PRODUCT_RUNTIME_FILE,
       hostImport: ctx.hostImport === null ? null : "./" + PRODUCT_RUNTIME_FILE,
       autoRun: ctx.run,
-    });
+    }, loaded.analysis);
     mkdirSync(dir, { recursive: true });
     writeFileSync(entry, code, "utf8");
     copyFileSync(product, join(dir, PRODUCT_RUNTIME_FILE));

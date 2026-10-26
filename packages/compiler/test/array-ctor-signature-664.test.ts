@@ -8,7 +8,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const src = (call: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint("V|", ${call})\n\tquit()\n`;
 const msgs = async (call: string): Promise<string[]> =>
-  analyze(lower(await parseSource(src(call)))).map((d) => d.message);
+  analyze(lower(await parseSource(src(call)))).diagnostics.map((d) => d.message);
 const noCtor = (sig: string): string => `No constructor of "Array" matches the signature "Array(${sig})".`;
 
 const REFUSED: Array<[string, string]> = [
@@ -43,7 +43,7 @@ describe("analyze · Array 的解析期签名臂", () => {
   it("行号与引擎同格", async () => {
     const source = src("Array(5, TYPE_INT)");
     const at = source.split("\n").indexOf('\tprint("V|", Array(5, TYPE_INT))') + 1;
-    const got = analyze(lower(await parseSource(source)));
+    const got = analyze(lower(await parseSource(source))).diagnostics;
     expect(got.map((d) => `${String(d.loc?.line)}|${d.message}`)).toEqual([`${String(at)}|${noCtor("int, Variant.Type")}`]);
   });
 });

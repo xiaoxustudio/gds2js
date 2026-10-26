@@ -10,7 +10,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function diags(body: string): Promise<string[]> {
-  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`))).map((d) => d.message);
+  return analyze(lower(await parseSource(`extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`))).diagnostics.map((d) => d.message);
 }
 
 const ONE = (t: string, n: string): string => `Function "${n}()" not found in base ${t}.`;
@@ -126,7 +126,7 @@ describe("形参标注的属性面与 var 标注同一形（读数 tmp/probe-bin
   ];
 
   it.each(CASES)("%s", async (_label, sig, body, want) => {
-    const diags = analyze(lower(await parseSource(src(sig, body)))).map((d) => d.message);
+    const diags = analyze(lower(await parseSource(src(sig, body)))).diagnostics.map((d) => d.message);
     expect(diags).toEqual(want);
   });
 });

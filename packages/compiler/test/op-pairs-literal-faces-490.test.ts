@@ -16,7 +16,7 @@ const HEAD = 'extends SceneTree\n\n';
 
 async function msgs(expr: string): Promise<string[]> {
   const src = HEAD + "func c():\n\tprint(" + expr + ")\n";
-  return analyze(lower(await parseSource(src))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource(src))).diagnostics.map((d) => d.message).sort();
 }
 
 const PAIRS: Array<[string, string[]]> = [

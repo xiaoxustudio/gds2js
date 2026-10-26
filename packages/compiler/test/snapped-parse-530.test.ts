@@ -14,7 +14,7 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 async function msgs(body: string): Promise<string[]> {
-  return analyze(lower(await parseSource("extends SceneTree\n\nfunc c():\n\t" + body))).map((d) => d.message).sort();
+  return analyze(lower(await parseSource("extends SceneTree\n\nfunc c():\n\t" + body))).diagnostics.map((d) => d.message).sort();
 }
 
 const X = `Invalid argument for "snapped()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".`;

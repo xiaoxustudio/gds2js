@@ -8,7 +8,7 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 const SAY = "Not all code paths return a value.";
 const src = (body: string): string => `extends SceneTree\n\n${body}\n\nfunc _initialize():\n\tquit()\n`;
 const sayings = async (body: string): Promise<string[] | null> => {
-  const hits = analyze(lower(await parseSource(src(body)))).filter((d) => d.message === SAY);
+  const hits = analyze(lower(await parseSource(src(body)))).diagnostics.filter((d) => d.message === SAY);
   return hits.length === 0 ? null : hits.map((d) => `${String(d.loc.line)}:${d.code}`);
 };
 

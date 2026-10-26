@@ -15,7 +15,7 @@ const H = "extends SceneTree\n\nfunc _initialize():\n\tprint(";
 const T = ")\n\tquit()\n";
 
 async function hits(call: string): Promise<Array<{ code: string; message: string }>> {
-  const diags = analyze(lower(await parseSource(`${H}${call}${T}`)));
+  const diags = analyze(lower(await parseSource(`${H}${call}${T}`))).diagnostics;
   return diags.filter((d) => d.code === "global-arg-type" || /^Too (few|many) arguments for /.test(d.message));
 }
 

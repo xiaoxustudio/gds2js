@@ -15,9 +15,10 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function compile(src: string): Promise<string> {
   const ir = lower(await parseSource(src));
-  const diags = analyze(ir);
+  const analysis = analyze(ir);
+  const diags = analysis.diagnostics;
   if (diags.length > 0) return `diag:${diags[0]!.code}`;
-  return emitModule(ir, OPTS);
+  return emitModule(ir, OPTS, analysis);
 }
 
 const HOST_BODY = (lines: string[]): string =>

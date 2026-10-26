@@ -13,8 +13,8 @@ const OPTS = { runtimeImport: "rt", hostImport: "host" };
 
 async function code(src: string): Promise<string> {
   const m = lower(await parseSource(src));
-  analyze(m);
-  return emitModule(m, OPTS);
+  const analysis = analyze(m);
+  return emitModule(m, OPTS, analysis);
 }
 
 const F = (body: string): string => `extends SceneTree\n\nfunc _initialize():\n${body}\n\tquit()\n`;
