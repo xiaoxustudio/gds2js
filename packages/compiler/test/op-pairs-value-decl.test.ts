@@ -7,7 +7,8 @@
  * 张数涨到 469 / 667；右支写成字面量还是标注名，引擎拒的集一字一样，所以两形共用一张表。
  */
 import { describe, expect, it } from "vitest";
-import { analyze, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "@gds2js/compiler/lower/analyze";
+import { analyze } from "@gds2js/compiler/lower/analyze";
+import { OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "@gds2js/compiler/semantics/op-pairs";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 

@@ -19,6 +19,7 @@
     "./lower/ir": "./src/lower/ir.ts",
     "./lower/lower": "./src/lower/lower.ts",
     "./parse/parser": "./src/parse/parser.ts",
+    "./semantics/op-pairs": "./src/semantics/op-pairs.ts",
     "./tree-face": "./src/tree-face.ts",
     "./package.json": "./package.json"
   },
