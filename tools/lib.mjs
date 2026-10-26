@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const CORPUS = join(ROOT, "corpus", "cases");
 
-/** 裁判引擎。可用 GODOT_BIN 覆盖，默认本机 4.6.3 console 版。 */
+/** 裁判引擎。`GODOT_BIN` 指路径；不设则走 PATH 上的 `godot`，缺它三支引擎门自己 skip 并说明缺什么。 */
 export const GODOT_BIN =
-  process.env.GODOT_BIN || "F:/godot/Godot_v4.6.3-stable_win64_console.exe";
+  process.env.GODOT_BIN || "godot";
 
 /** 单次 Godot 运行的上限，「卡住了没输出」的护栏；用 GDS2JS_GODOT_TIMEOUT_MS 按机器状况放大。 */
 export const DEFAULT_TIMEOUT_MS = Number(process.env.GDS2JS_GODOT_TIMEOUT_MS) || 15000;
