@@ -10,7 +10,7 @@ const PROVENANCE_DEBT = ["engine-classes"];
 const CODE_BUDGET: Array<[string, number]> = [
   ["packages/runtime/src/runtime/values", 2238],
   ["packages/runtime/src/runtime/methods", 59],
-  ["packages/runtime/src/runtime/builtins", 1674],
+  ["packages/runtime/src/runtime/builtins", 37],
   ["packages/runtime/src/runtime/packed", 1098],
   ["packages/compiler/src/lower/lower", 1269],
   ["packages/compiler/src/analyze/checks-collections", 1153],
