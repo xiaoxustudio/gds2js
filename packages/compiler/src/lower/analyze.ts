@@ -3112,10 +3112,26 @@ function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
       }
       if (n.kind !== "attribute" || callCallees.has(n)) continue;
       const face = attrFaceRecv(n.obj as Record<string, unknown>, attr, elems, mods);
-      if (face === null) continue;
       const name = n.name;
       if (typeof name !== "string") continue;
       const loc = (n.loc as Diagnostic["loc"]) ?? null;
+      if (face === null) {
+        // 定形容器标注接收者的 `new`（尺 `tmp/probe730/` 四形：`Array[int]` / `Array[String]` / `Array[Vector2]` /
+        // `Dictionary[int, String]`）引擎在解析期两句，base 印**标注全文**（逗号后带一个空格）。
+        // 不定形的 `Array` 由上面按面表发同两句（读数一致），`Dictionary` 引擎本来就是运行期那句 —— 都不走这一支。
+        const rec = n.obj as Record<string, unknown>;
+        if (name === "new" && rec.kind === "ident" && typeof rec.name === "string") {
+          const annText = elems.get(rec.name) ?? attr.get(rec.name) ?? "";
+          if (/^(Array|Dictionary)\[[^\]]+\]$/.test(annText)) {
+            const shown = annText.replace(/\[([^\]]*)\]/, (_m, inner: string) => `[${inner.split(",").map((s) => s.trim()).join(", ")}]`);
+            const one = `Cannot find member "new" in base "${shown}".`;
+            diags.push({ code: "face-attr-missing", message: one, loc });
+            // 定形 `Dictionary` 那形引擎只发一句（语料 449 与 `tmp/probe730/t5.gd` 两把读数一致），定形 `Array` 发两遍
+            if (annText.startsWith("Array")) diags.push({ code: "face-attr-missing", message: one, loc });
+          }
+        }
+        continue;
+      }
       const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "String" ? STRING_METHOD_ARITY : face === "StringName" ? STRING_NAME_METHOD_ARITY : face === "NodePath" ? NODE_PATH_METHOD_ARITY : (VALUE_METHOD_ARITY[face] ?? {});
       const refused = PACK_TYPE_NAMES.has(face) || face === "Array" || face === "String";
       if (name in table) {
