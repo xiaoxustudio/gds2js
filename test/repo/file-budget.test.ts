@@ -5,8 +5,8 @@ import { bad, ok } from "@gds2js/testkit";
 import { ROOT } from "../../tools/lib.mjs";
 
 const EXEMPT_FROM_BUDGET = ["ucaps", "engine-classes", "case-flags", "case-table"];
-const REGENERATED = ["case-table", "case-flags"];
-const PROVENANCE_DEBT = ["ucaps", "engine-classes"];
+const REGENERATED = ["case-table", "case-flags", "ucaps"];
+const PROVENANCE_DEBT = ["engine-classes"];
 const CODE_BUDGET: Array<[string, number]> = [
   ["packages/runtime/src/runtime/values", 3592],
   ["packages/runtime/src/runtime/methods", 2935],

@@ -25,6 +25,7 @@
     "test:treeface": "vitest run --project repo",
     "regen:case-table": "node tools/case-probe.mjs && node tools/golden.mjs 000-probe-cs && node tools/case-table.mjs",
     "regen:case-flags": "node tools/case-flags-probe.mjs && node tools/golden.mjs 000-probe-cf && node tools/case-flags.mjs",
+    "regen:ucaps": "node tools/ucaps-probe.mjs && node tools/ucaps.mjs write",
     "test:cli-native": "vitest run --project e2e cli-native.test.ts",
     "test:compile": "tsx tools/compile.ts",
     "test:pkgmodes": "vitest run --project e2e pkg-modes.test.ts",

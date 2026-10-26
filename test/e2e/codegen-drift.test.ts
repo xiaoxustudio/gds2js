@@ -7,6 +7,7 @@ import {
   renderCaseFlags,
   renderCaseTable,
 } from "../../tools/case-codegen.mjs";
+import { renderUcaps } from "../../tools/ucaps.mjs";
 import { CORPUS, ROOT } from "../support/lib-bridge";
 
 const lf = (s: string): string => s.replace(/\r\n/g, "\n");
@@ -42,5 +43,16 @@ describe.skipIf(!haveProbes)(`生成源码无漂移${SKIP_WHY}`, () => {
     const want = renderCaseFlags(sets);
     const got = readFileSync(`${ROOT}/packages/runtime/src/runtime/case-flags.ts`, "utf8");
     expect(lf(got), "case-flags.ts 漂了：手改了生成物，或 regen:case-flags 跑了没提交").toBe(lf(want));
+  });
+});
+
+const SWEEP = `${ROOT}/tmp/ucaps-probe/sweep.txt`;
+const haveSweep = existsSync(SWEEP);
+
+describe.skipIf(!haveSweep)(`ucaps 生成源码无漂移${haveSweep ? "" : "（跳过：全码点扫描读数在 tmp/ 下，先跑 pnpm regen:ucaps）"}`, () => {
+  it("ucaps.ts 逐字节等于 Godot 全码点扫描重算的产出", () => {
+    const want = renderUcaps(readFileSync(SWEEP, "utf8"));
+    const got = readFileSync(`${ROOT}/packages/runtime/src/runtime/ucaps.ts`, "utf8");
+    expect(lf(got), "ucaps.ts 漂了：手改了生成物，或 Godot 版本不是钉住的 4.6.3").toBe(lf(want));
   });
 });
