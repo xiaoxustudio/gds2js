@@ -9,7 +9,16 @@
     "test": "vitest run --config ../../vitest.config.ts --project compiler"
   },
   "exports": {
-    "./*": "./src/*.ts",
+    "./compile/project": "./src/compile/project.ts",
+    "./emit/emitter": "./src/emit/emitter.ts",
+    "./emit/sourcemap": "./src/emit/sourcemap.ts",
+    "./home": "./src/home.ts",
+    "./lower/analyze": "./src/lower/analyze.ts",
+    "./lower/globals": "./src/lower/globals.ts",
+    "./lower/ir": "./src/lower/ir.ts",
+    "./lower/lower": "./src/lower/lower.ts",
+    "./parse/parser": "./src/parse/parser.ts",
+    "./tree-face": "./src/tree-face.ts",
     "./package.json": "./package.json"
   },
   "dependencies": {

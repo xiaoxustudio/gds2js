@@ -3,6 +3,7 @@ import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
+import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
 import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, lambdaCaptureNames, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
@@ -983,8 +984,6 @@ function dropBind(out: Map<string, number>, name: string): void {
   if (left <= 0) out.delete(name);
   else out.set(name, left);
 }
-
-const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
 
 const MEASURED_SLOTS = new Set([
   "int",

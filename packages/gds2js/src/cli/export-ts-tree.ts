@@ -2,7 +2,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSy
 import { basename, dirname, join, relative } from "node:path";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import { emitModule } from "@gds2js/compiler/emit/emitter";
-import { TREE_FACE } from "@gds2js/runtime/tree-face";
+import { TREE_FACE } from "@gds2js/compiler/tree-face";
 import { runtimeTsDir } from "../paths";
 import { baseName, closureRoot, errOf, printDiags, projectDiags, tryLoadSingle, type Ctx } from "./ctx";
 import { exportVerdict, NO_DIRS, walkMjs, type ExportTree } from "./export-common";

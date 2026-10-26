@@ -13,12 +13,12 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 
 | 位置 | 内容 |
 | --- | --- |
-| `packages/runtime` | 运行时内核：值表示 / `ops.*` 动态路径 / `fast.*` 快路径、容器、UTF-32 String、Vector/Color、hash；host 宿主入口；`tree-face.ts` 产物树唯一清单 |
-| `packages/compiler` | parse（tree-sitter WASM→CST）→ lower(IR) → analyze → emit；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存 |
+| `packages/runtime` | 运行时内核：值表示 / `ops.*` 动态路径 / `fast.*` 快路径、容器、UTF-32 String、Vector/Color、hash；host 宿主入口 |
+| `packages/compiler` | parse（tree-sitter WASM→CST）→ lower(IR) → analyze → emit；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |
-| `corpus/cases/` | 语料用例 001–373，逐例 golden 对账 |
+| `corpus/cases/` | 语料用例 446 例（另有 `000-*` 探头，不入语料），逐例 golden 对账 |
 | `test/` | `repo/`（仓库不变量）+ `e2e/`（出货与语义门，逐支落点看目录）+ `support/` |
 
 ## 常用命令
@@ -43,7 +43,7 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GD
 ## 架构要点
 
 - **seam 模式**：node 侧与原生 exe 的分岔口是同名的 `*.native.ts` 覆盖原文件（parser / ir-cache / bundle / exec / home 五处），其余源码一行不改；`tools/cli-native.mjs` 装配 scratch 树，zig cc（`-target x86_64-windows-gnu`）编 C shim，scriptc 出 exe。
-- **tree-face**：`packages/runtime/src/tree-face.ts` 是产物树 / 内嵌 HOME 布局的唯一清单，四个消费者共用；`test:treeface`（`test/repo/`）对账，改产物树或 HOME 布局先跑它。
+- **tree-face**：`packages/compiler/src/tree-face.ts` 是产物树 / 内嵌 HOME 布局的唯一清单，三个消费者共用；`test:treeface`（`test/repo/`）对账，改产物树或 HOME 布局先跑它。
 - **双轨值表示**（D1/D2）：编译期能定类型 → 原生直译（`fast.*`）；推断不出 / `Variant` → 装箱走 `ops.*`。int 分轨：安全整数内纯 Number、越界响亮抛错；装箱轨算术升 bigint 按 int64 回绕。
 - **产物**：ESM `.mts`，带可擦除 TS 标注，Node 原生类型擦除直接跑；默认末尾 `await new Main().run()`，`--no-run` 关闭。
 

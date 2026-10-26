@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 与 packages/ 到 scratch、把四份同名文件换成原生实现、
+ * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 与 packages/ 到 scratch、把五份同名文件换成原生实现、
  * 用 zig 编 C、写 ffi manifest、跑 scriptc build。
  * C 用 zig cc 编，目标三元组按 host 推导（`CC_TARGET` 可覆盖），标准必须是 `-std=gnu11`：
  * 严格 ANSI 下 glibc 不暴露 `le16toh`（`unicode.h`）、musl 不暴露 `fdopen`（`parser.c`），
@@ -14,9 +14,9 @@
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TREE_FACE } from "../packages/runtime/src/tree-face.ts";
+import { TREE_FACE } from "../packages/compiler/src/tree-face.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH = join(ROOT, "tmp", "cli-native");
@@ -77,7 +77,7 @@ for (const pkg of ["runtime", "compiler", "gds2js"]) {
 }
 console.log(`复制了 ${pkgFiles.length} 份包源码 → ${SCRATCH}`);
 
-/* 2) 四份 seam 文件同名换实现：拿仓库里的 .native.ts 覆盖到 scratch 的同名位置。
+/* 2) 五份 seam 文件同名换实现：拿仓库里的 .native.ts 覆盖到 scratch 的同名位置。
  *    这是构建期分岔的口子：node 那侧吃 web-tree-sitter、进程内 import()、tsdown、SEA 资产，
  *    原生 exe 里这四样都不存在，所以同名换实现，其余源码一行不改。 */
 const SEAMS = [
@@ -88,7 +88,7 @@ const SEAMS = [
   ["packages/compiler/src/home.native.ts", "packages/compiler/src/home.ts"],
 ];
 for (const [from, to] of SEAMS) copyFileSync(join(ROOT, from), join(SCRATCH, to));
-console.log(`scratch 的 ${SEAMS.length} 份 seam 换成原生实现（parser / bundle / exec / home）`);
+console.log(`scratch 的 ${SEAMS.length} 份 seam 换成原生实现（${SEAMS.map(([, to]) => basename(to).replace(".ts", "")).join(" / ")}）`);
 
 /* 原生那支的「自带家目录」= 构建期把 dist 与 runtime 源码嵌进 exe。
  * 契约与 SEA 那支一字不差：解出一个只读目录，给目录本身和目录里某个文件的落盘路径。

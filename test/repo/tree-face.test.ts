@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, it } from "vitest";
 import { bad, ok } from "@gds2js/testkit";
-import { TREE_FACE } from "@gds2js/runtime/tree-face";
+import { TREE_FACE } from "@gds2js/compiler/tree-face";
 import { ROOT } from "../../tools/lib.mjs";
 
 const T = TREE_FACE;
@@ -55,11 +55,10 @@ describe("tree-face 对账门", () => {
   });
 
   it("③ 消费者零硬编码（硬编码的树面字符串只许出现在 tree-face.ts）", () => {
-    const consumers: Array<{ file: string; mustRef: boolean }> = [
-      { file: "packages/gds2js/src/cli.ts", mustRef: false },
-      { file: "packages/gds2js/src/cli/export-ts-tree.ts", mustRef: true },
-      { file: "test/e2e/scriptc.test.ts", mustRef: true },
-      { file: "tools/cli-native.mjs", mustRef: true },
+    const consumers = [
+      "packages/gds2js/src/cli/export-ts-tree.ts",
+      "test/e2e/scriptc.test.ts",
+      "tools/cli-native.mjs",
     ];
     const forbidden = [
       ...new Set<string>([
@@ -77,7 +76,7 @@ describe("tree-face 对账门", () => {
       ]),
     ];
 
-    for (const { file, mustRef } of consumers) {
+    for (const file of consumers) {
       const abs = join(ROOT, file);
       if (!existsSync(abs)) {
         bad(`消费者不在盘面：${file}`);
@@ -94,8 +93,8 @@ describe("tree-face 对账门", () => {
           }
         });
       }
-      if (mustRef && !text.includes("TREE_FACE")) bad(`${file} 没引用 TREE_FACE 清单`);
-      else if (hits === 0) ok(`${file}：零硬编码${mustRef ? " + 已引清单" : ""}`);
+      if (!text.includes("TREE_FACE")) bad(`${file} 没引用 TREE_FACE 清单`);
+      else if (hits === 0) ok(`${file}：零硬编码 + 已引清单`);
     }
   });
 });

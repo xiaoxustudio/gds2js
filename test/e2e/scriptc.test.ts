@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync,
 import { cpus } from "node:os";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vitest";
-import { TREE_FACE } from "@gds2js/runtime/tree-face";
+import { TREE_FACE } from "@gds2js/compiler/tree-face";
 import { hasScriptc, missing } from "../support/env";
 import { caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden, ROOT } from "../support/lib-bridge";
 import { NEED_ZSTD_TEXT } from "../support/pack-codec";

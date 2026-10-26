@@ -1,7 +1,8 @@
 import { staticMemberFn } from "./ir";
-import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "./static-arg-types";
-import { FACE_ARG_AS, FACE_ARG_TYPES } from "./face-arg-types";
-import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "./instance-arg-types";
+import { ELEM_FACES, NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
+import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../semantics/arg-types/static-arg-types";
+import { FACE_ARG_AS, FACE_ARG_TYPES } from "../semantics/arg-types/face-arg-types";
+import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "../semantics/arg-types/instance-arg-types";
 import { isGlobalConst } from "./globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
@@ -14,7 +15,7 @@ import {
   GLOBAL_ARG_SHOULD_BE,
   GLOBAL_ARG_TYPES,
   GLOBAL_ARG_VARARG,
-} from "./global-arg-types";
+} from "../semantics/arg-types/global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import {
@@ -517,10 +518,6 @@ function parseTyped(name: string): TypedSlot | null {
   if (parts.length !== 2) return null;
   return { decl: name, kind: "Dictionary", key: parts[0] as string, val: parts[1] as string };
 }
-
-export const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
-
-const ELEM_FACES = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "String", "int", "float", "bool"]);
 
 function readFaceOf(decl: string, keyType: StaticType): string | null {
   const slot = parseTyped(decl);
