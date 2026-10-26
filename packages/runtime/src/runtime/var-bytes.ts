@@ -16,10 +16,8 @@ import { CallableBox, nullCallable } from "./callable";
 import { GdRid, rid } from "./rid";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
-/** 引擎 `VariantWriter::encode` 的头部标志：实测到的只有 `1 << 16`（int64 / double / 定型数组都挂它）。 */
 const FLAG_WIDE = 1;
 
-/** 实测过的类型码（S224 那张表）：只对得上数的那几支开，其余一律响亮拒。 */
 const T_NIL = 0;
 const T_BOOL = 1;
 const T_INT = 2;
@@ -34,7 +32,6 @@ const T_DICTIONARY = 27;
 const T_ARRAY = 28;
 const T_PACKED_BYTE_ARRAY = 29;
 const T_PACKED_FLOAT64_ARRAY = 33;
-/** 实测 `bytes_to_var` 的 `(header & 0xFF) >= VARIANT_MAX` 判据：引擎那句给的是 39 那一格。 */
 const VARIANT_MAX = 39;
 const T_NODE_PATH = 22;
 const T_PACKED_I32 = 30;
@@ -52,9 +49,7 @@ const T_OBJECT = 24;
 const T_RID = 23;
 const T_CALLABLE = 25;
 
-/** 编码侧的信号：路径拿不出来时引擎回的是**一个空 PackedByteArray**（并打一句 `Failed to encode a path to a custom script`），不是错。 */
 const CODE_NO_SCRIPT_PATH = "var-to-bytes-no-script-path";
-/** 解码侧的响亮拒：类名是宿主类，Tier 1 造不出那种实例（D4），这一支不进 try/catch 的吞名单。 */
 const CODE_CANNOT_BUILD = "bytes-to-var-object-class";
 
 const PACK_TYPE_CODE: Record<PackKind, number> = {
@@ -73,7 +68,6 @@ const PACK_TYPE_CODE: Record<PackKind, number> = {
 const CODE_PACK: Record<number, PackKind> = {};
 for (const k of Object.keys(PACK_TYPE_CODE) as PackKind[]) CODE_PACK[PACK_TYPE_CODE[k]] = k;
 
-/** 定型数组 / 字典头部那枚类型码：`ElemKind` 的十二支都在 S224 那张 TYPE_* 表里，容器里再各量一枚（语料 275）。 */
 const ELEM_TYPE: Record<ElemKind, number> = {
   bool: 1,
   int: 2,
@@ -95,14 +89,12 @@ const ELEM_TYPE: Record<ElemKind, number> = {
 const TYPE_ELEM: Record<number, ElemKind> = {};
 for (const k of Object.keys(ELEM_TYPE) as ElemKind[]) TYPE_ELEM[ELEM_TYPE[k]] = k;
 
-/** 反向：ElemKind 折成头部的类型码。表外的字符串（例如值位置写 Variant）绝不能写成 NaN 字节。 */
 function elemCode(kind: ElemKind): number {
   const c = ELEM_TYPE[kind];
   if (c === undefined) throw new UnsupportedError("var-to-bytes-elemkind", `var_to_bytes() 的容器元素标注 ${String(kind)} 不在量过的类型码表里，响亮拒`);
   return c;
 }
 
-/** 头部那枚类型码折回 ElemKind：表外（对象、引擎类值那一族）响亮拒。 */
 function elemKindOf(code: number): ElemKind {
   const k = TYPE_ELEM[code & 0xff];
   if (k === undefined) throw new UnsupportedError("bytes-to-var-elemkind", `bytes_to_var() 读到没量过的容器元素类型码 ${String(code)}`);
@@ -143,7 +135,6 @@ function bitsToFloat64(b: bigint): number {
   return SCRATCH.getFloat64(0, true);
 }
 
-/** Godot 的字符串上线是 UTF-8（实测 `héllo` 六个字节、`😀` 四个），这里自己走码点，不碰 TextEncoder。 */
 function utf8(s: string): number[] {
   const out: number[] = [];
   for (let i = 0; i < s.length; ) {
@@ -188,7 +179,6 @@ function fromUtf8(bytes: number[]): string {
   return s;
 }
 
-/** 一个值能不能编：把没量过的形状在这里一次拦清，别让它们流进式子里。 */
 function refuseUnmeasured(v: Variant): void {
   if (v.t !== Tag.OBJECT) return;
   const o = v.v;
@@ -222,7 +212,6 @@ class Writer {
     this.bytes.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff);
   }
 
-  /** 静态目标上 bigint 只做得加减乘除（`>>=` 是 SC1043），所以走 DataView 取字节。 */
   u64(x: bigint): void {
     SCRATCH.setBigUint64(0, u64Mask(x), true);
     for (let k = 0; k < 8; k++) this.bytes.push(SCRATCH.getUint8(k));
@@ -241,7 +230,6 @@ class Writer {
     this.u32((type & 0xff) | (wide ? FLAG_WIDE << 16 : 0));
   }
 
-  /** 字符串上线形状：UTF-8 字节数（不含填充）+ 补零到 4 的倍数。 */
   str(s: string): void {
     const b = utf8(s);
     this.u32(b.length);
@@ -249,7 +237,6 @@ class Writer {
     while (this.bytes.length % 4 !== 0) this.bytes.push(0);
   }
 
-  /** pack 里的字符串把终止符一起算进长度（实测 "a" 写 2、"abc" 写 4、"é" 写 3），数据仍只补零到 4 的倍数。 */
   strPacked(s: string): void {
     const b = utf8(s);
     this.u32(b.length + 1);
@@ -275,7 +262,6 @@ class Writer {
         this.f64(Number(e));
         return;
       case "string":
-        // 静态目标不接受对带对象分支的 union 做 String 转换（SC1090）；错型格子照模型折成默认格，与 `defaultElem("string")` 同值。
         this.strPacked(typeof e === "string" ? e : "");
         return;
       case "vector2":
@@ -302,8 +288,6 @@ class Writer {
     }
   }
 
-  /** 表里那一支：类名串、属性数、逐格「名串 + 整支变体」（S284 ②③）。Tier 1 没有 `@export`，
-   *  而普通 `var` 本来就不进 storage 那一族，所以表里只有 `script` 一格；路径拿不出来那一形引擎回**空数组**（S284 的 `objects.mts` 七格全是 0 字节）。 */
   objectEntry(o: GdScriptObject): void {
     const desc = descOf(o);
     if (desc === null || desc.dictResPath === null || desc.dictClassPath !== "") {
@@ -343,9 +327,7 @@ class Writer {
         return;
       }
       case Tag.FLOAT: {
-        // 静态目标不比对 `unknown`：先收到 number 格子里（SC1043）。
         const f = v.v as number;
-        // 实测判据只有一条：float32 折回来还是它自己就走窄身（NaN 因为 NaN != NaN 自然落进宽身，±inf 与 2 的幂都在窄身那侧）
         if (bitsToFloat32(float32Bits(f)) === f) {
           this.header(T_FLOAT);
           this.f32(f);
@@ -367,10 +349,7 @@ class Writer {
         const a = v.v as GArray;
         const items = a.raw();
         const kind = a.elemKind();
-        // 实测：定型数组头部挂宽位，再跟一枚「元素类型码」字（Array[int] 给 2、Array[String] 给 4、Array[Array] 给 28）
         if (a.classNamed() !== "") {
-          // 类定型（S614 拆完的形）：头部 flags=2，之后**不写元素型码**，只写一枚固定的串名位 —— 引擎写的
-          // 是 "EncodedObjectAsID"，与我们给的类名无关，回读后类名也就变成它（读数 tmp/d6/s624.gd）
           this.u32(T_ARRAY | (2 << 16));
           this.str("EncodedObjectAsID");
           this.u32(items.length);
@@ -390,7 +369,6 @@ class Writer {
         }
         const ks = d.keys();
         const vs = d.values();
-        // 实测：头部高位 1 = 带键类型、再加 4 = 连值类型一起带；类型码写在个数之前
         this.u32(T_DICTIONARY | ((d.keyKind !== null ? (d.valKind !== null ? 5 : 1) : 0) << 16));
         if (d.keyKind !== null) this.u32(elemCode(d.keyKind));
         if (d.valKind !== null) this.u32(elemCode(d.valKind));
@@ -458,12 +436,10 @@ class Writer {
           this.header(PACK_TYPE_CODE[o.kind]);
           this.u32(items.length);
           for (const e of items) this.packElem(o.kind, e);
-          // 只有字节那一族要补零到 4（实测 PackedInt32Array([]) 就八字节，元素本身都是 4 的倍数）
           if (o.kind === "byte") while (this.bytes.length % 4 !== 0) this.bytes.push(0);
           return;
         }
         if (o instanceof GdNodePath) {
-          // 实测三个计数字：第一个是「名字数 | 1<<31」（那一位恒置），再子名数、绝对位；其后每段「长度 + UTF-8 补零」
           this.header(T_NODE_PATH);
           this.u32(0x80000000 | o.names.length);
           this.u32(o.subnames.length);
@@ -473,7 +449,6 @@ class Writer {
           return;
         }
         if (o instanceof CallableBox) {
-          // 内建、脚本方法、静态方法、lambda、`Callable(h, "m")` 五形只写一枚裸头部，两支函数一字一样（尺 `tmp/probe709/bytes.mts`）
           this.header(T_CALLABLE);
           return;
         }
@@ -487,7 +462,6 @@ class Writer {
             this.objectEntry(o);
             return;
           }
-          // 实测：不挂对象表那一支把身份号直写 —— 24,0,1,0 再一枚 int64（S284 ①）
           this.header(T_OBJECT, true);
           this.u64(BigInt(o.gdObjectId));
           return;
@@ -498,15 +472,12 @@ class Writer {
   }
 }
 
-/** `var_to_bytes(值)`：PackedByteArray，照 4.6.3 实测的 `VariantWriter::encode` 形状（语料 274 / §6 第 29 条）。 */
 export function gVarToBytes(v: Variant): Variant {
   const w = new Writer();
   w.variant(v);
   return V.object(GBytes.of(w.bytes, "byte"));
 }
 
-/** `var_to_bytes_with_objects(值)`：同一台编码器，只是 OBJECT 那一支改写成内联条目（S284 ②）。
- *  脚本路径拿不出来那一形按实测回**空数组**（`tmp/probe-varbytes/objects.mts` 那七格全是 0 字节），不是错。 */
 export function gVarToBytesWithObjects(v: Variant): Variant {
   const w = new Writer(true);
   try {
@@ -527,7 +498,6 @@ class Reader {
     return this.b.length - this.i;
   }
 
-  /** 读不满就是截断：引擎那句 `Condition "len < 4" is true` 之后返回 NIL，我们照这一形走（语料 274 的 t33）。 */
   need(n: number): void {
     if (this.left < n) throw new UnsupportedError("bytes-to-var-truncated", "截了");
   }
@@ -541,7 +511,6 @@ class Reader {
 
   u64(): bigint {
     this.need(8);
-    // 字节进 DataView、从有符号那头出来：bigint 的移位与按位或在静态目标上没有 lowering。
     for (let k = 0; k < 8; k++) SCRATCH.setUint8(k, this.b[this.i + k] as number);
     this.i += 8;
     return SCRATCH.getBigInt64(0, true);
@@ -569,7 +538,6 @@ class Reader {
     return fromUtf8(slice);
   }
 
-  /** pack 里的字符串：长度含终止符，数据只占 utf8 的字节数，再补零到 4 的倍数。 */
   strPacked(): string {
     const n = this.u32() - 1;
     const pad = n + ((4 - (n % 4)) % 4);
@@ -621,7 +589,6 @@ class Reader {
     }
   }
 
-  /** 条目照 S284 ② 那份形状读：类名串、属性数、逐格「名串 + 整支变体」，两个串都不带变体头部。纯函数式的一次顺序读。 */
   objectEntry(): Variant {
     const cls = this.str();
     const n = this.u32();
@@ -700,7 +667,6 @@ class Reader {
       }
       case T_ARRAY: {
         if ((flags & 2) !== 0) {
-          // 类定型：读那枚串名位（引擎恒为 "EncodedObjectAsID"），元素型不写码 —— 定型性按 Object 接（S614）
           const cls = this.str();
           const cn = this.u32();
           const citems: Variant[] = [];
@@ -731,16 +697,13 @@ class Reader {
         return V.dict(d);
       }
       case T_OBJECT: {
-        // 实测：带号那一支解回 EncodedObjectAsID（盒子自己另占一个号），内联条目那一支在没开对象表的解码器里回 <null>（S285 ②③）
         if ((flags & FLAG_WIDE) !== 0) return V.object(encodedObjectIdBox(this.u64()));
         if (!this.allowObjects) throw new UnsupportedError("bytes-to-var-object", "对象表那一支要的是 bytes_to_var_with_objects()");
         return this.objectEntry();
       }
       case T_RID:
-        // 读回来还是那一枚号（`RID()` 那格量的是 0：`typeof` 23、`get_id()` 0，尺 `tmp/probe709/decode.mts`）
         return rid(this.u64());
       case T_CALLABLE:
-        // 编码不落脚本与方法名：解回的是失效 Callable（印 `null::null`、`is_valid()` false、`typeof` 25）
         return nullCallable();
       case T_NODE_PATH: {
         const names = (this.u32() >>> 0) & 0x7fffffff;
@@ -758,7 +721,6 @@ class Reader {
         const n = this.u32();
         const items: PackElem[] = [];
         for (let k = 0; k < n; k++) items.push(this.packElem(kind));
-        // 只有字节那一族在元素后面补零到 4 的倍数
         if (kind === "byte") this.i += (4 - (this.i % 4)) % 4;
         return V.object(GBytes.of(items, kind));
       }
@@ -766,8 +728,6 @@ class Reader {
   }
 }
 
-/** 实测：空类名给的是空对象引用 `<Object#null>`；类名在 ClassDB 里不存在给 `<null>`（引擎那句 `Cannot get class` 没有 `at:` 行）；
- *  `script` 指向加载不到的路径也给 `<null>`（`Invalid script path`）。宿主类名 Tier 1 造不出实例，那句不吞、响亮拒（S284 ⑤）。 */
 function builtObject(cls: string, names: string[], values: Variant[]): Variant {
   if (cls === "") return V.object(NULL_OBJECT);
   if (!ENGINE_CLASS_NAMES.has(cls)) return V.nil();
@@ -793,7 +753,6 @@ function builtObject(cls: string, names: string[], values: Variant[]): Variant {
   return V.object(inst);
 }
 
-/** 开对象表那侧不吞的码：这三形不是「字节读不通」，而是我们造不出 / 没量过，按红线要响。 */
 const LOUD_WITH_OBJECTS: ReadonlySet<string> = new Set([CODE_CANNOT_BUILD, "bytes-to-var-object-prop", "bytes-to-var-elemkind"]);
 const LOUD_NONE: ReadonlySet<string> = new Set<string>([]);
 

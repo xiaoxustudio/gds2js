@@ -34,7 +34,6 @@ export function vector3(x: number, y: number, z: number): Variant {
   return V.object(new GVector3(x, y, z));
 }
 
-/** 「这个对象是不是 Vector3i、是的话把三个分量交出来」那一格，由 `vector3i` 在自己模块里登记：反向 import 会成环，而交分量而不是布尔是因为判完再收结构视图会丢掉实例身份。两个入口各自认各自的类，所以 `Vector2()` 的单参分支不会把 Vector3i 误认成 Vector2i。 */
 type Vec3iParts = (o: object) => [number, number, number] | null;
 
 let vec3iParts: Vec3iParts | null = null;
@@ -48,7 +47,6 @@ export function asVec3(v: Variant): GVector3 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector3 ? (v.v as GVector3) : null;
 }
 
-/** `Vector3(...)`：0 参给零向量，1 参收 Vector3（拷贝）与 Vector3i（逐分量升 float），其余必须三个数值。 */
 export function vector3New(args: Variant[]): Variant {
   if (args.length === 0) return vector3(0, 0, 0);
   if (args.length === 1) {
@@ -66,7 +64,6 @@ export function vector3New(args: Variant[]): Variant {
   return vector3(scalar(args[0], "Vector3"), scalar(args[1], "Vector3"), scalar(args[2], "Vector3"));
 }
 
-/** `Vector3.UP` 这类静态常量（Godot 只有这九个）。 */
 const VEC3_CONST: Record<string, [number, number, number]> = {
   ZERO: [0, 0, 0],
   ONE: [1, 1, 1],
@@ -79,10 +76,8 @@ const VEC3_CONST: Record<string, [number, number, number]> = {
   BACK: [0, 0, 1],
 };
 
-/** 轴常量（`Vector3i` 那一张同形）：值实测是 int 0 / 1 / 2。 */
 const VEC3_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1, AXIS_Z: 2 };
 
-/** 八面体解码的式子（4.6.3 实测 169 格全中，`tmp/probe-oct/grid.txt`）：`t` 夹在 [0,1]，两个水平分量各走 `>= 0` 那一支。 */
 function octaDecode(o: GVector2): Variant {
   const fx = sub(mul(o.x, 2), 1);
   const fy = sub(mul(o.y, 2), 1);
@@ -91,7 +86,6 @@ function octaDecode(o: GVector2): Variant {
   return normalized(add(fx, fx >= 0 ? -t : t), add(fy, fy >= 0 ? -t : t), fz);
 }
 
-/** 解码的实参口：`Vector2` 直接收，`Vector2i` 走 `Vector2()` 那条升 float 的支（4.6.3 实测 `Vector3.octahedron_decode(Vector2i(0, 0))` 给 (0.0, 0.0, -1.0)），其余响亮报错。 */
 function octArg(args: Variant[], i: number, who: string): GVector2 {
   const a = args[i];
   if (a === undefined) throw new UnsupportedError("vector3-arg", `Vector3.${who} 缺少实参`);
@@ -102,7 +96,6 @@ function octArg(args: Variant[], i: number, who: string): GVector2 {
   return conv;
 }
 
-/** `Vector3.` 上的静态成员：九个常量，加上 `octahedron_decode`（静态式与实例式共用一条式子，实例被忽略，实测过）。 */
 export function vector3Const(name: string, args: Variant[] = []): Variant {
   if (args.length > 0 || name === "octahedron_decode") {
     switch (name) {
@@ -129,13 +122,10 @@ export function vector3Const(name: string, args: Variant[] = []): Variant {
   );
 }
 
-/** 标量实参：int/float 收成 number，其余响亮报错。 */
-/** 数值实参在调用边界上就是 `real_t`：float 折回 float32（S313，与 `Vector2` 同一条）。 */
 function scalar(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("vector3-arity", `Vector3.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return r(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
-  // bool 在数值位上折 0 / 1（`Vector3(1, 2, 3).cubic_interpolate(…, true)` 实测照算，与 `Vector2` 同一条）
   if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   throw new UnsupportedError("vector3-arg", `Vector3.${who} 需要数值实参，收到 ${v.t}`);
 }
@@ -144,7 +134,6 @@ function vecArg(args: Variant[], i: number, who: string): GVector3 {
   const a = args[i];
   const v = a === undefined ? null : asVec3(a);
   if (v) return v;
-  // Vector3i 交在 Vector3 位上引擎按分量折（`Vector3(1, 2, 3).signed_angle_to(Vector3i(1, 2, 3), Vector3(1, 2, 3))` 实测给值），与构造式那一格同一登记
   const inner = a !== undefined && a.t === Tag.OBJECT ? a.v : null;
   const parts = inner !== null && typeof inner === "object" && vec3iParts !== null ? vec3iParts(inner) : null;
   if (parts !== null) return new GVector3(parts[0] as number, parts[1] as number, parts[2] as number);
@@ -153,7 +142,6 @@ function vecArg(args: Variant[], i: number, who: string): GVector3 {
 
 function arity(args: Variant[], n: number, who: string): void {
   if (args.length !== n) {
-    // 运行期这一句的 N 取的是**声明的形参数**（带默认实参那族也报上界，实测 `a[2].from_hsv(0)` 给 4 而非 3；S305）
     throw new GodotRuntimeError("vector3-arity", `Invalid call to function '${who}' in base 'Vector3'. Expected ${n} argument(s).`);
   }
 }
@@ -165,18 +153,14 @@ const flen = (x: number, y: number, z: number) => r(Math.sqrt(add(add(mul(x, x),
 /** 与全局 `fposmod` 同一条实测口径：模数为 0 或商不有限都给 nan，负模数也走 `a - b*floor(a/b)` 这一支。 */
 const fposmod = (a: number, b: number): number => (b === 0 || !Number.isFinite(a / b) ? NaN : a - b * Math.floor(a / b) + 0);
 
-/** `is_normalized()` 那一条判据，与 Vector2 同一口径（epsilon 两侧实测过）。 */
 const isUnit = (v: GVector3) => r(Math.abs(sub(lengthSq(v), 1))) < NORMALIZED_EPS;
 
-/** 轴没归一时引擎推的那一块 ERROR（`tmp/probe708/axis.mts` 七格：原向量照回、脚本不打断）。
- *  本模块是叶子，拿不到 show 与帧表，所以由宿主把这一块登记进来 —— 与 `setStackPrintSink` 同一条通道。 */
 let rotatedAxisBlock: ((axis: GVector3) => void) | null = null;
 
 export function setRotatedAxisBlockSink(fn: (axis: GVector3) => void): void {
   rotatedAxisBlock = fn;
 }
 
-/** Vector3 的方法面：未知成员响亮报缺。 */
 export function vector3Method(v: GVector3, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length":
@@ -236,7 +220,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(Math.ceil(v.x), Math.ceil(v.y), Math.ceil(v.z));
     case "round": {
       arity(args, 0, "round");
-      // 与 Vector2 同一条：先舍回 float32 再取整（S311）
       const h = (n: number) => (n < 0 ? Math.ceil(sub(n, 0.5)) : Math.floor(add(n, 0.5)));
       return vector3(h(v.x), h(v.y), h(v.z));
     }
@@ -317,8 +300,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       );
     }
     case "move_toward": {
-      // 与 `Vector2` 那一条同形：`v + ((o - v) / len) * delta`，`len` 为零或不超过 `delta` 时直接落到目标（S313 的第 46 格：
-      // 19 支 MT3 全合，之前那两格「差 1～3 ULP」是旧打印口径固定 6 位小数造成的假分岔 —— `|x| ≈ 14` 引擎只印 5 位）
       arity(args, 2, "move_toward");
       const o = vecArg(args, 0, "move_toward");
       const d = scalar(args[1], "move_toward");
@@ -345,7 +326,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(bz(v.x, c1.x, c2.x, e.x), bz(v.y, c1.y, c2.y, e.y), bz(v.z, c1.z, c2.z, e.z));
     }
     case "bezier_derivative": {
-      // 与 `Vector2` 同一支式子，每步折回 float32（`math_funcs.h` 的 float 那一支，134 格全合）
       arity(args, 4, "bezier_derivative");
       const c1 = vecArg(args, 0, "bezier_derivative");
       const c2 = vecArg(args, 1, "bezier_derivative");
@@ -369,8 +349,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const cubic = (zero: number, one: number, two: number, three: number) => {
         const p0 = mul(2, one);
         const p1 = mul(sub(two, zero), w);
-        // 两项系数按 C++ 源码的从左到右结合：`2p0 - 5p1 + 4p2 - p3` 与 `3*(p1 - p2) - p0 + p3`（S313：
-        // 原来的 `(2p0+4p2)-5p1-p3` 与 `(3p1+p3)-p0-3p2` 在 3573.422 / 9058.08 / 1e7 那三格上各差 1 个 float32 ULP）
         const p2 = mul(sub(add(sub(mul(2, zero), mul(5, one)), mul(4, two)), three), t2);
         const p3 = mul(add(sub(mul(3, sub(one, two)), zero), three), t3);
         return mul(0.5, add(add(add(p0, p1), p2), p3));
@@ -378,7 +356,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return vector3(cubic(pre.x, v.x, b.x, post.x), cubic(pre.y, v.y, b.y, post.y), cubic(pre.z, v.z, b.z, post.z));
     }
     case "cubic_interpolate_in_time": {
-      // 与 `Vector2` 那一条同形：Barry-Goldman 逐分量、每步 lerp 的权重在跨度退化时换成钉死的常数（读数 `tmp/probe-argtype/cubtau.txt`）。
       arity(args, 7, "cubic_interpolate_in_time");
       const b = vecArg(args, 0, "cubic_interpolate_in_time");
       const pre = vecArg(args, 1, "cubic_interpolate_in_time");
@@ -422,12 +399,10 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       );
     }
     case "limit_length": {
-      // 与 Vector2 同：`limit_length(length = 1.0)` 带默认实参，0 支也收（S304）
       if (args.length > 1) arity(args, 1, "limit_length");
       const max = args.length === 0 ? 1 : scalar(args[0], "limit_length");
       const len = flen(v.x, v.y, v.z);
       if (!(len > max)) return vector3(v.x, v.y, v.z);
-      // 与 Vector2 同一条零长保护，门槛同样是「长度非零」（S304 的 LL3 / LLS 行）
       if (len === 0) return vector3(v.x, v.y, v.z);
       return vector3(mul(div(v.x, len), max), mul(div(v.y, len), max), mul(div(v.z, len), max));
     }
@@ -448,14 +423,11 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       const cy = sub(mul(v.z, o.x), mul(v.x, o.z));
       const cz = sub(mul(v.x, o.y), mul(v.y, o.x));
       const signed = add(add(mul(cx, ax.x), mul(cy, ax.y)), mul(cz, ax.z));
-      // 反平行那一格（`Vector3(1, 2, 3).signed_angle_to(Vector3(-1, -2, -3), Vector3(0, 0, 1))`）实测给 `pi`：
-      // 既没有「叉积为零就先返 0」那道判据，`sign(0)` 也取 `+1`（S308）
       const dot = add(add(mul(v.x, o.x), mul(v.y, o.y)), mul(v.z, o.z));
       const ang = r(Math.atan2(flen(cx, cy, cz), dot));
       return V.float(r((signed < 0 ? -1 : 1) * ang));
     }
     case "min_axis_index": {
-      // 式子照 4.6.3 的**严格** `<` 嵌套：并列时 min 给后面的下标、max 给前面的，NaN 走 else 分支（S304 的 21 格；镜像写法在两形上给出不同下标）
       arity(args, 0, "min_axis_index");
       return V.int(v.x < v.y ? (v.x < v.z ? 0 : 2) : v.y < v.z ? 1 : 2);
     }
@@ -464,7 +436,6 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
       return V.int(v.x < v.y ? (v.y < v.z ? 2 : 1) : v.x < v.z ? 2 : 0);
     }
     case "inverse": {
-      // 实测逐分量 1/x，**没有零保护**：(0,0,0) 给 (inf, inf, inf)、(INF,0,0) 给 (0.0, inf, inf)、(NAN,0,1) 给 (nan, inf, 1.0)
       arity(args, 0, "inverse");
       return vector3(div(1, v.x), div(1, v.y), div(1, v.z));
     }
@@ -574,21 +545,18 @@ export function vector3Method(v: GVector3, name: string, args: Variant[]): Varia
   }
 }
 
-/** 归一化：零向量原样返回，INF 给 nan。 */
 function normalized(x: number, y: number, z: number): Variant {
   const l = flen(x, y, z);
   if (l === 0) return vector3(0, 0, 0);
   return vector3(div(x, l), div(y, l), div(z, l));
 }
 
-/** 比较的唯一口径：**字典序**（x → y → z），不是「每个分量都更大」；ops 的比较与 `Array.sort()` 都走这里。 */
 export function vec3Cmp(a: GVector3, b: GVector3): number {
   if (a.x !== b.x) return a.x < b.x ? -1 : 1;
   if (a.y !== b.y) return a.y < b.y ? -1 : 1;
   return a.z === b.z ? 0 : a.z < b.z ? -1 : 1;
 }
 
-/** 键 → 分量槽位：0/1/2 与 `"x"`/`"y"`/`"z"` 都认。 */
 function vec3Slot(key: Variant): 0 | 1 | 2 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -601,7 +569,6 @@ function vec3Slot(key: Variant): 0 | 1 | 2 | null {
   return null;
 }
 
-/** 写分量：与 Vector2 同口径（只收 int/float、存下过 float32、越界与未知键都报错、不做尾部折算）。 */
 export function vec3Write(vec: GVector3, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vec3Slot(key);
   if (slot === null) vecFailKey(key, via, "Vector3", value);
@@ -612,7 +579,6 @@ export function vec3Write(vec: GVector3, key: Variant, value: Variant, via: "pro
   return vector3(vec.x, vec.y, num);
 }
 
-/** 下标读：`v[0]` / `v["z"]` 都认，越界报 `Invalid access of index …`。 */
 export function vec3ReadIndex(vec: GVector3, key: Variant): Variant {
   const slot = vec3Slot(key);
   if (slot === null) vecFailKey(key, "read", "Vector3");

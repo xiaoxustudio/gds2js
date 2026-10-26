@@ -31,12 +31,10 @@ export function asColor(v: Variant): GColor | null {
   return v.t === Tag.OBJECT && v.v instanceof GColor ? (v.v as GColor) : null;
 }
 
-/** 数值实参：float 在调用边界上折回 `real_t`（S313，与 Vector 两支同一条），int 收成 number，其余响亮报错。 */
 function numArg(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return r32(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
-  // bool 在数值位上引擎收下来折 0 / 1（`Color(1, 0, 0, 1).from_hsv(true, 1, 1)` 实测照算）
   if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   throw new UnsupportedError("color-arg", `Color.${who} 需要数值实参，收到 ${tagName(v.t)}`);
 }
@@ -55,20 +53,16 @@ function uppercaseSlot(v: Variant): boolean {
 function strArg(v: Variant | undefined, who: string): string {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return v.v as string;
-  // NodePath 在字符串位上引擎按其文本折（`Color.html(^"808080")` 实测给 `(0.502, 0.502, 0.502, 1.0)`，与给 `"808080"` 同值）
   const np = asNodePath(v);
   if (np !== null) return nodePathText(np);
   throw new UnsupportedError("color-arg", `Color.${who} 需要字符串实参，收到 ${tagName(v.t)}`);
 }
 
-/** `hex` / `hex64` 的实参：那一位声明是 int，引擎收 int / float / bool（`tmp/probe-argtype/hexfold.txt`），
- *  折法与其余 int 形参同一口径（`int64ParamBig`），再按无符号截到低 32 / 64 位（实测 `Color.hex(-1)` 与 `Color.hex(0xFFFFFFFF)` 同值、`Color.hex(4294967296)` 给全零）。 */
 function intBits(v: Variant | undefined, who: string, bits: number): bigint {
   if (v === undefined) throw new UnsupportedError("color-arity", `Color.${who} 缺少实参`);
   return int64ParamBig(v, `Color.${who}`) & ((1n << BigInt(bits)) - 1n);
 }
 
-/** `hex` / `hex64` 的通道切法：高位在前（与 `to_rgba32` / `to_rgba64` 那一路同序），标度分别是 255 与 65535。 */
 const fromHex32 = (h: bigint): Variant => {
   const b = (sh: number) => div(Number((h >> BigInt(sh)) & 0xffn), 255);
   return color(b(24), b(16), b(8), b(0));
@@ -79,10 +73,8 @@ const fromHex64 = (h: bigint): Variant => {
   return color(s(48), s(32), s(16), s(0));
 };
 
-/** 解析失败时的兜底色：`Color(String)` 与 `Color.html` 都用 (0,0,0,1)。 */
 const ZERO_COLOR = (): Variant => color(0, 0, 0, 1);
 
-/** 名字查表用的键：引擎把 空格、`-`、`_`、`'`、`.` 五种都抹掉再转大写（`"web green"` `"web-green"` `"WEB_GREEN"` 都算 web_green），表里的下划线同样得抹掉才对得上。 */
 const NAME_SEPS = /[ \-_'".]/g;
 
 function namedOf(s: string): number | undefined {
@@ -99,7 +91,6 @@ function packedColor(packed: number): Variant {
   return color(b(2) / 255, b(1) / 255, b(0) / 255, b(3) / 255);
 }
 
-/** 十六进制解析：`#` 可省，长度 3（`f00`→`ff0000`）/ 4（`f00f`→`ff0000ff`，一数字一通道）/ 6（RGB）/ 8（RGBA，**alpha 在后**），其余长度或非法字符给 null；`names` 为 false 时不查名字表 —— 这是 `Color.html` 与 `Color(String)` 的唯一区别。 */
 function parseColor(s: string, names: boolean): Variant | null {
   if (names) {
     const packed = namedOf(s);
@@ -114,7 +105,6 @@ function parseColor(s: string, names: boolean): Variant | null {
   return color(byte(0) / 255, byte(2) / 255, byte(4) / 255, a / 255);
 }
 
-/** `Color.html_is_valid()` 的判据：非空、可省 `#`、去掉后长度只认 3 / 4 / 6 / 8，且每一位都是十六进制数字。 */
 function htmlIsValid(s: string): boolean {
   if (s.length === 0) return false;
   const h = s[0] === "#" ? s.slice(1) : s;
@@ -127,14 +117,12 @@ export function colorFromText(s: string): Variant {
   return parseColor(s, true) ?? ZERO_COLOR();
 }
 
-/** int → Color 的 **packed RGBA** 那一形（构造器与槽共用，见 `colorNew` 与 `tryColorSlot`）。 */
 function packedRgba(raw: bigint): Variant {
   const u = ((raw % 4294967296n) + 4294967296n) % 4294967296n;
   const ch = (k: bigint) => Number((u >> k) & 255n) / 255;
   return color(ch(24n), ch(16n), ch(8n), ch(0n));
 }
 
-/** `Color(...)`：0 参给 `(0,0,0,1)`；1 参收 Color 或字符串；3 参 alpha 补 1；4 参照收。 */
 export function colorNew(args: Variant[]): Variant {
   if (args.length === 0) return ZERO_COLOR();
   if (args.length === 1) {
@@ -144,7 +132,6 @@ export function colorNew(args: Variant[]): Variant {
     if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
       return parseColor(a.v as string, true) ?? ZERO_COLOR();
     }
-    // 单参收 int = **packed RGBA**：r/g/b/a 各占一字节，先按 2³² 取模；float 那一形 Godot 解析期就拒，不顺手接。
     if (a.t === Tag.INT) return packedRgba(intToBig(a.v as IntPayload));
     throw new UnsupportedError("color-arg", `Color() 单参只收 Color / 字符串 / int，收到 ${tagName(a.t)}`);
   }
@@ -165,7 +152,6 @@ export function colorNew(args: Variant[]): Variant {
   );
 }
 
-/** **Color 槽**（变量初值 / 后续赋值 / 字段 / 定型容器元素与字典键值 / 形参默认值）收什么：同型拷一份、int 走 packed RGBA、String 走色名与 hex；装不下的形状给 null，由调用方按自己的口径处理。 */
 export function tryColorSlot(v: Variant): Variant | null {
   const c = asColor(v);
   if (c !== null) return color(c.r, c.g, c.b, c.a);
@@ -174,14 +160,12 @@ export function tryColorSlot(v: Variant): Variant | null {
   return null;
 }
 
-/** 变量 / 字段那一族的 Color 转换：槽只能装 Color，装不下不是「原样塞进去」而是响亮报。 */
 export function toColor(v: Variant): Variant {
   const r = tryColorSlot(v);
   if (r !== null) return r;
   throw new UnsupportedError("color-slot", `Color 槽只收 Color / int / String，收到 ${tagName(v.t)}`);
 }
 
-/** `Color.` 上的静态成员：常量名（`Color.RED`、`Color.TRANSPARENT`）与 `html` / `from_string` / `from_hsv` / `from_ok_hsl` 四个静态函数，名单外响亮报缺。 */
 export function colorStatic(name: string, args: Variant[] = []): Variant {
   if (args.length > 0 || name === "html" || name === "from_string" || name === "from_hsv" || name === "from_ok_hsl") {
     switch (name) {
@@ -198,7 +182,6 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
             `Color.from_string() 需要 2 个参数（字符串 + 兜底色，收到 ${args.length} 个）`,
           );
         }
-        // 兜底色那一位与 **Color 槽**同口径：Color / int（打包）/ String（按 html）都收（实测 `from_string("a", 1)` 给 `(0.0, 0.0, 0.0, 0.0039)`、`from_string("a", "a")` 给 `(0.0, 0.0, 0.0, 1.0)`）
         const folded = args[1] === undefined ? null : tryColorSlot(args[1]);
         const fb = folded === null ? null : asColor(folded);
         if (fb === null) throw new UnsupportedError("color-arg", "Color.from_string() 的第 2 个实参需要 Color");
@@ -230,8 +213,6 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
           numArg(args[1], "from_ok_hsl"),
           numArg(args[2], "from_ok_hsl"),
         );
-        // 原文不夹，引擎在最后一道把四个通道全夹进 0..1：463 格里 38 格（全是 s 满格）落在 ±1e-6 外、引擎一律给整 0 / 整 1，
-        // alpha 同样夹（实测 `-0.2 → 0`、`2 → 1`、`INF → 1`，而 `NAN` 原样留 nan —— 与 `x<0→0 / x>1→1` 的三目一致）
         const ch = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
         return color(ch(r), ch(g), ch(b), ch(args.length === 4 ? numArg(args[3], "from_ok_hsl") : 1));
       }
@@ -257,7 +238,6 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
         if (args.length !== 3 && args.length !== 4) {
           throw new UnsupportedError("color-arity", `Color.from_rgba8() 需要 3 或 4 个 int（收到 ${args.length} 个）`);
         }
-        // 式子是 `int64 / 255.0f`：整数先升 float32 再除，不夹范围（实测 300 → 1.1765、-5 → -0.0196）。
         const ch = (v: Variant | undefined, i: number): number =>
           div(r32(Number(int64ParamBig(v, `Color.from_rgba8() 的第 ${i + 1} 个实参`))), 255);
         return color(ch(args[0], 0), ch(args[1], 1), ch(args[2], 2), args[3] === undefined ? 1 : ch(args[3], 3));
@@ -266,9 +246,6 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
         if (args.length !== 1) {
           throw new UnsupportedError("color-arity", `Color.from_rgbe9995() 只收 1 个 int（收到 ${args.length} 个）`);
         }
-        // 源是 `core/math/color.cpp` 的 `Color::from_rgbe9995(uint32_t)`：R/G/B 各取 9 位、最高 5 位是指数的原码，
-        // `m = Math::pow(2.0f, e - 15.0f - 9.0f)`。形参声明是 int，装箱值先折进 uint32 —— 实测 `4294967296` 给全零、
-        // `-1` 与 `0xFFFFFFFF` 同值、`2147483647`（e = 15）给 0.998（24 格读数在 `tmp/probe-argtype/rgbe.txt`）。
         const p = Number(BigInt.asUintN(32, int64ParamBig(args[0], "Color.from_rgbe9995() 的实参")));
         const m = r32(Math.pow(2, (p >>> 27) - 15 - 9));
         return color(r32((p & 0x1ff) * m), r32(((p >>> 9) & 0x1ff) * m), r32(((p >>> 18) & 0x1ff) * m), 1);
@@ -289,13 +266,6 @@ export function colorStatic(name: string, args: Variant[] = []): Variant {
   return color(b(2) / 255, b(1) / 255, b(0) / 255, b(3) / 255);
 }
 
-/* ---------------- OKHSL → sRGB：`thirdparty/ok_color.h`（Björn Ottosson，MIT）里 `okhsl_to_srgb` 那一支的逐字移植 ----------------
- * 每一步都按 float32 落一次（`r32` / `mul` / `div` / `add` / `sub`），常数先折成 `...f` 字面量的 float32，
- * 多项式的括号层次、Halley 只走一步与 `FLT_MAX` 哨兵都照原文。判据是三张引擎读数表：
- * 463 格全精度网格（`tmp/probe-argtype/okhsl-full.txt`，尺 `fold41.mts`）全合、199 格边界批（`okhsl-b2.json`，尺 `fold42.mts`）除满色相支路的
- * 3 格外全合、792 格细扫掠（`okhsl-sweep.json`，尺 `fold43.mts`）里 s=0 的 396 格全合、s=1 的 396 格合 327 格（差值 ≤1.1e-6）。
- * 两条试过的替代口径都被读数否掉：全程 double 只剩 40/792 合、把 `w0*x + w1*y + w2*z` 收成 FMA 只剩 217/792 合 —— 引擎确是逐算子 float32。 */
-
 const OK_PI = r32(3.1415926535897932384626433832795028841971693993751058209749445923078164062);
 const OK_FLT_MAX = 3.4028234663852886e38;
 
@@ -307,7 +277,6 @@ function okMin(x: number, y: number): number {
   return x < y ? x : y;
 }
 
-/** 原文里出现三次的 `w0 * x + w1 * y + w2 * z`：按 C 的左结合逐层加。 */
 const W_R: readonly [number, number, number] = [r32(4.0767416621), r32(-3.3077115913), r32(0.2309699292)];
 const W_G: readonly [number, number, number] = [r32(-1.2684380046), r32(2.6097574011), r32(-0.3413193965)];
 const W_B: readonly [number, number, number] = [r32(-0.0041960863), r32(-0.7034186147), r32(1.707614701)];
@@ -485,7 +454,6 @@ function getCs(L: number, a: number, b: number): [number, number, number] {
   return [C_0, C_mid, C_max];
 }
 
-/** OKHSL → sRGB（不夹取、不管 alpha；`l == 1` / `l == 0` 两支先短路，与原文同）。 */
 function okhslToSrgb(h: number, s: number, l: number): [number, number, number] {
   if (l === 1) return [1, 1, 1];
   if (l === 0) return [0, 0, 0];
@@ -512,7 +480,6 @@ function okhslToSrgb(h: number, s: number, l: number): [number, number, number] 
   return [srgbTransfer(lr), srgbTransfer(lg), srgbTransfer(lb)];
 }
 
-/** RGB → HSV（Godot `Color::to_hsv`）：delta 在容差内给 h=s=0，saturation 除的是 max 不是 1。 */
 function toHsv(c: GColor): [number, number, number] {
   const min = Math.min(c.r, c.g, c.b);
   const max = Math.max(c.r, c.g, c.b);
@@ -529,7 +496,6 @@ function toHsv(c: GColor): [number, number, number] {
   return [h, s, max];
 }
 
-/** HSV → RGB（Godot `Color::from_hsv`）：扇区号要按 6 取模。 */
 function fromHsv(h: number, s: number, v: number, a: number): Variant {
   const hh = mul(h, 6);
   const i = Math.floor(hh);
@@ -555,7 +521,6 @@ function fromHsv(h: number, s: number, v: number, a: number): Variant {
 
 const HEX_DIGITS = "0123456789abcdef";
 
-/** 整数的十六进制（幅值），按位取模拼。 */
 function hexMag(v: number): string {
   if (v <= 0) return "0";
   let out = "";
@@ -574,7 +539,6 @@ function hexByte(v: number): string {
   return HEX_DIGITS.charAt((v >> 4) & 0xf) + HEX_DIGITS.charAt(v & 0xf);
 }
 
-/** 字节属性读（`c.r8`）：`round(分量*255)` 后夹到 0..255，而 **nan 给 -2147483648**、`inf` → 255、`-inf` → 0。 */
 function byteOf(n: number): number {
   if (Number.isNaN(n)) return -2147483648;
   const scaled = r32(n * 255);
@@ -592,7 +556,6 @@ function arity(args: Variant[], n: number, who: string): void {
 
 function colArg(args: Variant[], i: number, who: string): GColor {
   const a = args[i];
-  // Color 位上引擎收 Color / int（按打包值）/ String（按 html），实测 `c.blend(1)`、`c.clamp("a", Color(...))` 都算得出值（`tmp/probe-argtype/values.mts`）
   const folded = a === undefined ? null : tryColorSlot(a);
   const v = folded === null ? null : asColor(folded);
   if (!v) throw new UnsupportedError("color-arg", `Color.${who} 的第 ${i + 1} 个实参需要 Color`);
@@ -608,7 +571,6 @@ const packChannel = (n: number, scale: number, mask: number): number => {
   return (scaled < 0 ? -Math.round(-scaled) : Math.round(scaled)) & mask;
 };
 
-/** 打包成 int32 再按无符号读回（交出去的是 64 位 int）。 */
 const pack8 = (n: number): number => packChannel(n, 255, 0xff);
 const pack16 = (n: number): number => packChannel(n, 65535, 0xffff);
 
@@ -624,22 +586,16 @@ const pack64 = (shorts: number[]): Variant => {
   return V.int(out);
 };
 
-/** Color 的方法面：Godot 里没有的成员（下面那一串 case）一律响亮报缺，别按文档印象实现。 */
 export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   switch (name) {
     case "to_html": {
       if (args.length > 1) arity(args, 1, "to_html");
-      // 有限分量走 `byteOf` 那条**夹紧**（`Color(1.0039, 0.49999, 0.5000001, 0.99999).to_html()` 给 `ff7f80ff`），
-      // 非有限分量（nan / ±inf）一律 `00`（`Color(INF, -INF, 0.25, 1).to_html()` 给 `000040ff`，S311）
       const hex = (n: number) => hexByte(Number.isFinite(n) ? byteOf(n) : 0);
       const body = hex(c.r) + hex(c.g) + hex(c.b);
-      // 那一位的声明是 `bool uppercase`：int / float 按 `≠ 0` 折（`0` / `0.0` / `-0.0` 给小写体、`1` / `2` / `0.5` 给带 alpha），
-      // 其余形引擎在解析期就拒（`tmp/probe-argtype/html.txt`），所以这里一律响亮抛、不按 JS 的真值编一个值出来。
       const withAlpha = args.length === 0 ? true : uppercaseSlot(args[0]!);
       return V.str(withAlpha ? body + hex(c.a) : body);
     }
     case "html":
-      // 静态那四支在实例上也能调，结果与静态一字一样（语料 298 的 S / F 行；元数先按引擎那句拦）
       arity(args, 1, "html");
       return colorStatic("html", args);
     case "html_is_valid":
@@ -649,10 +605,8 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       arity(args, 2, "from_string");
       return colorStatic("from_string", args);
     case "from_rgbe9995":
-      // 静态那一支在实例上同样调得出，三格读数（int / float / bool 各一）与静态一字一样（`tmp/probe-argtype/values.txt`）
       return colorStatic("from_rgbe9995", args);
     case "from_hsv":
-      // 声明是 `from_hsv(h, s, v, alpha = 1.0)`，元数不对时运行期那句报 4（S305 ③）
       if (args.length < 3 || args.length > 4) arity(args, 4, "from_hsv");
       return colorStatic("from_hsv", args);
     case "from_ok_hsl":
@@ -665,7 +619,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       arity(args, 1, "hex64");
       return fromHex64(intBits(args[0], "hex64", 64));
     case "blend": {
-      // `p_with` 叠在接收者**之上**（over）：alpha 不守恒时各通道按 `(src*srcA + (1-srcA)*dstA*dst) / outA`，outA 为 0 就全给零（S309）
       arity(args, 1, "blend");
       const s = colArg(args, 0, "blend");
       const oa = add(s.a, mul(sub(1, s.a), c.a));
@@ -693,7 +646,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       arity(args, 0, "to_abgr64");
       return pack64([pack16(c.a), pack16(c.b), pack16(c.g), pack16(c.r)]);
     case "get_luminance":
-      // 三项之和是**右结合**：`t1 + (t2 + t3)`（`Color(1.0039, 0.49999, 0.5000001, …)` 引擎给 `0.60712200403214`，左结合给 `0.60712206363678`；S311）
       arity(args, 0, "get_luminance");
       return V.float(add(mul(0.2126, c.r), add(mul(0.7152, c.g), mul(0.0722, c.b))));
     case "lightened": {
@@ -709,7 +661,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
     case "darkened": {
       arity(args, 1, "darkened");
       const w = numArg(args[0], "darkened");
-      // 引擎是乘性的 `分量 * (1 - amount)`：`-0.0` 保住号、`inf` 不被减成 nan（S311）
       const k = sub(1, w);
       return color(
         mul(c.r, k),
@@ -733,7 +684,6 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
       );
     }
     case "clamp": {
-      // 形参是 `clamp(min = Color(0,0,0,0), max = Color(1,1,1,1))`，0 支与 1 支都收（S305 的元数表：上界 2）
       if (args.length > 2) arity(args, 2, "clamp");
       const lo = args.length === 0 ? new GColor(0, 0, 0, 0) : colArg(args, 0, "clamp");
       const hi = args.length < 2 ? new GColor(1, 1, 1, 1) : colArg(args, 1, "clamp");
@@ -815,7 +765,6 @@ function withChannel(c: GColor, slot: ColorSlot, value: number): Variant {
   );
 }
 
-/** 读分量：`c[0]`/`c["r"]` 给 float32、`c["h"]` 给派生值、`c["r8"]` 给 int。 */
 export function colorRead(c: GColor, key: Variant, via: "prop" | "index" | "read"): Variant {
   const slot = colorSlot(key);
   if (slot === null) vecFailKey(key, via, "Color");
@@ -834,7 +783,6 @@ export function colorReadIndex(c: GColor, key: Variant): Variant {
   return colorRead(c, key, "read");
 }
 
-/** 写分量：r/g/b/a **不做夹取**（`c.r = 2.7` 存的就是 2.7），实参只收整数族；h/s/v 是「转 HSV → 换那一格 → 转回 RGB」，r8 一族写的是字节。 */
 export function colorWrite(c: GColor, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = colorSlot(key);
   if (slot === null) vecFailKey(key, via, "Color", value);

@@ -2,12 +2,10 @@ import { GodotRuntimeError, UnsupportedError } from "./errors";
 import type { Variant } from "./tags";
 import { GArray, GDict, arrIdx, arrIdxWrite, strFloat, valueEq } from "./values";
 
-/** 整数超出 2^53 时抛的错，与 tags.ts 的 checkInt 同一句。 */
 function int64(v: number): UnsupportedError {
   return new UnsupportedError("int64-out-of-range", `整数 ${v} 超出 2^53，需要 BigInt 路径（未实现）`);
 }
 
-/** 单态快路径：输入输出都是裸 JS 值，不装箱。 */
 export const fast = {
   /** 装箱值 → 裸值：按名派发表调裸 ABI 方法时用。 */
   unboxNum(v: Variant): number {
@@ -18,7 +16,6 @@ export const fast = {
     return v.v as string;
   },
 
-  // 裸数组 / 裸字典的快路径按元素种类各发一个具体入口，不发泛型方法：泛型方法在静态编译目标上按接收者解析不过去。
   rawArrGetNum(a: number[], i: number): number {
     return a[arrIdx(i, a.length)] as number;
   },
@@ -63,7 +60,6 @@ export const fast = {
     row[arrIdxWrite(j, row.length, "String")] = v;
   },
 
-  // 插入按种类各发一份：不能先 push 一个外来值占位再移位，静态目标上数组带元素类型、长度撑不起来。先 push 本族值，再把 k 之后的格子整体后移，最后写 k。
   rawArrInsertNum(a: number[], at: number, v: number): number {
     const n = a.length;
     const k = at < 0 ? n + at : at;
@@ -84,7 +80,6 @@ export const fast = {
     return 0;
   },
 
-  // removeAt / clear 也按种类各发一份：`unknown[]` 形参在静态目标上收到的是拷贝，原地改动会静默丢掉；`splice` 没有 lowering，所以手写后移 + pop。
   rawArrRemoveAtNum(a: number[], i: number): void {
     const k = i < 0 ? i + a.length : i;
     if (k < 0 || k >= a.length) return;

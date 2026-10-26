@@ -40,7 +40,6 @@ function intArg(v: Variant | undefined, who: string): bigint {
   throw new UnsupportedError("vector4i-arg", `${who} 只收整数族，收到 ${tagName(v.t)}`);
 }
 
-/** `Vector4i(...)`（S580）：0 参、4 个分量、或单参收 Vector4（向零截断 + int32 回绕）。 */
 export function vector4iNew(args: Variant[]): Variant {
   if (args.length === 0) return vector4i(0, 0, 0, 0);
   if (args.length === 1) {

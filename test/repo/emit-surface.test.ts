@@ -1,9 +1,3 @@
-/**
- * 发射面 ↔ runtime 导出表对账门（§2 的 0c 那笔里「自动对账」那半条）。
- *   产物里每个 `rt.<名>(` 与每个 `rt.ops.<名>(` / `rt.fast.<名>(` / `rt.V.<名>(`
- *   都必须落在 runtime 的导出表上 —— 名字对不上就是「编译期放过、运行期撞 undefined」
- *   那一族，语料门未必走到那一行。
- */
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -11,7 +5,6 @@ import * as rt from "@gds2js/runtime";
 import { ROOT } from "../support/lib-bridge";
 
 const CASES = join(ROOT, "corpus", "cases");
-/** 带点那一族：命名空间导出 → 产物里按 `rt.<ns>.<名>(` 调用的那一位。 */
 const NAMESPACES = ["ops", "fast", "V"] as const;
 
 function scan(): Map<string, string> {

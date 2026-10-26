@@ -10,12 +10,9 @@ import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { PRODUCT_RUNTIME_FILE } from "../paths";
 
-/** 两支 `--pack` 的名字。 */
 export type Pack = "node" | "scriptc";
 
-/** 一条命令的实现签名：dispatch 与 watch 都按它调。 */
 export type Runner = (ctx: Ctx) => Promise<boolean>;
-
 
 /** 手搓 `hh:mm:ss`：`Date.prototype.toLocaleTimeString` 在静态目标上没有 lowering。 */
 export function hhmmss(d: Date): string {
@@ -26,7 +23,6 @@ export function hhmmss(d: Date): string {
 export type CmdName = "check" | "build" | "check-project" | "build-project" | "run" | "run-project" | "export";
 export type RuntimeMode = "import" | "local" | "single";
 
-/** 旁挂/内联用的自包含运行时文件名（local 模式复制到输出目录时用它）。 */
 export const STANDALONE_FILE = "gds2js-standalone.cjs";
 
 export function standalonePath(): string {
@@ -71,7 +67,6 @@ export interface Diag {
   file: string;
 }
 
-/** 自带家目录的 exe 里裸说明符没人能解析，`--runtime/--host` 的默认值于是直接给家目录里那份打平运行时的 file URL；npm 安装态家目录为 null，说明符照旧是裸的。 */
 export function selfRuntimeSpec(): string | null {
   const p = selfFile(`dist/${PRODUCT_RUNTIME_FILE}`);
   return p === null ? null : pathToFileURL(p).href;
@@ -81,7 +76,6 @@ export function runtimeOf(v: unknown): string {
   return strOf(v) ?? selfRuntimeSpec() ?? "gds2js/runtime";
 }
 
-/** 旗标值一律 typeof 收窄，不 `as string`：静态目标上那是带运行期检查的断言。 */
 export function strOf(v: unknown): string | null {
   return typeof v === "string" ? v : null;
 }
@@ -92,7 +86,6 @@ export function modeOf(v: unknown): RuntimeMode {
   return "import";
 }
 
-/** `--no-host` 给 false、`--host X` 给字符串、缺省给默认值：三态归一到 `null | string`。 */
 export function hostOf(hostOpt: unknown): string | null {
   if (hostOpt === false) return null;
   if (typeof hostOpt === "string") return hostOpt;
@@ -106,7 +99,6 @@ export function packOf(v: unknown): Pack {
   process.exit(1);
 }
 
-/** 工程级命令：入口按 res:// 根展开、把根下的 .gd 递归全收进同一次编译。 */
 export function isProjectCmd(cmd: CmdName): boolean {
   return cmd === "check-project" || cmd === "build-project" || cmd === "run-project";
 }
@@ -164,7 +156,6 @@ export function refuseNestedProjects(input: string, root: string, nested: string
 export interface Loaded {
   ir: ReturnType<typeof lower>;
   diags: Diag[];
-  /** 入口自己引用了本地脚本（`extends "<路径>"` / `preload("sub.gd")`）—— 这一形要读依赖，走闭包管线。 */
   deps: boolean;
 }
 
@@ -179,16 +170,13 @@ export async function tryLoadSingle(absPath: string): Promise<Loaded | { error: 
     const ir = lower(await parseSource(src));
     return { ir, diags: toDiags(absPath, ir), deps: needsClosure(ir) };
   } catch (e) {
-    // 下降函数在抛出处挂的行号（S649 那层）这里用得上：引擎的解析期报错报的就是构造自己那一行，别再写死 1:1
     const line = (e as { line?: number }).line;
     return { error: `${absPath}:${String(line ?? 1)}:1  error  ${e instanceof Error ? e.message : String(e)}` };
   }
 }
 
-/** `compileProject` 那条收集环认的两个名字 —— 判「要不要读依赖」必须跟它一格不差，否则 `load` 这一形会留在单文件支上撞 `[load-unknown-script]`。 */
 const CLOSURE_LOADERS = new Set(["preload", "load"]);
 
-/** `extends` 挂父脚本，或正文 `preload` / `load` 一个本地 `.gd` —— 两者都要把依赖读进来才判得出继承面。 */
 function needsClosure(ir: ReturnType<typeof lower>): boolean {
   if (singleFileExtends(ir.extends) !== null) return true;
   let hit = false;
@@ -211,7 +199,6 @@ function needsClosure(ir: ReturnType<typeof lower>): boolean {
   return hit;
 }
 
-/** `extends` 挂的是父脚本（路径 / uid / `.gd`）而不是标识符时给那串文本，否则 null。 */
 function singleFileExtends(raw: string | null): string | null {
   if (raw === null) return null;
   const dq = String.fromCharCode(34);
@@ -238,7 +225,6 @@ export function printDiags(diags: Diag[]): boolean {
   return diags.length === 0;
 }
 
-/** 报错行的正文：真源在 runtime，产物顶层的兜底与 CLI 报的是同一句。 */
 export { errOf } from "@gds2js/runtime/runtime/errors";
 
 /** tree-face 清单里的 `.ts` 名 → 发射器说明符/文件名要的裸基名。 */
@@ -246,12 +232,8 @@ export function baseName(file: string): string {
   return file.replace(/\.ts$/, "");
 }
 
-/** `compileProject` 的返回。刻意声明出来：隐式 any 的局部变量在静态目标上是个通配符槽，值过槽要逐格校验。 */
 export type CompileResult = Awaited<ReturnType<typeof compileProject>>;
 
-/** 单文件模式下的闭包编译：只种入口，依赖靠 `extends` / `preload` 拉进来；根取入口所在目录。
- *  继承来的方法 / 字段与宿主名从此判得出，与 `check-project` / `run-project` 共用同一套判定（S455）。 */
-/** 闭包的 res 根：命令给了 `--res-root` 就用它（`export` 那一支有这一旗），否则取入口所在目录。 */
 export function closureRoot(ctx: Ctx): string {
   return ctx.resRoot === "" ? dirname(ctx.input) : ctx.resRoot;
 }
@@ -260,7 +242,6 @@ export async function compileClosure(
   ctx: Ctx,
   outDir: string,
   autoRun: boolean | undefined,
-  /** 旁挂 standalone 那一形：`local` 只把旁挂文件放在树根，逐模块的 require 路径由 `compileProject` 按各自深度算。 */
   mode: { runtimeMode?: "import" | "local"; standaloneFile?: string } = {},
 ): Promise<CompileResult> {
   return compileProject({

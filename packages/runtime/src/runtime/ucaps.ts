@@ -1,7 +1,3 @@
-/**
- * 生成物，不要手改 —— 数据来自 Godot 4.6.3 `core/string/ucaps.h`（`misc/scripts/ucaps_fetch.py` 的产物）。
- * `findUpper` / `findLower` 逐句照 UCAPS 的二分，找不到原样返回（S576）。
- */
 const CAPS_TABLE: readonly (readonly [number, number])[] = [
   [0x61, 0x41],
   [0x62, 0x42],

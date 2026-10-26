@@ -41,7 +41,6 @@ export function matchPattern(subject: Variant, p: Pat): Variant[] | null {
   return matches(subject, p, out) ? out : null;
 }
 
-/** 手臂的型别：String 与 StringName 算一支，其余非 OBJECT 按 Tag，OBJECT 按原型 —— Callable 盒子并成一支，免得每次读属性新建的盒子把同一条等式拆散。 */
 function armKind(v: Variant): unknown {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return "string";
   if (v.t !== Tag.OBJECT) return v.t;
@@ -51,7 +50,6 @@ function armKind(v: Variant): unknown {
   return Object.getPrototypeOf(o);
 }
 
-/** 臂那一侧是**类型严格**的等式（S279 量的）：`5` 臂遇到 `5.0` 走 `_`，`Vector2(1, 2)` 臂遇到 RID / null 同样走 `_`；只有 String 与 StringName 互认。异型一律假 —— 不像算子 `==` 那样抛。 */
 function armEq(s: Variant, v: Variant): boolean {
   const ks = armKind(s);
   if (ks !== armKind(v)) return false;
@@ -108,7 +106,6 @@ function builtinTag(name: string): TagValue | undefined {
   return TYPE_TAGS[name.replace(/\[.*\]$/, "")];
 }
 
-/** 数学内建类型：都挤在 Tag.OBJECT 里，只能按实例判。 */
 const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Vector2: (v) => v.t === Tag.OBJECT && v.v instanceof GVector2,
   Vector3: (v) => v.t === Tag.OBJECT && v.v instanceof GVector3,
@@ -119,7 +116,6 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
 };
 
-/** Packed*Array 的 `is` / `as`：各认各的形状，且 pack 既不算 Array 也不算 Object —— `is Object` 那支要先把它摘出去。 */
 const PACK_TYPES: Record<string, PackKind> = {
   PackedByteArray: "byte",
   PackedInt32Array: "int32",
@@ -137,17 +133,14 @@ function packKindMatches(v: Variant, kind: PackKind): boolean {
   return isBytes(v) && packBytes(v).kind === kind;
 }
 
-/** 引擎类名的 `is`：探头 `tmp/probe-is-class/` 量过这七个名（表外的响亮拒）。 */
 const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "SceneTree", "MainLoop"];
 
-/** 脚本实例那条链上的引擎基类：量过的只有 RefCounted 与宿主 SceneTree 两条。 */
 function instanceClassNames(base: string | null): string[] | null {
   if (base === "RefCounted") return ["Object", "RefCounted"];
   if (base === "SceneTree") return ["Object", "SceneTree", "MainLoop"];
   return null;
 }
 
-/** 一个值是不是某引擎类名的实例：按四类形状各查各的表。 */
 function engineClassIs(v: Variant, name: string): boolean | null {
   if (name === "Callable") return v.t === Tag.OBJECT && isCallableBox(v.v);
   if (v.t !== Tag.OBJECT) return false;
@@ -167,7 +160,6 @@ export function isType(v: Variant, name: string): Variant {
   if (name === "Variant") return V.bool(true);
   const pk = PACK_TYPES[name];
   if (pk !== undefined) return V.bool(packKindMatches(v, pk));
-  // 实测 `NodePath("x") is NodePath` 真（g7）：`NodePath` 既不是 ClassDB 的类值，也不在 `builtinTag` 那张表里，单列一条。
   if (name === "NodePath") return V.bool(asNodePath(v) !== null);
   if (PROBED_CLASS_NAMES.indexOf(name) >= 0 || name === "Callable") {
     const e = engineClassIs(v, name);
@@ -186,10 +178,8 @@ export function isType(v: Variant, name: string): Variant {
   throw new UnsupportedError("is-type", `is ${name} 未实现（未知类型）`);
 }
 
-/** TYPE_* 那一族的合法码数：实测 `TYPE_MAX` 是 39（S224 那张常数表），越界的 int 抛函数里那一句。 */
 const IS_INSTANCE_OF_TYPE_COUNT = 39;
 
-/** `is_instance_of(值, TYPE_* 常数 | 脚本类值 | 引擎类值)`（S274）：int 那形比的是 `typeof` 的同一张码表，两种类值复用 `is` 量过的两条链，其余第二参抛引擎运行期那一句。 */
 export function gIsInstanceOf(obj: Variant, klass: Variant): Variant {
   if (klass.t === Tag.INT) {
     const t = intToNum(klass.v as IntPayload);
@@ -225,7 +215,6 @@ export function asType(v: Variant, name: string): Variant {
     if (packKindMatches(v, pk)) return v;
     throw new UnsupportedError("as-type-pack", `as ${name} 只量过形状相符的 pack（收到的是别的东西）`);
   }
-  // `as NodePath`：同型原样回、String 与 StringName 走解析式子，其余来源是运行期那一句（null / int / bool / Dictionary 四格同一句）
   if (name === "NodePath") {
     if (asNodePath(v) !== null) return v;
     if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return nodePathValue(v.v as string);
@@ -235,7 +224,6 @@ export function asType(v: Variant, name: string): Variant {
   if (t !== undefined) return v.t === t ? v : V.nil();
   const math = MATH_TYPES[name];
   if (math) {
-    // `as` 在整型向量与浮点向量之间是转换而不是判空，走下面的判空会静默成 `<null>`。
     if (name === "Vector3" && asVec3i(v) !== null) return toVec3(v);
     return math(v) ? v : V.nil();
   }
@@ -246,7 +234,6 @@ export function asType(v: Variant, name: string): Variant {
   throw new UnsupportedError("as-type", `as ${name} 未实现（未知类型）`);
 }
 
-/** `typeof` 返回 Godot 的 Variant.Type 枚举值（int=2、float=3），与内部的 Tag 不同值，只能另建一张表。 */
 const GODOT_TYPE: Record<TagValue, number> = {
   [Tag.NIL]: 0,
   [Tag.BOOL]: 1,

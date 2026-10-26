@@ -1,8 +1,6 @@
-/** Godot 数组排序的逐行转写：`core/templates/sort_array.h` 的 introsort + 堆退化 + 收尾插入趟。 */
 
 type Less<T> = (a: T, b: T) => boolean;
 
-/** 原文 `bitlog`：`for (k = 0; p_n != 1; p_n >>= 1) ++k;`（p_n ≥ 1 才调用，与原文的 sort_range 同前提） */
 function bitlog(p_n: number): number {
   let n = p_n;
   let k = 0;
@@ -24,7 +22,6 @@ class SortArray<T> {
     this.compare = compare;
   }
 
-  /** 原文 `median_of_3_index`，分支逐个照搬 */
   private medianOf3Index(pa: number, pb: number, pc: number): number {
     const a = this.a[pa] as T;
     const b = this.a[pb] as T;
@@ -45,8 +42,6 @@ class SortArray<T> {
       return pb;
     }
   }
-
-  /* ---------------- 堆 / 堆排 ---------------- */
 
   private pushHeap(first: number, holeIdx: number, topIndex: number, value: T): void {
     let hole = holeIdx;
@@ -121,18 +116,14 @@ class SortArray<T> {
     this.sortHeap(first, middle);
   }
 
-  /* ---------------- 分治 ---------------- */
-
   private partitioner(firstIn: number, lastIn: number, pivotIn: number): number {
     const unmodifiedFirst = firstIn;
     const unmodifiedLast = lastIn;
     let first = firstIn;
     let last = lastIn;
-    // 原文是 `&p_array[p_pivot]`：交换时跟着走，比较时**每次现读那个位置**
     let pivotLoc = pivotIn;
 
     for (;;) {
-      // ERR_BAD_COMPARE 的 break 只中断**当前这一个扫描 while**，外面的分治循环照走
       while (first !== pivotLoc && this.compare(this.a[first] as T, this.a[pivotLoc] as T)) {
         if (first === unmodifiedLast - 1) break;
         first++;
@@ -180,8 +171,6 @@ class SortArray<T> {
       last = cut;
     }
   }
-
-  /* ---------------- 插入趟 ---------------- */
 
   private unguardedLinearInsert(lastIn: number, value: T): void {
     let last = lastIn;
@@ -231,7 +220,6 @@ class SortArray<T> {
     }
   }
 
-  /** 原文 `sort_range`：先 introsort（深度 `bitlog(len) * 2`），再对**整段**走一遍收尾插入趟 */
   sortRange(first: number, last: number): void {
     if (first !== last) {
       this.introsort(first, last, bitlog(last - first) * 2);
@@ -240,7 +228,6 @@ class SortArray<T> {
   }
 }
 
-/** 按引擎的置换排一遍，返回新数组（`GArray` 现有口径）；比较器不自洽时走引擎 `ERR_BAD_COMPARE` 的 break 分支，置换照给、只复现不了那行 stderr。 */
 export function sortGodot<T>(items: readonly T[], less: Less<T>): T[] {
   const a = [...items];
   new SortArray<T>(a, less).sortRange(0, a.length);

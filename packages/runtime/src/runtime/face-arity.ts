@@ -1,6 +1,3 @@
-// 值类型面的元数表：解析期（`analyze` 的元数与表外名两族）与运行期（装箱接收者的属性读要发绑定 Callable）共用一份，
-// 两侧不可能各量一次 —— 方向同 `PACK_ABSENT_*`（S415）。
-// Array 49 名、String 108 名都逐名过裁判（S379 / S380，读数 `tmp/probe-array/compare22.txt` 与 `tmp/probe-slice/compare{104,105}.txt`）。
 export const ARRAY_METHOD_ARITY: Record<string, [number, number]> = {
   all: [1, 1], any: [1, 1], append: [1, 1], append_array: [1, 1], assign: [1, 1], back: [0, 0],
   bsearch: [1, 2], bsearch_custom: [2, 3], clear: [0, 0], count: [1, 1], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1],
@@ -44,12 +41,6 @@ export const STRING_METHOD_ARITY: Record<string, [number, number]> = {
   to_multibyte_char_buffer: [0, 1]
 };
 
-
-// StringName 与 String 的名册只差那六名（尺 `tmp/probe639/gen639.mjs`，读数 `names.gd` 二十一格，并与本机 4.6.3 的
-// `--dump-extension-api` 导出逐名对账，尺 `tmp/probe639/diff639.mts`）：六名 `chr / humanize_size / num / num_int64 /
-// num_scientific / num_uint64` 在 StringName 面上是表外名（`Invalid access to property or key 'X' on a base object of type 'StringName'.`），
-// 三名 `uri_file_decode / is_valid_ascii_identifier / is_valid_unicode_identifier` 两面都存在且零元（S639 读的是属性读，
-// 两面都回 `StringName::X` / `String::X` 的绑定 Callable；元数两界随 S668 一起登进 String 那张表，两面共用）。
 const STRING_NAME_ABSENT = ["chr", "humanize_size", "num", "num_int64", "num_scientific", "num_uint64"];
 export const STRING_NAME_METHOD_ARITY: Record<string, [number, number]> =
   Object.fromEntries(Object.entries(STRING_METHOD_ARITY).filter(([n]) => !STRING_NAME_ABSENT.includes(n)));
@@ -61,10 +52,6 @@ export const PACK_METHOD_ARITY: Record<string, [number, number]> = {
   reverse: [0, 0], rfind: [1, 2], set: [2, 2], size: [0, 0], slice: [1, 2], sort: [0, 0],
 };
 export const PACK_METHOD_ARITY_WITH_BYTES: Record<string, [number, number]> = { ...PACK_METHOD_ARITY, to_byte_array: [0, 0] };
-// `PackedByteArray` 独有那一批名字一名一名过了裁判：前 11 名的元数上下界见尺 `tmp/probe-bytearity/round2.mts`（读数 `compare1.txt`
-// 与 `raw.txt`），后 36 名与上下界见尺 `tmp/probe636/arity636.mjs`（读数 `arity636.compare.txt`）—— 零实参不报错的那些就是「至少 0」，
-// 五实参报「至多 N」的就是上界；`decompress` 两界都直接从两句里读。名册完整性另有一把尺 `tmp/probe636/gen636.mjs`（读数 `attr.out`）：
-// 94 个候选名 × 十支的属性读，落进存在集的 69 / 23 名与本机 4.6.3 的实例成员表一字不差。
 export const PACK_BYTE_EXTRA_ARITY: Record<string, [number, number]> = {
   compress: [0, 1], decompress: [1, 2], get_string_from_ascii: [0, 0], get_string_from_utf16: [0, 0],
   get_string_from_utf8: [0, 0], get_string_from_wchar: [0, 0], hex_encode: [0, 0], to_float32_array: [0, 0],
@@ -88,11 +75,6 @@ export const NODE_PATH_METHOD_ARITY: Record<string, [number, number]> = {
   get_subname_count: [0, 0], hash: [0, 0], is_absolute: [0, 0], is_empty: [0, 0], slice: [1, 2],
 };
 
-/** `Callable` 面装箱直调的上下界（尺 `tmp/probe644/sc645.gd` 廿一格）：越界两向都报**声明的全部数**，
- *  所以每一非变参名的两界同数；`bind` 是变参、零支收下（实测 `Callable().bind()` 原样回同一只），
- *  上界用最大安全整数占位（越不出界，那句里的数永远读不到它）。
- *  没量过的名不进表：`call` / `call_deferred` / `rpc` / `rpc_id`（变参的界没单独量）、
- *  `emit` / `disconnect`（引擎在取返回值那一步先给 `Trying to get a return value of a method that returns "void"`）。 */
 export const CALLABLE_METHOD_ARITY: Record<string, [number, number]> = {
   bind: [0, Number.MAX_SAFE_INTEGER], bindv: [1, 1], callv: [1, 1], create: [2, 2],
   get_argument_count: [0, 0], get_bound_arguments: [0, 0], get_bound_arguments_count: [0, 0],
@@ -100,15 +82,11 @@ export const CALLABLE_METHOD_ARITY: Record<string, [number, number]> = {
   hash: [0, 0], is_custom: [0, 0], is_null: [0, 0], is_standard: [0, 0], is_valid: [0, 0], unbind: [1, 1],
 };
 
-/** `Signal` 面同一把尺（同支探头八名 × 越界两向）：`connect` 报 2、`is_connected` 报 1、其余六名报 0。
- *  `connect` 的两界是 `[1, 2]` 而不是 `[2, 2]` —— `flags` 有默认值，一支实参引擎照样连上
- *  （S546 那批重复连/空 Callable 的读数都是一支形），只是越界那句报的是声明的全部数 2。 */
 export const SIGNAL_METHOD_ARITY: Record<string, [number, number]> = {
   connect: [1, 2], disconnect: [1, 1], emit: [0, Number.MAX_SAFE_INTEGER],
   get_connections: [0, 0], get_name: [0, 0], get_object: [0, 0],
   get_object_id: [0, 0], has_connections: [0, 0], is_connected: [1, 1], is_null: [0, 0],
 };
-
 
 const PACK_NINE: Record<string, boolean> = {
   PackedByteArray: true, PackedInt32Array: true, PackedInt64Array: true, PackedFloat32Array: true,
@@ -184,10 +162,6 @@ export const VALUE_METHOD_ARITY: Record<string, Record<string, [number, number]>
   PackedVector3Array: PACK_METHOD_ARITY_WITH_BYTES,
   PackedColorArray: PACK_METHOD_ARITY_WITH_BYTES,
 };
-
-// 属性读那一形两面过裁判的读数（S431）：宇宙 = 175 个候选名（`tmp/probe-vattr/` 拿别面的成员名当表外名试），
-// 每面的「存在集」= 宇宙里引擎**没**判为表外的那些，也就是该面的成员 ∪ 真属性；宇宙内又不在存在集的就是表外。
-// 构造位逐名读数 `tmp/probe-vattr/compare1.txt`；装箱位同式七格 `tmp/probe-vattr/box.gd`。
 
 export const VALUE_ATTR_UNIVERSE: readonly string[] = [
   "a", "all", "any", "append", "append_array", "assign", "b", "back", "begins_with", "bigrams", "bin_to_int",
@@ -274,7 +248,6 @@ const VALUE_EXIST: Record<string, readonly string[]> = {
   "NodePath": VALUE_NodePath_EXISTS,
 };
 
-/** 值类型面与两支名字面的属性读三分类：`"member"` 给绑定 Callable、`"prop"` 走原路、`"absent"` 给引擎那句、null 是没量过。 */
 export function valueAttrKind(face: string, name: string): "member" | "prop" | "absent" | null {
   const ex = VALUE_EXIST[face];
   if (ex === undefined) return null;
@@ -283,7 +256,6 @@ export function valueAttrKind(face: string, name: string): "member" | "prop" | "
   return faceArity(face, name) === null ? "prop" : "member";
 }
 
-/** Dictionary 方法的元数（S378）：解析期与运行期共用一份，运行期靠它认表外名（S627）。 */
 export const DICT_METHOD_ARITY: Record<string, [number, number]> = {
   assign: [1, 1], clear: [0, 0], duplicate: [0, 1], duplicate_deep: [0, 1], erase: [1, 1], find_key: [1, 1],
   get: [1, 2], get_or_add: [1, 2], has: [1, 1], has_all: [1, 1], hash: [0, 0],
@@ -296,14 +268,9 @@ export const DICT_METHOD_ARITY: Record<string, [number, number]> = {
   get_typed_key_script: [0, 0], get_typed_value_script: [0, 0],
 };
 
-/** 装箱直调越元数那一句（尺 `tmp/probe639/{names,call}.mjs` 与 `tmp/probe636/np642.gd`）：九格九面一字一样 ——
- *  `get_name_count` 给 1 支报 0、`get_name` 给 0 支与 2 支都报 1、`size` / `length` / `get_luminance` 给 1 支报 0、
- *  `append` 给 2 支报 1、`lerp` 给 4 支报 2、`slice` 给 0 支与 4 支都报 2。数恒取**声明的全部数**（与 S637 同一条），
- *  名字不在表里或实参在界内返回 null，由调用方发自己那一句。 */
 export function nativeAritySay(face: string, name: string, given: number): string | null {
   const b = faceArity(face, name);
   if (b === null || (given >= b[0] && given <= b[1])) return null;
-  // 变长那一侧报的是**必填写数**（`rpc_id()` 一句是 Expected 1，不是 Expected 天文数字；尺 `tmp/probe712/arity3.mts`）
   const want = b[1] === Number.MAX_SAFE_INTEGER ? b[0] : b[1];
   return `Invalid call to function '${name}' in base '${face}'. Expected ${String(want)} argument(s).`;
 }
@@ -313,7 +280,6 @@ export function faceMemberKnown(face: string, name: string): boolean {
   return faceArity(face, name) !== null;
 }
 
-/** 按面名与成员名查那一对元数上下界；查不到给 null（表外名、byte 独有的名字，或候选宇宙之外的名字）。 */
 export function faceArity(face: string, name: string): [number, number] | null {
   const table = face === "Array" ? ARRAY_METHOD_ARITY : face === "Dictionary" ? DICT_METHOD_ARITY
     : face === "String" ? STRING_METHOD_ARITY

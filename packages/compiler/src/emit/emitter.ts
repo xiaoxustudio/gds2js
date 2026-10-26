@@ -6,16 +6,13 @@ import { isElemKind } from "@gds2js/runtime/runtime/values";
 import { isDictIntRead, posReadLabel, boundFace, isGlobalValueRead, isHostMethodValueRead, isNativeClassValueRead, lambdaCaptureNames, useMarkOwner } from "../lower/analyze";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
-
 export type BaseSpec =
   | { kind: "host" }
   | { kind: "none" }
   | { kind: "import"; name: string; from: string };
 
 export interface EmitOptions {
-  /** 产物里 runtime 的 import 说明符 —— 由调用方按产物落点算，编译器不带仓库布局知识。 */
   runtimeImport: string;
-  /** 产物里宿主的 import 说明符；null = 这个产物不带宿主。 */
   hostImport: string | null;
   autoRun?: boolean;
   className?: string;
@@ -26,13 +23,11 @@ export interface EmitOptions {
   loadMap?: Array<{ literal: string; resPath: string }>;
   sideEffectImports?: string[];
   inheritedMembers?: string[];
-  /** JS 原型链顶端挂的是宿主 SceneTree（自己 extends 它，或沿脚本继承链走到它）：`quit()` / `create_timer()` 这类宿主方法只在链上有时才认。 */
   hostBaseInChain?: boolean;
   sourcemap?: boolean;
   sourceFile?: string;
   jsFile?: string;
   rawAbiExternal?: string[];
-  /** 本模块的类被工程里别的脚本类 extends：构造要走协议形状，由 project.ts 按 extends 边给出。 */
   extendedByScript?: boolean;
   runtimeMode?: "import" | "local" | "single";
   standaloneRequirePath?: string;
@@ -59,7 +54,6 @@ const BINOP: Record<string, string> = {
   "^": "bxor",
 };
 
-/** 这张表用普通数组而不是 `as const` 元组：静态编译目标没有对元组走 for-of 的 lowering。 */
 const ABI_KINDS: Array<"int" | "float" | "str"> = ["int", "float", "str"];
 
 function rangeArgList(a: Array<string | undefined>): string {
@@ -81,8 +75,6 @@ function isRangeCall(e: Expr): e is Extract<Expr, { kind: "call" }> {
   );
 }
 
-
-/** 映射到运行时的内置函数 */
 const BUILTIN: Record<string, (args: string[]) => string> = {
   range: (a) => `rt.V.array(rt.range(${rangeArgList(a)}))`,
   str: (a) => `rt.strBuiltin([${a.join(", ")}])`,
@@ -225,8 +217,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   exp: (a) => `rt.gExp(${a[0]})`,
   log: (a) => `rt.gLog(${a[0]})`,
   pow: (a) => `rt.gPow(${a[0]}, ${a[1]})`,
-  // 调用栈那一族（S281）：四支都在 runtime 那一侧，`.call()` 与直接调用共用同一条实现；
-  // 帧的行号由模块里的打点供（`rt.frameEnter` / `rt.frameLine`），没用到这四支的模块一行都不发。
   var_to_bytes: (a) => `rt.gVarToBytes(${a[0]})`,
   var_to_bytes_with_objects: (a) => `rt.gVarToBytesWithObjects(${a[0]})`,
   bytes_to_var: (a) => `rt.gBytesToVar(${a[0]})`,
@@ -237,7 +227,6 @@ const BUILTIN: Record<string, (args: string[]) => string> = {
   push_warning: (a) => `rt.gPushWarning([${a.join(", ")}])`,
 };
 
-/** 认得但还没实现的内置：宁可响，不能悄悄生成错代码 */
 const BUILTIN_TODO = GLOBAL_TODO_FUNCTIONS;
 
 const BUILTIN_TODO_WHY: Readonly<Record<string, string>> = {};
@@ -252,8 +241,6 @@ export const HOST_PRINT_NAMES: readonly string[] = [
   "printDebug",
 ];
 
-/** 实测「Godot 有这个名字、我们这边也发得出」的全局名字：`BUILTIN` 那批加打印一族与 `load` / `preload`。
- *  与 `GLOBAL_TODO_FUNCTIONS`（Godot 有、我们拒）相对，两份都是量出来的，摸不得。 */
 export const GLOBAL_IMPLEMENTED: Set<string> = new Set([
   ...Object.keys(BUILTIN),
   ...HOST_PRINT_NAMES,
@@ -261,76 +248,43 @@ export const GLOBAL_IMPLEMENTED: Set<string> = new Set([
   "preload",
 ]);
 
-/** 模块级名字：局部变量不在里面，发射成裸标识符；模块级的变量 / 信号 / 函数发成类字段或方法，引用时必须带 `this.`。局部与模块级同名时会被误判成 `this.x`（emitter 没有作用域信息）。 */
 let MODULE_VARS = new Set<string>();
 let MODULE_SIGNALS = new Set<string>();
-/** 当前内部类自己的信号名：与 `CURRENT_MEMBERS` 同起同落，取值要的是装箱过的 `this.<名>`（引擎在内部类里看得见自己类的信号，读数 `tmp/probe-innerscope/compare97.txt` 的 c15）。 */
 let CLASS_SIGNALS = new Set<string>();
 let MODULE_FUNCS = new Set<string>();
-/** 认得到的 callee 的形参表（S619 实参位那两句要用）。 */
 let PARAM_TYPES = new Map<string, Param[]>();
 let MODULE_CLASSES = new Set<string>();
-/** 脚本类名 → 原生基类名：`Array[Inner]` 的标注名进句子里，`get_typed_class_name()` 印基类（读数 tmp/probe621/q7）。 */
 let SCRIPT_BASE = new Map<string, string>();
-/** 宿主基类那一档（s4：`class N extends Node` 的 `Array[N]` 给 `Node`）。 */
 const SCRIPT_HOST_BASES = new Set(["RefCounted", "Node", "Object"]);
-/** 本模块可见的内部类名 → 声明：解析内部类的 `extends` 与排发射顺序都用它。 */
 let INNER_CLASSES = new Map<string, ClassDecl>();
-/** 被同模块内部类当基类的那些类名：它们的构造要走协议形状。 */
 let EXTENDED_INNER = new Set<string>();
-/** preload("字面量") → 解析到的类绑定名 */
 let PRELOADS = new Map<string, string>();
-/** load("字面量") → 规范化 res 路径（脚本注册表的键） */
 let LOADS = new Map<string, string>();
-/** 正在发射 `_init` 的体 —— 只有这里的 `super(...)` 才发成 `super._init(...)`。 */
 let IN_INIT = false;
 let INIT_HAS_BASE = false;
 let CURRENT_FUNC = "";
-/** print_debug 的 `At:` 里那个 `<函数>()`：lambda 体内发射时套一层，实测那格引擎打的是 `<anonymous lambda>()`（`tmp/probe-pdebug/d-lambda.gd`）。
- *  不动 `CURRENT_FUNC` 是因为它还管着 `super()` 的发射，两者要的形状不是一回事。 */
 let LAMBDA_DEPTH = 0;
-/** 本模块在 `At:` 那一行里印的路径：工程模式是 res 路径（与引擎同一串），单文件模式退到输入路径。 */
 let DEBUG_FILE = "";
-/** `inst_to_dict` 的 `@path` 那一格只认 res 路径（S269 ②）：单文件模式没有它，发 null 让运行期响亮拒。 */
 let MODULE_RES_PATH: string | null = null;
-/** `_init` 发成协议形状的方法（true）还是 JS constructor（false）：只有链上有脚本继承边的类才需要协议形状。 */
 let INIT_AS_METHOD = false;
-/** 这个类的 JS 基类上已有的成员名：覆写它们必须加 `override` 修饰符；静态方法不算覆写。 */
 let INHERITED_METHODS = new Set<string>();
-/** 其中**来自脚本祖先**的那一部分：入口的 async 实体发成 `__gd_<名>`，宿主基类身上没有这一格，只有父脚本定义过同名入口时才有 —— 那一形才要 `override`。 */
 let SCRIPT_INHERITED = new Set<string>();
-/** 宿主 SceneTree / GdScriptObject 身上产品脚本可能重名的成员。 */
 const HOST_MEMBERS = ["quit", "create_timer", "run", "_initialize", "_process", "__gdDispatch"];
-/** 旧形状下 JS 的直接基类是宿主 SceneTree：派生构造器必须自己调 super()，否则运行期当场炸。 */
 let NEEDS_HOST_SUPER = false;
-/** 正在发射的模块里 named enum 的名字（`Suit.HEARTS` 点访问要特判成 rt.index） */
 let ENUM_NAMES = new Set<string>();
-/** 当前正在发射的类的成员名（内部类方法里引用 `hp` 要变成 `this.hp`） */
 let CURRENT_MEMBERS = new Set<string>();
-/** 当前类作用域里的 `static func` 名字（模块类与内部类各一套）：静态方法发在构造器上，实例里的裸调用、静态方法内的裸调用与值位置都要发成 `<类>.f`。 */
 let STATIC_FUNCS = new Set<string>();
-/** 当前类作用域的 JS 类名：静态调用与静态取值都挂在这个名字上。 */
 let CURRENT_CLASS = "";
-/** 正在发的是 `static var` 初值：那一段里没有实例，`self` 发 null 盒子（实测 typeof 0，S367）。 */
 let selfInNilContext = false;
-/** 当前作用域可见的 `const` → 它所属的 JS 类名：常量是类级的，内部类也看得见外层脚本的常量，裸读一律按归属发成 `<类>.NAME`。 */
 let CLASS_VALUE_OWNERS = new Map<string, string>();
-/** 每个类拥有的类级值（常量 / 静态变量）：认 `Inner.IC`、`A.sv` 这种类名点类级值的写法，须在发射任何函数体之前建好。 */
 let CLASS_VALUES = new Map<string, Set<string>>();
-/** 当前作用域里声明了类型的名字 → 那个 TypeRef（模块级 + 当前类的成员变量，emitClassDecl 进出时切换）；赋值点要按声明类型转换。 */
 let VAR_TYPES = new Map<string, TypeRef | null>();
-/** 函数体内 `var x: T` 的声明类型（含嵌套块），emitFunc 每次重建并与 VAR_TYPES 合并。 */
 let LOCAL_TYPES = new Map<string, TypeRef | null>();
-/** 当前发射的函数自己绑住的名字（见 `collectBinds`），取值记号撞号时用它先认局部。 */
 let FUNC_BINDS = new Map<string, number>();
-/** 本脚本函数的返回标注（`%` 那一族的形状判据，S696）：无标注与 `-> Variant` 都算动态那一形。 */
 let FUNC_RETURNS = new Map<string, TypeRef | null>();
-/** 当前函数里**没有标注**（或标注写的就是 `Variant`）的名字：`%` 的实参落在它们身上就是动态那一形（S696）。 */
 let UNTYPED_NAMES = new Set<string>();
-/** 当前类里能当 callee 使的方法名：自己的 + 沿 `extends` 继承来的。`CURRENT_MEMBERS` 只收字段，内部类里裸调本类方法要靠这张表。 */
 let CLASS_FUNCS = new Set<string>();
 
-// ---- sourcemap 采集（只在 emitModuleWithMap 且 opts.sourcemap 时启用）----
 let MAP_ACTIVE = false;
 let LINE_MAPPINGS: LineMapping[] = [];
 function mark(genLine: number, loc: Loc | undefined): void {
@@ -358,7 +312,6 @@ function standaloneInlineHeader(body: string): string {
   ].join("\n");
 }
 
-/** 引擎在报错文本里只写文件那一名：`res://a/b.gd` 与 Windows 的分岔都在这儿收平。 */
 function basenameOfGd(path: string | undefined): string | null {
   if (path === undefined || path === "") return null;
   return path.split(/[\/\\]/).pop() ?? null;
@@ -390,12 +343,10 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     ...m.signals.map((s) => s.name),
     ...(opts.inheritedMembers ?? []),
   ]);
-  /** 信号字段落的是裸 `rt.Signal`，当值用（比较、当字典键、进数组、`typeof`）必须先装箱成 Variant —— 直接递出去会在运行期变成没有类型的裸对象。 */
   MODULE_SIGNALS = new Set(m.signals.map((s) => s.name));
   MODULE_FUNCS = new Set(m.funcs.map((f) => f.name));
   PARAM_TYPES = new Map(m.funcs.map((f) => [f.name, f.params]));
   FUNC_RETURNS = new Map(m.funcs.map((f) => [f.name, f.returnType]));
-  // 字段初始化式发在 INHERITED_METHODS 建起来之前，而那里裸调本类方法、继承来的方法与宿主基类的方法都合法，守卫认这张表。
   CLASS_FUNCS = new Set([
     ...m.funcs.map((f) => f.name),
     ...(opts.inheritedMembers ?? []),
@@ -430,7 +381,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     for (const inner of c.innerClasses) indexInner(inner);
   };
   for (const c of m.innerClasses) indexInner(c);
-  // 被同模块别的内部类当基类的，要走协议形状（它的子类字段必须排在它的 `_init` 体之前）。
   EXTENDED_INNER = new Set<string>();
   for (const c of INNER_CLASSES.values()) {
     if (c.extends !== null && INNER_CLASSES.has(c.extends)) EXTENDED_INNER.add(c.extends);
@@ -460,7 +410,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   for (const ref of classRefs) imports.set(ref.name, ref.from);
   for (const p of preloads) imports.set(p.name, p.from);
   for (const [name, from] of imports) out.push(`import { ${name} } from "${from}";`);
-  // 旁挂模块一律再发一条裸 import：具名 import 若在产物里没被用到会被打包器整条消掉，裸 import 永不被消；同一条 spec 只发一次。
   const bare = new Set<string>(sideEffectImports ?? []);
   for (const ref of classRefs) bare.add(ref.from);
   for (const p of preloads) bare.add(p.from);
@@ -468,7 +417,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (baseClass.kind === "import") out.push(`import { ${baseClass.name} } from "${baseClass.from}";`);
   out.push("");
 
-  // 全局常量（`PI` / `TAU` / `INF` / `NAN` / `CONNECT_*`）：只在模块真的引用了才发，发成模块顶层的 `const`、引用点保持裸名字。
   const globalConsts = globalConstLines(m, new Set<string>([
     ...m.vars.map((v) => v.name),
     ...classRefs.map((r) => r.name),
@@ -502,11 +450,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     baseClass.kind === "host" ? " extends SceneTree"
     : baseClass.kind === "import" ? ` extends ${baseClass.name}`
     : " extends rt.GdScriptObject";
-  // 构造形状由「链上有没有脚本继承边」决定：有边才用协议形状，孤立根类走 JS constructor。
   const proto = baseClass.kind === "import" || opts.extendedByScript === true;
   INIT_HAS_BASE = baseClass.kind === "import";
   INIT_AS_METHOD = proto;
-  // 现在每个脚本类都有 JS 基类（宿主 SceneTree 或根 GdScriptObject），显式构造器必须串 super()
   NEEDS_HOST_SUPER = !proto;
   out.push(`export class ${className}${heritage} {`);
   if (proto && baseClass.kind !== "import") out.push(...emitRootConstructor(true));
@@ -530,7 +476,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   out.push("}");
   out.push("");
 
-  // 类身份登记：构造器值本身在静态编译目标上不可编，所以发的是「工厂 + 判子」两个闭包，里面全用静态类引用。
   out.push(`const __gd_d_${className} = rt.defineClass(${className}, ${makeClosure(className, m.funcs.find((x) => x.name === "_init" && !x.isStatic), proto)}, (o) => o instanceof ${className});`);
   if (m.className) out.push(`rt.nameClass(__gd_d_${className}, ${JSON.stringify(m.className)});`);
   if (baseClass.kind === "import") {
@@ -556,7 +501,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
   if (baseClass.kind !== "import") {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
-  // Callable 标签里那截括号实测是 `class_name`，没有就用文件名（`RefCounted(Util)::hi` / `SceneTree(main.gd)::top`）。
   const scriptLabel = m.className ?? basenameOfGd(resPath ?? opts.sourceFile) ?? className + ".gd";
   if (scriptLabel !== null && scriptLabel !== undefined) {
     out.push(`rt.registerScriptLabel(__gd_d_${className}, ${JSON.stringify(scriptLabel)});`);
@@ -568,9 +512,6 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions): EmitResult {
     for (const line of emitClassDecl(c, base)) out.push(line);
   }
 
-  // 驱动尾拆成两句：链式的 `new Main().run()` 在静态编译目标上是围栏，落成局部变量再调就是普通虚调用。
-  // 外面再包一层兜底：没有 CLI 在场时（直接 node 产物、scriptc 出的 exe）报同一句 `runtime error`，
-  // 而不是漏成一条 Uncaught 栈；CLI 在 globalThis 上留了标记，那层照旧自己报。
   if (autoRun) {
     out.push(`const __gd_entry = new ${className}();`);
     out.push(`try {`);
@@ -614,9 +555,6 @@ function scriptPropsReaderLiteral(className: string, vars: readonly { name: stri
   return `(o) => { const s = o as ${className}; return [${reads}]; }`;
 }
 
-/** 一个类的 `inst_to_dict` 身份五段：res 路径（单文件模式发 null，运行期响亮拒）、类路径、名单、accessor 类型表、读数器。
- *  读数器是静态写的取值式子：静态编译目标上不能拿类实例当 `Record<string, Variant>` 索引（scriptc 会用记录形状去校验实例
- *  自己的槽，第一格就撞 `gdObjectId`），所以「按名单顺序把自己的字段取出来」这件事只有发射器知道怎么拼。 */
 function dictIdentityLiteral(descVar: string, classPath: string, vars: readonly VarDecl[], className: string): string {
   const res = MODULE_RES_PATH === null ? "null" : JSON.stringify(MODULE_RES_PATH);
   const kept = vars.filter((v) => !v.isStatic && !v.isConst);
@@ -631,7 +569,6 @@ function dictIdentityLiteral(descVar: string, classPath: string, vars: readonly 
   const reads = kept
     .map((v) => {
       if (v.accessor === null || v.accessor === undefined) return `s.${v.name}`;
-      // 带读写器的属性进表的是后备槽（实测带初值的 setter 属性给那个初值，没初值的给 `<null>`，`tmp/pos/compare9.txt` 02/03）
       const slot = propSlot(v);
       return slot === null ? "rt.V.nil()" : `s.${slot}`;
     })
@@ -692,7 +629,6 @@ function staticVarTableLiteral(vars: readonly VarDecl[]): string | null {
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
 }
 
-/** 静态变量的读写格：一格一对闭包，里面全是指向具体类的静态字段引用（类值上按名字取静态字段不可表示）。 */
 function staticVarSlotsLiteral(className: string, vars: readonly VarDecl[]): string | null {
   const rows: string[] = [];
   for (const v of vars) {
@@ -704,7 +640,6 @@ function staticVarSlotsLiteral(className: string, vars: readonly VarDecl[]): str
   return rows.length === 0 ? null : `{${rows.join(", ")}}`;
 }
 
-/** static 属性委托到实例方法那一形要在运行期打引擎那块 ERROR（语料 371），要打就得先有帧栈。 */
 function hasDeadStaticDelegate(m: Module): boolean {
   const dead = (vars: readonly VarDecl[], statics: Set<string>): boolean =>
     vars.some((v) => {
@@ -719,8 +654,6 @@ function hasDeadStaticDelegate(m: Module): boolean {
   return walk(m.vars, m.funcs, m.innerClasses);
 }
 
-/** 带读写器的属性也留一个后备槽：初值照评（副作用与它在字段里的次序都是实测的，`tmp/pos/compare8.txt`），没有 getter 时读出来的就是它，写属性不动它。
- *  没写初值也没 getter 时槽装的是**声明类型的零值** —— `var x: int: set = _s` 实测读 0（typeof 2），不是 null；`Variant` 那一形才给 null。 */
 function propSlot(v: VarDecl): string | null {
   const a = v.accessor;
   if (a === null || a === undefined) return null;
@@ -731,7 +664,6 @@ function propSlotInit(v: VarDecl): string {
   return `  ${v.isStatic ? "static " : ""}${propSlot(v)} = ${slotInit(v.type, v.init, v.isStatic)};`;
 }
 
-/** 带读写器的属性：发成 JS 的 get/set，`static var` 那一维发 static 访问器。 */
 function emitAccessors(v: VarDecl): string[] {
   const a = v.accessor;
   if (a === null || a === undefined) return [];
@@ -740,10 +672,8 @@ function emitAccessors(v: VarDecl): string[] {
   const slot = propSlot(v);
   const selfRef = v.isStatic ? `${CURRENT_CLASS}.` : "this.";
   const lines = (body: Stmt[]): string[] => body.flatMap((s) => emitStmt(s, false)).map((l) => `    ${l}`);
-  // static 属性委托到实例方法时那一次调用不发生：引擎运行期打一块 ERROR，读给 null、写什么也不做（实测 `tmp/pos/compare9.txt` 00/01，语料 371）
   const dead = (method: string): string => `rt.reportNonStaticCall(${JSON.stringify(method)})`;
   const unreachable = (method: string): boolean => v.isStatic && !STATIC_FUNCS.has(method);
-  // 委托目标是 static 方法时接收者是类：实例上没有那个槽（实测 static 方法能给实例属性当读写器）
   const delegate = (method: string, arg: string): string =>
     `${STATIC_FUNCS.has(method) ? `${CURRENT_CLASS}.` : "this."}${method}(${arg})`;
   out.push(`  ${st}get ${v.name}() {`);
@@ -763,14 +693,12 @@ function emitAccessors(v: VarDecl): string[] {
   return out;
 }
 
-/** 内部类 `extends` 的目标怎么发：无脚本构造器的原生基类（`RefCounted` / `Object`）发成不带 heritage 的根类，同模块内部类名发成 `extends 那个绑定`，其余响亮拒。 */
 function innerClassBase(text: string): string | null {
   if (text === "RefCounted" || text === "Object") return null;
   if (INNER_CLASSES.has(text)) return text;
   throw new UnsupportedError("class-extends", `内部类 extends ${text} 还没实测过（引擎类型属 Tier 2，跨文件的内部类基类那一格没量）`);
 }
 
-/** 内部类沿 `extends` 链拿到的方法名（`override` 修饰符要用）。 */
 function innerInheritedMethodNames(decl: ClassDecl): string[] {
   const seen = new Set<string>([decl.name]);
   const out: string[] = [];
@@ -785,7 +713,6 @@ function innerInheritedMethodNames(decl: ClassDecl): string[] {
   return out;
 }
 
-/** 内部类沿 `extends` 链继承来的实例成员名（字段、常量、信号）：裸引在链上任何一层都合法，链要一路走上去。 */
 function innerInheritedNames(decl: ClassDecl): string[] {
   const seen = new Set<string>([decl.name]);
   const out: string[] = [];
@@ -894,7 +821,6 @@ function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   if (declParams !== null) lines.push(`rt.registerMethodParams(__gd_d_${decl.name}, ${declParams});`);
   const declStatics = staticNamesLiteral(decl.funcs);
   if (declStatics.length > 0) lines.push(`rt.registerStaticMethods(__gd_d_${decl.name}, ${JSON.stringify(declStatics)}, ${staticsTableLiteral(decl.name, decl.funcs)});`);
-  // 原生基类只在没有脚本基类时登记，有的话运行时沿 `base` 链往上找。
   if (baseName === null) lines.push(`rt.registerNativeBase(__gd_d_${decl.name}, "RefCounted");`);
   lines.push("");
 
@@ -1001,7 +927,6 @@ function collectLocalTypes(body: Stmt[], out: Map<string, TypeRef | null>, untyp
   return out;
 }
 
-/** 只认没写 `extends` 的内部类：`Array[脚本类名]` 的标注名与原生基类名两格都从这儿来（其余形没量）。 */
 function collectScriptBase(c: ClassDecl, out: Map<string, string>): void {
   const base = c.extends === null || c.extends === "" ? "RefCounted" : c.extends;
   if (base === "RefCounted" || out.get(base) !== undefined || SCRIPT_HOST_BASES.has(base)) out.set(c.name, out.get(base) ?? base);
@@ -1026,8 +951,6 @@ function emitFunc(f: FuncDecl, base = 0): string[] {
   }
 }
 
-/** 这个函数自己绑住的名字：形参、体内所有 `var`、lambda 形参、`for` 的循环变量与 match 手臂的 `bind`。
- *  取值记号（analyze 的 `名@行:列`）是跨模块共用的表，两份同形同位的源会撞号 —— 撞上了先认局部，别把局部读成 Callable。 */
 function collectBinds(root: unknown, out: Map<string, number>): Map<string, number> {
   if (Array.isArray(root)) {
     for (const v of root) collectBinds(v, out);
@@ -1040,7 +963,6 @@ function collectBinds(root: unknown, out: Map<string, number>): Map<string, numb
   if (loopVar !== null) addBind(out, loopVar);
   if (Array.isArray(o["params"])) for (const p of o["params"] as Array<{ name?: string }>) if (typeof p?.name === "string") addBind(out, p.name);
   for (const v of Object.values(o)) collectBinds(v, out);
-  // 循环变量只活到循环体结束（引擎在循环之后读它发的是解析期那句 `Identifier "k" not declared in the current scope.`，§6 第 88 条）
   if (loopVar !== null) dropBind(out, loopVar);
   return out;
 }
@@ -1062,7 +984,6 @@ function dropBind(out: Map<string, number>, name: string): void {
   else out.set(name, left);
 }
 
-/** 与 declaredCast 同一批类型，这里要的是槽位类型名（运行时报错文本里要用它）。 */
 const NATIVE_CLASS_SLOTS = new Set(["Object", "RefCounted", "Node"]);
 
 const MEASURED_SLOTS = new Set([
@@ -1085,7 +1006,6 @@ function slotTypeName(t: TypeRef | null): string | null {
   return MEASURED_SLOTS.has(base) ? base : null;
 }
 
-/** 形参的入口槽位：Godot 在函数入口把实参塞进定型标量的槽，塞不进去是抛错而不是转换；只对实例方法发。 */
 function emitParamSlots(f: FuncDecl): string[] {
   const out: string[] = [];
   let n = 0;
@@ -1098,11 +1018,9 @@ function emitParamSlots(f: FuncDecl): string[] {
   return out;
 }
 
-/** 形参表：带默认值的发成 JS 的默认参数（每次调用重新求值，可引用前面的形参），每个形参都标 `rt.Variant`。 */
 function emitParamList(params: Param[], abiParams?: Kind[]): string {
   return params
     .map((p) => {
-      // 裸 ABI 的形参存的就是裸 JS 值，这里按元素种类标 number / string，不能沿用 rt.Variant。
       if (p.default === null && abiParams !== undefined) {
         const k = abiParams[params.indexOf(p)];
         if (k !== undefined) return `${p.name}: ${k === "str" ? "string" : "number"}`;
@@ -1115,7 +1033,6 @@ function emitParamList(params: Param[], abiParams?: Kind[]): string {
     .join(", ");
 }
 
-/** `make` 闭包：把「脚本值.new(实参)」转成一次真正的构造，转发形状跟着这个类自己的构造器走。 */
 function makeClosure(className: string, init: FuncDecl | undefined, protoShape: boolean): string {
   if (protoShape) return `(a) => new ${className}(...a)`;
   if (init === undefined || init.params.length === 0) return `() => new ${className}()`;
@@ -1123,7 +1040,6 @@ function makeClosure(className: string, init: FuncDecl | undefined, protoShape: 
   return `(a) => new ${className}(${fwd})`;
 }
 
-/** 帧打点三件套（S281）：进栈一对 try/finally、每条语句一行当前行。运行期错误要在每支函数边界上接住（S406），所以帧常开。 */
 function frameEnterLines(name: string): string[] {
   return [
     `  const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, ${JSON.stringify(name)});`,
@@ -1161,7 +1077,6 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
 
   const isEntry = f.name === "_initialize" || f.name === "_process";
   const abi = RAW_ABIS.get(f.name);
-  // 入口 virtual 发成两件套：非 async 的薄壳（签名与宿主的 virtual 一致）+ 别名的 async 实体。
   const wrap = isEntry && abi === undefined;
   const bodyName = wrap ? `__gd_${f.name}` : f.name;
   const async = f.coroutine || isEntry ? "async " : "";
@@ -1172,17 +1087,14 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   if (abi) ret = abi.ret === "str" ? "string" : "number";
   else if (f.name === "_initialize") ret = "Promise<void>";
   else if (isEntry || f.coroutine) ret = "Promise<unknown>";
-  // 有返回值就是装箱值，返回类型发成 rt.Variant。
   else ret = hasValue ? "rt.Variant" : "void";
 
   const lines: string[] = [];
   if (wrap) {
     const fwd = f.params.map((p) => p.name).join(", ");
-    // 覆写的签名要与宿主那两条 virtual 逐字一致（`_process(delta: number)`），装箱在转发这一笔里做。
     const dname = f.params[0]?.name ?? "delta";
     const wrapParams = f.name === "_process" ? `${dname}: number` : params;
     const wrapFwd = f.name === "_process" ? `rt.V.float(${dname})` : fwd;
-    // 宿主的两条 virtual 一定是覆写，`override` 修饰符不能省。
     lines.push(`  override ${f.name}(${wrapParams}): ${ret} { return this.${bodyName}(${wrapFwd}); }`);
   }
   const overriding = !f.isStatic && (wrap ? SCRIPT_INHERITED.has(f.name) : INHERITED_METHODS.has(f.name));
@@ -1205,7 +1117,6 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
   const pad = "    ";
   lines.push(...frameEnterLines(f.name));
   try {
-    // 实例方法才发入口槽位（静态方法的 base 标签未定；裸 ABI 不收带类型的函数）。
     if (!f.isStatic) for (const line of emitParamSlots(f)) lines.push(`${pad}${line}`);
     for (const s of f.body) {
       mark(base + lines.length, s.loc);
@@ -1220,18 +1131,13 @@ function emitFuncInner(f: FuncDecl, base = 0): string[] {
     CURRENT_FUNC = savedFunc;
   }
   lines.push(...frameExitLines(catchRet));
-  // 装箱轨的回值函数要有个收尾 return：静态目标按流分析判「少了结尾 return」（SC0001）。
-  // 标了返回型那一半在解析期就被 `return-path` 拦掉了（引擎同句同行，S699），所以这句只对
-  // **没标返回型**的函数可达 —— 那正是实测的掉尾交 Nil（`m_untyped` 给 `<null>`）。
   if (ret === "rt.Variant") lines.push(`${pad}return rt.V.nil();`);
   lines.push("}");
   lines.push("");
   return lines;
 }
 
-/** `_init` 发成普通方法（协议形状）：继承链上有脚本边时用，字段初始化子全部跑完才轮到 `_init` 的体。 */
 function emitInitMethod(f: FuncDecl, base: number): string[] {
-  // 协议形状下所有 `_init` 都发同一个 rest 签名（静态编译目标拒换签名的覆写）；形参名与默认值在体首的绑定里还原。
   const lines = [`${INHERITED_METHODS.has("_init") ? "override " : ""}_init(...__gd_init_args: rt.Variant[]): void {`];
   const pad = "    ";
   lines.push(...frameEnterLines("_init"));
@@ -1272,7 +1178,6 @@ function emitInitMethod(f: FuncDecl, base: number): string[] {
   return lines;
 }
 
-/** 旧形状：`_init` 就是 JS constructor，只在链上没有脚本继承边时用；`hostSuper` 表示直接基类是宿主的 SceneTree，那种构造器必须自己调 `super()`。 */
 function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): string[] {
   const params = emitParamList(f.params);
   const lines = [`constructor(${params}) {`];
@@ -1286,7 +1191,6 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
     first.expr.callee.name === "super";
   if (!explicitSuper && hostSuper) lines.push("  super();");
   lines.push("  this.__gd_fields__();");
-  // `_init` 的体整个进守卫里：`dict_to_inst` 的裸构造只要字段初始化子（`__gd_fields__` 那一格）与 super 链。
   lines.push("  if (!rt.bareConstruction()) {");
   const pad = "      ";
   lines.push(...frameEnterLines("_init").map((l) => `    ${l}`));
@@ -1312,7 +1216,6 @@ function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: boolean): s
   return lines;
 }
 
-/** 收集模块里裸引用到的全局常量，生成模块顶层的声明行；撞名时以用户自己的声明为准，所以保留名不声明。 */
 function globalConstLines(m: Module, reservedExtra: Set<string>): string[] {
   const reserved = new Set<string>(reservedExtra);
   const addEnum = (en: Module["enums"][number]): void => {
@@ -1433,13 +1336,11 @@ function globalConstLines(m: Module, reservedExtra: Set<string>): string[] {
     .filter((n) => !reserved.has(n))
     .sort()
     .map((n) => {
-      // `used` 里只放过 `isGlobalConst` 认过的名字，所以这张表一定查得到。
       const c = GLOBAL_CONSTANTS[n]!;
       return `const ${n} = ${c.kind === "int" ? "rt.V.int" : "rt.V.float"}(${c.value});`;
     });
 }
 
-/** 字段 / 静态变量的初始化：定型容器走 `stampDecl`，定目标量还要再过 `declaredCast`。`selfIsNil` 那支是 `static var` 初值 —— 那处没有实例，实测 `self` 给 typeof 0（S367）。 */
 function slotInit(t: TypeRef | null, init: Expr | null | undefined, selfIsNil = false): string {
   const prev = selfInNilContext;
   selfInNilContext = selfIsNil;
@@ -1452,7 +1353,6 @@ function slotInit(t: TypeRef | null, init: Expr | null | undefined, selfIsNil = 
   }
 }
 
-/** proto 形状的类要一份类型声明：字段都在 `__gd_fields__()` 里落地，类体里只发 `declare` —— 带初值的类字段会在 `super()` 之后再定义一次，把基类已写好的值冲掉。 */
 function emitFieldDeclarations(vars: VarDecl[], signals: SignalDecl[]): string[] {
   const out: string[] = [];
   for (const s of signals) out.push(`  declare ${s.name}: rt.Signal;`);
@@ -1467,10 +1367,7 @@ function emitFieldDeclarations(vars: VarDecl[], signals: SignalDecl[]): string[]
   return out;
 }
 
-/** 字段与信号的初始化子集中到 `__gd_fields__`：根类的构造器调一次，派生类各自 `super.__gd_fields__()` 串起来，于是初始化子按「基类 → 子类」跑完。
- *  引擎把这一格编成 `@implicit_new`：里面出错作废的是这一支自己的初始化子，后面的 `_init` 照跑、其余类的初始化子也照跑（S406 三格）。 */
 function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: boolean, lineBase: number): string[] {
-  // 派生类覆写基类的这一格，`override` 修饰符不能省。
   const out: string[] = [chainToBase ? "  override __gd_fields__() {" : "  __gd_fields__() {"];
   out.push(`    const __gd_frame = rt.frameEnter(${JSON.stringify(DEBUG_FILE)}, "@implicit_new");`);
   out.push("    try {");
@@ -1505,7 +1402,6 @@ function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainToBase: b
   return out;
 }
 
-/** 类级的那几行：静态变量、const 的静态镜像、带读写器属性的 get/set。 */
 function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
   const out: string[] = [];
   for (const v of vars) {
@@ -1521,17 +1417,14 @@ function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
   return out;
 }
 
-/** 每个脚本类一份「名字 → 方法」派发表：表发在类里，运行时只需一次 `instanceof` 收窄。静态方法与非协议形状的 `_init` 不进表。 */
 function emitDispatch(funcs: FuncDecl[], proto: boolean): string[] {
   const out: string[] = ["  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {"];
   out.push("    switch (name) {");
   for (const f of funcs) {
     if (f.isStatic) continue;
     if (!proto && f.name === "_init") continue;
-    // 宿主的 virtual 发的是「薄覆写 + 别名的 async 实体」，派发表直接指向实体（形参才是 Variant 的那一个）。
     const wrapped = (f.name === "_initialize" || f.name === "_process") && RAW_ABIS.get(f.name) === undefined;
     const who = wrapped ? `__gd_${f.name}` : f.name;
-    // `_init` 是统一的 rest 签名：整串实参原样交过去，缺位由它体首的绑定自己判。
     const abi = RAW_ABIS.get(f.name);
     const fwd =
       f.name === "_init" && proto
@@ -1548,19 +1441,16 @@ function emitDispatch(funcs: FuncDecl[], proto: boolean): string[] {
   return out;
 }
 
-/** 只有根用户类需要构造器：派生类继承它，`this.__gd_fields__()` 与 `this._init?.(...)` 都按最派生的一支走。 */
 function emitRootConstructor(hostSuper: boolean): string[] {
   const out = ["  constructor(...__gd_new_args: rt.Variant[]) {"];
   if (hostSuper) out.push("    super();");
   out.push("    this.__gd_fields__();");
-  // 裸构造（`dict_to_inst`）只跑字段初始化子，不跑 `_init`（S269 ⑦）
   out.push("    if (!rt.bareConstruction()) this.__gdDispatch(\"_init\", __gd_new_args);");
   out.push("  }");
   out.push("");
   return out;
 }
 
-/** 非协议形状的类没有 `__gdDispatch("_init")` 可走，也没写 `_init` 时不发构造器：字段初始化子搬进 `__gd_fields__` 后要自己有一份调用它的构造器（S406）。 */
 function emitFieldsOnlyConstructor(): string[] {
   const out = ["  constructor() {", "    super();", "    this.__gd_fields__();", "  }", "",];
   return out;
@@ -1582,8 +1472,6 @@ function hasValueReturn(stmts: Stmt[]): boolean {
   return false;
 }
 
-
-/** 条件表达式：裸 bool 直接用；裸 int/float 用 `!== 0`，裸 str 用 `!== ""`（空串为假）；否则 rt.ops.truthy。 */
 function condExpr(e: Expr): string {
   const r = emitExprR(e);
   if (r.rep === "bool") return r.code;
@@ -1775,7 +1663,6 @@ function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
   }
 }
 
-/** 裸数组 / 裸网格的下标写：rep 核不上说明「推断 ⟺ 发射」的不变式被破坏，编译期响亮报错而不是静默往裸数组塞 Variant；返回 null 表示这不是裸容器。 */
 function emitRawIndexWrite(target: Expr, value: Expr): string | null {
   if (target.kind !== "index") return null;
   const raw = (e: Expr, want: Kind): string => {
@@ -1809,14 +1696,12 @@ interface WPath {
   pre: string[];
 }
 
-/** 一次写回：容器是原地改（运行时返回 null，不用再补一笔）；只有值类型才要把新值放回它来的那个存储位。 */
 function writeBack(p: WPath, call: string): string[] {
   const store = p.write("_nv");
   if (store === "") return [call + ";"];
   return ["{", ...p.pre, "  const _nv = " + call + ";", "  if (_nv !== null) " + store, "}"];
 }
 
-/** 值类型写（`v.x = 1`、`v[0] = 9`、`a[0].x = 5`、`m.x = 3`）：Vector2 这类是值类型，写它要产出新值再放回它来的那一格，路径由 {@link writePathFor} 给。 */
 function emitValueWrite(target: Expr, value: Expr): string[] | null {
   const seq = { n: 0 };
   if (target.kind === "attribute") {
@@ -1841,7 +1726,6 @@ function writePathFor(t: Expr, seq: { n: number }): WPath {
 function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
   if (t.kind === "ident") {
     const read = emitExpr(t);
-    // 类名那一格读的是类身份（desc 的盒子），不是可赋值的存储位，省掉写回那一笔。
     if (INNER_CLASSES.has(t.name) || t.name === CURRENT_CLASS) return { read, write: () => "", pre: [] };
     return { read, write: (nv) => `${read} = ${nv};`, pre: [] };
   }
@@ -1869,7 +1753,6 @@ function lvalueOf(t: Expr, seq: { n: number }): WPath | null {
   return null;
 }
 
-/** `self.<成员>` → 裸成员 ident（两者同一格）；名字不是当前类的成员就返回 null，宁可走响亮分支也不发成一个不存在的 `this.x`。 */
 function unwrapSelfMember(t: Expr): Expr | null {
   if (t.kind !== "attribute" || t.obj.kind !== "ident" || t.obj.name !== "self") return null;
   if (!CURRENT_MEMBERS.has(t.name) && !MODULE_VARS.has(t.name)) return null;
@@ -1895,17 +1778,14 @@ function emitAssign(target: Expr, value: string, valueExpr?: Expr): string {
   throw new UnsupportedError("emit-assign", `赋值目标 ${target.kind} 还没实现`);
 }
 
-
 type Rep = "var" | "int" | "float" | "str" | "bool";
 interface R {
   code: string;
   rep: Rep;
 }
 
-/** 当前函数里被解箱成裸 JS 值的局部：int/float → number，str → string。 */
 let UNBOXED = new Map<string, "int" | "float" | "str">();
 
-/** 快路径入口按元素种类挑具体名：静态编译目标解析不了对象字面量上的泛型成员，而种类在发射期就定死。 */
 function fastSuffix(k: ElemKind): "Num" | "Str" {
   return leafOf(k) === "str" ? "Str" : "Num";
 }
@@ -1915,29 +1795,22 @@ interface RawAbi {
   params: Kind[];
   ret: Kind;
 }
-/** 当前模块内可走裸 ABI 的函数：名字 → 签名。由 computeRawAbis 逐模块算出。 */
 let RAW_ABIS = new Map<string, RawAbi>();
 let CURRENT_RET: Kind | null = null;
-/** 当前函数的返回标注（S618 返回位那一族）；lambda 体里不发，lambda 的返回槽没实测过。 */
 let CURRENT_RET_ANN: TypeRef | null = null;
 
 type ElemKind = "int" | "float" | "str" | "int[]" | "float[]" | "str[]";
 const isGridElem = (k: ElemKind): k is "int[]" | "float[]" | "str[]" => k === "int[]" || k === "float[]" || k === "str[]";
-/** 网格的叶子标量类型。 */
 const leafOf = (k: ElemKind): Kind => (k === "int[]" ? "int" : k === "float[]" ? "float" : k === "str[]" ? "str" : k);
-/** 当前函数里被特化成裸 number[] / number[][] 的数组局部：名字 → 元素类型。由 analyzeFuncLayout 逐函数算出。 */
 let RAW_ARRAYS = new Map<string, ElemKind>();
-/** 当前函数里被特化成裸 Map<primitive,number> 的字典局部：名字 → 值类型（键仅 int/str，值仅标量 int/float）。 */
 let RAW_DICTS = new Map<string, "int" | "float">();
 const NO_ARRAYS: Map<string, ElemKind> = new Map();
 const NO_DICTS: Map<string, "int" | "float"> = new Map();
 
 const CMP_RAW: Record<string, string> = { "<": "<", "<=": "<=", ">": ">", ">=": ">=", "==": "===", "!=": "!==" };
 const ARITH_RAW: Record<string, string> = { "+": "iAddC", "-": "iSubC", "*": "iMulC", "/": "iDivC", "%": "iModC" };
-// float 没有 int64 的范围陷阱（溢出→Infinity、除零→Infinity，与装箱 V.float(a op b) 逐位一致），故可内联裸运算。
 const FLOAT_ARITH_RAW: Record<string, string> = { "+": "+", "-": "-", "*": "*", "/": "/" };
 
-/** 把带表示的表达式装箱成 Variant 字符串。 */
 function boxR(r: R): string {
   if (r.rep === "int") return `rt.V.int(${r.code})`;
   if (r.rep === "float") return `rt.V.float(${r.code})`;
@@ -2127,8 +2000,6 @@ function computeUnboxed(
   const walkExpr = (e: Expr, inLambda: boolean): void => {
     switch (e.kind) {
       case "ident":
-        // 分析器记下的全局函数取值点：同一个名字在本函数里既当全局又当局部时（实测 `var len = 5` 之前的 `len` 是全局 Callable），
-        // 裸值通道按名字整支覆盖会把两处搅在一起，所以这个名字整个退出裸值优化。
         if (isGlobalValueRead(e)) excluded.add(e.name);
         break;
       case "lambda":
@@ -2259,7 +2130,6 @@ function computeUnboxed(
   return result;
 }
 
-
 const INT_ARITH = new Set(["+", "-", "*", "/", "%"]);
 const FLOAT_ARITH = new Set(["+", "-", "*", "/"]);
 const CMP_OPS = new Set(["<", "<=", ">", ">=", "==", "!="]);
@@ -2267,7 +2137,6 @@ const CMP_OPS = new Set(["<", "<=", ">", ">=", "==", "!="]);
 const RAW_INT_MIN = BigInt(Number.MIN_SAFE_INTEGER);
 const RAW_INT_MAX = BigInt(Number.MAX_SAFE_INTEGER);
 
-/** 只在「本身就是个范围内 int 字面量」时给出其精确值，否则 null（不参与判定）。 */
 function rawIntLit(e: Expr): bigint | null {
   if (e.kind !== "lit" || e.lit !== "int") return null;
   return typeof e.value === "number" ? BigInt(e.value) : null;
@@ -2385,7 +2254,6 @@ interface RawSite {
   owner: FuncDecl;
 }
 
-/** 裸 ABI 形态判定：无返回类型标注、参数无类型/默认值、非协程/静态/入口，且函数体是直线（只有 `var x = …`、`x = …` 目标是裸 ident、带值的 `return`）；同型性判定交给 sigValid。 */
 function abiFormOk(f: FuncDecl): boolean {
   if (f.coroutine || f.isStatic) return false;
   if (f.returnType) return false;
@@ -2533,9 +2401,6 @@ function scanRawUsage(m: Module, candNames: Set<string>): { escapes: Set<string>
   return { escapes, sitesByF };
 }
 
-/** 裸轨作废的唯一来源（S695）：int 的 `/`、`%` 除数是运行期值时引擎在调用点开口，无标注的那一支函数作废返回 null；
- *  裸签名（number / string）装不下 null，所以这种函数整个退出裸轨，由装箱轨的边界按返回型给默认值。
- *  除数是「非零 int 字面量」时不可能作废（`0` 字面量那形由解析期拦下，S694）。 */
 function intDivMayAbort(e: Expr, ik: (n: string) => Kind | null): boolean {
   switch (e.kind) {
     case "binary":
@@ -2679,7 +2544,6 @@ function computeRawAbis(
   RAW_ABIS = saved;
   return stable ? cur : empty;
 }
-
 
 interface ArrayCand {
   init: Extract<Expr, { kind: "array" }>;
@@ -2909,12 +2773,10 @@ function scanArrayCandidates(f: FuncDecl): Map<string, ArrayCand> {
   return cands;
 }
 
-/** 标量数字字面量的类型；非安全 int / 非数字 → null。 */
 function scalarLitKind(e: Expr): Kind | null {
   if (e.kind !== "lit") return null;
   if (e.lit === "float" && typeof e.value === "number") return "float";
   if (e.lit === "int" && typeof e.value === "number" && Number.isSafeInteger(e.value)) return "int";
-  // 字符串元素也进裸轨（rep 为 str），越界读仍由运行时响亮抛错。
   if (e.lit === "string") return "str";
   return null;
 }
@@ -2975,12 +2837,9 @@ function analyzeFuncLayout(f: FuncDecl): {
   }
   let unboxed = computeUnboxed(f, arrays, dicts);
   const seeded = new Set<string>();
-  // 每轮至少消费掉一次「播种 / 删数组 / 删字典」事件，所以这个上限够用；到上限也只是提前停止特化（保守方向）。
   const cap = aC.size * 2 + dC.size + 8;
   for (let it = 0; it < cap; it++) {
     let changed = false;
-    // 空初值的候选在这里按写入证据定类型（只看字面量证据定不下来）。
-    // `seeded` 保证每个候选最多播种一次，被 verifyArray 删掉后不再重播。
     for (const [name, c] of aC) {
       if (c.escaped || arrays.has(name) || seeded.has(name) || c.init.items.length !== 0) continue;
       const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
@@ -3014,7 +2873,6 @@ function analyzeFuncLayout(f: FuncDecl): {
   return { unboxed, arrays, dicts };
 }
 
-/** 校验候选数组在其所设 Kind 下：初值元素、写入元素皆为该 Kind，读下标皆为 int。 */
 function verifyArray(
   c: ArrayCand,
   K: ElemKind,
@@ -3023,7 +2881,6 @@ function verifyArray(
   dicts: Map<string, "int" | "float">,
 ): boolean {
   const identKind = (n: string): Kind | null => unboxed.get(n) ?? null;
-  // 空初值没有初值类型可对：它的 K 是不动点里按写入证据定的，下面 writeElems / writeVals 两条就是它的校验。
   if (c.init.items.length !== 0 && elemKindFromInit(c.init, true) !== K) return false;
   if (!isGridElem(K)) {
     for (const it of c.init.items) {
@@ -3038,7 +2895,6 @@ function verifyArray(
   for (const ix of c.writeIdxs) if (kindOfExpr(ix, identKind, arrays, dicts) !== "int") return false;
   return true;
 }
-
 
 interface DictCand {
   init: Extract<Expr, { kind: "dict" }>;
@@ -3117,7 +2973,6 @@ function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
         visitExpr(e.right, inL);
         return;
       case "ternary":
-        // 三目的两支都是**整值读**：候选容器当分支读就退出裸值通道（否则发出去的是 raw Map，装箱位拿到 undefined）。
         for (const br of [e.thenE, e.elseE]) {
           const cn = candObj(br);
           if (cn !== null) markEscape(cn);
@@ -3207,12 +3062,10 @@ function scanDictCandidates(f: FuncDecl): Map<string, DictCand> {
   return cands;
 }
 
-/** 键必须裸化为 int 或 str（float/bool/其它一律拒收，避免 1 与 1.0 碰撞）。 */
 function keyKindOk(k: Kind | "bool" | null): boolean {
   return k === "int" || k === "str";
 }
 
-/** 校验候选字典在所设值 Kind 下：初值/写入值皆为该 Kind，初值/写入/读键皆 int|str。 */
 function verifyDict(
   c: DictCand,
   K: ElemKind,
@@ -3240,17 +3093,13 @@ function emitExprVar(e: Expr): string {
       if (e.name === "self") return selfInNilContext ? "rt.V.nil()" : `rt.V.object(this)`;
       const owner = CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
-      // 类名当接收者（`Inner.make()`、`Inner.f` 取值）时给的是类身份的盒子：类值本身装不进 Variant。
       if (INNER_CLASSES.has(e.name) || e.name === CURRENT_CLASS) return `rt.V.object(__gd_d_${e.name})`;
       if (STATIC_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(__gd_d_${CURRENT_CLASS}), ${JSON.stringify(e.name)})`;
       if (MODULE_FUNCS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       if (CURRENT_MEMBERS.has(e.name)) return CLASS_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
       if (MODULE_VARS.has(e.name)) return MODULE_SIGNALS.has(e.name) ? `rt.wrapValue(this.${e.name})` : `this.${e.name}`;
-      // 全局函数的取值点：分析器按真实作用域记的号，实测一律给 `@GlobalScope::<名字>` 的 Callable（typeof 25）
       if (isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
-      // 引擎类名的取值点：实测 typeof 24、等式按类，发一个身份盒子；打印与 `.new()` 那两支在运行时各自响亮拒
       if (isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
-      // 宿主基类方法名的取值点（S358）：实测给 `SceneTree(<文件>)::<名>` 的 Callable，与 `Callable(self, "<名>")` 同一个盒子
       if (isHostMethodValueRead(e) && !FUNC_BINDS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
       return e.name;
 
@@ -3279,7 +3128,6 @@ function emitExprVar(e: Expr): string {
     }
 
     case "index":
-      // 静态标注的字典 + 静态 int 键：引擎讲的是数组那一式，得让运行期知道这一格是谁（S405）。
       if (isDictIntRead(e)) return `rt.wrapValue(rt.dictIndexInt(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`;
       const pos = posReadLabel(e);
       return pos === null
@@ -3313,7 +3161,6 @@ function emitExprVar(e: Expr): string {
       return `rt.wrapValue(rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)}))`;
 
     case "lambda": {
-      // 默认值形参必须排在尾部：`func(a = 1, b)` 那一形引擎没收过，不发（读数 `tmp/probe-lamdef/`）
       const firstDef = e.params.findIndex((p) => p.default !== null);
       if (firstDef >= 0 && e.params.slice(firstDef).some((p) => p.default === null)) {
         throw new UnsupportedError("lambda-param-default", "lambda 的默认值形参排在必填形参之前那一形没实测过，不发");
@@ -3331,8 +3178,6 @@ function emitExprVar(e: Expr): string {
           LAMBDA_DEPTH -= 1;
         }
       });
-      // 盒子里的式子统一收一个数组，所以按位置把形参绑成同名 const，并把声明形参数一起交给盒子。
-      // 默认值排在同名 const 之后：`func(x = 1, y = x)` 那格的读数是 `[1, 1]` —— 后一位看得见前一位（`tmp/probe-lamdef/{a1,c1}.gd`）
       const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant` + (p.default === null ? "" : " ?? " + emitExpr(p.default)) + ";");
       const lines: string[] = [
         `rt.callable((__a: rt.Variant[]) => {`,
@@ -3340,7 +3185,6 @@ function emitExprVar(e: Expr): string {
         "        try {",
         ...bind.map((l) => `  ${l}`),
         ...body.map((l) => `  ${l}`),
-        // lambda 出错也只作废这一支自己：`.call()` 那格实测拿回 `<null>`，调用方接着跑（S406 三格）。
         "        } catch (__gd_err) {",
         "          rt.gdFunctionError(__gd_err);",
         "          return rt.V.nil();",
@@ -3350,7 +3194,6 @@ function emitExprVar(e: Expr): string {
         `    }, ${e.params.length}${defs.length === 0 ? "" : ", " + String(defs.length)})`,
       ];
       const inner = lines.join(String.fromCharCode(10));
-      // 引擎的 lambda **按值捕获**函数级局部（`tmp/probe-capture/c1.gd` K3 / K4 / K7）：套一层只跑一次的影子箭头，把那几个名字冻在创建那一刻。
       const caps = lambdaCaptureNames(e);
       if (caps.length > 0) return "(((" + caps.join(", ") + ") => " + inner + "))(" + caps.join(", ") + ")";
       return inner;
@@ -3377,7 +3220,6 @@ function emitLit(lit: string, value: string | number | bigint | boolean | null):
   return "rt.V.nil()";
 }
 
-/** 声明类型是定型容器（`Array[int]` / `Dictionary[String, int]`）时在容器创建处盖章：章跟着值一起走，别名共享；元素是引擎类时不盖章。 */
 function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: Expr) => string): string {
   const raw = init ? emit(init) : typeDefault(t);
   if (t === null || t.kind !== "named") return raw;
@@ -3401,7 +3243,6 @@ function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit: (e: E
   return `rt.stampDict(${raw}, ${JSON.stringify(keyKind)}, ${JSON.stringify(valKind)}, ${String(fromLiteral)})`;
 }
 
-/** 槽位标注的类型文本（S618）：只认实测过的那几种元素型 / 键值型，其余返回 null 原样透传。 */
 function containerAnnText(ann: TypeRef | null): string | null {
   if (ann === null || ann.kind !== "named") return null;
   const m = /^(Array|Dictionary)\[(.+)\]$/.exec(ann.name);
@@ -3417,7 +3258,6 @@ function containerAnnText(ann: TypeRef | null): string | null {
     ? `Dictionary[${parts[0]}, ${parts[1]}]` : null;
 }
 
-/** 认得 callee 的调用点：字面量实参照引擎那样在编译期折算成定形容器，其余实参发运行期那一句（S619）。 */
 function packTypedArgs(fnName: string, argExprs: Expr[], emitted: string[], recv: string): string[] {
   const ps = PARAM_TYPES.get(fnName);
   if (ps === undefined) return emitted;
@@ -3449,16 +3289,13 @@ function slotElemKindName(name: string): string | null {
   return SCRIPT_BASE.has(name) ? "Object" : null;
 }
 
-/** 非字面量源进定形容器的槽：赋值位与返回位各一句；字面量源引擎在编译期折算、不发句。 */
 function containerSlot(code: string, value: Expr, text: string | null, say: "assignContainer" | "returnContainer"): string {
   if (text === null || value.kind === "array" || value.kind === "dict") return code;
   return `rt.${say}(${code}, ${JSON.stringify(text)})`;
 }
-/** `Object.call` / `callv` 的 arity 表：`[必填数, 全部形参数]`，必填数取第一个带默认值的形参之前的个数。 */
 function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
   for (const f of funcs) {
-    // `_init` 不在表里（它的实参数另有解析期那一族）；静态方法进表，给的是声明形参数。
     if (f.name === "_init") continue;
     let required = f.params.length;
     for (let i = 0; i < f.params.length; i++) {
@@ -3472,8 +3309,6 @@ function methodAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
 }
 
-/** 构造子元数：`_init` 刻意不在 `methodArities` 里，`H.new` 当值那支 Callable 的 `get_argument_count()` 要这一行。
- *  没声明 `_init`、或 `_init` 不带形参的类一概不发 —— 产物树一字不动。 */
 function ctorAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   const ctor = funcs.find((f) => f.name === "_init");
   if (ctor === undefined || ctor.params.length === 0) return null;
@@ -3487,8 +3322,6 @@ function ctorAritiesLiteral(funcs: readonly FuncDecl[]): string | null {
   return `[${required}, ${ctor.params.length}]`;
 }
 
-/** 形参型名表（S648）：被调方入口那句 `Invalid type in function ... Cannot convert argument N from X to Y.`
- *  要按声明型判断，而运行期看不到源码。只登记**有标注位**的方法，其余形状不发，产物树一字不动。 */
 function methodParamsLiteral(funcs: readonly FuncDecl[]): string | null {
   const rows: string[] = [];
   for (const f of funcs) {
@@ -3500,7 +3333,6 @@ function methodParamsLiteral(funcs: readonly FuncDecl[]): string | null {
   return rows.length === 0 ? null : `{ ${rows.join(", ")} }`;
 }
 
-/** 带类型标注的赋值按声明类型显式转换（float 赋给 int 向零截断）。 */
 function declaredCast(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
@@ -3509,19 +3341,16 @@ function declaredCast(t: TypeRef | null): string | null {
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
   if (base === "Vector2") return "rt.toVec2";
-  // 值类型槽之间的互转（Vector3 ↔ Vector3i 等）：没有这两条转换时槽里存的是原形状，打印与 `typeof` 一起错。
   if (base === "Vector3") return "rt.toVec3";
   if (base === "Vector3i") return "rt.toVec3i";
   if (base === "Vector4") return "rt.toVec4";
   if (base === "Vector4i") return "rt.toVec4i";
   if (base === "Vector2i") return "rt.toVec2i";
-  // Color 槽吃 int（packed RGBA）与 String（色名 / hex），StringName 槽吃 String；四路赋值同形。
   if (base === "Color") return "rt.toColor";
   if (base === "StringName") return "rt.toStringNameSlot";
   return null;
 }
 
-/** 没有初值的声明给的是该类型的默认值而不是 null：只有值类型要特判，类与引擎对象保持 null。 */
 function typeDefault(t: TypeRef | null): string {
   if (t === null) return "rt.V.nil()";
   if (t.kind === "array") return "rt.V.array(rt.GArray.of([]))";
@@ -3531,7 +3360,6 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "float") return "rt.V.float(0)";
   if (base === "bool") return "rt.V.bool(false)";
   if (base === "String") return `rt.V.str("")`;
-  // `var sn: StringName` 的默认值是空 StringName（打印空串、length 0），不是 null。
   if (base === "StringName") return `rt.V.stringName("")`;
   if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
   if (base === "Dictionary") return "rt.dictOf([])";
@@ -3552,7 +3380,6 @@ function typeDefault(t: TypeRef | null): string {
   if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
   if (base === "PackedVector4Array") return 'rt.packCtor("vector4", [])';
   if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
-  // D6 那七个值类型不进 Tier 1：它们的默认值发不出来 —— 那一站要响亮拒，不是静默的 null 盒子（读数 `tmp/probe-valuedefault/compare96.txt`）
   if (D6_VALUE_TYPES.has(base)) return `rt.unsupportedValueDefault(${JSON.stringify(base)})`;
   return "rt.V.nil()";
 }
@@ -3595,10 +3422,6 @@ function patternNames(p: Pattern): string[] {
   }
 }
 
-/** `%` 格式化那一族的形状（S696，尺 `tmp/probe720/{x,y,z2}.gd` 二十三格 + `tmp/probe719/{p,q,t,s}.gd`）：
- *  两侧都是**静态已知的非 Variant 型**时引擎打的是非致命那块（脚本照跑、回原格式串），
- *  任一侧是 Variant 时发的是 SCRIPT ERROR 那一句并作废当前那支函数。
- *  认不出来的形态一律回答「照旧的静态形」—— 没量过的不翻。 */
 function pctStaticSide(e: Expr): boolean {
   switch (e.kind) {
     case "ident": {
@@ -3618,8 +3441,6 @@ function pctStaticSide(e: Expr): boolean {
       return !(t.kind === "named" && t.name === "Variant");
     }
     case "index": {
-      // 只量过「读的是标了 `Array` / `Dictionary`（不带内型）的那一格」：`la[0]`、`dsc["k"]` 都算动态那一形；
-      // 定形容器 `Array[String]` 的那一格是静态（Z5），其余没量过，照旧。
       if (e.obj.kind !== "ident") return true;
       const table = LOCAL_TYPES.has(e.obj.name) ? LOCAL_TYPES : VAR_TYPES.has(e.obj.name) ? VAR_TYPES : null;
       const t = table === null ? undefined : table.get(e.obj.name);
@@ -3676,8 +3497,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     if (name === "print_verbose") return `printVerbose([${args.join(", ")}])`;
     if (name === "print_rich") return `printRich([${args.join(", ")}])`;
     if (name === "print_debug") {
-      // 实测两句都走 stdout，第二句的 `()` 前是**调用点所在函数**的名：lambda 里是 `<anonymous lambda>`，
-      // 具名函数与静态都只写名字本身（不带类前缀），读数 `tmp/probe-pdebug/{d-lambda,d_static,d_inner}.gd`
       const fnLabel = LAMBDA_DEPTH > 0 ? "<anonymous lambda>" : CURRENT_FUNC;
       return `printDebug([${args.join(", ")}], ${JSON.stringify(DEBUG_FILE)}, ${String(e.loc.line)}, ${JSON.stringify(fnLabel)})`;
     }
@@ -3705,7 +3524,6 @@ function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       return builtin(args);
     }
     if (name === "super") {
-      // `_init` 里的 `super(...)` 调父类 `_init` 的体（调两次就跑两遍）；别的方法里的 `super()` 调父类的同名方法。
       if (!INIT_HAS_BASE) {
         throw new UnsupportedError("emit-super-ctor", `${CURRENT_CLASS} 没有脚本基类，super() 这一格还没实测过，不发`);
       }

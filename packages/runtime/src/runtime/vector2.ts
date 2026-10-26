@@ -12,7 +12,6 @@ export class GVector2 {
 
 const r = Math.fround;
 
-/** 「这个对象是不是 Vector2i、是的话把两个分量交出来」那一格，由 `vector2i` 在自己模块里登记：反向 import 会成环，而交分量而不是布尔是因为判完再收结构视图会丢掉实例身份。 */
 type Vec2iParts = (o: object) => [number, number] | null;
 
 let vec2iParts: Vec2iParts | null = null;
@@ -25,7 +24,6 @@ export function vector2(x: number, y: number): Variant {
   return V.object(new GVector2(x, y));
 }
 
-/** 取向量实例，不是 Vector2 对象则 null（ops 里分派用）。 */
 export function asVec2(v: Variant): GVector2 | null {
   return v.t === Tag.OBJECT && v.v instanceof GVector2 ? (v.v as GVector2) : null;
 }
@@ -35,7 +33,6 @@ export function toVec2(v: Variant): Variant {
   return vector2New([v]);
 }
 
-/** `Vector2(...)` 构造：0 参给零向量，1 参收 Vector2 / Vector2i，其余必须两参。 */
 export function vector2New(args: Variant[]): Variant {
   if (args.length === 0) return vector2(0, 0);
   if (args.length === 1) {
@@ -52,7 +49,6 @@ export function vector2New(args: Variant[]): Variant {
   return vector2(scalar(args[0], "Vector2"), scalar(args[1], "Vector2"));
 }
 
-/** `Vector2.UP` 这类静态常量（Godot 只有这七个）。 */
 const VEC2_CONST: Record<string, [number, number]> = {
   ZERO: [0, 0],
   ONE: [1, 1],
@@ -63,10 +59,8 @@ const VEC2_CONST: Record<string, [number, number]> = {
   DOWN: [0, 1],
 };
 
-/** 轴常量：`typeof(Vector2.AXIS_X)` 实测是 2（int），而且**只有 X/Y**（`AXIS_Z` 解析期就拒）。 */
 const VEC2_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1 };
 
-/** `Vector2.` 上的静态函数只量到 `from_angle` 一支（4.6.3 实测：实例式也照样能调，实例被忽略，`tmp/probe-from-angle/one.gd`）。 */
 export function vector2Const(name: string, args: Variant[] = []): Variant {
   if (args.length > 0 || name === "from_angle") {
     switch (name) {
@@ -90,10 +84,8 @@ export function vector2Const(name: string, args: Variant[] = []): Variant {
   );
 }
 
-/** 发货线定在 1e12：那以下 570 格（含 9 位小数的字面量）一字一样，之上分歧按值出现（`tmp/probe-from-angle/{sweep,edge2}.txt`），与标量 `sin` / `cos` 那两条限同一口径。 */
 const FROM_ANGLE_LIMIT = 1e12;
 
-/** `Vector2.from_angle(a)`：实参先折 float32（S313 那条），分量是 `cos` / `sin` 各折回 float32。 */
 function fromAngle(a: number): Variant {
   const x = r(a);
   if (Number.isFinite(x) && Math.abs(x) > FROM_ANGLE_LIMIT) {
@@ -105,13 +97,10 @@ function fromAngle(a: number): Variant {
   return vector2(Math.cos(x), Math.sin(x));
 }
 
-/** 标量实参：int/float 收成 number，其余响亮报错。 */
-/** 数值实参在调用边界上就是 `real_t`：float 折回 float32，int 收成 number，其余响亮报错（S313 的判据是 1e7 量级那两格 cubic —— 不折就差 1 个 ULP）。 */
 function scalar(v: Variant | undefined, who: string): number {
   if (v === undefined) throw new UnsupportedError("vector2-arity", `Vector2.${who} 缺少实参`);
   if (v.t === Tag.FLOAT) return r(v.v as number);
   if (v.t === Tag.INT) return intToNum(v.v as number | bigint);
-  // bool 在数值位上引擎收下来折 0 / 1（`Vector2(1, 2).bezier_derivative(Vector2(1, 2), Vector2(1, 2), Vector2(1, 2), true)` 实测给 `(0.0, 0.0)`）
   if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   throw new UnsupportedError("vector2-arg", `Vector2.${who} 需要数值实参，收到 ${v.t}`);
 }
@@ -120,7 +109,6 @@ function vecArg(args: Variant[], i: number, who: string): GVector2 {
   const a = args[i];
   const v = a === undefined ? null : asVec2(a);
   if (v) return v;
-  // Vector2i 交在 Vector2 位上引擎按分量折（`Vector2(1, 2).angle_to(Vector2i(1, 2))` 实测 `0.0`），与构造式那一格同一登记
   const inner = a !== undefined && a.t === Tag.OBJECT ? a.v : null;
   const parts = inner !== null && typeof inner === "object" && vec2iParts !== null ? vec2iParts(inner) : null;
   if (parts !== null) return new GVector2(parts[0] as number, parts[1] as number);
@@ -133,26 +121,18 @@ function arity(args: Variant[], n: number, who: string): void {
   }
 }
 
-/** 逐分量 float32 运算的积木（每个中间量都舍回 float32）。 */
 const mul = (a: number, b: number) => r(a * b);
 const div = (a: number, b: number) => r(a / b);
 const add = (a: number, b: number) => r(a + b);
 const sub = (a: number, b: number) => r(a - b);
 const flen = (x: number, y: number) => r(Math.sqrt(add(mul(x, x), mul(y, y))));
 
-/** 与全局 `fposmod` 同一条实测口径：模数为 0 或商不有限都给 nan，负模数也走 `a - b*floor(a/b)` 这一支。 */
 const fposmod = (a: number, b: number): number => (b === 0 || !Number.isFinite(a / b) ? NaN : a - b * Math.floor(a / b) + 0);
 
-/** 值类型这五族的 clamp 实测是「先比下界、再比上界」：`Vector2i(3, -4).clamp(Vector2i(2, -2), Vector2i(-2, 2))` 给 `(-2, -2)`，
- *  此前出货的 `Math.max(lo, Math.min(hi, v))` 给 `(2, -2)`；`Math.min(Math.max(v, lo), hi)` 在这一格巧合，
- *  到 `Vector2(-4, 4).clamp(Vector2(3, 4), Vector2(-1, -2))`（引擎 `(3.0, -2.0)`）就给 `(-1.0, …)` —— CLX / CLY / CLZ 三行钉住（S306）。
- *  全局 `clamp()` / `clampf()` 是**另一条**口径（实测 `clamp(1, 2, 0)` 给 0，正是这一支给 `2` 的那一格），别把两边对齐。 */
 export const clamp = (n: number, lo: number, hi: number): number => (n < lo ? lo : n > hi ? hi : n);
 
-/** `is_normalized()` 那一条判据（epsilon 两侧实测：Δlen² = 9.986e-4 过，1.000e-3 不过）。 */
 const isUnit = (x: number, y: number) => r(Math.abs(sub(add(mul(x, x), mul(y, y)), 1))) < NORMALIZED_EPS;
 
-/** Vector2 的方法面：按名字派发，未知成员响亮报缺。 */
 export function vector2Method(v: GVector2, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length":
@@ -208,8 +188,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(Math.ceil(v.x), Math.ceil(v.y));
     case "round": {
       arity(args, 0, "round");
-      // `Math::round` 的形状：负数 `ceil(x - 0.5)`、非负 `floor(x + 0.5)`，**加法先舍回 float32**
-      // （`0.49999997` 那一格：double 里 `x+0.5 = 0.99999997` 折回 float32 就是 `1.0`，引擎给 1，double 写法给 0）
       const h = (n: number) => (n < 0 ? Math.ceil(sub(n, 0.5)) : Math.floor(add(n, 0.5)));
       return vector2(h(v.x), h(v.y));
     }
@@ -268,7 +246,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(fposmod(v.x, o.x), fposmod(v.y, o.y));
     }
     case "bezier_interpolate": {
-      // 舍入点照引擎的表达式：`u=1-t`、`this*u3 + ((3*u2)*t)*c1 + ((3*u)*t2)*c2 + end*t3`，每步折回 float32（S310）
       arity(args, 4, "bezier_interpolate");
       const c1 = vecArg(args, 0, "bezier_interpolate");
       const c2 = vecArg(args, 1, "bezier_interpolate");
@@ -284,7 +261,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(bz(v.x, c1.x, c2.x, e.x), bz(v.y, c1.y, c2.y, e.y));
     }
     case "bezier_derivative": {
-      // `(c1-s)*3*omt2 + (c2-c1)*6*omt*t + (e-c2)*3*t2`，每步折回 float32（`math_funcs.h` 的 float 那一支，134 格全合）
       arity(args, 4, "bezier_derivative");
       const c1 = vecArg(args, 0, "bezier_derivative");
       const c2 = vecArg(args, 1, "bezier_derivative");
@@ -298,14 +274,11 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(bd(v.x, c1.x, c2.x, e.x), bd(v.y, c1.y, c2.y, e.y));
     }
     case "cubic_interpolate": {
-      // GDScript 那侧的形参是 `(b, pre, post, weight)`：p0=pre、p1=自己、p2=b、p3=post
       arity(args, 4, "cubic_interpolate");
       const b = vecArg(args, 0, "cubic_interpolate");
       const pre = vecArg(args, 1, "cubic_interpolate");
       const post = vecArg(args, 2, "cubic_interpolate");
       const t = scalar(args[3], "cubic_interpolate");
-      // 与 `Vector3` 同一支：`(2p1 + (p2-p0)t + ((2p0-5p1)+4p2-p3)t² + ((3(p1-p2)-p0)+p3)t³) * 0.5`，
-      // 两项系数按 C++ 从左到右结合；`t` 在调用边界上已经是 float32（S313 —— 24 格 V2 + 15 格 V3 全合，含 1e7 那三格）
       const t2 = mul(t, t);
       const t3 = mul(t, t2);
       const ci = (p0: number, p1: number, p2: number, p3: number) => {
@@ -316,10 +289,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(ci(pre.x, v.x, b.x, post.x), ci(pre.y, v.y, b.y, post.y));
     }
     case "cubic_interpolate_in_time": {
-      // 引擎走的是 Barry-Goldman（`Math::cubic_interpolate_in_time`，逐分量、`real_t` 是 float32）：
-      // `t = lerp(0, b_time, weight)`，两层割线 `a1/a2/a3 → b1/b2` 再收成一格；每一步 lerp 的权重在**跨度退化时换成钉死的常数**
-      // （`pre_time==0 → 0`、`b_time==0 → 0.5`、`post_time-b_time==0 → 1`、`b_time-pre_time==0 → 0`、`post_time==0 → 1`、收尾再遇 `b_time==0 → 0.5`）。
-      // 六处退化分支的读数在 `tmp/probe-argtype/cubtau.txt`（V2 九形 × 五个 weight + V3 七形 × 三个），改前这里对它们响亮拒（§6 第 41 条的旧账）。
       arity(args, 7, "cubic_interpolate_in_time");
       const b = vecArg(args, 0, "cubic_interpolate_in_time");
       const pre = vecArg(args, 1, "cubic_interpolate_in_time");
@@ -359,13 +328,10 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(add(v.x, mul(div(vx, len), d)), add(v.y, mul(div(vy, len), d)));
     }
     case "limit_length": {
-      // 引擎的形参是 `limit_length(length = 1.0)`，**0 支也收**（实测 `Vector2(3, 4).limit_length()` 给 `(0.6, 0.8)`；S304）
       if (args.length > 1) arity(args, 1, "limit_length");
       const max = args.length === 0 ? 1 : scalar(args[0], "limit_length");
       const len = flen(v.x, v.y);
       if (!(len > max)) return vector2(v.x, v.y);
-      // 零长保护：`Vector2(0, 0).limit_length(-1.0)` 实测给 `(0.0, 0.0)`，少了这一支会算出 `0/0` 的 nan。
-      // 门槛是「长度非零」而非某个 epsilon —— 实测 5e-6 这一档照样缩放到 `(0.0, 0.0)`（S304 的 LL2 / LLS 行）
       if (len === 0) return vector2(v.x, v.y);
       return vector2(mul(div(v.x, len), max), mul(div(v.y, len), max));
     }
@@ -375,7 +341,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(r(Math.cos(t)), r(Math.sin(t)));
     }
     case "min_axis_index":
-      // 实测式子是**严格的** `<`：并列时 min 给后面的下标、max 给前面的（S304 的 9 格含 (2,2) / 负数 / 零向量 / INF / NAN）
       arity(args, 0, "min_axis_index");
       return V.int(v.x < v.y ? 0 : 1);
     case "max_axis_index":
@@ -416,7 +381,6 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       arity(args, 2, "slerp");
       const o = vecArg(args, 0, "slerp");
       const w = scalar(args[1], "slerp");
-      // 两端任一长度为零时**退回普通 lerp**（实测 `Vector2(0,0).slerp(Vector2(1,-1), 0.3)` 给 `(0.3, -0.3)`；S311）
       const lsq = add(mul(v.x, v.x), mul(v.y, v.y));
       const osq = add(mul(o.x, o.x), mul(o.y, o.y));
       if (lsq === 0 || osq === 0) {
@@ -473,38 +437,31 @@ export function vector2Method(v: GVector2, name: string, args: Variant[]): Varia
       return vector2(mul(n.x, k), mul(n.y, k));
     }
     case "from_angle": {
-      // 静态式与实例式同一条式子，实例被忽略（实测两支都给 (0.877583, 0.479426)）
       arity(args, 1, "from_angle");
       return fromAngle(scalar(args[0] as Variant, "from_angle"));
     }
     case "inverse":
-      // 实测这支只在 Vector3 上有；Vector2 / Vector2i / Vector3i 全给运行期那句（S304）
       throw new GodotRuntimeError("vector2-method", `Invalid call. Nonexistent function 'inverse' in base 'Vector2'.`);
     default:
       throw new UnsupportedError("vector2-method", `Vector2.${name}() 未实现`);
   }
 }
 
-/** 归一化：零向量原样返回，不是 nan。 */
 function normalized(x: number, y: number): Variant {
   const l = flen(x, y);
   if (l === 0) return vector2(0, 0);
   return vector2(div(x, l), div(y, l));
 }
 
-/** 比较的唯一口径：**字典序**（先 x 再 y），不是「每个分量都更大」；ops 的比较与 `Array.sort()` 都走这里。 */
 export function vecCmp(a: GVector2, b: GVector2): number {
   if (a.x !== b.x) return a.x < b.x ? -1 : 1;
   return a.y === b.y ? 0 : a.y < b.y ? -1 : 1;
 }
 
-/** Godot 单精度构建里的 `CMP_EPSILON`：`is_zero_approx` 是逐分量 `|v| < eps`，`is_equal_approx` 是 `|a-b| < max(eps, eps*|a|)`，两条都**严格小于**。 */
 export const CMP_EPS = r(1e-5);
 
-/** `is_normalized` 的阈值：`|length_squared() - 1| < 1e-3`，Vector2 与 Vector3 同一条。 */
 export const NORMALIZED_EPS = r(1e-3);
 
-/** 逐分量容差比较，口径见 `CMP_EPS`；分量已经先过 float32，所以边界点会跟着 fround 挪位。 */
 export function approxEq(a: number, b: number): boolean {
   if (a === b) return true;
   const eps = mul(CMP_EPS, Math.abs(a));
@@ -517,7 +474,6 @@ export function lerpLen(la: number, lb: number, w: number): number {
   return add(la, mul(sub(lb, la), w));
 }
 
-/** 下标/属性键 → 分量槽位：0/1 与 `"x"`/`"y"` 都认。 */
 function vecSlot(key: Variant): 0 | 1 | null {
   if (key.t === Tag.INT) {
     const i = intToNum(key.v as IntPayload);
@@ -531,7 +487,6 @@ function vecSlot(key: Variant): 0 | 1 | null {
 }
 
 export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: string, value?: Variant): never {
-  /** 四句文案的差别：字符串键**不加引号**，按下标读那一句在 `type` 后多一个冒号。 */
   const isName = key.t === Tag.STRING || key.t === Tag.STRING_NAME;
   const shown = isName ? (key.v as string) : String(key.v);
   const vt = value ? tagName(value.t) : "?";
@@ -553,7 +508,6 @@ export function vecFailKey(key: Variant, via: "prop" | "index" | "read", base: s
   );
 }
 
-/** 向量写（`v.x = 9`、`v[0] = 9`、`v["x"] = 7`）。Vector2 是**值类型**，所以绝不原地改：产出新值、由调用方写回它来的那个存储位；实参只收 int/float，存下照旧过 float32（构造即 fround）。 */
 export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop" | "index"): Variant {
   const slot = vecSlot(key);
   if (slot === null) vecFailKey(key, via, "Vector2", value);
@@ -562,7 +516,6 @@ export function vecWrite(vec: GVector2, key: Variant, value: Variant, via: "prop
   return V.object(slot === 0 ? new GVector2(num, vec.y) : new GVector2(vec.x, num));
 }
 
-/** 下标读：越界或键型不对都报错（`v[2]` → Invalid access of index …）。 */
 export function vecReadIndex(vec: GVector2, key: Variant): Variant {
   const slot = vecSlot(key);
   if (slot === null) vecFailKey(key, "read", "Vector2");

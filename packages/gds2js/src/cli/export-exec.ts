@@ -9,14 +9,12 @@ import { closureRoot, errOf, printDiags, projectDiags, tryLoadSingle, type Ctx }
 import { exportTsTree } from "./export-ts-tree";
 import { exportVerdict, NO_DIRS, walkMjs, type ExportTree, type ExportVerdict } from "./export-common";
 
-
 export async function exportTree(ctx: Ctx, closureOnly = false): Promise<ExportTree | null> {
   if (!ctx.project && !closureOnly) return exportSingleTree(ctx);
   const dir = ctx.outDir;
   const resRoot = closureOnly ? closureRoot(ctx) : ctx.resRoot;
   const product = productRuntimePath();
   try {
-    // 打平运行时只在树根放一份，每个模块的 import 按自己那一层的深度算（`runtimeRoot`）：每层各一份就是多张 runtime 图。
     mkdirSync(dir, { recursive: true });
     const result = await compileProject({
       entries: [ctx.input],
@@ -81,15 +79,12 @@ export async function exportSingleTree(ctx: Ctx): Promise<ExportTree | null> {
   }
 }
 
-/** `--pack node` 放在模块树根上的 SEA main 转接文件（入口在子目录时靠它对回 VFS 的挂载根）。 */
 export const SEA_MAIN_FILE = "sea-main.mjs";
-/** 两支 pack 共用的中间树目录名 —— 只有这个名字的目录才允许整棵收掉（清理时靠它兜底）。 */
 export const EXPORT_TREE_DIR = ".gds2js-export";
 export function diagText(r: { stdout?: string; stderr?: string; status?: number | null }): string {
   return ((r.stdout ?? "") + (r.stderr ?? "")).trim() || `退出码 ${r.status}`;
 }
 
-/** 宿主只驱动 SceneTree 的 `_initialize` / `_process`；产物里两个都没有，跑起来就是什么都不做。 */
 export function hasHostEntry(code: string): boolean {
   return /_(initialize|process)\s*\(/.test(code);
 }
@@ -99,8 +94,6 @@ export function head(text: string, n: number): string {
   return text.split(/\r?\n/).slice(0, n).join("\n");
 }
 
-
-/** `--build-sea` 可用的最低 node 版本：再低没有这个 flag，也不认 `mainFormat: "module"`。 */
 export const SEA_MIN_NODE = "25.7.0";
 
 export function versionAtLeast(v: string, min: string): boolean {
@@ -265,7 +258,6 @@ export async function exportExecutable(ctx: Ctx): Promise<boolean> {
       for (const rel of tree.files) ours.add(join(ctx.outDir, rel));
       for (const p of ours) rmSync(p, { force: true });
       if (pack === "scriptc") {
-        // 这一支的中间树里除了 .mts 还有整份 runtime 源码、zstd 驱动的 node_modules 和外部编译器的缓存，逐格删删不干净：目录名是工具自己的暂存（EXPORT_TREE_DIR），整棵收掉才不留渣。
         if (basename(ctx.outDir) === EXPORT_TREE_DIR) rmSync(ctx.outDir, { recursive: true, force: true });
         else if (tree.dynamic === true) rmSync(join(ctx.outDir, "node_modules"), { recursive: true, force: true });
       } else {

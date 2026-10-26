@@ -57,11 +57,6 @@ import {
 const isNum = (v: Variant): boolean => v.t === Tag.INT || v.t === Tag.FLOAT;
 const isStringish = (v: Variant): boolean => v.t === Tag.STRING || v.t === Tag.STRING_NAME;
 
-/** `%` 的格式化那一路：左支 `String` 与 `StringName` 都当格式串读，回值都是 `String`
- *  （实测 `tmp/d6/s491.py`：`&"%d" % 1` 给 `1`、`typeof` 是 4，`&"%%"` 给 `%%`）；
- *  失败那一格的**形状看两侧的静态型**（S696，尺 `tmp/probe720/{x,y,z2}.gd` 二十三格）：两侧都是静态已知的非 Variant 型时
- *  引擎推一块非致命 ERROR、脚本照跑、把格式串**原样**回出去（`soft`）；任一侧是 Variant 时发的是 SCRIPT ERROR 那一句，
- *  作废当前那支函数、调用点拿到 Nil（非 `soft`，走 `strFormat` 那一式）。 */
 export function pctFormatOp(fmt: Variant, args: Variant, soft: boolean): Variant {
   const text = fmt.v as string;
   const list = args.t === Tag.ARRAY ? (args.v as GArray).raw() : [args];
@@ -90,17 +85,9 @@ function intPair(a: Variant, b: Variant, op: string): [IntPayload, IntPayload] {
   return [a.v as IntPayload, b.v as IntPayload];
 }
 
-/** 量过的六型（S399 那张 468 格矩阵就摆这六型）：拒的那 329 对引擎讲的是运行期那一句，没量过的型仍走响亮拒。 */
 const MEASURED_SIX = new Set<number>([Tag.BOOL, Tag.INT, Tag.FLOAT, Tag.STRING, Tag.ARRAY, Tag.DICT]);
-/** 六型之外、运行期那一句**一格一格量过**的那几对（S661：`var v: Variant = &"ab"` 之后 `v + 1` 给
- *  `Invalid operands 'StringName' and 'int' in operator '+'.`，读数 `tmp/probe661/D_sn_variant.gd`）。
- *  同一面的其余对（`StringName` 与 float / Array 之类）没在运行期量过，照旧不进这一集。 */
 const RUNTIME_REFUSED_PAIRS = new Set<string>(["StringName|int"]);
 
-/** Nil 参与的这些对（含 Nil 对 Nil）讲的是运行期那一句（S695：体里作废的无标注函数返回的就是 Nil，
- *  18 个运算符 × 13 对 = 234 格逐格量过，读数 `tmp/probe718/z.gd`）。所以是 S399 那六型**再加 Nil**，
- *  直接从 `MEASURED_SIX` 派生，两张表不漂。`==` / `!=` 不吃这一集（照实给 false / true，归 `eqSixRefused` 判），
- *  `%` 的 String 左操作数走格式化那一路，也不在这一集。 */
 const NIL_SENTENCED = new Set<number>([...MEASURED_SIX, Tag.NIL]);
 
 function pairKey(a: Variant, b: Variant): string {
@@ -114,7 +101,6 @@ function operandsRefused(a: Variant, b: Variant, op: string, code: string): Vari
   throw new UnsupportedError(code, `${op} 不支持 ${tagName(a.t)} ${op} ${tagName(b.t)}`);
 }
 
-/** `==` / `!=` 的两支型不同时引擎讲的是运行期那一句（S399 那 36 格里只有 int 与 float 互相能比，其余 28 对全拒）；六型之外照旧走原路。 */
 function eqSixRefused(a: Variant, b: Variant, op: "==" | "!="): void {
   if (a.t === b.t) return;
   if (!MEASURED_SIX.has(a.t) || !MEASURED_SIX.has(b.t)) return;
@@ -127,10 +113,8 @@ function eqSixRefused(a: Variant, b: Variant, op: "==" | "!="): void {
   return V.int(f(intToBig(x), intToBig(y)));
 }
 
-/** 动态路径的运算符分派。 */
 export const ops = {
   add(a: Variant, b: Variant): Variant {
-    // pack 的 `+`（拼接）：`instanceof` 直接写在条件里，不落地 `GBytes | null` 的可空局部。
     if (a.t === Tag.OBJECT && b.t === Tag.OBJECT && a.v instanceof GBytes && b.v instanceof GBytes) {
       return bytesConcat(a.v, b.v);
     }
@@ -165,7 +149,6 @@ export const ops = {
     const cbAdd = asColor(b);
     if (caAdd && cbAdd)
       return color(caAdd.r + cbAdd.r, caAdd.g + cbAdd.g, caAdd.b + cbAdd.b, caAdd.a + cbAdd.a);
-    // 实测 NodePath 的 `+` 两个来源都是运行期那一句（与 NodePath 与与 String 各一格）
     if (asNodePath(a) !== null || asNodePath(b) !== null) {
       throw new GodotRuntimeError("add-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '+'.`);
     }
@@ -205,7 +188,6 @@ export const ops = {
   },
 
   mul(a: Variant, b: Variant): Variant {
-    // 数值先短路：下面那串向量/颜色探针都要求 Tag.OBJECT，两个数值跑完它们必然全落空（node 侧量不出差别，AOT 侧是热路径）。
     if (isNum(a) && isNum(b)) {
       return bothInt(a, b) ? i64(a.v as IntPayload, b.v as IntPayload, (x, y) => x * y) : V.float(num(a) * num(b));
     }
@@ -237,7 +219,6 @@ export const ops = {
     if (zjMul && a.t === Tag.FLOAT) return vec2iToFloat(zjMul, num(a), "mul");
     if (ziMul && isNum(b)) return vector2i(mul32(ziMul.x, intToNum(b.v as IntPayload)), mul32(ziMul.y, intToNum(b.v as IntPayload)));
     if (zjMul && isNum(a)) return vector2i(mul32(zjMul.x, intToNum(a.v as IntPayload)), mul32(zjMul.y, intToNum(a.v as IntPayload)));
-    // Vector3i 与标量：右边放 float 时升级成 Vector3（与 Vector2i 同形），左边只接 int 标量。
     const zi3Mul = asVec3i(a);
     const zj3Mul = asVec3i(b);
     if (zi3Mul && zj3Mul) return v3iMul(zi3Mul, zj3Mul);
@@ -285,7 +266,6 @@ export const ops = {
       const k = intToNum(b.v as IntPayload);
       return vector2i(div32(ziDiv.x, k), div32(ziDiv.y, k));
     }
-    // Vector3i 的除 / 取模：向量对向量与右边 int 标量，除零走 div32 / mod32 那两句报错文本。
     const zi3Div = asVec3i(a);
     const zj3Div = asVec3i(b);
     if (zi3Div && zj3Div) return v3iDiv(zi3Div, zj3Div);
@@ -375,7 +355,6 @@ export const ops = {
     return a.t === Tag.INT ? V.int(-intToBig(a.v as IntPayload)) : V.float(-(a.v as number));
   },
 
-  /** 一元 `+`：实测只有 int 与 float 走得通，其余六型给运行期那一句（第二格引擎写的是 `Nil`，S400）。 */
   pos(a: Variant): Variant {
     if (isNum(a)) return a;
     if (MEASURED_SIX.has(a.t)) {
@@ -469,9 +448,6 @@ function compare(a: Variant, b: Variant, op = "<"): number {
     return x === y ? 0 : x < y ? -1 : 1;
   }
   if (a.t === Tag.BOOL && b.t === Tag.BOOL) {
-    // 装箱 bool 对 bool：`<` / `>` 在运行时**合式**（false 在前 —— `[false, true].bsearch(true)` 给 1、`min()` 给 false，读数
-    // `tmp/probe-argtype/boolfamily.txt`），但 `<=` / `>=` 引擎当场拒，句子是标准那条 —— 源里写成静态已知的 bool 时更早，
-    // 是解析期两句（§6 第 56 条），那一层在 analyze 那边。
     if (op === "<=" || op === ">=") {
       throw new GodotRuntimeError("compare-operands", `Invalid operands 'bool' and 'bool' in operator '${op}'.`);
     }
@@ -486,7 +462,6 @@ function compare(a: Variant, b: Variant, op = "<"): number {
       `StringName 的 < / > 按 Godot 内部指针序，无可靠口径（实测 &"zzz" < &"abc" 为真），拒绝${tagName(a.t)} 与 ${tagName(b.t)} 比大小`,
     );
   }
-  // RID 按号比大小，比的是**无符号**号：实测 rid_from_int64(-1) < rid_from_int64(0) 假、反向真（-1 折成 2^64-1 是最大的那个）
   const ra = asRid(a);
   const rb = asRid(b);
   if (ra !== null && rb !== null) {
@@ -494,11 +469,9 @@ function compare(a: Variant, b: Variant, op = "<"): number {
     const ry = BigInt.asUintN(64, intToBig(rb.id));
     return rx === ry ? 0 : rx < ry ? -1 : 1;
   }
-  // 只有一边是 RID 就是运行期那一句：四个运算符各量过一格（与 int 的 < / <= / > / >=，外加与 String 的 <）
   if (ra !== null || rb !== null) {
     throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
-  // NodePath 不排序：实测两侧都是它时 `<` `<=` `>` `>=` 四句照旧是运行期那一句（RID 按号比序那条在这儿不成立），与 String 比的 `<` 也量过一格
   if (asNodePath(a) !== null || asNodePath(b) !== null) {
     throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
@@ -514,7 +487,6 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   const za4 = asVec4i(a);
   const zb4 = asVec4i(b);
   if (za4 && zb4) return vec4iCmp(za4, zb4);
-  // Color 两侧都是它、或与别的东西比，引擎都是同一句运行期拒（实测 `Color < Color`、`Color < int`、`Color < [1]` 三形同文）
   if (asColor(a) !== null || asColor(b) !== null) {
     throw new GodotRuntimeError("color-cmp", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
@@ -524,8 +496,6 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   const zi3Cmp = asVec3i(a);
   const zj3Cmp = asVec3i(b);
   if (zi3Cmp && zj3Cmp) return vec3iCmp(zi3Cmp, zj3Cmp);
-  // 数组对数组：引擎逐元素比、异型按「形的秩」定方向、长度做平手（读数 `tmp/probe-argtype/{ordcmp4,ordcmp5,ordcmp8}.txt`）。
-  // 这一条与 `Array.sort()` 用的那条**不是同一条**（105 对逐对核过只有 106/210 相同），所以 sort 不在这儿走。
   if (a.t === Tag.ARRAY && b.t === Tag.ARRAY) {
     const x = arrayLess(a, b);
     const y = arrayLess(b, a);
@@ -534,8 +504,6 @@ function compare(a: Variant, b: Variant, op = "<"): number {
   throw new GodotRuntimeError("compare-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
 }
 
-/** 容器元素的形秩：① 那条量成的全序，`null < bool < int < float < String < Vector2 < Vector2i < Vector3 < Vector3i < Color < StringName < NodePath < RID < Dictionary < Array`。
- *  数值三个形**也按秩而不按值**（`[2.5] < [3]` 假、`[3] < [2.5]` 真；`[true] < [1]` 真）—— 引擎就是这样。 */
 function elemRank(v: Variant): number {
   if (v.t === Tag.NIL) return 0;
   if (v.t === Tag.BOOL) return 1;
@@ -555,8 +523,6 @@ function elemRank(v: Variant): number {
   throw new UnsupportedError("compare-elem", `容器元素的序只量到这 15 形，收到 ${tagName(v.t)}`);
 }
 
-/** 同型元素谁在前：数值 / 串 / 向量 / RID 按值，Color、NodePath、Dictionary **两头都假**（比不出但不报错），
- *  StringName 引擎走的是 intern 指针序（`[&"aaa"] < [&"abc"]` 假而 `[&"a"] < [&"zzz"]` 真，文字序与反序都对不上）—— 复现不了，响亮拒。 */
 function elemLess(x: Variant, y: Variant): boolean {
   const rx = elemRank(x);
   const ry = elemRank(y);
@@ -612,16 +578,9 @@ export function isLess(a: Variant, b: Variant): boolean {
   return compare(a, b) < 0;
 }
 
-/** `Array.sort()` 的比较器只认这两张表里的形（S357）：有方向的那一族同形才比值，比不出的一族两向都假。 */
 const SORT_ORDERED = new Set(["int", "float", "bool", "String", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "RID", "Array"]);
 const SORT_UNORDERED = new Set(["Nil", "Dictionary", "Color", "NodePath", "PackedByteArray", "PackedInt32Array", "PackedStringArray", "Callable"]);
 
-/** `Array.sort()` 自己那条比较器 —— 与源里的装箱 `<`（`compare`）、也与 `sort_custom` 那位 Callable 都**不是同一条**（S357，
- *  读数 `tmp/probe-argtype/{sortcmp,sortcmp2,sortcmp3}.txt`，尺 `{fold25,fold26,fold27}.mts`）：
- *  **形不同只有 int 对 float 有方向**（按值，`[2.5, 1]` 换成 `[1, 2.5]`），bool 掺进数值里也不比（`[true, 0.5]` 与 `[0.5, true]` 两向都不动）；
- *  **形相同才比值**：串按码点（`é` 排在 `z` 之后）、四个向量按分量字典序、RID 按**无符号**号（`RID(-1)` 最大）、数组走 ① 那条装箱序、bool 是 false 在前；
- *  null / Dictionary / Color / NodePath / pack / Callable 同形也**一律比不出**（两向都不换位，引擎也不报错）；
- *  StringName 走 intern 之后的指针序（`[&"b"] `排在 `[&"ab"]` 之前，文字序与反序都对不上）复现不了，没量过的形（用户对象、其余 pack）也响亮拒。 */
 export function sortLess(a: Variant, b: Variant): boolean {
   const ka = valueTypeName(a);
   const kb = valueTypeName(b);
@@ -635,7 +594,6 @@ export function sortLess(a: Variant, b: Variant): boolean {
   return compare(a, b) < 0;
 }
 
-/** bigint 的比较与复合赋值在静态编译目标上没有 lowering，而 `DataView` 的 bigint 读写都有：拆成带符号高 32 位 + 无符号低 32 位，按 number 判。 */
 const BIG_SCRATCH = new DataView(new ArrayBuffer(8));
 
 function bigWords(v: bigint): [number, number] {
@@ -643,7 +601,6 @@ function bigWords(v: bigint): [number, number] {
   return [BIG_SCRATCH.getInt32(0), BIG_SCRATCH.getUint32(4)];
 }
 
-/** 严格大于 0：高字不带符号，且不是全零。 */
 function bigPositive(v: bigint): boolean {
   const w = bigWords(v);
   const hi = w[0] as number;
@@ -651,12 +608,10 @@ function bigPositive(v: bigint): boolean {
   return hi > 0 || (w[1] as number) > 0;
 }
 
-/** 最低位是不是 1（`v & 1n` 的等价判）。 */
 function bigOdd(v: bigint): boolean {
   return ((bigWords(v)[1] as number) & 1) === 1;
 }
 
-/** 二进制快速幂，每步都回绕到 int64（等价于 Godot 的 64 位溢出行为）。 */
 function bigPow(base0: bigint, exp0: bigint): bigint {
   let r = 1n;
   let base = wrap64(base0);
@@ -669,7 +624,6 @@ function bigPow(base0: bigint, exp0: bigint): bigint {
   return wrap64(r);
 }
 
-/** Godot 编译期就拒绝移位负操作数，运行时这条也得拦住 */
 function checkShift(a: Variant, b: Variant, op: string): [IntPayload, IntPayload] {
   const [x, y] = intPair(a, b, op);
   if (intToBig(x) < 0n || intToBig(y) < 0n) {
@@ -678,7 +632,6 @@ function checkShift(a: Variant, b: Variant, op: string): [IntPayload, IntPayload
   return [x, y];
 }
 
-/** String 相关运算的转发。 */
 export const strOps = {
   length: strLength,
   at: (s: string, i: number): string => strAt(s, i),
@@ -687,9 +640,7 @@ export const strOps = {
   float: strFloat,
 };
 
-// 内建类型面的绑定 Callable 的等式按接收者的值比（读数 `tmp/probe-bincall/e1.gd` 的 E1–E6 六格）
 registerRecvEqHook((a: Variant, b: Variant): boolean => {
-  // 两台接收者型对不上时引擎的 `==` 自己就不给比（`Invalid operands 'Vector2' and 'Vector2i'`），而跨面的 Callable 等式实测就是 false
   try {
     return ops.eq(a, b).v === true;
   } catch {

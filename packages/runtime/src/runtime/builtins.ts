@@ -22,8 +22,6 @@ import { typeOf } from "./patterns";
 import { rtosFix } from "./grisu2";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
-/** `Array(x)`：源形是 Array 时**就是那支数组本身**（引擎实测：`var r = Array(a)` 之后 `r[0] = 7` 把 `a` 也改了，S601）；
- * pack 逐元素装箱成新的不 typed 数组（S597）；Dictionary / String / int / null / Vector2 五格发引擎原句；其余没量过的形响亮拒。 */
 export function arrayFromVariant(v: Variant): Variant {
   if (v.t === Tag.ARRAY) {
     return v;
@@ -46,10 +44,6 @@ function kindByCode(code: number): ElemKind | null {
   return null;
 }
 
-/** `Array(base, type, class_name, script)`（S605）：**新建**一支数组并按型逐格转换 —— 单参形是别名，这一形不是。
- * 第一参是 pack 时引擎给 `Invalid type in 'Array' constructor. Cannot convert argument 1 from <pack名> to Array.`；
- * 任一格转不过就交回**空的定型数组**（引擎那侧另推一条 `ERROR: Unable to convert array index N from "K" to "T".`，
- * 那一块由语料的 normalize 整段滤掉，所以值对齐即逐字节一致）；非 OBJECT 型带类名时类名被丢掉（`TYPE_NIL` 给不 typed）。 */
 export function arrayFromArgs(args: Variant[]): Variant {
   if (args.length === 0) return V.array(GArray.of([]));
   if (args.length === 1) return arrayFromVariant(args[0] as Variant);
@@ -57,9 +51,6 @@ export function arrayFromArgs(args: Variant[]): Variant {
     throw new UnsupportedError("array-ctor-arity", `Array(...) 只实测过 0 / 1 / 4 参三形（收到 ${String(args.length)} 参）`);
   }
   const [base, typeArg, classArg] = args as [Variant, Variant, Variant, Variant];
-  // 第四参在这一形**收任何型并整个丢掉**：11 种来源实测给的都是同一份转换结果（`tmp/probe665` 的
-  // null / bool / int / float / String / StringName / Array / Dictionary / Vector2 / PackedByteArray / Color，
-  // `Array([1], TYPE_INT, &"", <那十一形>) == [1]` 全真），所以这里不再设闸（S663）。
   if (base.t !== Tag.ARRAY) {
     if (isBytes(base)) {
       throw new GodotRuntimeError("array-ctor-base", `Invalid type in 'Array' constructor. Cannot convert argument 1 from ${packTypeName(packBytes(base).kind)} to Array.`);
@@ -92,8 +83,6 @@ export function arrayFromArgs(args: Variant[]): Variant {
     return out;
   };
   if (cls !== null && kind !== "Object") {
-    // 类名只配 TYPE_OBJECT：其余型带上类名时引擎推「Class names can only be set for type OBJECT」，并把整支**降成不 typed**
-    // —— 元素照转（读数 tmp/d6/s623.gd：Array([1, 2], TYPE_INT, &"Foo", null) 给 is_typed 假、get_typed_builtin 0，值仍是 [1, 2]）
     const converted = convertAll();
     return V.array(GArray.of(converted ?? []));
   }
@@ -107,11 +96,9 @@ export function arrayFromArgs(args: Variant[]): Variant {
     return V.array(g);
   };
   const converted = convertAll();
-  // 任一格转不过 → 空的定型数组，类名照挂（S613 的 m1：Array([1], TYPE_OBJECT, &"RefCounted", null) 给 [] | is_typed 真 | RefCounted | 24）
   return built(converted ?? []);
 }
 
-/** 第三参（类名位）：StringName 与 String 都收（`tmp/d6/s623.gd` 的 m3 用 String 变量给的名字照样读回来），空串按「没有类名」算。 */
 function ctorClassName(v: Variant): string | null {
   if (v.t === Tag.STRING_NAME || v.t === Tag.STRING) {
     const text = v.v as string;
@@ -120,9 +107,6 @@ function ctorClassName(v: Variant): string | null {
   throw new UnsupportedError("array-ctor-class", `Array(...) 的第三参只实测过 StringName 与 String（收到 ${tagName(v.t)}）`);
 }
 
-/** 把 Variant 取成裸 number（内置函数收数值参数时用）。bool 也折：S362 逐位扫过 64 个函数的 101 个数值位，
- *  其中 97 格引擎照收 bool 并按 false=0 / true=1 参与运算（`absf(false)` 给 0.0、`lerp(1, 2, false)` 给 1.0、
- *  `posmod(5, false)` 给 0），拒 bool 的位全部在解析期就被 `analyze` 那几张表拦下，走不到这里。 */
 export function num(v: Variant): number {
   if (v.t === Tag.BOOL) return (v.v as boolean) ? 1 : 0;
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
@@ -131,7 +115,6 @@ export function num(v: Variant): number {
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
 
-/** 单个数位实参的引擎转换句（S564）：接受 int / float / bool，其余按源型与目标型发原文。 */
 function utilFloatArg(v: Variant, fn: string, n: number): number {
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
     throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${n} from ${valueTypeName(v)} to float.`);
@@ -146,9 +129,6 @@ function utilIntArg(v: Variant, fn: string, n: number): number {
   return Math.trunc(num(v));
 }
 
-/** `abs` / `sign` / `floor` / `ceil` / `round` 的坏型实参（向量分支已让开时）：引擎走运行期
- *  `Error calling utility function "<fn>()": Argument "x" must be "int", "float", …, or "Vector4i".`
- *  （S524，`tmp/d6/s520.py` 五支逐字同句；bool 照收、折 0/1，与 S362 一致）。 */
 export function numOrVectorArg(v: Variant, fn: string): number {
   vec4UtilityGuard(v, fn);
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
@@ -157,7 +137,6 @@ export function numOrVectorArg(v: Variant, fn: string): number {
   return num(v);
 }
 
-/** Vector4 / Vector4i 的全局函数语义（abs / sign / lerp / snapped / clamp / min / max…）还没量过：响亮拒，不冒发引擎句子。 */
 function vec4UtilityGuard(v: Variant, fn: string): void {
   if (v.t === Tag.OBJECT && (v.v instanceof GVector4 || v.v instanceof GVector4i)) {
     throw new UnsupportedError("utility-vector4", `${fn}() 在 Vector4 / Vector4i 上的语义没实测过（S580 只到核心值类型）`);
@@ -169,7 +148,6 @@ export function strOf(v: Variant): Variant {
   return V.str(show(v));
 }
 
-/** `hex_to_int()`：**整串必须合式**才给值，否则 0 —— 式子是「可选一个 `-`、可选 `0x`/`0X` 前缀、其后全是十六进制位」。溢出**饱和**到 INT64_MAX / INT64_MIN，不回绕。 */
 export function strHexToInt(s: string): bigint {
   const m = /^(-?)(0[xX])?([0-9a-fA-F]+)$/.exec(s);
   if (m === null) return 0n;
@@ -178,14 +156,10 @@ export function strHexToInt(s: string): bigint {
   return m[1] === "-" ? -v : v;
 }
 
-/** `is_valid_int()`：整串 `[+-]?数字+`，**不看范围**（超出 int64 的数字串也算真） */
 export const INT_RE = /^[+-]?[0-9]+$/;
-/** `is_valid_hex_number()` 默认式子：可带**一个**正负号，**不**带前缀 */
 export const HEX_RE = /^[+-]?[0-9a-fA-F]+$/;
-/** 参数为真时的式子（Godot 那侧叫 `with_alpha_prefix`）：必须带**小写** `0x`，可再带一个正负号。它与 `hex_to_int()` 不同调：`"+ff"` 在这儿是真。 */
 export const HEX_PREFIX_RE = /^[+-]?0x[0-9a-fA-F]+$/;
 
-/** int() / float() 的类型转换：float 向零截断，`nan` / `±inf` / `|x| ≥ 2^63` 饱和成 INT64_MIN，bool 给 1/0，String 走 {@link strToFloat} / {@link strToInt}；其余类型在 Godot 是 Parse Error，这里同样响亮拒绝。 */
 export function toFloat(v: Variant): Variant {
   switch (v.t) {
     case Tag.FLOAT:
@@ -229,23 +203,19 @@ export function toBool(v: Variant): Variant {
   return V.bool(truthyOf(v));
 }
 
-/** Godot 的字符串哈希：**djb2、按 UTF-32 码点走、每步回绕 32 位、结果按无符号印** —— `h = 5381; h = (h * 33 + codepoint) mod 2³²`。 */
 export function hashDjb2(s: string): number {
   let h = 5381;
   for (const ch of s) h = (h * 33 + (ch.codePointAt(0) as number)) % 4294967296;
   return h;
 }
 
-/** Godot 的 `Variant.Type` 编号 —— 容器哈希起手混的是引擎那侧的类型标签，不是我们内部的 Tag。 */
 const GD_TYPE = { DICTIONARY: 27, ARRAY: 28 } as const;
 const MURMUR_SEED = 0x7f07c65;
 const MASK64 = (1n << 64n) - 1n;
-// 双精度的两个 32 位字：bigint 的 BigUint64Array 在 scriptc 没有 lowering，DataView 有（与 ops.ts 同一套路）。
 const F64_VIEW = new DataView(new ArrayBuffer(8));
 const F32_VIEW = new DataView(new ArrayBuffer(4));
 const I64_VIEW = new DataView(new ArrayBuffer(8));
 
-/** 引擎 `hash_murmur3_one_float`：float32 位型入 murmur，−0 归一成 +0、NaN 换成规范静默 NaN 位型（S542）。纯函数。 */
 function hashFloat32(x: number, seed: number): number {
   if (Number.isNaN(x)) return murmurOne32(0x7fc00000, seed);
   F32_VIEW.setFloat32(0, x, true);
@@ -267,7 +237,6 @@ registerVarToStrValueHook((o) => {
   return null;
 });
 
-/** murmur3 x86_32 的一轮（引擎 `hash_murmur3_one_32`，默认种子 0x7f07c65）。纯函数。 */
 function murmurOne32(pIn: number, pSeed: number): number {
   let k = Math.imul(pIn >>> 0, 0xcc9e2d51) >>> 0;
   k = ((k << 15) | (k >>> 17)) >>> 0;
@@ -277,7 +246,6 @@ function murmurOne32(pIn: number, pSeed: number): number {
   return (Math.imul(s, 5) + 0xe6546b64) >>> 0;
 }
 
-/** murmur3 的收尾混合（引擎 `hash_fmix32`）。纯函数。 */
 function fmix32(h: number): number {
   let x = (h ^ (h >>> 16)) >>> 0;
   x = Math.imul(x, 0x85ebca6b) >>> 0;
@@ -286,7 +254,6 @@ function fmix32(h: number): number {
   return (x ^ (x >>> 16)) >>> 0;
 }
 
-/** 引擎的 `hash_one_uint64`：SuperFastHash 那段 patter，按 64 位回绕。纯函数。 */
 function hashOneUint64(key: bigint): number {
   let v = key & MASK64;
   v = (((~v) & MASK64) + ((v << 18n) & MASK64)) & MASK64;
@@ -303,7 +270,6 @@ function murmurOne64Words(lo: number, hi: number, seed: number): number {
   return murmurOne32(hi >>> 0, murmurOne32(lo >>> 0, seed));
 }
 
-/** `hash_murmur3_one_double`。纯函数。 */
 function hashDoubleInto(d: number, seed: number): number {
   if (Number.isNaN(d)) return murmurOne64Words(0, 0x7ff80000, seed);
   F64_VIEW.setFloat64(0, d === 0 ? 0 : d, true);
@@ -315,7 +281,6 @@ function hashDouble(d: number): number {
   return hashDoubleInto(d, MURMUR_SEED);
 }
 
-/** 引擎 `hash_murmur3_buffer`：小端 4 字节块逐轮、尾巴不足一块按字节补进 k1、长度混进收尾。纯函数。 */
 function hashBuffer(bytes: readonly number[]): number {
   const len = bytes.length;
   const nblocks = len >> 2;
@@ -347,7 +312,6 @@ function hashBuffer(bytes: readonly number[]): number {
   return fmix32((h ^ len) >>> 0);
 }
 
-/** NodePath 的哈希（S541）：路径与子路径各折 StringName 哈希，拼成 64 位再过 `hash_one_uint64`；相对路径取反。 */
 function nodePathHash(p: GdNodePath): number {
   if (p.empty) return 0;
   const h1 = hashDjb2(p.names.join("/"));
@@ -357,7 +321,6 @@ function nodePathHash(p: GdNodePath): number {
 }
 registerNodePathHashHook(nodePathHash);
 
-/** pack 九支的哈希（S540）：byte/int32/int64 折小端字节缓冲；float/string/值类型 pack 折元素，收尾与空 pack 各按引擎那一支。 */
 function packHash(p: GBytes): number {
   const raw = p.raw();
   const n = raw.length;
@@ -429,10 +392,8 @@ function packHash(p: GBytes): number {
   return fmix32(h);
 }
 
-/** 引擎的 `MAX_RECURSION`（100）截住容器哈希：实测数到第 102 层那一支给 0，`ERR_PRINT` 只进 stderr、不进 stdout。 */
 const HASH_MAX_RECURSION = 100;
 
-/** 一个 Variant 的 Godot 哈希数：全局 `hash()` 与 `Array.hash()` / `Dictionary.hash()` 共用；容器那一支照引擎的 `recursive_hash`。 */
 export function variantHashNumber(v: Variant, depth = 0): number {
   switch (v.t) {
     case Tag.NIL:
@@ -465,11 +426,8 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       return fmix32(h);
     }
     case Tag.OBJECT: {
-      // 引擎那支是 hash_one_uint64(RID::get_id())（core/variant/variant.cpp 的 RID 分支）；实测 0 / 1 / 5 / -1 / 13241 五格全中
       if (v.v instanceof GdRid) return hashOneUint64(intToBig((v.v as GdRid).id));
-      // NodePath 的式子 S541 解出：path / subpath 各折 StringName 哈希 → 64 位 → hash_one_uint64，相对路径取反；空路径给 0
       if (v.v instanceof GdNodePath) return nodePathHash(v.v as GdNodePath);
-      // 值类型：引擎按分量逐个折 murmur3 再 fmix32 —— 浮点分量折 float32 位型（−0 归一），整型分量折 int32 位型（S539）
       if (v.v instanceof GVector2) return fmix32(hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)));
       if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
       if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
@@ -478,7 +436,6 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GVector4i) return fmix32(murmurOne32(v.v.w >>> 0, murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)))));
       if (v.v instanceof GColor) return fmix32(hashFloat32(v.v.a, hashFloat32(v.v.b, hashFloat32(v.v.g, hashFloat32(v.v.r, MURMUR_SEED)))));
       if (v.v instanceof GBytes) return packHash(v.v as GBytes);
-      // 空 Signal 的对象号是 0，名字空串 → one_64(0, seed=hash(""))（S547）；带名 Signal 折的是宿主实例号，合成号对不上
       if (v.v instanceof Signal) {
         if ((v.v as Signal).sigName !== "") {
           throw new UnsupportedError("hash-signal", "带对象的 Signal 哈希折的是宿主实例号，那一路复现不了（S547）");
@@ -489,8 +446,6 @@ export function variantHashNumber(v: Variant, depth = 0): number {
         throw new UnsupportedError("hash-type", `hash() 收到 ${tagName(v.t)}：这类值的哈希还没和引擎对上（对象在引擎里是指针号，天生不可复现）`);
       }
       const box = v.v as CallableBox;
-      // 实测两条：全局内置那一族折出来就是名字那支 String 哈希（十六支一名一名对上，`tmp/probe-hash-callable/`）；
-      // 空 Callable 走引擎非 custom 那条 —— 名字空串 + 对象 0，再 fmix32。
       if (isNullCallable(box)) return fmix32(murmurOne64Words(0, 0, hashDjb2("")));
       if (box.invalidMethod) {
         throw new UnsupportedError("hash-callable-invalid-method", "Callable.create(obj, 不存在的方法) 的哈希没拟合出来，不发");
@@ -512,7 +467,6 @@ export function variantHashNumber(v: Variant, depth = 0): number {
   }
 }
 
-/** 全局 `hash()`：Godot 给的是无符号 32 位，宽成 int 印出来。 */
 export function variantHash(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("arity", `hash() 只接受 1 个参数（收到 ${args.length} 个）`);
@@ -527,7 +481,6 @@ export function sqrt(v: Variant): Variant {
 export function abs(v: Variant): Variant {
   if (v.t === Tag.INT) {
     const x = intToBig(v.v as IntPayload);
-    // `abs(INT64_MIN)` 回绕回 INT64_MIN（实测 e13），不是 +2^63。
     return V.int(x < 0n ? wrap64(-x) : x);
   }
   const vec = vectorMath(v, "abs");
@@ -535,11 +488,8 @@ export function abs(v: Variant): Variant {
   return V.float(Math.abs(numOrVectorArg(v, "abs")) + 0);
 }
 
-/** 全局数学函数一族：每一条都由 4.6.3 实测边界定住（式子与类型规则见 SEMANTICS）。 */
-
 const INT_MIN_F = -9223372036854775808;
 
-/** int 载荷：2^53 内用 number，越界用 bigint（与装箱轨同一口径）。int 那一侧没有负号零 —— `floori(-0.0)` 实测给的是 `0`（`1.0 / (floori(-0.0) * 1.0)` 给 `inf`），而 JS 的 `Math.floor(-0)` 是 `-0`，进槽之前折掉。 */
 function vi(n: number): Variant {
   const v = Object.is(n, -0) ? 0 : n;
   return Number.isSafeInteger(v) ? V.int(v) : V.int(BigInt(Math.trunc(v)));
@@ -549,8 +499,6 @@ function isInt(v: Variant): boolean {
   return v.t === Tag.INT;
 }
 
-/** 数值一族只吃 int / float / bool（bool 折成 1 / 0 是实测 a05 / k01 那一形）：其余形引擎在调用边界上就拒（S339 ⑤ 同一口径），
- *  而先前 `v.v as number` 那一步会拿对象或串算出 NaN —— 那是静默错值，不是拒。 */
 function mathNum(v: Variant): number {
   if (v.t === Tag.FLOAT) return v.v as number;
   if (v.t === Tag.INT) return intToNum(v.v as IntPayload);
@@ -575,9 +523,6 @@ function one(x: number): number {
   return Number.isNaN(x) ? 0 : x > 0 ? 1 : x < 0 ? -1 : 0;
 }
 
-/** 这一族引擎的形参是 Variant + 向量允许集（`tmp/probe-argtype/matrix.txt` 的名单、`vals.txt` 的结果）：
- *  向量实参逐分量走值类型那一族的同一条式子，int 向量的 floor / ceil / round 原样给回
- *  （实测 `floor(Vector2i(-1, 2))` 给 `(-1, 2)`、`ceil(Vector3i(-1, 2, -3))` 给 `(-1, 2, -3)`）。 */
 function vectorMath(v: Variant, name: "abs" | "floor" | "ceil" | "round" | "sign"): Variant | null {
   if (v.t !== Tag.OBJECT) return null;
   const o = v.v;
@@ -606,7 +551,6 @@ export function gSignF(v: Variant): Variant {
   return V.float(one(utilFloatArg(v, "signf", 1)) + 0);
 }
 
-/** 实参是 int 时 `floor`/`ceil`/`round` 原样给回 int（实测 `floor(3)` 的 typeof 是 2），而 `floorf` 一族恒给 float、`floori` 一族恒给 int 且 NaN/INF 折成 INT64_MIN。 */
 type RoundMode = "auto" | "float" | "int";
 
 function roundThree(x: number, fn: (n: number) => number, mode: RoundMode): Variant {
@@ -614,7 +558,6 @@ function roundThree(x: number, fn: (n: number) => number, mode: RoundMode): Vari
     if (!Number.isFinite(x)) return V.int(INT64_MIN);
     return vi(fn(x));
   }
-  // 实测 `floor(-0.0)` / `ceil(-0.0)` / `round(-0.0)` 三支都留号（`1.0 / (floor(-0.0) * 1.0)` 给 `-inf`），所以这里不能 `+ 0`
   if (mode === "float") return V.float(fn(x));
   return V.float(fn(x));
 }
@@ -654,8 +597,6 @@ export function gRound(v: Variant, mode: RoundMode = "auto"): Variant {
     const vec = vectorMath(v, "round");
     if (vec !== null) return vec;
   }
-  // 实测 `round(-0.0)` 留号：`-0 >= 0` 是真的，`gdRound` 那支会绕进 `floor(-0 + 0.5)` 把号折成正零，所以零原样给回。
-  // 这条只在 `round` 一支生效 —— `snapped` 实测要的是 `+0.0`（`snapped(-0.0, 1.0)` 那格两侧都是正零），不把保号塞进共用的 `gdRound`。
   return roundThree(mode === "auto" ? numOrVectorArg(v, "round") : utilFloatArg(v, mode === "float" ? "roundf" : "roundi", 1), (x: number): number => (x === 0 ? x : gdRound(x)), mode);
 }
 
@@ -668,8 +609,6 @@ export function gPosmod(x: Variant, y: Variant): Variant {
   utilIntArg(y, "posmod", 2);
   const a = intOf(x);
   const b = intOf(y);
-  // 模数为 0 那一支引擎不报错也不夹：推一条 `Division by zero in posmod is undefined. Returning 0 as fallback.`
-  // 之后**给 0**（实测 5 / -5 / 0 / 2^31 四形都是 0；那条 ERROR 的 frame 在 `./core/math/`，语料的 normalize 整块滤掉，所以出货只需要发那个值）。
   if (b === 0) return vi(0);
   return vi(a - b * floorDiv(a, b));
 }
@@ -677,7 +616,6 @@ export function gPosmod(x: Variant, y: Variant): Variant {
 export function gFposmod(x: Variant, y: Variant): Variant {
   const a = utilFloatArg(x, "fposmod", 1);
   const b = utilFloatArg(y, "fposmod", 2);
-  // 源是 `fmod` 再把结果按号折回，不是 `a - b*floor(a/b)`：两者的最后一两位 double 会分岔（普查 8/30）。
   let v = a % b;
   if ((v < 0 && b > 0) || (v > 0 && b < 0)) v += b;
   return V.float(v + 0);
@@ -695,8 +633,6 @@ export function gWrap(v: Variant, lo: Variant, hi: Variant, asInt: boolean): Var
     utilIntArg(hi, "wrapi", 3);
   }
   if (!asInt) {
-    // 引擎的 wrapf **不排序两端**：`range = max - min`，`is_zero_approx(range)` 就回 min；
-    // `result = value - range * floor((value - min) / range)`，最后 `is_equal_approx(result, max)` 再回 min。
     const mn = utilFloatArg(lo, "wrapf", 2);
     const mx = utilFloatArg(hi, "wrapf", 3);
     const x = utilFloatArg(v, "wrapf", 1);
@@ -736,7 +672,6 @@ function utilConvertError(fn: string, src: Variant, target: string, argNo: numbe
   return new GodotRuntimeError("utility-convert", `Invalid type in utility function "${fn}()". Cannot convert argument ${argNo} from ${valueTypeName(src)} to ${target}.`);
 }
 
-/** `lerp` 的权重按 Variant→float 折（实测 int/float/bool/String 照值，Array / null / Vector2 都折 0）。 */
 function weightToFloat(w: Variant): number {
   if (w.t === Tag.INT) {
     const n = intToNum(w.v as IntPayload);
@@ -773,7 +708,6 @@ export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
     const x = num(a);
     return V.float(x + (num(b) - x) * weight + 0);
   }
-  // 向量 / Color 当 from 时 to 必须同型；不同型引擎按「跟第一参走」那句报转换失败
   throw utilConvertError("lerp", b, aName, 2);
 }
 
@@ -790,17 +724,10 @@ export function gMoveToward(from: Variant, to: Variant, delta: Variant): Variant
   const a = utilFloatArg(from, "move_toward", 1);
   const b = utilFloatArg(to, "move_toward", 2);
   const d = utilFloatArg(delta, "move_toward", 3);
-  // 引擎那句是 `abs(to - from) <= delta ? to : from + SIGN(to - from) * delta`：上界比的是**带号的 delta**，
-  // 所以 delta 为负时永远走后半支，也就是往 `to` 的反方向走（30 格普查里 22 格的分岔全在这条上）。
   if (Math.abs(b - a) <= d) return V.float(b + 0);
   return V.float(a + (b - a > 0 ? 1 : b - a < 0 ? -1 : 0) * d + 0);
 }
 
-/** `snapped` 的结果类型跟步长那一侧，但**商按 float 算**：`snapped(7.5, 3)` = 9、`snappedi(7, 3)` = 6。折半的方向是 `floor(v / step + 0.5)`（往 +∞），不是 `round()` 的远离零 —— 实测 `snapped(-0.5, 1.0)` 给 `0.0`、`snapped(-7.5, 3.0)` 给 `-6.0`。 */
-/** `snapped` 与 `lerp` 的向量那一支：两支都只量过**两端同型**那一形（`vals.txt`：
- *  `snapped(Vector2(-1.5, 2), Vector2(1, 1))` 给 `(-1.0, 2.0)`、`snapped(Vector3(-1.5, 2, -3), Vector3(1, 1, 1))` 给 `(-1.0, 2.0, -3.0)`、
- *  `lerp(Vector2(-1, 0), Vector2(3, 8), 0.25)` 给 `(0.0, 2.0)`、`lerp(Color(0, 0, 0, 1), Color(1, 0.5, 0.25, 0.5), 0.5)` 给 `(0.5, 0.25, 0.125, 0.75)`）。
- *  异型那一侧引擎是解析期「跟第一参走」那一句（§6 第 51 条①），运行期这一族没量全，所以不在此列的一律往下走、由数值那一支响亮拒。 */
 /** 同型向量的分量数组（`clamp` 的字典序比较用）：V2 / V2i 取 2 个、V3 / V3i 取 3 个，其余给 null。 */
 function vecComponents3(o: object): number[] | null {
   if (o instanceof GVector2) return [o.x, o.y];
@@ -815,7 +742,6 @@ function sameTypeVectorMath(name: "snapped" | "lerp", a: Variant, args: Variant[
   const o = a.v;
   if (o instanceof GVector2) return vector2Method(o, name, args);
   if (o instanceof GVector3) return vector3Method(o, name, args);
-  // S536：`snapped` 的 x 还收 `Vector2i` / `Vector3i`（引擎 x 列表里有）；`lerp` 不收（解析期那句的 from 列表没有它们）。
   if (name === "snapped" && o instanceof GVector2i) return vector2iMethod(o, "snapped", args);
   if (name === "snapped" && o instanceof GVector3i) return vector3iMethod(o, "snapped", args);
   if (o instanceof GColor) return colorMethod(o, name, args);
@@ -871,7 +797,6 @@ export function gSnappedF(x: Variant, step: Variant): Variant {
   return V.float(Math.floor(a / s + 0.5) * s + 0);
 }
 
-/** `snappedi` 只在**结果**上取 int，实参不先截断（实测 `snappedi(7.5, 3.0)` 给 9 而不是 6；`snappedi(7, 0)` = 7）。 */
 export function gSnappedI(x: Variant, step: Variant): Variant {
   const a = fl(x);
   const s = fl(step);
@@ -927,11 +852,6 @@ export function gIsFinite(v: Variant): Variant {
   return V.bool(Number.isFinite(utilFloatArg(v, "is_finite", 1)));
 }
 
-/** `min`/`max` 返回的是**赢的那个实参**（类型跟着它走），且比较式子对 NaN 是「留第一个」：`max(NAN, 1)` 给 nan。
- *  三元以上是**左折**：`max(1, NAN, 2)` 给 2、`max(1.0, 2, 3)` 给 int 3、`max(1, 2, NAN)` 给 2（读数 `tmp/maxmin/{maxmin,maxmin2}.txt`，尺 `fold46.mts` / `fold47.mts`）。
- *  实参按**左到右逐位**转 float，只认 int 与 float：其余形（装箱的 bool / null / String / StringName / NodePath /
- *  Array / Dictionary / pack / Callable / Color / Vector2 十四形各测两支）都在运行期打断脚本，
- *  句里点名的是**第一个转不动的位**（`tmp/probe-maxrt/compare53.txt`，S393）。 */
 function maxMinFloat(xs: Variant[], i: number, who: string): number {
   const v = xs[i] as Variant;
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
@@ -999,8 +919,6 @@ function need2(a: Variant, b: Variant, who: string): void {
   }
 }
 
-/** 实测口径：先看上界再看下界（`clamp(1, 2, 0)` 给 0、`clamp(NAN, 0, 1)` 给 nan），返回的那一侧带自己的类型；`clampf` 恒给 float、`clampi` 恒给 int。 */
-/** `clamp`（auto）的目标型跟第一参走（S567）：lo/hi 先往 x 的型转，第一位失败的按 argument 2/3 报。 */
 function clampTargetName(x: Variant): string {
   if (x.t === Tag.INT) return "int";
   if (x.t === Tag.FLOAT) return "float";
@@ -1038,8 +956,6 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
     if (!clampAccepts(target, lo)) throw utilConvertError("clamp", lo, target, 2);
     if (!clampAccepts(target, hi)) throw utilConvertError("clamp", hi, target, 3);
   }
-  // 三支都是 bool 时不走数值那一序：六格真值表只合「先并下界、再截上界」（S362，读数 `tmp/probe-argtype/bool-slot.txt` 与 `fold39.mts`）——
-  // `clamp(false, true, false)` 给 false，而数值那一序（先比上界）会落到下界 true
   if (mode === "auto" && v.t === Tag.BOOL && lo.t === Tag.BOOL && hi.t === Tag.BOOL) {
     return V.bool(((v.v as boolean) || (lo.v as boolean)) && (hi.v as boolean));
   }
@@ -1058,9 +974,6 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
       return v;
     }
   }
-  // S537：向量 clamp 走引擎的**字典序**比较（先 x、再 y、再 z），整支返回 v / lo / hi（`CLAMP` 用 Variant `<`/`>`，
-  // Vector 的这两个运算符是字典序）——实测 `clamp(Vector2(1,-5),(0,0),(2,2))` 给 `(1.0,-5.0)` 原样、
-  // `(0,-5)` 给 min、`(2,5)` 给 max；Vector3 / Vector2i / Vector3i 同一条（18 格读数）。
   if (mode === "auto" && v.t === Tag.OBJECT && lo.t === Tag.OBJECT && hi.t === Tag.OBJECT) {
     const a = v.v as object;
     const b = lo.v as object;
@@ -1082,7 +995,6 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
       return v;
     }
   }
-  // clampf / clampi 的坏型位（S566）：逐位发引擎转换句
   if (mode === "float") {
     utilFloatArg(v, "clampf", 1);
     utilFloatArg(lo, "clampf", 2);
@@ -1099,7 +1011,6 @@ export function gClamp(v: Variant, lo: Variant, hi: Variant, mode: RoundMode = "
   const mx = mode === "int" ? intOf(hi) : fl(hi);
   const win = x > mx ? hi : x < mn ? lo : v;
   if (mode === "int") return vi(intOf(win));
-  // `clampf(-0.0, 0.0, 1.0)` 实测留号（下界判的是 `<`，`-0.0 < 0.0` 假，落回原值），所以不 `+ 0`
   if (mode === "float") return V.float(fl(win));
   if (mode === "auto" && !(x <= x)) return V.float(x);
   return win;
@@ -1110,13 +1021,10 @@ export function gSmoothstep(from: Variant, to: Variant, s: Variant): Variant {
   const b = utilFloatArg(to, "smoothstep", 2);
   const x = utilFloatArg(s, "smoothstep", 3);
   if (approxEq(a, b)) return V.float((a <= b ? (x <= a ? 0.0 : 1.0) : x <= b ? 1.0 : 0.0) + 0);
-  // 降序那一侧没有早退支：源里只有 `s = CLAMP((p_s - p_from) / (p_to - p_from), 0, 1)` 再走 `s*s*(3-2s)`，
-  // 原来那两条 `x <= a / x >= b` 早退在 a > b 时把 0 与 1 交错了（普查 30 格里 9 格分岔）。
   const y = Math.min(Math.max((x - a) / (b - a), 0.0), 1.0);
   return V.float(y * y * (3.0 - 2.0 * y) + 0);
 }
 
-/** 绑定签名是 `ease(float x, float curve)`：两个实参先在调用边界折回 float32，式子本身走 `Math::ease` 的 double 那一支（168 格读数含负曲线）。 */
 export function gEase(delta: Variant, curve: Variant): Variant {
   const c = Math.fround(utilFloatArg(curve, "ease", 2));
   let x = Math.fround(utilFloatArg(delta, "ease", 1));
@@ -1133,7 +1041,6 @@ export function gEase(delta: Variant, curve: Variant): Variant {
   return V.float(0.0);
 }
 
-/** 实参顺序是 `(from, to, pre, after, weight)`：`cubic_interpolate(0,1,2,3,0.5)` 给 0.25、`(1,2,3,4,0.5)` 给 1.25。 */
 export function gCubic(from: Variant, to: Variant, pre: Variant, after: Variant, w: Variant): Variant {
   const p0 = utilFloatArg(from, "cubic_interpolate", 1);
   const p1 = utilFloatArg(to, "cubic_interpolate", 2);
@@ -1169,8 +1076,6 @@ export function gSqrt(v: Variant): Variant {
   return V.float(Math.sqrt(utilFloatArg(v, "sqrt", 1)));
 }
 
-
-/** D6 那七个值类型不进 Tier 1：它们各自的默认值发不出来，声明与接住点那两站要的是响亮拒，不是 null 盒子（21 格读数量的是各型自己的默认值，`tmp/probe-valuedefault/compare96.txt`）。 */
 export function unsupportedValueDefault(name: string): Variant {
   throw new UnsupportedError("value-default", `${name} 的默认值发不出（D6：那七个值类型不进 Tier 1）`);
 }
@@ -1197,7 +1102,6 @@ export function or(l: Variant, right: () => Variant): Variant {
   return truthyOf(l) ? V.bool(true) : V.bool(truthyOf(right()));
 }
 
-/** `range()` 的实参归一 —— 它只吃 int：float 向零截断、bool 当 0/1，String / Vector2 等报运行错。 */
 export function rangeInt(v: Variant | undefined, n: number): number {
   if (v === undefined) {
     throw new GodotRuntimeError("range-arity", `range 缺少第 ${n} 个参数`);
@@ -1210,8 +1114,6 @@ export function rangeSeq(args: Variant[]): number[] {
   const start = args.length >= 2 ? rangeInt(args[0], 1) : 0;
   const step = args.length >= 3 ? rangeInt(args[2], 3) : 1;
   if (step === 0) {
-    // 引擎那句带实用函数名的包装前缀与全角叹号（S698，尺 `tmp/probe723/v.gd` 十五格 + 语料 074）：
-    // `range()` 是量过的唯一一支会**作废当前那支函数**的全局函数，其余除零形的全局函数都给非致命那块或干脆给值。
     throw new GodotRuntimeError("range-step-zero", `Error calling GDScript utility function "range()": 步长参数为零！`);
   }
   const items: number[] = [];
@@ -1223,7 +1125,6 @@ export function rangeSeq(args: Variant[]): number[] {
   return items;
 }
 
-/** range(end) / range(start, end) / range(start, end, step) */
 export function range(args: Variant[]): GArray {
   return GArray.of(rangeSeq(args).map((i) => V.int(i)));
 }
@@ -1239,7 +1140,6 @@ export function gAbsI(v: Variant): Variant {
   return V.int(x < 0n ? wrap64(-x) : x);
 }
 
-/** 这一族「float 形参」的取数：bool 折成 1/0（实测 a05 / k01），其余非数值同 intArgBig 那侧报运行时错（f01–f12 / k02–k03）。 */
 function numArg(v: Variant, who: string): number {
   if (v.t === Tag.BOOL) return v.v ? 1 : 0;
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT) {
@@ -1248,11 +1148,6 @@ function numArg(v: Variant, who: string): number {
   return v.t === Tag.FLOAT ? (v.v as number) : intToNum(v.v as IntPayload);
 }
 
-/**
- * 三角与双曲那一族（实测 h.log 435 格 + l.log 56 格逐格比对）：式子就是引擎那句 `::sin` / `::cos`，
- * 但引擎那侧的幅度归约从某一刻开始丢有效位 —— `cos` 在 1e6、`sin` 在 1e7 就与本机的式子差在第 12~14 位，
- * 所以两支只发到量过的那一格，再大响亮拒；`tan` 一路到 1e300 都对得上，不设限。
- */
 const SIN_LIMIT = 1e6;
 const COS_LIMIT = 1e5;
 const HALF_PI = Math.PI / 2;
@@ -1306,7 +1201,6 @@ export function gAtan2(y: Variant, x: Variant): Variant {
   return V.float(Math.atan2(utilFloatArg(y, "atan2", 1), utilFloatArg(x, "atan2", 2)));
 }
 
-/** 引擎的两个 dB 常数（4.3 树 `core/math/math_funcs.h`：`ln(10)/20` 与 `20/ln(10)`）。 */
 const DB_TO_LINEAR_K = 0.11512925464970228420089957273422;
 const LINEAR_TO_DB_K = 8.6858896380650365530225783783321;
 
@@ -1318,7 +1212,6 @@ export function gLinearToDb(v: Variant): Variant {
   return V.float(Math.log(utilFloatArg(v, "linear_to_db", 1)) * LINEAR_TO_DB_K);
 }
 
-/** `pingpong(值, 周期)`：`length == 0` 那格实测给 0.0（n.log pp|1.5,0.0），式子是引擎那句 `abs(fract((v-l)/(2l))*2l - l)`。 */
 export function gPingpong(v: Variant, length: Variant): Variant {
   const value = utilFloatArg(v, "pingpong", 1);
   const l = utilFloatArg(length, "pingpong", 2);
@@ -1327,12 +1220,9 @@ export function gPingpong(v: Variant, length: Variant): Variant {
   return V.float(Math.abs((x - Math.floor(x)) * l * 2 - l) + 0);
 }
 
-/** `step_decimals()` 不是对数式的：引擎拿小数部分去比那张 10 格的门槛表（`math_funcs.cpp`），门槛是 `0.9999 / 0.09999 / …`。 */
 const STEP_THRESHOLDS = [0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000009999, 0.0000009999, 0.00000009999, 0.000000009999, 0.0000000009999];
 
 export function gStepDecimals(v: Variant): Variant {
-  // 绑定签名是 `step_decimals(float step)`：实参先在调用边界折回 float32，再进这张 double 门槛表
-  // （`0.9999` 折成 float32 是 `0.99989998…`，掉到门槛下面，实测 `step_decimals(0.9999)` 给 1）。
   const x = Math.abs(Math.fround(utilFloatArg(v, "step_decimals", 1)));
   const decs = x - Math.trunc(x);
   let i = 0;
@@ -1343,7 +1233,6 @@ export function gStepDecimals(v: Variant): Variant {
   return V.int(0);
 }
 
-/** `nearest_po2()`：无符号那侧「进一位再抹平」的式子（`typedefs.h` 的 `nearest_power_of_2_templated`），回绕都按 64 位走 —— 实测 `0 → 0`、`-3 → 0`、`3 → 4`、`5 → 8`。 */
 export function gNearestPo2(v: Variant): Variant {
   if (v.t !== Tag.INT && v.t !== Tag.FLOAT && v.t !== Tag.BOOL) {
     throw new GodotRuntimeError("utility-convert", `Invalid type in utility function "nearest_po2()". Cannot convert argument 1 from ${valueTypeName(v)} to int.`);
@@ -1365,7 +1254,6 @@ export function gLerpAngle(from: Variant, to: Variant, w: Variant): Variant {
   return V.float(a + angleDiff(a, utilFloatArg(to, "lerp_angle", 2)) * utilFloatArg(w, "lerp_angle", 3) + 0);
 }
 
-/** `rotate_toward`：实参先夹进 `|差| - π … |差|` 再按弧的符号走（负 delta 那格没量过，照式子给，语料里不钉）。 */
 export function gRotateToward(from: Variant, to: Variant, delta: Variant): Variant {
   const a = utilFloatArg(from, "rotate_toward", 1);
   const diff = angleDiff(a, utilFloatArg(to, "rotate_toward", 2));
@@ -1400,7 +1288,6 @@ export function gBezierDerivative(s1: Variant, c1: Variant, c2: Variant, e: Vari
   return V.float((a - p) * 3 * omt2 + (b - a) * 6 * omt * w + (q - b) * 3 * t2 + 0);
 }
 
-/** 角度版先把四个控制点折到 `from` 附近（引擎那六行 `fmod` 的式子），再走 `cubic_interpolate`。 */
 function angleRots(from: number, to: number, pre: number, post: number): [number, number, number, number] {
   const fromRot = from % TAU_D;
   const preDiff = (pre - fromRot) % TAU_D;
@@ -1453,7 +1340,6 @@ export function gCubicAngleInTime(from: Variant, to: Variant, pre: Variant, post
     utilFloatArg(preT, "cubic_interpolate_angle_in_time", 7), utilFloatArg(postT, "cubic_interpolate_angle_in_time", 8)) + 0);
 }
 
-/** `wrap(值, 起, 止)`：三支全是 int 才走整数那条道，混进浮点就一律浮点（实测 c02 给 1、c03 给 1.5）。 */
 export function gWrapAny(v: Variant, lo: Variant, hi: Variant): Variant {
   utilFloatArg(v, "wrap", 1);
   utilIntArg(lo, "wrap", 2);
@@ -1461,11 +1347,6 @@ export function gWrapAny(v: Variant, lo: Variant, hi: Variant): Variant {
   return gWrap(v, lo, hi, v.t === Tag.INT && lo.t === Tag.INT && hi.t === Tag.INT);
 }
 
-/**
- * `is_same(a, b)`：先比引擎那侧的类型，再按类型走「同一性」。
- * 容器 / pack / 信号 / 对象与类值看身份，Callable 看等式（绑过没绑过算不等），
- * 结构体与标量看值 —— 浮点的 NaN 自己相等、0.0 与 -0.0 相等（实测 d06 / e08）。
- */
 export function gIsSame(a: Variant, b: Variant): Variant {
   const ta = (typeOf(a) as Variant).v as number;
   if ((typeOf(b) as Variant).v !== ta) return V.bool(false);
@@ -1482,14 +1363,12 @@ export function gIsSame(a: Variant, b: Variant): Variant {
   return V.bool(valueEq(a, b));
 }
 
-/** `type_string()` 的 0–38 号名表（实测 `tmp/probe-small-builtins/r.log`；39 往上给 `<invalid type>`）。 */
 const TYPE_NAMES = ["Nil", "bool", "int", "float", "String", "Vector2", "Vector2i", "Rect2", "Rect2i", "Vector3",
   "Vector3i", "Transform2D", "Vector4", "Vector4i", "Plane", "Quaternion", "AABB", "Basis", "Transform3D",
   "Projection", "Color", "StringName", "NodePath", "RID", "Object", "Callable", "Signal", "Dictionary", "Array",
   "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
   "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray", "PackedVector4Array"];
 
-/** `error_string()` 的 0–48 号名表（同探头；49 往上、负数与 INT64_MAX 都给 `(invalid error code)`）。 */
 const ERROR_NAMES = ["OK", "Failed", "Unavailable", "Unconfigured", "Unauthorized", "Parameter out of range",
   "Out of memory", "File not found", "File: Bad drive", "File: Bad path", "File: Permission denied",
   "File already in use", "Can't open file", "Can't write file", "Can't read file", "File unrecognized",
@@ -1502,7 +1381,6 @@ const ERROR_NAMES = ["OK", "Failed", "Unavailable", "Unconfigured", "Unauthorize
 
 /** 引擎这两支的形参是 int32：先按 32 位回绕再查表 —— 实测 `error_string(INT64_MIN)` 给 **OK**（低 32 位是 0），`error_string(-1)` 给 `(invalid error code)`。 */
 function nameById(v: Variant, who: string, names: string[], fallback: string): Variant {
-  // 折成 int32 走 BigInt.asIntN：scriptc 对下面那种 bigint 关系运算没有 lowering（报 SC1043），语义与实测读数一致。
   const x = Number(BigInt.asIntN(32, intArgBig(v, who)));
   return x >= 0 && x < names.length ? V.str(names[x] as string) : V.str(fallback);
 }
@@ -1515,7 +1393,6 @@ export function gErrorString(v: Variant): Variant {
   return nameById(v, "error_string() 的参数", ERROR_NAMES, "(invalid error code)");
 }
 
-/** `type_exists()`：判据就是这张 ClassDB 名单；实参只量过 String，其余类型响亮拒（连 StringName 都没量）。 */
 export function gTypeExists(v: Variant): Variant {
   if (v.t !== Tag.STRING) {
     throw new UnsupportedError("type-exists-arg", `type_exists() 的实参只量过 String（收到 ${tagName(v.t)}）`);
@@ -1534,7 +1411,6 @@ type Pcg = { state: bigint; inc: bigint };
 
 const DEFAULT_RAND: Pcg = { state: 0n, inc: 1n };
 
-/** pcg32 的那一步：先推进状态，再用**旧**状态算 XSH-RR 输出。 */
 function pcgNext(rng: Pcg): number {
   const old = rng.state;
   rng.state = (old * PCG_MUL + (rng.inc | 1n)) & PCG_MASK;
@@ -1543,7 +1419,6 @@ function pcgNext(rng: Pcg): number {
   return ((xs >>> rot) | (xs << ((-rot) & 31))) >>> 0;
 }
 
-/** `pcg32_srandom_r`：inc 走 `(seq<<1)|1`，再预热两步、中间把 seed 加进 state。 */
 function pcgSeedTo(rng: Pcg, seed: bigint): void {
   rng.state = 0n;
   rng.inc = ((PCG_INC << 1n) | 1n) & PCG_MASK;
@@ -1563,7 +1438,6 @@ function pcgClz32(x: number): number {
   return c;
 }
 
-/** `randd()`：第一发当指数种子（0 就直接给 0），后两发拼 53 位尾数并硬塞 MSB/LSB，再按 `ldexp(值, -64-CLZ)` 落地。 */
 function pcgRandd(rng: Pcg): number {
   const proto = pcgNext(rng);
   if (proto === 0) return 0;
@@ -1573,7 +1447,6 @@ function pcgRandd(rng: Pcg): number {
   return Number(sig) * Math.pow(2, -64 - pcgClz32(proto));
 }
 
-/** `pcg32_boundedrand_r`：拒绝采样，门槛是 C 那句 `(0x100000000 - bound) % bound`。 */
 function pcgBounded(rng: Pcg, bound: number): number {
   const threshold = bound >= 4294967296 ? 0 : (4294967296 - bound) % bound;
   for (;;) {
@@ -1651,7 +1524,6 @@ export function gRandfn(mean: Variant, dev: Variant): Variant {
   return V.float(m + d * (Math.cos(MATH_TAU * pcgRandd(DEFAULT_RAND)) * Math.sqrt(-2.0 * Math.log(temp))));
 }
 
-/** 实测为真的那四类：脚本实例、脚本类值、引擎类值、weakref 本身。空对象引用与 Callable / Signal / 结构体 / 容器 / nil 都是假。 */
 export function gIsInstanceValid(v: Variant): Variant {
   if (v.t !== Tag.OBJECT) return V.bool(false);
   const inner = v.v;
@@ -1661,7 +1533,6 @@ export function gIsInstanceValid(v: Variant): Variant {
   );
 }
 
-/** 号还在就返回那个对象，不在返回空对象引用（typeof 24、与 null 相等、印 `<Object#null>`）。 */
 export function gInstanceFromId(v: Variant): Variant {
   const live = liveObjectOf(Number(BigInt.asIntN(64, intArgBig(v, "instance_from_id() 的实参"))));
   return live === null ? V.object(NULL_OBJECT) : V.object(live);
@@ -1671,7 +1542,6 @@ export function gIsInstanceIdValid(v: Variant): Variant {
   return V.bool(liveObjectOf(Number(BigInt.asIntN(64, intArgBig(v, "is_instance_id_valid() 的实参")))) !== null);
 }
 
-/** 只有对象与 null 量过（`weakref(null).get_ref()` 给 `<null>`），其余实参这一族没依据就拒。 */
 export function gWeakref(v: Variant): Variant {
   if (v.t === Tag.NIL) return V.object(weakRefBox(null));
   if (!gIsInstanceValid(v).v) {
@@ -1680,12 +1550,10 @@ export function gWeakref(v: Variant): Variant {
   return V.object(weakRefBox(v));
 }
 
-/** 报错文本里的来源名：Godot 管 null 叫 Nil，其余走 valueTypeName（它认得 RID / Vector2 这些结构体）。 */
 function utilityArgLabel(v: Variant): string {
   return v.t === Tag.NIL ? "Nil" : valueTypeName(v);
 }
 
-/** 实测收 int / float（向零截断：1.7 → RID(1)）/ bool（true → RID(1)）；String 与 Nil 两格量过引擎那句原文，其余来源按同一条式子代入。 */
 function ridArgBig(v: Variant): bigint {
   if (v.t === Tag.INT) return intToBig(v.v as IntPayload);
   if (v.t === Tag.BOOL) return v.v ? 1n : 0n;
@@ -1712,10 +1580,6 @@ export function gRidAllocateId(): Variant {
   return V.int(allocateRid());
 }
 
-/**
- * `inst_to_dict` 里带 get/set 的属性出门的默认值：引擎**不调 getter**（S269 ④ 十六格实测），
- * 与「声明了类型却没赋值的普通 var」那一格一字不差。表外的类型名（Rect2 / Callable / 脚本类名…）响亮拒。
- */
 function dictTypeDefault(t: string | null): Variant {
   if (t === null) return V.nil();
   switch (t) {
@@ -1763,11 +1627,6 @@ function dictTypeDefault(t: string | null): Variant {
   }
 }
 
-/**
- * `inst_to_dict(obj)`（S269）：`{ "@subpath": 类路径的 NodePath, "@path": 模块 res 路径, <字段名 StringName>: 值 }`。
- * 三段都有读数：`null` 实参给 null、类值给运行期那一句、字段序是**基类在前**（与 `String.format()` 反着走），
- * 对象与容器出门的是引用而不是序列化。
- */
 export function gInstToDict(v: Variant): Variant {
   if (v.t === Tag.NIL) return V.nil();
   if (v.t !== Tag.OBJECT) {
@@ -1797,9 +1656,7 @@ export function gInstToDict(v: Variant): Variant {
   const written = Object.keys(acc).length === 0 ? null : dictWrittenOf(inner);
   for (let i = 0; i < shape.names.length; i++) {
     const name = shape.names[i] as string;
-    // `undefined` = 普通字段（读数器已经按同一顺序把值取好了）；`null` = 无类型的 get/set 属性（出门 `<null>`）。
     const declared = acc[name] as string | null | undefined;
-    // 带 get/set 的属性：引擎不调 getter，出门的是声明类型的默认值（S269 ④）；但 `dict_to_inst` 灌过那一格就改出门灌进去的原值（S272 ③）。
     const carried = declared === undefined || written === null ? undefined : written[name];
     const value = declared === undefined ? (shape.values[i] as Variant) : carried === undefined ? dictTypeDefault(declared) : carried;
     d.set(V.stringName(name), value);

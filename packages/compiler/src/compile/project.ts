@@ -10,13 +10,10 @@ import { lower } from "../lower/lower";
 import { parseSource } from "../parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 
-
 const RES_PREFIX = "res://";
 
-/** GDScript 里宿主/引擎提供、不需要文件支持的基类。Tier 1 只给了 SceneTree。 */
 const HOST_BASES = new Set(["SceneTree"]);
 
-/** 认得但不给实现的引擎基类 —— 遇到就响亮报错。 */
 const ENGINE_BASES = new Set([
   "Node", "Node2D", "Node3D", "Control", "Resource", "RefCounted", "Object",
   "CharacterBody2D", "CharacterBody3D", "Area2D", "StaticBody2D", "RigidBody2D",
@@ -26,15 +23,11 @@ export interface ProjectOptions {
   entries: string[];
   resRoot: string;
   outDir: string;
-  /** 只种入口、不扫目录：依赖靠 `extends` / `preload` 拉进来（单文件模式读依赖走的就是这一条）。 */
   closureOnly?: boolean;
   runtimeImport: string;
   hostImport: string | null;
-  /** 静态打包（`--pack scriptc`）用：`runtime/` 与 `host.ts` 的源码只铺一份在这个目录下，每个模块的 import 按自己那一层的相对深度算（每层各放一份会编成多张 runtime 图、同一个类有多份身份）。 */
   runtimeRoot?: string;
-  /** `runtimeRoot` 里 runtime 那一份的目标文件名（不带扩展名，scriptc 那支是 `runtime/index`）。 */
   runtimeFile?: string;
-  /** 同一棵树根上的宿主文件名；不给就跟 `runtimeImport` 一样走静态那条 import。 */
   hostFile?: string;
   autoRun?: boolean;
   sourcemap?: boolean;
@@ -49,7 +42,6 @@ export interface CompiledModule {
   className: string;
   code: string;
   map?: RawSourceMap;
-  /** 透传 IR 的 pack codec 标志：`--pack scriptc` 的 zstd 宿主注入按它定。 */
   usesPackCodec: boolean;
 }
 
@@ -58,13 +50,11 @@ export interface ProjectResult {
   diags: Array<{ resPath: string; diagnostic: Diagnostic }>;
 }
 
-
 function toResPath(absPath: string, resRoot: string): string {
   const rel = relative(resRoot, absPath).split(sep).join("/");
   return RES_PREFIX + rel;
 }
 
-/** 把 GDScript 里的路径字符串解析成规范化的 res:// 路径（全程在 res 空间内）。 */
 function resolveGdPath(fromRes: string, target: string): string {
   if (target.startsWith(RES_PREFIX)) return normalizeRes(target);
   const fromDir = dirname(fromRes);
@@ -77,7 +67,6 @@ function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
 }
 
-/** 相对路径里出现了 `..`：res:// 空间放不下它（规范化时会被吃掉），于是指向的其实是根内另一格。 */
 function climbsAboveRoot(target: string, fromAbs: string, resRoot: string): boolean {
   if (target.startsWith(RES_PREFIX)) return false;
   const rel = relative(resRoot, resolve(join(dirname(fromAbs), target)));
@@ -100,7 +89,6 @@ function derivedClassName(resPath: string): string {
   const raw = basename(resPath, extname(resPath)).replace(/[^A-Za-z0-9_]/g, "_");
   return /^[0-9]/.test(raw) ? `_${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
 }
-
 
 function walkStmt(s: Stmt, visit: (e: Expr) => void): void {
   switch (s.kind) {
@@ -198,14 +186,12 @@ function typeRefName(t: TypeRef | null): string | null {
   return t && t.kind === "named" ? t.name : null;
 }
 
-/** 从 `extends` 文本里剥出引用的名字（去掉可能的前导 @virtual 之类不涉及）。 */
 function extendsRefText(raw: string | null): string | null {
   if (raw === null) return null;
   const trimmed = raw.trim();
   if (/^["'].*["']$/.test(trimmed)) return trimmed.slice(1, -1);
   return trimmed;
 }
-
 
 interface Loaded {
   resPath: string;
@@ -335,7 +321,6 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     });
   }
   const rawAbiBlockedModules = new Set<string>();
-  // 被别的脚本类 extends 的那些模块：构造要走协议形状（子类的字段初始化子必须排在父类 `_init` 体之前）
   const extendedModules = new Set<string>();
   for (const l of loaded.values()) {
     const bm = baseModule(l, loaded, classIndex);
@@ -350,7 +335,6 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   for (const l of loaded.values()) {
     const inherited = inheritedMembers(l, loaded, classIndex);
     const globals = new Set<string>([...classIndex.keys(), ...inherited]);
-    // 链上挂着宿主基类的那一份（含子脚本、孙脚本）里，宿主裸方法名当值用是合法的（S369 的读数）
     const hostChain = opts.hostImport !== null && hostOnChain(l, loaded, classIndex, entryResSet);
     l.module.hostChain = hostChain;
     const fileDiags = analyze(l.module, globals, l.resPath).map((d) => ({ resPath: l.resPath, diagnostic: d }));
@@ -476,7 +460,6 @@ function classFile(name: string, loaded: Map<string, Loaded>, classIndex: Map<st
   return resPath ? loaded.get(resPath) ?? null : null;
 }
 
-/** 解析一个文件的 extends 目标模块（用户基类）；host/引擎/无 → null。 */
 function baseModule(
   l: Loaded,
   loaded: Map<string, Loaded>,
@@ -508,7 +491,6 @@ function inheritedMembers(
   return names;
 }
 
-/** 这个脚本的 JS 原型链顶端挂的是不是宿主 SceneTree：只有挂在上面时，`quit()` / `create_timer()` 这类宿主基类方法才在作用域里。没写 extends 时按 `baseClass` 那条式子走（入口才挂宿主）。 */
 function hostOnChain(
   l: Loaded,
   loaded: Map<string, Loaded>,
@@ -569,7 +551,6 @@ function jsImportSpecifier(from: Loaded, target: Loaded, opts: ProjectOptions): 
   return relFromJs(jsPathFor(from, opts), jsPathFor(target, opts));
 }
 
-/** 从某个产物的目录到**绝对**目标的相对 ESM 说明符（`./` / `../` 起头，斜杠分隔）。 */
 function relFromJs(fromJsPath: string, absTarget: string): string {
   const rel = relative(dirname(fromJsPath), absTarget).split(sep).join("/");
   return rel.startsWith(".") ? rel : "./" + rel;

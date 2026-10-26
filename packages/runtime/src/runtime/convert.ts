@@ -10,7 +10,6 @@ import { GVector3 } from "./vector3";
 import { GVector3i } from "./vector3i";
 import { colorFromText, GColor } from "./color";
 
-/** 引擎 `Variant.Type` 里我们手里有形状的那二十支号（其余在 `variantConvert` 里响亮拒，S235）。 */
 const GT = {
   NIL: 0,
   BOOL: 1,
@@ -28,7 +27,6 @@ const GT = {
   ARRAY: 28,
 } as const;
 
-/** pack 目标的号 → 我们的 pack 形状。 */
 const PACK_TARGET: Record<number, PackKind> = {
   29: "byte",
   30: "int32",
@@ -47,7 +45,6 @@ function isText(t: number): boolean {
   return t === Tag.STRING || t === Tag.STRING_NAME;
 }
 
-/** `Vector2` 与 `Vector2i` 是一族（`Vector3` 同），转换时按 x / y / z 搬，缺的补 0、多的丢掉。 */
 function vecOf(v: Variant): [number, number, number] | null {
   if (v.t !== Tag.OBJECT) return null;
   const o = v.v as object;
@@ -73,7 +70,6 @@ function mkVec(target: number, x: number, y: number, z: number): Variant {
   return V.object(new GVector3i(Math.trunc(x), Math.trunc(y), Math.trunc(z)));
 }
 
-/** int → Color 走的是 0xRRGGBBAA 那套字节拆包（实测 255 给 `(0, 0, 0, 1.0)`、256 给 `(0, 0, 0.0039, 0.0)`、-1 给全 1）。 */
 function colorFromInt(n: bigint): Variant {
   const w = BigInt.asUintN(32, n);
   const ch = (k: number): number => (Number((w >> BigInt(k * 8)) & 0xffn) as number) / 255;
@@ -87,8 +83,6 @@ function convPack(v: Variant, kind: PackKind, strict: boolean): Variant {
   }
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) {
     const src = v.v as GBytes;
-    // 同型 pack 也是**拷一份**：实测 `var q = convert(p, TYPE_PACKED_BYTE_ARRAY)` 之后 `q[0] = 9` 不串回 p，
-    // 与数组、字典那两支的共享引用不一样（语料 236 的 id1 / id2 两格一边一条）。
     if (src.kind === kind) return V.object(new GBytes(src.raw().slice(), kind));
     if (strict) return V.nil();
     return V.object(new GBytes(packItems(src).map((x) => toElem(kind, x)), kind));
@@ -97,12 +91,6 @@ function convPack(v: Variant, kind: PackKind, strict: boolean): Variant {
   return V.object(new GBytes([], kind));
 }
 
-/**
- * `convert()` / `type_convert()`：一张一支一支量出来的目标类型表（S235），`strict` 是 `convert()` 那一支。
- * 两支的区别全在「凑不出来怎么办」：`convert()` 给 null，`type_convert()` 给该类型的就近默认值。
- * 同型转换的引用形状两支一样：数组与字典**是同一个对象**（实测 `append` 串得回去），pack **拷一份**（实测写回不串原包）。
- * 字符串转 Color 走十六进制与名字两套（`"abc"` → `(0.6667, 0.7333, 0.8, 1.0)`），名字表我们没有 → 响亮拒。
- */
 export function variantConvert(v: Variant, target: Variant, strict: boolean): Variant {
   if (target.t !== Tag.INT) {
     throw new UnsupportedError("convert-target", `${strict ? "convert" : "type_convert"}() 的目标类型需要 int（收到 ${tagName(target.t)}）`);
@@ -127,19 +115,15 @@ export function variantConvert(v: Variant, target: Variant, strict: boolean): Va
       return strict ? V.nil() : V.float(0);
     case GT.STRING:
       if (v.t === Tag.STRING) return v;
-      // NodePath 转 String 走的就是 `str()` 那一串（实测 a12：strict 也给 "a/b"、typeof 4）
       if (asNodePath(v) !== null) return V.str(show(v));
       if (isText(v.t) || !strict) return V.str(show(v));
       return V.nil();
     case GT.STRING_NAME:
       if (v.t === Tag.STRING_NAME) return v;
       if (v.t === Tag.STRING) return V.stringName(v.v as string);
-      // 实测 `convert(NodePath("a/b"), TYPE_STRING_NAME)` 给 `&"a/b"`（r14 / r15）
       if (asNodePath(v) !== null) return V.stringName(show(v));
       return strict ? V.nil() : V.stringName("");
     case GT.NODE_PATH: {
-      // 实测进来的三条：同型原样回（a15）、String 与 StringName 走解析式子（r10 / s03），
-      // `type_convert(5, TYPE_NODE_PATH)` 给**空路径**（r12 / r13）；strict 的非字符串来源在引擎是解析期拒，跑不到这一格。
       if (asNodePath(v) !== null) return v;
       if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return nodePathValue(v.v as string);
       return strict ? V.nil() : emptyNodePath();
@@ -159,7 +143,6 @@ export function variantConvert(v: Variant, target: Variant, strict: boolean): Va
       if (v.t === Tag.OBJECT && v.v instanceof GColor) return v;
       if (v.t === Tag.INT) return colorFromInt(intToBig(v.v as IntPayload));
       if (v.t === Tag.STRING) return colorFromText(v.v as string);
-      // 实测两支不一样：`convert(&"red", TYPE_COLOR)` 名字与 hex 都走，`type_convert(&"red", TYPE_COLOR)` 连 `"00ff00"` 都不认，直接给 `(0,0,0,1)`
       if (v.t === Tag.STRING_NAME) return strict ? colorFromText(v.v as string) : V.object(new GColor(0, 0, 0, 1));
       return strict ? V.nil() : V.object(new GColor(0, 0, 0, 1));
     }

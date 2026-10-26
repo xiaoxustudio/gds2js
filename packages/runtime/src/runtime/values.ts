@@ -24,7 +24,6 @@ import { asRid, ridText } from "./rid";
 import { asNodePath, emptyNodePath, nodePathText, nodePathValue, sameNodePath } from "./node-path";
 import { findLower, findUpper } from "./ucaps";
 
-/** 把 INT/FLOAT 变体收成裸 number（bigint 载荷按 Godot 的 double 精度损失折算）。 */
 function numVal(v: Variant): number {
   return v.t === Tag.INT ? intToNum(v.v as IntPayload) : (v.v as number);
 }
@@ -34,14 +33,11 @@ export function keyOf(v: Variant): string {
   return keyOfIn(v, 0);
 }
 
-/** 容器桶的编码：按**内容**分格（元素走 {@link valueSame} 的身份口径），字典的编码跟着键序走；`c:` 前缀保证容器桶不与标量桶撞车。 */
-/** Callable 的键位：空 Callable 一律同键；方法按「接收者身份 + 方法名 + 绑过没绑过」；lambda 按盒子身份。 */
 function callableKey(box: CallableBox): string {
   if (isNullCallable(box)) return "y:";
   const boundTag = box.boundOnce ? "1" : "0";
   if (box.name !== null) {
     const recv = box.object;
-    // 全局 Callable（`abs` 这类）实测等式只看「名字 + 绑过没绑过」：`{abs: 1}.has(abs)` 真、`.has(abs.bind())` 假
     if (recv === null) return `g:${box.name}:${boundTag}`;
     if (recv.t === Tag.OBJECT && !(recv.v instanceof GBytes)) {
       const id = (recv.v as GdIdentified).gdObjectId;
@@ -139,7 +135,6 @@ export type ElemKind =
   | "Dictionary"
   | "Object";
 
-/** Godot 认识、且我们能在运行时校验的容器标注类型名 */
 export function isElemKind(name: string): name is ElemKind {
   return (
     name === "int" || name === "float" || name === "bool" || name === "String" ||
@@ -156,7 +151,6 @@ export function isElemKind(name: string): name is ElemKind {
   );
 }
 
-/** `resize` 扩张时按元素类型填进新格子的默认值。 */
 export function elemDefault(kind: ElemKind): Variant {
   switch (kind) {
     case "Object":
@@ -192,8 +186,6 @@ export function elemDefault(kind: ElemKind): Variant {
   }
 }
 
-/** 元素折算矩阵：能转就转，转不了交 null —— 调用方把整次容器操作静默作废，不报错。 */
-/** 脚本类名槽的收法（S622 的 s1 / s2）：只有那个类与其子类的实例才收，异类丢掉继续跑。 */
 let classFaceCheck: ((cls: string, v: Variant) => boolean) | null = null;
 export function registerClassFaceCheck(fn: (cls: string, v: Variant) => boolean): void {
   classFaceCheck = fn;
@@ -205,7 +197,6 @@ function classFaceMatches(cls: string, v: Variant): Variant | null {
 
 export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   switch (kind) {
-    // `Array[Object]` 只收 null（S613：`Array([null], TYPE_OBJECT, &"RefCounted", null)` 给 `[<null>]`，`Array([1], …)` 转不过）
     case "Object":
       return v.t === Tag.NIL || v.t === Tag.OBJECT ? v : null;
     case "int":
@@ -272,16 +263,12 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
   }
 }
 
-/** 位置型基读越界的两句：基带**静态标注**时引擎讲的是 `Out of bounds get index '<k>' (on base: '<声明的拼法>')`（句末没有句点、负数原样印），
- *  推断来的与转手过的同一份值讲的是 `Invalid access of index '<k>' on a base object of type: '<型>'.` —— 两句都量的，读数 `tmp/probe-typedlabel/compare{98,99}.txt`。 */
 export function posOobSay(key: string, base: string | undefined, valueType: string): string {
   return base === undefined
     ? `Invalid access of index '${key}' on a base object of type: '${valueType}'.`
     : `Out of bounds get index '${key}' (on base: '${base}')`;
 }
 
-/** 数组下标的唯一读口径：支持负数（从尾部数），越界给引擎那一句（S403 量的；两式的分工见 `posOobSay`）。
- *  后一式里的型名是**值自己**的拼法，定形数组带元素型（`var b = a` 那种转手过的一格量的，读数 `tmp/probe-typedlabel/compare99.txt` 的 u6）。 */
 export function arrIdx(i: number, len: number, base?: string, valueType = "Array"): number {
   const k = i < 0 ? i + len : i;
   if (k < 0 || k >= len) {
@@ -299,22 +286,17 @@ export function arrIdxWrite(i: number, len: number, vt: string, base = "Array"):
   return k;
 }
 
-/** 方法参数里的下标（`pop_at` / `remove_at` / `insert` …）：与 arrIdx 同样负数从尾部数，但越界交 null 表示静默无操作。 */
 function fromEnd(i: number, len: number): number | null {
   const k = i < 0 ? i + len : i;
   return k < 0 || k >= len ? null : k;
 }
 
-/** `min()` / `max()` 里「比不出就整串给 null」的那两支错误码：源级装箱 `<` 的运行期拒与 Color 那一支（S360）。
- *  `compare-string-name` 不在里头 —— 那一支是我们的响亮拒，不是引擎的 null。 */
 const MINMAX_UNORDERABLE = new Set(["compare-operands", "color-cmp"]);
 
 export class GArray {
   private items: Variant[];
   elem: ElemKind | null = null;
-  /** `Array(base, TYPE_OBJECT, &"类名", null)` 那一族的类名（S613）；空串就是纯 `Array[Object]`。 */
   className = "";
-  /** `Array[脚本类名]` 标注里的那个类名（S621 的 q6..q12）：句子与面比对用它，`get_typed_class_name()` 用上面那格。 */
   scriptName = "";
   private ro = false;
 
@@ -348,7 +330,6 @@ export class GArray {
     return this.className;
   }
 
-  /** `is_typed()` 的判据：元素型与类名两形都算（S613 的 m1 / m2 读数）。 */
   typedAny(): boolean {
     return this.elem !== null || this.className !== "";
   }
@@ -582,11 +563,9 @@ export class GArray {
     this.items = sortGodot(this.items, before);
   }
 
-  /** 带比较器的排序：同键顺序走引擎那份置换（`packages/runtime/src/runtime/sort.ts`），不是 JS 的稳定 sort。 */
   sortCustom(before: (a: Variant, b: Variant) => boolean): void {
     this.items = sortGodot(this.items, before);
-  }  /** 引擎那一条二分界循环：`before` 真 = lower_bound（比较收 `(元素, 值)`），假 = upper_bound（同一支比较器换过来收 `(值, 元素)` 再取反）。
-   *  找不到不回 -1、也不提前收尾，走到底给的就是插入位；格子 `tmp/probe-argtype/{bsearch2,bsearch3}.txt` 共 198 格逐格对过。 */
+  }
   bsearch(value: Variant, before: boolean, cmp: (a: Variant, b: Variant) => boolean): number {
     let min = 0;
     let max = this.items.length;
@@ -656,11 +635,6 @@ export class GArray {
     return -1;
   }
 
-  /** `min()` / `max()` 是**第四条**比较口子（S360）：折法还是「第一个元素当基准，后面的逐个比」，但**一比就废**——
-   *  碰到比不了的组合（null、Color、NodePath、字典、pack、Callable、对象，以及任何跨形）引擎**当场整串给 null**，一行错误都不推，
-   *  后面本来更小的元素也不再看（`[1, "a", 0]` 给 null 而不是 0；读数 `tmp/probe-argtype/{minmax,minmax2}.txt`，尺 `{fold31,fold32}.mts`，
-   *  对象那一形 `tmp/probe-argtype/v37.gd`）。float 对 NaN 是**合式**比较只是结果为假，所以 `[nan, 1.5, 2]` 给 nan、`[1.5, nan, 2]` 给 1.5 —— 不乱套。
-   *  StringName 那一形引擎按 intern 指针序给值，复现不了，照旧响亮拒（与 S355 / S357 同一条立场）。 */
   extreme(
     wantMin: boolean,
     less: (a: Variant, b: Variant) => boolean,
@@ -677,7 +651,6 @@ export class GArray {
       } catch (e) {
         const code = (e as { code?: string }).code ?? "";
         if (MINMAX_UNORDERABLE.has(code)) return null;
-        // StringName 对 String 也是「比不出」，引擎给 null；两支都是 StringName 才是我们复现不了的那一形，照旧响亮拒
         if (code === "compare-string-name" && !(x.t === Tag.STRING_NAME && best.t === Tag.STRING_NAME)) return null;
         throw e;
       }
@@ -738,7 +711,6 @@ export class GDict {
     return [...this.vs];
   }
 
-  /** `Dictionary.sort()`（S572）：按键那侧的比较器重排，值跟着键走；重排后重建哈希索引。 */
   sortKeys(before: (a: Variant, b: Variant) => boolean): void {
     const ks = this.ks;
     const vs = this.vs;
@@ -787,7 +759,6 @@ export class GDict {
     return this.keyKind === null || this.valKind === null ? "Dictionary" : `Dictionary[${this.keyKind}, ${this.valKind}]`;
   }
 
-  /** 缺键那一句：`Invalid access to property or key '<键>' on a base object of type '<基名>'.`（键按打印那一条走）。 */
   getRequired(k: Variant): Variant {
     const q = this.asQuery(k);
     const i = q === null ? -1 : this.slot(keyOf(q), q);
@@ -965,13 +936,11 @@ function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
   return { t: v.t, v: v.v };
 }
 
-/** 声明处给容器值盖上元素类型：类型记在**值**上、章只盖一次；非字面量赋给本来未定型的容器是运行时报错。 */
 /** `Array[类名]` 标注那一族（S615 量了 `Array[RefCounted]` / `Array[Object]` / `Array[Node]`）：元素按 Object 收，类名照标注挂。 */
 export function stampClassArray(v: Variant, cls: string, fromLiteral: boolean): Variant {
   return stampArray(v, "Object", fromLiteral, cls);
 }
 
-/** `Array[脚本类名]` 那一族（S621 的 q7 / q12）：元素按 Object 收，标注名进 `scriptName`，`get_typed_class_name()` 印原生基类。 */
 export function stampScriptArray(v: Variant, name: string, nativeBase: string, fromLiteral: boolean): Variant {
   const g = v.t === Tag.ARRAY ? (v.v as GArray) : null;
   if (g === null) throw new UnsupportedError("typed-assign", `Array[${name}] 的初值不是数组`);
@@ -982,7 +951,6 @@ export function stampScriptArray(v: Variant, name: string, nativeBase: string, f
   return v;
 }
 
-/** 容器值自己的类型文本（S618 那四句都用它）：未定型给基名，定型给带元素型 / 类名 / 键值型的拼法。 */
 export function arrayTypeLabel(g: GArray): string {
   if (g.elem === null) return "Array";
   const name = g.scriptName !== "" ? g.scriptName : g.className;
@@ -996,7 +964,6 @@ export function containerFace(v: Variant): { word: string; label: string } | nul
   return null;
 }
 
-/** 运行期才看清的那一族：源的类型文本与槽的标注必须一字不差，差一个就发引擎那两句之一。 */
 function needSameFace(v: Variant, target: string, say: (word: string, src: string) => string): Variant {
   const c = containerFace(v);
   if (c === null) throw new UnsupportedError("typed-assign", `定形容器的槽位只实测过 Array 与 Dictionary 源（收到 ${tagName(v.t)}）`);
@@ -1030,8 +997,6 @@ export function stampDict(v: Variant, k: ElemKind, val: ElemKind, fromLiteral: b
   return v;
 }
 
-/** GDScript String 是 UTF-32、length 数码点，JS 是 UTF-16。 */
-/** 码点数组：`for…of` 走的是码点序，而 `[...s]` 与 `Array.from(s)` 在 scriptc 都没有 lowering。 */
 function codepoints(s: string): string[] {
   const out: string[] = [];
   for (const ch of s) out.push(ch);
@@ -1051,14 +1016,12 @@ export function strAt(s: string, i: number, base?: string): string {
   return c;
 }
 
-/** `substr(from, len = -1)`：`from` 为负或越过串尾都给空串，`len` 省略或为负表示截到串尾 —— JS 原生 slice 两条都不对。 */
 export function strSubstr(s: string, from: number, len = -1): string {
   const chars = codepoints(s);
   if (from < 0 || from >= chars.length) return "";
   return (len < 0 ? chars.slice(from) : chars.slice(from, from + len)).join("");
 }
 
-/** `left(n)` / `right(n)`：n 是**码点**个数；负数先折成 `length + n`，再夹进 [0, length]。 */
 export function strEdge(s: string, n: number, side: "left" | "right"): string {
   const len = strLength(s);
   const k = n < 0 ? len + n : n;
@@ -1150,7 +1113,6 @@ export function strSplit(s: string, delim: string, allowEmpty: boolean): string[
   return allowEmpty ? parts : parts.filter((p) => p !== "");
 }
 
-/** 字符串比较按**码点**逐位（Godot 的 String 是 UTF-32）；JS 原生按 UTF-16 码元，代理区会排到 U+FFFF 之下。两边都无代理对时码元序即码点序，走原生快路。 */
 export function strCmp(x: string, y: string): number {
   if (!/[\uD800-\uDFFF]/.test(x) && !/[\uD800-\uDFFF]/.test(y)) {
     return x === y ? 0 : x < y ? -1 : 1;
@@ -1207,7 +1169,6 @@ function matchAt(chars: string[], at: number, needle: string[], insensitive: boo
   return true;
 }
 
-/** `replace(what, by)` / `replacen`：左起、不重叠地换掉每一处命中；`what` 为空串时整串原样返回。 */
 export function strReplace(hay: string, what: string, by: string, insensitive = false): string {
   if (what === "") return hay;
   const chars = [...hay];
@@ -1226,7 +1187,6 @@ export function strReplace(hay: string, what: string, by: string, insensitive = 
   return out.join("");
 }
 
-/** `replace_char(key, with)`（S544）：0 作 key 或 with 都原样返回（with 那侧引擎会打一块 ERROR，调用方先发）。 */
 export function strReplaceChar(s: string, key: number, withCp: number): string {
   if (key === 0 || withCp === 0) return s;
   const by = String.fromCodePoint(withCp);
@@ -1235,7 +1195,6 @@ export function strReplaceChar(s: string, key: number, withCp: number): string {
   return out;
 }
 
-/** `replace_chars(keys, with)`（S544）：keys 按码点成集合；with 为 0 时调用方先发 ERROR 再原样返回。 */
 export function strReplaceChars(s: string, keys: string, withCp: number): string {
   if (withCp === 0) return s;
   const set = codepointSet(keys);
@@ -1246,7 +1205,6 @@ export function strReplaceChars(s: string, keys: string, withCp: number): string
   return out;
 }
 
-/** `remove_char(what)`（S544）：0 与未命中都原样返回。 */
 export function strRemoveChar(s: string, what: number): string {
   if (what === 0) return s;
   let out = "";
@@ -1254,7 +1212,6 @@ export function strRemoveChar(s: string, what: number): string {
   return out;
 }
 
-/** `remove_chars(chars)`（S544）：空串与全部未命中都原样返回。 */
 export function strRemoveChars(s: string, chars: string): string {
   const set = codepointSet(chars);
   if (set.size === 0) return s;
@@ -1270,7 +1227,6 @@ export function strReverse(s: string): string {
   return cs.join("");
 }
 
-/** `String.bigrams()`（S574）：按码点取相邻两格，长度 <2 给空。 */
 export function strBigramsList(s: string): string[] {
   const cs = Array.from(s);
   const out: string[] = [];
@@ -1278,7 +1234,6 @@ export function strBigramsList(s: string): string[] {
   return out;
 }
 
-/** `String.get_slice_count(delimiter)`（S574）：空串或空分隔符给 0；否则 1 + 不重叠命中数。 */
 export function strSliceCount(s: string, delim: string): number {
   if (s.length === 0 || delim.length === 0) return 0;
   let pos = 0;
@@ -1291,7 +1246,6 @@ export function strSliceCount(s: string, delim: string): number {
   }
 }
 
-/** `String.rsplit(delimiter="", allow_empty=true, maxsplit=0)`（S574）：照引擎的从右往左切与最后的 reverse。 */
 export function strRsplit(s: string, delim: string, allowEmpty: boolean, maxsplit: number): string[] {
   const out: string[] = [];
   const chars = delim.length === 0 ? Array.from(s) : null;
@@ -1334,7 +1288,6 @@ export function strRsplit(s: string, delim: string, allowEmpty: boolean, maxspli
   return out;
 }
 
-/** `String.split_floats(delimiter, allow_empty=true)`（S574）：每段走 `to_float` 的前导解析，空段按 allow_empty 取舍。 */
 export function strSplitFloats(s: string, delim: string, allowEmpty: boolean): number[] {
   const out: number[] = [];
   if (s.length === 0) return out;
@@ -1370,7 +1323,6 @@ function repeatCp(s: string, n: number): string {
   return out;
 }
 
-/** `String.pad_decimals(digits)`（S574）：无小数点先补一个，再按位数截断或补零。 */
 export function strPadDecimals(s: string, digits: number): string {
   let t = s;
   let c = t.indexOf(".");
@@ -1393,14 +1345,12 @@ export function strTrimSuffix(s: string, suffix: string): string {
   return s.endsWith(suffix) ? s.slice(0, s.length - suffix.length) : s;
 }
 
-/** `String.strip_escapes()`（S575）：删掉所有码点 < 32 的字符（含 `\n` / `\t`）。 */
 export function strStripEscapes(s: string): string {
   let out = "";
   for (const ch of s) if ((ch.codePointAt(0) as number) >= 32) out += ch;
   return out;
 }
 
-/** `String.c_unescape()`（S575）：按引擎的顺序逐对替换（`\n` 先于 `\\`，所以 `\\n` 会留下反斜杠 + 换行）。 */
 export function strCUnescape(s: string): string {
   const pairs: [string, string][] = [["\\a", "\u0007"], ["\\b", "\b"], ["\\f", "\f"], ["\\n", "\n"], ["\\r", "\r"], ["\\t", "\t"], ["\\v", "\v"], ["\\'", "'"], ["\\\"", "\""], ["\\\\", "\\"]];
   let out = s;
@@ -1416,14 +1366,12 @@ export function strJsonEscape(s: string): string {
   return out.split("\"").join("\\\"");
 }
 
-/** `String.xml_escape(escape_quotes=false)`（S575）：`&` `<` `>` 恒转；引号只在参数为真时转。 */
 export function strXmlEscape(s: string, quotes: boolean): string {
   let out = s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
   if (quotes) out = out.split("'").join("&apos;").split("\"").join("&quot;");
   return out;
 }
 
-/** `String.indent(prefix)`（S575）：非空行加前缀，空行保持空，末尾无换行的那一段也加。 */
 export function strIndent(s: string, prefix: string): string {
   const cs = Array.from(s);
   let out = "";
@@ -1439,7 +1387,6 @@ export function strIndent(s: string, prefix: string): string {
   return out;
 }
 
-/** `String.dedent()`（S575）：以第一段有文本的行的缩进为基准逐行扣除，基准不匹配处开始保留。 */
 export function strDedent(s: string): string {
   const cs = Array.from(s);
   let out = "";
@@ -1478,7 +1425,6 @@ export function strDedent(s: string): string {
 const INVALID_FILENAME_CHARS = [":", "/", "\\", "?", "*", "\"", "|", "%", "<", ">"];
 const INVALID_NODE_NAME_CHARS = [".", ":", "@", "/", "\""];
 
-/** `String.validate_filename()`（S575）：先 strip_edges，再把十个非法字符逐个换成 `_`。 */
 export function strValidateFilename(s: string): string {
   let out = strStripEdges(s);
   for (const ch of INVALID_FILENAME_CHARS) out = out.split(ch).join("_");
@@ -1492,7 +1438,6 @@ export function strValidateNodeName(s: string): string {
   return out;
 }
 
-/** `String.match(wildcard)`（S575）：`*` / `?` 通配，`?` 不吃 `.`；任一为空串给 false。 */
 export function strWildcardMatch(s: string, wildcard: string): boolean {
   if (wildcard.length === 0 || s.length === 0) return false;
   const p = Array.from(wildcard);
@@ -1507,7 +1452,6 @@ export function strWildcardMatch(s: string, wildcard: string): boolean {
   return walk(0, 0);
 }
 
-/** `String.nocasecmp_to()`（S576）：逐码点比 `_find_upper` 后的值，前缀短者小。 */
 export function strNoCaseCmp(a: string, b: string): number {
   const x = Array.from(a);
   const y = Array.from(b);
@@ -1615,12 +1559,10 @@ export function strFileNoCaseCmp(a: string, b: string): number {
   return r !== 0 ? r : naturalCmpBase(x, y, i, j, true);
 }
 
-/** `String.containsn()`（S576）：`findn` 的布尔形（大小写不敏感，按 `_find_lower` 比）。 */
 export function strContainsN(s: string, needle: string): boolean {
   return strFind(s, needle, 0, false, true) !== -1;
 }
 
-/** `String.matchn(wildcard)`（S576）：通配比较走 `_find_upper`，其余同 `match`。 */
 export function strWildcardMatchN(s: string, wildcard: string): boolean {
   if (wildcard.length === 0 || s.length === 0) return false;
   const p = Array.from(wildcard);
@@ -1635,7 +1577,6 @@ export function strWildcardMatchN(s: string, wildcard: string): boolean {
   return walk(0, 0);
 }
 
-/** `String.is_subsequence_of()` / `…ofn()`（S576）：目标串按下标扫，能按序吃下源串即为真。 */
 export function strIsSubsequenceOf(s: string, target: string, insensitive: boolean): boolean {
   const src = Array.from(s);
   if (src.length === 0) return true;
@@ -1650,7 +1591,6 @@ export function strIsSubsequenceOf(s: string, target: string, insensitive: boole
   return i === src.length;
 }
 
-/** `String.lstrip(chars)` / `rstrip(chars)`（S576）：从一侧删掉出现在 chars 里的码点。 */
 export function strLstrip(s: string, chars: string): string {
   const cs = Array.from(s);
   let i = 0;
@@ -1665,7 +1605,6 @@ export function strRstrip(s: string, chars: string): string {
   return cs.slice(0, i + 1).join("");
 }
 
-/** `String.to_pascal_case()`（S576）：拆词后每段首码点走 `_find_upper`。 */
 export function strPascalCase(s: string): string {
   const words = strStripEdges(separateCompoundWords(s));
   const parts = words.split(" ");
@@ -1678,7 +1617,6 @@ export function strPascalCase(s: string): string {
   return out;
 }
 
-/** `String.xml_unescape()`（S577）：五个命名实体 + `&#十进制;` / `&#x小写x十六进制;`；其余原样（含 `&#X43;`、`&#0;`、缺分号）。 */
 export function strXmlUnescape(s: string): string {
   const named: [string, string][] = [["&amp;", "&"], ["&lt;", "<"], ["&gt;", ">"], ["&quot;", "\""], ["&apos;", "'"]];
   let out = "";
@@ -1717,7 +1655,6 @@ export function strXmlUnescape(s: string): string {
   return out;
 }
 
-/** `String.is_valid_html_color()`（S577）：可选 `#`，后面 3 / 4 / 6 / 8 个十六进制位（没有颜色名那条路）。 */
 export function strIsValidHtmlColor(s: string): boolean {
   if (s.length === 0) return false;
   const start = s[0] === "#" ? 1 : 0;
@@ -1816,7 +1753,6 @@ export function strIsValidIpAddress(s: string): boolean {
   return false;
 }
 
-/** `String.is_absolute_path()`（S573）：首字符是 `/` / `\`，或串里出现 `:/` / `:\`；长度 1 只看首字符。 */
 export function strIsAbsolutePath(s: string): boolean {
   if (s.length > 1) return s[0] === "/" || s[0] === "\\" || s.includes(":/") || s.includes(":\\");
   if (s.length === 1) return s[0] === "/" || s[0] === "\\";
@@ -1854,7 +1790,6 @@ export function strPathJoin(s: string, file: string): string {
   return s + "/" + file;
 }
 
-/** `String.get_base_dir()`（S573）：先摘 `://` / `C:/` / UNC / 根 `/` 作 base，再对余下部分砍最后一个分隔符。 */
 export function strGetBaseDir(s: string): string {
   let end = 0;
   const scheme = s.indexOf("://");
@@ -1878,7 +1813,6 @@ export function strGetBaseDir(s: string): string {
   return base + rs.slice(0, sep);
 }
 
-/** `String.simplify_path()`（S573）：驱动前缀单独摘出，反斜杠归一，`.` / `..` 逐段折叠，`res://` 不吃「上跳」。 */
 export function strSimplifyPath(input: string): string {
   let s = input;
   let drive = "";
@@ -1944,7 +1878,6 @@ function codepointSet(s: string): Set<number> {
   return set;
 }
 
-/** `is_valid_unicode_identifier()`（S555）：首码点查引擎实测的 start 表、其余查 continue 表。 */
 export function strIsValidUnicodeIdentifier(s: string): boolean {
   const chars = [...s];
   if (chars.length === 0) return false;
@@ -1955,7 +1888,6 @@ export function strIsValidUnicodeIdentifier(s: string): boolean {
   return true;
 }
 
-/** `is_valid_ascii_identifier()`（S544）：首字符非数字，其余只收 ASCII 字母 / 数字 / 下划线。 */
 export function strIsValidAsciiIdentifier(s: string): boolean {
   const chars = [...s];
   if (chars.length === 0) return false;
@@ -1967,11 +1899,6 @@ export function strIsValidAsciiIdentifier(s: string): boolean {
   return true;
 }
 
-/**
- * `find`/`findn`/`rfind`/`rfindn` 的落点口径（码点下标，没命中 -1）。
- * 空 needle 一律 -1；`from` 为负时按「可落点数」折回 —— `B = len - m + 1 + from`，
- * 折完仍为负就没命中。正向取第一个 `>= B`，反向取最后一个 `<= B`，且反向还要求 `from <= len - m`。
- */
 export function strFind(hay: string, needle: string, from: number, last: boolean, insensitive = false): number {
   const chars = [...hay];
   const nd = [...needle];
@@ -1991,7 +1918,6 @@ export function strFind(hay: string, needle: string, from: number, last: boolean
   return -1;
 }
 
-/** Godot 的 `strip_edges()`：`capitalize` 用得上，此刻串里的空白已全被折成空格。 */
 function stripSpaces(s: string): string {
   let lo = 0;
   let hi = s.length;
@@ -2000,10 +1926,6 @@ function stripSpaces(s: string): string {
   return s.slice(lo, hi);
 }
 
-/**
- * Godot `_separate_compound_words` 的拆词：大小写边界、数字与字母边界都插一个空格。
- * condA `aA` / condB `AAa`、`2Aa` / condC `2aa` / condD `A2`、`a2`（逐条件实测于 4.6.3）。
- */
 function separateCompoundWords(s: string): string {
   const chars = [...s];
   if (chars.length === 0) return s;
@@ -2036,10 +1958,6 @@ function separateCompoundWords(s: string): string {
   return strCase(folded, "lower");
 }
 
-/**
- * `capitalize()`：拆词 → 去首尾空白 → 整串降档 → 每个非空词只把首码元换成简单大写。
- * 词与词之间恒定一个空格，所以 `hELLo` 会变成 `H El Lo` —— 这是 Godot 自己的行为，不是偏差。
- */
 export function strCapitalize(s: string): string {
   const words = stripSpaces(separateCompoundWords(s)).split(" ");
   const out: string[] = [];
@@ -2050,8 +1968,6 @@ export function strCapitalize(s: string): string {
   return out.join(" ");
 }
 
-/** 两端裁掉 `0 < 码点 <= 0x20` 的空白（实测 `"\u0001abc"` 裁、`"\u0000abc"` 与 NBSP 不裁，读数 `tmp/probe-argtype/fold8.txt`）；
- *  `left` / `right` 是那两位参数，各自关掉一端的扫描。 */
 export function strStripEdges(s: string, left = true, right = true): string {
   const cs = codepoints(s);
   const spaceAt = (i: number): boolean => {
@@ -2073,7 +1989,6 @@ export function strGetSlice(s: string, delim: string, n: number): string {
   return parts[n] ?? "";
 }
 
-/** `pad_zeros()`：引擎的式子是「以第一个小数点为界（没有就整串），界落在最前就不动；跳过界内的前导非数字，把 `0` 插到数字段开头补到 `digits` 位」。于是 `".5"` 原样、`"abc"` 是往尾巴上贴 `abc00000`、`"--5"` 给 `--05`。 */
 export function strPadZeros(s: string, digits: number): string {
   const chars = codepoints(s);
   const found = chars.indexOf(".");
@@ -2090,7 +2005,6 @@ export function strPadZeros(s: string, digits: number): string {
   return chars.slice(0, begin).join("") + strRepeat("0", zeros) + chars.slice(begin).join("");
 }
 
-/** `get_slicec()`：引擎签名是 `get_slicec(char32_t p_splitter, int p_slice)` —— 分隔符是**码点数字**，不是字符串（文档写的那个形状在 4.6.3 过不了解析）。空串、负段号、段号越界都给空串。 */
 export function strGetSlicec(s: string, splitter: number, slice: number): string {
   if (s === "" || slice < 0) return "";
   const chars = codepoints(s);
@@ -2109,7 +2023,6 @@ export function strGetSlicec(s: string, splitter: number, slice: number): string
   return "";
 }
 
-/** `insert`：负位置原样返回，超出末尾就接在尾巴上。 */
 export function strInsertAt(s: string, pos: number, what: string): string {
   const cs = codepoints(s);
   if (pos < 0) return s;
@@ -2117,7 +2030,6 @@ export function strInsertAt(s: string, pos: number, what: string): string {
   return cs.slice(0, at).join("") + what + cs.slice(at).join("");
 }
 
-/** `erase`：负起点给空串（Godot 那边另有一句引擎 ERROR），长度 0 或起点越界都不动。 */
 export function strEraseAt(s: string, pos: number, len: number): string {
   const cs = codepoints(s);
   if (pos < 0) return "";
@@ -2133,7 +2045,6 @@ export function strRepeat(s: string, n: number): string {
   return out;
 }
 
-/** `similarity()`：引擎是**交叠 bigram 的 Dice 系数** —— 先判全等给 1，任一边不足两个码点给 0，其余 `2 × 交集 / (两边 bigram 数之和)`；交集是「源的每个 bigram 只要在目标里出现就计一次」，目标不被消耗，所以 `aaaa` 对 `aa` 能给到 1.5（大于 1 不是 bug）。返回值在 C++ 那边是 `float`，所以要过一遍 float32。 */
 export function strSimilarity(a: string, b: string): number {
   if (a === b) return 1;
   const ac = codepoints(a);
@@ -2148,7 +2059,6 @@ export function strSimilarity(a: string, b: string): number {
   return Math.fround((2 * inter) / (src.length + tgt.length));
 }
 
-/** 重叠二字组，`length() - 1` 个：循环上界保证两个下标都在界内。 */
 function strBigrams(chars: string[]): string[] {
   const out: string[] = [];
   for (let i = 0; i + 1 < chars.length; i++) out.push((chars[i] as string) + (chars[i + 1] as string));
@@ -2172,14 +2082,12 @@ export function strEndsWith(s: string, suf: string): boolean {
   return true;
 }
 
-/** 码点下标取字符；越界与负数给 0（引擎那侧同时往 stderr 打一行 out of bounds）。 */
 export function strUnicodeAt(s: string, i: number): number {
   const c = codepoints(s)[i];
   if (c === undefined) return 0;
   return c.codePointAt(0) as number;
 }
 
-/** `count` 是非重叠计数；空针子给 0，不是「长度 + 1」。`from` / `to` 是码点下标的窗口：`to` 给 0 表示到末尾，任一为负或 `from >= to` 直接 0。 */
 export function strCount(hay: string, needle: string, insensitive = false, from = 0, to = 0): number {
   if (needle === "") return 0;
   const cs = codepoints(hay);
@@ -2200,7 +2108,6 @@ export function strCount(hay: string, needle: string, insensitive = false, from 
   return n;
 }
 
-/** 脚本实例给 `String.format()` 用的属性面：`props` 已按引擎的替换顺序排好，`unmodeledBase` 是那条链上的原生基类名（没量过属性表的那种）。非脚本实例（Callable、pack、类值、信号）给 null —— 引擎不当它们是 Object。 */
 export type ScriptPropFace = { props: Array<{ name: string; value: Variant }>; unmodeledBase: string | null };
 let scriptPropsHook: ((inner: object) => ScriptPropFace | null) | null = null;
 
@@ -2208,24 +2115,18 @@ export function registerScriptPropsHook(f: (inner: object) => ScriptPropFace | n
   scriptPropsHook = f;
 }
 
-/** 脚本实例的打印形状（`<原生基类名#身份号>`）：号在本模块发，基类名只有 object.ts 知道，所以走同一套注入。 */
 let objectLabelHook: ((inner: object) => string | null) | null = null;
 
 export function registerObjectLabelHook(f: (inner: object) => string | null): void {
   objectLabelHook = f;
 }
 
-/** 值类型（Vector2/2i/3/3i、Color）的 `var_to_str()` 构造式文本：本模块 import 不到那些类（反向会成环），由 builtins.ts 注入。 */
 let varToStrValueHook: ((inner: object) => string | null) | null = null;
 
 export function registerVarToStrValueHook(f: (inner: object) => string | null): void {
   varToStrValueHook = f;
 }
 
-/**
- * `String.format()`：值表按 print 那套转成文本；占位符含 `_` 时把 `_` 换成键名再做全串替换，不含时对每个值做一次 replace_first（S232）。
- * 引擎的缺省占位符实测是 `"{_}"` —— 所以「只给一个实参」与「显式给 `"{}"`」走的是两条道，前者换 `{0}` / `{键}`，后者把 `{}` 当字面量。
- */
 export function strFormatV(text: string, v: Variant, ph: string): string {
   const items: Array<[string, Variant]> = [];
   if (v.t === Tag.ARRAY) {
@@ -2255,7 +2156,6 @@ export function strFormatV(text: string, v: Variant, ph: string): string {
     if (scriptKey !== "" && text.indexOf(scriptKey) >= 0) {
       throw new UnsupportedError("format-object", `String.format() 撞上 ${scriptKey}：引擎那一格打的是 ():<GDScript#一个进程内的号>，复现不了`);
     }
-    // 实测的顺序是「自己类的变量在前、基类在后」，每个属性把自己那一格的全部分量换掉，换进来的值不再二次替换。
     let objOut = text;
     for (const p of face.props) {
       const key = ph.split("_").join(p.name);
@@ -2295,7 +2195,6 @@ function hex2(b: number): string {
   return d.charAt(Math.floor(b / 16)) + d.charAt(b % 16);
 }
 
-/** 保留集只有 `[A-Za-z0-9-._~]`（实测 `*` `'` `!` Tab 与 DEL 都要转），其余按 UTF-8 字节出 `%XX`（大写）。 */
 export function strUriEncode(s: string): string {
   const enc = new TextEncoder();
   let out = "";
@@ -2306,13 +2205,6 @@ export function strUriEncode(s: string): string {
   return out;
 }
 
-/**
- * `uri_decode()`：引擎的式子在 `core/string/ustring.cpp:4542`，走的是 **UTF-8 字节**。三处最容易踩的地方都量过：
- * ① 合法 hex 位只认 `0-9` 与 `A-Z` —— **小写 a-f 不算**，所以 `"%2f"` 把 `%` 吃掉、后两位照常输出成 `2f`；
- * ② 「后面还有两位」的判据是 `i + 2 < 字节数`（严格小于），于是 `"x%4"` 与 `"%%4"` 都留下了 `%`；
- * ③ `strtol` 是**部分**解析：`"%G1"` 折成 `0x00`、`"%4Z"` 折成 `0x04`，而重组按 strlen 取长度 —— **撞到 0 就截断**，故 `"%G1"` 是空串。
- * `+` 一律换空格；非法字节序列由 UTF-8 状态机给一个 U+FFFD（引擎那边还会往 stderr 打一句 ERROR，那行不属于产物）。
- */
 export function strUriDecode(s: string, plusToSpace = true): string {
   const src = Array.from(new TextEncoder().encode(s));
   const res: number[] = [];
@@ -2341,7 +2233,6 @@ export function strUriDecode(s: string, plusToSpace = true): string {
   return utf8Decode(nul === -1 ? res : res.slice(0, nul));
 }
 
-/** `strtol(…, 16)` 认的位（含小写 a-f，虽然外层那道 `A-Z` 判据先把小写挡在外面了）。 */
 function uriHexDigit(c: number): number {
   if (c >= 0x30 && c <= 0x39) return c - 0x30;
   if (c >= 0x41 && c <= 0x46) return c - 0x41 + 10;
@@ -2354,7 +2245,6 @@ function uriHexOk(c: number): boolean {
   return (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a);
 }
 
-/** 字面量式的字符串：加引号，只转义 `"` 与 `\` —— 制表符与换行**按原字符写进去**（实测不是 `\t` / `\n`）。 */
 function vsQuote(s: string): string {
   let out = '"';
   for (const ch of s) {
@@ -2364,7 +2254,6 @@ function vsQuote(s: string): string {
   return out + '"';
 }
 
-/** 字典键的排序：先按类型等级 `null < bool < int < float < String < StringName < NodePath`，同级再按值（实测：`{1, 2.5, 0.5}` → `1、0.5、2.5`，`{"B","a","A"}` 按码点）。 */
 const VS_KEY_RANK: Partial<Record<number, number>> = {
   [Tag.NIL]: 0,
   [Tag.BOOL]: 1,
@@ -2374,8 +2263,6 @@ const VS_KEY_RANK: Partial<Record<number, number>> = {
   [Tag.STRING_NAME]: 5,
 };
 
-/** NodePath 骑在 Tag.OBJECT 上，等级查不进那张表，单列一条：实测同一本字典里 `"s"`、`&"sn"` 都在它之前、
- *  七个键的序是 `null、true、7、1.5、"s"、&"sn"、NodePath`（`tmp/probe-nodepath/o-o1.gd`）。 */
 const VS_RANK_NODE_PATH = 6;
 
 function vsKeyRank(v: Variant): number | undefined {
@@ -2389,7 +2276,6 @@ function vsKeyCompare(a: Variant, b: Variant): number {
     throw new UnsupportedError("var-to-str-key", `var_to_str() 的字典键只实测过 null / bool / int / float / String / StringName / NodePath（收到 ${valueTypeName(a)}）`);
   }
   if (ra !== rb) return ra - rb;
-  // 同为 NodePath 的并列键按插入序出门（实测五个键：`/a、z、a、a/b、""`，不是按码点排的）
   if (asNodePath(a) !== null) return 0;
   if (a.t === Tag.BOOL) return (a.v ? 1 : 0) - (b.v ? 1 : 0);
   if (a.t === Tag.STRING || a.t === Tag.STRING_NAME) {
@@ -2406,13 +2292,6 @@ function vsKeyCompare(a: Variant, b: Variant): number {
   return numVal(a) - numVal(b);
 }
 
-/**
- * `var_to_str()`：字面量通道，与 print 分岔的每一条都量过（S214 / S221 / S227 / S229）——
- * nil 是 `null`（不是 `<null>`）、字符串带引号且只转义两个字符、数组自己不加换行（元素里有字典就跟着字典多行，S230）、
- * **字典在任意深度多行且不缩进、键按 {@link vsKeyCompare} 排序**、空的 `{}` 与 `[]` 才是紧凑式、int 走 int64。
- * 浮点尾数走引擎那侧的 Grisu2 生成器（S289），与 print 的「14 位定点」是两条式子，别互相抄；
- * **打包数组的元素不补 `.0`**（实测 `PackedFloat64Array(1.5, 2, …)`，S289），只有 FLOAT 那支补。
- */
 export function varToStr(v: Variant): string {
   switch (v.t) {
     case Tag.NIL:
@@ -2464,10 +2343,8 @@ export function varToStr(v: Variant): string {
       }
       const npV = asNodePath(v);
       if (npV !== null) return `NodePath("${strCEscape(nodePathText(npV))}")`;
-      // RID 与 print / str 同一条式子：实测 var_to_str(rid_from_int64(5)) 给 `RID(5)`（语料 261 的 r05）
       const ridV = asRid(v);
       if (ridV !== null) return ridText(ridV);
-      // Callable 五支实测都印成 `Callable()`（方法、静态、lambda、空 Callable、全局的、绑过实参的都一样）
       if (isCallable(v)) return "Callable()";
       const valueText = varToStrValueHook === null ? null : varToStrValueHook(inner as object);
       if (valueText !== null) return valueText;
@@ -2479,7 +2356,6 @@ export function varToStr(v: Variant): string {
 }
 
 const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color"]);
-/** `PackedXArray(...)` 那七支：名字 → pack 形状，实测的 arity 与元素形状一支一张。 */
 const SV_PACK_CTORS: Record<string, PackKind> = {
   PackedByteArray: "byte",
   PackedInt32Array: "int32",
@@ -2489,7 +2365,6 @@ const SV_PACK_CTORS: Record<string, PackKind> = {
   PackedStringArray: "string",
   PackedVector2Array: "vector2",
 };
-/** 引擎给得出值、我们这边没有对应形状的（实测 `Rect2(1, 2, 3, 4)` 是 typeof 7、`Quaternion(1, 2, 3, 4)` 是 15）：宁可响亮拒，也不发一个 null 出去。 */
 const SV_UNSHIPPED_CTORS = new Set(["Rect2", "Quaternion", "PackedVector3Array", "PackedColorArray"]);
 
 function svIsDigit(c: string): boolean {
@@ -2514,12 +2389,6 @@ function svNumArg(v: Variant | null): Variant | null {
   return v;
 }
 
-/**
- * `str_to_var()`：读侧的语法一支一支量过（S231），与 {@link varToStr} 是两条通道，别互相抄。
- * 顶部只认一个值，后面跟着什么都不看（`1 2` → 1、`Vector2(1, 2) 3` → Vector2）；认不出的写法给 null
- * —— 裸词、大写 `INF`、`'单引号'`、`(1, 2)`、`{: 1}`、容器里缺逗号、`Vector2()` 的 arity 不对，实测全是 null。
- * 不落 null 只有一类：名字是 Godot 认识而我们没有的形状（`Rect2` 那支）—— 响亮拒，不猜。
- */
 export function strToVar(v: Variant): Variant {
   if (v.t !== Tag.STRING) {
     throw new UnsupportedError("str-to-var-arg", `str_to_var() 收到 ${tagName(v.t)}：只量过 String 那一支，其余形状不猜`);
@@ -2541,7 +2410,6 @@ export function strToVar(v: Variant): Variant {
     return true;
   };
 
-  /** 数字一段：`.` 与 `e` 只在实测到的形状里出现，`1e` / `1e+` / `1.` 都算 float 1.0，`1.5.2` 停在第二个点。 */
   const number = (): Variant | null => {
     const start = i;
     let neg = false;
@@ -2549,7 +2417,6 @@ export function strToVar(v: Variant): Variant {
       neg = true;
       i++;
       if (i >= cs.length || !svIsDigit(cs[i] as string)) {
-        // `-` 后面跟的不是数字也不是 `inf` 就整段作废：`-`、`- 7`、`-nan` 三格实测都是 null
         if (matchWord("inf")) return V.float(-Infinity);
         i = start;
         return null;
@@ -2583,7 +2450,6 @@ export function strToVar(v: Variant): Variant {
     return V.float(parseGdDouble(`${text}${frac.length > 0 ? `.${frac}` : ""}${exp}`));
   };
 
-  /** 字符串体：`"` 与 `\` 之外只有量过的那十个转义；`\a` `\v` `\q` `\x` `\0` 都是「去掉反斜杠留原字符」。 */
   const string = (asName: boolean): Variant | null => {
     i++;
     let out = "";
@@ -2633,7 +2499,6 @@ export function strToVar(v: Variant): Variant {
           break;
         }
         case "U": {
-          // 引擎这一支只吃**六**位（不是八位），多出来的照字面留在串里；越界折 U+FFFD、代理区整串作废。
           let val = 0;
           for (let k = 0; k < 6; k++) {
             if (i >= cs.length) return null;
@@ -2707,7 +2572,6 @@ export function strToVar(v: Variant): Variant {
     }
   };
 
-  /** `Name(args)`：arity、元素类型、逗号规则全按实测的那几支；`Vector2 (1, 2)` 的空格是量过能吃的。 */
   const ctor = (word: string): Variant | null => {
     if (SV_UNSHIPPED_CTORS.has(word)) {
       throw new UnsupportedError("str-to-var-type", `str_to_var() 的 ${word}(...) 引擎给得出值（实测 Rect2 是 typeof 7、Quaternion 是 15），我们没这个形状`);
@@ -2721,7 +2585,6 @@ export function strToVar(v: Variant): Variant {
     ws();
     if (!eat(")")) {
       for (;;) {
-        // 参数形状一支一张：`PackedStringArray("a")` 只吃过串，`PackedStringArray(1)`、`Vector2("1", 2)`、`Vector2(Vector2(1, 2), 3)` 实测全是 null
         const a = kind === "string" ? (at('"') ? string(false) : null) : svNumArg(number());
         if (a === null) return null;
         args.push(a);
@@ -2755,7 +2618,6 @@ export function strToVar(v: Variant): Variant {
     return V.object(new GBytes(args.map((a) => toElem(pack, a)), pack));
   };
 
-  /** null 是「这条写法引擎也解析不出来」，与量过的那批 null 同一形。 */
   function value(): Variant | null {
     ws();
     if (i >= cs.length) return null;
@@ -2812,11 +2674,9 @@ export function strCEscape(s: string): string {
   return out;
 }
 
-/** int64 的下界幅值：`%d` 收越界与非有限的 float 时，引擎一律给 -9223372036854775808（w04–w06）。 */
 const TWO_63_B = 9223372036854775808;
 const INT64_MAX_B = 9223372036854775807n;
 
-/** 只认前置的 `-`（`+101` 实测整串判 0）与可选的 `0b` 前缀；其余任何非 01 字符都把整串判成 0，超出 int64 饱和到 MAX（符号后加）。 */
 export function strBinToInt(s: string): bigint {
   const cs = codepoints(s);
   let i = 0;
@@ -2837,7 +2697,6 @@ export function strBinToInt(s: string): bigint {
   return neg ? -acc : acc;
 }
 
-/** 拆词后按目标风格拼：`to_snake_case` / `to_kebab_case` / `to_camel_case` 共用同一条拆词（与 `capitalize` 同源）。 */
 export function strCaseStyle(s: string, style: "snake" | "kebab" | "camel"): string {
   const words = stripSpaces(separateCompoundWords(s)).split(" ").filter((w) => w !== "");
   if (style === "camel") {
@@ -2853,10 +2712,8 @@ export function strCaseStyle(s: string, style: "snake" | "kebab" | "camel"): str
   return joined.join(style === "snake" ? "_" : "-");
 }
 
-/** Godot 的 `%` 只认这七个转换符；其余 44 名（`%i %e %g %n %l` 与 `#` / 空格旗标）解析期与运行期都是 unsupported 那一句，`%u` 是 incomplete。 */
 const FMT_TYPES = new Set(["d", "o", "x", "X", "c", "s", "f", "v"]);
 
-/** 运行期那九句（与解析期同文，只是运算符写成带引号的 `'%'`；读数 `tmp/probe-pct/round5-table.txt`、`round6b/c-table.txt`）。 */
 const FMT_ERR = {
   unsupported: "unsupported format character in operator '%'.",
   incomplete: "incomplete format in operator '%'.",
@@ -2882,7 +2739,6 @@ interface FmtSpec {
 
 type FmtTok = { lit: string } | { spec: FmtSpec };
 
-/** 格式化填充：符号在前，再补零或补空格到目标宽度。 */
 function padFmt(body: string, sign: string, sp: FmtSpec): string {
   const left = sp.flags.includes("-");
   const zero = !left && sp.flags.includes("0");
@@ -2912,7 +2768,6 @@ function fmtTruncMag(a: Variant, sp: FmtSpec): { neg: boolean; mag: bigint } {
   return { neg: b < 0n, mag: b < 0n ? -b : b };
 }
 
-/** `%v` 的接收者：六型向量里出货只有四型（Vector4 属 D6 那七型），其余一律引擎那句「要向量」。 */
 function fmtVecComps(a: Variant): number[] | null {
   if (a.t !== Tag.OBJECT) return null;
   const o = a.v as object;
@@ -2996,9 +2851,6 @@ export function strFormat(fmt: string, args: Variant[]): string {
   }
   toks.push({ lit });
 
-  // 元数不够那一句要到**某一位真要取实参而取不到**那一刻才发（S697，尺 `tmp/probe722/a.gd` 十七格）：
-  // 引擎按槽序走，先撞上的可能是这一槽的值型那句 —— `"%d %d" % "ab"` 给 `a number is required`，
-  // `"%s %s" % "ab"`（`%s` 什么都收）才给 `not enough arguments for format string`。
   let ai = 0;
   let out = "";
   for (const tk of toks) {
@@ -3035,8 +2887,6 @@ export function strFormat(fmt: string, args: Variant[]): string {
       case "f": {
         const v = fmtNum(a, sp);
         if (!Number.isFinite(v)) {
-          // 实测 ±inf 印 `inf` / `-inf`、nan 印 `nan`（与 `%s` 那三个词同形），宽度按空格补 ——
-          // `0` 那旗标对这三个词不起作用（`%09.1f` 对 INF 给六空格 + inf，w02），对普通数才起（w03）
           const words = sp.flags.replace("0", "");
           const body = Number.isNaN(v) ? "nan" : "inf";
           const sign = Number.isNaN(v) ? "" : v < 0 ? "-" : sp.flags.includes("+") ? "+" : "";
@@ -3044,7 +2894,6 @@ export function strFormat(fmt: string, args: Variant[]): string {
           break;
         }
         const body = Math.abs(v).toFixed(sp.prec ?? 6);
-        // -0 的号要留着：实测 `%.1f` 给 `-0.0`、`%f` 给 `-0.000000`，而 `v < 0` 对 -0 是假
         const neg = Object.is(v, -0) || v < 0;
         out += padFmt(body, neg ? "-" : sp.flags.includes("+") ? "+" : "", sp);
         break;
@@ -3075,14 +2924,12 @@ export function strFormat(fmt: string, args: Variant[]): string {
       case "v": {
         const comps = fmtVecComps(a);
         if (comps === null) throw new GodotRuntimeError("format-vector", FMT_ERR.vector);
-        // 宽度与精度都落到**每一支**上（实测 `%30v` 给两支各补到 30 的 `(...)`、`%.2v` 给 `(1.00, 2.00)`）
         const body = comps.map((c) => padFmt(fmtVecPart(c, sp.prec), "", sp)).join(", ");
         out += "(" + body + ")";
         break;
       }
     }
   }
-  // 多出来的实参要到**走完所有槽**才算数：`"%v" % [1, 2]` 引擎给的是「要向量」而不是参数多用那一句（round5 c16）
   if (args.length > specs) throw new GodotRuntimeError("format-arity", FMT_ERR.notAll);
   return out;
 }
@@ -3099,15 +2946,12 @@ export function strFormatSoft(fmt: string, args: Variant[]): { text: string; fai
   }
 }
 
-/** `%c` 的 float 走截断：实测 1.5 → U+0001、-0.5 与 -0.0 → U+0000、1e30 越界落到 int64 那一头（负 → lower 那句）。 */
 function fmtStarCodepoint(v: number): bigint {
   if (!Number.isFinite(v)) return -(2n ** 63n);
   const t = Math.trunc(v);
   return t >= -TWO_63_B && t < TWO_63_B ? BigInt(t) : -(2n ** 63n);
 }
 
-/** `*`（宽度与精度那一位）实测收数与向量：截断、负数与向量都不补，其余给引擎那句。
- *  1e7 以上也不补 —— 引擎那一格给的就是 `7`（`999999999999`），而 2147483648 那一格把进程挂住、没有值可对。 */
 function fmtStar(a: Variant): number {
   if (a.t === Tag.INT || a.t === Tag.FLOAT) {
     const p = a.t === Tag.INT ? intToBig(a.v as IntPayload) : BigInt(fmtStarCodepoint(a.v as number));
@@ -3117,7 +2961,6 @@ function fmtStar(a: Variant): number {
   return 0;
 }
 
-/** `n.toPrecision(17)` 的等价实现（bigint 手算）：口径是**约 17 位有效数字**，不是 double 的精确展开。 */
 function digits17(n: number): string {
   let b = BigInt(n);
   const neg = b < 0n;
@@ -3132,14 +2975,11 @@ function digits17(n: number): string {
   return `${neg ? "-" : ""}${String(q)}${"0".repeat(tail)}`;
 }
 
-/** 浮点转字符串（Godot 的 print 口径）：`nan` / `inf` / `-inf` 原样，0 与 -0.0 都印 `0.0`；整数值先试 int64（装得下就精确展开，装不下回到约 17 位有效数字）再补 `.0`，非整数按整数位数定小数位再去尾随零。 */
 export function strFloat(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
   if (n === -Infinity) return "-inf";
   if (n === 0) return "0.0";
-  // 引擎那侧是 `p_num == (double)(int64_t)p_num` 这一眼：落进 int64 就整数的十进制展开原样印（实测 2^62、2^63-1024、123456789012345678.0），
-  // 落不进去才换成 17 位有效数字（实测 2^63 → 9223372036854775800.0、1e19 → 10000000000000000000.0）。
   if (Number.isInteger(n)) return `${n >= -(2 ** 63) && n < 2 ** 63 ? String(BigInt(n)) : digits17(n)}.0`;
   const intDigits = Math.max(0, Math.floor(Math.log10(Math.abs(n))) + 1);
   const decimals = Math.max(0, Math.min(14, 15 - intDigits));
@@ -3151,7 +2991,6 @@ export function strFloat(n: number): string {
   return trimmed.endsWith(".") ? `${trimmed}0` : trimmed;
 }
 
-/** Color 分量的打印格式：与 strVec2 同一套规则但只有 **4 位小数**；差别是 -0.0 与舍到零的非零值都**保留负号**（Vector2 同位置给 `0.0`）。 */
 export function strColor(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -3161,10 +3000,6 @@ export function strColor(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
-/** Vector2 分量的打印格式：**整数值**走 strFloat 的展开，**非整数值**的小数位数按量级收缩 —— `6 - trunc(log10(|x|))` 再夹进 `0..6`（S312）。
- *  实测 12.34567 给 5 位、123.4567 给 4 位、123456.7 给 1 位、2777777.75 给 `2777778`（0 位）、而 `|x| < 1` 一律封顶 6 位（0.000123456 给 `0.000123`）；
- *  量级那一折是 float32 的 `log10`，所以 999999.875 与 9999.9995 都进到上一档去（实测给 `1000000` 与 `10000.0`）；
- *  小数位为 0 时**不做去尾随零**（否则 `1000000` 会被削成 `1`），而 `.0` 只由分量本身的值是否整数决定（实测 `Vector2(3430000.75, 3430001.0)` 给 `(3430001, 3430001.0)`）。 */
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -3176,7 +3011,6 @@ export function strVec2(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
-/** 工具函数「int 形参」的统一归一：**float 向零截断**、**bool 当 0/1**、int 原样，其余类型运行时报错。用 bigint 作中介，大整数才不会被折成 double。 */
 export function intArgBig(v: Variant, who: string): bigint {
   switch (v.t) {
     case Tag.INT:
@@ -3200,7 +3034,6 @@ export function strNum(n: number): string {
   return Object.is(n, -0) ? "-0.0" : strFloat(n);
 }
 
-/** `String.num_scientific(v)`：`|x| >= 1e15` 或 `|x| < 1e-4` 才走科学计数法，数字部分取最短可回读表示，指数带符号补到两位；与 print 是两套印法（`42` / `0` 都不带 `.0`）。 */
 export function strSci(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (n === Infinity) return "inf";
@@ -3212,10 +3045,8 @@ export function strSci(n: number): string {
   return m ? `${m[1]}e${m[2]}${m[3]!.padStart(2, "0")}` : n.toExponential();
 }
 
-/** `humanize_size` 的单位档位。 */
 const SIZE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
 
-/** `String.humanize_size(n)`：参数按 **uint64** 解释（所以负数变成一个巨大值）再转 double；`while (value > 1024)` 严格大于定档，小数位 <100 两位、<1024 一位、再大不留，尾数**截断不四舍五入**；B 档直接印整数本身。 */
 export function strHumanizeSize(v: Variant): Variant {
   const signed = int64ParamBig(v, "String.humanize_size() 的参数");
   const u = signed & ((1n << 64n) - 1n);
@@ -3234,7 +3065,6 @@ export function strHumanizeSize(v: Variant): Variant {
   return V.str(digits === 0 ? `${Math.trunc(value)} ${unit}` : `${trunc.toFixed(digits)} ${unit}`);
 }
 
-/** 码点 → 一位字符串：实测 `char(0)` 与 `String.chr(0)` 是同一支 —— 0、负数、代理区、> U+10FFFF 一律换成 U+FFFD（引擎在建串那一刻就换，并往 stderr 打一句 Unicode parsing error）。 */
 export function stringChr(cp: Variant): Variant {
   if (cp.t !== Tag.INT && cp.t !== Tag.FLOAT && cp.t !== Tag.BOOL) {
     throw new GodotRuntimeError("utility-convert", `Invalid type in GDScript utility function "char()". Cannot convert argument 1 from ${valueTypeName(cp)} to int.`);
@@ -3249,7 +3079,6 @@ function wrapUnsigned64(n: bigint): bigint {
   return n & ((1n << 64n) - 1n);
 }
 
-/** 引擎的 `num_int64` / `num_uint64` 那一支（`core/string/ustring.cpp:1501` / `:1541`）：`base` 不在 `2..36` 给**空串**（引擎那侧另 push 一条 `ERROR:`，语料的 normalize 把整块 `ERROR:` 滤掉，所以这里不发也逐字节一样）；位数用「先数长度再倒着填」那一条，字母位只在 `mod >= 10` 时用 `capitalize_hex` 那一个字母表，余数取绝对值，除法按**向零截断**。 */
 function numInBase(n: bigint, base: number, cap: boolean, unsigned: boolean): string {
   if (!Number.isInteger(base) || base < 2 || base > 36) return "";
   const B = BigInt(base);
@@ -3275,7 +3104,6 @@ function numInBase(n: bigint, base: number, cap: boolean, unsigned: boolean): st
   return out.join("");
 }
 
-/** 双精度精确值 × 10^k，四舍五入（半程远离零）成 BigInt —— 引擎那侧是 `snprintf`，不能拿 `toFixed` 代。 */
 function scaledRound64(a: number, k: number): bigint {
   const dv = new DataView(new ArrayBuffer(8));
   dv.setFloat64(0, a, true);
@@ -3293,7 +3121,6 @@ function scaledRound64(a: number, k: number): bigint {
   return rem * 2n >= den ? q + 1n : q;
 }
 
-/** 尾部削零，但小数点后面至少留一个零（`ustring.cpp` 那段 `// Destroy trailing zeroes, except one after period.`）。 */
 function stripTrailingZeros(src: string): string {
   if (!src.includes(".")) return src;
   const chars = src.split("");
@@ -3309,7 +3136,6 @@ function stripTrailingZeros(src: string): string {
   return chars.join("").split("\0")[0]!;
 }
 
-/** 出货的 libc 只有 17 位有效数字：先算这一档在给定的数上能给到几位小数。 */
 function sigDigitCap(a: number): number {
   const probe = scaledRound64(a, 30).toString().padStart(31, "0");
   const intPart = probe.slice(0, probe.length - 30).replace(/^0+/, "");
@@ -3320,7 +3146,6 @@ function sigDigitCap(a: number): number {
   return 17 + z;
 }
 
-/** 十进制形 `n / 10^k` 再按 `p` 位定点取（平局远离零 —— 平局那三格是 `2.5`→`3`、`0.125` 两位→`0.13`、`10.5` 零位→`11` 量出来的）。 */
 function renderAt(n: bigint, k: number, p: number): string {
   const ten = 10n ** BigInt(k);
   const q = 10n ** BigInt(p);
@@ -3330,9 +3155,6 @@ function renderAt(n: bigint, k: number, p: number): string {
   return p === 0 ? s : `${s.slice(0, s.length - p)}.${s.slice(s.length - p)}`;
 }
 
-/** `String.num(number, decimals)`：`decimals < 0` → 14（`|x| > 10` 再减 `floor(log10|x|)`），超过 32 夹到 32，夹完还为负走 `%.lf` 那一支（默认 6 位）；`nan` / `inf` 先走前两条；结果削尾零。
- *  关键是**两次取位**：先把这支 double 收敛到十七位有效数字，再从那个十进制值按请求的位数取位 —— 一次取位在边界上会差一格（`String.num(1.0 / 7.0, 16)` 引擎给 `0.1428571428571429`，一次取位给的是 `0.1428571428571428`）。
- *  898 格逐字节对账在 `packages/runtime/test/string-num-decimals.test.ts`（尺 `tmp/probe-num/{round1,round2}.mts`）。 */
 export function strNumDecimals(x: number, decimals: number): string {
   if (Number.isNaN(x)) return "nan";
   if (!Number.isFinite(x)) return x < 0 ? "-inf" : "inf";
@@ -3345,7 +3167,6 @@ export function strNumDecimals(x: number, decimals: number): string {
   if (p > 32) p = 32;
   if (p < 0) p = 6;
   const a = Math.abs(x);
-  // 第一次取位：十七位有效数字（`sigDigitCap` 可能给负数 —— 那是整数部分本身就超过十七位，`DBL_MAX` 那一头）
   const cap = a === 0 ? p : sigDigitCap(a);
   let n: bigint;
   let k: number;
@@ -3359,17 +3180,12 @@ export function strNumDecimals(x: number, decimals: number): string {
     n = t * unit;
     k = 0;
   }
-  // 第二次取位之后再削零。削零**之前**的串长过 324 个字符，引擎给的是空串（`String.num(1.7976931348623157e308, 15)` 325 → 空、`…14)` 324 → 出；`1e300` 到 20 位 322 出、24 位 326 空，读数 `tmp/probe-num/compare30.txt`）。
-  // **负号占那一格**：同一支 `1e300` 正值到 22 位还出（不含号 324）、23 位空，负值 22 位就空（含号 325）——
-  // 二十二档两侧各量一遍，读数 `tmp/probe-numsign/compare45.txt`（S390），所以长度按「符号 + 数字串」判。
   const body = renderAt(n, k, p);
-  // 符号一律跟着实参走：一格一脚本实测 `String.num(-0.0, 2)` 给 `-0.0`、`(-0.0, 0)` 给 `-0`。
   const sign = x < 0 || Object.is(x, -0) ? "-" : "";
   if (body.length + sign.length > 324) return "";
   return `${sign}${stripTrailingZeros(body)}`;
 }
 
-/** `String` 上的静态成员派发：`chr`（0、负数、代理区、> U+10FFFF 一律换成 U+FFFD）/ `num` / `num_int64` / `num_scientific` / `humanize_size`，其余响亮拒。 */
 export function stringStatic(name: string, args: Variant[] = []): Variant {
   switch (name) {
     case "chr": {
@@ -3422,13 +3238,11 @@ export function strBuiltin(args: Variant[]): Variant {
   return V.str(args.map((v) => show(v)).join(""));
 }
 
-/** `String(x)` 构造器：只接受 String，其余来源是 Godot 的 Parse Error。 */
 export function stringCtor(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("string-ctor-arity", `String() 只接受 1 个参数（收到 ${args.length} 个）`);
   }
   const v = args[0] as Variant;
-  // 实测 `String(NodePath("a:b"))` 给 `a:b`、typeof 4（v04 / r16 / r17 三格）
   const np = asNodePath(v);
   if (np !== null) return V.str(nodePathText(np));
   if (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME) {
@@ -3437,7 +3251,6 @@ export function stringCtor(args: Variant[]): Variant {
   return V.str(v.v as string);
 }
 
-/** `StringName("x")`：只接受字符串族（int 是 Parse Error），结果与 `&"x"` 同类。 */
 export function stringNameCtor(args: Variant[]): Variant {
   if (args.length !== 1) {
     throw new GodotRuntimeError("string-name-ctor-arity", `StringName() 只接受 1 个参数（收到 ${args.length} 个）`);
@@ -3452,9 +3265,6 @@ export function stringNameCtor(args: Variant[]): Variant {
   return V.stringName(v.v as string);
 }
 
-/** `NodePath()` / `NodePath(String)` / `NodePath(StringName)` / `NodePath(NodePath)` 四形实测都有；其余元数与
- *  实参类型是那句 `No constructor of "NodePath" matches the signature "NodePath(…)"`（量过 `NodePath(int)` 与
- *  `NodePath(String, String)` 两格，括号里的名字就是 `valueTypeName` 那一张）。 */
 export function nodePathCtor(args: Variant[]): Variant {
   if (args.length === 0) return emptyNodePath();
   if (args.length === 1) {
@@ -3468,22 +3278,18 @@ export function nodePathCtor(args: Variant[]): Variant {
   );
 }
 
-/** **StringName 槽**（变量 / 字段 / 容器元素与键 / 形参默认值）：只收 StringName / String，装不下就响亮报，不原样塞进去。 */
 export function toStringNameSlot(v: Variant): Variant {
   if (v.t === Tag.STRING_NAME) return v;
   if (v.t === Tag.STRING) return V.stringName(v.v as string);
   throw new UnsupportedError("string-name-slot", `StringName 槽只收 StringName / String，收到 ${tagName(v.t)}`);
 }
 
-/** 容器打印的深度上限：一条**固定的层数闸门**，不是「看见重复就断」，越界那一层给 `[...]` / `{ ... }`。 */
 export const PRINT_DEPTH = 101;
 
-/** 比较（`==` / `has` / `count` 的身份比较）的深度上限：另一道**更浅**的固定闸门，超出后两个明显不同的容器会被判成相等；与打印那道不是一条。 */
 export const COMPARE_DEPTH = 52;
 
 registerPackStringifier((v) => show(v));
 
-/** 按 `sep` 把实参逐个 show 后拼起来。 */
 export function showArgsSep(args: Variant[], sep: string): string {
   let out = "";
   for (let i = 0; i < args.length; i++) {
@@ -3498,7 +3304,6 @@ export function showArgs(args: Variant[]): string {
   return showArgsSep(args, "");
 }
 
-/** 顶层 print：字符串不加引号 */
 export function show(v: Variant, depth = 0): string {
   switch (v.t) {
     case Tag.NIL:
@@ -3551,7 +3356,6 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
-      // 引擎类值与 weakref 都带进程内的号，形状照实测发；号在语料两侧都先掩掉再比。
       const innerRid = asRid(v);
       if (innerRid !== null) return ridText(innerRid);
       const innerNp = asNodePath(v);
@@ -3562,7 +3366,6 @@ export function show(v: Variant, depth = 0): string {
       if (isEncodedObjectIdBox(inner)) return `<EncodedObjectAsID#${String(inner.gdObjectId)}>`;
       const shape = objectLabelHook === null ? null : objectLabelHook(inner as object);
       if (shape !== null) return shape;
-      // Callable 实测印 `<标签>`：@GlobalScope::abs、GDScript::sm、RefCounted(Util)::hi、<anonymous lambda>(lambda)、null::null
       if (isCallable(v)) {
         const label = callableLabel(inner as CallableBox);
         if (label !== null) return label;
@@ -3574,10 +3377,7 @@ export function show(v: Variant, depth = 0): string {
   }
 }
 
-/** 容器内嵌：字符串要加引号 */
 export function repr(v: Variant, depth = 0): string {
-  // 容器里的 String 与 StringName 走的是 `String::c_escape()`（实测 `["a\"b"]` / `["a\'b"]` / `["a\tb"]`，而 ESC 与 U+001B 那类留原样），
-  // 与顶层 `var_to_str(串)` 那条不是同一把尺（那条只转 `"` 与 `\\`、控制字符留原样）—— 与 NodePath 那一支同源。
   if (v.t === Tag.STRING) return `"${strCEscape(v.v as string)}"`;
   if (v.t === Tag.STRING_NAME) return `&"${strCEscape(v.v as string)}"`;
   const np = asNodePath(v);
@@ -3585,7 +3385,6 @@ export function repr(v: Variant, depth = 0): string {
   return show(v, depth);
 }
 
-/** `分隔符.join(数组)`：每个元素走 **print 那一条 stringify**，不是容器里那套带引号的 repr；空数组给空串。 */
 export function strJoin(sep: string, g: GArray): string {
   const items = g.raw();
   let out = "";
@@ -3596,9 +3395,6 @@ export function strJoin(sep: string, g: GArray): string {
   return out;
 }
 
-/** Variant 的 **Godot 类型名**：`tagName` 只到 Tag 粒度，值类型都在 OBJECT 里，而报错文本要说得出 `Vector2` / `Color` 这种名字。
- *  形名走引擎的拼法：它管 null 叫 `Nil`（实测 `Invalid operands 'Nil' and 'int' in operator '<'.`），
- *  九支 pack 也叫自己的名字（`PackedInt32Array` 那一族），内部标签 `nil` / `Object` 都不出现在引擎句子里。 */
 export function valueTypeName(x: Variant): string {
   if (x.t === Tag.NIL) return "Nil";
   if (x.t === Tag.OBJECT && x.v instanceof GBytes) return packTypeName(x.v.kind);
@@ -3636,12 +3432,10 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const br = asRid(b);
   const anp = asNodePath(a);
   const bnp = asNodePath(b);
-  // RID 的等式按号走；与 null 比给假（实测 n01 / h26），与其他一切比是运行期那一句（int / float / bool / String / StringName / Array / Dictionary / Vector2 / Color / Object / Callable 各量过一格）
   if (ar !== null || br !== null) {
     if (ar !== null && br !== null) return String(ar.id) === String(br.id);
     const ridOther: Variant = ar !== null ? b : a;
     if (ridOther.t === Tag.NIL) return false;
-    // 两句都量过：`==` 与 `!=` 的原文各一格（y04 / ne_int），运算符名就按写的那一个发
     throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '${op}'.`);
   }
   if (
@@ -3691,13 +3485,11 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
     return (a.v as string) === (b.v as string);
   }
   if (isCallable(a) !== isCallable(b)) {
-    // Callable 跟 int 比在 Godot **不是** false，而是运行期那一句 `Invalid operands 'Callable' and 'int' in operator '=='.`
     const other = isCallable(a) ? b : a;
     if (other.t === Tag.INT) {
       throw new GodotRuntimeError("eq-operands", `Invalid operands '${valueTypeName(a)}' and '${valueTypeName(b)}' in operator '=='.`);
     }
   }
-  // 空对象引用（`instance_from_id` 找不到号给的那一个）与 null 相等，与其他一切都不等（实测 q01–q04）
   const an = a.t === Tag.OBJECT && isNullRefValue(a.v);
   const bn = b.t === Tag.OBJECT && isNullRefValue(b.v);
   if (an || bn) {
@@ -3720,14 +3512,12 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
       return (a.v as GDict).eq(b.v as GDict, depth);
     case Tag.OBJECT:
       if (a.v instanceof GBytes && b.v instanceof GBytes) return bytesEq(a.v as GBytes, b.v as GBytes);
-      // Callable 之间是**内容**等式（接收者 + 方法名，绑定实参不算，但绑过没绑过算）：读一次属性就新建一个盒子，按 JS 引用比会把真判成假
       if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
       return a.v === b.v;
   }
   return false;
 }
 
-/** Godot 的**身份**相等（`Variant::identity`）：`has` / `find` / `rfind` / `count` / `erase` 用它。数字不做 int/float 跨型合一（`[1].has(1.0)` 假），String 与 StringName 却合一，容器递归比身份、字典不看键序。 */
 export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
   if (depth >= COMPARE_DEPTH && (a.t === Tag.ARRAY || a.t === Tag.DICT) && a.t === b.t) return true;
   if (
@@ -3766,9 +3556,7 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       if (a.v instanceof GColor && b.v instanceof GColor) {
         return a.v.r === b.v.r && a.v.g === b.v.g && a.v.b === b.v.b && a.v.a === b.v.a;
       }
-      // Callable 走与 `==` 同一条等式：盒子每次读都是新建的，按 JS 引用比会把真判成假
       if (isCallable(a) && isCallable(b)) return callableEq(a.v as CallableBox, b.v as CallableBox);
-      // NodePath 同理（实测 `^"a/b" in [^"a/b"]` 与 `arr.has(^"a/b")` 都真）
       {
         const npa = asNodePath(a);
         const npb = asNodePath(b);
@@ -3780,7 +3568,6 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
   }
 }
 
-/** 空数组 / 空字典 / 0 / 0.0 / "" 全为 false —— 与 JS 相反。 */
 export function truthyOf(v: Variant): boolean {
   switch (v.t) {
     case Tag.NIL:
@@ -3798,7 +3585,6 @@ export function truthyOf(v: Variant): boolean {
     case Tag.DICT:
       return (v.v as GDict).size() !== 0;
     case Tag.OBJECT:
-      // 空的 Packed\*Array 是假：实测 `type_convert(PackedByteArray(), TYPE_BOOL)` 给 false，值类型不受这条影响
       return v.v instanceof GBytes ? (v.v as GBytes).length !== 0 : true;
   }
   return false;

@@ -33,7 +33,6 @@ async function main(): Promise<void> {
     const inst = new mod.K();
     inst.bench();
     let checksum: unknown = null;
-    // 单次读数在这台机器上能飘 ±30%，所以一轮里再跑 R 遍取最小值（GDS2JS_BENCH_ROUNDS）。
     let best = Number.POSITIVE_INFINITY;
     for (let q = 0; q < ROUNDS; q++) {
       const t0 = performance.now();

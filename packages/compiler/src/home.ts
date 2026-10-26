@@ -1,4 +1,3 @@
-/** 构建期由 tools/cli-native.mjs 同名换实现：原生 exe 的自带家目录是构建期嵌进二进制的文件，不是 SEA 资产。 */
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -19,7 +18,6 @@ function seaApi(): SeaModule | null {
   return sea;
 }
 
-/** 解出来的家目录（进程内只算一次）。null = 这个构建没有自带家目录（npm 安装态就是 null）。 */
 let home: string | null | undefined;
 
 export function selfHome(): string | null {

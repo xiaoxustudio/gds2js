@@ -1,15 +1,10 @@
-/** 原生 CST：把 FFI 交回来的节点表物化成 `./cst` 那套普通记录。 */
 import type { CsNode, CsPoint, CsTree } from "./cst";
 
-/** 一条记录七个 int32：depth、kind 名在名字池里的偏移、startByte、endByte、isNamed、hasError、本节点在父亲那里的字段名偏移（0 = 池首那个空串，即没有字段名）。 */
 const REC = 7;
 
 export type NodeTable = {
-  /** C 侧 `gds_parse_nodes` 的返回：前序遍历的定长记录 */
   rec: Int32Array;
-  /** `\0` 分隔的名字池（kind 名与字段名共用一张） */
   names: Uint8Array;
-  /** 这份表对应的源码 */
   src: string;
 };
 
@@ -26,7 +21,6 @@ function nameAt(table: NodeTable, at: number): string {
   return s;
 }
 
-/** byte→JS 码元下标表：每个字节指向它所属字符的 JS 起始下标，落在多字节序列中间的字节退化到该字符开头。 */
 function byteToJsIndex(src: string): Int32Array {
   let total = 0;
   for (let i = 0; i < src.length; i++) total += utf8LenOfCodeUnit(src.charCodeAt(i) as number);
@@ -54,7 +48,6 @@ function utf8LenOfCodeUnit(unit: number): number {
   return unit < 0x80 ? 1 : unit < 0x800 ? 2 : unit < 0xd800 || unit >= 0xe000 ? 3 : 2;
 }
 
-/** 前序 + depth 复原父子：一个栈走一遍，栈顶始终是「还在长孩子的最近那个祖先」。 */
 function childRowsOf(rec: Int32Array): number[][] {
   const total = rec.length / REC;
   const out: number[][] = [];
@@ -69,7 +62,6 @@ function childRowsOf(rec: Int32Array): number[][] {
   return out;
 }
 
-/** 交回 `CsTree`：每节点一个普通记录对象，无方法也无父指针；`startPosition` 的列按 JS 码元算。 */
 export function buildCsTree(table: NodeTable): CsTree {
   const rec = table.rec;
   const total = rec.length / REC;

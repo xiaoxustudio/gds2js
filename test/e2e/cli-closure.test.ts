@@ -1,13 +1,3 @@
-/**
- * 单文件闭包门（S455）：入口用 `extends "<路径>"` 挂父脚本时，`check` / `run` / `build` / `export` 四条路都要**读依赖**，
- * 出货与引擎同一份字（`C1|25 7` —— 引擎侧的读数与夹具在 `tmp/probe-chain/`：父脚本 `extends SceneTree` 带 `helper()`）。
- *
- * 三种 runtime 模式各有各的形状：`import` 出小树、`local` 小树旁挂一份 standalone、`single` 把小树压成一个文件。
- * 爬出闭包根的那一形（`extends "../sub.gd"`）钉的是**准确拒**（`[closure-root]`）—— 不是静默绑到根内另一格同名文件。
- *
- * 不用 Godot；scriptc 也不需要（静态那支的闭包读的是同一棵树，缺 SEA 级 node 时那一格 skip）。
- * 缺 dist 时按仓库口径 skip（先 `pnpm build`）。
- */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

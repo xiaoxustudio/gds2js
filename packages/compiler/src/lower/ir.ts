@@ -59,7 +59,6 @@ export type TypeRef =
   | { kind: "array"; item: TypeRef }
   | { kind: "variant" };
 
-/** 能用「类型名.静态成员」取值的内建类型 → 运行时里产出该成员的函数名；语义分析据此放行属性基与被调属性，emitter 据此发运行时调用。 */
 const STATIC_MEMBER_FNS: Record<string, string> = {
   Vector2: "vector2Const",
   Vector3: "vector3Const",
@@ -72,7 +71,6 @@ const STATIC_MEMBER_FNS: Record<string, string> = {
   Callable: "callableStatic",
 };
 
-/** 属性基是「带静态成员的内建类型名」时给出运行时函数名，否则 null。 */
 export function staticMemberFn(e: Expr): string | null {
   return e.kind === "ident" ? (STATIC_MEMBER_FNS[e.name] ?? null) : null;
 }
@@ -142,10 +140,7 @@ export interface Module {
   enums: EnumDecl[];
   funcs: FuncDecl[];
   innerClasses: ClassDecl[];
-  /** 用了 PackedByteArray 的 compress()/decompress() —— `--pack scriptc` 据此铺 zstd 宿主并加 `--dynamic`。 */
   usesPackCodec?: boolean;
-  /** 取值记号的归属标识：记号表是进程内累积的，跨文件同 `行:列` 会同名抢号（§6 第 61 条），所以每份模块先归一个主 —— `analyze` 写、发射器读回。 */
   markOwner?: string;
-  /** 这份脚本的 `extends` 链顶端挂的是不是宿主基类（跨文件工程才判得出）：判定式子与发射器那条 `hostBaseInChain` 同一条，分析器据此给不给宿主裸方法名那张表（S370 的读数）。 */
   hostChain?: boolean;
 }

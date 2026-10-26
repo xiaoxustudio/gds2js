@@ -1,5 +1,3 @@
-/** FastLZ（Godot `Compression::MODE_FASTLZ`，S558）：按 `thirdparty/misc/fastlz.c` 的 level 1 / level 2 逐式移植，
- *  `compress()` 长度 < 65536 走 level 1、否则 level 2；解压按首字节高位判层，越界一律给 null。 */
 
 const MAX_COPY = 32;
 const MAX_LEN = 264;
@@ -364,7 +362,6 @@ export function fastlzCompress(input: Uint8Array): Uint8Array {
   return input.length < 65536 ? compress1(input) : compress2(input);
 }
 
-/** 引擎 `fastlz_decompress()`：按首字节高位判层；越界 / 未知层给 null（对应引擎的 0 返回）。 */
 export function fastlzDecompress(input: Uint8Array, maxout: number): Uint8Array | null {
   if (input.length === 0) return null;
   const level = ((input[0] as number) >> 5) + 1;

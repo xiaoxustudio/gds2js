@@ -1,13 +1,3 @@
-/**
- * `gds2js export` 的出货门（SEA node exe + scriptc exe）。只出 Windows 产物，
- * 所以非 Windows 整支 skip。三态映射与 crash 算红的理由见 test/support/verdict.ts。
- *
- * 结构上的取舍：所有昂贵动作（runExport / 跑 exe）都在 beforeAll 里按固定顺序跑完、
- * 把每格判定记进 results；然后按**静态格子清单**一格一个 it() 去认领自己的判定。
- * 之所以要静态清单：Vitest 先收集测试再跑钩子，没法用 beforeAll 的结果动态生成 it()。
- * 这样同时拿到三样东西 —— 精确的 `汇总：ok X / 上游或环境记账 Y / FAIL Z` 读数、
- * 每格独立的 pass/skip/fail、以及 `-t "scriptc/nested"` 这种单格重跑。
- */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -35,8 +25,6 @@ function record(cell: string, v: Verdict, note: string): void {
   results.push({ cell, v, note });
 }
 
-/** 静态格子清单：beforeAll 会走到的全部 record() 落点（含 checkExe 合成的 /清理 子格）。
- *  没走到的（上游 refused 或提前失败）会在 it() 里被认成 skip，不会假绿。 */
 const CELLS = [
   "node/出货",
   "node/出货/清理",
@@ -75,14 +63,10 @@ function runExport(args: string[], env: NodeJS.ProcessEnv): { code: number | nul
   return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
 }
 
-/** 打出 exe 并跑一遍，把结果拆成主格 + `/清理` 子格记进 results。 */
 function checkExe(cell: string, exe: string, want: string | null, work = WORK): void {
   if (!existsSync(exe)) return record(cell, "FAIL", `退出码 0 但没有 ${exe}`);
   const run = spawnSync(exe, [], { encoding: "utf8", windowsHide: true, timeout: 120_000 });
   if (want === null) {
-    // boom 工程守的是「运行期那一块有没有上报到 stderr」：`print(100 / z)` 自 S694 起按引擎口径走
-    // —— 除零作废当前那支函数、SCRIPT ERROR 那块照打，宿主主循环自己收尾退 0（引擎那侧 `quit()` 走不到、
-    // 永不退出，退出形状那条差记在 ROADMAP）。所以这一格不再拿退出码当判据。
     const err = run.stderr || "";
     if (!/^SCRIPT ERROR: Division by zero error in operator '\/'\.$/m.test(err)) {
       return record(cell, "FAIL", `退了 ${run.status}，但 stderr 里没有除零那块：${JSON.stringify(err.slice(0, 160))}`);
@@ -158,7 +142,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
     const selfV = nodeVerOf(process.execPath) ?? "0.0.0";
     const seaCapable = seaCapableNode();
 
-    // A node/出货（官方一步式 --build-sea）
     if (seaCapable === null) {
       record("node/出货", "refused", `本机没有 Node >= ${SEA_MIN_NODE}（用 GDS2JS_NODE_BIN 指一个）`);
     } else {
@@ -178,9 +161,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
       }
     }
 
-    // B node/版本门禁（SEA 节点不够新时该响，并给出重跑命令）
-    // 反向逻辑逐字保留：**当前 node 已够新时这一格记 refused** —— 没有更旧的当对照物，
-    // 那就诚实地说「测不了」，而不是硬凑一个 pass。
     const atLeast = (v: string, min: string): boolean => {
       const a = v.replace(/^v/, "").split(".").map(Number);
       const b = min.split(".").map(Number);
@@ -203,7 +183,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
       else record("node/版本门禁", "ok", `v${selfV} 上响亮拒绝 + 给出重跑命令`);
     }
 
-    // E 嵌套目录工程（入口在子目录，两支都真打真跑）
     {
       const nested = nestedProject();
       const cells: Array<{ name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean }> = [
@@ -228,7 +207,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
       }
     }
 
-    // G 散装单文件（入口不在任何工程里）：两支都该照 build/run 的边界打得出 exe
     {
       const loose = looseScript();
       const cells: Array<{ label: string; name: string; args: string[]; env: NodeJS.ProcessEnv; needSea: boolean }> = [
@@ -249,7 +227,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
       }
     }
 
-    // H --pack scriptc：项目树也出货（examples/multi 多模块，整棵树只共享一份 runtime 源码）
     {
       const exe = join(TMP, "s.exe");
       const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--pack", "scriptc"], {});
@@ -258,7 +235,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
       else checkExe("--pack scriptc", exe, MULTI_WANT);
     }
 
-    // I 不带 --pack 的默认值必须落在 scriptc 那一支（翻默认值这件事得有人守着）
     {
       const exe = join(TMP, "default.exe");
       const r = runExport([MULTI, "--res-root", MULTI_ROOT, "-o", exe, "--verbose"], {});
@@ -282,7 +258,6 @@ describe.skipIf(!ready)(`gds2js export 出货门${SKIP_WHY}`, () => {
   for (const cell of CELLS) {
     it(cell, (ctx: TestContext) => {
       const hit = results.find((r) => r.cell === cell);
-      // 本轮没记到这一格：上游 refused 或提前失败了。记成 skip 而不是 pass —— 假绿最坏。
       if (hit === undefined) {
         ctx.skip(true, "本轮没走到这一格（上游 refused 或提前失败）");
         return;

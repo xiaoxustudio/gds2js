@@ -1,4 +1,3 @@
-/** wasm 那侧的 CST 物化：`web-tree-sitter` 的包名只出现在这一支，不流进 `lower`。 */
 import type { Node as WasmNode } from "web-tree-sitter";
 import type { CsNode, CsTree } from "./cst";
 

@@ -1,22 +1,3 @@
-/**
- * scriptc 出货门：把语料的产物喂给 scriptc 编成原生 exe，再逐字节对拍 Godot 的 golden。
- * 单文件用例走「产物 + 换宿主 import → scriptc build」这条短路，项目树用例走真命令
- * `export --pack scriptc`。
- *
- * 读数 `出货 X/N 编过、Y/N 跑通、逐字节一致 Z/N` 由 afterAll 原样打印；
- * 判红口径：**逐字节一致数必须等于用例数**（编不过 / 跑挂 / 输出不符都算红）。
- *
- * 开关改成环境变量（Vitest 下 argv 是 runner 自己的）：
- *   GDS2JS_SCRIPTC_ALL=1      全量（≈150 例：141 单文件 + 9 项目树），并发 4
- *   GDS2JS_SCRIPTC_PROJECT=1  只跑项目树那几例，走真命令 export --pack scriptc
- *   GDS2JS_SCRIPTC_KEEP=1     收尾不删替身树与 .gds2js-export 树
- *
- * 并发安全：两个进程**同时跑同一个 id** 会互删替身树，且 `ensureZstdPackages()` 往共享的
- * `tmp/sc-gate/node_modules` 写。所以 (1) 整个 e2e project 钉死单 worker 串行，杜绝跨文件
- * 并发；(2) ensureZstdPackages **提到 beforeAll 只调一次**，拆掉那个共享目录的写竞争；
- * (3) 只有全量/项目树模式才开 it.concurrent（各 id 独占 `tmp/sc-gate/<id>/`，同进程内互不
- * 干扰），代表集仍串行。
- */
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
@@ -25,37 +6,17 @@ import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vit
 import { TREE_FACE } from "@gds2js/runtime/tree-face";
 import { hasScriptc, missing } from "../support/env";
 import { caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden, ROOT } from "../support/lib-bridge";
-// 文本口径与 IR 标志（usesPackCodec）的互锁断言在 packages/compiler/test/emit-invariants.test.ts；
-// 两边共用这一份正则，省掉两处各抄一份带来的漂移。
 import { NEED_ZSTD_TEXT } from "../support/pack-codec";
 
 const ALL = process.env.GDS2JS_SCRIPTC_ALL === "1";
 const PROJECT_ONLY = process.env.GDS2JS_SCRIPTC_PROJECT === "1";
 const KEEP = process.env.GDS2JS_SCRIPTC_KEEP === "1";
-/** case-id 子串过滤。给了它就跑全部匹配用例、不只跑代表集（tools/release.mjs 的面探针靠它
- *  点名 234-string-methods-batch）。这与 Vitest 自己的 `-t` 不同：`-t` 只过滤**已收集**的
- *  测试，挑不出代表集之外的用例。 */
 const FILTER = process.env.GDS2JS_SCRIPTC_FILTER ?? "";
 const JOBS = ALL || PROJECT_ONLY ? Math.min(4, cpus().length) : 1;
 
 const WORK = join(ROOT, "tmp", "sc-gate");
-/** 收尾只删本进程建过的这几份，不连锅端 `tmp/sc-gate` —— 那样会把另一个门进程正在编的替身树删掉。 */
 const created: string[] = [];
 
-/** 代表集：一族一格各一个。`246` 是「node 过、静态目标炸」那类的闸 —— 属性面按名索引只在 AOT 上暴露（S270 ④）。
- *  `266` 是它的续集：`dict_to_inst` 要的是「实例上那张按名的原值表 + 不跑 `_init` 的构造路」，两条都只有 AOT 才验得出来。
- *  `268` 不是续集而是补账：NodePath 这一族（构造 + 字面量）此前在代表集里一格都没有。
- *  `285` 是这一轮新加的：符号零那几支（`floor` / `ceil` / `round` / `clampf` / `deg_to_rad` / `fmod` / `floori`）改的是运行时函数体里的算式，
- *  其中 `round` 那一支多了一层内联箭头函数 —— 这类形状只有真编到静态目标才验得出来（S270 ④ 同一条路）。
- *  `286` 是同一轮的第二格：容器元素的 `c_escape` 改的是 `values.ts` 里 `repr` 那一句，String / StringName 两条通道的出货文本都从它出（S296）。
- *  `334` / `335` 是八面体解码与 `from_angle` 那一轮：两支都新走 `rt.vector3Const(name, [args])` / `rt.vector2Const(name, [args])` 那个带实参的静态口，
- *  函数体里是 `Math.fround` 套 `Math.abs` / `Math.cos` 的算式与一条 `Number.isFinite` 的限 —— 这类只改运行时函数体的形状，同样只有真编到静态目标才验得出来（S322 / S323）。
- *  `336` 是同族的第三格：`String.num(number, decimals)` 要从 IEEE754 位里拆 `m · 2^e`，用的是 `DataView` + `getBigUint64` + `BigInt` 的 `**` 与移位 ——
- *  scriptc 对这类内建历来有围栏（S200 那四道坑），所以这一支不真编一遍不算数。
- *  `339` 是同族的第四格：`bezier_derivative` 两支的函数体全是 `Math.fround` 套加乘减的直算式，没有一处能退回 double ——
- *  静态目标上把中间量升成 double 就等于换了舍入模型，只有真编一遍才看得出来（S329）。
- *  `340` 是同族的第五格：一轮普查把 `move_toward` / `smoothstep` / `wrapf` / `fposmod` 四支的函数体照源重写（早退支、带号比较、`is_equal_approx` 那一档），
- *  改的全是运行期函数体里的算式与判据顺序 —— 同样是只有真编到静态目标才验得出来的形状（S331）。 */
 const DEFAULT_SET = [
   "001-int-division",
   "064-float-render",
@@ -111,7 +72,6 @@ const DEFAULT_SET = [
   "032-preload-load",
 ];
 
-/** 异步版 spawnSync：全量门要靠它把多个用例叠在一起跑。 */
 interface SpResult {
   status: number;
   stdout: string;
@@ -136,8 +96,6 @@ function sp(cmd: string, cmdArgs: string[], opts: Parameters<typeof spawn>[2] = 
 
 const genFile = (id: string): string => join(caseDir(id), "main.gen.mts");
 
-/** 替身树里的 zstd 宿主：直接读真实的 zstdHost 源码，按 tree-face 清单把它那些相对说明符
- *  改写成回指仓库源（深度按替身树位置算）—— 不再有同形副本。 */
 function zstdHostSource(dir: string): string {
   const rtSrc = join(ROOT, TREE_FACE.repo.runtimeSrcRoot);
   const src = readFileSync(join(rtSrc, TREE_FACE.repo.zstdHost), "utf8");
@@ -163,8 +121,6 @@ function copyTreeAll(from: string, to: string): void {
   }
 }
 
-/** 把 vendor 里两个包铺到 `tmp/sc-gate/node_modules`（替身宿主从 tmp/sc-gate/<id>/ 往上正好找得到）。
- *  只在 beforeAll 调一次 —— 每个 zstd 用例各调一次就是对这个共享目录的无守卫并发写。 */
 function ensureZstdPackages(): void {
   const from = join(ROOT, TREE_FACE.repo.runtimeSrcRoot, TREE_FACE.repo.vendorDir);
   const to = join(WORK, "node_modules");
@@ -177,7 +133,6 @@ function ensureZstdPackages(): void {
 }
 
 function pickCases(): string[] {
-  // 项目树用例走真 CLI 的 `export --pack scriptc`，不需要 `main.gen.mts`（那一支只发单文件产物）
   const allIds = listCases(FILTER)
     .filter((id) => (PROJECT_ONLY ? caseIsProject(id) : true))
     .filter((id) => godotOk(readGolden(id)) && (caseIsProject(id) || existsSync(genFile(id))));
@@ -186,11 +141,9 @@ function pickCases(): string[] {
 }
 
 const cases = pickCases();
-// 「挑出 0 例 → 0 个 it() → 门报绿」是最坏的失败形状，所以响亮拒。
 expect(cases.length, "挑出 0 个用例（golden 或 main.gen.mts 都不在？先跑 pnpm test:compile）").toBeGreaterThan(0);
 
 function prepare(id: string): { dir: string; file: string; zstd: boolean } {
-  // 与 `corpus/cases/<case>/` 同深（三级），runtime 的 import 原样保留，只把宿主那一行换成静态可用的宿主
   const dir = join(WORK, id);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
@@ -243,8 +196,6 @@ async function gateProject(id: string): Promise<{ built: boolean; exe: string; o
     { shell: true, cwd: ROOT, timeout: 1_500_000 },
   );
   const built = existsSync(exe);
-  // 无条件清，不是「编出来了才清」：编失败留下的半成品树同样不该脏 corpus
-  //（.gds2js-export/ 虽已 gitignore，但会误导下一次跑）。
   if (!KEEP) rmSync(treeDir, { recursive: true, force: true });
   return { built, exe, out: r.out, code: r.status };
 }
@@ -255,20 +206,13 @@ interface Row {
   ran: boolean;
   exact: boolean;
   note: string;
-  /** 静态目标没这个能力那一族（不是我们编不过），记成一格 skip 并说清理由。 */
   booked: string | null;
 }
 const rows: Row[] = [];
 
-/** scriptc 0.4.4 起「岛 / 动态档」那条路整个没了：`--dynamic` 成 Unknown option，命名空间成员调用（`Zstd.ready()`）
- *  与 `--npm-static` + 补 `.d.ts` 两条改写分别撞 SC1090「method calls like …」与「a binding form with no lowering」
- *  （三处读数见 ROADMAP 第二百五十六笔）。mode 2 的 zstd 保真路只有 `--pack node`，所以带 zstd 岛的那一页按工具链能力记账。 */
 const islandGone = (text: string): boolean =>
   /Unknown option '--dynamic'|SC2013|binding form with no lowering|method calls like/.test(text);
 
-/** scriptc 0.4.4 不认**静态访问器**（`static get` / `static set`，读的那一句被截成 `… have no l`）：
- *  `static var` 配读写器的那一页在静态目标上编不过，node 侧照旧逐字节过。这一族的出货路是 `--pack node`，
- *  页数按 `test/repo/static-accessor-pages.test.ts` 对账 —— 多了页就是门红，不会把这族悄悄摊大。 */
 const staticAccessorGone = (text: string): boolean => /static accessors and initializer-less/.test(text);
 
 async function gateOne(id: string): Promise<Row> {
@@ -339,7 +283,6 @@ describe.skipIf(!hasScriptc)(`scriptc 出货门 · ${cases.length} 个用例（$
     if (!KEEP) for (const dir of created) rmSync(dir, { recursive: true, force: true });
   });
 
-  // 不把 it.concurrent 赋给变量再调 —— chainable API 脱开 it 调用有丢绑定的风险，显式分支更稳。
   const gate = async (id: string, ctx: TestContext): Promise<void> => {
     const row = await gateOne(id);
     rows.push(row);

@@ -7,7 +7,6 @@ import { runtimeTsDir } from "../paths";
 import { baseName, closureRoot, errOf, printDiags, projectDiags, tryLoadSingle, type Ctx } from "./ctx";
 import { exportVerdict, NO_DIRS, walkMjs, type ExportTree } from "./export-common";
 
-/** `--pack scriptc` 的中间树：产物 + `runtime/` 与 `host.ts` 的 TS 源码，整棵树只铺一份源码（静态编的是源码图，不是打平的 `product.mjs`）。 */
 export async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
   const rt = runtimeTsDir();
   if (rt === null) {
@@ -16,7 +15,6 @@ export async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
     exportVerdict("refused", "没有 runtime 的 TS 源码");
     return null;
   }
-  // runtime 在树外的依赖（sharedDouble 那个零 import 叶子、宿主）按 tree-face 清单的相对位置铺进产物目录，产物的 import 就不用改。
   const srcRoot = dirname(rt);
   const hostTs = join(srcRoot, TREE_FACE.repo.host);
   const doubleTs = join(srcRoot, TREE_FACE.repo.sharedDouble);
@@ -52,7 +50,6 @@ export async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
   const zstdHostSpec = "./" + baseName(TREE_FACE.tree.zstdHost);
   try {
     let code = emitModule(loaded.ir, { runtimeImport: rtSpec, hostImport: hostSpec, autoRun: ctx.run });
-    // 判据是 IR 标志（单文件支的树里宿主恒在，无需 hostImport 守卫）；用到就把宿主换成带 zstd 的那份再编一次。
     const useZstd = loaded.ir.usesPackCodec === true;
     if (useZstd) {
       if (!copyZstdHost(dir, srcRoot)) return null;
@@ -67,7 +64,6 @@ export async function exportTsTree(ctx: Ctx): Promise<ExportTree | null> {
   }
 }
 
-/** 项目树的静态出货：N 个模块 + 同一份 runtime 源码（`runtimeRoot` 负责把 import 深度逐模块算对）。 */
 export async function exportTsProjectTree(
   ctx: Ctx,
   dir: string,
@@ -83,7 +79,6 @@ export async function exportTsProjectTree(
         outDir: dir,
         runtimeRoot: dir,
         runtimeImport: "./" + TREE_FACE.tree.runtimeDir + "/" + baseName(TREE_FACE.repo.runtimeIndex),
-        // 树里换宿主名的开关是 hostFile（runtimeRoot 那条分支不走 hostImport）；hostImport 只管 baseClass 那一格。
         hostImport,
         hostFile,
         autoRun: ctx.run ? undefined : false,
@@ -91,7 +86,6 @@ export async function exportTsProjectTree(
       });
     let result = await compile(ctx.hostImport === null ? null : "./" + baseName(TREE_FACE.tree.host), baseName(TREE_FACE.tree.host));
     if (!printDiags(projectDiags(result, resRoot))) return null;
-    // 判据是各模块透传的 IR 标志；用到就换带 zstd 的宿主重编一遍。--no-host 的树不注入宿主。
     const useZstd = ctx.hostImport !== null && result.modules.some((m) => m.usesPackCodec);
     if (useZstd) {
       result = await compile("./" + baseName(TREE_FACE.tree.zstdHost), baseName(TREE_FACE.tree.zstdHost));
@@ -125,7 +119,6 @@ export function copyTreeTs(from: string, to: string): void {
   }
 }
 
-/** 目录/文件一视同仁地拷（zstd 宿主变体是文件，vendor 里那两个包是整目录）。 */
 export function copyTreeAll(from: string, to: string): void {
   if (!statSync(from).isDirectory()) {
     copyFileSync(from, to);
@@ -140,7 +133,6 @@ export function copyTreeAll(from: string, to: string): void {
   }
 }
 
-/** 用了 compress()/decompress() 的 scriptc 产物：把带 zstd 的宿主变体与驱动包铺进产物树（树要自包含，node_modules 由这里现铺）。 */
 export function copyZstdHost(dir: string, srcRoot: string): boolean {
   const vendor = join(srcRoot, TREE_FACE.repo.vendorDir);
   const hostVariant = join(srcRoot, TREE_FACE.repo.zstdHost);

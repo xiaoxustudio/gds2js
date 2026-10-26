@@ -1,7 +1,3 @@
-/**
- * SHA-1 / SHA-256（`String.sha1_*` / `sha256_*`，S577）：纯字节实现，输入由 UTF-8 编码（与引擎一致）。
- * 目标是 scriptc 静态面可编，不引 node:crypto。
- */
 const TWO32 = 0x100000000;
 
 function padMessage(bytes: Uint8Array): DataView {

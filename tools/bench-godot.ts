@@ -11,10 +11,6 @@ function fnName(kernel: string): string {
   return "k_" + kernel.replace(/[^a-zA-Z0-9_]/g, "_");
 }
 
-/**
- * 一份 GDScript 程序跑完所有 kernel：Godot 冷启动要 12~17 s，一个 kernel 起一次进程
- * 会把要量的东西全淹在启动里，所以只起一次、内部逐个计时（预热 1 次 + reps 次计时，与 bench.ts 同形）。
- */
 function program(): string {
   const helperBlocks: string[] = [];
   const seenHelper = new Map<string, string>();

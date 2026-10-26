@@ -1,14 +1,3 @@
-/**
- * 产物的运行时打包模式门（--runtime-mode single / local）。
- * 读数 `失败 N 项` 由 afterAll 原样打印。
- *
- * 两处形状上的取舍：
- *   - `readFileSync(STANDALONE_CJS)` 不在模块顶层做，改成 describe.skipIf + beforeAll 里读，
- *     缺 dist 时给一句人话而不是裸 ENOENT 栈。
- *   - ① 的 2×8 = 16 格用 it.each（各格互不相干，可 `-t "single 042-enum"` 单跑）；
- *     ②③④ 各格共享一次昂贵的前置（compileProject / emit / tsdown build），
- *     所以前置放 beforeAll、断言拆成独立 it()，这样一格红不会连带掩盖后面的格。
- */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -26,11 +15,9 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 import { hasStandalone, missing } from "../support/env";
 import { ROOT } from "../support/lib-bridge";
 
-const TMP = join(ROOT, "pkg-check"); // 仓库根级，不在 tmp/ 下
+const TMP = join(ROOT, "pkg-check");
 const STANDALONE_CJS = join(ROOT, "packages/gds2js/dist/standalone.cjs");
 
-/** 读数 `失败 N 项` 要靠计数，但 testkit 的 ok/bad 把数记在 task.meta 里、afterAll 读不回来
- *  （e2e project 也不在 assert-count-reporter 的 READINGS 里），所以本地另记一份。 */
 let failures = 0;
 function bad(msg: string): void {
   failures++;
@@ -39,7 +26,6 @@ function bad(msg: string): void {
 
 let STANDALONE_SRC = "";
 
-/** describe.skipIf 跳过时不显示原因，所以把「缺什么」拼进套件名 —— 输出里才看得见。 */
 const SKIP_WHY = hasStandalone ? "" : `（跳过：${missing("packages/gds2js/dist/standalone.cjs，先跑 pnpm build")}）`;
 
 function runNode(cwd: string, file: string): { out: string; code: number | null } {
@@ -47,7 +33,6 @@ function runNode(cwd: string, file: string): { out: string; code: number | null 
   return { out: (r.stdout || "") + (r.stderr || ""), code: r.status };
 }
 
-// ── ① single/local × 代表性用例 vs golden ──────────────────────────────
 const CASES = [
   "011-add-operator-types",
   "020-match-array-pattern",
@@ -72,7 +57,6 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
     rmSync(TMP, { recursive: true, force: true });
   });
 
-  // 走 npm 安装态：原生 exe 不带打包器，single 在那边会响亮拒。
   it.each(MODE_CELLS)("① $mode $c 逐字节匹配 golden", async ({ mode, c }) => {
     const src = readFileSync(join(ROOT, "corpus/cases", c, "main.gd"), "utf8");
     const ir = lower(await parseSource(src));
@@ -106,7 +90,6 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
     expect(out, `${mode} ${c} 输出与 golden 不符`).toBe(golden);
   });
 
-  // ── ② 子目录工程 local：../ 相对旁挂 + 跨文件 registerClass 共享 ──────────
   const nested: { subCode: string; out: string; code: number | null; diags: string } = {
     subCode: "",
     out: "",
@@ -185,7 +168,6 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
     expect(nested.out).toBe("hi from sub\n");
   });
 
-  // ── ③ single 模式 sourcemap 解码 ────────────────────────────────────
   /** base64-VLQ 解 mappings：genLine 被内联头顶大、srcLine 仍指回 .gd 小行号。 */
   function decodeMappingsField(str: string): Array<{ genLine: number; srcLine: number; srcCol: number }> {
     const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -287,7 +269,6 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
     expect(smap.out, `带 map single 输出不符：${JSON.stringify(smap.out.slice(0, 120))}`).toBe(smap.golden);
   });
 
-  // ── ④ build-project single：tsdown bundle → 零 import 单文件 + 仓库外可跑 ──
   const wa: { imports: string[]; out: string; code: number | null; diags: string } = {
     imports: [],
     out: "",
@@ -335,7 +316,6 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
     const bundleFile = join(out, "main.mjs");
     const b = readFileSync(bundleFile, "utf8");
     wa.imports = b.split("\n").filter((l) => /^\s*import[\s{*.]/.test(l));
-    // 六支 E2E 门里唯一真正抗竞争的临时目录：mkdtemp 每次给一个新名字。
     const iso = mkdtempSync(join(tmpdir(), "gds-iso-"));
     try {
       copyFileSync(bundleFile, join(iso, "app.mjs"));
