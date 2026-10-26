@@ -5682,8 +5682,28 @@ function staticCallDiags(t: string, name: string, got: number): Array<{ code: st
   ];
 }
 
+/** `tmp/probe728/new-member.compare.txt` + `extra.compare.txt` 逐面量过的廿一支内建类型名（`X.new` 当值读时引擎解析期两句）。 */
+const BUILTIN_NEW_ABSENT_FACES: ReadonlySet<string> = new Set([
+  "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color",
+  "String", "StringName", "NodePath", "Array", "Dictionary",
+  "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedByteArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+]);
+
 /** 「类名.静态函数」当值引用（不调用）不是一等成员：引擎那句报两遍。 */
 function staticBareDiags(t: string, name: string): Array<{ code: string; message: string }> {
+  // `tmp/probe728/` 廿一面逐形实测：内建类型名当接收者、成员名 `new` 时，引擎在解析期把同一句发两遍
+  // （`Cannot find member "new" in base "<面>".`）。此前这一族要么落到运行期发我们的自述，
+  // 要么整个 JS 崩（`Dictionary is not defined`）—— 属「Godot 解析期拒、我们编得过跑崩」那一类。
+  // `RefCounted` / `Object` / `Node` 这些**原生类名**不吃这一句：引擎给的是 `GDScriptNativeClass::new`
+  // 那支 Callable，属 §6 里划给 Tier 2 的「引擎类值的属性面」，不在这一族。
+  if (name === "new" && BUILTIN_NEW_ABSENT_FACES.has(t)) {
+    const one = `Cannot find member "new" in base "${t}".`;
+    return [
+      { code: "static-member-unknown", message: one },
+      { code: "static-member-unknown", message: one },
+    ];
+  }
   const face = STATIC_FACE[t];
   if (face === undefined || face.statics[name] === undefined || staticFaceConstName(t, name)) return [];
   const one = `Cannot find member "${name}" in base "${t}".`;
@@ -5875,7 +5895,8 @@ function checkValueMethodArity(m: Module, diags: Diagnostic[]): void {
           return;
         case "call":
           calls.push(e);
-          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" && e.callee.obj.name in STATIC_FACE) {
+          if (e.callee.kind === "attribute" && e.callee.obj.kind === "ident" &&
+              (e.callee.obj.name in STATIC_FACE || BUILTIN_NEW_ABSENT_FACES.has(e.callee.obj.name))) {
             staticCallees.add(e.callee);
           }
           walkExpr(e.callee);
