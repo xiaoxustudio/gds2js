@@ -3,7 +3,7 @@ import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Vari
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
 import { GArray, GDict, elemConvert, registerVarToStrValueHook, show, truthyOf, valueEq, type ElemKind} from "./values";
 import { intArgBig, strLength, valueTypeName } from "./string-ops";
-import { ELEM_TYPE_CODE } from "./methods";
+import { ELEM_TYPE_CODE } from "./method-core";
 import { GBytes, isBytes, packBytes, packCtor, packItems, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";
 import { Signal } from "./signal";

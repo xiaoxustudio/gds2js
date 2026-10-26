@@ -5,7 +5,7 @@ import { bad, ok } from "@gds2js/testkit";
 import { ROOT } from "../../tools/lib.mjs";
 
 const SRC = join(ROOT, "packages", "runtime", "src");
-const KNOWN_CIRCLES: Array<string[]> = [["runtime/builtins", "runtime/convert", "runtime/methods"]];
+const KNOWN_CIRCLES: Array<string[]> = [];
 const LEAVES = ["runtime/ucaps", "runtime/errors", "runtime/case-flags", "runtime/case-table", "runtime/engine-classes"];
 
 const files = readdirSync(join(SRC, "runtime")).filter((n) => n.endsWith(".ts")).map((n) => "runtime/" + n.replace(/\.ts$/, ""));
