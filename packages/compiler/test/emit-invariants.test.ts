@@ -16,7 +16,7 @@
  */
 import { readFileSync } from "node:fs";
 import { afterAll, describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";

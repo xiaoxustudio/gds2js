@@ -5,7 +5,7 @@
 // 这一支把「体里可能作废」的函数整个请出裸轨（int 的 `/`、`%` 除数不是非零字面量那一族），
 // 作废边界回到装箱轨：无标注给 `rt.V.nil()`、标注了返回型的给该型默认值；裸轨那支不再发接住点（它只剩 int64 越界那条未实现的响亮拒，原样上抛比咽下去诚实）。
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";

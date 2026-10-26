@@ -5,7 +5,7 @@
  * 读数 `tmp/hostnames/readings.txt`；`_initialize` 量出来是 Callable 只因探针脚本自己定义了它，不进名单。语料 368 端到端再钉一遍。
  */
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";

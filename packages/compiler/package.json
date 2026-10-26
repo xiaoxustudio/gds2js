@@ -11,7 +11,7 @@
   "exports": {
     "./analyze/analysis-result": "./src/analyze/analysis-result.ts",
     "./compile/project": "./src/compile/project.ts",
-    "./emit/emitter": "./src/emit/emitter.ts",
+    "./emit": "./src/emit/index.ts",
     "./emit/sourcemap": "./src/emit/sourcemap.ts",
     "./home": "./src/home.ts",
     "./analyze": "./src/analyze/index.ts",

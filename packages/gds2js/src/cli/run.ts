@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { compileProject } from "@gds2js/compiler/compile/project";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { bundleModule, bundlingAvailable } from "../bundle";
 import { runProduct } from "../exec";
 import { closureResPath, closureRoot, compileClosure, errOf, printDiags, projectDiags, tryLoadSingle, type CompileResult, type Ctx } from "./ctx";

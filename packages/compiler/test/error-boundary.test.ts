@@ -4,7 +4,7 @@
  * 默认值那一张表逐格对过引擎（读数 `tmp/probe-errorflow/compare{85,86,87}.txt`，出货侧 51 格对账 `tmp/probe-errorflow/ours.mts`）。
  */
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";

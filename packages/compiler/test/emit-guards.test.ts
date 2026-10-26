@@ -6,11 +6,11 @@
  *
  * 判据只有「抛不抛 + code」，产物文本不参与断言，所以这里用的是探测用的
  * EMIT_OPTS_PROBE 而不是 compile.ts 里那个冻结的 GEN_EMIT_OPTS —— emitModule
- * （emitter.ts:264-265）只把两个 specifier 当字符串嵌进产物、不做任何校验，
+ * （emit/index.ts 的 EmitOptions）只把两个 specifier 当字符串嵌进产物、不做任何校验，
  * 换成短占位值是惰性的，也免得把冻结字面量抄成第二份、将来改一处漏一处。
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 import { GLOBAL_TODO_FUNCTIONS } from "@gds2js/compiler/lower/globals";

@@ -4,7 +4,7 @@
 // 无标注或 `-> Variant` 的脚本函数调用、以及读 `Array` / `Dictionary`（不带内型）的那一格。`:=` 那一形是静态（X4b 两侧同文）。
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";

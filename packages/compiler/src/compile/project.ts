@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { cachedLower } from "./ir-cache";
-import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/emitter";
+import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/index";
 import type { RawSourceMap } from "../emit/sourcemap";
 import type { Diagnostic } from "../analyze/analysis-result";
 import { analyze } from "../analyze/index";

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileProject } from "@gds2js/compiler/compile/project";
-import { emitModule, emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
+import { emitModule, emitModuleWithMap } from "@gds2js/compiler/emit";
 import type { RawSourceMap } from "@gds2js/compiler/emit/sourcemap";
 import { selfFile } from "@gds2js/compiler/home";
 import { bundleModule, bundlingAvailable } from "../bundle";

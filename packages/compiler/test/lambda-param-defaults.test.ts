@@ -4,7 +4,7 @@
  * 函数级局部在 lambda 创建那一刻冻住，模块变量与 `self` 不参与。
  */
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";

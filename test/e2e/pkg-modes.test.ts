@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bad as tkBad } from "@gds2js/testkit";
 import { build } from "tsdown";
 import { compileProject } from "@gds2js/compiler/compile/project";
-import { emitModuleWithMap } from "@gds2js/compiler/emit/emitter";
+import { emitModuleWithMap } from "@gds2js/compiler/emit";
 import { NO_ANALYSIS } from "@gds2js/compiler/analyze/analysis-result";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";

@@ -1,6 +1,6 @@
 /** 认得到 callee 的调用点：字面量实参折算、其余实参发运行期那一句（S620），读数 `tmp/probe619/`。 */
 import { describe, expect, it } from "vitest";
-import { emitModule } from "@gds2js/compiler/emit/emitter";
+import { emitModule } from "@gds2js/compiler/emit";
 import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
