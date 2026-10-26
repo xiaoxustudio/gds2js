@@ -1,4 +1,4 @@
-import type * as rtAll from "@gds2js/runtime";
+import type * as rtAll from "@gds2js/runtime/runtime/index";
 import type { fast as fastAll } from "@gds2js/runtime/runtime/fast";
 import type { ops as opsAll, strOps as strOpsAll } from "@gds2js/runtime/runtime/ops";
 import type { V as VAll } from "@gds2js/runtime/runtime/tags";

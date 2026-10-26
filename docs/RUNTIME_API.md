@@ -17,7 +17,7 @@
 | 范围 | **Tier 1 纯语言**。引擎 API（`Node` / `SceneTree` …）不在本契约内 |
 | 错误处理 | 不支持一律抛 `UnsupportedError`，**绝不静默降级**（D4 + 项目红线） |
 | 产物 import 形式 | `import * as rt from "gds2js/runtime"` |
-| 覆盖面 | 本契约**只登记需要跨层冻结形状的那一层**（`ops.*` / `fast.*` / 容器 / String / 对象类 / 信号）；发射器实际用到的全量面以 `rt` 的导出表为准，由 `test/repo/emit-surface.test.ts` 逐名对账 —— 产物里每个 `rt.<名>(` 与 `rt.ops.<名>(` / `rt.fast.<名>(` / `rt.V.<名>(` 都必须在导出表上，名字对不上就是门红 |
+| 覆盖面 | 本契约**只登记需要跨层冻结形状的那一层**（`ops.*` / `fast.*` / 容器 / String / 对象类 / 信号）；发射器实际用到的全量面有两道机器门：**源侧** `emit/surface.ts` 的名表用 `satisfies readonly RtName[]` 钉在 `keyof typeof rt` 上（拼错或 runtime 改名 → `pnpm typecheck` 直接红），**产物侧** `test/repo/emit-surface.test.ts` 逐名对账（产物里每个 `rt.<名>(` 与 `rt.ops.<名>(` / `rt.fast.<名>(` / `rt.V.<名>(` 都必须在导出表上）。`test/repo/emit-contract.test.ts` 再双向锁：emitter 源码 ⊆ 名表 ⊆ runtime 导出，且不得超出产物实际用量 |
 
 ---
 
