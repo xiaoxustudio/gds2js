@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import { gEase } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
-import { strNumDecimals } from "@gds2js/runtime/runtime/values";
+import { strNumDecimals } from "@gds2js/runtime/runtime/numfmt";
 
 const CELLS: Array<[number, number, string]> = [
   [0.37, 2, "0.13690000352859499"],

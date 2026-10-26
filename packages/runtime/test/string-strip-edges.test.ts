@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { strStripEdges } from "@gds2js/runtime/runtime/values";
+import { strStripEdges } from "@gds2js/runtime/runtime/string-ops";
 
 const strip = (...args: Variant[]): string => String(method(V.str("  abc  "), "strip_edges", args).v);
 const B = V.bool, I = (n: number | bigint): Variant => V.int(BigInt(n)), F = (n: number): Variant => V.float(n);

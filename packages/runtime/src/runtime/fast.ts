@@ -1,6 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import type { Variant } from "./tags";
-import { GArray, GDict, arrIdx, arrIdxWrite, strFloat, valueEq } from "./values";
+import { GArray, GDict, arrIdx, arrIdxWrite, valueEq} from "./values";
+import { strFloat } from "./numfmt";
 
 function int64(v: number): UnsupportedError {
   return new UnsupportedError("int64-out-of-range", `整数 ${v} 超出 2^53，需要 BigInt 路径（未实现）`);

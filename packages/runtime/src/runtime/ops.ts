@@ -37,22 +37,9 @@ import {
   vec3iCmp,
   vec3iToFloat,
 } from "./vector3i";
-import {
-  GArray,
-  GDict,
-  keyOf,
-  show,
-  strAt,
-  strCmp,
-  strFloat,
-  strFormat,
-  strFormatSoft,
-  strLength,
-  strSubstr,
-  truthyOf,
-  valueEq,
-  valueTypeName,
-} from "./values";
+import { GArray, GDict, keyOf, show, strFormat, strFormatSoft, truthyOf, valueEq} from "./values";
+import { strAt, strCmp, strLength, strSubstr, valueTypeName } from "./string-ops";
+import { strFloat } from "./numfmt";
 
 const isNum = (v: Variant): boolean => v.t === Tag.INT || v.t === Tag.FLOAT;
 const isStringish = (v: Variant): boolean => v.t === Tag.STRING || v.t === Tag.STRING_NAME;

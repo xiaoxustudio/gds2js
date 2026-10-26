@@ -43,14 +43,8 @@ import type { GdIdentified } from "./identity";
 import { GdNativeClass } from "./native-class";
 import { Signal } from "./signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strFormat, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strJoin, strLength, strPadZeros, strRepeat, strReplace, strSplit,
-  strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strFormatV, toStringNameSlot, truthyOf, stringChr,
-  strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath,
-  strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix,
-  strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch,
-  strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf,
-  strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress,
-  strBuiltin, varToStr, strToVar, valueTypeName, valueEq, show, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./values";
+import { GArray, GDict, strFormat, strJoin, strFormatV, toStringNameSlot, truthyOf, strBuiltin, varToStr, strToVar, valueEq, show} from "./values";
+import { posOobSay, strAt, strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strLength, strPadZeros, strRepeat, strReplace, strSplit, strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, stringChr, strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath, strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix, strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch, strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf, strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress, valueTypeName, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./string-ops";
 import { isLess, pctFormatOp, sortLess } from "./ops";
 import { GVector2, toVec2, vecReadIndex, vecWrite, vector2Method } from "./vector2";
 import { GVector3, vec3ReadIndex, vec3Write, vector3Method } from "./vector3";

@@ -1,7 +1,8 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
 import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { GArray, GDict, elemConvert, intArgBig, registerVarToStrValueHook, show, strLength, truthyOf, valueEq, valueTypeName, type ElemKind } from "./values";
+import { GArray, GDict, elemConvert, registerVarToStrValueHook, show, truthyOf, valueEq, type ElemKind} from "./values";
+import { intArgBig, strLength, valueTypeName } from "./string-ops";
 import { ELEM_TYPE_CODE } from "./methods";
 import { GBytes, isBytes, packBytes, packCtor, packItems, packTypeName } from "./packed";
 import { CallableBox, callableEq, isCallableBox, isNullCallable } from "./callable";

@@ -5,7 +5,8 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GArray, show, strFloat } from "@gds2js/runtime/runtime/values";
+import { GArray, show} from "@gds2js/runtime/runtime/values";
+import { strFloat } from "@gds2js/runtime/runtime/numfmt";
 import { globalCallable, method } from "@gds2js/runtime/runtime/methods";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { gAbsF, gAbsI } from "@gds2js/runtime/runtime/builtins";

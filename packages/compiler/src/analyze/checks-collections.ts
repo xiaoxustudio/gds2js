@@ -35,7 +35,7 @@ import {
   VALUE_METHOD_ARITY,
   valueAttrKind,
 } from "@gds2js/runtime/runtime/face-arity";
-import { strFloat } from "@gds2js/runtime/runtime/values";
+import { strFloat } from "@gds2js/runtime/runtime/numfmt";
 import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 

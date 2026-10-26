@@ -47,6 +47,8 @@
     "./runtime/vector4": "./src/runtime/vector4.ts",
     "./runtime/vector4i": "./src/runtime/vector4i.ts",
     "./runtime/values": "./src/runtime/values.ts",
+    "./runtime/numfmt": "./src/runtime/numfmt.ts",
+    "./runtime/string-ops": "./src/runtime/string-ops.ts",
     "./package.json": "./package.json"
   },
   "devDependencies": {

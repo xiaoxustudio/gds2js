@@ -8,9 +8,9 @@ const EXEMPT_FROM_BUDGET = ["ucaps", "engine-classes", "case-flags", "case-table
 const REGENERATED = ["case-table", "case-flags", "ucaps"];
 const PROVENANCE_DEBT = ["engine-classes"];
 const CODE_BUDGET: Array<[string, number]> = [
-  ["packages/runtime/src/runtime/values", 3592],
+  ["packages/runtime/src/runtime/values", 2238],
   ["packages/runtime/src/runtime/methods", 2935],
-  ["packages/runtime/src/runtime/builtins", 1673],
+  ["packages/runtime/src/runtime/builtins", 1674],
   ["packages/runtime/src/runtime/packed", 1098],
   ["packages/compiler/src/lower/lower", 1269],
   ["packages/compiler/src/analyze/checks-collections", 1153],
