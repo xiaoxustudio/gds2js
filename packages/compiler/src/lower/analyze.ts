@@ -4675,6 +4675,21 @@ function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: Diagnos
         // 宿主链上那 15 支虚方法名取值时引擎换一句（S366：`Compile Error: Identifier not found: _process`，末尾没有句号）
         else if (VIRTUAL_HOST_NAMES.has(e.name))
           diags.push({ code: "undeclared-identifier", message: `Identifier not found: ${e.name}`, loc: e.loc });
+        else if (BUILTIN_TYPE_NAMES.has(e.name)) {
+          // 内建类型名**单独当值**用是解析期两句（尺 `tmp/probe729/` 卅二面逐形实测，含 D6 那七支与
+          // `Callable` / `Signal` / `RID`；`RefCounted` / `Object` / `Node` 这些原生类名照收，不在这一族）。
+          // 此前我们只发第二句。
+          diags.push({
+            code: "undeclared-identifier",
+            message: "Builtin type cannot be used as a name on its own.",
+            loc: e.loc,
+          });
+          diags.push({
+            code: "undeclared-identifier",
+            message: `Identifier "${e.name}" not declared in the current scope.`,
+            loc: e.loc,
+          });
+        }
         else
           diags.push({
             code: "undeclared-identifier",
@@ -5681,6 +5696,16 @@ function staticCallDiags(t: string, name: string, got: number): Array<{ code: st
     { code: "static-member-unknown", message: `Function "${name}()" not found in base ${t}.` },
   ];
 }
+
+/** 内建类型名（`tmp/probe729/` 卅二面逐形实测：单独当值用时引擎解析期发两句 —— `Builtin type cannot be used as a name on its own.` + `Identifier "<名>" not declared in the current scope.`）。 */
+const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set([
+  "int", "float", "bool", "String", "StringName", "NodePath", "Array", "Dictionary",
+  "Color", "Rect2", "Rect2i", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i",
+  "Transform2D", "Transform3D", "Basis", "Plane", "Quaternion", "AABB", "RID",
+  "Callable", "Signal",
+  "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
+  "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",
+]);
 
 /** `tmp/probe728/new-member.compare.txt` + `extra.compare.txt` 逐面量过的廿一支内建类型名（`X.new` 当值读时引擎解析期两句）。 */
 const BUILTIN_NEW_ABSENT_FACES: ReadonlySet<string> = new Set([
