@@ -28,7 +28,7 @@
 | Godot 实测静态表住在分析过程里 | `compiler/src/semantics/`（含 `arg-types/`） | 层位错位：它们是「编译期拒绝判断」数据，不是分析算法 |
 | `runtime/tree-face.ts` | `compiler/src/tree-face.ts` | 三个消费者都是 CLI/tools/门，没有一个是 runtime 行为 |
 | `runtime/values.ts` / `methods.ts` / `builtins.ts`（三个巨无霸） | 门面 + `values/`、`method/`、`builtin/` 三族 | 见 §4、§5 |
-| Tier 2 阶段零：`analyze/checks/collections.ts`、`lower/lower.ts`（预算顶格，加不进行） | `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts` + `lower/{cst,lit}.ts` | 顶格的登记文件要先减才能加；切的全是**只被引用、不反向引用**的叶子簇，拆完 `collections` 的预算登记直接删（没有单文件超线），`lower.ts` 的封顶跟着降。同目录的新模块必须一并进 `compile/ir-cache.ts` 的 `STAMP_SOURCES`，否则 IR 缓存戳算不到它 |
+| Tier 2 阶段零：`analyze/checks/collections.ts`、`lower/lower.ts`、`runtime/values/core.ts`（预算顶格，加不进行） | `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts` + `lower/{cst,lit}.ts` + `values/containers.ts` | 顶格的登记文件要先减才能加；切的全是**只被引用、不反向引用**的叶子簇，`collections` 与 `values/core` 拆完直接删登记（没有单文件超线），`lower.ts` 封顶跟着降。互递归的一族（lower 的 expr/pattern/arm）刻意不搬 —— 搬出去就是把同文件内的互递归变成跨模块值环。core 里两处**构造**容器改用 `registerContainerFactories` 注入断开，其余 `as GArray` 只是型标注、不计值边，`module-cycles` 仍空表。同目录的新模块必须一并进 `compile/ir-cache.ts` 的 `STAMP_SOURCES`，否则 IR 缓存戳静默失效 |
 
 拆分的**验收姿势**（每步都一样）：产物逐字节不变（`pnpm test:compile` + `git diff --exit-code -- corpus/cases`）→ typecheck → 快层 → treeface/codegen → 出货面门。搬迁一律逐字照搬，不改写成表驱动：把 `switch (name)` 换成查表是**语义改动**，得重新实测。
 
@@ -56,7 +56,7 @@
 
 - **语义只认 Godot 4.6.3 实测**；没测过的行为一律 `UnsupportedError`，不猜、不静默降级（红线 1）。
 - 钉住的版本只有一个字面量：`tools/lib.mjs` 的 `GODOT_PIN`。任何会**落盘读数**的入口（`tools/golden.mjs`、`regen:*` 的探头）在写之前先 `requireGodotPin()`，裁判引擎自报版本不符就拒写 —— 起因是本机 PATH 上那个 `godot.exe` 自报另一条版本线，同一条命令换引擎照样跑通，读数却换了来源。
-- 四张实测生成表由生成器产出头注释与表体，只能走 `pnpm regen:*`，手删头部会让 `test:codegen` 红：`case-table`、`case-flags`、`ucaps`、`engine-classes`。生成机制的分工是「探头（跑 Godot 落读数）/ 纯计算渲染 / 写盘」三段，漂移门复用中间那段而不写盘。
+- 五张实测生成表由生成器产出头注释与表体，只能走 `pnpm regen:*`，手删头部会让 `test:codegen` 红：`case-table`、`case-flags`、`ucaps`、`engine-classes`。生成机制的分工是「探头（跑 Godot 落读数）/ 纯计算渲染 / 写盘」三段，漂移门复用中间那段而不写盘。
 - `compiler/src/semantics/` 那批表同样是 Godot 实测面，但目前是**手抄、无生成器** —— 这是已知薄弱点，Tier 2 新增的成员面表要求带探头与漂移门（见 `docs/TIER2.md`）。
 
 ## 8. 注释与文档口径

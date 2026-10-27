@@ -25,31 +25,30 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 
 ### 阶段零 —— 减负前置切片（不加语义，只腾预算）
 
-阶段一~三要动的落点，**恰好全压在预算顶格的文件上**。`test/repo/file-budget.test.ts:10-17` 的六条登记值，盘面行数与登记的封顶**一字不差**：
+阶段一~三要动的落点，**恰好压在预算顶格的文件上**。`test/repo/file-budget.test.ts` 原来登记六份，盘面行数与封顶**一字不差**；本阶段切完剩四份：
 
-| 登记文件 | 封顶 | 盘面 | 余量 | Tier 2 谁要动它 |
-| --- | --- | --- | --- | --- |
-| `runtime/values/core.ts` | 1202 | 1202 | **0** | 阶段二：默认值 / 转换 / 打印 / 相等 / 字典键前缀 / `deepCopy` 六面都要加臂 |
-| ~~`compiler/lower/lower.ts`~~ | 1269 | 已切出 `lower/{cst,lit}.ts` | 249 | 阶段二要用 `CTOR_ARMS` / `ARM_NO_CTOR` 那一族；封顶已随切分降到 1020，两份新模块同步进了 `STAMP_SOURCES` |
-| ~~`analyze/checks/collections.ts`~~ | 1153 | 已拆 | — | 阶段零已目录化为 `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts`，预算登记随之删除；阶段二的 `Array[T]` 盖章落在 `collections/typed.ts` |
-| `runtime/packed.ts` | 1098 | 1098 | **0** | 阶段二：与值类型互转 |
-| `runtime/methods.ts` | 59 | 59 | **0** | 门面：新成员族要加再导出名 |
-| `runtime/builtins.ts` | 37 | 37 | **0** | 门面：同上 |
+| 原登记文件 | 原封顶 | 现状 | 结果 |
+| --- | --- | --- | --- |
+| `analyze/checks/collections.ts` | 1153 | 目录化成 `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts` | 登记删除（没有单文件再接近任何线）；阶段二的 `Array[T]` 盖章落 `collections/typed.ts` |
+| `compiler/lower/lower.ts` | 1269 | 切出 `lower/{cst,lit}.ts`，封顶随降到 1020 | 余 249；阶段二的 `CTOR_ARMS` / `ARM_NO_CTOR` 落回本文件 |
+| `runtime/values/core.ts` | 1202 | `GArray` / `GDict` 搬到 `values/containers.ts`，core 降到 576 | 登记删除；阶段二六面（默认值 / 转换 / 打印 / 相等 / 字典键前缀 / `deepCopy`）有了落点 |
+| `runtime/packed.ts` | 1098 | **没动** | 阶段二不需要它：`Rect2` 不是 packed 元素种类，七类型互转走 `values/`，不碰 packed 数组 |
+| `runtime/methods.ts` / `builtins.ts` | 59 / 37 | **没动** | 再导出名是往**已有的单行 `export { … } from`** 里追加名字，行数增量为 0；只有新增一整行时才受顶格约束 |
 
-门是「只降不升」的棘轮（`:46` 判 `> budget` 即红），所以 Tier 2 的**每一行新增都必须先在这儿换出等量的行**，否则第一笔语义提交就把仓库不变量顶破。把它当成一个独立阶段而不是"顺手挪两行"：本阶段**零语义增量**，判据就是存量字节门零漂移，可整体回滚。
+门是「只降不升」的棘轮（`m.lines > budget` 即红），所以规则是**先减后加**：后续阶段若要把代码写进仍被登记的文件，必须当场再切一刀，而不是把封顶改大。
 
-切法沿用 Tier 1 已验证的那三条路子，不再发明：
+切法只用了 Tier 1 已验证的两把刀，且学到一条边界：
 
-- **同族目录化**：`values/core.ts` 里成簇的（默认值 / 转换 / 相等）按 Tier 1 P4/P7 的 decl 级搬迁切到 `values/` 下新模块，门面留再导出 —— 公开面 169 名一字不变的证明流程（`tmp/surface-check.mts` 那套）重跑一遍即可。
-- **叶子外提**（本轮实际用的那把刀）：只切「被引用、但不反向引用」的簇。`lower.ts` 试过把 expr/pattern/arm 一族整块搬出去，结果是把**同文件内的互递归**变成**跨模块值环** —— 那一族必须留在 `lower.ts`，能走的只有 CST 访问子与字面量处理两片叶子。
-- **门面瘦身**：`methods.ts` / `builtins.ts` 两行封顶的门面，把逐名再导出改成 `export * from`（前提：`module-cycles` 门把 `export … from` 也算价值边，这条改动要看着它绿）。
+- **同族目录化**（`collections.ts` 九支判断本就按维度天然分块，除共享 import 头之外零耦合，是最便宜的一刀）。
+- **叶子外提**：只切「被引用、但不反向引用」的簇。`lower.ts` 试过把 expr/pattern/arm 一族整块搬出去，结果是把**同文件内的互递归**变成**跨模块值环** —— 那一族必须留下，能走的只有 CST 访问子与字面量处理两片叶子。
+- **注入断开回程边**（`values/core.ts` 那一刀的关键）：core 里六处容器引用中只有两处**构造**（`elemDefault` 的 `new GArray()` / `new GDict()`），改成 `registerContainerFactories` 由 `containers.ts` 注册；其余全是 `Tag` 分流后的 `as GArray` 型标注 —— 型边不计值环，所以 `module-cycles` 仍是空表、`module-reach` 仍从入口走到每一份。
 
 **两道连带门，切的时候要一起处理，不然会静默失效**：
 
-1. `compile/ir-cache.ts:8` 的 `STAMP_SOURCES` 是 IR 缓存戳的输入清单，`:17-23` 的读取包在 `try{}catch{}` 里 —— 文件不在就直接跳过，不报。门 `test/repo/stamp-sources.test.ts` 的③ 只扫 **`lower.ts` 一层的 `./` import**：新表若被 `lower/ir.ts` 等传递依赖引用，缓存戳算不到它，改表不会让 IR 缓存失效（**假绿**）。所以本阶段每外提一份表，要么同步加进 `STAMP_SOURCES`，要么把③ 加深成传递闭包 —— 二选一，写在提交正文里。
-2. `emit/surface.ts` 的四张名表与 `emit-contract` / `emit-surface` 双向门：搬动只要碰发射面导出的名字，名表与门必须同时绿。
+1. `compile/ir-cache.ts:8` 的 `STAMP_SOURCES` 是 IR 缓存戳的输入清单，`:17-23` 的读取包在 `try{}catch{}` 里 —— 文件不在就直接跳过，不报。门 `test/repo/stamp-sources.test.ts` 的③ 只扫 **`lower.ts` 一层的 `./` import**：新表若被 `lower/ir.ts` 等传递依赖引用，缓存戳算不到它，改表不会让 IR 缓存失效（**假绿**）。本轮 `lower/{cst,lit}.ts` 已手工补进清单；若将来要拆 `lower/ir.ts` 的传递依赖，得把③ 加深成闭包。
+2. `emit/surface.ts` 的名表与 `emit-contract` / `emit-surface` 双向门：搬动只要碰发射面导出的名字，名表与门必须同时绿。
 
-**判据**：`pnpm test:compile` + `git diff --exit-code -- corpus/cases` 零漂移；`pnpm test` 与 `pnpm test:treeface` 全绿且六条封顶值**只降不升**（降了就把登记数字一起改小，棘轮才真生效）；纯结构调整免 `bench:ab`，但若动了 `values/core.ts` 的相等/打印热臂，按常驻口径 5 出配对读数。
+**判据与读数**：`pnpm test:compile` + `git diff --exit-code -- corpus/cases` 零漂移（三刀各自跑过，均零漂移）；`pnpm test`、`pnpm test:treeface`、`pnpm typecheck` 全绿。纯结构搬迁按常驻口径 5 免读数是惯例，但 `values/core.ts` 是相等/打印热面，仍出了配对 A/B：|t|=0.44、checksum 一致 → **按无回归记录**（结构调整本来就该读成这样）。
 
 ### 阶段一 —— 引擎类值的属性面（读数已全，先落地）
 
