@@ -3,6 +3,7 @@ import { GArray, GDict, registerClassFaceCheck, registerObjectLabelHook, registe
 import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
 import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
+import { GdNativeClass, nativeClassNewArgs } from "./native-class";
 
 export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, registerBoundSnapshotHook, type Fn } from "./callable";
 
@@ -64,6 +65,8 @@ export function declaredArgCount(box: CallableBox): number | null {
   if (box.builtinBounds !== null) return box.builtinBounds[1];
   const name = box.name;
   if (name === "new") {
+    const native = box.object === null ? null : nativeClassNewArgs(box.object.v);
+    if (native !== null) return native;
     const ctor = box.object === null ? null : ctorAritiesOf(box.object.v);
     if (ctor !== null) return 0;
   }
@@ -453,6 +456,7 @@ registerCallableLabelHook((box) => {
   const name = box.name;
   if (inner === undefined || name === null) return null;
   if (inner instanceof ClassDesc && name === "new") return "GDScript::new";
+  if (inner instanceof GdNativeClass && name === "new") return "GDScriptNativeClass::new";
   if (hasStaticName(inner, name)) return `GDScript::${name}`;
   const base = nativeBaseOf(inner);
   if (base === null) return null;

@@ -5,6 +5,7 @@ import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccess
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
 import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
+import { ENGINE_CLASS_FACES } from "../semantics/engine-faces";
 import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
@@ -266,6 +267,11 @@ export function emitExprVar(e: Expr): string {
       const bound = analysis.boundFace(e);
       if (bound !== null) {
         return "rt.wrapValue(rt.boundMethod(" + emitExpr(e.obj) + ", " + JSON.stringify(bound.face) + ", " + JSON.stringify(e.name) + ", " + String(bound.min) + ", " + String(bound.max) + "))";
+      }
+      if (e.obj.kind === "ident" && analysis.isNativeClassValueRead(e.obj)) {
+        const face = ENGINE_CLASS_FACES[e.obj.name];
+        const row = face === undefined ? undefined : face.find((r) => r.member === e.name);
+        if (row !== undefined) return `rt.nativeClassNew(${JSON.stringify(e.obj.name)}, ${String(row.args)})`;
       }
       return `rt.wrapValue(rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)}))`;
 
