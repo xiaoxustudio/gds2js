@@ -5,8 +5,8 @@ import { bad, ok } from "@gds2js/testkit";
 import { ROOT } from "../../tools/lib.mjs";
 
 const EXEMPT_FROM_BUDGET = ["ucaps", "engine-classes", "case-flags", "case-table"];
-const REGENERATED = ["case-table", "case-flags", "ucaps"];
-const PROVENANCE_DEBT = ["engine-classes"];
+const REGENERATED = ["case-table", "case-flags", "ucaps", "engine-classes"];
+const PROVENANCE_DEBT: string[] = [];
 const CODE_BUDGET: Array<[string, number]> = [
   ["packages/runtime/src/runtime/values", 2238],
   ["packages/runtime/src/runtime/methods", 59],
@@ -71,6 +71,6 @@ describe("文件预算门（超千行的手写码只减不增、无来源的数�
     const gone = PROVENANCE_DEBT.filter((d) => !actual.includes(d));
     for (const e of extra) bad(`${e} 是无来源的新数据表：要 tools/ 生成器 + regen 脚本 + codegen-drift 覆盖`);
     for (const g of gone) bad(`${g} 已经可重算了，从 PROVENANCE_DEBT 里去掉`);
-    if (extra.length === 0 && gone.length === 0) ok(`无来源数据表恰好登记的这几份：${actual.join(" / ")}`);
+    if (extra.length === 0 && gone.length === 0) ok(actual.length === 0 ? "无来源数据表清零：豁免的四张表全部由 tools/ 生成器产出" : `无来源数据表恰好登记的这几份：${actual.join(" / ")}`);
   });
 });
