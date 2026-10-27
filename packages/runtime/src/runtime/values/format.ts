@@ -10,7 +10,8 @@ import { GVector3i } from "../vector3i";
 import { GVector4i } from "../vector4i";
 import { asNodePath, emptyNodePath, nodePathValue } from "../node-path";
 import { scriptPropsHook } from "./print";
-import { GArray, GDict, show, truthyOf } from "./core";
+import { GArray, GDict } from "./containers";
+import { show, truthyOf } from "./core";
 
 export function strFormatV(text: string, v: Variant, ph: string): string {
   const items: Array<[string, Variant]> = [];

@@ -1,6 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { Tag, tagName, type Variant } from "../tags";
-import { type ElemKind, GArray, GDict } from "./core";
+import { GArray, GDict } from "./containers";
+import { type ElemKind } from "./core";
 
 export function isElemKind(name: string): name is ElemKind {
   return (

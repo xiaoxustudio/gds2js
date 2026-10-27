@@ -17,7 +17,8 @@ import { floatConstructText, rtosFix } from "../grisu2";
 import { isCallable } from "../callable";
 import { asRid, ridText } from "../rid";
 import { asNodePath, nodePathText } from "../node-path";
-import { GArray, GDict, show } from "./core";
+import { GArray, GDict } from "./containers";
+import { show } from "./core";
 
 export type ScriptPropFace = { props: Array<{ name: string; value: Variant }>; unmodeledBase: string | null };
 

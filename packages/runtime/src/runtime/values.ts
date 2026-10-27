@@ -2,3 +2,4 @@ export { arrayTypeLabel, assignContainer, containerFace, isElemKind, returnConta
 export { registerScriptPropsHook, registerVarToStrValueHook, showArgs, showArgsSep, strToVar, type ScriptPropFace, varToStr } from "./values/print";
 export { nodePathCtor, strBuiltin, strFormat, strFormatSoft, strFormatV, strJoin, stringStatic, toStringNameSlot } from "./values/format";
 export * from "./values/core";
+export { GArray, GDict } from "./values/containers";
