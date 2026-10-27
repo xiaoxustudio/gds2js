@@ -52,7 +52,7 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 
 ### 阶段一 —— 引擎类值的属性面（读数已全，先落地）
 
-> **进度（2026-10-27）**：六支引擎类值的 `.new` 面已放行（`45c8d30`）—— 生成表 `semantics/engine-faces.ts` + `tools/engine-class-face*.{mjs,d.mts}` + `pnpm regen:engine-class-face` + `codegen-drift` 第五条逐字节门 + 语料用例 `450-engine-class-new-face`（九格 golden，`corpus-diff` 286/286 逐字节、三桶全 0）。**没做的**：造实例那一形照旧抛 `native-class-member`（阶段三）；`ENGINE_TODO_FACES` 那份可机器校验清单换成了一支测试（`packages/runtime/test/engine-class-new-face.test.ts`）逐名要求仍抛，没另建 src 侧清单表。下面正文是当初的设计，保留作考古。
+> **进度（2026-10-27）**：六支引擎类值的 `.new` 面已放行（`45c8d30`）—— 生成表 `semantics/engine-faces.ts` + `tools/engine-class-face*.{mjs,d.mts}` + `pnpm regen:engine-class-face` + `codegen-drift` 第五条逐字节门 + 语料用例 `450-engine-class-new-face`（九格 golden，`corpus-diff` 286/286 逐字节、三桶全 0）；出货面按门序也全跑过：`pkg-modes` + `export` 42 格绿 2 格跳，`cli-native` 20/20（含 scriptc 出货与原生 CLI 等价），`GDS2JS_SCRIPTC_FILTER=450 pnpm test:scriptc` 真编真跑逐字节 1/1 —— 这是硬约束 1「不许按名反射」在新发射形状上的唯一机器证明。**没做的**：造实例那一形照旧抛 `native-class-member`（阶段三）；`ENGINE_TODO_FACES` 那份可机器校验清单换成了一支测试（`packages/runtime/test/engine-class-new-face.test.ts`）逐名要求仍抛，没另建 src 侧清单表。下面正文是当初的设计，保留作考古。
 
 **切割口径**：只做「把 `Node.new` 这类成员当**值**发出来，并满足已测读数」；**真正调用它造实例照旧响亮拒**（造实例要对象模型 → 阶段三）。这是唯一能让"读数已全"立刻落地、又不把宿主提前拖进来的切法。
 
