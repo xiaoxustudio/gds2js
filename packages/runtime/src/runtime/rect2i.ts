@@ -1,9 +1,9 @@
 import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { asVec2i, vector2i, wrap32 } from "./vector2i";
-import { GRect2i } from "./rect-classes";
+import { GRect2i } from "./composite-classes";
 
-export { GRect2i } from "./rect-classes";
+export { GRect2i } from "./composite-classes";
 import { asRect2 } from "./rect2";
 import { GVector2 } from "./vector2";
 

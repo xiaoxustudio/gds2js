@@ -133,7 +133,7 @@ describe("解析期那三句也管到 lambda 与初始化子", () => {
 });
 
 describe("D6 那七型的默认值站点响亮拒", () => {
-  const UNSHIPPED = ["Transform2D", "Plane", "Quaternion", "Basis", "AABB"];
+  const UNSHIPPED = ["Transform2D", "Plane", "Quaternion", "Basis"];
 
   it.each(UNSHIPPED)("%s 的接住点发不出默认值（读数 tmp/probe-valuedefault/compare96.txt 的 B 站）", async (t) => {
     expect(catchReturn(await emitted(initCell(` -> ${t}`)), "T("), `${t} 的接住返回`).toBe(`return rt.unsupportedValueDefault("${t}");`);

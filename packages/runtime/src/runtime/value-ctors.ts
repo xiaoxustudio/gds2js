@@ -7,7 +7,7 @@ import { GVector3i } from "./vector3i";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GColor } from "./color";
-import { GRect2, GRect2i } from "./rect-classes";
+import { GAABB, GRect2, GRect2i } from "./composite-classes";
 import { rtosFix } from "./grisu2";
 
 registerVarToStrValueHook((o) => {
@@ -20,6 +20,7 @@ registerVarToStrValueHook((o) => {
   if (o instanceof GColor) return `Color(${rtosFix(o.r, true)}, ${rtosFix(o.g, true)}, ${rtosFix(o.b, true)}, ${rtosFix(o.a, true)})`;
   if (o instanceof GRect2) return `Rect2(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.w, true)}, ${rtosFix(o.h, true)})`;
   if (o instanceof GRect2i) return `Rect2i(${o.x}, ${o.y}, ${o.w}, ${o.h})`;
+  if (o instanceof GAABB) return `AABB(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)}, ${rtosFix(o.sx, true)}, ${rtosFix(o.sy, true)}, ${rtosFix(o.sz, true)})`;
   if (o instanceof Signal) return "Signal()";
   return null;
 });

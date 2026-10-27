@@ -8,6 +8,8 @@ import { GVector4, asVec4, vector4 } from "../vector4";
 import { asVec2i, GVector2i, vector2i } from "../vector2i";
 import { asRect2, GRect2, rect2, rect2Text } from "../rect2";
 import { asRect2i, GRect2i, rect2i, rect2iText } from "../rect2i";
+import { aabb, aabbText } from "../aabb";
+import { asAABB, GAABB } from "../composite-classes";
 import { asVec3i, GVector3i, vector3i } from "../vector3i";
 import { asVec4i, GVector4i, vector4i } from "../vector4i";
 import { asColor, color, GColor, tryColorSlot } from "../color";
@@ -107,6 +109,8 @@ function keyOfIn(v: Variant, depth: number): string {
       const rc2 = asRect2(v);
       if (rc2) return `7:${String(rc2.x)},${String(rc2.y)},${String(rc2.w)},${String(rc2.h)}`;
       const rc2i = asRect2i(v);
+      const ab = asAABB(v);
+      if (ab) return `16:${String(ab.x)},${String(ab.y)},${String(ab.z)},${String(ab.sx)},${String(ab.sy)},${String(ab.sz)}`;
       if (rc2i) return `8:${String(rc2i.x)},${String(rc2i.y)},${String(rc2i.w)},${String(rc2i.h)}`;
       const ridKey = asRid(v);
       if (ridKey !== null) return "r:" + String(ridKey.id);
@@ -137,6 +141,7 @@ export type ElemKind =
   | "Vector3i"
   | "Rect2"
   | "Rect2i"
+  | "AABB"
   | "Vector4"
   | "Vector4i"
   | "Color"
@@ -168,6 +173,8 @@ export function elemDefault(kind: ElemKind): Variant {
       return rect2(0, 0, 0, 0);
     case "Rect2i":
       return rect2i(0, 0, 0, 0);
+    case "AABB":
+      return aabb(0, 0, 0, 0, 0, 0);
     case "Vector3i":
       return vector3i(0, 0, 0);
     case "Vector4":
@@ -242,6 +249,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       if (ri instanceof GRect2i) return rect2(ri.x, ri.y, ri.w, ri.h);
       return null;
     }
+    case "AABB":
+      return v.t === Tag.OBJECT && v.v instanceof GAABB ? v : null;
     case "Rect2i": {
       if (v.t === Tag.OBJECT && v.v instanceof GRect2i) return v;
       const rf = v.t === Tag.OBJECT ? (v.v as object) : null;
@@ -394,6 +403,9 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GRect2i) {
         return rect2iText(inner);
       }
+      if (inner instanceof GAABB) {
+        return aabbText(inner);
+      }
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
@@ -430,6 +442,14 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const ta = a.t;
   const tb = b.t;
   if (ta === Tag.OBJECT && tb === Tag.OBJECT) {
+    const aa = asAABB(a);
+    const bb = asAABB(b);
+    if (aa !== null && bb !== null) return aa.x === bb.x && aa.y === bb.y && aa.z === bb.z && aa.sx === bb.sx && aa.sy === bb.sy && aa.sz === bb.sz;
+    if (aa !== null || bb !== null) {
+      const other: Variant = aa !== null ? b : a;
+      if (other.t === Tag.NIL) return false;
+      throw new UnsupportedError("aabb-eq-pair", `AABB 与 ${valueTypeName(other)} 的 ${op} 那一格没量过`);
+    }
     const av = a.v;
     const bv = b.v;
     if (av instanceof GRect2 || av instanceof GRect2i || bv instanceof GRect2 || bv instanceof GRect2i) {

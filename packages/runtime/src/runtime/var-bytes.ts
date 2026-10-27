@@ -7,6 +7,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
+import { GAABB } from "./composite-classes";
 import { GRect2 } from "./rect2";
 import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
@@ -29,6 +30,7 @@ const T_VECTOR2 = 5;
 const T_VECTOR2I = 6;
 const T_RECT2 = 7;
 const T_RECT2I = 8;
+const T_AABB = 16;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
 const T_STRING_NAME = 21;
@@ -79,6 +81,7 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   String: 4,
   Vector2: 5,
   Vector2i: 6,
+  AABB: 16,
   Rect2: 7,
   Rect2i: 8,
   Vector3: 9,
@@ -194,6 +197,7 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GVector2i ||
     o instanceof GRect2 ||
     o instanceof GRect2i ||
+    o instanceof GAABB ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
     o instanceof GVector4i ||
@@ -414,6 +418,16 @@ class Writer {
           this.f32(o.y);
           this.f32(o.w);
           this.f32(o.h);
+          return;
+        }
+        if (o instanceof GAABB) {
+          this.header(T_AABB);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.z);
+          this.f32(o.sx);
+          this.f32(o.sy);
+          this.f32(o.sz);
           return;
         }
         if (o instanceof GRect2i) {
@@ -662,6 +676,15 @@ class Reader {
         const w = this.f32();
         const h = this.f32();
         return V.object(new GRect2(x, y, w, h));
+      }
+      case T_AABB: {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        const sx = this.f32();
+        const sy = this.f32();
+        const sz = this.f32();
+        return V.object(new GAABB(x, y, z, sx, sy, sz));
       }
       case T_RECT2I: {
         const x = this.i32();

@@ -1,7 +1,7 @@
 import { Tag, V, tagName, type Variant } from "./tags";
-import { GRect2, rect2iPartsOf } from "./rect-classes";
+import { GRect2, rect2iPartsOf } from "./composite-classes";
 
-export { GRect2 } from "./rect-classes";
+export { GRect2 } from "./composite-classes";
 import { UnsupportedError } from "./errors";
 import { strVec2 } from "./string-ops";
 import { asVec2, vector2 } from "./vector2";

@@ -10,7 +10,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GRect2, GRect2i } from "./rect-classes";
+import { GAABB, GRect2, GRect2i } from "./composite-classes";
 import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
@@ -117,6 +117,7 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Color: (v) => v.t === Tag.OBJECT && v.v instanceof GColor,
   Rect2: (v) => v.t === Tag.OBJECT && v.v instanceof GRect2,
   Rect2i: (v) => v.t === Tag.OBJECT && v.v instanceof GRect2i,
+  AABB: (v) => v.t === Tag.OBJECT && v.v instanceof GAABB,
 };
 
 const PACK_TYPES: Record<string, PackKind> = {
@@ -258,6 +259,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GVector2i) return V.int(6);
   if (v.t === Tag.OBJECT && v.v instanceof GRect2) return V.int(7);
   if (v.t === Tag.OBJECT && v.v instanceof GRect2i) return V.int(8);
+  if (v.t === Tag.OBJECT && v.v instanceof GAABB) return V.int(16);
   if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return V.int(10);
   if (v.t === Tag.OBJECT && v.v instanceof GColor) return V.int(20);
   if (v.t === Tag.OBJECT && v.v instanceof GBytes) return V.int(packTypeOfCode((v.v as GBytes).kind));

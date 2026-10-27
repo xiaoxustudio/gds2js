@@ -1,7 +1,7 @@
 import { UnsupportedError } from "../errors";
 import { Tag, V, type Variant } from "../tags";
-import { GRect2 } from "../rect-classes";
-import { GRect2i } from "../rect-classes";
+import { GRect2 } from "../composite-classes";
+import { GRect2i } from "../composite-classes";
 import { asVec2 } from "../vector2";
 import { asVec2i } from "../vector2i";
 import { vector2 } from "../vector2";

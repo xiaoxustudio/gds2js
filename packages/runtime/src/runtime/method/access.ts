@@ -26,6 +26,8 @@ import { GVector3, vec3ReadIndex, vec3Write } from "../vector3";
 import { GVector4, vec4ReadIndex, vec4Write } from "../vector4";
 import { GVector4i, vec4iReadIndex, vec4iWrite } from "../vector4i";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "../vector2i";
+import { aabbReadProp } from "../aabb";
+import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
 import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite } from "../vector3i";
@@ -431,6 +433,12 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
+    const ab = obj.v instanceof GAABB ? (obj.v as GAABB) : null;
+    if (ab !== null) {
+      const part = aabbReadProp(ab, name);
+      if (part !== null) return part;
+      throw new UnsupportedError("aabb-prop", `AABB.${name} 的属性读没量过`);
+    }
     const rc = obj.v instanceof GRect2 ? (obj.v as GRect2) : null;
     if (rc !== null) {
       const part = rect2ReadProp(rc, name);

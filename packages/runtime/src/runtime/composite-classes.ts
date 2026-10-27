@@ -27,6 +27,28 @@ export class GRect2i {
   }
 }
 
+export class GAABB {
+  x: number;
+  y: number;
+  z: number;
+  sx: number;
+  sy: number;
+  sz: number;
+  constructor(x: number, y: number, z: number, sx: number, sy: number, sz: number) {
+    const r = Math.fround;
+    this.x = r(x);
+    this.y = r(y);
+    this.z = r(z);
+    this.sx = r(sx);
+    this.sy = r(sy);
+    this.sz = r(sz);
+  }
+}
+
+export function asAABB(v: Variant): GAABB | null {
+  return v.t === Tag.OBJECT && v.v instanceof GAABB ? (v.v as GAABB) : null;
+}
+
 export function rect2iPartsOf(o: object): [number, number, number, number] | null {
   return o instanceof GRect2i ? [o.x, o.y, o.w, o.h] : null;
 }
