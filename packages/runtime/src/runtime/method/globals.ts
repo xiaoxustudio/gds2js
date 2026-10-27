@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,20 +9,20 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { GLOBAL_CALLABLES } from "./global-names";
-import { variantConvert } from "./convert";
-import { typeOf, gIsInstanceOf } from "./patterns";
-import { dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, loadScript } from "./object";
-import { CallableBox } from "./object";
-import { gGetStack, gPrintStack, gPushError, gPushWarning } from "./frames";
-import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
-import { asNodePath, nodePathText } from "./node-path";
-import { Tag, V, type Variant } from "./tags";
-import { GDict, strBuiltin, varToStr, strToVar } from "./values";
-import { stringChr, valueTypeName } from "./string-ops";
-import { writeProp } from "./method-access";
-import type { Fn } from "./callable";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { GLOBAL_CALLABLES } from "../global-names";
+import { variantConvert } from "../convert";
+import { typeOf, gIsInstanceOf } from "../patterns";
+import { dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, loadScript } from "../object";
+import { CallableBox } from "../object";
+import { gGetStack, gPrintStack, gPushError, gPushWarning } from "../frames";
+import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "../var-bytes";
+import { asNodePath, nodePathText } from "../node-path";
+import { Tag, V, type Variant } from "../tags";
+import { GDict, strBuiltin, varToStr, strToVar } from "../values";
+import { stringChr, valueTypeName } from "../string-ops";
+import { writeProp } from "./access";
+import type { Fn } from "../callable";
 
 export function ga(a: Variant[], i: number): Variant {
   const v = a[i];

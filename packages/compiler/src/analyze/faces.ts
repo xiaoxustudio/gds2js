@@ -1,6 +1,6 @@
 import { staticMemberFn } from "../lower/ir";
 import { ELEM_FACES, NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
-import type { AnalysisResult, Diagnostic } from "../analyze/analysis-result";
+import type { AnalysisResult, Diagnostic } from "./analysis-result";
 import { BUILTIN_ARITY, BUILTIN_INSTANCE_MEMBERS, BUILTIN_INSTANCE_PROPS, BUILTIN_MEMBER_TYPES, BUILTIN_METHOD_RETURNS, BUILTIN_NEW_ABSENT_FACES, BUILTIN_TYPE_NAMES, FACE_CTOR_LITERAL, JOIN_BAD_ARG, UTILITY_ARITY } from "../semantics/builtin-members";
 import { OP_PAIRS_CONST_A, OP_PAIRS_CONST_B, OP_PAIRS_REFUSED_A, OP_PAIRS_REFUSED_B, OP_PAIRS_REFUSED_CALLABLE, OP_PAIRS_REFUSED_DECL, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "../semantics/op-pairs";
 import { ANNOT_SOURCES, ARG_NAME_TYPES, FACE_ANNOTATIONS, INSTANCE_OF_TYPE_LAST, NUMERIC_VALUE_CTORS, OBJECT_ARG_NAMES, PACK_APPEND_ARRAY_AS, PACK_APPEND_NAMED, PACK_ARG_POSITIONS, PACK_ARG_SLOTS, PACK_BOOL_SLOT_OK, PACK_INT_SLOT_OK, PACK_IS_AS_NAMES, PACK_SHAPE_NAMES, PACK_TYPE_NAMES, PARAM_OWN_SLOTS, PCT_MSG, PCT_NUMERIC, PCT_VALUE_CTORS, PCT_VECTORS, SIGNAL_PARSE_MISSING, STATIC_VALUE_TYPES, VALUE_ARG_WANTS } from "../semantics/elem-faces";
@@ -44,7 +44,7 @@ import { canHold, varSlotHolds } from "./slots";
 import { flattenBody, reassignedNames } from "./walk";
 import { isNum, typedFaceText } from "./literals";
 import { instanceFaceManaged } from "./arity";
-import { checkValueMethodArity } from "./checks-calls";
+import { checkValueMethodArity } from "./checks/calls";
 
 export function readFaceOf(decl: string, keyType: StaticType): string | null {
   const slot = parseTyped(decl);

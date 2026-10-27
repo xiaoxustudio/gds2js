@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,17 +9,17 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { faceMemberKnown, nativeAritySay } from "./face-arity";
-import { NULL_OBJECT } from "./identity";
-import { arrayIndexOob, arrayEmptyBlock } from "./frames";
-import { Tag, V, type Variant } from "./tags";
-import { GArray } from "./values";
-import { isLess, sortLess } from "./ops";
-import { ARRAY_RO_WRITE, argAt, arrayIndexArg, boolArgOr, elemCode, intArg, intArgOr, readOnlyWrite } from "./method-core";
-import { one } from "./method-core";
-import { callerOf, comparatorOf, lessOrFalse, predOf } from "./method-callable";
-import { asArray } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { faceMemberKnown, nativeAritySay } from "../face-arity";
+import { NULL_OBJECT } from "../identity";
+import { arrayIndexOob, arrayEmptyBlock } from "../frames";
+import { Tag, V, type Variant } from "../tags";
+import { GArray } from "../values";
+import { isLess, sortLess } from "../ops";
+import { ARRAY_RO_WRITE, argAt, arrayIndexArg, boolArgOr, elemCode, intArg, intArgOr, readOnlyWrite } from "./core";
+import { one } from "./core";
+import { callerOf, comparatorOf, lessOrFalse, predOf } from "./callable";
+import { asArray } from "./core";
 
 export function arrayMethod(obj: Variant, name: string, args: Variant[]): Variant {
     const a = obj.v as GArray;

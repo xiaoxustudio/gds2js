@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,16 +9,16 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { stringUnicodeReplaceError, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDynamicBadMode } from "./frames";
-import { gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "./var-bytes";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GVector2 } from "./vector2";
-import { GVector3 } from "./vector3";
-import { GVector4 } from "./vector4";
-import { GColor } from "./color";
-import { GBytes, packDynamicUnpack, packTypeName } from "./packed";
-import { asString, boolArgOr } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { stringUnicodeReplaceError, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDynamicBadMode } from "../frames";
+import { gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "../var-bytes";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
+import { GVector2 } from "../vector2";
+import { GVector3 } from "../vector3";
+import { GVector4 } from "../vector4";
+import { GColor } from "../color";
+import { GBytes, packDynamicUnpack, packTypeName } from "../packed";
+import { asString, boolArgOr } from "./core";
 
 export function bytesBswap(p: GBytes, kind: 16 | 32 | 64, args: Variant[]): Variant {
   if (p.kind !== "byte") {

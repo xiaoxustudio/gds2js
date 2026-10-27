@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,27 +9,27 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { classNameOf, descOf, fieldTypesOf, methodParamsOf, methodAritiesOf, nativeBaseOf, staticCall, hasStaticName, varSlotOf, GdScriptObject, methodCallable, ClassDesc } from "./object";
-import { boundBuiltinCallable } from "./callable";
-import { faceArity, faceMemberKnown, valueAttrKind } from "./face-arity";
-import { readOnlyError } from "./frames";
-import { GdNodePath } from "./node-path";
-import { GdNativeClass } from "./native-class";
-import { Signal } from "./signal";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, toStringNameSlot, show } from "./values";
-import { posOobSay, strAt, valueTypeName } from "./string-ops";
-import { pctFormatOp } from "./ops";
-import { GVector2, toVec2, vecReadIndex, vecWrite } from "./vector2";
-import { GVector3, vec3ReadIndex, vec3Write } from "./vector3";
-import { GVector4, vec4ReadIndex, vec4Write } from "./vector4";
-import { GVector4i, vec4iReadIndex, vec4iWrite } from "./vector4i";
-import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "./vector2i";
-import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite } from "./vector3i";
-import { colorRead, colorWrite, GColor, toColor } from "./color";
-import { bytesReadIndex, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "./packed";
-import { ARRAY_ATTR_ABSENT, STRING_ATTR_ABSENT, VECTOR_FACES, asArray, asDict, asString, intArgIdx, norm } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { classNameOf, descOf, fieldTypesOf, methodParamsOf, methodAritiesOf, nativeBaseOf, staticCall, hasStaticName, varSlotOf, GdScriptObject, methodCallable, ClassDesc } from "../object";
+import { boundBuiltinCallable } from "../callable";
+import { faceArity, faceMemberKnown, valueAttrKind } from "../face-arity";
+import { readOnlyError } from "../frames";
+import { GdNodePath } from "../node-path";
+import { GdNativeClass } from "../native-class";
+import { Signal } from "../signal";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
+import { GArray, GDict, toStringNameSlot, show } from "../values";
+import { posOobSay, strAt, valueTypeName } from "../string-ops";
+import { pctFormatOp } from "../ops";
+import { GVector2, toVec2, vecReadIndex, vecWrite } from "../vector2";
+import { GVector3, vec3ReadIndex, vec3Write } from "../vector3";
+import { GVector4, vec4ReadIndex, vec4Write } from "../vector4";
+import { GVector4i, vec4iReadIndex, vec4iWrite } from "../vector4i";
+import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "../vector2i";
+import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite } from "../vector3i";
+import { colorRead, colorWrite, GColor, toColor } from "../color";
+import { bytesReadIndex, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "../packed";
+import { ARRAY_ATTR_ABSENT, STRING_ATTR_ABSENT, VECTOR_FACES, asArray, asDict, asString, intArgIdx, norm } from "./core";
 
 export function signalCtor(args: Variant[]): Variant {
   if (args.length === 0) return V.object(new Signal());

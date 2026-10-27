@@ -7,10 +7,13 @@ import { ROOT } from "../../tools/lib.mjs";
 const compilerSrc = join(ROOT, "packages", "compiler", "src");
 const ir = readFileSync(join(compilerSrc, "lower", "ir.ts"), "utf8");
 
-const filesIn = (dir: string): Array<{ name: string; text: string }> =>
-  readdirSync(join(compilerSrc, dir))
-    .filter((n) => n.endsWith(".ts"))
-    .map((n) => ({ name: n, text: readFileSync(join(compilerSrc, dir, n), "utf8") }));
+const filesIn = (dir: string, rel = ""): Array<{ name: string; text: string }> =>
+  readdirSync(join(compilerSrc, dir, rel), { withFileTypes: true }).flatMap((ent) => {
+    const sub = rel === "" ? ent.name : `${rel}/${ent.name}`;
+    if (ent.isDirectory()) return filesIn(dir, sub);
+    if (!ent.name.endsWith(".ts")) return [];
+    return [{ name: sub, text: readFileSync(join(compilerSrc, dir, sub), "utf8") }];
+  });
 
 describe("阶段边界门（parse → lower → analyze → emit 只经显式契约）", () => {
   it("① emit 的每个模块只依赖 analyze 的契约", () => {

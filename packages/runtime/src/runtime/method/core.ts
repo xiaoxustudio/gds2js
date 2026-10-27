@@ -1,10 +1,10 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { isVariant, wrapValue } from "./object";
-import { writeOrderedStderr, readOnlyError } from "./frames";
-import { asNodePath, nodePathText } from "./node-path";
-import { Tag, V, intToNum, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict } from "./values";
-import { valueTypeName } from "./string-ops";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { isVariant, wrapValue } from "../object";
+import { writeOrderedStderr, readOnlyError } from "../frames";
+import { asNodePath, nodePathText } from "../node-path";
+import { Tag, V, intToNum, type IntPayload, type Variant } from "../tags";
+import { GArray, GDict } from "../values";
+import { valueTypeName } from "../string-ops";
 
 const NL = String.fromCharCode(10);
 

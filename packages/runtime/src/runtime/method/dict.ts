@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,15 +9,15 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { faceMemberKnown, nativeAritySay } from "./face-arity";
-import { NULL_OBJECT } from "./identity";
-import { Tag, V, type Variant } from "./tags";
-import { GArray, GDict, valueEq } from "./values";
-import { sortLess } from "./ops";
-import { DICT_RO_WRITE, argAt, asDict, boolArgOr, elemCode, readOnlyWrite } from "./method-core";
-import { one } from "./method-core";
-import { asArray } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { faceMemberKnown, nativeAritySay } from "../face-arity";
+import { NULL_OBJECT } from "../identity";
+import { Tag, V, type Variant } from "../tags";
+import { GArray, GDict, valueEq } from "../values";
+import { sortLess } from "../ops";
+import { DICT_RO_WRITE, argAt, asDict, boolArgOr, elemCode, readOnlyWrite } from "./core";
+import { one } from "./core";
+import { asArray } from "./core";
 
 export function dictMethod(obj: Variant, name: string, args: Variant[]): Variant {
     const d = obj.v as GDict;

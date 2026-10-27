@@ -1,18 +1,18 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
-import { INT64_MIN } from "./numstr";
-import { intArgBig, valueTypeName } from "./string-ops";
-import { GBytes, packTypeName } from "./packed";
-import { GVector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
-import { GVector3 } from "./vector3";
-import { GVector3i } from "./vector3i";
-import { GVector4, vector4Method, vec4Cmp } from "./vector4";
-import { GVector4i, vector4iMethod } from "./vector4i";
-import { GColor } from "./color";
-import { utilityArgLabel } from "./builtin-ops";
-import { CMP_EPSILON, MASK64, approxEq, fl, intOf, isInt, num, numOrVectorArg, one, or, sameTypeVectorMath, utilConvertError, utilFloatArg, utilIntArg, vec4UtilityGuard, vecClassName, vecComponents3, vectorMath, vi } from "./builtin-args";
-import { range } from "./builtin-array";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { Tag, V, intToNum, wrap64, tagName, type IntPayload, type Variant } from "../tags";
+import { INT64_MIN } from "../numstr";
+import { intArgBig, valueTypeName } from "../string-ops";
+import { GBytes, packTypeName } from "../packed";
+import { GVector2 } from "../vector2";
+import { GVector2i } from "../vector2i";
+import { GVector3 } from "../vector3";
+import { GVector3i } from "../vector3i";
+import { GVector4, vector4Method, vec4Cmp } from "../vector4";
+import { GVector4i, vector4iMethod } from "../vector4i";
+import { GColor } from "../color";
+import { utilityArgLabel } from "./ops";
+import { CMP_EPSILON, MASK64, approxEq, fl, intOf, isInt, num, numOrVectorArg, one, or, sameTypeVectorMath, utilConvertError, utilFloatArg, utilIntArg, vec4UtilityGuard, vecClassName, vecComponents3, vectorMath, vi } from "./args";
+import { range } from "./array";
 
 const INT_MIN_F = -9223372036854775808;
 

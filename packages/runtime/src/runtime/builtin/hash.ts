@@ -1,19 +1,19 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict } from "./values";
-import { GBytes } from "./packed";
-import { CallableBox, isCallableBox, isNullCallable } from "./callable";
-import { Signal } from "./signal";
-import { GdRid } from "./rid";
-import { GdNodePath } from "./node-path";
-import { GVector2, vector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
-import { GVector3, vector3 } from "./vector3";
-import { GVector3i } from "./vector3i";
-import { GVector4, vector4 } from "./vector4";
-import { GVector4i } from "./vector4i";
-import { GColor } from "./color";
-import { MASK64 } from "./builtin-args";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { Tag, V, intToBig, tagName, type IntPayload, type Variant } from "../tags";
+import { GArray, GDict } from "../values";
+import { GBytes } from "../packed";
+import { CallableBox, isCallableBox, isNullCallable } from "../callable";
+import { Signal } from "../signal";
+import { GdRid } from "../rid";
+import { GdNodePath } from "../node-path";
+import { GVector2, vector2 } from "../vector2";
+import { GVector2i } from "../vector2i";
+import { GVector3, vector3 } from "../vector3";
+import { GVector3i } from "../vector3i";
+import { GVector4, vector4 } from "../vector4";
+import { GVector4i } from "../vector4i";
+import { GColor } from "../color";
+import { MASK64 } from "./args";
 
 export function hashDjb2(s: string): number {
   let h = 5381;

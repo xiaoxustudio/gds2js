@@ -1,8 +1,8 @@
-import { V, type Variant } from "./tags";
-import { GArray } from "./values";
-import { intArgBig } from "./string-ops";
-import { packCtor } from "./packed";
-import { CMP_EPSILON, MATH_TAU, utilFloatArg, utilIntArg } from "./builtin-args";
+import { V, type Variant } from "../tags";
+import { GArray } from "../values";
+import { intArgBig } from "../string-ops";
+import { packCtor } from "../packed";
+import { CMP_EPSILON, MATH_TAU, utilFloatArg, utilIntArg } from "./args";
 
 const PCG_MUL = 6364136223846793005n;
 

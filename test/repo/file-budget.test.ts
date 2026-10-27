@@ -8,12 +8,12 @@ const EXEMPT_FROM_BUDGET = ["ucaps", "engine-classes", "case-flags", "case-table
 const REGENERATED = ["case-table", "case-flags", "ucaps", "engine-classes"];
 const PROVENANCE_DEBT: string[] = [];
 const CODE_BUDGET: Array<[string, number]> = [
-  ["packages/runtime/src/runtime/values-core", 1202],
+  ["packages/runtime/src/runtime/values/core", 1202],
   ["packages/runtime/src/runtime/methods", 59],
   ["packages/runtime/src/runtime/builtins", 37],
   ["packages/runtime/src/runtime/packed", 1098],
   ["packages/compiler/src/lower/lower", 1269],
-  ["packages/compiler/src/analyze/checks-collections", 1153],
+  ["packages/compiler/src/analyze/checks/collections", 1153],
 ];
 
 function tsUnder(dir: string, out: string[] = []): string[] {

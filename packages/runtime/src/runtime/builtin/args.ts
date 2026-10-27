@@ -1,15 +1,15 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "./tags";
-import { strToFloat } from "./numstr";
-import { truthyOf } from "./values";
-import { valueTypeName } from "./string-ops";
-import { GVector2, vector2Method } from "./vector2";
-import { GVector2i, vector2i, vector2iMethod } from "./vector2i";
-import { GVector3, vector3Method } from "./vector3";
-import { GVector3i, vector3i, vector3iMethod } from "./vector3i";
-import { GVector4, vector4, vector4Method } from "./vector4";
-import { GVector4i, vector4i, vector4iMethod } from "./vector4i";
-import { GColor, colorMethod } from "./color";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Variant } from "../tags";
+import { strToFloat } from "../numstr";
+import { truthyOf } from "../values";
+import { valueTypeName } from "../string-ops";
+import { GVector2, vector2Method } from "../vector2";
+import { GVector2i, vector2i, vector2iMethod } from "../vector2i";
+import { GVector3, vector3Method } from "../vector3";
+import { GVector3i, vector3i, vector3iMethod } from "../vector3i";
+import { GVector4, vector4, vector4Method } from "../vector4";
+import { GVector4i, vector4i, vector4iMethod } from "../vector4i";
+import { GColor, colorMethod } from "../color";
 
 export function num(v: Variant): number {
   if (v.t === Tag.BOOL) return (v.v as boolean) ? 1 : 0;

@@ -1,10 +1,10 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, type Variant } from "./tags";
-import { show } from "./values";
-import { GVector4 } from "./vector4";
-import { GVector4i } from "./vector4i";
-import { PI_D, TAU_D, approxEq, num, sameShape, sameTypeVectorMath, sqrt, utilConvertError, utilFloatArg, vecClassName, weightToFloat } from "./builtin-args";
-import { LERP_FROM_LIST } from "./builtin-math";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { Tag, V, type Variant } from "../tags";
+import { show } from "../values";
+import { GVector4 } from "../vector4";
+import { GVector4i } from "../vector4i";
+import { PI_D, TAU_D, approxEq, num, sameShape, sameTypeVectorMath, sqrt, utilConvertError, utilFloatArg, vecClassName, weightToFloat } from "./args";
+import { LERP_FROM_LIST } from "./math";
 
 export function gLerp(a: Variant, b: Variant, w: Variant): Variant {
   const va4 = a.t === Tag.OBJECT && a.v instanceof GVector4 ? (a.v as GVector4) : null;

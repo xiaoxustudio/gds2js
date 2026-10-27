@@ -1,10 +1,10 @@
-import { UnsupportedError } from "./errors";
-import { Tag, V, tagName, type Variant } from "./tags";
-import { INT64_MIN } from "./numstr";
-import { intArgBig } from "./string-ops";
-import { Signal } from "./signal";
-import { ENGINE_CLASS_NAMES } from "./engine-classes";
-import { range } from "./builtin-array";
+import { UnsupportedError } from "../errors";
+import { Tag, V, tagName, type Variant } from "../tags";
+import { INT64_MIN } from "../numstr";
+import { intArgBig } from "../string-ops";
+import { Signal } from "../signal";
+import { ENGINE_CLASS_NAMES } from "../engine-classes";
+import { range } from "./array";
 
 const TYPE_NAMES = ["Nil", "bool", "int", "float", "String", "Vector2", "Vector2i", "Rect2", "Rect2i", "Vector3",
   "Vector3i", "Transform2D", "Vector4", "Vector4i", "Plane", "Quaternion", "AABB", "Basis", "Transform3D",

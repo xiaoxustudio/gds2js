@@ -1,6 +1,6 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { md5Hex } from "./md5";
-import { bytesToHex, sha1Bytes, sha256Bytes } from "./hashes";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { md5Hex } from "../md5";
+import { bytesToHex, sha1Bytes, sha256Bytes } from "../hashes";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -11,19 +11,19 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { strToInt, strToFloat } from "./numstr";
-import { GdScriptObject } from "./object";
-import { faceMemberKnown, nativeAritySay } from "./face-arity";
-import { stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringHexUnevenBlock } from "./frames";
-import { Tag, V, tagName, type Variant } from "./tags";
-import { GArray, strJoin, strFormatV } from "./values";
-import { strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strLength, strPadZeros, strRepeat, strReplace, strSplit, strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath, strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix, strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch, strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf, strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "./string-ops";
-import { GBytes, utf8EncodeWtf } from "./packed";
-import { boolArg, boolArgOr, foldInt, hexDigit, hexPairsToBytes, intArg, intArgOr } from "./method-core";
-import { one } from "./method-core";
-import { charReplacement, cp1252EncodeBytes } from "./method-bytes";
-import { asString } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { strToInt, strToFloat } from "../numstr";
+import { GdScriptObject } from "../object";
+import { faceMemberKnown, nativeAritySay } from "../face-arity";
+import { stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringHexUnevenBlock } from "../frames";
+import { Tag, V, tagName, type Variant } from "../tags";
+import { GArray, strJoin, strFormatV } from "../values";
+import { strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strLength, strPadZeros, strRepeat, strReplace, strSplit, strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath, strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix, strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch, strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf, strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "../string-ops";
+import { GBytes, utf8EncodeWtf } from "../packed";
+import { boolArg, boolArgOr, foldInt, hexDigit, hexPairsToBytes, intArg, intArgOr } from "./core";
+import { one } from "./core";
+import { charReplacement, cp1252EncodeBytes } from "./bytes";
+import { asString } from "./core";
 
 export function stringMethod(obj: Variant, name: string, args: Variant[]): Variant {
     const s = obj.v as string;

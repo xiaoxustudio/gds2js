@@ -224,7 +224,7 @@ strCapitalize(s: string): string
 
 浮点的 `nan` / `inf` / `-inf` 输出也走这一层（`017`）。
 
-`%` 那一族的另一颗入口（`packages/runtime/src/runtime/method-access.ts`）：左支是 **String 字面量**时发射器不走 `ops.mod`，直发这一颗。
+`%` 那一族的另一颗入口（`packages/runtime/src/runtime/method/access.ts`）：左支是 **String 字面量**时发射器不走 `ops.mod`，直发这一颗。
 
 ```ts
 // soft 与 ops.mod 第三个参数同一个旗标：发射器按两侧静态型定（true = 非致命那块，false = SCRIPT ERROR 并作废旧那支）。

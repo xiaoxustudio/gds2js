@@ -1,7 +1,7 @@
-import { UnsupportedError } from "./errors";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "./numstr";
-import { show, truthyOf } from "./values";
+import { UnsupportedError } from "../errors";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
+import { INT64_MAX, INT64_MIN, TWO_63, strToInt, strToFloat } from "../numstr";
+import { show, truthyOf } from "../values";
 
 /** str() 返回的是 String 变体，不是裸 JS 字符串 —— 否则 print(str(x)) 会炸 */
 export function strOf(v: Variant): Variant {

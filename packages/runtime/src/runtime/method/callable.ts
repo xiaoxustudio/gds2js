@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,19 +9,19 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { boundArgsOf, callableArityBounds, declaredArgCount, descOf, methodAritiesOf, nativeBaseOf, requiredArgCount, wrapValue, scriptLabelOf, ctorAritiesOf } from "./object";
-import { CallableBox, callableLabel, isCallableBox, isNullCallable, nullCallable } from "./object";
-import { callDeferred } from "./callable";
-import { nativeAritySay } from "./face-arity";
-import { NULL_OBJECT } from "./identity";
-import type { GdIdentified } from "./identity";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, truthyOf } from "./values";
-import { valueTypeName } from "./string-ops";
-import { isLess } from "./ops";
-import { attribute } from "./method-access";
-import { deferredArityBlock, isAritySay } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { boundArgsOf, callableArityBounds, declaredArgCount, descOf, methodAritiesOf, nativeBaseOf, requiredArgCount, wrapValue, scriptLabelOf, ctorAritiesOf } from "../object";
+import { CallableBox, callableLabel, isCallableBox, isNullCallable, nullCallable } from "../object";
+import { callDeferred } from "../callable";
+import { nativeAritySay } from "../face-arity";
+import { NULL_OBJECT } from "../identity";
+import type { GdIdentified } from "../identity";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
+import { GArray, truthyOf } from "../values";
+import { valueTypeName } from "../string-ops";
+import { isLess } from "../ops";
+import { attribute } from "./access";
+import { deferredArityBlock, isAritySay } from "./core";
 
 let methodDispatch: ((raw: unknown, name: string, args: Variant[]) => Variant) | null = null;
 export function registerMethodDispatch(fn: (raw: unknown, name: string, args: Variant[]) => Variant): void {

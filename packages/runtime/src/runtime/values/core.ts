@@ -1,22 +1,22 @@
-import { numVal, strFloat } from "./numfmt";
-import { posOobSay, strCEscape, strColor, strVec2, valueTypeName } from "./string-ops";
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, tagName, V, intToNum, type IntPayload, type Variant } from "./tags";
-import { GVector2, asVec2 } from "./vector2";
-import { GVector3, asVec3, vector3 } from "./vector3";
-import { GVector4, asVec4, vector4 } from "./vector4";
-import { asVec2i, GVector2i, vector2i } from "./vector2i";
-import { asVec3i, GVector3i, vector3i } from "./vector3i";
-import { asVec4i, GVector4i, vector4i } from "./vector4i";
-import { asColor, color, GColor, tryColorSlot } from "./color";
-import { bytesEq, GBytes, packItems, registerPackStringifier } from "./packed";
-import { sortGodot } from "./sort";
-import { callableEq, callableLabel, isCallable, isNullCallable, type CallableBox } from "./callable";
-import { GdNativeClass } from "./native-class";
-import { isEncodedObjectIdBox, isNullRefValue, isWeakRefBox } from "./identity";
-import type { GdIdentified } from "./identity";
-import { asRid, ridText } from "./rid";
-import { asNodePath, nodePathText, sameNodePath } from "./node-path";
+import { numVal, strFloat } from "../numfmt";
+import { posOobSay, strCEscape, strColor, strVec2, valueTypeName } from "../string-ops";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { Tag, tagName, V, intToNum, type IntPayload, type Variant } from "../tags";
+import { GVector2, asVec2 } from "../vector2";
+import { GVector3, asVec3, vector3 } from "../vector3";
+import { GVector4, asVec4, vector4 } from "../vector4";
+import { asVec2i, GVector2i, vector2i } from "../vector2i";
+import { asVec3i, GVector3i, vector3i } from "../vector3i";
+import { asVec4i, GVector4i, vector4i } from "../vector4i";
+import { asColor, color, GColor, tryColorSlot } from "../color";
+import { bytesEq, GBytes, packItems, registerPackStringifier } from "../packed";
+import { sortGodot } from "../sort";
+import { callableEq, callableLabel, isCallable, isNullCallable, type CallableBox } from "../callable";
+import { GdNativeClass } from "../native-class";
+import { isEncodedObjectIdBox, isNullRefValue, isWeakRefBox } from "../identity";
+import type { GdIdentified } from "../identity";
+import { asRid, ridText } from "../rid";
+import { asNodePath, nodePathText, sameNodePath } from "../node-path";
 
 /** Dictionary 键编码：键必须带类型前缀，否则 1（int）与 1.0（float）会撞成同一个键。 */
 export function keyOf(v: Variant): string {

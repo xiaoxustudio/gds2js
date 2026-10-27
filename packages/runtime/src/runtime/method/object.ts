@@ -1,4 +1,4 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -9,34 +9,34 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gRandi, gRandf, gRandomize, gSeed, gRandFromSeed, gRandiRange, gRandfRange, gRandfn,
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
-  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "./builtins";
-import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc } from "./object";
-import { CallableBox, callableLabel, isCallableBox, isNullCallable } from "./object";
-import { callDeferred } from "./callable";
-import { nativeAritySay } from "./face-arity";
-import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "./identity";
-import { asRid } from "./rid";
-import { signalDuplicateConnect, signalNullCallable } from "./frames";
-import { asNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice } from "./node-path";
-import type { GdIdentified } from "./identity";
-import { GdNativeClass } from "./native-class";
-import { Signal } from "./signal";
-import { Tag, V, type Variant } from "./tags";
-import { GArray, GDict } from "./values";
-import { GVector2, vector2Method } from "./vector2";
-import { GVector3, vector3Method } from "./vector3";
-import { GVector4, vector4Method } from "./vector4";
-import { GVector4i, vector4iMethod } from "./vector4i";
-import { GVector2i, vector2iMethod } from "./vector2i";
-import { GVector3i, vector3iMethod } from "./vector3i";
-import { colorMethod, GColor } from "./color";
-import { bytesMethod, GBytes, packTypeName } from "./packed";
-import { CONVERT_INFO, DECODE_INFO, ENCODE_INFO, FLOAT_DECODE_INFO, FLOAT_ENCODE_INFO, VAR_CODEC_GUARD, bytesBswap, bytesDecompressDynamic, bytesMultibyte, bytesUtf32, packConvert, packDecode, packDecodeFloat, packEncode, packEncodeFloat, packVarCodec } from "./method-bytes";
-import { callableMethod } from "./method-callable";
-import { attribute, callSlot, callStatic, callvArgs, descFor, objectBaseLabel, scriptMethodSay, scriptParamArgs, writeProp } from "./method-access";
-import { deferredArityBlock, isAritySay } from "./method-core";
-import { callCallableBox } from "./method-callable";
-import { nodePathSliceArg } from "./method-core";
+  gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
+import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc } from "../object";
+import { CallableBox, callableLabel, isCallableBox, isNullCallable } from "../object";
+import { callDeferred } from "../callable";
+import { nativeAritySay } from "../face-arity";
+import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "../identity";
+import { asRid } from "../rid";
+import { signalDuplicateConnect, signalNullCallable } from "../frames";
+import { asNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice } from "../node-path";
+import type { GdIdentified } from "../identity";
+import { GdNativeClass } from "../native-class";
+import { Signal } from "../signal";
+import { Tag, V, type Variant } from "../tags";
+import { GArray, GDict } from "../values";
+import { GVector2, vector2Method } from "../vector2";
+import { GVector3, vector3Method } from "../vector3";
+import { GVector4, vector4Method } from "../vector4";
+import { GVector4i, vector4iMethod } from "../vector4i";
+import { GVector2i, vector2iMethod } from "../vector2i";
+import { GVector3i, vector3iMethod } from "../vector3i";
+import { colorMethod, GColor } from "../color";
+import { bytesMethod, GBytes, packTypeName } from "../packed";
+import { CONVERT_INFO, DECODE_INFO, ENCODE_INFO, FLOAT_DECODE_INFO, FLOAT_ENCODE_INFO, VAR_CODEC_GUARD, bytesBswap, bytesDecompressDynamic, bytesMultibyte, bytesUtf32, packConvert, packDecode, packDecodeFloat, packEncode, packEncodeFloat, packVarCodec } from "./bytes";
+import { callableMethod } from "./callable";
+import { attribute, callSlot, callStatic, callvArgs, descFor, objectBaseLabel, scriptMethodSay, scriptParamArgs, writeProp } from "./access";
+import { deferredArityBlock, isAritySay } from "./core";
+import { callCallableBox } from "./callable";
+import { nodePathSliceArg } from "./core";
 
 export function objectMethod(obj: Variant, name: string, args: Variant[]): Variant {
   const inner = obj.v;

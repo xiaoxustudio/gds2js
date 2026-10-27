@@ -1,15 +1,15 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, tagName, type IntPayload, type Variant } from "./tags";
-import { GArray, GDict, valueEq } from "./values";
-import { intArgBig, strLength, valueTypeName } from "./string-ops";
-import { GBytes, isBytes } from "./packed";
-import { CallableBox, callableEq, isCallableBox } from "./callable";
-import { Signal } from "./signal";
-import { ClassDesc, GdScriptObject } from "./object";
-import { GdNativeClass } from "./native-class";
-import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "./identity";
-import { allocateRid, rid } from "./rid";
-import { typeOf } from "./patterns";
+import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { Tag, V, intToBig, tagName, type IntPayload, type Variant } from "../tags";
+import { GArray, GDict, valueEq } from "../values";
+import { intArgBig, strLength, valueTypeName } from "../string-ops";
+import { GBytes, isBytes } from "../packed";
+import { CallableBox, callableEq, isCallableBox } from "../callable";
+import { Signal } from "../signal";
+import { ClassDesc, GdScriptObject } from "../object";
+import { GdNativeClass } from "../native-class";
+import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "../identity";
+import { allocateRid, rid } from "../rid";
+import { typeOf } from "../patterns";
 
 export function unsupportedValueDefault(name: string): Variant {
   throw new UnsupportedError("value-default", `${name} 的默认值发不出（D6：那七个值类型不进 Tier 1）`);
