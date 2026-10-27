@@ -17,6 +17,7 @@ import {
   type NodeRec,
 } from "../node";
 import { scenePathOf, sceneTree } from "../scene";
+import { node2dMethod } from "../node2d";
 
 function walkParts(node: NodeRec, parts: string[]): NodeRec | null {
   let cur: NodeRec = node;
@@ -143,6 +144,11 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       return V.object(sceneTree() as object);
     case "get_path":
       return nodePathValue(scenePathOf(rec as unknown as object));
+    case "show":
+    case "hide":
+    case "is_visible_in_tree":
+    case "get_global_transform":
+      return node2dMethod(target, name, args);
     default:
       throw new UnsupportedError("node-method", `Node.${name}() 这一支没量过（duplicate / find_child / get_path_to / has_method 那几支还没建模）`);
   }

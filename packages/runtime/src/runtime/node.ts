@@ -8,6 +8,9 @@ export type NodeRec = {
   __gd_engine_class__: string;
   __gd_freed__: boolean;
   __gd_node_queued__: boolean;
+  __gd_node_t2d__?: unknown;
+  __gd_node_visible__?: boolean;
+  __gd_node_top_level__?: boolean;
   __gd_node_name__: string;
   __gd_node_parent__: object | null;
   __gd_node_children__: object[];

@@ -33,6 +33,7 @@ import { transform2dReadProp } from "../transform2d";
 import { basisReadProp, basisWriteProp } from "../basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet } from "../node";
 import { GdSceneTree, treeReadProp } from "../scene";
+import { node2dRead, node2dWrite } from "../node2d";
 import { GBasis, GPlane, GQuaternion, GTransform2D } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
@@ -244,6 +245,10 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (bs !== null) return basisWriteProp(bs, key, value);
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
+    if (enw.__gd_engine_class__ === "Node2D" && key !== "name") {
+      node2dWrite(base.v, key, value);
+      return null;
+    }
     if (key !== "name") throw new UnsupportedError("node-prop-write", `${enw.__gd_engine_class__}.${key} 的属性写没量过`);
     if (enw.__gd_freed__) throw new UnsupportedError("node-freed-prop", `在已 free() 的实例上写 ${key} 那一形没建模`);
     nodeNameSet(enw, asString(value, "属性写入"));
@@ -518,6 +523,10 @@ export function attribute(raw: unknown, name: string): unknown {
     const en = nodeFaceOf(obj.v);
     if (en !== null) {
       if (en.__gd_freed__) throw new UnsupportedError("node-freed-prop", `在已 free() 的实例上读 ${name} 那一形没建模`);
+      if (en.__gd_engine_class__ === "Node2D") {
+        const m2 = node2dRead(obj.v, name);
+        if (m2 !== null) return m2;
+      }
       if (name === "name") return V.str(en.__gd_node_name__);
       throw new UnsupportedError("node-prop", `${en.__gd_engine_class__}.${name} 的属性读没量过`);
     }

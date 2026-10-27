@@ -22,6 +22,7 @@ export * from "./quaternion";
 export * from "./transform2d";
 export * from "./basis";
 export * from "./node";
+export * from "./node2d";
 export * from "./scene";
 export * from "./rect2";
 export * from "./rect2i";
