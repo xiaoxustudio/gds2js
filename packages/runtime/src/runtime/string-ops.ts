@@ -1265,8 +1265,10 @@ export function strColor(n: number): string {
 
 /** 引擎给 Plane.D 与 Quaternion 分量的那一形：六位小数、去尾零（`2` / `0.707107`）。 */
 export function num6Text(n: number): string {
-  const s = n.toFixed(6);
-  return s.indexOf(".") < 0 ? s : s.replace(/0+$/, "").replace(/\.$/, "");
+  if (!Number.isFinite(n)) return strVec2(n);
+  if (Number.isInteger(n)) return String(n);
+  const s = n.toFixed(6).replace(/0+$/, "");
+  return s.endsWith(".") ? s + "0" : s;
 }
 
 export function strVec2(n: number): string {

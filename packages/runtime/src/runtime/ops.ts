@@ -5,7 +5,10 @@ import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Vari
 import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
 import { asVec2, GVector2, vecCmp } from "./vector2";
-import { asVec3, GVector3, vec3Cmp } from "./vector3";
+import { asVec3, GVector3, vector3, vec3Cmp } from "./vector3";
+import { asQuaternion, quaternion } from "./quaternion";
+
+const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./vector4";
 import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./vector4i";
 import { asColor, color, GColor } from "./color";
@@ -199,6 +202,18 @@ export const ops = {
     if (zi4Mul && b.t === Tag.FLOAT) return vec4iToFloat(zi4Mul, num(b), "mul");
     if (zi4Mul && b.t === Tag.INT) return v4iMulK(zi4Mul, intToNum(b.v as IntPayload));
     if (zj4Mul && a.t === Tag.INT) return v4iMulK(zj4Mul, intToNum(a.v as IntPayload));
+    const qaMul = asQuaternion(a);
+    const qbMul = asQuaternion(b);
+    if (qaMul && qbMul) {
+      const x = r3(qaMul.w * qbMul.x) + r3(qaMul.x * qbMul.w) + r3(qaMul.y * qbMul.z) - r3(qaMul.z * qbMul.y);
+      const y = r3(qaMul.w * qbMul.y) + r3(qaMul.y * qbMul.w) + r3(qaMul.z * qbMul.x) - r3(qaMul.x * qbMul.z);
+      const z = r3(qaMul.w * qbMul.z) + r3(qaMul.z * qbMul.w) + r3(qaMul.x * qbMul.y) - r3(qaMul.y * qbMul.x);
+      const w = r3(qaMul.w * qbMul.w) - r3(qaMul.x * qbMul.x) - r3(qaMul.y * qbMul.y) - r3(qaMul.z * qbMul.z);
+      return quaternion(x, y, z, w);
+    }
+    if (qaMul && b.t === Tag.OBJECT && (b.v as object) instanceof GVector3) {
+      throw new UnsupportedError("quaternion-xform", "Quaternion * Vector3 这一式还没对上：三种 float32 结合次序里，两种各自复现了一格、另一格差 6e-7，读不出引擎的那一条，响亮拒");
+    }
     const ziMul = asVec2i(a);
     const zjMul = asVec2i(b);
     if (ziMul && zjMul) return vector2i(mul32(ziMul.x, zjMul.x), mul32(ziMul.y, zjMul.y));

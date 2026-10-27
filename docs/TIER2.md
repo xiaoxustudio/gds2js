@@ -112,6 +112,9 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 > **批次二进展**：`AABB` 已落地（typeof 16、`[P: (…), S: (…)]` 打印、`()` 与 `(Vector3, Vector3)` 两形、`position` / `size` / `end` 读、`get_volume` / `has_volume` / `get_center` / `has_point`（**闭区间**，与 Rect2 的半开不同）/ `intersects` / `merge` / `expand` / `is_equal_approx` / `is_finite`、`var_to_str` 写 `AABB(0, 0, 0, 1, 2, 3)` 并读回、`var_to_bytes` 28 字节、`Array[AABB]`、字典键、默认值、`is AABB`），语料用例 `453-aabb-face` 十一格逐字节，`corpus-diff` 289/289 三桶全 0。`has_volume()` 用 `size > 0` 三分量与（零与负尺寸都 false，实测）、`get_volume()` 是带符号积（负尺寸给 -8.0）。剩 `Plane` / `Quaternion`（批次二零头剩下的两支）与 `Basis` / `Transform2D`（批次三）。
 
+**`*` 运算符（语料 `456-quaternion-mul` 五格逐字节）**：四元数积已按实测式子发出（非交换、`b*b` 的 y 打印 `1.0`、`u*u` 给 `(0, 0, 0, -1)` 即 360° 那一支）。**`Quaternion * Vector3` 整支响亮拒**，理由是复现不了：三种 float32 结合次序（`u×(2(u×v))`、`2(u×(u×v))`、基矩阵式）各只能对上四格里的三格，差的那一格是 `b * Vector3(1,2,3)` 的 z 给 `-1.000001`（引擎 `-1.0`）与 `b * Vector3(1,0,0)` 的 x 给 `-1.19e-7`（引擎 `-0.0`，基矩阵式在这格丢符号）—— 式子没读出来就不发数。读数与差值都在 `tmp/r2/rot*.mjs`。
+**踩到的工程约束**：新值类型模块必须进 `packages/runtime/package.json` 的 `exports` 白名单（41 → 46 条），否则测试与产物按子路径 import 时 `ERR_MODULE_NOT_FOUND`；`composite-classes` / `value-ctors` 这类内部接线按口径**不**开放。
+
 **批次二 / 三 的其余读数已取（4.6.3 直跑，`tmp/r2/b2.gd`）** —— 实现时照这份对，别再重量：
 **`Plane` 也已落地**（语料 `454-plane-face` 九格逐字节，`corpus-diff` 290/290）：默认值是**零法身** `[N: (0.0, 0.0, 0.0), D: 0]` 不是 (0,0,1)；`d` 存的是常数项，故 `distance_to(p) = dot(n, p) - d`、`has_point` 是 `|dot - d| <= 1e-5`、`intersects_ray` 的 `t = (d - dot(n, from)) / dot(n, dir)`（这三处的符号我一处猜反过，是读数纠正的）；三点构造式的法身是 `cross(c - a, b - a)`（反过来就整体变号），`D = dot(n, a)`；打印里 **D 用 6 位小数去尾零**（`2` / `0.707107`），与法身三分量的 `0.0` 强制小数**不同形** —— 同一行里两套浮点格式，照着 vector 的写法抄就会错。
 

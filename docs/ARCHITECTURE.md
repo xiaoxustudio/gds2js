@@ -8,6 +8,7 @@
 ## 1. 出货模型不变量（改之前先读这段）
 
 - **源码即出货**：`runtime` / `compiler` / `gds2js` / `testkit` 四包全部 `noEmit`，`exports` 直指 `.ts`。不引入 dist 层、不加 project references（composite 会强制 emit，与这条冲突）。seam 覆盖、`copyTreeTs` 铺树、scriptc 编源码图、HOME 内嵌，全建在这条之上。
+- 新的**公共值类型模块**（`rect2` / `aabb` / `plane` / `quaternion` 这一类）要同时进 `packages/runtime/package.json` 的 `exports` 白名单：那份清单是显式的，不是通配，漏一条就是子路径 `ERR_MODULE_NOT_FOUND`。内部接线（`composite-classes`、`value-ctors`、`method/*`）按同一纪律**不**开放。
 - **不新增第五个包**：`tools/cli-native.mjs` 的复制清单与「把 `@gds2js/<pkg>/<subpath>` 相对化」的正则都只认 runtime/compiler（外加 gds2js 自身），新包会在原生轨上静默炸；层位错位一律用**目录**解决（`src/semantics/`、`src/analyze/`、`src/emit/` 都是这么来的）。
 - **同族模块用目录，目录里不重复前缀**：`runtime/method/`、`runtime/builtin/`、`runtime/values/`、`analyze/checks/`。入口门面文件（`methods.ts`、`builtins.ts`、`values.ts`）位置与公共面不动 —— 消费者说明符不变，`exports` 白名单也不变（这些家族模块本来就只被相对引用）。
 - **产物树是封闭清单**：唯一真源 `packages/compiler/src/tree-face.ts` 的 `TREE_FACE`，字符串值就是出货布局本身，动它 = `test:pkgmodes` / `test:scriptc` / `test:export` 同时漂。改布局先跑 `pnpm test:treeface`。
