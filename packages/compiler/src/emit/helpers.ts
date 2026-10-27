@@ -8,7 +8,7 @@ import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
 import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
-import { BUILTIN, D6_VALUE_TYPES, HOST_PRINT_NAMES, NO_ARRAYS, NO_DICTS, type R } from "./surface";
+import { BUILTIN, HOST_PRINT_NAMES, NO_ARRAYS, NO_DICTS, type R } from "./surface";
 import { fwdParams } from "./layout";
 import { type RawSite, arrayElemKind, computeUnboxed, elemKindFromInit, isGridElem, keyKindOk, kindOfExpr, leafOf, slotElemKindName } from "./abi";
 import { emitExpr } from "./expr-boxed";
@@ -939,6 +939,7 @@ export function typeDefault(t: TypeRef | null): string {
   if (base === "AABB") return "rt.aabb(0, 0, 0, 0, 0, 0)";
   if (base === "Rect2") return "rt.rect2(0, 0, 0, 0)";
   if (base === "Rect2i") return "rt.rect2i(0, 0, 0, 0)";
+  if (base === "Basis") return "rt.basis(1, 0, 0, 0, 1, 0, 0, 0, 1)";
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';
@@ -950,7 +951,6 @@ export function typeDefault(t: TypeRef | null): string {
   if (base === "PackedVector3Array") return 'rt.packCtor("vector3", [])';
   if (base === "PackedVector4Array") return 'rt.packCtor("vector4", [])';
   if (base === "PackedColorArray") return 'rt.packCtor("color", [])';
-  if (D6_VALUE_TYPES.has(base)) return `rt.unsupportedValueDefault(${JSON.stringify(base)})`;
   return "rt.V.nil()";
 }
 

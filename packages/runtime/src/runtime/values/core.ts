@@ -14,6 +14,7 @@ import { quaternion, quaternionText } from "../quaternion";
 import { asQuaternion, GQuaternion } from "../composite-classes";
 import { asTransform2D, GTransform2D } from "../composite-classes";
 import { transform2d, transform2dText } from "../transform2d";
+import { asBasis, basis, basisText, GBasis } from "../basis";
 import { asPlane, GPlane } from "../composite-classes";
 import { asAABB, GAABB } from "../composite-classes";
 import { asVec3i, GVector3i, vector3i } from "../vector3i";
@@ -124,6 +125,8 @@ function keyOfIn(v: Variant, depth: number): string {
       const ab = asAABB(v);
       if (ab) return `16:${String(ab.x)},${String(ab.y)},${String(ab.z)},${String(ab.sx)},${String(ab.sy)},${String(ab.sz)}`;
       if (rc2i) return `8:${String(rc2i.x)},${String(rc2i.y)},${String(rc2i.w)},${String(rc2i.h)}`;
+      const bsKey = asBasis(v);
+      if (bsKey) return `17:${String(bsKey.x0)},${String(bsKey.x1)},${String(bsKey.x2)},${String(bsKey.y0)},${String(bsKey.y1)},${String(bsKey.y2)},${String(bsKey.z0)},${String(bsKey.z1)},${String(bsKey.z2)}`;
       const ridKey = asRid(v);
       if (ridKey !== null) return "r:" + String(ridKey.id);
       const npKey = asNodePath(v);
@@ -156,6 +159,7 @@ export type ElemKind =
   | "Plane"
   | "Quaternion"
   | "Transform2D"
+  | "Basis"
   | "AABB"
   | "Vector4"
   | "Vector4i"
@@ -196,6 +200,8 @@ export function elemDefault(kind: ElemKind): Variant {
       return quaternion(0, 0, 0, 1);
     case "Transform2D":
       return transform2d(1, 0, 0, 1, 0, 0);
+    case "Basis":
+      return basis(1, 0, 0, 0, 1, 0, 0, 0, 1);
     case "Vector3i":
       return vector3i(0, 0, 0);
     case "Vector4":
@@ -272,6 +278,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
     }
     case "Transform2D":
       return v.t === Tag.OBJECT && v.v instanceof GTransform2D ? v : null;
+    case "Basis":
+      return v.t === Tag.OBJECT && v.v instanceof GBasis ? v : null;
     case "Quaternion":
       return v.t === Tag.OBJECT && v.v instanceof GQuaternion ? v : null;
     case "Plane":
@@ -433,6 +441,9 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GTransform2D) {
         return transform2dText(inner);
       }
+      if (inner instanceof GBasis) {
+        return basisText(inner);
+      }
       if (inner instanceof GQuaternion) {
         return quaternionText(inner);
       }
@@ -509,6 +520,14 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
       const other: Variant = aa !== null ? b : a;
       if (other.t === Tag.NIL) return false;
       throw new UnsupportedError("aabb-eq-pair", `AABB 与 ${valueTypeName(other)} 的 ${op} 那一格没量过`);
+    }
+    const abs2 = asBasis(a);
+    const bbs = asBasis(b);
+    if (abs2 !== null && bbs !== null) return abs2.x0 === bbs.x0 && abs2.x1 === bbs.x1 && abs2.x2 === bbs.x2 && abs2.y0 === bbs.y0 && abs2.y1 === bbs.y1 && abs2.y2 === bbs.y2 && abs2.z0 === bbs.z0 && abs2.z1 === bbs.z1 && abs2.z2 === bbs.z2;
+    if (abs2 !== null || bbs !== null) {
+      const o3: Variant = abs2 !== null ? b : a;
+      if (o3.t === Tag.NIL) return false;
+      throw new UnsupportedError("basis-eq-pair", `Basis 与 ${valueTypeName(o3)} 的 ${op} 那一格没量过`);
     }
     const av = a.v;
     const bv = b.v;

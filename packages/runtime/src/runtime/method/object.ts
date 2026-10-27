@@ -33,7 +33,8 @@ import { aabbMethod } from "./aabb";
 import { planeMethod } from "./plane";
 import { quaternionMethod } from "./quaternion";
 import { transform2dMethod } from "./transform2d";
-import { GAABB, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "../composite-classes";
+import { basisMethod } from "./basis";
+import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "../composite-classes";
 import { GVector3i, vector3iMethod } from "../vector3i";
 import { colorMethod, GColor } from "../color";
 import { bytesMethod, GBytes, packTypeName } from "../packed";
@@ -383,5 +384,6 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GAABB) return aabbMethod(inner, name, args);
   if (inner instanceof GRect2) return rect2Method(inner, name, args);
   if (inner instanceof GRect2i) return rect2iMethod(inner, name, args);
+  if (inner instanceof GBasis) return basisMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
 }

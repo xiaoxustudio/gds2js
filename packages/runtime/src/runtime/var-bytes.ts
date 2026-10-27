@@ -7,7 +7,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GAABB, GPlane, GQuaternion, GTransform2D } from "./composite-classes";
+import { GAABB, GBasis, GPlane, GQuaternion, GTransform2D } from "./composite-classes";
 import { GRect2 } from "./rect2";
 import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
@@ -34,6 +34,7 @@ const T_AABB = 16;
 const T_PLANE = 14;
 const T_QUATERNION = 15;
 const T_TRANSFORM2D = 11;
+const T_BASIS = 17;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
 const T_STRING_NAME = 21;
@@ -85,6 +86,7 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   Vector2: 5,
   Vector2i: 6,
   Transform2D: 11,
+  Basis: 17,
   Quaternion: 15,
   Plane: 14,
   AABB: 16,
@@ -207,6 +209,7 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GPlane ||
     o instanceof GQuaternion ||
     o instanceof GTransform2D ||
+    o instanceof GBasis ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
     o instanceof GVector4i ||
@@ -437,6 +440,19 @@ class Writer {
           this.f32(o.yy);
           this.f32(o.ox);
           this.f32(o.oy);
+          return;
+        }
+        if (o instanceof GBasis) {
+          this.header(T_BASIS);
+          this.f32(o.x0);
+          this.f32(o.y0);
+          this.f32(o.z0);
+          this.f32(o.x1);
+          this.f32(o.y1);
+          this.f32(o.z1);
+          this.f32(o.x2);
+          this.f32(o.y2);
+          this.f32(o.z2);
           return;
         }
         if (o instanceof GQuaternion) {
@@ -720,6 +736,18 @@ class Reader {
         const tox = this.f32();
         const toy = this.f32();
         return V.object(new GTransform2D(txx, txy, tyx, tyy, tox, toy));
+      }
+      case T_BASIS: {
+        const g0 = this.f32();
+        const g1 = this.f32();
+        const g2 = this.f32();
+        const g3 = this.f32();
+        const g4 = this.f32();
+        const g5 = this.f32();
+        const g6 = this.f32();
+        const g7 = this.f32();
+        const g8 = this.f32();
+        return V.object(new GBasis(g0, g3, g6, g1, g4, g7, g2, g5, g8));
       }
       case T_QUATERNION: {
         const qx = this.f32();

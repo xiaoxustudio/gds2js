@@ -11,10 +11,6 @@ import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } f
 import { allocateRid, rid } from "../rid";
 import { typeOf } from "../patterns";
 
-export function unsupportedValueDefault(name: string): Variant {
-  throw new UnsupportedError("value-default", `${name} 的默认值发不出（D6：那七个值类型不进 Tier 1）`);
-}
-
 export function lengthOf(v: Variant): Variant {
   if (v.t === Tag.STRING || v.t === Tag.STRING_NAME) return V.int(strLength(v.v as string));
   if (v.t === Tag.ARRAY) return V.int((v.v as GArray).size());

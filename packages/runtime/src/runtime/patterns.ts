@@ -10,7 +10,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GAABB, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "./composite-classes";
+import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "./composite-classes";
 import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
@@ -121,6 +121,7 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Plane: (v) => v.t === Tag.OBJECT && v.v instanceof GPlane,
   Quaternion: (v) => v.t === Tag.OBJECT && v.v instanceof GQuaternion,
   Transform2D: (v) => v.t === Tag.OBJECT && v.v instanceof GTransform2D,
+  Basis: (v) => v.t === Tag.OBJECT && v.v instanceof GBasis,
 };
 
 const PACK_TYPES: Record<string, PackKind> = {
@@ -263,6 +264,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GRect2) return V.int(7);
   if (v.t === Tag.OBJECT && v.v instanceof GRect2i) return V.int(8);
   if (v.t === Tag.OBJECT && v.v instanceof GTransform2D) return V.int(11);
+  if (v.t === Tag.OBJECT && v.v instanceof GBasis) return V.int(17);
   if (v.t === Tag.OBJECT && v.v instanceof GQuaternion) return V.int(15);
   if (v.t === Tag.OBJECT && v.v instanceof GPlane) return V.int(14);
   if (v.t === Tag.OBJECT && v.v instanceof GAABB) return V.int(16);

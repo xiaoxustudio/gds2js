@@ -30,7 +30,8 @@ import { aabbReadProp } from "../aabb";
 import { planeReadProp } from "../plane";
 import { quaternionReadProp } from "../quaternion";
 import { transform2dReadProp } from "../transform2d";
-import { GPlane, GQuaternion, GTransform2D } from "../composite-classes";
+import { basisReadProp, basisWriteProp } from "../basis";
+import { GBasis, GPlane, GQuaternion, GTransform2D } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
 import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
@@ -237,6 +238,8 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (rc !== null) return rect2WriteProp(rc, key, value);
   const rci = base.t === Tag.OBJECT && base.v instanceof GRect2i ? (base.v as GRect2i) : null;
   if (rci !== null) return rect2iWriteProp(rci, key, value);
+  const bs = base.t === Tag.OBJECT && base.v instanceof GBasis ? (base.v as GBasis) : null;
+  if (bs !== null) return basisWriteProp(bs, key, value);
   const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
   if (col !== null) return colorWrite(col, V.str(key), value, "prop");
   if (
@@ -460,6 +463,12 @@ export function attribute(raw: unknown, name: string): unknown {
       const part = aabbReadProp(ab, name);
       if (part !== null) return part;
       throw new UnsupportedError("aabb-prop", `AABB.${name} 的属性读没量过`);
+    }
+    const bs = obj.v instanceof GBasis ? (obj.v as GBasis) : null;
+    if (bs !== null) {
+      const part = basisReadProp(bs, name);
+      if (part !== null) return part;
+      throw new UnsupportedError("basis-prop", `Basis.${name} 的属性读没量过`);
     }
     const rc = obj.v instanceof GRect2 ? (obj.v as GRect2) : null;
     if (rc !== null) {

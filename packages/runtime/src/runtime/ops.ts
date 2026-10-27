@@ -8,6 +8,7 @@ import { asVec2, GVector2, vector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vector3, vec3Cmp } from "./vector3";
 import { asQuaternion, quaternion } from "./quaternion";
 import { asTransform2D, transform2d } from "./transform2d";
+import { asBasis, basisMul, basisScaled, basisXform } from "./basis";
 
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./vector4";
@@ -225,6 +226,18 @@ export const ops = {
         return vector2(r3(r3(taMul.xx * p.x) + r3(taMul.yx * p.y)) + taMul.ox, r3(r3(taMul.xy * p.x) + r3(taMul.yy * p.y)) + taMul.oy);
       }
       throw new UnsupportedError("transform2d-mul-right", `Transform2D 的 ${"\u002a"} 只量过乘 Transform2D 与乘 Vector2（收到另一形）`);
+    }
+    const baMul = asBasis(a);
+    if (baMul !== null) {
+      const bbMul = asBasis(b);
+      if (bbMul !== null) return basisMul(baMul, bbMul);
+      const bvMul = asVec3(b);
+      if (bvMul !== null) {
+        const p = basisXform(baMul, bvMul.x, bvMul.y, bvMul.z);
+        return vector3(p[0] as number, p[1] as number, p[2] as number);
+      }
+      if (b.t === Tag.FLOAT || b.t === Tag.INT) return basisScaled(baMul, r3(num(b)));
+      throw new UnsupportedError("basis-mul-right", `Basis 的 ${"\u002a"} 只量过乘 Basis、乘 Vector3、乘数（收到另一形）`);
     }
     const qaMul = asQuaternion(a);
     const qbMul = asQuaternion(b);

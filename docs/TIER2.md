@@ -12,7 +12,7 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 - `emit/surface.ts:223 SCRIPT_HOST_BASES`（`RefCounted` / `Node` / `Object`）与 `project.ts:15 HOST_BASES`（只有 `SceneTree`）语义互相抵消，且**零测试覆盖**。
 - `packages/runtime/src/host.ts:107-167` 的 `SceneTree` 是 `setTimeout` 自制帧循环：无 children、无 `add_child`、无 `_ready`，`run(maxFrames=3000)` 固定 `dt`。`:111` 那条注释是实测教训：**基类 `async` 虚方法被子类覆写在静态编译目标上没有实现**，所以两条 virtual 都写成「非 async 签名 + 返回 Promise」。
 - `runtime/identity.ts` 的 `LIVE: Map<number, object>` 是强引用且从不清除 → 没有确定性释放，D7 与 `object.ts:109 signal-flag-deferred` 都卡在这。
-- 全仓 **0 个 `.tscn`**，`tools/golden.mjs` 只发 `--script`、从不加载场景；`tools/lib.mjs` 的夹具槽硬编码成 `main.gd` / `godot.txt` 两个名字，`normalize` 只按 gd 路径归一，**没有实例 id 掩码**。
+- 全仓 **0 个 `.tscn`**，`tools/golden.mjs` 只发 `--script`、从不加载场景；`tools/lib.mjs` 的夹具槽硬编码成 `main.gd` / `godot.txt` 两个名字；`normalize` 已掩 `<Class#号>` 与引擎 `core/variant`、`core/math` 的报错帧，但**裸 `get_instance_id()` 数字**没有规则。
 - `emit/index.ts` 尾部写死 `await new Main().run()`：产物只有一个宿主驱动入口。
 
 ## 三条硬约束（决定所有设计形状）
@@ -93,7 +93,7 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 **预算影响**：本阶段的主落点 `method/object.ts`（375 行）与 `method/access.ts`（485 行）离 1500 线都远，不需要先减负；但引擎类成员**不需要**新增导出名（放行的是既有的 `methodCallable` / `V.object` 形状，新表在 compiler 侧）。真正的预算压力在阶段二，见下。
 
-### 阶段二 —— 七个值类型（D6，整族进，分三批）
+### 阶段二 —— 七个值类型（D6，整族进，分三批）【已收口：七型全落地，`unsupportedValueDefault` 那条拒已随 `Basis` 一起删掉】
 
 > **进度（批次一第一片）**：`Rect2` / `Rect2i` 的**值形状**已落地 —— 构造式全形（`()` / 四数 / 两 Vector2 / 两 Vector2i / 同型与互转单参，浮点进 Rect2i 按引擎截断）、`position` / `size` / `end` 属性读写、打印 `[P: (1.0, 2.0), S: (3.0, 4.0)]`、`var_to_str` / `str_to_var` 往返、`var_to_bytes` 型码 7 / 8 与四分量编解码、`hash` 逐分量 murmur（**绝对值对上引擎**：`hash(Rect2(1,2,3,4)) = 3873189715`、`hash(Rect2i(1,2,3,4)) = 3206438488`、`hash(Rect2(1.5,2.5,3.5,4.5)) = 2235871981`）、`==` / `!=` 逐分量与 `Rect2 == Rect2i` 的响亮拒、`is Rect2` / `is Rect2i`、`Array[Rect2]` 元素与字典键、`var r: Rect2` 默认值。语料用例 `451-rect2-face` 十七格逐字节一致，`corpus-diff` 287/287、三桶全 0。
 > **方法面也落了一半**：`method/rect.ts` 收下 Rect2 十四支与 Rect2i 十一支（Rect2i 没有 `is_finite` / `is_equal_approx`，实测不存在），语料用例 `452-rect2-methods` 十一格逐字节。三条从读数里逼出来的形状值得记住：`get_area()` 用**有符号**积（负尺寸照样正数）、`get_center()` 与 `end` 用**有符号**尺寸、`abs()` 才做归一；`grow_side` 的边号顺序是 Margin 的 `0=LEFT 1=TOP 2=RIGHT 3=BOTTOM`（猜成左右上下会全格错）；负尺寸矩形打 `has_point` / `intersects` / `encloses` 时引擎往 stderr 吐一句 `Rect2 size is negative, this is not supported. Use Rect2.abs() ...` 并回 false —— 那句带 `rect2.h:185` 的源文件行号，产物复现不了，所以**负尺寸那一形不能进语料**，只在用例外的读数里留证。另有两格没定案：`intersects(r, true)` 这种两参形在 `var e := Rect2(...)` 之后是解析期 `Too many arguments ... Expected at most 1`，但对构造式临时值同样写法却给 true —— 静态类型是否已知造成的分歧，没读清就响亮拒；`%` 格式化的 `%v`、以及 `e.abs` 当值取（打 `Rect2::abs`）也仍未定案。`%` 格式化的 `%v`（实测吐字面量）与 `e.abs` 当值取（打 `Rect2::abs`）两格待单独定案；`op-pairs` 的 Rect2 矩阵**故意不加条目**（引擎对 Rect2 没有算术与序比较，加了就是自造语义）。
@@ -126,6 +126,19 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 > **批次三进度**：`Transform2D` 已落地（typeof 11，语料 `457-transform2d-face` 十一格逐字节）。一处值得留档：`rotated(a)` 的式子是整体左乘 `R = [[c, -s], [s, c]]`（三列一起转），我第一版把 X 列写成 `c*x + s*y`，在 `t` 的基正好是单位阵时与正确答案同值，只有原点分量把差异暴露出来 —— 「对称输入下巧合对上」是这类式子的典型陷阱，用例里要保持非对称数值。`var_to_bytes` 型码 11、六个 float32 共 28 字节，`var_to_str` 是六数式。没量的 `interpolate_with` / `xform` / `basis_xform` / `affine_xform` / `get_origin` 与四参 `(角度, 位置, 缩放)` 形一律响亮拒。
 
+**批次三收尾（`Basis` 已落地，语料 `458-basis-face` 十七格逐字节）**：把上面「还没读到」的四项各自补到了能定式子的格数 ——
+`get_scale()` = 列长 × `sign(determinant())`（shear 那支给 `(-3.741657, -8.774964, -14.59452)`，单位阵给 `(1.0, 1.0, 1.0)`）；
+`Basis * float` 只有右乘那一侧（`b * 2.0` 与 `b * 2` 同值，三列一起放缩；`2.0 * b` 是解析期错，见上）；
+`rotated(axis, angle)` 用同一支再转一次的复合格定死了「整体左乘 `from_axis_angle`」；
+`is_conformal` 存在（shear 支 false、两支旋转基 true），但**没实现**：引擎那一格靠 epsilon 容差，`(0.1,0.2,0.3,0.4)` 那支的点积是 2e-8 量级仍判 true，strict 规则会在这一格静默错 —— 容差公式没读数，一律响亮拒。
+两处式子不是「看着对」而是被读数钉住的：`inverse()` 用余子式乘 `r(1/det)` 而**不是**除法（`4 / -3` 与 `4 * r(-0.33333334)` 差一个 ulp，读数 `-1.3333334` 只认后者）；
+`var_to_bytes` 与 `var_to_str` 与 `hash()` 三处都是**行主序** `(x0,y0,z0, x1,y1,z1, x2,y2,z2)`，`hash` 第一版按列序写就撞上 `k14` 那一格（引擎 `1562345701`，列序得 `3090056357`）。
+轴角两支（构造式与 `rotated`）只量过**单位轴**：非归一化轴引擎发 `ERROR: The axis … must be normalized.` 并回单位阵，那条形我们没建模，改抛 `basis-axis-normalized`。
+`Basis()` 的九数写法引擎构造式**不收**（`No constructor of "Basis" matches the signature "Basis(float × 9)"`），只有 `var_to_str` 认 —— 所以 `basisNew` 的元数表是 0/1/2/3，九数路径单独只走 `str_to_var`。
+仍响亮拒：`get_euler`（三个 order 的分支与象限没量）、`scaled`、`slerp`、`looking_at`、`orthonormalized`、与 `null` 之外的异型 `==` 配对。
+
+**`Basis` 的第一轮读数（`tmp/r2/b.sh`，一支一脚本防解析期连坐）**：typeof 17；打印 `[X: (1.0, 2.0, 3.0), Y: …, Z: …]`（列即构造实参）；成员 `x` / `y` / `z`；`determinant()` 在列 (1,2,3)/(4,5,6)/(7,8,10) 上是 `-3.0`；`transposed()` 给 `[X: (1.0,4.0,7.0), Y: (2.0,5.0,8.0), Z: (3.0,6.0,10.0)]`；`inverse() * b` 回到单位；`q * Vector3(1,2,3) = (3.0, 2.0, -1.0)`（即 `x*v.x + y*v.y + z*v.z`）；`Basis(Quaternion)` 与 `Basis(Vector3 轴, float 角)` 两支都在，后者给 `X: (0.877583, 0.0, -0.479426), Z: (0.479426, 0.0, 0.877583)`；`get_euler()` 存在（90° 那支给 `(0.0, 1.570796, 0.0)`）；`rotated(axis, angle)` 存在且有一格数；`var_to_bytes` 型码 17、40 字节往返成立；`2.0 * Basis` 是解析期错（`Invalid operands "float" and "Basis" for "*" operator.`），`orthonormalize()` 不存在。这一轮缺的 `get_scale` / `is_conformal` / `Basis * float` 合法侧 / `rotated` 复合式，都在上面收尾那一轮补到了格数。
+
 **分批（按依赖序，不是一次七支）**：
 
 1. `Rect2` + `Rect2i` —— 只依赖已实现的 `Vector2` / `Vector2i`。
@@ -142,7 +155,7 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 按依赖拆四步，每步都要先出实测再做实现：
 
-1. **实例 id 与打印的可比性（前置，最先做）**：`tools/lib.mjs` 的 `normalize` 目前只按 gd 路径归一，**没有实例 id 掩码**；而这一层所有新读数的号都是进程内分配。掩号规则不落地，任何节点/实例用例都不可比 —— 所以它是后三步的门槛，不是收尾活。
+1. **实例 id 与打印的可比性（前置，最先做）**：**本轮复核纠正了这条的说法** —— `tools/lib.mjs` 的 `normalize` 已经掩 `<Class#号>` 这一形（`:137` 的 `/<([A-Za-z_]\w*)#-?\d+>/g`），所以带类名的对象打印早就可比；**真正缺的是裸数字那一形**（`print(node.get_instance_id())` 直接吐一个 int，掩它会把合法数据一起吃掉），以及 `Callable` 的字典键 `q:<id>:<name>:<boundTag>` 只在运行时内部、不进打印。所以这一步的活是：定一个「用例必须用标记位打印 id」的 harness 约定（例如只允许 `print("id|", ...)` 包一层再归一），而不是再写一个掩码正则。`identity.ts` 的 `LIVE` 强引用不清除仍然是这一步的第二半（D7）。
 2. **对象生命周期与确定性释放（D7）**：`identity.ts` 的 `LIVE` 强引用 map 要换成可释放登记；`object.ts:109 signal-flag-deferred`（`CONNECT_DEFERRED`）与 `call_deferred` 一族在这里解禁。差异牵连五处等式面（打印、`is_instance_valid`、容器键、Callable 的等式、`hash`），见待拍板 9。**释放机制别顺手选 JS 的反射式方案**：`WeakRef` + `FinalizationRegistry` 看似最省事，但回收时机由 GC 决定、跨进程不确定的行为**测不出可复现的 golden**，违反红线 1「没测过的不许写进实现」；scriptc 静态轨对它的支持也未知。三条候选（γ 先响亮拒 / 引用计数照 Godot 的 `RefCounted` 语义自己实现 / WeakRef 交给 GC）里**建议 γ**：这一格继续抛 `UnsupportedError`，把「引用计数何时归零」作为单独一批实测读数（拿真 Godot 的 `is_instance_valid()` 时序量），量出来再落地。
 3. **节点树与通知**：新增 `runtime/node.ts`（children、`add_child` / `remove_child` / `get_node(path)` / `free` / `queue_free`），今天这些名字全落 `method/object.ts:374 object-method`。通知派发**必须走发射期静态表**，复用 `emit/class.ts:200-222` 的 `__gdDispatch` 机制；`_ready` / `_process` 的覆写形状守 `src/host.ts:111` 那条实测教训（非 async 签名 + 返回 Promise）。基类集合改为探头派生的父子链，替换 `project.ts:17-20` 手抄名单，并解开它与 `surface.ts:223` / `project.ts:15` 的三集合冲突（补测试，今天零覆盖）。
 4. **主循环与退出形状**：`emit/index.ts` 尾部写死 `await new Main().run()`，`src/host.ts:145 run(maxFrames=3000)` 是 `setTimeout` 自制循环。接真 `SceneTree` 要先拍：谁持有主循环、`quit(code)` 的退出码语义、以及那 18 例带 `<<GDS2JS_TIMEOUT>>` 的**退出形状**（引擎侧入口被作废后走不到 `quit()`、永不退出，我们的宿主自己收尾退 0）。这不是"改改就行"：`test/e2e/corpus-hang.test.ts:38-44` 要求**产物也被 SIGTERM 杀掉、且杀之前输出逐字节相等**，所以要连 `tools/lib.mjs` 的超时预算（`DEFAULT_TIMEOUT_MS`、`hangBudget`）与标记追加逻辑一起复核。

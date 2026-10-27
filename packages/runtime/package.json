@@ -52,6 +52,7 @@
     "./runtime/plane": "./src/runtime/plane.ts",
     "./runtime/quaternion": "./src/runtime/quaternion.ts",
     "./runtime/transform2d": "./src/runtime/transform2d.ts",
+    "./runtime/basis": "./src/runtime/basis.ts",
     "./runtime/values": "./src/runtime/values.ts",
     "./runtime/numfmt": "./src/runtime/numfmt.ts",
     "./runtime/string-ops": "./src/runtime/string-ops.ts",
