@@ -44,7 +44,7 @@ import { flattenBody } from "./walk";
 import { typedFaceText } from "./literals";
 import { argFaceBase, argNameType, literalTypeName, staticType } from "./faces";
 import { faceListHas } from "./arity";
-import { checkPackArgSlots } from "./checks/collections";
+import { checkPackArgSlots } from "./checks/collections/pack";
 
 /** 只认没量的那一族之外的源名：容器、`Variant` 与脚本类名各自走自己那一支（r1..r7 量的是标量与 `null`）。 */
 export function scalarSourceName(st: string, classNames: Set<string>): boolean {

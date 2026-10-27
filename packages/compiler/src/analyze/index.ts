@@ -40,7 +40,11 @@ import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 
 import { Scope, capKey, declNames, diKey, gvKey, nextMarkSeq, resetRun, run } from "./state";
-import { checkArrayMethodArity, checkDictDuplicateKeys, checkDictMethodArity, checkPackArgSlots, checkPackFaceNames, checkPackIsAs, checkTypedCollections, checkTypedIndexSlots, checkTypedVarAssign } from "./checks/collections";
+import { checkTypedCollections } from "./checks/collections/typed";
+import { checkTypedIndexSlots } from "./checks/collections/index-slots";
+import { checkTypedVarAssign } from "./checks/collections/var-assign";
+import { checkPackArgSlots, checkPackFaceNames, checkPackIsAs } from "./checks/collections/pack";
+import { checkArrayMethodArity, checkDictDuplicateKeys, checkDictMethodArity } from "./checks/collections/method-arity";
 import { checkClass, checkClassFuncVisibility, checkConstAssign, checkFieldInits, checkInitContracts, checkParamDefaultAssign, checkPropertyDelegates, checkReturnPaths, checkScriptClassSlots, checkSignalDefaults } from "./checks/decls";
 import { checkBoolOrdering, checkOperandPairs, checkPercentFormat, checkVoidAnnotation, checkVoidMethodValues } from "./checks/operators";
 import { checkFunc, classTable, markClassFaceReceivers, seedOuterNames } from "./walk";
