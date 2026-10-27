@@ -24,9 +24,16 @@
 ## 1. 值的表示（D1）
 
 ```ts
-export const enum Tag { NIL, BOOL, INT, FLOAT, STRING, ARRAY, DICT, OBJECT }
+```ts
+export const Tag = {
+  NIL: 0, BOOL: 1, INT: 2, FLOAT: 3,
+  STRING: 4, ARRAY: 5, DICT: 6, OBJECT: 7,
+  STRING_NAME: 8,          // `&"foo"`：与 STRING 同族不同标签，`str()` / `==` / 打印都另有形
+} as const;
 
-export interface Variant { t: Tag; v: unknown }
+export type TagValue = (typeof Tag)[keyof typeof Tag];
+export interface Variant { t: TagValue; v: unknown }
+```
 ```
 
 **四条规则（emitter 必须遵守）**
@@ -120,8 +127,9 @@ export function reportRunFailure(e: unknown): void        // in-process → 再�
 | 签名 | 语义 | 依据 |
 | --- | --- | --- |
 | `ops.inOp(a, b): Variant(BOOL)` | `a in b`：Array 查元素 / String 查子串 / Dict 查键 | `019` |
-| `ops.str(a): Variant(STRING)` | 转字符串，int/float 输出不同 | S7 |
-| `ops.key(a): string` | Dictionary 键编码，**必须区分 int / float / string** | S14 |
+| `ops.truthy(a): Variant(BOOL)` | 真值判定：`0` / `""` / 空数组 / 空字典为假（**没有** `truthyInt` / `truthyStr` 这种分型 —— 那是 §4 那一代的设想，实际只有这一颗） | S12 |
+
+转字符串与 Dictionary 键编码**不在 `ops.*` 面上**：前者是内建函数 `str()`（发射面上的 `rt.str`，走 `values/` 那族），后者是 `keyOf`（`values/core.ts`，同样不是 `ops` 成员）。文档早先写的 `ops.str` / `ops.key` 两颗名字从来没有导出过，emitter 也不发它们。
 
 ---
 
@@ -130,27 +138,17 @@ export function reportRunFailure(e: unknown): void        // in-process → 再�
 emitter 在**编译期能确定类型**时直接发这些，输入输出都是**裸 JS 值**（不装箱）。
 这是 D2 的"快路径"那一轨；`ops.*` 是"动态"那一轨。
 
-| 签名 | 对应场景 | 依据 |
-| --- | --- | --- |
-| `fast.iDiv(a: number, b: number): number` | int / int → **`Math.trunc(a / b)`**，向零截断 | S1 |
-| `fast.fDiv(a: number, b: number): number` | 含 float → `a / b` | S2 |
-| `fast.iMod(a: number, b: number): number` | `a % b`（与 Godot 一致） | S3 |
-| `fast.iPow(a: number, b: number): number` | `Math.pow(a, b)` | S4 |
-| `fast.fPow(a: number, b: number): number` | `Math.pow(a, b)` | S4 |
-| `fast.iAdd / iSub / iMul(a, b): number` | 整数加减乘 | |
-| `fast.fAdd / fSub / fMul(a, b): number` | 浮点加减乘 | |
-| `fast.sConcat(a: string, b: string): string` | 字符串连接 | S13 |
-| `fast.strInt(n: number): string` | `String(n)` —— **不带 `.0`** | S7 |
-| `fast.strFloat(n: number): string` | Godot 浮点格式：14 位有效数字、去尾随零、**至少保留一位小数**（`1.0` → `"1.0"`） | S7 |
-| `fast.truthyInt(n): boolean` | `n !== 0` | S12 |
-| `fast.truthyStr(s): boolean` | `s !== ""` | S12 |
-| `fast.truthyArr(a): boolean` | `a.length !== 0` —— **空数组 false** | S12 |
-| `fast.truthyDict(d): boolean` | `d.size() !== 0` —— **空字典 false** | S12 |
-| `fast.eqDeep(a, b): boolean` | 深度比较 | S10 |
-| `fast.eqNum(a, b): boolean` | 数值比较（跨 int/float） | S11 |
+**名表不在这份文档里列** —— 早先这里是一张手写的 `fast.iDiv / fDiv / iPow / sConcat / strInt / truthyInt / eqDeep …` 表，和真实导出面**一个名字都对不上**，而且只要漂移就没人会发现（它是第二份清单）。真源只有一个：`packages/compiler/src/emit/surface.ts` 里的四个常量 `RT_NAMES` / `FAST_NAMES` / `OPS_NAMES` / `V_NAMES`，每个都用 `satisfies readonly RtName[]` 钉在 runtime 的真实导出面上 —— **拼错名字或 runtime 改名，`pnpm typecheck` 直接红**。产物侧另有 `test/repo/emit-surface.test.ts` 逐名对账，`test/repo/emit-contract.test.ts` 双向锁（emitter 源码 ⊆ 名表 ⊆ runtime 导出，且不得超出产物实际用量）。
 
-> `fast.*` 是可选的。emitter 不做类型推断也能工作（全走 `ops.*`），只是慢。
-> 所以 P2 可以先只实现 `ops.*`，`fast.*` 留到性能阶段补 —— **但签名现在就定死**。
+今天 `fast.*` 这一轨实际分成三族，语义各不相同：
+
+| 族 | 形状 | 为什么单独一族 |
+| --- | --- | --- |
+| `iAddC / iSubC / iMulC / iDivC / iModC` | 带**检查**的整数五则（`C` = checked）：安全整数内走裸 Number，越界响亮抛错而不是静默回绕 | D1 的"越界必须响"要求发射点带边界检查，不能是裸 `+ - * /` |
+| `rawArrGetNum / rawArrSetStr / rawArrInsertNum / rawArrPushFrontNum / rawArrRemoveAtNum / rawArrClearStr / rawArrGetNum2 …` | 定形 Array 槽位的裸读写（元素型静态已知时不走 `GArray` 装箱） | 快路径的收益主要在这里：容器逐元素装箱是当初最大的常数项 |
+| `rawDictGet / rawDictGetOrNum` + `unboxNum / unboxStr` | 定形 Dictionary 取值，以及从 `Variant` 解回裸值 | 解箱只在发射点静态已型时才发 |
+
+`fast.*` 是**可选加速轨**：不做类型推断也能工作（全走 `ops.*`），只是慢。这一轨已经落地（不是"留给性能阶段"），要扩面必须先有 `bench:ab` 配对收益（`AGENTS.md` 红线 5）。
 
 ---
 
@@ -201,14 +199,14 @@ ops.key(V.str("1"))  -> "s:1"
 GDScript String 是 **UTF-32**，`length()` 数的是**码点**，索引也按码点（S26）。
 JS 是 UTF-16，所以不能直接复用 `String.length` / `[i]`。
 
+**没有 `GString` 这个类**（早期草案写过，从未落地）。运行时里 GDScript 的 String 就是**裸 JS 字符串**装在 `Variant`（`Tag.STRING`）或 `StringName`（`Tag.STRING_NAME`）里，码点语义全部由 `packages/runtime/src/runtime/string-ops.ts` 的一组**函数**提供 —— 因为 UTF-32 索引/长度在 JS 侧必须是显式操作，做成一个包装类只会把每个内建函数的装箱成本加一遍：
+
 ```ts
-export class GString {
-  length(): number             // 码点数
-  at(i: number): string        // 按码点取，返回长度 1 的字符串
-  substr(from: number, len: number): string
-  toUpper(): string
-  format(args: Variant[]): string   // "%d/%s" % [...]
-}
+strLength(s: string): number            // 码点数，不是 s.length
+strAt(s: string, i: number): Variant    // 按码点取，越界走实测那句报错
+strSubstr(s: string, from: number, len: number): Variant
+strCase(s: string, upper: boolean): string   // to_upper / to_lower，走 case-flags.ts 的实测分类表
+codepoints(s: string): number[]         // UTF-32 视图，索引族共用它
 ```
 
 字符串上另外三条纯函数（`packages/runtime/src/runtime/string-ops.ts`，口径全部实测于 4.6.3，见归档台账 S199）：
@@ -235,19 +233,23 @@ formatOf(fmt: Variant, args: Variant, soft: boolean): Variant   // S696 / S491 /
 
 ## 7. 对象与类
 
+**没有 `GObject` / `GClass` 这两个类**（早期草案）。脚本类实例的真实形状是 `packages/runtime/src/object.ts` 里的一对：
+
 ```ts
-export class GObject {
-  readonly klass: GClass
-  is(klass: GClass): boolean
-  get(name: string): Variant
-  set(name: string, v: Variant): void
-  call(name: string, args: Variant[]): Variant
+export class GdScriptObject {          // 脚本类实例的宿主侧基类
+  gdObjectId: number                   // 进程内自增号（语料一律掩号再比）
+  __gdDispatch(name: string, args: Variant[]): Variant | null   // 方法表，产物覆写它
+}
+export interface ClassDesc {           // 一个脚本类的登记表：由 emitter 在模块级填
+  base: string | null; make: () => GdScriptObject; check: (v: Variant) => boolean;
+  nativeBase: string; methodArities: ...; ctorArities: ...; methodParams: ...;
+  staticVars / scriptProps / fieldTypes / dict 族 ...
 }
 ```
 
-- 类注册表由 emitter 生成的模块级代码填充
-- `is` 走继承链（`021`）
-- 属性 setter/getter 按测清语义（归档台账 S152 / S156）：读只走 get、写只走 set、只有 getter 时写是静默无操作
+- `is` / `get_class` / `has_method` 沿 `ClassDesc.base` 链走（`021`）；今天**只有脚本类**在这套表里，引擎类当值另有专支（`native-class.ts`）—— 那一族的成员面是 Tier 2 阶段一（`docs/TIER2.md`）。
+- 属性 setter/getter 按实测语义（归档 S152 / S156）：读只走 get、写只走 set、只有 getter 时写是静默无操作。
+- 静态成员/静态变量走 `varSlotOf` / `staticCall` / `hasStaticName`，`call_deferred` 与 `CONNECT_DEFERRED` 仍响亮拒（等 Tier 2 的对象生命周期）。
 
 ---
 
@@ -284,18 +286,16 @@ emitter 规则：
 
 ---
 
-## 9. 未决项（实现前必须先补测；历史 §6 台账见 git 归档）
+## 9. 未决项（实现前必须先补测）
 
-1. setter/getter 触发时机
-2. `super()` 与构造顺序
-3. Packed\*Array 语义
-4. 静态类型违反是编译错还是运行时错
-5. `match` 的字典模式 / `when` guard
-6. `Callable` / `call_deferred`
-7. `StringName`（`&"foo"`）
-8. 浮点格式化的完整规则（尾随零、科学计数法阈值）—— 目前只知道 14 位有效数字
+这一节以前列了八条（setter/getter 触发时机、`super()` 与构造顺序、Packed\*Array 语义、静态类型违反是编译错还是运行时错、`match` 的字典模式与 `when` guard、`Callable` / `call_deferred`、`StringName`、浮点格式化的完整规则）。**其中七条已经在 Tier 1 实测并实现**，留在"未决"清单里只会让人以为这些面还没做 —— 全部删掉。
 
-**这些未测项在实现里一律抛 `UnsupportedError`，不准猜。**
+真正还开着的只有两族，且都不在这一层：
+
+1. **`call_deferred` / `CONNECT_DEFERRED` 的对象生命周期**（D7）：延后泵与局部 RefCounted 实例的确定性释放要连着做，牵连五处等式面。→ `docs/TIER2.md` 阶段三。
+2. **引擎类值的成员面与实例化**（D4）：`X.new` 当值、`.call()` 造实例。→ `docs/TIER2.md` 阶段一 / 三。
+
+**这些未测项在实现里一律抛 `UnsupportedError`，不准猜。**（`docs/ROADMAP.md` §0 的 D4 / D6 / D7 就是这条纪律的范围决定。）
 
 ---
 
@@ -306,3 +306,4 @@ emitter 规则：
 | v1 | 2026-09-23 | 首版。基于 Godot 4.6.3 实测语义，D1/D2/D3/D4 已拍板 |
 | v1（补记） | 2026-10-25 | §3 的 `ops.mod` 第三位 `soft` 旗标与 §6 的 `formatOf` 补登记 —— 两颗都是 S696 / S697 那两笔已经在用的发射面，这里只是把契约文字对齐实现，签名集合没缩也没涨 |
 | v1（补记 2） | 2026-10-25 | §0 补「覆盖面」一行，把口径写死：本契约只覆盖跨层冻结的形状，全量发射面以 `rt` 的导出表为准，并由 `test/repo/emit-surface.test.ts` 逐名自动对账。契约文字变宽，签名集合没动 |
+| v1（补记 3） | 2026-10-27 | **文档纠偏，签名集合一字未动**。§1 的 `Tag` 补回 `STRING_NAME` 并改成真实的对象常量写法；§3 删掉从未导出的 `ops.str` / `ops.key`，真值判定归位成一颗 `ops.truthy`；§4 手写的 `fast.*` 名单与真实导出面零交集，整表删除、改为指向 `surface.ts` 四个常量 + 三道门，并写清今天这一轨实际的三族形状；§6 的 `GString`、§7 的 `GObject` / `GClass` 都是从草案留下的不存在的类，改成实际落地的 `string-ops.ts` 函数族与 `GdScriptObject` + `ClassDesc`；§9 未决项从八条收敛到两条（其余七条 Tier 1 已实测并实现），两条都转 `docs/TIER2.md` |

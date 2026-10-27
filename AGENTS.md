@@ -52,12 +52,25 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GD
 1. 语义只认 Godot 4.6.3 实测（**corpus golden 逐字节** + `tools/golden.mjs` 对账；历史 S 编号台账已归档到 git 历史的 `docs/SEMANTICS.md`）；**没测过的不许写进实现**——一律抛 `UnsupportedError`，绝不静默降级、不猜。钉版本只有一个字面量 `tools/lib.mjs` 的 `GODOT_PIN`：任何要落读数的工具（`golden.mjs` / `regen:*` 探头）落盘前先 `requireGodotPin()`，版本不符直接拒写，`test/repo` 的文档计数门③ 保证树里所有「Godot x.y.z」都跟着它一起搬。
 2. **禁止自行添加语言特性、长短注释及说明注释等，除非我特意说明，否则直接禁止添加。** 存量注释的口径：**源码里只留纯函数的 `/** */` 文档注释**，其余（任务编号、读数依据、临时说明）不写；`case-table.ts` / `case-flags.ts` / `ucaps.ts` / `engine-classes.ts` 四张实测生成物的头注释由生成器产出，只能走 `pnpm regen:*`，别手删（`test:codegen` 会红）。
 3. 测试文件只放 `packages/<pkg>/test/` 或根 `test/`，**绝不放进 `packages/*/src/`**（会被 `copyTreeTs` 扫进出货产物树）。
-4. 版本戳：`packages/gds2js/src/version.ts` 与四处 `package.json` 必须一字一致（`pnpm release` 校验）。
+4. 版本戳：`packages/gds2js/src/version.ts` 与**五份** `package.json`（根 + 四包）必须一字一致（`pnpm release` 与 `test/repo/version-consistency` 双重校验）。
 5. 任何语义改动：golden 必须逐字节不变；性能改动要有 `bench:ab` 配对读数才作数。
+
+## 常驻操作口径（动代码或跑门之前先看这几条）
+
+1. **两道引擎门不并跑** —— `test:golden-check` 与 `test:scriptc` 同跑会因 CPU 争用误报超时与漂移；报了超时先单跑点名的几格复现（`npx vitest run --project e2e golden-drift -t "00[1-6]-"`），别急着改 golden。
+2. **长门在跑时别动 `corpus/cases/*`、别改源码** —— 门读的是盘面产物，改了就是拿两份不同的东西比对（假红）；停门要停干净，残留的 godot / node / scriptc 子进程能让三支门同时红。
+3. **改 runtime 的发射形状或函数形状** —— 先 `GDS2JS_SCRIPTC_FILTER=234-string-methods-batch pnpm test:scriptc`（面探针），`pnpm release` 的第 2b 步就是它。
+4. **新增 runtime 的导出名** —— 先 `pnpm build`：工程形状用例的产物 import 的是 `packages/gds2js/dist/runtime.mjs` 那份打包副本，不重建会报 `xxx is not a function`。
+5. **改产物树 / 内嵌 HOME 布局** —— 先跑 `pnpm test:treeface`；三个消费者共用 `packages/compiler/src/tree-face.ts` 那一张清单。
+6. **语义改动的验收** —— `corpus-diff` 逐字节 + `test:golden-check` 零漂移 + 三桶（静默错 / 崩溃 / 未实现）全 0；性能改动没有 `bench:ab` 配对读数就不动热路。
+7. **出货** —— `pnpm release` 前先确认全量 scriptc 门零红（`GDS2JS_SCRIPTC_ALL=1 pnpm test:scriptc`，本机以小时计，四并发）；版本戳一致由 release 自己校验，漂了就红。
+8. **重构的默认判据** —— `pnpm test:compile` 之后 `git diff --exit-code -- corpus/cases` 必须零漂移：它只对**已追踪**的产物敏感，正是「存量语义没变」的机器判据（新增用例走自己的 golden 基线）。
 
 ## 文档索引
 
-- `docs/ROADMAP.md` — 已拍板决策（D1–D7、A–I）/ 阶段判据 / Tier 1 收口状态与剩余大任务
+- `docs/ROADMAP.md` — 已拍板决策（D1–D8、A–I）/ 阶段判据 / Tier 1 收口状态快照
+- `docs/ARCHITECTURE.md` — 架构史与不变量（D8 正文：出货模型、阶段契约、模块布局、尺寸棘轮、依赖图纪律、发射面、实测出处）
+- `docs/TIER2.md` — Tier 2（宿主与引擎 API、七个值类型、对象生命周期）的阶段、判据、取证清单与待拍板问题
 - `docs/RUNTIME_API.md` — runtime ↔ emitter 契约（v1，签名冻结；覆盖面口径见 §0）
 - `README.md` — CLI 用法、运行时打包模式、测试分层详解
-- 历史逐笔台账与 S 编号语义基线（原 `docs/SEMANTICS.md` / ROADMAP §1.3 起流水）已归档，需要时 `git log -- docs/` 取回
+- 历史逐笔台账与 S 编号语义基线（原 `docs/SEMANTICS.md` 与 ROADMAP 的逐笔流水）已归档，需要时 `git show fa46a87:docs/SEMANTICS.md` / `git show fa46a87:docs/ROADMAP.md` 取回
