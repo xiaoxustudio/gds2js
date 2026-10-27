@@ -13,7 +13,7 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 
 | 位置 | 内容 |
 | --- | --- |
-| `packages/runtime` | 运行时内核：值表示 / `ops.*` 动态路径 / `fast.*` 快路径、容器、UTF-32 String、Vector/Color、hash；GDScript 内建函数按族拆在 `runtime/builtin-*.ts`（`builtins.ts` 只剩再导出与两处 hook 接线），方法名与属性面按接收者种类拆在 `runtime/method-*.ts`（`methods.ts` 只留 `method()` 分派器）；host 宿主入口 |
+| `packages/runtime` | 运行时内核：值表示 / `ops.*` 动态路径 / `fast.*` 快路径、容器、UTF-32 String、Vector/Color、hash；GDScript 内建函数按族拆在 `runtime/builtin-*.ts`（`builtins.ts` 只剩再导出与两处 hook 接线），方法名与属性面按接收者种类拆在 `runtime/method-*.ts`（`methods.ts` 只留 `method()` 分派器），容器 / 打印 / `%` 格式化 / 型标注盖章拆在 `runtime/values-*.ts`（`values.ts` 只剩门面）；host 宿主入口 |
 | `packages/compiler` | parse（tree-sitter WASM→CST）→ lower(IR) → analyze → emit；`analyze/` 按判断维度分模块、入口 `analyze/index.ts`；`emit/` 按发射维度分模块、入口 `emit/index.ts`、每模块共享 `emit/context.ts` 的 `EmitContext`；`semantics/` 装 Godot 实测静态表；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
