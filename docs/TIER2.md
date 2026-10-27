@@ -30,7 +30,7 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 | 登记文件 | 封顶 | 盘面 | 余量 | Tier 2 谁要动它 |
 | --- | --- | --- | --- | --- |
 | `runtime/values/core.ts` | 1202 | 1202 | **0** | 阶段二：默认值 / 转换 / 打印 / 相等 / 字典键前缀 / `deepCopy` 六面都要加臂 |
-| `compiler/lower/lower.ts` | 1269 | 1269 | **0** | 阶段二：`CTOR_ARMS` / `ARM_NO_CTOR`；阶段一：引擎类构造式 |
+| ~~`compiler/lower/lower.ts`~~ | 1269 | 已切出 `lower/{cst,lit}.ts` | 249 | 阶段二要用 `CTOR_ARMS` / `ARM_NO_CTOR` 那一族；封顶已随切分降到 1020，两份新模块同步进了 `STAMP_SOURCES` |
 | ~~`analyze/checks/collections.ts`~~ | 1153 | 已拆 | — | 阶段零已目录化为 `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts`，预算登记随之删除；阶段二的 `Array[T]` 盖章落在 `collections/typed.ts` |
 | `runtime/packed.ts` | 1098 | 1098 | **0** | 阶段二：与值类型互转 |
 | `runtime/methods.ts` | 59 | 59 | **0** | 门面：新成员族要加再导出名 |

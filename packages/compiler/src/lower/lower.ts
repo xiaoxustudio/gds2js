@@ -21,162 +21,29 @@ import type {
   TypeRef,
   VarDecl,
 } from "./ir";
+import { accessorTokenErr, checkAfterToken, checkColonHere, continuationErr, field, inBrackets, indexParents, type LineCarrying, loc, lowerType, MATCH_PATTERN_COLON, matchMalformedScan, named, need, nextNamedSib, operatorOf, operatorToken, tokenOf } from "./cst";
+import { lowerIntLit, stripAmp, stripCaret, unquote } from "./lit";
 
-function loc(n: SyntaxNode): Loc {
-  return { line: n.startPosition.row + 1, col: n.startPosition.column + 1 };
-}
 
-function field(n: SyntaxNode, name: string): SyntaxNode | null {
-  for (const c of n.children) {
-    if (c.fieldName === name) return c;
-  }
-  return null;
-}
 
-function need(n: SyntaxNode | null | undefined, what: string): SyntaxNode {
-  if (!n) throw new UnsupportedError("missing-field", `缺少 ${what}`);
-  return n;
-}
 
-function operatorOf(n: SyntaxNode): string {
-  const op = n.children.find((c) => !c.isNamed);
-  if (!op) throw new UnsupportedError("missing-operator", `${n.type} 找不到运算符`);
-  return op.text;
-}
 
-const BRACKET_NODES = new Set(["parenthesized_expression", "array", "dictionary", "arguments", "subscript"]);
 
-const CST_PARENTS = new WeakMap<SyntaxNode, SyntaxNode>();
 
-function indexParents(n: SyntaxNode): void {
-  for (const c of n.children) {
-    CST_PARENTS.set(c, n);
-    indexParents(c);
-  }
-}
 
-function inBrackets(n: SyntaxNode | null | undefined): boolean {
-  for (let p = n ? CST_PARENTS.get(n) : undefined; p; p = CST_PARENTS.get(p)) {
-    if (BRACKET_NODES.has(p.type)) return true;
-  }
-  return false;
-}
 
-function tokenOf(n: SyntaxNode, text: string): SyntaxNode | null {
-  return n.children.find((c) => !c.isNamed && c.text === text) ?? null;
-}
 
-function continuationErr(sentence: string, at?: SyntaxNode): never {
-  const e = new UnsupportedError("line-continuation", sentence);
-  const carry = e as LineCarrying;
-  if (at !== undefined) carry.line = at.startPosition.row + 1;
-  throw e;
-}
 
-function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxNode | null, sentence: string): void {
-  if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence, token);
-}
 
-const MATCH_PATTERN_COLON = 'Expected ":" or "when" after "match" patterns.';
-const MATCH_GUARD_EMPTY = 'Expected expression for pattern guard after "when".';
-const MATCH_SUBJECT_COLON = 'Expected ":" after "match" expression.';
-const MATCH_EMPTY_BLOCK = 'Expected an indented block after "match" statement.';
 
-function gluedArm(x: SyntaxNode): SyntaxNode | null {
-  const kids = x.children;
-  if (!kids.some((k) => k.type === "ERROR" && /^[A-Za-z_]/.test(k.text))) return null;
-  return kids.find((k) => k.isNamed && k.type !== "ERROR" && k.type !== "arguments") ?? null;
-}
 
-/** `match` 那一族的畸形形整棵树只有一个落点可用：语法塌法按缩进与手臂位置分岔（顶层 ERROR / `body` 里的 ERROR / `match_body` 的直接 ERROR），
- *  所以只要树里带 ERROR 就按记号级证据扫一遍（尺 `tmp/probe710` 十三形，句与行都按引擎原文量的），取最靠前的那一处。
- *  三条判据都要求树上真有 `match` 记号，且各认各的形状：守卫把身体粘走、主题后面直接贴上下一条手臂、手臂后面没冒号。 */
-function matchMalformedScan(root: SyntaxNode): { sentence: string; at: SyntaxNode } | null {
-  const hits: Array<{ sentence: string; at: SyntaxNode; row: number }> = [];
-  let sawMatch = false;
-  const walk = (x: SyntaxNode): void => {
-    if (x.type === "match") sawMatch = true;
-    {
-      const head = x.children.findIndex((k) => k.type === "match");
-      const colon = x.children.findIndex((k, i) => i > head && !k.isNamed && k.text === ":");
-      if (head >= 0 && colon > head && x.children.slice(head + 1, colon).filter((k) => k.isNamed).length >= 2) {
-        const tok = x.children[head];
-        if (tok !== undefined) hits.push({ sentence: MATCH_SUBJECT_COLON, at: tok, row: tok.startPosition.row });
-      }
-      if (head >= 0 && colon > head && !x.children.slice(colon + 1).some((k) => k.isNamed)) {
-        const tok = x.children[head];
-        if (tok !== undefined) hits.push({ sentence: MATCH_EMPTY_BLOCK, at: tok, row: tok.startPosition.row });
-      }
-    }
-    if (x.type === "pattern_guard") {
-      const cond = x.children.find((k) => k.isNamed);
-      if (cond !== undefined && gluedArm(cond) !== null) hits.push({ sentence: MATCH_GUARD_EMPTY, at: x, row: x.startPosition.row });
-    }
-    if (x.type === "call") {
-      const arm = gluedArm(x);
-      if (arm !== null) hits.push({ sentence: MATCH_PATTERN_COLON, at: arm, row: arm.startPosition.row });
-    }
-    for (const k of x.children) walk(k);
-  };
-  walk(root);
-  if (!sawMatch) return null;
-  hits.sort((a, b) => a.row - b.row);
-  const first = hits[0];
-  return first === undefined ? null : { sentence: first.sentence, at: first.at };
-}
 
-function operatorToken(n: SyntaxNode): SyntaxNode | null {
-  return n.children.find((c) => !c.isNamed) ?? null;
-}
 
-function lastRow(n: SyntaxNode): number {
-  let row = n.startPosition.row;
-  for (let i = 0; i < n.text.length; i++) if (n.text.charCodeAt(i) === 10) row++;
-  return row;
-}
 
-function checkColonHere(n: SyntaxNode, sentence: string): void {
-  const kids = n.children;
-  const at = kids.findIndex((c) => !c.isNamed && c.text === ":");
-  const colon = at < 1 ? undefined : kids[at];
-  const prev = at < 1 ? undefined : kids[at - 1];
-  if (colon && prev && colon.startPosition.row > lastRow(prev)) continuationErr(sentence, prev);
-}
 
-function accessorTokenErr(n: SyntaxNode, needVar = true): string | null {
-  const toks: SyntaxNode[] = [];
-  const collect = (x: SyntaxNode): void => {
-    if (x.children.length === 0) toks.push(x);
-    else for (const c of x.children) collect(c);
-  };
-  collect(n);
-  let seenVar = !needVar;
-  for (let i = 0; i < toks.length; i++) {
-    const t = toks[i]!;
-    if (t.isNamed) continue;
-    if (t.text === "var") seenVar = true;
-    if (!seenVar || (t.text !== "get" && t.text !== "set")) continue;
-    const nxt = toks[i + 1];
-    if (nxt === undefined || nxt.text === ":" || nxt.text === "(") continue;
-    if (nxt.text === "=") {
-      const after = toks[i + 2];
-      const isName = after !== undefined && (after.type === "identifier" || after.type === "getter" || after.type === "setter");
-      if (isName && after!.startPosition.row === t.startPosition.row) continue;
-      return `Expected ${t.text === "get" ? "getter" : "setter"} function name after "=".`;
-    }
-    return t.text === "get" ? 'Expected ":" or "(" after "get".' : 'Expected "(" after "set".';
-  }
-  return null;
-}
 
-function named(n: SyntaxNode): SyntaxNode[] {
-  return n.namedChildren;
-}
 
-function lowerType(n: SyntaxNode): TypeRef {
-  if (n.type === "inferred_type") return { kind: "variant" };
-  return { kind: "named", name: n.text };
-}
+
 
 let packCodecUse = false;
 
@@ -184,7 +51,6 @@ let scriptFuncNames = new Set<string>();
 
 let scriptInstanceMethods = new Map<string, Set<string>>();
 
-type LineCarrying = { line?: number };
 
 function atNode<T>(n: SyntaxNode, f: () => T): T {
   try {
@@ -472,12 +338,6 @@ function lowerParam(n: SyntaxNode): Param {
   };
 }
 
-/** 整数字面量必须原样保住精度：先 `Number()` 会四舍五入、BigInt 那条路就拿不到正确值，所以 2^53 内用 number、超出用 bigint 字面量。顺带剥掉 GDScript 的 `1_000_000` 下划线。 */
-function lowerIntLit(text: string): number | bigint {
-  const t = text.replace(/_/g, "");
-  const n = Number(t);
-  return Number.isSafeInteger(n) ? n : BigInt(t);
-}
 
 function lowerBody(n: SyntaxNode): Stmt[] {
   return named(n)
@@ -941,14 +801,7 @@ function collectMulChain(n: SyntaxNode, operands: SyntaxNode[], ops: Array<{ op:
   operands.push(n);
 }
 
-/** `&"abc"` 的 CST 文本连前导 `&` 一起给，剥掉后才能和 String 共用同一套转义解码。 */
-function stripAmp(text: string): string {
-  return text.startsWith("&") ? text.slice(1) : text;
-}
 
-function stripCaret(text: string): string {
-  return text.startsWith("^") ? text.slice(1) : text;
-}
 
 const CTOR_ARMS: Record<string, string[][]> = {
   Vector2: [[], ["N", "N"], ["B", "B"], ["V2"]],
@@ -998,14 +851,6 @@ function armArgKind(n: SyntaxNode): string | null {
   }
 }
 
-/** `CsNode` 这一层不暴露 `nextNamedSibling`，兄弟关系从 `indexParents` 存的父节点上找。 */
-function nextNamedSib(n: SyntaxNode): SyntaxNode | undefined {
-  const parent = CST_PARENTS.get(n);
-  if (parent === undefined) return undefined;
-  const kids = named(parent);
-  const i = kids.indexOf(n);
-  return i < 0 ? undefined : kids[i + 1];
-}
 
 function markLiteralCalls(n: SyntaxNode): void {
   if (n.type === "ERROR") {
@@ -1171,98 +1016,4 @@ function nodePathArm(n: SyntaxNode): string | null {
   const only = args[0] ?? null;
   if (only === null || only.type !== "string") return null;
   return unquote(only.text);
-}
-
-function unquote(raw: string): string {
-  if (raw.length < 2 || !(raw.startsWith('"') || raw.startsWith("'"))) return raw;
-  const inner = raw.slice(1, -1);
-  const parts: Array<string | number> = [];
-  const pushLit = (ch: string) => {
-    const last = parts[parts.length - 1];
-    if (typeof last === "string") parts[parts.length - 1] = last + ch;
-    else parts.push(ch);
-  };
-  const pushEsc = (cp: number) => parts.push(cp);
-
-  for (let i = 0; i < inner.length; i++) {
-    const ch = inner[i]!;
-    if (ch !== "\\") {
-      const lead = inner.charCodeAt(i);
-      if (lead >= 0xd800 && lead <= 0xdbff && i + 1 < inner.length) {
-        const trail = inner.charCodeAt(i + 1);
-        if (trail >= 0xdc00 && trail <= 0xdfff) {
-          pushLit(inner.slice(i, i + 2));
-          i++;
-          continue;
-        }
-      }
-      pushLit(ch);
-      continue;
-    }
-    const e = inner[++i];
-    if (e === undefined) {
-      throw new UnsupportedError("string-escape", "字符串以孤立反斜杠结尾");
-    }
-    switch (e) {
-      case "n": pushLit("\n"); break;
-      case "t": pushLit("\t"); break;
-      case "r": pushLit("\r"); break;
-      case "a": pushEsc(0x07); break;
-      case "b": pushEsc(0x08); break;
-      case "f": pushEsc(0x0c); break;
-      case "v": pushEsc(0x0b); break;
-      case "\\": pushLit("\\"); break;
-      case '"': pushLit('"'); break;
-      case "'": pushLit("'"); break;
-      case "u":
-      case "U": {
-        const width = e === "u" ? 4 : 6;
-        const hex = inner.slice(i + 1, i + 1 + width);
-        if (!new RegExp(`^[0-9a-fA-F]{${width}}$`).test(hex)) {
-          throw new UnsupportedError(
-            "string-escape",
-            `\\${e} 需要恰好 ${width} 位十六进制，收到 "${hex}"（Godot: Invalid hexadecimal digit in unicode escape sequence）`,
-          );
-        }
-        pushEsc(parseInt(hex, 16));
-        i += width;
-        break;
-      }
-      default:
-        throw new UnsupportedError(
-          "string-escape",
-          `不支持的字符串转义 \\${e}（GDScript 无 \\x；实测 Godot 对 \\x41 报 Parse Error: Invalid escape in string）`,
-        );
-    }
-  }
-
-  let out = "";
-  for (let k = 0; k < parts.length; k++) {
-    const p = parts[k]!;
-    if (typeof p === "string") {
-      out += p;
-      continue;
-    }
-    const hi = p as number;
-    if (hi >= 0xd800 && hi <= 0xdbff) {
-      const q = parts[k + 1];
-      if (typeof q === "number" && q >= 0xdc00 && q <= 0xdfff) {
-        out += String.fromCodePoint(0x10000 + (hi - 0xd800) * 1024 + (q - 0xdc00));
-        k++;
-        continue;
-      }
-      throw new UnsupportedError(
-        "string-escape",
-        `\\u${hi.toString(16)} 是孤立的前置代理（Godot: Invalid UTF-16 sequence in string, unpaired lead surrogate）`,
-      );
-    }
-    if (hi >= 0xdc00 && hi <= 0xdfff) {
-      throw new UnsupportedError(
-        "string-escape",
-        `\\u${hi.toString(16)} 是孤立的后续代理（Godot: Invalid UTF-16 sequence in string, unpaired trail surrogate）`,
-      );
-    }
-    out += hi === 0 || hi > 0x10ffff ? "\uFFFD" : String.fromCodePoint(hi);
-  }
-  return out;
 }

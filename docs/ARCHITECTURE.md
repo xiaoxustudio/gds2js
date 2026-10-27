@@ -28,6 +28,7 @@
 | Godot 实测静态表住在分析过程里 | `compiler/src/semantics/`（含 `arg-types/`） | 层位错位：它们是「编译期拒绝判断」数据，不是分析算法 |
 | `runtime/tree-face.ts` | `compiler/src/tree-face.ts` | 三个消费者都是 CLI/tools/门，没有一个是 runtime 行为 |
 | `runtime/values.ts` / `methods.ts` / `builtins.ts`（三个巨无霸） | 门面 + `values/`、`method/`、`builtin/` 三族 | 见 §4、§5 |
+| Tier 2 阶段零：`analyze/checks/collections.ts`、`lower/lower.ts`（预算顶格，加不进行） | `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts` + `lower/{cst,lit}.ts` | 顶格的登记文件要先减才能加；切的全是**只被引用、不反向引用**的叶子簇，拆完 `collections` 的预算登记直接删（没有单文件超线），`lower.ts` 的封顶跟着降。同目录的新模块必须一并进 `compile/ir-cache.ts` 的 `STAMP_SOURCES`，否则 IR 缓存戳算不到它 |
 
 拆分的**验收姿势**（每步都一样）：产物逐字节不变（`pnpm test:compile` + `git diff --exit-code -- corpus/cases`）→ typecheck → 快层 → treeface/codegen → 出货面门。搬迁一律逐字照搬，不改写成表驱动：把 `switch (name)` 换成查表是**语义改动**，得重新实测。
 
