@@ -933,6 +933,8 @@ export function typeDefault(t: TypeRef | null): string {
   if (base === "Vector3i") return "rt.vector3i(0, 0, 0)";
   if (base === "Vector4") return "rt.vector4(0, 0, 0, 0)";
   if (base === "Vector4i") return "rt.vector4i(0, 0, 0, 0)";
+  if (base === "Rect2") return "rt.rect2(0, 0, 0, 0)";
+  if (base === "Rect2i") return "rt.rect2i(0, 0, 0, 0)";
   if (base === "Color") return "rt.color(0, 0, 0, 1)";
   if (base === "PackedByteArray") return "rt.bytesCtor([])";
   if (base === "PackedInt32Array") return 'rt.packCtor("int32", [])';

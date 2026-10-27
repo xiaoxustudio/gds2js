@@ -8,6 +8,7 @@ import { GdRid } from "../rid";
 import { GdNodePath } from "../node-path";
 import { GVector2, vector2 } from "../vector2";
 import { GVector2i } from "../vector2i";
+import { GRect2, GRect2i } from "../rect-classes";
 import { GVector3, vector3 } from "../vector3";
 import { GVector3i } from "../vector3i";
 import { GVector4, vector4 } from "../vector4";
@@ -231,6 +232,8 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GdNodePath) return nodePathHash(v.v as GdNodePath);
       if (v.v instanceof GVector2) return fmix32(hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)));
       if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
+      if (v.v instanceof GRect2) return fmix32(hashFloat32(v.v.h, hashFloat32(v.v.w, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)))));
+      if (v.v instanceof GRect2i) return fmix32(murmurOne32(v.v.h >>> 0, murmurOne32(v.v.w >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)))));
       if (v.v instanceof GVector3) return fmix32(hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED))));
       if (v.v instanceof GVector3i) return fmix32(murmurOne32(v.v.z >>> 0, murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED))));
       if (v.v instanceof GVector4) return fmix32(hashFloat32(v.v.w, hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)))));

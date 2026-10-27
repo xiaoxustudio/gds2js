@@ -1,0 +1,15 @@
+export const CTOR_ARMS: Record<string, string[][]> = {
+  Vector2: [[], ["N", "N"], ["B", "B"], ["V2"]],
+  Vector2i: [[], ["N", "N"], ["V2"]],
+  Vector3: [[], ["N", "N", "N"]],
+  Vector3i: [[], ["N", "N", "N"]],
+  StringName: [[], ["S"]],
+  NodePath: [[], ["S"]],
+  Callable: [[]],
+  Rect2: [[], ["N", "N", "N", "N"], ["V2", "V2"], ["R2"], ["R2I"]],
+  Rect2i: [[], ["N", "N", "N", "N"], ["V2I", "V2I"], ["R2"], ["R2I"]],
+  Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
+  String: [[], ["S"]],
+  Array: [],
+  Dictionary: [],
+};

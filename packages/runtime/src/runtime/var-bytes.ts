@@ -7,6 +7,8 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
+import { GRect2 } from "./rect2";
+import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
 import { GdNodePath } from "./node-path";
@@ -25,6 +27,8 @@ const T_FLOAT = 3;
 const T_STRING = 4;
 const T_VECTOR2 = 5;
 const T_VECTOR2I = 6;
+const T_RECT2 = 7;
+const T_RECT2I = 8;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
 const T_STRING_NAME = 21;
@@ -75,6 +79,8 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   String: 4,
   Vector2: 5,
   Vector2i: 6,
+  Rect2: 7,
+  Rect2i: 8,
   Vector3: 9,
   Vector3i: 10,
   Vector4: 12,
@@ -186,6 +192,8 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GVector2 ||
     o instanceof GVector3 ||
     o instanceof GVector2i ||
+    o instanceof GRect2 ||
+    o instanceof GRect2i ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
     o instanceof GVector4i ||
@@ -398,6 +406,22 @@ class Writer {
           this.header(T_VECTOR2I);
           this.u32(o.x);
           this.u32(o.y);
+          return;
+        }
+        if (o instanceof GRect2) {
+          this.header(T_RECT2);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.w);
+          this.f32(o.h);
+          return;
+        }
+        if (o instanceof GRect2i) {
+          this.header(T_RECT2I);
+          this.u32(o.x);
+          this.u32(o.y);
+          this.u32(o.w);
+          this.u32(o.h);
           return;
         }
         if (o instanceof GVector3i) {
@@ -631,6 +655,20 @@ class Reader {
         const x = this.i32();
         const y = this.i32();
         return V.object(new GVector2i(x, y));
+      }
+      case T_RECT2: {
+        const x = this.f32();
+        const y = this.f32();
+        const w = this.f32();
+        const h = this.f32();
+        return V.object(new GRect2(x, y, w, h));
+      }
+      case T_RECT2I: {
+        const x = this.i32();
+        const y = this.i32();
+        const w = this.i32();
+        const h = this.i32();
+        return V.object(new GRect2i(x, y, w, h));
       }
       case T_VECTOR3I: {
         const x = this.i32();

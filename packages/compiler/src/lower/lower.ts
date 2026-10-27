@@ -1,6 +1,7 @@
 import { parseGdDouble } from "@gds2js/runtime/shared/double";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { GLOBAL_CALLABLES } from "@gds2js/runtime/runtime/global-names";
+import { CTOR_ARMS } from "../semantics/ctor-arms";
 import type { CsNode as SyntaxNode, CsTree as Tree } from "../parse/cst";
 import type {
   ClassDecl,
@@ -803,20 +804,6 @@ function collectMulChain(n: SyntaxNode, operands: SyntaxNode[], ops: Array<{ op:
 
 
 
-const CTOR_ARMS: Record<string, string[][]> = {
-  Vector2: [[], ["N", "N"], ["B", "B"], ["V2"]],
-  Vector2i: [[], ["N", "N"], ["V2"]],
-  Vector3: [[], ["N", "N", "N"]],
-  Vector3i: [[], ["N", "N", "N"]],
-  StringName: [[], ["S"]],
-  NodePath: [[], ["S"]],
-  Callable: [[]],
-  Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
-  String: [[], ["S"]],
-  Array: [],
-  Dictionary: [],
-};
-
 function armArgKind(n: SyntaxNode): string | null {
   switch (n.type) {
     case "integer":
@@ -943,12 +930,15 @@ function slotForK(kind: string | null, slot: string): boolean {
   if (slot === "B") return kind === "int" || kind === "float" || kind === "bool";
   if (slot === "S") return kind === "String";
   if (slot === "V2") return kind === "Vector2";
+  if (slot === "V2I") return kind === "Vector2i";
+  if (slot === "R2") return kind === "Rect2";
+  if (slot === "R2I") return kind === "Rect2i";
   if (slot === "V3") return kind === "Vector3";
   return kind === slot;
 }
 
 const ARM_NO_CTOR: Record<string, boolean> = {
-  Rect2: true, Rect2i: true, Transform2D: true, Plane: true, Quaternion: true, Basis: true, AABB: true, Signal: true,
+  Transform2D: true, Plane: true, Quaternion: true, Basis: true, AABB: true, Signal: true,
 };
 
 function ctorArm(n: SyntaxNode): boolean {

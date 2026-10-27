@@ -26,6 +26,8 @@ import { GVector3, vec3ReadIndex, vec3Write } from "../vector3";
 import { GVector4, vec4ReadIndex, vec4Write } from "../vector4";
 import { GVector4i, vec4iReadIndex, vec4iWrite } from "../vector4i";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "../vector2i";
+import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
+import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite } from "../vector3i";
 import { colorRead, colorWrite, GColor, toColor } from "../color";
 import { bytesReadIndex, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "../packed";
@@ -225,6 +227,10 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (vec2i !== null) return vec2iWrite(vec2i, V.str(key), value, "prop");
   const vec3i = asVec3i(base);
   if (vec3i !== null) return vec3iWrite(vec3i, V.str(key), value, "prop");
+  const rc = base.t === Tag.OBJECT && base.v instanceof GRect2 ? (base.v as GRect2) : null;
+  if (rc !== null) return rect2WriteProp(rc, key, value);
+  const rci = base.t === Tag.OBJECT && base.v instanceof GRect2i ? (base.v as GRect2i) : null;
+  if (rci !== null) return rect2iWriteProp(rci, key, value);
   const col = base.t === Tag.OBJECT && base.v instanceof GColor ? (base.v as GColor) : null;
   if (col !== null) return colorWrite(col, V.str(key), value, "prop");
   if (
@@ -425,6 +431,16 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
+    const rc = obj.v instanceof GRect2 ? (obj.v as GRect2) : null;
+    if (rc !== null) {
+      const part = rect2ReadProp(rc, name);
+      if (part !== null) return part;
+    }
+    const rci = obj.v instanceof GRect2i ? (obj.v as GRect2i) : null;
+    if (rci !== null) {
+      const part = rect2iReadProp(rci, name);
+      if (part !== null) return part;
+    }
     const vface = obj.v instanceof GVector2 ? "Vector2" : obj.v instanceof GVector2i ? "Vector2i"
       : obj.v instanceof GVector3 ? "Vector3" : obj.v instanceof GVector3i ? "Vector3i"
         : obj.v instanceof GVector4 ? "Vector4" : obj.v instanceof GVector4i ? "Vector4i"

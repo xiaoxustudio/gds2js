@@ -7,6 +7,7 @@ import { asVec2 } from "./vector2";
 import { asVec3 } from "./vector3";
 import { asVec4 } from "./vector4";
 import { asVec2i } from "./vector2i";
+import { asRect2, asRect2i } from "./rect-classes";
 import { asVec3i } from "./vector3i";
 import { asVec4i } from "./vector4i";
 import { asColor } from "./color";
@@ -1334,6 +1335,8 @@ export function valueTypeName(x: Variant): string {
   if (asVec3(x) !== null) return "Vector3";
   if (asVec4(x) !== null) return "Vector4";
   if (asVec2i(x) !== null) return "Vector2i";
+  if (asRect2(x) !== null) return "Rect2";
+  if (asRect2i(x) !== null) return "Rect2i";
   if (asVec3i(x) !== null) return "Vector3i";
   if (asVec4i(x) !== null) return "Vector4i";
   if (asColor(x) !== null) return "Color";

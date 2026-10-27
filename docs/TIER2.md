@@ -95,6 +95,12 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 ### 阶段二 —— 七个值类型（D6，整族进，分三批）
 
+> **进度（批次一第一片）**：`Rect2` / `Rect2i` 的**值形状**已落地 —— 构造式全形（`()` / 四数 / 两 Vector2 / 两 Vector2i / 同型与互转单参，浮点进 Rect2i 按引擎截断）、`position` / `size` / `end` 属性读写、打印 `[P: (1.0, 2.0), S: (3.0, 4.0)]`、`var_to_str` / `str_to_var` 往返、`var_to_bytes` 型码 7 / 8 与四分量编解码、`hash` 逐分量 murmur（**绝对值对上引擎**：`hash(Rect2(1,2,3,4)) = 3873189715`、`hash(Rect2i(1,2,3,4)) = 3206438488`、`hash(Rect2(1.5,2.5,3.5,4.5)) = 2235871981`）、`==` / `!=` 逐分量与 `Rect2 == Rect2i` 的响亮拒、`is Rect2` / `is Rect2i`、`Array[Rect2]` 元素与字典键、`var r: Rect2` 默认值。语料用例 `451-rect2-face` 十七格逐字节一致，`corpus-diff` 287/287、三桶全 0。
+> **仍未做（同一批次的下一片）**：方法面十四支实测存在的（`get_area` / `get_center` / `has_point` / `intersects` 两形 / `encloses` / `merge` / `expand` / `grow` / `grow_individual` / `grow_side` / `abs()` / `is_equal_approx` / `is_finite`）与 Rect2i 那几支的差集 —— 今天打到它们仍走 `object-method` 响亮拒；`%` 格式化的 `%v`（实测吐字面量）与 `e.abs` 当值取（打 `Rect2::abs`）两格待单独定案；`op-pairs` 的 Rect2 矩阵**故意不加条目**（引擎对 Rect2 没有算术与序比较，加了就是自造语义）。
+> 结构上的两条副产出：`runtime/rect-classes.ts` 是把 `GRect2` / `GRect2i` 放在叶子模块以免 `string-ops → rect2 → string-ops` 成环（`module-cycles` 抓到过），`lower.ts` 的 `CTOR_ARMS` 外提成 `semantics/ctor-arms.ts` 换回了预算余量并同步进 `STAMP_SOURCES`。
+
+
+
 成本量级（以已实现的 `Vector2` 为模板实测：口径 = `packages/*/src` + `tools/` + `test/`，不计 `corpus/` 产物，**45 个文件、3229 次命中**）。这不是"加一个类文件"的工作量，落点清单：
 
 - **runtime**：新类文件（仿 `runtime/vector2.ts` 的 `GVector2` / `vector2()` / `asVec2` / `toVec2` / `vector2New` / 常量表这套形状）、`tags.ts`（**值类型没有自己的 Tag，全走 `Tag.OBJECT` + `instanceof`**，`V` 工厂也没有 `V.vector2`）、`builtin/names.ts` 的 `TYPE_NAMES`（七个名字已在册）、`method/object.ts:47-68` 接收者分派、`method/access.ts:416` 属性读、`face-arity.ts` 的元数与存在表、`values/core.ts`（默认值 / 转换 / 打印 / 相等 / 字典键前缀 / `deepCopy`）、`values/print.ts`（`SV_VALUE_CTORS` 与 `str_to_var` 构造式）、`values/format.ts` 的 `%v`、`values/stamp.ts`、`builtin/hash.ts` 的 murmur 逐分量、`var-bytes.ts` 序列化、`convert.ts`、`ops.ts` 六则运算符逐对 + `SORT_ORDERED`、`runtime/slots.ts` 槽位加宽；出货面 = `packages/runtime/package.json` 的 `exports` 白名单加一条 + `runtime/index.ts` 一行再导出。

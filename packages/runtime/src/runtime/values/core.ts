@@ -6,6 +6,8 @@ import { GVector2, asVec2 } from "../vector2";
 import { GVector3, asVec3, vector3 } from "../vector3";
 import { GVector4, asVec4, vector4 } from "../vector4";
 import { asVec2i, GVector2i, vector2i } from "../vector2i";
+import { asRect2, GRect2, rect2, rect2Text } from "../rect2";
+import { asRect2i, GRect2i, rect2i, rect2iText } from "../rect2i";
 import { asVec3i, GVector3i, vector3i } from "../vector3i";
 import { asVec4i, GVector4i, vector4i } from "../vector4i";
 import { asColor, color, GColor, tryColorSlot } from "../color";
@@ -102,6 +104,10 @@ function keyOfIn(v: Variant, depth: number): string {
       const col = asColor(v);
       if (col)
         return `z:${String(col.r)},${String(col.g)},${String(col.b)},${String(col.a)}`;
+      const rc2 = asRect2(v);
+      if (rc2) return `7:${String(rc2.x)},${String(rc2.y)},${String(rc2.w)},${String(rc2.h)}`;
+      const rc2i = asRect2i(v);
+      if (rc2i) return `8:${String(rc2i.x)},${String(rc2i.y)},${String(rc2i.w)},${String(rc2i.h)}`;
       const ridKey = asRid(v);
       if (ridKey !== null) return "r:" + String(ridKey.id);
       const npKey = asNodePath(v);
@@ -129,6 +135,8 @@ export type ElemKind =
   | "Vector3"
   | "Vector2i"
   | "Vector3i"
+  | "Rect2"
+  | "Rect2i"
   | "Vector4"
   | "Vector4i"
   | "Color"
@@ -156,6 +164,10 @@ export function elemDefault(kind: ElemKind): Variant {
       return vector3(0, 0, 0);
     case "Vector2i":
       return vector2i(0, 0);
+    case "Rect2":
+      return rect2(0, 0, 0, 0);
+    case "Rect2i":
+      return rect2i(0, 0, 0, 0);
     case "Vector3i":
       return vector3i(0, 0, 0);
     case "Vector4":
@@ -223,6 +235,18 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       const g2 = v.t === Tag.OBJECT ? (v.v as object) : null;
       if (g2 instanceof GVector2) return vector2i(g2.x, g2.y);
       return v.t === Tag.OBJECT && v.v instanceof GVector2i ? v : null;
+    }
+    case "Rect2": {
+      if (v.t === Tag.OBJECT && v.v instanceof GRect2) return v;
+      const ri = v.t === Tag.OBJECT ? (v.v as object) : null;
+      if (ri instanceof GRect2i) return rect2(ri.x, ri.y, ri.w, ri.h);
+      return null;
+    }
+    case "Rect2i": {
+      if (v.t === Tag.OBJECT && v.v instanceof GRect2i) return v;
+      const rf = v.t === Tag.OBJECT ? (v.v as object) : null;
+      if (rf instanceof GRect2) return rect2i(rf.x, rf.y, rf.w, rf.h);
+      return null;
     }
     case "Vector3i": {
       if (v.t === Tag.OBJECT && v.v instanceof GVector3i) return v;
@@ -364,6 +388,12 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GColor) {
         return `(${strColor(inner.r)}, ${strColor(inner.g)}, ${strColor(inner.b)}, ${strColor(inner.a)})`;
       }
+      if (inner instanceof GRect2) {
+        return rect2Text(inner);
+      }
+      if (inner instanceof GRect2i) {
+        return rect2iText(inner);
+      }
       if (inner instanceof GBytes) {
         return `[${packItems(inner as GBytes).map((e) => repr(e, depth + 1)).join(", ")}]`;
       }
@@ -399,6 +429,20 @@ export function repr(v: Variant, depth = 0): string {
 export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const ta = a.t;
   const tb = b.t;
+  if (ta === Tag.OBJECT && tb === Tag.OBJECT) {
+    const av = a.v;
+    const bv = b.v;
+    if (av instanceof GRect2 || av instanceof GRect2i || bv instanceof GRect2 || bv instanceof GRect2i) {
+      if (av instanceof GRect2 && bv instanceof GRect2) return av.x === bv.x && av.y === bv.y && av.w === bv.w && av.h === bv.h;
+      if (av instanceof GRect2i && bv instanceof GRect2i) return av.x === bv.x && av.y === bv.y && av.w === bv.w && av.h === bv.h;
+      if ((av instanceof GRect2 && bv instanceof GRect2i) || (av instanceof GRect2i && bv instanceof GRect2)) {
+        throw new GodotRuntimeError("rect2-eq", `Invalid operands to operator ${op}, Rect2 and Rect2i.`);
+      }
+      const other: Variant = av instanceof GRect2 || av instanceof GRect2i ? b : a;
+      if (other.t === Tag.NIL) return false;
+      throw new UnsupportedError("rect2-eq-pair", `Rect2 与 ${valueTypeName(other)} 的 ${op} 那一格没量过`);
+    }
+  }
   const a2 = asVec2(a);
   const b2 = asVec2(b);
   const a3 = asVec3(a);
@@ -531,6 +575,12 @@ export function valueSame(a: Variant, b: Variant, depth = 0): boolean {
       }
       if (a.v instanceof GVector2i && b.v instanceof GVector2i) {
         return a.v.x === b.v.x && a.v.y === b.v.y;
+      }
+      if (a.v instanceof GRect2 && b.v instanceof GRect2) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.w === b.v.w && a.v.h === b.v.h;
+      }
+      if (a.v instanceof GRect2i && b.v instanceof GRect2i) {
+        return a.v.x === b.v.x && a.v.y === b.v.y && a.v.w === b.v.w && a.v.h === b.v.h;
       }
       if (a.v instanceof GVector3i && b.v instanceof GVector3i) {
         return a.v.x === b.v.x && a.v.y === b.v.y && a.v.z === b.v.z;

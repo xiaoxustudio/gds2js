@@ -99,7 +99,8 @@ describe("runtime · 类型转换族（236）", () => {
     eq("236", "str_to_var 认其余六支 pack 的形状", `${sv("PackedInt32Array(1.7, 2)")}|${sv("PackedInt64Array(1)")}|${sv("PackedFloat32Array(1)")}|${sv("PackedFloat64Array(1.5)")}|${sv('PackedStringArray("a")')}|${sv("PackedVector2Array(1, 2)")}`, "30|[1, 2]|31|[1]|32|[1.0]|33|[1.5]|34|[\"a\"]|35|[(1.0, 2.0)]");
     eq("236", "str_to_var 的 pack 元素类型不合式给 null（实测 int 串互斥）", `${sv('PackedByteArray("a")')}|${sv('PackedInt32Array("a")')}|${sv("PackedStringArray(1)")}|${sv("PackedByteArray(1, 2,)")}`, "0|<null>|0|<null>|0|<null>|0|<null>");
     eq("236", "str_to_var 的 int64 饱和（引擎同时往 stderr 打一句 Too large，值这边一致）", `${sv("99999999999999999999")}|${sv("PackedInt64Array(99999999999999999999)")}`, "2|9223372036854775807|31|[9223372036854775807]");
-    eq("236", "str_to_var 撞见引擎给得出而我们没形状的类型，响亮拒", `${sv("Rect2(1, 2, 3, 4)")}|${sv("Quaternion(1, 2, 3, 4)")}|${sv("PackedColorArray()")}`, "[str-to-var-type]|[str-to-var-type]|[str-to-var-type]");
+    eq("236", "str_to_var 的 Rect2 / Rect2i 形状已接住（读数语料 451 r10）", `${sv("Rect2(1, 2, 3, 4)")}|${sv("Rect2i(1, 2, 3, 4)")}|${sv("Rect2i(-1.7, 2, 3, 4)")}`, '7|[P: (1.0, 2.0), S: (3.0, 4.0)]|8|[P: (1, 2), S: (3, 4)]|8|[P: (-1, 2), S: (3, 4)]');
+    eq("236", "str_to_var 撞见引擎给得出而我们没形状的类型，响亮拒", `${sv("Quaternion(1, 2, 3, 4)")}|${sv("PackedColorArray()")}`, "[str-to-var-type]|[str-to-var-type]");
     eq("236", "str_to_var 撞见没量过的构造式名字响亮拒（引擎的 null 只量过 NoSuchType 那一格）", sv("NoSuchType(1)"), "[str-to-var-shape]");
     eq("236", "str_to_var 的实参只量过 String：给 int 就拒", String(((() => { try { return strToVar(I(7)); } catch (e) { return `[${(e as UnsupportedError).code}]`; } })())), "[str-to-var-arg]");
     eq("236", "var_to_str 打出去的写法，str_to_var 能原样读回来", sv(vs(gd([[S("a"), arrOf([I(1), gd([[S("b"), I(2)]])])], [I(3), S("z")]]))), '27|{ 3: "z", "a": [1, { "b": 2 }] }');

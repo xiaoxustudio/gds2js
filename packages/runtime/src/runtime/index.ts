@@ -16,6 +16,8 @@ export * from "./var-bytes";
 export * from "./vector2";
 export * from "./vector3";
 export * from "./vector2i";
+export * from "./rect2";
+export * from "./rect2i";
 export * from "./vector3i";
 export * from "./vector4";
 export * from "./vector4i";
