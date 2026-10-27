@@ -41,7 +41,7 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 切法沿用 Tier 1 已验证的那三条路子，不再发明：
 
 - **同族目录化**：`values/core.ts` 里成簇的（默认值 / 转换 / 相等）按 Tier 1 P4/P7 的 decl 级搬迁切到 `values/` 下新模块，门面留再导出 —— 公开面 169 名一字不变的证明流程（`tmp/surface-check.mts` 那套）重跑一遍即可。
-- **表外提**：`lower.ts` 的 `CTOR_ARMS` / `ARM_NO_CTOR`、`checks/collections.ts` 的成员表按 Tier 1 P1「semantics 抽表」的先例外提成 `semantics/` 或 `lower/` 同级表文件。
+- **叶子外提**（本轮实际用的那把刀）：只切「被引用、但不反向引用」的簇。`lower.ts` 试过把 expr/pattern/arm 一族整块搬出去，结果是把**同文件内的互递归**变成**跨模块值环** —— 那一族必须留在 `lower.ts`，能走的只有 CST 访问子与字面量处理两片叶子。
 - **门面瘦身**：`methods.ts` / `builtins.ts` 两行封顶的门面，把逐名再导出改成 `export * from`（前提：`module-cycles` 门把 `export … from` 也算价值边，这条改动要看着它绿）。
 
 **两道连带门，切的时候要一起处理，不然会静默失效**：
@@ -54,6 +54,22 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 ### 阶段一 —— 引擎类值的属性面（读数已全，先落地）
 
 **切割口径**：只做「把 `Node.new` 这类成员当**值**发出来，并满足已测读数」；**真正调用它造实例照旧响亮拒**（造实例要对象模型 → 阶段三）。这是唯一能让"读数已全"立刻落地、又不把宿主提前拖进来的切法。
+
+**本轮新取的读数**（`GODOT_BIN` = Godot 4.6.3.stable.official.7d41c59c4，`tools/golden.mjs` 落盘；探头料在 `corpus/cases/000-probe-engine-class-new/`，实现落地时转正为语料用例）。当前我们在这一支的失败点是 `method/object.ts:45 native-class-member`（取属性 `Node.new` 就抛，还没走到造实例）：
+
+```
+f01|25|25|25|25|25|25                 typeof Node.new / RefCounted.new / Object.new / Resource.new / FileAccess.new / GDScript.new 全是 25（Callable）
+f02|true|false|true                  n == Node.new 为 true；n == RefCounted.new 为 false；两次独立取值等式成立
+f03|new|new|new                      .get_method() 一律 "new"
+f04|true|true|true                   .is_valid()
+f05|0|0|0                            .get_argument_count()
+f06|-1|new|true                      bind(1) 之后元数 −1、名与有效性不变
+f07|false|false                      .is_null()
+f08|1|true|1                         {Node.new: 1} 的 size / has / 取值 —— 两次取值能当同一个字典键
+f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程内号
+```
+
+读数里**没有**任何实例 id（`.call()` / `Node.new()` 造出的实例那一形不在本阶段，掩号是阶段三第 1 步的前置），所以这一格可以现在就变成语料用例而不等掩号落地。
 
 已测读数（原 §2 第 4 条，不必重量）：`RefCounted` / `Object` / `Node` / `Resource` / `FileAccess` / `GDScript` 六支的 `.new` 同名同标签 `GDScriptNativeClass::new`、`typeof` 为 25、两次取同一属性 `==` 为 true、`get_method()` 给 `new`、`is_valid()` true、`get_argument_count()` 0、`bind(1)` 后 −1、`.call()` 造得出实例（实例号按进程内分配，语料一律掩号再比）。
 
