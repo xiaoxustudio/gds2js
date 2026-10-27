@@ -9,6 +9,7 @@ export const CTOR_ARMS: Record<string, string[][]> = {
   Rect2: [[], ["N", "N", "N", "N"], ["V2", "V2"], ["R2"], ["R2I"]],
   Rect2i: [[], ["N", "N", "N", "N"], ["V2I", "V2I"], ["R2"], ["R2I"]],
   AABB: [[], ["V3", "V3"]],
+  Plane: [[], ["V3", "N"], ["V3", "V3", "V3"], ["N", "N", "N", "N"]],
   Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
   String: [[], ["S"]],
   Array: [],

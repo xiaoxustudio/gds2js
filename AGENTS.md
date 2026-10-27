@@ -18,7 +18,7 @@ Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupport
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |
-| `corpus/cases/` | 语料用例 450 例（另有 `000-*` 探头，不入语料），逐例 golden 对账 |
+| `corpus/cases/` | 语料用例 451 例（另有 `000-*` 探头，不入语料），逐例 golden 对账 |
 | `test/` | `repo/`（仓库不变量）+ `e2e/`（出货与语义门，逐支落点看目录）+ `support/` |
 
 ## 常用命令

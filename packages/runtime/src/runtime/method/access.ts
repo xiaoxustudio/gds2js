@@ -27,6 +27,8 @@ import { GVector4, vec4ReadIndex, vec4Write } from "../vector4";
 import { GVector4i, vec4iReadIndex, vec4iWrite } from "../vector4i";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "../vector2i";
 import { aabbReadProp } from "../aabb";
+import { planeReadProp } from "../plane";
+import { GPlane } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
 import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
@@ -433,6 +435,12 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
+    const pl = obj.v instanceof GPlane ? (obj.v as GPlane) : null;
+    if (pl !== null) {
+      const part = planeReadProp(pl, name);
+      if (part !== null) return part;
+      throw new UnsupportedError("plane-prop", `Plane.${name} 的属性读没量过`);
+    }
     const ab = obj.v instanceof GAABB ? (obj.v as GAABB) : null;
     if (ab !== null) {
       const part = aabbReadProp(ab, name);

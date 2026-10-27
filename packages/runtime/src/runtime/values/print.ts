@@ -7,6 +7,7 @@ import { GVector2, vector2 } from "../vector2";
 import { rect2 } from "../rect2";
 import { rect2i } from "../rect2i";
 import { aabb } from "../aabb";
+import { plane } from "../plane";
 import { vector3 } from "../vector3";
 import { GVector4, vector4 } from "../vector4";
 import { vector2i } from "../vector2i";
@@ -147,7 +148,7 @@ export function varToStr(v: Variant): string {
   }
 }
 
-const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "Rect2", "Rect2i", "AABB"]);
+const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "Rect2", "Rect2i", "AABB", "Plane"]);
 
 const SV_PACK_CTORS: Record<string, PackKind> = {
   PackedByteArray: "byte",
@@ -403,6 +404,7 @@ export function strToVar(v: Variant): Variant {
     if (word === "Rect2") return args.length === 4 ? rect2(n(0), n(1), n(2), n(3)) : null;
     if (word === "Rect2i") return args.length === 4 ? rect2i(Math.trunc(n(0)), Math.trunc(n(1)), Math.trunc(n(2)), Math.trunc(n(3))) : null;
     if (word === "AABB") return args.length === 6 ? aabb(n(0), n(1), n(2), n(3), n(4), n(5)) : null;
+    if (word === "Plane") return args.length === 4 ? plane(n(0), n(1), n(2), n(3)) : null;
     const pack = SV_PACK_CTORS[word] as PackKind;
     if (pack === "vector2") {
       if (args.length % 2 !== 0) {

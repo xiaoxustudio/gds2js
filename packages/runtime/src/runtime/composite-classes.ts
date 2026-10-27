@@ -49,6 +49,24 @@ export function asAABB(v: Variant): GAABB | null {
   return v.t === Tag.OBJECT && v.v instanceof GAABB ? (v.v as GAABB) : null;
 }
 
+export class GPlane {
+  nx: number;
+  ny: number;
+  nz: number;
+  d: number;
+  constructor(nx: number, ny: number, nz: number, d: number) {
+    const r = Math.fround;
+    this.nx = r(nx);
+    this.ny = r(ny);
+    this.nz = r(nz);
+    this.d = r(d);
+  }
+}
+
+export function asPlane(v: Variant): GPlane | null {
+  return v.t === Tag.OBJECT && v.v instanceof GPlane ? (v.v as GPlane) : null;
+}
+
 export function rect2iPartsOf(o: object): [number, number, number, number] | null {
   return o instanceof GRect2i ? [o.x, o.y, o.w, o.h] : null;
 }
