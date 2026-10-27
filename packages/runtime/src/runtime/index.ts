@@ -18,6 +18,7 @@ export * from "./vector3";
 export * from "./vector2i";
 export * from "./aabb";
 export * from "./plane";
+export * from "./quaternion";
 export * from "./rect2";
 export * from "./rect2i";
 export * from "./vector3i";

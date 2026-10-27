@@ -1,7 +1,6 @@
 import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
-import { strVec2 } from "./string-ops";
-import { rtosFix } from "./grisu2";
+import { num6Text, strVec2 } from "./string-ops";
 import { GPlane, asPlane } from "./composite-classes";
 import { asVec3, vector3 } from "./vector3";
 
@@ -69,13 +68,8 @@ export function toPlane(v: Variant): Variant {
   return planeNew([v]);
 }
 
-function planeDText(d: number): string {
-  const s = d.toFixed(6);
-  return s.indexOf(".") < 0 ? s : s.replace(/0+$/, "").replace(/\.$/, "");
-}
-
 export function planeText(v: GPlane): string {
-  return `[N: (${strVec2(v.nx)}, ${strVec2(v.ny)}, ${strVec2(v.nz)}), D: ${planeDText(v.d)}]`;
+  return `[N: (${strVec2(v.nx)}, ${strVec2(v.ny)}, ${strVec2(v.nz)}), D: ${num6Text(v.d)}]`;
 }
 
 export function planeReadProp(v: GPlane, name: string): Variant | null {

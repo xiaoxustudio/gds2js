@@ -7,7 +7,7 @@ import { asVec2 } from "./vector2";
 import { asVec3 } from "./vector3";
 import { asVec4 } from "./vector4";
 import { asVec2i } from "./vector2i";
-import { asAABB, asPlane, asRect2, asRect2i } from "./composite-classes";
+import { asAABB, asPlane, asQuaternion, asRect2, asRect2i } from "./composite-classes";
 import { asVec3i } from "./vector3i";
 import { asVec4i } from "./vector4i";
 import { asColor } from "./color";
@@ -1263,6 +1263,12 @@ export function strColor(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
+/** 引擎给 Plane.D 与 Quaternion 分量的那一形：六位小数、去尾零（`2` / `0.707107`）。 */
+export function num6Text(n: number): string {
+  const s = n.toFixed(6);
+  return s.indexOf(".") < 0 ? s : s.replace(/0+$/, "").replace(/\.$/, "");
+}
+
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -1335,6 +1341,7 @@ export function valueTypeName(x: Variant): string {
   if (asVec3(x) !== null) return "Vector3";
   if (asVec4(x) !== null) return "Vector4";
   if (asVec2i(x) !== null) return "Vector2i";
+  if (asQuaternion(x) !== null) return "Quaternion";
   if (asPlane(x) !== null) return "Plane";
   if (asAABB(x) !== null) return "AABB";
   if (asRect2(x) !== null) return "Rect2";

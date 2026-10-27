@@ -933,6 +933,7 @@ export function typeDefault(t: TypeRef | null): string {
   if (base === "Vector3i") return "rt.vector3i(0, 0, 0)";
   if (base === "Vector4") return "rt.vector4(0, 0, 0, 0)";
   if (base === "Vector4i") return "rt.vector4i(0, 0, 0, 0)";
+  if (base === "Quaternion") return "rt.quaternion(0, 0, 0, 1)";
   if (base === "Plane") return "rt.plane(0, 0, 0, 0)";
   if (base === "AABB") return "rt.aabb(0, 0, 0, 0, 0, 0)";
   if (base === "Rect2") return "rt.rect2(0, 0, 0, 0)";

@@ -67,6 +67,24 @@ export function asPlane(v: Variant): GPlane | null {
   return v.t === Tag.OBJECT && v.v instanceof GPlane ? (v.v as GPlane) : null;
 }
 
+export class GQuaternion {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+  constructor(x: number, y: number, z: number, w: number) {
+    const r = Math.fround;
+    this.x = r(x);
+    this.y = r(y);
+    this.z = r(z);
+    this.w = r(w);
+  }
+}
+
+export function asQuaternion(v: Variant): GQuaternion | null {
+  return v.t === Tag.OBJECT && v.v instanceof GQuaternion ? (v.v as GQuaternion) : null;
+}
+
 export function rect2iPartsOf(o: object): [number, number, number, number] | null {
   return o instanceof GRect2i ? [o.x, o.y, o.w, o.h] : null;
 }

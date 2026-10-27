@@ -7,7 +7,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GAABB, GPlane } from "./composite-classes";
+import { GAABB, GPlane, GQuaternion } from "./composite-classes";
 import { GRect2 } from "./rect2";
 import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
@@ -32,6 +32,7 @@ const T_RECT2 = 7;
 const T_RECT2I = 8;
 const T_AABB = 16;
 const T_PLANE = 14;
+const T_QUATERNION = 15;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
 const T_STRING_NAME = 21;
@@ -82,6 +83,7 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   String: 4,
   Vector2: 5,
   Vector2i: 6,
+  Quaternion: 15,
   Plane: 14,
   AABB: 16,
   Rect2: 7,
@@ -201,6 +203,7 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GRect2i ||
     o instanceof GAABB ||
     o instanceof GPlane ||
+    o instanceof GQuaternion ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
     o instanceof GVector4i ||
@@ -421,6 +424,14 @@ class Writer {
           this.f32(o.y);
           this.f32(o.w);
           this.f32(o.h);
+          return;
+        }
+        if (o instanceof GQuaternion) {
+          this.header(T_QUATERNION);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.z);
+          this.f32(o.w);
           return;
         }
         if (o instanceof GPlane) {
@@ -687,6 +698,13 @@ class Reader {
         const w = this.f32();
         const h = this.f32();
         return V.object(new GRect2(x, y, w, h));
+      }
+      case T_QUATERNION: {
+        const qx = this.f32();
+        const qy = this.f32();
+        const qz = this.f32();
+        const qw = this.f32();
+        return V.object(new GQuaternion(qx, qy, qz, qw));
       }
       case T_PLANE: {
         const nx = this.f32();

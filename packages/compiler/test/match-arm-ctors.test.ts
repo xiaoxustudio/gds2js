@@ -61,7 +61,7 @@ describe("手臂构造式 · 运行期构造子还没对上那两形仍拦", () 
 /** 引擎手臂收这些形，可这些类名的构造调用连表达式位置都编不过 ——
  *  收了只会把拦点从 lower 挪到 emit，所以仍留在表外；那七支构造接进全局可调用表之后再看这一格。 */
 describe("手臂构造式 · 构造子没接进表达式位置的七形仍拦", () => {
-  const ARMS = ["Transform2D()", "Quaternion(1, 2, 3, 4)", "Basis()", "Signal()"];
+  const ARMS = ["Transform2D()", "Basis()", "Signal()"];
   it.each(ARMS)("%s", async (arm) => {
     expect(await verdict(MOD(arm)), `${arm} 现在还不该放过`).not.toBe("放过");
     refusedCells++;

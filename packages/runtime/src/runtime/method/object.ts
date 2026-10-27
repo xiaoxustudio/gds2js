@@ -31,7 +31,8 @@ import { GVector2i, vector2iMethod } from "../vector2i";
 import { rect2Method, rect2iMethod } from "./rect";
 import { aabbMethod } from "./aabb";
 import { planeMethod } from "./plane";
-import { GAABB, GPlane, GRect2, GRect2i } from "../composite-classes";
+import { quaternionMethod } from "./quaternion";
+import { GAABB, GPlane, GQuaternion, GRect2, GRect2i } from "../composite-classes";
 import { GVector3i, vector3iMethod } from "../vector3i";
 import { colorMethod, GColor } from "../color";
 import { bytesMethod, GBytes, packTypeName } from "../packed";
@@ -375,6 +376,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     }
   }
 
+  if (inner instanceof GQuaternion) return quaternionMethod(inner, name, args);
   if (inner instanceof GPlane) return planeMethod(inner, name, args);
   if (inner instanceof GAABB) return aabbMethod(inner, name, args);
   if (inner instanceof GRect2) return rect2Method(inner, name, args);
