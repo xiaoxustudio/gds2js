@@ -1,0 +1,5 @@
+t|v01|true|true|false
+t|v02|false|false|true
+t|v03|true|true|false
+t|v04|true|true|true
+t|v05|<Node#号>|Node

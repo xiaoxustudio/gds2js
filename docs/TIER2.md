@@ -172,6 +172,7 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 - **基类登记改实测派生**：`extends Node` / `Node2D` 之外的一切引擎类名，答复来自 `ENGINE_CLASS_NAMES`（ClassDB 全量表）而不是手抄名单，所以 `extends Sprite2D` 现在发 `engine-base` 而不再掉进 `extends-unknown`；名单删掉的那 12 个名字不再参与判定。
 
+- **`is 引擎类` 与 `is_class()` 放行到实测的那几形（语料 `463-is-engine-class`）**：`patterns.ts` 那张 `PROBED_CLASS_NAMES` + `instanceClassNames` 表加了两行链 —— `Node → [Object, Node]`、`Node2D → [Object, Node, Node2D]`（`RefCounted` / `SceneTree` 两行是原有的）。逐格实测过：`Node` 与 `Node2D` 的实例都 `is Node`、`Node` 不 `is Node2D`、节点不 `is RefCounted`、两者都 `is Object`、都 `is Resource` false，`is_class` 拿 `"Node"` 问 `Node2D` 实例为 true。表里没有的祖先名（`CanvasItem` / `Control` 那几支）继续按 `is-type` 响亮拒 —— 一行链就是一条读数，不推。
 **场景这一格仍响亮拒**：类体里**裸属性**读引擎成员（`print(name)` 这类 —— 分析期按「没声明」拦下，得写 `get_name()`；self 属性面还没实测）、`Node` / `Node2D` 之外的场景节点类型、`instance=` / `groups=` / `sub_resource` / 除 `script=` 之外的节点属性、`ext_resource` 的非 Script 类型、场景根不带脚本、一工程多场景、`SceneTree.create_timer` / `call_group` / `get_nodes_in_group`。
    - **已落**：场景模式的主循环（`sceneRun` 的帧环 + `quit(code)` 把 code 写进 `process.exitCode`），`--script` 那条入口一字未动，所以那 18 例超时形状不受影响。
 4. **主循环与退出形状**：`emit/index.ts` 尾部写死 `await new Main().run()`，`src/host.ts:145 run(maxFrames=3000)` 是 `setTimeout` 自制循环。接真 `SceneTree` 要先拍：谁持有主循环、`quit(code)` 的退出码语义、以及那 18 例带 `<<GDS2JS_TIMEOUT>>` 的**退出形状**（引擎侧入口被作废后走不到 `quit()`、永不退出，我们的宿主自己收尾退 0）。这不是"改改就行"：`test/e2e/corpus-hang.test.ts:38-44` 要求**产物也被 SIGTERM 杀掉、且杀之前输出逐字节相等**，所以要连 `tools/lib.mjs` 的超时预算（`DEFAULT_TIMEOUT_MS`、`hangBudget`）与标记追加逻辑一起复核。
