@@ -102,6 +102,8 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 **取证的现实形状（2026-10-27 实测撞出来的，别再撞一遍）**：想从引擎里一次性读回内置类型的成员面 —— `ClassDB.get_builtin_method_list(...)` / `get_builtin_property_list(...)` —— 在 GDScript 侧**不存在**：4.6.3 直接报 `Static function "get_builtin_method_list()" not found in base "GDScriptNativeClass"`。所以 `semantics/builtin-members.ts` 里 Vector2 那一族成员表当初是一支一用量出来的，Rect2 也只能走同一条路：**每个候选成员单独一支小脚本**（名字错了是解析期错误，会把整支脚本带走，所以不能合批）。顺带两条免费的口径读数：`Rect2 == Rect2i` 这种「内置类型名当表达式用」引擎给的是 `Builtin type cannot be used as a name on its own` + `Identifier "Rect2" not declared in the current scope`，各出一条 —— 这正是我们 `test:sema` 要对齐的那一类句子。
 
+**批次一（`Rect2` + `Rect2i`）的读数已经取了**（`tmp/r2/grid.txt`，钉住的 4.6.3 直接跑，零解析错），几条会改变实现形状的：打印是 `[P: (1.0, 2.0), S: (3.0, 4.0)]` 这种**带前缀空格**的形状（`Rect2i` 同理但整数不带 `.0`），不是 `Rect2(...)`；`var_to_str` 反过来给 `Rect2(1, 2, 3, 4)` 且 `str_to_var` 能读回；`typeof` 是 7 / 8（与现有 Tag 表冲突点在 `Tag.OBJECT` 分流上，照 D6 的 OBJECT+instanceof 走没问题）；`var_to_bytes`/`bytes_to_var` 往返为真；`hash(b) == hash(c)` 为真（两个同值不同构造的矩形同哈希）；字典键 `{Rect2: 1}` 成立；`Array[Rect2]` 的字面量元素与 `arr[0] == b` 成立；默认值 `var j: Rect2` 给全零。**两条要单独定案**：`e.abs` 打出来是 `Rect2::abs`（说明 `abs` 是**方法名当值取**的那一形，不是属性），`"%v|%s" % [b, ...]` 两个占位符都按字面吐出 —— 这两格不能照抄直觉实现，要么补读数要么响亮拒。**六则运算符与 `<` `<=` `>` `>=` 比较对在 Rect2 上全部是解析期错误**（`Invalid operands "Rect2" and "Rect2" for "+" operator.`），所以 `op-pairs.ts` 这一族**不该加条目**，加了就是自造语义；`b is Rect2i` / `b is Object` 同样是解析期错误（`Expression is of type "Rect2" so it can't be of type ...`），只有 `b is Rect2` 合法；`grow_endpoints()` 在 4.6.3 不存在（`Array[Rect2].identical()` 也不存在）—— 名字表里没有就是没有，别补。
+
 **分批（按依赖序，不是一次七支）**：
 
 1. `Rect2` + `Rect2i` —— 只依赖已实现的 `Vector2` / `Vector2i`。
