@@ -28,6 +28,8 @@ import { GVector3, vector3Method } from "../vector3";
 import { GVector4, vector4Method } from "../vector4";
 import { GVector4i, vector4iMethod } from "../vector4i";
 import { GVector2i, vector2iMethod } from "../vector2i";
+import { rect2Method, rect2iMethod } from "./rect";
+import { GRect2, GRect2i } from "../rect-classes";
 import { GVector3i, vector3iMethod } from "../vector3i";
 import { colorMethod, GColor } from "../color";
 import { bytesMethod, GBytes, packTypeName } from "../packed";
@@ -371,5 +373,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     }
   }
 
+  if (inner instanceof GRect2) return rect2Method(inner, name, args);
+  if (inner instanceof GRect2i) return rect2iMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
 }

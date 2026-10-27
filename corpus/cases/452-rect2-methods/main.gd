@@ -1,0 +1,20 @@
+extends SceneTree
+
+func _initialize():
+	var e := Rect2(0, 0, 4, 4)
+	var f := Rect2(2, 2, 4, 4)
+	print("q01|", e.get_area(), "|", str(e.get_center()), "|", str(e.abs()), "|", e.is_finite(), "|", e.is_equal_approx(Rect2(0, 0, 4, 4)), "|", e.is_equal_approx(f))
+	print("q02|", e.has_point(Vector2(0, 0)), "|", e.has_point(Vector2(4, 4)), "|", e.has_point(Vector2(3.9, 3.9)))
+	print("q03|", e.intersects(f), "|", e.intersects(Rect2(4, 0, 4, 4)), "|", e.intersects(Rect2(1, 1, 1, 1)))
+	print("q04|", e.encloses(f), "|", e.encloses(Rect2(1, 1, 1, 1)), "|", f.encloses(e))
+	print("q05|", str(e.merge(f)), "|", str(e.merge(Rect2(8, 8, 1, 1))), "|", str(e.expand(Vector2(9, 9))), "|", str(e.expand(Vector2(1, 1))))
+	print("q06|", str(e.grow(1)), "|", str(e.grow(0)), "|", str(e.grow_individual(1, 2, 3, 4)), "|", str(e.grow_side(0, 1)), "|", str(e.grow_side(1, 2)), "|", str(e.grow_side(2, 1)), "|", str(e.grow_side(3, 2)))
+	var ri := Rect2i(0, 0, 4, 4)
+	var rj := Rect2i(2, 2, 4, 4)
+	print("q07|", ri.get_area(), "|", str(ri.get_center()), "|", str(ri.abs()), "|", ri.has_point(Vector2i(0, 0)), "|", ri.has_point(Vector2i(4, 4)))
+	print("q08|", ri.intersects(rj), "|", ri.intersects(Rect2i(9, 9, 1, 1)), "|", ri.encloses(Rect2i(1, 1, 1, 1)), "|", str(ri.merge(rj)), "|", str(ri.expand(Vector2i(9, 9))))
+	print("q09|", str(ri.grow(1)), "|", str(ri.grow_individual(1, 2, 3, 4)), "|", str(ri.grow_side(0, 1)), "|", str(ri.grow_side(3, 2)))
+	print("q10|", str(Rect2i(1, 1, 1, 1).get_center()), "|", str(Rect2i(1, 1, 3, 3).get_center()), "|", str(Rect2(1, 1, 0, 0).get_center()), "|", Rect2(1, 1, 0, 0).get_area())
+	var half := Rect2(1, 2, 3.5, 4.5)
+	print("q11|", str(half.get_center()), "|", half.get_area(), "|", str(half.abs()), "|", str(half.merge(Rect2(0, 0, 1, 1))))
+	quit()
