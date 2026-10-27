@@ -9,7 +9,7 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 现状盘点（都是盘面事实，不是推测）：
 
 - `compile/project.ts:538-539` 在进 emit 之前就把 `extends Node` 抛掉；`:17-20` 的 `ENGINE_BASES` 是手抄 12 个名字，名单外的 `extends Sprite2D` 掉到 `:541 extends-unknown`。
-- `emit/surface.ts:223 SCRIPT_HOST_BASES`（`RefCounted` / `Node` / `Object`）与 `project.ts:15 HOST_BASES`（只有 `SceneTree`）语义互相抵消，且**零测试覆盖**。
+- `emit/surface.ts:230 SCRIPT_HOST_BASES`（`RefCounted` / `Node` / `Object`，只喂内部类的基类链）与 `project.ts:16 HOST_BASES`（只有 `SceneTree`，管模块级 `extends` 走宿主导入）——两集合今天各管一段、不再互相抵消，第三张手抄名单 `ENGINE_BASES`（12 名）已删：「这个名字是不是引擎类」由 `regen:engine-classes` 那张 ClassDB 全量表回答，「能不能当脚本基类」由实测过的 `SCRIPT_NODE_BASES`（`Node` / `Node2D`）回答。四格判定（宿主 / 引擎基类 / 引擎类但未量 / 根本不是类名）由 `packages/compiler/test/script-base-sets.test.ts` 十格钉住（这一带原来是零覆盖）。
 - `packages/runtime/src/host.ts:107-167` 的 `SceneTree` 是 `setTimeout` 自制帧循环：无 children、无 `add_child`、无 `_ready`，`run(maxFrames=3000)` 固定 `dt`。`:111` 那条注释是实测教训：**基类 `async` 虚方法被子类覆写在静态编译目标上没有实现**，所以两条 virtual 都写成「非 async 签名 + 返回 Promise」。
 - `runtime/identity.ts` 的 `LIVE: Map<number, object>` 是强引用且从不清除 → 没有确定性释放，D7 与 `object.ts:109 signal-flag-deferred` 都卡在这。
 - 全仓 **0 个 `.tscn`**，`tools/golden.mjs` 只发 `--script`、从不加载场景；`tools/lib.mjs` 的夹具槽硬编码成 `main.gd` / `godot.txt` 两个名字；`normalize` 已掩 `<Class#号>` 与引擎 `core/variant`、`core/math` 的报错帧，但**裸 `get_instance_id()` 数字**没有规则。
@@ -166,6 +166,8 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 `_init` 在挂树之前跑（`name` 空、`get_child_count()` 0）；`_enter_tree` 前序（父先于子，且此时兄弟与孩子都已就位：Root 看到 2、C1 看到 1）；`_ready` 后序（叶子先）；`_process` 每帧前序；`quit()` **不收尾当前帧**（同帧里后面的节点照跑）；`_exit_tree` 后序（叶子 → 子 → 根）；`get_tree().get_root()` 是那个名为 `root` 的 Window，`current_scene` 就是场景根；路径 `/root/Root/C1/G1`。`extends Node` / `extends Node2D` 由 `BaseSpec` 的 `engine` 一支发出（`registerNativeBase` 记引擎基类，类体里补五个节点面字段），类体里的**裸名**引擎方法调用走 `semantics/node-face.ts` 那张实测表，翻成 `rt.method(this, "…", [...])`。
 
 一条把用例写法直接改掉读数：**`get_tree().get_frame()` 在引擎侧不可比** —— 同一支用例，场景根的第二次实测第一次 `_process` 时报 2、重跑报 1（进场景前走过几拍取决于进程时序）。所以用例自己要数拍子（`_tick += 1`），别把 `get_frame()` 打进 golden。也因此 `sceneRun` 的 `frame` 从 0 起算只是我们自己的计数。
+
+- **基类登记改实测派生**：`extends Node` / `Node2D` 之外的一切引擎类名，答复来自 `ENGINE_CLASS_NAMES`（ClassDB 全量表）而不是手抄名单，所以 `extends Sprite2D` 现在发 `engine-base` 而不再掉进 `extends-unknown`；名单删掉的那 12 个名字不再参与判定。
 
 **场景这一格仍响亮拒**：类体里**裸属性**读引擎成员（`print(name)` 这类 —— 分析期按「没声明」拦下，得写 `get_name()`；self 属性面还没实测）、`Node` / `Node2D` 之外的场景节点类型、`instance=` / `groups=` / `sub_resource` / 除 `script=` 之外的节点属性、`ext_resource` 的非 Script 类型、场景根不带脚本、一工程多场景、`SceneTree.create_timer` / `call_group` / `get_nodes_in_group`。
    - **已落**：场景模式的主循环（`sceneRun` 的帧环 + `quit(code)` 把 code 写进 `process.exitCode`），`--script` 那条入口一字未动，所以那 18 例超时形状不受影响。

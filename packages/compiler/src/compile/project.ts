@@ -10,17 +10,13 @@ import type { ClassDecl, Expr, Module, Stmt, TypeRef } from "../lower/ir";
 import { lower } from "../lower/lower";
 import { parseSource } from "../parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
 
 const RES_PREFIX = "res://";
 
 const HOST_BASES = new Set(["SceneTree"]);
 
 const SCRIPT_NODE_BASES = new Set(["Node", "Node2D"]);
-
-const ENGINE_BASES = new Set([
-  "Node", "Node2D", "Node3D", "Control", "Resource", "RefCounted", "Object",
-  "CharacterBody2D", "CharacterBody3D", "Area2D", "StaticBody2D", "RigidBody2D",
-]);
 
 export interface ProjectOptions {
   entries: string[];
@@ -574,8 +570,8 @@ function resolveBase(
     return { jsName: dep.jsName, spec: { kind: "import", name: dep.jsName, from: jsImportSpecifier(l, dep, opts) } };
   }
   if (SCRIPT_NODE_BASES.has(bare)) return { jsName: null, spec: { kind: "engine", name: bare } };
-  if (ENGINE_BASES.has(bare)) {
-    throw new UnsupportedError("engine-base", `extends 引擎类型 ${bare} 还没建模（只量过 Node 与 Node2D 的脚本基类）`);
+  if (ENGINE_CLASS_NAMES.has(bare)) {
+    throw new UnsupportedError("engine-base", `extends 引擎类型 ${bare} 还没建模（脚本基类只量过 Node 与 Node2D）`);
   }
   throw new UnsupportedError("extends-unknown", `无法解析 extends 目标：${ext}`);
 }
