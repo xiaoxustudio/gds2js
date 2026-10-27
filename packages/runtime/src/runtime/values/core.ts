@@ -12,6 +12,8 @@ import { aabb, aabbText } from "../aabb";
 import { plane, planeText } from "../plane";
 import { quaternion, quaternionText } from "../quaternion";
 import { asQuaternion, GQuaternion } from "../composite-classes";
+import { asTransform2D, GTransform2D } from "../composite-classes";
+import { transform2d, transform2dText } from "../transform2d";
 import { asPlane, GPlane } from "../composite-classes";
 import { asAABB, GAABB } from "../composite-classes";
 import { asVec3i, GVector3i, vector3i } from "../vector3i";
@@ -113,6 +115,8 @@ function keyOfIn(v: Variant, depth: number): string {
       const rc2 = asRect2(v);
       if (rc2) return `7:${String(rc2.x)},${String(rc2.y)},${String(rc2.w)},${String(rc2.h)}`;
       const rc2i = asRect2i(v);
+      const t2 = asTransform2D(v);
+      if (t2) return `11:${String(t2.xx)},${String(t2.xy)},${String(t2.yx)},${String(t2.yy)},${String(t2.ox)},${String(t2.oy)}`;
       const qq = asQuaternion(v);
       if (qq) return `15:${String(qq.x)},${String(qq.y)},${String(qq.z)},${String(qq.w)}`;
       const pl = asPlane(v);
@@ -151,6 +155,7 @@ export type ElemKind =
   | "Rect2i"
   | "Plane"
   | "Quaternion"
+  | "Transform2D"
   | "AABB"
   | "Vector4"
   | "Vector4i"
@@ -189,6 +194,8 @@ export function elemDefault(kind: ElemKind): Variant {
       return plane(0, 0, 0, 0);
     case "Quaternion":
       return quaternion(0, 0, 0, 1);
+    case "Transform2D":
+      return transform2d(1, 0, 0, 1, 0, 0);
     case "Vector3i":
       return vector3i(0, 0, 0);
     case "Vector4":
@@ -263,6 +270,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
       if (ri instanceof GRect2i) return rect2(ri.x, ri.y, ri.w, ri.h);
       return null;
     }
+    case "Transform2D":
+      return v.t === Tag.OBJECT && v.v instanceof GTransform2D ? v : null;
     case "Quaternion":
       return v.t === Tag.OBJECT && v.v instanceof GQuaternion ? v : null;
     case "Plane":
@@ -421,6 +430,9 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GRect2i) {
         return rect2iText(inner);
       }
+      if (inner instanceof GTransform2D) {
+        return transform2dText(inner);
+      }
       if (inner instanceof GQuaternion) {
         return quaternionText(inner);
       }
@@ -466,6 +478,14 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
   const ta = a.t;
   const tb = b.t;
   if (ta === Tag.OBJECT && tb === Tag.OBJECT) {
+    const at2 = asTransform2D(a);
+    const bt2 = asTransform2D(b);
+    if (at2 !== null && bt2 !== null) return at2.xx === bt2.xx && at2.xy === bt2.xy && at2.yx === bt2.yx && at2.yy === bt2.yy && at2.ox === bt2.ox && at2.oy === bt2.oy;
+    if (at2 !== null || bt2 !== null) {
+      const t3: Variant = at2 !== null ? b : a;
+      if (t3.t === Tag.NIL) return false;
+      throw new UnsupportedError("transform2d-eq-pair", `Transform2D 与 ${valueTypeName(t3)} 的 ${op} 那一格没量过`);
+    }
     const aq = asQuaternion(a);
     const bq = asQuaternion(b);
     if (aq !== null && bq !== null) return aq.x === bq.x && aq.y === bq.y && aq.z === bq.z && aq.w === bq.w;

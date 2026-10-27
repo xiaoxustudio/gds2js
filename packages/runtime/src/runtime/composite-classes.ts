@@ -81,6 +81,28 @@ export class GQuaternion {
   }
 }
 
+export class GTransform2D {
+  xx: number;
+  xy: number;
+  yx: number;
+  yy: number;
+  ox: number;
+  oy: number;
+  constructor(xx: number, xy: number, yx: number, yy: number, ox: number, oy: number) {
+    const f = Math.fround;
+    this.xx = f(xx);
+    this.xy = f(xy);
+    this.yx = f(yx);
+    this.yy = f(yy);
+    this.ox = f(ox);
+    this.oy = f(oy);
+  }
+}
+
+export function asTransform2D(v: Variant): GTransform2D | null {
+  return v.t === Tag.OBJECT && v.v instanceof GTransform2D ? (v.v as GTransform2D) : null;
+}
+
 export function asQuaternion(v: Variant): GQuaternion | null {
   return v.t === Tag.OBJECT && v.v instanceof GQuaternion ? (v.v as GQuaternion) : null;
 }

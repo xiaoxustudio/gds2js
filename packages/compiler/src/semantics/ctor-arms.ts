@@ -11,6 +11,7 @@ export const CTOR_ARMS: Record<string, string[][]> = {
   AABB: [[], ["V3", "V3"]],
   Plane: [[], ["V3", "N"], ["V3", "V3", "V3"], ["N", "N", "N", "N"]],
   Quaternion: [[], ["N", "N", "N", "N"], ["V3", "N"], ["V3", "V3"]],
+  Transform2D: [[], ["V2", "V2"], ["V2", "V2", "V2"], ["N", "N", "N", "N", "N", "N"], ["N", "V2"]],
   Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
   String: [[], ["S"]],
   Array: [],

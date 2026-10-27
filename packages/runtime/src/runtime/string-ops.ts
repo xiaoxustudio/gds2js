@@ -7,7 +7,7 @@ import { asVec2 } from "./vector2";
 import { asVec3 } from "./vector3";
 import { asVec4 } from "./vector4";
 import { asVec2i } from "./vector2i";
-import { asAABB, asPlane, asQuaternion, asRect2, asRect2i } from "./composite-classes";
+import { asAABB, asPlane, asQuaternion, asRect2, asRect2i, asTransform2D } from "./composite-classes";
 import { asVec3i } from "./vector3i";
 import { asVec4i } from "./vector4i";
 import { asColor } from "./color";
@@ -1343,6 +1343,7 @@ export function valueTypeName(x: Variant): string {
   if (asVec3(x) !== null) return "Vector3";
   if (asVec4(x) !== null) return "Vector4";
   if (asVec2i(x) !== null) return "Vector2i";
+  if (asTransform2D(x) !== null) return "Transform2D";
   if (asQuaternion(x) !== null) return "Quaternion";
   if (asPlane(x) !== null) return "Plane";
   if (asAABB(x) !== null) return "AABB";

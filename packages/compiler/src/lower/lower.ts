@@ -938,7 +938,7 @@ function slotForK(kind: string | null, slot: string): boolean {
 }
 
 const ARM_NO_CTOR: Record<string, boolean> = {
-  Transform2D: true, Basis: true, Signal: true,
+  Basis: true, Signal: true,
 };
 
 function ctorArm(n: SyntaxNode): boolean {

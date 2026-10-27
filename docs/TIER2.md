@@ -124,6 +124,8 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 `Quaternion` typeof 15，打印是**裸四元组** `(0, 0.247404, 0, 0.968912)`（不是 `[...]` 那两型），构造 `()` / `(四数)` / `(Vector3, float 角)`，成员 `x y z w`，方法 `length()` / `length_squared()` / `inverse()` / `normalized()` / `get_angle()` / `get_axis()` / `dot()` / `slerp()` / `is_equal_approx()`，`*` 四元数乘法成立（`q1 * q1` 有效，与 Rect2 相反），`var_to_str` 写 `Quaternion(0, 0, 0, 1)`，`var_to_bytes` 长 20。
 `AABB` typeof 16，打印 `[P: (0.0, 0.0, 0.0), S: (1.0, 2.0, 3.0)]`，构造**只两形**：`()` 与 `(Vector3, Vector3)` —— 六数式是解析期 `No constructor of "AABB" matches the signature`；成员 `position` / `size` / `end`，方法 `get_volume()` / `has_volume()` / `has_point(Vector3)`（**没有** `contains`，也没有 `Point3` 这个类型名）/ `intersects()` / `merge()` / `expand()` / `is_equal_approx()`，`var_to_str` 写 `AABB(0, 0, 0, 1, 2, 3)`（六数写法与构造式不同 —— 读回靠的是这一式），`var_to_bytes` 长 28。
 
+> **批次三进度**：`Transform2D` 已落地（typeof 11，语料 `457-transform2d-face` 十一格逐字节）。一处值得留档：`rotated(a)` 的式子是整体左乘 `R = [[c, -s], [s, c]]`（三列一起转），我第一版把 X 列写成 `c*x + s*y`，在 `t` 的基正好是单位阵时与正确答案同值，只有原点分量把差异暴露出来 —— 「对称输入下巧合对上」是这类式子的典型陷阱，用例里要保持非对称数值。`var_to_bytes` 型码 11、六个 float32 共 28 字节，`var_to_str` 是六数式。没量的 `interpolate_with` / `xform` / `basis_xform` / `affine_xform` / `get_origin` 与四参 `(角度, 位置, 缩放)` 形一律响亮拒。
+
 **分批（按依赖序，不是一次七支）**：
 
 1. `Rect2` + `Rect2i` —— 只依赖已实现的 `Vector2` / `Vector2i`。

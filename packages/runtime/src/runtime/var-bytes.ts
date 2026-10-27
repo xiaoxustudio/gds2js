@@ -7,7 +7,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GAABB, GPlane, GQuaternion } from "./composite-classes";
+import { GAABB, GPlane, GQuaternion, GTransform2D } from "./composite-classes";
 import { GRect2 } from "./rect2";
 import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
@@ -33,6 +33,7 @@ const T_RECT2I = 8;
 const T_AABB = 16;
 const T_PLANE = 14;
 const T_QUATERNION = 15;
+const T_TRANSFORM2D = 11;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
 const T_STRING_NAME = 21;
@@ -83,6 +84,7 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   String: 4,
   Vector2: 5,
   Vector2i: 6,
+  Transform2D: 11,
   Quaternion: 15,
   Plane: 14,
   AABB: 16,
@@ -204,6 +206,7 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GAABB ||
     o instanceof GPlane ||
     o instanceof GQuaternion ||
+    o instanceof GTransform2D ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
     o instanceof GVector4i ||
@@ -424,6 +427,16 @@ class Writer {
           this.f32(o.y);
           this.f32(o.w);
           this.f32(o.h);
+          return;
+        }
+        if (o instanceof GTransform2D) {
+          this.header(T_TRANSFORM2D);
+          this.f32(o.xx);
+          this.f32(o.xy);
+          this.f32(o.yx);
+          this.f32(o.yy);
+          this.f32(o.ox);
+          this.f32(o.oy);
           return;
         }
         if (o instanceof GQuaternion) {
@@ -698,6 +711,15 @@ class Reader {
         const w = this.f32();
         const h = this.f32();
         return V.object(new GRect2(x, y, w, h));
+      }
+      case T_TRANSFORM2D: {
+        const txx = this.f32();
+        const txy = this.f32();
+        const tyx = this.f32();
+        const tyy = this.f32();
+        const tox = this.f32();
+        const toy = this.f32();
+        return V.object(new GTransform2D(txx, txy, tyx, tyy, tox, toy));
       }
       case T_QUATERNION: {
         const qx = this.f32();

@@ -4,9 +4,10 @@ import { pctFormatError } from "./frames";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
-import { asVec2, GVector2, vecCmp } from "./vector2";
+import { asVec2, GVector2, vector2, vecCmp } from "./vector2";
 import { asVec3, GVector3, vector3, vec3Cmp } from "./vector3";
 import { asQuaternion, quaternion } from "./quaternion";
+import { asTransform2D, transform2d } from "./transform2d";
 
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./vector4";
@@ -202,6 +203,29 @@ export const ops = {
     if (zi4Mul && b.t === Tag.FLOAT) return vec4iToFloat(zi4Mul, num(b), "mul");
     if (zi4Mul && b.t === Tag.INT) return v4iMulK(zi4Mul, intToNum(b.v as IntPayload));
     if (zj4Mul && a.t === Tag.INT) return v4iMulK(zj4Mul, intToNum(a.v as IntPayload));
+    const taMul = asTransform2D(a);
+    if (taMul !== null) {
+      const tbMul = asTransform2D(b);
+      if (tbMul !== null) {
+        const ax = taMul.xx;
+        const ay = taMul.xy;
+        const bx = taMul.yx;
+        const by = taMul.yy;
+        return transform2d(
+          r3(ax * tbMul.xx) + r3(bx * tbMul.xy),
+          r3(ay * tbMul.xx) + r3(by * tbMul.xy),
+          r3(ax * tbMul.yx) + r3(bx * tbMul.yy),
+          r3(ay * tbMul.yx) + r3(by * tbMul.yy),
+          r3(r3(ax * tbMul.ox) + r3(bx * tbMul.oy)) + taMul.ox,
+          r3(r3(ay * tbMul.ox) + r3(by * tbMul.oy)) + taMul.oy,
+        );
+      }
+      if (b.t === Tag.OBJECT && (b.v as object) instanceof GVector2) {
+        const p = b.v as GVector2;
+        return vector2(r3(r3(taMul.xx * p.x) + r3(taMul.yx * p.y)) + taMul.ox, r3(r3(taMul.xy * p.x) + r3(taMul.yy * p.y)) + taMul.oy);
+      }
+      throw new UnsupportedError("transform2d-mul-right", `Transform2D 的 ${"\u002a"} 只量过乘 Transform2D 与乘 Vector2（收到另一形）`);
+    }
     const qaMul = asQuaternion(a);
     const qbMul = asQuaternion(b);
     if (qaMul && qbMul) {

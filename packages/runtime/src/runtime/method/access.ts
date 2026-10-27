@@ -29,7 +29,8 @@ import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "../vector2i";
 import { aabbReadProp } from "../aabb";
 import { planeReadProp } from "../plane";
 import { quaternionReadProp } from "../quaternion";
-import { GPlane, GQuaternion } from "../composite-classes";
+import { transform2dReadProp } from "../transform2d";
+import { GPlane, GQuaternion, GTransform2D } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
 import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
@@ -436,6 +437,12 @@ export function attribute(raw: unknown, name: string): unknown {
     if (vec2i && (name === "x" || name === "y")) return V.int(vec2i[name]);
     const vec3i = obj.v instanceof GVector3i ? (obj.v as GVector3i) : null;
     if (vec3i && (name === "x" || name === "y" || name === "z")) return V.int(vec3i[name]);
+    const t2 = obj.v instanceof GTransform2D ? (obj.v as GTransform2D) : null;
+    if (t2 !== null) {
+      const part = transform2dReadProp(t2, name);
+      if (part !== null) return part;
+      throw new UnsupportedError("transform2d-prop", `Transform2D.${name} 的属性读没量过`);
+    }
     const qq = obj.v instanceof GQuaternion ? (obj.v as GQuaternion) : null;
     if (qq !== null) {
       const part = quaternionReadProp(qq, name);

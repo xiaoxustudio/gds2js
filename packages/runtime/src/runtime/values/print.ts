@@ -9,6 +9,7 @@ import { rect2i } from "../rect2i";
 import { aabb } from "../aabb";
 import { plane } from "../plane";
 import { quaternion } from "../quaternion";
+import { transform2d } from "../transform2d";
 import { vector3 } from "../vector3";
 import { GVector4, vector4 } from "../vector4";
 import { vector2i } from "../vector2i";
@@ -149,7 +150,7 @@ export function varToStr(v: Variant): string {
   }
 }
 
-const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "Rect2", "Rect2i", "AABB", "Plane", "Quaternion"]);
+const SV_VALUE_CTORS = new Set(["Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i", "Color", "Rect2", "Rect2i", "AABB", "Plane", "Quaternion", "Transform2D"]);
 
 const SV_PACK_CTORS: Record<string, PackKind> = {
   PackedByteArray: "byte",
@@ -407,6 +408,7 @@ export function strToVar(v: Variant): Variant {
     if (word === "AABB") return args.length === 6 ? aabb(n(0), n(1), n(2), n(3), n(4), n(5)) : null;
     if (word === "Plane") return args.length === 4 ? plane(n(0), n(1), n(2), n(3)) : null;
     if (word === "Quaternion") return args.length === 4 ? quaternion(n(0), n(1), n(2), n(3)) : null;
+    if (word === "Transform2D") return args.length === 6 ? transform2d(n(0), n(1), n(2), n(3), n(4), n(5)) : null;
     const pack = SV_PACK_CTORS[word] as PackKind;
     if (pack === "vector2") {
       if (args.length % 2 !== 0) {

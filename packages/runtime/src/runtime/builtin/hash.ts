@@ -8,7 +8,7 @@ import { GdRid } from "../rid";
 import { GdNodePath } from "../node-path";
 import { GVector2, vector2 } from "../vector2";
 import { GVector2i } from "../vector2i";
-import { GAABB, GPlane, GQuaternion, GRect2, GRect2i } from "../composite-classes";
+import { GAABB, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "../composite-classes";
 import { GVector3, vector3 } from "../vector3";
 import { GVector3i } from "../vector3i";
 import { GVector4, vector4 } from "../vector4";
@@ -232,6 +232,15 @@ export function variantHashNumber(v: Variant, depth = 0): number {
       if (v.v instanceof GdNodePath) return nodePathHash(v.v as GdNodePath);
       if (v.v instanceof GVector2) return fmix32(hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)));
       if (v.v instanceof GVector2i) return fmix32(murmurOne32(v.v.y >>> 0, murmurOne32(v.v.x >>> 0, MURMUR_SEED)));
+      if (v.v instanceof GTransform2D) {
+        let th = hashFloat32(v.v.xx, MURMUR_SEED);
+        th = hashFloat32(v.v.xy, th);
+        th = hashFloat32(v.v.yx, th);
+        th = hashFloat32(v.v.yy, th);
+        th = hashFloat32(v.v.ox, th);
+        th = hashFloat32(v.v.oy, th);
+        return fmix32(th);
+      }
       if (v.v instanceof GQuaternion) return fmix32(hashFloat32(v.v.w, hashFloat32(v.v.z, hashFloat32(v.v.y, hashFloat32(v.v.x, MURMUR_SEED)))));
       if (v.v instanceof GPlane) return fmix32(hashFloat32(v.v.d, hashFloat32(v.v.nz, hashFloat32(v.v.ny, hashFloat32(v.v.nx, MURMUR_SEED)))));
       if (v.v instanceof GAABB) {
