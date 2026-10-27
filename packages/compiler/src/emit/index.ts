@@ -203,6 +203,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   if (baseClass.kind === "engine") {
     out.push(`  __gd_engine_class__ = ${JSON.stringify(baseClass.name)};`);
     out.push("  __gd_freed__ = false;");
+    out.push("  __gd_node_queued__ = false;");
     out.push('  __gd_node_name__ = "";');
     out.push("  __gd_node_parent__: unknown = null;");
     out.push("  __gd_node_children__: unknown[] = [];");

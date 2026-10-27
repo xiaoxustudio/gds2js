@@ -7,6 +7,7 @@ const CONSTRUCTIBLE = new Set(["Node", "Node2D", "RefCounted", "Object"]);
 export type NodeRec = {
   __gd_engine_class__: string;
   __gd_freed__: boolean;
+  __gd_node_queued__: boolean;
   __gd_node_name__: string;
   __gd_node_parent__: object | null;
   __gd_node_children__: object[];
@@ -15,6 +16,7 @@ export type NodeRec = {
 export class GdEngineInstance extends GdScriptObject {
   readonly __gd_engine_class__: string;
   __gd_freed__: boolean = false;
+  __gd_node_queued__: boolean = false;
   __gd_node_name__: string = "";
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
@@ -36,6 +38,7 @@ export function engineClassNew(cls: string): Variant {
 export function nodeInit(inst: object, cls: string): void {
   const rec = inst as unknown as NodeRec;
   rec.__gd_engine_class__ = cls;
+  rec.__gd_node_queued__ = false;
   rec.__gd_node_name__ = "";
   rec.__gd_node_parent__ = null;
   rec.__gd_node_children__ = [];
@@ -106,6 +109,21 @@ export function nodeMoveChild(parent: NodeRec, child: NodeRec, to: number): void
   if (to < 0 || to >= parent.__gd_node_children__.length) throw new UnsupportedError("node-move-oob", "move_child 越界那一形没量过");
   parent.__gd_node_children__.splice(at, 1);
   parent.__gd_node_children__.splice(to, 0, child as unknown as object);
+}
+
+const QUEUED: NodeRec[] = [];
+
+export function nodeQueueFree(node: NodeRec): void {
+  node.__gd_node_queued__ = true;
+  QUEUED.push(node);
+}
+
+export function nodeDrainQueued(): void {
+  while (QUEUED.length > 0) {
+    const next = QUEUED.shift() as NodeRec;
+    if (next.__gd_freed__) continue;
+    nodeFree(next);
+  }
 }
 
 export function nodeFree(node: NodeRec): void {

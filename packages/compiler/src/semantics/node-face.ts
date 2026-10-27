@@ -17,7 +17,9 @@ export const NODE_SELF_METHODS = new Set([
   "get_tree",
   "has_node",
   "is_inside_tree",
+  "is_queued_for_deletion",
   "move_child",
+  "queue_free",
   "remove_child",
   "set_name",
 ]);

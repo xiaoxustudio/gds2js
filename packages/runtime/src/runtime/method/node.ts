@@ -11,6 +11,7 @@ import {
   nodeFaceOf,
   nodeFree,
   nodeMoveChild,
+  nodeQueueFree,
   nodeOfVariant,
   nodeNameSet,
   type NodeRec,
@@ -127,6 +128,11 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     case "free":
       nodeFree(rec);
       return V.nil();
+    case "queue_free":
+      nodeQueueFree(rec);
+      return V.nil();
+    case "is_queued_for_deletion":
+      return V.bool(rec.__gd_node_queued__);
     case "set_name":
       nodeNameSet(rec, asString(args[0] as Variant, "属性写入"));
       return V.nil();
@@ -138,6 +144,6 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     case "get_path":
       return nodePathValue(scenePathOf(rec as unknown as object));
     default:
-      throw new UnsupportedError("node-method", `Node.${name}() 这一支没量过（queue_free / duplicate / find_child / get_path_to / has_method 那几支还没建模）`);
+      throw new UnsupportedError("node-method", `Node.${name}() 这一支没量过（duplicate / find_child / get_path_to / has_method 那几支还没建模）`);
   }
 }

@@ -3,7 +3,7 @@ import { deferredPendingCount } from "./runtime/callable";
 import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/object";
 import { V, type Variant } from "./runtime/tags";
-import { GdEngineInstance, nodeAttach, nodeInit, type NodeRec } from "./runtime/node";
+import { GdEngineInstance, nodeAttach, nodeDrainQueued, nodeInit, type NodeRec } from "./runtime/node";
 import {
   GdSceneTree,
   dispatchHook,
@@ -193,12 +193,14 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
 
   scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_enter_tree", []));
   scenePostOrder(rootNode as object, (n) => dispatchHook(n, "_ready", []));
+  nodeDrainQueued();
 
   while (!tree.quitted && tree.frame < SCENE_MAX_FRAMES) {
     await new Promise((r) => setTimeout(r, 2));
     tree.frame += 1;
     const dt = V.float(SCENE_FRAME_DT);
     scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_process", [dt]));
+    nodeDrainQueued();
   }
 
   scenePostOrder(rootNode as object, (n) => dispatchHook(n, "_exit_tree", []));
