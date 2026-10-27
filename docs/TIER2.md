@@ -53,6 +53,8 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 
 ### 阶段一 —— 引擎类值的属性面（读数已全，先落地）
 
+> **进度（2026-10-27）**：六支引擎类值的 `.new` 面已放行（`45c8d30`）—— 生成表 `semantics/engine-faces.ts` + `tools/engine-class-face*.{mjs,d.mts}` + `pnpm regen:engine-class-face` + `codegen-drift` 第五条逐字节门 + 语料用例 `450-engine-class-new-face`（九格 golden，`corpus-diff` 286/286 逐字节、三桶全 0）。**没做的**：造实例那一形照旧抛 `native-class-member`（阶段三）；`ENGINE_TODO_FACES` 那份可机器校验清单换成了一支测试（`packages/runtime/test/engine-class-new-face.test.ts`）逐名要求仍抛，没另建 src 侧清单表。下面正文是当初的设计，保留作考古。
+
 **切割口径**：只做「把 `Node.new` 这类成员当**值**发出来，并满足已测读数」；**真正调用它造实例照旧响亮拒**（造实例要对象模型 → 阶段三）。这是唯一能让"读数已全"立刻落地、又不把宿主提前拖进来的切法。
 
 **本轮新取的读数**（`GODOT_BIN` = Godot 4.6.3.stable.official.7d41c59c4，`tools/golden.mjs` 落盘；探头料在 `corpus/cases/000-probe-engine-class-new/`，实现落地时转正为语料用例）。当前我们在这一支的失败点是 `method/object.ts:45 native-class-member`（取属性 `Node.new` 就抛，还没走到造实例）：
@@ -149,7 +151,7 @@ pnpm test:golden-check  →（单独一轮）→ pnpm test:diff           # 引�
 按「不定就动不了工」排序；每条给选项与建议。
 
 1. **阶段一的切割线（Tier 1 边界画在哪）**：`Node.new` 只当 Callable 值发、真造实例（`.call()` / `.new()`）照旧响亮拒（**建议**，唯一能让"读数已全"落地又不出宿主的切法）vs 连实例一起造（等于把阶段三的对象模型提前）。
-2. **`docs/ROADMAP.md` 的 D4 措辞要不要跟着改**：D4 现文是「不实现任何引擎 API，遇到即抛 `unsupported`」，`AGENTS.md` 开头的项目概述同样口径。Tier 2 一旦放行引擎类值面，这句话就成了假陈述（**建议**：阶段一落地那一笔同步改成「Tier 1 范围内不实现；Tier 2 按 `docs/TIER2.md` 分阶段放行」，别让文档与门互相打脸）。
+2. ~~**D4 措辞要不要跟着改**~~ **已执行**：ROADMAP 的 D4 与 `AGENTS.md` 概述都改成「Tier 1 范围内不实现；Tier 2 按本文分阶段解禁」，随阶段一第一笔一起落地。
 3. **引擎成员表面放哪**：`compiler/src/semantics/engine-faces.ts`（发射期解析，**建议**，产物零负担）vs runtime 全表（每份产物都背一张表，且要过 `copyTreeTs` / `TREE_FACE`）。
 4. **七类型的 Tag 策略**：继续 `Tag.OBJECT` + `instanceof`（**建议**）vs 新增 Tag（牵动 `typeof` / `hash` / 字典键三条已实测等式）。
 5. **阶段零的切法授权**：同族目录化 + 表外提 + 门面 `export *`（**建议**，全是零语义搬迁，判据是存量字节门）vs 允许把 `CODE_BUDGET` 数字临时改大换余量（会把棘轮变成摆设，不推荐）。
