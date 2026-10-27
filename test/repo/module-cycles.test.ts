@@ -8,7 +8,11 @@ const SRC = join(ROOT, "packages", "runtime", "src");
 const KNOWN_CIRCLES: Array<string[]> = [];
 const LEAVES = ["runtime/ucaps", "runtime/errors", "runtime/case-flags", "runtime/case-table", "runtime/engine-classes"];
 
-const files = readdirSync(join(SRC, "runtime")).filter((n) => n.endsWith(".ts")).map((n) => "runtime/" + n.replace(/\.ts$/, ""));
+const walkRuntime = (rel: string): string[] =>
+  readdirSync(join(SRC, rel), { withFileTypes: true }).flatMap((ent) =>
+    ent.isDirectory() ? walkRuntime(`${rel}/${ent.name}`) : ent.name.endsWith(".ts") ? [`${rel}/${ent.name.replace(/\.ts$/, "")}`] : [],
+  );
+const files = walkRuntime("runtime");
 for (const n of ["host", "host-node", "host-scriptc", "standalone", "product"]) files.push(n);
 
 function valueDeps(f: string, text: string): string[] {
@@ -17,10 +21,10 @@ function valueDeps(f: string, text: string): string[] {
     const id = posix.normalize(posix.join(posix.dirname(f), spec));
     if (files.includes(id)) deps.add(id);
   };
-  for (const m of text.matchAll(/import([\s\S]*?)from\s*"(\.\.?\/[^"]+)";/g)) {
-    const clause = m[1] ?? "";
-    const spec = m[2] ?? "";
-    if (/^\s*type[\s{]/.test(clause)) continue;
+  for (const m of text.matchAll(/\b(import|export)([\s\S]*?)from\s*"(\.\.?\/[^"]+)";/g)) {
+    const clause = m[2] ?? "";
+    const spec = m[3] ?? "";
+    if (/^\s*type[\s{*]/.test(clause)) continue;
     const names = (/\{([\s\S]*)\}/.exec(clause)?.[1] ?? "").split(",").map((s) => s.trim()).filter((s) => s !== "");
     if (names.length > 0 && names.every((s) => s.startsWith("type "))) continue;
     add(spec);

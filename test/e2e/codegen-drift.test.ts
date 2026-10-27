@@ -8,6 +8,8 @@ import {
   renderCaseTable,
 } from "../../tools/case-codegen.mjs";
 import { renderUcaps } from "../../tools/ucaps.mjs";
+import { renderEngineClasses } from "../../tools/engine-classes.mjs";
+import { renderFace } from "../../tools/engine-class-face.mjs";
 import { CORPUS, ROOT } from "../support/lib-bridge";
 
 const lf = (s: string): string => s.replace(/\r\n/g, "\n");
@@ -54,5 +56,27 @@ describe.skipIf(!haveSweep)(`ucaps 生成源码无漂移${haveSweep ? "" : "（�
     const want = renderUcaps(readFileSync(SWEEP, "utf8"));
     const got = readFileSync(`${ROOT}/packages/runtime/src/runtime/ucaps.ts`, "utf8");
     expect(lf(got), "ucaps.ts 漂了：手改了生成物，或 Godot 版本不是钉住的 4.6.3").toBe(lf(want));
+  });
+});
+
+const CLASSES = `${ROOT}/tmp/engine-classes-probe/classes.txt`;
+const haveClasses = existsSync(CLASSES);
+
+describe.skipIf(!haveClasses)(`engine-classes 生成源码无漂移${haveClasses ? "" : "（跳过：ClassDB 类清单读数在 tmp/ 下，先跑 pnpm regen:engine-classes）"}`, () => {
+  it("engine-classes.ts 逐字节等于 Godot ClassDB.get_class_list() 重算的产出", () => {
+    const want = renderEngineClasses(readFileSync(CLASSES, "utf8"));
+    const got = readFileSync(`${ROOT}/packages/runtime/src/runtime/engine-classes.ts`, "utf8");
+    expect(lf(got), "engine-classes.ts 漂了：手改了生成物，或 Godot 版本不是钉住的 4.6.3").toBe(lf(want));
+  });
+});
+
+const FACE = `${ROOT}/tmp/engine-class-face-probe/face.txt`;
+const haveFace = existsSync(FACE);
+
+describe.skipIf(!haveFace)(`engine-faces 生成源码无漂移${haveFace ? "" : "（跳过：引擎类 new 面读数在 tmp/ 下，先跑 pnpm regen:engine-class-face）"}`, () => {
+  it("engine-faces.ts 逐字节等于 Godot 里六支类 .new 面的重算产出", () => {
+    const want = renderFace(readFileSync(FACE, "utf8"));
+    const got = readFileSync(`${ROOT}/packages/compiler/src/semantics/engine-faces.ts`, "utf8");
+    expect(lf(got), "engine-faces.ts 漂了：手改了生成物，或 Godot 版本不是钉住的 4.6.3").toBe(lf(want));
   });
 });

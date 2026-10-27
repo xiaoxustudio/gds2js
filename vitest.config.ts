@@ -58,7 +58,7 @@ export default defineConfig({
            * 而两者读数逐字相同（1509/0）。曾以为必须 true 的理由
            * （registerClass("Holder") 在 :2307 与 :3123 各登记一次）核实后不成立：nameClass 是
            * CLASS_REGISTRY.set(name, desc)，撞名只覆盖不抛，两处各用自己返回的 descriptor，
-           * 全文没有按名字回查 "Holder"。详见 ROADMAP §1.33。
+           * 全文没有按名字回查 "Holder"。当时的逐笔读数已归档（git show fa46a87:docs/ROADMAP.md）。
            *
            * 代价：跨文件的模块级脏状态不会被隔离兜住。
            */

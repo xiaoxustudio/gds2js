@@ -1,3 +1,14 @@
+/**
+ * Godot 引擎类名清单 —— 生成物，别手改，改请重跑生成流程（pnpm regen:engine-classes）。
+ *
+ *   node tools/engine-classes-probe.mjs
+ *   node tools/engine-classes.mjs write
+ *
+ * 数据是 Godot 4.6.3 无头进程里 `ClassDB.get_class_list()` 的全量返回，升序存放。
+ * 这张表只回答「这个类名在引擎的 ClassDB 里存不存在」（`type_exists()` 与解析期的类名判定），
+ * 不代表这些类有可建的实例或有建模的属性面 —— 那些仍按 D4 在遇到时响亮抛错。
+ */
+
 export const ENGINE_CLASS_NAMES: ReadonlySet<string> = new Set([
   "AESContext",
   "AStar2D",

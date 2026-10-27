@@ -7,6 +7,7 @@ import { asVec2 } from "./vector2";
 import { asVec3 } from "./vector3";
 import { asVec4 } from "./vector4";
 import { asVec2i } from "./vector2i";
+import { asAABB, asBasis, asPlane, asQuaternion, asRect2, asRect2i, asTransform2D } from "./composite-classes";
 import { asVec3i } from "./vector3i";
 import { asVec4i } from "./vector4i";
 import { asColor } from "./color";
@@ -1262,6 +1263,14 @@ export function strColor(n: number): string {
   return t.endsWith(".") ? `${t}0` : t;
 }
 
+/** 引擎给 Plane.D 与 Quaternion 分量的那一形：六位小数、去尾零（`2` / `0.707107`）。 */
+export function num6Text(n: number): string {
+  if (!Number.isFinite(n)) return strVec2(n);
+  if (Number.isInteger(n)) return String(n);
+  const s = n.toFixed(6).replace(/0+$/, "");
+  return s.endsWith(".") ? s + "0" : s;
+}
+
 export function strVec2(n: number): string {
   if (Number.isNaN(n)) return "nan";
   if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
@@ -1334,11 +1343,18 @@ export function valueTypeName(x: Variant): string {
   if (asVec3(x) !== null) return "Vector3";
   if (asVec4(x) !== null) return "Vector4";
   if (asVec2i(x) !== null) return "Vector2i";
+  if (asTransform2D(x) !== null) return "Transform2D";
+  if (asQuaternion(x) !== null) return "Quaternion";
+  if (asPlane(x) !== null) return "Plane";
+  if (asAABB(x) !== null) return "AABB";
+  if (asRect2(x) !== null) return "Rect2";
+  if (asRect2i(x) !== null) return "Rect2i";
   if (asVec3i(x) !== null) return "Vector3i";
   if (asVec4i(x) !== null) return "Vector4i";
   if (asColor(x) !== null) return "Color";
   if (asRid(x) !== null) return "RID";
   if (asNodePath(x) !== null) return "NodePath";
+  if (asBasis(x) !== null) return "Basis";
   if (isCallable(x)) return "Callable";
   return tagName(x.t);
 }

@@ -1,11 +1,11 @@
-import { norm } from "./method-core";
+import { norm } from "./method/core";
 import { registerBoundSnapshotHook } from "./object";
-import { boundSnapshot } from "./method-access";
-import { objectMethod } from "./method-object";
-import { arrayMethod } from "./method-array";
-import { dictMethod } from "./method-dict";
-import { stringMethod } from "./method-string";
-import { registerMethodDispatch } from "./method-callable";
+import { boundSnapshot } from "./method/access";
+import { objectMethod } from "./method/object";
+import { arrayMethod } from "./method/array";
+import { dictMethod } from "./method/dict";
+import { stringMethod } from "./method/string";
+import { registerMethodDispatch } from "./method/callable";
 
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { faceMemberKnown, nativeAritySay } from "./face-arity";
@@ -52,7 +52,7 @@ export function method(raw: unknown, name: string, args: Variant[]): Variant {
 registerBoundSnapshotHook(boundSnapshot);
 registerMethodDispatch(method);
 
-export { ELEM_TYPE_CODE } from "./method-core";
-export { signalCtor, index, dictIndexInt, writeProp, writeIdx, setIndex, iter, dictOf, formatOf, boundMethod, attribute } from "./method-access";
-export { callableCtor, callableStatic } from "./method-callable";
-export { gDictToInst, GLOBAL_CALLABLE_IMPLEMENTED, globalCallable } from "./method-globals";
+export { ELEM_TYPE_CODE } from "./method/core";
+export { signalCtor, index, dictIndexInt, writeProp, writeIdx, setIndex, iter, dictOf, formatOf, boundMethod, attribute } from "./method/access";
+export { callableCtor, callableStatic } from "./method/callable";
+export { gDictToInst, GLOBAL_CALLABLE_IMPLEMENTED, globalCallable } from "./method/globals";

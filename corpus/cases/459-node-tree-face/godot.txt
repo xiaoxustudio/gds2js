@@ -1,0 +1,12 @@
+q01||0|-1|<Node#号>
+q02|@Node@号|1|0|par:<Node#号>
+q03|kid|@Node@号|[@Node@号:<Node#号>, kid:<Node#号>, @Node@号:<Node#号>]
+q04|kid:<Node#号>|true|true|false
+q05|a_b_c_d|a_b_c_d|Node
+q06|0|true|2
+q07|false|2
+q08|true|1
+q09|a_b_c_d|2|par:<Node#号>
+q10|<RefCounted#号>|RefCounted|24
+q11|1|true|false
+q12|[]|false|false

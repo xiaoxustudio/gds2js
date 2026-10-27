@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { GODOT_BIN, ROOT, runGodot } from "./lib.mjs";
+import { GODOT_BIN, ROOT, requireGodotPin, runGodot } from "./lib.mjs";
 
 const OUT_DIR = join(ROOT, "tmp", "ucaps-probe");
 const GD = join(OUT_DIR, "sweep.gd");
@@ -27,7 +27,7 @@ if (!process.env.GODOT_BIN) {
   console.error(`需要 GODOT_BIN（当前解析到 ${GODOT_BIN}）：指到一个 Godot 4.6.3 可执行文件`);
   process.exit(1);
 }
-
+requireGodotPin();
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(GD, gd, "utf8");
 

@@ -3,6 +3,7 @@ import { GArray, GDict, registerClassFaceCheck, registerObjectLabelHook, registe
 import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
 import { globalCallableRow } from "./global-names";
 import { nextObjectId } from "./identity";
+import { GdNativeClass, nativeClassNewArgs } from "./native-class";
 
 export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, registerBoundSnapshotHook, type Fn } from "./callable";
 
@@ -64,6 +65,8 @@ export function declaredArgCount(box: CallableBox): number | null {
   if (box.builtinBounds !== null) return box.builtinBounds[1];
   const name = box.name;
   if (name === "new") {
+    const native = box.object === null ? null : nativeClassNewArgs(box.object.v);
+    if (native !== null) return native;
     const ctor = box.object === null ? null : ctorAritiesOf(box.object.v);
     if (ctor !== null) return 0;
   }
@@ -423,6 +426,10 @@ export function registerNativeBase(desc: ClassDesc, name: string): void {
 }
 
 export function nativeBaseOf(target: unknown): string | null {
+  if (typeof target === "object" && target !== null) {
+    const cls = (target as Record<string, unknown>).__gd_engine_class__;
+    if (typeof cls === "string") return cls;
+  }
   for (let d = descOf(target); d !== null; d = d.base) {
     if (d.nativeBase !== null) return d.nativeBase;
   }
@@ -453,6 +460,7 @@ registerCallableLabelHook((box) => {
   const name = box.name;
   if (inner === undefined || name === null) return null;
   if (inner instanceof ClassDesc && name === "new") return "GDScript::new";
+  if (inner instanceof GdNativeClass && name === "new") return "GDScriptNativeClass::new";
   if (hasStaticName(inner, name)) return `GDScript::${name}`;
   const base = nativeBaseOf(inner);
   if (base === null) return null;
@@ -477,10 +485,21 @@ registerScriptPropsHook((inner) => {
   return { props, unmodeledBase };
 });
 
+export function markFreed(inner: object): void {
+  (inner as unknown as Record<string, unknown>).__gd_freed__ = true;
+}
+
+export function isFreed(inner: unknown): boolean {
+  return typeof inner === "object" && inner !== null && (inner as unknown as Record<string, unknown>).__gd_freed__ === true;
+}
+
 registerObjectLabelHook((inner) => {
   if (!(inner instanceof GdScriptObject)) return null;
   const base = nativeBaseOf(inner);
-  return base === null ? null : `<${base}#${String(inner.gdObjectId)}>`;
+  if (base === null) return null;
+  const tag = `<${base}#${String(inner.gdObjectId)}>`;
+  const nm = (inner as unknown as Record<string, unknown>).__gd_node_name__;
+  return typeof nm === "string" && nm !== "" ? `${nm}:${tag}` : tag;
 });
 
 const METAS = new Map<object, Map<string, Variant>>();

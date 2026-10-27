@@ -7,6 +7,9 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
+import { GAABB, GBasis, GPlane, GQuaternion, GTransform2D } from "./composite-classes";
+import { GRect2 } from "./rect2";
+import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
 import { GColor } from "./color";
 import { GdNodePath } from "./node-path";
@@ -25,6 +28,13 @@ const T_FLOAT = 3;
 const T_STRING = 4;
 const T_VECTOR2 = 5;
 const T_VECTOR2I = 6;
+const T_RECT2 = 7;
+const T_RECT2I = 8;
+const T_AABB = 16;
+const T_PLANE = 14;
+const T_QUATERNION = 15;
+const T_TRANSFORM2D = 11;
+const T_BASIS = 17;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
 const T_STRING_NAME = 21;
@@ -75,6 +85,13 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   String: 4,
   Vector2: 5,
   Vector2i: 6,
+  Transform2D: 11,
+  Basis: 17,
+  Quaternion: 15,
+  Plane: 14,
+  AABB: 16,
+  Rect2: 7,
+  Rect2i: 8,
   Vector3: 9,
   Vector3i: 10,
   Vector4: 12,
@@ -186,6 +203,13 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GVector2 ||
     o instanceof GVector3 ||
     o instanceof GVector2i ||
+    o instanceof GRect2 ||
+    o instanceof GRect2i ||
+    o instanceof GAABB ||
+    o instanceof GPlane ||
+    o instanceof GQuaternion ||
+    o instanceof GTransform2D ||
+    o instanceof GBasis ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
     o instanceof GVector4i ||
@@ -398,6 +422,71 @@ class Writer {
           this.header(T_VECTOR2I);
           this.u32(o.x);
           this.u32(o.y);
+          return;
+        }
+        if (o instanceof GRect2) {
+          this.header(T_RECT2);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.w);
+          this.f32(o.h);
+          return;
+        }
+        if (o instanceof GTransform2D) {
+          this.header(T_TRANSFORM2D);
+          this.f32(o.xx);
+          this.f32(o.xy);
+          this.f32(o.yx);
+          this.f32(o.yy);
+          this.f32(o.ox);
+          this.f32(o.oy);
+          return;
+        }
+        if (o instanceof GBasis) {
+          this.header(T_BASIS);
+          this.f32(o.x0);
+          this.f32(o.y0);
+          this.f32(o.z0);
+          this.f32(o.x1);
+          this.f32(o.y1);
+          this.f32(o.z1);
+          this.f32(o.x2);
+          this.f32(o.y2);
+          this.f32(o.z2);
+          return;
+        }
+        if (o instanceof GQuaternion) {
+          this.header(T_QUATERNION);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.z);
+          this.f32(o.w);
+          return;
+        }
+        if (o instanceof GPlane) {
+          this.header(T_PLANE);
+          this.f32(o.nx);
+          this.f32(o.ny);
+          this.f32(o.nz);
+          this.f32(o.d);
+          return;
+        }
+        if (o instanceof GAABB) {
+          this.header(T_AABB);
+          this.f32(o.x);
+          this.f32(o.y);
+          this.f32(o.z);
+          this.f32(o.sx);
+          this.f32(o.sy);
+          this.f32(o.sz);
+          return;
+        }
+        if (o instanceof GRect2i) {
+          this.header(T_RECT2I);
+          this.u32(o.x);
+          this.u32(o.y);
+          this.u32(o.w);
+          this.u32(o.h);
           return;
         }
         if (o instanceof GVector3i) {
@@ -631,6 +720,64 @@ class Reader {
         const x = this.i32();
         const y = this.i32();
         return V.object(new GVector2i(x, y));
+      }
+      case T_RECT2: {
+        const x = this.f32();
+        const y = this.f32();
+        const w = this.f32();
+        const h = this.f32();
+        return V.object(new GRect2(x, y, w, h));
+      }
+      case T_TRANSFORM2D: {
+        const txx = this.f32();
+        const txy = this.f32();
+        const tyx = this.f32();
+        const tyy = this.f32();
+        const tox = this.f32();
+        const toy = this.f32();
+        return V.object(new GTransform2D(txx, txy, tyx, tyy, tox, toy));
+      }
+      case T_BASIS: {
+        const g0 = this.f32();
+        const g1 = this.f32();
+        const g2 = this.f32();
+        const g3 = this.f32();
+        const g4 = this.f32();
+        const g5 = this.f32();
+        const g6 = this.f32();
+        const g7 = this.f32();
+        const g8 = this.f32();
+        return V.object(new GBasis(g0, g3, g6, g1, g4, g7, g2, g5, g8));
+      }
+      case T_QUATERNION: {
+        const qx = this.f32();
+        const qy = this.f32();
+        const qz = this.f32();
+        const qw = this.f32();
+        return V.object(new GQuaternion(qx, qy, qz, qw));
+      }
+      case T_PLANE: {
+        const nx = this.f32();
+        const ny = this.f32();
+        const nz = this.f32();
+        const dd = this.f32();
+        return V.object(new GPlane(nx, ny, nz, dd));
+      }
+      case T_AABB: {
+        const x = this.f32();
+        const y = this.f32();
+        const z = this.f32();
+        const sx = this.f32();
+        const sy = this.f32();
+        const sz = this.f32();
+        return V.object(new GAABB(x, y, z, sx, sy, sz));
+      }
+      case T_RECT2I: {
+        const x = this.i32();
+        const y = this.i32();
+        const w = this.i32();
+        const h = this.i32();
+        return V.object(new GRect2i(x, y, w, h));
       }
       case T_VECTOR3I: {
         const x = this.i32();

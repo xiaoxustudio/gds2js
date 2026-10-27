@@ -4,8 +4,13 @@ import { pctFormatError } from "./frames";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
-import { asVec2, GVector2, vecCmp } from "./vector2";
-import { asVec3, GVector3, vec3Cmp } from "./vector3";
+import { asVec2, GVector2, vector2, vecCmp } from "./vector2";
+import { asVec3, GVector3, vector3, vec3Cmp } from "./vector3";
+import { asQuaternion, quaternion } from "./quaternion";
+import { asTransform2D, transform2d } from "./transform2d";
+import { asBasis, basisMul, basisScaled, basisXform } from "./basis";
+
+const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./vector4";
 import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./vector4i";
 import { asColor, color, GColor } from "./color";
@@ -199,6 +204,53 @@ export const ops = {
     if (zi4Mul && b.t === Tag.FLOAT) return vec4iToFloat(zi4Mul, num(b), "mul");
     if (zi4Mul && b.t === Tag.INT) return v4iMulK(zi4Mul, intToNum(b.v as IntPayload));
     if (zj4Mul && a.t === Tag.INT) return v4iMulK(zj4Mul, intToNum(a.v as IntPayload));
+    const taMul = asTransform2D(a);
+    if (taMul !== null) {
+      const tbMul = asTransform2D(b);
+      if (tbMul !== null) {
+        const ax = taMul.xx;
+        const ay = taMul.xy;
+        const bx = taMul.yx;
+        const by = taMul.yy;
+        return transform2d(
+          r3(ax * tbMul.xx) + r3(bx * tbMul.xy),
+          r3(ay * tbMul.xx) + r3(by * tbMul.xy),
+          r3(ax * tbMul.yx) + r3(bx * tbMul.yy),
+          r3(ay * tbMul.yx) + r3(by * tbMul.yy),
+          r3(r3(ax * tbMul.ox) + r3(bx * tbMul.oy)) + taMul.ox,
+          r3(r3(ay * tbMul.ox) + r3(by * tbMul.oy)) + taMul.oy,
+        );
+      }
+      if (b.t === Tag.OBJECT && (b.v as object) instanceof GVector2) {
+        const p = b.v as GVector2;
+        return vector2(r3(r3(taMul.xx * p.x) + r3(taMul.yx * p.y)) + taMul.ox, r3(r3(taMul.xy * p.x) + r3(taMul.yy * p.y)) + taMul.oy);
+      }
+      throw new UnsupportedError("transform2d-mul-right", `Transform2D 的 ${"\u002a"} 只量过乘 Transform2D 与乘 Vector2（收到另一形）`);
+    }
+    const baMul = asBasis(a);
+    if (baMul !== null) {
+      const bbMul = asBasis(b);
+      if (bbMul !== null) return basisMul(baMul, bbMul);
+      const bvMul = asVec3(b);
+      if (bvMul !== null) {
+        const p = basisXform(baMul, bvMul.x, bvMul.y, bvMul.z);
+        return vector3(p[0] as number, p[1] as number, p[2] as number);
+      }
+      if (b.t === Tag.FLOAT || b.t === Tag.INT) return basisScaled(baMul, r3(num(b)));
+      throw new UnsupportedError("basis-mul-right", `Basis 的 ${"\u002a"} 只量过乘 Basis、乘 Vector3、乘数（收到另一形）`);
+    }
+    const qaMul = asQuaternion(a);
+    const qbMul = asQuaternion(b);
+    if (qaMul && qbMul) {
+      const x = r3(qaMul.w * qbMul.x) + r3(qaMul.x * qbMul.w) + r3(qaMul.y * qbMul.z) - r3(qaMul.z * qbMul.y);
+      const y = r3(qaMul.w * qbMul.y) + r3(qaMul.y * qbMul.w) + r3(qaMul.z * qbMul.x) - r3(qaMul.x * qbMul.z);
+      const z = r3(qaMul.w * qbMul.z) + r3(qaMul.z * qbMul.w) + r3(qaMul.x * qbMul.y) - r3(qaMul.y * qbMul.x);
+      const w = r3(qaMul.w * qbMul.w) - r3(qaMul.x * qbMul.x) - r3(qaMul.y * qbMul.y) - r3(qaMul.z * qbMul.z);
+      return quaternion(x, y, z, w);
+    }
+    if (qaMul && b.t === Tag.OBJECT && (b.v as object) instanceof GVector3) {
+      throw new UnsupportedError("quaternion-xform", "Quaternion * Vector3 这一式还没对上：三种 float32 结合次序里，两种各自复现了一格、另一格差 6e-7，读不出引擎的那一条，响亮拒");
+    }
     const ziMul = asVec2i(a);
     const zjMul = asVec2i(b);
     if (ziMul && zjMul) return vector2i(mul32(ziMul.x, zjMul.x), mul32(ziMul.y, zjMul.y));

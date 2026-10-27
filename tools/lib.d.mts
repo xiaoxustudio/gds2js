@@ -2,6 +2,10 @@ export declare const ROOT: string;
 export declare const CORPUS: string;
 export declare const GODOT_BIN: string;
 export declare const DEFAULT_TIMEOUT_MS: number;
+export declare const GODOT_PIN: string;
+
+export declare function godotVersion(timeoutMs?: number): string | null;
+export declare function requireGodotPin(): string;
 
 export declare function listCases(filter?: string): string[];
 export declare function listSingleCases(filter?: string): string[];

@@ -1,0 +1,9 @@
+f01|25|25|25|25|25|25
+f02|true|false|true
+f03|new|new|new
+f04|true|true|true
+f05|0|0|0
+f06|-1|new|true
+f07|false|false
+f08|1|true|1
+f09|GDScriptNativeClass::new|GDScriptNativeClass::new|GDScriptNativeClass::new

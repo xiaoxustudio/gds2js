@@ -58,7 +58,7 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 
 ## 测试
 
-测试跑在 **Vitest** 上（根 `vitest.config.ts`，四个 project），分两层。
+测试跑在 **Vitest** 上（根 `vitest.config.ts`，五个 project：`testkit` / `runtime` / `compiler` / `repo` 为快层，`e2e` 单独一层）。
 **快层**零外部依赖、零 build，秒级；**E2E 层**串行跑，缺外部工具时自动 skip 并说出缺什么。
 测试文件一律放在 `packages/<pkg>/test/` 或根 `test/`，**绝不放进 `packages/*/src/`** ——
 `export --pack scriptc` 的 `copyTreeTs` 会把 `packages/runtime/src/` 下每个 `.ts` 扫进出货产物树。
@@ -67,10 +67,10 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 # ── 快层：零外部依赖、零 build（实测 ~5s）─────────────────────────────
 pnpm test              # testkit + runtime + compiler + repo 四个 project 全跑
 pnpm test:unit         # 只 runtime + compiler
-pnpm test:ops          # runtime 单测：原 tools/ops-check.ts，1509 条断言拆成 23 个文件
-pnpm test:ir           # 语料 229 例 parse+lower 不抛
+pnpm test:ops          # runtime 单测：ops 面的自校验（断言条数由门自己报，别在这里写死）
+pnpm test:ir           # 语料单文件例 parse+lower 不抛（例数跟着语料长，看门输出）
 pnpm test:sema         # 语义分析：恰好在 Godot 报 Parse Error 的那些用例上拒答
-pnpm test:guards       # 发射期守卫的 33 格 cell table（原内嵌在 test:compile 里）
+pnpm test:guards       # 发射期守卫的 cell table（原内嵌在 test:compile 里）
 pnpm test:treeface     # tree-face 对账：清单 ↔ 盘面 ↔ 三处消费者（改产物树/HOME 布局先跑它）
                        # 另：packages/compiler/test/emit-invariants.test.ts 随 pnpm test 跑，
                        #    验「产物文本口径 === IR usesPackCodec 标志」与「autoRun 尾巴必须自兜底」
@@ -80,7 +80,7 @@ pnpm test:treeface     # tree-face 对账：清单 ↔ 盘面 ↔ 三处消费�
 pnpm test:e2e          # E2E 门全跑（门数随覆盖加长会漂，落点看 test/e2e/）
 pnpm test:diff         # Godot golden vs 编译产物，逐字节 + 分桶看板（要 main.gen.mts，即先跑 test:compile）
 pnpm test:golden-check # 拿真 Godot 重跑全部语料页查 golden 漂移（要 GODOT_BIN；只读不写盘）
-pnpm test:codegen      # 查生成源码漂移：case-table.ts / case-flags.ts 是否等于重跑 regen 该产出的
+pnpm test:codegen      # 查生成源码漂移：四张实测生成表（case-table / case-flags / ucaps / engine-classes）是否等于重跑 regen 该产出的
                        #   （探头用例 gitignored，没跑过 regen:* 的机器上整支 skip；比对前归一行尾，
                        #    仓库已用 .gitattributes 锁 eol=lf，归一那步给老 clone 兜底）
 pnpm test:pkgmodes     # single/local 两模式逐用例对齐 golden + 子目录 local + single sourcemap 解码（要 pnpm build）
@@ -97,8 +97,8 @@ pnpm test:all          # 两层全跑
 ### E2E 层的开关（旧命令行参数改成环境变量）
 
 ```bash
-GDS2JS_SCRIPTC_ALL=1        # scriptc 全量（282 例 = 271 单文件 + 11 项目树），并发 4
-GDS2JS_SCRIPTC_PROJECT=1    # scriptc 只跑 9 个项目树用例
+GDS2JS_SCRIPTC_ALL=1        # scriptc 全量（可执行页 = 单文件 + 项目树，页数跟着语料长），并发 4
+GDS2JS_SCRIPTC_PROJECT=1    # scriptc 只跑项目树用例（带 project.godot 的那批）
 GDS2JS_SCRIPTC_FILTER=064   # scriptc 按 case-id 子串挑（跑全部匹配，不只代表集）
 GDS2JS_SCRIPTC_KEEP=1       # scriptc 收尾不删替身树
 GDS2JS_CLI_NATIVE_QUICK=1   # cli-native 跳过 ④⑥ 两格 scriptc/SEA 出货
@@ -111,7 +111,7 @@ GODOT_BIN / TS_SRC / ZIG_CC / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落�
 `export` 门里 `node/版本门禁` 那一格判的是「runner 的 node 不够新时 CLI 该响亮拒并给出重跑命令」，
 所以这一格要真跑就得拿**低于 25.7** 的 node 当 runner；同时把 SEA 那几格也真打出来，就再给
 `GDS2JS_NODE_BIN` 指一颗 **≥25.7** 的：`D:/nvm/v24.8.0/node.exe node_modules/vitest/vitest.mjs run --project e2e export.test.ts`
-配 `GDS2JS_NODE_BIN=<26.x>`（本机实测 ok 18 / 记账 0 / FAIL 0；runner 自己就够新时这一格按口径只记环境账，不硬凑 pass）。
+配 `GDS2JS_NODE_BIN=<够新的 node>`（各格的 ok / 记账数按机器与工具链而变，以门输出为准；runner 自己就够新时，版本门禁那一格按口径只记环境账，不硬凑 pass）。
 
 ## 关于
 

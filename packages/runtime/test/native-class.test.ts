@@ -41,7 +41,12 @@ describe("runtime/native-class · 引擎类值", () => {
     const mask = (s: string): string => s.replace(/#-?\d+>/, "#号>");
     eq("243", "引擎类值印 <GDScriptNativeClass#号>", mask(show(nativeClass("Node"))), "<GDScriptNativeClass#号>");
     eq("243", "同名两次是同一个号（`Node == Node` 那条身份的另一半）", `${mask(show(nativeClass("Resource")))}|${String(show(nativeClass("Node")) === show(nativeClass("Node")))}`, "<GDScriptNativeClass#号>|true");
-    eq("243", ".new() 不发 → [native-class-member]", code(() => method(nativeClass("Node"), "new", [])), "[native-class-member]");
+    eq("243", "没量过的 .new() 仍不发 → [native-class-member]", code(() => method(nativeClass("Resource"), "new", [])), "[native-class-member]");
+    eq("459", "量过的四支造得出实例，打印带原生基类号", (() => {
+      const out: string[] = [];
+      for (const cls of ["Node", "Node2D", "RefCounted", "Object"]) out.push(mask(show(method(nativeClass(cls), "new", []))));
+      return out.join("|");
+    })(), "<Node#号>|<Node2D#号>|<RefCounted#号>|<Object#号>");
     eq("243", "属性面同样拒（名字进那句文案）", code(() => attribute(nativeClass("Label"), "text")), "[native-class-member]");
     eq("243", "容器里也走得通（var_to_str 那一支仍没量，走它自己那条拒）", mask(show(V.array(GArray.of([nativeClass("Node")])))), "[<GDScriptNativeClass#号>]");
   });
