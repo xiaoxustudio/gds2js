@@ -1,0 +1,7 @@
+d|v01|iid|号|2
+d|v02|iid|号|2
+d|v03|true|true
+d|v04|true|false
+d|v05|true|false
+d|v06|true|24
+d|v07|<Node2D#号>|<Node#号>

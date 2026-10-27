@@ -119,9 +119,11 @@ export interface Run {
   globalValueReads: Set<string>;
   nativeClassReads: Set<string>;
   hostMethodReads: Set<string>;
+  enginePropReads: Set<string>;
   lambdaCaptures: Map<string, string[]>;
   outerNames: Set<string>;
   hostValueMethods: Set<string>;
+  enginePropFace: ReadonlySet<string>;
   hostStaticCtx: HostStaticCtx;
 }
 
@@ -134,9 +136,11 @@ export function newRun(): Run {
     globalValueReads: new Set<string>(),
     nativeClassReads: new Set<string>(),
     hostMethodReads: new Set<string>(),
+    enginePropReads: new Set<string>(),
     lambdaCaptures: new Map<string, string[]>(),
     outerNames: new Set<string>(),
     hostValueMethods: new Set<string>(),
+    enginePropFace: new Set<string>(),
     hostStaticCtx: null,
   };
 }

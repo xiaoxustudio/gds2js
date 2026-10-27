@@ -141,10 +141,12 @@ function packKindMatches(v: Variant, kind: PackKind): boolean {
   return isBytes(v) && packBytes(v).kind === kind;
 }
 
-const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "SceneTree", "MainLoop"];
+const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "SceneTree", "MainLoop"];
 
 function instanceClassNames(base: string | null): string[] | null {
   if (base === "RefCounted") return ["Object", "RefCounted"];
+  if (base === "Node") return ["Object", "Node"];
+  if (base === "Node2D") return ["Object", "Node", "Node2D"];
   if (base === "SceneTree") return ["Object", "SceneTree", "MainLoop"];
   return null;
 }

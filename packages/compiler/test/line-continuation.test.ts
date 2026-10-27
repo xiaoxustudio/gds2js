@@ -77,20 +77,22 @@ describe("换行落点 · 同句的其余形态", () => {
   CELLS.push(["多行数组主题后冒号另起", HEAD_ + "\tmatch [1,\n2]\n\t:\n\t\t[1, 2]:\n\t\t\tprint(1)" + TAIL_, 'Expected ":" after "match" expression.']);
   CELLS.push(["守卫括号收尾后冒号另起", HEAD_ + "\tmatch 1:\n\t\t1 when (\ntrue\n)\n\t\t:\n\t\t\tprint(1)" + TAIL_, 'Expected ":" after "match" pattern guard.']);
   CELLS.push(["嵌套内部类冒号另起", "extends SceneTree\n\nfunc _initialize():\n\tquit()\n\nclass Outer extends RefCounted:\n\tclass Inner extends RefCounted\n\t:\n\t\tvar a = 1\n", 'Expected ":" after class declaration.']);
-  CELLS.push(["func 头后冒号另起走别的句子", "extends SceneTree\n\nfunc f()\n:\n\tprint(2)\n\nfunc _initialize():\n\tf()\n\tquit()\n", "顶层节点 ERROR 未支持"]);
-  CELLS.push(["static func 头后冒号另起同句", "extends SceneTree\n\nstatic func f()\n:\n\tprint(2)\n\nfunc _initialize():\n\tprint(3)\n\tquit()\n", "顶层节点 ERROR 未支持"]);
   it.each(CELLS)("%s", async (_label, src, engine) => {
     expect(await refuse(src), `${_label} 的句子与引擎不一致`).toBe(engine);
     sameSentenceCells++;
   });
 });
 
-/** 引擎在解析期也拒、但句子归别的落点管：三形都要求我们响亮拒（句子可以不同，放过就是漏报）。 */
+/** 引擎在解析期也拒、但句子归别的落点管（或根本不是引擎读数）：五形都要求我们响亮拒，放过就是漏报。 */
 describe("换行落点 · 别处的句子同样响亮拒", () => {
   const CELLS: Array<[string, string]> = [
     ["声明后接逗号换行", MOD("var a = 1,\n2")],
     ["名字与调用括号之间换行", MOD("var s = str\n(1)")],
     ["型注之后换行再接赋值", MOD("var a: int\n= 1")],
+    // 这两形原先钉的是 `顶层节点 ERROR 未支持` —— vendored 语法在 `func` 头上吐 ERROR 节点、下行照它编的句子，
+    // 不是引擎读数。手写解析器不合成 ERROR，句子换成我们自己那句「语法畸形未支持」，照样响亮拒。
+    ["func 头后冒号另起", "extends SceneTree\n\nfunc f()\n:\n\tprint(2)\n\nfunc _initialize():\n\tf()\n\tquit()\n"],
+    ["static func 头后冒号另起", "extends SceneTree\n\nstatic func f()\n:\n\tprint(2)\n\nfunc _initialize():\n\tprint(3)\n\tquit()\n"],
   ];
   it.each(CELLS)("%s", async (_label, src) => {
     expect(await refuse(src), `${_label} 不该放过`).not.toBeNull();

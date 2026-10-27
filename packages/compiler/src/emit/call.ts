@@ -5,6 +5,7 @@ import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccess
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
 import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
+import { NODE_SELF_METHODS } from "../semantics/node-face";
 import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
@@ -89,6 +90,9 @@ export function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     }
     if (ctx.STATIC_FUNCS.has(name)) return `${ctx.CURRENT_CLASS}.${name}(${args.join(", ")})`;
     if (!callableInScope(name)) {
+      if (ctx.ENGINE_BASE !== null && NODE_SELF_METHODS.has(name)) {
+        return `rt.method(this, ${JSON.stringify(name)}, [${args.join(", ")}])`;
+      }
       throw new UnsupportedError("call-unknown", `Function "${name}()" not found in base self.`);
     }
     return `this.${name}(${packTypedArgs(name, e.args, args, "this").join(", ")})`;

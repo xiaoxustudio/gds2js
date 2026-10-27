@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 /**
- * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 与 packages/ 到 scratch、把五份同名文件换成原生实现、
- * 用 zig 编 C、写 ffi manifest、跑 scriptc build。
- * C 用 zig cc 编，目标三元组按 host 推导（`CC_TARGET` 可覆盖），标准必须是 `-std=gnu11`：
- * 严格 ANSI 下 glibc 不暴露 `le16toh`（`unicode.h`）、musl 不暴露 `fdopen`（`parser.c`），
- * 实测 `-std=c11` 在 x86_64-linux-gnu 与 x86_64-linux-musl 上编不过，gnu11 五目标全绿。
+ * 把 gds2js 自己编成不带 node 的原生 exe：复制 src/ 与 packages/ 到 scratch、把四份同名文件换成原生实现、
+ * 跑 scriptc build。解析器是纯 TS（手写递归下降），这条路上没有 C、没有 FFI、没有 wasm。
  *
  * 用法：
  *   node tools/cli-native.mjs                    # 出货形态：岛（scriptc 0.3.2 起是默认），编出来在 tmp/cli-native/gds2js.exe
- *   node tools/cli-native.mjs --ts-only --keep   # 只重编 TS：沿用已有的 .o
+ *   node tools/cli-native.mjs --keep             # 保留 scratch 树
  *   node tools/cli-native.mjs --coverage         # 只要围栏清单（带 file:line）
- *   TS_SRC=../libtree-sitter node tools/cli-native.mjs
  */
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, existsSync } from "node:fs";
@@ -20,24 +16,13 @@ import { TREE_FACE } from "../packages/compiler/src/tree-face.ts";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SCRATCH = join(ROOT, "tmp", "cli-native");
-const TS_SRC = process.env.TS_SRC ?? join(ROOT, "tmp", "libtree-sitter");
-const ZIG = process.env.ZIG_CC ?? "zig";
 const SCRIPTC = process.env.SCRIPTC_BIN ?? "scriptc";
-const GRAMMAR = join(ROOT, "tree-sitter-gdscript", "src");
-const CC_TARGET = process.env.CC_TARGET ?? defaultCcTarget(process.platform, process.arch);
 const coverageOnly = process.argv.includes("--coverage");
 const keep = process.argv.includes("--keep");
 
 function fail(msg) {
   console.error(msg);
   process.exit(1);
-}
-
-function defaultCcTarget(platform, arch) {
-  if (platform === "win32") return "x86_64-windows-gnu";
-  if (platform === "linux") return arch === "arm64" ? "aarch64-linux-gnu" : "x86_64-linux-gnu";
-  if (platform === "darwin") return arch === "arm64" ? "aarch64-macos" : "x86_64-macos";
-  fail(`没有 ${platform}/${arch} 的 zig 目标：用 CC_TARGET=<triple> 指一个`);
 }
 
 function listTs(dir, out = []) {
@@ -57,10 +42,6 @@ function listTs(dir, out = []) {
   return out;
 }
 
-if (!existsSync(join(TS_SRC, "lib", "src", "lib.c"))) {
-  fail(`找不到 libtree-sitter 源码：${TS_SRC}\n  用 TS_SRC=<目录> 指过去（那目录要有 lib/src/lib.c 与 lib/include/tree_sitter/api.h）。`);
-}
-
 /* 1) scratch 里的源码树：三个 workspace 包（packages/*）原样铺出来。
  *    包源码放在 SCRATCH/packages/*，步骤 2c 会把全部 `@gds2js/*` 说明符改成相对路径 ——
  *    盘面上一旦落进 node_modules，scriptc 会把它当「包代码」收进岛，这些源码必须保持静态编译。 */
@@ -77,11 +58,10 @@ for (const pkg of ["runtime", "compiler", "gds2js"]) {
 }
 console.log(`复制了 ${pkgFiles.length} 份包源码 → ${SCRATCH}`);
 
-/* 2) 五份 seam 文件同名换实现：拿仓库里的 .native.ts 覆盖到 scratch 的同名位置。
- *    这是构建期分岔的口子：node 那侧吃 web-tree-sitter、进程内 import()、tsdown、SEA 资产，
- *    原生 exe 里这四样都不存在，所以同名换实现，其余源码一行不改。 */
+/* 2) 四份 seam 文件同名换实现：拿仓库里的 .native.ts 覆盖到 scratch 的同名位置。
+ *    这是构建期分岔的口子：node 那侧吃进程内 import()、tsdown、SEA 资产，
+ *    原生 exe 里这三样都不存在，所以同名换实现，其余源码一行不改。 */
 const SEAMS = [
-  ["packages/compiler/src/parse/parser.native.ts", "packages/compiler/src/parse/parser.ts"],
   ["packages/compiler/src/compile/ir-cache.native.ts", "packages/compiler/src/compile/ir-cache.ts"],
   ["packages/gds2js/src/bundle.native.ts", "packages/gds2js/src/bundle.ts"],
   ["packages/gds2js/src/exec.native.ts", "packages/gds2js/src/exec.ts"],
@@ -92,8 +72,7 @@ console.log(`scratch 的 ${SEAMS.length} 份 seam 换成原生实现（${SEAMS.m
 
 /* 原生那支的「自带家目录」= 构建期把 dist 与 runtime 源码嵌进 exe。
  * 契约与 SEA 那支一字不差：解出一个只读目录，给目录本身和目录里某个文件的落盘路径。
- * 键名与源位置全部来自 tree-face 清单（home/repo 两节），cli.ts 问 selfFile() 的那些键在这份清单里有唯一出处。
- * 不带 wasm：解析器走 FFI，gdscript.wasm 在这条路上没有读者。 */
+ * 键名与源位置全部来自 tree-face 清单（home/repo 两节），cli.ts 问 selfFile() 的那些键在这份清单里有唯一出处。 */
 const HOME = [];
 const HOME_KEYS = [];
 function assetTo(rel, abs) {
@@ -151,46 +130,7 @@ for (const f of pkgFiles) {
 }
 console.log(`相对化了 ${relRewrites} 份 scratch 源码的 @gds2js/* 说明符`);
 
-
-/* 3) 编 C（`--ts-only` 复用已有的 obj，不重编 libtree-sitter） */
-const objDir = join(SCRATCH, "obj");
-const tsOnly = process.argv.includes("--ts-only");
-if (!tsOnly) rmSync(objDir, { recursive: true, force: true });
-mkdirSync(objDir, { recursive: true });
-const INC = ["-I", join(TS_SRC, "lib", "include"), "-I", join(TS_SRC, "lib", "src"), "-I", GRAMMAR];
-const units = [
-  { src: join(TS_SRC, "lib", "src", "lib.c"), obj: "lib.o" },
-  { src: join(GRAMMAR, "parser.c"), obj: "parser.o" },
-  { src: join(GRAMMAR, "scanner.c"), obj: "scanner.o" },
-  { src: join(ROOT, "native", "gds_ts.c"), obj: "gds_ts.o" },
-];
-for (const u of units) {
-  if (tsOnly && existsSync(join(objDir, u.obj))) {
-    console.log(`沿用 ${u.obj}（--ts-only）`);
-    continue;
-  }
-  const args = ["cc", "-target", CC_TARGET, "-O2", "-std=gnu11", ...INC, "-c", u.src, "-o", join(objDir, u.obj)];
-  const r = spawnSync(ZIG, args, { encoding: "utf8", cwd: ROOT, timeout: 900_000 });
-  if (r.status !== 0) fail(`${u.obj} 编译失败：\n${((r.stderr ?? "") + (r.stdout ?? "")).slice(0, 3000)}`);
-  console.log(`编好 ${u.obj}`);
-}
-
-/* 4) manifest + scriptc */
-const manifest = {
-  ffi_format: 6,
-  functions: [
-    { name: "gdsInit", symbol: "gds_init", params: [], returns: "i32" },
-    { name: "gdsParseNodes", symbol: "gds_parse_nodes", params: ["string", "i32"], returns: "i32" },
-    { name: "gdsNodesBytes", symbol: "gds_nodes_bytes", params: [], returns: "i32" },
-    { name: "gdsNodesInto", symbol: "gds_nodes_into", params: ["mutable-bytes", "i32"], returns: "i32" },
-    { name: "gdsNamesBytes", symbol: "gds_names_bytes", params: [], returns: "i32" },
-    { name: "gdsNamesInto", symbol: "gds_names_into", params: ["mutable-bytes", "i32"], returns: "i32" },
-  ],
-  libraries: units.map((u) => join(objDir, u.obj)),
-};
-const ffiPath = join(SCRATCH, "ffi.json");
-writeFileSync(ffiPath, JSON.stringify(manifest, null, 2), "utf8");
-
+/* 3) scriptc */
 const entry = join(SCRATCH, "packages", "gds2js", "src", "cli.ts");
 /* 岛是**必需**的，不再是可选形态：CLI 的参数解析用 commander，而 commander 不带岛就是 6 格 SC2013
  * （实测；岛里 0 错并真跑通）。原先 `--static` 那一支随 commander 一起没了。
@@ -203,7 +143,7 @@ if (coverageOnly) {
   process.exit(r.status ?? 1);
 }
 const exe = join(SCRATCH, "gds2js.exe");
-const build = spawnSync(SCRIPTC, ["build", entry, "--ffi", ffiPath, "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
+const build = spawnSync(SCRIPTC, ["build", entry, "-o", exe, "--strip"], { encoding: "utf8", cwd: ROOT, timeout: 2_400_000 });
 process.stdout.write(`${build.stdout ?? ""}${build.stderr ?? ""}`);
 if (build.status !== 0 || !existsSync(exe)) {
   console.error("\n还没编过去：SC 编号就是线索（对着报错站点的形状看），新增的围栏记得记一笔。");

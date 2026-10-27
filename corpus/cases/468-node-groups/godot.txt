@@ -1,0 +1,12 @@
+g|g1|[&"alpha"]
+g|k1|[&"alpha", &"beta"]|true|false
+g|d1|[&"alpha"]
+g|p1|[&"_root_canvas号", &"zeta", &"alpha", &"aardvark"]|true|false
+g|p2|[Root:<Node2D#号>, Kid:<Node#号>, Grand:<Node#号>, Kid2:<Node#号>]
+g|p3|1|[]
+g|p4|true|[&"alpha", &"beta"]
+g|p5|[Root:<Node2D#号>, Grand:<Node#号>, Kid2:<Node#号>]|false|[&"beta"]
+ERROR: Cannot add node 'Root' to a group with an empty name.
+   at: add_to_group (scene/main/node.cpp:2448)
+   GDScript backtrace (most recent call first):
+       [0] _ready (<case>/main.gd:9)

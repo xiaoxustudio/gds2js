@@ -1,0 +1,16 @@
+n|init||0|Node2D
+n|enter|Root|/root/Root|true|2
+n|kid-enter|C1|/root/Root/C1|1|Root
+n|leaf-ready|C1|G1:<Node#号>|Node|0
+n|kid-ready|1|true|G1:<Node#号>
+n|ready|2|/root/Root|C1|[C1:<Node#号>, C2:<Node#号>]
+n|late|3|@Node@号|true|true
+n|root-process|1|false
+n|kid-process|0|true
+n|leaf-process|/root/Root/C1/G1
+n|root-process|2|true
+n|kid-process|0|true
+n|leaf-process|/root/Root/C1/G1
+n|leaf-exit|/root/Root/C1/G1
+n|kid-exit|C1
+n|exit|Root

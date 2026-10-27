@@ -31,7 +31,11 @@ import { planeReadProp } from "../plane";
 import { quaternionReadProp } from "../quaternion";
 import { transform2dReadProp } from "../transform2d";
 import { basisReadProp, basisWriteProp } from "../basis";
-import { GdEngineInstance, isEngineNode, nodeNameSet } from "../node";
+import { isEngineNode, nodeFaceOf, nodeNameSet } from "../node";
+import { GdSceneTree, treeReadProp } from "../scene";
+import { node2dRead, node2dWrite } from "../node2d";
+import { ctlRead, ctlWrite } from "../control";
+import { node3dRead, node3dWrite } from "../node3d";
 import { GBasis, GPlane, GQuaternion, GTransform2D } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
@@ -241,9 +245,21 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (rci !== null) return rect2iWriteProp(rci, key, value);
   const bs = base.t === Tag.OBJECT && base.v instanceof GBasis ? (base.v as GBasis) : null;
   if (bs !== null) return basisWriteProp(bs, key, value);
-  const enw = base.t === Tag.OBJECT && base.v instanceof GdEngineInstance ? (base.v as GdEngineInstance) : null;
+  const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
-    if (key !== "name" || !isEngineNode(enw)) throw new UnsupportedError("node-prop-write", `${enw.__gd_engine_class__}.${key} 的属性写没量过`);
+    if (enw.__gd_engine_class__ === "Node3D" && key !== "name") {
+      node3dWrite(base.v, key, value);
+      return null;
+    }
+    if (enw.__gd_engine_class__ === "Control" && key !== "name") {
+      ctlWrite(base.v, key, value);
+      return null;
+    }
+    if (enw.__gd_engine_class__ === "Node2D" && key !== "name") {
+      node2dWrite(base.v, key, value);
+      return null;
+    }
+    if (key !== "name") throw new UnsupportedError("node-prop-write", `${enw.__gd_engine_class__}.${key} 的属性写没量过`);
     if (enw.__gd_freed__) throw new UnsupportedError("node-freed-prop", `在已 free() 的实例上写 ${key} 那一形没建模`);
     nodeNameSet(enw, asString(value, "属性写入"));
     return null;
@@ -510,10 +526,26 @@ export function attribute(raw: unknown, name: string): unknown {
       if (row !== null) return boundBuiltinCallable(obj, packTypeName((obj.v as GBytes).kind), name, row[0], row[1]);
       throw new UnsupportedError("packed-attribute", `pack 的属性读落在两份名单之外：${packTypeName((obj.v as GBytes).kind)}.${name} 的元数没量过，不发引擎那句`);
     }
-    const en = obj.v instanceof GdEngineInstance ? (obj.v as GdEngineInstance) : null;
+    if (obj.v instanceof GdSceneTree) {
+      const tp = treeReadProp(obj.v, name);
+      if (tp !== null) return tp;
+    }
+    const en = nodeFaceOf(obj.v);
     if (en !== null) {
       if (en.__gd_freed__) throw new UnsupportedError("node-freed-prop", `在已 free() 的实例上读 ${name} 那一形没建模`);
-      if (name === "name" && isEngineNode(en)) return V.str(en.__gd_node_name__);
+      if (en.__gd_engine_class__ === "Node3D") {
+        const m3 = node3dRead(obj.v, name);
+        if (m3 !== null) return m3;
+      }
+      if (en.__gd_engine_class__ === "Control") {
+        const mc = ctlRead(obj.v, name);
+        if (mc !== null) return mc;
+      }
+      if (en.__gd_engine_class__ === "Node2D") {
+        const m2 = node2dRead(obj.v, name);
+        if (m2 !== null) return m2;
+      }
+      if (name === "name") return V.str(en.__gd_node_name__);
       throw new UnsupportedError("node-prop", `${en.__gd_engine_class__}.${name} 的属性读没量过`);
     }
     const inner = obj.v as Record<string, unknown>;

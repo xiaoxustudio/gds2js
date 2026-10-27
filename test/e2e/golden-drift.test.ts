@@ -3,6 +3,7 @@ import { hasGodot, missing } from "../support/env";
 import {
   caseDir,
   caseIsProject,
+  caseScene,
   caseScript,
   GODOT_BIN,
   godotOk,
@@ -29,7 +30,7 @@ describe.skipIf(!hasGodot)(`golden 漂移检测${SKIP_WHY}`, () => {
       const gd = caseScript(id);
       const projectPath = caseIsProject(id) ? caseDir(id) : null;
       const prev = readGolden(id);
-      const { text, timedOut } = runGodot(gd, { projectPath, timeoutMs: hangBudget(prev) });
+      const { text, timedOut } = runGodot(gd, { projectPath, scene: caseScene(id) !== null, timeoutMs: hangBudget(prev) });
       const norm = normalize(text, gd);
       const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
       if (timedOut) timeout++;

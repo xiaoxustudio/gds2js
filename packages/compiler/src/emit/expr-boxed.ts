@@ -211,6 +211,7 @@ export function emitExprVar(e: Expr): string {
       if (analysis.isGlobalValueRead(e)) return `rt.globalCallable(${JSON.stringify(e.name)})`;
       if (analysis.isNativeClassValueRead(e)) return `rt.nativeClass(${JSON.stringify(e.name)})`;
       if (analysis.isHostMethodValueRead(e) && !ctx.FUNC_BINDS.has(e.name)) return `rt.methodCallable(rt.V.object(this), ${JSON.stringify(e.name)})`;
+      if (analysis.isEnginePropRead(e)) return `rt.wrapValue(rt.attribute(rt.V.object(this), ${JSON.stringify(e.name)}))`;
       return e.name;
 
     case "unary":

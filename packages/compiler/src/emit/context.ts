@@ -36,6 +36,7 @@ export interface EmitContext {
   CURRENT_MEMBERS: Set<string>;
   STATIC_FUNCS: Set<string>;
   CURRENT_CLASS: string;
+  ENGINE_BASE: string | null;
   selfInNilContext: boolean;
   CLASS_VALUE_OWNERS: Map<string, string>;
   CLASS_VALUES: Map<string, Set<string>>;
@@ -82,6 +83,7 @@ export function newContext(): EmitContext {
     CURRENT_MEMBERS: new Set<string>(),
     STATIC_FUNCS: new Set<string>(),
     CURRENT_CLASS: "",
+    ENGINE_BASE: null,
     selfInNilContext: false,
     CLASS_VALUE_OWNERS: new Map<string, string>(),
     CLASS_VALUES: new Map<string, Set<string>>(),

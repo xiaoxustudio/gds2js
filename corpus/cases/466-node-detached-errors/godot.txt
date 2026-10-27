@@ -1,0 +1,22 @@
+e|q1||true|<Object#null>
+e|q2|true||false
+ERROR: Cannot get path of node as it is not in a scene tree.
+   at: get_path (scene/main/node.cpp:2419)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)
+ERROR: Cannot get path of node as it is not in a scene tree.
+   at: get_path (scene/main/node.cpp:2419)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)
+ERROR: Parameter "data.tree" is null.
+   at: get_tree (scene/main/node.h:549)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)
+ERROR: Cannot get path of node as it is not in a scene tree.
+   at: get_path (scene/main/node.cpp:2419)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:8)
+ERROR: Cannot get path of node as it is not in a scene tree.
+   at: get_path (scene/main/node.cpp:2419)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:8)

@@ -1,29 +1,10 @@
-import { Language, Parser } from "web-tree-sitter";
-import { selfFile } from "../home";
-import { resolveWasm } from "../paths";
 import type { CsTree } from "./cst";
-import { toCsTree } from "./wasm-cst";
+import { parseSync } from "./descent";
 
-let cached: Promise<Parser> | null = null;
-
-async function create(): Promise<Parser> {
-  const glue = selfFile("node_modules/web-tree-sitter/web-tree-sitter.wasm");
-  await Parser.init(glue ? { locateFile: () => glue } : undefined);
-  const lang = await Language.load(resolveWasm(import.meta.url));
-  const parser = new Parser();
-  parser.setLanguage(lang);
-  return parser;
-}
-
-/** tree-sitter 初始化要读 wasm，别每次解析都重来一遍。 */
-export async function getParser(): Promise<Parser> {
-  cached ??= create();
-  return cached;
-}
-
+/**
+ * 解析入口。签名保持 async 不动 —— 145 个单测、compile/project.ts、tools/compile.ts 与 tools/bench.ts
+ * 全在 await 它，而手写解析器是同步的，await 一个非 Promise 不花钱。
+ */
 export async function parseSource(src: string): Promise<CsTree> {
-  const parser = await getParser();
-  const tree = parser.parse(src);
-  if (!tree) throw new Error("tree-sitter 解析返回空树");
-  return toCsTree(tree.rootNode, src);
+  return parseSync(src);
 }

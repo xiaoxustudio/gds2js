@@ -116,6 +116,9 @@ export function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
         const vw = emitValueWrite(s.target, s.value);
         if (vw) return vw;
       }
+      if (s.target.kind === "ident" && analysis.isEnginePropRead(s.target)) {
+        return [`rt.writeProp(rt.V.object(this), ${JSON.stringify(s.target.name)}, ${emitExpr(s.value)});`];
+      }
       return [emitAssign(s.target, emitExpr(s.value), s.value)];
     }
 

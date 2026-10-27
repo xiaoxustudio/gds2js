@@ -1,0 +1,17 @@
+x|a1|1
+x|a2|true
+x|a3|true
+x|a4|true
+x|a5|1|0|[C:<Node#号>]
+ERROR: Index p_index = 5 is out of bounds ((int)data.children_cache.size() - data.internal_children_front_count_cache - data.internal_children_back_count_cache = 1).
+   at: get_child (scene/main/node.cpp:1849)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:10)
+ERROR: Node not found: "Nope" (relative to "P").
+   at: get_node (scene/main/node.cpp:1963)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:14)
+ERROR: Invalid new child index: 3.
+   at: move_child (scene/main/node.cpp:520)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:16)

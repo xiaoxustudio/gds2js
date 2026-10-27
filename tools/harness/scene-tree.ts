@@ -14,4 +14,5 @@ export {
   captured,
   resetOut as reset,
   SceneTree,
+  sceneRun,
 } from "@gds2js/runtime/host-node";

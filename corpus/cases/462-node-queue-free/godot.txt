@@ -1,0 +1,5 @@
+q|before|1|true|false
+q|after|1|true|true
+q|tick|1|0|false
+q|tick|2|0|false
+q|exit|0

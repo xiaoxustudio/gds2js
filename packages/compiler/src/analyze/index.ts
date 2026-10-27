@@ -5,6 +5,7 @@ import { BUILTIN_ARITY, BUILTIN_INSTANCE_MEMBERS, BUILTIN_INSTANCE_PROPS, BUILTI
 import { OP_PAIRS_CONST_A, OP_PAIRS_CONST_B, OP_PAIRS_REFUSED_A, OP_PAIRS_REFUSED_B, OP_PAIRS_REFUSED_CALLABLE, OP_PAIRS_REFUSED_DECL, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "../semantics/op-pairs";
 import { ANNOT_SOURCES, ARG_NAME_TYPES, FACE_ANNOTATIONS, INSTANCE_OF_TYPE_LAST, NUMERIC_VALUE_CTORS, OBJECT_ARG_NAMES, PACK_APPEND_ARRAY_AS, PACK_APPEND_NAMED, PACK_ARG_POSITIONS, PACK_ARG_SLOTS, PACK_BOOL_SLOT_OK, PACK_INT_SLOT_OK, PACK_IS_AS_NAMES, PACK_SHAPE_NAMES, PACK_TYPE_NAMES, PARAM_OWN_SLOTS, PCT_MSG, PCT_NUMERIC, PCT_VALUE_CTORS, PCT_VECTORS, SIGNAL_PARSE_MISSING, STATIC_VALUE_TYPES, VALUE_ARG_WANTS } from "../semantics/elem-faces";
 import { CALLABLE_PARSE_ARGS, CALLABLE_PARSE_ARITY, HOST_VALUE_METHODS, NO_HOST_VALUE_METHODS, SIGNAL_PARSE_ARITY_MAX, VIRTUAL_HOST_NAMES, VOID_ARRAY_METHODS, VOID_BYTES_METHODS, VOID_CALLABLE_METHODS, VOID_DICT_METHODS, VOID_OBJECT_METHODS, VOID_SIGNAL_METHODS } from "../semantics/void-methods";
+import { ENGINE_SELF_BASES, nodeSelfProps } from "../semantics/node-face";
 import { CTOR_REFUSED, CUBIC_NAME_ARG_FUNCS, FUNC_ARG_SLOTS, GLOBAL_NUM_ARITH, GLOBAL_TYPED_NAME_ARGS, NODE_PATH_FACE, STATIC_FACE, STRINGNAME_FACE, type NamedFace } from "../semantics/faces";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../semantics/arg-types/static-arg-types";
 import { FACE_ARG_AS, FACE_ARG_TYPES } from "../semantics/arg-types/face-arg-types";
@@ -82,7 +83,8 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   );
 
   const hostFace = m.extends === "SceneTree" || hostChain ? HOST_VALUE_METHODS : NO_HOST_VALUE_METHODS;
-  for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace);
+  const engineFace = nodeSelfProps(ENGINE_SELF_BASES.has(m.extends ?? "") ? m.extends : null);
+  for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace, engineFace);
   checkReturnPaths(m.funcs, diags);
   checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);
@@ -132,6 +134,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
     isGlobalValueRead: (e: Expr): boolean => e.kind === "ident" && r.globalValueReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
     isNativeClassValueRead: (e: Expr): boolean => e.kind === "ident" && r.nativeClassReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
     isHostMethodValueRead: (e: Expr): boolean => e.kind === "ident" && r.hostMethodReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
+    isEnginePropRead: (e: Expr): boolean => e.kind === "ident" && r.enginePropReads.has(gvKey(r, e.name, e.loc.line, e.loc.col)),
     /** 这一支 lambda 创建时要按值影子化的局部名。 */
     lambdaCaptureNames: (e: Expr): string[] => e.kind !== "lambda" || e.loc === null ? [] : r.lambdaCaptures.get(capKey(r, e.loc.line, e.loc.col)) ?? [],
   };
