@@ -135,6 +135,8 @@ export function normalize(text, gdPath = "") {
   }
   out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, p) => `<case>/${p.split("/").pop()}`);
   out = out.replace(/<([A-Za-z_]\w*)#-?\d+>/g, "<$1#号>");
+  out = out.replace(/@([A-Za-z_]\w*)@-?\d+/g, "@$1@号");
+  out = out.replace(/(^|[\s|,(])_([A-Z]\w*)_-?\d+/g, (_m, p, cls) => `${p}_${cls}_号`);
   const lines = out.split(/\r?\n/);
   const kept = [];
   const ENGINE_FRAME = /^\s+at: \S+ \(\.?\/?core\/(variant|math)\//;

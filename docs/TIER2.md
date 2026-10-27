@@ -156,10 +156,21 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 按依赖拆四步，每步都要先出实测再做实现：
 
 1. **实例 id 与打印的可比性（前置，最先做）**：**本轮复核纠正了这条的说法** —— `tools/lib.mjs` 的 `normalize` 已经掩 `<Class#号>` 这一形（`:137` 的 `/<([A-Za-z_]\w*)#-?\d+>/g`），所以带类名的对象打印早就可比；**真正缺的是裸数字那一形**（`print(node.get_instance_id())` 直接吐一个 int，掩它会把合法数据一起吃掉），以及 `Callable` 的字典键 `q:<id>:<name>:<boundTag>` 只在运行时内部、不进打印。所以这一步的活是：定一个「用例必须用标记位打印 id」的 harness 约定（例如只允许 `print("id|", ...)` 包一层再归一），而不是再写一个掩码正则。`identity.ts` 的 `LIVE` 强引用不清除仍然是这一步的第二半（D7）。
+   - **本轮已落的部分**：`normalize` 又补了 `@Class@号` 与 `_Class_号` 两条（引擎在 `add_child` 重名与 `duplicate()` 两处分给节点这两个形的自动名，号是进程内的 —— 见下面的第一轮取证）。裸 `get_instance_id()` 那一形**仍未解决**：它周围没有任何标记，掩它会连合法数字一起吃掉，所以还等那条「用例侧包一层」的约定。
 2. **对象生命周期与确定性释放（D7）**：`identity.ts` 的 `LIVE` 强引用 map 要换成可释放登记；`object.ts:109 signal-flag-deferred`（`CONNECT_DEFERRED`）与 `call_deferred` 一族在这里解禁。差异牵连五处等式面（打印、`is_instance_valid`、容器键、Callable 的等式、`hash`），见待拍板 9。**释放机制别顺手选 JS 的反射式方案**：`WeakRef` + `FinalizationRegistry` 看似最省事，但回收时机由 GC 决定、跨进程不确定的行为**测不出可复现的 golden**，违反红线 1「没测过的不许写进实现」；scriptc 静态轨对它的支持也未知。三条候选（γ 先响亮拒 / 引用计数照 Godot 的 `RefCounted` 语义自己实现 / WeakRef 交给 GC）里**建议 γ**：这一格继续抛 `UnsupportedError`，把「引用计数何时归零」作为单独一批实测读数（拿真 Godot 的 `is_instance_valid()` 时序量），量出来再落地。
 3. **节点树与通知**：新增 `runtime/node.ts`（children、`add_child` / `remove_child` / `get_node(path)` / `free` / `queue_free`），今天这些名字全落 `method/object.ts:374 object-method`。通知派发**必须走发射期静态表**，复用 `emit/class.ts:200-222` 的 `__gdDispatch` 机制；`_ready` / `_process` 的覆写形状守 `src/host.ts:111` 那条实测教训（非 async 签名 + 返回 Promise）。基类集合改为探头派生的父子链，替换 `project.ts:17-20` 手抄名单，并解开它与 `surface.ts:223` / `project.ts:15` 的三集合冲突（补测试，今天零覆盖）。
 4. **主循环与退出形状**：`emit/index.ts` 尾部写死 `await new Main().run()`，`src/host.ts:145 run(maxFrames=3000)` 是 `setTimeout` 自制循环。接真 `SceneTree` 要先拍：谁持有主循环、`quit(code)` 的退出码语义、以及那 18 例带 `<<GDS2JS_TIMEOUT>>` 的**退出形状**（引擎侧入口被作废后走不到 `quit()`、永不退出，我们的宿主自己收尾退 0）。这不是"改改就行"：`test/e2e/corpus-hang.test.ts:38-44` 要求**产物也被 SIGTERM 杀掉、且杀之前输出逐字节相等**，所以要连 `tools/lib.mjs` 的超时预算（`DEFAULT_TIMEOUT_MS`、`hangBudget`）与标记追加逻辑一起复核。
    - **这一支的门会随语义进步而变红，红了不许删断言**：`corpus-hang` 的用例清单是从 golden 里含 `<<GDS2JS_TIMEOUT>>` 的页**算出来的**（`:12-24`），所以宿主一旦让这批页真能走到 `quit()`、正常退 0，清单就掉成空集，`:26` 的顶层 `toBeGreaterThan(0)` 立刻红。这是有意的哨兵（防止门静默失效变成摆设），正确处置是**把这批用例从超时族正式划走**（重生成不带标记的 golden + 同一笔里调整本门的判据或适用范围），而不是把 `:26` 删了事。18 这个数当前由盘面实测确认。
+
+**阶段三 第一轮取证（`tmp/t3/n1..n3.gd` 走 `--script`，`tmp/t3/scene/` 走主场景）**：
+
+- **`--script` 宿主不是一棵活的树**：`root.add_child(x)` 之后 `x.is_inside_tree()` 仍 **false**，`get_path()` 空串并落 `ERROR: Cannot get path of node as it is not in a scene tree.`，`_enter_tree` / `_ready` **一支都不发**，`get_tree()` 返回 null（另发 `ERROR: Parameter "data.tree" is null.`）。所以通知次序与路径**在这条夹具路上取不到读数**，只能由甲路线（主场景）取 —— 这不是实现偷懒的理由，是取证的边界。
+- **主场景路线验通了**：`tmp/t3/scene`（`project.godot` 写 `run/main_scene`，`main.tscn` 的非根节点段必须带 `parent="."` / `parent="Kid"`，Node 脚本里没有 `quit()`、要 `get_tree().quit(0)`）实测到 `_enter_tree` → `_ready` 的次序、`/root/Root` 与 `/root/Root/Kid` 两条路径、`is_inside_tree()` true、`get_child_count()` = 1、`get_node("Kid/..") == self` true、`str(get_children())` 打 `[Kid:<Node#号>]`。harness 要补的就是「用例带 `main.tscn` 时跑主场景、不发 `--script`」这一格。
+- **掩号补了两形**（`tools/lib.mjs` 的 `normalize` 加 `@Class@号` 与 `_Class_号`）：重名 `add_child` 时引擎把后者改名 `@Node@1212`（**是加进树那一刻才生成的**，`Node.new()` 出来 `name` 是空串），`duplicate()` 给 `_Node_1212`；两形都带进程内的号，不掩就没法对账。
+- **`root` 不是干净起点**：`--script` 下 `root.add_child(x)` 之后 `root.get_child_count()` 是 **2**、`x.get_index()` 是 **1**（root 本身已经挂着东西）。→ 节点用例一律自建子树做断言，不拿 root 的 children 计数当读数。
+- **释放时序**：`free()` 之后 `is_instance_valid` 立刻 false；`queue_free()` 当帧仍 true（帧没走）、`is_queued_for_deletion()` 同理按帧；`remove_child(a)` 不动 `a` 自己的子树（`a.get_child_count()` 仍 1、`c.get_parent() == a` 仍 true）。这正是第 2 步 γ 要先量的那一格。
+- **类型面**：`p is Node` true / `p is Node2D` false，`typeof(node)` = 24，`get_class()` 报**引擎基类**名（脚本子类也一样报基类），`has_method("add_child")` 与 `has_signal("ready")` true、`get_signal_list().size()` = 13。另有一句解析期诊断要记下：静态型是 `RefCounted` 的变量写 `rc is Node` 直接 **`Expression is of type "RefCounted" so it can't be of type "Node".`**，不是运行时 false。
+- **打印形状**：无名 `<Node#号>`、有名 `alpha:<Node#号>`；`RefCounted.new()` 的号可为**负**（`<RefCounted#-9223371867656542708>`），现有 `<Class#-?\d+>` 那条规则已覆盖。
 
 **场景语料（从零开始）**：全仓 0 个 `.tscn`，`golden.mjs` 只发 `--headless --script`，所以这一格是**先设计后动工**。两条路线：
 
