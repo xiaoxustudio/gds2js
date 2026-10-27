@@ -81,7 +81,8 @@
 **Tier 1 收口状态（2026-10-26）**：Tier 1（纯语言层）按 §1.1 / §1.2 的判据**已收口**。
 
 - 全量 scriptc 门零红：`出货 280/282 编过、280/282 跑通、逐字节一致 280/282`，另 2 例按工具链能力**记账**（`161-pack-compress` 岛档、`371-property-delegation` 静态访问器），页数由 `test/repo/static-accessor-pages.test.ts` 钉住。
-- `corpus-diff` 285/285 逐字节，静默错 0 / 崩溃 0 / 未实现 0；golden **446/446 零漂移**；`pnpm test` 27402 格 / 321 文件；typecheck 4/4；`test:cli-native` 20/20；正文门 143/143。
+- `corpus-diff` 285/285 逐字节，静默错 0 / 崩溃 0 / 未实现 0；golden **446/446 零漂移**；`pnpm test` 27434 格 / 332 文件；typecheck 4/4；`test:cli-native` 20/20；正文门 143/143。
+- **架构整改后的全量 e2e 复验（2026-10-27，钉 GODOT_BIN=4.6.3）**：`Test Files 10 passed (10)`、`Tests 1023 passed | 163 skipped`、72 分 24 秒；`corpus-diff` 446 格里 285 支可执行者逐字节一致、JS 侧 285/285 跑出结果、三桶（静默错 / 崩溃 / 未实现）全 0；`codegen-drift` 4/4（含新加的 `engine-classes` 一条）；`export` 出货门 ok 17 / 上游或环境记账 1 / FAIL 0；scriptc 面探针与 `cli-native` 原生 exe 装配（zig + scriptc 产出 9.6MB `gds2js.exe`）都在这轮里真跑过、没静默 skip。覆盖 D8 后续四笔拆分（values / methods / builtins 家族 + 打印格式化族）改动的出货 runtime 模块图。
 - 出货（形态 A，scriptc 由用户自备）：`release/gds2js-0.1.4-win64.exe` + `.sha256`（`d72c4776…1a9316a6`）。0.1.1→0.1.2→0.1.3 分别是 `.new` 族修复与定形容器接收者那一笔；0.1.4 是让出货件与「源码只留纯函数文档注释」的清理后的源码一致（`ea7638f`，纯注释改动，`golden-check` 446/446 零漂移、`cli-native` 20/20 已证行为不变）。
 - 历史逐笔流水（原 §1.3 起）与 S 编号语义基线（原 `docs/SEMANTICS.md`）已从工作树删除；要考古按 git 历史取回。
 
