@@ -1,4 +1,4 @@
-/** 引擎类值上的 `new` 面：放行的是实测到的那一形，造实例照旧响亮拒（阶段一切割线）。 */
+/** 引擎类值上的 `new` 面：Callable 面是阶段一的读数，造实例按阶段三的实测一支一支放行。 */
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { nativeClassNew } from "@gds2js/runtime/runtime/native-class";
@@ -10,8 +10,9 @@ import { V } from "@gds2js/runtime/runtime/tags";
 const CLASSES = ["Node", "RefCounted", "Object", "Resource", "FileAccess", "GDScript"];
 
 const STILL_REFUSED: Array<[string, () => unknown]> = [
-  ["Node.new()", () => method(nativeClassNew("Node", 0), "call", [])],
-  ["Node.new(1) 的实参那一形", () => method(nativeClassNew("Node", 0), "callv", [])],
+  ["Resource.new()", () => method(nativeClassNew("Resource", 0), "call", [])],
+  ["FileAccess.new()", () => method(nativeClassNew("FileAccess", 0), "call", [])],
+  ["GDScript.new()", () => method(nativeClassNew("GDScript", 0), "call", [])],
 ];
 
 describe("引擎类 .new 的实测面", () => {
@@ -37,7 +38,11 @@ describe("引擎类 .new 的实测面", () => {
     eq("450", "同名字的两支各自缓存", String(a === b), "true");
   });
 
-  it("造实例那一形仍响亮拒", () => {
+  it("量过的那四支造得出实例，其余仍响亮拒", () => {
+    for (const cls of ["Node", "Node2D", "RefCounted", "Object"]) {
+      const v = method(nativeClassNew(cls, 0), "call", []);
+      eq("459", `${cls}.new() 的 get_class`, String(method(v, "get_class", []).v), cls);
+    }
     for (const [what, fn] of STILL_REFUSED) shouldThrow("450", what, fn);
   });
 });

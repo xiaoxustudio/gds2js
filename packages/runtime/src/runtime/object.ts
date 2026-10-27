@@ -426,6 +426,10 @@ export function registerNativeBase(desc: ClassDesc, name: string): void {
 }
 
 export function nativeBaseOf(target: unknown): string | null {
+  if (typeof target === "object" && target !== null) {
+    const cls = (target as Record<string, unknown>).__gd_engine_class__;
+    if (typeof cls === "string") return cls;
+  }
   for (let d = descOf(target); d !== null; d = d.base) {
     if (d.nativeBase !== null) return d.nativeBase;
   }
@@ -481,10 +485,21 @@ registerScriptPropsHook((inner) => {
   return { props, unmodeledBase };
 });
 
+export function markFreed(inner: object): void {
+  (inner as unknown as Record<string, unknown>).__gd_freed__ = true;
+}
+
+export function isFreed(inner: unknown): boolean {
+  return typeof inner === "object" && inner !== null && (inner as unknown as Record<string, unknown>).__gd_freed__ === true;
+}
+
 registerObjectLabelHook((inner) => {
   if (!(inner instanceof GdScriptObject)) return null;
   const base = nativeBaseOf(inner);
-  return base === null ? null : `<${base}#${String(inner.gdObjectId)}>`;
+  if (base === null) return null;
+  const tag = `<${base}#${String(inner.gdObjectId)}>`;
+  const nm = (inner as unknown as Record<string, unknown>).__gd_node_name__;
+  return typeof nm === "string" && nm !== "" ? `${nm}:${tag}` : tag;
 });
 
 const METAS = new Map<object, Map<string, Variant>>();

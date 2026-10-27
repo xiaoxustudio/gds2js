@@ -34,6 +34,8 @@ import { planeMethod } from "./plane";
 import { quaternionMethod } from "./quaternion";
 import { transform2dMethod } from "./transform2d";
 import { basisMethod } from "./basis";
+import { engineInstanceMethod } from "./node";
+import { GdEngineInstance, engineClassNew, engineClassNewable } from "../node";
 import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "../composite-classes";
 import { GVector3i, vector3iMethod } from "../vector3i";
 import { colorMethod, GColor } from "../color";
@@ -49,7 +51,8 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   const inner = obj.v;
 
   if (inner instanceof GdNativeClass) {
-    throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（实测 Node.new() 造得出实例、我们不发）`);
+    if (name === "new" && args.length === 0 && engineClassNewable(inner.className)) return engineClassNew(inner.className);
+    throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（构造式只量过无实参的那几支）`);
   }
   const vecFace =
     inner instanceof GVector2 ? "Vector2" :
@@ -385,5 +388,6 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GRect2) return rect2Method(inner, name, args);
   if (inner instanceof GRect2i) return rect2iMethod(inner, name, args);
   if (inner instanceof GBasis) return basisMethod(inner, name, args);
+  if (inner instanceof GdEngineInstance) return engineInstanceMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
 }

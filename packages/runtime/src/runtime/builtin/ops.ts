@@ -5,7 +5,7 @@ import { intArgBig, strLength, valueTypeName } from "../string-ops";
 import { GBytes, isBytes } from "../packed";
 import { CallableBox, callableEq, isCallableBox } from "../callable";
 import { Signal } from "../signal";
-import { ClassDesc, GdScriptObject } from "../object";
+import { ClassDesc, GdScriptObject, isFreed } from "../object";
 import { GdNativeClass } from "../native-class";
 import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "../identity";
 import { allocateRid, rid } from "../rid";
@@ -41,7 +41,7 @@ export function gIsInstanceValid(v: Variant): Variant {
   const inner = v.v;
   if (isNullRefValue(inner) || isCallableBox(inner) || inner instanceof Signal) return V.bool(false);
   return V.bool(
-    inner instanceof GdScriptObject || inner instanceof ClassDesc || inner instanceof GdNativeClass || isWeakRefBox(inner),
+    (inner instanceof GdScriptObject && !isFreed(inner)) || inner instanceof ClassDesc || inner instanceof GdNativeClass || isWeakRefBox(inner),
   );
 }
 

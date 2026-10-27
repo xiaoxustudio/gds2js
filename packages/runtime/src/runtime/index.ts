@@ -21,6 +21,7 @@ export * from "./plane";
 export * from "./quaternion";
 export * from "./transform2d";
 export * from "./basis";
+export * from "./node";
 export * from "./rect2";
 export * from "./rect2i";
 export * from "./vector3i";
