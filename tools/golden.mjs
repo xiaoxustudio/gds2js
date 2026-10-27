@@ -8,6 +8,7 @@ import {
   listCases,
   normalize,
   readGolden,
+  requireGodotPin,
   runGodot,
   writeGolden,
   GODOT_BIN,
@@ -24,6 +25,7 @@ if (cases.length === 0) {
 }
 
 console.log(`裁判引擎: ${GODOT_BIN}`);
+requireGodotPin();
 console.log(`用例数量: ${cases.length}${checkOnly ? "  (check 模式，不写盘)" : ""}\n`);
 
 let ok = 0;

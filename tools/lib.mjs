@@ -13,6 +13,36 @@ export const GODOT_BIN =
 /** 单次 Godot 运行的上限，「卡住了没输出」的护栏；用 GDS2JS_GODOT_TIMEOUT_MS 按机器状况放大。 */
 export const DEFAULT_TIMEOUT_MS = Number(process.env.GDS2JS_GODOT_TIMEOUT_MS) || 15000;
 
+/** 语义基线钉死的裁判版本；读数、golden 与生成表一律只认这一支。 */
+export const GODOT_PIN = "4.6.3";
+
+/** 跑一次 `--version` 拿裁判引擎自报的版本号；起不来给 null。 */
+export function godotVersion(timeoutMs = DEFAULT_TIMEOUT_MS) {
+  let r;
+  try {
+    r = spawnSync(GODOT_BIN, ["--version"], { encoding: "utf8", timeout: timeoutMs, windowsHide: true });
+  } catch {
+    return null;
+  }
+  const out = (r.stdout ?? "").trim();
+  return r.status === 0 && out !== "" ? out : null;
+}
+
+/** 落盘任何读数之前先验裁判版本：版本不对就拒写，免得把语义基线静默搬到另一支引擎上。 */
+export function requireGodotPin() {
+  const v = godotVersion();
+  if (v === null) {
+    console.error(`裁判引擎起不来（${GODOT_BIN} --version 没回版本号）：GODOT_BIN 指到一个 Godot ${GODOT_PIN} 可执行文件`);
+    process.exit(1);
+  }
+  if (!v.startsWith(GODOT_PIN)) {
+    console.error(`语义只认 Godot ${GODOT_PIN} 的实测读数，${GODOT_BIN} 自报 ${v} —— 拒写 golden / 生成表`);
+    process.exit(1);
+  }
+  console.log(`裁判引擎版本: ${v}`);
+  return v;
+}
+
 /** golden 里带 `<<GDS2JS_TIMEOUT>>` 的那一族是「运行期脚本报错 → 后面的 quit() 永远到不了」：
  *  读数在冷启动那几秒里就打完了，等满整段超时只是白等（17 例每例 15 秒）。预算取 DEFAULT 的三分之一、
  *  下限 4 秒，慢机器用 GDS2JS_GODOT_TIMEOUT_MS 放大时两道一起放大；万一提前杀导致文本对不上，门报「漂移」而不是静默。 */
