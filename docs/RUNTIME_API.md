@@ -211,7 +211,7 @@ export class GString {
 }
 ```
 
-字符串上另外三条纯函数（`packages/runtime/src/runtime/values.ts`，口径全部实测于 4.6.3，见归档台账 S199）：
+字符串上另外三条纯函数（`packages/runtime/src/runtime/string-ops.ts`，口径全部实测于 4.6.3，见归档台账 S199）：
 
 ```ts
 // 左起、不重叠；what 为空串整串原样返回。insensitive 对应 Godot 的 replacen。
@@ -224,7 +224,7 @@ strCapitalize(s: string): string
 
 浮点的 `nan` / `inf` / `-inf` 输出也走这一层（`017`）。
 
-`%` 那一族的另一颗入口（`packages/runtime/src/runtime/methods.ts`）：左支是 **String 字面量**时发射器不走 `ops.mod`，直发这一颗。
+`%` 那一族的另一颗入口（`packages/runtime/src/runtime/method-access.ts`）：左支是 **String 字面量**时发射器不走 `ops.mod`，直发这一颗。
 
 ```ts
 // soft 与 ops.mod 第三个参数同一个旗标：发射器按两侧静态型定（true = 非致命那块，false = SCRIPT ERROR 并作废旧那支）。
