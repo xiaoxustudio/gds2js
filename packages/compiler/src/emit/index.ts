@@ -18,7 +18,12 @@ import { emitFunc } from "./func";
 export type BaseSpec =
   | { kind: "host" }
   | { kind: "none" }
-  | { kind: "import"; name: string; from: string };
+  | { kind: "import"; name: string; from: string }
+  | { kind: "engine"; name: string };
+
+export type SceneChild = { expr: string; name: string; cls: string; children: SceneChild[] };
+
+export type SceneEmit = { rootName: string; rootCls: string; children: SceneChild[] };
 
 export interface EmitOptions {
   runtimeImport: string;
@@ -26,6 +31,7 @@ export interface EmitOptions {
   autoRun?: boolean;
   className?: string;
   baseClass?: BaseSpec;
+  scene?: SceneEmit;
   classRefs?: Array<{ name: string; from: string }>;
   resPath?: string;
   preloads?: Array<{ literal: string; name: string; from: string }>;
@@ -46,6 +52,11 @@ export interface EmitOptions {
 export interface EmitResult {
   code: string;
   map: RawSourceMap | null;
+}
+
+function sceneLiteral(children: SceneChild[]): string {
+  if (children.length === 0) return "[]";
+  return `[${children.map((c) => `rt.sceneNode(${c.expr}, ${JSON.stringify(c.name)}, ${JSON.stringify(c.cls)}, ${sceneLiteral(c.children)})`).join(", ")}]`;
 }
 
 export function emitModule(m: Module, opts: EmitOptions, analysisResult: AnalysisResult): string {
@@ -85,6 +96,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
     ...(baseClass.kind === "host" || opts.hostBaseInChain === true ? HOST_MEMBERS : []),
   ]);
   ctx.CURRENT_CLASS = className;
+  ctx.ENGINE_BASE = baseClass.kind === "engine" ? baseClass.name : null;
   ctx.STATIC_FUNCS = new Set(m.funcs.filter((f) => f.isStatic).map((f) => f.name));
   ctx.CLASS_VALUE_OWNERS = new Map(
     m.vars.filter((v) => v.isConst || v.isStatic).map((v) => [v.name, className]),
@@ -130,11 +142,12 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   } else if (runtimeMode === "local") {
     const p = opts.standaloneRequirePath ?? "./gds2js-standalone.cjs";
     out.push(`import { createRequire } from "node:module";`);
-    out.push(`const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
+    out.push(`const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree${opts.scene !== undefined ? ", sceneRun" : ""} } = createRequire(import.meta.url)(${JSON.stringify(p)});`);
   } else {
     out.push(`import * as rt from "${runtimeImport}";`);
     if (hostImport) {
       const hostNames = baseClass.kind === "host" ? [...HOST_PRINT_NAMES, "SceneTree"] : [...HOST_PRINT_NAMES];
+      if (opts.scene !== undefined) hostNames.push("sceneRun");
       out.push(`import { ${hostNames.join(", ")} } from "${hostImport}";`);
     }
   }
@@ -187,6 +200,13 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   ctx.INIT_AS_METHOD = proto;
   ctx.NEEDS_HOST_SUPER = !proto;
   out.push(`export class ${className}${heritage} {`);
+  if (baseClass.kind === "engine") {
+    out.push(`  __gd_engine_class__ = ${JSON.stringify(baseClass.name)};`);
+    out.push("  __gd_freed__ = false;");
+    out.push('  __gd_node_name__ = "";');
+    out.push("  __gd_node_parent__: unknown = null;");
+    out.push("  __gd_node_children__: unknown[] = [];");
+  }
   if (proto && baseClass.kind !== "import") out.push(...emitRootConstructor(true));
   out.push(...emitFieldDeclarations(m.vars, m.signals));
   out.push(...emitFieldsMethod(m.vars, m.signals, proto && baseClass.kind === "import", out.length));
@@ -230,7 +250,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   if (moduleParams !== null) out.push(`rt.registerMethodParams(__gd_d_${className}, ${moduleParams});`);
   const moduleStatics = staticNamesLiteral(m.funcs);
   if (moduleStatics.length > 0) out.push(`rt.registerStaticMethods(__gd_d_${className}, ${JSON.stringify(moduleStatics)}, ${staticsTableLiteral(className, m.funcs)});`);
-  if (baseClass.kind !== "import") {
+  if (baseClass.kind === "engine") {
+    out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.name)});`);
+  } else if (baseClass.kind !== "import") {
     out.push(`rt.registerNativeBase(__gd_d_${className}, ${JSON.stringify(baseClass.kind === "host" ? "SceneTree" : "RefCounted")});`);
   }
   const scriptLabel = m.className ?? basenameOfGd(resPath ?? opts.sourceFile) ?? className + ".gd";
@@ -247,7 +269,12 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   if (autoRun) {
     out.push(`const __gd_entry = new ${className}();`);
     out.push(`try {`);
-    out.push(`  await __gd_entry.run();`);
+    if (opts.scene !== undefined) {
+      const sc = opts.scene;
+      out.push(`  await sceneRun(__gd_entry, ${JSON.stringify(sc.rootName)}, ${JSON.stringify(sc.rootCls)}, ${sceneLiteral(sc.children)});`);
+    } else {
+      out.push(`  await __gd_entry.run();`);
+    }
     out.push(`} catch (__gd_e) {`);
     out.push(`  rt.reportRunFailure(__gd_e);`);
     out.push(`}`);

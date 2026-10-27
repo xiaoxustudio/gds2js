@@ -78,17 +78,22 @@ export function caseIsProject(id) {
   return existsSync(join(caseDir(id), "project.godot"));
 }
 
+export function caseScene(id) {
+  const p = join(caseDir(id), "main.tscn");
+  return existsSync(p) ? p : null;
+}
+
 /** 单文件工具的用例集：排除工程用例。吃它的有 tools/compile.ts 与
  *  packages/compiler/test/{ir,sema,emit-invariants}.test.ts。 */
 export function listSingleCases(filter = "") {
   return listCases(filter).filter((id) => !caseIsProject(id));
 }
 
-export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null } = {}) {
+export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null, scene = false } = {}) {
   const scriptArg = projectPath ? "res://" + (gdPath.split(/[\\/]/).pop() || "main.gd") : gdPath;
   const args = ["--headless"];
   if (projectPath) args.push("--path", projectPath);
-  args.push("--script", scriptArg);
+  if (!scene) args.push("--script", scriptArg);
 
   if (projectPath) {
     try {

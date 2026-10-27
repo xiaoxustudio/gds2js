@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { cachedLower } from "./ir-cache";
-import { emitModule, emitModuleWithMap, type BaseSpec } from "../emit/index";
+import { emitModule, emitModuleWithMap, type BaseSpec, type SceneChild, type SceneEmit } from "../emit/index";
+import { parseScene, type SceneNode } from "../parse/scene";
 import type { RawSourceMap } from "../emit/sourcemap";
 import type { Diagnostic } from "../analyze/analysis-result";
 import { analyze } from "../analyze/index";
@@ -13,6 +14,8 @@ import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 const RES_PREFIX = "res://";
 
 const HOST_BASES = new Set(["SceneTree"]);
+
+const SCRIPT_NODE_BASES = new Set(["Node", "Node2D"]);
 
 const ENGINE_BASES = new Set([
   "Node", "Node2D", "Node3D", "Control", "Resource", "RefCounted", "Object",
@@ -34,6 +37,7 @@ export interface ProjectOptions {
   runtimeMode?: "import" | "local" | "single";
   standaloneInline?: string;
   standaloneFile?: string;
+  sceneFile?: string | null;
 }
 
 export interface CompiledModule {
@@ -331,6 +335,28 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     }
   }
 
+  const sceneRoot: SceneNode | null = opts.sceneFile ? parseScene(readFileSync(opts.sceneFile, "utf8")) : null;
+  const sceneDeps = new Map<string, Loaded>();
+  if (sceneRoot !== null) {
+    const collect = (node: SceneNode): void => {
+      if (node.script !== null) {
+        const dep = loaded.get(normalizeRes(node.script));
+        if (dep === undefined) throw new UnsupportedError("scene-script-missing", `场景脚本 ${node.script} 不在编译作用域里`);
+        sceneDeps.set(normalizeRes(node.script), dep);
+      }
+      for (const c of node.children) collect(c);
+    };
+    collect(sceneRoot);
+    if (sceneRoot.script === null) throw new UnsupportedError("scene-root-script", "场景根节点没挂脚本时入口驱动发不出来（只量过根节点带 script= 的那一形）");
+  }
+
+  const sceneChild = (node: SceneNode): SceneChild => {
+    if (node.cls !== "Node" && node.cls !== "Node2D") throw new UnsupportedError("scene-node-class", `场景节点的类型 ${node.cls} 造不出来（只量过 Node 与 Node2D）`);
+    let expr = `rt.engineClassNew(${JSON.stringify(node.cls)})`;
+    if (node.script !== null) expr = `new ${(sceneDeps.get(normalizeRes(node.script)) as Loaded).jsName}()`;
+    return { expr, name: node.name, cls: node.cls, children: node.children.map((c) => sceneChild(c)) };
+  };
+
   const modules: CompiledModule[] = [];
   for (const l of loaded.values()) {
     const inherited = inheritedMembers(l, loaded, classIndex);
@@ -379,6 +405,17 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       }
     });
 
+    const scene: SceneEmit | null =
+      sceneRoot !== null && normalizeRes(sceneRoot.script ?? "") === l.resPath
+        ? { rootName: sceneRoot.name, rootCls: sceneRoot.cls, children: sceneRoot.children.map((c) => sceneChild(c)) }
+        : null;
+    if (scene !== null) {
+      for (const dep of sceneDeps.values()) {
+        if (dep.resPath === l.resPath) continue;
+        if (!classRefs.some((r) => r.name === dep.jsName)) classRefs.push({ name: dep.jsName, from: jsImportSpecifier(l, dep, opts) });
+      }
+    }
+
     const jsPath = jsPathFor(l, opts);
     const emitOpts = {
       runtimeImport: opts.runtimeRoot
@@ -393,6 +430,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       autoRun: opts.autoRun ?? isEntry,
       className: l.jsName,
       baseClass: base?.spec ?? (isEntry && opts.hostImport ? { kind: "host" } : { kind: "none" }),
+      scene: scene ?? undefined,
       hostBaseInChain: hostChain,
       classRefs,
       resPath: l.resPath,
@@ -535,8 +573,9 @@ function resolveBase(
     const dep = classFile(bare, loaded, classIndex)!;
     return { jsName: dep.jsName, spec: { kind: "import", name: dep.jsName, from: jsImportSpecifier(l, dep, opts) } };
   }
+  if (SCRIPT_NODE_BASES.has(bare)) return { jsName: null, spec: { kind: "engine", name: bare } };
   if (ENGINE_BASES.has(bare)) {
-    throw new UnsupportedError("engine-base", `Tier 1 不支持 extends 引擎类型 ${bare}（D4）`);
+    throw new UnsupportedError("engine-base", `extends 引擎类型 ${bare} 还没建模（只量过 Node 与 Node2D 的脚本基类）`);
   }
   throw new UnsupportedError("extends-unknown", `无法解析 extends 目标：${ext}`);
 }

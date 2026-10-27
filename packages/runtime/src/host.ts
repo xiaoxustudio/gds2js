@@ -3,6 +3,17 @@ import { deferredPendingCount } from "./runtime/callable";
 import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/object";
 import { V, type Variant } from "./runtime/tags";
+import { GdEngineInstance, nodeAttach, nodeInit, type NodeRec } from "./runtime/node";
+import {
+  GdSceneTree,
+  dispatchHook,
+  sceneInit,
+  sceneNode,
+  scenePostOrder,
+  scenePreOrder,
+  sceneTreeBegin,
+  type SceneSpec,
+} from "./runtime/scene";
 import { setRotatedAxisBlockSink } from "./runtime/vector3";
 import { richAnsi } from "./runtime/rich-ansi";
 import { showArgsSep, truthyOf } from "./runtime/values";
@@ -164,6 +175,35 @@ export class SceneTree extends GdScriptObject {
     }
     if (initError !== null) throw initError;
   }
+}
+
+const SCENE_MAX_FRAMES = 3000;
+const SCENE_FRAME_DT = 0.002;
+
+export async function sceneRun(rootNode: unknown, rootName: string, rootCls: string, children: unknown[]): Promise<void> {
+  const root = new GdEngineInstance("Window");
+  root.__gd_node_name__ = "root";
+  const tree = new GdSceneTree(root);
+  sceneTreeBegin(tree);
+  nodeInit(rootNode as object, rootCls);
+  (rootNode as { __gd_node_name__: string }).__gd_node_name__ = rootName;
+  nodeAttach(root as unknown as NodeRec, rootNode as unknown as NodeRec);
+  tree.currentScene = rootNode as object;
+  for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object);
+
+  scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_enter_tree", []));
+  scenePostOrder(rootNode as object, (n) => dispatchHook(n, "_ready", []));
+
+  while (!tree.quitted && tree.frame < SCENE_MAX_FRAMES) {
+    await new Promise((r) => setTimeout(r, 2));
+    tree.frame += 1;
+    const dt = V.float(SCENE_FRAME_DT);
+    scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_process", [dt]));
+  }
+
+  scenePostOrder(rootNode as object, (n) => dispatchHook(n, "_exit_tree", []));
+  process.exitCode = tree.code;
+  flush();
 }
 
 function isTruthyResult(r: unknown): boolean {

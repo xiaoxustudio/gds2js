@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import * as harness from "../../tools/harness/scene-tree";
-import { caseDir, caseIsProject, CORPUS } from "./lib-bridge";
+import { caseDir, caseIsProject, caseScene, CORPUS } from "./lib-bridge";
 
 export default async function runCase(id: string): Promise<string | null> {
   if (caseIsProject(id)) return runProjectCase(id);
@@ -22,6 +22,7 @@ async function runProjectCase(id: string): Promise<string> {
   const outDir = join(root, ".gen");
   const result = await compileProject({
     entries: [join(root, "main.gd")],
+    sceneFile: caseScene(id),
     resRoot: root,
     outDir,
     runtimeImport: "gds2js/runtime",

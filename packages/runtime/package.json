@@ -54,6 +54,7 @@
     "./runtime/transform2d": "./src/runtime/transform2d.ts",
     "./runtime/basis": "./src/runtime/basis.ts",
     "./runtime/node": "./src/runtime/node.ts",
+    "./runtime/scene": "./src/runtime/scene.ts",
     "./runtime/values": "./src/runtime/values.ts",
     "./runtime/numfmt": "./src/runtime/numfmt.ts",
     "./runtime/string-ops": "./src/runtime/string-ops.ts",

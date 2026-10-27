@@ -2,6 +2,7 @@
 import {
   caseDir,
   caseIsProject,
+  caseScene,
   caseScript,
   godotOk,
   hangBudget,
@@ -37,7 +38,8 @@ for (const id of cases) {
   const gd = caseScript(id);
   const projectPath = caseIsProject(id) ? caseDir(id) : null;
   const prev = readGolden(id);
-  const { text, timedOut } = runGodot(gd, { projectPath, timeoutMs: hangBudget(prev) });
+  const scene = caseScene(id);
+  const { text, timedOut } = runGodot(gd, { projectPath: projectPath ?? (scene === null ? null : caseDir(id)), scene: scene !== null, timeoutMs: hangBudget(prev) });
   const norm = normalize(text, gd);
   const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
   if (timedOut) timeout++;

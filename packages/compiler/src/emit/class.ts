@@ -65,7 +65,9 @@ export function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   ]);
   ctx.CLASS_SIGNALS = new Set(decl.signals.map((g) => g.name));
   ctx.VAR_TYPES = new Map(decl.vars.map((v) => [v.name, v.type]));
+  const savedEngineBase = ctx.ENGINE_BASE;
   ctx.CURRENT_CLASS = decl.name;
+  ctx.ENGINE_BASE = null;
   ctx.STATIC_FUNCS = new Set(decl.funcs.filter((f) => f.isStatic).map((f) => f.name));
   ctx.CLASS_FUNCS = new Set([...decl.funcs.map((f) => f.name), ...innerInheritedMethodNames(decl)]);
   ctx.FUNC_RETURNS = new Map<string, TypeRef | null>([...savedReturns, ...decl.funcs.map((f): [string, TypeRef | null] => [f.name, f.returnType])]);
@@ -124,6 +126,7 @@ export function emitClassDecl(decl: ClassDecl, base = 0): string[] {
   ctx.VAR_TYPES = savedTypes;
   ctx.STATIC_FUNCS = savedStatics;
   ctx.CURRENT_CLASS = savedClass;
+  ctx.ENGINE_BASE = savedEngineBase;
   ctx.CLASS_VALUE_OWNERS = savedConsts;
   ctx.INIT_HAS_BASE = savedHasBase;
   ctx.INIT_AS_METHOD = savedAsMethod;
