@@ -4,7 +4,7 @@
 
 GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
-Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupported`（D4）；Tier 2 按 `docs/TIER2.md` 分阶段解禁，已放行引擎类值的 `.new` 面（造实例仍在阶段三）。
+Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupported`（D4）；Tier 2（`docs/TIER2.md`）四阶段**已收口**：七个值类型整族落地（D6）、引擎类实例构造与成员面放行（`Node` / `Node2D` / `Control` / `Node3D` 四支基类 + 类体裸名读写）、节点树与场景通知路线打通（`.tscn` 编译期展树 + `sceneRun` 帧环 + 分组查询），没量过的形状仍一律 `UnsupportedError`（D7 引用计数按 γ 记档不落地）。
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`），不靠"看着对"。
 核心技术：tree-sitter（WASM 语法，`tree-sitter-gdscript` submodule）、scriptc（AOT 出原生 exe）。
