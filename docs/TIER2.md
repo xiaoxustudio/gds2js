@@ -173,6 +173,7 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 - **基类登记改实测派生**：`extends Node` / `Node2D` 之外的一切引擎类名，答复来自 `ENGINE_CLASS_NAMES`（ClassDB 全量表）而不是手抄名单，所以 `extends Sprite2D` 现在发 `engine-base` 而不再掉进 `extends-unknown`；名单删掉的那 12 个名字不再参与判定。
 
 - **`Node2D` 的成员面放行（语料 `464-node2d-members` 十三格逐字节）**：`Node2D` 身上存一个 `Transform2D`，`position` / `rotation` / `rotation_degrees` / `scale` / `transform` / `global_position` / `global_transform` 全是它的投影 —— 写 `rotation` 换掉整个基（`[X: (c, s), Y: (-s, c)]`，float32 取 `cosf/sinf`）但留着原点，写 `scale` 只在两列上各自乘（`X *= s.x`、`Y *= s.y`），写 `position` 只挪原点，读 `rotation` 是 `atan2(x.y, x.x)`、读 `scale` 是两列长度；`global_position` 沿祖先链把父变换乘过来（父转 90° 时子 `(1,1)` 得全局 `(2.0, 5.0)` 这一格钉住了乘法方向），写 `global_position` 走父变换的逆（同那一格反算回 `(-4.0, 3.0)`）；`visible` / `show()` / `hide()` / `is_visible_in_tree()` 读得到实测值，`z_index=0` / `top_level=false` / `y_sort_enabled=false` 是默认值那一格。`Node2D.x` / `.y` 引擎直接是非法访问（`Invalid access to property or key 'x'`）—— 我们同样不开。没量的仍拒：`to_local` / `to_global` / `get_viewport` / `top_level=true` 时的全局链 / 非 `Node2D` 祖先（`Node` 夹在中间）/ `global_rotation`。同一支用例还钉住一条清理规矩：`free()` 已经级联掉子树，再对子节点调 `free()` 引擎不作声、我们按 `node-freed-call` 拒，所以用例里不写重复 `free()`（p9 那支探针就是这么暴露的）。
+- **通知派发不追协程，实测同字（语料 `465-scene-await-hooks`）**：`_ready` 里 `await` 一支同步完成的协程，引擎在**同一次 `_ready` 调用之内**就续跑到后半句（`ready-before` → `ready-after` 才进第一帧 `_process`）；`_process` 里 `await` 也一样，那一帧后续的语句照样在同一帧里跑完。我们的派发是 `__gdDispatch` 返回的 Promise 不去 await，两侧这份输出逐字节相同，所以 `host.ts:111` 那条「基类 async 虚方法被子类覆写在静态编译目标上没有实现」的形状不用改 —— 钩子一律「非 async 签名 + 自己处理 Promise」，引擎本来也不等。这一格钉住的是顺序而不是异常路径：钩子里 `await` 一个永不完成的协程之后 `quit()` 走不到，两侧都不退出，那条形归超时族（口径 6 的 18 例）。
 - **`is 引擎类` 与 `is_class()` 放行到实测的那几形（语料 `463-is-engine-class`）**：`patterns.ts` 那张 `PROBED_CLASS_NAMES` + `instanceClassNames` 表加了两行链 —— `Node → [Object, Node]`、`Node2D → [Object, Node, Node2D]`（`RefCounted` / `SceneTree` 两行是原有的）。逐格实测过：`Node` 与 `Node2D` 的实例都 `is Node`、`Node` 不 `is Node2D`、节点不 `is RefCounted`、两者都 `is Object`、都 `is Resource` false，`is_class` 拿 `"Node"` 问 `Node2D` 实例为 true。表里没有的祖先名（`CanvasItem` / `Control` 那几支）继续按 `is-type` 响亮拒 —— 一行链就是一条读数，不推。
 **场景这一格仍响亮拒**：类体里**裸属性**读引擎成员（`print(name)` 这类 —— 分析期按「没声明」拦下，得写 `get_name()`；self 属性面还没实测）、`Node` / `Node2D` 之外的场景节点类型、`instance=` / `groups=` / `sub_resource` / 除 `script=` 之外的节点属性、`ext_resource` 的非 Script 类型、场景根不带脚本、一工程多场景、`SceneTree.create_timer` / `call_group` / `get_nodes_in_group`。
    - **已落**：场景模式的主循环（`sceneRun` 的帧环 + `quit(code)` 把 code 写进 `process.exitCode`），`--script` 那条入口一字未动，所以那 18 例超时形状不受影响。
@@ -209,6 +210,11 @@ pnpm test:codegen                                               # 生成表逐�
 pnpm test:pkgmodes / test:cli-native / test:export              # 出货面与原生轨
 pnpm test:golden-check  →（单独一轮）→ pnpm test:diff           # 引擎面，不并跑
 ```
+
+**热臂配对读数（阶段二 七型 + 阶段三 节点面全部落地之后补跑，风险表那一行的账）**：拿 `8110ff9`（阶段二 第一笔语义提交之前）的 `values/core.ts` 与 `method/access.ts` 当候选，跟现树配对 —— 四轮里候选更快 2 轮，
+`pnpm bench:ab` 给的总账是 **-7.63 ms ± 8.23(SE) = -5.54%，|t| = 0.93**，按常驻口径 5 这条就是「读不出效应」，不记成回退也不记成收益。
+逐核的配对中位差除两格外都在 ±0.9 ms 以内：`array-write` +2.35 ms（候选慢）、`helper-assign` -1.77 ms（候选快）—— 都在同一次跑就能翻转的量级里，
+所以「七型判定链变长会不会拖慢热面」这一问，现在的答复是**这份噪声读不出来**，而不是「确认无害」。真要定论得等核本身变慢到 |t|≥2；届时优先动的就是 `valueEq` / `show` / `keyOf` 那三条串（新臂都按已定的规矩排在链尾）。
 
 **字节门在 Tier 2 仍然成立，但要分清两件事**：`corpus/cases/*/main.gen.mts` 里被 git 追踪的那些是**存量基线**，`git diff --exit-code -- corpus/cases` 只对它们敏感 → 它就是「存量语义没变」的判据；新用例落的是未追踪的新目录，不会让它变红。增量基线走：`pnpm test:golden <新用例>` 写 `godot.txt`（`requireGodotPin()` 已经挡住换引擎）→ 人工过一遍 `git status --porcelain corpus/cases` 的新目录清单 → `pnpm test:compile` 重跑后把新产物纳入追踪。阶段一、二里那些"从抛错变成能编过"的形状**不会**产生存量 diff（它们本来抛在产物之前），所以一旦存量出现 diff，就是回归，不是新语义。
 
