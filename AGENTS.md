@@ -34,7 +34,7 @@ pnpm test:all           # 两层全跑
 pnpm typecheck          # turbo run typecheck + tsc -p tsconfig.test.json
 pnpm test:golden        # 重跑/重生成 golden（要 GODOT_BIN）
 pnpm release            # 版本一致性校验 → build → 门 → release/gds2js-<ver>-win64.exe(+.sha256)
-pnpm bench / bench:ab / bench:godot / bench:scriptc   # 性能三把尺；收益只认 bench:ab 的 |t|≥2
+pnpm bench / bench:parse / bench:ab / bench:godot / bench:scriptc   # 运行期收益只认 bench:ab 的 |t|≥2；解析期看 bench:parse 的耗时与节点总数两把
 ```
 
 E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `GDS2JS_NODE_BIN`。

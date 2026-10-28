@@ -34,6 +34,7 @@
     "test:export": "vitest run --project e2e export.test.ts",
     "release": "node tools/release.mjs",
     "bench": "tsx tools/bench.ts",
+    "bench:parse": "tsx tools/bench.ts --parse",
     "bench:godot": "tsx tools/bench-godot.ts",
     "latency": "node tools/cli-latency.mjs",
     "build": "turbo run build",
