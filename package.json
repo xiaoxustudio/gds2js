@@ -30,6 +30,8 @@
     "regen:engine-classes": "node tools/engine-classes-probe.mjs && node tools/engine-classes.mjs write",
     "test:cli-native": "vitest run --project e2e cli-native.test.ts",
     "test:compile": "tsx tools/compile.ts",
+    "test:parse-diff": "vitest run --project compiler parse-diff.test.ts",
+    "gen:parse-snippets": "node tools/collect-parse-snippets.mjs",
     "test:pkgmodes": "vitest run --project e2e pkg-modes.test.ts",
     "test:export": "vitest run --project e2e export.test.ts",
     "release": "node tools/release.mjs",

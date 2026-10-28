@@ -1,11 +1,12 @@
 /**
- * 语料面：ir / sema / emit-guards / emit-invariants 四个门要的东西过一道。
+ * 语料面：ir / sema / emit-guards / emit-invariants / parse-diff 五个门要的东西过一道。
  *
  * 直接复用 tools/lib.mjs 而不另抄一份：它与 golden.mjs / compile.ts / 各 bench 共用同一份
  * 口径，抄一份就会漂（尤其 godotOk 的正则、与 listCases 对 000- 探头的排除），
  * 一漂就会让 `sema 229/229` 和 `diff 152/152` 不再指同一件事。
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { CORPUS, caseScript, godotOk, listSingleCases, readGolden } from "../../../../tools/lib.mjs";
 
 /** lib.mjs 的 listCases 对不存在的目录返回空数组 → it.each([]) 注册 0 个测试 → 门报绿。
@@ -18,6 +19,22 @@ export { caseScript, godotOk, readGolden };
 
 /** 单文件用例集（排除工程用例与 000- 探头）；今天恒为 229。 */
 export const cases: string[] = listSingleCases();
+
+/** 语料里全部 .gd 的绝对路径（含工程用例的跨文件脚本，仍排除 000- 探头）；今天恒为 493。
+ *  caseScript 只给 main.gd，parse-diff 要的是每个会被解析的文件，所以另开一个递归出口。 */
+export function allScripts(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!e.name.startsWith("000-")) walk(p);
+      } else if (e.name.endsWith(".gd")) out.push(p);
+    }
+  };
+  walk(CORPUS);
+  return out.sort();
+}
 
 /**
  * Godot 的报错分两类，只有**静态**那类才是语义分析层该拦的：
