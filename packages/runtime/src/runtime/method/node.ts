@@ -107,13 +107,22 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       return V.nil();
     }
     case "move_child": {
-      nodeMoveChild(rec, childArg(args, name), indexArg(args[1], name));
+      const child = childArg(args, name);
+      const to = indexArg(args[1], name);
+      if (to >= rec.__gd_node_children__.length) {
+        engineError("move_child (scene/main/node.cpp:520)", `Invalid new child index: ${String(to)}.`);
+        return V.nil();
+      }
+      nodeMoveChild(rec, child, to);
       return V.nil();
     }
     case "get_child": {
       const at = indexArg(args[0], name);
       const hit = rec.__gd_node_children__[at];
-      if (at < 0 || hit === undefined) throw new UnsupportedError("node-child-oob", "get_child() 越界那一形没建模：引擎发 ERROR 并回 null");
+      if (hit === undefined) {
+        engineError("get_child (scene/main/node.cpp:1849)", `Index p_index = ${String(at)} is out of bounds ((int)data.children_cache.size() - data.internal_children_front_count_cache - data.internal_children_back_count_cache = ${String(rec.__gd_node_children__.length)}).`);
+        return V.object(NULL_OBJECT);
+      }
       return V.object(hit);
     }
     case "get_child_count":
@@ -132,8 +141,12 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       return V.int(p === null ? -1 : p.__gd_node_children__.indexOf(rec as unknown as object));
     }
     case "get_node": {
-      const hit = nodeWalkOr(rec, pathArg(args, name));
-      if (hit === null) throw new UnsupportedError("node-path-shape", "Node.get_node() 走不通的路径那一形没建模：引擎发 ERROR 并回 null");
+      const want = pathArg(args, name);
+      const hit = nodeWalkOr(rec, want);
+      if (hit === null) {
+        engineError("get_node (scene/main/node.cpp:1963)", `Node not found: "${want}" (relative to "${rec.__gd_node_name__}").`);
+        return V.object(NULL_OBJECT);
+      }
       return V.object(hit);
     }
     case "get_node_or_null": {
