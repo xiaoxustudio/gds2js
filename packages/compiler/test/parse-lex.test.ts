@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseSource } from "@gds2js/compiler/parse/parser";
+import { parseWithTreeSitter } from "@gds2js/compiler/parse/parser";
 import { ROOT } from "../../../tools/lib.mjs";
 import { allScripts } from "./support/corpus";
 import { Cursor } from "../src/parse/descent/indent";
@@ -57,7 +57,7 @@ function fixtures(file: string): Array<{ id: string; src: string }> {
 async function check(inputs: Array<{ id: string; src: string }>): Promise<Tally> {
   const t: Tally = { bad: [], compared: 0, skipped: 0, skippedTexts: new Map(), hidden: 0 };
   for (const inp of inputs) {
-    const tree = (await parseSource(inp.src)).rootNode as CsLike;
+    const tree = (await parseWithTreeSitter(inp.src)).rootNode as CsLike;
     if (tree.hasError) {
       t.hidden++;
       continue;

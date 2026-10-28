@@ -108,5 +108,5 @@ export function buildCsTree(table: NodeTable): CsTree {
     };
   };
 
-  return { rootNode: build(0, "") };
+  return { rootNode: build(0, ""), syntaxErrors: [] };
 }

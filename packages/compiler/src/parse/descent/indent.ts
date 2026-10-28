@@ -158,4 +158,62 @@ export class Cursor {
     if (line !== undefined) this.i = line.from;
     else this.i = this.toks.length - 1;
   }
+
+  /**
+   * 游标停在 `var x` 后面那个 `:` 上时，判它属于 setget 还是类型标注。
+   *
+   * tree-sitter 靠 GLR 两条路都试、谁走得通选谁来定这件事，实测结论就是缩进：
+   *   - `265-inst-to-dict` 第 46-47 行 `var au:` 换行接**更深缩进**的 `get: return 7` → 走 setget；
+   *     类型那条路会把 `get` 当类型名吃掉，接着 `: return 7` 无论如何接不上，整棵树报错。
+   *   - `307-eol-after-annot-colon` 第 3-4 行 `var a:` 换行接**同缩进**的 `int = 1` → 走类型；
+   *     setget 那条路要 INDENT，同缩进给不出来。
+   * 所以判据就是「冒号后那个记号在更深的行上」。
+   */
+  colonOpensBlock(): boolean {
+    if (this.peek(1).kind === "eof") return false;
+    const next = this.lineIndex(1);
+    if (next === this.lineIndex()) return false;
+    return this.lineIndent(next) > this.stack[this.stack.length - 1]!;
+  }
+
+  /** `_body_end`：块体撞上 `,` `)` `]` `}` 就地收摊。grammar.js:49-57 把这几个记号列为 externals
+   *  就是为了让扫描器能在这里发 BODY_END，典型形状是括号里的 lambda 体（`235-object-identity-keys`
+   *  第 64-65 行的 `print("22|", … (func(y):` 换行接 `return y))`）。 */
+  atBodyEnd(): boolean {
+    const t = this.peek();
+    return t.kind === "punct" && (CLOSERS.has(t.text) || t.text === ",");
+  }
+
+  /** 下一个记号是不是还待在同一物理行上（括号内跨行也算同行，`\` 续行天然不算换行）。 */
+  followsOnSameLine(off = 0): boolean {
+    const n = this.peek(off + 1);
+    if (n.kind === "eof") return false;
+    return this.bracketDepth > 0 || !n.lineStart;
+  }
+
+  /** 跨过 extras（`comment` 与 `line_continuation`）并把它们交出来，让 builder 决定挂到哪个节点上。
+   *  解析器因此永远看不见 extras，但 `dedented()` 这类要看注释行缩进的判断必须在跨过之前做。 */
+  skipExtras(): LexTok[] {
+    const out: LexTok[] = [];
+    while (this.i < this.toks.length - 1) {
+      const t = this.toks[this.i]!;
+      if (t.kind !== "comment" && t.kind !== "cont") return out;
+      out.push(t);
+      this.i++;
+    }
+    return out;
+  }
+
+  /** 只跨过指定那一行上的 extras。表头行尾的注释（`func f():  # 签名注释`）属于声明节点，
+   *  而身体首行的注释属于 body —— 一刀切地 stash 会把后者也吞到前者去（`054-comments`）。 */
+  skipExtrasOnRow(row: number): LexTok[] {
+    const out: LexTok[] = [];
+    while (this.i < this.toks.length - 1) {
+      const t = this.toks[this.i]!;
+      if ((t.kind !== "comment" && t.kind !== "cont") || t.row !== row) return out;
+      out.push(t);
+      this.i++;
+    }
+    return out;
+  }
 }

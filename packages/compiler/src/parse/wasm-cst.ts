@@ -24,5 +24,5 @@ function csOf(n: WasmNode, src: string, fieldName: string): CsNode {
 
 /** 把 web-tree-sitter 的树拍成我们自己的 CST 记录（`./cst`）：每节点一个普通对象，无方法、无父指针。 */
 export function toCsTree(root: WasmNode, src: string): CsTree {
-  return { rootNode: csOf(root, src, "") };
+  return { rootNode: csOf(root, src, ""), syntaxErrors: [] };
 }

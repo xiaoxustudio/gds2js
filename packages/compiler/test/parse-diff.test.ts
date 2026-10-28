@@ -1,7 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseSource } from "@gds2js/compiler/parse/parser";
+import { parseWithTreeSitter } from "@gds2js/compiler/parse/parser";
+import { parseSync } from "../src/parse/descent/index";
 import { ROOT } from "../../../tools/lib.mjs";
 import { allScripts } from "./support/corpus";
 
@@ -24,6 +25,7 @@ type Outcome = {
   compared: number;
   nodes: number;
   errored: string[];
+  triaged: string[];
   threw: string[];
   drifts: Drift[];
   driftInputs: Set<string>;
@@ -32,8 +34,21 @@ type Outcome = {
   anon: Set<string>;
 };
 
-const oracle: (src: string) => Promise<{ rootNode: CsLike }> = parseSource;
-const candidate: (src: string) => Promise<{ rootNode: CsLike }> = parseSource;
+const oracle: (src: string) => Promise<{ rootNode: CsLike }> = parseWithTreeSitter;
+const candidate: (src: string) => Promise<{ rootNode: CsLike }> = async (src) => parseSync(src);
+
+/**
+ * 定性台账：已知且刻意的偏离，逐条记理由，别的漂移一律算红。
+ *
+ * `**` 一族 —— tree-sitter 把 `**` 挂在 `PREC.times` 且左结合（grammar.js:672），于是
+ * `2 * 3 ** 2` 被解成 `(2*3)**2`；Godot 4.6.3 实测是 18，即 `2*(3**2)`，语料
+ * `280-pow-precedence` 的 p02/p22/p33 与 `004-power-associativity` 逐字节钉着，
+ * 今天靠 `lower/lower.ts:763-803` 的 MUL_LEVEL 重爬补偿。新解析器直接产出正确的树
+ * （`**` 独立一层、高于 `*` `/` `%`、仍左结合，`2**3**2 == 64` 不变），
+ * 那段补偿机器随之退化成普通递归。这是「同词汇、自定结构」口径下**唯一**行使自定结构的地方，
+ * 验收不靠 CST 差分，靠这 8 个含 `**` 的语料用例逐字节对 golden。
+ */
+const TRIAGE = new Set(["280-pow-precedence/main.gd", "edge-power", "edge-precedence"]);
 
 const CAP = 20;
 
@@ -46,6 +61,7 @@ function blank(): Outcome {
     compared: 0,
     nodes: 0,
     errored: [],
+    triaged: [],
     threw: [],
     drifts: [],
     driftInputs: new Set(),
@@ -86,6 +102,10 @@ function diffNode(want: CsLike, got: CsLike, path: string, input: string, out: O
 async function compareAll(inputs: Input[]): Promise<Outcome> {
   const out = blank();
   for (const inp of inputs) {
+    if (TRIAGE.has(inp.id)) {
+      out.triaged.push(inp.id);
+      continue;
+    }
     const want = (await oracle(inp.src)).rootNode;
     if (want.hasError) {
       out.errored.push(inp.id);
@@ -124,7 +144,7 @@ function report(out: Outcome): string {
 }
 
 function assertClean(label: string, out: Outcome): void {
-  const tail = `（比对 ${String(out.compared)} 份 / ${String(out.nodes)} 个节点，ERROR 侧 ${String(out.errored.length)} 份另计）`;
+  const tail = `（比对 ${String(out.compared)} 份 / ${String(out.nodes)} 个节点，ERROR 侧 ${String(out.errored.length)} 份、定性台账 ${String(out.triaged.length)} 份另计）`;
   const detail = out.drifts.length === 0 && out.threw.length === 0 ? "" : `\n${report(out)}`;
   expect(out.threw.length, `${label} 候选侧不抛错${detail}`).toBe(0);
   expect(out.driftInputs.size, `${label} 零漂移${tail}${detail}`).toBe(0);
