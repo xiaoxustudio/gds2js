@@ -57,8 +57,8 @@
 
 - **语义只认 Godot 4.6.3 实测**；没测过的行为一律 `UnsupportedError`，不猜、不静默降级（红线 1）。
 - 钉住的版本只有一个字面量：`tools/lib.mjs` 的 `GODOT_PIN`。任何会**落盘读数**的入口（`tools/golden.mjs`、`regen:*` 的探头）在写之前先 `requireGodotPin()`，裁判引擎自报版本不符就拒写 —— 起因是本机 PATH 上那个 `godot.exe` 自报另一条版本线，同一条命令换引擎照样跑通，读数却换了来源。
-- 五张实测生成表由生成器产出头注释与表体，只能走 `pnpm regen:*`，手删头部会让 `test:codegen` 红：`case-table`、`case-flags`、`ucaps`、`engine-classes`。生成机制的分工是「探头（跑 Godot 落读数）/ 纯计算渲染 / 写盘」三段，漂移门复用中间那段而不写盘。
-- `compiler/src/semantics/` 那批表同样是 Godot 实测面，但目前是**手抄、无生成器** —— 这是已知薄弱点，Tier 2 新增的成员面表要求带探头与漂移门（见 `docs/TIER2.md`）。
+- 四张实测生成表由生成器产出头注释与表体，只能走 `pnpm regen:*`，手删头部会让 `test:codegen` 红：`case-table`、`case-flags`、`ucaps`、`engine-classes`。生成机制的分工是「探头（跑 Godot 落读数）/ 纯计算渲染 / 写盘」三段，漂移门复用中间那段而不写盘。
+- `compiler/src/semantics/` 那批表同样是 Godot 实测面，但**手抄、无生成器** —— 已知薄弱点。Tier 2 新增的成员面表（`semantics/node-face.ts` 的 `NODE_SELF_METHODS` 与 `NODE_SELF_PROPS`）走的不是生成器那条路，而是**逐名挂语料编号**：名单里每个名字都在 459 / 460 / 464 / 466 / 467 / 468 / 469 / 470 / 471 里有一格逐字节读数，多写一个名字就是一次 `corpus-diff` 红或一次 `UnsupportedError`，过拦则由 `packages/compiler/test/script-base-sets.test.ts` 钉住（表外的名字仍报 `undeclared-identifier`，静态函数里读也一样）。
 
 ## 8. 注释与文档口径
 
