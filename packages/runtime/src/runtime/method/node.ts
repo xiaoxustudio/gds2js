@@ -4,6 +4,7 @@ import { GArray } from "../values";
 import { NULL_OBJECT } from "../identity";
 import { nodePathValue } from "../node-path";
 import { asString } from "./core";
+import { stackBlockLines, writeOrderedStderr } from "../frames";
 import {
   nodeArgSay,
   nodeAttach,
@@ -18,6 +19,10 @@ import {
 } from "../node";
 import { scenePathOf, sceneTree } from "../scene";
 import { node2dMethod } from "../node2d";
+
+function engineError(at: string, message: string): void {
+  writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));
+}
 
 function walkParts(node: NodeRec, parts: string[]): NodeRec | null {
   let cur: NodeRec = node;
@@ -139,11 +144,22 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       return V.nil();
     case "get_name":
       return V.str(rec.__gd_node_name__);
-    case "get_tree":
-      if (!insideTree(rec)) throw new UnsupportedError("node-tree-null", "不在树里的 get_tree() 那一形没建模：引擎发 ERROR 并回 null");
-      return V.object(sceneTree() as object);
-    case "get_path":
+    case "get_tree": {
+      const tree = sceneTree();
+      if (tree === null || !insideTree(rec)) {
+        engineError("get_tree (scene/main/node.h:549)", 'Parameter "data.tree" is null.');
+        return V.object(NULL_OBJECT);
+      }
+      return V.object(tree);
+    }
+    case "get_path": {
+      const tree = sceneTree();
+      if (tree === null || !insideTree(rec)) {
+        engineError("get_path (scene/main/node.cpp:2419)", "Cannot get path of node as it is not in a scene tree.");
+        return nodePathValue("");
+      }
       return nodePathValue(scenePathOf(rec as unknown as object));
+    }
     case "show":
     case "hide":
     case "is_visible_in_tree":
