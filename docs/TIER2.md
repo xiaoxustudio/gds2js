@@ -30,10 +30,10 @@ Tier 1 是纯语言层（D4）：不实现 `Node` / `SceneTree` / 任何引擎 A
 | 原登记文件 | 原封顶 | 现状 | 结果 |
 | --- | --- | --- | --- |
 | `analyze/checks/collections.ts` | 1153 | 目录化成 `checks/collections/{typed,index-slots,var-assign,pack,method-arity}.ts` | 登记删除（没有单文件再接近任何线）；阶段二的 `Array[T]` 盖章落 `collections/typed.ts` |
-| `compiler/lower/lower.ts` | 1269 | 切出 `lower/{cst,lit}.ts`，封顶随降到 1020 | 余 249；阶段二的 `CTOR_ARMS` / `ARM_NO_CTOR` 落回本文件 |
+| `compiler/lower/lower.ts` | 1269 | 切出 `lower/{cst,lit}.ts`，封顶跟着降 | 现登记 **1010**、盘面 1009 行（余 1）；阶段二的 `CTOR_ARMS` / `ARM_NO_CTOR` 与后续批次都落在这条线上，所以再往这个文件加行必须先切一刀 |
 | `runtime/values/core.ts` | 1202 | `GArray` / `GDict` 搬到 `values/containers.ts`，core 降到 576 | 登记删除；阶段二六面（默认值 / 转换 / 打印 / 相等 / 字典键前缀 / `deepCopy`）有了落点 |
-| `runtime/packed.ts` | 1098 | **没动** | 阶段二不需要它：`Rect2` 不是 packed 元素种类，七类型互转走 `values/`，不碰 packed 数组 |
-| `runtime/methods.ts` / `builtins.ts` | 59 / 37 | **没动** | 再导出名是往**已有的单行 `export { … } from`** 里追加名字，行数增量为 0；只有新增一整行时才受顶格约束 |
+| `runtime/packed.ts` | 1098 | **没动** | 现登记 1098、盘面 1097 行（余 1）；阶段二不需要它：`Rect2` 不是 packed 元素种类，七类型互转走 `values/`，不碰 packed 数组 |
+| `runtime/methods.ts` / `builtins.ts` | 59 / 37 | **没动** | 再导出名是往**已有的单行 `export { … } from`** 里追加名字，行数增量为 0；`builtins` 的封顶在阶段二的函数族拆分里降到 **17**（现值 15，`methods` 现值 58） |
 
 门是「只降不升」的棘轮（`m.lines > budget` 即红），所以规则是**先减后加**：后续阶段若要把代码写进仍被登记的文件，必须当场再切一刀，而不是把封顶改大。
 
@@ -149,7 +149,7 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 **Tag 取舍**：继续 `Tag.OBJECT` + `instanceof`，不给这七支新增 Tag。理由：八个 Tag 在全仓有硬编码分支面（`tagName`、`typeOf`、`valueTypeName`、`keyOf` 前缀、`var_to_str`），新增 Tag 会牵动 `typeof` / `hash` / 字典键三条**已实测**的等式；而 `Vector2` / `Color` 已经证明 OBJECT+instanceof 这条路在这三面上逐字节对得上 golden。代价要写清楚：装箱轨上每多一个值类型，判定链就多一串 `instanceof`，热面（`values/core.ts` 相等与打印、`ops.ts` 运算符）会变长 —— 所以**每批都要出 `bench:ab` 配对读数**，|t|≥2 才算收益，读不出就按"无回归"记录，不许凭单次运行下结论。
 
-**判据**：这批动的是**语义增量**，字节门只对存量敏感（见「门序」）；新增用例走 `pnpm test:golden` 建新基线；`emit-surface` / `emit-contract` 必须绿（新名要么进名表要么不发）；**本阶段是预算最紧的一支** —— 落点里 `values/core.ts`、`lower/lower.ts`、`checks/collections.ts`、`packed.ts` 四份都顶格，`runtime/index.ts` / `methods.ts` / `builtins.ts` 三扇门面也要加新类文件的再导出（且新增模块必须仍被 `module-reach` 从入口走到、被 `test:pkgmodes` 打进 bundle），所以**每批开工前先确认阶段零换出的余量够这一批用**，不够就回到阶段零再切一刀，不许临时把登记封顶改大（棘轮只降不升，改大要单独一笔并说明理由）。
+**判据**：这批动的是**语义增量**，字节门只对存量敏感（见「门序」）；新增用例走 `pnpm test:golden` 建新基线；`emit-surface` / `emit-contract` 必须绿（新名要么进名表要么不发）；**本阶段是预算最紧的一支** —— 顶格的是 `lower/lower.ts`（登记 1010、现值 1009）与 `packed.ts`（1098 / 1097），两扇门面 `methods.ts`（59 / 58）与 `builtins.ts`（17 / 15）也只剩一行余量，`runtime/index.ts` / `methods.ts` / `builtins.ts` 三扇门面也要加新类文件的再导出（且新增模块必须仍被 `module-reach` 从入口走到、被 `test:pkgmodes` 打进 bundle），所以**每批开工前先确认阶段零换出的余量够这一批用**，不够就回到阶段零再切一刀，不许临时把登记封顶改大（棘轮只降不升，改大要单独一笔并说明理由）。**阶段二后半与阶段三各批次的实际走法**：一行都没往这四份里加 —— 新语义全落**叶子新文件**（`runtime/node.ts` / `node2d.ts` / `control.ts` / `node3d.ts` / `scene.ts` / `method/node.ts` / `compiler/semantics/node-face.ts` / `compiler/parse/scene.ts`），门面只追加再导出名，四份登记的数字一字未动。
 
 ### 阶段三 —— 宿主与引擎 API + 对象生命周期【四步全落：id 与打印可比、释放时机按 γ 记档不落地、节点树/通知/场景路线通、主循环与退出形状复核过；剩下的都是"没量过的形状"那一档响亮拒】
 
