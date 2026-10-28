@@ -247,7 +247,7 @@ export interface ClassDesc {           // 一个脚本类的登记表：由 emit
 }
 ```
 
-- `is` / `get_class` / `has_method` 沿 `ClassDesc.base` 链走（`021`）；今天**只有脚本类**在这套表里，引擎类当值另有专支（`native-class.ts`）—— 那一族的成员面是 Tier 2 阶段一（`docs/TIER2.md`）。
+- `is` / `get_class` / `has_method` 沿 `ClassDesc.base` 链走（`021`）；今天**只有脚本类**在这套表里，引擎类当值另有专支（`native-class.ts`）—— 那一族的成员面是 Tier 2 阶段一（`docs/TIER2.md`（已归档））。
 - 属性 setter/getter 按实测语义（归档 S152 / S156）：读只走 get、写只走 set、只有 getter 时写是静默无操作。
 - 静态成员/静态变量走 `varSlotOf` / `staticCall` / `hasStaticName`，`call_deferred` 与 `CONNECT_DEFERRED` 仍响亮拒（等 Tier 2 的对象生命周期）。
 
@@ -292,8 +292,8 @@ emitter 规则：
 
 真正还开着的只有两族，且都不在这一层：
 
-1. **`call_deferred` / `CONNECT_DEFERRED` 的对象生命周期**（D7）：延后泵与局部 RefCounted 实例的确定性释放要连着做，牵连五处等式面。→ `docs/TIER2.md` 阶段三。
-2. **引擎类值的成员面与实例化**（D4）：`X.new` 当值、`.call()` 造实例。→ `docs/TIER2.md` 阶段一 / 三。
+1. **`call_deferred` / `CONNECT_DEFERRED` 的对象生命周期**（D7）：延后泵与局部 RefCounted 实例的确定性释放要连着做，牵连五处等式面。→ `docs/TIER2.md`（已归档） 阶段三。
+2. **引擎类值的成员面与实例化**（D4）：`X.new` 当值、`.call()` 造实例。→ 原 `docs/TIER2.md`（已归档）阶段一 / 三。
 
 **这些未测项在实现里一律抛 `UnsupportedError`，不准猜。**（`docs/ROADMAP.md` §0 的 D4 / D6 / D7 就是这条纪律的范围决定。）
 
@@ -306,4 +306,4 @@ emitter 规则：
 | v1 | 2026-09-23 | 首版。基于 Godot 4.6.3 实测语义，D1/D2/D3/D4 已拍板 |
 | v1（补记） | 2026-10-25 | §3 的 `ops.mod` 第三位 `soft` 旗标与 §6 的 `formatOf` 补登记 —— 两颗都是 S696 / S697 那两笔已经在用的发射面，这里只是把契约文字对齐实现，签名集合没缩也没涨 |
 | v1（补记 2） | 2026-10-25 | §0 补「覆盖面」一行，把口径写死：本契约只覆盖跨层冻结的形状，全量发射面以 `rt` 的导出表为准，并由 `test/repo/emit-surface.test.ts` 逐名自动对账。契约文字变宽，签名集合没动 |
-| v1（补记 3） | 2026-10-27 | **文档纠偏，签名集合一字未动**。§1 的 `Tag` 补回 `STRING_NAME` 并改成真实的对象常量写法；§3 删掉从未导出的 `ops.str` / `ops.key`，真值判定归位成一颗 `ops.truthy`；§4 手写的 `fast.*` 名单与真实导出面零交集，整表删除、改为指向 `surface.ts` 四个常量 + 三道门，并写清今天这一轨实际的三族形状；§6 的 `GString`、§7 的 `GObject` / `GClass` 都是从草案留下的不存在的类，改成实际落地的 `string-ops.ts` 函数族与 `GdScriptObject` + `ClassDesc`；§9 未决项从八条收敛到两条（其余七条 Tier 1 已实测并实现），两条都转 `docs/TIER2.md` |
+| v1（补记 3） | 2026-10-27 | **文档纠偏，签名集合一字未动**。§1 的 `Tag` 补回 `STRING_NAME` 并改成真实的对象常量写法；§3 删掉从未导出的 `ops.str` / `ops.key`，真值判定归位成一颗 `ops.truthy`；§4 手写的 `fast.*` 名单与真实导出面零交集，整表删除、改为指向 `surface.ts` 四个常量 + 三道门，并写清今天这一轨实际的三族形状；§6 的 `GString`、§7 的 `GObject` / `GClass` 都是从草案留下的不存在的类，改成实际落地的 `string-ops.ts` 函数族与 `GdScriptObject` + `ClassDesc`；§9 未决项从八条收敛到两条（其余七条 Tier 1 已实测并实现），两条都转 `docs/TIER2.md`（已归档） |

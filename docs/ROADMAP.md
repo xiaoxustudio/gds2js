@@ -3,7 +3,7 @@
 > 目标：GDScript 4.x → JavaScript 的 **AOT 编译器 + 独立运行时**。
 > 路线：**A（独立运行时），按 C→A 推进** —— 先纯语言层（Tier 1），引擎宿主后置。
 > 裁判版本：**Godot 4.6.3.stable.official.7d41c59c4**（单一字面量在 `tools/lib.mjs` 的 `GODOT_PIN`，落读数的入口写盘前先验它）。
-> 配套文档：`docs/ARCHITECTURE.md`（架构史与不变量）、`docs/RUNTIME_API.md`（runtime ↔ emitter 契约，签名冻结；覆盖面口径见它的 §0）、`docs/TIER2.md`（下一层的计划与判据）。
+> 配套文档：`docs/ARCHITECTURE.md`（架构史与不变量）、`docs/RUNTIME_API.md`（runtime ↔ emitter 契约，签名冻结；覆盖面口径见它的 §0）、原 `docs/TIER2.md`（下一层的计划与判据；Tier 2 收口后归档，考古用 `git show ca95311:docs/TIER2.md`）。
 >
 > **2026-10-26 清理：本文只留决策、阶段判据与大任务。** §1.3 起的逐笔流水（原 1.3–1.275，约 2650 行）与
 > `docs/SEMANTICS.md`（S 编号语义基线，约 1.5 MB）已从工作树删除，判据、门读数与出货状态一律以 §2 为准。
@@ -17,10 +17,10 @@
 | **D1** | int 表示 | **分轨**（2026-09-25 修订）。**解箱轨**纯 Number：覆盖 2^53 内场景，越界**响亮抛错**、绝不静默回绕。**装箱轨**（Variant）载荷归一化为「2^53 内 number / 超出 bigint」，算术与位运算统一升 bigint 并按 **int64 回绕**，与 Godot 逐位一致。`str()` 靠标签区分 int/float。**"全面 BigInt" 依旧否决**（热路径差一个数量级）。 |
 | **D2** | 值表示 | **类型驱动双轨**：编译期能定类型 → 原生直译；`Variant` / 推断不出 → 走 `ops.*`。 |
 | **D3** | `await` 语义 | **直接降级为 JS `async/await` + Promise**。实测证明引擎强制"协程必须被 await"（读数与逐笔台账已归档，判定看 `corpus/` golden），所谓 async 传染**就是引擎自己的规则**，不是偏差。 |
-| **D4** | 宿主深度 | **Tier 1：纯语言**。Tier 1 内不实现 `Node` / `SceneTree` / 任何引擎 API，遇到就抛 `unsupported`。Tier 2 按 `docs/TIER2.md` 分阶段解禁，四阶段**已收口**：七个值类型整族进来（`Transform3D` 除外），`Node` / `Node2D` / `Control` / `Node3D` 四支基类的成员面、节点树、场景通知、分组与查不到节点的那几块 ERROR 都按实测落地；没量过的形状仍一律 `unsupported`。 |
+| **D4** | 宿主深度 | **Tier 1：纯语言**。Tier 1 内不实现 `Node` / `SceneTree` / 任何引擎 API，遇到就抛 `unsupported`。Tier 2 按 `docs/TIER2.md`（已归档） 分阶段解禁，四阶段**已收口**：七个值类型整族进来（`Transform3D` 除外），`Node` / `Node2D` / `Control` / `Node3D` 四支基类的成员面、节点树、场景通知、分组与查不到节点的那几块 ERROR 都按实测落地；没量过的形状仍一律 `unsupported`。 |
 | **D5** | 版本 | 钉 **4.6.3**。已实测：4.6.3 与 4.7 在本项目覆盖的语义上输出逐字节一致。 |
-| **D6** | 七个值类型 | **不进 Tier 1**（2026-10-14 拍板）。`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` 的构造式、静态名、方法、打印、哈希与序列化**照 D4 继续抛 `unsupported`** —— 补它们要的是整族值表示 + 方法面 + 序列化，不是登记一笔的事（逐笔读数已归档；整族方案见 `docs/TIER2.md` 阶段二）。Tier 1 收尾因此只看「已实现面上的错值、过拦与解析期拒」。**Tier 2 阶段二已把这一族整族落地**（逐型逐字节对账），唯一没做的是 `Transform3D` —— 它不在 D6 那七支里，`Node3D.transform` 因此照旧响亮拒。 |
-| **D7** | 延后队列的对象生命周期 | **不进 Tier 1**（2026-10-24 拍板，用户选的口径）。引擎把 `Callable.call_deferred` 排在**局部作用域的 RefCounted 实例**上那一支，在泵之前就随引用计数归零丢掉；复刻它要给脚本类实例做**确定性引用计数**，牵连释放后的打印、`is_instance_valid`、容器键、Callable 的等式与 hash 五处 —— 与 D6 同性质，是范围决定不是对账活。Tier 1 期间这一族**照跑不拦**；Tier 2 阶段三按 γ 收口（见 `docs/TIER2.md`）：释放时机的读数已取 —— 引擎把最后一个引用赋成 `null` 后**同一条语句之后**就 `is_instance_id_valid()` false、`instance_from_id()` null，`Node.free()` 同形；我们这边 `identity.ts` 的 `LIVE` 是强引用，要匹配它得做真引用计数（`WeakRef` 的回收时机测不出可复现 golden），所以"引用已全部放开"那一形照旧响亮拒，不静默降级。 |
+| **D6** | 七个值类型 | **不进 Tier 1**（2026-10-14 拍板）。`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB` 的构造式、静态名、方法、打印、哈希与序列化**照 D4 继续抛 `unsupported`** —— 补它们要的是整族值表示 + 方法面 + 序列化，不是登记一笔的事（逐笔读数已归档；整族方案见 `docs/TIER2.md`（已归档） 阶段二）。Tier 1 收尾因此只看「已实现面上的错值、过拦与解析期拒」。**Tier 2 阶段二已把这一族整族落地**（逐型逐字节对账），唯一没做的是 `Transform3D` —— 它不在 D6 那七支里，`Node3D.transform` 因此照旧响亮拒。 |
+| **D7** | 延后队列的对象生命周期 | **不进 Tier 1**（2026-10-24 拍板，用户选的口径）。引擎把 `Callable.call_deferred` 排在**局部作用域的 RefCounted 实例**上那一支，在泵之前就随引用计数归零丢掉；复刻它要给脚本类实例做**确定性引用计数**，牵连释放后的打印、`is_instance_valid`、容器键、Callable 的等式与 hash 五处 —— 与 D6 同性质，是范围决定不是对账活。Tier 1 期间这一族**照跑不拦**；Tier 2 阶段三按 γ 收口（见 `docs/TIER2.md`（已归档））：释放时机的读数已取 —— 引擎把最后一个引用赋成 `null` 后**同一条语句之后**就 `is_instance_id_valid()` false、`instance_from_id()` null，`Node.free()` 同形；我们这边 `identity.ts` 的 `LIVE` 是强引用，要匹配它得做真引用计数（`WeakRef` 的回收时机测不出可复现 golden），所以"引用已全部放开"那一形照旧响亮拒，不静默降级。 |
 | **D8** | 架构整改（2026-10-26 起，持续） | **分阶段渐进，不动出货模型**。八项落地：阶段契约显式化（只读 `AnalysisResult` + per-module `EmitContext`，拔掉跨阶段侧信道）、两个巨无霸按维度拆目录、`exports` 通配收成实测白名单、Godot 实测表归位 `src/semantics/`、`tree-face` 归位 compiler、发射面名表类型化钉在 runtime 真实导出面上、仓库不变量进门（`test/repo`）。后续追加：文件尺寸棘轮、依赖环登记册（现为空表）、四张实测生成表的 `regen:` 出处、裁判版本单一字面量 `GODOT_PIN`、同族模块改目录。**全文、不变量与被实测否掉的那条（barrel 拆公共/内部面）见 `docs/ARCHITECTURE.md`。** |
 
 ### 2026-10-03 拍板（CLI 出货形态）
@@ -46,7 +46,7 @@
 那张带「进行中 / 2–3 周 / 30 用例」状态列的阶段表不再维护 —— 一次性读数跟着门改了口径，原文在归档件里：`git show fa46a87:docs/ROADMAP.md`。**今天还约束着工作的只有两条口径**：
 
 - **性能（D2）**：先 benchmark 后优化；动热路要过三重护栏 —— 收益量化（`bench:ab` 配对读数，|t|≥2 才算收益）、golden 逐字节不变、校验值一致。
-- **宿主与引擎 API 归 Tier 2**：阶段、判据与取证计划见 `docs/TIER2.md`。
+- **宿主与引擎 API 归 Tier 2**：阶段、判据与取证计划见 `docs/TIER2.md`（已归档）。
 
 ### 1.2 native CLI / scriptc 迁移（2026-10-03，已收口）
 
@@ -68,15 +68,15 @@
 
 **Tier 1 之后 → Tier 2**
 
-阶段划分、每阶段判据、需要新实测的取证清单与 harness 改造，全部收在 **`docs/TIER2.md`**。原先这里散着的七条已经并入它的阶段表：引擎类值的属性面（读数已全，阶段一）、七个值类型（D6，阶段二）、宿主与引擎 API + 延后队列的对象生命周期（D4/D7，阶段三）、超时件的退出形状、性能账（D2）。**`hash(Callable)` 已定案不追**，见 §3。
+阶段划分、每阶段判据、需要新实测的取证清单与 harness 改造，全部收在**原 `docs/TIER2.md`**（已归档，考古用 `git show ca95311:docs/TIER2.md`）。原先这里散着的七条已经并入它的阶段表：引擎类值的属性面（读数已全，阶段一）、七个值类型（D6，阶段二）、宿主与引擎 API + 延后队列的对象生命周期（D4/D7，阶段三）、超时件的退出形状、性能账（D2）。**`hash(Callable)` 已定案不追**，见 §3。
 
-**已结清的台账**：Tier 1 期间的决策类待办（SEA 保留、身份合成号与 RID、形态 A 与 `pnpm release`、`engines.node` 底线、缺口/覆盖面各族的读数账、开工清单与备忘）逐条已闭合，或转成 `docs/TIER2.md` 的大任务；原文与每格原始读数在 `git show fa46a87:docs/ROADMAP.md`。
+**已结清的台账**：Tier 1 期间的决策类待办（SEA 保留、身份合成号与 RID、形态 A 与 `pnpm release`、`engines.node` 底线、缺口/覆盖面各族的读数账、开工清单与备忘）逐条已闭合，或转成 `docs/TIER2.md`（已归档） 的大任务；原文与每格原始读数在 `git show fa46a87:docs/ROADMAP.md`。
 
 **常驻操作口径**：已搬进 `AGENTS.md`（动代码或跑门之前先看那几条）。
 
 ## 3. 明确的非目标
 
-- 任何引擎 API（`Node` / `SceneTree` / `add_child` …）—— **Tier 1 内**遇到就抛 `unsupported`；Tier 2 阶段三已按实测解禁四支基类成员面、节点树、场景通知与分组查询（`docs/TIER2.md`），没量过的形状照旧拒
+- 任何引擎 API（`Node` / `SceneTree` / `add_child` …）—— **Tier 1 内**遇到就抛 `unsupported`；Tier 2 阶段三已按实测解禁四支基类成员面、节点树、场景通知与分组查询（`docs/TIER2.md`（已归档）），没量过的形状照旧拒
 - **七个值类型**（`Rect2` / `Rect2i` / `Transform2D` / `Plane` / `Quaternion` / `Basis` / `AABB`）—— 按 D6 不进 Tier 1；Tier 2 阶段二已整族落地（构造式、静态名、方法、打印、哈希与序列化逐字节对账），`Transform3D` 是唯一还没做的值类型，因此 `Node3D.transform` 照旧响亮拒
 - GDScript 3.x 兼容（`yield` / `setget`）
 - 编辑器 / LSP

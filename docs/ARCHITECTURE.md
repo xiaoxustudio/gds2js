@@ -63,4 +63,4 @@
 ## 8. 注释与文档口径
 
 - 源码里只留纯函数的 `/** */` 文档注释；任务编号、读数依据、临时说明不写。生成表头部注释由生成器产出。
-- 文档分工：`AGENTS.md` = 纪律与命令（门的措辞契约在这里，例：语料计数句是 `doc-counters` 的正则目标）；`docs/ROADMAP.md` = 决策与阶段判据；本文 = 架构史与不变量；`docs/RUNTIME_API.md` = runtime ↔ emitter 契约；`docs/TIER2.md` = 下一层的计划。逐笔流水与 S 编号语义基线已归档，考古用 `git show fa46a87:docs/ROADMAP.md` 与 `git show fa46a87:docs/SEMANTICS.md`。
+- 文档分工：`AGENTS.md` = 纪律与命令（门的措辞契约在这里，例：语料计数句是 `doc-counters` 的正则目标）；`docs/ROADMAP.md` = 决策与阶段判据；本文 = 架构史与不变量；`docs/RUNTIME_API.md` = runtime ↔ emitter 契约；`docs/TIER2.md` = 下一层的计划（Tier 2 四阶段收口后归档，考古用 `git show ca95311:docs/TIER2.md`）。逐笔流水与 S 编号语义基线已归档，考古用 `git show fa46a87:docs/ROADMAP.md` 与 `git show fa46a87:docs/SEMANTICS.md`。

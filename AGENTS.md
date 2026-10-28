@@ -4,7 +4,7 @@
 
 GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
-Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupported`（D4）；Tier 2（`docs/TIER2.md`）四阶段**已收口**：七个值类型整族落地（D6）、引擎类实例构造与成员面放行（`Node` / `Node2D` / `Control` / `Node3D` 四支基类 + 类体裸名读写）、节点树与场景通知路线打通（`.tscn` 编译期展树 + `sceneRun` 帧环 + 分组查询），没量过的形状仍一律 `UnsupportedError`（D7 引用计数按 γ 记档不落地）。
+Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupported`（D4）；Tier 2 四阶段**已收口**：七个值类型整族落地（D6）、引擎类实例构造与成员面放行（`Node` / `Node2D` / `Control` / `Node3D` 四支基类 + 类体裸名读写）、节点树与场景通知路线打通（`.tscn` 编译期展树 + `sceneRun` 帧环 + 分组查询），没量过的形状仍一律 `UnsupportedError`（D7 引用计数按 γ 记档不落地）。
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`），不靠"看着对"。
 核心技术：tree-sitter（WASM 语法，`tree-sitter-gdscript` submodule）、scriptc（AOT 出原生 exe）。
@@ -70,7 +70,7 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GD
 
 - `docs/ROADMAP.md` — 已拍板决策（D1–D8、A–I）/ 阶段判据 / Tier 1 收口状态快照
 - `docs/ARCHITECTURE.md` — 架构史与不变量（D8 正文：出货模型、阶段契约、模块布局、尺寸棘轮、依赖图纪律、发射面、实测出处）
-- `docs/TIER2.md` — Tier 2（宿主与引擎 API、七个值类型、对象生命周期）的阶段、判据、取证清单与待拍板问题
+- `docs/TIER2.md` — Tier 2（宿主与引擎 API、七个值类型、对象生命周期）的阶段、判据、取证清单与十二条待拍板落点；四阶段收口后已归档，需要时 `git show ca95311:docs/TIER2.md` 取回
 - `docs/RUNTIME_API.md` — runtime ↔ emitter 契约（v1，签名冻结；覆盖面口径见 §0）
 - `README.md` — CLI 用法、运行时打包模式、测试分层详解
 - 历史逐笔台账与 S 编号语义基线（原 `docs/SEMANTICS.md` 与 ROADMAP 的逐笔流水）已归档，需要时 `git show fa46a87:docs/SEMANTICS.md` / `git show fa46a87:docs/ROADMAP.md` 取回
