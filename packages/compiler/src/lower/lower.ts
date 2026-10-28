@@ -758,46 +758,17 @@ function lowerExprInner(n: SyntaxNode): Expr {
   }
 }
 
-const MUL_LEVEL: Record<string, number> = { "**": 2, "*": 1, "/": 1, "%": 1 };
-
 function lowerBinary(n: SyntaxNode, c: Loc): Expr {
   const op = operatorOf(n);
   if (!inBrackets(n)) {
     const tok = n.children.find((k) => !k.isNamed) ?? null;
     checkAfterToken(n, tok, field(n, "right"), `Expected expression after "${op}" operator.`);
   }
-  if (MUL_LEVEL[op] === undefined) {
-    const left = lowerOperand(need(field(n, "left"), "左操作数"));
-    const right = need(field(n, "right"), "右操作数");
-    if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
-    if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
-    return { kind: "binary", op, left, right: lowerExpr(right), loc: c };
-  }
-  const operands: SyntaxNode[] = [];
-  const ops: Array<{ op: string; node: SyntaxNode }> = [];
-  collectMulChain(n, operands, ops);
-  let at = 0;
-  const climb = (min: number): Expr => {
-    let left = lowerOperand(operands[at++]!);
-    while (at - 1 < ops.length && MUL_LEVEL[ops[at - 1]!.op]! >= min) {
-      const step = ops[at - 1]!;
-      const right = climb(MUL_LEVEL[step.op]! + 1);
-      left = { kind: "binary", op: step.op, left, right, loc: loc(step.node) };
-    }
-    return left;
-  };
-  return climb(1);
-}
-
-/** 摊平只吃没有括号包着的同层二元节点：`parenthesized_expression` 是另一种节点，天然挡住合并。 */
-function collectMulChain(n: SyntaxNode, operands: SyntaxNode[], ops: Array<{ op: string; node: SyntaxNode }>): void {
-  if (n.type === "binary_operator" && MUL_LEVEL[operatorOf(n)] !== undefined) {
-    collectMulChain(need(field(n, "left"), "左操作数"), operands, ops);
-    ops.push({ op: operatorOf(n), node: n });
-    collectMulChain(need(field(n, "right"), "右操作数"), operands, ops);
-    return;
-  }
-  operands.push(n);
+  const left = lowerOperand(need(field(n, "left"), "左操作数"));
+  const right = need(field(n, "right"), "右操作数");
+  if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
+  if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
+  return { kind: "binary", op, left, right: lowerExpr(right), loc: c };
 }
 
 
