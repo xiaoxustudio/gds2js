@@ -128,6 +128,12 @@ export class Cursor {
     return this.lineIndent(this.lineIndex()) < this.stack[this.stack.length - 1]!;
   }
 
+  /** 当前逻辑行的有效缩进深过栈顶：手臂换行接身体那一形（437），身体不能被当成守卫表达式粘走；
+   *  而与手臂同缩进的换行（318）引擎照样收进 `pattern_guard`，只在下行按跨行那一句拒。 */
+  deeperThanBlock(): boolean {
+    return this.lineIndent(this.lineIndex()) > this.stack[this.stack.length - 1]!;
+  }
+
   /**
    * 冒号之后开块体：冒号后同一行就有内容是内联体（返回假）；否则看当前记号所在行的有效缩进，
    * 比栈顶深就压栈（返回真，游标已经在块体首个记号上，不用挪）。

@@ -1,5 +1,5 @@
 /**
- * 语料面：ir / sema / emit-guards / emit-invariants / parse-diff 五个门要的东西过一道。
+ * 语料面：ir / sema / emit-guards / emit-invariants / parse-diff / parse-reject-golden 六个门要的东西过一道。
  *
  * 直接复用 tools/lib.mjs 而不另抄一份：它与 golden.mjs / compile.ts / 各 bench 共用同一份
  * 口径，抄一份就会漂（尤其 godotOk 的正则、与 listCases 对 000- 探头的排除），

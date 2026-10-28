@@ -74,11 +74,13 @@ export function continuationErr(sentence: string, at?: SyntaxNode): never {
 }
 
 /** 手写解析器交上来的语法错已经带着引擎原文句子与它点名的那一行，直接抛，不再从树上重扫。
+ *  还没对过引擎读数的那一处（`sentence` 是空串）也照拒不误，只是句子换成我们自己的，绝不静默放过。
  *  tree-sitter 那一路恒交空数组，所以这道判据对旧路完全无感。 */
 export function syntaxErrOf(tree: Tree): void {
   const issue = tree.syntaxErrors[0];
-  if (issue === undefined || issue.sentence === "") return;
-  const e = new UnsupportedError("line-continuation", issue.sentence);
+  if (issue === undefined) return;
+  const sentence = issue.sentence === "" ? `语法畸形未支持：${issue.context} 在 ${String(issue.row + 1)}:${String(issue.column + 1)} 撞上 ${JSON.stringify(issue.got)}` : issue.sentence;
+  const e = new UnsupportedError(issue.code, sentence);
   (e as LineCarrying).line = issue.reportRow + 1;
   throw e;
 }

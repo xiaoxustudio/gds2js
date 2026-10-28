@@ -19,6 +19,8 @@ export type SyntaxIssue = {
   /** 引擎点名的是哪一行（0 基）。它常常不是失败点那一行：`match` 手臂族报的是首个 pattern 的行，
    *  表头族报的是 `match` 关键字的行 —— 十条语料用例（428/429/430/433/434/435/436/437/438/439）逐条量过。 */
   reportRow: number;
+  /** 响亮拒的方括号里那一段，跟着句子族走：读写器一族是 `property-setget`，其余是 `line-continuation`。 */
+  code: string;
 };
 
 export const SENTENCES = {
@@ -30,6 +32,12 @@ export const SENTENCES = {
   matchSubjectColon: 'Expected ":" after "match" expression.',
   matchEmptyBlock: 'Expected an indented block after "match" statement.',
   parenClose: 'Expected closing ")" after grouping expression.',
+  accGetColonOrParen: 'Expected ":" or "(" after "get".',
+  accSetParen: 'Expected "(" after "set".',
+  accGetterName: 'Expected getter function name after "=".',
+  accSetterName: 'Expected setter function name after "=".',
+  accBlockEnd: "Expected end of indented block for property.",
+  varTypeAfterColon: 'Expected type after ":"',
 } as const;
 export class GdSyntaxError extends Error {
   readonly issue: SyntaxIssue;

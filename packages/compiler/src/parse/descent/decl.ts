@@ -2,7 +2,20 @@ import { parseRhs, parseString, parseType } from "./expr";
 import type { CsNode } from "../cst";
 import type { Parser } from "./state";
 import { parseBody, parseParametersOf } from "./stmt";
+import { GdSyntaxError, SENTENCES } from "./diag";
 import type { Tok } from "./tokens";
+
+const ACC = "property-setget";
+
+/** `var` 没写型时，读写器那一段畸形报的是类型那一句（读数 `tmp/probe-inneracc/{m1.mts,compare32.txt}`）。 */
+function relabel(e: unknown, sentence: string, reportRow: number, code: string): unknown {
+  if (e instanceof GdSyntaxError) {
+    e.issue.sentence = sentence;
+    e.issue.reportRow = reportRow;
+    e.issue.code = code;
+  }
+  return e;
+}
 
 const REMOTE = new Set(["remote", "master", "puppet", "remotesync", "mastersync", "puppetsync"]);
 
@@ -50,7 +63,7 @@ function parseArgumentsOf(p: Parser, field: string): void {
   b.close(field);
 }
 
-export function parseVariable(p: Parser, field: string, anns: CsNode[] = []): void {
+export function parseVariable(p: Parser, field: string, anns: CsNode[] = [], members = false): void {
   const b = p.b;
   b.open("variable_statement");
   emitAnnotations(p, anns);
@@ -66,33 +79,43 @@ export function parseVariable(p: Parser, field: string, anns: CsNode[] = []): vo
   b.anon(p.expectWord("var", "var"), "");
   if (!p.atKind("ident")) p.fail(["变量名"], "var");
   b.leaf("name", p.take(), "name");
-  parseVarTail(p);
-  if (p.atPunct(":")) parseSetget(p);
+  const typed = parseVarTail(p);
+  if (p.atPunct(":")) {
+    const colonRow = p.peek().row;
+    try {
+      parseSetget(p);
+    } catch (e) {
+      if (typed || members) throw e;
+      throw relabel(e, SENTENCES.varTypeAfterColon, colonRow, "line-continuation");
+    }
+  }
   b.close(field);
 }
 
 /** `: 类型` / `:= 值` / `: 类型 = 值` / `= 值` 四种尾巴，grammar.js:272-279。
- *  注意 `inferred_type` 自己就含了 `:=`（或 `:` 与 `=` 两个记号），后面**不再**另有一个 `=`。 */
-function parseVarTail(p: Parser): void {
+ *  注意 `inferred_type` 自己就含了 `:=`（或 `:` 与 `=` 两个记号），后面**不再**另有一个 `=`。
+ *  交回「有没有写型」：读写器那一段畸形时报哪一句要看它（见 `relabel`）。 */
+function parseVarTail(p: Parser): boolean {
   const b = p.b;
   if (p.atPunct(":=") || (p.atPunct(":") && p.atPunct("=", 1))) {
     parseInferredOf(p);
     parseRhs(p, "value");
-    return;
+    return false;
   }
   if (p.atPunct(":") && !p.colonOpensBlock()) {
     b.anon(p.take(), "");
     parseType(p, "type");
-    if (p.atPunct("=")) {
+    if (p.atPunct("=") && !p.atLineHead()) {
       b.anon(p.take(), "");
       parseRhs(p, "value");
     }
-    return;
+    return true;
   }
-  if (p.atPunct("=")) {
+  if (p.atPunct("=") && !p.atLineHead()) {
     b.anon(p.take(), "");
     parseRhs(p, "value");
   }
+  return false;
 }
 
 function parseInferredOf(p: Parser): void {
@@ -116,12 +139,25 @@ function parseSetget(p: Parser): void {
       if (p.atEof() || p.atBodyEnd() || p.dedented()) break;
       p.flush();
       if (p.atEof() || p.atBodyEnd() || p.dedented()) break;
-      if (p.atWord("get") && !p.atPunct("=", 1)) parseGetBody(p);
-      else if (p.atWord("set") && !p.atPunct("=", 1)) parseSetBody(p);
-      else if (p.atWord("get") || p.atWord("set")) parseSetgetAssign(p);
-      else p.fail(['"get"', '"set"'], "setget");
+      let assigned: boolean;
+      if (p.atWord("get") && !p.atPunct("=", 1)) {
+        parseGetBody(p);
+        assigned = false;
+      } else if (p.atWord("set") && !p.atPunct("=", 1)) {
+        parseSetBody(p);
+        assigned = false;
+      } else if (p.atWord("get") || p.atWord("set")) {
+        parseSetgetAssign(p);
+        assigned = true;
+      } else p.fail(['"get"', '"set"'], "setget");
       p.flush();
-      if (p.atPunct(",")) b.anon(p.take(), "");
+      if (p.atEof() || p.dedented()) break;
+      if (p.atPunct(",")) {
+        b.anon(p.take(), "");
+        continue;
+      }
+      if (!assigned && (p.atWord("get") || p.atWord("set"))) continue;
+      p.fail(['","'], "setget", SENTENCES.accBlockEnd, -1, ACC);
     }
     p.c.closeBlock();
     b.close("setget");
@@ -159,21 +195,24 @@ function parseSetgetAssign(p: Parser): void {
   const kw = p.take();
   b.anon(kw, "");
   b.anon(p.expectPunct("=", "setget"), "");
-  if (!p.atKind("ident")) p.fail(["访问器函数名"], "setget");
-  b.leaf(kw.text === "get" ? "getter" : "setter", p.take(), kw.text);
+  const getter = kw.text === "get";
+  if (!p.atKind("ident") || p.atLineHead()) p.fail(["访问器函数名"], "setget", getter ? SENTENCES.accGetterName : SENTENCES.accSetterName, kw.row, ACC);
+  b.leaf(getter ? "getter" : "setter", p.take(), kw.text);
 }
 
 function parseGetBody(p: Parser): void {
   const b = p.b;
   b.open("get_body");
-  b.anon(p.expectWord("get", "setget"), "");
+  const kw = p.expectWord("get", "setget");
+  b.anon(kw, "");
   if (p.atPunct("(")) {
     b.openAnon("()");
     b.anon(p.take(), "");
     b.anon(p.expectPunct(")", "setget"), "");
     b.close("");
   }
-  const colon = p.expectPunct(":", "setget");
+  if (!p.atPunct(":")) p.fail(['":"', '"("'], "setget", SENTENCES.accGetColonOrParen, kw.row, ACC);
+  const colon = p.take();
   b.anon(colon, "");
   parseBody(p, "body", colon);
   b.close("get");
@@ -182,7 +221,9 @@ function parseGetBody(p: Parser): void {
 function parseSetBody(p: Parser): void {
   const b = p.b;
   b.open("set_body");
-  b.anon(p.expectWord("set", "setget"), "");
+  const kw = p.expectWord("set", "setget");
+  b.anon(kw, "");
+  if (!p.atPunct("(")) p.fail(['"("'], "setget", SENTENCES.accSetParen, kw.row, ACC);
   parseParametersOf(p);
   b.setLastField("");
   const colon = p.expectPunct(":", "setget");
@@ -319,11 +360,11 @@ export function parseFunction(p: Parser, field: string, anns: CsNode[] = [], sta
     b.anon(p.take(), "");
     parseArgumentsOf(p, "arguments");
   }
-  if (p.atPunct("->")) {
+  if (p.atPunct("->") && !p.atLineHead()) {
     b.anon(p.take(), "");
     parseType(p, "return_type");
   }
-  if (p.atPunct(":")) {
+  if (p.atPunct(":") && !p.atLineHead()) {
     const colon = p.take();
     b.anon(colon, "");
     parseBody(p, "body", colon);

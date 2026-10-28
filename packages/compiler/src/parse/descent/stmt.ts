@@ -150,7 +150,7 @@ function parseDecl(p: Parser, field: string, anns: CsNode[], members: boolean): 
         parseFunction(p, field, anns, kw, members);
         return;
       }
-      parseVariable(p, field, anns);
+      parseVariable(p, field, anns, members);
       return;
     case "class":
       parseClassDefinition(p, field, anns);
@@ -170,7 +170,7 @@ function parseDecl(p: Parser, field: string, anns: CsNode[], members: boolean): 
     case "var":
     case "onready":
     case "export":
-      parseVariable(p, field, anns);
+      parseVariable(p, field, anns, members);
       return;
     default:
       if (members) p.fail(["类成员"], "class-node");
@@ -361,7 +361,8 @@ function parsePatternSection(p: Parser): void {
 
 /** 逗号之后还跟不跟一个 pattern。428 的 `1,:` 就卡在这里，引擎那一句是 `Expected expression for match pattern.`。 */
 function patternExprAhead(p: Parser): boolean {
-  if (p.atEof() || p.atLineHead()) return false;
+  if (p.atEof()) return false;
+  if (p.atLineHead() && p.deeperThanBlock()) return false;
   if (p.atPunct(":") || p.atPunct(",") || p.atPunct(")") || p.atPunct("]") || p.atPunct("}")) return false;
   return true;
 }

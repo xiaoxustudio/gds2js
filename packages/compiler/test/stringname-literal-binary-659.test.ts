@@ -1,12 +1,15 @@
 /** 字面量直接点方法**再接一个运算符**的收形（S659，CST 读数 `tmp/probe658/cstop2.mts`，值一侧随语料件 410 的 golden 对账）。
  *  vendored 语法把接收者吞进 ERROR：`arguments( string , ERROR(string_name) , binary_operator(base_call, OP, 右) )`，
  *  折法是「ERROR 里的字面量 + 运算符节点 left 槽那条 base_call 链」拼成 left，再交回现成的 `lowerBinary` 走运算符与结合级。
- *  只认量过的这一形：字面量在右操作数、两侧都是字面量链、运算符套运算符、三元 —— 都没量过，照旧响亮拒。 */
+ *  手写解析器不再吐 ERROR，这一族的四形（字面量在右操作数、两侧都是字面量链、运算符套运算符、三元）
+ *  与名字链同形落地，本文件按「与名字链同形」对账，不再钉那四句事故拒答。 */
 import { describe, expect, it } from "vitest";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const src = (expr: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint("S|", ${expr})\n\tquit()\n`;
+
+const DESCENT = process.env.GDS_PARSER === "ts";
 
 const findFirst = (node: unknown, kind: string): Record<string, unknown> | null => {
   if (node === null || typeof node !== "object") return null;
@@ -21,6 +24,29 @@ const findFirst = (node: unknown, kind: string): Record<string, unknown> | null 
 
 const bin = async (expr: string): Promise<Record<string, unknown> | null> =>
   findFirst(await lower(await parseSource(src(expr))), "binary");
+
+/** 把接收者与 `loc` 抹平之后的 IR 形状：字面量链与名字链只差这两处，其余应当逐字段同形。 */
+const shape = (o: unknown): unknown => {
+  if (Array.isArray(o)) return o.map(shape);
+  if (o === null || typeof o !== "object") return o;
+  const r = o as Record<string, unknown>;
+  if (r.kind === "lit" || r.kind === "ident") return { kind: "operand" };
+  return Object.fromEntries(Object.keys(r).filter((k) => k !== "loc").map((k) => [k, shape(r[k])]));
+};
+
+const firstOf = async (expr: string, ...kinds: string[]): Promise<unknown> => {
+  const hit = (o: unknown): unknown => {
+    if (o === null || typeof o !== "object") return null;
+    const r = o as Record<string, unknown>;
+    if (typeof r.kind === "string" && kinds.includes(r.kind)) return r;
+    for (const k of Object.keys(r)) {
+      const g = hit(r[k]);
+      if (g !== null) return g;
+    }
+    return null;
+  };
+  return hit(await lower(await parseSource(src(expr))));
+};
 
 const BIN = [
   '&"ab".capitalize() + "z"',
@@ -62,24 +88,27 @@ describe("lower · 字面量点方法再接一个运算符", () => {
     expect((await bin('NodePath("a/b").is_absolute() or true'))?.op).toBe("or");
   });
 
-  it("两侧都是字面量链那一形没量过，照旧响亮拒", async () => {
-    const tree = await parseSource(src('&"ab".length() + &"cd".length()'));
-    expect(() => lower(tree)).toThrow(/未支持/);
-  });
-
-  it("运算符套运算符（left 槽是 binary_operator）没量过，照旧响亮拒", async () => {
-    const tree = await parseSource(src('&"ab".length() * 2 + 1'));
-    expect(() => lower(tree)).toThrow(/未支持/);
-  });
-
-  it("字面量在右操作数那一形没量过，照旧响亮拒", async () => {
-    const tree = await parseSource(src('2 + &"ab".length()'));
-    expect(() => lower(tree)).toThrow(/未支持/);
-  });
-
-  it("三元那一形没量过，照旧响亮拒", async () => {
-    const tree = await parseSource(src('&"ab".length() if true else 0'));
-    expect(() => lower(tree)).toThrow(/未支持/);
+  // 这四形此前拒答，是 vendored 语法的拼装事故而不是引擎读数：tree-sitter 把字面量接收者吞进 ERROR，
+  // 下行的 `recoverLiteralCall` 只认「字面量链在 left 槽」那一种拼法，其余三形就落到「表达式 ERROR 未支持」。
+  // 手写解析器交出干净的 `binary_operator(call, …)` / `ternary` 之后，四形走的都是名字链同一条已量过的路：
+  // 接收者那一头的值逐形对过 4.6.3（S651），组合后的产物在本机跑通，读数是 4 / 5 / 4 / 2 / 0。
+  // 迁移期两路都要绿，所以按影子开关分岔；收口那一提交把 `DESCENT` 这个分岔连开关一起删掉。
+  const TWINS: Array<[string, string]> = [
+    ['&"ab".length() + &"cd".length()', "q.length() + w.length()"],
+    ['&"ab".length() * 2 + 1', "q.length() * 2 + 1"],
+    ['2 + &"ab".length()', "2 + q.length()"],
+    ['&"ab".length() if true else 0', "q.length() if true else 0"],
+  ];
+  it.each(TWINS)("%s", async (expr, twin) => {
+    if (!DESCENT) {
+      const tree = await parseSource(src(expr));
+      expect(() => lower(tree)).toThrow(/未支持/);
+      return;
+    }
+    const kinds = expr.includes(" if ") ? ["ternary"] : ["binary"];
+    const got = shape(await firstOf(expr, ...kinds));
+    expect(got, `源：\n${src(expr)}\n对照：${twin}`).not.toBeNull();
+    expect(got).toEqual(shape(await firstOf(twin, ...kinds)));
   });
 
   it("字面量不点方法直接参与运算，本来就走常规路（不是这一族的格子）", async () => {

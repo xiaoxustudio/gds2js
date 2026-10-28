@@ -21,7 +21,7 @@ export class Parser {
     this.b = new Builder(src);
     this.c = new Cursor(lexed.tokens);
     for (const i of lexed.issues) {
-      this.issues.push({ at: i.at, row: i.row, column: i.col, got: "", expected: [], context: "lex", tokens: lexed.tokens, sentence: "", reportRow: i.row });
+      this.issues.push({ at: i.at, row: i.row, column: i.col, got: "", expected: [], context: "lex", tokens: lexed.tokens, sentence: "", reportRow: i.row, code: "line-continuation" });
       void i.message;
     }
   }
@@ -100,6 +100,11 @@ export class Parser {
     return this.c.dedented();
   }
 
+  deeperThanBlock(): boolean {
+    this.stash();
+    return this.c.deeperThanBlock();
+  }
+
   /** 块体到此为止：撞上 `_body_end`（`,` `)` `]` `}`）。 */
   atBodyEnd(): boolean {
     this.stash();
@@ -139,9 +144,9 @@ export class Parser {
   }
 
 
-  expectPunct(text: string, context: string, sentence = "", reportRow = -1): Tok {
+  expectPunct(text: string, context: string, sentence = "", reportRow = -1, code = "line-continuation"): Tok {
     if (this.atPunct(text)) return this.take();
-    return this.fail([`"${text}"`], context, sentence, reportRow);
+    return this.fail([`"${text}"`], context, sentence, reportRow, code);
   }
 
   expectWord(text: string, context: string): Tok {
@@ -154,7 +159,7 @@ export class Parser {
     return this.fail([kind], context);
   }
 
-  fail(expected: string[], context: string, sentence = "", reportRow = -1): never {
+  fail(expected: string[], context: string, sentence = "", reportRow = -1, code = "line-continuation"): never {
     const t = this.peek();
     const issue: SyntaxIssue = {
       at: t.start,
@@ -166,6 +171,7 @@ export class Parser {
       tokens: this.c.toks,
       sentence,
       reportRow: reportRow < 0 ? t.row : reportRow,
+      code,
     };
     this.issues.push(issue);
     throw new GdSyntaxError(issue, `${context}: 期望 ${expected.join(" / ")}，实得 ${JSON.stringify(issue.got)}（${String(issue.row + 1)}:${String(issue.column + 1)}）`);
