@@ -21,7 +21,7 @@ export class Parser {
     this.b = new Builder(src);
     this.c = new Cursor(lexed.tokens);
     for (const i of lexed.issues) {
-      this.issues.push({ at: i.at, row: i.row, column: i.col, got: "", expected: [], context: "lex", tokens: lexed.tokens });
+      this.issues.push({ at: i.at, row: i.row, column: i.col, got: "", expected: [], context: "lex", tokens: lexed.tokens, sentence: "", reportRow: i.row });
       void i.message;
     }
   }
@@ -139,9 +139,9 @@ export class Parser {
   }
 
 
-  expectPunct(text: string, context: string): Tok {
+  expectPunct(text: string, context: string, sentence = "", reportRow = -1): Tok {
     if (this.atPunct(text)) return this.take();
-    return this.fail([`"${text}"`], context);
+    return this.fail([`"${text}"`], context, sentence, reportRow);
   }
 
   expectWord(text: string, context: string): Tok {
@@ -154,7 +154,7 @@ export class Parser {
     return this.fail([kind], context);
   }
 
-  fail(expected: string[], context: string): never {
+  fail(expected: string[], context: string, sentence = "", reportRow = -1): never {
     const t = this.peek();
     const issue: SyntaxIssue = {
       at: t.start,
@@ -164,6 +164,8 @@ export class Parser {
       expected,
       context,
       tokens: this.c.toks,
+      sentence,
+      reportRow: reportRow < 0 ? t.row : reportRow,
     };
     this.issues.push(issue);
     throw new GdSyntaxError(issue, `${context}: 期望 ${expected.join(" / ")}，实得 ${JSON.stringify(issue.got)}（${String(issue.row + 1)}:${String(issue.column + 1)}）`);

@@ -73,6 +73,13 @@ export function continuationErr(sentence: string, at?: SyntaxNode): never {
   throw e;
 }
 
+/** 手写解析器交上来的语法错已经带着引擎原文句子与它点名的那一行，直接抛，不再从树上重扫。 */
+export function syntaxErrAtRow(sentence: string, row: number): never {
+  const e = new UnsupportedError("line-continuation", sentence);
+  (e as LineCarrying).line = row + 1;
+  throw e;
+}
+
 export function checkAfterToken(n: SyntaxNode, token: SyntaxNode | null, value: SyntaxNode | null, sentence: string): void {
   if (token && value && value.startPosition.row > token.startPosition.row) continuationErr(sentence, token);
 }

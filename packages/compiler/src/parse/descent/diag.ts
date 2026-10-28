@@ -14,7 +14,23 @@ export type SyntaxIssue = {
   expected: string[];
   context: string;
   tokens: Tok[];
+  /** Godot 4.6.3 的报错原文。空串表示这一处还没有对过引擎读数，`lower` 不会替它编句子。 */
+  sentence: string;
+  /** 引擎点名的是哪一行（0 基）。它常常不是失败点那一行：`match` 手臂族报的是首个 pattern 的行，
+   *  表头族报的是 `match` 关键字的行 —— 十条语料用例（428/429/430/433/434/435/436/437/438/439）逐条量过。 */
+  reportRow: number;
 };
+
+export const SENTENCES = {
+  matchPatternExpr: "Expected expression for match pattern.",
+  matchGuardColon: 'Expected ":" after "match" pattern guard.',
+  matchGuardExpr: 'Expected expression for pattern guard after "when".',
+  matchPatternsColon: 'Expected ":" or "when" after "match" patterns.',
+  matchSubjectExpr: 'Expected expression to test after "match".',
+  matchSubjectColon: 'Expected ":" after "match" expression.',
+  matchEmptyBlock: 'Expected an indented block after "match" statement.',
+  parenClose: 'Expected closing ")" after grouping expression.',
+} as const;
 export class GdSyntaxError extends Error {
   readonly issue: SyntaxIssue;
 

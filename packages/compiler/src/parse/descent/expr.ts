@@ -1,6 +1,7 @@
 import type { Tok } from "./tokens";
 import type { Parser } from "./state";
 import { parseLambda } from "./stmt";
+import { SENTENCES } from "./diag";
 
 /**
  * grammar.js:1-24 的 PREC 阶梯，一处刻意偏离：`**` 从 `PREC.times` 抬到独立一层、仍在 times 之上。
@@ -246,7 +247,7 @@ function parseAtom(p: Parser): void {
         b.flush();
         parseRhs(p, "");
         b.flush();
-        b.anon(p.expectPunct(")", "paren"), "");
+        b.anon(p.expectPunct(")", "paren", SENTENCES.parenClose), "");
         b.close("");
         return;
       case "[":

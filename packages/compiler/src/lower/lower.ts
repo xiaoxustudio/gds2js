@@ -22,7 +22,7 @@ import type {
   TypeRef,
   VarDecl,
 } from "./ir";
-import { accessorTokenErr, checkAfterToken, checkColonHere, continuationErr, field, inBrackets, indexParents, type LineCarrying, loc, lowerType, MATCH_PATTERN_COLON, matchMalformedScan, named, need, nextNamedSib, operatorOf, operatorToken, tokenOf } from "./cst";
+import { accessorTokenErr, checkAfterToken, checkColonHere, continuationErr, field, inBrackets, indexParents, type LineCarrying, loc, lowerType, MATCH_PATTERN_COLON, matchMalformedScan, named, need, nextNamedSib, operatorOf, operatorToken, syntaxErrAtRow, tokenOf } from "./cst";
 import { lowerIntLit, stripAmp, stripCaret, unquote } from "./lit";
 
 
@@ -69,6 +69,8 @@ export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
   markLiteralCalls(tree.rootNode);
+  const issue = tree.syntaxErrors[0];
+  if (issue !== undefined && issue.sentence !== "") syntaxErrAtRow(issue.sentence, issue.reportRow);
   if (tree.rootNode.hasError) {
     const hit = matchMalformedScan(tree.rootNode);
     if (hit !== null) continuationErr(hit.sentence, hit.at);

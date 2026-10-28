@@ -1,4 +1,5 @@
 import { parseExpression, parseRhs, parseType } from "./expr";
+import { GdSyntaxError, SENTENCES } from "./diag";
 import type { Parser } from "./state";
 import type { CsNode } from "../cst";
 import {
@@ -282,12 +283,23 @@ function parseWhile(p: Parser, field: string): void {
 function parseMatch(p: Parser, field: string): void {
   const b = p.b;
   b.open("match_statement");
-  b.anon(p.expectWord("match", "match"), "");
-  parseExpression(p, "value");
-  const colon = p.expectPunct(":", "match");
+  const kw = p.expectWord("match", "match");
+  b.anon(kw, "");
+  // 表头族（主题缺表达式 / 主题后缺冒号 / 后面没有缩进块）引擎点名的都是 `match` 那一行。
+  try {
+    parseExpression(p, "value");
+  } catch (e) {
+    throw remark(e, SENTENCES.matchSubjectExpr, kw.row);
+  }
+  let colon: Tok;
+  try {
+    colon = p.expectPunct(":", "match");
+  } catch (e) {
+    throw remark(e, SENTENCES.matchSubjectColon, kw.row);
+  }
   b.anon(colon, "");
   b.open("match_body", after(colon));
-  if (!p.c.openBlock()) p.fail(["缩进的手臂"], "match");
+  if (!p.c.openBlock()) p.fail(["缩进的手臂"], "match", SENTENCES.matchEmptyBlock, kw.row);
   for (;;) {
     if (p.atEof() || p.atBodyEnd() || p.dedented()) break;
     p.flush();
@@ -301,32 +313,90 @@ function parseMatch(p: Parser, field: string): void {
   b.close(field);
 }
 
+/**
+ * 手臂族一律报**首个 pattern 那一行**，不是失败点那一行。十条语料用例逐条量过：
+ * 434/435 的手臂在第 5 行、失败点在下一行的 `print`；436 的第二条手臂在第 7 行；
+ * 437 的 `1 when` 在第 5 行、失败点却跑到第 7 行的 `quit`。四条都归到「首 pattern 行」这一个规则上。
+ */
 function parsePatternSection(p: Parser): void {
   const b = p.b;
+  const armRow = p.peek().row;
   b.open("pattern_section");
-  for (;;) {
-    if (p.atWord("var")) {
-      b.open("pattern_binding");
+  try {
+    for (;;) {
+      if (p.atWord("var")) {
+        b.open("pattern_binding");
+        b.anon(p.take(), "");
+        if (!p.atKind("ident")) p.fail(["绑定名"], "pattern", SENTENCES.matchPatternExpr);
+        b.leaf("identifier", p.take(), "");
+        b.close("");
+      } else {
+        parsePatternExpr(p, SENTENCES.matchPatternExpr);
+      }
+      if (!p.atPunct(",")) break;
       b.anon(p.take(), "");
-      if (!p.atKind("ident")) p.fail(["绑定名"], "pattern");
-      b.leaf("identifier", p.take(), "");
-      b.close("");
-    } else {
-      parseExpression(p, "");
+      if (!patternExprAhead(p)) p.fail(["表达式"], "pattern", SENTENCES.matchPatternExpr);
     }
-    if (!p.atPunct(",")) break;
-    b.anon(p.take(), "");
+    let guarded = false;
+    if (p.atWord("when")) {
+      guarded = true;
+      b.open("pattern_guard");
+      b.anon(p.take(), "");
+      // `1 when` 后面换行接身体时，别让身体被当成守卫表达式粘走 —— 引擎那一句是
+      // `Expected expression for pattern guard after "when".`（437-pattern-guard-empty 第 5 行）。
+      if (!patternExprAhead(p)) p.fail(["表达式"], "pattern", SENTENCES.matchGuardExpr);
+      parsePatternExpr(p, SENTENCES.matchGuardExpr);
+      b.close("");
+    }
+    const want = guarded ? SENTENCES.matchGuardColon : SENTENCES.matchPatternsColon;
+    if (!p.atPunct(":")) p.fail(['":"'], "match", want);
+    const colon = p.take();
+    b.anon(colon, "");
+    parseBody(p, "body", colon);
+  } catch (e) {
+    throw retrack(e, armRow);
   }
-  if (p.atWord("when")) {
-    b.open("pattern_guard");
-    b.anon(p.take(), "");
-    parseExpression(p, "");
-    b.close("");
-  }
-  const colon = p.expectPunct(":", "match");
-  b.anon(colon, "");
-  parseBody(p, "body", colon);
   b.close("");
+}
+
+/** 逗号之后还跟不跟一个 pattern。428 的 `1,:` 就卡在这里，引擎那一句是 `Expected expression for match pattern.`。 */
+function patternExprAhead(p: Parser): boolean {
+  if (p.atEof() || p.atLineHead()) return false;
+  if (p.atPunct(":") || p.atPunct(",") || p.atPunct(")") || p.atPunct("]") || p.atPunct("}")) return false;
+  return true;
+}
+
+function parsePatternExpr(p: Parser, sentence: string): void {
+  try {
+    parseExpression(p, "");
+  } catch (e) {
+    throw resentence(e, sentence);
+  }
+}
+
+function retrack(e: unknown, reportRow: number): unknown {
+  if (e instanceof GdSyntaxError) {
+    e.issue.reportRow = reportRow;
+    return e;
+  }
+  return e;
+}
+
+function remark(e: unknown, sentence: string, reportRow: number): unknown {
+  if (e instanceof GdSyntaxError) {
+    if (e.issue.sentence === "") e.issue.sentence = sentence;
+    e.issue.reportRow = reportRow;
+    return e;
+  }
+  return e;
+}
+
+function resentence(e: unknown, sentence: string): unknown {
+  if (e instanceof GdSyntaxError) {
+    if (e.issue.sentence === "") e.issue.sentence = sentence;
+    return e;
+  }
+  return e;
 }
 
 /** lambda：`func` [名字] 参数 [`->` 类型] `:` 块体。grammar.js:894-902。 */
