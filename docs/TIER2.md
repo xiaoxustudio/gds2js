@@ -151,7 +151,7 @@ f09|GDScriptNativeClass::new|...     str() 三支同名同标签，不带进程�
 
 **判据**：这批动的是**语义增量**，字节门只对存量敏感（见「门序」）；新增用例走 `pnpm test:golden` 建新基线；`emit-surface` / `emit-contract` 必须绿（新名要么进名表要么不发）；**本阶段是预算最紧的一支** —— 落点里 `values/core.ts`、`lower/lower.ts`、`checks/collections.ts`、`packed.ts` 四份都顶格，`runtime/index.ts` / `methods.ts` / `builtins.ts` 三扇门面也要加新类文件的再导出（且新增模块必须仍被 `module-reach` 从入口走到、被 `test:pkgmodes` 打进 bundle），所以**每批开工前先确认阶段零换出的余量够这一批用**，不够就回到阶段零再切一刀，不许临时把登记封顶改大（棘轮只降不升，改大要单独一笔并说明理由）。
 
-### 阶段三 —— 宿主与引擎 API + 对象生命周期
+### 阶段三 —— 宿主与引擎 API + 对象生命周期【四步全落：id 与打印可比、释放时机按 γ 记档不落地、节点树/通知/场景路线通、主循环与退出形状复核过；剩下的都是"没量过的形状"那一档响亮拒】
 
 按依赖拆四步，每步都要先出实测再做实现：
 
