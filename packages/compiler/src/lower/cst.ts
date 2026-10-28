@@ -73,9 +73,8 @@ export function continuationErr(sentence: string, at?: SyntaxNode): never {
   throw e;
 }
 
-/** 手写解析器交上来的语法错已经带着引擎原文句子与它点名的那一行，直接抛，不再从树上重扫。
- *  还没对过引擎读数的那一处（`sentence` 是空串）也照拒不误，只是句子换成我们自己的，绝不静默放过。
- *  tree-sitter 那一路恒交空数组，所以这道判据对旧路完全无感。 */
+/** 解析器交上来的语法错已经带着引擎原文句子与它点名的那一行，直接抛，不再从树上重扫。
+ *  还没对过引擎读数的那一处（`sentence` 是空串）也照拒不误，只是句子换成我们自己的，绝不静默放过。 */
 export function syntaxErrOf(tree: Tree): void {
   const issue = tree.syntaxErrors[0];
   if (issue === undefined) return;

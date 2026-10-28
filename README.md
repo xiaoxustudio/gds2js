@@ -1,13 +1,12 @@
 # gds2js
 
-GDScript 4.x → JavaScript 的 AOT 编译器。管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
+GDScript 4.x → JavaScript 的 AOT 编译器。管线：手写递归下降 CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`）。
 
 ## 构建
 
 ```bash
-pnpm gen:ws     # 用 tree-sitter-cli 生成 gdscript.wasm（语法）
 pnpm build      # turbo run build：产出 packages/gds2js/dist/cli.mjs + runtime.mjs + host.mjs + standalone.cjs + product.mjs（自包含运行时包）
 ```
 
@@ -86,7 +85,7 @@ pnpm test:codegen      # 查生成源码漂移：四张实测生成表（case-ta
 pnpm test:pkgmodes     # single/local 两模式逐用例对齐 golden + 子目录 local + single sourcemap 解码（要 pnpm build）
 pnpm test:scriptc      # scriptc 真编 exe 真跑、逐字节对 Godot golden（要 scriptc）
 pnpm test:export       # export 的 node(SEA) / scriptc 两支各真打一个 exe（要 Windows + pnpm build；SEA 那几格另要 Node ≥ 25.7）
-pnpm test:cli-native   # 原生 gds2js.exe 与 node 侧 CLI 逐字节/逐字等价（要 zig + scriptc + libtree-sitter + pnpm build）
+pnpm test:cli-native   # 原生 gds2js.exe 与 node 侧 CLI 逐字节/逐字等价（要 scriptc + pnpm build）
 
 pnpm test:all          # 两层全跑
 ```
@@ -105,7 +104,7 @@ GDS2JS_CLI_NATIVE_QUICK=1   # cli-native 跳过 ④⑥ 两格 scriptc/SEA 出货
 GDS2JS_CLI_NATIVE_REBUILD=1 # 强制重编原生 exe
 GDS2JS_CLI_NATIVE_NO_REBUILD=1  # exe 过期时拒绝验旧货、直接红
 GDS2JS_SEMA_VERBOSE=1       # sema 逐例打印诊断码
-GODOT_BIN / TS_SRC / ZIG_CC / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落点（同旧版）
+GODOT_BIN / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落点（同旧版）
 ```
 
 `export` 门里 `node/版本门禁` 那一格判的是「runner 的 node 不够新时 CLI 该响亮拒并给出重跑命令」，

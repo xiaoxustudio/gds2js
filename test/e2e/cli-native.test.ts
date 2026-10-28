@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { hasDist, hasScriptc, hasTsSrc, hasZig, isWindows, missing, TS_SRC } from "../support/env";
+import { hasDist, hasScriptc, isWindows, missing } from "../support/env";
 import { ROOT } from "../support/lib-bridge";
 
 const EXE = join(ROOT, "tmp", "cli-native", "gds2js.exe");
@@ -23,11 +23,9 @@ const SINGLE = ["001-int-division", "021-class-basic", "062-string-escapes", "06
 const PROJECT_CASE = "032-preload-load";
 
 const LACK = [
-  !isWindows ? `Windows 平台（当前 ${process.platform}；zig 的 target triple 是 x86_64-windows-gnu）` : null,
+  !isWindows ? `Windows 平台（当前 ${process.platform}；scriptc 出的是 gds2js.exe）` : null,
   !hasDist ? "packages/gds2js/dist（先跑 pnpm build）" : null,
-  !hasZig ? "zig（ZIG_CC 可覆盖）" : null,
   !hasScriptc ? "scriptc" : null,
-  !hasTsSrc ? `libtree-sitter 源码 ${TS_SRC}（TS_SRC 可覆盖）` : null,
 ].filter((x): x is string => x !== null);
 const ready = LACK.length === 0;
 const SKIP_WHY = ready ? "" : `（跳过：${missing(...LACK)}）`;
@@ -120,7 +118,6 @@ function newestInputMtime(): number {
     }
   };
   walk(join(ROOT, "packages"));
-  walk(join(ROOT, "native"));
   const script = statSync(join(ROOT, "tools", "cli-native.mjs")).mtimeMs;
   return script > newest ? script : newest;
 }
@@ -129,11 +126,11 @@ describe.skipIf(!ready)(`原生 CLI 等价性门${SKIP_WHY}`, () => {
   beforeAll(() => {
     const exeStale = existsSync(EXE) && newestInputMtime() > statSync(EXE).mtimeMs;
     if (exeStale && process.env.GDS2JS_CLI_NATIVE_NO_REBUILD === "1") {
-      throw new Error("原生 exe 过期（packages/ 或 native/ 比它新），且设了 GDS2JS_CLI_NATIVE_NO_REBUILD=1 —— 拒绝验旧货。");
+      throw new Error("原生 exe 过期（packages/ 比它新），且设了 GDS2JS_CLI_NATIVE_NO_REBUILD=1 —— 拒绝验旧货。");
     }
-    if (exeStale) console.log("原生 exe 过期（packages/ 或 native/ 比它新），自动重建…");
+    if (exeStale) console.log("原生 exe 过期（packages/ 比它新），自动重建…");
     if (!existsSync(EXE) || REBUILD || exeStale) {
-      console.log("先编原生 CLI（tools/cli-native.mjs，出货形态默认带 --dynamic；含 zig 编 C + scriptc 出货，慢）…");
+      console.log("先编原生 CLI（tools/cli-native.mjs，scriptc 出货，慢）…");
       const r = spawnSync("node", [join(ROOT, "tools", "cli-native.mjs"), "--keep"], {
         encoding: "utf8",
         cwd: ROOT,

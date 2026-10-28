@@ -29,11 +29,6 @@ export const hasGodot = existsSync(GODOT_BIN);
 
 export const hasScriptc = which("scriptc") !== null;
 
-export const hasZig = which(process.env.ZIG_CC ?? "zig") !== null;
-
-export const TS_SRC = process.env.TS_SRC ?? join(ROOT, "tmp", "libtree-sitter");
-export const hasTsSrc = existsSync(join(TS_SRC, "lib", "src", "lib.c"));
-
 export const hasDist = existsSync(join(ROOT, "packages", "gds2js", "dist", "cli.mjs"));
 export const hasStandalone = existsSync(join(ROOT, "packages", "gds2js", "dist", "standalone.cjs"));
 

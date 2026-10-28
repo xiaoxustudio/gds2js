@@ -181,9 +181,6 @@ importers:
       gds2js:
         specifier: workspace:*
         version: link:packages/gds2js
-      tree-sitter-cli:
-        specifier: ^0.27.1
-        version: 0.27.1
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(tsx@4.23.15)(typescript@7.0.2)
@@ -208,19 +205,12 @@ importers:
       '@gds2js/runtime':
         specifier: workspace:*
         version: link:../runtime
-      web-tree-sitter:
-        specifier: ^0.27.0
-        version: 0.27.1
     devDependencies:
       '@gds2js/testkit':
         specifier: workspace:*
         version: link:../testkit
 
   packages/gds2js:
-    dependencies:
-      web-tree-sitter:
-        specifier: ^0.27.0
-        version: 0.27.1
     devDependencies:
       '@gds2js/compiler':
         specifier: workspace:*
@@ -1085,11 +1075,6 @@ packages:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
 
-  tree-sitter-cli@0.27.1:
-    resolution: {integrity: sha512-WFPEjxwscCjZP9uYj0rxT2TyGBkDcXUkGTthrMpxZFGvzXEYsbC3J0633Ps8dd2mMsdsbU8oVwmQ148lLHI7Xw==}
-    engines: {node: '>=12.0.0'}
-    hasBin: true
-
   tsdown@0.22.14:
     resolution: {integrity: sha512-ule7Y+fsAN2iZbLDoo7C4KYljFJNJJ+fLshyn+9gozeTspVersWHxwdGB+Dm2hzA38s6muFnUTl0jK3vJm9ifQ==}
     engines: {node: ^22.18.0 || >=24.11.0}
@@ -1231,9 +1216,6 @@ packages:
         optional: true
       jsdom:
         optional: true
-
-  web-tree-sitter@0.27.1:
-    resolution: {integrity: sha512-qtx0VyUyNRHtL3ze7+v0hCKB/sLcAmY7ZAVp/ZK/bCj0yED8ptvNrr7Vd7DwDyKDWN9baqcUx4uaD2r2ql+6IA==}
 
   why-is-node-running@3.2.1:
     resolution: {integrity: sha512-Tb2FUhB4vUsGQlfSquQLYkApkuPAFQXGFzxWKHHumVz2dK+X1RUm/HnID4+TfIGYJ1kTcwOaCk/buYCEJr6YjQ==}
@@ -1758,8 +1740,6 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
-  tree-sitter-cli@0.27.1: {}
-
   tsdown@0.22.14(tsx@4.23.15)(typescript@7.0.2):
     dependencies:
       ansis: 4.4.0
@@ -1866,8 +1846,6 @@ snapshots:
       '@types/node': 25.9.9
     transitivePeerDependencies:
       - msw
-
-  web-tree-sitter@0.27.1: {}
 
   why-is-node-running@3.2.1: {}
 

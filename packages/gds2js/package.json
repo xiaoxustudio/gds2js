@@ -21,14 +21,12 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsdown && tsdown --config tsdown.standalone.config.ts && tsdown --config tsdown.product.config.ts && node -e \"require('node:fs').copyFileSync('../../gdscript.wasm','dist/gdscript.wasm')\"",
+    "build": "tsdown && tsdown --config tsdown.standalone.config.ts && tsdown --config tsdown.product.config.ts",
     "dev": "tsx cli.ts",
     "watch": "tsdown --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "dependencies": {
-    "web-tree-sitter": "^0.27.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@gds2js/compiler": "workspace:*",
     "@gds2js/runtime": "workspace:*",

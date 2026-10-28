@@ -9,8 +9,6 @@ import { parseSource } from "@gds2js/compiler/parse/parser";
 
 const src = (expr: string): string => `extends SceneTree\n\nfunc _initialize():\n\tprint("S|", ${expr})\n\tquit()\n`;
 
-const DESCENT = process.env.GDS_PARSER === "ts";
-
 const findFirst = (node: unknown, kind: string): Record<string, unknown> | null => {
   if (node === null || typeof node !== "object") return null;
   const o = node as Record<string, unknown>;
@@ -92,19 +90,13 @@ describe("lower · 字面量点方法再接一个运算符", () => {
   // 下行的 `recoverLiteralCall` 只认「字面量链在 left 槽」那一种拼法，其余三形就落到「表达式 ERROR 未支持」。
   // 手写解析器交出干净的 `binary_operator(call, …)` / `ternary` 之后，四形走的都是名字链同一条已量过的路：
   // 接收者那一头的值逐形对过 4.6.3（S651），组合后的产物在本机跑通，读数是 4 / 5 / 4 / 2 / 0。
-  // 迁移期两路都要绿，所以按影子开关分岔；收口那一提交把 `DESCENT` 这个分岔连开关一起删掉。
   const TWINS: Array<[string, string]> = [
     ['&"ab".length() + &"cd".length()', "q.length() + w.length()"],
     ['&"ab".length() * 2 + 1', "q.length() * 2 + 1"],
     ['2 + &"ab".length()', "2 + q.length()"],
     ['&"ab".length() if true else 0', "q.length() if true else 0"],
   ];
-  it.each(TWINS)("%s", async (expr, twin) => {
-    if (!DESCENT) {
-      const tree = await parseSource(src(expr));
-      expect(() => lower(tree)).toThrow(/未支持/);
-      return;
-    }
+  it.each(TWINS)("%s 与名字链同形落地", async (expr, twin) => {
     const kinds = expr.includes(" if ") ? ["ternary"] : ["binary"];
     const got = shape(await firstOf(expr, ...kinds));
     expect(got, `源：\n${src(expr)}\n对照：${twin}`).not.toBeNull();

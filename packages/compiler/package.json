@@ -24,8 +24,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@gds2js/runtime": "workspace:*",
-    "web-tree-sitter": "^0.27.0"
+    "@gds2js/runtime": "workspace:*"
   },
   "devDependencies": {
     "@gds2js/testkit": "workspace:*"

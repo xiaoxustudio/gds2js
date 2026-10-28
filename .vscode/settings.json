@@ -1,6 +1,4 @@
 {
-    "cmake.sourceDirectory": "F:/ex/nodejsEx/gds2js/tree-sitter-gdscript",
-    "cmake.autoDetectSourceDirectory": false,
     "editor.gotoLocation.alternativeDeclarationCommand": "editor.action.revealDefinition",
     "editor.gotoLocation.alternativeDefinitionCommand": "editor.action.revealDefinition",
     "editor.gotoLocation.alternativeTypeDefinitionCommand": "editor.action.revealDefinition",

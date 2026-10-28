@@ -3,18 +3,18 @@
 ## 项目概述
 
 GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
-管线：tree-sitter CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
+管线：手写递归下降 CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
 Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupported`（D4）；Tier 2 四阶段**已收口**：七个值类型整族落地（D6）、引擎类实例构造与成员面放行（`Node` / `Node2D` / `Control` / `Node3D` 四支基类 + 类体裸名读写）、节点树与场景通知路线打通（`.tscn` 编译期展树 + `sceneRun` 帧环 + 分组查询），没量过的形状仍一律 `UnsupportedError`（D7 引用计数按 γ 记档不落地）。
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`），不靠"看着对"。
-核心技术：tree-sitter（WASM 语法，`tree-sitter-gdscript` submodule）、scriptc（AOT 出原生 exe）。
+核心技术：手写递归下降解析器（`packages/compiler/src/parse/descent/`，纯 TS，无 wasm 无 C）、scriptc（AOT 出原生 exe）。
 
 ## 仓库结构（pnpm workspace + Turbo）
 
 | 位置 | 内容 |
 | --- | --- |
 | `packages/runtime` | 运行时内核：值表示 / `ops.*` 动态路径 / `fast.*` 快路径、容器、UTF-32 String、Vector/Color、hash；GDScript 内建函数按族拆在 `runtime/builtin/*.ts`（`builtins.ts` 只剩再导出与两处 hook 接线），方法名与属性面按接收者种类拆在 `runtime/method/*.ts`（`methods.ts` 只留 `method()` 分派器），容器 / 打印 / `%` 格式化 / 型标注盖章拆在 `runtime/values/*.ts`（`values.ts` 只剩门面）；同族模块用目录、目录里不再重复前缀；host 宿主入口 |
-| `packages/compiler` | parse（tree-sitter WASM→CST）→ lower(IR) → analyze → emit；`analyze/` 按判断维度分模块、入口 `analyze/index.ts`；`emit/` 按发射维度分模块、入口 `emit/index.ts`、每模块共享 `emit/context.ts` 的 `EmitContext`；`semantics/` 装 Godot 实测静态表；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
+| `packages/compiler` | parse（手写递归下降→CST）→ lower(IR) → analyze → emit；`analyze/` 按判断维度分模块、入口 `analyze/index.ts`；`emit/` 按发射维度分模块、入口 `emit/index.ts`、每模块共享 `emit/context.ts` 的 `EmitContext`；`semantics/` 装 Godot 实测静态表；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |
@@ -25,7 +25,6 @@ Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupport
 
 ```bash
 pnpm install            # pnpm@12.13.0；开发机 Node >= 25（产物最低 Node >= 25）
-pnpm gen:ws             # tree-sitter-cli 编 gdscript.wasm（先拉 submodule）
 pnpm build              # turbo run build → packages/gds2js/dist/*
 pnpm dev                # tsx 跑 CLI 源码
 pnpm test               # 快层四 project（testkit+runtime+compiler+repo），零外部依赖
@@ -38,11 +37,11 @@ pnpm release            # 版本一致性校验 → build → 门 → release/gd
 pnpm bench / bench:ab / bench:godot / bench:scriptc   # 性能三把尺；收益只认 bench:ab 的 |t|≥2
 ```
 
-E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `ZIG_CC` / `TS_SRC` / `GDS2JS_NODE_BIN`。
+E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `GDS2JS_NODE_BIN`。
 
 ## 架构要点
 
-- **seam 模式**：node 侧与原生 exe 的分岔口是同名的 `*.native.ts` 覆盖原文件（parser / ir-cache / bundle / exec / home 五处），其余源码一行不改；`tools/cli-native.mjs` 装配 scratch 树，zig cc（`-target x86_64-windows-gnu`）编 C shim，scriptc 出 exe。
+- **seam 模式**：node 侧与原生 exe 的分岔口是同名的 `*.native.ts` 覆盖原文件（ir-cache / bundle / exec / home 四处），其余源码一行不改；`tools/cli-native.mjs` 装配 scratch 树，scriptc 出 exe（解析器是纯 TS，这条路上没有 C 也没有 FFI）。
 - **tree-face**：`packages/compiler/src/tree-face.ts` 是产物树 / 内嵌 HOME 布局的唯一清单，三个消费者共用；`test:treeface`（`test/repo/`）对账，改产物树或 HOME 布局先跑它。
 - **双轨值表示**（D1/D2）：编译期能定类型 → 原生直译（`fast.*`）；推断不出 / `Variant` → 装箱走 `ops.*`。int 分轨：安全整数内纯 Number、越界响亮抛错；装箱轨算术升 bigint 按 int64 回绕。
 - **产物**：ESM `.mts`，带可擦除 TS 标注，Node 原生类型擦除直接跑；默认末尾 `await new Main().run()`，`--no-run` 关闭。
