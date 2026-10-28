@@ -11,7 +11,7 @@ const at = (p: string): string => fileURLToPath(new URL(p, import.meta.url));
  * 强制成 1，所以「必须串行」的 project 天生与「放开并行」的不同组。
  * 组间串行 ⇒ 快层总耗时 ≈ 组0 + 组1。
  */
-const GROUP_PARALLEL = 0; // testkit / repo / compiler，都 maxWorkers:3
+const GROUP_PARALLEL = 0; // testkit / repo / compiler，同组共用池子，一律 maxWorkers:8
 const GROUP_RUNTIME = 1; // runtime，maxWorkers:1
 const GROUP_E2E = 2; // e2e，同上；排最后 ⇒ test:all 时先快后慢
 
@@ -33,7 +33,7 @@ export default defineConfig({
           environment: "node",
           include: ["test/**/*.test.ts"],
           pool: "forks",
-          maxWorkers: 3,
+          maxWorkers: 8,
           isolate: true,
           sequence: { groupOrder: GROUP_PARALLEL },
         },
@@ -75,13 +75,13 @@ export default defineConfig({
           root: at("./packages/compiler"),
           environment: "node",
           include: ["test/**/*.test.ts"],
-          // 三个文件互不相干、又都吃 tree-sitter WASM，放开并行把 6s 压到 ~3s。
+          // 三个同组 project 共用一个 worker 池，maxWorkers 必须一字相同（见文件头那道 Vitest 5 硬约束）。
           pool: "forks",
-          maxWorkers: 3,
+          maxWorkers: 8,
           isolate: true,
           fileParallelism: true,
           sequence: { groupOrder: GROUP_PARALLEL },
-          testTimeout: 60_000, // 229 例真解析，给足余量
+          testTimeout: 60_000, // 452 例真解析，给足余量
           hookTimeout: 60_000,
         },
       },
@@ -93,7 +93,7 @@ export default defineConfig({
           environment: "node",
           include: ["test/repo/**/*.test.ts"],
           pool: "forks",
-          maxWorkers: 3,
+          maxWorkers: 8,
           isolate: true,
           sequence: { groupOrder: GROUP_PARALLEL },
         },
