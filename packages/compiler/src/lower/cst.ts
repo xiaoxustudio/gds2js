@@ -73,10 +73,13 @@ export function continuationErr(sentence: string, at?: SyntaxNode): never {
   throw e;
 }
 
-/** 手写解析器交上来的语法错已经带着引擎原文句子与它点名的那一行，直接抛，不再从树上重扫。 */
-export function syntaxErrAtRow(sentence: string, row: number): never {
-  const e = new UnsupportedError("line-continuation", sentence);
-  (e as LineCarrying).line = row + 1;
+/** 手写解析器交上来的语法错已经带着引擎原文句子与它点名的那一行，直接抛，不再从树上重扫。
+ *  tree-sitter 那一路恒交空数组，所以这道判据对旧路完全无感。 */
+export function syntaxErrOf(tree: Tree): void {
+  const issue = tree.syntaxErrors[0];
+  if (issue === undefined || issue.sentence === "") return;
+  const e = new UnsupportedError("line-continuation", issue.sentence);
+  (e as LineCarrying).line = issue.reportRow + 1;
   throw e;
 }
 
