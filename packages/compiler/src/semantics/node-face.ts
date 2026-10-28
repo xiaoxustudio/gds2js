@@ -3,11 +3,13 @@
  *  不在表里的名字照旧发 `call-unknown`。 */
 export const NODE_SELF_METHODS = new Set([
   "add_child",
+  "add_to_group",
   "free",
   "get_child",
   "get_child_count",
   "get_children",
   "get_class",
+  "get_groups",
   "get_index",
   "get_name",
   "get_node",
@@ -17,10 +19,12 @@ export const NODE_SELF_METHODS = new Set([
   "get_tree",
   "has_node",
   "is_inside_tree",
+  "is_in_group",
   "is_queued_for_deletion",
   "move_child",
   "queue_free",
   "remove_child",
+  "remove_from_group",
   "set_name",
 ]);
 

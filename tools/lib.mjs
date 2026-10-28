@@ -142,6 +142,7 @@ export function normalize(text, gdPath = "") {
   out = out.replace(/<([A-Za-z_]\w*)#-?\d+>/g, "<$1#号>");
   out = out.replace(/\biid\|-?\d+(?![\d.])/g, "iid|号");
   out = out.replace(/@([A-Za-z_]\w*)@-?\d+/g, "@$1@号");
+  out = out.replace(/_root_canvas\d+/g, "_root_canvas号");
   out = out.replace(/(^|[\s|,(])_([A-Z]\w*)_-?\d+/g, (_m, p, cls) => `${p}_${cls}_号`);
   const lines = out.split(/\r?\n/);
   const kept = [];

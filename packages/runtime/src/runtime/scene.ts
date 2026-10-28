@@ -1,7 +1,8 @@
-import { V, type Variant } from "./tags";
+import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
+import { GArray } from "./values";
 import { GdScriptObject } from "./object";
-import { nodeAttach, nodeChildren, nodeInit, nodeIsInside, nodePathOf, type NodeRec } from "./node";
+import { nodeAttach, nodeChildren, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodePathOf, type NodeRec } from "./node";
 
 export type SceneSpec = { node: object; name: string; cls: string; children: SceneSpec[] };
 
@@ -11,6 +12,7 @@ export class GdSceneTree extends GdScriptObject {
   __gd_node_name__: string = "";
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
+  __gd_node_groups__: string[] = [];
   root: GdScriptObject;
   currentScene: object | null = null;
   frame = 0;
@@ -72,8 +74,22 @@ export function treeMethod(tree: GdSceneTree, name: string, args: Variant[]): Va
       return V.int(tree.frame);
     case "get_root":
       return V.object(tree.root);
+    case "get_nodes_in_group": {
+      const a = args[0] as Variant | undefined;
+      if (a === undefined) throw new UnsupportedError("node-arity", "get_nodes_in_group() 少了组名实参");
+      if (a.t !== Tag.STRING && a.t !== Tag.STRING_NAME) {
+        throw new UnsupportedError("node-group-arg-type", `get_nodes_in_group() 的组名只量过字符串（收到 ${tagName(a.t)}）`);
+      }
+      const group = String(a.v);
+      const out: Variant[] = [];
+      scenePreOrder(tree.root, (n) => {
+        const rec = nodeFaceOf(n);
+        if (rec !== null && nodeIsInGroup(rec, group)) out.push(V.object(n));
+      });
+      return V.array(GArray.of(out));
+    }
     default:
-      throw new UnsupportedError("scene-tree-method", `SceneTree.${name}() 这一支没量过（create_timer / call_group / get_nodes_in_group 那几支还没读数）`);
+      throw new UnsupportedError("scene-tree-method", `SceneTree.${name}() 这一支没量过（call_group / set_group 那几支还没读数）`);
   }
 }
 

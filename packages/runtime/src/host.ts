@@ -3,7 +3,7 @@ import { deferredPendingCount } from "./runtime/callable";
 import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/object";
 import { V, type Variant } from "./runtime/tags";
-import { GdEngineInstance, nodeAttach, nodeDrainQueued, nodeInit, type NodeRec } from "./runtime/node";
+import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeDrainQueued, nodeInit, type NodeRec } from "./runtime/node";
 import {
   GdSceneTree,
   dispatchHook,
@@ -188,6 +188,7 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
   nodeInit(rootNode as object, rootCls);
   (rootNode as { __gd_node_name__: string }).__gd_node_name__ = rootName;
   nodeAttach(root as unknown as NodeRec, rootNode as unknown as NodeRec);
+  if (rootCls === "Node2D") nodeAddToGroup(rootNode as unknown as NodeRec, `_root_canvas${String((rootNode as GdScriptObject).gdObjectId)}`);
   tree.currentScene = rootNode as object;
   for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object);
 

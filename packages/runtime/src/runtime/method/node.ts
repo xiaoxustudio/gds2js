@@ -11,6 +11,10 @@ import {
   nodeDetach,
   nodeFaceOf,
   nodeFree,
+  nodeGroups,
+  nodeAddToGroup,
+  nodeIsInGroup,
+  nodeRemoveFromGroup,
   nodeMoveChild,
   nodeQueueFree,
   nodeOfVariant,
@@ -52,8 +56,16 @@ function pathArg(args: Variant[], name: string): string {
   return asString(a, "路径实参");
 }
 
-function childArg(args: Variant[], name: string): NodeRec {
+function groupArg(args: Variant[], name: string): string {
   const a = args[0] as Variant | undefined;
+  if (a === undefined) throw new UnsupportedError("node-arity", `Node.${name}() 少了组名实参`);
+  if (a.t !== Tag.STRING && a.t !== Tag.STRING_NAME) {
+    throw new UnsupportedError("node-group-arg-type", `Node.${name}() 的组名只量过字符串（收到 ${tagName(a.t)}）`);
+  }
+  return String(a.v);
+}
+
+function childArg(args: Variant[], name: string): NodeRec {  const a = args[0] as Variant | undefined;
   if (a === undefined) throw new UnsupportedError("node-arity", `Node.${name}() 少了子节点实参`);
   const c = nodeOfVariant(a);
   if (c === null) nodeArgSay(a, name);
@@ -144,6 +156,24 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       return V.nil();
     case "get_name":
       return V.str(rec.__gd_node_name__);
+    case "add_to_group": {
+      if (args.length === 0 || args.length > 2) throw new UnsupportedError("node-arity", `add_to_group() 只量过 1 与 2 个实参（收到 ${args.length} 个）`);
+      const group = groupArg(args, name);
+      if (group === "") {
+        engineError("add_to_group (scene/main/node.cpp:2448)", `Cannot add node '${rec.__gd_node_name__}' to a group with an empty name.`);
+        return V.nil();
+      }
+      nodeAddToGroup(rec, group);
+      return V.nil();
+    }
+    case "remove_from_group":
+      nodeRemoveFromGroup(rec, groupArg(args, name));
+      return V.nil();
+    case "is_in_group":
+      return V.bool(nodeIsInGroup(rec, groupArg(args, name)));
+    case "get_groups":
+      if (args.length !== 0) throw new UnsupportedError("node-arity", `get_groups() 只量过 0 个实参（收到 ${args.length} 个）`);
+      return V.array(GArray.of(nodeGroups(rec)));
     case "get_tree": {
       const tree = sceneTree();
       if (tree === null || !insideTree(rec)) {

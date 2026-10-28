@@ -14,6 +14,7 @@ export type NodeRec = {
   __gd_node_name__: string;
   __gd_node_parent__: object | null;
   __gd_node_children__: object[];
+  __gd_node_groups__: string[];
 };
 
 export class GdEngineInstance extends GdScriptObject {
@@ -23,6 +24,7 @@ export class GdEngineInstance extends GdScriptObject {
   __gd_node_name__: string = "";
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
+  __gd_node_groups__: string[] = [];
   constructor(cls: string) {
     super();
     this.__gd_engine_class__ = cls;
@@ -45,6 +47,7 @@ export function nodeInit(inst: object, cls: string): void {
   rec.__gd_node_name__ = "";
   rec.__gd_node_parent__ = null;
   rec.__gd_node_children__ = [];
+  rec.__gd_node_groups__ = [];
 }
 
 const NAME_BAD = /[:.@/]/g;
@@ -151,6 +154,23 @@ export function nodeOfVariant(value: Variant): NodeRec | null {
 
 export function nodeArgSay(value: Variant, who: string): never {
   throw new UnsupportedError("node-arg-type", `Node.${who}() 的这条只收节点（收到 ${tagName(value.t)}）`);
+}
+
+export function nodeAddToGroup(rec: NodeRec, group: string): void {
+  if (!rec.__gd_node_groups__.includes(group)) rec.__gd_node_groups__.push(group);
+}
+
+export function nodeRemoveFromGroup(rec: NodeRec, group: string): void {
+  const at = rec.__gd_node_groups__.indexOf(group);
+  if (at >= 0) rec.__gd_node_groups__.splice(at, 1);
+}
+
+export function nodeIsInGroup(rec: NodeRec, group: string): boolean {
+  return rec.__gd_node_groups__.includes(group);
+}
+
+export function nodeGroups(rec: NodeRec): Variant[] {
+  return rec.__gd_node_groups__.map((g) => V.stringName(g));
 }
 
 export function nodeIsInside(node: object, treeRoot: object): boolean {

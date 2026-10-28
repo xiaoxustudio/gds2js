@@ -95,6 +95,20 @@ func _initialize():
     await expect(emitOne("Node", src), "拒的是那张实测表之外的名字").rejects.toThrow(/not found in base self/);
   });
 
+  it("分组面四支也走那张裸名表", async () => {
+    const code = await emitOne("Node", `extends Node
+
+func _ready():
+	add_to_group("g")
+	print("B|", get_groups(), "|", is_in_group("g"))
+	remove_from_group("g")
+`);
+    expect(code).toContain('rt.method(this, "add_to_group", ');
+    expect(code).toContain('rt.method(this, "get_groups", [])');
+    expect(code).toContain('rt.method(this, "is_in_group", ');
+    expect(code).toContain('rt.method(this, "remove_from_group", ');
+  });
+
   it("类体里裸名读写引擎成员按量过的那张名单翻成属性面", async () => {
     const code = await emitOne("Node2D", `extends Node2D
 

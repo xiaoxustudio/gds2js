@@ -207,6 +207,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
     out.push('  __gd_node_name__ = "";');
     out.push("  __gd_node_parent__: unknown = null;");
     out.push("  __gd_node_children__: unknown[] = [];");
+    out.push("  __gd_node_groups__: string[] = [];");
   }
   if (proto && baseClass.kind !== "import") out.push(...emitRootConstructor(true));
   out.push(...emitFieldDeclarations(m.vars, m.signals));
