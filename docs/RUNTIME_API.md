@@ -14,7 +14,7 @@
 | --- | --- |
 | 契约版本 | v1 |
 | 裁判版本 | Godot 4.6.3.stable.official.7d41c59c4 |
-| 范围 | **Tier 1 纯语言**。引擎 API（`Node` / `SceneTree` …）不在本契约内 |
+| 范围 | **Tier 1 纯语言 + Tier 2 的引擎值与宿主入口**。Tier 2 只复用本契约里已冻结的那几个形状（`rt.method` / `rt.attribute` / `rt.writeProp` / `rt.index` 的接收者面 + `rt.V.object` 的引擎类值），新增的都是站内的分支而不是新签名：引擎类实例走 `rt.engineClassNew`，场景建树走 `rt.sceneNode` 与 host 的 `sceneRun`，成员面按发射期那张实测表（`compiler/src/semantics/node-face.ts`）解析；因此 v1 的签名一个都没动，`emit-surface` / `emit-contract` 两道门仍是全量名表的对账依据。没量过的形状照旧抛 `UnsupportedError` |
 | 错误处理 | 不支持一律抛 `UnsupportedError`，**绝不静默降级**（D4 + 项目红线） |
 | 产物 import 形式 | `import * as rt from "gds2js/runtime"` |
 | 覆盖面 | 本契约**只登记需要跨层冻结形状的那一层**（`ops.*` / `fast.*` / 容器 / String / 对象类 / 信号）；发射器实际用到的全量面有两道机器门：**源侧** `emit/surface.ts` 的名表用 `satisfies readonly RtName[]` 钉在 `keyof typeof rt` 上（拼错或 runtime 改名 → `pnpm typecheck` 直接红），**产物侧** `test/repo/emit-surface.test.ts` 逐名对账（产物里每个 `rt.<名>(` 与 `rt.ops.<名>(` / `rt.fast.<名>(` / `rt.V.<名>(` 都必须在导出表上）。`test/repo/emit-contract.test.ts` 再双向锁：emitter 源码 ⊆ 名表 ⊆ runtime 导出，且不得超出产物实际用量 |
