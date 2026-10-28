@@ -5,6 +5,7 @@ import { BUILTIN_ARITY, BUILTIN_INSTANCE_MEMBERS, BUILTIN_INSTANCE_PROPS, BUILTI
 import { OP_PAIRS_CONST_A, OP_PAIRS_CONST_B, OP_PAIRS_REFUSED_A, OP_PAIRS_REFUSED_B, OP_PAIRS_REFUSED_CALLABLE, OP_PAIRS_REFUSED_DECL, OP_PAIRS_REFUSED_DECL_VAL, OP_PAIRS_REFUSED_DECL_VAL_REV } from "../semantics/op-pairs";
 import { ANNOT_SOURCES, ARG_NAME_TYPES, FACE_ANNOTATIONS, INSTANCE_OF_TYPE_LAST, NUMERIC_VALUE_CTORS, OBJECT_ARG_NAMES, PACK_APPEND_ARRAY_AS, PACK_APPEND_NAMED, PACK_ARG_POSITIONS, PACK_ARG_SLOTS, PACK_BOOL_SLOT_OK, PACK_INT_SLOT_OK, PACK_IS_AS_NAMES, PACK_SHAPE_NAMES, PACK_TYPE_NAMES, PARAM_OWN_SLOTS, PCT_MSG, PCT_NUMERIC, PCT_VALUE_CTORS, PCT_VECTORS, SIGNAL_PARSE_MISSING, STATIC_VALUE_TYPES, VALUE_ARG_WANTS } from "../semantics/elem-faces";
 import { CALLABLE_PARSE_ARGS, CALLABLE_PARSE_ARITY, HOST_VALUE_METHODS, NO_HOST_VALUE_METHODS, SIGNAL_PARSE_ARITY_MAX, VIRTUAL_HOST_NAMES, VOID_ARRAY_METHODS, VOID_BYTES_METHODS, VOID_CALLABLE_METHODS, VOID_DICT_METHODS, VOID_OBJECT_METHODS, VOID_SIGNAL_METHODS } from "../semantics/void-methods";
+import { NO_NODE_SELF_PROPS } from "../semantics/node-face";
 import { CTOR_REFUSED, CUBIC_NAME_ARG_FUNCS, FUNC_ARG_SLOTS, GLOBAL_NUM_ARITH, GLOBAL_TYPED_NAME_ARGS, NODE_PATH_FACE, STATIC_FACE, STRINGNAME_FACE, type NamedFace } from "../semantics/faces";
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../semantics/arg-types/static-arg-types";
 import { FACE_ARG_AS, FACE_ARG_TYPES } from "../semantics/arg-types/face-arg-types";
@@ -198,15 +199,25 @@ export function guaranteedReturn(stmts: Stmt[]): boolean {
   }
 }
 
-export function checkFunc(f: FuncDecl, outer: Scope, coroutines: Set<string>, diags: Diagnostic[], hostFace: Set<string> = NO_HOST_VALUE_METHODS): void {
+export function checkFunc(
+  f: FuncDecl,
+  outer: Scope,
+  coroutines: Set<string>,
+  diags: Diagnostic[],
+  hostFace: Set<string> = NO_HOST_VALUE_METHODS,
+  engineFace: ReadonlySet<string> = NO_NODE_SELF_PROPS,
+): void {
   const scope = outer.funcChild(["self", ...f.params.map((p) => p.name)], !f.isStatic);
   const prevFace = run.hostValueMethods;
+  const prevEngineFace = run.enginePropFace;
   const prevCtx = run.hostStaticCtx;
   run.hostValueMethods = hostFace;
+  run.enginePropFace = engineFace;
   run.hostStaticCtx = f.isStatic ? { kind: "func", name: f.name } : null;
   for (const p of f.params) if (p.default !== null) walkExpr(p.default, scope, coroutines, diags);
   walkStmts(f.body, scope, coroutines, diags, false);
   run.hostValueMethods = prevFace;
+  run.enginePropFace = prevEngineFace;
   run.hostStaticCtx = prevCtx;
 }
 
@@ -351,6 +362,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
               loc: e.loc,
             });
         }
+        else if (run.enginePropFace.has(e.name) && staticCtx === null) run.enginePropReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
         else if (VIRTUAL_HOST_NAMES.has(e.name))
           diags.push({ code: "undeclared-identifier", message: `Identifier not found: ${e.name}`, loc: e.loc });
         else if (BUILTIN_TYPE_NAMES.has(e.name)) {

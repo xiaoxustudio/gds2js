@@ -16,7 +16,7 @@ export declare function caseIsProject(id: string): boolean;
 export declare function caseScene(id: string): string | null;
 export declare function runGodot(
   gdPath: string,
-  opts?: { timeoutMs?: number; projectPath?: string | null },
+  opts?: { timeoutMs?: number; projectPath?: string | null; scene?: boolean },
 ): { text: string; timedOut: boolean; exitCode: number | null };
 export declare function normalize(text: string, gdPath?: string): string;
 export declare function readGolden(id: string): string | null;

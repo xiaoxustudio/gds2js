@@ -53,6 +53,7 @@ export function node2dGlobalTransform(target: unknown): GTransform2D {
   while (up !== null) {
     const face = nodeFaceOf(up);
     if (face === null) throw new UnsupportedError("node2d-parent", "Node2D 往上的祖先没有节点面那一形没量过");
+    if (face.__gd_engine_class__ === "Window") break;
     if (face.__gd_engine_class__ !== "Node2D") throw new UnsupportedError("node2d-parent-base", `祖先的 ${face.__gd_engine_class__} 不在 2D 链上那一形没量过`);
     if (rec(up).__gd_node_top_level__ === true) throw new UnsupportedError("node2d-top-level", "top_level 为 true 时的全局变换没量过");
     const parent = t2d(up);

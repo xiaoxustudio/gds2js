@@ -15,6 +15,7 @@ export interface AnalysisResult {
   isGlobalValueRead(e: Expr): boolean;
   isNativeClassValueRead(e: Expr): boolean;
   isHostMethodValueRead(e: Expr): boolean;
+  isEnginePropRead(e: Expr): boolean;
   lambdaCaptureNames(e: Expr): string[];
 }
 
@@ -29,5 +30,6 @@ export const NO_ANALYSIS: AnalysisResult = {
   isGlobalValueRead: () => false,
   isNativeClassValueRead: () => false,
   isHostMethodValueRead: () => false,
+  isEnginePropRead: () => false,
   lambdaCaptureNames: () => NO_LIST,
 };

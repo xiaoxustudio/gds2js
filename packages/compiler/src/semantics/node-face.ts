@@ -23,3 +23,32 @@ export const NODE_SELF_METHODS = new Set([
   "remove_child",
   "set_name",
 ]);
+
+/** 类体里**裸名**读写的引擎成员，按直接基类分档；逐条来自 Godot 4.6.3 的实测读数（corpus/cases/467-*）。 */
+export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["Node", new Set(["name"])],
+  [
+    "Node2D",
+    new Set([
+      "name",
+      "position",
+      "rotation",
+      "rotation_degrees",
+      "scale",
+      "transform",
+      "global_position",
+      "visible",
+      "z_index",
+      "top_level",
+      "y_sort_enabled",
+    ]),
+  ],
+]);
+
+export function nodeSelfProps(base: string | null): ReadonlySet<string> {
+  return base === null ? NO_NODE_SELF_PROPS : NODE_SELF_PROPS.get(base) ?? NO_NODE_SELF_PROPS;
+}
+
+export const NO_NODE_SELF_PROPS: ReadonlySet<string> = new Set<string>();
+
+export const ENGINE_SELF_BASES: ReadonlySet<string> = new Set(NODE_SELF_PROPS.keys());

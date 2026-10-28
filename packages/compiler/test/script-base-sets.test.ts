@@ -95,6 +95,36 @@ func _initialize():
     await expect(emitOne("Node", src), "拒的是那张实测表之外的名字").rejects.toThrow(/not found in base self/);
   });
 
+  it("类体里裸名读写引擎成员按量过的那张名单翻成属性面", async () => {
+    const code = await emitOne("Node2D", `extends Node2D
+
+func _ready():
+	print("B|", name, "|", position)
+	name = "r2"
+	position += Vector2(1, 2)
+`);
+    expect(code).toContain('rt.wrapValue(rt.attribute(rt.V.object(this), "name"))');
+    expect(code).toContain('rt.writeProp(rt.V.object(this), "name", rt.V.str("r2"))');
+    expect(code, "增广赋值读的还是同一个属性面").toContain('rt.writeProp(rt.V.object(this), "position", ');
+    expect(code.match(/rt\.attribute\(rt\.V\.object\(this\), "position"\)/g)?.length).toBe(2);
+  });
+
+  it("Node 那一支只量过 name，其余成员名仍按找不到拒", async () => {
+    await expect(emitOne("Node", `extends Node
+
+func _ready():
+	print("B|", position)
+`)).rejects.toThrow(/not declared in the current scope/);
+  });
+
+  it("静态函数里读引擎成员不放行", async () => {
+    await expect(emitOne("Node", `extends Node
+
+static func probe():
+	print("B|", name)
+`)).rejects.toThrow(/not declared in the current scope/);
+  });
+
   it.each(["Sprite2D", "Control", "Resource", "RefCounted"])(
     "引擎里的 %s 还没量过基类面，响亮拒",
     async (base) => {
