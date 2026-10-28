@@ -16,7 +16,7 @@ const RES_PREFIX = "res://";
 
 const HOST_BASES = new Set(["SceneTree"]);
 
-const SCRIPT_NODE_BASES = new Set(["Node", "Node2D", "Control"]);
+const SCRIPT_NODE_BASES = new Set(["Node", "Node2D", "Control", "Node3D"]);
 
 export interface ProjectOptions {
   entries: string[];
@@ -571,7 +571,7 @@ function resolveBase(
   }
   if (SCRIPT_NODE_BASES.has(bare)) return { jsName: null, spec: { kind: "engine", name: bare } };
   if (ENGINE_CLASS_NAMES.has(bare)) {
-    throw new UnsupportedError("engine-base", `extends 引擎类型 ${bare} 还没建模（脚本基类只量过 Node、Node2D 与 Control）`);
+    throw new UnsupportedError("engine-base", `extends 引擎类型 ${bare} 还没建模（脚本基类只量过 Node、Node2D、Control 与 Node3D）`);
   }
   throw new UnsupportedError("extends-unknown", `无法解析 extends 目标：${ext}`);
 }

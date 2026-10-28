@@ -44,6 +44,7 @@ export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map
       "visible",
     ]),
   ],
+  ["Node3D", new Set(["name", "position", "rotation", "rotation_degrees", "scale", "basis", "visible"])],
   [
     "Node2D",
     new Set([

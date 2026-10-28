@@ -67,7 +67,7 @@ func _initialize():
     expect(code).toContain('rt.registerNativeBase(__gd_d_Main, "SceneTree");');
   });
 
-  it.each(["Node", "Node2D", "Control"])("%s 发引擎基类那支，并带上节点面的五个字段", async (base) => {
+  it.each(["Node", "Node2D", "Control", "Node3D"])("%s 发引擎基类那支，并带上节点面的五个字段", async (base) => {
     const code = await emitOne(base);
     expect(code).toContain(`rt.registerNativeBase(__gd_d_Main, "${base}");`);
     expect(code, "引擎基类的类体不 JS 继承，节点面靠字段").toContain("export class Main extends rt.GdScriptObject {");
@@ -139,7 +139,7 @@ static func probe():
 `)).rejects.toThrow(/not declared in the current scope/);
   });
 
-  it.each(["Sprite2D", "Node3D", "Resource", "RefCounted"])(
+  it.each(["Sprite2D", "Label", "Resource", "RefCounted"])(
     "引擎里的 %s 还没量过基类面，响亮拒",
     async (base) => {
       expect(await codeOfThrow(base), "名单来自 ClassDB 全量表").toBe("[engine-base]");

@@ -35,6 +35,7 @@ import { isEngineNode, nodeFaceOf, nodeNameSet } from "../node";
 import { GdSceneTree, treeReadProp } from "../scene";
 import { node2dRead, node2dWrite } from "../node2d";
 import { ctlRead, ctlWrite } from "../control";
+import { node3dRead, node3dWrite } from "../node3d";
 import { GBasis, GPlane, GQuaternion, GTransform2D } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
@@ -246,6 +247,10 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (bs !== null) return basisWriteProp(bs, key, value);
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
+    if (enw.__gd_engine_class__ === "Node3D" && key !== "name") {
+      node3dWrite(base.v, key, value);
+      return null;
+    }
     if (enw.__gd_engine_class__ === "Control" && key !== "name") {
       ctlWrite(base.v, key, value);
       return null;
@@ -528,6 +533,10 @@ export function attribute(raw: unknown, name: string): unknown {
     const en = nodeFaceOf(obj.v);
     if (en !== null) {
       if (en.__gd_freed__) throw new UnsupportedError("node-freed-prop", `在已 free() 的实例上读 ${name} 那一形没建模`);
+      if (en.__gd_engine_class__ === "Node3D") {
+        const m3 = node3dRead(obj.v, name);
+        if (m3 !== null) return m3;
+      }
       if (en.__gd_engine_class__ === "Control") {
         const mc = ctlRead(obj.v, name);
         if (mc !== null) return mc;
