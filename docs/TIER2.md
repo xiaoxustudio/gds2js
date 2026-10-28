@@ -229,6 +229,8 @@ pnpm test:golden-check  →（单独一轮）→ pnpm test:diff           # 引�
 
 按「不定就动不了工」排序；每条给选项与建议。
 
+**十二条的落点（Tier 2 四阶段跑完后的回执）**：1 走建议（阶段一只发 `.new` 的值面，实例与成员面随阶段三一起按实测解禁）；2 已执行；3 走建议（成员面表在 `compiler/src/semantics/node-face.ts`，产物零负担）；4 走建议（继续 `Tag.OBJECT` + `instanceof`，七型逐字节对账证明三条等式不受牵动）；5 走建议（阶段零只减不加，棘轮没有一次改大）；6 走建议（外提表逐笔进 `STAMP_SOURCES`）；7 走建议（只对本轮新增表强制出处链，`node-face.ts` 每张都带语料编号，旧表的 `PROVENANCE_DEBT` 仍是空账）；8 走建议 γ（释放时机读数已取，没落地实现也不静默降级）；9 走建议（没动那五处等式面，γ 一支都不必改）；10 走建议（node 轨全绿 + `GDS2JS_SCRIPTC_FILTER` 面探针，全量 scriptc 留给 `pnpm release` 前）；11 走甲（`.tscn` 只在编译期展成 `rt.sceneNode(...)`，产物树与 `TREE_FACE` 一字未动）；12 走建议（自建最小 `.tscn`，逐格对引擎读数）。
+
 1. **阶段一的切割线（Tier 1 边界画在哪）**：`Node.new` 只当 Callable 值发、真造实例（`.call()` / `.new()`）照旧响亮拒（**建议**，唯一能让"读数已全"落地又不出宿主的切法）vs 连实例一起造（等于把阶段三的对象模型提前）。
 2. ~~**D4 措辞要不要跟着改**~~ **已执行**：ROADMAP 的 D4 与 `AGENTS.md` 概述都改成「Tier 1 范围内不实现；Tier 2 按本文分阶段解禁」，随阶段一第一笔一起落地。
 3. **引擎成员表面放哪**：`compiler/src/semantics/engine-faces.ts`（发射期解析，**建议**，产物零负担）vs runtime 全表（每份产物都背一张表，且要过 `copyTreeTs` / `TREE_FACE`）。
