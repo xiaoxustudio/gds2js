@@ -23,6 +23,7 @@ import {
 } from "../node";
 import { scenePathOf, sceneTree } from "../scene";
 import { node2dMethod } from "../node2d";
+import { ctlMethod } from "../control";
 
 function engineError(at: string, message: string): void {
   writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));
@@ -193,8 +194,13 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     case "show":
     case "hide":
     case "is_visible_in_tree":
-    case "get_global_transform":
+    case "get_global_transform": {
+      if (rec.__gd_engine_class__ === "Control") {
+        const cm = ctlMethod(target, name, args);
+        if (cm !== null) return cm;
+      }
       return node2dMethod(target, name, args);
+    }
     default:
       throw new UnsupportedError("node-method", `Node.${name}() 这一支没量过（duplicate / find_child / get_path_to / has_method 那几支还没建模）`);
   }

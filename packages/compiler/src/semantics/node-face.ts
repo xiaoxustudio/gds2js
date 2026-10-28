@@ -32,6 +32,19 @@ export const NODE_SELF_METHODS = new Set([
 export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["Node", new Set(["name"])],
   [
+    "Control",
+    new Set([
+      "name",
+      "position",
+      "size",
+      "rotation",
+      "scale",
+      "pivot_offset",
+      "global_position",
+      "visible",
+    ]),
+  ],
+  [
     "Node2D",
     new Set([
       "name",

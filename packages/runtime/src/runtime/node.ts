@@ -2,7 +2,7 @@ import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { GdScriptObject, markFreed } from "./object";
 
-const CONSTRUCTIBLE = new Set(["Node", "Node2D", "RefCounted", "Object"]);
+const CONSTRUCTIBLE = new Set(["Node", "Node2D", "Control", "RefCounted", "Object"]);
 
 export type NodeRec = {
   __gd_engine_class__: string;
@@ -11,6 +11,7 @@ export type NodeRec = {
   __gd_node_t2d__?: unknown;
   __gd_node_visible__?: boolean;
   __gd_node_top_level__?: boolean;
+  __gd_ctl__?: unknown;
   __gd_node_name__: string;
   __gd_node_parent__: object | null;
   __gd_node_children__: object[];
@@ -36,7 +37,7 @@ export function engineClassNewable(cls: string): boolean {
 }
 
 export function engineClassNew(cls: string): Variant {
-  if (!CONSTRUCTIBLE.has(cls)) throw new UnsupportedError("engine-class-ctor", `${cls}.new() 这一支没量过（只量过 Node / Node2D / RefCounted / Object）`);
+  if (!CONSTRUCTIBLE.has(cls)) throw new UnsupportedError("engine-class-ctor", `${cls}.new() 这一支没量过（只量过 Node / Node2D / Control / RefCounted / Object）`);
   return V.object(new GdEngineInstance(cls));
 }
 
