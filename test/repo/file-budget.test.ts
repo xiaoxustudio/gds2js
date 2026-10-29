@@ -11,7 +11,7 @@ const CODE_BUDGET: Array<[string, number]> = [
   ["packages/runtime/src/runtime/methods", 59],
   ["packages/runtime/src/runtime/builtins", 17],
   ["packages/runtime/src/runtime/packed", 1098],
-  ["packages/compiler/src/lower/lower", 979],
+  ["packages/compiler/src/lower/lower", 869],
 ];
 
 function tsUnder(dir: string, out: string[] = []): string[] {

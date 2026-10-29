@@ -23,7 +23,7 @@ function mk(src: string, type: string, isNamed: boolean, fieldName: string, star
 }
 
 /**
- * CST 构造器。产物形状照抄 `parse/wasm-cst.ts:4-23`：每节点一个普通对象、无方法、无父指针，
+ * CST 构造器。每节点一个普通对象、无方法、无父指针，
  * `text = src.slice(startIndex, endIndex)`、`namedChildren = children.filter(isNamed)`、`hasError` 恒假。
  *
  * 匿名节点的 `type` 就是记号原文（tree-sitter 对字符串字面量的口径），所以标点直接拿 `tok.text` 当类型。
