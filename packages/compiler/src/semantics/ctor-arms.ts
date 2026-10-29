@@ -13,6 +13,7 @@ export const CTOR_ARMS: Record<string, string[][]> = {
   Quaternion: [[], ["N", "N", "N", "N"], ["V3", "N"], ["V3", "V3"]],
   Basis: [[], ["Basis"], ["Quaternion"], ["V3", "N"], ["V3", "V3", "V3"]],
   Transform2D: [[], ["V2", "V2"], ["V2", "V2", "V2"], ["N", "N", "N", "N", "N", "N"], ["N", "V2"]],
+  Transform3D: [[], ["Transform3D"], ["Basis"], ["Basis", "V3"], ["V3", "V3", "V3", "V3"]],
   Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
   String: [[], ["S"]],
   Array: [],

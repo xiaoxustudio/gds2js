@@ -10,7 +10,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "./composite-classes";
+import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "./composite-classes";
 import { GVector3i } from "./vector3i";
 import { asVec3i, toVec3 } from "./vector3i";
 import { GColor } from "./color";
@@ -121,6 +121,7 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Plane: (v) => v.t === Tag.OBJECT && v.v instanceof GPlane,
   Quaternion: (v) => v.t === Tag.OBJECT && v.v instanceof GQuaternion,
   Transform2D: (v) => v.t === Tag.OBJECT && v.v instanceof GTransform2D,
+  Transform3D: (v) => v.t === Tag.OBJECT && v.v instanceof GTransform3D,
   Basis: (v) => v.t === Tag.OBJECT && v.v instanceof GBasis,
 };
 
@@ -141,14 +142,20 @@ function packKindMatches(v: Variant, kind: PackKind): boolean {
   return isBytes(v) && packBytes(v).kind === kind;
 }
 
-const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "SceneTree", "MainLoop"];
+const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "Node3D", "JSON", "SceneTree", "MainLoop"];
 
-function instanceClassNames(base: string | null): string[] | null {
-  if (base === "RefCounted") return ["Object", "RefCounted"];
+function instanceClassNames(base: string | null): string[] | null {  if (base === "RefCounted") return ["Object", "RefCounted"];
+  if (base === "JSON") return ["Object", "RefCounted", "JSON"];
   if (base === "Node") return ["Object", "Node"];
   if (base === "Node2D") return ["Object", "Node", "Node2D"];
+  if (base === "Node3D") return ["Object", "Node", "Node3D"];
   if (base === "SceneTree") return ["Object", "SceneTree", "MainLoop"];
   return null;
+}
+
+/** `is_class()` 用的实测祖先链；表外基类回 null，让调用方保留旧判据。 */
+export function probedClassChain(base: string): string[] | null {
+  return instanceClassNames(base);
 }
 
 function engineClassIs(v: Variant, name: string): boolean | null {
@@ -266,6 +273,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GRect2) return V.int(7);
   if (v.t === Tag.OBJECT && v.v instanceof GRect2i) return V.int(8);
   if (v.t === Tag.OBJECT && v.v instanceof GTransform2D) return V.int(11);
+  if (v.t === Tag.OBJECT && v.v instanceof GTransform3D) return V.int(18);
   if (v.t === Tag.OBJECT && v.v instanceof GBasis) return V.int(17);
   if (v.t === Tag.OBJECT && v.v instanceof GQuaternion) return V.int(15);
   if (v.t === Tag.OBJECT && v.v instanceof GPlane) return V.int(14);

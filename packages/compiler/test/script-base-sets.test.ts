@@ -70,9 +70,9 @@ func _initialize():
   it.each(["Node", "Node2D", "Control", "Node3D"])("%s 发引擎基类那支，并带上节点面的五个字段", async (base) => {
     const code = await emitOne(base);
     expect(code).toContain(`rt.registerNativeBase(__gd_d_Main, "${base}");`);
-    expect(code, "引擎基类的类体不 JS 继承，节点面靠字段").toContain("export class Main extends rt.GdScriptObject {");
-    expect(code).toContain(`  __gd_engine_class__ = "${base}";`);
-    expect(code).toContain("  __gd_node_children__: unknown[] = [];");
+    expect(code, "引擎基类的类体 JS 继承节点面那个类").toContain("export class Main extends rt.GdNodeObject {");
+    expect(code).toContain(`  override __gd_engine_class__ = "${base}";`);
+    expect(code).toContain("  override __gd_node_children__: object[] = [];");
   });
 
   it("类体里的裸名引擎方法翻成 rt.method(self, …)", async () => {

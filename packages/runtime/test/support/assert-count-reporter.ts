@@ -1,6 +1,6 @@
 /**
  * 把 @gds2js/testkit 记在 task.meta 上的断言计数按 project 加总，印出与旧门脚本
- * 逐字同形的读数行 —— docs/ROADMAP.md 按名字记这些数，所以它们必须活着。
+ * 逐字同形的读数行 —— `git show 64cf250:docs/ROADMAP.md` 按名字记这些数，所以它们必须活着。
  *
  * 计数只能在这里做：表驱动 helper（如 region 280-390 的 runMut）在运行时才生成断言，
  * 总数对不上静态调用点；而各测试文件的模块作用域互不相通，计数得经 task.meta
@@ -24,7 +24,7 @@ function add(total: Counters, meta: unknown): void {
 
 /**
  * 每个 project 一行读数，%d 依次是 pass / fail。文本逐字沿用被搬走的那支门脚本，
- * 好让 docs/ROADMAP.md 里按名字记的读数仍可 grep。
+ * 好让 `git show 64cf250:docs/ROADMAP.md` 里按名字记的读数仍可 grep。
  *
  * 只有「多文件共用一个总读数」的门才需要 reporter；compiler 与 e2e 的读数形状
  * 各不相同（分桶看板、三元组、ok/记账/FAIL 汇总），由各自文件在 afterAll 里打。

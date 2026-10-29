@@ -33,11 +33,15 @@ import { aabbMethod } from "./aabb";
 import { planeMethod } from "./plane";
 import { quaternionMethod } from "./quaternion";
 import { transform2dMethod } from "./transform2d";
+import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "./json";
+import { GdJson, jsonNew } from "../json";
+import { probedClassChain } from "../patterns";
+import { transform3dMethod } from "./transform3d";
 import { basisMethod } from "./basis";
 import { nodeMethod } from "./node";
 import { GdSceneTree, treeMethod } from "../scene";
 import { engineClassNew, engineClassNewable, isEngineNode } from "../node";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "../composite-classes";
+import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "../composite-classes";
 import { GVector3i, vector3iMethod } from "../vector3i";
 import { colorMethod, GColor } from "../color";
 import { bytesMethod, GBytes, packTypeName } from "../packed";
@@ -52,7 +56,11 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   const inner = obj.v;
 
   if (inner instanceof GdNativeClass) {
-    if (name === "new" && args.length === 0 && engineClassNewable(inner.className)) return engineClassNew(inner.className);
+    if (name === "new" && args.length === 0) {
+      if (inner.className === "JSON") return jsonNew();
+      if (engineClassNewable(inner.className)) return engineClassNew(inner.className);
+    }
+    if (inner.className === "JSON" && JSON_STATIC_NAMES.has(name)) return jsonStatic(name, args);
     throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（构造式只量过无实参的那几支）`);
   }
   const vecFace =
@@ -267,7 +275,10 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     const base = nativeBaseOf(inner);
     if (base === null) throw new UnsupportedError("is-class", "is_class() 还不知道这个类的原生基类");
     const want = a0.v as string;
-    return V.bool(want === base || want === "Object");
+    if (want === base || want === "Object") return V.bool(true);
+    const chain = probedClassChain(base);
+    if (chain !== null) return V.bool(chain.indexOf(want) >= 0);
+    return V.bool(false);
   }
   if (name === "set" || name === "get") {
     const key = args[0] as Variant | undefined;
@@ -383,12 +394,14 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   }
 
   if (inner instanceof GTransform2D) return transform2dMethod(inner, name, args);
+  if (inner instanceof GTransform3D) return transform3dMethod(inner, name, args);
   if (inner instanceof GQuaternion) return quaternionMethod(inner, name, args);
   if (inner instanceof GPlane) return planeMethod(inner, name, args);
   if (inner instanceof GAABB) return aabbMethod(inner, name, args);
   if (inner instanceof GRect2) return rect2Method(inner, name, args);
   if (inner instanceof GRect2i) return rect2iMethod(inner, name, args);
   if (inner instanceof GBasis) return basisMethod(inner, name, args);
+  if (inner instanceof GdJson) return jsonMethod(inner, name, args);
   if (inner instanceof GdSceneTree) return treeMethod(inner, name, args);
   if (isEngineNode(inner)) return nodeMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);

@@ -4,29 +4,24 @@ import { GdScriptObject, markFreed } from "./object";
 
 const CONSTRUCTIBLE = new Set(["Node", "Node2D", "Control", "Node3D", "RefCounted", "Object"]);
 
-export type NodeRec = {
-  __gd_engine_class__: string;
-  __gd_freed__: boolean;
-  __gd_node_queued__: boolean;
+export class GdNodeObject extends GdScriptObject {
+  __gd_engine_class__: string = "";
+  __gd_freed__: boolean = false;
+  __gd_node_queued__: boolean = false;
   __gd_node_t2d__?: unknown;
   __gd_node_visible__?: boolean;
   __gd_node_top_level__?: boolean;
   __gd_ctl__?: unknown;
   __gd_node_t3d__?: unknown;
-  __gd_node_name__: string;
-  __gd_node_parent__: object | null;
-  __gd_node_children__: object[];
-  __gd_node_groups__: string[];
-};
-
-export class GdEngineInstance extends GdScriptObject {
-  readonly __gd_engine_class__: string;
-  __gd_freed__: boolean = false;
-  __gd_node_queued__: boolean = false;
   __gd_node_name__: string = "";
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
   __gd_node_groups__: string[] = [];
+}
+
+export type NodeRec = GdNodeObject;
+
+export class GdEngineInstance extends GdNodeObject {
   constructor(cls: string) {
     super();
     this.__gd_engine_class__ = cls;
@@ -56,9 +51,9 @@ const NAME_BAD = /[:.@/]/g;
 
 export function nodeFaceOf(target: unknown): NodeRec | null {
   if (typeof target !== "object" || target === null) return null;
-  const rec = target as Partial<NodeRec>;
-  if (typeof rec.__gd_engine_class__ !== "string" || !Array.isArray(rec.__gd_node_children__)) return null;
-  return rec as NodeRec;
+  const probe = target as Partial<GdNodeObject>;
+  if (typeof probe.__gd_engine_class__ !== "string" || !Array.isArray(probe.__gd_node_children__)) return null;
+  return target as unknown as GdNodeObject;
 }
 
 export function isEngineNode(target: unknown): boolean {

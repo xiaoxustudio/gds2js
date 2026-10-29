@@ -7,7 +7,7 @@ import { GVector3 } from "./vector3";
 import { GVector4 } from "./vector4";
 import { GVector4i } from "./vector4i";
 import { GVector2i } from "./vector2i";
-import { GAABB, GBasis, GPlane, GQuaternion, GTransform2D } from "./composite-classes";
+import { GAABB, GBasis, GPlane, GQuaternion, GTransform2D, GTransform3D } from "./composite-classes";
 import { GRect2 } from "./rect2";
 import { GRect2i } from "./rect2i";
 import { GVector3i } from "./vector3i";
@@ -34,6 +34,7 @@ const T_AABB = 16;
 const T_PLANE = 14;
 const T_QUATERNION = 15;
 const T_TRANSFORM2D = 11;
+const T_TRANSFORM3D = 18;
 const T_BASIS = 17;
 const T_VECTOR3 = 9;
 const T_COLOR = 20;
@@ -86,6 +87,7 @@ const ELEM_TYPE: Record<ElemKind, number> = {
   Vector2: 5,
   Vector2i: 6,
   Transform2D: 11,
+  Transform3D: 18,
   Basis: 17,
   Quaternion: 15,
   Plane: 14,
@@ -209,6 +211,7 @@ function refuseUnmeasured(v: Variant): void {
     o instanceof GPlane ||
     o instanceof GQuaternion ||
     o instanceof GTransform2D ||
+    o instanceof GTransform3D ||
     o instanceof GBasis ||
     o instanceof GVector3i ||
     o instanceof GVector4 ||
@@ -440,6 +443,22 @@ class Writer {
           this.f32(o.yy);
           this.f32(o.ox);
           this.f32(o.oy);
+          return;
+        }
+        if (o instanceof GTransform3D) {
+          this.header(T_TRANSFORM3D);
+          this.f32(o.x0);
+          this.f32(o.y0);
+          this.f32(o.z0);
+          this.f32(o.x1);
+          this.f32(o.y1);
+          this.f32(o.z1);
+          this.f32(o.x2);
+          this.f32(o.y2);
+          this.f32(o.z2);
+          this.f32(o.ox);
+          this.f32(o.oy);
+          this.f32(o.oz);
           return;
         }
         if (o instanceof GBasis) {
@@ -736,6 +755,21 @@ class Reader {
         const tox = this.f32();
         const toy = this.f32();
         return V.object(new GTransform2D(txx, txy, tyx, tyy, tox, toy));
+      }
+      case T_TRANSFORM3D: {
+        const h0 = this.f32();
+        const h1 = this.f32();
+        const h2 = this.f32();
+        const h3 = this.f32();
+        const h4 = this.f32();
+        const h5 = this.f32();
+        const h6 = this.f32();
+        const h7 = this.f32();
+        const h8 = this.f32();
+        const h9 = this.f32();
+        const h10 = this.f32();
+        const h11 = this.f32();
+        return V.object(new GTransform3D(h0, h3, h6, h1, h4, h7, h2, h5, h8, h9, h10, h11));
       }
       case T_BASIS: {
         const g0 = this.f32();

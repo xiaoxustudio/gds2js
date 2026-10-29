@@ -91,7 +91,7 @@ export function emitFuncInner(f: FuncDecl, base = 0): string[] {
     const dname = f.params[0]?.name ?? "delta";
     const wrapParams = f.name === "_process" ? `${dname}: number` : params;
     const wrapFwd = f.name === "_process" ? `rt.V.float(${dname})` : fwd;
-    lines.push(`  override ${f.name}(${wrapParams}): ${ret} { return this.${bodyName}(${wrapFwd}); }`);
+    lines.push(`  ${ctx.INHERITED_METHODS.has(f.name) ? "override " : ""}${f.name}(${wrapParams}): ${ret} { return this.${bodyName}(${wrapFwd}); }`);
   }
   const overriding = !f.isStatic && (wrap ? ctx.SCRIPT_INHERITED.has(f.name) : ctx.INHERITED_METHODS.has(f.name));
   lines.push(`${f.isStatic ? "static " : ""}${overriding ? "override " : ""}${async}${bodyName}(${params}): ${ret} {`);

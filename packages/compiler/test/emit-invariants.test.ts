@@ -69,7 +69,7 @@ describe("发射器输出的互锁不变量", () => {
 });
 
 afterAll(() => {
-  // 两行读数逐字沿用 tools/compile.ts 原样（含前导两空格），ROADMAP 序列仍可 grep。
+  // 两行读数逐字沿用 tools/compile.ts 原样（含前导两空格），归档件里按名字记的读数序列仍可 grep。
   console.log(
     `  pack codec 口径不一致 ${packCodecMismatch.length}（文本 regex vs IR 标志，应为 0）` +
       `${packCodecMismatch.length > 0 ? "：" + packCodecMismatch.join(", ") : ""}`,

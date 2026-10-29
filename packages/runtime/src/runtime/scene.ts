@@ -2,17 +2,12 @@ import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { GArray } from "./values";
 import { GdScriptObject } from "./object";
-import { nodeAttach, nodeChildren, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodePathOf, type NodeRec } from "./node";
+import { GdNodeObject, nodeAttach, nodeChildren, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodePathOf, type NodeRec } from "./node";
 
 export type SceneSpec = { node: object; name: string; cls: string; children: SceneSpec[] };
 
-export class GdSceneTree extends GdScriptObject {
-  readonly __gd_engine_class__ = "SceneTree";
-  __gd_freed__: boolean = false;
-  __gd_node_name__: string = "";
-  __gd_node_parent__: object | null = null;
-  __gd_node_children__: object[] = [];
-  __gd_node_groups__: string[] = [];
+export class GdSceneTree extends GdNodeObject {
+  override __gd_engine_class__ = "SceneTree";
   root: GdScriptObject;
   currentScene: object | null = null;
   frame = 0;

@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: No constructor of "Transform3D" matches the signature "Transform3D(int, int, int, int, int, int, int, int, int, int, int, int)".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

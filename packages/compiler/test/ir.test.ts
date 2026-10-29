@@ -1,7 +1,7 @@
 /**
  * 语料门 · IR：每个单文件用例都必须能 parse + lower 而不抛（引擎解析期就拒的那几形除外，见下）。
  *
- * 读数 `Lowering 成功 229/229` 由 afterAll 原样打印（docs/ROADMAP.md 记的是这个数），
+ * 读数 `Lowering 成功 229/229` 由 afterAll 原样打印（`git show 64cf250:docs/ROADMAP.md` 记的是这个数），
  * 聚合诊断（按失败原因聚合 + 明细）也在 afterAll 打。一例一个 it() 是为了
  * `vitest run --project compiler -t 088-vector2-write-error` 能一秒重跑单例。
  */
