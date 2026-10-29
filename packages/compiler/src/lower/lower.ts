@@ -22,7 +22,7 @@ import type {
   TypeRef,
   VarDecl,
 } from "./ir";
-import { accessorTokenErr, checkAfterToken, checkColonHere, continuationErr, field, inBrackets, indexParents, type LineCarrying, loc, lowerType, MATCH_PATTERN_COLON, matchMalformedScan, named, need, nextNamedSib, operatorOf, operatorToken, syntaxErrOf, tokenOf } from "./cst";
+import { checkAfterToken, checkColonHere, continuationErr, field, inBrackets, indexParents, type LineCarrying, loc, lowerType, named, need, operatorOf, operatorToken, syntaxErrOf, tokenOf } from "./cst";
 import { lowerIntLit, stripAmp, stripCaret, unquote } from "./lit";
 
 
@@ -68,12 +68,7 @@ function atNode<T>(n: SyntaxNode, f: () => T): T {
 export function lower(tree: Tree): Module {
   packCodecUse = false;
   indexParents(tree.rootNode);
-  markLiteralCalls(tree.rootNode);
   syntaxErrOf(tree);
-  if (tree.rootNode.hasError) {
-    const hit = matchMalformedScan(tree.rootNode);
-    if (hit !== null) continuationErr(hit.sentence, hit.at);
-  }
   const m = lowerModule(tree.rootNode);
   m.usesPackCodec = packCodecUse;
   return m;
@@ -143,23 +138,16 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
       case "annotation":
       case "comment":
         break;
-      default: {
-        const sentence = c.type === "ERROR" ? accessorTokenErr(c) : null;
-        if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
+      default:
         throw new UnsupportedError("module-node", `顶层节点 ${c.type} 未支持`);
-      }
     }
   }
   return m;
 }
 
-function lowerVar(n: SyntaxNode, isConst: boolean, inClass = false): VarDecl {
+function lowerVar(n: SyntaxNode, isConst: boolean): VarDecl {
   const typeNode = field(n, "type");
   const valueNode = field(n, "value");
-  if (inClass) {
-    const sentence = accessorTokenErr(n, false);
-    if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
-  }
   checkAfterToken(n, tokenOf(n, "="), valueNode, isConst ? 'Expected initializer expression for constant.' : 'Expected expression for variable initial value after "=".');
   checkAfterToken(n, tokenOf(n, ":"), typeNode, 'Expected type after ":"');
   return {
@@ -190,12 +178,7 @@ function lowerAccessor(n: SyntaxNode | null | undefined): PropAccessor | null {
       setter = { kind: "inline", param: pname, body: blockBody(c) };
     } else if (c.type === "getter") getter = { kind: "method", method: c.text };
     else if (c.type === "setter") setter = { kind: "method", method: c.text };
-    else if (c.type === "ERROR") {
-      const sentence = accessorTokenErr(n, false);
-      if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
-      if (/^(get|set)\s*=/.test(c.text)) throw new UnsupportedError("property-setget", "Expected end of indented block for property.");
-      throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
-    } else if (c.isNamed) {
+    else if (c.isNamed) {
       throw new UnsupportedError("property-setget", `属性访问器里没见过的形态：${c.type} ${JSON.stringify(c.text.slice(0, 24))}`);
     }
   }
@@ -259,7 +242,7 @@ function lowerClassInner(n: SyntaxNode): ClassDecl {
 need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "variable_statement":
-        decl.vars.push(lowerVar(c, false, true));
+        decl.vars.push(lowerVar(c, false));
         break;
       case "const_statement":
         decl.vars.push(lowerVar(c, true));
@@ -280,11 +263,8 @@ need(named(c)[0] ?? field(c, "type"), "extends").text;
         break;
       case "annotation":
         break;
-      default: {
-        const sentence = c.type === "ERROR" ? accessorTokenErr(c) : null;
-        if (sentence !== null) throw new UnsupportedError("property-setget", sentence);
+      default:
         throw new UnsupportedError("class-node", `类内节点 ${c.type} 未支持`);
-      }
     }
   }
   return decl;
@@ -477,7 +457,6 @@ function lowerMatch(n: SyntaxNode): Stmt {
   const arms: MatchArm[] = [];
   for (const section of named(body)) {
     if (section.type !== "pattern_section") {
-      if (section.type === "ERROR") continuationErr(MATCH_PATTERN_COLON, section);
       throw new UnsupportedError("match-node", `match 内节点 ${section.type} 未支持`);
     }
     const sectionBody = lowerBody(need(field(section, "body"), "match 分支体"));
@@ -579,26 +558,13 @@ function lowerPatternInner(n: SyntaxNode): Pattern {
     case "unary_operator":
     case "parenthesized_expression":
     case "conditional_expression": {
-      if (n.type === "parenthesized_expression" && armMissingParen(n)) {
-        throw new UnsupportedError("pattern-arm-parse", `Expected closing ")" after grouping expression.`);
-      }
       if (armAllLiterals(n)) return { kind: "const", expr: lowerExpr(n) };
       if (armHasAttributeLeaf(n)) throw new UnsupportedError("pattern-arm-runtime", ARM_PATTERN);
-      throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
-    }
-    case "ERROR": {
-      const first = n.children[0]?.text ?? "";
-      if (first === ",") throw new UnsupportedError("pattern-arm-parse", `Expected expression for match pattern.`);
-      if (first === "else") throw new UnsupportedError("pattern-arm-parse", `Expected ":" after "match" pattern guard.`);
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
     }
     default:
       throw new UnsupportedError("pattern", `模式 ${n.type} 未支持`);
   }
-}
-
-function armMissingParen(n: SyntaxNode): boolean {
-  return n.children.some((c) => c.type === ")" && (c.hasError || c.text === ""));
 }
 
 function armAllLiterals(n: SyntaxNode): boolean {
@@ -748,11 +714,6 @@ function lowerExprInner(n: SyntaxNode): Expr {
     }
     case "binary_operator":
       return lowerBinary(n, c);
-    case "ERROR": {
-      const recovered = recoverLiteralCall(n);
-      if (recovered !== null) return recovered;
-      throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
-    }
     default:
       throw new UnsupportedError("expr", `表达式 ${n.type} 未支持`);
   }
@@ -764,7 +725,7 @@ function lowerBinary(n: SyntaxNode, c: Loc): Expr {
     const tok = n.children.find((k) => !k.isNamed) ?? null;
     checkAfterToken(n, tok, field(n, "right"), `Expected expression after "${op}" operator.`);
   }
-  const left = lowerOperand(need(field(n, "left"), "左操作数"));
+  const left = lowerExpr(need(field(n, "left"), "左操作数"));
   const right = need(field(n, "right"), "右操作数");
   if (op === "is") return { kind: "is", operand: left, type: lowerType(right), loc: c };
   if (op === "as") return { kind: "as", operand: left, type: lowerType(right), loc: c };
@@ -808,80 +769,9 @@ function armArgKind(n: SyntaxNode): string | null {
 }
 
 
-function markLiteralCalls(n: SyntaxNode): void {
-  if (n.type === "ERROR") {
-    const lit = named(n)[0];
-    if (lit !== undefined && (lit.type === "string_name" || lit.type === "node_path")) {
-      let sib = nextNamedSib(n);
-      while (sib !== undefined && sib.type === "base_call") {
-        CONSUMED.add(sib);
-        sib = nextNamedSib(sib);
-      }
-      if (sib !== undefined && sib.type === "binary_operator") CONSUMED.add(sib);
-    }
-  }
-  for (const c of n.children) markLiteralCalls(c);
-}
-
-const CONSUMED = new WeakSet<SyntaxNode>();
-
-const LEFT_RECOVER = new WeakMap<SyntaxNode, Expr>();
-
-function lowerOperand(n: SyntaxNode): Expr {
-  return LEFT_RECOVER.get(n) ?? lowerExpr(n);
-}
-
 function callArgs(n: SyntaxNode): SyntaxNode[] {
   const argsNode = field(n, "arguments");
-  return argsNode === null ? [] : named(argsNode).filter((c) => !CONSUMED.has(c));
-}
-
-function recoverLiteralCall(err: SyntaxNode): Expr | null {
-  const lit = named(err)[0];
-  if (lit === undefined || (lit.type !== "string_name" && lit.type !== "node_path")) return null;
-  let sib = nextNamedSib(err);
-  if (sib === undefined) return null;
-  let out = lowerExpr(lit);
-  if (sib.type === "binary_operator") {
-    const leftNode = field(sib, "left");
-    if (leftNode === null || leftNode.type !== "base_call") return null;
-    const stepped = baseCallStep(out, named(leftNode), field(leftNode, "arguments"), leftNode);
-    if (stepped === null) return null;
-    LEFT_RECOVER.set(leftNode, stepped);
-    CONSUMED.add(sib);
-    return lowerOperand(sib);
-  }
-  if (sib.type !== "base_call") return null;
-  while (sib !== undefined && sib.type === "base_call") {
-    const kids = named(sib);
-    const argsNode = field(sib, "arguments");
-    const folded = baseCallStep(out, kids, argsNode, sib);
-    if (folded === null) return null;
-    CONSUMED.add(sib);
-    out = folded;
-    sib = nextNamedSib(sib);
-  }
-  if (sib !== undefined && sib.type === "binary_operator") {
-    const leftNode = field(sib, "left");
-    if (leftNode === null || leftNode.type !== "base_call") return null;
-    LEFT_RECOVER.set(leftNode, out);
-    CONSUMED.add(sib);
-    return lowerOperand(sib);
-  }
-  return out;
-}
-
-function baseCallStep(obj: Expr, kids: SyntaxNode[], argsNode: SyntaxNode | null, at: SyntaxNode): Expr | null {
-  const c = loc(at);
-  const head = kids[0];
-  if (head === undefined) return null;
-  if (head.type === "identifier") {
-    const name = head.text;
-    if (argsNode === null) return { kind: "attribute", obj, name, loc: c };
-    const args = named(argsNode).filter((x) => !CONSUMED.has(x)).map(lowerExpr);
-    return { kind: "call", callee: { kind: "attribute", obj, name, loc: c }, args, loc: c };
-  }
-  return null;
+  return argsNode === null ? [] : named(argsNode);
 }
 
 function ctorAccepts(name: string, kinds: Array<string | null>): boolean {

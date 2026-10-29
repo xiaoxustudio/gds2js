@@ -11,7 +11,7 @@ import { parseStatementLine } from "./stmt";
  * 所以下行不需要再摆一套摊平机器去补偿 `2 * 3 ** 2` 被解成 `(2*3)**2` 那一形。
  *
  * 畸形输入**不**合成 `type:"ERROR"` 子树、也**不**置 `hasError`：证据全在 `syntaxErrors` 里，
- * `lower` 那几处原本寄生在 ERROR 落点上的记号级重扫改从那里取证，对外的 Godot 原文句子与行号不变。
+ * 对外的 Godot 原文句子与行号由 `lower` 的 `syntaxErrOf` 照原样抛。
  */
 export function parseSync(src: string): CsTree {
   const p = new Parser(src);
