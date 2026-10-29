@@ -186,7 +186,7 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
   const tree = new GdSceneTree(root);
   sceneTreeBegin(tree);
   nodeInit(rootNode as object, rootCls);
-  (rootNode as { __gd_node_name__: string }).__gd_node_name__ = rootName;
+  (rootNode as unknown as NodeRec).__gd_node_name__ = rootName;
   nodeAttach(root as unknown as NodeRec, rootNode as unknown as NodeRec);
   if (rootCls === "Node2D") nodeAddToGroup(rootNode as unknown as NodeRec, `_root_canvas${String((rootNode as GdScriptObject).gdObjectId)}`);
   tree.currentScene = rootNode as object;

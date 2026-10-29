@@ -194,6 +194,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   const heritage =
     baseClass.kind === "host" ? " extends SceneTree"
     : baseClass.kind === "import" ? ` extends ${baseClass.name}`
+    : baseClass.kind === "engine" ? " extends rt.GdNodeObject"
     : " extends rt.GdScriptObject";
   const proto = baseClass.kind === "import" || opts.extendedByScript === true;
   ctx.INIT_HAS_BASE = baseClass.kind === "import";
@@ -201,13 +202,13 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   ctx.NEEDS_HOST_SUPER = !proto;
   out.push(`export class ${className}${heritage} {`);
   if (baseClass.kind === "engine") {
-    out.push(`  __gd_engine_class__ = ${JSON.stringify(baseClass.name)};`);
-    out.push("  __gd_freed__ = false;");
-    out.push("  __gd_node_queued__ = false;");
-    out.push('  __gd_node_name__ = "";');
-    out.push("  __gd_node_parent__: unknown = null;");
-    out.push("  __gd_node_children__: unknown[] = [];");
-    out.push("  __gd_node_groups__: string[] = [];");
+    out.push(`  override __gd_engine_class__ = ${JSON.stringify(baseClass.name)};`);
+    out.push("  override __gd_freed__ = false;");
+    out.push("  override __gd_node_queued__ = false;");
+    out.push('  override __gd_node_name__ = "";');
+    out.push("  override __gd_node_parent__: object | null = null;");
+    out.push("  override __gd_node_children__: object[] = [];");
+    out.push("  override __gd_node_groups__: string[] = [];");
   }
   if (proto && baseClass.kind !== "import") out.push(...emitRootConstructor(true));
   out.push(...emitFieldDeclarations(m.vars, m.signals));
@@ -216,7 +217,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   if (!proto && !m.funcs.some((f) => f.name === "_init" && !f.isStatic)) out.push(...emitFieldsOnlyConstructor());
   ctx.INHERITED_METHODS = new Set([
     ...(opts.inheritedMembers ?? []),
-    ...(baseClass.kind === "host" ? HOST_MEMBERS : []),
+    ...(baseClass.kind === "host" || opts.hostBaseInChain === true ? HOST_MEMBERS : []),
   ]);
   ctx.SCRIPT_INHERITED = new Set(opts.inheritedMembers ?? []);
   for (const f of m.funcs) {

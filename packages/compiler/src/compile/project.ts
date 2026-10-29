@@ -67,6 +67,15 @@ function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
 }
 
+function mainSceneFile(resRoot: string): string | null {
+  const project = join(resRoot, "project.godot");
+  if (!existsSync(project)) return null;
+  const m = /^run\/main_scene="(res:\/\/[^"]+)"/m.exec(readFileSync(project, "utf8"));
+  if (m === null) return null;
+  const abs = resToAbs(normalizeRes(m[1]!), resRoot);
+  return existsSync(abs) ? abs : null;
+}
+
 function climbsAboveRoot(target: string, fromAbs: string, resRoot: string): boolean {
   if (target.startsWith(RES_PREFIX)) return false;
   const rel = relative(resRoot, resolve(join(dirname(fromAbs), target)));
@@ -331,7 +340,8 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     }
   }
 
-  const sceneRoot: SceneNode | null = opts.sceneFile ? parseScene(readFileSync(opts.sceneFile, "utf8")) : null;
+  const scenePath = opts.sceneFile === undefined ? mainSceneFile(opts.resRoot) : opts.sceneFile;
+  const sceneRoot: SceneNode | null = scenePath ? parseScene(readFileSync(scenePath, "utf8")) : null;
   const sceneDeps = new Map<string, Loaded>();
   if (sceneRoot !== null) {
     const collect = (node: SceneNode): void => {
