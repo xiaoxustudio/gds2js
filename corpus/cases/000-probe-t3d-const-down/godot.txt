@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot find member "DOWN" in base "Transform3D".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "DOWN" in base "Transform3D".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

@@ -1,0 +1,8 @@
+SCRIPT ERROR: Parse Error: Invalid operands "Transform3D" and "Basis" for "==" operator.
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid operands "Transform3D" and "Vector3" for "==" operator.
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid operands "Transform3D" and "int" for "==" operator.
+   at: GDScript::reload (<case>/main.gd:7)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

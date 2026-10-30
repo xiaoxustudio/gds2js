@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot find member "get" in base "Transform3D".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Function "get()" not found in base Transform3D.
+   at: GDScript::reload (<case>/main.gd:5)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
