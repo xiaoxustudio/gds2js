@@ -16,6 +16,7 @@ import { faceArity, faceMemberKnown, valueAttrKind } from "../face-arity";
 import { readOnlyError } from "../frames";
 import { GdNodePath } from "../node-path";
 import { GdNativeClass } from "../native-class";
+import { engineClassConst } from "../engine-class-consts";
 import { Signal } from "../signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
 import { GArray, GDict, toStringNameSlot, show } from "../values";
@@ -456,6 +457,8 @@ export function attribute(raw: unknown, name: string): unknown {
   }
   if (obj.t === Tag.OBJECT) {
     if (obj.v instanceof GdNativeClass) {
+      const konst = engineClassConst(obj.v.className, name);
+      if (konst !== null) return V.int(konst);
       throw new UnsupportedError("native-class-member", `引擎类 ${obj.v.className} 的 .${name} 还没建模（实测能取值、能比等式，打出来带进程内的号）`);
     }
     const vec = obj.v instanceof GVector2 ? (obj.v as GVector2) : null;

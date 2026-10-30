@@ -47,6 +47,7 @@ export interface EmitOptions {
   runtimeMode?: "import" | "local" | "single";
   standaloneRequirePath?: string;
   standaloneInline?: string;
+  projectName?: string;
 }
 
 export interface EmitResult {
@@ -270,6 +271,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   }
 
   if (autoRun) {
+    if (opts.projectName !== undefined && opts.projectName !== "") {
+      out.push(`rt.setHostProjectName(${JSON.stringify(opts.projectName)});`);
+    }
     out.push(`const __gd_entry = new ${className}();`);
     out.push(`try {`);
     if (opts.scene !== undefined) {

@@ -67,6 +67,14 @@ function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
 }
 
+/** 4.6.3 实测 `user://` 落在 `%APPDATA%/Godot/app_userdata/<config/name>`，那一格由工程名决定。 */
+function projectConfigName(resRoot: string): string | undefined {
+  const project = join(resRoot, "project.godot");
+  if (!existsSync(project)) return undefined;
+  const m = /^config\/name="?([^"\r\n]+)"?/m.exec(readFileSync(project, "utf8"));
+  return m === null ? undefined : m[1];
+}
+
 function mainSceneFile(resRoot: string): string | null {
   const project = join(resRoot, "project.godot");
   if (!existsSync(project)) return null;
@@ -341,6 +349,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   }
 
   const scenePath = opts.sceneFile === undefined ? mainSceneFile(opts.resRoot) : opts.sceneFile;
+  const configName = projectConfigName(resRoot);
   const sceneRoot: SceneNode | null = scenePath ? parseScene(readFileSync(scenePath, "utf8")) : null;
   const sceneDeps = new Map<string, Loaded>();
   if (sceneRoot !== null) {
@@ -434,6 +443,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
             ? relFromJs(jsPath, join(opts.runtimeRoot, opts.hostFile ?? "host"))
             : opts.hostImport,
       autoRun: opts.autoRun ?? isEntry,
+      projectName: isEntry ? configName : undefined,
       className: l.jsName,
       baseClass: base?.spec ?? (isEntry && opts.hostImport ? { kind: "host" } : { kind: "none" }),
       scene: scene ?? undefined,

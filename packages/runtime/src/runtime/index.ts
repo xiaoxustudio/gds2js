@@ -22,6 +22,8 @@ export * from "./quaternion";
 export * from "./transform2d";
 export * from "./transform3d";
 export * from "./json";
+export { registerHostIo, setHostProjectName } from "../host-io";
+export type { HostIo } from "../host-io";
 export * from "./basis";
 export * from "./node";
 export * from "./node2d";

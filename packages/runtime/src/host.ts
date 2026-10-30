@@ -17,6 +17,7 @@ import {
 import { setRotatedAxisBlockSink } from "./runtime/vector3";
 import { richAnsi } from "./runtime/rich-ansi";
 import { showArgsSep, truthyOf } from "./runtime/values";
+import "./host-io-node";
 
 let out: string[] = [];
 let pending = "";

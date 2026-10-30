@@ -1,0 +1,16 @@
+m|0|true
+o|true|0|DirAccess|24|true|true|true|true
+c|true|false
+f|["b.txt"]|34
+s|true|true|false|false
+l|["b.txt", "deep/"]
+g|["deep"]
+cp|0|true
+rn|0|false|true
+rm|0|1|false
+md|0|true
+ra|0|false
+cd|0|true|false|true
+n2|true|31
+de|true|false
+n3|true|hello

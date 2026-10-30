@@ -34,6 +34,8 @@ import { planeMethod } from "./plane";
 import { quaternionMethod } from "./quaternion";
 import { transform2dMethod } from "./transform2d";
 import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "./json";
+import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAccessStatic, fileMethod } from "./file-access";
+import { GdDir, GdFile } from "../file-access";
 import { GdJson, jsonNew } from "../json";
 import { probedClassChain } from "../patterns";
 import { transform3dMethod } from "./transform3d";
@@ -61,6 +63,8 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
       if (engineClassNewable(inner.className)) return engineClassNew(inner.className);
     }
     if (inner.className === "JSON" && JSON_STATIC_NAMES.has(name)) return jsonStatic(name, args);
+    if (inner.className === "FileAccess" && FA_STATIC_NAMES.has(name)) return fileAccessStatic(name, args);
+    if (inner.className === "DirAccess" && DA_STATIC_NAMES.has(name)) return dirAccessStatic(name, args);
     throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（构造式只量过无实参的那几支）`);
   }
   const vecFace =
@@ -402,6 +406,8 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GRect2i) return rect2iMethod(inner, name, args);
   if (inner instanceof GBasis) return basisMethod(inner, name, args);
   if (inner instanceof GdJson) return jsonMethod(inner, name, args);
+  if (inner instanceof GdFile) return fileMethod(inner, name, args);
+  if (inner instanceof GdDir) return dirMethod(inner, name, args);
   if (inner instanceof GdSceneTree) return treeMethod(inner, name, args);
   if (isEngineNode(inner)) return nodeMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
