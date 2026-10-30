@@ -135,6 +135,45 @@ export function asBasis(v: Variant): GBasis | null {
   return v.t === Tag.OBJECT && v.v instanceof GBasis ? (v.v as GBasis) : null;
 }
 
+export class GTransform3D {
+  x0: number;
+  x1: number;
+  x2: number;
+  y0: number;
+  y1: number;
+  y2: number;
+  z0: number;
+  z1: number;
+  z2: number;
+  ox: number;
+  oy: number;
+  oz: number;
+  constructor(
+    x0: number, x1: number, x2: number,
+    y0: number, y1: number, y2: number,
+    z0: number, z1: number, z2: number,
+    ox: number, oy: number, oz: number,
+  ) {
+    const f = Math.fround;
+    this.x0 = f(x0);
+    this.x1 = f(x1);
+    this.x2 = f(x2);
+    this.y0 = f(y0);
+    this.y1 = f(y1);
+    this.y2 = f(y2);
+    this.z0 = f(z0);
+    this.z1 = f(z1);
+    this.z2 = f(z2);
+    this.ox = f(ox);
+    this.oy = f(oy);
+    this.oz = f(oz);
+  }
+}
+
+export function asTransform3D(v: Variant): GTransform3D | null {
+  return v.t === Tag.OBJECT && v.v instanceof GTransform3D ? (v.v as GTransform3D) : null;
+}
+
 export function rect2iPartsOf(o: object): [number, number, number, number] | null {
   return o instanceof GRect2i ? [o.x, o.y, o.w, o.h] : null;
 }

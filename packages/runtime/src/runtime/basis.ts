@@ -134,6 +134,51 @@ export function basisDeterminant(a: GBasis): number {
   return r(r(r(a.x0 * cx) + r(a.y0 * cy)) + r(a.z0 * cz));
 }
 
+export function basisInverseParts(a: GBasis): GBasis | null {
+  const det = basisDeterminant(a);
+  if (det === 0) return null;
+  const rd = r(1 / det);
+  const x0 = a.x0, x1 = a.x1, x2 = a.x2;
+  const y0 = a.y0, y1 = a.y1, y2 = a.y2;
+  const z0 = a.z0, z1 = a.z1, z2 = a.z2;
+  return new GBasis(
+    r(rd * r(r(y1 * z2) - r(z1 * y2))), r(rd * r(r(z1 * x2) - r(x1 * z2))), r(rd * r(r(x1 * y2) - r(y1 * x2))),
+    r(rd * r(r(y2 * z0) - r(z2 * y0))), r(rd * r(r(x0 * z2) - r(z0 * x2))), r(rd * r(r(x2 * y0) - r(y2 * x0))),
+    r(rd * r(r(y0 * z1) - r(z0 * y1))), r(rd * r(r(x1 * z0) - r(z1 * x0))), r(rd * r(r(x0 * y1) - r(y0 * x1))),
+  );
+}
+
+function basisRowLength(x: number, y: number, z: number): number {
+  return r(Math.sqrt(r(r(r(x * x) + r(y * y)) + r(z * z))));
+}
+
+function basisRowDivide(x: number, y: number, z: number, d: number): [number, number, number] {
+  return [r(x / d), r(y / d), r(z / d)];
+}
+
+function basisRowDot(a: [number, number, number], b: [number, number, number]): number {
+  return r(r(r(a[0] * b[0]) + r(a[1] * b[1])) + r(a[2] * b[2]));
+}
+
+export function basisOrthoParts(a: GBasis): GBasis {
+  const x: [number, number, number] = [a.x0, a.x1, a.x2];
+  const y: [number, number, number] = [a.y0, a.y1, a.y2];
+  const z: [number, number, number] = [a.z0, a.z1, a.z2];
+  const o0 = basisRowDivide(x[0], x[1], x[2], basisRowLength(x[0], x[1], x[2]));
+  const dy = basisRowDot(o0, y);
+  const yRaw: [number, number, number] = [r(y[0] - r(o0[0] * dy)), r(y[1] - r(o0[1] * dy)), r(y[2] - r(o0[2] * dy))];
+  const o1 = basisRowDivide(yRaw[0], yRaw[1], yRaw[2], basisRowLength(yRaw[0], yRaw[1], yRaw[2]));
+  const dz0 = basisRowDot(o0, z);
+  const dz1 = basisRowDot(o1, z);
+  const zRaw: [number, number, number] = [
+    r(r(z[0] - r(o0[0] * dz0)) - r(o1[0] * dz1)),
+    r(r(z[1] - r(o0[1] * dz0)) - r(o1[1] * dz1)),
+    r(r(z[2] - r(o0[2] * dz0)) - r(o1[2] * dz1)),
+  ];
+  const o2 = basisRowDivide(zRaw[0], zRaw[1], zRaw[2], basisRowLength(zRaw[0], zRaw[1], zRaw[2]));
+  return new GBasis(o0[0], o0[1], o0[2], o1[0], o1[1], o1[2], o2[0], o2[1], o2[2]);
+}
+
 export function basisText(v: GBasis): string {
   return `[X: (${strVec2(v.x0)}, ${strVec2(v.x1)}, ${strVec2(v.x2)}), `
     + `Y: (${strVec2(v.y0)}, ${strVec2(v.y1)}, ${strVec2(v.y2)}), `

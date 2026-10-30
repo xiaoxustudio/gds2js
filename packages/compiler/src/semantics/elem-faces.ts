@@ -94,7 +94,7 @@ export const ARG_NAME_TYPES = new Set([
 ]);
 
 export const PARAM_OWN_SLOTS = new Set(["Array", "Dictionary", "NodePath", "Callable", "Signal",
-  "Rect2", "Rect2i", "Transform2D", "Plane", "Quaternion", "Basis", "AABB"]);
+  "Rect2", "Rect2i", "Transform2D", "Transform3D", "Plane", "Quaternion", "Basis", "AABB"]);
 
 export const INSTANCE_OF_TYPE_LAST = 38;
 

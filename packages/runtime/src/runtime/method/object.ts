@@ -33,11 +33,12 @@ import { aabbMethod } from "./aabb";
 import { planeMethod } from "./plane";
 import { quaternionMethod } from "./quaternion";
 import { transform2dMethod } from "./transform2d";
+import { transform3dMethod } from "./transform3d";
 import { basisMethod } from "./basis";
 import { nodeMethod } from "./node";
 import { GdSceneTree, treeMethod } from "../scene";
 import { engineClassNew, engineClassNewable, isEngineNode } from "../node";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D } from "../composite-classes";
+import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "../composite-classes";
 import { GVector3i, vector3iMethod } from "../vector3i";
 import { colorMethod, GColor } from "../color";
 import { bytesMethod, GBytes, packTypeName } from "../packed";
@@ -383,6 +384,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   }
 
   if (inner instanceof GTransform2D) return transform2dMethod(inner, name, args);
+  if (inner instanceof GTransform3D) return transform3dMethod(inner, name, args);
   if (inner instanceof GQuaternion) return quaternionMethod(inner, name, args);
   if (inner instanceof GPlane) return planeMethod(inner, name, args);
   if (inner instanceof GAABB) return aabbMethod(inner, name, args);

@@ -30,13 +30,14 @@ import { aabbReadProp } from "../aabb";
 import { planeReadProp } from "../plane";
 import { quaternionReadProp } from "../quaternion";
 import { transform2dReadProp } from "../transform2d";
+import { transform3dReadProp, transform3dWriteProp } from "../transform3d";
 import { basisReadProp, basisWriteProp } from "../basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet } from "../node";
 import { GdSceneTree, treeReadProp } from "../scene";
 import { node2dRead, node2dWrite } from "../node2d";
 import { ctlRead, ctlWrite } from "../control";
 import { node3dRead, node3dWrite } from "../node3d";
-import { GBasis, GPlane, GQuaternion, GTransform2D } from "../composite-classes";
+import { GBasis, GPlane, GQuaternion, GTransform2D, GTransform3D } from "../composite-classes";
 import { GAABB } from "../composite-classes";
 import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
 import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
@@ -245,6 +246,11 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   if (rci !== null) return rect2iWriteProp(rci, key, value);
   const bs = base.t === Tag.OBJECT && base.v instanceof GBasis ? (base.v as GBasis) : null;
   if (bs !== null) return basisWriteProp(bs, key, value);
+  const t3w = base.t === Tag.OBJECT && base.v instanceof GTransform3D ? (base.v as GTransform3D) : null;
+  if (t3w !== null) {
+    transform3dWriteProp(t3w, key, value);
+    return null;
+  }
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
     if (enw.__gd_engine_class__ === "Node3D" && key !== "name") {
@@ -469,6 +475,12 @@ export function attribute(raw: unknown, name: string): unknown {
       const part = transform2dReadProp(t2, name);
       if (part !== null) return part;
       throw new UnsupportedError("transform2d-prop", `Transform2D.${name} 的属性读没量过`);
+    }
+    const t3o = obj.v instanceof GTransform3D ? (obj.v as GTransform3D) : null;
+    if (t3o !== null) {
+      const part = transform3dReadProp(t3o, name);
+      if (part !== null) return part;
+      throw new UnsupportedError("transform3d-prop", `Transform3D.${name} 的属性读没量过`);
     }
     const qq = obj.v instanceof GQuaternion ? (obj.v as GQuaternion) : null;
     if (qq !== null) {

@@ -9,6 +9,7 @@ import { asVec3, GVector3, vector3, vec3Cmp } from "./vector3";
 import { asQuaternion, quaternion } from "./quaternion";
 import { asTransform2D, transform2d } from "./transform2d";
 import { asBasis, basisMul, basisScaled, basisXform } from "./basis";
+import { asTransform3D, pointMulTransform3d, transform3dCompose, transform3dXformPoint } from "./transform3d";
 
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./vector4";
@@ -226,6 +227,20 @@ export const ops = {
         return vector2(r3(r3(taMul.xx * p.x) + r3(taMul.yx * p.y)) + taMul.ox, r3(r3(taMul.xy * p.x) + r3(taMul.yy * p.y)) + taMul.oy);
       }
       throw new UnsupportedError("transform2d-mul-right", `Transform2D 的 ${"\u002a"} 只量过乘 Transform2D 与乘 Vector2（收到另一形）`);
+    }
+    const ta3Mul = asTransform3D(a);
+    if (ta3Mul !== null) {
+      const tb3Mul = asTransform3D(b);
+      if (tb3Mul !== null) return transform3dCompose(ta3Mul, tb3Mul);
+      const t3Point = b.t === Tag.OBJECT && (b.v as object) instanceof GVector3 ? (b.v as GVector3) : null;
+      if (t3Point !== null) return transform3dXformPoint(ta3Mul, t3Point.x, t3Point.y, t3Point.z);
+      throw new UnsupportedError("transform3d-mul-right", `Transform3D 的 ${"\u002a"} 只量过乘 Transform3D 与乘 Vector3（收到另一形）`);
+    }
+    const t3Right = asTransform3D(b);
+    if (t3Right !== null) {
+      const t3Left = a.t === Tag.OBJECT && (a.v as object) instanceof GVector3 ? (a.v as GVector3) : null;
+      if (t3Left !== null) return pointMulTransform3d(t3Left.x, t3Left.y, t3Left.z, t3Right);
+      throw new UnsupportedError("transform3d-mul-left", `乘数落在 Transform3D 左边的 ${"\u002a"} 只量过 Vector3（收到 ${tagName(a.t)}）`);
     }
     const baMul = asBasis(a);
     if (baMul !== null) {

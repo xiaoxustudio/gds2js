@@ -2,7 +2,7 @@ import { UnsupportedError } from "../errors";
 import { Tag, V, type Variant } from "../tags";
 import { GBasis } from "../composite-classes";
 import { asVec3, vector3 } from "../vector3";
-import { axisAngleBasis, basis, basisDeterminant, basisMul } from "../basis";
+import { axisAngleBasis, basis, basisDeterminant, basisInverseParts, basisMul } from "../basis";
 
 const r = Math.fround;
 
@@ -21,17 +21,9 @@ export function basisMethod(inner: GBasis, name: string, args: Variant[]): Varia
     case "transposed":
       return basis(inner.x0, inner.y0, inner.z0, inner.x1, inner.y1, inner.z1, inner.x2, inner.y2, inner.z2);
     case "inverse": {
-      const det = basisDeterminant(inner);
-      if (det === 0) throw new UnsupportedError("basis-inverse", "Basis.inverse() 的行列式为零那一形没量过");
-      const rd = r(1 / det);
-      const x0 = inner.x0, x1 = inner.x1, x2 = inner.x2;
-      const y0 = inner.y0, y1 = inner.y1, y2 = inner.y2;
-      const z0 = inner.z0, z1 = inner.z1, z2 = inner.z2;
-      return basis(
-        r(rd * r(r(y1 * z2) - r(z1 * y2))), r(rd * r(r(z1 * x2) - r(x1 * z2))), r(rd * r(r(x1 * y2) - r(y1 * x2))),
-        r(rd * r(r(y2 * z0) - r(z2 * y0))), r(rd * r(r(x0 * z2) - r(z0 * x2))), r(rd * r(r(x2 * y0) - r(y2 * x0))),
-        r(rd * r(r(y0 * z1) - r(z0 * y1))), r(rd * r(r(x1 * z0) - r(z1 * x0))), r(rd * r(r(x0 * y1) - r(y0 * x1))),
-      );
+      const inv = basisInverseParts(inner);
+      if (inv === null) throw new UnsupportedError("basis-inverse", "Basis.inverse() 的行列式为零那一形没量过");
+      return basis(inv.x0, inv.x1, inv.x2, inv.y0, inv.y1, inv.y2, inv.z0, inv.z1, inv.z2);
     }
     case "get_scale": {
       const det = basisDeterminant(inner);

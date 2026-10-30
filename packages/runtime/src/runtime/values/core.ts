@@ -13,7 +13,9 @@ import { plane, planeText } from "../plane";
 import { quaternion, quaternionText } from "../quaternion";
 import { asQuaternion, GQuaternion } from "../composite-classes";
 import { asTransform2D, GTransform2D } from "../composite-classes";
+import { asTransform3D, GTransform3D } from "../composite-classes";
 import { transform2d, transform2dText } from "../transform2d";
+import { transform3d, transform3dText } from "../transform3d";
 import { asBasis, basis, basisText, GBasis } from "../basis";
 import { asPlane, GPlane } from "../composite-classes";
 import { asAABB, GAABB } from "../composite-classes";
@@ -127,6 +129,8 @@ function keyOfIn(v: Variant, depth: number): string {
       if (rc2i) return `8:${String(rc2i.x)},${String(rc2i.y)},${String(rc2i.w)},${String(rc2i.h)}`;
       const bsKey = asBasis(v);
       if (bsKey) return `17:${String(bsKey.x0)},${String(bsKey.x1)},${String(bsKey.x2)},${String(bsKey.y0)},${String(bsKey.y1)},${String(bsKey.y2)},${String(bsKey.z0)},${String(bsKey.z1)},${String(bsKey.z2)}`;
+      const t3Key = asTransform3D(v);
+      if (t3Key) return `18:${String(t3Key.x0)},${String(t3Key.x1)},${String(t3Key.x2)},${String(t3Key.y0)},${String(t3Key.y1)},${String(t3Key.y2)},${String(t3Key.z0)},${String(t3Key.z1)},${String(t3Key.z2)},${String(t3Key.ox)},${String(t3Key.oy)},${String(t3Key.oz)}`;
       const ridKey = asRid(v);
       if (ridKey !== null) return "r:" + String(ridKey.id);
       const npKey = asNodePath(v);
@@ -159,6 +163,7 @@ export type ElemKind =
   | "Plane"
   | "Quaternion"
   | "Transform2D"
+  | "Transform3D"
   | "Basis"
   | "AABB"
   | "Vector4"
@@ -200,6 +205,8 @@ export function elemDefault(kind: ElemKind): Variant {
       return quaternion(0, 0, 0, 1);
     case "Transform2D":
       return transform2d(1, 0, 0, 1, 0, 0);
+    case "Transform3D":
+      return transform3d(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0);
     case "Basis":
       return basis(1, 0, 0, 0, 1, 0, 0, 0, 1);
     case "Vector3i":
@@ -278,6 +285,8 @@ export function elemConvert(kind: ElemKind, v: Variant): Variant | null {
     }
     case "Transform2D":
       return v.t === Tag.OBJECT && v.v instanceof GTransform2D ? v : null;
+    case "Transform3D":
+      return v.t === Tag.OBJECT && v.v instanceof GTransform3D ? v : null;
     case "Basis":
       return v.t === Tag.OBJECT && v.v instanceof GBasis ? v : null;
     case "Quaternion":
@@ -441,6 +450,9 @@ export function show(v: Variant, depth = 0): string {
       if (inner instanceof GTransform2D) {
         return transform2dText(inner);
       }
+      if (inner instanceof GTransform3D) {
+        return transform3dText(inner);
+      }
       if (inner instanceof GBasis) {
         return basisText(inner);
       }
@@ -496,6 +508,19 @@ export function valueEq(a: Variant, b: Variant, depth = 0, op = "=="): boolean {
       const t3: Variant = at2 !== null ? b : a;
       if (t3.t === Tag.NIL) return false;
       throw new UnsupportedError("transform2d-eq-pair", `Transform2D 与 ${valueTypeName(t3)} 的 ${op} 那一格没量过`);
+    }
+    const at3d = asTransform3D(a);
+    const bt3d = asTransform3D(b);
+    if (at3d !== null && bt3d !== null) {
+      return at3d.x0 === bt3d.x0 && at3d.x1 === bt3d.x1 && at3d.x2 === bt3d.x2
+        && at3d.y0 === bt3d.y0 && at3d.y1 === bt3d.y1 && at3d.y2 === bt3d.y2
+        && at3d.z0 === bt3d.z0 && at3d.z1 === bt3d.z1 && at3d.z2 === bt3d.z2
+        && at3d.ox === bt3d.ox && at3d.oy === bt3d.oy && at3d.oz === bt3d.oz;
+    }
+    if (at3d !== null || bt3d !== null) {
+      const other: Variant = at3d !== null ? b : a;
+      if (other.t === Tag.NIL) return false;
+      throw new UnsupportedError("transform3d-eq-pair", `Transform3D 与 ${valueTypeName(other)} 的 ${op} 那一格没量过`);
     }
     const aq = asQuaternion(a);
     const bq = asQuaternion(b);
