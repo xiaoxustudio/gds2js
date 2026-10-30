@@ -2,15 +2,19 @@
 import {
   caseDir,
   caseIsProject,
+  caseSandboxed,
   caseScene,
   caseScript,
+  dropSandbox,
   godotOk,
   hangBudget,
   listCases,
   normalize,
+  prepareSandbox,
   readGolden,
   requireGodotPin,
   runGodot,
+  sandboxEnv,
   writeGolden,
   GODOT_BIN,
 } from "./lib.mjs";
@@ -36,11 +40,28 @@ let drift = 0;
 
 for (const id of cases) {
   const gd = caseScript(id);
-  const projectPath = caseIsProject(id) ? caseDir(id) : null;
   const prev = readGolden(id);
   const scene = caseScene(id);
-  const { text, timedOut } = runGodot(gd, { projectPath: projectPath ?? (scene === null ? null : caseDir(id)), scene: scene !== null, timeoutMs: hangBudget(prev) });
-  const norm = normalize(text, gd);
+  const sandboxed = caseSandboxed(id);
+  const projectPath = sandboxed
+    ? prepareSandbox(id).engine
+    : caseIsProject(id) || scene !== null
+      ? caseDir(id)
+      : null;
+  let run;
+  try {
+    run = runGodot(gd, {
+      projectPath,
+      scene: scene !== null,
+      timeoutMs: hangBudget(prev),
+      env: sandboxed ? sandboxEnv(id) : null,
+      cwd: sandboxed ? projectPath : null,
+    });
+  } finally {
+    if (sandboxed) dropSandbox(id);
+  }
+  const { text, timedOut } = run;
+  const norm = normalize(text, gd, sandboxed ? id : null);
   const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
   if (timedOut) timeout++;
   else if (status === "OK") ok++;

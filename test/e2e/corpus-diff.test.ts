@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import runCase from "../support/js-runner";
-import { caseScript, godotOk, listCases, normalize, readGolden } from "../support/lib-bridge";
+import { caseScript, caseSandboxed, godotOk, listCases, normalize, readGolden } from "../support/lib-bridge";
 
 const cases = listCases();
 
@@ -53,7 +53,7 @@ describe("corpus · JS 侧产物 vs Godot golden 逐字节", () => {
 
       try {
         const raw = await runCase(id);
-        row.js = raw === null || raw === undefined ? null : normalize(String(raw), gd);
+        row.js = raw === null || raw === undefined ? null : normalize(String(raw), gd, caseSandboxed(id) ? id : null);
       } catch (e) {
         row.jsErr = e instanceof Error ? e.message : String(e);
       }

@@ -3,9 +3,25 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { compileProject } from "@gds2js/compiler/compile/project";
 import * as harness from "../../tools/harness/scene-tree";
-import { caseDir, caseIsProject, caseScene, CORPUS } from "./lib-bridge";
+import { caseDir, caseIsProject, caseSandboxed, caseScene, CORPUS, dropSandbox, prepareSandbox, sandboxEnv } from "./lib-bridge";
 
 export default async function runCase(id: string): Promise<string | null> {
+  if (!caseSandboxed(id)) return runCaseInner(id);
+  prepareSandbox(id);
+  const saved = { APPDATA: process.env.APPDATA, LOCALAPPDATA: process.env.LOCALAPPDATA };
+  Object.assign(process.env, sandboxEnv(id));
+  try {
+    return await runCaseInner(id);
+  } finally {
+    if (saved.APPDATA === undefined) delete process.env.APPDATA;
+    else process.env.APPDATA = saved.APPDATA;
+    if (saved.LOCALAPPDATA === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = saved.LOCALAPPDATA;
+    dropSandbox(id);
+  }
+}
+
+async function runCaseInner(id: string): Promise<string | null> {
   if (caseIsProject(id)) return runProjectCase(id);
 
   const gen = join(CORPUS, id, "main.gen.mts");
