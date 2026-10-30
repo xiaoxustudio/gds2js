@@ -1,5 +1,5 @@
 export * from "./host";
-import { registerZipCodec } from "./runtime/packed";
+import { registerZipCodec } from "./runtime/class/bytes/packed";
 
 type ZipFn = (b: Uint8Array) => Uint8Array;
 

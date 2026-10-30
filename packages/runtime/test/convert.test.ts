@@ -4,14 +4,14 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
-import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, strToVar, varToStr } from "@gds2js/runtime/runtime/values";
-import { GBytes, toElem } from "@gds2js/runtime/runtime/packed";
+import { GBytes, toElem } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { variantConvert } from "@gds2js/runtime/runtime/convert";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
-import { vector3i } from "@gds2js/runtime/runtime/vector3i";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { vector3i } from "@gds2js/runtime/runtime/class/vector/vector3i";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { F, I, S } from "./support/variants";
 

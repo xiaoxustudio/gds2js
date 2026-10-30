@@ -1,0 +1,7 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+w|true|24|0
+p|F:/ex/nodejsEx/gds2js/tmp/fa-sandbox/path_shapes/appdata/Roaming/Godot/app_userdata/fa-path_shapes/probe.txt
+q|true|0
+r|true|12
+s|true|7

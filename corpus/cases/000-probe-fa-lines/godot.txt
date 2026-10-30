@@ -1,0 +1,9 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+w|true|24|0
+l|0|a|false
+l|1|b|false
+l|2|c|false
+l|3||false
+l|4|z|true
+l|5||true

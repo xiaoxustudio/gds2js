@@ -1,0 +1,25 @@
+extends SceneTree
+
+func _initialize():
+	var p := "user://modes.txt"
+	var w := FileAccess.open(p, FileAccess.WRITE)
+	w.store_string("one")
+	w.close()
+	var rw := FileAccess.open(p, FileAccess.READ_WRITE)
+	print("a|", rw.get_line(), "|", rw.get_position())
+	rw.store_string("TWO")
+	rw.close()
+	var rd := FileAccess.open(p, FileAccess.READ)
+	print("b|", rd.get_as_text())
+	rd.close()
+	var wr := FileAccess.open(p, FileAccess.WRITE_READ)
+	wr.store_string("abc")
+	wr.flush()
+	wr.seek(0)
+	print("c|", wr.get_as_text())
+	wr.close()
+	var wf := FileAccess.open(p, FileAccess.READ_WRITE_FLUSH)
+	print("d|", wf != null, "|", wf.get_error())
+	wf.close()
+	print("e|", FileAccess.open("user://modes.txt", FileAccess.WRITE) != null)
+	quit()

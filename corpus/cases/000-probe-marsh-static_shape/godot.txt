@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot construct native class "Marshalls" because it is an engine singleton.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "m" variable because the value doesn't have a set type.
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

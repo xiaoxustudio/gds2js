@@ -67,6 +67,14 @@ function resToAbs(resPath: string, resRoot: string): string {
   return join(resRoot, resPath.slice(RES_PREFIX.length));
 }
 
+/** 4.6.3 实测 `user://` 落在 `%APPDATA%/Godot/app_userdata/<config/name>`，那一格由工程名决定。 */
+function projectConfigName(resRoot: string): string | undefined {
+  const project = join(resRoot, "project.godot");
+  if (!existsSync(project)) return undefined;
+  const m = /^config\/name="?([^"\r\n]+)"?/m.exec(readFileSync(project, "utf8"));
+  return m === null ? undefined : m[1];
+}
+
 function mainSceneFile(resRoot: string): string | null {
   const project = join(resRoot, "project.godot");
   if (!existsSync(project)) return null;
@@ -94,6 +102,11 @@ function normalizeRes(resPath: string): string {
 }
 
 /** 匿名脚本的类名：文件名首字母大写、去掉非法字符。 */
+function moduleClassName(module: Module, resPath: string): string {
+  const derived = derivedClassName(resPath);
+  return module.innerClasses.some((c) => c.name === derived) ? `${derived}Module` : derived;
+}
+
 function derivedClassName(resPath: string): string {
   const raw = basename(resPath, extname(resPath)).replace(/[^A-Za-z0-9_]/g, "_");
   return /^[0-9]/.test(raw) ? `_${raw}` : raw.charAt(0).toUpperCase() + raw.slice(1);
@@ -233,7 +246,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       module,
       depPaths: new Set(),
       classRefs: new Set(),
-      jsName: module.className ?? derivedClassName(resPath),
+      jsName: module.className ?? moduleClassName(module, resPath),
     };
     loaded.set(resPath, l);
     return l;
@@ -341,6 +354,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   }
 
   const scenePath = opts.sceneFile === undefined ? mainSceneFile(opts.resRoot) : opts.sceneFile;
+  const configName = projectConfigName(resRoot);
   const sceneRoot: SceneNode | null = scenePath ? parseScene(readFileSync(scenePath, "utf8")) : null;
   const sceneDeps = new Map<string, Loaded>();
   if (sceneRoot !== null) {
@@ -434,6 +448,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
             ? relFromJs(jsPath, join(opts.runtimeRoot, opts.hostFile ?? "host"))
             : opts.hostImport,
       autoRun: opts.autoRun ?? isEntry,
+      projectName: isEntry ? configName : undefined,
       className: l.jsName,
       baseClass: base?.spec ?? (isEntry && opts.hostImport ? { kind: "host" } : { kind: "none" }),
       scene: scene ?? undefined,
@@ -441,6 +456,9 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       classRefs,
       resPath: l.resPath,
       preloads,
+      preloadConsts: constsByClass(loaded),
+      preloadClasses: innerClassesByClass(loaded),
+      exportInner: preloadedResPaths(loaded, resRoot).has(l.resPath),
       inheritedMembers: inherited,
       loadMap: [...loadMap].map(([literal, resPath]) => ({ literal, resPath })),
       sideEffectImports: [...sideEffect.values()],
@@ -516,6 +534,40 @@ function baseModule(
   if (classIndex.has(bare)) return classFile(bare, loaded, classIndex);
   return null;
 }
+
+function innerClassesByClass(loaded: Map<string, Loaded>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const m of loaded.values()) {
+    const names = m.module.innerClasses.map((c) => c.name);
+    if (names.length > 0) out[m.jsName] = names;
+  }
+  return out;
+}
+
+function preloadedResPaths(loaded: Map<string, Loaded>, resRoot: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of loaded.values()) {
+    walkModuleExprs(m.module, (e) => {
+      if (e.kind !== "call" || e.callee.kind !== "ident") return;
+      if (e.callee.name !== "preload" && e.callee.name !== "load") return;
+      const a = e.args[0];
+      if (!a || a.kind !== "lit" || a.lit !== "string") return;
+      out.add(normalizeRes(resolveGdPath(m.resPath, String(a.value))));
+    });
+  }
+  void resRoot;
+  return out;
+}
+
+function constsByClass(loaded: Map<string, Loaded>): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const m of loaded.values()) {
+    const names = m.module.vars.filter((v) => v.isConst).map((v) => v.name);
+    if (names.length > 0) out[m.jsName] = names;
+  }
+  return out;
+}
+
 
 function inheritedMembers(
   l: Loaded,

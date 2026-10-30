@@ -4,8 +4,8 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
-import { GColor } from "@gds2js/runtime/runtime/color";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
+import { GColor } from "@gds2js/runtime/runtime/class/color/color";
 import { attribute, method } from "@gds2js/runtime/runtime/methods";
 
 const read = (v: Variant, name: string): string => {

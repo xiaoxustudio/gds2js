@@ -1,0 +1,10 @@
+SCRIPT ERROR: Parse Error: Static function "int64_array_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_int64_array()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_int64_array()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_uint64_array()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:8)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

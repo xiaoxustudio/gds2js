@@ -7,11 +7,11 @@ import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import {
   GdScriptObject, nullCallable, registerClass, registerMethodArities, registerNativeBase,
   registerScriptLabel, wrapValue,
-} from "@gds2js/runtime/runtime/object";
+} from "@gds2js/runtime/runtime/class/object/script-object";
 import { gdDispatchByName } from "./support/gd-dispatch";
 import { I } from "./support/variants";
 

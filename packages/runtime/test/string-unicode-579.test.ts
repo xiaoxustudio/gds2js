@@ -2,7 +2,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { S } from "./support/variants";
 
 const pb = (xs: number[]) => V.object(new GBytes(xs, "byte"));

@@ -1,0 +1,77 @@
+a|false|0|0
+b|0
+c|false
+d|[]|0
+e|0|2
+g|0
+h|false|true
+i|false
+j|0
+ERRO<abs> File must be opened before use.
+   a<abs> get_position (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> get_length (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> get_buffer (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> File must be opened before use.
+   a<abs> get_position (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> get_buffer (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> get_buffer (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Condition "p_size < 0" is true. Returnin<abs> ERR_INVALID_PARAMETER
+   a<abs> resize (./core/templates/cowdata.<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> seek (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> File must be opened before use.
+   a<abs> get_position (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> store_buffer (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> flush (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> File must be opened before use.
+   a<abs> get_position (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> seek (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> get_length (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> get_buffer (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Condition "r != len" is true. Returnin<abs> String()
+   a<abs> get_as_utf8_string (core/io/file_access.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Parameter "f" is null.
+   a<abs> seek (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)

@@ -1,0 +1,22 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+m|get_files|true
+m|get_directories|true
+m|get_next|true
+m|get_current_dir|true
+m|is_read_only|false
+m|get_size|false
+m|get_access|false
+m|change_dir|true
+m|make_dir|true
+m|remove|true
+m|rename|true
+m|copy|true
+m|file_exists|true
+m|dir_exists|true
+m|exists|false
+m|get_open_error|true
+m|make_dir_recursive|true
+m|remove_absolute|true
+m|list_dir_begin|true
+m|list_dir_end|true

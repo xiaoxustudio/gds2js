@@ -1,0 +1,30 @@
+c|1|2|3|7|2
+i|0
+w|true|24|0|FileAccess|true|true|true|true
+p|use<abs>
+a|<user>/probe.txt
+l|3|6|false|true
+e|true|false|false|false
+n|true|7
+b|true|12
+d|true|7
+t|aXYdef|6|0|false
+o|false|false
+s|<FileAccess#号>
+m|40
+v|200|4464|4294967289|1234567890123|-4|1.25|0.125|[1, 2, 255]|S
+q|0|18|true
+L|0|a|false
+L|1|b|false
+L|2|c|false
+L|3||false
+L|4|z|true
+L|5||true
+nl|8
+nt|8|true
+cs|["a"]
+cv|["x", "y", "z"]|34
+k|9
+j|9|true|one|two||
+y|28
+x|[1, "a"]|0

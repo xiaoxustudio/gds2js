@@ -2,12 +2,12 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { GBytes, packCtor } from "@gds2js/runtime/runtime/packed";
+import { GBytes, packCtor } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { GArray, show, varToStr, valueEq } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { variantHashNumber } from "@gds2js/runtime/runtime/builtins";
-import { vector4New } from "@gds2js/runtime/runtime/vector4";
-import { vector4iNew } from "@gds2js/runtime/runtime/vector4i";
+import { vector4New } from "@gds2js/runtime/runtime/class/vector/vector4";
+import { vector4iNew } from "@gds2js/runtime/runtime/class/vector/vector4i";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { I } from "./support/variants";
 

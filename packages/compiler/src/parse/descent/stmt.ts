@@ -219,6 +219,7 @@ function wrap(p: Parser, field: string): void {
 
 function parseIf(p: Parser, field: string): void {
   const b = p.b;
+  const level = p.blockIndent();
   b.open("if_statement");
   b.anon(p.expectWord("if", "if"), "");
   parseExpression(p, "condition");
@@ -227,7 +228,7 @@ function parseIf(p: Parser, field: string): void {
   const block = parseBody(p, "body", colon);
   if (block) {
     for (;;) {
-      if (p.atWord("elif") && p.atLineHead()) {
+      if (p.atWord("elif") && p.atLineHead() && p.blockIndent() === level) {
         b.open("elif_clause");
         b.anon(p.take(), "");
         parseExpression(p, "condition");
@@ -237,7 +238,7 @@ function parseIf(p: Parser, field: string): void {
         b.close("alternative");
         continue;
       }
-      if (p.atWord("else") && p.atLineHead()) {
+      if (p.atWord("else") && p.atLineHead() && p.blockIndent() === level) {
         b.open("else_clause");
         b.anon(p.take(), "");
         const c2 = p.expectPunct(":", "else");

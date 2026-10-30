@@ -2,7 +2,7 @@ import { UnsupportedError } from "../errors";
 import { Tag, V, tagName, type Variant } from "../tags";
 import { INT64_MIN } from "../numstr";
 import { intArgBig } from "../string-ops";
-import { Signal } from "../signal";
+import { Signal } from "../class/identity/signal";
 import { ENGINE_CLASS_NAMES } from "../engine-classes";
 import { range } from "./array";
 

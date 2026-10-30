@@ -3,7 +3,7 @@
 // 读数：`tmp/probe-edge/{ladder,ladder2,ladder3}.gd` 与 `corpus/cases/301-float32-print-band/`。
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { strVec2 } from "@gds2js/runtime/runtime/string-ops";
+import { strVec2 } from "@gds2js/runtime/runtime/numfmt";
 
 const P = (n: number): string => strVec2(Math.fround(n));
 

@@ -426,8 +426,8 @@ function lowerIf(n: SyntaxNode): Stmt {
       body: lowerBody(need(field(n, "body"), "if 体")),
     },
   ];
-  let alt = field(n, "alternative");
-  while (alt) {
+  for (const alt of n.children) {
+    if (alt.fieldName !== "alternative") continue;
     if (alt.type === "elif_clause") {
       const elifCond = field(alt, "condition");
       checkAfterToken(alt, tokenOf(alt, "elif"), elifCond, 'Expected conditional expression after "elif".');
@@ -442,7 +442,6 @@ function lowerIf(n: SyntaxNode): Stmt {
     } else {
       throw new UnsupportedError("if-alt", `if 分支 ${alt.type} 未支持`);
     }
-    alt = field(alt, "alternative");
   }
   return { kind: "if", branches, loc: loc(n) };
 }

@@ -1,0 +1,16 @@
+n|0|source|true|false||0|17|0|0|var x = 1 + "é😀"
+|4|2
+n|1|identifier|true|false|left|0|3|0|0|var|0|0
+n|1|=|false|false||3|4|0|3| |0|0
+n|1|binary_operator|true|false|tail|4|14|0|4|x = 1 + "é|3|1
+n|2|int|false|false|left|4|5|0|4|x|0|0
+n|2|+|false|false|operator|6|7|0|6|=|0|0
+n|2|string|true|false|right|8|14|0|8|1 + "é|0|0
+n|1|()|false|false||20|22|0|20||2|2
+n|2|comment|true|false||14|19|0|14|😀"
+|0|0
+n|2|identifier|true|false||21|22|0|21||0|0
+z|0|0
+n|0|source|true|false||0|7|0|0|lift me|1|1
+n|1|wrapped|true|false|tail|0|4|0|0|lift|1|1
+n|2|identifier|true|false|inner|0|4|0|0|lift|0|0

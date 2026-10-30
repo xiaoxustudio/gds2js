@@ -1,0 +1,11 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+p|a*|0|true|a*|[]|0
+a|0|0||0|[""]
+o|2|4|aa
+b|[[0, 0, ""], [1, 4, "aaa"], [4, 4, ""]]
+d|#baaa|#b##|[]b[aaa][]|<>b<><>
+ERROR: PCRE2 Error: unknown substring
+   at: sub (modules/regex/regex.cpp:351)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:22)

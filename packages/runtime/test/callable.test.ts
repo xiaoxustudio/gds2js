@@ -3,13 +3,13 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { callableEq, callableSame, callableOf, CallableBox, methodCallable, nullCallable, registerClass, registerMethodArities, registerNativeBase, registerScriptLabel, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { callableEq, callableSame, callableOf, CallableBox, methodCallable, nullCallable, registerClass, registerMethodArities, registerNativeBase, registerScriptLabel, registerStaticMethods, GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 import { attribute, boundMethod, method } from "@gds2js/runtime/runtime/methods";
-import { packBytes, packCtor } from "@gds2js/runtime/runtime/packed";
+import { packBytes, packCtor } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBuiltin, varToStr } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { gdDispatchByName } from "./support/gd-dispatch";
 import { I } from "./support/variants";
 

@@ -3,15 +3,19 @@ import { hasGodot, missing } from "../support/env";
 import {
   caseDir,
   caseIsProject,
+  caseSandboxed,
   caseScene,
   caseScript,
+  dropSandbox,
   GODOT_BIN,
   godotOk,
   hangBudget,
   listCases,
   normalize,
+  prepareSandbox,
   readGolden,
   runGodot,
+  sandboxEnv,
 } from "../support/lib-bridge";
 
 const cases = listCases();
@@ -28,10 +32,23 @@ describe.skipIf(!hasGodot)(`golden 漂移检测${SKIP_WHY}`, () => {
   for (const id of cases) {
     it(id, () => {
       const gd = caseScript(id);
-      const projectPath = caseIsProject(id) ? caseDir(id) : null;
       const prev = readGolden(id);
-      const { text, timedOut } = runGodot(gd, { projectPath, scene: caseScene(id) !== null, timeoutMs: hangBudget(prev) });
-      const norm = normalize(text, gd);
+      const sandboxed = caseSandboxed(id);
+      const projectPath = sandboxed ? prepareSandbox(id).engine : caseIsProject(id) ? caseDir(id) : null;
+      let ran;
+      try {
+        ran = runGodot(gd, {
+          projectPath,
+          scene: caseScene(id) !== null,
+          timeoutMs: hangBudget(prev),
+          env: sandboxed ? sandboxEnv(id) : null,
+          cwd: sandboxed ? projectPath : null,
+        });
+      } finally {
+        if (sandboxed) dropSandbox(id);
+      }
+      const { text, timedOut } = ran;
+      const norm = normalize(text, gd, sandboxed ? id : null);
       const status = timedOut ? "TIMEOUT" : godotOk(norm) ? "OK" : "PARSE/RUN-ERR";
       if (timedOut) timeout++;
       else if (status === "OK") ok++;

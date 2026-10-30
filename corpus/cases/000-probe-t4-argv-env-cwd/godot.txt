@@ -1,0 +1,11 @@
+a|["--script", "re<abs>"]
+b|[]
+c|[]
+d|true|true
+e|true|true
+f|false
+g|true|<case>
+h|true|true
+i|true
+j|true
+k|2|0

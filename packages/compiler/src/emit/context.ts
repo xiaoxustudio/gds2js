@@ -21,6 +21,7 @@ export interface EmitContext {
   INNER_CLASSES: Map<string, ClassDecl>;
   EXTENDED_INNER: Set<string>;
   PRELOADS: Map<string, string>;
+  PRELOAD_FACE_OWNERS: Map<string, { cls: string; names: Set<string> }>;
   LOADS: Map<string, string>;
   IN_INIT: boolean;
   INIT_HAS_BASE: boolean;
@@ -68,6 +69,7 @@ export function newContext(): EmitContext {
     INNER_CLASSES: new Map<string, ClassDecl>(),
     EXTENDED_INNER: new Set<string>(),
     PRELOADS: new Map<string, string>(),
+    PRELOAD_FACE_OWNERS: new Map<string, { cls: string; names: Set<string> }>(),
     LOADS: new Map<string, string>(),
     IN_INIT: false,
     INIT_HAS_BASE: false,

@@ -1,0 +1,15 @@
+a|true|true
+b|0|true|false
+c|7|false
+d|0|true
+e|0|1|1
+f|7|1
+g|0
+ERRO<abs> Failed to open 'ren.txt'.
+   a<abs> copy (core/io/dir_access.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
+ERRO<abs> Failed to open 'nope.txt'.
+   a<abs> copy (core/io/dir_access.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)

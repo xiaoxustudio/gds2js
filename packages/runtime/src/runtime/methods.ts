@@ -1,5 +1,5 @@
 import { norm } from "./method/core";
-import { registerBoundSnapshotHook } from "./object";
+import { registerBoundSnapshotHook } from "./class/object/script-object";
 import { boundSnapshot } from "./method/access";
 import { objectMethod } from "./method/object";
 import { arrayMethod } from "./method/array";
@@ -12,7 +12,7 @@ import { faceMemberKnown, nativeAritySay } from "./face-arity";
 
 import { packDecompressBufferZero, packDecompressSrcZero, packDecompressInflateErr } from "./frames";
 import { Tag, V, type Variant } from "./tags";
-import { registerPackErrorSink } from "./packed";
+import { registerPackErrorSink } from "./class/bytes/packed";
 
 registerPackErrorSink({
   bufferZero: packDecompressBufferZero,

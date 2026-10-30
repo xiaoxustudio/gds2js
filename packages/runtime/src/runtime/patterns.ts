@@ -1,22 +1,35 @@
 import { UnsupportedError, GodotRuntimeError } from "./errors";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
-import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
-import { Signal } from "./signal";
-import { GdNativeClass } from "./native-class";
+import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./class/object/script-object";
+import { Signal } from "./class/identity/signal";
+import { GdNativeClass } from "./class/identity/native-class";
 import { Tag, V, intToNum, type IntPayload, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
-import { GVector2 } from "./vector2";
-import { GVector3 } from "./vector3";
-import { GVector4 } from "./vector4";
-import { GVector4i } from "./vector4i";
-import { GVector2i } from "./vector2i";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "./composite-classes";
-import { GVector3i } from "./vector3i";
-import { asVec3i, toVec3 } from "./vector3i";
-import { GColor } from "./color";
-import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
-import { GdRid } from "./rid";
-import { asNodePath, GdNodePath, nodePathValue } from "./node-path";
+import { GVector2 } from "./class/vector/vector2";
+import { GVector3 } from "./class/vector/vector3";
+import { GVector4 } from "./class/vector/vector4";
+import { GVector4i } from "./class/vector/vector4i";
+import { GVector2i } from "./class/vector/vector2i";
+import { GVector3i } from "./class/vector/vector3i";
+import { asVec3i, toVec3 } from "./class/vector/vector3i";
+import { GColor } from "./class/color/color";
+import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./class/bytes/packed";
+import { GdRid } from "./class/identity/rid";
+import { asNodePath, GdNodePath, nodePathValue } from "./class/identity/node-path";
+
+import { GAABB } from "./class/shape/aabb";
+
+import { GBasis } from "./class/orient/basis";
+
+import { GPlane } from "./class/orient/plane";
+
+import { GQuaternion } from "./class/orient/quaternion";
+
+import { GRect2, GRect2i } from "./class/shape/rect";
+
+import { GTransform2D } from "./class/orient/transform2d";
+
+import { GTransform3D } from "./class/orient/transform3d";
 
 export type Pat =
   | { k: "wild" }
@@ -142,10 +155,14 @@ function packKindMatches(v: Variant, kind: PackKind): boolean {
   return isBytes(v) && packBytes(v).kind === kind;
 }
 
-const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "Node3D", "JSON", "SceneTree", "MainLoop"];
+const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "Node3D", "JSON", "FileAccess", "DirAccess", "RegEx", "RegExMatch", "SceneTree", "MainLoop"];
 
 function instanceClassNames(base: string | null): string[] | null {  if (base === "RefCounted") return ["Object", "RefCounted"];
   if (base === "JSON") return ["Object", "RefCounted", "JSON"];
+  if (base === "FileAccess") return ["Object", "RefCounted", "FileAccess"];
+  if (base === "DirAccess") return ["Object", "RefCounted", "DirAccess"];
+  if (base === "RegEx") return ["Object", "RefCounted", "RegEx"];
+  if (base === "RegExMatch") return ["Object", "RefCounted", "RegExMatch"];
   if (base === "Node") return ["Object", "Node"];
   if (base === "Node2D") return ["Object", "Node", "Node2D"];
   if (base === "Node3D") return ["Object", "Node", "Node3D"];

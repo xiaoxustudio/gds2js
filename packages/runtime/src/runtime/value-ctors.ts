@@ -1,14 +1,27 @@
 import { registerVarToStrValueHook } from "./values";
-import { Signal } from "./signal";
-import { GVector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
-import { GVector3 } from "./vector3";
-import { GVector3i } from "./vector3i";
-import { GVector4 } from "./vector4";
-import { GVector4i } from "./vector4i";
-import { GColor } from "./color";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "./composite-classes";
+import { Signal } from "./class/identity/signal";
+import { GVector2 } from "./class/vector/vector2";
+import { GVector2i } from "./class/vector/vector2i";
+import { GVector3 } from "./class/vector/vector3";
+import { GVector3i } from "./class/vector/vector3i";
+import { GVector4 } from "./class/vector/vector4";
+import { GVector4i } from "./class/vector/vector4i";
+import { GColor } from "./class/color/color";
 import { rtosFix } from "./grisu2";
+
+import { GAABB } from "./class/shape/aabb";
+
+import { GBasis } from "./class/orient/basis";
+
+import { GPlane } from "./class/orient/plane";
+
+import { GQuaternion } from "./class/orient/quaternion";
+
+import { GRect2, GRect2i } from "./class/shape/rect";
+
+import { GTransform2D } from "./class/orient/transform2d";
+
+import { GTransform3D } from "./class/orient/transform3d";
 
 registerVarToStrValueHook((o) => {
   if (o instanceof GVector2) return `Vector2(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)})`;

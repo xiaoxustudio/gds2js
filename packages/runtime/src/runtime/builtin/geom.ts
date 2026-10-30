@@ -1,8 +1,8 @@
 import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { Tag, V, type Variant } from "../tags";
 import { show } from "../values";
-import { GVector4 } from "../vector4";
-import { GVector4i } from "../vector4i";
+import { GVector4 } from "../class/vector/vector4";
+import { GVector4i } from "../class/vector/vector4i";
 import { PI_D, TAU_D, approxEq, num, sameShape, sameTypeVectorMath, sqrt, utilConvertError, utilFloatArg, vecClassName, weightToFloat } from "./args";
 import { LERP_FROM_LIST } from "./math";
 

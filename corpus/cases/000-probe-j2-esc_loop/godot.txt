@@ -1,0 +1,2 @@
+a|"�";"";"";"";"";"";"";"";"\b";"\t";"\n";"\v";"\f";"\r";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";
+Unicode parsing error, some characters were replaced with � (U+FFFD): Unexpected NUL character

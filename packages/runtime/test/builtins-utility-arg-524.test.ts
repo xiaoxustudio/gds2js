@@ -8,7 +8,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { abs, gSign, gFloor, gCeil, gRound } from "@gds2js/runtime/runtime/builtins";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GColor } from "@gds2js/runtime/runtime/color";
+import { GColor } from "@gds2js/runtime/runtime/class/color/color";
 
 const MSG = (fn: string): string =>
   `Error calling utility function "${fn}()": Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".`;

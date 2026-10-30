@@ -10,47 +10,62 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
-import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc } from "../object";
-import { CallableBox, callableLabel, isCallableBox, isNullCallable } from "../object";
-import { callDeferred } from "../callable";
+import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc, CallableBox, callableLabel, isCallableBox, isNullCallable } from "../class/object/script-object";
+import { callDeferred } from "../class/identity/callable";
 import { nativeAritySay } from "../face-arity";
-import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "../identity";
-import { asRid } from "../rid";
+import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "../class/identity/null-object";
+import { asRid } from "../class/identity/rid";
 import { signalDuplicateConnect, signalNullCallable } from "../frames";
-import { asNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice } from "../node-path";
-import type { GdIdentified } from "../identity";
-import { GdNativeClass } from "../native-class";
-import { Signal } from "../signal";
+import { asNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice } from "../class/identity/node-path";
+import type { GdIdentified } from "../class/identity/null-object";
+import { GdNativeClass } from "../class/identity/native-class";
+import { Signal } from "../class/identity/signal";
 import { Tag, V, type Variant } from "../tags";
 import { GArray, GDict } from "../values";
-import { GVector2, vector2Method } from "../vector2";
-import { GVector3, vector3Method } from "../vector3";
-import { GVector4, vector4Method } from "../vector4";
-import { GVector4i, vector4iMethod } from "../vector4i";
-import { GVector2i, vector2iMethod } from "../vector2i";
-import { rect2Method, rect2iMethod } from "./rect";
-import { aabbMethod } from "./aabb";
-import { planeMethod } from "./plane";
-import { quaternionMethod } from "./quaternion";
-import { transform2dMethod } from "./transform2d";
-import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "./json";
-import { GdJson, jsonNew } from "../json";
+import { GVector2, vector2Method } from "../class/vector/vector2";
+import { GVector3, vector3Method } from "../class/vector/vector3";
+import { GVector4, vector4Method } from "../class/vector/vector4";
+import { GVector4i, vector4iMethod } from "../class/vector/vector4i";
+import { GVector2i, vector2iMethod } from "../class/vector/vector2i";
+import { rect2Method, rect2iMethod } from "../class/shape/rect";
+import { aabbMethod } from "../class/shape/aabb";
+import { planeMethod } from "../class/orient/plane";
+import { quaternionMethod } from "../class/orient/quaternion";
+import { transform2dMethod } from "../class/orient/transform2d";
+import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "../class/host/json";
+import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAccessStatic, fileMethod, GdDir, GdFile } from "../class/host/file-access";
+import { OS_STATIC_NAMES, osStatic } from "../class/host/os";
+import { GdRegEx, GdRegExMatch, regExNew, regExMatchMethod, regExMethod } from "../class/host/regex";
+import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
-import { transform3dMethod } from "./transform3d";
-import { basisMethod } from "./basis";
-import { nodeMethod } from "./node";
-import { GdSceneTree, treeMethod } from "../scene";
-import { engineClassNew, engineClassNewable, isEngineNode } from "../node";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "../composite-classes";
-import { GVector3i, vector3iMethod } from "../vector3i";
-import { colorMethod, GColor } from "../color";
-import { bytesMethod, GBytes, packTypeName } from "../packed";
-import { CONVERT_INFO, DECODE_INFO, ENCODE_INFO, FLOAT_DECODE_INFO, FLOAT_ENCODE_INFO, VAR_CODEC_GUARD, bytesBswap, bytesDecompressDynamic, bytesMultibyte, bytesUtf32, packConvert, packDecode, packDecodeFloat, packEncode, packEncodeFloat, packVarCodec } from "./bytes";
+import { transform3dMethod } from "../class/orient/transform3d";
+import { basisMethod } from "../class/orient/basis";
+import { nodeMethod } from "../class/object/node-face";
+import { GdSceneTree, treeMethod } from "../class/object/scene-tree";
+import { engineClassNew, engineClassNewable, isEngineNode } from "../class/object/node";
+import { GVector3i, vector3iMethod } from "../class/vector/vector3i";
+import { colorMethod, GColor } from "../class/color/color";
+import { bytesMethod, GBytes, packTypeName } from "../class/bytes/packed";
+import { CONVERT_INFO, DECODE_INFO, ENCODE_INFO, FLOAT_DECODE_INFO, FLOAT_ENCODE_INFO, VAR_CODEC_GUARD, bytesBswap, bytesDecompressDynamic, bytesMultibyte, bytesUtf32, packConvert, packDecode, packDecodeFloat, packEncode, packEncodeFloat, packVarCodec } from "../class/bytes/packed-face";
 import { callableMethod } from "./callable";
 import { attribute, callSlot, callStatic, callvArgs, descFor, objectBaseLabel, scriptMethodSay, scriptParamArgs, writeProp } from "./access";
 import { deferredArityBlock, isAritySay } from "./core";
 import { callCallableBox } from "./callable";
 import { nodePathSliceArg } from "./core";
+
+import { GAABB } from "../class/shape/aabb";
+
+import { GBasis } from "../class/orient/basis";
+
+import { GPlane } from "../class/orient/plane";
+
+import { GQuaternion } from "../class/orient/quaternion";
+
+import { GRect2, GRect2i } from "../class/shape/rect";
+
+import { GTransform2D } from "../class/orient/transform2d";
+
+import { GTransform3D } from "../class/orient/transform3d";
 
 export function objectMethod(obj: Variant, name: string, args: Variant[]): Variant {
   const inner = obj.v;
@@ -58,9 +73,13 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GdNativeClass) {
     if (name === "new" && args.length === 0) {
       if (inner.className === "JSON") return jsonNew();
+      if (inner.className === "RegEx") return regExNew();
       if (engineClassNewable(inner.className)) return engineClassNew(inner.className);
     }
     if (inner.className === "JSON" && JSON_STATIC_NAMES.has(name)) return jsonStatic(name, args);
+    if (inner.className === "FileAccess" && FA_STATIC_NAMES.has(name)) return fileAccessStatic(name, args);
+    if (inner.className === "DirAccess" && DA_STATIC_NAMES.has(name)) return dirAccessStatic(name, args);
+    if (inner.className === "OS" && OS_STATIC_NAMES.has(name)) return osStatic(name, args);
     throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（构造式只量过无实参的那几支）`);
   }
   const vecFace =
@@ -402,6 +421,10 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GRect2i) return rect2iMethod(inner, name, args);
   if (inner instanceof GBasis) return basisMethod(inner, name, args);
   if (inner instanceof GdJson) return jsonMethod(inner, name, args);
+  if (inner instanceof GdFile) return fileMethod(inner, name, args);
+  if (inner instanceof GdDir) return dirMethod(inner, name, args);
+  if (inner instanceof GdRegEx) return regExMethod(inner, name, args);
+  if (inner instanceof GdRegExMatch) return regExMatchMethod(inner, name, args);
   if (inner instanceof GdSceneTree) return treeMethod(inner, name, args);
   if (isEngineNode(inner)) return nodeMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);

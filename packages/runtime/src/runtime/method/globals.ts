@@ -13,16 +13,16 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
 import { GLOBAL_CALLABLES } from "../global-names";
 import { variantConvert } from "../convert";
 import { typeOf, gIsInstanceOf } from "../patterns";
-import { dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, loadScript } from "../object";
-import { CallableBox } from "../object";
+import { dictDescOf, dictShapeOf, writeDictWritten, beginBareConstruction, endBareConstruction, loadScript } from "../class/object/script-object";
+import { CallableBox } from "../class/object/script-object";
 import { gGetStack, gPrintStack, gPushError, gPushWarning } from "../frames";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "../var-bytes";
-import { asNodePath, nodePathText } from "../node-path";
+import { asNodePath, nodePathText } from "../class/identity/node-path";
 import { Tag, V, type Variant } from "../tags";
 import { GDict, strBuiltin, varToStr, strToVar } from "../values";
 import { stringChr, valueTypeName } from "../string-ops";
 import { writeProp } from "./access";
-import type { Fn } from "../callable";
+import type { Fn } from "../class/identity/callable";
 
 export function ga(a: Variant[], i: number): Variant {
   const v = a[i];

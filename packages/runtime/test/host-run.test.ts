@@ -4,8 +4,8 @@
 import { afterEach, describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { print, resetOut, SceneTree } from "@gds2js/runtime/host";
-import { callDeferred } from "@gds2js/runtime/runtime/callable";
-import { awaitValue } from "@gds2js/runtime/runtime/signal";
+import { callDeferred } from "@gds2js/runtime/runtime/class/identity/callable";
+import { awaitValue } from "@gds2js/runtime/runtime/class/identity/signal";
 
 describe("runtime/host · print/flush 的进程内捕获", () => {
   it("host-run · print/flush 的进程内捕获与复位", async () => {

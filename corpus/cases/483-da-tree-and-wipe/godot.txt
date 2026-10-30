@@ -1,0 +1,15 @@
+a|0
+b|true
+c|1|true
+d|0|32
+e|0|true
+f|1|0
+r|two.txt|0
+w|inner|0
+r|one.txt|0
+g|0|false
+r|in.txt|0
+w|deeper|0
+w|deep|0
+h|0|false
+i|0|true

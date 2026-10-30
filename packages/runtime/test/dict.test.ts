@@ -5,7 +5,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, stampDict, valueEq } from "@gds2js/runtime/runtime/values";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/values · GDict 与 keyOf", () => {

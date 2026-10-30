@@ -3,10 +3,12 @@ import { staticMemberFn } from "../lower/ir";
 import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
+import { HOST_PRINT_NAMES } from "./surface";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
 import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
 import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
+
 
 import { analyzeFuncLayout, frameEnterLines, frameExitLines, hasValueReturn, mark, stampDecl, typeDefault } from "./helpers";
 import { collectLocalTypes } from "./layout";
@@ -66,6 +68,11 @@ export function frameStmtLines(loc: { line: number } | undefined): string[] {
 }
 
 export function emitFuncInner(f: FuncDecl, base = 0): string[] {
+  const prelude = new Set(["rt", ...HOST_PRINT_NAMES]);
+  const shadowed = [...f.params.map((p) => p.name), ...ctx.LOCAL_TYPES.keys(), ...ctx.UNTYPED_NAMES].find((n) => prelude.has(n));
+  if (shadowed !== undefined) {
+    throw new UnsupportedError("emit-prelude-shadow", `${shadowed} 撞上发射器自己引进来的名字（rt 与 print 那一族）：产物里函数体会把它盖住，换掉这个名字`);
+  }
   if (f.isStatic && (f.name === "_init" || f.name === "_initialize" || f.name === "_process")) {
     throw new UnsupportedError("static-entry", `静态的 ${f.name}() 还没实测过行为，不猜着发`);
   }

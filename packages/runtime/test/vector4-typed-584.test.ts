@@ -3,8 +3,8 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { keyOf, GArray, GDict, elemConvert, elemDefault, show } from "@gds2js/runtime/runtime/values";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { vector4New } from "@gds2js/runtime/runtime/vector4";
-import { vector4iNew } from "@gds2js/runtime/runtime/vector4i";
+import { vector4New } from "@gds2js/runtime/runtime/class/vector/vector4";
+import { vector4iNew } from "@gds2js/runtime/runtime/class/vector/vector4i";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { I } from "./support/variants";
 

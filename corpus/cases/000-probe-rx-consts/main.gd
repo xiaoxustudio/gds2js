@@ -1,0 +1,9 @@
+extends SceneTree
+
+func _initialize():
+	print("a|", RegEx.RD_OK, "|", RegEx.RD_INVALID_PATTERN, "|", RegEx.RD_UNKNOWN_COMPILE_ERROR, "|", RegEx.RD_TOO_COMPLEX)
+	print("b|", RegEx.REGEX_DEFAULT, "|", RegEx.REGEX_NONE, "|", RegEx.REGEX_EXTENDED, "|", RegEx.REGEX_MULTILINE, "|", RegEx.REGEX_COMPACT)
+	print("c|", RegEx.CREATE_NORMAL, "|", RegEx.REGEX_COMPILE_ALLOW_UNICODE, "|", RegEx.REGEX_SUBSCRIBE_CHAR_IN_NAME)
+	print("d|", RegEx.REGEX_MATCH_ENABLED, "|", RegEx.REGEX_MATCH_NOT_BOL, "|", RegEx.REGEX_MATCH_NOT_EOL, "|", RegEx.REGEX_MATCH_NOT_EMPTY, "|", RegEx.REGEX_MATCH_PARTIAL_SOFT, "|", RegEx.REGEX_MATCH_PARTIAL_HARD, "|", RegEx.REGEX_MATCH_NEWLINE_CONTERSIM, "|", RegEx.REGEX_MATCH_NEWLINE_UC, "|", RegEx.REGEX_MATCH_NEWLINE_ANYC)
+	print("e|", typeof(RegEx.RD_OK))
+	quit()

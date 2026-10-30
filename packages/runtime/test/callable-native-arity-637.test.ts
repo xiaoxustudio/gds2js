@@ -4,7 +4,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
-import { packCtor } from "@gds2js/runtime/runtime/packed";
+import { packCtor } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { attribute, method } from "@gds2js/runtime/runtime/methods";
 import { I } from "./support/variants";
 

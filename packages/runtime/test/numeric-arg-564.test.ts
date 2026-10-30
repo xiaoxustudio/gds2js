@@ -6,7 +6,7 @@ import {
   gPow, gFmod, gFposmod, gAtan2, gNearestPo2,
 } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { show } from "@gds2js/runtime/runtime/values";
 import { I, S } from "./support/variants";
 

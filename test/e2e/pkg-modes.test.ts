@@ -317,7 +317,7 @@ describe.skipIf(!hasStandalone)(`pkg-modes · 产物运行时打包模式${SKIP_
     } as unknown as Parameters<typeof build>[0]);
     const bundleFile = join(out, "main.mjs");
     const b = readFileSync(bundleFile, "utf8");
-    wa.imports = b.split("\n").filter((l) => /^\s*import[\s{*.]/.test(l));
+    wa.imports = b.split("\n").filter((l) => /^\s*import[\s{*.]/.test(l) && !/from "node:[^"]+"/.test(l));
     const iso = mkdtempSync(join(tmpdir(), "gds-iso-"));
     try {
       copyFileSync(bundleFile, join(iso, "app.mjs"));

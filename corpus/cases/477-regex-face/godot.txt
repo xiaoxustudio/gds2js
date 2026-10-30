@@ -1,0 +1,24 @@
+k01|true|24|RegEx|true|true|true|true|false|
+k02|0|true|(\w+)@(\w+)|[]|2
+k03|true|24|RegExMatch|true|true|false|2
+k04|5|13|bob@site|["bob@site", "bob", "site"]|mail bob@site x
+k05|5|8|bob|9|13|site||-1|-1
+k06|{  }|["bob@site", "bob", "site"]
+k07|true|24
+k08|mail # x|mail # x|mail [bob@site] x|mail <bob> x
+k09|6|ob@site|5
+k10|["head", "tail"]|2|(?<head>\w+): (?<tail>\w+)
+k11|xx head: yy tail zz|{ "head": 1, "tail": 2 }|3|11|head: yy|["head: yy", "head", "yy"]
+k12|head|yy|3|11|-1|-1
+k13|xx [yy]-head tail zz|xx head: yy tail zz
+k14|[[0, 0, ""], [1, 4, "aaa"], [4, 4, ""]]
+k15|#baaa|#b##|[]b[aaa][]|$b$$
+k16|["b", ""]||-1|-1|0|1
+k17|#1#2|ab|0|[]
+k18|ABC|z#z|0
+k19|a|#b|2
+k20|["name"]|1|a-a|["a-a", "a"]
+k21|a|1|#b #b
+k22|123|true|#
+k23|false|^\d+$
+k24|[[3, "bb"], [6, "cc"]]|aa # cc|aa # #|6

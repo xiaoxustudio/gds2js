@@ -1,0 +1,3 @@
+a|{"zeta":1,"alpha":2,"m":3}
+b|{"alpha":2,"m":3,"zeta":1}
+c|{"alpha":2,"m":3,"zeta":1}

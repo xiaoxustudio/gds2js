@@ -1,0 +1,24 @@
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_var()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes_with_objects()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes_with_objects()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_var_with_objects()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_var()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:8)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

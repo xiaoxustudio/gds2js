@@ -1,4 +1,4 @@
-import { wrapValue } from "@gds2js/runtime/runtime/object";
+import { wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 import type { Variant } from "@gds2js/runtime/runtime/tags";
 
 /** 手写的类没有发射器，自己给一张与产物同形状的按名派发表。 */

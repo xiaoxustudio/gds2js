@@ -3,7 +3,7 @@
  * 两侧对账的密格在 `tmp/probe-from-angle/{sweep,edge2}.txt` —— 带内 570 格一字一样，|a| > 1e12 那支按值出现末位分歧，因此发货线定在 1e12。
  */
 import { describe, expect, it } from "vitest";
-import { GVector2, vector2Const, vector2Method } from "@gds2js/runtime/runtime/vector2";
+import { GVector2, vector2Const, vector2Method } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";

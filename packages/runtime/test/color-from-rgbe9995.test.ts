@@ -3,7 +3,7 @@
  * 式子抄自 `core/math/color.cpp` 的 `Color::from_rgbe9995(uint32_t)`，装箱实参先折进 uint32 那一步也在同一批格子里钉住。
  */
 import { describe, expect, it } from "vitest";
-import { colorStatic } from "@gds2js/runtime/runtime/color";
+import { colorStatic } from "@gds2js/runtime/runtime/class/color/color";
 import { show } from "@gds2js/runtime/runtime/values";
 import { V } from "@gds2js/runtime/runtime/tags";
 

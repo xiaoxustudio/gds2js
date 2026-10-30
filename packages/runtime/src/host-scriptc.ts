@@ -1,6 +1,6 @@
 /// <reference path="./gds2js-zstd.d.ts" />
 export * from "./host";
-import { registerZipCodec } from "./runtime/packed";
+import { registerZipCodec } from "./runtime/class/bytes/packed";
 import { deflateSync, inflateSync, gzipSync, gunzipSync } from "node:zlib";
 import * as Zstd from "gds2js-zstd";
 

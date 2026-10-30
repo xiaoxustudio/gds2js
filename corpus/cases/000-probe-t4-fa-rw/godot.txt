@@ -1,0 +1,14 @@
+a|true|0|0
+b|appended|9|9
+c|false|0
+d|9|appended
+e|true|7|true
+f|true|7
+g|first|second|13
+h|irst|6|13
+i|65|irst
+j|true|0
+ERRO<abs> File must be opened before use.
+   a<abs> get_position (drivers/windows/file_access_windows.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)

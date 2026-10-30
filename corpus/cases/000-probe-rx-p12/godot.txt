@@ -1,0 +1,11 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+p|^[0-9]{3}-[0-9]{4}$|0|true|^[0-9]{3}-[0-9]{4}$|[]|0
+a|0|8|555-1234|0|["555-1234"]
+o|nil
+b|[[0, 8, "555-1234"]]
+d|#|#|[555-1234]|<>
+ERROR: PCRE2 Error: unknown substring
+   at: sub (modules/regex/regex.cpp:351)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:22)

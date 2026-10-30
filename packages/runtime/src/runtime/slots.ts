@@ -1,13 +1,13 @@
 import { toBool, toFloat, strOf, toInt } from "./builtins";
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { classNameOf, nativeBaseOf, scriptLabelOf } from "./object";
+import { classNameOf, nativeBaseOf, scriptLabelOf } from "./class/object/script-object";
 import { Tag, tagName, V, type Variant } from "./tags";
 import { containerFace} from "./values";
 import { valueTypeName } from "./string-ops";
-import { colorNew } from "./color";
-import { toVec2 } from "./vector2";
-import { vector2iNew } from "./vector2i";
-import { toVec3, toVec3i } from "./vector3i";
+import { colorNew } from "./class/color/color";
+import { toVec2 } from "./class/vector/vector2";
+import { vector2iNew } from "./class/vector/vector2i";
+import { toVec3, toVec3i } from "./class/vector/vector3i";
 
 const PARAM_SLOTS: Record<string, { from: string[]; cast: (v: Variant) => Variant }> = {
   int: { from: ["int", "float", "bool"], cast: toInt },

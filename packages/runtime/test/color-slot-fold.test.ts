@@ -5,10 +5,10 @@
  */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { GColor, color, colorMethod, colorStatic } from "@gds2js/runtime/runtime/color";
+import { GColor, color, colorMethod, colorStatic } from "@gds2js/runtime/runtime/class/color/color";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 
 const RED = new GColor(1, 0, 0, 1);
 const NAN = V.float(Number.NaN);

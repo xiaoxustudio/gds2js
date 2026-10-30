@@ -1,0 +1,7 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+p|(?<name>\w+)-\k<name>|0|true|(?<name>\w+)-\k<name>|["name"]|1
+a|1|4|a-a|1|["a-a", "a"]
+o|nil
+b|[[1, 4, "a-a"]]
+d|a#|a#|a[a-a]|a<a>

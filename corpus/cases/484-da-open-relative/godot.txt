@@ -1,0 +1,7 @@
+a|true|<case>
+b|true|true
+c|false|true
+d|31|<case>|false
+e|use<abs>|true
+f|false
+g|false

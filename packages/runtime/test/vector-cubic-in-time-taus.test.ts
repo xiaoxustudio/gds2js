@@ -12,8 +12,8 @@ import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { strOf } from "@gds2js/runtime/runtime/builtins";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 
 const F = (n: number): Variant => V.float(n);
 const call = (recv: Variant, args: Variant[]): string => strOf(method(recv, "cubic_interpolate_in_time", args)).v as string;

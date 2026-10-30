@@ -11,7 +11,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
 import { faceMemberKnown, nativeAritySay } from "../face-arity";
-import { NULL_OBJECT } from "../identity";
+import { NULL_OBJECT } from "../class/identity/null-object";
 import { Tag, V, type Variant } from "../tags";
 import { GArray, GDict, valueEq } from "../values";
 import { sortLess } from "../ops";

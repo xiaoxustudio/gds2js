@@ -117,6 +117,16 @@ export function emitCall(e: Extract<Expr, { kind: "call" }>): string {
     ) {
       return `rt.V.object(new ${e.callee.obj.name}(${args.join(", ")}))`;
     }
+    if (
+      e.callee.name === "new" &&
+      e.callee.obj.kind === "attribute" &&
+      e.callee.obj.obj.kind === "ident"
+    ) {
+      const shared = ctx.PRELOAD_FACE_OWNERS.get(e.callee.obj.obj.name);
+      if (shared !== undefined && shared.names.has(e.callee.obj.name)) {
+        return `rt.V.object(new ${shared.cls}.${e.callee.obj.name}(${args.join(", ")}))`;
+      }
+    }
     const staticFn = staticMemberFn(e.callee.obj);
     if (staticFn) {
       return `rt.${staticFn}(${JSON.stringify(e.callee.name)}, [${args.join(", ")}])`;

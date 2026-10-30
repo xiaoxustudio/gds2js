@@ -13,7 +13,7 @@ import {
   registerNativeBase,
   registerScriptProps,
   wrapValue,
-} from "@gds2js/runtime/runtime/object";
+} from "@gds2js/runtime/runtime/class/object/script-object";
 import {
   gInstanceFromId,
   gIsInstanceValid,
@@ -21,7 +21,7 @@ import {
   gWeakref,
 } from "@gds2js/runtime/runtime/builtins";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { nativeClass } from "@gds2js/runtime/runtime/native-class";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { I, S } from "./support/variants";
 
 class Plain extends GdScriptObject {

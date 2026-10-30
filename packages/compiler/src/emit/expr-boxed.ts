@@ -249,6 +249,10 @@ export function emitExprVar(e: Expr): string {
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
       }
+      if (e.obj.kind === "ident") {
+        const shared = ctx.PRELOAD_FACE_OWNERS.get(e.obj.name);
+        if (shared !== undefined && shared.names.has(e.name)) return `${shared.cls}.${e.name}`;
+      }
       if (e.obj.kind === "ident" && e.obj.name === "self") {
         if (ctx.CURRENT_MEMBERS.has(e.name) || ctx.MODULE_VARS.has(e.name) || ctx.MODULE_FUNCS.has(e.name)) {
           return emitExprVar({ kind: "ident", name: e.name, loc: e.loc });

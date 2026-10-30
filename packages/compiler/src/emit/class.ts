@@ -185,6 +185,13 @@ export function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainTo
   return out;
 }
 
+export function emitInnerMirrors(innerClasses: ClassDecl[]): string[] {
+  const out: string[] = [];
+  for (const c of innerClasses) out.push(`  static ${c.name}: typeof ${c.name};`);
+  if (out.length > 0) out.push("");
+  return out;
+}
+
 export function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
   const out: string[] = [];
   for (const v of vars) {

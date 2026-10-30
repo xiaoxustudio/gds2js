@@ -1,0 +1,46 @@
+== 长度 42
+tk|ident|0|3|0|0|true|0|var
+tk|ident|4|5|0|4|false|0|x
+tk|punct|6|7|0|6|false|0|=
+tk|int|8|10|0|8|false|0|42
+tk|ident|11|15|1|0|true|0|func
+tk|ident|16|17|1|5|false|0|f
+tk|punct|17|18|1|6|false|0|(
+tk|ident|18|19|1|7|false|0|a
+tk|punct|19|20|1|8|false|0|)
+tk|punct|20|21|1|9|false|0|:
+tk|ident|23|29|2|1|true|8|return
+tk|str-start|30|31|2|8|false|8|"
+tk|str-end|33|34|2|11|false|8|"
+tk|comment|35|41|2|13|false|8|# tail
+tk|eof|42|42|3|0|true|0|
+== 长度 30
+tk|ident|0|2|0|0|true|0|a1
+tk|punct|3|4|0|3|false|0|=
+tk|float|5|8|0|5|false|0|3.5
+tk|ident|10|12|1|1|true|8|if
+tk|ident|13|14|1|4|false|8|b
+tk|punct|14|16|1|5|false|8|>=
+tk|ident|16|17|1|7|false|8|c
+tk|punct|17|18|1|8|false|8|:
+tk|ident|21|26|2|2|true|16|print
+tk|punct|26|27|2|7|false|16|(
+tk|int|27|28|2|8|false|16|2
+tk|punct|28|29|2|9|false|16|)
+tk|eof|30|30|3|0|true|0|
+== 长度 46
+tk|region-start|0|7|0|0|true|0|#region
+tk|region-label|7|10|0|7|false|0| 标题
+tk|ident|11|14|1|0|true|0|var
+tk|ident|15|16|1|4|false|0|s
+tk|punct|17|18|1|6|false|0|=
+tk|str-start|19|20|1|8|false|0|'
+tk|escape|22|24|1|11|false|0|\'
+tk|str-end|25|26|1|14|false|0|'
+tk|punct|27|28|1|16|false|0|+
+tk|str-start|29|31|1|18|false|0|r'
+tk|str-end|33|34|1|22|false|0|'
+tk|region-end|35|45|2|0|true|0|#endregion
+tk|eof|46|46|3|0|true|0|
+== 长度 3
+tk|eof|3|3|1|0|true|0|

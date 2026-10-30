@@ -1,4 +1,4 @@
-import { asColor, colorFromText } from "./color";
+import { asColor, colorFromText } from "./class/color/color";
 
 type Rule = readonly [tag: string, code: string];
 

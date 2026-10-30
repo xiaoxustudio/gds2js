@@ -3,12 +3,12 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { callable } from "@gds2js/runtime/runtime/object";
+import { callable } from "@gds2js/runtime/runtime/class/object/script-object";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, elemConvert, elemDefault, stampArray, stampDict, valueEq, valueSame } from "@gds2js/runtime/runtime/values";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/values · GArray", () => {

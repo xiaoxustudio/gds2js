@@ -1,8 +1,8 @@
 /** Signal.connect 的两块非致命 ERROR（S546）：重复连与空 Callable，读数 `tmp/d6/s546.gd`。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { callable, nullCallable } from "@gds2js/runtime/runtime/object";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { callable, nullCallable } from "@gds2js/runtime/runtime/class/object/script-object";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";

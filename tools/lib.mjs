@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -89,32 +89,98 @@ export function listSingleCases(filter = "") {
   return listCases(filter).filter((id) => !caseIsProject(id));
 }
 
-export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null, scene = false } = {}) {
+/**
+ * 宿主 IO 那一族（`FileAccess` / `DirAccess`）的读数要能复现：裁判引擎与产物两侧各拿一份
+ * 干净的沙箱，`user://` 靠重定向 `APPDATA` 关进沙箱里（4.6.3 实测规则是
+ * `%APPDATA%/Godot/app_userdata/<config/name>`），夹具播种进那一层，跑完整树删。
+ * 沙箱路径只由用例号决定，所以两侧不必互相告知就能算出同一份掩码表。
+ */
+export const SANDBOX_ROOT = join(ROOT, "tmp", "golden-sandbox");
+
+const SANDBOX_SKIP = new Set(["godot.txt", "main.gen.mts", "main.mts", "sandbox", ".gen", ".godot"]);
+
+export function caseSandboxed(id) {
+  return existsSync(join(caseDir(id), "sandbox"));
+}
+
+export function projectConfigName(id) {
+  const p = join(caseDir(id), "project.godot");
+  if (!existsSync(p)) return "gds2js-case";
+  const m = readFileSync(p, "utf8").match(/^config\/name="?([^"\r\n]+)"?/m);
+  return m === null ? "gds2js-case" : m[1];
+}
+
+export function sandboxPaths(id) {
+  const dir = join(SANDBOX_ROOT, id);
+  const appdata = join(dir, "appdata");
+  const roaming = join(appdata, "Roaming");
+  return {
+    id,
+    dir,
+    engine: join(dir, "engine"),
+    appdata,
+    roaming,
+    local: join(appdata, "Local"),
+    user: join(roaming, "Godot", "app_userdata", projectConfigName(id)),
+  };
+}
+
+export function sandboxEnv(id) {
+  const p = sandboxPaths(id);
+  return { ...process.env, APPDATA: p.roaming, LOCALAPPDATA: p.local };
+}
+
+function copyInto(from, to) {
+  mkdirSync(dirname(to), { recursive: true });
+  if (statSync(from).isDirectory()) {
+    for (const e of readdirSync(from, { withFileTypes: true })) copyInto(join(from, e.name), join(to, e.name));
+    return;
+  }
+  copyFileSync(from, to);
+}
+
+/** 跑前重建：夹具那格播种进 `user://`，其余盘面文件照抄进引擎侧的工程根。 */
+export function prepareSandbox(id) {
+  const p = sandboxPaths(id);
+  rmSync(p.dir, { recursive: true, force: true });
+  mkdirSync(p.user, { recursive: true });
+  mkdirSync(p.engine, { recursive: true });
+  for (const e of readdirSync(caseDir(id), { withFileTypes: true })) {
+    if (SANDBOX_SKIP.has(e.name) || e.name.endsWith(".uid")) continue;
+    if (e.name === "fixtures") {
+      copyInto(join(caseDir(id), "fixtures"), p.user);
+      continue;
+    }
+    copyInto(join(caseDir(id), e.name), join(p.engine, e.name));
+  }
+  return p;
+}
+
+export function dropSandbox(id) {
+  rmSync(sandboxPaths(id).dir, { recursive: true, force: true });
+}
+
+const ABS_PATH = /[A-Za-z]:[^\s|)"']*/g;
+
+export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null, scene = false, env = null, cwd = null } = {}) {
   const scriptArg = projectPath ? "res://" + (gdPath.split(/[\\/]/).pop() || "main.gd") : gdPath;
   const args = ["--headless"];
   if (projectPath) args.push("--path", projectPath);
   if (!scene) args.push("--script", scriptArg);
+  const spawnOpts = { encoding: "utf8", timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024 };
+  if (env !== null) spawnOpts.env = env;
+  if (cwd !== null) spawnOpts.cwd = cwd;
 
   if (projectPath) {
     try {
-      spawnSync(GODOT_BIN, ["--headless", "--path", projectPath, "--import"], {
-        encoding: "utf8",
-        timeout: timeoutMs,
-        windowsHide: true,
-        maxBuffer: 8 * 1024 * 1024,
-      });
+      spawnSync(GODOT_BIN, ["--headless", "--path", projectPath, "--import"], spawnOpts);
     } catch {
     }
   }
 
   let r;
   try {
-    r = spawnSync(GODOT_BIN, args, {
-      encoding: "utf8",
-      timeout: timeoutMs,
-      windowsHide: true,
-      maxBuffer: 8 * 1024 * 1024,
-    });
+    r = spawnSync(GODOT_BIN, args, spawnOpts);
   } catch (e) {
     return { text: `<<GDS2JS_SPAWN_ERROR>> ${e.message}`, timedOut: false, exitCode: null };
   }
@@ -132,11 +198,19 @@ export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath =
   return { text, timedOut, exitCode: r.status };
 }
 
-export function normalize(text, gdPath = "") {
+export function normalize(text, gdPath = "", sandboxId = null) {
   let out = text;
   if (gdPath) {
     const variants = [gdPath.replace(/\\/g, "/"), gdPath.replace(/\//g, "\\")];
     for (const v of variants) out = out.split(v).join("<case>/main.gd");
+  }
+  if (sandboxId !== null) {
+    const p = sandboxPaths(sandboxId);
+    out = out.replace(ABS_PATH, (m) => m.split("\\").join("/"));
+    for (const [dir, label] of [[p.user, "<user>"], [p.engine, "<case>"], [p.roaming, "<appdata>"], [p.dir, "<sandbox>"]]) {
+      out = out.split(dir.split("\\").join("/")).join(label);
+    }
+    out = out.replace(ABS_PATH, "<abs>");
   }
   out = out.replace(/res:\/\/[^\s)"]*?([\w./-]+\.gd)/g, (_m, p) => `<case>/${p.split("/").pop()}`);
   out = out.replace(/<([A-Za-z_]\w*)#-?\d+>/g, "<$1#号>");

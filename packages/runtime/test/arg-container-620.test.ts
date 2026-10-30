@@ -2,7 +2,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { paramContainer } from "@gds2js/runtime/runtime/slots";
-import { registerClass, registerNativeBase, registerScriptLabel } from "@gds2js/runtime/runtime/object";
+import { registerClass, registerNativeBase, registerScriptLabel } from "@gds2js/runtime/runtime/class/object/script-object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, stampArray, stampClassArray, stampDict } from "@gds2js/runtime/runtime/values";
 

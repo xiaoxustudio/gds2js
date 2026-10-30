@@ -1,0 +1,7 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+p|(a|b)*|0|true|(a|b)*|[]|1
+a|0|2|ab|1|["ab", "b"]
+o|2|2|
+b|[[0, 2, "ab"], [2, 2, ""], [3, 3, ""]]
+d|#z|##z#|[ab][]z[]|<b><>z<>

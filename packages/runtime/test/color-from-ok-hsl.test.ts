@@ -5,7 +5,7 @@
  *  `okhsl-sweep.json`（792 格细扫掠，尺 `fold43.mts`）；两边都试过并否掉的口径：全程 double 只剩 40/792 合、把三点乘加收成 FMA 只剩 217/792 合。 */
 import { describe, expect, it } from "vitest";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { color, colorStatic, asColor } from "@gds2js/runtime/runtime/color";
+import { color, colorStatic, asColor } from "@gds2js/runtime/runtime/class/color/color";
 import { method } from "@gds2js/runtime/runtime/methods";
 
 const EXACT = [

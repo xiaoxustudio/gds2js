@@ -12,8 +12,10 @@ import { HOST_MEMBERS, HOST_PRINT_NAMES } from "./surface";
 import { basenameOfGd, globalConstLines, makeClosure, mark, standaloneInlineHeader } from "./helpers";
 import { collectScriptBase, ctorAritiesLiteral, dictIdentityLiteral, fieldTypesLiteral, methodAritiesLiteral, methodParamsLiteral, orderInnerClasses, scriptPropsLiteral, scriptPropsReaderLiteral, staticNamesLiteral, staticVarTableLiteral, staticsTableLiteral } from "./layout";
 import { computeRawAbis, staticVarSlotsLiteral } from "./abi";
-import { emitClassDecl, emitClassLevelVars, emitDispatch, emitFieldDeclarations, emitFieldsMethod, emitFieldsOnlyConstructor, emitRootConstructor } from "./class";
+import { emitClassDecl, emitClassLevelVars, emitInnerMirrors, emitDispatch, emitFieldDeclarations, emitFieldsMethod, emitFieldsOnlyConstructor, emitRootConstructor } from "./class";
 import { emitFunc } from "./func";
+
+const ENTRY_OWNED = new Set(["run", "__gdDispatch"]);
 
 export type BaseSpec =
   | { kind: "host" }
@@ -38,6 +40,9 @@ export interface EmitOptions {
   loadMap?: Array<{ literal: string; resPath: string }>;
   sideEffectImports?: string[];
   inheritedMembers?: string[];
+  preloadConsts?: Record<string, string[]>;
+  preloadClasses?: Record<string, string[]>;
+  exportInner?: boolean;
   hostBaseInChain?: boolean;
   sourcemap?: boolean;
   sourceFile?: string;
@@ -47,6 +52,7 @@ export interface EmitOptions {
   runtimeMode?: "import" | "local" | "single";
   standaloneRequirePath?: string;
   standaloneInline?: string;
+  projectName?: string;
 }
 
 export interface EmitResult {
@@ -130,6 +136,20 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
     if (c.extends !== null && ctx.INNER_CLASSES.has(c.extends)) ctx.EXTENDED_INNER.add(c.extends);
   }
   ctx.PRELOADS = new Map(preloads.map((p) => [p.literal, p.name]));
+  const preloadConsts = opts.preloadConsts ?? {};
+  const preloadClasses = opts.preloadClasses ?? {};
+  ctx.PRELOAD_FACE_OWNERS = new Map();
+  for (const v of m.vars) {
+    const init = v.init;
+    if (!v.isConst || init === null || init.kind !== "call" || init.callee.kind !== "ident") continue;
+    if (init.callee.name !== "preload" && init.callee.name !== "load") continue;
+    const a = init.args[0];
+    if (!a || a.kind !== "lit" || a.lit !== "string") continue;
+    const cls = ctx.PRELOADS.get(String(a.value));
+    if (cls === undefined) continue;
+    const names = new Set([...(preloadConsts[cls] ?? []), ...(preloadClasses[cls] ?? [])]);
+    if (names.size > 0) ctx.PRELOAD_FACE_OWNERS.set(v.name, { cls, names });
+  }
   ctx.LOADS = new Map((opts.loadMap ?? []).map((l) => [l.literal, l.resPath]));
 
   const out: string[] = [];
@@ -214,12 +234,21 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   out.push(...emitFieldDeclarations(m.vars, m.signals));
   out.push(...emitFieldsMethod(m.vars, m.signals, proto && baseClass.kind === "import", out.length));
   out.push(...emitClassLevelVars(m.vars, out.length));
+  if (opts.exportInner === true) out.push(...emitInnerMirrors(m.innerClasses));
   if (!proto && !m.funcs.some((f) => f.name === "_init" && !f.isStatic)) out.push(...emitFieldsOnlyConstructor());
   ctx.INHERITED_METHODS = new Set([
     ...(opts.inheritedMembers ?? []),
     ...(baseClass.kind === "host" || opts.hostBaseInChain === true ? HOST_MEMBERS : []),
   ]);
   ctx.SCRIPT_INHERITED = new Set(opts.inheritedMembers ?? []);
+  const clash = m.innerClasses.find((c) => c.name === className);
+  if (clash !== undefined) {
+    throw new UnsupportedError("emit-class-clash", `内部类 ${clash.name} 与文件名派生出的模块类同名：两支会发成同一个标识符，产物是非法 JS —— 换掉其中一个的名字`);
+  }
+  const shadowed = m.funcs.find((f) => !f.isStatic && ENTRY_OWNED.has(f.name) && ctx.INHERITED_METHODS.has(f.name));
+  if (shadowed !== undefined) {
+    throw new UnsupportedError("emit-entry-name", `${shadowed.name}() 占的是产物入口的名字，脚本自己声明它会把入口盖掉：换个名`);
+  }
   for (const f of m.funcs) {
     const base = out.length;
     const lines = emitFunc(f, base);
@@ -268,8 +297,15 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
     const base = out.length;
     for (const line of emitClassDecl(c, base)) out.push(line);
   }
+  if (opts.exportInner === true) {
+    for (const c of m.innerClasses) out.push(`${className}.${c.name} = ${c.name};`);
+    if (m.innerClasses.length > 0) out.push("");
+  }
 
   if (autoRun) {
+    if (opts.projectName !== undefined && opts.projectName !== "") {
+      out.push(`rt.setHostProjectName(${JSON.stringify(opts.projectName)});`);
+    }
     out.push(`const __gd_entry = new ${className}();`);
     out.push(`try {`);
     if (opts.scene !== undefined) {

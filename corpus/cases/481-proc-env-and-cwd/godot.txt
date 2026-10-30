@@ -1,0 +1,12 @@
+a|true
+b|true
+c|false
+d|[]
+e|0
+f|true|true
+g|true
+h|true
+i|0|true
+j|0|true
+k|31|true
+l|true

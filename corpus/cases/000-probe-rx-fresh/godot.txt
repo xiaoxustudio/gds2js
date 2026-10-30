@@ -1,0 +1,42 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+a|false||[]|0
+b|true|24
+c|0|[]
+d|
+e|false|
+f|0|1|[]
+g|1|false|(|0
+h|0|true|z
+ERROR: Condition "!is_valid()" is true. Returning: result
+   at: get_names (modules/regex/regex.cpp:383)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:5)
+ERROR: Condition "!is_valid()" is true. Returning: 0
+   at: get_group_count (modules/regex/regex.cpp:371)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:5)
+ERROR: Condition "!is_valid()" is true. Returning: nullptr
+   at: search (modules/regex/regex.cpp:208)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:6)
+ERROR: Condition "!is_valid()" is true. Returning: nullptr
+   at: search (modules/regex/regex.cpp:208)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:8)
+ERROR: Condition "!is_valid()" is true. Returning: String()
+   at: sub (modules/regex/regex.cpp:336)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:10)
+ERROR: 1: missing closing parenthesis
+   at: compile (modules/regex/regex.cpp:200)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:14)
+ERROR: Condition "!is_valid()" is true. Returning: 0
+   at: get_group_count (modules/regex/regex.cpp:371)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:14)
+ERROR: 1: missing closing parenthesis
+   at: compile (modules/regex/regex.cpp:200)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:16)

@@ -4,8 +4,8 @@
 // 另两处不在这份件里：脚本实例的表外键读（语料 442 与漂移门逐字节）、延后失败那块（语料 441）。
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { CallableBox } from "@gds2js/runtime/runtime/callable";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { CallableBox } from "@gds2js/runtime/runtime/class/identity/callable";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { method } from "@gds2js/runtime/runtime/methods";
 

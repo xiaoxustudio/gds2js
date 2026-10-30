@@ -10,13 +10,13 @@ import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
 import { dictOf } from "@gds2js/runtime/runtime/methods";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector2i } from "@gds2js/runtime/runtime/vector2i";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
-import { vector3i } from "@gds2js/runtime/runtime/vector3i";
-import { color } from "@gds2js/runtime/runtime/color";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
-import { rid } from "@gds2js/runtime/runtime/rid";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { vector3i } from "@gds2js/runtime/runtime/class/vector/vector3i";
+import { color } from "@gds2js/runtime/runtime/class/color/color";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
+import { rid } from "@gds2js/runtime/runtime/class/identity/rid";
 import { isLess } from "@gds2js/runtime/runtime/ops";
 
 const CELLS: Array<[Variant, Variant, string, boolean]> = [

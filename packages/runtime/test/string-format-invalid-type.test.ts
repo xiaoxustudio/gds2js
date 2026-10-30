@@ -10,7 +10,7 @@ import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show } from "@gds2js/runtime/runtime/values";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 
 const HEAD = "ERROR: Invalid type: use Array, Dictionary or Object.";
 const AT = "   at: format (core/string/ustring.cpp:3598)";

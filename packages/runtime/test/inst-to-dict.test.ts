@@ -11,9 +11,9 @@ import {
   registerDictIdentity,
   registerNativeBase,
   setClassBase,
-} from "@gds2js/runtime/runtime/object";
+} from "@gds2js/runtime/runtime/class/object/script-object";
 import { gInstToDict } from "@gds2js/runtime/runtime/builtins";
-import { nativeClass } from "@gds2js/runtime/runtime/native-class";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { I, S } from "./support/variants";
 
 class DictBase extends GdScriptObject {

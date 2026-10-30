@@ -5,10 +5,10 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
-import { ClassDesc, GdScriptObject, defineClass, registerScriptProps, setClassBase } from "@gds2js/runtime/runtime/object";
-import { nativeClass } from "@gds2js/runtime/runtime/native-class";
+import { ClassDesc, GdScriptObject, defineClass, registerScriptProps, setClassBase } from "@gds2js/runtime/runtime/class/object/script-object";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { GArray, strFormatV } from "@gds2js/runtime/runtime/values";
 import { globalCallable } from "@gds2js/runtime/runtime/methods";
 import { I, S } from "./support/variants";

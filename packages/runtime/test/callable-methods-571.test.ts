@@ -1,7 +1,7 @@
 /** Callable 的 bindv / is_custom / is_standard / get_object_id / hash（S571），读数 `tmp/d6/s571.gd` / `s571b.gd`。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { GdScriptObject, callableOf, methodCallable, nullCallable, wrapValue } from "@gds2js/runtime/runtime/object";
+import { GdScriptObject, callableOf, methodCallable, nullCallable, wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { attribute, globalCallable, method } from "@gds2js/runtime/runtime/methods";
 import { GArray } from "@gds2js/runtime/runtime/values";

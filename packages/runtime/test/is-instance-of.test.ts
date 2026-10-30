@@ -3,8 +3,8 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { defineClass, registerNativeBase, setClassBase, GdScriptObject, type ClassDesc } from "@gds2js/runtime/runtime/object";
-import { nativeClass } from "@gds2js/runtime/runtime/native-class";
+import { defineClass, registerNativeBase, setClassBase, GdScriptObject, type ClassDesc } from "@gds2js/runtime/runtime/class/object/script-object";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { gIsInstanceOf } from "@gds2js/runtime/runtime/patterns";
 import { I, S, F } from "./support/variants";
 

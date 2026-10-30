@@ -1,6 +1,6 @@
 import "./value-ctors";
 import { nodePathHash } from "./builtin/hash";
-import { registerNodePathHashHook } from "./node-path";
+import { registerNodePathHashHook } from "./class/identity/node-path";
 
 registerNodePathHashHook(nodePathHash);
 

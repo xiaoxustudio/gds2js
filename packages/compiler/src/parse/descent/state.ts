@@ -100,6 +100,11 @@ export class Parser {
     return this.c.dedented();
   }
 
+  /** 当前逻辑行的有效缩进：`elif` / `else` 只接与自家 `if` 同一级缩进的那一行。 */
+  blockIndent(): number {
+    return this.c.lineIndent(this.c.lineIndex());
+  }
+
   deeperThanBlock(): boolean {
     this.stash();
     return this.c.deeperThanBlock();

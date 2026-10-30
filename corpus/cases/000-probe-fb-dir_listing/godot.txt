@@ -1,0 +1,9 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+a|["seed.txt"]
+b|34|1
+c|["logs/", "seed.txt"]
+SCRIPT ERROR: Invalid call. Nonexistent function 'is_read_only' in base 'DirAccess'.
+   at: _initialize (res://main.gd:15)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:15)

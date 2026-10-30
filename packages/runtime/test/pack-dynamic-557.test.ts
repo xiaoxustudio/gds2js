@@ -3,7 +3,7 @@ import { describe, it } from "vitest";
 import { deflateSync, inflateSync } from "node:zlib";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { GBytes, registerZipCodec } from "@gds2js/runtime/runtime/packed";
+import { GBytes, registerZipCodec } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { show, valueEq } from "@gds2js/runtime/runtime/values";
 import { I } from "./support/variants";

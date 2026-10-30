@@ -1,7 +1,7 @@
 import { GodotRuntimeError, UnsupportedError } from "../errors";
-import { isVariant, wrapValue } from "../object";
+import { isVariant, wrapValue } from "../class/object/script-object";
 import { writeOrderedStderr, readOnlyError } from "../frames";
-import { asNodePath, nodePathText } from "../node-path";
+import { asNodePath, nodePathText } from "../class/identity/node-path";
 import { Tag, V, intToNum, type IntPayload, type Variant } from "../tags";
 import { GArray, GDict } from "../values";
 import { valueTypeName } from "../string-ops";

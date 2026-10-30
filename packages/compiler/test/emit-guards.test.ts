@@ -711,3 +711,61 @@ afterAll(() => {
     `  值位置 Callable ${VALUE_NAMES.length - valueBad.length}/${VALUE_NAMES.length} 支一致（应为 ${VALUE_NAMES.length}）${valueBad.length > 0 ? "：" + valueBad.join(", ") : ""}`,
   );
 });
+
+describe("产物入口名的占用闸门", () => {
+  const entryCode = async (src: string): Promise<string> => {
+    const ir = lower(await parseSource(src));
+    try {
+      emitModule(ir, EMIT_OPTS_PROBE, analyze(ir));
+      return "ok";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.code : `other:${String(e)}`;
+    }
+  };
+
+  it("入口类声明 run() 与 __gdDispatch() 按 emit-entry-name 响亮拒", async () => {
+    expect(await entryCode("extends SceneTree\n\nfunc run(x):\n\treturn x\n")).toBe("emit-entry-name");
+    expect(await entryCode("extends SceneTree\n\nfunc __gdDispatch(x):\n\treturn x\n")).toBe("emit-entry-name");
+  });
+
+  it("内部类的 run() 与近名的 runner() 照发", async () => {
+    expect(await entryCode("extends SceneTree\n\nclass Holder:\n\tfunc run(x):\n\t\treturn x\n\n\nfunc _initialize():\n\tprint(Holder.new().run(1))\n\tquit()\n")).toBe("ok");
+    expect(await entryCode("extends SceneTree\n\nfunc runner(x):\n\treturn x\n")).toBe("ok");
+  });
+});
+
+describe("模块类名与内部类的相撞闸门", () => {
+  const clashCode = async (src: string): Promise<string> => {
+    const ir = lower(await parseSource(src));
+    try {
+      emitModule(ir, { ...EMIT_OPTS_PROBE, resPath: "res://lexer.gd", className: "Lexer" }, analyze(ir));
+      return "ok";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.code : `other:${String(e)}`;
+    }
+  };
+
+  it("同名内部类按 emit-class-clash 响亮拒，不同名的照发", async () => {
+    expect(await clashCode("class Lexer:\n\tvar n = 1\n")).toBe("emit-class-clash");
+    expect(await clashCode("class Scanner:\n\tvar n = 1\n")).toBe("ok");
+  });
+});
+
+describe("发射前奏名的遮挡闸门", () => {
+  const codeOf = async (src: string): Promise<string> => {
+    const ir = lower(await parseSource(src));
+    try {
+      emitModule(ir, EMIT_OPTS_PROBE, analyze(ir));
+      return "ok";
+    } catch (e) {
+      return e instanceof UnsupportedError ? e.code : `other:${String(e)}`;
+    }
+  };
+
+  it("形参与局部名撞上 rt / print 一族都响亮拒，别的名字照发", async () => {
+    expect(await codeOf("func f(rt):\n	return rt\n")).toBe("emit-prelude-shadow");
+    expect(await codeOf("func f(print):\n	return print\n")).toBe("emit-prelude-shadow");
+    expect(await codeOf("func f():\n	var rt = 1\n	return rt\n")).toBe("emit-prelude-shadow");
+    expect(await codeOf("func f(text):\n	return text\n")).toBe("ok");
+  });
+});

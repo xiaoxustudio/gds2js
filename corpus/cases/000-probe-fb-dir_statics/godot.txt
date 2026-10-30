@@ -1,0 +1,16 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+m|open|true
+m|get_open_err|false
+m|make_dir_absolute|true
+m|make_dir_recursive_absolute|true
+m|remove_absolute|true
+m|copy_absolute|true
+m|rename_absolute|true
+m|dir_exists_absolute|true
+m|file_exists_absolute|false
+m|exists|false
+m|get_files_at_absolute|false
+m|get_directories_at_absolute|false
+m|is_read_only_absolute|false
+m|change_dir_to_beginning|false

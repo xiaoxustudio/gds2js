@@ -4,10 +4,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { Tag } from "@gds2js/runtime/runtime/tags";
-import { vector2Const } from "@gds2js/runtime/runtime/vector2";
-import { vector2iConst } from "@gds2js/runtime/runtime/vector2i";
-import { vector3Const } from "@gds2js/runtime/runtime/vector3";
-import { vector3iConst } from "@gds2js/runtime/runtime/vector3i";
+import { vector2Const } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector2iConst } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { vector3Const } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { vector3iConst } from "@gds2js/runtime/runtime/class/vector/vector3i";
 
 const AXES: Array<[string, (n: string) => unknown, number[]]> = [
   ["Vector2", vector2Const, [0, 1]],

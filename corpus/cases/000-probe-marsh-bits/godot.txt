@@ -1,0 +1,12 @@
+SCRIPT ERROR: Parse Error: Static function "bool_to_bit()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "bool_to_bit()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "bool_to_bit()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_bits()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:5)
+SCRIPT ERROR: Parse Error: Static function "bytes_to_bits()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:6)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
