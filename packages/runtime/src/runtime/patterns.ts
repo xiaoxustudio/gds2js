@@ -142,15 +142,20 @@ function packKindMatches(v: Variant, kind: PackKind): boolean {
   return isBytes(v) && packBytes(v).kind === kind;
 }
 
-const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "Node3D", "SceneTree", "MainLoop"];
+const PROBED_CLASS_NAMES = ["Object", "RefCounted", "Resource", "GDScript", "Node", "Node2D", "Node3D", "JSON", "SceneTree", "MainLoop"];
 
-function instanceClassNames(base: string | null): string[] | null {
-  if (base === "RefCounted") return ["Object", "RefCounted"];
+function instanceClassNames(base: string | null): string[] | null {  if (base === "RefCounted") return ["Object", "RefCounted"];
+  if (base === "JSON") return ["Object", "RefCounted", "JSON"];
   if (base === "Node") return ["Object", "Node"];
   if (base === "Node2D") return ["Object", "Node", "Node2D"];
   if (base === "Node3D") return ["Object", "Node", "Node3D"];
   if (base === "SceneTree") return ["Object", "SceneTree", "MainLoop"];
   return null;
+}
+
+/** `is_class()` 用的实测祖先链；表外基类回 null，让调用方保留旧判据。 */
+export function probedClassChain(base: string): string[] | null {
+  return instanceClassNames(base);
 }
 
 function engineClassIs(v: Variant, name: string): boolean | null {

@@ -493,13 +493,21 @@ export function isFreed(inner: unknown): boolean {
   return typeof inner === "object" && inner !== null && (inner as unknown as Record<string, unknown>).__gd_freed__ === true;
 }
 
+/**
+ * 实测到的实例打印前缀：`str(JSON.new())` 是 `():<JSON#号>`，而 `str(RefCounted.new())` 没有前缀。
+ * 引擎里那一判据还没读透，所以按类登记实测形状，不做推断。
+ */
+const ENGINE_LABEL_PREFIX: Readonly<Record<string, string>> = { JSON: "():" };
+
 registerObjectLabelHook((inner) => {
   if (!(inner instanceof GdScriptObject)) return null;
   const base = nativeBaseOf(inner);
   if (base === null) return null;
   const tag = `<${base}#${String(inner.gdObjectId)}>`;
   const nm = (inner as unknown as Record<string, unknown>).__gd_node_name__;
-  return typeof nm === "string" && nm !== "" ? `${nm}:${tag}` : tag;
+  if (typeof nm === "string" && nm !== "") return `${nm}:${tag}`;
+  const pfx = ENGINE_LABEL_PREFIX[base];
+  return pfx === undefined ? tag : `${pfx}${tag}`;
 });
 
 const METAS = new Map<object, Map<string, Variant>>();

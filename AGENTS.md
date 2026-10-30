@@ -7,6 +7,7 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupported`（D4）；Tier 2 四阶段**已收口**：D6 那七支值类型加 `Transform3D` 共八支整族落地、引擎类实例构造与成员面放行（`Node` / `Node2D` / `Control` / `Node3D` 四支基类 + 类体裸名读写，`Node3D.transform` 与 `global_*` 按不在树里那一形落地）、节点树与场景通知路线打通（`.tscn` 编译期展树 + `sceneRun` 帧环 + 分组查询），没量过的形状仍一律 `UnsupportedError`（D7 引用计数按 γ 记档不落地）。
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`），不靠"看着对"。
+**Tier 3（宿主 API 族）在开工**：`JSON` 面按实测落地（`stringify` 的两支浮点印法与排序 / pretty、`parse_string` / `parse` / `get_data` / `get_error_*` 的成功路径、实例打印与 `is` / `is_class` 链），解析失败那一形连同引擎 ERROR 的消息集**还没实测完，照旧响亮拒**；`Marshalls` 经实测在 GDScript 里根本不可达（引擎单例，静态调用解析期就拒）→ 划出范围；`FileAccess` / `DirAccess` / `RegEx` 未开工，一律 `UnsupportedError`。
 核心技术：手写递归下降解析器（`packages/compiler/src/parse/descent/`，纯 TS，无 wasm 无 C）、scriptc（AOT 出原生 exe）。
 
 ## 仓库结构（pnpm workspace + Turbo）
@@ -18,7 +19,7 @@ Tier 1 内不实现 `Node` / `SceneTree` 等引擎 API，遇到即抛 `unsupport
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |
-| `corpus/cases/` | 语料用例 470 例（另有 `000-*` 探头，不入语料），逐例 golden 对账；工程用例带 `project.godot`，场景用例再带 `main.tscn` 第三格夹具 |
+| `corpus/cases/` | 语料用例 471 例（另有 `000-*` 探头，不入语料），逐例 golden 对账；工程用例带 `project.godot`，场景用例再带 `main.tscn` 第三格夹具 |
 | `test/` | `repo/`（仓库不变量）+ `e2e/`（出货与语义门，逐支落点看目录）+ `support/` |
 
 ## 常用命令
