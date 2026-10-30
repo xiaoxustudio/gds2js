@@ -1,0 +1,10 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Cannot find member "READ_WRITE_FLUSH" in base "FileAccess".
+   at: GDScript::reload (res://main.gd:4)
+SCRIPT ERROR: Parse Error: Identifier "ERR_ACCESS_DENIED" not declared in the current scope.
+   at: GDScript::reload (res://main.gd:5)
+SCRIPT ERROR: Parse Error: Identifier "ERR_DOES_EXIST" not declared in the current scope.
+   at: GDScript::reload (res://main.gd:5)
+ERROR: Failed to load script "res://main.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:2907)

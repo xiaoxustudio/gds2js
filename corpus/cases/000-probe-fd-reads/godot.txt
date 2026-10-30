@@ -1,0 +1,17 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+a|7|0.0|||18
+b|0|<null>
+c|7|7|true|0
+ERROR: Condition "(uint32_t)buff.size() != len" is true. Returning: Variant()
+   at: get_var (core/io/file_access.cpp:383)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:13)
+ERROR: Condition "len < 4" is true. Returning: ERR_INVALID_DATA
+   at: decode_variant (core/io/marshalls.cpp:190)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:13)
+ERROR: Error when trying to encode Variant.
+   at: get_var (core/io/file_access.cpp:389)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:13)

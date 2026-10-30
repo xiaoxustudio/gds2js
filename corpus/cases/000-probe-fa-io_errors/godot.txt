@@ -1,0 +1,14 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+a|true|12
+b|0
+c|6513249|18|0|18
+d|18|false|[63, 0, 0, 0]
+ERROR: Parameter "f" is null.
+   at: get_buffer (drivers/windows/file_access_windows.cpp:336)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:14)
+ERROR: Condition "p_size < 0" is true. Returning: ERR_INVALID_PARAMETER
+   at: resize (./core/templates/cowdata.h:396)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:14)

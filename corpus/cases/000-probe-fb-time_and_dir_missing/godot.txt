@@ -1,0 +1,12 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Too few arguments for "get_modified_time()" call. Expected at least 1 but received 0.
+   at: GDScript::reload (res://main.gd:8)
+SCRIPT ERROR: Parse Error: Too few arguments for "get_modified_time()" call. Expected at least 1 but received 0.
+   at: GDScript::reload (res://main.gd:8)
+SCRIPT ERROR: Parse Error: Cannot find member "size" in base "int".
+   at: GDScript::reload (res://main.gd:8)
+SCRIPT ERROR: Parse Error: Function "size()" not found in base int.
+   at: GDScript::reload (res://main.gd:8)
+ERROR: Failed to load script "res://main.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:2907)

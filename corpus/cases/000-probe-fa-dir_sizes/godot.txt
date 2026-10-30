@@ -1,0 +1,6 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+SCRIPT ERROR: Invalid call. Nonexistent function 'get_size' in base 'DirAccess'.
+   at: _initialize (res://main.gd:8)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:8)
