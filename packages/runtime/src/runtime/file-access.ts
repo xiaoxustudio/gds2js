@@ -1,4 +1,4 @@
-import { hostIo, hostIoMissing, resolveIoPath } from "../host-io";
+import { hostIo, hostIoMissing, resolveIoPath } from "./host-io";
 import { UnsupportedError } from "./errors";
 import { NULL_OBJECT } from "./identity";
 import { GdScriptObject } from "./object";

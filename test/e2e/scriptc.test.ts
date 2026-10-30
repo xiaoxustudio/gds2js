@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vitest";
 import { TREE_FACE } from "@gds2js/compiler/tree-face";
 import { hasScriptc, missing } from "../support/env";
-import { caseDir, caseIsProject, caseScript, godotOk, listCases, normalize, readGolden, ROOT } from "../support/lib-bridge";
+import { caseDir, caseIsProject, caseSandboxed, caseScript, dropSandbox, godotOk, listCases, normalize, prepareSandbox, readGolden, ROOT, sandboxEnv } from "../support/lib-bridge";
 import { NEED_ZSTD_TEXT } from "../support/pack-codec";
 
 const ALL = process.env.GDS2JS_SCRIPTC_ALL === "1";
@@ -239,12 +239,20 @@ async function gateOne(id: string): Promise<Row> {
     }
   }
   if (row.built && exe !== null) {
-    const run = await sp(exe, [], { timeout: 30000 });
+    const sandboxed = caseSandboxed(id);
+    const runOpts: Parameters<typeof sp>[2] = { timeout: 30000 };
+    if (sandboxed) {
+      const sb = prepareSandbox(id);
+      runOpts.env = sandboxEnv(id);
+      runOpts.cwd = sb.engine;
+    }
+    const run = await sp(exe, [], runOpts);
+    if (sandboxed) dropSandbox(id);
     row.ran = run.status === 0;
     if (!row.ran) {
       row.note = `exe 退出 ${String(run.status)}：${run.stderr.trim().split("\n")[0]?.slice(0, 140) ?? ""}`;
     } else {
-      const got = normalize(run.out, caseScript(id));
+      const got = normalize(run.out, caseScript(id), sandboxed ? id : null);
       const golden = readGolden(id);
       row.exact = got === golden;
       if (!row.exact) {

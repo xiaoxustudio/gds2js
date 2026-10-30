@@ -1,4 +1,4 @@
-import { UnsupportedError } from "./runtime/errors";
+import { UnsupportedError } from "./errors";
 
 /**
  * 宿主侧文件系统的能力表。三轨共用同一份语义，差异只由「产物 import 哪一份 host」表达：
@@ -59,8 +59,20 @@ export function resolveIoPath(path: string): string {
     }
     const name = PROJECT_NAME === "" ? "Godot" : PROJECT_NAME;
     const rel = path.slice("user://".length);
-    return `${roaming}/Godot/app_userdata/${name}${rel === "" ? "" : `/${rel}`}`;
+    const root = `${roaming}/Godot/app_userdata/${name}`;
+    ensureUserRoot(io, root);
+    return rel === "" ? root : `${root}/${rel}`;
   }
   if (/^[A-Za-z]:[/\\]/.test(path)) return path;
   throw new UnsupportedError("io-path-shape", `路径只量过 user:// 与带盘符的绝对路径（收到 ${path === "" ? "空串" : "另一形"}）：裸相对路径两侧 cwd 不同源`);
+}
+
+/** 引擎在启动那一步就把 `app_userdata/<工程名>` 建出来（沙箱门里那一层由 prepareSandbox 备好，
+ *  原生轨上没人备）；缺的那两级由这里补上，缺中间层照旧按实测回 7。 */
+function ensureUserRoot(io: HostIo, root: string): void {
+  if (io.exists(root)) return;
+  const cut = root.lastIndexOf("/");
+  const parent = cut <= 0 ? "" : root.slice(0, cut);
+  if (parent !== "" && !io.exists(parent)) ensureUserRoot(io, parent);
+  io.makeDir(root);
 }
