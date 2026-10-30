@@ -48,7 +48,7 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `GDS2JS_NODE_BIN`。
 
 ## 纪律（红线）
 
-1. 语义只认 Godot 4.6.3 实测（**corpus golden 逐字节** + `tools/golden.mjs` 对账；历史 S 编号台账已归档到 git 历史的 `docs/SEMANTICS.md`）；**没测过的不许写进实现**——一律抛 `UnsupportedError`，绝不静默降级、不猜。钉版本只有一个字面量 `tools/lib.mjs` 的 `GODOT_PIN`：任何要落读数的工具（`golden.mjs` / `regen:*` 探头）落盘前先 `requireGodotPin()`，版本不符直接拒写，`test/repo` 的文档计数门③ 保证树里所有「Godot x.y.z」都跟着它一起搬。
+1. 语义只认 Godot 4.6.3 实测（**corpus golden 逐字节** + `tools/golden.mjs` 对账；历史 S 编号台账已归档，取回 `git show fa46a87:docs/SEMANTICS.md`）；**没测过的不许写进实现**——一律抛 `UnsupportedError`，绝不静默降级、不猜。钉版本只有一个字面量 `tools/lib.mjs` 的 `GODOT_PIN`：任何要落读数的工具（`golden.mjs` / `regen:*` 探头）落盘前先 `requireGodotPin()`，版本不符直接拒写，`test/repo` 的文档计数门③ 保证树里所有「Godot x.y.z」都跟着它一起搬。
 2. **禁止自行添加语言特性、长短注释及说明注释等，除非我特意说明，否则直接禁止添加。** 存量注释的口径：**源码里只留纯函数的 `/** */` 文档注释**，其余（任务编号、读数依据、临时说明）不写；`case-table.ts` / `case-flags.ts` / `ucaps.ts` / `engine-classes.ts` 四张实测生成物的头注释由生成器产出，只能走 `pnpm regen:*`，别手删（`test:codegen` 会红）。
 3. 测试文件只放 `packages/<pkg>/test/` 或根 `test/`，**绝不放进 `packages/*/src/`**（会被 `copyTreeTs` 扫进出货产物树）。
 4. 版本戳：`packages/gds2js/src/version.ts` 与**五份** `package.json`（根 + 四包）必须一字一致（`pnpm release` 与 `test/repo/version-consistency` 双重校验）。
@@ -67,9 +67,6 @@ E2E 外部工具落点：`GODOT_BIN` / `SCRIPTC_BIN` / `GDS2JS_NODE_BIN`。
 
 ## 文档索引
 
-- `docs/ROADMAP.md` — 已拍板决策（D1–D8、A–I）/ 阶段判据 / Tier 1 收口状态快照
-- `docs/ARCHITECTURE.md` — 架构史与不变量（D8 正文：出货模型、阶段契约、模块布局、尺寸棘轮、依赖图纪律、发射面、实测出处）
-- `docs/TIER2.md` — Tier 2（宿主与引擎 API、七个值类型、对象生命周期）的阶段、判据、取证清单与十二条待拍板落点；四阶段收口后已归档，需要时 `git show ca95311:docs/TIER2.md` 取回
-- `docs/RUNTIME_API.md` — runtime ↔ emitter 契约（v1，签名冻结；覆盖面口径见 §0）
+- `docs/` 整套已随 Tier 2 收口归档进 git 历史，取回：`git show 64cf250:docs/ROADMAP.md`（拍板决策 D1–D8 / A–I、阶段判据、收口快照）、`git show 64cf250:docs/ARCHITECTURE.md`（D8 正文：出货模型、阶段契约、模块布局、尺寸棘轮、依赖图纪律、发射面、实测出处）、`git show 64cf250:docs/RUNTIME_API.md`（runtime ↔ emitter 契约 v1，签名冻结）、`git show ca95311:docs/TIER2.md`（Tier 2 阶段与取证清单）、`git show fa46a87:docs/SEMANTICS.md`（S 编号语义基线与逐笔台账）。
+- 归档件不再承载待办，它的判据本体全部有门守着：D8 不变量 → `test/repo/`（`tree-face` / `seam-count` / `module-cycles` / `phase-boundary` / `version-consistency` / `file-budget`）、契约面 → `test/repo/emit-surface` + `emit-contract`、语义 → `corpus/` golden + `pnpm test:golden` + `corpus-diff` 三桶、出货 → `test/e2e/export` + `cli-native` + 全量 `test:scriptc`。还开着的只有 D7 那一族（引用计数没建模）：判据在代码里，`runtime/method/object.ts` 的 `signal-flag-deferred` 与 `runtime/method/callable.ts` 的 `callable-deferred-null` 两支 `UnsupportedError`，外加 `Node3D.transform` / `Transform3D` 那一支 —— 一律「没量过就响亮拒」，不准静默降级。
 - `README.md` — CLI 用法、运行时打包模式、测试分层详解
-- 历史逐笔台账与 S 编号语义基线（原 `docs/SEMANTICS.md` 与 ROADMAP 的逐笔流水）已归档，需要时 `git show fa46a87:docs/SEMANTICS.md` / `git show fa46a87:docs/ROADMAP.md` 取回

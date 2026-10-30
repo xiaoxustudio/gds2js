@@ -5,7 +5,7 @@
  *   exe 过期会自动重编）→ 落 `release/` + sha256 → 产物 `--version` 冒烟。
  *
  * 用法：pnpm release
- * 不带 scriptc、也不写 zip（拍板记录见 docs/ROADMAP.md §0 的 H/I 两行）。
+ * 不带 scriptc、也不写 zip（拍板记录已归档：`git show 64cf250:docs/ROADMAP.md` §0 的 H/I 两行）。
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
