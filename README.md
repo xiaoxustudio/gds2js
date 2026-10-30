@@ -1,6 +1,6 @@
 # gds2js
 
-GDScript 4.x → JavaScript 的 AOT 编译器。管线：手写递归下降 CST → lower(IR) → analyze(语义) → emit(ESM `.mts`)。
+GDScript 4.x → JavaScript 的 AOT 编译器
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`）。
 
@@ -57,11 +57,6 @@ gds2js build-project main.gd --runtime-mode local            # 整个工程 + �
 
 ## 测试
 
-测试跑在 **Vitest** 上（根 `vitest.config.ts`，五个 project：`testkit` / `runtime` / `compiler` / `repo` 为快层，`e2e` 单独一层）。
-**快层**零外部依赖、零 build，秒级；**E2E 层**串行跑，缺外部工具时自动 skip 并说出缺什么。
-测试文件一律放在 `packages/<pkg>/test/` 或根 `test/`，**绝不放进 `packages/*/src/`** ——
-`export --pack scriptc` 的 `copyTreeTs` 会把 `packages/runtime/src/` 下每个 `.ts` 扫进出货产物树。
-
 ```bash
 # ── 快层：零外部依赖、零 build（实测 ~5s）─────────────────────────────
 pnpm test              # testkit + runtime + compiler + repo 四个 project 全跑
@@ -106,11 +101,6 @@ GDS2JS_CLI_NATIVE_NO_REBUILD=1  # exe 过期时拒绝验旧货、直接红
 GDS2JS_SEMA_VERBOSE=1       # sema 逐例打印诊断码
 GODOT_BIN / SCRIPTC_BIN / GDS2JS_NODE_BIN   # 外部工具落点（同旧版）
 ```
-
-`export` 门里 `node/版本门禁` 那一格判的是「runner 的 node 不够新时 CLI 该响亮拒并给出重跑命令」，
-所以这一格要真跑就得拿**低于 25.7** 的 node 当 runner；同时把 SEA 那几格也真打出来，就再给
-`GDS2JS_NODE_BIN` 指一颗 **≥25.7** 的：`D:/nvm/v24.8.0/node.exe node_modules/vitest/vitest.mjs run --project e2e export.test.ts`
-配 `GDS2JS_NODE_BIN=<够新的 node>`（各格的 ok / 记账数按机器与工具链而变，以门输出为准；runner 自己就够新时，版本门禁那一格按口径只记环境账，不硬凑 pass）。
 
 ## 关于
 
