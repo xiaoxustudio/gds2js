@@ -160,8 +160,7 @@ function basisRowDot(a: [number, number, number], b: [number, number, number]): 
   return r(r(r(a[0] * b[0]) + r(a[1] * b[1])) + r(a[2] * b[2]));
 }
 
-export function basisOrthoParts(a: GBasis): GBasis {
-  const x: [number, number, number] = [a.x0, a.x1, a.x2];
+export function basisOrthoParts(a: GBasis): GBasis {  const x: [number, number, number] = [a.x0, a.x1, a.x2];
   const y: [number, number, number] = [a.y0, a.y1, a.y2];
   const z: [number, number, number] = [a.z0, a.z1, a.z2];
   const o0 = basisRowDivide(x[0], x[1], x[2], basisRowLength(x[0], x[1], x[2]));
@@ -183,6 +182,41 @@ export function basisText(v: GBasis): string {
   return `[X: (${strVec2(v.x0)}, ${strVec2(v.x1)}, ${strVec2(v.x2)}), `
     + `Y: (${strVec2(v.y0)}, ${strVec2(v.y1)}, ${strVec2(v.y2)}), `
     + `Z: (${strVec2(v.z0)}, ${strVec2(v.z1)}, ${strVec2(v.z2)})]`;
+}
+
+export function basisScaleParts(a: GBasis): [number, number, number] {
+  const sign = basisDeterminant(a) < 0 ? -1 : 1;
+  return [
+    r(sign * basisRowLength(a.x0, a.x1, a.x2)),
+    r(sign * basisRowLength(a.y0, a.y1, a.y2)),
+    r(sign * basisRowLength(a.z0, a.z1, a.z2)),
+  ];
+}
+
+const EULER_SINGULAR = r(1 - 0.00000025);
+
+export function basisEulerYXZ(a: GBasis): [number, number, number] {
+  const o = basisOrthoParts(a);
+  const flip = basisDeterminant(o) < 0;
+  const c00 = flip ? -o.x0 : o.x0;
+  const c01 = flip ? -o.x1 : o.x1;
+  const c02 = flip ? -o.x2 : o.x2;
+  const c10 = flip ? -o.y0 : o.y0;
+  const c11 = flip ? -o.y1 : o.y1;
+  const c20 = flip ? -o.z0 : o.z0;
+  const c21 = flip ? -o.z1 : o.z1;
+  const c22 = flip ? -o.z2 : o.z2;
+  const m12 = c21;
+  if (m12 < EULER_SINGULAR) {
+    if (m12 > -EULER_SINGULAR) {
+      if (c01 === 0 && c10 === 0 && c20 === 0 && c02 === 0 && c00 === 1) {
+        return [r(Math.atan2(-m12, c11)), 0, 0];
+      }
+      return [r(Math.asin(-m12)), r(Math.atan2(c20, c22)), r(Math.atan2(c01, c11))];
+    }
+    return [r(Math.PI * 0.5), r(Math.atan2(c10, c00)), 0];
+  }
+  return [r(-Math.PI * 0.5), r(-Math.atan2(c10, c00)), 0];
 }
 
 export function basisReadProp(v: GBasis, name: string): Variant | null {

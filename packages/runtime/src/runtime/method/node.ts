@@ -23,6 +23,7 @@ import {
 } from "../node";
 import { scenePathOf, sceneTree } from "../scene";
 import { node2dMethod } from "../node2d";
+import { node3dGlobalTransform } from "../node3d";
 import { ctlMethod } from "../control";
 
 function engineError(at: string, message: string): void {
@@ -206,8 +207,18 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     }
     case "show":
     case "hide":
-    case "is_visible_in_tree":
+    case "is_visible_in_tree": {
+      if (rec.__gd_engine_class__ === "Node3D") {
+        throw new UnsupportedError("node3d-method", `Node3D.${name}() 这一支没量过（引擎里 show / hide 是 CanvasItem 那一族，Node3D 身上只量过 visible 读写）`);
+      }
+      if (rec.__gd_engine_class__ === "Control") {
+        const cm = ctlMethod(target, name, args);
+        if (cm !== null) return cm;
+      }
+      return node2dMethod(target, name, args);
+    }
     case "get_global_transform": {
+      if (rec.__gd_engine_class__ === "Node3D") return node3dGlobalTransform(target);
       if (rec.__gd_engine_class__ === "Control") {
         const cm = ctlMethod(target, name, args);
         if (cm !== null) return cm;
