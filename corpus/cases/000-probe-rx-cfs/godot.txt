@@ -1,0 +1,19 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+a|<RegEx#-9223372010967530064>|false||0|[]
+ERROR: Condition "!is_valid()" is true. Returning: 0
+   at: get_group_count (modules/regex/regex.cpp:371)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:5)
+ERROR: Condition "!is_valid()" is true. Returning: result
+   at: get_names (modules/regex/regex.cpp:383)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:5)
+ERROR: Condition "!is_valid()" is true. Returning: nullptr
+   at: search (modules/regex/regex.cpp:208)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:6)
+SCRIPT ERROR: Attempt to call function 'get_strings' in base 'null instance' on a null instance.
+   at: _initialize (res://main.gd:7)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://main.gd:7)

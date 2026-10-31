@@ -1,0 +1,7 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+p|(\w+)@(\w+)|0|true|(\w+)@(\w+)|[]|2
+a|5|13|bob@site|2|["bob@site", "bob", "site"]
+o|5|13|bob@site
+b|[[5, 13, "bob@site"]]
+d|mail # x|mail # x|mail [bob@site] x|mail <bob> x

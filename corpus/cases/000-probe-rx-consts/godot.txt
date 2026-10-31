@@ -1,0 +1,48 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Cannot find member "RD_OK" in base "RegEx".
+   at: GDScript::reload (res://main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "RD_INVALID_PATTERN" in base "RegEx".
+   at: GDScript::reload (res://main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "RD_UNKNOWN_COMPILE_ERROR" in base "RegEx".
+   at: GDScript::reload (res://main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "RD_TOO_COMPLEX" in base "RegEx".
+   at: GDScript::reload (res://main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_DEFAULT" in base "RegEx".
+   at: GDScript::reload (res://main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_NONE" in base "RegEx".
+   at: GDScript::reload (res://main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_EXTENDED" in base "RegEx".
+   at: GDScript::reload (res://main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MULTILINE" in base "RegEx".
+   at: GDScript::reload (res://main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_COMPACT" in base "RegEx".
+   at: GDScript::reload (res://main.gd:5)
+SCRIPT ERROR: Parse Error: Cannot find member "CREATE_NORMAL" in base "RegEx".
+   at: GDScript::reload (res://main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_COMPILE_ALLOW_UNICODE" in base "RegEx".
+   at: GDScript::reload (res://main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_SUBSCRIBE_CHAR_IN_NAME" in base "RegEx".
+   at: GDScript::reload (res://main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_ENABLED" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_NOT_BOL" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_NOT_EOL" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_NOT_EMPTY" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_PARTIAL_SOFT" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_PARTIAL_HARD" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_NEWLINE_CONTERSIM" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_NEWLINE_UC" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "REGEX_MATCH_NEWLINE_ANYC" in base "RegEx".
+   at: GDScript::reload (res://main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot find member "RD_OK" in base "RegEx".
+   at: GDScript::reload (res://main.gd:8)
+ERROR: Failed to load script "res://main.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:2907)
