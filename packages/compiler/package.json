@@ -21,7 +21,8 @@
     "./parse/parser": "./src/parse/parser.ts",
     "./semantics/op-pairs": "./src/semantics/op-pairs.ts",
     "./tree-face": "./src/tree-face.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./semantics/ctor-arms": "./src/semantics/ctor-arms.ts"
   },
   "dependencies": {
     "@gds2js/runtime": "workspace:*"

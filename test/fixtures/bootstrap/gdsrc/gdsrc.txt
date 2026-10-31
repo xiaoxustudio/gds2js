@@ -84,23 +84,23 @@ tk|str-end|48|51|1|4|false|0|"""
 tk|str-start|52|55|1|8|false|0|'''
 tk|str-end|58|61|1|14|false|0|'''
 tk|eof|62|62|2|0|true|0|
-case|m08|52
+case|m08|50
 tk|str-start|0|1|0|0|true|0|"
 tk|escape|2|8|0|2|false|0|\u00e9
 tk|str-end|9|10|0|9|false|0|"
 tk|str-start|11|12|0|11|false|0|"
-tk|escape|13|21|0|13|false|0|\U0001F6
-tk|str-end|24|25|0|24|false|0|"
-tk|str-start|26|27|0|26|false|0|"
-tk|escape|28|30|0|28|false|0|\\
-tk|str-end|31|32|0|31|false|0|"
-tk|str-start|33|34|0|33|false|0|"
-tk|escape|35|39|0|35|false|0|\x41
-tk|str-end|40|41|0|40|false|0|"
-tk|str-start|42|43|0|42|false|0|"
-tk|escape|44|49|0|44|false|0|\o101
-tk|str-end|50|51|0|50|false|0|"
-tk|eof|52|52|1|0|true|0|
+tk|escape|13|21|0|13|false|0|\U01F600
+tk|str-end|22|23|0|22|false|0|"
+tk|str-start|24|25|0|24|false|0|"
+tk|escape|26|28|0|26|false|0|\\
+tk|str-end|29|30|0|29|false|0|"
+tk|str-start|31|32|0|31|false|0|"
+tk|escape|33|37|0|33|false|0|\x41
+tk|str-end|38|39|0|38|false|0|"
+tk|str-start|40|41|0|40|false|0|"
+tk|escape|42|47|0|42|false|0|\o101
+tk|str-end|48|49|0|48|false|0|"
+tk|eof|50|50|1|0|true|0|
 case|m09|28
 tk|region-start|0|7|0|0|true|0|#region
 tk|region-label|7|10|0|7|false|0| 标题
@@ -256,19 +256,25 @@ parse|p01|15
 1|identifier||T|-|0|1|0|0|0|0
 stop|,|item
 root|1|1|15
+id|2|1|1
 err|1|0|1|,|identifier|item
 msg|item: 期望 identifier / number / (，实得 ","（1:2）
 parse|p02|5
 0|source||T|-|0|5|0|0|1|1
-1|group|body|T|-|0|5|0|0|4|2
+1|parenthesized_expression|body|T|-|0|5|0|0|4|2
 2|(||-|-|0|1|0|0|0|0
 2|identifier||T|-|1|2|0|1|0|0
 2|,||-|-|2|3|0|2|0|0
 2|identifier||T|-|4|5|0|4|0|0
-stop||group
+stop||parenthesized_expression
 root|1|1|5
-err|5|0|5|<eof>|")"|group
-msg|group: 期望 ")"，实得 "<eof>"（1:6）
+id|2|1|1
+id|3|2|2
+id|4|2|2
+id|5|2|2
+id|6|2|2
+err|5|0|5|<eof>|")"|parenthesized_expression
+msg|parenthesized_expression: 期望 ")"，实得 "<eof>"（1:6）
 parse|p03|4
 0|source||T|-|0|4|0|0|0|0
 stop|@|item
@@ -277,9 +283,1788 @@ err|0|0|0|@|identifier|item
 msg|item: 期望 identifier / number / (，实得 "@"（1:1）
 parse|p04|5
 0|source||T|-|0|5|0|0|1|1
-1|group|body|T|-|0|1|0|0|1|0
+1|parenthesized_expression|body|T|-|0|1|0|0|1|0
 2|(||-|-|0|1|0|0|0|0
 stop|,|item
 root|1|1|5
+id|2|1|1
+id|3|2|2
 err|1|0|1|,|identifier|item
 msg|item: 期望 identifier / number / (，实得 ","（1:2）
+k|1000000|31|10|15|9223372036854775807|-42
+l|"abc"|"A/B"
+m|abc|3|4
+n|é|1|1
+o|4|\x
+p|true|string-escape|不支持的字符串转义 \q
+r|true|\ud800 是孤立的前置代理
+s|true|\udc00 是孤立的后续代理
+e|1 + 2 * 3
+0|source||T|-|0|9|0|0|1|1
+1|binary_operator||T|-|0|9|0|0|3|2
+2|integer|left|T|-|0|1|0|0|0|0
+2|+|op|-|-|2|3|0|2|0|0
+2|binary_operator|right|T|-|4|9|0|4|3|2
+3|integer|left|T|-|4|5|0|4|0|0
+3|*|op|-|-|6|7|0|6|0|0
+3|integer|right|T|-|8|9|0|8|0|0
+e|a.b(c)[d]
+0|source||T|-|0|9|0|0|1|1
+1|subscript||T|-|0|9|0|0|2|2
+2|attribute||T|-|0|6|0|0|3|2
+3|identifier||T|-|0|1|0|0|0|0
+3|.||-|-|1|2|0|1|0|0
+3|attribute_call||T|-|2|6|0|2|2|2
+4|identifier||T|-|2|3|0|2|0|0
+4|arguments|arguments|T|-|3|6|0|3|3|1
+5|(||-|-|3|4|0|3|0|0
+5|identifier||T|-|4|5|0|4|0|0
+5|)||-|-|5|6|0|5|0|0
+2|subscript_arguments|arguments|T|-|6|9|0|6|3|1
+3|[||-|-|6|7|0|6|0|0
+3|identifier||T|-|7|8|0|7|0|0
+3|]||-|-|8|9|0|8|0|0
+e|not x and y or z
+0|source||T|-|0|16|0|0|1|1
+1|binary_operator||T|-|0|16|0|0|3|2
+2|binary_operator|left|T|-|0|11|0|0|3|2
+3|unary_operator|left|T|-|0|5|0|0|2|1
+4|not||-|-|0|3|0|0|0|0
+4|identifier||T|-|4|5|0|4|0|0
+3|and|op|-|-|6|9|0|6|0|0
+3|identifier|right|T|-|10|11|0|10|0|0
+2|or|op|-|-|12|14|0|12|0|0
+2|identifier|right|T|-|15|16|0|15|0|0
+e|x if c else y
+0|source||T|-|0|13|0|0|1|1
+1|conditional_expression||T|-|0|13|0|0|5|3
+2|identifier|left|T|-|0|1|0|0|0|0
+2|if||-|-|2|4|0|2|0|0
+2|identifier|condition|T|-|5|6|0|5|0|0
+2|else||-|-|7|11|0|7|0|0
+2|identifier|right|T|-|12|13|0|12|0|0
+e|[1, 2, ..]
+0|source||T|-|0|10|0|0|1|1
+1|array|body|T|-|0|6|0|0|5|2
+2|[||-|-|0|1|0|0|0|0
+2|integer||T|-|1|2|0|1|0|0
+2|,||-|-|2|3|0|2|0|0
+2|integer||T|-|4|5|0|4|0|0
+2|,||-|-|5|6|0|5|0|0
+err|expr|..
+e|a ** b ** c
+0|source||T|-|0|11|0|0|1|1
+1|binary_operator||T|-|0|11|0|0|3|2
+2|binary_operator|left|T|-|0|6|0|0|3|2
+3|identifier|left|T|-|0|1|0|0|0|0
+3|**|op|-|-|2|4|0|2|0|0
+3|identifier|right|T|-|5|6|0|5|0|0
+2|**|op|-|-|7|9|0|7|0|0
+2|identifier|right|T|-|10|11|0|10|0|0
+e|-x ** 2
+0|source||T|-|0|7|0|0|1|1
+1|binary_operator||T|-|0|7|0|0|3|2
+2|unary_operator|left|T|-|0|2|0|0|2|1
+3|-||-|-|0|1|0|0|0|0
+3|identifier||T|-|1|2|0|1|0|0
+2|**|op|-|-|3|5|0|3|0|0
+2|integer|right|T|-|6|7|0|6|0|0
+e|f(1, g(2))
+0|source||T|-|0|10|0|0|1|1
+1|call||T|-|0|10|0|0|2|2
+2|identifier||T|-|0|1|0|0|0|0
+2|arguments|arguments|T|-|1|10|0|1|5|2
+3|(||-|-|1|2|0|1|0|0
+3|integer||T|-|2|3|0|2|0|0
+3|,||-|-|3|4|0|3|0|0
+3|call||T|-|5|9|0|5|2|2
+4|identifier||T|-|5|6|0|5|0|0
+4|arguments|arguments|T|-|6|9|0|6|3|1
+5|(||-|-|6|7|0|6|0|0
+5|integer||T|-|7|8|0|7|0|0
+5|)||-|-|8|9|0|8|0|0
+3|)||-|-|9|10|0|9|0|0
+e|(a)
+0|source||T|-|0|3|0|0|1|1
+1|parenthesized_expression||T|-|0|3|0|0|3|1
+2|(||-|-|0|1|0|0|0|0
+2|identifier||T|-|1|2|0|1|0|0
+2|)||-|-|2|3|0|2|0|0
+e|x is int
+0|source||T|-|0|8|0|0|1|1
+1|binary_operator||T|-|0|8|0|0|3|2
+2|identifier|left|T|-|0|1|0|0|0|0
+2|is|op|-|-|2|4|0|2|0|0
+2|identifier|right|T|-|5|8|0|5|0|0
+e|&"name" + ^"p/q"
+0|source||T|-|0|16|0|0|1|1
+1|binary_operator||T|-|0|16|0|0|3|2
+2|string_name|left|T|-|0|7|0|0|2|0
+3|&"||-|-|0|2|0|0|0|0
+3|"||-|-|6|7|0|6|0|0
+2|+|op|-|-|8|9|0|8|0|0
+2|node_path|right|T|-|10|16|0|10|2|0
+3|^"||-|-|10|12|0|10|0|0
+3|"||-|-|15|16|0|15|0|0
+e|$Node/Sub
+0|source||T|-|0|9|0|0|1|1
+1|get_node||T|-|0|9|0|0|2|0
+2|$||-|-|0|1|0|0|0|0
+2|/||-|-|5|6|0|5|0|0
+e|%Uniq
+0|source||T|-|0|5|0|0|1|1
+1|get_node||T|-|0|5|0|0|1|0
+2|%||-|-|0|1|0|0|0|0
+e|"s"
+0|source||T|-|0|3|0|0|1|1
+1|string||T|-|0|3|0|0|2|0
+2|"||-|-|0|1|0|0|0|0
+2|"||-|-|2|3|0|2|0|0
+e|{}
+0|source||T|-|0|2|0|0|1|1
+1|dictionary||T|-|0|2|0|0|2|0
+2|{||-|-|0|1|0|0|0|0
+2|}||-|-|1|2|0|1|0|0
+e|func(a): return a
+0|source||T|-|0|17|0|0|1|1
+1|lambda||T|-|0|17|0|0|4|2
+2|func||-|-|0|4|0|0|0|0
+2|parameters|parameters|T|-|4|7|0|4|3|1
+3|(||-|-|4|5|0|4|0|0
+3|identifier||T|-|5|6|0|5|0|0
+3|)||-|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|body|body|T|-|9|17|0|9|1|1
+3|return_statement||T|-|9|17|0|9|2|1
+4|return||-|-|9|15|0|9|0|0
+4|identifier||T|-|16|17|0|16|0|0
+e|func(): return 1 + 2
+0|source||T|-|0|20|0|0|1|1
+1|lambda||T|-|0|20|0|0|4|2
+2|func||-|-|0|4|0|0|0|0
+2|parameters|parameters|T|-|4|6|0|4|2|0
+3|(||-|-|4|5|0|4|0|0
+3|)||-|-|5|6|0|5|0|0
+2|:||-|-|6|7|0|6|0|0
+2|body|body|T|-|8|20|0|8|1|1
+3|return_statement||T|-|8|20|0|8|2|1
+4|return||-|-|8|14|0|8|0|0
+4|binary_operator||T|-|15|20|0|15|3|2
+5|integer|left|T|-|15|16|0|15|0|0
+5|+|op|-|-|17|18|0|17|0|0
+5|integer|right|T|-|19|20|0|19|0|0
+e|func(a: int = 1): return a
+0|source||T|-|0|26|0|0|1|1
+1|lambda||T|-|0|26|0|0|4|2
+2|func||-|-|0|4|0|0|0|0
+2|parameters|parameters|T|-|4|16|0|4|3|1
+3|(||-|-|4|5|0|4|0|0
+3|typed_default_parameter||T|-|5|15|0|5|5|3
+4|identifier||T|-|5|6|0|5|0|0
+4|:||-|-|6|7|0|6|0|0
+4|type|type|T|-|8|11|0|8|1|1
+5|identifier||T|-|8|11|0|8|0|0
+4|=||-|-|12|13|0|12|0|0
+4|integer|value|T|-|14|15|0|14|0|0
+3|)||-|-|15|16|0|15|0|0
+2|:||-|-|16|17|0|16|0|0
+2|body|body|T|-|18|26|0|18|1|1
+3|return_statement||T|-|18|26|0|18|2|1
+4|return||-|-|18|24|0|18|0|0
+4|identifier||T|-|25|26|0|25|0|0
+s|9|0|var x = 1
+0|source||T|-|0|9|0|0|1|1
+1|variable_statement||T|-|0|9|0|0|4|2
+2|var||-|-|0|3|0|0|0|0
+2|name|name|T|-|4|5|0|4|0|0
+2|=||-|-|6|7|0|6|0|0
+2|integer|value|T|-|8|9|0|8|0|0
+s|44|0|func f(a: int, b := 2) -> int:~n~treturn a + b
+0|source||T|-|0|44|0|0|1|1
+1|function_definition||T|-|0|44|0|0|7|4
+2|func||-|-|0|4|0|0|0|0
+2|name|name|T|-|5|6|0|5|0|0
+2|parameters|parameters|T|-|6|22|0|6|5|2
+3|(||-|-|6|7|0|6|0|0
+3|typed_parameter||T|-|7|13|0|7|3|2
+4|identifier||T|-|7|8|0|7|0|0
+4|:||-|-|8|9|0|8|0|0
+4|type|type|T|-|10|13|0|10|1|1
+5|identifier||T|-|10|13|0|10|0|0
+3|,||-|-|13|14|0|13|0|0
+3|typed_default_parameter||T|-|15|21|0|15|3|3
+4|identifier||T|-|15|16|0|15|0|0
+4|inferred_type|type|T|-|17|19|0|17|1|0
+5|:=||-|-|17|19|0|17|0|0
+4|integer|value|T|-|20|21|0|20|0|0
+3|)||-|-|21|22|0|21|0|0
+2|->||-|-|23|25|0|23|0|0
+2|type|return_type|T|-|26|29|0|26|1|1
+3|identifier||T|-|26|29|0|26|0|0
+2|:||-|-|29|30|0|29|0|0
+2|body|body|T|-|30|44|0|30|1|1
+3|return_statement||T|-|32|44|1|1|2|1
+4|return||-|-|32|38|1|1|0|0
+4|binary_operator||T|-|39|44|1|8|3|2
+5|identifier|left|T|-|39|40|1|8|0|0
+5|+|op|-|-|41|42|1|10|0|0
+5|identifier|right|T|-|43|44|1|12|0|0
+s|54|0|const K = 3~nsignal ping(a)~nclass_name Foo~nextends Node
+0|source||T|-|0|54|0|0|4|4
+1|const_statement||T|-|0|11|0|0|4|2
+2|const||-|-|0|5|0|0|0|0
+2|name|name|T|-|6|7|0|6|0|0
+2|=||-|-|8|9|0|8|0|0
+2|integer|value|T|-|10|11|0|10|0|0
+1|signal_statement||T|-|12|26|1|0|3|2
+2|signal||-|-|12|18|1|0|0|0
+2|name|name|T|-|19|23|1|7|0|0
+2|parameters|parameters|T|-|23|26|1|11|3|1
+3|(||-|-|23|24|1|11|0|0
+3|identifier||T|-|24|25|1|12|0|0
+3|)||-|-|25|26|1|13|0|0
+1|class_name_statement||T|-|27|41|2|0|2|1
+2|class_name||-|-|27|37|2|0|0|0
+2|name|name|T|-|38|41|2|11|0|0
+1|extends_statement||T|-|42|54|3|0|2|1
+2|extends||-|-|42|49|3|0|0|0
+2|type||T|-|50|54|3|8|1|1
+3|identifier||T|-|50|54|3|8|0|0
+s|34|0|if a:~n~tf()~nelif b:~n~tg()~nelse:~n~th()
+0|source||T|-|0|34|0|0|1|1
+1|if_statement||T|-|0|34|0|0|6|4
+2|if||-|-|0|2|0|0|0|0
+2|identifier|condition|T|-|3|4|0|3|0|0
+2|:||-|-|4|5|0|4|0|0
+2|body|body|T|-|5|10|0|5|1|1
+3|expression_statement||T|-|7|10|1|1|1|1
+4|call||T|-|7|10|1|1|2|2
+5|identifier||T|-|7|8|1|1|0|0
+5|arguments|arguments|T|-|8|10|1|2|2|0
+6|(||-|-|8|9|1|2|0|0
+6|)||-|-|9|10|1|3|0|0
+2|elif_clause|alternative|T|-|11|23|2|0|4|2
+3|elif||-|-|11|15|2|0|0|0
+3|identifier|condition|T|-|16|17|2|5|0|0
+3|:||-|-|17|18|2|6|0|0
+3|body|body|T|-|18|23|2|7|1|1
+4|expression_statement||T|-|20|23|3|1|1|1
+5|call||T|-|20|23|3|1|2|2
+6|identifier||T|-|20|21|3|1|0|0
+6|arguments|arguments|T|-|21|23|3|2|2|0
+7|(||-|-|21|22|3|2|0|0
+7|)||-|-|22|23|3|3|0|0
+2|else_clause|alternative|T|-|24|34|4|0|3|1
+3|else||-|-|24|28|4|0|0|0
+3|:||-|-|28|29|4|4|0|0
+3|body|body|T|-|29|34|4|5|1|1
+4|expression_statement||T|-|31|34|5|1|1|1
+5|call||T|-|31|34|5|1|2|2
+6|identifier||T|-|31|32|5|1|0|0
+6|arguments|arguments|T|-|32|34|5|2|2|0
+7|(||-|-|32|33|5|2|0|0
+7|)||-|-|33|34|5|3|0|0
+s|28|0|for i in range(3):~n~tprint(i)
+0|source||T|-|0|28|0|0|1|1
+1|for_statement||T|-|0|28|0|0|6|3
+2|for||-|-|0|3|0|0|0|0
+2|identifier|left|T|-|4|5|0|4|0|0
+2|in||-|-|6|8|0|6|0|0
+2|call|right|T|-|9|17|0|9|2|2
+3|identifier||T|-|9|14|0|9|0|0
+3|arguments|arguments|T|-|14|17|0|14|3|1
+4|(||-|-|14|15|0|14|0|0
+4|integer||T|-|15|16|0|15|0|0
+4|)||-|-|16|17|0|16|0|0
+2|:||-|-|17|18|0|17|0|0
+2|body|body|T|-|18|28|0|18|1|1
+3|expression_statement||T|-|20|28|1|1|1|1
+4|call||T|-|20|28|1|1|2|2
+5|identifier||T|-|20|25|1|1|0|0
+5|arguments|arguments|T|-|25|28|1|6|3|1
+6|(||-|-|25|26|1|6|0|0
+6|identifier||T|-|26|27|1|7|0|0
+6|)||-|-|27|28|1|8|0|0
+s|16|0|while x:~n~tx -= 1
+0|source||T|-|0|16|0|0|1|1
+1|while_statement||T|-|0|16|0|0|4|2
+2|while||-|-|0|5|0|0|0|0
+2|identifier|condition|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|body|body|T|-|8|16|0|8|1|1
+3|expression_statement||T|-|10|16|1|1|1|1
+4|augmented_assignment||T|-|10|16|1|1|3|2
+5|identifier|left|T|-|10|11|1|1|0|0
+5|-=|op|-|-|12|14|1|3|0|0
+5|integer|right|T|-|15|16|1|6|0|0
+s|71|0|match v:~n~t1, 2:~n~t~tprint(1)~n~tvar w when w > 0:~n~t~tprint(w)~n~t_:~n~t~tprint(0)
+0|source||T|-|0|71|0|0|1|1
+1|match_statement||T|-|0|71|0|0|4|2
+2|match||-|-|0|5|0|0|0|0
+2|identifier|value|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|match_body|body|T|-|8|71|0|8|3|3
+3|pattern_section||T|-|10|26|1|1|5|3
+4|integer||T|-|10|11|1|1|0|0
+4|,||-|-|11|12|1|2|0|0
+4|integer||T|-|13|14|1|4|0|0
+4|:||-|-|14|15|1|5|0|0
+4|body|body|T|-|15|26|1|6|1|1
+5|expression_statement||T|-|18|26|2|2|1|1
+6|call||T|-|18|26|2|2|2|2
+7|identifier||T|-|18|23|2|2|0|0
+7|arguments|arguments|T|-|23|26|2|7|3|1
+8|(||-|-|23|24|2|7|0|0
+8|integer||T|-|24|25|2|8|0|0
+8|)||-|-|25|26|2|9|0|0
+3|pattern_section||T|-|28|56|3|1|4|3
+4|pattern_binding||T|-|28|33|3|1|2|1
+5|var||-|-|28|31|3|1|0|0
+5|identifier||T|-|32|33|3|5|0|0
+4|pattern_guard||T|-|34|44|3|7|2|1
+5|when||-|-|34|38|3|7|0|0
+5|binary_operator||T|-|39|44|3|12|3|2
+6|identifier|left|T|-|39|40|3|12|0|0
+6|>|op|-|-|41|42|3|14|0|0
+6|integer|right|T|-|43|44|3|16|0|0
+4|:||-|-|44|45|3|17|0|0
+4|body|body|T|-|45|56|3|18|1|1
+5|expression_statement||T|-|48|56|4|2|1|1
+6|call||T|-|48|56|4|2|2|2
+7|identifier||T|-|48|53|4|2|0|0
+7|arguments|arguments|T|-|53|56|4|7|3|1
+8|(||-|-|53|54|4|7|0|0
+8|identifier||T|-|54|55|4|8|0|0
+8|)||-|-|55|56|4|9|0|0
+3|pattern_section||T|-|58|71|5|1|3|2
+4|identifier||T|-|58|59|5|1|0|0
+4|:||-|-|59|60|5|2|0|0
+4|body|body|T|-|60|71|5|3|1|1
+5|expression_statement||T|-|63|71|6|2|1|1
+6|call||T|-|63|71|6|2|2|2
+7|identifier||T|-|63|68|6|2|0|0
+7|arguments|arguments|T|-|68|71|6|7|3|1
+8|(||-|-|68|69|6|7|0|0
+8|integer||T|-|69|70|6|8|0|0
+8|)||-|-|70|71|6|9|0|0
+s|60|0|class Inner extends Node:~n~tvar p = 1~n~n~tfunc _init():~n~t~tp = 2
+0|source||T|-|0|60|0|0|1|1
+1|class_definition||T|-|0|60|0|0|5|3
+2|class||-|-|0|5|0|0|0|0
+2|name|name|T|-|6|11|0|6|0|0
+2|extends_statement|extends|T|-|12|24|0|12|2|1
+3|extends||-|-|12|19|0|12|0|0
+3|type||T|-|20|24|0|20|1|1
+4|identifier||T|-|20|24|0|20|0|0
+2|:||-|-|24|25|0|24|0|0
+2|class_body|body|T|-|25|60|0|25|2|2
+3|variable_statement||T|-|27|36|1|1|4|2
+4|var||-|-|27|30|1|1|0|0
+4|name|name|T|-|31|32|1|5|0|0
+4|=||-|-|33|34|1|7|0|0
+4|integer|value|T|-|35|36|1|9|0|0
+3|function_definition||T|-|39|60|3|1|5|3
+4|func||-|-|39|43|3|1|0|0
+4|name|name|T|-|44|49|3|6|0|0
+4|parameters|parameters|T|-|49|51|3|11|2|0
+5|(||-|-|49|50|3|11|0|0
+5|)||-|-|50|51|3|12|0|0
+4|:||-|-|51|52|3|13|0|0
+4|body|body|T|-|52|60|3|14|1|1
+5|expression_statement||T|-|55|60|4|2|1|1
+6|assignment||T|-|55|60|4|2|3|2
+7|identifier|left|T|-|55|56|4|2|0|0
+7|=||-|-|57|58|4|4|0|0
+7|integer|right|T|-|59|60|4|6|0|0
+s|22|0|enum E { A, B = 2, C }
+0|source||T|-|0|22|0|0|1|1
+1|enum_definition||T|-|0|22|0|0|3|2
+2|enum||-|-|0|4|0|0|0|0
+2|name|name|T|-|5|6|0|5|0|0
+2|enumerator_list|body|T|-|7|22|0|7|7|3
+3|{||-|-|7|8|0|7|0|0
+3|enumerator||T|-|9|10|0|9|1|1
+4|identifier|left|T|-|9|10|0|9|0|0
+3|,||-|-|10|11|0|10|0|0
+3|enumerator||T|-|12|17|0|12|3|2
+4|identifier|left|T|-|12|13|0|12|0|0
+4|=||-|-|14|15|0|14|0|0
+4|integer|right|T|-|16|17|0|16|0|0
+3|,||-|-|17|18|0|17|0|0
+3|enumerator||T|-|19|20|0|19|1|1
+4|identifier|left|T|-|19|20|0|19|0|0
+3|}||-|-|21|22|0|21|0|0
+s|39|0|var q:~n~tget:~n~t~treturn 1~n~tset(v):~n~t~tpass
+0|source||T|-|0|39|0|0|1|1
+1|variable_statement||T|-|0|39|0|0|3|2
+2|var||-|-|0|3|0|0|0|0
+2|name|name|T|-|4|5|0|4|0|0
+2|setget|setget|T|-|5|39|0|5|3|2
+3|:||-|-|5|6|0|5|0|0
+3|get_body|get|T|-|8|23|1|1|3|1
+4|get||-|-|8|11|1|1|0|0
+4|:||-|-|11|12|1|4|0|0
+4|body|body|T|-|12|23|1|5|1|1
+5|return_statement||T|-|15|23|2|2|2|1
+6|return||-|-|15|21|2|2|0|0
+6|integer||T|-|22|23|2|9|0|0
+3|set_body|set|T|-|25|39|3|1|4|2
+4|set||-|-|25|28|3|1|0|0
+4|parameters||T|-|28|31|3|4|3|1
+5|(||-|-|28|29|3|4|0|0
+5|identifier||T|-|29|30|3|5|0|0
+5|)||-|-|30|31|3|6|0|0
+4|:||-|-|31|32|3|7|0|0
+4|body|body|T|-|32|39|3|8|1|1
+5|pass_statement||T|-|35|39|4|2|1|0
+6|pass||-|-|35|39|4|2|0|0
+s|25|0|class C:~n~tvar r: int = 1~n
+0|source||T|-|0|25|0|0|1|1
+1|class_definition||T|-|0|24|0|0|4|2
+2|class||-|-|0|5|0|0|0|0
+2|name|name|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|class_body|body|T|-|8|24|0|8|1|1
+3|variable_statement||T|-|10|24|1|1|6|3
+4|var||-|-|10|13|1|1|0|0
+4|name|name|T|-|14|15|1|5|0|0
+4|:||-|-|15|16|1|6|0|0
+4|type|type|T|-|17|20|1|8|1|1
+5|identifier||T|-|17|20|1|8|0|0
+4|=||-|-|21|22|1|12|0|0
+4|integer|value|T|-|23|24|1|14|0|0
+s|13|0|x += 1; y = 2
+0|source||T|-|0|13|0|0|3|2
+1|expression_statement||T|-|0|6|0|0|1|1
+2|augmented_assignment||T|-|0|6|0|0|3|2
+3|identifier|left|T|-|0|1|0|0|0|0
+3|+=|op|-|-|2|4|0|2|0|0
+3|integer|right|T|-|5|6|0|5|0|0
+1|;||-|-|6|7|0|6|0|0
+1|expression_statement||T|-|8|13|0|8|1|1
+2|assignment||T|-|8|13|0|8|3|2
+3|identifier|left|T|-|8|9|0|8|0|0
+3|=||-|-|10|11|0|10|0|0
+3|integer|right|T|-|12|13|0|12|0|0
+s|19|0|func _init():~n~tpass
+0|source||T|-|0|19|0|0|1|1
+1|constructor_definition||T|-|0|19|0|0|5|2
+2|func||-|-|0|4|0|0|0|0
+2|_init||-|-|5|10|0|5|0|0
+2|parameters|parameters|T|-|10|12|0|10|2|0
+3|(||-|-|10|11|0|10|0|0
+3|)||-|-|11|12|0|11|0|0
+2|:||-|-|12|13|0|12|0|0
+2|body|body|T|-|13|19|0|13|1|1
+3|pass_statement||T|-|15|19|1|1|1|0
+4|pass||-|-|15|19|1|1|0|0
+s|22|0|static func g():~n~tpass
+0|source||T|-|0|22|0|0|1|1
+1|function_definition||T|-|0|22|0|0|6|4
+2|static_keyword||T|-|0|6|0|0|0|0
+2|func||-|-|7|11|0|7|0|0
+2|name|name|T|-|12|13|0|12|0|0
+2|parameters|parameters|T|-|13|15|0|13|2|0
+3|(||-|-|13|14|0|13|0|0
+3|)||-|-|14|15|0|14|0|0
+2|:||-|-|15|16|0|15|0|0
+2|body|body|T|-|16|22|0|16|1|1
+3|pass_statement||T|-|18|22|1|1|1|0
+4|pass||-|-|18|22|1|1|0|0
+s|171|0|func f(x):~n~tif x > 0:~n~t~treturn x~n~tfor i in range(x):~n~t~tprint(i)~n~twhile x:~n~t~tx -= 1~n~tmatch x:~n~t~t1:~n~t~t~treturn "one"~n~t~tvar w when w > 5:~n~t~t~treturn "big"~n~t~tvar z:~n~t~t~treturn z~n
+0|source||T|-|0|171|0|0|1|1
+1|function_definition||T|-|0|170|0|0|5|3
+2|func||-|-|0|4|0|0|0|0
+2|name|name|T|-|5|6|0|5|0|0
+2|parameters|parameters|T|-|6|9|0|6|3|1
+3|(||-|-|6|7|0|6|0|0
+3|identifier||T|-|7|8|0|7|0|0
+3|)||-|-|8|9|0|8|0|0
+2|:||-|-|9|10|0|9|0|0
+2|body|body|T|-|10|170|0|10|4|4
+3|if_statement||T|-|12|32|1|1|4|2
+4|if||-|-|12|14|1|1|0|0
+4|binary_operator|condition|T|-|15|20|1|4|3|2
+5|identifier|left|T|-|15|16|1|4|0|0
+5|>|op|-|-|17|18|1|6|0|0
+5|integer|right|T|-|19|20|1|8|0|0
+4|:||-|-|20|21|1|9|0|0
+4|body|body|T|-|21|32|1|10|1|1
+5|return_statement||T|-|24|32|2|2|2|1
+6|return||-|-|24|30|2|2|0|0
+6|identifier||T|-|31|32|2|9|0|0
+3|for_statement||T|-|34|63|3|1|6|3
+4|for||-|-|34|37|3|1|0|0
+4|identifier|left|T|-|38|39|3|5|0|0
+4|in||-|-|40|42|3|7|0|0
+4|call|right|T|-|43|51|3|10|2|2
+5|identifier||T|-|43|48|3|10|0|0
+5|arguments|arguments|T|-|48|51|3|15|3|1
+6|(||-|-|48|49|3|15|0|0
+6|identifier||T|-|49|50|3|16|0|0
+6|)||-|-|50|51|3|17|0|0
+4|:||-|-|51|52|3|18|0|0
+4|body|body|T|-|52|63|3|19|1|1
+5|expression_statement||T|-|55|63|4|2|1|1
+6|call||T|-|55|63|4|2|2|2
+7|identifier||T|-|55|60|4|2|0|0
+7|arguments|arguments|T|-|60|63|4|7|3|1
+8|(||-|-|60|61|4|7|0|0
+8|identifier||T|-|61|62|4|8|0|0
+8|)||-|-|62|63|4|9|0|0
+3|while_statement||T|-|65|82|5|1|4|2
+4|while||-|-|65|70|5|1|0|0
+4|identifier|condition|T|-|71|72|5|7|0|0
+4|:||-|-|72|73|5|8|0|0
+4|body|body|T|-|73|82|5|9|1|1
+5|expression_statement||T|-|76|82|6|2|1|1
+6|augmented_assignment||T|-|76|82|6|2|3|2
+7|identifier|left|T|-|76|77|6|2|0|0
+7|-=|op|-|-|78|80|6|4|0|0
+7|integer|right|T|-|81|82|6|7|0|0
+3|match_statement||T|-|84|170|7|1|4|2
+4|match||-|-|84|89|7|1|0|0
+4|identifier|value|T|-|90|91|7|7|0|0
+4|:||-|-|91|92|7|8|0|0
+4|match_body|body|T|-|92|170|7|9|3|3
+5|pattern_section||T|-|95|113|8|2|3|2
+6|integer||T|-|95|96|8|2|0|0
+6|:||-|-|96|97|8|3|0|0
+6|body|body|T|-|97|113|8|4|1|1
+7|return_statement||T|-|101|113|9|3|2|1
+8|return||-|-|101|107|9|3|0|0
+8|string||T|-|108|113|9|10|2|0
+9|"||-|-|108|109|9|10|0|0
+9|"||-|-|112|113|9|14|0|0
+5|pattern_section||T|-|116|149|10|2|4|3
+6|pattern_binding||T|-|116|121|10|2|2|1
+7|var||-|-|116|119|10|2|0|0
+7|identifier||T|-|120|121|10|6|0|0
+6|pattern_guard||T|-|122|132|10|8|2|1
+7|when||-|-|122|126|10|8|0|0
+7|binary_operator||T|-|127|132|10|13|3|2
+8|identifier|left|T|-|127|128|10|13|0|0
+8|>|op|-|-|129|130|10|15|0|0
+8|integer|right|T|-|131|132|10|17|0|0
+6|:||-|-|132|133|10|18|0|0
+6|body|body|T|-|133|149|10|19|1|1
+7|return_statement||T|-|137|149|11|3|2|1
+8|return||-|-|137|143|11|3|0|0
+8|string||T|-|144|149|11|10|2|0
+9|"||-|-|144|145|11|10|0|0
+9|"||-|-|148|149|11|14|0|0
+5|pattern_section||T|-|152|170|12|2|3|2
+6|pattern_binding||T|-|152|157|12|2|2|1
+7|var||-|-|152|155|12|2|0|0
+7|identifier||T|-|156|157|12|6|0|0
+6|:||-|-|157|158|12|7|0|0
+6|body|body|T|-|158|170|12|8|1|1
+7|return_statement||T|-|162|170|13|3|2|1
+8|return||-|-|162|168|13|3|0|0
+8|identifier||T|-|169|170|13|10|0|0
+s|134|0|class A:~n~tvar p: int = 1~n~n~tfunc _init():~n~t~tp = 2~n~n~tfunc get_p():~n~t~treturn p~n~n~nclass B extends A:~n~tfunc get_p():~n~t~treturn super.get_p()
+0|source||T|-|0|134|0|0|2|2
+1|class_definition||T|-|0|75|0|0|4|2
+2|class||-|-|0|5|0|0|0|0
+2|name|name|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|class_body|body|T|-|8|75|0|8|3|3
+3|variable_statement||T|-|10|24|1|1|6|3
+4|var||-|-|10|13|1|1|0|0
+4|name|name|T|-|14|15|1|5|0|0
+4|:||-|-|15|16|1|6|0|0
+4|type|type|T|-|17|20|1|8|1|1
+5|identifier||T|-|17|20|1|8|0|0
+4|=||-|-|21|22|1|12|0|0
+4|integer|value|T|-|23|24|1|14|0|0
+3|function_definition||T|-|27|48|3|1|5|3
+4|func||-|-|27|31|3|1|0|0
+4|name|name|T|-|32|37|3|6|0|0
+4|parameters|parameters|T|-|37|39|3|11|2|0
+5|(||-|-|37|38|3|11|0|0
+5|)||-|-|38|39|3|12|0|0
+4|:||-|-|39|40|3|13|0|0
+4|body|body|T|-|40|48|3|14|1|1
+5|expression_statement||T|-|43|48|4|2|1|1
+6|assignment||T|-|43|48|4|2|3|2
+7|identifier|left|T|-|43|44|4|2|0|0
+7|=||-|-|45|46|4|4|0|0
+7|integer|right|T|-|47|48|4|6|0|0
+3|function_definition||T|-|51|75|6|1|5|3
+4|func||-|-|51|55|6|1|0|0
+4|name|name|T|-|56|61|6|6|0|0
+4|parameters|parameters|T|-|61|63|6|11|2|0
+5|(||-|-|61|62|6|11|0|0
+5|)||-|-|62|63|6|12|0|0
+4|:||-|-|63|64|6|13|0|0
+4|body|body|T|-|64|75|6|14|1|1
+5|return_statement||T|-|67|75|7|2|2|1
+6|return||-|-|67|73|7|2|0|0
+6|identifier||T|-|74|75|7|9|0|0
+1|class_definition||T|-|78|134|10|0|5|3
+2|class||-|-|78|83|10|0|0|0
+2|name|name|T|-|84|85|10|6|0|0
+2|extends_statement|extends|T|-|86|95|10|8|2|1
+3|extends||-|-|86|93|10|8|0|0
+3|type||T|-|94|95|10|16|1|1
+4|identifier||T|-|94|95|10|16|0|0
+2|:||-|-|95|96|10|17|0|0
+2|class_body|body|T|-|96|134|10|18|1|1
+3|function_definition||T|-|98|134|11|1|5|3
+4|func||-|-|98|102|11|1|0|0
+4|name|name|T|-|103|108|11|6|0|0
+4|parameters|parameters|T|-|108|110|11|11|2|0
+5|(||-|-|108|109|11|11|0|0
+5|)||-|-|109|110|11|12|0|0
+4|:||-|-|110|111|11|13|0|0
+4|body|body|T|-|111|134|11|14|1|1
+5|return_statement||T|-|114|134|12|2|2|1
+6|return||-|-|114|120|12|2|0|0
+6|attribute||T|-|121|134|12|9|3|2
+7|identifier||T|-|121|126|12|9|0|0
+7|.||-|-|126|127|12|14|0|0
+7|attribute_call||T|-|127|134|12|15|2|2
+8|identifier||T|-|127|132|12|15|0|0
+8|arguments|arguments|T|-|132|134|12|20|2|0
+9|(||-|-|132|133|12|20|0|0
+9|)||-|-|133|134|12|21|0|0
+s|39|0|var g:~n~tget:~n~t~treturn 1~n~tset(v):~n~t~tpass
+0|source||T|-|0|39|0|0|1|1
+1|variable_statement||T|-|0|39|0|0|3|2
+2|var||-|-|0|3|0|0|0|0
+2|name|name|T|-|4|5|0|4|0|0
+2|setget|setget|T|-|5|39|0|5|3|2
+3|:||-|-|5|6|0|5|0|0
+3|get_body|get|T|-|8|23|1|1|3|1
+4|get||-|-|8|11|1|1|0|0
+4|:||-|-|11|12|1|4|0|0
+4|body|body|T|-|12|23|1|5|1|1
+5|return_statement||T|-|15|23|2|2|2|1
+6|return||-|-|15|21|2|2|0|0
+6|integer||T|-|22|23|2|9|0|0
+3|set_body|set|T|-|25|39|3|1|4|2
+4|set||-|-|25|28|3|1|0|0
+4|parameters||T|-|28|31|3|4|3|1
+5|(||-|-|28|29|3|4|0|0
+5|identifier||T|-|29|30|3|5|0|0
+5|)||-|-|30|31|3|6|0|0
+4|:||-|-|31|32|3|7|0|0
+4|body|body|T|-|32|39|3|8|1|1
+5|pass_statement||T|-|35|39|4|2|1|0
+6|pass||-|-|35|39|4|2|0|0
+s|47|0|func h(a, b = 2, c := 3, d: int = 4):~n~treturn a
+0|source||T|-|0|47|0|0|1|1
+1|function_definition||T|-|0|47|0|0|5|3
+2|func||-|-|0|4|0|0|0|0
+2|name|name|T|-|5|6|0|5|0|0
+2|parameters|parameters|T|-|6|36|0|6|9|4
+3|(||-|-|6|7|0|6|0|0
+3|identifier||T|-|7|8|0|7|0|0
+3|,||-|-|8|9|0|8|0|0
+3|default_parameter||T|-|10|15|0|10|3|2
+4|identifier||T|-|10|11|0|10|0|0
+4|=||-|-|12|13|0|12|0|0
+4|integer|value|T|-|14|15|0|14|0|0
+3|,||-|-|15|16|0|15|0|0
+3|typed_default_parameter||T|-|17|23|0|17|3|3
+4|identifier||T|-|17|18|0|17|0|0
+4|inferred_type|type|T|-|19|21|0|19|1|0
+5|:=||-|-|19|21|0|19|0|0
+4|integer|value|T|-|22|23|0|22|0|0
+3|,||-|-|23|24|0|23|0|0
+3|typed_default_parameter||T|-|25|35|0|25|5|3
+4|identifier||T|-|25|26|0|25|0|0
+4|:||-|-|26|27|0|26|0|0
+4|type|type|T|-|28|31|0|28|1|1
+5|identifier||T|-|28|31|0|28|0|0
+4|=||-|-|32|33|0|32|0|0
+4|integer|value|T|-|34|35|0|34|0|0
+3|)||-|-|35|36|0|35|0|0
+2|:||-|-|36|37|0|36|0|0
+2|body|body|T|-|37|47|0|37|1|1
+3|return_statement||T|-|39|47|1|1|2|1
+4|return||-|-|39|45|1|1|0|0
+4|identifier||T|-|46|47|1|8|0|0
+s|24|0|match v:~n~t_:~n~t~tprint(0)~n
+0|source||T|-|0|24|0|0|1|1
+1|match_statement||T|-|0|23|0|0|4|2
+2|match||-|-|0|5|0|0|0|0
+2|identifier|value|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|match_body|body|T|-|8|23|0|8|1|1
+3|pattern_section||T|-|10|23|1|1|3|2
+4|identifier||T|-|10|11|1|1|0|0
+4|:||-|-|11|12|1|2|0|0
+4|body|body|T|-|12|23|1|3|1|1
+5|expression_statement||T|-|15|23|2|2|1|1
+6|call||T|-|15|23|2|2|2|2
+7|identifier||T|-|15|20|2|2|0|0
+7|arguments|arguments|T|-|20|23|2|7|3|1
+8|(||-|-|20|21|2|7|0|0
+8|integer||T|-|21|22|2|8|0|0
+8|)||-|-|22|23|2|9|0|0
+s|24|0|match v:~n~t1:~n~t~tprint(1)~n
+0|source||T|-|0|24|0|0|1|1
+1|match_statement||T|-|0|23|0|0|4|2
+2|match||-|-|0|5|0|0|0|0
+2|identifier|value|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|match_body|body|T|-|8|23|0|8|1|1
+3|pattern_section||T|-|10|23|1|1|3|2
+4|integer||T|-|10|11|1|1|0|0
+4|:||-|-|11|12|1|2|0|0
+4|body|body|T|-|12|23|1|3|1|1
+5|expression_statement||T|-|15|23|2|2|1|1
+6|call||T|-|15|23|2|2|2|2
+7|identifier||T|-|15|20|2|2|0|0
+7|arguments|arguments|T|-|20|23|2|7|3|1
+8|(||-|-|20|21|2|7|0|0
+8|integer||T|-|21|22|2|8|0|0
+8|)||-|-|22|23|2|9|0|0
+s|28|0|match v:~n~tvar w:~n~t~tprint(w)~n
+0|source||T|-|0|28|0|0|1|1
+1|match_statement||T|-|0|27|0|0|4|2
+2|match||-|-|0|5|0|0|0|0
+2|identifier|value|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|match_body|body|T|-|8|27|0|8|1|1
+3|pattern_section||T|-|10|27|1|1|3|2
+4|pattern_binding||T|-|10|15|1|1|2|1
+5|var||-|-|10|13|1|1|0|0
+5|identifier||T|-|14|15|1|5|0|0
+4|:||-|-|15|16|1|6|0|0
+4|body|body|T|-|16|27|1|7|1|1
+5|expression_statement||T|-|19|27|2|2|1|1
+6|call||T|-|19|27|2|2|2|2
+7|identifier||T|-|19|24|2|2|0|0
+7|arguments|arguments|T|-|24|27|2|7|3|1
+8|(||-|-|24|25|2|7|0|0
+8|identifier||T|-|25|26|2|8|0|0
+8|)||-|-|26|27|2|9|0|0
+s|39|0|match v:~n~tvar w when w > 0:~n~t~tprint(w)~n
+0|source||T|-|0|39|0|0|1|1
+1|match_statement||T|-|0|38|0|0|4|2
+2|match||-|-|0|5|0|0|0|0
+2|identifier|value|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|match_body|body|T|-|8|38|0|8|1|1
+3|pattern_section||T|-|10|38|1|1|4|3
+4|pattern_binding||T|-|10|15|1|1|2|1
+5|var||-|-|10|13|1|1|0|0
+5|identifier||T|-|14|15|1|5|0|0
+4|pattern_guard||T|-|16|26|1|7|2|1
+5|when||-|-|16|20|1|7|0|0
+5|binary_operator||T|-|21|26|1|12|3|2
+6|identifier|left|T|-|21|22|1|12|0|0
+6|>|op|-|-|23|24|1|14|0|0
+6|integer|right|T|-|25|26|1|16|0|0
+4|:||-|-|26|27|1|17|0|0
+4|body|body|T|-|27|38|1|18|1|1
+5|expression_statement||T|-|30|38|2|2|1|1
+6|call||T|-|30|38|2|2|2|2
+7|identifier||T|-|30|35|2|2|0|0
+7|arguments|arguments|T|-|35|38|2|7|3|1
+8|(||-|-|35|36|2|7|0|0
+8|identifier||T|-|36|37|2|8|0|0
+8|)||-|-|37|38|2|9|0|0
+s|27|0|match v:~n~t1, 2:~n~t~tprint(1)~n
+0|source||T|-|0|27|0|0|1|1
+1|match_statement||T|-|0|26|0|0|4|2
+2|match||-|-|0|5|0|0|0|0
+2|identifier|value|T|-|6|7|0|6|0|0
+2|:||-|-|7|8|0|7|0|0
+2|match_body|body|T|-|8|26|0|8|1|1
+3|pattern_section||T|-|10|26|1|1|5|3
+4|integer||T|-|10|11|1|1|0|0
+4|,||-|-|11|12|1|2|0|0
+4|integer||T|-|13|14|1|4|0|0
+4|:||-|-|14|15|1|5|0|0
+4|body|body|T|-|15|26|1|6|1|1
+5|expression_statement||T|-|18|26|2|2|1|1
+6|call||T|-|18|26|2|2|2|2
+7|identifier||T|-|18|23|2|2|0|0
+7|arguments|arguments|T|-|23|26|2|7|3|1
+8|(||-|-|23|24|2|7|0|0
+8|integer||T|-|24|25|2|8|0|0
+8|)||-|-|25|26|2|9|0|0
+d|1|true|1.0|1.0
+d|0|true|0.0|0.0
+d|-0|true|0.0|0.0
+d|1.5|true|1.5|1.5
+d|0.1|true|0.1|0.1
+d|3.5e-3|true|0.0035|0.0035
+d|1e10|true|10000000000.0|10000000000.0
+d|1E+3|true|1000.0|1000.0
+d|.5|true|0.5|0.5
+d|1.|true|1.0|1.0
+d|123456789012345678901|true|123456789012345680000.0|123456789012345680000.0
+d|0.000001|true|0.000001|0.000001
+d| 12|true|12.0|12.0
+d|-1.25e-7|true|-0.000000125|-0.000000125
+d|1e-320|true|0.0|0.0
+d|1e400|true|inf|inf
+i|1 + 2 * 3|{"kind":"binary","left":{"kind":"lit","lit":"int","loc":{"col":11,"line":1},"value":1},"loc":{"col":11,"line":1},"op":"+","right":{"kind":"binary","left":{"kind":"lit","lit":"int","loc":{"col":15,"line":1},"value":2},"loc":{"col":15,"line":1},"op":"*","right":{"kind":"lit","lit":"int","loc":{"col":19,"line":1},"value":3}}}
+i|a.b(c)[d]|{"index":{"kind":"ident","loc":{"col":18,"line":1},"name":"d"},"kind":"index","loc":{"col":11,"line":1},"obj":{"args":[{"kind":"ident","loc":{"col":15,"line":1},"name":"c"}],"callee":{"kind":"attribute","loc":{"col":13,"line":1},"name":"b","obj":{"kind":"ident","loc":{"col":11,"line":1},"name":"a"}},"kind":"call","loc":{"col":11,"line":1}}}
+i|not x and y or z|{"kind":"binary","left":{"kind":"binary","left":{"kind":"unary","loc":{"col":11,"line":1},"op":"not","operand":{"kind":"ident","loc":{"col":15,"line":1},"name":"x"}},"loc":{"col":11,"line":1},"op":"and","right":{"kind":"ident","loc":{"col":21,"line":1},"name":"y"}},"loc":{"col":11,"line":1},"op":"or","right":{"kind":"ident","loc":{"col":26,"line":1},"name":"z"}}
+i|x if c else y|{"cond":{"kind":"ident","loc":{"col":16,"line":1},"name":"c"},"elseE":{"kind":"ident","loc":{"col":23,"line":1},"name":"y"},"kind":"ternary","loc":{"col":11,"line":1},"thenE":{"kind":"ident","loc":{"col":11,"line":1},"name":"x"}}
+i|a ** b ** c|{"kind":"binary","left":{"kind":"binary","left":{"kind":"ident","loc":{"col":11,"line":1},"name":"a"},"loc":{"col":11,"line":1},"op":"**","right":{"kind":"ident","loc":{"col":16,"line":1},"name":"b"}},"loc":{"col":11,"line":1},"op":"**","right":{"kind":"ident","loc":{"col":21,"line":1},"name":"c"}}
+i|-x ** 2|{"kind":"binary","left":{"kind":"unary","loc":{"col":11,"line":1},"op":"-","operand":{"kind":"ident","loc":{"col":12,"line":1},"name":"x"}},"loc":{"col":11,"line":1},"op":"**","right":{"kind":"lit","lit":"int","loc":{"col":17,"line":1},"value":2}}
+i|f(1, g(2))|{"args":[{"kind":"lit","lit":"int","loc":{"col":13,"line":1},"value":1},{"args":[{"kind":"lit","lit":"int","loc":{"col":18,"line":1},"value":2}],"callee":{"kind":"ident","loc":{"col":16,"line":1},"name":"g"},"kind":"call","loc":{"col":16,"line":1}}],"callee":{"kind":"ident","loc":{"col":11,"line":1},"name":"f"},"kind":"call","loc":{"col":11,"line":1}}
+i|(a)|{"kind":"ident","loc":{"col":12,"line":1},"name":"a"}
+i|x is int|{"kind":"is","loc":{"col":11,"line":1},"operand":{"kind":"ident","loc":{"col":11,"line":1},"name":"x"},"type":{"kind":"named","name":"int"}}
+i|&"name" + ^"p/q"|{"kind":"binary","left":{"kind":"lit","lit":"string_name","loc":{"col":11,"line":1},"value":"name"},"loc":{"col":11,"line":1},"op":"+","right":{"kind":"lit","lit":"node_path","loc":{"col":21,"line":1},"value":"p/q"}}
+i|$Node/Sub|{"__error":"expr","message":"表达式 get_node 未支持"}
+i|%Uniq|{"__error":"expr","message":"表达式 get_node 未支持"}
+i|"s"|{"kind":"lit","lit":"string","loc":{"col":11,"line":1},"value":"s"}
+i|{}|{"entries":[],"kind":"dict","loc":{"col":11,"line":1}}
+mi|var x = 1|{"className":null,"enums":[],"extends":null,"funcs":[],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[{"accessor":null,"init":{"kind":"lit","lit":"int","loc":{"col":9,"line":1},"value":1},"isConst":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"x","type":null}]}
+mi|func f(a: int, b := 2) -> int:~n~treturn a + b|{"className":null,"enums":[],"extends":null,"funcs":[{"body":[{"kind":"return","loc":{"col":2,"line":2},"value":{"kind":"binary","left":{"kind":"ident","loc":{"col":9,"line":2},"name":"a"},"loc":{"col":9,"line":2},"op":"+","right":{"kind":"ident","loc":{"col":13,"line":2},"name":"b"}}}],"coroutine":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"f","params":[{"default":null,"name":"a","type":{"kind":"named","name":"int"}},{"default":{"kind":"lit","lit":"int","loc":{"col":21,"line":1},"value":2},"name":"b","type":{"kind":"variant"}}],"returnType":{"kind":"named","name":"int"}}],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|const K = 3~nsignal ping(a)~nclass_name Foo~nextends Node|{"className":"Foo","enums":[],"extends":"Node","funcs":[],"innerClasses":[],"signals":[{"hasDefaults":false,"loc":{"col":1,"line":2},"name":"ping","params":["a"]}],"topStmts":[],"usesPackCodec":false,"vars":[{"accessor":null,"init":{"kind":"lit","lit":"int","loc":{"col":11,"line":1},"value":3},"isConst":true,"isStatic":false,"loc":{"col":1,"line":1},"name":"K","type":null}]}
+mi|if a:~n~tf()~nelif b:~n~tg()~nelse:~n~th()|{"__error":"module-node","message":"顶层节点 if_statement 未支持"}
+mi|for i in range(3):~n~tprint(i)|{"__error":"module-node","message":"顶层节点 for_statement 未支持"}
+mi|while x:~n~tx -= 1|{"__error":"module-node","message":"顶层节点 while_statement 未支持"}
+mi|match v:~n~t1, 2:~n~t~tprint(1)~n~tvar w when w > 0:~n~t~tprint(w)~n~t_:~n~t~tprint(0)|{"__error":"module-node","message":"顶层节点 match_statement 未支持"}
+mi|class Inner extends Node:~n~tvar p = 1~n~n~tfunc _init():~n~t~tp = 2|{"className":null,"enums":[],"extends":null,"funcs":[],"innerClasses":[{"extends":"Node","funcs":[{"body":[{"kind":"assign","loc":{"col":3,"line":5},"target":{"kind":"ident","loc":{"col":3,"line":5},"name":"p"},"value":{"kind":"lit","lit":"int","loc":{"col":7,"line":5},"value":2}}],"coroutine":false,"isStatic":false,"loc":{"col":2,"line":4},"name":"_init","params":[],"returnType":null}],"innerClasses":[],"loc":{"col":1,"line":1},"name":"Inner","signals":[],"vars":[{"accessor":null,"init":{"kind":"lit","lit":"int","loc":{"col":10,"line":2},"value":1},"isConst":false,"isStatic":false,"loc":{"col":2,"line":2},"name":"p","type":null}]}],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|enum E { A, B = 2, C }|{"className":null,"enums":[{"loc":{"col":1,"line":1},"members":[{"name":"A","value":0},{"name":"B","value":2},{"name":"C","value":3}],"name":"E"}],"extends":null,"funcs":[],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|var q:~n~tget:~n~t~treturn 1~n~tset(v):~n~t~tpass|{"className":null,"enums":[],"extends":null,"funcs":[],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[{"accessor":{"getter":{"body":[{"kind":"return","loc":{"col":3,"line":3},"value":{"kind":"lit","lit":"int","loc":{"col":10,"line":3},"value":1}}],"kind":"inline"},"setter":{"body":[{"kind":"pass","loc":{"col":3,"line":5}}],"kind":"inline","param":"v"}},"init":null,"isConst":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"q","type":null}]}
+mi|class C:~n~tvar r: int = 1~n|{"className":null,"enums":[],"extends":null,"funcs":[],"innerClasses":[{"extends":null,"funcs":[],"innerClasses":[],"loc":{"col":1,"line":1},"name":"C","signals":[],"vars":[{"accessor":null,"init":{"kind":"lit","lit":"int","loc":{"col":15,"line":2},"value":1},"isConst":false,"isStatic":false,"loc":{"col":2,"line":2},"name":"r","type":{"kind":"named","name":"int"}}]}],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|x += 1; y = 2|{"__error":"module-node","message":"顶层节点 expression_statement 未支持"}
+mi|func _init():~n~tpass|{"className":null,"enums":[],"extends":null,"funcs":[{"body":[{"kind":"pass","loc":{"col":2,"line":2}}],"coroutine":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"_init","params":[],"returnType":null}],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|static func g():~n~tpass|{"className":null,"enums":[],"extends":null,"funcs":[{"body":[{"kind":"pass","loc":{"col":2,"line":2}}],"coroutine":false,"isStatic":true,"loc":{"col":1,"line":1},"name":"g","params":[],"returnType":null}],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|func f(x):~n~tif x > 0:~n~t~treturn x~n~tfor i in range(x):~n~t~tprint(i)~n~twhile x:~n~t~tx -= 1~n~tmatch x:~n~t~t1:~n~t~t~treturn "one"~n~t~tvar w when w > 5:~n~t~t~treturn "big"~n~t~tvar z:~n~t~t~treturn z~n|{"className":null,"enums":[],"extends":null,"funcs":[{"body":[{"branches":[{"body":[{"kind":"return","loc":{"col":3,"line":3},"value":{"kind":"ident","loc":{"col":10,"line":3},"name":"x"}}],"cond":{"kind":"binary","left":{"kind":"ident","loc":{"col":5,"line":2},"name":"x"},"loc":{"col":5,"line":2},"op":">","right":{"kind":"lit","lit":"int","loc":{"col":9,"line":2},"value":0}}}],"kind":"if","loc":{"col":2,"line":2}},{"body":[{"expr":{"args":[{"kind":"ident","loc":{"col":9,"line":5},"name":"i"}],"callee":{"kind":"ident","loc":{"col":3,"line":5},"name":"print"},"kind":"call","loc":{"col":3,"line":5}},"kind":"expr","loc":{"col":3,"line":5}}],"iter":{"args":[{"kind":"ident","loc":{"col":17,"line":4},"name":"x"}],"callee":{"kind":"ident","loc":{"col":11,"line":4},"name":"range"},"kind":"call","loc":{"col":11,"line":4}},"kind":"for","loc":{"col":2,"line":4},"var":"i"},{"body":[{"kind":"assign","loc":{"col":3,"line":7},"target":{"kind":"ident","loc":{"col":3,"line":7},"name":"x"},"value":{"kind":"binary","left":{"kind":"ident","loc":{"col":3,"line":7},"name":"x"},"loc":{"col":3,"line":7},"op":"-","right":{"kind":"lit","lit":"int","loc":{"col":8,"line":7},"value":1}}}],"cond":{"kind":"ident","loc":{"col":8,"line":6},"name":"x"},"kind":"while","loc":{"col":2,"line":6}},{"arms":[{"body":[{"kind":"return","loc":{"col":4,"line":10},"value":{"kind":"lit","lit":"string","loc":{"col":11,"line":10},"value":"one"}}],"guard":null,"pattern":{"kind":"lit","lit":"int","value":1}},{"body":[{"kind":"return","loc":{"col":4,"line":12},"value":{"kind":"lit","lit":"string","loc":{"col":11,"line":12},"value":"big"}}],"guard":{"kind":"binary","left":{"kind":"ident","loc":{"col":14,"line":11},"name":"w"},"loc":{"col":14,"line":11},"op":">","right":{"kind":"lit","lit":"int","loc":{"col":18,"line":11},"value":5}},"pattern":{"kind":"bind","name":"w"}},{"body":[{"kind":"return","loc":{"col":4,"line":14},"value":{"kind":"ident","loc":{"col":11,"line":14},"name":"z"}}],"guard":null,"pattern":{"kind":"bind","name":"z"}}],"kind":"match","loc":{"col":2,"line":8},"subject":{"kind":"ident","loc":{"col":8,"line":8},"name":"x"}}],"coroutine":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"f","params":[{"default":null,"name":"x","type":null}],"returnType":null}],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|class A:~n~tvar p: int = 1~n~n~tfunc _init():~n~t~tp = 2~n~n~tfunc get_p():~n~t~treturn p~n~n~nclass B extends A:~n~tfunc get_p():~n~t~treturn super.get_p()|{"className":null,"enums":[],"extends":null,"funcs":[],"innerClasses":[{"extends":null,"funcs":[{"body":[{"kind":"assign","loc":{"col":3,"line":5},"target":{"kind":"ident","loc":{"col":3,"line":5},"name":"p"},"value":{"kind":"lit","lit":"int","loc":{"col":7,"line":5},"value":2}}],"coroutine":false,"isStatic":false,"loc":{"col":2,"line":4},"name":"_init","params":[],"returnType":null},{"body":[{"kind":"return","loc":{"col":3,"line":8},"value":{"kind":"ident","loc":{"col":10,"line":8},"name":"p"}}],"coroutine":false,"isStatic":false,"loc":{"col":2,"line":7},"name":"get_p","params":[],"returnType":null}],"innerClasses":[],"loc":{"col":1,"line":1},"name":"A","signals":[],"vars":[{"accessor":null,"init":{"kind":"lit","lit":"int","loc":{"col":15,"line":2},"value":1},"isConst":false,"isStatic":false,"loc":{"col":2,"line":2},"name":"p","type":{"kind":"named","name":"int"}}]},{"extends":"A","funcs":[{"body":[{"kind":"return","loc":{"col":3,"line":13},"value":{"args":[],"callee":{"kind":"attribute","loc":{"col":16,"line":13},"name":"get_p","obj":{"kind":"ident","loc":{"col":10,"line":13},"name":"super"}},"kind":"call","loc":{"col":10,"line":13}}}],"coroutine":false,"isStatic":false,"loc":{"col":2,"line":12},"name":"get_p","params":[],"returnType":null}],"innerClasses":[],"loc":{"col":1,"line":11},"name":"B","signals":[],"vars":[]}],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+mi|var g:~n~tget:~n~t~treturn 1~n~tset(v):~n~t~tpass|{"className":null,"enums":[],"extends":null,"funcs":[],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[{"accessor":{"getter":{"body":[{"kind":"return","loc":{"col":3,"line":3},"value":{"kind":"lit","lit":"int","loc":{"col":10,"line":3},"value":1}}],"kind":"inline"},"setter":{"body":[{"kind":"pass","loc":{"col":3,"line":5}}],"kind":"inline","param":"v"}},"init":null,"isConst":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"g","type":null}]}
+mi|func h(a, b = 2, c := 3, d: int = 4):~n~treturn a|{"className":null,"enums":[],"extends":null,"funcs":[{"body":[{"kind":"return","loc":{"col":2,"line":2},"value":{"kind":"ident","loc":{"col":9,"line":2},"name":"a"}}],"coroutine":false,"isStatic":false,"loc":{"col":1,"line":1},"name":"h","params":[{"default":null,"name":"a","type":null},{"default":{"kind":"lit","lit":"int","loc":{"col":15,"line":1},"value":2},"name":"b","type":null},{"default":{"kind":"lit","lit":"int","loc":{"col":23,"line":1},"value":3},"name":"c","type":{"kind":"variant"}},{"default":{"kind":"lit","lit":"int","loc":{"col":35,"line":1},"value":4},"name":"d","type":{"kind":"named","name":"int"}}],"returnType":null}],"innerClasses":[],"signals":[],"topStmts":[],"usesPackCodec":false,"vars":[]}
+st|parse|Array[int]|{"decl":"Array[int]","elem":"int","kind":"Array"}
+st|parse|Dictionary[String, int]|{"decl":"Dictionary[String, int]","key":"String","kind":"Dictionary","val":"int"}
+st|parse|Array[Array[int]]|null
+st|parse|Dictionary[a]|null
+st|parse|int|null
+st|parse|Array[int|null
+st|parse|Dictionary[a, b, c]|null
+st|parse|Dictionary[Vector2, Array[int]]|null
+st|decl|["a","s","f","C"]
+st|keys|own#3:4|own#x@3:4|own@3:4
+st|scope|truefalsefalsefalsetrue,truefalsefalsefalsetrue,truetruefalsetruefalse,
+lf|float|0.0|0.0|0.0|0
+lf|float|1.0|1.0|1.0|1
+lf|float|-1.0|-1.0|-1.0|-1
+lf|float|1.5|1.5|1.5|1.5
+lf|float|0.1|0.1|0.1|0.1
+lf|float|1000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0|1000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0|1000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0|1e+300
+lf|float|0.0|0.0|0.0|1e-300
+lf|float|123456789012345680000.0|123456789012345680000.0|123456789012345680000.0|1.2345678901234568e+20
+lf|float|3.14159265358979|3.14159265358979|3.14159265358979|3.141592653589793
+lf|float|1000000000000000.0|1000000000000000.0|1000000000000000.0|1e+15
+lf|float|10000000000000000.0|10000000000000000.0|10000000000000000.0|1e+16
+lf|float|0.000000025|0.000000025|0.000000025|2.5e-08
+lf|float|12345.6789|12345.6789|12345.6789|12345.6789
+lf|float|0.00012345678901|0.00012345678901|0.00012345678901|ERR:numfmt-sci-frac
+lf|float|0.0|0.0|-0.0|0
+lf|typed|Array[Variant]|Array
+lf|typed|Dictionary[Variant, Variant]|Dictionary
+lf|typed|Array[int]|Array[int]
+lf|typed|Dictionary[String, Array[Variant]]|Dictionary[String, Array]
+lf|typed|int|int
+lf|typed|Array[int|Array[int
+lf|typed|Array[Array[int]]|Array[Array[int]]
+lf|typed| Dictionary[ String , int ] |Dictionary[String, int]
+lf|tok|i:3|f:1.5|s:s|b:1|b:0|n|v:Vector2:1,2|p:A/B
+lf|txt|3|1.5|s|true|<null>|(1.0, 2.0)|A/B
+lf|num|true|true|false
+lf|expr|1|false|int
+lf|expr|-1|true|null
+lf|expr|-x|true|null
+lf|expr|1.5|false|float
+lf|expr|"s"|false|null
+lf|expr|true|false|null
+lf|face|Array[int]|Variant|Dictionary[int, Variant]|Variant|Variant
+lf|opnd|1|null|true
+lf|opnd|-1|null|false
+lf|opnd|"s"|String|true
+lf|opnd|&"s"|StringName|true
+lf|opnd|^"/a"|NodePath|true
+lf|opnd|null|null|true
+lf|opnd|[1]|Array|true
+lf|opnd|{}|Dictionary|true
+lf|opnd|Vector2(1, 2)|Vector2|true
+lf|opnd|Color(1, 0, 0)|Color|true
+lf|opnd|int(1)|null|false
+lf|opnd|f(1)|null|false
+dup|0|var d = {1: 1, 1: 2}
+dupdiag|0|dict-dup-key|1|Key "1" was already used in this dictionary (at line 1).
+dup|1|var d = {0.0: 1, -0.0: 2}
+dupdiag|1|dict-dup-key|1|Key "0.0" was already used in this dictionary (at line 1).
+dup|2|var d = {"a": 1, "a": 2}
+dupdiag|2|dict-dup-key|1|Key "a" was already used in this dictionary (at line 1).
+dup|3|var d = {true: 1, false: 2}
+dup|4|var d = {null: 1, null: 2}
+dupdiag|4|dict-dup-key|1|Key "<null>" was already used in this dictionary (at line 1).
+dup|5|var d = {Vector2(1, 2): 1, Vector2(1, 2): 2}
+dupdiag|5|dict-dup-key|1|Key "(1.0, 2.0)" was already used in this dictionary (at line 1).
+dup|6|var d = {^"A/B": 1, NodePath("A/B"): 2}
+dupdiag|6|dict-dup-key|1|Key "A/B" was already used in this dictionary (at line 1).
+dup|7|var d = {1 + 2: 1, 3: 2}
+dupdiag|7|dict-dup-key|1|Key "3" was already used in this dictionary (at line 1).
+dup|8|var d = {1 / 0: 1, 2: 2}
+dup|9|func f():~n	var d = {1: 1, 1: 2}~n
+dupdiag|9|dict-dup-key|2|Key "1" was already used in this dictionary (at line 2).
+dup|10|class C:~n	var d = {"x": 1, "x": 2}~n
+dupdiag|10|dict-dup-key|2|Key "x" was already used in this dictionary (at line 2).
+dup|11|var d = {1: 1, 2: 1, 2: 2, 1: 3}
+dupdiag|11|dict-dup-key|1|Key "2" was already used in this dictionary (at line 1).
+dupdiag|11|dict-dup-key|1|Key "1" was already used in this dictionary (at line 1).
+hp|range|[a]|[a, b]|[]
+hp|rangecall|false|true|true|false|false|false
+hp|base|c.gd|c.gd|c.gd|null|null
+hp|default|rt.V.int(0)|rt.V.float(0)|rt.V.bool(false)|rt.V.str("")|rt.V.stringName("")|rt.V.array(rt.GArray.of([]))|rt.dictOf([])|rt.vector2(0, 0)|rt.vector3(0, 0, 0)|rt.vector2i(0, 0)|rt.vector3i(0, 0, 0)|rt.vector4(0, 0, 0, 0)|rt.vector4i(0, 0, 0, 0)|rt.transform2d(1, 0, 0, 1, 0, 0)|rt.transform3d(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)|rt.quaternion(0, 0, 0, 1)|rt.plane(0, 0, 0, 0)|rt.aabb(0, 0, 0, 0, 0, 0)|rt.rect2(0, 0, 0, 0)|rt.rect2i(0, 0, 0, 0)|rt.basis(1, 0, 0, 0, 1, 0, 0, 0, 1)|rt.color(0, 0, 0, 1)|rt.bytesCtor([])|rt.packCtor("int32", [])|rt.packCtor("int64", [])|rt.packCtor("float32", [])|rt.packCtor("float64", [])|rt.packCtor("string", [])|rt.packCtor("vector2", [])|rt.packCtor("vector3", [])|rt.packCtor("vector4", [])|rt.packCtor("color", [])|rt.V.nil()|rt.V.array(rt.GArray.of([]))|rt.dictOf([])|rt.V.array(rt.GArray.of([]))|rt.V.nil()|rt.V.nil()
+hp|hasret|false|false|true|true|true|true|false
+hp|typename|int|Array|Variant
+hp|unwrap|hp_a|null|null|null
+hp|ann|null|Array[int]|Dictionary[String, int]|null|Array[Object]|Array[MyScript]|null|null|null|null
+mf|escape|6|-1|8|4|-1|5|-1|2|-1|2|3|-1|-1|-1
+mf|group|0|0:0:0:4,1:0:4:10,2:8:10:12,
+mf|group|1|0:0:0:6,
+mf|group|2|
+mf|group|3|0:0:0:3,1:8:3:4,
+mf|static|vector2Const|vector4iConst|colorStatic|stringStatic|callableStatic|null|null
+mf|props|null|
+mf|props|Node|name
+mf|props|Node2D|global_position, name, position, rotation, rotation_degrees, scale, top_level, transform, visible, y_sort_enabled, z_index
+mf|props|Node3D|basis, global_basis, global_position, global_rotation, global_rotation_degrees, name, position, rotation, rotation_degrees, scale, transform, visible
+mf|props|Control|global_position, name, pivot_offset, position, rotation, scale, size, visible
+mf|props|Label|
+sc|0|ok|.:Node2D:<case>/main.gd;./Body:Sprite2D:null;./Body/Arm:Node2D:null
+sc|1|err|scene-header
+sc|2|err|scene-node
+sc|3|err|scene-node
+sc|4|err|scene-ext-resource
+sc|5|err|scene-sub-resource
+sc|6|err|scene-section
+sc|7|err|scene-node
+sc|8|ok|.:Node:null
+sc|9|err|scene-property
+sc|10|err|scene-property
+sc|11|err|scene-line
+sc|12|err|scene-line
+sc|13|err|scene-parent
+sc|14|err|scene-root
+wb|assigned|x, y
+wb|flat|52|array, assign, assign, assign, assign, assign, assign, binary, binary, binary, call, const, dict, for, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, ident, if, lit, lit, lit, lit, lit, lit, lit, lit, lit, lit, match, return, var, var, wildcard
+wb|locals|a, b, i, x, y
+wb|classes|Base, Child
+wb|inherit|Child|bv
+wb|gret|true|false
+wb|assign|x|p|null|null
+wb|bind|a|a|q, r|
+wb|reads|y
+wb|ikinds|2
+sl|coll|true|true|false|false|false|false|false
+sl|scalar|true|false|false|false
+sl|hold|int|true|false|false|false
+sl|hold|bool|true|false|false|false
+sl|hold|String|false|false|true|false
+sl|hold|StringName|false|false|true|false
+sl|hold|Vector2|false|true|false|false
+sl|hold|Array|false|false|false|false
+sl|hold|Node|true|true|true|true
+sl|varhold|true|false|null|true|false|true|false|true|false|true|true|null
+sl|dict|Dictionary:Dictionary[String, int]|Dictionary:Dictionary|null|null
+sl|funcslot|int|Vector2|Rect2|null|null|null
+sl|intarg|5|-7|null|null
+sl|pct|%s|c:s
+sl|pct|%d|c:d
+sl|pct|%*d|*, c:d
+sl|pct|%.3f|c:f
+sl|pct|%|tail
+sl|pct|%%|
+sl|pct|%c|c:c
+sl|pct|%-05v|c:v
+sl|pct|a%sb|c:s
+sl|pct|%5.2f|c:f
+sl|pct|%-+u*x|*, c:x
+sl|nullref|true|false|false
+sl|objref|true|false|false|true
+sl|pctarg|true:false:false:null|true:true:false:null|true:false:false:null|false:false:false:a|false:false:false:ab|false:false:false:null|false:false:false:null|null|false:false:true:null|false:false:false:null|null|null
+sl|pctmsg|incomplete format in operator %.|null|* wants number or vector in operator %.|null|null|unsigned integer is lower than minimum in operator %.|null|%c requires number or single-character string in operator %.|null|%v requires a vector type (Vector2/3/4/2i/3i/4i) in operator %.|null|a number is required in operator %.|unsupported format character in operator %.
+sl|insty|null|Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.|Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.|null|null|null|null|null
+cx|CLASS_FUNCS|dict
+cx|CLASS_SIGNALS|dict
+cx|CLASS_VALUES|dict
+cx|CLASS_VALUE_OWNERS|dict
+cx|CURRENT_CLASS|str
+cx|CURRENT_FUNC|str
+cx|CURRENT_MEMBERS|dict
+cx|CURRENT_RET|null
+cx|CURRENT_RET_ANN|null
+cx|DEBUG_FILE|str
+cx|DEFER_PRELOAD_CONSTS|dict
+cx|ENGINE_BASE|null
+cx|ENUM_NAMES|dict
+cx|EXTENDED_INNER|dict
+cx|FUNC_BINDS|dict
+cx|FUNC_RETURNS|dict
+cx|INHERITED_METHODS|dict
+cx|INIT_AS_METHOD|bool
+cx|INIT_HAS_BASE|bool
+cx|INNER_CLASSES|dict
+cx|IN_INIT|bool
+cx|LAMBDA_DEPTH|int
+cx|LINE_MAPPINGS|array
+cx|LOADS|dict
+cx|LOCAL_TYPES|dict
+cx|MAP_ACTIVE|bool
+cx|MODULE_CLASSES|dict
+cx|MODULE_FUNCS|dict
+cx|MODULE_RES_PATH|null
+cx|MODULE_SIGNALS|dict
+cx|MODULE_VARS|dict
+cx|NEEDS_HOST_SUPER|bool
+cx|PARAM_TYPES|dict
+cx|PRELOADS|dict
+cx|PRELOAD_FACE_OWNERS|dict
+cx|RAW_ABIS|dict
+cx|RAW_ARRAYS|dict
+cx|RAW_DICTS|dict
+cx|SCRIPT_BASE|dict
+cx|SCRIPT_INHERITED|dict
+cx|STATIC_FUNCS|dict
+cx|UNBOXED|dict
+cx|UNTYPED_NAMES|dict
+cx|VAR_TYPES|dict
+cx|selfInNilContext|bool
+cx|keys|45
+cx|reset|0|true
+fc|read|int|int|null|null|null|int|int|null|null|null|null
+fc|hold|true|false|true|true|false|true|false|false
+fc|scalar|Array|Dictionary|int|Color|null|null
+fc|static|int|String|StringName|null|Array|Dictionary|Vector2|null|null
+fc|base|Array|Dictionary|int|Array
+fc|argname|int|Array[int]|Dictionary[String, int]|null|null|null|null
+fc|snv|a, c
+fc|vta|null|Vector2|null|null|null|null
+fc|lft|String|null|Array|Dictionary|Foo|null
+fc|ltn|int|float|bool|null|String|StringName|NodePath|Array|Dictionary|Callable|Vector2|PackedByteArray|null|null|null
+fc|cfk|true|true|true|true|false
+fc|kfa|Vector2|Array|PackedByteArray|null|null|null|null
+fc|pfr|Vector2|null|PackedByteArray|null|null
+ab|stvarlit|{"a": { get: (): rt.Variant => Cls.a, set: (__v: rt.Variant): void => { Cls.a = __v; } }}|null
+ab|propslot|null|__gd_store_y|null|__gd_store_w
+ab|binds|p, q, v, w
+ab|slottype|int|Vector2|null|null|null|null
+ab|rawts|number|number|string|number
+ab|scalarlit|int|float|str|null|null|null
+ab|elemkind|int|int|null|str|int[]|null|null
+ab|keykind|true|true|false|false|false
+ab|slelem|int|Vector2|Object|null
+ab|cont|c|c|c|rt.returnContainer(c, "int")
+ab|cast|rt.toInt|rt.toVec2|null|rt.toStringNameSlot|null|null|null
+ab|rawlit|5|null|null
+ab|litfit|true|false|true|true|false|true|true
+ab|formok|true|false|false|false|false|true|false|false
+ab|sameabis|true|false|false|true
+ly|sprops|null|["a","b"]
+ly|sreader|(o) => { const s = o as Cls; return [s.a, s.b]; }
+ly|ftypes|{"x": "int"}|{"q": "accessor"}|null|{"w": "int"}
+ly|snames|f
+ly|fwd|a[0] as rt.Variant, a.length > 1 ? (a[1] as rt.Variant) : undefined
+ly|svars|{"a": "int", "c": ""}|null
+ly|dead|false|true|true
+ly|inhm|m
+ly|inhn|bv, sig
+ly|order|Base, Child
+ly|pnames|a|a|q, r|
+ar|classface|table|table|table|table|table|null
+ar|listhas|true|true|false|false
+ar|diag|Too many arguments for "append()" call. Expected at most 1 but received 3.|Too few arguments for "append()" call. Expected at least 1 but received -1.|Too many arguments for "has()" call. Expected at most 1 but received 2.|null
+ar|memberabsent|false|false|false
+ar|chainface|string-arity:116|string-name-arity:110|node-path-arity:11|value-arity:48|value-arity:0
+ar|managed|false|false|false|false|false
+ar|imabsent|false|false|false|true|false
+ar|babsent|false|false|false
+ar|fctor|StringName|NodePath|null|null
+ar|barity|Too few arguments for "abs()" call. Expected at least 1 but received 0.|null|Too many arguments for "abs()" call. Expected at most 1 but received 2.|null
+ar|uarity|Invalid call to GDScript utility function "range()". Expected 1 argument(s).|null|Invalid call to GDScript utility function "range()". Expected 3 argument(s).|Invalid call to utility function "str()". Expected 1 argument(s).|null|null
+ar|code|char-arity|var-to-str-arity|str-to-var-arity|convert-arity|convert-arity|range-arity|str-arity|builtin-arity
+ar|vctor|Vector2|null|null
+fn|slots|a = rt.paramSlot(a, "int", 1, "f", this);
+fn|frame||rt.frameLine(7);
+cl|fd|  declare sig: rt.Signal;~  declare x: rt.Variant;~  declare __gd_store_y: rt.Variant;~|
+cl|im|  static A: typeof A;~  static B: typeof B;~|
+cl|dispatch|  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {~    switch (name) {~      case "_init": return rt.wrapValue(this._init(...args));~      case "f": return rt.wrapValue(this.f(args[0] as rt.Variant, args.length > 1 ? (args[1] as rt.Variant) : undefined));~      default: return super.__gdDispatch(name, args);~    }~  }~|  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {~    switch (name) {~      case "f": return rt.wrapValue(this.f(args[0] as rt.Variant, args.length > 1 ? (args[1] as rt.Variant) : undefined));~      default: return super.__gdDispatch(name, args);~    }~  }~
+cl|dispatch2|  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {~    switch (name) {~      case "g": return rt.wrapValue(this.g(rt.fast.unboxNum(args[0] as rt.Variant), rt.fast.unboxStr(args[1] as rt.Variant)));~      default: return super.__gdDispatch(name, args);~    }~  }~
+cl|rc|  constructor(...__gd_new_args: rt.Variant[]) {~    super();~    this.__gd_fields__();~    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);~  }~|  constructor(...__gd_new_args: rt.Variant[]) {~    this.__gd_fields__();~    if (!rt.bareConstruction()) this.__gdDispatch("_init", __gd_new_args);~  }~
+cl|foc|  constructor() {~    super();~    this.__gd_fields__();~  }~
+fc|stype|int|float|String|String|null|bool|null|Array|Dictionary|bool|int|null|int|float|String|Array|Vector2|null|null
+va|src|0|var a: int = 1~nvar b: int = "s"~n
+vad|0|typed-var-value|2|Cannot assign a value of type "String" as "int".
+vad|0|typed-var-assign|2|Cannot assign a value of type String to variable "b" with specified type int.
+va|src|1|var a: int = 1~nfunc f():~n	a = "s"~n
+vad|1|typed-var-value|3|Cannot assign a value of type "String" as "int".
+vad|1|typed-var-assign|3|Value of type "String" cannot be assigned to a variable of type "int".
+va|src|2|var a: int = 1~nfunc f(x):~n	var y: int = "s"~n
+vad|2|typed-var-value|3|Cannot assign a value of type "String" as "int".
+vad|2|typed-var-assign|3|Cannot assign a value of type String to variable "y" with specified type int.
+va|src|3|func f():~n	print(is_instance_of(1, 39))~n
+vad|3|instance-of-type-arg|2|Invalid argument for "is_instance_of()" function: Invalid type argument for is_instance_of(), use TYPE_* constants for built-in types.
+va|src|4|var a: Vector2 = Vector2(1, 2)~n
+va|src|5|class C:~n	var a: bool = 1~n
+va|src|6|var a: float = true~n
+h2|sih|import { createRequire } from "node:module";~const { rt, print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } = (() => {~  const require = createRequire(import.meta.url);~  const module = { exports: {} };~  const exports = module.exports;~  a~  b~  return exports;~})();
+h2|boxr|rt.V.int(x)|rt.V.float(x)|rt.V.str(x)|rt.V.bool(x)|x
+h2|fastsuffix|Num|Str|Num
+h2|closure|(a) => new Cls(...a)|() => new Cls()|(a) => new Cls(a[0] as rt.Variant, a.length > 1 ? (a[1] as rt.Variant) : undefined)
+h2|maps|true|false|false|true
+h2|frame|  const __gd_frame = rt.frameEnter("a.gd", "f");;  try {|  } finally {;    rt.frameExit(__gd_frame);;  }|  } catch (__gd_err) {;    rt.gdFunctionError(__gd_err);;    return rt.V.nil();;  } finally {;    rt.frameExit(__gd_frame);;  }
+h2|scope|true|false|true
+h2|stamp|rt.stampArray(rt.V.array(rt.GArray.of([])), "int", true)|rt.stampClassArray(rt.V.array(rt.GArray.of([])), "Object", false)|rt.stampScriptArray(rt.V.array(rt.GArray.of([])), "MyScript", "Node", true)|rt.V.array(rt.GArray.of([]))|rt.stampDict(rt.dictOf([]), "String", "int", true)|rt.dictOf([])|rt.V.array(rt.GArray.of([]))|x|rt.V.nil()
+fc|attr|Array|null|Vector2|Array|String|Vector2|null|int|float|StringName|NodePath|null
+fc|chain|null|null|null
+fc|sfcn|true|false|true|true|false|false
+ar|scall|static-const-call:Name "ZERO" called as a function but is a "Vector2".|static-const-call:Name "AXIS_X" called as a function but is a "Vector2.Axis".||static-arity:Too many arguments for "from_angle()" call. Expected at most 1 but received 2.|static-nonstatic-call:Cannot call non-static function "angle()" on the class "Vector2" directly. Make an instance instead.|static-member-unknown:Cannot find member "zzz" in base "Vector2".;static-member-unknown:Function "zzz()" not found in base Vector2.|
+ar|sbare|||||
+fc|ant|Vector2|null|null|null
+fc|anscopes|a=Array[int], p=Array[int];e=Array[int]
+fc|frecv|a, b, d
+fc|frecv2|
+fc|fscope|a, b, c, p;e
+sl|nappend|null|null|String|null
+sl|nslot|Array[int]|null|null
+sl|packsrc|int|float|String|Array|Dictionary|Vector2|null|String|null
+sl|packscope|a, p;a, e
+pk|src|0|var s: StringName = &"x"~nfunc f():~n	if s is String:~n		pass~n
+pk|src|1|func f():~n	var b = [1] as PackedByteArray~n
+pkd|1|pack-as-type|2|Cannot cast a value of type "Array" as "PackedByteArray".
+pkd|1|pack-as-type|2|Invalid cast. Cannot convert from "Array" to "PackedByteArray".
+pk|src|2|func f():~n	var c = "s" as PackedFloat32Array~n
+pkd|2|pack-as-type|2|Cannot cast a value of type "String" as "PackedFloat32Array".
+pkd|2|pack-as-type|2|Invalid cast. Cannot convert from "String" to "PackedFloat32Array".
+pk|src|3|func f():~n	if [1] is PackedByteArray:~n		pass~n
+pkd|3|pack-is-type|2|Expression is of type "Array" so it can't be of type "PackedByteArray".
+pk|src|4|var a = PackedByteArray()~nfunc f():~n	a.append("s")~n	a.append(1)~n	a.append_array([1])~n	a.set(0, "s")~n	a.insert("s", 1)~n	a.fill("s")~n
+fc|attrscope|2:p,q;1:
+sl|ctorname|int|Vector2|Variant.Type|null|Array
+sl|namebad|Vector2|null|null|null
+sl|slotnames|A, B, C, a, g1
+hl|fnv|811c9dc5|e40c292c|1a47e90b|d4cbe14c|28619638|cb31c4b8
+ty|src|0|var a: Array[int] = [1, 2]~n
+ty|src|1|var a: Array[int] = ["s"]~n
+tyd|1|typed-collection-literal|1|Cannot include a value of type "String" as "int".
+tyd|1|typed-collection-element|1|Cannot have an element of type "String" in an array of type "Array[int]".
+ty|src|2|var a: Array[Vector2] = [1]~n
+tyd|2|typed-collection-literal|1|Cannot include a value of type "int" as "Vector2".
+tyd|2|typed-collection-element|1|Cannot have an element of type "int" in an array of type "Array[Vector2]".
+ty|src|3|var d: Dictionary[String, int] = {"k": "v"}~n
+tyd|3|typed-collection-literal|1|Cannot include a value of type "String" as "int".
+tyd|3|typed-collection-element|1|Cannot have a value of type "String" in a dictionary of type "Dictionary[String, int]".
+ty|src|4|var a: Array[int] = "s"~n
+ty|src|5|var a: Array[Array[int]] = []~n
+tyd|5|typed-collection-nested|1|Nested typed collections are not supported.
+ty|src|6|var a: Array[int] = [1]~nfunc f():~n	a = ["s"]~n
+tyd|6|typed-collection-literal|3|Cannot include a value of type "String" as "int".
+tyd|6|typed-collection-element|3|Cannot have an element of type "String" in an array of type "Array[int]".
+ty|src|7|func f(p: Array[int]):~n	pass~nfunc g():~n	var v: Array[String] = ["s"]~n	f(v)~n
+tyd|7|typed-collection-param|5|Invalid argument for "f()" function: argument 1 should be "Array[int]" but is "Array[String]".
+ty|src|8|var a: Array[float] = [1, 2.5]~n
+ty|src|9|class K:~n	var a: Array[int] = ["s"]~n
+tyd|9|typed-collection-literal|2|Cannot include a value of type "String" as "int".
+tyd|9|typed-collection-element|2|Cannot have an element of type "String" in an array of type "Array[int]".
+dc|src|0|var x:~n	get:~n		return 1~n
+dc|src|1|var x: int:~n	get = get_x~n	func get_x(a):~n		return a~n
+dc|src|2|var x: int:~n	get = get_x~n	func get_x():~n		return 1~n
+dc|src|3|func f() -> int:~n	return 1~n
+dc|src|4|func f() -> int:~n	if 1:~n		return 1~n
+dcd|4|return-path|1|Not all code paths return a value.
+dc|src|5|func f() -> void:~n	pass~n
+dc|src|6|func f(a: int = "s"):~n	pass~n
+dcd|6|param-default-value|1|Cannot assign a value of type "String" as "int".
+dcd|6|param-default-assign|1|Cannot assign a value of type String to parameter "a" with specified type int.
+dc|src|7|func f(a: Vector2 = 1):~n	pass~n
+dcd|7|param-default-value|1|Cannot assign a value of type "int" as "Vector2".
+dcd|7|param-default-assign|1|Cannot assign a value of type int to parameter "a" with specified type Vector2.
+dc|src|8|func f(a: float = 1):~n	pass~n
+dc|src|9|signal s(a = 1)~n
+dcd|9|signal-default-param|1|Signal parameters cannot have a default value.
+op|src|0|func f(a: void):~n	pass~n
+opd|0|void-annotation|1|"void" is only allowed for a function return type.
+op|src|1|func f() -> void:~n	pass~n
+op|src|2|var a: bool = true~nfunc f():~n	if a <= true:~n		pass~n
+opd|2|bool-ordering|3|Invalid operands "bool" and "bool" for "<=" operator.
+opd|2|op-pair|3|Invalid operands "bool" and "bool" for "<=" operator.
+op|src|3|var a: int = 1~nfunc f():~n	print("%d" % a)~n
+op|src|4|func f():~n	var x = 1.5 % 2~n
+opd|4|op-mod-float|2|Invalid operands to operator %, float and int.
+op|src|5|func f():~n	var x = "a" == 1~n
+opd|5|op-eq-cross-type|2|Invalid operands to operator ==, String and int.
+op|src|6|func f():~n	var x = 1 << -1~n
+opd|6|op-shift-negative|2|Invalid operands for bit shifting. Only positive operands are supported. in operator <<.
+op|src|7|func f():~n	var x = 1 / 0~n
+opd|7|div-by-zero|2|Division by zero error in operator /.
+op|src|8|func f():~n	var a = [1]~n	var x = a.append(2)~n
+opd|8|void-method-value|3|Cannot get return value of call to "append()" because it returns "void".
+op|src|9|var c: Callable = Callable()~nfunc f():~n	var x = c.call(1, 2)~n
+op|src|10|func f():~n	var x = Vector2(1, 2) + 1~n
+opd|10|op-pair|2|Invalid operands to operator +, Vector2 and int.
+op|src|11|var s: String = "a"~nfunc f():~n	var t = s + 1~n
+opd|11|op-pair|3|Invalid operands "String" and "int" for "+" operator.
+ma|src|0|func f():~n	var d = {}~n	d.keys(1)~n
+mad|0|dict-arity|3|Too many arguments for "keys()" call. Expected at most 0 but received 1.
+ma|src|1|func f():~n	var d: Dictionary = {}~n	var x = d.nope()~n
+mad|1|face-member-not-found|3|Function "nope()" not found in base Dictionary.
+ma|src|2|func f():~n	var a = []~n	a.append()~n
+mad|2|array-arity|3|Too few arguments for "append()" call. Expected at least 1 but received 0.
+ma|src|3|func f():~n	var a: Array = []~n	a.nope()~n
+mad|3|face-member-missing|3|Cannot find member "nope" in base "Array".
+mad|3|face-member-not-found|3|Function "nope()" not found in base Array.
+ma|src|4|func f():~n	var a = []~n	a.push_back(1, 2)~n
+mad|4|array-arity|3|Too many arguments for "push_back()" call. Expected at most 1 but received 2.
+ma|src|5|func f():~n	var d = {}~n	var x = d.merge({})~n
+ma|src|6|func f():~n	var d: Dictionary[String, int] = {}~n	var x = d.nope()~n
+mad|6|face-member-not-found|3|Function "nope()" not found in base Dictionary[String, int].
+mk|off|0
+mk|on|1|3|4|1
+hgc|src|0|var x = PI~n
+hgl|0|const PI = rt.V.float(3.141592653589793);
+hgc|src|1|var x = PI + TAU~n
+hgl|1|const PI = rt.V.float(3.141592653589793);
+hgl|1|const TAU = rt.V.float(6.283185307179586);
+hgc|src|2|const PI = 1~nfunc f():~n	return PI~n
+hgl|2|const PI = rt.V.float(3.141592653589793);
+hgc|src|3|var PI = 2~nfunc f():~n	return PI + TAU~n
+hgl|3|const PI = rt.V.float(3.141592653589793);
+hgl|3|const TAU = rt.V.float(6.283185307179586);
+hgc|src|4|var f = func():~n	return PI~n
+hgl|4|const PI = rt.V.float(3.141592653589793);
+hgc|src|5|class K:~n	var PI = 1~n	func f():~n		return TAU~n
+hgl|5|const TAU = rt.V.float(6.283185307179586);
+hgc|src|6|func f(c):~n	return 1 if c else TAU~n
+hgl|6|const TAU = rt.V.float(6.283185307179586);
+hgc|src|7|class K:~n	class J:~n		var TAU = 1~n		func f():~n			return INF~n
+hgl|7|const INF = rt.V.float(Number.POSITIVE_INFINITY);
+so|src|0|var a = 1~nfunc f():~n	pass~nclass K:~n	var b = 2~n	signal s~n	const C = 3~n	func g():~n		pass~n
+son|0|C,K,a,b,f,g,s
+so|src|1|class K:~n	class J:~n		var c = 1~n
+son|1|K,c
+cp|src|0|var outer = 1~nfunc f(p):~n	var q = 2~n	var lam = func(): return p + q~n	return lam~n
+cpr|0|t@4:12|p,q
+cp|src|1|func f():~n	var z = 1~n	var lam = func(a): return a + z + outer~n
+cpr|1|t@3:12|z
+cp|src|2|func f():~n	var q = 2~n	var lam = func(): return q~n	var lam2 = func(): return q + 1~n
+cpr|2|t@3:12|q
+cpr|2|t@4:13|q
+sc|src|0|class K:~n	pass~nvar a: K = 1~n
+scd|0|script-class-slot|3|Cannot assign a value of type int to variable "a" with specified type K.
+sc|src|1|class K:~n	pass~nfunc f(a: K = 1):~n	pass~n
+scd|1|script-class-slot|3|Cannot assign a value of type int to parameter "a" with specified type K.
+sc|src|2|class K:~n	pass~nfunc f():~n	var v: K = "s"~n
+scd|2|script-class-slot|4|Cannot assign a value of type String to variable "v" with specified type K.
+sc|src|3|class K:~n	var a: K = 1~n
+scd|3|script-class-slot|2|Cannot assign a value of type int to variable "a" with specified type K.
+sc|src|4|class K:~n	func g(a: K = "s"):~n		pass~n
+scd|4|script-class-slot|2|Cannot assign a value of type String to parameter "a" with specified type K.
+sc|src|5|class K:~n	pass~nvar a: K = null~n
+sc|src|6|class K:~n	class J:~n		var a: J = 1~n
+scd|6|script-class-slot|3|Cannot assign a value of type int to variable "a" with specified type J.
+ca|src|0|const A = 1~nfunc f():~n	A = 2~n
+cad|0|const-assign|3|Cannot assign a new value to a constant.
+ca|src|1|const A = 1~nfunc f():~n	var A = 2~n	A = 3~n
+ca|src|2|func f():~n	PI = 1~n
+cad|2|const-assign|2|Cannot assign a new value to a constant.
+ca|src|3|func f():~n	print = 1~n
+cad|3|const-assign|2|Cannot assign a new value to a constant.
+ca|src|4|func f():~n	Node = 1~n
+cad|4|const-assign|2|Cannot assign a new value to a constant.
+ca|src|5|func f():~n	var lam = func():~n		PI = 1~n
+cad|5|const-assign|3|Cannot assign a new value to a constant.
+ca|src|6|class K:~n	const B = 1~n	func g():~n		B = 2~n
+cad|6|const-assign|4|Cannot assign a new value to a constant.
+ca|src|7|const C = 1~nfunc f():~n	var v = func():~n		C = 2~n
+cad|7|const-assign|4|Cannot assign a new value to a constant.
+ic|src|0|class K:~n	func _init():~n		return 1~n
+icd|0|init-returns-value|3|Constructor cannot return a value.
+ic|src|1|class K:~n	func _init():~n		super()~n
+icd|1|super-init-missing|3|Cannot call the parent class' virtual function "_init()" because it hasn't been defined.
+ic|src|2|class A:~n	func _init():~n		pass~nclass B extends A:~n	func _init():~n		super()~n
+ic|src|3|class A:~n	func _init(x):~n		pass~nclass B extends A:~n	func _init():~n		super()~n
+icd|3|super-init-arity|6|Too few arguments for "_init()" call. Expected at least 1 but received 0.
+ic|src|4|class A:~n	func _init(x = 1):~n		pass~nclass B extends A:~n	func _init():~n		super()~n
+ic|src|5|class A:~n	func _init(x):~n		pass~nfunc f():~n	var a = A.new()~n
+icd|5|new-arity|5|Too few arguments for "new()" call. Expected at least 1 but received 0.
+ic|src|6|class A:~n	func _init(x):~n		pass~nfunc f():~n	var a = A.new(1, 2)~n
+icd|6|new-arity|5|Too many arguments for "new()" call. Expected at most 1 but received 2.
+cfv|src|0|func helper():~n	pass~nclass K:~n	func g():~n		helper()~n
+cfvd|0|class-outer-func|5|Function "helper()" not found in base self.
+cfv|src|1|func helper():~n	pass~nclass K:~n	func helper():~n		pass~n	func g():~n		helper()~n
+cfv|src|2|func helper():~n	pass~nclass K:~n	func g():~n		var helper = 1~n		helper()~n
+cfv|src|3|func helper():~n	pass~nclass K:~n	func g(helper):~n		helper()~n
+cfv|src|4|func helper():~n	pass~nclass K:~n	func g():~n		var f = func():~n			helper()~n
+cfvd|4|class-outer-func|6|Function "helper()" not found in base self.
+cfv|src|5|func helper():~n	pass~nclass K:~n	class J:~n		func g():~n			helper()~n
+cfvd|5|class-outer-func|6|Function "helper()" not found in base self.
+cfv|src|6|func helper():~n	pass~nclass K:~n	var v = helper()~n
+cfvd|6|class-outer-func|4|Function "helper()" not found in base self.
+cfv|src|7|func helper():~n	pass~nclass K:~n	var v:~n		get:~n			return helper()~n
+cfvd|7|class-outer-func|6|Function "helper()" not found in base self.
+cfv|src|8|class K:~n	func g():~n		helper()~n
+cr|0|false|false
+cr|1|false|false
+cr|2|false|true
+cr|3|false|false
+cr|4|false|false
+cr|5|false|false
+lcn|src|0|func f():~n	var q = 2~n	var lam = func(): return q~n
+lcn|0|3|q
+lcn|src|1|func f():~n	var lam = func(a): return a~n
+lcn|1|2|
+cl|src|0|func f():~n	var x = String(1)~n
+cld|0|ctor-signature|2|No constructor of "String" matches the signature "String(int)".
+cl|src|1|var a: int = 1~nfunc f():~n	var x = String(a)~n
+cl|src|2|func f():~n	var x = String(1.0)~n
+cl|src|3|func f(a):~n	var x = String(a)~n
+cl|src|4|func String():~n	pass~nfunc f():~n	var x = String(1)~n
+cl|src|5|func f():~n	var x = Vector2(1, 2)~n
+cl|src|6|func f():~n	var s = "a".join()~n
+cld|6|join-arity|2|Too few arguments for "join()" call. Expected at least 1 but received 0.
+cl|src|7|func f():~n	var s = "a".join(",", 1)~n
+cld|7|join-arity|2|Too many arguments for "join()" call. Expected at most 1 but received 2.
+cl|src|8|func f():~n	var d = {}~n	var s = d.join(",")~n
+cl|src|9|func f():~n	var s = "a".join({})~n
+cl|src|10|func f():~n	var x = bool([1])~n
+cld|10|bool-ctor-signature|2|No constructor of "bool" matches the signature "bool(Array)".
+cl|src|11|func f():~n	var x = bool(1)~n
+cl|src|12|var v = 1~nstatic func s():~n	return v~n
+cld|12|static-access-var|3|Cannot access non-static variable "v" from the static function "s()".
+cl|src|13|func h():~n	pass~nstatic func s():~n	h()~n
+cld|13|static-call-func|4|Cannot call non-static function "h()" from the static function "s()".
+cl|src|14|func h():~n	pass~nstatic var sv = h()~n
+cld|14|static-call-func|3|Cannot call non-static function "h()" from a static variable initializer.
+cl|src|15|var v = 1~nstatic func s():~n	var v = 2~n	return v~n
+sm|src|0|func f():~n	var s = "a"~n	s.substr(1, 2, 3)~n
+smd|0|string-arity|3|Too many arguments for "substr()" call. Expected at most 2 but received 3.
+sm|src|1|func f():~n	"a".nope()~n
+smd|1|face-member-missing|2|Cannot find member "nope" in base "String".
+smd|1|face-member-not-found|2|Function "nope()" not found in base String.
+sm|src|2|var s: String = "a"~nfunc f():~n	var x = s.substr(1, 2, 3)~n
+smd|2|string-arity|3|Too many arguments for "substr()" call. Expected at most 2 but received 3.
+sm|src|3|func f():~n	var a: Array[String] = ["x"]~n	var x = a[0].substr(1, 2, 3)~n
+smd|3|string-arity|3|Too many arguments for "substr()" call. Expected at most 2 but received 3.
+sm|src|4|func f():~n	var s = "a"~n	s.replace("a", "b")~n
+sm|src|5|var s: String = "a"~nfunc f():~n	var x = s.nope()~n
+smd|5|face-member-missing|3|Cannot find member "nope" in base "String".
+smd|5|face-member-not-found|3|Function "nope()" not found in base String.
+cfa|0|face-arg-pass|Cannot pass a value of type "int" as "String".
+cfa|0|face-arg-type|Invalid argument for "split()" function: argument 1 should be "String" but is "int".
+cfa|0|END
+cfa|1|END
+cfa|2|END
+cfa|3|face-arg-pass|Cannot pass a value of type "String" as "bool".
+cfa|3|face-arg-type|Invalid argument for "split()" function: argument 2 should be "bool" but is "String".
+cfa|3|END
+cfa|4|face-arg-pass|Cannot pass a value of type "String" as "int".
+cfa|4|face-arg-type|Invalid argument for "substr()" function: argument 1 should be "int" but is "String".
+cfa|4|END
+nf|src|0|func f():~n	var s: StringName = &"a"~n	s.substr(1, 2, 3)~n
+nfd|0|StringName|string-name-arity|3|Too many arguments for "substr()" call. Expected at most 2 but received 3.
+nf|src|1|func f():~n	var s = &"a"~n	s.split(1)~n
+nfd|1|StringName|face-arg-pass|3|Cannot pass a value of type "int" as "String".
+nfd|1|StringName|face-arg-type|3|Invalid argument for "split()" function: argument 1 should be "String" but is "int".
+nf|src|2|func f():~n	var s = ^"a"~n	s.split(1)~n
+nf|src|3|func f():~n	var s = NodePath("a")~n	s.substr(1, 2, 3)~n
+nf|src|4|func f():~n	"a".substr(1, 2, 3)~n
+nf|src|5|var s: StringName = &"a"~nfunc f():~n	s.substr(1)~n
+fas|src|0|func f(p: int):~n	pass~nfunc g():~n	f("s")~n
+fasd|0|func-arg-slot|4|Cannot pass a value of type "String" as "int".
+fasd|0|func-arg-slot|4|Invalid argument for "f()" function: argument 1 should be "int" but is "String".
+fas|src|1|func f(p: int):~n	pass~nfunc g():~n	f(1)~n
+fas|src|2|class K:~n	func m(p: int):~n		pass~n	func g():~n		self.m("s")~n
+fasd|2|func-arg-slot|5|Cannot pass a value of type "String" as "int".
+fasd|2|func-arg-slot|5|Invalid argument for "m()" function: argument 1 should be "int" but is "String".
+fas|src|3|class K:~n	pass~nfunc g(a: K):~n	pass~nfunc h():~n	g(1)~n
+fasd|3|func-arg-class-slot|6|Invalid argument for "g()" function: argument 1 should be "K" but is "int".
+fas|src|4|func f(p: int):~n	pass~nfunc g():~n	f()~n
+fas|src|5|class A:~n	func m(p: int):~n		pass~nclass B extends A:~n	func g():~n		self.m("s")~n
+fasd|5|func-arg-slot|6|Cannot pass a value of type "String" as "int".
+fasd|5|func-arg-slot|6|Invalid argument for "m()" function: argument 1 should be "int" but is "String".
+lay2|src|0|class K:~n	static func s(a, b):~n		pass~n	func _init(x, y = 1):~n		pass~n	func m(p: int, q):~n		pass~n
+lay2|0|statics|{"s": (a: rt.Variant[]): rt.Variant => rt.wrapValue(K.s(a[0] as rt.Variant, a[1] as rt.Variant))}
+lay2|0|methods|{ "s": [2, 2], "m": [2, 2] }
+lay2|0|ctors|[1, 2]
+lay2|0|params|{ "m": ["int", null] }
+lay2|0|untyped|
+lay2|0|base|K|RefCounted
+lay2|src|1|func f():~n	var a = 1~n	var b: int = 2~n	if a:~n		var c: String = "x"~n
+lay2|1|statics|{}
+lay2|1|methods|{ "f": [0, 0] }
+lay2|1|ctors|null
+lay2|1|params|null
+lay2|1|localv|b|int
+lay2|1|localv|c|String
+lay2|1|untyped|a
+lay2|src|2|class A:~n	pass~nclass B extends A:~n	pass~nclass C extends Node:~n	pass~n
+lay2|2|statics|{}
+lay2|2|methods|null
+lay2|2|ctors|null
+lay2|2|params|null
+lay2|2|untyped|
+lay2|2|base|A|RefCounted
+lay2|2|base|B|RefCounted
+lay2|2|base|C|Node
+k|0|int
+k|1|null
+k|2|null
+k|3|int
+k|4|null
+k|5|bool
+k|6|str
+k|7|int
+k|8|int
+k|9|int
+k|10|int
+k|11|int
+k|12|int
+k|13|int
+k|14|null
+ib|K|K
+ib|RefCounted|null
+ib|Object|null
+ib|Node|__error|class-extends
+ib|Other|__error|class-extends
+ps|0|false
+ps|1|true
+ps|2|false
+ps|3|false
+ps|4|true
+ps|5|true
+ps|6|true
+ps|7|true
+ps|8|false
+ps|9|false
+ps|10|false
+ps|11|true
+ps|12|true
+ida|0|false
+ida|1|true
+ida|2|true
+ida|3|false
+ida|4|true
+sv|0|true
+sv|1|true
+sv|2|false
+sv|3|true
+sv|4|false
+wk|src|0|func f():~n	return zzz~n
+wkd|0|undeclared-identifier|2|Identifier "zzz" not declared in the current scope.
+wk|src|1|func f():~n	var a = 1~n	return a~n
+wk|src|2|static func s():~n	return self~n
+wkd|2|self-in-static|2|Cannot use "self" inside a static function.
+wk|src|3|func f():~n	break~n
+wkd|3|break-outside-loop|2|break 不在循环内
+wk|src|4|func f():~n	var a = 1 + "s"~n
+wkd|4|op-pair|2|Invalid operands to operator +, int and String.
+wk|src|5|func f():~n	print(pow(1, "x"))~n
+wk|src|6|class K:~n	static func s():~n		pass~nfunc f():~n	K.s()~n
+wkd|6|undeclared-identifier|5|Identifier "K" not declared in the current scope.
+wk|src|7|func f():~n	var x = 5~n	if x:~n		print(zz)~n
+wkd|7|undeclared-identifier|4|Identifier "zz" not declared in the current scope.
+wk|src|8|func f():~n	var a = 1~n	for i in [1]:~n		break~n
+cls|src|0|class K:~n	var a = 1~n	func f():~n		return a~n
+cls|src|1|class K:~n	static var s = 1~n	var a = s~n
+cls|src|2|class K:~n	var a = self.b~n
+cls|src|3|class K:~n	var a = zzz~n
+clsd|3|undeclared-identifier|2|Identifier "zzz" not declared in the current scope.
+cls|src|4|class K:~n	var a:~n		get:~n			return 1~n
+cls|src|5|class K:~n	static func s():~n		pass~n	var a = s()~n
+ix|src|0|var a: Array[int] = [1]~nfunc f():~n	var x = a["s"]~n
+ixd|0|typed-index-key|3|Invalid index type "String" for a base of type "Array[int]".
+ix|src|1|var d: Dictionary[String, int] = {}~nfunc f():~n	var x = d["k"]~n
+ix|src|2|var d: Dictionary[String, int] = {}~nfunc f():~n	d["k"] = "v"~n
+ixd|2|typed-index-value|3|Cannot assign a value of type "String" as "int".
+ixd|2|typed-index-assign|3|Value of type "String" cannot be assigned to a variable of type "int".
+ix|src|3|var a: Array[int] = [1]~nfunc f():~n	a["s"] = 1~n
+ixd|3|typed-index-key|3|Invalid index type "String" for a base of type "Array[int]".
+ix|src|4|func f():~n	var a = [1]~n	var x = a["s"]~n
+ixd|4|typed-index-key|3|Invalid index type "String" for a base of type "Array".
+ix|src|5|func f():~n	var x = ["a"]["s"]~n
+ixd|5|typed-index-key|2|Invalid index type "String" for a base of type "Array".
+vm|src|0|func f():~n	var x = pow(1)~n
+vm|src|1|func f():~n	var x = abs("s")~n
+vmd|1|global-arg-sentence|2|Invalid argument for "abs()" function: Argument "x" must be "int", "float", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", or "Vector4i".
+vm|src|2|func f():~n	var x = Vector2(1, 2).bogus()~n
+vm|src|3|var v = Vector2(1, 2)~nfunc f():~n	var x = v.lerp("s", 0.5)~n
+vmd|3|instance-arg-pass|3|Cannot pass a value of type "String" as "Vector2".
+vmd|3|instance-arg-type|3|Invalid argument for "lerp()" function: argument 1 should be "Vector2" but is "String".
+vm|src|4|func f():~n	var x = Vector2.ZERO()~n
+vmd|4|static-const-call|2|Name "ZERO" called as a function but is a "Vector2".
+vm|src|5|func f():~n	var x = Vector2.nope()~n
+vmd|5|static-member-unknown|2|Cannot find member "nope" in base "Vector2".
+vmd|5|static-member-unknown|2|Function "nope()" not found in base Vector2.
+vm|src|6|func f():~n	var x = char(4294967296)~n
+vmd|6|char-range|2|Invalid argument for "char()" function: Expected an integer between 0 and 2^32 - 1.
+vm|src|7|func f():~n	var x = String(1)~n
+pk6|src|0|func f(p: PackedByteArray):~n	p.nope()~n
+pk6d|0|face-member-missing|2|Cannot find member "nope" in base "PackedByteArray".
+pk6d|0|face-member-not-found|2|Function "nope()" not found in base PackedByteArray.
+pk6|src|1|func f():~n	var s: StringName = &"a"~n	s.nope()~n
+pk6d|1|face-member-missing|3|Cannot find member "nope" in base "StringName".
+pk6d|1|face-member-not-found|3|Function "nope()" not found in base StringName.
+pk6|src|2|func f(p: PackedByteArray):~n	var x = p.nope~n
+pk6d|2|face-attr-missing|2|Cannot find member "nope" in base "PackedByteArray".
+pk6d|2|face-attr-missing|2|Cannot find member "nope" in base "PackedByteArray".
+pk6|src|3|var a: Array[int] = []~nfunc f():~n	var x = a.new()~n
+pk6|src|4|func f(p: PackedByteArray):~n	p.size = 1~n
+pk6d|4|face-attr-constant|2|Cannot assign a new value to a constant.
+az|src|0|var a: Array[int] = ["s"]~nfunc f():~n	return zzz~n
+azd|0|undeclared-identifier|3|Identifier "zzz" not declared in the current scope.
+azd|0|typed-collection-literal|1|Cannot include a value of type "String" as "int".
+azd|0|typed-collection-element|1|Cannot have an element of type "String" in an array of type "Array[int]".
+az|src|1|const A = 1~nfunc f():~n	A = 2~n
+azd|1|const-assign|3|Cannot assign a new value to a constant.
+az|src|2|extends SceneTree~nfunc f():~n	call_deferred("x")~n
+az|src|3|func f():~n	var q = 1~n	var g = func(): return q~n
+az|src|4|class K:~n	var a = zzz~n
+azd|4|undeclared-identifier|2|Identifier "zzz" not declared in the current scope.
+az|src|5|func f():~n	var x = pow(1)~n
+azd|5|builtin-arity|2|Too few arguments for "pow()" call. Expected at least 2 but received 1.
+az|src|6|func f(p: PackedByteArray):~n	p.nope()~n
+azd|6|face-member-missing|2|Cannot find member "nope" in base "PackedByteArray".
+azd|6|face-member-not-found|2|Function "nope()" not found in base PackedByteArray.
+az|src|7|var d: Dictionary[String, int] = {}~nfunc f():~n	d["k"] = "v"~n
+azd|7|typed-index-value|3|Cannot assign a value of type "String" as "int".
+azd|7|typed-index-assign|3|Value of type "String" cannot be assigned to a variable of type "int".
+di|src|0|var a = 1~nvar b = 2~n
+di|0|null|rt.registerDictIdentity(__d, null, "C:/proj/main.gd", ["a","b"], {}, (o) => { const s = o as Main; return [s.a, s.b]; });
+di|0|set|rt.registerDictIdentity(__d, "C:/proj/main.gd", "C:/proj/main.gd", ["a","b"], {}, (o) => { const s = o as Main; return [s.a, s.b]; });
+di|src|1|var a = 1~nconst C = 2~nstatic var s = 3~n
+di|1|null|rt.registerDictIdentity(__d, null, "C:/proj/main.gd", ["a"], {}, (o) => { const s = o as Main; return [s.a]; });
+di|1|set|rt.registerDictIdentity(__d, "C:/proj/main.gd", "C:/proj/main.gd", ["a"], {}, (o) => { const s = o as Main; return [s.a]; });
+di|src|2|var v: int:~n	get:~n		return 1~n
+di|2|null|rt.registerDictIdentity(__d, null, "C:/proj/main.gd", ["v"], {"v": "int"}, (o) => { const s = o as Main; return [rt.V.nil()]; });
+di|2|set|rt.registerDictIdentity(__d, "C:/proj/main.gd", "C:/proj/main.gd", ["v"], {"v": "int"}, (o) => { const s = o as Main; return [rt.V.nil()]; });
+el|0|rt.V.int(42)
+el|1|rt.V.int(9007199254740993n)
+el|2|rt.V.float(1.5)
+el|3|rt.V.str("a\"b")
+el|4|rt.V.stringName("x")
+el|5|rt.nodePathCtor([rt.V.str("p/q")])
+el|6|rt.V.bool(true)
+el|7|rt.V.nil()
+ex|0|1|int
+ex|1|1.5|float
+ex|2|"s"|str
+ex|3|rt.V.bool(true)|var
+ex|4|(-1)|int
+ex|5|rt.tern(rt.V.bool(true), () => rt.V.int(1), () => rt.V.int(2))|var
+ex|6|rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)]))|var
+ex|7|rt.dictOf([[rt.V.int(1), rt.V.int(2)]])|var
+ex|8|rt.V.bool(!rt.ops.truthy(rt.V.bool(true)))|var
+as|0|x = 5;
+as|1|rt.setIndex(a, rt.V.int(0), 5);
+as|2|rt.writeProp(rt.V.object(this), "x", 5);
+bf|AABB|rt.aabbNew([A0, A1, A2])
+bf|Array|rt.arrayFromArgs([A0, A1, A2])
+bf|Basis|rt.basisNew([A0, A1, A2])
+bf|Callable|rt.callableCtor([A0, A1, A2])
+bf|Color|rt.colorNew([A0, A1, A2])
+bf|NodePath|rt.nodePathCtor([A0, A1, A2])
+bf|PackedByteArray|rt.bytesCtor([A0, A1, A2])
+bf|PackedColorArray|rt.packCtor("color", [A0, A1, A2])
+bf|PackedFloat32Array|rt.packCtor("float32", [A0, A1, A2])
+bf|PackedFloat64Array|rt.packCtor("float64", [A0, A1, A2])
+bf|PackedInt32Array|rt.packCtor("int32", [A0, A1, A2])
+bf|PackedInt64Array|rt.packCtor("int64", [A0, A1, A2])
+bf|PackedStringArray|rt.packCtor("string", [A0, A1, A2])
+bf|PackedVector2Array|rt.packCtor("vector2", [A0, A1, A2])
+bf|PackedVector3Array|rt.packCtor("vector3", [A0, A1, A2])
+bf|PackedVector4Array|rt.packCtor("vector4", [A0, A1, A2])
+bf|Plane|rt.planeNew([A0, A1, A2])
+bf|Quaternion|rt.quaternionNew([A0, A1, A2])
+bf|Rect2|rt.rect2New([A0, A1, A2])
+bf|Rect2i|rt.rect2iNew([A0, A1, A2])
+bf|Signal|rt.signalCtor([A0, A1, A2])
+bf|String|rt.stringCtor([A0, A1, A2])
+bf|StringName|rt.stringNameCtor([A0, A1, A2])
+bf|Transform2D|rt.transform2dNew([A0, A1, A2])
+bf|Transform3D|rt.transform3dNew([A0, A1, A2])
+bf|Vector2|rt.vector2New([A0, A1, A2])
+bf|Vector2i|rt.vector2iNew([A0, A1, A2])
+bf|Vector3|rt.vector3New([A0, A1, A2])
+bf|Vector3i|rt.vector3iNew([A0, A1, A2])
+bf|Vector4|rt.vector4New([A0, A1, A2])
+bf|Vector4i|rt.vector4iNew([A0, A1, A2])
+bf|abs|rt.abs(A0, A1, A2)
+bf|absf|rt.gAbsF(A0)
+bf|absi|rt.gAbsI(A0)
+bf|acos|rt.gAcos(A0)
+bf|acosh|rt.gAcosh(A0)
+bf|angle_difference|rt.gAngleDifference(A0, A1)
+bf|asin|rt.gAsin(A0)
+bf|asinh|rt.gAsinh(A0)
+bf|atan|rt.gAtan(A0)
+bf|atan2|rt.gAtan2(A0, A1)
+bf|atanh|rt.gAtanh(A0)
+bf|bezier_derivative|rt.gBezierDerivative(A0, A1, A2, A3, A4)
+bf|bezier_interpolate|rt.gBezierInterpolate(A0, A1, A2, A3, A4)
+bf|bool|rt.toBool(A0, A1, A2)
+bf|bytes_to_var|rt.gBytesToVar(A0)
+bf|bytes_to_var_with_objects|rt.gBytesToVarWithObjects(A0)
+bf|ceil|rt.gCeil(A0, "auto")
+bf|ceilf|rt.gCeil(A0, "float")
+bf|ceili|rt.gCeil(A0, "int")
+bf|char|rt.stringChr(A0)
+bf|clamp|rt.gClamp(A0, A1, A2, "auto")
+bf|clampf|rt.gClamp(A0, A1, A2, "float")
+bf|clampi|rt.gClamp(A0, A1, A2, "int")
+bf|convert|rt.variantConvert(A0, A1, true)
+bf|cos|rt.gCos(A0)
+bf|cosh|rt.gCosh(A0)
+bf|cubic_interpolate|rt.gCubic(A0, A1, A2, A3, A4)
+bf|cubic_interpolate_angle|rt.gCubicAngle(A0, A1, A2, A3, A4)
+bf|cubic_interpolate_angle_in_time|rt.gCubicAngleInTime(A0, A1, A2, A3, A4, A5, A6, A7)
+bf|cubic_interpolate_in_time|rt.gCubicInTime(A0, A1, A2, A3, A4, A5, A6, A7)
+bf|db_to_linear|rt.gDbToLinear(A0)
+bf|deg_to_rad|rt.gDegToRad(A0)
+bf|dict_to_inst|rt.gDictToInst(A0)
+bf|ease|rt.gEase(A0, A1)
+bf|error_string|rt.gErrorString(A0)
+bf|exp|rt.gExp(A0)
+bf|float|rt.toFloat(A0, A1, A2)
+bf|floor|rt.gFloor(A0, "auto")
+bf|floorf|rt.gFloor(A0, "float")
+bf|floori|rt.gFloor(A0, "int")
+bf|fmod|rt.gFmod(A0, A1)
+bf|fposmod|rt.gFposmod(A0, A1)
+bf|get_stack|rt.gGetStack()
+bf|hash|rt.variantHash([A0, A1, A2])
+bf|inst_to_dict|rt.gInstToDict(A0)
+bf|instance_from_id|rt.gInstanceFromId(A0)
+bf|int|rt.toInt(A0, A1, A2)
+bf|inverse_lerp|rt.gInverseLerp(A0, A1, A2)
+bf|is_equal_approx|rt.gIsEqualApprox(A0, A1)
+bf|is_finite|rt.gIsFinite(A0)
+bf|is_inf|rt.gIsInf(A0)
+bf|is_instance_id_valid|rt.gIsInstanceIdValid(A0)
+bf|is_instance_of|rt.gIsInstanceOf(A0, A1)
+bf|is_instance_valid|rt.gIsInstanceValid(A0)
+bf|is_nan|rt.gIsNan(A0)
+bf|is_same|rt.gIsSame(A0, A1)
+bf|is_zero_approx|rt.gIsZeroApprox(A0)
+bf|len|rt.lengthOf(A0, A1, A2)
+bf|lerp|rt.gLerp(A0, A1, A2)
+bf|lerp_angle|rt.gLerpAngle(A0, A1, A2)
+bf|lerpf|rt.gLerp(A0, A1, A2)
+bf|linear_to_db|rt.gLinearToDb(A0)
+bf|log|rt.gLog(A0)
+bf|max|rt.gMax(A0, A1, A2)
+bf|maxf|rt.gMaxF(A0, A1)
+bf|maxi|rt.gMaxI(A0, A1)
+bf|min|rt.gMin(A0, A1, A2)
+bf|minf|rt.gMinF(A0, A1)
+bf|mini|rt.gMinI(A0, A1)
+bf|move_toward|rt.gMoveToward(A0, A1, A2)
+bf|nearest_po2|rt.gNearestPo2(A0)
+bf|pingpong|rt.gPingpong(A0, A1)
+bf|posmod|rt.gPosmod(A0, A1)
+bf|pow|rt.gPow(A0, A1)
+bf|print_stack|rt.gPrintStack()
+bf|push_error|rt.gPushError([A0, A1, A2])
+bf|push_warning|rt.gPushWarning([A0, A1, A2])
+bf|rad_to_deg|rt.gRadToDeg(A0)
+bf|rand_from_seed|rt.gRandFromSeed(A0)
+bf|randf|rt.gRandf()
+bf|randf_range|rt.gRandfRange(A0, A1)
+bf|randfn|rt.gRandfn(A0, A1)
+bf|randi|rt.gRandi()
+bf|randi_range|rt.gRandiRange(A0, A1)
+bf|randomize|rt.gRandomize()
+bf|range|rt.V.array(rt.range([A0, A1, A2]))
+bf|remap|rt.gRemap(A0, A1, A2, A3, A4)
+bf|rid_allocate_id|rt.gRidAllocateId()
+bf|rid_from_int64|rt.gRidFromInt64(A0)
+bf|rotate_toward|rt.gRotateToward(A0, A1, A2)
+bf|round|rt.gRound(A0, "auto")
+bf|roundf|rt.gRound(A0, "float")
+bf|roundi|rt.gRound(A0, "int")
+bf|seed|rt.gSeed(A0)
+bf|sign|rt.gSign(A0)
+bf|signf|rt.gSignF(A0)
+bf|signi|rt.gSignI(A0)
+bf|sin|rt.gSin(A0)
+bf|sinh|rt.gSinh(A0)
+bf|smoothstep|rt.gSmoothstep(A0, A1, A2)
+bf|snapped|rt.gSnapped(A0, A1)
+bf|snappedf|rt.gSnappedF(A0, A1)
+bf|snappedi|rt.gSnappedI(A0, A1)
+bf|sqrt|rt.sqrt(A0, A1, A2)
+bf|step_decimals|rt.gStepDecimals(A0)
+bf|str|rt.strBuiltin([A0, A1, A2])
+bf|str_to_var|rt.strToVar(A0)
+bf|tan|rt.gTan(A0)
+bf|tanh|rt.gTanh(A0)
+bf|type_convert|rt.variantConvert(A0, A1, false)
+bf|type_exists|rt.gTypeExists(A0)
+bf|type_string|rt.gTypeString(A0)
+bf|typeof|rt.typeOf(A0, A1, A2)
+bf|var_to_bytes|rt.gVarToBytes(A0)
+bf|var_to_bytes_with_objects|rt.gVarToBytesWithObjects(A0)
+bf|var_to_str|rt.V.str(rt.varToStr(A0))
+bf|weakref|rt.gWeakref(A0)
+bf|wrap|rt.gWrapAny(A0, A1, A2)
+bf|wrapf|rt.gWrap(A0, A1, A2, false)
+bf|wrapi|rt.gWrap(A0, A1, A2, true)
+bn|0|rt.ops.add(rt.V.int(1), rt.V.int(2))
+bn|1|rt.ops.add(rt.V.str("a"), rt.V.str("b"))
+bn|2|rt.ops.mod(rt.V.int(1), rt.V.int(2), true)
+bn|3|rt.ops.inOp(x, y)
+bn|4|rt.and(a, () => b)
+bn|5|rt.or(a, () => b)
+bn|6|rt.ops.shl(rt.V.int(1), rt.V.int(2))
+bcl|0|print(rt.showArgs([rt.V.int(1)]))
+bcl|1|rt.gPow(rt.V.int(1), rt.V.int(2))
+bcl|2|rt.lengthOf(rt.V.array(rt.GArray.of([rt.V.int(1)])))
+bcl|3|rt.sqrt(rt.V.int(2))
+stm|0|["rt.frameLine(2);","let a = rt.V.int(1);"]
+stm|1|["rt.frameLine(2);","a = rt.V.int(1);"]
+stm|2|["rt.frameLine(2);","print(rt.showArgs([rt.V.int(1)]));"]
+stm|3|["rt.frameLine(2);","if (rt.ops.truthy(rt.V.bool(true))) {","  rt.frameLine(3);","  /* pass */","}"]
+stm|4|["rt.frameLine(2);","for (let i of rt.iter(rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])))) {","  rt.frameLine(3);","  /* pass */","}"]
+stm|5|["rt.frameLine(2);","while (rt.ops.truthy(rt.V.bool(true))) {","  rt.frameLine(3);","  break;","}"]
+stm|6|["rt.frameLine(2);","return rt.V.int(1);"]
+stm|7|["rt.frameLine(2);","do {","  const __m0 = rt.matchPattern(rt.V.int(1), rt.patLit(rt.V.int(1)));","  if (__m0 !== null) {","    rt.frameLine(4);","    /* pass */","    break;","  }","} while (false);"]
+fl|0|{"arrays":{"a":"int"},"dicts":{},"unboxed":{"x":"int"}}
+fl|1|{"arrays":{},"dicts":{"d":"int"},"unboxed":{"x":"int"}}
+fl|2|{"arrays":{},"dicts":{},"unboxed":{"x":"int"}}
+fl|3|{"arrays":{},"dicts":{},"unboxed":{}}
+fl|4|{"arrays":{"a":"int"},"dicts":{},"unboxed":{}}
+fl|5|{"arrays":{},"dicts":{},"unboxed":{"x":"float"}}
+rb|0|rt.fast.iAddC(x, 1)|int
+rb|1|rt.fast.iAddC(1, 2)|int
+rb|2|(x < 1)|bool
+rb|3|(y + 1.5)|float
+rb|4|(s + "a")|str
+rb|5|null
+si|0|rt.V.nil()
+si|1|rt.V.int(1)
+si|2|rt.toInt(rt.V.int(2))
+si|3|rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(1)])), "int", true)
+sp|0|  null = rt.V.int(1);
+sp|1|  static null = rt.V.int(2);
+efn|0|["f(a: rt.Variant): rt.Variant {","  const __gd_frame = rt.frameEnter(\"\", \"f\");","  try {","    rt.frameLine(2);","    return a;","  } catch (__gd_err) {","    rt.gdFunctionError(__gd_err);","    return rt.V.nil();","  } finally {","    rt.frameExit(__gd_frame);","  }","    return rt.V.nil();","}",""]
+efn|1|["f(a: rt.Variant): rt.Variant {","  const __gd_frame = rt.frameEnter(\"\", \"f\");","  try {","    a = rt.paramSlot(a, \"int\", 1, \"f\", this);","    rt.frameLine(2);","    return rt.ops.add(a, rt.V.int(1));","  } catch (__gd_err) {","    rt.gdFunctionError(__gd_err);","    return rt.V.int(0);","  } finally {","    rt.frameExit(__gd_frame);","  }","    return rt.V.nil();","}",""]
+efn|2|["f(): rt.Variant {","  const __gd_frame = rt.frameEnter(\"\", \"f\");","  try {","    rt.frameLine(2);","    let x = 1;","    rt.frameLine(3);","    x = 2;","    rt.frameLine(4);","    return rt.V.int(x);","  } catch (__gd_err) {","    rt.gdFunctionError(__gd_err);","    return rt.V.nil();","  } finally {","    rt.frameExit(__gd_frame);","  }","    return rt.V.nil();","}",""]
+efn|3|["f(): void {","  const __gd_frame = rt.frameEnter(\"\", \"f\");","  try {","    rt.frameLine(2);","    print(rt.showArgs([rt.V.int(1)]));","  } catch (__gd_err) {","    rt.gdFunctionError(__gd_err);","    return;","  } finally {","    rt.frameExit(__gd_frame);","  }","}",""]
+efn|4|["static f(): void {","  const __gd_frame = rt.frameEnter(\"\", \"f\");","  try {","    rt.frameLine(2);","    /* pass */","  } catch (__gd_err) {","    rt.gdFunctionError(__gd_err);","    return;","  } finally {","    rt.frameExit(__gd_frame);","  }","}",""]
+efn|5|["f(p: rt.Variant): void {","  const __gd_frame = rt.frameEnter(\"\", \"f\");","  try {","    p = rt.paramSlot(p, \"int\", 1, \"f\", this);","    rt.frameLine(2);","    /* pass */","  } catch (__gd_err) {","    rt.gdFunctionError(__gd_err);","    return;","  } finally {","    rt.frameExit(__gd_frame);","  }","}",""]
+cd|0|["class K extends rt.GdScriptObject {","  declare a: rt.Variant;","","  __gd_fields__() {","    const __gd_frame = rt.frameEnter(\"\", \"@implicit_new\");","    try {","      rt.frameLine(2);","      this.a = rt.V.int(1);","    } catch (__gd_err) {","      rt.gdFunctionError(__gd_err);","      return;","    } finally {","      rt.frameExit(__gd_frame);","    }","  }","","  constructor() {","    super();","    this.__gd_fields__();","  }","","  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {","    switch (name) {","      default: return super.__gdDispatch(name, args);","    }","  }","","}","const __gd_d_K = rt.defineClass(K, () => new K(), (o) => o instanceof K);","rt.nameClass(__gd_d_K, \"K\");","rt.registerScriptProps(__gd_d_K, [\"a\"], (o) => { const s = o as K; return [s.a]; });","rt.registerDictIdentity(__gd_d_K, null, \"K\", [\"a\"], {}, (o) => { const s = o as K; return [s.a]; });","rt.registerNativeBase(__gd_d_K, \"RefCounted\");",""]
+cd|1|["class K extends rt.GdScriptObject {","  __gd_fields__() {","    const __gd_frame = rt.frameEnter(\"\", \"@implicit_new\");","    try {","    } catch (__gd_err) {","      rt.gdFunctionError(__gd_err);","      return;","    } finally {","      rt.frameExit(__gd_frame);","    }","  }","","  get v() {","    rt.frameLine(4);","    return rt.V.int(1);","  }","  set v(value) {","    // 只读属性：Godot 里写它是静默无操作，不是报错","  }","","  constructor() {","    super();","    this.__gd_fields__();","  }","","  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {","    switch (name) {","      default: return super.__gdDispatch(name, args);","    }","  }","","}","const __gd_d_K = rt.defineClass(K, () => new K(), (o) => o instanceof K);","rt.nameClass(__gd_d_K, \"K\");","rt.registerFieldTypes(__gd_d_K, {\"v\": \"int\"});","rt.registerScriptProps(__gd_d_K, [\"v\"], (o) => { const s = o as K; return [s.v]; });","rt.registerDictIdentity(__gd_d_K, null, \"K\", [\"v\"], {\"v\": \"int\"}, (o) => { const s = o as K; return [rt.V.nil()]; });","rt.registerNativeBase(__gd_d_K, \"RefCounted\");",""]
+cd|2|["class K extends rt.GdScriptObject {","  __gd_fields__() {","    const __gd_frame = rt.frameEnter(\"\", \"@implicit_new\");","    try {","    } catch (__gd_err) {","      rt.gdFunctionError(__gd_err);","      return;","    } finally {","      rt.frameExit(__gd_frame);","    }","  }","","  static s = rt.V.int(1);","","  constructor() {","    super();","    this.__gd_fields__();","  }","","  f(): rt.Variant {","    const __gd_frame = rt.frameEnter(\"\", \"f\");","    try {","      rt.frameLine(4);","      return K.s;","    } catch (__gd_err) {","      rt.gdFunctionError(__gd_err);","      return rt.V.nil();","    } finally {","      rt.frameExit(__gd_frame);","    }","      return rt.V.nil();","  }","  ","  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {","    switch (name) {","      case \"f\": return rt.wrapValue(this.f());","      default: return super.__gdDispatch(name, args);","    }","  }","","}","const __gd_d_K = rt.defineClass(K, () => new K(), (o) => o instanceof K);","rt.nameClass(__gd_d_K, \"K\");","rt.registerDictIdentity(__gd_d_K, null, \"K\", [], {}, (o) => { const s = o as K; return []; });","rt.registerStaticVars(__gd_d_K, {\"s\": \"\"}, {\"s\": { get: (): rt.Variant => K.s, set: (__v: rt.Variant): void => { K.s = __v; } }});","rt.registerMethodArities(__gd_d_K, { \"f\": [0, 0] });","rt.registerNativeBase(__gd_d_K, \"RefCounted\");",""]
+cd|3|["class K extends rt.GdScriptObject {","  declare sig: rt.Signal;","","  __gd_fields__() {","    const __gd_frame = rt.frameEnter(\"\", \"@implicit_new\");","    try {","      rt.frameLine(2);","      this.sig = new rt.Signal(\"sig\");","    } catch (__gd_err) {","      rt.gdFunctionError(__gd_err);","      return;","    } finally {","      rt.frameExit(__gd_frame);","    }","  }","","  constructor() {","    super();","    this.__gd_fields__();","  }","","  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {","    switch (name) {","      default: return super.__gdDispatch(name, args);","    }","  }","","}","const __gd_d_K = rt.defineClass(K, () => new K(), (o) => o instanceof K);","rt.nameClass(__gd_d_K, \"K\");","rt.registerDictIdentity(__gd_d_K, null, \"K\", [], {}, (o) => { const s = o as K; return []; });","rt.registerNativeBase(__gd_d_K, \"RefCounted\");",""]
+cd|4|["class K extends rt.GdScriptObject {","  declare a: rt.Variant;","","  __gd_fields__() {","    const __gd_frame = rt.frameEnter(\"\", \"@implicit_new\");","    try {","      rt.frameLine(2);","      this.a = rt.V.int(1);","    } catch (__gd_err) {","      rt.gdFunctionError(__gd_err);","      return;","    } finally {","      rt.frameExit(__gd_frame);","    }","  }","","  constructor(x: rt.Variant = rt.V.int(1)) {","    super();","    this.__gd_fields__();","    if (!rt.bareConstruction()) {","        const __gd_frame = rt.frameEnter(\"\", \"_init\");","        try {","        rt.frameLine(4);","        rt.frameLine(4);","        this.a = x;","        } catch (__gd_err) {","          rt.gdFunctionError(__gd_err);","          return;","        } finally {","          rt.frameExit(__gd_frame);","        }","    }","  }","  ","  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {","    switch (name) {","      default: return super.__gdDispatch(name, args);","    }","  }","","}","const __gd_d_K = rt.defineClass(K, (a) => new K(a.length > 0 ? (a[0] as rt.Variant) : undefined), (o) => o instanceof K);","rt.nameClass(__gd_d_K, \"K\");","rt.registerScriptProps(__gd_d_K, [\"a\"], (o) => { const s = o as K; return [s.a]; });","rt.registerDictIdentity(__gd_d_K, null, \"K\", [\"a\"], {}, (o) => { const s = o as K; return [s.a]; });","rt.registerCtorArities(__gd_d_K, [0, 1]);","rt.registerNativeBase(__gd_d_K, \"RefCounted\");",""]
+ra|0|{"add":{"params":["int","int"],"ret":"int"}}
+ra|1|{}
+ra|2|{}
+ra|3|{}
+ra|4|{"r":{"params":["int","int"],"ret":"int"}}
+ra|5|{}
+me|0|{"code":"// 由 gds2js 从 main.gd 编译生成 —— 不要手改。\n\nimport * as rt from \"./rt.mjs\";\n\nconst E = rt.dictOf([[rt.V.str(\"A\"), rt.V.int(0)], [rt.V.str(\"B\"), rt.V.int(1)]]);\n\nexport class Main extends rt.GdScriptObject {\n  declare hit: rt.Signal;\n  declare K: rt.Variant;\n  declare count: rt.Variant;\n  declare label: rt.Variant;\n\n  __gd_fields__() {\n    const __gd_frame = rt.frameEnter(\"main.gd\", \"@implicit_new\");\n    try {\n      rt.frameLine(1);\n      this.hit = new rt.Signal(\"hit\");\n      rt.frameLine(2);\n      this.K = rt.V.int(2);\n      rt.frameLine(8);\n      this.count = rt.toInt(rt.V.int(0));\n      rt.frameLine(9);\n      this.label = rt.V.str(\"x\");\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n\n  static K = rt.V.int(2);\n\n  static twice(a: rt.Variant): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"main.gd\", \"twice\");\n    try {\n      rt.frameLine(11);\n      return rt.ops.mul(a, rt.V.int(2));\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.int(0);\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  constructor() {\n    super();\n    this.__gd_fields__();\n    if (!rt.bareConstruction()) {\n        const __gd_frame = rt.frameEnter(\"main.gd\", \"_init\");\n        try {\n        rt.frameLine(13);\n        this.count = rt.toInt(rt.V.int(1));\n        } catch (__gd_err) {\n          rt.gdFunctionError(__gd_err);\n          return;\n        } finally {\n          rt.frameExit(__gd_frame);\n        }\n    }\n  }\n  \n  go(a: rt.Variant): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"main.gd\", \"go\");\n    try {\n      a = rt.paramSlot(a, \"int\", 1, \"go\", this);\n      rt.frameLine(15);\n      return rt.ops.add(a, Main.K);\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.int(0);\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {\n    switch (name) {\n      case \"go\": return rt.wrapValue(this.go(args[0] as rt.Variant));\n      default: return super.__gdDispatch(name, args);\n    }\n  }\n\n}\n\nconst __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);\nrt.registerFieldTypes(__gd_d_Main, {\"count\": \"int\"});\nrt.registerScriptProps(__gd_d_Main, [\"K\",\"count\",\"label\"], (o) => { const s = o as Main; return [s.K, s.count, s.label]; });\nrt.registerDictIdentity(__gd_d_Main, null, \"\", [\"count\",\"label\"], {}, (o) => { const s = o as Main; return [s.count, s.label]; });\nrt.registerMethodArities(__gd_d_Main, { \"twice\": [1, 1], \"go\": [1, 1] });\nrt.registerMethodParams(__gd_d_Main, { \"twice\": [\"int\"], \"go\": [\"int\"] });\nrt.registerStaticMethods(__gd_d_Main, [\"twice\"], {\"twice\": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Main.twice(a[0] as rt.Variant))});\nrt.registerNativeBase(__gd_d_Main, \"RefCounted\");\nrt.registerScriptLabel(__gd_d_Main, \"main.gd\");\nclass Inner extends rt.GdScriptObject {\n  declare q: rt.Variant;\n\n  __gd_fields__() {\n    const __gd_frame = rt.frameEnter(\"main.gd\", \"@implicit_new\");\n    try {\n      rt.frameLine(5);\n      this.q = rt.V.int(1);\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n\n  constructor() {\n    super();\n    this.__gd_fields__();\n  }\n\n  ping(): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"main.gd\", \"ping\");\n    try {\n      rt.frameLine(7);\n      return rt.ops.add(this.q, rt.V.int(1));\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.int(0);\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {\n    switch (name) {\n      case \"ping\": return rt.wrapValue(this.ping());\n      default: return super.__gdDispatch(name, args);\n    }\n  }\n\n}\nconst __gd_d_Inner = rt.defineClass(Inner, () => new Inner(), (o) => o instanceof Inner);\nrt.nameClass(__gd_d_Inner, \"Inner\");\nrt.registerScriptProps(__gd_d_Inner, [\"q\"], (o) => { const s = o as Inner; return [s.q]; });\nrt.registerDictIdentity(__gd_d_Inner, null, \"Inner\", [\"q\"], {}, (o) => { const s = o as Inner; return [s.q]; });\nrt.registerMethodArities(__gd_d_Inner, { \"ping\": [0, 0] });\nrt.registerNativeBase(__gd_d_Inner, \"RefCounted\");\n\nconst __gd_entry = new Main();\ntry {\n  await __gd_entry.run();\n} catch (__gd_e) {\n  rt.reportRunFailure(__gd_e);\n}\n","map":null}
+me|1|{"code":"// 由 gds2js 从 main.gd 编译生成 —— 不要手改。\n\nimport * as rt from \"./rt.mjs\";\n\nexport class Main extends rt.GdNodeObject {\n  override __gd_engine_class__ = \"Node\";\n  override __gd_freed__ = false;\n  override __gd_node_queued__ = false;\n  override __gd_node_name__ = \"\";\n  override __gd_node_parent__: object | null = null;\n  override __gd_node_children__: object[] = [];\n  override __gd_node_groups__: string[] = [];\n  declare hp: rt.Variant;\n\n  __gd_fields__() {\n    const __gd_frame = rt.frameEnter(\"C:/proj/main.gd\", \"@implicit_new\");\n    try {\n      rt.frameLine(1);\n      this.hp = rt.toInt(rt.V.int(10));\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n\n  constructor() {\n    super();\n    this.__gd_fields__();\n  }\n\n  _ready(): void {\n    const __gd_frame = rt.frameEnter(\"C:/proj/main.gd\", \"_ready\");\n    try {\n      rt.frameLine(3);\n      print(rt.showArgs([this.hp]));\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n  \n  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {\n    switch (name) {\n      case \"_ready\": return rt.wrapValue(this._ready());\n      default: return super.__gdDispatch(name, args);\n    }\n  }\n\n}\n\nconst __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);\nrt.registerFieldTypes(__gd_d_Main, {\"hp\": \"int\"});\nrt.registerScriptProps(__gd_d_Main, [\"hp\"], (o) => { const s = o as Main; return [s.hp]; });\nrt.registerDictIdentity(__gd_d_Main, \"C:/proj/main.gd\", \"\", [\"hp\"], {}, (o) => { const s = o as Main; return [s.hp]; });\nrt.registerMethodArities(__gd_d_Main, { \"_ready\": [0, 0] });\nrt.registerNativeBase(__gd_d_Main, \"Node\");\nrt.registerScriptLabel(__gd_d_Main, \"main.gd\");\nrt.registerScript(\"C:/proj/main.gd\", __gd_d_Main);\nrt.setHostProjectName(\"demo\");\nconst __gd_entry = new Main();\ntry {\n  await sceneRun(__gd_entry, \"Main\", \"Node\", []);\n} catch (__gd_e) {\n  rt.reportRunFailure(__gd_e);\n}\n//# sourceMappingURL=Main.mjs.map\n","map":{"file":"Main.mjs","mappings":";;;;;;;;;;;;;;;;;AAAA;;;;;;;;;;AAAA;;;;;AACA;;;AACC","names":[],"sources":["main.gd"],"version":3}}
+pj|0|{"diags":[],"modules":[{"className":"Main","code":"// 由 gds2js 从 main.gd 编译生成 —— 不要手改。\n\nimport * as rt from \"./rt.mjs\";\nimport { Tokens } from \"./tokens.mts\";\nimport { Scan } from \"./scan.mts\";\nimport \"./tokens.mts\";\nimport \"./scan.mts\";\n\nlet __pre_T: rt.Variant | null = null;\nlet __pre_S: rt.Variant | null = null;\nexport class Main extends SceneTree {\n  declare T: rt.Variant;\n  declare S: rt.Variant;\n\n  __gd_fields__() {\n    const __gd_frame = rt.frameEnter(\"<case>/main.gd\", \"@implicit_new\");\n    try {\n      rt.frameLine(3);\n      this.T = rt.loadScript(\"<case>/tokens.gd\");\n      rt.frameLine(4);\n      this.S = rt.loadScript(\"<case>/scan.gd\");\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n\n  static get T(): rt.Variant {\n    if (__pre_T === null) __pre_T = rt.loadScript(\"<case>/tokens.gd\");\n    return __pre_T as rt.Variant;\n  }\n  static get S(): rt.Variant {\n    if (__pre_S === null) __pre_S = rt.loadScript(\"<case>/scan.gd\");\n    return __pre_S as rt.Variant;\n  }\n\n  constructor() {\n    super();\n    this.__gd_fields__();\n  }\n\n    override _initialize(): Promise<void> { return this.__gd__initialize(); }\n  async __gd__initialize(): Promise<void> {\n    const __gd_frame = rt.frameEnter(\"<case>/main.gd\", \"_initialize\");\n    try {\n      rt.frameLine(8);\n      print(rt.showArgs([rt.V.str(\"a|\"), Tokens.TAB_WIDTH, rt.V.str(\"|\"), rt.method(Tokens.PUNCT, \"size\", []), rt.V.str(\"|\"), rt.wrapValue(rt.index(Tokens.PUNCT, rt.V.int(0))), rt.V.str(\"|\"), rt.wrapValue(rt.index(Tokens.PUNCT, rt.V.int(47)))]));\n      rt.frameLine(9);\n      print(rt.showArgs([rt.V.str(\"b|\"), rt.method(Main.T, \"punct_face\", [rt.V.str(\"2 **= 3 := x\")])]));\n      rt.frameLine(10);\n      print(rt.showArgs([rt.V.str(\"c|\"), rt.method(Main.S, \"split\", [rt.V.str(\"12 + 345 ** x\")])]));\n      rt.frameLine(11);\n      print(rt.showArgs([rt.V.str(\"d|\"), rt.ops.neq(rt.method(Main.T, \"new\", []), rt.V.nil()), rt.V.str(\"|\"), rt.method(Main.T, \"punct_at\", [rt.V.str(\"**=\"), rt.V.int(0)]), rt.V.str(\"|\"), rt.method(Main.T, \"punct_at\", [rt.V.str(\"**=\"), rt.V.int(3)])]));\n      rt.frameLine(12);\n      print(rt.showArgs([rt.V.str(\"e|\"), rt.method(Main.S, \"split\", [rt.V.str(\"\")]), rt.V.str(\"|\"), Tokens.PUNCT]));\n      rt.frameLine(13);\n      this.quit();\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n  \n  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {\n    switch (name) {\n      case \"_initialize\": return rt.wrapValue(this.__gd__initialize());\n      default: return super.__gdDispatch(name, args);\n    }\n  }\n\n}\n\nconst __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);\nrt.registerScriptProps(__gd_d_Main, [\"T\",\"S\"], (o) => { const s = o as Main; return [s.T, s.S]; });\nrt.registerDictIdentity(__gd_d_Main, \"<case>/main.gd\", \"\", [], {}, (o) => { const s = o as Main; return []; });\nrt.registerMethodArities(__gd_d_Main, { \"_initialize\": [0, 0] });\nrt.registerNativeBase(__gd_d_Main, \"SceneTree\");\nrt.registerScriptLabel(__gd_d_Main, \"main.gd\");\nrt.registerScript(\"<case>/main.gd\", __gd_d_Main);\nrt.setHostProjectName(\"487-preload-cross-file\");\nconst __gd_entry = new Main();\ntry {\n  await __gd_entry.run();\n} catch (__gd_e) {\n  rt.reportRunFailure(__gd_e);\n}\n","jsPath":"C:/out/main.mts","resPath":"<case>/main.gd","usesPackCodec":false},{"className":"Tokens","code":"// 由 gds2js 从 main.gd 编译生成 —— 不要手改。\n\nimport * as rt from \"./rt.mjs\";\n\nexport class Tokens extends rt.GdScriptObject {\n  declare TAB_WIDTH: rt.Variant;\n  declare PUNCT: rt.Variant;\n\n  __gd_fields__() {\n    const __gd_frame = rt.frameEnter(\"<case>/tokens.gd\", \"@implicit_new\");\n    try {\n      rt.frameLine(2);\n      this.TAB_WIDTH = rt.V.int(8);\n      rt.frameLine(3);\n      this.PUNCT = rt.V.array(rt.GArray.of([rt.V.str(\"**=\"), rt.V.str(\"<<=\"), rt.V.str(\">>=\"), rt.V.str(\"**\"), rt.V.str(\"<<\"), rt.V.str(\">>\"), rt.V.str(\":=\"), rt.V.str(\"->\"), rt.V.str(\"+=\"), rt.V.str(\"-=\"), rt.V.str(\"*=\"), rt.V.str(\"/=\"), rt.V.str(\"%=\"), rt.V.str(\"&=\"), rt.V.str(\"|=\"), rt.V.str(\"^=\"), rt.V.str(\"<=\"), rt.V.str(\">=\"), rt.V.str(\"==\"), rt.V.str(\"!=\"), rt.V.str(\"&&\"), rt.V.str(\"||\"), rt.V.str(\"..\"), rt.V.str(\"(\"), rt.V.str(\")\"), rt.V.str(\"[\"), rt.V.str(\"]\"), rt.V.str(\"{\"), rt.V.str(\"}\"), rt.V.str(\",\"), rt.V.str(\":\"), rt.V.str(\";\"), rt.V.str(\".\"), rt.V.str(\"=\"), rt.V.str(\"+\"), rt.V.str(\"-\"), rt.V.str(\"*\"), rt.V.str(\"/\"), rt.V.str(\"%\"), rt.V.str(\"&\"), rt.V.str(\"|\"), rt.V.str(\"^\"), rt.V.str(\"~\"), rt.V.str(\"!\"), rt.V.str(\"<\"), rt.V.str(\">\"), rt.V.str(\"@\"), rt.V.str(\"$\")]));\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n\n  static TAB_WIDTH = rt.V.int(8);\n  static PUNCT = rt.V.array(rt.GArray.of([rt.V.str(\"**=\"), rt.V.str(\"<<=\"), rt.V.str(\">>=\"), rt.V.str(\"**\"), rt.V.str(\"<<\"), rt.V.str(\">>\"), rt.V.str(\":=\"), rt.V.str(\"->\"), rt.V.str(\"+=\"), rt.V.str(\"-=\"), rt.V.str(\"*=\"), rt.V.str(\"/=\"), rt.V.str(\"%=\"), rt.V.str(\"&=\"), rt.V.str(\"|=\"), rt.V.str(\"^=\"), rt.V.str(\"<=\"), rt.V.str(\">=\"), rt.V.str(\"==\"), rt.V.str(\"!=\"), rt.V.str(\"&&\"), rt.V.str(\"||\"), rt.V.str(\"..\"), rt.V.str(\"(\"), rt.V.str(\")\"), rt.V.str(\"[\"), rt.V.str(\"]\"), rt.V.str(\"{\"), rt.V.str(\"}\"), rt.V.str(\",\"), rt.V.str(\":\"), rt.V.str(\";\"), rt.V.str(\".\"), rt.V.str(\"=\"), rt.V.str(\"+\"), rt.V.str(\"-\"), rt.V.str(\"*\"), rt.V.str(\"/\"), rt.V.str(\"%\"), rt.V.str(\"&\"), rt.V.str(\"|\"), rt.V.str(\"^\"), rt.V.str(\"~\"), rt.V.str(\"!\"), rt.V.str(\"<\"), rt.V.str(\">\"), rt.V.str(\"@\"), rt.V.str(\"$\")]));\n\n  constructor() {\n    super();\n    this.__gd_fields__();\n  }\n\n  static is_digit(c: rt.Variant): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"<case>/tokens.gd\", \"is_digit\");\n    try {\n      rt.frameLine(7);\n      return rt.and(rt.ops.gte(c, rt.V.str(\"0\")), () => rt.ops.lte(c, rt.V.str(\"9\")));\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.nil();\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  static punct_at(src: rt.Variant, at: rt.Variant): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"<case>/tokens.gd\", \"punct_at\");\n    try {\n      rt.frameLine(11);\n      for (let p of rt.iter(Tokens.PUNCT)) {\n        rt.frameLine(12);\n        if (rt.ops.truthy(rt.ops.eq(rt.method(src, \"substr\", [at, rt.method(p, \"length\", [])]), p))) {\n          rt.frameLine(13);\n          return p;\n        }\n      }\n      rt.frameLine(14);\n      return rt.V.str(\"\");\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.nil();\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  static punct_face(src: rt.Variant): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"<case>/tokens.gd\", \"punct_face\");\n    try {\n      rt.frameLine(18);\n      let out = rt.V.array(rt.GArray.of([]));\n      rt.frameLine(19);\n      let i = rt.V.int(0);\n      rt.frameLine(20);\n      let n = rt.method(src, \"length\", []);\n      rt.frameLine(21);\n      while (rt.ops.truthy(rt.ops.lt(i, n))) {\n        rt.frameLine(22);\n        let hit = Tokens.punct_at(src, i);\n        rt.frameLine(23);\n        if (rt.ops.truthy(rt.ops.eq(hit, rt.V.str(\"\")))) {\n          rt.frameLine(24);\n          i = rt.ops.add(i, rt.V.int(1));\n          rt.frameLine(25);\n          continue;\n        }\n        rt.frameLine(26);\n        rt.method(out, \"append\", [rt.ops.add(rt.ops.add(rt.strBuiltin([i]), rt.V.str(\":\")), hit)]);\n        rt.frameLine(27);\n        i = rt.ops.add(i, rt.method(hit, \"length\", []));\n      }\n      rt.frameLine(28);\n      return out;\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.nil();\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {\n    switch (name) {\n      default: return super.__gdDispatch(name, args);\n    }\n  }\n\n}\n\nconst __gd_d_Tokens = rt.defineClass(Tokens, () => new Tokens(), (o) => o instanceof Tokens);\nrt.registerScriptProps(__gd_d_Tokens, [\"TAB_WIDTH\",\"PUNCT\"], (o) => { const s = o as Tokens; return [s.TAB_WIDTH, s.PUNCT]; });\nrt.registerDictIdentity(__gd_d_Tokens, \"<case>/tokens.gd\", \"\", [], {}, (o) => { const s = o as Tokens; return []; });\nrt.registerMethodArities(__gd_d_Tokens, { \"is_digit\": [1, 1], \"punct_at\": [2, 2], \"punct_face\": [1, 1] });\nrt.registerStaticMethods(__gd_d_Tokens, [\"is_digit\",\"punct_at\",\"punct_face\"], {\"is_digit\": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Tokens.is_digit(a[0] as rt.Variant)), \"punct_at\": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Tokens.punct_at(a[0] as rt.Variant, a[1] as rt.Variant)), \"punct_face\": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Tokens.punct_face(a[0] as rt.Variant))});\nrt.registerNativeBase(__gd_d_Tokens, \"RefCounted\");\nrt.registerScriptLabel(__gd_d_Tokens, \"tokens.gd\");\nrt.registerScript(\"<case>/tokens.gd\", __gd_d_Tokens);\nconst __gd_entry = new Tokens();\ntry {\n  await __gd_entry.run();\n} catch (__gd_e) {\n  rt.reportRunFailure(__gd_e);\n}\n","jsPath":"C:/out/tokens.mts","resPath":"<case>/tokens.gd","usesPackCodec":false},{"className":"Scan","code":"// 由 gds2js 从 main.gd 编译生成 —— 不要手改。\n\nimport * as rt from \"./rt.mjs\";\nimport { Tokens } from \"./tokens.mts\";\nimport \"./tokens.mts\";\n\nlet __pre_T: rt.Variant | null = null;\nexport class Scan extends rt.GdScriptObject {\n  declare T: rt.Variant;\n\n  __gd_fields__() {\n    const __gd_frame = rt.frameEnter(\"<case>/scan.gd\", \"@implicit_new\");\n    try {\n      rt.frameLine(2);\n      this.T = rt.loadScript(\"<case>/tokens.gd\");\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return;\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n  }\n\n  static get T(): rt.Variant {\n    if (__pre_T === null) __pre_T = rt.loadScript(\"<case>/tokens.gd\");\n    return __pre_T as rt.Variant;\n  }\n\n  constructor() {\n    super();\n    this.__gd_fields__();\n  }\n\n  static split(src: rt.Variant): rt.Variant {\n    const __gd_frame = rt.frameEnter(\"<case>/scan.gd\", \"split\");\n    try {\n      rt.frameLine(6);\n      let words = rt.V.array(rt.GArray.of([]));\n      rt.frameLine(7);\n      let i = rt.V.int(0);\n      rt.frameLine(8);\n      let n = rt.method(src, \"length\", []);\n      rt.frameLine(9);\n      while (rt.ops.truthy(rt.ops.lt(i, n))) {\n        rt.frameLine(10);\n        let c = rt.wrapValue(rt.index(src, i));\n        rt.frameLine(11);\n        if (rt.ops.truthy(rt.ops.eq(c, rt.V.str(\" \")))) {\n          rt.frameLine(12);\n          i = rt.ops.add(i, rt.V.int(1));\n          rt.frameLine(13);\n          continue;\n        }\n        rt.frameLine(14);\n        if (rt.ops.truthy(rt.method(Scan.T, \"is_digit\", [c]))) {\n          rt.frameLine(15);\n          let j = i;\n          rt.frameLine(16);\n          while (rt.ops.truthy(rt.and(rt.ops.lt(j, n), () => rt.method(Scan.T, \"is_digit\", [rt.wrapValue(rt.index(src, j))])))) {\n            rt.frameLine(17);\n            j = rt.ops.add(j, rt.V.int(1));\n          }\n          rt.frameLine(18);\n          rt.method(words, \"append\", [rt.ops.add(rt.V.str(\"num-\"), rt.strBuiltin([rt.ops.sub(j, i)]))]);\n          rt.frameLine(19);\n          i = j;\n          rt.frameLine(20);\n          continue;\n        }\n        rt.frameLine(21);\n        let hit = rt.method(Scan.T, \"punct_at\", [src, i]);\n        rt.frameLine(22);\n        if (rt.ops.truthy(rt.ops.neq(hit, rt.V.str(\"\")))) {\n          rt.frameLine(23);\n          rt.method(words, \"append\", [rt.ops.add(rt.V.str(\"punct-\"), hit)]);\n          rt.frameLine(24);\n          i = rt.ops.add(i, rt.method(hit, \"length\", []));\n          rt.frameLine(25);\n          continue;\n        }\n        rt.frameLine(26);\n        rt.method(words, \"append\", [rt.ops.add(rt.V.str(\"other-\"), c)]);\n        rt.frameLine(27);\n        i = rt.ops.add(i, rt.V.int(1));\n      }\n      rt.frameLine(28);\n      return words;\n    } catch (__gd_err) {\n      rt.gdFunctionError(__gd_err);\n      return rt.V.nil();\n    } finally {\n      rt.frameExit(__gd_frame);\n    }\n      return rt.V.nil();\n  }\n  \n  override __gdDispatch(name: string, args: rt.Variant[]): rt.Variant | null {\n    switch (name) {\n      default: return super.__gdDispatch(name, args);\n    }\n  }\n\n}\n\nconst __gd_d_Scan = rt.defineClass(Scan, () => new Scan(), (o) => o instanceof Scan);\nrt.registerScriptProps(__gd_d_Scan, [\"T\"], (o) => { const s = o as Scan; return [s.T]; });\nrt.registerDictIdentity(__gd_d_Scan, \"<case>/scan.gd\", \"\", [], {}, (o) => { const s = o as Scan; return []; });\nrt.registerMethodArities(__gd_d_Scan, { \"split\": [1, 1] });\nrt.registerStaticMethods(__gd_d_Scan, [\"split\"], {\"split\": (a: rt.Variant[]): rt.Variant => rt.wrapValue(Scan.split(a[0] as rt.Variant))});\nrt.registerNativeBase(__gd_d_Scan, \"RefCounted\");\nrt.registerScriptLabel(__gd_d_Scan, \"scan.gd\");\nrt.registerScript(\"<case>/scan.gd\", __gd_d_Scan);\nconst __gd_entry = new Scan();\ntry {\n  await __gd_entry.run();\n} catch (__gd_e) {\n  rt.reportRunFailure(__gd_e);\n}\n","jsPath":"C:/out/scan.mts","resPath":"<case>/scan.gd","usesPackCodec":false}]}

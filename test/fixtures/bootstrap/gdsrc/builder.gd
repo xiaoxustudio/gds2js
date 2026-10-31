@@ -1,6 +1,7 @@
 class Draft:
 	var kind_type = ""
 	var is_named = true
+	var id = 0
 	var children = []
 	var start = null
 	var end = null
@@ -11,13 +12,19 @@ class Builder:
 	var root_type = "source"
 	var stack = []
 	var pending = []
+	var next_id = 1
+	var parents = {}
 
 	func boot(text, root_name := "source"):
 		src = text
 		root_type = root_name
 		stack = []
 		pending = []
+		next_id = 1
+		parents = {}
 		var root = Draft.new()
+		root.id = next_id
+		next_id += 1
 		root.kind_type = root_name
 		root.is_named = true
 		stack.append(root)
@@ -26,7 +33,13 @@ class Builder:
 		return {"index": t["start"], "row": t["row"], "col": t["col"]}
 
 	func mk(type, is_named, field_name, start, end, children):
+		var id = next_id
+		next_id += 1
+		return mk_id(id, type, is_named, field_name, start, end, children)
+
+	func mk_id(id, type, is_named, field_name, start, end, children):
 		return {
+			"id": id,
 			"type": type,
 			"text": src.substr(start["index"], end - start["index"]),
 			"isNamed": is_named,
@@ -46,10 +59,13 @@ class Builder:
 				out.append(c)
 		return out
 
-	func open(type):
+	func open(type, start = null):
 		var d = Draft.new()
 		d.kind_type = type
 		d.is_named = true
+		d.start = start
+		d.id = next_id
+		next_id += 1
 		stack.append(d)
 
 	func open_anon(type, start):
@@ -57,6 +73,8 @@ class Builder:
 		d.kind_type = type
 		d.is_named = false
 		d.start = start
+		d.id = next_id
+		next_id += 1
 		stack.append(d)
 
 	func close(field_name := ""):
@@ -75,29 +93,45 @@ class Builder:
 		var end = d.end
 		if end == null:
 			end = start["index"] if last == null else last["endIndex"]
-		var node = mk(d.kind_type, d.is_named, field_name, start, end, kids)
+		var node = mk_id(d.id, d.kind_type, d.is_named, field_name, start, end, kids)
 		if stack.size() > 0:
-			stack[stack.size() - 1].children.append(node)
+			var parent = stack[stack.size() - 1]
+			parents[node["id"]] = parent.id
+			parent.children.append(node)
 		return node
 
 	func top():
 		return stack[stack.size() - 1]
 
+	func parent_id(node):
+		if parents.has(node["id"]):
+			return parents[node["id"]]
+		return -1
+
+	func bind_parent(node, parent_id):
+		parents[node["id"]] = parent_id
+
+	func push_child(node):
+		parents[node["id"]] = top().id
+		top().children.append(node)
+
 	func anon(t, field_name := ""):
 		flush()
-		top().children.append(mk(t["text"], false, field_name, pos(t), t["end"], []))
+		push_child(mk(t["text"], false, field_name, pos(t), t["end"], []))
 
 	func anon_as(type, t, field_name := ""):
 		flush()
-		top().children.append(mk(type, false, field_name, pos(t), t["end"], []))
+		push_child(mk(type, false, field_name, pos(t), t["end"], []))
 
 	func leaf(type, t, field_name := ""):
 		flush()
-		top().children.append(mk(type, true, field_name, pos(t), t["end"], []))
+		push_child(mk(type, true, field_name, pos(t), t["end"], []))
 
 	func attach(node, field_name):
 		node["fieldName"] = field_name
-		top().children.append(node)
+		var owner = top()
+		parents[node["id"]] = owner.id
+		owner.children.append(node)
 
 	func set_last_field(field_name):
 		var kids = top().children
@@ -141,7 +175,7 @@ class Builder:
 		if pending.is_empty():
 			return
 		for n in pending:
-			top().children.append(n)
+			push_child(n)
 		pending = []
 
 	func pending_count():

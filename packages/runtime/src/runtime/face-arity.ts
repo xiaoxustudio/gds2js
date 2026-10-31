@@ -236,7 +236,7 @@ export const VALUE_NodePath_EXISTS: readonly string[] = [
   "get_name_count", "hash", "is_empty", "slice"
 ];
 
-const VALUE_EXIST: Record<string, readonly string[]> = {
+export const VALUE_EXIST: Record<string, readonly string[]> = {
   "Vector2": VALUE_VEC2_EXISTS,
   "Vector2i": VALUE_VEC2i_EXISTS,
   "Vector3": VALUE_VEC3_EXISTS,

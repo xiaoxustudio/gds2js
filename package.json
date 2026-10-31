@@ -17,6 +17,7 @@
     "test:bootstrap": "vitest run --project e2e bootstrap",
     "regen:bootstrap-golden": "node tools/bootstrap.mjs",
     "regen:bootstrap-tree": "node tools/bootstrap.mjs --tree",
+    "regen:gdsrc-globals": "tsx tools/gdsrc-globals.ts",
     "test:golden-check": "vitest run --project e2e golden-drift.test.ts",
     "test:codegen": "vitest run --project e2e codegen-drift.test.ts",
     "test:diff": "vitest run --project e2e corpus-diff.test.ts",
@@ -45,7 +46,10 @@
     "dev": "tsx packages/gds2js/src/cli.ts",
     "watch": "pnpm --filter gds2js watch",
     "bench:ab": "node tools/bench-ab.ts",
-    "bench:scriptc": "tsx tools/bench-scriptc.ts"
+    "bench:scriptc": "tsx tools/bench-scriptc.ts",
+    "regen:port-coverage": "tsx tools/port-coverage.ts --write",
+    "regen:gdsrc-arity": "tsx tools/gdsrc-arity.ts",
+    "regen:gdsrc-builtin": "tsx tools/gdsrc-builtin.ts"
   },
   "devDependencies": {
     "@gds2js/compiler": "workspace:*",

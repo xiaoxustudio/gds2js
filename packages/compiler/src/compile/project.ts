@@ -220,6 +220,7 @@ interface Loaded {
   absPath: string;
   module: Module;
   depPaths: Set<string>;
+  strongDeps: Set<string>;
   classRefs: Set<string>;
   jsName: string;
 }
@@ -245,6 +246,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
       absPath,
       module,
       depPaths: new Set(),
+      strongDeps: new Set(),
       classRefs: new Set(),
       jsName: module.className ?? moduleClassName(module, resPath),
     };
@@ -268,7 +270,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     const abs = resToAbs(resPath, resRoot);
     const l = await need(abs);
     if (!l) continue;
-    const collect = (candidate: string | null, from: string): string | null => {
+    const collect = (candidate: string | null, from: string, weak = false): string | null => {
       if (!candidate) return null;
       if (!candidate.endsWith(".gd")) return null;
       if (opts.closureOnly && climbsAboveRoot(candidate, l.absPath, resRoot)) {
@@ -282,6 +284,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
         l.depPaths.add(depRes);
         queue.push(depRes);
       }
+      if (weak !== true) l.strongDeps.add(depRes);
       return depRes;
     };
 
@@ -289,7 +292,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
     walkModuleExprs(l.module, (e) => {
       if (e.kind === "call" && e.callee.kind === "ident" && (e.callee.name === "preload" || e.callee.name === "load")) {
         const a = e.args[0];
-        if (a && a.kind === "lit" && a.lit === "string") collect(String(a.value), resPath);
+        if (a && a.kind === "lit" && a.lit === "string") collect(String(a.value), resPath, e.callee.name === "load");
       }
     });
   }
@@ -659,7 +662,7 @@ function detectCycles(loaded: Map<string, Loaded>, resRoot: string): void {
   for (const k of loaded.keys()) color.set(k, WHITE);
 
   const edgesOf = (l: Loaded): string[] => {
-    const out = [...l.depPaths];
+    const out = [...l.strongDeps];
     const ext = extendsRefText(l.module.extends);
     if (ext && ext.endsWith(".gd")) {
       out.push(resolveGdPath(l.resPath, ext));

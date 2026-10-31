@@ -52,7 +52,6 @@ class Cursor:
 
 	func at(off := 0):
 		return toks[min(i + off, toks.size() - 1)]
-
 	func take():
 		var t = at()
 		if OPEN_TEXT.has(t["text"]):
@@ -206,3 +205,21 @@ static func walk(text, mode):
 		else:
 			c.step_line()
 	return rows
+
+
+static func group_lines(toks):
+	var out = []
+	for k in toks.size():
+		var tk = toks[k]
+		if tk["kind"] == "eof":
+			continue
+		if tk["lineStart"] or out.is_empty():
+			var span = LineSpan.new()
+			span.row = tk["row"]
+			span.indent = tk["indent"]
+			span.from = k
+			span.to = k + 1
+			out.append(span)
+		else:
+			out[out.size() - 1].to = k + 1
+	return out

@@ -24,7 +24,8 @@ if (treeMode) {
   requireGodotPin();
   const dir = join(ROOT, "test", "fixtures", "bootstrap", "gdsrc");
   spawnSync(GODOT_BIN, ["--headless", "--path", dir, "--import"], { encoding: "utf8", timeout: 120_000, windowsHide: true });
-  const run = runGodot(join(dir, "main.gd"), { timeoutMs: 60_000, projectPath: dir, env: { ...process.env } });
+  const bootCase = join(ROOT, "corpus", "cases", "487-preload-cross-file");
+  const run = runGodot(join(dir, "main.gd"), { timeoutMs: 60_000, projectPath: dir, env: { ...process.env, GDS2JS_BOOT_CASE: bootCase } });
   const text = normalize(run.text, join(dir, "main.gd"));
   const ref = join(dir, "gdsrc.txt");
   if (checkOnly) {

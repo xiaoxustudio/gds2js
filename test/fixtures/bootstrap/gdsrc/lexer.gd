@@ -341,3 +341,39 @@ static func lex(text):
 	var s = Scanner.new()
 	s.run(text)
 	return {"tokens": s.tokens, "issues": s.issues}
+
+
+static func escape_end(src, backslash):
+	var at = backslash + 1
+	if at >= src.length():
+		return -1
+	var c = src[at]
+	if c == "u":
+		return _run_of(src, backslash + 2, 4, "hex")
+	if c == "U":
+		return _run_of(src, backslash + 2, 6, "hex")
+	if c == "x":
+		return _run_of(src, backslash + 2, 2, "hex")
+	if c == "o":
+		return _run_of(src, backslash + 2, 3, "oct")
+	if c == "\r":
+		if backslash + 2 < src.length() and src[backslash + 2] == "\n":
+			return backslash + 3
+		return -1
+	return backslash + 2
+
+
+static func _run_of(src, at, count, kind):
+	var i = at
+	var seen = 0
+	while seen < count and i < src.length() and _is_run_char(src[i], kind):
+		i += 1
+		seen += 1
+	return i if seen == count else -1
+
+
+static func _is_run_char(c, kind):
+	if kind == "oct":
+		return c >= "0" and c <= "7"
+	var code = c.unicode_at(0)
+	return (code >= 48 and code <= 57) or (code >= 65 and code <= 70) or (code >= 97 and code <= 102)

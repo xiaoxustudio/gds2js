@@ -39,9 +39,16 @@ export function posOobSay(key: string, base: string | undefined, valueType: stri
     : `Out of bounds get index '${key}' (on base: '${base}')`;
 }
 
+const CP_CACHE = new Map<string, string[]>();
+const CP_CACHE_MAX = 64;
+
 export function codepoints(s: string): string[] {
+  const hit = CP_CACHE.get(s);
+  if (hit !== undefined) return hit;
   const out: string[] = [];
   for (const ch of s) out.push(ch);
+  if (CP_CACHE.size >= CP_CACHE_MAX) CP_CACHE.clear();
+  CP_CACHE.set(s, out);
   return out;
 }
 

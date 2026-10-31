@@ -46,7 +46,7 @@ beforeAll(async () => {
   await build({ entry: [entry.jsPath], outDir: WORK, format: "esm", target: "node22", dts: false, clean: false, config: false, silent: true } as unknown as Parameters<typeof build>[0]);
   iso = mkdtempSync(join(tmpdir(), "gds-portface-"));
   copyFileSync(join(WORK, "main.mjs"), join(iso, "app.mjs"));
-  const r = spawnSync(process.execPath, [join(iso, "app.mjs")], { encoding: "utf8", timeout: 60_000, cwd: iso });
+  const r = spawnSync(process.execPath, [join(iso, "app.mjs")], { encoding: "utf8", timeout: 60_000, cwd: iso, env: { ...process.env, GDS2JS_BOOT_CASE: join(ROOT, "corpus", "cases", "487-preload-cross-file") } });
   nodeOut = normalize((r.stdout ?? "") + (r.stderr ?? ""), GD);
   const second = await compileProject({ entries: [GD], resRoot: SRC, outDir: join(WORK, "src2"), runtimeImport: "gds2js/runtime", hostImport: "gds2js/host" });
   againBytes = modulesToBytes(second);

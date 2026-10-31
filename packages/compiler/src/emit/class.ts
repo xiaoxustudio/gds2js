@@ -201,7 +201,14 @@ export function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] 
       for (const l of emitAccessors(v)) out.push(l);
       continue;
     }
-    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
+    if ((v.isStatic || v.isConst) && ctx.DEFER_PRELOAD_CONSTS.has(v.name)) {
+      out.push(`  static get ${v.name}(): rt.Variant {`);
+      out.push(`    if (__pre_${v.name} === null) __pre_${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
+      out.push(`    return __pre_${v.name} as rt.Variant;`);
+      out.push(`  }`);
+      continue;
+    }
+    else if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
   }
   if (out.length > 0) out.push("");
   return out;

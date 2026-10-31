@@ -93,14 +93,15 @@ function parseBinary(p: Parser, minBp: number): void {
 function parseUnary(p: Parser): void {
   const b = p.b;
   const t = p.peek();
-  const isPrefix = (t.kind === "punct" && PREFIX.has(t.text)) || (t.kind === "ident" && t.text === "not");
+  const isNot = t.kind === "ident" && t.text === "not";
+  const isPrefix = (t.kind === "punct" && PREFIX.has(t.text)) || isNot;
   if (!isPrefix) {
     parsePostfix(p);
     return;
   }
   b.open("unary_operator");
   b.anon(p.take(), "");
-  parseBinary(p, BP.unary);
+  parseBinary(p, isNot ? BP.in : BP.unary);
   b.close("");
 }
 

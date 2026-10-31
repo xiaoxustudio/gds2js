@@ -1,0 +1,7 @@
+a|true|false
+c|false|true
+d|false|true
+e|true|false
+f|false|true
+g|false|true
+h|false|false

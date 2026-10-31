@@ -14,6 +14,7 @@ import { collectScriptBase, ctorAritiesLiteral, dictIdentityLiteral, fieldTypesL
 import { computeRawAbis, staticVarSlotsLiteral } from "./abi";
 import { emitClassDecl, emitClassLevelVars, emitInnerMirrors, emitDispatch, emitFieldDeclarations, emitFieldsMethod, emitFieldsOnlyConstructor, emitRootConstructor } from "./class";
 import { emitFunc } from "./func";
+import { emitExpr } from "./expr-boxed";
 
 const ENTRY_OWNED = new Set(["run", "__gdDispatch"]);
 
@@ -137,6 +138,13 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   }
   ctx.PRELOADS = new Map(preloads.map((p) => [p.literal, p.name]));
   const preloadConsts = opts.preloadConsts ?? {};
+  ctx.DEFER_PRELOAD_CONSTS = new Set();
+  for (const v of m.vars) {
+    const init = v.init;
+    if (!v.isConst || init === null || init.kind !== "call" || init.callee.kind !== "ident") continue;
+    if (init.callee.name !== "preload" && init.callee.name !== "load") continue;
+    ctx.DEFER_PRELOAD_CONSTS.add(v.name);
+  }
   const preloadClasses = opts.preloadClasses ?? {};
   ctx.PRELOAD_FACE_OWNERS = new Map();
   for (const v of m.vars) {
@@ -220,6 +228,9 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   ctx.INIT_HAS_BASE = baseClass.kind === "import";
   ctx.INIT_AS_METHOD = proto;
   ctx.NEEDS_HOST_SUPER = !proto;
+  for (const v of m.vars) {
+    if (ctx.DEFER_PRELOAD_CONSTS.has(v.name)) out.push(`let __pre_${v.name}: rt.Variant | null = null;`);
+  }
   out.push(`export class ${className}${heritage} {`);
   if (baseClass.kind === "engine") {
     out.push(`  override __gd_engine_class__ = ${JSON.stringify(baseClass.name)};`);
