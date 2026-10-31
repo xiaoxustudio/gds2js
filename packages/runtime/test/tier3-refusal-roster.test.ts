@@ -2,6 +2,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { UnsupportedError, V, attribute, method, nativeClass, registerHostIo, type HostIo, type Variant } from "@gds2js/runtime";
+import { GArray, GDict } from "@gds2js/runtime/runtime/values";
 
 /** 一张不碰盘面的假表：路径只要不以 gone.txt 收尾就算在，目录只有 work 那一格。 */
 const TABLE: HostIo = {
@@ -47,6 +48,7 @@ function dir(): Variant {
 }
 
 const RX = nativeClass("RegEx");
+const JS = nativeClass("JSON");
 
 function regex(pattern: string): Variant {
   const r = method(RX, "new", []);
@@ -161,5 +163,21 @@ describe("tier3 · 定形拒绝清单", () => {
     const m = matchOf("(?<user>\\w+)@(?<host>\\w+)", "mail bob@site x");
     eq("t3", "越界组号的三格", `${String(method(m, "get_string", [I(9)]).v)}|${String(method(m, "get_start", [I(9)]).v)}|${String(method(m, "get_end", [I(9)]).v)}`, "|-1|-1");
     eq("t3", "未参与的组给空与 -1", `${String(method(matchOf("(a)?b", "b"), "get_string", [I(1)]).v)}|${String(method(matchOf("(a)?b", "b"), "get_start", [I(1)]).v)}`, "|-1");
+  });
+
+  it("JSON 的解析失败与实参面：消息集没实测完的那几支照旧响亮拒", () => {
+    const j = method(JS, "new", []);
+    eq("t3", "解析失败", say(() => method(JS, "parse_string", [T("{")])), "json-parse-failure");
+    eq("t3", "parse 带第二个实参", say(() => method(j, "parse", [T("{}"), V.bool(true)])), "json-arity");
+    eq("t3", "stringify 空手", say(() => method(JS, "stringify", [])), "json-arity");
+    eq("t3", "sort_keys 给了非布尔", say(() => method(JS, "stringify", [T("x"), T(""), I(1)])), "json-arg-type");
+    eq("t3", "get_data 带实参", say(() => method(j, "get_data", [I(1)])), "json-arity");
+    eq("t3", "get_error_column 引擎根本没有", say(() => method(j, "get_error_column", [])), "json-method");
+    eq("t3", "静态面调 parse", say(() => method(JS, "parse", [T("{}")])), "native-class-member");
+    eq("t3", "NaN 那一支没量过", say(() => method(JS, "stringify", [V.float(NaN)])), "json-number-nan");
+    const keyed = new GDict();
+    keyed.set(V.array(GArray.of([V.int(1)])), V.int(1));
+    keyed.set(V.array(GArray.of([V.int(2)])), V.int(2));
+    eq("t3", "数组键的排序", say(() => method(JS, "stringify", [V.dict(keyed)])), "json-key-sort");
   });
 });
