@@ -1,0 +1,2 @@
+a|<GDScriptNativeClass#号>|24|():<JSON#号>
+iid|号

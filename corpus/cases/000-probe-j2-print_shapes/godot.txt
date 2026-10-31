@@ -1,0 +1,3 @@
+a|():<JSON#号>|<RefCounted#号>|():<Resource#号>
+iid|号
+b|false|true|true|true|true|JSON

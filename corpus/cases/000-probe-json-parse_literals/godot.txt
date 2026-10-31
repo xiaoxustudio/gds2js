@@ -1,0 +1,10 @@
+a|true|<null>|5.0|5.0|s|[]
+b|<null>|1.0|<null>
+ERROR: Parse JSON failed. Error at line 0: Unknown error getting token
+   at: parse_string (core/io/json.cpp:624)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)
+ERROR: Parse JSON failed. Error at line 0: Expected 'EOF'
+   at: parse_string (core/io/json.cpp:624)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)

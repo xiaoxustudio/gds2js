@@ -1,0 +1,5 @@
+a|0
+ERROR: Parse JSON failed. Error at line 0: Expected '}'
+   at: parse_string (core/io/json.cpp:624)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:5)

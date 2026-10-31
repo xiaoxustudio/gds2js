@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Static function "var_to_bytes()" not found in base "GDScriptNativeClass".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

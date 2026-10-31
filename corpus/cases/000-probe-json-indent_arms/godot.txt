@@ -1,0 +1,16 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Invalid argument for "stringify()" function: argument 3 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:6)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "stringify()" function: argument 3 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Too many arguments for "stringify()" call. Expected at most 4 but received 6.
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "String" as "bool".
+   at: GDScript::reload (<case>/main.gd:8)
+SCRIPT ERROR: Parse Error: Invalid argument for "stringify()" function: argument 3 should be "bool" but is "String".
+   at: GDScript::reload (<case>/main.gd:8)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
