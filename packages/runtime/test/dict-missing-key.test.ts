@@ -8,7 +8,7 @@ import { eq } from "@gds2js/testkit";
 import { dictIndexInt, index, setIndex } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, type ElemKind } from "@gds2js/runtime/runtime/values";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 
 function dict(pairs: Array<[Variant, Variant]>): Variant {

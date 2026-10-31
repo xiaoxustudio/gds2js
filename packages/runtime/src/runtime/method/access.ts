@@ -10,14 +10,14 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
-import { classNameOf, descOf, fieldTypesOf, methodParamsOf, methodAritiesOf, nativeBaseOf, staticCall, hasStaticName, varSlotOf, GdScriptObject, methodCallable, ClassDesc } from "../object";
-import { boundBuiltinCallable } from "../callable";
+import { classNameOf, descOf, fieldTypesOf, methodParamsOf, methodAritiesOf, nativeBaseOf, staticCall, hasStaticName, varSlotOf, GdScriptObject, methodCallable, ClassDesc } from "../class/object/script-object";
+import { boundBuiltinCallable } from "../class/identity/callable";
 import { faceArity, faceMemberKnown, valueAttrKind } from "../face-arity";
 import { readOnlyError } from "../frames";
-import { GdNodePath } from "../node-path";
-import { GdNativeClass } from "../native-class";
+import { GdNodePath } from "../class/identity/node-path";
+import { GdNativeClass } from "../class/identity/native-class";
 import { engineClassConst } from "../engine-class-consts";
-import { Signal } from "../signal";
+import { Signal } from "../class/identity/signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
 import { GArray, GDict, toStringNameSlot, show } from "../values";
 import { posOobSay, strAt, valueTypeName } from "../string-ops";
@@ -33,15 +33,15 @@ import { quaternionReadProp } from "../class/orient/quaternion";
 import { transform2dReadProp } from "../class/orient/transform2d";
 import { transform3dReadProp, transform3dWriteProp } from "../class/orient/transform3d";
 import { basisReadProp, basisWriteProp } from "../class/orient/basis";
-import { isEngineNode, nodeFaceOf, nodeNameSet } from "../node";
-import { GdSceneTree, treeReadProp } from "../scene";
-import { node2dRead, node2dWrite } from "../node2d";
-import { ctlRead, ctlWrite } from "../control";
-import { node3dRead, node3dWrite } from "../node3d";
+import { isEngineNode, nodeFaceOf, nodeNameSet } from "../class/object/node";
+import { GdSceneTree, treeReadProp } from "../class/object/scene-tree";
+import { node2dRead, node2dWrite } from "../class/object/node2d";
+import { ctlRead, ctlWrite } from "../class/object/control";
+import { node3dRead, node3dWrite } from "../class/object/node3d";
 import { GRect2, rect2ReadProp, rect2WriteProp, GRect2i, rect2iReadProp, rect2iWriteProp } from "../class/shape/rect";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite } from "../class/vector/vector3i";
-import { colorRead, colorWrite, GColor, toColor } from "../color";
-import { bytesReadIndex, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "../packed";
+import { colorRead, colorWrite, GColor, toColor } from "../class/color/color";
+import { bytesReadIndex, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "../class/bytes/packed";
 import { ARRAY_ATTR_ABSENT, STRING_ATTR_ABSENT, VECTOR_FACES, asArray, asDict, asString, intArgIdx, norm } from "./core";
 
 import { GBasis } from "../class/orient/basis";

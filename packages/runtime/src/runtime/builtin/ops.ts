@@ -2,13 +2,13 @@ import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { Tag, V, intToBig, tagName, type IntPayload, type Variant } from "../tags";
 import { GArray, GDict, valueEq } from "../values";
 import { intArgBig, strLength, valueTypeName } from "../string-ops";
-import { GBytes, isBytes } from "../packed";
-import { CallableBox, callableEq, isCallableBox } from "../callable";
-import { Signal } from "../signal";
-import { ClassDesc, GdScriptObject, isFreed } from "../object";
-import { GdNativeClass } from "../native-class";
-import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "../identity";
-import { allocateRid, rid } from "../rid";
+import { GBytes, isBytes } from "../class/bytes/packed";
+import { CallableBox, callableEq, isCallableBox } from "../class/identity/callable";
+import { Signal } from "../class/identity/signal";
+import { ClassDesc, GdScriptObject, isFreed } from "../class/object/script-object";
+import { GdNativeClass } from "../class/identity/native-class";
+import { NULL_OBJECT, isNullRefValue, isWeakRefBox, liveObjectOf, weakRefBox } from "../class/identity/null-object";
+import { allocateRid, rid } from "../class/identity/rid";
 import { typeOf } from "../patterns";
 
 export function lengthOf(v: Variant): Variant {

@@ -11,7 +11,7 @@ import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { callableOf } from "@gds2js/runtime/runtime/object";
+import { callableOf } from "@gds2js/runtime/runtime/class/object/script-object";
 import { isLess, ops, sortLess } from "@gds2js/runtime/runtime/ops";
 
 const B = (v: boolean): Variant => V.bool(v);

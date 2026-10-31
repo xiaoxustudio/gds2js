@@ -5,7 +5,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { V } from "@gds2js/runtime/runtime/tags";
-import { GdNodePath } from "@gds2js/runtime/runtime/node-path";
+import { GdNodePath } from "@gds2js/runtime/runtime/class/identity/node-path";
 
 const say = (a: Parameters<typeof ops.add>[0], b: Parameters<typeof ops.add>[1]): string => {
   try {

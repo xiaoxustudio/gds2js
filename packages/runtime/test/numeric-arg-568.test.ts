@@ -4,10 +4,10 @@ import { eq } from "@gds2js/testkit";
 import {
   gIsEqualApprox, gIsZeroApprox, gIsFinite, gIsNan, gIsInf, gMax, gMin, gClamp, lengthOf,
 } from "@gds2js/runtime/runtime/builtins";
-import { nullCallable } from "@gds2js/runtime/runtime/object";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { nullCallable } from "@gds2js/runtime/runtime/class/object/script-object";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { V } from "@gds2js/runtime/runtime/tags";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { GDict, nodePathCtor, show} from "@gds2js/runtime/runtime/values";
 import { stringChr } from "@gds2js/runtime/runtime/string-ops";

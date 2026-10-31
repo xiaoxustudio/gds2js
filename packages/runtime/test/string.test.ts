@@ -10,7 +10,7 @@ import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strFormat, strFormatV, stringStatic, truthyOf, valueEq} from "@gds2js/runtime/runtime/values";
 import { strBinToInt, strCase, strCaseStyle, strCapitalize, strCEscape, strCount, strEndsWith, strEraseAt, strFind, strGetSlice, strInsertAt, strIsValidFilename, strGetSlicec, strPadZeros, strRepeat, strStartsWith, strStripEdges, strUriDecode, strUnicodeAt, strUriEncode, strReplace, stringCtor, stringNameCtor } from "@gds2js/runtime/runtime/string-ops";
 import { strFloat } from "@gds2js/runtime/runtime/numfmt";
-import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { F, I, S } from "./support/variants";

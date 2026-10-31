@@ -5,7 +5,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { nodePathText, nodePathValue } from "@gds2js/runtime/runtime/node-path";
+import { nodePathText, nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 import { F, I, S } from "./support/variants";
 
 const say = (path: string, args: Variant[]): string => {

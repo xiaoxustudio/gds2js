@@ -1,7 +1,7 @@
 /** 零名 Signal 的谓词 / 对象面 / 哈希（S547），读数 `tmp/d6/s547.gd`。 */
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { variantHash } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";

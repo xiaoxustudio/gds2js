@@ -10,12 +10,12 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
-import { boundArgsOf, callableArityBounds, declaredArgCount, descOf, methodAritiesOf, nativeBaseOf, requiredArgCount, wrapValue, scriptLabelOf, ctorAritiesOf } from "../object";
-import { CallableBox, callableLabel, isCallableBox, isNullCallable, nullCallable } from "../object";
-import { callDeferred } from "../callable";
+import { boundArgsOf, callableArityBounds, declaredArgCount, descOf, methodAritiesOf, nativeBaseOf, requiredArgCount, wrapValue, scriptLabelOf, ctorAritiesOf } from "../class/object/script-object";
+import { CallableBox, callableLabel, isCallableBox, isNullCallable, nullCallable } from "../class/object/script-object";
+import { callDeferred } from "../class/identity/callable";
 import { nativeAritySay } from "../face-arity";
-import { NULL_OBJECT } from "../identity";
-import type { GdIdentified } from "../identity";
+import { NULL_OBJECT } from "../class/identity/null-object";
+import type { GdIdentified } from "../class/identity/null-object";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
 import { GArray, truthyOf } from "../values";
 import { valueTypeName } from "../string-ops";

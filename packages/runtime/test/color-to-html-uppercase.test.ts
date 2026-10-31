@@ -4,7 +4,7 @@
  * 改前出货对没收的形按 JS 真值编值（`to_html("a")` 给 `ff0000ff`、`to_html(null)` 给 `ff0000`），而引擎解析期就拒。
  */
 import { describe, expect, it } from "vitest";
-import { GColor, color, colorMethod } from "@gds2js/runtime/runtime/color";
+import { GColor, color, colorMethod } from "@gds2js/runtime/runtime/class/color/color";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";

@@ -9,7 +9,7 @@ import { GVector3, vector3Method } from "../class/vector/vector3";
 import { GVector3i, vector3i, vector3iMethod } from "../class/vector/vector3i";
 import { GVector4, vector4, vector4Method } from "../class/vector/vector4";
 import { GVector4i, vector4i, vector4iMethod } from "../class/vector/vector4i";
-import { GColor, colorMethod } from "../color";
+import { GColor, colorMethod } from "../class/color/color";
 
 export function num(v: Variant): number {
   if (v.t === Tag.BOOL) return (v.v as boolean) ? 1 : 0;

@@ -8,7 +8,7 @@ import { ops } from "@gds2js/runtime/runtime/ops";
 import { gRidFromInt64, gRidAllocateId, gIsInstanceValid, variantHashNumber } from "@gds2js/runtime/runtime/builtins";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
-import { color } from "@gds2js/runtime/runtime/color";
+import { color } from "@gds2js/runtime/runtime/class/color/color";
 import { I, S } from "./support/variants";
 
 const rid = (n: number | bigint): Variant => gRidFromInt64(V.int(n));

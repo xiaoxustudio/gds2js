@@ -1,5 +1,5 @@
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
-import { GodotRuntimeError, UnsupportedError } from "./errors";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../../tags";
+import { GodotRuntimeError, UnsupportedError } from "../../errors";
 
 export class GdNodePath {
   constructor(

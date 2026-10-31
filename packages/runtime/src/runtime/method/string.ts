@@ -13,16 +13,16 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
 import { strToInt, strToFloat } from "../numstr";
-import { GdScriptObject } from "../object";
+import { GdScriptObject } from "../class/object/script-object";
 import { faceMemberKnown, nativeAritySay } from "../face-arity";
 import { stringFormatInvalidType, stringReplaceCharNul, stringReplaceCharsNul, stringUnicodeAsciiError, stringHexUnevenBlock } from "../frames";
 import { Tag, V, tagName, type Variant } from "../tags";
 import { GArray, strJoin, strFormatV } from "../values";
 import { strBinToInt, strCaseStyle, strCapitalize, strCEscape, strCase, strContains, strCount, strEdge, strEndsWith, strEraseAt, strFind, strGetSlice, strGetSlicec, strInsertAt, strIsValidFilename, strLength, strPadZeros, strRepeat, strReplace, strSplit, strSplitCapped, strSimilarity, strStartsWith, strStripEdges, strSubstr, strUnicodeAt, strUriDecode, strUriEncode, strCmp, strGetExtension, strGetBasename, strGetBaseDir, strGetFile, strPathJoin, strSimplifyPath, strIsAbsolutePath, strIsRelativePath, strReverse, strBigramsList, strSliceCount, strRsplit, strSplitFloats, strLpad, strRpad, strPadDecimals, strTrimPrefix, strTrimSuffix, strStripEscapes, strCUnescape, strJsonEscape, strXmlEscape, strIndent, strDedent, strValidateFilename, strValidateNodeName, strWildcardMatch, strNoCaseCmp, strNaturalCaseCmp, strNaturalNoCaseCmp, strFileCaseCmp, strFileNoCaseCmp, strContainsN, strWildcardMatchN, strIsSubsequenceOf, strLstrip, strRstrip, strPascalCase, strXmlUnescape, strIsValidHtmlColor, strIsValidIpAddress, strReplaceChar, strReplaceChars, strRemoveChar, strRemoveChars, strIsValidAsciiIdentifier, strIsValidUnicodeIdentifier } from "../string-ops";
-import { GBytes, utf8EncodeWtf } from "../packed";
+import { GBytes, utf8EncodeWtf } from "../class/bytes/packed";
 import { boolArg, boolArgOr, foldInt, hexDigit, hexPairsToBytes, intArg, intArgOr } from "./core";
 import { one } from "./core";
-import { charReplacement, cp1252EncodeBytes } from "./bytes";
+import { charReplacement, cp1252EncodeBytes } from "../class/bytes/packed-face";
 import { asString } from "./core";
 
 export function stringMethod(obj: Variant, name: string, args: Variant[]): Variant {

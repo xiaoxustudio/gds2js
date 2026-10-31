@@ -1,12 +1,12 @@
 import { registerVarToStrValueHook } from "./values";
-import { Signal } from "./signal";
+import { Signal } from "./class/identity/signal";
 import { GVector2 } from "./class/vector/vector2";
 import { GVector2i } from "./class/vector/vector2i";
 import { GVector3 } from "./class/vector/vector3";
 import { GVector3i } from "./class/vector/vector3i";
 import { GVector4 } from "./class/vector/vector4";
 import { GVector4i } from "./class/vector/vector4i";
-import { GColor } from "./color";
+import { GColor } from "./class/color/color";
 import { rtosFix } from "./grisu2";
 
 import { GAABB } from "./class/shape/aabb";

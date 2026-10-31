@@ -1,4 +1,4 @@
-import { Tag, V, normInt, type IntPayload, type Variant } from "./tags";
+import { Tag, V, normInt, type IntPayload, type Variant } from "../../tags";
 
 export class GdRid {
   readonly id: IntPayload;

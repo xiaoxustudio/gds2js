@@ -1,6 +1,6 @@
 import { Tag, V, intToBig, intToNum, type Variant } from "../tags";
 import { UnsupportedError } from "../errors";
-import { GBytes } from "../packed";
+import { GBytes } from "../class/bytes/packed";
 import * as fa from "../file-access";
 import { asString } from "./core";
 

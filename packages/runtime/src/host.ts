@@ -1,9 +1,9 @@
-import { Signal } from "./runtime/signal";
-import { deferredPendingCount } from "./runtime/callable";
+import { Signal } from "./runtime/class/identity/signal";
+import { deferredPendingCount } from "./runtime/class/identity/callable";
 import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
-import { GdScriptObject } from "./runtime/object";
+import { GdScriptObject } from "./runtime/class/object/script-object";
 import { V, type Variant } from "./runtime/tags";
-import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeDrainQueued, nodeInit, type NodeRec } from "./runtime/node";
+import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeDrainQueued, nodeInit, type NodeRec } from "./runtime/class/object/node";
 import {
   GdSceneTree,
   dispatchHook,
@@ -13,7 +13,7 @@ import {
   scenePreOrder,
   sceneTreeBegin,
   type SceneSpec,
-} from "./runtime/scene";
+} from "./runtime/class/object/scene-tree";
 import { setRotatedAxisBlockSink } from "./runtime/class/vector/vector3";
 import { richAnsi } from "./runtime/rich-ansi";
 import { showArgsSep, truthyOf } from "./runtime/values";

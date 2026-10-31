@@ -12,7 +12,7 @@ import {
   methodCallable,
   nullCallable,
   wrapValue,
-} from "@gds2js/runtime/runtime/object";
+} from "@gds2js/runtime/runtime/class/object/script-object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { globalCallable, method } from "@gds2js/runtime/runtime/methods";
 

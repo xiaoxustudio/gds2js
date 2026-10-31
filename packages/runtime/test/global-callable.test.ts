@@ -6,7 +6,7 @@ import { eq } from "@gds2js/testkit";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, varToStr } from "@gds2js/runtime/runtime/values";
-import { callable, methodCallable, nullCallable } from "@gds2js/runtime/runtime/object";
+import { callable, methodCallable, nullCallable } from "@gds2js/runtime/runtime/class/object/script-object";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import { GLOBAL_CALLABLE_IMPLEMENTED, globalCallable, method } from "@gds2js/runtime/runtime/methods";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";

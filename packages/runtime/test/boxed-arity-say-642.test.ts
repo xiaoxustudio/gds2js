@@ -4,9 +4,9 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
-import { packCtor } from "@gds2js/runtime/runtime/packed";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
-import { GColor } from "@gds2js/runtime/runtime/color";
+import { packCtor } from "@gds2js/runtime/runtime/class/bytes/packed";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
+import { GColor } from "@gds2js/runtime/runtime/class/color/color";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { I } from "./support/variants";
 

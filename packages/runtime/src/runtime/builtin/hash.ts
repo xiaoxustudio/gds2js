@@ -1,18 +1,18 @@
 import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { Tag, V, intToBig, tagName, type IntPayload, type Variant } from "../tags";
 import { GArray, GDict } from "../values";
-import { GBytes } from "../packed";
-import { CallableBox, isCallableBox, isNullCallable } from "../callable";
-import { Signal } from "../signal";
-import { GdRid } from "../rid";
-import { GdNodePath } from "../node-path";
+import { GBytes } from "../class/bytes/packed";
+import { CallableBox, isCallableBox, isNullCallable } from "../class/identity/callable";
+import { Signal } from "../class/identity/signal";
+import { GdRid } from "../class/identity/rid";
+import { GdNodePath } from "../class/identity/node-path";
 import { GVector2, vector2 } from "../class/vector/vector2";
 import { GVector2i } from "../class/vector/vector2i";
 import { GVector3, vector3 } from "../class/vector/vector3";
 import { GVector3i } from "../class/vector/vector3i";
 import { GVector4, vector4 } from "../class/vector/vector4";
 import { GVector4i } from "../class/vector/vector4i";
-import { GColor } from "../color";
+import { GColor } from "../class/color/color";
 import { MASK64 } from "./args";
 
 import { GAABB } from "../class/shape/aabb";

@@ -1,11 +1,11 @@
-import { UnsupportedError } from "./errors";import { Tag, V, tagName, type Variant } from "./tags";
-import { GArray, GDict, registerClassFaceCheck, registerObjectLabelHook, registerScriptPropsHook } from "./values";
-import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "./callable";
-import { globalCallableRow } from "./global-names";
-import { nextObjectId } from "./identity";
-import { GdNativeClass, nativeClassNewArgs } from "./native-class";
+import { UnsupportedError } from "../../errors";import { Tag, V, tagName, type Variant } from "../../tags";
+import { GArray, GDict, registerClassFaceCheck, registerObjectLabelHook, registerScriptPropsHook } from "../../values";
+import { CallableBox, isNullCallable, registerCallableLabelHook, type Fn } from "../identity/callable";
+import { globalCallableRow } from "../../global-names";
+import { nextObjectId } from "../identity/null-object";
+import { GdNativeClass, nativeClassNewArgs } from "../identity/native-class";
 
-export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, registerBoundSnapshotHook, type Fn } from "./callable";
+export { CallableBox, callableEq, callableLabel, callableSame, isCallable, isCallableBox, isNullCallable, nullCallable, registerBoundSnapshotHook, type Fn } from "../identity/callable";
 
 export class GdScriptObject {
   readonly gdObjectId: number = nextObjectId(this);
@@ -25,8 +25,8 @@ export {
   liveObjectOf,
   nextObjectId,
   weakRefBox,
-} from "./identity";
-export type { GdIdentified } from "./identity";
+} from "../identity/null-object";
+export type { GdIdentified } from "../identity/null-object";
 
 export function callable(fn: Fn, arity: number | null = null, defaultCount = 0): Variant {
   return V.object(new CallableBox(fn, null, null, [], arity, false, null, null, defaultCount));

@@ -2,7 +2,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { callableStatic, method } from "@gds2js/runtime/runtime/methods";
-import { GdScriptObject, methodCallable, wrapValue } from "@gds2js/runtime/runtime/object";
+import { GdScriptObject, methodCallable, wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { show, valueEq } from "@gds2js/runtime/runtime/values";
 import { I, S } from "./support/variants";

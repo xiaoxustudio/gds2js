@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { colorStatic } from "@gds2js/runtime/runtime/color";
+import { colorStatic } from "@gds2js/runtime/runtime/class/color/color";
 import { show, stringStatic } from "@gds2js/runtime/runtime/values";
 
 const rgba = (...args: Variant[]): string => show(colorStatic("from_rgba8", args));

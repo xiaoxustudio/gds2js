@@ -3,7 +3,7 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { callable } from "@gds2js/runtime/runtime/object";
+import { callable } from "@gds2js/runtime/runtime/class/object/script-object";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";

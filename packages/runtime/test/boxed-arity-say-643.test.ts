@@ -10,7 +10,7 @@ import { GVector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { GVector3i } from "@gds2js/runtime/runtime/class/vector/vector3i";
 import { GVector4 } from "@gds2js/runtime/runtime/class/vector/vector4";
 import { GVector4i } from "@gds2js/runtime/runtime/class/vector/vector4i";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { I } from "./support/variants";
 

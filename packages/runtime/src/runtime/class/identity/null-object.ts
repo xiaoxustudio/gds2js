@@ -1,4 +1,4 @@
-import type { Variant } from "./tags";
+import type { Variant } from "../../tags";
 
 export interface GdIdentified {
   readonly gdObjectId: number;

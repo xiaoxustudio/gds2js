@@ -1,8 +1,8 @@
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
-import { GdScriptObject } from "./object";
+import { GdScriptObject } from "./class/object/script-object";
 import { GArray, GDict, show } from "./values";
-import { GBytes, packItems } from "./packed";
+import { GBytes, packItems } from "./class/bytes/packed";
 import { strNumDecimals, strSci } from "./numfmt";
 
 export class GdJson extends GdScriptObject {

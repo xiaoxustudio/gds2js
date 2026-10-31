@@ -1,4 +1,4 @@
-import { nextObjectId } from "./identity";
+import { nextObjectId } from "./null-object";
 
 export const CONNECT_OK = 0;
 export const CONNECT_ALREADY_CONNECTED = 31;
@@ -85,7 +85,7 @@ function sameBox(a: object, b: object): boolean {
   return callableSame(a as unknown as CallableBox, b as unknown as CallableBox);
 }
 
-import { callableSame, type CallableBox } from "./object";
+import { callableSame, type CallableBox } from "../object/script-object";
 
 export function normalizeArgs(args: Variant[]): Variant {
   if (args.length === 0) return V.nil();
@@ -96,9 +96,9 @@ export function normalizeArgs(args: Variant[]): Variant {
   return V.array(GArray.of(items));
 }
 
-import { isVariant, wrapValue } from "./object";
-import { GArray } from "./values";
-import { V, type Variant } from "./tags";
+import { isVariant, wrapValue } from "../object/script-object";
+import { GArray } from "../../values";
+import { V, type Variant } from "../../tags";
 
 export async function awaitValue(x: unknown): Promise<Variant> {
   const sig = asSignal(x);

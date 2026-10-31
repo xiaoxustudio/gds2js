@@ -5,14 +5,14 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GDict, show } from "@gds2js/runtime/runtime/values";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 import {
   ClassDesc,
   GdScriptObject,
   defineClass,
   registerDictIdentity,
   registerNativeBase,
-} from "@gds2js/runtime/runtime/object";
+} from "@gds2js/runtime/runtime/class/object/script-object";
 import { gInstToDict } from "@gds2js/runtime/runtime/builtins";
 import { gDictToInst } from "@gds2js/runtime/runtime/methods";
 import { I, S } from "./support/variants";

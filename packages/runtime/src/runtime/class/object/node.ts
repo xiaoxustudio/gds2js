@@ -1,6 +1,6 @@
-import { Tag, V, tagName, type Variant } from "./tags";
-import { UnsupportedError } from "./errors";
-import { GdScriptObject, markFreed } from "./object";
+import { Tag, V, tagName, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
+import { GdScriptObject, markFreed } from "./script-object";
 
 const CONSTRUCTIBLE = new Set(["Node", "Node2D", "Control", "Node3D", "RefCounted", "Object"]);
 

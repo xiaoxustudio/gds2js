@@ -3,8 +3,8 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { callable, callableOf, nullCallable, methodCallable, registerClass, registerMethodArities, registerStaticMethods, GdScriptObject } from "@gds2js/runtime/runtime/object";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { callable, callableOf, nullCallable, methodCallable, registerClass, registerMethodArities, registerStaticMethods, GdScriptObject } from "@gds2js/runtime/runtime/class/object/script-object";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { attribute, callableCtor, method } from "@gds2js/runtime/runtime/methods";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show, valueEq } from "@gds2js/runtime/runtime/values";

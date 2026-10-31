@@ -1,9 +1,9 @@
-import { Tag, V, tagName, type Variant } from "./tags";
-import { UnsupportedError } from "./errors";
-import { asVec2, vector2 } from "./class/vector/vector2";
+import { Tag, V, tagName, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
+import { asVec2, vector2 } from "../vector/vector2";
 import { nodeFaceOf, nodeParent, type NodeRec } from "./node";
 
-import { GTransform2D } from "./class/orient/transform2d";
+import { GTransform2D } from "../orient/transform2d";
 
 const r = Math.fround;
 

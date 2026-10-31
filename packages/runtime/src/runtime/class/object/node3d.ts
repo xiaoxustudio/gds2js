@@ -1,15 +1,15 @@
-import { Tag, V, tagName, type Variant } from "./tags";
-import { UnsupportedError } from "./errors";
-import { basisDeterminant, basisEulerYXZ, basisScaleParts, basis } from "./class/orient/basis";
-import { asVec3, vector3 } from "./class/vector/vector3";
-import { transform3d } from "./class/orient/transform3d";
+import { Tag, V, tagName, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
+import { basisDeterminant, basisEulerYXZ, basisScaleParts, basis } from "../orient/basis";
+import { asVec3, vector3 } from "../vector/vector3";
+import { transform3d } from "../orient/transform3d";
 import { nodeFaceOf, type NodeRec } from "./node";
-import { sceneTree } from "./scene";
-import { stackBlockLines, writeOrderedStderr } from "./frames";
+import { sceneTree } from "./scene-tree";
+import { stackBlockLines, writeOrderedStderr } from "../../frames";
 
-import { GBasis } from "./class/orient/basis";
+import { GBasis } from "../orient/basis";
 
-import { asTransform3D } from "./class/orient/transform3d";
+import { asTransform3D } from "../orient/transform3d";
 
 const r = Math.fround;
 

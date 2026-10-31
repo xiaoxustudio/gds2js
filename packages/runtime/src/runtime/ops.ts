@@ -1,9 +1,9 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { registerRecvEqHook } from "./callable";
+import { registerRecvEqHook } from "./class/identity/callable";
 import { pctFormatError } from "./frames";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
-import { asRid } from "./rid";
-import { asNodePath } from "./node-path";
+import { asRid } from "./class/identity/rid";
+import { asNodePath } from "./class/identity/node-path";
 import { asVec2, GVector2, vector2, vecCmp } from "./class/vector/vector2";
 import { asVec3, GVector3, vector3, vec3Cmp } from "./class/vector/vector3";
 import { asQuaternion, quaternion } from "./class/orient/quaternion";
@@ -14,8 +14,8 @@ import { asTransform3D, pointMulTransform3d, transform3dCompose, transform3dXfor
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./class/vector/vector4";
 import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./class/vector/vector4i";
-import { asColor, color, GColor } from "./color";
-import { bytesConcat, GBytes } from "./packed";
+import { asColor, color, GColor } from "./class/color/color";
+import { bytesConcat, GBytes } from "./class/bytes/packed";
 import { INT64_MIN, TWO_63 } from "./numstr";
 import {
   add32,

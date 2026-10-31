@@ -3,7 +3,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, Tag } from "@gds2js/runtime/runtime/tags";
 import { GArray, elemConvert, stampArray, stampScriptArray } from "@gds2js/runtime/runtime/values";
-import { registerClass } from "@gds2js/runtime/runtime/object";
+import { registerClass } from "@gds2js/runtime/runtime/class/object/script-object";
 import { I, S } from "./support/variants";
 
 const say = (kind: string, v: Parameters<typeof elemConvert>[1]): string => {

@@ -1,7 +1,7 @@
 /** 引擎类值上的 `new` 面：Callable 面是阶段一的读数，造实例按阶段三的实测一支一支放行。 */
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { nativeClassNew } from "@gds2js/runtime/runtime/native-class";
+import { nativeClassNew } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { show, valueEq } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";

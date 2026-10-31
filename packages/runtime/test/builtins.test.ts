@@ -7,7 +7,7 @@ import { hashDjb2, range, rangeSeq, variantHash } from "@gds2js/runtime/runtime/
 import { method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
-import { color } from "@gds2js/runtime/runtime/color";
+import { color } from "@gds2js/runtime/runtime/class/color/color";
 import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { F, I, S } from "./support/variants";
 

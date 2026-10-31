@@ -1,6 +1,6 @@
-import { Tag, V, type Variant } from "./tags";
-import { globalCallableLabel } from "./global-names";
-import { nextObjectId } from "./identity";
+import { Tag, V, type Variant } from "../../tags";
+import { globalCallableLabel } from "../../global-names";
+import { nextObjectId } from "./null-object";
 
 export type Fn = (args: Variant[]) => unknown;
 

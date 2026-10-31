@@ -2,7 +2,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { arrayFromVariant } from "@gds2js/runtime/runtime/builtins";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { GArray, GDict, show } from "@gds2js/runtime/runtime/values";
 import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";

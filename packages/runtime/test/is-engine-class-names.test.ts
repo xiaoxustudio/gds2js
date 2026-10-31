@@ -13,13 +13,13 @@ import {
   registerNativeBase,
   registerScriptProps,
   wrapValue,
-} from "@gds2js/runtime/runtime/object";
-import { nativeClass } from "@gds2js/runtime/runtime/native-class";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+} from "@gds2js/runtime/runtime/class/object/script-object";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
-import { callable } from "@gds2js/runtime/runtime/object";
+import { callable } from "@gds2js/runtime/runtime/class/object/script-object";
 import { isType } from "@gds2js/runtime/runtime/patterns";
 import { I, S } from "./support/variants";
 

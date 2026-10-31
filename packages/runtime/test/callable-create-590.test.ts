@@ -7,7 +7,7 @@ import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { show, valueEq } from "@gds2js/runtime/runtime/values";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { S, I } from "./support/variants";
-import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/object";
+import { GdScriptObject, wrapValue } from "@gds2js/runtime/runtime/class/object/script-object";
 
 class Fake extends GdScriptObject {}
 

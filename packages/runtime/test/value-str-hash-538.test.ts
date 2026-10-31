@@ -8,7 +8,7 @@ import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { GVector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { GVector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { GVector3i } from "@gds2js/runtime/runtime/class/vector/vector3i";
-import { GColor } from "@gds2js/runtime/runtime/color";
+import { GColor } from "@gds2js/runtime/runtime/class/color/color";
 
 const o = (v: object) => V.object(v);
 const v2 = (x: number, y: number) => o(new GVector2(x, y));

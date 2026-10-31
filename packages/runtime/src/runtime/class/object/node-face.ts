@@ -1,10 +1,10 @@
-import { Tag, V, tagName, type Variant } from "../tags";
-import { UnsupportedError } from "../errors";
-import { GArray } from "../values";
-import { NULL_OBJECT } from "../identity";
-import { nodePathValue } from "../node-path";
-import { asString } from "./core";
-import { stackBlockLines, writeOrderedStderr } from "../frames";
+import { Tag, V, tagName, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
+import { GArray } from "../../values";
+import { NULL_OBJECT } from "../identity/null-object";
+import { nodePathValue } from "../identity/node-path";
+import { asString } from "../../method/core";
+import { stackBlockLines, writeOrderedStderr } from "../../frames";
 import {
   nodeArgSay,
   nodeAttach,
@@ -20,11 +20,11 @@ import {
   nodeOfVariant,
   nodeNameSet,
   type NodeRec,
-} from "../node";
-import { scenePathOf, sceneTree } from "../scene";
-import { node2dMethod } from "../node2d";
-import { node3dGlobalTransform } from "../node3d";
-import { ctlMethod } from "../control";
+} from "./node";
+import { scenePathOf, sceneTree } from "./scene-tree";
+import { node2dMethod } from "./node2d";
+import { node3dGlobalTransform } from "./node3d";
+import { ctlMethod } from "./control";
 
 function engineError(at: string, message: string): void {
   writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));

@@ -1,7 +1,7 @@
-import { Tag, V, tagName, type Variant } from "./tags";
-import { UnsupportedError } from "./errors";
-import { GArray } from "./values";
-import { GdScriptObject } from "./object";
+import { Tag, V, tagName, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
+import { GArray } from "../../values";
+import { GdScriptObject } from "./script-object";
 import { GdNodeObject, nodeAttach, nodeChildren, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodePathOf, type NodeRec } from "./node";
 
 export type SceneSpec = { node: object; name: string; cls: string; children: SceneSpec[] };

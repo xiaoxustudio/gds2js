@@ -1,7 +1,7 @@
 /** `Signal()` / `Signal(Object, name)` 与 `var_to_str(Signal)`（S556），读数 `tmp/d6/s556.gd`。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { method, signalCtor } from "@gds2js/runtime/runtime/methods";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { varToStr } from "@gds2js/runtime/runtime/values";

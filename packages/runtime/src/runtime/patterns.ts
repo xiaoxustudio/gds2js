@@ -1,8 +1,8 @@
 import { UnsupportedError, GodotRuntimeError } from "./errors";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
-import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./object";
-import { Signal } from "./signal";
-import { GdNativeClass } from "./native-class";
+import { ClassDesc, GdScriptObject, isCallableBox, isVariant, lookupClass, nativeBaseOf, objIs, wrapValue } from "./class/object/script-object";
+import { Signal } from "./class/identity/signal";
+import { GdNativeClass } from "./class/identity/native-class";
 import { Tag, V, intToNum, type IntPayload, type TagValue, type Variant } from "./tags";
 import { GArray, GDict, valueEq } from "./values";
 import { GVector2 } from "./class/vector/vector2";
@@ -12,10 +12,10 @@ import { GVector4i } from "./class/vector/vector4i";
 import { GVector2i } from "./class/vector/vector2i";
 import { GVector3i } from "./class/vector/vector3i";
 import { asVec3i, toVec3 } from "./class/vector/vector3i";
-import { GColor } from "./color";
-import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./packed";
-import { GdRid } from "./rid";
-import { asNodePath, GdNodePath, nodePathValue } from "./node-path";
+import { GColor } from "./class/color/color";
+import { GBytes, isBytes, packBytes, packTypeOfCode, type PackKind } from "./class/bytes/packed";
+import { GdRid } from "./class/identity/rid";
+import { asNodePath, GdNodePath, nodePathValue } from "./class/identity/node-path";
 
 import { GAABB } from "./class/shape/aabb";
 

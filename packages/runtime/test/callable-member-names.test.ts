@@ -5,7 +5,7 @@
 
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { callableOf, nullCallable } from "@gds2js/runtime/runtime/object";
+import { callableOf, nullCallable } from "@gds2js/runtime/runtime/class/object/script-object";
 import type { Variant } from "@gds2js/runtime/runtime/tags";
 import { method } from "@gds2js/runtime/runtime/methods";
 

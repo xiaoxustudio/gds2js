@@ -1,7 +1,7 @@
 import { valueTypeName } from "../string-ops";
 import { GodotRuntimeError } from "../errors";
 import { Tag, V, type Variant } from "../tags";
-import { color } from "../color";
+import { color } from "../class/color/color";
 import { sortGodot } from "../sort";
 import { arrIdx, arrIdxWrite, COMPARE_DEPTH, elemConvert, elemDefault, type ElemKind, keyOf, registerContainerFactories, show, truthyOf, valueEq, valueSame } from "./core";
 import { deepCopy } from "./core";

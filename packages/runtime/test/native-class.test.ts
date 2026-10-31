@@ -6,7 +6,7 @@ import { eq } from "@gds2js/testkit";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, valueEq } from "@gds2js/runtime/runtime/values";
-import { nativeClass } from "@gds2js/runtime/runtime/native-class";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { attribute, method } from "@gds2js/runtime/runtime/methods";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { I } from "./support/variants";

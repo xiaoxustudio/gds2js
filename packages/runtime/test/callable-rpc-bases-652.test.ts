@@ -3,8 +3,8 @@
  *  带不带实参不改句形（R0 零支与 R3 三支同句、L2 与 I3 同句）；内建类型面绑来的那一只（`Array::append.rpc()`）没量过，仍给「未实现」。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { callableOf, nullCallable } from "@gds2js/runtime/runtime/object";
-import { CallableBox } from "@gds2js/runtime/runtime/callable";
+import { callableOf, nullCallable } from "@gds2js/runtime/runtime/class/object/script-object";
+import { CallableBox } from "@gds2js/runtime/runtime/class/identity/callable";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { method } from "@gds2js/runtime/runtime/methods";
 

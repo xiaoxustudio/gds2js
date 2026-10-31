@@ -1,5 +1,5 @@
-import { V, Tag, type Variant } from "./tags";
-import { nextObjectId } from "./identity";
+import { V, Tag, type Variant } from "../../tags";
+import { nextObjectId } from "./null-object";
 import { CallableBox } from "./callable";
 
 export class GdNativeClass {

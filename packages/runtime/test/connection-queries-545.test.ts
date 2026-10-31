@@ -1,8 +1,8 @@
 /** Signal 的连接查询与 Callable.get_unbound_arguments_count（S545），读数 `tmp/d6/s545*.gd`。 */
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
-import { callable } from "@gds2js/runtime/runtime/object";
-import { Signal } from "@gds2js/runtime/runtime/signal";
+import { callable } from "@gds2js/runtime/runtime/class/object/script-object";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, valueEq } from "@gds2js/runtime/runtime/values";

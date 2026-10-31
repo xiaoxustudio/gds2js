@@ -1,7 +1,7 @@
 import { UnsupportedError } from "./errors";
 import { Tag, V, type Variant } from "./tags";
 import { GArray, GDict, type ElemKind } from "./values";
-import { GBytes, type PackElem, type PackKind } from "./packed";
+import { GBytes, type PackElem, type PackKind } from "./class/bytes/packed";
 import { GVector2 } from "./class/vector/vector2";
 import { GVector3 } from "./class/vector/vector3";
 import { GVector4 } from "./class/vector/vector4";
@@ -9,12 +9,12 @@ import { GVector4i } from "./class/vector/vector4i";
 import { GVector2i } from "./class/vector/vector2i";
 import { GRect2, GRect2i } from "./class/shape/rect";
 import { GVector3i } from "./class/vector/vector3i";
-import { GColor } from "./color";
-import { GdNodePath } from "./node-path";
-import { beginBareConstruction, descOf, dictDescOf, endBareConstruction, GdScriptObject, nativeBaseOf } from "./object";
-import { encodedObjectIdBox, NULL_OBJECT } from "./identity";
-import { CallableBox, nullCallable } from "./callable";
-import { GdRid, rid } from "./rid";
+import { GColor } from "./class/color/color";
+import { GdNodePath } from "./class/identity/node-path";
+import { beginBareConstruction, descOf, dictDescOf, endBareConstruction, GdScriptObject, nativeBaseOf } from "./class/object/script-object";
+import { encodedObjectIdBox, NULL_OBJECT } from "./class/identity/null-object";
+import { CallableBox, nullCallable } from "./class/identity/callable";
+import { GdRid, rid } from "./class/identity/rid";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
 
 import { GAABB } from "./class/shape/aabb";

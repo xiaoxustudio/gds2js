@@ -9,7 +9,7 @@ import { analyze } from "@gds2js/compiler/analyze";
 import { lower } from "@gds2js/compiler/lower/lower";
 import { parseSource } from "@gds2js/compiler/parse/parser";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
-import { callable } from "@gds2js/runtime/runtime/object";
+import { callable } from "@gds2js/runtime/runtime/class/object/script-object";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { V } from "@gds2js/runtime/runtime/tags";
 

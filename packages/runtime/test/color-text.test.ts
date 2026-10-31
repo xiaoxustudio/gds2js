@@ -6,8 +6,8 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
-import { color, colorNew, colorStatic } from "@gds2js/runtime/runtime/color";
-import { COLOR_NAMED } from "@gds2js/runtime/runtime/color-named";
+import { color, colorNew, colorStatic } from "@gds2js/runtime/runtime/class/color/color";
+import { COLOR_NAMED } from "@gds2js/runtime/runtime/class/color/named";
 import { variantConvert } from "@gds2js/runtime/runtime/convert";
 
 const C = (s: string): string => show(colorNew([V.str(s)]));

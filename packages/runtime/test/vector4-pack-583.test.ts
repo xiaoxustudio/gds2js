@@ -2,7 +2,7 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { GBytes, packCtor } from "@gds2js/runtime/runtime/packed";
+import { GBytes, packCtor } from "@gds2js/runtime/runtime/class/bytes/packed";
 import { GArray, show, varToStr, valueEq } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { variantHashNumber } from "@gds2js/runtime/runtime/builtins";

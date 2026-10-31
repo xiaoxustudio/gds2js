@@ -2,13 +2,13 @@ import { UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
 import { GArray, GDict, show, truthyOf } from "./values";
 import { toFloat, toInt } from "./builtins";
-import { GBytes, packItems, toElem, type PackKind } from "./packed";
-import { asNodePath, emptyNodePath, nodePathValue } from "./node-path";
+import { GBytes, packItems, toElem, type PackKind } from "./class/bytes/packed";
+import { asNodePath, emptyNodePath, nodePathValue } from "./class/identity/node-path";
 import { GVector2 } from "./class/vector/vector2";
 import { GVector2i } from "./class/vector/vector2i";
 import { GVector3 } from "./class/vector/vector3";
 import { GVector3i } from "./class/vector/vector3i";
-import { colorFromText, GColor } from "./color";
+import { colorFromText, GColor } from "./class/color/color";
 
 const GT = {
   NIL: 0,

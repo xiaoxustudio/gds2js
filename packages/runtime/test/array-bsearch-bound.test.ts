@@ -10,10 +10,10 @@ import { eq } from "@gds2js/testkit";
 import { method, dictOf } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
-import { color } from "@gds2js/runtime/runtime/color";
+import { color } from "@gds2js/runtime/runtime/class/color/color";
 import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
-import { callableOf } from "@gds2js/runtime/runtime/object";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
+import { callableOf } from "@gds2js/runtime/runtime/class/object/script-object";
 import { ops } from "@gds2js/runtime/runtime/ops";
 
 const CELLS: Array<[Variant, Variant[], string, string]> = [

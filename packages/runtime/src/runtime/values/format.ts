@@ -8,7 +8,7 @@ import { GVector4 } from "../class/vector/vector4";
 import { GVector2i } from "../class/vector/vector2i";
 import { GVector3i } from "../class/vector/vector3i";
 import { GVector4i } from "../class/vector/vector4i";
-import { asNodePath, emptyNodePath, nodePathValue } from "../node-path";
+import { asNodePath, emptyNodePath, nodePathValue } from "../class/identity/node-path";
 import { scriptPropsHook } from "./print";
 import { GArray, GDict } from "./containers";
 import { show, truthyOf } from "./core";

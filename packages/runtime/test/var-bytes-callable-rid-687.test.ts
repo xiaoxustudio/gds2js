@@ -4,11 +4,11 @@
 // Signal 那一支量过了但**带对象的实例号**（`[26,…]` 尾巴上那八字节），合成号对不上引擎，照红线响亮拒。
 import { describe, expect, it } from "vitest";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
-import { CallableBox, isNullCallable } from "@gds2js/runtime/runtime/callable";
-import { Signal } from "@gds2js/runtime/runtime/signal";
-import { rid } from "@gds2js/runtime/runtime/rid";
+import { CallableBox, isNullCallable } from "@gds2js/runtime/runtime/class/identity/callable";
+import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
+import { rid } from "@gds2js/runtime/runtime/class/identity/rid";
 import { gBytesToVar, gVarToBytes, gVarToBytesWithObjects } from "@gds2js/runtime/runtime/var-bytes";
-import type { GBytes } from "@gds2js/runtime/runtime/packed";
+import type { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 
 const bytesOf = (v: Variant): number[] => Array.from((v.v as GBytes).raw() as Iterable<number>);
 

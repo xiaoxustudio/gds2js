@@ -1,8 +1,8 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, intToNum, int64ParamBig, tagName, type IntPayload, type Variant } from "./tags";
-import { CMP_EPS, approxEq, clamp, vecFailKey } from "./class/vector/vector2";
-import { COLOR_NAMED } from "./color-named";
-import { asNodePath, nodePathText } from "./node-path";
+import { GodotRuntimeError, UnsupportedError } from "../../errors";
+import { Tag, V, intToBig, intToNum, int64ParamBig, tagName, type IntPayload, type Variant } from "../../tags";
+import { CMP_EPS, approxEq, clamp, vecFailKey } from "../vector/vector2";
+import { COLOR_NAMED } from "./named";
+import { asNodePath, nodePathText } from "../identity/node-path";
 
 export class GColor {
   r: number;

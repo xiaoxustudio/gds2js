@@ -9,12 +9,12 @@ import { asVec4 } from "./class/vector/vector4";
 import { asVec2i } from "./class/vector/vector2i";
 import { asVec3i } from "./class/vector/vector3i";
 import { asVec4i } from "./class/vector/vector4i";
-import { asColor } from "./color";
-import { GBytes, packTypeName, utf8Decode } from "./packed";
+import { asColor } from "./class/color/color";
+import { GBytes, packTypeName, utf8Decode } from "./class/bytes/packed";
 import { isUnicodeIdContinue, isUnicodeIdStart } from "./unicode-identifier";
-import { isCallable } from "./callable";
-import { asRid } from "./rid";
-import { asNodePath, nodePathText } from "./node-path";
+import { isCallable } from "./class/identity/callable";
+import { asRid } from "./class/identity/rid";
+import { asNodePath, nodePathText } from "./class/identity/node-path";
 import { findLower, findUpper } from "./ucaps";
 
 import { strFloat } from "./numfmt";

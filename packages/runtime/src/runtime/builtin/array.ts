@@ -3,17 +3,17 @@ import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tag
 import { GArray, GDict, elemConvert, type ElemKind } from "../values";
 import { intArgBig, valueTypeName } from "../string-ops";
 import { ELEM_TYPE_CODE } from "../method/core";
-import { GBytes, isBytes, packBytes, packItems, packTypeName } from "../packed";
-import { ClassDesc, dictShapeOf, dictWrittenOf } from "../object";
-import { GdNativeClass } from "../native-class";
-import { emptyNodePath, nodePathValue } from "../node-path";
+import { GBytes, isBytes, packBytes, packItems, packTypeName } from "../class/bytes/packed";
+import { ClassDesc, dictShapeOf, dictWrittenOf } from "../class/object/script-object";
+import { GdNativeClass } from "../class/identity/native-class";
+import { emptyNodePath, nodePathValue } from "../class/identity/node-path";
 import { GVector2 } from "../class/vector/vector2";
 import { GVector2i } from "../class/vector/vector2i";
 import { GVector3 } from "../class/vector/vector3";
 import { GVector3i } from "../class/vector/vector3i";
 import { GVector4, vector4 } from "../class/vector/vector4";
 import { GVector4i } from "../class/vector/vector4i";
-import { GColor } from "../color";
+import { GColor } from "../class/color/color";
 
 export function arrayFromVariant(v: Variant): Variant {
   if (v.t === Tag.ARRAY) {

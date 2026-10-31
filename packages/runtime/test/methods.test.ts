@@ -7,7 +7,7 @@ import { range } from "@gds2js/runtime/runtime/builtins";
 import { iter } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
-import { GBytes } from "@gds2js/runtime/runtime/packed";
+import { GBytes } from "@gds2js/runtime/runtime/class/bytes/packed";
 
 describe("runtime/methods · iter 与属性派发", () => {
   it("229 · for i in 5 数到 4", async () => {

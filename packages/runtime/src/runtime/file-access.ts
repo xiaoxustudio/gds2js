@@ -1,8 +1,8 @@
 import { hostIo, hostIoMissing, resolveIoPath } from "./host-io";
 import { UnsupportedError } from "./errors";
-import { NULL_OBJECT } from "./identity";
-import { GdScriptObject } from "./object";
-import { GBytes } from "./packed";
+import { NULL_OBJECT } from "./class/identity/null-object";
+import { GdScriptObject } from "./class/object/script-object";
+import { GBytes } from "./class/bytes/packed";
 import { Tag, V, normInt, type Variant } from "./tags";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "./var-bytes";
 

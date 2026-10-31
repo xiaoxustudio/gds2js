@@ -3,7 +3,7 @@
 
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject } from "@gds2js/runtime/runtime/object";
+import { registerClass, registerFieldTypes, registerNativeBase, registerStaticMethods, registerStaticVars, setMeta, GdScriptObject } from "@gds2js/runtime/runtime/class/object/script-object";
 import { attribute, method, writeProp } from "@gds2js/runtime/runtime/methods";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GDict, show } from "@gds2js/runtime/runtime/values";

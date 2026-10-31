@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "vitest";
 import { bad, ok } from "@gds2js/testkit";
@@ -50,5 +50,19 @@ describe("跨包说明符形状门", () => {
     const unique = [...new Set(bads)];
     for (const u of unique) bad(`说明符 @gds2js/${u} 解析不到文件，原生铺树会当场失败`);
     if (unique.length === 0) ok("每个 @gds2js/<pkg>/<子路径> 都能按 cli-native 的解析规则落到文件");
+  });
+
+  it("③ 每支包的 exports 目标都在盘面", () => {
+    const missing: string[] = [];
+    for (const pkg of ["runtime", "compiler", "testkit", "gds2js"]) {
+      const dir = join(ROOT, "packages", pkg);
+      const map = (JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).exports ?? {}) as Record<string, string>;
+      for (const [key, value] of Object.entries(map)) {
+        if (typeof value !== "string" || value.includes("*")) continue;
+        if (!existsSync(join(dir, value))) missing.push(`${pkg}:${key} -> ${value}`);
+      }
+    }
+    for (const m of missing) bad(`${m} 落不到文件，产物轨与 node 轨都会当场解析失败`);
+    if (missing.length === 0) ok("四份包的 exports 目标全部在盘面");
   });
 });

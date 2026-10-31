@@ -2,8 +2,8 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V, Tag, type Variant } from "@gds2js/runtime/runtime/tags";
-import { GColor } from "@gds2js/runtime/runtime/color";
-import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
+import { GColor } from "@gds2js/runtime/runtime/class/color/color";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 import { attribute } from "@gds2js/runtime/runtime/methods";
 
 const errText = (f: () => unknown): string => {
