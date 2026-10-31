@@ -44,7 +44,9 @@ export function standaloneInlineHeader(body: string): string {
     .map((l) => (l.length ? `  ${l}` : l))
     .join("\n");
   return [
+    `import { createRequire } from "node:module";`,
     `const { rt, ${HOST_PRINT_NAMES.join(", ")}, SceneTree } = (() => {`,
+    "  const require = createRequire(import.meta.url);",
     "  const module = { exports: {} };",
     "  const exports = module.exports;",
     indented,
