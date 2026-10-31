@@ -1,7 +1,7 @@
 import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { basisDeterminant, basisEulerYXZ, basisScaleParts, basis } from "./basis";
-import { asVec3, vector3 } from "./vector3";
+import { asVec3, vector3 } from "./class/vector/vector3";
 import { GBasis, asTransform3D } from "./composite-classes";
 import { transform3d } from "./transform3d";
 import { nodeFaceOf, type NodeRec } from "./node";

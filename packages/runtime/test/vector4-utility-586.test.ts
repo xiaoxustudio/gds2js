@@ -2,8 +2,8 @@
 import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { gClamp, gIsEqualApprox, gIsZeroApprox, gIsFinite, gLerp, gMax, gMaxF, gMaxI, gMin, gMinF, gMinI, gSnapped } from "@gds2js/runtime/runtime/builtins";
-import { vector4New } from "@gds2js/runtime/runtime/vector4";
-import { vector4iNew } from "@gds2js/runtime/runtime/vector4i";
+import { vector4New } from "@gds2js/runtime/runtime/class/vector/vector4";
+import { vector4iNew } from "@gds2js/runtime/runtime/class/vector/vector4i";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { I } from "./support/variants";
 import { gBytesToVar, gVarToBytes } from "@gds2js/runtime/runtime/var-bytes";

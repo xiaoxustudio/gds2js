@@ -5,8 +5,8 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { strOf } from "@gds2js/runtime/runtime/builtins";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector3 as v3 } from "@gds2js/runtime/runtime/vector3";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3 as v3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { V } from "@gds2js/runtime/runtime/tags";
 import type { Variant } from "@gds2js/runtime/runtime/tags";
 

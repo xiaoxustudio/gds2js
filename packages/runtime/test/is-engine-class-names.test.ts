@@ -18,7 +18,7 @@ import { nativeClass } from "@gds2js/runtime/runtime/native-class";
 import { Signal } from "@gds2js/runtime/runtime/signal";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { callable } from "@gds2js/runtime/runtime/object";
 import { isType } from "@gds2js/runtime/runtime/patterns";
 import { I, S } from "./support/variants";

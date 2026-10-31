@@ -7,7 +7,7 @@ import { GDict, nodePathCtor, repr, show, varToStr, valueEq } from "@gds2js/runt
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { variantHashNumber } from "@gds2js/runtime/runtime/builtins";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { asType, isType, typeOf } from "@gds2js/runtime/runtime/patterns";
 import { variantConvert } from "@gds2js/runtime/runtime/convert";
 import { I, S } from "./support/variants";

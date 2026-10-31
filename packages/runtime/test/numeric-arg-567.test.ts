@@ -5,9 +5,9 @@ import { gClamp, gMax, gMin } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
 import { GArray } from "@gds2js/runtime/runtime/values";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector2i } from "@gds2js/runtime/runtime/vector2i";
-import { GVector3 } from "@gds2js/runtime/runtime/vector3";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { GVector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { I, S } from "./support/variants";
 
 const F = (n: number) => V.float(n);

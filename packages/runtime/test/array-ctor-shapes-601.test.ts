@@ -4,7 +4,7 @@ import { eq } from "@gds2js/testkit";
 import { arrayFromVariant } from "@gds2js/runtime/runtime/builtins";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
 import { GArray, GDict, show } from "@gds2js/runtime/runtime/values";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { I } from "./support/variants";
 

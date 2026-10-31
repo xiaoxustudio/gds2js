@@ -6,8 +6,8 @@
 import { describe, expect, it } from "vitest";
 import * as rt from "@gds2js/runtime/runtime/index";
 import { GodotRuntimeError } from "@gds2js/runtime/runtime/errors";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 
 const V2 = (x: number, y: number): Variant => vector2(x, y);

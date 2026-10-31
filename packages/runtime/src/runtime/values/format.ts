@@ -2,12 +2,12 @@ import { strHumanizeSize, strNumDecimals, strSci, wrapUnsigned64 } from "../numf
 import { strReplace, stringChr, valueTypeName } from "../string-ops";
 import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { Tag, tagName, V, intToBig, intToNum, int64ParamBig, type IntPayload, type Variant } from "../tags";
-import { GVector2 } from "../vector2";
-import { GVector3 } from "../vector3";
-import { GVector4 } from "../vector4";
-import { GVector2i } from "../vector2i";
-import { GVector3i } from "../vector3i";
-import { GVector4i } from "../vector4i";
+import { GVector2 } from "../class/vector/vector2";
+import { GVector3 } from "../class/vector/vector3";
+import { GVector4 } from "../class/vector/vector4";
+import { GVector2i } from "../class/vector/vector2i";
+import { GVector3i } from "../class/vector/vector3i";
+import { GVector4i } from "../class/vector/vector4i";
 import { asNodePath, emptyNodePath, nodePathValue } from "../node-path";
 import { scriptPropsHook } from "./print";
 import { GArray, GDict } from "./containers";

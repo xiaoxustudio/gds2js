@@ -4,8 +4,8 @@ import { GRect2, rect2iPartsOf } from "./composite-classes";
 export { GRect2 } from "./composite-classes";
 import { UnsupportedError } from "./errors";
 import { strVec2 } from "./string-ops";
-import { asVec2, vector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
+import { asVec2, vector2 } from "./class/vector/vector2";
+import { GVector2i } from "./class/vector/vector2i";
 
 const r = Math.fround;
 

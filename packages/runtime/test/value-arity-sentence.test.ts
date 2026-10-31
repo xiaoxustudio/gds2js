@@ -6,10 +6,10 @@ import { afterAll, describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { colorNew } from "@gds2js/runtime/runtime/color";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector2i } from "@gds2js/runtime/runtime/vector2i";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
-import { vector3i } from "@gds2js/runtime/runtime/vector3i";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { vector3i } from "@gds2js/runtime/runtime/class/vector/vector3i";
 import type { Variant } from "@gds2js/runtime/runtime/tags";
 import { V } from "@gds2js/runtime/runtime/tags";
 

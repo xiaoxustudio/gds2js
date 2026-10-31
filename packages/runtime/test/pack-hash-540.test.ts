@@ -5,8 +5,8 @@ import { variantHash } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector3 } from "@gds2js/runtime/runtime/vector3";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { GColor } from "@gds2js/runtime/runtime/color";
 
 const p = (kind: "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "color", items: unknown[]) =>

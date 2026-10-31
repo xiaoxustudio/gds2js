@@ -4,9 +4,9 @@ import { eq } from "@gds2js/testkit";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { varToStr } from "@gds2js/runtime/runtime/values";
 import "@gds2js/runtime/runtime/builtins";
-import { GVector3, setRotatedAxisBlockSink } from "@gds2js/runtime/runtime/vector3";
+import { GVector3, setRotatedAxisBlockSink } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { installRotatedAxisBlockSink } from "@gds2js/runtime/host";
-import { vector3Method } from "@gds2js/runtime/runtime/vector3";
+import { vector3Method } from "@gds2js/runtime/runtime/class/vector/vector3";
 
 const v3 = (x: number, y: number, z: number) => V.object(new GVector3(x, y, z));
 const rot = (v: number[], axis: number[], ang: number) =>

@@ -2,7 +2,7 @@ import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { num6Text } from "./string-ops";
 import { GQuaternion, asQuaternion } from "./composite-classes";
-import { asVec3 } from "./vector3";
+import { asVec3 } from "./class/vector/vector3";
 
 const r = Math.fround;
 

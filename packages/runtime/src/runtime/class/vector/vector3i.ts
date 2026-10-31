@@ -1,5 +1,5 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { GodotRuntimeError, UnsupportedError } from "../../errors";
+import { Tag, V, intToBig, intToNum, tagName, type IntPayload, type Variant } from "../../tags";
 import { clamp, vecFailKey } from "./vector2";
 import { add32, div32, mod32, mul32, sat32, sub32, wrap32 } from "./vector2i";
 import { GVector3, registerVec3iParts, vector3 } from "./vector3";

@@ -3,10 +3,10 @@
  * `octahedron_decode`：式子量全在 `tmp/probe-oct/grid.txt` 的 169 格上（CLAMP 那一支 169/169），读数抄自语料 334 的 golden。
  */
 import { describe, expect, it } from "vitest";
-import { GVector3, vector3Const, vector3Method } from "@gds2js/runtime/runtime/vector3";
+import { GVector3, vector3Const, vector3Method } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { V } from "@gds2js/runtime/runtime/tags";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector2i } from "@gds2js/runtime/runtime/vector2i";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { show } from "@gds2js/runtime/runtime/values";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 

@@ -1,7 +1,7 @@
 import { UnsupportedError } from "../errors";
 import { Tag, V, type Variant } from "../tags";
 import { GAABB } from "../composite-classes";
-import { asVec3, vector3 } from "../vector3";
+import { asVec3, vector3 } from "../class/vector/vector3";
 import { aabb } from "../aabb";
 
 const r = Math.fround;

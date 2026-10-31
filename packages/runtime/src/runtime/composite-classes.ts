@@ -1,4 +1,4 @@
-import { wrap32 } from "./vector2i";
+import { wrap32 } from "./class/vector/vector2i";
 import { Tag, type Variant } from "./tags";
 
 export class GRect2 {

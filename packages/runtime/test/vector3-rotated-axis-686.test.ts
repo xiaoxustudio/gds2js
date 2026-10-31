@@ -6,7 +6,7 @@ import { installRotatedAxisBlockSink } from "@gds2js/runtime/host";
 import "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { varToStr } from "@gds2js/runtime/runtime/values";
-import { GVector3, vector3Method } from "@gds2js/runtime/runtime/vector3";
+import { GVector3, vector3Method } from "@gds2js/runtime/runtime/class/vector/vector3";
 
 const v3 = (x: number, y: number, z: number) => V.object(new GVector3(x, y, z));
 const written: string[] = [];

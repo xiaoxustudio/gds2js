@@ -4,9 +4,9 @@ import { eq } from "@gds2js/testkit";
 import { gLerp, gSnapped } from "@gds2js/runtime/runtime/builtins";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector2i } from "@gds2js/runtime/runtime/vector2i";
-import { GVector3 } from "@gds2js/runtime/runtime/vector3";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { GVector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { GColor } from "@gds2js/runtime/runtime/color";
 import { I, S } from "./support/variants";
 

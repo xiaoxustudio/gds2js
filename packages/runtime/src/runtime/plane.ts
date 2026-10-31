@@ -2,7 +2,7 @@ import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { num6Text, strVec2 } from "./string-ops";
 import { GPlane, asPlane } from "./composite-classes";
-import { asVec3, vector3 } from "./vector3";
+import { asVec3, vector3 } from "./class/vector/vector3";
 
 const r = Math.fround;
 

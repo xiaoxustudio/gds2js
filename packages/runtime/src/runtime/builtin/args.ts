@@ -3,12 +3,12 @@ import { Tag, V, intToBig, intToNum, wrap64, tagName, type IntPayload, type Vari
 import { strToFloat } from "../numstr";
 import { truthyOf } from "../values";
 import { valueTypeName } from "../string-ops";
-import { GVector2, vector2Method } from "../vector2";
-import { GVector2i, vector2i, vector2iMethod } from "../vector2i";
-import { GVector3, vector3Method } from "../vector3";
-import { GVector3i, vector3i, vector3iMethod } from "../vector3i";
-import { GVector4, vector4, vector4Method } from "../vector4";
-import { GVector4i, vector4i, vector4iMethod } from "../vector4i";
+import { GVector2, vector2Method } from "../class/vector/vector2";
+import { GVector2i, vector2i, vector2iMethod } from "../class/vector/vector2i";
+import { GVector3, vector3Method } from "../class/vector/vector3";
+import { GVector3i, vector3i, vector3iMethod } from "../class/vector/vector3i";
+import { GVector4, vector4, vector4Method } from "../class/vector/vector4";
+import { GVector4i, vector4i, vector4iMethod } from "../class/vector/vector4i";
 import { GColor, colorMethod } from "../color";
 
 export function num(v: Variant): number {

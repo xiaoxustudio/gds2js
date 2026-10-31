@@ -9,11 +9,11 @@ import { ops } from "@gds2js/runtime/runtime/ops";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, valueEq } from "@gds2js/runtime/runtime/values";
 import { GColor } from "@gds2js/runtime/runtime/color";
-import { GVector2, vector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector3 } from "@gds2js/runtime/runtime/vector3";
+import { GVector2, vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { bytesCtor, GBytes, packCtor, toByte } from "@gds2js/runtime/runtime/packed";
 import { asType, isType, typeOf } from "@gds2js/runtime/runtime/patterns";
-import { GVector2i } from "@gds2js/runtime/runtime/vector2i";
+import { GVector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/packed · 打包数组与 zstd", () => {

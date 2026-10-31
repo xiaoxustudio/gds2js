@@ -18,7 +18,7 @@ import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
 import { variantHash } from "@gds2js/runtime/runtime/builtins";
 import { callableCtor, globalCallable } from "@gds2js/runtime/runtime/methods";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { I, S } from "./support/variants";
 
 const num = (v: Variant): string => {

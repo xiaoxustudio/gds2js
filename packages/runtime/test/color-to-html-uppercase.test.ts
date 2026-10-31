@@ -8,7 +8,7 @@ import { GColor, color, colorMethod } from "@gds2js/runtime/runtime/color";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { dictOf } from "@gds2js/runtime/runtime/methods";
 
 const RED = new GColor(1, 0, 0, 1);

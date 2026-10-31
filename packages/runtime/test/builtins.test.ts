@@ -8,7 +8,7 @@ import { method } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
 import { color } from "@gds2js/runtime/runtime/color";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/builtins · range 与哈希", () => {

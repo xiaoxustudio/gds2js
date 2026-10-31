@@ -1,7 +1,7 @@
 /** `bezier_derivative` 的读数逐字抄自 `corpus/cases/339-bezier-derivative/godot.txt`（同批 222 格走逐字节门）。 */
 import { describe, expect, it } from "vitest";
-import { GVector2, vector2, vector2Method } from "@gds2js/runtime/runtime/vector2";
-import { GVector3, vector3, vector3Method } from "@gds2js/runtime/runtime/vector3";
+import { GVector2, vector2, vector2Method } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector3, vector3, vector3Method } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { show } from "@gds2js/runtime/runtime/values";
 

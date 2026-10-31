@@ -4,10 +4,10 @@ import { GArray, GDict, show, truthyOf } from "./values";
 import { toFloat, toInt } from "./builtins";
 import { GBytes, packItems, toElem, type PackKind } from "./packed";
 import { asNodePath, emptyNodePath, nodePathValue } from "./node-path";
-import { GVector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
-import { GVector3 } from "./vector3";
-import { GVector3i } from "./vector3i";
+import { GVector2 } from "./class/vector/vector2";
+import { GVector2i } from "./class/vector/vector2i";
+import { GVector3 } from "./class/vector/vector3";
+import { GVector3i } from "./class/vector/vector3i";
 import { colorFromText, GColor } from "./color";
 
 const GT = {

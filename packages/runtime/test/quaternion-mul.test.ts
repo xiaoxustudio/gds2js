@@ -2,7 +2,7 @@
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
 import { quaternion } from "@gds2js/runtime/runtime/quaternion";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { show } from "@gds2js/runtime/runtime/values";
 

@@ -1,7 +1,7 @@
 import { Tag, V, tagName, type Variant } from "../tags";
 import { UnsupportedError } from "../errors";
 import { asBasis, GBasis, type GTransform3D } from "../composite-classes";
-import { asVec3 } from "../vector3";
+import { asVec3 } from "../class/vector/vector3";
 import { axisAngleBasis, basisInverseParts, basisMul, basisOrthoParts, basisXform } from "../basis";
 import { transform3d, transform3dBasisParts, transform3dOfParts } from "../transform3d";
 

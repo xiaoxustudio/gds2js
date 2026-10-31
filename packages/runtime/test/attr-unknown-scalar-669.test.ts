@@ -7,7 +7,7 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { V } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict } from "@gds2js/runtime/runtime/values";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { GColor } from "@gds2js/runtime/runtime/color";
 import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";

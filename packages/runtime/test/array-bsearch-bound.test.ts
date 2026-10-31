@@ -11,7 +11,7 @@ import { method, dictOf } from "@gds2js/runtime/runtime/methods";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
 import { color } from "@gds2js/runtime/runtime/color";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { nodePathValue } from "@gds2js/runtime/runtime/node-path";
 import { callableOf } from "@gds2js/runtime/runtime/object";
 import { ops } from "@gds2js/runtime/runtime/ops";

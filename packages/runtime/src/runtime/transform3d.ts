@@ -2,7 +2,7 @@ import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { strVec2 } from "./string-ops";
 import { asBasis, asTransform3D, GBasis, GTransform3D } from "./composite-classes";
-import { asVec3, vector3 } from "./vector3";
+import { asVec3, vector3 } from "./class/vector/vector3";
 import { basis, basisMul, basisXform } from "./basis";
 
 const r = Math.fround;

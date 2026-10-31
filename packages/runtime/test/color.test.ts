@@ -9,7 +9,7 @@ import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, elemConvert, elemDefault, toStringNameSlot} from "@gds2js/runtime/runtime/values";
 import { strColor } from "@gds2js/runtime/runtime/string-ops";
 import { asColor, color, colorMethod, colorNew, colorRead, colorStatic, colorWrite, GColor, toColor } from "@gds2js/runtime/runtime/color";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 
 describe("runtime/color", () => {

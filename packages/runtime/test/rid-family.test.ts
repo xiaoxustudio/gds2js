@@ -7,7 +7,7 @@ import { show, varToStr, valueEq } from "@gds2js/runtime/runtime/values";
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { gRidFromInt64, gRidAllocateId, gIsInstanceValid, variantHashNumber } from "@gds2js/runtime/runtime/builtins";
 import { method } from "@gds2js/runtime/runtime/methods";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { color } from "@gds2js/runtime/runtime/color";
 import { I, S } from "./support/variants";
 

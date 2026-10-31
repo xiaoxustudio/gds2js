@@ -6,9 +6,9 @@ import { GBytes } from "@gds2js/runtime/runtime/packed";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
 import { show } from "@gds2js/runtime/runtime/values";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector3 } from "@gds2js/runtime/runtime/vector3";
-import { GVector4 } from "@gds2js/runtime/runtime/vector4";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { GVector4 } from "@gds2js/runtime/runtime/class/vector/vector4";
 import { GColor } from "@gds2js/runtime/runtime/color";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 

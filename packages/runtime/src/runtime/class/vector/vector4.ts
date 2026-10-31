@@ -1,5 +1,5 @@
-import { GodotRuntimeError, UnsupportedError } from "./errors";
-import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "./tags";
+import { GodotRuntimeError, UnsupportedError } from "../../errors";
+import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../../tags";
 import { NORMALIZED_EPS, approxEq, vecFailKey } from "./vector2";
 
 export class GVector4 {

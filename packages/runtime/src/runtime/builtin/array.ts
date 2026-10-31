@@ -7,12 +7,12 @@ import { GBytes, isBytes, packBytes, packItems, packTypeName } from "../packed";
 import { ClassDesc, dictShapeOf, dictWrittenOf } from "../object";
 import { GdNativeClass } from "../native-class";
 import { emptyNodePath, nodePathValue } from "../node-path";
-import { GVector2 } from "../vector2";
-import { GVector2i } from "../vector2i";
-import { GVector3 } from "../vector3";
-import { GVector3i } from "../vector3i";
-import { GVector4, vector4 } from "../vector4";
-import { GVector4i } from "../vector4i";
+import { GVector2 } from "../class/vector/vector2";
+import { GVector2i } from "../class/vector/vector2i";
+import { GVector3 } from "../class/vector/vector3";
+import { GVector3i } from "../class/vector/vector3i";
+import { GVector4, vector4 } from "../class/vector/vector4";
+import { GVector4i } from "../class/vector/vector4i";
 import { GColor } from "../color";
 
 export function arrayFromVariant(v: Variant): Variant {

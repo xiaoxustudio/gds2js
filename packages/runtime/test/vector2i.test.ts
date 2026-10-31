@@ -6,10 +6,10 @@ import { eq, shouldThrow } from "@gds2js/testkit";
 import { ops, sortLess } from "@gds2js/runtime/runtime/ops";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, elemDefault, valueEq } from "@gds2js/runtime/runtime/values";
-import { asVec2, toVec2, vector2, vector2New } from "@gds2js/runtime/runtime/vector2";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
+import { asVec2, toVec2, vector2, vector2New } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { isType, typeOf } from "@gds2js/runtime/runtime/patterns";
-import { GVector2i, asVec2i, vec2iReadIndex, vec2iWrite, vector2i, vector2iConst, vector2iMethod, vector2iNew } from "@gds2js/runtime/runtime/vector2i";
+import { GVector2i, asVec2i, vec2iReadIndex, vec2iWrite, vector2i, vector2iConst, vector2iMethod, vector2iNew } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/vector2i", () => {

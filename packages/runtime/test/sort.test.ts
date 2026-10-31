@@ -6,8 +6,8 @@ import { eq, shouldThrow } from "@gds2js/testkit";
 import { isLess, sortLess } from "@gds2js/runtime/runtime/ops";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
-import { GVector2, vecCmp, vector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector2i, asVec2i, vector2i } from "@gds2js/runtime/runtime/vector2i";
+import { GVector2, vecCmp, vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector2i, asVec2i, vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/values · 排序", () => {

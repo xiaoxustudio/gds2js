@@ -3,12 +3,12 @@ import { fastlzCompress, fastlzDecompress } from "./fastlz";
 import { Tag, V, intToNum, tagName, type Variant } from "./tags";
 import { INT64_MIN, TWO_63, hexLower, padZero2, strToInt, strToFloat } from "./numstr";
 import { GColor } from "./color";
-import { GVector2 } from "./vector2";
-import { GVector2i } from "./vector2i";
-import { GVector3i } from "./vector3i";
-import { GVector3 } from "./vector3";
-import { GVector4 } from "./vector4";
-import { GVector4i } from "./vector4i";
+import { GVector2 } from "./class/vector/vector2";
+import { GVector2i } from "./class/vector/vector2i";
+import { GVector3i } from "./class/vector/vector3i";
+import { GVector3 } from "./class/vector/vector3";
+import { GVector4 } from "./class/vector/vector4";
+import { GVector4i } from "./class/vector/vector4i";
 import type { GArray } from "./values";
 
 export type PackKind = "byte" | "int32" | "int64" | "float32" | "float64" | "string" | "vector2" | "vector3" | "vector4" | "color";

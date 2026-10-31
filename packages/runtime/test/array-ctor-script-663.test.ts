@@ -7,7 +7,7 @@ import { arrayFromArgs } from "@gds2js/runtime/runtime/builtins";
 import { V, Tag, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
 import { GdNodePath } from "@gds2js/runtime/runtime/node-path";
-import { GVector2 } from "@gds2js/runtime/runtime/vector2";
+import { GVector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 
 const src = V.array(GArray.of([V.int(1)]));
 const argsWith = (script: Variant): Variant[] => [src, V.int(2), V.stringName(""), script];

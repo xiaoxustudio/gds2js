@@ -9,8 +9,8 @@ import { eq } from "@gds2js/testkit";
 import { PACK_ABSENT_ALL, PACK_ABSENT_BYTE_ONLY, PACK_ABSENT_NOT_BYTE, packBytes, packCtor, packMethod, type PackKind } from "@gds2js/runtime/runtime/packed";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { attribute, writeProp } from "@gds2js/runtime/runtime/methods";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector3 } from "@gds2js/runtime/runtime/vector3";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { colorNew } from "@gds2js/runtime/runtime/color";
 
 const errOf = (f: () => unknown): string => {

@@ -9,7 +9,7 @@ import { packBytes, packCtor } from "@gds2js/runtime/runtime/packed";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, keyOf, show, strBuiltin, varToStr } from "@gds2js/runtime/runtime/values";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { gdDispatchByName } from "./support/gd-dispatch";
 import { I } from "./support/variants";
 

@@ -14,7 +14,7 @@ import {
   sceneTreeBegin,
   type SceneSpec,
 } from "./runtime/scene";
-import { setRotatedAxisBlockSink } from "./runtime/vector3";
+import { setRotatedAxisBlockSink } from "./runtime/class/vector/vector3";
 import { richAnsi } from "./runtime/rich-ansi";
 import { showArgsSep, truthyOf } from "./runtime/values";
 import "./runtime/host-io-node";

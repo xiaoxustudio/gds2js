@@ -7,9 +7,9 @@ import { registerClass, registerFieldTypes, registerNativeBase, registerStaticMe
 import { attribute, method, writeProp } from "@gds2js/runtime/runtime/methods";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GDict, show } from "@gds2js/runtime/runtime/values";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
-import { vector2i } from "@gds2js/runtime/runtime/vector2i";
+import { vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { gdDispatchByName } from "./support/gd-dispatch";
 import { F, I, S } from "./support/variants";
 

@@ -9,7 +9,7 @@ import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, valueEq} from "@gds2js/runtime/runtime/values";
 import { strFloat } from "@gds2js/runtime/runtime/numfmt";
 import { strVec2 } from "@gds2js/runtime/runtime/string-ops";
-import { GVector2, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "@gds2js/runtime/runtime/vector2";
+import { GVector2, vecReadIndex, vecWrite, vector2, vector2Const, vector2Method, vector2New } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { F, I, S } from "./support/variants";
 
 describe("runtime/vector2", () => {

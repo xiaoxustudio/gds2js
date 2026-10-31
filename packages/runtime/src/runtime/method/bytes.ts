@@ -13,9 +13,9 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
 import { stringUnicodeReplaceError, packBswapGuard, packDecodeGuard, packEncodeGuard, packVarOffsetNegative, packVarShort, packSizeMultiple, packDynamicSrcEmpty, packDynamicFailed, packDynamicBadMode } from "../frames";
 import { gVarToBytes, gVarToBytesWithObjects, gVarDecodeAt } from "../var-bytes";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
-import { GVector2 } from "../vector2";
-import { GVector3 } from "../vector3";
-import { GVector4 } from "../vector4";
+import { GVector2 } from "../class/vector/vector2";
+import { GVector3 } from "../class/vector/vector3";
+import { GVector4 } from "../class/vector/vector4";
 import { GColor } from "../color";
 import { GBytes, packDynamicUnpack, packTypeName } from "../packed";
 import { asString, boolArgOr } from "./core";

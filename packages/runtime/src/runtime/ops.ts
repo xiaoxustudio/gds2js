@@ -4,16 +4,16 @@ import { pctFormatError } from "./frames";
 import { Tag, tagName, V, intToBig, intToNum, wrap64, type IntPayload, type Variant } from "./tags";
 import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
-import { asVec2, GVector2, vector2, vecCmp } from "./vector2";
-import { asVec3, GVector3, vector3, vec3Cmp } from "./vector3";
+import { asVec2, GVector2, vector2, vecCmp } from "./class/vector/vector2";
+import { asVec3, GVector3, vector3, vec3Cmp } from "./class/vector/vector3";
 import { asQuaternion, quaternion } from "./quaternion";
 import { asTransform2D, transform2d } from "./transform2d";
 import { asBasis, basisMul, basisScaled, basisXform } from "./basis";
 import { asTransform3D, pointMulTransform3d, transform3dCompose, transform3dXformPoint } from "./transform3d";
 
 const r3 = Math.fround;
-import { asVec4, GVector4, vec4Cmp } from "./vector4";
-import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./vector4i";
+import { asVec4, GVector4, vec4Cmp } from "./class/vector/vector4";
+import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./class/vector/vector4i";
 import { asColor, color, GColor } from "./color";
 import { bytesConcat, GBytes } from "./packed";
 import { INT64_MIN, TWO_63 } from "./numstr";
@@ -28,7 +28,7 @@ import {
   vec2iCmp,
   vec2iToFloat,
   vector2i,
-} from "./vector2i";
+} from "./class/vector/vector2i";
 import {
   asVec3i,
   v3iAdd,
@@ -42,7 +42,7 @@ import {
   v3iSub,
   vec3iCmp,
   vec3iToFloat,
-} from "./vector3i";
+} from "./class/vector/vector3i";
 import { GArray, GDict, keyOf, show, strFormat, strFormatSoft, truthyOf, valueEq} from "./values";
 import { strAt, strCmp, strLength, strSubstr, valueTypeName } from "./string-ops";
 import { strFloat } from "./numfmt";

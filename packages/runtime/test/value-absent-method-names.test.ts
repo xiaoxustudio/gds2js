@@ -7,9 +7,9 @@ import { describe, it } from "vitest";
 import { eq } from "@gds2js/testkit";
 import { method } from "@gds2js/runtime/runtime/methods";
 import { packCtor } from "@gds2js/runtime/runtime/packed";
-import { vector2 } from "@gds2js/runtime/runtime/vector2";
-import { vector2i } from "@gds2js/runtime/runtime/vector2i";
-import { vector3i } from "@gds2js/runtime/runtime/vector3i";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { vector3i } from "@gds2js/runtime/runtime/class/vector/vector3i";
 import { colorNew } from "@gds2js/runtime/runtime/color";
 import type { Variant } from "@gds2js/runtime/runtime/tags";
 

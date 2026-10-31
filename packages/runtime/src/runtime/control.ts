@@ -1,7 +1,7 @@
 import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
 import { GTransform2D } from "./composite-classes";
-import { asVec2, vector2 } from "./vector2";
+import { asVec2, vector2 } from "./class/vector/vector2";
 import { nodeFaceOf, nodeParent, type NodeRec } from "./node";
 
 const r = Math.fround;

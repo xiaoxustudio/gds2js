@@ -1,6 +1,6 @@
 import { GodotRuntimeError, UnsupportedError } from "./errors";
 import { Tag, V, intToBig, intToNum, int64ParamBig, tagName, type IntPayload, type Variant } from "./tags";
-import { CMP_EPS, approxEq, clamp, vecFailKey } from "./vector2";
+import { CMP_EPS, approxEq, clamp, vecFailKey } from "./class/vector/vector2";
 import { COLOR_NAMED } from "./color-named";
 import { asNodePath, nodePathText } from "./node-path";
 

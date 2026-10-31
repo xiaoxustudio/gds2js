@@ -1,11 +1,11 @@
 import { Tag, V, tagName, type Variant } from "./tags";
 import { UnsupportedError } from "./errors";
-import { asVec2i, vector2i, wrap32 } from "./vector2i";
+import { asVec2i, vector2i, wrap32 } from "./class/vector/vector2i";
 import { GRect2i } from "./composite-classes";
 
 export { GRect2i } from "./composite-classes";
 import { asRect2 } from "./rect2";
-import { GVector2 } from "./vector2";
+import { GVector2 } from "./class/vector/vector2";
 
 export function rect2i(x: number | bigint, y: number | bigint, w: number | bigint, h: number | bigint): Variant {
   return V.object(new GRect2i(x, y, w, h));

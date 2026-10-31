@@ -7,13 +7,13 @@ import { index, method, writeIdx, writeProp } from "@gds2js/runtime/runtime/meth
 import { isLess, ops } from "@gds2js/runtime/runtime/ops";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, GDict, show, stampArray, valueEq } from "@gds2js/runtime/runtime/values";
-import { GVector2, vector2 } from "@gds2js/runtime/runtime/vector2";
-import { GVector3, vector3 } from "@gds2js/runtime/runtime/vector3";
+import { GVector2, vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { GVector3, vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { GBytes } from "@gds2js/runtime/runtime/packed";
 import { typeOf } from "@gds2js/runtime/runtime/patterns";
-import { vector2i } from "@gds2js/runtime/runtime/vector2i";
-import { asVec3i, GVector3i, toVec3, toVec3i, vector3i, vector3iConst, vector3iMethod, vector3iNew } from "@gds2js/runtime/runtime/vector3i";
-import { toVec2i } from "@gds2js/runtime/runtime/vector2i";
+import { vector2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { asVec3i, GVector3i, toVec3, toVec3i, vector3i, vector3iConst, vector3iMethod, vector3iNew } from "@gds2js/runtime/runtime/class/vector/vector3i";
+import { toVec2i } from "@gds2js/runtime/runtime/class/vector/vector2i";
 import { I } from "./support/variants";
 
 describe("runtime/vector3i", () => {

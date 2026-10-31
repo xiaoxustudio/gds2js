@@ -8,10 +8,10 @@ import { paramSlot } from "@gds2js/runtime/runtime/slots";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray, show } from "@gds2js/runtime/runtime/values";
 import { colorNew } from "@gds2js/runtime/runtime/color";
-import { vector2New } from "@gds2js/runtime/runtime/vector2";
-import { vector3New } from "@gds2js/runtime/runtime/vector3";
-import { vector2iNew } from "@gds2js/runtime/runtime/vector2i";
-import { vector3iNew } from "@gds2js/runtime/runtime/vector3i";
+import { vector2New } from "@gds2js/runtime/runtime/class/vector/vector2";
+import { vector3New } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { vector2iNew } from "@gds2js/runtime/runtime/class/vector/vector2i";
+import { vector3iNew } from "@gds2js/runtime/runtime/class/vector/vector3i";
 
 describe("runtime/slots · 参数槽", () => {
   it("156 +3 · 形参的入口槽位：「能转的」与「该抛的」各钉一格", async () => {
