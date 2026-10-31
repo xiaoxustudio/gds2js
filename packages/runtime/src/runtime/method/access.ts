@@ -27,25 +27,34 @@ import { GVector3, vec3ReadIndex, vec3Write } from "../class/vector/vector3";
 import { GVector4, vec4ReadIndex, vec4Write } from "../class/vector/vector4";
 import { GVector4i, vec4iReadIndex, vec4iWrite } from "../class/vector/vector4i";
 import { GVector2i, toVec2i, vec2iReadIndex, vec2iWrite } from "../class/vector/vector2i";
-import { aabbReadProp } from "../aabb";
-import { planeReadProp } from "../plane";
-import { quaternionReadProp } from "../quaternion";
-import { transform2dReadProp } from "../transform2d";
-import { transform3dReadProp, transform3dWriteProp } from "../transform3d";
-import { basisReadProp, basisWriteProp } from "../basis";
+import { aabbReadProp } from "../class/shape/aabb";
+import { planeReadProp } from "../class/orient/plane";
+import { quaternionReadProp } from "../class/orient/quaternion";
+import { transform2dReadProp } from "../class/orient/transform2d";
+import { transform3dReadProp, transform3dWriteProp } from "../class/orient/transform3d";
+import { basisReadProp, basisWriteProp } from "../class/orient/basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet } from "../node";
 import { GdSceneTree, treeReadProp } from "../scene";
 import { node2dRead, node2dWrite } from "../node2d";
 import { ctlRead, ctlWrite } from "../control";
 import { node3dRead, node3dWrite } from "../node3d";
-import { GBasis, GPlane, GQuaternion, GTransform2D, GTransform3D } from "../composite-classes";
-import { GAABB } from "../composite-classes";
-import { GRect2, rect2ReadProp, rect2WriteProp } from "../rect2";
-import { GRect2i, rect2iReadProp, rect2iWriteProp } from "../rect2i";
+import { GRect2, rect2ReadProp, rect2WriteProp, GRect2i, rect2iReadProp, rect2iWriteProp } from "../class/shape/rect";
 import { asVec3i, GVector3i, toVec3, toVec3i, vec3iReadIndex, vec3iWrite } from "../class/vector/vector3i";
 import { colorRead, colorWrite, GColor, toColor } from "../color";
 import { bytesReadIndex, bytesWriteIndex, GBytes, packItems, packNameAbsent, packTypeName } from "../packed";
 import { ARRAY_ATTR_ABSENT, STRING_ATTR_ABSENT, VECTOR_FACES, asArray, asDict, asString, intArgIdx, norm } from "./core";
+
+import { GBasis } from "../class/orient/basis";
+
+import { GPlane } from "../class/orient/plane";
+
+import { GQuaternion } from "../class/orient/quaternion";
+
+import { GTransform2D } from "../class/orient/transform2d";
+
+import { GTransform3D } from "../class/orient/transform3d";
+
+import { GAABB } from "../class/shape/aabb";
 
 export function signalCtor(args: Variant[]): Variant {
   if (args.length === 0) return V.object(new Signal());

@@ -1,7 +1,7 @@
 /** Quaternion 乘法：四元数积按实测五形发，`q * Vector3` 在 float32 结合次序对上之前响亮拒。 */
 import { describe, it } from "vitest";
 import { eq, shouldThrow } from "@gds2js/testkit";
-import { quaternion } from "@gds2js/runtime/runtime/quaternion";
+import { quaternion } from "@gds2js/runtime/runtime/class/orient/quaternion";
 import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
 import { ops } from "@gds2js/runtime/runtime/ops";
 import { show } from "@gds2js/runtime/runtime/values";

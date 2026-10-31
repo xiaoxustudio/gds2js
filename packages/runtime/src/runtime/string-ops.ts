@@ -7,7 +7,6 @@ import { asVec2 } from "./class/vector/vector2";
 import { asVec3 } from "./class/vector/vector3";
 import { asVec4 } from "./class/vector/vector4";
 import { asVec2i } from "./class/vector/vector2i";
-import { asAABB, asBasis, asPlane, asQuaternion, asRect2, asRect2i, asTransform2D, asTransform3D } from "./composite-classes";
 import { asVec3i } from "./class/vector/vector3i";
 import { asVec4i } from "./class/vector/vector4i";
 import { asColor } from "./color";
@@ -19,6 +18,20 @@ import { asNodePath, nodePathText } from "./node-path";
 import { findLower, findUpper } from "./ucaps";
 
 import { strFloat } from "./numfmt";
+
+import { asAABB } from "./class/shape/aabb";
+
+import { asBasis } from "./class/orient/basis";
+
+import { asPlane } from "./class/orient/plane";
+
+import { asQuaternion } from "./class/orient/quaternion";
+
+import { asRect2, asRect2i } from "./class/shape/rect";
+
+import { asTransform2D } from "./class/orient/transform2d";
+
+import { asTransform3D } from "./class/orient/transform3d";
 
 export function posOobSay(key: string, base: string | undefined, valueType: string): string {
   return base === undefined
@@ -1260,25 +1273,6 @@ export function strColor(n: number): string {
   if (n === 0) return Object.is(n, -0) ? "-0.0" : "0.0";
   if (Number.isInteger(n)) return strFloat(n);
   const t = n.toFixed(4).replace(/0+$/, "");
-  return t.endsWith(".") ? `${t}0` : t;
-}
-
-/** 引擎给 Plane.D 与 Quaternion 分量的那一形：六位小数、去尾零（`2` / `0.707107`）。 */
-export function num6Text(n: number): string {
-  if (!Number.isFinite(n)) return strVec2(n);
-  if (Number.isInteger(n)) return String(n);
-  const s = n.toFixed(6).replace(/0+$/, "");
-  return s.endsWith(".") ? s + "0" : s;
-}
-
-export function strVec2(n: number): string {
-  if (Number.isNaN(n)) return "nan";
-  if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
-  if (Number.isInteger(n)) return strFloat(n);
-  const magnitude = Math.trunc(Math.fround(Math.log10(Math.abs(n))));
-  const decimals = Math.max(0, Math.min(6, 6 - magnitude));
-  if (decimals === 0) return n.toFixed(0);
-  const t = n.toFixed(decimals).replace(/0+$/, "");
   return t.endsWith(".") ? `${t}0` : t;
 }
 

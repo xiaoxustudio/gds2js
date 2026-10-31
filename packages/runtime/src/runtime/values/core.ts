@@ -1,24 +1,18 @@
-import { numVal, strFloat } from "../numfmt";
-import { posOobSay, strCEscape, strColor, strVec2, valueTypeName } from "../string-ops";
+import { numVal, strFloat, strVec2 } from "../numfmt";
+import { posOobSay, strCEscape, strColor, valueTypeName } from "../string-ops";
 import { GodotRuntimeError, UnsupportedError } from "../errors";
 import { Tag, tagName, V, intToNum, type IntPayload, type Variant } from "../tags";
 import { GVector2, asVec2 } from "../class/vector/vector2";
 import { GVector3, asVec3, vector3 } from "../class/vector/vector3";
 import { GVector4, asVec4, vector4 } from "../class/vector/vector4";
 import { asVec2i, GVector2i, vector2i } from "../class/vector/vector2i";
-import { asRect2, GRect2, rect2, rect2Text } from "../rect2";
-import { asRect2i, GRect2i, rect2i, rect2iText } from "../rect2i";
-import { aabb, aabbText } from "../aabb";
-import { plane, planeText } from "../plane";
-import { quaternion, quaternionText } from "../quaternion";
-import { asQuaternion, GQuaternion } from "../composite-classes";
-import { asTransform2D, GTransform2D } from "../composite-classes";
-import { asTransform3D, GTransform3D } from "../composite-classes";
-import { transform2d, transform2dText } from "../transform2d";
-import { transform3d, transform3dText } from "../transform3d";
-import { asBasis, basis, basisText, GBasis } from "../basis";
-import { asPlane, GPlane } from "../composite-classes";
-import { asAABB, GAABB } from "../composite-classes";
+import { asRect2, GRect2, rect2, rect2Text, asRect2i, GRect2i, rect2i, rect2iText } from "../class/shape/rect";
+import { aabb, aabbText } from "../class/shape/aabb";
+import { plane, planeText } from "../class/orient/plane";
+import { quaternion, quaternionText } from "../class/orient/quaternion";
+import { transform2d, transform2dText } from "../class/orient/transform2d";
+import { transform3d, transform3dText } from "../class/orient/transform3d";
+import { asBasis, basis, basisText, GBasis } from "../class/orient/basis";
 import { asVec3i, GVector3i, vector3i } from "../class/vector/vector3i";
 import { asVec4i, GVector4i, vector4i } from "../class/vector/vector4i";
 import { asColor, color, GColor, tryColorSlot } from "../color";
@@ -31,6 +25,16 @@ import { asRid, ridText } from "../rid";
 import { asNodePath, nodePathText, sameNodePath } from "../node-path";
 import type { GArray, GDict } from "./containers";
 
+import { GQuaternion, asQuaternion } from "../class/orient/quaternion";
+
+import { GTransform2D, asTransform2D } from "../class/orient/transform2d";
+
+import { GTransform3D, asTransform3D } from "../class/orient/transform3d";
+
+import { GPlane, asPlane } from "../class/orient/plane";
+
+import { GAABB, asAABB } from "../class/shape/aabb";
+
 let containerFactories: { array: () => GArray; dict: () => GDict } | null = null;
 export function registerContainerFactories(f: { array: () => GArray; dict: () => GDict }): void {
   containerFactories = f;
@@ -40,7 +44,6 @@ function newContainer(kind: "array" | "dict"): GArray | GDict {
   if (containerFactories === null) throw new UnsupportedError("container-factory", "容器工厂还没接上：`values/containers` 没被加载进运行时模块图");
   return kind === "array" ? containerFactories.array() : containerFactories.dict();
 }
-
 
 /** Dictionary 键编码：键必须带类型前缀，否则 1（int）与 1.0（float）会撞成同一个键。 */
 export function keyOf(v: Variant): string {
@@ -346,9 +349,6 @@ export function fromEnd(i: number, len: number): number | null {
   const k = i < 0 ? i + len : i;
   return k < 0 || k >= len ? null : k;
 }
-
-
-
 
 export function deepCopy(v: Variant, memo?: Map<unknown, Variant>): Variant {
   if (v.t === Tag.ARRAY) return V.array((v.v as GArray).duplicate(true, memo));

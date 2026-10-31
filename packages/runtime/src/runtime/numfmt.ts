@@ -154,3 +154,22 @@ export function stripTrailingZeros(src: string): string {
   }
   return chars.join("").split("\0")[0]!;
 }
+
+export function strVec2(n: number): string {
+  if (Number.isNaN(n)) return "nan";
+  if (!Number.isFinite(n)) return n > 0 ? "inf" : "-inf";
+  if (Number.isInteger(n)) return strFloat(n);
+  const magnitude = Math.trunc(Math.fround(Math.log10(Math.abs(n))));
+  const decimals = Math.max(0, Math.min(6, 6 - magnitude));
+  if (decimals === 0) return n.toFixed(0);
+  const t = n.toFixed(decimals).replace(/0+$/, "");
+  return t.endsWith(".") ? `${t}0` : t;
+}
+
+/** 引擎给 Plane.D 与 Quaternion 分量的那一形：六位小数、去尾零（`2` / `0.707107`）。 */
+export function num6Text(n: number): string {
+  if (!Number.isFinite(n)) return strVec2(n);
+  if (Number.isInteger(n)) return String(n);
+  const s = n.toFixed(6).replace(/0+$/, "");
+  return s.endsWith(".") ? s + "0" : s;
+}

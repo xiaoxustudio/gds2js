@@ -8,13 +8,26 @@ import { GdRid } from "../rid";
 import { GdNodePath } from "../node-path";
 import { GVector2, vector2 } from "../class/vector/vector2";
 import { GVector2i } from "../class/vector/vector2i";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "../composite-classes";
 import { GVector3, vector3 } from "../class/vector/vector3";
 import { GVector3i } from "../class/vector/vector3i";
 import { GVector4, vector4 } from "../class/vector/vector4";
 import { GVector4i } from "../class/vector/vector4i";
 import { GColor } from "../color";
 import { MASK64 } from "./args";
+
+import { GAABB } from "../class/shape/aabb";
+
+import { GBasis } from "../class/orient/basis";
+
+import { GPlane } from "../class/orient/plane";
+
+import { GQuaternion } from "../class/orient/quaternion";
+
+import { GRect2, GRect2i } from "../class/shape/rect";
+
+import { GTransform2D } from "../class/orient/transform2d";
+
+import { GTransform3D } from "../class/orient/transform3d";
 
 export function hashDjb2(s: string): number {
   let h = 5381;

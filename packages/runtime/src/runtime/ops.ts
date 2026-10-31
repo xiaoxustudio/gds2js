@@ -6,10 +6,10 @@ import { asRid } from "./rid";
 import { asNodePath } from "./node-path";
 import { asVec2, GVector2, vector2, vecCmp } from "./class/vector/vector2";
 import { asVec3, GVector3, vector3, vec3Cmp } from "./class/vector/vector3";
-import { asQuaternion, quaternion } from "./quaternion";
-import { asTransform2D, transform2d } from "./transform2d";
-import { asBasis, basisMul, basisScaled, basisXform } from "./basis";
-import { asTransform3D, pointMulTransform3d, transform3dCompose, transform3dXformPoint } from "./transform3d";
+import { asQuaternion, quaternion } from "./class/orient/quaternion";
+import { asTransform2D, transform2d } from "./class/orient/transform2d";
+import { asBasis, basisMul, basisScaled, basisXform } from "./class/orient/basis";
+import { asTransform3D, pointMulTransform3d, transform3dCompose, transform3dXformPoint } from "./class/orient/transform3d";
 
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./class/vector/vector4";

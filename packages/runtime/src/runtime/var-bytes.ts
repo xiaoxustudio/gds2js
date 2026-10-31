@@ -7,9 +7,7 @@ import { GVector3 } from "./class/vector/vector3";
 import { GVector4 } from "./class/vector/vector4";
 import { GVector4i } from "./class/vector/vector4i";
 import { GVector2i } from "./class/vector/vector2i";
-import { GAABB, GBasis, GPlane, GQuaternion, GTransform2D, GTransform3D } from "./composite-classes";
-import { GRect2 } from "./rect2";
-import { GRect2i } from "./rect2i";
+import { GRect2, GRect2i } from "./class/shape/rect";
 import { GVector3i } from "./class/vector/vector3i";
 import { GColor } from "./color";
 import { GdNodePath } from "./node-path";
@@ -18,6 +16,18 @@ import { encodedObjectIdBox, NULL_OBJECT } from "./identity";
 import { CallableBox, nullCallable } from "./callable";
 import { GdRid, rid } from "./rid";
 import { ENGINE_CLASS_NAMES } from "./engine-classes";
+
+import { GAABB } from "./class/shape/aabb";
+
+import { GBasis } from "./class/orient/basis";
+
+import { GPlane } from "./class/orient/plane";
+
+import { GQuaternion } from "./class/orient/quaternion";
+
+import { GTransform2D } from "./class/orient/transform2d";
+
+import { GTransform3D } from "./class/orient/transform3d";
 
 const FLAG_WIDE = 1;
 

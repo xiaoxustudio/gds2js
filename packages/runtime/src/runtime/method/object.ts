@@ -10,8 +10,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
-import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc } from "../object";
-import { CallableBox, callableLabel, isCallableBox, isNullCallable } from "../object";
+import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc, CallableBox, callableLabel, isCallableBox, isNullCallable } from "../object";
 import { callDeferred } from "../callable";
 import { nativeAritySay } from "../face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "../identity";
@@ -28,11 +27,11 @@ import { GVector3, vector3Method } from "../class/vector/vector3";
 import { GVector4, vector4Method } from "../class/vector/vector4";
 import { GVector4i, vector4iMethod } from "../class/vector/vector4i";
 import { GVector2i, vector2iMethod } from "../class/vector/vector2i";
-import { rect2Method, rect2iMethod } from "./rect";
-import { aabbMethod } from "./aabb";
-import { planeMethod } from "./plane";
-import { quaternionMethod } from "./quaternion";
-import { transform2dMethod } from "./transform2d";
+import { rect2Method, rect2iMethod } from "../class/shape/rect";
+import { aabbMethod } from "../class/shape/aabb";
+import { planeMethod } from "../class/orient/plane";
+import { quaternionMethod } from "../class/orient/quaternion";
+import { transform2dMethod } from "../class/orient/transform2d";
 import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "./json";
 import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAccessStatic, fileMethod } from "./file-access";
 import { GdDir, GdFile } from "../file-access";
@@ -40,12 +39,11 @@ import { GdRegEx, GdRegExMatch, regExNew } from "../regex";
 import { regExMatchMethod, regExMethod } from "./regex";
 import { GdJson, jsonNew } from "../json";
 import { probedClassChain } from "../patterns";
-import { transform3dMethod } from "./transform3d";
-import { basisMethod } from "./basis";
+import { transform3dMethod } from "../class/orient/transform3d";
+import { basisMethod } from "../class/orient/basis";
 import { nodeMethod } from "./node";
 import { GdSceneTree, treeMethod } from "../scene";
 import { engineClassNew, engineClassNewable, isEngineNode } from "../node";
-import { GAABB, GBasis, GPlane, GQuaternion, GRect2, GRect2i, GTransform2D, GTransform3D } from "../composite-classes";
 import { GVector3i, vector3iMethod } from "../class/vector/vector3i";
 import { colorMethod, GColor } from "../color";
 import { bytesMethod, GBytes, packTypeName } from "../packed";
@@ -55,6 +53,20 @@ import { attribute, callSlot, callStatic, callvArgs, descFor, objectBaseLabel, s
 import { deferredArityBlock, isAritySay } from "./core";
 import { callCallableBox } from "./callable";
 import { nodePathSliceArg } from "./core";
+
+import { GAABB } from "../class/shape/aabb";
+
+import { GBasis } from "../class/orient/basis";
+
+import { GPlane } from "../class/orient/plane";
+
+import { GQuaternion } from "../class/orient/quaternion";
+
+import { GRect2, GRect2i } from "../class/shape/rect";
+
+import { GTransform2D } from "../class/orient/transform2d";
+
+import { GTransform3D } from "../class/orient/transform3d";
 
 export function objectMethod(obj: Variant, name: string, args: Variant[]): Variant {
   const inner = obj.v;

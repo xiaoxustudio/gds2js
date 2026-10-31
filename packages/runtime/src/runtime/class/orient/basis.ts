@@ -1,13 +1,38 @@
-import { Tag, V, tagName, type Variant } from "./tags";
-import { UnsupportedError } from "./errors";
-import { strVec2 } from "./string-ops";
-import { asBasis, GQuaternion, GBasis } from "./composite-classes";
-import { asVec3, vector3 } from "./class/vector/vector3";
+import { Tag, V, tagName, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
+import { strVec2 } from "../../numfmt";
+import { GQuaternion } from "./quaternion";
+import { asVec3, vector3 } from "../vector/vector3";
+
+export class GBasis {
+  x0: number;
+  x1: number;
+  x2: number;
+  y0: number;
+  y1: number;
+  y2: number;
+  z0: number;
+  z1: number;
+  z2: number;
+  constructor(x0: number, x1: number, x2: number, y0: number, y1: number, y2: number, z0: number, z1: number, z2: number) {
+    const f = Math.fround;
+    this.x0 = f(x0);
+    this.x1 = f(x1);
+    this.x2 = f(x2);
+    this.y0 = f(y0);
+    this.y1 = f(y1);
+    this.y2 = f(y2);
+    this.z0 = f(z0);
+    this.z1 = f(z1);
+    this.z2 = f(z2);
+  }
+}
+
+export function asBasis(v: Variant): GBasis | null {
+  return v.t === Tag.OBJECT && v.v instanceof GBasis ? (v.v as GBasis) : null;
+}
 
 const r = Math.fround;
-
-export { asBasis, GBasis };
-
 export function basis(
   x0: number, x1: number, x2: number,
   y0: number, y1: number, y2: number,
@@ -15,13 +40,11 @@ export function basis(
 ): Variant {
   return V.object(new GBasis(x0, x1, x2, y0, y1, y2, z0, z1, z2));
 }
-
 function num(v: Variant | undefined, at: string): number {
   if (v === undefined) throw new UnsupportedError("basis-arity", `Basis() 的 ${at} 缺了`);
   if (v.t === Tag.INT || v.t === Tag.FLOAT) return r(Number(v.v));
   throw new UnsupportedError("basis-arg", `Basis() 的 ${at} 只量过数与向量（收到 ${tagName(v.t)}）`);
 }
-
 export function axisAngleBasis(ax: number, ay: number, az: number, angle: number): GBasis {
   const len2 = r(r(r(ax * ax) + r(ay * ay)) + r(az * az));
   if (len2 !== 1) throw new UnsupportedError("basis-axis-normalized", "Basis 的轴角两支只量过单位轴：轴长平方不为 1 那一形引擎发 ERROR 并回单位阵，没建模");
@@ -41,11 +64,9 @@ export function axisAngleBasis(ax: number, ay: number, az: number, angle: number
     r(r(tx * az) + sy), r(r(ty * az) - sx), r(r(tz * az) + c),
   );
 }
-
 export function basisFromAxisAngle(ax: number, ay: number, az: number, angle: number): Variant {
   return V.object(axisAngleBasis(ax, ay, az, angle));
 }
-
 export function basisFromQuaternion(q: GQuaternion): Variant {
   const x = q.x;
   const y = q.y;
@@ -69,7 +90,6 @@ export function basisFromQuaternion(q: GQuaternion): Variant {
     r(xz + yw), r(yz - xw), r(1 - r(x2 + y2)),
   );
 }
-
 export function basisNew(args: Variant[]): Variant {
   if (args.length === 0) return basis(1, 0, 0, 0, 1, 0, 0, 0, 1);
   if (args.length === 1) {
@@ -96,7 +116,6 @@ export function basisNew(args: Variant[]): Variant {
   }
   throw new UnsupportedError("basis-arity", `Basis() 只量过 0、1、2、3 个实参（收到 ${args.length} 个）：九数写法只在 var_to_str 的输出里量到过`);
 }
-
 export function basisMul(a: GBasis, b: GBasis): Variant {
   return basis(
     r(r(r(a.x0 * b.x0) + r(a.y0 * b.x1)) + r(a.z0 * b.x2)),
@@ -110,7 +129,6 @@ export function basisMul(a: GBasis, b: GBasis): Variant {
     r(r(r(a.x2 * b.z0) + r(a.y2 * b.z1)) + r(a.z2 * b.z2)),
   );
 }
-
 export function basisXform(a: GBasis, vx: number, vy: number, vz: number): [number, number, number] {
   return [
     r(r(r(a.x0 * vx) + r(a.y0 * vy)) + r(a.z0 * vz)),
@@ -118,7 +136,6 @@ export function basisXform(a: GBasis, vx: number, vy: number, vz: number): [numb
     r(r(r(a.x2 * vx) + r(a.y2 * vy)) + r(a.z2 * vz)),
   ];
 }
-
 export function basisScaled(a: GBasis, k: number): Variant {
   return basis(
     r(a.x0 * k), r(a.x1 * k), r(a.x2 * k),
@@ -126,14 +143,12 @@ export function basisScaled(a: GBasis, k: number): Variant {
     r(a.z0 * k), r(a.z1 * k), r(a.z2 * k),
   );
 }
-
 export function basisDeterminant(a: GBasis): number {
   const cx = r(r(a.y1 * a.z2) - r(a.z1 * a.y2));
   const cy = r(r(a.z1 * a.x2) - r(a.x1 * a.z2));
   const cz = r(r(a.x1 * a.y2) - r(a.y1 * a.x2));
   return r(r(r(a.x0 * cx) + r(a.y0 * cy)) + r(a.z0 * cz));
 }
-
 export function basisInverseParts(a: GBasis): GBasis | null {
   const det = basisDeterminant(a);
   if (det === 0) return null;
@@ -147,19 +162,15 @@ export function basisInverseParts(a: GBasis): GBasis | null {
     r(rd * r(r(y0 * z1) - r(z0 * y1))), r(rd * r(r(x1 * z0) - r(z1 * x0))), r(rd * r(r(x0 * y1) - r(y0 * x1))),
   );
 }
-
 function basisRowLength(x: number, y: number, z: number): number {
   return r(Math.sqrt(r(r(r(x * x) + r(y * y)) + r(z * z))));
 }
-
 function basisRowDivide(x: number, y: number, z: number, d: number): [number, number, number] {
   return [r(x / d), r(y / d), r(z / d)];
 }
-
 function basisRowDot(a: [number, number, number], b: [number, number, number]): number {
   return r(r(r(a[0] * b[0]) + r(a[1] * b[1])) + r(a[2] * b[2]));
 }
-
 export function basisOrthoParts(a: GBasis): GBasis {  const x: [number, number, number] = [a.x0, a.x1, a.x2];
   const y: [number, number, number] = [a.y0, a.y1, a.y2];
   const z: [number, number, number] = [a.z0, a.z1, a.z2];
@@ -177,13 +188,11 @@ export function basisOrthoParts(a: GBasis): GBasis {  const x: [number, number, 
   const o2 = basisRowDivide(zRaw[0], zRaw[1], zRaw[2], basisRowLength(zRaw[0], zRaw[1], zRaw[2]));
   return new GBasis(o0[0], o0[1], o0[2], o1[0], o1[1], o1[2], o2[0], o2[1], o2[2]);
 }
-
 export function basisText(v: GBasis): string {
   return `[X: (${strVec2(v.x0)}, ${strVec2(v.x1)}, ${strVec2(v.x2)}), `
     + `Y: (${strVec2(v.y0)}, ${strVec2(v.y1)}, ${strVec2(v.y2)}), `
     + `Z: (${strVec2(v.z0)}, ${strVec2(v.z1)}, ${strVec2(v.z2)})]`;
 }
-
 export function basisScaleParts(a: GBasis): [number, number, number] {
   const sign = basisDeterminant(a) < 0 ? -1 : 1;
   return [
@@ -192,9 +201,7 @@ export function basisScaleParts(a: GBasis): [number, number, number] {
     r(sign * basisRowLength(a.z0, a.z1, a.z2)),
   ];
 }
-
 const EULER_SINGULAR = r(1 - 0.00000025);
-
 export function basisEulerYXZ(a: GBasis): [number, number, number] {
   const o = basisOrthoParts(a);
   const flip = basisDeterminant(o) < 0;
@@ -218,14 +225,12 @@ export function basisEulerYXZ(a: GBasis): [number, number, number] {
   }
   return [r(-Math.PI * 0.5), r(-Math.atan2(c10, c00)), 0];
 }
-
 export function basisReadProp(v: GBasis, name: string): Variant | null {
   if (name === "x") return vector3(v.x0, v.x1, v.x2);
   if (name === "y") return vector3(v.y0, v.y1, v.y2);
   if (name === "z") return vector3(v.z0, v.z1, v.z2);
   return null;
 }
-
 export function basisWriteProp(v: GBasis, name: string, value: Variant): Variant | null {
   const col = asVec3(value);
   if (col === null) throw new UnsupportedError("basis-write", `Basis.${name} 的写入只量过 Vector3 那一形（收到 ${tagName(value.t)}）`);
@@ -233,4 +238,56 @@ export function basisWriteProp(v: GBasis, name: string, value: Variant): Variant
   if (name === "y") { v.y0 = col.x; v.y1 = col.y; v.y2 = col.z; return null; }
   if (name === "z") { v.z0 = col.x; v.z1 = col.y; v.z2 = col.z; return null; }
   throw new UnsupportedError("basis-prop", `Basis.${name} 的写入没量过`);
+}
+function columnLength(x: number, y: number, z: number): number {
+  return r(Math.sqrt(r(r(r(x * x) + r(y * y)) + r(z * z))));
+}
+function dot3(ax: number, ay: number, az: number, bx: number, by: number, bz: number): number {
+  return r(r(r(ax * bx) + r(ay * by)) + r(az * bz));
+}
+export function basisMethod(inner: GBasis, name: string, args: Variant[]): Variant {
+  switch (name) {
+    case "determinant":
+      return V.float(basisDeterminant(inner));
+    case "transposed":
+      return basis(inner.x0, inner.y0, inner.z0, inner.x1, inner.y1, inner.z1, inner.x2, inner.y2, inner.z2);
+    case "inverse": {
+      const inv = basisInverseParts(inner);
+      if (inv === null) throw new UnsupportedError("basis-inverse", "Basis.inverse() 的行列式为零那一形没量过");
+      return basis(inv.x0, inv.x1, inv.x2, inv.y0, inv.y1, inv.y2, inv.z0, inv.z1, inv.z2);
+    }
+    case "get_scale": {
+      const det = basisDeterminant(inner);
+      const sign = det > 0 ? 1 : -1;
+      return vector3(
+        r(sign * columnLength(inner.x0, inner.x1, inner.x2)),
+        r(sign * columnLength(inner.y0, inner.y1, inner.y2)),
+        r(sign * columnLength(inner.z0, inner.z1, inner.z2)),
+      );
+    }
+    case "rotated": {
+      const axis = asVec3(args[0] as Variant);
+      if (axis === null) throw new UnsupportedError("basis-arg-type", "Basis.rotated() 的第 1 参只量过 Vector3");
+      const angle = args[1] as Variant;
+      if (angle === undefined || (angle.t !== Tag.INT && angle.t !== Tag.FLOAT)) throw new UnsupportedError("basis-arg-type", "Basis.rotated() 的第 2 参只量过数");
+      return basisMul(axisAngleBasis(axis.x, axis.y, axis.z, Number(angle.v)), inner);
+    }
+    case "tdotx": {
+      const v = asVec3(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.tdotx() 的实参只量过 Vector3");
+      return V.float(dot3(inner.x0, inner.x1, inner.x2, v.x, v.y, v.z));
+    }
+    case "tdoty": {
+      const v = asVec3(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.tdoty() 的实参只量过 Vector3");
+      return V.float(dot3(inner.y0, inner.y1, inner.y2, v.x, v.y, v.z));
+    }
+    case "tdotz": {
+      const v = asVec3(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.tdotz() 的实参只量过 Vector3");
+      return V.float(dot3(inner.z0, inner.z1, inner.z2, v.x, v.y, v.z));
+    }
+    default:
+      throw new UnsupportedError("basis-method", `Basis.${name}() 这一支没量过（get_euler / is_conformal / scaled / slerp / looking_at / orthonormalized 那几支还没读数）`);
+  }
 }
