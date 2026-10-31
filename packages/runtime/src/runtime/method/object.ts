@@ -36,6 +36,8 @@ import { transform2dMethod } from "./transform2d";
 import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "./json";
 import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAccessStatic, fileMethod } from "./file-access";
 import { GdDir, GdFile } from "../file-access";
+import { GdRegEx, GdRegExMatch, regExNew } from "../regex";
+import { regExMatchMethod, regExMethod } from "./regex";
 import { GdJson, jsonNew } from "../json";
 import { probedClassChain } from "../patterns";
 import { transform3dMethod } from "./transform3d";
@@ -60,6 +62,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GdNativeClass) {
     if (name === "new" && args.length === 0) {
       if (inner.className === "JSON") return jsonNew();
+      if (inner.className === "RegEx") return regExNew();
       if (engineClassNewable(inner.className)) return engineClassNew(inner.className);
     }
     if (inner.className === "JSON" && JSON_STATIC_NAMES.has(name)) return jsonStatic(name, args);
@@ -408,6 +411,8 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GdJson) return jsonMethod(inner, name, args);
   if (inner instanceof GdFile) return fileMethod(inner, name, args);
   if (inner instanceof GdDir) return dirMethod(inner, name, args);
+  if (inner instanceof GdRegEx) return regExMethod(inner, name, args);
+  if (inner instanceof GdRegExMatch) return regExMatchMethod(inner, name, args);
   if (inner instanceof GdSceneTree) return treeMethod(inner, name, args);
   if (isEngineNode(inner)) return nodeMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
