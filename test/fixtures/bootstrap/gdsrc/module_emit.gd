@@ -396,7 +396,7 @@ static func emit_module_with_map(m, opts, analysis_result):
 			out.append(line3)
 	if opts.get("exportInner") == true:
 		for cl8 in m["innerClasses"]:
-			out.append(cls_name + "." + cl8["name"] + " = " + cl8["name"] + ";")
+			out.append("Reflect.set(" + cls_name + ", " + JSON.stringify(cl8["name"]) + ", " + cl8["name"] + ");")
 		if m["innerClasses"].size() > 0:
 			out.append("")
 

@@ -190,9 +190,8 @@ static func check_pack_arg_slots(m, diags):
 
 static func _pk(node):
 	var loc = node.get("loc")
-	if loc == null:
-		return "?"
-	return str(loc["line"]) + ":" + str(loc["col"])
+	var head = "?" if loc == null else str(loc["line"]) + ":" + str(loc["col"])
+	return head + "|" + str(node.get("kind")) + "|" + str(node.get("name"))
 
 
 static func _pf_face_name(t):

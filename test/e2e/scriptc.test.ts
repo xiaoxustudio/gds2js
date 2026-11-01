@@ -12,7 +12,10 @@ const ALL = process.env.GDS2JS_SCRIPTC_ALL === "1";
 const PROJECT_ONLY = process.env.GDS2JS_SCRIPTC_PROJECT === "1";
 const KEEP = process.env.GDS2JS_SCRIPTC_KEEP === "1";
 const FILTER = process.env.GDS2JS_SCRIPTC_FILTER ?? "";
-const JOBS = ALL || PROJECT_ONLY ? Math.min(4, cpus().length) : 1;
+const FILTER_IDS = FILTER.split(",").map((x) => x.trim()).filter((x) => x !== "" && !x.includes(" "));
+const JOB_CAP = Number(process.env.GDS2JS_SCRIPTC_JOBS ?? 4);
+const PARALLEL = ALL || PROJECT_ONLY || FILTER_IDS.length > 0;
+const JOBS = PARALLEL ? Math.min(Number.isFinite(JOB_CAP) && JOB_CAP > 0 ? JOB_CAP : 4, cpus().length) : 1;
 
 const WORK = join(ROOT, "tmp", "sc-gate");
 const created: string[] = [];
@@ -133,9 +136,11 @@ function ensureZstdPackages(): void {
 }
 
 function pickCases(): string[] {
-  const allIds = listCases(FILTER)
+  const chunked = FILTER_IDS.length > 0;
+  const allIds = listCases(chunked ? "" : FILTER)
     .filter((id) => (PROJECT_ONLY ? caseIsProject(id) : true))
-    .filter((id) => godotOk(readGolden(id)) && (caseIsProject(id) || existsSync(genFile(id))));
+    .filter((id) => godotOk(readGolden(id)) && (caseIsProject(id) || existsSync(genFile(id))))
+    .filter((id) => !chunked || FILTER_IDS.includes(id));
   if (ALL || PROJECT_ONLY || FILTER !== "") return allIds;
   return DEFAULT_SET.filter((id) => allIds.includes(id));
 }

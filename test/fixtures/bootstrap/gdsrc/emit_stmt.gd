@@ -101,7 +101,11 @@ static func emit_stmt_inner(s, void_return):
 			if se is Dictionary:
 				return err(se["__error"], se["message"])
 			raw = se
-		var init = HE.stamp_decl(s.get("type"), raw, s.get("init") != null, false)
+		var from_lit = true
+		if s.get("init") != null:
+			var ik = s["init"].get("kind")
+			from_lit = ik == "array" or ik == "dict"
+		var init = HE.stamp_decl(s.get("type"), raw, s.get("init") != null, from_lit)
 		var cast = AB.declared_cast(s.get("type"))
 		if cast != null:
 			return ["let " + s["name"] + " = " + cast + "(" + init + ");"]

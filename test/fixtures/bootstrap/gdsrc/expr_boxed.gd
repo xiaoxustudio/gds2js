@@ -11,6 +11,8 @@ const SAFE_INT = 9007199254740991
 
 static func emit_lit(lit, value):
 	if lit == "int":
+		if typeof(value) == TYPE_STRING:
+			return "rt.V.int(" + value + "n)"
 		var text = str(value)
 		if typeof(value) == TYPE_INT and (value > SAFE_INT or value < -SAFE_INT):
 			return "rt.V.int(" + text + "n)"

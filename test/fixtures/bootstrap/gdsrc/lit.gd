@@ -13,6 +13,11 @@ static func lower_int_lit(text):
 			value = value * 8 + body[i].to_int()
 	else:
 		value = body.to_int()
+		var canon = body
+		while canon.length() > 1 and canon.begins_with("0"):
+			canon = canon.substr(1)
+		if str(value) != canon:
+			return ("-" if neg else "") + canon
 	if neg:
 		return -value
 	return value

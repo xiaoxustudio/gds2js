@@ -309,7 +309,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
     for (const line of emitClassDecl(c, base)) out.push(line);
   }
   if (opts.exportInner === true) {
-    for (const c of m.innerClasses) out.push(`${className}.${c.name} = ${c.name};`);
+    for (const c of m.innerClasses) out.push(`Reflect.set(${className}, ${JSON.stringify(c.name)}, ${c.name});`);
     if (m.innerClasses.length > 0) out.push("");
   }
 

@@ -790,9 +790,10 @@ static func compile_project(opts) -> Variant:
 	var scene_root = null
 	var scene_deps = {}
 	if scene_path != null:
-		scene_root = SC.parse_scene(_read_text(scene_path))
-		if scene_root is Dictionary and scene_root.has("__error"):
-			return scene_root
+		var parsed = SC.parse_scene(_read_text(scene_path))
+		if parsed is Dictionary and parsed.has("__error"):
+			return parsed
+		scene_root = parsed["root"]
 		var stack = [scene_root]
 		while stack.size() > 0:
 			var node = stack.pop_back()
@@ -801,8 +802,9 @@ static func compile_project(opts) -> Variant:
 				if dep3 == null:
 					return _err("scene-script-missing", "场景脚本 " + node["script"] + " 不在编译作用域里")
 				scene_deps[normalize_res(node["script"])] = dep3
-			for ch in node["children"]:
-				stack.append(ch)
+			var kids = node["children"]
+			for k in range(kids.size() - 1, -1, -1):
+				stack.append(kids[k])
 		if scene_root.get("script") == null:
 			return _err("scene-root-script", "场景根节点没挂脚本时入口驱动发不出来（只量过根节点带 script= 的那一形）")
 

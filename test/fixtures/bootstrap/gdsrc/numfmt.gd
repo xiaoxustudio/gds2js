@@ -170,8 +170,20 @@ static func js_num_text(n):
 	var red = digits
 	for p in range(1, digits.length() + 1):
 		var bumped = digits.substr(0, p)
-		if p < digits.length() and digits.substr(p, 1) >= "5":
-			bumped = _js_inc_digits(bumped)
+		if p < digits.length():
+			var nx = digits.substr(p, 1)
+			var up = nx > "5"
+			if nx == "5":
+				var rest_nonzero = false
+				if p + 1 < digits.length():
+					var tail = digits.substr(p + 1)
+					rest_nonzero = tail.strip_edges().replace("0", "") != ""
+				if rest_nonzero:
+					up = true
+				elif p > 0 and int(digits.substr(p - 1, 1)) % 2 == 1:
+					up = true
+			if up:
+				bumped = _js_inc_digits(bumped)
 		var pe = e
 		if bumped.length() > p:
 			bumped = bumped.substr(0, p)

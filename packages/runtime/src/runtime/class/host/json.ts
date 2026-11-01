@@ -25,7 +25,6 @@ const ESCAPES: Record<number, string> = {
   8: "\\b",
   9: "\\t",
   10: "\\n",
-  11: "\\v",
   12: "\\f",
   13: "\\r",
   34: "\\\"",
@@ -37,7 +36,9 @@ function escString(s: string): string {
   for (const ch of s) {
     const code = ch.codePointAt(0) as number;
     const esc = ESCAPES[code];
-    out += esc === undefined ? ch : esc;
+    if (esc !== undefined) out += esc;
+    else if (code < 0x20) out += String.fromCharCode(92) + "u" + code.toString(16).padStart(4, "0");
+    else out += ch;
   }
   return out + "\"";
 }

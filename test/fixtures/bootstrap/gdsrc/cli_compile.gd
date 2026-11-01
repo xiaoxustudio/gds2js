@@ -38,7 +38,6 @@ static func compile_one(res_root, out_dir, runtime_import, entry_path):
 		"hostImport": "gds2js/host",
 		"autoRun": null,
 		"runtimeMode": "import",
-		"sceneFile": null,
 	}
 	var res = PJ.compile_project(opts)
 	if res == null:
