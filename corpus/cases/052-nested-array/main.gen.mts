@@ -31,11 +31,11 @@ export class Main extends SceneTree {
       rt.frameLine(6);
       let i = 0;
       rt.frameLine(7);
-      while ((i < 3)) {
+      while ((i < (3 as number))) {
         rt.frameLine(8);
         let j = 0;
         rt.frameLine(9);
-        while ((j < 3)) {
+        while ((j < (3 as number))) {
           rt.frameLine(10);
           s = rt.fast.iAddC(s, rt.fast.rawArrGetNum2(g, i, j));
           rt.frameLine(11);

@@ -20,11 +20,11 @@ static func emit_lit(lit, value):
 	if lit == "float":
 		return "rt.V.float(" + NF.js_num_text(value) + ")"
 	if lit == "string":
-		return "rt.V.str(" + JSON.stringify(String(value)) + ")"
+		return "rt.V.str(" + HE.json_quote(value) + ")"
 	if lit == "string_name":
-		return "rt.V.stringName(" + JSON.stringify(String(value)) + ")"
+		return "rt.V.stringName(" + HE.json_quote(value) + ")"
 	if lit == "node_path":
-		return "rt.nodePathCtor([rt.V.str(" + JSON.stringify(String(value)) + ")])"
+		return "rt.nodePathCtor([rt.V.str(" + HE.json_quote(value) + ")])"
 	if lit == "bool":
 		return "rt.V.bool(" + str(value) + ")"
 	return "rt.V.nil()"
@@ -77,7 +77,7 @@ static func emit_expr_r(e):
 	if kind == "lit" and e.get("lit") == "float" and (typeof(e.get("value")) == TYPE_FLOAT or typeof(e.get("value")) == TYPE_INT):
 		return {"code": NF.js_num_text(e["value"]), "rep": "float"}
 	if kind == "lit" and e.get("lit") == "string":
-		return {"code": JSON.stringify(String(e["value"])), "rep": "str"}
+		return {"code": HE.json_quote(e["value"]), "rep": "str"}
 	if kind == "ident":
 		var k = CTX.ctx["UNBOXED"].get(e["name"])
 		if k != null:

@@ -52,11 +52,11 @@ export class Main extends SceneTree {
       rt.frameLine(16);
       let r = 0;
       rt.frameLine(17);
-      while ((r < 2)) {
+      while ((r < (2 as number))) {
         rt.frameLine(18);
         let c = 0;
         rt.frameLine(19);
-        while ((c < 2)) {
+        while ((c < (2 as number))) {
           rt.frameLine(20);
           rt.fast.rawArrSetNum2(g, r, c, rt.fast.iAddC(rt.fast.rawArrGetNum2(g, r, c), 100));
           rt.frameLine(21);
@@ -74,7 +74,7 @@ export class Main extends SceneTree {
       rt.frameLine(26);
       let k = 0;
       rt.frameLine(27);
-      while ((k < 2)) {
+      while ((k < (2 as number))) {
         rt.frameLine(28);
         s = rt.fast.iAddC(s, rt.fast.iAddC(rt.fast.rawArrGetNum2(g, k, 0), rt.fast.rawArrGetNum2(g, k, 1)));
         rt.frameLine(29);

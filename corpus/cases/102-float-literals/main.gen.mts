@@ -59,7 +59,7 @@ export class Main extends SceneTree {
       rt.frameLine(20);
       print(rt.showArgs([rt.V.str("f9 "), rt.toInt(rt.V.float((1.0000000000000001e-23 * 1e+30))), rt.V.str(" | "), rt.V.float((1.0000000000000001e-23 * 1e+30))]));
       rt.frameLine(21);
-      print(rt.showArgs([rt.V.str("f10 "), rt.V.bool((a === 9007199254740994)), rt.V.str(" | "), rt.V.bool((a > 9007199254740992)), rt.V.str(" | "), rt.V.bool((d < 1.2345678901e-7))]));
+      print(rt.showArgs([rt.V.str("f10 "), rt.V.bool((a === (9007199254740994 as number))), rt.V.str(" | "), rt.V.bool((a > (9007199254740992 as number))), rt.V.str(" | "), rt.V.bool((d < (1.2345678901e-7 as number)))]));
       rt.frameLine(22);
       let i = 1000000.25;
       rt.frameLine(23);

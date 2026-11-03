@@ -603,13 +603,24 @@ static func _cu_ident_domain(param_kind, result, U):
 		out.append(n3)
 	return out
 
+static func _num_literal_expr(x):
+	if x.get("kind") == "lit" and (x.get("lit") == "int" or x.get("lit") == "float"):
+		return true
+	if x.get("kind") == "unary" and x.get("op") == "-":
+		var inner = x.get("operand")
+		return inner != null and inner.get("kind") == "lit" and (inner.get("lit") == "int" or inner.get("lit") == "float")
+	return false
+
+
 static func try_raw_binary(e):
 	var EB = load("res://expr_boxed.gd")
 	var l = EB.emit_expr_r(e["left"])
 	var r = EB.emit_expr_r(e["right"])
 	var op = e.get("op")
 	if O.CMP_RAW.has(op) and l["rep"] == r["rep"] and (l["rep"] == "int" or l["rep"] == "float"):
-		return {"code": "(" + l["code"] + " " + O.CMP_RAW[op] + " " + r["code"] + ")", "rep": "bool"}
+		var lc = "(" + l["code"] + " as number)" if _num_literal_expr(e["left"]) else l["code"]
+		var rc = "(" + r["code"] + " as number)" if _num_literal_expr(e["right"]) else r["code"]
+		return {"code": "(" + lc + " " + O.CMP_RAW[op] + " " + rc + ")", "rep": "bool"}
 	if l["rep"] == "int" and r["rep"] == "int" and O.ARITH_RAW.has(op):
 		if not lit_binary_fits_raw(e):
 			return null

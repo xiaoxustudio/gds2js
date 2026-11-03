@@ -65,7 +65,7 @@ export class Main extends SceneTree {
       rt.frameLine(19);
       print(rt.showArgs([this.log]));
       rt.frameLine(20);
-      print(rt.showArgs([rt.tern(rt.V.bool((5 > 3)), () => rt.V.str("big"), () => rt.V.str("small"))]));
+      print(rt.showArgs([rt.tern(rt.V.bool(((5 as number) > (3 as number))), () => rt.V.str("big"), () => rt.V.str("small"))]));
       rt.frameLine(21);
       let d = rt.dictOf([[rt.V.int(1), rt.V.int(2)]]);
       rt.frameLine(22);

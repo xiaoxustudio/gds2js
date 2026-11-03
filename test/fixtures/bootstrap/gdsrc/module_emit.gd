@@ -145,7 +145,7 @@ static func emit_module_with_map(m, opts, analysis_result):
 		var init = v4.get("init")
 		if v4.get("isConst") != true or init == null or init.get("kind") != "call" or init["callee"].get("kind") != "ident":
 			continue
-		if init["callee"]["name"] != "preload" and init["callee"]["name"] != "load":
+		if init["callee"]["name"] != "load":
 			continue
 		defer[v4["name"]] = true
 	c["DEFER_PRELOAD_CONSTS"] = defer

@@ -25,21 +25,21 @@ export class Main extends SceneTree {
     const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
     try {
       rt.frameLine(5);
-      print(rt.showArgs([rt.V.str("a|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((1 === 2)))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((1 === 1))))]));
+      print(rt.showArgs([rt.V.str("a|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(((1 as number) === (2 as number))))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(((1 as number) === (1 as number)))))]));
       rt.frameLine(6);
-      print(rt.showArgs([rt.V.str("c|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((1 < 2)))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((1 > 2))))]));
+      print(rt.showArgs([rt.V.str("c|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(((1 as number) < (2 as number))))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(((1 as number) > (2 as number)))))]));
       rt.frameLine(7);
       print(rt.showArgs([rt.V.str("d|"), rt.and(rt.V.bool(!rt.ops.truthy(rt.V.bool(true))), () => rt.V.bool(false)), rt.V.str("|"), rt.and(rt.V.bool(!rt.ops.truthy(rt.V.bool(false))), () => rt.V.bool(true))]));
       rt.frameLine(8);
       print(rt.showArgs([rt.V.str("e|"), rt.V.bool(!rt.ops.truthy(rt.ops.inOp(rt.V.int(1), rt.V.array(rt.GArray.of([rt.V.int(2), rt.V.int(3)]))))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.ops.inOp(rt.V.int(1), rt.V.array(rt.GArray.of([rt.V.int(1), rt.V.int(2)])))))]));
       rt.frameLine(9);
-      print(rt.showArgs([rt.V.str("f|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((1 === 1)))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(!rt.ops.truthy(rt.V.bool(true)))))]));
+      print(rt.showArgs([rt.V.str("f|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(((1 as number) === (1 as number))))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(!rt.ops.truthy(rt.V.bool(true)))))]));
       rt.frameLine(10);
       let x = 3;
       rt.frameLine(11);
-      print(rt.showArgs([rt.V.str("g|"), rt.or(rt.V.bool(!rt.ops.truthy(rt.V.bool((x === 3)))), () => rt.V.bool((x === 4))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((x !== 3))))]));
+      print(rt.showArgs([rt.V.str("g|"), rt.or(rt.V.bool(!rt.ops.truthy(rt.V.bool((x === (3 as number))))), () => rt.V.bool((x === (4 as number)))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((x !== (3 as number)))))]));
       rt.frameLine(12);
-      print(rt.showArgs([rt.V.str("h|"), rt.V.bool(!rt.ops.truthy(rt.V.bool(((-1) === (-1))))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((rt.fast.iAddC(1, 1) === 2))))]));
+      print(rt.showArgs([rt.V.str("h|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((((-1) as number) === ((-1) as number))))), rt.V.str("|"), rt.V.bool(!rt.ops.truthy(rt.V.bool((rt.fast.iAddC(1, 1) === (2 as number)))))]));
       rt.frameLine(13);
       this.quit();
     } catch (__gd_err) {

@@ -92,7 +92,7 @@ export class Main extends SceneTree {
       rt.frameLine(24);
       let i = 0;
       rt.frameLine(25);
-      while ((i < 3)) {
+      while ((i < (3 as number))) {
         rt.frameLine(26);
         s = this.tri(i);
         rt.frameLine(27);

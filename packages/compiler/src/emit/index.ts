@@ -142,7 +142,7 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
   for (const v of m.vars) {
     const init = v.init;
     if (!v.isConst || init === null || init.kind !== "call" || init.callee.kind !== "ident") continue;
-    if (init.callee.name !== "preload" && init.callee.name !== "load") continue;
+    if (init.callee.name !== "load") continue;
     ctx.DEFER_PRELOAD_CONSTS.add(v.name);
   }
   const preloadClasses = opts.preloadClasses ?? {};

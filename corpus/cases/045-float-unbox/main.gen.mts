@@ -29,7 +29,7 @@ export class Main extends SceneTree {
       rt.frameLine(5);
       let i = 0;
       rt.frameLine(6);
-      while ((i < 5)) {
+      while ((i < (5 as number))) {
         rt.frameLine(7);
         acc = (acc + (i * 2));
         rt.frameLine(8);
@@ -48,7 +48,7 @@ export class Main extends SceneTree {
       rt.frameLine(14);
       print(rt.showArgs([rt.V.int(rt.fast.iAddC(2, rt.fast.iMulC(3, 4)))]));
       rt.frameLine(15);
-      print(rt.showArgs([rt.V.bool((n < 4))]));
+      print(rt.showArgs([rt.V.bool((n < (4 as number)))]));
       rt.frameLine(16);
       this.quit();
     } catch (__gd_err) {

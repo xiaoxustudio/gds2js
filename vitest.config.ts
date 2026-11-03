@@ -1,5 +1,6 @@
 // 单一 vitest 根配置：四个 project 分管两层。不用 vitest.workspace.ts（Vitest 4 已删）。
 // 不需要 resolve.alias：pnpm 软链 + exports 映射直接指到 src/*.ts，Vite 当项目源码内联转译。
+import { cpus } from "node:os";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -118,8 +119,8 @@ export default defineConfig({
           retry: 0,
           sequence: { groupOrder: GROUP_E2E },
           // 只有 scriptc.test.ts 的全量模式会用 it.concurrent（各 id 独占 tmp/sc-gate/<id>/），
-          // 上限 Math.min(4, cpus())。
-          maxConcurrency: 4,
+          // 上限 GDS2JS_SCRIPTC_JOBS（默认 4，封顶核数）。
+          maxConcurrency: Math.min(Math.max(Number(process.env.GDS2JS_SCRIPTC_JOBS ?? 4) || 4, 1), cpus().length),
           testTimeout: 1_800_000, // scriptc build 单例上限 600s、export 1500s
           hookTimeout: 3_600_000, // cli-native 自动重建 zig+scriptc 可到 3000s
         },

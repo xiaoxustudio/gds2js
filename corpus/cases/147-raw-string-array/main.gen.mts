@@ -58,7 +58,7 @@ export class Main extends SceneTree {
       rt.frameLine(19);
       let k = 0;
       rt.frameLine(20);
-      while ((k < 3)) {
+      while ((k < (3 as number))) {
         rt.frameLine(21);
         acc.push((rt.fast.rawArrGetStr(names, k) + "!"));
         rt.frameLine(22);

@@ -550,7 +550,7 @@ export class Main extends SceneTree {
             reps = rt.fast.iAddC(reps, 1);
           }
           rt.frameLine(201);
-          if ((reps > 0)) {
+          if ((reps > (0 as number))) {
             rt.frameLine(202);
             return rt.dictOf([[rt.V.str("end"), j], [rt.V.str("kind"), rt.V.str("int")]]);
           }

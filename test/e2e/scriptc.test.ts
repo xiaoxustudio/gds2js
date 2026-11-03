@@ -216,32 +216,37 @@ interface Row {
 const rows: Row[] = [];
 
 const islandGone = (text: string): boolean =>
-  /Unknown option '--dynamic'|SC2013|binding form with no lowering|method calls like/.test(text);
+  /Unknown option '--dynamic'|SC2013|SC8010|binding form with no lowering|method calls like/.test(text);
 
 const staticAccessorGone = (text: string): boolean => /static accessors and initializer-less/.test(text);
 
 async function gateOne(id: string): Promise<Row> {
   const row: Row = { id, built: false, ran: false, exact: false, note: "", booked: null };
   let exe: string | null = null;
+  let buildOut = "";
+  let zstd = false;
   if (caseIsProject(id)) {
     const g = await gateProject(id);
     row.built = g.built;
     exe = g.exe;
+    buildOut = g.out;
     if (!g.built) row.note = scNote(g.out, `export 退出 ${String(g.code)}`);
   } else {
-    const { dir, file, zstd } = prepare(id);
-    const build = await scBuild(file);
-    exe = exePath(dir);
+    const prepared = prepare(id);
+    const build = await scBuild(prepared.file);
+    exe = exePath(prepared.dir);
+    zstd = prepared.zstd;
     row.built = build.code === 0 && exe !== null;
+    buildOut = build.out;
     if (!row.built) row.note = scNote(build.out, `build 退出 ${String(build.code)}`);
-    if (!row.built && zstd && islandGone(build.out)) {
-      row.booked = "静态目标没有岛档：这页用 mode 2（vendored 那份 asm zstd 绑定），出货走 --pack node";
-      return row;
-    }
-    if (!row.built && staticAccessorGone(build.out)) {
-      row.booked = "静态目标没有静态访问器：这页有 static var 配读写器，出货走 --pack node";
-      return row;
-    }
+  }
+  if (!row.built && zstd && islandGone(buildOut)) {
+    row.booked = "静态目标没有岛档：这页用 mode 2（vendored 那份 asm zstd 绑定），出货走 --pack node";
+    return row;
+  }
+  if (!row.built && staticAccessorGone(buildOut)) {
+    row.booked = "静态目标没有 initializer-less 静态字段的 lowering：跨模块内部类镜像只能延后挂，出货走 --pack node";
+    return row;
   }
   if (row.built && exe !== null) {
     const sandboxed = caseSandboxed(id);

@@ -309,6 +309,33 @@ static func stamp_decl(t, raw, has_init, from_literal):
 		return out
 	return "rt.stampDict(" + out + ", " + JSON.stringify(key_kind) + ", " + JSON.stringify(val_kind) + ", " + str(from_literal) + ")"
 
+static func json_quote(text):
+	var bs = String.chr(92)
+	var q = String.chr(34)
+	var out = q
+	for ch in String(text):
+		var cp = ch.unicode_at(0)
+		if ch == q:
+			out += bs + q
+		elif ch == bs:
+			out += bs + bs
+		elif cp == 8:
+			out += bs + "b"
+		elif cp == 9:
+			out += bs + "t"
+		elif cp == 10:
+			out += bs + "n"
+		elif cp == 12:
+			out += bs + "f"
+		elif cp == 13:
+			out += bs + "r"
+		elif cp < 32:
+			out += bs + "u" + ("%04x" % cp)
+		else:
+			out += ch
+	return out + q
+
+
 static func mark(gen_line, loc):
 	if not CTX.ctx["MAP_ACTIVE"] or loc == null:
 		return

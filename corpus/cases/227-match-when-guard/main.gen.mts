@@ -233,7 +233,7 @@ export class Main extends SceneTree {
           break;
         }
         const __m2 = rt.matchPattern(v, rt.patWild());
-        if (__m2 !== null && rt.ops.truthy(rt.V.bool((lo === 2)))) {
+        if (__m2 !== null && rt.ops.truthy(rt.V.bool((lo === (2 as number))))) {
           rt.frameLine(58);
           print(rt.showArgs([rt.ops.add(rt.ops.add(rt.V.str("  "), label), rt.V.str(" guard-sees-outer"))]));
           break;
@@ -301,7 +301,7 @@ export class Main extends SceneTree {
           break;
         }
         const __m1 = rt.matchPattern(v, rt.patWild());
-        if (__m1 !== null && rt.ops.truthy(rt.V.bool((part > 4)))) {
+        if (__m1 !== null && rt.ops.truthy(rt.V.bool((part > (4 as number))))) {
           rt.frameLine(77);
           print(rt.showArgs([rt.ops.add(rt.ops.add(rt.V.str("  "), label), rt.V.str(" outer-guard-uses-bind"))]));
           break;

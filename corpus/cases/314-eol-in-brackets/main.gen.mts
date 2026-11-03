@@ -52,7 +52,7 @@ export class Main extends SceneTree {
       rt.frameLine(33);
       let n = 0;
       rt.frameLine(34);
-      while ((n < 2)) {
+      while ((n < (2 as number))) {
         rt.frameLine(38);
         n = rt.fast.iAddC(n, 1);
       }

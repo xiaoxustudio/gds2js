@@ -121,11 +121,17 @@ export const isGridElem = (k: ElemKind): k is "int[]" | "float[]" | "str[]" => k
 
 export const leafOf = (k: ElemKind): Kind => (k === "int[]" ? "int" : k === "float[]" ? "float" : k === "str[]" ? "str" : k);
 
+const numericLiteralOperand = (x: Expr): boolean =>
+  (x.kind === "lit" && (x.lit === "int" || x.lit === "float")) ||
+  (x.kind === "unary" && x.op === "-" && x.operand.kind === "lit" && (x.operand.lit === "int" || x.operand.lit === "float"));
+
 export function tryRawBinary(e: Extract<Expr, { kind: "binary" }>): R | null {
   const L = emitExprR(e.left);
   const Rr = emitExprR(e.right);
   if (CMP_RAW[e.op] && L.rep === Rr.rep && (L.rep === "int" || L.rep === "float")) {
-    return { code: `(${L.code} ${CMP_RAW[e.op]!} ${Rr.code})`, rep: "bool" };
+    const lc = numericLiteralOperand(e.left) ? `(${L.code} as number)` : L.code;
+    const rc = numericLiteralOperand(e.right) ? `(${Rr.code} as number)` : Rr.code;
+    return { code: `(${lc} ${CMP_RAW[e.op]!} ${rc})`, rep: "bool" };
   }
   if (L.rep === "int" && Rr.rep === "int" && ARITH_RAW[e.op]) {
     if (!litBinaryFitsRaw(e)) return null;

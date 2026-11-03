@@ -50,7 +50,7 @@ export class Main extends SceneTree {
       rt.frameLine(11);
       let i = 0;
       rt.frameLine(12);
-      while ((i < 12)) {
+      while ((i < (12 as number))) {
         rt.frameLine(13);
         let t = rt.fast.iModC(rt.fast.iAddC(a, b), 100);
         rt.frameLine(14);
@@ -71,7 +71,7 @@ export class Main extends SceneTree {
       rt.frameLine(22);
       let j = 0;
       rt.frameLine(23);
-      while ((j < 6)) {
+      while ((j < (6 as number))) {
         rt.frameLine(24);
         p = q;
         rt.frameLine(25);
@@ -90,7 +90,7 @@ export class Main extends SceneTree {
       rt.frameLine(32);
       let r = 0;
       rt.frameLine(33);
-      while ((r < 5)) {
+      while ((r < (5 as number))) {
         rt.frameLine(34);
         let z = ((x * 0.5) + y);
         rt.frameLine(35);
@@ -111,7 +111,7 @@ export class Main extends SceneTree {
       rt.frameLine(43);
       let w = 0;
       rt.frameLine(44);
-      while ((w < 4)) {
+      while ((w < (4 as number))) {
         rt.frameLine(45);
         g = w;
         rt.frameLine(46);
@@ -126,7 +126,7 @@ export class Main extends SceneTree {
       rt.frameLine(51);
       let c = 0;
       rt.frameLine(52);
-      if ((g > 1)) {
+      if ((g > (1 as number))) {
         rt.frameLine(53);
         let u = c;
         rt.frameLine(54);

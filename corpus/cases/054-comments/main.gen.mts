@@ -47,7 +47,7 @@ export class Main extends SceneTree {
       rt.frameLine(15);
       let i = 0;
       rt.frameLine(16);
-      while ((i < 3)) {
+      while ((i < (3 as number))) {
         rt.frameLine(18);
         i = rt.fast.iAddC(i, 1);
       }
@@ -56,7 +56,7 @@ export class Main extends SceneTree {
       rt.frameLine(21);
       print(rt.showArgs([this.counter]));
       rt.frameLine(22);
-      if ((i > 2)) {
+      if ((i > (2 as number))) {
         rt.frameLine(24);
         print(rt.showArgs([rt.V.int(111)]));
       } else {
