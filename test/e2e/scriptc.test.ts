@@ -245,7 +245,7 @@ async function gateOne(id: string): Promise<Row> {
     return row;
   }
   if (!row.built && staticAccessorGone(buildOut)) {
-    row.booked = "静态目标没有 initializer-less 静态字段的 lowering：跨模块内部类镜像只能延后挂，出货走 --pack node";
+    row.booked = "静态目标没有静态访问器 / initializer-less 静态字段的 lowering：延后挂的 preload const 与跨模块内部类镜像都走这条，本页出货走 --pack node";
     return row;
   }
   if (row.built && exe !== null) {
