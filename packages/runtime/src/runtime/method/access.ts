@@ -570,6 +570,7 @@ export function attribute(raw: unknown, name: string): unknown {
         if (m2 !== null) return m2;
       }
       if (name === "name") return V.str(en.__gd_node_name__);
+      if (methodAritiesOf(obj.v)?.[name] !== undefined) return methodCallable(obj, name);
       throw new UnsupportedError("node-prop", `${en.__gd_engine_class__}.${name} 的属性读没量过`);
     }
     const inner = obj.v as Record<string, unknown>;

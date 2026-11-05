@@ -23,24 +23,27 @@ export class Signal {
 
   /** `is_connected(callable)`（S545）：身份按 Callable 等式比，**绑定串不算**（实测 `bind(1)` 那支仍真）。 */
   isConnected(box: object): boolean {
-    for (const l of this.#listeners) if (sameBox(l.box, box)) return true;
+    for (const l of this.#listeners) if (sameBox(l.box, box) && live(l.box)) return true;
     return false;
   }
 
   hasConnections(): boolean {
-    return this.#listeners.length > 0;
+    for (const l of this.#listeners) if (live(l.box)) return true;
+    return false;
   }
 
   /** `get_connections()` 的三格：signal 本体、连进来的 Callable、原样存下的 flags（实测 0 / 4 / 8）。 */
   connections(): Array<{ box: object; flags: number }> {
     const out: Array<{ box: object; flags: number }> = [];
-    for (const l of this.#listeners) out.push({ box: l.box, flags: l.flags });
+    for (const l of this.#listeners) if (live(l.box)) out.push({ box: l.box, flags: l.flags });
     return out;
   }
 
-  disconnectFrom(box: object): void {
-    const i = this.#listeners.findIndex((l) => sameBox(l.box, box));
-    if (i >= 0) removeAt(this.#listeners, i);
+  disconnectFrom(box: object): boolean {
+    const i = this.#listeners.findIndex((l) => sameBox(l.box, box) && live(l.box));
+    if (i < 0) return false;
+    removeAt(this.#listeners, i);
+    return true;
   }
 
   emit(...args: Variant[]): void {
@@ -52,6 +55,7 @@ export class Signal {
     for (const l of this.#listeners) snapshot.push(l);
     for (const l of snapshot) {
       if (l.oneShot) removeOnce(this.#listeners, l);
+      if (!live(l.box)) continue;
       l.fn(args);
     }
     const pending = this.#waiting;
@@ -85,7 +89,12 @@ function sameBox(a: object, b: object): boolean {
   return callableSame(a as unknown as CallableBox, b as unknown as CallableBox);
 }
 
-import { callableSame, type CallableBox } from "../object/script-object";
+import { callableSame, isFreed, type CallableBox } from "../object/script-object";
+
+function live(box: object): boolean {
+  const target = (box as CallableBox).object;
+  return target === null || target === undefined || !isFreed(target.v);
+}
 
 export function normalizeArgs(args: Variant[]): Variant {
   if (args.length === 0) return V.nil();

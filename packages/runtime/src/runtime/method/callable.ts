@@ -11,7 +11,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
 import { boundArgsOf, callableArityBounds, declaredArgCount, descOf, methodAritiesOf, nativeBaseOf, requiredArgCount, wrapValue, scriptLabelOf, ctorAritiesOf } from "../class/object/script-object";
-import { CallableBox, callableLabel, isCallableBox, isNullCallable, nullCallable } from "../class/object/script-object";
+import { CallableBox, callableLabel, isCallableBox, isFreed, isNullCallable, nullCallable } from "../class/object/script-object";
 import { callDeferred } from "../class/identity/callable";
 import { nativeAritySay } from "../face-arity";
 import { NULL_OBJECT } from "../class/identity/null-object";
@@ -319,6 +319,7 @@ export function callableMethod(box: CallableBox, name: string, args: Variant[]):
       return V.bool(empty && bound.length === 0);
     case "is_valid":
       if (box.detachedOwner !== null || box.invalidMethod) return V.bool(false);
+      if (box.object !== null && isFreed(box.object.v)) return V.bool(false);
       if (empty && bound.length > 0) {
         throw new UnsupportedError("callable-is-valid-bound-null", "绑过实参的空 Callable 上 is_valid() 没量过");
       }

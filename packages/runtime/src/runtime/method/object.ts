@@ -179,7 +179,9 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
       if (cb === undefined || !isCallableBox(cb.v)) {
         throw new UnsupportedError("signal-disconnect", "disconnect() 的 Callable 实参这一格没量过（非 Callable 来源）");
       }
-      inner.disconnectFrom(cb.v as CallableBox);
+      if (!inner.disconnectFrom(cb.v as CallableBox)) {
+        throw new UnsupportedError("signal-disconnect-missing", "disconnect 一个不存在的连接：引擎发 ERROR 后继续，消息集没建模");
+      }
       return V.nil();
     }
     if (name === "get_name") return V.str(inner.sigName);

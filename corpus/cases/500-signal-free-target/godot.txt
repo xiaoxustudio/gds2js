@@ -1,0 +1,9 @@
+t|7
+cb|Node(target.gd)::on|true|on|<null>
+obj|true
+pre|true|true|1
+t|1
+post|false|false|false|0|false
+end
+tick|1
+tick|2
