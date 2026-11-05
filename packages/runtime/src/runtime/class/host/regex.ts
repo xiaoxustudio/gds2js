@@ -170,7 +170,7 @@ export function regexCompile(rx: GdRegEx, pattern: string): number {
   }
   const { source, flags } = translate(pattern);
   const { count, entries } = scanGroups(pattern);
-  rx.js = new RegExp(source, "g" + flags);
+  rx.js = new RegExp(source, "gu" + flags);
   rx.groupCount = count;
   rx.entries = entries;
   rx.names = entries.map((e) => e[0]).sort();
@@ -218,9 +218,35 @@ function dollarBeforeFinalNewline(body: string): string {
 }
 
 function guardSubject(text: string): void {
-  if (/[\uD800-\uDFFF]/.test(text)) {
-    throw new UnsupportedError("rx-subject-encoding", `RegEx 的文本实参里有需配对的码位（${JSON.stringify(text.slice(0, 24))}）：引擎按码位偏移、JS 按码元偏移，这条偏移没量过`);
+  if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(text)) {
+    throw new UnsupportedError("rx-subject-encoding", `RegEx 的文本实参里有孤立代理（${JSON.stringify(text.slice(0, 24))}）：引擎在字符串构造时就把它们换成 U+FFFD，这一层没建模`);
   }
+}
+
+function cpToUnit(text: string, cp: number): number {
+  let unit = 0;
+  let count = 0;
+  while (count < cp && unit < text.length) {
+    const code = text.charCodeAt(unit);
+    unit += code >= 0xd800 && code <= 0xdbff && unit + 1 < text.length ? 2 : 1;
+    count += 1;
+  }
+  return unit;
+}
+
+function unitToCp(text: string, unit: number): number {
+  let count = 0;
+  for (let at = 0; at < unit && at < text.length; at++) {
+    const code = text.charCodeAt(at);
+    if (code >= 0xd800 && code <= 0xdbff && at + 1 < text.length) at += 1;
+    count += 1;
+  }
+  return count;
+}
+
+function stepUnit(text: string, unit: number): number {
+  const code = text.charCodeAt(unit);
+  return unit + (code >= 0xd800 && code <= 0xdbff && unit + 1 < text.length ? 2 : 1);
 }
 
 function nullObject(): Variant {
@@ -232,8 +258,8 @@ function buildMatch(rx: GdRegEx, text: string, m: RegExpExecArray): GdRegExMatch
   rd.subject = text;
   const whole = m[0] as string;
   rd.strings.push(whole);
-  rd.starts.push(m.index);
-  rd.ends.push(m.index + whole.length);
+  rd.starts.push(unitToCp(text, m.index));
+  rd.ends.push(unitToCp(text, m.index + whole.length));
   let cursor = 0;
   for (let g = 1; g <= rx.groupCount; g++) {
     const value = m[g];
@@ -245,8 +271,8 @@ function buildMatch(rx: GdRegEx, text: string, m: RegExpExecArray): GdRegExMatch
     }
     const at = value === "" ? cursor : whole.indexOf(value, cursor);
     rd.strings.push(value);
-    rd.starts.push(m.index + at);
-    rd.ends.push(m.index + at + value.length);
+    rd.starts.push(unitToCp(text, m.index + at));
+    rd.ends.push(unitToCp(text, m.index + at + value.length));
     cursor = at + value.length;
   }
   rd.entries = [...rx.entries];
@@ -256,10 +282,10 @@ function buildMatch(rx: GdRegEx, text: string, m: RegExpExecArray): GdRegExMatch
 export function regexSearch(rx: GdRegEx, text: string, from: number): Variant {
   guardSubject(text);
   if (rx.js === null) return nullObject();
-  rx.js.lastIndex = from;
+  rx.js.lastIndex = cpToUnit(text, from);
   const m = rx.js.exec(text);
   if (m === null) return nullObject();
-  if (m.index === rx.js.lastIndex) rx.js.lastIndex = m.index + 1;
+  if (m.index === rx.js.lastIndex) rx.js.lastIndex = stepUnit(text, m.index);
   return V.object(buildMatch(rx, text, m));
 }
 
@@ -267,12 +293,12 @@ export function regexSearchAll(rx: GdRegEx, text: string, from: number): Variant
   guardSubject(text);
   const items: Variant[] = [];
   if (rx.js === null) return V.array(GArray.of(items));
-  rx.js.lastIndex = from;
+  rx.js.lastIndex = cpToUnit(text, from);
   for (;;) {
     const m = rx.js.exec(text);
     if (m === null) break;
     items.push(V.object(buildMatch(rx, text, m)));
-    if (m.index === rx.js.lastIndex) rx.js.lastIndex = m.index + 1;
+    if (m.index === rx.js.lastIndex) rx.js.lastIndex = stepUnit(text, m.index);
   }
   return V.array(GArray.of(items));
 }
@@ -354,10 +380,11 @@ export function regexSub(rx: GdRegEx, text: string, by: string, count: number, f
   guardSubject(text);
   const parts = replacementParts(rx, by);
   if (rx.js === null) return "";
-  let out = text.slice(0, from);
-  let cursor = from;
+  const fromUnit = cpToUnit(text, from);
+  let out = text.slice(0, fromUnit);
+  let cursor = fromUnit;
   let done = 0;
-  rx.js.lastIndex = from;
+  rx.js.lastIndex = fromUnit;
   for (;;) {
     const m = rx.js.exec(text);
     if (m === null) break;
@@ -367,7 +394,7 @@ export function regexSub(rx: GdRegEx, text: string, by: string, count: number, f
     cursor = end;
     done += 1;
     if (count <= 0 && done >= 1) break;
-    if (start === rx.js.lastIndex) rx.js.lastIndex = start + 1;
+    if (start === rx.js.lastIndex) rx.js.lastIndex = stepUnit(text, start);
   }
   return out + text.slice(cursor);
 }

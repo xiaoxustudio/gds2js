@@ -180,8 +180,10 @@ describe("tier3 · 定形拒绝清单", () => {
     eq("t3", "可变长度后顾", say(() => regex("(?<=a)b")), "rx-pattern");
   });
 
-  it("RegEx 的文本实参：偏移与字符类语义只量过 ASCII 那一层", () => {
-    eq("t3", "需配对码位", say(() => method(regex("\\w+"), "search", [T("a\uD800\uDCC0b")])), "rx-subject-encoding");
+  it("RegEx 的文本实参：ASCII 与非 BMP 都按码位，孤立代理照旧拒", () => {
+    eq("t3", "孤立代理", say(() => method(regex("\\w+"), "search", [T("a\uD800b")])), "rx-subject-encoding");
+    const nb = matchOf("\\w+", "a\uD800\uDCC0b");
+    eq("t4", "非 BMP 配对按码位偏移已放行", `${String(method(nb, "get_string", [I(0)]).v)}|${String(method(nb, "get_end", [I(0)]).v)}`, "a|1");
     const uw = matchOf("\\w+", "héllo");
     eq("t3", "\\w 遇非 ASCII 已放行：ASCII-only", `${String(method(uw, "get_string", [I(0)]).v)}|${String(method(uw, "get_end", [I(0)]).v)}`, "h|1");
     const dn = matchOf("^\\d+$", "12\n");
