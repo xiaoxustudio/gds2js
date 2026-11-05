@@ -198,11 +198,10 @@ function readScalar(file: GdFile, n: number, full: (v: DataView) => number | big
   return typeof value === "bigint" ? V.int(normInt(value)) : V.int(value);
 }
 
-function readFloat(file: GdFile, n: number, full: (v: DataView) => number): Variant {
+function readFloat(file: GdFile, n: number, full: (v: DataView, littleEndian: boolean) => number): Variant {
   requireOpen(file, "get");
-  if (file.bigEndian) throw new UnsupportedError("fa-endian-float", "set_big_endian(true) 之后的浮点读取没实测，照旧响亮拒");
   const got = take(file, n);
-  return V.float(got.short ? 0 : full(viewOf(got.bs)));
+  return V.float(got.short ? 0 : full(viewOf(got.bs), !file.bigEndian));
 }
 
 export function fileStoreBytes(file: GdFile, bs: number[]): void {
@@ -228,10 +227,9 @@ export function fileStoreNumber(file: GdFile, width: number, value: bigint): voi
 
 export function fileStoreFloat(file: GdFile, width: number, value: number): void {
   requireWrite(file, width === 4 ? "store_float" : "store_double");
-  if (file.bigEndian) throw new UnsupportedError("fa-endian-float", "set_big_endian(true) 之后的浮点写入没实测，照旧响亮拒");
   const view = new DataView(new ArrayBuffer(width));
-  if (width === 4) view.setFloat32(0, value, true);
-  else view.setFloat64(0, value, true);
+  if (width === 4) view.setFloat32(0, value, !file.bigEndian);
+  else view.setFloat64(0, value, !file.bigEndian);
   put(file, Array.from(new Uint8Array(view.buffer)));
 }
 
@@ -446,7 +444,7 @@ export function fileReadNumber(file: GdFile, n: number, full: (v: DataView) => n
   return readScalar(file, n, full);
 }
 
-export function fileReadFloat(file: GdFile, n: number, full: (v: DataView) => number): Variant {
+export function fileReadFloat(file: GdFile, n: number, full: (v: DataView, littleEndian: boolean) => number): Variant {
   return readFloat(file, n, full);
 }
 
@@ -745,11 +743,11 @@ export function fileMethod(file: GdFile, name: string, args: Variant[]): Variant
     case "get_float":
     case "get_real": {
       if (args.length !== 0) throw new UnsupportedError("io-arity", `${name}() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
-      return fileReadFloat(file, 4, (v) => v.getFloat32(0, true));
+      return fileReadFloat(file, 4, (v, le) => v.getFloat32(0, le));
     }
     case "get_double": {
       if (args.length !== 0) throw new UnsupportedError("io-arity", "get_double() 只量过 0 个实参");
-      return fileReadFloat(file, 8, (v) => v.getFloat64(0, true));
+      return fileReadFloat(file, 8, (v, le) => v.getFloat64(0, le));
     }
     case "get_buffer": {
       if (args.length !== 1) throw new UnsupportedError("io-arity", `get_buffer() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
