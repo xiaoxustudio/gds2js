@@ -1,0 +1,1 @@
+{"id":"engine:FramebufferCacheRD","label":"引擎 · FramebufferCacheRD","family":"engine","cols":["o","k","n","s","f","h","t","e"],"rows":[{"o":"FramebufferCacheRD","k":"m","n":"get_cache_multipass","s":"get_cache_multipass(textures: typedarray::RID, passes: typedarray::RDFramebufferPass, views: int) -> RID","f":1,"h":3437881813,"t":"unplanned","e":[["n","不在 Tier 2 已建模的引擎类集合内"]]}]}

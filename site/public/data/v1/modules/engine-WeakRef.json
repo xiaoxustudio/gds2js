@@ -1,0 +1,1 @@
+{"id":"engine:WeakRef","label":"引擎 · WeakRef","family":"engine","cols":["o","k","n","s","f","h","t","e"],"rows":[{"o":"WeakRef","k":"m","n":"get_ref","s":"get_ref() -> Variant","f":8,"h":1214101251,"t":"unplanned","e":[["n","不在 Tier 2 已建模的引擎类集合内"]]}]}

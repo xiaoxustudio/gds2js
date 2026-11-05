@@ -13,7 +13,8 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 | `packages/compiler` | parse（手写递归下降→CST）→ lower(IR) → analyze → emit；`analyze/` 按判断维度分模块、入口 `analyze/index.ts`；`emit/` 按发射维度分模块、入口 `emit/index.ts`、每模块共享 `emit/context.ts` 的 `EmitContext`；`semantics/` 装 Godot 实测静态表；`compile/project.ts` 跨文件工程编译；`compile/ir-cache.ts` 内容寻址 IR 缓存；`tree-face.ts` 产物树唯一清单 |
 | `packages/gds2js` | CLI（`src/cli.ts` 薄入口 + `src/cli/` 模块）+ 打包三模式（import/local/single）+ export（SEA/scriptc）；`src/version.ts` 是唯一版本字面量 |
 | `packages/testkit` | 测试断言库 |
-| `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等 |
+| `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等；`tools/compat/` 生成兼容性矩阵数据 |
+| `site/` | Godot API 兼容性站点：Vite + React 单页，数据由 `tools/compat/` 按钉住引擎导出后提交；不进 workspace / turbo / release |
 | `corpus/cases/` | 语料用例 496 例（另有 `000-*` 探头，不入语料），逐例 golden 对账；工程用例带 `project.godot`，场景用例再带 `main.tscn` 第三格夹具 |
 | `test/` | `repo/`（仓库不变量）+ `e2e/`（出货与语义门，逐支落点看目录；`e2e/bootstrap/` 是自举线那把切片级收敛门）+ `fixtures/bootstrap/slices/`（自举切片夹具，不入语义账）+ `fixtures/bootstrap/gdsrc/`（阶段五那棵逐步长大的移植树，带 Godot 参照 gdsrc.txt）+ `support/` |
 
@@ -29,6 +30,9 @@ pnpm test:e2e           # E2E 门全跑，缺外部工具自动 skip 并说明�
 pnpm test:all           # 两层全跑
 pnpm typecheck          # turbo run typecheck + tsc -p tsconfig.test.json
 pnpm test:golden        # 重跑/重生成 golden（要 GODOT_BIN）
+pnpm regen:compat-api   # 用钉住的裁判引擎导出 API 骨架并合并状态（要 GODOT_BIN）
+pnpm regen:compat       # 只重算兼容性状态与证据（不要 Godot）
+pnpm site:dev / site:build / site:typecheck   # 兼容性站点（site/，不进 turbo / release）
 pnpm release            # 版本一致性校验 → build → 门 → release/gds2js-<ver>-win64.exe(+.sha256)
 pnpm bench / bench:parse / bench:ab / bench:godot / bench:scriptc   # 运行期收益只认 bench:ab 的 |t|≥2；解析期看 bench:parse 的耗时与节点总数两把
 ```

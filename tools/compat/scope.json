@@ -1,0 +1,58 @@
+{
+  "engine": {
+    "modeledClasses": [
+      "Object",
+      "RefCounted",
+      "Node",
+      "Node2D",
+      "Node3D",
+      "Control",
+      "SceneTree",
+      "FileAccess",
+      "DirAccess",
+      "RegEx",
+      "RegExMatch",
+      "JSON"
+    ],
+    "hostClasses": [
+      "FileAccess",
+      "DirAccess",
+      "RegEx",
+      "RegExMatch",
+      "JSON",
+      "OS"
+    ],
+    "nodeClasses": [
+      "Node",
+      "Node2D",
+      "Node3D",
+      "Control",
+      "SceneTree",
+      "RefCounted",
+      "Object"
+    ],
+    "unplannedClasses": [
+      "Engine",
+      "Marshalls"
+    ],
+    "unplannedMembers": {
+      "OS": {
+        "get_cmdline_args": "两侧不同源：Godot 进程 argv 与宿主 argv 不可比",
+        "get_executable_path": "两侧不同源：引擎可执行文件与宿主可执行文件不可比",
+        "get_processor_count": "机器相关读数，golden 不可复现"
+      },
+      "FileAccess": {
+        "open_encrypted": "AES 加密打开面未建模"
+      }
+    },
+    "unplannedReasons": {
+      "class": "不在 Tier 2 已建模的引擎类集合内",
+      "Engine": "明示非目标（Tier 3 起即划出范围）",
+      "Marshalls": "明示非目标：GDScript 里本就解析期拒"
+    }
+  },
+  "builtins": {
+    "unmodeledReason": "内建类型面尚未建模",
+    "partialReason": "类型面已建模，但这一支没有逐条 golden 证据"
+  }
+}

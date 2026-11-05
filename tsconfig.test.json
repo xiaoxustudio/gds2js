@@ -7,5 +7,10 @@
   // 所以这里单开一份，只覆盖根级 test/ 与 vitest.config.ts ——
   // 包内的 packages/*/test/ 已经被各包自己的 tsconfig（include: ["./"]）覆盖，不重复。
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"]
+  },
   "include": ["test", "vitest.config.ts"]
 }

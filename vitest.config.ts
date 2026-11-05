@@ -92,7 +92,7 @@ export default defineConfig({
           name: "repo", // 仓库不变量：只读、亚秒级、天然并发安全
           root: at("."),
           environment: "node",
-          include: ["test/repo/**/*.test.ts"],
+          include: ["test/repo/**/*.test.ts", "test/compat/**/*.test.{ts,tsx}"],
           pool: "forks",
           maxWorkers: 8,
           isolate: true,
