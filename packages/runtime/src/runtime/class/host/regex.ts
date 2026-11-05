@@ -66,6 +66,9 @@ const PATTERNS: readonly string[] = [
   "(?<user>\\w+)@(?<host>\\w+)",
   "(?<head>\\w+): (?<tail>\\w+)",
   "(a)?b",
+  "\\S+",
+  "[\\s]+",
+  "[^\\s]+",
 ];
 
 export const REGEX_PATTERNS: ReadonlySet<string> = new Set(PATTERNS);
@@ -89,7 +92,38 @@ function translate(pattern: string): { source: string; flags: string } {
     body = body.split("[[:alpha:]]").join("[A-Za-z]");
   }
   if (/\\\d/.test(body)) refusePattern(pattern, "数字后向引用 \\1 那一支引擎按 unknown substring 处理，没量过可移植写法");
-  return { source: dollarBeforeFinalNewline(body), flags };
+  return { source: dollarBeforeFinalNewline(translateSpaces(pattern, body)), flags };
+}
+
+const ASCII_SPACE = " \\t\\n\\r\\f\\v";
+
+function translateSpaces(pattern: string, body: string): string {
+  let out = "";
+  let inClass = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i] as string;
+    if (ch === "\\") {
+      const next = body[i + 1] ?? "";
+      if (next === "s") {
+        out += inClass ? ASCII_SPACE : `[${ASCII_SPACE}]`;
+        i += 1;
+        continue;
+      }
+      if (next === "S") {
+        if (inClass) refusePattern(pattern, "字符类里的 \\S 那一形没量过");
+        out += `[^${ASCII_SPACE}]`;
+        i += 1;
+        continue;
+      }
+      out += ch + next;
+      i += 1;
+      continue;
+    }
+    if (ch === "[") inClass = true;
+    else if (ch === "]") inClass = false;
+    out += ch;
+  }
+  return out;
 }
 
 function scanGroups(pattern: string): { count: number; entries: [string, number][] } {
@@ -183,14 +217,9 @@ function dollarBeforeFinalNewline(body: string): string {
   return out;
 }
 
-const UNICODE_SENSITIVE = /\\[sS]|\[:/;
-
-function guardSubject(pattern: string, text: string): void {
+function guardSubject(text: string): void {
   if (/[\uD800-\uDFFF]/.test(text)) {
     throw new UnsupportedError("rx-subject-encoding", `RegEx 的文本实参里有需配对的码位（${JSON.stringify(text.slice(0, 24))}）：引擎按码位偏移、JS 按码元偏移，这条偏移没量过`);
-  }
-  if (UNICODE_SENSITIVE.test(pattern) && /[^\0-\x7F]/.test(text)) {
-    throw new UnsupportedError("rx-unicode-subject", `pattern ${JSON.stringify(pattern)} 里的空白字符类遇上非 ASCII 文本：\\s 在引擎与 JS 的空白集合没量过`);
   }
 }
 
@@ -225,7 +254,7 @@ function buildMatch(rx: GdRegEx, text: string, m: RegExpExecArray): GdRegExMatch
 }
 
 export function regexSearch(rx: GdRegEx, text: string, from: number): Variant {
-  guardSubject(rx.pattern, text);
+  guardSubject(text);
   if (rx.js === null) return nullObject();
   rx.js.lastIndex = from;
   const m = rx.js.exec(text);
@@ -235,7 +264,7 @@ export function regexSearch(rx: GdRegEx, text: string, from: number): Variant {
 }
 
 export function regexSearchAll(rx: GdRegEx, text: string, from: number): Variant {
-  guardSubject(rx.pattern, text);
+  guardSubject(text);
   const items: Variant[] = [];
   if (rx.js === null) return V.array(GArray.of(items));
   rx.js.lastIndex = from;
@@ -322,7 +351,7 @@ function replacementParts(rx: GdRegEx, by: string): ((m: RegExpExecArray) => str
 }
 
 export function regexSub(rx: GdRegEx, text: string, by: string, count: number, from: number): string {
-  guardSubject(rx.pattern, text);
+  guardSubject(text);
   const parts = replacementParts(rx, by);
   if (rx.js === null) return "";
   let out = text.slice(0, from);

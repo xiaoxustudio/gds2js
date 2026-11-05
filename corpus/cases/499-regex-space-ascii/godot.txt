@@ -1,0 +1,12 @@
+a|null
+b|null
+c|null
+d|1|2
+e|1|2
+f|0|1
+g|0|1
+h|0|1
+i|null
+j|0|1
+k|null
+l|1|2
