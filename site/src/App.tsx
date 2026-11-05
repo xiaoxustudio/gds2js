@@ -272,7 +272,7 @@ export function App() {
   );
 }
 
-function Overview({ index, onOpenModule }: { index: CompatIndex; onOpenModule: (id: string) => void }) {
+export function Overview({ index, onOpenModule }: { index: CompatIndex; onOpenModule: (id: string) => void }) {
   const top = index.modules
     .filter((m) => m.stats.implemented > 0)
     .sort((a, b) => b.stats.implemented - a.stats.implemented)
