@@ -10,7 +10,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
-import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc, CallableBox, callableLabel, isCallableBox, isNullCallable } from "../class/object/script-object";
+import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc, CallableBox, callableLabel, isCallableBox, isFreed, isNullCallable } from "../class/object/script-object";
 import { callDeferred } from "../class/identity/callable";
 import { nativeAritySay } from "../face-arity";
 import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "../class/identity/null-object";
@@ -143,20 +143,31 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
         throw new UnsupportedError("signal-flag", "connect() 的 flags 只量过 int 来源");
       }
       const n = Number(flags.v);
-      if (n === 1) {
-        throw new UnsupportedError("signal-flag-deferred", "connect() 的 CONNECT_DEFERRED 要宿主先有对象生命周期模型，否则局部实例那一形会从静默丢行变成静默多印");
-      }
-      if (n !== 0 && n !== 2 && n !== 4 && n !== 8) {
-        throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 8）`);
+      if (!ALLOWED_SIGNAL_FLAGS.has(n)) {
+        throw new UnsupportedError("signal-flag", `connect() 的 flags=${n} 没量过（只量过 0 / 1 / 2 / 4 / 5 / 8 / 9）`);
       }
       const box = cb.v as CallableBox;
       if (isNullCallable(box)) {
         signalNullCallable(inner.sigName);
         return V.int(31);
       }
-      const rc = inner.connectTo(box, (a: Variant[]) => {
+      let invoke = (a: Variant[]): void => {
         callCallableBox(box, a);
-      }, n);
+      };
+      if ((n & 1) !== 0) {
+        const target = deferredTargetOf(box);
+        if (target === "unsupported") {
+          throw new UnsupportedError("signal-flag-deferred-refcount", "CONNECT_DEFERRED 连到 RefCounted / builtin 目标时 Godot 会随对象回收丢掉回调，宿主持强引用会多印 —— 这一形不建模");
+        }
+        invoke = (a: Variant[]): void => {
+          const captured = a.slice();
+          callDeferred(() => {
+            if (target === "node" && box.object !== null && isFreed(box.object.v)) return;
+            callCallableBox(box, captured);
+          });
+        };
+      }
+      const rc = inner.connectTo(box, invoke, n);
       if (rc === 31) {
         const label = callableLabel(box);
         if (label !== null) signalDuplicateConnect(inner.sigName, label);
@@ -428,4 +439,17 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GdSceneTree) return treeMethod(inner, name, args);
   if (isEngineNode(inner)) return nodeMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
+}
+
+const ALLOWED_SIGNAL_FLAGS = new Set([0, 1, 2, 4, 5, 8, 9]);
+
+function deferredTargetOf(box: CallableBox): "lambda" | "node" | "unsupported" {
+  if (box.builtin !== null) return "unsupported";
+  if (box.object === null) return box.fn === null ? "unsupported" : "lambda";
+  const inner = box.object.v;
+  if (typeof inner === "object" && inner !== null) {
+    const cls = (inner as Record<string, unknown>).__gd_engine_class__;
+    if (typeof cls === "string" && cls !== "") return "node";
+  }
+  return "unsupported";
 }

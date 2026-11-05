@@ -89,7 +89,7 @@ function translate(pattern: string): { source: string; flags: string } {
     body = body.split("[[:alpha:]]").join("[A-Za-z]");
   }
   if (/\\\d/.test(body)) refusePattern(pattern, "数字后向引用 \\1 那一支引擎按 unknown substring 处理，没量过可移植写法");
-  return { source: body, flags };
+  return { source: dollarBeforeFinalNewline(body), flags };
 }
 
 function scanGroups(pattern: string): { count: number; entries: [string, number][] } {
@@ -158,17 +158,39 @@ export function regexNames(rx: GdRegEx): Variant {
   return V.array(GArray.of(rx.names.map((n) => V.str(n))));
 }
 
-const UNICODE_SENSITIVE = /\\[wWsSdDbB]|\[:/;
+function dollarBeforeFinalNewline(body: string): string {
+  let out = "";
+  let inClass = false;
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i] as string;
+    if (ch === "\\") {
+      out += ch + (body[i + 1] ?? "");
+      i += 1;
+      continue;
+    }
+    if (inClass) {
+      out += ch;
+      if (ch === "]") inClass = false;
+      continue;
+    }
+    if (ch === "[") {
+      inClass = true;
+      out += ch;
+      continue;
+    }
+    out += ch === "$" ? "(?=\\n?$)" : ch;
+  }
+  return out;
+}
+
+const UNICODE_SENSITIVE = /\\[sS]|\[:/;
 
 function guardSubject(pattern: string, text: string): void {
   if (/[\uD800-\uDFFF]/.test(text)) {
     throw new UnsupportedError("rx-subject-encoding", `RegEx 的文本实参里有需配对的码位（${JSON.stringify(text.slice(0, 24))}）：引擎按码位偏移、JS 按码元偏移，这条偏移没量过`);
   }
   if (UNICODE_SENSITIVE.test(pattern) && /[^\0-\x7F]/.test(text)) {
-    throw new UnsupportedError("rx-unicode-subject", `pattern ${JSON.stringify(pattern)} 里的字符类遇上非 ASCII 文本：\\w 那几支在引擎按 Unicode 认字、JS 按 ASCII，这一形没量过`);
-  }
-  if (pattern.includes("$") && text.includes("\n")) {
-    throw new UnsupportedError("rx-dollar-newline", `pattern ${JSON.stringify(pattern)} 带 $ 而文本带换行：引擎的 $ 认结尾前那个换行、JS 的不认，这一形没量过`);
+    throw new UnsupportedError("rx-unicode-subject", `pattern ${JSON.stringify(pattern)} 里的空白字符类遇上非 ASCII 文本：\\s 在引擎与 JS 的空白集合没量过`);
   }
 }
 

@@ -1,0 +1,18 @@
+a|43
+a2|0|Expected '}'|<null>
+b|43
+b2|0|Expected ']'|<null>
+c|43
+c2|0|Unknown error getting token|<null>
+d|43
+d2|0|Expected 'true', 'false', or 'null', got 'tru'|<null>
+e|43
+e2|3|Expected value, got ''}''|<null>
+f|43
+f2|0|Expected 'EOF'|<null>
+g|<null>
+i|{  }
+ERROR: Parse JSON failed. Error at line 0: Expected '}'
+   at: parse_string (core/io/json.cpp:624)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:20)

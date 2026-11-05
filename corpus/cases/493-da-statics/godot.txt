@@ -1,0 +1,2 @@
+e|["a.txt", "b.txt"]
+f|["sub"]

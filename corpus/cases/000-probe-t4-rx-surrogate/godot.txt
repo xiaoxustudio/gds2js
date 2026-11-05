@@ -1,0 +1,6 @@
+a|3|65533
+b|true
+b2|0|1|a
+c|true
+c2|2|3|b
+Unicode parsing error, some characters were replaced with � (U+FFFD): Unpaired surrogate (d800)

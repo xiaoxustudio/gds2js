@@ -7,6 +7,8 @@ import { UnsupportedError } from "./errors";
 export type HostProc = {
   argv(): string[];
   env(name: string): string | null;
+  setEnv?(name: string, value: string): void;
+  osName?(): string;
 };
 
 let TABLE: HostProc | null = null;

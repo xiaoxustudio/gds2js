@@ -99,7 +99,8 @@ describe("runtime/signal", () => {
     eq("194", "空 Callable 的 get_bound_arguments 是空 Array、callv 给 null 且不报错（c11 / c8）", `${show(method(nullCallable(), "get_bound_arguments", []))} ${show(method(nullCallable(), "callv", [V.array(GArray.of([V.int(1), V.int(2)]))]))}`, "[] <null>");
     eq("194", "空 Callable 上 call() 是运行期那一句（c3）", errText(() => method(nullCallable(), "call", [V.int(1)])), "Attempt to call function 'null::null (Callable)' on a null instance.");
     eq("194", "绑过实参的空 Callable 不再算 null（c6）", `${method(boundWith(0), "is_null", []).v} ${method(method(nullCallable(), "bind", [V.int(1)]), "is_null", []).v}`, "false false");
-    shouldThrow("194", "空 Callable 上 call_deferred 没量过 → 响亮拒（c9 只量到解析期那一格）", () => method(nullCallable(), "call_deferred", [V.int(1)]));
+    eq("194", "空 Callable 上 call_deferred 是 no-op（491 实测）", `${show(method(nullCallable(), "call_deferred", [V.int(1)]))}`, "<null>");
+    shouldThrow("194", "绑过实参的空 Callable 上 call_deferred 还没量 → 响亮拒", () => method(method(nullCallable(), "bind", [V.int(1)]), "call_deferred", []));
     shouldThrow("194", "is_valid 在「空 + 绑过实参」那一格没量 → 响亮拒，不拿 is_null 的反面推", () => method(method(nullCallable(), "bind", [V.int(1)]), "is_valid", []));
     shouldThrow("194", "Callable(字符串) 一参形：Godot 是解析期 No constructor，运行期先响亮拒（c10）", () => callableCtor([V.str("on_fired")]));
     eq("440", "unbind() 已发货：给得出盒子而不是响亮拒", (() => { try { method(c0, "unbind", [V.int(1)]); return true; } catch { return false; } })(), true);
@@ -172,8 +173,8 @@ describe("runtime/signal", () => {
         method(sig3, "emit", [V.int(9)]);
         eq("195", "重复连的那一份不补投", seen3.join(","), "9");
       }
-      // 局部实例的 deferred 会被 Godot 随 RefCounted 回收丢掉；我们持强引用，排干就会多印一行 → 响亮拒
-      shouldThrow("195", "CONNECT_DEFERRED 要宿主先有对象生命周期模型 → 响亮拒（排干会让局部实例那一形静默多印）", () =>
+      // 局部 RefCounted 目标的 deferred 会被 Godot 随对象回收丢掉；我们持强引用会多印 → 这一形仍响亮拒
+      shouldThrow("195", "CONNECT_DEFERRED 连 RefCounted 方法目标会多印 → 响亮拒", () =>
         method(V.object(new Signal("fired")), "connect", [mkSink([]), V.int(1)]),
       );
       shouldThrow("195", "flags=-1 这种压着多个位的组合没量过 → 响亮拒（q10 只量到它给 0）", () =>

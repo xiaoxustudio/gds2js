@@ -1,0 +1,21 @@
+c1|0
+c2|0
+c3|0
+c4|0
+empty|true
+after-empty
+d|1|0
+d|2|0
+d|3|0
+d|4|0
+tick|1
+tick|2
+tick|3
+ERROR: Error calling from signal 's' to callable: 'GDScript::<anonymous lambda>': Method expected 0 argument(s), but called with 1.
+   at: emit_signalp (core/object/object.cpp:1435)
+   GDScript backtrace (most recent call first):
+       [0] _ready (<case>/main.gd:16)
+ERROR: Error calling deferred method: 'GDScript::<anonymous lambda>': Method expected 0 argument(s), but called with 1.
+   at: _call_function (core/object/message_queue.cpp:222)
+ERROR: Error calling deferred method: 'GDScript::<anonymous lambda>': Method expected 0 argument(s), but called with 1.
+   at: _call_function (core/object/message_queue.cpp:222)

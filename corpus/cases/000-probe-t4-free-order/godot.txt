@@ -1,0 +1,7 @@
+ready-end
+tick|1
+tick|2
+ERROR: Signal 'sc' is already connected to given callable 'Node::on' in that object.
+   at: connect (core/object/object.cpp:1682)
+   GDScript backtrace (most recent call first):
+       [0] _ready (<case>/main.gd:28)

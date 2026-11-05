@@ -927,6 +927,7 @@ export function typeDefault(t: TypeRef | null): string {
   if (base === "bool") return "rt.V.bool(false)";
   if (base === "String") return `rt.V.str("")`;
   if (base === "StringName") return `rt.V.stringName("")`;
+  if (base === "Callable") return "rt.callableCtor([])";
   if (base === "Array") return "rt.V.array(rt.GArray.of([]))";
   if (base === "Dictionary") return "rt.dictOf([])";
   if (base === "Vector2") return "rt.vector2(0, 0)";

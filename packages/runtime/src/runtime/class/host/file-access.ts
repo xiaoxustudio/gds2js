@@ -7,6 +7,7 @@ import { Tag, V, normInt, type Variant } from "../../tags";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "../../var-bytes";
 import { intToBig, intToNum } from "../../tags";
 import { asString } from "../../method/core";
+import { md5Bytes } from "../../md5";
 
 const ERR_OK = 0;
 const ERR_FAILED = 1;
@@ -37,6 +38,8 @@ export class GdFile extends GdScriptObject {
   bytes: number[] = [];
   pos = 0;
   err = ERR_OK;
+  bigEndian = false;
+  eof = false;
 }
 
 export class GdDir extends GdScriptObject {
@@ -94,7 +97,11 @@ function viewOf(bs: number[]): DataView {
 
 export function faOpen(path: string, mode: number): Variant {
   if (!modeAllowed(mode)) {
-    throw new UnsupportedError("fa-mode", `FileAccess.open() 只量过 1 / 2 / 3 / 7 四种模式（收到 ${String(mode)}）：带 _FLUSH 的那几支与 0 都不在实测内`);
+    if (mode === 0 || mode === 4 || mode === 5) {
+      lastFileOpenError = ERR_DOES_NOT_EXIST;
+      return nullObject();
+    }
+    throw new UnsupportedError("fa-mode", `FileAccess.open() 只量过 1 / 2 / 3 / 7 四种模式；0 / 4 / 5 实测回 null + 31（收到 ${String(mode)}，其余仍拒）`);
   }
   if (path === "") {
     lastFileOpenError = ERR_BAD_PATH;
@@ -136,6 +143,15 @@ export function faOpen(path: string, mode: number): Variant {
   return V.object(file);
 }
 
+function faMd5(path: string): Variant {
+  const abs = resolveIoPath(path);
+  const table = io();
+  if (!table.exists(abs) || table.isDir(abs)) {
+    throw new UnsupportedError("fa-md5-missing", "FileAccess.get_md5() 对缺失文件 / 目录的那一形带引擎自己的 ERROR 消息，没建模");
+  }
+  return V.str(md5Bytes(table.read(abs) ?? new Uint8Array(0)));
+}
+
 export function faFileExists(path: string): boolean {
   if (path === "") return false;
   const abs = resolveIoPath(path);
@@ -171,6 +187,7 @@ function take(file: GdFile, n: number): { bs: number[]; short: boolean } {
   const short = file.pos + n > file.bytes.length;
   if (short) file.err = ERR_CORRUPT;
   file.pos += n;
+  if (file.pos >= file.bytes.length) file.eof = true;
   return { bs, short };
 }
 
@@ -183,6 +200,7 @@ function readScalar(file: GdFile, n: number, full: (v: DataView) => number | big
 
 function readFloat(file: GdFile, n: number, full: (v: DataView) => number): Variant {
   requireOpen(file, "get");
+  if (file.bigEndian) throw new UnsupportedError("fa-endian-float", "set_big_endian(true) 之后的浮点读取没实测，照旧响亮拒");
   const got = take(file, n);
   return V.float(got.short ? 0 : full(viewOf(got.bs)));
 }
@@ -200,15 +218,17 @@ export function fileStoreNumber(file: GdFile, width: number, value: bigint): voi
   requireWrite(file, `store_${String(width * 8)}`);
   const buf = new ArrayBuffer(width);
   const view = new DataView(buf);
+  const le = !file.bigEndian;
   if (width === 1) view.setUint8(0, Number(value) & 0xff);
-  else if (width === 2) view.setUint16(0, Number(value) & 0xffff, true);
-  else if (width === 4) view.setUint32(0, Number(BigInt.asUintN(32, value)), true);
-  else view.setBigInt64(0, BigInt.asIntN(64, value), true);
+  else if (width === 2) view.setUint16(0, Number(value) & 0xffff, le);
+  else if (width === 4) view.setUint32(0, Number(BigInt.asUintN(32, value)), le);
+  else view.setBigInt64(0, BigInt.asIntN(64, value), le);
   put(file, Array.from(new Uint8Array(buf)));
 }
 
 export function fileStoreFloat(file: GdFile, width: number, value: number): void {
   requireWrite(file, width === 4 ? "store_float" : "store_double");
+  if (file.bigEndian) throw new UnsupportedError("fa-endian-float", "set_big_endian(true) 之后的浮点写入没实测，照旧响亮拒");
   const view = new DataView(new ArrayBuffer(width));
   if (width === 4) view.setFloat32(0, value, true);
   else view.setFloat64(0, value, true);
@@ -266,6 +286,7 @@ export function fileReadLine(file: GdFile): string {
     p += 1;
   }
   file.pos = p;
+  if (file.pos >= file.bytes.length) file.eof = true;
   return bytesText(field);
 }
 
@@ -291,12 +312,42 @@ export function fileSeek(file: GdFile, to: number): void {
     throw new UnsupportedError("fa-seek", `seek() 只量过落在已有内容之内（含末尾）的位置（收到 ${String(to)}，长度 ${String(file.bytes.length)}）`);
   }
   file.pos = to;
+  file.eof = false;
+}
+
+export function fileSeekEnd(file: GdFile, offset: number): void {
+  requireOpen(file, "seek_end");
+  const target = file.bytes.length + offset;
+  if (target < 0) return;
+  file.pos = target;
+  file.eof = false;
+}
+
+export function fileGetPascalString(file: GdFile): string {
+  requireOpen(file, "get_pascal_string");
+  const head = take(file, 4);
+  if (head.short) return "";
+  const n = viewOf(head.bs).getUint32(0, !file.bigEndian);
+  if (n === 0) return "";
+  if (file.pos + n > file.bytes.length) {
+    throw new UnsupportedError("fa-pascal-short", "get_pascal_string() 的长度前缀超出剩余字节时引擎是脏读，产物侧不复刻，响亮拒");
+  }
+  return bytesText(take(file, n).bs);
+}
+
+export function fileStorePascalString(file: GdFile, s: string): void {
+  requireWrite(file, "store_pascal_string");
+  const body = textBytes(s);
+  const head = new DataView(new ArrayBuffer(4));
+  head.setUint32(0, body.length, !file.bigEndian);
+  put(file, Array.from(new Uint8Array(head.buffer)));
+  put(file, body);
 }
 
 export function fileEof(file: GdFile): boolean {
   requireOpen(file, "eof_reached");
   if (file.mode === FA_WRITE) return false;
-  return file.pos >= file.bytes.length;
+  return file.eof;
 }
 
 export function dirOpen(path: string): Variant {
@@ -326,6 +377,17 @@ function dirPath(dir: GdDir, name: string): string {
 
 function dirNames(dir: GdDir): string[] {
   return io().list(dir.abs);
+}
+
+function dirListAt(path: string, wantDirs: boolean): Variant {
+  const abs = resolveIoPath(path);
+  const table = io();
+  if (!table.exists(abs) || !table.isDir(abs)) {
+    throw new UnsupportedError("da-list-missing", `DirAccess.${wantDirs ? "get_directories_at" : "get_files_at"}() 对缺失目录 / 非目录那一形带引擎 ERROR 块，没建模`);
+  }
+  const names = table.list(abs).filter((n) => table.isDir(`${abs}/${n}`) === wantDirs);
+  names.sort();
+  return V.object(GBytes.of(names, "string"));
 }
 
 function dirKindSet(dir: GdDir): Set<string> {
@@ -516,11 +578,13 @@ export function dirExistsAbsolute(path: string): boolean {
 export { ERR_OK, ERR_FAILED, ERR_NOT_FOUND, ERR_BAD_PATH, ERR_CORRUPT };
 
 
-export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error"]);
+export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5"]);
 
 export const DA_STATIC_NAMES = new Set([
   "open",
   "get_open_error",
+  "get_files_at",
+  "get_directories_at",
   "make_dir_absolute",
   "make_dir_recursive_absolute",
   "remove_absolute",
@@ -578,6 +642,10 @@ export function fileAccessStatic(name: string, args: Variant[]): Variant {
     if (args.length !== 1) throw new UnsupportedError("io-arity", `FileAccess.file_exists() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
     return V.bool(faFileExists(pathArg(args, 0, "file_exists")));
   }
+  if (name === "get_md5") {
+    if (args.length !== 1) throw new UnsupportedError("io-arity", `FileAccess.get_md5() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
+    return faMd5(pathArg(args, 0, "get_md5"));
+  }
   if (args.length !== 0) throw new UnsupportedError("io-arity", `FileAccess.get_open_error() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
   return V.int(faLastOpenError());
 }
@@ -586,6 +654,10 @@ export function dirAccessStatic(name: string, args: Variant[]): Variant {
   if (name === "open") {
     if (args.length !== 1) throw new UnsupportedError("io-arity", `DirAccess.open() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
     return dirOpen(pathArg(args, 0, "open"));
+  }
+  if (name === "get_files_at" || name === "get_directories_at") {
+    if (args.length !== 1) throw new UnsupportedError("io-arity", `DirAccess.${name}() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
+    return dirListAt(pathArg(args, 0, name), name === "get_directories_at");
   }
   if (name === "get_open_error") {
     if (args.length !== 0) throw new UnsupportedError("io-arity", `DirAccess.get_open_error() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
@@ -666,9 +738,9 @@ export function fileMethod(file: GdFile, name: string, args: Variant[]): Variant
     case "get_64": {
       if (args.length !== 0) throw new UnsupportedError("io-arity", `${name}() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
       if (name === "get_8") return fileReadNumber(file, 1, (v) => v.getUint8(0));
-      if (name === "get_16") return fileReadNumber(file, 2, (v) => v.getUint16(0, true));
-      if (name === "get_32") return fileReadNumber(file, 4, (v) => v.getUint32(0, true));
-      return fileReadNumber(file, 8, (v) => v.getBigInt64(0, true));
+      if (name === "get_16") return fileReadNumber(file, 2, (v) => v.getUint16(0, !file.bigEndian));
+      if (name === "get_32") return fileReadNumber(file, 4, (v) => v.getUint32(0, !file.bigEndian));
+      return fileReadNumber(file, 8, (v) => v.getBigInt64(0, !file.bigEndian));
     }
     case "get_float":
     case "get_real": {
@@ -709,6 +781,25 @@ export function fileMethod(file: GdFile, name: string, args: Variant[]): Variant
     case "seek": {
       if (args.length !== 1) throw new UnsupportedError("io-arity", "seek() 只量过 1 个实参");
       fileSeek(file, intArg(args, 0, "seek"));
+      return V.nil();
+    }
+    case "seek_end": {
+      if (args.length !== 1) throw new UnsupportedError("io-arity", "seek_end() 只量过 1 个实参");
+      fileSeekEnd(file, intArg(args, 0, "seek_end"));
+      return V.nil();
+    }
+    case "set_big_endian": {
+      if (args.length !== 1) throw new UnsupportedError("io-arity", "set_big_endian() 只量过 1 个实参");
+      file.bigEndian = boolArg(args, 0, "set_big_endian", false);
+      return V.nil();
+    }
+    case "get_pascal_string": {
+      if (args.length !== 0) throw new UnsupportedError("io-arity", "get_pascal_string() 只量过 0 个实参");
+      return V.str(fileGetPascalString(file));
+    }
+    case "store_pascal_string": {
+      if (args.length !== 1) throw new UnsupportedError("io-arity", "store_pascal_string() 只量过 1 个实参");
+      fileStorePascalString(file, pathArg(args, 0, "store_pascal_string"));
       return V.nil();
     }
     case "eof_reached":

@@ -304,6 +304,7 @@ describe.skipIf(!hasScriptc)(`scriptc 出货门 · ${cases.length} 个用例（$
   const gate = async (id: string, ctx: TestContext): Promise<void> => {
     const row = await gateOne(id);
     rows.push(row);
+    if (!KEEP) rmSync(join(WORK, id), { recursive: true, force: true });
     if (row.booked !== null) {
       ctx.skip(true, `${id}：${row.booked}`);
       return;

@@ -1,0 +1,11 @@
+a|true
+a2|0|2|12
+b|false
+c|true
+c2|0|2|34
+d|true|h|0|1
+SCRIPT ERROR: Attempt to call function 'get_string' in base 'null instance' on a null instance.
+   at: _initialize (<case>/main.gd:27)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:27)
+<<GDS2JS_TIMEOUT>>

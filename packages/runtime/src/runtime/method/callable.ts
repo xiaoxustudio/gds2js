@@ -266,7 +266,10 @@ export function callableMethod(box: CallableBox, name: string, args: Variant[]):
     case "call":
       return callableCall(box, args);
     case "call_deferred": {
-      if (empty) throw new UnsupportedError("callable-deferred-null", "空 Callable 上 call_deferred() 没量过");
+      if (empty) {
+        if (bound.length > 0) throw new UnsupportedError("callable-deferred-null-bound", "绑过实参的空 Callable 上 call_deferred() 没量过");
+        return V.nil();
+      }
       callDeferred(() => {
         try {
           callCallableBox(box, args);

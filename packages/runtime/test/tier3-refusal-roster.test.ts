@@ -62,12 +62,15 @@ function matchOf(pattern: string, text: string, from = 0): Variant {
 
 describe("tier3 · 定形拒绝清单", () => {
   it("FileAccess 的成员面：没量过的那一族照旧响亮拒", () => {
-    eq("t3", "get_pascal_string", say(() => method(writer(), "get_pascal_string", [])), "fa-method");
+    const psr = reader();
+    eq("t3", "get_pascal_string 已放行：短读回空串", `${String(method(psr, "get_pascal_string", []).v)}|${String(method(psr, "get_position", []).v)}`, "|4");
     eq("t3", "get_bool 引擎根本没有", say(() => method(reader(), "get_bool", [])), "fa-method");
-    eq("t3", "seek_end", say(() => method(reader(), "seek_end", [I(-2)])), "fa-method");
+    const sr = reader();
+    method(sr, "seek_end", [I(-1)]);
+    eq("t3", "seek_end 已放行", method(sr, "get_position", []).v, 1);
     eq("t3", "open_compressed", say(() => method(writer(), "open_compressed", [])), "fa-method");
-    eq("t3", "get_md5", say(() => method(reader(), "get_md5", [T("user://probe.txt")])), "fa-method");
-    eq("t3", "store_var 之外的端序开关", say(() => method(writer(), "set_big_endian", [V.bool(true)])), "fa-method");
+    eq("t3", "get_md5 静态面已放行", method(FILE, "get_md5", [T("user://probe.txt")]).v, "49f68a5c8493ec2c0bf489821c21fc3b");
+    eq("t3", "set_big_endian 已放行", String(method(writer(), "set_big_endian", [V.bool(true)]).v), "null");
   });
 
   it("FileAccess 关闭之后：引擎打的是 drivers/windows 的 ERROR 块，值也没法复现", () => {
@@ -104,9 +107,8 @@ describe("tier3 · 定形拒绝清单", () => {
   });
 
   it("没建模的宿主 API 与引擎单例都在名单外", () => {
-    eq("t3", "OS 的静态调用", say(() => method(nativeClass("OS"), "get_name", [])), "native-class-member");
+    eq("t3", "OS 的静态调用", say(() => method(nativeClass("OS"), "get_processor_count", [])), "native-class-member");
     eq("t3", "OS 的 get_cmdline_args（两侧不同源）", say(() => method(nativeClass("OS"), "get_cmdline_args", [])), "native-class-member");
-    eq("t3", "OS 的 set_environment", say(() => method(nativeClass("OS"), "set_environment", [T("A"), T("B")])), "native-class-member");
     eq("t3", "OS 的 get_executable_path", say(() => method(nativeClass("OS"), "get_executable_path", [])), "native-class-member");
     eq("t3", "Engine 的静态调用", say(() => method(nativeClass("Engine"), "get_main_loop", [])), "native-class-member");
     eq("t3", "Marshalls 在 GDScript 里本就解析期拒", say(() => method(nativeClass("Marshalls"), "bool_to_bit", [V.bool(true)])), "native-class-member");
@@ -114,9 +116,14 @@ describe("tier3 · 定形拒绝清单", () => {
   });
 
   it("OS 的进程面按实测放行：argv 的 -- 切分与环境变量两形", () => {
+    const ENV = new Map<string, string>();
     registerHostProc({
       argv: () => ["compile", "--", "alpha", "--", "beta"],
-      env: (n: string): string | null => (n === "GDS2JS_SET" ? "v" : n === "GDS2JS_EMPTY" ? "" : null),
+      env: (n: string): string | null => (ENV.has(n) ? (ENV.get(n) as string) : n === "GDS2JS_SET" ? "v" : n === "GDS2JS_EMPTY" ? "" : null),
+      setEnv: (n: string, v: string): void => {
+        ENV.set(n, v);
+      },
+      osName: (): string => "Windows",
     });
     eq("t4", "argv 在第一个 -- 之后切，后续 -- 原样留着", userArgsOf(["compile", "--", "alpha", "--", "beta"]).join("|"), "alpha|--|beta");
     eq("t4", "没有 -- 时 user args 是空表", userArgsOf(["compile", "alpha"]).join("|"), "");
@@ -127,6 +134,18 @@ describe("tier3 · 定形拒绝清单", () => {
     eq("t4", "get_environment 的非 String 实参", say(() => method(OS, "get_environment", [I(1)])), "os-arg-type");
     eq("t4", "get_environment 少参", say(() => method(OS, "get_environment", [])), "os-arity");
     eq("t4", "get_cmdline_user_args 带参", say(() => method(OS, "get_cmdline_user_args", [I(1)])), "os-arity");
+    eq("t4", "get_name", String((method(OS, "get_name", []) as Variant).v), "Windows");
+    eq(
+      "t4",
+      "set_environment 设空串后变量仍在",
+      (() => {
+        method(OS, "set_environment", [T("GDS2JS_T4"), T("v1")]);
+        const a = String((method(OS, "get_environment", [T("GDS2JS_T4")]) as Variant).v);
+        method(OS, "set_environment", [T("GDS2JS_T4"), T("")]);
+        return `${a}|${String((method(OS, "has_environment", [T("GDS2JS_T4")]) as Variant).v)}|${String((method(OS, "get_environment", [T("GDS2JS_T4")]) as Variant).v)}`;
+      })(),
+      "v1|true|",
+    );
   });
 
   it("FileAccess 的读写交错模式按实测放行，带 _FLUSH 的那几支照旧拒", () => {
@@ -142,8 +161,8 @@ describe("tier3 · 定形拒绝清单", () => {
     eq("t3", "READ_WRITE 重开从 0 位读", `${String(method(rw, "get_length", []).v)}|${String(method(rw, "get_8", []).v)}|${String(method(rw, "get_position", []).v)}`, "2|104|1");
     eq("t3", "READ_WRITE 不建文件：开错误 7", String(method(FILE, "open", [T("user://gone.txt"), I(3)]).v === null ? "抛了" : method(FILE, "get_open_error", []).v), "7");
     eq("t3", "READ 句柄上写仍响亮拒", say(() => method(reader(), "store_8", [I(1)])), "fa-readonly");
-    eq("t3", "READ_FLUSH(4) 没量过", say(() => method(FILE, "open", [T("user://probe.txt"), I(4)])), "fa-mode");
-    eq("t3", "模式 0 没量过", say(() => method(FILE, "open", [T("user://probe.txt"), I(0)])), "fa-mode");
+    eq("t3", "模式 4 已放行：null + 31", `${say(() => method(FILE, "open", [T("user://probe.txt"), I(4)]))}|${String(method(FILE, "get_open_error", []).v)}`, "没抛|31");
+    eq("t3", "模式 0 已放行：null + 31", `${say(() => method(FILE, "open", [T("user://probe.txt"), I(0)]))}|${String(method(FILE, "get_open_error", []).v)}`, "没抛|31");
   });
 
   it("FileAccess 常量面：实测那四格原样给出", () => {
@@ -163,8 +182,10 @@ describe("tier3 · 定形拒绝清单", () => {
 
   it("RegEx 的文本实参：偏移与字符类语义只量过 ASCII 那一层", () => {
     eq("t3", "需配对码位", say(() => method(regex("\\w+"), "search", [T("a\uD800\uDCC0b")])), "rx-subject-encoding");
-    eq("t3", "\\w 遇上非 ASCII", say(() => method(regex("\\w+"), "search", [T("héllo")])), "rx-unicode-subject");
-    eq("t3", "$ 遇上换行", say(() => method(regex("^\\d+$"), "search", [T("12\n")])), "rx-dollar-newline");
+    const uw = matchOf("\\w+", "héllo");
+    eq("t3", "\\w 遇非 ASCII 已放行：ASCII-only", `${String(method(uw, "get_string", [I(0)]).v)}|${String(method(uw, "get_end", [I(0)]).v)}`, "h|1");
+    const dn = matchOf("^\\d+$", "12\n");
+    eq("t3", "$ 认末尾换行前已放行", `${String(method(dn, "get_start", [I(0)]).v)}|${String(method(dn, "get_end", [I(0)]).v)}`, "0|2");
     eq("t3", "字面量 pattern 的 Unicode 面", say(() => method(regex("é"), "search", [T("xéy")])), "rx-pattern");
   });
 
@@ -207,13 +228,13 @@ describe("tier3 · 定形拒绝清单", () => {
   it("JSON 的解析失败与实参面：消息集没实测完的那几支照旧响亮拒", () => {
     const j = method(JS, "new", []);
     eq("t3", "解析失败", say(() => method(JS, "parse_string", [T("{")])), "json-parse-failure");
-    eq("t3", "parse 带第二个实参", say(() => method(j, "parse", [T("{}"), V.bool(true)])), "json-arity");
+    eq("t3", "parse 带第二个实参已放行", `${say(() => method(j, "parse", [T("{}"), V.bool(true)]))}|${String(method(j, "get_error_line", []).v)}`, "没抛|0");
     eq("t3", "stringify 空手", say(() => method(JS, "stringify", [])), "json-arity");
     eq("t3", "sort_keys 给了非布尔", say(() => method(JS, "stringify", [T("x"), T(""), I(1)])), "json-arg-type");
     eq("t3", "get_data 带实参", say(() => method(j, "get_data", [I(1)])), "json-arity");
     eq("t3", "get_error_column 引擎根本没有", say(() => method(j, "get_error_column", [])), "json-method");
     eq("t3", "静态面调 parse", say(() => method(JS, "parse", [T("{}")])), "native-class-member");
-    eq("t3", "NaN 那一支没量过", say(() => method(JS, "stringify", [V.float(NaN)])), "json-number-nan");
+    eq("t3", "NaN 印 null（WARNING 块不复刻）", method(JS, "stringify", [V.float(NaN)]).v, "null");
     const keyed = new GDict();
     keyed.set(V.array(GArray.of([V.int(1)])), V.int(1));
     keyed.set(V.array(GArray.of([V.int(2)])), V.int(2));

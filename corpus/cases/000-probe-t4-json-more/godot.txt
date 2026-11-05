@@ -1,0 +1,9 @@
+a|null
+b|1e99999
+c|-1e99999
+d|0|{ "a": 1.0 }
+e|43|Expected 'true', 'false', or 'null', got 'bad'
+WARNING: `NaN` ("Not a Number") found in argument passed to JSON.stringify(). `NaN` cannot be represented in JSON, so the value has been replaced with `null`. This warning will not be printed for any later NaN occurrences.
+   at: _stringify (core/io/json.cpp:86)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (<case>/main.gd:4)

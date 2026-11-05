@@ -1,0 +1,14 @@
+c9|0|0
+c1|0|31
+ready-end
+o5|1
+o9|4
+o9|5
+o1|6
+od|7
+tick|1
+tick|2
+ERROR: Signal 's1' is already connected to given callable '<anonymous lambda>(lambda)' in that object.
+   at: connect (core/object/object.cpp:1682)
+   GDScript backtrace (most recent call first):
+       [0] _ready (<case>/main.gd:20)

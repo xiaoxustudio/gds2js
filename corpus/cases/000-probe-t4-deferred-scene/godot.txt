@@ -1,0 +1,10 @@
+r|0
+r|1
+r|2
+r|3
+r|4|true
+r|5
+d|7|0
+tick|1|false
+tick|2|false
+exit|2

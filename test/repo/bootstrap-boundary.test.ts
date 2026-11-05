@@ -10,7 +10,7 @@ const sliceIds = existsSync(SLICE_ROOT)
   ? readdirSync(SLICE_ROOT, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
   : [];
 
-describe("自举夹具边界（Tier 4 阶段零）", () => {
+describe("自举夹具边界（自举线阶段零）", () => {
   it("① 切片一支都不进语义账", () => {
     const corpus = new Set(listCases(""));
     const singles = new Set(listSingleCases(""));

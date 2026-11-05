@@ -15,9 +15,9 @@ export class Signal {
   connectTo(box: object, fn: (args: Variant[]) => void, flags: number): number {
     for (const l of this.#listeners) {
       if (!sameBox(l.box, box)) continue;
-      return flags === 8 ? CONNECT_OK : CONNECT_ALREADY_CONNECTED;
+      return (flags & 8) !== 0 ? CONNECT_OK : CONNECT_ALREADY_CONNECTED;
     }
-    this.#listeners.push({ box, fn, oneShot: flags === 4, flags });
+    this.#listeners.push({ box, fn, oneShot: (flags & 4) !== 0, flags });
     return CONNECT_OK;
   }
 

@@ -9,7 +9,10 @@ const K = new Int32Array(
 );
 
 export function md5Hex(text: string): string {
-  const bytes = new TextEncoder().encode(text);
+  return md5Bytes(new TextEncoder().encode(text));
+}
+
+export function md5Bytes(bytes: Uint8Array): string {
   const bitLen = bytes.length * 8;
   const padded = new Uint8Array((((bytes.length + 8) >> 6) + 1) << 6);
   padded.set(bytes);

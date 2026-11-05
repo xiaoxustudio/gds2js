@@ -1,0 +1,11 @@
+a|true
+b
+c|false
+d
+tick|1
+tick|2
+tick|3
+ERROR: Signal 'greet' is already connected to given callable 'Node::notify' in that object.
+   at: connect (core/object/object.cpp:1682)
+   GDScript backtrace (most recent call first):
+       [0] _ready (<case>/main.gd:17)

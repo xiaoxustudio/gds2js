@@ -1,0 +1,7 @@
+connected|true
+emitted
+after-mk
+lam|2
+tick|1
+tick|2
+tick|3

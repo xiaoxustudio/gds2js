@@ -44,12 +44,12 @@ function escString(s: string): string {
 }
 
 /**
- * 实测到的两支无穷印法：`1e99999` / `-1e99999`，两种模式同形；NaN 没量过。
+ * 实测到的两支无穷印法：`1e99999` / `-1e99999`，两种模式同形；NaN 印 `null`（引擎另有一次性 WARNING 块，不复刻）。
  * 默认那一支是 15 位有效数字的定点形（尾零裁掉但留一位小数），`full_float` 那一支是科学计数、
  * 没有小数点也没有指数的补 `.0`；`-0.0` 两支都给 `0.0`。
  */
 function numJson(x: number, full: boolean): string {
-  if (Number.isNaN(x)) throw new UnsupportedError("json-number-nan", "JSON.stringify 遇上 NaN 那一形没量过（引擎的门面里只读到 inf 与 -inf）");
+  if (Number.isNaN(x)) return "null";
   if (!Number.isFinite(x)) return x > 0 ? "1e99999" : "-1e99999";
   if (x === 0) return "0.0";
   if (!full) {
@@ -408,8 +408,9 @@ function jsonParseResult(text: string): Variant {
 }
 
 function parseCode(j: GdJson, args: Variant[]): Variant {
+  if (args.length < 1 || args.length > 2) throw new UnsupportedError("json-arity", `JSON.parse() 只量过 1 到 2 个实参（收到 ${String(args.length)} 个）`);
   const text = textArg(args, 0, "parse", "");
-  if (args.length !== 1) throw new UnsupportedError("json-arity", `JSON.parse() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
+  if (args.length === 2) boolArg(args, 1, "parse", false);
   j.__gd_json_data = jsonParseResult(text);
   j.__gd_json_error_line = 0;
   return V.int(0);

@@ -1,0 +1,12 @@
+refc|0|0
+ready-end
+lam|1
+lam|2
+lam|3
+self|3
+once|4
+ref|6
+ref|7
+drop|8
+tick|1
+tick|2

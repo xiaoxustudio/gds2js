@@ -1,0 +1,7 @@
+e|["a.txt", "b.txt"]
+f|["sub"]
+g|[]
+ERRO<abs> Couldn't open directory at path "use<abs>".
+   a<abs> get_files_at (core/io/dir_access.cp<abs>)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (re<abs>)
