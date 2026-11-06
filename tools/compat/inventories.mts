@@ -109,7 +109,7 @@ const EXTRA_GLOBAL_IMPLEMENTED = ["print", "print_debug", "print_rich", "print_v
 
 const EXTRA_PROPS = { Node: ["name"] };
 
-const EXTRA_METHODS = { FileAccess: ["get_open_error"] };
+const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"] };
 
 function functionBody(source: string, fnName: string): string {
   const re = new RegExp(`(?:export\\s+)?function\\s+${fnName}\\s*\\(`, "g");
