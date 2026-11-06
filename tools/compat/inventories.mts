@@ -84,6 +84,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/orient/quaternion.ts", fn: "quaternionReadProp", owners: ["Quaternion"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/orient/basis.ts", fn: "basisMethod", owners: ["Basis"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/orient/basis.ts", fn: "basisReadProp", owners: ["Basis"], kind: "prop" },
+  { file: "packages/runtime/src/runtime/class/orient/basis.ts", fn: "basisStatic", owners: ["Basis"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/orient/basis.ts", fn: "basisWriteProp", owners: ["Basis"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/orient/transform2d.ts", fn: "transform2dMethod", owners: ["Transform2D"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/orient/transform2d.ts", fn: "transform2dReadProp", owners: ["Transform2D"], kind: "prop" },

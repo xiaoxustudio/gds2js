@@ -89,6 +89,13 @@ function vec3(v: Variant | undefined, name: string): [number, number, number] {
   if (p === null) throw new UnsupportedError("quaternion-arg-type", `Quaternion.${name}() 的实参只量过 Vector3`);
   return [p.x, p.y, p.z];
 }
+type EulerHook = (x: number, y: number, z: number, w: number) => [number, number, number];
+let EULER_HOOK: EulerHook | null = null;
+
+export function registerQuaternionEulerHook(fn: EulerHook): void {
+  EULER_HOOK = fn;
+}
+
 export function quaternionMethod(inner: GQuaternion, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length_squared":
@@ -122,6 +129,11 @@ export function quaternionMethod(inner: GQuaternion, name: string, args: Variant
       return V.bool(Math.abs(len2(inner) - 1) < 1e-5);
     case "is_finite":
       return V.bool(Number.isFinite(inner.x) && Number.isFinite(inner.y) && Number.isFinite(inner.z) && Number.isFinite(inner.w));
+    case "get_euler": {
+      if (EULER_HOOK === null) throw new UnsupportedError("quaternion-euler", "Quaternion.get_euler() 的钩子未注册");
+      const e = EULER_HOOK(inner.x, inner.y, inner.z, inner.w);
+      return vector3(e[0], e[1], e[2]);
+    }
     case "angle_to": {
       const o = same(args[0], "angle_to");
       let d = r(inner.x * o.x);
