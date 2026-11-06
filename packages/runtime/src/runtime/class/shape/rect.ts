@@ -249,6 +249,21 @@ export function rect2Method(inner: GRect2, name: string, args: Variant[]): Varia
     }
     case "is_finite":
       return V.bool(Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(sx) && Number.isFinite(sy));
+    case "has_area":
+      return V.bool(sx > 0 && sy > 0);
+    case "intersection": {
+      const other = asRect2v(args[0] as Variant);
+      const nx = Math.max(px, other.x);
+      const ny = Math.max(py, other.y);
+      const ex = Math.min(f(px + sx), f(other.x + other.w));
+      const ey = Math.min(f(py + sy), f(other.y + other.h));
+      if (nx >= ex || ny >= ey) return rect2(0, 0, 0, 0);
+      return rect2(nx, ny, f(ex - nx), f(ey - ny));
+    }
+    case "get_support": {
+      const p = one(args, "get_support", asVec2, "只量过 Vector2");
+      return vector2(p.x >= 0 ? f(px + sx) : px, p.y >= 0 ? f(py + sy) : py);
+    }
     default:
       throw new UnsupportedError("rect2-method", `Rect2.${name}() 这一支没量过（存在性与返回值都只按实测的十四支放行）`);
   }
@@ -324,6 +339,17 @@ export function rect2iMethod(inner: GRect2i, name: string, args: Variant[]): Var
       const nx = sx < 0 ? px + sx : px;
       const ny = sy < 0 ? py + sy : py;
       return rect2i(nx, ny, Math.abs(sx), Math.abs(sy));
+    }
+    case "has_area":
+      return V.bool(sx > 0 && sy > 0);
+    case "intersection": {
+      const other = asRect2iv(args[0] as Variant);
+      const nx = Math.max(px, other.x);
+      const ny = Math.max(py, other.y);
+      const ex = Math.min(px + sx, other.x + other.w);
+      const ey = Math.min(py + sy, other.y + other.h);
+      if (nx >= ex || ny >= ey) return rect2i(0, 0, 0, 0);
+      return rect2i(nx, ny, ex - nx, ey - ny);
     }
     default:
       throw new UnsupportedError("rect2i-method", `Rect2i.${name}() 这一支没量过（is_finite 与 is_equal_approx 在 4.6.3 都不存在）`);
