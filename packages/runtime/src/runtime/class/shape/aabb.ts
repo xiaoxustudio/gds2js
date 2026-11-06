@@ -100,6 +100,58 @@ export function aabbMethod(inner: GAABB, name: string, args: Variant[]): Variant
       const nz = Math.min(pz, p.z);
       return aabb(nx, ny, nz, r(Math.max(ex, p.x) - nx), r(Math.max(ey, p.y) - ny), r(Math.max(ez, p.z) - nz));
     }
+    case "get_longest_axis_index":
+      return V.int(sx >= sy && sx >= sz ? 0 : sy >= sz ? 1 : 2);
+    case "get_shortest_axis_index":
+      return V.int(sx <= sy && sx <= sz ? 0 : sy <= sz ? 1 : 2);
+    case "get_longest_axis": {
+      const i = sx >= sy && sx >= sz ? 0 : sy >= sz ? 1 : 2;
+      return vector3(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0);
+    }
+    case "get_shortest_axis": {
+      const i = sx <= sy && sx <= sz ? 0 : sy <= sz ? 1 : 2;
+      return vector3(i === 0 ? 1 : 0, i === 1 ? 1 : 0, i === 2 ? 1 : 0);
+    }
+    case "get_longest_axis_size":
+      return V.float(sx >= sy && sx >= sz ? sx : sy >= sz ? sy : sz);
+    case "get_shortest_axis_size":
+      return V.float(sx <= sy && sx <= sz ? sx : sy <= sz ? sy : sz);
+    case "get_support": {
+      const d = asVec3(pt(args[0]));
+      if (d === null) throw new UnsupportedError("aabb-arg-type", "AABB.get_support() 的实参只量过 Vector3");
+      return vector3(d.x >= 0 ? ex : px, d.y >= 0 ? ey : py, d.z >= 0 ? ez : pz);
+    }
+    case "has_surface":
+      return V.bool(sx > 0 || sy > 0 || sz > 0);
+    case "abs": {
+      const nx = sx < 0 ? r(px + sx) : px;
+      const ny = sy < 0 ? r(py + sy) : py;
+      const nz = sz < 0 ? r(pz + sz) : pz;
+      return aabb(nx, ny, nz, Math.abs(sx), Math.abs(sy), Math.abs(sz));
+    }
+    case "grow": {
+      const g = args[0];
+      if (g === undefined || (g.t !== Tag.INT && g.t !== Tag.FLOAT)) throw new UnsupportedError("aabb-arg-type", "AABB.grow() 的实参只量过数");
+      const k = r(Number(g.v));
+      return aabb(r(px - k), r(py - k), r(pz - k), r(sx + r(2 * k)), r(sy + r(2 * k)), r(sz + r(2 * k)));
+    }
+    case "encloses": {
+      const o = other(args[0]);
+      return V.bool(px <= o.x && py <= o.y && pz <= o.z && ex >= r(o.x + o.sx) && ey >= r(o.y + o.sy) && ez >= r(o.z + o.sz));
+    }
+    case "intersection": {
+      const o = other(args[0]);
+      const nx = Math.max(px, o.x);
+      const ny = Math.max(py, o.y);
+      const nz = Math.max(pz, o.z);
+      return aabb(nx, ny, nz, r(Math.min(ex, r(o.x + o.sx)) - nx), r(Math.min(ey, r(o.y + o.sy)) - ny), r(Math.min(ez, r(o.z + o.sz)) - nz));
+    }
+    case "get_endpoint": {
+      const i = args[0];
+      if (i === undefined || (i.t !== Tag.INT && i.t !== Tag.FLOAT)) throw new UnsupportedError("aabb-arg-type", "AABB.get_endpoint() 的编号只量过数");
+      const n = Math.trunc(Number(i.v));
+      return vector3((n & 4) !== 0 ? ex : px, (n & 2) !== 0 ? ey : py, (n & 1) !== 0 ? ez : pz);
+    }
     case "is_finite":
       return V.bool(Number.isFinite(px) && Number.isFinite(py) && Number.isFinite(pz) && Number.isFinite(sx) && Number.isFinite(sy) && Number.isFinite(sz));
     case "is_equal_approx": {

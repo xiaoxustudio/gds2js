@@ -84,6 +84,9 @@ export function planeText(v: GPlane): string {
 export function planeReadProp(v: GPlane, name: string): Variant | null {
   if (name === "normal") return vector3(v.nx, v.ny, v.nz);
   if (name === "d") return V.float(v.d);
+  if (name === "x") return V.float(v.nx);
+  if (name === "y") return V.float(v.ny);
+  if (name === "z") return V.float(v.nz);
   return null;
 }
 function vec(v: Variant | undefined): [number, number, number] {
