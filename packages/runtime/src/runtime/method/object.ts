@@ -231,6 +231,10 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
       }
       return V.int(ridv.id);
     }
+    if (name === "is_valid") {
+      if (args.length !== 0) throw new GodotRuntimeError("arity", "is_valid() 不接受实参");
+      return V.bool(ridv.id !== 0n && ridv.id !== 0);
+    }
     throw new GodotRuntimeError("rid-method", `Invalid call. Nonexistent function '${name}' in base 'RID'.`);
   }
 

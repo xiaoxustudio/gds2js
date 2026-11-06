@@ -15,6 +15,7 @@ export const CTOR_ARMS: Record<string, string[][]> = {
   Transform2D: [[], ["V2", "V2"], ["V2", "V2", "V2"], ["N", "N", "N", "N", "N", "N"], ["N", "V2"]],
   Transform3D: [[], ["Transform3D"], ["Basis"], ["Basis", "V3"], ["V3", "V3", "V3", "V3"]],
   Projection: [[], ["Transform3D"], ["V4", "V4", "V4", "V4"]],
+  RID: [[]],
   Color: [[], ["N", "N", "N"], ["N", "N", "N", "N"], ["S"]],
   String: [[], ["S"]],
   Array: [],

@@ -6,6 +6,7 @@ export * from "./string-ops";
 export { ops, strOps } from "./ops";
 export { fast } from "./fast";
 export * from "./class/identity/signal";
+export * from "./class/identity/rid";
 export * from "./builtins";
 export * from "./methods";
 export * from "./class/object/script-object";

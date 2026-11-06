@@ -1,4 +1,5 @@
 import { Tag, V, normInt, type IntPayload, type Variant } from "../../tags";
+import { UnsupportedError } from "../../errors";
 
 export class GdRid {
   readonly id: IntPayload;
@@ -26,4 +27,9 @@ export function allocateRid(): bigint {
 /** 号就是值的全部内容：打印、等式与哈希都按它走（`RID(0)` / `RID(-1)` / `RID(9223372036854775807)` 都是实测原样）。 */
 export function ridText(r: GdRid): string {
   return "RID(" + String(r.id) + ")";
+}
+
+export function ridCtor(args: Variant[]): Variant {
+  if (args.length !== 0) throw new UnsupportedError("rid-arity", "RID() 只量过 0 个实参");
+  return rid(0n);
 }
