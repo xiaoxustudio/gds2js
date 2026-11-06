@@ -374,7 +374,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
   }
 
   const sceneChild = (node: SceneNode): SceneChild => {
-    if (node.cls !== "Node" && node.cls !== "Node2D" && node.cls !== "Node3D" && node.cls !== "Control") throw new UnsupportedError("scene-node-class", `场景节点的类型 ${node.cls} 造不出来（只量过 Node / Node2D / Node3D / Control）`);
+    if (node.cls !== "Node" && node.cls !== "Node2D" && node.cls !== "Node3D" && node.cls !== "Control" && node.cls !== "Timer") throw new UnsupportedError("scene-node-class", `场景节点的类型 ${node.cls} 造不出来（只量过 Node / Node2D / Node3D / Control / Timer）`);
     let expr = `rt.engineClassNew(${JSON.stringify(node.cls)})`;
     if (node.script !== null) expr = `new ${(sceneDeps.get(normalizeRes(node.script)) as Loaded).jsName}()`;
     return { expr, name: node.name, cls: node.cls, children: node.children.map((c) => sceneChild(c)) };

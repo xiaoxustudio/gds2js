@@ -35,6 +35,7 @@ import { transform3dReadProp, transform3dWriteProp } from "../class/orient/trans
 import { GProjection, projectionReadProp } from "../class/orient/projection";
 import { basisReadProp, basisWriteProp } from "../class/orient/basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/object/node";
+import { timerRead, timerWrite } from "../class/object/timer";
 import { registerTweenHooks } from "../class/object/tween";
 import { GdSceneTree, treeReadProp } from "../class/object/scene-tree";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
@@ -265,6 +266,7 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   }
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
+    if (enw.__gd_engine_class__ === "Timer" && timerWrite(base.v, key, value)) return null;
     if (key === "process_mode") {
       if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("node-prop-write", "Node.process_mode 的写入只量过数");
       enw.__gd_node_process_mode__ = Number(value.v);
@@ -583,6 +585,10 @@ export function attribute(raw: unknown, name: string): unknown {
         if (m2 !== null) return m2;
       }
       if (name === "name") return V.stringName(en.__gd_node_name__);
+      if (en.__gd_engine_class__ === "Timer") {
+        const tv = timerRead(obj.v, name);
+        if (tv !== null) return tv;
+      }
       if (name === "process_mode") return V.int(en.__gd_node_process_mode__);
       const sig = nodeSignalOf(en, name);
       if (sig !== null) return V.object(sig);

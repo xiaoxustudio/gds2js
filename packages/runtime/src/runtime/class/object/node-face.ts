@@ -27,6 +27,7 @@ import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
 import { node3dGlobalTransform, node3dMethod } from "./node3d";
+import { timerMethod } from "./timer";
 import { ctlMethod } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
@@ -199,6 +200,10 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
   if ((rec.__gd_engine_class__ === "Node2D" || rec.__gd_engine_class__ === "Control") && NODE2D_METHODS.has(name)) return node2dMethod(target, name, args);
   if (rec.__gd_engine_class__ === "Node3D" && NODE3D_METHODS.has(name)) {
     const hit = node3dMethod(target, name, args);
+    if (hit !== null) return hit;
+  }
+  if (rec.__gd_engine_class__ === "Timer") {
+    const hit = timerMethod(target, name, args);
     if (hit !== null) return hit;
   }
   if (rec.__gd_engine_class__ === "Control" && CTL_METHODS.has(name)) {

@@ -4,6 +4,7 @@ import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runt
 import { GdScriptObject } from "./runtime/class/object/script-object";
 import { V, type Variant } from "./runtime/tags";
 import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeCanProcess, nodeDrainQueued, nodeEmitSignal, nodeFaceOf, nodeInit, nodeProcessWanted, type NodeRec } from "./runtime/class/object/node";
+import { timerStart, timerStep } from "./runtime/class/object/timer";
 import {
   GdSceneTree,
   dispatchHook,
@@ -198,7 +199,10 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
   scenePreOrder(rootNode as object, (n) => {
     dispatchHook(n, "_enter_tree", []);
     const rec = nodeFaceOf(n);
-    if (rec !== null) nodeEmitSignal(rec, "tree_entered", []);
+    if (rec !== null) {
+      if (rec.__gd_engine_class__ === "Timer") timerStart(n);
+      nodeEmitSignal(rec, "tree_entered", []);
+    }
   });
   scenePostOrder(rootNode as object, (n) => {
     const rec = nodeFaceOf(n) as NodeRec;
@@ -222,6 +226,10 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
     scenePreOrder(rootNode as object, (n) => {
       const rec = nodeFaceOf(n);
       if (rec !== null && nodeProcessWanted(rec, false) && nodeCanProcess(rec, tree.paused)) dispatchHook(n, "_process", [dt]);
+    });
+    scenePreOrder(rootNode as object, (n) => {
+      const rec = nodeFaceOf(n);
+      if (rec !== null && rec.__gd_engine_class__ === "Timer") timerStep(n, tree.processDt);
     });
     treeTickTimers(tree, tree.processDt);
     treeTickTweens(tree, tree.processDt);
