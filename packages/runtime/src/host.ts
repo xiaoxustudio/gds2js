@@ -12,6 +12,8 @@ import {
   scenePostOrder,
   scenePreOrder,
   sceneTreeBegin,
+  treeTickTimers,
+  treeTickTweens,
   type SceneSpec,
 } from "./runtime/class/object/scene-tree";
 import { setRotatedAxisBlockSink } from "./runtime/class/vector/vector3";
@@ -211,14 +213,18 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
     await new Promise((r) => setTimeout(r, 2));
     tree.frame += 1;
     const dt = V.float(tree.processDt);
+    nodeEmitSignal(tree as unknown as NodeRec, "physics_frame", []);
     scenePreOrder(rootNode as object, (n) => {
       const rec = nodeFaceOf(n);
       if (rec !== null && nodeProcessWanted(rec, true) && nodeCanProcess(rec, tree.paused)) dispatchHook(n, "_physics_process", [dt]);
     });
+    nodeEmitSignal(tree as unknown as NodeRec, "process_frame", []);
     scenePreOrder(rootNode as object, (n) => {
       const rec = nodeFaceOf(n);
       if (rec !== null && nodeProcessWanted(rec, false) && nodeCanProcess(rec, tree.paused)) dispatchHook(n, "_process", [dt]);
     });
+    treeTickTimers(tree, tree.processDt);
+    treeTickTweens(tree, tree.processDt);
     nodeDrainQueued();
   }
 

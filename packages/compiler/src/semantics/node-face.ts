@@ -6,6 +6,7 @@ export const NODE_SELF_METHODS = new Set([
   "add_sibling",
   "add_to_group",
   "can_process",
+  "create_tween",
   "find_child",
   "find_children",
   "find_parent",

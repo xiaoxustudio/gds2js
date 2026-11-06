@@ -66,6 +66,11 @@ export const NODE_SIGNALS: ReadonlySet<string> = new Set([
   "child_exiting_tree",
   "child_order_changed",
   "replacing_by",
+  "process_frame",
+  "physics_frame",
+  "node_added",
+  "node_removed",
+  "tree_changed",
 ]);
 
 export function nodeSignalOf(rec: NodeRec, name: string): Signal | null {

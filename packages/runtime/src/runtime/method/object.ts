@@ -41,7 +41,7 @@ import { probedClassChain } from "../patterns";
 import { transform3dMethod } from "../class/orient/transform3d";
 import { basisMethod } from "../class/orient/basis";
 import { nodeMethod } from "../class/object/node-face";
-import { GdSceneTree, treeMethod } from "../class/object/scene-tree";
+import { GdSceneTree, registerTreeCallHook, treeMethod } from "../class/object/scene-tree";
 import { engineClassNew, engineClassNewable, isEngineNode } from "../class/object/node";
 import { GVector3i, vector3iMethod } from "../class/vector/vector3i";
 import { colorMethod, GColor } from "../class/color/color";
@@ -66,6 +66,8 @@ import { GRect2, GRect2i } from "../class/shape/rect";
 import { GTransform2D } from "../class/orient/transform2d";
 
 import { GTransform3D } from "../class/orient/transform3d";
+
+registerTreeCallHook((node, name, args) => nodeMethod(node, name, args));
 
 export function objectMethod(obj: Variant, name: string, args: Variant[]): Variant {
   const inner = obj.v;

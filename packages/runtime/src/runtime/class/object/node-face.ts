@@ -23,8 +23,8 @@ import {
   type NodeRec,
 } from "./node";
 import { callDeferred } from "../identity/callable";
-import { getMeta, hasMeta, setMeta, GdScriptObject } from "./script-object";
-import { scenePathOf, sceneTree } from "./scene-tree";
+import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-object";
+import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
 import { node3dGlobalTransform } from "./node3d";
 import { ctlMethod } from "./control";
@@ -183,6 +183,16 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
   const rec = nodeFaceOf(target);
   if (rec === null) throw new UnsupportedError("node-face-missing", `${name}() 要落在带节点面的对象上`);
   if (name === "get_class") return V.str(rec.__gd_engine_class__);
+  if (name === "set_meta") {
+    setMeta(rec, args[0] as Variant, args[1] as Variant);
+    return V.nil();
+  }
+  if (name === "get_meta") return getMeta(rec, args[0] as Variant, args[1]);
+  if (name === "has_meta") return V.bool(hasMeta(rec, args[0] as Variant));
+  if (name === "remove_meta") {
+    removeMeta(rec, args[0] as Variant);
+    return V.nil();
+  }
   if (rec.__gd_freed__) throw new UnsupportedError("node-freed-call", `在已 free() 的实例上调 ${name}() 那一形没建模：引擎发 SCRIPT ERROR 并中断脚本`);
   if ((rec.__gd_engine_class__ === "Node2D" || rec.__gd_engine_class__ === "Control") && NODE2D_METHODS.has(name)) return node2dMethod(target, name, args);
   switch (name) {
@@ -384,6 +394,11 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     case "get_physics_process_delta_time": {
       const tree = sceneTree();
       return V.float(tree === null ? 1 / 60 : tree.processDt);
+    }
+    case "create_tween": {
+      const tree = sceneTree();
+      if (tree === null) throw new UnsupportedError("node-no-tree", "不在树里的 create_tween() 这一形没建模");
+      return treeCreateTween(tree);
     }
     case "can_process": {
       const tree = sceneTree();

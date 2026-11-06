@@ -34,6 +34,7 @@ import { transform2dReadProp } from "../class/orient/transform2d";
 import { transform3dReadProp, transform3dWriteProp } from "../class/orient/transform3d";
 import { basisReadProp, basisWriteProp } from "../class/orient/basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/object/node";
+import { registerTweenHooks } from "../class/object/tween";
 import { GdSceneTree, treeReadProp } from "../class/object/scene-tree";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
 import { ctlRead, ctlWrite } from "../class/object/control";
@@ -617,3 +618,7 @@ export function attribute(raw: unknown, name: string): unknown {
   }
   throw new UnsupportedError("attribute", `取属性 ${name} 未实现（对象模型还没做完）`);
 }
+
+registerTweenHooks((target, prop) => attribute(target, prop) as Variant, (target, prop, value) => {
+  writeProp(target, prop, value);
+});
