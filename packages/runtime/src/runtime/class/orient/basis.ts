@@ -318,6 +318,28 @@ export function basisMethod(inner: GBasis, name: string, args: Variant[]): Varia
       if (t === undefined || (t.t !== Tag.INT && t.t !== Tag.FLOAT)) throw new UnsupportedError("basis-arg-type", "Basis.slerp() 的权重只量过数");
       return basisSlerp(inner, o.v as GBasis, Number(t.v));
     }
+    case "looking_at": {
+      const dir = asVec3(args[0] as Variant);
+      const upArg = args[1] === undefined ? vector3(0, 1, 0) : args[1];
+      const up = asVec3(upArg as Variant);
+      if (dir === null || up === null) throw new UnsupportedError("basis-arg-type", "Basis.looking_at() 只量过 Vector3");
+      const d = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+      const zx = -dir.x / d;
+      const zy = -dir.y / d;
+      const zz = -dir.z / d;
+      let xx = up.y * zz - up.z * zy;
+      let xy = up.z * zx - up.x * zz;
+      let xz = up.x * zy - up.y * zx;
+      const xl = Math.sqrt(xx * xx + xy * xy + xz * xz);
+      if (xl === 0) throw new UnsupportedError("basis-look-up", "looking_at() 与 up 平行那一形没量过");
+      xx /= xl;
+      xy /= xl;
+      xz /= xl;
+      const yx = zy * xz - zz * xy;
+      const yy = zz * xx - zx * xz;
+      const yz = zx * xy - zy * xx;
+      return basis(xx, xy, xz, yx, yy, yz, zx, zy, zz);
+    }
     case "tdotx": {
       const v = asVec3(args[0] as Variant);
       if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.tdotx() 的实参只量过 Vector3");

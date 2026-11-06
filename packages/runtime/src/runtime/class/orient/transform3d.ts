@@ -305,6 +305,32 @@ export function transform3dMethod(inner: GTransform3D, name: string, args: Varia
         r(inner.oz + r(t * r(other.oz - inner.oz))),
       );
     }
+    case "looking_at": {
+      const target = vecArg(args, "looking_at");
+      const upArg = args[1] === undefined ? vector3(0, 1, 0) : args[1];
+      const up = asVec3(upArg as Variant);
+      if (up === null) throw new UnsupportedError("transform3d-arg", "looking_at() 的 up 只量过 Vector3");
+      const front = args[2] !== undefined && args[2].t === Tag.BOOL && args[2].v === true;
+      const dx = front ? target.x - inner.ox : inner.ox - target.x;
+      const dy = front ? target.y - inner.oy : inner.oy - target.y;
+      const dz = front ? target.z - inner.oz : inner.oz - target.z;
+      const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const zx = dx / dl;
+      const zy = dy / dl;
+      const zz = dz / dl;
+      let xx = up.y * zz - up.z * zy;
+      let xy = up.z * zx - up.x * zz;
+      let xz = up.x * zy - up.y * zx;
+      const xl = Math.sqrt(xx * xx + xy * xy + xz * xz);
+      if (xl === 0) throw new UnsupportedError("transform3d-look-up", "looking_at() 与 up 平行那一形没量过");
+      xx /= xl;
+      xy /= xl;
+      xz /= xl;
+      const yx = zy * xz - zz * xy;
+      const yy = zz * xx - zx * xz;
+      const yz = zx * xy - zy * xx;
+      return transform3d(xx, xy, xz, yx, yy, yz, zx, zy, zz, inner.ox, inner.oy, inner.oz);
+    }
     case "is_finite": {
       if (args.length !== 0) throw new UnsupportedError("transform3d-arity", `is_finite() 只量过 0 个实参（收到 ${args.length} 个）`);
       return V.bool(

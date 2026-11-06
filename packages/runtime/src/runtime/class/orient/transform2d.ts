@@ -193,6 +193,14 @@ export function transform2dMethod(inner: GTransform2D, name: string, args: Varia
         r(inner.ox + r(t * r(b.ox - inner.ox))), r(inner.oy + r(t * r(b.oy - inner.oy))),
       );
     }
+    case "looking_at": {
+      const p = asVec2(args[0] as Variant);
+      if (p === null) throw new UnsupportedError("transform2d-arg-type", "looking_at() 只量过 Vector2");
+      const a = r(Math.atan2(p.y, p.x));
+      const c = r(Math.cos(a));
+      const s = r(Math.sin(a));
+      return transform2d(c, s, r(-s), c, inner.ox, inner.oy);
+    }
     case "is_conformal":
       return V.bool(r(r(xx * yx) + r(xy * yy)) === 0 && r(r(xx * xx) + r(xy * xy)) === r(r(yx * yx) + r(yy * yy)));
     default:
