@@ -3,7 +3,7 @@ import { deferredPendingCount } from "./runtime/class/identity/callable";
 import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/class/object/script-object";
 import { V, type Variant } from "./runtime/tags";
-import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeDrainQueued, nodeFaceOf, nodeInit, type NodeRec } from "./runtime/class/object/node";
+import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeCanProcess, nodeDrainQueued, nodeEmitSignal, nodeFaceOf, nodeInit, nodeProcessWanted, type NodeRec } from "./runtime/class/object/node";
 import {
   GdSceneTree,
   dispatchHook,
@@ -180,7 +180,6 @@ export class SceneTree extends GdScriptObject {
 }
 
 const SCENE_MAX_FRAMES = 3000;
-const SCENE_FRAME_DT = 0.002;
 
 export async function sceneRun(rootNode: unknown, rootName: string, rootCls: string, children: unknown[]): Promise<void> {
   const root = new GdEngineInstance("Window");
@@ -194,22 +193,44 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
   tree.currentScene = rootNode as object;
   for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object, rootNode as object);
 
-  scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_enter_tree", []));
+  scenePreOrder(rootNode as object, (n) => {
+    dispatchHook(n, "_enter_tree", []);
+    const rec = nodeFaceOf(n);
+    if (rec !== null) nodeEmitSignal(rec, "tree_entered", []);
+  });
   scenePostOrder(rootNode as object, (n) => {
-    (nodeFaceOf(n) as NodeRec).__gd_node_ready__ = true;
+    const rec = nodeFaceOf(n) as NodeRec;
+    rec.__gd_node_ready__ = true;
     dispatchHook(n, "_ready", []);
+    nodeEmitSignal(rec, "ready", []);
   });
   nodeDrainQueued();
 
+  tree.processDt = 1 / 60;
   while (!tree.quitted && tree.frame < SCENE_MAX_FRAMES) {
     await new Promise((r) => setTimeout(r, 2));
     tree.frame += 1;
-    const dt = V.float(SCENE_FRAME_DT);
-    scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_process", [dt]));
+    const dt = V.float(tree.processDt);
+    scenePreOrder(rootNode as object, (n) => {
+      const rec = nodeFaceOf(n);
+      if (rec !== null && nodeProcessWanted(rec, true) && nodeCanProcess(rec, tree.paused)) dispatchHook(n, "_physics_process", [dt]);
+    });
+    scenePreOrder(rootNode as object, (n) => {
+      const rec = nodeFaceOf(n);
+      if (rec !== null && nodeProcessWanted(rec, false) && nodeCanProcess(rec, tree.paused)) dispatchHook(n, "_process", [dt]);
+    });
     nodeDrainQueued();
   }
 
-  scenePostOrder(rootNode as object, (n) => dispatchHook(n, "_exit_tree", []));
+  scenePostOrder(rootNode as object, (n) => {
+    const rec = nodeFaceOf(n);
+    if (rec !== null) nodeEmitSignal(rec, "tree_exiting", []);
+  });
+  scenePostOrder(rootNode as object, (n) => {
+    const rec = nodeFaceOf(n);
+    dispatchHook(n, "_exit_tree", []);
+    if (rec !== null) nodeEmitSignal(rec, "tree_exited", []);
+  });
   process.exitCode = tree.code;
   flush();
 }

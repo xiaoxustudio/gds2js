@@ -33,7 +33,7 @@ import { quaternionReadProp } from "../class/orient/quaternion";
 import { transform2dReadProp } from "../class/orient/transform2d";
 import { transform3dReadProp, transform3dWriteProp } from "../class/orient/transform3d";
 import { basisReadProp, basisWriteProp } from "../class/orient/basis";
-import { isEngineNode, nodeFaceOf, nodeNameSet } from "../class/object/node";
+import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/object/node";
 import { GdSceneTree, treeReadProp } from "../class/object/scene-tree";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
 import { ctlRead, ctlWrite } from "../class/object/control";
@@ -263,6 +263,11 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   }
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
+    if (key === "process_mode") {
+      if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("node-prop-write", "Node.process_mode 的写入只量过数");
+      enw.__gd_node_process_mode__ = Number(value.v);
+      return null;
+    }
     if (enw.__gd_engine_class__ === "Node3D" && key !== "name") {
       node3dWrite(base.v, key, value);
       return null;
@@ -570,6 +575,9 @@ export function attribute(raw: unknown, name: string): unknown {
         if (m2 !== null) return m2;
       }
       if (name === "name") return V.stringName(en.__gd_node_name__);
+      if (name === "process_mode") return V.int(en.__gd_node_process_mode__);
+      const sig = nodeSignalOf(en, name);
+      if (sig !== null) return V.object(sig);
       if (methodAritiesOf(obj.v)?.[name] !== undefined) return methodCallable(obj, name);
       throw new UnsupportedError("node-prop", `${en.__gd_engine_class__}.${name} 的属性读没量过`);
     }

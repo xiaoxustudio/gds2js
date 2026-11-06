@@ -1,6 +1,7 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { GdScriptObject, markFreed } from "./script-object";
+import { Signal } from "../identity/signal";
 
 const CONSTRUCTIBLE = new Set(["Node", "Node2D", "Control", "Node3D", "RefCounted", "Object"]);
 
@@ -19,6 +20,10 @@ export class GdNodeObject extends GdScriptObject {
   __gd_node_groups__: string[] = [];
   __gd_node_owner__: object | null = null;
   __gd_node_ready__: boolean = false;
+  __gd_node_process__?: boolean;
+  __gd_node_physics__?: boolean;
+  __gd_node_process_mode__: number = 0;
+  __gd_node_signals__?: Map<string, Signal>;
 }
 
 export type NodeRec = GdNodeObject;
@@ -49,6 +54,57 @@ export function nodeInit(inst: object, cls: string): void {
   rec.__gd_node_groups__ = [];
   rec.__gd_node_owner__ = null;
   rec.__gd_node_ready__ = false;
+}
+
+export const NODE_SIGNALS: ReadonlySet<string> = new Set([
+  "ready",
+  "renamed",
+  "tree_entered",
+  "tree_exiting",
+  "tree_exited",
+  "child_entered_tree",
+  "child_exiting_tree",
+  "child_order_changed",
+  "replacing_by",
+]);
+
+export function nodeSignalOf(rec: NodeRec, name: string): Signal | null {
+  if (!NODE_SIGNALS.has(name)) return null;
+  let table = rec.__gd_node_signals__;
+  if (table === undefined) {
+    table = new Map();
+    rec.__gd_node_signals__ = table;
+  }
+  let sig = table.get(name);
+  if (sig === undefined) {
+    sig = new Signal(name);
+    table.set(name, sig);
+  }
+  return sig;
+}
+
+export function nodeEmitSignal(rec: NodeRec, name: string, args: Variant[]): void {
+  nodeSignalOf(rec, name)?.emitList(args);
+}
+
+export function nodeProcessMode(rec: NodeRec): number {
+  if (rec.__gd_node_process_mode__ !== 0) return rec.__gd_node_process_mode__;
+  const parent = nodeFaceOf(rec.__gd_node_parent__);
+  return parent === null ? 1 : nodeProcessMode(parent);
+}
+
+export function nodeCanProcess(rec: NodeRec, paused: boolean): boolean {
+  const mode = nodeProcessMode(rec);
+  if (mode === 4) return false;
+  if (mode === 3) return true;
+  if (mode === 2) return paused;
+  if (mode === 1) return !paused;
+  return !paused;
+}
+
+export function nodeProcessWanted(rec: NodeRec, physics: boolean): boolean {
+  const flag = physics ? rec.__gd_node_physics__ : rec.__gd_node_process__;
+  return flag !== false;
 }
 
 const NAME_BAD = /[:.@/]/g;

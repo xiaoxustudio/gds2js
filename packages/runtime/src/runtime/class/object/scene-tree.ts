@@ -13,6 +13,8 @@ export class GdSceneTree extends GdNodeObject {
   frame = 0;
   quitted = false;
   code = 0;
+  paused = false;
+  processDt = 1 / 60;
   constructor(root: GdScriptObject) {
     super();
     this.root = root;
@@ -68,6 +70,14 @@ export function treeMethod(tree: GdSceneTree, name: string, args: Variant[]): Va
     }
     case "get_frame":
       return V.int(tree.frame);
+    case "set_pause": {
+      const v = args[0];
+      if (v === undefined || v.t !== Tag.BOOL) throw new UnsupportedError("scene-tree-arg-type", "set_pause() 只量过 bool");
+      tree.paused = v.v === true;
+      return V.nil();
+    }
+    case "is_paused":
+      return V.bool(tree.paused);
     case "get_root":
       return V.object(tree.root);
     case "get_nodes_in_group": {
@@ -93,6 +103,7 @@ export function treeReadProp(tree: GdSceneTree, name: string): Variant | null {
   if (name === "current_scene") return tree.currentScene === null ? V.nil() : V.object(tree.currentScene);
   if (name === "root") return V.object(tree.root);
   if (name === "frame") return V.int(tree.frame);
+  if (name === "paused") return V.bool(tree.paused);
   return null;
 }
 

@@ -8,6 +8,7 @@ import { stackBlockLines, writeOrderedStderr } from "../../frames";
 import {
   nodeArgSay,
   nodeAttach,
+  nodeCanProcess,
   nodeDetach,
   nodeFaceOf,
   nodeFree,
@@ -21,6 +22,7 @@ import {
   nodeNameSet,
   type NodeRec,
 } from "./node";
+import { callDeferred } from "../identity/callable";
 import { getMeta, hasMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
@@ -355,8 +357,47 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       }
       return V.nil();
     }
-    case "can_process":
-      return V.bool(true);
+    case "set_process": {
+      rec.__gd_node_process__ = args[0] === undefined ? true : args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    }
+    case "is_processing":
+      return V.bool(insideTree(rec) && rec.__gd_node_process__ !== false);
+    case "set_physics_process": {
+      rec.__gd_node_physics__ = args[0] === undefined ? true : args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    }
+    case "is_physics_processing":
+      return V.bool(insideTree(rec) && rec.__gd_node_physics__ !== false);
+    case "set_process_mode": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_process_mode() 只量过数");
+      rec.__gd_node_process_mode__ = Number(v.v);
+      return V.nil();
+    }
+    case "get_process_mode":
+      return V.int(rec.__gd_node_process_mode__);
+    case "get_process_delta_time": {
+      const tree = sceneTree();
+      return V.float(tree === null ? 1 / 60 : tree.processDt);
+    }
+    case "get_physics_process_delta_time": {
+      const tree = sceneTree();
+      return V.float(tree === null ? 1 / 60 : tree.processDt);
+    }
+    case "can_process": {
+      const tree = sceneTree();
+      return V.bool(nodeCanProcess(rec, tree !== null && tree.paused));
+    }
+    case "set_deferred": {
+      const mname = args[0];
+      if (mname === undefined || (mname.t !== Tag.STRING && mname.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "set_deferred() 的方法名只量过字符串");
+      const rest = args.length > 1 && args[1] !== undefined && args[1].t === Tag.ARRAY ? ((args[1].v as GArray).raw() as Variant[]) : [];
+      callDeferred(() => {
+        if (callOnNode(rec, String(mname.v), rest) === null) throw new UnsupportedError("node-set-deferred", `set_deferred() 的方法 ${String(mname.v)}() 没量过`);
+      });
+      return V.nil();
+    }
     case "get_node": {
       const want = pathArg(args, name);
       const hit = nodeWalkOr(rec, want);

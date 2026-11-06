@@ -25,11 +25,20 @@ export const NODE_SELF_METHODS = new Set([
   "replace_by",
   "request_ready",
   "apply_scale",
+  "get_physics_process_delta_time",
+  "get_process_delta_time",
+  "get_process_mode",
+  "is_physics_processing",
+  "is_processing",
   "move_local_x",
   "move_local_y",
   "rotate",
+  "set_deferred",
   "set_meta",
   "set_owner",
+  "set_physics_process",
+  "set_process",
+  "set_process_mode",
   "to_global",
   "to_local",
   "translate",
@@ -57,8 +66,10 @@ export const NODE_SELF_METHODS = new Set([
 ]);
 
 /** 类体里**裸名**读写的引擎成员，按直接基类分档；逐条来自 Godot 4.6.3 的实测读数（corpus/cases/467-*）。 */
+const NODE_SIGNAL_PROPS = ["ready", "renamed", "tree_entered", "tree_exiting", "tree_exited", "child_entered_tree", "child_exiting_tree", "child_order_changed", "replacing_by"];
+
 export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["Node", new Set(["name"])],
+  ["Node", new Set(["name", "process_mode", ...NODE_SIGNAL_PROPS])],
   [
     "Control",
     new Set([
@@ -105,7 +116,11 @@ export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map
 ]);
 
 export function nodeSelfProps(base: string | null): ReadonlySet<string> {
-  return base === null ? NO_NODE_SELF_PROPS : NODE_SELF_PROPS.get(base) ?? NO_NODE_SELF_PROPS;
+  if (base === null) return NO_NODE_SELF_PROPS;
+  const own = NODE_SELF_PROPS.get(base);
+  const root = NODE_SELF_PROPS.get("Node");
+  if (own === undefined) return NO_NODE_SELF_PROPS;
+  return base === "Node" ? own : new Set([...(root ?? []), ...own]);
 }
 
 export const NO_NODE_SELF_PROPS: ReadonlySet<string> = new Set<string>();
