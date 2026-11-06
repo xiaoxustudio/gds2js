@@ -169,6 +169,30 @@ export function transform2dMethod(inner: GTransform2D, name: string, args: Varia
       if (v === null) throw new UnsupportedError("transform2d-arg-type", "translated_local() 的实参只量过 Vector2");
       return transform2d(xx, xy, yx, yy, r(inner.ox + r(r(xx * v.x) + r(yx * v.y))), r(inner.oy + r(r(xy * v.x) + r(yy * v.y))));
     }
+    case "interpolate_with": {
+      const o = args[0];
+      const w = args[1];
+      if (o === undefined || !(o.v instanceof GTransform2D) || w === undefined) throw new UnsupportedError("transform2d-arg-type", "interpolate_with() 只量过 (Transform2D, 数)");
+      const b = o.v as GTransform2D;
+      const t = r(Number(w.v));
+      const ra = Math.atan2(xy, xx);
+      const rb = Math.atan2(b.xy, b.xx);
+      const rot = r(ra + r(t * r(rb - ra)));
+      const sa = Math.sqrt(r(xx * xx) + r(xy * xy));
+      const sb = Math.sqrt(r(b.xx * b.xx) + r(b.xy * b.xy));
+      const sx = r(sa + r(t * r(sb - sa)));
+      const ya = Math.sqrt(r(yx * yx) + r(yy * yy));
+      const yb = Math.sqrt(r(b.yx * b.yx) + r(b.yy * b.yy));
+      const sy = r(ya + r(t * r(yb - ya)));
+      const ka = r(r(Math.atan2(yy, yx) - Math.atan2(xy, xx)) - r(Math.PI / 2));
+      const kb = r(r(Math.atan2(b.yy, b.yx) - Math.atan2(b.xy, b.xx)) - r(Math.PI / 2));
+      const skew = r(ka + r(t * r(kb - ka)));
+      return transform2d(
+        r(Math.cos(rot) * sx), r(Math.sin(rot) * sx),
+        r(-Math.sin(r(rot + skew)) * sy), r(Math.cos(r(rot + skew)) * sy),
+        r(inner.ox + r(t * r(b.ox - inner.ox))), r(inner.oy + r(t * r(b.oy - inner.oy))),
+      );
+    }
     case "is_conformal":
       return V.bool(r(r(xx * yx) + r(xy * yy)) === 0 && r(r(xx * xx) + r(xy * xy)) === r(r(yx * yx) + r(yy * yy)));
     default:
