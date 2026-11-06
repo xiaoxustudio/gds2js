@@ -4,7 +4,7 @@ import { cpus } from "node:os";
 import { join, relative } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vitest";
 import { TREE_FACE } from "@gds2js/compiler/tree-face";
-import { hasScriptc, missing } from "../support/env";
+import { hasScriptc, missing, scriptcBin } from "../support/env";
 import { caseDir, caseIsProject, caseSandboxed, caseScript, dropSandbox, godotOk, listCases, normalize, prepareSandbox, readGolden, ROOT, sandboxEnv } from "../support/lib-bridge";
 import { NEED_ZSTD_TEXT } from "../support/pack-codec";
 
@@ -169,9 +169,9 @@ function prepare(id: string): { dir: string; file: string; zstd: boolean } {
 
 async function scBuild(file: string): Promise<{ code: number; out: string }> {
   const a = ["build", file, "--strip"];
-  let last = await sp("scriptc", a, { cwd: ROOT, timeout: 600000 });
+  let last = await sp(scriptcBin as string, a, { cwd: ROOT, timeout: 600000 });
   for (let retry = 0; retry < 2 && (last.status === null || last.status < 0); retry++) {
-    last = await sp("scriptc", a, { cwd: ROOT, timeout: 600000 });
+    last = await sp(scriptcBin as string, a, { cwd: ROOT, timeout: 600000 });
   }
   return { code: last.status ?? -1, out: last.out };
 }

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vitest";
-import { hasScriptc, missing } from "../support/env";
+import { hasScriptc, missing, scriptcBin } from "../support/env";
 import { ROOT } from "../support/lib-bridge";
 
 const FIX = join(ROOT, "test", "fixtures", "scriptc-io");
@@ -158,7 +158,7 @@ async function scriptcRow(cell: string): Promise<Omit<Row, "cell" | "node">> {
   created.push(dir);
   const file = join(dir, "main.mts");
   copyFileSync(join(FIX, `${cell}.mts`), file);
-  const build = await sp("scriptc", ["build", "main.mts", "--strip"], { cwd: dir, timeout: 600000 });
+  const build = await sp(scriptcBin as string, ["build", "main.mts", "--strip"], { cwd: dir, timeout: 600000 });
   const exe = join(dir, process.platform === "win32" ? ".scriptc/main.exe" : ".scriptc/main");
   const built = build.status === 0 && existsSync(exe);
   if (!built) {

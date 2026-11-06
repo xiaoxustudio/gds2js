@@ -27,7 +27,9 @@ export function which(cmd: string): string | null {
 
 export const hasGodot = existsSync(GODOT_BIN);
 
-export const hasScriptc = which("scriptc") !== null;
+const pinnedScriptc = (process.env.SCRIPTC_BIN ?? "").trim();
+export const scriptcBin = pinnedScriptc !== "" && existsSync(pinnedScriptc) ? pinnedScriptc : which("scriptc");
+export const hasScriptc = scriptcBin !== null;
 
 export const hasDist = existsSync(join(ROOT, "packages", "gds2js", "dist", "cli.mjs"));
 export const hasStandalone = existsSync(join(ROOT, "packages", "gds2js", "dist", "standalone.cjs"));
