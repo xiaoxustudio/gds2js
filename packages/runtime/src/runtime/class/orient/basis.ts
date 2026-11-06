@@ -272,6 +272,39 @@ export function basisMethod(inner: GBasis, name: string, args: Variant[]): Varia
       if (angle === undefined || (angle.t !== Tag.INT && angle.t !== Tag.FLOAT)) throw new UnsupportedError("basis-arg-type", "Basis.rotated() 的第 2 参只量过数");
       return basisMul(axisAngleBasis(axis.x, axis.y, axis.z, Number(angle.v)), inner);
     }
+    case "is_conformal": {
+      const lx = columnLength(inner.x0, inner.x1, inner.x2);
+      const ly = columnLength(inner.y0, inner.y1, inner.y2);
+      const lz = columnLength(inner.z0, inner.z1, inner.z2);
+      const dot = (a: [number, number, number], b: [number, number, number]): number => r(r(r(a[0] * b[0]) + r(a[1] * b[1])) + r(a[2] * b[2]));
+      const x: [number, number, number] = [inner.x0, inner.x1, inner.x2];
+      const y: [number, number, number] = [inner.y0, inner.y1, inner.y2];
+      const z: [number, number, number] = [inner.z0, inner.z1, inner.z2];
+      return V.bool(Math.abs(dot(x, y)) < 1e-5 && Math.abs(dot(x, z)) < 1e-5 && Math.abs(dot(y, z)) < 1e-5 && Math.abs(lx - ly) < 1e-5 && Math.abs(lx - lz) < 1e-5);
+    }
+    case "is_equal_approx": {
+      const o = args[0];
+      if (o === undefined || !(o.v instanceof GBasis)) throw new UnsupportedError("basis-arg-type", "Basis.is_equal_approx() 的实参只量过 Basis");
+      const b = o.v as GBasis;
+      const eq = (m: number, n: number): boolean => Math.abs(m - n) < 1e-5;
+      return V.bool(eq(inner.x0, b.x0) && eq(inner.x1, b.x1) && eq(inner.x2, b.x2) && eq(inner.y0, b.y0) && eq(inner.y1, b.y1) && eq(inner.y2, b.y2) && eq(inner.z0, b.z0) && eq(inner.z1, b.z1) && eq(inner.z2, b.z2));
+    }
+    case "is_finite":
+      return V.bool([inner.x0, inner.x1, inner.x2, inner.y0, inner.y1, inner.y2, inner.z0, inner.z1, inner.z2].every((n) => Number.isFinite(n)));
+    case "orthonormalized": {
+      const b = basisOrthoParts(inner);
+      return basis(b.x0, b.x1, b.x2, b.y0, b.y1, b.y2, b.z0, b.z1, b.z2);
+    }
+    case "scaled": {
+      const v = asVec3(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.scaled() 的实参只量过 Vector3");
+      return basis(r(inner.x0 * v.x), r(inner.x1 * v.y), r(inner.x2 * v.z), r(inner.y0 * v.x), r(inner.y1 * v.y), r(inner.y2 * v.z), r(inner.z0 * v.x), r(inner.z1 * v.y), r(inner.z2 * v.z));
+    }
+    case "scaled_local": {
+      const v = asVec3(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.scaled_local() 的实参只量过 Vector3");
+      return basis(r(inner.x0 * v.x), r(inner.x1 * v.x), r(inner.x2 * v.x), r(inner.y0 * v.y), r(inner.y1 * v.y), r(inner.y2 * v.y), r(inner.z0 * v.z), r(inner.z1 * v.z), r(inner.z2 * v.z));
+    }
     case "tdotx": {
       const v = asVec3(args[0] as Variant);
       if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.tdotx() 的实参只量过 Vector3");

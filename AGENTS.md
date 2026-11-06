@@ -15,7 +15,7 @@ GDScript 4.x → JavaScript 的 AOT 编译器（Tier 1：纯语言层）。
 | `packages/testkit` | 测试断言库 |
 | `tools/` | 门脚本与生成器：`golden.mjs` / `compile.ts` / `release.mjs` / `cli-native.mjs` / `bench*` 等；`tools/compat/` 生成兼容性矩阵数据 |
 | `site/` | Godot API 兼容性站点：Vite + React 单页，数据由 `tools/compat/` 按钉住引擎导出后提交；不进 workspace / turbo / release |
-| `corpus/cases/` | 语料用例 508 例（另有 `000-*` 探头，不入语料），逐例 golden 对账；工程用例带 `project.godot`，场景用例再带 `main.tscn` 第三格夹具 |
+| `corpus/cases/` | 语料用例 509 例（另有 `000-*` 探头，不入语料），逐例 golden 对账；工程用例带 `project.godot`，场景用例再带 `main.tscn` 第三格夹具 |
 | `test/` | `repo/`（仓库不变量）+ `e2e/`（出货与语义门，逐支落点看目录；`e2e/bootstrap/` 是自举线那把切片级收敛门）+ `fixtures/bootstrap/slices/`（自举切片夹具，不入语义账）+ `fixtures/bootstrap/gdsrc/`（阶段五那棵逐步长大的移植树，带 Godot 参照 gdsrc.txt）+ `support/` |
 
 ## 常用命令
