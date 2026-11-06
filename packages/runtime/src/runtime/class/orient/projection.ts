@@ -59,8 +59,72 @@ export function projectionText(p: GProjection): string {
   return `[X: ${row(p.x)}, Y: ${row(p.y)}, Z: ${row(p.z)}, W: ${row(p.w)}]`;
 }
 
+function rowOf(v: GVector4): [number, number, number, number] {
+  return [v.x, v.y, v.z, v.w];
+}
+
+function matOf(p: GProjection): number[][] {
+  return [rowOf(p.x), rowOf(p.y), rowOf(p.z), rowOf(p.w)];
+}
+
+function det4(m: number[][]): number {
+  const a = m[0] as number[];
+  let out = 0;
+  for (let i = 0; i < 4; i++) {
+    const sub: number[][] = [];
+    for (let r = 1; r < 4; r++) sub.push((m[r] as number[]).filter((_v, c) => c !== i));
+    const d3 = (sub[0] as number[])[0]! * ((sub[1] as number[])[1]! * (sub[2] as number[])[2]! - (sub[1] as number[])[2]! * (sub[2] as number[])[1]!)
+      - (sub[0] as number[])[1]! * ((sub[1] as number[])[0]! * (sub[2] as number[])[2]! - (sub[1] as number[])[2]! * (sub[2] as number[])[0]!)
+      + (sub[0] as number[])[2]! * ((sub[1] as number[])[0]! * (sub[2] as number[])[1]! - (sub[1] as number[])[1]! * (sub[2] as number[])[0]!);
+    out += (i % 2 === 0 ? 1 : -1) * (a[i] as number) * d3;
+  }
+  return out;
+}
+
+function inverseMat(m: number[][]): number[][] | null {
+  const det = det4(m);
+  if (det === 0) return null;
+  const out: number[][] = [];
+  for (let r = 0; r < 4; r++) {
+    const row: number[] = [];
+    for (let c = 0; c < 4; c++) {
+      const sub: number[][] = [];
+      for (let rr = 0; rr < 4; rr++) {
+        if (rr === c) continue;
+        sub.push((m[rr] as number[]).filter((_v, cc) => cc !== r));
+      }
+      const d3 = (sub[0] as number[])[0]! * ((sub[1] as number[])[1]! * (sub[2] as number[])[2]! - (sub[1] as number[])[2]! * (sub[2] as number[])[1]!)
+        - (sub[0] as number[])[1]! * ((sub[1] as number[])[0]! * (sub[2] as number[])[2]! - (sub[1] as number[])[2]! * (sub[2] as number[])[0]!)
+        + (sub[0] as number[])[2]! * ((sub[1] as number[])[0]! * (sub[2] as number[])[1]! - (sub[1] as number[])[1]! * (sub[2] as number[])[0]!);
+      row.push(Math.fround(((r + c) % 2 === 0 ? 1 : -1) * d3 / det));
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 export function projectionMethod(target: GProjection, name: string, args: Variant[]): Variant {
   switch (name) {
+    case "inverse": {
+      const inv = inverseMat(matOf(target));
+      if (inv === null) throw new UnsupportedError("projection-inverse", "Projection.inverse() 的行列式为零那一形没量过");
+      const v = (r: number[]): GVector4 => new GVector4(r[0] as number, r[1] as number, r[2] as number, r[3] as number);
+      return projection(v(inv[0] as number[]), v(inv[1] as number[]), v(inv[2] as number[]), v(inv[3] as number[]));
+    }
+    case "flipped_y":
+      return projection(target.x, new GVector4(Math.fround(-target.y.x), Math.fround(-target.y.y), Math.fround(-target.y.z), Math.fround(-target.y.w)), target.z, target.w);
+    case "is_orthogonal": {
+      const inv = inverseMat(matOf(target));
+      if (inv === null) return V.bool(false);
+      const m = matOf(target);
+      const eq = (a: number, b: number): boolean => Math.abs(a - b) < 1e-5;
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (!eq((inv[r] as number[])[c] as number, (m[c] as number[])[r] as number)) return V.bool(false);
+      return V.bool(true);
+    }
+    case "get_aspect": {
+      const len = (v: GVector4): number => Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+      return V.float(len(target.y) / len(target.x));
+    }
     case "determinant": {
       if (args.length !== 0) throw new UnsupportedError("projection-arity", "determinant() 不接受实参");
       const m = [p1(target.x), p1(target.y), p1(target.z), p1(target.w)];
