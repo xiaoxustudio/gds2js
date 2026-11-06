@@ -47,70 +47,126 @@
     },
     "unplannedPatterns": [
       {
-        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "owners": [
+          "Node",
+          "Node2D",
+          "Node3D",
+          "Control",
+          "SceneTree",
+          "Object"
+        ],
         "match": "accessibility",
         "reason": "无障碍面不建模：宿主侧没有可复现的辅助信息树"
       },
       {
-        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "owners": [
+          "Node",
+          "Node2D",
+          "Node3D",
+          "Control",
+          "SceneTree",
+          "Object"
+        ],
         "match": "thread",
         "reason": "线程组与线程安全开关不建模：产物是单线程事件循环"
       },
       {
-        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "owners": [
+          "Node",
+          "Node2D",
+          "Node3D",
+          "Control",
+          "SceneTree",
+          "Object"
+        ],
         "match": "multiplayer|^rpc|_rpc_",
         "reason": "多人同步不建模：没有网络会话"
       },
       {
-        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "owners": [
+          "Node",
+          "Node2D",
+          "Node3D",
+          "Control",
+          "SceneTree",
+          "Object"
+        ],
         "match": "editor|edited_scene|configuration_warning|display_folded|unique_name_in_owner|scene_instance_load_placeholder",
         "reason": "编辑器专用面不建模：无头运行没有编辑器会话"
       },
       {
-        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "owners": [
+          "Node",
+          "Node2D",
+          "Node3D",
+          "Control",
+          "SceneTree",
+          "Object"
+        ],
         "match": "viewport|window|screen|exclusive",
         "reason": "窗口与视口面不建模：没有渲染或窗口系统"
       },
       {
-        "owners": ["Control"],
+        "owners": [
+          "Control"
+        ],
         "match": "^(draw_|theme|font|stylebox|theme_|cursor|drag|drop|gui_input|shortcut|focus|mouse|get_parent_area|get_parent_control|get_screen_position)",
         "reason": "Control 的绘制、主题与焦点面不建模：无头运行时没有画布"
       },
       {
-        "owners": ["Node2D", "Node3D", "Control"],
+        "owners": [
+          "Node2D",
+          "Node3D",
+          "Control"
+        ],
         "match": "^draw_|get_rect|is_visible_in_tree|visible|show|hide|z_index|z_as_relative|y_sort|modulate|self_modulate|texture|material",
         "reason": "绘制与可见性面不建模：没有渲染器"
       },
       {
-        "owners": ["SceneTree"],
+        "owners": [
+          "SceneTree"
+        ],
         "match": "change_scene|reload_current_scene|unload_current_scene|edited_scene|multiplayer|accessibility|debug_|quit_on_go_back|auto_accept_quit",
         "reason": "场景切换与窗口退出策略不建模：没有资源加载器与窗口系统"
       },
       {
-        "owners": ["OS"],
+        "owners": [
+          "OS"
+        ],
         "match": "time|ticks|delay|processor|memory|locale|version|_dir$|system_|entropy|unique_id|process_id|thread|feature|debug_build|sandbox|userfs|low_processor|delta_smoothing|midi|permission|shell|execute|process|kill|logger|stdin|stdout|stderr|connected|model_name|granted|restart|request_|revoke|crash|alert|keycode",
         "reason": "时间、机器、进程或平台相关读数不可复现，golden 不稳定"
       },
       {
-        "owners": ["FileAccess"],
+        "owners": [
+          "FileAccess"
+        ],
         "match": "time|attribute|read_only|hidden|unix_permission|compressed|encrypted|sha256|half",
         "reason": "平台时间戳/属性/权限与压缩加密工具链跨三轨不可复现"
       },
       {
-        "owners": ["DirAccess"],
+        "owners": [
+          "DirAccess"
+        ],
         "match": "link|drive|space|filesystem_type|bundle|case_sensitive|temp|hidden|navigational|equivalent",
         "reason": "平台文件系统、链接与盘符读数不可复现"
       },
       {
-        "owners": ["OS", "FileAccess"],
+        "owners": [
+          "OS",
+          "FileAccess"
+        ],
         "match": "RenderingDriver|StdHandleType|SystemDir|CompressionMode|UnixPermissionFlags|ModeFlags|create_instance|create_temp|big_endian|distribution|video_adapter|trash|open_with|file_access_save|unset_environment",
         "reason": "类内枚举/常量面尚未建模，按响亮拒记账"
       }
     ],
     "unplannedReasons": {
-      "class": "不在 Tier 2 已建模的引擎类集合内",
+      "class": "未建模的引擎类：Tier 6 资源/场景尖峰判定不落地，遇到即响亮拒",
       "Engine": "明示非目标（Tier 3 起即划出范围）",
-      "Marshalls": "明示非目标：GDScript 里本就解析期拒"
+      "Marshalls": "明示非目标：GDScript 里本就解析期拒",
+      "ResourceLoader": "Tier 6 资源尖峰 no-go：.tres/.res 与资源类型族不建模",
+      "ResourceSaver": "Tier 6 资源尖峰 no-go：资源序列化不建模",
+      "Resource": "Tier 6 资源尖峰 no-go：资源对象族不建模",
+      "PackedScene": "Tier 6 资源尖峰 no-go：场景打包与运行期实例化不建模"
     }
   },
   "builtins": {
