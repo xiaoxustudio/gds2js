@@ -6,6 +6,7 @@ func _ready():
 	add_child(c)
 	c.position = Vector2(10, 20)
 	c.size = Vector2(100, 50)
+	print("m|", c.get_minimum_size(), "|", c.get_combined_minimum_size(), "|", c.get_anchor(0), "|", c.custom_minimum_size, "|", c.size_flags_horizontal, "|", c.size_flags_vertical)
 	print("a0|", c.anchor_left, "|", c.anchor_top, "|", c.anchor_right, "|", c.anchor_bottom)
 	print("o0|", c.offset_left, "|", c.offset_top, "|", c.offset_right, "|", c.offset_bottom)
 	c.anchor_right = 1
