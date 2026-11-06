@@ -11,7 +11,6 @@ import {
   SIGNAL_METHOD_ARITY,
   STRING_METHOD_ARITY,
   STRING_NAME_METHOD_ARITY,
-  VALUE_EXIST,
   VALUE_METHOD_ARITY,
 } from "../../packages/runtime/src/runtime/face-arity.ts";
 import { BUILTIN_INSTANCE_MEMBERS } from "../../packages/compiler/src/semantics/builtin-members.ts";
@@ -44,12 +43,9 @@ const BUILTIN_METHODS = {
   ...VALUE_METHOD_ARITY,
 };
 
-const BUILTIN_PROPS = {
-  ...VALUE_EXIST,
-  ...Object.fromEntries(
-    Object.entries(BUILTIN_INSTANCE_MEMBERS).map(([type, names]) => [type, names.filter((n) => BUILTIN_METHODS[type]?.[n] === undefined)]),
-  ),
-};
+const BUILTIN_PROPS = Object.fromEntries(
+  Object.entries(BUILTIN_INSTANCE_MEMBERS).map(([type, names]) => [type, names.filter((n) => BUILTIN_METHODS[type]?.[n] === undefined)]),
+);
 
 const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/object/node-face.ts", fn: "nodeMethod", owners: ["Node", "Node2D", "Node3D", "Control", "SceneTree"], kind: "method" },
@@ -173,7 +169,7 @@ export function buildInventories() {
     for (const n of names) table[owner].add(n);
   };
   for (const [type, table] of Object.entries(BUILTIN_METHODS)) add(type, "method", Object.keys(table));
-  for (const [type, names] of Object.entries(BUILTIN_PROPS)) add(type, "method", names);
+  for (const [type, names] of Object.entries(BUILTIN_PROPS)) add(type, "prop", names);
   add("Object", "method", OBJECT_METHODS);
   for (const owner of VIRTUAL_OWNERS) add(owner, "method", VIRTUAL_METHODS);
   for (const [owner, names] of Object.entries(EXTRA_PROPS)) add(owner, "prop", names);
