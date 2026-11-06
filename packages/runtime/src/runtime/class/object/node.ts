@@ -17,6 +17,8 @@ export class GdNodeObject extends GdScriptObject {
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
   __gd_node_groups__: string[] = [];
+  __gd_node_owner__: object | null = null;
+  __gd_node_ready__: boolean = false;
 }
 
 export type NodeRec = GdNodeObject;
@@ -45,6 +47,8 @@ export function nodeInit(inst: object, cls: string): void {
   rec.__gd_node_parent__ = null;
   rec.__gd_node_children__ = [];
   rec.__gd_node_groups__ = [];
+  rec.__gd_node_owner__ = null;
+  rec.__gd_node_ready__ = false;
 }
 
 const NAME_BAD = /[:.@/]/g;

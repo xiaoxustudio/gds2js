@@ -3,7 +3,7 @@ import { deferredPendingCount } from "./runtime/class/identity/callable";
 import { setStackPrintSink, setOrderedStderrSink, stackBlockLines } from "./runtime/frames";
 import { GdScriptObject } from "./runtime/class/object/script-object";
 import { V, type Variant } from "./runtime/tags";
-import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeDrainQueued, nodeInit, type NodeRec } from "./runtime/class/object/node";
+import { GdEngineInstance, nodeAddToGroup, nodeAttach, nodeDrainQueued, nodeFaceOf, nodeInit, type NodeRec } from "./runtime/class/object/node";
 import {
   GdSceneTree,
   dispatchHook,
@@ -192,10 +192,13 @@ export async function sceneRun(rootNode: unknown, rootName: string, rootCls: str
   nodeAttach(root as unknown as NodeRec, rootNode as unknown as NodeRec);
   if (rootCls === "Node2D") nodeAddToGroup(rootNode as unknown as NodeRec, `_root_canvas${String((rootNode as GdScriptObject).gdObjectId)}`);
   tree.currentScene = rootNode as object;
-  for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object);
+  for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object, rootNode as object);
 
   scenePreOrder(rootNode as object, (n) => dispatchHook(n, "_enter_tree", []));
-  scenePostOrder(rootNode as object, (n) => dispatchHook(n, "_ready", []));
+  scenePostOrder(rootNode as object, (n) => {
+    (nodeFaceOf(n) as NodeRec).__gd_node_ready__ = true;
+    dispatchHook(n, "_ready", []);
+  });
   nodeDrainQueued();
 
   while (!tree.quitted && tree.frame < SCENE_MAX_FRAMES) {

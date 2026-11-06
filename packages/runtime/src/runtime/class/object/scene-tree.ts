@@ -44,11 +44,12 @@ export function scenePostOrder(node: object, at: (n: object) => void): void {
   at(node);
 }
 
-export function sceneInit(spec: SceneSpec, parent: object): void {
+export function sceneInit(spec: SceneSpec, parent: object, owner: object | null): void {
   nodeInit(spec.node, spec.cls);
   (spec.node as unknown as NodeRec).__gd_node_name__ = spec.name;
+  (spec.node as unknown as NodeRec).__gd_node_owner__ = owner;
   nodeAttach(parent as unknown as NodeRec, spec.node as unknown as NodeRec);
-  for (const c of spec.children) sceneInit(c, spec.node);
+  for (const c of spec.children) sceneInit(c, spec.node, owner);
 }
 
 export function dispatchHook(node: object, hook: string, args: Variant[]): void {

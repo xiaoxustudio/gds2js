@@ -1,0 +1,14 @@
+owner|<null>|Root|true
+find1|B|<null>|<null>
+find2|4|4|1
+find4|B1|<null>|<null>
+find3|B1|B1|3
+parent|<null>|<null>
+path|B|..|.|B1
+anc|true|false|false|true
+gt|false|false|true
+ready|true|true
+sib|[&"A", &"S", &"B", &"C"]
+rep|C|1|3
+repby|R|3|Root
+prop|7|7

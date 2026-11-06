@@ -71,6 +71,30 @@ export function node2dGlobalTransform(target: unknown): GTransform2D {
   return cur;
 }
 
+function applyInverseTransform(g: GTransform2D): GTransform2D {
+  const det = r(r(g.xx * g.yy) - r(g.xy * g.yx));
+  if (det === 0) throw new UnsupportedError("node2d-inverse", "逆变换行列式为零那一形没量过");
+  return new GTransform2D(
+    r(g.yy / det),
+    r(-g.xy / det),
+    r(-g.yx / det),
+    r(g.xx / det),
+    r(-r(r(g.yy * g.ox) - r(g.yx * g.oy)) / det),
+    r(-r(r(g.xx * g.oy) - r(g.xy * g.ox)) / det),
+  );
+}
+
+function mulTransform(a: GTransform2D, b: GTransform2D): GTransform2D {
+  return new GTransform2D(
+    r(r(a.xx * b.xx) + r(a.yx * b.xy)),
+    r(r(a.xy * b.xx) + r(a.yy * b.xy)),
+    r(r(a.xx * b.yx) + r(a.yx * b.yy)),
+    r(r(a.xy * b.yx) + r(a.yy * b.yy)),
+    r(r(r(a.xx * b.ox) + r(a.yx * b.oy)) + a.ox),
+    r(r(r(a.xy * b.ox) + r(a.yy * b.oy)) + a.oy),
+  );
+}
+
 function fromVariantAngle(v: Variant | undefined, who: string): number {
   if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node2d-arg-type", `Node2D.${who} 的写入只量过数（收到 ${v === undefined ? "缺参" : tagName(v.t)}）`);
   return r(Number(v.v));
@@ -178,8 +202,118 @@ export function node2dWrite(target: unknown, name: string, value: Variant): void
   }
 }
 
+export function node2dApplyGlobal(target: unknown, want: GTransform2D): void {
+  const up = nodeParent(target);
+  const face = nodeFaceOf(up);
+  if (face === null) {
+    setT2d(target, new GTransform2D(want.xx, want.xy, want.yx, want.yy, want.ox, want.oy));
+    return;
+  }
+  if (face.__gd_engine_class__ === "Window") {
+    setT2d(target, new GTransform2D(want.xx, want.xy, want.yx, want.yy, want.ox, want.oy));
+    return;
+  }
+  if (face.__gd_engine_class__ !== "Node2D") throw new UnsupportedError("node2d-parent-base", `祖先的 ${face.__gd_engine_class__} 不在 2D 链上那一形没量过`);
+  const g = node2dGlobalTransform(up);
+  const det = r(r(g.xx * g.yy) - r(g.xy * g.yx));
+  if (det === 0) throw new UnsupportedError("node2d-inverse", "保留全局变换要过行列式为零的父变换那一形没量过");
+  const dx = r(want.ox - g.ox);
+  const dy = r(want.oy - g.oy);
+  const lx = r(r(r(g.yy * dx) - r(g.yx * dy)) / det);
+  const ly = r(r(r(g.xx * dy) - r(g.xy * dx)) / det);
+  const xx = r(r(r(g.yy * want.xx) - r(g.yx * want.xy)) / det);
+  const xy = r(r(r(g.xx * want.xy) - r(g.xy * want.xx)) / det);
+  const yx = r(r(r(g.yy * want.yx) - r(g.yx * want.yy)) / det);
+  const yy = r(r(r(g.xx * want.yy) - r(g.xy * want.yx)) / det);
+  setT2d(target, new GTransform2D(xx, xy, yx, yy, lx, ly));
+}
+
+function applyTo(g: GTransform2D, x: number, y: number): [number, number] {
+  const px = r(x);
+  const py = r(y);
+  return [r(r(r(g.xx * px) + r(g.yx * py)) + g.ox), r(r(r(g.xy * px) + r(g.yy * py)) + g.oy)];
+}
+
+function applyInverse(g: GTransform2D, x: number, y: number): [number, number] {
+  const det = r(r(g.xx * g.yy) - r(g.xy * g.yx));
+  if (det === 0) throw new UnsupportedError("node2d-inverse", "逆变换行列式为零那一形没量过");
+  const dx = r(r(x) - g.ox);
+  const dy = r(r(y) - g.oy);
+  return [r(r(r(g.yy * dx) - r(g.yx * dy)) / det), r(r(r(g.xx * dy) - r(g.xy * dx)) / det)];
+}
+
 export function node2dMethod(target: unknown, name: string, args: Variant[]): Variant {
   switch (name) {
+    case "to_local": {
+      const p = fromVariantVec2(args[0], "to_local");
+      const g = node2dGlobalTransform(target);
+      const out = applyInverse(g, p[0], p[1]);
+      return vector2(out[0], out[1]);
+    }
+    case "to_global": {
+      const p = fromVariantVec2(args[0], "to_global");
+      const g = node2dGlobalTransform(target);
+      const out = applyTo(g, p[0], p[1]);
+      return vector2(out[0], out[1]);
+    }
+    case "rotate": {
+      const a = fromVariantAngle(args[0], "rotate");
+      const store = t2d(target);
+      const c = r(Math.cos(a));
+      const s = r(Math.sin(a));
+      setT2d(target, new GTransform2D(
+        r(r(c * store.xx) + r(-s * store.xy)),
+        r(r(s * store.xx) + r(c * store.xy)),
+        r(r(c * store.yx) + r(-s * store.yy)),
+        r(r(s * store.yx) + r(c * store.yy)),
+        store.ox,
+        store.oy,
+      ));
+      return V.nil();
+    }
+    case "translate": {
+      const p = fromVariantVec2(args[0], "translate");
+      const store = t2d(target);
+      setT2d(target, new GTransform2D(store.xx, store.xy, store.yx, store.yy, r(store.ox + p[0]), r(store.oy + p[1])));
+      return V.nil();
+    }
+    case "move_local_x":
+    case "move_local_y": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node2d-arg-type", `Node2D.${name} 的位移只量过数`);
+      const scaled = args[1] !== undefined && args[1].t === Tag.BOOL && args[1].v === true;
+      const delta = r(Number(v.v));
+      const store = t2d(target);
+      const ang = basisAngle(store.xx, store.xy);
+      const c = r(Math.cos(ang));
+      const s = r(Math.sin(ang));
+      const k = name === "move_local_x" ? (scaled ? columnLength(store.xx, store.xy) : 1) : (scaled ? columnLength(store.yx, store.yy) : 1);
+      const d = r(delta * k);
+      const dx = name === "move_local_x" ? r(c * d) : r(-s * d);
+      const dy = name === "move_local_x" ? r(s * d) : r(c * d);
+      setT2d(target, new GTransform2D(store.xx, store.xy, store.yx, store.yy, r(store.ox + dx), r(store.oy + dy)));
+      return V.nil();
+    }
+    case "apply_scale": {
+      const p = fromVariantVec2(args[0], "apply_scale");
+      const store = t2d(target);
+      setT2d(target, new GTransform2D(r(store.xx * p[0]), r(store.xy * p[0]), r(store.yx * p[1]), r(store.yy * p[1]), store.ox, store.oy));
+      return V.nil();
+    }
+    case "get_relative_transform_to_parent": {
+      const p = args[0];
+      const parent = p === undefined ? nodeParent(target) : nodeFaceOf(p.t === Tag.OBJECT ? p.v : null);
+      if (parent === null || nodeFaceOf(parent)?.__gd_engine_class__ !== "Node2D") throw new UnsupportedError("node2d-parent-base", "get_relative_transform_to_parent 的父节点不在 2D 链上那一形没量过");
+      if (nodeParent(target) === parent) {
+        const local = t2d(target);
+        return transform2d(local.xx, local.xy, local.yx, local.yy, local.ox, local.oy);
+      }
+      const g = node2dGlobalTransform(target);
+      const pg = node2dGlobalTransform(parent);
+      const inv = applyInverseTransform(pg);
+      const out = mulTransform(inv, g);
+      return transform2d(out.xx, out.xy, out.yx, out.yy, out.ox, out.oy);
+    }
     case "show":
       rec(target).__gd_node_visible__ = true;
       return V.nil();

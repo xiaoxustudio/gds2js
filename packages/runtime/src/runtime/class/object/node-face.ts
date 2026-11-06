@@ -21,10 +21,13 @@ import {
   nodeNameSet,
   type NodeRec,
 } from "./node";
+import { getMeta, hasMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree } from "./scene-tree";
-import { node2dMethod } from "./node2d";
+import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
 import { node3dGlobalTransform } from "./node3d";
 import { ctlMethod } from "./control";
+
+const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
 
 function engineError(at: string, message: string): void {
   writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));
@@ -92,11 +95,94 @@ function insideTree(rec: NodeRec): boolean {
   }
 }
 
+function globMatch(pattern: string, text: string): boolean {
+  let out = "^";
+  for (const ch of pattern) {
+    if (ch === "*") out += ".*";
+    else if (ch === "?") out += ".";
+    else out += ch.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&");
+  }
+  return new RegExp(out + "$").test(text);
+}
+
+function ownedBy(target: NodeRec, hit: NodeRec): boolean {
+  return hit.__gd_node_owner__ !== null;
+}
+
+function collectDescendants(rec: NodeRec, recursive: boolean, out: NodeRec[]): void {
+  for (const c of rec.__gd_node_children__) {
+    const f = nodeFaceOf(c);
+    if (f === null) continue;
+    out.push(f);
+    if (recursive) collectDescendants(f, true, out);
+  }
+}
+
+function boolArg(args: Variant[], at: number, fallback: boolean): boolean {
+  const v = args[at];
+  if (v === undefined) return fallback;
+  if (v.t !== Tag.BOOL) throw new UnsupportedError("node-arg-type", `这一支的布尔实参只量过 bool（收到 ${tagName(v.t)}）`);
+  return v.v === true;
+}
+
+function ancestry(rec: NodeRec): NodeRec[] {
+  const out: NodeRec[] = [rec];
+  let cur = nodeFaceOf(rec.__gd_node_parent__);
+  while (cur !== null) {
+    out.push(cur);
+    cur = nodeFaceOf(cur.__gd_node_parent__);
+  }
+  return out;
+}
+
+function indexPath(rec: NodeRec): number[] {
+  const out: number[] = [];
+  let cur: NodeRec | null = rec;
+  while (cur !== null) {
+    const parent = nodeFaceOf(cur.__gd_node_parent__);
+    if (parent === null) break;
+    out.unshift(parent.__gd_node_children__.indexOf(cur as unknown as object));
+    cur = parent;
+  }
+  return out;
+}
+
+function pathTo(from: NodeRec, to: NodeRec): string {
+  if (from === to) return ".";
+  const a = ancestry(from);
+  const b = ancestry(to);
+  let common = -1;
+  for (let i = 0; i < a.length && i < b.length; i++) {
+    if (a[a.length - 1 - i] === b[b.length - 1 - i]) common = i;
+    else break;
+  }
+  if (common < 0) throw new UnsupportedError("node-path-common", "get_path_to() 的两个节点不在同一棵树里，这一形没建模");
+  const ups = a.length - 1 - common;
+  const down = b.slice(0, b.length - 1 - common).reverse().map((n) => n.__gd_node_name__);
+  const parts: string[] = [];
+  for (let i = 0; i < ups; i++) parts.push("..");
+  parts.push(...down);
+  return parts.join("/");
+}
+
+function callOnNode(rec: NodeRec, name: string, args: Variant[]): Variant | null {
+  const dispatched = (rec as unknown as GdScriptObject).__gdDispatch(name, args);
+  if (dispatched !== null) return dispatched;
+  if (name === "set_meta") {
+    setMeta(rec, args[0] as Variant, args[1] as Variant);
+    return V.nil();
+  }
+  if (name === "get_meta") return getMeta(rec, args[0] as Variant, args[1]);
+  if (name === "has_meta") return V.bool(hasMeta(rec, args[0] as Variant));
+  return null;
+}
+
 export function nodeMethod(target: unknown, name: string, args: Variant[]): Variant {
   const rec = nodeFaceOf(target);
   if (rec === null) throw new UnsupportedError("node-face-missing", `${name}() 要落在带节点面的对象上`);
   if (name === "get_class") return V.str(rec.__gd_engine_class__);
   if (rec.__gd_freed__) throw new UnsupportedError("node-freed-call", `在已 free() 的实例上调 ${name}() 那一形没建模：引擎发 SCRIPT ERROR 并中断脚本`);
+  if ((rec.__gd_engine_class__ === "Node2D" || rec.__gd_engine_class__ === "Control") && NODE2D_METHODS.has(name)) return node2dMethod(target, name, args);
   switch (name) {
     case "add_child": {
       if (args.length === 0 || args.length > 2) throw new UnsupportedError("node-arity", `add_child() 只量过 1 与 2 个实参（收到 ${args.length} 个）`);
@@ -141,6 +227,136 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       const p = nodeFaceOf(rec.__gd_node_parent__);
       return V.int(p === null ? -1 : p.__gd_node_children__.indexOf(rec as unknown as object));
     }
+    case "find_child": {
+      const pat = pathArg(args, name);
+      const recursive = boolArg(args, 1, true);
+      const owned = boolArg(args, 2, true);
+      const all: NodeRec[] = [];
+      collectDescendants(rec, recursive, all);
+      const hit = all.find((n) => globMatch(pat, n.__gd_node_name__) && (!owned || ownedBy(rec, n)));
+      return hit === undefined ? V.object(NULL_OBJECT) : V.object(hit as unknown as object);
+    }
+    case "find_children": {
+      const pat = pathArg(args, name);
+      const type = args[1] === undefined ? "" : asString(args[1] as Variant, "类型名");
+      const recursive = boolArg(args, 2, true);
+      const owned = boolArg(args, 3, true);
+      const all: NodeRec[] = [];
+      collectDescendants(rec, recursive, all);
+      const hits = all.filter((n) => globMatch(pat, n.__gd_node_name__) && (type === "" || n.__gd_engine_class__ === type) && (!owned || ownedBy(rec, n)));
+      return V.array(GArray.of(hits.map((n) => V.object(n as unknown as object))));
+    }
+    case "find_parent": {
+      const pat = pathArg(args, name);
+      let cur = nodeFaceOf(rec.__gd_node_parent__);
+      while (cur !== null) {
+        if (globMatch(pat, cur.__gd_node_name__)) return V.object(cur as unknown as object);
+        cur = nodeFaceOf(cur.__gd_node_parent__);
+      }
+      return V.object(NULL_OBJECT);
+    }
+    case "get_path_to": {
+      const other = childArg(args, name);
+      return nodePathValue(pathTo(rec, other));
+    }
+    case "is_ancestor_of": {
+      const other = childArg(args, name);
+      return V.bool(other !== rec && ancestry(other).includes(rec));
+    }
+    case "is_greater_than": {
+      const other = childArg(args, name);
+      const a = indexPath(rec);
+      const b = indexPath(other);
+      let out = false;
+      const n = Math.min(a.length, b.length);
+      for (let i = 0; i < n; i++) {
+        if (a[i] !== b[i]) {
+          out = (a[i] as number) > (b[i] as number);
+          return V.bool(out);
+        }
+      }
+      return V.bool(a.length > b.length);
+    }
+    case "add_sibling": {
+      const sibling = childArg(args, name);
+      const parent = nodeFaceOf(rec.__gd_node_parent__);
+      if (parent === null) throw new UnsupportedError("node-no-parent", "add_sibling() 落在没有父亲的节点上，这一形没建模");
+      nodeAttach(parent, sibling);
+      nodeMoveChild(parent, sibling, parent.__gd_node_children__.indexOf(rec as unknown as object) + 1);
+      return V.nil();
+    }
+    case "reparent": {
+      const next = childArg(args, name);
+      const keep = boolArg(args, 1, true);
+      const before = keep && rec.__gd_engine_class__ === "Node2D" ? node2dGlobalTransform(rec) : null;
+      const old = nodeFaceOf(rec.__gd_node_parent__);
+      if (old !== null) nodeDetach(old, rec);
+      nodeAttach(next, rec);
+      if (before !== null) node2dApplyGlobal(rec, before);
+      return V.nil();
+    }
+    case "replace_by": {
+      const next = childArg(args, name);
+      const keepGroups = boolArg(args, 1, false);
+      const parent = nodeFaceOf(rec.__gd_node_parent__);
+      if (parent === null) throw new UnsupportedError("node-no-parent", "replace_by() 落在没有父亲的节点上，这一形没建模");
+      const at = parent.__gd_node_children__.indexOf(rec as unknown as object);
+      nodeDetach(parent, rec);
+      nodeAttach(parent, next);
+      nodeMoveChild(parent, next, at);
+      if (keepGroups) for (const g of rec.__gd_node_groups__) nodeAddToGroup(next, g);
+      return V.nil();
+    }
+    case "get_owner": {
+      const owner = rec.__gd_node_owner__;
+      return owner === null ? V.object(NULL_OBJECT) : V.object(owner);
+    }
+    case "set_owner": {
+      const v = args[0];
+      if (v === undefined) throw new UnsupportedError("node-arity", "set_owner() 少了实参");
+      if (v.t === Tag.NIL) {
+        rec.__gd_node_owner__ = null;
+        return V.nil();
+      }
+      rec.__gd_node_owner__ = childArg(args, name) as unknown as object;
+      return V.nil();
+    }
+    case "is_node_ready":
+      return V.bool(rec.__gd_node_ready__);
+    case "request_ready":
+      rec.__gd_node_ready__ = false;
+      return V.nil();
+    case "notification": {
+      const what = args[0];
+      if (what === undefined || (what.t !== Tag.INT && what.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "notification() 的编号只量过数");
+      const dispatched = (rec as unknown as GdScriptObject).__gdDispatch("_notification", [V.int(Number(what.v))]);
+      return dispatched === null ? V.nil() : dispatched;
+    }
+    case "propagate_notification": {
+      const what = args[0];
+      if (what === undefined || (what.t !== Tag.INT && what.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "propagate_notification() 的编号只量过数");
+      const all: NodeRec[] = [];
+      collectDescendants(rec, true, all);
+      for (const n of all) (n as unknown as GdScriptObject).__gdDispatch("_notification", [V.int(Number(what.v))]);
+      (rec as unknown as GdScriptObject).__gdDispatch("_notification", [V.int(Number(what.v))]);
+      return V.nil();
+    }
+    case "propagate_call": {
+      const mname = args[0];
+      if (mname === undefined || (mname.t !== Tag.STRING && mname.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "propagate_call() 的方法名只量过字符串");
+      const rest = args.length > 1 && args[1] !== undefined && args[1].t === Tag.ARRAY ? ((args[1].v as GArray).raw() as Variant[]) : [];
+      const parentFirst = boolArg(args, 2, false);
+      const all: NodeRec[] = [];
+      collectDescendants(rec, true, all);
+      const list = parentFirst ? [rec, ...all] : [...all.reverse(), rec];
+      for (const n of list) {
+        const r = callOnNode(n, String(mname.v), rest);
+        if (r === null) throw new UnsupportedError("node-propagate-method", `propagate_call() 的方法 ${String(mname.v)}() 没量过`);
+      }
+      return V.nil();
+    }
+    case "can_process":
+      return V.bool(true);
     case "get_node": {
       const want = pathArg(args, name);
       const hit = nodeWalkOr(rec, want);
@@ -170,7 +386,7 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       nodeNameSet(rec, asString(args[0] as Variant, "属性写入"));
       return V.nil();
     case "get_name":
-      return V.str(rec.__gd_node_name__);
+      return V.stringName(rec.__gd_node_name__);
     case "add_to_group": {
       if (args.length === 0 || args.length > 2) throw new UnsupportedError("node-arity", `add_to_group() 只量过 1 与 2 个实参（收到 ${args.length} 个）`);
       const group = groupArg(args, name);
