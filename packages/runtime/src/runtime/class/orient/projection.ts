@@ -3,7 +3,8 @@ import { UnsupportedError } from "../../errors";
 import { strVec2 } from "../../numfmt";
 import { asTransform3D, type GTransform3D } from "./transform3d";
 import { asVec4, GVector4, vector4 } from "../vector/vector4";
-import { vector2 } from "../vector/vector2";
+import { asVec2, vector2 } from "../vector/vector2";
+import { GPlane } from "./plane";
 
 export class GProjection {
   x: GVector4;
@@ -151,6 +152,38 @@ export function projectionMethod(target: GProjection, name: string, args: Varian
     case "get_lod_multiplier": {
       const fov = 2 * Math.atan(1 / Math.abs(target.x.x));
       return V.float(Math.fround(2 * Math.tan(fov / 2)));
+    }
+    case "perspective_znear_adjusted": {
+      const nn = args[0];
+      if (nn === undefined) throw new UnsupportedError("projection-arity", "perspective_znear_adjusted() 少了 near");
+      const far = Math.fround(target.w.z / (target.z.z + 1));
+      const near = Math.fround(Number(nn.v));
+      const nf = Math.fround(near - far);
+      return projection(target.x, target.y, new GVector4(0, 0, Math.fround((far + near) / nf), -1), new GVector4(0, 0, Math.fround((2 * far * near) / nf), 0));
+    }
+    case "jitter_offseted": {
+      const v = asVec2(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("projection-arg", "jitter_offseted() 只量过 Vector2");
+      return projection(target.x, target.y, target.z, new GVector4(Math.fround(target.w.x + v.x), Math.fround(target.w.y + v.y), target.w.z, target.w.w));
+    }
+    case "get_projection_plane": {
+      const i = args[0];
+      if (i === undefined) throw new UnsupportedError("projection-arity", "get_projection_plane() 少了平面号");
+      const idx = Math.trunc(Number(i.v));
+      const near = Math.fround(target.w.z / (target.z.z - 1));
+      const far = Math.fround(target.w.z / (target.z.z + 1));
+      const norm = (x: number, y: number, z: number, d: number): Variant => {
+        const l = Math.fround(Math.sqrt(Math.fround(Math.fround(x * x) + Math.fround(y * y)) + Math.fround(z * z)));
+        const p: GPlane = new GPlane(x / l, y / l, z / l, d / l);
+        return V.object(p);
+      };
+      if (idx === 0) return norm(0, 0, 1, -near);
+      if (idx === 1) return norm(0, 0, -1, far);
+      if (idx === 2) return norm(-target.x.x, 0, 1, 0);
+      if (idx === 3) return norm(0, target.y.y, 1, 0);
+      if (idx === 4) return norm(target.x.x, 0, 1, 0);
+      if (idx === 5) return norm(0, -target.y.y, 1, 0);
+      throw new UnsupportedError("projection-plane", "get_projection_plane() 的平面号只量过 0..5");
     }
     case "get_aspect": {
       const len = (v: GVector4): number => Math.fround(Math.sqrt(Math.fround(Math.fround(Math.fround(v.x * v.x) + Math.fround(v.y * v.y)) + Math.fround(v.z * v.z))));
