@@ -37,7 +37,7 @@ import { basisReadProp, basisWriteProp } from "../class/orient/basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/object/node";
 import { timerRead, timerWrite } from "../class/object/timer";
 import { registerTweenHooks } from "../class/object/tween";
-import { GdSceneTree, treeReadProp } from "../class/object/scene-tree";
+import { GdSceneTree, registerTreeWriteHook, treeReadProp, treeSetCurrentScene } from "../class/object/scene-tree";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
 import { ctlRead, ctlWrite } from "../class/object/control";
 import { node3dRead, node3dWrite } from "../class/object/node3d";
@@ -264,9 +264,17 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
     transform3dWriteProp(t3w, key, value);
     return null;
   }
+  if (base.t === Tag.OBJECT && base.v instanceof GdSceneTree && key === "current_scene") {
+    treeSetCurrentScene(base.v, value);
+    return null;
+  }
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
     if (enw.__gd_engine_class__ === "Timer" && timerWrite(base.v, key, value)) return null;
+    if (key === "scene_file_path") {
+      enw.__gd_scene_file_path__ = asString(value, "scene_file_path 写入");
+      return null;
+    }
     if (key === "process_mode") {
       if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("node-prop-write", "Node.process_mode 的写入只量过数");
       enw.__gd_node_process_mode__ = Number(value.v);
@@ -585,6 +593,7 @@ export function attribute(raw: unknown, name: string): unknown {
         if (m2 !== null) return m2;
       }
       if (name === "name") return V.stringName(en.__gd_node_name__);
+      if (name === "scene_file_path") return V.str(en.__gd_scene_file_path__);
       if (en.__gd_engine_class__ === "Timer") {
         const tv = timerRead(obj.v, name);
         if (tv !== null) return tv;
@@ -634,4 +643,8 @@ export function attribute(raw: unknown, name: string): unknown {
 
 registerTweenHooks((target, prop) => attribute(target, prop) as Variant, (target, prop, value) => {
   writeProp(target, prop, value);
+});
+
+registerTreeWriteHook((node, prop, value) => {
+  writeProp(node, prop, value);
 });

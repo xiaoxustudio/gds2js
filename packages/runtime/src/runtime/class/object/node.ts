@@ -19,7 +19,9 @@ export class GdNodeObject extends GdScriptObject {
   __gd_node_top_level__?: boolean;
   __gd_ctl__?: unknown;
   __gd_node_t3d__?: unknown;
+  __gd_node_ctl__?: unknown;
   __gd_node_name__: string = "";
+  __gd_scene_file_path__: string = "";
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
   __gd_node_groups__: string[] = [];
@@ -55,6 +57,7 @@ export function nodeInit(inst: object, cls: string): void {
   rec.__gd_engine_class__ = cls;
   rec.__gd_node_queued__ = false;
   rec.__gd_node_name__ = "";
+  rec.__gd_scene_file_path__ = "";
   rec.__gd_node_parent__ = null;
   rec.__gd_node_children__ = [];
   rec.__gd_node_groups__ = [];
@@ -179,6 +182,13 @@ function autoName(node: NodeRec): string {
   return `@${node.__gd_engine_class__}@${String((node as unknown as GdScriptObject).gdObjectId)}`;
 }
 
+type TreeSignalHook = (node: object, name: string) => void;
+let TREE_SIGNAL_HOOK: TreeSignalHook | null = null;
+
+export function registerTreeSignalHook(fn: TreeSignalHook): void {
+  TREE_SIGNAL_HOOK = fn;
+}
+
 export function nodeAttach(parent: NodeRec, child: NodeRec): void {
   if (child === parent) throw new UnsupportedError("node-add-self", "add_child(self) 那一形没建模：引擎发 ERROR 并什么都不做");
   if (child.__gd_node_parent__ !== null) throw new UnsupportedError("node-already-parented", "把已有父亲的节点再 add_child 那一形没建模：引擎发 ERROR 并什么都不做");
@@ -187,6 +197,7 @@ export function nodeAttach(parent: NodeRec, child: NodeRec): void {
   }
   child.__gd_node_parent__ = parent as unknown as object;
   parent.__gd_node_children__.push(child as unknown as object);
+  if (TREE_SIGNAL_HOOK !== null) TREE_SIGNAL_HOOK(child as unknown as object, "node_added");
 }
 
 export function nodeDetach(parent: NodeRec, child: NodeRec): void {
@@ -194,6 +205,7 @@ export function nodeDetach(parent: NodeRec, child: NodeRec): void {
   if (at < 0) throw new UnsupportedError("node-remove-nonchild", "remove_child 一个不是自己孩子的节点那一形没量过");
   parent.__gd_node_children__.splice(at, 1);
   child.__gd_node_parent__ = null;
+  if (TREE_SIGNAL_HOOK !== null) TREE_SIGNAL_HOOK(child as unknown as object, "node_removed");
 }
 
 export function nodeMoveChild(parent: NodeRec, child: NodeRec, to: number): void {

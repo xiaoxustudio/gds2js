@@ -53,6 +53,10 @@ function writeStdoutLine(line: string): void {
   else process.stdout.write(line + "\n");
 }
 
+export function printLine(line: string): void {
+  writeStdoutLine(line);
+}
+
 /** `print_stack()`：每帧一行、没有表头（实测 stdout，语料 273）。 */
 export function gPrintStack(): Variant {
   for (const line of stackFrameLines()) writeStdoutLine(line);

@@ -5,7 +5,7 @@ import { NULL_OBJECT } from "../identity/null-object";
 import { GdScriptObject } from "./script-object";
 import { GdTween } from "./tween";
 import { Signal } from "../identity/signal";
-import { GdNodeObject, nodeAttach, nodeChildren, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodePathOf, type NodeRec } from "./node";
+import { GdNodeObject, nodeAttach, nodeChildren, nodeEmitSignal, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodeParent, nodePathOf, registerTreeSignalHook, type NodeRec } from "./node";
 
 export type SceneSpec = { node: object; name: string; cls: string; children: SceneSpec[] };
 
@@ -78,12 +78,13 @@ export function scenePostOrder(node: object, at: (n: object) => void): void {
   at(node);
 }
 
-export function sceneInit(spec: SceneSpec, parent: object, owner: object | null): void {
+export function sceneInit(spec: SceneSpec, parent: object, owner: object | null, scenePath = ""): void {
   nodeInit(spec.node, spec.cls);
   (spec.node as unknown as NodeRec).__gd_node_name__ = spec.name;
   (spec.node as unknown as NodeRec).__gd_node_owner__ = owner;
+  (spec.node as unknown as NodeRec).__gd_scene_file_path__ = scenePath;
   nodeAttach(parent as unknown as NodeRec, spec.node as unknown as NodeRec);
-  for (const c of spec.children) sceneInit(c, spec.node, owner);
+  for (const c of spec.children) sceneInit(c, spec.node, owner, scenePath);
 }
 
 export function dispatchHook(node: object, hook: string, args: Variant[]): void {
@@ -115,6 +116,25 @@ function groupNodes(tree: GdSceneTree, group: string): object[] {
 function dynamicCall(node: object, name: string, args: Variant[]): Variant {
   if (TREE_CALL === null) throw new UnsupportedError("tree-call-hook", "SceneTree 的动态调用钩子未注册");
   return TREE_CALL(node, name, args);
+}
+
+type TreeWriteHook = (node: Variant, prop: string, value: Variant) => void;
+let TREE_WRITE: TreeWriteHook | null = null;
+
+export function registerTreeWriteHook(fn: TreeWriteHook): void {
+  TREE_WRITE = fn;
+}
+
+export function treeSetCurrentScene(tree: GdSceneTree, node: Variant): void {
+  if (node.t === Tag.NIL) {
+    tree.currentScene = null;
+    return;
+  }
+  const inner = node.t === Tag.OBJECT ? (node.v as object) : null;
+  if (inner === null || nodeParent(inner) !== (tree.root as unknown as object)) {
+    throw new UnsupportedError("scene-current-child", "current_scene 只能设成 root 的直接孩子：条件不成立时引擎发 ERROR 并忽略，这一形没建模");
+  }
+  tree.currentScene = inner;
 }
 
 export function treeCreateTween(tree: GdSceneTree): Variant {
@@ -160,6 +180,21 @@ export function treeMethod(tree: GdSceneTree, name: string, args: Variant[]): Va
       const timer = new GdSceneTreeTimer(Number(sec.v), always, physics, ignore);
       tree.timers.push(timer);
       return V.object(timer);
+    }
+    case "set_current_scene": {
+      treeSetCurrentScene(tree, args[0] as Variant);
+      return V.nil();
+    }
+    case "set_group":
+    case "set_group_flags": {
+      const at = name === "set_group" ? 0 : 1;
+      const g = args[at];
+      const p = args[at + 1];
+      const v = args[at + 2];
+      if (g === undefined || p === undefined || v === undefined) throw new UnsupportedError("scene-tree-arity", `${name}() 少了实参`);
+      if (TREE_WRITE === null) throw new UnsupportedError("tree-write-hook", "SceneTree.set_group() 的写入钩子未注册");
+      for (const n of groupNodes(tree, String(g.v))) TREE_WRITE(V.object(n), String(p.v), v);
+      return V.nil();
     }
     case "create_tween":
       return treeCreateTween(tree);
@@ -256,3 +291,8 @@ export function scenePathOf(node: object): string {
   if (!nodeIsInside(node, tree.root)) throw new UnsupportedError("node-path-unbuilt", "不在树里的 get_path() 这一形没建模：引擎发 ERROR 并回空 NodePath");
   return nodePathOf(node, tree.root);
 }
+
+registerTreeSignalHook((child, name) => {
+  const tree = sceneTree();
+  if (tree !== null) nodeEmitSignal(tree as unknown as NodeRec, name, [V.object(child)]);
+});

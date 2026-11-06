@@ -430,7 +430,7 @@ export async function compileProject(opts: ProjectOptions): Promise<ProjectResul
 
     const scene: SceneEmit | null =
       sceneRoot !== null && normalizeRes(sceneRoot.script ?? "") === l.resPath
-        ? { rootName: sceneRoot.name, rootCls: sceneRoot.cls, children: sceneRoot.children.map((c) => sceneChild(c)) }
+        ? { rootName: sceneRoot.name, rootCls: sceneRoot.cls, scenePath: scenePath === null ? "" : RES_PREFIX + relative(opts.resRoot, scenePath).split(sep).join("/"), children: sceneRoot.children.map((c) => sceneChild(c)) }
         : null;
     if (scene !== null) {
       for (const dep of sceneDeps.values()) {

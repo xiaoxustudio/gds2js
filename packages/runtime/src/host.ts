@@ -184,17 +184,18 @@ export class SceneTree extends GdScriptObject {
 
 const SCENE_MAX_FRAMES = 3000;
 
-export async function sceneRun(rootNode: unknown, rootName: string, rootCls: string, children: unknown[]): Promise<void> {
+export async function sceneRun(rootNode: unknown, rootName: string, rootCls: string, children: unknown[], scenePath = ""): Promise<void> {
   const root = new GdEngineInstance("Window");
   root.__gd_node_name__ = "root";
   const tree = new GdSceneTree(root);
   sceneTreeBegin(tree);
   nodeInit(rootNode as object, rootCls);
   (rootNode as unknown as NodeRec).__gd_node_name__ = rootName;
+  (rootNode as unknown as NodeRec).__gd_scene_file_path__ = scenePath;
   nodeAttach(root as unknown as NodeRec, rootNode as unknown as NodeRec);
   if (rootCls === "Node2D") nodeAddToGroup(rootNode as unknown as NodeRec, `_root_canvas${String((rootNode as GdScriptObject).gdObjectId)}`);
   tree.currentScene = rootNode as object;
-  for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object, rootNode as object);
+  for (const spec of children as SceneSpec[]) sceneInit(spec, rootNode as object, rootNode as object, scenePath);
 
   scenePreOrder(rootNode as object, (n) => {
     dispatchHook(n, "_enter_tree", []);

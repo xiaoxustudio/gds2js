@@ -10,6 +10,7 @@ export const NODE_SELF_METHODS = new Set([
   "connect",
   "create_tween",
   "disconnect",
+  "duplicate",
   "emit_signal",
   "find_child",
   "find_children",
@@ -22,6 +23,10 @@ export const NODE_SELF_METHODS = new Set([
   "get_owner",
   "get_relative_transform_to_parent",
   "get_path_to",
+  "get_tree_string",
+  "get_tree_string_pretty",
+  "print_tree",
+  "print_tree_pretty",
   "has_meta",
   "has_signal",
   "has_user_signal",
@@ -81,7 +86,7 @@ export const NODE_SELF_METHODS = new Set([
 const NODE_SIGNAL_PROPS = ["ready", "renamed", "tree_entered", "tree_exiting", "tree_exited", "child_entered_tree", "child_exiting_tree", "child_order_changed", "replacing_by"];
 
 export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["Node", new Set(["name", "process_mode", "custom_minimum_size", "size_flags_horizontal", "size_flags_vertical", ...NODE_SIGNAL_PROPS])],
+  ["Node", new Set(["name", "scene_file_path", "process_mode", "custom_minimum_size", "size_flags_horizontal", "size_flags_vertical", ...NODE_SIGNAL_PROPS])],
   [
     "Control",
     new Set([

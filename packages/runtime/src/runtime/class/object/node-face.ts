@@ -4,9 +4,11 @@ import { GArray } from "../../values";
 import { NULL_OBJECT } from "../identity/null-object";
 import { nodePathValue } from "../identity/node-path";
 import { asString } from "../../method/core";
-import { stackBlockLines, writeOrderedStderr } from "../../frames";
+import { printLine, stackBlockLines, writeOrderedStderr } from "../../frames";
 import {
   nodeAddUserSignal,
+  engineClassNew,
+  GdEngineInstance,
   nodeArgSay,
   nodeAttach,
   nodeCanProcess,
@@ -32,12 +34,37 @@ import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
 import { node3dGlobalTransform, node3dMethod } from "./node3d";
-import { timerMethod } from "./timer";
+import { GdTimer, timerMethod } from "./timer";
 import { ctlMethod } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
 const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "orthonormalize", "get_parent_node_3d"]);
 const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor"]);
+
+function cloneEngineNode(rec: NodeRec): NodeRec {
+  let made: NodeRec;
+  if (rec instanceof GdTimer) made = new GdTimer();
+  else if (rec instanceof GdEngineInstance) made = new GdEngineInstance(rec.__gd_engine_class__);
+  else throw new UnsupportedError("node-duplicate-script", "duplicate() 只量过引擎节点；脚本实例的字段克隆需要反射，这一形没建模");
+  made.__gd_node_name__ = rec.__gd_node_name__;
+  made.__gd_node_process__ = rec.__gd_node_process__;
+  made.__gd_node_physics__ = rec.__gd_node_physics__;
+  made.__gd_node_process_mode__ = rec.__gd_node_process_mode__;
+  made.__gd_node_visible__ = rec.__gd_node_visible__;
+  made.__gd_node_top_level__ = rec.__gd_node_top_level__;
+  made.__gd_node_groups__ = rec.__gd_node_groups__.slice();
+  if (rec.__gd_node_t2d__ !== undefined) made.__gd_node_t2d__ = Object.assign(Object.create(Object.getPrototypeOf(rec.__gd_node_t2d__)), rec.__gd_node_t2d__);
+  if (rec.__gd_node_t3d__ !== undefined) made.__gd_node_t3d__ = Object.assign({}, rec.__gd_node_t3d__);
+  if (rec.__gd_node_ctl__ !== undefined) made.__gd_node_ctl__ = Object.assign({}, rec.__gd_node_ctl__);
+  for (const c of rec.__gd_node_children__) {
+    const f = nodeFaceOf(c);
+    if (f === null) continue;
+    const cloned = cloneEngineNode(f);
+    cloned.__gd_node_parent__ = made as unknown as object;
+    made.__gd_node_children__.push(cloned as unknown as object);
+  }
+  return made;
+}
 
 function engineError(at: string, message: string): void {
   writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));
@@ -449,6 +476,46 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       const tree = sceneTree();
       if (tree === null) throw new UnsupportedError("node-no-tree", "不在树里的 create_tween() 这一形没建模");
       return treeCreateTween(tree);
+    }
+    case "duplicate": {
+      const flags = args[0];
+      if (flags !== undefined && (flags.t !== Tag.INT && flags.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "duplicate() 的 flags 只量过数");
+      return V.object(cloneEngineNode(rec) as unknown as object);
+    }
+    case "get_tree_string":
+    case "get_tree_string_pretty": {
+      const pretty = name.endsWith("pretty");
+      const lines: string[] = [pretty ? ` ┖╴${rec.__gd_node_name__}` : "."];
+      const walk = (node: NodeRec, prefix: string, path: string): void => {
+        node.__gd_node_children__.forEach((child, i) => {
+          const f = nodeFaceOf(child);
+          if (f === null) return;
+          const last = i === node.__gd_node_children__.length - 1;
+          if (pretty) lines.push(`${prefix}${last ? " ┖╴" : " ┠╴"}${f.__gd_node_name__}`);
+          else lines.push(path === "" ? f.__gd_node_name__ : `${path}/${f.__gd_node_name__}`);
+          walk(f, `${prefix}   `, path === "" ? f.__gd_node_name__ : `${path}/${f.__gd_node_name__}`);
+        });
+      };
+      walk(rec, "   ", "");
+      return V.str(lines.join("\n"));
+    }
+    case "print_tree":
+    case "print_tree_pretty": {
+      const pretty = name.endsWith("pretty");
+      const lines = pretty ? [` ┖╴${rec.__gd_node_name__}`] : ["."];
+      const walk = (node: NodeRec, prefix: string, path: string): void => {
+        node.__gd_node_children__.forEach((child, i) => {
+          const f = nodeFaceOf(child);
+          if (f === null) return;
+          const last = i === node.__gd_node_children__.length - 1;
+          if (pretty) lines.push(`${prefix}${last ? " ┖╴" : " ┠╴"}${f.__gd_node_name__}`);
+          else lines.push(path === "" ? f.__gd_node_name__ : `${path}/${f.__gd_node_name__}`);
+          walk(f, `${prefix}   `, path === "" ? f.__gd_node_name__ : `${path}/${f.__gd_node_name__}`);
+        });
+      };
+      walk(rec, "   ", "");
+      for (const l of lines) printLine(l);
+      return V.nil();
     }
     case "can_process": {
       const tree = sceneTree();

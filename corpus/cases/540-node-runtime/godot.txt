@@ -1,0 +1,17 @@
+add|B
+add|C
+sfp|res://main.tscn
+s|.
+A
+B
+B/C
+p| ┖╴Root
+    ┠╴A
+    ┖╴B
+       ┖╴C
+.
+C
+ ┖╴B
+    ┖╴C
+sg|Z
+d|Z|1
