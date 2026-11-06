@@ -337,7 +337,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
         }
         return;
       }
-      if (!scope.has(e.name) && !isGlobalConst(e.name) && !isGlobalEnumName(e.name) && !isGlobalEnumPrefix(e.name)) {
+      if (!scope.has(e.name) && !isGlobalConst(e.name) && !isGlobalEnumName(e.name)) {
         if (CLASS_FACE_RECEIVERS.has(e)) return;
         if (GLOBAL_VALUE_NAMES.has(e.name)) run.globalValueReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
         else if (ENGINE_CLASS_NAMES.has(e.name)) run.nativeClassReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
@@ -412,6 +412,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
       return;
 
     case "attribute":
+      if (e.obj.kind === "ident" && isGlobalEnumPrefix(e.obj.name) && isGlobalEnumName(`${e.obj.name}.${e.name}`)) return;
       if (staticMemberFn(e.obj) === null && !(e.obj.kind === "ident" && PACK_TYPE_NAMES.has(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
       return;
 
