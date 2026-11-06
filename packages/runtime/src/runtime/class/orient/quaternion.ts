@@ -118,6 +118,10 @@ export function quaternionMethod(inner: GQuaternion, name: string, args: Variant
       if (s < 0.00001) return vector3(0, 0, 1);
       return vector3(inner.x / s, inner.y / s, inner.z / s);
     }
+    case "is_normalized":
+      return V.bool(Math.abs(len2(inner) - 1) < 1e-5);
+    case "is_finite":
+      return V.bool(Number.isFinite(inner.x) && Number.isFinite(inner.y) && Number.isFinite(inner.z) && Number.isFinite(inner.w));
     case "is_equal_approx": {
       const o = same(args[0], "is_equal_approx");
       return V.bool(inner.x === o.x && inner.y === o.y && inner.z === o.z && inner.w === o.w);
