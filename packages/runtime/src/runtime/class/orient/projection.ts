@@ -114,14 +114,8 @@ export function projectionMethod(target: GProjection, name: string, args: Varian
     }
     case "flipped_y":
       return projection(target.x, new GVector4(Math.fround(-target.y.x), Math.fround(-target.y.y), Math.fround(-target.y.z), Math.fround(-target.y.w)), target.z, target.w);
-    case "is_orthogonal": {
-      const inv = inverseMat(matOf(target));
-      if (inv === null) return V.bool(false);
-      const m = matOf(target);
-      const eq = (a: number, b: number): boolean => Math.abs(a - b) < 1e-5;
-      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (!eq((inv[r] as number[])[c] as number, (m[c] as number[])[r] as number)) return V.bool(false);
-      return V.bool(true);
-    }
+    case "is_orthogonal":
+      return V.bool(target.z.w === 0 && target.w.w === 1);
     case "get_z_near":
     case "get_z_far": {
       const zz = target.z.z;
@@ -198,4 +192,75 @@ export function projectionReadProp(p: GProjection, name: string): Variant | null
   if (name === "z") return V.object(p.z);
   if (name === "w") return V.object(p.w);
   return null;
+}
+
+function num(v: Variant | undefined, at: string): number {
+  if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("projection-arg", `Projection.${at} 只量过数`);
+  return Number(v.v);
+}
+
+function frustum(left: number, right: number, bottom: number, top: number, zn: number, zf: number): Variant {
+  const rl = Math.fround(right - left);
+  const tb = Math.fround(top - bottom);
+  const nf = Math.fround(zn - zf);
+  return projection(
+    new GVector4(Math.fround(Math.fround(2 * zn) / rl), 0, 0, 0),
+    new GVector4(0, Math.fround(Math.fround(2 * zn) / tb), 0, 0),
+    new GVector4(Math.fround((right + left) / rl), Math.fround((top + bottom) / tb), Math.fround((zf + zn) / nf), -1),
+    new GVector4(0, 0, Math.fround(Math.fround(2 * zf * zn) / nf), 0),
+  );
+}
+
+export function projectionStatic(name: string, args: Variant[]): Variant {
+  switch (name) {
+    case "create_perspective": {
+      const fovy = num(args[0], "create_perspective");
+      const aspect = num(args[1], "create_perspective");
+      const zn = num(args[2], "create_perspective");
+      const zf = num(args[3], "create_perspective");
+      const flip = args[4] !== undefined && args[4].t === Tag.BOOL && args[4].v === true;
+      const top = Math.fround(zn * Math.tan((fovy * Math.PI) / 360));
+      const right = Math.fround(top * (flip ? 1 / aspect : aspect));
+      const left = flip ? Math.fround(-Math.fround(right * aspect)) : -right;
+      return frustum(left, right, -top, top, zn, zf);
+    }
+    case "create_orthogonal": {
+      const left = num(args[0], "create_orthogonal");
+      const right = num(args[1], "create_orthogonal");
+      const bottom = num(args[2], "create_orthogonal");
+      const top = num(args[3], "create_orthogonal");
+      const zn = num(args[4], "create_orthogonal");
+      const zf = num(args[5], "create_orthogonal");
+      const rl = Math.fround(right - left);
+      const tb = Math.fround(top - bottom);
+      const nf = Math.fround(zf - zn);
+      return projection(
+        new GVector4(Math.fround(2 / rl), 0, 0, 0),
+        new GVector4(0, Math.fround(2 / tb), 0, 0),
+        new GVector4(0, 0, Math.fround(-2 / nf), 0),
+        new GVector4(Math.fround(-(right + left) / rl), Math.fround(-(top + bottom) / tb), Math.fround(-(zf + zn) / nf), 1),
+      );
+    }
+    case "create_frustum": {
+      return frustum(num(args[0], name), num(args[1], name), num(args[2], name), num(args[3], name), num(args[4], name), num(args[5], name));
+    }
+    case "create_frustum_aspect": {
+      const fovy = num(args[0], name);
+      const aspect = num(args[1], name);
+      const zn = num(args[2], name);
+      const zf = num(args[3], name);
+      const top = Math.fround(zn * Math.tan((fovy * Math.PI) / 360));
+      return frustum(Math.fround(-top * aspect), Math.fround(top * aspect), -top, top, zn, zf);
+    }
+    case "create_orthogonal_aspect": {
+      const size = num(args[0], name);
+      const aspect = num(args[1], name);
+      const zn = num(args[2], name);
+      const zf = num(args[3], name);
+      const half = Math.fround(size / 2);
+      return projectionStatic("create_orthogonal", [V.float(-half), V.float(half), V.float(-half), V.float(half), V.float(zn), V.float(zf)]);
+    }
+    default:
+      throw new UnsupportedError("projection-static", `Projection.${name}() 这一支没量过`);
+  }
 }
