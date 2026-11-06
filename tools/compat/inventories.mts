@@ -91,6 +91,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/orient/transform3d.ts", fn: "transform3dReadProp", owners: ["Transform3D"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/orient/transform3d.ts", fn: "transform3dWriteProp", owners: ["Transform3D"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/orient/projection.ts", fn: "projectionMethod", owners: ["Projection"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/orient/projection.ts", fn: "projectionStatic", owners: ["Projection"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/orient/projection.ts", fn: "projectionReadProp", owners: ["Projection"], kind: "prop" },
   { file: "packages/runtime/src/runtime/method/string.ts", fn: "stringMethod", owners: ["String"], kind: "method" },
   { file: "packages/runtime/src/runtime/method/array.ts", fn: "arrayMethod", owners: ["Array"], kind: "method" },
