@@ -166,7 +166,8 @@ for (let mi = 0; mi < index.modules.length; mi++) {
     const ov = overrideOf(row.o, row.n, row.k);
     let result;
     if (ov !== null) {
-      result = { status: ov.status, ev: [["n", ov.reason ?? "人工口径"]] };
+      const ovEv = ov.status === "implemented" ? evidenceFor(row.o, row.n, row.k) : [];
+      result = { status: ov.status, ev: ovEv.length > 0 ? ovEv : [["n", ov.reason ?? "人工口径"]] };
     } else {
       result = classify(row);
     }

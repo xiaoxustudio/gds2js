@@ -157,6 +157,18 @@
         ],
         "match": "RenderingDriver|StdHandleType|SystemDir|CompressionMode|UnixPermissionFlags|ModeFlags|create_instance|create_temp|big_endian|distribution|video_adapter|trash|open_with|file_access_save|unset_environment",
         "reason": "类内枚举/常量面尚未建模，按响亮拒记账"
+      },
+      {
+        "owners": [
+          "Node",
+          "Node2D",
+          "Node3D",
+          "Control",
+          "SceneTree",
+          "Object"
+        ],
+        "match": "process_input|process_unhandled|process_shortcut|process_internal|process_thread|physics_interpolation|_input$|_unhandled|_shortcut|auto_translate|translation|atr|display_folded|editable_instance|orphan|load_placeholder|scene_instance|set_thread|call_deferred_thread|notify_deferred|thread_safe|is_greater_than",
+        "reason": "输入事件、线程、物理插值、翻译与编辑器折叠不在 Tier 6 非目标内"
       }
     ],
     "unplannedReasons": {

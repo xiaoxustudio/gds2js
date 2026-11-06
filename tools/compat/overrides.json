@@ -1,10 +1,18 @@
 {
-  "FileAccess.READ#c": { "status": "implemented", "reason": "engine-class-consts 已实现，语料 475 对账" },
-  "FileAccess.WRITE#c": { "status": "implemented", "reason": "engine-class-consts 已实现，语料 475 对账" },
-  "FileAccess.READ_WRITE#c": { "status": "implemented", "reason": "engine-class-consts 已实现，语料 475 对账" },
-  "FileAccess.WRITE_READ#c": { "status": "implemented", "reason": "engine-class-consts 已实现，语料 475 对账" },
-  "FileAccess.ModeFlags.READ#v": { "status": "implemented", "reason": "FileAccess.READ 的枚举视图已实现" },
-  "FileAccess.ModeFlags.WRITE#v": { "status": "implemented", "reason": "FileAccess.WRITE 的枚举视图已实现" },
-  "FileAccess.ModeFlags.READ_WRITE#v": { "status": "implemented", "reason": "FileAccess.READ_WRITE 的枚举视图已实现" },
-  "FileAccess.ModeFlags.WRITE_READ#v": { "status": "implemented", "reason": "FileAccess.WRITE_READ 的枚举视图已实现" }
+  "FileAccess.ModeFlags.READ#v": {
+    "status": "implemented",
+    "reason": "FileAccess.READ 的枚举视图已实现"
+  },
+  "FileAccess.ModeFlags.WRITE#v": {
+    "status": "implemented",
+    "reason": "FileAccess.WRITE 的枚举视图已实现"
+  },
+  "FileAccess.ModeFlags.READ_WRITE#v": {
+    "status": "implemented",
+    "reason": "FileAccess.READ_WRITE 的枚举视图已实现"
+  },
+  "FileAccess.ModeFlags.WRITE_READ#v": {
+    "status": "implemented",
+    "reason": "FileAccess.WRITE_READ 的枚举视图已实现"
+  }
 }
