@@ -1,7 +1,8 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { strVec2 } from "../../numfmt";
-import { asBasis, GBasis, basis, basisMul, basisXform, axisAngleBasis, basisInverseParts, basisOrthoParts } from "./basis";
+import { asBasis, GBasis, basis, basisFromQuaternion, basisMul, basisScaleParts, basisXform, axisAngleBasis, basisInverseParts, basisOrthoParts } from "./basis";
+import { GQuaternion } from "./quaternion";
 import { asVec3, vector3 } from "../vector/vector3";
 
 export class GTransform3D {
@@ -166,6 +167,52 @@ function vecArg(args: Variant[], at: string): { x: number; y: number; z: number 
 function reParts(b: GBasis, ox: number, oy: number, oz: number): Variant {
   return transform3dOfParts(b, ox, oy, oz);
 }
+function quatOfBasis(b: GBasis): GQuaternion {
+  const trace = r(r(b.x0 + b.y1) + b.z2);
+  if (trace > 0) {
+    const s = r(Math.sqrt(trace + 1) * 2);
+    return new GQuaternion(r((b.y2 - b.z1) / s), r((b.z0 - b.x2) / s), r((b.x1 - b.y0) / s), r(0.25 * s));
+  }
+  if (b.x0 > b.y1 && b.x0 > b.z2) {
+    const s = r(Math.sqrt(1 + b.x0 - b.y1 - b.z2) * 2);
+    return new GQuaternion(r(0.25 * s), r((b.y0 + b.x1) / s), r((b.z0 + b.x2) / s), r((b.y2 - b.z1) / s));
+  }
+  if (b.y1 > b.z2) {
+    const s = r(Math.sqrt(1 + b.y1 - b.x0 - b.z2) * 2);
+    return new GQuaternion(r((b.y0 + b.x1) / s), r(0.25 * s), r((b.z1 + b.y2) / s), r((b.z0 - b.x2) / s));
+  }
+  const s = r(Math.sqrt(1 + b.z2 - b.x0 - b.y1) * 2);
+  return new GQuaternion(r((b.z0 + b.x2) / s), r((b.z1 + b.y2) / s), r(0.25 * s), r((b.x1 - b.y0) / s));
+}
+
+function slerpQuat(a: GQuaternion, b: GQuaternion, t: number): GQuaternion {
+  let bx = b.x;
+  let by = b.y;
+  let bz = b.z;
+  let bw = b.w;
+  let d = r(r(r(a.x * bx) + r(a.y * by)) + r(r(a.z * bz) + r(a.w * bw)));
+  if (d < 0) {
+    bx = r(-bx);
+    by = r(-by);
+    bz = r(-bz);
+    bw = r(-bw);
+    d = r(-d);
+  }
+  if (d > 0.9995) {
+    const x = r(a.x + r(t * r(bx - a.x)));
+    const y = r(a.y + r(t * r(by - a.y)));
+    const z = r(a.z + r(t * r(bz - a.z)));
+    const w = r(a.w + r(t * r(bw - a.w)));
+    const l = r(Math.sqrt(r(r(x * x) + r(y * y)) + r(r(z * z) + r(w * w))));
+    return new GQuaternion(x / l, y / l, z / l, w / l);
+  }
+  const theta = Math.acos(d);
+  const sin = Math.sin(theta);
+  const ka = r(Math.sin(r(r(1 - t) * theta)) / sin);
+  const kb = r(Math.sin(r(t * theta)) / sin);
+  return new GQuaternion(r(r(ka * a.x) + r(kb * bx)), r(r(ka * a.y) + r(kb * by)), r(r(ka * a.z) + r(kb * bz)), r(r(ka * a.w) + r(kb * bw)));
+}
+
 export function transform3dMethod(inner: GTransform3D, name: string, args: Variant[]): Variant {
   const basis = transform3dBasisParts(inner);
   switch (name) {
@@ -232,6 +279,31 @@ export function transform3dMethod(inner: GTransform3D, name: string, args: Varia
       const d = vecArg(args, "translated_local");
       const p = basisXform(basis, d.x, d.y, d.z);
       return reParts(basis, r(inner.ox + p[0]), r(inner.oy + p[1]), r(inner.oz + p[2]));
+    }
+    case "interpolate_with": {
+      const o = args[0];
+      const w = args[1];
+      if (o === undefined || !(o.v instanceof GTransform3D) || w === undefined) throw new UnsupportedError("transform3d-arg", "interpolate_with() 只量过 (Transform3D, 数)");
+      const other = o.v as GTransform3D;
+      const ob = transform3dBasisParts(other);
+      const t = Math.fround(Number(w.v));
+      const qa = quatOfBasis(basis);
+      const qb = quatOfBasis(ob);
+      const q = slerpQuat(qa, qb, t);
+      const bs = asBasis(basisFromQuaternion(q)) as GBasis;
+      const sa = basisScaleParts(basis);
+      const sb = basisScaleParts(ob);
+      const sx = r(sa[0] + r(t * r(sb[0] - sa[0])));
+      const sy = r(sa[1] + r(t * r(sb[1] - sa[1])));
+      const sz = r(sa[2] + r(t * r(sb[2] - sa[2])));
+      return transform3d(
+        r(bs.x0 * sx), r(bs.x1 * sy), r(bs.x2 * sz),
+        r(bs.y0 * sx), r(bs.y1 * sy), r(bs.y2 * sz),
+        r(bs.z0 * sx), r(bs.z1 * sy), r(bs.z2 * sz),
+        r(inner.ox + r(t * r(other.ox - inner.ox))),
+        r(inner.oy + r(t * r(other.oy - inner.oy))),
+        r(inner.oz + r(t * r(other.oz - inner.oz))),
+      );
     }
     case "is_finite": {
       if (args.length !== 0) throw new UnsupportedError("transform3d-arity", `is_finite() 只量过 0 个实参（收到 ${args.length} 个）`);
