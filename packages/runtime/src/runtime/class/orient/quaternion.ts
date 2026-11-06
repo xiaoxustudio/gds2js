@@ -96,6 +96,21 @@ export function registerQuaternionEulerHook(fn: EulerHook): void {
   EULER_HOOK = fn;
 }
 
+type FromEulerHook = (e: Variant) => Variant;
+let FROM_EULER_HOOK: FromEulerHook | null = null;
+
+export function registerQuaternionFromEulerHook(fn: FromEulerHook): void {
+  FROM_EULER_HOOK = fn;
+}
+
+export function quaternionStatic(name: string, args: Variant[]): Variant {
+  if (name === "from_euler") {
+    if (FROM_EULER_HOOK === null) throw new UnsupportedError("quaternion-static", "Quaternion.from_euler() 的钩子未注册");
+    return FROM_EULER_HOOK(args[0] as Variant);
+  }
+  throw new UnsupportedError("quaternion-static", `Quaternion.${name}() 这一支没量过`);
+}
+
 export function quaternionMethod(inner: GQuaternion, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length_squared":

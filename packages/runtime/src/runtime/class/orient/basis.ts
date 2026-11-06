@@ -1,7 +1,7 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { strVec2 } from "../../numfmt";
-import { GQuaternion, registerQuaternionEulerHook } from "./quaternion";
+import { GQuaternion, registerQuaternionEulerHook, registerQuaternionFromEulerHook } from "./quaternion";
 import { asVec3, vector3 } from "../vector/vector3";
 
 export class GBasis {
@@ -428,4 +428,9 @@ export function basisSlerp(a: GBasis, b: GBasis, t: number): Variant {
 registerQuaternionEulerHook((x, y, z, w) => {
   const b = asBasis(basisFromQuaternion(new GQuaternion(x, y, z, w))) as GBasis;
   return basisEulerYXZ(b);
+});
+
+registerQuaternionFromEulerHook((e) => {
+  const b = asBasis(basisStatic("from_euler", [e])) as GBasis;
+  return V.object(basisToQuaternion(b));
 });

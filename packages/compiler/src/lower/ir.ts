@@ -68,6 +68,7 @@ const STATIC_MEMBER_FNS: Record<string, string> = {
   Vector4i: "vector4iConst",
   Color: "colorStatic",
   Basis: "basisStatic",
+  Quaternion: "quaternionStatic",
   Projection: "projectionStatic",
   String: "stringStatic",
   Callable: "callableStatic",
