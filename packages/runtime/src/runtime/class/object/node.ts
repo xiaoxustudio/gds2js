@@ -79,8 +79,27 @@ export const NODE_SIGNALS: ReadonlySet<string> = new Set([
   "tree_changed",
 ]);
 
+const USER_SIGNALS = new WeakMap<object, Set<string>>();
+
+export function nodeAddUserSignal(rec: NodeRec, name: string): void {
+  let set = USER_SIGNALS.get(rec as unknown as object);
+  if (set === undefined) {
+    set = new Set();
+    USER_SIGNALS.set(rec as unknown as object, set);
+  }
+  set.add(name);
+}
+
+export function nodeHasUserSignal(rec: NodeRec, name: string): boolean {
+  return USER_SIGNALS.get(rec as unknown as object)?.has(name) === true;
+}
+
+export function nodeRemoveUserSignal(rec: NodeRec, name: string): void {
+  USER_SIGNALS.get(rec as unknown as object)?.delete(name);
+}
+
 export function nodeSignalOf(rec: NodeRec, name: string): Signal | null {
-  if (!NODE_SIGNALS.has(name)) return null;
+  if (!NODE_SIGNALS.has(name) && !nodeHasUserSignal(rec, name)) return null;
   let table = rec.__gd_node_signals__;
   if (table === undefined) {
     table = new Map();

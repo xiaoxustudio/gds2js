@@ -6,9 +6,12 @@ import { nodePathValue } from "../identity/node-path";
 import { asString } from "../../method/core";
 import { stackBlockLines, writeOrderedStderr } from "../../frames";
 import {
+  nodeAddUserSignal,
   nodeArgSay,
   nodeAttach,
   nodeCanProcess,
+  nodeHasUserSignal,
+  nodeRemoveUserSignal,
   nodeDetach,
   nodeFaceOf,
   nodeFree,
@@ -16,13 +19,15 @@ import {
   nodeAddToGroup,
   nodeIsInGroup,
   nodeRemoveFromGroup,
+  nodeSignalOf,
   nodeMoveChild,
   nodeQueueFree,
   nodeOfVariant,
   nodeNameSet,
   type NodeRec,
 } from "./node";
-import { callDeferred } from "../identity/callable";
+import { callDeferred, isCallableBox } from "../identity/callable";
+import { callCallableBox } from "../../method/callable";
 import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
@@ -186,6 +191,36 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
   const rec = nodeFaceOf(target);
   if (rec === null) throw new UnsupportedError("node-face-missing", `${name}() 要落在带节点面的对象上`);
   if (name === "get_class") return V.str(rec.__gd_engine_class__);
+  if (name === "add_user_signal") {
+    nodeAddUserSignal(rec, asString(args[0] as Variant, "信号名"));
+    return V.nil();
+  }
+  if (name === "has_user_signal") return V.bool(nodeHasUserSignal(rec, asString(args[0] as Variant, "信号名")));
+  if (name === "remove_user_signal") {
+    nodeRemoveUserSignal(rec, asString(args[0] as Variant, "信号名"));
+    return V.nil();
+  }
+  if (name === "has_signal") {
+    return V.bool(nodeSignalOf(rec, asString(args[0] as Variant, "信号名")) !== null);
+  }
+  if (name === "connect" || name === "disconnect" || name === "is_connected" || name === "emit_signal") {
+    const sig = nodeSignalOf(rec, asString(args[0] as Variant, "信号名"));
+    if (sig === null) throw new UnsupportedError("node-signal-missing", `节点上没有信号 ${String((args[0] as Variant).v)}`);
+    if (name === "emit_signal") {
+      sig.emitList(args.slice(1));
+      return V.nil();
+    }
+    const cb = args[1];
+    if (cb === undefined || !isCallableBox(cb.v)) throw new UnsupportedError("node-signal-callable", `${name}() 的 Callable 实参没量过`);
+    if (name === "is_connected") return V.bool(sig.isConnected(cb.v));
+    if (name === "disconnect") {
+      sig.disconnectFrom(cb.v);
+      return V.nil();
+    }
+    const flag = args[2] === undefined ? 0 : Number((args[2] as Variant).v);
+    if (flag !== 0 && flag !== 4 && flag !== 8) throw new UnsupportedError("node-signal-flag", `connect() 的 flags=${flag} 没量过`);
+    return V.int(sig.connectTo(cb.v, (a) => callCallableBox(cb.v as never, a), flag));
+  }
   if (name === "set_meta") {
     setMeta(rec, args[0] as Variant, args[1] as Variant);
     return V.nil();
