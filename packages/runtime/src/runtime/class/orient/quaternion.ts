@@ -149,6 +149,21 @@ export function quaternionMethod(inner: GQuaternion, name: string, args: Variant
       const e = EULER_HOOK(inner.x, inner.y, inner.z, inner.w);
       return vector3(e[0], e[1], e[2]);
     }
+    case "exp": {
+      const vlen = r(Math.sqrt(r(r(inner.x * inner.x) + r(inner.y * inner.y)) + r(inner.z * inner.z)));
+      if (vlen === 0) return quaternion(0, 0, 0, 1);
+      const half = r(vlen / 2);
+      const k = r(Math.sin(half) / vlen);
+      return quaternion(r(inner.x * k), r(inner.y * k), r(inner.z * k), r(Math.cos(half)));
+    }
+    case "log": {
+      const vlen = r(Math.sqrt(r(r(inner.x * inner.x) + r(inner.y * inner.y)) + r(inner.z * inner.z)));
+      if (vlen === 0) return quaternion(0, 0, 0, 0);
+      const s = r(Math.sqrt(r(1 - r(inner.w * inner.w))));
+      if (s === 0) throw new UnsupportedError("quaternion-log", "Quaternion.log() 的 w=±1 那一形没量过");
+      const k = r(r(2 * Math.acos(Math.max(-1, Math.min(1, inner.w)))) / s);
+      return quaternion(r(inner.x * k), r(inner.y * k), r(inner.z * k), 0);
+    }
     case "angle_to": {
       const o = same(args[0], "angle_to");
       let d = r(inner.x * o.x);
