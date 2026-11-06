@@ -122,6 +122,43 @@ export function planeMethod(inner: GPlane, name: string, args: Variant[]): Varia
       const tf = r(r(d - r(r(nx * from[0]) + r(ny * from[1])) + r(nz * from[2])) / den);
       return vector3(r(from[0] + r(tf * dir[0])), r(from[1] + r(tf * dir[1])), r(from[2] + r(tf * dir[2])));
     }
+    case "get_center":
+      return vector3(r(nx * d), r(ny * d), r(nz * d));
+    case "is_finite":
+      return V.bool(Number.isFinite(nx) && Number.isFinite(ny) && Number.isFinite(nz) && Number.isFinite(d));
+    case "is_point_over": {
+      const p = vec(args[0]);
+      return V.bool(r(r(r(nx * p[0]) + r(ny * p[1])) + r(nz * p[2])) > d);
+    }
+    case "project": {
+      const p = vec(args[0]);
+      const k = r(r(r(r(nx * p[0]) + r(ny * p[1])) + r(nz * p[2])) - d);
+      return vector3(r(p[0] - r(nx * k)), r(p[1] - r(ny * k)), r(p[2] - r(nz * k)));
+    }
+    case "intersects_segment": {
+      if (args.length !== 2) throw new UnsupportedError("plane-arity", "Plane.intersects_segment() 只量过 2 个实参");
+      const a = vec(args[0]);
+      const b = vec(args[1]);
+      const da = r(r(r(nx * a[0]) + r(ny * a[1])) + r(nz * a[2])) - d;
+      const db = r(r(r(nx * b[0]) + r(ny * b[1])) + r(nz * b[2])) - d;
+      if (da === db) return V.nil();
+      const t = r(da / r(da - db));
+      if (t < 0 || t > 1) return V.nil();
+      return vector3(r(a[0] + r(t * r(b[0] - a[0]))), r(a[1] + r(t * r(b[1] - a[1]))), r(a[2] + r(t * r(b[2] - a[2]))));
+    }
+    case "intersect_3": {
+      const b = args[0];
+      const c = args[1];
+      if (b === undefined || c === undefined || !(b.v instanceof GPlane) || !(c.v instanceof GPlane)) throw new UnsupportedError("plane-arg-type", "Plane.intersect_3() 只量过两个 Plane");
+      const q = b.v as GPlane;
+      const s = c.v as GPlane;
+      const det = r(r(nx * r(r(q.ny * s.nz) - r(q.nz * s.ny))) - r(ny * r(r(q.nx * s.nz) - r(q.nz * s.nx)))) + r(nz * r(r(q.nx * s.ny) - r(q.ny * s.nx)));
+      if (det === 0) return V.nil();
+      const x = r(r(d * r(r(q.ny * s.nz) - r(q.nz * s.ny))) - r(ny * r(r(q.d * s.nz) - r(q.nz * s.d)))) + r(nz * r(r(q.d * s.ny) - r(q.ny * s.d)));
+      const y = r(r(nx * r(r(q.d * s.nz) - r(q.nz * s.d))) - r(d * r(r(q.nx * s.nz) - r(q.nz * s.nx)))) + r(nz * r(r(q.nx * s.d) - r(q.d * s.nx)));
+      const z = r(r(nx * r(r(q.ny * s.d) - r(q.d * s.ny))) - r(ny * r(r(q.nx * s.d) - r(q.d * s.nx)))) + r(d * r(r(q.nx * s.ny) - r(q.ny * s.nx)));
+      return vector3(r(x / det), r(y / det), r(z / det));
+    }
     case "is_equal_approx": {
       const o = args[0];
       if (o === undefined || !(o.t === Tag.OBJECT && o.v instanceof GPlane)) throw new UnsupportedError("plane-arg-type", "Plane.is_equal_approx() 的实参只量过 Plane");
