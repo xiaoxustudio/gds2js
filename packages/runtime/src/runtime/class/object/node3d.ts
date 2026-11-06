@@ -1,6 +1,6 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
-import { asBasis, basisDeterminant, basisEulerYXZ, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisXform, basis } from "../orient/basis";
+import { asBasis, axisAngleBasis, basisDeterminant, basisEulerYXZ, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisXform, basis } from "../orient/basis";
 import { NULL_OBJECT } from "../identity/null-object";
 import { asVec3, vector3 } from "../vector/vector3";
 import { transform3d } from "../orient/transform3d";
@@ -313,6 +313,40 @@ export function node3dMethod(target: unknown, name: string, args: Variant[]): Va
       const g = node3dGlobalParts(target);
       const [x, y, z] = basisXform(g.b, p[0], p[1], p[2]);
       return vector3(r(x + g.x), r(y + g.y), r(z + g.z));
+    }
+    case "rotate":
+    case "rotate_x":
+    case "rotate_y":
+    case "rotate_z": {
+      const s = t3(target);
+      const b = node3dBasisParts(s);
+      let axisX = 1;
+      let axisY = 0;
+      let axisZ = 0;
+      let angle = 0;
+      if (name === "rotate") {
+        const a = fromVec3(args[0], "rotate");
+        axisX = a[0];
+        axisY = a[1];
+        axisZ = a[2];
+        const v = args[1];
+        if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node3d-arg-type", "rotate() 的角度只量过数");
+        angle = r(Number(v.v));
+      } else {
+        if (name === "rotate_y") {
+          axisX = 0;
+          axisY = 1;
+        } else if (name === "rotate_z") {
+          axisX = 0;
+          axisZ = 1;
+        }
+        const v = args[0];
+        if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node3d-arg-type", `${name}() 的角度只量过数`);
+        angle = r(Number(v.v));
+      }
+      const rot = axisAngleBasis(axisX, axisY, axisZ, angle);
+      s.b3 = asBasis(basisMul(rot, b)) as GBasis;
+      return V.nil();
     }
     case "translate": {
       const p = fromVec3(args[0], "translate");

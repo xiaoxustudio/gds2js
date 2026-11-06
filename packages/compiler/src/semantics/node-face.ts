@@ -50,6 +50,9 @@ export const NODE_SELF_METHODS = new Set([
   "move_local_x",
   "move_local_y",
   "rotate",
+  "rotate_x",
+  "rotate_y",
+  "rotate_z",
   "set_deferred",
   "set_meta",
   "set_owner",
@@ -86,7 +89,7 @@ export const NODE_SELF_METHODS = new Set([
 const NODE_SIGNAL_PROPS = ["ready", "renamed", "tree_entered", "tree_exiting", "tree_exited", "child_entered_tree", "child_exiting_tree", "child_order_changed", "replacing_by"];
 
 export const NODE_SELF_PROPS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["Node", new Set(["name", "scene_file_path", "process_mode", "custom_minimum_size", "size_flags_horizontal", "size_flags_vertical", ...NODE_SIGNAL_PROPS])],
+  ["Node", new Set(["name", "scene_file_path", "process_mode", "custom_minimum_size", "size_flags_horizontal", "size_flags_vertical", "anchor_left", "anchor_top", "anchor_right", "anchor_bottom", "offset_left", "offset_top", "offset_right", "offset_bottom", ...NODE_SIGNAL_PROPS])],
   [
     "Control",
     new Set([

@@ -8,10 +8,14 @@ import { GTransform2D } from "../orient/transform2d";
 const r = Math.fround;
 
 type CtlStore = {
-  px: number;
-  py: number;
-  sx: number;
-  sy: number;
+  aL: number;
+  aT: number;
+  aR: number;
+  aB: number;
+  oL: number;
+  oT: number;
+  oR: number;
+  oB: number;
   rot: number;
   scx: number;
   scy: number;
@@ -33,12 +37,29 @@ function ctl(target: unknown): CtlStore {
   const face = rec(target);
   const store = face.__gd_ctl__ as CtlStore | undefined;
   if (store !== undefined) return store;
-  const fresh: CtlStore = { px: 0, py: 0, sx: 0, sy: 0, rot: 0, scx: 1, scy: 1, pvx: 0, pvy: 0, minx: 0, miny: 0, fh: 1, fv: 1 };
+  const fresh: CtlStore = { aL: 0, aT: 0, aR: 0, aB: 0, oL: 0, oT: 0, oR: 0, oB: 0, rot: 0, scx: 1, scy: 1, pvx: 0, pvy: 0, minx: 0, miny: 0, fh: 1, fv: 1 };
   face.__gd_ctl__ = fresh;
   return fresh;
 }
 
-function ownTransform(s: CtlStore): GTransform2D {
+function parentArea(target: unknown): [number, number] {
+  const up = nodeFaceOf(nodeParent(target));
+  if (up === null || up.__gd_engine_class__ !== "Control") return [0, 0];
+  return sizeOf(up, ctl(up));
+}
+
+function posOf(target: unknown, s: CtlStore): [number, number] {
+  const [pw, ph] = parentArea(target);
+  return [r(r(s.aL * pw) + s.oL), r(r(s.aT * ph) + s.oT)];
+}
+
+function sizeOf(target: unknown, s: CtlStore): [number, number] {
+  const [pw, ph] = parentArea(target);
+  return [r(r(r(s.aR - s.aL) * pw) + r(s.oR - s.oL)), r(r(r(s.aB - s.aT) * ph) + r(s.oB - s.oT))];
+}
+
+function ownTransform(target: unknown, s: CtlStore): GTransform2D {
+  const [px, py] = posOf(target, s);
   const a = r(s.rot);
   const c = r(Math.cos(a));
   const sn = r(Math.sin(a));
@@ -48,17 +69,17 @@ function ownTransform(s: CtlStore): GTransform2D {
   const yy = r(c * s.scy);
   const dx = r(r(xx * s.pvx) + r(yx * s.pvy));
   const dy = r(r(xy * s.pvx) + r(yy * s.pvy));
-  return new GTransform2D(xx, xy, yx, yy, r(r(s.px + s.pvx) - dx), r(r(s.py + s.pvy) - dy));
+  return new GTransform2D(xx, xy, yx, yy, r(r(px + s.pvx) - dx), r(r(py + s.pvy) - dy));
 }
 
 export function ctlGlobalTransform(target: unknown): GTransform2D {
-  let cur = ownTransform(ctl(target));
+  let cur = ownTransform(target, ctl(target));
   let up = nodeParent(target);
   while (up !== null) {
     const face = nodeFaceOf(up);
     if (face === null) throw new UnsupportedError("ctl-parent", "Control 往上的祖先没有节点面那一形没量过");
     if (face.__gd_engine_class__ !== "Control") throw new UnsupportedError("ctl-parent-base", `祖先的 ${face.__gd_engine_class__} 不在 Control 链上那一形没量过`);
-    const p = ownTransform(ctl(up));
+    const p = ownTransform(up, ctl(up));
     cur = new GTransform2D(
       r(r(p.xx * cur.xx) + r(p.yx * cur.xy)),
       r(r(p.xy * cur.xx) + r(p.yy * cur.xy)),
@@ -90,9 +111,9 @@ export function ctlRead(target: unknown, name: string): Variant | null {
   const s = ctl(target);
   switch (name) {
     case "position":
-      return vector2(s.px, s.py);
+      return vector2(...posOf(target, s));
     case "size":
-      return vector2(s.sx, s.sy);
+      return vector2(...sizeOf(target, s));
     case "rotation":
       return V.float(s.rot);
     case "scale":
@@ -111,6 +132,22 @@ export function ctlRead(target: unknown, name: string): Variant | null {
       return V.int(s.fh);
     case "size_flags_vertical":
       return V.int(s.fv);
+    case "anchor_left":
+      return V.float(s.aL);
+    case "anchor_top":
+      return V.float(s.aT);
+    case "anchor_right":
+      return V.float(s.aR);
+    case "anchor_bottom":
+      return V.float(s.aB);
+    case "offset_left":
+      return V.float(s.oL);
+    case "offset_top":
+      return V.float(s.oT);
+    case "offset_right":
+      return V.float(s.oR);
+    case "offset_bottom":
+      return V.float(s.oB);
     default:
       return null;
   }
@@ -137,7 +174,9 @@ export function ctlMethod(target: unknown, name: string, args: Variant[]): Varia
     case "get_anchor": {
       const v = args[0];
       if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("ctl-arg-type", "get_anchor() 的边号只量过数");
-      return V.float(0);
+      const s = ctl(target);
+      const i = Math.trunc(Number(v.v));
+      return V.float(i === 0 ? s.aL : i === 1 ? s.aT : i === 2 ? s.aR : s.aB);
     }
     default:
       return null;
@@ -149,14 +188,17 @@ export function ctlWrite(target: unknown, name: string, value: Variant): void {
   switch (name) {
     case "position": {
       const p = fromVec2(value, "position");
-      s.px = p[0];
-      s.py = p[1];
+      const size = sizeOf(target, s);
+      s.oL = p[0];
+      s.oR = r(p[0] + size[0]);
+      s.oT = p[1];
+      s.oB = r(p[1] + size[1]);
       return;
     }
     case "size": {
       const p = fromVec2(value, "size");
-      s.sx = p[0];
-      s.sy = p[1];
+      s.oR = r(s.oL + p[0]);
+      s.oB = r(s.oT + p[1]);
       return;
     }
     case "scale": {
@@ -189,6 +231,30 @@ export function ctlWrite(target: unknown, name: string, value: Variant): void {
       return;
     case "size_flags_vertical":
       s.fv = Math.trunc(Number(value.v));
+      return;
+    case "anchor_left":
+      s.aL = fromAngle(value, "anchor_left");
+      return;
+    case "anchor_top":
+      s.aT = fromAngle(value, "anchor_top");
+      return;
+    case "anchor_right":
+      s.aR = fromAngle(value, "anchor_right");
+      return;
+    case "anchor_bottom":
+      s.aB = fromAngle(value, "anchor_bottom");
+      return;
+    case "offset_left":
+      s.oL = fromAngle(value, "offset_left");
+      return;
+    case "offset_top":
+      s.oT = fromAngle(value, "offset_top");
+      return;
+    case "offset_right":
+      s.oR = fromAngle(value, "offset_right");
+      return;
+    case "offset_bottom":
+      s.oB = fromAngle(value, "offset_bottom");
       return;
     default:
       throw new UnsupportedError("ctl-prop", `Control.${name} 的写入没量过`);
