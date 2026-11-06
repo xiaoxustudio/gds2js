@@ -280,6 +280,56 @@ export function projectionStatic(name: string, args: Variant[]): Variant {
       const v = a.v as { x: number; y: number; z: number; sx: number; sy: number; sz: number };
       return projection(new GVector4(1, 0, 0, 0), new GVector4(0, 1, 0, 0), new GVector4(0, 0, 1, 0), new GVector4(Math.fround(-(v.x + Math.fround(v.sx / 2))), Math.fround(-(v.y + Math.fround(v.sy / 2))), Math.fround(-(v.z + Math.fround(v.sz / 2))), 1));
     }
+    case "create_perspective_hmd": {
+      const fovy = num(args[0], name);
+      const aspect = num(args[1], name);
+      const zn = num(args[2], name);
+      const zf = num(args[3], name);
+      const flip = args[4] !== undefined && args[4].t === Tag.BOOL && args[4].v === true;
+      const eye = Math.trunc(Number((args[5] as Variant).v));
+      const iod = num(args[6], name);
+      const conv = num(args[7], name);
+      const ymax = Math.fround(zn * Math.tan(((flip ? 2 * Math.atan(Math.tan((fovy * Math.PI) / 360) * aspect) : fovy) * Math.PI) / 360));
+      const xmax = Math.fround(ymax * aspect);
+      const shift = Math.fround(Math.fround(iod / 2) * zn / conv);
+      let left = -xmax;
+      let right = xmax;
+      let mt = 0;
+      if (eye === 1) {
+        left = Math.fround(-xmax + shift);
+        right = Math.fround(xmax + shift);
+        mt = Math.fround(iod / 2);
+      } else if (eye === 2) {
+        left = Math.fround(-xmax - shift);
+        right = Math.fround(xmax - shift);
+        mt = Math.fround(-iod / 2);
+      }
+      const base = frustum(left, right, -ymax, ymax, zn, zf);
+      const p = base.v as GProjection;
+      return projection(p.x, p.y, p.z, new GVector4(Math.fround(p.w.x + Math.fround(p.x.x * mt)), p.w.y, p.w.z, p.w.w));
+    }
+    case "create_for_hmd": {
+      const eye = Math.trunc(Number((args[0] as Variant).v));
+      const aspect = num(args[1], name);
+      const iod = num(args[2], name);
+      const width = num(args[3], name);
+      const lens = num(args[4], name);
+      const over = num(args[5], name);
+      const zn = num(args[6], name);
+      const zf = num(args[7], name);
+      let f1 = Math.fround(Math.fround(iod * 0.5) / lens);
+      let f2 = Math.fround(Math.fround((width - iod) * 0.5) / lens);
+      let f3 = Math.fround(Math.fround(width / 4) / lens);
+      const add = Math.fround(Math.fround((Math.fround(f1 + f2)) * Math.fround(over - 1)) / 2);
+      f1 = Math.fround(f1 + add);
+      f2 = Math.fround(f2 + add);
+      f3 = Math.fround(Math.fround(f3 * over) / aspect);
+      const b = Math.fround(-f3 * zn);
+      const t = Math.fround(f3 * zn);
+      if (eye === 1) return frustum(Math.fround(-f2 * zn), Math.fround(f1 * zn), b, t, zn, zf);
+      if (eye === 2) return frustum(Math.fround(-f1 * zn), Math.fround(f2 * zn), b, t, zn, zf);
+      return projectionCopy(PROJECTION_IDENTITY);
+    }
     case "create_depth_correction": {
       const flip = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
       return projection(new GVector4(1, 0, 0, 0), new GVector4(0, flip ? -1 : 1, 0, 0), new GVector4(0, 0, -0.5, 0), new GVector4(0, 0, 0.5, 1));
