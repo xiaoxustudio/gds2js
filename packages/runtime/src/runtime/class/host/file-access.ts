@@ -576,7 +576,7 @@ export function dirExistsAbsolute(path: string): boolean {
 export { ERR_OK, ERR_FAILED, ERR_NOT_FOUND, ERR_BAD_PATH, ERR_CORRUPT };
 
 
-export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5"]);
+export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5", "get_file_as_bytes", "get_file_as_string", "get_size"]);
 
 export const DA_STATIC_NAMES = new Set([
   "open",
@@ -631,6 +631,13 @@ function bytesArg(args: Variant[], at: number, who: string): number[] {
   return (v.v as GBytes).raw().map((e) => Number(e as number | bigint) & 0xff);
 }
 
+function readWhole(path: string, who: string): Uint8Array {
+  const abs = resolveIoPath(path);
+  const table = io();
+  if (!table.exists(abs) || table.isDir(abs)) throw new UnsupportedError("fa-read-missing", `FileAccess.${who}() 对缺失文件 / 目录那一形没量过`);
+  return table.read(abs) ?? new Uint8Array(0);
+}
+
 export function fileAccessStatic(name: string, args: Variant[]): Variant {
   if (name === "open") {
     if (args.length !== 2) throw new UnsupportedError("io-arity", `FileAccess.open() 只量过 (路径, 模式) 两个实参（收到 ${String(args.length)} 个）`);
@@ -643,6 +650,15 @@ export function fileAccessStatic(name: string, args: Variant[]): Variant {
   if (name === "get_md5") {
     if (args.length !== 1) throw new UnsupportedError("io-arity", `FileAccess.get_md5() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
     return faMd5(pathArg(args, 0, "get_md5"));
+  }
+  if (name === "get_file_as_bytes" || name === "get_file_as_string") {
+    if (args.length !== 1) throw new UnsupportedError("io-arity", `FileAccess.${name}() 只量过 1 个实参`);
+    const data = readWhole(pathArg(args, 0, name), name);
+    return name === "get_file_as_bytes" ? V.object(GBytes.of([...data], "byte")) : V.str(DECODER.decode(data));
+  }
+  if (name === "get_size") {
+    if (args.length !== 1) throw new UnsupportedError("io-arity", "FileAccess.get_size() 只量过 1 个实参");
+    return V.int(readWhole(pathArg(args, 0, name), name).length);
   }
   if (args.length !== 0) throw new UnsupportedError("io-arity", `FileAccess.get_open_error() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
   return V.int(faLastOpenError());
@@ -790,6 +806,44 @@ export function fileMethod(file: GdFile, name: string, args: Variant[]): Variant
       if (args.length !== 1) throw new UnsupportedError("io-arity", "set_big_endian() 只量过 1 个实参");
       file.bigEndian = boolArg(args, 0, "set_big_endian", false);
       return V.nil();
+    }
+    case "is_big_endian":
+      return V.bool(file.bigEndian);
+    case "resize": {
+      requireWrite(file, "resize");
+      if (args.length !== 1) throw new UnsupportedError("io-arity", "resize() 只量过 1 个实参");
+      const n = intArg(args, 0, "resize");
+      if (n < 0) throw new UnsupportedError("io-arg-type", "resize() 只量过非负长度");
+      if (n < file.bytes.length) file.bytes.length = n;
+      else while (file.bytes.length < n) file.bytes.push(0);
+      if (file.pos > n) file.pos = n;
+      return V.int(ERR_OK);
+    }
+    case "store_half": {
+      requireWrite(file, "store_half");
+      if (args.length !== 1) throw new UnsupportedError("io-arity", "store_half() 只量过 1 个实参");
+      const value = args[0] as Variant;
+      if (value.t !== Tag.FLOAT && value.t !== Tag.INT) throw new UnsupportedError("io-arg-type", "store_half() 的实参只量过数");
+      const buf = new ArrayBuffer(2);
+      new DataView(buf).setFloat16(0, Number(value.v), !file.bigEndian);
+      put(file, [...new Uint8Array(buf)]);
+      return V.bool(true);
+    }
+    case "get_half": {
+      requireOpen(file, "get_half");
+      const got = take(file, 2);
+      if (got.short) return V.float(0);
+      const view = new DataView(Uint8Array.from(got.bs).buffer);
+      return V.float(view.getFloat16(0, !file.bigEndian));
+    }
+    case "store_csv_line": {
+      requireWrite(file, "store_csv_line");
+      if (args.length < 1 || args.length > 2) throw new UnsupportedError("io-arity", "store_csv_line() 只量过 1 与 2 个实参");
+      const delim = args[1] === undefined ? "," : asString(args[1] as Variant, "store_csv_line 的分隔符");
+      const cells = ((args[0] as Variant).v as GBytes).raw().map((e) => String(e));
+      const text = cells.map((cell) => (cell.includes(delim) || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell)).join(delim);
+      fileStoreText(file, text + String.fromCharCode(10));
+      return V.bool(true);
     }
     case "get_pascal_string": {
       if (args.length !== 0) throw new UnsupportedError("io-arity", "get_pascal_string() 只量过 0 个实参");
