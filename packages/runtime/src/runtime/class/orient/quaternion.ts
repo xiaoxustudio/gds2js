@@ -111,6 +111,79 @@ export function quaternionStatic(name: string, args: Variant[]): Variant {
   throw new UnsupportedError("quaternion-static", `Quaternion.${name}() 这一支没量过`);
 }
 
+function qmul(a: GQuaternion, b: GQuaternion): GQuaternion {
+  return new GQuaternion(
+    r(r(r(a.w * b.x) + r(a.x * b.w)) + r(r(a.y * b.z) - r(a.z * b.y))),
+    r(r(r(a.w * b.y) - r(a.x * b.z)) + r(r(a.y * b.w) + r(a.z * b.x))),
+    r(r(r(a.w * b.z) + r(a.x * b.y)) - r(r(a.y * b.x) - r(a.z * b.w))),
+    r(r(r(a.w * b.w) - r(a.x * b.x)) - r(r(a.y * b.y) + r(a.z * b.z))),
+  );
+}
+
+function qinv(a: GQuaternion): GQuaternion {
+  return new GQuaternion(r(-a.x), r(-a.y), r(-a.z), a.w);
+}
+
+function qlog(a: GQuaternion): GQuaternion {
+  const vlen = r(Math.sqrt(r(r(a.x * a.x) + r(a.y * a.y)) + r(a.z * a.z)));
+  if (vlen === 0) return new GQuaternion(0, 0, 0, 0);
+  const s = r(Math.sqrt(r(1 - r(a.w * a.w))));
+  const k = r(r(2 * Math.acos(Math.max(-1, Math.min(1, a.w)))) / s);
+  return new GQuaternion(r(a.x * k), r(a.y * k), r(a.z * k), 0);
+}
+
+function qexp(a: GQuaternion): GQuaternion {
+  const vlen = r(Math.sqrt(r(r(a.x * a.x) + r(a.y * a.y)) + r(a.z * a.z)));
+  if (vlen === 0) return new GQuaternion(0, 0, 0, 1);
+  const half = r(vlen / 2);
+  const k = r(Math.sin(half) / vlen);
+  return new GQuaternion(r(a.x * k), r(a.y * k), r(a.z * k), r(Math.cos(half)));
+}
+
+function cubic(a: number, b: number, pre: number, post: number, t: number): number {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return 0.5 * (a * 2 + (-pre + b) * t + (2 * pre - 5 * a + 4 * b - post) * t2 + (-pre + 3 * a - 3 * b + post) * t3);
+}
+
+function cubicInTime(a: number, b: number, pre: number, post: number, t: number, bt: number, pret: number, postt: number): number {
+  const tt = t * bt;
+  const a1 = pre + (a - pre) * (pret === 0 ? 0 : (tt - pret) / -pret);
+  const a2 = a + (b - a) * (bt === 0 ? 0.5 : tt / bt);
+  const a3 = b + (post - b) * (postt - bt === 0 ? 1 : (tt - bt) / (postt - bt));
+  const b1 = a1 + (a2 - a1) * (bt - pret === 0 ? 0 : (tt - pret) / (bt - pret));
+  const b2 = a2 + (a3 - a2) * (postt === 0 ? 1 : tt / postt);
+  return b1 + (b2 - b1) * (bt === 0 ? 0.5 : tt / bt);
+}
+
+function slerpQ(a: GQuaternion, b: GQuaternion, t: number): GQuaternion {
+  let bx = b.x;
+  let by = b.y;
+  let bz = b.z;
+  let bw = b.w;
+  let d = r(r(r(a.x * bx) + r(a.y * by)) + r(r(a.z * bz) + r(a.w * bw)));
+  if (d < 0) {
+    bx = r(-bx);
+    by = r(-by);
+    bz = r(-bz);
+    bw = r(-bw);
+    d = r(-d);
+  }
+  if (d > 0.9995) {
+    const x = r(a.x + r(t * r(bx - a.x)));
+    const y = r(a.y + r(t * r(by - a.y)));
+    const z = r(a.z + r(t * r(bz - a.z)));
+    const w = r(a.w + r(t * r(bw - a.w)));
+    const l = r(Math.sqrt(r(r(x * x) + r(y * y)) + r(r(z * z) + r(w * w))));
+    return new GQuaternion(x / l, y / l, z / l, w / l);
+  }
+  const theta = Math.acos(d);
+  const sin = Math.sin(theta);
+  const ka = r(Math.sin(r(r(1 - t) * theta)) / sin);
+  const kb = r(Math.sin(r(t * theta)) / sin);
+  return new GQuaternion(r(r(ka * a.x) + r(kb * bx)), r(r(ka * a.y) + r(kb * by)), r(r(ka * a.z) + r(kb * bz)), r(r(ka * a.w) + r(kb * bw)));
+}
+
 export function quaternionMethod(inner: GQuaternion, name: string, args: Variant[]): Variant {
   switch (name) {
     case "length_squared":
@@ -163,6 +236,57 @@ export function quaternionMethod(inner: GQuaternion, name: string, args: Variant
       if (s === 0) throw new UnsupportedError("quaternion-log", "Quaternion.log() 的 w=±1 那一形没量过");
       const k = r(r(2 * Math.acos(Math.max(-1, Math.min(1, inner.w)))) / s);
       return quaternion(r(inner.x * k), r(inner.y * k), r(inner.z * k), 0);
+    }
+    case "spherical_cubic_interpolate":
+    case "spherical_cubic_interpolate_in_time": {
+      const b = same(args[0], name);
+      const preIn = same(args[1], name);
+      const postIn = same(args[2], name);
+      const w = args[3];
+      if (w === undefined) throw new UnsupportedError("quaternion-arity", `${name}() 少了权重`);
+      const inTime = name.endsWith("in_time");
+      const bt = inTime ? r(Number((args[4] as Variant).v)) : 0;
+      const pret = inTime ? r(Number((args[5] as Variant).v)) : 0;
+      const postt = inTime ? r(Number((args[6] as Variant).v)) : 0;
+      const t = r(Number(w.v));
+      const from = inner;
+      let pre: GQuaternion = preIn;
+      let to: GQuaternion = b;
+      let post: GQuaternion = postIn;
+      const dot = (x: GQuaternion, y: GQuaternion): number => r(r(r(x.x * y.x) + r(x.y * y.y)) + r(r(x.z * y.z) + r(x.w * y.w)));
+      if (dot(from, pre) < 0) pre = new GQuaternion(-pre.x, -pre.y, -pre.z, -pre.w);
+      const flip2 = dot(from, to) < 0;
+      if (flip2) to = new GQuaternion(-to.x, -to.y, -to.z, -to.w);
+      const postDot = dot(to, post);
+      if (flip2 ? postDot <= 0 : postDot < 0) post = new GQuaternion(-post.x, -post.y, -post.z, -post.w);
+      const calc = (base: GQuaternion, target: GQuaternion): GQuaternion => {
+        const lf = new GQuaternion(0, 0, 0, 0);
+        const lt = qlog(qmul(qinv(base), target));
+        const lp = qlog(qmul(qinv(base), pre));
+        const lq = qlog(qmul(qinv(base), post));
+        const f = inTime ? cubicInTime : cubic;
+        const ln = new GQuaternion(
+          f(lf.x, lt.x, lp.x, lq.x, t, bt, pret, postt),
+          f(lf.y, lt.y, lp.y, lq.y, t, bt, pret, postt),
+          f(lf.z, lt.z, lp.z, lq.z, t, bt, pret, postt),
+          0,
+        );
+        return qmul(base, qexp(ln));
+      };
+      const q1 = calc(from, to);
+      const lf2 = qlog(qmul(qinv(to), from));
+      const zero = new GQuaternion(0, 0, 0, 0);
+      const lp2 = qlog(qmul(qinv(to), pre));
+      const lq2 = qlog(qmul(qinv(to), post));
+      const f = inTime ? cubicInTime : cubic;
+      const ln2 = new GQuaternion(
+        f(lf2.x, zero.x, lp2.x, lq2.x, t, bt, pret, postt),
+        f(lf2.y, zero.y, lp2.y, lq2.y, t, bt, pret, postt),
+        f(lf2.z, zero.z, lp2.z, lq2.z, t, bt, pret, postt),
+        0,
+      );
+      const q2 = qmul(to, qexp(ln2));
+      return V.object(slerpQ(q1, q2, t));
     }
     case "angle_to": {
       const o = same(args[0], "angle_to");
