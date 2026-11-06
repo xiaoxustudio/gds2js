@@ -1,0 +1,3 @@
+ray|(0.0, 1.0, 1.0)|<null>
+seg|(0.0, 1.0, 1.0)|<null>
+pl|true|false

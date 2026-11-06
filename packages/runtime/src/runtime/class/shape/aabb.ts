@@ -2,6 +2,7 @@ import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { strVec2 } from "../../numfmt";
 import { asVec3, vector3 } from "../vector/vector3";
+import { GPlane } from "../orient/plane";
 
 export class GAABB {
   x: number;
@@ -157,6 +158,47 @@ export function aabbMethod(inner: GAABB, name: string, args: Variant[]): Variant
     case "is_equal_approx": {
       const o = other(args[0]);
       return V.bool(px === o.x && py === o.y && pz === o.z && sx === o.sx && sy === o.sy && sz === o.sz);
+    }
+    case "intersects_ray":
+    case "intersects_segment": {
+      const from = asVec3(args[0] as Variant);
+      const to = asVec3(args[1] as Variant);
+      if (from === null || to === null) throw new UnsupportedError("aabb-arg-type", `AABB.${name}() 只量过两个 Vector3`);
+      const lo = [px, py, pz];
+      const hi = [ex, ey, ez];
+      const o = [from.x, from.y, from.z];
+      const d = name === "intersects_segment" ? [r(to.x - from.x), r(to.y - from.y), r(to.z - from.z)] : [to.x, to.y, to.z];
+      let tmin = -Infinity;
+      let tmax = Infinity;
+      for (let i = 0; i < 3; i++) {
+        const oi = o[i] as number;
+        const di = d[i] as number;
+        if (di === 0) {
+          if (oi < (lo[i] as number) || oi > (hi[i] as number)) return V.nil();
+        } else {
+          const t1 = ((lo[i] as number) - oi) / di;
+          const t2 = ((hi[i] as number) - oi) / di;
+          tmin = Math.max(tmin, Math.min(t1, t2));
+          tmax = Math.min(tmax, Math.max(t1, t2));
+        }
+      }
+      if (tmax < Math.max(tmin, 0)) return V.nil();
+      if (name === "intersects_segment" && tmin > 1) return V.nil();
+      const t = Math.max(tmin, 0);
+      return vector3(r((o[0] as number) + r(t * (d[0] as number))), r((o[1] as number) + r(t * (d[1] as number))), r((o[2] as number) + r(t * (d[2] as number))));
+    }
+    case "intersects_plane": {
+      const pl = args[0];
+      if (pl === undefined || !(pl.v instanceof GPlane)) throw new UnsupportedError("aabb-arg-type", "AABB.intersects_plane() 只量过 Plane");
+      const q = pl.v as GPlane;
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (const cx of [px, ex]) for (const cy of [py, ey]) for (const cz of [pz, ez]) {
+        const dist = r(r(r(q.nx * cx) + r(q.ny * cy)) + r(q.nz * cz)) - q.d;
+        lo = Math.min(lo, dist);
+        hi = Math.max(hi, dist);
+      }
+      return V.bool(lo <= 0 && hi >= 0);
     }
     default:
       throw new UnsupportedError("aabb-method", `AABB.${name}() 这一支没量过（get_support / 轴向那几支还没读数）`);
