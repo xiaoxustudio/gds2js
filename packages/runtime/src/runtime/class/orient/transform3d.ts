@@ -202,6 +202,37 @@ export function transform3dMethod(inner: GTransform3D, name: string, args: Varia
       const d = vecArg(args, "translated");
       return reParts(basis, r(inner.ox + d.x), r(inner.oy + d.y), r(inner.oz + d.z));
     }
+    case "inverse": {
+      if (args.length !== 0) throw new UnsupportedError("transform3d-arity", "inverse() 只量过 0 个实参");
+      const ox = r(-r(r(r(basis.x0 * inner.ox) + r(basis.x1 * inner.oy)) + r(basis.x2 * inner.oz)));
+      const oy = r(-r(r(r(basis.y0 * inner.ox) + r(basis.y1 * inner.oy)) + r(basis.y2 * inner.oz)));
+      const oz = r(-r(r(r(basis.z0 * inner.ox) + r(basis.z1 * inner.oy)) + r(basis.z2 * inner.oz)));
+      return transform3d(basis.x0, basis.y0, basis.z0, basis.x1, basis.y1, basis.z1, basis.x2, basis.y2, basis.z2, ox, oy, oz);
+    }
+    case "is_equal_approx": {
+      const o = args[0];
+      if (o === undefined || !(o.v instanceof GTransform3D)) throw new UnsupportedError("transform3d-arg-type", "is_equal_approx() 只量过 Transform3D");
+      const b = o.v as GTransform3D;
+      const eq = (m: number, n: number): boolean => Math.abs(m - n) < 1e-5;
+      return V.bool(eq(inner.x0, b.x0) && eq(inner.x1, b.x1) && eq(inner.x2, b.x2) && eq(inner.y0, b.y0) && eq(inner.y1, b.y1) && eq(inner.y2, b.y2) && eq(inner.z0, b.z0) && eq(inner.z1, b.z1) && eq(inner.z2, b.z2) && eq(inner.ox, b.ox) && eq(inner.oy, b.oy) && eq(inner.oz, b.oz));
+    }
+    case "rotated_local": {
+      const axis = vecArg(args, "rotated_local");
+      const angle = args[1] as Variant;
+      if (angle === undefined || (angle.t !== Tag.INT && angle.t !== Tag.FLOAT)) throw new UnsupportedError("transform3d-arg-type", "rotated_local() 的第 2 参只量过数");
+      const rot = axisAngleBasis(axis.x, axis.y, axis.z, Number(angle.v));
+      const bs = asBasis(basisMul(basis, rot)) as GBasis;
+      return transform3d(bs.x0, bs.x1, bs.x2, bs.y0, bs.y1, bs.y2, bs.z0, bs.z1, bs.z2, inner.ox, inner.oy, inner.oz);
+    }
+    case "scaled_local": {
+      const s = vecArg(args, "scaled_local");
+      return transform3d(r(basis.x0 * s.x), r(basis.x1 * s.x), r(basis.x2 * s.x), r(basis.y0 * s.y), r(basis.y1 * s.y), r(basis.y2 * s.y), r(basis.z0 * s.z), r(basis.z1 * s.z), r(basis.z2 * s.z), inner.ox, inner.oy, inner.oz);
+    }
+    case "translated_local": {
+      const d = vecArg(args, "translated_local");
+      const p = basisXform(basis, d.x, d.y, d.z);
+      return reParts(basis, r(inner.ox + p[0]), r(inner.oy + p[1]), r(inner.oz + p[2]));
+    }
     case "is_finite": {
       if (args.length !== 0) throw new UnsupportedError("transform3d-arity", `is_finite() 只量过 0 个实参（收到 ${args.length} 个）`);
       return V.bool(
