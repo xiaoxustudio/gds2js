@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT } from "../lib.mjs";
 import { buildInventories, hasMember } from "./inventories.mts";
+import { GLOBAL_ENUM_VALUES } from "../../packages/compiler/src/semantics/global-enums.ts";
 import { scanEvidence } from "./evidence.mjs";
 import { parseRoster } from "./roster-parse.mjs";
 
@@ -32,7 +33,17 @@ const ctors = new Set(inv.ctors);
 const METHOD = new Set(["m", "bm", "uf"]);
 const PROP = new Set(["p", "bp"]);
 const ENUM = new Set(["e", "be", "ge"]);
-const ENUM_VALUE = new Set(["v", "bv"]);
+const ENUM_VALUE = new Set(["v", "bv", "gv"]);
+
+function globalEnumValueOf(n: string): number | null {
+  for (const [owner, members] of Object.entries(GLOBAL_ENUM_VALUES)) {
+    const prefix = `${owner}.`;
+    if (!n.startsWith(prefix)) continue;
+    const member = n.slice(prefix.length);
+    if (Object.hasOwn(members, member)) return members[member] as number;
+  }
+  return null;
+}
 const CONST = new Set(["c", "bc", "gv"]);
 
 function evidenceFor(o, n, kind) {
@@ -81,10 +92,14 @@ function classifyBase(row) {
     return { status: hit ? (hasEvidence ? "implemented" : "partial") : "missing", ev: hit ? ev : note("全局函数未进 GLOBAL_CALLABLE_IMPLEMENTED，按响亮拒处理") };
   }
   if (o === "GlobalScope" && CONST.has(k)) {
-    const hit = globalConstants.has(n) || globalConstants.has(n.split(".").pop());
-    return { status: hit ? (hasEvidence ? "implemented" : "partial") : "missing", ev: hit ? ev : note("全局常量未进 GLOBAL_CONSTANTS") };
+    const enumHit = k === "gv" ? globalEnumValueOf(n) : null;
+    const hit = enumHit !== null || globalConstants.has(n) || globalConstants.has(n.split(".").pop());
+    return { status: hit ? (hasEvidence ? "implemented" : "partial") : "missing", ev: hit ? ev : note("全局常量未进 GLOBAL_CONSTANTS / GLOBAL_ENUM_VALUES") };
   }
-  if (ENUM.has(k) && o === "GlobalScope") return { status: "missing", ev };
+  if (ENUM.has(k) && o === "GlobalScope") {
+    const hit = Object.hasOwn(GLOBAL_ENUM_VALUES, n);
+    return { status: hit ? (hasEvidence ? "implemented" : "partial") : "missing", ev: hit ? ev : note("全局枚举未进 GLOBAL_ENUM_VALUES") };
+  }
 
   if (builtinNames.has(o)) {
     if (!modeledBuiltins.has(o)) return { status: "missing", ev: note(scope.builtins.unmodeledReason) };
@@ -173,6 +188,9 @@ for (let mi = 0; mi < index.modules.length; mi++) {
       totals[row.t] -= 1;
       totals[next] += 1;
       row.t = next;
+    }
+    if (next === "implemented" && row.e.length === 0) {
+      row.e = children.find((c) => c.e.length > 0)?.e ?? row.e;
     }
   }
   writeFileSync(file, `${JSON.stringify(chunk)}\n`, "utf8");

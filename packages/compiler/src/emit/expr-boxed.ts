@@ -1,6 +1,6 @@
 import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
-import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
+import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, globalEnumValue, isGlobalConst, isGlobalEnumName, isGlobalEnumPrefix } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
@@ -47,11 +47,48 @@ export function emitAssign(target: Expr, value: string, valueExpr?: Expr): strin
   throw new UnsupportedError("emit-assign", `赋值目标 ${target.kind} 还没实现`);
 }
 
+function enumBaseShadowed(name: string): boolean {
+  if (
+    ctx.MODULE_VARS.has(name) ||
+    ctx.MODULE_FUNCS.has(name) ||
+    ctx.MODULE_CLASSES.has(name) ||
+    ctx.INNER_CLASSES.has(name) ||
+    ctx.CURRENT_MEMBERS.has(name) ||
+    ctx.UNBOXED.has(name) ||
+    ctx.LOCAL_TYPES.has(name) ||
+    ctx.UNTYPED_NAMES.has(name) ||
+    ctx.ENUM_NAMES.has(name) ||
+    ctx.PRELOADS.has(name) ||
+    ctx.LOADS.has(name) ||
+    ctx.CLASS_VALUES.has(name)
+  ) return true;
+  const params = ctx.PARAM_TYPES.get(ctx.CURRENT_FUNC);
+  return params !== undefined && params.some((p) => p.name === name);
+}
+
+export function globalEnumInt(e: Expr): number | null {
+  if (e.kind !== "attribute") return null;
+  if (e.obj.kind === "ident") {
+    if (!isGlobalEnumName(e.obj.name) || enumBaseShadowed(e.obj.name)) return null;
+    return globalEnumValue(e.obj.name, e.name);
+  }
+  if (e.obj.kind === "attribute" && e.obj.obj.kind === "ident") {
+    const prefix = e.obj.obj.name;
+    if (!isGlobalEnumPrefix(prefix) || enumBaseShadowed(prefix)) return null;
+    return globalEnumValue(`${prefix}.${e.obj.name}`, e.name);
+  }
+  return null;
+}
+
 export function emitExpr(e: Expr): string {
   return boxR(emitExprR(e));
 }
 
 export function emitExprR(e: Expr): R {
+  if (e.kind === "attribute") {
+    const v = globalEnumInt(e);
+    if (v !== null) return { code: String(v), rep: "int" };
+  }
   if (e.kind === "ternary") {
     const cr = emitExprR(e.cond);
     const tr = emitExprR(e.thenE);
@@ -245,7 +282,9 @@ export function emitExprVar(e: Expr): string {
         ? `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}))`
         : `rt.wrapValue(rt.index(${emitExpr(e.obj)}, ${emitExpr(e.index)}, ${JSON.stringify(pos)}))`;
 
-    case "attribute":
+    case "attribute": {
+      const enumv = globalEnumInt(e);
+      if (enumv !== null) return `rt.V.int(${String(enumv)})`;
       if (e.obj.kind === "ident" && e.obj.name === "super") {
         throw new UnsupportedError("emit-super-prop", "super.属性 访问还没实现（只支持 super.method()）");
       }
@@ -279,6 +318,7 @@ export function emitExprVar(e: Expr): string {
         if (row !== undefined) return `rt.nativeClassNew(${JSON.stringify(e.obj.name)}, ${String(row.args)})`;
       }
       return `rt.wrapValue(rt.attribute(${emitExpr(e.obj)}, ${JSON.stringify(e.name)}))`;
+    }
 
     case "lambda": {
       const firstDef = e.params.findIndex((p) => p.default !== null);

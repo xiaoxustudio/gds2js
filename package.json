@@ -32,6 +32,7 @@
     "regen:ucaps": "node tools/ucaps-probe.mjs && node tools/ucaps.mjs write",
     "regen:engine-class-face": "node tools/engine-class-face-probe.mjs && node tools/engine-class-face.mjs write",
     "regen:engine-classes": "node tools/engine-classes-probe.mjs && node tools/engine-classes.mjs write",
+    "regen:global-enums": "node tools/global-enums.mjs write",
     "test:cli-native": "vitest run --project e2e cli-native.test.ts",
     "test:compile": "tsx tools/compile.ts",
     "test:pkgmodes": "vitest run --project e2e pkg-modes.test.ts",

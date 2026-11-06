@@ -10,7 +10,7 @@ import { CTOR_REFUSED, CUBIC_NAME_ARG_FUNCS, FUNC_ARG_SLOTS, GLOBAL_NUM_ARITH, G
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../semantics/arg-types/static-arg-types";
 import { FACE_ARG_AS, FACE_ARG_TYPES } from "../semantics/arg-types/face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "../semantics/arg-types/instance-arg-types";
-import { isGlobalConst } from "../lower/globals";
+import { isGlobalConst, isGlobalEnumName, isGlobalEnumPrefix } from "../lower/globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
   DERIVED_ARG_TYPES,
@@ -337,7 +337,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
         }
         return;
       }
-      if (!scope.has(e.name) && !isGlobalConst(e.name)) {
+      if (!scope.has(e.name) && !isGlobalConst(e.name) && !isGlobalEnumName(e.name) && !isGlobalEnumPrefix(e.name)) {
         if (CLASS_FACE_RECEIVERS.has(e)) return;
         if (GLOBAL_VALUE_NAMES.has(e.name)) run.globalValueReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
         else if (ENGINE_CLASS_NAMES.has(e.name)) run.nativeClassReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));

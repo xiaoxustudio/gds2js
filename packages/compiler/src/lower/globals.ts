@@ -1,3 +1,5 @@
+export { GLOBAL_ENUM_VALUES, globalEnumValue, isGlobalEnumName, isGlobalEnumPrefix } from "../semantics/global-enums";
+
 export type GlobalConst = { kind: "float" | "int"; value: string };
 
 export const GLOBAL_TODO_FUNCTIONS: ReadonlySet<string> = new Set<string>([]);

@@ -10,6 +10,7 @@ import {
 import { renderUcaps } from "../../tools/ucaps.mjs";
 import { renderEngineClasses } from "../../tools/engine-classes.mjs";
 import { renderFace } from "../../tools/engine-class-face.mjs";
+import { renderGlobalEnums } from "../../tools/global-enums.mjs";
 import { CORPUS, ROOT } from "../support/lib-bridge";
 
 const lf = (s: string): string => s.replace(/\r\n/g, "\n");
@@ -78,5 +79,16 @@ describe.skipIf(!haveFace)(`engine-faces 生成源码无漂移${haveFace ? "" : 
     const want = renderFace(readFileSync(FACE, "utf8"));
     const got = readFileSync(`${ROOT}/packages/compiler/src/semantics/engine-faces.ts`, "utf8");
     expect(lf(got), "engine-faces.ts 漂了：手改了生成物，或 Godot 版本不是钉住的 4.6.3").toBe(lf(want));
+  });
+});
+
+const API = [`${ROOT}/tmp/d6/extension_api.json`, `${ROOT}/tmp/d6/api/extension_api.json`].find((p) => existsSync(p));
+const haveApi = API !== undefined;
+
+describe.skipIf(!haveApi)(`global-enums 生成源码无漂移${haveApi ? "" : "（跳过：extension_api.json 不在 tmp/ 下，先跑 pnpm regen:global-enums）"}`, () => {
+  it("global-enums.ts 逐字节等于钉住引擎导出的 global_enums 重算产出", () => {
+    const want = renderGlobalEnums(JSON.parse(readFileSync(API as string, "utf8")));
+    const got = readFileSync(`${ROOT}/packages/compiler/src/semantics/global-enums.ts`, "utf8");
+    expect(lf(got), "global-enums.ts 漂了：手改了生成物，或 Godot 版本不是钉住的 4.6.3").toBe(lf(want));
   });
 });
