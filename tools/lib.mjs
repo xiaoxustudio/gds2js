@@ -83,6 +83,14 @@ export function caseScene(id) {
   return existsSync(p) ? p : null;
 }
 
+/** 时间相关用例的固定帧率：目录里的 fixed-fps.txt 写一个正整数；没有就返回 null。 */
+export function caseFixedFps(id) {
+  const p = join(caseDir(id), "fixed-fps.txt");
+  if (!existsSync(p)) return null;
+  const n = Number(readFileSync(p, "utf8").trim());
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 /** 单文件工具的用例集：排除工程用例。吃它的有 tools/compile.ts 与
  *  packages/compiler/test/{ir,sema,emit-invariants}.test.ts。 */
 export function listSingleCases(filter = "") {
@@ -162,9 +170,10 @@ export function dropSandbox(id) {
 
 const ABS_PATH = /[A-Za-z]:[^\s|)"']*/g;
 
-export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null, scene = false, env = null, cwd = null } = {}) {
+export function runGodot(gdPath, { timeoutMs = DEFAULT_TIMEOUT_MS, projectPath = null, scene = false, env = null, cwd = null, fixedFps = null } = {}) {
   const scriptArg = projectPath ? "res://" + (gdPath.split(/[\\/]/).pop() || "main.gd") : gdPath;
   const args = ["--headless"];
+  if (fixedFps !== null) args.push("--fixed-fps", String(fixedFps));
   if (projectPath) args.push("--path", projectPath);
   if (!scene) args.push("--script", scriptArg);
   const spawnOpts = { encoding: "utf8", timeout: timeoutMs, windowsHide: true, maxBuffer: 8 * 1024 * 1024 };

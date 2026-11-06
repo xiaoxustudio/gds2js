@@ -45,6 +45,48 @@
         "open_encrypted": "AES 加密打开面未建模"
       }
     },
+    "unplannedPatterns": [
+      {
+        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "match": "accessibility",
+        "reason": "无障碍面不建模：宿主侧没有可复现的辅助信息树"
+      },
+      {
+        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "match": "thread",
+        "reason": "线程组与线程安全开关不建模：产物是单线程事件循环"
+      },
+      {
+        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "match": "multiplayer|^rpc|_rpc_",
+        "reason": "多人同步不建模：没有网络会话"
+      },
+      {
+        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "match": "editor|edited_scene|configuration_warning|display_folded|unique_name_in_owner|scene_instance_load_placeholder",
+        "reason": "编辑器专用面不建模：无头运行没有编辑器会话"
+      },
+      {
+        "owners": ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"],
+        "match": "viewport|window|screen|exclusive",
+        "reason": "窗口与视口面不建模：没有渲染或窗口系统"
+      },
+      {
+        "owners": ["Control"],
+        "match": "^(draw_|theme|font|stylebox|theme_|cursor|drag|drop|gui_input|shortcut|focus|mouse|get_parent_area|get_parent_control|get_screen_position)",
+        "reason": "Control 的绘制、主题与焦点面不建模：无头运行时没有画布"
+      },
+      {
+        "owners": ["Node2D", "Node3D", "Control"],
+        "match": "^draw_|get_rect|is_visible_in_tree|visible|show|hide|z_index|z_as_relative|y_sort|modulate|self_modulate|texture|material",
+        "reason": "绘制与可见性面不建模：没有渲染器"
+      },
+      {
+        "owners": ["SceneTree"],
+        "match": "change_scene|reload_current_scene|unload_current_scene|edited_scene|multiplayer|accessibility|debug_|quit_on_go_back|auto_accept_quit",
+        "reason": "场景切换与窗口退出策略不建模：没有资源加载器与窗口系统"
+      }
+    ],
     "unplannedReasons": {
       "class": "不在 Tier 2 已建模的引擎类集合内",
       "Engine": "明示非目标（Tier 3 起即划出范围）",

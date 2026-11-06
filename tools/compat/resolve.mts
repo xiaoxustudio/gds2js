@@ -15,6 +15,11 @@ const classes = index.classes;
 const modeled = new Set([...scope.engine.modeledClasses, ...scope.engine.hostClasses, ...scope.engine.nodeClasses]);
 const unplannedClasses = new Set(scope.engine.unplannedClasses);
 const unplannedMembers = scope.engine.unplannedMembers ?? {};
+const unplannedPatterns = (scope.engine.unplannedPatterns ?? []).map((p) => ({
+  owners: new Set(p.owners),
+  re: new RegExp(p.match),
+  reason: p.reason,
+}));
 const roster = parseRoster();
 
 const refs = scanEvidence({ globalNames: new Set(Object.keys(inv.globals.callables)) });
@@ -49,7 +54,21 @@ function overrideOf(o, n, kind) {
   return overrides[`${o}.${n}#${kind}`] ?? overrides[`${o}.${n}`] ?? null;
 }
 
+function patternReason(o, n) {
+  for (const p of unplannedPatterns) {
+    if (p.owners.has(o) && p.re.test(n)) return p.reason;
+  }
+  return null;
+}
+
 function classify(row) {
+  const r = classifyBase(row);
+  if (r.status === "implemented") return r;
+  const reason = patternReason(row.o, row.n);
+  return reason === null ? r : { status: "unplanned", ev: [["n", reason]] };
+}
+
+function classifyBase(row) {
   const o = row.o;
   const n = row.n;
   const k = row.k;

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {
   caseDir,
+  caseFixedFps,
   caseIsProject,
   caseSandboxed,
   caseScene,
@@ -56,6 +57,7 @@ for (const id of cases) {
       timeoutMs: hangBudget(prev),
       env: sandboxed ? sandboxEnv(id) : null,
       cwd: sandboxed ? projectPath : null,
+      fixedFps: caseFixedFps(id),
     });
   } finally {
     if (sandboxed) dropSandbox(id);

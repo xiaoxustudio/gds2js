@@ -102,6 +102,10 @@ const ENGINE_RULES = [
 
 const OBJECT_METHODS = ["has_method", "get_class", "get_instance_id", "is_class", "get", "set", "get_meta", "set_meta", "has_meta", "remove_meta", "call", "callv"];
 
+const VIRTUAL_METHODS = ["_enter_tree", "_exit_tree", "_ready", "_process"];
+
+const VIRTUAL_OWNERS = ["Node", "Node2D", "Node3D", "Control"];
+
 const EXTRA_GLOBAL_IMPLEMENTED = ["print", "print_debug", "print_rich", "print_verbose", "printerr", "printraw", "prints", "printt"];
 
 const EXTRA_PROPS = { Node: ["name"] };
@@ -169,6 +173,7 @@ export function buildInventories() {
   for (const [type, table] of Object.entries(BUILTIN_METHODS)) add(type, "method", Object.keys(table));
   for (const [type, names] of Object.entries(BUILTIN_PROPS)) add(type, "method", names);
   add("Object", "method", OBJECT_METHODS);
+  for (const owner of VIRTUAL_OWNERS) add(owner, "method", VIRTUAL_METHODS);
   for (const [owner, names] of Object.entries(EXTRA_PROPS)) add(owner, "prop", names);
   for (const [owner, names] of Object.entries(EXTRA_METHODS)) add(owner, "method", names);
   for (const rule of ENGINE_RULES) {
