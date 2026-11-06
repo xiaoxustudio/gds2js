@@ -274,6 +274,12 @@ export function projectionStatic(name: string, args: Variant[]): Variant {
         new GVector4(Math.fround(-(right + left) / rl), Math.fround(-(top + bottom) / tb), Math.fround(-(zf + zn) / nf), 1),
       );
     }
+    case "create_fit_aabb": {
+      const a = args[0];
+      if (a === undefined) throw new UnsupportedError("projection-arity", "create_fit_aabb() 少了 AABB");
+      const v = a.v as { x: number; y: number; z: number; sx: number; sy: number; sz: number };
+      return projection(new GVector4(1, 0, 0, 0), new GVector4(0, 1, 0, 0), new GVector4(0, 0, 1, 0), new GVector4(Math.fround(-(v.x + Math.fround(v.sx / 2))), Math.fround(-(v.y + Math.fround(v.sy / 2))), Math.fround(-(v.z + Math.fround(v.sz / 2))), 1));
+    }
     case "create_depth_correction": {
       const flip = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
       return projection(new GVector4(1, 0, 0, 0), new GVector4(0, flip ? -1 : 1, 0, 0), new GVector4(0, 0, -0.5, 0), new GVector4(0, 0, 0.5, 1));
