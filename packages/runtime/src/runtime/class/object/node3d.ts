@@ -1,9 +1,10 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
-import { basisDeterminant, basisEulerYXZ, basisScaleParts, basis } from "../orient/basis";
+import { asBasis, basisDeterminant, basisEulerYXZ, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisXform, basis } from "../orient/basis";
+import { NULL_OBJECT } from "../identity/null-object";
 import { asVec3, vector3 } from "../vector/vector3";
 import { transform3d } from "../orient/transform3d";
-import { nodeFaceOf, type NodeRec } from "./node";
+import { nodeFaceOf, nodeParent, type NodeRec } from "./node";
 import { sceneTree } from "./scene-tree";
 import { stackBlockLines, writeOrderedStderr } from "../../frames";
 
@@ -137,13 +138,39 @@ function inTree(target: unknown): boolean {
 }
 
 function globalFace(target: unknown): void {
-  if (inTree(target)) throw new UnsupportedError("node3d-global-in-tree", "Node3D 的 global_* 只量过不在树里那一形：挂在活树上的链还没读数");
+  if (!inTree(target)) globalTransformError();
+}
+
+export function node3dGlobalParts(target: unknown): { b: GBasis; x: number; y: number; z: number } {
+  const s = t3(target);
+  let b = node3dBasisParts(s);
+  let x = s.px;
+  let y = s.py;
+  let z = s.pz;
+  let up = nodeParent(target);
+  while (up !== null) {
+    const face = nodeFaceOf(up);
+    if (face === null) break;
+    if (face.__gd_engine_class__ === "Window") break;
+    if (face.__gd_engine_class__ === "Node3D") {
+      const ps = t3(up);
+      const pb = node3dBasisParts(ps);
+      const [ox, oy, oz] = basisXform(pb, x, y, z);
+      x = r(ox + ps.px);
+      y = r(oy + ps.py);
+      z = r(oz + ps.pz);
+      b = asBasis(basisMul(pb, b)) as GBasis;
+    }
+    up = nodeParent(up);
+  }
+  return { b, x, y, z };
 }
 
 export function node3dGlobalTransform(target: unknown): Variant {
   globalFace(target);
-  globalTransformError();
-  return transform3d(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0);
+  if (!inTree(target)) return transform3d(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0);
+  const g = node3dGlobalParts(target);
+  return transform3d(g.b.x0, g.b.x1, g.b.x2, g.b.y0, g.b.y1, g.b.y2, g.b.z0, g.b.z1, g.b.z2, g.x, g.y, g.z);
 }
 
 export function node3dRead(target: unknown, name: string): Variant | null {
@@ -171,16 +198,26 @@ export function node3dRead(target: unknown, name: string): Variant | null {
       const b = node3dBasisParts(s);
       return transform3d(b.x0, b.x1, b.x2, b.y0, b.y1, b.y2, b.z0, b.z1, b.z2, s.px, s.py, s.pz);
     }
-    case "global_position":
-    case "global_rotation":
-    case "global_rotation_degrees":
-      globalFace(target);
-      globalTransformError();
-      return vector3(0, 0, 0);
-    case "global_basis":
-      globalFace(target);
-      globalTransformError();
-      return basis(1, 0, 0, 0, 1, 0, 0, 0, 1);
+    case "global_position": {
+      const g = node3dGlobalParts(target);
+      return vector3(g.x, g.y, g.z);
+    }
+    case "global_rotation": {
+      const g = node3dGlobalParts(target);
+      const e = basisEulerYXZ(g.b);
+      return vector3(e[0], e[1], e[2]);
+    }
+    case "global_rotation_degrees": {
+      const g = node3dGlobalParts(target);
+      const e = basisEulerYXZ(g.b);
+      return vector3(degOf(e[0]), degOf(e[1]), degOf(e[2]));
+    }
+    case "global_transform":
+      return node3dGlobalTransform(target);
+    case "global_basis": {
+      const g = node3dGlobalParts(target);
+      return basis(g.b.x0, g.b.x1, g.b.x2, g.b.y0, g.b.y1, g.b.y2, g.b.z0, g.b.z1, g.b.z2);
+    }
     default:
       return null;
   }
@@ -243,5 +280,54 @@ export function node3dWrite(target: unknown, name: string, value: Variant): void
     }
     default:
       throw new UnsupportedError("node3d-prop", `Node3D.${name} 的成员面没量过（global_rotation 那几支的写入、look_at / translate / rotate_* 一族还没读数）`);
+  }
+}
+
+export function node3dMethod(target: unknown, name: string, args: Variant[]): Variant | null {
+  switch (name) {
+    case "to_local": {
+      const p = fromVec3(args[0], "to_local");
+      const g = node3dGlobalParts(target);
+      const inv = basisInverseParts(g.b);
+      if (inv === null) throw new UnsupportedError("node3d-inverse", "to_local() 的全局基不可逆那一形没量过");
+      const [x, y, z] = basisXform(inv, r(p[0] - g.x), r(p[1] - g.y), r(p[2] - g.z));
+      return vector3(x, y, z);
+    }
+    case "to_global": {
+      const p = fromVec3(args[0], "to_global");
+      const g = node3dGlobalParts(target);
+      const [x, y, z] = basisXform(g.b, p[0], p[1], p[2]);
+      return vector3(r(x + g.x), r(y + g.y), r(z + g.z));
+    }
+    case "translate": {
+      const p = fromVec3(args[0], "translate");
+      const s = t3(target);
+      const b = node3dBasisParts(s);
+      const [x, y, z] = basisXform(b, p[0], p[1], p[2]);
+      s.px = r(s.px + x);
+      s.py = r(s.py + y);
+      s.pz = r(s.pz + z);
+      delete s.b3;
+      return V.nil();
+    }
+    case "orthonormalize": {
+      const s = t3(target);
+      const b = node3dBasisParts(s);
+      const o = basisOrthoParts(b);
+      s.b3 = o;
+      return V.nil();
+    }
+    case "get_parent_node_3d": {
+      let up = nodeParent(target);
+      while (up !== null) {
+        const face = nodeFaceOf(up);
+        if (face === null) return V.object(NULL_OBJECT);
+        if (face.__gd_engine_class__ === "Node3D") return V.object(up);
+        up = nodeParent(up);
+      }
+      return V.object(NULL_OBJECT);
+    }
+    default:
+      return null;
   }
 }

@@ -26,10 +26,11 @@ import { callDeferred } from "../identity/callable";
 import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
-import { node3dGlobalTransform } from "./node3d";
+import { node3dGlobalTransform, node3dMethod } from "./node3d";
 import { ctlMethod } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
+const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "orthonormalize", "get_parent_node_3d"]);
 
 function engineError(at: string, message: string): void {
   writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));
@@ -195,6 +196,10 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
   }
   if (rec.__gd_freed__) throw new UnsupportedError("node-freed-call", `在已 free() 的实例上调 ${name}() 那一形没建模：引擎发 SCRIPT ERROR 并中断脚本`);
   if ((rec.__gd_engine_class__ === "Node2D" || rec.__gd_engine_class__ === "Control") && NODE2D_METHODS.has(name)) return node2dMethod(target, name, args);
+  if (rec.__gd_engine_class__ === "Node3D" && NODE3D_METHODS.has(name)) {
+    const hit = node3dMethod(target, name, args);
+    if (hit !== null) return hit;
+  }
   switch (name) {
     case "add_child": {
       if (args.length === 0 || args.length > 2) throw new UnsupportedError("node-arity", `add_child() 只量过 1 与 2 个实参（收到 ${args.length} 个）`);
