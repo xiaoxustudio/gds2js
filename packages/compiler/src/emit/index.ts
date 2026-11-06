@@ -26,7 +26,7 @@ export type BaseSpec =
 
 export type SceneChild = { expr: string; name: string; cls: string; children: SceneChild[] };
 
-export type SceneEmit = { rootName: string; rootCls: string; scenePath: string; children: SceneChild[] };
+export type SceneEmit = { rootName: string; rootCls: string; scenePath?: string; children: SceneChild[] };
 
 export interface EmitOptions {
   runtimeImport: string;
@@ -321,7 +321,8 @@ export function emitModuleWithMap(m: Module, opts: EmitOptions, analysisResult: 
     out.push(`try {`);
     if (opts.scene !== undefined) {
       const sc = opts.scene;
-      out.push(`  await sceneRun(__gd_entry, ${JSON.stringify(sc.rootName)}, ${JSON.stringify(sc.rootCls)}, ${sceneLiteral(sc.children)}, ${JSON.stringify(sc.scenePath)});`);
+      const pathArg = sc.scenePath === undefined ? "" : `, ${JSON.stringify(sc.scenePath)}`;
+      out.push(`  await sceneRun(__gd_entry, ${JSON.stringify(sc.rootName)}, ${JSON.stringify(sc.rootCls)}, ${sceneLiteral(sc.children)}${pathArg});`);
     } else {
       out.push(`  await __gd_entry.run();`);
     }

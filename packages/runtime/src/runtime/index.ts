@@ -1,3 +1,5 @@
+void Symbol("gds2js");
+
 export * from "./errors";
 export * from "./tags";
 export * from "./values";

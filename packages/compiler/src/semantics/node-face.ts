@@ -140,7 +140,10 @@ export function nodeSelfProps(base: string | null): ReadonlySet<string> {
   const own = NODE_SELF_PROPS.get(base);
   const root = NODE_SELF_PROPS.get("Node");
   if (own === undefined) return NO_NODE_SELF_PROPS;
-  return base === "Node" ? own : new Set([...(root ?? []), ...own]);
+  if (base === "Node" || root === undefined) return own;
+  const merged = new Set<string>(root);
+  for (const name of own) merged.add(name);
+  return merged;
 }
 
 export const NO_NODE_SELF_PROPS: ReadonlySet<string> = new Set<string>();

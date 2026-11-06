@@ -170,10 +170,10 @@ export function scriptcWall(why: string): { v: ExportVerdict; advice: string } {
     };
   }
   if (codes.some((c) => c === "SC2011" || c === "SC2012" || c === "SC2020")) {
-    return { v: "no-lib", advice: `  ${head}：有形没有 lowering（SC2011/2012/2020）。改发射形状或登记缺的那格，别指望 --dynamic。` };
+    return { v: "no-lib", advice: `  ${head}：有形没有 lowering（SC2011/2012/2020）。改发射形状或登记缺的那格。` };
   }
   if (codes.some((c) => c === "SC1090" || c === "SC1091" || c === "SC1013" || c === "SC1100" || c === "SC1101" || c === "SC2004")) {
-    return { v: "refused", advice: `  ${head}：动态形状（按名取成员 / cast 成函数表 / namespace import）静态不收。见 README 的 --pack 表。` };
+    return { v: "refused", advice: `  ${head}：动态形状（按名取成员 / cast 成函数表）静态不收。见 README 的 --pack 表。` };
   }
   return { v: "failed", advice: `  ${head}（原因未归类，原文见上）` };
 }
@@ -208,7 +208,6 @@ export async function exportExecutable(ctx: Ctx): Promise<boolean> {
   try {
     if (pack === "scriptc") {
       const args = ["build", tree.entry, "-o", exe, "--strip"];
-      if (tree.dynamic === true) args.push("--dynamic");
       note = `scriptc ${sc?.version ?? ""}`;
       if (ctx.verbose) console.error(`  ${sc?.bin ?? "scriptc"} ${args.join(" ")}`);
       const r = spawnSync(sc?.bin ?? "scriptc", args, { encoding: "utf8", windowsHide: true, timeout: 1_500_000 });

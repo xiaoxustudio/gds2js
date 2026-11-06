@@ -23,12 +23,21 @@ const rejected: string[] = [];
 const unsupported: Array<{ id: string; msg: string }> = [];
 const refused: Array<{ id: string; msg: string }> = [];
 
+const writeGen = (id: string, text: string): void => {
+  const file = join(caseDir(id), "main.gen.mts");
+  for (let attempt = 0; ; attempt++) {
+    try {
+      writeFileSync(file, text, "utf8");
+      return;
+    } catch (e) {
+      if (attempt >= 20) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+};
+
 const writeStub = (id: string, reason: string): void => {
-  writeFileSync(
-    join(caseDir(id), "main.gen.mts"),
-    `// gds2js：本轮没有生成有效产物。保留文件是为了让 js-runner 报出明确原因。\nthrow new Error(${JSON.stringify(`gds2js 编译失败：${reason}`)});\n`,
-    "utf8",
-  );
+  writeGen(id, `// gds2js：本轮没有生成有效产物。保留文件是为了让 js-runner 报出明确原因。\nthrow new Error(${JSON.stringify(`gds2js 编译失败：${reason}`)});\n`);
 };
 
 for (const id of cases) {
@@ -59,7 +68,7 @@ for (const id of cases) {
 
   try {
     const gen = emitModule(ir!, GEN_EMIT_OPTS, analysis);
-    writeFileSync(join(caseDir(id), "main.gen.mts"), gen, "utf8");
+    writeGen(id, gen);
     compiled++;
   } catch (e) {
     const msg = e instanceof UnsupportedError ? e.message : String(e);
