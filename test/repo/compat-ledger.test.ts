@@ -7,6 +7,7 @@ import { parseRoster } from "../../tools/compat/roster-parse.mjs";
 
 const DATA = join(ROOT, "site", "public", "data", "v1");
 const STATUS = ["implemented", "partial", "missing", "unplanned"] as const;
+const PARTIAL_BUDGET = 1059;
 
 type Row = { o: string; n: string; k: string; t: (typeof STATUS)[number]; e: Array<[string, string]> };
 type Module = { id: string; rows: number; stats: Record<(typeof STATUS)[number], number>; chunk: { rows: Row[] } };
@@ -106,7 +107,14 @@ describe("兼容性账本门", () => {
     if (drift === 0) ok(`${patterns.length} 条没计划规则可用`);
   });
 
-  it("⑤ roster 格数与矩阵账本同步", () => {
+  it("⑤ 部分实现只降不升", () => {
+    let partial = 0;
+    for (const m of modules()) partial += m.chunk.rows.filter((r) => r.t === "partial").length;
+    if (partial <= PARTIAL_BUDGET) ok(`部分实现 ${partial} ≤ 预算 ${PARTIAL_BUDGET}`);
+    else bad(`部分实现 ${partial} 超出预算 ${PARTIAL_BUDGET}：补逐条证据或改判 unplanned，别把新面挂成 partial`);
+  });
+
+  it("⑥ roster 格数与矩阵账本同步", () => {
     const index = JSON.parse(readFileSync(join(DATA, "index.json"), "utf8"));
     const cells = parseRoster();
     if (cells.length === index.roster.cells) ok(`拒绝清单 ${cells.length} 格`);
