@@ -2,6 +2,7 @@ import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { num6Text } from "../../numfmt";
 import { asVec3, vector3 } from "../vector/vector3";
+import { asBasis, basisEulerYXZ, basisFromQuaternion } from "./basis";
 
 export class GQuaternion {
   x: number;
@@ -122,6 +123,69 @@ export function quaternionMethod(inner: GQuaternion, name: string, args: Variant
       return V.bool(Math.abs(len2(inner) - 1) < 1e-5);
     case "is_finite":
       return V.bool(Number.isFinite(inner.x) && Number.isFinite(inner.y) && Number.isFinite(inner.z) && Number.isFinite(inner.w));
+    case "angle_to": {
+      const o = same(args[0], "angle_to");
+      let d = r(inner.x * o.x);
+      d = r(d + r(inner.y * o.y));
+      d = r(d + r(inner.z * o.z));
+      d = r(d + r(inner.w * o.w));
+      const k = Math.max(-1, Math.min(1, r(r(2 * d * d) - 1)));
+      return V.float(r(Math.acos(k)));
+    }
+    case "get_euler": {
+      const b = asBasis(basisFromQuaternion(inner));
+      if (b === null) throw new UnsupportedError("quaternion-euler", "get_euler() 的 basis 构造失败");
+      const e = basisEulerYXZ(b);
+      return vector3(e[0], e[1], e[2]);
+    }
+    case "slerp":
+    case "slerpni": {
+      const o = same(args[0], name);
+      const t = args[1];
+      if (t === undefined || (t.t !== Tag.INT && t.t !== Tag.FLOAT)) throw new UnsupportedError("quaternion-arg-type", `${name}() 的权重只量过数`);
+      let w = r(Number(t.v));
+      let ox = o.x;
+      let oy = o.y;
+      let oz = o.z;
+      let ow = o.w;
+      if (name === "slerp") {
+        let d = r(r(r(inner.x * ox) + r(inner.y * oy)) + r(r(inner.z * oz) + r(inner.w * ow)));
+        if (d < 0) {
+          ox = r(-ox);
+          oy = r(-oy);
+          oz = r(-oz);
+          ow = r(-ow);
+          d = r(-d);
+        }
+        if (d > 0.9995) {
+          const nx = r(inner.x + r(w * r(ox - inner.x)));
+          const ny = r(inner.y + r(w * r(oy - inner.y)));
+          const nz = r(inner.z + r(w * r(oz - inner.z)));
+          const nw = r(inner.w + r(w * r(ow - inner.w)));
+          const l = r(Math.sqrt(r(r(nx * nx) + r(ny * ny)) + r(r(nz * nz) + r(nw * nw))));
+          return quaternion(nx / l, ny / l, nz / l, nw / l);
+        }
+        const theta = Math.acos(d);
+        const sin = Math.sin(theta);
+        const a = r(Math.sin(r(r(1 - w) * theta)) / sin);
+        const b = r(Math.sin(r(w * theta)) / sin);
+        return quaternion(r(r(a * inner.x) + r(b * ox)), r(r(a * inner.y) + r(b * oy)), r(r(a * inner.z) + r(b * oz)), r(r(a * inner.w) + r(b * ow)));
+      }
+      const d = r(r(r(inner.x * ox) + r(inner.y * oy)) + r(r(inner.z * oz) + r(inner.w * ow)));
+      if (d > 0.9995) {
+        const nx = r(inner.x + r(w * r(ox - inner.x)));
+        const ny = r(inner.y + r(w * r(oy - inner.y)));
+        const nz = r(inner.z + r(w * r(oz - inner.z)));
+        const nw = r(inner.w + r(w * r(ow - inner.w)));
+        const l = r(Math.sqrt(r(r(nx * nx) + r(ny * ny)) + r(r(nz * nz) + r(nw * nw))));
+        return quaternion(nx / l, ny / l, nz / l, nw / l);
+      }
+      const theta = Math.acos(d);
+      const sin = Math.sin(theta);
+      const a = r(Math.sin(r(r(1 - w) * theta)) / sin);
+      const b = r(Math.sin(r(w * theta)) / sin);
+      return quaternion(r(r(a * inner.x) + r(b * ox)), r(r(a * inner.y) + r(b * oy)), r(r(a * inner.z) + r(b * oz)), r(r(a * inner.w) + r(b * ow)));
+    }
     case "is_equal_approx": {
       const o = same(args[0], "is_equal_approx");
       return V.bool(inner.x === o.x && inner.y === o.y && inner.z === o.z && inner.w === o.w);
