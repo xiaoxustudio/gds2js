@@ -31,6 +31,7 @@ import { ctlMethod } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
 const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "orthonormalize", "get_parent_node_3d"]);
+const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor"]);
 
 function engineError(at: string, message: string): void {
   writeOrderedStderr(stackBlockLines("ERROR", at, [V.str(message)]));
@@ -198,6 +199,10 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
   if ((rec.__gd_engine_class__ === "Node2D" || rec.__gd_engine_class__ === "Control") && NODE2D_METHODS.has(name)) return node2dMethod(target, name, args);
   if (rec.__gd_engine_class__ === "Node3D" && NODE3D_METHODS.has(name)) {
     const hit = node3dMethod(target, name, args);
+    if (hit !== null) return hit;
+  }
+  if (rec.__gd_engine_class__ === "Control" && CTL_METHODS.has(name)) {
+    const hit = ctlMethod(target, name, args);
     if (hit !== null) return hit;
   }
   switch (name) {

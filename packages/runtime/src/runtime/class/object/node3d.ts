@@ -199,15 +199,27 @@ export function node3dRead(target: unknown, name: string): Variant | null {
       return transform3d(b.x0, b.x1, b.x2, b.y0, b.y1, b.y2, b.z0, b.z1, b.z2, s.px, s.py, s.pz);
     }
     case "global_position": {
+      if (!inTree(target)) {
+        globalFace(target);
+        return vector3(0, 0, 0);
+      }
       const g = node3dGlobalParts(target);
       return vector3(g.x, g.y, g.z);
     }
     case "global_rotation": {
+      if (!inTree(target)) {
+        globalFace(target);
+        return vector3(0, 0, 0);
+      }
       const g = node3dGlobalParts(target);
       const e = basisEulerYXZ(g.b);
       return vector3(e[0], e[1], e[2]);
     }
     case "global_rotation_degrees": {
+      if (!inTree(target)) {
+        globalFace(target);
+        return vector3(0, 0, 0);
+      }
       const g = node3dGlobalParts(target);
       const e = basisEulerYXZ(g.b);
       return vector3(degOf(e[0]), degOf(e[1]), degOf(e[2]));
@@ -215,6 +227,10 @@ export function node3dRead(target: unknown, name: string): Variant | null {
     case "global_transform":
       return node3dGlobalTransform(target);
     case "global_basis": {
+      if (!inTree(target)) {
+        globalFace(target);
+        return basis(1, 0, 0, 0, 1, 0, 0, 0, 1);
+      }
       const g = node3dGlobalParts(target);
       return basis(g.b.x0, g.b.x1, g.b.x2, g.b.y0, g.b.y1, g.b.y2, g.b.z0, g.b.z1, g.b.z2);
     }
@@ -265,7 +281,6 @@ export function node3dWrite(target: unknown, name: string, value: Variant): void
     case "global_position": {
       const p = fromVec3(value, "global_position");
       globalFace(target);
-      globalTransformError();
       delete s.b3;
       s.px = p[0];
       s.py = p[1];

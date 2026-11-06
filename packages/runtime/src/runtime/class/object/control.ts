@@ -17,6 +17,10 @@ type CtlStore = {
   scy: number;
   pvx: number;
   pvy: number;
+  minx: number;
+  miny: number;
+  fh: number;
+  fv: number;
 };
 
 function rec(target: unknown): NodeRec {
@@ -29,7 +33,7 @@ function ctl(target: unknown): CtlStore {
   const face = rec(target);
   const store = face.__gd_ctl__ as CtlStore | undefined;
   if (store !== undefined) return store;
-  const fresh: CtlStore = { px: 0, py: 0, sx: 0, sy: 0, rot: 0, scx: 1, scy: 1, pvx: 0, pvy: 0 };
+  const fresh: CtlStore = { px: 0, py: 0, sx: 0, sy: 0, rot: 0, scx: 1, scy: 1, pvx: 0, pvy: 0, minx: 0, miny: 0, fh: 1, fv: 1 };
   face.__gd_ctl__ = fresh;
   return fresh;
 }
@@ -101,6 +105,12 @@ export function ctlRead(target: unknown, name: string): Variant | null {
     }
     case "visible":
       return V.bool(rec(target).__gd_node_visible__ !== false);
+    case "custom_minimum_size":
+      return vector2(s.minx, s.miny);
+    case "size_flags_horizontal":
+      return V.int(s.fh);
+    case "size_flags_vertical":
+      return V.int(s.fv);
     default:
       return null;
   }
@@ -117,6 +127,17 @@ export function ctlMethod(target: unknown, name: string, args: Variant[]): Varia
     case "get_global_transform": {
       if (args.length !== 0) throw new UnsupportedError("ctl-arity", `get_global_transform() 只量过 0 个实参（收到 ${args.length} 个）`);
       return V.object(ctlGlobalTransform(target));
+    }
+    case "get_minimum_size":
+      return vector2(0, 0);
+    case "get_combined_minimum_size": {
+      const s = ctl(target);
+      return vector2(s.minx, s.miny);
+    }
+    case "get_anchor": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("ctl-arg-type", "get_anchor() 的边号只量过数");
+      return V.float(0);
     }
     default:
       return null;
@@ -156,6 +177,18 @@ export function ctlWrite(target: unknown, name: string, value: Variant): void {
     case "visible":
       if (value.t !== Tag.BOOL) throw new UnsupportedError("ctl-arg-type", `Control.visible 的写入只量过 bool（收到 ${tagName(value.t)}）`);
       rec(target).__gd_node_visible__ = value.v === true;
+      return;
+    case "custom_minimum_size": {
+      const p = fromVec2(value, "custom_minimum_size");
+      s.minx = p[0];
+      s.miny = p[1];
+      return;
+    }
+    case "size_flags_horizontal":
+      s.fh = Math.trunc(Number(value.v));
+      return;
+    case "size_flags_vertical":
+      s.fv = Math.trunc(Number(value.v));
       return;
     default:
       throw new UnsupportedError("ctl-prop", `Control.${name} 的写入没量过`);
