@@ -30,6 +30,7 @@ import { GQuaternion, asQuaternion } from "../class/orient/quaternion";
 import { GTransform2D, asTransform2D } from "../class/orient/transform2d";
 
 import { GTransform3D, asTransform3D } from "../class/orient/transform3d";
+import { GProjection, projectionText } from "../class/orient/projection";
 
 import { GPlane, asPlane } from "../class/orient/plane";
 
@@ -452,6 +453,9 @@ export function show(v: Variant, depth = 0): string {
       }
       if (inner instanceof GTransform3D) {
         return transform3dText(inner);
+      }
+      if (inner instanceof GProjection) {
+        return projectionText(inner);
       }
       if (inner instanceof GBasis) {
         return basisText(inner);

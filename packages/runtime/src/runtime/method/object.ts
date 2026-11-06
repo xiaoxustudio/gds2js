@@ -39,6 +39,7 @@ import { GdRegEx, GdRegExMatch, regExNew, regExMatchMethod, regExMethod } from "
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
 import { transform3dMethod } from "../class/orient/transform3d";
+import { GProjection, projectionMethod } from "../class/orient/projection";
 import { basisMethod } from "../class/orient/basis";
 import { nodeMethod } from "../class/object/node-face";
 import { GdSceneTree, registerTreeCallHook, treeMethod } from "../class/object/scene-tree";
@@ -429,6 +430,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
 
   if (inner instanceof GTransform2D) return transform2dMethod(inner, name, args);
   if (inner instanceof GTransform3D) return transform3dMethod(inner, name, args);
+  if (inner instanceof GProjection) return projectionMethod(inner, name, args);
   if (inner instanceof GQuaternion) return quaternionMethod(inner, name, args);
   if (inner instanceof GPlane) return planeMethod(inner, name, args);
   if (inner instanceof GAABB) return aabbMethod(inner, name, args);

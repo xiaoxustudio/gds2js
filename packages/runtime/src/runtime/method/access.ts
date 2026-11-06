@@ -32,6 +32,7 @@ import { planeReadProp } from "../class/orient/plane";
 import { quaternionReadProp } from "../class/orient/quaternion";
 import { transform2dReadProp } from "../class/orient/transform2d";
 import { transform3dReadProp, transform3dWriteProp } from "../class/orient/transform3d";
+import { GProjection, projectionReadProp } from "../class/orient/projection";
 import { basisReadProp, basisWriteProp } from "../class/orient/basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/object/node";
 import { registerTweenHooks } from "../class/object/tween";
@@ -499,6 +500,12 @@ export function attribute(raw: unknown, name: string): unknown {
       const part = transform3dReadProp(t3o, name);
       if (part !== null) return part;
       throw new UnsupportedError("transform3d-prop", `Transform3D.${name} 的属性读没量过`);
+    }
+    const pj = obj.v instanceof GProjection ? (obj.v as GProjection) : null;
+    if (pj !== null) {
+      const part = projectionReadProp(pj, name);
+      if (part !== null) return part;
+      throw new UnsupportedError("projection-prop", `Projection.${name} 的属性读没量过`);
     }
     const qq = obj.v instanceof GQuaternion ? (obj.v as GQuaternion) : null;
     if (qq !== null) {

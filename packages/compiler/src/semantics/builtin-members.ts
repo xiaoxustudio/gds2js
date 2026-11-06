@@ -174,7 +174,7 @@ export const UTILITY_ARITY: Record<string, [number, number | null, string]> = {
 export const BUILTIN_TYPE_NAMES: ReadonlySet<string> = new Set([
   "int", "float", "bool", "String", "StringName", "NodePath", "Array", "Dictionary",
   "Color", "Rect2", "Rect2i", "Vector2", "Vector2i", "Vector3", "Vector3i", "Vector4", "Vector4i",
-  "Transform2D", "Transform3D", "Basis", "Plane", "Quaternion", "AABB", "RID",
+  "Transform2D", "Transform3D", "Projection", "Basis", "Plane", "Quaternion", "AABB", "RID",
   "Callable", "Signal",
   "PackedByteArray", "PackedInt32Array", "PackedInt64Array", "PackedFloat32Array", "PackedFloat64Array",
   "PackedStringArray", "PackedVector2Array", "PackedVector3Array", "PackedColorArray",

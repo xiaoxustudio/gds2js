@@ -21,6 +21,7 @@ export * from "./class/orient/plane";
 export * from "./class/orient/quaternion";
 export * from "./class/orient/transform2d";
 export * from "./class/orient/transform3d";
+export * from "./class/orient/projection";
 export * from "./class/host/json";
 export { registerHostIo, setHostProjectName } from "./host-io";
 export type { HostIo } from "./host-io";

@@ -792,6 +792,7 @@ function slotForK(kind: string | null, slot: string): boolean {
   if (slot === "R2") return kind === "Rect2";
   if (slot === "R2I") return kind === "Rect2i";
   if (slot === "V3") return kind === "Vector3";
+  if (slot === "V4") return kind === "Vector4";
   return kind === slot;
 }
 

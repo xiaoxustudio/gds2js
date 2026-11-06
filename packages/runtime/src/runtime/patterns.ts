@@ -30,6 +30,7 @@ import { GRect2, GRect2i } from "./class/shape/rect";
 import { GTransform2D } from "./class/orient/transform2d";
 
 import { GTransform3D } from "./class/orient/transform3d";
+import { GProjection } from "./class/orient/projection";
 
 export type Pat =
   | { k: "wild" }
@@ -135,6 +136,7 @@ const MATH_TYPES: Record<string, (v: Variant) => boolean> = {
   Quaternion: (v) => v.t === Tag.OBJECT && v.v instanceof GQuaternion,
   Transform2D: (v) => v.t === Tag.OBJECT && v.v instanceof GTransform2D,
   Transform3D: (v) => v.t === Tag.OBJECT && v.v instanceof GTransform3D,
+  Projection: (v) => v.t === Tag.OBJECT && v.v instanceof GProjection,
   Basis: (v) => v.t === Tag.OBJECT && v.v instanceof GBasis,
 };
 
@@ -291,6 +293,7 @@ export function typeOf(raw: unknown): Variant {
   if (v.t === Tag.OBJECT && v.v instanceof GRect2i) return V.int(8);
   if (v.t === Tag.OBJECT && v.v instanceof GTransform2D) return V.int(11);
   if (v.t === Tag.OBJECT && v.v instanceof GTransform3D) return V.int(18);
+  if (v.t === Tag.OBJECT && v.v instanceof GProjection) return V.int(19);
   if (v.t === Tag.OBJECT && v.v instanceof GBasis) return V.int(17);
   if (v.t === Tag.OBJECT && v.v instanceof GQuaternion) return V.int(15);
   if (v.t === Tag.OBJECT && v.v instanceof GPlane) return V.int(14);

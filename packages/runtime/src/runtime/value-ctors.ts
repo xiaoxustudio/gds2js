@@ -22,6 +22,7 @@ import { GRect2, GRect2i } from "./class/shape/rect";
 import { GTransform2D } from "./class/orient/transform2d";
 
 import { GTransform3D } from "./class/orient/transform3d";
+import { GProjection } from "./class/orient/projection";
 
 registerVarToStrValueHook((o) => {
   if (o instanceof GVector2) return `Vector2(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)})`;
@@ -37,6 +38,7 @@ registerVarToStrValueHook((o) => {
   if (o instanceof GTransform3D) {
     return `Transform3D(${rtosFix(o.x0, true)}, ${rtosFix(o.y0, true)}, ${rtosFix(o.z0, true)}, ${rtosFix(o.x1, true)}, ${rtosFix(o.y1, true)}, ${rtosFix(o.z1, true)}, ${rtosFix(o.x2, true)}, ${rtosFix(o.y2, true)}, ${rtosFix(o.z2, true)}, ${rtosFix(o.ox, true)}, ${rtosFix(o.oy, true)}, ${rtosFix(o.oz, true)})`;
   }
+  if (o instanceof GProjection) return `Projection(${rtosFix(o.x.x, true)}, ${rtosFix(o.x.y, true)}, ${rtosFix(o.x.z, true)}, ${rtosFix(o.x.w, true)}, ${rtosFix(o.y.x, true)}, ${rtosFix(o.y.y, true)}, ${rtosFix(o.y.z, true)}, ${rtosFix(o.y.w, true)}, ${rtosFix(o.z.x, true)}, ${rtosFix(o.z.y, true)}, ${rtosFix(o.z.z, true)}, ${rtosFix(o.z.w, true)}, ${rtosFix(o.w.x, true)}, ${rtosFix(o.w.y, true)}, ${rtosFix(o.w.z, true)}, ${rtosFix(o.w.w, true)})`;
   if (o instanceof GQuaternion) return `Quaternion(${rtosFix(o.x, true)}, ${rtosFix(o.y, true)}, ${rtosFix(o.z, true)}, ${rtosFix(o.w, true)})`;
   if (o instanceof GPlane) return `Plane(${rtosFix(o.nx, true)}, ${rtosFix(o.ny, true)}, ${rtosFix(o.nz, true)}, ${rtosFix(o.d, true)})`;
   if (o instanceof GBasis) return `Basis(${rtosFix(o.x0, true)}, ${rtosFix(o.y0, true)}, ${rtosFix(o.z0, true)}, ${rtosFix(o.x1, true)}, ${rtosFix(o.y1, true)}, ${rtosFix(o.z1, true)}, ${rtosFix(o.x2, true)}, ${rtosFix(o.y2, true)}, ${rtosFix(o.z2, true)})`;
