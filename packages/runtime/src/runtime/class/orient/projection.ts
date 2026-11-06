@@ -274,6 +274,16 @@ export function projectionStatic(name: string, args: Variant[]): Variant {
         new GVector4(Math.fround(-(right + left) / rl), Math.fround(-(top + bottom) / tb), Math.fround(-(zf + zn) / nf), 1),
       );
     }
+    case "create_depth_correction": {
+      const flip = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return projection(new GVector4(1, 0, 0, 0), new GVector4(0, flip ? -1 : 1, 0, 0), new GVector4(0, 0, -0.5, 0), new GVector4(0, 0, 0.5, 1));
+    }
+    case "create_light_atlas_rect": {
+      const r = args[0];
+      if (r === undefined) throw new UnsupportedError("projection-arity", "create_light_atlas_rect() 少了 Rect2");
+      const v = r.v as { x: number; y: number; w: number; h: number };
+      return projection(new GVector4(v.w, 0, 0, 0), new GVector4(0, v.h, 0, 0), new GVector4(0, 0, 1, 0), new GVector4(v.x, v.y, 0, 1));
+    }
     case "create_frustum": {
       return frustum(num(args[0], name), num(args[1], name), num(args[2], name), num(args[3], name), num(args[4], name), num(args[5], name));
     }
