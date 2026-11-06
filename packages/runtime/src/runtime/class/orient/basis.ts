@@ -305,6 +305,19 @@ export function basisMethod(inner: GBasis, name: string, args: Variant[]): Varia
       if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.scaled_local() 的实参只量过 Vector3");
       return basis(r(inner.x0 * v.x), r(inner.x1 * v.x), r(inner.x2 * v.x), r(inner.y0 * v.y), r(inner.y1 * v.y), r(inner.y2 * v.y), r(inner.z0 * v.z), r(inner.z1 * v.z), r(inner.z2 * v.z));
     }
+    case "get_euler": {
+      const e = basisEulerYXZ(inner);
+      return vector3(e[0], e[1], e[2]);
+    }
+    case "get_rotation_quaternion":
+      return V.object(basisToQuaternion(inner));
+    case "slerp": {
+      const o = args[0];
+      if (o === undefined || !(o.v instanceof GBasis)) throw new UnsupportedError("basis-arg-type", "Basis.slerp() 的实参只量过 Basis");
+      const t = args[1];
+      if (t === undefined || (t.t !== Tag.INT && t.t !== Tag.FLOAT)) throw new UnsupportedError("basis-arg-type", "Basis.slerp() 的权重只量过数");
+      return basisSlerp(inner, o.v as GBasis, Number(t.v));
+    }
     case "tdotx": {
       const v = asVec3(args[0] as Variant);
       if (v === null) throw new UnsupportedError("basis-arg-type", "Basis.tdotx() 的实参只量过 Vector3");
@@ -323,4 +336,69 @@ export function basisMethod(inner: GBasis, name: string, args: Variant[]): Varia
     default:
       throw new UnsupportedError("basis-method", `Basis.${name}() 这一支没量过（get_euler / is_conformal / scaled / slerp / looking_at / orthonormalized 那几支还没读数）`);
   }
+}
+export function basisToQuaternion(b: GBasis): GQuaternion {
+  const trace = r(r(b.x0 + b.y1) + b.z2);
+  if (trace > 0) {
+    const s = r(Math.sqrt(trace + 1) * 2);
+    return new GQuaternion(r((b.y2 - b.z1) / s), r((b.z0 - b.x2) / s), r((b.x1 - b.y0) / s), r(0.25 * s));
+  }
+  if (b.x0 > b.y1 && b.x0 > b.z2) {
+    const s = r(Math.sqrt(1 + b.x0 - b.y1 - b.z2) * 2);
+    return new GQuaternion(r(0.25 * s), r((b.y0 + b.x1) / s), r((b.z0 + b.x2) / s), r((b.y2 - b.z1) / s));
+  }
+  if (b.y1 > b.z2) {
+    const s = r(Math.sqrt(1 + b.y1 - b.x0 - b.z2) * 2);
+    return new GQuaternion(r((b.y0 + b.x1) / s), r(0.25 * s), r((b.z1 + b.y2) / s), r((b.z0 - b.x2) / s));
+  }
+  const s = r(Math.sqrt(1 + b.z2 - b.x0 - b.y1) * 2);
+  return new GQuaternion(r((b.z0 + b.x2) / s), r((b.z1 + b.y2) / s), r(0.25 * s), r((b.x1 - b.y0) / s));
+}
+
+function numer(v: Variant | undefined, at: string): number {
+  if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("basis-arg", `Basis.${at} 只量过数`);
+  return Number(v.v);
+}
+
+export function basisStatic(name: string, args: Variant[]): Variant {
+  if (name === "from_scale") {
+    const s = asVec3(args[0] as Variant);
+    if (s === null) throw new UnsupportedError("basis-arg", "Basis.from_scale() 只量过 Vector3");
+    return basis(s.x, 0, 0, 0, s.y, 0, 0, 0, s.z);
+  }
+  if (name === "from_euler") {
+    const e = asVec3(args[0] as Variant);
+    if (e === null) throw new UnsupportedError("basis-arg", "Basis.from_euler() 只量过 Vector3");
+    const rx = axisAngleBasis(1, 0, 0, e.x);
+    const ry = axisAngleBasis(0, 1, 0, e.y);
+    const rz = axisAngleBasis(0, 0, 1, e.z);
+    return basisMul(ry, asBasis(basisMul(rx, rz)) as GBasis);
+  }
+  throw new UnsupportedError("basis-static", `Basis.${name}() 这一支没量过`);
+}
+
+export function basisSlerp(a: GBasis, b: GBasis, t: number): Variant {
+  const qa = basisToQuaternion(a);
+  const qb = basisToQuaternion(b);
+  let bx = qb.x;
+  let by = qb.y;
+  let bz = qb.z;
+  let bw = qb.w;
+  let d = r(r(r(qa.x * bx) + r(qa.y * by)) + r(r(qa.z * bz) + r(qa.w * bw)));
+  if (d < 0) {
+    bx = r(-bx);
+    by = r(-by);
+    bz = r(-bz);
+    bw = r(-bw);
+    d = r(-d);
+  }
+  if (d > 0.9995) {
+    const q = new GQuaternion(r(qa.x + r(t * r(bx - qa.x))), r(qa.y + r(t * r(by - qa.y))), r(qa.z + r(t * r(bz - qa.z))), r(qa.w + r(t * r(bw - qa.w))));
+    return basisFromQuaternion(q);
+  }
+  const theta = Math.acos(d);
+  const sin = Math.sin(theta);
+  const ka = r(Math.sin(r(r(1 - t) * theta)) / sin);
+  const kb = r(Math.sin(r(t * theta)) / sin);
+  return basisFromQuaternion(new GQuaternion(r(r(ka * qa.x) + r(kb * bx)), r(r(ka * qa.y) + r(kb * by)), r(r(ka * qa.z) + r(kb * bz)), r(r(ka * qa.w) + r(kb * bw))));
 }

@@ -2,7 +2,6 @@ import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { num6Text } from "../../numfmt";
 import { asVec3, vector3 } from "../vector/vector3";
-import { asBasis, basisEulerYXZ, basisFromQuaternion } from "./basis";
 
 export class GQuaternion {
   x: number;
@@ -131,12 +130,6 @@ export function quaternionMethod(inner: GQuaternion, name: string, args: Variant
       d = r(d + r(inner.w * o.w));
       const k = Math.max(-1, Math.min(1, r(r(2 * d * d) - 1)));
       return V.float(r(Math.acos(k)));
-    }
-    case "get_euler": {
-      const b = asBasis(basisFromQuaternion(inner));
-      if (b === null) throw new UnsupportedError("quaternion-euler", "get_euler() 的 basis 构造失败");
-      const e = basisEulerYXZ(b);
-      return vector3(e[0], e[1], e[2]);
     }
     case "slerp":
     case "slerpni": {
