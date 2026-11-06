@@ -113,6 +113,62 @@ export function transform2dMethod(inner: GTransform2D, name: string, args: Varia
       const s = r(Math.sin(Number(a.v)));
       return transform2d(r(r(c * xx) - r(s * xy)), r(r(s * xx) + r(c * xy)), r(r(c * yx) - r(s * yy)), r(r(s * yx) + r(c * yy)), r(r(c * inner.ox) - r(s * inner.oy)), r(r(s * inner.ox) + r(c * inner.oy)));
     }
+    case "basis_xform": {
+      const v = asVec2(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("transform2d-arg-type", "Transform2D.basis_xform() 的实参只量过 Vector2");
+      return vector2(r(r(xx * v.x) + r(yx * v.y)), r(r(xy * v.x) + r(yy * v.y)));
+    }
+    case "basis_xform_inv": {
+      const v = asVec2(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("transform2d-arg-type", "Transform2D.basis_xform_inv() 的实参只量过 Vector2");
+      return vector2(r(r(xx * v.x) + r(xy * v.y)), r(r(yx * v.x) + r(yy * v.y)));
+    }
+    case "get_origin":
+      return vector2(inner.ox, inner.oy);
+    case "get_skew":
+      return V.float(r(r(Math.atan2(yy, yx) - Math.atan2(xy, xx)) - r(Math.PI / 2)));
+    case "inverse": {
+      const ox = r(-(r(xx * inner.ox) + r(xy * inner.oy)));
+      const oy = r(-(r(yx * inner.ox) + r(yy * inner.oy)));
+      return transform2d(xx, yx, xy, yy, ox, oy);
+    }
+    case "orthonormalized": {
+      const lx = r(Math.sqrt(r(xx * xx) + r(xy * xy)));
+      if (lx === 0) throw new UnsupportedError("transform2d-inverse", "orthonormalized() 的零列那一形没量过");
+      const nx = r(xx / lx);
+      const ny = r(xy / lx);
+      const proj = r(nx * yx + ny * yy);
+      const oy1 = r(yy - r(proj * ny));
+      const oy0 = r(yx - r(proj * nx));
+      const ly = r(Math.sqrt(r(oy0 * oy0) + r(oy1 * oy1)));
+      return transform2d(nx, ny, r(oy0 / ly), r(oy1 / ly), inner.ox, inner.oy);
+    }
+    case "is_equal_approx": {
+      const o = args[0];
+      if (o === undefined || !(o.v instanceof GTransform2D)) throw new UnsupportedError("transform2d-arg-type", "Transform2D.is_equal_approx() 的实参只量过 Transform2D");
+      const b = o.v as GTransform2D;
+      const eq = (m: number, n: number): boolean => Math.abs(m - n) < 1e-5;
+      return V.bool(eq(xx, b.xx) && eq(xy, b.xy) && eq(yx, b.yx) && eq(yy, b.yy) && eq(inner.ox, b.ox) && eq(inner.oy, b.oy));
+    }
+    case "is_finite":
+      return V.bool([xx, xy, yx, yy, inner.ox, inner.oy].every((n) => Number.isFinite(n)));
+    case "rotated_local": {
+      const a = args[0] as Variant;
+      if (a === undefined || (a.t !== Tag.INT && a.t !== Tag.FLOAT)) throw new UnsupportedError("transform2d-arg-type", "rotated_local() 的实参只量过数");
+      const c = r(Math.cos(Number(a.v)));
+      const s = r(Math.sin(Number(a.v)));
+      return transform2d(r(r(xx * c) + r(yx * s)), r(r(xy * c) + r(yy * s)), r(r(-xx * s) + r(yx * c)), r(r(-xy * s) + r(yy * c)), inner.ox, inner.oy);
+    }
+    case "scaled_local": {
+      const v = asVec2(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("transform2d-arg-type", "scaled_local() 的实参只量过 Vector2");
+      return transform2d(r(xx * v.x), r(xy * v.x), r(yx * v.y), r(yy * v.y), inner.ox, inner.oy);
+    }
+    case "translated_local": {
+      const v = asVec2(args[0] as Variant);
+      if (v === null) throw new UnsupportedError("transform2d-arg-type", "translated_local() 的实参只量过 Vector2");
+      return transform2d(xx, xy, yx, yy, r(inner.ox + r(r(xx * v.x) + r(yx * v.y))), r(inner.oy + r(r(xy * v.x) + r(yy * v.y))));
+    }
     case "is_conformal":
       return V.bool(r(r(xx * yx) + r(xy * yy)) === 0 && r(r(xx * xx) + r(xy * xy)) === r(r(yx * yx) + r(yy * yy)));
     default:
