@@ -1,11 +1,11 @@
 // 由 gds2js 从 main.gd 编译生成 —— 不要手改。
 
-import * as rt from "gds2js/runtime";
-import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "gds2js/host";
+import * as rt from "../../../packages/runtime/src/runtime/index";
+import { print, printJoined, printRaw, printErr, printVerbose, printRich, printDebug, SceneTree } from "../../../tools/harness/scene-tree";
 
 export class Main extends SceneTree {
   __gd_fields__() {
-    const __gd_frame = rt.frameEnter("Main.gd", "@implicit_new");
+    const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
@@ -22,7 +22,7 @@ export class Main extends SceneTree {
 
     override _initialize(): Promise<void> { return this.__gd__initialize(); }
   async __gd__initialize(): Promise<void> {
-    const __gd_frame = rt.frameEnter("Main.gd", "_initialize");
+    const __gd_frame = rt.frameEnter("res://main.gd", "_initialize");
     try {
       rt.frameLine(3);
       print(rt.showArgs([rt.V.str("d0|"), rt.projectionStatic("create_depth_correction", [rt.V.bool(false)])]));
@@ -50,10 +50,11 @@ export class Main extends SceneTree {
 }
 
 const __gd_d_Main = rt.defineClass(Main, () => new Main(), (o) => o instanceof Main);
-rt.registerDictIdentity(__gd_d_Main, null, "", [], {}, (o) => { const s = o as Main; return []; });
+rt.registerDictIdentity(__gd_d_Main, "res://main.gd", "", [], {}, (o) => { const s = o as Main; return []; });
 rt.registerMethodArities(__gd_d_Main, { "_initialize": [0, 0] });
 rt.registerNativeBase(__gd_d_Main, "SceneTree");
-rt.registerScriptLabel(__gd_d_Main, "Main.gd");
+rt.registerScriptLabel(__gd_d_Main, "main.gd");
+rt.registerScript("res://main.gd", __gd_d_Main);
 const __gd_entry = new Main();
 try {
   await __gd_entry.run();
