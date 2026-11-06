@@ -3,6 +3,7 @@ import { UnsupportedError } from "../../errors";
 import { strVec2 } from "../../numfmt";
 import { asTransform3D, type GTransform3D } from "./transform3d";
 import { asVec4, GVector4, vector4 } from "../vector/vector4";
+import { vector2 } from "../vector/vector2";
 
 export class GProjection {
   x: GVector4;
@@ -121,9 +122,45 @@ export function projectionMethod(target: GProjection, name: string, args: Varian
       for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (!eq((inv[r] as number[])[c] as number, (m[c] as number[])[r] as number)) return V.bool(false);
       return V.bool(true);
     }
+    case "get_z_near":
+    case "get_z_far": {
+      const zz = target.z.z;
+      const wz = target.w.z;
+      const ortho = Math.abs(target.z.w) < 1e-6 && Math.abs(target.w.w - 1) < 1e-6;
+      if (name === "get_z_near") return V.float(ortho ? Math.fround((wz + 1) / zz) : Math.fround(wz / (zz - 1)));
+      return V.float(ortho ? Math.fround((wz - 1) / zz) : Math.fround(wz / (zz + 1)));
+    }
+    case "get_fov":
+      return V.float(Math.fround(2 * Math.atan(1 / Math.abs(target.x.x)) * 180 / Math.PI));
+    case "get_fovy": {
+      const fovx = args[0];
+      const aspect = args[1];
+      if (fovx === undefined || aspect === undefined) throw new UnsupportedError("projection-arity", "get_fovy() 需要 fovx 与 aspect");
+      const rad = (Number(fovx.v) * Math.PI) / 180;
+      return V.float(Math.fround(2 * Math.atan(Math.tan(rad / 2) * Number(aspect.v)) * 180 / Math.PI));
+    }
+    case "get_viewport_half_extents": {
+      const near = target.w.z / (target.z.z - 1);
+      return vector2(Math.fround(near / Math.abs(target.x.x)), Math.fround(near / Math.abs(target.y.y)));
+    }
+    case "get_far_plane_half_extents": {
+      const far = target.w.z / (target.z.z + 1);
+      return vector2(Math.fround(far / Math.abs(target.x.x)), Math.fround(far / Math.abs(target.y.y)));
+    }
+    case "get_pixels_per_meter": {
+      const w = args[0];
+      if (w === undefined) throw new UnsupportedError("projection-arity", "get_pixels_per_meter() 少了宽度");
+      const near = target.w.z / (target.z.z - 1);
+      const half = Math.fround(near / Math.abs(target.x.x));
+      return V.int(Math.floor(Number(w.v) / (2 * half)));
+    }
+    case "get_lod_multiplier": {
+      const fov = 2 * Math.atan(1 / Math.abs(target.x.x));
+      return V.float(Math.fround(2 * Math.tan(fov / 2)));
+    }
     case "get_aspect": {
-      const len = (v: GVector4): number => Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-      return V.float(len(target.y) / len(target.x));
+      const len = (v: GVector4): number => Math.fround(Math.sqrt(Math.fround(Math.fround(Math.fround(v.x * v.x) + Math.fround(v.y * v.y)) + Math.fround(v.z * v.z))));
+      return V.float(Math.fround(len(target.y) / len(target.x)));
     }
     case "determinant": {
       if (args.length !== 0) throw new UnsupportedError("projection-arity", "determinant() 不接受实参");
