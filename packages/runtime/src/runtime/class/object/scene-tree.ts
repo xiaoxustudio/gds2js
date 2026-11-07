@@ -181,6 +181,15 @@ export function treeMethod(tree: GdSceneTree, name: string, args: Variant[]): Va
       tree.timers.push(timer);
       return V.object(timer);
     }
+    case "get_current_scene":
+      return tree.currentScene === null ? V.object(NULL_OBJECT) : V.object(tree.currentScene);
+    case "queue_delete": {
+      const obj = args[0];
+      if (obj === undefined) throw new UnsupportedError("scene-tree-arity", "queue_delete() 少了实参");
+      const face = nodeFaceOf(obj.t === Tag.OBJECT ? (obj.v as object) : null);
+      if (face !== null) face.__gd_node_queued__ = true;
+      return V.nil();
+    }
     case "set_current_scene": {
       treeSetCurrentScene(tree, args[0] as Variant);
       return V.nil();

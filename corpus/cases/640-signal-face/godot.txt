@@ -1,0 +1,15 @@
+s|ready|true
+s|renamed|true
+s|tree_entered|true
+s|tree_exiting|true
+s|tree_exited|true
+s|child_entered_tree|true
+s|child_exiting_tree|true
+s|child_order_changed|true
+s|replacing_by|true
+s|property_list_changed|true
+s|script_changed|true
+s|visibility_changed|true
+s|resized|true
+s|size_flags_changed|true
+s|minimum_size_changed|true

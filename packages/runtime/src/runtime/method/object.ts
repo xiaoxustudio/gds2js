@@ -447,7 +447,13 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GdDir) return dirMethod(inner, name, args);
   if (inner instanceof GdRegEx) return regExMethod(inner, name, args);
   if (inner instanceof GdRegExMatch) return regExMatchMethod(inner, name, args);
-  if (inner instanceof GdSceneTree) return treeMethod(inner, name, args);
+  if (inner instanceof GdSceneTree) {
+    if (name === "connect" || name === "disconnect" || name === "emit_signal" || name === "has_signal" || name === "is_connected"
+      || name === "add_user_signal" || name === "has_user_signal" || name === "remove_user_signal") {
+      return nodeMethod(inner, name, args);
+    }
+    return treeMethod(inner, name, args);
+  }
   if (isEngineNode(inner)) return nodeMethod(inner, name, args);
   throw new UnsupportedError("object-method", `对象上的 ${name}() 未实现`);
 }

@@ -81,6 +81,15 @@ export const NODE_SIGNALS: ReadonlySet<string> = new Set([
   "node_added",
   "node_removed",
   "tree_changed",
+  "scene_changed",
+  "tree_process_mode_changed",
+  "node_renamed",
+  "visibility_changed",
+  "resized",
+  "size_flags_changed",
+  "minimum_size_changed",
+  "property_list_changed",
+  "script_changed",
 ]);
 
 const USER_SIGNALS = new WeakMap<object, Set<string>>();

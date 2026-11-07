@@ -172,6 +172,12 @@ function classifyBase(row) {
       ? { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(`${o}.${n} 在类常量表里，但没有逐条 golden 证据`) }
       : { status: "missing", ev: note(`${o}.${n} 未进类常量表`) };
   }
+  if (k === "s") {
+    const hit = inv.signals[o]?.includes(n) ?? false;
+    return hit
+      ? { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(`${o}.${n} 在信号表里，但没有逐条 golden 证据`) }
+      : { status: "missing", ev: note(`${o}.${n} 未进信号表`) };
+  }
   if (ENUM.has(k)) return { status: "missing", ev };
   return { status: "missing", ev: note("这一类引擎面未建模") };
 }

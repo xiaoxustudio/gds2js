@@ -64,6 +64,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/object/control.ts", fn: "ctlRead", owners: ["Control"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/object/control.ts", fn: "ctlWrite", owners: ["Control"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/object/scene-tree.ts", fn: "treeMethod", owners: ["SceneTree"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/object/scene-tree.ts", fn: "treeReadProp", owners: ["SceneTree"], kind: "prop" },
   { file: "packages/runtime/src/runtime/class/host/file-access.ts", fn: "fileAccessStatic", owners: ["FileAccess"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/file-access.ts", fn: "dirAccessStatic", owners: ["DirAccess"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/file-access.ts", fn: "fileMethod", owners: ["FileAccess"], kind: "method" },
@@ -166,6 +167,15 @@ function collectLabels(file: string, fnName: string): Set<string> {
   return out;
 }
 
+const SIGNALS: Readonly<Record<string, readonly string[]>> = {
+  Node: ["ready", "renamed", "tree_entered", "tree_exiting", "tree_exited", "child_entered_tree", "child_exiting_tree", "child_order_changed", "replacing_by"],
+  Node2D: ["visibility_changed"],
+  Node3D: ["visibility_changed"],
+  Control: ["resized", "size_flags_changed", "minimum_size_changed"],
+  Object: ["property_list_changed", "script_changed"],
+  SceneTree: ["node_added", "node_removed", "node_renamed", "physics_frame", "process_frame", "scene_changed", "tree_changed", "tree_process_mode_changed"],
+};
+
 export function buildInventories() {
   const methods = Object.create(null);
   const props = Object.create(null);
@@ -196,6 +206,7 @@ export function buildInventories() {
     },
     ctors: Object.keys(CTOR_ARMS).sort(),
     classConsts: ENGINE_CLASS_CONSTS,
+    signals: SIGNALS,
     builtinTypes: [...new Set([...Object.keys(BUILTIN_METHODS), ...Object.keys(BUILTIN_PROPS)])].sort(),
   };
 }
