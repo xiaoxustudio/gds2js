@@ -230,6 +230,25 @@ export const KERNELS: Kernel[] = [
 	return s
 `,
   },
+  {
+    name: "field-init",
+    reps: 5,
+    helpers: `class Holder:
+	var a = 1
+	var b = 2
+	var c = 3
+
+`,
+    body: `
+	var s = 0
+	var i = 0
+	while i < 100000:
+		var h = Holder.new()
+		s += h.a + h.b + h.c
+		i += 1
+	return s
+`,
+  },
 ];
 
 export interface BenchRow {
