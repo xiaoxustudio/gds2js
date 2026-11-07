@@ -10,7 +10,7 @@ import { CTOR_REFUSED, CUBIC_NAME_ARG_FUNCS, FUNC_ARG_SLOTS, GLOBAL_NUM_ARITH, G
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../semantics/arg-types/static-arg-types";
 import { FACE_ARG_AS, FACE_ARG_TYPES } from "../semantics/arg-types/face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "../semantics/arg-types/instance-arg-types";
-import { isGlobalConst, isGlobalEnumName, isGlobalEnumPrefix } from "../lower/globals";
+import { globalEnumValue, isGlobalConst, isGlobalEnumName, isGlobalEnumPrefix } from "../lower/globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
   DERIVED_ARG_TYPES,
@@ -249,7 +249,12 @@ export function walkStmt(
       walkExpr(s.expr, scope, coroutines, diags, true);
       break;
     case "assign":
-      walkExpr(s.target, scope, coroutines, diags);
+      if (s.target.kind === "ident" && !scope.has(s.target.name) && isGlobalEnumName(s.target.name)) {
+        diags.push({ code: "global-enum-standalone", message: `Global enum "${s.target.name}" cannot be used on its own.`, loc: s.target.loc });
+        diags.push({ code: "global-enum-constant", message: "Cannot assign a new value to a constant.", loc: s.target.loc });
+      } else {
+        walkExpr(s.target, scope, coroutines, diags);
+      }
       walkExpr(s.value, scope, coroutines, diags);
       break;
     case "return":
@@ -356,6 +361,10 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
         }
         return;
       }
+      if (!scope.has(e.name) && isGlobalEnumName(e.name)) {
+        diags.push({ code: "global-enum-standalone", message: `Global enum "${e.name}" cannot be used on its own.`, loc: e.loc });
+        return;
+      }
       if (!scope.has(e.name) && !isGlobalConst(e.name) && !isGlobalEnumName(e.name)) {
         if (CLASS_FACE_RECEIVERS.has(e)) return;
         if (GLOBAL_VALUE_NAMES.has(e.name)) run.globalValueReads.add(gvKey(run, e.name, e.loc.line, e.loc.col));
@@ -426,7 +435,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
       return;
 
     case "index":
-      walkExpr(e.obj, scope, coroutines, diags);
+      if (!(e.obj.kind === "ident" && !scope.has(e.obj.name) && isGlobalEnumName(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
       walkExpr(e.index, scope, coroutines, diags);
       return;
 
@@ -440,7 +449,19 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
           return;
         }
       }
-      if (e.obj.kind === "ident" && isGlobalEnumPrefix(e.obj.name) && isGlobalEnumName(`${e.obj.name}.${e.name}`)) return;
+      const owner =
+        e.obj.kind === "ident" ? { name: e.obj.name, root: e.obj.name }
+        : e.obj.kind === "attribute" && e.obj.obj.kind === "ident" ? { name: `${e.obj.obj.name}.${e.obj.name}`, root: e.obj.obj.name }
+        : null;
+      if (owner !== null && !scope.has(owner.root) && isGlobalEnumName(owner.name)) {
+        if (globalEnumValue(owner.name, e.name) !== null) return;
+        diags.push({ code: "global-enum-member", message: `Cannot find member "${e.name}" in base "${owner.name}".`, loc: e.loc });
+        return;
+      }
+      if (e.obj.kind === "ident" && !scope.has(e.obj.name) && isGlobalEnumPrefix(e.obj.name) && isGlobalEnumName(`${e.obj.name}.${e.name}`)) {
+        diags.push({ code: "global-enum-standalone", message: `Type "${e.name}" in base "${e.obj.name}" cannot be used on its own.`, loc: e.loc });
+        return;
+      }
       if (staticMemberFn(e.obj) === null && !(e.obj.kind === "ident" && PACK_TYPE_NAMES.has(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
       return;
     }
