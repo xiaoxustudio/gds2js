@@ -140,7 +140,9 @@ function emitStmtInnerRaw(s: Stmt, voidReturn: boolean): string[] {
         }
         return [`return ${rr.code};`];
       }
-      const code = emitExpr(s.value);
+      const cast = declaredCast(ctx.CURRENT_RET_ANN);
+      const raw = emitExpr(s.value);
+      const code = cast === null ? raw : `${cast}(${raw})`;
       const text = ctx.LAMBDA_DEPTH > 0 ? null : containerAnnText(ctx.CURRENT_RET_ANN);
       const wrapped = containerSlot(code, s.value, text, "returnContainer");
       return voidReturn ? [`return void (${wrapped});`] : [`return ${wrapped};`];

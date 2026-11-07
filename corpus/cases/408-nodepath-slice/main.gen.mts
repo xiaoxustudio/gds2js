@@ -24,7 +24,7 @@ export class Main extends SceneTree {
     const __gd_frame = rt.frameEnter("res://main.gd", "fmt");
     try {
       rt.frameLine(4);
-      return rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.strBuiltin([r]), rt.V.str("!")), rt.strBuiltin([rt.method(r, "get_name_count", [])])), rt.V.str("!")), rt.strBuiltin([rt.method(r, "get_subname_count", [])])), rt.V.str("!")), rt.strBuiltin([rt.method(r, "is_absolute", [])])), rt.V.str("!")), rt.strBuiltin([rt.method(r, "is_empty", [])])), rt.V.str("!")), rt.strBuiltin([rt.typeOf(r)]));
+      return rt.strOf(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.strBuiltin([r]), rt.V.str("!")), rt.strBuiltin([rt.method(r, "get_name_count", [])])), rt.V.str("!")), rt.strBuiltin([rt.method(r, "get_subname_count", [])])), rt.V.str("!")), rt.strBuiltin([rt.method(r, "is_absolute", [])])), rt.V.str("!")), rt.strBuiltin([rt.method(r, "is_empty", [])])), rt.V.str("!")), rt.strBuiltin([rt.typeOf(r)])));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");

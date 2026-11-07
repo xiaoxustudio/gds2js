@@ -132,7 +132,7 @@ class Base extends rt.GdScriptObject {
       rt.frameLine(10);
       print(rt.showArgs([rt.V.str("n2 init "), who]));
       rt.frameLine(11);
-      return rt.V.int(1);
+      return rt.toInt(rt.V.int(1));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.int(0);

@@ -33,79 +33,79 @@ export class Main extends SceneTree {
         const __m0 = rt.matchPattern(s, rt.patConst(rt.V.int(rt.fast.iAddC(1, 1))));
         if (__m0 !== null) {
           rt.frameLine(6);
-          return rt.V.str("A-sum");
+          return rt.strOf(rt.V.str("A-sum"));
           break;
         }
         const __m1 = rt.matchPattern(s, rt.patConst(rt.V.int(rt.fast.iSubC(3, 2))));
         if (__m1 !== null) {
           rt.frameLine(8);
-          return rt.V.str("A-sub");
+          return rt.strOf(rt.V.str("A-sub"));
           break;
         }
         const __m2 = rt.matchPattern(s, rt.patConst(rt.V.int(rt.fast.iDivC(4, 2))));
         if (__m2 !== null) {
           rt.frameLine(10);
-          return rt.V.str("A-div");
+          return rt.strOf(rt.V.str("A-div"));
           break;
         }
         const __m3 = rt.matchPattern(s, rt.patConst(rt.V.int(rt.fast.iModC(7, 3))));
         if (__m3 !== null) {
           rt.frameLine(12);
-          return rt.V.str("A-mod");
+          return rt.strOf(rt.V.str("A-mod"));
           break;
         }
         const __m4 = rt.matchPattern(s, rt.patConst(rt.ops.pow(rt.V.int(2), rt.V.int(1))));
         if (__m4 !== null) {
           rt.frameLine(14);
-          return rt.V.str("A-pow");
+          return rt.strOf(rt.V.str("A-pow"));
           break;
         }
         const __m5 = rt.matchPattern(s, rt.patConst(rt.ops.add(rt.V.float(1.5), rt.V.int(1))));
         if (__m5 !== null) {
           rt.frameLine(16);
-          return rt.V.str("A-float");
+          return rt.strOf(rt.V.str("A-float"));
           break;
         }
         const __m6 = rt.matchPattern(s, rt.patConst(rt.V.bool(!rt.ops.truthy(rt.V.bool(true)))));
         if (__m6 !== null) {
           rt.frameLine(18);
-          return rt.V.str("A-not");
+          return rt.strOf(rt.V.str("A-not"));
           break;
         }
         const __m7 = rt.matchPattern(s, rt.patConst(rt.and(rt.V.bool(true), () => rt.V.bool(false))));
         if (__m7 !== null) {
           rt.frameLine(20);
-          return rt.V.str("A-and");
+          return rt.strOf(rt.V.str("A-and"));
           break;
         }
         const __m8 = rt.matchPattern(s, rt.patConst(rt.or(rt.V.bool(true), () => rt.V.bool(false))));
         if (__m8 !== null) {
           rt.frameLine(22);
-          return rt.V.str("A-or");
+          return rt.strOf(rt.V.str("A-or"));
           break;
         }
         const __m9 = rt.matchPattern(s, rt.patConst(rt.V.str(("a" + "b"))));
         if (__m9 !== null) {
           rt.frameLine(24);
-          return rt.V.str("A-str");
+          return rt.strOf(rt.V.str("A-str"));
           break;
         }
         const __m10 = rt.matchPattern(s, rt.patConst(rt.V.int((-1))));
         if (__m10 !== null) {
           rt.frameLine(26);
-          return rt.V.str("A-neg");
+          return rt.strOf(rt.V.str("A-neg"));
           break;
         }
         const __m11 = rt.matchPattern(s, rt.patConst(rt.V.int(rt.fast.iMulC(rt.fast.iAddC(1, 1), 2))));
         if (__m11 !== null) {
           rt.frameLine(28);
-          return rt.V.str("A-paren");
+          return rt.strOf(rt.V.str("A-paren"));
           break;
         }
         const __m12 = rt.matchPattern(s, rt.patWild());
         if (__m12 !== null) {
           rt.frameLine(30);
-          return rt.V.str("A-none");
+          return rt.strOf(rt.V.str("A-none"));
           break;
         }
       } while (false);

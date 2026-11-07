@@ -50,7 +50,7 @@ export class Main extends SceneTree {
       rt.frameLine(10);
       let t = rt.vector2New([rt.V.int(1), rt.V.int(2)]);
       rt.frameLine(11);
-      return t;
+      return rt.toVec2(t);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.vector2(0, 0);

@@ -51,6 +51,7 @@ import { checkBoolOrdering, checkOperandPairs, checkPercentFormat, checkVoidAnno
 import { checkFunc, classTable, markClassFaceReceivers, seedOuterNames } from "./walk";
 import { checkCtorSignatures, checkFuncArgSlots, checkNamedFace, checkStaticAccess, checkStringMethodArity, checkValueMethodArity } from "./checks/calls";
 import { checkModuleVarCycles } from "./checks/module-cycles";
+import { checkReturnTypes } from "./checks/returns";
 import { lambdaCaptureNames } from "./faces";
 
 export function analyze(m: Module, globals: Set<string> = new Set<string>(), owner?: string, hostChain = false): AnalysisResult {
@@ -87,6 +88,7 @@ export function analyze(m: Module, globals: Set<string> = new Set<string>(), own
   const engineFace = nodeSelfProps(ENGINE_SELF_BASES.has(m.extends ?? "") ? m.extends : null);
   for (const f of m.funcs) checkFunc(f, moduleScope, coroutines, diags, hostFace, engineFace);
   checkReturnPaths(m.funcs, diags);
+  checkReturnTypes(m, diags);
   checkModuleVarCycles(m, diags);
   checkFieldInits(m.vars, moduleScope, coroutines, diags, hostFace);
   for (const c of m.innerClasses) checkClass(c, classScopeBase, diags, classes);

@@ -77,7 +77,7 @@ class A extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "p", this);
       rt.frameLine(5);
-      return rt.ops.add(rt.V.str("ok<-"), rt.strBuiltin([a]));
+      return rt.strOf(rt.ops.add(rt.V.str("ok<-"), rt.strBuiltin([a])));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");

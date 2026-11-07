@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot return a value of type "String" as "Vector2".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot return value of type "String" because the function return type is "Vector2".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

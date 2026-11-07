@@ -98,25 +98,25 @@ export class Main extends SceneTree {
         const __m0 = rt.matchPattern(q, rt.patConst(rt.vector3Const("AXIS_X")));
         if (__m0 !== null) {
           rt.frameLine(37);
-          return rt.V.str("x");
+          return rt.strOf(rt.V.str("x"));
           break;
         }
         const __m1 = rt.matchPattern(q, rt.patConst(rt.vector3iConst("AXIS_Y")));
         if (__m1 !== null) {
           rt.frameLine(39);
-          return rt.V.str("y");
+          return rt.strOf(rt.V.str("y"));
           break;
         }
         const __m2 = rt.matchPattern(q, rt.patConst(rt.vector3Const("AXIS_Z")));
         if (__m2 !== null && rt.ops.truthy(rt.ops.eq(q, rt.V.int(2)))) {
           rt.frameLine(41);
-          return rt.V.str("z-guard");
+          return rt.strOf(rt.V.str("z-guard"));
           break;
         }
         const __m3 = rt.matchPattern(q, rt.patWild());
         if (__m3 !== null) {
           rt.frameLine(43);
-          return rt.V.str("none");
+          return rt.strOf(rt.V.str("none"));
           break;
         }
       } while (false);

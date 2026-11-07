@@ -148,7 +148,7 @@ export class Main extends SceneTree {
         this.quit();
       }
       rt.frameLine(32);
-      return rt.V.bool(false);
+      return rt.toBool(rt.V.bool(false));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.bool(false);

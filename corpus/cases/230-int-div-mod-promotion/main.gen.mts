@@ -106,7 +106,7 @@ export class Main extends SceneTree {
       rt.frameLine(32);
       z = rt.ops.pow(z, rt.V.int(5));
       rt.frameLine(33);
-      return rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.strBuiltin([rt.V.int(v)]), rt.V.str("/")), rt.strBuiltin([rt.typeOf(rt.V.int(v))])), rt.V.str(" ")), rt.strBuiltin([rt.V.int(w)])), rt.V.str(" ")), rt.strBuiltin([x])), rt.V.str(" ")), rt.strBuiltin([y])), rt.V.str(" ")), rt.strBuiltin([z]));
+      return rt.strOf(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.ops.add(rt.strBuiltin([rt.V.int(v)]), rt.V.str("/")), rt.strBuiltin([rt.typeOf(rt.V.int(v))])), rt.V.str(" ")), rt.strBuiltin([rt.V.int(w)])), rt.V.str(" ")), rt.strBuiltin([x])), rt.V.str(" ")), rt.strBuiltin([y])), rt.V.str(" ")), rt.strBuiltin([z])));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");

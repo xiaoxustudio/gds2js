@@ -87,7 +87,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "ti", this);
       rt.frameLine(5);
-      return a;
+      return rt.toInt(a);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.int(0);
@@ -102,7 +102,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "float", 1, "tf", this);
       rt.frameLine(8);
-      return a;
+      return rt.toFloat(a);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.float(0);
@@ -117,7 +117,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "bool", 1, "tb", this);
       rt.frameLine(11);
-      return a;
+      return rt.toBool(a);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.bool(false);
@@ -132,7 +132,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "String", 1, "ts", this);
       rt.frameLine(14);
-      return a;
+      return rt.strOf(a);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -147,7 +147,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "StringName", 1, "tsn", this);
       rt.frameLine(17);
-      return a;
+      return rt.toStringNameSlot(a);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.stringName("");
@@ -162,7 +162,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "Vector2", 1, "tv", this);
       rt.frameLine(20);
-      return rt.wrapValue(rt.attribute(a, "x"));
+      return rt.toFloat(rt.wrapValue(rt.attribute(a, "x")));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.float(0);
@@ -176,7 +176,7 @@ class Inner extends rt.GdScriptObject {
     const __gd_frame = rt.frameEnter("res://main.gd", "freec");
     try {
       rt.frameLine(23);
-      return rt.V.int(7);
+      return rt.toInt(rt.V.int(7));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.int(0);
@@ -191,7 +191,7 @@ class Inner extends rt.GdScriptObject {
     try {
       a = rt.paramSlot(a, "int", 1, "dflt", this);
       rt.frameLine(26);
-      return a;
+      return rt.toInt(a);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.int(0);

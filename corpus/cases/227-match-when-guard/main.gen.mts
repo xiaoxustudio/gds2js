@@ -35,7 +35,7 @@ export class Main extends SceneTree {
       rt.frameLine(4);
       print(rt.showArgs([rt.ops.add(rt.V.str("guard:"), name)]));
       rt.frameLine(5);
-      return cond;
+      return rt.toBool(cond);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.bool(false);

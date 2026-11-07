@@ -58,7 +58,7 @@ export class Main extends SceneTree {
         rt.method(out, "append", [rt.strBuiltin([p])]);
       }
       rt.frameLine(27);
-      return rt.method(rt.V.str(";"), "join", [out]);
+      return rt.strOf(rt.method(rt.V.str(";"), "join", [out]));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");

@@ -58,7 +58,7 @@ export class Main extends SceneTree {
       rt.frameLine(12);
       let z2 = 0;
       rt.frameLine(13);
-      return rt.V.int(rt.fast.iDivC(100, z2));
+      return rt.toInt(rt.V.int(rt.fast.iDivC(100, z2)));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.int(0);
@@ -74,7 +74,7 @@ export class Main extends SceneTree {
       rt.frameLine(16);
       let z2 = 0;
       rt.frameLine(17);
-      return rt.V.int(rt.fast.iDivC(100, z2));
+      return rt.strOf(rt.V.int(rt.fast.iDivC(100, z2)));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");

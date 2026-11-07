@@ -53,7 +53,7 @@ export class Main extends SceneTree {
         total = rt.ops.add(total, i);
       }
       rt.frameLine(13);
-      return total;
+      return rt.toInt(total);
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.int(0);
@@ -75,7 +75,7 @@ export class Main extends SceneTree {
         rt.method(out, "append", [rt.strBuiltin([i])]);
       }
       rt.frameLine(19);
-      return rt.method(rt.V.str("|"), "join", [out]);
+      return rt.strOf(rt.method(rt.V.str("|"), "join", [out]));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -99,7 +99,7 @@ export class Main extends SceneTree {
         }
       }
       rt.frameLine(26);
-      return rt.method(rt.V.str(","), "join", [out]);
+      return rt.strOf(rt.method(rt.V.str(","), "join", [out]));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
@@ -120,7 +120,7 @@ export class Main extends SceneTree {
         rt.method(out, "append", [rt.strBuiltin([i])]);
       }
       rt.frameLine(32);
-      return rt.method(rt.V.str(","), "join", [out]);
+      return rt.strOf(rt.method(rt.V.str(","), "join", [out]));
     } catch (__gd_err) {
       rt.gdFunctionError(__gd_err);
       return rt.V.str("");
