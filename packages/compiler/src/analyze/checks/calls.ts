@@ -9,7 +9,7 @@ import { CTOR_REFUSED, CUBIC_NAME_ARG_FUNCS, FUNC_ARG_SLOTS, GLOBAL_NUM_ARITH, G
 import { STATIC_ARG_AS, STATIC_ARG_TYPES } from "../../semantics/arg-types/static-arg-types";
 import { FACE_ARG_AS, FACE_ARG_TYPES } from "../../semantics/arg-types/face-arg-types";
 import { INSTANCE_ARG_AS, INSTANCE_ARG_TYPES } from "../../semantics/arg-types/instance-arg-types";
-import { isGlobalConst } from "../../lower/globals";
+import { isGlobalConst, isGlobalEnumName } from "../../lower/globals";
 import {
   ARG_TYPE_FOLLOWS_FIRST,
   DERIVED_ARG_TYPES,
@@ -236,19 +236,22 @@ export function checkFuncArgSlots(m: Module, globals: Set<string>, diags: Diagno
       if (args.length !== params.length) continue;
       for (let i = 0; i < args.length; i++) {
         const ptype = (params[i] as Param).type;
-        const slot = funcSlotName(ptype);
+        const enumName = ptype !== null && ptype.kind === "named" ? ptype.name.replace(/\[.*\]$/, "") : null;
+        const enumSlot = enumName !== null && isGlobalEnumName(enumName) ? "int" : null;
+        const slot = enumSlot ?? funcSlotName(ptype);
+        const shown = enumSlot !== null ? (enumName as string) : slot;
         const src = slotSource(args[i] as Expr);
         if (src === null) continue;
         if (slot !== null) {
-          const accept = FUNC_ARG_SLOTS[slot] as readonly string[];
+          const accept = enumSlot !== null ? ["int"] : (FUNC_ARG_SLOTS[slot] as readonly string[]);
           if (accept.includes(src)) continue;
           const loc = (n.loc as Diagnostic["loc"]) ?? null;
           if (src !== "Array" && src !== "Dictionary") {
-            diags.push({ code: "func-arg-slot", message: `Cannot pass a value of type "${src}" as "${slot}".`, loc });
+            diags.push({ code: "func-arg-slot", message: `Cannot pass a value of type "${src}" as "${shown}".`, loc });
           }
           diags.push({
             code: "func-arg-slot",
-            message: `Invalid argument for "${fname}()" function: argument ${i + 1} should be "${slot}" but is "${src}".`,
+            message: `Invalid argument for "${fname}()" function: argument ${i + 1} should be "${shown}" but is "${src}".`,
             loc,
           });
           continue;

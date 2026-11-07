@@ -1,6 +1,6 @@
 import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
-import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
+import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst, isGlobalEnumName } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
@@ -922,6 +922,7 @@ export function typeDefault(t: TypeRef | null): string {
   if (t.kind === "array") return "rt.V.array(rt.GArray.of([]))";
   if (t.kind !== "named") return "rt.V.nil()";
   const base = t.name.replace(/\[.*\]$/, "");
+  if (isGlobalEnumName(base)) return "rt.V.int(0)";
   if (base === "int") return "rt.V.int(0)";
   if (base === "float") return "rt.V.float(0)";
   if (base === "bool") return "rt.V.bool(false)";

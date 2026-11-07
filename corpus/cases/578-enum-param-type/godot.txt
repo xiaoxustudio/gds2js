@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "float" as "Error".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Invalid argument for "f()" function: argument 1 should be "Error" but is "float".
+   at: GDScript::reload (<case>/main.gd:7)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

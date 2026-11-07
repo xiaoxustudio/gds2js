@@ -4,40 +4,46 @@ import type { ClassDecl, Expr, FuncDecl, Module, Stmt, TypeRef, VarDecl } from "
 import { type StaticType, run } from "../../state";
 import { instanceOfTypeArgMessage, slotSource, varSlotHolds } from "../../slots";
 import { staticType } from "../../faces";
+import { isGlobalEnumName } from "../../../lower/globals";
+
+type SlotInfo = { face: string; display: string; strictInt?: boolean };
 
 export function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
-  const scalarType = (t: TypeRef | null): string | null => {
+  const scalarType = (t: TypeRef | null): SlotInfo | null => {
     if (t === null || t.kind !== "named") return null;
     const base = t.name.replace(/\[.*\]$/, "");
-    if (base === "int" || base === "float" || base === "bool" || base === "String") return base;
-    if (base === "StringName") return base;
-    return STATIC_VALUE_TYPES.has(base) ? base : null;
+    if (isGlobalEnumName(base)) return { face: "int", display: base, strictInt: true };
+    if (base === "int" || base === "float" || base === "bool" || base === "String") return { face: base, display: base };
+    if (base === "StringName") return { face: base, display: base };
+    return STATIC_VALUE_TYPES.has(base) ? { face: base, display: base } : null;
   };
 
-  const staticOf = (e: Expr, d: Map<string, string>): NonNullable<StaticType> | null => {
+  const staticOf = (e: Expr, d: Map<string, SlotInfo>): NonNullable<StaticType> | null => {
     if (e.kind === "ident") {
       const t = d.get(e.name);
-      return t === undefined ? null : (t as NonNullable<StaticType>);
+      return t === undefined ? null : (t.face as NonNullable<StaticType>);
     }
     return slotSource(e);
   };
 
-  const declRefuse = (name: string, slot: string, init: Expr, slots: Map<string, string>): void => {
+  const declRefuse = (name: string, slot: SlotInfo, init: Expr, slots: Map<string, SlotInfo>): void => {
     const st = staticOf(init, slots);
-    if (st === null || varSlotHolds(slot, st) !== false) return;
+    if (st === null) return;
+    const holds = slot.strictInt === true ? st === "int" : varSlotHolds(slot.face, st);
+    if (holds !== false) return;
     diags.push({
       code: "typed-var-value",
-      message: `Cannot assign a value of type "${st}" as "${slot}".`,
+      message: `Cannot assign a value of type "${st}" as "${slot.display}".`,
       loc: init.loc,
     });
     diags.push({
       code: "typed-var-assign",
-      message: `Cannot assign a value of type ${st} to variable "${name}" with specified type ${slot}.`,
+      message: `Cannot assign a value of type ${st} to variable "${name}" with specified type ${slot.display}.`,
       loc: init.loc,
     });
   };
 
-  const checkBody = (body: Stmt[], outer: Map<string, string>): void => {
+  const checkBody = (body: Stmt[], outer: Map<string, SlotInfo>): void => {
     const decls = new Map(outer);
     const stmt = (s: Stmt): void => {
       switch (s.kind) {
@@ -53,18 +59,18 @@ export function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
             const slot = decls.get(s.target.name);
             const st = staticOf(s.value, decls);
             if (slot !== undefined && st !== null) {
-              const holds = varSlotHolds(slot, st);
+              const holds = slot.strictInt === true ? st === "int" : varSlotHolds(slot.face, st);
               if (holds === false) {
                 if (s.value.kind === "lit" || (staticType(s.value) !== null && STATIC_VALUE_TYPES.has(st))) {
                   diags.push({
                     code: "typed-var-value",
-                    message: `Cannot assign a value of type "${st}" as "${slot}".`,
+                    message: `Cannot assign a value of type "${st}" as "${slot.display}".`,
                     loc: s.value.loc,
                   });
                 }
                 diags.push({
                   code: "typed-var-assign",
-                  message: `Value of type "${st}" cannot be assigned to a variable of type "${slot}".`,
+                  message: `Value of type "${st}" cannot be assigned to a variable of type "${slot.display}".`,
                   loc: s.value.loc,
                 });
               }
@@ -152,7 +158,7 @@ export function checkTypedVarAssign(m: Module, diags: Diagnostic[]): void {
   };
 
   const run = (vars: VarDecl[], funcs: FuncDecl[]): void => {
-    const outer = new Map<string, string>();
+    const outer = new Map<string, SlotInfo>();
     for (const v of vars) {
       const d = scalarType(v.type);
       if (d !== null) outer.set(v.name, d);

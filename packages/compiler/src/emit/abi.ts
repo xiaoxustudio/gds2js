@@ -1,6 +1,6 @@
 import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
-import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
+import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst, isGlobalEnumName } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { isElemKind } from "@gds2js/runtime/runtime/values";
@@ -700,7 +700,7 @@ export function containerSlot(code: string, value: Expr, text: string | null, sa
 export function declaredCast(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
-  if (base === "int") return "rt.toInt";
+  if (isGlobalEnumName(base) || base === "int") return "rt.toInt";
   if (base === "float") return "rt.toFloat";
   if (base === "bool") return "rt.toBool";
   if (base === "String") return "rt.strOf";
