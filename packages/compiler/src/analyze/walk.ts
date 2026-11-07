@@ -587,6 +587,37 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
       }
       if (e.callee.kind === "ident") {
         const name = e.callee.name;
+        if (name === "call" || name === "callv") {
+          const min = name === "call" ? 1 : 2;
+          if (e.args.length < min) {
+            diags.push({ code: "call-arity", message: `Too few arguments for "${name}()" call. Expected at least ${min} but received ${e.args.length}.`, loc: e.loc });
+            return;
+          }
+          const staticCtx = run.hostStaticCtx;
+          if (staticCtx !== null && (staticCtx.kind === "func" || staticCtx.kind === "var")) {
+            const where = staticCtx.kind === "func" ? `the static function "${staticCtx.name}()"` : "a static variable initializer";
+            diags.push({ code: "non-static-call-in-static", message: `Cannot call non-static function "${name}()" from ${where}.`, loc: e.loc });
+            return;
+          }
+          const first = e.args[0];
+          const fst = first === undefined ? null : staticType(first);
+          if (fst !== null && fst !== "String") {
+            diags.push({ code: "call-arg", message: `Cannot pass a value of type "${fst}" as "StringName".`, loc: e.loc });
+            diags.push({ code: "call-arg", message: `Invalid argument for "${name}()" function: argument 1 should be "StringName" but is "${fst}".`, loc: e.loc });
+            return;
+          }
+          if (name === "callv") {
+            const second = e.args[1];
+            const sst = second === undefined ? null : staticType(second);
+            if (sst !== null && sst !== "Array") {
+              diags.push({ code: "call-arg", message: `Cannot pass a value of type "${sst}" as "Array".`, loc: e.loc });
+              diags.push({ code: "call-arg", message: `Invalid argument for "callv()" function: argument 2 should be "Array" but is "${sst}".`, loc: e.loc });
+              return;
+            }
+          }
+          for (const a of e.args) walkExpr(a, scope, coroutines, diags);
+          return;
+        }
         if (coroutines.has(name) && !awaited) {
           diags.push({
             code: "coroutine-not-awaited",

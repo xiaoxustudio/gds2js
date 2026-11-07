@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot pass a value of type "int" as "Array".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Invalid argument for "callv()" function: argument 2 should be "Array" but is "int".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

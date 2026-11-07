@@ -67,6 +67,9 @@ export function emitCall(e: Extract<Expr, { kind: "call" }>): string {
       return `rt.loadScript(${args[0]})`;
     }
 
+    if (name === "call" || name === "callv") {
+      return `rt.method(rt.V.object(this), ${JSON.stringify(name)}, [${args.join(", ")}])`;
+    }
     const builtin = BUILTIN[name];
     if (builtin) {
       return builtin(args);
