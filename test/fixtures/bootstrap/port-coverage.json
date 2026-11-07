@@ -1,8 +1,8 @@
 {
  "totals": {
-  "modules": 62,
+  "modules": 66,
   "ported": 43,
-  "funcs": 381,
+  "funcs": 394,
   "covered": 305
  },
  "modules": {
@@ -14,7 +14,9 @@
   "compiler/src/analyze/checks/collections/typed.ts": 1,
   "compiler/src/analyze/checks/collections/var-assign.ts": 1,
   "compiler/src/analyze/checks/decls.ts": 10,
+  "compiler/src/analyze/checks/module-cycles.ts": 0,
   "compiler/src/analyze/checks/operators.ts": 6,
+  "compiler/src/analyze/checks/returns.ts": 0,
   "compiler/src/analyze/faces.ts": 24,
   "compiler/src/analyze/index.ts": 1,
   "compiler/src/analyze/literals.ts": 10,
@@ -44,6 +46,7 @@
   "compiler/src/lower/ir.ts": 1,
   "compiler/src/lower/lit.ts": 4,
   "compiler/src/lower/lower.ts": 1,
+  "compiler/src/lower/module-refs.ts": 0,
   "compiler/src/parse/descent/decl.ts": 11,
   "compiler/src/parse/descent/expr.ts": 10,
   "compiler/src/parse/descent/indent.ts": 1,
@@ -52,6 +55,7 @@
   "compiler/src/parse/descent/tokens.ts": 3,
   "compiler/src/parse/parser.ts": 1,
   "compiler/src/parse/scene.ts": 1,
+  "compiler/src/semantics/global-enums.ts": 0,
   "compiler/src/semantics/node-face.ts": 1,
   "gds2js/src/bundle.native.ts": 0,
   "gds2js/src/bundle.ts": 0,

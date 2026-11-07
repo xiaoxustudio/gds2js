@@ -1,4 +1,16 @@
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+
+function writeRetry(file: string, data: string): void {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      writeFileSync(file, data, "utf8");
+      return;
+    } catch (e) {
+      if (attempt >= 20) throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+}
 import { join } from "node:path";
 import { ROOT } from "../lib.mjs";
 import { buildInventories, hasMember } from "./inventories.mts";
@@ -194,19 +206,19 @@ for (let mi = 0; mi < index.modules.length; mi++) {
       row.e = children.find((c) => c.e.length > 0)?.e ?? row.e;
     }
   }
-  writeFileSync(file, `${JSON.stringify(chunk)}\n`, "utf8");
+  writeRetry(file, `${JSON.stringify(chunk)}\n`);
   for (const row of chunk.rows) searchRows.push([row.o, row.n, row.t, mi, row.k]);
   mod.stats = stats;
   moduleStats.set(mod.id, stats);
 }
 
-writeFileSync(join(DATA, "search.json"), `${JSON.stringify(searchRows)}\n`, "utf8");
+writeRetry(join(DATA, "search.json"), `${JSON.stringify(searchRows)}\n`);
 index.search = { rows: searchRows.length };
 index.statsModeled = totals.implemented + totals.partial + totals.missing;
 index.stats = totals;
 index.roster = { cells: roster.length, codes: [...new Set(roster.map((r) => r.code))].sort() };
 index.evidence = refs.stats;
-writeFileSync(join(DATA, "index.json"), `${JSON.stringify(index)}\n`, "utf8");
+writeRetry(join(DATA, "index.json"), `${JSON.stringify(index)}\n`);
 
 const pct = ((totals.implemented / index.rowCount) * 100).toFixed(1);
 process.stdout.write(

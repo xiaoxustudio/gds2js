@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { hasGodot, missing } from "../support/env";
 import {
   caseDir,
+  caseFixedFps,
   caseIsProject,
   caseSandboxed,
   caseScene,
@@ -43,6 +44,7 @@ describe.skipIf(!hasGodot)(`golden 漂移检测${SKIP_WHY}`, () => {
           timeoutMs: hangBudget(prev),
           env: sandboxed ? sandboxEnv(id) : null,
           cwd: sandboxed ? projectPath : null,
+          fixedFps: caseFixedFps(id),
         });
       } finally {
         if (sandboxed) dropSandbox(id);
