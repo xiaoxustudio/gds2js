@@ -24,6 +24,7 @@ import {
   GLOBAL_ARG_VARARG,
 } from "../semantics/arg-types/global-arg-types";
 import { ENGINE_CLASS_NAMES } from "@gds2js/runtime/runtime/engine-classes";
+import { UnsupportedError } from "@gds2js/runtime/runtime/errors";
 import { GLOBAL_CALLABLES, GLOBAL_VALUE_NAMES } from "@gds2js/runtime/runtime/global-names";
 import {
   ARRAY_METHOD_ARITY,
@@ -448,10 +449,19 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
       walkExpr(e.operand, scope, coroutines, diags);
       return;
 
-    case "index":
-      if (!(e.obj.kind === "ident" && !scope.has(e.obj.name) && isGlobalEnumName(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
+    case "index": {
+      const enumName =
+        e.obj.kind === "ident" ? e.obj.name
+        : e.obj.kind === "attribute" && e.obj.obj.kind === "ident" ? `${e.obj.obj.name}.${e.obj.name}`
+        : null;
+      const root = e.obj.kind === "ident" ? e.obj.name : e.obj.kind === "attribute" && e.obj.obj.kind === "ident" ? e.obj.obj.name : null;
+      if (enumName !== null && root !== null && !scope.has(root) && isGlobalEnumName(enumName)) {
+        throw new UnsupportedError("global-enum-subscript", `全局枚举 ${enumName} 的下标访问在引擎里是 Compile Error 阶段（不是 Parse Error），本编译器尚未建模这一阶段`);
+      }
+      walkExpr(e.obj, scope, coroutines, diags);
       walkExpr(e.index, scope, coroutines, diags);
       return;
+    }
 
     case "attribute": {
       if (e.obj.kind === "ident") {
