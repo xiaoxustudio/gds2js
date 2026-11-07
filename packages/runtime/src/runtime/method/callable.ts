@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { withCallContext } from "../call-context";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -85,10 +86,10 @@ export function callCallableBox(box: CallableBox, args: Variant[]): Variant {
   const all: Variant[] = [];
   for (const a of keptCallArgs(box, args)) all.push(a);
   for (const b of box.bound) all.push(b);
-  if (box.fn !== null) return wrapValue(box.fn(all));
+  if (box.fn !== null) return withCallContext("callable", () => wrapValue(box.fn!(all)));
   if (box.name !== null && box.object !== null) {
     if (methodDispatch === null) throw new UnsupportedError("method-dispatch-unregistered", "Callable 按名字调用要经 method() 分派，注册那一步没发生");
-    return methodDispatch(box.object, box.name, all);
+    return withCallContext("callable", () => methodDispatch!(box.object, box.name!, all));
   }
   throw new GodotRuntimeError("callable-null-call", "Attempt to call function 'null::null (Callable)' on a null instance.");
 }

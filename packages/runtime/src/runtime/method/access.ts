@@ -10,7 +10,8 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
   gSin, gCos, gTan, gAsin, gAcos, gAtan, gAtan2, gSinh, gCosh, gTanh, gAsinh, gAcosh, gAtanh, randNextUint32,
   gDbToLinear, gLinearToDb, gPingpong, gStepDecimals, gNearestPo2, gRotateToward, gLerpAngle,
   gBezierInterpolate, gBezierDerivative, gCubicAngle, gCubicInTime, gCubicAngleInTime } from "../builtins";
-import { classNameOf, descOf, fieldTypesOf, methodParamsOf, methodAritiesOf, nativeBaseOf, staticCall, hasStaticName, varSlotOf, GdScriptObject, methodCallable, ClassDesc } from "../class/object/script-object";
+import { classNameOf, descOf, fieldTypesOf, methodParamsOf, methodAritiesOf, nativeBaseOf, scriptLabelOf, staticCall, hasStaticName, varSlotOf, GdScriptObject, methodCallable, ClassDesc } from "../class/object/script-object";
+import { callContext } from "../call-context";
 import { boundBuiltinCallable } from "../class/identity/callable";
 import { faceArity, faceMemberKnown, valueAttrKind } from "../face-arity";
 import { readOnlyError } from "../frames";
@@ -163,6 +164,14 @@ export function scriptParamArgs(recv: unknown, name: string, args: Variant[]): V
       const base = nativeBaseOf(recv);
       if (cls === null || base === null) {
         throw new UnsupportedError("script-method-label", `${name}() 的实参位要发引擎那句转换错，但这台实例的类名或原生基类还没登记`);
+      }
+      const kind = callContext();
+      if (kind === "callable") {
+        const label = scriptLabelOf(recv);
+        throw new GodotRuntimeError("script-param-type", `Invalid type in function '${base}${label === null ? "" : `(${label})`}::${name} (Callable)'. Cannot convert argument ${String(i + 1)} from ${got} to ${slot}.`);
+      }
+      if (kind === "call") {
+        throw new GodotRuntimeError("script-param-type", `Invalid type in function '${name} (via call)' in base '${base} (${cls})'. Cannot convert argument ${String(i + 2)} from ${got} to ${slot}.`);
       }
       throw new GodotRuntimeError("script-param-type", `Invalid type in function '${name}' in base '${base} (${cls})'. Cannot convert argument ${String(i + 1)} from ${got} to ${slot}.`);
     }

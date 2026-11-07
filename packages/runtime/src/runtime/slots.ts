@@ -5,6 +5,7 @@ import { Tag, tagName, V, type Variant } from "./tags";
 import { containerFace} from "./values";
 import { valueTypeName } from "./string-ops";
 import { colorNew } from "./class/color/color";
+import { callContext } from "./call-context";
 import { toVec2 } from "./class/vector/vector2";
 import { vector2iNew } from "./class/vector/vector2i";
 import { toVec3, toVec3i } from "./class/vector/vector3i";
@@ -55,5 +56,14 @@ export function paramSlot(v: Variant, slot: string, index: number, fn: string, s
 
 /** 槽位收不下某个实参时 Godot 抛的那句话；抽出来好让语义与 `paramSlot` 的分支共用一份口径。 */
 export function paramSlotErrorText(fn: string, self: unknown, index: number, from: string, slot: string): string {
+  const kind = callContext();
+  if (kind === "callable") {
+    const native = nativeBaseOf(self) ?? "Object";
+    const label = scriptLabelOf(self);
+    return `Invalid type in function '${native}${label === null ? "" : `(${label})`}::${fn} (Callable)'. Cannot convert argument ${index} from ${from} to ${slot}.`;
+  }
+  if (kind === "call") {
+    return `Invalid type in function '${fn} (via call)' in base '${baseLabel(self)}'. Cannot convert argument ${index + 1} from ${from} to ${slot}.`;
+  }
   return `Invalid type in function '${fn}' in base '${baseLabel(self)}'. Cannot convert argument ${index} from ${from} to ${slot}.`;
 }

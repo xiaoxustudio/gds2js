@@ -1,4 +1,5 @@
 import { GodotRuntimeError, UnsupportedError } from "../errors";
+import { withCallContext } from "../call-context";
 import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, toInt, variantHashNumber,
   abs, lengthOf, range as gRange, sqrt, variantHash, gAngleDifference, gCubic, gClamp, gCeil, gDegToRad, gRadToDeg, gEase, gExp,
   gFloor, gFmod, gFposmod, gInverseLerp, gIsEqualApprox, gIsFinite, gIsInf, gIsNan, gIsZeroApprox, gLerp, gLog,
@@ -367,7 +368,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
         `Invalid call to function '${who} (via call)' in base '${label}'. Expected ${max} argument(s).`,
       );
     }
-    const hit = callSlot(inner, who, rest);
+    const hit = withCallContext("call", () => callSlot(inner, who, rest));
     if (hit === null) {
       throw new UnsupportedError("method-slot-missing", `${who}() 在接收者上不可调用（注册表与产物不一致）`);
     }
