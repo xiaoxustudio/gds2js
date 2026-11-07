@@ -40,6 +40,7 @@ const globalImplemented = new Set(inv.globals.implemented);
 const globalConstants = new Set(inv.globals.constants);
 const builtinNames = new Set(index.builtinClasses ?? []);
 const modeledBuiltins = new Set([...Object.keys(inv.methods), ...Object.keys(inv.props)].filter((n) => builtinNames.has(n)));
+modeledBuiltins.add("Nil");
 const ctors = new Set(inv.ctors);
 
 const METHOD = new Set(["m", "bm", "uf"]);
@@ -58,7 +59,7 @@ function globalEnumValueOf(n: string): number | null {
 }
 const CONST = new Set(["c", "bc", "gv"]);
 
-function evidenceFor(o, n, kind) {
+function evidenceFor(o, n, kind, right?: string) {
   const out = [];
   const seen = new Set();
   const push = (r) => {
@@ -68,6 +69,11 @@ function evidenceFor(o, n, kind) {
     out.push([r.k === "case" ? "c" : "t", r.i]);
   };
   const bare = kind === "ct" ? "new" : ENUM_VALUE.has(kind) ? n.split(".").pop() : n;
+  if (kind === "op" && right !== undefined) {
+    const op = n.slice(0, n.length - right.length - 1);
+    for (const r of refs.opRefs.get(`${o}#${op}#${right}`) ?? []) push(r);
+    return out.slice(0, 4);
+  }
   for (const r of refs.ownerRefs.get(`${o}.${n}`) ?? []) push(r);
   for (const r of refs.nameRefs.get(bare) ?? []) push(r);
   return out.slice(0, 4);
@@ -95,7 +101,8 @@ function classifyBase(row) {
   const o = row.o;
   const n = row.n;
   const k = row.k;
-  const ev = evidenceFor(o, n, k);
+  const rightMatch = /right: ([A-Za-z0-9_]+) ->/.exec(row.s);
+  const ev = evidenceFor(o, n, k, rightMatch === null ? undefined : rightMatch[1]);
   const hasEvidence = ev.length > 0;
   const note = (text) => [["n", text]];
 
@@ -219,8 +226,9 @@ for (let mi = 0; mi < index.modules.length; mi++) {
       totals[next] += 1;
       row.t = next;
     }
-    if (next === "implemented" && row.e.length === 0) {
-      row.e = children.find((c) => c.e.length > 0)?.e ?? row.e;
+    if (next === "implemented" && row.e.every((x) => x[0] === "n")) {
+      const backed = children.find((c) => c.e.some((x) => x[0] !== "n"))?.e;
+      if (backed !== undefined) row.e = backed;
     }
   }
   writeRetry(file, `${JSON.stringify(chunk)}\n`);

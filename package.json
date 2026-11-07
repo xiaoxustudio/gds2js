@@ -57,7 +57,8 @@
     "site:dev": "pnpm run regen:compat && vite --config site/vite.config.ts",
     "site:build": "tsx tools/compat/resolve.mts && vite --config site/vite.config.ts build",
     "site:typecheck": "tsc -p site/tsconfig.json --noEmit",
-    "test:compat": "vitest run --project repo test/compat"
+    "test:compat": "vitest run --project repo test/compat",
+    "regen:op-face": "tsx tools/compat/op-face.mts write"
   },
   "devDependencies": {
     "@gds2js/compiler": "workspace:*",

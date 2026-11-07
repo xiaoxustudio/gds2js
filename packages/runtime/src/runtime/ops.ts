@@ -8,8 +8,8 @@ import { asVec2, GVector2, vector2, vecCmp } from "./class/vector/vector2";
 import { asVec3, GVector3, vector3, vec3Cmp } from "./class/vector/vector3";
 import { asQuaternion, quaternion } from "./class/orient/quaternion";
 import { asTransform2D, transform2d } from "./class/orient/transform2d";
-import { asBasis, basisMul, basisScaled, basisXform } from "./class/orient/basis";
-import { asTransform3D, pointMulTransform3d, transform3dCompose, transform3dXformPoint } from "./class/orient/transform3d";
+import { asBasis, GBasis, basisMul, basisScaled, basisXform } from "./class/orient/basis";
+import { asTransform3D, pointMulTransform3d, transform3d, transform3dCompose, transform3dXformPoint } from "./class/orient/transform3d";
 
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./class/vector/vector4";
@@ -138,6 +138,11 @@ export const ops = {
     const zi3Add = asVec3i(a);
     const zj3Add = asVec3i(b);
     if (zi3Add && zj3Add) return v3iAdd(zi3Add, zj3Add);
+    const qaAdd = asQuaternion(a);
+    const qbAdd = asQuaternion(b);
+    if (qaAdd && qbAdd) {
+      return quaternion(r3(qaAdd.x + qbAdd.x), r3(qaAdd.y + qbAdd.y), r3(qaAdd.z + qbAdd.z), r3(qaAdd.w + qbAdd.w));
+    }
     const caAdd = asColor(a);
     const cbAdd = asColor(b);
     if (caAdd && cbAdd)
@@ -167,6 +172,11 @@ export const ops = {
     const zi3Sub = asVec3i(a);
     const zj3Sub = asVec3i(b);
     if (zi3Sub && zj3Sub) return v3iSub(zi3Sub, zj3Sub);
+    const qaSub = asQuaternion(a);
+    const qbSub = asQuaternion(b);
+    if (qaSub && qbSub) {
+      return quaternion(r3(qaSub.x - qbSub.x), r3(qaSub.y - qbSub.y), r3(qaSub.z - qbSub.z), r3(qaSub.w - qbSub.w));
+    }
     const caSub = asColor(a);
     const cbSub = asColor(b);
     if (caSub && cbSub)
@@ -222,6 +232,10 @@ export const ops = {
           r3(r3(ay * tbMul.ox) + r3(by * tbMul.oy)) + taMul.oy,
         );
       }
+      if (isNum(b)) {
+        const k = num(b);
+        return transform2d(r3(taMul.xx * k), r3(taMul.xy * k), r3(taMul.yx * k), r3(taMul.yy * k), r3(taMul.ox * k), r3(taMul.oy * k));
+      }
       if (b.t === Tag.OBJECT && (b.v as object) instanceof GVector2) {
         const p = b.v as GVector2;
         return vector2(r3(r3(taMul.xx * p.x) + r3(taMul.yx * p.y)) + taMul.ox, r3(r3(taMul.xy * p.x) + r3(taMul.yy * p.y)) + taMul.oy);
@@ -234,6 +248,15 @@ export const ops = {
       if (tb3Mul !== null) return transform3dCompose(ta3Mul, tb3Mul);
       const t3Point = b.t === Tag.OBJECT && (b.v as object) instanceof GVector3 ? (b.v as GVector3) : null;
       if (t3Point !== null) return transform3dXformPoint(ta3Mul, t3Point.x, t3Point.y, t3Point.z);
+      if (isNum(b)) {
+        const k = num(b);
+        return transform3d(
+          r3(ta3Mul.x0 * k), r3(ta3Mul.x1 * k), r3(ta3Mul.x2 * k),
+          r3(ta3Mul.y0 * k), r3(ta3Mul.y1 * k), r3(ta3Mul.y2 * k),
+          r3(ta3Mul.z0 * k), r3(ta3Mul.z1 * k), r3(ta3Mul.z2 * k),
+          r3(ta3Mul.ox * k), r3(ta3Mul.oy * k), r3(ta3Mul.oz * k),
+        );
+      }
       throw new UnsupportedError("transform3d-mul-right", `Transform3D 的 ${"\u002a"} 只量过乘 Transform3D 与乘 Vector3（收到另一形）`);
     }
     const t3Right = asTransform3D(b);
@@ -266,6 +289,14 @@ export const ops = {
     if (qaMul && b.t === Tag.OBJECT && (b.v as object) instanceof GVector3) {
       throw new UnsupportedError("quaternion-xform", "Quaternion * Vector3 这一式还没对上：三种 float32 结合次序里，两种各自复现了一格、另一格差 6e-7，读不出引擎的那一条，响亮拒");
     }
+    if (qaMul && isNum(b)) {
+      const k = num(b);
+      return quaternion(r3(qaMul.x * k), r3(qaMul.y * k), r3(qaMul.z * k), r3(qaMul.w * k));
+    }
+    if (qbMul && isNum(a)) {
+      const k = num(a);
+      return quaternion(r3(qbMul.x * k), r3(qbMul.y * k), r3(qbMul.z * k), r3(qbMul.w * k));
+    }
     const ziMul = asVec2i(a);
     const zjMul = asVec2i(b);
     if (ziMul && zjMul) return vector2i(mul32(ziMul.x, zjMul.x), mul32(ziMul.y, zjMul.y));
@@ -292,6 +323,35 @@ export const ops = {
   },
 
   div(a: Variant, b: Variant): Variant {
+    const qaDiv = asQuaternion(a);
+    if (qaDiv && isNum(b)) {
+      const k = num(b);
+      return quaternion(r3(qaDiv.x / k), r3(qaDiv.y / k), r3(qaDiv.z / k), r3(qaDiv.w / k));
+    }
+    const baDiv = asBasis(a);
+    if (baDiv && isNum(b)) {
+      const k = num(b);
+      return V.object(new GBasis(
+        r3(baDiv.x0 / k), r3(baDiv.x1 / k), r3(baDiv.x2 / k),
+        r3(baDiv.y0 / k), r3(baDiv.y1 / k), r3(baDiv.y2 / k),
+        r3(baDiv.z0 / k), r3(baDiv.z1 / k), r3(baDiv.z2 / k),
+      ));
+    }
+    const taDiv = asTransform2D(a);
+    if (taDiv !== null && isNum(b)) {
+      const k = num(b);
+      return transform2d(r3(taDiv.xx / k), r3(taDiv.xy / k), r3(taDiv.yx / k), r3(taDiv.yy / k), r3(taDiv.ox / k), r3(taDiv.oy / k));
+    }
+    const ta3Div = asTransform3D(a);
+    if (ta3Div !== null && isNum(b)) {
+      const k = num(b);
+      return transform3d(
+        r3(ta3Div.x0 / k), r3(ta3Div.x1 / k), r3(ta3Div.x2 / k),
+        r3(ta3Div.y0 / k), r3(ta3Div.y1 / k), r3(ta3Div.y2 / k),
+        r3(ta3Div.z0 / k), r3(ta3Div.z1 / k), r3(ta3Div.z2 / k),
+        r3(ta3Div.ox / k), r3(ta3Div.oy / k), r3(ta3Div.oz / k),
+      );
+    }
     const va = asVec2(a);
     const vb = asVec2(b);
     if (va && vb) return V.object(new GVector2(va.x / vb.x, va.y / vb.y));
@@ -398,6 +458,8 @@ export const ops = {
     if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
     const zi3Neg = asVec3i(a);
     if (zi3Neg) return v3iNeg(zi3Neg);
+    const qaNeg = asQuaternion(a);
+    if (qaNeg) return quaternion(r3(-qaNeg.x), r3(-qaNeg.y), r3(-qaNeg.z), r3(-qaNeg.w));
     const caNeg = asColor(a);
     if (caNeg) return color(1 - caNeg.r, 1 - caNeg.g, 1 - caNeg.b, caNeg.a);
     if (!isNum(a)) {
@@ -411,6 +473,7 @@ export const ops = {
 
   pos(a: Variant): Variant {
     if (isNum(a)) return a;
+    if (a.t === Tag.OBJECT) return a;
     if (MEASURED_SIX.has(a.t)) {
       throw new GodotRuntimeError("pos-operands", `Invalid operands '${valueTypeName(a)}' and 'Nil' in operator 'unary+'.`);
     }

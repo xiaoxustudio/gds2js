@@ -23,6 +23,7 @@ export function scanEvidence({ globalNames = new Set() } = {}) {
   const cases = listCases("");
   const nameRefs = new Map();
   const ownerRefs = new Map();
+  const opRefs = new Map();
   const globals = new Set();
   let caseCount = 0;
 
@@ -54,7 +55,8 @@ export function scanEvidence({ globalNames = new Set() } = {}) {
     const text = readFileSync(join(testDir, file), "utf8");
     for (const m of text.matchAll(/method\([^,\n]+,\s*"([A-Za-z_]\w*)"/g)) addRef(nameRefs, m[1], ref);
     for (const m of text.matchAll(/attribute\([^,\n]+,\s*"([A-Za-z_]\w*)"/g)) addRef(nameRefs, m[1], ref);
+    for (const m of text.matchAll(/op#([A-Za-z0-9_]+)#([^#\s]+)#([A-Za-z0-9_]+)#/g)) addRef(opRefs, `${m[1]}#${m[2]}#${m[3]}`, ref);
   }
 
-  return { nameRefs, ownerRefs, globals, stats: { cases: caseCount, tests: testFiles.length } };
+  return { nameRefs, ownerRefs, opRefs, globals, stats: { cases: caseCount, tests: testFiles.length } };
 }
