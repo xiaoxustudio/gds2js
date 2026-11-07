@@ -23,6 +23,7 @@ export class Main extends SceneTree {
   f(x: rt.Variant): void {
     const __gd_frame = rt.frameEnter("res://main.gd", "f");
     try {
+      x = rt.paramSlot(x, "int", 1, "f", this);
       rt.frameLine(4);
       print(rt.showArgs([x]));
     } catch (__gd_err) {

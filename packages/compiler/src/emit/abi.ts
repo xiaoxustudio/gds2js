@@ -70,6 +70,7 @@ export function dropBind(out: Map<string, number>, name: string): void {
 export function slotTypeName(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");
+  if (isGlobalEnumName(base)) return "int";
   return MEASURED_SLOTS.has(base) ? base : null;
 }
 
