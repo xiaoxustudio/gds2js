@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.1.4",
   "private": true,
-  "packageManager": "pnpm@12.13.0",
+  "packageManager": "pnpm@12.18.0",
   "description": "将 gdscript 转义为 js 运行",
   "engines": {
     "node": ">=25"
@@ -53,7 +53,7 @@
     "regen:gdsrc-builtin": "tsx tools/gdsrc-builtin.ts",
     "regen:compat-api": "node tools/compat/regen-api.mjs && tsx tools/compat/resolve.mts",
     "regen:compat": "tsx tools/compat/resolve.mts",
-    "site:dev": "vite --config site/vite.config.ts",
+    "site:dev": "pnpm run regen:compat && vite --config site/vite.config.ts",
     "site:build": "tsx tools/compat/resolve.mts && vite --config site/vite.config.ts build",
     "site:typecheck": "tsc -p site/tsconfig.json --noEmit",
     "test:compat": "vitest run --project repo test/compat"
@@ -73,7 +73,7 @@
     "tsx": "^4.23.15",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5",
-    "vitest": "^5.0.5"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   }
 }
