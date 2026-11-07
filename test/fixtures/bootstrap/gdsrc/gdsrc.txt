@@ -1229,10 +1229,10 @@ mf|group|2|
 mf|group|3|0:0:0:3,1:8:3:4,
 mf|static|vector2Const|vector4iConst|colorStatic|stringStatic|callableStatic|null|null
 mf|props|null|
-mf|props|Node|name
-mf|props|Node2D|global_position, name, position, rotation, rotation_degrees, scale, top_level, transform, visible, y_sort_enabled, z_index
-mf|props|Node3D|basis, global_basis, global_position, global_rotation, global_rotation_degrees, name, position, rotation, rotation_degrees, scale, transform, visible
-mf|props|Control|global_position, name, pivot_offset, position, rotation, scale, size, visible
+mf|props|Node|anchor_bottom, anchor_left, anchor_right, anchor_top, child_entered_tree, child_exiting_tree, child_order_changed, custom_minimum_size, name, offset_bottom, offset_left, offset_right, offset_top, process_mode, ready, renamed, replacing_by, scene_file_path, size_flags_horizontal, size_flags_vertical, tree_entered, tree_exited, tree_exiting
+mf|props|Node2D|anchor_bottom, anchor_left, anchor_right, anchor_top, child_entered_tree, child_exiting_tree, child_order_changed, custom_minimum_size, global_position, name, offset_bottom, offset_left, offset_right, offset_top, position, process_mode, ready, renamed, replacing_by, rotation, rotation_degrees, scale, scene_file_path, size_flags_horizontal, size_flags_vertical, top_level, transform, tree_entered, tree_exited, tree_exiting, visible, y_sort_enabled, z_index
+mf|props|Node3D|anchor_bottom, anchor_left, anchor_right, anchor_top, basis, child_entered_tree, child_exiting_tree, child_order_changed, custom_minimum_size, global_basis, global_position, global_rotation, global_rotation_degrees, name, offset_bottom, offset_left, offset_right, offset_top, position, process_mode, ready, renamed, replacing_by, rotation, rotation_degrees, scale, scene_file_path, size_flags_horizontal, size_flags_vertical, transform, tree_entered, tree_exited, tree_exiting, visible
+mf|props|Control|anchor_bottom, anchor_left, anchor_right, anchor_top, child_entered_tree, child_exiting_tree, child_order_changed, custom_minimum_size, global_position, name, offset_bottom, offset_left, offset_right, offset_top, pivot_offset, position, process_mode, ready, renamed, replacing_by, rotation, scale, scene_file_path, size, size_flags_horizontal, size_flags_vertical, tree_entered, tree_exited, tree_exiting, visible
 mf|props|Label|
 sc|0|ok|.:Node2D:<case>/main.gd;./Body:Sprite2D:null;./Body/Arm:Node2D:null
 sc|1|err|scene-header
@@ -1878,7 +1878,9 @@ bf|PackedVector2Array|rt.packCtor("vector2", [A0, A1, A2])
 bf|PackedVector3Array|rt.packCtor("vector3", [A0, A1, A2])
 bf|PackedVector4Array|rt.packCtor("vector4", [A0, A1, A2])
 bf|Plane|rt.planeNew([A0, A1, A2])
+bf|Projection|rt.projectionNew([A0, A1, A2])
 bf|Quaternion|rt.quaternionNew([A0, A1, A2])
+bf|RID|rt.ridCtor([A0, A1, A2])
 bf|Rect2|rt.rect2New([A0, A1, A2])
 bf|Rect2i|rt.rect2iNew([A0, A1, A2])
 bf|Signal|rt.signalCtor([A0, A1, A2])
