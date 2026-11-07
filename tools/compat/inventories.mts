@@ -20,6 +20,7 @@ import { GLOBAL_CALLABLE_IMPLEMENTED } from "../../packages/runtime/src/runtime/
 import { GLOBAL_CONSTANTS } from "../../packages/compiler/src/lower/globals.ts";
 import { ENGINE_CLASS_CONSTS } from "../../packages/runtime/src/runtime/engine-class-consts.ts";
 import { NODE2D_METHOD_NAMES } from "../../packages/runtime/src/runtime/class/object/node2d.ts";
+import { NODE3D_METHOD_NAMES } from "../../packages/runtime/src/runtime/class/object/node3d.ts";
 
 const PACK = { ...PACK_METHOD_ARITY_WITH_BYTES, ...PACK_BYTE_EXTRA_ARITY };
 
@@ -180,6 +181,7 @@ export function buildInventories() {
   for (const [owner, names] of Object.entries(EXTRA_PROPS)) add(owner, "prop", names);
   for (const [owner, names] of Object.entries(EXTRA_METHODS)) add(owner, "method", names);
   add("Node2D", "method", NODE2D_METHOD_NAMES);
+  add("Node3D", "method", NODE3D_METHOD_NAMES);
   for (const rule of ENGINE_RULES) {
     const labels = collectLabels(rule.file, rule.fn);
     for (const owner of rule.owners) add(owner, rule.kind, labels);

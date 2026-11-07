@@ -1,0 +1,23 @@
+extends SceneTree
+
+func _initialize():
+	var n := Node3D.new()
+	print("n1|", n.position, "|", n.rotation, "|", n.rotation_degrees, "|", n.scale, "|", n.basis, "|", n.transform)
+	print("n2|", n.quaternion, "|", n.top_level)
+	n.set_position(Vector3(1, 2, 3))
+	n.set_rotation(Vector3(0.1, 0.2, 0.3))
+	print("n3|", n.position, "|", n.rotation, "|", n.rotation_degrees)
+	n.set_rotation_degrees(Vector3(15, 30, 45))
+	print("n4|", n.rotation, "|", n.rotation_degrees)
+	n.set_scale(Vector3(2, 3, 4))
+	print("n5|", n.scale, "|", n.get_scale())
+	n.set_transform(Transform3D(Basis(Vector3(0, 0, 1), 0.5), Vector3(7, 8, 9)))
+	print("n6|", n.position, "|", n.rotation, "|", n.scale, "|", n.basis)
+	n.set_quaternion(Quaternion(0, 0, 0, 1))
+	print("n7|", n.quaternion, "|", n.basis)
+	n.set_as_top_level(true)
+	print("n8|", n.top_level, "|", n.is_set_as_top_level())
+	n.set_identity()
+	print("n9|", n.position, "|", n.rotation, "|", n.scale, "|", n.basis)
+	n.free()
+	quit()

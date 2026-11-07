@@ -1,6 +1,7 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
-import { asBasis, axisAngleBasis, basisDeterminant, basisEulerYXZ, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisXform, basis } from "../orient/basis";
+import { asBasis, axisAngleBasis, basisDeterminant, basisEulerYXZ, basisFromQuaternion, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisToQuaternion, basisXform, basis } from "../orient/basis";
+import { asQuaternion, quaternion } from "../orient/quaternion";
 import { NULL_OBJECT } from "../identity/null-object";
 import { asVec3, vector3 } from "../vector/vector3";
 import { transform3d } from "../orient/transform3d";
@@ -14,6 +15,7 @@ import { asTransform3D } from "../orient/transform3d";
 
 const r = Math.fround;
 const DEG_PER_RAD = r(180 / r(Math.PI));
+const RAD_PER_DEG = r(r(Math.PI) / 180);
 
 type T3Store = {
   px: number;
@@ -235,6 +237,12 @@ export function node3dRead(target: unknown, name: string): Variant | null {
       const g = node3dGlobalParts(target);
       return basis(g.b.x0, g.b.x1, g.b.x2, g.b.y0, g.b.y1, g.b.y2, g.b.z0, g.b.z1, g.b.z2);
     }
+    case "quaternion": {
+      const q = basisToQuaternion(node3dBasisParts(s));
+      return quaternion(q.x, q.y, q.z, q.w);
+    }
+    case "top_level":
+      return V.bool(rec(target).__gd_node_top_level__ === true);
     default:
       return null;
   }
@@ -294,12 +302,84 @@ export function node3dWrite(target: unknown, name: string, value: Variant): void
       s.sz = 1;
       return;
     }
+    case "rotation_degrees": {
+      const p = fromVec3(value, "rotation_degrees");
+      node3dMaterialize(s);
+      s.rx = r(p[0] * RAD_PER_DEG);
+      s.ry = r(p[1] * RAD_PER_DEG);
+      s.rz = r(p[2] * RAD_PER_DEG);
+      return;
+    }
+    case "basis": {
+      const b = asBasis(value);
+      if (b === null) throw new UnsupportedError("node3d-arg-type", `Node3D.basis 的写入只量过 Basis（收到 ${tagName(value.t)}）`);
+      s.b3 = b;
+      return;
+    }
+    case "quaternion": {
+      const q = asQuaternion(value);
+      if (q === null) throw new UnsupportedError("node3d-arg-type", `Node3D.quaternion 的写入只量过 Quaternion（收到 ${tagName(value.t)}）`);
+      s.b3 = asBasis(basisFromQuaternion(q)) as GBasis;
+      return;
+    }
+    case "top_level": {
+      if (value.t !== Tag.BOOL) throw new UnsupportedError("node3d-arg-type", `Node3D.top_level 的写入只量过 bool（收到 ${tagName(value.t)}）`);
+      rec(target).__gd_node_top_level__ = value.v === true;
+      return;
+    }
     default:
       throw new UnsupportedError("node3d-prop", `Node3D.${name} 的成员面没量过（global_rotation 那几支的写入、look_at / translate / rotate_* 一族还没读数）`);
   }
 }
 
+const NODE3D_GETTERS: Readonly<Record<string, string>> = {
+  get_position: "position",
+  get_rotation: "rotation",
+  get_rotation_degrees: "rotation_degrees",
+  get_scale: "scale",
+  get_basis: "basis",
+  get_transform: "transform",
+  get_quaternion: "quaternion",
+  get_global_position: "global_position",
+  get_global_rotation: "global_rotation",
+  get_global_rotation_degrees: "global_rotation_degrees",
+  get_global_basis: "global_basis",
+  get_global_transform: "global_transform",
+  is_set_as_top_level: "top_level",
+};
+
+const NODE3D_SETTERS: Readonly<Record<string, string>> = {
+  set_position: "position",
+  set_rotation: "rotation",
+  set_rotation_degrees: "rotation_degrees",
+  set_scale: "scale",
+  set_basis: "basis",
+  set_transform: "transform",
+  set_quaternion: "quaternion",
+  set_global_position: "global_position",
+  set_as_top_level: "top_level",
+};
+
+export const NODE3D_METHOD_NAMES: readonly string[] = [
+  ...Object.keys(NODE3D_GETTERS),
+  ...Object.keys(NODE3D_SETTERS),
+  "set_identity",
+];
+
 export function node3dMethod(target: unknown, name: string, args: Variant[]): Variant | null {
+  const prop = NODE3D_GETTERS[name];
+  if (prop !== undefined) return node3dRead(target, prop) ?? V.nil();
+  const propSet = NODE3D_SETTERS[name];
+  if (propSet !== undefined) {
+    const value = args[0];
+    if (value === undefined) throw new UnsupportedError("node3d-arg-type", `Node3D.${name} 少了实参`);
+    node3dWrite(target, propSet, value);
+    return V.nil();
+  }
+  if (name === "set_identity") {
+    node3dWrite(target, "transform", transform3d(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0));
+    return V.nil();
+  }
   switch (name) {
     case "to_local": {
       const p = fromVec3(args[0], "to_local");

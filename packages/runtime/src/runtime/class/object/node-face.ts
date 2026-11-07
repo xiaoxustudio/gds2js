@@ -33,7 +33,7 @@ import { callCallableBox } from "../../method/callable";
 import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
-import { node3dGlobalTransform, node3dMethod } from "./node3d";
+import { node3dGlobalTransform, node3dMethod, NODE3D_METHOD_NAMES } from "./node3d";
 import { GdTimer, timerMethod } from "./timer";
 import { ctlMethod } from "./control";
 
@@ -46,7 +46,7 @@ const NODE2D_ONLY_METHODS = new Set([
   "get_global_rotation", "set_global_rotation", "get_global_rotation_degrees", "set_global_rotation_degrees",
   "get_global_scale", "set_global_scale", "get_global_skew",
 ]);
-const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "rotate", "rotate_x", "rotate_y", "rotate_z", "orthonormalize", "get_parent_node_3d"]);
+const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "rotate", "rotate_x", "rotate_y", "rotate_z", "orthonormalize", "get_parent_node_3d", ...NODE3D_METHOD_NAMES]);
 const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor"]);
 
 function cloneEngineNode(rec: NodeRec): NodeRec {
