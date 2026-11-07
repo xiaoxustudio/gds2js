@@ -18,6 +18,8 @@ export class Main extends SceneTree {
       this.s1 = rt.V.nil();
       this.s2 = rt.V.nil();
       this.s3 = rt.V.nil();
+      this.__gd_store_setter_only = rt.V.nil();
+      this.__gd_store_shadowed = rt.V.nil();
       rt.frameLine(4);
       this.host = rt.methodCallable(rt.V.object(this), "quit");
       rt.frameLine(5);

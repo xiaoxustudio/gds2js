@@ -161,8 +161,10 @@ export function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainTo
     out.push(`      this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
   }
   for (const v of vars) {
-    if (v.isStatic || v.accessor) continue;
-    out.push(`      this.${v.name} = ${typeDefault(v.type)};`);
+    if (v.isStatic) continue;
+    const slot = propSlot(v);
+    if (slot !== null) out.push(`      this.${slot} = ${typeDefault(v.type)};`);
+    else if (!v.accessor) out.push(`      this.${v.name} = ${typeDefault(v.type)};`);
   }
   for (const v of vars) {
     if (v.isStatic) continue;

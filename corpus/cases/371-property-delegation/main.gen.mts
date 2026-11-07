@@ -17,6 +17,11 @@ export class Main extends SceneTree {
     try {
       this.store = rt.V.nil();
       this.side = rt.V.nil();
+      this.__gd_store_named_set = rt.V.nil();
+      this.__gd_store_with_init = rt.V.nil();
+      this.__gd_store_inline_init = rt.V.nil();
+      this.__gd_store_typed_set = rt.V.int(0);
+      this.__gd_store_ordered = rt.V.nil();
       rt.frameLine(4);
       this.store = rt.V.int(0);
       rt.frameLine(5);
