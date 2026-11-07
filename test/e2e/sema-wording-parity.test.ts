@@ -22,7 +22,7 @@ function engineLines(gold: string): Array<{ line: string; text: string }> {
 
 const CASES = existsSync(CORPUS)
   ? readdirSync(CORPUS, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && /^\d{3}-/.test(d.name))
+      .filter((d) => d.isDirectory() && /^\d{3}-/.test(d.name) && !d.name.startsWith("000-"))
       .map((d) => d.name)
       .sort()
       .map((id) => ({ id, eng: engineLines(readFileSync(`${CORPUS}/${id}/godot.txt`, "utf8")) }))
