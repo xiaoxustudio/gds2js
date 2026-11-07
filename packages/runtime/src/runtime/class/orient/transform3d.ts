@@ -344,3 +344,12 @@ export function transform3dMethod(inner: GTransform3D, name: string, args: Varia
       throw new UnsupportedError("transform3d-method", `Transform3D.${name}() 这一支没量过（interpolate_with / looking_at / is_equal_approx 还没落地）`);
   }
 }
+export function transform3dStatic(name: string, args: Variant[] = []): Variant {
+  if (args.length === 0) {
+    if (name === "IDENTITY") return transform3d(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0);
+    if (name === "FLIP_X") return transform3d(-1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0);
+    if (name === "FLIP_Y") return transform3d(1, 0, 0, 0, -1, 0, 0, 0, 1, 0, 0, 0);
+    if (name === "FLIP_Z") return transform3d(1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 0, 0);
+  }
+  throw new UnsupportedError("transform3d-static", `Transform3D.${name} 这一支没量过`);
+}

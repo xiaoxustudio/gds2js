@@ -80,7 +80,7 @@ export const STATIC_FACE: Record<string, { consts: readonly string[]; axis: read
     statics: {},
   },
   Vector3: {
-    consts: ["ZERO", "ONE", "INF", "LEFT", "RIGHT", "UP", "DOWN", "FORWARD", "BACK"],
+    consts: ["ZERO", "ONE", "INF", "LEFT", "RIGHT", "UP", "DOWN", "FORWARD", "BACK", "MODEL_LEFT", "MODEL_RIGHT", "MODEL_TOP", "MODEL_BOTTOM", "MODEL_FRONT", "MODEL_REAR"],
     axis: ["AXIS_X", "AXIS_Y", "AXIS_Z"],
     statics: { octahedron_decode: [1, 1] },
   },
@@ -106,12 +106,12 @@ export const STATIC_FACE: Record<string, { consts: readonly string[]; axis: read
   },
   Vector4: {
     consts: ["ZERO", "ONE", "INF"],
-    axis: [],
+    axis: ["AXIS_X", "AXIS_Y", "AXIS_Z", "AXIS_W"],
     statics: {},
   },
   Vector4i: {
     consts: ["ZERO", "ONE", "MIN", "MAX"],
-    axis: [],
+    axis: ["AXIS_X", "AXIS_Y", "AXIS_Z", "AXIS_W"],
     statics: {},
   },
   String: {
@@ -130,6 +130,36 @@ export const STATIC_FACE: Record<string, { consts: readonly string[]; axis: read
     consts: [],
     axis: [],
     statics: { create: [2, 2] },
+  },
+  Basis: {
+    consts: ["IDENTITY", "FLIP_X", "FLIP_Y", "FLIP_Z"],
+    axis: [],
+    statics: {},
+  },
+  Quaternion: {
+    consts: ["IDENTITY"],
+    axis: [],
+    statics: {},
+  },
+  Projection: {
+    consts: ["IDENTITY", "ZERO", "PLANE_NEAR", "PLANE_FAR", "PLANE_LEFT", "PLANE_TOP", "PLANE_RIGHT", "PLANE_BOTTOM"],
+    axis: [],
+    statics: {},
+  },
+  Plane: {
+    consts: ["PLANE_XY", "PLANE_XZ", "PLANE_YZ"],
+    axis: [],
+    statics: {},
+  },
+  Transform2D: {
+    consts: ["IDENTITY", "FLIP_X", "FLIP_Y"],
+    axis: [],
+    statics: {},
+  },
+  Transform3D: {
+    consts: ["IDENTITY", "FLIP_X", "FLIP_Y", "FLIP_Z"],
+    axis: [],
+    statics: {},
   },
 };
 

@@ -60,7 +60,11 @@ const VEC4_CONST: Record<string, [number, number, number, number]> = {
   INF: [Infinity, Infinity, Infinity, Infinity],
 };
 
+const VEC4_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1, AXIS_Z: 2, AXIS_W: 3 };
+
 export function vector4Const(name: string, args: Variant[] = []): Variant {
+  const i = VEC4_CONST_INT[name];
+  if (i !== undefined && args.length === 0) return V.int(i);
   const c = VEC4_CONST[name];
   if (c === undefined || args.length > 0) {
     if (args.length > 0 && c !== undefined) throw new UnsupportedError("vector4-const", `Vector4.${name} 不是函数`);

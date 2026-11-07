@@ -244,7 +244,22 @@ function frustum(left: number, right: number, bottom: number, top: number, zn: n
   );
 }
 
-export function projectionStatic(name: string, args: Variant[]): Variant {
+const PROJECTION_PLANES: Record<string, number> = {
+  PLANE_NEAR: 0,
+  PLANE_FAR: 1,
+  PLANE_LEFT: 2,
+  PLANE_TOP: 3,
+  PLANE_RIGHT: 4,
+  PLANE_BOTTOM: 5,
+};
+
+export function projectionStatic(name: string, args: Variant[] = []): Variant {
+  if (args.length === 0) {
+    if (name === "IDENTITY") return projectionCopy(PROJECTION_IDENTITY);
+    if (name === "ZERO") return projection(new GVector4(0, 0, 0, 0), new GVector4(0, 0, 0, 0), new GVector4(0, 0, 0, 0), new GVector4(0, 0, 0, 0));
+    const plane = PROJECTION_PLANES[name];
+    if (plane !== undefined) return V.int(plane);
+  }
   switch (name) {
     case "create_perspective": {
       const fovy = num(args[0], "create_perspective");

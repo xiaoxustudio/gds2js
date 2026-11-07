@@ -70,6 +70,9 @@ const STATIC_MEMBER_FNS: Record<string, string> = {
   Basis: "basisStatic",
   Quaternion: "quaternionStatic",
   Projection: "projectionStatic",
+  Plane: "planeStatic",
+  Transform2D: "transform2dStatic",
+  Transform3D: "transform3dStatic",
   String: "stringStatic",
   Callable: "callableStatic",
 };

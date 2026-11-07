@@ -62,7 +62,11 @@ const VEC4I_CONST: Record<string, [number, number, number, number]> = {
   MAX: [2147483647, 2147483647, 2147483647, 2147483647],
 };
 
+const VEC4I_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1, AXIS_Z: 2, AXIS_W: 3 };
+
 export function vector4iConst(name: string, args: Variant[] = []): Variant {
+  const i = VEC4I_CONST_INT[name];
+  if (i !== undefined && args.length === 0) return V.int(i);
   const c = VEC4I_CONST[name];
   if (c === undefined || args.length > 0) {
     if (args.length > 0 && c !== undefined) throw new UnsupportedError("vector4i-const", `Vector4i.${name} 不是函数`);

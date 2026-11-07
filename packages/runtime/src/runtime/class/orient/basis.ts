@@ -382,7 +382,13 @@ function numer(v: Variant | undefined, at: string): number {
   return Number(v.v);
 }
 
-export function basisStatic(name: string, args: Variant[]): Variant {
+export function basisStatic(name: string, args: Variant[] = []): Variant {
+  if (args.length === 0) {
+    if (name === "IDENTITY") return basis(1, 0, 0, 0, 1, 0, 0, 0, 1);
+    if (name === "FLIP_X") return basis(-1, 0, 0, 0, 1, 0, 0, 0, 1);
+    if (name === "FLIP_Y") return basis(1, 0, 0, 0, -1, 0, 0, 0, 1);
+    if (name === "FLIP_Z") return basis(1, 0, 0, 0, 1, 0, 0, 0, -1);
+  }
   if (name === "from_scale") {
     const s = asVec3(args[0] as Variant);
     if (s === null) throw new UnsupportedError("basis-arg", "Basis.from_scale() 只量过 Vector3");

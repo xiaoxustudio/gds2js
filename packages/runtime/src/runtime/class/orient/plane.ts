@@ -169,3 +169,11 @@ export function planeMethod(inner: GPlane, name: string, args: Variant[]): Varia
       throw new UnsupportedError("plane-method", `Plane.${name}() 这一支没量过（intersects_segment / intersects_plane / get_center 那几支还没读数）`);
   }
 }
+export function planeStatic(name: string, args: Variant[] = []): Variant {
+  if (args.length === 0) {
+    if (name === "PLANE_XY") return plane(0, 0, 1, 0);
+    if (name === "PLANE_XZ") return plane(0, 1, 0, 0);
+    if (name === "PLANE_YZ") return plane(1, 0, 0, 0);
+  }
+  throw new UnsupportedError("plane-static", `Plane.${name} 这一支没量过`);
+}

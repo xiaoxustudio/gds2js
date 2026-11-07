@@ -103,7 +103,8 @@ export function registerQuaternionFromEulerHook(fn: FromEulerHook): void {
   FROM_EULER_HOOK = fn;
 }
 
-export function quaternionStatic(name: string, args: Variant[]): Variant {
+export function quaternionStatic(name: string, args: Variant[] = []): Variant {
+  if (name === "IDENTITY" && args.length === 0) return quaternion(0, 0, 0, 1);
   if (name === "from_euler") {
     if (FROM_EULER_HOOK === null) throw new UnsupportedError("quaternion-static", "Quaternion.from_euler() 的钩子未注册");
     return FROM_EULER_HOOK(args[0] as Variant);

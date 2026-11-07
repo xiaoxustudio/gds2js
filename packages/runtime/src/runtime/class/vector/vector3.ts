@@ -74,6 +74,12 @@ const VEC3_CONST: Record<string, [number, number, number]> = {
   DOWN: [0, -1, 0],
   FORWARD: [0, 0, -1],
   BACK: [0, 0, 1],
+  MODEL_LEFT: [1, 0, 0],
+  MODEL_RIGHT: [-1, 0, 0],
+  MODEL_TOP: [0, 1, 0],
+  MODEL_BOTTOM: [0, -1, 0],
+  MODEL_FRONT: [0, 0, 1],
+  MODEL_REAR: [0, 0, -1],
 };
 
 const VEC3_CONST_INT: Record<string, number> = { AXIS_X: 0, AXIS_Y: 1, AXIS_Z: 2 };

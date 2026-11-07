@@ -207,3 +207,11 @@ export function transform2dMethod(inner: GTransform2D, name: string, args: Varia
       throw new UnsupportedError("transform2d-method", `Transform2D.${name}() 这一支没量过（interpolate_with / xform / basis_xform 那几支还没读数）`);
   }
 }
+export function transform2dStatic(name: string, args: Variant[] = []): Variant {
+  if (args.length === 0) {
+    if (name === "IDENTITY") return transform2d(1, 0, 0, 1, 0, 0);
+    if (name === "FLIP_X") return transform2d(-1, 0, 0, 1, 0, 0);
+    if (name === "FLIP_Y") return transform2d(1, 0, 0, -1, 0, 0);
+  }
+  throw new UnsupportedError("transform2d-static", `Transform2D.${name} 这一支没量过`);
+}
