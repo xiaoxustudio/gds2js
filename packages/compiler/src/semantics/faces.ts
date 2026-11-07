@@ -134,17 +134,28 @@ export const STATIC_FACE: Record<string, { consts: readonly string[]; axis: read
   Basis: {
     consts: ["IDENTITY", "FLIP_X", "FLIP_Y", "FLIP_Z"],
     axis: [],
-    statics: {},
+    statics: { from_scale: [1, 1], from_euler: [1, 2] },
   },
   Quaternion: {
     consts: ["IDENTITY"],
     axis: [],
-    statics: {},
+    statics: { from_euler: [1, 2] },
   },
   Projection: {
     consts: ["IDENTITY", "ZERO", "PLANE_NEAR", "PLANE_FAR", "PLANE_LEFT", "PLANE_TOP", "PLANE_RIGHT", "PLANE_BOTTOM"],
     axis: [],
-    statics: {},
+    statics: {
+      create_depth_correction: [1, 1],
+      create_light_atlas_rect: [1, 1],
+      create_perspective: [4, 5],
+      create_perspective_hmd: [8, 8],
+      create_for_hmd: [8, 8],
+      create_orthogonal: [6, 7],
+      create_orthogonal_aspect: [4, 5],
+      create_frustum: [6, 6],
+      create_frustum_aspect: [5, 6],
+      create_fit_aabb: [1, 1],
+    },
   },
   Plane: {
     consts: ["PLANE_XY", "PLANE_XZ", "PLANE_YZ"],
