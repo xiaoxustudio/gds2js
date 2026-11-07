@@ -23,6 +23,8 @@ export class GdNodeObject extends GdScriptObject {
   __gd_node_ctl__?: unknown;
   __gd_node_name__: string = "";
   __gd_scene_file_path__: string = "";
+  __gd_node_process_priority__: number = 0;
+  __gd_node_physics_priority__: number = 0;
   __gd_node_parent__: object | null = null;
   __gd_node_children__: object[] = [];
   __gd_node_groups__: string[] = [];

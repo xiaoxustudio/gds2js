@@ -289,6 +289,18 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
       enw.__gd_node_process_mode__ = Number(value.v);
       return null;
     }
+    if (key === "process_priority" || key === "process_physics_priority") {
+      if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("node-prop-write", `Node.${key} 的写入只量过数`);
+      const n = Math.trunc(Number(value.v));
+      if (key === "process_priority") enw.__gd_node_process_priority__ = n;
+      else enw.__gd_node_physics_priority__ = n;
+      return null;
+    }
+    if (key === "owner") {
+      if (value.t !== Tag.OBJECT && value.t !== Tag.NIL) throw new UnsupportedError("node-prop-write", "Node.owner 的写入只量过节点或 null");
+      enw.__gd_node_owner__ = value.t === Tag.NIL ? null : (value.v as object);
+      return null;
+    }
     if (enw.__gd_engine_class__ === "Node3D" && key !== "name") {
       node3dWrite(base.v, key, value);
       return null;
@@ -608,6 +620,9 @@ export function attribute(raw: unknown, name: string): unknown {
         if (tv !== null) return tv;
       }
       if (name === "process_mode") return V.int(en.__gd_node_process_mode__);
+      if (name === "process_priority") return V.int(en.__gd_node_process_priority__);
+      if (name === "process_physics_priority") return V.int(en.__gd_node_physics_priority__);
+      if (name === "owner") return en.__gd_node_owner__ === null ? V.nil() : V.object(en.__gd_node_owner__);
       const sig = nodeSignalOf(en, name);
       if (sig !== null) return V.object(sig);
       if (methodAritiesOf(obj.v)?.[name] !== undefined) return methodCallable(obj, name);

@@ -473,6 +473,39 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     }
     case "get_process_mode":
       return V.int(rec.__gd_node_process_mode__);
+    case "get_scene_file_path":
+      return V.str(rec.__gd_scene_file_path__);
+    case "set_scene_file_path": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "set_scene_file_path() 只量过字符串");
+      rec.__gd_scene_file_path__ = String(v.v);
+      return V.nil();
+    }
+    case "get_process_priority":
+      return V.int(rec.__gd_node_process_priority__);
+    case "set_process_priority": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_process_priority() 只量过数");
+      rec.__gd_node_process_priority__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "get_physics_process_priority":
+      return V.int(rec.__gd_node_physics_priority__);
+    case "set_physics_process_priority": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_physics_process_priority() 只量过数");
+      rec.__gd_node_physics_priority__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "is_processing_internal":
+    case "is_physics_processing_internal":
+      return V.bool(false);
+    case "is_physics_interpolated":
+      return V.bool(true);
+    case "is_physics_interpolated_and_enabled":
+      return V.bool(false);
+    case "is_displayed_folded":
+      return V.bool(false);
     case "get_process_delta_time": {
       const tree = sceneTree();
       return V.float(tree === null ? 1 / 60 : tree.processDt);

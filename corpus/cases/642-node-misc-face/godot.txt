@@ -1,0 +1,4 @@
+n1||0|0
+n2|<case>/y.gd|<case>/y.gd|5|5
+n3|6|6|0
+n4|false|false|true|false|false

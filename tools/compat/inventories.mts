@@ -52,7 +52,7 @@ const BUILTIN_PROPS = Object.fromEntries(
 );
 
 const ENGINE_RULES = [
-  { file: "packages/runtime/src/runtime/class/object/node-face.ts", fn: "nodeMethod", owners: ["Node", "Node2D", "Node3D", "Control", "SceneTree"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/object/node-face.ts", fn: "nodeMethod", owners: ["Node", "Node2D", "Node3D", "Control", "SceneTree", "Object"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/object/node2d.ts", fn: "node2dMethod", owners: ["Node2D", "Control"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/object/node2d.ts", fn: "node2dGlobalTransform", owners: ["Node2D", "Control"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/object/node2d.ts", fn: "node2dRead", owners: ["Node2D", "Control"], kind: "prop" },
@@ -114,7 +114,7 @@ const VIRTUAL_OWNERS = ["Node", "Node2D", "Node3D", "Control"];
 
 const EXTRA_GLOBAL_IMPLEMENTED = ["print", "print_debug", "print_rich", "print_verbose", "printerr", "printraw", "prints", "printt"];
 
-const EXTRA_PROPS = { Node: ["name"] };
+const EXTRA_PROPS = { Node: ["name", "scene_file_path", "process_mode", "process_priority", "process_physics_priority", "owner"] };
 
 const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"] };
 
