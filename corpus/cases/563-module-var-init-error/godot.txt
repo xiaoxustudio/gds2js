@@ -1,0 +1,6 @@
+A
+<null><null>
+SCRIPT ERROR: Invalid operands 'int' and 'Nil' in operator '+'.
+   at: @implicit_new (<case>/main.gd:7)
+   GDScript backtrace (most recent call first):
+       [0] @implicit_new (<case>/main.gd:7)

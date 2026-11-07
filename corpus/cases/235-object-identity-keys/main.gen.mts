@@ -261,6 +261,7 @@ class Thing extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.n = rt.V.nil();
       rt.frameLine(6);
       this.n = rt.V.int(1);
     } catch (__gd_err) {

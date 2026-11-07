@@ -10,6 +10,8 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.outervar = rt.V.nil();
+      this.outer_self = rt.V.nil();
       rt.frameLine(22);
       this.outervar = rt.V.int(7);
       rt.frameLine(23);
@@ -124,6 +126,7 @@ class Box extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.n = rt.V.nil();
       rt.frameLine(4);
       this.n = rt.V.int(1);
     } catch (__gd_err) {

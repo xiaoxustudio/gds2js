@@ -99,6 +99,7 @@ class Box extends rt.GdScriptObject {
     try {
       rt.frameLine(7);
       this.boxed = new rt.Signal("boxed");
+      this.n = rt.V.int(0);
       rt.frameLine(9);
       this.n = rt.toInt(rt.V.int(1));
     } catch (__gd_err) {

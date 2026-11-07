@@ -8,7 +8,7 @@ import { NATIVE_CLASS_SLOTS } from "../semantics/elem-faces";
 import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
-import { makeClosure, mark } from "./helpers";
+import { makeClosure, mark, typeDefault } from "./helpers";
 import { ctorAritiesLiteral, dictIdentityLiteral, fieldTypesLiteral, fwdParams, innerClassBase, innerInheritedMethodNames, innerInheritedNames, methodAritiesLiteral, methodParamsLiteral, scriptPropsLiteral, scriptPropsReaderLiteral, staticNamesLiteral, staticVarTableLiteral, staticsTableLiteral } from "./layout";
 import { propSlot, propSlotInit, slotInit, staticVarSlotsLiteral } from "./abi";
 import { emitFunc } from "./func";
@@ -159,6 +159,10 @@ export function emitFieldsMethod(vars: VarDecl[], signals: SignalDecl[], chainTo
     mark(lineBase + out.length, s.loc);
     out.push(`      rt.frameLine(${String(s.loc?.line ?? 0)});`);
     out.push(`      this.${s.name} = new rt.Signal(${JSON.stringify(s.name)});`);
+  }
+  for (const v of vars) {
+    if (v.isStatic || v.accessor) continue;
+    out.push(`      this.${v.name} = ${typeDefault(v.type)};`);
   }
   for (const v of vars) {
     if (v.isStatic) continue;

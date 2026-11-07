@@ -144,6 +144,7 @@ class NeedsArg extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.n = rt.V.int(0);
       rt.frameLine(12);
       this.n = rt.toInt(rt.V.int(0));
     } catch (__gd_err) {
@@ -193,6 +194,7 @@ class Forward extends NeedsArg {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.k = rt.V.int(0);
       rt.frameLine(19);
       this.k = rt.toInt(rt.V.int(3));
     } catch (__gd_err) {

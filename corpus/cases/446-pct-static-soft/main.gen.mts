@@ -12,6 +12,10 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.fs = rt.V.str("");
+      this.snq = rt.V.stringName("");
+      this.vt = rt.V.array(rt.GArray.of([]));
+      this.vs = rt.V.str("");
       rt.frameLine(3);
       this.fs = rt.strOf(rt.V.str("%d"));
       rt.frameLine(4);

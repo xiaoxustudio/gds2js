@@ -147,6 +147,10 @@ static func emit_fields_method(vars, signals, chain_to_base, line_base):
 		out.append("      rt.frameLine(" + str(line) + ");")
 		out.append("      this." + s["name"] + " = new rt.Signal(" + JSON.stringify(s["name"]) + ");")
 	for v in vars:
+		if v.get("isStatic") == true or v.get("accessor") != null:
+			continue
+		out.append("      this." + v["name"] + " = " + HE.type_default(v.get("type")) + ";")
+	for v in vars:
 		if v.get("isStatic") == true:
 			continue
 		var slot = AB.prop_slot(v)

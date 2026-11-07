@@ -177,6 +177,7 @@ class A extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.x = rt.V.nil();
       rt.frameLine(4);
       this.x = rt.V.int(1);
     } catch (__gd_err) {
@@ -207,6 +208,7 @@ class B extends A {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.y = rt.V.nil();
       rt.frameLine(7);
       this.y = rt.V.int(2);
     } catch (__gd_err) {
@@ -236,6 +238,7 @@ class Other extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.z = rt.V.nil();
       rt.frameLine(10);
       this.z = rt.V.int(3);
     } catch (__gd_err) {

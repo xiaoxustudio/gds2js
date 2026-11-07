@@ -9,6 +9,7 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.K = rt.V.nil();
       rt.frameLine(3);
       this.K = rt.V.int(11);
     } catch (__gd_err) {
@@ -347,6 +348,7 @@ class Needs extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.a = rt.V.int(0);
       rt.frameLine(50);
       this.a = rt.toInt(rt.V.int(0));
     } catch (__gd_err) {

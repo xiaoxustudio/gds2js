@@ -100,6 +100,7 @@ class Inner extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.v = rt.V.nil();
       rt.frameLine(4);
       this.v = rt.V.int(7);
     } catch (__gd_err) {

@@ -63,6 +63,7 @@ class Base extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.hp = rt.V.nil();
       rt.frameLine(10);
       this.hp = rt.V.int(10);
     } catch (__gd_err) {

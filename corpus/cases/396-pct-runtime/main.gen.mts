@@ -29,6 +29,27 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.sFmt = rt.V.str("");
+      this.sPlain = rt.V.str("");
+      this.sTwo = rt.V.str("");
+      this.sStar = rt.V.str("");
+      this.nFmt = rt.V.stringName("");
+      this.nPlain = rt.V.stringName("");
+      this.nTwo = rt.V.stringName("");
+      this.nX = rt.V.stringName("");
+      this.nC = rt.V.stringName("");
+      this.nV = rt.V.stringName("");
+      this.nF = rt.V.stringName("");
+      this.nStar = rt.V.stringName("");
+      this.aStr = rt.V.str("");
+      this.one = rt.V.str("");
+      this.no = rt.V.int(0);
+      this.negi = rt.V.int(0);
+      this.fl = rt.V.float(0);
+      this.vv = rt.vector2(0, 0);
+      this.va1 = rt.V.array(rt.GArray.of([]));
+      this.va2 = rt.V.array(rt.GArray.of([]));
+      this.vs2 = rt.V.array(rt.GArray.of([]));
       rt.frameLine(3);
       this.sFmt = rt.strOf(rt.V.str("%d"));
       rt.frameLine(4);

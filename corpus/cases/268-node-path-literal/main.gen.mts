@@ -9,6 +9,7 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.KN = rt.V.nil();
       rt.frameLine(3);
       this.KN = rt.nodePathCtor([rt.V.str("x/y")]);
     } catch (__gd_err) {

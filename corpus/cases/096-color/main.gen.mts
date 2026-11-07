@@ -10,6 +10,8 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.c = rt.color(0, 0, 0, 1);
+      this.q = rt.color(0, 0, 0, 1);
       rt.frameLine(3);
       this.c = rt.toColor(rt.colorNew([rt.V.float(0.1), rt.V.float(0.2), rt.V.float(0.3), rt.V.float(0.4)]));
       rt.frameLine(4);

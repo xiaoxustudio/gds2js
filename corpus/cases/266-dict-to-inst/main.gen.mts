@@ -172,6 +172,8 @@ class Inner extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.k = rt.V.nil();
+      this.s = rt.V.nil();
       rt.frameLine(4);
       this.k = rt.V.int(1);
       rt.frameLine(5);
@@ -243,6 +245,7 @@ class Base extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.a = rt.V.nil();
       rt.frameLine(11);
       this.a = rt.V.int(1);
     } catch (__gd_err) {
@@ -273,6 +276,7 @@ class Derived extends Base {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.b = rt.V.nil();
       rt.frameLine(14);
       this.b = rt.V.int(2);
     } catch (__gd_err) {
@@ -302,6 +306,7 @@ class WithInit extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.touched = rt.V.nil();
       rt.frameLine(17);
       this.touched = rt.V.int(0);
     } catch (__gd_err) {
@@ -350,6 +355,7 @@ class Acc extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this._v = rt.V.nil();
       rt.frameLine(24);
       this._v = rt.V.int(1);
     } catch (__gd_err) {
@@ -397,6 +403,10 @@ class Box extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.plain = rt.V.nil();
+      this.arr = rt.V.nil();
+      this.dic = rt.V.nil();
+      this.leaf = rt.V.nil();
       rt.frameLine(32);
       this.plain = rt.V.nil();
       rt.frameLine(33);

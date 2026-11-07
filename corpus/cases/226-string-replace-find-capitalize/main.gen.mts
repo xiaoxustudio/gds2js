@@ -13,6 +13,11 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.HAYS = rt.V.nil();
+      this.KEYS = rt.V.nil();
+      this.MODEL_HAYS = rt.V.nil();
+      this.MODEL_KEYS = rt.V.nil();
+      this.CAPS = rt.V.nil();
       rt.frameLine(3);
       this.HAYS = rt.V.array(rt.GArray.of([rt.V.str("hello"), rt.V.str("Hello World"), rt.V.str("aaa"), rt.V.str("ababab"), rt.V.str("a"), rt.V.str("0123456789"), rt.V.str("xYxyX"), rt.V.str("test_case-1.2"), rt.V.str("i am"), rt.V.str("McDonald")]));
       rt.frameLine(4);

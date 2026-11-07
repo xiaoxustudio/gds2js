@@ -101,6 +101,7 @@ class Base extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.bx = rt.V.int(0);
       rt.frameLine(4);
       this.bx = rt.toInt(this._mk(rt.V.str("Base.bx")));
     } catch (__gd_err) {
@@ -181,6 +182,7 @@ class NoInit extends Base {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.cx = rt.V.int(0);
       rt.frameLine(17);
       this.cx = rt.toInt(this._mk(rt.V.str("NoInit.cx")));
     } catch (__gd_err) {
@@ -212,6 +214,7 @@ class Own extends Base {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.cx2 = rt.V.int(0);
       rt.frameLine(20);
       this.cx2 = rt.toInt(this._mk(rt.V.str("Own.cx2")));
     } catch (__gd_err) {
@@ -261,6 +264,7 @@ class Grand extends Own {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.gx = rt.V.int(0);
       rt.frameLine(28);
       this.gx = rt.toInt(this._mk(rt.V.str("Grand.gx")));
     } catch (__gd_err) {
@@ -315,6 +319,7 @@ class Needs extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.n = rt.V.int(0);
       rt.frameLine(36);
       this.n = rt.toInt(rt.V.int(0));
     } catch (__gd_err) {
@@ -403,6 +408,7 @@ class Forwarded extends Needs {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.k = rt.V.int(0);
       rt.frameLine(47);
       this.k = rt.toInt(rt.V.int(3));
     } catch (__gd_err) {

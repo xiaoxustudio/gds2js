@@ -114,6 +114,7 @@ class A extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.mv = rt.V.int(0);
       rt.frameLine(15);
       this.mv = rt.toInt(rt.V.int(9));
     } catch (__gd_err) {

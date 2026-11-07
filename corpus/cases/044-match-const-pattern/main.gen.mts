@@ -11,6 +11,7 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.LIMIT = rt.V.nil();
       rt.frameLine(3);
       this.LIMIT = rt.V.int(3);
     } catch (__gd_err) {

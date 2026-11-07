@@ -476,6 +476,7 @@ class Inner extends rt.GdScriptObject {
     try {
       rt.frameLine(5);
       this.tick = new rt.Signal("tick");
+      this.k = rt.V.nil();
       rt.frameLine(4);
       this.k = rt.V.int(1);
     } catch (__gd_err) {

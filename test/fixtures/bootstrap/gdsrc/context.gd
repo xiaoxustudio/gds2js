@@ -44,6 +44,7 @@ static func new_context():
 		"MAP_ACTIVE": false,
 		"LINE_MAPPINGS": [],
 		"UNBOXED": {},
+		"LOCAL_SCOPES": [],
 		"RAW_ABIS": {},
 		"CURRENT_RET": null,
 		"CURRENT_RET_ANN": null,

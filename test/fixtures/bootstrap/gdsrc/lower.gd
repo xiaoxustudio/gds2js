@@ -486,6 +486,7 @@ static func lower_stmt(n, idx):
 	if t == "for_statement":
 		var loop_var = C.field(n, "left")
 		var iterable = C.field(n, "right")
+		var var_type_node = C.field(n, "type")
 		if loop_var == null:
 			return err("missing-field", "循环变量")
 		if iterable == null:
@@ -501,7 +502,7 @@ static func lower_stmt(n, idx):
 		var body = lower_body(body_node, idx)
 		if failed:
 			return null
-		return {"kind": "for", "var": loop_var["text"], "iter": it, "body": body, "loc": c}
+		return {"kind": "for", "var": loop_var["text"], "varType": null if var_type_node == null else C.lower_type(var_type_node), "iter": it, "body": body, "loc": c}
 	if t == "while_statement":
 		var cond_node = C.field(n, "condition")
 		if cond_node == null:

@@ -15,6 +15,13 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.TAB_WIDTH = rt.V.nil();
+      this.PUNCT = rt.V.nil();
+      this.starts = rt.V.nil();
+      this.toks = rt.V.nil();
+      this.issues = rt.V.nil();
+      this.fresh = rt.V.nil();
+      this.indent = rt.V.nil();
       rt.frameLine(3);
       this.TAB_WIDTH = rt.V.int(8);
       rt.frameLine(4);

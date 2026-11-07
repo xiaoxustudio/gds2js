@@ -67,6 +67,7 @@ class Thing extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.s = rt.V.str("");
       rt.frameLine(4);
       this.s = rt.strOf(rt.V.str("x"));
     } catch (__gd_err) {

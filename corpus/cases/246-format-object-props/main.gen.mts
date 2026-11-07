@@ -94,6 +94,8 @@ class Base extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.two = rt.V.nil();
+      this.holder = rt.V.nil();
       rt.frameLine(4);
       this.two = rt.V.int(2);
       rt.frameLine(5);
@@ -127,6 +129,8 @@ class Kid extends Base {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.three = rt.V.nil();
+      this.back = rt.V.nil();
       rt.frameLine(8);
       this.three = rt.V.int(3);
       rt.frameLine(9);
@@ -165,6 +169,14 @@ class Thing extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.alpha = rt.V.nil();
+      this.beta = rt.V.nil();
+      this.note = rt.V.nil();
+      this.twice = rt.V.nil();
+      this.lower = rt.V.nil();
+      this.deep = rt.V.nil();
+      this.f = rt.V.nil();
+      this.s = rt.V.nil();
       rt.frameLine(12);
       this.alpha = rt.V.int(1);
       rt.frameLine(13);

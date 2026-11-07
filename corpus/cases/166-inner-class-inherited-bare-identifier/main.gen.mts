@@ -77,6 +77,9 @@ class NoInit extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.a = rt.V.nil();
+      this.shadow = rt.V.nil();
+      this.CA = rt.V.nil();
       rt.frameLine(4);
       this.a = rt.V.int(7);
       rt.frameLine(5);
@@ -185,6 +188,7 @@ class Mid extends Plain {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
       super.__gd_fields__();
+      this.b = rt.V.nil();
       rt.frameLine(20);
       this.b = rt.V.int(3);
     } catch (__gd_err) {

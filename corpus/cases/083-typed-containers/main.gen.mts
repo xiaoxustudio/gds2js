@@ -9,6 +9,7 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.member = rt.V.array(rt.GArray.of([]));
       rt.frameLine(3);
       this.member = rt.stampArray(rt.V.array(rt.GArray.of([rt.V.int(7)])), "int", true);
     } catch (__gd_err) {

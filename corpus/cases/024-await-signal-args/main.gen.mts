@@ -18,6 +18,7 @@ export class Main extends SceneTree {
       this.one = new rt.Signal("one");
       rt.frameLine(5);
       this.two = new rt.Signal("two");
+      this.frames = rt.V.nil();
       rt.frameLine(2);
       this.frames = rt.V.int(0);
     } catch (__gd_err) {

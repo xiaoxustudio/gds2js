@@ -104,6 +104,7 @@ class Box extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.m = rt.vector2(0, 0);
       rt.frameLine(4);
       this.m = rt.toVec2(rt.vector2New([rt.V.int(1), rt.V.int(2)]));
     } catch (__gd_err) {

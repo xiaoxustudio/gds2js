@@ -139,6 +139,7 @@ class Plain extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.k = rt.V.nil();
       rt.frameLine(4);
       this.k = rt.V.int(1);
     } catch (__gd_err) {
@@ -176,6 +177,7 @@ class Inner extends rt.GdScriptObject {
     try {
       rt.frameLine(8);
       this.fired = new rt.Signal("fired");
+      this.k = rt.V.nil();
       rt.frameLine(7);
       this.k = rt.V.int(1);
     } catch (__gd_err) {

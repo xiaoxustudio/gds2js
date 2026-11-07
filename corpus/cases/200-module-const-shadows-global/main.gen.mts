@@ -11,6 +11,7 @@ export class Main extends SceneTree {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.PI = rt.V.nil();
       rt.frameLine(3);
       this.PI = rt.V.int(1);
     } catch (__gd_err) {
@@ -70,6 +71,7 @@ class Thing extends rt.GdScriptObject {
   __gd_fields__() {
     const __gd_frame = rt.frameEnter("res://main.gd", "@implicit_new");
     try {
+      this.PIISH = rt.V.nil();
       rt.frameLine(6);
       this.PIISH = Main.PI;
     } catch (__gd_err) {

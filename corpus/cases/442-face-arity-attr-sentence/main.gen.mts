@@ -115,6 +115,7 @@ class Holder extends rt.GdScriptObject {
     try {
       rt.frameLine(5);
       this.pinged = new rt.Signal("pinged");
+      this.tag = rt.V.nil();
       rt.frameLine(4);
       this.tag = rt.V.int(1);
     } catch (__gd_err) {
