@@ -15,6 +15,7 @@ export class GdNodeObject extends GdScriptObject {
   __gd_freed__: boolean = false;
   __gd_node_queued__: boolean = false;
   __gd_node_t2d__?: unknown;
+  __gd_node_t2d_vals__?: unknown;
   __gd_node_visible__?: boolean;
   __gd_node_top_level__?: boolean;
   __gd_ctl__?: unknown;

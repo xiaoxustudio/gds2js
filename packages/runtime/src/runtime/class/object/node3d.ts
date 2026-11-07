@@ -13,6 +13,7 @@ import { GBasis } from "../orient/basis";
 import { asTransform3D } from "../orient/transform3d";
 
 const r = Math.fround;
+const DEG_PER_RAD = r(180 / r(Math.PI));
 
 type T3Store = {
   px: number;
@@ -119,7 +120,7 @@ function fromVec3(v: Variant | undefined, who: string): [number, number, number]
 }
 
 function degOf(a: number): number {
-  return r(a * r(180 / Math.PI));
+  return r(a * DEG_PER_RAD);
 }
 
 function globalTransformError(): void {

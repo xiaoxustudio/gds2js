@@ -38,6 +38,14 @@ import { GdTimer, timerMethod } from "./timer";
 import { ctlMethod } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
+
+const NODE2D_ONLY_METHODS = new Set([
+  "get_global_transform", "get_angle_to", "look_at", "global_translate", "set_global_transform", "set_transform",
+  "get_position", "set_position", "get_rotation", "set_rotation", "get_rotation_degrees", "set_rotation_degrees",
+  "get_scale", "set_scale", "get_skew", "set_skew", "get_global_position", "set_global_position",
+  "get_global_rotation", "set_global_rotation", "get_global_rotation_degrees", "set_global_rotation_degrees",
+  "get_global_scale", "set_global_scale", "get_global_skew",
+]);
 const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "rotate", "rotate_x", "rotate_y", "rotate_z", "orthonormalize", "get_parent_node_3d"]);
 const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor"]);
 
@@ -260,6 +268,7 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
   }
   if (rec.__gd_freed__) throw new UnsupportedError("node-freed-call", `在已 free() 的实例上调 ${name}() 那一形没建模：引擎发 SCRIPT ERROR 并中断脚本`);
   if ((rec.__gd_engine_class__ === "Node2D" || rec.__gd_engine_class__ === "Control") && NODE2D_METHODS.has(name)) return node2dMethod(target, name, args);
+  if (rec.__gd_engine_class__ === "Node2D" && NODE2D_ONLY_METHODS.has(name)) return node2dMethod(target, name, args);
   if (rec.__gd_engine_class__ === "Node3D" && NODE3D_METHODS.has(name)) {
     const hit = node3dMethod(target, name, args);
     if (hit !== null) return hit;

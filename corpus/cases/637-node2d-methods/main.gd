@@ -1,0 +1,41 @@
+extends SceneTree
+
+func _show(tag: String, n: Node2D) -> void:
+	print(tag, "|", n.position, "|", n.rotation, "|", n.rotation_degrees, "|", n.scale, "|", n.skew)
+
+func _initialize():
+	var a := Node2D.new()
+	var b := Node2D.new()
+	a.add_child(b)
+	a.position = Vector2(10, 20)
+	a.rotation = 0.5
+	a.scale = Vector2(2, 3)
+	a.skew = 0.25
+	print("a1|", a.get_position(), "|", a.get_rotation(), "|", a.get_rotation_degrees(), "|", a.get_scale(), "|", a.get_skew())
+	print("a2|", a.global_position, "|", a.global_rotation, "|", a.global_rotation_degrees, "|", a.global_scale, "|", a.global_skew)
+	print("b1|", b.global_position, "|", b.global_rotation, "|", b.global_rotation_degrees, "|", b.global_scale, "|", b.global_skew)
+	b.set_position(Vector2(1, 2))
+	b.set_rotation(0.2)
+	b.set_rotation_degrees(15.0)
+	b.set_scale(Vector2(0.5, 0.75))
+	b.set_skew(0.1)
+	_show("b2", b)
+	print("b3|", b.get_angle_to(Vector2(3, 4)))
+	b.set_global_position(Vector2(5, 6))
+	print("b4|", b.position, "|", b.global_position)
+	b.set_global_rotation(1.0)
+	print("b5|", b.rotation, "|", b.global_rotation)
+	b.set_global_rotation_degrees(30.0)
+	print("b6|", b.rotation_degrees, "|", b.global_rotation_degrees)
+	b.set_global_scale(Vector2(1.5, 2.5))
+	print("b7|", b.scale, "|", b.global_scale)
+	b.set_transform(Transform2D(0.3, Vector2(7, 8)))
+	print("b9|", b.position, "|", b.rotation, "|", b.scale)
+	b.set_global_transform(Transform2D(0.1, Vector2(1, 1)))
+	print("b10|", b.position, "|", b.global_position)
+	b.global_translate(Vector2(2, -1))
+	print("b11|", b.global_position)
+	a.look_at(Vector2(100, 50))
+	print("a3|", a.rotation)
+	a.free()
+	quit()
