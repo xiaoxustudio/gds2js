@@ -154,7 +154,7 @@ const CLI: CliSpec = {
           metavar: "name",
           defaultTo: "scriptc",
           help:
-            "打包器：scriptc（默认，也是首选：外部原生编译器静态编 runtime 源码图，产物 1.6 MB、不带 node；产物里真的调了 compress/decompress 时自动铺 zstd 驱动，见 README）| node（出路：官方 SEA，要 Node>=25.7，自带 zlib/zstd。scriptc 的查找顺序：SCRIPTC_BIN → 同目录 scriptc/ → npm 依赖 → PATH；-v 打出实际用的哪一份）",
+            "打包器：scriptc（默认，也是首选：外部原生编译器静态编 runtime 源码图，产物约 7 MB、不带 node；产物里真的调了 compress/decompress 时自动铺 zstd 驱动，见 README）| node（出路：官方 SEA，要 Node>=25.7，自带 zlib/zstd。scriptc 的查找顺序：SCRIPTC_BIN → 同目录 scriptc/ → npm 依赖 → PATH；-v 打出实际用的哪一份）",
         },
         {
           key: "node",

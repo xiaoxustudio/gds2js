@@ -4,6 +4,22 @@ GDScript 4.x → JavaScript 的 AOT 编译器
 
 语义正确性只以 **Godot golden** 为准（`corpus/` + `tools/golden.mjs`）。
 
+## 实现进度
+
+Tier 1–6 的排期任务已 100% 收口；100% 指本仓计划范围，Godot 全 API 不在计划内（未建模项看兼容矩阵的 `unplanned`）。每条语义先落 `corpus/cases/` 的 golden，再改实现，语料数量与逐字节门看 `AGENTS.md` 与 `pnpm test:diff`。
+
+| 面 | 状态 | 证据 |
+| --- | --- | --- |
+| Tier 1 纯语言层 | 完成 | `test:unit` / `test:ir` / `test:sema` / `test:diff` |
+| Tier 2 引擎类 | 完成 | `corpus/` 逐字节 + 兼容矩阵 |
+| Tier 3 宿主 API | 完成 | `corpus/` + `test:e2e` 宿主门 |
+| Tier 4 运行时完整性 | 完成 | `test:unit` / `test:ops` 自校验 |
+| Tier 5 节点与场景面 | 完成 | `test:diff` / `test:scriptc` |
+| Tier 6 证据与性能 | 完成 | `test:diff` / `bench:ab` 基线 |
+| scriptc 出货（0.4.8） | 完成 | `test:scriptc` / `test:e2e` / `test:cli-native` / `test:export` |
+
+明示非目标：`Engine`、`Marshalls`、`OS` 的三项宿主不可比成员、`FileAccess.open_encrypted`；静态目标的 zstd 压缩页按工具链缺口记账，出货走 `--pack node`。
+
 ## 构建
 
 ```bash
