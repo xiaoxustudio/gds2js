@@ -40,18 +40,11 @@ import { lowerIntLit, stripAmp, stripCaret, unquote } from "./lit";
 
 
 
-
-
-
-
-
-
 let packCodecUse = false;
 
 let scriptFuncNames = new Set<string>();
 
 let scriptInstanceMethods = new Map<string, Set<string>>();
-
 
 function atNode<T>(n: SyntaxNode, f: () => T): T {
   try {
@@ -390,9 +383,11 @@ function lowerStmtInner(n: SyntaxNode): Stmt {
       checkAfterToken(n, tokenOf(n, "for"), loopVar, 'Expected loop variable name after "for".');
       checkAfterToken(n, tokenOf(n, "in"), iterable, 'Expected iterable after "in".');
       checkColonHere(n, 'Expected ":" after "for" condition.');
+      const varTypeNode = field(n, "type");
       return {
         kind: "for",
         var: need(loopVar, "循环变量").text,
+        varType: varTypeNode ? lowerType(varTypeNode) : null,
         iter: lowerExpr(need(iterable, "迭代对象")),
         body: lowerBody(need(field(n, "body"), "循环体")),
         loc: c,

@@ -1,4 +1,4 @@
-import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
+import { analysis, beginEmit, declareLocal, popLocalScope, pushLocalScope, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
 import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
@@ -28,6 +28,12 @@ export function emitStmt(s: Stmt, voidReturn: boolean): string[] {
 }
 
 export function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
+  const lines = emitStmtInnerRaw(s, voidReturn);
+  if (s.kind === "var") declareLocal(s.name);
+  return lines;
+}
+
+function emitStmtInnerRaw(s: Stmt, voidReturn: boolean): string[] {
   switch (s.kind) {
     case "var": {
       const ek = ctx.RAW_ARRAYS.get(s.name);
@@ -146,8 +152,13 @@ export function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
         const kw = i === 0 ? "if" : br.cond ? "else if" : "else";
         const cond = br.cond ? ` (${condExpr(br.cond)})` : "";
         lines.push(`${prefix}${kw}${cond} {`);
-        for (const st of br.body) {
-          for (const line of emitStmt(st, voidReturn)) lines.push(`  ${line}`);
+        pushLocalScope([]);
+        try {
+          for (const st of br.body) {
+            for (const line of emitStmt(st, voidReturn)) lines.push(`  ${line}`);
+          }
+        } finally {
+          popLocalScope();
         }
       });
       lines.push("}");
@@ -155,23 +166,31 @@ export function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
     }
 
     case "for": {
-      const body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
-      if (isRangeCall(s.iter) && ctx.UNBOXED.get(s.var) === "int") {
-        return [
-          `for (let ${s.var} of rt.rangeSeq(${rangeArgList(s.iter.args.map(emitExpr))})) {`,
-          ...body,
-          "}",
-        ];
+      const iter =
+        isRangeCall(s.iter) && ctx.UNBOXED.get(s.var) === "int"
+          ? `rt.rangeSeq(${rangeArgList(s.iter.args.map(emitExpr))})`
+          : `rt.iter(${emitExpr(s.iter)})`;
+      pushLocalScope([s.var]);
+      let body: string[];
+      try {
+        body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
+      } finally {
+        popLocalScope();
       }
-      return [`for (let ${s.var} of rt.iter(${emitExpr(s.iter)})) {`, ...body, "}"];
+      return [`for (let ${s.var} of ${iter}) {`, ...body, "}"];
     }
 
-    case "while":
-      return [
-        `while (${condExpr(s.cond)}) {`,
-        ...s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`)),
-        "}",
-      ];
+    case "while": {
+      const cond = condExpr(s.cond);
+      pushLocalScope([]);
+      let body: string[];
+      try {
+        body = s.body.flatMap((st) => emitStmt(st, voidReturn).map((l) => `  ${l}`));
+      } finally {
+        popLocalScope();
+      }
+      return [`while (${cond}) {`, ...body, "}"];
+    }
 
     case "break":
       return ["break;"];
@@ -184,18 +203,23 @@ export function emitStmtInner(s: Stmt, voidReturn: boolean): string[] {
       const subject = emitExpr(s.subject);
       const lines: string[] = ["do {"];
       s.arms.forEach((arm, i) => {
-        const m = `__m${i}`;
-        const guard = arm.guard ? ` && rt.ops.truthy(${emitExpr(arm.guard)})` : "";
-        lines.push(`  const ${m} = rt.matchPattern(${subject}, ${emitPattern(arm.pattern)});`);
-        lines.push(`  if (${m} !== null${guard}) {`);
-        patternNames(arm.pattern).forEach((name, idx) => {
-          lines.push(`    const ${name} = ${m}[${idx}] as rt.Variant;`);
-        });
-        for (const st of arm.body) {
-          for (const line of emitStmt(st, voidReturn)) lines.push(`    ${line}`);
+        pushLocalScope(patternNames(arm.pattern));
+        try {
+          const m = `__m${i}`;
+          const guard = arm.guard ? ` && rt.ops.truthy(${emitExpr(arm.guard)})` : "";
+          lines.push(`  const ${m} = rt.matchPattern(${subject}, ${emitPattern(arm.pattern)});`);
+          lines.push(`  if (${m} !== null${guard}) {`);
+          patternNames(arm.pattern).forEach((name, idx) => {
+            lines.push(`    const ${name} = ${m}[${idx}] as rt.Variant;`);
+          });
+          for (const st of arm.body) {
+            for (const line of emitStmt(st, voidReturn)) lines.push(`    ${line}`);
+          }
+          lines.push("    break;");
+          lines.push("  }");
+        } finally {
+          popLocalScope();
         }
-        lines.push("    break;");
-        lines.push("  }");
       });
       lines.push("} while (false);");
       return lines;

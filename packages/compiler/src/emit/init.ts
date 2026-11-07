@@ -1,4 +1,4 @@
-import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
+import { analysis, beginEmit, popLocalScope, pushLocalScope, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
 import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
@@ -38,6 +38,7 @@ export function emitInitMethod(f: FuncDecl, base: number): string[] {
   ctx.IN_INIT = true;
   ctx.CURRENT_FUNC = "_init";
   ctx.UNBOXED = computeUnboxed(f);
+  pushLocalScope(f.params.map((p) => p.name));
   try {
     for (const s of f.body) {
 
@@ -45,6 +46,7 @@ export function emitInitMethod(f: FuncDecl, base: number): string[] {
       for (const line of emitStmt(s, false)) lines.push(`${pad}${line}`);
     }
   } finally {
+    popLocalScope();
     ctx.IN_INIT = savedIn;
     ctx.UNBOXED = savedUnboxed;
     ctx.CURRENT_FUNC = savedFunc;
@@ -75,6 +77,7 @@ export function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: bool
   const savedFunc = ctx.CURRENT_FUNC;
   ctx.UNBOXED = computeUnboxed(f);
   ctx.CURRENT_FUNC = "_init";
+  pushLocalScope(f.params.map((p) => p.name));
   try {
     for (const line of emitParamSlots(f)) lines.push(`${pad}${line}`);
     for (const s of f.body) {
@@ -83,6 +86,7 @@ export function emitInitAsConstructor(f: FuncDecl, base: number, hostSuper: bool
       for (const line of emitStmt(s, false)) lines.push(`${pad}${line}`);
     }
   } finally {
+    popLocalScope();
     ctx.UNBOXED = savedUnboxed;
     ctx.CURRENT_FUNC = savedFunc;
   }

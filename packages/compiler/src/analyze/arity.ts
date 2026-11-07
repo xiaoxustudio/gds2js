@@ -121,6 +121,22 @@ export function faceGhostDiags(
   return out;
 }
 
+export function faceAttrAbsent(face: string, name: string): boolean {
+  const table =
+    face === "Array" ? ARRAY_METHOD_ARITY
+    : face === "String" ? STRING_METHOD_ARITY
+    : face === "StringName" ? STRING_NAME_METHOD_ARITY
+    : face === "NodePath" ? NODE_PATH_METHOD_ARITY
+    : (VALUE_METHOD_ARITY[face] ?? {});
+  if (name in table) return false;
+  return PACK_TYPE_NAMES.has(face)
+    ? memberNameAbsent(face, name)
+    : face === "Array" || face === "String"
+      ? true
+      : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name) ||
+        ((face === "StringName" || face === "NodePath") && memberNameAbsent(face, name));
+}
+
 /** pack 那一面的表外名：不在 dump 的方法全集里就是那两句（S480，尺 `tmp/d6/ppack.py` 八十一格 + `tmp/d6/ppack2.py` 二百五十三格）。 */
 export function memberNameAbsent(face: string, name: string): boolean {
   const list = BUILTIN_INSTANCE_MEMBERS[face];

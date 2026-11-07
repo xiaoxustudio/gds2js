@@ -1,4 +1,4 @@
-import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
+import { analysis, beginEmit, popLocalScope, pushLocalScope, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
 import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, isGlobalConst } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
@@ -26,9 +26,11 @@ export function emitFunc(f: FuncDecl, base = 0): string[] {
   ctx.FUNC_BINDS = collectBinds(f.body, seedParamBinds(f.params));
   for (const p of f.params) if (p.type === null || (p.type.kind === "named" && p.type.name === "Variant")) untyped.push(p.name);
   ctx.UNTYPED_NAMES = new Set(untyped);
+  pushLocalScope(f.params.map((p) => p.name));
   try {
     return emitFuncInner(f, base);
   } finally {
+    popLocalScope();
     ctx.LOCAL_TYPES = saved;
     ctx.FUNC_BINDS = savedBinds;
     ctx.UNTYPED_NAMES = savedUntyped;

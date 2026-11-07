@@ -47,16 +47,38 @@ export interface Decl {
   innerClasses: Array<{ name: string }>;
 }
 
+export type Binding = { kind: "var" | "typed"; face: string | null };
+
 export class Scope {
+  private vars: Set<string>;
+  private readonly bindings = new Map<string, Binding>();
+
   constructor(
-    private vars: Set<string>,
+    names: Set<string>,
     private parent: Scope | null,
     private selfOk?: boolean,
     private isLocal = false,
-  ) {}
+  ) {
+    this.vars = names;
+    for (const n of names) this.bindings.set(n, { kind: "var", face: null });
+  }
 
   has(name: string): boolean {
     return this.vars.has(name) || (this.parent !== null && this.parent.has(name));
+  }
+
+  bindingOf(name: string): Binding | null {
+    const own = this.bindings.get(name);
+    if (own !== undefined) return own;
+    return this.parent === null ? null : this.parent.bindingOf(name);
+  }
+
+  declareFace(name: string, face: string | null): void {
+    this.bindings.set(name, { kind: "var", face });
+  }
+
+  declareTyped(name: string, face: string | null): void {
+    this.bindings.set(name, { kind: "typed", face });
   }
 
   hasLocal(name: string): boolean {
@@ -77,6 +99,7 @@ export class Scope {
 
   declare(name: string): void {
     this.vars.add(name);
+    this.bindings.set(name, { kind: "var", face: null });
   }
 }
 

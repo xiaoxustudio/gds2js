@@ -41,10 +41,10 @@ import { COLOR_NAMED } from "@gds2js/runtime/runtime/class/color/named";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
 
 import { CLASS_FACE_RECEIVERS, Scope, capKey, declNames, gvKey, run } from "./state";
-import { builtinArity, builtinArityCode, classFaceArity, utilityArity } from "./arity";
+import { builtinArity, builtinArityCode, classFaceArity, faceAttrAbsent, utilityArity } from "./arity";
 import { checkOperator } from "./checks/operators";
 import { checkCall, checkMethodCall } from "./checks/calls";
-import { literalTypeName } from "./faces";
+import { annotationFace, literalTypeName, staticType } from "./faces";
 
 export function assignTargetName(t: unknown): string | null {
   const o = t as Record<string, unknown> | null;
@@ -208,6 +208,7 @@ export function checkFunc(
   engineFace: ReadonlySet<string> = NO_NODE_SELF_PROPS,
 ): void {
   const scope = outer.funcChild(["self", ...f.params.map((p) => p.name)], !f.isStatic);
+  for (const p of f.params) scope.declareFace(p.name, annotationFace(p.type));
   const prevFace = run.hostValueMethods;
   const prevEngineFace = run.enginePropFace;
   const prevCtx = run.hostStaticCtx;
@@ -242,6 +243,7 @@ export function walkStmt(
     case "var":
       if (s.init) walkExpr(s.init, scope, coroutines, diags);
       scope.declare(s.name);
+      scope.declareFace(s.name, annotationFace(s.type));
       break;
     case "expr":
       walkExpr(s.expr, scope, coroutines, diags, true);
@@ -262,6 +264,8 @@ export function walkStmt(
     case "for": {
       walkExpr(s.iter, scope, coroutines, diags);
       const loopScope = scope.child([s.var]);
+      const loopFace = annotationFace(s.varType);
+      if (loopFace !== null) loopScope.declareTyped(s.var, loopFace);
       walkStmts(s.body, loopScope, coroutines, diags, true);
       break;
     }
@@ -271,6 +275,20 @@ export function walkStmt(
       break;
     case "match": {
       walkExpr(s.subject, scope, coroutines, diags);
+      const subjectFace = staticType(s.subject) ?? (s.subject.kind === "ident" ? (scope.bindingOf(s.subject.name)?.face ?? null) : null);
+      const bindingFaces = (p: Pattern, face: string | null, target: Scope): void => {
+        if (p.kind === "bind") {
+          target.declareTyped(p.name, face);
+          return;
+        }
+        if (p.kind === "array") {
+          for (const it of p.items) bindingFaces(it, null, target);
+          return;
+        }
+        if (p.kind === "dict") {
+          for (const en of p.entries) bindingFaces(en.pattern, null, target);
+        }
+      };
       const patternNames = (p: Pattern): void => {
         if (p.kind === "const") walkExpr(p.expr, scope, coroutines, diags);
         else if (p.kind === "array") for (const it of p.items) patternNames(it);
@@ -284,6 +302,7 @@ export function walkStmt(
       for (const arm of s.arms) {
         patternNames(arm.pattern);
         const armScope = scope.child(patternBindings(arm.pattern));
+        bindingFaces(arm.pattern, subjectFace, armScope);
         if (arm.guard) walkExpr(arm.guard, armScope, coroutines, diags);
         walkStmts(arm.body, armScope, coroutines, diags, inLoop);
       }
@@ -411,10 +430,20 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
       walkExpr(e.index, scope, coroutines, diags);
       return;
 
-    case "attribute":
+    case "attribute": {
+      if (e.obj.kind === "ident") {
+        const bound = scope.bindingOf(e.obj.name);
+        if (bound !== null && bound.kind !== "var" && bound.face !== null && faceAttrAbsent(bound.face, e.name)) {
+          const one = `Cannot find member "${e.name}" in base "${bound.face}".`;
+          diags.push({ code: "face-attr-missing", message: one, loc: e.loc });
+          diags.push({ code: "face-attr-missing", message: one, loc: e.loc });
+          return;
+        }
+      }
       if (e.obj.kind === "ident" && isGlobalEnumPrefix(e.obj.name) && isGlobalEnumName(`${e.obj.name}.${e.name}`)) return;
       if (staticMemberFn(e.obj) === null && !(e.obj.kind === "ident" && PACK_TYPE_NAMES.has(e.obj.name))) walkExpr(e.obj, scope, coroutines, diags);
       return;
+    }
 
     case "array":
       for (const it of e.items) walkExpr(it, scope, coroutines, diags);
@@ -429,6 +458,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
 
     case "lambda": {
       const fnScope = scope.child(e.params.map((p) => p.name));
+      for (const p of e.params) fnScope.declareTyped(p.name, annotationFace(p.type));
       recordCaptures(e, scope);
       let defScope = scope;
       for (const p of e.params) {

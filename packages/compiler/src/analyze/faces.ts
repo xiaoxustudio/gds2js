@@ -287,6 +287,12 @@ export function chainFaceKnown(rt: string): boolean {
   return rt in VALUE_METHOD_ARITY || rt === "String" || rt === "StringName" || rt === "NodePath";
 }
 
+export function annotationFace(t: TypeRef | null): string | null {
+  if (t === null || t.kind !== "named") return null;
+  const name = t.name;
+  return PACK_TYPE_NAMES.has(name) || name === "Array" || name === "String" || name === "StringName" || name === "NodePath" || name === "int" || name === "float" || name === "bool" || name in VALUE_METHOD_ARITY ? name : null;
+}
+
 export function knownFaceAnnotation(t: TypeRef | null): string | null {
   if (t === null || t.kind !== "named") return null;
   const base = t.name.replace(/\[.*\]$/, "");

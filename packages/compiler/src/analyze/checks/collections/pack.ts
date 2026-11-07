@@ -1,12 +1,12 @@
 import type { Diagnostic } from "../../analysis-result";
 import { ANNOT_SOURCES, OBJECT_ARG_NAMES, PACK_APPEND_ARRAY_AS, PACK_ARG_POSITIONS, PACK_ARG_SLOTS, PACK_BOOL_SLOT_OK, PACK_INT_SLOT_OK, PACK_IS_AS_NAMES, PACK_TYPE_NAMES, VALUE_ARG_WANTS } from "../../../semantics/elem-faces";
-import { ARRAY_METHOD_ARITY, NODE_PATH_METHOD_ARITY, STRING_METHOD_ARITY, STRING_NAME_METHOD_ARITY, VALUE_METHOD_ARITY, valueAttrKind } from "@gds2js/runtime/runtime/face-arity";
+import { ARRAY_METHOD_ARITY, NODE_PATH_METHOD_ARITY, STRING_METHOD_ARITY, STRING_NAME_METHOD_ARITY, VALUE_METHOD_ARITY } from "@gds2js/runtime/runtime/face-arity";
 import type { ClassDecl, Expr, Module, Stmt, TypeRef } from "../../../lower/ir";
 import { diKey, run } from "../../state";
 import { reassignedNames, walkExprKinds } from "../../walk";
 import { namedAppendSource, namedSlotSource, packArgScopes, packArgSource } from "../../slots";
-import { argFaceBase, attrFaceRecv, attrScopes, chainRecvFace, packFaceRecv, readFaceOf, staticTypeName, stringNameVars } from "../../faces";
-import { instanceFaceManaged, instanceMemberAbsent, memberNameAbsent } from "../../arity";
+import { annotationFace, argFaceBase, attrFaceRecv, attrScopes, chainRecvFace, packFaceRecv, readFaceOf, staticTypeName, stringNameVars } from "../../faces";
+import { faceAttrAbsent, instanceFaceManaged, memberNameAbsent } from "../../arity";
 
 export function checkPackIsAs(m: Module, diags: Diagnostic[]): void {
   const bodies: Stmt[][] = [...m.funcs.map((f) => f.body)];
@@ -144,21 +144,19 @@ export function checkPackArgSlots(m: Module, diags: Diagnostic[]): void {
 export function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
   for (const { nodes, params } of attrScopes(m)) {
     const ann = new Map<string, string>();
-    const faceName = (t: TypeRef | null): string | null =>
-      t !== null && t.kind === "named" && (PACK_TYPE_NAMES.has(t.name) || t.name === "Array" || t.name === "String" || t.name === "StringName" || t.name === "NodePath" || t.name === "int" || t.name === "float" || t.name === "bool" || t.name in VALUE_METHOD_ARITY) ? t.name : null;
     for (const n of nodes) {
       if (n.kind !== "var" || typeof n.name !== "string") continue;
-      const face = faceName(n.type as TypeRef | null);
+      const face = annotationFace(n.type as TypeRef | null);
       if (face !== null) ann.set(n.name, face);
     }
     const attr = new Map(ann);
     for (const p of params) {
-      const face = faceName(p.type);
+      const face = annotationFace(p.type);
       if (face !== null) attr.set(p.name, face);
     }
     const mods = new Map<string, string>();
     for (const v of m.vars) {
-      const face = faceName(v.type);
+      const face = annotationFace(v.type);
       if (face !== null) mods.set(v.name, face);
     }
     const elems = new Map<string, string>();
@@ -236,13 +234,7 @@ export function checkPackFaceNames(m: Module, diags: Diagnostic[]): void {
         }
         continue;
       }
-      const absent = PACK_TYPE_NAMES.has(face)
-        ? memberNameAbsent(face, name)
-        : face === "Array" || face === "String"
-          ? true
-          : valueAttrKind(face, name) === "absent" || instanceMemberAbsent(face, name) ||
-            ((face === "StringName" || face === "NodePath") && memberNameAbsent(face, name));
-      if (!absent) continue;
+      if (!faceAttrAbsent(face, name)) continue;
       if (!refused && writeTargets.has(n)) continue;
       const one = `Cannot find member "${name}" in base "${face}".`;
       diags.push({ code: "face-attr-missing", message: one, loc });

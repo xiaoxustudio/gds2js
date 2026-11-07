@@ -1,4 +1,4 @@
-import { analysis, beginEmit, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
+import { analysis, beginEmit, localShadowed, popLocalScope, pushLocalScope, type ElemKind, type EmitContext, type Kind, type RawAbi, ctx } from "./context";
 import { staticMemberFn } from "../lower/ir";
 import { GLOBAL_CONSTANTS, GLOBAL_TODO_FUNCTIONS, globalEnumValue, isGlobalConst, isGlobalEnumName, isGlobalEnumPrefix } from "../lower/globals";
 import type { ClassDecl, Expr, FuncDecl, Loc, Module, Param, Pattern, PropAccessor, SignalDecl, Stmt, TypeRef, VarDecl } from "../lower/ir";
@@ -54,16 +54,12 @@ function enumBaseShadowed(name: string): boolean {
     ctx.MODULE_CLASSES.has(name) ||
     ctx.INNER_CLASSES.has(name) ||
     ctx.CURRENT_MEMBERS.has(name) ||
-    ctx.UNBOXED.has(name) ||
-    ctx.LOCAL_TYPES.has(name) ||
-    ctx.UNTYPED_NAMES.has(name) ||
     ctx.ENUM_NAMES.has(name) ||
     ctx.PRELOADS.has(name) ||
     ctx.LOADS.has(name) ||
     ctx.CLASS_VALUES.has(name)
   ) return true;
-  const params = ctx.PARAM_TYPES.get(ctx.CURRENT_FUNC);
-  return params !== undefined && params.some((p) => p.name === name);
+  return localShadowed(name);
 }
 
 export function globalEnumInt(e: Expr): number | null {
@@ -330,14 +326,21 @@ export function emitExprVar(e: Expr): string {
         throw new UnsupportedError("lambda-param-default", "默认值那一位直接放 lambda 的形况没实测过，不发");
       }
       const lpad = "        ";
-      const body = e.body.flatMap((st) => {
-        ctx.LAMBDA_DEPTH += 1;
+      pushLocalScope(e.params.map((p) => p.name));
+      const body = (() => {
         try {
-          return emitStmt(st, false).map((l) => `${lpad}${l}`);
+          return e.body.flatMap((st) => {
+            ctx.LAMBDA_DEPTH += 1;
+            try {
+              return emitStmt(st, false).map((l) => `${lpad}${l}`);
+            } finally {
+              ctx.LAMBDA_DEPTH -= 1;
+            }
+          });
         } finally {
-          ctx.LAMBDA_DEPTH -= 1;
+          popLocalScope();
         }
-      });
+      })();
       const bind = e.params.map((p, i) => `${lpad}const ${p.name} = __a[${i}] as rt.Variant` + (p.default === null ? "" : " ?? " + emitExpr(p.default)) + ";");
       const lines: string[] = [
         `rt.callable((__a: rt.Variant[]) => {`,

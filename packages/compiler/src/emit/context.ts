@@ -51,6 +51,7 @@ export interface EmitContext {
   MAP_ACTIVE: boolean;
   LINE_MAPPINGS: LineMapping[];
   UNBOXED: Map<string, "int" | "float" | "str">;
+  LOCAL_SCOPES: Set<string>[];
   RAW_ABIS: Map<string, RawAbi>;
   CURRENT_RET: Kind | null;
   CURRENT_RET_ANN: TypeRef | null;
@@ -105,7 +106,25 @@ export function newContext(): EmitContext {
     CURRENT_RET_ANN: null,
     RAW_ARRAYS: new Map<string, ElemKind>(),
     RAW_DICTS: new Map<string, "int" | "float">(),
+    LOCAL_SCOPES: [],
   };
+}
+
+export function pushLocalScope(names: Iterable<string>): void {
+  ctx.LOCAL_SCOPES.push(new Set(names));
+}
+
+export function popLocalScope(): void {
+  ctx.LOCAL_SCOPES.pop();
+}
+
+export function declareLocal(name: string): void {
+  const top = ctx.LOCAL_SCOPES[ctx.LOCAL_SCOPES.length - 1];
+  if (top !== undefined) top.add(name);
+}
+
+export function localShadowed(name: string): boolean {
+  return ctx.LOCAL_SCOPES.some((scope) => scope.has(name));
 }
 
 export let ctx: EmitContext = newContext();

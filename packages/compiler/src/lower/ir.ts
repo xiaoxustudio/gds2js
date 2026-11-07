@@ -26,7 +26,7 @@ export type Stmt =
   | { kind: "var"; name: string; type: TypeRef | null; init: Expr | null; isConst: boolean; loc: Loc }
   | { kind: "assign"; target: Expr; value: Expr; loc: Loc }
   | { kind: "if"; branches: Array<{ cond: Expr | null; body: Stmt[] }>; loc: Loc }
-  | { kind: "for"; var: string; iter: Expr; body: Stmt[]; loc: Loc }
+  | { kind: "for"; var: string; varType: TypeRef | null; iter: Expr; body: Stmt[]; loc: Loc }
   | { kind: "while"; cond: Expr; body: Stmt[]; loc: Loc }
   | { kind: "match"; subject: Expr; arms: MatchArm[]; loc: Loc }
   | { kind: "return"; value: Expr | null; loc: Loc }
