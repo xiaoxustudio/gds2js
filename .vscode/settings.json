@@ -9,5 +9,6 @@
         "other": "on",
         "comments": "off",
         "strings": "on"
-    }
+    },
+    "js/ts.tsdk.path": "node_modules\\typescript"
 }
