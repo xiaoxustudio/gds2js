@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot include a value of type "float" as "Error".
+   at: GDScript::reload (<case>/main.gd:7)
+SCRIPT ERROR: Parse Error: Cannot have an element of type "float" in an array of type "Array[Error]".
+   at: GDScript::reload (<case>/main.gd:7)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

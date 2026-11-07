@@ -867,8 +867,9 @@ export function stampDecl(t: TypeRef | null, init: Expr | null | undefined, emit
     if (NATIVE_CLASS_SLOTS.has(kind)) return `rt.stampClassArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
     const scriptBase = ctx.SCRIPT_BASE.get(kind);
     if (scriptBase !== undefined) return `rt.stampScriptArray(${raw}, ${JSON.stringify(kind)}, ${JSON.stringify(scriptBase)}, ${String(fromLiteral)})`;
-    if (!isElemKind(kind)) return raw;
-    return `rt.stampArray(${raw}, ${JSON.stringify(kind)}, ${String(fromLiteral)})`;
+    const elemKind = isGlobalEnumName(kind) ? "int" : kind;
+    if (!isElemKind(elemKind)) return raw;
+    return `rt.stampArray(${raw}, ${JSON.stringify(elemKind)}, ${String(fromLiteral)})`;
   }
   const parts = inner.split(",").map((p) => p.trim());
   const keyKind = slotElemKindName(parts[0] ?? "");

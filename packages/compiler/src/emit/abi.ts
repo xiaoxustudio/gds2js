@@ -689,6 +689,7 @@ export function keyKindOk(k: Kind | "bool" | null): boolean {
 /** 字典的键值位可以盖章的那些名字：八档元素型照原样，脚本类名按 `Object` 收（v11 量的是这一形；宿主类名作键值没量，仍不盖章）。 */
 export function slotElemKindName(name: string): string | null {
   if (isElemKind(name)) return name;
+  if (isGlobalEnumName(name)) return "int";
   return ctx.SCRIPT_BASE.has(name) ? "Object" : null;
 }
 

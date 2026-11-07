@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Cannot include a value of type "String" as "Error".
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Cannot have a key of type "String" in a dictionary of type "Dictionary[Error, int]".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

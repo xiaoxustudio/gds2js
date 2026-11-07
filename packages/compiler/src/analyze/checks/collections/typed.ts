@@ -1,4 +1,5 @@
 import { NATIVE_CLASS_SLOTS } from "../../../semantics/elem-faces";
+import { isGlobalEnumName } from "../../../lower/globals";
 import type { Diagnostic } from "../../analysis-result";
 import type { ClassDecl, Expr, Loc, Module, Stmt, TypeRef } from "../../../lower/ir";
 import { type StaticType } from "../../state";
@@ -216,12 +217,14 @@ export function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
     };
     if (m2[1] === "Array") {
       const kind = inner.trim();
+      const enumElem = isGlobalEnumName(kind);
+      const face = enumElem ? "int" : kind;
       if (t.init.kind === "array") {
         let done = false;
         for (const it of t.init.items) {
           if (done) break;
           const st = slotOf(it);
-          if (st === null || holds(kind, st)) continue;
+          if (st === null || (enumElem ? st === "int" : holds(face, st))) continue;
           done = true;
           report(st, kind, `Cannot have an element of type "${st}" in an array of type "Array[${kind}]".`);
         }
@@ -230,19 +233,21 @@ export function checkTypedCollections(m: Module, diags: Diagnostic[]): void {
       const parts = inner.split(",").map((p) => p.trim());
       const keyKind = parts[0] ?? "";
       const valKind = parts[1] ?? "";
+      const enumKey = isGlobalEnumName(keyKind);
+      const enumVal = isGlobalEnumName(valKind);
       if (t.init.kind === "dict" && parts.length === 2) {
         const text = `Dictionary[${keyKind}, ${valKind}]`;
         let done = false;
         for (const en of t.init.entries) {
           if (done) break;
           const ks = slotOf(en.key);
-          if (ks !== null && !holds(keyKind, ks)) {
+          if (ks !== null && !(enumKey ? ks === "int" : holds(keyKind, ks))) {
             done = true;
             report(ks, keyKind, `Cannot have a key of type "${ks}" in a dictionary of type "${text}".`);
             break;
           }
           const vs = slotOf(en.value);
-          if (vs !== null && !holds(valKind, vs)) {
+          if (vs !== null && !(enumVal ? vs === "int" : holds(valKind, vs))) {
             done = true;
             report(vs, valKind, `Cannot have a value of type "${vs}" in a dictionary of type "${text}".`);
           }
