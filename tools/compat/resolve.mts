@@ -133,7 +133,7 @@ function classifyBase(row) {
         ? { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(scope.builtins.partialReason) }
         : { status: "missing", ev: note(`${o} 的构造面未建模`) };
     }
-    return { status: "partial", ev: note(scope.builtins.partialReason) };
+    return { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(scope.builtins.partialReason) };
   }
 
   if (!builtinNames.has(o) && o !== "GlobalScope" && !classes[o]) {
@@ -160,8 +160,19 @@ function classifyBase(row) {
       ? { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(`${o}.${n} 在属性面里，但没有逐条 golden 证据`) }
       : { status: "missing", ev: note(`${o}.${n} 未进属性面，按响亮拒处理`) };
   }
+  if (k === "c") {
+    const hit = inv.classConsts[o]?.[n] !== undefined;
+    return hit
+      ? { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(`${o}.${n} 在类常量表里，但没有逐条 golden 证据`) }
+      : { status: "missing", ev: note(`${o}.${n} 未进类常量表`) };
+  }
+  if (ENUM_VALUE.has(k)) {
+    const hit = inv.classConsts[o]?.[n.split(".").pop()] !== undefined;
+    return hit
+      ? { status: hasEvidence ? "implemented" : "partial", ev: hasEvidence ? ev : note(`${o}.${n} 在类常量表里，但没有逐条 golden 证据`) }
+      : { status: "missing", ev: note(`${o}.${n} 未进类常量表`) };
+  }
   if (ENUM.has(k)) return { status: "missing", ev };
-  if (ENUM_VALUE.has(k)) return { status: "missing", ev };
   return { status: "missing", ev: note("这一类引擎面未建模") };
 }
 

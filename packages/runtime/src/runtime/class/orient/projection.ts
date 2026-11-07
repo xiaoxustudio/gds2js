@@ -344,20 +344,35 @@ export function projectionStatic(name: string, args: Variant[]): Variant {
       return frustum(num(args[0], name), num(args[1], name), num(args[2], name), num(args[3], name), num(args[4], name), num(args[5], name));
     }
     case "create_frustum_aspect": {
-      const fovy = num(args[0], name);
-      const aspect = num(args[1], name);
-      const zn = num(args[2], name);
-      const zf = num(args[3], name);
-      const top = Math.fround(zn * Math.tan((fovy * Math.PI) / 360));
-      return frustum(Math.fround(-top * aspect), Math.fround(top * aspect), -top, top, zn, zf);
+      let size = Math.fround(num(args[0], name));
+      const aspect = Math.fround(num(args[1], name));
+      const offset = asVec2(args[2] as Variant);
+      if (offset === null) throw new UnsupportedError("projection-arg", `Projection.${name} 的第 3 参只量过 Vector2`);
+      const zn = num(args[3], name);
+      const zf = num(args[4], name);
+      const flip = args[5] !== undefined && args[5].t === Tag.BOOL && args[5].v === true;
+      if (!flip) size = Math.fround(size * aspect);
+      const half = Math.fround(size / 2);
+      const halfA = Math.fround(Math.fround(size / aspect) / 2);
+      return frustum(
+        Math.fround(-half + offset.x),
+        Math.fround(half + offset.x),
+        Math.fround(-halfA + offset.y),
+        Math.fround(halfA + offset.y),
+        zn,
+        zf,
+      );
     }
     case "create_orthogonal_aspect": {
-      const size = num(args[0], name);
-      const aspect = num(args[1], name);
+      let size = Math.fround(num(args[0], name));
+      const aspect = Math.fround(num(args[1], name));
       const zn = num(args[2], name);
       const zf = num(args[3], name);
+      const flip = args[4] !== undefined && args[4].t === Tag.BOOL && args[4].v === true;
+      if (!flip) size = Math.fround(size * aspect);
       const half = Math.fround(size / 2);
-      return projectionStatic("create_orthogonal", [V.float(-half), V.float(half), V.float(-half), V.float(half), V.float(zn), V.float(zf)]);
+      const halfA = Math.fround(Math.fround(size / aspect) / 2);
+      return projectionStatic("create_orthogonal", [V.float(-half), V.float(half), V.float(-halfA), V.float(halfA), V.float(zn), V.float(zf)]);
     }
     default:
       throw new UnsupportedError("projection-static", `Projection.${name}() 这一支没量过`);

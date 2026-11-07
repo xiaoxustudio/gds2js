@@ -480,6 +480,60 @@ function okhslToSrgb(h: number, s: number, l: number): [number, number, number] 
   return [srgbTransfer(lr), srgbTransfer(lg), srgbTransfer(lb)];
 }
 
+function srgbTransferInv(a: number): number {
+  return a > r32(0.04045)
+    ? r32(Math.pow(div(add(a, r32(0.055)), r32(1.055)), r32(2.4)))
+    : div(a, r32(12.92));
+}
+
+function linearSrgbToOklab(rr: number, gg: number, bb: number): [number, number, number] {
+  const l = add(add(mul(r32(0.4122214708), rr), mul(r32(0.5363325363), gg)), mul(r32(0.0514459929), bb));
+  const m = add(add(mul(r32(0.2119034982), rr), mul(r32(0.6806995451), gg)), mul(r32(0.1073969566), bb));
+  const s = add(add(mul(r32(0.0883024619), rr), mul(r32(0.2817188376), gg)), mul(r32(0.6299787005), bb));
+  const l_ = r32(Math.cbrt(l));
+  const m_ = r32(Math.cbrt(m));
+  const s_ = r32(Math.cbrt(s));
+  return [
+    sub(add(mul(r32(0.2104542553), l_), mul(r32(0.793617785), m_)), mul(r32(0.0040720468), s_)),
+    add(sub(mul(r32(1.9779984951), l_), mul(r32(2.428592205), m_)), mul(r32(0.4505937099), s_)),
+    sub(add(mul(r32(0.0259040371), l_), mul(r32(0.7827717662), m_)), mul(r32(0.808675766), s_)),
+  ];
+}
+
+function toe(x: number): number {
+  const k1 = r32(0.206);
+  const k2 = r32(0.03);
+  const k3 = div(add(1, k1), add(1, k2));
+  const t = sub(mul(k3, x), k1);
+  return mul(r32(0.5), add(t, r32(Math.sqrt(add(mul(t, t), mul(mul(4, k2), mul(k3, x)))))));
+}
+
+function toOkhsl(c: GColor): [number, number, number] {
+  if (c.r === 0 && c.g === 0 && c.b === 0) return [0, 0, 0];
+  const [L, A, B] = linearSrgbToOklab(srgbTransferInv(c.r), srgbTransferInv(c.g), srgbTransferInv(c.b));
+  const C = r32(Math.sqrt(add(mul(A, A), mul(B, B))));
+  const a_ = div(A, C);
+  const b_ = div(B, C);
+  const h = add(r32(0.5), mul(r32(0.5), div(r32(Math.atan2(-B, -A)), OK_PI)));
+  const [C_0, C_mid, C_max] = getCs(L, a_, b_);
+  const mid = r32(0.8);
+  const midInv = r32(1.25);
+  let s: number;
+  if (C < C_mid) {
+    const k_1 = mul(mid, C_0);
+    const k_2 = sub(1, div(k_1, C_mid));
+    const t = div(C, add(k_1, mul(k_2, C)));
+    s = mul(t, mid);
+  } else {
+    const k_0 = C_mid;
+    const k_1 = div(mul(mul(mul(sub(1, mid), C_mid), C_mid), mul(midInv, midInv)), C_0);
+    const k_2 = sub(1, div(k_1, sub(C_max, C_mid)));
+    const t = div(sub(C, k_0), add(k_1, mul(k_2, sub(C, k_0))));
+    s = add(mid, mul(sub(1, mid), t));
+  }
+  return [h, s, toe(L)];
+}
+
 function toHsv(c: GColor): [number, number, number] {
   const min = Math.min(c.r, c.g, c.b);
   const max = Math.max(c.r, c.g, c.b);
@@ -724,7 +778,7 @@ export function colorMethod(c: GColor, name: string, args: Variant[]): Variant {
   }
 }
 
-type ColorSlot = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+type ColorSlot = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 const SLOTS: Record<string, ColorSlot> = {
   r: 0,
@@ -738,6 +792,9 @@ const SLOTS: Record<string, ColorSlot> = {
   g8: 8,
   b8: 9,
   a8: 10,
+  ok_hsl_h: 11,
+  ok_hsl_s: 12,
+  ok_hsl_l: 13,
 };
 
 function colorSlot(key: Variant): ColorSlot | null {
@@ -773,6 +830,11 @@ export function colorRead(c: GColor, key: Variant, via: "prop" | "index" | "read
   if (s <= 6) {
     const [h, sv, v] = toHsv(c);
     return V.float(s === 4 ? h : s === 5 ? sv : v);
+  }
+  if (s >= 11) {
+    const [h, sv, l] = toOkhsl(c);
+    const raw = s === 11 ? h : s === 12 ? sv : l;
+    return V.float(Number.isNaN(raw) ? 0 : clamp(raw, 0, 1));
   }
   const bytes = [byteOf(c.r), byteOf(c.g), byteOf(c.b), byteOf(c.a)];
   return V.int(bytes[s - 7] as number);

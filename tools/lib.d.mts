@@ -14,6 +14,7 @@ export declare function caseScript(id: string): string;
 export declare function caseGolden(id: string): string;
 export declare function caseIsProject(id: string): boolean;
 export declare function caseScene(id: string): string | null;
+export declare function caseFixedFps(id: string): number | null;
 export declare const SANDBOX_ROOT: string;
 
 export interface Sandbox {
@@ -34,7 +35,7 @@ export declare function prepareSandbox(id: string): Sandbox;
 export declare function dropSandbox(id: string): void;
 export declare function runGodot(
   gdPath: string,
-  opts?: { timeoutMs?: number; projectPath?: string | null; scene?: boolean; env?: Record<string, string | undefined> | null; cwd?: string | null },
+  opts?: { timeoutMs?: number; projectPath?: string | null; scene?: boolean; env?: Record<string, string | undefined> | null; cwd?: string | null; fixedFps?: number | null },
 ): { text: string; timedOut: boolean; exitCode: number | null };
 export declare function normalize(text: string, gdPath?: string, sandboxId?: string | null): string;
 export declare function readGolden(id: string): string | null;

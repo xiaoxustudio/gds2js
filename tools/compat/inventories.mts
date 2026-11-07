@@ -18,6 +18,7 @@ import { CTOR_ARMS } from "../../packages/compiler/src/semantics/ctor-arms.ts";
 import { GLOBAL_CALLABLES } from "../../packages/runtime/src/runtime/global-names.ts";
 import { GLOBAL_CALLABLE_IMPLEMENTED } from "../../packages/runtime/src/runtime/method/globals.ts";
 import { GLOBAL_CONSTANTS } from "../../packages/compiler/src/lower/globals.ts";
+import { ENGINE_CLASS_CONSTS } from "../../packages/runtime/src/runtime/engine-class-consts.ts";
 
 const PACK = { ...PACK_METHOD_ARITY_WITH_BYTES, ...PACK_BYTE_EXTRA_ARITY };
 
@@ -190,6 +191,7 @@ export function buildInventories() {
       constants: Object.keys(GLOBAL_CONSTANTS).sort(),
     },
     ctors: Object.keys(CTOR_ARMS).sort(),
+    classConsts: ENGINE_CLASS_CONSTS,
     builtinTypes: [...new Set([...Object.keys(BUILTIN_METHODS), ...Object.keys(BUILTIN_PROPS)])].sort(),
   };
 }
