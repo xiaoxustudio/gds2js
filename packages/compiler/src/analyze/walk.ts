@@ -47,6 +47,25 @@ import { checkOperator } from "./checks/operators";
 import { checkCall, checkMethodCall } from "./checks/calls";
 import { annotationFace, literalTypeName, staticType } from "./faces";
 
+function literalText(e: Expr): string | null {
+  if (e.kind !== "lit") return null;
+  if (e.lit === "null") return "<null>";
+  if (e.lit === "string") return String(e.value);
+  if (e.lit === "bool") return e.value === true ? "true" : "false";
+  if (e.lit === "int" || e.lit === "float") return String(e.value);
+  return null;
+}
+
+function enumMemberInt(e: Expr, scope: Scope): number | null {
+  if (e.kind !== "attribute") return null;
+  if (e.obj.kind === "ident" && !scope.has(e.obj.name) && isGlobalEnumName(e.obj.name)) return globalEnumValue(e.obj.name, e.name);
+  if (e.obj.kind === "attribute" && e.obj.obj.kind === "ident" && !scope.has(e.obj.obj.name)) {
+    const owner = `${e.obj.obj.name}.${e.obj.name}`;
+    if (isGlobalEnumName(owner)) return globalEnumValue(owner, e.name);
+  }
+  return null;
+}
+
 function enumOwner(e: Expr): { name: string; root: string } | null {
   if (e.kind !== "attribute") return null;
   if (e.obj.kind === "ident") return { name: e.obj.name, root: e.obj.name };
@@ -251,7 +270,7 @@ export function walkStmt(
     case "var":
       if (s.init) walkExpr(s.init, scope, coroutines, diags);
       scope.declare(s.name);
-      scope.declareFace(s.name, annotationFace(s.type));
+      scope.declareFace(s.name, annotationFace(s.type) ?? (s.init === null ? null : staticType(s.init)));
       break;
     case "expr":
       walkExpr(s.expr, scope, coroutines, diags, true);
@@ -457,6 +476,32 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
       const root = e.obj.kind === "ident" ? e.obj.name : e.obj.kind === "attribute" && e.obj.obj.kind === "ident" ? e.obj.obj.name : null;
       if (enumName !== null && root !== null && !scope.has(root) && isGlobalEnumName(enumName)) {
         throw new UnsupportedError("global-enum-subscript", `全局枚举 ${enumName} 的下标访问在引擎里是 Compile Error 阶段（不是 Parse Error），本编译器尚未建模这一阶段`);
+      }
+      const idx = literalText(e.index);
+      const scalarLit = e.obj.kind === "lit" && (e.obj.lit === "int" || e.obj.lit === "float" || e.obj.lit === "bool" || e.obj.lit === "null") ? literalText(e.obj) : null;
+      if (scalarLit !== null) {
+        if (idx !== null) {
+          diags.push({ code: "scalar-index", message: `Cannot get index "${idx}" from "${scalarLit}".`, loc: e.loc });
+        } else {
+          const face = e.obj.kind === "lit" ? e.obj.lit : "null";
+          diags.push({ code: "scalar-index", message: `Cannot use subscript operator on a base of type "${face}".`, loc: e.loc });
+        }
+        walkExpr(e.index, scope, coroutines, diags);
+        return;
+      }
+      const folded = enumMemberInt(e.obj, scope);
+      if (folded !== null) {
+        if (idx !== null) diags.push({ code: "scalar-index", message: `Cannot get index "${idx}" from "${String(folded)}".`, loc: e.loc });
+        walkExpr(e.index, scope, coroutines, diags);
+        return;
+      }
+      if (e.obj.kind === "ident") {
+        const bound = scope.bindingOf(e.obj.name);
+        if (bound !== null && (bound.face === "int" || bound.face === "float" || bound.face === "bool")) {
+          diags.push({ code: "scalar-index", message: `Cannot use subscript operator on a base of type "${bound.face}".`, loc: e.loc });
+          walkExpr(e.index, scope, coroutines, diags);
+          return;
+        }
       }
       walkExpr(e.obj, scope, coroutines, diags);
       walkExpr(e.index, scope, coroutines, diags);
