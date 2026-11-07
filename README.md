@@ -20,6 +20,14 @@ Tier 1–6 的排期任务已 100% 收口；100% 指本仓计划范围，Godot �
 
 明示非目标：`Engine`、`Marshalls`、`OS` 的三项宿主不可比成员、`FileAccess.open_encrypted`；静态目标的 zstd 压缩页按工具链缺口记账，出货走 `--pack node`。
 
+### 后续任务
+
+- 裸名 `call` / `callv` 的动态分派，以及 Callable 动态调用的错误标签（当前参数槽沿用 int 文案）。
+- bootstrap 移植树追平全局枚举面（生成物 + 枚举折叠）。
+- 字段/静态默认值预填的性能 bench 覆盖（现有 kernels 不含模块字段）。
+- 静态目标的 zstd 压缩页：等 scriptc 支持 vendored asm 绑定，或维持 `--pack node`。
+- 兼容矩阵下一阶段（partial 预算与新的 Tier）需单独拍板。
+
 ## 构建
 
 ```bash
