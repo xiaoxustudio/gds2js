@@ -35,7 +35,7 @@ import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
 import { node3dGlobalTransform, node3dMethod, NODE3D_METHOD_NAMES } from "./node3d";
 import { GdTimer, timerMethod } from "./timer";
-import { ctlMethod } from "./control";
+import { ctlMethod, CTL_METHOD_NAMES } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
 
@@ -47,7 +47,7 @@ const NODE2D_ONLY_METHODS = new Set([
   "get_global_scale", "set_global_scale", "get_global_skew",
 ]);
 const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "rotate", "rotate_x", "rotate_y", "rotate_z", "orthonormalize", "get_parent_node_3d", ...NODE3D_METHOD_NAMES]);
-const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor"]);
+const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor", ...CTL_METHOD_NAMES]);
 
 function cloneEngineNode(rec: NodeRec): NodeRec {
   let made: NodeRec;
