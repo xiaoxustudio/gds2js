@@ -1,0 +1,8 @@
+SCRIPT ERROR: Parse Error: Global enum "Side" cannot be used on its own.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: The native enum "Side" does not behave like Dictionary and does not have methods of its own.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "BAD()" not found in base "Side".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)

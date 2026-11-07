@@ -502,6 +502,34 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
     }
 
     case "call": {
+      if (e.callee.kind === "attribute") {
+        const owner = enumOwner(e.callee);
+        if (owner !== null && !scope.has(owner.root) && isGlobalEnumName(owner.name)) {
+          const member = e.callee.name;
+          if (owner.name.includes(".")) {
+            const cut = owner.name.lastIndexOf(".");
+            diags.push({ code: "global-enum-standalone", message: `Type "${owner.name.slice(cut + 1)}" in base "${owner.name.slice(0, cut)}" cannot be used on its own.`, loc: e.loc });
+            diags.push({ code: "enum-method", message: `Native class ${owner.name} used in script doesn't exist or isn't exposed.`, loc: e.loc });
+            diags.push({ code: "enum-static-method", message: `Static function "${member}()" not found in base "${owner.root}".`, loc: e.loc });
+          } else {
+            diags.push({ code: "global-enum-standalone", message: `Global enum "${owner.name}" cannot be used on its own.`, loc: e.loc });
+            diags.push({ code: "enum-method", message: `The native enum "${owner.name}" does not behave like Dictionary and does not have methods of its own.`, loc: e.loc });
+            diags.push({ code: "enum-static-method", message: `Static function "${member}()" not found in base "${owner.name}".`, loc: e.loc });
+          }
+          for (const a of e.args) walkExpr(a, scope, coroutines, diags);
+          return;
+        }
+        if (e.callee.obj.kind === "ident" && !scope.has(e.callee.obj.name) && isGlobalEnumPrefix(e.callee.obj.name) && isGlobalEnumName(`${e.callee.obj.name}.${e.callee.name}`)) {
+          diags.push({ code: "undeclared-identifier", message: `Identifier "${e.callee.obj.name}" not declared in the current scope.`, loc: e.loc });
+          for (const a of e.args) walkExpr(a, scope, coroutines, diags);
+          return;
+        }
+      }
+      if (e.callee.kind === "ident" && !scope.has(e.callee.name) && isGlobalEnumName(e.callee.name)) {
+        diags.push({ code: "function-not-found", message: `Function "${e.callee.name}()" not found in base self.`, loc: e.loc });
+        for (const a of e.args) walkExpr(a, scope, coroutines, diags);
+        return;
+      }
       if (e.callee.kind === "ident") {
         const name = e.callee.name;
         if (coroutines.has(name) && !awaited) {

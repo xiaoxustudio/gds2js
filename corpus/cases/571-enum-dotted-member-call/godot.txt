@@ -1,0 +1,8 @@
+SCRIPT ERROR: Parse Error: Type "Type" in base "Variant" cannot be used on its own.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Native class Variant.Type used in script doesn't exist or isn't exposed.
+   at: GDScript::reload (<case>/main.gd:4)
+SCRIPT ERROR: Parse Error: Static function "TYPE_INT()" not found in base "Variant".
+   at: GDScript::reload (<case>/main.gd:4)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
