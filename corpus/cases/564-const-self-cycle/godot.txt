@@ -1,0 +1,6 @@
+SCRIPT ERROR: Parse Error: Could not resolve member "A": Cyclic reference.
+   at: GDScript::reload (<case>/main.gd:3)
+SCRIPT ERROR: Parse Error: Could not resolve type for constant "A".
+   at: GDScript::reload (<case>/main.gd:3)
+ERROR: Failed to load script "<case>/main.gd" with error "Parse error".
+   at: load (modules/gdscript)
