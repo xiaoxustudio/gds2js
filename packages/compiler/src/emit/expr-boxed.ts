@@ -234,6 +234,8 @@ export function emitExprVar(e: Expr): string {
 
     case "ident":
       if (e.name === "self") return ctx.selfInNilContext ? "rt.V.nil()" : `rt.V.object(this)`;
+      const forwardDefault = ctx.STATIC_FORWARD_DEFAULTS.get(e.name);
+      if (forwardDefault !== undefined) return forwardDefault;
       const owner = ctx.CLASS_VALUE_OWNERS.get(e.name);
       if (owner !== undefined) return `${owner}.${e.name}`;
       if (ctx.INNER_CLASSES.has(e.name) || e.name === ctx.CURRENT_CLASS) return `rt.V.object(__gd_d_${e.name})`;

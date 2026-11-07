@@ -185,25 +185,119 @@ static func emit_fields_method(vars, signals, chain_to_base, line_base):
 	return out
 
 
+static func _refs_of(e, out):
+	if e == null:
+		return
+	var k = e.get("kind")
+	if k == "lit":
+		return
+	if k == "ident":
+		out.append(e["name"])
+		return
+	if k == "binary":
+		_refs_of(e["left"], out)
+		_refs_of(e["right"], out)
+		return
+	if k == "unary" or k == "await" or k == "is" or k == "as":
+		_refs_of(e["operand"], out)
+		return
+	if k == "ternary":
+		_refs_of(e["cond"], out)
+		_refs_of(e["thenE"], out)
+		_refs_of(e["elseE"], out)
+		return
+	if k == "call":
+		_refs_of(e["callee"], out)
+		for a in e["args"]:
+			_refs_of(a, out)
+		return
+	if k == "attribute":
+		_refs_of(e["obj"], out)
+		return
+	if k == "index":
+		_refs_of(e["obj"], out)
+		_refs_of(e["index"], out)
+		return
+	if k == "array":
+		for it in e["items"]:
+			_refs_of(it, out)
+		return
+	if k == "dict":
+		for en in e["entries"]:
+			_refs_of(en["key"], out)
+			_refs_of(en["value"], out)
+
+
+static func _visit_const(v, consts, names, seen, visiting, order):
+	if seen.has(v["name"]) or visiting.has(v["name"]):
+		return
+	visiting[v["name"]] = true
+	var refs = []
+	_refs_of(v.get("init"), refs)
+	for r in refs:
+		if not names.has(r):
+			continue
+		for x in consts:
+			if x["name"] == r:
+				_visit_const(x, consts, names, seen, visiting, order)
+	visiting.erase(v["name"])
+	seen[v["name"]] = true
+	order.append(v)
+
+
+static func _emit_one(v, out, line_base):
+	var c = CTX.ctx
+	HE.mark(line_base + out.size(), v.get("loc"))
+	if v.get("accessor") != null:
+		if v.get("isStatic") == true and AB.prop_slot(v) != null:
+			out.append(AB.prop_slot_init(v))
+		for l in emit_accessors(v):
+			out.append(l)
+		return
+	if (v.get("isStatic") == true or v.get("isConst") == true) and c["DEFER_PRELOAD_CONSTS"].has(v["name"]):
+		out.append("  static get " + v["name"] + "(): rt.Variant {")
+		out.append("    if (__pre_" + v["name"] + " === null) __pre_" + v["name"] + " = " + AB.slot_init(v.get("type"), v.get("init"), v.get("isStatic") == true) + ";")
+		out.append("    return __pre_" + v["name"] + " as rt.Variant;")
+		out.append("  }")
+		return
+	if v.get("isStatic") == true or v.get("isConst") == true:
+		out.append("  static " + v["name"] + " = " + AB.slot_init(v.get("type"), v.get("init"), v.get("isStatic") == true) + ";")
+
+
 static func emit_class_level_vars(vars, line_base):
 	var c = CTX.ctx
 	var out = []
+	var consts = []
 	for v in vars:
-		HE.mark(line_base + out.size(), v.get("loc"))
-		if v.get("accessor") != null:
-			if v.get("isStatic") == true and AB.prop_slot(v) != null:
-				out.append(AB.prop_slot_init(v))
-			for l in emit_accessors(v):
-				out.append(l)
+		if v.get("isConst") == true:
+			consts.append(v)
+	var names = {}
+	for v in consts:
+		names[v["name"]] = true
+	var seen = {}
+	var visiting = {}
+	var order = []
+	for v in consts:
+		_visit_const(v, consts, names, seen, visiting, order)
+	for v in order:
+		_emit_one(v, out, line_base)
+	for i in range(vars.size()):
+		var v = vars[i]
+		if v.get("isConst") == true:
 			continue
-		if (v.get("isStatic") == true or v.get("isConst") == true) and c["DEFER_PRELOAD_CONSTS"].has(v["name"]):
-			out.append("  static get " + v["name"] + "(): rt.Variant {")
-			out.append("    if (__pre_" + v["name"] + " === null) __pre_" + v["name"] + " = " + AB.slot_init(v.get("type"), v.get("init"), v.get("isStatic") == true) + ";")
-			out.append("    return __pre_" + v["name"] + " as rt.Variant;")
-			out.append("  }")
+		if v.get("isStatic") != true or v.get("accessor") != null or c["DEFER_PRELOAD_CONSTS"].has(v["name"]):
+			_emit_one(v, out, line_base)
 			continue
-		if v.get("isStatic") == true or v.get("isConst") == true:
-			out.append("  static " + v["name"] + " = " + AB.slot_init(v.get("type"), v.get("init"), v.get("isStatic") == true) + ";")
+		var fwd = {}
+		for j in range(i + 1, vars.size()):
+			var x = vars[j]
+			if x.get("isStatic") != true or x.get("isConst") == true or x.get("accessor") != null or c["DEFER_PRELOAD_CONSTS"].has(x["name"]):
+				continue
+			fwd[x["name"]] = HE.type_default(x.get("type"))
+		var saved = c["STATIC_FORWARD_DEFAULTS"]
+		c["STATIC_FORWARD_DEFAULTS"] = fwd
+		_emit_one(v, out, line_base)
+		c["STATIC_FORWARD_DEFAULTS"] = saved
 	if out.size() > 0:
 		out.append("")
 	return out

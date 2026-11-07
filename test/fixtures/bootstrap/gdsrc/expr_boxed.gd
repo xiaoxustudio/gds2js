@@ -236,6 +236,9 @@ static func emit_expr_var(e):
 	if kind == "ident":
 		if e["name"] == "self":
 			return "rt.V.nil()" if CTX.ctx["selfInNilContext"] else "rt.V.object(this)"
+		var fwd = CTX.ctx["STATIC_FORWARD_DEFAULTS"].get(e["name"])
+		if fwd != null:
+			return fwd
 		var owner = CTX.ctx["CLASS_VALUE_OWNERS"].get(e["name"])
 		if owner != null:
 			return owner + "." + e["name"]

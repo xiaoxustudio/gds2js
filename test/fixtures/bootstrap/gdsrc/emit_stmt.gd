@@ -166,7 +166,9 @@ static func emit_stmt_inner(s, void_return):
 			if rr3["rep"] != CTX.ctx["CURRENT_RET"]:
 				return err("raw-abi-return", "内部不变量破坏：裸函数返回期望 " + str(CTX.ctx["CURRENT_RET"]) + "，实得 " + rr3["rep"])
 			return ["return " + rr3["code"] + ";"]
-		var code = EB.emit_expr(s["value"])
+		var cast = AB.declared_cast(CTX.ctx["CURRENT_RET_ANN"])
+		var raw = EB.emit_expr(s["value"])
+		var code = raw if cast == null else cast + "(" + raw + ")"
 		var text = null
 		if CTX.ctx["LAMBDA_DEPTH"] == 0:
 			text = HE.container_ann_text(CTX.ctx["CURRENT_RET_ANN"])

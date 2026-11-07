@@ -9,6 +9,7 @@ import { NO_ANALYSIS, type AnalysisResult } from "../analyze/analysis-result";
 import { buildSourceMap, type LineMapping, type RawSourceMap } from "./sourcemap";
 
 import { makeClosure, mark, typeDefault } from "./helpers";
+import { moduleVarRefs } from "../lower/module-refs";
 import { ctorAritiesLiteral, dictIdentityLiteral, fieldTypesLiteral, fwdParams, innerClassBase, innerInheritedMethodNames, innerInheritedNames, methodAritiesLiteral, methodParamsLiteral, scriptPropsLiteral, scriptPropsReaderLiteral, staticNamesLiteral, staticVarTableLiteral, staticsTableLiteral } from "./layout";
 import { propSlot, propSlotInit, slotInit, staticVarSlotsLiteral } from "./abi";
 import { emitFunc } from "./func";
@@ -200,21 +201,63 @@ export function emitInnerMirrors(innerClasses: ClassDecl[]): string[] {
 
 export function emitClassLevelVars(vars: VarDecl[], lineBase: number): string[] {
   const out: string[] = [];
-  for (const v of vars) {
+  const one = (v: VarDecl): void => {
     mark(lineBase + out.length, v.loc);
     if (v.accessor) {
       if (v.isStatic && propSlot(v) !== null) out.push(propSlotInit(v));
       for (const l of emitAccessors(v)) out.push(l);
-      continue;
+      return;
     }
     if ((v.isStatic || v.isConst) && ctx.DEFER_PRELOAD_CONSTS.has(v.name)) {
       out.push(`  static get ${v.name}(): rt.Variant {`);
       out.push(`    if (__pre_${v.name} === null) __pre_${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
       out.push(`    return __pre_${v.name} as rt.Variant;`);
       out.push(`  }`);
+      return;
+    }
+    if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
+  };
+  const consts = vars.filter((v) => v.isConst);
+  const names = new Set(consts.map((v) => v.name));
+  const seen = new Set<string>();
+  const visiting = new Set<string>();
+  const order: VarDecl[] = [];
+  const visit = (v: VarDecl): void => {
+    if (seen.has(v.name) || visiting.has(v.name)) return;
+    visiting.add(v.name);
+    const refs: string[] = [];
+    moduleVarRefs(v.init, refs);
+    for (const r of refs) {
+      if (!names.has(r)) continue;
+      const found = consts.find((x) => x.name === r);
+      if (found !== undefined) visit(found);
+    }
+    visiting.delete(v.name);
+    seen.add(v.name);
+    order.push(v);
+  };
+  for (const v of consts) visit(v);
+  for (const v of order) one(v);
+  for (let i = 0; i < vars.length; i++) {
+    const v = vars[i]!;
+    if (v.isConst) continue;
+    if (!v.isStatic || v.accessor || ctx.DEFER_PRELOAD_CONSTS.has(v.name)) {
+      one(v);
       continue;
     }
-    else if (v.isStatic || v.isConst) out.push(`  static ${v.name} = ${slotInit(v.type, v.init, v.isStatic)};`);
+    const forward = new Map<string, string>();
+    for (let j = i + 1; j < vars.length; j++) {
+      const x = vars[j]!;
+      if (!x.isStatic || x.isConst || x.accessor || ctx.DEFER_PRELOAD_CONSTS.has(x.name)) continue;
+      forward.set(x.name, typeDefault(x.type));
+    }
+    const saved = ctx.STATIC_FORWARD_DEFAULTS;
+    ctx.STATIC_FORWARD_DEFAULTS = forward;
+    try {
+      one(v);
+    } finally {
+      ctx.STATIC_FORWARD_DEFAULTS = saved;
+    }
   }
   if (out.length > 0) out.push("");
   return out;

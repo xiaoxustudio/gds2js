@@ -1,5 +1,5 @@
 import type { Diagnostic } from "../analysis-result";
-import type { Expr, Module, VarDecl } from "../../lower/ir";
+import type { ClassDecl, Expr, FuncDecl, Module, VarDecl } from "../../lower/ir";
 import { moduleVarRefs } from "../../lower/module-refs";
 import { isGlobalEnumName } from "../../lower/globals";
 
@@ -44,8 +44,7 @@ function nonConstantExpr(e: Expr | null, funcs: ReadonlySet<string>): boolean {
   }
 }
 
-export function checkModuleVarCycles(m: Module, diags: Diagnostic[]): void {
-  const vars = m.vars;
+function checkScope(vars: VarDecl[], funcsList: FuncDecl[], diags: Diagnostic[]): void {
   const byName = new Map<string, VarDecl>(vars.map((v) => [v.name, v]));
   const refs = new Map<string, string[]>();
   for (const v of vars) {
@@ -53,7 +52,7 @@ export function checkModuleVarCycles(m: Module, diags: Diagnostic[]): void {
     moduleVarRefs(v.init, out);
     refs.set(v.name, out);
   }
-  const funcs = new Set(m.funcs.map((f) => f.name));
+  const funcs = new Set(funcsList.map((f) => f.name));
   const readsValue = (v: VarDecl): boolean => (refs.get(v.name) ?? []).some((r) => byName.get(r)?.isConst === false);
   const notConstant = (v: VarDecl): boolean => readsValue(v) || nonConstantExpr(v.init, funcs);
   const fixed = new Set<string>();
@@ -88,4 +87,13 @@ export function checkModuleVarCycles(m: Module, diags: Diagnostic[]): void {
   for (const v of vars) {
     if (v.isConst && !fixed.has(v.name) && notConstant(v)) constExpr(v);
   }
+}
+
+export function checkModuleVarCycles(m: Module, diags: Diagnostic[]): void {
+  checkScope(m.vars, m.funcs, diags);
+  const walk = (c: ClassDecl): void => {
+    checkScope(c.vars, c.funcs, diags);
+    for (const inner of c.innerClasses) walk(inner);
+  };
+  for (const c of m.innerClasses) walk(c);
 }

@@ -52,6 +52,7 @@ export interface EmitContext {
   LINE_MAPPINGS: LineMapping[];
   UNBOXED: Map<string, "int" | "float" | "str">;
   LOCAL_SCOPES: Set<string>[];
+  STATIC_FORWARD_DEFAULTS: Map<string, string>;
   RAW_ABIS: Map<string, RawAbi>;
   CURRENT_RET: Kind | null;
   CURRENT_RET_ANN: TypeRef | null;
@@ -107,6 +108,7 @@ export function newContext(): EmitContext {
     RAW_ARRAYS: new Map<string, ElemKind>(),
     RAW_DICTS: new Map<string, "int" | "float">(),
     LOCAL_SCOPES: [],
+    STATIC_FORWARD_DEFAULTS: new Map<string, string>(),
   };
 }
 
