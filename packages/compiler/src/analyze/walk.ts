@@ -46,6 +46,13 @@ import { checkOperator } from "./checks/operators";
 import { checkCall, checkMethodCall } from "./checks/calls";
 import { annotationFace, literalTypeName, staticType } from "./faces";
 
+function enumOwner(e: Expr): { name: string; root: string } | null {
+  if (e.kind !== "attribute") return null;
+  if (e.obj.kind === "ident") return { name: e.obj.name, root: e.obj.name };
+  if (e.obj.kind === "attribute" && e.obj.obj.kind === "ident") return { name: `${e.obj.obj.name}.${e.obj.name}`, root: e.obj.obj.name };
+  return null;
+}
+
 export function assignTargetName(t: unknown): string | null {
   const o = t as Record<string, unknown> | null;
   if (o === null || typeof o !== "object") return null;
@@ -248,8 +255,14 @@ export function walkStmt(
     case "expr":
       walkExpr(s.expr, scope, coroutines, diags, true);
       break;
-    case "assign":
-      if (s.target.kind === "ident" && !scope.has(s.target.name) && isGlobalEnumName(s.target.name)) {
+    case "assign": {
+      const owner = enumOwner(s.target);
+      if (
+        s.target.kind === "attribute" && owner !== null && !scope.has(owner.root) &&
+        isGlobalEnumName(owner.name) && globalEnumValue(owner.name, s.target.name) !== null
+      ) {
+        diags.push({ code: "global-enum-constant", message: "Cannot assign a new value to a constant.", loc: s.target.loc });
+      } else if (s.target.kind === "ident" && !scope.has(s.target.name) && isGlobalEnumName(s.target.name)) {
         diags.push({ code: "global-enum-standalone", message: `Global enum "${s.target.name}" cannot be used on its own.`, loc: s.target.loc });
         diags.push({ code: "global-enum-constant", message: "Cannot assign a new value to a constant.", loc: s.target.loc });
       } else {
@@ -257,6 +270,7 @@ export function walkStmt(
       }
       walkExpr(s.value, scope, coroutines, diags);
       break;
+    }
     case "return":
       if (s.value) walkExpr(s.value, scope, coroutines, diags);
       break;
@@ -449,10 +463,7 @@ export function walkExpr(e: Expr, scope: Scope, coroutines: Set<string>, diags: 
           return;
         }
       }
-      const owner =
-        e.obj.kind === "ident" ? { name: e.obj.name, root: e.obj.name }
-        : e.obj.kind === "attribute" && e.obj.obj.kind === "ident" ? { name: `${e.obj.obj.name}.${e.obj.name}`, root: e.obj.obj.name }
-        : null;
+      const owner = enumOwner(e);
       if (owner !== null && !scope.has(owner.root) && isGlobalEnumName(owner.name)) {
         if (globalEnumValue(owner.name, e.name) !== null) return;
         diags.push({ code: "global-enum-member", message: `Cannot find member "${e.name}" in base "${owner.name}".`, loc: e.loc });
