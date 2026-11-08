@@ -473,6 +473,25 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
     }
     case "get_process_mode":
       return V.int(rec.__gd_node_process_mode__);
+    case "get_reference_count":
+      return V.int(rec.__gd_refcount__ ?? 1);
+    case "reference": {
+      const n = rec.__gd_refcount__ ?? 1;
+      if (n <= 0) return V.bool(false);
+      rec.__gd_refcount__ = n + 1;
+      return V.bool(true);
+    }
+    case "unreference": {
+      const n = rec.__gd_refcount__ ?? 1;
+      if (n <= 0) return V.bool(false);
+      rec.__gd_refcount__ = n - 1;
+      return V.bool(rec.__gd_refcount__ === 0);
+    }
+    case "init_ref": {
+      const n = rec.__gd_refcount__ ?? 1;
+      rec.__gd_refcount__ = n + 1;
+      return V.bool(true);
+    }
     case "get_scene_file_path":
       return V.str(rec.__gd_scene_file_path__);
     case "set_scene_file_path": {

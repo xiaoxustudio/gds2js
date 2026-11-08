@@ -4,10 +4,12 @@ import { engineClassNew, nodeAttach, nodeInit } from "@gds2js/runtime/runtime/cl
 import { GdSceneTree, sceneTreeBegin } from "@gds2js/runtime/runtime/class/object/scene-tree";
 import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
 import { GArray } from "@gds2js/runtime/runtime/values";
+import { nullCallable } from "@gds2js/runtime/runtime/class/identity/callable";
 
 const GArrayOf = (items: Variant[]) => GArray.of(items);
 import { basis } from "@gds2js/runtime/runtime/class/orient/basis";
 import { vector3 } from "@gds2js/runtime/runtime/class/vector/vector3";
+import { vector2 } from "@gds2js/runtime/runtime/class/vector/vector2";
 import { transform3d } from "@gds2js/runtime/runtime/class/orient/transform3d";
 import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
 
@@ -111,6 +113,25 @@ describe("runtime/engine face evidence", () => {
     expect(method(c, "get_mouse_filter", []).t).toBe(Tag.INT);
     method(c, "set_mouse_filter", [V.int(1)]);
     expect(method(c, "get_mouse_filter", []).v).toBe(1);
+    expect(method(c, "_get_minimum_size", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "_has_point", [vector2(1, 1)]).t).toBe(Tag.BOOL);
+    expect(method(c, "_structured_text_parser", [V.array(GArray.of([])), V.str("x")]).t).toBe(Tag.NIL);
+  });
+
+  it("Callable rpc face rejects null instances", () => {
+    expect(() => method(nullCallable(), "rpc", [])).toThrow();
+    expect(() => method(nullCallable(), "rpc_id", [V.int(1)])).toThrow();
+  });
+
+  it("RefCounted reference face", () => {
+    const r = mk("RefCounted");
+    expect(method(r, "get_reference_count", []).v).toBe(1);
+    expect(method(r, "reference", []).v).toBe(true);
+    expect(method(r, "get_reference_count", []).v).toBe(2);
+    expect(method(r, "unreference", []).v).toBe(false);
+    expect(method(r, "get_reference_count", []).v).toBe(1);
+    expect(method(r, "init_ref", []).v).toBe(true);
+    expect(method(r, "get_reference_count", []).v).toBe(2);
   });
 
   it("SceneTree method, property and signal face", () => {

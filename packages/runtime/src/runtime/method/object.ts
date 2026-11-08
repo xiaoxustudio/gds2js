@@ -36,7 +36,7 @@ import { transform2dMethod } from "../class/orient/transform2d";
 import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "../class/host/json";
 import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAccessStatic, fileMethod, GdDir, GdFile } from "../class/host/file-access";
 import { OS_STATIC_NAMES, osStatic } from "../class/host/os";
-import { GdRegEx, GdRegExMatch, regExNew, regExMatchMethod, regExMethod } from "../class/host/regex";
+import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
 import { transform3dMethod } from "../class/orient/transform3d";
@@ -79,6 +79,13 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
       if (inner.className === "JSON") return jsonNew();
       if (inner.className === "RegEx") return regExNew();
       if (engineClassNewable(inner.className)) return engineClassNew(inner.className);
+    }
+    if (inner.className === "RegEx" && name === "create_from_string") {
+      const pat = args[0];
+      if (pat === undefined || (pat.t !== Tag.STRING && pat.t !== Tag.STRING_NAME)) throw new UnsupportedError("regex-arg", "RegEx.create_from_string() 只量过字符串");
+      const rx = new GdRegEx();
+      regexCompile(rx, String(pat.v));
+      return V.object(rx);
     }
     if (inner.className === "JSON" && JSON_STATIC_NAMES.has(name)) return jsonStatic(name, args);
     if (inner.className === "FileAccess" && FA_STATIC_NAMES.has(name)) return fileAccessStatic(name, args);

@@ -39,6 +39,8 @@ import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/ob
 import { timerRead, timerWrite } from "../class/object/timer";
 import { registerTweenHooks } from "../class/object/tween";
 import { GdSceneTree, registerTreeWriteHook, treeReadProp, treeSetCurrentScene } from "../class/object/scene-tree";
+import { GdJson } from "../class/host/json";
+import { GdRegExMatch, matchNames, matchStrings } from "../class/host/regex";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
 import { ctlRead, ctlWrite } from "../class/object/control";
 import { node3dRead, node3dWrite } from "../class/object/node3d";
@@ -250,6 +252,10 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
       "container-prop-assign",
       `Invalid assignment of property or key '${key}' with value of type '${tagName(value.t)}' on a base object of type '${tagName(base.t)}'.`,
     );
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GdJson && key === "data") {
+    (base.v as GdJson).__gd_json_data = value;
+    return null;
   }
   const vec = base.t === Tag.OBJECT && base.v instanceof GVector2 ? (base.v as GVector2) : null;
   const vec3 = base.t === Tag.OBJECT && base.v instanceof GVector3 ? (base.v as GVector3) : null;
@@ -593,6 +599,13 @@ export function attribute(raw: unknown, name: string): unknown {
       const row = faceArity(packTypeName((obj.v as GBytes).kind), name);
       if (row !== null) return boundBuiltinCallable(obj, packTypeName((obj.v as GBytes).kind), name, row[0], row[1]);
       throw new UnsupportedError("packed-attribute", `pack 的属性读落在两份名单之外：${packTypeName((obj.v as GBytes).kind)}.${name} 的元数没量过，不发引擎那句`);
+    }
+    if (obj.v instanceof GdJson && name === "data") return (obj.v as GdJson).__gd_json_data;
+    if (obj.v instanceof GdRegExMatch) {
+      const rd = obj.v as GdRegExMatch;
+      if (name === "names") return matchNames(rd);
+      if (name === "strings") return matchStrings(rd);
+      if (name === "subject") return V.str(rd.subject);
     }
     if (obj.v instanceof GdSceneTree) {
       const tp = treeReadProp(obj.v, name);

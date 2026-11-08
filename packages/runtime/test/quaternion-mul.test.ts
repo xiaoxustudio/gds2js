@@ -18,8 +18,8 @@ describe("Quaternion 的 * 那一族", () => {
     eq("456", "u * u 是转 360°，引擎给 -1 那一支", show(ops.mul(u, u)), "(0, 0, 0, -1)");
   });
 
-  it("q * Vector3 在式子读出之前响亮拒", () => {
-    shouldThrow("456", "b * Vector3(1, 0, 0)", () => ops.mul(b, vector3(1, 0, 0)));
+  it("q * Vector3 走旋转变换；非单位四元数照引擎拒", () => {
+    eq("456", "b * Vector3(1, 0, 0)", show(ops.mul(b, vector3(1, 0, 0))), "(-0.0, 0.0, -1.0)");
     shouldThrow("456", "a * Vector3(1, 2, 3)", () => ops.mul(a, vector3(1, 2, 3)));
   });
 });

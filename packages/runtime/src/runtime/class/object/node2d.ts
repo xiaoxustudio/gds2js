@@ -51,16 +51,7 @@ function originOf(store: GTransform2D): Variant {
 }
 
 function skewOf(g: GTransform2D): number {
-  const det = r(r(g.xx * g.yy) - r(g.xy * g.yx));
-  const x0 = columnLength(g.xx, g.xy);
-  const x1 = columnLength(g.yx, g.yy);
-  const n0x = x0 === 0 ? 0 : r(g.xx / x0);
-  const n0y = x0 === 0 ? 0 : r(g.xy / x0);
-  const n1x = x1 === 0 ? 0 : r(g.yx / x1);
-  const n1y = x1 === 0 ? 0 : r(g.yy / x1);
-  const sgn = det < 0 ? -1 : 1;
-  const dot = r(r(n0x * r(sgn * n1x)) + r(n0y * r(sgn * n1y)));
-  return r(Math.acos(dot) - r(r(Math.PI) * r(0.5)));
+  return r(r(Math.atan2(g.yy, g.yx) - Math.atan2(g.xy, g.xx)) - r(Math.PI / 2));
 }
 
 function rotationOf(g: GTransform2D): number {

@@ -114,11 +114,15 @@ const VIRTUAL_OWNERS = ["Node", "Node2D", "Node3D", "Control"];
 
 const EXTRA_GLOBAL_IMPLEMENTED = ["print", "print_debug", "print_rich", "print_verbose", "printerr", "printraw", "prints", "printt"];
 
-const EXTRA_PROPS = { Node: ["name", "scene_file_path", "process_mode", "process_priority", "process_physics_priority", "owner"] };
+const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
+  Node: ["name", "scene_file_path", "process_mode", "process_priority", "process_physics_priority", "owner"],
+  JSON: ["data"],
+  RegExMatch: ["names", "strings", "subject"],
+};
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];
 
-const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"] };
+const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"] };
 
 function functionBody(source: string, fnName: string): string {
   const re = new RegExp(`(?:export\\s+)?function\\s+${fnName}\\s*\\(`, "g");

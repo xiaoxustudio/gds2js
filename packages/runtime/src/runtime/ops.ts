@@ -713,6 +713,10 @@ function basisXformInv(b: GBasis, x: number, y: number, z: number): [number, num
 }
 
 function quaternionXform(qx: number, qy: number, qz: number, qw: number, v: GVector3): Variant {
+  const lensq = r3(r3(r3(r3(qx * qx) + r3(qy * qy)) + r3(qz * qz)) + r3(qw * qw));
+  if (Math.abs(lensq - 1) > 1e-5) {
+    throw new GodotRuntimeError("quaternion-normalized", `The quaternion (${String(qx)}, ${String(qy)}, ${String(qz)}, ${String(qw)}) must be normalized.`);
+  }
   const uvx = r3(r3(qy * v.z) - r3(qz * v.y));
   const uvy = r3(r3(qz * v.x) - r3(qx * v.z));
   const uvz = r3(r3(qx * v.y) - r3(qy * v.x));

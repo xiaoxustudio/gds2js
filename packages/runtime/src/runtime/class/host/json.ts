@@ -5,10 +5,32 @@ import { GArray, GDict, show } from "../../values";
 import { GBytes, packItems } from "../bytes/packed";
 import { strNumDecimals, strSci } from "../../numfmt";
 import { asString } from "../../method/core";
+import { asVec2, vector2, GVector2 } from "../vector/vector2";
+import { asVec2i, vector2i, GVector2i } from "../vector/vector2i";
+import { asVec3, vector3, GVector3 } from "../vector/vector3";
+import { asVec3i, vector3i, GVector3i } from "../vector/vector3i";
+import { asVec4, vector4, GVector4 } from "../vector/vector4";
+import { asVec4i, vector4i, GVector4i } from "../vector/vector4i";
+import { asRect2, rect2, GRect2 } from "../shape/rect";
+import { asRect2i, rect2i, GRect2i } from "../shape/rect";
+import { asAABB, aabb, GAABB } from "../shape/aabb";
+import { asPlane, plane, GPlane } from "../orient/plane";
+import { asQuaternion, quaternion, GQuaternion } from "../orient/quaternion";
+import { asTransform2D, transform2d, GTransform2D } from "../orient/transform2d";
+import { asTransform3D, transform3d, GTransform3D } from "../orient/transform3d";
+import { asBasis, basis, GBasis } from "../orient/basis";
+import { asProjection, projection, GProjection } from "../orient/projection";
+import { asColor, color, GColor } from "../color/color";
+import { asNodePath, nodePathText, nodePathValue } from "../identity/node-path";
+import { asRid, ridCtor } from "../identity/rid";
+import { nullCallable, isCallable } from "../identity/callable";
+import { Signal } from "../identity/signal";
+import { packCtor, packTypeName, type PackKind } from "../bytes/packed";
 
 export class GdJson extends GdScriptObject {
   __gd_engine_class__ = "JSON";
   __gd_json_data: Variant = V.nil();
+  __gd_json_text = "";
   __gd_json_error_line = 0;
   __gd_json_error_message = "";
 }
@@ -395,10 +417,183 @@ function stringifyArgs(name: string, args: Variant[]): string {
   return jsonStringify(args[0] as Variant, indent, sort, full);
 }
 
-export const JSON_STATIC_NAMES = new Set(["stringify", "parse_string"]);
+export const JSON_STATIC_NAMES = new Set(["stringify", "parse_string", "from_native", "to_native"]);
+
+const TYPE_KEY = "type";
+const ARGS_KEY = "args";
+
+function typeDict(name: string, args: Variant[]): Variant {
+  const d = new GDict();
+  d.set(V.str(TYPE_KEY), V.stringName(name));
+  d.set(V.str(ARGS_KEY), V.array(GArray.of(args)));
+  return V.dict(d);
+}
+
+function fnum(x: number): string {
+  if (Number.isNaN(x)) return "nan";
+  if (x === Infinity) return "inf";
+  if (x === -Infinity) return "-inf";
+  return String(x);
+}
+
+function enc(v: Variant): Variant {
+  switch (v.t) {
+    case Tag.NIL:
+    case Tag.BOOL:
+      return v;
+    case Tag.INT:
+      return V.str("i:" + show(v));
+    case Tag.FLOAT:
+      return V.str("f:" + fnum(v.v as number));
+    case Tag.STRING:
+      return V.str("s:" + String(v.v));
+    case Tag.STRING_NAME:
+      return V.str("sn:" + String(v.v));
+    case Tag.ARRAY: {
+      const items: Variant[] = [];
+      for (const it of (v.v as GArray).raw()) items.push(enc(it));
+      return V.array(GArray.of(items));
+    }
+    case Tag.DICT: {
+      const args: Variant[] = [];
+      for (const k of (v.v as GDict).keys()) {
+        args.push(enc(k));
+        args.push(enc((v.v as GDict).getRequired(k)));
+      }
+      return typeDict("Dictionary", args);
+    }
+    case Tag.OBJECT: {
+      const np = asNodePath(v);
+      if (np !== null) return V.str("np:" + nodePathText(np));
+      if (isCallable(v)) return typeDict("Callable", []);
+      if (v.v instanceof Signal) return typeDict("Signal", []);
+      const rid = asRid(v);
+      if (rid !== null) return typeDict("RID", []);
+      const v2 = asVec2(v);
+      if (v2 !== null) return typeDict("Vector2", [V.float(v2.x), V.float(v2.y)]);
+      const v2i = asVec2i(v);
+      if (v2i !== null) return typeDict("Vector2i", [V.int(v2i.x), V.int(v2i.y)]);
+      const v3 = asVec3(v);
+      if (v3 !== null) return typeDict("Vector3", [V.float(v3.x), V.float(v3.y), V.float(v3.z)]);
+      const v3i = asVec3i(v);
+      if (v3i !== null) return typeDict("Vector3i", [V.int(v3i.x), V.int(v3i.y), V.int(v3i.z)]);
+      const v4 = asVec4(v);
+      if (v4 !== null) return typeDict("Vector4", [V.float(v4.x), V.float(v4.y), V.float(v4.z), V.float(v4.w)]);
+      const v4i = asVec4i(v);
+      if (v4i !== null) return typeDict("Vector4i", [V.int(v4i.x), V.int(v4i.y), V.int(v4i.z), V.int(v4i.w)]);
+      const r2 = asRect2(v);
+      if (r2 !== null) return typeDict("Rect2", [V.float(r2.x), V.float(r2.y), V.float(r2.w), V.float(r2.h)]);
+      const r2i = asRect2i(v);
+      if (r2i !== null) return typeDict("Rect2i", [V.int(r2i.x), V.int(r2i.y), V.int(r2i.w), V.int(r2i.h)]);
+      const pl = asPlane(v);
+      if (pl !== null) return typeDict("Plane", [V.float(pl.nx), V.float(pl.ny), V.float(pl.nz), V.float(pl.d)]);
+      const q = asQuaternion(v);
+      if (q !== null) return typeDict("Quaternion", [V.float(q.x), V.float(q.y), V.float(q.z), V.float(q.w)]);
+      const t2 = asTransform2D(v);
+      if (t2 !== null) return typeDict("Transform2D", [V.float(t2.xx), V.float(t2.xy), V.float(t2.yx), V.float(t2.yy), V.float(t2.ox), V.float(t2.oy)]);
+      const b = asBasis(v);
+      if (b !== null) return typeDict("Basis", [V.float(b.x0), V.float(b.x1), V.float(b.x2), V.float(b.y0), V.float(b.y1), V.float(b.y2), V.float(b.z0), V.float(b.z1), V.float(b.z2)]);
+      const t3 = asTransform3D(v);
+      if (t3 !== null) return typeDict("Transform3D", [V.float(t3.x0), V.float(t3.x1), V.float(t3.x2), V.float(t3.y0), V.float(t3.y1), V.float(t3.y2), V.float(t3.z0), V.float(t3.z1), V.float(t3.z2), V.float(t3.ox), V.float(t3.oy), V.float(t3.oz)]);
+      const pj = asProjection(v);
+      if (pj !== null) return typeDict("Projection", [V.float(pj.x.x), V.float(pj.x.y), V.float(pj.x.z), V.float(pj.x.w), V.float(pj.y.x), V.float(pj.y.y), V.float(pj.y.z), V.float(pj.y.w), V.float(pj.z.x), V.float(pj.z.y), V.float(pj.z.z), V.float(pj.z.w), V.float(pj.w.x), V.float(pj.w.y), V.float(pj.w.z), V.float(pj.w.w)]);
+      const c = asColor(v);
+      if (c !== null) return typeDict("Color", [V.float(c.r), V.float(c.g), V.float(c.b), V.float(c.a)]);
+      const ab = asAABB(v);
+      if (ab !== null) return typeDict("AABB", [V.float(ab.x), V.float(ab.y), V.float(ab.z), V.float(ab.sx), V.float(ab.sy), V.float(ab.sz)]);
+      if (v.v instanceof GBytes) {
+        const items: Variant[] = [];
+        for (const it of packItems(v.v as GBytes)) items.push(enc(it));
+        return typeDict(packTypeName((v.v as GBytes).kind), items);
+      }
+      return V.nil();
+    }
+    default:
+      return V.nil();
+  }
+}
+
+function dec(v: Variant): Variant {
+  if (v.t === Tag.STRING) {
+    const s = v.v as string;
+    if (s.startsWith("i:")) return V.int(BigInt(s.slice(2)));
+    if (s.startsWith("f:")) {
+      const sub = s.slice(2);
+      if (sub === "inf") return V.float(Infinity);
+      if (sub === "-inf") return V.float(-Infinity);
+      if (sub === "nan") return V.float(NaN);
+      return V.float(Number(sub));
+    }
+    if (s.startsWith("s:")) return V.str(s.slice(2));
+    if (s.startsWith("sn:")) return V.stringName(s.slice(3));
+    if (s.startsWith("np:")) return nodePathValue(s.slice(3));
+    return V.nil();
+  }
+  if (v.t === Tag.ARRAY) {
+    const items: Variant[] = [];
+    for (const it of (v.v as GArray).raw()) items.push(dec(it));
+    return V.array(GArray.of(items));
+  }
+  if (v.t === Tag.DICT) {
+    const d = v.v as GDict;
+    const t = d.get(V.str(TYPE_KEY));
+    if (t === undefined) return V.nil();
+    const name = String(t.v);
+    const argsRaw = d.get(V.str(ARGS_KEY));
+    const args: Variant[] = argsRaw === undefined ? [] : (argsRaw.v as GArray).raw().map((x) => dec(x));
+    const nums = () => args.map((a) => Number(a.v));
+    const ints = () => args.map((a) => Number(a.v));
+    if (name === "Dictionary") {
+      const out = new GDict();
+      for (let i = 0; i + 1 < args.length; i += 2) out.set(args[i] as Variant, args[i + 1] as Variant);
+      return V.dict(out);
+    }
+    if (name === "RID") return ridCtor([]);
+    if (name === "Callable") return nullCallable();
+    if (name === "Signal") return V.object(new Signal(""));
+    if (name === "Vector2") { const n = nums(); return vector2(n[0] as number, n[1] as number); }
+    if (name === "Vector2i") { const n = ints(); return vector2i(n[0] as number, n[1] as number); }
+    if (name === "Vector3") { const n = nums(); return vector3(n[0] as number, n[1] as number, n[2] as number); }
+    if (name === "Vector3i") { const n = ints(); return vector3i(n[0] as number, n[1] as number, n[2] as number); }
+    if (name === "Vector4") { const n = nums(); return vector4(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "Vector4i") { const n = ints(); return vector4i(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "Rect2") { const n = nums(); return rect2(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "Rect2i") { const n = ints(); return rect2i(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "Plane") { const n = nums(); return plane(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "Quaternion") { const n = nums(); return quaternion(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "Transform2D") { const n = nums(); return transform2d(n[0] as number, n[1] as number, n[2] as number, n[3] as number, n[4] as number, n[5] as number); }
+    if (name === "Basis") { const n = nums(); return basis(n[0] as number, n[1] as number, n[2] as number, n[3] as number, n[4] as number, n[5] as number, n[6] as number, n[7] as number, n[8] as number); }
+    if (name === "Transform3D") { const n = nums(); return transform3d(n[0] as number, n[1] as number, n[2] as number, n[3] as number, n[4] as number, n[5] as number, n[6] as number, n[7] as number, n[8] as number, n[9] as number, n[10] as number, n[11] as number); }
+    if (name === "Projection") { const n = nums(); return projection(new GVector4(n[0] as number, n[1] as number, n[2] as number, n[3] as number), new GVector4(n[4] as number, n[5] as number, n[6] as number, n[7] as number), new GVector4(n[8] as number, n[9] as number, n[10] as number, n[11] as number), new GVector4(n[12] as number, n[13] as number, n[14] as number, n[15] as number)); }
+    if (name === "Color") { const n = nums(); return color(n[0] as number, n[1] as number, n[2] as number, n[3] as number); }
+    if (name === "AABB") { const n = nums(); return aabb(n[0] as number, n[1] as number, n[2] as number, n[3] as number, n[4] as number, n[5] as number); }
+    const PACK_NAMES: Record<string, PackKind> = {
+      PackedByteArray: "byte", PackedInt32Array: "int32", PackedInt64Array: "int64",
+      PackedFloat32Array: "float32", PackedFloat64Array: "float64", PackedStringArray: "string",
+      PackedVector2Array: "vector2", PackedVector3Array: "vector3", PackedVector4Array: "vector4",
+      PackedColorArray: "color",
+    };
+    const pk = PACK_NAMES[name];
+    if (pk !== undefined) return packCtor(pk, args);
+    return V.nil();
+  }
+  return v;
+}
 
 export function jsonStatic(name: string, args: Variant[]): Variant {
   if (name === "stringify") return V.str(stringifyArgs(name, args));
+  if (name === "from_native") {
+    if (args.length < 1) throw new UnsupportedError("json-arity", "JSON.from_native() 少了实参");
+    return enc(args[0] as Variant);
+  }
+  if (name === "to_native") {
+    if (args.length < 1) throw new UnsupportedError("json-arity", "JSON.to_native() 少了实参");
+    return dec(args[0] as Variant);
+  }
+  if (name === "parse_string") {
+    const text = textArg(args, 0, name, "");
+    return jsonParseResult(text);
+  }
   return jsonParseResult(textArg(args, 0, name, ""));
 }
 
@@ -410,8 +605,9 @@ function jsonParseResult(text: string): Variant {
 function parseCode(j: GdJson, args: Variant[]): Variant {
   if (args.length < 1 || args.length > 2) throw new UnsupportedError("json-arity", `JSON.parse() 只量过 1 到 2 个实参（收到 ${String(args.length)} 个）`);
   const text = textArg(args, 0, "parse", "");
-  if (args.length === 2) boolArg(args, 1, "parse", false);
+  const keep = args.length === 2 ? boolArg(args, 1, "parse", false) : false;
   j.__gd_json_data = jsonParseResult(text);
+  j.__gd_json_text = keep ? text : "";
   j.__gd_json_error_line = 0;
   return V.int(0);
 }
@@ -421,7 +617,9 @@ export function jsonMethod(inner: GdJson, name: string, args: Variant[]): Varian
     case "stringify":
       return V.str(stringifyArgs(name, args));
     case "parse_string": {
-      const v = jsonParseResult(textArg(args, 0, name, ""));
+      const text = textArg(args, 0, name, "");
+      const v = jsonParseResult(text);
+      inner.__gd_json_text = text;
       inner.__gd_json_error_line = 0;
       return v;
     }
@@ -430,6 +628,13 @@ export function jsonMethod(inner: GdJson, name: string, args: Variant[]): Varian
     case "get_data":
       if (args.length !== 0) throw new UnsupportedError("json-arity", `get_data() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
       return inner.__gd_json_data;
+    case "set_data":
+      if (args.length !== 1) throw new UnsupportedError("json-arity", "set_data() 只量过 1 个实参");
+      inner.__gd_json_data = args[0] as Variant;
+      return V.nil();
+    case "get_parsed_text":
+      if (args.length !== 0) throw new UnsupportedError("json-arity", "get_parsed_text() 只量过 0 个实参");
+      return V.str(inner.__gd_json_text);
     case "get_error_message":
       if (args.length !== 0) throw new UnsupportedError("json-arity", `get_error_message() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
       return V.str(inner.__gd_json_error_message);
