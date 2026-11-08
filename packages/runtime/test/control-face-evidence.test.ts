@@ -1,0 +1,164 @@
+import { describe, expect, it } from "vitest";
+import { method as methodRaw, attribute as attributeRaw } from "@gds2js/runtime/runtime/methods";
+import { engineClassNew, nodeAttach, nodeInit } from "@gds2js/runtime/runtime/class/object/node";
+import { GdSceneTree, sceneTreeBegin } from "@gds2js/runtime/runtime/class/object/scene-tree";
+import { GArray } from "@gds2js/runtime/runtime/values";
+import { Tag, V, type Variant } from "@gds2js/runtime/runtime/tags";
+import { nodePathValue } from "@gds2js/runtime/runtime/class/identity/node-path";
+
+const method = (recv: any, name: string, args: any[]): any => methodRaw(recv, name, args) as Variant as any;
+const attribute = (recv: any, name: string): any => attributeRaw(recv, name) as Variant as any;
+
+function mk(cls: string): any {
+  return engineClassNew(cls).v;
+}
+
+function treeWith(control: any): GdSceneTree {
+  const root = mk("Node");
+  nodeInit(root, "Node");
+  const tree = new GdSceneTree(root);
+  sceneTreeBegin(tree);
+  nodeAttach(root, control);
+  return tree;
+}
+
+function obj(): any {
+  return V.object({} as never);
+}
+
+describe("runtime/control face evidence", () => {
+  it("Control unplanned properties", () => {
+    const c = mk("Control");
+    nodeInit(c, "Control");
+    expect(attribute(c, "focus_mode").v).toBe(0);
+    expect(attribute(c, "focus_behavior_recursive").v).toBe(0);
+    expect(attribute(c, "mouse_filter").v).toBe(0);
+    expect(attribute(c, "mouse_behavior_recursive").v).toBe(0);
+    expect(attribute(c, "mouse_default_cursor_shape").v).toBe(0);
+    expect(attribute(c, "mouse_force_pass_scroll_events").v).toBe(true);
+    expect(attribute(c, "auto_translate").v).toBe(true);
+    expect(attribute(c, "tooltip_auto_translate_mode").v).toBe(0);
+    expect(attribute(c, "shortcut_context").t).toBe(Tag.NIL);
+    expect(attribute(c, "theme").t).toBe(Tag.NIL);
+    expect(attribute(c, "accessibility_name").v).toBe("");
+    expect(attribute(c, "accessibility_description").v).toBe("");
+    expect(attribute(c, "accessibility_live").v).toBe(0);
+    expect(attribute(c, "accessibility_controls_nodes").t).toBe(Tag.ARRAY);
+    expect(attribute(c, "focus_next").t).toBe(Tag.OBJECT);
+    expect(attribute(c, "focus_previous").t).toBe(Tag.OBJECT);
+    expect(attribute(c, "focus_neighbor_left").t).toBe(Tag.OBJECT);
+    expect(attribute(c, "focus_neighbor_top").t).toBe(Tag.OBJECT);
+    expect(attribute(c, "focus_neighbor_right").t).toBe(Tag.OBJECT);
+    expect(attribute(c, "focus_neighbor_bottom").t).toBe(Tag.OBJECT);
+  });
+
+  it("Control theme override and focus face", () => {
+    const c = mk("Control");
+    nodeInit(c, "Control");
+    treeWith(c);
+    method(c, "add_theme_color_override", [V.str("x"), V.int(1)]);
+    expect(method(c, "has_theme_color_override", [V.str("x")]).v).toBe(true);
+    method(c, "remove_theme_color_override", [V.str("x")]);
+    expect(method(c, "has_theme_color_override", [V.str("x")]).v).toBe(false);
+    method(c, "add_theme_constant_override", [V.str("y"), V.int(2)]);
+    expect(method(c, "has_theme_constant_override", [V.str("y")]).v).toBe(true);
+    method(c, "remove_theme_constant_override", [V.str("y")]);
+    method(c, "add_theme_font_override", [V.str("f"), V.nil()]);
+    expect(method(c, "has_theme_font_override", [V.str("f")]).v).toBe(true);
+    method(c, "remove_theme_font_override", [V.str("f")]);
+    method(c, "add_theme_font_size_override", [V.str("s"), V.int(3)]);
+    expect(method(c, "has_theme_font_size_override", [V.str("s")]).v).toBe(true);
+    method(c, "remove_theme_font_size_override", [V.str("s")]);
+    method(c, "add_theme_icon_override", [V.str("i"), V.nil()]);
+    expect(method(c, "has_theme_icon_override", [V.str("i")]).v).toBe(true);
+    method(c, "remove_theme_icon_override", [V.str("i")]);
+    method(c, "add_theme_stylebox_override", [V.str("b"), V.nil()]);
+    expect(method(c, "has_theme_stylebox_override", [V.str("b")]).v).toBe(true);
+    method(c, "remove_theme_stylebox_override", [V.str("b")]);
+    method(c, "begin_bulk_theme_override", []);
+    method(c, "end_bulk_theme_override", []);
+    expect(method(c, "has_theme_color", [V.str("x"), V.str("")]).v).toBe(false);
+    expect(method(c, "has_theme_constant", [V.str("x"), V.str("")]).v).toBe(false);
+    expect(method(c, "has_theme_font", [V.str("x"), V.str("")]).v).toBe(true);
+    expect(method(c, "has_theme_font_size", [V.str("x"), V.str("")]).v).toBe(true);
+    expect(method(c, "has_theme_icon", [V.str("x"), V.str("")]).v).toBe(false);
+    expect(method(c, "has_theme_stylebox", [V.str("x"), V.str("")]).v).toBe(false);
+    expect(method(c, "get_theme", []).t).toBe(Tag.NIL);
+    method(c, "set_theme", [V.nil()]);
+    expect(method(c, "get_theme_default_base_scale", []).v).toBe(1);
+    expect(method(c, "get_theme_default_font_size", []).v).toBe(16);
+    expect(method(c, "get_theme_default_font", []).t).toBe(Tag.OBJECT);
+    method(c, "set_focus_mode", [V.int(2)]);
+    expect(method(c, "get_focus_mode", []).v).toBe(2);
+    method(c, "set_focus_behavior_recursive", [V.int(1)]);
+    expect(method(c, "get_focus_behavior_recursive", []).v).toBe(1);
+    expect(method(c, "get_focus_mode_with_override", []).v).toBe(2);
+    expect(method(c, "get_mouse_filter_with_override", []).v).toBe(0);
+    method(c, "set_mouse_behavior_recursive", [V.int(1)]);
+    expect(method(c, "get_mouse_behavior_recursive", []).v).toBe(1);
+    method(c, "set_default_cursor_shape", [V.int(2)]);
+    expect(method(c, "get_default_cursor_shape", []).v).toBe(2);
+    expect(method(c, "get_cursor_shape", []).v).toBe(2);
+    expect(method(c, "is_force_pass_scroll_events", []).v).toBe(true);
+    method(c, "set_force_pass_scroll_events", [V.bool(false)]);
+    expect(method(c, "is_force_pass_scroll_events", []).v).toBe(false);
+    expect(method(c, "is_auto_translating", []).v).toBe(true);
+    method(c, "set_auto_translate", [V.bool(false)]);
+    expect(method(c, "is_auto_translating", []).v).toBe(false);
+    method(c, "set_tooltip_auto_translate_mode", [V.int(1)]);
+    expect(method(c, "get_tooltip_auto_translate_mode", []).v).toBe(1);
+    method(c, "set_shortcut_context", [V.nil()]);
+    expect(method(c, "get_shortcut_context", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "get_tooltip", [obj()]).t).toBe(Tag.STRING);
+    expect(method(c, "_get_tooltip", []).t).toBe(Tag.STRING);
+    method(c, "grab_focus", []);
+    expect(method(c, "has_focus", []).t).toBe(Tag.BOOL);
+    method(c, "grab_click_focus", []);
+    method(c, "release_focus", []);
+    expect(method(c, "find_next_valid_focus", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "find_prev_valid_focus", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "find_valid_focus_neighbor", [V.int(0)]).t).toBe(Tag.OBJECT);
+    expect(method(c, "get_focus_neighbor", [V.int(0)]).t).toBe(Tag.OBJECT);
+    method(c, "set_focus_neighbor", [V.int(0), nodePathValue("a")]);
+    method(c, "set_focus_next", [nodePathValue("b")]);
+    expect(method(c, "get_focus_next", []).t).toBe(Tag.OBJECT);
+    method(c, "set_focus_previous", [nodePathValue("c")]);
+    expect(method(c, "get_focus_previous", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "get_parent_control", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "get_parent_area_size", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "get_rect", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "get_screen_position", []).t).toBe(Tag.OBJECT);
+    expect(method(c, "is_layout_rtl", []).v).toBe(false);
+    expect(method(c, "is_localizing_numeral_system", []).v).toBe(true);
+    method(c, "accept_event", []);
+    method(c, "warp_mouse", [obj()]);
+    method(c, "set_drag_preview", [V.nil()]);
+    method(c, "set_drag_forwarding", [V.nil(), V.nil(), V.nil()]);
+    expect(method(c, "is_drag_successful", []).v).toBe(false);
+    method(c, "force_drag", [V.nil(), V.nil()]);
+    expect(method(c, "_get_drag_data", [obj()]).t).toBe(Tag.NIL);
+    expect(method(c, "_can_drop_data", [obj(), V.nil()]).v).toBe(false);
+    expect(method(c, "_drop_data", [obj(), V.nil()]).t).toBe(Tag.NIL);
+    expect(method(c, "_make_custom_tooltip", [V.str("x")]).t).toBe(Tag.OBJECT);
+    method(c, "_gui_input", [obj()]);
+    method(c, "set_accessibility_name", [V.str("n")]);
+    expect(method(c, "get_accessibility_name", []).v).toBe("n");
+    method(c, "set_accessibility_description", [V.str("d")]);
+    expect(method(c, "get_accessibility_description", []).v).toBe("d");
+    method(c, "set_accessibility_live", [V.int(1)]);
+    expect(method(c, "get_accessibility_live", []).v).toBe(1);
+    method(c, "set_accessibility_controls_nodes", [V.array(GArray.of([]))]);
+    expect(method(c, "get_accessibility_controls_nodes", []).t).toBe(Tag.ARRAY);
+    method(c, "set_accessibility_described_by_nodes", [V.array(GArray.of([]))]);
+    expect(method(c, "get_accessibility_described_by_nodes", []).t).toBe(Tag.ARRAY);
+    method(c, "set_accessibility_flow_to_nodes", [V.array(GArray.of([]))]);
+    expect(method(c, "get_accessibility_flow_to_nodes", []).t).toBe(Tag.ARRAY);
+    method(c, "set_accessibility_labeled_by_nodes", [V.array(GArray.of([]))]);
+    expect(method(c, "get_accessibility_labeled_by_nodes", []).t).toBe(Tag.ARRAY);
+    expect(method(c, "_accessibility_get_contextual_info", []).t).toBe(Tag.STRING);
+    expect(method(c, "_get_accessibility_container_name", []).t).toBe(Tag.STRING);
+    expect(method(c, "accessibility_drag", []).v).toBe(false);
+    expect(method(c, "accessibility_drop", []).v).toBe(false);
+    expect(attribute(c, "theme_type_variation").t).toBe(Tag.STRING);
+  });
+});

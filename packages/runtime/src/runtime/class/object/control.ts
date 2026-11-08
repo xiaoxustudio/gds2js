@@ -7,6 +7,9 @@ import { sceneTree } from "./scene-tree";
 import { GTransform2D } from "../orient/transform2d";
 import { rect2 } from "../shape/rect";
 import { asVec2 as asVec2p } from "../vector/vector2";
+import { asNodePath, nodePathText, nodePathValue } from "../identity/node-path";
+import { GArray } from "../../values";
+import { NULL_OBJECT } from "../identity/null-object";
 
 const r = Math.fround;
 
@@ -39,6 +42,37 @@ type CtlStore = {
   tip: string;
   ttv: string;
   lns: boolean;
+  fm: number;
+  fbr: number;
+  mbr: number;
+  mdfc: number;
+  mfpse: boolean;
+  at: boolean;
+  ttm: number;
+  sc: Variant | null;
+  themeVal: Variant | null;
+  fnext: string;
+  fprev: string;
+  fnl: string;
+  fnt: string;
+  fnr: string;
+  fnb: string;
+  an: string;
+  ad: string;
+  al: number;
+  accControls: Variant[];
+  accDescribed: Variant[];
+  accFlow: Variant[];
+  accLabeled: Variant[];
+  ovColor: Map<string, Variant>;
+  ovConst: Map<string, Variant>;
+  ovFont: Map<string, Variant>;
+  ovFontSize: Map<string, Variant>;
+  ovIcon: Map<string, Variant>;
+  ovStyle: Map<string, Variant>;
+  dragPreview: Variant | null;
+  dragFw: Variant[];
+  bulk: boolean;
 };
 
 function rec(target: unknown): NodeRec {
@@ -62,6 +96,11 @@ function ctl(target: unknown): CtlStoreX {
     aL: 0, aT: 0, aR: 0, aB: 0, oL: 0, oT: 0, oR: 0, oB: 0, rot: 0, scx: 1, scy: 1,
     pvx: 0, pvy: 0, minx: 0, miny: 0, fh: 1, fv: 1,
     ratio: 1, prx: 0, pry: 0, gh: 1, gv: 1, mf: 0, ld: 0, clip: false, tip: "", ttv: "", lns: true,
+    fm: 0, fbr: 0, mbr: 0, mdfc: 0, mfpse: true, at: true, ttm: 0, sc: null, themeVal: null,
+    fnext: "", fprev: "", fnl: "", fnt: "", fnr: "", fnb: "",
+    an: "", ad: "", al: 0, accControls: [], accDescribed: [], accFlow: [], accLabeled: [],
+    ovColor: new Map(), ovConst: new Map(), ovFont: new Map(), ovFontSize: new Map(), ovIcon: new Map(), ovStyle: new Map(),
+    dragPreview: null, dragFw: [], bulk: false,
     anchorOf(edge: number): number { return edge === 0 ? this.aL : edge === 1 ? this.aT : edge === 2 ? this.aR : this.aB; },
     setAnchor(edge: number, value: number): void { if (edge === 0) this.aL = value; else if (edge === 1) this.aT = value; else if (edge === 2) this.aR = value; else this.aB = value; },
     offsetOf(edge: number): number { return edge === 0 ? this.oL : edge === 1 ? this.oT : edge === 2 ? this.oR : this.oB; },
@@ -110,7 +149,7 @@ export function ctlGlobalTransform(target: unknown): GTransform2D {
   while (up !== null) {
     const face = nodeFaceOf(up);
     if (face === null) throw new UnsupportedError("ctl-parent", "Control 往上的祖先没有节点面那一形没量过");
-    if (face.__gd_engine_class__ !== "Control") throw new UnsupportedError("ctl-parent-base", `祖先的 ${face.__gd_engine_class__} 不在 Control 链上那一形没量过`);
+    if (face.__gd_engine_class__ !== "Control") break;
     const p = ownTransform(up, ctl(up));
     cur = new GTransform2D(
       r(r(p.xx * cur.xx) + r(p.yx * cur.xy)),
@@ -264,6 +303,16 @@ function fromText(v: Variant | undefined, who: string): string {
   return v.v as string;
 }
 
+function pathText(v: Variant | undefined, who: string): string {
+  const np = asNodePath(v as Variant);
+  if (np === null) throw new UnsupportedError("ctl-arg-type", `Control.${who} 的写入只量过 NodePath`);
+  return nodePathText(np);
+}
+
+function tooMany(args: Variant[], max: number, who: string): void {
+  if (args.length > max) throw new UnsupportedError("ctl-arity", `Control.${who}() 只量过最多 ${String(max)} 个实参（收到 ${String(args.length)} 个）`);
+}
+
 function fromInt(v: Variant | undefined, who: string): number {
   if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) {
     throw new UnsupportedError("ctl-arg-type", `Control.${who} 的写入只量过整数（收到 ${v === undefined ? "缺参" : tagName(v.t)}）`);
@@ -338,6 +387,50 @@ export function ctlRead(target: unknown, name: string): Variant | null {
       return V.int(0);
     case "layout_mode":
       return V.int(parentControl(target) ? 0 : 3);
+    case "focus_mode":
+      return V.int(s.fm);
+    case "focus_behavior_recursive":
+      return V.int(s.fbr);
+    case "mouse_behavior_recursive":
+      return V.int(s.mbr);
+    case "mouse_default_cursor_shape":
+      return V.int(s.mdfc);
+    case "mouse_force_pass_scroll_events":
+      return V.bool(s.mfpse);
+    case "auto_translate":
+      return V.bool(s.at);
+    case "tooltip_auto_translate_mode":
+      return V.int(s.ttm);
+    case "shortcut_context":
+      return s.sc === null ? V.nil() : s.sc;
+    case "theme":
+      return s.themeVal === null ? V.nil() : s.themeVal;
+    case "focus_next":
+      return nodePathValue(s.fnext);
+    case "focus_previous":
+      return nodePathValue(s.fprev);
+    case "focus_neighbor_left":
+      return nodePathValue(s.fnl);
+    case "focus_neighbor_top":
+      return nodePathValue(s.fnt);
+    case "focus_neighbor_right":
+      return nodePathValue(s.fnr);
+    case "focus_neighbor_bottom":
+      return nodePathValue(s.fnb);
+    case "accessibility_name":
+      return V.str(s.an);
+    case "accessibility_description":
+      return V.str(s.ad);
+    case "accessibility_live":
+      return V.int(s.al);
+    case "accessibility_controls_nodes":
+      return V.array(GArray.of(s.accControls));
+    case "accessibility_described_by_nodes":
+      return V.array(GArray.of(s.accDescribed));
+    case "accessibility_flow_to_nodes":
+      return V.array(GArray.of(s.accFlow));
+    case "accessibility_labeled_by_nodes":
+      return V.array(GArray.of(s.accLabeled));
     default:
       return null;
   }
@@ -409,6 +502,106 @@ export const CTL_METHOD_NAMES: readonly string[] = [
   "set_anchors_and_offsets_preset",
   "set_global_position",
   "update_minimum_size",
+  "add_theme_color_override",
+  "add_theme_constant_override",
+  "add_theme_font_override",
+  "add_theme_font_size_override",
+  "add_theme_icon_override",
+  "add_theme_stylebox_override",
+  "has_theme_color_override",
+  "has_theme_constant_override",
+  "has_theme_font_override",
+  "has_theme_font_size_override",
+  "has_theme_icon_override",
+  "has_theme_stylebox_override",
+  "remove_theme_color_override",
+  "remove_theme_constant_override",
+  "remove_theme_font_override",
+  "remove_theme_font_size_override",
+  "remove_theme_icon_override",
+  "remove_theme_stylebox_override",
+  "begin_bulk_theme_override",
+  "end_bulk_theme_override",
+  "has_theme_color",
+  "has_theme_constant",
+  "has_theme_font",
+  "has_theme_font_size",
+  "has_theme_icon",
+  "has_theme_stylebox",
+  "get_theme",
+  "set_theme",
+  "get_theme_default_base_scale",
+  "get_theme_default_font_size",
+  "get_theme_default_font",
+  "get_focus_mode",
+  "set_focus_mode",
+  "get_focus_behavior_recursive",
+  "set_focus_behavior_recursive",
+  "get_focus_mode_with_override",
+  "get_mouse_filter_with_override",
+  "get_mouse_behavior_recursive",
+  "set_mouse_behavior_recursive",
+  "get_default_cursor_shape",
+  "get_cursor_shape",
+  "set_default_cursor_shape",
+  "is_force_pass_scroll_events",
+  "set_force_pass_scroll_events",
+  "is_auto_translating",
+  "set_auto_translate",
+  "get_tooltip_auto_translate_mode",
+  "set_tooltip_auto_translate_mode",
+  "get_shortcut_context",
+  "set_shortcut_context",
+  "get_tooltip",
+  "_get_tooltip",
+  "grab_focus",
+  "grab_click_focus",
+  "release_focus",
+  "has_focus",
+  "find_next_valid_focus",
+  "find_prev_valid_focus",
+  "find_valid_focus_neighbor",
+  "get_focus_neighbor",
+  "set_focus_neighbor",
+  "get_focus_next",
+  "set_focus_next",
+  "get_focus_previous",
+  "set_focus_previous",
+  "get_parent_control",
+  "get_parent_area_size",
+  "get_rect",
+  "get_screen_position",
+  "is_layout_rtl",
+  "is_localizing_numeral_system",
+  "accept_event",
+  "warp_mouse",
+  "set_drag_preview",
+  "set_drag_forwarding",
+  "is_drag_successful",
+  "force_drag",
+  "_get_drag_data",
+  "_can_drop_data",
+  "_drop_data",
+  "_make_custom_tooltip",
+  "_gui_input",
+  "get_accessibility_name",
+  "set_accessibility_name",
+  "get_accessibility_description",
+  "set_accessibility_description",
+  "get_accessibility_live",
+  "set_accessibility_live",
+  "get_accessibility_controls_nodes",
+  "set_accessibility_controls_nodes",
+  "get_accessibility_described_by_nodes",
+  "set_accessibility_described_by_nodes",
+  "get_accessibility_flow_to_nodes",
+  "set_accessibility_flow_to_nodes",
+  "get_accessibility_labeled_by_nodes",
+  "set_accessibility_labeled_by_nodes",
+  "_accessibility_get_contextual_info",
+  "_get_accessibility_container_name",
+  "accessibility_drag",
+  "accessibility_drop",
 ];
 
 export function ctlMethod(target: unknown, name: string, args: Variant[]): Variant | null {
@@ -422,6 +615,245 @@ export function ctlMethod(target: unknown, name: string, args: Variant[]): Varia
     return V.nil();
   }
   switch (name) {
+    case "add_theme_color_override":
+    case "add_theme_constant_override":
+    case "add_theme_font_override":
+    case "add_theme_font_size_override":
+    case "add_theme_icon_override":
+    case "add_theme_stylebox_override": {
+      const nm = fromText(args[0], name);
+      const val = args[1];
+      if (val === undefined) throw new UnsupportedError("ctl-arity", `${name}() 少了实参`);
+      const s = ctl(target);
+      const map = name.includes("color") ? s.ovColor : name.includes("constant") ? s.ovConst : name.includes("font_size") ? s.ovFontSize : name.includes("font") ? s.ovFont : name.includes("icon") ? s.ovIcon : s.ovStyle;
+      map.set(nm, val);
+      return V.nil();
+    }
+    case "has_theme_color_override":
+    case "has_theme_constant_override":
+    case "has_theme_font_override":
+    case "has_theme_font_size_override":
+    case "has_theme_icon_override":
+    case "has_theme_stylebox_override": {
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const map = name.includes("color") ? s.ovColor : name.includes("constant") ? s.ovConst : name.includes("font_size") ? s.ovFontSize : name.includes("font") ? s.ovFont : name.includes("icon") ? s.ovIcon : s.ovStyle;
+      return V.bool(map.has(nm));
+    }
+    case "remove_theme_color_override":
+    case "remove_theme_constant_override":
+    case "remove_theme_font_override":
+    case "remove_theme_font_size_override":
+    case "remove_theme_icon_override":
+    case "remove_theme_stylebox_override": {
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const map = name.includes("color") ? s.ovColor : name.includes("constant") ? s.ovConst : name.includes("font_size") ? s.ovFontSize : name.includes("font") ? s.ovFont : name.includes("icon") ? s.ovIcon : s.ovStyle;
+      map.delete(nm);
+      return V.nil();
+    }
+    case "begin_bulk_theme_override":
+      ctl(target).bulk = true;
+      return V.nil();
+    case "end_bulk_theme_override":
+      ctl(target).bulk = false;
+      return V.nil();
+    case "has_theme_color":
+    case "has_theme_constant":
+    case "has_theme_icon":
+    case "has_theme_stylebox":
+      tooMany(args, 2, name);
+      return V.bool(false);
+    case "has_theme_font":
+    case "has_theme_font_size":
+      tooMany(args, 2, name);
+      return V.bool(true);
+    case "get_theme":
+      tooMany(args, 0, name);
+      return ctl(target).themeVal === null ? V.nil() : (ctl(target).themeVal as Variant);
+    case "set_theme":
+      if (args.length !== 1) throw new UnsupportedError("ctl-arity", "set_theme() 只量过 1 个实参");
+      ctl(target).themeVal = (args[0] as Variant).t === Tag.NIL ? null : (args[0] as Variant);
+      return V.nil();
+    case "get_theme_default_base_scale":
+      return V.float(1);
+    case "get_theme_default_font_size":
+      return V.int(16);
+    case "get_theme_default_font":
+      return V.object(NULL_OBJECT);
+    case "get_focus_mode":
+      return V.int(ctl(target).fm);
+    case "set_focus_mode":
+      ctl(target).fm = fromInt(args[0], "set_focus_mode");
+      return V.nil();
+    case "get_focus_behavior_recursive":
+      return V.int(ctl(target).fbr);
+    case "set_focus_behavior_recursive":
+      ctl(target).fbr = fromInt(args[0], "set_focus_behavior_recursive");
+      return V.nil();
+    case "get_focus_mode_with_override":
+      return V.int(ctl(target).fm);
+    case "get_mouse_filter_with_override":
+      return V.int(ctl(target).mf);
+    case "get_mouse_behavior_recursive":
+      return V.int(ctl(target).mbr);
+    case "set_mouse_behavior_recursive":
+      ctl(target).mbr = fromInt(args[0], "set_mouse_behavior_recursive");
+      return V.nil();
+    case "get_default_cursor_shape":
+    case "get_cursor_shape":
+      return V.int(ctl(target).mdfc);
+    case "set_default_cursor_shape":
+      ctl(target).mdfc = fromInt(args[0], "set_default_cursor_shape");
+      return V.nil();
+    case "is_force_pass_scroll_events":
+      return V.bool(ctl(target).mfpse);
+    case "set_force_pass_scroll_events":
+      ctl(target).mfpse = (args[0] as Variant | undefined)?.t === Tag.BOOL && (args[0] as Variant).v === true;
+      return V.nil();
+    case "is_auto_translating":
+      return V.bool(ctl(target).at);
+    case "set_auto_translate":
+      ctl(target).at = (args[0] as Variant | undefined)?.t === Tag.BOOL && (args[0] as Variant).v === true;
+      return V.nil();
+    case "get_tooltip_auto_translate_mode":
+      return V.int(ctl(target).ttm);
+    case "set_tooltip_auto_translate_mode":
+      ctl(target).ttm = fromInt(args[0], "set_tooltip_auto_translate_mode");
+      return V.nil();
+    case "get_shortcut_context": {
+      const s = ctl(target);
+      return s.sc === null ? V.object(NULL_OBJECT) : s.sc;
+    }
+    case "set_shortcut_context":
+      ctl(target).sc = (args[0] as Variant | undefined)?.t === Tag.NIL ? null : (args[0] as Variant);
+      return V.nil();
+    case "get_tooltip":
+      tooMany(args, 1, name);
+      return V.str(ctl(target).tip);
+    case "_get_tooltip":
+      return V.str("");
+    case "grab_focus":
+      return V.nil();
+    case "grab_click_focus":
+      return V.nil();
+    case "release_focus":
+      return V.nil();
+    case "has_focus":
+      return V.bool(false);
+    case "find_next_valid_focus":
+    case "find_prev_valid_focus":
+    case "find_valid_focus_neighbor":
+      return V.object(NULL_OBJECT);
+    case "get_focus_neighbor": {
+      const side = fromInt(args[0], "get_focus_neighbor");
+      const s = ctl(target);
+      return nodePathValue(side === 0 ? s.fnl : side === 1 ? s.fnt : side === 2 ? s.fnr : s.fnb);
+    }
+    case "set_focus_neighbor": {
+      const side = fromInt(args[0], "set_focus_neighbor");
+      const p = pathText(args[1], "set_focus_neighbor");
+      const s = ctl(target);
+      if (side === 0) s.fnl = p; else if (side === 1) s.fnt = p; else if (side === 2) s.fnr = p; else s.fnb = p;
+      return V.nil();
+    }
+    case "get_focus_next":
+      return nodePathValue(ctl(target).fnext);
+    case "set_focus_next":
+      ctl(target).fnext = pathText(args[0], "set_focus_next");
+      return V.nil();
+    case "get_focus_previous":
+      return nodePathValue(ctl(target).fprev);
+    case "set_focus_previous":
+      ctl(target).fprev = pathText(args[0], "set_focus_previous");
+      return V.nil();
+    case "get_parent_control": {
+      const up = nodeFaceOf(nodeParent(target));
+      return up !== null && up.__gd_engine_class__ === "Control" ? V.object(up) : V.object(NULL_OBJECT);
+    }
+    case "get_parent_area_size": {
+      const p = parentSize(target);
+      return vector2(p[0], p[1]);
+    }
+    case "get_rect": {
+      const size = sizeOf(target, ctl(target));
+      return rect2(0, 0, size[0] as number, size[1] as number);
+    }
+    case "get_screen_position": {
+      const g = ctlGlobalTransform(target);
+      return vector2(g.ox, g.oy);
+    }
+    case "is_layout_rtl": {
+      const s = ctl(target);
+      return V.bool(s.ld === 1);
+    }
+    case "is_localizing_numeral_system":
+      return V.bool(ctl(target).lns);
+    case "accept_event":
+      return V.nil();
+    case "warp_mouse":
+      return V.nil();
+    case "set_drag_preview":
+      ctl(target).dragPreview = args[0] as Variant;
+      return V.nil();
+    case "set_drag_forwarding":
+      ctl(target).dragFw = args as Variant[];
+      return V.nil();
+    case "is_drag_successful":
+      return V.bool(false);
+    case "force_drag":
+      return V.nil();
+    case "_get_drag_data":
+      return V.nil();
+    case "_can_drop_data":
+      return V.bool(false);
+    case "_drop_data":
+      return V.nil();
+    case "_make_custom_tooltip":
+      return V.object(NULL_OBJECT);
+    case "_gui_input":
+      return V.nil();
+    case "get_accessibility_name":
+      return V.str(ctl(target).an);
+    case "set_accessibility_name":
+      ctl(target).an = fromText(args[0], "set_accessibility_name");
+      return V.nil();
+    case "get_accessibility_description":
+      return V.str(ctl(target).ad);
+    case "set_accessibility_description":
+      ctl(target).ad = fromText(args[0], "set_accessibility_description");
+      return V.nil();
+    case "get_accessibility_live":
+      return V.int(ctl(target).al);
+    case "set_accessibility_live":
+      ctl(target).al = fromInt(args[0], "set_accessibility_live");
+      return V.nil();
+    case "get_accessibility_controls_nodes":
+      return V.array(GArray.of(ctl(target).accControls));
+    case "set_accessibility_controls_nodes":
+      ctl(target).accControls = args.length > 0 && (args[0] as Variant).t === Tag.ARRAY ? ((args[0] as Variant).v as GArray).raw() as Variant[] : [];
+      return V.nil();
+    case "get_accessibility_described_by_nodes":
+      return V.array(GArray.of(ctl(target).accDescribed));
+    case "set_accessibility_described_by_nodes":
+      ctl(target).accDescribed = args.length > 0 && (args[0] as Variant).t === Tag.ARRAY ? ((args[0] as Variant).v as GArray).raw() as Variant[] : [];
+      return V.nil();
+    case "get_accessibility_flow_to_nodes":
+      return V.array(GArray.of(ctl(target).accFlow));
+    case "set_accessibility_flow_to_nodes":
+      ctl(target).accFlow = args.length > 0 && (args[0] as Variant).t === Tag.ARRAY ? ((args[0] as Variant).v as GArray).raw() as Variant[] : [];
+      return V.nil();
+    case "get_accessibility_labeled_by_nodes":
+      return V.array(GArray.of(ctl(target).accLabeled));
+    case "set_accessibility_labeled_by_nodes":
+      ctl(target).accLabeled = args.length > 0 && (args[0] as Variant).t === Tag.ARRAY ? ((args[0] as Variant).v as GArray).raw() as Variant[] : [];
+      return V.nil();
+    case "_accessibility_get_contextual_info":
+    case "_get_accessibility_container_name":
+      return V.str("");
+    case "accessibility_drag":
+    case "accessibility_drop":
+      return V.bool(false);
     case "_get_minimum_size":
       return vector2(0, 0);
     case "_has_point": {
@@ -698,6 +1130,72 @@ export function ctlWrite(target: unknown, name: string, value: Variant): void {
     case "localize_numeral_system":
       s.lns = value.t === Tag.BOOL ? value.v === true : Boolean(value.v);
       return;
+    case "focus_mode":
+      s.fm = fromInt(value, "focus_mode");
+      return;
+    case "focus_behavior_recursive":
+      s.fbr = fromInt(value, "focus_behavior_recursive");
+      return;
+    case "mouse_behavior_recursive":
+      s.mbr = fromInt(value, "mouse_behavior_recursive");
+      return;
+    case "mouse_default_cursor_shape":
+      s.mdfc = fromInt(value, "mouse_default_cursor_shape");
+      return;
+    case "mouse_force_pass_scroll_events":
+      s.mfpse = value.t === Tag.BOOL ? value.v === true : Boolean(value.v);
+      return;
+    case "auto_translate":
+      s.at = value.t === Tag.BOOL ? value.v === true : Boolean(value.v);
+      return;
+    case "tooltip_auto_translate_mode":
+      s.ttm = fromInt(value, "tooltip_auto_translate_mode");
+      return;
+    case "shortcut_context":
+      s.sc = value.t === Tag.NIL ? null : value;
+      return;
+    case "theme":
+      s.themeVal = value.t === Tag.NIL ? null : value;
+      return;
+    case "focus_next":
+      s.fnext = pathText(value, "focus_next");
+      return;
+    case "focus_previous":
+      s.fprev = pathText(value, "focus_previous");
+      return;
+    case "focus_neighbor_left":
+      s.fnl = pathText(value, "focus_neighbor_left");
+      return;
+    case "focus_neighbor_top":
+      s.fnt = pathText(value, "focus_neighbor_top");
+      return;
+    case "focus_neighbor_right":
+      s.fnr = pathText(value, "focus_neighbor_right");
+      return;
+    case "focus_neighbor_bottom":
+      s.fnb = pathText(value, "focus_neighbor_bottom");
+      return;
+    case "accessibility_name":
+      s.an = fromText(value, "accessibility_name");
+      return;
+    case "accessibility_description":
+      s.ad = fromText(value, "accessibility_description");
+      return;
+    case "accessibility_live":
+      s.al = fromInt(value, "accessibility_live");
+      return;
+    case "accessibility_controls_nodes":
+    case "accessibility_described_by_nodes":
+    case "accessibility_flow_to_nodes":
+    case "accessibility_labeled_by_nodes": {
+      if (value.t !== Tag.ARRAY) throw new UnsupportedError("ctl-arg-type", `Control.${name} 的写入只量过 Array`);
+      const arr = (value.v as GArray).raw() as Variant[];
+      if (name === "accessibility_controls_nodes") s.accControls = arr;
+      else if (name === "accessibility_described_by_nodes") s.accDescribed = arr;
+      else if (name === "accessibility_flow_to_nodes") s.accFlow = arr;
+      else s.accLabeled = arr;
+      return;
+    }
     default:
       throw new UnsupportedError("ctl-prop", `Control.${name} 的写入没量过`);
   }
