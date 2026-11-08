@@ -38,6 +38,7 @@ import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAcces
 import { OS_STATIC_NAMES, osStatic } from "../class/host/os";
 import { marshallsStatic } from "../class/host/marshalls";
 import { GdHashingContext, hashingContextMethod } from "../class/host/hashing-context";
+import { timeStatic } from "../class/host/time";
 import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
@@ -100,6 +101,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     if (inner.className === "DirAccess" && DA_STATIC_NAMES.has(name)) return dirAccessStatic(name, args);
     if (inner.className === "OS" && OS_STATIC_NAMES.has(name)) return osStatic(name, args);
     if (inner.className === "Marshalls") return marshallsStatic(name, args);
+    if (inner.className === "Time") return timeStatic(name, args);
     throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（构造式只量过无实参的那几支）`);
   }
   const vecFace =

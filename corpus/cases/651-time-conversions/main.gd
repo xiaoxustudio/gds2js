@@ -1,0 +1,22 @@
+extends SceneTree
+
+func _initialize():
+	print("t1|", Time.get_datetime_dict_from_unix_time(0))
+	print("t2|", Time.get_datetime_dict_from_unix_time(1700000000))
+	print("t3|", Time.get_date_dict_from_unix_time(1700000000))
+	print("t4|", Time.get_time_dict_from_unix_time(1700000000))
+	print("t5|", Time.get_datetime_string_from_unix_time(1700000000, false))
+	print("t6|", Time.get_datetime_string_from_unix_time(1700000000, true))
+	print("t7|", Time.get_date_string_from_unix_time(1700000000))
+	print("t8|", Time.get_time_string_from_unix_time(1700000000))
+	print("t9|", Time.get_datetime_dict_from_datetime_string("2024-02-29T12:34:56", true))
+	print("t10|", Time.get_datetime_dict_from_datetime_string("2024-02-29 12:34:56", false))
+	print("t11|", Time.get_datetime_string_from_datetime_dict({"year": 2024, "month": 2, "day": 29, "hour": 12, "minute": 34, "second": 56}, false))
+	print("t12|", Time.get_unix_time_from_datetime_dict({"year": 2024, "month": 2, "day": 29, "hour": 12, "minute": 34, "second": 56}))
+	print("t13|", Time.get_unix_time_from_datetime_string("2024-02-29T12:34:56"))
+	print("t14|", Time.get_unix_time_from_datetime_string("2024-02-29 12:34:56"))
+	print("t15|", Time.get_offset_string_from_offset_minutes(330), "|", Time.get_offset_string_from_offset_minutes(-300), "|", Time.get_offset_string_from_offset_minutes(0))
+	print("t16|", Time.MONTH_JANUARY, "|", Time.WEEKDAY_SUNDAY, "|", Time.WEEKDAY_SATURDAY)
+	print("t17|", Time.get_datetime_dict_from_unix_time(-1))
+	print("t18|", Time.get_datetime_string_from_unix_time(-86400))
+	quit()

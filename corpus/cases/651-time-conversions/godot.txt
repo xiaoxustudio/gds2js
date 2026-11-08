@@ -1,0 +1,18 @@
+t1|{ "year": 1970, "month": 1, "day": 1, "weekday": 4, "hour": 0, "minute": 0, "second": 0 }
+t2|{ "year": 2023, "month": 11, "day": 14, "weekday": 2, "hour": 22, "minute": 13, "second": 20 }
+t3|{ "year": 2023, "month": 11, "day": 14, "weekday": 2 }
+t4|{ "hour": 22, "minute": 13, "second": 20 }
+t5|2023-11-14T22:13:20
+t6|2023-11-14 22:13:20
+t7|2023-11-14
+t8|22:13:20
+t9|{ "year": 2024, "month": 2, "day": 29, "weekday": 4, "hour": 12, "minute": 34, "second": 56 }
+t10|{ "year": 2024, "month": 2, "day": 29, "hour": 12, "minute": 34, "second": 56 }
+t11|2024-02-29T12:34:56
+t12|1709210096
+t13|1709210096
+t14|1709210096
+t15|+05:30|-05:00|+00:00
+t16|1|0|6
+t17|{ "year": 1969, "month": 12, "day": 31, "weekday": 3, "hour": 23, "minute": 59, "second": 59 }
+t18|1969-12-31T00:00:00

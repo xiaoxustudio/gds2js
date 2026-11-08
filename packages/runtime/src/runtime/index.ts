@@ -33,6 +33,7 @@ export type { HostProc } from "./host-proc";
 export { OS_STATIC_NAMES, userArgsOf } from "./class/host/os";
 export { marshallsStatic } from "./class/host/marshalls";
 export { GdHashingContext, hashingContextMethod } from "./class/host/hashing-context";
+export { timeStatic } from "./class/host/time";
 export * from "./class/orient/basis";
 export * from "./class/object/node";
 export * from "./class/object/node2d";

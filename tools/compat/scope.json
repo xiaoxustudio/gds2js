@@ -14,7 +14,8 @@
       "RegExMatch",
       "JSON",
       "Marshalls",
-      "HashingContext"
+      "HashingContext",
+      "Time"
     ],
     "hostClasses": [
       "FileAccess",

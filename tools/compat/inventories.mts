@@ -76,6 +76,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/host/json.ts", fn: "jsonMethod", owners: ["JSON"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/os.ts", fn: "osStatic", owners: ["OS"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/marshalls.ts", fn: "marshallsStatic", owners: ["Marshalls"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/host/time.ts", fn: "timeStatic", owners: ["Time"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2Method", owners: ["Rect2"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2iMethod", owners: ["Rect2i"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2ReadProp", owners: ["Rect2"], kind: "prop" },
