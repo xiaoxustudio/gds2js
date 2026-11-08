@@ -39,6 +39,7 @@ import { OS_STATIC_NAMES, osStatic } from "../class/host/os";
 import { marshallsStatic } from "../class/host/marshalls";
 import { GdHashingContext, hashingContextMethod } from "../class/host/hashing-context";
 import { timeStatic } from "../class/host/time";
+import { geometry3dStatic } from "../class/host/geometry3d";
 import { GdHmacContext, hmacContextMethod } from "../class/host/hmac-context";
 import { GdAesContext, aesContextMethod } from "../class/host/aes-context";
 import { GdConfigFile, configFileMethod } from "../class/host/config-file";
@@ -110,6 +111,7 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     if (inner.className === "OS" && OS_STATIC_NAMES.has(name)) return osStatic(name, args);
     if (inner.className === "Marshalls") return marshallsStatic(name, args);
     if (inner.className === "Time") return timeStatic(name, args);
+    if (inner.className === "Geometry3D") return geometry3dStatic(name, args);
     throw new UnsupportedError("native-class-member", `引擎类 ${inner.className} 的 .${name}() 还没建模（构造式只量过无实参的那几支）`);
   }
   const vecFace =

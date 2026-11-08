@@ -34,6 +34,7 @@ export { OS_STATIC_NAMES, userArgsOf } from "./class/host/os";
 export { marshallsStatic } from "./class/host/marshalls";
 export { GdHashingContext, hashingContextMethod } from "./class/host/hashing-context";
 export { timeStatic } from "./class/host/time";
+export { geometry3dStatic } from "./class/host/geometry3d";
 export { GdHmacContext, hmacContextMethod } from "./class/host/hmac-context";
 export { GdAesContext, aesContextMethod } from "./class/host/aes-context";
 export { GdConfigFile, configFileMethod } from "./class/host/config-file";

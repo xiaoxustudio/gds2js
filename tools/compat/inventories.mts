@@ -77,6 +77,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/host/os.ts", fn: "osStatic", owners: ["OS"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/marshalls.ts", fn: "marshallsStatic", owners: ["Marshalls"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/time.ts", fn: "timeStatic", owners: ["Time"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/host/geometry3d.ts", fn: "geometry3dStatic", owners: ["Geometry3D"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/hmac-context.ts", fn: "hmacContextMethod", owners: ["HMACContext"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2Method", owners: ["Rect2"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2iMethod", owners: ["Rect2i"], kind: "method" },

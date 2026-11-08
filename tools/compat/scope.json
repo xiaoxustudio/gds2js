@@ -22,7 +22,8 @@
       "ConfigFile",
       "Expression",
       "PCKPacker",
-      "Crypto"
+      "Crypto",
+      "Geometry3D"
     ],
     "hostClasses": [
       "FileAccess",
