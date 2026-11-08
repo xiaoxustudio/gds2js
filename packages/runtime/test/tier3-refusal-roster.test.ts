@@ -111,7 +111,7 @@ describe("tier3 · 定形拒绝清单", () => {
     eq("t3", "OS 的 get_cmdline_args（两侧不同源）", say(() => method(nativeClass("OS"), "get_cmdline_args", [])), "native-class-member");
     eq("t3", "OS 的 get_executable_path", say(() => method(nativeClass("OS"), "get_executable_path", [])), "native-class-member");
     eq("t3", "Engine 的静态调用", say(() => method(nativeClass("Engine"), "get_main_loop", [])), "native-class-member");
-    eq("t3", "Marshalls 在 GDScript 里本就解析期拒", say(() => method(nativeClass("Marshalls"), "bool_to_bit", [V.bool(true)])), "native-class-member");
+    eq("t3", "Marshalls 没量过的成员", say(() => method(nativeClass("Marshalls"), "bool_to_bit", [V.bool(true)])), "marshalls-member");
     eq("t3", "FileAccess 常量面只量过四格", say(() => attribute(FILE, "READ_WRITE_FLUSH")), "native-class-member");
   });
 

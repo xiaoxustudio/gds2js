@@ -31,6 +31,7 @@ export type { HostIo } from "./host-io";
 export { registerHostProc } from "./host-proc";
 export type { HostProc } from "./host-proc";
 export { OS_STATIC_NAMES, userArgsOf } from "./class/host/os";
+export { marshallsStatic } from "./class/host/marshalls";
 export * from "./class/orient/basis";
 export * from "./class/object/node";
 export * from "./class/object/node2d";

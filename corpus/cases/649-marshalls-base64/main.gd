@@ -1,0 +1,21 @@
+extends SceneTree
+
+func _initialize():
+	var b := PackedByteArray([104, 105, 0, 255])
+	print("m1|", Marshalls.raw_to_base64(b))
+	print("m2|", Marshalls.base64_to_raw("aGkA/w=="))
+	print("m3|", Marshalls.utf8_to_base64("hé😀"))
+	print("m4|", Marshalls.base64_to_utf8("aMOp8J+YgA=="))
+	print("m5|", Marshalls.variant_to_base64(1))
+	print("m6|", Marshalls.variant_to_base64("a"))
+	print("m7|", Marshalls.variant_to_base64([1, 2, 3]))
+	print("m8|", Marshalls.variant_to_base64(true))
+	print("m9|", Marshalls.variant_to_base64(null))
+	print("m10|", Marshalls.variant_to_base64(Vector2(1, 2)))
+	print("m11|", Marshalls.variant_to_base64({"a": 1}))
+	print("m12|", Marshalls.base64_to_variant(Marshalls.variant_to_base64([1, 2, 3]), false))
+	print("m13|", Marshalls.base64_to_raw(""))
+	print("m14|", Marshalls.utf8_to_base64(""))
+	print("m15|", Marshalls.base64_to_utf8(""))
+	print("m16|", Marshalls.base64_to_variant(Marshalls.variant_to_base64({"k": [true, null]}), false))
+	quit()
