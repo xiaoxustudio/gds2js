@@ -127,6 +127,7 @@ const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
   EncodedObjectAsID: ["object_id"],
   FileAccess: ["big_endian"],
   DirAccess: ["include_hidden", "include_navigational"],
+  OS: ["delta_smoothing", "low_processor_usage_mode", "low_processor_usage_mode_sleep_usec"],
 };
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];

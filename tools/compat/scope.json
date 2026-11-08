@@ -46,11 +46,6 @@
       "Engine"
     ],
     "unplannedMembers": {
-      "OS": {
-        "get_cmdline_args": "两侧不同源：Godot 进程 argv 与宿主 argv 不可比",
-        "get_executable_path": "两侧不同源：引擎可执行文件与宿主可执行文件不可比",
-        "get_processor_count": "机器相关读数，golden 不可复现"
-      },
       "FileAccess": {}
     },
     "unplannedPatterns": [
@@ -65,13 +60,6 @@
       },
       {
         "owners": [
-          "OS"
-        ],
-        "match": "time|ticks|delay|processor|memory|locale|version|_dir$|system_|entropy|unique_id|process_id|thread|feature|debug_build|sandbox|userfs|low_processor|delta_smoothing|midi|permission|shell|execute|process|kill|logger|stdin|stdout|stderr|connected|model_name|granted|restart|request_|revoke|crash|alert|keycode",
-        "reason": "时间、机器、进程或平台相关读数不可复现，golden 不稳定"
-      },
-      {
-        "owners": [
           "FileAccess"
         ],
         "match": "time|attribute|read_only|hidden|unix_permission|compressed|encrypted|sha256|half",
@@ -83,13 +71,6 @@
         ],
         "match": "link|drive|space|filesystem_type|bundle|case_sensitive|temp|hidden|navigational|equivalent",
         "reason": "平台文件系统、链接与盘符读数不可复现"
-      },
-      {
-        "owners": [
-          "OS"
-        ],
-        "match": "RenderingDriver|StdHandleType|SystemDir|CompressionMode|UnixPermissionFlags|ModeFlags|create_instance|create_temp|big_endian|distribution|video_adapter|trash|open_with|file_access_save|unset_environment",
-        "reason": "类内枚举/常量面尚未建模，按响亮拒记账"
       },
       {
         "owners": [

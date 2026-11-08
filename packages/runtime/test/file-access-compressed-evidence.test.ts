@@ -3,6 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import "@gds2js/runtime/host-node";
+import { registerHostIo } from "../src/runtime/host-io";
+import { nodeHostIo } from "../src/runtime/host-io-node";
+
+registerHostIo(nodeHostIo);
 import { method as methodRaw } from "@gds2js/runtime/runtime/methods";
 import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { V, type Variant } from "@gds2js/runtime/runtime/tags";

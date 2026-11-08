@@ -19,6 +19,7 @@ import { GdNodePath } from "../class/identity/node-path";
 import { GdNativeClass } from "../class/identity/native-class";
 import { isEncodedObjectIdBox } from "../class/identity/null-object";
 import { engineClassConst } from "../engine-class-consts";
+import { osPropRead, osPropWrite } from "../class/host/os";
 import { Signal } from "../class/identity/signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
 import { GArray, GDict, toStringNameSlot, show } from "../values";
@@ -337,6 +338,7 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
       return null;
     }
   }
+  if (base.t === Tag.OBJECT && base.v instanceof GdNativeClass && base.v.className === "OS" && osPropWrite(key, value)) return null;
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
     if (enw.__gd_engine_class__ === "Timer" && timerWrite(base.v, key, value)) return null;
@@ -577,6 +579,10 @@ export function attribute(raw: unknown, name: string): unknown {
       throw new UnsupportedError("encoded-object-id-prop", `EncodedObjectAsID.${name} 的属性读没量过`);
     }
     if (obj.v instanceof GdNativeClass) {
+      if (obj.v.className === "OS") {
+        const prop = osPropRead(name);
+        if (prop !== null) return prop;
+      }
       const konst = engineClassConst(obj.v.className, name);
       if (konst !== null) return V.int(konst);
       throw new UnsupportedError("native-class-member", `引擎类 ${obj.v.className} 的 .${name} 还没建模（实测能取值、能比等式，打出来带进程内的号）`);
