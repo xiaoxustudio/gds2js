@@ -28,4 +28,5 @@ export const ENGINE_CLASS_FACES: Readonly<Record<string, readonly EngineClassMem
   "ConfigFile": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "Expression": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "PCKPacker": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
+  "Crypto": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
 });

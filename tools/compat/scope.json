@@ -21,7 +21,8 @@
       "AESContext",
       "ConfigFile",
       "Expression",
-      "PCKPacker"
+      "PCKPacker",
+      "Crypto"
     ],
     "hostClasses": [
       "FileAccess",

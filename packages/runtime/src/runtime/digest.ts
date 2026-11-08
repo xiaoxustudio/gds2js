@@ -1,3 +1,5 @@
+import { md5Bytes } from "./md5";
+
 const SHA256_K = [
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -89,4 +91,18 @@ export function sha1Bytes(data: readonly number[]): number[] {
     out.push((h >>> 24) & 255, (h >>> 16) & 255, (h >>> 8) & 255, h & 255);
   }
   return out;
+}
+
+export function digestBytes(kind: number, data: readonly number[]): number[] {
+  if (kind === 0) {
+    const hex = md5HexBytes(data as number[]);
+    const out: number[] = [];
+    for (let i = 0; i < hex.length; i += 2) out.push(parseInt(hex.slice(i, i + 2), 16));
+    return out;
+  }
+  return kind === 1 ? sha1Bytes(data) : sha256Bytes(data);
+}
+
+function md5HexBytes(data: number[]): string {
+  return md5Bytes(new Uint8Array(data));
 }

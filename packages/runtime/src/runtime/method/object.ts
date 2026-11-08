@@ -44,6 +44,7 @@ import { GdAesContext, aesContextMethod } from "../class/host/aes-context";
 import { GdConfigFile, configFileMethod } from "../class/host/config-file";
 import { GdExpression, expressionMethod } from "../class/host/expression";
 import { GdPckPacker, pckPackerMethod } from "../class/host/pck-packer";
+import { GdCrypto, GdCryptoKey, GdX509Certificate, cryptoMethod } from "../class/host/crypto";
 import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
@@ -324,6 +325,13 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     if (hit !== null) return hit;
     throw new UnsupportedError("pckpacker-method", `PCKPacker.${name}() 未实现`);
   }
+  if (inner instanceof GdCrypto) {
+    const hit = cryptoMethod(inner, name, args);
+    if (hit !== null) return hit;
+    throw new UnsupportedError("crypto-method", `Crypto.${name}() 未实现`);
+  }
+  if (inner instanceof GdCryptoKey) throw new UnsupportedError("crypto-key-method", `CryptoKey.${name}() 没量过`);
+  if (inner instanceof GdX509Certificate) throw new UnsupportedError("x509-method", `X509Certificate.${name}() 没量过`);
 
   if (isCallableBox(inner)) {
     return callableMethod(inner, name, args);
