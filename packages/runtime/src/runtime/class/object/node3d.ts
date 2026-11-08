@@ -1,6 +1,6 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
-import { asBasis, axisAngleBasis, basisDeterminant, basisEulerYXZ, basisFromQuaternion, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisToQuaternion, basisXform, basis } from "../orient/basis";
+import { asBasis, axisAngleBasis, basisDeterminant, basisEulerYXZ, basisFromQuaternion, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisStatic, basisToQuaternion, basisXform, basis } from "../orient/basis";
 import { asQuaternion, quaternion } from "../orient/quaternion";
 import { NULL_OBJECT } from "../identity/null-object";
 import { asVec3, vector3 } from "../vector/vector3";
@@ -11,7 +11,8 @@ import { stackBlockLines, writeOrderedStderr } from "../../frames";
 
 import { GBasis } from "../orient/basis";
 
-import { asTransform3D } from "../orient/transform3d";
+import { asTransform3D, GTransform3D, transform3dCompose } from "../orient/transform3d";
+import { asNodePath, nodePathText, nodePathValue } from "../identity/node-path";
 
 const r = Math.fround;
 const DEG_PER_RAD = r(180 / r(Math.PI));
@@ -243,6 +244,8 @@ export function node3dRead(target: unknown, name: string): Variant | null {
     }
     case "top_level":
       return V.bool(rec(target).__gd_node_top_level__ === true);
+    case "visibility_parent":
+      return nodePathValue(rec(target).__gd_node_visibility_parent__ ?? "");
     default:
       return null;
   }
@@ -327,6 +330,12 @@ export function node3dWrite(target: unknown, name: string, value: Variant): void
       rec(target).__gd_node_top_level__ = value.v === true;
       return;
     }
+    case "visibility_parent": {
+      const np = asNodePath(value);
+      if (np === null) throw new UnsupportedError("node3d-arg-type", `Node3D.visibility_parent 的写入只量过 NodePath（收到 ${tagName(value.t)}）`);
+      rec(target).__gd_node_visibility_parent__ = nodePathText(np);
+      return;
+    }
     default:
       throw new UnsupportedError("node3d-prop", `Node3D.${name} 的成员面没量过（global_rotation 那几支的写入、look_at / translate / rotate_* 一族还没读数）`);
   }
@@ -364,7 +373,117 @@ export const NODE3D_METHOD_NAMES: readonly string[] = [
   ...Object.keys(NODE3D_GETTERS),
   ...Object.keys(NODE3D_SETTERS),
   "set_identity",
+  "get_visibility_parent",
+  "set_visibility_parent",
+  "global_rotate",
+  "global_scale",
+  "global_translate",
+  "rotate_object_local",
+  "scale_object_local",
+  "translate_object_local",
+  "look_at",
+  "look_at_from_position",
+  "set_global_basis",
+  "set_global_rotation",
+  "set_global_rotation_degrees",
+  "set_global_transform",
 ];
+
+function setGlobalTransform(target: unknown, basisIn: GBasis, ox: number, oy: number, oz: number): void {
+  const up = nodeParent(target);
+  const face = nodeFaceOf(up);
+  if (face === null || face.__gd_engine_class__ !== "Node3D" || rec(target).__gd_node_top_level__ === true) {
+    const s = t3(target);
+    s.b3 = new GBasis(basisIn.x0, basisIn.x1, basisIn.x2, basisIn.y0, basisIn.y1, basisIn.y2, basisIn.z0, basisIn.z1, basisIn.z2);
+    s.px = r(ox);
+    s.py = r(oy);
+    s.pz = r(oz);
+    return;
+  }
+  const pg = node3dGlobalParts(up);
+  const inv = basisInverseParts(pg.b);
+  if (inv === null) throw new UnsupportedError("node3d-inverse", "set_global_transform 的父基不可逆那一形没量过");
+  const invOrigin = basisXform(inv, r(-pg.x), r(-pg.y), r(-pg.z));
+  const invT = asTransform3D(transform3d(inv.x0, inv.x1, inv.x2, inv.y0, inv.y1, inv.y2, inv.z0, inv.z1, inv.z2, invOrigin[0] as number, invOrigin[1] as number, invOrigin[2] as number)) as GTransform3D;
+  const targetT = asTransform3D(transform3d(basisIn.x0, basisIn.x1, basisIn.x2, basisIn.y0, basisIn.y1, basisIn.y2, basisIn.z0, basisIn.z1, basisIn.z2, ox, oy, oz)) as GTransform3D;
+  const local = transform3dCompose(invT, targetT);
+  const t = asTransform3D(local);
+  if (t === null) throw new UnsupportedError("node3d-transform", "set_global_transform 的合成结果没量过");
+  const s = t3(target);
+  s.b3 = new GBasis(t.x0, t.x1, t.x2, t.y0, t.y1, t.y2, t.z0, t.z1, t.z2);
+  s.px = t.ox;
+  s.py = t.oy;
+  s.pz = t.oz;
+}
+
+function globalTransform(target: unknown): { b: GBasis; x: number; y: number; z: number } {
+  return node3dGlobalParts(target);
+}
+
+function setGlobalBasis(target: unknown, b: GBasis): void {
+  const g = globalTransform(target);
+  setGlobalTransform(target, b, g.x, g.y, g.z);
+}
+
+function scaleRows(b: GBasis, sx: number, sy: number, sz: number): GBasis {
+  return new GBasis(
+    r(b.x0 * sx), r(b.x1 * sy), r(b.x2 * sz),
+    r(b.y0 * sx), r(b.y1 * sy), r(b.y2 * sz),
+    r(b.z0 * sx), r(b.z1 * sy), r(b.z2 * sz),
+  );
+}
+
+function scaleColumns(b: GBasis, sx: number, sy: number, sz: number): GBasis {
+  return new GBasis(
+    r(b.x0 * sx), r(b.x1 * sx), r(b.x2 * sx),
+    r(b.y0 * sy), r(b.y1 * sy), r(b.y2 * sy),
+    r(b.z0 * sz), r(b.z1 * sz), r(b.z2 * sz),
+  );
+}
+
+function lookingAt(forwardX: number, forwardY: number, forwardZ: number, upX: number, upY: number, upZ: number, modelFront: boolean): GBasis {
+  const lengthsq = r(r(r(forwardX * forwardX) + r(forwardY * forwardY)) + r(forwardZ * forwardZ));
+  const len = Math.sqrt(lengthsq);
+  let zx = len === 0 ? 0 : r(forwardX / len);
+  let zy = len === 0 ? 0 : r(forwardY / len);
+  let zz = len === 0 ? 0 : r(forwardZ / len);
+  if (!modelFront) {
+    zx = r(-zx);
+    zy = r(-zy);
+    zz = r(-zz);
+  }
+  let xx = r(r(upY * zz) - r(upZ * zy));
+  let xy = r(r(upZ * zx) - r(upX * zz));
+  let xz = r(r(upX * zy) - r(upY * zx));
+  const xlensq = r(r(r(xx * xx) + r(xy * xy)) + r(xz * xz));
+  if (xlensq === 0) {
+    xx = 1;
+    xy = 0;
+    xz = 0;
+  } else {
+    const xlen = Math.sqrt(xlensq);
+    xx = r(xx / xlen);
+    xy = r(xy / xlen);
+    xz = r(xz / xlen);
+  }
+  const yx = r(r(zy * xz) - r(zz * xy));
+  const yy = r(r(zz * xx) - r(zx * xz));
+  const yz = r(r(zx * xy) - r(zy * xx));
+  return new GBasis(xx, yx, zx, xy, yy, zy, xz, yz, zz);
+}
+
+function vec3Arg(v: Variant | undefined, who: string): [number, number, number] {
+  return fromVec3(v, who);
+}
+
+function numArg3(v: Variant | undefined, who: string): number {
+  if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node3d-arg-type", `Node3D.${who} 只量过数`);
+  return r(Number(v.v));
+}
+
+function boolArg3(v: Variant | undefined): boolean {
+  return v !== undefined && v.t === Tag.BOOL && v.v === true;
+}
 
 export function node3dMethod(target: unknown, name: string, args: Variant[]): Variant | null {
   const prop = NODE3D_GETTERS[name];
@@ -445,6 +564,106 @@ export function node3dMethod(target: unknown, name: string, args: Variant[]): Va
       const b = node3dBasisParts(s);
       const o = basisOrthoParts(b);
       s.b3 = o;
+      return V.nil();
+    }
+    case "get_visibility_parent":
+      return nodePathValue(rec(target).__gd_node_visibility_parent__ ?? "");
+    case "set_visibility_parent": {
+      const np = asNodePath(args[0] as Variant);
+      if (np === null) throw new UnsupportedError("node3d-arg-type", "set_visibility_parent() 只量过 NodePath");
+      rec(target).__gd_node_visibility_parent__ = nodePathText(np);
+      return V.nil();
+    }
+    case "set_global_transform": {
+      const t = asTransform3D(args[0] as Variant);
+      if (t === null) throw new UnsupportedError("node3d-arg-type", "set_global_transform() 只量过 Transform3D");
+      setGlobalTransform(target, new GBasis(t.x0, t.x1, t.x2, t.y0, t.y1, t.y2, t.z0, t.z1, t.z2), t.ox, t.oy, t.oz);
+      return V.nil();
+    }
+    case "set_global_basis": {
+      const b = asBasis(args[0] as Variant);
+      if (b === null) throw new UnsupportedError("node3d-arg-type", "set_global_basis() 只量过 Basis");
+      setGlobalBasis(target, b);
+      return V.nil();
+    }
+    case "set_global_rotation":
+    case "set_global_rotation_degrees": {
+      const deg = name.endsWith("degrees");
+      const e = vec3Arg(args[0], name);
+      const rot = deg ? [r(e[0] * RAD_PER_DEG), r(e[1] * RAD_PER_DEG), r(e[2] * RAD_PER_DEG)] : e;
+      const g = globalTransform(target);
+      const scale = basisScaleParts(g.b);
+      const rotB = asBasis(basisStatic("from_euler", [vector3(rot[0] as number, rot[1] as number, rot[2] as number)]));
+      const scaleB = asBasis(basisStatic("from_scale", [vector3(scale[0] as number, scale[1] as number, scale[2] as number)]));
+      if (rotB === null || scaleB === null) throw new UnsupportedError("node3d-basis", "set_global_rotation 的基构造没量过");
+      setGlobalTransform(target, asBasis(basisMul(rotB, scaleB)) as GBasis, g.x, g.y, g.z);
+      return V.nil();
+    }
+    case "global_rotate": {
+      const axis = vec3Arg(args[0], "global_rotate");
+      const angle = numArg3(args[1], "global_rotate");
+      const g = globalTransform(target);
+      const rot = axisAngleBasis(axis[0] as number, axis[1] as number, axis[2] as number, angle);
+      setGlobalTransform(target, asBasis(basisMul(rot, g.b)) as GBasis, g.x, g.y, g.z);
+      return V.nil();
+    }
+    case "global_scale": {
+      const k = vec3Arg(args[0], "global_scale");
+      const g = globalTransform(target);
+      setGlobalTransform(target, scaleRows(g.b, k[0] as number, k[1] as number, k[2] as number), g.x, g.y, g.z);
+      return V.nil();
+    }
+    case "global_translate": {
+      const off = vec3Arg(args[0], "global_translate");
+      const g = globalTransform(target);
+      setGlobalTransform(target, g.b, r(g.x + (off[0] as number)), r(g.y + (off[1] as number)), r(g.z + (off[2] as number)));
+      return V.nil();
+    }
+    case "rotate_object_local": {
+      const axis = vec3Arg(args[0], "rotate_object_local");
+      const angle = numArg3(args[1], "rotate_object_local");
+      const s = t3(target);
+      const b = node3dBasisParts(s);
+      const rot = axisAngleBasis(axis[0] as number, axis[1] as number, axis[2] as number, angle);
+      s.b3 = asBasis(basisMul(b, rot)) as GBasis;
+      return V.nil();
+    }
+    case "scale_object_local": {
+      const k = vec3Arg(args[0], "scale_object_local");
+      const s = t3(target);
+      const b = node3dBasisParts(s);
+      s.b3 = scaleColumns(b, k[0] as number, k[1] as number, k[2] as number);
+      return V.nil();
+    }
+    case "translate_object_local": {
+      const off = vec3Arg(args[0], "translate_object_local");
+      const s = t3(target);
+      const b = node3dBasisParts(s);
+      const d = basisXform(b, off[0] as number, off[1] as number, off[2] as number);
+      s.px = r(s.px + (d[0] as number));
+      s.py = r(s.py + (d[1] as number));
+      s.pz = r(s.pz + (d[2] as number));
+      delete s.b3;
+      return V.nil();
+    }
+    case "look_at":
+    case "look_at_from_position": {
+      const at = name === "look_at" ? 0 : 1;
+      const pos = name === "look_at" ? [0, 0, 0] : vec3Arg(args[0], name);
+      const tgt = vec3Arg(args[at], name);
+      const up = vec3Arg(args[at + 1], name);
+      const modelFront = boolArg3(args[at + 2]);
+      if (name === "look_at") {
+        const g = globalTransform(target);
+        pos[0] = g.x;
+        pos[1] = g.y;
+        pos[2] = g.z;
+      }
+      const forward = [r((tgt[0] as number) - (pos[0] as number)), r((tgt[1] as number) - (pos[1] as number)), r((tgt[2] as number) - (pos[2] as number))];
+      const b = lookingAt(forward[0] as number, forward[1] as number, forward[2] as number, up[0] as number, up[1] as number, up[2] as number, modelFront);
+      const scale = node3dScale(t3(target));
+      setGlobalTransform(target, b, pos[0] as number, pos[1] as number, pos[2] as number);
+      node3dWrite(target, "scale", vector3(scale[0] as number, scale[1] as number, scale[2] as number));
       return V.nil();
     }
     case "get_parent_node_3d": {

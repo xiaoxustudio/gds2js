@@ -13,6 +13,7 @@ import { quaternion, quaternionText } from "../class/orient/quaternion";
 import { transform2d, transform2dText } from "../class/orient/transform2d";
 import { transform3d, transform3dText } from "../class/orient/transform3d";
 import { asBasis, basis, basisText, GBasis } from "../class/orient/basis";
+import { asProjection } from "../class/orient/projection";
 import { asVec3i, GVector3i, vector3i } from "../class/vector/vector3i";
 import { asVec4i, GVector4i, vector4i } from "../class/vector/vector4i";
 import { asColor, color, GColor, tryColorSlot } from "../class/color/color";
@@ -135,12 +136,18 @@ function keyOfIn(v: Variant, depth: number): string {
       if (bsKey) return `17:${String(bsKey.x0)},${String(bsKey.x1)},${String(bsKey.x2)},${String(bsKey.y0)},${String(bsKey.y1)},${String(bsKey.y2)},${String(bsKey.z0)},${String(bsKey.z1)},${String(bsKey.z2)}`;
       const t3Key = asTransform3D(v);
       if (t3Key) return `18:${String(t3Key.x0)},${String(t3Key.x1)},${String(t3Key.x2)},${String(t3Key.y0)},${String(t3Key.y1)},${String(t3Key.y2)},${String(t3Key.z0)},${String(t3Key.z1)},${String(t3Key.z2)},${String(t3Key.ox)},${String(t3Key.oy)},${String(t3Key.oz)}`;
+      const pjKey = asProjection(v);
+      if (pjKey) return `19:${String(pjKey.x.x)},${String(pjKey.x.y)},${String(pjKey.x.z)},${String(pjKey.x.w)},${String(pjKey.y.x)},${String(pjKey.y.y)},${String(pjKey.y.z)},${String(pjKey.y.w)},${String(pjKey.z.x)},${String(pjKey.z.y)},${String(pjKey.z.z)},${String(pjKey.z.w)},${String(pjKey.w.x)},${String(pjKey.w.y)},${String(pjKey.w.z)},${String(pjKey.w.w)}`;
       const ridKey = asRid(v);
       if (ridKey !== null) return "r:" + String(ridKey.id);
       const npKey = asNodePath(v);
       if (npKey !== null) return "^" + nodePathText(npKey);
       if (isCallable(v)) return callableKey(v.v as CallableBox);
-      if (!(v.v instanceof GBytes)) {
+      if (v.v instanceof GBytes) {
+        const b = v.v as GBytes;
+        return `g:${b.kind}:` + packItems(b).map((x) => keyOf(x)).join("\u0000");
+      }
+      {
         const id = (v.v as GdIdentified).gdObjectId;
         if (id > 0) return `o:${String(id)}`;
       }
@@ -476,6 +483,10 @@ export function show(v: Variant, depth = 0): string {
       if (innerRid !== null) return ridText(innerRid);
       const innerNp = asNodePath(v);
       if (innerNp !== null) return nodePathText(innerNp);
+      const sigInner = inner as { sigName?: unknown };
+      if (typeof sigInner.sigName === "string" && (inner as object).constructor?.name === "Signal") {
+        return sigInner.sigName === "" ? "null::[signal]" : `null::${String(sigInner.sigName)}`;
+      }
       if (isNullRefValue(inner)) return "<Object#null>";
       if (inner instanceof GdNativeClass) return `<GDScriptNativeClass#${String(inner.gdObjectId)}>`;
       if (isWeakRefBox(inner)) return `<WeakRef#${String(inner.gdObjectId)}>`;

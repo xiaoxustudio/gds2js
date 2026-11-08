@@ -32,20 +32,14 @@ import { callDeferred, isCallableBox } from "../identity/callable";
 import { callCallableBox } from "../../method/callable";
 import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
-import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod } from "./node2d";
+import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod, NODE2D_METHOD_NAMES } from "./node2d";
 import { node3dGlobalTransform, node3dMethod, NODE3D_METHOD_NAMES } from "./node3d";
 import { GdTimer, timerMethod } from "./timer";
 import { ctlMethod, CTL_METHOD_NAMES } from "./control";
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
 
-const NODE2D_ONLY_METHODS = new Set([
-  "get_global_transform", "get_angle_to", "look_at", "global_translate", "set_global_transform", "set_transform",
-  "get_position", "set_position", "get_rotation", "set_rotation", "get_rotation_degrees", "set_rotation_degrees",
-  "get_scale", "set_scale", "get_skew", "set_skew", "get_global_position", "set_global_position",
-  "get_global_rotation", "set_global_rotation", "get_global_rotation_degrees", "set_global_rotation_degrees",
-  "get_global_scale", "set_global_scale", "get_global_skew",
-]);
+const NODE2D_ONLY_METHODS = new Set(NODE2D_METHOD_NAMES);
 const NODE3D_METHODS = new Set(["to_local", "to_global", "translate", "rotate", "rotate_x", "rotate_y", "rotate_z", "orthonormalize", "get_parent_node_3d", ...NODE3D_METHOD_NAMES]);
 const CTL_METHODS = new Set(["get_minimum_size", "get_combined_minimum_size", "get_anchor", ...CTL_METHOD_NAMES]);
 
@@ -453,6 +447,12 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       }
       return V.nil();
     }
+    case "_enter_tree":
+    case "_exit_tree":
+    case "_ready":
+    case "_process":
+    case "_physics_process":
+      return V.nil();
     case "set_process": {
       rec.__gd_node_process__ = args[0] === undefined ? true : args[0].t === Tag.BOOL && args[0].v === true;
       return V.nil();
@@ -586,6 +586,13 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       return hit === null ? V.object(NULL_OBJECT) : V.object(hit);
     }
     case "has_node":
+      return V.bool(nodeWalkOr(rec, pathArg(args, name)) !== null);
+    case "get_node_and_resource": {
+      const hit = nodeWalkOr(rec, pathArg(args, name));
+      if (hit === null) return V.array(GArray.of([]));
+      return V.array(GArray.of([V.object(hit), V.nil(), nodePathValue("")]));
+    }
+    case "has_node_and_resource":
       return V.bool(nodeWalkOr(rec, pathArg(args, name)) !== null);
     case "is_inside_tree":
       return V.bool(insideTree(rec));

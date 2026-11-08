@@ -18,6 +18,7 @@ export class GdNodeObject extends GdScriptObject {
   __gd_node_t2d_vals__?: unknown;
   __gd_node_visible__?: boolean;
   __gd_node_top_level__?: boolean;
+  __gd_node_visibility_parent__?: string;
   __gd_ctl__?: unknown;
   __gd_node_t3d__?: unknown;
   __gd_node_ctl__?: unknown;

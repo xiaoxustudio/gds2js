@@ -125,8 +125,18 @@ export function transform2dMethod(inner: GTransform2D, name: string, args: Varia
     }
     case "get_origin":
       return vector2(inner.ox, inner.oy);
-    case "get_skew":
-      return V.float(r(r(Math.atan2(yy, yx) - Math.atan2(xy, xx)) - r(Math.PI / 2)));
+    case "get_skew": {
+      const det = r(r(xx * yy) - r(xy * yx));
+      const l0 = r(Math.sqrt(r(r(xx * xx) + r(xy * xy))));
+      const l1 = r(Math.sqrt(r(r(yx * yx) + r(yy * yy))));
+      const n0x = l0 === 0 ? 0 : r(xx / l0);
+      const n0y = l0 === 0 ? 0 : r(xy / l0);
+      const n1x = l1 === 0 ? 0 : r(yx / l1);
+      const n1y = l1 === 0 ? 0 : r(yy / l1);
+      const sgn = det < 0 ? -1 : 1;
+      const dot = r(r(n0x * r(sgn * n1x)) + r(n0y * r(sgn * n1y)));
+      return V.float(r(Math.acos(dot) - r(r(Math.PI) * r(0.5))));
+    }
     case "inverse": {
       const ox = r(-(r(xx * inner.ox) + r(xy * inner.oy)));
       const oy = r(-(r(yx * inner.ox) + r(yy * inner.oy)));

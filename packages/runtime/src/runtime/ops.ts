@@ -7,15 +7,19 @@ import { asNodePath } from "./class/identity/node-path";
 import { asVec2, GVector2, vector2, vecCmp } from "./class/vector/vector2";
 import { asVec3, GVector3, vector3, vec3Cmp } from "./class/vector/vector3";
 import { asQuaternion, quaternion } from "./class/orient/quaternion";
-import { asTransform2D, transform2d } from "./class/orient/transform2d";
-import { asBasis, GBasis, basisMul, basisScaled, basisXform } from "./class/orient/basis";
-import { asTransform3D, pointMulTransform3d, transform3d, transform3dCompose, transform3dXformPoint } from "./class/orient/transform3d";
+import { asTransform2D, transform2d, GTransform2D } from "./class/orient/transform2d";
+import { asBasis, GBasis, basisMul, basisScaled, basisXform, basisInverseParts } from "./class/orient/basis";
+import { asProjection, projection, GProjection } from "./class/orient/projection";
+import { asAABB, aabb, GAABB } from "./class/shape/aabb";
+import { asRect2, rect2, GRect2 } from "./class/shape/rect";
+import { asPlane, plane, GPlane } from "./class/orient/plane";
+import { asTransform3D, GTransform3D, pointMulTransform3d, transform3d, transform3dCompose, transform3dXformPoint } from "./class/orient/transform3d";
 
 const r3 = Math.fround;
 import { asVec4, GVector4, vec4Cmp } from "./class/vector/vector4";
 import { asVec4i, GVector4i, v4iAdd, v4iDiv, v4iDivK, v4iMul, v4iMulK, v4iNeg, v4iSub, vec4iCmp, vec4iToFloat } from "./class/vector/vector4i";
 import { asColor, color, GColor } from "./class/color/color";
-import { bytesConcat, GBytes } from "./class/bytes/packed";
+import { bytesConcat, GBytes, packItems } from "./class/bytes/packed";
 import { INT64_MIN, TWO_63 } from "./numstr";
 import {
   add32,
@@ -215,7 +219,21 @@ export const ops = {
     if (zi4Mul && b.t === Tag.FLOAT) return vec4iToFloat(zi4Mul, num(b), "mul");
     if (zi4Mul && b.t === Tag.INT) return v4iMulK(zi4Mul, intToNum(b.v as IntPayload));
     if (zj4Mul && a.t === Tag.INT) return v4iMulK(zj4Mul, intToNum(a.v as IntPayload));
+    if (zi4Mul && b.t === Tag.FLOAT) return vec4iToFloat(zi4Mul, num(b), "mul");
+    if (zj4Mul && a.t === Tag.FLOAT) return vec4iToFloat(zj4Mul, num(a), "mul");
     const taMul = asTransform2D(a);
+    const tbMul = asTransform2D(b);
+    if (taMul === null && tbMul !== null) {
+      const v2x = asVec2(a);
+      if (v2x !== null) {
+        const p = xform2Inv(tbMul, v2x.x, v2x.y);
+        return vector2(p[0], p[1]);
+      }
+      const r2x = asRect2(a);
+      if (r2x !== null) return xformRect2InvBy(tbMul, r2x);
+      const pack2x = packOf(a, "vector2");
+      if (pack2x !== null) return mapPack2(pack2x, (x, y) => xform2Inv(tbMul, x, y));
+    }
     if (taMul !== null) {
       const tbMul = asTransform2D(b);
       if (tbMul !== null) {
@@ -240,6 +258,10 @@ export const ops = {
         const p = b.v as GVector2;
         return vector2(r3(r3(taMul.xx * p.x) + r3(taMul.yx * p.y)) + taMul.ox, r3(r3(taMul.xy * p.x) + r3(taMul.yy * p.y)) + taMul.oy);
       }
+      const pack2 = packOf(b, "vector2");
+      if (pack2 !== null) return mapPack2(pack2, (x, y) => xform2Point(taMul, x, y));
+      const rectR = asRect2(b);
+      if (rectR !== null) return xformRect2By(taMul, rectR);
       throw new UnsupportedError("transform2d-mul-right", `Transform2D 的 ${"\u002a"} 只量过乘 Transform2D 与乘 Vector2（收到另一形）`);
     }
     const ta3Mul = asTransform3D(a);
@@ -257,12 +279,31 @@ export const ops = {
           r3(ta3Mul.ox * k), r3(ta3Mul.oy * k), r3(ta3Mul.oz * k),
         );
       }
+      const pack3 = packOf(b, "vector3");
+      if (pack3 !== null) {
+        return mapPack3(pack3, (x, y, z) => {
+          const p = transform3dXformPoint(ta3Mul, x, y, z).v as GVector3;
+          return [p.x, p.y, p.z];
+        });
+      }
+      const aabbR = asAABB(b);
+      if (aabbR !== null) return xformAabbBy(ta3Mul, aabbR);
+      const planeR = asPlane(b);
+      if (planeR !== null) return xformPlaneBy(ta3Mul, planeR);
       throw new UnsupportedError("transform3d-mul-right", `Transform3D 的 ${"\u002a"} 只量过乘 Transform3D 与乘 Vector3（收到另一形）`);
     }
     const t3Right = asTransform3D(b);
     if (t3Right !== null) {
       const t3Left = a.t === Tag.OBJECT && (a.v as object) instanceof GVector3 ? (a.v as GVector3) : null;
       if (t3Left !== null) return pointMulTransform3d(t3Left.x, t3Left.y, t3Left.z, t3Right);
+      const aabbLeft = asAABB(a);
+      if (aabbLeft !== null) return xformAabbInvBy(t3Right, aabbLeft);
+      const planeLeft = asPlane(a);
+      if (planeLeft !== null) return xformPlaneInvBy(t3Right, planeLeft);
+      const pack3Left = packOf(a, "vector3");
+      if (pack3Left !== null) {
+        return mapPack3(pack3Left, (x, y, z) => xform3InvPoint(t3Right, x, y, z));
+      }
       throw new UnsupportedError("transform3d-mul-left", `乘数落在 Transform3D 左边的 ${"\u002a"} 只量过 Vector3（收到 ${tagName(a.t)}）`);
     }
     const baMul = asBasis(a);
@@ -287,7 +328,61 @@ export const ops = {
       return quaternion(x, y, z, w);
     }
     if (qaMul && b.t === Tag.OBJECT && (b.v as object) instanceof GVector3) {
-      throw new UnsupportedError("quaternion-xform", "Quaternion * Vector3 这一式还没对上：三种 float32 结合次序里，两种各自复现了一格、另一格差 6e-7，读不出引擎的那一条，响亮拒");
+      return quaternionXform(qaMul.x, qaMul.y, qaMul.z, qaMul.w, b.v as GVector3);
+    }
+    const v3Basis = asVec3(a);
+    const bRightMul = asBasis(b);
+    if (v3Basis !== null && bRightMul !== null) {
+      const p = basisXformInv(bRightMul, v3Basis.x, v3Basis.y, v3Basis.z);
+      return vector3(p[0], p[1], p[2]);
+    }
+    if (v3Basis !== null && qbMul !== null) {
+      return quaternionXform(r3(-qbMul.x), r3(-qbMul.y), r3(-qbMul.z), qbMul.w, v3Basis);
+    }
+    const projA = asProjection(a);
+    const projB = asProjection(b);
+    if (projA !== null && projB !== null) {
+      const cols = [projA.x, projA.y, projA.z, projA.w];
+      const pcols = [projB.x, projB.y, projB.z, projB.w];
+      const out: GVector4[] = [];
+      for (let j = 0; j < 4; j++) {
+        const pj = pcols[j] as GVector4;
+        const comp: number[] = [];
+        for (let i = 0; i < 4; i++) {
+          let ab = 0;
+          const k0 = (cols[0] as GVector4)[(["x", "y", "z", "w"] as const)[i] as "x"];
+          const k1 = (cols[1] as GVector4)[(["x", "y", "z", "w"] as const)[i] as "x"];
+          const k2 = (cols[2] as GVector4)[(["x", "y", "z", "w"] as const)[i] as "x"];
+          const k3 = (cols[3] as GVector4)[(["x", "y", "z", "w"] as const)[i] as "x"];
+          ab = r3(ab + r3(k0 * pj.x));
+          ab = r3(ab + r3(k1 * pj.y));
+          ab = r3(ab + r3(k2 * pj.z));
+          ab = r3(ab + r3(k3 * pj.w));
+          comp.push(ab);
+        }
+        out.push(new GVector4(comp[0] as number, comp[1] as number, comp[2] as number, comp[3] as number));
+      }
+      return projection(out[0] as GVector4, out[1] as GVector4, out[2] as GVector4, out[3] as GVector4);
+    }
+    const v4Left = asVec4(a);
+    if (v4Left !== null && projB !== null) {
+      const cols = [projB.x, projB.y, projB.z, projB.w];
+      const comp = (i: number) => {
+        const c0 = cols[0] as GVector4;
+        const c1 = cols[1] as GVector4;
+        const c2 = cols[2] as GVector4;
+        const c3 = cols[3] as GVector4;
+        const pick = (c: GVector4) => (i === 0 ? c.x : i === 1 ? c.y : i === 2 ? c.z : c.w);
+        return r3(r3(r3(r3(pick(c0) * v4Left.x) + r3(pick(c1) * v4Left.y)) + r3(pick(c2) * v4Left.z)) + r3(pick(c3) * v4Left.w));
+      };
+      return V.object(new GVector4(comp(0), comp(1), comp(2), comp(3)));
+    }
+    if (projA !== null) {
+      const v4Right = asVec4(b);
+      if (v4Right !== null) {
+        const comp = (c: GVector4) => r3(r3(r3(r3(c.x * v4Right.x) + r3(c.y * v4Right.y)) + r3(c.z * v4Right.z)) + r3(c.w * v4Right.w));
+        return V.object(new GVector4(comp(projA.x), comp(projA.y), comp(projA.z), comp(projA.w)));
+      }
     }
     if (qaMul && isNum(b)) {
       const k = num(b);
@@ -310,6 +405,8 @@ export const ops = {
     if (zi3Mul && b.t === Tag.FLOAT) return vec3iToFloat(zi3Mul, num(b), "mul");
     if (zi3Mul && b.t === Tag.INT) return v3iMulK(zi3Mul, intToNum(b.v as IntPayload));
     if (zj3Mul && a.t === Tag.INT) return v3iMulK(zj3Mul, intToNum(a.v as IntPayload));
+    if (zi3Mul && b.t === Tag.FLOAT) return vec3iToFloat(zi3Mul, num(b), "mul");
+    if (zj3Mul && a.t === Tag.FLOAT) return vec3iToFloat(zj3Mul, num(a), "mul");
     if (zj3Mul && a.t === Tag.INT) return v3iMulK(zj3Mul, intToNum(a.v as IntPayload));
     const caMul = asColor(a);
     const cbMul = asColor(b);
@@ -326,7 +423,8 @@ export const ops = {
     const qaDiv = asQuaternion(a);
     if (qaDiv && isNum(b)) {
       const k = num(b);
-      return quaternion(r3(qaDiv.x / k), r3(qaDiv.y / k), r3(qaDiv.z / k), r3(qaDiv.w / k));
+      const inv = 1 / k;
+      return quaternion(r3(qaDiv.x * inv), r3(qaDiv.y * inv), r3(qaDiv.z * inv), r3(qaDiv.w * inv));
     }
     const baDiv = asBasis(a);
     if (baDiv && isNum(b)) {
@@ -458,6 +556,8 @@ export const ops = {
     if (ziNeg) return vector2i(sub32(0, ziNeg.x), sub32(0, ziNeg.y));
     const zi3Neg = asVec3i(a);
     if (zi3Neg) return v3iNeg(zi3Neg);
+    const planeNeg = asPlane(a);
+    if (planeNeg) return plane(r3(-planeNeg.nx), r3(-planeNeg.ny), r3(-planeNeg.nz), r3(-planeNeg.d));
     const qaNeg = asQuaternion(a);
     if (qaNeg) return quaternion(r3(-qaNeg.x), r3(-qaNeg.y), r3(-qaNeg.z), r3(-qaNeg.w));
     const caNeg = asColor(a);
@@ -517,6 +617,9 @@ export const ops = {
     const [x, y] = intPair(a, b, "^");
     return i64(x, y, (p, q) => p ^ q);
   },
+  xor(a: Variant, b: Variant): Variant {
+    return V.bool(truthyOf(a) !== truthyOf(b));
+  },
   bnot(a: Variant): Variant {
     if (a.t !== Tag.INT) {
       if (MEASURED_SIX.has(a.t)) {
@@ -538,9 +641,13 @@ export const ops = {
   inOp(a: Variant, b: Variant): Variant {
     if (b.t === Tag.ARRAY) return V.bool((b.v as GArray).has(a));
     if (b.t === Tag.DICT) return V.bool((b.v as GDict).has(a));
-    if (b.t === Tag.STRING && a.t === Tag.STRING) {
+    if (isStringish(b) && isStringish(a)) {
       return V.bool((b.v as string).includes(a.v as string));
     }
+    if (b.t === Tag.OBJECT && b.v instanceof GBytes) {
+      return V.bool(packItems(b.v as GBytes).some((v) => valueEq(v, a)));
+    }
+    if (b.t === Tag.OBJECT) return V.bool(false);
     return operandsRefused(a, b, "in", "in-operands");
   },
 
@@ -552,6 +659,199 @@ export const ops = {
     return keyOf(a);
   },
 };
+
+
+function packOf(v: Variant, kind: string): GBytes | null {
+  return v.t === Tag.OBJECT && v.v instanceof GBytes && (v.v as GBytes).kind === kind ? (v.v as GBytes) : null;
+}
+
+function mapPack2(p: GBytes, fn: (x: number, y: number) => [number, number]): Variant {
+  const items = p.raw().map((e) => {
+    const v = e as GVector2;
+    const [x, y] = fn(v.x, v.y);
+    return new GVector2(x, y);
+  });
+  return V.object(new GBytes(items, p.kind));
+}
+
+function mapPack3(p: GBytes, fn: (x: number, y: number, z: number) => [number, number, number]): Variant {
+  const items = p.raw().map((e) => {
+    const v = e as GVector3;
+    const [x, y, z] = fn(v.x, v.y, v.z);
+    return new GVector3(x, y, z);
+  });
+  return V.object(new GBytes(items, p.kind));
+}
+
+function xform2Point(t: GTransform2D, x: number, y: number): [number, number] {
+  return [r3(r3(r3(t.xx * x) + r3(t.yx * y)) + t.ox), r3(r3(r3(t.xy * x) + r3(t.yy * y)) + t.oy)];
+}
+
+function xform2Inv(t: GTransform2D, x: number, y: number): [number, number] {
+  const vx = r3(x - t.ox);
+  const vy = r3(y - t.oy);
+  return [r3(r3(t.xx * vx) + r3(t.xy * vy)), r3(r3(t.yx * vx) + r3(t.yy * vy))];
+}
+
+function xform3InvPoint(t: GTransform3D, x: number, y: number, z: number): [number, number, number] {
+  const vx = r3(x - t.ox);
+  const vy = r3(y - t.oy);
+  const vz = r3(z - t.oz);
+  return [
+    r3(r3(r3(t.x0 * vx) + r3(t.x1 * vy)) + r3(t.x2 * vz)),
+    r3(r3(r3(t.y0 * vx) + r3(t.y1 * vy)) + r3(t.y2 * vz)),
+    r3(r3(r3(t.z0 * vx) + r3(t.z1 * vy)) + r3(t.z2 * vz)),
+  ];
+}
+
+function basisXformInv(b: GBasis, x: number, y: number, z: number): [number, number, number] {
+  return [
+    r3(r3(r3(b.x0 * x) + r3(b.y0 * y)) + r3(b.z0 * z)),
+    r3(r3(r3(b.x1 * x) + r3(b.y1 * y)) + r3(b.z1 * z)),
+    r3(r3(r3(b.x2 * x) + r3(b.y2 * y)) + r3(b.z2 * z)),
+  ];
+}
+
+function quaternionXform(qx: number, qy: number, qz: number, qw: number, v: GVector3): Variant {
+  const uvx = r3(r3(qy * v.z) - r3(qz * v.y));
+  const uvy = r3(r3(qz * v.x) - r3(qx * v.z));
+  const uvz = r3(r3(qx * v.y) - r3(qy * v.x));
+  const t1x = r3(r3(uvx * qw) + r3(r3(qy * uvz) - r3(qz * uvy)));
+  const t1y = r3(r3(uvy * qw) + r3(r3(qz * uvx) - r3(qx * uvz)));
+  const t1z = r3(r3(uvz * qw) + r3(r3(qx * uvy) - r3(qy * uvx)));
+  return vector3(r3(v.x + r3(t1x * 2)), r3(v.y + r3(t1y * 2)), r3(v.z + r3(t1z * 2)));
+}
+
+function transposedBasis(b: GBasis): GBasis {
+  return new GBasis(b.x0, b.y0, b.z0, b.x1, b.y1, b.z1, b.x2, b.y2, b.z2);
+}
+
+function xformAabbBy(t: GTransform3D, g: GAABB): Variant {
+  const min = [g.x, g.y, g.z];
+  const max = [r3(g.x + g.sx), r3(g.y + g.sy), r3(g.z + g.sz)];
+  const rows = [
+    [t.x0, t.y0, t.z0],
+    [t.x1, t.y1, t.z1],
+    [t.x2, t.y2, t.z2],
+  ];
+  const origin = [t.ox, t.oy, t.oz];
+  const tmin = [0, 0, 0];
+  const tmax = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    tmin[i] = origin[i] as number;
+    tmax[i] = origin[i] as number;
+    for (let j = 0; j < 3; j++) {
+      const e = r3((rows[i] as number[])[j] as number * (min[j] as number));
+      const f = r3((rows[i] as number[])[j] as number * (max[j] as number));
+      if (e < f) {
+        tmin[i] = r3((tmin[i] as number) + e);
+        tmax[i] = r3((tmax[i] as number) + f);
+      } else {
+        tmin[i] = r3((tmin[i] as number) + f);
+        tmax[i] = r3((tmax[i] as number) + e);
+      }
+    }
+  }
+  return aabb(tmin[0] as number, tmin[1] as number, tmin[2] as number, r3((tmax[0] as number) - (tmin[0] as number)), r3((tmax[1] as number) - (tmin[1] as number)), r3((tmax[2] as number) - (tmin[2] as number)));
+}
+
+function xformPlaneBy(t: GTransform3D, pl: GPlane): Variant {
+  const b = new GBasis(t.x0, t.x1, t.x2, t.y0, t.y1, t.y2, t.z0, t.z1, t.z2);
+  const inv = basisInverseParts(b);
+  if (inv === null) throw new UnsupportedError("plane-xform", "Transform3D.xform(Plane) 的基不可逆那一形没量过");
+  const invT = transposedBasis(inv);
+  const px = r3(pl.nx * pl.d);
+  const py = r3(pl.ny * pl.d);
+  const pz = r3(pl.nz * pl.d);
+  const p1 = transform3dXformPoint(t, px, py, pz).v as GVector3;
+  const nx0 = r3(r3(r3(invT.x0 * pl.nx) + r3(invT.y0 * pl.ny)) + r3(invT.z0 * pl.nz));
+  const ny0 = r3(r3(r3(invT.x1 * pl.nx) + r3(invT.y1 * pl.ny)) + r3(invT.z1 * pl.nz));
+  const nz0 = r3(r3(r3(invT.x2 * pl.nx) + r3(invT.y2 * pl.ny)) + r3(invT.z2 * pl.nz));
+  const lengthsq = r3(r3(r3(nx0 * nx0) + r3(ny0 * ny0)) + r3(nz0 * nz0));
+  const len = Math.sqrt(lengthsq);
+  const nx = len === 0 ? 0 : r3(nx0 / len);
+  const ny = len === 0 ? 0 : r3(ny0 / len);
+  const nz = len === 0 ? 0 : r3(nz0 / len);
+  const d = r3(nx * p1.x + ny * p1.y + nz * p1.z);
+  return plane(nx, ny, nz, d);
+}
+
+function xformRect2InvBy(t: GTransform2D, r: GRect2): Variant {
+  const pts = [
+    xform2Inv(t, r.x, r.y),
+    xform2Inv(t, r.x, r3(r.y + r.h)),
+    xform2Inv(t, r3(r.x + r.w), r3(r.y + r.h)),
+    xform2Inv(t, r3(r.x + r.w), r.y),
+  ];
+  const xs = pts.map((q) => q[0]);
+  const ys = pts.map((q) => q[1]);
+  const minx = Math.min(...xs);
+  const maxx = Math.max(...xs);
+  const miny = Math.min(...ys);
+  const maxy = Math.max(...ys);
+  return rect2(minx, miny, r3(maxx - minx), r3(maxy - miny));
+}
+
+function xformAabbInvBy(t: GTransform3D, g: GAABB): Variant {
+  const verts: Array<[number, number, number]> = [
+    [r3(g.x + g.sx), r3(g.y + g.sy), r3(g.z + g.sz)],
+    [r3(g.x + g.sx), r3(g.y + g.sy), g.z],
+    [r3(g.x + g.sx), g.y, r3(g.z + g.sz)],
+    [r3(g.x + g.sx), g.y, g.z],
+    [g.x, r3(g.y + g.sy), r3(g.z + g.sz)],
+    [g.x, r3(g.y + g.sy), g.z],
+    [g.x, g.y, r3(g.z + g.sz)],
+    [g.x, g.y, g.z],
+  ];
+  const out = verts.map(([x, y, z]) => xform3InvPoint(t, x, y, z));
+  const xs = out.map((q) => q[0]);
+  const ys = out.map((q) => q[1]);
+  const zs = out.map((q) => q[2]);
+  const minx = Math.min(...xs);
+  const maxx = Math.max(...xs);
+  const miny = Math.min(...ys);
+  const maxy = Math.max(...ys);
+  const minz = Math.min(...zs);
+  const maxz = Math.max(...zs);
+  return aabb(minx, miny, minz, r3(maxx - minx), r3(maxy - miny), r3(maxz - minz));
+}
+
+function xformPlaneInvBy(t: GTransform3D, pl: GPlane): Variant {
+  const b = new GBasis(t.x0, t.x1, t.x2, t.y0, t.y1, t.y2, t.z0, t.z1, t.z2);
+  const inv = basisInverseParts(b);
+  if (inv === null) throw new UnsupportedError("plane-xform", "Transform3D.xform_inv(Plane) 的基不可逆那一形没量过");
+  const px = r3(pl.nx * pl.d);
+  const py = r3(pl.ny * pl.d);
+  const pz = r3(pl.nz * pl.d);
+  const invO = basisXformInv(inv, r3(-t.ox), r3(-t.oy), r3(-t.oz));
+  const tp = basisXformInv(inv, px, py, pz);
+  const p1 = [r3(tp[0] + invO[0]), r3(tp[1] + invO[1]), r3(tp[2] + invO[2])];
+  const nx0 = r3(r3(r3(b.x0 * pl.nx) + r3(b.x1 * pl.ny)) + r3(b.x2 * pl.nz));
+  const ny0 = r3(r3(r3(b.y0 * pl.nx) + r3(b.y1 * pl.ny)) + r3(b.y2 * pl.nz));
+  const nz0 = r3(r3(r3(b.z0 * pl.nx) + r3(b.z1 * pl.ny)) + r3(b.z2 * pl.nz));
+  const lengthsq = r3(r3(r3(nx0 * nx0) + r3(ny0 * ny0)) + r3(nz0 * nz0));
+  const len = Math.sqrt(lengthsq);
+  const nnx = len === 0 ? 0 : r3(nx0 / len);
+  const nny = len === 0 ? 0 : r3(ny0 / len);
+  const nnz = len === 0 ? 0 : r3(nz0 / len);
+  const d = r3(r3(r3(nnx * p1[0]!) + r3(nny * p1[1]!)) + r3(nnz * p1[2]!));
+  return plane(nnx, nny, nnz, d);
+}
+
+function xformRect2By(t: GTransform2D, r: GRect2): Variant {
+  const xx = r3(t.xx * r.w);
+  const xy = r3(t.xy * r.w);
+  const yx = r3(t.yx * r.h);
+  const yy = r3(t.yy * r.h);
+  const [px, py] = xform2Point(t, r.x, r.y);
+  const xs = [px, r3(px + xx), r3(px + yx), r3(r3(px + xx) + yx)];
+  const ys = [py, r3(py + xy), r3(py + yy), r3(r3(py + xy) + yy)];
+  const minx = Math.min(...xs);
+  const maxx = Math.max(...xs);
+  const miny = Math.min(...ys);
+  const maxy = Math.max(...ys);
+  return rect2(minx, miny, r3(maxx - minx), r3(maxy - miny));
+}
 
 function compare(a: Variant, b: Variant, op = "<"): number {
   if (isNum(a) && isNum(b)) {

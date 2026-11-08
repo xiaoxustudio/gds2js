@@ -255,6 +255,10 @@ export function treeMethod(tree: GdSceneTree, name: string, args: Variant[]): Va
       }
       return V.nil();
     }
+    case "is_debugging_collisions_hint":
+    case "is_debugging_navigation_hint":
+    case "is_debugging_paths_hint":
+      return V.bool(false);
     case "get_frame":
       return V.int(tree.frame);
     case "set_pause": {

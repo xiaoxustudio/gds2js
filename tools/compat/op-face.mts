@@ -26,6 +26,7 @@ import { ridCtor } from "../../packages/runtime/src/runtime/class/identity/rid.t
 import { nullCallable } from "../../packages/runtime/src/runtime/class/identity/callable.ts";
 import { Signal } from "../../packages/runtime/src/runtime/class/identity/signal.ts";
 import { packCtor } from "../../packages/runtime/src/runtime/class/bytes/packed.ts";
+import { nativeClass } from "../../packages/runtime/src/runtime/class/identity/native-class.ts";
 import { UnsupportedError } from "../../packages/runtime/src/runtime/errors.ts";
 
 
@@ -71,6 +72,7 @@ const EXPR = {
   Callable: "nullCallable()",
   Signal: 'V.object(new Signal("x"))',
   RID: "ridCtor([])",
+  Object: `nativeClass("Node")`,
 };
 
 
@@ -113,6 +115,7 @@ const PROBE: Record<string, () => Variant> = {
   Callable: () => nullCallable(),
   Signal: () => V.object(new Signal("x")),
   RID: () => ridCtor([]),
+  Object: () => nativeClass("Node"),
 };
 
 function probeCall(op: string, a: Variant, b: Variant): void {
@@ -204,6 +207,7 @@ import { ridCtor } from "@gds2js/runtime/runtime/class/identity/rid";
 import { nullCallable } from "@gds2js/runtime/runtime/class/identity/callable";
 import { Signal } from "@gds2js/runtime/runtime/class/identity/signal";
 import { packCtor } from "@gds2js/runtime/runtime/class/bytes/packed";
+import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 
 type Cell = [string, () => unknown];
 
@@ -233,11 +237,14 @@ export function buildSupported() {
       const m = /right: ([A-Za-z0-9_]+) ->/.exec(row.s);
       if (m === null) continue;
       const right = m[1];
-      if (right === "Object") continue;
-      const a = EXPR[row.o];
+
+      let a = EXPR[row.o];
       if (a === undefined) continue;
       const op = row.n.slice(0, row.n.length - right.length - 1);
       if (op === "xor") continue;
+      if (op === "%" && (row.o === "String" || row.o === "StringName")) {
+        a = row.o === "String" ? 'V.str("%s")' : 'V.stringName("%s")';
+      }
       const b = right === "none" || right === "Variant" ? a : EXPR[right];
       if (b === undefined) continue;
       const expr = exprOf(op, a, right === "none" ? "" : b);

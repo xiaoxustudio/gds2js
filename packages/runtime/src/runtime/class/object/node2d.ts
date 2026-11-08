@@ -51,7 +51,16 @@ function originOf(store: GTransform2D): Variant {
 }
 
 function skewOf(g: GTransform2D): number {
-  return r(r(Math.atan2(g.yy, g.yx) - Math.atan2(g.xy, g.xx)) - r(Math.PI / 2));
+  const det = r(r(g.xx * g.yy) - r(g.xy * g.yx));
+  const x0 = columnLength(g.xx, g.xy);
+  const x1 = columnLength(g.yx, g.yy);
+  const n0x = x0 === 0 ? 0 : r(g.xx / x0);
+  const n0y = x0 === 0 ? 0 : r(g.xy / x0);
+  const n1x = x1 === 0 ? 0 : r(g.yx / x1);
+  const n1y = x1 === 0 ? 0 : r(g.yy / x1);
+  const sgn = det < 0 ? -1 : 1;
+  const dot = r(r(n0x * r(sgn * n1x)) + r(n0y * r(sgn * n1y)));
+  return r(Math.acos(dot) - r(r(Math.PI) * r(0.5)));
 }
 
 function rotationOf(g: GTransform2D): number {
@@ -128,6 +137,7 @@ const SETTERS: Readonly<Record<string, string>> = {
   set_global_rotation: "global_rotation",
   set_global_rotation_degrees: "global_rotation_degrees",
   set_global_scale: "global_scale",
+  set_global_skew: "global_skew",
   set_transform: "transform",
 };
 

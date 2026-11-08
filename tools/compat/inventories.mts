@@ -108,13 +108,15 @@ const ENGINE_RULES = [
 
 const OBJECT_METHODS = ["has_method", "get_class", "get_instance_id", "is_class", "get", "set", "get_meta", "set_meta", "has_meta", "remove_meta", "call", "callv"];
 
-const VIRTUAL_METHODS = ["_enter_tree", "_exit_tree", "_ready", "_process"];
+const VIRTUAL_METHODS = ["_enter_tree", "_exit_tree", "_ready", "_process", "_physics_process"];
 
 const VIRTUAL_OWNERS = ["Node", "Node2D", "Node3D", "Control"];
 
 const EXTRA_GLOBAL_IMPLEMENTED = ["print", "print_debug", "print_rich", "print_verbose", "printerr", "printraw", "prints", "printt"];
 
 const EXTRA_PROPS = { Node: ["name", "scene_file_path", "process_mode", "process_priority", "process_physics_priority", "owner"] };
+
+const EXTRA_CTORS = ["int", "float", "bool", "Signal"];
 
 const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"] };
 
@@ -206,7 +208,7 @@ export function buildInventories() {
       implemented: [...new Set([...GLOBAL_CALLABLE_IMPLEMENTED, ...EXTRA_GLOBAL_IMPLEMENTED])].sort(),
       constants: Object.keys(GLOBAL_CONSTANTS).sort(),
     },
-    ctors: Object.keys(CTOR_ARMS).sort(),
+    ctors: [...new Set([...Object.keys(CTOR_ARMS), ...EXTRA_CTORS])].sort(),
     classConsts: ENGINE_CLASS_CONSTS,
     signals: SIGNALS,
     builtinTypes: [...new Set([...Object.keys(BUILTIN_METHODS), ...Object.keys(BUILTIN_PROPS)])].sort(),
