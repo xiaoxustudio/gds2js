@@ -21,4 +21,5 @@ export const ENGINE_CLASS_FACES: Readonly<Record<string, readonly EngineClassMem
   "Resource": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "FileAccess": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "GDScript": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
+  "HashingContext": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
 });

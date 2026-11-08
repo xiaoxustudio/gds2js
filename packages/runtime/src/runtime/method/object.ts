@@ -37,6 +37,7 @@ import { JSON_STATIC_NAMES, jsonMethod, jsonStatic } from "../class/host/json";
 import { DA_STATIC_NAMES, FA_STATIC_NAMES, dirAccessStatic, dirMethod, fileAccessStatic, fileMethod, GdDir, GdFile } from "../class/host/file-access";
 import { OS_STATIC_NAMES, osStatic } from "../class/host/os";
 import { marshallsStatic } from "../class/host/marshalls";
+import { GdHashingContext, hashingContextMethod } from "../class/host/hashing-context";
 import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
@@ -469,6 +470,11 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   if (inner instanceof GdDir) return dirMethod(inner, name, args);
   if (inner instanceof GdRegEx) return regExMethod(inner, name, args);
   if (inner instanceof GdRegExMatch) return regExMatchMethod(inner, name, args);
+  if (inner instanceof GdHashingContext) {
+    const hit = hashingContextMethod(inner, name, args);
+    if (hit !== null) return hit;
+    throw new UnsupportedError("hashing-context-method", `HashingContext.${name}() 未实现`);
+  }
   if (inner instanceof GdSceneTree) {
     if (name === "connect" || name === "disconnect" || name === "emit_signal" || name === "has_signal" || name === "is_connected"
       || name === "add_user_signal" || name === "has_user_signal" || name === "remove_user_signal") {

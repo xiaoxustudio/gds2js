@@ -3,7 +3,7 @@ import { UnsupportedError } from "../../errors";
 import { GdScriptObject, markFreed } from "./script-object";
 import { Signal } from "../identity/signal";
 
-const CONSTRUCTIBLE = new Set(["Node", "Node2D", "Control", "Node3D", "Timer", "RefCounted", "Object"]);
+const CONSTRUCTIBLE = new Set(["Node", "Node2D", "Control", "Node3D", "Timer", "RefCounted", "Object", "HashingContext"]);
 const EXTRA_CTORS = new Map<string, () => object>();
 
 export function registerEngineCtor(name: string, make: () => object): void {
@@ -79,7 +79,7 @@ export function engineClassNewable(cls: string): boolean {
 }
 
 export function engineClassNew(cls: string): Variant {
-  if (!CONSTRUCTIBLE.has(cls)) throw new UnsupportedError("engine-class-ctor", `${cls}.new() 这一支没量过（只量过 Node / Node2D / Control / Node3D / Timer / RefCounted / Object）`);
+  if (!CONSTRUCTIBLE.has(cls)) throw new UnsupportedError("engine-class-ctor", `${cls}.new() 这一支没量过（只量过 Node / Node2D / Control / Node3D / Timer / RefCounted / Object / HashingContext）`);
   const extra = EXTRA_CTORS.get(cls);
   return V.object(extra === undefined ? new GdEngineInstance(cls) : extra());
 }

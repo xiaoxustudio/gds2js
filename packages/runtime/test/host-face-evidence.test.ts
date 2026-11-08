@@ -3,8 +3,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { method } from "@gds2js/runtime/runtime/methods";
+import { registerHostIo } from "../src/runtime/host-io";
 import { nativeClass } from "@gds2js/runtime/runtime/class/identity/native-class";
 import { Tag, V } from "@gds2js/runtime/runtime/tags";
+import { nodeHostIo } from "../src/runtime/host-io-node";
+
+registerHostIo(nodeHostIo);
 
 const DIR = nativeClass("DirAccess");
 const FILE = nativeClass("FileAccess");

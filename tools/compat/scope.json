@@ -13,7 +13,8 @@
       "RegEx",
       "RegExMatch",
       "JSON",
-      "Marshalls"
+      "Marshalls",
+      "HashingContext"
     ],
     "hostClasses": [
       "FileAccess",
