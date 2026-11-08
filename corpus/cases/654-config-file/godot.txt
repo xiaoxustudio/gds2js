@@ -1,0 +1,31 @@
+c1|[base]
+plain="text"
+space="with space"
+num=42
+flt=1.5
+bool=true
+vec=Vector2(1, 2)
+arr=[1, "x", true]
+dict={
+"k": 1
+}
+cn="中文 ok"
+quote="a\"b\\c
+d"
+[other]
+q="v"
+c2|true|false|true|["base", "other"]
+c3|["plain", "space", "num", "flt", "bool", "vec", "arr", "dict", "cn", "quote"]
+c4|text|(1.0, 2.0)|{ "k": 1 }|7
+c5|0
+c6|a"b\c
+d|中文 ok|v
+c7|["base"]|["space", "num", "flt", "bool", "vec", "arr", "dict", "cn", "quote"]
+c8|[]
+c9|7
+c10|0
+c11|0|with space|[1, "x", true]
+c12|0
+c13|0|42|v
+c14|0
+c15|0|中文 ok
