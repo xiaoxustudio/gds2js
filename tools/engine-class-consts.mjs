@@ -4,7 +4,7 @@ import { GODOT_PIN, ROOT } from "./lib.mjs";
 
 const OUT = join(ROOT, "packages", "runtime", "src", "runtime", "engine-class-consts.ts");
 
-const CLASSES = ["Node", "Node2D", "Node3D", "Control", "Object", "SceneTree", "RefCounted", "FileAccess", "HashingContext", "Time"];
+const CLASSES = ["Node", "Node2D", "Node3D", "Control", "Object", "SceneTree", "RefCounted", "FileAccess", "HashingContext", "Time", "AESContext"];
 
 const HEADER = `/**
  * 引擎类静态常量与枚举值 —— 生成物，别手改，改请重跑生成流程（pnpm regen:engine-consts）。

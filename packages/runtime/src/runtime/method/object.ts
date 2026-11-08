@@ -40,6 +40,7 @@ import { marshallsStatic } from "../class/host/marshalls";
 import { GdHashingContext, hashingContextMethod } from "../class/host/hashing-context";
 import { timeStatic } from "../class/host/time";
 import { GdHmacContext, hmacContextMethod } from "../class/host/hmac-context";
+import { GdAesContext, aesContextMethod } from "../class/host/aes-context";
 import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
@@ -299,6 +300,11 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     const hit = hmacContextMethod(inner, name, args);
     if (hit !== null) return hit;
     throw new UnsupportedError("hmac-context-method", `HMACContext.${name}() 未实现`);
+  }
+  if (inner instanceof GdAesContext) {
+    const hit = aesContextMethod(inner, name, args);
+    if (hit !== null) return hit;
+    throw new UnsupportedError("aes-context-method", `AESContext.${name}() 未实现`);
   }
 
   if (isCallableBox(inner)) {

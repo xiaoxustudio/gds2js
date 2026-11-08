@@ -17,7 +17,8 @@
       "HashingContext",
       "Time",
       "HMACContext",
-      "EncodedObjectAsID"
+      "EncodedObjectAsID",
+      "AESContext"
     ],
     "hostClasses": [
       "FileAccess",

@@ -35,6 +35,7 @@ export { marshallsStatic } from "./class/host/marshalls";
 export { GdHashingContext, hashingContextMethod } from "./class/host/hashing-context";
 export { timeStatic } from "./class/host/time";
 export { GdHmacContext, hmacContextMethod } from "./class/host/hmac-context";
+export { GdAesContext, aesContextMethod } from "./class/host/aes-context";
 export * from "./class/orient/basis";
 export * from "./class/object/node";
 export * from "./class/object/node2d";

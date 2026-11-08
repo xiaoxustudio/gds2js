@@ -591,6 +591,21 @@ export const ENGINE_CLASS_CONSTS: Readonly<Record<string, Readonly<Record<string
       "WEEKDAY_TUESDAY": 2,
       "WEEKDAY_WEDNESDAY": 3,
   }),
+  "AESContext": Object.freeze({
+      "CONNECT_APPEND_SOURCE_OBJECT": 16,
+      "CONNECT_DEFERRED": 1,
+      "CONNECT_ONE_SHOT": 4,
+      "CONNECT_PERSIST": 2,
+      "CONNECT_REFERENCE_COUNTED": 8,
+      "MODE_CBC_DECRYPT": 3,
+      "MODE_CBC_ENCRYPT": 2,
+      "MODE_ECB_DECRYPT": 1,
+      "MODE_ECB_ENCRYPT": 0,
+      "MODE_MAX": 4,
+      "NOTIFICATION_EXTENSION_RELOADED": 2,
+      "NOTIFICATION_POSTINITIALIZE": 0,
+      "NOTIFICATION_PREDELETE": 1,
+  }),
 });
 
 export function engineClassConst(cls: string, name: string): number | null {

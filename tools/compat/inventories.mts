@@ -128,7 +128,7 @@ const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];
 
-const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"], HashingContext: ["start", "update", "finish"], HMACContext: ["start", "update", "finish"], EncodedObjectAsID: ["get_object_id", "set_object_id"] };
+const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"], HashingContext: ["start", "update", "finish"], HMACContext: ["start", "update", "finish"], EncodedObjectAsID: ["get_object_id", "set_object_id"], AESContext: ["start", "update", "get_iv_state", "finish"] };
 
 function functionBody(source: string, fnName: string): string {
   const re = new RegExp(`(?:export\\s+)?function\\s+${fnName}\\s*\\(`, "g");

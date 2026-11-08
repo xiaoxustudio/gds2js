@@ -24,4 +24,5 @@ export const ENGINE_CLASS_FACES: Readonly<Record<string, readonly EngineClassMem
   "HashingContext": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "HMACContext": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "EncodedObjectAsID": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
+  "AESContext": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
 });
