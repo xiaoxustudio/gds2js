@@ -1,0 +1,8 @@
+e1|4|6|3|stable|official
+e2|x86_64|true|true|true|true|true
+e3|30|2.0|120|0.1|4
+e4|true|true|true
+e5||false
+e6|true
+e7|false
+e8|true|true|true

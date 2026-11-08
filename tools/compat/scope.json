@@ -26,7 +26,8 @@
       "Geometry3D",
       "Mutex",
       "Semaphore",
-      "Thread"
+      "Thread",
+      "Engine"
     ],
     "hostClasses": [
       "FileAccess",
@@ -45,9 +46,7 @@
       "RefCounted",
       "Object"
     ],
-    "unplannedClasses": [
-      "Engine"
-    ],
+    "unplannedClasses": [],
     "unplannedMembers": {
       "FileAccess": {}
     },
@@ -102,7 +101,6 @@
     ],
     "unplannedReasons": {
       "class": "未建模的引擎类：Tier 6 资源/场景尖峰判定不落地，遇到即响亮拒",
-      "Engine": "明示非目标（Tier 3 起即划出范围）",
       "ResourceLoader": "Tier 6 资源尖峰 no-go：.tres/.res 与资源类型族不建模",
       "ResourceSaver": "Tier 6 资源尖峰 no-go：资源序列化不建模",
       "Resource": "Tier 6 资源尖峰 no-go：资源对象族不建模",

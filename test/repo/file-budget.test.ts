@@ -4,8 +4,8 @@ import { describe, it } from "vitest";
 import { bad, ok } from "@gds2js/testkit";
 import { ROOT } from "../../tools/lib.mjs";
 
-const EXEMPT_FROM_BUDGET = ["ucaps", "engine-classes", "case-flags", "case-table", "engine-faces", "global-enums"];
-const REGENERATED = ["case-table", "case-flags", "ucaps", "engine-classes", "engine-faces", "global-enums"];
+const EXEMPT_FROM_BUDGET = ["ucaps", "engine-classes", "case-flags", "case-table", "engine-faces", "global-enums", "engine-meta"];
+const REGENERATED = ["case-table", "case-flags", "ucaps", "engine-classes", "engine-faces", "global-enums", "engine-meta"];
 const PROVENANCE_DEBT: string[] = [];
 const CODE_BUDGET: Array<[string, number]> = [
   ["packages/runtime/src/runtime/methods", 59],

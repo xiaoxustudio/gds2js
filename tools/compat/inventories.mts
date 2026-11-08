@@ -78,6 +78,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/host/marshalls.ts", fn: "marshallsStatic", owners: ["Marshalls"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/time.ts", fn: "timeStatic", owners: ["Time"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/geometry3d.ts", fn: "geometry3dStatic", owners: ["Geometry3D"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/host/engine.ts", fn: "engineStatic", owners: ["Engine"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/hmac-context.ts", fn: "hmacContextMethod", owners: ["HMACContext"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2Method", owners: ["Rect2"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2iMethod", owners: ["Rect2i"], kind: "method" },
@@ -128,6 +129,7 @@ const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
   FileAccess: ["big_endian"],
   DirAccess: ["include_hidden", "include_navigational"],
   OS: ["delta_smoothing", "low_processor_usage_mode", "low_processor_usage_mode_sleep_usec"],
+  Engine: ["max_fps", "max_physics_steps_per_frame", "physics_jitter_fix", "physics_ticks_per_second", "print_error_messages", "print_to_stdout", "time_scale"],
 };
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];

@@ -107,7 +107,6 @@ describe("tier3 · 定形拒绝清单", () => {
   });
 
   it("没建模的宿主 API 与引擎单例都在名单外", () => {
-    eq("t3", "Engine 的静态调用", say(() => method(nativeClass("Engine"), "get_main_loop", [])), "native-class-member");
     eq("t3", "Marshalls 没量过的成员", say(() => method(nativeClass("Marshalls"), "bool_to_bit", [V.bool(true)])), "marshalls-member");
     eq("t3", "FileAccess 常量面只量过四格", say(() => attribute(FILE, "READ_WRITE_FLUSH")), "native-class-member");
   });
