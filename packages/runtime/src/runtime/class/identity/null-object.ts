@@ -46,7 +46,7 @@ export function isWeakRefBox(inner: unknown): inner is WeakRefBox {
 
 export class EncodedObjectIdBox {
   readonly gdObjectId: number = nextObjectId(this);
-  constructor(readonly storedId: number | bigint) {}
+  constructor(public storedId: number | bigint) {}
 }
 
 export function encodedObjectIdBox(storedId: number | bigint): EncodedObjectIdBox {

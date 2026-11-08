@@ -14,7 +14,7 @@ import { HEX_PREFIX_RE, HEX_RE, INT_RE, hashDjb2, strHexToInt, toBool, toFloat, 
 import { classNameOf, getMeta, hasMeta, methodAritiesOf, nativeBaseOf, removeMeta, setMeta, hasStaticName, wrapValue, GdScriptObject, scriptLabelOf, ClassDesc, CallableBox, callableLabel, isCallableBox, isFreed, isNullCallable } from "../class/object/script-object";
 import { callDeferred } from "../class/identity/callable";
 import { nativeAritySay } from "../face-arity";
-import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT } from "../class/identity/null-object";
+import { isEncodedObjectIdBox, isWeakRefBox, NULL_OBJECT, encodedObjectIdBox } from "../class/identity/null-object";
 import { asRid } from "../class/identity/rid";
 import { signalDuplicateConnect, signalNullCallable } from "../frames";
 import { asNodePath, NODE_PATH_SLICE_END_DEFAULT, nodePathMethod, nodePathSlice } from "../class/identity/node-path";
@@ -39,6 +39,7 @@ import { OS_STATIC_NAMES, osStatic } from "../class/host/os";
 import { marshallsStatic } from "../class/host/marshalls";
 import { GdHashingContext, hashingContextMethod } from "../class/host/hashing-context";
 import { timeStatic } from "../class/host/time";
+import { GdHmacContext, hmacContextMethod } from "../class/host/hmac-context";
 import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
@@ -47,7 +48,7 @@ import { GProjection, projectionMethod } from "../class/orient/projection";
 import { basisMethod } from "../class/orient/basis";
 import { nodeMethod, registerNodePropReadHook, registerNodePropWriteHook } from "../class/object/node-face";
 import { GdSceneTree, registerTreeCallHook, treeMethod } from "../class/object/scene-tree";
-import { engineClassNew, engineClassNewable, isEngineNode } from "../class/object/node";
+import { engineClassNew, engineClassNewable, isEngineNode, registerEngineCtor } from "../class/object/node";
 import { GVector3i, vector3iMethod } from "../class/vector/vector3i";
 import { colorMethod, GColor } from "../class/color/color";
 import { bytesMethod, GBytes, packTypeName } from "../class/bytes/packed";
@@ -79,6 +80,8 @@ registerNodePropWriteHook((rec, key, value) => {
   writeProp(V.object(rec), key, value);
 });
 registerNodePropReadHook((rec, key) => attribute(V.object(rec), key) as Variant);
+
+registerEngineCtor("EncodedObjectAsID", () => encodedObjectIdBox(0));
 
 export function objectMethod(obj: Variant, name: string, args: Variant[]): Variant {
   const inner = obj.v;
@@ -280,13 +283,22 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
   }
 
   if (isEncodedObjectIdBox(inner)) {
-    if (name !== "get_object_id") {
-      throw new UnsupportedError("encoded-object-id-method", `EncodedObjectAsID.${name}() 没量过（只发得出实测的 get_object_id()）`);
+    if (name === "get_object_id") {
+      if (args.length !== 0) throw new GodotRuntimeError("arity", `get_object_id() 不接受参数（收到 ${args.length} 个）`);
+      return V.int(inner.storedId);
     }
-    if (args.length !== 0) {
-      throw new GodotRuntimeError("arity", `get_object_id() 不接受参数（收到 ${args.length} 个）`);
+    if (name === "set_object_id") {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("encoded-object-id-arg", "set_object_id() 只量过数");
+      inner.storedId = typeof v.v === "bigint" ? v.v : Math.trunc(Number(v.v));
+      return V.nil();
     }
-    return V.int(inner.storedId);
+    throw new UnsupportedError("encoded-object-id-method", `EncodedObjectAsID.${name}() 没量过（只发得出实测的 get_object_id()/set_object_id()）`);
+  }
+  if (inner instanceof GdHmacContext) {
+    const hit = hmacContextMethod(inner, name, args);
+    if (hit !== null) return hit;
+    throw new UnsupportedError("hmac-context-method", `HMACContext.${name}() 未实现`);
   }
 
   if (isCallableBox(inner)) {

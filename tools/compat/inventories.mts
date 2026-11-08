@@ -77,6 +77,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/class/host/os.ts", fn: "osStatic", owners: ["OS"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/marshalls.ts", fn: "marshallsStatic", owners: ["Marshalls"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/host/time.ts", fn: "timeStatic", owners: ["Time"], kind: "method" },
+  { file: "packages/runtime/src/runtime/class/host/hmac-context.ts", fn: "hmacContextMethod", owners: ["HMACContext"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2Method", owners: ["Rect2"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2iMethod", owners: ["Rect2i"], kind: "method" },
   { file: "packages/runtime/src/runtime/class/shape/rect.ts", fn: "rect2ReadProp", owners: ["Rect2"], kind: "prop" },
@@ -122,11 +123,12 @@ const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
     "process_thread_group", "process_thread_group_order", "process_thread_messages", "multiplayer"],
   JSON: ["data"],
   RegExMatch: ["names", "strings", "subject"],
+  EncodedObjectAsID: ["object_id"],
 };
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];
 
-const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"], HashingContext: ["start", "update", "finish"] };
+const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"], HashingContext: ["start", "update", "finish"], HMACContext: ["start", "update", "finish"], EncodedObjectAsID: ["get_object_id", "set_object_id"] };
 
 function functionBody(source: string, fnName: string): string {
   const re = new RegExp(`(?:export\\s+)?function\\s+${fnName}\\s*\\(`, "g");

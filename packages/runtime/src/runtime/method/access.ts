@@ -17,6 +17,7 @@ import { faceArity, faceMemberKnown, valueAttrKind } from "../face-arity";
 import { readOnlyError } from "../frames";
 import { GdNodePath } from "../class/identity/node-path";
 import { GdNativeClass } from "../class/identity/native-class";
+import { isEncodedObjectIdBox } from "../class/identity/null-object";
 import { engineClassConst } from "../engine-class-consts";
 import { Signal } from "../class/identity/signal";
 import { Tag, V, intToNum, tagName, type IntPayload, type Variant } from "../tags";
@@ -273,6 +274,12 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const base = norm(raw);
   if (base.t === Tag.DICT) {
     asDict(base, "属性").set(V.stringName(key), value);
+    return null;
+  }
+  if (base.t === Tag.OBJECT && isEncodedObjectIdBox(base.v)) {
+    if (key !== "object_id") throw new UnsupportedError("encoded-object-id-prop", `EncodedObjectAsID.${key} 的属性写没量过`);
+    if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("encoded-object-id-arg", "object_id 的写入只量过数");
+    base.v.storedId = typeof value.v === "bigint" ? value.v : Math.trunc(Number(value.v));
     return null;
   }
   if (base.t === Tag.ARRAY || base.t === Tag.STRING) {
@@ -549,6 +556,10 @@ export function attribute(raw: unknown, name: string): unknown {
     throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读落在两份名单之外：候选宇宙之外的名字没量过，不发引擎那句`);
   }
   if (obj.t === Tag.OBJECT) {
+    if (isEncodedObjectIdBox(obj.v)) {
+      if (name === "object_id") return V.int(obj.v.storedId);
+      throw new UnsupportedError("encoded-object-id-prop", `EncodedObjectAsID.${name} 的属性读没量过`);
+    }
     if (obj.v instanceof GdNativeClass) {
       const konst = engineClassConst(obj.v.className, name);
       if (konst !== null) return V.int(konst);
