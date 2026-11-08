@@ -19,7 +19,8 @@
       "HMACContext",
       "EncodedObjectAsID",
       "AESContext",
-      "ConfigFile"
+      "ConfigFile",
+      "Expression"
     ],
     "hostClasses": [
       "FileAccess",

@@ -42,6 +42,7 @@ import { timeStatic } from "../class/host/time";
 import { GdHmacContext, hmacContextMethod } from "../class/host/hmac-context";
 import { GdAesContext, aesContextMethod } from "../class/host/aes-context";
 import { GdConfigFile, configFileMethod } from "../class/host/config-file";
+import { GdExpression, expressionMethod } from "../class/host/expression";
 import { GdRegEx, GdRegExMatch, regExNew, regexCompile, regExMatchMethod, regExMethod } from "../class/host/regex";
 import { GdJson, jsonNew } from "../class/host/json";
 import { probedClassChain } from "../patterns";
@@ -311,6 +312,11 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
     const hit = configFileMethod(inner, name, args);
     if (hit !== null) return hit;
     throw new UnsupportedError("configfile-method", `ConfigFile.${name}() 未实现`);
+  }
+  if (inner instanceof GdExpression) {
+    const hit = expressionMethod(inner, name, args);
+    if (hit !== null) return hit;
+    throw new UnsupportedError("expression-method", `Expression.${name}() 未实现`);
   }
 
   if (isCallableBox(inner)) {

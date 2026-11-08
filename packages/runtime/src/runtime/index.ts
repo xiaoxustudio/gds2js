@@ -37,6 +37,7 @@ export { timeStatic } from "./class/host/time";
 export { GdHmacContext, hmacContextMethod } from "./class/host/hmac-context";
 export { GdAesContext, aesContextMethod } from "./class/host/aes-context";
 export { GdConfigFile, configFileMethod } from "./class/host/config-file";
+export { GdExpression, expressionMethod } from "./class/host/expression";
 export * from "./class/orient/basis";
 export * from "./class/object/node";
 export * from "./class/object/node2d";
