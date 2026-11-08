@@ -29,4 +29,7 @@ export const ENGINE_CLASS_FACES: Readonly<Record<string, readonly EngineClassMem
   "Expression": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "PCKPacker": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
   "Crypto": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
+  "Mutex": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
+  "Semaphore": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
+  "Thread": [{"member":"new","typeofCode":25,"label":"GDScriptNativeClass::new","args":0,"boundArgs":-1}],
 });

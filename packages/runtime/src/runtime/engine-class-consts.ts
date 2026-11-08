@@ -633,6 +633,19 @@ export const ENGINE_CLASS_CONSTS: Readonly<Record<string, Readonly<Record<string
       "SYSTEM_DIR_PICTURES": 6,
       "SYSTEM_DIR_RINGTONES": 7,
   }),
+  "Thread": Object.freeze({
+      "CONNECT_APPEND_SOURCE_OBJECT": 16,
+      "CONNECT_DEFERRED": 1,
+      "CONNECT_ONE_SHOT": 4,
+      "CONNECT_PERSIST": 2,
+      "CONNECT_REFERENCE_COUNTED": 8,
+      "NOTIFICATION_EXTENSION_RELOADED": 2,
+      "NOTIFICATION_POSTINITIALIZE": 0,
+      "NOTIFICATION_PREDELETE": 1,
+      "PRIORITY_HIGH": 2,
+      "PRIORITY_LOW": 0,
+      "PRIORITY_NORMAL": 1,
+  }),
 });
 
 export function engineClassConst(cls: string, name: string): number | null {

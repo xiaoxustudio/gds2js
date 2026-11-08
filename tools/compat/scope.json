@@ -23,7 +23,10 @@
       "Expression",
       "PCKPacker",
       "Crypto",
-      "Geometry3D"
+      "Geometry3D",
+      "Mutex",
+      "Semaphore",
+      "Thread"
     ],
     "hostClasses": [
       "FileAccess",

@@ -1,0 +1,12 @@
+m1|true
+m2|true
+s1|false
+s2|true|false
+s3|true|true|false
+t1|false|false|true
+t2|0
+t3|true|true
+t4|42
+t5|false|false|0
+t6|0|1|2
+t7|0|2

@@ -7,7 +7,7 @@ const GD = join(OUT_DIR, "face.gd");
 const OUT = join(OUT_DIR, "face.txt");
 const T = String.fromCharCode(9);
 
-const CLASSES = ["Node", "RefCounted", "Object", "Resource", "FileAccess", "GDScript", "HashingContext", "HMACContext", "EncodedObjectAsID", "AESContext", "ConfigFile", "Expression", "PCKPacker", "Crypto"];
+const CLASSES = ["Node", "RefCounted", "Object", "Resource", "FileAccess", "GDScript", "HashingContext", "HMACContext", "EncodedObjectAsID", "AESContext", "ConfigFile", "Expression", "PCKPacker", "Crypto", "Mutex", "Semaphore", "Thread"];
 
 const lines = ["extends SceneTree", "", "func _initialize():"];
 CLASSES.forEach((c, i) => {

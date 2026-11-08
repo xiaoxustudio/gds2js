@@ -41,6 +41,7 @@ export { GdConfigFile, configFileMethod } from "./class/host/config-file";
 export { GdExpression, expressionMethod } from "./class/host/expression";
 export { GdPckPacker, pckPackerMethod } from "./class/host/pck-packer";
 export { GdCrypto, GdCryptoKey, GdX509Certificate, RsaKey, cryptoMethod } from "./class/host/crypto";
+export { GdMutex, GdSemaphore, GdThread, mutexMethod, semaphoreMethod, threadMethod } from "./class/host/threading";
 export * from "./class/orient/basis";
 export * from "./class/object/node";
 export * from "./class/object/node2d";
