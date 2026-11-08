@@ -2,7 +2,7 @@ import { hostIo, hostIoMissing, resolveIoPath, type HostIo } from "../../host-io
 import { UnsupportedError } from "../../errors";
 import { NULL_OBJECT } from "../identity/null-object";
 import { GdScriptObject } from "../object/script-object";
-import { GBytes } from "../bytes/packed";
+import { GBytes, bytesMethod } from "../bytes/packed";
 import { Tag, V, normInt, type Variant } from "../../tags";
 import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObjects } from "../../var-bytes";
 import { intToBig, intToNum } from "../../tags";
@@ -45,6 +45,7 @@ export class GdFile extends GdScriptObject {
   encKey: number[] | null = null;
   encIv: number[] | null = null;
   autoDelete = false;
+  compMode: number | null = null;
 }
 
 export class GdDir extends GdScriptObject {
@@ -315,6 +316,10 @@ export function fileClose(file: GdFile): void {
   if (!writableMode(file.mode)) return;
   if (file.encKey !== null && file.encIv !== null) {
     io().write(file.abs, Uint8Array.from(encryptFile(file.bytes, file.encKey, file.encIv)));
+    return;
+  }
+  if (file.compMode !== null) {
+    io().write(file.abs, Uint8Array.from(compressFile(file.bytes, file.compMode)));
     return;
   }
   io().write(file.abs, Uint8Array.from(file.bytes));
@@ -592,7 +597,7 @@ export function dirExistsAbsolute(path: string): boolean {
 export { ERR_OK, ERR_FAILED, ERR_NOT_FOUND, ERR_BAD_PATH, ERR_CORRUPT };
 
 
-export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5", "get_file_as_bytes", "get_file_as_string", "get_size", "get_sha256", "get_access_time", "get_modified_time", "get_hidden_attribute", "set_hidden_attribute", "get_read_only_attribute", "set_read_only_attribute", "get_unix_permissions", "set_unix_permissions", "get_extended_attribute", "get_extended_attribute_string", "get_extended_attributes_list", "set_extended_attribute", "set_extended_attribute_string", "remove_extended_attribute", "create_temp", "open_encrypted", "open_encrypted_with_pass"]);
+export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5", "get_file_as_bytes", "get_file_as_string", "get_size", "get_sha256", "get_access_time", "get_modified_time", "get_hidden_attribute", "set_hidden_attribute", "get_read_only_attribute", "set_read_only_attribute", "get_unix_permissions", "set_unix_permissions", "get_extended_attribute", "get_extended_attribute_string", "get_extended_attributes_list", "set_extended_attribute", "set_extended_attribute_string", "remove_extended_attribute", "create_temp", "open_encrypted", "open_encrypted_with_pass", "open_compressed"]);
 
 export const DA_STATIC_NAMES = new Set([
   "open",
@@ -774,6 +779,94 @@ function ioOptional<K extends keyof HostIo>(name: K): NonNullable<HostIo[K]> {
   return fn as NonNullable<HostIo[K]>;
 }
 
+
+const COMP_BLOCK = 4096;
+
+function compressBlock(data: number[], mode: number): number[] {
+  const out = bytesMethod(new GBytes(data, "byte"), "compress", [V.int(mode)]);
+  return (out.v as GBytes).raw().map((b) => Number(b) & 255);
+}
+
+function decompressBlock(data: number[], want: number, mode: number): number[] {
+  const size = mode === 0 ? Math.max(want, 16) : want;
+  const out = bytesMethod(new GBytes(data, "byte"), "decompress", [V.int(size), V.int(mode)]);
+  return (out.v as GBytes).raw().map((b) => Number(b) & 255).slice(0, want);
+}
+
+function compressFile(plain: number[], mode: number): number[] {
+  if (mode === 4) throw new UnsupportedError("fa-brotli-write", "FileAccess.open_compressed() 的 brotli 写入这一支引擎自己就不支持");
+  const out = [0x47, 0x43, 0x50, 0x46];
+  for (const v of [mode, COMP_BLOCK]) {
+    out.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255);
+  }
+  for (let off = 0; off < plain.length; off += COMP_BLOCK) {
+    const chunk = plain.slice(off, off + COMP_BLOCK);
+    const comp = compressBlock(chunk, mode);
+    for (const v of [chunk.length, comp.length]) {
+      out.push(v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255);
+    }
+    out.push(...comp);
+  }
+  out.push(0x47, 0x43, 0x50, 0x46);
+  return out;
+}
+
+function decompressFile(raw: number[]): { mode: number; bytes: number[] } | null {
+  if (raw.length < 16) return null;
+  if (raw[0] !== 0x47 || raw[1] !== 0x43 || raw[2] !== 0x50 || raw[3] !== 0x46) return null;
+  const u32 = (off: number): number => (raw[off] as number) + ((raw[off + 1] as number) << 8) + ((raw[off + 2] as number) << 16) + ((raw[off + 3] as number) << 24);
+  const mode = u32(4);
+  let at = 12;
+  const out: number[] = [];
+  while (at + 8 <= raw.length - 4) {
+    const want = u32(at);
+    const size = u32(at + 4);
+    at += 8;
+    if (at + size > raw.length - 4) return null;
+    out.push(...decompressBlock(raw.slice(at, at + size), want, mode));
+    at += size;
+  }
+  return { mode, bytes: out };
+}
+
+function faOpenCompressed(path: string, mode: number, compression: number): Variant {
+  const table = io();
+  const abs = resolveIoPath(path);
+  if (compression < 0 || compression > 4) {
+    lastFileOpenError = ERR_BAD_PATH;
+    return nullObject();
+  }
+  if (mode === FA_READ || mode === FA_READ_WRITE) {
+    if (!table.exists(abs)) {
+      lastFileOpenError = ERR_NOT_FOUND;
+      return nullObject();
+    }
+    const parsed = decompressFile([...(table.read(abs) ?? new Uint8Array(0))]);
+    if (parsed === null) {
+      lastFileOpenError = ERR_NOT_FOUND;
+      return nullObject();
+    }
+    const file = new GdFile();
+    file.given = path;
+    file.abs = abs;
+    file.mode = mode;
+    file.opened = true;
+    file.bytes = parsed.bytes;
+    file.compMode = compression;
+    lastFileOpenError = ERR_OK;
+    return V.object(file);
+  }
+  if (!table.write(abs, new Uint8Array(0))) throw new UnsupportedError("fa-create", "FileAccess.open_compressed() 建不出文件这一形没量过");
+  const file = new GdFile();
+  file.given = path;
+  file.abs = abs;
+  file.mode = mode;
+  file.opened = true;
+  file.compMode = compression;
+  lastFileOpenError = ERR_OK;
+  return V.object(file);
+}
+
 export function fileAccessStatic(name: string, args: Variant[]): Variant {
   if (name === "open") {
     if (args.length !== 2) throw new UnsupportedError("io-arity", `FileAccess.open() 只量过 (路径, 模式) 两个实参（收到 ${String(args.length)} 个）`);
@@ -856,6 +949,9 @@ export function fileAccessStatic(name: string, args: Variant[]): Variant {
   }
   if (name === "open_encrypted_with_pass") {
     return faOpenEncrypted(pathArg(args, 0, name), intArg(args, 1, name), passwordKey(pathArg(args, 2, name)), null);
+  }
+  if (name === "open_compressed") {
+    return faOpenCompressed(pathArg(args, 0, name), intArg(args, 1, name), intArg(args, 2, name));
   }
   if (args.length !== 0) throw new UnsupportedError("io-arity", `FileAccess.get_open_error() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
   return V.int(faLastOpenError());
