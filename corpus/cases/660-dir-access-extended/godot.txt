@@ -1,0 +1,6 @@
+d1|false|false
+d2|true|true|true|true
+d3|true|true|false|false
+d4|0
+d5|true|true|true
+d6|true|true

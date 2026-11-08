@@ -1,4 +1,7 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, realpathSync, renameSync, rmdirSync, statSync, statfsSync, symlinkSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { registerHostIo, type HostIo } from "./host-io";
 
 function ok(fn: () => void): boolean {
@@ -65,6 +68,119 @@ export const nodeHostIo: HostIo = {
       return readdirSync(p);
     } catch {
       return [];
+    }
+  },
+  stat: (p) => {
+    try {
+      const st = statSync(p);
+      return { mtime: Math.floor(st.mtimeMs / 1000), atime: Math.floor(st.atimeMs / 1000) };
+    } catch {
+      return null;
+    }
+  },
+  hiddenAttr: (p) => {
+    if (process.platform !== "win32") return p.split("/").pop()?.startsWith(".") === true;
+    const r = spawnSync("attrib", [p], { encoding: "utf8" });
+    if (r.status !== 0 || r.stdout === null) return null;
+    return r.stdout.trim().split(/\s{4,}/)[0]!.includes("H");
+  },
+  setHiddenAttr: (p, hidden) => (spawnSync("attrib", [hidden ? "+H" : "-H", p]).status === 0 ? 0 : 1),
+  readOnlyAttr: (p) => {
+    try {
+      const mode = statSync(p).mode;
+      return (mode & 0o200) === 0;
+    } catch {
+      return null;
+    }
+  },
+  setReadOnlyAttr: (p, ro) => (ok(() => chmodSync(p, ro ? 0o444 : 0o666)) ? 0 : 1),
+  unixPermissions: (p) => {
+    if (process.platform === "win32") return 0;
+    try {
+      return statSync(p).mode & 0o777;
+    } catch {
+      return 0;
+    }
+  },
+  setUnixPermissions: (p, permissions) => {
+    if (process.platform === "win32") return 2;
+    return ok(() => chmodSync(p, permissions)) ? 0 : 1;
+  },
+  xattrs: (p) => {
+    if (process.platform !== "win32") {
+      const r = spawnSync("getfattr", ["--absolute-names", "--only-values", "--dump", p], { encoding: "utf8" });
+      if (r.status !== 0 || r.stdout === null) return [];
+      return [...r.stdout.matchAll(/^\s+user\.([^=]+)=/gm)].map((m) => "user." + (m[1] as string));
+    }
+    const r = spawnSync("powershell", ["-NoProfile", "-Command", `(Get-Item -LiteralPath '${p.replace(/'/g, "''")}' -Stream *).Stream`], { encoding: "utf8" });
+    if (r.status !== 0 || r.stdout === null) return [];
+    return r.stdout.split(/\r?\n/).map((x) => x.trim()).filter((x) => x !== "" && x !== ":$DATA");
+  },
+  getXattr: (p, name) => {
+    try {
+      return new Uint8Array(readFileSync(process.platform === "win32" ? `${p}:${name}` : p));
+    } catch {
+      return null;
+    }
+  },
+  setXattr: (p, name, data) => (ok(() => writeFileSync(process.platform === "win32" ? `${p}:${name}` : p, data)) ? 0 : 1),
+  removeXattr: (p, name) => (ok(() => unlinkSync(process.platform === "win32" ? `${p}:${name}` : p)) ? 0 : 1),
+  createLink: (source, target) => (ok(() => symlinkSync(source, target)) ? 0 : 1),
+  readLink: (p) => {
+    try {
+      return readlinkSync(p);
+    } catch {
+      return null;
+    }
+  },
+  isLink: (p) => {
+    try {
+      return lstatSync(p).isSymbolicLink();
+    } catch {
+      return false;
+    }
+  },
+  equivalent: (a, b) => {
+    try {
+      return realpathSync(a) === realpathSync(b);
+    } catch {
+      return false;
+    }
+  },
+  caseSensitive: () => process.platform !== "win32" && process.platform !== "darwin",
+  filesystemType: (p) => {
+    if (process.platform !== "win32") return "";
+    const r = spawnSync("powershell", ["-NoProfile", "-Command", `(Get-Volume -DriveLetter '${p.charAt(0)}').FileSystem`], { encoding: "utf8" });
+    return r.status === 0 && r.stdout !== null ? r.stdout.trim() : "";
+  },
+  spaceLeft: (p) => {
+    try {
+      const st = statfsSync(p);
+      return Number(st.bavail) * Number(st.bsize);
+    } catch {
+      return 0;
+    }
+  },
+  drives: () => {
+    if (process.platform !== "win32") return ["/"];
+    const r = spawnSync("powershell", ["-NoProfile", "-Command", "(Get-PSDrive -PSProvider FileSystem).Name"], { encoding: "utf8" });
+    return r.status === 0 && r.stdout !== null ? r.stdout.split(/\r?\n/).map((x) => x.trim()).filter((x) => x !== "") : [];
+  },
+  createTempFile: (prefix, extension) => {
+    try {
+      const dir = mkdtempSync(join(tmpdir(), prefix));
+      const file = join(dir, prefix + extension);
+      writeFileSync(file, "");
+      return file;
+    } catch {
+      return null;
+    }
+  },
+  makeTempDir: (prefix) => {
+    try {
+      return mkdtempSync(join(tmpdir(), prefix));
+    } catch {
+      return null;
     }
   },
 };

@@ -1,4 +1,4 @@
-import { hostIo, hostIoMissing, resolveIoPath } from "../../host-io";
+import { hostIo, hostIoMissing, resolveIoPath, type HostIo } from "../../host-io";
 import { UnsupportedError } from "../../errors";
 import { NULL_OBJECT } from "../identity/null-object";
 import { GdScriptObject } from "../object/script-object";
@@ -8,6 +8,8 @@ import { gBytesToVar, gBytesToVarWithObjects, gVarToBytes, gVarToBytesWithObject
 import { intToBig, intToNum } from "../../tags";
 import { asString } from "../../method/core";
 import { md5Bytes } from "../../md5";
+import { digestBytes } from "../../digest";
+import { Aes } from "../../aes";
 
 const ERR_OK = 0;
 const ERR_FAILED = 1;
@@ -40,6 +42,9 @@ export class GdFile extends GdScriptObject {
   err = ERR_OK;
   bigEndian = false;
   eof = false;
+  encKey: number[] | null = null;
+  encIv: number[] | null = null;
+  autoDelete = false;
 }
 
 export class GdDir extends GdScriptObject {
@@ -49,6 +54,8 @@ export class GdDir extends GdScriptObject {
   names: string[] = [];
   cursor = 0;
   entryIsDir = false;
+  includeHidden = false;
+  includeNavigational = false;
 }
 
 let lastFileOpenError = ERR_OK;
@@ -301,7 +308,16 @@ export function fileFlush(file: GdFile): void {
 export function fileClose(file: GdFile): void {
   if (!file.opened) return;
   file.opened = false;
-  if (writableMode(file.mode)) io().write(file.abs, Uint8Array.from(file.bytes));
+  if (file.autoDelete) {
+    io().remove(file.abs);
+    return;
+  }
+  if (!writableMode(file.mode)) return;
+  if (file.encKey !== null && file.encIv !== null) {
+    io().write(file.abs, Uint8Array.from(encryptFile(file.bytes, file.encKey, file.encIv)));
+    return;
+  }
+  io().write(file.abs, Uint8Array.from(file.bytes));
 }
 
 export function fileSeek(file: GdFile, to: number): void {
@@ -576,7 +592,7 @@ export function dirExistsAbsolute(path: string): boolean {
 export { ERR_OK, ERR_FAILED, ERR_NOT_FOUND, ERR_BAD_PATH, ERR_CORRUPT };
 
 
-export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5", "get_file_as_bytes", "get_file_as_string", "get_size"]);
+export const FA_STATIC_NAMES = new Set(["open", "file_exists", "get_open_error", "get_md5", "get_file_as_bytes", "get_file_as_string", "get_size", "get_sha256", "get_access_time", "get_modified_time", "get_hidden_attribute", "set_hidden_attribute", "get_read_only_attribute", "set_read_only_attribute", "get_unix_permissions", "set_unix_permissions", "get_extended_attribute", "get_extended_attribute_string", "get_extended_attributes_list", "set_extended_attribute", "set_extended_attribute_string", "remove_extended_attribute", "create_temp", "open_encrypted", "open_encrypted_with_pass"]);
 
 export const DA_STATIC_NAMES = new Set([
   "open",
@@ -589,6 +605,9 @@ export const DA_STATIC_NAMES = new Set([
   "copy_absolute",
   "rename_absolute",
   "dir_exists_absolute",
+  "get_drive_count",
+  "get_drive_name",
+  "create_temp",
 ]);
 
 function pathArg(args: Variant[], at: number, who: string): string {
@@ -638,6 +657,123 @@ function readWhole(path: string, who: string): Uint8Array {
   return table.read(abs) ?? new Uint8Array(0);
 }
 
+
+function md5HexBytes(data: number[]): number[] {
+  const hex = md5Bytes(new Uint8Array(data));
+  const out: number[] = [];
+  for (let i = 0; i < hex.length; i += 2) out.push(parseInt(hex.slice(i, i + 2), 16));
+  return out;
+}
+
+function passwordKey(password: string): number[] {
+  return [...ENCODER.encode(md5Bytes(ENCODER.encode(password)))];
+}
+
+function cfbCrypt(aes: Aes, iv: number[], data: number[], decrypt: boolean): number[] {
+  const out: number[] = [];
+  let feedback = iv.slice();
+  for (let off = 0; off < data.length; off += 16) {
+    const block = data.slice(off, off + 16);
+    const ks = aes.encryptBlock(feedback);
+    const result = block.map((b, i) => b ^ (ks[i] as number));
+    out.push(...result);
+    feedback = decrypt ? block : result;
+  }
+  return out;
+}
+
+function encryptFile(plain: number[], key: number[], iv: number[]): number[] {
+  const padded = plain.slice();
+  while (padded.length % 16 !== 0) padded.push(0);
+  const cipher = cfbCrypt(new Aes(key), iv, padded, false);
+  const header = [0x47, 0x44, 0x45, 0x43, ...md5HexBytes(plain)];
+  let len = plain.length;
+  for (let i = 0; i < 8; i++) {
+    header.push(len & 255);
+    len = Math.floor(len / 256);
+  }
+  return [...header, ...iv, ...cipher];
+}
+
+function decryptFile(raw: number[], key: number[]): number[] | null {
+  if (raw.length < 44) return null;
+  if (raw[0] !== 0x47 || raw[1] !== 0x44 || raw[2] !== 0x45 || raw[3] !== 0x43) return null;
+  const md5 = raw.slice(4, 20);
+  let len = 0;
+  for (let i = 7; i >= 0; i--) len = len * 256 + (raw[20 + i] as number);
+  const iv = raw.slice(28, 44);
+  const plain = cfbCrypt(new Aes(key), iv, raw.slice(44), true).slice(0, len);
+  const check = md5HexBytes(plain);
+  if (check.some((b, i) => b !== md5[i])) return null;
+  return plain;
+}
+
+function keyBytesArg(args: Variant[], at: number, who: string): number[] {
+  const v = args[at];
+  if (v === undefined || v.t !== Tag.OBJECT || !(v.v instanceof GBytes)) throw new UnsupportedError("io-arg-type", `FileAccess.${who}() 的密钥只量过 PackedByteArray`);
+  return (v.v as GBytes).raw().map((b) => Number(b) & 255);
+}
+
+function faOpenEncrypted(path: string, mode: number, key: number[], iv: number[] | null): Variant {
+  const table = io();
+  const abs = resolveIoPath(path);
+  if (key.length !== 32 || (iv !== null && iv.length !== 16)) {
+    lastFileOpenError = ERR_BAD_PATH;
+    return nullObject();
+  }
+  if (mode === FA_READ || mode === FA_READ_WRITE) {
+    if (!table.exists(abs)) {
+      lastFileOpenError = ERR_NOT_FOUND;
+      return nullObject();
+    }
+    const plain = decryptFile([...(table.read(abs) ?? new Uint8Array(0))], key);
+    if (plain === null) {
+      lastFileOpenError = ERR_NOT_FOUND;
+      return nullObject();
+    }
+    const file = new GdFile();
+    file.given = path;
+    file.abs = abs;
+    file.mode = mode;
+    file.opened = true;
+    file.bytes = plain;
+    file.encKey = key;
+    file.encIv = iv ?? [...(table.read(abs) ?? new Uint8Array(0))].slice(28, 44);
+    lastFileOpenError = ERR_OK;
+    return V.object(file);
+  }
+  if (!table.write(abs, new Uint8Array(0))) throw new UnsupportedError("fa-create", "FileAccess.open_encrypted() 建不出文件这一形没量过");
+  const file = new GdFile();
+  file.given = path;
+  file.abs = abs;
+  file.mode = mode;
+  file.opened = true;
+  file.encKey = key;
+  file.encIv = iv ?? randomIv();
+  lastFileOpenError = ERR_OK;
+  return V.object(file);
+}
+
+function randomIv(): number[] {
+  const out: number[] = [];
+  const c = (globalThis as { crypto?: { getRandomValues?: (a: Uint8Array) => Uint8Array } }).crypto;
+  if (c?.getRandomValues !== undefined) {
+    const buf = new Uint8Array(16);
+    c.getRandomValues(buf);
+    for (const b of buf) out.push(b);
+    return out;
+  }
+  for (let i = 0; i < 16; i++) out.push(Math.floor(Math.random() * 256));
+  return out;
+}
+
+function ioOptional<K extends keyof HostIo>(name: K): NonNullable<HostIo[K]> {
+  const table = io();
+  const fn = table[name];
+  if (typeof fn !== "function") throw new UnsupportedError("io-host-capability", `这一份宿主没有注册 ${String(name)} 能力`);
+  return fn as NonNullable<HostIo[K]>;
+}
+
 export function fileAccessStatic(name: string, args: Variant[]): Variant {
   if (name === "open") {
     if (args.length !== 2) throw new UnsupportedError("io-arity", `FileAccess.open() 只量过 (路径, 模式) 两个实参（收到 ${String(args.length)} 个）`);
@@ -660,6 +796,67 @@ export function fileAccessStatic(name: string, args: Variant[]): Variant {
     if (args.length !== 1) throw new UnsupportedError("io-arity", "FileAccess.get_size() 只量过 1 个实参");
     return V.int(readWhole(pathArg(args, 0, name), name).length);
   }
+  if (name === "get_sha256") {
+    const data = readWhole(pathArg(args, 0, name), name);
+    const digest = digestBytes(2, [...data]);
+    return V.str(digest.map((b) => b.toString(16).padStart(2, "0")).join(""));
+  }
+  if (name === "get_modified_time" || name === "get_access_time") {
+    const stat = ioOptional("stat")(resolveIoPath(pathArg(args, 0, name)));
+    return V.int(stat === null ? 0 : name === "get_modified_time" ? stat.mtime : stat.atime);
+  }
+  if (name === "get_hidden_attribute") {
+    return V.bool(ioOptional("hiddenAttr")(resolveIoPath(pathArg(args, 0, name))) === true);
+  }
+  if (name === "set_hidden_attribute") {
+    return V.int(ioOptional("setHiddenAttr")(resolveIoPath(pathArg(args, 0, name)), args[1] !== undefined && args[1].t === Tag.BOOL && args[1].v === true));
+  }
+  if (name === "get_read_only_attribute") {
+    return V.bool(ioOptional("readOnlyAttr")(resolveIoPath(pathArg(args, 0, name))) === true);
+  }
+  if (name === "set_read_only_attribute") {
+    return V.int(ioOptional("setReadOnlyAttr")(resolveIoPath(pathArg(args, 0, name)), args[1] !== undefined && args[1].t === Tag.BOOL && args[1].v === true));
+  }
+  if (name === "get_unix_permissions") {
+    return V.int(ioOptional("unixPermissions")(resolveIoPath(pathArg(args, 0, name))));
+  }
+  if (name === "set_unix_permissions") {
+    return V.int(ioOptional("setUnixPermissions")(resolveIoPath(pathArg(args, 0, name)), intArg(args, 1, name)));
+  }
+  if (name === "get_extended_attribute") {
+    const data = ioOptional("getXattr")(resolveIoPath(pathArg(args, 0, name)), pathArg(args, 1, name));
+    return V.object(GBytes.of(data === null ? [] : [...data], "byte"));
+  }
+  if (name === "get_extended_attribute_string") {
+    const data = ioOptional("getXattr")(resolveIoPath(pathArg(args, 0, name)), pathArg(args, 1, name));
+    return V.str(data === null ? "" : DECODER.decode(data));
+  }
+  if (name === "get_extended_attributes_list") {
+    return V.object(GBytes.of(ioOptional("xattrs")(resolveIoPath(pathArg(args, 0, name))), "string"));
+  }
+  if (name === "set_extended_attribute") {
+    return V.int(ioOptional("setXattr")(resolveIoPath(pathArg(args, 0, name)), pathArg(args, 1, name), new Uint8Array(keyBytesArg(args, 2, name))));
+  }
+  if (name === "set_extended_attribute_string") {
+    return V.int(ioOptional("setXattr")(resolveIoPath(pathArg(args, 0, name)), pathArg(args, 1, name), ENCODER.encode(pathArg(args, 2, name))));
+  }
+  if (name === "remove_extended_attribute") {
+    return V.int(ioOptional("removeXattr")(resolveIoPath(pathArg(args, 0, name)), pathArg(args, 1, name)));
+  }
+  if (name === "create_temp") {
+    const prefix = args[1] !== undefined && args[1].t === Tag.STRING ? String(args[1].v) : "";
+    const extension = args[2] !== undefined && args[2].t === Tag.STRING ? String(args[2].v) : "";
+    const path = ioOptional("createTempFile")(prefix, extension);
+    if (path === null) return nullObject();
+    const file = faOpen(path, intArg(args, 0, name));
+    return file;
+  }
+  if (name === "open_encrypted") {
+    return faOpenEncrypted(pathArg(args, 0, name), intArg(args, 1, name), keyBytesArg(args, 2, name), keyBytesArg(args, 3, name));
+  }
+  if (name === "open_encrypted_with_pass") {
+    return faOpenEncrypted(pathArg(args, 0, name), intArg(args, 1, name), passwordKey(pathArg(args, 2, name)), null);
+  }
   if (args.length !== 0) throw new UnsupportedError("io-arity", `FileAccess.get_open_error() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
   return V.int(faLastOpenError());
 }
@@ -676,6 +873,19 @@ export function dirAccessStatic(name: string, args: Variant[]): Variant {
   if (name === "get_open_error") {
     if (args.length !== 0) throw new UnsupportedError("io-arity", `DirAccess.get_open_error() 只量过 0 个实参（收到 ${String(args.length)} 个）`);
     return V.int(daLastOpenError());
+  }
+  if (name === "get_drive_count") {
+    return V.int(ioOptional("drives")().length);
+  }
+  if (name === "get_drive_name") {
+    const drives = ioOptional("drives")();
+    const idx = intArg(args, 0, name);
+    return V.str(idx >= 0 && idx < drives.length ? `${drives[idx] as string}:` : "");
+  }
+  if (name === "create_temp") {
+    const prefix = args[0] !== undefined && args[0].t === Tag.STRING ? String(args[0].v) : "";
+    const path = ioOptional("makeTempDir")(prefix);
+    return path === null ? nullObject() : dirOpen(path);
   }
   if (name === "dir_exists_absolute") {
     if (args.length !== 1) throw new UnsupportedError("io-arity", `DirAccess.dir_exists_absolute() 只量过 1 个实参（收到 ${String(args.length)} 个）`);
@@ -880,6 +1090,38 @@ export function fileMethod(file: GdFile, name: string, args: Variant[]): Variant
 
 export function dirMethod(dir: GdDir, name: string, args: Variant[]): Variant {
   switch (name) {
+    case "get_include_hidden":
+      return V.bool(dir.includeHidden);
+    case "set_include_hidden":
+      dir.includeHidden = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "get_include_navigational":
+      return V.bool(dir.includeNavigational);
+    case "set_include_navigational":
+      dir.includeNavigational = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "get_space_left":
+      return V.int(ioOptional("spaceLeft")(dir.abs));
+    case "get_filesystem_type":
+      return V.str(ioOptional("filesystemType")(dir.abs));
+    case "get_current_drive": {
+      const drive = dir.abs.slice(0, 1).toUpperCase();
+      return V.int(ioOptional("drives")().indexOf(drive));
+    }
+    case "is_case_sensitive":
+      return V.bool(ioOptional("caseSensitive")(resolveIoPath(pathArg(args, 0, name))));
+    case "is_bundle":
+      return V.bool(false);
+    case "create_link":
+      return V.int(ioOptional("createLink")(resolveIoPath(pathArg(args, 0, name)), resolveIoPath(pathArg(args, 1, name))));
+    case "is_link":
+      return V.bool(ioOptional("isLink")(resolveIoPath(pathArg(args, 0, name))));
+    case "read_link": {
+      const target = ioOptional("readLink")(resolveIoPath(pathArg(args, 0, name)));
+      return V.str(target === null ? "" : target.split("\\").join("/"));
+    }
+    case "is_equivalent":
+      return V.bool(ioOptional("equivalent")(resolveIoPath(pathArg(args, 0, name)), resolveIoPath(pathArg(args, 1, name))));
     case "get_current_dir":
       return V.str(dir.given);
     case "get_files":

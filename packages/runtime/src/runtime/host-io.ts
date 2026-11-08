@@ -16,6 +16,27 @@ export type HostIo = {
   rename(from: string, to: string): number;
   copy(from: string, to: string): number;
   list(path: string): string[];
+  stat?(path: string): { mtime: number; atime: number } | null;
+  hiddenAttr?(path: string): boolean | null;
+  setHiddenAttr?(path: string, hidden: boolean): number;
+  readOnlyAttr?(path: string): boolean | null;
+  setReadOnlyAttr?(path: string, ro: boolean): number;
+  unixPermissions?(path: string): number;
+  setUnixPermissions?(path: string, permissions: number): number;
+  xattrs?(path: string): string[];
+  getXattr?(path: string, name: string): Uint8Array | null;
+  setXattr?(path: string, name: string, data: Uint8Array): number;
+  removeXattr?(path: string, name: string): number;
+  createLink?(source: string, target: string): number;
+  readLink?(path: string): string | null;
+  isLink?(path: string): boolean;
+  equivalent?(a: string, b: string): boolean;
+  caseSensitive?(path: string): boolean;
+  filesystemType?(path: string): string;
+  spaceLeft?(path: string): number;
+  drives?(): string[];
+  createTempFile?(prefix: string, extension: string): string | null;
+  makeTempDir?(prefix: string): string | null;
 };
 
 let TABLE: HostIo | null = null;

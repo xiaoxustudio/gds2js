@@ -51,9 +51,7 @@
         "get_executable_path": "两侧不同源：引擎可执行文件与宿主可执行文件不可比",
         "get_processor_count": "机器相关读数，golden 不可复现"
       },
-      "FileAccess": {
-        "open_encrypted": "AES 加密打开面未建模"
-      }
+      "FileAccess": {}
     },
     "unplannedPatterns": [
       {
@@ -88,8 +86,7 @@
       },
       {
         "owners": [
-          "OS",
-          "FileAccess"
+          "OS"
         ],
         "match": "RenderingDriver|StdHandleType|SystemDir|CompressionMode|UnixPermissionFlags|ModeFlags|create_instance|create_temp|big_endian|distribution|video_adapter|trash|open_with|file_access_save|unset_environment",
         "reason": "类内枚举/常量面尚未建模，按响亮拒记账"

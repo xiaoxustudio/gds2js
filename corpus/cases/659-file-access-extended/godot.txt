@@ -1,0 +1,18 @@
+a1|2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+a2|true|true
+a3|false|false|0
+a4|0|true
+a5|0|true
+a6|2
+a7|0
+a8|[1, 2, 3]
+a9|v
+a10|["test.attr", "test.str"]
+a11|0
+a12|secret
+a13|true
+a14|secret
+a15|true
+a16|true
+a17|true
+a18|1|2|256|128|1|7

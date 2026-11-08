@@ -125,6 +125,8 @@ const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
   JSON: ["data"],
   RegExMatch: ["names", "strings", "subject"],
   EncodedObjectAsID: ["object_id"],
+  FileAccess: ["big_endian"],
+  DirAccess: ["include_hidden", "include_navigational"],
 };
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];

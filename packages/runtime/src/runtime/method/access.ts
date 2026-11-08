@@ -41,6 +41,7 @@ import { timerRead, timerWrite } from "../class/object/timer";
 import { registerTweenHooks } from "../class/object/tween";
 import { GdSceneTree, registerTreeWriteHook, treeMethod, treeReadProp, treeSetCurrentScene } from "../class/object/scene-tree";
 import { GdJson } from "../class/host/json";
+import { GdDir, GdFile } from "../class/host/file-access";
 import { GdRegExMatch, matchNames, matchStrings } from "../class/host/regex";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
 import { ctlRead, ctlWrite } from "../class/object/control";
@@ -274,6 +275,17 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
   const base = norm(raw);
   if (base.t === Tag.DICT) {
     asDict(base, "属性").set(V.stringName(key), value);
+    return null;
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GdDir && (key === "include_hidden" || key === "include_navigational")) {
+    if (value.t !== Tag.BOOL) throw new UnsupportedError("da-include-prop", "DirAccess 的 include 属性只量过 bool");
+    if (key === "include_hidden") base.v.includeHidden = value.v === true;
+    else base.v.includeNavigational = value.v === true;
+    return null;
+  }
+  if (base.t === Tag.OBJECT && base.v instanceof GdFile && key === "big_endian") {
+    if (value.t !== Tag.BOOL) throw new UnsupportedError("fa-big-endian", "FileAccess.big_endian 的写入只量过 bool");
+    base.v.bigEndian = value.v === true;
     return null;
   }
   if (base.t === Tag.OBJECT && isEncodedObjectIdBox(base.v)) {
@@ -556,6 +568,10 @@ export function attribute(raw: unknown, name: string): unknown {
     throw new UnsupportedError("face-attribute", `${face}.${name} 的属性读落在两份名单之外：候选宇宙之外的名字没量过，不发引擎那句`);
   }
   if (obj.t === Tag.OBJECT) {
+    if (obj.v instanceof GdFile && name === "big_endian") return V.bool(obj.v.bigEndian);
+    if (obj.v instanceof GdDir && (name === "include_hidden" || name === "include_navigational")) {
+      return V.bool(name === "include_hidden" ? obj.v.includeHidden : obj.v.includeNavigational);
+    }
     if (isEncodedObjectIdBox(obj.v)) {
       if (name === "object_id") return V.int(obj.v.storedId);
       throw new UnsupportedError("encoded-object-id-prop", `EncodedObjectAsID.${name} 的属性读没量过`);
