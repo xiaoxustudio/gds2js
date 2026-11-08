@@ -1,6 +1,8 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
-import { GArray } from "../../values";
+import { GArray, GDict } from "../../values";
+import { GBytes } from "../bytes/packed";
+import { rid } from "../identity/rid";
 import { NULL_OBJECT } from "../identity/null-object";
 import { nodePathValue } from "../identity/node-path";
 import { asString } from "../../method/core";
@@ -26,16 +28,29 @@ import {
   nodeQueueFree,
   nodeOfVariant,
   nodeNameSet,
+  nodeParent,
   type NodeRec,
 } from "./node";
-import { callDeferred, isCallableBox } from "../identity/callable";
+import { callDeferred, isCallableBox, type CallableBox } from "../identity/callable";
 import { callCallableBox } from "../../method/callable";
-import { getMeta, hasMeta, removeMeta, setMeta, GdScriptObject } from "./script-object";
+import { getMeta, hasMeta, metaKeys, removeMeta, setMeta, GdScriptObject } from "./script-object";
 import { scenePathOf, sceneTree, treeCreateTween } from "./scene-tree";
 import { node2dApplyGlobal, node2dGlobalTransform, node2dMethod, NODE2D_METHOD_NAMES } from "./node2d";
 import { node3dGlobalTransform, node3dMethod, NODE3D_METHOD_NAMES } from "./node3d";
 import { GdTimer, timerMethod } from "./timer";
 import { ctlMethod, CTL_METHOD_NAMES } from "./control";
+
+type NodePropWriteHook = (rec: NodeRec, key: string, value: Variant) => void;
+let NODE_PROP_WRITE: NodePropWriteHook | null = null;
+export function registerNodePropWriteHook(fn: NodePropWriteHook): void {
+  NODE_PROP_WRITE = fn;
+}
+
+type NodePropReadHook = (rec: NodeRec, key: string) => Variant;
+let NODE_PROP_READ: NodePropReadHook | null = null;
+export function registerNodePropReadHook(fn: NodePropReadHook): void {
+  NODE_PROP_READ = fn;
+}
 
 const NODE2D_METHODS = new Set(["to_local", "to_global", "rotate", "translate", "move_local_x", "move_local_y", "apply_scale", "get_relative_transform_to_parent"]);
 
@@ -447,6 +462,305 @@ export function nodeMethod(target: unknown, name: string, args: Variant[]): Vari
       }
       return V.nil();
     }
+    case "_input":
+    case "_shortcut_input":
+    case "_unhandled_input":
+    case "_unhandled_key_input":
+      return V.nil();
+    case "_get_configuration_warnings":
+    case "_get_accessibility_configuration_warnings":
+      return V.array(GArray.of([]));
+    case "_get_focused_accessibility_element":
+      return rid(0n);
+    case "get_viewport":
+    case "get_window":
+    case "get_last_exclusive_window": {
+      const tree = sceneTree();
+      return tree === null ? V.object(NULL_OBJECT) : V.object(tree.root);
+    }
+    case "get_multiplayer": {
+      const tree = sceneTree();
+      if (tree === null) return V.object(NULL_OBJECT);
+      if (rec.__gd_node_mp_api__ === undefined) rec.__gd_node_mp_api__ = V.object(new GdEngineInstance("SceneMultiplayer"));
+      return rec.__gd_node_mp_api__;
+    }
+    case "get_multiplayer_authority":
+      return V.int(rec.__gd_node_mp_authority__ ?? 1);
+    case "set_multiplayer_authority": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_multiplayer_authority() 只量过数");
+      const id = Math.trunc(Number(v.v));
+      const recursive = args[1] !== undefined && args[1].t === Tag.BOOL && args[1].v === true;
+      const assign = (n: NodeRec, value: number): void => {
+        n.__gd_node_mp_authority__ = value;
+        if (!recursive) return;
+        for (const c of n.__gd_node_children__) assign(c as NodeRec, value);
+      };
+      assign(rec, id);
+      return V.nil();
+    }
+    case "is_multiplayer_authority":
+      return V.bool(insideTree(rec) && (rec.__gd_node_mp_authority__ ?? 1) === 1);
+    case "get_node_rpc_config":
+      return rec.__gd_node_rpc_config__ === undefined ? V.nil() : (rec.__gd_node_rpc_config__ as Variant);
+    case "rpc_config": {
+      const m = args[0];
+      if (m === undefined || (m.t !== Tag.STRING && m.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "rpc_config() 的方法名只量过字符串");
+      let cfg = rec.__gd_node_rpc_config__ as Variant | undefined;
+      if (cfg === undefined) {
+        cfg = V.dict(new GDict());
+        rec.__gd_node_rpc_config__ = cfg;
+      }
+      (cfg.v as GDict).set(V.stringName(String(m.v)), args[1] as Variant);
+      return V.nil();
+    }
+    case "rpc":
+    case "rpc_id": {
+      if (insideTree(rec)) throw new UnsupportedError("node-rpc-in-tree", `${name}() 在树里的返回值没量过`);
+      return V.int(3);
+    }
+    case "to_string": {
+      const tag = `<${rec.__gd_engine_class__}#${String(rec.gdObjectId)}>`;
+      return V.str(rec.__gd_node_name__ === "" ? tag : `${rec.__gd_node_name__}:${tag}`);
+    }
+    case "tr":
+    case "tr_n": {
+      const singular = args[0];
+      if (singular === undefined || (singular.t !== Tag.STRING && singular.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", `${name}() 的消息只量过字符串`);
+      if (name === "tr") return V.str(String(singular.v));
+      const plural = args[1];
+      const n = args[2];
+      if (plural === undefined || (plural.t !== Tag.STRING && plural.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "tr_n() 的复数消息只量过字符串");
+      if (n === undefined || (n.t !== Tag.INT && n.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "tr_n() 的数量只量过数");
+      return V.str(Number(n.v) === 1 ? String(singular.v) : String(plural.v));
+    }
+    case "can_translate_messages":
+      return V.bool(rec.__gd_obj_message_translation__ !== false);
+    case "set_message_translation":
+      rec.__gd_obj_message_translation__ = boolArg(args, 0, true);
+      return V.nil();
+    case "is_blocking_signals":
+      return V.bool(rec.__gd_obj_block_signals__ === true);
+    case "set_block_signals":
+      rec.__gd_obj_block_signals__ = boolArg(args, 0, false);
+      return V.nil();
+    case "cancel_free":
+    case "notification":
+    case "notify_property_list_changed":
+      return V.nil();
+    case "property_can_revert":
+      return V.bool(false);
+    case "property_get_revert":
+      return V.nil();
+    case "get_meta_list":
+      return V.array(GArray.of(metaKeys(rec).map((k) => V.stringName(k))));
+    case "get_incoming_connections":
+      return V.array(GArray.of([]));
+    case "get_script":
+      return rec.__gd_obj_script__ === undefined ? V.nil() : rec.__gd_obj_script__;
+    case "set_script":
+      rec.__gd_obj_script__ = args[0] as Variant;
+      return V.nil();
+    case "get_method_argument_count": {
+      const m = args[0];
+      if (m === undefined || (m.t !== Tag.STRING && m.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "get_method_argument_count() 的方法名只量过字符串");
+      const who = String(m.v);
+      if (who === "get_meta" || who === "set_meta") return V.int(2);
+      if (who === "has_meta" || who === "remove_meta") return V.int(1);
+      return V.int(0);
+    }
+    case "get_method_list":
+    case "get_property_list":
+    case "get_signal_list":
+      return V.array(GArray.of([]));
+    case "get_signal_connection_list": {
+      const sg = nodeSignalOf(rec, asString(args[0] as Variant, "信号名"));
+      if (sg === null) return V.array(GArray.of([]));
+      const out: Variant[] = [];
+      for (const row of sg.connections()) {
+        const d = new GDict();
+        d.set(V.str("signal"), V.object(sg));
+        d.set(V.str("callable"), V.object(row.box));
+        d.set(V.str("flags"), V.int(row.flags));
+        out.push(V.dict(d));
+      }
+      return V.array(GArray.of(out));
+    }
+    case "has_connections": {
+      const sg = nodeSignalOf(rec, asString(args[0] as Variant, "信号名"));
+      return V.bool(sg !== null && sg.hasConnections());
+    }
+    case "get_indexed": {
+      const p = args[0];
+      if (p === undefined || (p.t !== Tag.STRING && p.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "get_indexed() 的路径只量过字符串");
+      const path = String(p.v);
+      if (path.includes(":") || path.includes("/")) throw new UnsupportedError("node-indexed-path", `get_indexed("${path}") 的复合路径没量过`);
+      if (NODE_PROP_READ === null) throw new UnsupportedError("node-prop-read", "节点属性读取钩子未注册");
+      return NODE_PROP_READ(rec, path);
+    }
+    case "set_indexed": {
+      const p = args[0];
+      if (p === undefined || (p.t !== Tag.STRING && p.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "set_indexed() 的路径只量过字符串");
+      const path = String(p.v);
+      if (path.includes(":") || path.includes("/")) throw new UnsupportedError("node-indexed-path", `set_indexed("${path}") 的复合路径没量过`);
+      if (NODE_PROP_WRITE === null) throw new UnsupportedError("node-prop-write", "节点属性写入钩子未注册");
+      NODE_PROP_WRITE(rec, path, args[1] as Variant);
+      return V.nil();
+    }
+    case "atr":
+    case "atr_n": {
+      const msg = args[0];
+      if (msg === undefined || (msg.t !== Tag.STRING && msg.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", `${name}() 的消息只量过字符串`);
+      if (name === "atr") return V.str(String(msg.v));
+      const plural = args[1];
+      const n = args[2];
+      if (plural === undefined || (plural.t !== Tag.STRING && plural.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "atr_n() 的复数消息只量过字符串");
+      if (n === undefined || (n.t !== Tag.INT && n.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "atr_n() 的数量只量过数");
+      return V.str(Number(n.v) === 1 ? String(msg.v) : String(plural.v));
+    }
+    case "can_auto_translate":
+      return V.bool(true);
+    case "get_auto_translate_mode":
+      return V.int(rec.__gd_node_auto_translate_mode__ ?? 0);
+    case "set_auto_translate_mode": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_auto_translate_mode() 只量过数");
+      rec.__gd_node_auto_translate_mode__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "get_editor_description":
+      return V.str(rec.__gd_node_editor_description__ ?? "");
+    case "set_editor_description": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "set_editor_description() 只量过字符串");
+      rec.__gd_node_editor_description__ = String(v.v);
+      return V.nil();
+    }
+    case "is_part_of_edited_scene":
+      return V.bool(false);
+    case "is_unique_name_in_owner":
+      return V.bool(rec.__gd_node_unique_in_owner__ === true);
+    case "set_unique_name_in_owner":
+      rec.__gd_node_unique_in_owner__ = boolArg(args, 0, false);
+      return V.nil();
+    case "is_editable_instance":
+      return V.bool(false);
+    case "set_editable_instance":
+      return V.nil();
+    case "set_display_folded":
+      return V.nil();
+    case "get_scene_instance_load_placeholder":
+      return V.bool(rec.__gd_node_scene_placeholder__ === true);
+    case "set_scene_instance_load_placeholder":
+      rec.__gd_node_scene_placeholder__ = boolArg(args, 0, false);
+      return V.nil();
+    case "get_physics_interpolation_mode":
+      return V.int(rec.__gd_node_physics_interp__ ?? 0);
+    case "set_physics_interpolation_mode": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_physics_interpolation_mode() 只量过数");
+      rec.__gd_node_physics_interp__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "reset_physics_interpolation":
+      return V.nil();
+    case "get_process_thread_group":
+      return V.int(rec.__gd_node_thread_group__ ?? 0);
+    case "set_process_thread_group": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_process_thread_group() 只量过数");
+      rec.__gd_node_thread_group__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "get_process_thread_group_order":
+      return V.int(rec.__gd_node_thread_order__ ?? 0);
+    case "set_process_thread_group_order": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_process_thread_group_order() 只量过数");
+      rec.__gd_node_thread_order__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "get_process_thread_messages":
+      return V.int(rec.__gd_node_thread_messages__ ?? 0);
+    case "set_process_thread_messages": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", "set_process_thread_messages() 只量过数");
+      rec.__gd_node_thread_messages__ = Math.trunc(Number(v.v));
+      return V.nil();
+    }
+    case "is_processing_input":
+      return V.bool(rec.__gd_node_process_input__ === true);
+    case "set_process_input":
+      rec.__gd_node_process_input__ = boolArg(args, 0, false);
+      return V.nil();
+    case "is_processing_shortcut_input":
+      return V.bool(rec.__gd_node_process_shortcut__ === true);
+    case "set_process_shortcut_input":
+      rec.__gd_node_process_shortcut__ = boolArg(args, 0, false);
+      return V.nil();
+    case "is_processing_unhandled_input":
+      return V.bool(rec.__gd_node_process_unhandled__ === true);
+    case "set_process_unhandled_input":
+      rec.__gd_node_process_unhandled__ = boolArg(args, 0, false);
+      return V.nil();
+    case "is_processing_unhandled_key_input":
+      return V.bool(rec.__gd_node_process_unhandled_key__ === true);
+    case "set_process_unhandled_key_input":
+      rec.__gd_node_process_unhandled_key__ = boolArg(args, 0, false);
+      return V.nil();
+    case "set_process_internal":
+    case "set_physics_process_internal":
+      return V.nil();
+    case "get_translation_domain":
+      return V.str(rec.__gd_node_translation_domain__ ?? "");
+    case "set_translation_domain": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.STRING && v.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", "set_translation_domain() 只量过字符串");
+      rec.__gd_node_translation_domain__ = String(v.v);
+      return V.nil();
+    }
+    case "set_translation_domain_inherited": {
+      const parent = nodeFaceOf(nodeParent(rec));
+      rec.__gd_node_translation_domain__ = parent?.__gd_node_translation_domain__ ?? "";
+      return V.nil();
+    }
+    case "set_message_translation":
+      return V.nil();
+    case "call_thread_safe":
+    case "call_deferred_thread_group": {
+      const m = args[0];
+      if (m === undefined || (m.t !== Tag.STRING && m.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", `${name}() 的方法名只量过字符串`);
+      return nodeMethod(rec, String(m.v), args.slice(1));
+    }
+    case "set_deferred_thread_group":
+    case "set_thread_safe":
+    case "set_deferred": {
+      const p = args[0];
+      if (p === undefined || (p.t !== Tag.STRING && p.t !== Tag.STRING_NAME)) throw new UnsupportedError("node-arg-type", `${name}() 的属性名只量过字符串`);
+      const v = args[1] as Variant;
+      if (NODE_PROP_WRITE === null) throw new UnsupportedError("node-prop-write", "节点属性写入钩子未注册");
+      if (name === "set_deferred_thread_group" || name === "set_deferred") {
+        callDeferred(() => (NODE_PROP_WRITE as NodePropWriteHook)(rec, String(p.v), v));
+        return V.nil();
+      }
+      NODE_PROP_WRITE(rec, String(p.v), v);
+      return V.nil();
+    }
+    case "notify_thread_safe":
+    case "notify_deferred_thread_group": {
+      const v = args[0];
+      if (v === undefined || (v.t !== Tag.INT && v.t !== Tag.FLOAT)) throw new UnsupportedError("node-arg-type", `${name}() 只量过数`);
+      return V.nil();
+    }
+    case "get_orphan_node_ids":
+      return V.object(new GBytes([], "int64"));
+    case "print_orphan_nodes":
+      return V.nil();
+    case "queue_accessibility_update":
+    case "update_configuration_warnings":
+      return V.nil();
+    case "get_accessibility_element":
+      return rid(0n);
     case "_enter_tree":
     case "_exit_tree":
     case "_ready":

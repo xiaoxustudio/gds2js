@@ -533,6 +533,10 @@ export function hasMeta(obj: object, key: Variant): boolean {
   return metaStore(obj).has(metaKey(key));
 }
 
+export function metaKeys(obj: object): string[] {
+  return [...metaStore(obj).keys()];
+}
+
 export function removeMeta(obj: object, key: Variant): void {
   metaStore(obj).delete(metaKey(key));
 }

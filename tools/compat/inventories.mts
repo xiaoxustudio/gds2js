@@ -106,7 +106,7 @@ const ENGINE_RULES = [
   { file: "packages/runtime/src/runtime/method/callable.ts", fn: "callableMethod", owners: ["Callable"], kind: "method" },
 ];
 
-const OBJECT_METHODS = ["has_method", "get_class", "get_instance_id", "is_class", "get", "set", "get_meta", "set_meta", "has_meta", "remove_meta", "call", "callv"];
+const OBJECT_METHODS = ["has_method", "get_class", "get_instance_id", "is_class", "get", "set", "get_meta", "set_meta", "has_meta", "remove_meta", "call", "callv", "call_deferred"];
 
 const VIRTUAL_METHODS = ["_enter_tree", "_exit_tree", "_ready", "_process", "_physics_process"];
 
@@ -115,7 +115,9 @@ const VIRTUAL_OWNERS = ["Node", "Node2D", "Node3D", "Control"];
 const EXTRA_GLOBAL_IMPLEMENTED = ["print", "print_debug", "print_rich", "print_verbose", "printerr", "printraw", "prints", "printt"];
 
 const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
-  Node: ["name", "scene_file_path", "process_mode", "process_priority", "process_physics_priority", "owner"],
+  Node: ["name", "scene_file_path", "process_mode", "process_priority", "process_physics_priority", "owner",
+    "auto_translate_mode", "editor_description", "unique_name_in_owner", "physics_interpolation_mode",
+    "process_thread_group", "process_thread_group_order", "process_thread_messages", "multiplayer"],
   JSON: ["data"],
   RegExMatch: ["names", "strings", "subject"],
 };
@@ -175,12 +177,12 @@ function collectLabels(file: string, fnName: string): Set<string> {
 }
 
 const SIGNALS: Readonly<Record<string, readonly string[]>> = {
-  Node: ["ready", "renamed", "tree_entered", "tree_exiting", "tree_exited", "child_entered_tree", "child_exiting_tree", "child_order_changed", "replacing_by"],
+  Node: ["ready", "renamed", "tree_entered", "tree_exiting", "tree_exited", "child_entered_tree", "child_exiting_tree", "child_order_changed", "replacing_by", "editor_description_changed", "editor_state_changed"],
   Node2D: ["visibility_changed"],
   Node3D: ["visibility_changed"],
-  Control: ["resized", "size_flags_changed", "minimum_size_changed"],
+  Control: ["resized", "size_flags_changed", "minimum_size_changed", "focus_entered", "focus_exited", "gui_input", "mouse_entered", "mouse_exited", "theme_changed"],
   Object: ["property_list_changed", "script_changed"],
-  SceneTree: ["node_added", "node_removed", "node_renamed", "physics_frame", "process_frame", "scene_changed", "tree_changed", "tree_process_mode_changed"],
+  SceneTree: ["node_added", "node_removed", "node_renamed", "physics_frame", "process_frame", "scene_changed", "tree_changed", "tree_process_mode_changed", "node_configuration_warning_changed"],
 };
 
 export function buildInventories() {

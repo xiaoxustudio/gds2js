@@ -1,7 +1,8 @@
 import { Tag, V, tagName, type Variant } from "../../tags";
 import { UnsupportedError } from "../../errors";
 import { asVec2, vector2 } from "../vector/vector2";
-import { nodeFaceOf, nodeParent, type NodeRec } from "./node";
+import { GdEngineInstance, nodeFaceOf, nodeParent, type NodeRec } from "./node";
+import { color } from "../color/color";
 import { sceneTree } from "./scene-tree";
 
 import { GTransform2D } from "../orient/transform2d";
@@ -528,6 +529,12 @@ export const CTL_METHOD_NAMES: readonly string[] = [
   "has_theme_font_size",
   "has_theme_icon",
   "has_theme_stylebox",
+  "get_theme_color",
+  "get_theme_constant",
+  "get_theme_font",
+  "get_theme_font_size",
+  "get_theme_icon",
+  "get_theme_stylebox",
   "get_theme",
   "set_theme",
   "get_theme_default_base_scale",
@@ -668,6 +675,61 @@ export function ctlMethod(target: unknown, name: string, args: Variant[]): Varia
     case "has_theme_font_size":
       tooMany(args, 2, name);
       return V.bool(true);
+    case "get_theme_color": {
+      tooMany(args, 2, name);
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const hit = s.ovColor.get(nm);
+      if (hit !== undefined) return hit;
+      const tt = args[1] === undefined ? "" : fromText(args[1], name);
+      if (nm === "font_color") return tt === "Label" ? color(1, 1, 1, 1) : color(0, 0, 0, 1);
+      throw new UnsupportedError("ctl-theme-color", `Control.get_theme_color(${nm}, ${tt}) 没量过`);
+    }
+    case "get_theme_constant": {
+      tooMany(args, 2, name);
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const hit = s.ovConst.get(nm);
+      if (hit !== undefined) return hit;
+      if (nm === "outline_size") return V.int(0);
+      throw new UnsupportedError("ctl-theme-constant", `Control.get_theme_constant(${nm}) 没量过`);
+    }
+    case "get_theme_font": {
+      tooMany(args, 2, name);
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const hit = s.ovFont.get(nm);
+      if (hit !== undefined) return hit;
+      if (nm === "font") return V.object(new GdEngineInstance("FontFile"));
+      throw new UnsupportedError("ctl-theme-font", `Control.get_theme_font(${nm}) 没量过`);
+    }
+    case "get_theme_font_size": {
+      tooMany(args, 2, name);
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const hit = s.ovFontSize.get(nm);
+      if (hit !== undefined) return hit;
+      if (nm === "font_size") return V.int(16);
+      throw new UnsupportedError("ctl-theme-font-size", `Control.get_theme_font_size(${nm}) 没量过`);
+    }
+    case "get_theme_icon": {
+      tooMany(args, 2, name);
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const hit = s.ovIcon.get(nm);
+      if (hit !== undefined) return hit;
+      if (nm === "arrow") return V.object(new GdEngineInstance("DPITexture"));
+      throw new UnsupportedError("ctl-theme-icon", `Control.get_theme_icon(${nm}) 没量过`);
+    }
+    case "get_theme_stylebox": {
+      tooMany(args, 2, name);
+      const nm = fromText(args[0], name);
+      const s = ctl(target);
+      const hit = s.ovStyle.get(nm);
+      if (hit !== undefined) return hit;
+      if (nm === "panel") return V.object(new GdEngineInstance("StyleBoxFlat"));
+      throw new UnsupportedError("ctl-theme-stylebox", `Control.get_theme_stylebox(${nm}) 没量过`);
+    }
     case "get_theme":
       tooMany(args, 0, name);
       return ctl(target).themeVal === null ? V.nil() : (ctl(target).themeVal as Variant);

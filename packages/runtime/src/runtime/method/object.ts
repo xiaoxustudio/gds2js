@@ -42,7 +42,7 @@ import { probedClassChain } from "../patterns";
 import { transform3dMethod } from "../class/orient/transform3d";
 import { GProjection, projectionMethod } from "../class/orient/projection";
 import { basisMethod } from "../class/orient/basis";
-import { nodeMethod } from "../class/object/node-face";
+import { nodeMethod, registerNodePropReadHook, registerNodePropWriteHook } from "../class/object/node-face";
 import { GdSceneTree, registerTreeCallHook, treeMethod } from "../class/object/scene-tree";
 import { engineClassNew, engineClassNewable, isEngineNode } from "../class/object/node";
 import { GVector3i, vector3iMethod } from "../class/vector/vector3i";
@@ -50,7 +50,7 @@ import { colorMethod, GColor } from "../class/color/color";
 import { bytesMethod, GBytes, packTypeName } from "../class/bytes/packed";
 import { CONVERT_INFO, DECODE_INFO, ENCODE_INFO, FLOAT_DECODE_INFO, FLOAT_ENCODE_INFO, VAR_CODEC_GUARD, bytesBswap, bytesDecompressDynamic, bytesMultibyte, bytesUtf32, packConvert, packDecode, packDecodeFloat, packEncode, packEncodeFloat, packVarCodec } from "../class/bytes/packed-face";
 import { callableMethod } from "./callable";
-import { attribute, callSlot, callStatic, callvArgs, descFor, objectBaseLabel, scriptMethodSay, scriptParamArgs, writeProp } from "./access";
+import { attribute, callSlot, callStatic, callvArgs, descFor, objectBaseLabel, registerNodeExtraCallHook, scriptMethodSay, scriptParamArgs, writeProp } from "./access";
 import { deferredArityBlock, isAritySay } from "./core";
 import { callCallableBox } from "./callable";
 import { nodePathSliceArg } from "./core";
@@ -70,6 +70,12 @@ import { GTransform2D } from "../class/orient/transform2d";
 import { GTransform3D } from "../class/orient/transform3d";
 
 registerTreeCallHook((node, name, args) => nodeMethod(node, name, args));
+
+registerNodeExtraCallHook((rec, name, args) => nodeMethod(rec, name, args));
+registerNodePropWriteHook((rec, key, value) => {
+  writeProp(V.object(rec), key, value);
+});
+registerNodePropReadHook((rec, key) => attribute(V.object(rec), key) as Variant);
 
 export function objectMethod(obj: Variant, name: string, args: Variant[]): Variant {
   const inner = obj.v;
@@ -387,6 +393,13 @@ export function objectMethod(obj: Variant, name: string, args: Variant[]): Varia
       throw new GodotRuntimeError("object-call", `call_deferred() 的第一个实参需要是方法名（String）`);
     }
     const who = fname.v as string;
+    if (isEngineNode(inner)) {
+      const rest = args.slice(1) as Variant[];
+      callDeferred(() => {
+        nodeMethod(inner, who, rest);
+      });
+      return V.nil();
+    }
     const fn = (inner as Record<string, unknown>)[who];
     if (typeof fn !== "function") {
       throw new UnsupportedError("object-call-deferred", `call_deferred("${who}") 的方法不存在，失败形状也没量过`);

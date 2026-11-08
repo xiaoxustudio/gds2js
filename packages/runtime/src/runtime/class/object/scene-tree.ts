@@ -5,7 +5,7 @@ import { NULL_OBJECT } from "../identity/null-object";
 import { GdScriptObject } from "./script-object";
 import { GdTween } from "./tween";
 import { Signal } from "../identity/signal";
-import { GdNodeObject, nodeAttach, nodeChildren, nodeEmitSignal, nodeFaceOf, nodeInit, nodeIsInGroup, nodeIsInside, nodeParent, nodePathOf, registerTreeSignalHook, type NodeRec } from "./node";
+import { GdNodeObject, GdEngineInstance, nodeAttach, nodeChildren, nodeEmitSignal, nodeFaceOf, nodeFree, nodeInit, nodeIsInGroup, nodeIsInside, nodeParent, nodePathOf, registerTreeSignalHook, type NodeRec } from "./node";
 
 export type SceneSpec = { node: object; name: string; cls: string; children: SceneSpec[] };
 
@@ -47,6 +47,15 @@ export class GdSceneTree extends GdNodeObject {
   processDt = 1 / 60;
   timers: GdSceneTreeTimer[] = [];
   tweens: GdTween[] = [];
+  autoAcceptQuit = true;
+  quitOnGoBack = true;
+  multiplayerPoll = true;
+  physicsInterpolation = false;
+  debugCollisionsHint = false;
+  debugNavigationHint = false;
+  debugPathsHint = false;
+  editedSceneRoot: object | null = null;
+  mpApi: Variant | null = null;
   constructor(root: GdScriptObject) {
     super();
     this.root = root;
@@ -256,9 +265,83 @@ export function treeMethod(tree: GdSceneTree, name: string, args: Variant[]): Va
       return V.nil();
     }
     case "is_debugging_collisions_hint":
+      return V.bool(tree.debugCollisionsHint);
     case "is_debugging_navigation_hint":
+      return V.bool(tree.debugNavigationHint);
     case "is_debugging_paths_hint":
+      return V.bool(tree.debugPathsHint);
+    case "change_scene_to_file":
+      return V.int(19);
+    case "change_scene_to_node": {
+      const arg = args[0];
+      if (arg === undefined || arg.t !== Tag.OBJECT) return V.int(31);
+      const inner = arg.v as object;
+      if (nodeFaceOf(inner) === null) return V.int(31);
+      if (nodeParent(inner) === null) nodeAttach(tree.root as unknown as NodeRec, inner as unknown as NodeRec);
+      tree.currentScene = inner;
+      return V.int(0);
+    }
+    case "change_scene_to_packed": {
+      const arg = args[0];
+      if (arg === undefined || arg.t !== Tag.OBJECT) return V.int(31);
+      const inner = arg.v;
+      if (inner instanceof GdEngineInstance && inner.__gd_engine_class__ === "PackedScene") return V.int(20);
+      throw new UnsupportedError("scene-tree-arg-type", "change_scene_to_packed() 的实参没量过（只量过 null 与空 PackedScene）");
+    }
+    case "reload_current_scene":
+      if (tree.currentScene === null) return V.int(3);
+      throw new UnsupportedError("scene-tree-reload", "reload_current_scene() 在已有当前场景时没量过");
+    case "unload_current_scene": {
+      if (tree.currentScene !== null) {
+        const face = nodeFaceOf(tree.currentScene);
+        if (face !== null) nodeFree(face);
+      }
+      tree.currentScene = null;
+      return V.nil();
+    }
+    case "get_edited_scene_root":
+      return tree.editedSceneRoot === null ? V.object(NULL_OBJECT) : V.object(tree.editedSceneRoot);
+    case "set_edited_scene_root":
+      tree.editedSceneRoot = args[0] === undefined || args[0].t !== Tag.OBJECT ? null : (args[0].v as object);
+      return V.nil();
+    case "get_multiplayer":
+      if (tree.mpApi === null) tree.mpApi = V.object(new GdEngineInstance("SceneMultiplayer"));
+      return tree.mpApi;
+    case "set_multiplayer":
+      tree.mpApi = args[0] === undefined || args[0].t !== Tag.OBJECT ? null : (args[0] as Variant);
+      return V.nil();
+    case "is_accessibility_enabled":
+    case "is_accessibility_supported":
       return V.bool(false);
+    case "is_auto_accept_quit":
+      return V.bool(tree.autoAcceptQuit);
+    case "set_auto_accept_quit":
+      tree.autoAcceptQuit = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "is_quit_on_go_back":
+      return V.bool(tree.quitOnGoBack);
+    case "set_quit_on_go_back":
+      tree.quitOnGoBack = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "is_multiplayer_poll_enabled":
+      return V.bool(tree.multiplayerPoll);
+    case "set_multiplayer_poll_enabled":
+      tree.multiplayerPoll = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "is_physics_interpolation_enabled":
+      return V.bool(tree.physicsInterpolation);
+    case "set_physics_interpolation_enabled":
+      tree.physicsInterpolation = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "set_debug_collisions_hint":
+      tree.debugCollisionsHint = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "set_debug_navigation_hint":
+      tree.debugNavigationHint = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
+    case "set_debug_paths_hint":
+      tree.debugPathsHint = args[0] !== undefined && args[0].t === Tag.BOOL && args[0].v === true;
+      return V.nil();
     case "get_frame":
       return V.int(tree.frame);
     case "set_pause": {
@@ -295,6 +378,14 @@ export function treeReadProp(tree: GdSceneTree, name: string): Variant | null {
   if (name === "root") return V.object(tree.root);
   if (name === "frame") return V.int(tree.frame);
   if (name === "paused") return V.bool(tree.paused);
+  if (name === "auto_accept_quit") return V.bool(tree.autoAcceptQuit);
+  if (name === "quit_on_go_back") return V.bool(tree.quitOnGoBack);
+  if (name === "multiplayer_poll") return V.bool(tree.multiplayerPoll);
+  if (name === "physics_interpolation") return V.bool(tree.physicsInterpolation);
+  if (name === "debug_collisions_hint") return V.bool(tree.debugCollisionsHint);
+  if (name === "debug_navigation_hint") return V.bool(tree.debugNavigationHint);
+  if (name === "debug_paths_hint") return V.bool(tree.debugPathsHint);
+  if (name === "edited_scene_root") return tree.editedSceneRoot === null ? V.object(NULL_OBJECT) : V.object(tree.editedSceneRoot);
   return null;
 }
 

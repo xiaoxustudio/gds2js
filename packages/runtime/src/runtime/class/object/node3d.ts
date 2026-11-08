@@ -3,6 +3,8 @@ import { UnsupportedError } from "../../errors";
 import { asBasis, axisAngleBasis, basisDeterminant, basisEulerYXZ, basisFromQuaternion, basisInverseParts, basisMul, basisOrthoParts, basisScaleParts, basisStatic, basisToQuaternion, basisXform, basis } from "../orient/basis";
 import { asQuaternion, quaternion } from "../orient/quaternion";
 import { NULL_OBJECT } from "../identity/null-object";
+import { GdEngineInstance } from "./node";
+import { GArray } from "../../values";
 import { asVec3, vector3 } from "../vector/vector3";
 import { transform3d } from "../orient/transform3d";
 import { nodeFaceOf, nodeParent, type NodeRec } from "./node";
@@ -246,6 +248,10 @@ export function node3dRead(target: unknown, name: string): Variant | null {
       return V.bool(rec(target).__gd_node_top_level__ === true);
     case "visibility_parent":
       return nodePathValue(rec(target).__gd_node_visibility_parent__ ?? "");
+    case "rotation_edit_mode":
+      return V.int(rec(target).__gd_node3d_rotation_edit_mode__ ?? 0);
+    case "rotation_order":
+      return V.int(rec(target).__gd_node3d_rotation_order__ ?? 2);
     default:
       return null;
   }
@@ -330,6 +336,16 @@ export function node3dWrite(target: unknown, name: string, value: Variant): void
       rec(target).__gd_node_top_level__ = value.v === true;
       return;
     }
+    case "rotation_edit_mode": {
+      if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("node3d-arg-type", "Node3D.rotation_edit_mode 的写入只量过数");
+      rec(target).__gd_node3d_rotation_edit_mode__ = Math.trunc(Number(value.v));
+      return;
+    }
+    case "rotation_order": {
+      if (value.t !== Tag.INT && value.t !== Tag.FLOAT) throw new UnsupportedError("node3d-arg-type", "Node3D.rotation_order 的写入只量过数");
+      rec(target).__gd_node3d_rotation_order__ = Math.trunc(Number(value.v));
+      return;
+    }
     case "visibility_parent": {
       const np = asNodePath(value);
       if (np === null) throw new UnsupportedError("node3d-arg-type", `Node3D.visibility_parent 的写入只量过 NodePath（收到 ${tagName(value.t)}）`);
@@ -387,6 +403,28 @@ export const NODE3D_METHOD_NAMES: readonly string[] = [
   "set_global_rotation",
   "set_global_rotation_degrees",
   "set_global_transform",
+  "get_rotation_edit_mode",
+  "set_rotation_edit_mode",
+  "get_rotation_order",
+  "set_rotation_order",
+  "is_visible",
+  "set_visible",
+  "is_scale_disabled",
+  "set_disable_scale",
+  "is_transform_notification_enabled",
+  "set_notify_transform",
+  "is_local_transform_notification_enabled",
+  "set_notify_local_transform",
+  "set_ignore_transform_notification",
+  "force_update_transform",
+  "get_world_3d",
+  "get_gizmos",
+  "add_gizmo",
+  "clear_gizmos",
+  "update_gizmos",
+  "set_subgizmo_selection",
+  "clear_subgizmo_selection",
+  "get_global_transform_interpolated",
 ];
 
 function setGlobalTransform(target: unknown, basisIn: GBasis, ox: number, oy: number, oz: number): void {
@@ -565,6 +603,69 @@ export function node3dMethod(target: unknown, name: string, args: Variant[]): Va
       const o = basisOrthoParts(b);
       s.b3 = o;
       return V.nil();
+    }
+    case "is_visible":
+      return V.bool(rec(target).__gd_node_visible__ !== false);
+    case "set_visible":
+      rec(target).__gd_node_visible__ = boolArg3(args[0]);
+      return V.nil();
+    case "get_rotation_edit_mode":
+      return V.int(rec(target).__gd_node3d_rotation_edit_mode__ ?? 0);
+    case "set_rotation_edit_mode":
+      rec(target).__gd_node3d_rotation_edit_mode__ = Math.trunc(numArg3(args[0], "set_rotation_edit_mode"));
+      return V.nil();
+    case "get_rotation_order":
+      return V.int(rec(target).__gd_node3d_rotation_order__ ?? 2);
+    case "set_rotation_order":
+      rec(target).__gd_node3d_rotation_order__ = Math.trunc(numArg3(args[0], "set_rotation_order"));
+      return V.nil();
+    case "is_scale_disabled":
+      return V.bool(rec(target).__gd_node3d_disable_scale__ === true);
+    case "set_disable_scale":
+      rec(target).__gd_node3d_disable_scale__ = boolArg3(args[0]);
+      return V.nil();
+    case "is_transform_notification_enabled":
+      return V.bool(rec(target).__gd_node3d_notify_transform__ === true);
+    case "set_notify_transform":
+      rec(target).__gd_node3d_notify_transform__ = boolArg3(args[0]);
+      return V.nil();
+    case "is_local_transform_notification_enabled":
+      return V.bool(rec(target).__gd_node3d_notify_local__ === true);
+    case "set_notify_local_transform":
+      rec(target).__gd_node3d_notify_local__ = boolArg3(args[0]);
+      return V.nil();
+    case "set_ignore_transform_notification":
+      rec(target).__gd_node3d_ignore_notification__ = boolArg3(args[0]);
+      return V.nil();
+    case "force_update_transform":
+      return V.nil();
+    case "get_world_3d": {
+      if (!inTree(target)) return V.nil();
+      const face = rec(target);
+      if (face.__gd_node3d_world__ === undefined) {
+        face.__gd_node3d_world__ = V.object(new GdEngineInstance("World3D"));
+      }
+      return face.__gd_node3d_world__ as Variant;
+    }
+    case "get_gizmos":
+      return V.array(GArray.of((rec(target).__gd_node3d_gizmos__ ?? []) as Variant[]));
+    case "add_gizmo": {
+      const list = rec(target).__gd_node3d_gizmos__ ?? [];
+      list.push(args[0] as Variant);
+      rec(target).__gd_node3d_gizmos__ = list;
+      return V.nil();
+    }
+    case "clear_gizmos":
+      rec(target).__gd_node3d_gizmos__ = [];
+      return V.nil();
+    case "update_gizmos":
+      return V.nil();
+    case "set_subgizmo_selection":
+    case "clear_subgizmo_selection":
+      return V.nil();
+    case "get_global_transform_interpolated": {
+      const g = node3dGlobalTransform(target);
+      return g;
     }
     case "get_visibility_parent":
       return nodePathValue(rec(target).__gd_node_visibility_parent__ ?? "");

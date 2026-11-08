@@ -19,6 +19,33 @@ export class GdNodeObject extends GdScriptObject {
   __gd_node_visible__?: boolean;
   __gd_node_top_level__?: boolean;
   __gd_node_visibility_parent__?: string;
+  __gd_node3d_gizmos__?: unknown[];
+  __gd_node3d_rotation_edit_mode__?: number;
+  __gd_node3d_rotation_order__?: number;
+  __gd_node3d_notify_transform__?: boolean;
+  __gd_node3d_notify_local__?: boolean;
+  __gd_node3d_ignore_notification__?: boolean;
+  __gd_node3d_disable_scale__?: boolean;
+  __gd_node3d_world__?: Variant;
+  __gd_node_auto_translate_mode__?: number;
+  __gd_node_editor_description__?: string;
+  __gd_node_unique_in_owner__?: boolean;
+  __gd_node_scene_placeholder__?: boolean;
+  __gd_node_physics_interp__?: number;
+  __gd_node_thread_group__?: number;
+  __gd_node_thread_order__?: number;
+  __gd_node_thread_messages__?: number;
+  __gd_node_process_input__?: boolean;
+  __gd_node_process_shortcut__?: boolean;
+  __gd_node_process_unhandled__?: boolean;
+  __gd_node_process_unhandled_key__?: boolean;
+  __gd_node_translation_domain__?: string;
+  __gd_node_mp_authority__?: number;
+  __gd_node_rpc_config__?: unknown;
+  __gd_node_mp_api__?: Variant;
+  __gd_obj_script__?: Variant;
+  __gd_obj_block_signals__?: boolean;
+  __gd_obj_message_translation__?: boolean;
   __gd_refcount__?: number;
   __gd_ctl__?: unknown;
   __gd_node_t3d__?: unknown;
@@ -92,8 +119,17 @@ export const NODE_SIGNALS: ReadonlySet<string> = new Set([
   "resized",
   "size_flags_changed",
   "minimum_size_changed",
+  "focus_entered",
+  "focus_exited",
+  "gui_input",
+  "mouse_entered",
+  "mouse_exited",
+  "theme_changed",
+  "node_configuration_warning_changed",
   "property_list_changed",
   "script_changed",
+  "editor_description_changed",
+  "editor_state_changed",
 ]);
 
 const USER_SIGNALS = new WeakMap<object, Set<string>>();

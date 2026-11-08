@@ -38,7 +38,7 @@ import { basisReadProp, basisWriteProp } from "../class/orient/basis";
 import { isEngineNode, nodeFaceOf, nodeNameSet, nodeSignalOf } from "../class/object/node";
 import { timerRead, timerWrite } from "../class/object/timer";
 import { registerTweenHooks } from "../class/object/tween";
-import { GdSceneTree, registerTreeWriteHook, treeReadProp, treeSetCurrentScene } from "../class/object/scene-tree";
+import { GdSceneTree, registerTreeWriteHook, treeMethod, treeReadProp, treeSetCurrentScene } from "../class/object/scene-tree";
 import { GdJson } from "../class/host/json";
 import { GdRegExMatch, matchNames, matchStrings } from "../class/host/regex";
 import { node2dRead, node2dWrite } from "../class/object/node2d";
@@ -96,6 +96,34 @@ export function callvArgs(v: Variant | undefined): Variant[] {
   }
   return (v.v as GArray).raw().slice();
 }
+
+const NODE_EXTRA_PROPS: Record<string, [string, string]> = {
+  auto_translate_mode: ["get_auto_translate_mode", "set_auto_translate_mode"],
+  editor_description: ["get_editor_description", "set_editor_description"],
+  unique_name_in_owner: ["is_unique_name_in_owner", "set_unique_name_in_owner"],
+  physics_interpolation_mode: ["get_physics_interpolation_mode", "set_physics_interpolation_mode"],
+  process_thread_group: ["get_process_thread_group", "set_process_thread_group"],
+  process_thread_group_order: ["get_process_thread_group_order", "set_process_thread_group_order"],
+  process_thread_messages: ["get_process_thread_messages", "set_process_thread_messages"],
+  translation_domain: ["get_translation_domain", "set_translation_domain"],
+  multiplayer: ["get_multiplayer", "get_multiplayer"],
+};
+
+type NodeExtraCallHook = (rec: unknown, name: string, args: Variant[]) => Variant;
+let NODE_EXTRA_CALL: NodeExtraCallHook | null = null;
+export function registerNodeExtraCallHook(fn: NodeExtraCallHook): void {
+  NODE_EXTRA_CALL = fn;
+}
+
+const TREE_PROP_SETTERS: Record<string, string> = {  auto_accept_quit: "set_auto_accept_quit",
+  quit_on_go_back: "set_quit_on_go_back",
+  multiplayer_poll: "set_multiplayer_poll_enabled",
+  physics_interpolation: "set_physics_interpolation_enabled",
+  debug_collisions_hint: "set_debug_collisions_hint",
+  debug_navigation_hint: "set_debug_navigation_hint",
+  debug_paths_hint: "set_debug_paths_hint",
+  edited_scene_root: "set_edited_scene_root",
+};
 
 function intoSlot(kind: string | undefined, value: Variant, key: string, owner: unknown): Variant {
   if (kind === undefined) return value;
@@ -283,6 +311,13 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
     treeSetCurrentScene(base.v, value);
     return null;
   }
+  if (base.t === Tag.OBJECT && base.v instanceof GdSceneTree) {
+    const setter = TREE_PROP_SETTERS[key];
+    if (setter !== undefined) {
+      treeMethod(base.v, setter, [value]);
+      return null;
+    }
+  }
   const enw = nodeFaceOf(base.t === Tag.OBJECT ? base.v : null);
   if (enw !== null) {
     if (enw.__gd_engine_class__ === "Timer" && timerWrite(base.v, key, value)) return null;
@@ -300,6 +335,11 @@ export function writeProp(raw: unknown, key: string, value: Variant): Variant | 
       const n = Math.trunc(Number(value.v));
       if (key === "process_priority") enw.__gd_node_process_priority__ = n;
       else enw.__gd_node_physics_priority__ = n;
+      return null;
+    }
+    if (NODE_EXTRA_PROPS[key] !== undefined) {
+      if (NODE_EXTRA_CALL === null) throw new UnsupportedError("node-extra-call", "节点扩展调用钩子未注册");
+      NODE_EXTRA_CALL(enw, NODE_EXTRA_PROPS[key][1], [value]);
       return null;
     }
     if (key === "owner") {
@@ -636,6 +676,11 @@ export function attribute(raw: unknown, name: string): unknown {
       if (name === "process_priority") return V.int(en.__gd_node_process_priority__);
       if (name === "process_physics_priority") return V.int(en.__gd_node_physics_priority__);
       if (name === "owner") return en.__gd_node_owner__ === null ? V.nil() : V.object(en.__gd_node_owner__);
+      const extra = NODE_EXTRA_PROPS[name];
+      if (extra !== undefined) {
+        if (NODE_EXTRA_CALL === null) throw new UnsupportedError("node-extra-call", "节点扩展调用钩子未注册");
+        return NODE_EXTRA_CALL(en, extra[0], []);
+      }
       const sig = nodeSignalOf(en, name);
       if (sig !== null) return V.object(sig);
       if (methodAritiesOf(obj.v)?.[name] !== undefined) return methodCallable(obj, name);

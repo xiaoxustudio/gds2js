@@ -48,86 +48,12 @@
     "unplannedPatterns": [
       {
         "owners": [
-          "Node",
-          "Node2D",
-          "Node3D",
-          "Control",
-          "SceneTree",
-          "Object"
-        ],
-        "match": "accessibility",
-        "reason": "无障碍面不建模：宿主侧没有可复现的辅助信息树"
-      },
-      {
-        "owners": [
-          "Node",
-          "Node2D",
-          "Node3D",
-          "Control",
-          "SceneTree",
-          "Object"
-        ],
-        "match": "thread",
-        "reason": "线程组与线程安全开关不建模：产物是单线程事件循环"
-      },
-      {
-        "owners": [
-          "Node",
-          "Node2D",
-          "Node3D",
-          "Control",
-          "SceneTree",
-          "Object"
-        ],
-        "match": "multiplayer|^rpc|_rpc_",
-        "reason": "多人同步不建模：没有网络会话"
-      },
-      {
-        "owners": [
-          "Node",
-          "Node2D",
-          "Node3D",
-          "Control",
-          "SceneTree",
-          "Object"
-        ],
-        "match": "editor|edited_scene|configuration_warning|display_folded|unique_name_in_owner|scene_instance_load_placeholder",
-        "reason": "编辑器专用面不建模：无头运行没有编辑器会话"
-      },
-      {
-        "owners": [
-          "Node",
-          "Node2D",
-          "Node3D",
-          "Control",
-          "SceneTree",
-          "Object"
-        ],
-        "match": "viewport|window|screen|exclusive",
-        "reason": "窗口与视口面不建模：没有渲染或窗口系统"
-      },
-      {
-        "owners": [
-          "Control"
-        ],
-        "match": "^(draw_|theme|font|stylebox|theme_|cursor|drag|drop|gui_input|shortcut|focus|mouse|get_parent_area|get_parent_control|get_screen_position)",
-        "reason": "Control 的绘制、主题与焦点面不建模：无头运行时没有画布"
-      },
-      {
-        "owners": [
           "Node2D",
           "Node3D",
           "Control"
         ],
         "match": "^draw_|get_rect|is_visible_in_tree|visible|show|hide|z_index|z_as_relative|y_sort|modulate|self_modulate|texture|material",
         "reason": "绘制与可见性面不建模：没有渲染器"
-      },
-      {
-        "owners": [
-          "SceneTree"
-        ],
-        "match": "change_scene|reload_current_scene|unload_current_scene|edited_scene|multiplayer|accessibility|debug_|quit_on_go_back|auto_accept_quit",
-        "reason": "场景切换与窗口退出策略不建模：没有资源加载器与窗口系统"
       },
       {
         "owners": [
@@ -157,39 +83,6 @@
         ],
         "match": "RenderingDriver|StdHandleType|SystemDir|CompressionMode|UnixPermissionFlags|ModeFlags|create_instance|create_temp|big_endian|distribution|video_adapter|trash|open_with|file_access_save|unset_environment",
         "reason": "类内枚举/常量面尚未建模，按响亮拒记账"
-      },
-      {
-        "owners": [
-          "Node",
-          "Node2D",
-          "Node3D",
-          "Control",
-          "SceneTree",
-          "Object"
-        ],
-        "match": "process_input|process_unhandled|process_shortcut|process_internal|process_thread|physics_interpolation|_input$|_unhandled|_shortcut|auto_translate|translation|atr|display_folded|editable_instance|orphan|load_placeholder|scene_instance|set_thread|call_deferred_thread|notify_deferred|thread_safe|is_greater_than",
-        "reason": "输入事件、线程、物理插值、翻译与编辑器折叠不在 Tier 6 非目标内"
-      },
-      {
-        "owners": [
-          "Control"
-        ],
-        "match": "theme|font|stylebox|cursor|drag|drop|focus|mouse|accessibility|tooltip|warp|accept_event|scroll_events|auto_translat|localizing_numeral|is_layout_rtl",
-        "reason": "无头运行时没有主题/焦点/输入系统：Control 的主题、焦点、拖放与提示面不建模"
-      },
-      {
-        "owners": [
-          "Node3D"
-        ],
-        "match": "gizmo|world_3d|notify_|transform_notification|force_update_transform|global_transform_interpolated|rotation_edit_mode|rotation_order|disable_scale|scale_disabled",
-        "reason": "编辑器 gizmo、变换通知与旋转编辑模式不建模：无渲染或编辑器会话"
-      },
-      {
-        "owners": [
-          "Object"
-        ],
-        "match": "^(get_method_list|get_property_list|get_signal_list|get_incoming_connections|get_signal_connection_list|get_script|set_script|get_meta_list|get_indexed|set_indexed|get_method_argument_count|has_connections|property_can_revert|property_get_revert|call_deferred|set_deferred|tr|tr_n|to_string|notification|notify_property_list_changed|is_blocking_signals|set_block_signals|can_translate_messages|cancel_free)$",
-        "reason": "Object 反射、脚本绑定与翻译面不建模：产物没有引擎反射表"
       },
       {
         "owners": [
