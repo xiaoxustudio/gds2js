@@ -20,7 +20,8 @@
       "EncodedObjectAsID",
       "AESContext",
       "ConfigFile",
-      "Expression"
+      "Expression",
+      "PCKPacker"
     ],
     "hostClasses": [
       "FileAccess",

@@ -128,7 +128,7 @@ const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 
 const EXTRA_CTORS = ["int", "float", "bool", "Signal"];
 
-const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"], HashingContext: ["start", "update", "finish"], HMACContext: ["start", "update", "finish"], EncodedObjectAsID: ["get_object_id", "set_object_id"], AESContext: ["start", "update", "get_iv_state", "finish"], Expression: ["parse", "execute", "has_execute_failed", "get_error_text"], ConfigFile: ["clear", "encode_to_text", "erase_section", "erase_section_key", "get_section_keys", "get_sections", "get_value", "has_section", "has_section_key", "load", "load_encrypted", "load_encrypted_pass", "parse", "save", "save_encrypted", "save_encrypted_pass", "set_value"] };
+const EXTRA_METHODS = { FileAccess: ["get_open_error"], RID: ["get_id", "is_valid"], RegEx: ["create_from_string"], HashingContext: ["start", "update", "finish"], HMACContext: ["start", "update", "finish"], EncodedObjectAsID: ["get_object_id", "set_object_id"], AESContext: ["start", "update", "get_iv_state", "finish"], PCKPacker: ["add_file", "add_file_removal", "flush", "pck_start"], Expression: ["parse", "execute", "has_execute_failed", "get_error_text"], ConfigFile: ["clear", "encode_to_text", "erase_section", "erase_section_key", "get_section_keys", "get_sections", "get_value", "has_section", "has_section_key", "load", "load_encrypted", "load_encrypted_pass", "parse", "save", "save_encrypted", "save_encrypted_pass", "set_value"] };
 
 function functionBody(source: string, fnName: string): string {
   const re = new RegExp(`(?:export\\s+)?function\\s+${fnName}\\s*\\(`, "g");
